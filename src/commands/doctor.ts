@@ -458,8 +458,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     fix: doctorFix,
     report_path: `${root}/.sneakoscope/reports/command-alias-cleanup.json`,
     canonical_command_count: 0,
-    legacy_alias_count: 0,
-    aliases: [],
+    current_alias_count: 0,
     detected: { registered_alias_commands: [], catalog_alias_rows: [], missing_canonical_targets: [] },
     actions: [],
     blockers: [err?.message || String(err)]
@@ -1238,7 +1237,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
         ok: receipt.status === 'current' && isUpdateMigrationReceiptCurrent(receipt),
         status: receipt.status === 'current' ? 'repaired' : receipt.status,
         reason: receipt.status === 'current' ? 'doctor_fix_wrote_current_project_migration_receipt' : 'doctor_fix_migration_receipt_blocked',
-        stages: receipt.legacy_migration_stages || [],
+        stages: receipt.migration_stages || [],
         migration_current: isUpdateMigrationReceiptCurrent(receipt),
         receipt_path: projectUpdateMigrationReceiptPath(root),
         blockers: receipt.blockers || [],
@@ -1366,14 +1365,12 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
   console.log('Project config:');
   console.log(`  node read:       ${ready.codex_config_readable_by_node ? 'ok' : 'failed'}`);
   console.log(`  codex cli read:  ${ready.codex_config_readable_by_codex_cli ? 'ok' : (actual?.status || 'failed')}`);
-  console.log(`  removed runtime: tmux`);
   console.log('Zellij:');
   console.log(`  binary:      ${zellijReadiness.binary} ${zellijReadiness.version || ''} ${zellijReadiness.status === 'ok' ? 'ok' : zellijReadiness.status}`);
   console.log(`  required_for: ${zellijReadiness.required_for.join(', ')}`);
   console.log(`  layout:      ${zellijReadiness.layout_proof}`);
   console.log(`  pane proof:  ${zellijReadiness.pane_proof}`);
   console.log(`  screen proof:${zellijReadiness.screen_proof}`);
-  console.log(`  tmux:        ${zellijReadiness.tmux_removed_runtime ? 'removed_runtime' : 'present'}`);
   const zellijRepairLine = doctorZellijRepairConsoleLine(zellijRepair as any);
   if (zellijRepairLine) console.log(zellijRepairLine);
   console.log('Context7 MCP:');
@@ -1420,10 +1417,14 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
   console.log('SKS Skills:');
   console.log(`  core skills: ${doctorSkillStatus((doctorNativeCapabilityRepair as any)?.core_skills)}`);
   console.log(`  duplicate project skills: ${doctorDedupeStatus((doctorNativeCapabilityRepair as any)?.skill_dedupe)}`);
-  console.log('SKS Command Aliases:');
+  console.log('SKS Current Command Surface:');
   console.log(`  status: ${(commandAliasCleanup as any).status || ((commandAliasCleanup as any).ok ? 'clean' : 'blocked')}`);
   console.log(`  canonical commands: ${(commandAliasCleanup as any).canonical_command_count ?? 0}`);
-  console.log(`  compatibility aliases: ${(commandAliasCleanup as any).legacy_alias_count ?? 0}`);
+  const managedRuntimeCleanup = (commandAliasCleanup as any)?.cleanup?.managed_runtime;
+  if (managedRuntimeCleanup) {
+    console.log(`  managed items reconciled: ${managedRuntimeCleanup.removed_managed_artifact_count ?? 0}`);
+    console.log(`  user-authored collisions preserved: ${managedRuntimeCleanup.preserved_user_file_count ?? 0}`);
+  }
   if ((commandAliasCleanup as any).report_path) console.log(`  report: ${(commandAliasCleanup as any).report_path}`);
   console.log('Secret preservation:');
   console.log(`  Supabase keys: ${(doctorNativeCapabilityRepair as any)?.ok === false && String(((doctorNativeCapabilityRepair as any)?.blockers || []).join(' ')).includes('secret_preservation_failed') ? 'blocked' : 'preserved'}`);
@@ -1766,7 +1767,6 @@ function buildZellijReadiness(root: string, zellij: any, ready: any) {
     layout_proof: proofStatus,
     pane_proof: proofStatus,
     screen_proof: proofStatus,
-    tmux_removed_runtime: true,
     mad_ready: ready?.mad_ready === true,
     cli_ready: ready?.cli_ready === true,
     ready_for_interactive_runtime: ready?.codex_config_readable_in_zellij_context === true

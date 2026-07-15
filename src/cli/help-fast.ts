@@ -9,7 +9,6 @@ SNEAKOSCOPE CODEX v${PACKAGE_VERSION}
 
   $Plan "task"              plan only; writes .sneakoscope/plans, no code edits
   $Work                     execute the latest plan with evidence gates
-  $Swarm "task"             Naruto alias for the Codex official subagent workflow
 
 Local surfaces
 

@@ -24,7 +24,7 @@ const index: EvidenceIndex = {
   schema: EVIDENCE_INDEX_SCHEMA,
   generated_at: '2026-05-18T00:00:00.000Z',
   mission_id: null,
-  route: '$Team',
+  route: '$Naruto',
   status: 'verified_partial',
   ok: true,
   records: [record],

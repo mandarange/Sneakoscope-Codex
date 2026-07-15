@@ -11,7 +11,7 @@ sks git status --json
 sks git precommit --json
 ```
 
-`sks git install` writes managed `.gitignore` and `.gitattributes` blocks plus the policy/manifest JSON files. It does not install Git hooks automatically. Teams that want a hook can call `sks git precommit` from a human-owned hook.
+`sks git install` writes managed `.gitignore` and `.gitattributes` blocks plus the policy/manifest JSON files. It does not install Git hooks automatically. Projects that want a hook can call `sks git precommit` from a human-owned hook.
 
 ## Precommit Policy
 
@@ -22,4 +22,4 @@ sks git precommit --json
 - plaintext secrets in shared records
 - oversized tracked files beyond `.sneakoscope/git-policy.json`
 
-Generated indexes are warnings by default and blockers in `strict-team` mode.
+Generated indexes are warnings by default and become blockers only under the strict collaboration policy.

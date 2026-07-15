@@ -1,38 +1,39 @@
-# Runtime Truth Matrix 1.18.10
+# Current Runtime Truth
 
-SKS 1.18.10 writes `sks.runtime-truth-matrix.v1` to `.sneakoscope/reports/runtime-truth-matrix-1.18.10.json`.
+SKS runtime claims are derived from current mission artifacts and machine
+checks. Static flags, preparation output, terminal panes, and prose summaries
+cannot promote a subsystem to proven.
 
-The matrix is generated from current proof artifacts, not from a static release table. It records each subsystem with `proof_level`, `evidence_artifacts`, `blockers`, `next_action`, and `required_mode`.
+## Required Evidence Domains
 
-Required rows:
+- official subagent plan and bounded role selection
+- official lifecycle event correlation
+- trustworthy parent outcome for every requested thread
+- parent-owned integration and scoped verification
+- route-specific safety and completion gates
+- TriWiki source hydration where the decision depends on recalled context
+- Zellij telemetry integrity without treating display state as proof
+- update, doctor, managed-residue, and installed-package verification
+- package, tarball, macOS, Linux, and registry evidence for a release
 
-- `tmux_physical`
-- `codex_dynamic`
-- `cleanup`
-- `intelligent_work_graph`
-- `source_intelligence`
-- `goal_mode`
-- `route_blackbox`
-- `dynamic_scheduler`
-- `warp_mad_lanes`
-- `codex_0_134`
-- `mcp_0_134`
-- `adhd_orchestration`
-- `appshots`
-- `parallel_write`
-- `patch_proof`
-- `native_cli_session_swarm`
-- `fast_mode_default`
-- `cleanup_v4`
-- `ast_type_work_graph`
-- `warp_mad_right_lanes`
+Canonical Naruto evidence is:
 
-`SKS_REQUIRE_REAL_TMUX=1`, `SKS_REQUIRE_REAL_DYNAMIC_AGENTS=1`, and `SKS_REQUIRE_WARP_MAD_LANES=1` turn optional missing live evidence into required blockers. Native CLI Session Swarm and Fast mode rows become `proven` only from current proof artifacts such as `native-cli-session-proof.json`, `agent-native-cli-session-swarm.json`, and `fast-mode-propagation-proof.json`; they are not inferred from route flags or subagent events.
+- `subagent-plan.json`
+- `subagent-events.jsonl`
+- `subagent-parent-summary.json`
+- `subagent-evidence.json`
+- `naruto-summary.json`
+- `naruto-gate.json`
+- `work-order-ledger.json`
 
-Run:
+Run the current inspection surfaces with:
 
 ```bash
-npm run release:runtime-truth-matrix
+sks naruto proof latest --json
+sks validate-artifacts latest --json
+sks pipeline status --json
+npm run release:check:affected
 ```
 
-The release readiness report reads the same artifact and surfaces the rows under `runtime_truth_1_18_8.subsystem_rows`, with P9 representing Native CLI Session Swarm and Fast mode default closure.
+Missing or ambiguous evidence remains blocked or unverified. SKS never infers
+successful official-thread completion from process counts or UI telemetry.

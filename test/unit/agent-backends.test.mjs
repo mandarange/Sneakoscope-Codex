@@ -27,7 +27,7 @@ test('process backend records pid, exit code, stdout, stderr, and timeout fields
   assert.equal(report.timed_out, false);
 });
 
-test('codex exec backend dry-run records output schema command and report artifact', async () => {
+test('retired codex exec backend dry-run fails closed and records a diagnostic report', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-agent-codex-backend-'));
   const result = await runCodexExecAgent(agent, slice, {
     missionId: 'M-backend',
@@ -35,8 +35,11 @@ test('codex exec backend dry-run records output schema command and report artifa
     cwd: root,
     prompt: 'dry-run only'
   });
-  assert.equal(result.status, 'done');
+  assert.equal(result.status, 'blocked');
   assert.equal(result.backend, 'codex-exec');
+  assert.ok(result.blockers.includes('schema_invalid:$.backend:enum'));
+  assert.equal(result.verification.status, 'failed');
+  assert.ok(result.verification.checks.includes('agent-result-schema'));
   const reportArtifact = result.artifacts.find((artifact) => artifact.endsWith('agent-process-report.json'));
   const report = JSON.parse(await fs.readFile(path.join(root, reportArtifact), 'utf8'));
   assert.equal(report.backend, 'codex-exec');

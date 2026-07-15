@@ -19,7 +19,7 @@ test('poller stops immediately on Telegram 409 and releases owner lock', async (
   const client = new TelegramBotApiClient('123456789:ABCDEFGHIJKLMNOPQRSTUVWX', {
     fetch: async () => new Response(JSON.stringify({ ok: false, error_code: 409, description: 'Conflict' }), { status: 409, headers: { 'content-type': 'application/json' } })
   });
-  const polling = new TelegramPollingHub(client, { handleUpdate: async () => ({}) } as never, owner, 1);
+  const polling = new TelegramPollingHub(client, { processUpdate: async () => ({}) } as never, owner, 1);
   const result = await polling.pollOnce();
   assert.equal(result.stopped_reason, 'telegram_409_conflict');
   assert.equal(await fsp.stat(lockPath).then(() => true).catch(() => false), false);
@@ -31,6 +31,6 @@ test('long polling fails closed while a webhook is configured', async () => {
   const client = new TelegramBotApiClient('123456789:ABCDEFGHIJKLMNOPQRSTUVWX', {
     fetch: async () => new Response(JSON.stringify({ ok: true, result: { url: 'https://example.test/hook' } }), { status: 200, headers: { 'content-type': 'application/json' } })
   });
-  const polling = new TelegramPollingHub(client, { handleUpdate: async () => ({}) } as never, owner, 1);
+  const polling = new TelegramPollingHub(client, { processUpdate: async () => ({}) } as never, owner, 1);
   await assert.rejects(polling.ensureLongPollingAllowed(), /webhook_conflict/);
 });

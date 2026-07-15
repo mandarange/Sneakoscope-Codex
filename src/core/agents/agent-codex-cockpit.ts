@@ -49,7 +49,7 @@ export interface AgentCodexCockpitState {
   pending_queue_count: number | null
   backfill_count: number | null
   scheduler_status: string | null
-  patch_swarm_phase: string | null
+  patch_handoff_phase: string | null
   patch_queue_depth: number | null
   patch_apply_groups: Array<Record<string, unknown>>
   patch_changed_files_by_agent: Record<string, unknown>
@@ -108,7 +108,7 @@ export async function buildAgentCodexCockpitState(
   const scheduler = await readJson<any>(path.join(root, 'agent-scheduler-state.json'), null)
   const workerSlots = await readJson<any>(path.join(root, 'agent-worker-slots.json'), null)
   const generations = await readJson<any>(path.join(root, 'agent-session-generations.json'), null)
-  const patchSwarm = await readJson<any>(path.join(root, 'agent-patch-swarm-runtime.json'), null)
+  const patchHandoff = await readJson<any>(path.join(root, 'agent-patch-handoff-runtime.json'), null)
   const patchQueue = await readJson<any>(path.join(root, 'agent-patch-queue.json'), null)
   const patchMerge = await readJson<any>(path.join(root, 'agent-merge-coordinator-report.json'), null)
   const patchVerification = await readJson<any>(path.join(root, 'agent-patch-verification-results.json'), null)
@@ -117,7 +117,7 @@ export async function buildAgentCodexCockpitState(
   const terminalClosed = proof?.terminal_sessions_closed === true
   const eventsTail = await readTailLines(path.join(root, 'agent-events.jsonl'), 8)
   const cockpitEventsTail = await readTailLines(path.join(root, AGENT_CODEX_COCKPIT_EVENTS), 8)
-  const teamTail = await readTailLines(path.join(missionDir, 'team-transcript.jsonl'), 8)
+  const subagentTail = await readTailLines(path.join(missionDir, 'subagent-events.jsonl'), 8)
   const sessionRows = normalizeAgentSessionRows(sessions)
   const rosterRows = Array.isArray(roster?.roster) ? roster.roster : []
   const leaseRows = Array.isArray(leases?.leases) ? leases.leases : []
@@ -150,7 +150,7 @@ export async function buildAgentCodexCockpitState(
     pending_queue_count: scheduler?.pending_count ?? null,
     backfill_count: scheduler?.backfill_count ?? null,
     scheduler_status: scheduler?.status || null,
-    patch_swarm_phase: patchSwarm ? (patchSwarm.ok === true ? 'passed' : 'blocked') : null,
+    patch_handoff_phase: patchHandoff ? (patchHandoff.ok === true ? 'passed' : 'blocked') : null,
     patch_queue_depth: patchQueue?.queued_count ?? null,
     patch_apply_groups: Array.isArray(patchMerge?.parallel_apply_groups) ? patchMerge.parallel_apply_groups : [],
     patch_changed_files_by_agent: patchProof?.changed_files_by_agent || {},
@@ -161,7 +161,7 @@ export async function buildAgentCodexCockpitState(
     session_generations: generations?.generations ? Object.values(generations.generations) : [],
     blockers,
     agents,
-    recent_events: [...eventsTail, ...cockpitEventsTail, ...teamTail].slice(-12),
+    recent_events: [...eventsTail, ...cockpitEventsTail, ...subagentTail].slice(-12),
     artifacts: {
       markdown: path.join('agents', AGENT_CODEX_DASHBOARD_MD),
       json: path.join('agents', AGENT_CODEX_DASHBOARD_JSON),
@@ -191,7 +191,7 @@ export function renderAgentCodexDashboard(state: AgentCodexCockpitState): string
     `- Zellij attach: ${state.zellij_attach_command || 'unknown'}`,
     `- All sessions closed: ${state.all_sessions_closed ?? 'unknown'}`,
     `- Scheduler: ${state.scheduler_status || 'unknown'}`,
-    `- Patch swarm: ${state.patch_swarm_phase || 'unknown'}`,
+    `- Patch handoff: ${state.patch_handoff_phase || 'unknown'}`,
     `- Patch queue depth: ${state.patch_queue_depth ?? 'unknown'}`,
     `- Patch apply groups: ${state.patch_apply_groups.length}`,
     `- Target active slots: ${state.target_active_slots ?? 'unknown'}`,
@@ -256,7 +256,7 @@ function summarizeLiveState(state: AgentCodexCockpitState) {
     pending_queue_count: state.pending_queue_count,
     backfill_count: state.backfill_count,
     scheduler_status: state.scheduler_status,
-    patch_swarm_phase: state.patch_swarm_phase,
+    patch_handoff_phase: state.patch_handoff_phase,
     patch_queue_depth: state.patch_queue_depth,
     patch_apply_groups: state.patch_apply_groups,
     patch_changed_files_by_agent: state.patch_changed_files_by_agent,

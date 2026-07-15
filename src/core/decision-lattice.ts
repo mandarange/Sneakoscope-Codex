@@ -100,14 +100,14 @@ const DEFAULT_ROUTE_PATHS = Object.freeze([
     notes: ['Lowest friction when scope is narrow and risk flags stay low.']
   },
   {
-    id: 'balanced_team_lane',
-    label: 'Balanced Team Lane',
+    id: 'balanced_naruto_lane',
+    label: 'Balanced Naruto Lane',
     action_ids: ['seal_contract', 'read_triwiki', 'proof_field_scan', 'minimal_patch', 'focused_verification', 'risk_scoped_review', 'honest_mode'],
     notes: ['Adds review evidence while preserving a compact change surface.']
   },
   {
-    id: 'full_team_honest_path',
-    label: 'Full Team Honest Path',
+    id: 'full_naruto_honest_path',
+    label: 'Full Naruto Honest Path',
     action_ids: ['seal_contract', 'read_triwiki', 'proof_field_scan', 'risk_scoped_review', 'minimal_patch', 'focused_verification', 'risk_scoped_review', 'honest_mode'],
     notes: ['Heaviest default for broad or release-sensitive missions.']
   }
@@ -176,7 +176,7 @@ export function buildDecisionLatticeReport(input: any = {}) {
 
 function inferredGoal(input: any = {}) {
   const goal: any = { ...DEFAULT_GOAL };
-  if (input.execution_lane?.fast_lane_allowed === true && !(input.team_trigger_matrix?.active_triggers || []).length) {
+  if (input.execution_lane?.fast_lane_allowed === true && !(input.naruto_trigger_matrix?.active_triggers || []).length) {
     goal.review = 0;
   }
   return goal;

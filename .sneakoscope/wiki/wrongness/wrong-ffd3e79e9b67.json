@@ -9,7 +9,7 @@
     "schema": "sks.triwiki-wrongness.v1",
     "id": "WRONG-FFD3E79E9B67",
     "mission_id": "M-20260520-000015-c181",
-    "route": "$Team",
+    "route": null,
     "created_at": "2026-05-19T15:00:30.405Z",
     "updated_at": "2026-05-19T15:14:11.336Z",
     "status": "resolved",

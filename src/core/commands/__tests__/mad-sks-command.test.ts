@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import os from 'node:os';
 import fsp from 'node:fs/promises';
-import { findGlmOnlyMadFlagBlockers, madHighCommand, stripMadLaunchOnlyArgs } from '../mad-sks-command.js';
+import { findGlmOnlyMadFlagBlockers, findUnsupportedMadArgumentErrors, madHighCommand, stripMadLaunchOnlyArgs } from '../mad-sks-command.js';
 
 test('non-GLM MAD fails closed for GLM-only flags instead of silently stripping them', () => {
   assert.deepEqual(findGlmOnlyMadFlagBlockers(['--mad', '--bench'], false), ['glm_flag_requires_--glm:--bench']);
@@ -17,6 +17,44 @@ test('non-GLM MAD fails closed for GLM-only flags instead of silently stripping 
 test('launch sanitizer strips GLM-only flags only for GLM launches', () => {
   assert.deepEqual(stripMadLaunchOnlyArgs(['--mad', '--deep', '--exact-provider', 'foo'], { includeGlmFlags: false }), ['--deep', '--exact-provider', 'foo']);
   assert.deepEqual(stripMadLaunchOnlyArgs(['--mad', '--deep', '--exact-provider', 'foo'], { includeGlmFlags: true }), []);
+});
+
+test('removed MAD namespaces and runtime flags are unsupported instead of redirected', async () => {
+  assert.deepEqual(findUnsupportedMadArgumentErrors([
+    '--mad-db',
+    '--mad-native-swarm',
+    '--mad-swarm',
+    '--no-mad-swarm',
+    '--mad-agents=4',
+    '--mad-swarm-work-items',
+    '8',
+    '--tmux-smoke',
+    '--require-tmux-smoke'
+  ]), [
+    'unsupported_argument:--mad-db',
+    'unsupported_argument:--mad-native-swarm',
+    'unsupported_argument:--mad-swarm',
+    'unsupported_argument:--no-mad-swarm',
+    'unsupported_argument:--mad-agents',
+    'unsupported_argument:--mad-swarm-work-items',
+    'unsupported_argument:--tmux-smoke',
+    'unsupported_argument:--require-tmux-smoke'
+  ]);
+
+  const originalExitCode = process.exitCode;
+  const originalError = console.error;
+  console.error = () => undefined;
+  try {
+    process.exitCode = 0;
+    const result: any = await madHighCommand(['repair-config', '--tmux-smoke']);
+    assert.equal(result.ok, false);
+    assert.equal(result.status, 'blocked');
+    assert.deepEqual(result.argument_errors, ['unsupported_argument:--tmux-smoke']);
+    assert.equal(process.exitCode, 1);
+  } finally {
+    console.error = originalError;
+    process.exitCode = originalExitCode;
+  }
 });
 
 async function makeMadSksMission(gate: Record<string, unknown>) {

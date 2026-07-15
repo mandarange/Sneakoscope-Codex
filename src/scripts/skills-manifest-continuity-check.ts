@@ -24,7 +24,7 @@ for (const skill of manifest.skills) {
 for (const required of ['naruto', 'answer', 'dfix', 'fast-mode', 'honest-mode']) {
   assertGate(names.has(required), `manifest missing required skill:${required}`, manifest);
 }
-assertGate(Array.isArray(manifest.removed_skills), 'removed_skills must be array', manifest);
+assertGate(!Object.hasOwn(manifest, 'removed_skills'), 'current packaged manifest must not publish retired skill names', manifest);
 
 const home = await makeTempRoot('skills-manifest-global-collision-');
 await writeText(path.join(home, '.agents', 'skills', 'answer', 'SKILL.md'), '---\nname: answer\ndescription: user global answer\n---\n\nuser-owned global answer.\n');
@@ -33,7 +33,7 @@ const answerExists = fs.existsSync(path.join(home, '.agents', 'skills', 'answer'
 const quarantined = await findFiles(path.join(home, '.sneakoscope', 'quarantine', 'skills', 'answer'), 'SKILL.md');
 assertGate(answerExists && quarantined.length === 1, 'global install must quarantine user official-name collision before writing official skill', install);
 
-emitGate('skills:manifest-continuity', { skills: manifest.skills.length, removed: manifest.removed_skills.length });
+emitGate('skills:manifest-continuity', { skills: manifest.skills.length, retired_names_published: 0 });
 
 async function findFiles(dir: string, name: string): Promise<string[]> {
   const rows = await fsp.readdir(dir, { withFileTypes: true }).catch(() => []);

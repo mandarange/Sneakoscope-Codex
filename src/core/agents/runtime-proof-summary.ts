@@ -72,7 +72,7 @@ export async function buildRuntimeProofSummary(root: string, missionIdInput: str
   const agentsDir = path.join(dir, 'agents')
   const parallel = await readJson<any>(path.join(agentsDir, 'parallel-runtime-proof.json'), null)
   const scheduler = await readJson<any>(path.join(agentsDir, 'agent-scheduler-state.json'), null)
-  const swarm = await readJson<any>(path.join(agentsDir, 'agent-native-cli-session-swarm.json'), null)
+  const runtime = await readJson<any>(path.join(agentsDir, 'native-cli-worker-runtime.json'), null)
   const telemetry = await readJson<any>(path.join(dir, 'zellij', 'slot-telemetry.snapshot.json'), null)
   const stopGate = await readJson<any>(path.join(dir, 'stop-gate.json'), null)
   const governor = await readJson<any>(path.join(agentsDir, 'naruto-concurrency-governor.json'), null)
@@ -84,9 +84,9 @@ export async function buildRuntimeProofSummary(root: string, missionIdInput: str
   const errorMessages = messagesAll.filter((row) => row.level === 'error')
   const telemetryAgeMs = telemetry?.updated_at ? Math.max(0, Date.now() - Date.parse(telemetry.updated_at)) : Number.MAX_SAFE_INTEGER
   const terminalProofAccepted = canonicalTerminalProofAccepted(stopGate, missionId)
-  const visiblePanes = Number(parallel?.visible_panes ?? swarm?.zellij_pane_worker_sessions ?? telemetryVisiblePaneCount(telemetry) ?? 0)
-  const targetActive = Number(scheduler?.target_active_slots ?? parallel?.target_active_slots ?? swarm?.target_active_slots ?? governor?.target_active_slots ?? 0)
-  const headlessWorkers = Number(parallel?.headless_workers ?? swarm?.headless_overflow_worker_count ?? Math.max(0, targetActive - visiblePanes))
+  const visiblePanes = Number(parallel?.visible_panes ?? runtime?.zellij_pane_worker_sessions ?? telemetryVisiblePaneCount(telemetry) ?? 0)
+  const targetActive = Number(scheduler?.target_active_slots ?? parallel?.target_active_slots ?? runtime?.target_active_slots ?? governor?.target_active_slots ?? 0)
+  const headlessWorkers = Number(parallel?.headless_workers ?? runtime?.headless_overflow_worker_count ?? Math.max(0, targetActive - visiblePanes))
   const parallelBlockers = parallel?.passed === false ? parallel.blockers || ['parallel_runtime_proof_failed'] : []
   const blockers = [
     ...(!parallel ? ['parallel_runtime_proof_missing'] : []),
@@ -103,7 +103,7 @@ export async function buildRuntimeProofSummary(root: string, missionIdInput: str
     generated_at: new Date().toISOString(),
     parallel: {
       max_active_workers: Number(parallel?.max_observed_active_workers || scheduler?.max_observed_active_slots || 0),
-      unique_worker_pids: Number(parallel?.unique_worker_pids || uniqueNumbers(swarm?.process_ids).length || 0),
+      unique_worker_pids: Number(parallel?.unique_worker_pids || uniqueNumbers(runtime?.process_ids).length || 0),
       speedup_ratio: Number(parallel?.speedup_ratio || 0),
       proof_passed: parallel?.passed === true
     },

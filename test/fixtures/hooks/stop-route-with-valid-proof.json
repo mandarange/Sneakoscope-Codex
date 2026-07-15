@@ -2,21 +2,23 @@
   "event": "Stop",
   "state": {
     "mission_id": "M-fixture-valid-proof",
-    "route_command": "$Team",
-    "mode": "TEAM",
+    "route_command": "$Naruto",
+    "mode": "NARUTO",
     "stop_gate": "none",
     "proof_required": true,
+    "subagents_required": true,
+    "native_sessions_required": false,
     "reflection_required": false
   },
   "payload": {
-    "last_assistant_message": "What changed: fixture route completed with proof.\n\nVerified: completion-proof.json is present.\n\nNot verified: no real external run claimed.\n\nHonest Mode: verified fixture proof, no real external run claimed."
+    "last_assistant_message": "What changed: fixture Naruto proof was written.\n\nVerified: completion-proof.json is present.\n\nNot verified: official subagent lifecycle events and parent summary are absent.\n\nHonest Mode: completion must remain blocked without official subagent evidence."
   },
   "proof": {
     "schema": "sks.completion-proof.v1",
     "version": "0.9.13",
     "generated_at": "2026-05-17T00:00:00.000Z",
     "mission_id": "M-fixture-valid-proof",
-    "route": "$Team",
+    "route": "$Naruto",
     "status": "verified_partial",
     "summary": {
       "files_changed": 0,
@@ -35,20 +37,10 @@
         "anchors": 0,
         "anchor_count": 0
       },
-      "agents": {
-        "schema": "sks.agent-proof-evidence.v1",
-        "ok": true,
-        "status": "passed",
-        "mission_id": "M-fixture-valid-proof",
-        "route": "$Team",
-        "backend": "fixture",
-        "agent_count": 5,
-        "all_sessions_closed": true,
-        "no_overlap_ok": true,
-        "ledger_hash_chain_ok": true,
-        "consensus_ok": true,
-        "janitor_ok": true,
-        "blockers": []
+      "route_gate": {
+        "workflow": "official_codex_subagent",
+        "official_subagent_evidence": true,
+        "parent_summary_present": true
       },
       "triwiki": null
     },

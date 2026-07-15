@@ -24,130 +24,296 @@
     "handoff_notes",
     "artifacts",
     "unverified",
-    "writes",
-    "patch_envelopes",
-    "patch_queue_refs",
-    "applied_patch_refs",
-    "rollback_refs",
-    "backend_router_report",
-    "codex_child_report",
-    "process_child_report",
-    "tmux_child_report",
-    "model_authored_patch_envelopes",
-    "fixture_patch_envelopes",
-    "no_patch_reason",
-    "follow_up_work_items",
-    "source_intelligence_refs",
-    "goal_mode_ref",
-    "worker_scout_evidence"
+    "writes"
   ],
   "properties": {
-    "schema": { "type": "string", "const": "sks.agent-result.v1" },
-    "mission_id": { "type": "string" },
-    "agent_id": { "type": "string", "minLength": 1 },
-    "session_id": { "type": "string", "minLength": 1 },
-    "persona_id": { "type": "string" },
-    "task_slice_id": { "type": "string" },
-    "status": { "type": "string", "enum": ["done", "blocked", "failed"] },
-    "backend": { "type": "string", "enum": ["fake", "process", "codex-sdk", "python-codex-sdk", "codex-exec", "zellij", "tmux", "ollama", "local-llm"] },
-    "summary": { "type": "string" },
-    "findings": { "type": "array", "items": { "type": "string" } },
-    "proposed_changes": { "type": "array", "items": { "type": "string" } },
-    "changed_files": { "type": "array", "items": { "type": "string" } },
+    "schema": {
+      "const": "sks.agent-result.v1"
+    },
+    "mission_id": {
+      "type": "string"
+    },
+    "agent_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "session_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "persona_id": {
+      "type": "string"
+    },
+    "task_slice_id": {
+      "type": "string"
+    },
+    "work_item_kind": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "done",
+        "blocked",
+        "failed"
+      ]
+    },
+    "backend": {
+      "enum": [
+        "fake",
+        "process",
+        "codex-sdk",
+        "python-codex-sdk",
+        "zellij",
+        "ollama",
+        "local-llm"
+      ]
+    },
+    "summary": {
+      "type": "string"
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "proposed_changes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "changed_files": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
     "lease_compliance": {
       "type": "object",
-      "required": ["ok", "violations"],
+      "required": [
+        "ok",
+        "violations"
+      ],
       "properties": {
-        "ok": { "type": "boolean" },
-        "violations": { "type": "array", "items": { "type": "string" } }
+        "ok": {
+          "type": "boolean"
+        },
+        "violations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
       },
       "additionalProperties": false
     },
-    "artifacts": { "type": "array", "items": { "type": "string" } },
-    "blockers": { "type": "array", "items": { "type": "string" } },
-    "confidence": { "type": "string" },
-    "handoff_notes": { "type": "string" },
-    "unverified": { "type": "array", "items": { "type": "string" } },
-    "writes": { "type": "array", "items": { "type": "string" } },
+    "recursion_guard": {
+      "type": "object",
+      "required": [
+        "ok",
+        "violations"
+      ],
+      "properties": {
+        "ok": {
+          "type": "boolean"
+        },
+        "violations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "verification": {
+      "type": "object",
+      "required": [
+        "status",
+        "checks"
+      ],
+      "properties": {
+        "status": {
+          "type": "string"
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "blockers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "confidence": {
+      "type": "string"
+    },
+    "handoff_notes": {
+      "type": "string"
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "unverified": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "writes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
     "patch_envelopes": {
       "type": "array",
       "items": {
         "type": "object",
         "required": [
           "schema",
-          "source",
-          "mission_id",
-          "route",
           "agent_id",
           "session_id",
           "slot_id",
           "generation_index",
-          "task_slice_id",
-          "native_cli_worker_session_id",
-          "native_cli_process_id",
-          "worker_process_id",
-          "backend_child_process_id",
-          "fast_mode",
-          "service_tier",
-          "lease_id",
-          "allowed_paths",
-          "strategy_task_id",
-          "micro_win_id",
-          "verification_node_id",
-          "rollback_node_id",
-          "lease_proof",
-          "operations",
-          "rationale",
-          "verification_hint",
-          "rollback_hint"
+          "operations"
         ],
         "properties": {
-          "schema": { "type": "string", "const": "sks.agent-patch-envelope.v1" },
-          "source": { "type": "string", "enum": ["fixture", "model_authored", "process_generated", "tmux_generated"] },
-          "mission_id": { "type": "string" },
-          "route": { "type": "string" },
-          "agent_id": { "type": "string", "minLength": 1 },
-          "session_id": { "type": "string", "minLength": 1 },
-          "slot_id": { "type": "string", "minLength": 1 },
-          "generation_index": { "type": "integer", "minimum": 0 },
-          "task_slice_id": { "type": "string" },
-          "native_cli_worker_session_id": { "type": "string" },
-          "native_cli_process_id": { "type": "number" },
-          "worker_process_id": { "type": "number" },
-          "backend_child_process_id": { "type": "number" },
-          "fast_mode": { "type": "boolean" },
-          "service_tier": { "type": "string", "enum": ["fast", "standard"] },
-          "lease_id": { "type": "string" },
-          "allowed_paths": { "type": "array", "items": { "type": "string" } },
-          "strategy_task_id": { "type": "string" },
-          "micro_win_id": { "type": "string" },
-          "verification_node_id": { "type": "string" },
-          "rollback_node_id": { "type": "string" },
+          "schema": {
+            "const": "sks.agent-patch-envelope.v1"
+          },
+          "source": {
+            "enum": [
+              "fixture",
+              "model_authored",
+              "process_generated",
+              "zellij_generated",
+              "git-worktree-diff"
+            ]
+          },
+          "mission_id": {
+            "type": "string"
+          },
+          "route": {
+            "type": "string"
+          },
+          "agent_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "slot_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "generation_index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "task_slice_id": {
+            "type": "string"
+          },
+          "native_cli_worker_session_id": {
+            "type": "string"
+          },
+          "native_cli_process_id": {
+            "type": "number"
+          },
+          "worker_process_id": {
+            "type": "number"
+          },
+          "backend_child_process_id": {
+            "type": "number"
+          },
+          "backend_sdk_thread_id": {
+            "type": "string"
+          },
+          "backend_ollama_request_id": {
+            "type": "string"
+          },
+          "fast_mode": {
+            "type": "boolean"
+          },
+          "service_tier": {
+            "enum": [
+              "fast",
+              "standard"
+            ]
+          },
+          "lease_id": {
+            "type": "string"
+          },
+          "allowed_paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "strategy_task_id": {
+            "type": "string"
+          },
+          "micro_win_id": {
+            "type": "string"
+          },
+          "verification_node_id": {
+            "type": "string"
+          },
+          "rollback_node_id": {
+            "type": "string"
+          },
           "lease_proof": {
             "type": "object",
-            "required": [
-              "lease_id",
-              "owner_agent",
-              "owner_persona",
-              "allowed_paths",
-              "strategy_task_id",
-              "micro_win_id",
-              "protected_path_check",
-              "conflict_prediction_id",
-              "verification_node_id",
-              "rollback_node_id"
-            ],
             "properties": {
-              "lease_id": { "type": "string" },
-              "owner_agent": { "type": "string" },
-              "owner_persona": { "type": "string" },
-              "allowed_paths": { "type": "array", "items": { "type": "string" } },
-              "strategy_task_id": { "type": "string" },
-              "micro_win_id": { "type": "string" },
-              "protected_path_check": { "type": "string", "enum": ["passed", "blocked", "not_checked"] },
-              "conflict_prediction_id": { "type": "string" },
-              "verification_node_id": { "type": "string" },
-              "rollback_node_id": { "type": "string" }
+              "lease_id": {
+                "type": "string"
+              },
+              "owner_agent": {
+                "type": "string"
+              },
+              "owner_persona": {
+                "type": "string"
+              },
+              "allowed_paths": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "strategy_task_id": {
+                "type": "string"
+              },
+              "micro_win_id": {
+                "type": "string"
+              },
+              "protected_path_check": {
+                "enum": [
+                  "passed",
+                  "blocked",
+                  "not_checked"
+                ]
+              },
+              "conflict_prediction_id": {
+                "type": "string"
+              },
+              "verification_node_id": {
+                "type": "string"
+              },
+              "rollback_node_id": {
+                "type": "string"
+              }
             },
             "additionalProperties": false
           },
@@ -156,55 +322,144 @@
             "minItems": 1,
             "items": {
               "type": "object",
-              "required": ["op", "path", "search", "replace", "content", "diff"],
+              "required": [
+                "op",
+                "path"
+              ],
               "properties": {
-                "op": { "type": "string", "enum": ["replace", "write", "unified_diff"] },
-                "path": { "type": "string", "minLength": 1 },
-                "search": { "type": "string" },
-                "replace": { "type": "string" },
-                "content": { "type": "string" },
-                "diff": { "type": "string" }
+                "op": {
+                  "enum": [
+                    "replace",
+                    "write",
+                    "unified_diff",
+                    "git_apply_patch"
+                  ]
+                },
+                "path": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "search": {
+                  "type": "string"
+                },
+                "replace": {
+                  "type": "string"
+                },
+                "content": {
+                  "type": "string"
+                },
+                "diff": {
+                  "type": "string"
+                }
               },
               "additionalProperties": false
             }
           },
-          "rationale": { "type": "string" },
+          "rationale": {
+            "type": "string"
+          },
           "verification_hint": {
             "type": "object",
-            "required": ["command", "node_id", "artifact", "notes"],
-            "properties": {
-              "command": { "type": "string" },
-              "node_id": { "type": "string" },
-              "artifact": { "type": "string" },
-              "notes": { "type": "string" }
-            },
-            "additionalProperties": false
+            "additionalProperties": {
+              "type": "string"
+            }
           },
           "rollback_hint": {
             "type": "object",
-            "required": ["command", "node_id", "artifact", "notes"],
-            "properties": {
-              "command": { "type": "string" },
-              "node_id": { "type": "string" },
-              "artifact": { "type": "string" },
-              "notes": { "type": "string" }
-            },
-            "additionalProperties": false
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "cochange_acknowledged": {
+            "type": "boolean"
+          },
+          "cochange_acknowledged_reason": {
+            "type": "string"
+          },
+          "regression_proof": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "repair_hypothesis": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "tournament": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "git_worktree": {
+            "type": "object",
+            "additionalProperties": true
           }
         },
         "additionalProperties": false
       }
     },
-    "patch_queue_refs": { "type": "array", "items": { "type": "string" } },
-    "applied_patch_refs": { "type": "array", "items": { "type": "string" } },
-    "rollback_refs": { "type": "array", "items": { "type": "string" } },
-    "backend_router_report": { "type": "object", "properties": {}, "required": [], "additionalProperties": false },
-    "codex_child_report": { "type": "object", "properties": {}, "required": [], "additionalProperties": false },
-    "process_child_report": { "type": "object", "properties": {}, "required": [], "additionalProperties": false },
-    "tmux_child_report": { "type": "object", "properties": {}, "required": [], "additionalProperties": false },
-    "model_authored_patch_envelopes": { "type": "boolean" },
-    "fixture_patch_envelopes": { "type": "boolean" },
-    "no_patch_reason": { "type": "object", "properties": {}, "required": [], "additionalProperties": false },
+    "patch_queue_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "applied_patch_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "rollback_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "backend_router_report": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "codex_child_report": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "codex_sdk_thread": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "process_child_report": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "zellij_child_report": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "model_authored_patch_envelopes": {
+      "type": "boolean"
+    },
+    "fixture_patch_envelopes": {
+      "type": "boolean"
+    },
+    "no_patch_reason": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "machine_feedback": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "regression_proof": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "repair_hypothesis": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "tournament": {
+      "type": "object",
+      "additionalProperties": true
+    },
     "follow_up_work_items": {
       "type": "array",
       "items": {
@@ -218,35 +473,64 @@
           "dependencies",
           "lease_requirements",
           "max_attempts",
-          "reason",
-          "source_agent_session_id"
+          "reason"
         ],
         "properties": {
-          "id": { "type": "string", "minLength": 1 },
-          "title": { "type": "string", "minLength": 1 },
-          "description": { "type": "string", "minLength": 1 },
-          "required_persona_category": { "type": "string", "minLength": 1 },
-          "priority": { "type": "integer", "minimum": 0 },
-          "dependencies": { "type": "array", "items": { "type": "string" } },
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "required_persona_category": {
+            "type": "string",
+            "minLength": 1
+          },
+          "priority": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "dependencies": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "lease_requirements": {
             "type": "array",
             "items": {
               "type": "object",
-              "required": ["kind", "path"],
+              "required": [
+                "kind",
+                "path"
+              ],
               "properties": {
-                "kind": { "type": "string" },
-                "path": { "type": "string" }
+                "kind": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                }
               },
               "additionalProperties": false
             }
           },
-          "max_attempts": { "type": "integer", "minimum": 1 },
-          "reason": { "type": "string", "minLength": 1 },
+          "max_attempts": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
           "source_agent_session_id": {
-            "anyOf": [
-              { "type": "string" },
-              { "type": "null" }
-            ]
+            "type": "string"
           }
         },
         "additionalProperties": false
@@ -256,59 +540,57 @@
       "anyOf": [
         {
           "type": "object",
-          "properties": {},
-          "required": [],
-          "additionalProperties": false
+          "additionalProperties": true
         },
-        { "type": "null" }
+        {
+          "type": "null"
+        }
       ]
     },
     "goal_mode_ref": {
       "anyOf": [
         {
           "type": "object",
-          "properties": {},
-          "required": [],
-          "additionalProperties": false
+          "additionalProperties": true
         },
-        { "type": "null" }
+        {
+          "type": "null"
+        }
       ]
     },
     "worker_scout_evidence": {
-      "anyOf": [
-        {
-          "type": "object",
-          "required": ["schema", "ok", "agent_id", "artifact_path", "central_proof_ssot", "blockers"],
-          "properties": {
-            "schema": { "type": "string", "const": "sks.worker-scout-evidence.v1" },
-            "ok": { "type": "boolean" },
-            "agent_id": { "type": "string" },
-            "artifact_path": { "type": "string" },
-            "central_proof_ssot": { "type": "boolean" },
-            "blockers": { "type": "array", "items": { "type": "string" } }
-          },
-          "additionalProperties": false
+      "type": "object",
+      "required": [
+        "schema",
+        "ok",
+        "agent_id",
+        "artifact_path",
+        "central_proof_ssot"
+      ],
+      "properties": {
+        "schema": {
+          "const": "sks.worker-scout-evidence.v1"
         },
-        { "type": "null" }
-      ]
-    },
-    "recursion_guard": {
-      "type": "object",
-      "required": ["ok", "violations"],
-      "properties": {
-        "ok": { "type": "boolean" },
-        "violations": { "type": "array", "items": { "type": "string" } }
+        "ok": {
+          "type": "boolean"
+        },
+        "agent_id": {
+          "type": "string"
+        },
+        "artifact_path": {
+          "type": "string"
+        },
+        "central_proof_ssot": {
+          "type": "boolean"
+        },
+        "blockers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
       },
-      "additionalProperties": false
-    },
-    "verification": {
-      "type": "object",
-      "required": ["status", "checks"],
-      "properties": {
-        "status": { "type": "string" },
-        "checks": { "type": "array", "items": { "type": "string" } }
-      },
-      "additionalProperties": false
+      "additionalProperties": true
     }
   },
   "additionalProperties": false

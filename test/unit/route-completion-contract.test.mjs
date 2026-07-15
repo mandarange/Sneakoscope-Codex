@@ -26,8 +26,8 @@ test('route completion contract requires visual anchors for visual routes', () =
 test('mock evidence cannot support a verified real route status', () => {
   const proof = {
     schema: 'sks.completion-proof.v1',
-    mission_id: 'M-team',
-    route: '$Team',
+    mission_id: 'M-naruto',
+    route: '$Naruto',
     execution_class: 'real',
     status: 'verified',
     summary: {},

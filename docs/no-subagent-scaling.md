@@ -37,7 +37,7 @@ naruto-summary.json
 naruto-gate.json
 ```
 
-The historical Naruto process swarm and its environment opt-in are removed.
+The historical Naruto process runtime and its environment opt-in are removed.
 Legacy backend, scheduler, pool, and model flags fail closed. A standalone
 terminal invocation launches at most one Sol Max `codex exec` parent, and a
 Codex App/Desktop invocation returns official delegation context to the current
@@ -47,6 +47,6 @@ The parent reuses only bounded TriWiki `attention.use_first` anchors and hydrate
 their source hints on demand. It does not inject the full context pack into each
 child or require repeated repository-wide context discovery.
 
-The legacy release-gate ids `agent:native-cli-session-swarm-scaling` and
+The legacy release-gate ids `agent:native-cli-worker-runtime-scaling` and
 `agent:fast-mode-policy` are retired. `naruto:canonical-stop-gate` validates
 the official event-evidence contract once.

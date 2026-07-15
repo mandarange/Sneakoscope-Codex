@@ -17,9 +17,9 @@ The fixture gate checks:
 - `not_required` count is at most 16;
 - mock fixture blocked count is zero;
 - expected artifacts exist where the command generated them and expose declared schemas or route gate pass fields.
-- `cli-agent` executes `sks agent run fixture --mock --json` and validates the native central ledger, task board, leases, no-overlap proof, cleanup, proof evidence, and dynamic effort policy.
-- `cli-agent` is the native multi-session fixture surface and validates `agents/agent-proof-evidence.json`, agent sessions, leases, task board, central ledger, and cleanup evidence.
-- all-features selftest checks `native_agent_intake_contract_present`, `cli_agent_fixture_pass`, `legacy_multiagent_removed`, `agent_proof_evidence_contract_present`, and `agent_lease_policy_present`.
+- `cli-naruto` executes `sks naruto run "fixture" --agents 4 --max-threads 4 --json` and validates the official-subagent preparation contract: `subagent-plan.json`, `subagent-events.jsonl`, `subagent-evidence.json`, `naruto-summary.json`, `naruto-gate.json`, and `work-order-ledger.json`.
+- preparation fixtures prove argument parsing, bounded role selection, mission creation, and artifact shape. They do not claim that official child threads completed.
+- completion fixtures require correlated official lifecycle events plus a trustworthy `subagent-parent-summary.json` with one outcome for every requested thread.
 
 External dependency routes remain honest: a mock fixture can pass while the real dependency path remains `blocked`, `not_verified`, or `verified_partial` until real evidence exists.
 
@@ -32,24 +32,12 @@ External dependency routes remain honest: a mock fixture can pass while the real
 - `missing`: invalid release state.
 
 `npm run feature-quality:check` fails when runtime route features are static-only or when quality counts are missing from the registry.
-# 1.0.1 Feature Quality Target
 
-Stable release feature quality is release-gated by `npm run feature-quality:check`, which now reads the TypeScript-built `dist` runtime.
+## Release Quality Target
 
-Targets:
-
-- `runtime_verified >= 22`
-- `runtime_mock_verified >= 45`
-- `integration_optional <= 6`
-- `static_contract <= 45`
-- `missing = 0`
-
-Current stable verification snapshot:
-
-- `runtime_verified=43`
-- `runtime_mock_verified=47`
-- `integration_optional=5`
-- `static_contract=22`
-- `missing=0`
-
-Runtime-capable CLI and route features should not stay `static_contract` unless they are explicitly documentation-only or no-op surfaces.
+The TypeScript-built registry and the current `feature-quality:check` report are
+the source of truth for thresholds and observed counts. A stable release
+requires `missing = 0`, zero blocked deterministic mock fixtures, and no
+runtime-capable command or route represented as a documentation-only static
+contract. Do not copy an older release's count snapshot into current readiness
+evidence.

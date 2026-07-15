@@ -44,11 +44,11 @@ test('feature registry does not silently allow unknown uppercase dollar mentions
   const coverage = validateFeatureRegistry({
     features: [
       {
-        id: 'route-team',
+        id: 'route-fixture',
         source_refs: {
           cli_command_names: [],
           handler_keys: [],
-          dollar_commands: ['$Team'],
+          dollar_commands: ['$Fixture'],
           app_skill_aliases: [],
           skills: []
         }
@@ -57,7 +57,7 @@ test('feature registry does not silently allow unknown uppercase dollar mentions
     source_inventory: {
       cli_command_names: [],
       handler_keys: [],
-      dollar_commands: ['$Team'],
+      dollar_commands: ['$Fixture'],
       app_skill_aliases: [],
       skills: [],
       doc_route_mentions: ['$FOO_BAR', '$CODEX_HOME', '$HOME', '$SKS_WORKTREE_ROOT', '$XDG_CACHE_HOME']

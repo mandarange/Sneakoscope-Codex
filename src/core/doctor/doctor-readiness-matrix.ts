@@ -110,7 +110,6 @@ export function buildDoctorReadinessMatrix(input: any = {}) {
     codex_config_readable_by_node: codexConfigNode,
     codex_config_readable_by_codex_cli: actualOk,
     codex_config_readable_in_zellij_context: zellijReadyForInteractive,
-    tmux_removed_runtime: true,
     zellij: zellij ? {
       ...zellij,
       required_for: ['sks --mad', 'interactive lane UI'],
@@ -119,10 +118,6 @@ export function buildDoctorReadinessMatrix(input: any = {}) {
       status: 'missing',
       required_for: ['sks --mad', 'interactive lane UI'],
       ready_for_interactive_runtime: false
-    },
-    tmux: {
-      status: 'removed_runtime',
-      replacement: 'zellij'
     },
     codex_doctor: codexDoctor || null,
     codex_0138_doctor: codex0138Doctor,

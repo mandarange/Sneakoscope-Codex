@@ -63,7 +63,7 @@ function researchStages(): ResearchGraphStage[] {
       kind: 'documentation',
       stage_kind: 'implementation_blueprint',
       dependencies: ['claim_matrix_build', 'source_shard_local_project_evidence'],
-      outputs: ['implementation-blueprint.json', 'implementation-blueprint.md', 'team-handoff-goal.md']
+      outputs: ['implementation-blueprint.json', 'implementation-blueprint.md', 'naruto-handoff-goal.md']
     },
     {
       id: 'experiment_plan',
@@ -161,7 +161,7 @@ export function buildResearchWorkGraph(plan: any = null): NarutoWorkGraph & Reco
   return {
     schema: 'sks.naruto-work-graph.v1',
     route: '$Naruto',
-    requested_clones: requestedReviewers,
+    requested_workers: requestedReviewers,
     total_work_items: workItems.length,
     readonly: true,
     write_capable: false,
@@ -176,8 +176,7 @@ export function buildResearchWorkGraph(plan: any = null): NarutoWorkGraph & Reco
     blockers: [],
     ok: true,
     official_subagent_workflow: true,
-    official_subagent_reviewer_count: requestedReviewers,
-    legacy_process_swarm_used: false
+    official_subagent_reviewer_count: requestedReviewers
   }
 }
 

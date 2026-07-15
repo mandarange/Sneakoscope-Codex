@@ -89,7 +89,7 @@ test('native Naruto worker routing passes the exact selected model and effort in
   }).sandbox, 'workspace-write');
 });
 
-test('legacy native Naruto worker routing still blocks non-family explicit overrides', async () => {
+test('internal Naruto worker routing blocks non-family explicit overrides', async () => {
   const routing = await resolveWorkerModelRouting({
     agent: { id: 'naruto_1', role: 'implementer', naruto_role: 'implementer' },
     slice: { id: 'W1', kind: 'implementation', title: 'Implement feature' },

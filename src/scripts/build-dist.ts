@@ -13,6 +13,7 @@ const distRoot = path.join(root, 'dist');
 await fsp.mkdir(distRoot, { recursive: true });
 await removeDistMjs(distRoot);
 await copyRuntimeConfigFiles();
+await copyNativeMenuBarSources();
 await writeSkillsManifest();
 await removeDistNonRuntimeArtifacts(distRoot);
 await writeCommonJsBinScope();
@@ -53,6 +54,13 @@ async function copyRuntimeConfigFiles() {
   );
 }
 
+async function copyNativeMenuBarSources() {
+  await copyDirIfPresent(
+    new URL('../../native/sks-menubar', import.meta.url),
+    path.join(distRoot, 'native', 'sks-menubar')
+  );
+}
+
 async function writeSkillsManifest() {
   const { generatePackagedSkillsManifest } = await import('../core/init/skills.js');
   const manifest = await generatePackagedSkillsManifest();
@@ -67,7 +75,7 @@ async function writeCommonJsBinScope() {
   await writeTextAtomic(path.join(binDir, 'package.json'), '{"type":"commonjs"}\n');
   await rewriteIfPresent(path.join(binDir, 'sks.js'), (text) =>
     stripSourceMap(text)
-      .replace(/^import \{ PACKAGE_VERSION \} from '\.\.\/core\/version\.js';$/m, "const { PACKAGE_VERSION } = require('../core/version.js');")
+      .replace(/^import \{ PACKAGE_VERSION \} from '\.\.\/core\/version\.js';$/m, "const { version: PACKAGE_VERSION } = require('../../package.json');")
       .replace(/\nexport \{\};\n?/, '\n')
   );
   await rewriteIfPresent(path.join(binDir, 'sks-dispatch.js'), (text) => {
@@ -118,6 +126,7 @@ function stripGeneratedCommonJsExports(text, names) {
 }
 
 async function copyDirIfPresent(from, to) {
+  from = fileURLToPathIfNeeded(from);
   if (!fs.existsSync(from)) return;
   await fsp.rm(to, { recursive: true, force: true });
   await fsp.mkdir(to, { recursive: true });
@@ -127,4 +136,8 @@ async function copyDirIfPresent(from, to) {
     if (entry.isDirectory()) await copyDirIfPresent(source, target);
     else if (entry.isFile()) await fsp.copyFile(source, target);
   }
+}
+
+function fileURLToPathIfNeeded(value) {
+  return value instanceof URL ? fileURLToPath(value) : value;
 }

@@ -1,6 +1,7 @@
 import fsp from 'node:fs/promises'
 import path from 'node:path'
-import { nowIso, randomId, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
+import { nowIso, randomId, readJson, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
+import { SSOT_GUARD_ARTIFACT, buildSsotGuard, validateSsotGuardArtifact } from '../safety/ssot-guard.js'
 import { classifyTaskProfile } from '../runtime/task-profile.js'
 import { chooseVerificationBudget } from '../runtime/verification-budget.js'
 import { buildOfficialSubagentPrompt } from './official-subagent-prompt.js'
@@ -110,7 +111,12 @@ export async function prepareOfficialSubagentMission(input: OfficialSubagentPrep
   })
   const selectedAgentPlan = officialSubagentOnDemandRolePlan(suggestedAgents)
   const agentCatalog = onDemandAgentCatalogMetadata(selectedAgentPlan)
-  const configBlockers = officialConfig.blockers.map((blocker) => `official_subagent_config:${blocker}`)
+  const ssotGuard = buildSsotGuard({ route: input.route, mode: mode === 'naruto' ? 'NARUTO' : 'OFFICIAL_SUBAGENT', task: goal })
+  const ssotGuardValidation = validateSsotGuardArtifact(ssotGuard)
+  const configBlockers = [
+    ...officialConfig.blockers.map((blocker) => `official_subagent_config:${blocker}`),
+    ...ssotGuardValidation.issues.map((issue) => `ssot_guard:${issue}`)
+  ]
   const plan = {
     schema: 'sks.subagent-plan.v1',
     mission_id: input.missionId,
@@ -150,7 +156,6 @@ export async function prepareOfficialSubagentMission(input: OfficialSubagentPrep
     verification_budget: verification,
     verification_checks: [],
     verification: { budget: verification },
-    legacy_process_swarm_used: false,
     created_at: nowIso()
   }
 
@@ -166,6 +171,7 @@ export async function prepareOfficialSubagentMission(input: OfficialSubagentPrep
   }
   await Promise.all(cleanup)
   await writeTextAtomic(path.join(input.dir, SUBAGENT_EVENT_LOG_FILENAME), '')
+  await writeJsonAtomic(path.join(input.dir, SSOT_GUARD_ARTIFACT), ssotGuard)
   await writeJsonAtomic(path.join(input.dir, SUBAGENT_PLAN_FILENAME), plan)
   const evidence = await writeSubagentEvidence(input.dir, {
     requestedSubagents: budget.requestedSubagents,
@@ -281,7 +287,6 @@ export function buildNarutoSummary(input: any) {
     app_session: input.appSession === true,
     session_scope: input.sessionKey || null,
     blockers: uniqueStrings(input.blockers || input.evidence?.blockers || []),
-    legacy_process_swarm_used: false,
     updated_at: nowIso()
   }
 }
@@ -301,7 +306,20 @@ function onDemandAgentCatalogMetadata(
 }
 
 export async function writeNarutoGate(dir: string, input: any) {
-  await writeJsonAtomic(path.join(dir, NARUTO_GATE_FILENAME), buildNarutoGateResult(input))
+  const ssotGuard = await readJson(path.join(dir, SSOT_GUARD_ARTIFACT), null)
+  const ssotValidation = validateSsotGuardArtifact(ssotGuard)
+  const blockers = uniqueStrings([
+    ...(input.blockers || []),
+    ...ssotValidation.issues.map((issue) => `${SSOT_GUARD_ARTIFACT}:${issue}`)
+  ])
+  const gate = buildNarutoGateResult({
+    ...input,
+    passed: input.passed === true && ssotValidation.ok && blockers.length === 0,
+    ssotGuard: ssotValidation.ok,
+    blockers
+  })
+  await writeJsonAtomic(path.join(dir, NARUTO_GATE_FILENAME), gate)
+  return gate
 }
 
 export function buildNarutoGateResult(input: any) {
@@ -331,9 +349,18 @@ export function buildNarutoGateResult(input: any) {
     completed_subagents: Number(input.evidence?.completed_threads || 0),
     failed_subagents: Number(input.evidence?.failed_threads || 0),
     parent_summary_present: input.evidence?.parent_summary_present === true,
+    ssot_guard: input.ssotGuard === true,
     event_sources: input.evidence?.event_sources || [],
+    evidence: {
+      official_subagent_evidence: SUBAGENT_EVIDENCE_FILENAME,
+      parent_summary: SUBAGENT_PARENT_SUMMARY_FILENAME,
+      ssot_guard: SSOT_GUARD_ARTIFACT,
+      requested_subagents: requested,
+      started_threads: Number(input.evidence?.started_threads || 0),
+      completed_threads: completed,
+      failed_threads: failed
+    },
     native_process_proof_required: false,
-    legacy_process_swarm_used: false,
     config_blockers: uniqueStrings(input.configBlockers || []),
     blockers: uniqueStrings(input.blockers || input.evidence?.blockers || []),
     missing_fields: uniqueStrings(input.blockers || input.evidence?.blockers || []),

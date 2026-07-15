@@ -3,7 +3,7 @@ import { projectRoot, readJson, readText, writeJsonAtomic, appendJsonl, nowIso, 
 import { looksInteractiveCommand, interactiveCommandReason } from './no-question-guard.js';
 import { loadStateForSession, missionDir, setCurrent } from './mission.js';
 import { checkDbOperation, dbBlockReason, handleMadSksUserConfirmation } from './db-safety.js';
-import { maybeRecordMadDbToolResultFromToolUse } from './mad-db/mad-db-result-lifecycle.js';
+import { maybeRecordMadSksSqlPlaneToolResultFromToolUse } from './mad-sks/sql-plane/result-lifecycle.js';
 import { checkHarnessModification, harnessGuardBlockReason, isHarnessSourceProject } from './harness-guard.js';
 import { isMadSksRouteState } from './permission-gates.js';
 import { classifyMadSksShellCommand } from './mad-sks/write-guard.js';
@@ -19,7 +19,6 @@ import { closeWorkOrderLedgerForRouteResult } from './work-order-ledger.js';
 import { maybeReconcileProjectSkillsPreflight } from './hooks-runtime/skill-reconcile-preflight.js';
 import { codePackFreshnessNote } from './hooks-runtime/code-pack-freshness-preflight.js';
 import { claimHookInvocation } from './hooks-runtime/hook-invocation-dedupe.js';
-import { joinSystemMessages, teamLiveDigest } from './hooks-runtime/team-digest.js';
 import { armLightTurnStopBypass, clearLightTurnStopBypass, consumeLightTurnStopBypass, hasMatchingLightTurnStopBypass } from './hooks-runtime/light-turn.js';
 import { evaluateHookNarutoDecisionGate, looksLikeActiveContinuationPrompt } from './hooks-runtime/naruto-decision-gate.js';
 import { finalizationRepeatDecision } from './hooks-runtime/stop-repeat-guard.js';
@@ -46,6 +45,7 @@ import {
   SUBAGENT_PARENT_SUMMARY_FILENAME,
   writeSubagentEvidence
 } from './subagents/subagent-evidence.js';
+import { writeNarutoGate } from './subagents/official-subagent-preparation.js';
 const LIGHT_ROUTE_STOP_ARTIFACT = 'light-route-stop.json';
 const CODEX_GIT_ACTION_STOP_ARTIFACT = 'codex-git-action-stop-bypass.json';
 const CODEX_GIT_ACTION_STOP_TTL_MS = 15 * 60 * 1000;
@@ -378,21 +378,15 @@ async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: a
       ? await handleMadSksUserConfirmation(root, state, prompt)
       : null;
     if (madSksConfirmation?.handled) {
-      const teamDigest = await teamLiveDigest(root, state);
-      const additionalContext = [madSksConfirmation.additionalContext, teamDigest?.context].filter(Boolean).join('\n\n');
-      return { continue: true, additionalContext, systemMessage: joinSystemMessages(visibleHookMessage('user-prompt-submit', additionalContext), teamDigest?.system) };
+      const additionalContext = madSksConfirmation.additionalContext;
+      return { continue: true, additionalContext, systemMessage: visibleHookMessage('user-prompt-submit', additionalContext) };
     }
     if (activeContinuation) {
       const activeContext = await activeRouteContext(root, state);
-      const teamDigest = await teamLiveDigest(root, state);
-      const additionalContext = [
-        activeContext,
-        teamDigest?.context
-      ].filter(Boolean).join('\n\n');
       return {
         continue: true,
-        additionalContext,
-        systemMessage: joinSystemMessages(visibleHookMessage('user-prompt-submit', activeContext), teamDigest?.system)
+        additionalContext: activeContext,
+        systemMessage: visibleHookMessage('user-prompt-submit', activeContext)
       };
     }
 
@@ -416,11 +410,9 @@ async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: a
     });
     if (isBlockingClarificationAwaiting(state) && !looksLikeClarificationCancel(prompt)) {
       const activeContext = await activeRouteContext(root, state);
-      const teamDigest = await teamLiveDigest(root, state);
-      const additionalContext = [updateContext, activeContext, teamDigest?.context].filter(Boolean).join('\n\n');
-      return { continue: true, additionalContext, systemMessage: joinSystemMessages(visibleHookMessage('user-prompt-submit', additionalContext), teamDigest?.system) };
+      const additionalContext = [updateContext, activeContext].filter(Boolean).join('\n\n');
+      return { continue: true, additionalContext, systemMessage: visibleHookMessage('user-prompt-submit', additionalContext) };
     }
-    const teamDigest = (bypassActiveRoute || command || prepareFreshRoute) ? null : await teamLiveDigest(root, state);
     const shouldLoadActiveContext = !command && !bypassActiveRoute && !goalOverlay && !prepareFreshRoute;
     const activeContext = shouldLoadActiveContext ? await activeRouteContext(root, state) : '';
     const contexts = [updateContext];
@@ -430,11 +422,10 @@ async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: a
       parentModel: observedParentModel(payload)
     })).additionalContext);
     if (goalOverlay) contexts.push(goalOverlay);
-    if (teamDigest?.context) contexts.push(teamDigest.context);
     const codePackNote = await codePackFreshnessNote(root);
     if (codePackNote) contexts.push(codePackNote);
     const additionalContext = contexts.filter(Boolean).join('\n\n');
-    return { continue: true, additionalContext, systemMessage: joinSystemMessages(visibleHookMessage('user-prompt-submit', additionalContext), teamDigest?.system) };
+    return { continue: true, additionalContext, systemMessage: visibleHookMessage('user-prompt-submit', additionalContext) };
   }
   const prompt = stripVisibleDecisionAnswerBlocks(extractUserPrompt(payload));
   if (diagnosticPromptAllowedDuringNoQuestions(prompt)) {
@@ -554,29 +545,19 @@ function agentWorkerHookContext(state: any = {}, payload: any = {}) {
 async function hookPostTool(root: any, state: any, payload: any, noQuestion: any, sessionKey: any = null) {
   state = { ...state, _session_key: state?._session_key || sessionKey };
   await Promise.all([
-    recordMadDbPostToolLifecycle(root, state, payload).catch(() => null),
+    recordMadSksSqlPlanePostToolLifecycle(root, state, payload).catch(() => null),
     recordContext7Evidence(root, state, payload).catch(() => null),
     recordSubagentEvidence(root, state, payload).catch(() => null),
     toolFailed(payload) ? recordToolErrorTaxonomy(root, state, payload).catch(() => null) : Promise.resolve(null)
   ]);
-  const teamDigest = await teamLiveDigest(root, state);
-  if (!noQuestion) {
-    return teamDigest?.context
-      ? { continue: true, additionalContext: teamDigest.context, systemMessage: joinSystemMessages(visibleHookMessage('post-tool'), teamDigest.system) }
-      : { continue: true };
-  }
+  if (!noQuestion) return { continue: true };
   if (toolFailed(payload)) {
     return {
-      additionalContext: [
-        'SKS no-question mode is active. Do not ask the user about this tool failure. Apply the active decision ladder, create a fix task only inside the sealed contract, and continue. Do not create unrequested fallback implementation code; block with evidence if the requested path is impossible.',
-        teamDigest?.context
-      ].filter(Boolean).join('\n\n'),
-      systemMessage: joinSystemMessages(visibleHookMessage('post-tool'), teamDigest?.system)
+      additionalContext: 'SKS no-question mode is active. Do not ask the user about this tool failure. Apply the active decision ladder, create a fix task only inside the sealed contract, and continue. Do not create unrequested fallback implementation code; block with evidence if the requested path is impossible.',
+      systemMessage: visibleHookMessage('post-tool')
     };
   }
-  return teamDigest?.context
-    ? { continue: true, additionalContext: teamDigest.context, systemMessage: joinSystemMessages(visibleHookMessage('post-tool'), teamDigest.system) }
-    : { continue: true };
+  return { continue: true };
 }
 
 function needsMutationSafetyCheck(payload: any = {}) {
@@ -588,9 +569,9 @@ function needsMutationSafetyCheck(payload: any = {}) {
   return true;
 }
 
-async function recordMadDbPostToolLifecycle(root: any, state: any = {}, payload: any = {}) {
+async function recordMadSksSqlPlanePostToolLifecycle(root: any, state: any = {}, payload: any = {}) {
   if (!state?.mission_id) return null;
-  return maybeRecordMadDbToolResultFromToolUse({
+  return maybeRecordMadSksSqlPlaneToolResultFromToolUse({
     root,
     missionId: String(state.mission_id),
     toolCallPayload: payload,
@@ -724,7 +705,7 @@ function clarificationAnswerToolAllowed(payload: any = {}) {
   if (!payloadMentionsAnswersJson(payload)) return false;
   if (!command) return true;
   if (/\bpipeline\s+answer\b/i.test(command)) return true;
-  return !/\b(npm|git|selftest|packcheck|release:check|publish:dry|publish:ignore-scripts|publish:npm|doctor|team|qa-loop|wiki|db|test)\b/i.test(command);
+  return !/\b(npm|git|selftest|packcheck|release:check|publish:dry|publish:ignore-scripts|publish:npm|doctor|naruto|qa-loop|wiki|db|test)\b/i.test(command);
 }
 
 function payloadMentionsAnswersJson(payload: any = {}) {
@@ -887,11 +868,26 @@ async function refreshOfficialSubagentCompletionArtifacts(root: any, state: any 
     ...(Array.isArray(plan.config_blockers) ? plan.config_blockers.map((item: any) => `official_subagent_config:${String(item)}`) : []),
     ...(parentModelMismatch ? [`parent_model_mismatch:${String(parentModel || 'unknown')}`] : [])
   ])];
-  const passed = evidence.ok === true && blockers.length === 0;
+  const candidatePassed = evidence.ok === true && blockers.length === 0;
+  const gate = await writeNarutoGate(dir, {
+    missionId: id,
+    workflowRunId,
+    evidence,
+    passed: candidatePassed,
+    blockers,
+    configBlockers: [
+      ...(Array.isArray(previousGate.config_blockers) ? previousGate.config_blockers.map(String) : []),
+      ...(Array.isArray(plan.config_blockers) ? plan.config_blockers.map((item: any) => `official_subagent_config:${String(item)}`) : [])
+    ],
+    observedParentModel: parentModel,
+    parentModelMatch: parentModel ? !parentModelMismatch : null
+  });
+  const passed = gate.passed === true;
   const updatedAt = nowIso();
   const summary = {
     schema: 'sks.naruto-subagent-workflow.v1',
     ok: passed,
+    completion_evidence: passed,
     workflow: 'official_codex_subagent',
     workflow_run_id: workflowRunId || null,
     mission_id: id,
@@ -918,48 +914,14 @@ async function refreshOfficialSubagentCompletionArtifacts(root: any, state: any 
           ? plan.verification_checks
           : []
     },
-    legacy_process_swarm_used: false,
     parent_summary_present: evidence.parent_summary_present,
     parent_summary: structuredParentSummary.summary,
     parent_thread_outcomes: structuredParentSummary.raw?.thread_outcomes || [],
     subagent_evidence: SUBAGENT_EVIDENCE_FILENAME,
-    blockers,
+    blockers: gate.blockers,
     updated_at: updatedAt
   };
   await writeJsonAtomic(path.join(dir, 'naruto-summary.json'), summary);
-  await writeJsonAtomic(path.join(dir, 'naruto-gate.json'), {
-    ...previousGate,
-    schema: 'sks.naruto-gate.v1',
-    workflow: 'official_codex_subagent',
-    workflow_run_id: workflowRunId || null,
-    mission_id: id,
-    status: passed ? 'passed' : 'blocked',
-    passed,
-    terminal: passed,
-    terminal_state: passed ? 'completed' : 'blocked',
-    subagent_plan_ready: true,
-    official_subagent_evidence: evidence.ok === true,
-    parent_summary_present: evidence.parent_summary_present,
-    session_cleanup: evidence.failed_threads === 0 && evidence.completed_threads >= requestedSubagents,
-    subagent_evidence_ready: evidence.ok === true,
-    requested_subagents: evidence.requested_subagents,
-    started_subagents: evidence.started_threads,
-    completed_subagents: evidence.completed_threads,
-    failed_subagents: evidence.failed_threads,
-    event_sources: evidence.event_sources,
-    evidence: {
-      ...(previousGate.evidence || {}),
-      official_subagent_evidence: SUBAGENT_EVIDENCE_FILENAME,
-      parent_summary: SUBAGENT_PARENT_SUMMARY_FILENAME,
-      requested_subagents: requestedSubagents,
-      started_threads: evidence.started_threads,
-      completed_threads: evidence.completed_threads,
-      failed_threads: evidence.failed_threads
-    },
-    blockers,
-    missing_fields: blockers,
-    updated_at: updatedAt
-  });
   if (passed) await closeWorkOrderLedgerForRouteResult(dir, { ok: true }).catch(() => null);
   await setCurrent(root, {
     subagents_spawned: evidence.started_threads > 0,
@@ -1176,7 +1138,7 @@ export async function selftestCodexCommitHooks() {
   if (settingsJson.decision === 'block' || settingsJson.hookSpecificOutput?.additionalContext || !String(settingsJson.systemMessage || '').includes('settings/profile event ignored')) throw new Error('selftest failed: settings/profile event should not route or block');
   const userHook = await runHook('user-prompt-submit', { prompt: '[커밋 메시지를 생성하지 못했습니다.] 코덱스 앱에서 이 버그 수정해줘' });
   if (userHook.code !== 0) throw new Error(`selftest failed: user commit hook ${userHook.code}: ${userHook.stderr}`);
-  if (!JSON.parse(userHook.stdout).hookSpecificOutput?.additionalContext?.includes('$Team route prepared')) throw new Error('selftest failed: user prompt route');
+  if (!JSON.parse(userHook.stdout).hookSpecificOutput?.additionalContext?.includes('$Naruto route prepared')) throw new Error('selftest failed: user prompt route');
   const userCommitPushHook = await runHook('user-prompt-submit', { prompt: '배포하게 커밋하고 푸쉬해줘' });
   if (userCommitPushHook.code !== 0) throw new Error(`selftest failed: user commit-push hook ${userCommitPushHook.code}: ${userCommitPushHook.stderr}`);
   const userCommitPushJson = JSON.parse(userCommitPushHook.stdout);

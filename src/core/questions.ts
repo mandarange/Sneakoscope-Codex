@@ -219,13 +219,13 @@ export function inferAnswersForPrompt(prompt: any, explicitAnswers: any = {}) {
   const inferred = {};
   const notes = {};
   const normalizedPrompt = String(prompt || '')
-    .replace(/^\s*\$(?:Team|SKS|Goal|team|sks|goal)\b/i, '')
+    .replace(/^\s*\$(?:SKS|Goal|sks|goal)\b/i, '')
     .replace(/\b(?:executor|reviewer|planner|user)\s*:\s*\d+\b/gi, '')
     .replace(/\s+/g, ' ')
     .trim();
   const version = String(text || '').match(/\bv?(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)\b/)?.[1] || null;
   const versionWork = /버전|version|bump|release|publish:dry|npm\s+pack/.test(lower);
-  const installWork = /bootstrap|postinstall|doctor|deps|tmux|homebrew|first install|최초\s*설치|설치\s*ux|셋업|setup/.test(lower);
+  const installWork = /bootstrap|postinstall|doctor|deps|zellij|homebrew|first install|최초\s*설치|설치\s*ux|셋업|setup/.test(lower);
   const questionGateWork = /모호|ambiguity|clarification|질문|triwiki|추론|infer|predict|예측|answers?\.json|decision-contract/.test(lower);
   const requestIntakeWork = /(모호|ambiguity|ambiguous|vague|rough|의도|intent|요청사항|requirements?|프롬프트|prompt|triwiki|위키|wiki)/.test(lower)
     && /(파이프라인|pipeline|변환|transform|rewrite|compile|리스트|list|누락|missing|의도|intent|request[- ]?intake|intake)/.test(lower);
@@ -241,7 +241,7 @@ export function inferAnswersForPrompt(prompt: any, explicitAnswers: any = {}) {
   const authWork = /로그인|auth|session|token|인증/.test(lower);
   const prioritySignalWork = /화|짜증|답답|;;|!!|강력|기억|우선|자주|반복|카운팅|count|frequency|frequent|priority|weight/.test(lower);
   const cliSurfaceWork = /\b(cli|command|route|usage|help|sks)\b|명령|커맨드|사용법/.test(lower);
-  const explicitRouteWork = /^\s*(?:\$|\[\$)(?:research|team|goal|dfix|ppt|qa-loop|image-ux-review|ux-review|visual-review|ui-ux-review|wiki|db|gx|computer-use|cu|autoresearch|sks|answer|help)\b/i.test(String(prompt || ''));
+  const explicitRouteWork = /^\s*(?:\$|\[\$)(?:research|naruto|work|goal|dfix|ppt|qa-loop|image-ux-review|ux-review|visual-review|ui-ux-review|wiki|db|gx|computer-use|cu|autoresearch|sks|answer|help)\b/i.test(String(prompt || ''));
   const triwikiAuditWork = /(triwiki|tri\s*wiki|wiki|복셀|voxel)/.test(lower)
     && /(검수|연구|개선|정상|동작|작동|반복|실수|mistake|repeat|audit|inspect|prevent|방지)/.test(lower);
   const chatCaptureWork = hasFromChatImgSignal(text)

@@ -25,11 +25,114 @@ test('release pack receipts bind exact local and staged tarball bytes', () => {
     assert.equal(local.package_version, '6.3.0')
     assert.match(local.sha256, /^[a-f0-9]{64}$/)
     assert.match(local.sha512_integrity, /^sha512-/)
+    assert.equal(local.secret_scan.ok, true)
+    assert.equal(local.secret_scan.findings.length, 0)
+    assert.equal(local.retired_surface_scan.ok, true)
+    assert.equal(local.retired_surface_scan.findings.length, 0)
     assert.equal(compareReleasePacks(local, staged).ok, true)
     const mismatch = compareReleasePacks(local, different)
     assert.equal(mismatch.ok, false)
     assert.equal(mismatch.blockers.includes('package_version_mismatch'), true)
     assert.equal(mismatch.blockers.includes('tarball_sha256_mismatch'), true)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('release pack inspection fails closed on retired runtime identity outside the migration allowlist', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-release-pack-retired-surface-'))
+  const leakedIdentity = 'team_trigger_matrix'
+  try {
+    const tarball = createTarball(root, 'retired-surface', '6.3.0', '', {
+      'dist/core/runtime/leak.js': `export const leaked = ${JSON.stringify(leakedIdentity)};\n`
+    })
+    const receipt = inspectReleaseTarball({ tarball, kind: 'staged', root })
+    assert.equal(receipt.ok, false)
+    assert.equal(receipt.retired_surface_scan.ok, false)
+    assert.equal(receipt.retired_surface_scan.findings.some((finding) => finding.kind === 'retired_team_runtime_identity'), true)
+    assert.equal(JSON.stringify(receipt).includes(leakedIdentity), false)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('release pack inspection allows retired tokens only in explicit cleanup and migration modules', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-release-pack-retired-allowlist-'))
+  try {
+    const tarball = createTarball(root, 'retired-allowlist', '6.3.0', '', {
+      'dist/core/doctor/retired-managed-residue-private.js': 'const tombstone = "sks team --json";\n',
+      'dist/core/doctor/retired-managed-projection-residue.js': 'const oldMode = "strict-team";\n',
+      'dist/core/doctor/retired-managed-residue-missions.js': 'const oldRoute = "$Team";\n'
+    })
+    const receipt = inspectReleaseTarball({ tarball, kind: 'staged', root })
+    assert.equal(receipt.ok, true, receipt.blockers.join(','))
+    assert.equal(receipt.retired_surface_scan.ok, true)
+    assert.equal(receipt.retired_surface_scan.allowlisted_finding_count, 3)
+    assert.equal(receipt.retired_surface_scan.findings.length, 0)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('release pack inspection does not mistake uppercase SKS product prose for a lowercase CLI command', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-release-pack-command-prose-'))
+  try {
+    const tarball = createTarball(root, 'command-prose', '6.3.0', '', {
+      'dist/cli/command-manifest-lite.js': 'export const summary = "Open the localhost SKS agent dashboard";\n',
+      'dist/core/doctor/doctor-codex-startup-repair.js': 'export const result = "created missing SKS agent role config";\n'
+    })
+    const receipt = inspectReleaseTarball({ tarball, kind: 'staged', root })
+    assert.equal(receipt.ok, true, receipt.blockers.join(','))
+    assert.equal(receipt.retired_surface_scan.findings.length, 0)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('release pack inspection still rejects an actual lowercase retired CLI command', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-release-pack-retired-command-'))
+  try {
+    const tarball = createTarball(root, 'retired-command', '6.3.0', '', {
+      'dist/core/runtime/leak.js': 'export const command = "sks agent run";\n'
+    })
+    const receipt = inspectReleaseTarball({ tarball, kind: 'staged', root })
+    assert.equal(receipt.ok, false)
+    assert.equal(receipt.retired_surface_scan.findings.some((finding) => finding.kind === 'retired_cli_command'), true)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('release pack inspection rejects every packaged menu bar MCP identity spelling', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-release-pack-retired-mcp-identity-'))
+  try {
+    const tarball = createTarball(root, 'retired-mcp-identity', '6.3.0', '', {
+      'dist/core/runtime/leak.js': [
+        'export const dash = "sks.menubar-mcp-list.v1";',
+        'export const underscore = "sks.menubar_mcp_mutation.v1";',
+        'export const dotted = "sks.menubar.mcp.view.v1";',
+        'export const spaced = "menu bar label: menubar mcp";'
+      ].join('\n')
+    })
+    const receipt = inspectReleaseTarball({ tarball, kind: 'staged', root })
+    assert.equal(receipt.ok, false)
+    assert.equal(receipt.retired_surface_scan.ok, false)
+    assert.equal(receipt.retired_surface_scan.findings.filter((finding) => finding.kind === 'retired_menubar_mcp_identity').length, 4)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('release pack inspection fails closed on secret-like content without echoing the secret', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-release-pack-secret-'))
+  const secret = `ghp_${'a'.repeat(40)}`
+  try {
+    const tarball = createTarball(root, 'secret', '6.3.0', secret)
+    const receipt = inspectReleaseTarball({ tarball, kind: 'staged', root })
+    assert.equal(receipt.ok, false)
+    assert.equal(receipt.secret_scan.ok, false)
+    assert.equal(receipt.secret_scan.findings.some((finding) => finding.kind === 'github_token'), true)
+    assert.equal(JSON.stringify(receipt).includes(secret), false)
   } finally {
     fs.rmSync(root, { recursive: true, force: true })
   }
@@ -77,11 +180,23 @@ test('release pack comparison recomputes frozen package budgets instead of trust
   assert.equal(result.blockers.includes('staged_receipt:package_budget_invalid_or_failed'), true)
 })
 
-function createTarball(root: string, name: string, version: string): string {
+function createTarball(
+  root: string,
+  name: string,
+  version: string,
+  secret = '',
+  extraFiles: Record<string, string> = {}
+): string {
   const staging = path.join(root, name, 'package')
   fs.mkdirSync(path.join(staging, 'dist/bin'), { recursive: true })
   fs.writeFileSync(path.join(staging, 'package.json'), JSON.stringify({ name: 'sneakoscope', version }))
   fs.writeFileSync(path.join(staging, 'dist/bin/sks.js'), '#!/usr/bin/env node\n')
+  if (secret) fs.writeFileSync(path.join(staging, 'dist/secret.txt'), secret)
+  for (const [relative, text] of Object.entries(extraFiles)) {
+    const file = path.join(staging, relative)
+    fs.mkdirSync(path.dirname(file), { recursive: true })
+    fs.writeFileSync(file, text)
+  }
   const tarball = path.join(root, `${name}.tgz`)
   const result = spawnSync('tar', ['-czf', tarball, '-C', path.dirname(staging), 'package'], { encoding: 'utf8' })
   assert.equal(result.status, 0, result.stderr || result.stdout)

@@ -142,7 +142,7 @@ export async function runGlmNarutoWorkerScheduler(input: GlmNarutoSchedulerInput
   async function recordDecision(reasonSuffix: string): Promise<void> {
     const health = input.health.getHealth();
     const decision = decideConcurrency({
-      requestedClones: maxActive,
+      requestedWorkers: maxActive,
       activeWorkers: targetActive,
       rateLimited429: health?.count_429 ?? 0,
       ttftP90Ms: health?.p90_ttft_ms ?? 0,

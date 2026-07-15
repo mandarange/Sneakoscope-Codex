@@ -30,7 +30,7 @@ export interface AgentEffortDecision {
 
 const XHIGH_SIGNAL_RE = /(frontier|autoresearch|novelty|hypothesis|falsif|forensic|from-chat-img|image\s*work\s*order|새로운\s*연구|가설|포렌식)/i
 const HIGH_SIGNAL_RE = /(database|supabase|sql|migration|security|permission|mad|release|publish|deploy|architecture|policy|schema|hook|rollback|db|보안|배포|마이그레이션|데이터베이스|권한|릴리즈)/i
-const MEDIUM_SIGNAL_RE = /(tmux|terminal|cli|tool(?:\s|-)?call|router|routing|orchestrat|pipeline|multi[-\s]?session|multi[-\s]?agent|lease|ledger|proof|검증|파이프라인|오케스트레이션|병렬|에이전트)/i
+const MEDIUM_SIGNAL_RE = /(terminal|cli|tool(?:\s|-)?call|router|routing|orchestrat|pipeline|multi[-\s]?session|multi[-\s]?agent|lease|ledger|proof|검증|파이프라인|오케스트레이션|병렬|에이전트)/i
 const SIMPLE_SIGNAL_RE = /(tiny|simple|small|one[-\s]?line|typo|copy|label|spacing|rename|readme|docs?|간단|단순|오타|문구|라벨)/i
 const SIMPLE_CODE_MOD_RE = /(tiny|simple|small|one[-\s]?line|typo|copy|label|spacing|rename|readme|docs?|minor|bounded|간단|단순|작은|오타|문구|라벨|이름\s*변경)/i
 
@@ -145,9 +145,6 @@ export function decideOfficialSubagentModel(input: { persona?: Partial<AgentPers
   }
 }
 
-/** @deprecated since 6.1.1. Use decideOfficialSubagentModel. */
-export const decideNarutoCloneEffort = decideOfficialSubagentModel
-
 export function buildAgentEffortPolicy(roster: any = {}) {
   const decisions = Array.isArray(roster.roster) ? roster.roster.map((agent: any) => ({
     agent_id: agent.id,
@@ -171,7 +168,6 @@ export function buildAgentEffortPolicy(roster: any = {}) {
     service_tier: 'fast',
     model_catalog_policy: narutoFamilyOnly ? 'official_subagent_four_profile_matrix' : 'codex_catalog_passthrough',
     model_constraint: narutoFamilyOnly ? ['gpt-5.6-luna', 'gpt-5.6-terra', 'gpt-5.6-sol'] : null,
-    explicit_compatibility_models: null,
     model_tiers: narutoFamilyOnly
       ? ['gpt-5.6-luna-max', 'gpt-5.6-sol-high', 'gpt-5.6-sol-max', 'gpt-5.6-terra-medium']
       : ['codex-selected-low', 'codex-selected-medium', 'codex-selected-high', 'codex-selected-xhigh', 'glm-5.2-minimal', 'glm-5.2-low', 'glm-5.2-high', 'glm-5.2-xhigh'],

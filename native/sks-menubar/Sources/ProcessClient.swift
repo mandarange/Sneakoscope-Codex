@@ -9,11 +9,13 @@ struct ProcessResult {
 final class ProcessClient {
     private let actionScript: String
     private let logPath: String
+    private let projectRoot: String
     private let outputLimit = 64 * 1024
 
-    init(actionScript: String, logPath: String) {
+    init(actionScript: String, logPath: String, projectRoot: String) {
         self.actionScript = actionScript
         self.logPath = logPath
+        self.projectRoot = projectRoot
     }
 
     func run(_ arguments: [String], stdin: String? = nil, completion: @escaping (ProcessResult) -> Void) {
@@ -21,6 +23,7 @@ final class ProcessClient {
         let output = Pipe()
         process.executableURL = URL(fileURLWithPath: actionScript)
         process.arguments = arguments
+        if FileManager.default.fileExists(atPath: projectRoot) { process.currentDirectoryURL = URL(fileURLWithPath: projectRoot) }
         process.standardOutput = output
         process.standardError = output
         var input: Pipe?
@@ -52,6 +55,7 @@ final class ProcessClient {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: actionScript)
         process.arguments = arguments
+        if FileManager.default.fileExists(atPath: projectRoot) { process.currentDirectoryURL = URL(fileURLWithPath: projectRoot) }
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
         try process.run()
@@ -61,8 +65,12 @@ final class ProcessClient {
         var text = value
         let patterns = [
             #"sk-(?:proj|or-v1|clb)?-?[A-Za-z0-9_-]{12,}"#,
+            #"gh[pousr]_[A-Za-z0-9_]{20,}"#,
+            #"github_pat_[A-Za-z0-9_]{20,}"#,
+            #"eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}"#,
             #"(?i)(api[_-]?key|secret|token)\s*[:=]\s*[^\s\"',}]+"#,
-            #"/Users/[^/\s]+"#
+            #"/Users/[^/\s]+"#,
+            NSRegularExpression.escapedPattern(for: projectRoot)
         ]
         for pattern in patterns where !pattern.isEmpty {
             guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }

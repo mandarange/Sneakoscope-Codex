@@ -2,71 +2,58 @@
 // @ts-nocheck
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import {
-  nonRecursivePipelineMarkdown,
-  scanNonRecursivePipelinePolicy
-} from '../core/agents/agent-recursion-guard.js';
+import { assertGate, emitGate, root } from './sks-1-18-gate-lib.js';
 
-const scriptDir = path.dirname(fileURLToPath(import.meta.url));
-const defaultRoot = path.resolve(scriptDir, '..');
-const args = process.argv.slice(2);
-const root = path.resolve(readFlag('--root') || defaultRoot);
-const json = args.includes('--json');
-const noWrite = args.includes('--no-write');
-const outputDir = path.join(root, '.sneakoscope', 'reports');
+const noWrite = process.argv.includes('--no-write');
+const json = process.argv.includes('--json');
+const sources = {
+  runner: text('src/core/subagents/official-subagent-runner.ts'),
+  preparation: text('src/core/subagents/official-subagent-preparation.ts'),
+  config: text('src/core/subagents/official-subagent-config.ts'),
+  naruto: text('src/core/commands/naruto-command.ts')
+};
 
-const report = scanNonRecursivePipelinePolicy(collectScanRecords(root));
+const checks = {
+  official_workflow_only: sources.naruto.includes('runOfficialSubagentWorkflow'),
+  runner_depth_one: sources.runner.includes("'agents.max_depth=1'") && sources.runner.includes('max_depth: 1'),
+  default_depth_one: sources.config.includes('DEFAULT_OFFICIAL_SUBAGENT_MAX_DEPTH = 1'),
+  parent_plan_written: sources.preparation.includes('SUBAGENT_PLAN_FILENAME') && sources.preparation.includes('writeJsonAtomic'),
+  parent_summary_required: sources.naruto.includes('persistOrReuseTrustworthySubagentParentSummary'),
+  parent_integration_bound: sources.naruto.includes('bindTrustworthySubagentParentSummaryToRun')
+};
+const blockers = Object.entries(checks)
+  .filter(([, passed]) => passed !== true)
+  .map(([name]) => `official_subagent_depth_contract_missing:${name}`);
+const report = {
+  schema: 'sks.official-subagent-depth-report.v1',
+  ok: blockers.length === 0,
+  workflow: 'official_codex_subagent',
+  max_depth: 1,
+  parent_owned_decomposition: true,
+  parent_owned_integration: true,
+  checked_source_count: Object.keys(sources).length,
+  checks,
+  blockers
+};
 
 if (!noWrite) {
-  fs.mkdirSync(outputDir, { recursive: true });
-  fs.writeFileSync(path.join(outputDir, 'non-recursive-pipeline-report.json'), `${JSON.stringify(report, null, 2)}\n`);
-  fs.writeFileSync(path.join(outputDir, 'non-recursive-pipeline-report.md'), nonRecursivePipelineMarkdown(report));
+  const output = path.join(root, '.sneakoscope', 'reports', 'official-subagent-depth-report.json');
+  fs.mkdirSync(path.dirname(output), { recursive: true });
+  fs.writeFileSync(output, `${JSON.stringify(report, null, 2)}\n`);
 }
+
+assertGate(report.ok, 'official subagent workflow must remain single-depth and parent-owned', { blocker_count: blockers.length });
 
 if (json) console.log(JSON.stringify(report, null, 2));
-else console.log(`non-recursive-pipeline: ${report.ok ? 'pass' : 'blocked'} (${report.violations.length} violation(s), ${report.scanned_records.length} record(s), ${report.elapsed_ms}ms)`);
-if (!report.ok || !report.performance_ok || !report.secret_redaction_ok) process.exitCode = 1;
+else emitGate('official-subagent:single-depth', {
+  workflow: report.workflow,
+  max_depth: report.max_depth,
+  checked_source_count: report.checked_source_count,
+  parent_owned_integration: report.parent_owned_integration
+});
 
-function readFlag(name) {
-  const idx = args.indexOf(name);
-  return idx >= 0 ? args[idx + 1] : null;
-}
-
-function collectScanRecords(scanRoot) {
-  const candidates = [
-    ['src/core/agents/agent-worker-pipeline.ts', 'source'],
-    ['src/core/agents/agent-recursion-guard.ts', 'source'],
-    ['src/core/agents/agent-runner-process.ts', 'source'],
-    ['src/core/agents/agent-runner-codex-exec.ts', 'source'],
-    ['docs/agent-non-recursive-pipeline.md', 'docs'],
-    ['docs/native-agent-kernel.md', 'docs']
-  ];
-  const records = [];
-  for (const [rel, channel] of candidates) {
-    const full = path.join(scanRoot, rel);
-    if (!fs.existsSync(full) || !fs.statSync(full).isFile()) continue;
-    records.push({ path: rel, channel, text: fs.readFileSync(full, 'utf8') });
-  }
-  records.push({
-    path: '.sneakoscope/reports/agent-worker.stdout.fixture.txt',
-    channel: 'stdout',
-    text: 'agent worker completed local slice; no nested route requested'
-  });
-  records.push({
-    path: '.sneakoscope/reports/agent-worker.stderr.fixture.txt',
-    channel: 'stderr',
-    text: 'agent worker stderr clean; no recursive SKS command emitted'
-  });
-  records.push({
-    path: '.sneakoscope/reports/agent-result.fixture.json',
-    channel: 'agent_result',
-    text: JSON.stringify({
-      schema: 'sks.agent-result.v1',
-      status: 'done',
-      recursion_guard: { ok: true, violations: [] },
-      blockers: []
-    })
-  });
-  return records;
+function text(rel: string): string {
+  const absolute = path.join(root, rel);
+  assertGate(fs.existsSync(absolute), `missing official subagent source: ${rel}`);
+  return fs.readFileSync(absolute, 'utf8');
 }

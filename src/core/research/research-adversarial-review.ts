@@ -874,8 +874,7 @@ function sanitizeWorkflowRun(run: any) {
     parent_model: run?.parent_model || null,
     parent_reasoning_effort: run?.parent_reasoning_effort || null,
     session_scope: run?.session_scope || null,
-    codex_exit_code: run?.codex_exit_code ?? null,
-    legacy_process_swarm_used: run?.legacy_process_swarm_used === true
+    codex_exit_code: run?.codex_exit_code ?? null
   }
 }
 

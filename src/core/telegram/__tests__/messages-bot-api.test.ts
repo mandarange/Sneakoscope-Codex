@@ -11,6 +11,10 @@ class FakeApi implements TelegramBotApiTransport {
     if (method === 'createForumTopic') return { message_thread_id: 77, name: payload.name } as T;
     return { message_id: this.calls.length } as T;
   }
+  async uploadDocument(input: Parameters<NonNullable<TelegramBotApiTransport['uploadDocument']>>[0]): Promise<{ message_id: number }> {
+    this.calls.push({ method: 'sendDocument', payload: { ...input, content: `[${input.content.byteLength} bytes]` } });
+    return { message_id: this.calls.length };
+  }
 }
 
 const route: TelegramTopicRouteV1 = {
@@ -79,6 +83,30 @@ test('plain/edit fallback, pinned card, ForceReply, reactions, and redaction are
   assert.ok(!publicSafeText('123456789:ABCDEFGHIJKLMNOPQRSTUVWX').includes('ABCDEFGHIJKLMNOPQRSTUVWX'));
   assert.ok(!publicSafeText('/Users/me/private').includes('/Users/me/private'));
   assert.ok(!publicSafeText('<tg-thinking>secret chain</tg-thinking> public').includes('secret chain'));
+  const document = await projector.sendArtifactManifest({ route, artifacts: ['completion-proof.json', '/Users/me/private'] });
+  assert.equal(document.method, 'sendDocument');
+  const upload = api.calls.find((call) => call.method === 'sendDocument');
+  assert.equal(upload?.payload.filename, 'sks-artifacts-S1.json');
+  assert.ok(!JSON.stringify(upload?.payload).includes('/Users/me/private'));
+});
+
+test('unsupported rich message and draft methods fall back without losing persistent delivery', async () => {
+  const calls: Array<{ method: string; payload: Record<string, unknown> }> = [];
+  const api: TelegramBotApiTransport = {
+    call: async <T>(method: string, payload: Record<string, unknown>): Promise<T> => {
+      calls.push({ method, payload });
+      if (method === 'sendRichMessage' || method === 'sendRichMessageDraft') {
+        throw new TelegramBotApiError(method, 404, 'method not found');
+      }
+      return { message_id: calls.length } as T;
+    }
+  };
+  const projector = new TelegramMessageProjector(api, { rich_message: true, rich_draft: true, plain_draft: true, reactions: false });
+  assert.equal((await projector.streamDraft({ route, publicPhase: 'Running', text: 'safe draft' })).method, 'sendMessageDraft');
+  assert.equal((await projector.sendFinal({ route, text: 'safe final' })).method, 'sendMessage');
+  assert.deepEqual(calls.map((call) => call.method), [
+    'sendRichMessageDraft', 'sendMessageDraft', 'sendRichMessage', 'sendMessage'
+  ]);
 });
 
 test('Bot API retries 429, exposes 409 as an immediate typed stop, and never leaks the token', async () => {
@@ -101,4 +129,21 @@ test('Bot API retries 429, exposes 409 as an immediate typed stop, and never lea
     assert.ok(!error.message.includes(token));
     return true;
   });
+});
+
+test('Bot API uploads bounded documents as multipart FormData', async () => {
+  let captured: RequestInit | undefined;
+  const client = new TelegramBotApiClient('123456789:ABCDEFGHIJKLMNOPQRSTUVWX', {
+    fetch: async (_url, init) => {
+      captured = init;
+      return new Response(JSON.stringify({ ok: true, result: { message_id: 9 } }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+  });
+  const result = await client.uploadDocument({ chat_id: '1', message_thread_id: 2, filename: 'proof.json', content: Uint8Array.from([1, 2, 3]), protect_content: true });
+  assert.equal(result.message_id, 9);
+  assert.ok(captured?.body instanceof FormData);
+  assert.equal((captured?.body as FormData).get('chat_id'), '1');
+  assert.equal((captured?.body as FormData).get('message_thread_id'), '2');
+  assert.ok((captured?.body as FormData).get('document') instanceof Blob);
+  await assert.rejects(client.uploadDocument({ chat_id: '1', filename: '../bad', content: Uint8Array.from([1]) }), /filename_invalid/);
 });

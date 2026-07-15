@@ -48,6 +48,55 @@ test('strict-all checks unchanged files and shrink-only waivers reject growth', 
   }
 });
 
+test('rename-aware baseline allows a high-similarity renamed file to use a shrink-only waiver', () => {
+  const fixture = createFixture({ waivedLines: 7 });
+  try {
+    git(fixture, ['checkout', '-b', 'feature']);
+    git(fixture, ['mv', 'src/waived.ts', 'src/renamed-waived.ts']);
+    writeLines(path.join(fixture, 'src/renamed-waived.ts'), 6);
+    writeWaivers(fixture, [{
+      schema: 'sks.architecture-waiver.v1',
+      file: 'src/renamed-waived.ts',
+      reason: 'fixture renamed legacy debt',
+      policy: 'shrink-only',
+      baseline_lines: 7,
+      expires_version: '9.9.9'
+    }]);
+    git(fixture, ['add', '.']);
+    git(fixture, ['commit', '-m', 'rename and shrink waived source']);
+
+    const result = runArchitecture(fixture, ['--base-ref', 'main']);
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const rename = gitOutput(fixture, ['diff', '--name-status', '--find-renames', 'main', '--']);
+    assert.match(rename, /^R\d+\s+src\/waived\.ts\s+src\/renamed-waived\.ts$/m);
+  } finally {
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
+});
+
+test('architecture waivers remain forbidden for genuinely new files', () => {
+  const fixture = createFixture();
+  try {
+    writeLines(path.join(fixture, 'src/new-waived.ts'), 6);
+    writeWaivers(fixture, [{
+      schema: 'sks.architecture-waiver.v1',
+      file: 'src/new-waived.ts',
+      reason: 'fixture must not waive a new file',
+      policy: 'shrink-only',
+      baseline_lines: 6,
+      expires_version: '9.9.9'
+    }]);
+    git(fixture, ['add', '.']);
+    git(fixture, ['commit', '-m', 'add oversized waived source']);
+
+    const result = runArchitecture(fixture, ['--base-ref', 'main']);
+    assert.notEqual(result.status, 0, result.stdout || result.stderr);
+    assert.match(result.stderr, /new files cannot use architecture waivers/);
+  } finally {
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
+});
+
 function createFixture(options = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-architecture-fixture-'));
   fs.mkdirSync(path.join(root, 'src'), { recursive: true });
@@ -77,7 +126,7 @@ function createFixture(options = {}) {
     baseline_lines: options.waivedLines,
     expires_version: '9.9.9'
   }] : [];
-  fs.writeFileSync(path.join(root, 'src/generated/architecture-waivers.json'), JSON.stringify({ schema: 'sks.architecture-waivers.v1', waivers }));
+  writeWaivers(root, waivers);
   writeLines(path.join(root, 'src/feature.ts'), 5);
   if (options.waivedLines) writeLines(path.join(root, 'src/waived.ts'), options.waivedLines);
   git(root, ['init', '-b', 'main']);
@@ -96,6 +145,19 @@ function runArchitecture(root, args) {
 function git(root, args) {
   const result = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr || result.stdout);
+}
+
+function gitOutput(root, args) {
+  const result = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  return result.stdout;
+}
+
+function writeWaivers(root, waivers) {
+  fs.writeFileSync(path.join(root, 'src/generated/architecture-waivers.json'), JSON.stringify({
+    schema: 'sks.architecture-waivers.v1',
+    waivers
+  }));
 }
 
 function writeLines(file, count) {

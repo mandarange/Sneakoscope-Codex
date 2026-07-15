@@ -27,7 +27,7 @@ test('native CLI worker patch envelope carries process, session, and Fast mode m
         },
         slice: {
           id: 'write-1',
-          write_paths: ['docs/native-cli-session-swarm.md'],
+          write_paths: ['docs/native-worker-session.md'],
           lease_id: 'lease-1'
         },
         worker_artifact_dir: 'sessions/slot-1/gen-1/worker',
@@ -45,7 +45,7 @@ test('native CLI worker patch envelope carries process, session, and Fast mode m
     assert.equal(Number.isInteger(envelope.native_cli_process_id), true);
     assert.equal(envelope.fast_mode, true);
     assert.equal(envelope.service_tier, 'fast');
-    assert.equal(envelope.operations[0].path, 'docs/native-cli-session-swarm.md');
+    assert.equal(envelope.operations[0].path, 'docs/native-worker-session.md');
   } finally {
     if (oldDisable === undefined) delete process.env.SKS_DISABLE_ROUTE_RECURSION;
     else process.env.SKS_DISABLE_ROUTE_RECURSION = oldDisable;

@@ -47,32 +47,6 @@ test('sks fast-mode toggles project-local preference from an unpacked cwd', asyn
   assert.equal(off.service_tier, 'standard');
   assert.equal(off.preference.mode, 'standard');
 
-  const agent = spawnSync(process.execPath, [
-    distCli,
-    'agent',
-    'run',
-    'fast mode preference fixture',
-    '--mock',
-    '--agents',
-    '1',
-    '--concurrency',
-    '1',
-    '--work-items',
-    '1',
-    '--minimum-work-items',
-    '1',
-    '--json'
-  ], {
-    cwd,
-    encoding: 'utf8',
-    env: isolatedEnv(home)
-  });
-  assert.equal(agent.status, 0, agent.stderr || agent.stdout);
-  const agentRun = JSON.parse(agent.stdout);
-  assert.equal(agentRun.fast_mode_policy.fast_mode, false);
-  assert.equal(agentRun.fast_mode_policy.service_tier, 'standard');
-  assert.equal(agentRun.fast_mode_policy.disabled_by, 'preference-standard');
-
   const dollarOn = spawnSync(process.execPath, [distCli, 'run', '$Fast-On', '--execute', '--json'], {
     cwd,
     encoding: 'utf8',

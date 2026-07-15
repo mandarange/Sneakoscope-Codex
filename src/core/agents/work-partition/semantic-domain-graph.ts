@@ -2,7 +2,7 @@ export function buildSemanticDomainGraph(inventory: any = {}) {
   const files: string[] = inventory.files || []
   const domains = [
     domain('agent-kernel', /agent|orchestrat|worker|ledger|lease|persona|roster/i, files, 100),
-    domain('team-route', /team|tmux|runtime-task|reviewer|executor/i, files, 95),
+    domain('naruto-route', /naruto|subagent|runtime-task|reviewer|executor/i, files, 95),
     domain('research-route', /research|autoresearch|source-ledger|debate/i, files, 95),
     domain('qa-review', /qa|review|computer-use|image-ux/i, files, 90),
     domain('release', /version|release|package|changelog|Cargo|sizecheck/i, files, 85),

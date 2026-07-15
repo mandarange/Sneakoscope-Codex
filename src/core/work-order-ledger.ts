@@ -3,7 +3,7 @@ import { exists, nowIso, readJson, writeJsonAtomic } from './fsx.js';
 import { ARTIFACT_FILES, validateWorkOrderLedger } from './artifact-schemas.js';
 import { promptRequirementItems } from './questions.js';
 
-export function createWorkOrderLedger({ missionId = 'unassigned', route = 'team', requests = [], sourcesComplete = false }: any = {}) {
+export function createWorkOrderLedger({ missionId = 'unassigned', route = 'Naruto', requests = [], sourcesComplete = false }: any = {}) {
   const items = requests.map((request: any, index: any) => ({
     id: `WO-${String(index + 1).padStart(3, '0')}`,
     source: {
@@ -29,7 +29,8 @@ export function createWorkOrderLedger({ missionId = 'unassigned', route = 'team'
     source_inventory_complete: Boolean(sourcesComplete),
     all_customer_requests_preserved: items.every((item: any) => Boolean(item.source.verbatim)),
     all_customer_requests_mapped: items.every((item: any) => item.implementation_tasks.length > 0 || item.blocker.blocked === true),
-    all_work_items_verified: items.length > 0 && items.every(workOrderItemResolved),
+    all_work_items_verified: items.length > 0 && items.every(workOrderItemVerified),
+    all_work_items_resolved: items.length > 0 && items.every(workOrderItemResolved),
     items
   };
 }
@@ -48,7 +49,9 @@ export function evaluateWorkOrderCoverage(ledger: any): { ok: boolean; blockers:
   const blockers: string[] = [];
   if (!ledger.source_inventory_complete) blockers.push('work_order_inventory_truncated');
   if (!ledger.all_customer_requests_mapped) blockers.push('work_order_requests_not_mapped');
-  if (!ledger.all_work_items_verified) blockers.push('work_order_items_not_verified');
+  const allResolved = ledger.all_work_items_resolved === true
+    || (ledger.all_work_items_resolved === undefined && (ledger.items || []).every(workOrderItemResolved));
+  if (!allResolved) blockers.push('work_order_items_not_resolved');
   let uncovered_count = 0;
   for (const item of (ledger.items || [])) {
     const isVerified = item.status === 'verified'
@@ -77,6 +80,10 @@ export function updateWorkOrderItem(ledger: any, id: any, patch: any = {}) {
       ? ((patch.implementation_tasks || item.implementation_tasks || []).length > 0 || (patch.blocker || item.blocker || {}).blocked === true)
       : ((item.implementation_tasks || []).length > 0 || item.blocker?.blocked === true)),
     all_work_items_verified: (ledger.items || []).every((item: any) => {
+      const next = item.id === id ? { ...item, ...patch } : item;
+      return workOrderItemVerified(next);
+    }),
+    all_work_items_resolved: (ledger.items || []).every((item: any) => {
       const next = item.id === id ? { ...item, ...patch } : item;
       return workOrderItemResolved(next);
     })
@@ -119,7 +126,14 @@ export function mergeWorkOrderLedger(existing: any, candidate: any) {
       ...item,
       id: `WO-${String(existing.items.length + index + 1).padStart(3, '0')}`
     }));
-  if (appended.length === 0) return existing;
+  if (appended.length === 0) {
+    const items = existing.items;
+    return {
+      ...existing,
+      all_work_items_verified: items.length > 0 && items.every(workOrderItemVerified),
+      all_work_items_resolved: items.length > 0 && items.every(workOrderItemResolved)
+    };
+  }
   const items = [...existing.items, ...appended];
   return {
     ...existing,
@@ -128,7 +142,8 @@ export function mergeWorkOrderLedger(existing: any, candidate: any) {
     source_inventory_complete: Boolean(existing.source_inventory_complete && candidate.source_inventory_complete),
     all_customer_requests_preserved: items.every((item: any) => Boolean(item.source?.verbatim)),
     all_customer_requests_mapped: items.every((item: any) => (item.implementation_tasks || []).length > 0 || item.blocker?.blocked === true),
-    all_work_items_verified: items.length > 0 && items.every(workOrderItemResolved),
+    all_work_items_verified: items.length > 0 && items.every(workOrderItemVerified),
+    all_work_items_resolved: items.length > 0 && items.every(workOrderItemResolved),
     items
   };
 }
@@ -260,9 +275,19 @@ function stripSliceMarker(text: string) {
  * blocked (route failed, real blockers recorded), never left hanging.
  * This is coarser than true per-item tracking, but it closes the loop.
  */
-export async function closeWorkOrderLedgerForRouteResult(dir: any, { ok, blockers = [] }: { ok: boolean; blockers?: string[] }) {
+export async function closeWorkOrderLedgerForRouteResult(
+  dir: any,
+  { ok, blockers = [], allowAttachmentBulkClose = false }: { ok: boolean; blockers?: string[]; allowAttachmentBulkClose?: boolean }
+) {
   const ledger = await readWorkOrderLedger(dir);
   if (!ledger || !Array.isArray(ledger.items) || ledger.items.length === 0) return null;
+  // Attachment-backed ledgers can represent a release work order with many
+  // independently authorized and independently verified requirements. A
+  // single route gate is not evidence that every attachment slice passed (or
+  // that post-main/2FA work occurred), so preserve per-item truth by default.
+  if (!allowAttachmentBulkClose && ledger.items.some((item: any) => item?.source?.type === 'attachment')) {
+    return ledger;
+  }
   const routeEvidence = ok ? await existingRouteEvidence(dir) : [];
   const verified = ok && routeEvidence.length > 0;
   let next = ledger;
@@ -290,6 +315,10 @@ export async function closeWorkOrderLedgerForRouteResult(dir: any, { ok, blocker
 
 function workOrderItemResolved(item: any) {
   if (item?.status === 'blocked') return item?.blocker?.blocked === true;
+  return workOrderItemVerified(item);
+}
+
+function workOrderItemVerified(item: any) {
   return item?.status === 'verified'
     && Array.isArray(item?.implementation_evidence) && item.implementation_evidence.length > 0
     && Array.isArray(item?.verification_evidence) && item.verification_evidence.length > 0;

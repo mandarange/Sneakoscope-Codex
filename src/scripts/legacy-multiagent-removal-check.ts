@@ -38,7 +38,7 @@ const sourceFiles = [
   'src/core/commands/status-command.mjs',
   'README.md',
   'docs/native-agent-kernel.md',
-  'docs/team-mode.md',
+  'docs/naruto.md',
   'docs/research-mode.md',
   'docs/legacy-free-architecture.md',
   'docs/feature-fixtures.md',

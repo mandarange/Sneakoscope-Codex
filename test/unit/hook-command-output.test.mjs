@@ -37,7 +37,7 @@ test('hook command emits Codex canonical PreToolUse deny output shape', async ()
 test('PreToolUse hook denies recursive SKS route command in agent worker context', async () => {
   const output = await runHook('pre-tool', {
     tool_name: 'Bash',
-    tool_input: { command: 'sks team "nested route"', env: { SKS_AGENT_WORKER: '1' } }
+    tool_input: { command: 'sks naruto run "nested route"', env: { SKS_AGENT_WORKER: '1' } }
   });
   assert.equal(output.hookSpecificOutput?.hookEventName, 'PreToolUse');
   assert.equal(output.hookSpecificOutput?.permissionDecision, 'deny');

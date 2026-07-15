@@ -108,7 +108,7 @@ export async function runWorkflowPerfBench(root: any, opts: any = {}) {
       contract_clarity_score: Number(proofField?.contract_clarity?.score || 0),
       workflow_complexity_score: Number(proofField?.workflow_complexity?.score || 0),
       workflow_complexity_band: proofField?.workflow_complexity?.band || null,
-      team_trigger_count: proofField?.team_trigger_matrix?.active_triggers?.length || 0,
+      naruto_trigger_count: proofField?.naruto_trigger_matrix?.active_triggers?.length || 0,
       verification_stage_cache_key: proofField?.verification_stage_cache?.cache_key || null,
       decision_lattice_selected_path: proofField?.decision_lattice?.selected_path?.id || null,
       decision_lattice_frontier_count: proofField?.decision_lattice?.frontier?.expanded_order?.length || 0,

@@ -107,8 +107,12 @@ export function buildReleaseGateScriptParityReport(): ReleaseGateScriptParityRep
     'release:check:confidence',
     'release:check:full',
     'prepublishOnly',
-    'publish:prep-ignore-scripts',
-    'publish:ignore-scripts',
+    'release:file-ownership',
+    'release:macos-menubar-proof',
+    'release:main-push-guard',
+    'release:main-push-receipt',
+    'release:pack-receipt',
+    'runtime:installed-smoke',
     'gates:run',
     'policy:gate-audit'
   ];
@@ -156,8 +160,8 @@ function directManifestCommandIssue(command: string | undefined): string {
   const invalid = segments.find((part) => !(
     /^node\s+\.\/dist\/scripts\/[^\s]+\.js\b/.test(part)
     || /^node\s+\.\/dist\/bin\/sks\.js\b/.test(part)
+    || /^node\s+\.\/node_modules\/typescript\/bin\/tsc\s+-p\s+tsconfig\.json\s+--noEmit$/.test(part)
     || /^node\s+--test\b/.test(part)
-    || /^tsc\s+-p\s+tsconfig\.json\s+--noEmit$/.test(part)
   ));
   if (invalid) {
     return 'gate_command_must_execute_dist_script_or_typecheck_directly';

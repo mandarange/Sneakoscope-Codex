@@ -1,7 +1,7 @@
 {
   "schema": "sks.git-policy.v1",
   "version": "1.0.3",
-  "mode": "team",
+  "mode": "work",
   "shared_memory": {
     "track": [
       ".sneakoscope/wiki/records/**/*.json",

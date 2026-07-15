@@ -1,7 +1,38 @@
 // @ts-nocheck
-import { assertGate, emitGate, readText } from './sks-1-18-gate-lib.js';
+import fs from 'node:fs';
+import { assertGate, emitGate, readText, root } from './sks-1-18-gate-lib.js';
 
 const registry = readText('src/cli/command-registry.ts');
-assertGate(!registry.includes("auth: '") && !registry.includes("dollars: '"), 'legacy compatibility aliases must be purged from command registry');
-assertGate(registry.includes('tmux') && registry.includes('removed-runtime migration notice'), 'tmux command must be explicit removed-runtime notice only');
-emitGate('legacy:gate-purge');
+const routes = readText('src/core/routes.ts');
+const skills = readText('src/core/init/skills.ts');
+const removedCommands = ['team', 'mad-db', 'tmux', 'xai', 'swarm'];
+const removedDollarCommands = ['$Agent', '$Team', '$MAD-DB', '$Swarm', '$ShadowClone', '$Kagebunshin'];
+const removedHandlers = [
+  'src/commands/team.ts',
+  'src/core/commands/team-command.ts',
+  'src/core/commands/team-legacy-observe-command.ts',
+  'src/commands/mad-db.ts',
+  'src/core/commands/mad-db-command.ts',
+  'src/commands/tmux.ts',
+  'src/cli/xai-command.ts'
+];
+
+assertGate(!registry.includes("auth: '") && !registry.includes("dollars: '"), 'obsolete compatibility aliases must be purged from command registry');
+for (const command of removedCommands) {
+  const escaped = command.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  assertGate(!new RegExp(`(?:^|\\n)\\s*(?:['\"]${escaped}['\"]|${escaped})\\s*:`).test(registry), `retired command must not have a registry entry: ${command}`);
+}
+for (const command of removedDollarCommands) {
+  assertGate(!routes.includes(`command: '${command}'`), `retired dollar command must not have a route entry: ${command}`);
+}
+for (const skill of ['team', 'mad-db', 'swarm', 'shadow-clone', 'kage-bunshin']) {
+  assertGate(!skills.includes(`'${skill}': \``), `retired skill template must not be generated: ${skill}`);
+}
+for (const file of removedHandlers) {
+  assertGate(!fs.existsSync(`${root}/${file}`), `retired command handler must be physically absent: ${file}`);
+}
+emitGate('legacy:gate-purge', {
+  removed_command_count: removedCommands.length,
+  removed_dollar_command_count: removedDollarCommands.length,
+  removed_handler_count: removedHandlers.length
+});

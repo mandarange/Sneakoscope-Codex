@@ -14,7 +14,7 @@ test('AST-aware work graph influences task graph work items', async () => {
     },
     dependencyGraph: { edges: [{ from: 'src/core/commands/agent-command.ts', imports: ['src/core/agents/agent-cleanup-executor.ts'] }] },
     changedFiles: ['src/core/agents/agent-cleanup-executor.ts'],
-    route: '$Team',
+    route: '$Fixture',
     prompt: 'cleanup executor'
   });
   const taskGraph = {

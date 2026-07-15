@@ -111,7 +111,7 @@ export function printSuperSearchDoctorReport(report: SuperSearchDoctorReport, js
     console.log(JSON.stringify(report, null, 2));
     return;
   }
-  console.log(`Super-Search doctor: ${report.status}; xAI/Grok is not required.`);
+  console.log(`Super-Search doctor: ${report.status}; provider-specific credentials are not required.`);
   if (report.blockers.length) {
     console.log(`Blockers: ${report.blockers.join(', ')}`);
     console.log(`Next actions: ${report.next_actions.join('; ')}`);

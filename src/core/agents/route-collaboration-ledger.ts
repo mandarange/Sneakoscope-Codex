@@ -62,9 +62,7 @@ export async function writeRouteCollaborationArtifacts(root: string, opts: {
     mission_id: opts.missionId,
     route: opts.route,
     route_key: routeKey,
-    backend: 'native_multi_session_agent_kernel',
-    replaces_legacy_multiagent_runtime: true,
-    legacy_compatibility_note: 'Legacy multi-agent command surfaces are removed; route collaboration uses the native agent kernel only.',
+    backend: 'internal_route_worker_runtime',
     central_ledger: 'agents/agent-events.jsonl',
     task_board: 'agents/agent-task-board.json',
     leases: 'agents/agent-leases.json',
@@ -73,22 +71,17 @@ export async function writeRouteCollaborationArtifacts(root: string, opts: {
     proof_graph: 'agents/agent-proof-evidence.json',
     trust_report: 'agents/agent-trust-report.json',
     fake_backend_fixture: backend === 'fake',
-    real_mode_codex_sdk_backend: {
-      supported: true,
-      command_pattern: 'sks agent run "<task>" --backend codex-sdk --real --agents <1-20> --concurrency <1-4> --json',
-      requires_user_runtime: true
+    worker_runtime: {
+      visibility: 'internal',
+      backend,
+      requested_workers: agentRun.roster.agent_count,
+      concurrency: agentRun.roster.concurrency
     },
     route_specific_personas: ROUTE_PERSONAS[routeKey] || [],
-    manual_agent_count_syntax: {
-      agent_command: 'sks agent run "<task>" --agents 8 --concurrency 4 --mock --json',
-      team_prompt: '$Team <task> executor:8 reviewer:5',
-      cap: agentRun.roster.max_agents,
-      default: agentRun.roster.default_agents
-    },
     dynamic_effort_assignment: agentRun.roster.effort_policy,
     validation: {
-      route_runtime_legacy_multiagent_call_removed: true,
-      native_agent_plan_used: true,
+      route_worker_runtime_scoped: true,
+      worker_plan_used: true,
       central_ledger_written: true,
       task_board_written: true,
       non_overlap_leases_assigned: agentRun.partition.lease_count > 0 && agentRun.partition.blockers.length === 0,
@@ -98,7 +91,7 @@ export async function writeRouteCollaborationArtifacts(root: string, opts: {
       docs_update_required: false,
       release_gate_updated: true,
       mock_mode_fake_agent_backend: backend === 'fake',
-      real_mode_codex_sdk_backend: true
+      internal_codex_sdk_backend: true
     }
   }
   await writeJsonAtomic(path.join(missionDir, routePlanName(routeKey)), plan)

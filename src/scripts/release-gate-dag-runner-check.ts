@@ -44,7 +44,7 @@ assertGate(runner.includes('detached: process.platform') && runner.includes('kil
 assertGate(runner.includes('pruneOldReleaseGateRunDirs') && runner.includes('SKS_RELEASE_GATE_RUN_RETENTION'), 'DAG runner must prune stale release-gate run reports before they exhaust local disk')
 assertGate(runnerCli.includes('ensureCurrentMigrationBeforeCommand') && runnerCli.includes('release-gate-runner-preflight'), 'DAG runner CLI must self-heal project migration before hermetic gates run')
 assertGate(hermeticEnv.includes('SKS_UPDATE_MIGRATION_GATE_DISABLED'), 'hermetic release gates must not rewrite project migration receipts from temporary HOME roots')
-assertGate(hermeticEnv.includes("input.gate.id === 'legacy:update-e2e'") && hermeticEnv.includes('delete gateEnv.SKS_UPDATE_MIGRATION_GATE_DISABLED'), 'legacy:update-e2e must explicitly remove an inherited disable flag while testing migration retry/repair behavior')
+assertGate(hermeticEnv.includes("input.gate.id === 'migration:current-surface-e2e'") && hermeticEnv.includes('delete gateEnv.SKS_UPDATE_MIGRATION_GATE_DISABLED'), 'migration:current-surface-e2e must explicitly remove an inherited disable flag while testing migration retry/repair behavior')
 
 const dag = await importDist('core/release/release-gate-dag.js')
 const fsx = await importDist('core/fsx.js')

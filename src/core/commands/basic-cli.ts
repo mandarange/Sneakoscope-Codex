@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { COMMANDS, LEGACY_COMMAND_ALIASES } from '../../cli/command-registry.js';
+import { COMMANDS } from '../../cli/command-registry.js';
 import { COMMAND_MANIFEST_LITE, type CommandManifestLiteEntry } from '../../cli/command-manifest-lite.js';
 import { flag } from '../../cli/args.js';
 import { printJson, sksTextLogo } from '../../cli/output.js';
@@ -14,7 +14,13 @@ import { runFeatureFixture } from '../feature-fixture-executor.js';
 import { hooksExplainReport } from '../../cli/feature-commands.js';
 import { writeSelftestRouteProof } from '../proof/selftest-proof-fixtures.js';
 import { createMission } from '../mission.js';
-import { formatSksUpdateCheckText, runSksUpdateCheck, runSksUpdateNow } from '../update-check.js';
+import {
+  formatSksUpdateStatusText,
+  runSksUpdateNow,
+  runSksUpdateReview,
+  runSksUpdateRollback,
+  runSksUpdateStatus
+} from '../update-check.js';
 import { persistSksUpdateNoticeFromVersions } from '../update/update-notice.js';
 import { withSecretPreservationGuard } from '../config/config-migration-journal.js';
 
@@ -69,8 +75,6 @@ export function dollarCommandsCommand(args: any = []) {
 export function aliasesCommand() {
   console.log('Aliases');
   console.log('- sks, sneakoscope');
-  console.log('- CLI compatibility aliases:');
-  for (const [alias, canonical] of Object.entries(LEGACY_COMMAND_ALIASES)) console.log(`  sks ${alias} -> sks ${canonical}`);
   console.log('- $ aliases:');
   for (const entry of DOLLAR_COMMAND_ALIASES) console.log(`  ${entry.app_skill} -> ${entry.canonical}`);
 }
@@ -91,7 +95,7 @@ export function usageCommand(args: any = []) {
   const topic = args[0] || 'overview';
   if (topic === 'overview') {
     console.log(`Usage topics: ${USAGE_TOPICS}`);
-    console.log('Try: sks usage goal, sks usage team, sks usage image-ux-review');
+    console.log('Try: sks usage goal, sks usage naruto, sks usage image-ux-review');
     return;
   }
   if (topic === 'seo-geo-optimizer') {
@@ -133,18 +137,22 @@ export function quickstartCommand() {
 For implementation work, use Codex App prompt routes such as $Naruto, $Goal, $QA-LOOP, $Image-UX-Review, and $Computer-Use.`);
 }
 
-export async function updateCheckCommand(args: any = []) {
-  const result = await runSksUpdateCheck();
-  await persistSksUpdateNoticeFromVersions({
-    packageName: result.package,
-    currentVersion: result.current,
-    latestVersion: result.latest,
-    error: result.error
-  }).catch(() => undefined);
+export async function updateStatusCommand(args: any = []) {
+  const root = await projectRoot();
+  const result = await runSksUpdateStatus({
+    refresh: flag(args, '--refresh'),
+    projectRoot: root
+  });
+  applyUpdateCommandExitCode(result);
   if (flag(args, '--json')) return printJson(result);
-  cliUi.banner('update');
-  result.update_available ? cliUi.warn('update available') : cliUi.ok('already current or no update required');
-  console.log(`${sksTextLogo()}\n\n${formatSksUpdateCheckText(result)}`);
+  cliUi.banner('update status');
+  result.update_count > 0 ? cliUi.warn(`${result.update_count} update action(s) available`) : cliUi.ok('all tracked components are current');
+  console.log(`${sksTextLogo()}\n\n${formatSksUpdateStatusText(result)}`);
+  return result;
+}
+
+export async function updateCheckCommand(args: any = []) {
+  return updateStatusCommand(flag(args, '--refresh') ? args : [...args, '--refresh']);
 }
 
 export async function updateCommand(sub: any = 'now', args: any = []) {
@@ -154,15 +162,67 @@ export async function updateCommand(sub: any = 'now', args: any = []) {
     effectiveArgs = [String(sub), ...args];
     action = 'now';
   }
-  if (action === 'check' || action === 'status') return updateCheckCommand(effectiveArgs);
-  if (action !== 'now') {
-    console.error('Usage: sks update [check|now] [--version <version>] [--json] [--dry-run]');
+  if (action === 'status') return updateStatusCommand(effectiveArgs);
+  if (action === 'check') return updateCheckCommand(effectiveArgs);
+  if (!['review', 'now', 'rollback'].includes(action)) {
+    console.error('Usage: sks update [status|check|review|now|rollback] [--refresh] [--version <version>] [--json] [--dry-run]');
     process.exitCode = 1;
     return;
   }
   const root = await projectRoot();
+  const version = valueAfter(effectiveArgs, '--version') || valueAfter(effectiveArgs, '-v');
+  if (action === 'review') {
+    const result = await runSksUpdateReview({
+      version,
+      projectRoot: root,
+      json: flag(effectiveArgs, '--json'),
+      quiet: flag(effectiveArgs, '--quiet'),
+      timeoutMs: 10 * 60 * 1000,
+      maxOutputBytes: 128 * 1024
+    });
+    applyUpdateCommandExitCode(result);
+    if (flag(effectiveArgs, '--json')) return printJson(result);
+    cliUi.banner('update review');
+    result.ok ? cliUi.ok('update plan ready') : cliUi.fail('update plan unavailable');
+    console.log(`Current: ${result.current}`);
+    console.log(`Target: ${result.target || 'unavailable'}`);
+    console.log(`Global root: ${result.global_root || 'unavailable'}`);
+    console.log(`Stages: ${result.stages.join(' -> ')}`);
+    console.log(`Rollback: ${result.rollback_command}`);
+    if (result.error) console.log(`Error: ${result.error}`);
+    return result;
+  }
+  if (action === 'rollback') {
+    const result = await withSecretPreservationGuard(root, 'update-rollback', async () => runSksUpdateRollback({
+      version: version || '',
+      dryRun: flag(effectiveArgs, '--dry-run'),
+      projectRoot: root,
+      json: flag(effectiveArgs, '--json'),
+      quiet: flag(effectiveArgs, '--quiet'),
+      timeoutMs: 10 * 60 * 1000,
+      maxOutputBytes: 128 * 1024
+    }));
+    if (result.update && !flag(effectiveArgs, '--dry-run')) {
+      await persistSksUpdateNoticeFromVersions({
+        packageName: result.update.package,
+        currentVersion: result.update.new_version || result.update.from,
+        latestVersion: result.update.latest,
+        error: result.ok ? null : result.error
+      }).catch(() => undefined);
+    }
+    applyUpdateCommandExitCode(result);
+    if (flag(effectiveArgs, '--json')) return printJson(result);
+    cliUi.banner('update rollback');
+    result.ok ? cliUi.ok(result.status) : cliUi.fail(result.status || 'failed');
+    console.log(`SKS rollback ${result.status}`);
+    console.log(`Requested version: ${result.requested_version || 'invalid'}`);
+    if (result.receipt_path) console.log(`Operation receipt: ${result.receipt_path}`);
+    if (result.update?.rollback?.command) console.log(`Rollback: ${result.update.rollback.command}`);
+    if (result.error) console.log(`Error: ${result.error}`);
+    return result;
+  }
   const result = await withSecretPreservationGuard(root, 'update-now', async () => runSksUpdateNow({
-    version: valueAfter(effectiveArgs, '--version') || valueAfter(effectiveArgs, '-v'),
+    version,
     dryRun: flag(effectiveArgs, '--dry-run'),
     projectRoot: root,
     json: flag(effectiveArgs, '--json'),
@@ -178,6 +238,7 @@ export async function updateCommand(sub: any = 'now', args: any = []) {
       error: result.ok ? null : result.error
     }).catch(() => undefined);
   }
+  applyUpdateCommandExitCode(result);
   if (flag(effectiveArgs, '--json')) return printJson(result);
   cliUi.banner('update');
   result.ok ? cliUi.ok(result.status) : result.status === 'updated_with_issues' ? cliUi.warn(result.status) : cliUi.fail(result.status || 'failed');
@@ -189,6 +250,8 @@ export async function updateCommand(sub: any = 'now', args: any = []) {
   if (result.new_version) console.log(`New version: ${result.new_version}`);
   if (result.project_receipt) console.log(`Migration receipt: ${result.project_receipt.root} (${result.migration_current ? 'current' : 'not current'})`);
   if (result.sks_menubar) console.log(`SKS menu bar: ${result.sks_menubar.status}${result.sks_menubar.app_path ? ` (${result.sks_menubar.app_path})` : ''}`);
+  if (result.operation_receipt_path) console.log(`Operation receipt: ${result.operation_receipt_path}`);
+  if (result.rollback?.command) console.log(`Rollback: ${result.rollback.command}`);
   for (const stage of result.stages || []) console.log(`Stage ${stage.id}: ${stage.ok ? 'ok' : 'failed'} ${stage.status}`);
   if (result.verification?.length) {
     console.log('Self verification:');
@@ -200,7 +263,17 @@ export async function updateCommand(sub: any = 'now', args: any = []) {
     for (const action of remediation) console.log(`Remediation: ${action}`);
   }
   if (result.error) console.log(`Error: ${result.error}`);
-  if (!result.ok) process.exitCode = 1;
+}
+
+export function updateCommandResultRequiresFailureExit(result: any): boolean {
+  return result?.source === 'error'
+    || result?.ok === false
+    || result?.status === 'failed'
+    || result?.status === 'terminal_uncertain';
+}
+
+function applyUpdateCommandExitCode(result: any): void {
+  if (updateCommandResultRequiresFailureExit(result)) process.exitCode = 1;
 }
 
 export async function setupCommand(args: any = []) {
@@ -355,8 +428,8 @@ export async function selftestCommand(args: any = []) {
     const registry = await buildFeatureRegistry({ root });
     const coverage = validateFeatureRegistry(registry);
     if (!coverage.ok) throw new Error(`selftest: feature registry blocked: ${coverage.blockers.join(', ')}`);
-    const mission = await createMission(tmp, { mode: 'team', prompt: 'selftest route proof fixture' });
-    await writeSelftestRouteProof(tmp, { missionId: mission.id, kind: 'team_gate' });
+    const mission = await createMission(tmp, { mode: 'naruto', prompt: 'selftest route proof fixture' });
+    await writeSelftestRouteProof(tmp, { missionId: mission.id, kind: 'route_gate' });
     const proof = await readJson(path.join(tmp, '.sneakoscope', 'missions', mission.id, 'completion-proof.json'), null);
     if (!proof?.mission_id) throw new Error('selftest: completion proof fixture missing');
     const hookExplain = hooksExplainReport();
@@ -448,22 +521,6 @@ export async function reasoningCommand(args: any = []) {
   console.log(`Route:   ${result.route}`);
   console.log(`Effort:  ${result.effort}`);
   console.log(`Profile: ${result.profile}`);
-}
-
-export async function tmuxCommand(sub: any = 'check', args: any = []) {
-  const result = {
-    schema: 'sks.removed-runtime.v1',
-    ok: false,
-    runtime: 'tmux',
-    status: 'removed_runtime',
-    replacement: 'zellij',
-    subcommand: sub || 'check',
-    operator_actions: ['Use `npm run zellij:capability` or `sks --mad` for the Zellij runtime.']
-  };
-  if (flag(args, '--json')) return printJson(result);
-  console.error('tmux runtime has been removed from SKS. Use Zellij instead.');
-  for (const action of result.operator_actions) console.error(`- ${action}`);
-  process.exitCode = 2;
 }
 
 export async function autoReviewCommand(sub: any = 'status', args: any = []) {

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { assertGate, emitGate, readText } from './sks-1-18-gate-lib.js'
 
-const swarm = readText('src/core/agents/native-cli-session-swarm.ts')
+const runtime = readText('src/core/agents/native-cli-worker-runtime.ts')
 const worker = readText('src/core/agents/native-cli-worker.ts')
 const requiredEvents = [
   'slot_reserved',
@@ -16,10 +16,10 @@ const requiredEvents = [
 ]
 
 for (const event of requiredEvents) {
-  assertGate(swarm.includes(event) || worker.includes(event), `missing runtime slot telemetry event ${event}`)
+  assertGate(runtime.includes(event) || worker.includes(event), `missing runtime slot telemetry event ${event}`)
 }
 
-assertGate(swarm.includes('appendZellijSlotTelemetry'), 'session swarm must append Zellij slot telemetry')
+assertGate(runtime.includes('appendZellijSlotTelemetry'), 'session runtime must append Zellij slot telemetry')
 assertGate(worker.includes('appendZellijSlotTelemetry'), 'native worker must append Zellij slot telemetry')
 assertGate(worker.includes('startWorkerProgressTelemetry'), 'native worker must emit progress telemetry during backend runtime')
 assertGate(!/progress:\s*\{\s*done:\s*tick,\s*total:\s*0/.test(worker), 'heartbeat ticks must not be reported as progress done/total counters')

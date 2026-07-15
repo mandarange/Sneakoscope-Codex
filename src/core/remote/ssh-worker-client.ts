@@ -12,6 +12,8 @@ import {
   type WorkerResponseV1
 } from './types.js';
 
+const SSH_REMOTE_COMMAND_SAFE_PATH_RE = /^\/[A-Za-z0-9._\/-]*$/;
+
 export class RemoteSshClientError extends Error {
   constructor(
     readonly code: string,
@@ -133,6 +135,9 @@ export class RemoteSshWorkerClient {
   private async connectWithBackoff(): Promise<void> {
     this.connectionState = 'validating';
     if (!validateSshAlias(this.machine.ssh_alias)) throw new RemoteSshClientError('ssh_alias_invalid', 'not_dispatched', false);
+    if (!isSshRemoteCommandSafePath(this.projectRoot)) {
+      throw new RemoteSshClientError('project_root_ssh_unsafe', 'not_dispatched', false);
+    }
     if (!isLexicallyWithinAllowedRoot(this.machine, this.projectRoot)) {
       throw new RemoteSshClientError('project_root_not_allowlisted', 'not_dispatched', false);
     }
@@ -342,6 +347,10 @@ export function buildSshWorkerArgs(machine: RemoteMachineV1, projectRoot: string
   if (!validateSshAlias(machine.ssh_alias)) throw new RemoteSshClientError('ssh_alias_invalid', 'not_dispatched', false);
   if (!/^[a-z0-9][a-z0-9._-]{0,63}$/.test(machine.id)) throw new RemoteSshClientError('machine_id_invalid', 'not_dispatched', false);
   if (!isLexicallyWithinAllowedRoot(machine, projectRoot)) throw new RemoteSshClientError('project_root_not_allowlisted', 'not_dispatched', false);
+  const resolvedProjectRoot = path.resolve(projectRoot);
+  if (!isSshRemoteCommandSafePath(resolvedProjectRoot)) {
+    throw new RemoteSshClientError('project_root_ssh_unsafe', 'not_dispatched', false);
+  }
   if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/.test(projectId)) throw new RemoteSshClientError('project_id_invalid', 'not_dispatched', false);
   return [
     '-T',
@@ -350,9 +359,16 @@ export function buildSshWorkerArgs(machine: RemoteMachineV1, projectRoot: string
     '--', machine.ssh_alias,
     'sks', 'remote', 'worker', '--stdio',
     '--machine', machine.id,
-    '--project-root', path.resolve(projectRoot),
+    '--project-root', resolvedProjectRoot,
     '--project-id', projectId
   ];
+}
+
+function isSshRemoteCommandSafePath(value: string): boolean {
+  // OpenSSH joins arguments after the host into one command interpreted by the
+  // remote login shell. Restrict the unquoted dynamic path to shell-neutral
+  // ASCII bytes so it remains exactly one argument after that serialization.
+  return SSH_REMOTE_COMMAND_SAFE_PATH_RE.test(value);
 }
 
 export function validateSshHostKeyPolicy(configText: string): { readonly ok: boolean; readonly issues: readonly string[] } {

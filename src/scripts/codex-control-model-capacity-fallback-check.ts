@@ -40,7 +40,7 @@ emitGate('codex-control:model-capacity-fallback', {
 
 function baseTask() {
   return {
-    route: '$Agent',
+    route: '$Naruto',
     tier: 'worker',
     missionId: 'M-model-capacity-fallback',
     cwd: process.cwd(),

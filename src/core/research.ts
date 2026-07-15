@@ -297,7 +297,7 @@ export function createResearchPlan(prompt: any, opts: any = {}) {
       rule: 'Write the final manuscript to the dated topic-specific research_paper artifact from this plan, not the legacy generic filename.'
     },
     rules: [
-      'Do not modify code or project source files during Research. Research writes only route-local mission artifacts; implementation belongs to $Team or another execution route.',
+      'Do not modify code or project source files during Research. Research writes only route-local mission artifacts; implementation belongs to $Naruto or another execution route.',
       'Do not claim novelty without a novelty ledger entry.',
       'Separate facts, inferences, hypotheses, and speculations.',
       'Run three distinct evidence-correlated official composite reviewer subagent reviews after synthesis.',

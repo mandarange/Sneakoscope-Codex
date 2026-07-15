@@ -1,22 +1,29 @@
-import fsp from 'node:fs/promises';
 import path from 'node:path';
-import { globalSksRoot, readJson } from '../fsx.js';
+import { globalSksRoot, projectRoot, readJson } from '../fsx.js';
 import {
-  evaluateMiniAppDefaultOnGate,
+  loadRemoteMachineRegistry,
+  loadRemoteSessionIndex,
+  remoteMachineRegistryPath,
+  remoteSessionIndexPath,
+  validateRemoteMachineRegistry,
+  validateRemoteSessionIndex
+} from '../remote/index.js';
+import {
   loadTelegramConfig,
   resolveTelegramBotToken,
   TelegramActionBroker,
   TelegramAuditLedger,
   TelegramBotApiClient,
   TelegramHubRouter,
+  TelegramHubRuntime,
   TelegramIdempotencyLedger,
   TelegramOwnerLock,
+  TelegramMessageProjector,
   TelegramPollingHub,
   TelegramTopicRegistry,
   telegramHubPaths,
   telegramTokenFingerprint,
   validateTelegramConfig,
-  type MiniAppDefaultOnEvidence,
   type TelegramOwnerV1
 } from '../telegram/index.js';
 
@@ -32,9 +39,16 @@ export async function telegramCommand(args: string[] = []): Promise<unknown> {
     const validation = validateTelegramConfig(rawConfig);
     const owner = await readJson<TelegramOwnerV1 | null>(paths.owner, null);
     const topics = await new TelegramTopicRegistry(paths.topics).list();
+    const controllingRoot = path.resolve(readOption(args, '--project-root') ?? await projectRoot());
+    const machineRegistryRaw = await readJson<unknown>(readOption(args, '--machines') ?? remoteMachineRegistryPath(root), null);
+    const machineValidation = validateRemoteMachineRegistry(machineRegistryRaw);
+    const sessionIndexRaw = await readJson<unknown>(readOption(args, '--session-index') ?? remoteSessionIndexPath(controllingRoot), null);
+    const sessionValidation = machineValidation.registry
+      ? validateRemoteSessionIndex(sessionIndexRaw, machineValidation.registry)
+      : { ok: false, issues: ['remote_machine_registry_invalid'], index: null };
     const result = {
       schema: 'sks.telegram-status.v1',
-      ok: validation.ok,
+      ok: validation.ok && machineValidation.ok && sessionValidation.ok,
       configured: rawConfig !== null,
       config_issues: validation.issues,
       owner: owner ? {
@@ -45,7 +59,9 @@ export async function telegramCommand(args: string[] = []): Promise<unknown> {
         heartbeat_at: owner.heartbeat_at
       } : null,
       topic_count: topics.length,
-      mini_app: validation.config?.mini_app ?? { enabled: false, default_on: false }
+      machine_count: machineValidation.registry?.machines.length ?? 0,
+      target_count: sessionValidation.index?.targets.length ?? 0,
+      remote_config_issues: [...machineValidation.issues, ...sessionValidation.issues]
     };
     return print(result, json);
   }
@@ -55,15 +71,11 @@ export async function telegramCommand(args: string[] = []): Promise<unknown> {
     return print({ schema: 'sks.telegram-config-validation.v1', ...validation, config: validation.config ? redactConfig(validation.config) : null }, json);
   }
 
-  if (action === 'mini-app-gate') {
-    const evidencePath = readOption(args, '--evidence');
-    if (!evidencePath || !path.isAbsolute(evidencePath)) throw new Error('telegram_mini_app_evidence_absolute_path_required');
-    const evidence = JSON.parse(await fsp.readFile(evidencePath, 'utf8')) as MiniAppDefaultOnEvidence;
-    return print(evaluateMiniAppDefaultOnGate(evidence), json);
-  }
-
   if (action === 'hub') {
     const config = await loadTelegramConfig(configPath);
+    const controllingRoot = path.resolve(readOption(args, '--project-root') ?? await projectRoot());
+    const machineRegistry = await loadRemoteMachineRegistry(readOption(args, '--machines') ?? remoteMachineRegistryPath(root));
+    const sessionIndex = await loadRemoteSessionIndex(readOption(args, '--session-index') ?? remoteSessionIndexPath(controllingRoot), machineRegistry);
     const token = await resolveTelegramBotToken(config.bot_token_ref);
     const fingerprint = telegramTokenFingerprint(token);
     const owner = new TelegramOwnerLock({
@@ -73,24 +85,47 @@ export async function telegramCommand(args: string[] = []): Promise<unknown> {
     });
     await owner.acquire();
     const topics = new TelegramTopicRegistry(paths.topics);
+    const actions = new TelegramActionBroker(paths.actions);
+    const audit = new TelegramAuditLedger(paths.audit, fingerprint);
     const router = new TelegramHubRouter({
       config,
       topics,
       idempotency: new TelegramIdempotencyLedger(paths.idempotency),
-      actions: new TelegramActionBroker(paths.actions),
-      audit: new TelegramAuditLedger(paths.audit, fingerprint)
+      actions,
+      audit
+    });
+    const api = new TelegramBotApiClient(token, { timeoutMs: (config.long_poll_timeout_sec ?? 25) * 1000 + 5_000 });
+    const runtime = new TelegramHubRuntime({
+      config,
+      router,
+      topics,
+      actions,
+      audit,
+      projector: new TelegramMessageProjector(api, {
+        rich_message: true,
+        rich_draft: true,
+        plain_draft: true,
+        reactions: true
+      }, {
+        protectContent: config.protect_content !== false,
+        silent: config.silent_notifications === true
+      }),
+      machineRegistry,
+      sessionIndex,
+      projectionStatePath: paths.projection
     });
     const polling = new TelegramPollingHub(
-      new TelegramBotApiClient(token, { timeoutMs: (config.long_poll_timeout_sec ?? 25) * 1000 + 5_000 }),
-      router,
+      api,
+      runtime,
       owner,
       config.long_poll_timeout_sec ?? 25
     );
     try {
       await polling.ensureLongPollingAllowed();
+      const sync = await runtime.initialize();
       if (args.includes('--once')) {
         const result = await polling.pollOnce();
-        return print({ schema: 'sks.telegram-hub-run.v1', ...result }, json);
+        return print({ schema: 'sks.telegram-hub-run.v1', ...result, sync }, json);
       }
       const controller = new AbortController();
       const stop = () => controller.abort();
@@ -98,12 +133,13 @@ export async function telegramCommand(args: string[] = []): Promise<unknown> {
       process.once('SIGTERM', stop);
       try {
         const result = await polling.run(controller.signal);
-        return print({ schema: 'sks.telegram-hub-run.v1', ...result }, json);
+        return print({ schema: 'sks.telegram-hub-run.v1', ...result, sync }, json);
       } finally {
         process.off('SIGINT', stop);
         process.off('SIGTERM', stop);
       }
     } finally {
+      await runtime.close();
       await owner.release();
     }
   }
@@ -112,7 +148,7 @@ export async function telegramCommand(args: string[] = []): Promise<unknown> {
     schema: 'sks.telegram-command.v1',
     ok: false,
     error: 'unknown_action',
-    supported: ['status', 'validate-config', 'hub', 'mini-app-gate']
+    supported: ['status', 'validate-config', 'hub']
   };
   process.exitCode = 2;
   return print(result, json);

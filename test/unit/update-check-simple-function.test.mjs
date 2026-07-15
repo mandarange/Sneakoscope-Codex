@@ -111,6 +111,7 @@ process.exit(1);
       SKS_MUTATION_LEDGER_ROOT: tmp,
       SKS_TEST_DOCTOR_OK: '1',
       SKS_UPDATE_CHECK_CACHE_ROOT: path.join(tmp, 'update-cache'),
+      SKS_UPDATE_SKIP_TEMP_INSTALL_SMOKE: '1',
       SKS_UPDATE_SKIP_SKS_MENUBAR: '1'
     })
   });
@@ -176,8 +177,10 @@ process.exit(1);
   assert.equal(result.status, 'dry_run');
   assert.equal(result.old_version_doctor, null);
   assert.equal(result.install_code, null);
-  assert.ok(result.stages.some((stage) => stage.id === 'old_version_doctor_preflight' && stage.status === 'skipped_dry_run'));
-  assert.ok(result.stages.some((stage) => stage.id === 'npm_install' && stage.status === 'dry_run'));
+  assert.ok(result.stages.some((stage) => stage.id === 'preflight' && stage.status === 'skipped_dry_run'));
+  assert.ok(result.stages.some((stage) => stage.id === 'download_or_registry_check' && stage.status === 'resolved'));
+  assert.ok(result.stages.some((stage) => stage.id === 'temporary_install_smoke' && stage.status === 'skipped_dry_run'));
+  assert.ok(result.stages.some((stage) => stage.id === 'global_install' && stage.status === 'dry_run'));
   const calls = (await fs.readFile(log, 'utf8')).trim().split(/\r?\n/).map((line) => JSON.parse(line));
   assert.ok(!calls.some((call) => call.args[0] === 'install'));
 });
@@ -315,17 +318,25 @@ process.exit(0);
 
 test('SKS update check reports unavailable instead of starting fallback work', async () => {
   const { runSksUpdateCheck } = await import('../../dist/core/update-check.js');
-  const result = await runSksUpdateCheck({
-    npmBin: null,
-    currentVersion: '1.10.0',
-    env: {}
-  });
-  assert.equal(result.status, 'unavailable');
-  assert.equal(result.update_available, false);
-  assert.equal(result.command, null);
-  assert.equal(result.error, 'npm not found on PATH');
-  assert.equal(result.route_required, false);
-  assert.equal(result.pipeline_required, false);
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-update-no-npm-'));
+  try {
+    const result = await runSksUpdateCheck({
+      npmBin: null,
+      currentVersion: '1.10.0',
+      env: {
+        HOME: tmp,
+        SKS_UPDATE_STATUS_PATH: path.join(tmp, 'update-status.json')
+      }
+    });
+    assert.equal(result.status, 'unavailable');
+    assert.equal(result.update_available, false);
+    assert.equal(result.command, null);
+    assert.equal(result.error, 'npm not found on PATH');
+    assert.equal(result.route_required, false);
+    assert.equal(result.pipeline_required, false);
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
 });
 
 test('CLI launch helper does not run SKS package update checks', async () => {

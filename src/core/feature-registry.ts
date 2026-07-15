@@ -57,8 +57,7 @@ export async function buildFeatureRegistry({ root = packageRoot(), generatedAt =
   for (const route of ROUTES.filter((entry: any) => entry.hidden === true)) {
     features.push(routeFeature(route));
   }
-  features.push(nativeAgentIntakeFeature());
-  features.push(agentProofEvidenceFeature());
+  features.push(officialSubagentProofFeature());
   features.push(doctorImagegenRepairFeature());
   features.push(...imagegenWiringFeatures());
   features.push(wikiCodePackFeature());
@@ -200,10 +199,9 @@ export function buildAllFeaturesSelftest(registry: any, opts: any = {}): JsonDat
     checkRow('fixture_fallback_removed', registry.features.every((feature: any) => feature.fixture?.fallback_removed === true && feature.fixture?.status !== 'missing'), registry.features.filter((feature: any) => feature.fixture?.fallback_removed !== true || feature.fixture?.status === 'missing').map((feature: any) => feature.id)),
     checkRow('proof_fixture_contract_present', registry.features.some((feature: any) => feature.id === 'cli-proof' && feature.fixture?.status === 'pass'), ['cli-proof']),
     checkRow('voxel_fixture_contract_present', registry.features.some((feature: any) => feature.id === 'cli-wiki' && feature.fixture?.expected_artifacts?.some((artifact: any) => expectedArtifactPath(artifact).includes('image-voxel-ledger'))), ['cli-wiki']),
-    checkRow('native_agent_intake_contract_present', registry.features.some((feature: any) => feature.id === 'route-native-agent-intake'), ['route-native-agent-intake']),
-    checkRow('cli_agent_fixture_pass', registry.features.some((feature: any) => feature.id === 'cli-agent' && feature.fixture?.status === 'pass' && feature.fixture.expected_artifacts?.some((artifact: any) => expectedArtifactPath(artifact).includes('agent-proof-evidence'))), ['cli-agent']),
-    checkRow('agent_proof_evidence_contract_present', registry.features.some((feature: any) => feature.id === 'proof-agent-evidence'), ['proof-agent-evidence']),
-    checkRow('agent_lease_policy_present', registry.features.some((feature: any) => feature.id === 'route-native-agent-intake' && /bounded workspace-write/i.test(JSON.stringify(feature.contract || {})) && /lease/i.test(JSON.stringify(feature.contract || {}))), ['route-native-agent-intake']),
+    checkRow('official_subagent_intake_contract_present', registry.features.some((feature: any) => feature.id === 'route-naruto'), ['route-naruto']),
+    checkRow('cli_naruto_fixture_pass', registry.features.some((feature: any) => feature.id === 'cli-naruto' && feature.fixture?.status === 'pass' && feature.fixture.expected_artifacts?.some((artifact: any) => expectedArtifactPath(artifact).includes('subagent-evidence'))), ['cli-naruto']),
+    checkRow('official_subagent_proof_contract_present', registry.features.some((feature: any) => feature.id === 'proof-official-subagent-evidence'), ['proof-official-subagent-evidence']),
     checkRow('fixture_pass_threshold', (fixturesSummary.counts.pass || 0) >= 90, [`pass=${fixturesSummary.counts.pass || 0}`]),
     checkRow('fixture_not_required_ceiling', (fixturesSummary.counts.not_required || 0) <= 16, [`not_required=${fixturesSummary.counts.not_required || 0}`]),
     checkRow(
@@ -523,7 +521,6 @@ const SAFE_EXECUTABLE_FIXTURE_ARGS = Object.freeze({
   'cli-codex': ['codex', 'compatibility', '--json'],
   'cli-codex-lb': ['codex-lb', 'metrics', '--json'],
   'cli-hooks': ['hooks', 'trust-report', '--json'],
-  'cli-agent': ['agent', 'run', 'fixture', '--mock', '--json'],
   'cli-perf': ['perf', 'cold-start', '--json', '--iterations', '1'],
   'cli-bench': ['bench', 'core', '--tier', 'npx-one-shot', '--json', '--iterations', '1'],
   'cli-code-structure': ['code-structure', 'scan', '--json'],
@@ -540,8 +537,6 @@ const SAFE_EXECUTABLE_FIXTURE_ARGS = Object.freeze({
   'cli-dfix': ['dfix', 'fixture', '--json'],
   'cli-all-features': ['all-features', 'complete', '--json'],
   'cli-naruto': ['naruto', 'run', 'fixture', '--agents', '4', '--max-threads', '4', '--json'],
-  'cli-team': ['team', 'fixture', '--agents', '4', '--max-threads', '4', '--json'],
-  'route-team': ['team', 'fixture', '--agents', '4', '--max-threads', '4', '--json'],
   'route-naruto': ['naruto', 'run', 'fixture', '--agents', '4', '--max-threads', '4', '--json'],
   'route-qa-loop': { setup: [['qa-loop', 'prepare', 'fixture API QA', '--json']], command: ['qa-loop', 'run', 'latest', '--mock', '--json'] },
   'route-research': { setup: [['research', 'prepare', 'fixture research topic', '--json']], command: ['research', 'run', 'latest', '--mock', '--json'] },
@@ -679,48 +674,17 @@ function routeFeature(route: any) {
   });
 }
 
-function nativeAgentIntakeFeature() {
+function officialSubagentProofFeature() {
   return baseFeature({
-    id: 'route-native-agent-intake',
-    commands: ['sks agent run "task" --route "$Team" --agents 5 --concurrency 4 --mock --json'],
+    id: 'proof-official-subagent-evidence',
+    commands: ['subagent-plan.json + subagent-parent-summary.json + subagent-evidence.json'],
     aliases: [],
     category: 'proof-route',
     maturity: 'stable',
-    intent: 'Separate bounded workspace-write agent-runtime intake for explicit sks agent missions; it is not the default Naruto workflow.',
-    voxel_triwiki_integration: 'native agent findings are TriWiki-ready and can require image voxel evidence for visual routes',
-    completion_proof_integration: 'Completion Proof evidence.agents records agent_count, route, leases, no-overlap proof, cleanup, proof graph, and dynamic effort policy',
-    known_gaps: ['real speedup claims require runtime timing/eval evidence; mock/static timing is not enough'],
-    contract: {
-      input: 'serious route mission, route collaboration fixture, or explicit sks agent run',
-      output: 'agents/agent-central-ledger.json, agents/agent-task-board.json, agents/agent-leases.json, agents/agent-no-overlap-proof.json, agents/agent-session-cleanup.json, agents/agent-proof-evidence.json, agents/agent-effort-policy.json',
-      state: 'mission-local native agent artifacts',
-      safety: 'bounded workspace-write analysis agents; central leases prevent overlapping write scopes; parent owns integration',
-      proof: 'evidence.agents required for serious native route proof',
-      voxel: 'visual agent records image voxel requirements without satisfying visual evidence by itself',
-      tests: 'unit, integration, e2e route fixtures, native release gate scripts',
-      docs: 'docs/native-agent-kernel.md'
-    },
-    source_refs: {
-      cli_command_names: [],
-      handler_keys: [],
-      dollar_commands: [],
-      app_skill_aliases: [],
-      skills: []
-    }
-  });
-}
-
-function agentProofEvidenceFeature() {
-  return baseFeature({
-    id: 'proof-agent-evidence',
-    commands: ['completion-proof.json evidence.agents'],
-    aliases: [],
-    category: 'proof-route',
-    maturity: 'stable',
-    intent: 'Completion Proof binding for native multi-session agent artifacts.',
-    voxel_triwiki_integration: 'inherits route Voxel/TriWiki evidence and references native agent visual decisions',
-    completion_proof_integration: 'required evidence.agents contract for serious route finalization',
-    known_gaps: ['disabled native agents must be recorded as not_verified_for_parallel_speed'],
+    intent: 'Completion Proof binding for Codex official subagent lifecycle and parent-owned integration evidence.',
+    voxel_triwiki_integration: 'inherits Naruto route Voxel/TriWiki evidence and bounded attention anchors',
+    completion_proof_integration: 'requires the official subagent plan, lifecycle events, parent summary, and correlated evidence',
+    known_gaps: ['parallel speed claims still require measured runtime evidence'],
     source_refs: {
       cli_command_names: [],
       handler_keys: [],
@@ -964,7 +928,7 @@ function slug(value: any) {
 }
 
 function commandCategory(name: any) {
-  if (['team', 'pipeline', 'goal', 'hproof', 'proof-field', 'validate-artifacts'].includes(name)) return 'proof-route';
+  if (['naruto', 'pipeline', 'goal', 'hproof', 'proof-field', 'validate-artifacts'].includes(name)) return 'proof-route';
   if (['qa-loop', 'research', 'recallpulse', 'skill-dream', 'eval', 'perf'].includes(name)) return 'loop';
   if (['codex', 'codex-app', 'codex-native', 'codex-lb', 'hooks', 'context7', 'computer-use'].includes(name)) return 'integration';
   if (['db', 'guard', 'conflicts', 'harness', 'versioning'].includes(name)) return 'safety';
@@ -975,13 +939,13 @@ function commandCategory(name: any) {
 
 function commandMaturity(name: any) {
   if (['help', 'version', 'commands', 'usage', 'root', 'quickstart', 'setup', 'doctor', 'selftest', 'update-check', 'fast-mode'].includes(name)) return 'stable';
-  if (['codex', 'codex-app', 'codex-native', 'codex-lb', 'hooks', 'features', 'all-features', 'wiki', 'wrongness', 'team', 'pipeline', 'goal', 'db', 'guard', 'computer-use', 'mad-sks', 'seo-geo-optimizer'].includes(name)) return 'beta';
+  if (['codex', 'codex-app', 'codex-native', 'codex-lb', 'hooks', 'features', 'all-features', 'wiki', 'wrongness', 'naruto', 'pipeline', 'goal', 'db', 'guard', 'computer-use', 'mad-sks', 'seo-geo-optimizer'].includes(name)) return 'beta';
   return 'labs';
 }
 
 function routeMaturity(command: any) {
   if (['$Answer', '$DFix', '$SKS', '$Fast-Mode', '$Wiki', '$Help'].includes(command)) return 'stable';
-  if (['$Team', '$Goal', '$DB', '$Computer-Use', '$CU', '$QA-LOOP', '$MAD-SKS', '$MAD-DB'].includes(command)) return 'beta';
+  if (['$Naruto', '$Goal', '$DB', '$Computer-Use', '$CU', '$QA-LOOP', '$MAD-SKS'].includes(command)) return 'beta';
   return 'labs';
 }
 
@@ -1005,14 +969,13 @@ function knownGapsForCommand(name: any) {
 
 function routeVoxelContract(command: any) {
   if (['$Image-UX-Review', '$UX-Review', '$PPT', '$From-Chat-IMG', '$GX'].includes(command)) return 'image/source/bbox voxel required';
-  if (command === '$DB' || command === '$MAD-SKS' || command === '$MAD-DB') return 'DB policy voxel required';
+  if (command === '$DB' || command === '$MAD-SKS') return 'DB policy voxel required';
   return 'TriWiki anchors required';
 }
 
 function routeKnownGaps(command: any) {
   if (['$Image-UX-Review', '$UX-Review', '$PPT'].includes(command)) return ['live imagegen/CU evidence required'];
   if (command === '$MAD-SKS') return ['permission closed by owning gate'];
-  if (command === '$MAD-DB') return ['deprecated alias; SQL-plane execution is merged into $MAD-SKS and must still read back postconditions and close the mission-local write profile'];
   return [];
 }
 

@@ -138,8 +138,8 @@ export async function repairSupabaseMcp(input: { root: string; apply?: boolean; 
       ? 'Project Supabase MCP uses stdio while the global config uses a streamable-http url; Codex rejects the merged config with "url is not supported for stdio". Run `sks doctor --fix` to disable the project stdio block so it inherits the safe global read-only url.'
       : manualRequired
         ? tokenEnvPresent
-          ? 'Set persistent Supabase MCP to read-only. Write-scoped Supabase MCP is allowed only through a mission-local MadDB runtime profile.'
-          : 'Set SUPABASE_ACCESS_TOKEN only when an explicit MadDB run needs Supabase MCP auth; otherwise keep persistent Supabase MCP disabled/read-only.'
+          ? 'Set persistent Supabase MCP to read-only. Write-scoped Supabase MCP is allowed only through a mission-local MAD-SKS SQL-plane runtime profile.'
+          : 'Set SUPABASE_ACCESS_TOKEN only when an explicit MAD-SKS SQL-plane run needs Supabase MCP auth; otherwise keep persistent Supabase MCP disabled/read-only.'
         : null,
     blockers: [
       ...(unsafeWriteAccess ? ['supabase_mcp_write_access_not_safe_by_default'] : []),

@@ -22,6 +22,6 @@ assertGate(
 assertGate((blueprint.existing_files || []).length > 0, 'blueprint must list concrete existing files', blueprint)
 assertGate((blueprint.sections || []).length >= 8, 'blueprint must keep required sections', blueprint)
 assertGate((blueprint.test_commands || []).some((cmd) => /^(?:procedure:|npm |node |cargo )/.test(String(cmd))), 'blueprint must include concrete verification commands or procedures', blueprint)
-assertGate(fs.existsSync(path.join(dir, 'team-handoff-goal.md')), 'team handoff goal must exist')
+assertGate(fs.existsSync(path.join(dir, 'naruto-handoff-goal.md')), 'Naruto handoff goal must exist')
 
 emitGate('research:blueprint-densifier', { dir, sections: blueprint.sections.length, files: blueprint.existing_files.length })

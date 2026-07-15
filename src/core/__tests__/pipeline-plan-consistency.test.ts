@@ -37,8 +37,9 @@ test('specialized parallel routes use one official subagent fanout without legac
   ]) {
     const plan: any = buildPipelinePlan({ route: routePrompt(task), task });
     assert.equal(plan.route.subagents_required, true, task);
-    assert.equal(plan.agent_intake.required, false, task);
-    assert.equal(plan.agent_intake.subagents_required, false, task);
+    assert.equal(plan.official_subagents.required, true, task);
+    assert.ok(plan.official_subagents.requested_subagents > 0, task);
+    assert.equal('agent_intake' in plan, false, task);
     assert.equal(plan.stages.filter((stage: any) => stage.id === 'native_agent_intake').length, 0, task);
     assert.equal(plan.stages.filter((stage: any) => stage.id === 'official_subagent_execution').length, 1, task);
     assert.doesNotMatch(plan.next_actions.join('\n'), /sks agent run/i, task);
@@ -50,12 +51,16 @@ test('route-owned QA execution and official Release Review never activate two fa
   const qa: any = buildPipelinePlan({ route: routePrompt(qaTask), task: qaTask });
   assert.equal(qa.route.subagents_required, false);
   assert.equal(qa.stages.some((stage: any) => stage.id === 'official_subagent_execution'), false);
-  assert.equal(qa.agent_intake.required, true);
+  assert.equal(qa.official_subagents.required, false);
+  assert.equal(qa.official_subagents.requested_subagents, 0);
+  assert.equal('agent_intake' in qa, false);
 
   const releaseTask = '$Release-Review --agents 5 audit the release';
   const release: any = buildPipelinePlan({ route: routePrompt(releaseTask), task: releaseTask });
   assert.equal(release.route.subagents_required, true);
-  assert.equal(release.agent_intake.required, false);
+  assert.equal(release.official_subagents.required, true);
+  assert.ok(release.official_subagents.requested_subagents > 0);
+  assert.equal('agent_intake' in release, false);
   assert.equal(release.stages.filter((stage: any) => stage.id === 'official_subagent_execution').length, 1);
   assert.doesNotMatch(release.next_actions.join('\n'), /sks agent run/i);
 });
@@ -66,8 +71,9 @@ test('implicit bounded Naruto routing uses the bounded official subagent workflo
     assert.equal(routed.explicit_invocation, false, task);
     const plan: any = buildPipelinePlan({ route: routed, task });
     assert.equal(plan.route.subagents_required, true, task);
-    assert.equal(plan.agent_intake.required, false, task);
-    assert.equal(plan.agent_intake.requested_subagents, 0, task);
+    assert.equal(plan.official_subagents.required, true, task);
+    assert.ok(plan.official_subagents.requested_subagents > 0, task);
+    assert.equal('agent_intake' in plan, false, task);
     assert.equal(plan.stages.some((stage: any) => stage.id === 'native_agent_intake'), false, task);
     assert.equal(plan.stages.some((stage: any) => stage.id === 'official_subagent_execution'), true, task);
   }
@@ -76,7 +82,9 @@ test('implicit bounded Naruto routing uses the bounded official subagent workflo
   assert.equal(explicitWorkRoute.explicit_invocation, true);
   const explicitWork: any = buildPipelinePlan({ route: explicitWorkRoute, task: '$Work' });
   assert.equal(explicitWork.route.subagents_required, true);
-  assert.equal(explicitWork.agent_intake.required, false);
+  assert.equal(explicitWork.official_subagents.required, true);
+  assert.ok(explicitWork.official_subagents.requested_subagents > 0);
+  assert.equal('agent_intake' in explicitWork, false);
   assert.equal(explicitWork.stages.some((stage: any) => stage.id === 'native_agent_intake'), false);
 });
 

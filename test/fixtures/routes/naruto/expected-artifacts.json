@@ -1,0 +1,8 @@
+{
+  "schema": "sks.route-fixture-expected-artifacts.v1",
+  "route": "$Naruto",
+  "required": [
+    ".sneakoscope/missions/M-fixture-naruto/completion-proof.json",
+    ".sneakoscope/missions/M-fixture-naruto/completion-proof.md"
+  ]
+}

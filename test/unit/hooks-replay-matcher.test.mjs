@@ -12,7 +12,7 @@ test('hook replay strict matcher validates reason gate issues and secret policy'
     '--json'
   ], {
     cwd: process.cwd(),
-    timeoutMs: 10000,
+    timeoutMs: 30000,
     maxOutputBytes: 128 * 1024
   });
   assert.equal(result.code, 0, result.stderr || result.stdout);

@@ -57,7 +57,7 @@ test('tool continuity audit unwraps persisted response_item rollout envelopes', 
 test('Reliability Shield fails closed and does not retry an ambiguous missing custom tool output', async () => {
   let attempts = 0;
   const result = await runWithCodexReliabilityShield({
-    route: '$Team',
+    route: '$Naruto',
     missionId: 'M-tool-output-continuity',
     cwd: process.cwd(),
     prompt: 'fixture',

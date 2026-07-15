@@ -29,7 +29,7 @@ elsewhere in the codebase) — `initialize`, `tools/list`, and `tools/call` are 
 real SDK, not a hand-rolled wire protocol.
 
 - **`tools/list`** returns one tool per command in the agent manifest. By default only
-  `read_only: true` commands are exposed (see `sks core/agent-bridge/agent-manifest.ts` — derived
+  `read_only: true` commands are exposed (see `src/core/agent-bridge/agent-manifest.ts` — derived
   from `src/cli/command-registry.ts`, never hand-maintained separately). Pass `--expose-exec` at
   server startup to also expose mutating commands — off by default, since a generic MCP client
   should not be able to run `sks uninstall` or a MAD-SKS route without an explicit opt-in.
@@ -146,11 +146,11 @@ for await (const line of readLines(child.stdout)) {
 ```
 
 - `read_only` — safe to expose without `--expose-exec`.
-- `requires_explicit_opt_in` — destructive-sounding commands (uninstall, MAD-SKS/MAD-DB, reset,
+- `requires_explicit_opt_in` — destructive or high-risk commands (uninstall, MAD-SKS, update/apply,
   purge, wipe, delete) are flagged so a host can gate them behind extra confirmation even under
   `--expose-exec`.
-- `latency_class` — `fast` (read-only), `long` (naruto/mad-sks/mad-db/update/agent/team/loop/
-  research family, or anything whose summary mentions install/update), `normal` otherwise.
+- `latency_class` — `fast` (read-only), `long` (Naruto, MAD-SKS, update, Loop, QA-Loop,
+  Research/AutoResearch, or anything whose summary mentions install/update), `normal` otherwise.
 - `json_output_supported` — best-effort static scan of the compiled command module for a
   `--json` literal; conservatively `false` (never fabricated `true`) when the file can't be
   read (e.g. `dist` not built yet).
@@ -163,3 +163,6 @@ for await (const line of readLines(child.stdout)) {
   `--expose-exec` is set.
 - Every subprocess invocation runs with `SKS_AGENT_MODE=1`, so it inherits the same
   never-block-on-a-prompt guarantee described above.
+- The generated manifest contains only the current command registry. `sks doctor --fix` and
+  `sks update` reconcile SKS-owned installed manifests and remove retired managed entries;
+  user-authored collisions are preserved in quarantine instead of overwritten.

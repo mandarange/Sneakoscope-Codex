@@ -1,5 +1,9 @@
 import path from 'node:path'
 import { nowIso, readJson, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
+import {
+  OFFICIAL_SUBAGENT_EXECUTION_ARTIFACTS,
+  OFFICIAL_SUBAGENT_EXECUTION_AUTHORITY
+} from '../proof/fake-real-proof-policy.js'
 import { readZellijLaneSupervisor } from './zellij-lane-supervisor.js'
 
 export async function writeAgentTrustReport(root: string, input: any = {}) {
@@ -10,10 +14,10 @@ export async function writeAgentTrustReport(root: string, input: any = {}) {
   const intelligentWorkGraph = await readJson<any>(path.join(root, 'agent-intelligent-work-graph.json'), null)
   const fakeRealPolicy = await readJson<any>(path.join(root, 'fake-real-proof-policy.json'), null)
   const runtimeTruthMatrix = await readJson<any>(path.join(root, 'runtime-truth-matrix.json'), null)
-  const patchSwarm = await readJson<any>(path.join(root, 'agent-patch-swarm-runtime.json'), null)
+  const patchHandoff = await readJson<any>(path.join(root, 'agent-patch-handoff-runtime.json'), null)
   const patchJournal = await readJson<any>(path.join(root, 'agent-patch-transaction-journal-summary.json'), null)
   const conflictRebase = await readJson<any>(path.join(root, 'agent-patch-conflict-rebase-results.json'), null)
-  const realCodexPatchSmoke = (runtimeTruthMatrix?.rows || runtimeTruthMatrix?.subsystems || []).find?.((row: any) => row.subsystem === 'codex_patch_envelope_smoke') || null
+  const officialSubagentExecution = (runtimeTruthMatrix?.rows || runtimeTruthMatrix?.subsystems || []).find?.((row: any) => row.subsystem === OFFICIAL_SUBAGENT_EXECUTION_AUTHORITY) || null
   const runtimeTruthGroups = {
     Fake: [] as string[],
     Optional: [] as string[],
@@ -24,11 +28,12 @@ export async function writeAgentTrustReport(root: string, input: any = {}) {
     if (/fake|fixture/.test(status)) runtimeTruthGroups.Fake.push(label)
     else if (/optional/.test(status)) runtimeTruthGroups.Optional.push(label)
     else if (/passed|proven/.test(status)) runtimeTruthGroups.Proven.push(label)
-    else if (/blocked|failed/.test(status)) runtimeTruthGroups.Blocked.push(label)
+    else if (/blocked|failed|missing/.test(status)) runtimeTruthGroups.Blocked.push(label)
   }
   pushTruth(zellijPaneProof?.ok === true ? 'passed' : zellijPaneProof ? 'blocked' : 'not_run', 'Zellij pane proof')
   pushTruth(cleanupProof?.ok === true ? 'passed' : cleanupProof ? 'blocked' : 'not_run', 'cleanup executor')
   pushTruth(intelligentWorkGraph?.ok === true ? 'passed' : intelligentWorkGraph ? 'partial' : 'not_run', 'intelligent work graph')
+  pushTruth(officialSubagentExecution?.proof_level || 'not_run', 'official Codex subagent execution')
   const subsystemProofLevels = {
     ...(fakeRealPolicy?.subsystem_levels || {}),
     ...Object.fromEntries((runtimeTruthMatrix?.rows || runtimeTruthMatrix?.subsystems || []).map((row: any) => [row.subsystem, row.proof_level])),
@@ -100,22 +105,27 @@ export async function writeAgentTrustReport(root: string, input: any = {}) {
       output_tail_records: Number(input.outputTails?.record_count || 0),
       timeout_kill_report: 'agent-timeout-kill-report.json',
       killed_timed_out_sessions: Array.isArray(input.timeoutKill?.killed_sessions) ? input.timeoutKill.killed_sessions : [],
-      fake_backend_disclaimer: input.backend === 'fake' ? 'fixture only; no real parallel execution claim' : null
+      fake_backend_disclaimer: input.backend === 'fake' ? 'fixture only; no execution-authority claim' : null
     },
-    patch_swarm_runtime: {
-      status: patchSwarm?.ok === true ? 'passed' : patchSwarm ? 'blocked' : 'not_run',
-      proof: patchSwarm ? 'agent-patch-swarm-runtime.json' : null,
+    patch_handoff_runtime: {
+      status: patchHandoff?.ok === true ? 'passed' : patchHandoff ? 'blocked' : 'not_run',
+      proof: patchHandoff ? 'agent-patch-handoff-runtime.json' : null,
       transaction_journal: patchJournal ? 'agent-patch-transaction-journal.jsonl' : null,
       transaction_journal_summary: patchJournal ? 'agent-patch-transaction-journal-summary.json' : null,
       transaction_journal_ok: patchJournal?.ok === true,
       transaction_event_count: patchJournal?.event_count ?? null,
       conflict_rebase: conflictRebase ? 'agent-patch-conflict-rebase-results.json' : null,
-	      conflict_rebase_ok: conflictRebase?.ok === true,
-	      rebase_attempt_count: conflictRebase?.rebase_attempt_count ?? null,
-	      real_codex_patch_smoke: realCodexPatchSmoke?.proof_level || realCodexPatchSmoke?.status || 'not_run',
-	      real_codex_patch_smoke_report: realCodexPatchSmoke?.artifacts?.[0] || null,
-	      rollback_command: 'sks agent rollback-patches latest --dry-run --json'
-	    },
+      conflict_rebase_ok: conflictRebase?.ok === true,
+      rebase_attempt_count: conflictRebase?.rebase_attempt_count ?? null
+    },
+    execution_proof: {
+      authority: runtimeTruthMatrix?.execution_authority?.workflow || OFFICIAL_SUBAGENT_EXECUTION_AUTHORITY,
+      status: officialSubagentExecution?.proof_level || 'not_run',
+      required_mode: officialSubagentExecution?.required_mode === true,
+      evidence_role: officialSubagentExecution?.evidence_role || 'execution_authority',
+      evidence_artifacts: officialSubagentExecution?.evidence_artifacts || [...OFFICIAL_SUBAGENT_EXECUTION_ARTIFACTS],
+      blockers: officialSubagentExecution?.blockers || []
+    },
     runtime_truth_groups: runtimeTruthGroups,
     runtime_truth_matrix: runtimeTruthMatrix ? 'runtime-truth-matrix.json' : null,
     proof_level_by_subsystem: subsystemProofLevels,
@@ -159,11 +169,11 @@ function renderAgentTrustReportMarkdown(report: any) {
     `- runtime_truth_proven: ${(report.runtime_truth_groups?.Proven || []).join(', ') || 'None'}`,
     `- runtime_truth_blocked: ${(report.runtime_truth_groups?.Blocked || []).join(', ') || 'None'}`,
     `- runtime_truth_matrix: ${report.runtime_truth_matrix || 'not_run'}`,
-    `- patch_swarm_runtime: ${report.patch_swarm_runtime?.status || 'not_run'}`,
-	    `- patch_transaction_journal: ${report.patch_swarm_runtime?.transaction_journal || 'not_run'}`,
-	    `- patch_conflict_rebase: ${report.patch_swarm_runtime?.conflict_rebase || 'not_run'}`,
-	    `- real_codex_patch_smoke: ${report.patch_swarm_runtime?.real_codex_patch_smoke || 'not_run'}`,
-	    `- rollback_command: ${report.patch_swarm_runtime?.rollback_command || 'not_run'}`,
+    `- patch_handoff_runtime: ${report.patch_handoff_runtime?.status || 'not_run'}`,
+    `- patch_transaction_journal: ${report.patch_handoff_runtime?.transaction_journal || 'not_run'}`,
+    `- patch_conflict_rebase: ${report.patch_handoff_runtime?.conflict_rebase || 'not_run'}`,
+    `- execution_authority: ${report.execution_proof?.authority || OFFICIAL_SUBAGENT_EXECUTION_AUTHORITY}`,
+    `- execution_proof_status: ${report.execution_proof?.status || 'not_run'}`,
     ...Object.entries(report.proof_level_by_subsystem || {}).sort(([a], [b]) => a.localeCompare(b)).map(([name, level]) => `- proof_level.${name}: ${level}`),
     `- generation_count: ${orchestration.generation_count ?? 'unknown'}`,
     `- no_overlap_ok: ${orchestration.no_overlap_ok === true}`,

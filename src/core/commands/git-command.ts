@@ -25,7 +25,7 @@ export async function gitCommand(args: string[] = []) {
 
 async function gitPolicyCommand(root: string, args: string[]) {
   const policy = await ensureGitPolicy(root, {
-    mode: readOption(args, '--mode', 'team'),
+    mode: readOption(args, '--mode', 'work'),
     write: flag(args, '--write'),
     imageBinaryPolicy: readOption(args, '--image-binary-policy', null)
   });
@@ -39,7 +39,7 @@ async function gitPolicyCommand(root: string, args: string[]) {
 
 async function gitInstallCommand(root: string, args: string[]) {
   const policy = await ensureGitPolicy(root, {
-    mode: readOption(args, '--mode', 'team'),
+    mode: readOption(args, '--mode', 'work'),
     write: true,
     imageBinaryPolicy: readOption(args, '--image-binary-policy', null)
   });
@@ -85,7 +85,7 @@ async function gitStatusCommand(root: string, args: string[]) {
 }
 
 async function gitDoctorCommand(root: string, args: string[]) {
-  const report = await gitDoctor(root, { fix: flag(args, '--fix'), mode: readOption(args, '--mode', 'team'), json: flag(args, '--json') });
+  const report = await gitDoctor(root, { fix: flag(args, '--fix'), mode: readOption(args, '--mode', 'work'), json: flag(args, '--json') });
   if (!report.ok) process.exitCode = 1;
   return output(args, report, () => {
     console.log(`SKS git doctor: ${report.ok ? 'ok' : 'blocked'}`);

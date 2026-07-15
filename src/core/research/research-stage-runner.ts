@@ -311,7 +311,7 @@ async function runImplementationBlueprintStage(input: StageInput, startedAt: str
   await writeTextAtomic(path.join(input.dir, 'implementation-blueprint.md'), renderImplementationBlueprintMarkdown(blueprint))
   await writeResearchHandoffArtifacts(input.dir, input.plan, blueprint)
   const validation = validateImplementationBlueprint(blueprint, await readJson(path.join(input.dir, 'research-quality-contract.json'), null))
-  return baseResult(input, startedAt, 'implementation_blueprint', validation.ok ? 'passed' : 'blocked', ['implementation-blueprint.json', 'implementation-blueprint.md', 'team-handoff-goal.md'], validation.blockers, validation)
+  return baseResult(input, startedAt, 'implementation_blueprint', validation.ok ? 'passed' : 'blocked', ['implementation-blueprint.json', 'implementation-blueprint.md', 'naruto-handoff-goal.md'], validation.blockers, validation)
 }
 
 async function runExperimentPlanStage(input: StageInput, startedAt: string): Promise<ResearchStageResult> {

@@ -70,9 +70,22 @@ function runGitApply(cwd: string, patch: string, args: readonly string[]): Promi
     const child = spawn('git', [...args], { cwd, stdio: ['pipe', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
+    let settled = false;
+    const finish = (code: number | null) => {
+      if (settled) return;
+      settled = true;
+      resolve({ code, stdout, stderr });
+    };
     child.stdout.on('data', (chunk) => { stdout += String(chunk); });
     child.stderr.on('data', (chunk) => { stderr += String(chunk); });
-    child.on('close', (code) => resolve({ code, stdout, stderr }));
+    child.stdin.on('error', (error: NodeJS.ErrnoException) => {
+      if (error.code !== 'EPIPE') stderr += `${stderr ? '\n' : ''}${error.message}`;
+    });
+    child.on('error', (error) => {
+      stderr += `${stderr ? '\n' : ''}${error.message}`;
+      finish(null);
+    });
+    child.on('close', finish);
     child.stdin.end(patch);
   });
 }

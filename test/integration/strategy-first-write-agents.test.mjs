@@ -7,7 +7,7 @@ import { compileStrategy } from '../../dist/core/strategy/strategy-compiler.js';
 test('strategy micro-wins propagate into agent task graph items', () => {
   const compiled = compileStrategy({ prompt: 'Patch `src/core/version.ts`.', writeTargets: ['src/core/version.ts'] });
   const graph = buildAgentTaskGraph({
-    routeType: '$Team',
+    routeType: '$Fixture',
     prompt: 'Patch version',
     targetActiveSlots: 3,
     desiredWorkItems: 4,
@@ -20,7 +20,7 @@ test('strategy micro-wins propagate into agent task graph items', () => {
 
 test('read-only micro-wins do not become write leases under write-capable route templates', () => {
   const graph = buildAgentTaskGraph({
-    routeType: '$Team',
+    routeType: '$Fixture',
     prompt: 'Inspect README',
     targetActiveSlots: 1,
     desiredWorkItems: 1,
@@ -37,7 +37,7 @@ test('read-only micro-wins do not become write leases under write-capable route 
 
 test('strategy gate blocks scheduler before visual write work without Appshots evidence', async () => {
   const result = await runNativeAgentOrchestrator({
-    route: '$Team',
+    route: '$Fixture',
     prompt: 'Patch docs after visual Appshots UI review.',
     backend: 'fake',
     mock: true,

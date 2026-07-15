@@ -614,7 +614,7 @@ function classifyRunRoute(prompt: string, args: readonly string[]): RouteSelecti
   if (flag(args, '--research')) return requireRoute(routePrompt('$Research'));
   if (flag(args, '--db')) return requireRoute(routePrompt('$DB'));
   const route = requireRoute(routePrompt(prompt));
-  return route.command === '$SKS' ? requireRoute(routePrompt('$Team')) : route;
+  return route.command === '$SKS' ? requireRoute(routePrompt('$Naruto')) : route;
 }
 
 function runNextAction(route: RouteSelection, id: string, args: readonly string[]): string {
@@ -633,7 +633,7 @@ function safeRouteExecutionArgs(route: RouteSelection, prompt: string, { auto = 
   if (route.command === '$with-local-llm-on') return ['with-local-llm', localModelActionFromPrompt(prompt), '--json'];
   if (route.command === '$Commit') return ['commit', '--json'];
   if (route.command === '$Commit-And-Push') return ['commit-and-push', '--json'];
-  // No silent fallback: $Team/$SKS and any other route without a dedicated
+  // No silent fallback: $Naruto/$SKS and any other route without a dedicated
   // safe live-execution branch above must fail explicitly (20차 P0-1) rather
   // than proxy through `team --mock`, which used to reach the fake Codex SDK
   // adapter for a route the caller believed was executing for real.

@@ -31,7 +31,7 @@ assertGate(
   'update now must refresh the SKS menu bar through the updated package-local entrypoint'
 );
 assertGate(
-  routes.includes('sks update [check|now]'),
+  routes.includes('sks update status|check|review|now|rollback'),
   'command catalog must document bare sks update as the default update path'
 );
 

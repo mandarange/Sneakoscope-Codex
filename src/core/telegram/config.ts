@@ -30,7 +30,7 @@ export function validateTelegramConfig(value: unknown): TelegramConfigValidation
   if (!stringIdArray(value.paired_user_ids)) issues.push('paired_user_ids');
   if (typeof value.long_poll_timeout_sec === 'number' && (value.long_poll_timeout_sec < 1 || value.long_poll_timeout_sec > 50)) issues.push('long_poll_timeout_sec');
   if (typeof value.owner_stale_ms === 'number' && value.owner_stale_ms < 5_000) issues.push('owner_stale_ms');
-  if (isRecord(value.mini_app) && value.mini_app.default_on === true && value.mini_app.enabled !== true) issues.push('mini_app_default_on_requires_enabled');
+  if ('mini_app' in value) issues.push('mini_app_excluded_from_6_3_package');
   return {
     ok: issues.length === 0,
     issues,

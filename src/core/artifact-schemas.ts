@@ -4,7 +4,6 @@ import { exists, nowIso, readJson, writeJsonAtomic } from './fsx.js';
 export const ARTIFACT_SCHEMA_VERSION = 1;
 export const EFFORTS = new Set(['none', 'low', 'medium', 'high', 'xhigh', 'forensic_vision', 'recovery']);
 export const WORK_ORDER_STATUSES = new Set(['pending', 'in_progress', 'implemented', 'verified', 'blocked']);
-export const GATE_STATUSES = new Set(['pass', 'fail', 'blocked', 'unknown']);
 
 export const ARTIFACT_FILES = {
   work_order_ledger: 'work-order-ledger.json',
@@ -19,8 +18,6 @@ export const ARTIFACT_FILES = {
   mistake_memory_report: 'mistake-memory-report.json',
   harness_growth_report: 'harness-growth-report.json',
   code_structure_report: 'code-structure-report.json',
-  team_dashboard_state: 'team-dashboard-state.json',
-  tmux_pane_plan: 'tmux-pane-plan.json',
   final_honest_mode_report: 'final-honest-mode-report.json'
 };
 
@@ -52,7 +49,7 @@ export function validateWorkOrderLedger(data: any = {}) {
   pushMissing(errors, Array.isArray(data.items), 'items_not_array');
   const items = arr(data.items);
   pushMissing(errors, items.length > 0, 'items_empty');
-  if (items.some((item: any) => !nonEmpty(item?.source?.verbatim))) errors.push('customer_request_verbatim_missing');
+  if (items.some((item: any) => !validWorkOrderSource(data, item?.source))) errors.push('customer_request_source_missing');
   if (items.some((item: any) => !WORK_ORDER_STATUSES.has(item?.status))) errors.push('invalid_item_status');
   if (items.some((item: any) => item?.status === 'verified' && arr(item.verification_evidence).length === 0)) errors.push('verified_item_missing_verification_evidence');
   if (items.some((item: any) => ['implemented', 'verified'].includes(item?.status) && arr(item.implementation_evidence).length === 0)) errors.push('completed_item_missing_implementation_evidence');
@@ -61,8 +58,26 @@ export function validateWorkOrderLedger(data: any = {}) {
   if (data.all_customer_requests_preserved !== true) errors.push('all_customer_requests_preserved_not_true');
   if (data.all_customer_requests_mapped !== true) errors.push('all_customer_requests_mapped_not_true');
   if (data.source_inventory_complete !== true) errors.push('source_inventory_complete_not_true');
-  if (data.all_work_items_verified === true && items.some((item: any) => item.status !== 'verified' && item.status !== 'blocked')) errors.push('all_work_items_verified_contradicts_items');
+  if (data.all_work_items_verified === true && items.some((item: any) => item.status !== 'verified')) errors.push('all_work_items_verified_contradicts_items');
+  if (data.all_work_items_resolved === true && items.some((item: any) => item.status !== 'verified' && item.status !== 'blocked')) errors.push('all_work_items_resolved_contradicts_items');
+  if (data.all_work_items_verified === true && data.all_work_items_resolved === false) errors.push('verified_items_not_resolved');
   return validationResult('WorkOrderLedger', errors);
+}
+
+function validWorkOrderSource(ledger: any, source: any) {
+  if (nonEmpty(source?.verbatim)) return true;
+  if (source?.type !== 'attachment') return false;
+  const start = Number(source?.line_start);
+  const end = Number(source?.line_end);
+  const total = Number(ledger?.source_line_count);
+  return nonEmpty(ledger?.source_path)
+    && /^[a-f0-9]{64}$/i.test(String(ledger?.source_sha256 || ''))
+    && Number.isInteger(start)
+    && Number.isInteger(end)
+    && Number.isInteger(total)
+    && start >= 1
+    && end >= start
+    && end <= total;
 }
 
 export function validateEffortDecision(data: any = {}) {
@@ -170,12 +185,12 @@ export function validateHarnessGrowthReport(data: any = {}) {
   pushMissing(errors, isObj(data.skills), 'skills_missing');
   pushMissing(errors, isObj(data.experiments), 'experiments_missing');
   pushMissing(errors, isObj(data.codex_native), 'codex_native_missing');
-  pushMissing(errors, isObj(data.tmux), 'tmux_missing');
+  pushMissing(errors, isObj(data.zellij), 'zellij_missing');
   pushMissing(errors, isObj(data.reliability), 'reliability_missing');
   if (data.forgetting?.fixture?.passed !== true) errors.push('forgetting_fixture_failed');
   if (!Array.isArray(data.reliability?.tool_error_taxonomy) || !data.reliability.tool_error_taxonomy.includes('Unknown')) errors.push('tool_error_taxonomy_missing_unknown');
   if (data.reliability?.unknown_errors_are_bugs !== true) errors.push('unknown_errors_not_marked_bug');
-  if (!Array.isArray(data.tmux?.views) || data.tmux.views.length < 10) errors.push('tmux_views_incomplete');
+  if (!Array.isArray(data.zellij?.views) || data.zellij.views.length < 10) errors.push('zellij_views_incomplete');
   return validationResult('HarnessGrowthReport', errors);
 }
 
@@ -185,29 +200,6 @@ export function validateCodeStructureReport(data: any = {}) {
   pushMissing(errors, Array.isArray(data.files), 'files_not_array');
   if (arr(data.files).some((file: any) => Number(file.line_count || 0) >= 3000 && !file.generated_or_vendor && !file.exception && !arr(data.actions_taken).length)) errors.push('over_3000_file_missing_split_review_or_exception');
   return validationResult('CodeStructureReport', errors);
-}
-
-export function validateTeamDashboardState(data: any = {}) {
-  const errors: any[] = [];
-  pushMissing(errors, isObj(data.mission), 'mission_missing');
-  pushMissing(errors, nonEmpty(data.mission?.id), 'mission_id_missing');
-  pushMissing(errors, EFFORTS.has(data.mission?.effort), 'mission_effort_invalid');
-  pushMissing(errors, Array.isArray(data.gates), 'gates_not_array');
-  pushMissing(errors, Array.isArray(data.agents), 'agents_not_array');
-  pushMissing(errors, Array.isArray(data.tasks), 'tasks_not_array');
-  for (const pane of ['Mission / Goal View', 'Agent Grid View', 'MultiAgentV2 Graph View', 'Work Order Ledger View', 'Skill Autopilot View', 'TriWiki Memory Health View', 'Forget Queue', 'Mistake Immunity', 'Tool Reliability View', 'Harness Experiments View', 'Dogfood Evidence View', 'Code Structure']) {
-    if (!arr(data.panes).includes(pane)) errors.push(`pane_missing:${pane}`);
-  }
-  if (arr(data.gates).some((gate: any) => !GATE_STATUSES.has(gate.status))) errors.push('gate_status_invalid');
-  return validationResult('TeamDashboardState', errors);
-}
-
-export function validateTmuxPanePlan(data: any = {}) {
-  const errors: any[] = [];
-  pushMissing(errors, nonEmpty(data.mission_id), 'mission_id_missing');
-  pushMissing(errors, Array.isArray(data.panes), 'panes_not_array');
-  if (arr(data.panes).some((pane: any) => !nonEmpty(pane.name) || !nonEmpty(pane.command))) errors.push('pane_missing_name_or_command');
-  return validationResult('TmuxPanePlan', errors);
 }
 
 export function validateFinalHonestModeReport(data: any = {}) {
@@ -232,8 +224,6 @@ export const ARTIFACT_VALIDATORS = {
   mistake_memory_report: validateMistakeMemoryReport,
   harness_growth_report: validateHarnessGrowthReport,
   code_structure_report: validateCodeStructureReport,
-  team_dashboard_state: validateTeamDashboardState,
-  tmux_pane_plan: validateTmuxPanePlan,
   final_honest_mode_report: validateFinalHonestModeReport
 };
 

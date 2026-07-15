@@ -17,15 +17,15 @@ export const OUTCOME_RUBRIC = Object.freeze([
   { id: 'goal_fit', description: 'The selected work directly satisfies the user goal without drifting into adjacent pipeline work.', adversarial_lens: 'creative: challenge the literal framing and keep only the user goal that survives.' },
   { id: 'minimum_surface', description: 'Only touched surfaces inside the proof cone are included; unrelated routes, docs, DB, visual, or release work are skipped with evidence.', adversarial_lens: 'skeptic+architect: subtract unneeded surface and reject coupling that does not pay for itself now.' },
   { id: 'bounded_verification', description: 'Verification is enough to prove the selected cone and no broader than the risk requires.', adversarial_lens: 'researcher+validator: require current evidence and test the integration edge that can actually break.' },
-  { id: 'escalation_defined', description: 'The path names the exact failure signals that should promote the work back to the full Team/Honest proof path.', adversarial_lens: 'validator+architect: name the failure signal before work starts and fail closed when it appears.' }
+  { id: 'escalation_defined', description: 'The path names the exact failure signals that should promote the work back to the full Naruto/Honest proof path.', adversarial_lens: 'validator+architect: name the failure signal before work starts and fail closed when it appears.' }
 ]);
 
 export const SPEED_LANE_POLICY = Object.freeze({
   min_score: FAST_LANE_MIN_SCORE,
   fast_lane: 'proof_field_fast_lane',
   balanced_lane: 'proof_field_balanced_lane',
-  full_lane: 'full_team_honest_path',
-  skip_when_fast: ['native_agent_intake', 'planning_debate', 'fresh_executor_team', 'broad_route_rework'],
+  full_lane: 'full_naruto_honest_path',
+  skip_when_fast: ['native_agent_intake', 'planning_debate', 'fresh_subagent_execution', 'broad_route_rework'],
   always_keep: ['listed_verification', 'honest_mode', 'triwiki_validate_before_final'],
   fail_closed_on: ['database_surface', 'security_surface', 'visual_forensic_surface', 'unknown_surface', 'broad_change_set', 'verification_failed', 'unsupported_claim']
 });
@@ -85,10 +85,10 @@ export async function buildProofField(root: any, opts: any = {}) {
   const sourceHash = await sourceDigest(root, changedFiles);
   const contractClarity = contractClarityScore({ intent, changedFiles, selectedCones, risk });
   const workflowComplexity = workflowComplexityScore({ changedFiles, selectedCones, risk, verification: fastLane.verification });
-  const teamTriggerMatrix = teamTriggerDecision({ intent, changedFiles, risk });
+  const narutoTriggerMatrix = narutoTriggerDecision({ intent, changedFiles, risk });
   const verificationStageCache = verificationStageCachePlan({ sourceHash, changedFiles, verification: fastLane.verification });
   const simplicity = outcomeScorecard({ intent, changedFiles, selectedCones, risk, negativeWork, fastLane, workflowComplexity });
-  const executionLane = executionLaneDecision({ fastLane, simplicity, workflowComplexity, teamTriggerMatrix });
+  const executionLane = executionLaneDecision({ fastLane, simplicity, workflowComplexity, narutoTriggerMatrix });
   const decisionLattice = normalizeDecisionLatticeReport(await buildDecisionLatticeReport({
     intent,
     changed_files: changedFiles,
@@ -96,12 +96,12 @@ export async function buildProofField(root: any, opts: any = {}) {
     risk,
     contract_clarity: contractClarity,
     workflow_complexity: workflowComplexity,
-    team_trigger_matrix: teamTriggerMatrix,
+    naruto_trigger_matrix: narutoTriggerMatrix,
     verification_stage_cache: verificationStageCache,
     simplicity_scorecard: simplicity,
     fast_lane_decision: fastLane,
     execution_lane: executionLane,
-    scoring_formula: 'simplicity_scorecard.score + contract_clarity.score - workflow_complexity.score - active_team_trigger_penalty'
+    scoring_formula: 'simplicity_scorecard.score + contract_clarity.score - workflow_complexity.score - active_naruto_trigger_penalty'
   }));
   return {
     schema_version: PROOF_FIELD_SCHEMA_VERSION,
@@ -115,7 +115,7 @@ export async function buildProofField(root: any, opts: any = {}) {
     speed_lane_policy: SPEED_LANE_POLICY,
     contract_clarity: contractClarity,
     workflow_complexity: workflowComplexity,
-    team_trigger_matrix: teamTriggerMatrix,
+    naruto_trigger_matrix: narutoTriggerMatrix,
     verification_stage_cache: verificationStageCache,
     decision_lattice: decisionLattice,
     simplicity_scorecard: simplicity,
@@ -147,7 +147,7 @@ export function validateProofFieldReport(report: any = {}) {
   if (!Number.isFinite(Number(report.contract_clarity?.score))) issues.push('contract_clarity');
   if (!Array.isArray(report.contract_clarity?.components) || report.contract_clarity.components.length < 1) issues.push('contract_clarity_components');
   if (!Number.isFinite(Number(report.workflow_complexity?.score))) issues.push('workflow_complexity');
-  if (!Array.isArray(report.team_trigger_matrix?.triggers)) issues.push('team_trigger_matrix');
+  if (!Array.isArray(report.naruto_trigger_matrix?.triggers)) issues.push('naruto_trigger_matrix');
   if (report.verification_stage_cache?.report_only !== true || !report.verification_stage_cache?.cache_key) issues.push('verification_stage_cache');
   const latticeValidation = validateDecisionLatticeReport(report.decision_lattice);
   if (!latticeValidation.ok) issues.push(`decision_lattice:${latticeValidation.issues.join('|')}`);
@@ -175,7 +175,7 @@ export async function proofFieldFixture() {
       negative_release_work_recorded: report.negative_work_cache.some((item: any) => item.id === 'full_release_gate' && item.disposition === 'skip_with_evidence'),
       outcome_rubric_present: report.outcome_rubric.length === OUTCOME_RUBRIC.length,
       adversarial_lenses_present: report.outcome_rubric.every((item: any) => item.adversarial_lens) && report.simplicity_scorecard.criteria.every((item: any) => item.adversarial_lens),
-      route_economy_present: report.contract_clarity?.report_only === true && report.workflow_complexity?.report_only === true && report.team_trigger_matrix?.report_only === true && report.verification_stage_cache?.report_only === true,
+      route_economy_present: report.contract_clarity?.report_only === true && report.workflow_complexity?.report_only === true && report.naruto_trigger_matrix?.report_only === true && report.verification_stage_cache?.report_only === true,
       decision_lattice_present: validateDecisionLatticeReport(report.decision_lattice).ok,
       decision_lattice_report_only: report.decision_lattice?.report_only === true,
       decision_lattice_selected_path: Boolean(report.decision_lattice?.selected_path?.id),
@@ -355,9 +355,9 @@ function workflowComplexityScore({ changedFiles, selectedCones, risk, verificati
   };
 }
 
-function teamTriggerDecision({ intent, changedFiles, risk }: any) {
+function narutoTriggerDecision({ intent, changedFiles, risk }: any) {
   const triggers = [
-    { id: 'explicit_team', active: /\$?team\b/i.test(intent || ''), reason: 'user explicitly selected Team' },
+    { id: 'explicit_naruto', active: /\$?naruto\b/i.test(intent || ''), reason: 'user explicitly selected Naruto' },
     { id: 'broad_change_set', active: changedFiles.length > 3, reason: `${changedFiles.length} changed file(s)` },
     { id: 'database_surface', active: risk.flags.database, reason: 'database risk flag present' },
     { id: 'security_surface', active: risk.flags.security, reason: 'security risk flag present' },
@@ -370,7 +370,7 @@ function teamTriggerDecision({ intent, changedFiles, risk }: any) {
   return {
     schema_version: 1,
     report_only: true,
-    full_team_recommended: active.length > 0,
+    full_naruto_honest_path_recommended: active.length > 0,
     active_triggers: active,
     triggers
   };
@@ -412,7 +412,7 @@ function outcomeScorecard({ intent, changedFiles, selectedCones, risk, negativeW
   };
 }
 
-function executionLaneDecision({ fastLane, simplicity, workflowComplexity, teamTriggerMatrix }: any) {
+function executionLaneDecision({ fastLane, simplicity, workflowComplexity, narutoTriggerMatrix }: any) {
   const score = Number(simplicity?.score || 0);
   const fast = Boolean(fastLane?.eligible) && score >= FAST_LANE_MIN_SCORE;
   const lane = fast
@@ -430,7 +430,7 @@ function executionLaneDecision({ fastLane, simplicity, workflowComplexity, teamT
     escalate_on: [...new Set([...(fastLane?.escalate_on || []), ...SPEED_LANE_POLICY.fail_closed_on])],
     reason: fast
       ? `Proof Field score ${score} >= ${FAST_LANE_MIN_SCORE} with no fast-lane blockers`
-      : `Fast lane not allowed: mode=${fastLane?.mode || 'unknown'}, score=${score}, complexity=${workflowComplexity?.band || 'unknown'}, team_triggers=${(teamTriggerMatrix?.active_triggers || []).join(', ') || 'none'}, blockers=${(fastLane?.blockers || []).join(', ') || 'none'}`
+      : `Fast lane not allowed: mode=${fastLane?.mode || 'unknown'}, score=${score}, complexity=${workflowComplexity?.band || 'unknown'}, naruto_triggers=${(narutoTriggerMatrix?.active_triggers || []).join(', ') || 'none'}, blockers=${(fastLane?.blockers || []).join(', ') || 'none'}`
   };
 }
 
@@ -438,7 +438,7 @@ function nextAction(decision: any, simplicity: any) {
   const score = Number.isFinite(Number(simplicity?.score)) ? ` outcome_score=${simplicity.score}` : '';
   if (decision.mode === 'fast_lane') return `apply minimal patch, run listed verification, then Honest Mode against the proof field report;${score}`;
   if (decision.mode === 'balanced') return `narrow the change set or run parent-led implementation with listed verification and reviewer escalation if checks fail;${score}`;
-  return 'use full Team/Honest proof path; fast lane is intentionally blocked for this risk state';
+  return 'use full Naruto/Honest proof path; fast lane is intentionally blocked for this risk state';
 }
 
 async function sourceDigest(root: any, files: any) {

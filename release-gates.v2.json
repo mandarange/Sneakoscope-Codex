@@ -50,7 +50,7 @@
           "src/core/safety/ssot-guard.ts",
           "src/core/pipeline-internals/runtime-core.ts",
           "src/core/pipeline-internals/runtime-gates.ts",
-          "src/core/commands/team-command.ts",
+          "src/core/commands/naruto-command.ts",
           "src/core/release/gate-manifest.ts",
           "src/scripts/architecture-guard-check.ts",
           "src/scripts/release-parallel-check.ts",
@@ -824,35 +824,6 @@
       "output_contract": "sks.gate-result.v1"
     },
     {
-      "id": "dfix:patch-swarm-route-blackbox",
-      "command": "node ./dist/scripts/dfix-patch-swarm-route-blackbox.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 180000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
       "id": "doctor:codex-app-harness",
       "command": "node ./dist/scripts/doctor-codex-app-harness-check.js",
       "deps": [],
@@ -1355,7 +1326,7 @@
     },
     {
       "id": "migration:upgrade-safety",
-      "command": "node ./dist/scripts/legacy-upgrade-matrix-check.js",
+      "command": "node ./dist/scripts/current-upgrade-matrix-check.js",
       "deps": [
         "legacy:strong-inventory"
       ],
@@ -1374,7 +1345,7 @@
           "src/core/codex/**",
           "src/core/migration/**",
           "src/core/skills/**",
-          "src/scripts/legacy-upgrade-matrix-check.ts"
+          "src/scripts/current-upgrade-matrix-check.ts"
         ]
       },
       "isolation": {
@@ -1388,8 +1359,8 @@
       "output_contract": "sks.gate-result.v1"
     },
     {
-      "id": "legacy:update-e2e",
-      "command": "node ./dist/scripts/legacy-update-e2e-check.js",
+      "id": "migration:current-surface-e2e",
+      "command": "node ./dist/scripts/current-surface-update-e2e-check.js",
       "deps": [],
       "resource": [
         "cpu-light",
@@ -1406,7 +1377,7 @@
           "src/core/update-check.ts",
           "src/core/update/update-migration-state.ts",
           "src/core/codex-hooks/**",
-          "src/scripts/legacy-update-e2e-check.ts"
+          "src/scripts/current-surface-update-e2e-check.ts"
         ]
       },
       "isolation": {
@@ -1478,8 +1449,8 @@
       "output_contract": "sks.gate-result.v1"
     },
     {
-      "id": "mad-db:capability",
-      "command": "node ./dist/scripts/mad-db-capability-check.js",
+      "id": "mad-sks:sql-plane-capability",
+      "command": "node ./dist/scripts/mad-sks-sql-plane-capability-check.js",
       "deps": [],
       "resource": [
         "cpu-light",
@@ -1507,8 +1478,8 @@
       "output_contract": "sks.gate-result.v1"
     },
     {
-      "id": "mad-db:command",
-      "command": "node ./dist/scripts/mad-db-command-check.js",
+      "id": "commands:current-surface-only",
+      "command": "node ./dist/scripts/current-command-surface-check.js",
       "deps": [],
       "resource": [
         "cpu-light",
@@ -1536,8 +1507,8 @@
       "output_contract": "sks.gate-result.v1"
     },
     {
-      "id": "mad-db:mad-command",
-      "command": "node ./dist/scripts/mad-db-mad-command-check.js",
+      "id": "mad-sks:launch-sql-plane-boundary",
+      "command": "node ./dist/scripts/mad-sks-launch-sql-plane-boundary-check.js",
       "deps": [],
       "resource": [
         "cpu-light",
@@ -1814,6 +1785,42 @@
       "output_contract": "sks.gate-result.v1"
     },
     {
+      "id": "publish:runtime-script-closure",
+      "command": "node ./dist/scripts/runtime-script-pack-closure-check.js",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "infra-harness-gates.json",
+          "runtime-required-scripts.json",
+          "src/core/release/runtime-script-pack-closure.ts",
+          "src/scripts/runtime-script-pack-closure-check.ts",
+          "src/**",
+          "native/**",
+          ".github/workflows/**",
+          "dist/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
       "id": "policy:gate-audit",
       "command": "node ./dist/scripts/gate-policy-audit-check.js && node ./dist/scripts/cli-output-consistency-check.js && node ./dist/scripts/harness-benchmark-check.js",
       "deps": [],
@@ -1973,7 +1980,9 @@
     {
       "id": "publish:packlist-performance",
       "command": "node ./dist/scripts/packlist-performance-check.js",
-      "deps": [],
+      "deps": [
+        "publish:runtime-script-closure"
+      ],
       "resource": [
         "cpu-light",
         "fs-read"
@@ -2160,7 +2169,6 @@
         "core-skill:heldout-validation",
         "core-skill:no-inference-optimizer",
         "core-skill:patch",
-        "dfix:patch-swarm-route-blackbox",
         "doctor:fix-proves-codex-read",
         "doctor:fixes-codex-app-fast-ui",
         "fast:codex-service-tier-proof",
@@ -2195,6 +2203,38 @@
         "inputs": [
           "src/scripts/release-parallel-speed-budget-check.ts",
           "release-gates.v2.json"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "release:latency-slo",
+      "command": "node ./dist/scripts/release-latency-slo-check.js",
+      "deps": [],
+      "resource": [
+        "cpu-heavy",
+        "fs-read",
+        "fs-write",
+        "timing-sensitive"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 180000,
+      "cache": {
+        "enabled": false,
+        "inputs": [
+          "config/perf-budgets.v1.json",
+          "src/core/perf/release-latency-slo.ts",
+          "src/scripts/release-latency-slo-check.ts",
+          "src/core/codex-app/menubar/**",
+          "native/sks-menubar/Sources/**"
         ]
       },
       "isolation": {
@@ -2335,6 +2375,40 @@
       "cache": {
         "enabled": false,
         "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "runtime:installed-smoke",
+      "command": "node ./dist/scripts/installed-package-smoke-check.js",
+      "deps": [],
+      "resource": [
+        "cpu-heavy",
+        "fs-read",
+        "fs-write"
+      ],
+      "side_effect": "real-env",
+      "timeout_ms": 600000,
+      "cache": {
+        "enabled": false,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "runtime-required-scripts.json",
+          "src/core/install/installed-package-smoke.ts",
+          "src/scripts/installed-package-smoke-check.ts",
+          "src/**",
+          "schemas/**"
+        ]
       },
       "isolation": {
         "home": "temp",
@@ -2648,7 +2722,7 @@
     },
     {
       "id": "typecheck",
-      "command": "tsc -p tsconfig.json --noEmit",
+      "command": "node ./node_modules/typescript/bin/tsc -p tsconfig.json --noEmit",
       "deps": [],
       "resource": [
         "cpu-heavy",
@@ -2830,7 +2904,7 @@
         "fs-read"
       ],
       "side_effect": "hermetic",
-      "timeout_ms": 120000,
+      "timeout_ms": 180000,
       "cache": {
         "enabled": true,
         "inputs": [
@@ -2857,7 +2931,7 @@
     },
     {
       "id": "test:official-subagent-policy",
-      "command": "node --test --test-concurrency=1 dist/core/subagents/__tests__/official-subagent-config.test.js dist/core/subagents/__tests__/model-policy.test.js dist/core/subagents/__tests__/task-profile.test.js dist/core/__tests__/naruto-route-reasoning.test.js dist/core/commands/__tests__/naruto-command-glm-block.test.js dist/cli/__tests__/router-active-naruto.test.js dist/core/release/__tests__/release-gate-affected-selector.test.js test/blackbox/naruto-shadow-clone-swarm-packed.test.mjs",
+      "command": "node --test --test-concurrency=1 dist/core/subagents/__tests__/official-subagent-config.test.js dist/core/subagents/__tests__/model-policy.test.js dist/core/subagents/__tests__/task-profile.test.js dist/core/__tests__/naruto-route-reasoning.test.js dist/core/commands/__tests__/naruto-command-glm-block.test.js dist/cli/__tests__/router-active-naruto.test.js dist/core/release/__tests__/release-gate-affected-selector.test.js",
       "deps": [],
       "resource": [
         "cpu-light",
@@ -2883,12 +2957,12 @@
           "src/core/commands/naruto-command.ts",
           "src/core/commands/__tests__/naruto-command-glm-block.test.ts",
           "src/cli/router.ts",
-          "src/cli/__tests__/router-active-naruto.test.ts",
-          "src/bin/fast-inline.ts",
-          "src/bin/sks-dispatch.ts",
-          "src/core/release/release-gate-affected-selector.ts",
-          "src/core/release/__tests__/release-gate-affected-selector.test.ts",
-          "test/blackbox/naruto-shadow-clone-swarm-packed.test.mjs"
+      "src/cli/__tests__/router-active-naruto.test.ts",
+      "src/bin/fast-inline.ts",
+      "src/bin/sks-dispatch.ts",
+      "test/blackbox/official-subagent-workflow-packed.test.mjs",
+      "src/core/release/release-gate-affected-selector.ts",
+      "src/core/release/__tests__/release-gate-affected-selector.test.ts"
         ]
       },
       "isolation": {
@@ -3078,7 +3152,7 @@
           "release-gates.v2.json",
           "src/**",
           "schemas/**",
-          "src/scripts/release-cache-glob-hashing.ts",
+          "src/scripts/release-cache-glob-hashing-check.ts",
           "src/core/zellij/**",
           "src/core/naruto/**",
           "src/core/release/**"
@@ -3339,8 +3413,8 @@
       "output_contract": "sks.gate-result.v1"
     },
     {
-      "id": "mad-db:operation-lifecycle",
-      "command": "node ./dist/scripts/mad-db-lifecycle-hook-decision-check.js && node ./dist/scripts/mad-db-mcp-result-lifecycle-check.js",
+      "id": "mad-sks:sql-plane-operation-lifecycle",
+      "command": "node ./dist/scripts/mad-sks-sql-plane-lifecycle-hook-decision-check.js && node ./dist/scripts/mad-sks-sql-plane-result-lifecycle-check.js",
       "deps": [],
       "resource": [
         "cpu-light",

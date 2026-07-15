@@ -12,7 +12,7 @@ test('evidence router blocks missing required artifact paths', async () => {
   const index = await writeEvidenceIndexForProof(root, {
     schema: 'sks.completion-proof.v1',
     mission_id: 'M-fixture',
-    route: '$Team',
+    route: '$Wiki',
     status: 'verified_partial',
     evidence: { artifacts: ['missing-gate.json'] },
     claims: [],
@@ -31,7 +31,7 @@ test('evidence router lowers fixture evidence trust without blocking it', async 
   const index = await writeEvidenceIndexForProof(root, {
     schema: 'sks.completion-proof.v1',
     mission_id: 'M-fixture',
-    route: '$Team',
+    route: '$Wiki',
     status: 'verified_partial',
     evidence: { artifacts: ['run-gate.json'] },
     claims: [],
@@ -57,7 +57,7 @@ test('evidence router does not mark wrongness memory stale against route events'
   const index = await writeEvidenceIndexForProof(root, {
     schema: 'sks.completion-proof.v1',
     mission_id: 'M-fixture',
-    route: '$Team',
+    route: '$Wiki',
     status: 'verified_partial',
     evidence: {},
     claims: [],

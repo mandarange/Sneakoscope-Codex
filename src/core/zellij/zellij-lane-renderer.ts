@@ -16,7 +16,7 @@ export const ZELLIJ_LANE_FOOTER_KEYS = [
   'Ctrl+q detach',
   'sks doctor --fix',
   'sks zellij status',
-  'sks agent rollback-patches'
+  'sks naruto status'
 ]
 
 // Canonical lane section sets (1.20.2 Area 5.2).
@@ -213,7 +213,7 @@ export async function renderZellijLaneFrame(opts: ZellijLaneRenderOptions) {
   const laneMd = await readText(path.join(laneDir, 'lane.md'), '')
   const commandBus = await processZellijLaneCommandBus(root, slot)
   // The persistent MAD/Naruto cockpit lane watches its OWN mission ledger, but the
-  // orchestrator's native-agent fan-out (sks agent/naruto) writes scheduler state to
+  // the internal worker runtime writes scheduler state to
   // a separate mission ledger. When this lane's own ledger has no live scheduler
   // state, mirror the most-recent active agent mission so the cockpit reflects real
   // parallel work instead of a permanent "Workers idle". Artifacts/heartbeat still
@@ -364,7 +364,7 @@ function normalizeSlot(value: unknown): string {
 async function buildLaneDashboard(root: string, slot: string, laneJson: any) {
   const artifacts = [
     'agent-scheduler-state.json',
-    'agent-native-cli-session-swarm.json',
+    'native-cli-worker-runtime.json',
     'real-codex-parallel-proof.json',
     'agent-patch-queue.json',
     'agent-patch-apply-results.json',
@@ -375,8 +375,8 @@ async function buildLaneDashboard(root: string, slot: string, laneJson: any) {
   const data: Record<string, any> = {}
   for (const name of artifacts) data[name] = await readJson<any>(path.join(root, name), null)
   const scheduler = data['agent-scheduler-state.json']
-  const swarm = data['agent-native-cli-session-swarm.json']
-  const worker = await resolveSlotWorkerSnapshot(root, slot, swarm)
+  const runtime = data['native-cli-worker-runtime.json']
+  const worker = await resolveSlotWorkerSnapshot(root, slot, runtime)
   const proof = data['agent-proof-evidence.json']
   const queue = data['agent-patch-queue.json']
   const apply = data['agent-patch-apply-results.json']
@@ -398,13 +398,13 @@ async function buildLaneDashboard(root: string, slot: string, laneJson: any) {
     firstPatchFile(verify)
   ]) || 'none'
 
-  // Mode: Agent / Team / MAD / Naruto. Prefer explicit lane/scheduler hints.
+  // Mode: Work / MAD-SKS / Naruto. Prefer explicit lane/scheduler hints.
   const mode = firstString([
     laneJson?.mode,
     scheduler?.mode,
     scheduler?.naruto_mode ? 'Naruto' : null,
-    swarm?.mode
-  ]) || 'Agent'
+    runtime?.mode
+  ]) || 'Work'
 
   // Fast service tier.
   const projectRoot = inferProjectRootFromLedgerRoot(root)
@@ -412,14 +412,14 @@ async function buildLaneDashboard(root: string, slot: string, laneJson: any) {
   const serviceTier = firstString([
     laneJson?.service_tier,
     scheduler?.service_tier,
-    swarm?.service_tier,
+    runtime?.service_tier,
     proof?.fast_mode_policy?.service_tier,
     policy.service_tier
   ])
   const fastMode = firstDefined([
     laneJson?.fast_mode,
     scheduler?.fast_mode,
-    swarm?.fast_mode,
+    runtime?.fast_mode,
     proof?.fast_mode_policy?.fast_mode,
     policy.fast_mode
   ])
@@ -427,23 +427,23 @@ async function buildLaneDashboard(root: string, slot: string, laneJson: any) {
     ? `on · service_tier=${serviceTier || 'fast'}`
     : `off · service_tier=${serviceTier || 'standard'}`
 
-  // Workers: live active/target + (naruto) clone fan-out.
-  const cloneTotal = numberOf([scheduler?.clones, scheduler?.clone_count, swarm?.clones])
-  const cloneActive = numberOf([scheduler?.active_clone, scheduler?.active_slot_count])
+  // Workers: live active/target plus the bounded worker total.
+  const workerTotal = numberOf([scheduler?.workers, scheduler?.worker_count, runtime?.workers])
+  const activeWorkers = numberOf([scheduler?.active_worker_count, scheduler?.active_slot_count])
   const workers = [
     scheduler ? `active ${scheduler.active_slot_count ?? 'n/a'}/${scheduler.target_active_slots ?? scheduler.max_active_slots ?? 'n/a'}` : 'idle',
     worker ? `${slot} gen-${worker.generation_index || '?'} ${worker.status || 'observed'}` : null,
-    cloneTotal ? `clone ${pad3(cloneActive || 0)}/${pad3(cloneTotal)}` : null,
+    workerTotal ? `workers ${pad3(activeWorkers || 0)}/${pad3(workerTotal)}` : null,
     scheduler ? `pending ${scheduler.pending_count ?? 'n/a'}` : null
   ].filter(Boolean).join(' · ') || 'idle'
 
   // Codex child sessions.
-  const sessions = arrayFrom(swarm, ['sessions', 'workers', 'items'])
+  const sessions = arrayFrom(runtime, ['sessions', 'workers', 'items'])
   const codexChild = worker
     ? `live ${worker.status || 'observed'} · result ${worker.result_status || 'pending'}`
     : sessions.length > 0
     ? `active ${sessions.length}`
-    : (swarm ? 'optional' : 'not-run')
+    : (runtime ? 'optional' : 'not-run')
 
   const baseQueueSummary = scheduler
     ? `pending ${scheduler.pending_count ?? 0} · applying ${scheduler.active_slot_count ?? 0} · verified ${numberOf([scheduler.verified_count, scheduler.completed_count]) ?? 0} · blocked ${scheduler.blocked_count ?? 0}`
@@ -462,7 +462,7 @@ async function buildLaneDashboard(root: string, slot: string, laneJson: any) {
   const protectedPaths = firstString([laneJson?.protected_status, apply?.protected_status]) || 'ok'
   const rollbackStatus = rollback ? statusOf(rollback) : 'ready'
 
-  const blockerList = collectBlockers([scheduler, swarm, worker?.result, proof, queue, apply, verify, rollback, laneJson])
+  const blockerList = collectBlockers([scheduler, runtime, worker?.result, proof, queue, apply, verify, rollback, laneJson])
   const presentArtifacts = artifacts.filter((name) => data[name])
   const reports = firstString([
     worker?.result_path ? rootedPath(root, worker.result_path) : null,
@@ -510,8 +510,8 @@ interface SlotWorkerSnapshot {
   result: any
 }
 
-async function resolveSlotWorkerSnapshot(root: string, slot: string, swarm: any): Promise<SlotWorkerSnapshot | null> {
-  const record = pickLatestSlotWorkerRecord(swarm, slot) || await latestFilesystemWorkerRecord(root, slot)
+async function resolveSlotWorkerSnapshot(root: string, slot: string, runtime: any): Promise<SlotWorkerSnapshot | null> {
+  const record = pickLatestSlotWorkerRecord(runtime, slot) || await latestFilesystemWorkerRecord(root, slot)
   if (!record) return null
   const workerDir = firstString([record.worker_artifact_dir, record.worker_dir]) || path.join('sessions', slot, `gen-${record.generation_index || 1}`, 'worker')
   const stdoutRel = firstString([record.stdout_log, path.join(workerDir, 'worker.stdout.log')])
@@ -571,8 +571,8 @@ async function resolveSlotWorkerSnapshot(root: string, slot: string, swarm: any)
   }
 }
 
-function pickLatestSlotWorkerRecord(swarm: any, slot: string): any | null {
-  const records = arrayFrom(swarm, ['records', 'sessions', 'workers', 'items'])
+function pickLatestSlotWorkerRecord(runtime: any, slot: string): any | null {
+  const records = arrayFrom(runtime, ['records', 'sessions', 'workers', 'items'])
     .filter((record) => normalizeSlot(firstString([record?.slot_id, record?.slot, record?.agent?.slot_id, record?.agent_id]) || '') === slot)
   return records.sort((a, b) => workerRecordTime(b) - workerRecordTime(a))[0] || null
 }
@@ -698,7 +698,7 @@ function firstDefined(values: unknown[]): unknown {
 
 // Follow the freshest ledger that has actual native worker session data. A lane's
 // own mission can have a scheduler placeholder while the native/Naruto worker
-// swarm writes logs into a sibling agent ledger; showing the placeholder makes
+// runtime writes logs into a sibling agent ledger; showing the placeholder makes
 // the right panes look disconnected. Pure read; never mutates. Returns the
 // original root when nothing better is found or when disabled.
 async function resolveActiveLedgerRoot(ledgerRoot: string): Promise<string> {
@@ -728,7 +728,7 @@ async function resolveActiveLedgerRoot(ledgerRoot: string): Promise<string> {
 
 async function nativeWorkerActivityMtime(candidate: string): Promise<number> {
   const mtimes: number[] = []
-  for (const artifact of ['agent-native-cli-session-swarm.json', 'agent-worker-slots.json']) {
+  for (const artifact of ['native-cli-worker-runtime.json', 'agent-worker-slots.json']) {
     try {
       mtimes.push((await stat(path.join(candidate, artifact))).mtimeMs)
     } catch {}

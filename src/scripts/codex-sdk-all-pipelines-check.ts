@@ -8,15 +8,12 @@ const required = [
 ];
 for (const name of required) assertGate(releaseGates.has(name), `required pipeline gate missing from v2 manifest: ${name}`);
 const sources = {
-  team: readText('src/core/commands/team-command.ts'),
   qa: readText('src/core/commands/qa-loop-command.ts'),
   research: readText('src/core/commands/research-command.ts'),
   naruto: readText('src/core/commands/naruto-command.ts'),
   dfix: readText('src/core/commands/dfix-command.ts'),
   coreSkill: readText('src/core/skills/core-skill-types.ts')
 };
-const teamCreateRedirectsToNaruto = sources.team.includes('redirectTeamCreateToNaruto') && sources.team.includes('narutoCommand');
-assertGate(teamCreateRedirectsToNaruto, 'Team create must route through the Naruto official-subagent SSOT');
 assertGate(sources.qa.includes("mock ? 'fake' : 'codex-sdk'"), 'QA must route native agents through codex-sdk');
 assertGate(
   sources.research.includes("backend: mock ? 'mock' : 'codex-sdk'")

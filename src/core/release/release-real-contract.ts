@@ -13,7 +13,7 @@ export const RELEASE_REAL_REQUIRED_CHECK_IDS = Object.freeze([
   'codex:0144:app-server-v2:real',
   'codex:0144:capability:real',
   'doctor:actual',
-  'publish:dry-run-performance',
+  'release:pack-receipt',
   'zellij:capability',
   'zellij:layout-valid',
   'zellij:real-session-launch',

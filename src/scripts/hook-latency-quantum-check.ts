@@ -10,7 +10,7 @@ const { runProcess } = await importDist('core/fsx.js')
 
 const scenarios = [
   { name: 'no-state', prompt: 'hello', budget_p95_ms: 230 },
-  { name: 'active-route', prompt: 'continue current route', budget_p95_ms: 230, state: { mission_id: 'M-active', mode: 'TEAM', route: 'Team', route_command: '$Team', phase: 'EXECUTE', implementation_allowed: true } },
+  { name: 'active-route', prompt: 'continue current route', budget_p95_ms: 230, state: { mission_id: 'M-active', mode: 'NARUTO', route: 'Naruto', route_command: '$Naruto', phase: 'EXECUTE', implementation_allowed: true } },
   { name: 'stale-code-pack-note', prompt: 'status?', budget_p95_ms: 230, files: { '.sneakoscope/wiki/code-pack.json': JSON.stringify({ generated_at: '2000-01-01T00:00:00.000Z' }) } },
   { name: 'no-question-queue', prompt: 'can I interrupt?', budget_p95_ms: 230, state: { mission_id: 'M-noq', mode: 'RESEARCH', phase: 'RESEARCH_RUNNING_NO_QUESTIONS' } },
   { name: 'clarification-awaiting', prompt: 'here is the answer', budget_p95_ms: 230, state: { mission_id: 'M-clarify', mode: 'TEAM', phase: 'CLARIFICATION_AWAITING_ANSWERS', stop_gate: 'clarification-gate', ambiguity_gate_required: true, clarification_required: true, implementation_allowed: false } },

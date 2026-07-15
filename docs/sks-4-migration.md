@@ -13,7 +13,7 @@ SKS 4.0.0 is a destructive verification-pipeline release. The default foreground
 
 ## Removed Runtime Migration
 
-Removed runtime migration is explicit. `tmux` remains only as a removed-runtime notice. SKS 4.0.0 does not silently route removed runtimes, old compatibility aliases, or legacy fallback command names to replacement behavior.
+Removed runtime migration is explicit. Retired runtimes and command names are absent from the public command surface and resolve as unknown input. SKS does not silently route removed runtimes, old compatibility aliases, or legacy fallback command names to replacement behavior.
 
 ## No Silent Legacy Fallback
 

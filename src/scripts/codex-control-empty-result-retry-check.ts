@@ -28,7 +28,7 @@ emitGate('codex-control:empty-result-retry', { attempts, retry_count: result.rel
 
 function baseTask() {
   return {
-    route: '$Agent',
+    route: '$Naruto',
     tier: 'worker',
     missionId: 'M-empty-result-retry',
     cwd: process.cwd(),

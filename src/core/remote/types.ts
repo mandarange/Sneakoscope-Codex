@@ -7,10 +7,11 @@ export const REMOTE_COMMAND_RECEIPT_SCHEMA = 'sks.remote-command-receipt.v1' as 
 export const REMOTE_OWNER_PROOF_SCHEMA = 'sks.remote-owner-proof.v1' as const;
 export const REMOTE_R2_APPROVAL_SCHEMA = 'sks.remote-r2-approval.v1' as const;
 export const REMOTE_EVENT_SCHEMA = 'sks.remote-event.v1' as const;
+export const REMOTE_SESSION_INDEX_SCHEMA = 'sks.remote-session-index.v1' as const;
 
 export type RemoteRisk = 'R0' | 'R1' | 'R2';
 export type RemoteCommandKind = 'input' | 'verify' | 'cancel' | 'read';
-export type RemoteWorkerRequestType = 'hello' | 'list_sessions' | 'read_snapshot' | 'watch' | 'command';
+export type RemoteWorkerRequestType = 'hello' | 'list_sessions' | 'read_snapshot' | 'watch' | 'prepare_cancel' | 'command';
 
 export interface RemoteMachineV1 {
   readonly id: string;
@@ -30,6 +31,23 @@ export interface RemoteMachineRegistryValidation {
   readonly ok: boolean;
   readonly issues: readonly string[];
   readonly registry: RemoteMachineRegistryV1 | null;
+}
+
+export interface RemoteSessionTargetV1 {
+  readonly machine_id: string;
+  readonly project_id: string;
+  readonly project_root: string;
+}
+
+export interface RemoteSessionIndexV1 {
+  readonly schema: typeof REMOTE_SESSION_INDEX_SCHEMA;
+  readonly targets: readonly RemoteSessionTargetV1[];
+}
+
+export interface RemoteSessionIndexValidation {
+  readonly ok: boolean;
+  readonly issues: readonly string[];
+  readonly index: RemoteSessionIndexV1 | null;
 }
 
 export interface RemoteReadinessV1 {
@@ -95,6 +113,7 @@ export type WorkerRequestV1 =
   | { readonly schema: typeof REMOTE_WORKER_REQUEST_SCHEMA; readonly id: string; readonly type: 'list_sessions' }
   | { readonly schema: typeof REMOTE_WORKER_REQUEST_SCHEMA; readonly id: string; readonly type: 'read_snapshot'; readonly session_id: string }
   | { readonly schema: typeof REMOTE_WORKER_REQUEST_SCHEMA; readonly id: string; readonly type: 'watch'; readonly after_seq: number; readonly session_id?: string }
+  | { readonly schema: typeof REMOTE_WORKER_REQUEST_SCHEMA; readonly id: string; readonly type: 'prepare_cancel'; readonly session_id: string; readonly command_id: string }
   | { readonly schema: typeof REMOTE_WORKER_REQUEST_SCHEMA; readonly id: string; readonly type: 'command'; readonly envelope: RemoteCommandEnvelopeV1 };
 
 export type RemoteDeliveryState = 'not_dispatched' | 'unknown' | 'acknowledged';

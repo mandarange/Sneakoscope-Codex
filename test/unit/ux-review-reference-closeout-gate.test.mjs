@@ -78,6 +78,11 @@ test('completion proof accepts Image UX reference-only partial closeout with act
       manual_review_required: true
     },
     evidence: {
+      route_gate: {
+        workflow: 'official_codex_subagent',
+        official_subagent_evidence: true,
+        parent_summary_present: true
+      },
       image_ux_review: {
         schema: 'sks.image-ux-review-proof-evidence.v1',
         reference_only: true,

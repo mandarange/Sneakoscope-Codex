@@ -9,12 +9,12 @@ import { latestTrustReport } from '../../dist/core/trust-kernel/trust-report.js'
 test('trust kernel writes contract, evidence index, and report for a serious route', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-trust-kernel-'));
   await fs.mkdir(path.join(root, '.sneakoscope/missions/M-fixture'), { recursive: true });
-  await fs.writeFile(path.join(root, '.sneakoscope/missions/M-fixture/team-gate.json'), '{}\n');
+  await fs.writeFile(path.join(root, '.sneakoscope/missions/M-fixture/wiki-gate.json'), '{}\n');
   const result = await finalizeRouteWithProof(root, {
     missionId: 'M-fixture',
-    route: '$Team',
+    route: '$Wiki',
     gate: { ok: true, passed: true },
-    artifacts: ['team-gate.json'],
+    artifacts: ['wiki-gate.json'],
     mock: true,
     statusHint: 'verified_partial'
   });

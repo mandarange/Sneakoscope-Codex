@@ -3,7 +3,7 @@
 import { assertGate, emitGate, importDist } from './sks-1-18-gate-lib.js';
 
 const classifier = await importDist('core/router/task-classifier.js');
-const orchestrator = classifier.classifyCodexTask(baseTask({ prompt: 'strategy planning and final synthesis', route: '$Team' }));
+const orchestrator = classifier.classifyCodexTask(baseTask({ prompt: 'strategy planning and final synthesis', route: '$Naruto' }));
 const worker = classifier.classifyCodexTask(baseTask({ prompt: 'work item patch shard', route: '$Naruto', slotId: 'slot-001', workItemId: 'slice-1' }));
 const imageWorker = classifier.classifyCodexTask(baseTask({ prompt: 'image QA shard', inputImages: ['screen.png'], slotId: 'slot-002', workItemId: 'slice-2' }));
 assertGate(orchestrator.tier === 'orchestrator', 'main route must classify as orchestrator', orchestrator);
@@ -13,7 +13,7 @@ emitGate('ultra-router:classification', { orchestrator: orchestrator.tier, worke
 
 function baseTask(extra = {}) {
   return {
-    route: '$Agent',
+    route: '$Naruto',
     missionId: 'M-ultra-router-classification',
     cwd: process.cwd(),
     prompt: 'fixture',

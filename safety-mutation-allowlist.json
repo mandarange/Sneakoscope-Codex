@@ -8,16 +8,16 @@
       "reason": "Permission normalization for created auth, shim, socket, or release artifacts; exact callsite is audited."
     },
     {
-      "file": "src/cli/install-helpers.ts",
-      "symbol": "ensureSksCommandDuringInstall",
+      "file": "src/cli/install-helpers-codex-lb-chain.ts",
+      "symbol": "writeCodexLbChainCache",
       "token": "chmod",
-      "reason": "Permission normalization for created auth, shim, socket, or release artifacts; exact callsite is audited."
+      "reason": "Codex LB chain health applies 0600 only to its SKS-owned cache under the selected HOME."
     },
     {
-      "file": "src/cli/install-helpers.ts",
-      "symbol": "hardBrokenLaunch",
+      "file": "src/cli/install-helpers-codex-lb-selftest-chain.ts",
+      "symbol": "runCodexLbLaunchChainSelftest",
       "token": "codex config write",
-      "reason": "Codex config or auth mutation path is constrained by caller contract and exact symbol audit."
+      "reason": "The launch-chain selftest writes only its caller-provided isolated Codex config fixture."
     },
     {
       "file": "src/cli/install-helpers.ts",
@@ -32,10 +32,10 @@
       "reason": "Postinstall writes only the package dist stamp JSON under the installed package runtime directory."
     },
     {
-      "file": "src/cli/install-helpers.ts",
-      "symbol": "reconcileSksPathShimsDuringInstall",
+      "file": "src/cli/install-helpers-codex-lb-selftest.ts",
+      "symbol": "selftestCodexLb",
       "token": "chmod",
-      "reason": "Permission normalization for created auth, shim, socket, or release artifacts; exact callsite is audited."
+      "reason": "Codex LB selftest chmods only fake executables inside its mkdtemp-owned fixture root."
     },
     {
       "file": "src/cli/install-helpers.ts",
@@ -74,28 +74,22 @@
       "reason": "Codex auth rollback removes only the selected auth file when the rollback contract proves that file did not exist before the operation."
     },
     {
-      "file": "src/cli/install-helpers.ts",
-      "symbol": "selftestCodexLb",
-      "token": "chmod",
-      "reason": "Permission normalization for created auth, shim, socket, or release artifacts; exact callsite is audited."
-    },
-    {
-      "file": "src/cli/install-helpers.ts",
+      "file": "src/cli/install-helpers-codex-lb-selftest.ts",
       "symbol": "selftestCodexLb",
       "token": "codex config write",
-      "reason": "Codex config or auth mutation path is constrained by caller contract and exact symbol audit."
+      "reason": "Codex LB selftest writes only auth and config fixtures inside its mkdtemp-owned HOME."
     },
     {
-      "file": "src/cli/install-helpers.ts",
+      "file": "src/cli/install-helpers-codex-lb-selftest.ts",
       "symbol": "selftestCodexLb",
       "token": "fsp.rm",
-      "reason": "Cleanup/removal path is route-owned, generated, or temporary artifact; exact callsite is audited."
+      "reason": "Codex LB selftest removes only isolated auth and environment fixtures under its mkdtemp HOME."
     },
     {
-      "file": "src/cli/install-helpers.ts",
-      "symbol": "selftestSksShimRepair",
+      "file": "src/cli/install-helpers-install-support.ts",
+      "symbol": "ensureSksCommandDuringInstall",
       "token": "chmod",
-      "reason": "Permission normalization for created auth, shim, socket, or release artifacts; exact callsite is audited."
+      "reason": "Installer support sets executable bits only on the SKS-owned command shim it just installed."
     },
     {
       "file": "src/cli/install-helpers.ts",
@@ -104,10 +98,16 @@
       "reason": "API key auth writer enforces 0600 permissions only on created auth and backup files."
     },
     {
-      "file": "src/cli/install-helpers.ts",
-      "symbol": "writeCodexLbChainCache",
+      "file": "src/cli/install-helpers-install-support.ts",
+      "symbol": "reconcileSksPathShimsDuringInstall",
       "token": "chmod",
-      "reason": "Permission normalization for created auth, shim, socket, or release artifacts; exact callsite is audited."
+      "reason": "Installer reconciliation chmods only SKS-owned command shims selected for repair."
+    },
+    {
+      "file": "src/cli/install-helpers-install-support.ts",
+      "symbol": "selftestSksShimRepair",
+      "token": "chmod",
+      "reason": "Shim repair selftest chmods only its fake npm binary inside the isolated selftest root."
     },
     {
       "file": "src/commands/doctor.ts",
@@ -236,34 +236,70 @@
       "reason": "Skill sync lock cleanup removes only the scoped .sneakoscope/locks/skill-sync.lock directory after the critical section exits."
     },
     {
-      "file": "src/core/codex-app/sks-menubar.ts",
-      "symbol": "buildMenuBarAppAtomically",
+      "file": "src/core/codex-app/menubar/app-bundle.ts",
+      "symbol": "buildMenuBarAppStaging",
       "token": "chmod",
-      "reason": "Menu bar atomic build mutates only staging, backup, and app bundle paths under the SKS-managed install directory."
+      "reason": "Menu Bar build marks only the newly compiled executable inside the SKS staging app bundle."
     },
     {
-      "file": "src/core/codex-app/sks-menubar.ts",
-      "symbol": "buildMenuBarAppAtomically",
+      "file": "src/core/codex-app/menubar/app-bundle.ts",
+      "symbol": "buildMenuBarAppStaging",
       "token": "fs.rm",
-      "reason": "Menu bar atomic build mutates only staging, backup, and app bundle paths under the SKS-managed install directory."
+      "reason": "Menu Bar build removes only the prior SKS staging app path before rebuilding it."
     },
     {
-      "file": "src/core/codex-app/sks-menubar.ts",
-      "symbol": "buildMenuBarAppAtomically",
+      "file": "src/core/codex-app/menubar/generation-transaction-journal.ts",
+      "symbol": "persistJournal",
+      "token": "chmod",
+      "reason": "Generation journaling applies 0600 only to its SKS-managed transaction journal."
+    },
+    {
+      "file": "src/core/codex-app/menubar/generation-transaction.ts",
+      "symbol": "cleanupCommittedJournal",
+      "token": "fs.rm",
+      "reason": "Committed generation cleanup removes only journal-declared temporary, staged, displaced, and journal paths."
+    },
+    {
+      "file": "src/core/codex-app/menubar/generation-transaction.ts",
+      "symbol": "recoverMenuBarGenerationTransaction",
+      "token": "fs.rm",
+      "reason": "Successful recovery removes only the validated SKS generation journal after rollback."
+    },
+    {
+      "file": "src/core/codex-app/menubar/generation-transaction.ts",
+      "symbol": "recoverPair",
+      "token": "fs.rm",
+      "reason": "Generation recovery removes only validated staged, temporary, and displaced paths from its journal pair."
+    },
+    {
+      "file": "src/core/codex-app/menubar/generation-transaction.ts",
+      "symbol": "recoveryRename",
       "token": "rename",
-      "reason": "Menu bar atomic build mutates only staging, backup, and app bundle paths under the SKS-managed install directory."
+      "reason": "Recovery renames only journal-validated Menu Bar generation pair paths."
     },
     {
-      "file": "src/core/codex-app/sks-menubar.ts",
-      "symbol": "installSksMenuBar",
-      "token": "chmod",
-      "reason": "Menu bar installer sets executable bit only on the SKS-owned action script in the install path."
+      "file": "src/core/codex-app/menubar/generation-transaction.ts",
+      "symbol": "transactionRename",
+      "token": "rename",
+      "reason": "Generation commit renames only journal-validated active, backup, staging, and temporary pair paths."
     },
     {
-      "file": "src/core/codex-app/sks-menubar.ts",
-      "symbol": "uninstallSksMenuBar",
+      "file": "src/core/codex-app/menubar/launch-agent.ts",
+      "symbol": "removeLaunchAgent",
       "token": "fs.rm",
-      "reason": "Menu bar uninstaller removes only SKS-owned launch agent and install directory paths."
+      "reason": "Menu Bar uninstall removes only the resolved SKS launch-agent file and managed install directory."
+    },
+    {
+      "file": "src/core/codex-app/menubar/resources.ts",
+      "symbol": "materializeNativeSources",
+      "token": "fs.rm",
+      "reason": "Native source materialization clears only its SKS staging source directory before regeneration."
+    },
+    {
+      "file": "src/core/codex-app/menubar/resources.ts",
+      "symbol": "materializeNativeSources",
+      "token": "fs.writeFile",
+      "reason": "Native source materialization writes only packaged Swift sources into the SKS staging directory."
     },
     {
       "file": "src/core/codex-control/codex-0139-probe-runner.ts",
@@ -633,24 +669,6 @@
     },
     {
       "file": "src/core/init/skills.ts",
-      "symbol": "quarantineSkillDir",
-      "token": "fsp.rm",
-      "reason": "Skill quarantine mutates only SKS-managed generated skill directories after collision checks."
-    },
-    {
-      "file": "src/core/init/skills.ts",
-      "symbol": "quarantineSkillDir",
-      "token": "rename",
-      "reason": "Skill quarantine mutates only SKS-managed generated skill directories after collision checks."
-    },
-    {
-      "file": "src/core/init/skills.ts",
-      "symbol": "reconcileProjectSkillEntries",
-      "token": "fsp.rm",
-      "reason": "Skill reconciliation removes only generated SKS-owned skill directories or manifests after marker checks."
-    },
-    {
-      "file": "src/core/init/skills.ts",
       "symbol": "removeGeneratedAgentSkillAliases",
       "token": "fsp.rm",
       "reason": "Skill reconciliation removes only generated SKS-owned skill directories or manifests after marker checks."
@@ -682,8 +700,8 @@
     {
       "file": "src/core/install/installed-package-smoke.ts",
       "symbol": "runInstalledPackageSmoke",
-      "token": "fs.writeFile",
-      "reason": "Installed package smoke writes only the package.json for its isolated mkdtemp npm install fixture."
+      "token": "fs.rm",
+      "reason": "Installed-package smoke removes only its mkdtemp-owned npm install fixture in finally."
     },
     {
       "file": "src/core/locks/file-lock.ts",
@@ -692,28 +710,28 @@
       "reason": "File-lock recovery atomically renames only a lock proven stale and dead into a same-path quarantine before guarded cleanup."
     },
     {
-      "file": "src/core/mad-db/mad-db-recovery.ts",
-      "symbol": "quarantineStaleMadDbRuntimeProfiles",
+      "file": "src/core/mad-sks/sql-plane/recovery.ts",
+      "symbol": "quarantineStaleMadSksSqlPlaneRuntimeProfiles",
       "token": "fs.rm",
-      "reason": "MAD-DB recovery removes only stale mission-local runtime Codex profile files when quarantine rename fails."
+      "reason": "MAD-SKS SQL-plane recovery removes only stale mission-local runtime Codex profile files when quarantine rename fails."
     },
     {
-      "file": "src/core/mad-db/mad-db-recovery.ts",
-      "symbol": "quarantineStaleMadDbRuntimeProfiles",
+      "file": "src/core/mad-sks/sql-plane/recovery.ts",
+      "symbol": "quarantineStaleMadSksSqlPlaneRuntimeProfiles",
       "token": "rename",
-      "reason": "MAD-DB recovery quarantines only stale mission-local runtime Codex profile files before restoring read-only operation."
+      "reason": "MAD-SKS SQL-plane recovery quarantines only stale mission-local runtime Codex profile files before restoring read-only operation."
     },
     {
-      "file": "src/core/mad-db/mad-db-runtime-profile.ts",
-      "symbol": "closeMadDbRuntimeProfile",
+      "file": "src/core/mad-sks/sql-plane/runtime-profile.ts",
+      "symbol": "closeMadSksSqlPlaneRuntimeProfile",
       "token": "fs.rm",
-      "reason": "MAD-DB close removes only the scoped mission-local runtime Codex profile when quarantine rename fails."
+      "reason": "MAD-SKS SQL-plane close removes only the scoped mission-local runtime Codex profile when quarantine rename fails."
     },
     {
-      "file": "src/core/mad-db/mad-db-runtime-profile.ts",
-      "symbol": "closeMadDbRuntimeProfile",
+      "file": "src/core/mad-sks/sql-plane/runtime-profile.ts",
+      "symbol": "closeMadSksSqlPlaneRuntimeProfile",
       "token": "rename",
-      "reason": "MAD-DB close moves only the scoped mission-local runtime Codex profile aside before verifying read-only restoration."
+      "reason": "MAD-SKS SQL-plane close moves only the scoped mission-local runtime Codex profile aside before verifying read-only restoration."
     },
     {
       "file": "src/core/mad-sks/executors/file-write-executor.ts",
@@ -1016,12 +1034,6 @@
       "reason": "TriWiki SLA certificate writer persists scoped release-equivalence certificate JSON under the configured certificate path."
     },
     {
-      "file": "src/core/update-check.ts",
-      "symbol": "writeUpdateLatestCache",
-      "token": "fs.writeFile",
-      "reason": "Update check writes only the scoped latest-version cache artifact after bounded registry or dry-run discovery."
-    },
-    {
       "file": "src/core/update/update-migration-state.ts",
       "symbol": "pruneLegacyDoctorMigrationReports",
       "token": "fsp.rm",
@@ -1124,24 +1136,6 @@
       "reason": "src/scripts/agent-cleanup-executor-v2-check.ts#module terminates only the child process created by its isolated check fixture after timeout or proof collection."
     },
     {
-      "file": "src/scripts/agent-codex-app-cockpit-check.ts",
-      "symbol": "runFixture",
-      "token": "writeFileSync",
-      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
-    },
-    {
-      "file": "src/scripts/agent-fast-mode-default-check.ts",
-      "symbol": "run",
-      "token": "rmSync",
-      "reason": "Fast-mode release fixture removes only its per-run mkdtemp project after the isolated mock agent command returns."
-    },
-    {
-      "file": "src/scripts/agent-fast-mode-default-check.ts",
-      "symbol": "run",
-      "token": "writeFileSync",
-      "reason": "src/scripts/agent-fast-mode-default-check.ts#run writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
       "file": "src/scripts/agent-janitor-check.ts",
       "symbol": "runFixture",
       "token": "writeFileSync",
@@ -1158,12 +1152,6 @@
       "symbol": "must",
       "token": "fs.writeFile",
       "reason": "src/scripts/agent-official-subagent-helper-policy-check.ts#must writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/agent-parallel-write-blackbox.ts",
-      "symbol": "module",
-      "token": "writeFileSync",
-      "reason": "src/scripts/agent-parallel-write-blackbox.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
     {
       "file": "src/scripts/agent-parallel-write-kernel-check.ts",
@@ -1196,16 +1184,16 @@
       "reason": "src/scripts/agent-patch-rollback-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
     {
-      "file": "src/scripts/agent-patch-swarm-gate-lib.ts",
+      "file": "src/scripts/patch-handoff-gate-lib.ts",
       "symbol": "makeTempPatchProject",
       "token": "writeFileSync",
-      "reason": "src/scripts/agent-patch-swarm-gate-lib.ts#makeTempPatchProject writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
+      "reason": "src/scripts/patch-handoff-gate-lib.ts#makeTempPatchProject writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
     {
-      "file": "src/scripts/agent-patch-swarm-gate-lib.ts",
+      "file": "src/scripts/patch-handoff-gate-lib.ts",
       "symbol": "writeReport",
       "token": "writeFileSync",
-      "reason": "src/scripts/agent-patch-swarm-gate-lib.ts#writeReport writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
+      "reason": "src/scripts/patch-handoff-gate-lib.ts#writeReport writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
     {
       "file": "src/scripts/agent-patch-transaction-journal-check.ts",
@@ -1214,46 +1202,10 @@
       "reason": "src/scripts/agent-patch-transaction-journal-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
     {
-      "file": "src/scripts/agent-real-codex-dynamic-smoke-check.ts",
-      "symbol": "writeReport",
-      "token": "writeFileSync",
-      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
-    },
-    {
-      "file": "src/scripts/agent-real-codex-in-zellij-worker-pane-check.ts",
-      "symbol": "emit",
-      "token": "fs.writeFile",
-      "reason": "Release/check script writes a scoped real Zellij worker-pane proof report under .sneakoscope/reports."
-    },
-    {
-      "file": "src/scripts/agent-real-codex-patch-envelope-smoke.ts",
-      "symbol": "module",
-      "token": "writeFileSync",
-      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
-    },
-    {
-      "file": "src/scripts/agent-real-codex-patch-envelope-smoke.ts",
-      "symbol": "writeReport",
-      "token": "writeFileSync",
-      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
-    },
-    {
       "file": "src/scripts/agent-role-config-repair-check.ts",
       "symbol": "module",
       "token": "writeFileSync",
       "reason": "src/scripts/agent-role-config-repair-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/agent-rollback-command-check.ts",
-      "symbol": "module",
-      "token": "writeFileSync",
-      "reason": "src/scripts/agent-rollback-command-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/agent-route-blackbox-lib.ts",
-      "symbol": "module",
-      "token": "rmSync",
-      "reason": "src/scripts/agent-route-blackbox-lib.ts#module removes only its isolated fixture, generated build output, or scoped temporary artifact during cleanup."
     },
     {
       "file": "src/scripts/agent-slot-pane-binding-proof-check.ts",
@@ -1284,12 +1236,6 @@
       "symbol": "module",
       "token": "fs.writeFile",
       "reason": "src/scripts/agent-worker-backend-router-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/agent-zellij-runtime-check.ts",
-      "symbol": "module",
-      "token": "fs.writeFile",
-      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
       "file": "src/scripts/appshots-capability-check.ts",
@@ -2150,42 +2096,6 @@
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "src/scripts/legacy-update-e2e-check.ts",
-      "symbol": "badStages",
-      "token": "fsp.writeFile",
-      "reason": "src/scripts/legacy-update-e2e-check.ts#badStages writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/legacy-update-e2e-check.ts",
-      "symbol": "rotatedAfterWrite",
-      "token": "fsp.rm",
-      "reason": "src/scripts/legacy-update-e2e-check.ts#rotatedAfterWrite removes only its isolated fixture, generated build output, or scoped temporary artifact during cleanup."
-    },
-    {
-      "file": "src/scripts/legacy-update-e2e-check.ts",
-      "symbol": "seedLegacyFixture",
-      "token": "codex config write",
-      "reason": "src/scripts/legacy-update-e2e-check.ts#seedLegacyFixture writes only an isolated temporary Codex configuration fixture used by the release check."
-    },
-    {
-      "file": "src/scripts/legacy-update-e2e-check.ts",
-      "symbol": "seedLegacyFixture",
-      "token": "fsp.writeFile",
-      "reason": "src/scripts/legacy-update-e2e-check.ts#seedLegacyFixture writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/legacy-upgrade-matrix-check.ts",
-      "symbol": "rmTmp",
-      "token": "rmSync",
-      "reason": "src/scripts/legacy-upgrade-matrix-check.ts#rmTmp removes only its isolated fixture, generated build output, or scoped temporary artifact during cleanup."
-    },
-    {
-      "file": "src/scripts/legacy-upgrade-matrix-check.ts",
-      "symbol": "rmTmp",
-      "token": "writeFileSync",
-      "reason": "src/scripts/legacy-upgrade-matrix-check.ts#rmTmp writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
       "file": "src/scripts/lib/ensure-dist-fresh.ts",
       "symbol": "writeDistFreshStamp",
       "token": "writeFileSync",
@@ -2220,30 +2130,6 @@
       "symbol": "writeReport",
       "token": "writeFileSync",
       "reason": "src/scripts/lib/mad-sks-actual-executor-check-lib.ts#writeReport writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/lib/native-cli-session-swarm-check-lib.ts",
-      "symbol": "cleanupFixture",
-      "token": "rmSync",
-      "reason": "Native CLI swarm check removes only its per-run mkdtemp project after isolated worker proof and report validation."
-    },
-    {
-      "file": "src/scripts/lib/native-cli-session-swarm-check-lib.ts",
-      "symbol": "cleanupFixture",
-      "token": "renameSync",
-      "reason": "Native CLI check atomically promotes only its owner-only completed stdout file inside the run-unique fixture root."
-    },
-    {
-      "file": "src/scripts/lib/native-cli-session-swarm-check-lib.ts",
-      "symbol": "runNativeCliSwarmCheck",
-      "token": "writeFileSync",
-      "reason": "src/scripts/lib/native-cli-session-swarm-check-lib.ts#runNativeCliSwarmCheck writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/lib/real-codex-parallel-gate.ts",
-      "symbol": "runRealCodexParallelGate",
-      "token": "writeFileSync",
-      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
       "file": "src/scripts/lib/real-codex-parallel-proof-fixture.ts",
@@ -2288,58 +2174,46 @@
       "reason": "src/scripts/loop-worker-fixture-child.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
     {
-      "file": "src/scripts/mad-db-mad-command-check.ts",
+      "file": "src/scripts/mad-sks-sql-plane-real-supabase-e2e.ts",
       "symbol": "module",
       "token": "codex config write",
-      "reason": "src/scripts/mad-db-mad-command-check.ts#module writes only an isolated temporary Codex configuration fixture used by the release check."
+      "reason": "src/scripts/mad-sks-sql-plane-real-supabase-e2e.ts#module writes only an isolated temporary Codex configuration fixture used by the release check."
     },
     {
-      "file": "src/scripts/mad-db-mad-command-check.ts",
+      "file": "src/scripts/mad-sks-sql-plane-real-supabase-e2e.ts",
       "symbol": "module",
       "token": "fs.writeFile",
-      "reason": "src/scripts/mad-db-mad-command-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
+      "reason": "src/scripts/mad-sks-sql-plane-real-supabase-e2e.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
     {
-      "file": "src/scripts/mad-db-real-supabase-e2e.ts",
+      "file": "src/scripts/mad-sks-sql-plane-runtime-profile-lifecycle-check.ts",
       "symbol": "module",
       "token": "codex config write",
-      "reason": "src/scripts/mad-db-real-supabase-e2e.ts#module writes only an isolated temporary Codex configuration fixture used by the release check."
+      "reason": "src/scripts/mad-sks-sql-plane-runtime-profile-lifecycle-check.ts#module writes only an isolated temporary Codex configuration fixture used by the release check."
     },
     {
-      "file": "src/scripts/mad-db-real-supabase-e2e.ts",
+      "file": "src/scripts/mad-sks-sql-plane-runtime-profile-lifecycle-check.ts",
       "symbol": "module",
       "token": "fs.writeFile",
-      "reason": "src/scripts/mad-db-real-supabase-e2e.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
+      "reason": "src/scripts/mad-sks-sql-plane-runtime-profile-lifecycle-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
     {
-      "file": "src/scripts/mad-db-runtime-profile-lifecycle-check.ts",
-      "symbol": "module",
-      "token": "codex config write",
-      "reason": "src/scripts/mad-db-runtime-profile-lifecycle-check.ts#module writes only an isolated temporary Codex configuration fixture used by the release check."
-    },
-    {
-      "file": "src/scripts/mad-db-runtime-profile-lifecycle-check.ts",
-      "symbol": "module",
-      "token": "fs.writeFile",
-      "reason": "src/scripts/mad-db-runtime-profile-lifecycle-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/mad-db-safety-conflict-matrix-check.ts",
+      "file": "src/scripts/mad-sks-sql-plane-safety-conflict-matrix-check.ts",
       "symbol": "module",
       "token": "writeFileSync",
-      "reason": "src/scripts/mad-db-safety-conflict-matrix-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
+      "reason": "src/scripts/mad-sks-sql-plane-safety-conflict-matrix-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
     {
-      "file": "src/scripts/mad-db-supabase-transport-diagnostics-check.ts",
+      "file": "src/scripts/mad-sks-sql-plane-supabase-transport-diagnostics-check.ts",
       "symbol": "module",
       "token": "codex config write",
-      "reason": "src/scripts/mad-db-supabase-transport-diagnostics-check.ts#module writes only an isolated temporary Codex configuration fixture used by the release check."
+      "reason": "src/scripts/mad-sks-sql-plane-supabase-transport-diagnostics-check.ts#module writes only an isolated temporary Codex configuration fixture used by the release check."
     },
     {
-      "file": "src/scripts/mad-db-supabase-transport-diagnostics-check.ts",
+      "file": "src/scripts/mad-sks-sql-plane-supabase-transport-diagnostics-check.ts",
       "symbol": "module",
       "token": "fs.writeFile",
-      "reason": "src/scripts/mad-db-supabase-transport-diagnostics-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
+      "reason": "src/scripts/mad-sks-sql-plane-supabase-transport-diagnostics-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
     {
       "file": "src/scripts/mad-preflight-blocks-unreadable-config-check.ts",
@@ -2430,12 +2304,6 @@
       "symbol": "module",
       "token": "fs.writeFile",
       "reason": "Release/check script writes scoped temp Zellij summary fixture artifacts under an mkdtemp root."
-    },
-    {
-      "file": "src/scripts/naruto-real-parallelism-blackbox.ts",
-      "symbol": "writeReusableProof",
-      "token": "writeFileSync",
-      "reason": "src/scripts/naruto-real-parallelism-blackbox.ts#writeReusableProof writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
     {
       "file": "src/scripts/naruto-worktree-coding-blackbox.ts",
@@ -2961,21 +2829,15 @@
     },
     {
       "file": "src/scripts/sks-menubar-install-check.ts",
-      "symbol": "module",
-      "token": "chmod",
-      "reason": "Release/check script writes, removes, or chmods only scoped fixture, report, manifest, or temp artifacts; exact callsite is audited."
-    },
-    {
-      "file": "src/scripts/sks-menubar-install-check.ts",
-      "symbol": "module",
-      "token": "fs.rm",
-      "reason": "Release/check script writes, removes, or chmods only scoped fixture, report, manifest, or temp artifacts; exact callsite is audited."
-    },
-    {
-      "file": "src/scripts/sks-menubar-install-check.ts",
-      "symbol": "module",
+      "symbol": "notificationRuntimeSmoke",
       "token": "fs.writeFile",
-      "reason": "Release/check script writes, removes, or chmods only scoped fixture, report, manifest, or temp artifacts; exact callsite is audited."
+      "reason": "Menu Bar notification smoke writes only its generated Swift harness inside the check temp root."
+    },
+    {
+      "file": "src/scripts/sks-menubar-install-check.ts",
+      "symbol": "writeProbeEntry",
+      "token": "fs.writeFile",
+      "reason": "Menu Bar install check writes only its probe plist fixture inside the check temp root."
     },
     {
       "file": "src/scripts/strategy-adhd-orchestrating-gate-check.ts",
@@ -3012,18 +2874,6 @@
       "symbol": "module",
       "token": "writeFileSync",
       "reason": "src/scripts/super-search-live-smoke-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/team-parallel-write-blackbox.ts",
-      "symbol": "module",
-      "token": "writeFileSync",
-      "reason": "src/scripts/team-parallel-write-blackbox.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/tmux-removal-inventory.ts",
-      "symbol": "module",
-      "token": "fs.writeFile",
-      "reason": "src/scripts/tmux-removal-inventory.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
     {
       "file": "src/scripts/triwiki-affected-graph-blackbox.ts",
@@ -3206,12 +3056,6 @@
       "reason": "Research cycle preparation clears only prior official-subagent evidence files inside the selected mission directory."
     },
     {
-      "file": "src/core/subagents/official-subagent-config.ts",
-      "symbol": "installOfficialSubagentAgentConfigs",
-      "token": "fs.rm",
-      "reason": "Agent config repair removes only legacy role files whose SKS ownership marker and managed body were verified."
-    },
-    {
       "file": "src/core/subagents/official-subagent-preparation.ts",
       "symbol": "prepareOfficialSubagentMission",
       "token": "fsp.rm",
@@ -3228,12 +3072,6 @@
       "symbol": "persistOrReuseTrustworthySubagentParentSummary",
       "token": "fsp.rm",
       "reason": "Failed official-subagent outcomes remove only the stale parent-summary artifact in the active artifact directory."
-    },
-    {
-      "file": "src/scripts/agent-native-release-gate.ts",
-      "symbol": "assertRouteNativeBlackbox",
-      "token": "writeFileSync",
-      "reason": "The native release blackbox writes only declared fixture files inside its withScratchDirSync-owned repository."
     },
     {
       "file": "src/scripts/db-route-materialization-check.ts",
@@ -3258,6 +3096,258 @@
       "symbol": "module",
       "token": "fs.rm",
       "reason": "The provider-interface check removes only its mkdtemp-owned Super Search mission fixture in its finally block."
+    },
+    {
+      "file": "src/core/managed-path-safety.ts",
+      "symbol": "removeNode",
+      "token": "unlink",
+      "reason": "Managed-path removal unlinks only a regular non-symlink file proven confined under the requested boundary."
+    },
+    {
+      "file": "src/core/managed-path-safety.ts",
+      "symbol": "moveConfinedPath",
+      "token": "rename",
+      "reason": "Managed-path move renames only source and destination paths proven confined under the same boundary."
+    },
+    {
+      "file": "src/core/mcp-config/backup.ts",
+      "symbol": "createMcpBackup",
+      "token": "chmod",
+      "reason": "MCP backup creation applies 0700 only to the verified backup directory under the selected Codex home."
+    },
+    {
+      "file": "src/core/mcp-config/codex-cli-adapter.ts",
+      "symbol": "CodexMcpCliAdapter",
+      "token": "fsp.writeFile",
+      "reason": "The official Codex CLI adapter writes only config.toml in its per-call isolated temporary Codex home."
+    },
+    {
+      "file": "src/core/mcp-config/codex-cli-adapter.ts",
+      "symbol": "CodexMcpCliAdapter",
+      "token": "fsp.rm",
+      "reason": "The official Codex CLI adapter removes only its per-call temporary transform root in finally."
+    },
+    {
+      "file": "src/core/mcp-config/health-check.ts",
+      "symbol": "JsonLineChannel",
+      "token": "process.kill",
+      "reason": "MCP health-channel close terminates only the process group of the child it spawned."
+    },
+    {
+      "file": "src/core/perf/release-latency-slo.ts",
+      "symbol": "runReleaseLatencySlo",
+      "token": "fs.rm",
+      "reason": "Release latency measurement removes only its mkdtemp-owned fixture root in finally."
+    },
+    {
+      "file": "src/core/perf/release-latency-slo.ts",
+      "symbol": "measureMcpStaticList",
+      "token": "fs.writeFile",
+      "reason": "MCP latency measurement writes only its generated config fixture under the run-local temp root."
+    },
+    {
+      "file": "src/core/perf/release-latency-slo.ts",
+      "symbol": "measureUpdateCacheRead",
+      "token": "fs.writeFile",
+      "reason": "Update-cache latency measurement writes only its synthetic cache fixture under the run-local temp root."
+    },
+    {
+      "file": "src/core/perf/release-latency-slo.ts",
+      "symbol": "measureSshHello",
+      "token": "fs.writeFile",
+      "reason": "SSH latency measurement writes only its fake worker fixture under the run-local temp root."
+    },
+    {
+      "file": "src/core/perf/release-latency-slo.ts",
+      "symbol": "measureNativeMenuBar",
+      "token": "fs.writeFile",
+      "reason": "Menu Bar latency measurement writes only cache, build-stamp, and source fixtures under the run-local temp root."
+    },
+    {
+      "file": "src/core/release/main-push-guard.ts",
+      "symbol": "writeReleaseClosureManifest",
+      "token": "writeFileSync",
+      "reason": "Main-push guard writes only the version-scoped closure manifest path derived from the release root."
+    },
+    {
+      "file": "src/core/release/npm-stage-tarball-verifier-support.ts",
+      "symbol": "writePrivate",
+      "token": "writeFileSync",
+      "reason": "Stage verifier writes only private inputs and receipts inside its run-unique review directory."
+    },
+    {
+      "file": "src/core/release/npm-stage-tarball-verifier-support.ts",
+      "symbol": "writePrivate",
+      "token": "chmodSync",
+      "reason": "Stage verifier reapplies 0600 only to the private file it just wrote."
+    },
+    {
+      "file": "src/core/release/npm-stage-tarball-verifier.ts",
+      "symbol": "verifyNpmStageTarball",
+      "token": "chmodSync",
+      "reason": "Stage verification sets owner-only modes only on its transaction root, downloaded tarball, and final review directory."
+    },
+    {
+      "file": "src/core/release/npm-stage-tarball-verifier.ts",
+      "symbol": "verifyNpmStageTarball",
+      "token": "renameSync",
+      "reason": "Stage verification atomically promotes only its completed run-unique review directory to the requested output path."
+    },
+    {
+      "file": "src/core/release/npm-stage-tarball-verifier.ts",
+      "symbol": "verifyNpmStageTarball",
+      "token": "rmSync",
+      "reason": "Failed stage verification removes only its run-unique temporary review directory."
+    },
+    {
+      "file": "src/core/release/release-pack-content-scanner.ts",
+      "symbol": "scanTarballTextContents",
+      "token": "rmSync",
+      "reason": "Tarball content scanning removes only its mkdtemp extraction root in finally."
+    },
+    {
+      "file": "src/core/release/release-pack-receipt.ts",
+      "symbol": "writeReleaseJson",
+      "token": "writeFileSync",
+      "reason": "Release receipt writer persists only the caller-selected version-scoped release JSON artifact."
+    },
+    {
+      "file": "src/core/release/release-pack-tarball.ts",
+      "symbol": "tarUnpackedBytes",
+      "token": "rmSync",
+      "reason": "Unpacked-byte measurement removes only its mkdtemp tar extraction root in finally."
+    },
+    {
+      "file": "src/core/telegram/owner-lock.ts",
+      "symbol": "TelegramOwnerLock",
+      "token": "rename",
+      "reason": "Telegram owner recovery renames only the configured lock after proving its owner stale."
+    },
+    {
+      "file": "src/core/telegram/owner-lock.ts",
+      "symbol": "TelegramOwnerLock",
+      "token": "unlink",
+      "reason": "Telegram owner locking unlinks only a stale quarantine or the same-owner configured lock."
+    },
+    {
+      "file": "src/core/telegram/owner-lock.ts",
+      "symbol": "TelegramOwnerLock",
+      "token": "fsp.writeFile",
+      "reason": "Telegram heartbeat overwrites only the configured owner lock after verifying the same owner nonce."
+    },
+    {
+      "file": "src/core/update/temporary-install-smoke.ts",
+      "symbol": "runTemporaryInstallSmoke",
+      "token": "fs.rm",
+      "reason": "Temporary update smoke removes only its mkdtemp package-install root in finally."
+    },
+    {
+      "file": "src/core/update/update-operation.ts",
+      "symbol": "UpdateOperationRecorder",
+      "token": "chmod",
+      "reason": "Update operation recording applies 0600 only to its operation receipt and latest-receipt files."
+    },
+    {
+      "file": "src/core/update/update-status.ts",
+      "symbol": "migrateLegacyUpdateCaches",
+      "token": "fs.rm",
+      "reason": "Update cache migration removes only legacy cache files successfully converted into the current cache."
+    },
+    {
+      "file": "src/scripts/check-architecture.ts",
+      "symbol": "writeReport",
+      "token": "writeFileSync",
+      "reason": "Architecture checking writes only architecture-check.json under its configured report directory."
+    },
+    {
+      "file": "src/scripts/current-surface-update-e2e-check.ts",
+      "symbol": "module",
+      "token": "fsp.writeFile",
+      "reason": "Current-surface E2E writes only timeout and rotation artifacts inside its isolated fixture root."
+    },
+    {
+      "file": "src/scripts/current-surface-update-e2e-check.ts",
+      "symbol": "rotatedAfterWrite",
+      "token": "fsp.rm",
+      "reason": "Current-surface E2E removes only its mkdtemp-owned upgrade fixture root in finally."
+    },
+    {
+      "file": "src/scripts/current-surface-update-e2e-check.ts",
+      "symbol": "seedUpgradeFixture",
+      "token": "fsp.writeFile",
+      "reason": "Upgrade fixture seeding writes only managed and customer-preservation fixtures under isolated project, HOME, and global roots."
+    },
+    {
+      "file": "src/scripts/current-surface-update-e2e-check.ts",
+      "symbol": "seedUpgradeFixture",
+      "token": "codex config write",
+      "reason": "Upgrade fixture seeding writes only legacy Codex config fixtures under isolated HOME and global roots."
+    },
+    {
+      "file": "src/scripts/current-surface-update-e2e-check.ts",
+      "symbol": "MAD",
+      "token": "fsp.writeFile",
+      "reason": "Current-surface fixture writes only legacy and preservation artifacts under its isolated project, HOME, and global roots."
+    },
+    {
+      "file": "src/scripts/current-surface-update-e2e-check.ts",
+      "symbol": "MAD",
+      "token": "codex config write",
+      "reason": "Current-surface fixture writes only legacy Codex configs under its isolated project and global roots."
+    },
+    {
+      "file": "src/scripts/current-surface-update-e2e-check.ts",
+      "symbol": "writeManagedSkill",
+      "token": "fsp.writeFile",
+      "reason": "Current-surface fixture writes only a generated SKS skill manifest under its isolated fixture directory."
+    },
+    {
+      "file": "src/scripts/current-upgrade-matrix-check.ts",
+      "symbol": "rmTmp",
+      "token": "rmSync",
+      "reason": "Current upgrade matrix removes only the mkdtemp-owned fixture directory recorded by the check."
+    },
+    {
+      "file": "src/scripts/current-upgrade-matrix-check.ts",
+      "symbol": "rmTmp",
+      "token": "writeFileSync",
+      "reason": "Current upgrade matrix writes only config and skill fixtures under its mkdtemp-owned test roots."
+    },
+    {
+      "file": "src/scripts/mad-sks-launch-sql-plane-boundary-check.ts",
+      "symbol": "module",
+      "token": "fs.writeFile",
+      "reason": "MAD-SKS boundary check writes only global and project Codex config fixtures under its isolated temp root."
+    },
+    {
+      "file": "src/scripts/mad-sks-launch-sql-plane-boundary-check.ts",
+      "symbol": "module",
+      "token": "codex config write",
+      "reason": "MAD-SKS boundary check writes only isolated global and project Codex config fixtures."
+    },
+    {
+      "file": "src/scripts/release-upgrade-smoke-isolation.ts",
+      "symbol": "createReleaseUpgradeIsolation",
+      "token": "fsp.writeFile",
+      "reason": "Upgrade smoke isolation writes only npm, package, launchctl, and log fixtures inside its sandbox."
+    },
+    {
+      "file": "src/scripts/release-upgrade-smoke-isolation.ts",
+      "symbol": "defaultRemoveReleaseUpgradeSandbox",
+      "token": "fsp.rm",
+      "reason": "Upgrade smoke cleanup removes only the sandbox path created for that smoke run."
+    },
+    {
+      "file": "src/scripts/release-upgrade-smoke-isolation.ts",
+      "symbol": "sealReleaseUpgradeTarball",
+      "token": "chmodSync",
+      "reason": "Upgrade smoke sealing applies read-only mode only to the copied sandbox tarball."
+    },
+    {
+      "file": "src/scripts/runtime-script-pack-closure-check.ts",
+      "symbol": "module",
+      "token": "writeFileSync",
+      "reason": "Runtime script closure check writes only its configured JSON report artifact."
     }
   ]
 }

@@ -17,6 +17,7 @@
     "generated_at": "2026-05-17T00:00:00.000Z",
     "mission_id": "M-fixture-visual-anchor",
     "route": "$Image-UX-Review",
+    "execution_class": "mock_fixture",
     "status": "verified_partial",
     "summary": {
       "files_changed": 0,
@@ -43,6 +44,14 @@
       "Fixture proof is mock evidence."
     ],
     "blockers": [],
+    "failure_analysis": {
+      "status": "complete",
+      "root_cause": "This replay fixture intentionally uses mock visual evidence instead of a live image-generation run.",
+      "corrective_action": "Keep the proof partial and never claim real external execution from this fixture.",
+      "evidence": [
+        "test/fixtures/hooks/stop-visual-route-with-anchor.json"
+      ]
+    },
     "next_human_actions": []
   }
 }

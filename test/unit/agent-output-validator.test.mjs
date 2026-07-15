@@ -36,7 +36,7 @@ test('agent result schema is recursively enforced', () => {
 });
 
 test('agent worker result blocks recursive route attempts', () => {
-  const result = validateAgentWorkerResult({ ...validResult, summary: 'try sks team nested' });
+  const result = validateAgentWorkerResult({ ...validResult, summary: 'try sks naruto run nested' });
   assert.equal(result.status, 'blocked');
-  assert.ok(result.blockers.some((blocker) => blocker.includes('recursion:sks team')));
+  assert.ok(result.blockers.some((blocker) => blocker.includes('recursion:sks naruto')));
 });

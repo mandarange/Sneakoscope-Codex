@@ -1,8 +1,5 @@
 export const SERIOUS_ROUTE_ALIASES = Object.freeze([
-  '$Team',
   '$Naruto',
-  '$ShadowClone',
-  '$Kagebunshin',
   '$DFix',
   '$QA-LOOP',
   '$Research',
@@ -18,6 +15,7 @@ export const SERIOUS_ROUTE_ALIASES = Object.freeze([
   '$CU',
   '$DB',
   '$Wiki',
+  '$SEO-GEO-OPTIMIZER',
   '$GX',
   '$Goal',
   '$MAD-SKS',
@@ -40,12 +38,8 @@ export const VISUAL_ROUTE_ALIASES = Object.freeze([
 ]);
 
 const ROUTE_NORMALIZATION = Object.freeze({
-  team: '$Naruto',
   naruto: '$Naruto',
-  shadowclone: '$Naruto',
-  'shadow-clone': '$Naruto',
-  kagebunshin: '$Naruto',
-  'kage-bunshin': '$Naruto',
+  work: '$Naruto',
   dfix: '$DFix',
   qaloop: '$QA-LOOP',
   'qa-loop': '$QA-LOOP',
@@ -69,6 +63,8 @@ const ROUTE_NORMALIZATION = Object.freeze({
   cu: '$CU',
   db: '$DB',
   wiki: '$Wiki',
+  seogeooptimizer: '$SEO-GEO-OPTIMIZER',
+  'seo-geo-optimizer': '$SEO-GEO-OPTIMIZER',
   gx: '$GX',
   goal: '$Goal',
   madsks: '$MAD-SKS',
@@ -84,6 +80,7 @@ export function normalizeProofRoute(route: any) {
   if (!raw) return null;
   if (SERIOUS_ROUTE_ALIASES.includes(raw) || VISUAL_ROUTE_ALIASES.includes(raw)) return raw;
   const stripped = raw.replace(/^\$/, '').replace(/[^A-Za-z0-9-]+/g, '').toLowerCase();
+  if (/^(?:agent|team|mad-?db|swarm|shadow-?clone|kage-?bunshin|tmux|xai)$/.test(stripped)) return null;
   return (ROUTE_NORMALIZATION as Record<string, string>)[stripped] || raw;
 }
 

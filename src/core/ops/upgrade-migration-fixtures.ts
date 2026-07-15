@@ -84,7 +84,7 @@ async function seedSeo(dir: string, missionId: string): Promise<void> {
 function routeForMode(mode: string): string {
   if (mode === 'super-search') return '$Super-Search';
   if (mode === 'seo') return '$SEO-GEO-OPTIMIZER';
-  if (mode === 'mad-db') return '$MAD-DB';
+  if (mode === 'mad-db') return '$MAD-SKS';
   return '$Naruto';
 }
 

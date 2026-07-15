@@ -1,57 +1,29 @@
 import crypto from 'node:crypto'
 import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { DEFAULT_MAX_PACK_BYTES, DEFAULT_MAX_UNPACKED_BYTES } from './package-size-budget.js'
 import { readCurrentNpmPackGateArtifacts } from './npm-pack-proof.js'
+import {
+  scanTarballTextContents,
+  type ReleasePackContentPattern
+} from './release-pack-content-scanner.js'
+import {
+  RELEASE_PACK_COMPARE_SCHEMA,
+  RELEASE_PACK_RECEIPT_SCHEMA,
+  type ReleasePackCompare,
+  type ReleasePackKind,
+  type ReleasePackReceipt
+} from './release-pack-contract.js'
+import { tarInventory, tarPackageJson, tarUnpackedBytes } from './release-pack-tarball.js'
 
-export const RELEASE_PACK_RECEIPT_SCHEMA = 'sks.release-pack-receipt.v1'
-export const RELEASE_PACK_COMPARE_SCHEMA = 'sks.release-pack-compare.v1'
-
-export type ReleasePackKind = 'local' | 'staged'
-
-export interface ReleasePackReceipt {
-  schema: typeof RELEASE_PACK_RECEIPT_SCHEMA
-  ok: boolean
-  kind: ReleasePackKind
-  package_name: string
-  package_version: string
-  source_commit: string | null
-  tarball_name: string
-  tarball_path: string
-  bytes: number
-  unpacked_bytes: number
-  sha256: string
-  sha512_integrity: string
-  file_count: number
-  file_list_sha256: string
-  budget: {
-    ok: boolean
-    max_packed_bytes: number
-    max_unpacked_bytes: number
-    max_file_count: number
-    blockers: string[]
-  }
-  npm_pack_proof: {
-    proof_id: string
-    info_sha256: string
-    file_list_sha256: string
-  } | null
-  generated_at: string
-  blockers: string[]
-}
-
-export interface ReleasePackCompare {
-  schema: typeof RELEASE_PACK_COMPARE_SCHEMA
-  ok: boolean
-  package_name: string | null
-  package_version: string | null
-  local_sha256: string | null
-  staged_sha256: string | null
-  blockers: string[]
-  compared_at: string
-}
+export {
+  RELEASE_PACK_COMPARE_SCHEMA,
+  RELEASE_PACK_RECEIPT_SCHEMA,
+  type ReleasePackCompare,
+  type ReleasePackKind,
+  type ReleasePackReceipt
+} from './release-pack-contract.js'
 
 export function releaseProofDir(root: string, version: string): string {
   return path.join(root, '.sneakoscope', 'reports', 'release', version)
@@ -78,6 +50,14 @@ export function inspectReleaseTarball(input: {
   if (!packageJson) blockers.push('tarball_package_json_missing_or_invalid')
   const files = [...inventory.files].sort()
   const unpackedBytes = bytes.length && inventory.blockers.length === 0 ? tarUnpackedBytes(tarball) : 0
+  const secretScan = bytes.length && inventory.blockers.length === 0
+    ? scanTarballContents(tarball)
+    : { ok: false, scanned_files: 0, scanned_bytes: 0, findings: [], blockers: ['tarball_secret_scan_unavailable'] }
+  blockers.push(...secretScan.blockers)
+  const retiredSurfaceScan = bytes.length && inventory.blockers.length === 0
+    ? scanRetiredSurfaceContents(tarball)
+    : { ok: false, scanned_files: 0, scanned_bytes: 0, allowlisted_finding_count: 0, findings: [], blockers: ['tarball_retired_surface_scan_unavailable'] }
+  blockers.push(...retiredSurfaceScan.blockers)
   if (bytes.length && unpackedBytes <= 0) blockers.push('tarball_unpacked_size_unavailable')
   const sha256 = bytes.length ? hash(bytes, 'sha256', 'hex') : ''
   const sha512Base64 = bytes.length ? hash(bytes, 'sha512', 'base64') : ''
@@ -102,6 +82,8 @@ export function inspectReleaseTarball(input: {
     sha512_integrity: sha512Base64 ? `sha512-${sha512Base64}` : '',
     file_count: files.length,
     file_list_sha256: hash(Buffer.from(files.join('\n')), 'sha256', 'hex'),
+    secret_scan: secretScan,
+    retired_surface_scan: retiredSurfaceScan,
     budget: {
       ok: budgetBlockers.length === 0,
       max_packed_bytes: DEFAULT_MAX_PACK_BYTES,
@@ -158,6 +140,30 @@ export function validateReleasePackReceipt(value: unknown, expectedKind?: Releas
   if (!/^sha512-[A-Za-z0-9+/]+={0,2}$/.test(String(receipt?.sha512_integrity || ''))) blockers.push('sha512_integrity_invalid')
   if (!Number.isSafeInteger(receipt?.file_count) || Number(receipt?.file_count) <= 0) blockers.push('file_count_invalid')
   if (!/^[a-f0-9]{64}$/i.test(String(receipt?.file_list_sha256 || ''))) blockers.push('file_list_sha256_invalid')
+  if (receipt?.secret_scan?.ok !== true
+    || !Number.isSafeInteger(receipt?.secret_scan?.scanned_files)
+    || Number(receipt?.secret_scan?.scanned_files) <= 0
+    || !Number.isSafeInteger(receipt?.secret_scan?.scanned_bytes)
+    || Number(receipt?.secret_scan?.scanned_bytes) <= 0
+    || !Array.isArray(receipt?.secret_scan?.findings)
+    || receipt.secret_scan.findings.length > 0
+    || !Array.isArray(receipt?.secret_scan?.blockers)
+    || receipt.secret_scan.blockers.length > 0) {
+    blockers.push('secret_scan_invalid_or_failed')
+  }
+  if (receipt?.retired_surface_scan?.ok !== true
+    || !Number.isSafeInteger(receipt?.retired_surface_scan?.scanned_files)
+    || Number(receipt?.retired_surface_scan?.scanned_files) <= 0
+    || !Number.isSafeInteger(receipt?.retired_surface_scan?.scanned_bytes)
+    || Number(receipt?.retired_surface_scan?.scanned_bytes) <= 0
+    || !Number.isSafeInteger(receipt?.retired_surface_scan?.allowlisted_finding_count)
+    || Number(receipt?.retired_surface_scan?.allowlisted_finding_count) < 0
+    || !Array.isArray(receipt?.retired_surface_scan?.findings)
+    || receipt.retired_surface_scan.findings.length > 0
+    || !Array.isArray(receipt?.retired_surface_scan?.blockers)
+    || receipt.retired_surface_scan.blockers.length > 0) {
+    blockers.push('retired_surface_scan_invalid_or_failed')
+  }
   if (!receipt?.generated_at || Number.isNaN(Date.parse(String(receipt.generated_at)))) blockers.push('generated_at_invalid')
   if (!Array.isArray(receipt?.blockers) || receipt.blockers.length > 0) blockers.push('receipt_blockers_present')
   const computedBudgetBlockers = [
@@ -211,6 +217,8 @@ export function validateLocalReleasePackBinding(root: string, value: unknown) {
     for (const key of ['package_name', 'package_version', 'tarball_name', 'tarball_path', 'bytes', 'unpacked_bytes', 'sha256', 'sha512_integrity', 'file_count', 'file_list_sha256'] as const) {
       if (actual[key] !== receipt?.[key]) blockers.push(`local_tarball_artifact_mismatch:${key}`)
     }
+    if (JSON.stringify(actual.secret_scan) !== JSON.stringify(receipt?.secret_scan)) blockers.push('local_tarball_artifact_mismatch:secret_scan')
+    if (JSON.stringify(actual.retired_surface_scan) !== JSON.stringify(receipt?.retired_surface_scan)) blockers.push('local_tarball_artifact_mismatch:retired_surface_scan')
     if (!actual.ok) blockers.push(...actual.blockers.map((blocker) => `local_tarball_artifact:${blocker}`))
   }
   return { ok: blockers.length === 0, receipt, gate, blockers: unique(blockers) }
@@ -221,57 +229,72 @@ export function writeReleaseJson(file: string, value: unknown): void {
   fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 })
 }
 
-function tarInventory(tarball: string): { files: string[]; blockers: string[] } {
-  const result = spawnSync('tar', ['-tzf', tarball], { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 })
-  if (result.status !== 0) return { files: [], blockers: ['tarball_inventory_command_failed'] }
-  const blockers: string[] = []
-  const files = String(result.stdout || '').split(/\r?\n/).filter(Boolean).filter((entry) => !entry.endsWith('/'))
-  for (const entry of files) {
-    const normalized = path.posix.normalize(entry)
-    if (!entry.startsWith('package/') || normalized.startsWith('../') || normalized.includes('/../') || path.posix.isAbsolute(entry)) {
-      blockers.push(`unsafe_tarball_path:${entry}`)
-    }
-    if (/(^|\/)\.env(?:\.|$)/i.test(entry)) blockers.push(`secret_file_in_tarball:${entry}`)
-  }
-  const verbose = spawnSync('tar', ['-tvzf', tarball], { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 })
-  if (verbose.status !== 0) blockers.push('tarball_type_inventory_command_failed')
-  else for (const line of String(verbose.stdout || '').split(/\r?\n/).filter(Boolean)) {
-    const type = line.trimStart()[0] || ''
-    if (type && type !== '-' && type !== 'd') blockers.push(`unsafe_tarball_entry_type:${type}`)
-  }
-  return { files, blockers }
+function scanTarballContents(tarball: string): ReleasePackReceipt['secret_scan'] {
+  return scanTarballTextContents({
+    tarball,
+    temp_prefix: 'sks-release-pack-secret-scan-',
+    extract_failed_blocker: 'tarball_secret_scan_extract_failed',
+    file_too_large_prefix: 'secret_scan_file_too_large',
+    finding_limit_blocker: 'secret_scan_finding_limit_reached',
+    empty_blocker: 'secret_scan_empty',
+    max_findings: 100,
+    patterns: SECRET_PATTERNS,
+    finding_blocker: (finding) => `secret_content_detected:${finding.kind}:${finding.file}:${finding.fingerprint}`
+  })
 }
 
-function tarPackageJson(tarball: string): Record<string, any> | null {
-  const result = spawnSync('tar', ['-xOzf', tarball, 'package/package.json'], { encoding: 'utf8', maxBuffer: 1024 * 1024 })
-  if (result.status !== 0) return null
-  try {
-    const parsed = JSON.parse(String(result.stdout || ''))
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null
-  } catch {
-    return null
-  }
+function scanRetiredSurfaceContents(tarball: string): ReleasePackReceipt['retired_surface_scan'] {
+  return scanTarballTextContents({
+    tarball,
+    temp_prefix: 'sks-release-pack-retired-surface-scan-',
+    extract_failed_blocker: 'tarball_retired_surface_scan_extract_failed',
+    file_too_large_prefix: 'retired_surface_scan_file_too_large',
+    finding_limit_blocker: 'retired_surface_scan_finding_limit_reached',
+    empty_blocker: 'retired_surface_scan_empty',
+    max_findings: 200,
+    patterns: RETIRED_SURFACE_PATTERNS,
+    finding_blocker: (finding) => `retired_surface_content_detected:${finding.kind}:${finding.file}:${finding.fingerprint}`,
+    allow_finding: retiredSurfaceFindingAllowed,
+    include_allowlisted_count: true
+  })
 }
 
-function tarUnpackedBytes(tarball: string): number {
-  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-release-pack-unpacked-'))
-  try {
-    const result = spawnSync('tar', ['-xzf', tarball, '-C', temp], { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 })
-    if (result.status !== 0) return 0
-    return directoryBytes(temp)
-  } finally {
-    fs.rmSync(temp, { recursive: true, force: true })
-  }
-}
+const SECRET_PATTERNS: ReleasePackContentPattern[] = [
+  { kind: 'github_token', regex: /\bgh[pousr]_[A-Za-z0-9]{30,}\b/g },
+  { kind: 'npm_token', regex: /\bnpm_[A-Za-z0-9]{30,}\b/g },
+  { kind: 'slack_token', regex: /\bxox[baprs]-[A-Za-z0-9-]{20,}\b/g },
+  { kind: 'openai_token', regex: /\bsk-(?:proj-|svcacct-)?[A-Za-z0-9_-]{20,}\b/g },
+  { kind: 'google_api_key', regex: /\bAIza[0-9A-Za-z_-]{30,}\b/g },
+  { kind: 'aws_access_key', regex: /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g },
+  { kind: 'jwt', regex: /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g },
+  { kind: 'private_key', regex: /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/g },
+  { kind: 'npm_auth_token', regex: /(?:^|\n)\s*(?:\/\/[^\s:]+\/?:)?_authToken\s*=\s*[^\s${][^\r\n]{15,}/g }
+]
 
-function directoryBytes(directory: string): number {
-  let total = 0
-  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-    const file = path.join(directory, entry.name)
-    if (entry.isDirectory()) total += directoryBytes(file)
-    else if (entry.isFile()) total += fs.statSync(file).size
-  }
-  return total
+const RETIRED_SURFACE_PATTERNS: ReleasePackContentPattern[] = [
+  { kind: 'retired_dollar_command', regex: /\$(?:Agent|Team|MAD-DB|Swarm|ShadowClone|Kagebunshin)\b/gi },
+  { kind: 'retired_cli_command', regex: /\bsks\s+(?:team|mad-db|tmux|xai|swarm|agent)(?=$|[\s"'`])/g },
+  { kind: 'retired_agent_option', regex: /(^|[\s"'`])--agent(?=$|[=\s"'`])/gim },
+  { kind: 'retired_menubar_mcp_command', regex: /\bsks\s+menubar\s+mcp(?=$|[\s"'`])/gi },
+  { kind: 'retired_menubar_mcp_identity', regex: /(^|[^A-Za-z0-9])menubar[-_. ]mcp(?=$|[^A-Za-z0-9])/gim },
+  { kind: 'retired_team_runtime_identity', regex: /\b(?:team_trigger_matrix|full_team_recommended|full_team_honest_path|strict-team|team-alias-to-naruto)\b/gi },
+  { kind: 'retired_team_profile', regex: /\bsks-team(?:\.config\.toml)?\b/gi },
+  { kind: 'retired_team_lane_label', regex: /\b(?:Balanced Team Lane|Full Team Honest Path|full Team\/Honest proof path)\b/gi }
+]
+
+const RETIRED_SURFACE_ALLOWLIST = [
+  /^dist\/core\/doctor\/retired-auto-review-config\.js$/,
+  /^dist\/core\/doctor\/(?:command-alias-cleanup|current-project-guidance|retired-managed-projection-residue)\.js$/,
+  /^dist\/core\/doctor\/retired-managed-residue(?:-artifact-helpers|-artifacts|-missions|-private|-runtime|-state)?\.js$/,
+  /^dist\/core\/init\/skills\.js$/,
+  /^dist\/core\/install\/installed-package-smoke\.js$/,
+  /^dist\/core\/release\/release-pack-receipt\.js$/,
+  /^dist\/core\/update\/update-migration-state\.js$/,
+  /^dist\/scripts\/(?:current-command-surface-check|current-surface-update-e2e-check|current-upgrade-matrix-check|legacy-gate-inventory-check|legacy-gate-purge-check|legacy-strong-inventory-check|release-metadata-1-19-check|runtime-current-terminal-check)\.js$/
+]
+
+function retiredSurfaceFindingAllowed(relative: string): boolean {
+  return RETIRED_SURFACE_ALLOWLIST.some((pattern) => pattern.test(relative))
 }
 
 function hash(value: crypto.BinaryLike, algorithm: 'sha256' | 'sha512', encoding: 'hex' | 'base64'): string {

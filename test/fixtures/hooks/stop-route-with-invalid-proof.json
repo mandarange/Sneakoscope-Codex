@@ -2,8 +2,8 @@
   "event": "Stop",
   "state": {
     "mission_id": "M-fixture-invalid-proof",
-    "route_command": "$Team",
-    "mode": "TEAM",
+    "route_command": "$Naruto",
+    "mode": "NARUTO",
     "stop_gate": "none",
     "proof_required": true,
     "reflection_required": false
@@ -16,7 +16,7 @@
     "version": "0.9.14",
     "generated_at": "2026-05-17T00:00:00.000Z",
     "mission_id": "M-fixture-invalid-proof",
-    "route": "$Team",
+    "route": "$Naruto",
     "status": "blocked",
     "summary": {
       "files_changed": 0,

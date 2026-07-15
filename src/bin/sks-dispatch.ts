@@ -1,9 +1,5 @@
 export async function runSks(args: string[]): Promise<void> {
-  if (args[0] === '--agent' && args[1] === 'worker') {
-    const workerModule = '../core/agents/native-cli-' + 'worker.js';
-    const { runNativeCliWorkerFromArgs } = await import(workerModule);
-    await runNativeCliWorkerFromArgs(args.slice(2));
-  } else if (args[0] === 'commands' && args.includes('--json')) {
+  if (args[0] === 'commands' && args.includes('--json')) {
     const { commandsJsonFast } = await import('../cli/commands-fast.js');
     commandsJsonFast();
   } else if (args[0] === 'dollar-commands' && args.includes('--json')) {

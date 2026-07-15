@@ -19,7 +19,7 @@ export interface RunMcpServerOptions {
 const MCP_SERVER_NAME = 'sks-mcp-server';
 const MCP_SERVER_VERSION = '1.0.0';
 
-// Same dynamic-import trick as src/core/mad-db/mad-db-executor.ts: avoids TS
+// Same dynamic-import trick as the MAD-SKS SQL-plane MCP executor: avoids TS
 // bundling the SDK's ESM entrypoints as a static import target this file must
 // resolve at compile time, while still using the real installed SDK.
 async function loadMcpSdk(): Promise<{

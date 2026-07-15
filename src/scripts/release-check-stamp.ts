@@ -46,7 +46,7 @@ function releaseManifestContract() {
     totalGateCount: allGates.length,
     releaseGateIds,
     releaseGateIdsSorted: [...new Set(releaseGateIds)].sort(),
-    expectedReleaseGateIds: contract.ids,
+    expectedReleaseGateIds: [...contract.ids].sort(),
     missingExpectedGateIds: contract.ids.filter((id) => !releaseGateIds.includes(id)),
     unexpectedReleaseGateIds: [...new Set(releaseGateIds)].filter((id) => !contract.ids.includes(id)).sort(),
     contract

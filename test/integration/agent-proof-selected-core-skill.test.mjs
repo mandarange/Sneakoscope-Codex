@@ -9,7 +9,7 @@ import { promoteToDeployed } from '../../dist/core/skills/core-skill-deployment.
 
 test('agent proof records selected_core_skill from the deployed snapshot', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-proof-skill-'));
-  const route = '$Agent';
+  const route = '$Naruto';
   const skillId = routeSkillId(route);
   const accepted = { ...createCandidateCard({ skillId, route, baseVersion: 0, body: 'deployed agent skill body' }), status: 'accepted' };
   const promoted = await promoteToDeployed(root, accepted);
@@ -25,7 +25,7 @@ test('agent proof records selected_core_skill from the deployed snapshot', async
 
 test('agent proof selected_core_skill falls back gracefully when no snapshot deployed', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-proof-skill-fb-'));
-  const result = await runNativeAgentOrchestrator({ route: '$Agent', prompt: 'inspect repo', backend: 'fake', mock: true, agents: 1, concurrency: 1, root });
+  const result = await runNativeAgentOrchestrator({ route: '$Naruto', prompt: 'inspect repo', backend: 'fake', mock: true, agents: 1, concurrency: 1, root });
   assert.ok(result.proof.selected_core_skill, 'proof must include selected_core_skill even on fallback');
   assert.equal(result.proof.selected_core_skill.source, 'fallback');
 });

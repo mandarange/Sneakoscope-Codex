@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const scripts = [
-  ['dist/scripts/blackbox-pack-install.js', 'sks.blackbox-pack-install.v1', ['npm_pack', 'npm_install_tarball', 'npx_sks_version', 'npx_sks_root_json', 'npx_sks_setup_local_only', 'npx_sks_selftest_mock', 'npx_sks_agent_mock', 'npx_sks_qa_loop_prepare', 'npx_sks_qa_loop_run_mock', 'verify_completion_proof_exists']],
+  ['dist/scripts/blackbox-pack-install.js', 'sks.blackbox-pack-install.v1', ['npm_pack', 'npm_install_tarball', 'npx_sks_version', 'npx_sks_root_json', 'npx_sks_setup_local_only', 'npx_sks_selftest_mock', 'npx_sks_naruto_prepare', 'npx_sks_naruto_close', 'npx_sks_qa_loop_prepare', 'npx_sks_qa_loop_run_mock', 'verify_completion_proof_exists']],
   ['dist/scripts/blackbox-npx-one-shot.js', 'sks.blackbox-npx-one-shot.v1', ['npm_pack', 'npm_exec_one_shot_version', 'npm_exec_one_shot_root', 'npm_exec_one_shot_selftest']],
   ['dist/scripts/blackbox-global-shim.js', 'sks.blackbox-global-shim.v1', ['npm_pack', 'npm_install_global_prefix', 'global_shim_version', 'global_sneakoscope_version', 'global_sks_root_json']]
 ];

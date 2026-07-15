@@ -7,7 +7,7 @@ import { assertGate, emitGate, importDist, root } from './sks-1-18-gate-lib.js';
 
 const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-official-subagent-helper-'));
 const nativeProof = {
-  schema: 'sks.native-cli-session-proof.v1',
+  schema: 'sks.native-cli-worker-runtime-proof.v1',
   ok: true,
   spawned_worker_process_count: 3,
   max_observed_worker_process_count: 3,
@@ -15,9 +15,9 @@ const nativeProof = {
   worker_proof_is_only_subagent_events: false,
   blockers: []
 };
-await fs.writeFile(path.join(tmp, 'native-cli-session-proof.json'), `${JSON.stringify(nativeProof, null, 2)}\n`);
-await fs.writeFile(path.join(tmp, 'agent-native-cli-session-swarm.json'), `${JSON.stringify({
-  schema: 'sks.agent-native-cli-session-swarm.v1',
+await fs.writeFile(path.join(tmp, 'native-cli-worker-runtime-proof.json'), `${JSON.stringify(nativeProof, null, 2)}\n`);
+await fs.writeFile(path.join(tmp, 'native-cli-worker-runtime.json'), `${JSON.stringify({
+  schema: 'sks.native-cli-worker-runtime.v2',
   ok: true,
   scaling_primitive: 'native_cli_process',
   spawned_worker_process_count: 3,

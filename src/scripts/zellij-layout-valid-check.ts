@@ -35,7 +35,7 @@ const narutoFanoutLayout = layoutMod.buildZellijLayoutKdl({
   slotCount: 24
 });
 const narutoFanoutPaneCount = (narutoFanoutLayout.layout_kdl.match(/pane name="sks-viewport-/g) || []).length;
-const kindsValidated = ['mad', 'agent', 'team', 'naruto'].map((kind) => {
+const kindsValidated = ['mad', 'naruto'].map((kind) => {
   const b = layoutMod.buildZellijLayoutKdl({
     missionId: `M-layout-${kind}`,
     ledgerRoot: path.join(root, '.sneakoscope', 'tmp', `layout-${kind}`),

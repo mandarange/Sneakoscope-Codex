@@ -14,7 +14,7 @@ export async function writeAgentSlotPaneBindingProof(root: string, input: { repo
 }
 
 export async function evaluateAgentSlotPaneBindingProof(root: string, input: { requireZellij?: boolean } = {}) {
-  const summary = await readJson<any>(path.join(root, 'agent-native-cli-session-swarm.json'), null)
+  const summary = await readJson<any>(path.join(root, 'native-cli-worker-runtime.json'), null)
   const ledger = await readJsonl(path.join(root, 'agent-zellij-pane-launch-ledger.jsonl'))
   const zellijRecords = Array.isArray(summary?.records)
     ? summary.records.filter((record: any) => record.scaling_primitive === 'native_cli_process_in_zellij_worker_pane' || record.scaling_primitive === 'native_cli_process_with_zellij_slot_renderer')

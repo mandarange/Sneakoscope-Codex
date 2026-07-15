@@ -17,8 +17,8 @@ export function selectLoopGates(input: {
   else if (/research/.test(files) || input.node.loop_id.includes('research')) add(local, ['research:quality-contract']);
   else if (/qa-loop/.test(files) || input.node.loop_id.includes('qa-loop')) add(local, ['qa-loop:app-handoff-gate-lifecycle']);
   else if (/codex/.test(files) || input.node.loop_id.includes('codex')) add(local, ['codex:0139-capability', 'codex-sdk:version-compat']);
-  else if (/mad-db|db-safety/.test(files) || input.node.loop_id.includes('mad-db')) add(local, ['mad-db:safety-conflict-matrix', 'mad-db:operation-lifecycle-ledger']);
-  else if (/agent|scheduler|native-swarm/.test(files) || input.node.loop_id.includes('naruto')) add(local, ['parallel:runtime-real-blackbox', 'scheduler:utilization-proof']);
+  else if (/mad-sks.*sql-plane|db-safety/.test(files) || input.node.loop_id.includes('mad-sks-sql-plane')) add(local, ['mad-sks:sql-plane-capability', 'mad-sks:sql-plane-operation-lifecycle']);
+  else if (/agent|scheduler|worker-runtime/.test(files) || input.node.loop_id.includes('naruto')) add(local, ['parallel:runtime-real-blackbox', 'scheduler:utilization-proof']);
   else add(local, ['loop:affected']);
   const integration = new Set<string>();
   if ((input.packageScriptsChanged || []).length || (input.releaseGateIdsChanged || []).length || files.includes('package.json') || files.includes('release-gates.v2.json')) {

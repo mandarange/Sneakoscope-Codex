@@ -10,14 +10,14 @@ test('route proof adapter writes mission completion proof', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-route-proof-'));
   const written = await writeRouteCompletionProof(root, {
     missionId: 'M-fixture',
-    route: '$Team',
+    route: '$Wiki',
     status: 'verified_partial',
     claims: [{ id: 'fixture', status: 'supported' }],
     unverified: ['mock fixture']
   });
   assert.equal(written.ok, true);
   const proof = JSON.parse(await fs.readFile(path.join(root, '.sneakoscope/missions/M-fixture/completion-proof.json'), 'utf8'));
-  assert.equal(proof.route, '$Team');
+  assert.equal(proof.route, '$Wiki');
 });
 
 test('route proof gate blocks problem-bearing proofs without root cause analysis', async () => {

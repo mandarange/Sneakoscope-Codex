@@ -50,7 +50,7 @@ const artifact = buildWorkerPaneArtifact({
   streamEventCount: 4,
   structuredOutputValid: true,
   status: 'running',
-  workerCommand: 'node dist/bin/sks.js --agent worker',
+  workerCommand: 'node dist/core/agents/native-cli-worker-entry.js --intake worker-intake.json --json',
   blockers: []
 })
 const slotRendererArtifact = buildWorkerPaneArtifact({

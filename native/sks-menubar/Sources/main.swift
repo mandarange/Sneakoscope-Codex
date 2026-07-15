@@ -3,6 +3,7 @@ import UserNotifications
 
 enum AppRuntime {
     static let actionScript = __SKS_ACTION_SCRIPT__
+    static let projectRoot = __SKS_PROJECT_ROOT__
     static let buildStampPath = __SKS_BUILD_STAMP__
     static let configPath = __SKS_CONFIG_PATH__
     static let lastActionLogPath = __SKS_LAST_LOG__

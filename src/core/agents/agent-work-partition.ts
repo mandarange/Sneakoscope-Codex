@@ -32,11 +32,11 @@ export async function buildAgentWorkPartition(root: string, roster: any, prompt 
     root,
     inventory,
     dependencyGraph: dependency_graph,
-    route: opts.route || '$Agent',
+    route: opts.route || '$Naruto',
     prompt
   })
   const task_graph = enhanceTaskGraphWithIntelligence(buildAgentTaskGraph({
-    routeType: opts.route || '$Agent',
+    routeType: opts.route || '$Naruto',
     prompt,
     targetActiveSlots,
     ...(opts.minimumWorkItems === undefined ? {} : { minimumWorkItems: opts.minimumWorkItems }),

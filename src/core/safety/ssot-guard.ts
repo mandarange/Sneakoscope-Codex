@@ -57,14 +57,14 @@ export function buildSsotGuard(input: { route?: string | null; mode?: string | n
     ],
     required_checks: [
       'pipeline_plan_contains_ssot_guard_stage',
-      'team_plan_requires_ssot_guard_artifact',
-      'team_gate_requires_ssot_guard_true',
+      'naruto_plan_requires_ssot_guard_artifact',
+      'naruto_gate_requires_ssot_guard_true',
       'stop_gate_validates_ssot_guard_artifact',
       'release_dag_runs_ssot_guard',
       'release_dag_runs_architecture_guard',
       'release_manifest_marks_architecture_guard_p0_and_publish_required'
     ],
-    gate_rule: `${SSOT_GUARD_ARTIFACT} must validate SSOT and SOLID expectations before a Team gate may set ssot_guard=true.`
+    gate_rule: `${SSOT_GUARD_ARTIFACT} must validate SSOT and SOLID expectations before a Naruto gate may set ssot_guard=true.`
   }
 }
 
@@ -74,14 +74,14 @@ export function canonicalSsotSources(): SsotGuardSource[] {
       id: 'route_contract',
       source: 'decision-contract.json, route prompt, and pipeline-plan.json',
       authority: 'The sealed user objective, constraints, non-goals, and acceptance criteria define what code may be created.',
-      derived: ['team-plan.json', 'team-runtime-tasks.json', 'worker inboxes'],
+      derived: ['subagent-plan.json', 'subagent-events.jsonl', 'worker inboxes'],
       rule: 'Do not implement behavior outside the sealed route contract; block with evidence if the requested path cannot be honored.'
     },
     {
       id: 'triwiki_context',
       source: '.sneakoscope/wiki/context-pack.json',
       authority: 'TriWiki is the bounded mission context SSOT and must be refreshed or packed, then validated before risky handoffs and final claims.',
-      derived: ['team-analysis.md', 'team-consensus.md', 'team-review.md'],
+      derived: ['subagent-parent-summary.json', 'subagent-evidence.json', 'reflection.md'],
       rule: 'Use the latest coordinate+voxel overlay pack; coordinate-only legacy packs are invalid for pipeline decisions.'
     },
     {
@@ -116,7 +116,7 @@ export function canonicalSsotSources(): SsotGuardSource[] {
 }
 
 export function ssotGuardPolicyText(commandPrefix = 'sks') {
-  return `SSOT/SOLID guard: before creating or changing code, identify the authoritative source for the surface being edited, edit only that source, regenerate derived outputs, and reject duplicated or fallback behavior that would compete with the source of truth. Keep changes aligned to SOLID by preserving single responsibility, extension boundaries, substitutable adapters, narrow interfaces, and dependency inversion at existing seams. Team routes must write ${SSOT_GUARD_ARTIFACT}, set team-gate.json ssot_guard=true only after it validates, and run ${commandPrefix} wiki validate .sneakoscope/wiki/context-pack.json before final claims.`
+  return `SSOT/SOLID guard: before creating or changing code, identify the authoritative source for the surface being edited, edit only that source, regenerate derived outputs, and reject duplicated or fallback behavior that would compete with the source of truth. Keep changes aligned to SOLID by preserving single responsibility, extension boundaries, substitutable adapters, narrow interfaces, and dependency inversion at existing seams. Naruto routes must write ${SSOT_GUARD_ARTIFACT}, set naruto-gate.json ssot_guard=true only after it validates, and run ${commandPrefix} wiki validate .sneakoscope/wiki/context-pack.json before final claims.`
 }
 
 export function validateSsotGuardArtifact(value: unknown): { ok: boolean; issues: string[] } {
@@ -151,7 +151,7 @@ export function validateSsotGuardArtifact(value: unknown): { ok: boolean; issues
   }
   if (stringArray(value.solid_risk_flags).length < 5) issues.push('solid_risk_flags')
   const checks = stringArray(value.required_checks)
-  for (const check of ['team_gate_requires_ssot_guard_true', 'stop_gate_validates_ssot_guard_artifact', 'release_dag_runs_ssot_guard', 'release_dag_runs_architecture_guard']) {
+  for (const check of ['naruto_gate_requires_ssot_guard_true', 'stop_gate_validates_ssot_guard_artifact', 'release_dag_runs_ssot_guard', 'release_dag_runs_architecture_guard']) {
     if (!checks.includes(check)) issues.push(`required_checks:${check}`)
   }
   if (typeof value.gate_rule !== 'string' || !value.gate_rule.includes(SSOT_GUARD_ARTIFACT)) issues.push('gate_rule')

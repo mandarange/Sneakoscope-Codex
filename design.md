@@ -16,11 +16,12 @@ Sneakoscope Codex is an operator utility. Interfaces should feel native, compact
 
 ## MCP manager
 
-- Present MCP servers in a resizable utility panel, defaulting to 760 × 440 pt with a 640 × 360 pt minimum.
-- Order information as: title, global-scope/restart explanation, server table, live status, actions.
+- Present MCP servers in the resizable Control Center and support Global, Project, and read-only Effective views.
+- Order information as: title, scope/restart explanation, scope selector, server table, live status, actions.
 - The table columns are State, Name, Transport, and Configuration. Never display command arguments, environment values, bearer tokens, URL paths, URL credentials, fragments, or query values.
-- Actions are Add, Remove, Enable/Disable, Refresh, and Close. Disable selection-dependent actions until a row is selected and disable all mutation controls while work is in progress.
-- Adding a server is progressive: choose Remote URL or Local command, then request only the fields for that transport. Local arguments are one per line; environment variables are `KEY=VALUE`, one per line.
+- Actions are Add, Edit, Duplicate, Remove, Enable/Disable, Test Connection, OAuth Login/Logout, Backups/Restore, and Refresh. Disable selection-dependent actions until a writable row is selected and disable all mutation controls while work is in progress.
+- Adding or editing a server is progressive: choose Remote URL or Local command, then request only the fields for that transport. Local arguments and environment-variable names are one per line. Never accept `KEY=VALUE` or a raw bearer value.
+- Include startup/tool timeouts, tool allow/deny lists, approval mode, required state, and a redacted review step before applying.
 - Removal always requires a destructive confirmation. Successful changes explain that they apply to new Codex sessions.
 - Escape closes the panel, controls have accessibility labels, the table supports keyboard selection, and status text must remain readable when the window is resized.
 

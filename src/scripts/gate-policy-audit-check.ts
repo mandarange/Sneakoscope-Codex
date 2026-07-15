@@ -19,6 +19,16 @@ const splitReviewFiles = [
   'src/core/hooks-runtime.ts',
   'src/core/recallpulse.ts'
 ]
+const policyCallsiteAllowlist = new Map([
+  ['codex_config_write|src/cli/install-helpers-codex-lb-selftest-chain.ts|runCodexLbLaunchChainSelftest|writeTextAtomic', 'isolated launch-chain selftest config'],
+  ['codex_config_write|src/cli/install-helpers-codex-lb-selftest.ts|selftestCodexLb|writeTextAtomic', 'isolated Codex LB selftest config'],
+  ['mkdtemp|src/core/mcp-config/codex-cli-adapter.ts|CodexMcpCliAdapter|mkdtemp', 'isolated official CLI transform HOME'],
+  ['mkdtemp|src/core/perf/release-latency-slo.ts|runReleaseLatencySlo|mkdtemp', 'run-local latency fixture root'],
+  ['mkdtemp|src/core/release/npm-stage-tarball-verifier.ts|verifyNpmStageTarball|mkdtempSync', 'private stage-review transaction root'],
+  ['mkdtemp|src/core/release/release-pack-content-scanner.ts|scanTarballTextContents|mkdtempSync', 'finally-cleaned tar scan root'],
+  ['mkdtemp|src/core/release/release-pack-tarball.ts|tarUnpackedBytes|mkdtempSync', 'finally-cleaned tar inventory root']
+])
+const policyCallsiteAllowlistHits = new Set<string>()
 const splitReviewLineCounts = splitReviewFiles.map((file) => ({
   file,
   lines: lineCount(path.join(root, file))
@@ -27,6 +37,7 @@ const directCodexConfigWrites = scanDirectCodexConfigWrites()
 const commandGateContract = scanCommandGateContract()
 const directMkdtempCalls = scanDirectMkdtempCalls()
 const rustTempdirCalls = scanRustTempdirCalls()
+const unusedPolicyCallsiteAllowlist = [...policyCallsiteAllowlist.keys()].filter((key) => !policyCallsiteAllowlistHits.has(key))
 
 if (releaseGates.length > 200) blockers.push(`release_preset_gate_budget_exceeded:${releaseGates.length}`)
 if (gates.length > 200) blockers.push(`release_manifest_gate_budget_exceeded:${gates.length}`)
@@ -38,6 +49,7 @@ if (directCodexConfigWrites.length) blockers.push(`direct_codex_config_write_cal
 if (!commandGateContract.ok) blockers.push(`command_gate_contract:${commandGateContract.issues[0]}`)
 if (directMkdtempCalls.length) blockers.push(`direct_mkdtemp_callsite:${directMkdtempCalls[0].file}:${directMkdtempCalls[0].line}`)
 if (rustTempdirCalls.length) blockers.push(`rust_tempdir_without_raii:${rustTempdirCalls[0].file}:${rustTempdirCalls[0].line}`)
+if (unusedPolicyCallsiteAllowlist.length) blockers.push(`unused_policy_callsite_allowlist:${unusedPolicyCallsiteAllowlist[0]}`)
 for (const row of splitReviewLineCounts) {
   if (row.lines > splitReviewBudget) blockers.push(`split_review_budget_exceeded:${row.file}:${row.lines}`)
 }
@@ -55,6 +67,7 @@ const result = {
   command_gate_contract: commandGateContract,
   direct_mkdtemp_callsite_count: directMkdtempCalls.length,
   direct_mkdtemp_callsites: directMkdtempCalls.slice(0, 20),
+  policy_callsite_allowlist: { used: policyCallsiteAllowlistHits.size, unused: unusedPolicyCallsiteAllowlist },
   rust_tempdir_raii: { ok: rustTempdirCalls.length === 0, direct_tempdir_callsites: rustTempdirCalls.slice(0, 20) },
   blockers
 }
@@ -83,7 +96,7 @@ function scanCommandGateContract() {
     const entry = (COMMANDS as Record<string, any>)[required]
     if (!entry?.skipMigrationGate) issues.push(`${required}:missing_skipMigrationGate`)
   }
-  for (const routeStarter of ['naruto', 'goal', 'dfix', 'team', 'agent', 'loop', 'qa-loop', 'research', 'autoresearch', 'mad-sks', 'mad-db', 'ppt', 'image-ux-review', 'computer-use']) {
+  for (const routeStarter of ['naruto', 'goal', 'dfix', 'loop', 'qa-loop', 'research', 'autoresearch', 'mad-sks', 'ppt', 'image-ux-review', 'computer-use']) {
     const entry = (COMMANDS as Record<string, any>)[routeStarter]
     if (entry?.mutatesRouteState !== true) issues.push(`${routeStarter}:missing_route_state_mutator_contract`)
   }
@@ -107,9 +120,12 @@ function scanDirectMkdtempCalls() {
     if (rel === 'src/core/fsx.ts') continue
     if (/(?:__tests__|fixture|fixtures|bench|blackbox|check|probe|smoke|selftest|feature-commands|feature-probes)/i.test(rel)) continue
     const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/)
+    let currentSymbol = 'module'
     for (let index = 0; index < lines.length; index += 1) {
       const line = lines[index] || ''
-      if (/\bmkdtemp(?:Sync)?\s*\(/.test(line)) out.push({ file: rel, line: index + 1, text: line.trim().slice(0, 220) })
+      currentSymbol = policySymbolFromLine(line) || currentSymbol
+      const match = line.match(/\b(mkdtemp(?:Sync)?)\s*\(/)
+      if (match && !allowPolicyCallsite('mkdtemp', rel, currentSymbol, match[1]!)) out.push({ file: rel, line: index + 1, text: line.trim().slice(0, 220) })
     }
   }
   return out
@@ -150,17 +166,30 @@ function scanDirectCodexConfigWrites() {
     const rel = path.relative(root, file)
     if (rel === 'src/core/codex/codex-config-guard.ts') continue
     const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/)
-    let inInstallHelperSelftest = false
+    let currentSymbol = 'module'
     for (let index = 0; index < lines.length; index += 1) {
       const line = lines[index] || ''
-      if (rel === 'src/cli/install-helpers.ts' && /export\s+async\s+function\s+selftest/.test(line)) inInstallHelperSelftest = true
-      if (inInstallHelperSelftest) continue
+      currentSymbol = policySymbolFromLine(line) || currentSymbol
       if (!/\bwriteTextAtomic\s*\(/.test(line)) continue
       if (!/(?:config\.toml|configPath|candidate\.path|config\.path|userConfigPath|codexHomeConfigPath)/.test(line)) continue
+      if (allowPolicyCallsite('codex_config_write', rel, currentSymbol, 'writeTextAtomic')) continue
       out.push({ file: rel, line: index + 1, text: line.trim().slice(0, 220) })
     }
   }
   return out
+}
+
+function allowPolicyCallsite(kind: string, file: string, symbol: string, token: string): boolean {
+  const key = `${kind}|${file}|${symbol}|${token}`
+  if (!policyCallsiteAllowlist.has(key)) return false
+  policyCallsiteAllowlistHits.add(key)
+  return true
+}
+
+function policySymbolFromLine(line: string): string | null {
+  return line.match(/(?:export\s+)?(?:async\s+)?function\s+([A-Za-z0-9_$]+)/)?.[1]
+    || line.match(/class\s+([A-Za-z0-9_$]+)/)?.[1]
+    || null
 }
 
 function walk(dir: string): string[] {

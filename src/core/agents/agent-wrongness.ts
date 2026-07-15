@@ -8,15 +8,14 @@ const WRONGNESS_MAP = [
   ['terminal_missing', /^terminal_missing:/],
   ['terminal_not_closed', /^terminal_not_closed:/],
   ['scheduler_starvation', /scheduler_pending_queue_without_active_sessions|scheduler_backfill_count_below_expected/],
-  ['tmux_lane_flicker', /tmux_lane_(?:unexpected_close|closed_before_drain|no_flicker_not_verified|survival_not_checked)/],
   ['missing_follow_up_schema', /follow_up_work_item|follow_up_work_items|schema_invalid:.*follow_up/],
   ['session_generation_missing', /session_generation_open|terminal_close_report_missing|source_intelligence_missing_for_generation|goal_mode_missing_for_generation/],
   ['schema_invalid_output', /^schema_invalid:/],
+  ['official_subagent_proof_missing', /official_subagent_(?:route_gate|evidence(?:_required)?|workflow|parent_summary|run_id|plan).*missing/],
   ['super_search_provider_independent_proof_missing', /super_search_provider_independent_proof_missing/],
   ['codex_web_search_missing', /codex_web_search_missing/],
   ['context7_missing', /context7_missing|docs_context_missing/],
-  ['stale_heartbeat', /stale_heartbeat/],
-  ['legacy_multiagent_runtime_usage_attempt', /(?:legacy_multiagent_runtime|removed_multiagent_backend|parallel_analysis_legacy)/]
+  ['stale_heartbeat', /stale_heartbeat/]
 ] as const
 
 export async function writeAgentWrongnessRecords(root: string, blockers: string[] = []) {

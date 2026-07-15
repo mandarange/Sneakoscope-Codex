@@ -304,9 +304,9 @@ export const GLM_NARUTO_LIMITS = {
 } as const;
 
 export const GLM_NARUTO_DEFAULTS = {
-  default_clones: 12,
+  default_workers: 12,
   safe_active_start: 6,
-  max_clones: 64,
+  max_workers: 64,
   patch_worker_ratio: 0.70,
   scout_ratio: 0.10,
   verifier_ratio: 0.20,

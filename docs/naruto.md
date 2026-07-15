@@ -1,55 +1,42 @@
 # $Naruto — Codex Official Subagent Workflow
 
-`$Naruto` is the SKS alias for a Codex official subagent workflow. The default
-path no longer treats a custom child-process swarm, PID count, Zellij panes, or
-a custom active pool as proof that subagents ran.
-
-An implicit run starts with one direct child so a plain task cannot trigger an
-accidental paid fanout. The parent may select two children only for explicit
-parallel work or independent risk domains, and three only for critical
-multi-domain work. Explicit `--agents N` remains authoritative, but every
-delegated slice must still be defensible and independent.
+`$Naruto` and `sks naruto run` are the single current SKS execution surface for
+Codex official subagent work. `$Work` is the intentional plan-execution alias;
+it resolves the newest SKS plan and continues through the same Naruto evidence
+contract. Retired route names and command spellings are unrecognized instead
+of warning, redirecting, or activating a compatibility runtime.
 
 ## Usage
 
 ```bash
-sks naruto run "implement this addendum"
-sks naruto run "review twenty packages" --agents 20 --max-threads 12
-sks naruto status latest
-sks naruto subagents latest
-sks naruto proof latest
+sks naruto run "implement this change"
+sks naruto run "review independent release domains" --agents 3 --max-threads 12
+sks naruto status latest --json
+sks naruto subagents latest --json
+sks naruto proof latest --json
 ```
 
-`--agents` is the canonical requested-subagent flag. `--clones` remains a
-deprecated compatibility alias and emits one warning. Likewise, `workers` is a
-deprecated alias for `subagents`.
-
-`$ShadowClone`, `$Kagebunshin`, `$Work`, and `$Swarm` remain compatibility
-aliases for the same official workflow. `$Work` is recognized only when the
-dollar command is explicit; a sentence such as “work on the parser” is routed
-from its actual task intent instead of being treated as an alias invocation.
-
-The run parser accepts both `--agents 8` and `--agents=8` (and the equivalent
-`--max-threads` forms). Empty tasks, missing or malformed values, duplicate or
-conflicting count flags, and legacy backend/scheduler/pool/model options are
-rejected before any parent or paid subagent workflow can start.
+Automatic fan-out is two children for non-trivial work and may expand to three
+only for critical multi-domain risk. An explicit `--agents N` remains
+authoritative, but every slice must be independent and defensible. The parser
+accepts `--agents N` or `--agents=N` and the corresponding `--max-threads`
+forms. Empty tasks, malformed or conflicting values, and removed options fail
+before an agent workflow starts.
 
 ## Model Policy
 
-- parent agent: GPT-5.6 Sol, maximum reasoning effort
-- Luna Max: only tiny, short-context, mechanical work with an explicit done condition
+- parent: GPT-5.6 Sol with maximum reasoning
+- Luna Max: tiny, short-context, mechanical work only
 - Sol High: ordinary UI, logic, backend, core, and native implementation
 - Sol Max: review, debugging, planning, architecture, security, database,
-  research, release, ambiguity, and every judgment-sensitive task
+  research, release, ambiguity, and other judgment-sensitive work
 - Terra Medium: long-context analysis and direct Computer Use, Browser/Chrome,
   or image-generation execution
 
-Mixed work is split when possible: Terra gathers evidence or operates tools,
-Sol High implements, and Sol Max judges. If one slice cannot be split safely,
-the Sol Max judgment policy wins. Luna is never used for exploration,
-long-context work, review, debugging, planning, or tool-heavy execution. SKS
-does not silently substitute a different model/effort profile when the selected
-combination is unavailable.
+Mixed work is split when practical. If a slice cannot safely separate execution
+from judgment, Sol Max owns it. SKS never silently substitutes another model or
+recreates a custom process scheduler when the selected official path is
+unavailable.
 
 ## Agent Configuration
 
@@ -63,80 +50,35 @@ job_max_runtime_seconds = 1200
 interrupt_message = true
 ```
 
-Explicit user project or global values are preserved. Only recognized
-SKS-owned legacy thread defaults are migrated. The SKS request safety cap is 32;
-requests larger than the configured concurrent limit are divided into waves.
-
-SKS materializes a project-scoped catalog of narrow official agents so Codex can
-select by description instead of routing every task through one generic pair:
-
-- tiny mechanical execution: `worker`
-- ordinary implementation: `implementation_specialist`, `ui_implementer`, `native_app_specialist`
-- long-context and tool execution: `explorer`, `docs_maintainer`, `long_context_analyst`, `computer_use_operator`, `browser_use_operator`, `image_generation_operator`
-- diagnosis and testing: `debugger`, `test_engineer`, `toolchain_specialist`
-- independent review: `expert`, `architecture_reviewer`, `security_reviewer`, `database_reviewer`, `integration_reviewer`, `performance_analyst`, `release_reviewer`
-- contracts and evidence: `protocol_reviewer`, `runtime_reliability_reviewer`, `triwiki_evidence_reviewer`
-- Research: `research_synthesizer`, `research_reviewer`
-
-The installed catalog contains twenty-five roles, but a delegation prompt
-injects metadata for at most the three roles relevant to the current goal. This
-keeps the broader capability inventory from becoming recurring prompt cost.
-Write-capable roles inherit the parent sandbox; only read-only roles declare a
-read-only sandbox explicitly.
-
-User-authored collisions or invalid TOML are preserved and reported as manual
-blockers instead of being overwritten.
+Explicit user configuration is preserved. SKS installs a project-scoped
+catalog of narrow official roles and injects only the few roles relevant to the
+current task. User-authored collisions or invalid TOML are preserved and
+reported as manual blockers.
 
 ## Delegation Contract
 
-The parent agent owns decomposition, integration, verification, and the final
-answer. Delegated slices must be independent, non-duplicative, and use disjoint
-write scopes. Nested subagent delegation is prohibited by `max_depth = 1`.
-The parent waits for all requested agent threads and closes completed threads
-after collecting their results.
+The parent owns decomposition, integration, verification, and the final answer.
+Delegated slices must be independent, non-duplicative, and use disjoint write
+scopes. Nested delegation is prohibited by `max_depth = 1`. The parent waits for
+every requested thread and records one structured outcome per thread.
 
-The parent reads a bounded set of central TriWiki `attention.use_first` anchors
-and passes only those identifiers, hashes, and on-demand hydration hints into
-the delegation context. Subagents hydrate a cited source only when it is
-relevant to their slice or a risky decision; the full context pack is not
-injected and every child is not asked to repeat repository-wide discovery.
+TriWiki recall stays bounded: the parent selects a small set of
+`attention.use_first` anchors and children hydrate only relevant sources. The
+full context pack is not copied into every child.
 
-Codex Desktop/App sessions do not launch a nested `codex exec`. SKS returns the
-official delegation context to the current parent session. A standalone
-`sks naruto run` may launch exactly one Sol Max Codex parent; Codex itself owns
-the official subagent threads. App preparation returns `prepared: true` with
-`ok: false`; the active `CODEX_THREAD_ID` is reused as the session scope, so
-preparing delegation cannot look like completed work or create a duplicate
-same-session mission.
-
-While a Naruto mission is active, its read-only `status`, `subagents`,
-deprecated `workers`, and `proof` commands remain available.
-
-If the Codex App reports `[No tool output found for custom tool call ...]`, the
-current conversation may no longer satisfy the Responses call/output pairing
-contract. SKS blocks same-thread continuation rather than treating preparation
-context or a post-hoc stub as recovery. The operator must upgrade a selected
-codex-lb to `1.21.0-beta.3` or later (or explicitly switch with
-`sks codex-lb use-oauth`), inspect possible side effects, and continue this
-mission from a fresh Codex task.
+Codex App sessions reuse the current parent session instead of launching a
+nested Codex process. Standalone CLI use may launch one parent process; Codex
+itself owns the official subagent threads.
 
 ## Completion Evidence
 
-Preparation is not completion. A run passes only when all of the following are
-present and consistent:
+Preparation is not completion. A run passes only when:
 
-- unique official `SubagentStart` and `SubagentStop` thread IDs
-- every started thread is stopped
-- no failed or open thread remains
-- the completed thread count satisfies the final requested-subagent plan
-- a trustworthy `sks.subagent-parent-summary.v1` object is present
-- that parent summary contains one explicit `completed`, `blocked`, or `failed`
-  outcome for every stopped thread, with an overall completed status
-
-The official `SubagentStop` hook payload does not supply a trustworthy success
-status by itself. A stop without a matching structured parent outcome remains
-ambiguous and fails closed; prose-only summaries and failed-result text also do
-not satisfy the gate.
+- official start/stop events correlate to unique thread IDs;
+- every started thread has stopped and no failed/open thread remains;
+- completed outcomes satisfy the final requested-subagent plan;
+- `subagent-parent-summary.json` contains one explicit outcome per thread; and
+- the parent-owned integration and verification evidence passes.
 
 Canonical mission artifacts are:
 
@@ -147,23 +89,5 @@ Canonical mission artifacts are:
 - `naruto-summary.json`
 - `naruto-gate.json`
 
-The result schema is `sks.naruto-subagent-workflow.v1`. Native process counts,
-Zellij panes, and legacy `.jsonl` heuristics are not completion evidence on the
-default path.
-
-In CLI Zellij sessions, those panes are nevertheless useful observability
-surfaces: official start/stop hooks populate the monitor and viewports, and a
-version-gated exact-agent rollout tail supplies redacted live phase/task/file
-updates without exposing raw reasoning, command arguments, or tool output.
-The rollout is display-only; stop remains `verifying`, and only the same
-trustworthy parent outcomes used by this gate produce terminal `completed` or
-`failed` telemetry.
-
-## Legacy Compatibility
-
-The historical Naruto process-swarm command implementation and its environment
-switch have been removed. Legacy backend, scheduler, work-item, patch-pool,
-model, and dashboard flags fail closed and cannot reactivate that runtime.
-`--clones` and read-only `workers` remain temporary spelling aliases only; they
-map to official `--agents` and `subagents` behavior and never select a custom
-scheduler, worker pool, process swarm, or alternate model fanout.
+Terminal panes and process counts are observability only. They never substitute
+for official thread evidence or a trustworthy parent outcome.

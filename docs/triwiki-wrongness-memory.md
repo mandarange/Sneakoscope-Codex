@@ -21,7 +21,7 @@ sks wrongness add --kind incorrect_claim --claim "Claim text" --reason "Why it w
 sks wrongness resolve WRONG-... --reason "Corrected by current evidence" --json
 sks wrongness summarize latest --json
 sks wrongness validate project --json
-sks wrongness context --route '$Team' --json
+sks wrongness context --route '$Naruto' --json
 sks wrongness publish latest --shared --json
 sks wrongness rebuild-summary --json
 sks wiki wrongness list --json

@@ -10,6 +10,7 @@ import {
   detectCodexAppSession,
   runOfficialSubagentWorkflow
 } from '../official-subagent-runner.js'
+import { writeNarutoGate } from '../official-subagent-preparation.js'
 import { CODEX_LB_TOOL_OUTPUT_RECOVERY_MIN_VERSION } from '../../codex-lb/codex-lb-tool-output-recovery.js'
 
 test('standalone parent args launch one Sol Max Codex parent with the official thread budget', () => {
@@ -53,6 +54,34 @@ test('Codex thread environment selects the in-app path unless standalone is expl
   assert.equal(codexAppSessionKey({ CODEX_THREAD_ID: 'thread' }), 'thread')
   assert.equal(codexAppSessionKey({ SKS_NARUTO_APP_SESSION: '1' }), null)
   assert.equal(codexAppSessionKey({ CODEX_THREAD_ID: 'thread', SKS_NARUTO_STANDALONE_CLI: '1' }), null)
+})
+
+test('Naruto gate cannot pass when the required SSOT guard artifact is missing', async () => {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-naruto-gate-ssot-'))
+  try {
+    await writeNarutoGate(dir, {
+      missionId: 'M-ssot-missing',
+      workflowRunId: 'run-ssot-missing',
+      evidence: {
+        ok: true,
+        run_id: 'run-ssot-missing',
+        requested_subagents: 1,
+        started_threads: 1,
+        completed_threads: 1,
+        failed_threads: 0,
+        parent_summary_present: true,
+        event_sources: ['SubagentStart', 'SubagentStop']
+      },
+      passed: true,
+      blockers: []
+    })
+    const gate = JSON.parse(await fsp.readFile(path.join(dir, 'naruto-gate.json'), 'utf8'))
+    assert.equal(gate.passed, false)
+    assert.equal(gate.ssot_guard, false)
+    assert.ok(gate.blockers.some((item: string) => item.startsWith('ssot-guard.json:')))
+  } finally {
+    await fsp.rm(dir, { recursive: true, force: true })
+  }
 })
 
 test('standalone parent launch exports the owning mission id to child hooks', async () => {

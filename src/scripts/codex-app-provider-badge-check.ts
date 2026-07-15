@@ -7,7 +7,7 @@ const providerContext: ProviderContext = {
   generated_at: new Date().toISOString(),
   provider: 'codex-lb',
   auth_mode: 'codex_lb_key',
-  route: '$Agent',
+  route: '$Naruto',
   service_tier: 'fast',
   source: 'codex_lb',
   confidence: 'high',

@@ -25,6 +25,7 @@ try {
   delete process.env.SKS_GPT_FINAL_ARBITER_UNAVAILABLE;
   process.env.NODE_ENV = 'test';
   process.env.SKS_CODEX_SDK_FAKE = '1';
+  process.env.SKS_CODEX_LB_AUTOBYPASS = '1';
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-gpt-final-available-'));
   const available = await arbiterMod.runGptFinalArbiter(input('available'), { cwd: root, mutationLedgerRoot: tmp });
   assertGate(available.ok === true, 'GPT available fixture must pass final arbiter');
@@ -37,7 +38,7 @@ try {
 function input(label) {
   return {
     schema: 'sks.gpt-final-arbiter-input.v1',
-    route: '$Team',
+    route: '$Naruto',
     mission_id: `M-${label}`,
     local_mode: 'local-parallel-gpt-final',
     local_outputs: [{ worker_id: 'local', backend: 'local-llm', summary: 'candidate' }],
@@ -50,7 +51,8 @@ function snapshotEnv() {
   return {
     NODE_ENV: process.env.NODE_ENV,
     SKS_CODEX_SDK_FAKE: process.env.SKS_CODEX_SDK_FAKE,
-    SKS_GPT_FINAL_ARBITER_UNAVAILABLE: process.env.SKS_GPT_FINAL_ARBITER_UNAVAILABLE
+    SKS_GPT_FINAL_ARBITER_UNAVAILABLE: process.env.SKS_GPT_FINAL_ARBITER_UNAVAILABLE,
+    SKS_CODEX_LB_AUTOBYPASS: process.env.SKS_CODEX_LB_AUTOBYPASS
   };
 }
 

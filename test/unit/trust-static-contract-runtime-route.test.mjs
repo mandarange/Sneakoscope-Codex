@@ -7,7 +7,7 @@ test('static_contract evidence cannot satisfy a runtime route contract', () => {
   const proof = {
     schema: 'sks.completion-proof.v1',
     mission_id: 'M-static-runtime',
-    route: '$Team',
+    route: '$Naruto',
     status: 'verified_partial',
     summary: {},
     evidence: {},
@@ -22,7 +22,7 @@ test('static_contract evidence cannot satisfy a runtime route contract', () => {
         source: 'static_contract',
         trust: 'low',
         kind: 'route_gate',
-        path: '.sneakoscope/missions/M-static-runtime/team-gate.json'
+        path: '.sneakoscope/missions/M-static-runtime/naruto-gate.json'
       }
     ]
   };

@@ -13,6 +13,7 @@ import {
 export const DEFAULT_REMOTE_MAX_LINE_BYTES = 64 * 1024;
 export const DEFAULT_REMOTE_MAX_RESPONSE_BYTES = 512 * 1024;
 const IDENTIFIER_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/;
+const REMOTE_READ_VIEWS = new Set(['status', 'tail', 'diff', 'gates', 'trust', 'proof', 'artifacts', 'refresh', 'open']);
 
 export class RemoteProtocolError extends Error {
   constructor(readonly code: string, readonly details: Record<string, unknown> = {}) {
@@ -57,6 +58,16 @@ export function validateWorkerRequest(value: unknown, now: number = Date.now()):
       ? { schema: REMOTE_WORKER_REQUEST_SCHEMA, id, type, after_seq: afterSeq }
       : { schema: REMOTE_WORKER_REQUEST_SCHEMA, id, type, after_seq: afterSeq, session_id: sessionId };
   }
+  if (type === 'prepare_cancel') {
+    exactKeys(record, ['schema', 'id', 'type', 'session_id', 'command_id']);
+    return {
+      schema: REMOTE_WORKER_REQUEST_SCHEMA,
+      id,
+      type,
+      session_id: identifier(record.session_id, 'session_id'),
+      command_id: identifier(record.command_id, 'command_id')
+    };
+  }
   if (type === 'command') {
     exactKeys(record, ['schema', 'id', 'type', 'envelope']);
     return { schema: REMOTE_WORKER_REQUEST_SCHEMA, id, type, envelope: validateRemoteCommandEnvelope(record.envelope, now) };
@@ -93,6 +104,10 @@ export function validateRemoteCommandEnvelope(value: unknown, now: number = Date
   if (!payload) throw new RemoteProtocolError('command_payload_object_required');
   if (Buffer.byteLength(JSON.stringify(payload)) > 32 * 1024) throw new RemoteProtocolError('command_payload_too_large');
   if (kind === 'input') boundedString(payload.text, 'input_text', 16 * 1024);
+  if (kind === 'read' && payload.view !== undefined) {
+    const view = boundedString(payload.view, 'read_view', 32);
+    if (!REMOTE_READ_VIEWS.has(view)) throw new RemoteProtocolError('command_read_view_unsupported');
+  }
   const idempotencyKey = identifier(record.idempotency_key, 'idempotency_key');
   return {
     schema: REMOTE_COMMAND_SCHEMA,

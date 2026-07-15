@@ -1,3 +1,6 @@
 {
-  "decision": "continue"
+  "decision": "block",
+  "reason_contains": "official Codex subagent evidence",
+  "gate": "official-subagent-evidence",
+  "secret_policy": "redacted"
 }

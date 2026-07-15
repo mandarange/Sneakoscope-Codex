@@ -40,6 +40,12 @@ export interface UpdateOperationReceipt {
   receipt_path: string;
 }
 
+export type UpdateRollbackAuthorization =
+  | { ok: true; receipt: UpdateOperationReceipt; receiptPath: string }
+  | { ok: false; blocker: string; receiptPath: string | null };
+
+const ROLLBACK_RECEIPT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
 export class UpdateOperationRecorder {
   readonly receiptPath: string;
   private receipt: UpdateOperationReceipt;
@@ -161,10 +167,90 @@ export function updateOperationLatestPath(env: NodeJS.ProcessEnv = process.env):
   return path.join(updateGlobalRoot(env), 'operations', 'update-latest.json');
 }
 
+export async function authorizeUpdateRollback(input: {
+  targetVersion: string;
+  currentVersion: string;
+  env?: NodeJS.ProcessEnv;
+  now?: Date;
+}): Promise<UpdateRollbackAuthorization> {
+  const env = input.env || process.env;
+  const latestPath = updateOperationLatestPath(env);
+  const operationsDir = path.dirname(latestPath);
+  const latest = await readRollbackReceipt(latestPath, operationsDir).catch(() => null);
+  if (!latest) return { ok: false, blocker: 'rollback_receipt_required', receiptPath: null };
+  const receiptPath = path.resolve(latest.receipt_path || '');
+  const source = await readRollbackReceipt(receiptPath, operationsDir).catch(() => null);
+  if (!source) return { ok: false, blocker: 'rollback_receipt_invalid', receiptPath };
+  if (!sameRollbackReceipt(latest, source)) {
+    return { ok: false, blocker: 'rollback_receipt_changed', receiptPath };
+  }
+  if (source.kind !== 'update') return { ok: false, blocker: 'rollback_receipt_not_update', receiptPath };
+  const completedInstall = isTerminalUpdateReceipt(source)
+    && source.side_effects_started === true
+    && hasConfirmedGlobalInstall(source);
+  if (!completedInstall) return { ok: false, blocker: 'rollback_receipt_not_install', receiptPath };
+  if (source.previous_version !== input.targetVersion) {
+    return { ok: false, blocker: 'rollback_target_not_previous_version', receiptPath };
+  }
+  if (source.target_version !== input.currentVersion) {
+    return { ok: false, blocker: 'rollback_receipt_not_current_install', receiptPath };
+  }
+  const updatedAt = Date.parse(source.updated_at);
+  const now = (input.now || new Date()).getTime();
+  if (!Number.isFinite(updatedAt) || updatedAt > now + 60_000 || now - updatedAt > ROLLBACK_RECEIPT_MAX_AGE_MS) {
+    return { ok: false, blocker: 'rollback_receipt_stale', receiptPath };
+  }
+  return { ok: true, receipt: source, receiptPath };
+}
+
+function isTerminalUpdateReceipt(receipt: UpdateOperationReceipt): boolean {
+  return receipt.state === 'succeeded'
+    || receipt.state === 'failed'
+    || receipt.state === 'terminal_uncertain';
+}
+
+function hasConfirmedGlobalInstall(receipt: UpdateOperationReceipt): boolean {
+  if (!Array.isArray(receipt.stages)) return false;
+  const installStages = receipt.stages.filter((stage) => stage?.id === 'global_install');
+  if (installStages.length !== 1) return false;
+  const install = installStages[0];
+  if (!install || install.ok !== true || !['installed', 'fake_installed'].includes(install.status)) return false;
+  if (!install.detail || typeof install.detail !== 'object') return false;
+  return install.detail.code === 0 && install.detail.timed_out !== true;
+}
+
 function updateGlobalRoot(env: NodeJS.ProcessEnv): string {
   return env.SKS_GLOBAL_ROOT
     ? path.resolve(env.SKS_GLOBAL_ROOT)
     : path.join(env.HOME || os.homedir(), '.sneakoscope-global');
+}
+
+async function readRollbackReceipt(file: string, operationsDir: string): Promise<UpdateOperationReceipt> {
+  const resolved = path.resolve(file);
+  const relative = path.relative(path.resolve(operationsDir), resolved);
+  if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) throw new Error('rollback_receipt_path_invalid');
+  const stat = await fs.lstat(resolved);
+  if (!stat.isFile() || stat.isSymbolicLink()) throw new Error('rollback_receipt_file_invalid');
+  if (process.platform !== 'win32' && (stat.mode & 0o077) !== 0) throw new Error('rollback_receipt_permissions_invalid');
+  const value = JSON.parse(await fs.readFile(resolved, 'utf8')) as UpdateOperationReceipt;
+  if (value?.schema !== UPDATE_OPERATION_SCHEMA || typeof value.id !== 'string' || typeof value.receipt_path !== 'string') {
+    throw new Error('rollback_receipt_schema_invalid');
+  }
+  return value;
+}
+
+function sameRollbackReceipt(left: UpdateOperationReceipt, right: UpdateOperationReceipt): boolean {
+  return stableJson(left) === stableJson(right);
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${stableJson(record[key])}`).join(',')}}`;
+  }
+  const encoded = JSON.stringify(value);
+  return encoded === undefined ? 'undefined' : encoded;
 }
 
 function publicDetail(value: Record<string, unknown>, env: NodeJS.ProcessEnv): Record<string, unknown> {

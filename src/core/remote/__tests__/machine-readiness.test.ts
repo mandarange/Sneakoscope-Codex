@@ -5,13 +5,15 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   findRemoteMachine,
+  remoteMachineRegistryPath,
   resolveAllowedProjectRoot,
   validateAllowedRoot,
   validateRemoteMachineRegistry,
   validateSshAlias
 } from '../machine-registry.js';
+import { remoteSessionIndexPath, validateRemoteSessionIndex } from '../session-index.js';
 import { remoteReadiness } from '../readiness.js';
-import type { RemoteMachineV1 } from '../types.js';
+import type { RemoteMachineRegistryV1, RemoteMachineV1 } from '../types.js';
 
 async function tempRoot(prefix: string): Promise<string> {
   return fsp.mkdtemp(path.join(os.tmpdir(), prefix));
@@ -37,6 +39,39 @@ test('machine registry accepts bounded SSH aliases and rejects host strings and 
   assert.equal(valid.ok, true);
   assert.equal(valid.registry?.machines[0]?.ssh_alias, 'sks-mac-studio');
   assert.throws(() => findRemoteMachine(valid.registry!, 'unknown'), /remote_machine_unknown_or_disabled/);
+});
+
+test('machine registry and project session index use canonical paths and fail closed on duplicate or outside targets', () => {
+  assert.equal(
+    remoteMachineRegistryPath('/Users/example/.sneakoscope-global'),
+    '/Users/example/.sneakoscope-global/remote/machines.json'
+  );
+  assert.equal(
+    remoteSessionIndexPath('/Users/example/src/repo'),
+    '/Users/example/src/repo/.sneakoscope/remote/session-index.json'
+  );
+  const registry: RemoteMachineRegistryV1 = {
+    schema: 'sks.remote-machines.v1',
+    machines: [{
+      id: 'mac', display_name: 'Mac', transport: 'ssh-stdio', ssh_alias: 'sks-mac',
+      allowed_roots: ['/Users/example/src'], enabled: true
+    }]
+  };
+  const valid = validateRemoteSessionIndex({
+    schema: 'sks.remote-session-index.v1',
+    targets: [{ machine_id: 'mac', project_id: 'repo', project_root: '/Users/example/src/repo' }]
+  }, registry);
+  assert.equal(valid.ok, true);
+  const invalid = validateRemoteSessionIndex({
+    schema: 'sks.remote-session-index.v1',
+    targets: [
+      { machine_id: 'mac', project_id: 'repo', project_root: '/Users/example/src/repo' },
+      { machine_id: 'mac', project_id: 'repo', project_root: '/Users/example/outside' }
+    ]
+  }, registry);
+  assert.equal(invalid.ok, false);
+  assert.ok(invalid.issues.includes('target_1:duplicate_machine_project'));
+  assert.ok(invalid.issues.includes('target_1:project_root_not_allowlisted'));
 });
 
 test('realpath allowlist accepts in-root projects and refuses symlink escape', async () => {

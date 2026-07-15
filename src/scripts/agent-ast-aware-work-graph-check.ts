@@ -9,7 +9,7 @@ const depsMod = await importDist('core/agents/work-partition/dependency-graph.js
 const graphMod = await importDist('core/agents/intelligent-work-graph.js');
 const inventory = await inventoryMod.collectRepoInventory(root, { maxFiles: 2000 });
 const dependencyGraph = depsMod.buildDependencyGraph(inventory);
-const graph = await graphMod.buildIntelligentWorkGraph({ root, inventory, dependencyGraph, route: '$Team', prompt: '1.18.6 AST-aware work graph release gate' });
+const graph = await graphMod.buildIntelligentWorkGraph({ root, inventory, dependencyGraph, route: '$Naruto', prompt: '6.3.0 AST-aware work graph release gate' });
 const releaseVersion = readJson('package.json').version;
 
 assertGate(graph.schema === 'sks.intelligent-work-graph.v2', 'intelligent work graph schema must be v2', graph);

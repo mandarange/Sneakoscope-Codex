@@ -5,7 +5,7 @@ import test from 'node:test';
 
 test('task slicer can create more slices than roster length', () => {
   const roster = Array.from({ length: 5 }, (_, index) => ({ id: `agent_${index + 1}`, role: 'verifier' }));
-  const graph = buildAgentTaskGraph({ routeType: '$Agent', prompt: 'fixture', targetActiveSlots: 5, desiredWorkItems: 25 });
+  const graph = buildAgentTaskGraph({ routeType: '$Naruto', prompt: 'fixture', targetActiveSlots: 5, desiredWorkItems: 25 });
   const slices = createAgentTaskSlices({ roster, routeWorkGraph: graph });
   assert.equal(slices.length, 25);
   assert.equal(new Set(slices.map((slice) => slice.owner_agent_id)).size, 5);

@@ -21,7 +21,7 @@ const [
 await fsp.mkdir(path.join(root, '.sneakoscope', 'missions', 'M-fixture'), { recursive: true });
 await ledger.recordTestFailureWrongness(root, {
   mission_id: 'M-fixture',
-  route: '$Team',
+  route: '$Naruto',
   command: 'node --test failing-fixture.test.mjs',
   failure: 'fixture assertion failed',
   artifact: '.sneakoscope/missions/M-fixture/test-report.json'

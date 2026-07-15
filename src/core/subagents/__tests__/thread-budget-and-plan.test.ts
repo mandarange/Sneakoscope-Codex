@@ -7,9 +7,9 @@ import {
   resolveSubagentThreadBudget
 } from '../thread-budget.js'
 import {
-  agentPipelineStage,
-  normalizeAgentPolicy,
-  routeRequiresAgentIntake
+  normalizeOfficialSubagentPolicy,
+  officialSubagentPipelineStage,
+  routeRequiresOfficialSubagents
 } from '../../agents/agent-plan.js'
 import { routePrompt } from '../../routes.js'
 
@@ -46,30 +46,31 @@ test('thread budget enforces the official hard safety ceiling', () => {
   assert.equal(budget.maxThreads, 32)
 })
 
-test('agent intake is task-profile aware and no longer required for every serious-looking route', () => {
-  assert.equal(routeRequiresAgentIntake('$Team', { task: 'implement feature' }), true)
-  assert.equal(routeRequiresAgentIntake('$Research', { task: 'How does this mechanism work?' }), false)
-  assert.equal(routeRequiresAgentIntake('$DFix', { task: 'fix a typo' }), false)
-  assert.equal(routeRequiresAgentIntake('$Release-Review', { task: 'fix the release metadata' }), false)
-  assert.equal(routeRequiresAgentIntake('$Release-Review', { task: 'fix release metadata in parallel across independent files' }), true)
-  assert.equal(routeRequiresAgentIntake(routePrompt('work on the parser'), { task: 'work on the parser' }), false)
-  assert.equal(routeRequiresAgentIntake(routePrompt('$Work'), { task: '$Work' }), true)
-  assert.equal(routeRequiresAgentIntake(routePrompt('parallel implementation'), { task: 'parallel implementation' }), true)
+test('official subagent requirement is task-profile aware and canonical-route bound', () => {
+  assert.equal(routeRequiresOfficialSubagents('$Naruto', { task: 'implement feature' }), true)
+  assert.equal(routeRequiresOfficialSubagents('$Research', { task: 'How does this mechanism work?' }), false)
+  assert.equal(routeRequiresOfficialSubagents('$DFix', { task: 'fix a typo' }), false)
+  assert.equal(routeRequiresOfficialSubagents('$Release-Review', { task: 'fix the release metadata' }), true)
+  assert.equal(routeRequiresOfficialSubagents('$Release-Review', { task: 'fix release metadata in parallel across independent files' }), true)
+  assert.equal(routeRequiresOfficialSubagents(routePrompt('work on the parser'), { task: 'work on the parser' }), true)
+  assert.equal(routeRequiresOfficialSubagents(routePrompt('What is a parser?'), { task: 'What is a parser?' }), false)
+  assert.equal(routeRequiresOfficialSubagents(routePrompt('$Work'), { task: '$Work' }), true)
+  assert.equal(routeRequiresOfficialSubagents(routePrompt('parallel implementation'), { task: 'parallel implementation' }), true)
 })
 
-test('official agent policy exposes requested count, waves, and canonical evidence outputs', () => {
-  const policy = normalizeAgentPolicy('$Naruto', 'implement feature', {
+test('official subagent policy exposes requested count, waves, and canonical evidence outputs', () => {
+  const policy = normalizeOfficialSubagentPolicy('$Naruto', 'implement feature', {
     requestedSubagents: 20,
     maxThreads: 12
   })
-  assert.equal(policy.schema, 'sks.subagent-intake-policy.v1')
+  assert.equal(policy.schema, 'sks.official-subagent-policy.v1')
   assert.equal(policy.requested_subagents, 20)
   assert.equal(policy.max_threads, 12)
   assert.equal(policy.wave_count, 2)
   assert.equal(policy.backend, 'official-codex-subagent')
   assert.ok(policy.outputs.includes('subagent-evidence.json'))
 
-  const stage = agentPipelineStage(policy)
+  const stage = officialSubagentPipelineStage(policy)
   assert.equal(stage.workflow, 'official_codex_subagent')
   assert.equal(stage.requested_subagents, 20)
   assert.equal(stage.max_parallel_agent_threads, 12)

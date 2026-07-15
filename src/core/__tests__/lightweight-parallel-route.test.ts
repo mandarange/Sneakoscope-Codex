@@ -4,7 +4,7 @@ import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { prepareRoute } from '../pipeline-internals/runtime-core.js';
-import { routePrompt, routeRequiresSubagents } from '../routes.js';
+import { COMMAND_CATALOG, routePrompt, routeRequiresSubagents } from '../routes.js';
 
 test('lightweight Wiki stays missionless even when its prompt contains parallel wording', async () => {
   const prompt = '$Wiki audit all wiki files in parallel';
@@ -114,7 +114,8 @@ test('$DB materializes internal safety artifacts without a public sks db command
     assert.equal(typeof scan.ok, 'boolean');
     assert.equal(review.scan_ok, scan.ok);
     assert.equal(review.destructive_operation_zero, true);
-    assert.match(String(prepared.additionalContext || ''), /legacy sks db CLI is removed/i);
+    assert.equal(COMMAND_CATALOG.some((entry: any) => entry.name === 'db'), false);
+    assert.match(String(prepared.additionalContext || ''), /database safety/i);
   } finally {
     await fsp.rm(root, { recursive: true, force: true });
   }

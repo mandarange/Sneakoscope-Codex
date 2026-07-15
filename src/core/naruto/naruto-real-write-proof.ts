@@ -88,7 +88,7 @@ export function realisticNarutoRealWriteProofFixture(overrides: Partial<NarutoRe
       { envelope_id: 'naruto-write-worker-a:naruto-write-worker-a-session:naruto-write-a', agent_id: 'naruto-write-worker-a', changed_files: ['src/a.ts'], applied: true },
       { envelope_id: 'naruto-write-worker-b:naruto-write-worker-b-session:naruto-write-b', agent_id: 'naruto-write-worker-b', changed_files: ['src/b.ts'], applied: true }
     ],
-    parent_merge_artifact: 'agents/agent-patch-swarm-runtime.json',
+    parent_merge_artifact: 'agents/agent-patch-handoff-runtime.json',
     typecheck: { ok: true, command: 'node node_modules/typescript/bin/tsc -p tsconfig.json --noEmit' },
     cleanup: { ok: true },
     blockers: [],

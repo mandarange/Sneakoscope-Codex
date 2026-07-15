@@ -43,8 +43,8 @@ export async function buildFixtureProof({ workers, required }) {
     }, null, 2));
     await fs.writeFile(path.join(root, dir, 'codex-worker-output-truth.json'), JSON.stringify({ ok: true, patch_envelope_count: 1 }, null, 2));
   }
-  await fs.writeFile(path.join(root, 'agent-native-cli-session-swarm.json'), JSON.stringify({
-    schema: 'sks.agent-native-cli-session-swarm.v1',
+  await fs.writeFile(path.join(root, 'native-cli-worker-runtime.json'), JSON.stringify({
+    schema: 'sks.native-cli-worker-runtime.v2',
     requested_agents: workers,
     target_active_slots: workers,
     process_ids: dirs.map((_, index) => 3000 + index),

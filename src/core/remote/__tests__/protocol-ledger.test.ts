@@ -85,8 +85,15 @@ test('bounded event cursor reports a retention gap instead of silently skipping 
 test('protocol enforces exact typed requests, risk-kind mapping, expiry, and R3 denial', () => {
   const now = Date.now();
   assert.throws(() => validateWorkerRequest({ schema: 'sks.remote-worker.request.v1', id: '1', type: 'hello', extra: true }), RemoteProtocolError);
+  assert.deepEqual(validateWorkerRequest({
+    schema: 'sks.remote-worker.request.v1', id: 'cancel-prepare', type: 'prepare_cancel', session_id: 'session-1', command_id: 'command-1'
+  }), {
+    schema: 'sks.remote-worker.request.v1', id: 'cancel-prepare', type: 'prepare_cancel', session_id: 'session-1', command_id: 'command-1'
+  });
   assert.throws(() => validateRemoteCommandEnvelope(envelope({ kind: 'cancel', risk: 'R1' }), now), /command_risk_kind_mismatch/);
   assert.throws(() => validateRemoteCommandEnvelope({ ...envelope(), risk: 'R3' }, now), /command_risk_invalid_or_r3_denied/);
+  assert.throws(() => validateRemoteCommandEnvelope(envelope({ payload: { view: 'arbitrary-shell' } }), now), /command_read_view_unsupported/);
+  assert.equal(validateRemoteCommandEnvelope(envelope({ payload: { view: 'proof' } }), now).payload.view, 'proof');
   assert.throws(() => validateRemoteCommandEnvelope(envelope({ expires_at: new Date(now - 1).toISOString() }), now), /command_expired/);
   assert.throws(() => validateRemoteCommandEnvelope(envelope({
     issued_at: new Date(now + 20_000).toISOString(),

@@ -26,7 +26,7 @@ const view = {
   updatedAt: '2026-05-30T00:00:00.000Z',
   mode: 'Naruto',
   fast: 'on · service_tier=fast',
-  workers: 'active 5/20 · clone 003/100 · pending 12',
+  workers: 'active 5/20 · workers 003/100 · pending 12',
   codexChild: 'active 5',
   currentFile: longPath,
   queue: 'pending 12 · applying 2 · verified 8 · blocked 0',
@@ -100,7 +100,7 @@ for (const cmd of footerCommands) {
     registry.includes(`"${cmd}":`);
   assertGate(registered, `footer command "${cmd}" is not a registered CLI command`, { cmd });
 }
-for (const required of ['doctor', 'zellij', 'agent']) {
+for (const required of ['doctor', 'zellij', 'naruto']) {
   assertGate(footerCommands.includes(required), `expected footer command "${required}" not found`, { footerCommands });
 }
 

@@ -26,7 +26,7 @@ export async function runFakeCodexSdkTaskFixture(label = 'fixture', extra = {}) 
   process.env.SKS_CODEX_LB_AUTOBYPASS = '1';
   try {
     const result = await mod.runCodexTask({
-      route: extra.route || '$Agent',
+      route: extra.route || '$Naruto',
       missionId: extra.missionId || `M-${label}`,
       workItemId: extra.workItemId || `${label}-work-item`,
       slotId: extra.slotId || 'slot-001',
@@ -41,7 +41,7 @@ export async function runFakeCodexSdkTaskFixture(label = 'fixture', extra = {}) 
       sandboxPolicy: extra.sandboxPolicy || 'read-only',
       requestedScopeContract: {
         id: `${label}-scope`,
-        route: extra.route || '$Agent',
+        route: extra.route || '$Naruto',
         read_only: extra.sandboxPolicy !== 'workspace-write',
         allowed_paths: extra.allowedPaths || [],
         write_paths: extra.allowedPaths || [],

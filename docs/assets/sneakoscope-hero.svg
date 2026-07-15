@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 600" role="img" aria-labelledby="t d" font-family="'Segoe UI', system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif">
   <title id="t">Sneakoscope Codex — proof-first Codex orchestration</title>
-  <desc id="d">Pipeline from a Codex task through the Naruto parallel worker swarm, live Zellij panes, and safety gates, ending in Completion Proof.</desc>
+  <desc id="d">Pipeline from a Codex task through the Naruto parallel worker group, live Zellij panes, and safety gates, ending in Completion Proof.</desc>
 
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
@@ -81,7 +81,7 @@
     <text x="123" y="188" text-anchor="middle" font-size="15" fill="#8b98a5">CLI &amp; App routes</text>
   </g>
 
-  <!-- 2: Naruto Swarm -->
+  <!-- 2: Naruto Runtime -->
   <g transform="translate(390,226)">
     <rect width="246" height="230" rx="18" fill="url(#card)" stroke="#26313d" stroke-width="1.5"/>
     <rect x="0" y="0" width="246" height="4" rx="2" fill="url(#teal)"/>
@@ -100,7 +100,7 @@
         <line x1="0" y1="0" x2="44" y2="-22"/><line x1="0" y1="0" x2="-44" y2="22"/>
       </g>
     </g>
-    <text x="123" y="158" text-anchor="middle" font-size="22" font-weight="700" fill="#f6f2e8">$Naruto Swarm</text>
+    <text x="123" y="158" text-anchor="middle" font-size="22" font-weight="700" fill="#f6f2e8">$Naruto Runtime</text>
     <text x="123" y="188" text-anchor="middle" font-size="15" fill="#8b98a5">up to <tspan fill="#f0b85a" font-weight="700">100</tspan> parallel workers</text>
   </g>
 

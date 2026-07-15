@@ -12,7 +12,7 @@ export function buildZellijAgentPanePlan(agent: any, slice: any = {}) {
     schema: 'sks.agent-zellij-pane-plan.v1',
     overview_pane: {
       title: 'overview: native_agent_orchestrator',
-      command: 'sks agent status latest --json && parent-owned team watch latest'
+      command: 'sks status --json'
     },
     agent_pane: {
       title: `agent: ${agentId}`,

@@ -2,7 +2,7 @@ import type { GlmNarutoConcurrencyDecision } from './glm-naruto-types.js';
 import { GLM_NARUTO_DEFAULTS } from './glm-naruto-types.js';
 
 export interface GovernorInput {
-  readonly requestedClones: number;
+  readonly requestedWorkers: number;
   readonly activeWorkers: number;
   readonly rateLimited429: number;
   readonly ttftP90Ms: number;
@@ -11,8 +11,8 @@ export interface GovernorInput {
 }
 
 export function decideConcurrency(input: GovernorInput): GlmNarutoConcurrencyDecision {
-  const maxClones = Math.min(input.operatorMax || GLM_NARUTO_DEFAULTS.max_clones, GLM_NARUTO_DEFAULTS.max_clones);
-  const requested = Math.min(input.requestedClones || GLM_NARUTO_DEFAULTS.default_clones, maxClones);
+  const maxWorkers = Math.min(input.operatorMax || GLM_NARUTO_DEFAULTS.max_workers, GLM_NARUTO_DEFAULTS.max_workers);
+  const requested = Math.min(input.requestedWorkers || GLM_NARUTO_DEFAULTS.default_workers, maxWorkers);
   const active = input.activeWorkers > 0 ? input.activeWorkers : Math.min(requested, GLM_NARUTO_DEFAULTS.safe_active_start);
 
   if (input.failureRate > 0.10) {

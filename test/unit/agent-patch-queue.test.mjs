@@ -16,7 +16,7 @@ test('agent patch queue records transitions and ownership ledger', () => {
     lease_id: 'lease-a',
     rollback_hint: { node_id: 'rollback-a' },
     operations: [{ op: 'write', path: 'a.txt', content: 'a' }]
-  }, { mission_id: 'M-test', route: '$Team' });
+  }, { mission_id: 'M-test', route: '$Fixture' });
   queue.markApplying(entry.id);
   queue.markApplied(entry.id);
   const json = queue.toJSON();
@@ -38,7 +38,7 @@ test('persistent agent patch queue writes queue, events, and ownership artifacts
     lease_proof: { lease_id: 'lease-a', allowed_paths: ['a.txt'] },
     rollback_hint: { node_id: 'rollback-a' },
     operations: [{ op: 'write', path: 'a.txt', content: 'a' }]
-  }, { mission_id: 'M-test', route: '$Team' });
+  }, { mission_id: 'M-test', route: '$Fixture' });
   await store.markApplied(entry.id);
   const queue = JSON.parse(await fs.readFile(path.join(root, 'agent-patch-queue.json'), 'utf8'));
   const events = await fs.readFile(path.join(root, 'agent-patch-queue-events.jsonl'), 'utf8');

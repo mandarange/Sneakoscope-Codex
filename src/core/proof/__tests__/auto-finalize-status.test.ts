@@ -69,23 +69,34 @@ test('explicit blockers force blocked despite upgraded statusHint', async () => 
   assert.ok(proof.blockers.includes('fixture_blocker'));
 });
 
-test('mock agent blockers remain visible and mock proof is not passing', async () => {
-  const missionId = 'M-auto-mock-agents';
-  const { root, dir } = await makeMission(missionId, { passed: true, ok: true, blockers: [], execution_class: 'mock_fixture' });
+test('mock official-subagent blockers remain visible and mock proof is not passing', async () => {
+  const missionId = 'M-auto-mock-subagents';
+  const { root, dir } = await makeMission(missionId, {
+    passed: true,
+    ok: true,
+    blockers: [],
+    execution_class: 'mock_fixture',
+    workflow: 'official_codex_subagent',
+    official_subagent_evidence: false,
+    parent_summary_present: false
+  });
   await maybeFinalizeRoute(root, {
     missionId,
-    route: '$Team',
+    route: '$Naruto',
     gateFile: 'route-gate.json',
+    blockers: ['official_subagent_evidence_missing', 'official_subagent_parent_summary_missing'],
     mock: true,
     statusHint: 'verified',
-    lightweightEvidence: true
+    lightweightEvidence: true,
+    agents: false
   });
   const proof = await readProof(dir);
-  const agentProof = JSON.parse(await fsp.readFile(path.join(dir, 'agents', 'agent-proof-evidence.json'), 'utf8'));
   assert.equal(proof.status, 'mock_only');
   assert.equal(proof.execution_class, 'mock_fixture');
-  assert.ok(proof.blockers.includes('agent_gate_not_passed'));
-  assert.equal(agentProof.execution_class, 'mock_fixture');
-  assert.equal(agentProof.ok, false);
-  assert.equal(agentProof.status, 'mock_fixture');
+  assert.equal(proof.route, '$Naruto');
+  assert.ok(proof.blockers.includes('official_subagent_evidence_missing'));
+  assert.ok(proof.blockers.includes('official_subagent_parent_summary_missing'));
+  assert.equal(proof.evidence.route_gate.workflow, 'official_codex_subagent');
+  assert.equal(proof.evidence.route_gate.official_subagent_evidence, false);
+  assert.equal(proof.evidence.route_gate.parent_summary_present, false);
 });

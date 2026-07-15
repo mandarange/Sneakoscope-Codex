@@ -70,7 +70,7 @@ export function namespacedAgentSessionId(input: {
   return `${input.agentId}-${input.missionId}-${input.rootHash}${suffix}`
 }
 
-export function namespacedZellijSessionName(namespace: ProjectNamespace, label = 'team'): string {
+export function namespacedZellijSessionName(namespace: ProjectNamespace, label = 'work'): string {
   const raw = `${namespace.zellij_prefix}-${label}`
   return raw.replace(/[^A-Za-z0-9_.:-]+/g, '-').slice(0, 80)
 }

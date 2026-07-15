@@ -5,18 +5,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { parse } from 'smol-toml';
 
-test('managed Codex 0.144.1 agent roles contain only supported rendered policy keys', async () => {
+test('installed Codex agent catalog exposes only current official roles', async () => {
   const manifest = await import('../../dist/core/managed-assets/managed-assets-manifest.js');
 
   assert.equal(manifest.MANAGED_ASSET_VERSION, '6.2.0');
-  for (const role of manifest.MANAGED_AGENT_ROLES) {
-    const text = manifest.managedAgentRoleContent(role);
-    const parsed = parse(text);
-    assert.equal(parsed.name, role.codex_name);
-    assert.equal(parsed.sandbox_mode, role.sandbox);
-    assert.equal(Object.hasOwn(parsed, 'permission_profile'), false);
-    assert.equal(Object.hasOwn(parsed, 'legacy_sandbox_projection'), false);
-  }
+  assert.equal(Object.hasOwn(manifest, 'MANAGED_AGENT_ROLES'), false);
 
   for (const role of manifest.MANAGED_OFFICIAL_SUBAGENT_ROLES) {
     const text = manifest.managedOfficialSubagentRoleContent(role);
@@ -89,35 +82,46 @@ test('fresh agent role repair requires the complete official custom agent catalo
   assert.deepEqual(files, expected);
 });
 
-test('agent role repair preserves legacy role TOMLs without creating or overwriting them', async () => {
+test('agent role repair removes SKS-owned retired roles and quarantines user collisions', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-agent-role-exact-repair-'));
-  const codexHome = path.join(root, 'codex-home');
-  const roleFile = path.join(root, '.codex', 'agents', 'analysis-scout.toml');
-  await fs.mkdir(path.dirname(roleFile), { recursive: true });
-  await fs.writeFile(roleFile, [
-    '# SKS-MANAGED-ASSET',
-    '# sks_managed_schema = 1',
-    '# sks_managed_id = "sks-explorer"',
-    '# sks_managed_version = "4.8.1"',
-    'name = "analysis_scout"',
-    'description = "stale managed content"',
-    'sandbox_mode = "workspace-write"',
-    'permission_profile = "sks-workspace-write"',
-    'legacy_sandbox_projection = "workspace-write"',
-    'developer_instructions = """',
-    'stale',
-    '"""',
-    ''
-  ].join('\n'), 'utf8');
+  const home = path.join(root, 'home');
+  const codexHome = path.join(home, '.codex');
+  const manifest = await import('../../dist/core/managed-assets/managed-assets-manifest.js');
+  const managedRole = manifest.RETIRED_MANAGED_AGENT_ROLE_TOMBSTONES[0];
+  const userRole = manifest.RETIRED_MANAGED_AGENT_ROLE_TOMBSTONES[1];
+  const managedFile = path.join(root, '.codex', 'agents', managedRole.filename);
+  const userFile = path.join(codexHome, 'agents', userRole.filename);
+  await fs.mkdir(path.dirname(managedFile), { recursive: true });
+  await fs.mkdir(path.dirname(userFile), { recursive: true });
+  await fs.writeFile(managedFile, manifest.managedAgentRoleContent(managedRole), 'utf8');
+  await fs.writeFile(userFile, 'name = "customer_role"\ndescription = "keep me"\n', 'utf8');
 
   const roles = await import('../../dist/core/agents/agent-role-config.js');
   const plan = await roles.repairAgentRoleConfigs({ root, codexHome, apply: false });
-  assert.equal(plan.stale.includes('analysis-scout.toml'), false);
-  assert.ok(plan.existing.includes('.codex/agents/analysis-scout.toml'));
+  assert.equal(plan.retired_role_cleanup.detected_count, 2);
+  assert.equal(plan.retired_role_cleanup.remaining_count, 2);
 
   const repair = await roles.repairAgentRoleConfigs({ root, codexHome, apply: true });
-  assert.equal(repair.repaired.includes('.codex/agents/analysis-scout.toml'), false);
-  const preserved = await fs.readFile(roleFile, 'utf8');
-  assert.match(preserved, /permission_profile = "sks-workspace-write"/);
-  assert.match(preserved, /legacy_sandbox_projection = "workspace-write"/);
+  assert.equal(repair.ok, true);
+  assert.equal(repair.retired_role_cleanup.removed_count, 1);
+  assert.equal(repair.retired_role_cleanup.quarantined_user_collision_count, 1);
+  assert.equal(repair.retired_role_cleanup.remaining_count, 0);
+  await assert.rejects(fs.access(managedFile));
+  await assert.rejects(fs.access(userFile));
+  const quarantined = await findFile(home, userRole.filename);
+  assert.ok(quarantined?.includes(path.join('.sneakoscope', 'quarantine', 'retired-agent-roles')));
+  assert.match(await fs.readFile(quarantined, 'utf8'), /keep me/);
+  assert.equal(Object.hasOwn(repair, 'legacy_compatibility_role_ids'), false);
 });
+
+async function findFile(root, name) {
+  const rows = await fs.readdir(root, { withFileTypes: true }).catch(() => []);
+  for (const row of rows) {
+    const file = path.join(root, row.name);
+    if (row.isDirectory()) {
+      const nested = await findFile(file, name);
+      if (nested) return nested;
+    } else if (row.name === name) return file;
+  }
+  return null;
+}

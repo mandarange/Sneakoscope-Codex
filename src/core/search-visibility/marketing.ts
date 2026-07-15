@@ -294,7 +294,7 @@ function scoreMarketingStrategy(strategy: MarketingStrategy, truth: ReturnType<t
   if (truth.forbidden_phrases.length === 0) score += 15;
   else blockers.push('strategy_quality_forbidden_phrases_present');
   if (hasSupportedSpecialClaim(strategy, /p95|latency|performance|fast/i, /perf|budget|report/i)
-    && hasSupportedSpecialClaim(strategy, /parallel|worker|clone|naruto/i, /parallel|naruto|agent|report|routes/i)
+    && hasSupportedSpecialClaim(strategy, /parallel|worker|naruto/i, /parallel|naruto|agent|report|routes/i)
     && hasSupportedSpecialClaim(strategy, /super-search|source-backed|source backed/i, /super-search|source|report/i)) {
     score += 15;
   } else {

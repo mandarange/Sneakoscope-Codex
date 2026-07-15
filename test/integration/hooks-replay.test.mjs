@@ -13,7 +13,7 @@ test('hooks replay calls shared runtime policy and matches expected decisions', 
     'stop-route-with-valid-proof.json',
     'stop-visual-route-without-anchor.json',
     'stop-visual-route-with-anchor.json',
-    'user-prompt-submit-team.json',
+    'user-prompt-submit-naruto.json',
     'app-git-action-commit.json',
     'app-git-action-push.json',
     'app-settings-event.json'

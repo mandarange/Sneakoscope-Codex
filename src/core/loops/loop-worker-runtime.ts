@@ -131,7 +131,6 @@ async function runLoopWorkerNative(input: LoopWorkerRunInput): Promise<LoopWorke
     maxAgentCount: Math.max(1, workerCount),
     targetActiveSlots: Math.max(1, workerCount),
     visualLaneCount: visiblePaneCap,
-    narutoMode: true,
     narutoWorkGraph: workGraph,
     ...zellijPlacementOpts,
     env: {
@@ -316,7 +315,7 @@ function buildLoopNarutoWorkGraph(input: LoopWorkerRunInput, workerCount: number
   return {
     schema: 'sks.naruto-work-graph.v1',
     route: '$Naruto',
-    requested_clones: workerCount,
+    requested_workers: workerCount,
     total_work_items: workItems.length,
     readonly: input.phase === 'checker',
     write_capable: input.phase === 'maker',

@@ -3,16 +3,17 @@ import path from 'node:path';
 import {
   addMcpServer,
   listMcpInventory,
+  MCP_INVENTORY_SCHEMA,
+  MCP_MUTATION_SCHEMA,
   removeMcpServer,
   setMcpServerEnabled,
   type McpMutationResultV2,
   type McpMutationOptions,
-  type CodexMcpCliPort,
-  type McpServerConfigV2
+  type CodexMcpCliPort
 } from '../mcp-config/index.js';
 
-export const CODEX_MCP_LIST_SCHEMA = 'sks.menubar-mcp-list.v1';
-export const CODEX_MCP_MUTATION_SCHEMA = 'sks.menubar-mcp-mutation.v1';
+export const CODEX_MCP_LIST_SCHEMA = MCP_INVENTORY_SCHEMA;
+export const CODEX_MCP_MUTATION_SCHEMA = MCP_MUTATION_SCHEMA;
 
 export interface CodexMcpManagerOptions {
   readonly home?: string;
@@ -40,20 +41,6 @@ export interface CodexMcpAddInput {
   readonly required?: boolean;
 }
 
-export interface CodexMcpServerSummary {
-  readonly name: string;
-  readonly enabled: boolean;
-  readonly transport: 'stdio' | 'url' | 'unknown';
-  readonly command: string | null;
-  readonly argument_count: number;
-  readonly env_keys: string[];
-  readonly url: string | null;
-  readonly bearer_token_env_var: string | null;
-  readonly startup_timeout_sec: number | null;
-  readonly tool_timeout_sec: number | null;
-  readonly summary: string;
-}
-
 export function codexMcpConfigPath(homeInput?: string): string {
   const home = path.resolve(homeInput || process.env.HOME || os.homedir());
   return path.join(home, '.codex', 'config.toml');
@@ -62,18 +49,10 @@ export function codexMcpConfigPath(homeInput?: string): string {
 export async function listCodexMcpServers(options: CodexMcpManagerOptions = {}) {
   const normalized = scopeOptions(options);
   const inventory = await listMcpInventory('global', normalized);
-  const servers = inventory.servers.map(summary);
   return {
-    schema: CODEX_MCP_LIST_SCHEMA,
-    ok: inventory.ok,
-    scope: 'global',
-    source: inventory.source,
+    ...inventory,
     config_path: codexMcpConfigPath(normalized.home),
-    server_count: servers.length,
-    enabled_count: servers.filter((server) => server.enabled).length,
-    servers,
-    blockers: inventory.blockers,
-    warnings: [...new Set([...inventory.warnings, 'menubar_mcp_alias_deprecated_use_sks_mcp_config'])]
+    warnings: [...inventory.warnings]
   };
 }
 
@@ -96,11 +75,9 @@ export async function removeCodexMcpServer(name: unknown, options: CodexMcpManag
 function compatibilityMutation(result: McpMutationResultV2, options: CodexMcpManagerOptions, enabled: boolean | null = null) {
   return {
     ...result,
-    schema: CODEX_MCP_MUTATION_SCHEMA,
     enabled,
     config_path: codexMcpConfigPath(scopeOptions(options).home),
-    servers: result.servers.map(summary),
-    warnings: [...new Set([...result.warnings, 'menubar_mcp_alias_deprecated_use_sks_mcp_config'])]
+    warnings: [...result.warnings]
   };
 }
 
@@ -118,34 +95,11 @@ function compatibilityFailure(action: string, name: string | null, options: Code
     fallback_used: false,
     backup_id: null,
     restart_required: false,
-    servers: [] as CodexMcpServerSummary[],
+    servers: [],
     blockers,
-    warnings: ['menubar_mcp_alias_deprecated_use_sks_mcp_config'],
+    warnings: [],
     attempts: 0,
     public_error: null
-  };
-}
-
-function summary(server: McpServerConfigV2): CodexMcpServerSummary {
-  const transport = server.transport === 'streamable-http' ? 'url' : server.transport === 'stdio' ? 'stdio' : 'unknown';
-  const command = server.command || null;
-  const url = server.url || null;
-  return {
-    name: server.name,
-    enabled: server.enabled,
-    transport,
-    command,
-    argument_count: server.args?.length || 0,
-    env_keys: [...new Set([...(server.env_vars || []), ...server.legacy_env_keys])].sort(),
-    url,
-    bearer_token_env_var: server.bearer_token_env_var || null,
-    startup_timeout_sec: server.startup_timeout_sec,
-    tool_timeout_sec: server.tool_timeout_sec,
-    summary: transport === 'url'
-      ? `Remote · ${url || 'URL configured'}`
-      : transport === 'stdio'
-        ? `Local · ${command || 'configured command'}${server.args?.length ? ` · ${server.args.length} args` : ''}`
-        : 'Configuration requires review'
   };
 }
 

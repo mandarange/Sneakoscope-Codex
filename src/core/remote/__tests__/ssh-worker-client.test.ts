@@ -134,6 +134,76 @@ test('SSH worker launch is a bounded argument vector using only the registered a
   assert.throws(() => buildSshWorkerArgs({ ...machine, ssh_alias: 'user@host' }, '/work/repos/project', 'project-1'), /ssh_alias_invalid/);
 });
 
+test('SSH worker launch rejects project roots that can change the remote shell command', () => {
+  const unsafeRoots = [
+    '/work/repos/project name',
+    '/work/repos/project;touch',
+    '/work/repos/project$(touch)',
+    '/work/repos/project`touch`',
+    "/work/repos/project'quoted",
+    '/work/repos/project"quoted',
+    '/work/repos/project\nnext-command',
+    '/work/repos/project/*',
+    '/work/repos/project>redirect'
+  ];
+
+  for (const root of unsafeRoots) {
+    assert.throws(
+      () => buildSshWorkerArgs(machine, root, 'project-1'),
+      (err: unknown) => err instanceof RemoteSshClientError
+        && err.code === 'project_root_ssh_unsafe'
+        && err.delivery === 'not_dispatched'
+        && !err.retryable,
+      root
+    );
+  }
+
+  const safeRoot = '/work/repos/SKS_6.3-release.safe_path';
+  assert.equal(buildSshWorkerArgs(machine, safeRoot, 'project-1').includes(safeRoot), true);
+});
+
+test('unsafe project roots are rejected before SSH config probing or process spawn', async () => {
+  const unsafeRoots = [
+    '/work/repos/project name',
+    '/work/repos/project;touch',
+    '/work/repos/project$(touch)',
+    '/work/repos/project`touch`',
+    "/work/repos/project'quoted",
+    '/work/repos/project"quoted',
+    '/work/repos/project\nnext-command',
+    '/work/repos/project/*',
+    '/work/repos/project>redirect'
+  ];
+  let configProbeCount = 0;
+  let spawnCount = 0;
+
+  for (const projectRoot of unsafeRoots) {
+    const client = new RemoteSshWorkerClient({
+      machine,
+      projectRoot,
+      projectId: 'project-1',
+      loadSshConfig: async () => {
+        configProbeCount += 1;
+        return validSshConfig;
+      },
+      spawnProcess: () => {
+        spawnCount += 1;
+        throw new Error('unsafe_root_must_not_spawn');
+      }
+    });
+    await assert.rejects(
+      client.connect(),
+      (err: unknown) => err instanceof RemoteSshClientError
+        && err.code === 'project_root_ssh_unsafe'
+        && err.delivery === 'not_dispatched'
+        && !err.retryable
+    );
+  }
+
+  assert.equal(configProbeCount, 0);
+  assert.equal(spawnCount, 0);
+});
+
 test('disconnect before dispatch is safe-to-retry and distinct from session state', async () => {
   const child = new FakeChild();
   respond(child);

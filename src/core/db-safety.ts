@@ -2,17 +2,18 @@ import path from 'node:path';
 import { exists, readJson, writeJsonAtomic, readText, nowIso, appendJsonlBounded, sha256 } from './fsx.js';
 import { missionDir, setCurrent } from './mission.js';
 import { evaluateMadSksPermissionGate, isMadSksRouteState } from './permission-gates.js';
-import { resolveMadDbMutationPolicy } from './mad-db/mad-db-policy-resolver.js';
-import { appendMadDbLedgerEvent } from './mad-db/mad-db-ledger.js';
-import { lifecycleHookFromUnknown, type MadDbLifecycleHook } from './mad-db/mad-db-result-lifecycle.js';
-import { extractCanonicalToolCallId, reserveMadDbOperation, transitionMadDbOperation } from './mad-db/mad-db-operation-store.js';
-import { madDbOperationClassesFromClassification } from './mad-db/mad-db-policy.js';
+import { resolveMadSksSqlPlaneMutationPolicy } from './mad-sks/sql-plane/policy-resolver.js';
+import { appendMadSksSqlPlaneLedgerEvent } from './mad-sks/sql-plane/ledger.js';
+import { lifecycleHookFromUnknown, type MadSksSqlPlaneLifecycleHook } from './mad-sks/sql-plane/result-lifecycle.js';
+import { extractCanonicalToolCallId, reserveMadSksSqlPlaneOperation, transitionMadSksSqlPlaneOperation } from './mad-sks/sql-plane/operation-store.js';
+import { madSksSqlPlaneOperationClassesFromClassification } from './mad-sks/sql-plane/policy.js';
+import { MAD_SKS_SQL_PLANE_CAPABILITY_FILE, madSksSqlPlaneRelativePath } from './mad-sks/sql-plane/paths.js';
 
 export const DEFAULT_DB_SAFETY_POLICY = Object.freeze({
   schema_version: 1,
   mode: 'read_only_default',
-  destructive_operations: 'deny_without_active_mad_db_capability',
-  production_writes: 'deny_without_active_mad_db_capability',
+  destructive_operations: 'deny_without_active_mad_sks_sql_plane_capability',
+  production_writes: 'deny_without_active_mad_sks_sql_plane_capability',
   mcp_live_writes: 'deny_by_default',
   require_project_scoped_mcp: true,
   require_read_only_mcp_for_real_data: true,
@@ -452,34 +453,34 @@ export async function checkDbOperation(root: any, state: any, payload: any, { du
   const policy = await loadDbSafetyPolicy(root);
   const contract = await loadMissionContract(root, state);
   const classification = classifyToolPayload(payload);
-  const madDb: any = await resolveMadDbMutationPolicy(root, state, classification);
-  if (madDb.allowed === true && madDb.mission_id) {
-    const madDbDecision = madDb;
-    const madDbMissionId = String(madDbDecision.mission_id);
+  const madSksSqlPlane: any = await resolveMadSksSqlPlaneMutationPolicy(root, state, classification);
+  if (madSksSqlPlane.allowed === true && madSksSqlPlane.mission_id) {
+    const madSksSqlPlaneDecision = madSksSqlPlane;
+    const madSksSqlPlaneMissionId = String(madSksSqlPlaneDecision.mission_id);
     const sqlText = classification.sql?.statements?.length ? String(classification.sql.statements.join('\n')) : null;
     const sqlHash = sqlText ? sha256(sqlText) : null;
     const toolCallId = extractCanonicalToolCallId(payload) || `payload-${sha256(JSON.stringify({ tool: classification.toolName || '', sqlHash, level: classification.level })).slice(0, 16)}`;
-    const operationClasses = madDbDecision.operation_classes?.length ? madDbDecision.operation_classes : madDbOperationClassesFromClassification(classification);
-    const reservation = await reserveMadDbOperation({
+    const operationClasses = madSksSqlPlaneDecision.operation_classes?.length ? madSksSqlPlaneDecision.operation_classes : madSksSqlPlaneOperationClassesFromClassification(classification);
+    const reservation = await reserveMadSksSqlPlaneOperation({
       root,
-      missionId: madDbMissionId,
-      capability: madDbDecision.capability,
+      missionId: madSksSqlPlaneMissionId,
+      capability: madSksSqlPlaneDecision.capability,
       toolCallId,
       toolName: classification.toolName || 'unknown_database_tool',
       sql: sqlText,
       operationClasses
     });
-    await transitionMadDbOperation({
+    await transitionMadSksSqlPlaneOperation({
       root,
-      missionId: madDbMissionId,
+      missionId: madSksSqlPlaneMissionId,
       toolCallId,
       state: 'started'
     });
-    const lifecycleHook: MadDbLifecycleHook = {
-      mission_id: madDbMissionId,
+    const lifecycleHook: MadSksSqlPlaneLifecycleHook = {
+      mission_id: madSksSqlPlaneMissionId,
       operation_id: reservation.operation.operation_id,
       tool_call_id: toolCallId,
-      cycle_id: madDbDecision.cycle_id || null,
+      cycle_id: madSksSqlPlaneDecision.cycle_id || null,
       tool_name: classification.toolName || null,
       sql_hash: sqlHash,
       destructive: classification.level === 'destructive'
@@ -487,16 +488,16 @@ export async function checkDbOperation(root: any, state: any, payload: any, { du
     const decision = {
       allowed: true,
       action: 'allow',
-      reasons: madDb.reasons,
+      reasons: madSksSqlPlane.reasons,
       classification,
-      effective: { mode: 'mad-db-break-glass', env: 'operator_authorized_one_cycle', destructive: true, migrationApply: 'yes' },
-      mad_db: {
+      effective: { mode: 'mad-sks-sql-plane-active', env: 'operator_authorized_one_cycle', destructive: true, migrationApply: 'yes' },
+      mad_sks_sql_plane: {
         active: true,
         priority: 'highest',
-        capability_schema: 'sks.mad-db-capability.v2',
+        capability_schema: 'sks.mad-sks-sql-plane-capability.v2',
         one_cycle_only: true,
-        cycle_id: madDbDecision.cycle_id,
-        capability_file: 'mad-db-capability.json',
+        cycle_id: madSksSqlPlaneDecision.cycle_id,
+        capability_file: madSksSqlPlaneRelativePath(MAD_SKS_SQL_PLANE_CAPABILITY_FILE),
         status: reservation.capability.status,
         operation_id: reservation.operation.operation_id,
         tool_call_id: toolCallId,
@@ -504,13 +505,13 @@ export async function checkDbOperation(root: any, state: any, payload: any, { du
         lifecycle_result_pending: true,
         ledger_result_hook: lifecycleHook,
         operation_classes: operationClasses,
-        state_source: madDbDecision.state_source || 'hook_state',
+        state_source: madSksSqlPlaneDecision.state_source || 'hook_state',
         counters: reservation.capability.counters,
         idempotent_reservation_reused: reservation.reused
       }
     };
-    await appendMadDbLedgerEvent(root, madDbMissionId, { type: 'db_mutation.allowed', cycle_id: madDbDecision.cycle_id, mode: madDbDecision.mode, classification, operation_id: reservation.operation.operation_id, tool_call_id: toolCallId });
-    await appendJsonlBounded(path.join(missionDir(root, madDbMissionId), 'db-safety.jsonl'), { ts: nowIso(), decision });
+    await appendMadSksSqlPlaneLedgerEvent(root, madSksSqlPlaneMissionId, { type: 'db_mutation.allowed', cycle_id: madSksSqlPlaneDecision.cycle_id, mode: madSksSqlPlaneDecision.mode, classification, operation_id: reservation.operation.operation_id, tool_call_id: toolCallId });
+    await appendJsonlBounded(path.join(missionDir(root, madSksSqlPlaneMissionId), 'db-safety.jsonl'), { ts: nowIso(), decision });
     return decision;
   }
   const madSks = await madSksOverrideState(root, state);
@@ -522,7 +523,7 @@ export async function checkDbOperation(root: any, state: any, payload: any, { du
   return decision;
 }
 
-export function madDbLifecycleHookFromDecision(decision: any): MadDbLifecycleHook | null {
+export function madSksSqlPlaneLifecycleHookFromDecision(decision: any): MadSksSqlPlaneLifecycleHook | null {
   return lifecycleHookFromUnknown(decision)
 }
 
@@ -550,8 +551,8 @@ export function dbBlockReason(decision: any) {
   return [
     'Sneakoscope Codex Database Safety Gate blocked this operation.',
     `Reasons: ${(decision.reasons || []).join(', ') || 'unknown'}.`,
-    'Default DB mode is read-only. Destructive SQL-plane operations require an explicit active MAD-SKS sql-plane capability opened by $MAD-SKS/sks mad-sks sql|apply-migration or the deprecated $MAD-DB/sks mad-db redirect.',
-    'Use read-only/project-scoped Supabase MCP URLs outside MAD-SKS sql-plane. Supabase project/account/billing/credential control-plane operations remain denied even there.'
+    'Default DB mode is read-only. Destructive SQL-plane operations require an explicit active MAD-SKS SQL-plane capability opened by $MAD-SKS or sks mad-sks sql|apply-migration.',
+    'Use read-only/project-scoped Supabase MCP URLs outside MAD-SKS SQL-plane. Supabase project/account/billing/credential control-plane operations remain denied even there.'
   ].join(' ');
 }
 

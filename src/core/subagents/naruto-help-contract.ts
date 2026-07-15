@@ -17,7 +17,7 @@ export function buildNarutoHelpResult() {
     ok: true,
     action: 'help',
     workflow: 'official_codex_subagent',
-    description: '$Naruto is the SKS alias for the Codex official subagent workflow.',
+    description: '$Naruto is the canonical SKS execution route for the Codex official subagent workflow; $Work is its intended execution alias.',
     usage: [
       'sks naruto run "<task>" [--agents N] [--max-threads N] [--json]',
       'sks naruto status [latest|M-...] [--json]',
@@ -44,11 +44,6 @@ export function buildNarutoHelpResult() {
       stop_is_success_evidence: false,
       structured_parent_summary: 'subagent-parent-summary.json'
     },
-    deprecated_aliases: {
-      '--clones N': '--agents N',
-      workers: 'subagents'
-    },
-    legacy_process_runtime_available: false,
     parent: { model: NARUTO_PARENT_MODEL, model_reasoning_effort: NARUTO_PARENT_EFFORT },
     agent_catalog_mode: 'full_catalog_only_on_explicit_help',
     agents: officialSubagentRolePlan()

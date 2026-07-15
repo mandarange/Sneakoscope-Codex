@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { assertGate, emitGate, importDist } from './sks-1-18-gate-lib.js';
-import { writeReport } from './agent-patch-swarm-gate-lib.js';
+import { writeReport } from './patch-handoff-gate-lib.js';
 
 const queueMod = await importDist('core/agents/agent-patch-queue-store.js');
 const mergeMod = await importDist('core/agents/agent-merge-coordinator.js');
@@ -144,7 +144,7 @@ async function runFixture(name, input) {
   writeFiles(dir, input.files || {});
   const store = new queueMod.PersistentAgentPatchQueueStore(dir);
   const entries = [];
-  for (const envelope of input.envelopes) entries.push(await store.enqueue(envelope, { mission_id: `M-${name}`, route: '$Agent' }));
+  for (const envelope of input.envelopes) entries.push(await store.enqueue(envelope, { mission_id: `M-${name}`, route: '$Naruto' }));
   const merge = input.mergeFactory ? input.mergeFactory(entries) : mergeMod.coordinateAgentPatchMerge(entries);
   const rebase = await rebaseMod.executeAgentPatchConflictRebase(dir, entries, merge, { artifactsDir: dir, ...(input.rebaseOptions || {}) });
   return { name, dir, store, merge, rebase };

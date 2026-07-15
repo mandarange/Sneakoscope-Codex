@@ -44,18 +44,46 @@ final class NotificationCoordinator: NSObject, UNUserNotificationCenterDelegate 
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
         DispatchQueue.main.async {
-            switch response.actionIdentifier {
-            case "OPEN_LOG": self.onOpenLog?()
-            case "RETRY_OPERATION": self.onRetryOperation?()
-            case "OPEN_DASHBOARD": self.onOpenDashboard?()
-            default: self.onOpenControlCenter?()
-            }
+            _ = self.dispatchActionIdentifier(response.actionIdentifier)
             completionHandler()
         }
     }
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
         completionHandler([.banner, .sound])
+    }
+
+    @discardableResult
+    func dispatchActionIdentifier(_ identifier: String) -> String {
+        switch identifier {
+        case "OPEN_LOG": onOpenLog?(); return "open_log"
+        case "RETRY_OPERATION": onRetryOperation?(); return "retry_operation"
+        case "OPEN_DASHBOARD": onOpenDashboard?(); return "open_dashboard"
+        case UNNotificationDismissActionIdentifier: return "dismissed"
+        default: onOpenControlCenter?(); return "open_control_center"
+        }
+    }
+
+    static func authorizationIsDenied(_ status: UNAuthorizationStatus) -> Bool {
+        status == .denied
+    }
+
+    static func categoryIdentifier(updateStatusOutput: String? = nil, failed: Bool = false, actionRequired: Bool = false) -> String {
+        if failed || actionRequired { return "SKS_ACTION_REQUIRED" }
+        if let output = updateStatusOutput, updateIsAvailable(in: output) { return "SKS_UPDATE_AVAILABLE" }
+        return "SKS_OPERATION_RESULT"
+    }
+
+    static func updateIsAvailable(in output: String) -> Bool {
+        guard let data = output.data(using: .utf8),
+              let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return false }
+        if (value["update_count"] as? Int ?? 0) > 0 { return true }
+        let sks = value["sks"] as? [String: Any]
+        let codex = value["codex_cli"] as? [String: Any]
+        let menuBar = value["menubar"] as? [String: Any]
+        return sks?["update_available"] as? Bool == true
+            || codex?["update_available"] as? Bool == true
+            || menuBar?["rebuild_required"] as? Bool == true
     }
 
     private func category(_ id: String, actions: [String]) -> UNNotificationCategory {
@@ -81,7 +109,7 @@ final class NotificationCoordinator: NSObject, UNUserNotificationCenterDelegate 
 
     private func refreshAuthorizationState() {
         UNUserNotificationCenter.current().getNotificationSettings { [weak self] settings in
-            let denied = settings.authorizationStatus == .denied
+            let denied = NotificationCoordinator.authorizationIsDenied(settings.authorizationStatus)
             DispatchQueue.main.async {
                 self?.authorizationDenied = denied
                 self?.onAuthorizationChanged?(denied)

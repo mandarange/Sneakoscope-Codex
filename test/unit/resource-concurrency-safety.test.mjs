@@ -1,39 +1,41 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_NARUTO_CLONES } from '../../dist/core/agents/agent-schema.js';
-import { buildAgentRoster, buildNarutoCloneRoster, systemSafeNarutoConcurrency } from '../../dist/core/agents/agent-roster.js';
-import { normalizeTargetActiveSlots } from '../../dist/core/agents/agent-scheduler.js';
 import { decideNarutoConcurrency } from '../../dist/core/naruto/naruto-concurrency-governor.js';
+import {
+  DEFAULT_NARUTO_REQUESTED_SUBAGENTS,
+  HARD_NARUTO_MAX_THREADS,
+  resolveSubagentThreadBudget
+} from '../../dist/core/subagents/thread-budget.js';
+import {
+  MAX_AUTOMATIC_SUBAGENT_COUNT,
+  officialSubagentFanoutPolicy
+} from '../../dist/core/subagents/agent-catalog.js';
 import { defaultReleaseGateMaxTotal } from '../../dist/core/release/release-gate-resource-governor.js';
 import { computeLoopConcurrencyBudget } from '../../dist/core/loops/loop-concurrency-budget.js';
 
-test('Naruto queues a modest default roster and never activates more than four workers', () => {
-  assert.equal(DEFAULT_NARUTO_CLONES, 8);
-  assert.equal(buildNarutoCloneRoster({ clones: 100 }).concurrency, 4);
-  assert.equal(buildAgentRoster({ agents: 20, concurrency: 20 }).concurrency, 4);
-  assert.equal(normalizeTargetActiveSlots(100, 100), 4);
-  const capacity = systemSafeNarutoConcurrency({
-    backend: 'codex-sdk',
-    cores: 64,
-    freeBytes: 128 * 1024 ** 3,
-    totalBytes: 256 * 1024 ** 3,
-    loadAverage: 0
+test('Naruto official-subagent fanout stays bounded and preserves max_depth=1', () => {
+  assert.equal(DEFAULT_NARUTO_REQUESTED_SUBAGENTS, 2);
+  assert.equal(MAX_AUTOMATIC_SUBAGENT_COUNT, 3);
+
+  const automatic = officialSubagentFanoutPolicy({
+    taskProfile: 'high-risk',
+    goal: 'critical release security database architecture audit',
+    suggestedRoles: ['release_reviewer', 'security_reviewer', 'database_reviewer']
   });
-  assert.equal(capacity.cap, 4);
+  assert.equal(automatic.requested_subagents, 3);
+  assert.equal(automatic.critical_multi_domain, true);
+
+  const budget = resolveSubagentThreadBudget({ requested: 100, configuredMaxThreads: 4 });
+  assert.equal(budget.requestedSubagents, HARD_NARUTO_MAX_THREADS);
+  assert.equal(budget.maxThreads, 4);
+  assert.equal(budget.firstWave, 4);
+  assert.equal(budget.waveCount, 8);
+  assert.equal(budget.maxDepth, 1);
 });
 
 test('live load and low free memory collapse Naruto to a single active worker', () => {
-  const loaded = systemSafeNarutoConcurrency({
-    backend: 'codex-sdk',
-    cores: 10,
-    freeBytes: 512 * 1024 ** 2,
-    totalBytes: 32 * 1024 ** 3,
-    loadAverage: 30
-  });
-  assert.equal(loaded.cap, 1);
-
   const governed = decideNarutoConcurrency({
-    requestedClones: 100,
+    requestedWorkers: 100,
     totalWorkItems: 200,
     backend: 'codex-sdk',
     parallelismMode: 'extreme',

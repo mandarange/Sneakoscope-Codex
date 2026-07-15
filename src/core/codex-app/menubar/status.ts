@@ -7,6 +7,7 @@ import { isCodexAppRunningByBundleId, readMenuBarConfig } from './config.js';
 import { inspectLaunchdService, isMenuBarProcessRunning, removeLaunchAgent, restartLaunchAgent } from './launch-agent.js';
 import { sksMenuBarPaths } from './paths.js';
 import { inspectInstalledResources } from './resources.js';
+import { inspectMenuBarArtifactSet } from './rollback.js';
 import { inspectSignature } from './signature.js';
 import type { SksMenuBarBuildStamp, SksMenuBarStatusResult, SksMenuBarUninstallResult } from './types.js';
 
@@ -29,8 +30,17 @@ export async function inspectSksMenuBarStatus(opts: {
   const config = await readMenuBarConfig(paths.config_path);
   const codexRunning = config.codex_bundle_id ? await isCodexAppRunningByBundleId(config.codex_bundle_id, opts.env) : null;
   const launchd = await inspectLaunchdService(opts.env);
-  const signature = await inspectSignature(paths.app_path, opts.env);
-  const resources = await inspectInstalledResources({ resourcesDir: paths.resources_path, buildStamp });
+  const legacyVerification = buildStamp?.legacy_v1
+    ? await inspectMenuBarArtifactSet({
+        appPath: paths.app_path,
+        buildStampPath: paths.build_stamp_path,
+        actionScriptPath: paths.action_script_path,
+        launchAgentPath: paths.launch_agent_path,
+        ...(opts.env ? { env: opts.env } : {})
+      })
+    : null;
+  const signature = legacyVerification?.signature || await inspectSignature(paths.app_path, opts.env);
+  const resources = legacyVerification?.resources || await inspectInstalledResources({ resourcesDir: paths.resources_path, buildStamp });
   const blockers: string[] = [];
   const warnings: string[] = [];
   if (!installed) blockers.push('menubar_app_missing');
@@ -42,6 +52,8 @@ export async function inspectSksMenuBarStatus(opts: {
   if (installed && buildStamp && !actionIntegrity.script_hash_matches_stamp) blockers.push('action_script_hash_mismatch');
   if (installed && !resources.ok) blockers.push('menubar_resources_invalid');
   if (installed && signature.checked && !signature.ok) blockers.push('menubar_signature_invalid');
+  if (await exists(paths.install_transaction_path)) blockers.push('menubar_install_transaction_pending');
+  if (await exists(paths.rollback_transaction_path)) blockers.push('menubar_rollback_transaction_pending');
   if (!config.codex_bundle_id) warnings.push('codex_sync_disabled');
   return {
     schema: 'sks.menubar-status.v1', ok: blockers.length === 0, platform: process.platform,

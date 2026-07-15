@@ -30,7 +30,7 @@ const codexFeatureEvidence = detectCodexImageGenerationFeature();
 const prompt = `Use case: infographic-diagram
 Asset type: README architecture hero image for Sneakoscope Codex
 Primary request: Use ChatGPT Images 2.0 / GPT Image 2.0 with gpt-image-2 to generate a polished, abstract architecture flow summary image for SKS ${PACKAGE_VERSION}.
-Content intent: Show Codex App, SKS runtime, Team/Goal routing, MAD-SKS scoped permission widening, gpt-image-2 image evidence, validation gates, and release readiness as connected layers.
+Content intent: Show Codex App, SKS runtime, Naruto/Goal routing, MAD-SKS scoped permission widening, gpt-image-2 image evidence, validation gates, and release readiness as connected layers.
 Visual constraints: 16:9 or wide landscape, premium technical product style, no logos, no mascot, no tiny unreadable text, no fake UI screenshots, no dark stock-photo look, no placeholder glyph soup.
 Output requirement: real Codex App $imagegen/gpt-image-2 raster output. Save the selected output path, then run:
 SKS_CODEX_APP_IMAGEGEN_OUTPUT=<path> SKS_CODEX_APP_IMAGEGEN_MODEL=gpt-image-2 SKS_CODEX_APP_IMAGEGEN_SURFACE=codex_app_imagegen npm run imagegen:readme-architecture

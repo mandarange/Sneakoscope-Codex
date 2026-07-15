@@ -23,6 +23,18 @@ test('config forbids raw tokens and accepts only external/keychain references', 
   assert.ok(invalid.issues.includes('external_secret_path_must_be_absolute'));
 });
 
+test('Mini App configuration is excluded from the 6.3 package', () => {
+  const validation = validateTelegramConfig({
+    schema: 'sks.telegram-config.v1',
+    bot_token_ref: { type: 'external_file', path: '/tmp/telegram-token' },
+    paired_chat_ids: ['1'],
+    paired_user_ids: ['2'],
+    mini_app: { enabled: true, default_on: true, url: 'https://cockpit.example.test/app' }
+  });
+  assert.equal(validation.ok, false);
+  assert.ok(validation.issues.includes('mini_app_excluded_from_6_3_package'));
+});
+
 test('owner-only external secret resolves without persisting the raw token', async () => {
   const root = await tempRoot();
   const file = path.join(root, 'token');

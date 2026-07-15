@@ -21,8 +21,8 @@ const installHelpers = await fs.readFile(path.join(root, 'src', 'cli', 'install-
 const madCommand = await fs.readFile(path.join(root, 'src', 'core', 'commands', 'mad-sks-command.ts'), 'utf8');
 const installSafetyOk = !installHelpers.includes("--from-postinstall', '--install-scope', 'global', '--force', '--yes")
   && installHelpers.includes('SKS_POSTINSTALL_AUTO_INSTALL_CLI_TOOLS')
-  && installHelpers.includes('(zellijRepair as any).error || zellij.blockers[0]')
-  && installHelpers.includes('Codex CLI is missing. Install latest Codex CLI');
+  && installHelpers.includes('Postinstall reports missing CLI tools but does not mutate Homebrew/npm globals')
+  && installHelpers.includes('Codex CLI missing. Install @openai/codex');
 const consoleDetailOk = madCommand.includes("['stderr_tail'")
   && madCommand.includes("['stdout_tail'")
   && madCommand.includes('report: ${launch.report_path}');
@@ -33,16 +33,14 @@ const autoAttachOk = madCommand.includes('shouldAutoAttachZellij(args)')
   && madCommand.includes('process.env.ZELLIJ')
   && madCommand.includes("list.includes('--attach')")
   && madCommand.includes('process.stdout.isTTY && process.stdin.isTTY');
-const nativeSwarmOk = madCommand.includes('startMadNativeSwarm(')
-  && madCommand.includes('void madNativeSwarmPromise')
-  && madCommand.includes('stripMadLaunchOnlyArgs(args, { includeGlmFlags: glmMadLaunch })')
+const officialWorkflowOk = madCommand.includes('stripMadLaunchOnlyArgs(args, { includeGlmFlags: glmMadLaunch })')
   && madCommand.includes('function madLaunchValueFlags(includeGlmFlags = false)')
-  && madCommand.includes("route: '$MAD-SKS'")
-  && madCommand.includes("route_command: 'sks --mad native swarm'")
-  && madCommand.includes("same_mission_ledger: true")
+  && madCommand.includes('[SKS_ZELLIJ_HOST_MISSION_ENV]: madLaunch.mission_id')
   && madCommand.includes('slotCount: 0')
-  && madCommand.includes('zellijSessionName: launch.session_name')
-  && madCommand.includes('mad_sks.native_swarm_started');
+  && madCommand.includes("initial_panes: 'orchestrator-monitor-viewports'")
+  && madCommand.includes('worker_panes_created: 0')
+  && madCommand.includes("ui_architecture: 'monitor_plus_viewports'")
+  && madCommand.includes('findUnsupportedMadArgumentErrors(rawArgsForHelp)');
 const instantBootstrapOk = madCommand.includes("status: 'deferred_background'")
   && madCommand.includes('SKS_MAD_STRICT_UI_SNAPSHOT')
   && madCommand.includes('refreshMadNativeLaunchArtifacts')
@@ -90,11 +88,11 @@ const ok = report.kind === 'mad'
   && installSafetyOk
   && consoleDetailOk
   && autoAttachOk
-  && nativeSwarmOk
+  && officialWorkflowOk
   && instantBootstrapOk
   && clipboardCliOk
   && codexPaneOk;
-const gate = { schema: 'sks.mad-sks-zellij-launch-check.v1', ok, install_safety_ok: installSafetyOk, console_detail_ok: consoleDetailOk, auto_attach_ok: autoAttachOk, native_swarm_ok: nativeSwarmOk, instant_bootstrap_ok: instantBootstrapOk, clipboard_cli_ok: clipboardCliOk, codex_pane_ok: codexPaneOk, codex_pane_checks: codexPaneChecks, report };
+const gate = { schema: 'sks.mad-sks-zellij-launch-check.v1', ok, install_safety_ok: installSafetyOk, console_detail_ok: consoleDetailOk, auto_attach_ok: autoAttachOk, official_workflow_ok: officialWorkflowOk, instant_bootstrap_ok: instantBootstrapOk, clipboard_cli_ok: clipboardCliOk, codex_pane_ok: codexPaneOk, codex_pane_checks: codexPaneChecks, report };
 await writeMadZellijLaunchGate(gate);
 emit(gate);
 async function writeMadZellijLaunchGate(gate) {

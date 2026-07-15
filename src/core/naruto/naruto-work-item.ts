@@ -86,7 +86,7 @@ export interface NarutoWorkItem {
 export interface NarutoWorkGraph {
   schema: 'sks.naruto-work-graph.v1'
   route: '$Naruto'
-  requested_clones: number
+  requested_workers: number
   total_work_items: number
   readonly: boolean
   write_capable: boolean

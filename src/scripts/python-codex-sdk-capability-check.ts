@@ -34,7 +34,7 @@ if (requireReal) {
     additionalProperties: false
   };
   const result = await plane.runCodexTask({
-    route: '$Agent',
+    route: '$Naruto',
     missionId: 'M-python-codex-sdk-real-smoke',
     workItemId: 'python-real-smoke',
     slotId: 'slot-python-real',

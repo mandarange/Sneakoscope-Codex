@@ -1,5 +1,5 @@
 export const ROUTE_FINALIZER_FIXTURE_ROUTES = Object.freeze([
-  '$Team',
+  '$Naruto',
   '$DFix',
   '$QA-LOOP',
   '$Research',

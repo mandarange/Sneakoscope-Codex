@@ -67,6 +67,15 @@ test('Naruto decision gate bypasses trivial work and defaults bounded execution 
   assert.equal(active.action, 'observe_required');
   assert.equal(active.source, 'active_route');
 
+  const retiredIdentity = decideHookNaruto({
+    name: 'pre-tool',
+    payload: { tool_name: 'Read' },
+    state: { mission_id: 'M-retired-route', route: 'Team', mode: 'TEAM' }
+  });
+  assert.equal(retiredIdentity.required, false);
+  assert.equal(retiredIdentity.action, 'observe_bypass');
+  assert.equal(retiredIdentity.route_id, null);
+
   const activeOwned = decideHookNaruto({
     name: 'post-tool',
     payload: { tool_name: 'Read' },

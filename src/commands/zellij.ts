@@ -142,8 +142,8 @@ async function zellijWorkerLogs(root: string, args: string[], json: boolean) {
   const missionId = resolveMissionId(root, readOption(args, '--mission', readOption(args, '--mission-id', 'latest') || 'latest') || 'latest');
   const slotArg = positionalAfter(args, 'worker-logs') || readOption(args, '--slot', '');
   const slotId = slotArg ? normalizeZellijSlot(slotArg) : null;
-  const swarm = await readJson<any>(path.join(root, '.sneakoscope', 'missions', missionId, 'agents', 'agent-native-cli-session-swarm.json'), null);
-  const records = Array.isArray(swarm?.records) ? swarm.records : [];
+  const runtime = await readJson<any>(path.join(root, '.sneakoscope', 'missions', missionId, 'agents', 'native-cli-worker-runtime.json'), null);
+  const records = Array.isArray(runtime?.records) ? runtime.records : [];
   const filtered = slotId ? records.filter((row: any) => normalizeZellijSlot(row.slot_id) === slotId) : records;
   const out = {
     schema: 'sks.zellij-worker-logs.v1',

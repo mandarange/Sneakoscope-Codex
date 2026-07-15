@@ -13,8 +13,8 @@ const report = {
   naruto_controls: ['dashboard', 'workers'].every((token) => naruto.includes(`'${token}'`)),
   dashboard_watch: zellij.includes('--watch') && zellij.includes('renderZellijDashboardText'),
   focus_uses_pane_id: zellij.includes('focus-pane-id'),
-  logs_read_swarm: zellij.includes('agent-native-cli-session-swarm.json')
+  logs_read_runtime: zellij.includes('native-cli-worker-runtime.json')
 }
-report.ok = report.zellij_controls && report.naruto_controls && report.dashboard_watch && report.focus_uses_pane_id && report.logs_read_swarm
+report.ok = report.zellij_controls && report.naruto_controls && report.dashboard_watch && report.focus_uses_pane_id && report.logs_read_runtime
 assertGate(report.ok, 'Zellij/Naruto developer controls missing', report)
 emitGate('zellij:developer-controls', report)

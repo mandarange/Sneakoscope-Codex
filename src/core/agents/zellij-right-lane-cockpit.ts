@@ -46,7 +46,7 @@ export function buildZellijRightLaneCockpit(input: {
     actual_pane_ids: lanes.map((lane) => lane.pane_id).filter(Boolean),
     attach_command: input.sessionName ? `zellij attach ${input.sessionName}` : 'sks zellij status',
     keyboard_hint: 'Use the Zellij pane controls to move between lanes; detach with the configured Zellij detach binding.',
-    cleanup_command_hint: 'Use native Zellij session controls; legacy Team mutation commands are removed.',
+    cleanup_command_hint: 'Use native Zellij session controls to close completed worker lanes.',
     ok: lanes.length > 0
   }
   const laneManifest = {

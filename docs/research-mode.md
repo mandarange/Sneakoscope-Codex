@@ -10,6 +10,6 @@ Three composite, persona-inspired Sol Max lenses independently attack the manusc
 
 ## AutoResearch
 
-AutoResearch inherits the same policy: no legacy process pool, no recursive Research command, and no final proof until all three structured reviewers approve with zero critical, major, minor, or required revisions. Every successful revision is followed by a fresh full three-thread review.
+AutoResearch inherits the same policy: it uses only official subagent reviewers, does not recursively invoke Research, and cannot finalize until all three structured reviewers approve with zero critical, major, minor, or required revisions. Every successful revision is followed by a fresh full three-thread review.
 
 Mock runs exercise artifact and fail-closed contracts only. They do not prove live source quality, model intelligence, novelty, or publication readiness.

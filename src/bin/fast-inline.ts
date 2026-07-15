@@ -43,7 +43,6 @@ export function doctorJsonFastInline(): void {
       layout_proof: 'unavailable',
       pane_proof: 'unavailable',
       screen_proof: 'unavailable',
-      tmux_removed_runtime: true,
       mad_ready: false,
       cli_ready: false,
       ready_for_interactive_runtime: false

@@ -1,4 +1,3 @@
-import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,17 +6,26 @@ import {
   writeJsonAtomic, writeTextAtomic
 } from '../../fsx.js';
 import { actionScriptSource } from './action-runner.js';
-import { buildMenuBarAppAtomically, MenuBarBuildError } from './app-bundle.js';
+import { buildMenuBarAppStaging, MenuBarBuildError } from './app-bundle.js';
 import { aggregateFileHashes, createSksMenuBarBuildStamp, menuBarBuildStampsEqual } from './build-stamp.js';
 import { MENU_ITEMS, SKS_MENUBAR_LABEL } from './constants.js';
 import { resolveCodexBundleId, writeDefaultMenuBarConfig } from './config.js';
+import {
+  applyMenuBarGenerationTransaction,
+  commitMenuBarGenerationTransaction,
+  installGenerationPairs,
+  MenuBarGenerationTransactionError,
+  recoverMenuBarGenerationTransaction,
+  rollbackGenerationPairs
+} from './generation-transaction.js';
 import { launchAgentSource, launchMenuBar, seedMenuBarPreferredPosition } from './launch-agent.js';
 import { cleanupMacLaunchSecretEnvironment } from './migration.js';
 import { sksMenuBarPaths } from './paths.js';
 import { infoPlistSource, inspectInstalledResources, loadNativeMenuBarSources, nativeResourceHashes } from './resources.js';
+import { inspectMenuBarArtifactSet, normalizeLegacyMenuBarBuildStamp, rollbackSksMenuBar } from './rollback.js';
 import { inspectSignature } from './signature.js';
 import { defaultNextActions, inspectSksMenuBarStatus, isMenuBarInstallPathUnderTempDir } from './status.js';
-import type { NativeSourceInput, SecretLaunchEnvCleanupResult, SksMenuBarBuildStamp, SksMenuBarInstallOptions, SksMenuBarInstallResult, SksMenuBarTargetCheck } from './types.js';
+import type { NativeSourceInput, SecretLaunchEnvCleanupResult, SksMenuBarBuildStamp, SksMenuBarGenerationTransactionOutcome, SksMenuBarInstallOptions, SksMenuBarInstallResult, SksMenuBarLegacyBuildStampV1, SksMenuBarRollbackResult, SksMenuBarTargetCheck } from './types.js';
 
 export async function installSksMenuBar(opts: SksMenuBarInstallOptions = {}): Promise<SksMenuBarInstallResult> {
   const apply = opts.apply === true;
@@ -28,6 +36,7 @@ export async function installSksMenuBar(opts: SksMenuBarInstallOptions = {}): Pr
   let targetCheck: SksMenuBarTargetCheck | undefined;
   let codexBundleId: string | null = null;
   let cleanup: SecretLaunchEnvCleanupResult | undefined;
+  let transaction: SksMenuBarGenerationTransactionOutcome | null = null;
 
   if (process.platform !== 'darwin') {
     const result = baseResult(paths, apply, 'unsupported_platform', true, actions, ['sks_menubar_requires_macos']);
@@ -57,6 +66,17 @@ export async function installSksMenuBar(opts: SksMenuBarInstallOptions = {}): Pr
   await ensureDir(paths.logs_dir);
   await ensureDir(paths.operations_dir);
   await ensureDir(path.dirname(paths.launch_agent_path));
+  const installPairs = installGenerationPairs(paths);
+  const rollbackPairs = rollbackGenerationPairs(paths);
+  for (const pending of [
+    { purpose: 'install' as const, journalPath: paths.install_transaction_path, pairs: installPairs },
+    { purpose: 'rollback' as const, journalPath: paths.rollback_transaction_path, pairs: rollbackPairs }
+  ]) {
+    const recovery = await recoverMenuBarGenerationTransaction({ ...pending, env });
+    if (!recovery.ok) return blocked('menubar_generation_recovery_terminal_uncertain', recovery.error || recovery.status, null, recovery);
+    if (recovery.status === 'rolled_back') actions.push(`recovered interrupted Menu Bar ${pending.purpose} transaction to its previous generation`);
+    if (recovery.status === 'completed_commit') actions.push(`completed committed Menu Bar ${pending.purpose} transaction cleanup`);
+  }
   cleanup = await cleanupMacLaunchSecretEnvironment({ env });
   if (!cleanup.ok) warnings.push('launch_secret_env_cleanup_incomplete');
 
@@ -76,12 +96,13 @@ export async function installSksMenuBar(opts: SksMenuBarInstallOptions = {}): Pr
   if (!targetCheck.exists || !targetCheck.resolved) return blocked('sks_entry_unresolved');
   if (targetCheck.project_local) warnings.push('sks_entry_project_local');
   const previousActionScript = await readText(paths.action_script_path, '');
-  const previous = await readJson<SksMenuBarBuildStamp | null>(paths.build_stamp_path, null);
+  const previousLaunchAgent = await readText(paths.launch_agent_path, '');
+  const previousRaw = await readJson<SksMenuBarBuildStamp | SksMenuBarLegacyBuildStampV1 | null>(paths.build_stamp_path, null);
+  let previous = previousRaw?.schema === 'sks.sks-menubar-build-stamp.v2' ? previousRaw : null;
   const actionScript = actionScriptSource({ nodeBin: process.execPath, sksEntry: targetCheck.resolved });
-  await writeTextAtomic(paths.action_script_path, actionScript);
-  await fs.chmod(paths.action_script_path, 0o755);
   const runtime: NativeSourceInput = {
     actionScriptPath: paths.action_script_path,
+    projectRootPath: paths.root,
     buildStampPath: paths.build_stamp_path,
     configPath: paths.config_path,
     lastActionLogPath: paths.last_action_log_path,
@@ -110,7 +131,7 @@ export async function installSksMenuBar(opts: SksMenuBarInstallOptions = {}): Pr
     swiftcVersion,
     codesignIdentifier: SKS_MENUBAR_LABEL
   });
-  const currentAction = await readText(paths.action_script_path, '');
+  const currentAction = previousActionScript;
   const bundleExists = await exists(paths.executable_path);
   const resources = bundleExists
     ? await inspectInstalledResources({ resourcesDir: paths.resources_path, buildStamp: previous })
@@ -131,13 +152,41 @@ export async function installSksMenuBar(opts: SksMenuBarInstallOptions = {}): Pr
     const preservingPrevious = await exists(paths.app_path);
     try {
       if (preservingPrevious) {
-        if (previous) await writeJsonAtomic(paths.previous_build_stamp_path, previous);
-        if (previousActionScript) {
-          await writeTextAtomic(paths.previous_action_script_path, previousActionScript);
-          await fs.chmod(paths.previous_action_script_path, 0o755);
+        if (previousRaw?.schema === 'sks.sks-menubar-build-stamp.v1') {
+          const normalized = await normalizeLegacyMenuBarBuildStamp({
+            appPath: paths.app_path,
+            legacySourcePath: path.join(paths.install_dir, 'SKSMenuBar.swift'),
+            buildStampPath: paths.build_stamp_path,
+            actionScript: previousActionScript,
+            launchAgentPath: paths.launch_agent_path,
+            env: { ...env, SKS_MENUBAR_CODESIGN: codesign }
+          });
+          if (!normalized.ok || !normalized.stamp) {
+            throw new MenuBarBuildError('menubar_legacy_rollback_candidate_invalid', normalized.blockers.join(','));
+          }
+          previous = normalized.stamp;
+          await writeJsonAtomic(paths.build_stamp_path, previous);
+          actions.push(`normalized verified ${previousRaw.package_version} Menu Bar v1 rollback metadata`);
+        }
+        if (!previous) throw new MenuBarBuildError('menubar_previous_build_stamp_invalid', 'installed Menu Bar has no verifiable rollback stamp');
+        if (!previousActionScript || sha256(previousActionScript) !== previous.action_script_sha256) {
+          throw new MenuBarBuildError('menubar_previous_action_script_invalid', 'installed Menu Bar action script does not match its rollback stamp');
+        }
+        if (!previousLaunchAgent || sha256(previousLaunchAgent) !== previous.launch_agent_sha256) {
+          throw new MenuBarBuildError('menubar_previous_launch_agent_invalid', 'installed Menu Bar launch agent does not match its rollback stamp');
+        }
+        const currentVerification = await inspectMenuBarArtifactSet({
+          appPath: paths.app_path,
+          buildStampPath: paths.build_stamp_path,
+          actionScriptPath: paths.action_script_path,
+          launchAgentPath: paths.launch_agent_path,
+          env: { ...env, SKS_MENUBAR_CODESIGN: codesign }
+        });
+        if (!currentVerification.ok) {
+          throw new MenuBarBuildError('menubar_previous_generation_invalid', currentVerification.blockers.join(','));
         }
       }
-      const built = await buildMenuBarAppAtomically({
+      const built = await buildMenuBarAppStaging({
         paths, swiftc, codesign, runtime, infoPlist, actions,
         ...(opts.quiet === undefined ? {} : { quiet: opts.quiet })
       });
@@ -145,13 +194,81 @@ export async function installSksMenuBar(opts: SksMenuBarInstallOptions = {}): Pr
       stamp.source_files_sha256 = built.sourceHashes;
       stamp.resources_sha256 = aggregateFileHashes(built.resourceHashes);
       stamp.resource_files_sha256 = built.resourceHashes;
+      await writeTextAtomic(paths.staging_action_script_path, actionScript, { mode: 0o755 });
+      await writeTextAtomic(paths.staging_launch_agent_path, launchAgent);
+      await writeJsonAtomic(paths.staging_build_stamp_path, stamp);
+      const stagedVerification = await inspectMenuBarArtifactSet({
+        appPath: paths.staging_app_path,
+        buildStampPath: paths.staging_build_stamp_path,
+        actionScriptPath: paths.staging_action_script_path,
+        launchAgentPath: paths.staging_launch_agent_path,
+        env: { ...env, SKS_MENUBAR_CODESIGN: codesign }
+      });
+      if (!stagedVerification.ok) {
+        throw new MenuBarBuildError('menubar_staged_generation_invalid', stagedVerification.blockers.join(','));
+      }
     } catch (error) {
       if (error instanceof MenuBarBuildError) return blocked(error.blocker, error.message);
       return blocked('menubar_build_failed', error instanceof Error ? error.message : String(error));
     }
+    try {
+      transaction = await applyMenuBarGenerationTransaction({
+        purpose: 'install', journalPath: paths.install_transaction_path, pairs: installPairs, env
+      });
+      actions.push(`installed ${paths.app_path} as one journaled generation`);
+      if (preservingPrevious) actions.push(`preserved complete previous generation at ${paths.backup_app_path}`);
+    } catch (error) {
+      const failed = error instanceof MenuBarGenerationTransactionError ? error.outcome : null;
+      const recovery = await recoverMenuBarGenerationTransaction({
+        purpose: 'install', journalPath: paths.install_transaction_path, pairs: installPairs, env
+      });
+      transaction = recovery;
+      return blocked(
+        recovery.ok ? 'menubar_install_transaction_failed' : 'menubar_install_transaction_terminal_uncertain',
+        (failed?.error || (error instanceof Error ? error.message : String(error))),
+        null,
+        recovery
+      );
+    }
   }
-  await writeTextAtomic(paths.launch_agent_path, launchAgent);
-  await writeJsonAtomic(paths.build_stamp_path, stamp);
+  const installedVerification = await inspectMenuBarArtifactSet({
+    appPath: paths.app_path,
+    buildStampPath: paths.build_stamp_path,
+    actionScriptPath: paths.action_script_path,
+    launchAgentPath: paths.launch_agent_path,
+    env: { ...env, SKS_MENUBAR_CODESIGN: codesign }
+  });
+  if (!installedVerification.ok) {
+    if (!upToDate) {
+      const recovery = await recoverMenuBarGenerationTransaction({
+        purpose: 'install', journalPath: paths.install_transaction_path, pairs: installPairs, env
+      });
+      transaction = recovery;
+      return blocked(
+        recovery.ok ? 'menubar_post_install_verification_failed' : 'menubar_post_install_recovery_terminal_uncertain',
+        installedVerification.blockers.join(','),
+        null,
+        recovery
+      );
+    }
+    return blocked('menubar_post_install_verification_failed', installedVerification.blockers.join(','));
+  }
+  actions.push('verified installed Menu Bar signature, resources, build stamp, action script, and launch agent');
+  if (!upToDate) {
+    const committed = await commitMenuBarGenerationTransaction({
+      purpose: 'install', journalPath: paths.install_transaction_path, pairs: installPairs, env
+    });
+    if (!committed.ok) {
+      const recovery = await recoverMenuBarGenerationTransaction({
+        purpose: 'install', journalPath: paths.install_transaction_path, pairs: installPairs, env
+      });
+      if (!recovery.ok) return blocked('menubar_install_commit_terminal_uncertain', recovery.error || committed.error || committed.status, null, recovery);
+      warnings.push('menubar_install_commit_cleanup_recovered');
+      transaction = recovery;
+    } else {
+      transaction = committed;
+    }
+  }
   const launchWanted = opts.launch !== false && env.SKS_SKIP_SKS_MENUBAR_LAUNCH !== '1';
   const launchAllowed = path.resolve(paths.home) === realUserHome() && !isMenuBarInstallPathUnderTempDir(paths.executable_path, env);
   if (launchWanted && path.resolve(paths.home) !== realUserHome()) warnings.push('launch_skipped_non_user_home');
@@ -159,29 +276,64 @@ export async function installSksMenuBar(opts: SksMenuBarInstallOptions = {}): Pr
   let launch: NonNullable<SksMenuBarInstallResult['launch']> = { requested: false, method: 'skipped', ok: true };
   if (launchWanted && launchAllowed) {
     if (await seedMenuBarPreferredPosition(env)) actions.push('seeded SKS menu bar preferred position');
-    launch = await launchMenuBar({ launchctl, open, paths });
+    launch = await launchMenuBar({ launchctl, open, paths, env });
   }
+  const rollbackCandidateExists = !upToDate && await exists(paths.backup_app_path);
+  const rollback = shouldAutoRollbackMenuBarLaunch({ launch, upToDate, rollbackCandidateExists })
+    ? await rollbackSksMenuBar({ home: paths.home, root: paths.root, env: { ...env, SKS_MENUBAR_CODESIGN: codesign }, launch: true })
+    : null;
+  if (!launch.ok && launch.terminal_uncertain === true && rollbackCandidateExists) {
+    warnings.push('menubar_launch_terminal_uncertain_rollback_skipped');
+  }
+  if (rollback?.ok) actions.push(`rolled back Menu Bar to ${rollback.previous_version || 'the verified previous build'}`);
+  const terminalUncertain = launch.terminal_uncertain === true || rollback?.status === 'terminal_uncertain';
   const ok = launch.ok;
-  const result = baseResult(paths, true, ok ? (launch.requested ? (launch.method === 'open-fallback' ? 'installed_open_fallback' : 'installed') : 'installed_launch_skipped') : 'blocked', ok, actions, warnings);
+  const result = baseResult(paths, true, ok ? (launch.requested ? (launch.method === 'open-fallback' ? 'installed_open_fallback' : 'installed') : 'installed_launch_skipped') : terminalUncertain ? 'terminal_uncertain' : 'blocked', ok, actions, warnings);
   result.codex_bundle_id = codexBundleId;
   result.target_check = targetCheck;
-  result.build_stamp = stamp;
+  result.build_stamp = rollback?.ok
+    ? await readJson<SksMenuBarBuildStamp | null>(paths.build_stamp_path, null)
+    : stamp;
   result.secret_env_cleanup = cleanup;
   result.launch = launch;
-  result.blockers = ok ? [] : [launch.error || 'sks_menubar_launch_failed'];
+  result.rollback = rollback;
+  result.transaction = transaction;
+  result.blockers = ok ? [] : [
+    terminalUncertain ? 'sks_menubar_launch_terminal_uncertain' : launch.error || 'sks_menubar_launch_failed',
+    ...(rollback && !rollback.ok ? rollback.blockers : [])
+  ];
   await writeReport(paths.report_path, result);
   return result;
 
-  async function blocked(reason: string, detail?: string): Promise<SksMenuBarInstallResult> {
-    const result = baseResult(paths, apply, 'blocked', false, actions, detail ? [...warnings, detail] : warnings);
+  async function blocked(
+    reason: string,
+    detail?: string,
+    rollback: SksMenuBarRollbackResult | null = null,
+    failedTransaction: SksMenuBarGenerationTransactionOutcome | null = null
+  ): Promise<SksMenuBarInstallResult> {
+    const terminalUncertain = rollback?.status === 'terminal_uncertain' || failedTransaction?.status === 'terminal_uncertain';
+    const result = baseResult(paths, apply, terminalUncertain ? 'terminal_uncertain' : 'blocked', false, actions, detail ? [...warnings, detail] : warnings);
     result.codex_bundle_id = codexBundleId;
     if (targetCheck) result.target_check = targetCheck;
     if (cleanup) result.secret_env_cleanup = cleanup;
-    result.blockers = [reason];
-    result.launch = { requested: false, method: 'none', ok: false, error: detail || reason };
+    result.rollback = rollback;
+    result.transaction = failedTransaction;
+    result.blockers = [reason, ...(rollback && !rollback.ok ? rollback.blockers : [])];
+    result.launch = { requested: false, method: 'none', ok: false, terminal_uncertain: terminalUncertain, error: detail || reason };
     await writeReport(paths.report_path, result);
     return result;
   }
+}
+
+export function shouldAutoRollbackMenuBarLaunch(input: {
+  launch: NonNullable<SksMenuBarInstallResult['launch']>;
+  upToDate: boolean;
+  rollbackCandidateExists: boolean;
+}): boolean {
+  return !input.launch.ok
+    && input.launch.terminal_uncertain !== true
+    && !input.upToDate
+    && input.rollbackCandidateExists;
 }
 
 function baseResult(paths: ReturnType<typeof sksMenuBarPaths>, apply: boolean, status: SksMenuBarInstallResult['status'], ok: boolean, actions: string[], warnings: string[]): SksMenuBarInstallResult {

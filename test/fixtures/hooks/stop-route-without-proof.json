@@ -2,8 +2,8 @@
   "event": "Stop",
   "state": {
     "mission_id": "M-fixture-without-proof",
-    "route_command": "$Team",
-    "mode": "TEAM",
+    "route_command": "$Naruto",
+    "mode": "NARUTO",
     "stop_gate": "none",
     "proof_required": true,
     "reflection_required": false

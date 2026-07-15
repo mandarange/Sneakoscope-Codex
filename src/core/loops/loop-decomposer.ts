@@ -20,7 +20,7 @@ export const LOOP_DOMAIN_RULES: LoopDomainRule[] = [
   { id: 'naruto', dirs: ['src/core/naruto', 'src/core/commands/naruto-command.ts'], gates: ['naruto:*'] },
   { id: 'codex-control', dirs: ['src/core/codex-control', 'src/scripts/codex-'], gates: ['codex:*', 'codex-sdk:*'] },
   { id: 'image', dirs: ['src/core/image', 'src/core/image-generation'], gates: ['image:*'] },
-  { id: 'mad-db', dirs: ['src/core/mad-db', 'src/core/db-safety.ts'], gates: ['mad-db:*'] },
+  { id: 'mad-sks-sql-plane', dirs: ['src/core/mad-sks/sql-plane', 'src/core/db-safety.ts'], gates: ['mad-sks:sql-plane-*'] },
   { id: 'docs', dirs: ['docs', 'README.md', 'CHANGELOG.md'], gates: ['docs:*', 'changelog:check'] }
 ];
 

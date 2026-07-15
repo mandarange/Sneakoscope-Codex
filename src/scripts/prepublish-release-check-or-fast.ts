@@ -40,7 +40,7 @@ function failClosed(status = 1) {
 
 function blockLifecyclePublish() {
   console.error('Lifecycle-enabled npm publish is unsupported because prepack would rebuild after authorization.');
-  console.error('Run `npm run publish:prep-ignore-scripts`, then use `npm publish --ignore-scripts` only if you are the repository maintainer performing the separate publish handoff.');
+  console.error('Direct npm publish is disabled. Use the reviewed stage-only GitHub workflow, which submits the exact receipt-bound tarball with `npm stage publish`.');
   process.exit(2);
 }
 

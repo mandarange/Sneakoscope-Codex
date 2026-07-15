@@ -8,7 +8,7 @@
 ### Added
 
 - Add a native menu-bar MCP manager with a resizable server table and modal controls to list, add, remove, enable, disable, and refresh remote URL and local stdio servers.
-- Add matching `sks menubar mcp` commands and real global Codex configuration updates, including protected backups, file locking, TOML validation, and restrictive file permissions.
+- Add canonical `sks mcp config` commands and real global Codex configuration updates, including protected backups, file locking, TOML validation, and restrictive file permissions.
 - Add one common three-state Naruto decision gate to all ten Codex hook events, with bounded hash-only telemetry and route-owned orchestration detection.
 - Expand the official project custom-agent catalog from sixteen to twenty-one roles with native AppKit, toolchain, protocol, runtime-reliability, and TriWiki-evidence specialists.
 - Add dedicated Terra Medium `long_context_analyst`, `computer_use_operator`, `browser_use_operator`, and `image_generation_operator` project agents, expanding the installed official catalog from twenty-one to twenty-five roles while retaining the three-role on-demand prompt cap.
@@ -142,7 +142,7 @@
 - Wait for the local dashboard to become ready before opening it, report Codex Settings open failures, restart after OpenRouter/GLM profile changes, and clear stale update badges by comparing the cached latest version with the embedded menu version.
 - Add live codex-lb catalog verification for Sol/Terra/Luna, normalize current App Server/model-cache effort metadata shapes, recognize `/Applications/ChatGPT.app`, and remove parsed Codex config objects from Fast status JSON so MCP environment secrets are not emitted.
 - Give Naruto work items unique default patch-envelope write leases when a prompt names no target path, and explicitly close each child route between sequential swarm release proofs so valid follow-up runs are not blocked by stale session ownership.
-- Block the command-local `sks naruto --glm` GPT-5.6 policy bypass (the separate explicit `sks --mad --glm --naruto` mode remains available), and fail closed when Naruto receives invalid explicit reasoning or service-tier overrides instead of silently ignoring them.
+- Block the command-local `sks naruto --glm` GPT-5.6 policy bypass (the separate explicit `sks --mad --glm naruto` mode remains available), and fail closed when Naruto receives invalid explicit reasoning or service-tier overrides instead of silently ignoring them.
 - Route conflict-resolution and patch-rebase integration work to Sol `max`, and disable Naruto's legacy local/Ollama auto-selection eligibility so scheduler planning and actual GPT-5.6 worker execution cannot disagree.
 - Fail closed for real write-capable Naruto prompts that name no source target path instead of treating route-local patch-envelope lease keys as source write authorization; fake/fixture swarm proofs retain isolated patch-envelope targets.
 - Unify sizecheck, packlist, and publish-performance packed-size limits behind one measured 2414 KiB SSOT, restore the real-release dry-run performance entrypoint, and exempt only the two generated Codex 0.142 protocol schemas from the handwritten-file size limit.
@@ -856,7 +856,7 @@
 
 ### Added
 
-- GLM Naruto extreme parallel modification loop: `sks --mad --glm --naruto "<task>"` launches parallel GLM-only patch workers, isolated worktree/patch-envelope candidates, deterministic gates, conflict graph, merge planner, judge/finalizer, repair waves, and real streaming TTFT.
+- GLM Naruto extreme parallel modification loop: `sks --mad --glm naruto "<task>"` launches parallel GLM-only patch workers, isolated worktree/patch-envelope candidates, deterministic gates, conflict graph, merge planner, judge/finalizer, repair waves, and real streaming TTFT.
 - `--open` alias for the GLM interactive launch path (from 4.0.7).
 
 ## [4.0.7] - 2026-06-18

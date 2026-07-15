@@ -24,8 +24,8 @@ const records = [1, 2, 3].map((index) => ({
   structured_output_valid: true,
   status: 'closed'
 }));
-await fs.writeFile(path.join(tmp, 'agent-native-cli-session-swarm.json'), `${JSON.stringify({
-  schema: 'sks.agent-native-cli-session-swarm.v1',
+await fs.writeFile(path.join(tmp, 'native-cli-worker-runtime.json'), `${JSON.stringify({
+  schema: 'sks.native-cli-worker-runtime.v2',
   ok: true,
   closed_worker_process_count: records.length,
   zellij_pane_worker_sessions: records.length,
@@ -49,7 +49,7 @@ await fs.writeFile(path.join(tmp, 'agent-zellij-pane-launch-ledger.jsonl'), reco
 })).join('\n') + '\n');
 const report = await proof.writeAgentSlotPaneBindingProof(tmp, { requireZellij: true, reportPath: path.join(root, '.sneakoscope', 'reports', 'agent-slot-pane-binding-proof.json') });
 const badRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-slot-pane-binding-bad-'));
-await fs.writeFile(path.join(badRoot, 'agent-native-cli-session-swarm.json'), `${JSON.stringify({
+await fs.writeFile(path.join(badRoot, 'native-cli-worker-runtime.json'), `${JSON.stringify({
   closed_worker_process_count: 1,
   zellij_pane_worker_sessions: 1,
   records: [{ ...records[0], zellij_pane_id_source: 'synthetic_layout_pending_proof' }]

@@ -10,7 +10,7 @@ import { writeFakeRealProofPolicyReport } from '../proof/fake-real-proof-policy.
 import { buildRuntimeTruthMatrix, writeRuntimeTruthMatrix } from '../proof/runtime-truth-matrix.js'
 import { evaluateLocalCollaborationFinalGate, localCollaborationParticipated, resolveLocalCollaborationPolicy } from '../local-llm/local-collaboration-policy.js'
 
-export async function writeAgentProofEvidence(root: string, input: { missionId: string; backend: string; route?: string; routeCommand?: string; routeBlackboxKind?: string; requestedWorkItems?: number; minimumWorkItems?: number; targetActiveSlots?: number; visualLaneCount?: number; realParallel?: boolean; roster?: any; partition?: any; consensus?: any; results?: any[]; cleanup?: any; janitor?: any; trust?: any; wrongness?: any; outputTails?: any; timeoutKill?: any; scheduler?: any; parallelWritePolicy?: any; gitWorktreeRuntime?: any; patchSwarm?: any; strategyGate?: any; nativeCliSessionProof?: any; noSubagentScalingPolicy?: any; officialSubagentHelperPolicy?: any; fastModePolicy?: any; fastModePropagation?: any; triwikiContext?: any; selectedCoreSkill?: any; localCollaborationPolicy?: any; gptFinalArbiter?: any; finalGptPatchStage?: any }) {
+export async function writeAgentProofEvidence(root: string, input: { missionId: string; backend: string; route?: string; routeCommand?: string; routeBlackboxKind?: string; requestedWorkItems?: number; minimumWorkItems?: number; targetActiveSlots?: number; visualLaneCount?: number; realParallel?: boolean; roster?: any; partition?: any; consensus?: any; results?: any[]; cleanup?: any; janitor?: any; trust?: any; wrongness?: any; outputTails?: any; timeoutKill?: any; scheduler?: any; parallelWritePolicy?: any; gitWorktreeRuntime?: any; patchHandoff?: any; strategyGate?: any; nativeCliWorkerRuntimeProof?: any; noSubagentScalingPolicy?: any; officialSubagentHelperPolicy?: any; fastModePolicy?: any; fastModePropagation?: any; triwikiContext?: any; selectedCoreSkill?: any; localCollaborationPolicy?: any; gptFinalArbiter?: any; finalGptPatchStage?: any }) {
   const lifecycle = await assertAllAgentSessionsClosed(root)
   const terminal = await assertAgentTerminalSessionsClosed(root)
   const generations = await assertAgentSessionGenerationsClosed(root)
@@ -30,7 +30,7 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
   const patchVerificationResults = await readJson<any>(path.join(root, 'agent-patch-verification-results.json'), null)
   const patchRollbackProof = await readJson<any>(path.join(root, 'agent-patch-rollback-proof.json'), null)
   const patchProof = await readJson<any>(path.join(root, 'agent-patch-proof.json'), null)
-  const patchSwarm = input.patchSwarm || await readJson<any>(path.join(root, 'agent-patch-swarm-runtime.json'), null)
+  const patchHandoff = input.patchHandoff || await readJson<any>(path.join(root, 'agent-patch-handoff-runtime.json'), null)
   const localCollaborationPolicy = input.localCollaborationPolicy || await readJson<any>(path.join(root, 'local-collaboration-policy.json'), null) || resolveLocalCollaborationPolicy()
   const gptFinalArbiter = input.gptFinalArbiter || await readJson<any>(path.join(root, 'gpt-final-arbiter', 'gpt-final-arbiter.json'), null)
   const narutoWorkGraph = await readJson<any>(path.join(root, 'naruto-work-graph.json'), null)
@@ -50,7 +50,7 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     gptFinalBackend: gptFinalArbiter?.backend || null,
     applyPatches: parallelWritePolicy?.apply_patches === true
   })
-  const nativeCliSessionProof = input.nativeCliSessionProof || await readJson<any>(path.join(root, 'native-cli-session-proof.json'), null)
+  const nativeCliWorkerRuntimeProof = input.nativeCliWorkerRuntimeProof || await readJson<any>(path.join(root, 'native-cli-worker-runtime-proof.json'), null)
   const noSubagentScalingPolicy = input.noSubagentScalingPolicy || await readJson<any>(path.join(root, 'no-subagent-scaling-policy.json'), null)
   const officialSubagentHelperPolicy = input.officialSubagentHelperPolicy || await readJson<any>(path.join(root, 'official-subagent-helper-policy.json'), null)
   const fastModePropagation = input.fastModePropagation || await readJson<any>(path.join(root, 'fast-mode-propagation-proof.json'), null)
@@ -83,11 +83,10 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
   const workQueueSourceRefsOk = Boolean(workQueue?.items?.length) && workQueue.items.every((item: any) => item.source_intelligence_refs)
   const workQueueGoalRefsOk = Boolean(workQueue?.items?.length) && workQueue.items.every((item: any) => item.goal_mode_ref)
   const workQueueStrategyRefsOk = Boolean(workQueue?.items?.length) && workQueue.items.every((item: any) => item.slice?.strategy_refs)
-  const route = String(input.route || taskGraph?.route_type || '$Agent')
+  const route = String(input.route || taskGraph?.route_type || 'internal-worker-runtime')
   const isNarutoRoute = route === '$Naruto'
-  const routeCommand = String(input.routeCommand || 'sks agent run')
-  const genericAgentRouteStandIn = !/\$?agent$/i.test(route) && /\bagent\s+run\b/i.test(routeCommand) && /--route/i.test(routeCommand)
-  const realRouteCommandUsed = !genericAgentRouteStandIn
+  const routeCommand = String(input.routeCommand || 'internal-worker-runtime')
+  const realRouteCommandUsed = routeCommand !== 'internal-worker-runtime'
   const laneSupervisorIntegrated = Boolean(laneSupervisor)
   const zellijSpawnOnDemandSupervisor = Boolean(laneSupervisor)
     && Number(laneSupervisor?.lane_count || 0) === 0
@@ -111,17 +110,17 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
   const patchQueuePendingCount = Number(patchQueue?.queued_count || patchEntries.filter((entry: any) => entry.status === 'pending').length || 0)
   const patchConflictCount = Number(patchMerge?.conflicts?.length || patchMerge?.serial_conflicts?.length || 0)
   const serialBottleneckCount = Number(patchMerge?.serial_conflicts?.length || 0)
-  const patchQueueOk = patchSwarm ? Boolean(patchQueue) && patchQueuePendingCount === 0 : true
-  const patchApplyOk = patchSwarm ? patchApplyRows.every((row: any) => row.ok !== false) : true
-  const patchVerificationOk = patchSwarm ? patchVerificationResults?.ok !== false && patchApplyRows.every((row: any) => {
+  const patchQueueOk = patchHandoff ? Boolean(patchQueue) && patchQueuePendingCount === 0 : true
+  const patchApplyOk = patchHandoff ? patchApplyRows.every((row: any) => row.ok !== false) : true
+  const patchVerificationOk = patchHandoff ? patchVerificationResults?.ok !== false && patchApplyRows.every((row: any) => {
     const changed = Array.isArray(row.changed_files) && row.changed_files.length > 0
     return !changed || (row.verification?.status && row.verification.status !== 'failed')
   }) : true
-  const patchRollbackOk = patchSwarm ? patchRollbackProof?.ok !== false && patchApplyRows.every((row: any) => {
+  const patchRollbackOk = patchHandoff ? patchRollbackProof?.ok !== false && patchApplyRows.every((row: any) => {
     const changed = Array.isArray(row.changed_files) && row.changed_files.length > 0
     return !changed || Boolean(row.rollback_digest)
   }) : true
-  const parallelPatchApplyVerified = patchSwarm ? Array.isArray(patchProof?.wall_clock_parallel_evidence) && patchProof.wall_clock_parallel_evidence.length > 0 || Number(patchSwarm?.parallel_apply_count || 0) > 1 : false
+  const parallelPatchApplyVerified = patchHandoff ? Array.isArray(patchProof?.wall_clock_parallel_evidence) && patchProof.wall_clock_parallel_evidence.length > 0 || Number(patchHandoff?.parallel_apply_count || 0) > 1 : false
   const readOnlyNoWriteLeaseMode = isReadOnlyNoWriteLeaseMode({
     results: input.results || [],
     leases: input.partition?.leases || [],
@@ -178,7 +177,6 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     ...(workQueue && !workQueueGoalRefsOk ? ['work_queue_goal_refs_missing'] : []),
     ...(workQueue && !workQueueStrategyRefsOk ? ['work_queue_strategy_refs_missing'] : []),
     ...(strategyGate?.ok === false ? strategyGate.blockers || ['strategy_gate_not_ok'] : []),
-    ...(genericAgentRouteStandIn ? ['non_agent_route_used_generic_agent_run_route_standin'] : []),
     ...(generationCount < finalWorkItemCount ? ['session_generation_count_below_finished_work_items'] : []),
     ...(terminalCloseReportCount < generationCount ? ['terminal_close_report_count_below_generation_count'] : []),
     ...(slots && slots.all_slots_closed_after_drain !== true ? ['agent_worker_slots_not_closed_after_drain'] : []),
@@ -200,22 +198,22 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     ...(input.janitor?.ok === false ? input.janitor.blockers || ['agent_janitor_not_ok'] : []),
     ...(cleanupProof?.ok === false ? cleanupProof.blockers || ['agent_cleanup_proof_not_ok'] : []),
     ...(input.results || []).flatMap((result: any) => result.blockers || []),
-    ...(nativeCliSessionProof?.ok === false ? nativeCliSessionProof.blockers || ['native_cli_session_proof_not_ok'] : []),
+    ...(nativeCliWorkerRuntimeProof?.ok === false ? nativeCliWorkerRuntimeProof.blockers || ['native_cli_worker_runtime_proof_not_ok'] : []),
     ...(noSubagentScalingPolicy?.ok === false ? noSubagentScalingPolicy.blockers || ['no_subagent_scaling_policy_not_ok'] : []),
     ...(officialSubagentHelperPolicy?.ok === false ? officialSubagentHelperPolicy.blockers || ['official_subagent_helper_policy_not_ok'] : []),
     ...(fastModePropagation?.ok === false ? fastModePropagation.blockers || ['fast_mode_propagation_not_ok'] : []),
-    ...(patchSwarm?.ok === false ? patchSwarm.blockers || ['patch_swarm_not_ok'] : []),
+    ...(patchHandoff?.ok === false ? patchHandoff.blockers || ['patch_handoff_not_ok'] : []),
     ...(gitWorktreeRuntime?.required === true && gitWorktreeRuntime?.ok === false ? gitWorktreeRuntime.blockers || ['git_worktree_runtime_not_ok'] : []),
-    ...(patchSwarm && !patchQueue ? ['patch_queue_missing'] : []),
-    ...(patchSwarm && !patchMerge ? ['patch_merge_report_missing'] : []),
-    ...(patchSwarm && !patchApplyResults ? ['patch_apply_results_missing'] : []),
-    ...(patchSwarm && !patchVerificationResults ? ['patch_verification_results_missing'] : []),
-    ...(patchSwarm && !patchRollbackProof ? ['patch_rollback_proof_missing'] : []),
-    ...(patchSwarm && patchProof?.ok === false ? patchProof.blockers || ['patch_proof_not_ok'] : []),
-    ...(patchSwarm && !patchQueueOk ? ['patch_queue_not_ok'] : []),
-    ...(patchSwarm && !patchApplyOk ? ['patch_apply_not_ok'] : []),
-    ...(patchSwarm && !patchVerificationOk ? ['patch_verification_not_ok'] : []),
-    ...(patchSwarm && !patchRollbackOk ? ['patch_rollback_not_ok'] : []),
+    ...(patchHandoff && !patchQueue ? ['patch_queue_missing'] : []),
+    ...(patchHandoff && !patchMerge ? ['patch_merge_report_missing'] : []),
+    ...(patchHandoff && !patchApplyResults ? ['patch_apply_results_missing'] : []),
+    ...(patchHandoff && !patchVerificationResults ? ['patch_verification_results_missing'] : []),
+    ...(patchHandoff && !patchRollbackProof ? ['patch_rollback_proof_missing'] : []),
+    ...(patchHandoff && patchProof?.ok === false ? patchProof.blockers || ['patch_proof_not_ok'] : []),
+    ...(patchHandoff && !patchQueueOk ? ['patch_queue_not_ok'] : []),
+    ...(patchHandoff && !patchApplyOk ? ['patch_apply_not_ok'] : []),
+    ...(patchHandoff && !patchVerificationOk ? ['patch_verification_not_ok'] : []),
+    ...(patchHandoff && !patchRollbackOk ? ['patch_rollback_not_ok'] : []),
     ...(localParticipated && localFinalGate.ok !== true ? localFinalGate.blockers || ['gpt_final_arbiter_gate_not_ok'] : []),
     ...(localParticipated && gptFinalArbiter?.ok !== true ? gptFinalArbiter?.blockers || ['gpt_final_arbiter_not_ok'] : []),
     ...(localParticipated && finalGptPatchStage?.ok === false ? finalGptPatchStage.blockers || ['final_gpt_patch_stage_not_ok'] : []),
@@ -244,10 +242,10 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     // confers mutation rights). Null when no snapshot is deployed for this route.
     selected_core_skill: input.selectedCoreSkill || null,
     git_worktree_runtime: gitWorktreeRuntime,
-    route_blackbox_kind: input.routeBlackboxKind || (realRouteCommandUsed ? 'actual_route_command' : 'generic_agent_route_standin'),
+    route_blackbox_kind: input.routeBlackboxKind || (realRouteCommandUsed ? 'actual_route_command' : 'internal_worker_runtime'),
     real_route_command_used: realRouteCommandUsed,
-    native_cli_session_proof: nativeCliSessionProof ? 'native-cli-session-proof.json' : null,
-    native_cli_session_swarm: nativeCliSessionProof ? 'agent-native-cli-session-swarm.json' : null,
+    native_cli_worker_runtime_proof: nativeCliWorkerRuntimeProof ? 'native-cli-worker-runtime-proof.json' : null,
+    native_cli_worker_runtime: nativeCliWorkerRuntimeProof ? 'native-cli-worker-runtime.json' : null,
     no_subagent_scaling_policy: noSubagentScalingPolicy ? 'no-subagent-scaling-policy.json' : null,
     official_subagent_helper_policy: officialSubagentHelperPolicy ? 'official-subagent-helper-policy.json' : null,
     official_subagent_helper_lane_enabled: officialSubagentHelperPolicy?.official_codex_subagent_helper_lane_enabled === true,
@@ -268,9 +266,9 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     imagegen_api_fallback_counts_as_codex_app_evidence: officialSubagentHelperPolicy?.imagegen_api_fallback_counts_as_codex_app_evidence === true,
     fast_mode_policy: input.fastModePolicy || null,
     fast_mode_propagation: fastModePropagation ? 'fast-mode-propagation-proof.json' : null,
-    native_cli_worker_process_count: Number(nativeCliSessionProof?.spawned_worker_process_count || 0),
-    native_cli_max_observed_worker_process_count: Number(nativeCliSessionProof?.max_observed_worker_process_count || 0),
-    native_cli_unique_worker_session_count: Number(nativeCliSessionProof?.unique_worker_session_count || 0),
+    native_cli_worker_process_count: Number(nativeCliWorkerRuntimeProof?.spawned_worker_process_count || 0),
+    native_cli_max_observed_worker_process_count: Number(nativeCliWorkerRuntimeProof?.max_observed_worker_process_count || 0),
+    native_cli_unique_worker_session_count: Number(nativeCliWorkerRuntimeProof?.unique_worker_session_count || 0),
     native_cli_subagent_scaling_blocked: noSubagentScalingPolicy?.ok === true,
     service_tier: input.fastModePolicy?.service_tier || fastModePropagation?.service_tier || 'fast',
     fast_mode: input.fastModePolicy?.fast_mode !== false,
@@ -309,11 +307,11 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     naruto_verification_dag: narutoVerificationDag ? 'naruto-verification-dag.json' : null,
     naruto_gpt_final_pack: narutoGptFinalPack ? 'naruto-gpt-final-pack.json' : null,
     naruto_zellij_dashboard: narutoZellijDashboard ? 'naruto-zellij-dashboard.json' : null,
-    patch_swarm_runtime: patchSwarm ? 'agent-patch-swarm-runtime.json' : null,
-    patch_queue: patchSwarm ? 'agent-patch-queue.json' : null,
-    patch_queue_events: patchSwarm ? 'agent-patch-queue-events.jsonl' : null,
+    patch_handoff_runtime: patchHandoff ? 'agent-patch-handoff-runtime.json' : null,
+    patch_queue: patchHandoff ? 'agent-patch-queue.json' : null,
+    patch_queue_events: patchHandoff ? 'agent-patch-queue-events.jsonl' : null,
     patch_queue_event_count: patchQueueEvents.split(/\n/).filter(Boolean).length,
-    patch_proof: patchSwarm ? 'agent-patch-proof.json' : null,
+    patch_proof: patchHandoff ? 'agent-patch-proof.json' : null,
     patch_queue_ok: patchQueueOk,
     patch_apply_ok: patchApplyOk,
     patch_verification_ok: patchVerificationOk,
@@ -440,9 +438,9 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
       'agent-scheduler-state.json': scheduler
       , 'strategy-gate.json': strategyGate
       , 'agent-patch-proof.json': patchProof
-      , 'agent-patch-swarm-runtime.json': patchSwarm
+      , 'agent-patch-handoff-runtime.json': patchHandoff
       , 'gpt-final-arbiter/gpt-final-arbiter.json': gptFinalArbiter
-      , 'native-cli-session-proof.json': nativeCliSessionProof
+      , 'native-cli-worker-runtime-proof.json': nativeCliWorkerRuntimeProof
       , 'no-subagent-scaling-policy.json': noSubagentScalingPolicy
       , 'official-subagent-helper-policy.json': officialSubagentHelperPolicy
       , 'fast-mode-propagation-proof.json': fastModePropagation

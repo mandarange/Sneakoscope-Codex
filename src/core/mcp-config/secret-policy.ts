@@ -1,4 +1,5 @@
 import { MCP_APPROVAL_MODES, type McpApprovalMode, type McpServerMutationInput } from './types.js';
+import { isSensitiveMcpArgumentName, looksLikeMcpSecretValue } from './redaction.js';
 
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const SERVER_NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/;
@@ -155,7 +156,8 @@ function stringArray(value: unknown, maxCount: number, maxLength: number, blocke
 function containsLikelyInlineSecret(args: readonly string[]): boolean {
   for (let index = 0; index < args.length; index += 1) {
     const value = args[index] || '';
-    if (/^--?(?:token|api[-_]?key|secret|password|authorization|bearer)(?:=|$)/i.test(value)) return true;
+    if (isSensitiveMcpArgumentName(value)) return true;
+    if (looksLikeMcpSecretValue(value)) return true;
     if (/^[A-Za-z_][A-Za-z0-9_]*=.+/.test(value)) return true;
   }
   return false;

@@ -541,9 +541,9 @@ export async function projectWikiClaims(root: any) {
   if (!citationRoot) return [];
   const claims = [
     ['wiki-hooks', '.codex/hooks.json routes UserPromptSubmit, tool, permission, and Stop events through SKS guards.', ['.codex/hooks.json'], 'code', 'high'],
-    ['wiki-config', '.codex/config.toml enables Codex App profiles, multi-agent support, and Team agent limits.', ['.codex/config.toml'], 'code', 'high'],
-    ['wiki-skills', '.agents/skills provides official repo-local routes plus support skills for dfix, team, goal, research, autoresearch, db, gx, wiki, reflection, evaluation, design-system/UI editing, and imagegen workflows.', ['.agents/skills'], 'code', 'medium'],
-    ['wiki-agents', '.codex/agents defines Team native analysis, planning, implementation, DB safety, and QA reviewer roles.', ['.codex/agents'], 'code', 'medium'],
+    ['wiki-config', '.codex/config.toml enables Codex App profiles, multi-agent support, and official subagent limits.', ['.codex/config.toml'], 'code', 'high'],
+    ['wiki-skills', '.agents/skills provides official repo-local routes plus support skills for dfix, naruto, goal, research, autoresearch, db, gx, wiki, reflection, evaluation, design-system/UI editing, and imagegen workflows.', ['.agents/skills'], 'code', 'medium'],
+    ['wiki-agents', '.codex/agents defines Naruto official-subagent analysis, planning, implementation, DB safety, and QA reviewer roles.', ['.codex/agents'], 'code', 'medium'],
     ['wiki-policy', '.sneakoscope/policy.json stores update-check, honest-mode, retention, database, performance, and prompt-pipeline policy.', ['.sneakoscope/policy.json'], 'contract', 'high'],
     ['wiki-memory', '.sneakoscope/memory stores Q0 raw, Q1 evidence, Q2 facts, Q3 tags, and Q4 control bits for hydratable context.', ['.sneakoscope/memory'], 'wiki', 'high'],
     ['wiki-gx', 'GX cartridges keep vgraph.json and beta.json as deterministic visual context sources with render, validation, drift, and snapshot outputs.', ['.sneakoscope/gx/cartridges'], 'vgraph', 'medium'],
@@ -736,7 +736,7 @@ function userRequestSignal(prompt: any = '') {
     ['install-bootstrap', /bootstrap|postinstall|doctor|deps|tmux|최초\s*설치|셋업|setup/],
     ['version-release', /버전|version|publish:dry|release|npm\s+pack/],
     ['qa-loop', /qa|e2e|검증|리포트|report/],
-    ['team-pipeline', /team|subagent|세션|cleanup|reflection|회고|반성/],
+    ['naruto-pipeline', /naruto|team|subagent|세션|cleanup|reflection|회고|반성/],
     ['safety-boundary', /삭제|파괴|destructive|production|권한|보안|인증|결제/]
   ];
   const topics = topicRules.filter(([, pattern]: any) => pattern.test(lower)).map(([topic]: any) => topic);

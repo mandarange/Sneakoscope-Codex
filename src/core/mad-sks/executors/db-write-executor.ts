@@ -30,7 +30,7 @@ export async function runDbWrite(input: MadSksExecutorInput, context: MadSksExec
     root: context.package_root
   });
   if (!guard.ok) blockers.push(...guard.issues);
-  // db-write-executor has no execution engine — it never calls runMadDbCycle (or any
+  // db-write-executor has no execution engine — it never calls the MAD-SKS SQL-plane cycle (or any
   // adapter) to actually run SQL against a database. It can only produce a preview
   // plan. A real apply must therefore always be blocked here rather than fabricate
   // an 'applied' result; the actual execution route is the sql-plane executor.

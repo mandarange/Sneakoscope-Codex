@@ -61,8 +61,7 @@ export async function runOfficialSubagentWorkflow(input: OfficialSubagentWorkflo
     max_depth: 1,
     parent_model: NARUTO_PARENT_MODEL,
     parent_reasoning_effort: NARUTO_PARENT_EFFORT,
-    session_scope: input.sessionKey || null,
-    legacy_process_swarm_used: false
+    session_scope: input.sessionKey || null
   }
 
   if (input.appSession) {

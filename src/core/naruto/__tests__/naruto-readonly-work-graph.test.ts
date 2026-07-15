@@ -13,7 +13,7 @@ test('readonly Naruto turns five semantic prompt slices into distinct path-free 
   ].join(' ')
   const graph = buildNarutoWorkGraph({
     prompt,
-    requestedClones: 5,
+    requestedWorkers: 5,
     totalWorkItems: 5,
     honorExplicitTotalWorkItems: true,
     readonly: true,
@@ -43,7 +43,7 @@ test('readonly Naruto turns five semantic prompt slices into distinct path-free 
 test('readonly Naruto preserves and distributes explicit read and target paths', () => {
   const graph = buildNarutoWorkGraph({
     prompt: 'Three slices: 1) source inspection; 2) documentation audit; 3) test evidence review',
-    requestedClones: 3,
+    requestedWorkers: 3,
     totalWorkItems: 3,
     honorExplicitTotalWorkItems: true,
     readonly: true,
@@ -74,7 +74,7 @@ test('semantic scope extraction supports numbered, semicolon, and bullet lists w
 test('write-capable Naruto keeps its existing per-item patch-envelope fallback', () => {
   const graph = buildNarutoWorkGraph({
     prompt: 'fixture write graph',
-    requestedClones: 2,
+    requestedWorkers: 2,
     totalWorkItems: 2,
     honorExplicitTotalWorkItems: true,
     writeCapable: true,

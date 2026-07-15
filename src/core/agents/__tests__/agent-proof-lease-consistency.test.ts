@@ -13,7 +13,7 @@ test('agent proof evidence uses canonical patch-proof lease compliance', () => {
   }]
   const initialRosterLeases = [{
     id: 'NW-000001:write:1',
-    agent_id: 'naruto_clone_001',
+    agent_id: 'naruto_worker_001',
     path: 'src/a.ts'
   }]
   const patchProof = {

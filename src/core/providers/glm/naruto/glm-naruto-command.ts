@@ -40,12 +40,12 @@ export async function glmNarutoCommand(args: string[] = []): Promise<GlmNarutoMi
       warnings: [] as string[]
     };
     if (flag(args, '--json')) printJson(result);
-    else console.error('GLM Naruto requires a task. Usage: sks --mad --glm --naruto "<task>"');
+    else console.error('GLM Naruto requires a task. Usage: sks --mad --glm naruto "<task>"');
     process.exitCode = 1;
     return result;
   }
 
-  const maxWorkers = parseInt(readOption(args, '--clones', readOption(args, '--workers', '12')), 10) || 12;
+  const maxWorkers = parseInt(readOption(args, '--agents', '12'), 10) || 12;
   const deep = flag(args, '--deep');
   const useJudge = flag(args, '--judge');
   const xhighFinalizer = flag(args, '--xhigh-finalizer');

@@ -1,6 +1,6 @@
 # macOS TCC Operator Actions
 
-In SKS 1.20.5, when Codex reports `Operation not permitted (os error 1)` while Node can read `.codex/config.toml`, SKS treats macOS TCC as a probable diagnosis, not a certain one.
+When Codex reports `Operation not permitted (os error 1)` while Node can read `.codex/config.toml`, SKS treats macOS TCC as a probable diagnosis, not a certain one.
 
 Check:
 
@@ -8,4 +8,4 @@ Check:
 - Grant access to the launching app: Warp, Terminal, iTerm, Codex app, or the app that starts Codex CLI.
 - If the project is under Desktop, Documents, iCloud Drive, or an external volume, also check Files and Folders.
 - Fully restart the terminal/Codex app after changing permissions.
-- Rerun `sks mad repair-config --apply --tmux-smoke`.
+- Rerun `sks doctor --fix --yes --json`, then use `sks zellij repair --json` if terminal observability is affected.

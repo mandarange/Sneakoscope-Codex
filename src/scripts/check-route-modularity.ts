@@ -20,9 +20,9 @@ for (const relModule of registeredCommandModules()) {
 }
 
 const disallowedImports = {
-  'qa-loop-command.ts': ['research-command', 'ppt-command', 'team-command', 'gx-command'],
-  'research-command.ts': ['qa-loop-command', 'ppt-command', 'team-command', 'gx-command'],
-  'wiki-command.ts': ['team-command', 'research-command', 'qa-loop-command', 'ppt-command']
+  'qa-loop-command.ts': ['research-command', 'ppt-command', 'gx-command'],
+  'research-command.ts': ['qa-loop-command', 'ppt-command', 'gx-command'],
+  'wiki-command.ts': ['research-command', 'qa-loop-command', 'ppt-command']
 };
 for (const [name, needles] of Object.entries(disallowedImports)) {
   const file = commandModulePath(name);

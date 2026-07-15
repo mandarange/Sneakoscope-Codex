@@ -1,47 +1,36 @@
 # Orchestration Layers
 
-SKS separates the public Codex workflow from compatibility runtimes and visual
-harness surfaces.
+SKS has one general public execution workflow and keeps route-specific policy,
+terminal observability, and completion proof separate.
 
-## User Entry Points
+## Public Entry Points
 
-- `$Naruto` / `sks naruto run`: the canonical Codex official subagent workflow.
-- `$Team`, `$Work`, `$Swarm`, `$ShadowClone`, and `$Kagebunshin`: compatibility
-  aliases that route new work to the same Naruto workflow.
-- `sks agent run`: a separate agent-runtime command retained for its documented
-  mission and patch-queue surfaces; its process evidence is not Naruto proof.
+- `$Naruto` / `sks naruto run`: canonical Codex official subagent workflow.
+- `$Work`: executes the newest explicit SKS plan through the same workflow.
+- Research, AutoResearch, QA-Loop, MAD-SKS, PPT, and visual routes keep their
+  own route contracts while using official child threads where required.
 
-## Official Naruto Path
+Unrecognized command and dollar-route spellings remain unrecognized. The
+router does not warn-and-forward them into another execution path.
+
+## Official Execution
 
 - `src/core/subagents/**`: task profiles, model selection, thread budgets,
-  official delegation prompts, event correlation, and completion evidence.
-- `src/core/hooks-runtime.ts`: records official `SubagentStart` and
-  `SubagentStop` events and evaluates them at the parent Stop boundary.
-- `src/core/commands/naruto-command.ts`: a thin facade for argument parsing,
-  official configuration, delegation context, mission artifacts, and status.
+  delegation prompts, event correlation, and parent-summary evidence.
+- `src/core/hooks-runtime.ts`: official lifecycle capture and stop evaluation.
+- `src/core/commands/naruto-command.ts`: command parsing, project-scoped agent
+  configuration, mission artifacts, status, and proof.
 
-The current parent agent owns decomposition, integration, verification, and the
-final answer. Codex owns the agent threads. App sessions do not create a nested
-Codex process; standalone CLI use may create one parent process only.
+The parent owns decomposition, integration, verification, and the final answer.
+Codex owns the official child threads. Codex App sessions reuse the current
+parent instead of launching a nested orchestrator.
 
-## Separate Runtime And Historical Evidence
+## Terminal UI
 
-- The historical Naruto process-swarm command and its environment opt-in are
-  removed. Public Naruto cannot load a custom scheduler, pool, process swarm,
-  patch queue, or alternate model fanout.
-- `src/core/agents/**` supports the separate explicit `sks agent` and MAD-SKS
-  runtimes plus read-only interpretation of old mission artifacts; it is not a
-  Naruto execution fallback.
-- `src/core/zellij/**` is terminal UI and harness support. Pane count is not
-  official subagent execution evidence.
+`src/core/zellij/**` renders the current official-thread telemetry. A monitor
+and a bounded set of viewports show lifecycle and redacted activity without
+claiming success. Pane count, process count, and display state never satisfy the
+completion contract.
 
-## Placement Rule
-
-- Public Naruto behavior belongs in the thin command, subagent policy modules,
-  route policy, and hook evidence handling.
-- Official model, budget, prompt, and event semantics belong in
-  `src/core/subagents/**`.
-- Scheduler, patch, and process mechanics used by separate explicit runtimes
-  must remain unreachable from the Naruto hot path.
-- Visual pane rendering and telemetry presentation belong in `src/core/zellij/**`
-  and must not become a default release blocker.
+Official model, budget, prompt, and evidence semantics belong in
+`src/core/subagents/**`; visual rendering belongs in `src/core/zellij/**`.

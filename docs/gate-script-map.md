@@ -42,7 +42,6 @@ Generated from `release-gates.v2.json`; release gate IDs and commands are the ma
 | `core-skill:route-runtime-integration` | `release` | `node ./dist/scripts/core-skill-route-runtime-integration-check.js` | `core-skill:route-runtime-integration` |
 | `dfix:fixture` | `release` | `node ./dist/scripts/dfix-fixture-check.js` | direct |
 | `dfix:patch-handoff` | `release` | `node ./dist/scripts/dfix-patch-handoff-check.js` | direct |
-| `dfix:patch-swarm-route-blackbox` | `release` | `node ./dist/scripts/dfix-patch-swarm-route-blackbox.js` | direct |
 | `dfix:verification` | `release` | `node ./dist/scripts/dfix-verification-check.js` | direct |
 | `dfix:verification-recommendation` | `release` | `node ./dist/scripts/dfix-verification-recommendation-check.js` | direct |
 | `doctor:codex-app-harness` | `release` | `node ./dist/scripts/doctor-codex-app-harness-check.js` | direct |
@@ -66,17 +65,13 @@ Generated from `release-gates.v2.json`; release gate IDs and commands are the ma
 | `legacy:gate-inventory` | `release` | `node ./dist/scripts/legacy-gate-inventory-check.js` | direct |
 | `legacy:gate-purge` | `release` | `node ./dist/scripts/legacy-gate-purge-check.js` | direct |
 | `legacy:strong-inventory` | `release` | `node ./dist/scripts/legacy-strong-inventory-check.js` | direct |
-| `legacy:update-e2e` | `release` | `node ./dist/scripts/legacy-update-e2e-check.js` | direct |
+| `migration:current-surface-e2e` | `release` | `node ./dist/scripts/current-surface-update-e2e-check.js` | direct |
 | `local-collab:all-pipelines-final-gpt` | `release` | `node ./dist/scripts/local-collab-all-pipelines-final-gpt-check.js` | direct |
 | `loop-integration-finalizer-check` | `release` | `node ./dist/scripts/loop-integration-finalizer-check.js` | direct |
-| `mad-db:capability` | `release` | `node ./dist/scripts/mad-db-capability-check.js` | direct |
-| `mad-db:command` | `release` | `node ./dist/scripts/mad-db-command-check.js` | direct |
-| `mad-db:mad-command` | `release` | `node ./dist/scripts/mad-db-mad-command-check.js` | direct |
-| `mad-db:operation-lifecycle` | `release` | `node ./dist/scripts/mad-db-lifecycle-hook-decision-check.js && node ./dist/scripts/mad-db-mcp-result-lifecycle-check.js` | direct |
 | `mad-sks:app-ui-no-mutation` | `release` | `node ./dist/scripts/mad-sks-app-ui-no-mutation-check.js` | direct |
 | `mad:preflight-blocks-unreadable-config` | `release` | `node ./dist/scripts/mad-preflight-blocks-unreadable-config-check.js` | direct |
 | `mcp:plugin-inventory` | `release` | `node ./dist/scripts/mcp-plugin-inventory-check.js` | direct |
-| `migration:upgrade-safety` | `release` | `node ./dist/scripts/legacy-upgrade-matrix-check.js` | `migration:upgrade-safety` |
+| `migration:upgrade-safety` | `release` | `node ./dist/scripts/current-upgrade-matrix-check.js` | `migration:upgrade-safety` |
 | `model-call:concurrency` | `release` | `node ./dist/scripts/model-call-concurrency-check.js` | direct |
 | `naruto:canonical-stop-gate` | `release` | `node ./dist/scripts/official-subagent-workflow-check.js` | direct |
 | `naruto:worktree-coding:blackbox` | `release` | `node ./dist/scripts/naruto-worktree-coding-blackbox.js` | direct |
@@ -135,7 +130,7 @@ Generated from `release-gates.v2.json`; release gate IDs and commands are the ma
 | `triwiki:proof-comprehensive` | `release` | `node ./dist/scripts/triwiki-proof-card-check.js && node ./dist/scripts/triwiki-proof-bank-check.js && node ./dist/scripts/triwiki-proof-bank-blackbox.js` | direct |
 | `trust:check` | `release` | `node ./dist/scripts/trust-fixture-check.js` | direct |
 | `type-surface:codex-app` | `release` | `node ./dist/scripts/type-surface-codex-app-check.js` | direct |
-| `typecheck` | `release` | `tsc -p tsconfig.json --noEmit` | `typecheck` |
+| `typecheck` | `release` | `node ./node_modules/typescript/bin/tsc -p tsconfig.json --noEmit` | `typecheck` |
 | `ultra-router:auto-router` | `release` | `node ./dist/scripts/ultra-router-auto-router-check.js` | direct |
 | `ux-review:extract-wires-real-extractor` | `release` | `node ./dist/scripts/ux-review-extract-wires-real-extractor-check.js` | direct |
 | `ux-review:imagegen-blackbox` | `release` | `node ./dist/scripts/ux-review-imagegen-blackbox-check.js` | direct |

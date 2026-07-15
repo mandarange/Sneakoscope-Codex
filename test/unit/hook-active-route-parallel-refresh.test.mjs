@@ -31,17 +31,18 @@ async function missionEntries(root) {
   }
 }
 
-const ACTIVE_TEAM_STATE = {
+const ACTIVE_NARUTO_STATE = {
   mission_id: 'M-active',
-  route: 'Team',
-  route_command: '$Team',
-  mode: 'TEAM',
-  phase: 'TEAM_NATIVE_AGENT_INTAKE',
-  agent_sessions: 5,
-  role_counts: { analysis: 5, debate: 5, implementation: 5, review: 5 }
+  route: 'Naruto',
+  route_command: '$Naruto',
+  mode: 'NARUTO',
+  phase: 'NARUTO_DELEGATION_CONTEXT_READY',
+  subagents_required: true,
+  native_sessions_required: false,
+  requested_subagents: 2
 };
 
-test('substantive prompt during active Team state prepares a fresh parallel route', async () => {
+test('substantive prompt during an active Naruto state prepares a fresh parallel route', async () => {
   await withEnv({ SKS_DISABLE_UPDATE_CHECK: '1' }, async () => {
     const root = await makeRoot();
     const { evaluateHookPayload } = await import('../../dist/core/hooks-runtime.js');
@@ -49,17 +50,17 @@ test('substantive prompt during active Team state prepares a fresh parallel rout
       cwd: root,
       conversation_id: 'active-route-fresh-parallel',
       prompt: '새 훅 병렬 처리 구조를 분석하고 코드 수정해줘'
-    }, { root, state: ACTIVE_TEAM_STATE });
+    }, { root, state: ACTIVE_NARUTO_STATE });
 
     const context = String(result.additionalContext || '');
-    assert.match(context, /\$(Team|Naruto) route prepared|Route: \$Naruto/);
+    assert.match(context, /\$Naruto route prepared|Route: \$Naruto/);
     assert.match(context, /Codex subagent workflow: required for this explicit Naruto or parallel task/);
-    assert.doesNotMatch(context, /Active Team mission M-active/);
+    assert.doesNotMatch(context, /Active Naruto mission M-active/);
 
     const missions = await missionEntries(root);
     assert.equal(missions.length, 1);
     const current = JSON.parse(await fs.readFile(path.join(root, '.sneakoscope', 'state', 'current.json'), 'utf8'));
-    assert.match(current.mode, /^(TEAM|NARUTO)$/);
+    assert.equal(current.mode, 'NARUTO');
     assert.notEqual(current.mission_id, 'M-active');
   });
 });
@@ -72,16 +73,16 @@ test('plain continuation prompt keeps the active route context instead of spawni
       cwd: root,
       conversation_id: 'active-route-continuation',
       prompt: 'keep going'
-    }, { root, state: ACTIVE_TEAM_STATE });
+    }, { root, state: ACTIVE_NARUTO_STATE });
 
     const context = String(result.additionalContext || '');
-    assert.match(context, /Legacy Team mission M-active/);
-    assert.doesNotMatch(context, /\$Team route prepared/);
+    assert.match(context, /Active Naruto mission M-active/);
+    assert.doesNotMatch(context, /\$Naruto route prepared/);
     assert.deepEqual(await missionEntries(root), []);
   });
 });
 
-test('simple commit and push request is lightweight git work, not a parallel Team route', async () => {
+test('simple commit and push request is lightweight git work, not a parallel Naruto route', async () => {
   const { routePrompt, routeRequiresSubagents } = await import('../../dist/core/routes.js');
   const prompt = '커밋하고 푸쉬해줘';
   const route = routePrompt(prompt);
@@ -105,7 +106,7 @@ test('natural language commit and push bypasses hook pipeline preparation', asyn
       cwd: root,
       conversation_id: 'active-route-git-bypass',
       prompt: '배포하게 커밋하고 푸쉬해줘'
-    }, { root, state: ACTIVE_TEAM_STATE });
+    }, { root, state: ACTIVE_NARUTO_STATE });
 
     assert.match(String(result.systemMessage || ''), /git action bypassed pipeline route gates/);
     assert.equal(result.additionalContext, undefined);
@@ -115,7 +116,7 @@ test('natural language commit and push bypasses hook pipeline preparation', asyn
       cwd: root,
       conversation_id: 'active-route-git-bypass',
       last_assistant_message: 'Commit and push complete.'
-    }, { root, state: ACTIVE_TEAM_STATE });
+    }, { root, state: ACTIVE_NARUTO_STATE });
     assert.notEqual(stop.decision, 'block');
     assert.match(String(stop.systemMessage || ''), /accepted without route finalization/);
   });

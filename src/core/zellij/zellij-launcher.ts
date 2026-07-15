@@ -24,7 +24,7 @@ export interface ZellijLaunchOptions {
   cwd?: string
   ledgerRoot?: string
   slotCount?: number
-  kind?: 'mad' | 'agent' | 'team' | 'naruto'
+  kind?: 'mad' | 'naruto'
   dryRun?: boolean
   attach?: boolean
   requireZellij?: boolean
@@ -55,9 +55,9 @@ export async function launchZellijLayout(opts: ZellijLaunchOptions = {}) {
     sessionName,
     ledgerRoot,
     cwd: opts.cwd || root,
-    kind: opts.kind || 'agent',
+    kind: opts.kind || 'naruto',
     slotCount: opts.slotCount ?? 1,
-    title: `SKS ${opts.kind || 'agent'} ${missionId}`,
+    title: `SKS ${opts.kind || 'naruto'} ${missionId}`,
     codexArgs: opts.codexArgs || [],
     launchEnv: opts.launchEnv || {}
   }
@@ -148,7 +148,7 @@ export async function launchZellijLayout(opts: ZellijLaunchOptions = {}) {
     schema: ZELLIJ_SESSION_SCHEMA,
     generated_at: nowIso(),
     ok: blockers.length === 0 && ok,
-    kind: opts.kind || 'agent',
+    kind: opts.kind || 'naruto',
     mission_id: missionId,
     session_name: sessionName,
     root,
@@ -230,14 +230,6 @@ export async function launchMadZellijUi(args: readonly unknown[] = [], opts: Zel
   const resolvedSession = session || opts.session
   if (resolvedSession) launchOpts.session = resolvedSession
   return launchZellijLayout(launchOpts)
-}
-
-export async function launchTeamZellijView(opts: ZellijLaunchOptions = {}) {
-  return launchZellijLayout({
-    ...opts,
-    kind: 'team',
-    slotCount: opts.slotCount ?? 5
-  })
 }
 
 export interface ZellijAttachResult {

@@ -445,7 +445,7 @@ function recommendedAction(rel: any, lines: any) {
 }
 
 function nextSplitCandidate(rel: any) {
-  if (/src\/cli\/main\.(js|ts)$/.test(rel)) return 'goal/wiki/team/eval/db command handlers';
+  if (/src\/cli\/main\.(js|ts)$/.test(rel)) return 'goal/wiki/naruto/eval/db command handlers';
   if (/src\/core\/pipeline\.(js|ts)$/.test(rel)) return 'route prepare handlers and stop-gate evaluators';
   return 'largest cohesive command or policy section';
 }

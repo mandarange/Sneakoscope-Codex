@@ -52,6 +52,11 @@ try {
 const files = info.files.map((f) => f.path);
 const packProof = writeNpmPackProof(root, info, packMs);
 const runtimeManifest = JSON.parse(fs.readFileSync(path.join(root, 'runtime-required-scripts.json'), 'utf8'));
+const customerPayloadForbidden = [
+  'dist/core/agents/agent-cleanup-executor.js',
+  'dist/core/release/npm-stage-tarball-verifier.js',
+  'dist/core/release/npm-stage-tarball-verifier-support.js'
+];
 assertGate(runtimeManifest.schema === 'sks.runtime-required-scripts.v1' && Array.isArray(runtimeManifest.scripts), 'runtime required scripts manifest invalid', runtimeManifest);
 
 assertGate(info.entryCount <= MAX_FILES, 'packlist_file_count_over_limit', { entryCount: info.entryCount, max_files: MAX_FILES });
@@ -69,6 +74,9 @@ for (const manifest of ['release-gates.v2.json', 'infra-harness-gates.json', 'ru
   assertGate(files.includes(manifest), 'packlist_missing_runtime_manifest', { missing: manifest });
 }
 assertGate(files.some((f) => f.startsWith('schemas/')), 'packlist_missing_runtime_entry', { missing: 'schemas/' });
+for (const retired of customerPayloadForbidden) {
+  assertGate(!files.includes(retired), 'packlist_retired_or_maintainer_only_payload_present', { path: retired });
+}
 
 const forbidden = files.filter((f) =>
   f.startsWith('test/') ||
@@ -99,6 +107,7 @@ const report = {
   pack_file_list_sha256: packProof.file_list_digest,
   runtime_required_scripts: runtimeManifest.scripts.map((entry) => entry.path),
   runtime_required_missing: runtimeManifest.scripts.filter((entry) => !files.includes(entry.path)).map((entry) => entry.path),
+  customer_payload_forbidden: customerPayloadForbidden,
   max_files: MAX_FILES,
   max_packed: MAX_PACKED,
   max_unpacked: MAX_UNPACKED,

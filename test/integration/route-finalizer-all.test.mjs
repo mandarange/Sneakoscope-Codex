@@ -7,7 +7,7 @@ import { finalizeRouteWithProof } from '../../dist/core/proof/route-finalizer.js
 
 test('serious route finalizer covers representative route classes', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-route-finalizer-all-'));
-  const routes = ['$Team', '$Research', '$QA-LOOP', '$Computer-Use', '$GX', '$DB', '$Goal', '$MAD-SKS'];
+  const routes = ['$Naruto', '$Research', '$QA-LOOP', '$Computer-Use', '$GX', '$DB', '$Goal', '$MAD-SKS'];
   for (const route of routes) {
     const result = await finalizeRouteWithProof(root, {
       missionId: `M-${route.replace(/[^A-Za-z0-9]+/g, '-')}`,

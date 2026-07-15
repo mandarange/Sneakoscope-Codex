@@ -17,10 +17,6 @@ export interface TelegramHubConfigV1 {
   owner_stale_ms?: number;
   protect_content?: boolean;
   silent_notifications?: boolean;
-  mini_app?: {
-    enabled: boolean;
-    default_on: boolean;
-  };
 }
 
 export interface TelegramOwnerV1 {
@@ -119,4 +115,13 @@ export interface TelegramBotApiResponse<T = unknown> {
 
 export interface TelegramBotApiTransport {
   call<T = unknown>(method: string, payload: Record<string, unknown>): Promise<T>;
+  uploadDocument?(input: {
+    chat_id: string;
+    message_thread_id?: number;
+    filename: string;
+    content: Uint8Array;
+    caption?: string;
+    protect_content?: boolean;
+    disable_notification?: boolean;
+  }): Promise<{ message_id: number }>;
 }

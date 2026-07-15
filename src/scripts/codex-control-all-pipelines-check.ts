@@ -9,7 +9,6 @@ const required = [
 ];
 for (const name of required) assertGate(releaseGates.has(name), `required control gate missing from v2 manifest: ${name}`);
 const sources = {
-  team: readText('src/core/commands/team-command.ts'),
   qa: readText('src/core/commands/qa-loop-command.ts'),
   research: readText('src/core/commands/research-command.ts'),
   researchStage: readText('src/core/research/research-stage-runner.ts'),
@@ -17,8 +16,6 @@ const sources = {
   dfix: readText('src/core/commands/dfix-command.ts'),
   workerRouter: readText('src/core/agents/native-worker-backend-router.ts')
 };
-const teamCreateRedirectsToNaruto = sources.team.includes('redirectTeamCreateToNaruto') && sources.team.includes('narutoCommand');
-assertGate(teamCreateRedirectsToNaruto, 'Team create must route through Naruto codex control backend SSOT');
 assertGate(sources.qa.includes("mock ? 'fake' : 'codex-sdk'"), 'QA must route native agents through codex control backend');
 assertGate(
   sources.research.includes("backend: mock ? 'mock' : 'codex-sdk'")

@@ -16,7 +16,6 @@ test('pipeline budget required split modules exist', () => {
     'stage-policy.ts',
     'agent-stage-policy.ts',
     'route-prep.ts',
-    'route-prep-team.ts',
     'route-prep-research.ts',
     'route-prep-qa.ts',
     'route-prep-ppt.ts',

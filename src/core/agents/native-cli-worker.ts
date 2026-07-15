@@ -342,7 +342,6 @@ function parseNativeCliWorkerArgs(args: string[]) {
     intake: readOption(args, '--intake', ''),
     json: args.includes('--json'),
     backend: readOption(args, '--backend', ''),
-    agentRoot: readOption(args, '--agent-root', ''),
     artifactDir: readOption(args, '--artifact-dir', ''),
     resultPath: readOption(args, '--result-path', ''),
     heartbeatPath: readOption(args, '--heartbeat-path', ''),

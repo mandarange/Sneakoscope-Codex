@@ -9,8 +9,8 @@ export interface ZellijLayoutInput {
   sessionName?: string
   ledgerRoot: string
   cwd?: string
-  kind?: 'mad' | 'agent' | 'team' | 'naruto'
-  /** Deprecated for dynamic swarm UI. Viewport count is controlled by SKS_ZELLIJ_VIEWPORTS. */
+  kind?: 'mad' | 'naruto'
+  /** Viewport count is controlled by SKS_ZELLIJ_VIEWPORTS. */
   slotCount?: number
   title?: string
   codexBin?: string
@@ -36,7 +36,7 @@ export interface ZellijLayoutBuild {
   lane_runtime_policies: ZellijLaneRuntimePolicy[]
   viewport_count: number
   ui_architecture: 'monitor_plus_viewports'
-  /** Deprecated compatibility field; dynamic swarm layouts do not precreate worker panes. */
+  /** Dynamic worker layouts do not precreate worker panes. */
   slot_count: number
   initial_worker_panes: number
   monitor_pane_enabled: boolean
@@ -59,7 +59,7 @@ export function buildZellijLayoutKdl(input: ZellijLayoutInput): ZellijLayoutBuil
   const sessionName = input.sessionName || `sks-${input.missionId}`
   const cwd = path.resolve(input.cwd || process.cwd())
   const ledgerRoot = path.resolve(input.ledgerRoot)
-  const title = input.title || `SKS ${input.kind || 'agent'} ${input.missionId}`
+  const title = input.title || `SKS ${input.kind || 'naruto'} ${input.missionId}`
   const sksCommand = `${shellQuote(process.execPath)} ${shellQuote(path.join(packageRoot(), 'dist', 'bin', 'sks.js'))}`
   const sksEntry = path.join(packageRoot(), 'dist', 'bin', 'sks.js')
   const mainPane = buildMainPaneCommand(input, sksCommand)
@@ -112,7 +112,7 @@ export function buildZellijLayoutKdl(input: ZellijLayoutInput): ZellijLayoutBuil
     generated_at: nowIso(),
     mission_id: input.missionId,
     session_name: sessionName,
-    kind: input.kind || 'agent',
+    kind: input.kind || 'naruto',
     ledger_root: ledgerRoot,
     cwd,
     viewport_count: viewportCount,
@@ -164,7 +164,7 @@ export async function writeZellijLayout(root: string, input: ZellijLayoutInput):
   })
   const dir = path.join(root, '.sneakoscope', 'layouts')
   await ensureDir(dir)
-  const fileName = `${input.kind || 'agent'}-${input.missionId}.kdl`
+  const fileName = `${input.kind || 'naruto'}-${input.missionId}.kdl`
   const layoutPath = path.join(dir, fileName)
   await writeTextAtomic(layoutPath, built.layout_kdl)
   return { ...built, layout_path: layoutPath }

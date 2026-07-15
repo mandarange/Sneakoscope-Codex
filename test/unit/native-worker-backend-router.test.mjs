@@ -368,7 +368,7 @@ test('ollama worker policy blocks strategy and design work', () => {
     role: 'architect',
     description: 'plan the architecture and design the implementation strategy',
     write_paths: ['owned.txt']
-  }, { route: '$Team', agent: { role: 'architect' } });
+  }, { route: '$Fixture', agent: { role: 'architect' } });
   assert.equal(policy.ok, false);
   assert.match(policy.blockers.join('\n'), /strategy_planning_design|role_blocked/);
 });

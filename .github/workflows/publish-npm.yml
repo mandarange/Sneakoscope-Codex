@@ -1,106 +1,433 @@
-name: Publish to npm
+name: Stage npm release
 
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: Exact package.json version to publish
+        description: Exact package.json version to stage
         required: true
         type: string
-      confirm_publish:
-        description: Run the publish job after the full release proof passes
+      confirm_stage:
+        description: Stage the verified immutable tarball after all proofs pass
         required: true
         default: false
         type: boolean
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
-  group: publish-npm-${{ github.ref }}
+  group: npm-stage-${{ github.ref }}
   cancel-in-progress: false
 
-jobs:
-  publish:
-    name: Publish package
-    if: github.repository == 'mandarange/Sneakoscope-Codex' && github.ref == 'refs/heads/main' && inputs.confirm_publish == true
-    runs-on: ubuntu-latest
-    timeout-minutes: 120
+env:
+  NPM_STAGE_CLI_VERSION: 11.15.0
 
+jobs:
+  linux-release-proof:
+    name: Linux release proof
+    if: github.repository == 'mandarange/Sneakoscope-Codex' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
     steps:
-      - name: Checkout repository
+      - name: Checkout exact main source
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - name: Setup Node.js
+      - name: Setup minimum Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '24.x'
-          registry-url: 'https://registry.npmjs.org'
+          node-version: '20.11.1'
           package-manager-cache: false
-
-      - name: Setup trusted-publishing npm
-        shell: bash
+      - name: Prove Node 20 minimum compatibility
         run: |
-          npm install --global npm@11.5.1
           node --version
           npm --version
+          npm ci --ignore-scripts
+          npm run typecheck --silent
+          npm run build:clean --silent
+          npm test --silent
+          npm run architecture:check --silent
 
-      - name: Install dependencies
+      - name: Setup Node.js 22 LTS
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Prove Node 22 compatibility
+        run: |
+          node --version
+          npm --version
+          npm ci --ignore-scripts
+          npm run typecheck --silent
+          npm run build:clean --silent
+          npm test --silent
+          npm run architecture:check --silent
+
+      - name: Setup Node.js 24 publish runtime
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - name: Install exact staged-publishing npm
+        run: |
+          npm install --global npm@${NPM_STAGE_CLI_VERSION}
+          node --version
+          test "$(npm --version)" = "${NPM_STAGE_CLI_VERSION}"
+      - name: Install release dependencies
         run: npm ci --ignore-scripts
 
-      - name: Read package metadata
-        id: package
-        shell: bash
-        run: |
-          node --input-type=module <<'NODE' >> "$GITHUB_OUTPUT"
-          import fs from 'node:fs';
-
-          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-          console.log(`name=${pkg.name}`);
-          console.log(`version=${pkg.version}`);
-          NODE
-
-      - name: Verify requested version
-        shell: bash
+      - name: Verify requested version and main SHA
         env:
           REQUESTED_VERSION: ${{ inputs.version }}
-          PACKAGE_VERSION: ${{ steps.package.outputs.version }}
+          EXPECTED_SHA: ${{ github.sha }}
         run: |
-          if [ "$REQUESTED_VERSION" != "$PACKAGE_VERSION" ]; then
-            echo "Requested version does not match package.json." >&2
-            exit 1
-          fi
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs'
+          import { execFileSync } from 'node:child_process'
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'))
+          const head = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+          if (pkg.version !== process.env.REQUESTED_VERSION) throw new Error('requested version does not match package.json')
+          if (head !== process.env.EXPECTED_SHA) throw new Error('checked out commit does not match workflow source SHA')
+          NODE
 
-      - name: Check npm registry
-        id: registry
-        shell: bash
-        env:
-          PACKAGE_NAME: ${{ steps.package.outputs.name }}
-          PACKAGE_VERSION: ${{ steps.package.outputs.version }}
-        run: |
-          if npm view "$PACKAGE_NAME@$PACKAGE_VERSION" version --registry https://registry.npmjs.org/ >/dev/null 2>&1; then
-            echo "published=true" >> "$GITHUB_OUTPUT"
-            echo "$PACKAGE_NAME@$PACKAGE_VERSION is already published; skipping publish."
-          else
-            echo "published=false" >> "$GITHUB_OUTPUT"
-            echo "$PACKAGE_NAME@$PACKAGE_VERSION is not published yet; continuing."
-          fi
-
-      - name: Run publish gates
-        if: steps.registry.outputs.published != 'true'
-        shell: bash
+      - name: Run full Linux release proof
         env:
           SKS_PUBLISH_AUTH_MODE: trusted-publisher
         run: |
-          npm run release:check:full
-          node ./dist/scripts/release-check-stamp.js verify
-          npm run publish:prep-ignore-scripts
+          npm run typecheck --silent
+          npm run release:check:full --silent
 
-      - name: Publish to npm
-        if: steps.registry.outputs.published != 'true'
+      - name: Create exact tarball and content-bound receipt
+        run: node ./dist/scripts/release-pack-receipt.js create
+
+      - name: Bundle Linux proof without repacking
         env:
-          NPM_CONFIG_PROVENANCE: 'true'
-        run: npm publish --ignore-scripts --provenance --access public
+          VERSION: ${{ inputs.version }}
+        run: |
+          test -f ".sneakoscope/reports/release/${VERSION}/pack-receipt.json"
+          test -f ".sneakoscope/reports/release/${VERSION}/artifacts/sneakoscope-${VERSION}.tgz"
+          tar -czf linux-release-proof.tgz .sneakoscope/reports
+
+      - name: Upload Linux proof and immutable tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-release-proof-${{ github.sha }}
+          path: linux-release-proof.tgz
+          if-no-files-found: error
+          retention-days: 7
+
+  macos-menubar-proof:
+    name: macOS Menu Bar proof
+    if: github.repository == 'mandarange/Sneakoscope-Codex' && github.ref == 'refs/heads/main'
+    runs-on: macos-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout exact main source
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Verify requested version and macOS source SHA
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs'
+          import { execFileSync } from 'node:child_process'
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'))
+          const head = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+          if (pkg.version !== process.env.REQUESTED_VERSION) throw new Error('requested version does not match package.json')
+          if (head !== process.env.EXPECTED_SHA) throw new Error('checked out commit does not match workflow source SHA')
+          NODE
+      - name: Install release dependencies
+        run: npm ci --ignore-scripts
+      - name: Build native release surface
+        run: npm run build:clean --silent
+      - name: Record Xcode and Swift versions
+        run: |
+          xcodebuild -version
+          swiftc --version
+      - name: Install Menu Bar app in isolated HOME
+        run: |
+          mkdir -p .sneakoscope/reports
+          HOME="$(mktemp -d)" CODEX_HOME="$(mktemp -d)" node ./dist/scripts/sks-menubar-install-check.js > .sneakoscope/reports/menubar-install.json
+      - name: Seal macOS Menu Bar proof
+        run: node ./dist/scripts/release-macos-menubar-proof.js --install-report .sneakoscope/reports/menubar-install.json
+      - name: Bundle macOS proof
+        run: tar -czf macos-menubar-proof.tgz .sneakoscope/reports/menubar-install.json ".sneakoscope/reports/release/${{ inputs.version }}/macos-menubar-proof.json"
+      - name: Upload macOS proof
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-menubar-proof-${{ github.sha }}
+          path: macos-menubar-proof.tgz
+          if-no-files-found: error
+          retention-days: 7
+
+  pack-and-compare:
+    name: Compare and smoke exact tarball
+    if: github.repository == 'mandarange/Sneakoscope-Codex' && github.ref == 'refs/heads/main'
+    needs: [linux-release-proof, macos-menubar-proof]
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout exact main source
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Verify requested version and pack source SHA
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs'
+          import { execFileSync } from 'node:child_process'
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'))
+          const head = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+          if (pkg.version !== process.env.REQUESTED_VERSION) throw new Error('requested version does not match package.json')
+          if (head !== process.env.EXPECTED_SHA) throw new Error('checked out commit does not match workflow source SHA')
+          NODE
+      - name: Install release dependencies
+        run: npm ci --ignore-scripts
+      - name: Build receipt tooling
+        run: npm run build:clean --silent
+      - name: Download Linux proof
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-release-proof-${{ github.sha }}
+          path: downloaded/linux
+      - name: Download macOS proof
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-menubar-proof-${{ github.sha }}
+          path: downloaded/macos
+      - name: Restore proof artifacts
+        run: |
+          tar -xzf downloaded/linux/linux-release-proof.tgz
+          tar -xzf downloaded/macos/macos-menubar-proof.tgz
+      - name: Reinspect and compare immutable tarball
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          TARBALL=".sneakoscope/reports/release/${VERSION}/artifacts/sneakoscope-${VERSION}.tgz"
+          LOCAL_RECEIPT=".sneakoscope/reports/release/${VERSION}/pack-receipt.json"
+          INSPECTED_RECEIPT=".sneakoscope/reports/release/${VERSION}/reinspected-pack-receipt.json"
+          node ./dist/scripts/release-pack-receipt.js inspect --tarball "$TARBALL" --kind staged --output "$INSPECTED_RECEIPT"
+          node ./dist/scripts/release-pack-receipt.js compare --local "$LOCAL_RECEIPT" --staged "$INSPECTED_RECEIPT"
+          node ./dist/scripts/installed-package-smoke-check.js --tarball "$TARBALL" --receipt "$LOCAL_RECEIPT"
+      - name: Verify macOS proof identity
+        env:
+          VERSION: ${{ inputs.version }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs'
+          const proof = JSON.parse(fs.readFileSync(`.sneakoscope/reports/release/${process.env.VERSION}/macos-menubar-proof.json`, 'utf8'))
+          if (proof.ok !== true) throw new Error(`macOS proof blocked: ${(proof.blockers || []).join(',')}`)
+          if (proof.version !== process.env.VERSION) throw new Error('macOS proof version mismatch')
+          if (proof.source_commit !== process.env.EXPECTED_SHA) throw new Error('macOS proof source commit mismatch')
+          NODE
+      - name: Create immutable release handoff
+        env:
+          VERSION: ${{ inputs.version }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          mkdir -p release-handoff
+          cp ".sneakoscope/reports/release/${VERSION}/artifacts/sneakoscope-${VERSION}.tgz" release-handoff/
+          cp ".sneakoscope/reports/release/${VERSION}/pack-receipt.json" release-handoff/
+          cp ".sneakoscope/reports/release/${VERSION}/pack-compare.json" release-handoff/
+          cp ".sneakoscope/reports/release/${VERSION}/macos-menubar-proof.json" release-handoff/
+          cp .sneakoscope/reports/installed-package-smoke.json release-handoff/
+          node --input-type=module <<'NODE'
+          import crypto from 'node:crypto'
+          import fs from 'node:fs'
+          import path from 'node:path'
+          const files = fs.readdirSync('release-handoff').sort()
+          const entries = files.map(file => ({ file, sha256: crypto.createHash('sha256').update(fs.readFileSync(path.join('release-handoff', file))).digest('hex') }))
+          fs.writeFileSync('release-handoff/handoff-manifest.json', JSON.stringify({ schema: 'sks.release-handoff.v1', version: process.env.VERSION, source_commit: process.env.SOURCE_SHA, entries }, null, 2) + '\n')
+          NODE
+      - name: Upload immutable release handoff
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage-input-${{ github.sha }}
+          path: release-handoff
+          if-no-files-found: error
+          retention-days: 7
+
+  stage-publish:
+    name: Stage exact npm tarball
+    if: github.repository == 'mandarange/Sneakoscope-Codex' && github.ref == 'refs/heads/main' && inputs.confirm_stage == true
+    needs: [pack-and-compare]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: npm-production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout exact main source
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - name: Install exact staged-publishing npm
+        run: |
+          npm install --global npm@${NPM_STAGE_CLI_VERSION}
+          node --version
+          test "$(npm --version)" = "${NPM_STAGE_CLI_VERSION}"
+      - name: Download immutable release handoff
+        uses: actions/download-artifact@v4
+        with:
+          name: stage-input-${{ github.sha }}
+          path: release-handoff
+      - name: Verify handoff identity and hashes
+        env:
+          VERSION: ${{ inputs.version }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          node --input-type=module <<'NODE'
+          import crypto from 'node:crypto'
+          import fs from 'node:fs'
+          import path from 'node:path'
+          import { execFileSync } from 'node:child_process'
+          const manifest = JSON.parse(fs.readFileSync('release-handoff/handoff-manifest.json', 'utf8'))
+          if (manifest.schema !== 'sks.release-handoff.v1') throw new Error('handoff schema mismatch')
+          if (manifest.version !== process.env.VERSION || manifest.source_commit !== process.env.SOURCE_SHA) throw new Error('handoff identity mismatch')
+          if (execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim() !== process.env.SOURCE_SHA) throw new Error('main SHA mismatch')
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'))
+          if (pkg.version !== process.env.VERSION) throw new Error('requested version does not match package.json')
+          const expectedFiles = [
+            'installed-package-smoke.json',
+            'macos-menubar-proof.json',
+            'pack-compare.json',
+            'pack-receipt.json',
+            `sneakoscope-${process.env.VERSION}.tgz`
+          ].sort()
+          const entryFiles = manifest.entries.map(entry => String(entry.file || '')).sort()
+          if (JSON.stringify(entryFiles) !== JSON.stringify(expectedFiles)) throw new Error('handoff inventory mismatch')
+          for (const entry of manifest.entries) {
+            if (path.basename(entry.file) !== entry.file || !/^[A-Za-z0-9._-]+$/.test(entry.file)) throw new Error(`unsafe handoff path: ${entry.file}`)
+            if (!/^[a-f0-9]{64}$/.test(String(entry.sha256 || ''))) throw new Error(`invalid handoff hash: ${entry.file}`)
+            const actual = crypto.createHash('sha256').update(fs.readFileSync(path.join('release-handoff', entry.file))).digest('hex')
+            if (actual !== entry.sha256) throw new Error(`handoff hash mismatch: ${entry.file}`)
+          }
+          const receipt = JSON.parse(fs.readFileSync('release-handoff/pack-receipt.json', 'utf8'))
+          if (receipt.schema !== 'sks.release-pack-receipt.v1' || receipt.kind !== 'local' || receipt.ok !== true) throw new Error('pack receipt is not an approved local receipt')
+          if (receipt.package_version !== process.env.VERSION || receipt.source_commit !== process.env.SOURCE_SHA) throw new Error('pack receipt identity mismatch')
+          if (!/^[a-f0-9]{64}$/.test(receipt.sha256) || !/^sha512-[A-Za-z0-9+/]+={0,2}$/.test(receipt.sha512_integrity)) throw new Error('pack receipt digest invalid')
+          if (!Number.isSafeInteger(receipt.bytes) || receipt.bytes <= 0 || !Number.isSafeInteger(receipt.unpacked_bytes) || receipt.unpacked_bytes <= 0 || !Number.isSafeInteger(receipt.file_count) || receipt.file_count <= 0) throw new Error('pack receipt size inventory invalid')
+          const comparison = JSON.parse(fs.readFileSync('release-handoff/pack-compare.json', 'utf8'))
+          if (comparison.schema !== 'sks.release-pack-compare.v1' || comparison.ok !== true || comparison.local_sha256 !== receipt.sha256 || comparison.staged_sha256 !== receipt.sha256) throw new Error('pack comparison proof mismatch')
+          const macos = JSON.parse(fs.readFileSync('release-handoff/macos-menubar-proof.json', 'utf8'))
+          if (macos.ok !== true || macos.version !== process.env.VERSION || macos.source_commit !== process.env.SOURCE_SHA) throw new Error('macOS proof identity mismatch')
+          const smoke = JSON.parse(fs.readFileSync('release-handoff/installed-package-smoke.json', 'utf8'))
+          if (smoke.schema !== 'sks.installed-package-smoke.v1' || smoke.ok !== true || smoke.installed_version !== process.env.VERSION || smoke.tarball_sha256 !== receipt.sha256 || smoke.tarball_binding?.exact_match !== true) throw new Error('installed package smoke mismatch')
+          const closure = smoke.public_surface?.closure
+          if (!closure || closure.all_rejected !== true || closure.receipt_safe !== true || closure.rejected_count !== closure.command_probe_count + closure.dollar_command_probe_count + closure.argument_probe_count) throw new Error('installed public surface closure mismatch')
+          if (closure.command_probe_count !== 6 || closure.dollar_command_probe_count !== 6 || closure.argument_probe_count !== 1 || closure.rejected_count !== 13) throw new Error('installed public surface closure inventory mismatch')
+          if (closure.expected_reason_counts?.unknown_command !== 12 || closure.expected_reason_counts?.unsupported_argument !== 1 || closure.observed_reason_counts?.unknown_command !== 12 || closure.observed_reason_counts?.unsupported_argument !== 1 || closure.observed_reason_counts?.other !== 0) throw new Error('installed public surface closure reason mismatch')
+          if ('removed_commands' in smoke.public_surface || 'removed_dollar_commands' in smoke.public_surface || 'rejections' in smoke.public_surface) throw new Error('installed smoke exposes retired surface details')
+          const serializedSmoke = JSON.stringify(smoke)
+          const retiredTokens = ['team', 'mad-db', 'tmux', 'xai', 'swarm', 'agent', '$Agent', '$Team', '$MAD-DB', '$Swarm', '$ShadowClone', '$Kagebunshin', '--agent']
+          const escapeRegExp = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+          const leaks = retiredTokens.filter(value => {
+            const escaped = escapeRegExp(value)
+            if (value === '--agent') return new RegExp(`${escaped}(?=$|[\\s"'=:,}\\]])`).test(serializedSmoke)
+            if (value.startsWith('$')) return new RegExp(`${escaped}(?![A-Za-z0-9_-])`).test(serializedSmoke)
+            return new RegExp(`(?<![A-Za-z0-9_-])${escaped}(?![A-Za-z0-9_-])`, 'i').test(serializedSmoke)
+          })
+          if (leaks.length > 0) throw new Error(`installed smoke exposes ${leaks.length} retired surface token(s)`)
+          NODE
+      - name: Stage exact reviewed tarball with OIDC
+        env:
+          VERSION: ${{ inputs.version }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          export TARBALL="release-handoff/sneakoscope-${VERSION}.tgz"
+          mkdir -p stage-receipt
+          npm stage publish "$TARBALL" --json --ignore-scripts --provenance --access public > stage-receipt/stage-output.json
+          node --input-type=module <<'NODE'
+          import crypto from 'node:crypto'
+          import fs from 'node:fs'
+          const outputBytes = fs.readFileSync('stage-receipt/stage-output.json')
+          const output = JSON.parse(outputBytes.toString('utf8'))
+          const stageIds = []
+          const collectStageIds = value => {
+            if (!value || typeof value !== 'object') return
+            if (typeof value.stageId === 'string') stageIds.push(value.stageId)
+            for (const child of Array.isArray(value) ? value : Object.values(value)) {
+              collectStageIds(child)
+            }
+          }
+          collectStageIds(output)
+          const uniqueStageIds = [...new Set(stageIds)]
+          if (uniqueStageIds.length !== 1) throw new Error('npm stage publish did not return exactly one stageId')
+          const stageId = uniqueStageIds[0]
+          if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(stageId)) throw new Error('stage_id_uuid_invalid')
+          const tarball = process.env.TARBALL
+          if (!tarball) throw new Error('staged tarball path missing')
+          const receipt = JSON.parse(fs.readFileSync('release-handoff/pack-receipt.json', 'utf8'))
+          if (!output || typeof output !== 'object' || Array.isArray(output) || !Object.hasOwn(output, receipt.package_name)) throw new Error('npm stage JSON output is not keyed by package name')
+          const tarballBytes = fs.readFileSync(tarball)
+          const sha256 = crypto.createHash('sha256').update(tarballBytes).digest('hex')
+          const sha512 = crypto.createHash('sha512').update(tarballBytes).digest('hex')
+          const sha512Integrity = `sha512-${crypto.createHash('sha512').update(tarballBytes).digest('base64')}`
+          const localPackReceiptBytes = fs.readFileSync('release-handoff/pack-receipt.json')
+          const localPackReceiptSha256 = crypto.createHash('sha256').update(localPackReceiptBytes).digest('hex')
+          if (sha256 !== receipt.sha256) throw new Error('staged tarball no longer matches reviewed receipt')
+          if (sha512Integrity !== receipt.sha512_integrity) throw new Error('staged tarball integrity no longer matches reviewed receipt')
+          const stageCommand = ['npm', 'stage', 'publish', tarball, '--json', '--ignore-scripts', '--provenance', '--access', 'public']
+          const stageCommandDigest = crypto.createHash('sha256').update(JSON.stringify(stageCommand)).digest('hex')
+          const stageOutputDigest = crypto.createHash('sha256').update(outputBytes).digest('hex')
+          fs.writeFileSync('stage-receipt/stage-receipt.json', JSON.stringify({
+            schema: 'sks.npm-stage-receipt.v1',
+            ok: true,
+            stage_id: stageId,
+            package_name: receipt.package_name,
+            package_version: receipt.package_version,
+            source_commit: process.env.SOURCE_SHA,
+            tarball_sha256: sha256,
+            tarball_sha512: sha512,
+            tarball_integrity: sha512Integrity,
+            packed_bytes: receipt.bytes,
+            unpacked_bytes: receipt.unpacked_bytes,
+            file_count: receipt.file_count,
+            workflow_run_id: process.env.GITHUB_RUN_ID,
+            workflow_run_attempt: process.env.GITHUB_RUN_ATTEMPT,
+            local_pack_receipt_sha256: localPackReceiptSha256,
+            stage_command_digest: stageCommandDigest,
+            stage_output_digest: stageOutputDigest,
+            review_verifier_schema: 'sks.npm-stage-review-receipt.v1',
+            oidc_review_supported: false,
+            maintainer_session_required: true,
+            review_required: true,
+            approved_with_2fa: false,
+            human_2fa_pending: true,
+            generated_at: new Date().toISOString()
+          }, null, 2) + '\n')
+          NODE
+      - name: Upload stage receipt for maintainer review
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-stage-receipt-${{ github.sha }}
+          path: stage-receipt
+          if-no-files-found: error
+          retention-days: 7

@@ -3,7 +3,7 @@ import { buildAgentTaskGraph } from '../../dist/core/agents/agent-task-graph.js'
 import test from 'node:test';
 
 test('agent task graph expands work items beyond active slots', () => {
-  const graph = buildAgentTaskGraph({ routeType: '$Team', prompt: 'fixture', targetActiveSlots: 5, desiredWorkItems: 8 });
+  const graph = buildAgentTaskGraph({ routeType: '$Fixture', prompt: 'fixture', targetActiveSlots: 5, desiredWorkItems: 8 });
   assert.equal(graph.schema, 'sks.agent-task-graph.v1');
   assert.equal(graph.target_active_slots, 4);
   assert.equal(graph.total_work_items, 8);

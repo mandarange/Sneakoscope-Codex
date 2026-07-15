@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { assertGate, emitGate, importDist } from './sks-1-18-gate-lib.js';
-import { makeTempPatchProject, writeReport } from './agent-patch-swarm-gate-lib.js';
+import { makeTempPatchProject, writeReport } from './patch-handoff-gate-lib.js';
 
 const queueMod = await importDist('core/agents/agent-patch-queue.js');
 const mergeMod = await importDist('core/agents/agent-merge-coordinator.js');

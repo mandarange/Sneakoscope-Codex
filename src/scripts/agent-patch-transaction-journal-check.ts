@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { assertGate, emitGate, importDist } from './sks-1-18-gate-lib.js';
-import { writeReport } from './agent-patch-swarm-gate-lib.js';
+import { writeReport } from './patch-handoff-gate-lib.js';
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-patch-journal-'));
 fs.writeFileSync(path.join(dir, 'a.txt'), 'before\n');
@@ -33,7 +33,7 @@ const entry = await store.enqueue({
   verification_hint: { node_id: 'verify-journal' },
   rollback_hint: { node_id: 'rollback-journal' },
   operations: [{ op: 'replace', path: 'a.txt', search: 'before', replace: 'after' }]
-}, { mission_id: 'M-journal', route: '$Agent' });
+}, { mission_id: 'M-journal', route: '$Naruto' });
 await store.markApplying(entry.id);
 const applyResult = await applyMod.applyAgentPatchQueueEntry(dir, entry, { artifactsDir: dir });
 await store.markApplied(entry.id);

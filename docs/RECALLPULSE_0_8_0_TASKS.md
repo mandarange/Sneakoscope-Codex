@@ -29,7 +29,7 @@ This task list converts the RecallPulse manuscript into a detailed implementatio
 - [S13] Cursor MCP progress discussion: real client progress rendering may be inconsistent.
 - [S14] Alert fatigue article: notification overload can hurt response quality.
 - [S15] Local TriWiki attention implementation: active recall and hydration primitives already exist.
-- [S16] Local mistake recall, pipeline, hooks, and team-live implementation: current SKS surfaces already contain partial recall, loop, status, and route primitives.
+- [S16] Local mistake recall, pipeline, hooks, and route-status implementation: current SKS surfaces already contain partial recall, loop, status, and route primitives.
 
 ## Non-Goals For This File
 
@@ -41,7 +41,7 @@ This task list converts the RecallPulse manuscript into a detailed implementatio
 
 ## 0.8.0 Release Goal
 
-Deliver a "Massive Upgrade" that makes SKS faster, less repetitive, more memory-aware, more visibly reliable, and easier to reason about, while preserving the personality and special workflow feel of Team, Research, DB, QA, Computer Use, PPT, DFix, Wiki, GX, imagegen, and Honest Mode.
+Deliver a "Massive Upgrade" that makes SKS faster, less repetitive, more memory-aware, more visibly reliable, and easier to reason about, while preserving the personality and special workflow feel of `$Naruto`, Research, DB, QA, Computer Use, PPT, DFix, Wiki, GX, imagegen, and Honest Mode.
 
 ## Master Task List
 
@@ -73,7 +73,7 @@ Deliver a "Massive Upgrade" that makes SKS faster, less repetitive, more memory-
 - [x] T024 Define a no-regression criterion for generated skill installation.
 - [x] T025 Define a no-regression criterion for Codex App stop hooks.
 - [x] T026 Define a no-regression criterion for DFix ultralight behavior.
-- [x] T027 Define a no-regression criterion for Team minimum five-lane review.
+- [x] T027 Define a no-regression criterion for `$Naruto` official-subagent review.
 - [x] T028 Define a no-regression criterion for Research xhigh scout requirements.
 - [x] T029 Define a no-regression criterion for DB destructive-operation blocking.
 - [x] T030 Define a no-regression criterion for imagegen evidence requirements.
@@ -188,7 +188,7 @@ Deliver a "Massive Upgrade" that makes SKS faster, less repetitive, more memory-
 - [x] T130 Define status ledger de-duplication keys.
 - [x] T131 Define status ledger latest-status projection.
 - [x] T132 Define status ledger final-summary projection.
-- [x] T133 Define status ledger Team live projection.
+- [x] T133 Define status ledger `$Naruto` live projection.
 - [x] T134 Define status ledger pipeline status projection.
 - [x] T135 Define status ledger Codex App stop-hook projection.
 - [x] T136 Define a rule that hook messages may point to ledger entries but must not be the only durable source.
@@ -329,7 +329,7 @@ Deliver a "Massive Upgrade" that makes SKS faster, less repetitive, more memory-
 - [x] T262 Define EvidenceEnvelope stale rules.
 - [x] T263 Define EvidenceEnvelope route-specific extension points.
 - [x] T264 Define Research extension fields.
-- [x] T265 Define Team extension fields.
+- [x] T265 Define `$Naruto` extension fields.
 - [x] T266 Define DB extension fields.
 - [x] T267 Define QA extension fields.
 - [x] T268 Define imagegen extension fields.
@@ -341,7 +341,7 @@ Deliver a "Massive Upgrade" that makes SKS faster, less repetitive, more memory-
 - [x] T271 Inventory all current route gates.
 - [x] T272 Group route gates into shared mechanical checks and route-specific checks.
 - [x] T273 Move only shared mechanical checks into the RecallPulse/ProofCapsule spine.
-- [x] T274 Keep Team's scout/debate/executor/review identity intact.
+- [x] T274 Keep `$Naruto` parent integration, scoped implementation, and review identity intact.
 - [x] T275 Keep Research's genius scout council identity intact.
 - [x] T276 Keep DB's conservative safety identity intact.
 - [x] T277 Keep DFix's ultralight identity intact.
@@ -502,7 +502,7 @@ Deliver a "Massive Upgrade" that makes SKS faster, less repetitive, more memory-
 
 - [x] T421 Roll out RecallPulse as opt-in report-only.
 - [x] T422 Record report-only decisions for at least one Research mission.
-- [x] T423 Record report-only decisions for at least one Team mission.
+- [x] T423 Record report-only decisions for at least one `$Naruto` mission.
 - [x] T424 Record report-only decisions for at least one DFix mission.
 - [x] T425 Record report-only decisions for at least one DB safety scan.
 - [x] T426 Record report-only decisions for at least one QA-LOOP mission.

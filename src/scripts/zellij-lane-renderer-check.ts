@@ -10,8 +10,8 @@ if (!freshness.ok) fail('dist_not_fresh', { freshness });
 const mod = await import(pathToFileURL(path.join(root, 'dist', 'core', 'zellij', 'zellij-lane-renderer.js')).href);
 const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-zellij-lane-'));
 await fs.writeFile(path.join(tmp, 'agent-scheduler-state.json'), `${JSON.stringify({ target_active_slots: 1, active_slot_count: 1, pending_count: 2, completed_count: 3 }, null, 2)}\n`);
-await fs.writeFile(path.join(tmp, 'agent-native-cli-session-swarm.json'), `${JSON.stringify({
-  schema: 'sks.agent-native-cli-session-swarm.v1',
+await fs.writeFile(path.join(tmp, 'native-cli-worker-runtime.json'), `${JSON.stringify({
+  schema: 'sks.native-cli-worker-runtime.v2',
   records: [{
     slot_id: 'slot-001',
     generation_index: 1,

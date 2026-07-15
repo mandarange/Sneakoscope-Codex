@@ -1,9 +1,9 @@
 {
   "schema": "sks.code-pack.v1",
-  "generated_at": "2026-07-14T07:52:08.177Z",
-  "git_head_sha": "b01c844d48049d1026bcbc3f780058edc426edc2",
-  "source_file_count": 3525,
-  "index_digest": "c1f92891d27025553c2edd32318f545ca3c5c123c2b6c467ee2a70b8830c52a4",
+  "generated_at": "2026-07-14T13:34:34.533Z",
+  "git_head_sha": "16117e482a39d995a96fdc9fcb8809397fb49a0c",
+  "source_file_count": 3622,
+  "index_digest": "54c123ea97a460adefb4fae7e4e87a9cc81f69a63c0ff2696c2416ff7133d088",
   "entries": [
     {
       "id": "code:bin",
@@ -43,7 +43,7 @@
     },
     {
       "id": "code:core",
-      "text": "core is a core module at src/core (118 files, 34675 loc, high risk). Key exports: const quietPolicy =; async function makeRoot(prefix: string); async function writeJson(file: string, value: unknown); async function backdate(file: string); const ARTIFACT_SCHEMA_VERSION = 1;, and 519 more. It has no detected cross-module dependencies.",
+      "text": "core is a core module at src/core (124 files, 36107 loc, high risk). Key exports: const quietPolicy =; async function makeRoot(prefix: string); async function writeJson(file: string, value: unknown); async function backdate(file: string); const ARTIFACT_SCHEMA_VERSION = 1;, and 519 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core"
@@ -55,7 +55,7 @@
     },
     {
       "id": "code:core-agent-bridge",
-      "text": "core-agent-bridge is a core module at src/core/agent-bridge (7 files, 710 loc, low risk). Key exports: type LatencyClass = 'fast' | 'normal' | 'long';; interface AgentManifestEntry; interface AgentManifest; interface AgentManifestValidation; function buildAgentManifest(): AgentManifest, and 10 more. It has no detected cross-module dependencies.",
+      "text": "core-agent-bridge is a core module at src/core/agent-bridge (7 files, 778 loc, low risk). Key exports: type LatencyClass = 'fast' | 'normal' | 'long';; interface AgentManifestEntry; interface AgentManifest; interface AgentManifestValidation; function buildAgentManifest(): AgentManifest, and 11 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/agent-bridge"
@@ -91,15 +91,18 @@
     },
     {
       "id": "code:core-codex-app",
-      "text": "core-codex-app is a core module at src/core/codex-app (31 files, 7233 loc, medium risk). Key exports: async function syncCodexAgentRoles(input:; async function probeCodexAgentTypeSupport(root: string, input:; function agentRolePayloadFor(role: string, probe: CodexAgentTypeProbe): CodexAgentRolePayload; async function resolveCodexAppExecutionProfile(input: { root: string; matrix?: CodexAppHarnessMatrix | unknown } = { root: process.cwd() }): Promise<CodexAppExecutionProfile>; const CODEX_APP_FAST_UI_PRESERVATION_SCHEMA = 'sks.codex-app-fast-ui-preservation.v1', and 70 more. It has no detected cross-module dependencies.",
+      "text": "core-codex-app is a core module at src/core/codex-app (45 files, 4924 loc, high risk). Key exports: async function syncCodexAgentRoles(input:; async function probeCodexAgentTypeSupport(root: string, input:; function agentRolePayloadFor(role: string, probe: CodexAgentTypeProbe): CodexAgentRolePayload; async function resolveCodexAppExecutionProfile(input: { root: string; matrix?: CodexAppHarnessMatrix | unknown } = { root: process.cwd() }): Promise<CodexAppExecutionProfile>; const CODEX_APP_FAST_UI_PRESERVATION_SCHEMA = 'sks.codex-app-fast-ui-preservation.v1', and 128 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/codex-app"
+        },
+        {
+          "path": "src/core/codex-app/menubar/index.ts"
         }
       ],
-      "trust_score": 0.7,
+      "trust_score": 0.75,
       "freshness": "unknown",
-      "token_cost": 157
+      "token_cost": 156
     },
     {
       "id": "code:core-codex-compat",
@@ -187,7 +190,7 @@
     },
     {
       "id": "code:core-commands",
-      "text": "core-commands is a command module at src/core/commands (78 files, 12998 loc, high risk). Key exports: async function agentBridgeCommand(subcommand: string, args: readonly string[] = []): Promise<unknown>; async function agentCommand(commandOrArgs: string | string[] = 'agent', maybeArgs: string[] = []); async function autoresearchCommand(sub: any, args: any = []); async function helpCommand(args: string[] = []): Promise<void | unknown>; function commandsCommand(args: string[] = []): unknown, and 100 more. It has no detected cross-module dependencies.",
+      "text": "core-commands is a command module at src/core/commands (80 files, 13248 loc, high risk). Key exports: async function agentBridgeCommand(subcommand: string, args: readonly string[] = []): Promise<unknown>; async function agentCommand(commandOrArgs: string | string[] = 'agent', maybeArgs: string[] = []); async function autoresearchCommand(sub: any, args: any = []); async function helpCommand(args: string[] = []): Promise<void | unknown>; function commandsCommand(args: string[] = []): unknown, and 102 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/commands"
@@ -465,6 +468,21 @@
       "token_cost": 86
     },
     {
+      "id": "code:core-mcp-config",
+      "text": "core-mcp-config is a core module at src/core/mcp-config (17 files, 2528 loc, medium risk). Key exports: interface PendingMcpBackup; async function createMcpBackup(; async function finalizeMcpBackup(pending: PendingMcpBackup, after: string): Promise<McpBackupMetadataV1>; async function listMcpBackups(ref: ResolvedMcpScope): Promise<McpBackupMetadataV1[]>; async function loadMcpBackup(ref: ResolvedMcpScope, id: string): Promise<{ metadata: McpBackupMetadataV1; text: string }>, and 80 more. It has no detected cross-module dependencies.",
+      "citations": [
+        {
+          "path": "src/core/mcp-config"
+        },
+        {
+          "path": "src/core/mcp-config/index.ts"
+        }
+      ],
+      "trust_score": 0.9,
+      "freshness": "unknown",
+      "token_cost": 135
+    },
+    {
       "id": "code:core-migration",
       "text": "core-migration is a core module at src/core/migration (1 file, 93 loc, low risk). Key exports: const MIGRATION_JOURNAL_SCHEMA = 'sks.migration-journal.v1'; const MIGRATION_JOURNAL_VERSION = '1.20.1'; interface MigrationEventInput; interface MigrationEvent; function hashConfigText(text: unknown): string, and 3 more. It has no detected cross-module dependencies.",
       "citations": [
@@ -685,15 +703,30 @@
     },
     {
       "id": "code:core-release",
-      "text": "core-release is a core module at src/core/release (33 files, 4754 loc, medium risk). Key exports: interface CriticalPathLedger; function buildCriticalPathLedger(input: Omit<CriticalPathLedger, 'schema'>): CriticalPathLedger; function writeCriticalPathLedger(root: string, ledger: CriticalPathLedger): string; const EXTREME_PARALLEL_SCHEDULER_SCHEMA = 'sks.extreme-parallel-scheduler.v1';; interface ExtremeParallelSchedule, and 128 more. It has no detected cross-module dependencies.",
+      "text": "core-release is a core module at src/core/release (47 files, 6327 loc, high risk). Key exports: function writeCompleteReleaseProofs(root: string, head: string, baseline = head, originIdentity = ''); interface CriticalPathLedger; function buildCriticalPathLedger(input: Omit<CriticalPathLedger, 'schema'>): CriticalPathLedger; function writeCriticalPathLedger(root: string, ledger: CriticalPathLedger): string; const EXTREME_PARALLEL_SCHEDULER_SCHEMA = 'sks.extreme-parallel-scheduler.v1';, and 159 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/release"
         }
       ],
-      "trust_score": 0.7,
+      "trust_score": 0.55,
       "freshness": "unknown",
-      "token_cost": 121
+      "token_cost": 138
+    },
+    {
+      "id": "code:core-remote",
+      "text": "core-remote is a core module at src/core/remote (15 files, 2919 loc, medium risk). Key exports: type CommandClaimResult =; function remoteRuntimePaths(root: string):; class RemoteCommandLedger; * from './types.js';; * from './machine-registry.js';, and 66 more. It has no detected cross-module dependencies.",
+      "citations": [
+        {
+          "path": "src/core/remote"
+        },
+        {
+          "path": "src/core/remote/index.ts"
+        }
+      ],
+      "trust_score": 0.9,
+      "freshness": "unknown",
+      "token_cost": 77
     },
     {
       "id": "code:core-reporting",
@@ -769,15 +802,18 @@
     },
     {
       "id": "code:core-safety",
-      "text": "core-safety is a core module at src/core/safety (5 files, 771 loc, low risk). Key exports: const MUTATION_GUARD_SCHEMA = 'sks.mutation-guard.v1'; class MutationGuardViolationError extends Error; interface GuardContext; interface GuardOptions; const MUTATION_LEDGER_SCHEMA = 'sks.mutation-ledger.v1', and 25 more. It has no detected cross-module dependencies.",
+      "text": "core-safety is a core module at src/core/safety (10 files, 1268 loc, low risk). Key exports: * from './types.js';; * from './json-schema.js';; * from './contracts.js';; function validateJsonSchema(input: unknown, schema: Record<string, unknown>): JsonSchemaValidation; type CommandRisk = 'R0' | 'R1' | 'R2' | 'R3';, and 35 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/safety"
+        },
+        {
+          "path": "src/core/safety/command-contract/index.ts"
         }
       ],
-      "trust_score": 0.8,
+      "trust_score": 1,
       "freshness": "unknown",
-      "token_cost": 90
+      "token_cost": 94
     },
     {
       "id": "code:core-search-visibility",
@@ -855,18 +891,6 @@
       "token_cost": 112
     },
     {
-      "id": "code:core-strategy",
-      "text": "core-strategy is a core module at src/core/strategy (3 files, 653 loc, low risk). Key exports: const ADHD_ORCHESTRATING_GATE_SCHEMA = 'sks.adhd-orchestrating-gate.v1'; const DOPAMINE_ORCHESTRATION_PLAN_SCHEMA = 'sks.dopamine-orchestration-plan.v1'; const PROGRESS_REWARD_LEDGER_SCHEMA = 'sks.progress-reward-ledger.v1'; const MICRO_WIN_TASK_BOARD_SCHEMA = 'sks.micro-win-task-board.v1'; interface MicroWinTask, and 14 more. It has no detected cross-module dependencies.",
-      "citations": [
-        {
-          "path": "src/core/strategy"
-        }
-      ],
-      "trust_score": 0.8,
-      "freshness": "unknown",
-      "token_cost": 118
-    },
-    {
       "id": "code:core-subagents",
       "text": "core-subagents is a core module at src/core/subagents (20 files, 5284 loc, medium risk). Key exports: const DEFAULT_AUTOMATIC_SUBAGENT_COUNT = 2; const MAX_AUTOMATIC_SUBAGENT_COUNT = 3; const MAX_AUTOMATIC_REVIEWER_COUNT = 2; const MAX_ON_DEMAND_SUBAGENT_ROLE_COUNT = MAX_AUTOMATIC_SUBAGENT_COUNT; interface OfficialSubagentRoleSummary, and 82 more. It has no detected cross-module dependencies.",
       "citations": [
@@ -877,23 +901,8 @@
       "trust_score": 0.7,
       "freshness": "unknown",
       "token_cost": 99
-    },
-    {
-      "id": "code:core-super-search",
-      "text": "core-super-search is a core module at src/core/super-search (7 files, 1677 loc, low risk). Key exports: interface SuperSearchDoctorReport; async function buildSuperSearchDoctorReport(args: string[] = [], env: NodeJS.ProcessEnv = process.env): Promise<SuperSearchDoctorReport>; function printSuperSearchDoctorReport(report: SuperSearchDoctorReport, json: boolean): void; * from './types.js'; * from './runtime.js', and 22 more. It has no detected cross-module dependencies.",
-      "citations": [
-        {
-          "path": "src/core/super-search"
-        },
-        {
-          "path": "src/core/super-search/index.ts"
-        }
-      ],
-      "trust_score": 1,
-      "freshness": "unknown",
-      "token_cost": 118
     }
   ],
   "token_budget": 8000,
-  "total_token_cost": 7986
+  "total_token_cost": 7982
 }

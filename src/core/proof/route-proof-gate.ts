@@ -2,7 +2,7 @@ import { containsPlaintextSecret } from '../secret-redaction.js';
 import { readRouteProof } from './proof-reader.js';
 import { validateCompletionProof } from './validation.js';
 import { normalizeProofRoute, proofStatusBlocks, routeRequiresCompletionProof, routeRequiresImageVoxelAnchors } from './route-proof-policy.js';
-import { routeRequiresAgentIntake } from '../agents/agent-plan.js';
+import { routeRequiresOfficialSubagents } from '../agents/agent-plan.js';
 import { rootCauseAnalysisIssue } from './root-cause-policy.js';
 
 export async function validateRouteCompletionProof(root: any, { missionId = null, route = null, state = {}, visualClaim = undefined }: any = {}) {
@@ -26,28 +26,16 @@ export async function validateRouteCompletionProof(root: any, { missionId = null
     if (Number(anchors) <= 0) issues.push('image_voxel_anchors_missing');
   }
   const normalizedRoute = normalizeProofRoute(route || proof.route);
-  const officialSubagentWorkflow = normalizedRoute === '$Naruto' && (
-    state.subagents_required === true
-    || state.native_sessions_required === false
+  const officialSubagentsRequired = state.subagents_required === true
     || proof.evidence?.route_gate?.workflow === 'official_codex_subagent'
-  );
-  const legacyAgentProofRequired = normalizedRoute === '$Release-Review'
-    || (!officialSubagentWorkflow && routeRequiresAgentIntake(route || proof.route, { task: state.prompt, noAgents: state.agents_required === false }));
-  if (legacyAgentProofRequired) {
-    const agents = proof.evidence?.agents;
-    if (!agents) issues.push('agent_proof_evidence_missing');
+    || routeRequiresOfficialSubagents(normalizedRoute || route || proof.route, { task: state.prompt });
+  if (officialSubagentsRequired) {
+    const routeGate = proof.evidence?.route_gate;
+    if (!routeGate) issues.push('official_subagent_route_gate_missing');
     else {
-      if (agents.status !== 'passed' || agents.ok !== true) issues.push('agent_gate_not_passed');
-      const maxAgentCount = normalizedRoute === '$Naruto' ? 100 : 20;
-      const agentCount = Number(agents.agent_count || 0);
-      if (agentCount < 5) issues.push('agent_count_below_5');
-      if (agentCount > maxAgentCount) issues.push(normalizedRoute === '$Naruto' ? 'agent_count_above_100' : 'agent_count_above_20');
-      if (agents.all_sessions_closed !== true) issues.push('agent_sessions_not_closed');
-      if (agents.no_overlap_ok !== true) issues.push('agent_no_overlap_not_ok');
-      if (agents.ledger_hash_chain_ok !== true) issues.push('agent_ledger_hash_chain_not_ok');
-      if (agents.consensus_ok !== true) issues.push('agent_consensus_not_ok');
-      if (agents.janitor_ok !== true) issues.push('agent_janitor_missing_or_not_ok');
-      if (Array.isArray(agents.blockers) && agents.blockers.length) issues.push('agent_blockers_present');
+      if (routeGate.workflow !== 'official_codex_subagent') issues.push('official_subagent_workflow_missing');
+      if (routeGate.official_subagent_evidence !== true) issues.push('official_subagent_evidence_missing');
+      if (routeGate.parent_summary_present !== true) issues.push('official_subagent_parent_summary_missing');
     }
   }
   const wrongness = proof.evidence?.wrongness;

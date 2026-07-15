@@ -47,6 +47,13 @@ test('greetings stay lightweight while bounded and explicit parallel work requir
   assert.equal(routeRequiresSubagents(ordinaryWork, 'work on the parser'), true);
 });
 
+test('removed dollar-command aliases do not redirect into current execution routes', () => {
+  for (const prompt of ['$Agent fix this', '$Team fix this', '$Swarm fix this', '$ShadowClone fix this', '$Kagebunshin fix this', '$MAD-DB truncate public.events']) {
+    const route = routePrompt(prompt);
+    assert.equal(route, null, prompt);
+  }
+});
+
 test('implementation language and Korean fix conjugations route as work', () => {
   for (const prompt of ['UI implementation 해줘', 'UI 버그 고치고 리뷰해줘', '이 문제는 이번 버전에서 반드시 해결해야해']) {
     const route = routePrompt(prompt);

@@ -33,7 +33,7 @@ test('sks run --execute routes $Commit through deterministic simple git command'
   assert.equal(parsed.route, '$Commit');
   assert.equal(parsed.execution.command, 'sks commit --json');
   assert.equal(parsed.execution.execution_kind, 'safe_deterministic');
-  assert.doesNotMatch(parsed.execution.command, /team|--mock/);
+  assert.doesNotMatch(parsed.execution.command, /naruto|--mock/);
 
   const message = runGit(cwd, ['log', '-1', '--pretty=%B']).stdout;
   assert.equal((message.match(/Co-authored-by: Codex <noreply@openai\.com>/g) || []).length, 1);
@@ -63,7 +63,7 @@ test('sks run --execute keeps clean $Commit on deterministic no_changes path', a
   assert.equal(parsed.execution.command, 'sks commit --json');
   assert.equal(parsed.execution.execution_kind, 'blocked');
   assert.match(parsed.execution.stdout_tail, /no_changes/);
-  assert.doesNotMatch(parsed.execution.command, /team|--mock/);
+  assert.doesNotMatch(parsed.execution.command, /naruto|--mock/);
 });
 
 function runGit(cwd, args) {

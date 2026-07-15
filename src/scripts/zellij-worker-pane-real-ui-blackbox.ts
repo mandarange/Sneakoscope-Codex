@@ -10,10 +10,10 @@ import { ensureDistFresh } from './lib/ensure-dist-fresh.js'
 const requireReal = process.env.SKS_REQUIRE_ZELLIJ === '1' || process.argv.includes('--require-real')
 const manager = readText('src/core/zellij/zellij-worker-pane-manager.ts')
 const schema = readText('src/core/agents/agent-schema.ts')
-const swarm = readText('src/core/agents/native-cli-session-swarm.ts')
+const runtime = readText('src/core/agents/native-cli-worker-runtime.ts')
 assertGate(manager.includes('action') && manager.includes('new-pane'), 'worker pane manager must call zellij action new-pane')
 assertGate(manager.includes('list-panes') && manager.includes('dump-screen'), 'worker pane proof must reconcile real list-panes/dump-screen evidence')
-assertGate(schema.includes('AgentWorkerPlacement') && swarm.includes("placement === 'zellij-pane'"), 'worker placement must control Zellij panes independently of backend')
+assertGate(schema.includes('AgentWorkerPlacement') && runtime.includes("placement === 'zellij-pane'"), 'worker placement must control Zellij panes independently of backend')
 if (!requireReal) {
   emitGate('zellij:worker-pane-real-ui:blackbox', { real_required: false, proof_mode: 'source_contract' })
   process.exit(0)

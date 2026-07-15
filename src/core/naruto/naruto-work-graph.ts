@@ -24,7 +24,7 @@ export interface NarutoAllocationAssignmentInput {
 
 export interface BuildNarutoWorkGraphInput {
   prompt?: string
-  requestedClones?: number
+  requestedWorkers?: number
   totalWorkItems?: number
   honorExplicitTotalWorkItems?: boolean
   readonly?: boolean
@@ -65,13 +65,13 @@ const READONLY_KIND_CYCLE: NarutoWorkKind[] = [
 ]
 
 export function buildNarutoWorkGraph(input: BuildNarutoWorkGraphInput = {}): NarutoWorkGraph {
-  const requestedClones = normalizePositiveInt(input.requestedClones, 12)
+  const requestedWorkers = normalizePositiveInt(input.requestedWorkers, 12)
   const readonly = input.readonly === true
   const writeCapable = input.writeCapable !== false && !readonly
-  const minimumFanout = writeCapable ? requestedClones * 2 : requestedClones
+  const minimumFanout = writeCapable ? requestedWorkers * 2 : requestedWorkers
   const requestedWorkItems = normalizePositiveInt(input.totalWorkItems, minimumFanout)
   const totalWorkItems = input.honorExplicitTotalWorkItems === true
-    ? Math.max(requestedClones, requestedWorkItems)
+    ? Math.max(requestedWorkers, requestedWorkItems)
     : Math.max(minimumFanout, requestedWorkItems)
   const kindCycle = writeCapable ? WRITE_CAPABLE_KIND_CYCLE : READONLY_KIND_CYCLE
   const basePath = normalizeNarutoPath(input.leaseBasePath || '.sneakoscope/naruto/patch-envelopes')
@@ -152,20 +152,20 @@ export function buildNarutoWorkGraph(input: BuildNarutoWorkGraphInput = {}): Nar
     })
   }
 
-  const activeWaves = planNarutoWorkWaves(workItems, Math.max(1, normalizePositiveInt(input.maxActiveWorkers, requestedClones)))
+  const activeWaves = planNarutoWorkWaves(workItems, Math.max(1, normalizePositiveInt(input.maxActiveWorkers, requestedWorkers)))
   annotateParallelCompatibility(workItems, activeWaves)
   const mixedWorkKinds = [...new Set(workItems.map((item) => item.kind))]
   const writeAllowedCount = workItems.filter((item) => item.write_allowed).length
   const blockers = [
     ...(mixedWorkKinds.length < 2 ? ['naruto_work_graph_not_mixed'] : []),
     ...(!readonly && writeAllowedCount === 0 ? ['naruto_write_capable_graph_missing_write_items'] : []),
-    ...(workItems.length < requestedClones ? ['naruto_work_graph_below_requested_clones'] : []),
+    ...(workItems.length < requestedWorkers ? ['naruto_work_graph_below_requested_workers'] : []),
     ...activeWaves.flatMap((wave) => wave.conflict_count > 0 ? [`naruto_wave_write_conflict:${wave.wave_id}`] : [])
   ]
   return {
     schema: 'sks.naruto-work-graph.v1',
     route: '$Naruto',
-    requested_clones: requestedClones,
+    requested_workers: requestedWorkers,
     total_work_items: workItems.length,
     readonly,
     write_capable: writeCapable,

@@ -9,9 +9,9 @@ import { validateCompletionProof } from '../../dist/core/proof/validation.js';
 
 test('proof engine writes latest json and markdown', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-proof-'));
-  const written = await writeCompletionProof(root, { route: '$Team', status: 'verified_partial' });
+  const written = await writeCompletionProof(root, { route: '$Wiki', status: 'verified_partial' });
   assert.equal(written.ok, true);
   const proof = await readLatestProof(root);
-  assert.equal(proof.route, '$Team');
+  assert.equal(proof.route, '$Wiki');
   assert.equal(validateCompletionProof(proof).ok, true);
 });

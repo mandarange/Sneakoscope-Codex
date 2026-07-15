@@ -38,14 +38,43 @@ export class TelegramBotApiClient implements TelegramBotApiTransport {
 
   async call<T = unknown>(method: string, payload: Record<string, unknown>): Promise<T> {
     if (!/^[A-Za-z][A-Za-z0-9]{1,63}$/.test(method)) throw new Error('telegram_method_invalid');
+    return this.perform<T>(method, () => ({
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload)
+    }));
+  }
+
+  async uploadDocument(input: {
+    chat_id: string;
+    message_thread_id?: number;
+    filename: string;
+    content: Uint8Array;
+    caption?: string;
+    protect_content?: boolean;
+    disable_notification?: boolean;
+  }): Promise<{ message_id: number }> {
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(input.filename)) throw new Error('telegram_document_filename_invalid');
+    if (input.content.byteLength < 1 || input.content.byteLength > 64 * 1024) throw new Error('telegram_document_size_invalid');
+    return this.perform('sendDocument', () => {
+      const form = new FormData();
+      form.set('chat_id', input.chat_id);
+      if (input.message_thread_id && input.message_thread_id > 0) form.set('message_thread_id', String(input.message_thread_id));
+      if (input.caption) form.set('caption', input.caption);
+      if (input.protect_content !== undefined) form.set('protect_content', String(input.protect_content));
+      if (input.disable_notification !== undefined) form.set('disable_notification', String(input.disable_notification));
+      form.set('document', new Blob([Uint8Array.from(input.content)], { type: 'application/json' }), input.filename);
+      return { body: form };
+    });
+  }
+
+  private async perform<T>(method: string, init: () => Pick<RequestInit, 'headers' | 'body'>): Promise<T> {
     for (let attempt = 0; attempt <= this.maxRetries; attempt += 1) {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), this.timeoutMs);
       try {
         const response = await this.request(`${this.apiOrigin}/bot${this.token}/${method}`, {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(payload),
+          ...init(),
           signal: controller.signal
         });
         const body = await response.json() as TelegramBotApiResponse<T>;

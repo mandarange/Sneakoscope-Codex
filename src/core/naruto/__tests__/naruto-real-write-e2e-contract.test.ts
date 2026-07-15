@@ -36,7 +36,7 @@ test('Naruto write graph uses explicit prompt file paths instead of patch-envelo
   const paths = extractNarutoPromptPaths(prompt)
   const graph = buildNarutoWorkGraph({
     prompt,
-    requestedClones: 2,
+    requestedWorkers: 2,
     totalWorkItems: 2,
     honorExplicitTotalWorkItems: true,
     writeCapable: true,

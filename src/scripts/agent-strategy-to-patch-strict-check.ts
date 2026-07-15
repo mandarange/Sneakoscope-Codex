@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // @ts-nocheck
 import { assertGate, emitGate, importDist } from './sks-1-18-gate-lib.js';
-import { writeReport } from './agent-patch-swarm-gate-lib.js';
+import { writeReport } from './patch-handoff-gate-lib.js';
 
 const proofMod = await importDist('core/agents/agent-patch-proof.js');
 const cleanProof = proofMod.buildAgentPatchProof({

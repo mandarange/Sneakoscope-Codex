@@ -1,12 +1,17 @@
 import path from 'node:path'
 import { nowIso, readJson, writeJsonAtomic } from '../fsx.js'
-import type { ProofLevel } from './fake-real-proof-policy.js'
+import {
+  OFFICIAL_SUBAGENT_EXECUTION_ARTIFACTS,
+  OFFICIAL_SUBAGENT_EXECUTION_AUTHORITY,
+  evaluateOfficialSubagentExecutionProof,
+  type ProofEvidenceRole,
+  type ProofLevel
+} from './fake-real-proof-policy.js'
 
-export const RUNTIME_TRUTH_MATRIX_SCHEMA = 'sks.runtime-truth-matrix.v1'
+export const RUNTIME_TRUTH_MATRIX_SCHEMA = 'sks.runtime-truth-matrix.v2'
 export const RUNTIME_TRUTH_SUBSYSTEMS = [
+  'official_codex_subagent',
   'zellij_pane',
-  'codex_dynamic',
-  'codex_patch_envelope_smoke',
   'cleanup',
   'intelligent_work_graph',
   'source_intelligence',
@@ -22,13 +27,7 @@ export const RUNTIME_TRUTH_SUBSYSTEMS = [
   'appshots',
   'parallel_write',
   'patch_proof',
-  'native_cli_session_swarm',
-  'real_codex_parallel_workers',
   'native_worker_backend_router',
-  'codex_child_overlap',
-  'model_authored_patch_envelopes',
-  'fast_mode_child_propagation',
-  'fast_mode_default',
   'cleanup_v4',
   'ast_type_work_graph',
   'warp_mad_right_lanes'
@@ -43,6 +42,7 @@ export interface RuntimeTruthRow {
   blockers: string[]
   next_action: string
   required_mode: boolean
+  evidence_role: ProofEvidenceRole
 }
 
 export interface RuntimeTruthMatrix {
@@ -50,6 +50,12 @@ export interface RuntimeTruthMatrix {
   release_version: string
   generated_at: string
   ok: boolean
+  execution_authority: {
+    workflow: typeof OFFICIAL_SUBAGENT_EXECUTION_AUTHORITY
+    subsystem: typeof OFFICIAL_SUBAGENT_EXECUTION_AUTHORITY
+    required_mode_source: 'explicit_input'
+    evidence_artifacts: string[]
+  }
   proof_levels: ProofLevel[]
   rows: RuntimeTruthRow[]
   subsystems: RuntimeTruthRow[]
@@ -79,22 +85,14 @@ export async function buildRuntimeTruthMatrix(input: {
     }
     return null
   }
-  const required = {
-    zellij_pane: process.env.SKS_REQUIRE_ZELLIJ === '1',
-    codex_dynamic: process.env.SKS_REQUIRE_REAL_DYNAMIC_AGENTS === '1',
-    codex_patch_envelope_smoke: process.env.SKS_REQUIRE_REAL_CODEX_PATCHES === '1',
-    real_codex_parallel_workers: process.env.SKS_REQUIRE_REAL_CODEX_PARALLEL === '1',
-    warp_mad_lanes: process.env.SKS_REQUIRE_WARP_MAD_LANES === '1',
-    ...(input.required || {})
-  } as Partial<Record<RuntimeTruthSubsystem, boolean>>
-  const [zellijPane, codex, codexPatch, realCodexParallel, workerBackendRouter, codexChildOverlap, modelAuthoredPatch, zellijRightLanePhysical, zellijRightLaneCoordinate, zellijRightLaneContent, madWarpRightLaneAttach, cleanup, workGraph, fakeReal, sourceIntel, goalMode, scheduler, warpMad, codex0136, codex0134, mcp0134, mcpReadonlyRuntime, adhdOrchestration, appshots, parallelWrite, patchProof, nativeCliSession, fastModeDefault] = await Promise.all([
+  const required = { ...(input.required || {}) } as Partial<Record<RuntimeTruthSubsystem, boolean>>
+  const [subagentPlan, subagentEvidence, narutoSummary, narutoGate, zellijPane, workerBackendRouter, zellijRightLanePhysical, zellijRightLaneCoordinate, zellijRightLaneContent, madWarpRightLaneAttach, cleanup, workGraph, fakeReal, sourceIntel, goalMode, scheduler, warpMad, codex0136, codex0134, mcp0134, mcpReadonlyRuntime, adhdOrchestration, appshots, parallelWrite, patchProof] = await Promise.all([
+    readReport('subagent-plan.json'),
+    readReport('subagent-evidence.json'),
+    readReport('naruto-summary.json'),
+    readReport('naruto-gate.json'),
     readReport('zellij-pane-proof.json'),
-    readReport(`agent-real-codex-dynamic-smoke-${input.releaseVersion}.json`, ['agent-real-codex-dynamic-smoke-1.18.6.json']),
-    readReport('agent-real-codex-patch-envelope-smoke.json'),
-    readReport('agent-real-codex-parallel-workers.json', ['real-codex-parallel-proof.json']),
-    readReport('agent-worker-backend-router.json'),
-    readReport('agent-codex-child-overlap.json'),
-    readReport('agent-model-authored-patch-envelope.json'),
+    readReport('agent-worker-backend-router.json', ['worker-backend-router-report.json']),
     readReport('zellij-layout-proof.json'),
     readReport('zellij-coordinate-proof.json'),
     readReport('zellij-content-proof.json'),
@@ -113,39 +111,38 @@ export async function buildRuntimeTruthMatrix(input: {
     readReport('strategy-gate.json', ['strategy-adhd-orchestrating-gate.json', 'adhd-orchestrating-gate.json']),
     readReport('appshots-evidence.json'),
     readReport('agent-parallel-write-kernel.json'),
-    readReport('agent-patch-proof.json'),
-    readReport('native-cli-session-proof.json', ['agent-native-cli-session-swarm.json']),
-    readReport('fast-mode-propagation-proof.json')
+    readReport('agent-patch-proof.json')
   ])
+  const official = evaluateOfficialSubagentExecutionProof({
+    subagent_plan: subagentPlan,
+    subagent_evidence: subagentEvidence,
+    naruto_summary: narutoSummary,
+    naruto_gate: narutoGate
+  }, {
+    required: required.official_codex_subagent === true
+  })
   const rows: RuntimeTruthRow[] = [
-    row('zellij_pane', levelFromOk(zellijPane, required.zellij_pane === true ? 'real_required_missing' : 'integration_optional'), ['zellij-pane-proof.json'], required.zellij_pane === true, zellijPane, 'run `SKS_REQUIRE_ZELLIJ=1 npm run zellij:pane-proof`'),
-    row('codex_dynamic', levelFromCodex(codex, required.codex_dynamic === true), ['agent-real-codex-dynamic-smoke'], required.codex_dynamic === true, codex, 'run `SKS_TEST_REAL_DYNAMIC_AGENTS=1 npm run agent:real-codex-dynamic-smoke-v2`'),
-    row('codex_patch_envelope_smoke', levelFromCodex(codexPatch, required.codex_patch_envelope_smoke === true), ['agent-real-codex-patch-envelope-smoke.json'], required.codex_patch_envelope_smoke === true, codexPatch, 'run `SKS_TEST_REAL_CODEX_PATCHES=1 npm run agent:real-codex-patch-envelope-smoke`'),
-    row('cleanup', levelFromOk(cleanup, 'integration_optional'), ['agent-cleanup-proof.json'], false, cleanup, 'run `npm run agent:cleanup-executor-v2`'),
-    row('intelligent_work_graph', levelFromWorkGraph(workGraph || fakeReal), ['agent-intelligent-work-graph-v2.json', 'agent-symbol-ownership-map.json'], false, workGraph, 'run `npm run agent:ast-aware-work-graph`'),
+    row('official_codex_subagent', official.proof_level, official.evidence_artifacts, official.required_mode, { blockers: official.blockers }, official.next_action, 'execution_authority'),
+    row('zellij_pane', levelFromOk(zellijPane, required.zellij_pane === true ? 'real_required_missing' : 'integration_optional'), ['zellij-pane-proof.json'], required.zellij_pane === true, zellijPane, 'capture current Zellij pane evidence'),
+    row('cleanup', levelFromOk(cleanup, 'integration_optional'), ['agent-cleanup-proof.json'], false, cleanup, 'run the managed cleanup verification'),
+    row('intelligent_work_graph', levelFromWorkGraph(workGraph || fakeReal), ['agent-intelligent-work-graph-v2.json', 'agent-symbol-ownership-map.json'], false, workGraph, 'run AST-aware work-graph verification'),
     row('source_intelligence', sourceIntel?.ok === true ? 'proven' : 'integration_optional', ['source-intelligence-evidence.json'], false, sourceIntel, 'refresh source intelligence evidence'),
     row('goal_mode', goalMode?.ok === true ? 'proven' : 'integration_optional', ['goal-mode-applied.json'], false, goalMode, 'record official goal mode evidence'),
-    row('route_blackbox', fakeReal?.subsystem_levels?.route_blackbox || 'integration_optional', ['fake-real-proof-policy.json', 'agent-proof-evidence.json'], false, fakeReal, 'run actual route blackbox proof'),
-    row('dynamic_scheduler', scheduler?.pending_queue_drained === true || scheduler?.ok === true ? 'proven' : 'integration_optional', ['agent-scheduler-state.json'], false, scheduler, 'run dynamic scheduler proof gate'),
-    row('warp_mad_lanes', levelFromWarp(warpMad || madWarpRightLaneAttach || zellijRightLanePhysical, required.warp_mad_lanes === true), ['zellij-session.json', 'zellij-pane-proof.json'], required.warp_mad_lanes === true, warpMad || madWarpRightLaneAttach || zellijRightLanePhysical, 'run `sks --mad` with Zellij and capture visible lane proof'),
+    row('route_blackbox', fakeReal?.subsystem_levels?.route_blackbox || (official.proof_level === 'proven' ? 'proven' : 'integration_optional'), ['subagent-evidence.json', 'naruto-gate.json', 'fake-real-proof-policy.json'], false, fakeReal, official.next_action),
+    row('dynamic_scheduler', scheduler?.pending_queue_drained === true || scheduler?.ok === true ? 'proven' : 'integration_optional', ['agent-scheduler-state.json'], false, scheduler, 'record scheduler drain evidence'),
+    row('warp_mad_lanes', levelFromWarp(warpMad || madWarpRightLaneAttach || zellijRightLanePhysical, required.warp_mad_lanes === true), ['zellij-session.json', 'zellij-pane-proof.json'], required.warp_mad_lanes === true, warpMad || madWarpRightLaneAttach || zellijRightLanePhysical, 'capture visible MAD Zellij lane evidence'),
     row('codex_0_136', levelFromOk(codex0136, 'integration_optional'), ['codex-0.136-compat.json'], false, codex0136, 'run `npm run codex:0.136-compat`'),
     row('codex_0_134', levelFromOk(codex0134, 'integration_optional'), ['codex-0-134-official-compat.json'], false, codex0134, 'run `npm run codex:0.134-official-compat`'),
     row('mcp_0_134', levelFromOk(mcp0134, 'integration_optional'), ['mcp-0-134-modernization.json'], false, mcp0134, 'run `npm run mcp:0.134-modernization`'),
     row('mcp_readonly_runtime_scheduler', levelFromOk(mcpReadonlyRuntime, 'integration_optional'), ['mcp-readonly-runtime-scheduler.json'], false, mcpReadonlyRuntime, 'run `npm run mcp:readonly-runtime-scheduler`'),
     row('adhd_orchestration', levelFromOk(adhdOrchestration, 'integration_optional'), ['strategy-gate.json', 'adhd-orchestrating-gate.json'], false, adhdOrchestration, 'run `npm run strategy:adhd-orchestrating-gate`'),
     row('appshots', levelFromAppshots(appshots), ['appshots-evidence.json'], false, appshots, 'run `npm run appshots:evidence`'),
-    row('parallel_write', levelFromOk(parallelWrite, 'integration_optional'), ['agent-parallel-write-kernel.json'], false, parallelWrite, 'run `npm run agent:parallel-write-kernel`'),
-    row('patch_proof', levelFromOk(patchProof, 'integration_optional'), ['agent-patch-proof.json'], false, patchProof, 'run `npm run agent:patch-proof`'),
-    row('native_cli_session_swarm', levelFromOk(nativeCliSession, 'integration_optional'), ['native-cli-session-proof.json', 'agent-native-cli-session-swarm.json'], false, nativeCliSession, 'run `npm run agent:native-cli-session-swarm-20`'),
-    row('real_codex_parallel_workers', levelFromCodex(realCodexParallel, required.real_codex_parallel_workers === true), ['real-codex-parallel-proof.json', 'agent-real-codex-parallel-workers.json'], required.real_codex_parallel_workers === true, realCodexParallel, 'run `SKS_TEST_REAL_CODEX_PARALLEL=1 npm run agent:real-codex-parallel-workers`'),
-    row('native_worker_backend_router', levelFromOk(workerBackendRouter, 'integration_optional'), ['agent-worker-backend-router.json', 'worker-backend-router-report.json'], false, workerBackendRouter, 'run `npm run agent:worker-backend-router`'),
-    row('codex_child_overlap', levelFromOk(codexChildOverlap || realCodexParallel, 'integration_optional'), ['agent-codex-child-overlap.json', 'real-codex-parallel-proof.json'], required.real_codex_parallel_workers === true, codexChildOverlap || realCodexParallel, 'run `npm run agent:codex-child-overlap`'),
-    row('model_authored_patch_envelopes', levelFromOk(modelAuthoredPatch || realCodexParallel, 'integration_optional'), ['agent-model-authored-patch-envelope.json', 'real-codex-parallel-proof.json'], required.real_codex_parallel_workers === true, modelAuthoredPatch || realCodexParallel, 'run `npm run agent:model-authored-patch-envelope`'),
-    row('fast_mode_child_propagation', levelFromOk(realCodexParallel || fastModeDefault, 'integration_optional'), ['real-codex-parallel-proof.json', 'fast-mode-propagation-proof.json'], false, realCodexParallel || fastModeDefault, 'run `npm run agent:fast-mode-worker-propagation`'),
-    row('fast_mode_default', levelFromOk(fastModeDefault, 'integration_optional'), ['fast-mode-propagation-proof.json'], false, fastModeDefault, 'run `npm run agent:fast-mode-default`'),
-    row('cleanup_v4', levelFromOk(cleanup, 'integration_optional'), ['agent-cleanup-proof.json'], false, cleanup, 'run `npm run agent:cleanup-executor-v2`'),
-    row('ast_type_work_graph', levelFromWorkGraph(workGraph || fakeReal), ['agent-intelligent-work-graph-v2.json', 'agent-symbol-ownership-map.json'], false, workGraph, 'run `npm run agent:ast-aware-work-graph`'),
-    row('warp_mad_right_lanes', levelFromWarp(warpMad || madWarpRightLaneAttach || zellijRightLanePhysical || zellijRightLaneCoordinate || zellijRightLaneContent, required.warp_mad_lanes === true), ['zellij-session.json', 'zellij-pane-proof.json'], required.warp_mad_lanes === true, warpMad || madWarpRightLaneAttach || zellijRightLanePhysical || zellijRightLaneCoordinate || zellijRightLaneContent, 'run `sks --mad` with Zellij and capture right-lane proof')
+    row('parallel_write', levelFromOk(parallelWrite, 'integration_optional'), ['agent-parallel-write-kernel.json'], false, parallelWrite, 'run parallel-write kernel verification'),
+    row('patch_proof', levelFromOk(patchProof, 'integration_optional'), ['agent-patch-proof.json'], false, patchProof, 'run patch handoff verification'),
+    row('native_worker_backend_router', levelFromOk(workerBackendRouter, 'integration_optional'), ['agent-worker-backend-router.json', 'worker-backend-router-report.json'], false, workerBackendRouter, 'run current backend-router verification'),
+    row('cleanup_v4', levelFromOk(cleanup, 'integration_optional'), ['agent-cleanup-proof.json'], false, cleanup, 'run the managed cleanup verification'),
+    row('ast_type_work_graph', levelFromWorkGraph(workGraph || fakeReal), ['agent-intelligent-work-graph-v2.json', 'agent-symbol-ownership-map.json'], false, workGraph, 'run AST-aware work-graph verification'),
+    row('warp_mad_right_lanes', levelFromWarp(warpMad || madWarpRightLaneAttach || zellijRightLanePhysical || zellijRightLaneCoordinate || zellijRightLaneContent, required.warp_mad_lanes === true), ['zellij-session.json', 'zellij-pane-proof.json'], required.warp_mad_lanes === true, warpMad || madWarpRightLaneAttach || zellijRightLanePhysical || zellijRightLaneCoordinate || zellijRightLaneContent, 'capture visible MAD Zellij right-lane evidence')
   ]
   const blockers = rows.flatMap((item) => item.required_mode && ['blocked', 'real_required_missing', 'integration_optional'].includes(item.proof_level)
     ? [`required_runtime_truth_missing:${item.subsystem}`, ...item.blockers]
@@ -163,6 +160,12 @@ export async function buildRuntimeTruthMatrix(input: {
     release_version: input.releaseVersion,
     generated_at: nowIso(),
     ok: blockers.length === 0,
+    execution_authority: {
+      workflow: OFFICIAL_SUBAGENT_EXECUTION_AUTHORITY,
+      subsystem: OFFICIAL_SUBAGENT_EXECUTION_AUTHORITY,
+      required_mode_source: 'explicit_input',
+      evidence_artifacts: [...OFFICIAL_SUBAGENT_EXECUTION_ARTIFACTS]
+    },
     proof_levels: ['fixture_only', 'fixture_instrumented_real', 'proven', 'integration_optional', 'real_required_missing', 'partial', 'blocked'],
     rows,
     subsystems: rows,
@@ -178,15 +181,24 @@ export async function writeRuntimeTruthMatrix(root: string, matrix: RuntimeTruth
   return matrix
 }
 
-function row(subsystem: RuntimeTruthSubsystem, proofLevel: ProofLevel, evidenceArtifacts: string[], requiredMode: boolean, report: any, nextAction: string): RuntimeTruthRow {
+function row(
+  subsystem: RuntimeTruthSubsystem,
+  proofLevel: ProofLevel,
+  evidenceArtifacts: string[],
+  requiredMode: boolean,
+  report: any,
+  nextAction: string,
+  evidenceRole: ProofEvidenceRole = 'supporting'
+): RuntimeTruthRow {
   const blockers = Array.isArray(report?.blockers) ? report.blockers.map(String) : []
   return {
     subsystem,
     proof_level: proofLevel,
     evidence_artifacts: evidenceArtifacts,
     blockers,
-    next_action: blockers.length ? nextAction : proofLevel === 'integration_optional' ? nextAction : 'no action required',
-    required_mode: requiredMode
+    next_action: blockers.length ? nextAction : proofLevel === 'integration_optional' || proofLevel === 'real_required_missing' ? nextAction : 'no action required',
+    required_mode: requiredMode,
+    evidence_role: evidenceRole
   }
 }
 
@@ -201,25 +213,16 @@ function levelFromOk(report: any, missing: ProofLevel): ProofLevel {
 function levelFromAppshots(report: any): ProofLevel {
   if (!report) return 'integration_optional'
   const evidence = report.evidence || report
+  if (evidence.status === 'not_required' || evidence.proof_level === 'not_required') return 'integration_optional'
   if (Array.isArray(evidence.blockers) && evidence.blockers.length > 0) return 'blocked'
   if (evidence.ok !== true && report.ok !== true) return 'blocked'
   if (evidence.proof_level === 'proven') return 'proven'
   if (evidence.proof_level === 'fixture_instrumented_real') return 'fixture_instrumented_real'
-  if (evidence.status === 'not_required') return 'integration_optional'
   const sources = Array.isArray(evidence.source_verification) ? evidence.source_verification : []
   if (sources.length && sources.every((source: any) => source?.accepted === true)) {
     return sources.some((source: any) => source?.fixture === true) ? 'fixture_instrumented_real' : 'proven'
   }
   return 'blocked'
-}
-
-function levelFromCodex(report: any, required: boolean): ProofLevel {
-  if (!report) return required ? 'real_required_missing' : 'integration_optional'
-  if (report.proof_level) return report.proof_level
-  if (report.fixture_instrumented_real === true || report.status === 'fixture_instrumented_real') return 'fixture_instrumented_real'
-  if (report.status === 'passed' || report.status === 'proven') return 'proven'
-  if (report.status === 'integration_optional') return required ? 'real_required_missing' : 'integration_optional'
-  return required ? 'real_required_missing' : 'blocked'
 }
 
 function levelFromWorkGraph(report: any): ProofLevel {

@@ -51,10 +51,6 @@ import { recordOfficialSubagentParentOutcomesTelemetry } from '../zellij/zellij-
 
 export { buildNarutoGateResult } from '../subagents/official-subagent-preparation.js'
 
-const LEGACY_FLAG_WARNING = 'SKS: --clones is deprecated; use --agents. Naruto now uses Codex subagents.'
-const LEGACY_WORKERS_WARNING = 'SKS: naruto workers is deprecated; use naruto subagents.'
-const REMOVED_LEGACY_SUBCOMMANDS = new Set(['dashboard'])
-
 type NarutoAction = 'run' | 'status' | 'subagents' | 'proof' | 'help'
 
 export interface NarutoArgs {
@@ -65,9 +61,6 @@ export interface NarutoArgs {
   missionId: string
   json: boolean
   readOnly: boolean
-  clonesAliasUsed: boolean
-  workersAliasUsed: boolean
-  unsupportedLegacyFlags: string[]
   argumentErrors: string[]
 }
 
@@ -76,19 +69,11 @@ export async function narutoCommand(commandOrArgs: string | string[] = 'naruto',
   if (args.some((arg) => arg === '--glm' || arg.startsWith('--glm='))) return blockGlmOverride(args.includes('--json'))
 
   const parsed = parseNarutoArgs(args)
-  if (parsed.clonesAliasUsed) console.warn(LEGACY_FLAG_WARNING)
-  if (parsed.workersAliasUsed) console.warn(LEGACY_WORKERS_WARNING)
   if (parsed.argumentErrors.length) {
     return emit(parsed, argumentBlock(parsed.argumentErrors), () => {
       console.error(`$Naruto argument error: ${parsed.argumentErrors.join(', ')}`)
     }, true)
   }
-  if (parsed.unsupportedLegacyFlags.length) {
-    return emit(parsed, legacyFlagBlock(parsed.unsupportedLegacyFlags), () => {
-      console.error('$Naruto uses only the Codex official subagent workflow. Legacy process, scheduler, pool, backend, and model flags were removed.')
-    }, true)
-  }
-
   if (!parsed.json) cliUi.banner(parsed.action === 'run' ? 'naruto subagents' : `naruto ${parsed.action}`)
   if (parsed.action === 'help') return narutoHelp(parsed)
   if (parsed.action === 'status') return narutoStatus(parsed)
@@ -238,13 +223,21 @@ async function narutoRunTransaction(
       }).catch(() => undefined)
     }
   }
-  const passed = run.ok === true && evidence.ok === true && appSession === false
+  const candidatePassed = run.ok === true && evidence.ok === true && appSession === false
   const blockers = uniqueStrings([
     ...(Array.isArray(evidence.blockers) ? evidence.blockers : []),
     ...configBlockers,
     ...(!appSession && run.ok !== true ? [`codex_parent_exit:${String(run.codex_exit_code ?? 'unknown')}`] : []),
     ...(appSession ? ['official_subagent_execution_pending_in_current_parent'] : [])
   ])
+  const gate = await writeNarutoGate(dir, {
+    missionId: id,
+    workflowRunId,
+    evidence,
+    passed: candidatePassed,
+    blockers
+  })
+  const passed = gate.passed === true
   const status = passed
     ? 'completed'
     : appSession
@@ -261,13 +254,12 @@ async function narutoRunTransaction(
     status,
     ok: passed,
     parentSummary: effectiveParentSummary,
-    blockers,
+    blockers: gate.blockers,
     appSession,
     sessionKey,
     suggestedAgents: Array.isArray(completedPlan?.suggested_agents) ? completedPlan.suggested_agents : []
   })
   await writeJsonAtomic(path.join(dir, NARUTO_SUMMARY_FILENAME), summary)
-  await writeNarutoGate(dir, { missionId: id, workflowRunId, evidence, passed, blockers })
   await setCurrent(root, {
     mission_id: id,
     official_subagent_run_id: workflowRunId,
@@ -280,7 +272,7 @@ async function narutoRunTransaction(
     route_closed: false
   }, { sessionKey })
   if (!appSession) {
-    await closeWorkOrderLedgerForRouteResult(dir, { ok: passed, blockers })
+    await closeWorkOrderLedgerForRouteResult(dir, { ok: passed, blockers: gate.blockers })
     if (!passed) process.exitCode = 1
   }
 
@@ -504,32 +496,26 @@ export function parseNarutoArgs(args: string[]): NarutoArgs {
     ? ['help', ...(args.includes('--json') ? ['--json'] : [])]
     : args
   const first = normalized[0] && !normalized[0].startsWith('-') ? normalized[0] : ''
-  const workersAliasUsed = first === 'workers'
-  const actionName = workersAliasUsed ? 'subagents' : first
+  const actionName = first
   const actions = new Set(['run', 'status', 'subagents', 'proof', 'help'])
   const action = (actions.has(actionName) ? actionName : 'run') as NarutoAction
-  const explicitAction = actions.has(actionName) || workersAliasUsed
+  const explicitAction = actions.has(actionName)
   const rest = explicitAction ? normalized.slice(1) : normalized
   const optionArgs = validationArgs.includes('--') ? validationArgs.slice(0, validationArgs.indexOf('--')) : validationArgs
   const agentsOption = optionValue(optionArgs, '--agents')
-  const clonesOption = optionValue(optionArgs, '--clones')
   const maxThreadsOption = optionValue(optionArgs, '--max-threads')
   const missionOption = optionValue(optionArgs, '--mission')
   const missionIdOption = optionValue(optionArgs, '--mission-id')
   const argumentErrors = uniqueStrings([
     ...optionErrors('--agents', agentsOption, true),
-    ...optionErrors('--clones', clonesOption, true),
     ...optionErrors('--max-threads', maxThreadsOption, true),
     ...optionErrors('--mission', missionOption, false),
     ...optionErrors('--mission-id', missionIdOption, false),
-    ...(agentsOption.present && clonesOption.present ? ['conflicting_options:--agents,--clones'] : []),
     ...booleanOptionErrors(validationArgs),
     ...unknownOptionErrors(validationArgs)
   ])
-  if (REMOVED_LEGACY_SUBCOMMANDS.has(String(first || '').toLowerCase())) {
-    argumentErrors.push(`removed_legacy_subcommand:${String(first).toLowerCase()}`)
-  }
-  const requestedSubagents = strictPositiveInteger(agentsOption.value ?? clonesOption.value)
+  if (first && !explicitAction) argumentErrors.push(`unknown_subcommand:${String(first).toLowerCase()}`)
+  const requestedSubagents = strictPositiveInteger(agentsOption.value)
   const maxThreads = strictPositiveInteger(maxThreadsOption.value)
   const missionFlag = missionOption.value ?? missionIdOption.value
   const positional = positionalValues(rest)
@@ -540,13 +526,12 @@ export function parseNarutoArgs(args: string[]): NarutoArgs {
     ? positional.join(' ').trim()
     : ''
   const positionalHead = String(positional[0] || '').toLowerCase()
-  const subcommandNames = new Set(['run', 'status', 'subagents', 'workers', 'proof', 'help'])
-  if (explicitAction && action === 'run' && REMOVED_LEGACY_SUBCOMMANDS.has(positionalHead)) {
-    argumentErrors.push(`removed_legacy_subcommand:${positionalHead}`)
-  } else if (explicitAction && action === 'run' && subcommandNames.has(positionalHead)) {
+  const subcommandNames = new Set(['run', 'status', 'subagents', 'proof', 'help'])
+  if (!first && !explicitAction && positionalHead && !subcommandNames.has(positionalHead)) {
+    argumentErrors.push(`unknown_subcommand:${positionalHead}`)
+  }
+  if (explicitAction && action === 'run' && subcommandNames.has(positionalHead)) {
     argumentErrors.push(`misplaced_subcommand:${positionalHead}`)
-  } else if (!explicitAction && REMOVED_LEGACY_SUBCOMMANDS.has(positionalHead)) {
-    argumentErrors.push(`removed_legacy_subcommand:${positionalHead}`)
   } else if (!explicitAction && subcommandNames.has(positionalHead)) {
     argumentErrors.push(`misplaced_subcommand:${positionalHead}`)
   }
@@ -558,9 +543,7 @@ export function parseNarutoArgs(args: string[]): NarutoArgs {
         continue
       }
       const normalizedValue = String(value || '').toLowerCase()
-      if (REMOVED_LEGACY_SUBCOMMANDS.has(normalizedValue)) {
-        argumentErrors.push(`removed_legacy_subcommand:${normalizedValue}`)
-      } else if (subcommandNames.has(normalizedValue)) {
+      if (subcommandNames.has(normalizedValue)) {
         argumentErrors.push(`misplaced_subcommand:${normalizedValue}`)
       } else {
         argumentErrors.push(`unexpected_positional:${value}`)
@@ -576,16 +559,13 @@ export function parseNarutoArgs(args: string[]): NarutoArgs {
     missionId: String(missionFlag || positionalMission || 'latest'),
     json: normalized.includes('--json'),
     readOnly: normalized.includes('--readonly') || normalized.includes('--read-only'),
-    clonesAliasUsed: clonesOption.present,
-    workersAliasUsed,
-    unsupportedLegacyFlags: unsupportedLegacyFlags(validationArgs),
     argumentErrors: uniqueStrings(argumentErrors)
   }
 }
 
 function positionalValues(args: string[]) {
   const valueFlags = new Set([
-    '--agents', '--clones', '--max-threads', '--mission', '--mission-id',
+    '--agents', '--max-threads', '--mission', '--mission-id',
     '--backend', '--concurrency', '--target-active-slots', '--work-items',
     '--write-mode', '--max-write-agents', '--service-tier', '--messages',
     '--parallelism', '--tournament', '--ollama-model', '--local-model-model',
@@ -615,30 +595,6 @@ function positionalValues(args: string[]) {
     if (!arg.startsWith('--')) result.push(arg)
   }
   return result
-}
-
-function unsupportedLegacyFlags(args: string[]) {
-  const optionArgs = args.includes('--') ? args.slice(0, args.indexOf('--')) : args
-  const unsupportedBoolean = [
-    '--mock', '--ollama', '--local-model', '--no-ollama', '--no-local-model',
-    '--apply-patches', '--dry-run-patches', '--dry-run-patch', '--attach', '--smoke',
-    '--parallel-write', '--fast', '--no-fast', '--real', '--no-open-zellij',
-    '--no-zellij', '--incremental', '--mad'
-  ]
-  const unsupportedValues = [
-    '--backend', '--concurrency', '--target-active-slots', '--work-items', '--write-mode',
-    '--max-write-agents', '--service-tier', '--messages', '--parallelism', '--tournament',
-    '--ollama-model', '--local-model-model', '--ollama-base-url', '--local-model-base-url',
-    '--scheduler', '--scheduler-mode', '--pool', '--pool-size', '--model', '--parent-model',
-    '--worker-model', '--expert-model', '--agent-model', '--clone-model', '--reasoning-effort',
-    '--engine'
-  ]
-  const flags = unsupportedBoolean.filter((flag) => optionArgs.some((arg) => arg === flag || arg.startsWith(`${flag}=`)))
-  for (const flag of unsupportedValues) {
-    const option = optionValue(optionArgs, flag)
-    if (option.present) flags.push(option.value === undefined ? flag : `${flag}=${option.value}`)
-  }
-  return uniqueStrings(flags)
 }
 
 function optionValue(args: string[], name: string): { present: boolean; value: string | undefined; missing: boolean; duplicate: boolean } {
@@ -679,26 +635,15 @@ function optionErrors(name: string, option: ReturnType<typeof optionValue>, nume
 
 function unknownOptionErrors(args: string[]): string[] {
   const canonical = new Set([
-    '--agents', '--clones', '--max-threads', '--mission', '--mission-id',
+    '--agents', '--max-threads', '--mission', '--mission-id',
     '--json', '--readonly', '--read-only', '--help', '-h', '--'
-  ])
-  const legacy = new Set([
-    '--mock', '--ollama', '--local-model', '--no-ollama', '--no-local-model',
-    '--apply-patches', '--dry-run-patches', '--dry-run-patch', '--attach', '--smoke',
-    '--parallel-write', '--fast', '--no-fast', '--real', '--no-open-zellij',
-    '--no-zellij', '--incremental', '--mad', '--glm', '--backend', '--concurrency',
-    '--target-active-slots', '--work-items', '--write-mode', '--max-write-agents',
-    '--service-tier', '--messages', '--parallelism', '--tournament', '--ollama-model',
-    '--local-model-model', '--ollama-base-url', '--local-model-base-url', '--scheduler',
-    '--scheduler-mode', '--pool', '--pool-size', '--model', '--parent-model', '--worker-model',
-    '--expert-model', '--agent-model', '--clone-model', '--reasoning-effort', '--engine'
   ])
   const errors: string[] = []
   const optionArgs = args.includes('--') ? args.slice(0, args.indexOf('--')) : args
   for (const arg of optionArgs) {
     if (!arg.startsWith('-') || arg === '-') continue
     const name = arg.includes('=') ? arg.slice(0, arg.indexOf('=')) : arg
-    if (!canonical.has(name) && !legacy.has(name)) errors.push(`unsupported_argument:${name}`)
+    if (!canonical.has(name)) errors.push(`unsupported_argument:${name}`)
   }
   return errors
 }
@@ -722,22 +667,12 @@ function blockGlmOverride(json: boolean) {
     status: 'blocked',
     reason: 'naruto_gpt_5_6_family_only_glm_override_forbidden',
     blockers: ['naruto_gpt_5_6_family_only_glm_override_forbidden'],
-    hint: 'Use normal sks naruto for the official Codex subagent workflow. The separate legacy GLM route requires sks --mad --glm --naruto.'
+    hint: 'Use normal sks naruto for the official Codex subagent workflow. The separate GLM workflow uses sks --mad --glm naruto.'
   }
   process.exitCode = 1
   if (json) console.log(JSON.stringify(result, null, 2))
   else console.error(`$Naruto blocked: ${result.reason}. ${result.hint}`)
   return result
-}
-
-function legacyFlagBlock(flags: string[]) {
-  return {
-    schema: NARUTO_RESULT_SCHEMA,
-    ok: false,
-    status: 'blocked',
-    blockers: flags.map((flag) => `removed_legacy_process_flag:${flag}`),
-    hint: 'Naruto supports only the Codex official subagent workflow. Use --agents, --max-threads, --read-only, --mission, or --json.'
-  }
 }
 
 function argumentBlock(errors: string[]) {

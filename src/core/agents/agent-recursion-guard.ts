@@ -6,20 +6,18 @@ export const NON_RECURSIVE_PIPELINE_REPORT_SCHEMA = 'sks.non-recursive-pipeline-
 export const NON_RECURSIVE_PIPELINE_PERFORMANCE_BUDGET_MS = 1500
 
 export const AGENT_RECURSIVE_COMMAND_DENYLIST = Object.freeze([
-  'sks team',
-  'sks --agent',
-  'sks agent run',
+  'sks naruto run',
   'sks research run',
   'sks autoresearch run',
   'sks qa-loop',
   'sks goal',
-  '$Team',
+  '$Naruto',
+  '$Work',
   '$Research',
   '$AutoResearch',
   '$QA-LOOP',
   '$Goal',
-  'node dist/bin/sks.js team',
-  'node dist/bin/sks.js agent',
+  'node dist/bin/sks.js naruto',
   'node dist/bin/sks.js research run'
 ])
 
@@ -405,7 +403,7 @@ function transcriptGroupForChannel(channel: NonRecursivePipelineChannel) {
 
 function isWorkerExecutionSurface(rel: string, channel: NonRecursivePipelineChannel) {
   if (channel === 'stdout' || channel === 'stderr' || channel === 'agent_result') return true
-  return /(?:^|\/)agent-worker-pipeline\.(?:ts|mjs|js)$/.test(rel) || /(?:^|\/)agent-runner-(?:process|tmux|codex-exec)\.(?:ts|mjs|js)$/.test(rel)
+  return /(?:^|\/)agent-worker-pipeline\.(?:ts|mjs|js)$/.test(rel) || /(?:^|\/)agent-runner-(?:process|zellij|ollama)\.(?:ts|mjs|js)$/.test(rel)
 }
 
 function classifyNonRecursivePipelinePath(file: string): NonRecursivePipelineChannel {

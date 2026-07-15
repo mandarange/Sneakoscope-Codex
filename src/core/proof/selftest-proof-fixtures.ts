@@ -2,7 +2,7 @@ import { writeRouteCompletionProof } from './route-adapter.js';
 
 const CLAIM_TEXT = {
   hard_blocker: 'Hard blocker unblocks incomplete active gate after repeated identical compliance stops.',
-  team_gate: 'Team selftest fixture reached Completion Proof gate before reflection validation.',
+  route_gate: 'Naruto selftest fixture reached Completion Proof gate before reflection validation.',
   subagent_gate: 'Subagent selftest fixture records Completion Proof after subagent evidence.'
 };
 
@@ -10,15 +10,15 @@ const DEFAULTS = {
   hard_blocker: {
     artifacts: ['hard-blocker.json', 'compliance-loop-guard.json'],
     gateSource: 'selftest-hard-blocker',
-    unverified: ['selftest fixture does not claim a real Team run completed']
+    unverified: ['selftest fixture does not claim a real Naruto run completed']
   },
-  team_gate: {
-    artifacts: ['team-gate.json', 'team-session-cleanup.json'],
+  route_gate: {
+    artifacts: ['naruto-gate.json', 'subagent-evidence.json'],
     gateSource: 'selftest-route-gate',
-    unverified: ['selftest fixture does not claim a real Team implementation run completed']
+    unverified: ['selftest fixture does not claim a real Naruto implementation run completed']
   },
   subagent_gate: {
-    artifacts: ['team-gate.json', 'team-session-cleanup.json', 'reflection-gate.json'],
+    artifacts: ['naruto-gate.json', 'subagent-evidence.json', 'reflection-gate.json'],
     gateSource: 'selftest-subagent-gate',
     unverified: ['selftest fixture records mocked subagent evidence only']
   }
@@ -26,13 +26,13 @@ const DEFAULTS = {
 
 export async function writeSelftestRouteProof(root: any, {
   missionId,
-  route = '$Team',
-  kind = 'team_gate',
+  route = '$Naruto',
+  kind = 'route_gate',
   artifacts = null,
   gateSource = null,
   unverified = null
 }: any = {}) {
-  const defaults = (DEFAULTS as Record<string, any>)[kind] || DEFAULTS.team_gate;
+  const defaults = (DEFAULTS as Record<string, any>)[kind] || DEFAULTS.route_gate;
   return writeRouteCompletionProof(root, {
     missionId,
     route,
@@ -64,7 +64,7 @@ export async function writeSelftestRouteProof(root: any, {
     },
     claims: [{
       id: `selftest-${kind.replaceAll('_', '-')}-proof`,
-      text: (CLAIM_TEXT as Record<string, string>)[kind] || CLAIM_TEXT.team_gate,
+      text: (CLAIM_TEXT as Record<string, string>)[kind] || CLAIM_TEXT.route_gate,
       status: 'verified_partial'
     }],
     unverified: unverified || defaults.unverified,

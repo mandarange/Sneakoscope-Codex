@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // @ts-nocheck
 import { assertGate, emitGate, importDist } from './sks-1-18-gate-lib.js';
-import { writeReport } from './agent-patch-swarm-gate-lib.js';
+import { writeReport } from './patch-handoff-gate-lib.js';
 
 const strategy = await importDist('core/strategy/strategy-compiler.js');
-const compiled = strategy.compileStrategy({ prompt: '`file-1.txt` `file-2.txt`', route: '$Agent', agentCount: 2 });
+const compiled = strategy.compileStrategy({ prompt: '`file-1.txt` `file-2.txt`', route: '$Naruto', agentCount: 2 });
 const verificationNodes = compiled.verification_rollback_dag.nodes.filter((node) => node.kind === 'verification');
 const report = { schema: 'sks.agent-patch-verification-dag-check.v1', ok: verificationNodes.length > 0, dag: compiled.verification_rollback_dag, verificationNodes };
 writeReport('agent-patch-verification-dag', report);

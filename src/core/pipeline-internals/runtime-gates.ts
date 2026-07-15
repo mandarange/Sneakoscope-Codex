@@ -10,12 +10,8 @@ import { IMAGE_UX_REVIEW_GATE_ARTIFACT, IMAGE_UX_REVIEW_POLICY_ARTIFACT, IMAGE_U
 import { CODEX_WEB_VERIFICATION_EVIDENCE_SOURCE, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, evidenceMentionsForbiddenBrowserAutomation, reflectionRequiredForRoute, routeById } from '../routes.js';
 import { validateRouteCompletionProof } from '../proof/route-proof-gate.js';
 import { routeFromState, routeRequiresCompletionProof } from '../proof/route-proof-policy.js';
-import { AGENT_INTAKE_STAGE_ID } from '../agents/agent-schema.js';
-import { routeRequiresAgentIntake } from '../agents/agent-plan.js';
-import { readAgentGateStatus } from '../agents/agent-gate.js';
 import { MISTAKE_RECALL_ARTIFACT, mistakeRecallGateStatus } from '../mistake-recall.js';
 import { SSOT_GUARD_ARTIFACT, validateSsotGuardArtifact } from '../safety/ssot-guard.js';
-import { validateTeamRuntimeArtifacts } from '../team-dag.js';
 import { checkStopGate } from '../stop-gate/stop-gate-check.js';
 import { readWorkOrderLedger, evaluateWorkOrderCoverage } from '../work-order-ledger.js';
 import {
@@ -30,7 +26,6 @@ import { projectTriwikiToAgentsMd } from '../triwiki/agents-md-projector.js';
 const REFLECTION_ARTIFACT = 'reflection.md';
 const REFLECTION_GATE = 'reflection-gate.json';
 const REFLECTION_MEMORY_PATH = '.sneakoscope/memory/q2_facts/post-route-reflection.md';
-const TEAM_SESSION_CLEANUP_ARTIFACT = 'team-session-cleanup.json';
 const COMPLIANCE_LOOP_GUARD_ARTIFACT = 'compliance-loop-guard.json';
 const HARD_BLOCKER_ARTIFACT = 'hard-blocker.json';
 const DEFAULT_COMPLIANCE_LOOP_LIMIT = 3;
@@ -143,15 +138,6 @@ export async function projectGateStatus(root: any, state: any = {}) {
       source: id ? `.sneakoscope/missions/${id}/subagent-evidence.json` : '.sneakoscope/state/subagents/subagent-evidence.json'
     });
   }
-  if (id && !stateUsesOfficialSubagentWorkflow(state) && routeRequiresAgentIntake(routeFromState(state), { task: state.prompt, force: state.forceAgents === true, noAgents: state.agents_required === false })) {
-    const agentGate = await readAgentGateStatus(root, id);
-    gates.push({
-      id: AGENT_INTAKE_STAGE_ID,
-      ok: agentGate.ok,
-      missing: agentGate.ok ? [] : (agentGate.missing || ['agents/agent-proof-evidence.json']),
-      source: `.sneakoscope/missions/${id}/agents/agent-proof-evidence.json`
-    });
-  }
   if (hasActiveGate) {
     const active: any = activeGate;
     gates.push({
@@ -226,34 +212,20 @@ export async function evaluateStop(root: any, state: any, payload: any, opts: an
     ? await passedActiveGate(root, state, jsonCache)
     : null;
   const activeGateNotApplicable = activeGatePreview?.not_applicable === true;
-  const agentIntakeRequired = state?.mission_id && !stateUsesOfficialSubagentWorkflow(state) && routeRequiresAgentIntake(route, { task: state.prompt, force: state.forceAgents === true, noAgents: state.agents_required === false });
   const context7Promise = state?.context7_required ? hasContext7DocsEvidence(root, state) : Promise.resolve(true);
   const subagentPromise = state?.subagents_required && !activeGateNotApplicable ? hasSubagentEvidence(root, state) : Promise.resolve(true);
-  const completionProofPromise = agentIntakeRequired
-    ? exists(path.join(missionDir(root, state.mission_id), 'completion-proof.json'))
-    : Promise.resolve(true);
-  const agentGatePromise = agentIntakeRequired ? readAgentGateStatus(root, state.mission_id) : Promise.resolve({ ok: true, missing: [] });
   const mistakeRecallPromise = mistakeRecallGateStatus(root, state);
-  const [context7Ok, subagentOk, completionProofExists, agentGate, mistakeRecall] = await Promise.all([
+  const [context7Ok, subagentOk, mistakeRecall] = await Promise.all([
     context7Promise,
     subagentPromise,
-    completionProofPromise,
-    agentGatePromise,
     mistakeRecallPromise
   ]);
   if (state?.context7_required && !context7Ok) {
-    return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} requires Context7 evidence before completion. Use Context7 resolve-library-id, then query-docs (or legacy get-library-docs), so SKS can record context7-evidence.jsonl.`, { gate: 'context7-evidence' });
+    return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} requires Context7 evidence before completion. Use Context7 resolve-library-id, then query-docs, so SKS can record context7-evidence.jsonl.`, { gate: 'context7-evidence' });
   }
   if (state?.subagents_required && !activeGateNotApplicable && !subagentOk) {
     const evidence = await subagentEvidence(root, state);
     return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} requires official Codex subagent evidence before completion. Record matched SubagentStart/SubagentStop events for every requested agent thread, wait for all threads, and provide the parent integration summary. Missing: ${(evidence.blockers || ['official_subagent_events_and_parent_summary']).join(', ')}.`, { gate: 'official-subagent-evidence', missing: evidence.blockers });
-  }
-  if (agentIntakeRequired && !completionProofExists) {
-    if (!agentGate.ok) {
-      const missionArg = String(state.mission_id || '').trim() || '<mission-id>';
-      const routeArg = String(state.route_command || state.route || state.mode || '$Agent');
-      return complianceBlock(root, state, `SKS ${routeArg} route cannot continue to implementation/finalization: native agent intake gate is missing or blocked. Run: sks agent run --mission ${shellQuote(missionArg)} --route ${shellQuote(routeArg)} --agents 5 --json`, { gate: AGENT_INTAKE_STAGE_ID, missing: agentGate.missing || ['agents/agent-proof-evidence.json'] });
-    }
   }
   if (!mistakeRecall.ok) {
     return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} found relevant TriWiki mistake memory that is not bound to the decision contract. Re-run pipeline answer or seal the contract so ${MISTAKE_RECALL_ARTIFACT} is consumed before finishing.`, { gate: MISTAKE_RECALL_ARTIFACT, missing: mistakeRecall.missing });
@@ -310,7 +282,7 @@ export async function evaluateStop(root: any, state: any, payload: any, opts: an
                 ]
               : ['naruto-gate.json'];
             if (officialMissing.length) {
-              return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} route cannot stop yet. Official subagent evidence and the parent integration summary are incomplete. Missing: ${officialMissing.join(', ')}. Historical legacy artifacts are read only when the mission itself already carries an explicit legacy workflow marker; no environment switch can reactivate that runtime.`, { gate: 'official-subagent-evidence', missing: officialMissing });
+              return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} route cannot stop yet. Official subagent evidence, SSOT guard, and the parent integration summary are incomplete. Missing: ${officialMissing.join(', ')}.`, { gate: 'official-subagent-evidence', missing: officialMissing });
             }
           }
           const coverage = await workOrderCoverageGateStatus(root, state);
@@ -356,10 +328,6 @@ export async function evaluateStop(root: any, state: any, payload: any, opts: an
   if (!coverage.ok) return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} route has unresolved work-order-ledger items (neither verified nor honestly blocked): ${coverage.blockers.join(', ')}.`, { gate: 'work-order-ledger', missing: coverage.blockers });
   fireAndForgetProjectMemory(root, state);
   return null;
-}
-
-function shellQuote(value: unknown) {
-  return `'${String(value ?? '').replace(/'/g, `'"'"'`)}'`;
 }
 
 function fireAndForgetProjectMemory(root: any, state: any = {}) {
@@ -544,34 +512,11 @@ async function passedHardBlocker(root: any, state: any, jsonCache?: Map<string, 
 
 function missingRequiredGateFields(file: any, state: any, gate: any = {}) {
   const mode = String(state?.mode || '').toUpperCase();
-  if (file === 'team-gate.json' || mode === 'TEAM') {
-    const required = ['team_roster_confirmed', 'analysis_artifact', 'triwiki_refreshed', 'triwiki_validated', 'ssot_guard', 'consensus_artifact', 'implementation_team_fresh', 'review_artifact', 'integration_evidence', 'session_cleanup'];
-    if (fromChatImgCoverageRequired(state, gate)) required.push('from_chat_img_request_coverage');
-    if (teamGraphRequired(state, gate)) required.push('team_graph_compiled', 'runtime_dependencies_concrete', 'worker_inboxes_written', 'write_scope_conflicts_zero', 'task_claim_readiness_checked');
-    return required
-      .filter((key: any) => gate[key] !== true);
-  }
   if (file === 'naruto-gate.json' || mode === 'NARUTO') {
-    const required = legacyNarutoWorkflowEnabled(state, gate)
-      ? [
-          'clone_roster_built',
-          'work_graph_ready',
-          'role_distribution_ready',
-          'allocation_ready',
-          'rebalance_ready',
-          'concurrency_governor_ready',
-          'active_pool_ready',
-          'verification_dag_ready',
-          'gpt_final_pack_ready',
-          'zellij_dashboard_ready',
-          'native_agent_proof',
-          'final_arbiter_accepted',
-          'session_cleanup'
-        ]
-      : ['subagent_plan_ready', 'official_subagent_evidence', 'parent_summary_present', 'session_cleanup'];
-    if (!legacyNarutoWorkflowEnabled(state, gate) && gate.workflow !== 'official_codex_subagent') required.push('workflow');
-    if (!legacyNarutoWorkflowEnabled(state, gate) && gate.parent_model_match === false) required.push('parent_model_match');
-    if (!legacyNarutoWorkflowEnabled(state, gate) && Array.isArray(gate.config_blockers) && gate.config_blockers.length) required.push(...gate.config_blockers.map((item: any) => `config:${String(item)}`));
+    const required = ['subagent_plan_ready', 'official_subagent_evidence', 'parent_summary_present', 'ssot_guard', 'session_cleanup'];
+    if (gate.workflow !== 'official_codex_subagent') required.push('workflow');
+    if (gate.parent_model_match === false) required.push('parent_model_match');
+    if (Array.isArray(gate.config_blockers) && gate.config_blockers.length) required.push(...gate.config_blockers.map((item: any) => `config:${String(item)}`));
     if (fromChatImgCoverageRequired(state, gate)) required.push('from_chat_img_request_coverage');
     return required.filter((key: any) => key.includes(':') || gate[key] !== true);
   }
@@ -612,28 +557,7 @@ async function missingRequiredGateArtifacts(root: any, file: any, state: any, ga
   }
   if (file === IMAGE_UX_REVIEW_GATE_ARTIFACT || mode === 'IMAGE_UX_REVIEW') return missingImageUxReviewArtifacts(root, state, gate);
   if (file === 'naruto-gate.json' || mode === 'NARUTO') return missingNarutoArtifacts(root, state, gate);
-  if (file !== 'team-gate.json' && mode !== 'TEAM') return [];
-  const missing: any[] = [];
-  if (gate.team_roster_confirmed === true && !(await exists(path.join(missionDir(root, state.mission_id), 'team-roster.json')))) missing.push('team-roster.json');
-  if (gate.ssot_guard === true) {
-    const ssotGuard = await readJson(path.join(missionDir(root, state.mission_id), SSOT_GUARD_ARTIFACT), null);
-    const validation = validateSsotGuardArtifact(ssotGuard);
-    if (!validation.ok) missing.push(...validation.issues.map((issue) => `${SSOT_GUARD_ARTIFACT}:${issue}`));
-  }
-  if (teamGraphRequired(state, gate) && gate.team_graph_compiled === true) {
-    const validation = await validateTeamRuntimeArtifacts(missionDir(root, state.mission_id));
-    if (!validation.ok) missing.push(...validation.issues.map((issue: any) => `team-runtime:${issue}`));
-  }
-  if (fromChatImgCoverageRequired(state, gate) && gate.from_chat_img_request_coverage === true) {
-    missing.push(...await missingFromChatImgCoverageArtifacts(root, state));
-  }
-  if (gate.session_cleanup !== true) return missing;
-  const cleanup = await readJson(path.join(missionDir(root, state.mission_id), TEAM_SESSION_CLEANUP_ARTIFACT), null);
-  if (!cleanup) return [...missing, TEAM_SESSION_CLEANUP_ARTIFACT];
-  if (cleanup.passed !== true) missing.push(`${TEAM_SESSION_CLEANUP_ARTIFACT}:passed`);
-  if (cleanup.all_sessions_closed !== true && cleanup.outstanding_sessions !== 0) missing.push(`${TEAM_SESSION_CLEANUP_ARTIFACT}:all_sessions_closed`);
-  if (cleanup.live_transcript_finalized !== true) missing.push(`${TEAM_SESSION_CLEANUP_ARTIFACT}:live_transcript_finalized`);
-  return missing;
+  return [];
 }
 
 async function missingImageUxReviewArtifacts(root: any, state: any = {}, gate: any = {}) {
@@ -701,10 +625,6 @@ function fromChatImgCoverageRequired(state: any = {}, gate: any = {}) {
   return state?.from_chat_img_required === true || gate?.from_chat_img_required === true;
 }
 
-function teamGraphRequired(state: any = {}, gate: any = {}) {
-  return state?.team_graph_required === true || gate?.team_graph_required === true;
-}
-
 async function missingFromChatImgCoverageArtifacts(root: any, state: any = {}) {
   const missing: any[] = [];
   const id = state?.mission_id;
@@ -768,7 +688,6 @@ function gateFilesForState(state: any) {
   if (state.mode === 'GOAL') return ['goal-workflow.json'];
   if (state.mode === 'RESEARCH') return ['research-gate.json', 'research-gate.evaluated.json'];
   if (state.mode === 'NARUTO') return ['naruto-gate.json'];
-  if (state.mode === 'TEAM') return ['team-gate.json'];
   if (state.mode === 'AUTORESEARCH') return ['autoresearch-gate.json'];
   if (state.mode === 'DB') return ['db-review.json'];
   if (state.mode === 'GX') return ['gx-gate.json'];
@@ -782,7 +701,6 @@ async function missingNarutoArtifacts(root: any, state: any = {}, gate: any = {}
   const id = state?.mission_id;
   if (!id) return ['mission_id'];
   const dir = missionDir(root, id);
-  if (legacyNarutoWorkflowEnabled(state, gate)) return missingLegacyNarutoArtifacts(root, state, gate);
   const required = [
     'naruto-gate.json',
     'subagent-plan.json',
@@ -794,6 +712,11 @@ async function missingNarutoArtifacts(root: any, state: any = {}, gate: any = {}
   const missing: any[] = [];
   for (const file of required) {
     if (!(await exists(path.join(dir, file)))) missing.push(file);
+  }
+  if (gate.ssot_guard === true) {
+    const ssotGuard = await readJson(path.join(dir, SSOT_GUARD_ARTIFACT), null);
+    const validation = validateSsotGuardArtifact(ssotGuard);
+    if (!validation.ok) missing.push(...validation.issues.map((issue) => `${SSOT_GUARD_ARTIFACT}:${issue}`));
   }
   const [plan, evidenceFile, summary, recomputedEvidence] = await Promise.all([
     readJson(path.join(dir, 'subagent-plan.json'), null),
@@ -820,7 +743,6 @@ async function missingNarutoArtifacts(root: any, state: any = {}, gate: any = {}
   if (summary?.ok !== true || summary?.status !== 'completed') missing.push('naruto-summary.json:completed');
   if (summary?.parent_summary_present !== true || !String(summary?.parent_summary || '').trim()) missing.push('naruto-summary.json:parent_summary');
   if (!String(summary?.verification?.budget || '').trim()) missing.push('naruto-summary.json:verification.budget');
-  if (summary?.legacy_process_swarm_used !== false) missing.push('naruto-summary.json:legacy_process_swarm_used');
   if (summary?.parent?.observed_model_match === false) missing.push('naruto-summary.json:parent.observed_model_match');
   if (fromChatImgCoverageRequired(state, gate) && gate.from_chat_img_request_coverage === true) {
     missing.push(...await missingFromChatImgCoverageArtifacts(root, state));
@@ -828,38 +750,6 @@ async function missingNarutoArtifacts(root: any, state: any = {}, gate: any = {}
   return missing;
 }
 
-async function missingLegacyNarutoArtifacts(root: any, state: any = {}, gate: any = {}) {
-  const id = state?.mission_id;
-  if (!id) return ['mission_id'];
-  const dir = missionDir(root, id);
-  const required = [
-    'naruto-gate.json',
-    'agents/naruto-work-graph.json',
-    'agents/naruto-role-distribution.json',
-    'agents/naruto-concurrency-governor.json',
-    'agents/naruto-verification-dag.json',
-    'agents/naruto-gpt-final-pack.json'
-  ];
-  const missing: any[] = [];
-  for (const file of required) if (!(await exists(path.join(dir, file)))) missing.push(file);
-  if (gate.native_agent_proof === true && !(await exists(path.join(dir, 'agents', 'agent-proof-evidence.json')))) missing.push('agents/agent-proof-evidence.json');
-  if (fromChatImgCoverageRequired(state, gate) && gate.from_chat_img_request_coverage === true) missing.push(...await missingFromChatImgCoverageArtifacts(root, state));
-  return missing;
-}
-
-function legacyNarutoWorkflowEnabled(state: any = {}, gate: any = {}) {
-  return state?.legacy_subagent_workflow === true
-    || state?.workflow === 'legacy_process_swarm'
-    || gate?.legacy_workflow === true
-    || gate?.workflow === 'legacy_process_swarm';
-}
-
-function stateUsesOfficialSubagentWorkflow(state: any = {}) {
-  return state?.subagents_required === true
-    && state?.native_sessions_required === false
-    && state?.legacy_subagent_workflow !== true
-    && state?.workflow !== 'legacy_process_swarm';
-}
 
 function extractLastMessage(payload: any) {
   return payload.last_assistant_message || payload.assistant_message || payload.message || payload.response || payload.raw || '';

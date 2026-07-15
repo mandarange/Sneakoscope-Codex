@@ -9,8 +9,8 @@ test('Naruto workers receive the route-contract long timeout while ordinary agen
   try {
     assert.equal(codexTimeoutClassForRoute('$Naruto', 'standard'), 'long');
     assert.equal(codexTimeoutClassForRoute('Naruto', 'short'), 'long');
-    assert.equal(codexTimeoutClassForRoute('$Agent', 'standard'), 'standard');
-    assert.equal(codexTimeoutClassForRoute('$Agent', 'short'), 'short');
+    assert.equal(codexTimeoutClassForRoute('$Research', 'standard'), 'standard');
+    assert.equal(codexTimeoutClassForRoute('$Research', 'short'), 'short');
 
     const naruto = task('$Naruto');
     assert.equal(normalizeCodexReliabilityPolicy(naruto).timeoutClass, 'long');
@@ -20,11 +20,11 @@ test('Naruto workers receive the route-contract long timeout while ordinary agen
     assert.equal(normalizeCodexReliabilityPolicy(staleNarutoCaller).timeoutClass, 'long');
     assert.equal(codexSdkTurnTimeoutMs(staleNarutoCaller), 300_000);
 
-    const ordinary = task('$Agent', 'standard');
+    const ordinary = task('$Research', 'standard');
     assert.equal(normalizeCodexReliabilityPolicy(ordinary).timeoutClass, 'standard');
     assert.equal(codexSdkTurnTimeoutMs(ordinary), 120_000);
 
-    const short = task('$Agent', 'short');
+    const short = task('$Research', 'short');
     assert.equal(normalizeCodexReliabilityPolicy(short).timeoutClass, 'short');
     assert.equal(codexSdkTurnTimeoutMs(short), 45_000);
   } finally {

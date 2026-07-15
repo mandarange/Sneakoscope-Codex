@@ -6,13 +6,17 @@ import { runGlmReadinessAndExit } from '../providers/glm/glm-readiness.js';
 import { runGlmInteractiveLaunch } from '../providers/glm/glm-interactive-launch.js';
 import { glmNarutoCommand } from '../providers/glm/naruto/glm-naruto-command.js';
 import { stripGlmSlashModelArgs } from '../providers/glm/glm-profile-resolver.js';
+import { findRetiredGlobalExecutionArgumentErrors } from '../../cli/global-mode-router.js';
 
 export async function glmCommand(args: string[] = []) {
-  if (flag(args, '--naruto') || positionalArgs(args)[0] === 'naruto') {
-    const narutoArgs = args.filter((a) => a !== '--naruto' && a !== 'naruto');
+  const argumentErrors = findRetiredGlobalExecutionArgumentErrors(args);
+  if (argumentErrors.length) return blockRetiredGlmArguments(args, argumentErrors);
+  if (positionalArgs(args)[0] === 'naruto') {
+    const narutoIndex = args.indexOf('naruto');
+    const narutoArgs = [...args.slice(0, narutoIndex), ...args.slice(narutoIndex + 1)];
     return glmNarutoCommand(narutoArgs);
   }
-  if (flag(args, '--bench') && !flag(args, '--naruto')) {
+  if (flag(args, '--bench')) {
     const result = await runGlmBenchmark(process.cwd(), args);
     if (result.status === 'blocked') process.exitCode = 1;
     if (flag(args, '--json')) printJson(result);
@@ -45,6 +49,25 @@ export async function glmCommand(args: string[] = []) {
   else if (result.ok) console.log(`GLM direct run completed: ${result.termination_reason}`);
   else console.error(`GLM direct run ${result.status}: ${result.blockers.join(', ') || result.termination_reason}`);
   if (!result.ok) process.exitCode = 1;
+  return result;
+}
+
+function blockRetiredGlmArguments(args: readonly string[], argumentErrors: readonly string[]) {
+  const result = {
+    schema: 'sks.glm-argument-error.v1',
+    ok: false,
+    status: 'blocked' as const,
+    reason: 'invalid_glm_arguments',
+    argument_errors: [...argumentErrors],
+    blockers: [...argumentErrors],
+    hint: 'Use `sks --mad --glm` or the canonical `sks --mad --glm naruto` surface.'
+  };
+  process.exitCode = 1;
+  if (flag(args, '--json')) printJson(result);
+  else {
+    console.error('SKS GLM argument error.');
+    for (const error of argumentErrors) console.error(`- ${error}`);
+  }
   return result;
 }
 

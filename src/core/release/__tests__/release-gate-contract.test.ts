@@ -14,6 +14,7 @@ test('release manifest matches the independent full gate contract exactly', () =
   for (const id of [
     'package:published-contract',
     'publish:packlist-performance',
+    'publish:runtime-script-closure',
     'release:metadata-current',
     'docs:truthfulness'
   ]) assert.ok(ids.includes(id), id)

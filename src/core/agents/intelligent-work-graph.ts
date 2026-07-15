@@ -52,7 +52,7 @@ export async function buildIntelligentWorkGraph(input: {
     inventory: input.inventory,
     dependencyGraph: input.dependencyGraph,
     root: input.root,
-    route: input.route || '$Agent',
+    route: input.route || '$Naruto',
     prompt: input.prompt || '',
     changedFiles
   })
@@ -76,7 +76,7 @@ export function buildIntelligentWorkGraphFromData(input: {
   const ownership = buildTestOwnershipMap(sourceFiles, testFiles, ast, input.dependencyGraph)
   const criticalPath = buildCriticalPath(sourceFiles, edges)
   const bottlenecks = buildIntegrationBottlenecks(edges, input.changedFiles || [])
-  const priorities = buildRouteDomainPriority({ route: input.route || '$Agent', prompt: input.prompt || '', sourceFiles, docs, scripts, changedFiles: input.changedFiles || [] })
+  const priorities = buildRouteDomainPriority({ route: input.route || '$Naruto', prompt: input.prompt || '', sourceFiles, docs, scripts, changedFiles: input.changedFiles || [] })
   const astSourceParsedCount = ast.parsed_files.filter((file: string) => sourceFiles.includes(file)).length
   const astCoverage = sourceFiles.length ? astSourceParsedCount / sourceFiles.length : 0
   const testOwnershipConfidence = sourceFiles.length ? ownership.relations.reduce((sum: number, row: any) => sum + Number(row.confidence_score || 0), 0) / Math.max(1, sourceFiles.length) : 0

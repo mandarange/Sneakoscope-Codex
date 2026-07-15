@@ -15,6 +15,16 @@ test('command contract registry covers the command registry without regex or com
   assert.equal(validation.ok, true, validation.issues.join(', '));
   assert.deepEqual(validation.observed_names, Object.keys(COMMANDS).sort());
   assert.equal(commandContracts().size, Object.keys(COMMANDS).length);
+  for (const [name, command] of Object.entries(COMMANDS)) {
+    assert.equal(typeof command.risk, 'string', name);
+    assert.equal(typeof command.latency, 'string', name);
+    assert.equal(typeof command.supportsJson, 'boolean', name);
+    assert.equal(typeof command.remoteAllowed, 'boolean', name);
+    assert.equal(typeof command.telegramAllowed, 'boolean', name);
+    assert.equal(typeof command.inputProfile, 'string', name);
+    assert.ok(Array.isArray(command.requiredCapabilities), name);
+    if (command.supportsJson) assert.notEqual(command.inputProfile, 'none', name);
+  }
 });
 
 test('risk and remote policy are explicit and fail closed for R3', () => {
@@ -24,6 +34,11 @@ test('risk and remote policy are explicit and fail closed for R3', () => {
   assert.equal(commandContract('mad-sks')?.risk, 'R3');
   assert.equal(commandContract('mad-sks')?.remote_allowed, false);
   assert.equal(commandContract('mad-sks')?.telegram_allowed, false);
+  for (const name of ['mcp', 'remote', 'telegram']) {
+    assert.equal(commandContract(name)?.risk, 'R2');
+    assert.equal(commandContract(name)?.remote_allowed, false);
+    assert.equal(commandContract(name)?.telegram_allowed, false);
+  }
 });
 
 test('per-tool schema rejects unknown or mistyped arguments', () => {
@@ -48,6 +63,19 @@ test('validated argv builders apply typed arguments and never accept arbitrary a
   assert.deepEqual(contract.argv_builder(validation.value), [
     'stop-gate', 'check', '--route', 'Naruto', '--mission', 'M-1', '--json'
   ]);
+});
+
+test('JSON-capable local R2 commands preserve the explicit JSON flag without exposing arbitrary argv', () => {
+  for (const name of ['mcp', 'remote', 'telegram']) {
+    const contract = commandContract(name);
+    assert.ok(contract, name);
+    const validation = validateJsonSchema({ json: true }, contract.input_schema);
+    assert.equal(validation.ok, true, name);
+    if (!validation.ok) continue;
+    assert.deepEqual(contract.argv_builder(validation.value), [name, '--json'], name);
+    const arbitrary = validateJsonSchema({ argv: ['--shell', 'rm -rf /'] }, contract.input_schema);
+    assert.equal(arbitrary.ok, false, name);
+  }
 });
 
 test('latency classes have bounded timeout and output caps', () => {

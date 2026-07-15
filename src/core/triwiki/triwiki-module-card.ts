@@ -26,7 +26,7 @@ export const DEFAULT_TRIWIKI_MODULE_CARDS: TriWikiModuleCard[] = [
   moduleCard('doctor-dirty-repair', ['src/core/doctor/doctor-dirty-planner.ts', 'src/core/doctor/doctor-repair-postcheck.ts', 'src/scripts/doctor-dirty-*.ts'], ['doctor:dirty'], ['doctor-production'], 'high'),
   moduleCard('startup-config-repair', ['src/core/doctor/*startup*.ts', 'src/scripts/doctor-startup-*.ts'], ['doctor:startup'], ['doctor-production'], 'high'),
   moduleCard('context7-mcp', ['src/core/doctor/*context7*.ts', 'src/commands/context7.ts'], ['doctor:context7', 'context7:'], ['startup-mcp'], 'critical'),
-  moduleCard('supabase-mcp', ['src/core/doctor/*supabase*.ts', 'src/core/db-safety.ts', 'src/core/pipeline-internals/runtime-core.ts'], ['doctor:supabase', 'mad-db:', 'mad-sks:'], ['startup-mcp'], 'critical'),
+  moduleCard('supabase-mcp', ['src/core/doctor/*supabase*.ts', 'src/core/db-safety.ts', 'src/core/mad-sks/sql-plane/**', 'src/core/pipeline-internals/runtime-core.ts'], ['doctor:supabase', 'mad-sks:sql-plane-', 'mad-sks:'], ['startup-mcp'], 'critical'),
   moduleCard('native-capability', ['src/core/codex-native/**', 'src/scripts/native-*.ts'], ['native:', 'codex-native:'], ['native-capability'], 'high'),
   moduleCard('secret-preservation', ['src/core/**/secret*.ts', 'src/scripts/secret-*.ts', 'safety-mutation-allowlist.json'], ['secret:', 'supabase-secret'], ['doctor-production'], 'critical'),
   moduleCard('core-skill', ['.agents/skills/**', 'src/scripts/core-skill-*.ts'], ['core-skill:'], ['core-skill'], 'high'),

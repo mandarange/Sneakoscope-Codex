@@ -4,7 +4,7 @@ import { assertGate, emitGate, importDist } from './lib/codex-sdk-gate-lib.js';
 
 const finalizer = await importDist('core/pipeline/finalize-pipeline-result.js');
 const blocked = await finalizer.finalizePipelineResult({
-  route: '$Team',
+  route: '$Naruto',
   missionId: 'M-local-final-gpt',
   localParticipated: true,
   candidateResults: [{ backend: 'local-llm', summary: 'draft' }],

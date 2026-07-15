@@ -5,13 +5,14 @@ import os from 'node:os'
 import path from 'node:path'
 import { parse } from 'smol-toml'
 import {
-  MANAGED_AGENT_ROLES,
   MANAGED_OFFICIAL_SUBAGENT_ROLES,
+  RETIRED_MANAGED_AGENT_ROLE_TOMBSTONES,
   managedAgentRoleContent,
   managedOfficialSubagentRoleContent,
   managedOfficialSubagentRoleOwnsText
 } from '../../managed-assets/managed-assets-manifest.js'
 import { initProject } from '../../init.js'
+import { reconcileRetiredAgentRoleResidue } from '../../agents/agent-role-config.js'
 import { pruneStaleGeneratedFiles } from '../../init/skills.js'
 import { repairCodexStartupConfig } from '../../doctor/codex-startup-config-repair.js'
 import { repairAgentConfigFileReferences } from '../../codex/agent-config-file-repair.js'
@@ -263,28 +264,137 @@ test('fresh agent install materializes the complete project-scoped custom agent 
   assert.deepEqual(second.existing.sort(), expectedRoleFiles.map((filename) => `.codex/agents/${filename}`).sort())
 })
 
-test('legacy 4/5/6 SKS role sets are removed only when their exact managed templates are intact', async () => {
+test('retired SKS-owned role sets are removed and modified collisions are quarantined', async () => {
   for (const legacyCount of [4, 5, 6]) {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), `sks-official-agent-legacy-${legacyCount}-`))
     const agentsDir = path.join(root, '.codex', 'agents')
     await fs.mkdir(agentsDir, { recursive: true })
-    for (const role of MANAGED_AGENT_ROLES.slice(0, legacyCount)) {
+    for (const role of RETIRED_MANAGED_AGENT_ROLE_TOMBSTONES.slice(0, legacyCount)) {
       await fs.writeFile(path.join(agentsDir, role.filename), managedAgentRoleContent(role))
     }
-    const modifiedRole = MANAGED_AGENT_ROLES[legacyCount]
+    const modifiedRole = RETIRED_MANAGED_AGENT_ROLE_TOMBSTONES[legacyCount]
     assert.ok(modifiedRole)
     const modifiedPath = path.join(agentsDir, modifiedRole.filename)
     await fs.writeFile(modifiedPath, managedAgentRoleContent(modifiedRole).replace(modifiedRole.description, 'operator modified role'))
 
-    const result = await installOfficialSubagentAgentConfigs(root)
+    const result = await reconcileRetiredAgentRoleResidue({ root, home: path.join(root, 'home'), fix: true })
     assert.equal(result.ok, true)
-    assert.equal(result.removed_legacy.length, legacyCount)
-    assert.equal(result.legacy_stale.length, legacyCount)
-    for (const role of MANAGED_AGENT_ROLES.slice(0, legacyCount)) {
+    assert.equal(result.removed_count, legacyCount)
+    assert.equal(result.quarantined_user_collision_count, 1)
+    assert.equal(result.remaining_count, 0)
+    for (const role of RETIRED_MANAGED_AGENT_ROLE_TOMBSTONES.slice(0, legacyCount)) {
       await assert.rejects(fs.access(path.join(agentsDir, role.filename)))
     }
-    assert.equal(await fs.readFile(modifiedPath, 'utf8'), managedAgentRoleContent(modifiedRole).replace(modifiedRole.description, 'operator modified role'))
-    assert.ok(result.preserved_legacy.includes(`.codex/agents/${modifiedRole.filename}`))
+    await assert.rejects(fs.access(modifiedPath))
+    const quarantined = await findFile(path.join(root, '.sneakoscope', 'quarantine'), modifiedRole.filename)
+    assert.ok(quarantined)
+    assert.equal(await fs.readFile(quarantined!, 'utf8'), managedAgentRoleContent(modifiedRole).replace(modifiedRole.description, 'operator modified role'))
+  }
+})
+
+test('retired agent cleanup never follows role roots or role-file symlinks outside their owner root', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-retired-agent-symlink-root-'))
+  const outside = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-retired-agent-symlink-outside-'))
+  try {
+    const home = path.join(root, 'home')
+    const globalAgentsDir = path.join(home, '.codex', 'agents')
+    const projectAgentsDir = path.join(root, '.codex', 'agents')
+    const role = RETIRED_MANAGED_AGENT_ROLE_TOMBSTONES[0]
+    assert.ok(role)
+    const outsideRootFile = path.join(outside, 'root-role.toml')
+    const outsideLeafFile = path.join(outside, 'leaf-role.toml')
+    const rootBytes = Buffer.from(managedAgentRoleContent(role))
+    const leafBytes = Buffer.from('name = "customer-external-role"\n')
+    await fs.mkdir(path.dirname(globalAgentsDir), { recursive: true })
+    await fs.mkdir(projectAgentsDir, { recursive: true })
+    await fs.writeFile(outsideRootFile, rootBytes)
+    await fs.writeFile(outsideLeafFile, leafBytes)
+    await fs.symlink(outside, globalAgentsDir)
+    await fs.symlink(outsideLeafFile, path.join(projectAgentsDir, role.filename))
+
+    const result = await reconcileRetiredAgentRoleResidue({ root, home, codexHome: path.join(home, '.codex'), fix: true })
+    assert.equal(result.ok, true)
+    assert.equal(result.quarantined_user_collision_count, 2)
+    assert.deepEqual(await fs.readFile(outsideRootFile), rootBytes)
+    assert.deepEqual(await fs.readFile(outsideLeafFile), leafBytes)
+    await assert.rejects(fs.lstat(globalAgentsDir))
+    await assert.rejects(fs.lstat(path.join(projectAgentsDir, role.filename)))
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
+    await fs.rm(outside, { recursive: true, force: true })
+  }
+})
+
+test('retired agent cleanup covers HOME and global-runtime disabled backups with marker proof', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-retired-agent-global-roots-'))
+  try {
+    const home = path.join(root, 'home')
+    const globalRuntimeRoot = path.join(root, 'global-runtime')
+    const role = RETIRED_MANAGED_AGENT_ROLE_TOMBSTONES[0]
+    assert.ok(role)
+    const homeBackupDir = path.join(home, '.codex', 'agents-disabled', 'sks')
+    const runtimeBackupDir = path.join(globalRuntimeRoot, '.codex', 'agents-disabled', 'sks')
+    const runtimeActiveDir = path.join(globalRuntimeRoot, '.codex', 'agents')
+    const managedHomeBackup = path.join(homeBackupDir, `${role.filename}.bak`)
+    const managedRuntimeBackup = path.join(runtimeBackupDir, `${role.filename}.legacy.bak`)
+    const managedRuntimeActiveBackup = path.join(runtimeActiveDir, `${role.filename}.legacy.bak`)
+    const customerBackup = path.join(runtimeBackupDir, `${role.filename.replace(/\.toml$/i, '')}-customer.bak`)
+    const customerBytes = Buffer.from('name = "customer-backup"\n')
+    await fs.mkdir(homeBackupDir, { recursive: true })
+    await fs.mkdir(runtimeBackupDir, { recursive: true })
+    await fs.mkdir(runtimeActiveDir, { recursive: true })
+    await fs.writeFile(managedHomeBackup, managedAgentRoleContent(role))
+    await fs.writeFile(managedRuntimeBackup, managedAgentRoleContent(role))
+    await fs.writeFile(managedRuntimeActiveBackup, managedAgentRoleContent(role))
+    await fs.writeFile(customerBackup, customerBytes)
+
+    const result = await reconcileRetiredAgentRoleResidue({
+      root,
+      home,
+      codexHome: path.join(home, '.codex'),
+      globalRuntimeRoot,
+      fix: true
+    })
+    assert.equal(result.ok, true)
+    assert.equal(result.removed_count, 3)
+    assert.equal(result.quarantined_user_collision_count, 1)
+    await assert.rejects(fs.access(managedHomeBackup))
+    await assert.rejects(fs.access(managedRuntimeBackup))
+    await assert.rejects(fs.access(managedRuntimeActiveBackup))
+    await assert.rejects(fs.access(customerBackup))
+    const quarantined = await findFile(path.join(globalRuntimeRoot, '.sneakoscope', 'quarantine'), path.basename(customerBackup))
+    assert.ok(quarantined)
+    assert.deepEqual(await fs.readFile(quarantined!), customerBytes)
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})
+
+test('retired agent cleanup accepts an external CODEX_HOME as its own managed boundary', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-retired-agent-external-codex-home-'))
+  try {
+    const project = path.join(root, 'project')
+    const home = path.join(root, 'home')
+    const codexHome = path.join(root, 'codex-home')
+    const role = RETIRED_MANAGED_AGENT_ROLE_TOMBSTONES[0]
+    assert.ok(role)
+    const activeRole = path.join(codexHome, 'agents', role.filename)
+    const disabledRole = path.join(codexHome, 'agents-disabled', 'sks', `${role.filename}.legacy.bak`)
+    await fs.mkdir(project, { recursive: true })
+    await fs.mkdir(path.dirname(activeRole), { recursive: true })
+    await fs.mkdir(path.dirname(disabledRole), { recursive: true })
+    await fs.writeFile(activeRole, managedAgentRoleContent(role))
+    await fs.writeFile(disabledRole, managedAgentRoleContent(role))
+
+    const result = await reconcileRetiredAgentRoleResidue({ root: project, home, codexHome, fix: true })
+    assert.equal(result.ok, true)
+    assert.equal(result.removed_count, 2)
+    assert.equal(result.remaining_count, 0)
+    assert.equal(result.error_count, 0)
+    await assert.rejects(fs.access(activeRole))
+    await assert.rejects(fs.access(disabledRole))
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
   }
 })
 
@@ -410,7 +520,7 @@ test('project setup backs up and preserves invalid config TOML without overwriti
   assert.equal(await fs.readFile(result.codex_config_install.backup_path, 'utf8'), invalid)
 })
 
-test('setup repair preserves user, invalid, and legacy Codex agent files', async () => {
+test('setup repair preserves current-role collisions and quarantines retired-role collisions', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-official-agent-repair-preserve-'))
   const home = path.join(root, 'home')
   const agentsDir = path.join(root, '.codex', 'agents')
@@ -434,13 +544,16 @@ test('setup repair preserves user, invalid, and legacy Codex agent files', async
   })
   assert.equal(await fs.readFile(workerPath, 'utf8'), customWorker)
   assert.equal(await fs.readFile(expertPath, 'utf8'), invalidExpert)
-  assert.equal(await fs.readFile(legacyPath, 'utf8'), legacy)
+  await assert.rejects(fs.access(legacyPath))
+  const quarantinedLegacy = await findFile(path.join(root, '.sneakoscope', 'quarantine'), 'analysis-scout.toml')
+  assert.ok(quarantinedLegacy)
+  assert.equal(await fs.readFile(quarantinedLegacy!, 'utf8'), legacy)
   assert.ok(result.agent_install.manual_blockers.includes('manual_user_owned_official_subagent_collision:.codex/agents/worker.toml'))
   assert.ok(result.agent_install.manual_blockers.includes('manual_invalid_official_subagent_toml:.codex/agents/expert.toml'))
   assert.equal(result.agent_install.backups.length, 1)
 })
 
-test('generated Naruto and compatibility alias skills describe the official workflow', async () => {
+test('generated Naruto skill describes the official workflow and retired aliases stay absent', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-official-skill-copy-'))
   const home = path.join(root, 'home')
   await initProject(root, {
@@ -452,8 +565,6 @@ test('generated Naruto and compatibility alias skills describe the official work
 
   const agentsRules = await fs.readFile(path.join(root, 'AGENTS.md'), 'utf8')
   const naruto = await fs.readFile(path.join(root, '.agents', 'skills', 'naruto', 'SKILL.md'), 'utf8')
-  const shadow = await fs.readFile(path.join(root, '.agents', 'skills', 'shadow-clone', 'SKILL.md'), 'utf8')
-  const kage = await fs.readFile(path.join(root, '.agents', 'skills', 'kage-bunshin', 'SKILL.md'), 'utf8')
   assert.match(naruto, /Codex official subagent workflow/)
   assert.match(naruto, /--agents N/)
   assert.match(naruto, /GPT-5\.6 Sol Max/)
@@ -466,13 +577,15 @@ test('generated Naruto and compatibility alias skills describe the official work
   assert.match(naruto, /lifecycle[- ]only/)
   assert.doesNotMatch(naruto, /verification-summary\.json|five-artifact/)
   assert.doesNotMatch(naruto, /native shadow-clone|up to 100|--backend codex-exec|--clones N/)
-  assert.match(agentsRules, /\$Team`, a compatibility alias for the `\$Naruto` Codex official subagent workflow/)
+  assert.match(agentsRules, /default to the `\$Naruto` Codex official subagent workflow/)
   assert.match(agentsRules, /subagent-parent-summary\.json/)
   assert.match(agentsRules, /Luna Max only for tiny short-context mechanical work/)
   assert.match(agentsRules, /Terra Medium for long-context analysis/)
   assert.doesNotMatch(agentsRules, /native agent intake agents|fresh executor team/)
-  assert.match(shadow, /Deprecated \$ShadowClone compatibility alias/)
-  assert.match(kage, /Deprecated \$Kagebunshin compatibility alias/)
+  assert.doesNotMatch(agentsRules, /\$Team|sks team|\$MAD-DB|sks mad-db/)
+  for (const name of ['team', 'mad-db', 'swarm', 'shadow-clone', 'kage-bunshin']) {
+    await assert.rejects(fs.access(path.join(root, '.agents', 'skills', name, 'SKILL.md')))
+  }
 })
 
 test('stale generated prune never deletes legacy or user Codex agent files', async () => {
@@ -487,3 +600,15 @@ test('stale generated prune never deletes legacy or user Codex agent files', asy
   assert.deepEqual(result.pruned, [])
   assert.equal(await fs.readFile(legacy, 'utf8'), 'name = "legacy"\n')
 })
+
+async function findFile(root: string, name: string): Promise<string | null> {
+  const rows = await fs.readdir(root, { withFileTypes: true }).catch(() => [])
+  for (const row of rows) {
+    const file = path.join(root, row.name)
+    if (row.isDirectory()) {
+      const nested = await findFile(file, name)
+      if (nested) return nested
+    } else if (row.name === name) return file
+  }
+  return null
+}

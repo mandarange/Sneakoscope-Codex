@@ -13,12 +13,12 @@ test('wrongness ledger records, validates, summarizes, and resolves negative evi
 
   const added = await ledger.addWrongnessRecord(root, {
     mission_id: 'M-ledger',
-    route: '$Team',
+    route: '$Naruto',
     wrongness_kind: 'incorrect_claim',
     claim: { text: 'This claim was wrong.' },
     root_cause: { category: 'bad_source', explanation: 'Fixture used a bad source.' },
     corrective_action: { summary: 'Use source-backed evidence.', required_evidence: ['fixture'], patch_status: 'pending' },
-    avoidance_rule: { text: 'Do not reuse fixture claims without source evidence.', applies_to: ['$Team'], severity: 'medium' }
+    avoidance_rule: { text: 'Do not reuse fixture claims without source evidence.', applies_to: ['$Naruto'], severity: 'medium' }
   });
 
   assert.match(added.record.id, /^WRONG-/);
@@ -43,12 +43,12 @@ test('wrongness ledger records, validates, summarizes, and resolves negative evi
   await ledger.addWrongnessRecord(root, {
     wrongness_kind: 'stale_evidence',
     severity: 'medium',
-    route: '$Team',
-    claim: { text: 'A project-global Team avoidance rule remains active.' }
+    route: '$Naruto',
+    claim: { text: 'A project-global Naruto avoidance rule remains active.' }
   });
   const inheritedGlobal = await ledger.summarizeWrongness(root, 'M-ledger');
   assert.equal(inheritedGlobal.active, 2);
-  const proof = await proofLinker.wrongnessProofEvidence(root, 'M-ledger', { route: '$Team' });
+  const proof = await proofLinker.wrongnessProofEvidence(root, 'M-ledger', { route: '$Naruto' });
   assert.equal(proof.active_count, 2);
   assert.equal(proof.active_ids.includes(added.record.id), true);
 

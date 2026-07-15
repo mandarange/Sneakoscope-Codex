@@ -8,7 +8,7 @@ import { validateCompletionContract } from '../../dist/core/trust-kernel/complet
 import { buildRouteCompletionContract } from '../../dist/core/trust-kernel/route-contract.js';
 
 test('chaos: corrupted proof does not silently pass', () => {
-  const proof = { schema: 'bad', route: '$Team', status: 'verified', evidence: {}, claims: [], unverified: [], blockers: [] };
+  const proof = { schema: 'bad', route: '$Naruto', status: 'verified', evidence: {}, claims: [], unverified: [], blockers: [] };
   const contract = buildRouteCompletionContract(proof, { records: [] });
   const validation = validateCompletionContract(contract, proof, { records: [] });
   assert.equal(validation.ok, false);
@@ -24,7 +24,7 @@ test('chaos: secret-bearing evidence blocks index', async () => {
   const index = await writeEvidenceIndexForProof(root, {
     schema: 'sks.completion-proof.v1',
     mission_id: 'M-chaos',
-    route: '$Team',
+    route: '$Naruto',
     status: 'verified_partial',
     evidence: { artifacts: ['bad-evidence.json'] },
     claims: [],

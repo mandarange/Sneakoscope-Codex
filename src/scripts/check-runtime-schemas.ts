@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import fs from 'node:fs';
+import { isDeepStrictEqual } from 'node:util';
 
 const root = process.cwd();
 const tsc = spawnSync(process.platform === 'win32' ? 'npx.cmd' : 'npx', ['tsc', '-p', 'tsconfig.json', '--noEmit'], {
@@ -23,7 +24,7 @@ try {
   validatorsOk = proof.isCompletionProof({
     schema: 'sks.completion-proof.v1',
     mission_id: null,
-    route: '$Team',
+    route: '$Naruto',
     status: 'verified_partial',
     evidence: {},
     claims: [],
@@ -78,6 +79,20 @@ for (const file of [
   } catch (err) {
     issues.push(`codex_schema_invalid_json:${file}:${err.message}`);
   }
+}
+
+try {
+  const external = JSON.parse(fs.readFileSync(path.join(codexSchemaDir, 'agent-result.schema.json'), 'utf8'));
+  const runtime = await import(pathToFileURL(path.join(root, 'dist', 'core', 'agents', 'agent-output-validator.js')));
+  const { $schema, $id, title, ...externalRuntimeShape } = external;
+  if ($schema !== 'https://json-schema.org/draft/2020-12/schema') issues.push('agent_result_schema_draft_mismatch');
+  if ($id !== 'https://sneakoscope.dev/schemas/codex/agent-result.schema.json') issues.push('agent_result_schema_id_mismatch');
+  if (title !== 'SKS Native Agent Result') issues.push('agent_result_schema_title_mismatch');
+  if (!isDeepStrictEqual(externalRuntimeShape, runtime.AGENT_RESULT_RUNTIME_SCHEMA)) {
+    issues.push('agent_result_runtime_schema_parity_mismatch');
+  }
+} catch (err) {
+  issues.push(`agent_result_runtime_schema_parity_error:${err.message}`);
 }
 
 const searchVisibilitySchemaDir = path.join(root, 'schemas', 'search-visibility');

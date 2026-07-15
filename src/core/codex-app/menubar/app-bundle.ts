@@ -7,7 +7,7 @@ import { copyNativeResources, materializeNativeSources } from './resources.js';
 import type { NativeSourceInput } from './types.js';
 import type { sksMenuBarPaths } from './paths.js';
 
-export async function buildMenuBarAppAtomically(input: {
+export async function buildMenuBarAppStaging(input: {
   paths: ReturnType<typeof sksMenuBarPaths>;
   swiftc: string;
   codesign: string;
@@ -57,16 +57,7 @@ export async function buildMenuBarAppAtomically(input: {
   if (verified.code !== 0) throw new MenuBarBuildError('codesign_verify_failed', String(verified.stderr || verified.stdout).trim());
   input.actions.push(`signed and verified ${input.paths.staging_app_path}`);
 
-  await fs.rm(input.paths.backup_app_path, { recursive: true, force: true });
-  if (await exists(input.paths.app_path)) await fs.rename(input.paths.app_path, input.paths.backup_app_path);
-  try {
-    await fs.rename(input.paths.staging_app_path, input.paths.app_path);
-  } catch (error) {
-    if (await exists(input.paths.backup_app_path)) await fs.rename(input.paths.backup_app_path, input.paths.app_path).catch(() => undefined);
-    throw error;
-  }
-  input.actions.push(`installed ${input.paths.app_path}`);
-  if (await exists(input.paths.backup_app_path)) input.actions.push(`preserved ${input.paths.backup_app_path}`);
+  input.actions.push(`prepared ${input.paths.staging_app_path}`);
   return { sourceSha256: sources.combinedSha256, sourceHashes: sources.hashes, resourceHashes };
 }
 

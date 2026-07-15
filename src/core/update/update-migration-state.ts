@@ -71,15 +71,15 @@ export interface UpdateMigrationReceipt {
   doctor?: PackageLocalDoctorRun | null;
   retention_cleanup?: UpdateRetentionCleanupRun | null;
   update_stages?: unknown[];
-  legacy_migration_stages?: LegacyMigrationStageRun[];
+  migration_stages?: UpdateMigrationStageSummary[];
   required_blockers?: string[];
   optional_warnings?: string[];
   blockers: string[];
   warnings: string[];
 }
 
-export interface LegacyMigrationStageRun {
-  schema: 'sks.legacy-update-migration-stage.v1';
+export interface UpdateMigrationStageRun {
+  schema: 'sks.update-migration-stage.v2';
   id: string;
   ok: boolean;
   status: 'ok' | 'skipped' | 'failed';
@@ -89,6 +89,15 @@ export interface LegacyMigrationStageRun {
   blockers: string[];
   warnings: string[];
   detail?: Record<string, unknown>;
+}
+
+export interface UpdateMigrationStageSummary {
+  id: string;
+  ok: boolean;
+  status: 'ok' | 'skipped' | 'failed';
+  action_count: number;
+  blocker_count: number;
+  warning_count: number;
 }
 
 export interface UpdateMigrationGateResult {
@@ -212,9 +221,10 @@ export async function writeProjectUpdateMigrationReceipt(input: {
   const receiptPath = projectUpdateMigrationReceiptPath(input.root);
   const epoch = await ensureInstallationEpoch(input.source);
   const retentionCleanup = await runUpdateRetentionCleanup(input.root, input.source);
-  const legacyStages = await runLegacyMigrationStages(input.root, { fromVersion: input.fromVersion || null });
-  const stageBlockers = legacyStages.flatMap((stage) => stage.blockers.map((blocker) => `${stage.id}:${blocker}`));
-  const stageWarnings = legacyStages.flatMap((stage) => stage.warnings.map((warning) => `${stage.id}:${warning}`));
+  const migrationStageRuns = await runUpdateMigrationStages(input.root, { fromVersion: input.fromVersion || null });
+  const migrationStages = migrationStageRuns.map(summarizeMigrationStage);
+  const stageBlockers = migrationStageRuns.flatMap((stage) => stage.blockers.map((blocker) => `${stage.id}:${blocker}`));
+  const stageWarnings = migrationStageRuns.flatMap((stage) => stage.warnings.map((warning) => `${stage.id}:${warning}`));
   const requiredBlockers = [...(input.blockers || []), ...stageBlockers];
   const optionalWarnings = [...(input.warnings || []), ...stageWarnings];
   const receipt: UpdateMigrationReceipt = {
@@ -232,8 +242,8 @@ export async function writeProjectUpdateMigrationReceipt(input: {
     installation_epoch_path: installationEpochPath(),
     doctor: input.doctor || null,
     retention_cleanup: retentionCleanup,
-    update_stages: [...(input.updateStages || []), ...legacyStages],
-    legacy_migration_stages: legacyStages,
+    update_stages: [...(input.updateStages || []), ...migrationStages],
+    migration_stages: migrationStages,
     required_blockers: requiredBlockers,
     optional_warnings: optionalWarnings,
     blockers: requiredBlockers,
@@ -241,6 +251,17 @@ export async function writeProjectUpdateMigrationReceipt(input: {
   };
   await writeReceiptRotated(receiptPath, receipt, { keep: 5 });
   return receipt;
+}
+
+function summarizeMigrationStage(stage: UpdateMigrationStageRun): UpdateMigrationStageSummary {
+  return {
+    id: stage.id,
+    ok: stage.ok,
+    status: stage.status,
+    action_count: stage.actions.length,
+    blocker_count: stage.blockers.length,
+    warning_count: stage.warnings.length
+  };
 }
 
 export async function runUpdateRetentionCleanup(root: string, source = 'update-migration'): Promise<UpdateRetentionCleanupRun> {
@@ -308,17 +329,17 @@ export async function runUpdateRetentionCleanup(root: string, source = 'update-m
   }
 }
 
-type LegacyMigrationStageDefinition = {
+type UpdateMigrationStageDefinition = {
   id: string;
   min_from_version: string;
-  run: (root: string, fromVersion: string | null) => Promise<Omit<LegacyMigrationStageRun, 'schema' | 'id' | 'min_from_version' | 'from_version'>>;
+  run: (root: string, fromVersion: string | null) => Promise<Omit<UpdateMigrationStageRun, 'schema' | 'id' | 'min_from_version' | 'from_version'>>;
 };
 
-const LEGACY_MIGRATION_STAGES: LegacyMigrationStageDefinition[] = [
+const UPDATE_MIGRATION_STAGES: UpdateMigrationStageDefinition[] = [
   {
-    id: 'legacy-team-artifacts',
+    id: 'current-public-surface-reconcile',
     min_from_version: '0.0.0',
-    run: runLegacyTeamArtifactsStage
+    run: runCurrentPublicSurfaceReconcileStage
   },
   {
     id: 'session-state-split',
@@ -352,13 +373,51 @@ const LEGACY_MIGRATION_STAGES: LegacyMigrationStageDefinition[] = [
   }
 ];
 
-async function runLegacyMigrationStages(root: string, opts: { fromVersion?: string | null } = {}): Promise<LegacyMigrationStageRun[]> {
+async function runCurrentPublicSurfaceReconcileStage(root: string): Promise<Omit<UpdateMigrationStageRun, 'schema' | 'id' | 'min_from_version' | 'from_version'>> {
+  const [{ runDoctorCommandAliasCleanup }, { reconcileRetiredAgentRoleResidue }] = await Promise.all([
+    import('../doctor/command-alias-cleanup.js'),
+    import('../agents/agent-role-config.js')
+  ]);
+  const home = path.resolve(process.env.HOME || os.homedir());
+  const globalRuntimeRoot = path.resolve(process.env.SKS_GLOBAL_ROOT || path.join(home, '.sneakoscope-global'));
+  const [publicSurface, retiredRoles] = await Promise.all([
+    runDoctorCommandAliasCleanup({ root, home, globalRuntimeRoot, fix: true }),
+    reconcileRetiredAgentRoleResidue({ root, home, globalRuntimeRoot, fix: true })
+  ]);
+  const blockers = [
+    ...(publicSurface.ok === true ? [] : ['public_surface_reconcile_failed']),
+    ...(retiredRoles.ok === true ? [] : ['retired_agent_role_reconcile_failed'])
+  ];
+  return {
+    ok: blockers.length === 0,
+    status: blockers.length ? 'failed' : 'ok',
+    actions: ['reconciled_current_public_surface'],
+    blockers,
+    warnings: [],
+    detail: {
+      removed_skill_count: Number(publicSurface.cleanup?.removed_count || 0),
+      quarantined_skill_collision_count: Number(publicSurface.cleanup?.preserved_user_collision_count || 0),
+      removed_runtime_artifact_count: Number(publicSurface.cleanup?.managed_runtime?.removed_managed_artifact_count || 0),
+      quarantined_runtime_collision_count: Number(publicSurface.cleanup?.managed_runtime?.preserved_user_file_count || 0),
+      reconciled_guidance_count: Number(publicSurface.cleanup?.project_guidance?.reconciled_count || 0),
+      quarantined_guidance_collision_count: Number(publicSurface.cleanup?.project_guidance?.preserved_user_file_count || 0),
+      removed_retired_role_count: retiredRoles.removed_count,
+      quarantined_retired_role_collision_count: retiredRoles.quarantined_user_collision_count,
+      remaining_count: Number(publicSurface.cleanup?.remaining_count || 0)
+        + Number(publicSurface.cleanup?.managed_runtime?.remaining_managed_artifact_count || 0)
+        + Number(publicSurface.cleanup?.project_guidance?.remaining_count || 0)
+        + retiredRoles.remaining_count
+    }
+  };
+}
+
+async function runUpdateMigrationStages(root: string, opts: { fromVersion?: string | null } = {}): Promise<UpdateMigrationStageRun[]> {
   const fromVersion = opts.fromVersion || null;
-  const runs: LegacyMigrationStageRun[] = [];
-  for (const stage of LEGACY_MIGRATION_STAGES) {
+  const runs: UpdateMigrationStageRun[] = [];
+  for (const stage of UPDATE_MIGRATION_STAGES) {
     if (!legacyStageApplies(fromVersion, stage.min_from_version)) {
       runs.push({
-        schema: 'sks.legacy-update-migration-stage.v1',
+        schema: 'sks.update-migration-stage.v2',
         id: stage.id,
         ok: true,
         status: 'skipped',
@@ -373,7 +432,7 @@ async function runLegacyMigrationStages(root: string, opts: { fromVersion?: stri
     try {
       const result = await stage.run(root, fromVersion);
       runs.push({
-        schema: 'sks.legacy-update-migration-stage.v1',
+        schema: 'sks.update-migration-stage.v2',
         id: stage.id,
         min_from_version: stage.min_from_version,
         from_version: fromVersion,
@@ -381,7 +440,7 @@ async function runLegacyMigrationStages(root: string, opts: { fromVersion?: stri
       });
     } catch (err: any) {
       runs.push({
-        schema: 'sks.legacy-update-migration-stage.v1',
+        schema: 'sks.update-migration-stage.v2',
         id: stage.id,
         ok: false,
         status: 'failed',
@@ -396,32 +455,7 @@ async function runLegacyMigrationStages(root: string, opts: { fromVersion?: stri
   return runs;
 }
 
-async function runLegacyTeamArtifactsStage(root: string): Promise<Omit<LegacyMigrationStageRun, 'schema' | 'id' | 'min_from_version' | 'from_version'>> {
-  const candidates = [
-    path.join(root, '.sneakoscope', 'team'),
-    path.join(root, '.sneakoscope', 'team-dashboard-state.json'),
-    path.join(root, '.sneakoscope', 'work-order-ledger.json')
-  ];
-  const present = [];
-  for (const candidate of candidates) {
-    if (await exists(candidate)) present.push(path.relative(root, candidate));
-  }
-  await writeJsonAtomic(path.join(root, '.sneakoscope', 'update', 'legacy-team-artifacts.json'), {
-    schema: 'sks.legacy-team-artifacts-migration.v1',
-    generated_at: nowIso(),
-    present
-  });
-  return {
-    ok: true,
-    status: 'ok',
-    actions: present.length ? ['recorded_legacy_team_artifacts'] : ['no_legacy_team_artifacts'],
-    blockers: [],
-    warnings: [],
-    detail: { present }
-  };
-}
-
-async function runSessionStateSplitStage(root: string): Promise<Omit<LegacyMigrationStageRun, 'schema' | 'id' | 'min_from_version' | 'from_version'>> {
+async function runSessionStateSplitStage(root: string): Promise<Omit<UpdateMigrationStageRun, 'schema' | 'id' | 'min_from_version' | 'from_version'>> {
   const legacyCurrent = path.join(root, '.sneakoscope', 'current.json');
   const stateCurrent = path.join(root, '.sneakoscope', 'state', 'current.json');
   const sessionsDir = path.join(root, '.sneakoscope', 'state', 'sessions');
@@ -446,14 +480,18 @@ async function runSessionStateSplitStage(root: string): Promise<Omit<LegacyMigra
   return { ok: true, status: 'ok', actions, blockers: [], warnings: [], detail: { legacy_present: Boolean(legacy), mission_id: missionId } };
 }
 
-async function runSkillsReconcileStage(root: string): Promise<Omit<LegacyMigrationStageRun, 'schema' | 'id' | 'min_from_version' | 'from_version'>> {
+async function runSkillsReconcileStage(root: string): Promise<Omit<UpdateMigrationStageRun, 'schema' | 'id' | 'min_from_version' | 'from_version'>> {
   const global = await reconcileSkills({ targetDir: path.join(os.homedir(), '.agents', 'skills'), scope: 'global', fix: true })
     .catch((err: any) => ({ ok: false, error: err?.message || String(err) }));
   const project = await reconcileSkills({ targetDir: path.join(root, '.agents', 'skills'), scope: 'project', fix: true })
     .catch((err: any) => ({ ok: false, error: err?.message || String(err) }));
+  const globalRemaining = Number((global as any).retired_residue?.remaining_count || 0);
+  const projectRemaining = Number((project as any).retired_residue?.remaining_count || 0);
   const blockers = [
     ...((global as any).ok === false || (global as any).error ? [`global:${(global as any).error || 'failed'}`] : []),
-    ...((project as any).ok === false || (project as any).error ? [`project:${(project as any).error || 'failed'}`] : [])
+    ...((project as any).ok === false || (project as any).error ? [`project:${(project as any).error || 'failed'}`] : []),
+    ...(globalRemaining ? [`global_retired_residue_remaining:${globalRemaining}`] : []),
+    ...(projectRemaining ? [`project_retired_residue_remaining:${projectRemaining}`] : [])
   ];
   return {
     ok: blockers.length === 0,
@@ -463,12 +501,16 @@ async function runSkillsReconcileStage(root: string): Promise<Omit<LegacyMigrati
     warnings: [],
     detail: {
       global_installed: Array.isArray((global as any).installed) ? (global as any).installed.length : null,
-      project_removed: Array.isArray((project as any).removed) ? (project as any).removed.length : null
+      global_removed_count: Number((global as any).retired_residue?.removed_count || 0)
+        + (Array.isArray((global as any).removed) ? (global as any).removed.length : 0),
+      project_removed_count: Number((project as any).retired_residue?.removed_count || 0)
+        + (Array.isArray((project as any).removed) ? (project as any).removed.length : 0),
+      residue_remaining_count: globalRemaining + projectRemaining
     }
   };
 }
 
-async function runMenubarRetargetStage(root: string): Promise<Omit<LegacyMigrationStageRun, 'schema' | 'id' | 'min_from_version' | 'from_version'>> {
+async function runMenubarRetargetStage(root: string): Promise<Omit<UpdateMigrationStageRun, 'schema' | 'id' | 'min_from_version' | 'from_version'>> {
   const actionScript = path.join(os.homedir(), '.codex', 'sks-menubar', 'sks-menubar-action.sh');
   const text = await readText(actionScript, null);
   if (typeof text !== 'string') return { ok: true, status: 'ok', actions: ['menubar_action_script_absent'], blockers: [], warnings: [] };
@@ -497,7 +539,7 @@ async function runMenubarRetargetStage(root: string): Promise<Omit<LegacyMigrati
   };
 }
 
-async function runConfigFastModeNormalizeStage(): Promise<Omit<LegacyMigrationStageRun, 'schema' | 'id' | 'min_from_version' | 'from_version'>> {
+async function runConfigFastModeNormalizeStage(): Promise<Omit<UpdateMigrationStageRun, 'schema' | 'id' | 'min_from_version' | 'from_version'>> {
   const configPath = path.join(os.homedir(), '.codex', 'config.toml');
   const text = await readText(configPath, null);
   if (typeof text !== 'string') return { ok: true, status: 'ok', actions: ['codex_config_absent'], blockers: [], warnings: [] };
@@ -541,7 +583,7 @@ async function runConfigFastModeNormalizeStage(): Promise<Omit<LegacyMigrationSt
   };
 }
 
-async function runHookTrustRefreshStage(root: string): Promise<Omit<LegacyMigrationStageRun, 'schema' | 'id' | 'min_from_version' | 'from_version'>> {
+async function runHookTrustRefreshStage(root: string): Promise<Omit<UpdateMigrationStageRun, 'schema' | 'id' | 'min_from_version' | 'from_version'>> {
   const result = await codexHookTrustDoctor(root, { fix: true, managed: true, actual: true });
   const blockers = (result as any).ok === false ? ((result as any).blockers || ['hook_trust_refresh_failed']) : [];
   return {
@@ -554,7 +596,7 @@ async function runHookTrustRefreshStage(root: string): Promise<Omit<LegacyMigrat
   };
 }
 
-async function runReceiptRotationStage(root: string): Promise<Omit<LegacyMigrationStageRun, 'schema' | 'id' | 'min_from_version' | 'from_version'>> {
+async function runReceiptRotationStage(root: string): Promise<Omit<UpdateMigrationStageRun, 'schema' | 'id' | 'min_from_version' | 'from_version'>> {
   const receiptPath = projectUpdateMigrationReceiptPath(root);
   const dir = path.dirname(receiptPath);
   const base = path.basename(receiptPath);

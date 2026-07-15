@@ -18,7 +18,7 @@ emitGate('ultra-router:auto-router', { worker: simpleWorker.selected_profile, im
 
 function baseTask(extra = {}) {
   return {
-    route: '$Agent',
+    route: '$Naruto',
     missionId: 'M-ultra-router-auto',
     cwd: process.cwd(),
     prompt: 'fixture',

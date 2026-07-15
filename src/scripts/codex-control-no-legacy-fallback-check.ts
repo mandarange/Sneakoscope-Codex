@@ -7,7 +7,6 @@ import { assertGate, emitGate, readText, root } from './sks-1-18-gate-lib.js';
 const runtimeFiles = [
   'src/core/agents/agent-orchestrator.ts',
   'src/core/agents/native-worker-backend-router.ts',
-  'src/core/commands/team-command.ts',
   'src/core/commands/qa-loop-command.ts',
   'src/core/commands/research-command.ts',
   'src/core/commands/naruto-command.ts',

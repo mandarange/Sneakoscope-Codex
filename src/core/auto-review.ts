@@ -2,12 +2,20 @@ import os from 'node:os';
 import path from 'node:path';
 import { ensureDir, exists, readText, writeTextAtomic } from './fsx.js';
 import { writeCodexConfigGuarded } from './codex/codex-config-guard.js';
+import { inspectConfinedPath, removeManagedPathVerified } from './managed-path-safety.js';
+import {
+  RETIRED_AUTO_REVIEW_POLICY_TEXTS,
+  RETIRED_SKS_CONFIG_PROFILE_NAMES
+} from './doctor/retired-auto-review-config.js';
+
+export { RETIRED_SKS_CONFIG_PROFILE_NAMES } from './doctor/retired-auto-review-config.js';
 
 export const AUTO_REVIEW_REVIEWER = 'auto_review';
 export const LEGACY_AUTO_REVIEW_REVIEWER = 'guardian_subagent';
 export const AUTO_REVIEW_PROFILE = 'sks-auto-review';
 export const AUTO_REVIEW_HIGH_PROFILE = 'sks-auto-review-high';
 export const MAD_HIGH_PROFILE = 'sks-mad-high';
+export const AUTO_REVIEW_POLICY_TEXT = 'In MAD-SKS launches, allow only scoped high-risk work approved for the active invocation and keep catastrophic DB wipe/all-row safeguards active. The explicit $MAD-SKS or sks mad-sks sql|apply-migration invocation is the SQL-plane approval boundary: execute requested execute_sql/apply_migration mutations with mission-local write transport, read-back proof, and final read-only restoration. Supabase project/account/billing/credential control-plane actions remain denied.';
 export const REVIEW_NATIVE_AGENT_PLAN = Object.freeze({
   schema: 'sks.review-native-agent-plan.v1',
   backend: 'native_multi_session_agent_kernel',
@@ -36,7 +44,7 @@ export const REVIEW_NATIVE_AGENT_PLAN = Object.freeze({
     }
   ],
   safety_personas_read_only_by_default: true,
-  manual_agent_count_syntax: 'sks auto-review fixture --json and sks agent run "<review task>" --route $Review --agents 5 --concurrency 4 --mock --json',
+  manual_agent_count_syntax: 'sks auto-review fixture --json and sks naruto run "$Review <review task>" --agents 5 --max-threads 4 --json',
   dynamic_effort: 'parent assigns high effort to safety/integrator lanes and medium or higher to verification lanes when proof risk is present'
 });
 
@@ -119,7 +127,6 @@ export const SKS_CONFIG_PROFILES: Array<{ name: string; stripTable: boolean; blo
   { name: 'sks-fast-high', stripTable: true, block: sksProfileFileBlock({ effort: 'high', serviceTier: 'fast', inheritSandbox: true }) },
   { name: 'sks-research-xhigh', stripTable: true, block: sksProfileFileBlock({ effort: 'xhigh' }) },
   { name: 'sks-research', stripTable: true, block: sksProfileFileBlock({ effort: 'xhigh', approvalPolicy: 'never' }) },
-  { name: 'sks-team', stripTable: true, block: sksProfileFileBlock({ effort: 'medium' }) },
   { name: MAD_HIGH_PROFILE, stripTable: true, block: sksProfileFileBlock({ effort: 'xhigh', approvalPolicy: 'never', sandboxMode: 'danger-full-access', reviewer: AUTO_REVIEW_REVIEWER }) },
   { name: 'sks-default', stripTable: true, block: sksProfileFileBlock({ effort: 'high' }) }
 ];
@@ -143,6 +150,13 @@ export async function migrateSksProfilesToPerFile(opts: any = {}) {
   await ensureDir(path.dirname(configPath));
   const current = await readText(configPath, '');
   let next = String(current || '');
+  let retiredProfileTableCount = 0;
+  for (const profile of RETIRED_SKS_CONFIG_PROFILE_NAMES) {
+    if (tableBody(next, `profiles.${profile}`) || readTomlString(topLevelBody(next), 'profile') === profile) {
+      retiredProfileTableCount += 1;
+    }
+    next = removeLegacyProfileConfig(next, profile);
+  }
   for (const profile of SKS_CONFIG_PROFILES) {
     if (profile.stripTable) next = removeLegacyProfileConfig(next, profile.name);
   }
@@ -154,11 +168,65 @@ export async function migrateSksProfilesToPerFile(opts: any = {}) {
     mutate: () => next
   });
   for (const profile of SKS_CONFIG_PROFILES) await writeProfileConfig(configPath, profile.name, profile.block);
+  let retiredProfileFileRemovedCount = 0;
+  for (const profile of RETIRED_SKS_CONFIG_PROFILE_NAMES) {
+    const file = path.join(path.dirname(configPath), `${profile}.config.toml`);
+    const inspection = await inspectConfinedPath(path.dirname(configPath), file).catch(() => null);
+    if (!inspection?.exists || inspection.leafSymlink || !inspection.stat?.isFile()) continue;
+    const text = await readText(file, '');
+    if (!isSksGeneratedRetiredProfileText(text)) continue;
+    await removeManagedPathVerified(path.dirname(configPath), file);
+    retiredProfileFileRemovedCount += 1;
+  }
   return {
     config_path: configPath,
     profiles_written: SKS_CONFIG_PROFILES.map((profile) => profile.name),
-    tables_stripped: SKS_CONFIG_PROFILES.filter((profile) => profile.stripTable).map((profile) => profile.name)
+    tables_stripped: SKS_CONFIG_PROFILES.filter((profile) => profile.stripTable).map((profile) => profile.name),
+    retired_profile_table_count: retiredProfileTableCount,
+    retired_profile_file_removed_count: retiredProfileFileRemovedCount
   };
+}
+
+export interface RetiredSksConfigTextReconcileResult {
+  text: string;
+  detected_count: number;
+  user_authored_conflict: boolean;
+}
+
+export function reconcileRetiredSksConfigText(text: string): RetiredSksConfigTextReconcileResult {
+  const before = String(text || '');
+  let next = before;
+  let detected = 0;
+  let userAuthoredConflict = false;
+
+  for (const profile of RETIRED_SKS_CONFIG_PROFILE_NAMES) {
+    const body = tableBody(next, `profiles.${profile}`);
+    const selected = readTomlString(topLevelBody(next), 'profile') === profile;
+    if (body) {
+      detected += 1;
+      if (!isSksGeneratedRetiredProfileText(body)) userAuthoredConflict = true;
+    } else if (selected) {
+      detected += 1;
+    }
+    next = removeLegacyProfileConfig(next, profile);
+  }
+
+  const autoReviewPolicy = readTableString(next, 'auto_review', 'policy');
+  if (autoReviewPolicy && RETIRED_AUTO_REVIEW_POLICY_TEXTS.has(autoReviewPolicy)) {
+    detected += 1;
+    next = upsertAutoReviewPolicy(next);
+  }
+
+  return {
+    text: next,
+    detected_count: detected,
+    user_authored_conflict: userAuthoredConflict
+  };
+}
+
+export function isSksGeneratedRetiredProfileText(text: string): boolean {
+  const normalized = normalizeGeneratedProfileText(text);
+  return managedRetiredProfileBodies().has(normalized);
 }
 
 export function buildMadHighLaunchProfileNoWrite(opts: any = {}) {
@@ -304,6 +372,12 @@ function tableBody(text: any, table: any) {
   return inTable || out.length ? out.join('\n') : '';
 }
 
+function topLevelBody(text: any) {
+  const lines = String(text || '').split('\n');
+  const firstTable = lines.findIndex((line: string) => /^\s*\[.+\]\s*$/.test(line));
+  return (firstTable === -1 ? lines : lines.slice(0, firstTable)).join('\n');
+}
+
 function upsertTopLevelString(text: any, key: any, value: any) {
   const line = `${key} = "${value}"`;
   const lines = String(text || '').split('\n');
@@ -347,7 +421,7 @@ function removeLegacyProfileConfig(text: any, profile: any) {
 function upsertAutoReviewPolicy(text: any) {
   const policy = [
     '[auto_review]',
-    'policy = "In MAD-SKS launches, allow only scoped non-MadDB high-risk work approved for the active invocation and keep catastrophic DB wipe/all-row safeguards active. In first-class MAD-DB cycles, the explicit $MAD-DB or sks mad-db run|exec|apply-migration invocation is the SQL-plane approval boundary: execute requested execute_sql/apply_migration mutations with mission-local write transport, read-back proof, and final read-only restoration. Supabase project/account/billing/credential control-plane actions remain denied."'
+    `policy = "${AUTO_REVIEW_POLICY_TEXT}"`
   ].join('\n');
   const existing = readTableString(text, 'auto_review', 'policy');
   if (existing && /unrequested fallback implementation code/i.test(existing)) return text;
@@ -404,4 +478,34 @@ function removeTopLevelStringIfValue(text: any, key: any, value: any) {
 
 function escapeRegExp(value: any) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function normalizeGeneratedProfileText(text: string): string {
+  return String(text || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join('\n');
+}
+
+function managedRetiredProfileBodies(): Set<string> {
+  return new Set([
+    sksProfileFileBlock({ effort: 'medium' }),
+    profileConfigBlock({ effort: 'medium' }),
+    profileConfigBlock({ effort: 'medium', reviewer: LEGACY_AUTO_REVIEW_REVIEWER }),
+    [
+      'model = "gpt-5.5"',
+      'service_tier = "fast"',
+      'approval_policy = "on-request"',
+      'sandbox_mode = "workspace-write"',
+      'model_reasoning_effort = "medium"'
+    ].join('\n'),
+    [
+      'model = "gpt-5.6-terra"',
+      'service_tier = "fast"',
+      'approval_policy = "on-request"',
+      'sandbox_mode = "workspace-write"',
+      'model_reasoning_effort = "medium"'
+    ].join('\n')
+  ].map(normalizeGeneratedProfileText));
 }

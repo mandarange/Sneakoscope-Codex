@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { assertGate, emitGate, importDist } from './sks-1-18-gate-lib.js';
-import { makeTempPatchProject, writeReport } from './agent-patch-swarm-gate-lib.js';
+import { makeTempPatchProject, writeReport } from './patch-handoff-gate-lib.js';
 
 const strategy = await importDist('core/strategy/strategy-compiler.js');
 const rosterMod = await importDist('core/agents/agent-roster.js');
@@ -11,10 +11,10 @@ const partitionMod = await importDist('core/agents/agent-work-partition.js');
 const tmp = makeTempPatchProject('sks-strategy-lease-');
 const files = Array.from({ length: 10 }, (_, index) => `file-${index + 1}.txt`);
 const prompt = files.map((file) => `\`${file}\``).join(' ');
-const compiled = strategy.compileStrategy({ prompt, route: '$Agent', agentCount: 5 });
+const compiled = strategy.compileStrategy({ prompt, route: '$Naruto', agentCount: 5 });
 const roster = rosterMod.buildAgentRoster({ agents: 5, concurrency: 4, prompt });
 const partition = await partitionMod.buildAgentWorkPartition(tmp, roster, prompt, {
-  route: '$Agent',
+  route: '$Naruto',
   targetActiveSlots: 4,
   desiredWorkItemCount: 10,
   minimumWorkItems: 10,

@@ -13,7 +13,7 @@ const MACHINE_ID_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 const SSH_ALIAS_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 
 export function remoteMachineRegistryPath(globalRoot: string): string {
-  return path.join(path.resolve(globalRoot), 'remote-machines.json');
+  return path.join(path.resolve(globalRoot), 'remote', 'machines.json');
 }
 
 export function validateSshAlias(value: unknown): value is string {

@@ -20,8 +20,18 @@ try {
     intakeJson: {
       mission_id: 'M-codex-sdk-router',
       parent_mission_id: 'M-codex-sdk-router',
-      route: '$Agent',
+      route: '$Naruto',
       backend: 'codex-sdk',
+      naruto_model_catalog: {
+        ok: true,
+        models: ['gpt-5.6-luna', 'gpt-5.6-terra', 'gpt-5.6-sol'],
+        model_efforts: {
+          'gpt-5.6-luna': ['low', 'medium', 'high', 'xhigh', 'max'],
+          'gpt-5.6-terra': ['low', 'medium', 'high', 'xhigh', 'max'],
+          'gpt-5.6-sol': ['low', 'medium', 'high', 'xhigh', 'max', 'ultra']
+        },
+        blockers: []
+      },
       agent_root: root,
       agent: { id: 'sdk-router-agent', session_id: 'sdk-router-session', slot_id: 'slot-001', generation_index: 1, persona_id: 'executor' },
       slice: { id: 'sdk-router-task', write_paths: [], description: 'exercise Codex SDK backend router' },

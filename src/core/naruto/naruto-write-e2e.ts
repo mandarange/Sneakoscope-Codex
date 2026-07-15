@@ -347,7 +347,7 @@ async function runRealNarutoCommandWriteE2e(): Promise<NarutoWriteE2eReport> {
       '--write-mode',
       'parallel',
       '--apply-patches',
-      '--clones',
+      '--agents',
       '2',
       '--work-items',
       '2',

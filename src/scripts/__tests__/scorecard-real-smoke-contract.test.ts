@@ -57,7 +57,7 @@ test('critical command fixture smoke is capped below production score', () => {
 })
 
 test('critical dollar command requires routePrompt smoke and command/route smoke', () => {
-  const entry = { command: '$Naruto', route: 'hardware-safe massive parallel work swarm', description: 'work route' }
+  const entry = { command: '$Naruto', route: 'hardware-safe official subagent workflow', description: 'work route' }
   const onlyRoutePrompt = scoreDollarEntry(
     entry,
     { kind: 'route_prompt', ok: true, generated_at: NOW, p95_ms: 1, routed: { id: 'Naruto', command: '$Naruto', stopGate: 'naruto' } },

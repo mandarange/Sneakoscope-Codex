@@ -43,7 +43,7 @@ export function createReleaseGateHermeticEnv(input: {
     // live session. Belt to the temp-path launch guard in installSksMenuBar.
     SKS_SKIP_SKS_MENUBAR_LAUNCH: '1'
   }
-  if (input.gate.id === 'legacy:update-e2e') {
+  if (input.gate.id === 'migration:current-surface-e2e') {
     // This gate exercises the migration path itself. An ambient disable flag
     // from the parent Codex/SKS process must not turn the fixture into a false
     // successful skip.

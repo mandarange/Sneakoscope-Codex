@@ -8,7 +8,7 @@ import {
 const proof: CompletionProof = {
   schema: COMPLETION_PROOF_SCHEMA,
   mission_id: 'M-type-test',
-  route: '$Team',
+  route: '$Naruto',
   status: 'verified_partial',
   evidence: {
     artifacts: [{ path: '.sneakoscope/missions/M-type-test/completion-proof.json', schema: COMPLETION_PROOF_SCHEMA }],

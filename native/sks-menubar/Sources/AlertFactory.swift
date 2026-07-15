@@ -41,4 +41,21 @@ enum AlertFactory {
             completion(response == .alertFirstButtonReturn && !value.isEmpty ? value : nil)
         }
     }
+
+    static func choiceSheet(window: NSWindow, title: String, message: String, choices: [(String, String)], completion: @escaping (String?) -> Void) {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        alert.addButton(withTitle: "Continue")
+        alert.addButton(withTitle: "Cancel")
+        let popup = NSPopUpButton(frame: NSRect(x: 0, y: 0, width: 420, height: 26))
+        popup.addItems(withTitles: choices.map(\.1))
+        popup.setAccessibilityLabel(title)
+        alert.accessoryView = popup
+        AppIdentity.applyIcon(to: alert)
+        alert.beginSheetModal(for: window) { response in
+            let index = popup.indexOfSelectedItem
+            completion(response == .alertFirstButtonReturn && index >= 0 && index < choices.count ? choices[index].0 : nil)
+        }
+    }
 }

@@ -159,6 +159,7 @@ function attentionRow(claim: any, anchor: any, reason: any = '') {
 const NEGATIVE_PRIMING_RE = /\b(do\s+not|don't|dont|never|avoid|forbid(?:den)?|must\s+not|unsupported|conflicted)\b|하지\s*마|하지\s*말|말아야|금지|안\s*(?:돼|됨|된다)|비\s*상식/i;
 
 export function negativePrimingRisk(claim: any = {}) {
+  if (claim.positive_recall_source_had_negative_priming === true) return true;
   return NEGATIVE_PRIMING_RE.test(String(claim.text || claim.claim || ''));
 }
 
@@ -174,10 +175,21 @@ export function positiveRecallText(claim: any = {}) {
   return `Follow the positive target behavior for ${claim.id || claim.source || 'this guardrail'}; hydrate source before acting on the guardrail.`;
 }
 
+function normalizePositiveRecallClaim(claim: any = {}) {
+  const originalText = String(claim.text || claim.claim || '').trim();
+  const text = positiveRecallText(claim);
+  if (text === originalText) return claim;
+  return {
+    ...claim,
+    text,
+    positive_recall_source_had_negative_priming: true
+  };
+}
+
 function hydrateReason(claim: any = {}) {
+  if (negativePrimingRisk(claim)) return 'negative_priming:hydrate_source';
   const action = trustAction(claim);
   if (action !== 'use') return `trust_action:${action}`;
-  if (negativePrimingRisk(claim)) return 'negative_priming:hydrate_source';
   if (['high', 'critical'].includes(claim.risk)) return `risk:${claim.risk}`;
   if (claim.status !== 'supported') return `status:${claim.status || 'unknown'}`;
   return '';
@@ -330,8 +342,10 @@ export function geometricOffsets(max: any = 65536) {
 
 export function contextCapsule({ mission, role = 'worker', contractHash = null, claims = [], q4 = {}, q3 = [], budget = {}, codePackEntries = [], wrongnessByModule = {} }: any) {
   const trustPolicy = budget.trustPolicy || DEFAULT_TRUST_POLICY;
-  const claimsWithTrust = (claims || []).map((claim: any) => withTrust(claim, trustPolicy));
-  const selected = selectClaims(mission, claims, { maxClaims: budget.maxClaims ?? (role.includes('verifier') ? 16 : 9), trustPolicy });
+  const claimsWithTrust = (claims || [])
+    .map((claim: any) => normalizePositiveRecallClaim(claim))
+    .map((claim: any) => withTrust(claim, trustPolicy));
+  const selected = selectClaims(mission, claimsWithTrust, { maxClaims: budget.maxClaims ?? (role.includes('verifier') ? 16 : 9), trustPolicy });
   const fullWiki = buildWikiCoordinateIndex({
     mission,
     claims: claimsWithTrust,
@@ -374,7 +388,7 @@ export function contextCapsule({ mission, role = 'worker', contractHash = null, 
         rgba: anchorAny.rgba,
         h: anchorAny.h
       };
-      if (text !== String(c.text || '')) row.text_policy = 'positive_recall_negation_suppressed';
+      if (c.positive_recall_source_had_negative_priming === true) row.text_policy = 'positive_recall_negation_suppressed';
       if (budget.verboseClaims) {
         row.status = c.status;
         row.risk = c.risk;

@@ -26,9 +26,9 @@ metrics.push(await measure('stop_hook_light_budget', 25, async () => {
   return { mode: 'script_presence_budget_proxy', measured_ms: performance.now() - started };
 }));
 
-metrics.push(await measure('swarm_14_worker_fixture', 20000, async () => {
+metrics.push(await measure('naruto_14_worker_fixture', 20000, async () => {
   const graph = buildNarutoWorkGraph({
-    requestedClones: 14,
+    requestedWorkers: 14,
     totalWorkItems: 14,
     honorExplicitTotalWorkItems: true,
     readonly: true,
@@ -36,7 +36,7 @@ metrics.push(await measure('swarm_14_worker_fixture', 20000, async () => {
     maxActiveWorkers: 14
   });
   const governor = decideNarutoConcurrency({
-    requestedClones: 14,
+    requestedWorkers: 14,
     totalWorkItems: 14,
     pendingWorkQueueSize: 14,
     backend: 'fake',
@@ -44,7 +44,7 @@ metrics.push(await measure('swarm_14_worker_fixture', 20000, async () => {
   });
   const report = simulateNarutoActivePool({ graph, governor: { ...governor, safe_active_workers: 14 } });
   return {
-    command: 'simulateNarutoActivePool --fake --clones 14',
+    command: 'simulateNarutoActivePool --fake --agents 14',
     ok: report.ok === true && report.completed_count >= 14 && report.max_observed_active_workers >= 7,
     completed_count: report.completed_count,
     max_observed_active_workers: report.max_observed_active_workers,

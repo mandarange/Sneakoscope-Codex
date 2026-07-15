@@ -15,7 +15,7 @@ test('smoke check fails with a distinct non-executable signal when the action sc
   // Write a script that WOULD succeed if invoked through an interpreter — the exact
   // condition that used to mask a missing +x bit and let doctor report a healthy
   // action target while the menu bar showed "action script broken".
-  await fs.writeFile(script, '#!/bin/zsh\necho "sneakoscope 9.9.9"\n', { mode: 0o644 });
+  await fs.writeFile(script, '#!/bin/sh\necho "sneakoscope 9.9.9"\n', { mode: 0o644 });
 
   const broken = await smokeSksMenuBarAction(script);
   assert.equal(broken.ok, false);
@@ -30,6 +30,7 @@ test('smoke check fails with a distinct non-executable signal when the action sc
 });
 
 test('SKS menu bar action script resolves sks dynamically from the login shell PATH first', async (t) => {
+  if (process.platform !== 'darwin') return t.skip('generated Menu Bar action scripts require macOS /bin/zsh');
   const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-menubar-action-'));
   t.after(async () => {
     await fs.rm(temp, { recursive: true, force: true });
@@ -52,6 +53,7 @@ test('SKS menu bar action script resolves sks dynamically from the login shell P
 });
 
 test('SKS menu bar action script prepends the resolved NVM Node bin before running the pinned entry', async (t) => {
+  if (process.platform !== 'darwin') return t.skip('generated Menu Bar action scripts require macOS /bin/zsh');
   const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-menubar-action-nvm-'));
   t.after(async () => {
     await fs.rm(temp, { recursive: true, force: true });
@@ -75,6 +77,7 @@ test('SKS menu bar action script prepends the resolved NVM Node bin before runni
 });
 
 test('SKS menu bar action script exits 127 when every candidate is unavailable', async (t) => {
+  if (process.platform !== 'darwin') return t.skip('generated Menu Bar action scripts require macOS /bin/zsh');
   const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-menubar-action-missing-'));
   t.after(async () => {
     await fs.rm(temp, { recursive: true, force: true });

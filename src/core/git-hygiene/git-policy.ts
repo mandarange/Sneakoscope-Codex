@@ -6,7 +6,7 @@ export const SHARED_MEMORY_MANIFEST_SCHEMA = 'sks.shared-memory-manifest.v1';
 export const GIT_HYGIENE_BLOCK = 'SKS MANAGED GIT HYGIENE';
 export const GIT_ATTRIBUTES_BLOCK = 'SKS MANAGED GIT ATTRIBUTES';
 
-export type GitPolicyMode = 'solo' | 'team' | 'strict-team' | 'ci';
+export type GitPolicyMode = 'solo' | 'work' | 'strict-work' | 'ci';
 
 export interface SksGitPolicy {
   schema: typeof GIT_POLICY_SCHEMA;
@@ -145,9 +145,9 @@ export const LOCAL_RUNTIME_DIRS = [
   '.sneakoscope/memory'
 ];
 
-export function normalizeGitPolicyMode(value: unknown = 'team'): GitPolicyMode {
-  const mode = String(value || 'team').trim().toLowerCase();
-  if (mode === 'solo' || mode === 'team' || mode === 'strict-team' || mode === 'ci') return mode;
+export function normalizeGitPolicyMode(value: unknown = 'work'): GitPolicyMode {
+  const mode = String(value || 'work').trim().toLowerCase();
+  if (mode === 'solo' || mode === 'work' || mode === 'strict-work' || mode === 'ci') return mode;
   throw new Error(`Invalid SKS git policy mode: ${value}`);
 }
 
@@ -159,7 +159,7 @@ export function sharedMemoryManifestPath(root: string): string {
   return path.join(root, '.sneakoscope', 'shared-memory-manifest.json');
 }
 
-export function defaultGitPolicy(mode: GitPolicyMode = 'team'): SksGitPolicy {
+export function defaultGitPolicy(mode: GitPolicyMode = 'work'): SksGitPolicy {
   return {
     schema: GIT_POLICY_SCHEMA,
     version: PACKAGE_VERSION,
@@ -223,7 +223,7 @@ export function defaultSharedMemoryManifest(policy: SksGitPolicy = defaultGitPol
 }
 
 export async function ensureGitPolicy(root: string, opts: { mode?: unknown; write?: boolean; imageBinaryPolicy?: string | null } = {}): Promise<SksGitPolicy> {
-  const mode = normalizeGitPolicyMode(opts.mode || 'team');
+  const mode = normalizeGitPolicyMode(opts.mode || 'work');
   const current = await readJson<SksGitPolicy | null>(gitPolicyPath(root), null);
   const policy = normalizeGitPolicy({
     ...(current?.schema === GIT_POLICY_SCHEMA ? current : defaultGitPolicy(mode)),
@@ -292,7 +292,7 @@ export function normalizeRelPath(value: string): string {
 }
 
 export function normalizeGitPolicy(value: Partial<SksGitPolicy> | null | undefined): SksGitPolicy {
-  const base = defaultGitPolicy(normalizeGitPolicyMode(value?.mode || 'team'));
+  const base = defaultGitPolicy(normalizeGitPolicyMode(value?.mode || 'work'));
   return {
     ...base,
     ...value,

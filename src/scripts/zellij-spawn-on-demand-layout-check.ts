@@ -9,7 +9,7 @@ const tmpRoot = path.join(root, '.sneakoscope', 'tmp', 'spawn-on-demand-layout-c
 process.env.SKS_ZELLIJ_VIEWPORTS = '3'
 const built = buildZellijLayoutKdl({ missionId: 'M-spawn-on-demand-layout', ledgerRoot: tmpRoot, cwd: root, kind: 'naruto', slotCount: 24 })
 const validation = validateZellijLayoutKdl(built.layout_kdl)
-const writeBuilt = await writeZellijLayout(root, { missionId: 'M-spawn-on-demand-layout-write', ledgerRoot: tmpRoot, cwd: root, kind: 'agent', slotCount: 5 })
+const writeBuilt = await writeZellijLayout(root, { missionId: 'M-spawn-on-demand-layout-write', ledgerRoot: tmpRoot, cwd: root, kind: 'naruto', slotCount: 5 })
 const manifest = JSON.parse(await fs.readFile(path.join(tmpRoot, 'zellij-lane-runtime.json'), 'utf8'))
 const workerPaneMatches = built.layout_kdl.match(/pane name="slot-/g) || []
 const viewportPaneMatches = built.layout_kdl.match(/pane name="sks-viewport-/g) || []

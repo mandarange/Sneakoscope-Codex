@@ -32,10 +32,10 @@ async function sqlPlaneInput(overrides: Record<string, unknown> = {}) {
 
 function readBackFailedCycle() {
   return {
-    schema: 'sks.mad-db-cycle-result.v1',
+    schema: 'sks.mad-sks-sql-plane-cycle-result.v1',
     ok: false,
     mission_id: 'M-test-readback',
-    cycle_id: 'mad-db-test',
+    cycle_id: 'mad-sks-sql-plane-test',
     action: 'exec',
     target: { blockers: [] },
     tool_inventory: { ok: true },
@@ -45,7 +45,7 @@ function readBackFailedCycle() {
     read_only_restoration: { ok: true, blockers: [] },
     capability_closed: true,
     timings_ms: {},
-    blockers: ['mad_db_read_back_verification_failed']
+    blockers: ['mad_sks_sql_plane_read_back_verification_failed']
   };
 }
 
@@ -56,41 +56,41 @@ test('sql-plane denies control-plane tool requests', async () => {
   }));
   assert.equal(result.ok, false);
   assert.equal(result.status, 'blocked');
-  assert.ok(result.blockers.includes('mad_db_control_plane_tool_denied'));
+  assert.ok(result.blockers.includes('mad_sks_sql_plane_control_plane_tool_denied'));
 });
 
 test('sql-plane fails when read-back verification fails', async () => {
-  const previous = process.env.SKS_TEST_MOCK_MAD_DB_CYCLE;
-  process.env.SKS_TEST_MOCK_MAD_DB_CYCLE = '1';
+  const previous = process.env.SKS_TEST_MOCK_MAD_SKS_SQL_PLANE_CYCLE;
+  process.env.SKS_TEST_MOCK_MAD_SKS_SQL_PLANE_CYCLE = '1';
   try {
     const result = await runMadSksExecutor(await sqlPlaneInput({
       sql: 'update public.fixture set name = name where id = 1',
       verify_sql: 'select false as ok',
       accept_not_rollbackable: true,
-      __test_mad_db_cycle_result: readBackFailedCycle()
+      __test_mad_sks_sql_plane_cycle_result: readBackFailedCycle()
     }));
     assert.equal(result.ok, false);
     assert.equal(result.status, 'failed');
-    assert.ok(result.blockers.includes('mad_db_read_back_verification_failed'));
+    assert.ok(result.blockers.includes('mad_sks_sql_plane_read_back_verification_failed'));
     assert.equal((result.sql_plane as any).read_back_passed, false);
     assert.equal((result.sql_plane as any).profile_closed, true);
   } finally {
-    if (previous === undefined) delete process.env.SKS_TEST_MOCK_MAD_DB_CYCLE;
-    else process.env.SKS_TEST_MOCK_MAD_DB_CYCLE = previous;
+    if (previous === undefined) delete process.env.SKS_TEST_MOCK_MAD_SKS_SQL_PLANE_CYCLE;
+    else process.env.SKS_TEST_MOCK_MAD_SKS_SQL_PLANE_CYCLE = previous;
   }
 });
 
 test('sql-plane blocks proof when protected core snapshot comparison fails', async () => {
-  const previousCycle = process.env.SKS_TEST_MOCK_MAD_DB_CYCLE;
+  const previousCycle = process.env.SKS_TEST_MOCK_MAD_SKS_SQL_PLANE_CYCLE;
   const previousCore = process.env.SKS_TEST_FORCE_PROTECTED_CORE_CHANGED;
-  process.env.SKS_TEST_MOCK_MAD_DB_CYCLE = '1';
+  process.env.SKS_TEST_MOCK_MAD_SKS_SQL_PLANE_CYCLE = '1';
   process.env.SKS_TEST_FORCE_PROTECTED_CORE_CHANGED = '1';
   try {
     const result = await runMadSksExecutor(await sqlPlaneInput({
       sql: 'select 1',
       verify_sql: 'select 1',
       __test_protected_core_changed: true,
-      __test_mad_db_cycle_result: {
+      __test_mad_sks_sql_plane_cycle_result: {
         ...readBackFailedCycle(),
         ok: true,
         read_back: { ok: true, blockers: [] },
@@ -101,8 +101,8 @@ test('sql-plane blocks proof when protected core snapshot comparison fails', asy
     assert.equal(result.status, 'applied');
     assert.ok(result.proof_evidence_path);
   } finally {
-    if (previousCycle === undefined) delete process.env.SKS_TEST_MOCK_MAD_DB_CYCLE;
-    else process.env.SKS_TEST_MOCK_MAD_DB_CYCLE = previousCycle;
+    if (previousCycle === undefined) delete process.env.SKS_TEST_MOCK_MAD_SKS_SQL_PLANE_CYCLE;
+    else process.env.SKS_TEST_MOCK_MAD_SKS_SQL_PLANE_CYCLE = previousCycle;
     if (previousCore === undefined) delete process.env.SKS_TEST_FORCE_PROTECTED_CORE_CHANGED;
     else process.env.SKS_TEST_FORCE_PROTECTED_CORE_CHANGED = previousCore;
   }

@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 const ROUTES = [
-  ['team', false],
+  ['naruto', false],
   ['qa-loop', true],
   ['research', false],
   ['autoresearch', false],

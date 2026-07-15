@@ -312,7 +312,7 @@ function layerVector(anchor: any = {}, claim: any = {}, q3: any = []) {
     freshnessScore(claim.freshness),
     clamp01((required / 1.25) + (requestCount * 0.04) + (strongFeedback * 0.18)),
     conflictShadow(anchor, claim),
-    clamp01((/wiki|memory|triwiki/.test(route) ? 0.45 : 0) + (/team|agent/.test(route) ? 0.25 : 0) + (/qa|test|gx|version|setup|npm/.test(route) ? 0.2 : 0)),
+    clamp01((/wiki|memory|triwiki/.test(route) ? 0.45 : 0) + (/naruto|subagent/.test(route) ? 0.25 : 0) + (/qa|test|gx|version|setup|npm/.test(route) ? 0.2 : 0)),
     clamp01(tokenCost / 360)
   ].map(round4);
 }

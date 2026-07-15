@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildAgentRoster } from '../../dist/core/agents/agent-roster.js';
-import { decideAgentEffort, decideAgentWorkerModel, decideNarutoCloneEffort, decideOfficialSubagentModel } from '../../dist/core/agents/agent-effort-policy.js';
+import { decideAgentEffort, decideAgentWorkerModel, decideOfficialSubagentModel } from '../../dist/core/agents/agent-effort-policy.js';
 
 test('native agent effort policy assigns high effort to safety and release lanes', () => {
   const safety = decideAgentEffort({
@@ -99,8 +99,7 @@ test('native agent model policy keeps GLM mode on GLM 5.2 with GLM efforts', () 
   assert.equal(risky.model_tier, 'glm-5.2-high');
 });
 
-test('official subagents use the fixed four-profile matrix and keep the legacy alias', () => {
-  assert.equal(decideNarutoCloneEffort, decideOfficialSubagentModel);
+test('official subagents use the fixed four-profile matrix', () => {
   const bounded = decideOfficialSubagentModel({ persona: { role: 'worker' }, prompt: 'exact one-line single-file mechanical rename' });
   const implementation = decideOfficialSubagentModel({ persona: { role: 'implementation_specialist' }, prompt: 'implement parser logic' });
   const context = decideOfficialSubagentModel({ persona: { role: 'browser_use_operator' }, prompt: 'collect Chrome browser evidence' });

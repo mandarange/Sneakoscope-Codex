@@ -48,31 +48,31 @@ export const PRODUCT_DESIGN_PIPELINE_STAGES = Object.freeze([
   {
     stage: 'context_intake',
     skills: ['get-context', 'user-context'],
-    routes: ['Team', 'PPT', 'ImageUXReview'],
+    routes: ['Naruto', 'PPT', 'ImageUXReview'],
     purpose: 'capture product/user/design context before local design.md fallback is hydrated'
   },
   {
     stage: 'research_and_ideation',
     skills: ['research', 'ideate'],
-    routes: ['Team', 'PPT'],
+    routes: ['Naruto', 'PPT'],
     purpose: 'ground competitive, audience, and concept exploration before visual decisions'
   },
   {
     stage: 'artifact_generation',
     skills: ['index', 'image-to-code', 'url-to-code'],
-    routes: ['Team', 'PPT'],
+    routes: ['Naruto', 'PPT'],
     purpose: 'turn sealed context, screenshots, images, or URLs into prototype/source direction'
   },
   {
     stage: 'design_review',
     skills: ['audit', 'design-qa'],
-    routes: ['Team', 'PPT', 'ImageUXReview', 'QALoop'],
+    routes: ['Naruto', 'PPT', 'ImageUXReview', 'QALoop'],
     purpose: 'audit hierarchy, accessibility, responsiveness, polish, and route-specific UX risk'
   },
   {
     stage: 'delivery',
     skills: ['share'],
-    routes: ['PPT', 'Team'],
+    routes: ['PPT', 'Naruto'],
     purpose: 'package or hand off design artifacts when the Codex App plugin exposes sharing'
   }
 ]);

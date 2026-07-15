@@ -22,13 +22,16 @@ export async function repairCodexStartupConfig(input: {
   reportPath?: string | null
   home?: string
   codexHome?: string
+  globalRuntimeRoot?: string
 }): Promise<CodexStartupConfigRepairReport> {
   const root = path.resolve(input.root);
   const roleRepair = await repairAgentRoleConfigs({
     root,
     apply: input.apply === true,
     reportPath: path.join(root, '.sneakoscope', 'reports', 'agent-role-config-repair.json'),
-    ...(input.codexHome ? { codexHome: input.codexHome } : {})
+    ...(input.home ? { home: input.home } : {}),
+    ...(input.codexHome ? { codexHome: input.codexHome } : {}),
+    ...(input.globalRuntimeRoot ? { globalRuntimeRoot: input.globalRuntimeRoot } : {})
   });
   const fileRepair = await repairAgentConfigFileReferences({
     root,

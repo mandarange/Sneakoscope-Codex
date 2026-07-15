@@ -31,7 +31,7 @@ import {
   UpdateStatusRefreshError,
   type SksUpdateStatusV3
 } from './update/update-status.js';
-import { UpdateOperationRecorder } from './update/update-operation.js';
+import { authorizeUpdateRollback, UpdateOperationRecorder } from './update/update-operation.js';
 import { runTemporaryInstallSmoke, type TemporaryInstallSmokeResult } from './update/temporary-install-smoke.js';
 import { ui as cliUi, withHeartbeat } from '../cli/cli-theme.js';
 
@@ -466,6 +466,34 @@ export async function runSksUpdateRollback(options: SksUpdateNowOptions & { vers
       error: 'rollback requires a valid semantic version'
     };
   }
+  const currentVersion = parseVersionText(options.currentVersion || PACKAGE_VERSION);
+  if (!currentVersion) {
+    return {
+      schema: 'sks.update-rollback.v1',
+      ok: false,
+      status: 'failed',
+      requested_version: version,
+      update: null,
+      receipt_path: null,
+      error: 'rollback current version is unavailable'
+    };
+  }
+  const authorization = await authorizeUpdateRollback({
+    targetVersion: version,
+    currentVersion,
+    ...(options.env ? { env: options.env } : {})
+  });
+  if (!authorization.ok) {
+    return {
+      schema: 'sks.update-rollback.v1',
+      ok: false,
+      status: 'failed',
+      requested_version: version,
+      update: null,
+      receipt_path: null,
+      error: authorization.blocker
+    };
+  }
   const update = await runSksUpdateNow({ ...options, version, operationKind: 'rollback' });
   return {
     schema: 'sks.update-rollback.v1',
@@ -661,7 +689,8 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
     stage('snapshot_refresh', snapshotOk, snapshotOk ? currentSnapshot!.source : 'failed', {
       update_count: currentSnapshot?.update_count ?? null
     });
-    const currentOk = migrationCurrent && menuVerification.ok && snapshotOk;
+    const currentMenuBarTerminalUncertain = menuBarInstallIsTerminalUncertain(sksMenuBar);
+    const currentOk = migrationCurrent && menuVerification.ok && snapshotOk && !currentMenuBarTerminalUncertain;
     return finalize(buildUpdateNowResult({
       packageName,
       from: check.current,
@@ -674,7 +703,7 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
       cwd,
       registry,
       globalRoot,
-      status: 'current',
+      status: currentMenuBarTerminalUncertain ? 'terminal_uncertain' : 'current',
       ok: currentOk,
       installCode: null,
       oldVersionDoctor: null,
@@ -685,7 +714,9 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
       migrationCurrent,
       sksMenuBar,
       stages,
-      error: currentOk ? null : 'current-version repair verification failed'
+      error: currentOk ? null : currentMenuBarTerminalUncertain
+        ? 'Menu Bar launch or rollback completion could not be confirmed'
+        : 'current-version repair verification failed'
     }));
   }
 
@@ -818,9 +849,9 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
       stage('version_probe', Boolean(newVersion), newVersion ? 'version_detected' : 'failed', { new_version: newVersion, code: versionProbe.code });
       stageStart('new_version_doctor', 'running migration doctor on updated install');
       newVersionDoctor = await updateHeartbeat(machineOutput, 'new-version doctor', runPackageLocalDoctor({
-        root: globalSksRootPath(env),
+        root: projectReceiptRoot,
         entrypoint: newBinary,
-        args: ['doctor', '--fix', '--yes', '--profile', 'migration', '--machine-only', '--report-file', path.join(globalSksRootPath(env), 'update', 'new-version-doctor.json')],
+        args: ['doctor', '--fix', '--yes', '--profile', 'migration', '--machine-only', '--report-file', path.join(projectReceiptRoot, '.sneakoscope', 'update', 'new-version-doctor.json')],
         env,
         timeoutMs: updateDoctorTimeoutMs(env),
         maxOutputBytes: 32 * 1024
@@ -904,7 +935,8 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
   const baseOk = installOk && Boolean(newBinary) && newVersionDoctor?.ok === true
     && hookTrust?.ok !== false && migrationCurrent && menubarVerified;
   const ok = baseOk && verifyOk && snapshotOk;
-  const terminalUncertain = install.timedOut === true;
+  const menuBarTerminalUncertain = menuBarInstallIsTerminalUncertain(sksMenuBar);
+  const terminalUncertain = install.timedOut === true || menuBarTerminalUncertain;
   const status: SksUpdateNowResult['status'] = terminalUncertain
     ? 'terminal_uncertain'
     : ok ? 'updated' : baseOk ? 'updated_with_issues' : 'failed';
@@ -933,9 +965,17 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
     stages,
     verification,
     error: terminalUncertain
-      ? 'global install timed out; package side-effect completion is uncertain'
+      ? menuBarTerminalUncertain
+        ? 'Menu Bar launch or rollback completion could not be confirmed'
+        : 'global install timed out; package side-effect completion is uncertain'
       : ok ? null : status === 'updated_with_issues' ? verificationError(verification) : updateNowError(install, newBinary, newVersionDoctor, migrationCurrent)
   }));
+}
+
+export function menuBarInstallIsTerminalUncertain(result: SksMenuBarInstallResult | null | undefined): boolean {
+  return result?.status === 'terminal_uncertain'
+    || result?.launch?.terminal_uncertain === true
+    || result?.rollback?.status === 'terminal_uncertain';
 }
 
 async function runUpdateGlobalSkillsReconcile(stage: (id: string, ok: boolean, status: string, detail?: Record<string, unknown>) => void, opts: { quiet?: boolean; newPackageRoot?: string | null; env?: NodeJS.ProcessEnv } = {}) {

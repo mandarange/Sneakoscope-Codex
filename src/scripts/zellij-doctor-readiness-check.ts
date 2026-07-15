@@ -2,8 +2,8 @@
 // @ts-nocheck
 // zellij:doctor-readiness (1.20.2 Area 5.1/5.2).
 //
-// Verifies: (1) the doctor readiness matrix exposes the Zellij block with the
-// mad_ready=false-while-cli_ready-can-stay-true semantics and tmux removed, and
+// Verifies: (1) the doctor readiness matrix exposes only the current Zellij
+// block with mad_ready=false-while-cli_ready-can-stay-true semantics, and
 // (2) the screen-proof scrapeable section set is a strict SUBSET of the composed
 // lane section superset (so the two layers can never silently diverge).
 import fs from 'node:fs';
@@ -29,7 +29,7 @@ const missing = buildDoctorReadinessMatrix({
 });
 assertGate(missing.mad_ready === false, 'zellij missing must make mad_ready=false', { missing });
 assertGate(missing.cli_ready === true, 'zellij missing must NOT block cli_ready', { missing });
-assertGate(missing.tmux_removed_runtime === true, 'tmux must be a removed runtime', { missing });
+assertGate(!Object.hasOwn(missing, 'tmux_removed_runtime') && !Object.hasOwn(missing, 'tmux'), 'readiness must expose only the current terminal runtime', { missing });
 assertGate(missing.zellij && Array.isArray(missing.zellij.required_for), 'matrix must carry a zellij block with required_for', { missing });
 
 // Zellij ok → mad_ready true (config readable).

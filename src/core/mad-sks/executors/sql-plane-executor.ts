@@ -1,9 +1,9 @@
 import path from 'node:path';
 import { classifySql } from '../../db-safety.js';
 import { readText } from '../../fsx.js';
-import { runMadDbCycle } from '../../mad-db/mad-db-coordinator.js';
-import { isMadDbControlPlaneDeniedTool, madDbOperationClassesFromClassification } from '../../mad-db/mad-db-policy.js';
-import { withMadDbLock } from '../../mad-db/mad-db-lock.js';
+import { runMadSksSqlPlaneCycle } from '../sql-plane/coordinator.js';
+import { isMadSksSqlPlaneControlPlaneDeniedTool, madSksSqlPlaneOperationClassesFromClassification } from '../sql-plane/policy.js';
+import { withMadSksSqlPlaneLock } from '../sql-plane/lock.js';
 import { madSksCatastrophicSqlExplicitlyRequested } from '../../permission-gates.js';
 import { runMadSksGuardMiddleware } from '../guard-middleware.js';
 import { madSksAuditAction } from '../audit-ledger.js';
@@ -40,7 +40,7 @@ async function runSqlPlane(input: MadSksExecutorInput, context: MadSksExecutorCo
   const toolName = String(input.tool_name || (action === 'apply-migration' ? 'apply_migration' : 'execute_sql'));
   const userIntent = String(input.user_intent || context.permission_model?.user_intent || 'MAD-SKS SQL-plane execution');
   const classification = classifySql(sql || userIntent);
-  const operationClasses = madDbOperationClassesFromClassification({ ...classification, toolName });
+  const operationClasses = madSksSqlPlaneOperationClassesFromClassification({ ...classification, toolName });
   const catastrophic = madSksCatastrophicSqlExplicitlyRequested({ classification, userIntent, sql });
   const rollbackKind = rollbackSql
     ? 'compensating_sql'
@@ -49,7 +49,7 @@ async function runSqlPlane(input: MadSksExecutorInput, context: MadSksExecutorCo
       : 'not_required';
   const blockers = [];
   if (!sql.trim() && action !== 'apply-migration') blockers.push('sql_required_for_sql_plane_executor');
-  if (isMadDbControlPlaneDeniedTool(toolName)) blockers.push('mad_db_control_plane_tool_denied');
+  if (isMadSksSqlPlaneControlPlaneDeniedTool(toolName)) blockers.push('mad_sks_sql_plane_control_plane_tool_denied');
   if (catastrophic.required && !catastrophic.ok) blockers.push('catastrophic_sql_literal_request_missing');
   if (!dryRun && ['write', 'destructive'].includes(String(classification.level || '')) && !verifySql) blockers.push('mad_sks_sql_plane_read_back_sql_required');
   if (!dryRun && rollbackKind === 'not_rollbackable' && input.accept_not_rollbackable !== true) blockers.push('not_rollbackable_sql_requires_explicit_acceptance');
@@ -130,7 +130,7 @@ async function runSqlPlane(input: MadSksExecutorInput, context: MadSksExecutorCo
     action,
     task: userIntent,
     sql: sql || null,
-    migrationName: String(input.migration_name || input.name || `mad_sks_${Date.now()}`),
+    migrationName: String(input.migration_name || input.name || `mad_sks_sql_plane_${Date.now()}`),
     migrationFile: migrationFile || null,
     verifySql: verifySql || null,
     verifyExpectedRowCount,
@@ -141,7 +141,7 @@ async function runSqlPlane(input: MadSksExecutorInput, context: MadSksExecutorCo
   const readBackPassed = result.read_back ? result.read_back.ok === true : result.execution?.ok === true;
   const profileClosed = result.capability_closed === true && result.read_only_restoration?.ok === true;
   const verification = [{
-    kind: 'mad_db_cycle',
+    kind: 'mad_sks_sql_plane_cycle',
     ok: result.ok === true,
     execution_ok: result.execution?.ok === true,
     read_back_passed: readBackPassed,
@@ -175,7 +175,7 @@ async function runSqlPlane(input: MadSksExecutorInput, context: MadSksExecutorCo
       catastrophic,
       rollback_kind: rollbackKind,
       operation_classes: result.operation?.operation_classes || operationClasses,
-      mad_db_cycle_result: result,
+      mad_sks_sql_plane_cycle_result: result,
       sql_plane: sqlPlaneSummary(readBackPassed, profileClosed, result, result.operation?.operation_classes || operationClasses)
     }
   });
@@ -189,10 +189,10 @@ async function resolveSqlPlaneSql(input: MadSksExecutorInput, context: MadSksExe
   return String(await readText(resolved, '') || '');
 }
 
-async function runSqlPlaneCycle(input: MadSksExecutorInput, context: MadSksExecutorContext, cycleInput: Parameters<typeof runMadDbCycle>[0]) {
-  const fixture = input.__test_mad_db_cycle_result;
-  if (fixture && (process.env.NODE_ENV === 'test' || process.env.SKS_TEST_MOCK_MAD_DB_CYCLE === '1')) return fixture as Awaited<ReturnType<typeof runMadDbCycle>>;
-  return withMadDbLock(context.target_root, String(input.mission_id || input.missionId || ''), 'mad-sks-sql-plane', () => runMadDbCycle(cycleInput));
+async function runSqlPlaneCycle(input: MadSksExecutorInput, context: MadSksExecutorContext, cycleInput: Parameters<typeof runMadSksSqlPlaneCycle>[0]) {
+  const fixture = input.__test_mad_sks_sql_plane_cycle_result;
+  if (fixture && (process.env.NODE_ENV === 'test' || process.env.SKS_TEST_MOCK_MAD_SKS_SQL_PLANE_CYCLE === '1')) return fixture as Awaited<ReturnType<typeof runMadSksSqlPlaneCycle>>;
+  return withMadSksSqlPlaneLock(context.target_root, String(input.mission_id || input.missionId || ''), 'mad-sks-sql-plane', () => runMadSksSqlPlaneCycle(cycleInput));
 }
 
 function sqlPlaneSummary(readBackPassed: boolean, profileClosed: boolean, result: any, operationClasses: unknown[]) {

@@ -13,7 +13,7 @@ export async function writeWorkerPaneCommunicationContract(root: string, input: 
 }
 
 export async function evaluateWorkerPaneCommunicationContract(root: string, input: { requireZellij?: boolean } = {}) {
-  const summary = await readJson<any>(path.join(root, 'agent-native-cli-session-swarm.json'), null)
+  const summary = await readJson<any>(path.join(root, 'native-cli-worker-runtime.json'), null)
   const records = Array.isArray(summary?.records)
     ? summary.records.filter((record: any) => record.scaling_primitive === 'native_cli_process_in_zellij_worker_pane')
     : []

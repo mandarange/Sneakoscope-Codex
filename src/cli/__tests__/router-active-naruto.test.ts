@@ -6,9 +6,10 @@ import path from 'node:path'
 import { dispatch, safeReadOnlySubcommand } from '../router.js'
 
 test('active Naruto permits only its read-only observation subcommands', () => {
-  for (const subcommand of ['status', 'subagents', 'workers', 'proof']) {
+  for (const subcommand of ['status', 'subagents', 'proof']) {
     assert.equal(safeReadOnlySubcommand('naruto', [subcommand, 'latest', '--json']), true, subcommand)
   }
+  assert.equal(safeReadOnlySubcommand('naruto', ['workers', 'latest', '--json']), false)
   assert.equal(safeReadOnlySubcommand('naruto', ['run', 'task']), false)
   assert.equal(safeReadOnlySubcommand('naruto', ['proof', 'latest', '--write']), false)
   assert.equal(safeReadOnlySubcommand('naruto', ['--json', 'status', 'latest']), false)

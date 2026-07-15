@@ -1,6 +1,5 @@
 import path from 'node:path';
 import fs from 'node:fs';
-import { spawn } from 'node:child_process';
 import { PACKAGE_VERSION, appendJsonlBounded, exists, nowIso, packageRoot, readJson, sksRoot, writeJsonAtomic } from '../fsx.js';
 import { initProject } from '../init.js';
 import { createMission, findLatestMission, missionDir, setCurrent, stateFile } from '../mission.js';
@@ -39,6 +38,20 @@ import {
 } from '../codex-lb/codex-lb-tool-output-recovery.js';
 
 const MAD_SKS_DEFAULT_TTL_MS = 10 * 60 * 1000;
+const UNSUPPORTED_MAD_ARGUMENT_NAMES = new Set([
+  '--mad-db',
+  '--mad-native-swarm',
+  '--mad-swarm',
+  '--no-swarm',
+  '--no-mad-swarm',
+  '--mad-agents',
+  '--mad-swarm-agents',
+  '--mad-swarm-work-items',
+  '--mad-swarm-backend',
+  '--mad-swarm-prompt',
+  '--tmux-smoke',
+  '--require-tmux-smoke'
+]);
 
 export async function madHighCommand(args: any = [], deps: any = {}) {
   const rawArgsForHelp = (args || []).map((arg: any) => String(arg));
@@ -53,7 +66,7 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
       `Subcommands: ${MAD_SKS_COMMAND_SURFACE.join(', ')}`,
       '',
       'With no subcommand, launches the MAD-SKS session (zellij UI, dependency checks, scoped permission model).',
-      '`sks mad-sks <subcommand> --help` shows this same summary — per-subcommand help is not yet implemented; see docs/mad-db.md and docs/mad-sks*.md for flag reference.'
+      '`sks mad-sks <subcommand> --help` shows this same summary — per-subcommand help is not yet implemented; see docs/mad-sks.md and docs/mad-sks-rollback.md for flag reference.'
     ].join('\n');
     if (rawArgsForHelp.includes('--json')) {
       console.log(JSON.stringify({ schema: 'sks.mad-sks-help.v1', ok: true, usage, command_surface: [...MAD_SKS_COMMAND_SURFACE] }, null, 2));
@@ -61,6 +74,24 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
       console.log(usage);
     }
     return { schema: 'sks.mad-sks-help.v1', ok: true, usage, command_surface: [...MAD_SKS_COMMAND_SURFACE] };
+  }
+  const argumentErrors = findUnsupportedMadArgumentErrors(rawArgsForHelp);
+  if (argumentErrors.length) {
+    const result = {
+      schema: 'sks.mad-sks-argument-error.v1',
+      ok: false,
+      status: 'blocked',
+      argument_errors: argumentErrors,
+      blockers: argumentErrors,
+      hint: 'Use `sks mad-sks --help` for the current command surface.'
+    };
+    process.exitCode = 1;
+    if (rawArgsForHelp.includes('--json')) console.log(JSON.stringify(result, null, 2));
+    else {
+      console.error('SKS MAD argument error.');
+      for (const error of argumentErrors) console.error(`- ${error}`);
+    }
+    return result;
   }
   const subcommand = firstSubcommand(args);
   if (subcommand) return madSksSubcommand(subcommand, args.filter((arg: any) => String(arg) !== subcommand));
@@ -85,7 +116,6 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
     return result;
   }
   const cleanArgs = stripMadLaunchOnlyArgs(args, { includeGlmFlags: glmMadLaunch });
-  const madDbGrant = resolveMadLaunchMadDbGrant(rawArgs);
   const dryRun = rawArgs.includes('--dry-run');
   if (rawArgs.includes('--json') && !dryRun) {
     const profile = glmMadLaunch ? buildMadGlmLaunchProfileNoWrite(rawArgs) : buildMadHighLaunchProfileNoWrite();
@@ -246,23 +276,6 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
     process.exitCode = 1;
     return glmRuntime;
   }
-  if (madDbGrant.requested) {
-    const grantReport = {
-      schema: 'sks.mad-sks-launch-grants.v2',
-      generated_at: nowIso(),
-      mission_id: madLaunch.mission_id,
-      mad_sks_active: true,
-      mad_db_active: false,
-      mad_db_default_grant: false,
-      mad_db_grant_source: madDbGrant.source,
-      mad_db_requires_first_class_route: true,
-      mad_db_cli: 'sks mad-db run|exec|apply-migration',
-      mad_db_capability_file: null,
-      standalone_mad_db_enable_still_requires_ack: true
-    };
-    await writeJsonAtomic(path.join(madLaunch.dir, 'mad-sks-launch-grants.json'), grantReport);
-    await appendJsonlBounded(path.join(madLaunch.dir, 'events.jsonl'), { ts: nowIso(), type: 'mad_db.first_class_route_required', grant_source: madDbGrant.source, cli: grantReport.mad_db_cli });
-  }
   const updateNotice = {
     schema: 'sks.update-notice.v1',
     checked_at: nowIso(),
@@ -283,7 +296,6 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
   await appendJsonlBounded(path.join(madLaunch.dir, 'events.jsonl'), { ts: nowIso(), type: 'mad_sks.update_notice_checked', non_blocking: true, update_available: updateNotice.update_available === true, source: updateNotice.source });
   console.log(`SKS MAD ready: ${glmRuntime?.profile?.profile_name || madHighProfileName()} | gate ${madLaunch.mission_id}`);
   if (glmRuntime?.profile) console.log(`GLM MAD launch active: ${glmRuntime.profile.model} via OpenRouter; GPT fallback blocked.`);
-  if (madDbGrant.requested) console.log('MAD-DB flag observed; deprecated route now redirects to MAD-SKS SQL-plane: sks mad-sks sql|apply-migration.');
   if (updateNotice.update_available === true) console.log(`SKS update notice: ${updateNotice.latest_version} available (non-blocking).`);
   console.log('Scoped high-power maintenance authority active; add explicit --allow-* flags for packages, services, network, browser/Computer Use, generated assets, file permissions, or system/admin scopes. SQL-plane execution is available through MAD-SKS sql-plane and still requires control-plane denial, read-back proof, and read-only restoration.');
   const launchLb = lb.status === 'present' ? { ...lb, status: 'configured' } : lb;
@@ -384,17 +396,6 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
     }));
     launchLifecycleTasks.push(zellijUpdateNoticePromise);
   }
-  const madNativeSwarmPromise = startMadNativeSwarm(madLaunch.root, madLaunch, args, launchProfile, {
-    env: {
-      ...madSksEnv,
-      ...(launch.session_name ? { SKS_ZELLIJ_SESSION_NAME: launch.session_name } : {})
-    },
-    glmLaunch: glmRuntime ? { provider: glmRuntime.profile.provider, model: glmRuntime.profile.model } : null,
-    zellijSessionName: launch.session_name || null,
-    workerPlacement: headlessZellij ? 'process' : shouldAutoAttachZellij(args) ? 'zellij-pane' : 'process',
-    zellijVisiblePaneCap: Number(process.env.SKS_ZELLIJ_VISIBLE_PANE_CAP || zellijVisiblePaneSetting || 8)
-  }).catch((err: any) => appendJsonlBounded(path.join(madLaunch.dir, 'events.jsonl'), { ts: nowIso(), type: 'mad_sks.native_swarm_background_failed', error: err?.message || String(err) }));
-  launchLifecycleTasks.push(madNativeSwarmPromise);
   // The launcher only creates a detached background session. In an interactive
   // terminal, immediately attach so the session actually opens for the user
   // instead of leaving them to copy/paste the attach command by hand.
@@ -521,185 +522,8 @@ function buildGlmMadLaunchOpts(cleanArgs: any[] = [], opts: any = {}) {
   return { ...opts, session, glmMadLaunch: true };
 }
 
-export function resolveMadLaunchMadDbGrant(args: any[] = []) {
-  const list = (args || []).map((arg: any) => String(arg));
-  const requested = list.includes('--mad-db');
-  return {
-    enabled: false,
-    requested,
-    source: requested ? 'mad_db_first_class_route_required' : 'not_requested',
-    one_cycle_only: true
-  };
-}
-
-export async function startMadNativeSwarm(root: string, madLaunch: any, args: any[] = [], profile: any = {}, opts: any = {}) {
-  const swarm = resolveMadNativeSwarmOptions(args, profile, opts);
-  const dir = madLaunch.dir || missionDirLike(root, madLaunch.mission_id);
-  const ledgerRoot = path.join(dir, 'agents');
-  const artifactPath = path.join(dir, 'mad-sks-native-swarm.json');
-  const stdoutLog = path.join(dir, 'mad-sks-native-swarm.stdout.log');
-  const stderrLog = path.join(dir, 'mad-sks-native-swarm.stderr.log');
-  if (!swarm.enabled) {
-    const disabled = {
-      schema: 'sks.mad-sks-native-swarm.v1',
-      ok: true,
-      status: 'disabled',
-      reason: swarm.disabled_reason,
-      mission_id: madLaunch.mission_id,
-      model_provider: opts.glmLaunch?.provider || null,
-      model: opts.glmLaunch?.model || null,
-      gpt_fallback_allowed: opts.glmLaunch ? false : null,
-      lane_count: 1,
-      ledger_root: path.relative(root, ledgerRoot)
-    };
-    await writeJsonAtomic(artifactPath, disabled);
-    await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'mad_sks.native_swarm_disabled', reason: swarm.disabled_reason });
-    return disabled;
-  }
-  const prompt = swarm.prompt || 'MAD-SKS native swarm: inspect the active high-power maintenance session, keep lane cockpit state current, and report risks before writes.';
-  const command = [
-    process.execPath,
-    path.join(packageRoot(), 'dist', 'bin', 'sks.js'),
-    'agent',
-    'run',
-    prompt,
-    '--mission',
-    madLaunch.mission_id,
-    '--route',
-    '$MAD-SKS',
-    '--agents',
-    String(swarm.agents),
-    '--target-active-slots',
-    String(swarm.agents),
-    '--work-items',
-    String(swarm.workItems),
-    '--minimum-work-items',
-    String(swarm.agents),
-    '--concurrency',
-    String(swarm.agents),
-    '--backend',
-    swarm.backend,
-    '--readonly',
-    '--profile',
-    profile.profile_name || madHighProfileName(),
-    '--service-tier',
-    'fast',
-    '--fast',
-    '--json'
-  ];
-  if (swarm.backend === 'zellij') {
-    command.push('--real');
-    command.push('--zellij-session-name', opts.zellijSessionName || `sks-${madLaunch.mission_id}`);
-    command.push('--zellij-pane-worker');
-    command.push('--worker-placement', opts.workerPlacement || 'zellij-pane');
-    command.push('--zellij-visible-pane-cap', String(opts.zellijVisiblePaneCap || swarm.agents));
-  }
-  const baseReport = {
-    schema: 'sks.mad-sks-native-swarm.v1',
-    ok: true,
-    status: opts.dryRun === true || swarm.dryRun ? 'dry_run' : 'spawned',
-    mission_id: madLaunch.mission_id,
-    route: '$MAD-SKS',
-    route_command: 'sks --mad native swarm',
-    same_mission_ledger: true,
-    ledger_root: path.relative(root, ledgerRoot),
-    lane_count: swarm.agents,
-    agents: swarm.agents,
-    target_active_slots: swarm.agents,
-    work_items: swarm.workItems,
-    backend: swarm.backend,
-    zellij_session_name: opts.zellijSessionName || null,
-    worker_placement: opts.workerPlacement || (swarm.backend === 'zellij' ? 'zellij-pane' : 'process'),
-    zellij_visible_pane_cap: opts.zellijVisiblePaneCap || null,
-    model_provider: opts.glmLaunch?.provider || null,
-    model: opts.glmLaunch?.model || null,
-    gpt_fallback_allowed: opts.glmLaunch ? false : null,
-    readonly: true,
-    command,
-    stdout_log: path.relative(root, stdoutLog),
-    stderr_log: path.relative(root, stderrLog),
-    pid: null as number | null,
-    blockers: [] as string[]
-  };
-  if (baseReport.status === 'spawned') {
-    try {
-      fs.mkdirSync(dir, { recursive: true });
-      const out = fs.openSync(stdoutLog, 'a');
-      const err = fs.openSync(stderrLog, 'a');
-      const child = spawn(command[0], command.slice(1), {
-        cwd: process.cwd(),
-        detached: true,
-        env: {
-          ...process.env,
-          ...(opts.env || {}),
-          SKS_SKIP_NPM_FRESHNESS_CHECK: '1',
-          SKS_MAD_NATIVE_SWARM: '1',
-          SKS_PARENT_MAD_MISSION: String(madLaunch.mission_id || '')
-        },
-        stdio: ['ignore', out, err]
-      });
-      child.unref();
-      fs.closeSync(out);
-      fs.closeSync(err);
-      baseReport.pid = child.pid || null;
-    } catch (err: any) {
-      baseReport.ok = false;
-      baseReport.status = 'blocked';
-      baseReport.blockers = [`mad_native_swarm_spawn_failed:${err?.message || String(err)}`];
-    }
-  }
-  await writeJsonAtomic(artifactPath, baseReport);
-  await appendJsonlBounded(path.join(dir, 'events.jsonl'), {
-    ts: nowIso(),
-    type: baseReport.ok ? 'mad_sks.native_swarm_started' : 'mad_sks.native_swarm_blocked',
-    status: baseReport.status,
-    agents: swarm.agents,
-    backend: swarm.backend,
-    pid: baseReport.pid,
-    blockers: baseReport.blockers
-  });
-  return baseReport;
-}
-
-export function resolveMadNativeSwarmOptions(args: any[] = [], profile: any = {}, opts: any = {}) {
-  const list = (args || []).map((arg: any) => String(arg));
-  const operatorEnabled = list.includes('--mad-native-swarm')
-    || list.includes('--mad-swarm')
-    || list.includes('--mad-agents')
-    || list.includes('--mad-swarm-agents')
-    || list.includes('--mad-swarm-prompt')
-    || process.env.SKS_MAD_NATIVE_SWARM === '1';
-  const operatorDisabled = list.includes('--no-swarm') || list.includes('--no-mad-swarm') || process.env.SKS_MAD_NATIVE_SWARM === '0';
-  const glmRequested = list.includes('--glm') || opts.glmLaunch?.provider === 'openrouter';
-  const glmNativeSwarmDisabled = glmRequested && process.env.SKS_GLM_MAD_ALLOW_GPT_SWARM !== '1';
-  const disabled = !operatorEnabled || operatorDisabled || glmNativeSwarmDisabled;
-  const agents = clampInt(readOption(list, '--mad-agents', readOption(list, '--mad-swarm-agents', process.env.SKS_MAD_SWARM_AGENTS || opts.agents || 1)), 1, 20);
-  const workItems = clampInt(readOption(list, '--mad-swarm-work-items', process.env.SKS_MAD_SWARM_WORK_ITEMS || opts.workItems || agents), agents, 100);
-  const backend = defaultMadSwarmBackend(list, opts);
-  return {
-    enabled: !disabled,
-    disabled_reason: operatorDisabled
-      ? 'operator_disabled_mad_native_swarm'
-      : !operatorEnabled
-      ? 'official_subagent_runtime_default'
-      : glmNativeSwarmDisabled ? 'glm_mad_native_swarm_disabled_to_block_gpt_fallback' : null,
-    agents,
-    workItems,
-    backend,
-    dryRun: list.includes('--dry-run') || opts.dryRun === true,
-    prompt: String(readOption(list, '--mad-swarm-prompt', opts.prompt || '') || ''),
-    profile_name: profile.profile_name || madHighProfileName()
-  };
-}
-
 function missionDirLike(root: string, missionId: string) {
   return path.join(root, '.sneakoscope', 'missions', missionId);
-}
-
-function clampInt(value: unknown, min: number, max: number) {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return min;
-  return Math.max(min, Math.min(max, Math.floor(parsed)));
 }
 
 // Decide whether to take over the current terminal with a foreground Zellij
@@ -907,18 +731,8 @@ function baseMadLaunchOnlyFlags() {
     '--allow-file-permissions',
     '--allow-chmod',
 	    '--allow-delete',
-	    '--mad-db',
     '--confirm-delete',
     '--confirm-destructive-delete',
-    '--no-swarm',
-    '--no-mad-swarm',
-    '--mad-native-swarm',
-    '--mad-swarm',
-    '--mad-agents',
-    '--mad-swarm-agents',
-    '--mad-swarm-work-items',
-    '--mad-swarm-backend',
-    '--mad-swarm-prompt',
     '--repair-config',
     '--fix',
     '--yes-repair',
@@ -952,11 +766,6 @@ function madLaunchOnlyFlags(includeGlmFlags = false) {
 
 function madLaunchValueFlags(includeGlmFlags = false) {
   const flags = new Set([
-    '--mad-agents',
-    '--mad-swarm-agents',
-    '--mad-swarm-work-items',
-    '--mad-swarm-backend',
-	    '--mad-swarm-prompt',
     '--zellij-visible-panes',
     '--zellij-viewports',
     '--zellij-refresh-ms',
@@ -976,15 +785,14 @@ export function findGlmOnlyMadFlagBlockers(args: readonly string[] = [], glmMadL
   return blockers;
 }
 
-export function defaultMadSwarmBackend(args: any[] = [], opts: any = {}) {
-  const list = (args || []).map((arg: any) => String(arg));
-  const explicit = readOption(list, '--mad-swarm-backend', null);
-  if (explicit) return String(explicit);
-  if (process.env.SKS_MAD_SWARM_BACKEND) return String(process.env.SKS_MAD_SWARM_BACKEND);
-  if (opts.backend) return String(opts.backend);
-  if (list.includes('--json') || list.includes('--no-attach') || opts.nonInteractive === true) return 'codex-sdk';
-  if (list.includes('--headless') || process.env.SKS_MAD_ALLOW_HEADLESS === '1') return 'codex-sdk';
-  return 'zellij';
+export function findUnsupportedMadArgumentErrors(args: readonly unknown[] = []): readonly string[] {
+  const errors: string[] = [];
+  for (const value of args) {
+    const arg = String(value);
+    const name = arg.includes('=') ? arg.slice(0, arg.indexOf('=')) : arg;
+    if (UNSUPPORTED_MAD_ARGUMENT_NAMES.has(name)) errors.push(`unsupported_argument:${name}`);
+  }
+  return [...new Set(errors)];
 }
 
 export function stripMadLaunchOnlyArgs(args: any[] = [], opts: { readonly includeGlmFlags?: boolean } = {}) {
@@ -1116,7 +924,7 @@ async function madSksSubcommand(subcommand: string, args: any[] = []) {
     return emit({
       schema: 'sks.mad-sks-explain.v1',
       ok: true,
-      summary: 'MAD-SKS is a user-authorized general permission widening mode and the merged SQL-plane execution route. Target project work can be widened by explicit flags, while SQL-plane work runs through the sql-plane executor with MadDB capability/profile/read-back safeguards and SKS harness/package/dist/scripts/schemas/release metadata remain immutable protected core.',
+      summary: 'MAD-SKS is a user-authorized general permission widening mode and the SQL-plane execution route. Target project work can be widened by explicit flags, while SQL-plane work runs through the sql-plane executor with mission-bound capability/profile/read-back safeguards and SKS harness/package/dist/scripts/schemas/release metadata remain immutable protected core.',
       command_surface: [...MAD_SKS_COMMAND_SURFACE],
       catastrophic_safeguards: permission.forbidden_scopes,
       immutable_harness_guard: 'installed_harness_only_with_engine_source_exception'
@@ -1161,8 +969,7 @@ async function madSksSubcommand(subcommand: string, args: any[] = []) {
       requireActualCodex: args.includes('--require-actual-codex'),
       codexBin: codexBin || undefined
     });
-    const legacyFlag = args.includes('--tmux-smoke') || args.includes('--require-tmux-smoke');
-    const blockers = [...new Set([...(repair.blockers || []), ...(legacyFlag ? ['tmux_runtime_removed_use_zellij'] : [])])];
+    const blockers = [...new Set(repair.blockers || [])];
     const result = {
       schema: 'sks.mad-repair-config.v1',
       ok: blockers.length === 0,
@@ -1171,9 +978,8 @@ async function madSksSubcommand(subcommand: string, args: any[] = []) {
       applied: apply,
       target_root: targetRoot,
       repair,
-      zellij_migration: legacyFlag ? { ok: false, reason: 'tmux runtime removed; use Zellij gates' } : { ok: true },
       blockers,
-      operator_actions: [...new Set([...(repair.operator_actions || []), ...(legacyFlag ? ['Use `npm run zellij:capability` and `sks --mad` for the Zellij runtime.'] : [])])]
+      operator_actions: [...new Set(repair.operator_actions || [])]
     };
     if (!result.ok) process.exitCode = 1;
     return emit(result, json);

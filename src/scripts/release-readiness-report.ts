@@ -50,7 +50,8 @@ const requiredGateGroups = {
     'release:provenance',
     'release:runtime-truth-matrix',
     'package:published-contract',
-    'publish:packlist-performance'
+    'publish:packlist-performance',
+    'publish:runtime-script-closure'
   ],
   flagship_routes: [
     'ux-review:run-wires-imagegen',
@@ -76,9 +77,9 @@ const requiredScripts = [
   'typecheck',
   'release:check:full',
   'release:real-check',
-  'publish:verify-ignore-scripts',
-  'publish:dry',
-  'publish:ignore-scripts'
+  'release:pack-receipt',
+  'release:macos-menubar-proof',
+  'runtime:installed-smoke'
 ];
 const remainingP0 = [];
 const duplicateGateIds = duplicateValues(gates.map((gate) => String(gate.id || '')));

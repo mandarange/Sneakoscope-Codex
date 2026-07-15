@@ -49,7 +49,7 @@ export const RECALLPULSE_POLICY = Object.freeze({
     'generated_skill_installation',
     'codex_app_stop_hooks',
     'dfix_ultralight_behavior',
-    'official_subagent_risk_scoped_review_with_legacy_team_compatibility',
+    'official_subagent_risk_scoped_review',
     'research_xhigh_agent_requirements',
     'db_destructive_operation_blocking',
     'imagegen_evidence_requirements'

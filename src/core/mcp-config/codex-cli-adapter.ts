@@ -2,7 +2,6 @@ import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { runProcess, which, type RunProcessResult } from '../fsx.js';
-import { redactMcpError } from './redaction.js';
 import type { McpCliInventoryRow } from './config-reader.js';
 import type { ResolvedMcpScope } from './scope.js';
 import type { McpServerMutationInput } from './types.js';
@@ -47,6 +46,11 @@ interface AdapterDependencies {
   readonly run?: (command: string, args: readonly string[], options: { cwd?: string; env: NodeJS.ProcessEnv; timeoutMs: number; maxOutputBytes: number }) => Promise<RunProcessResult>;
 }
 
+type CodexTransformPublicError =
+  | 'codex_mcp_edit_remove_failed'
+  | 'codex_mcp_mutation_failed'
+  | 'codex_mcp_cli_transform_failed';
+
 export class CodexMcpCliAdapter implements CodexMcpCliPort {
   private readonly configuredPath: string | undefined;
   private readonly findExecutable: NonNullable<AdapterDependencies['findExecutable']>;
@@ -59,51 +63,54 @@ export class CodexMcpCliAdapter implements CodexMcpCliPort {
   }
 
   async list(ref: ResolvedMcpScope): Promise<CodexCliListResult> {
-    const executable = await this.executable();
-    if (!executable) return { available: false, ok: false, rows: [], public_error: 'codex_cli_not_found' };
-    const result = await this.run(executable, ['mcp', 'list', '--json'], {
-      cwd: ref.root,
-      env: scopedEnvironment(ref.codexHome),
-      timeoutMs: 10_000,
-      maxOutputBytes: 1024 * 1024
-    });
-    if (result.code !== 0 || result.timedOut) {
-      return { available: true, ok: false, rows: [], public_error: redactMcpError(result.stderr || result.stdout || 'codex_mcp_list_failed') };
-    }
     try {
+      const executable = await this.executable();
+      if (!executable) return { available: false, ok: false, rows: [], public_error: 'codex_cli_not_found' };
+      const result = await this.run(executable, ['mcp', 'list', '--json'], {
+        cwd: ref.root,
+        env: scopedEnvironment(ref.codexHome),
+        timeoutMs: 10_000,
+        maxOutputBytes: 1024 * 1024
+      });
+      if (result.code !== 0 || result.timedOut) {
+        return { available: true, ok: false, rows: [], public_error: 'codex_mcp_list_failed' };
+      }
       const parsed = JSON.parse(result.stdout) as unknown;
       const rows = Array.isArray(parsed) ? parsed.map(parseListRow).filter((row): row is McpCliInventoryRow => row !== null) : [];
       return { available: true, ok: true, rows, public_error: null };
-    } catch (error) {
-      return { available: true, ok: false, rows: [], public_error: redactMcpError(error) };
+    } catch {
+      return { available: true, ok: false, rows: [], public_error: 'codex_mcp_list_failed' };
     }
   }
 
   async transform(before: string, operation: CodexCliMutationOperation): Promise<CodexCliTransformResult> {
-    const executable = await this.executable();
-    if (!executable) return unavailableTransform('codex_cli_not_found');
-    if (!isOfficialServerName(operation.name)) return unavailableTransform('codex_cli_server_name_unsupported');
-    const temp = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-mcp-codex-cli-'));
-    const codexHome = path.join(temp, '.codex');
-    const configPath = path.join(codexHome, 'config.toml');
+    let temp: string | null = null;
     try {
+      const executable = await this.executable();
+      if (!executable) return unavailableTransform('codex_cli_not_found');
+      if (!isOfficialServerName(operation.name)) return unavailableTransform('codex_cli_server_name_unsupported');
+      temp = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-mcp-codex-cli-'));
+      const codexHome = path.join(temp, '.codex');
+      const configPath = path.join(codexHome, 'config.toml');
       await fsp.mkdir(codexHome, { recursive: true });
       if (before) await fsp.writeFile(configPath, before, { mode: 0o600 });
       const env = scopedEnvironment(codexHome, temp);
       if (operation.action === 'edit') {
         const removed = await this.run(executable, ['mcp', 'remove', operation.name], { cwd: temp, env, timeoutMs: 10_000, maxOutputBytes: 256 * 1024 });
-        if (removed.code !== 0) return failedTransform(removed, 'codex_mcp_edit_remove_failed');
+        if (removed.code !== 0 || removed.timedOut) return failedTransform('codex_mcp_edit_remove_failed');
       }
       const args = operation.action === 'remove'
         ? ['mcp', 'remove', operation.name]
         : buildCodexMcpAddArgs(operation.server);
       if (!args) return unavailableTransform('codex_cli_mutation_unsupported');
       const result = await this.run(executable, args, { cwd: temp, env, timeoutMs: 10_000, maxOutputBytes: 256 * 1024 });
-      if (result.code !== 0 || result.timedOut) return failedTransform(result, 'codex_mcp_mutation_failed');
+      if (result.code !== 0 || result.timedOut) return failedTransform('codex_mcp_mutation_failed');
       const text = await fsp.readFile(configPath, 'utf8').catch(() => '');
       return { available: true, ok: true, used: true, text, unsupported_reason: null, public_error: null };
+    } catch {
+      return failedTransform('codex_mcp_cli_transform_failed');
     } finally {
-      await fsp.rm(temp, { recursive: true, force: true }).catch(() => undefined);
+      if (temp) await fsp.rm(temp, { recursive: true, force: true }).catch(() => undefined);
     }
   }
 
@@ -118,19 +125,23 @@ export class CodexMcpCliAdapter implements CodexMcpCliPort {
   }
 
   private async auth(ref: ResolvedMcpScope, args: string[]): Promise<CodexCliAuthResult> {
-    const executable = await this.executable();
-    if (!executable) return { available: false, ok: false, public_error: 'codex_cli_not_found' };
-    const result = await this.run(executable, args, {
-      cwd: ref.root,
-      env: scopedEnvironment(ref.codexHome),
-      timeoutMs: 5 * 60_000,
-      maxOutputBytes: 256 * 1024
-    });
-    return {
-      available: true,
-      ok: result.code === 0 && !result.timedOut,
-      public_error: result.code === 0 && !result.timedOut ? null : redactMcpError(result.stderr || result.stdout || 'codex_mcp_auth_failed')
-    };
+    try {
+      const executable = await this.executable();
+      if (!executable) return { available: false, ok: false, public_error: 'codex_cli_not_found' };
+      const result = await this.run(executable, args, {
+        cwd: ref.root,
+        env: scopedEnvironment(ref.codexHome),
+        timeoutMs: 5 * 60_000,
+        maxOutputBytes: 256 * 1024
+      });
+      return {
+        available: true,
+        ok: result.code === 0 && !result.timedOut,
+        public_error: result.code === 0 && !result.timedOut ? null : 'codex_mcp_auth_failed'
+      };
+    } catch {
+      return { available: true, ok: false, public_error: 'codex_mcp_auth_failed' };
+    }
   }
 
   private async executable(): Promise<string | null> {
@@ -177,14 +188,14 @@ function unavailableTransform(reason: string): CodexCliTransformResult {
   return { available: reason !== 'codex_cli_not_found', ok: false, used: false, text: null, unsupported_reason: reason, public_error: null };
 }
 
-function failedTransform(result: RunProcessResult, fallback: string): CodexCliTransformResult {
+function failedTransform(publicError: CodexTransformPublicError): CodexCliTransformResult {
   return {
     available: true,
     ok: false,
     used: true,
     text: null,
     unsupported_reason: null,
-    public_error: redactMcpError(result.stderr || result.stdout || fallback)
+    public_error: publicError
   };
 }
 

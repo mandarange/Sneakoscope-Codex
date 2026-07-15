@@ -15,6 +15,8 @@ import {
 import { evaluateStop } from '../pipeline-internals/runtime-gates.js';
 import { buildSubagentEvidence } from '../subagents/subagent-evidence.js';
 import { writeRouteCompletionProof } from '../proof/route-adapter.js';
+import { buildSsotGuard } from '../safety/ssot-guard.js';
+import { validateWorkOrderLedger } from '../artifact-schemas.js';
 
 async function makeTempRoot(): Promise<string> {
   return fsp.mkdtemp(path.join(os.tmpdir(), 'sks-wo-coverage-'));
@@ -62,6 +64,7 @@ async function writePassingOfficialNarutoArtifacts(dir: string, missionId: strin
     events,
     parentSummary
   })));
+  await fsp.writeFile(path.join(dir, 'ssot-guard.json'), JSON.stringify(buildSsotGuard({ route: 'Naruto', mode: 'NARUTO', task: 'fixture' })));
   await fsp.writeFile(path.join(dir, 'naruto-summary.json'), JSON.stringify({
     schema: 'sks.naruto-subagent-workflow.v1',
     ok: true,
@@ -76,7 +79,6 @@ async function writePassingOfficialNarutoArtifacts(dir: string, missionId: strin
     completed_subagents: 1,
     failed_subagents: 0,
     verification: { budget: 'affected', checks: [] },
-    legacy_process_swarm_used: false,
     parent_summary_present: true,
     parent_summary: parentSummary.summary,
     parent_thread_outcomes: parentSummary.thread_outcomes
@@ -92,6 +94,7 @@ async function writePassingOfficialNarutoArtifacts(dir: string, missionId: strin
     subagent_plan_ready: true,
     official_subagent_evidence: true,
     parent_summary_present: true,
+    ssot_guard: true,
     session_cleanup: true,
     blockers: [],
     missing_fields: []
@@ -114,6 +117,40 @@ test('createWorkOrderLedger maps requests to WO-00N items with verbatim source t
   // Nothing has been mapped to implementation tasks or verified yet.
   assert.equal(ledger.all_customer_requests_mapped, false);
   assert.equal(ledger.all_work_items_verified, false);
+  assert.equal(ledger.all_work_items_resolved, false);
+});
+
+test('work-order artifact validation accepts hash-bound attachment ranges and rejects incomplete pointers', () => {
+  const attachmentLedger = {
+    schema_version: 1,
+    mission_id: 'M-attachment',
+    route: 'Naruto',
+    created_at: new Date().toISOString(),
+    source_path: '/tmp/release-work-order.md',
+    source_sha256: 'a'.repeat(64),
+    source_line_count: 10,
+    source_inventory_complete: true,
+    all_customer_requests_preserved: true,
+    all_customer_requests_mapped: true,
+    all_work_items_verified: true,
+    all_work_items_resolved: true,
+    items: [{
+      id: 'WO-001',
+      source: { type: 'attachment', line_start: 1, line_end: 10, title: 'Release work order' },
+      normalized_requirement: 'Implement the full attachment.',
+      implementation_tasks: ['implementation'],
+      owner: 'parent_orchestrator',
+      status: 'verified',
+      implementation_evidence: ['implementation.json'],
+      verification_evidence: ['verification.json']
+    }]
+  };
+  assert.equal(validateWorkOrderLedger(attachmentLedger).ok, true);
+  assert.equal(validateWorkOrderLedger({ ...attachmentLedger, source_sha256: null }).ok, false);
+  assert.equal(validateWorkOrderLedger({
+    ...attachmentLedger,
+    items: [{ ...attachmentLedger.items[0]!, source: { ...attachmentLedger.items[0]!.source, line_end: 11 } }]
+  }).ok, false);
 });
 
 test('evaluateWorkOrderCoverage blocks while any item is pending, passes once every item is verified or honestly blocked', () => {
@@ -140,6 +177,8 @@ test('evaluateWorkOrderCoverage blocks while any item is pending, passes once ev
   assert.equal(halfDone.uncovered_count, 1);
 
   ledger = updateWorkOrderItem(ledger, 'WO-002', { status: 'blocked', blocker: { blocked: true, reason: 'out of scope', needed_to_unblock: 'n/a' } });
+  assert.equal(ledger.all_work_items_verified, false);
+  assert.equal(ledger.all_work_items_resolved, true);
   const done = evaluateWorkOrderCoverage(ledger);
   assert.equal(done.ok, true);
   assert.equal(done.uncovered_count, 0);
@@ -307,6 +346,8 @@ test('closeWorkOrderLedgerForRouteResult resolves every item to verified on succ
   assert.ok(closed);
   assert.ok(closed.items.every((item: any) => item.status === 'blocked'));
   assert.ok(closed.items.every((item: any) => item.blocker.reason === 'some_real_blocker'));
+  assert.equal(closed.all_work_items_verified, false);
+  assert.equal(closed.all_work_items_resolved, true);
   assert.equal(evaluateWorkOrderCoverage(closed).ok, true, 'an honestly blocked ledger is a passing coverage check');
 
   await fsp.writeFile(path.join(dir, 'completion-proof.json'), '{"ok":true}\n');
@@ -331,6 +372,34 @@ test('closeWorkOrderLedgerForRouteResult never verifies success without a persis
   const closed = await closeWorkOrderLedgerForRouteResult(dir, { ok: true });
   assert.equal(closed.items[0].status, 'blocked');
   assert.equal(closed.items[0].blocker.reason, 'route_completion_evidence_missing');
+});
+
+test('closeWorkOrderLedgerForRouteResult does not bulk-close attachment release ledgers', async () => {
+  const root = await makeTempRoot();
+  const dir = path.join(root, 'attachment-release-ledger');
+  await fsp.mkdir(dir, { recursive: true });
+  await fsp.writeFile(path.join(dir, 'naruto-gate.json'), '{"passed":true}\n');
+  const ledger = {
+    ...createWorkOrderLedger({ missionId: 'M-release', route: 'Naruto', requests: [{ verbatim: 'release attachment' }], sourcesComplete: true }),
+    source_path: '/tmp/release-work-order.md',
+    source_sha256: 'a'.repeat(64),
+    source_line_count: 1,
+    items: [{
+      id: 'WO-000',
+      source: { type: 'attachment', line_start: 1, line_end: 1, slice_sha256: 'b'.repeat(64) },
+      normalized_requirement: 'release requirement',
+      implementation_tasks: ['implement independently'],
+      status: 'pending',
+      implementation_evidence: [],
+      verification_evidence: []
+    }]
+  };
+  await writeWorkOrderLedger(dir, ledger);
+
+  const closed = await closeWorkOrderLedgerForRouteResult(dir, { ok: true });
+  assert.equal(closed.items[0].status, 'pending');
+  assert.deepEqual(closed.items[0].implementation_evidence, []);
+  assert.equal(closed.all_work_items_verified, false);
 });
 
 test('closeWorkOrderLedgerForRouteResult is a no-op when there is no ledger to close', async () => {
@@ -383,6 +452,11 @@ test('evaluateStop allows a Naruto mission to stop once its official, proof, and
     status: 'verified',
     executionClass: 'real',
     lightweightEvidence: true,
+    gate: {
+      workflow: 'official_codex_subagent',
+      official_subagent_evidence: true,
+      parent_summary_present: true
+    },
     summary: { manual_review_required: false }
   });
   await writeCurrent(root, { mission_id: missionId, stop_gate: 'naruto-gate.json', mode: 'NARUTO', route: 'Naruto', route_command: '$Naruto', agents_required: false, proof_required: false, reflection_required: false });

@@ -21,7 +21,7 @@ process.env.SKS_PYTHON_CODEX_SDK_FAKE = '1';
 process.env.SKS_CODEX_LB_AUTOBYPASS = '1';
 try {
   const result = await mod.runCodexTask({
-    route: '$Agent',
+    route: '$Naruto',
     missionId: 'M-python-sdk-all-pipelines',
     workItemId: 'python-sdk-fixture',
     slotId: 'slot-python-fixture',

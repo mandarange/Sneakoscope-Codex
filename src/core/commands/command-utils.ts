@@ -55,11 +55,11 @@ export function positionalArgs(args: any = []) {
     '--format', '--iterations', '--out', '--baseline', '--candidate', '--install-scope',
     '--max-cycles', '--cycle-timeout-minutes', '--depth', '--scope', '--transport',
     '--query', '--topic', '--tokens', '--timeout-ms', '--sql', '--command',
-    '--project-ref', '--agent', '--phase', '--message', '--role', '--max-anchors',
+    '--project-ref', '--phase', '--message', '--role', '--max-anchors',
     '--lines', '--intent', '--changed', '--route', '--skills', '--prompt-signature',
     '--mission-id', '--source', '--image-id', '--bbox', '--label', '--evidence',
     '--claim-id', '--type', '--before', '--after', '--anchors', '--verification',
-    '--status', '--agents', '--clones', '--max-threads', '--target-active-slots', '--work-items', '--minimum-work-items',
+    '--status', '--agents', '--max-threads', '--target-active-slots', '--work-items', '--minimum-work-items',
     '--max-queue-expansion', '--engine', '--kind', '--severity', '--claim',
     '--prior-status', '--artifact', '--reason', '--root-cause', '--corrective-action',
     '--required-evidence', '--patch-status', '--avoid', '--applies-to', '--files',
@@ -94,7 +94,7 @@ export function ambientGoalContinuation() {
     mode: 'ambient_codex_native_goal_overlay',
     native_slash_command: '/goal',
     non_disruptive: true,
-    rule: 'Use Codex native goal persistence to keep long work resumable when available, but never replace Team, TriWiki, verification, or Honest Mode route gates.'
+    rule: 'Use Codex native goal persistence to keep long work resumable when available, but never replace Naruto, TriWiki, verification, or Honest Mode route gates.'
   };
 }
 

@@ -1,6 +1,9 @@
 # MAD-SKS
 
-MAD-SKS 1.18.8 is user-authorized general permission widening for high-power maintenance, not a DB-only unlock. It can operate on a declared target root and approved resource scopes, but every expanded capability is evidence-bound and the SKS harness protected core remains immutable. Database write access is one explicit executor scope inside MAD-SKS; it is not the identity of MAD-SKS.
+MAD-SKS is the single current, explicitly authorized high-risk route. It widens
+only the scopes named by the operator and includes a mission-bound SQL-plane
+executor for database work. It does not create a second orchestration runtime,
+redirect retired DB commands, or carry authority into later routes.
 
 ## Authority Model
 
@@ -9,27 +12,48 @@ sks mad-sks plan --target-root <path> --json
 sks mad-sks permissions --json
 sks mad-sks run --target-root <path> --json
 sks mad-sks apply --target-root <path> --yes --json
+sks mad-sks sql "<statement>" --json
+sks mad-sks apply-migration <file> --json
 sks mad-sks rollback-apply --rollback-plan <path> --yes --json
 sks mad-sks status --json
 sks mad-sks proof --json
 ```
 
-MAD-SKS starts disabled. Write-capable operation requires an authorization manifest with user intent, target root, allowed scopes, forbidden scopes, timestamp, and hash. `run` is dry-run by default; `apply` performs the guarded executor action only with a valid manifest. Separate consent is required for system access, DB writes, package installation, service control, admin operations, network operations, Computer Use, destructive delete, browser automation, generated asset edits, and file permission changes. Broad authority is assembled from those explicit scopes instead of inferred from a single "database mode."
+MAD-SKS starts disabled. Write-capable work requires an authorization manifest
+that binds user intent, target root, allowed and forbidden scopes, timestamp,
+and hash. `run` is dry-run by default; `apply` performs only the sealed executor
+operation. Separate consent is required for system access, database writes,
+package installation, service control, admin operations, network operations,
+Computer Use, destructive delete, browser automation, generated asset edits,
+and file-permission changes.
+
+## SQL-Plane Boundary
+
+SQL and migration operations use a mission-local capability and runtime
+profile. The executor validates target identity and tool inventory, records the
+operation lifecycle, performs read-back verification, closes the capability in
+`finally`, and proves that the persistent MCP configuration is read-only again.
+Catastrophic SQL classes are allowed only when the sealed user request
+explicitly names the operation and target; control-plane account, billing,
+credential, token, project, organization, and branch operations remain denied.
 
 ## Official Subagent Cockpit
 
-`sks --mad` opens the Zellij cockpit without starting a second custom worker runtime by default. Codex official subagent lifecycle events from work launched in the orchestrator pane are mirrored into the MAD host mission, so the right-side monitor and viewport panes show the actual official thread role, model, state, and bounded result tail instead of occupying static empty space.
+`sks --mad` may open the Zellij cockpit for the current official workflow. It
+does not launch extra local processes merely to fill panes. Official
+subagent lifecycle events populate the monitor and bounded viewports, while a
+trustworthy structured parent outcome remains the only terminal success or
+failure authority.
 
-The historical native `sks agent run` swarm is an explicit compatibility/debug opt-in only. Enable it with `--mad-native-swarm`, `--mad-swarm`, or `SKS_MAD_NATIVE_SWARM=1`; then tune it with `--mad-agents`, `--mad-swarm-work-items`, and `--mad-swarm-backend`. Without that opt-in, no paid or local worker fan-out is created merely to populate panes.
+## Evidence And Boundaries
 
-The cockpit uses one monitor plus one viewport by default and allows at most three viewports. `SubagentStart` is shown as running, `SubagentStop` as verifying, and a terminal success/failure state is shown only after the parent emits a trustworthy structured thread outcome. Recent completed threads remain visible briefly so a fast child does not disappear before the operator can inspect it.
+Every full-system action records action type, before/after hashes where
+available, exit code, duration, risk, rollback availability, secret-redaction
+status, and protected-core impact. Completion Proof, Trust Report, Evidence
+Router, Wrongness Memory, and rollback plans link to those receipts.
 
-## Evidence
-
-Every full-system action is recorded in the MAD-SKS audit ledger with action type, before/after hash where available, exit code, duration, risk level, rollback availability, secret-redaction status, protected-core impact, and local-only artifact policy. Completion Proof, Trust Report, Evidence Router, Wrongness Memory, and rollback plans must link to that ledger before MAD-SKS can claim success. Release proof graph v4 additionally requires actual executor blackbox reports for file write, shell argv, package, service, DB, rollback apply, and live protected-core guard behavior.
-
-## Boundaries
-
-MAD-SKS can modify user-authorized target project files, package manager state, build/test/lint/typecheck outputs, local services, DB migrations or data, browser/Computer Use workflows, generated assets, file permissions, network operations, and system configuration only inside the approved scope. It must not store sudo passwords, leak secrets into logs, perform destructive delete without explicit confirmation, or treat third-party systems as authorized targets.
-
-Installed SKS package roots remain protected core. The Sneakoscope engine source repository is the explicit exception: when the target root is the engine source itself, release engineering may edit `src/core`, `src/cli`, `src/commands`, `scripts`, package metadata, docs, and tests through the normal verified route instead of being blocked by protected-core.
+MAD-SKS may change only the user-authorized target and scopes. It must not store
+sudo passwords, leak secrets, perform destructive deletion without exact
+confirmation, or treat third-party systems as implicitly authorized. Installed
+SKS package roots remain protected; the Sneakoscope engine source repository is
+the explicit development exception for normal verified release work.

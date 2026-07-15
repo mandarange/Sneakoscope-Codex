@@ -35,7 +35,7 @@ const DEFAULT_MAX_RUNTIME_MS = 10 * 60 * 1000
 const PARENT_GRACE_MS = 15_000
 
 // Tracks every currently-live worker child so a parent-process interrupt can
-// clean the whole swarm up (20차 P1-5). Children are spawned detached (own
+// clean the whole runtime up (20차 P1-5). Children are spawned detached (own
 // process group) specifically so killAllActiveNarutoWorkers's process-group
 // signal reaches any grandchildren (e.g. a codex CLI subprocess) too, not
 // just the immediate child — a plain (non-detached) spawn has no separate

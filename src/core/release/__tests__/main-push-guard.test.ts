@@ -4,44 +4,68 @@ import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 import { spawnSync } from 'node:child_process'
-import { inspectMainPushGuard } from '../main-push-guard.js'
+import { inspectMainPushGuard, RELEASE_630_MISSION_ID } from '../main-push-guard.js'
 import { normalizeReleaseOrigin } from '../release-origin.js'
+import { writeReleaseClosureFixture } from './release-closure-fixture.js'
 import { writeCompleteReleaseProofs } from './release-proof-fixture.js'
 
 test('main push guard requires clean, source-bound release proofs', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-main-push-guard-'))
   try {
     fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'sneakoscope', version: '6.3.0' }))
-    fs.writeFileSync(path.join(root, '.gitignore'), '.sneakoscope/reports/\ndist/\n')
+    fs.writeFileSync(path.join(root, '.gitignore'), '.sneakoscope/\ndist/\n')
     git(root, ['init', '-b', 'main'])
     git(root, ['config', 'user.email', 'fixture@example.test'])
     git(root, ['config', 'user.name', 'Release Fixture'])
     const originUrl = path.join(root, 'origin.git')
     git(root, ['remote', 'add', 'origin', originUrl])
     git(root, ['add', '.'])
+    git(root, ['commit', '-m', 'baseline'])
+    const baseline = gitText(root, ['rev-parse', 'HEAD'])
+    fs.writeFileSync(path.join(root, 'release.txt'), 'release\n')
+    git(root, ['add', '.'])
     git(root, ['commit', '-m', 'release source'])
-    const head = gitText(root, ['rev-parse', 'HEAD'])
-    git(root, ['update-ref', 'refs/remotes/origin/main', head])
+    const sourceCommit = gitText(root, ['rev-parse', 'HEAD'])
+    git(root, ['update-ref', 'refs/remotes/origin/main', baseline])
     const expectedOriginIdentity = normalizeReleaseOrigin(originUrl)
-    writeCompleteReleaseProofs(root, head, head, expectedOriginIdentity)
+    const closure = writeReleaseClosureFixture({ root, baseline, sourceCommit })
+    writeCompleteReleaseProofs(root, closure.head, baseline, expectedOriginIdentity)
 
     const passing = inspectMainPushGuard({
       root,
       expectedVersion: '6.3.0',
-      expectedOriginMain: head,
+      expectedOriginMain: baseline,
       expectedOriginIdentity,
+      requireReleaseStamp: true,
+      requirePackProof: true,
+      requireMacosProof: true,
+      requireCleanTree: true,
+      expectedWorkOrderSha256: closure.workOrderSha256
+    })
+    assert.equal(passing.ok, true, passing.blockers.join(','))
+    assert.equal(passing.release_closure.mission_id, RELEASE_630_MISSION_ID)
+
+    const wrongMission = inspectMainPushGuard({
+      root,
+      expectedVersion: '6.3.0',
+      expectedOriginMain: baseline,
+      expectedOriginIdentity,
+      expectedReleaseMissionId: 'M-unrelated',
+      expectedWorkOrderSha256: closure.workOrderSha256,
       requireReleaseStamp: true,
       requirePackProof: true,
       requireMacosProof: true,
       requireCleanTree: true
     })
-    assert.equal(passing.ok, true, passing.blockers.join(','))
+    assert.equal(wrongMission.ok, false)
+    assert.equal(wrongMission.blockers.includes(`release_closure:mission_id_mismatch:${RELEASE_630_MISSION_ID}`), true)
 
     const missingRequirements = inspectMainPushGuard({
       root,
       expectedVersion: '6.3.0',
-      expectedOriginMain: head,
-      expectedOriginIdentity
+      expectedOriginMain: baseline,
+      expectedOriginIdentity,
+      expectedWorkOrderSha256: closure.workOrderSha256
     })
     assert.equal(missingRequirements.ok, false)
     assert.equal(missingRequirements.blockers.includes('release_stamp_requirement_missing'), true)
@@ -53,8 +77,9 @@ test('main push guard requires clean, source-bound release proofs', () => {
     const blocked = inspectMainPushGuard({
       root,
       expectedVersion: '6.3.0',
-      expectedOriginMain: head,
+      expectedOriginMain: baseline,
       expectedOriginIdentity,
+      expectedWorkOrderSha256: closure.workOrderSha256,
       requireReleaseStamp: true,
       requirePackProof: true,
       requireMacosProof: true,

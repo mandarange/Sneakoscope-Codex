@@ -10,9 +10,9 @@ const codexHome = path.join(root, '.codex-home')
 await fs.mkdir(codexHome, { recursive: true })
 await fs.writeFile(path.join(codexHome, 'auth.json'), '{"account_id":"acct_fixture"}\n')
 
-const openai = await resolveProviderContext({ root, codexHome, env: { OPENAI_API_KEY: 'sk-fixture', HOME: root } as any, route: '$Agent', serviceTier: 'fast' })
+const openai = await resolveProviderContext({ root, codexHome, env: { OPENAI_API_KEY: 'sk-fixture', HOME: root } as any, route: '$Naruto', serviceTier: 'fast' })
 const lb = await resolveProviderContext({ root, codexHome, env: { CODEX_LB_API_KEY: 'lb-fixture', SKS_PROVIDER: 'codex-lb', HOME: root } as any, route: '$Naruto', serviceTier: 'fast' })
-const app = await resolveProviderContext({ root, codexHome, env: { HOME: root } as any, route: '$Agent', serviceTier: 'standard' })
+const app = await resolveProviderContext({ root, codexHome, env: { HOME: root } as any, route: '$Naruto', serviceTier: 'standard' })
 const conflict = await resolveProviderContext({ root, codexHome, env: { OPENAI_API_KEY: 'sk-fixture', CODEX_LB_API_KEY: 'lb-fixture', HOME: root } as any })
 const ok = openai.provider === 'openai'
   && lb.provider === 'codex-lb'

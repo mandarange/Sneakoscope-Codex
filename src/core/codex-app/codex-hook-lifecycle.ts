@@ -47,7 +47,7 @@ export async function buildCodexHookLifecycle(input: { root?: string; apply?: bo
   }))
   const events = {
     UserPromptSubmit: ['route_classifier', 'goal_to_loop_compiler', 'permission_profile_badge'],
-    PreToolUse: ['requested_scope_guard', 'mad_db_priority_resolver', 'side_effect_zero_gate'],
+    PreToolUse: ['requested_scope_guard', 'mad_sks_sql_plane_priority_resolver', 'side_effect_zero_gate'],
     PostToolUse: ['evidence_ledger', 'mutation_ledger', 'side_effect_scanner', 'context7_native_session_updates'],
     Stop: ['continuation_enforcer', 'final_proof_check', 'loop_resume_hint'],
     Notification: ['operator_status', 'zellij_anchor', 'codex_app_status']

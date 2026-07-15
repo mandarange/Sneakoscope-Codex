@@ -6,7 +6,7 @@ import { assertGate, emitGate, root } from './sks-1-18-gate-lib.js'
 
 const worker = fs.readFileSync(path.join(root, 'src/core/zellij/zellij-worker-pane-manager.ts'), 'utf8')
 const manager = fs.readFileSync(path.join(root, 'src/core/zellij/zellij-right-column-manager.ts'), 'utf8')
-const swarm = fs.readFileSync(path.join(root, 'src/core/agents/native-cli-session-swarm.ts'), 'utf8')
+const runtime = fs.readFileSync(path.join(root, 'src/core/agents/native-cli-worker-runtime.ts'), 'utf8')
 const headlessReturnIndex = worker.indexOf("rightColumn?.placement === 'headless'")
 const newPaneIndex = worker.indexOf("action', 'new-pane'")
 const report = {
@@ -15,8 +15,8 @@ const report = {
   headless_scaling_primitive: worker.includes('native_cli_process_headless_with_slot_dashboard'),
   returns_before_new_pane: headlessReturnIndex >= 0 && newPaneIndex >= 0 && headlessReturnIndex < newPaneIndex,
   manager_records_overflow: manager.includes('worker_headless_overflow') && manager.includes('visible_pane_cap'),
-  swarm_records_overflow: swarm.includes('recordHeadlessWorkerInRightColumn')
+  runtime_records_overflow: runtime.includes('recordHeadlessWorkerInRightColumn')
 }
-const ok = report.headless_source && report.headless_scaling_primitive && report.returns_before_new_pane && report.manager_records_overflow && report.swarm_records_overflow
+const ok = report.headless_source && report.headless_scaling_primitive && report.returns_before_new_pane && report.manager_records_overflow && report.runtime_records_overflow
 assertGate(ok, 'headless overflow must not call zellij action new-pane', report)
 emitGate('zellij:right-column-headless-overflow', report)

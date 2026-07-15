@@ -4,7 +4,7 @@ import { assertGate, emitGate, importDist } from './sks-1-18-gate-lib.js';
 
 const mod = await importDist('core/codex-control/codex-sdk-sandbox-policy.js');
 const base = {
-  route: '$Agent',
+  route: '$Naruto',
   tier: 'worker',
   missionId: 'M-control-side-effect',
   cwd: process.cwd(),

@@ -1,296 +1,566 @@
 {
   "schema": "sks.agent-manifest.v1",
-  "generated_at": "2026-07-12T19:05:36.210Z",
+  "generated_at": "2026-07-15T09:15:58.047Z",
   "tools": [
-    {
-      "name": "agent",
-      "description": "Run native multi-session agent missions",
-      "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
-      "latency_class": "long",
-      "example_invocation": "sks agent --json",
-      "maturity": "beta"
-    },
     {
       "name": "agent-bridge",
       "description": "Publish the agent-bridge manifest and print host registration snippets for external agent systems",
       "read_only": true,
       "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "json_output_supported": false,
       "latency_class": "fast",
-      "example_invocation": "sks agent-bridge --json",
-      "maturity": "beta"
+      "example_invocation": "sks agent-bridge",
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R0",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "aliases",
       "description": "Show command aliases",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
       "latency_class": "normal",
-      "example_invocation": "sks aliases --json",
-      "maturity": "stable"
+      "example_invocation": "sks aliases",
+      "maturity": "stable",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "all-features",
       "description": "Run all-features selftest",
       "read_only": false,
-      "requires_explicit_opt_in": false,
+      "requires_explicit_opt_in": true,
       "json_output_supported": false,
       "latency_class": "normal",
       "example_invocation": "sks all-features",
-      "maturity": "beta"
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "auto-review",
       "description": "Manage auto-review profile",
       "read_only": false,
-      "requires_explicit_opt_in": false,
+      "requires_explicit_opt_in": true,
       "json_output_supported": false,
       "latency_class": "normal",
       "example_invocation": "sks auto-review",
-      "maturity": "beta"
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "autoresearch",
       "description": "Alias for research/autoresearch route",
       "read_only": false,
-      "requires_explicit_opt_in": false,
+      "requires_explicit_opt_in": true,
       "json_output_supported": false,
       "latency_class": "long",
       "example_invocation": "sks autoresearch",
-      "maturity": "labs"
+      "maturity": "labs",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "bench",
       "description": "Run core trust-kernel benchmark budgets",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
-      "latency_class": "normal",
-      "example_invocation": "sks bench --json",
-      "maturity": "beta"
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
+      "latency_class": "long",
+      "example_invocation": "sks bench",
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "bootstrap",
       "description": "Initialize SKS project files",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
       "latency_class": "normal",
-      "example_invocation": "sks bootstrap --json",
-      "maturity": "stable"
+      "example_invocation": "sks bootstrap",
+      "maturity": "stable",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "check",
       "description": "Run five-minute proof-bank affected checks",
       "read_only": false,
       "requires_explicit_opt_in": false,
-      "json_output_supported": true,
-      "latency_class": "normal",
-      "example_invocation": "sks check --json",
-      "maturity": "stable"
+      "json_output_supported": false,
+      "latency_class": "long",
+      "example_invocation": "sks check",
+      "maturity": "stable",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R1",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "code-structure",
       "description": "Scan source structure",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
       "latency_class": "normal",
-      "example_invocation": "sks code-structure --json",
-      "maturity": "labs"
+      "example_invocation": "sks code-structure",
+      "maturity": "labs",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "codex",
       "description": "Check Codex CLI compatibility and vendored hook schemas",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
       "latency_class": "normal",
-      "example_invocation": "sks codex --json",
-      "maturity": "beta"
+      "example_invocation": "sks codex",
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "codex-app",
       "description": "Check Codex App readiness",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
       "latency_class": "normal",
-      "example_invocation": "sks codex-app --json",
-      "maturity": "beta"
+      "example_invocation": "sks codex-app",
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "codex-lb",
       "description": "Inspect codex-lb status and circuit health",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
       "latency_class": "normal",
-      "example_invocation": "sks codex-lb --json",
-      "maturity": "beta"
+      "example_invocation": "sks codex-lb",
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "codex-native",
       "description": "Inspect Codex Native broker and routing readiness",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
       "latency_class": "normal",
-      "example_invocation": "sks codex-native --json",
-      "maturity": "beta"
+      "example_invocation": "sks codex-native",
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "commands",
       "description": "List SKS commands",
       "read_only": true,
       "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "json_output_supported": false,
       "latency_class": "fast",
-      "example_invocation": "sks commands --json",
-      "maturity": "stable"
+      "example_invocation": "sks commands",
+      "maturity": "stable",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R0",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "commit",
       "description": "Create a simple git commit",
       "read_only": false,
-      "requires_explicit_opt_in": false,
+      "requires_explicit_opt_in": true,
       "json_output_supported": false,
       "latency_class": "normal",
       "example_invocation": "sks commit",
-      "maturity": "stable"
+      "maturity": "stable",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "commit-and-push",
       "description": "Create a simple git commit and push",
       "read_only": false,
-      "requires_explicit_opt_in": false,
+      "requires_explicit_opt_in": true,
       "json_output_supported": false,
       "latency_class": "normal",
       "example_invocation": "sks commit-and-push",
-      "maturity": "stable"
+      "maturity": "stable",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R3",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "computer-use",
       "description": "Record native Mac/non-web Computer Use visual evidence",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
-      "latency_class": "normal",
-      "example_invocation": "sks computer-use --json",
-      "maturity": "beta"
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
+      "latency_class": "long",
+      "example_invocation": "sks computer-use",
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "conflicts",
       "description": "Check harness conflicts",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
       "latency_class": "normal",
-      "example_invocation": "sks conflicts --json",
-      "maturity": "beta"
+      "example_invocation": "sks conflicts",
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "context7",
       "description": "Context7 checks and docs",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
       "latency_class": "normal",
-      "example_invocation": "sks context7 --json",
-      "maturity": "beta"
+      "example_invocation": "sks context7",
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "daemon",
       "description": "Inspect or warm the local SKS daemon cache",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
       "latency_class": "normal",
-      "example_invocation": "sks daemon --json",
-      "maturity": "stable"
+      "example_invocation": "sks daemon",
+      "maturity": "stable",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "deps",
       "description": "Check local dependencies",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
       "latency_class": "normal",
-      "example_invocation": "sks deps --json",
-      "maturity": "stable"
+      "example_invocation": "sks deps",
+      "maturity": "stable",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "dfix",
       "description": "Run DFix diagnose/plan/patch/verify loop",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
-      "latency_class": "normal",
-      "example_invocation": "sks dfix --json",
-      "maturity": "stable"
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
+      "latency_class": "long",
+      "example_invocation": "sks dfix",
+      "maturity": "stable",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "doctor",
       "description": "Check and repair SKS install",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
-      "latency_class": "long",
-      "example_invocation": "sks doctor --json",
-      "maturity": "stable"
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
+      "latency_class": "normal",
+      "example_invocation": "sks doctor",
+      "maturity": "stable",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "dollar-commands",
       "description": "List Codex App dollar commands",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
       "latency_class": "normal",
-      "example_invocation": "sks dollar-commands --json",
-      "maturity": "stable"
+      "example_invocation": "sks dollar-commands",
+      "maturity": "stable",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "eval",
       "description": "Run eval reports",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
-      "latency_class": "normal",
-      "example_invocation": "sks eval --json",
-      "maturity": "labs"
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
+      "latency_class": "long",
+      "example_invocation": "sks eval",
+      "maturity": "labs",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "fast-mode",
       "description": "Toggle SKS Fast mode default for dollar-command routes",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
       "latency_class": "normal",
-      "example_invocation": "sks fast-mode --json",
-      "maturity": "stable"
+      "example_invocation": "sks fast-mode",
+      "maturity": "stable",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "features",
       "description": "Validate feature registry",
       "read_only": false,
-      "requires_explicit_opt_in": false,
+      "requires_explicit_opt_in": true,
       "json_output_supported": false,
       "latency_class": "normal",
       "example_invocation": "sks features",
-      "maturity": "beta"
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "fix-path",
       "description": "Repair hook command paths",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
       "latency_class": "normal",
-      "example_invocation": "sks fix-path --json",
-      "maturity": "stable"
+      "example_invocation": "sks fix-path",
+      "maturity": "stable",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "gates",
@@ -298,79 +568,181 @@
       "read_only": false,
       "requires_explicit_opt_in": false,
       "json_output_supported": true,
-      "latency_class": "normal",
+      "latency_class": "long",
       "example_invocation": "sks gates --json",
-      "maturity": "stable"
+      "maturity": "stable",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R1",
+      "remote_allowed": true,
+      "telegram_allowed": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "target": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "preset",
+              "gate"
+            ]
+          },
+          "full": {
+            "type": "boolean"
+          },
+          "json": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "required_capabilities": [
+        "project.git",
+        "proof.gates"
+      ]
     },
     {
       "name": "gc",
       "description": "Compact/prune runtime state",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
       "latency_class": "normal",
-      "example_invocation": "sks gc --json",
-      "maturity": "labs"
+      "example_invocation": "sks gc",
+      "maturity": "labs",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "git",
       "description": "Inspect and enforce SKS git collaboration hygiene",
       "read_only": false,
-      "requires_explicit_opt_in": false,
+      "requires_explicit_opt_in": true,
       "json_output_supported": false,
       "latency_class": "normal",
       "example_invocation": "sks git",
-      "maturity": "beta"
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "glm",
       "description": "Run GLM 5.2 MAD mode through OpenRouter",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
-      "latency_class": "normal",
-      "example_invocation": "sks glm --json",
-      "maturity": "beta"
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
+      "latency_class": "long",
+      "example_invocation": "sks glm",
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "goal",
       "description": "Manage Goal bridge workflow",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
       "latency_class": "normal",
-      "example_invocation": "sks goal --json",
-      "maturity": "beta"
+      "example_invocation": "sks goal",
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "guard",
       "description": "Check harness guard",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
       "latency_class": "normal",
-      "example_invocation": "sks guard --json",
-      "maturity": "beta"
+      "example_invocation": "sks guard",
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "gx",
       "description": "Render/validate GX cartridges",
       "read_only": false,
-      "requires_explicit_opt_in": false,
+      "requires_explicit_opt_in": true,
       "json_output_supported": false,
       "latency_class": "normal",
       "example_invocation": "sks gx",
-      "maturity": "labs"
+      "maturity": "labs",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "harness",
       "description": "Run harness fixtures",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
-      "latency_class": "normal",
-      "example_invocation": "sks harness --json",
-      "maturity": "labs"
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
+      "latency_class": "long",
+      "example_invocation": "sks harness",
+      "maturity": "labs",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "help",
@@ -380,127 +752,261 @@
       "json_output_supported": false,
       "latency_class": "fast",
       "example_invocation": "sks help",
-      "maturity": "stable"
+      "maturity": "stable",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R0",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "hook",
       "description": "Codex hook entrypoint",
       "read_only": false,
-      "requires_explicit_opt_in": false,
+      "requires_explicit_opt_in": true,
       "json_output_supported": false,
       "latency_class": "normal",
       "example_invocation": "sks hook",
-      "maturity": "beta"
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "hooks",
       "description": "Explain and inspect Codex hooks",
       "read_only": false,
-      "requires_explicit_opt_in": false,
+      "requires_explicit_opt_in": true,
       "json_output_supported": false,
       "latency_class": "normal",
       "example_invocation": "sks hooks",
-      "maturity": "beta"
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "hproof",
       "description": "Evaluate H-Proof gate",
       "read_only": false,
-      "requires_explicit_opt_in": false,
+      "requires_explicit_opt_in": true,
       "json_output_supported": false,
       "latency_class": "normal",
       "example_invocation": "sks hproof",
-      "maturity": "beta"
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "image-ux-review",
       "description": "Inspect image UX artifacts",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
-      "latency_class": "normal",
-      "example_invocation": "sks image-ux-review --json",
-      "maturity": "labs"
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
+      "latency_class": "long",
+      "example_invocation": "sks image-ux-review",
+      "maturity": "labs",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "init",
       "description": "Initialize local control surface",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
       "latency_class": "normal",
-      "example_invocation": "sks init --json",
-      "maturity": "stable"
+      "example_invocation": "sks init",
+      "maturity": "stable",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "loop",
       "description": "Dynamic Loop Runtime: plan/run/status/proof loop graphs.",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
-      "latency_class": "long",
-      "example_invocation": "sks loop --json",
-      "maturity": "labs"
-    },
-    {
-      "name": "mad-db",
-      "description": "Deprecated alias for MAD-SKS SQL-plane execution; redirects to sks mad-sks sql|apply-migration",
-      "read_only": false,
       "requires_explicit_opt_in": true,
       "json_output_supported": false,
       "latency_class": "long",
-      "example_invocation": "sks mad-db",
-      "maturity": "beta"
+      "example_invocation": "sks loop",
+      "maturity": "labs",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "mad-sks",
-      "description": "MAD-SKS scoped permission modifier + SQL-plane execution (merged MAD-DB)",
+      "description": "MAD-SKS scoped permission modifier + SQL-plane execution",
       "read_only": false,
       "requires_explicit_opt_in": true,
       "json_output_supported": false,
       "latency_class": "long",
       "example_invocation": "sks mad-sks",
-      "maturity": "beta"
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R3",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
+    },
+    {
+      "name": "mcp",
+      "description": "Manage scoped Codex MCP configuration",
+      "read_only": false,
+      "requires_explicit_opt_in": true,
+      "json_output_supported": true,
+      "latency_class": "long",
+      "example_invocation": "sks mcp --json",
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "json": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "mcp-server",
       "description": "Run a stdio MCP server exposing SKS commands as tools for MCP-capable agent hosts",
       "read_only": false,
-      "requires_explicit_opt_in": false,
+      "requires_explicit_opt_in": true,
       "json_output_supported": false,
       "latency_class": "normal",
       "example_invocation": "sks mcp-server",
-      "maturity": "beta"
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "memory",
       "description": "Project TriWiki memory into managed AGENTS.md blocks or run memory GC",
       "read_only": false,
-      "requires_explicit_opt_in": false,
+      "requires_explicit_opt_in": true,
       "json_output_supported": false,
       "latency_class": "normal",
       "example_invocation": "sks memory",
-      "maturity": "beta"
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "menubar",
       "description": "Inspect/install/restart/uninstall SKS menu bar",
       "read_only": false,
       "requires_explicit_opt_in": true,
-      "json_output_supported": true,
-      "latency_class": "long",
-      "example_invocation": "sks menubar --json",
-      "maturity": "beta"
+      "json_output_supported": false,
+      "latency_class": "normal",
+      "example_invocation": "sks menubar",
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "naruto",
       "description": "Run the $Naruto Codex official subagent workflow",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
       "latency_class": "long",
-      "example_invocation": "sks naruto --json",
-      "maturity": "labs"
+      "example_invocation": "sks naruto",
+      "maturity": "labs",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "paths",
@@ -510,247 +1016,569 @@
       "json_output_supported": true,
       "latency_class": "fast",
       "example_invocation": "sks paths --json",
-      "maturity": "beta"
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R0",
+      "remote_allowed": true,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "managed",
+              "git-policy"
+            ]
+          },
+          "json": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "required_capabilities": [
+        "project.fs.read"
+      ]
     },
     {
       "name": "perf",
       "description": "Run performance checks",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
-      "latency_class": "normal",
-      "example_invocation": "sks perf --json",
-      "maturity": "beta"
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
+      "latency_class": "long",
+      "example_invocation": "sks perf",
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "pipeline",
       "description": "Inspect pipeline missions",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": false,
+      "requires_explicit_opt_in": true,
+      "json_output_supported": true,
       "latency_class": "normal",
-      "example_invocation": "sks pipeline",
-      "maturity": "beta"
+      "example_invocation": "sks pipeline --json",
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": true,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "status"
+            ]
+          },
+          "json": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "required_capabilities": [
+        "proof.pipeline"
+      ]
     },
     {
       "name": "plan",
       "description": "Write a planning-only SKS plan artifact without code edits",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
       "latency_class": "normal",
-      "example_invocation": "sks plan --json",
-      "maturity": "stable"
+      "example_invocation": "sks plan",
+      "maturity": "stable",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "postinstall",
       "description": "Run postinstall bootstrap",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
       "latency_class": "long",
-      "example_invocation": "sks postinstall --json",
-      "maturity": "stable"
+      "example_invocation": "sks postinstall",
+      "maturity": "stable",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "ppt",
       "description": "Inspect/build PPT artifacts",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
-      "latency_class": "normal",
-      "example_invocation": "sks ppt --json",
-      "maturity": "labs"
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
+      "latency_class": "long",
+      "example_invocation": "sks ppt",
+      "maturity": "labs",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "profile",
       "description": "Inspect/set profile",
       "read_only": false,
-      "requires_explicit_opt_in": false,
+      "requires_explicit_opt_in": true,
       "json_output_supported": false,
       "latency_class": "normal",
       "example_invocation": "sks profile",
-      "maturity": "labs"
+      "maturity": "labs",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "proof",
       "description": "Show and validate completion proof",
-      "read_only": false,
+      "read_only": true,
       "requires_explicit_opt_in": false,
       "json_output_supported": true,
-      "latency_class": "normal",
+      "latency_class": "fast",
       "example_invocation": "sks proof --json",
-      "maturity": "beta"
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R0",
+      "remote_allowed": true,
+      "telegram_allowed": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "show",
+              "latest",
+              "validate",
+              "route"
+            ]
+          },
+          "mission": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "completion": {
+            "type": "boolean"
+          },
+          "json": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "required_capabilities": [
+        "proof.read"
+      ]
     },
     {
       "name": "proof-field",
       "description": "Scan proof field",
       "read_only": false,
-      "requires_explicit_opt_in": false,
+      "requires_explicit_opt_in": true,
       "json_output_supported": false,
       "latency_class": "normal",
       "example_invocation": "sks proof-field",
-      "maturity": "beta"
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "qa-loop",
       "description": "Run QA loop missions",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
-      "latency_class": "normal",
-      "example_invocation": "sks qa-loop --json",
-      "maturity": "beta"
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
+      "latency_class": "long",
+      "example_invocation": "sks qa-loop",
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "quickstart",
       "description": "Show quickstart flow",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
       "latency_class": "normal",
-      "example_invocation": "sks quickstart --json",
-      "maturity": "stable"
+      "example_invocation": "sks quickstart",
+      "maturity": "stable",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "reasoning",
       "description": "Show reasoning route",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
       "latency_class": "normal",
-      "example_invocation": "sks reasoning --json",
-      "maturity": "labs"
+      "example_invocation": "sks reasoning",
+      "maturity": "labs",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "recallpulse",
       "description": "RecallPulse evidence route",
       "read_only": false,
-      "requires_explicit_opt_in": false,
+      "requires_explicit_opt_in": true,
       "json_output_supported": false,
-      "latency_class": "normal",
+      "latency_class": "long",
       "example_invocation": "sks recallpulse",
-      "maturity": "labs"
+      "maturity": "labs",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "release",
       "description": "Run affected/full/background release gates",
       "read_only": false,
       "requires_explicit_opt_in": false,
+      "json_output_supported": false,
+      "latency_class": "long",
+      "example_invocation": "sks release",
+      "maturity": "stable",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R1",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
+    },
+    {
+      "name": "remote",
+      "description": "Inspect official Remote readiness and run the proof-aware SSH stdio worker",
+      "read_only": false,
+      "requires_explicit_opt_in": true,
       "json_output_supported": true,
-      "latency_class": "normal",
-      "example_invocation": "sks release --json",
-      "maturity": "stable"
+      "latency_class": "long",
+      "example_invocation": "sks remote --json",
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "json": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "research",
       "description": "Run research missions",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
       "latency_class": "long",
-      "example_invocation": "sks research --json",
-      "maturity": "labs"
+      "example_invocation": "sks research",
+      "maturity": "labs",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "review",
       "description": "Review a git diff with machine evidence first",
       "read_only": false,
       "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "json_output_supported": false,
       "latency_class": "normal",
-      "example_invocation": "sks review --json",
-      "maturity": "stable"
+      "example_invocation": "sks review",
+      "maturity": "stable",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R1",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "rollback",
       "description": "List or apply managed-path rollback actions",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
       "latency_class": "normal",
-      "example_invocation": "sks rollback --json",
-      "maturity": "beta"
+      "example_invocation": "sks rollback",
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "root",
       "description": "Show active SKS root",
       "read_only": true,
       "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "json_output_supported": false,
       "latency_class": "fast",
-      "example_invocation": "sks root --json",
-      "maturity": "stable"
+      "example_invocation": "sks root",
+      "maturity": "stable",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R0",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "route",
       "description": "Inspect or close active route state",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
       "latency_class": "normal",
-      "example_invocation": "sks route --json",
-      "maturity": "beta"
+      "example_invocation": "sks route",
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "run",
       "description": "Classify and execute a task through the SKS trust kernel",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
-      "latency_class": "normal",
-      "example_invocation": "sks run --json",
-      "maturity": "beta"
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
+      "latency_class": "long",
+      "example_invocation": "sks run",
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "rust",
       "description": "Inspect optional Rust accelerator status and smoke parity",
       "read_only": false,
-      "requires_explicit_opt_in": false,
+      "requires_explicit_opt_in": true,
       "json_output_supported": false,
       "latency_class": "normal",
       "example_invocation": "sks rust",
-      "maturity": "beta"
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "selftest",
       "description": "Run local mock selftest",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
       "latency_class": "normal",
-      "example_invocation": "sks selftest --json",
-      "maturity": "stable"
+      "example_invocation": "sks selftest",
+      "maturity": "stable",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "seo-geo-optimizer",
       "description": "Run unified SEO/GEO optimizer audit/plan/apply/verify on the search-visibility kernel",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
       "latency_class": "normal",
-      "example_invocation": "sks seo-geo-optimizer --json",
-      "maturity": "beta"
+      "example_invocation": "sks seo-geo-optimizer",
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "setup",
       "description": "Initialize SKS state",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
       "latency_class": "normal",
-      "example_invocation": "sks setup --json",
-      "maturity": "stable"
+      "example_invocation": "sks setup",
+      "maturity": "stable",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "skill-dream",
       "description": "Track skill dream counters",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
       "latency_class": "normal",
-      "example_invocation": "sks skill-dream --json",
-      "maturity": "labs"
+      "example_invocation": "sks skill-dream",
+      "maturity": "labs",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "stats",
@@ -760,7 +1588,26 @@
       "json_output_supported": true,
       "latency_class": "fast",
       "example_invocation": "sks stats --json",
-      "maturity": "labs"
+      "maturity": "labs",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R0",
+      "remote_allowed": true,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "full": {
+            "type": "boolean"
+          },
+          "json": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "required_capabilities": [
+        "project.fs.read"
+      ]
     },
     {
       "name": "status",
@@ -770,7 +1617,23 @@
       "json_output_supported": true,
       "latency_class": "fast",
       "example_invocation": "sks status --json",
-      "maturity": "stable"
+      "maturity": "stable",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R0",
+      "remote_allowed": true,
+      "telegram_allowed": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "json": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "required_capabilities": [
+        "proof.read"
+      ]
     },
     {
       "name": "stop-gate",
@@ -780,17 +1643,58 @@
       "json_output_supported": true,
       "latency_class": "fast",
       "example_invocation": "sks stop-gate --json",
-      "maturity": "beta"
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R0",
+      "remote_allowed": true,
+      "telegram_allowed": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "route": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "mission": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "gate": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          },
+          "json": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "required_capabilities": [
+        "proof.stop-gate"
+      ]
     },
     {
       "name": "super-search",
       "description": "Run Super-Search provider-independent source intelligence",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
       "latency_class": "normal",
-      "example_invocation": "sks super-search --json",
-      "maturity": "beta"
+      "example_invocation": "sks super-search",
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "task",
@@ -798,99 +1702,208 @@
       "read_only": false,
       "requires_explicit_opt_in": false,
       "json_output_supported": false,
-      "latency_class": "normal",
+      "latency_class": "long",
       "example_invocation": "sks task",
-      "maturity": "stable"
+      "maturity": "stable",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R1",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
-      "name": "team",
-      "description": "Deprecated alias. New execution redirects to Naruto; legacy observe/watch remains.",
+      "name": "telegram",
+      "description": "Inspect and run the private proof-aware Telegram Hub",
       "read_only": false,
-      "requires_explicit_opt_in": false,
+      "requires_explicit_opt_in": true,
       "json_output_supported": true,
       "latency_class": "long",
-      "example_invocation": "sks team --json",
-      "maturity": "beta"
-    },
-    {
-      "name": "tmux",
-      "description": "Show removed-runtime migration notice",
-      "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
-      "latency_class": "normal",
-      "example_invocation": "sks tmux --json",
-      "maturity": "beta"
+      "example_invocation": "sks telegram --json",
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "json": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "triwiki",
       "description": "Inspect TriWiki index, affected graph, and proof bank",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
       "latency_class": "normal",
-      "example_invocation": "sks triwiki --json",
-      "maturity": "stable"
+      "example_invocation": "sks triwiki",
+      "maturity": "stable",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "trust",
       "description": "Report and validate route trust kernel evidence",
-      "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
-      "latency_class": "normal",
-      "example_invocation": "sks trust --json",
-      "maturity": "beta"
-    },
-    {
-      "name": "ui",
-      "description": "Open the localhost SKS swarm dashboard",
       "read_only": true,
       "requires_explicit_opt_in": false,
       "json_output_supported": true,
       "latency_class": "fast",
-      "example_invocation": "sks ui --json",
-      "maturity": "stable"
+      "example_invocation": "sks trust --json",
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R0",
+      "remote_allowed": true,
+      "telegram_allowed": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "report",
+              "status",
+              "explain"
+            ]
+          },
+          "mission": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "json": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "required_capabilities": [
+        "proof.trust"
+      ]
+    },
+    {
+      "name": "ui",
+      "description": "Open the localhost SKS agent dashboard",
+      "read_only": true,
+      "requires_explicit_opt_in": false,
+      "json_output_supported": false,
+      "latency_class": "fast",
+      "example_invocation": "sks ui",
+      "maturity": "stable",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R0",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "uninstall",
       "description": "Uninstall SKS global skills, hooks, config, menu bar, and optional project residue",
       "read_only": false,
       "requires_explicit_opt_in": true,
-      "json_output_supported": true,
-      "latency_class": "normal",
-      "example_invocation": "sks uninstall --json",
-      "maturity": "stable"
+      "json_output_supported": false,
+      "latency_class": "long",
+      "example_invocation": "sks uninstall",
+      "maturity": "stable",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R3",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "update",
-      "description": "Update the global SKS npm package",
+      "description": "Inspect, review, apply, or roll back the global SKS update",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
       "latency_class": "long",
-      "example_invocation": "sks update --json",
-      "maturity": "stable"
+      "example_invocation": "sks update",
+      "maturity": "stable",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "update-check",
-      "description": "Check npm package freshness",
+      "description": "Show the shared SKS, Codex CLI, and Menu Bar update status",
       "read_only": true,
       "requires_explicit_opt_in": false,
       "json_output_supported": true,
       "latency_class": "fast",
       "example_invocation": "sks update-check --json",
-      "maturity": "stable"
+      "maturity": "stable",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R0",
+      "remote_allowed": true,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "json": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "required_capabilities": [
+        "network.npm.read"
+      ]
     },
     {
       "name": "usage",
       "description": "Show focused usage topic",
       "read_only": true,
       "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "json_output_supported": false,
       "latency_class": "fast",
-      "example_invocation": "sks usage --json",
-      "maturity": "stable"
+      "example_invocation": "sks usage",
+      "maturity": "stable",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R0",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "validate-artifacts",
@@ -900,7 +1913,37 @@
       "json_output_supported": true,
       "latency_class": "normal",
       "example_invocation": "sks validate-artifacts --json",
-      "maturity": "beta"
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R1",
+      "remote_allowed": true,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "mission": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "required": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "maxItems": 32
+          },
+          "json": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "required_capabilities": [
+        "proof.artifacts"
+      ]
     },
     {
       "name": "version",
@@ -910,87 +1953,157 @@
       "json_output_supported": false,
       "latency_class": "fast",
       "example_invocation": "sks version",
-      "maturity": "stable"
+      "maturity": "stable",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R0",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "versioning",
       "description": "Manage release version metadata",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
       "latency_class": "normal",
-      "example_invocation": "sks versioning --json",
-      "maturity": "stable"
+      "example_invocation": "sks versioning",
+      "maturity": "stable",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "wiki",
       "description": "Manage TriWiki and image voxel ledgers",
       "read_only": false,
-      "requires_explicit_opt_in": false,
+      "requires_explicit_opt_in": true,
       "json_output_supported": false,
       "latency_class": "normal",
       "example_invocation": "sks wiki",
-      "maturity": "beta"
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "with-local-llm",
       "description": "Enable or inspect local Ollama worker backend",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
       "latency_class": "normal",
-      "example_invocation": "sks with-local-llm --json",
-      "maturity": "beta"
+      "example_invocation": "sks with-local-llm",
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "wizard",
       "description": "Open setup wizard help",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
       "latency_class": "normal",
-      "example_invocation": "sks wizard --json",
-      "maturity": "stable"
+      "example_invocation": "sks wizard",
+      "maturity": "stable",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "wrongness",
       "description": "Record and inspect TriWiki wrongness negative evidence",
       "read_only": false,
-      "requires_explicit_opt_in": false,
+      "requires_explicit_opt_in": true,
       "json_output_supported": false,
       "latency_class": "normal",
       "example_invocation": "sks wrongness",
-      "maturity": "beta"
-    },
-    {
-      "name": "xai",
-      "description": "Deprecated compatibility notice for removed xAI/Grok setup",
-      "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
-      "latency_class": "normal",
-      "example_invocation": "sks xai --json",
-      "maturity": "beta"
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "zellij",
       "description": "Inspect Zellij runtime status and explain repair (no auto-install)",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
-      "latency_class": "long",
-      "example_invocation": "sks zellij --json",
-      "maturity": "beta"
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
+      "latency_class": "normal",
+      "example_invocation": "sks zellij",
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "zellij-lane",
       "description": "Render a Zellij lane frame for SKS sessions",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
       "latency_class": "normal",
-      "example_invocation": "sks zellij-lane --json",
-      "maturity": "beta"
+      "example_invocation": "sks zellij-lane",
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "zellij-monitor-pane",
@@ -1000,27 +2113,57 @@
       "json_output_supported": false,
       "latency_class": "fast",
       "example_invocation": "sks zellij-monitor-pane",
-      "maturity": "beta"
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R0",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "zellij-slot-column-anchor",
       "description": "Render the compact SLOTS anchor pane for first-slot-down Zellij stacks",
       "read_only": false,
-      "requires_explicit_opt_in": false,
+      "requires_explicit_opt_in": true,
       "json_output_supported": false,
       "latency_class": "normal",
       "example_invocation": "sks zellij-slot-column-anchor",
-      "maturity": "beta"
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "zellij-slot-pane",
       "description": "Render a compact Zellij worker slot pane",
       "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
+      "requires_explicit_opt_in": true,
+      "json_output_supported": false,
       "latency_class": "normal",
-      "example_invocation": "sks zellij-slot-pane --json",
-      "maturity": "beta"
+      "example_invocation": "sks zellij-slot-pane",
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R2",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     },
     {
       "name": "zellij-viewport-pane",
@@ -1030,7 +2173,17 @@
       "json_output_supported": false,
       "latency_class": "fast",
       "example_invocation": "sks zellij-viewport-pane",
-      "maturity": "beta"
+      "maturity": "beta",
+      "contract_schema": "sks.command-contract.v2",
+      "risk": "R0",
+      "remote_allowed": false,
+      "telegram_allowed": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "required_capabilities": []
     }
   ]
 }

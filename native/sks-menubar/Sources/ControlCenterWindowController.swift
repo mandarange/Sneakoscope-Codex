@@ -8,7 +8,7 @@ final class ControlCenterWindowController: NSWindowController, NSTableViewDataSo
     private var selected: SidebarItem = .overview
 
     init(processClient: ProcessClient, operations: OperationCoordinator, notifications: NotificationCoordinator) {
-        let overview = OverviewViewController(processClient: processClient)
+        let overview = OverviewViewController(processClient: processClient, operations: operations)
         overviewController = overview
         controllers = [
             .overview: overview,
@@ -45,6 +45,10 @@ final class ControlCenterWindowController: NSWindowController, NSTableViewDataSo
 
     func setNotificationAuthorizationDenied(_ denied: Bool) {
         overviewController.setNotificationAuthorizationDenied(denied)
+    }
+
+    override func cancelOperation(_ sender: Any?) {
+        window?.orderOut(sender)
     }
 
     private func build() {

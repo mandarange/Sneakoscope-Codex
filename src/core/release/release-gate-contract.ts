@@ -42,7 +42,6 @@ export const RELEASE_GATE_CONTRACT_IDS: readonly string[] = Object.freeze([
   'core-skill:route-runtime-integration',
   'dfix:fixture',
   'dfix:patch-handoff',
-  'dfix:patch-swarm-route-blackbox',
   'dfix:verification',
   'dfix:verification-recommendation',
   'docs:truthfulness',
@@ -67,13 +66,13 @@ export const RELEASE_GATE_CONTRACT_IDS: readonly string[] = Object.freeze([
   'legacy:gate-inventory',
   'legacy:gate-purge',
   'legacy:strong-inventory',
-  'legacy:update-e2e',
+  'migration:current-surface-e2e',
   'local-collab:all-pipelines-final-gpt',
   'loop-integration-finalizer-check',
-  'mad-db:capability',
-  'mad-db:command',
-  'mad-db:mad-command',
-  'mad-db:operation-lifecycle',
+  'mad-sks:sql-plane-capability',
+  'commands:current-surface-only',
+  'mad-sks:launch-sql-plane-boundary',
+  'mad-sks:sql-plane-operation-lifecycle',
   'mad-sks:app-ui-no-mutation',
   'mad:preflight-blocks-unreadable-config',
   'mcp:plugin-inventory',
@@ -95,6 +94,7 @@ export const RELEASE_GATE_CONTRACT_IDS: readonly string[] = Object.freeze([
   'proof:root-cause-policy',
   'provider:badge-context',
   'publish:packlist-performance',
+  'publish:runtime-script-closure',
   'python-sdk:all-pipelines',
   'qa-loop:comprehensive-verification',
   'release:aggressive-resource-governor',
@@ -103,6 +103,7 @@ export const RELEASE_GATE_CONTRACT_IDS: readonly string[] = Object.freeze([
   'release:dag-runner',
   'release:gate-budget',
   'release:gate-selection-comprehensive',
+  'release:latency-slo',
   'release:metadata-current',
   'release:parallel-speed-budget',
   'release:proof-truth',
@@ -112,6 +113,7 @@ export const RELEASE_GATE_CONTRACT_IDS: readonly string[] = Object.freeze([
   'research:complete-package-final-review-comprehensive',
   'research:execution-profile-routing',
   'responses:retry-policy-centralized',
+  'runtime:installed-smoke',
   'runtime:proof-summary',
   'safety:mutation-callsite-coverage',
   'scheduler:comprehensive',
@@ -146,7 +148,7 @@ export const RELEASE_GATE_CONTRACT_IDS: readonly string[] = Object.freeze([
   'ux-review:patch-diff-recheck',
   'ux-review:run-wires-imagegen',
   'wrongness:check'
-])
+].sort())
 
 export function releaseGateContractSnapshot() {
   const ids = [...RELEASE_GATE_CONTRACT_IDS]

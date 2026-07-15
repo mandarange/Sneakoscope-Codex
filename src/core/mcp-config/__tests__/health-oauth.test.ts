@@ -68,6 +68,39 @@ test('stdio health performs initialize and tools/list with bounded secret-safe o
   assert.doesNotMatch(JSON.stringify(health), /must-never-appear/);
 });
 
+test('stdio handshake timeout terminates the spawned process tree', { timeout: 12_000 }, async (t) => {
+  if (process.platform === 'win32') return t.skip('POSIX process-group cleanup assertion required');
+  const s = await fixture(t);
+  const server = path.join(s.home, 'hanging-server.mjs');
+  const pidFile = path.join(s.home, 'hanging-pids.json');
+  await fsp.writeFile(server, [
+    "import fs from 'node:fs';",
+    "import { spawn } from 'node:child_process';",
+    "const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });",
+    "fs.writeFileSync(process.argv[2], JSON.stringify({ parent: process.pid, child: child.pid }));",
+    "setInterval(() => {}, 1000);"
+  ].join('\n'), { mode: 0o600 });
+  await fsp.writeFile(s.configPath, [
+    '[mcp_servers.hanging]',
+    `command = ${JSON.stringify(process.execPath)}`,
+    `args = [${JSON.stringify(server)}, ${JSON.stringify(pidFile)}]`,
+    'startup_timeout_sec = 1',
+    ''
+  ].join('\n'), { mode: 0o600 });
+
+  const health = await testMcpConnection('hanging', 'global', { home: s.home });
+  assert.equal(health.status, 'timeout');
+  const pids = JSON.parse(await fsp.readFile(pidFile, 'utf8')) as { parent: number; child: number };
+  t.after(() => {
+    for (const pid of [pids.parent, pids.child]) {
+      try { process.kill(pid, 'SIGKILL'); } catch { /* already gone */ }
+    }
+  });
+  await Promise.all([pids.parent, pids.child].map((pid) => waitForProcessExit(pid, 5_000)));
+  assert.equal(processExists(pids.parent), false);
+  assert.equal(processExists(pids.child), false);
+});
+
 test('streamable HTTP health initializes, lists tools, preserves session ID, and reports OAuth required', async (t) => {
   const s = await fixture(t);
   const sessionHeaders: string[] = [];
@@ -174,4 +207,15 @@ async function readRequest(request: http.IncomingMessage): Promise<string> {
   const chunks: Buffer[] = [];
   for await (const chunk of request) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
   return Buffer.concat(chunks).toString('utf8');
+}
+
+function processExists(pid: number): boolean {
+  try { process.kill(pid, 0); return true; } catch { return false; }
+}
+
+async function waitForProcessExit(pid: number, timeoutMs: number): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (processExists(pid) && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
 }

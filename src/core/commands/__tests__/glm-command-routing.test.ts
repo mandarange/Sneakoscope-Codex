@@ -18,6 +18,30 @@ test('bare GLM command returns readiness/status and does not launch direct run',
   process.exitCode = previous;
 });
 
+test('GLM rejects retired global execution options before readiness', async () => {
+  const previousExit = process.exitCode;
+  const previousLog = console.log;
+  const output: string[] = [];
+  process.exitCode = undefined;
+  console.log = (...values: unknown[]) => { output.push(values.map(String).join(' ')); };
+  try {
+    for (const retired of ['--naruto', '--agent=worker', '--clones=8', '--mad-db']) {
+      output.length = 0;
+      process.exitCode = undefined;
+      const result = await glmCommand([retired, '--status', '--json']) as any;
+      assert.equal(result.schema, 'sks.glm-argument-error.v1', retired);
+      assert.equal(result.reason, 'invalid_glm_arguments', retired);
+      assert.deepEqual(result.argument_errors, [`unsupported_argument:${retired.split('=')[0]}`], retired);
+      assert.notEqual(result.schema, 'sks.glm-mode-result.v1', retired);
+      assert.equal(JSON.parse(output.join('\n')).schema, 'sks.glm-argument-error.v1', retired);
+      assert.equal(process.exitCode, 1, retired);
+    }
+  } finally {
+    console.log = previousLog;
+    process.exitCode = previousExit;
+  }
+});
+
 test('GLM task routes to bounded direct run and blocks without key instead of launching Zellij', async () => {
   const previousExit = process.exitCode;
   const previousOpenRouter = process.env.OPENROUTER_API_KEY;

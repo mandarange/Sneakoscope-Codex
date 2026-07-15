@@ -4,7 +4,7 @@ import { buildFeatureRegistry, executeFeatureFixtures } from '../../dist/core/fe
 
 test('strict executable feature fixtures validate generated artifacts', async () => {
   const registry = await buildFeatureRegistry({ root: process.cwd() });
-  const report = executeFeatureFixtures(registry.features.filter((feature) => ['cli-agent', 'route-team'].includes(feature.id)), {
+  const report = executeFeatureFixtures(registry.features.filter((feature) => ['cli-naruto', 'proof-official-subagent-evidence'].includes(feature.id)), {
     root: process.cwd(),
     strictArtifacts: true
   });

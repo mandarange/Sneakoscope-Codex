@@ -17,6 +17,7 @@ import {
 import { RemoteProtocolError, workerErrorResponse, workerSuccessResponse } from './protocol.js';
 import {
   listRemoteSessionRows,
+  readRemoteSessionView,
   readRemoteSessionSnapshot,
   remoteSessionGeneration,
   remoteSessionRecord
@@ -125,7 +126,16 @@ export class RemoteWorker {
           details: { cursor: watched.cursor }
         });
       }
-      return workerSuccessResponse(request, watched);
+      const snapshot = request.session_id ? await this.readSnapshot(request.session_id).catch(() => null) : null;
+      return workerSuccessResponse(request, snapshot ? { ...watched, snapshot } : watched);
+    }
+    if (request.type === 'prepare_cancel') {
+      try {
+        return workerSuccessResponse(request, await this.prepareCancel(request.session_id, request.command_id));
+      } catch (err: unknown) {
+        const code = errorCode(err);
+        return workerErrorResponse(request.id, request.type, code, { message: code });
+      }
     }
     return this.handleCommand(request);
   }
@@ -243,7 +253,15 @@ export class RemoteWorker {
 
   private async executeCommand(envelope: RemoteCommandEnvelopeV1): Promise<{ readonly result: unknown; readonly sideEffectApplied: boolean }> {
     if (envelope.kind === 'read') {
-      const result = envelope.session_id ? await this.readSnapshot(envelope.session_id) : { sessions: await listRemoteSessionRows(this.root) };
+      const result = envelope.session_id
+        ? await readRemoteSessionView({
+            root: this.root,
+            machineId: this.machine.id,
+            projectId: this.projectId,
+            sessionId: envelope.session_id,
+            view: String(envelope.payload.view ?? 'status')
+          })
+        : { sessions: await listRemoteSessionRows(this.root) };
       return { result, sideEffectApplied: false };
     }
     const sessionId = envelope.session_id;
@@ -252,7 +270,16 @@ export class RemoteWorker {
       throw new RemoteWorkerExecutionError(errorMessage(err));
     });
     if (envelope.kind === 'verify') {
-      return { result: await this.readSnapshot(sessionId), sideEffectApplied: false };
+      return {
+        result: await readRemoteSessionView({
+          root: this.root,
+          machineId: this.machine.id,
+          projectId: this.projectId,
+          sessionId,
+          view: 'verify'
+        }),
+        sideEffectApplied: false
+      };
     }
     const owner = await this.owners.read(sessionId);
     if (!owner) throw new RemoteWorkerExecutionError('remote_session_binding_missing');
@@ -304,6 +331,26 @@ export class RemoteWorker {
     const workerRoot = await fsp.realpath(this.root).catch(() => null);
     if (!ownerRoot || !workerRoot || ownerRoot !== workerRoot) throw new RemoteWorkerExecutionError('session_binding_root_mismatch');
     if (owner.active_generation !== remoteSessionGeneration(state)) throw new RemoteWorkerExecutionError('session_binding_generation_stale');
+  }
+
+  private async prepareCancel(sessionId: string, commandId: string): Promise<JsonObject> {
+    const session = await remoteSessionRecord(this.root, sessionId).catch((err: unknown) => {
+      throw new RemoteWorkerExecutionError(errorMessage(err));
+    });
+    const owner = await this.owners.read(sessionId);
+    if (!owner) throw new RemoteWorkerExecutionError('remote_session_binding_missing');
+    await this.assertSessionBinding(owner, session.state);
+    return {
+      schema: 'sks.remote-cancel-challenge.v1',
+      command_id: commandId,
+      session_id: sessionId,
+      owner_nonce: owner.owner_nonce,
+      expected_pid: owner.pid,
+      expected_process_start_time: owner.process_start_time,
+      expected_command: owner.expected_command,
+      expected_project_root: owner.project_root,
+      expected_generation: owner.active_generation
+    };
   }
 
   private async readSnapshot(sessionId: string): Promise<JsonObject> {

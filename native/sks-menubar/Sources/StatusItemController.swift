@@ -18,6 +18,8 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private var operationRunning = false
     private var actionRequired = false
     private var notificationAuthorizationDenied = false
+    private var updateRefreshInFlight = false
+    private var lastUpdateNotificationFingerprint: String?
 
     init(processClient: ProcessClient, operations: OperationCoordinator, notifications: NotificationCoordinator, openControlCenter: @escaping (SidebarItem) -> Void) {
         self.processClient = processClient
@@ -57,7 +59,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     func stop() { timer?.invalidate(); timer = nil }
 
-    func menuWillOpen(_ menu: NSMenu) { refreshLocalState() }
+    func menuWillOpen(_ menu: NSMenu) {
+        refreshLocalState()
+        refreshExpiredUpdateStatusIfNeeded()
+    }
 
     func setNotificationAuthorizationDenied(_ denied: Bool) {
         notificationAuthorizationDenied = denied
@@ -98,6 +103,50 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         statusLine.title = "Status: \(summary)"
     }
 
+    private func refreshExpiredUpdateStatusIfNeeded() {
+        let update = readJson(path: FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".sneakoscope-global/cache/update-status.json").path)
+        guard !updateRefreshInFlight, StatusItemController.updateStatusNeedsRefresh(update) else { return }
+        updateRefreshInFlight = true
+        processClient.run(["update", "status", "--json"]) { [weak self] result in
+            guard let self = self else { return }
+            self.updateRefreshInFlight = false
+            let fingerprint = self.updateNotificationFingerprint(result.output)
+            if result.code == 0 && NotificationCoordinator.updateIsAvailable(in: result.output), fingerprint != self.lastUpdateNotificationFingerprint {
+                self.lastUpdateNotificationFingerprint = fingerprint
+                self.notifications.send(PublicNotificationEvent(
+                    category: "SKS_UPDATE_AVAILABLE",
+                    title: "SKS update available",
+                    body: "An expired update snapshot was refreshed and a verified update is ready for review."
+                ))
+            }
+            self.refreshLocalState()
+        }
+    }
+
+    private func updateNotificationFingerprint(_ output: String) -> String? {
+        guard let data = output.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        let sks = json["sks"] as? [String: Any]
+        let codex = json["codex_cli"] as? [String: Any]
+        let menu = json["menubar"] as? [String: Any]
+        return [
+            json["generated_at"] as? String ?? "",
+            sks?["latest"] as? String ?? "",
+            codex?["latest"] as? String ?? "",
+            menu?["expected_version"] as? String ?? ""
+        ].joined(separator: "|")
+    }
+
+    static func updateStatusNeedsRefresh(_ update: [String: Any]?, now: Date = Date()) -> Bool {
+        guard let update = update else { return true }
+        if update["source"] as? String == "disabled" { return false }
+        guard update["schema"] as? String == "sks.update-status.v3",
+              let expiresAt = update["expires_at"] as? String,
+              let expiry = ISO8601DateFormatter().date(from: expiresAt) else { return true }
+        return expiry <= now
+    }
+
     private func apply(_ state: SKSStatusIcon) {
         let pair: (String, String)
         switch state {
@@ -114,6 +163,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private func run(_ arguments: [String], kind: String, mutationGroup: String?, summary: String) {
         guard let snapshot = operations.begin(kind: kind, mutationGroup: mutationGroup, summary: summary) else {
             actionRequired = true
+            notifications.send(PublicNotificationEvent(
+                category: "SKS_ACTION_REQUIRED",
+                title: "SKS action requires attention",
+                body: "Another guarded mutation is already running. Open Control Center to review the active operation."
+            ))
             refreshLocalState()
             return
         }
@@ -127,10 +181,15 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             self.operationRunning = false
             self.operationFailed = result.code != 0
             _ = self.operations.update(snapshot, state: result.code == 0 ? .succeeded : .failed, stage: "complete", progress: 1, summary: result.code == 0 ? "Operation completed" : "Operation failed")
+            let updateOutput = kind == "update-status" ? result.output : nil
             self.notifications.send(PublicNotificationEvent(
-                category: "SKS_OPERATION_RESULT",
-                title: result.code == 0 ? "SKS operation completed" : "SKS operation needs attention",
-                body: result.code == 0 ? "The requested operation completed." : "The requested operation failed. Open Control Center for redacted details."
+                category: NotificationCoordinator.categoryIdentifier(updateStatusOutput: updateOutput, failed: result.code != 0),
+                title: updateOutput != nil && NotificationCoordinator.updateIsAvailable(in: result.output)
+                    ? "SKS update available"
+                    : result.code == 0 ? "SKS operation completed" : "SKS operation needs attention",
+                body: updateOutput != nil && NotificationCoordinator.updateIsAvailable(in: result.output)
+                    ? "A verified SKS, Codex CLI, or Menu Bar update is ready for review."
+                    : result.code == 0 ? "The requested operation completed." : "The requested operation failed. Open Control Center for redacted details."
             ))
             self.refreshLocalState()
         }

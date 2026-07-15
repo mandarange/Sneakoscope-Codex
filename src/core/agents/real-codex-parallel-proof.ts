@@ -1,5 +1,6 @@
 import path from 'node:path'
 import { nowIso, readJson, writeJsonAtomic } from '../fsx.js'
+import { OFFICIAL_SUBAGENT_EXECUTION_AUTHORITY } from '../proof/fake-real-proof-policy.js'
 
 export const REAL_CODEX_PARALLEL_PROOF_SCHEMA = 'sks.real-codex-parallel-proof.v1'
 
@@ -17,15 +18,15 @@ export async function buildRealCodexParallelProof(root: string, opts: {
   requestedWorkers?: number
   required?: boolean
 } = {}) {
-  const swarm = await readJson<any>(path.join(root, 'agent-native-cli-session-swarm.json'), null)
-  const workerDirs: string[] = Array.isArray(swarm?.worker_artifact_dirs) ? swarm.worker_artifact_dirs.map(String) : []
+  const runtime = await readJson<any>(path.join(root, 'native-cli-worker-runtime.json'), null)
+  const workerDirs: string[] = Array.isArray(runtime?.worker_artifact_dirs) ? runtime.worker_artifact_dirs.map(String) : []
   const routerReports = await readReports(root, workerDirs, 'worker-backend-router-report.json')
   const codexReports = await readReports(root, workerDirs, 'codex-worker-process-report.json')
   const sdkProofs = await readReports(root, workerDirs, 'codex-control-proof.json')
   const outputTruths = await readReports(root, workerDirs, 'codex-worker-output-truth.json')
-  const requestedWorkers = Number(opts.requestedWorkers || swarm?.requested_agents || swarm?.target_active_slots || routerReports.length || 0)
+  const requestedWorkers = Number(opts.requestedWorkers || runtime?.requested_agents || runtime?.target_active_slots || routerReports.length || 0)
   const required = opts.required === true || process.env.SKS_REQUIRE_REAL_CODEX_PARALLEL === '1'
-  const nativeProcessIds = uniqueNumbers([...(Array.isArray(swarm?.process_ids) ? swarm.process_ids : []), ...routerReports.map((row) => row.worker_process_id)])
+  const nativeProcessIds = uniqueNumbers([...(Array.isArray(runtime?.process_ids) ? runtime.process_ids : []), ...routerReports.map((row) => row.worker_process_id)])
   const codexChildProcessIds = uniqueNumbers([
     ...routerReports.flatMap((row) => Array.isArray(row.child_process_ids) ? row.child_process_ids : []),
     ...codexReports.map((row) => row.codex_child_pid)
@@ -53,7 +54,7 @@ export async function buildRealCodexParallelProof(root: string, opts: {
   const enoughWork = requestedWorkers > 0 && workerDirs.length >= requestedWorkers
   const realCodexExecuted = (codexChildProcessIds.length > 0 && windows.length > 0) || sdkThreadIds.length > 0
   const blockers = [
-    ...(!swarm ? ['native_cli_session_swarm_missing'] : []),
+    ...(!runtime ? ['native_cli_worker_runtime_missing'] : []),
     ...(required && !realCodexExecuted ? ['real_codex_sdk_threads_missing'] : []),
     ...(required && enoughWork && observedParallel < requestedWorkers ? [`codex_sdk_parallelism_below_requested:${observedParallel}/${requestedWorkers}`] : []),
     ...(required && outputLastMessageCount === 0 && sdkStructuredOutputCount < Math.min(requestedWorkers, sdkProofs.length || requestedWorkers) ? ['codex_structured_output_missing'] : []),
@@ -91,7 +92,11 @@ export async function buildRealCodexParallelProof(root: string, opts: {
     fast_mode_child_propagation_ok: fastModeMissing.length === 0,
     router_report_count: routerReports.length,
     codex_worker_process_report_count: codexReports.length,
-    runtime_truth_links: ['real_codex_parallel_workers', 'codex_sdk_threads', 'codex_sdk_event_stream', 'model_authored_patch_envelopes', 'fast_mode_child_propagation'],
+    execution_authority: OFFICIAL_SUBAGENT_EXECUTION_AUTHORITY,
+    evidence_role: 'supporting',
+    proof_scope: 'supporting_runtime_signals',
+    runtime_truth_links: [OFFICIAL_SUBAGENT_EXECUTION_AUTHORITY],
+    supporting_runtime_signals: ['codex_sdk_threads', 'codex_sdk_event_stream', 'model_authored_patch_envelopes', 'fast_mode_child_propagation'],
     blockers
   }
 }

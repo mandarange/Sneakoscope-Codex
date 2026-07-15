@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "tsBuildInfoFile": ".sneakoscope/cache/tsbuildinfo/tsconfig.build.tsbuildinfo"
+  }
+}

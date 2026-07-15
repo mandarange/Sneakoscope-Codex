@@ -64,7 +64,7 @@ function printSessionTable(sessions: any[] = []) {
 }
 
 function nextAction(state: any = {}, trust: any = {}, proof: any = {}) {
-  if (!state.mission_id) return 'start a route with sks run, $Team, or $Goal';
+  if (!state.mission_id) return 'start a route with sks run, $Naruto, or $Goal';
   if (!proof?.schema) return `write completion proof for ${state.mission_id}`;
   if (trust?.ok) return 'ready for final Honest Mode summary';
   if (trust?.issues?.length) return `resolve trust blocker: ${trust.issues[0]}`;

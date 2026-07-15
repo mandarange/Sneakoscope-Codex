@@ -28,8 +28,6 @@ test('Naruto keeps requested official subagent counts and canonical thread flags
   assert.equal(parsed.prompt, 'review the packages')
   assert.equal(parsed.requestedSubagents, 12)
   assert.equal(parsed.maxThreads, 8)
-  assert.equal(parsed.clonesAliasUsed, false)
-  assert.deepEqual(parsed.unsupportedLegacyFlags, [])
   assert.deepEqual(parsed.argumentErrors, [])
 })
 
@@ -57,7 +55,11 @@ test('Naruto parser accepts equals syntax and rejects malformed or empty paid fa
   }
 
   const removedAfterOption = parseNarutoArgs(['--agents=8', 'dashboard'])
-  assert.ok(removedAfterOption.argumentErrors.includes('removed_legacy_subcommand:dashboard'))
+  assert.ok(removedAfterOption.argumentErrors.includes('unknown_subcommand:dashboard'))
+
+  const explicitTaskAfterSeparator = parseNarutoArgs(['run', '--', 'dashboard'])
+  assert.equal(explicitTaskAfterSeparator.prompt, 'dashboard')
+  assert.deepEqual(explicitTaskAfterSeparator.argumentErrors, [])
 
   for (const flag of ['--json=true', '--read-only=true', '--readonly=false', '--help=true']) {
     const booleanValue = parseNarutoArgs(['run', 'task', flag])
@@ -65,7 +67,7 @@ test('Naruto parser accepts equals syntax and rejects malformed or empty paid fa
   }
 })
 
-test('Naruto parser fails closed on legacy backend scheduler pool and model options', () => {
+test('Naruto parser treats non-current backend scheduler pool and model options as unknown', () => {
   const parsed = parseNarutoArgs([
     'run', 'review packages',
     '--backend=codex-sdk',
@@ -73,18 +75,18 @@ test('Naruto parser fails closed on legacy backend scheduler pool and model opti
     '--pool-size=4',
     '--model', 'gpt-5.6-terra'
   ])
-  assert.deepEqual(parsed.unsupportedLegacyFlags, [
-    '--backend=codex-sdk',
-    '--scheduler=legacy',
-    '--pool-size=4',
-    '--model=gpt-5.6-terra'
+  assert.deepEqual(parsed.argumentErrors, [
+    'unsupported_argument:--backend',
+    'unsupported_argument:--scheduler',
+    'unsupported_argument:--pool-size',
+    'unsupported_argument:--model'
   ])
 })
 
-test('removed Naruto dashboard command fails closed instead of becoming a paid run task', async () => {
+test('unknown Naruto subcommand fails closed instead of becoming a paid run task', async () => {
   const parsed = parseNarutoArgs(['dashboard', 'latest'])
   assert.equal(parsed.action, 'run')
-  assert.ok(parsed.argumentErrors.includes('removed_legacy_subcommand:dashboard'))
+  assert.ok(parsed.argumentErrors.includes('unknown_subcommand:dashboard'))
 
   const previousExitCode = process.exitCode
   const previousError = console.error
@@ -96,7 +98,7 @@ test('removed Naruto dashboard command fails closed instead of becoming a paid r
     const result: any = await narutoCommand(['dashboard', 'latest', '--json'])
     assert.equal(process.exitCode, 1)
     assert.equal(result.ok, false)
-    assert.ok(result.blockers.includes('invalid_naruto_argument:removed_legacy_subcommand:dashboard'))
+    assert.ok(result.blockers.includes('invalid_naruto_argument:unknown_subcommand:dashboard'))
   } finally {
     console.error = previousError
     console.log = previousLog
@@ -132,19 +134,20 @@ test('human Naruto help renders model mapping nesting and durable parent evidenc
   }
 })
 
-test('Naruto preserves deprecated aliases for one release without selecting the legacy runtime', () => {
+test('Naruto rejects removed aliases instead of redirecting them', () => {
   const parsed = parseNarutoArgs(['workers', 'latest', '--clones', '8'])
-  assert.equal(parsed.action, 'subagents')
+  assert.equal(parsed.action, 'run')
   assert.equal(parsed.missionId, 'latest')
-  assert.equal(parsed.requestedSubagents, 8)
-  assert.equal(parsed.workersAliasUsed, true)
-  assert.equal(parsed.clonesAliasUsed, true)
+  assert.equal(parsed.requestedSubagents, undefined)
+  assert.ok(parsed.argumentErrors.includes('unknown_subcommand:workers'))
+  assert.ok(parsed.argumentErrors.includes('unsupported_argument:--clones'))
 })
 
 test('standalone and hook completion share the canonical Naruto gate fields', () => {
   const gate = buildNarutoGateResult({
     missionId: 'M-gate-shape',
     passed: true,
+    ssotGuard: true,
     blockers: [],
     evidence: {
       ok: true,

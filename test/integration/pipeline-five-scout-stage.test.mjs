@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { buildPipelinePlan } from '../../dist/core/pipeline.js';
 import { routePrompt } from '../../dist/core/routes.js';
 
-test('explicit Team compatibility route uses official subagent stages without legacy five-agent intake', () => {
-  const plan = buildPipelinePlan({ route: routePrompt('$Team'), task: 'implement fixture' });
+test('explicit Naruto route uses official subagent stages without legacy five-agent intake', () => {
+  const plan = buildPipelinePlan({ route: routePrompt('$Naruto'), task: 'implement fixture' });
   assert.equal(plan.stages.some((row) => row.id === 'native_agent_intake'), false);
   assert.ok(plan.stages.some((row) => row.id === 'subagent_plan'));
   assert.ok(plan.stages.some((row) => row.id === 'official_subagent_execution'));

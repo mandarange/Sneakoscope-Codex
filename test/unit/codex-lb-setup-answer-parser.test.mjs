@@ -5,7 +5,7 @@ import { runProcess } from '../../dist/core/fsx.js';
 test('codex-lb setup flags map no/default and no/env answers into plan fields', async () => {
   const result = await runProcess(process.execPath, ['./dist/bin/sks.js', 'codex-lb', 'setup', '--host', 'lb.example.test', '--api-key-stdin', '--plan', '--no-default-provider', '--no-env-file', '--json'], {
     input: 'sk-clb-test\n',
-    env: { ...process.env, CI: 'true' },
+    env: { ...process.env, CI: 'true', SKS_UPDATE_MIGRATION_GATE_DISABLED: '1' },
     timeoutMs: 20_000,
     maxOutputBytes: 256 * 1024
   });

@@ -95,7 +95,7 @@ test('stale nonterminal session without a process is planned in dry-run and atom
     slot_id: 'slot-001',
     generation_index: 5,
     task_id: 'NW-000005',
-    persona_id: 'naruto_clone_001',
+    persona_id: 'naruto_worker_001',
     terminal_session_id: `${sessionId}-terminal`,
     started_at: old,
     closed_at: null,

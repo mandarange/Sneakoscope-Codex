@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { assertGate, emitGate, importDist } from './sks-1-18-gate-lib.js';
-import { readJson, writeReport } from './agent-patch-swarm-gate-lib.js';
+import { readJson, writeReport } from './patch-handoff-gate-lib.js';
 
 const storeMod = await importDist('core/agents/agent-patch-queue-store.js');
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-patch-queue-'));
@@ -19,7 +19,7 @@ const entry = await store.enqueue({
   lease_proof: { lease_id: 'lease-a', allowed_paths: ['a.txt'], verification_node_id: 'verify-a', rollback_node_id: 'rollback-a' },
   rollback_hint: { node_id: 'rollback-a' },
   operations: [{ op: 'write', path: 'a.txt', content: 'a\n' }]
-}, { mission_id: 'mission-a', route: '$Agent' });
+}, { mission_id: 'mission-a', route: '$Naruto' });
 await store.markApplying(entry.id);
 await store.markApplied(entry.id);
 await store.markVerified(entry.id);
@@ -29,7 +29,7 @@ const events = fs.readFileSync(path.join(dir, 'agent-patch-queue-events.jsonl'),
 const report = { schema: 'sks.agent-patch-queue-runtime-check.v1', ok: true, artifact_dir: dir, queue, ownership, events };
 writeReport('agent-patch-queue-runtime', report);
 assertGate(queue.entries?.[0]?.mission_id === 'mission-a', 'queue entry must include mission id', report);
-assertGate(queue.entries?.[0]?.route === '$Agent', 'queue entry must include route', report);
+assertGate(queue.entries?.[0]?.route === '$Naruto', 'queue entry must include route', report);
 assertGate(queue.entries?.[0]?.status === 'verified', 'queue entry must reach verified state', report);
 assertGate(events.length >= 4, 'queue events must record append-only transitions', report);
 assertGate(ownership.entries?.[0]?.lease_id === 'lease-a', 'ownership ledger must bind lease id', report);

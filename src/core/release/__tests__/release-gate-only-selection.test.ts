@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 import {
+  gatePackRunCoverageComplete,
   loadReleaseGateManifest,
   runReleaseGateDag,
   selectReleaseGateClosure
@@ -52,6 +53,53 @@ test('single codex-lb gate selection closes over and executes its Codex App depe
   }
 })
 
+test('in-progress DAG snapshots cannot claim a successful full release proof', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-release-gate-in-progress-'))
+  const manifest: ReleaseGateManifestV2 = {
+    schema: 'sks.release-gates.v2',
+    gates: [
+      gate('gate:fast', [], nodeCommand("setTimeout(() => console.log(JSON.stringify({schema:'sks.gate-result.v1',ok:true})), 10)")),
+      gate('gate:slow', [], nodeCommand("setTimeout(() => console.log(JSON.stringify({schema:'sks.gate-result.v1',ok:true})), 600)"))
+    ]
+  }
+  const run = (async () => {
+    await fs.writeFile(path.join(root, 'release-gates.v2.json'), `${JSON.stringify(manifest, null, 2)}\n`)
+    return runReleaseGateDag({ root, preset: 'release', full: true, noCache: true })
+  })()
+  try {
+    const snapshot = await waitForInProgressSummary(root)
+    assert.equal(snapshot.in_progress, true)
+    assert.equal(snapshot.ok, false)
+    assert.ok(snapshot.completed + snapshot.failed < snapshot.selected_gates)
+    assert.equal(snapshot.completion_certificate?.ok, false)
+    assert.equal(snapshot.completion_certificate?.confidence, 'incomplete')
+    assert.equal(snapshot.completion_certificate?.sla_met, false)
+    assert.equal(snapshot.completion_certificate?.full_release_proof, 'background_or_release_before_publish_required')
+
+    const result = await run
+    assert.equal(result.ok, true)
+    assert.equal(result.completed, 2)
+    assert.equal(result.completion_certificate.confidence, 'full-release-proof')
+    assert.equal(result.completion_certificate.full_release_proof, 'current_run')
+  } finally {
+    await run.catch(() => null)
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})
+
+test('gate-pack completion requires exact pack reports and selected-gate coverage', () => {
+  const complete = {
+    executed_packs: ['pack-a'],
+    pack_reports: [{ pack_id: 'pack-a' }],
+    executed_gate_count: 1,
+    reused_proof_count: 1
+  } as any
+  assert.equal(gatePackRunCoverageComplete(2, complete), true)
+  assert.equal(gatePackRunCoverageComplete(3, complete), false)
+  assert.equal(gatePackRunCoverageComplete(2, { ...complete, pack_reports: [] }), false)
+  assert.equal(gatePackRunCoverageComplete(2, { ...complete, pack_reports: [...complete.pack_reports, ...complete.pack_reports] }), false)
+})
+
 test('current codex-lb comprehensive selection includes its declared Codex App dependency', () => {
   const manifest = loadReleaseGateManifest(process.cwd())
   const selected = selectReleaseGateClosure(manifest, ['codex-lb:comprehensive']).map((entry) => entry.id)
@@ -70,3 +118,20 @@ test('single-gate selection fails immediately for unknown gates and dependency c
   assert.throws(() => selectReleaseGateClosure(manifest, ['gate:missing']), /release_gate_only_selection_unknown:gate:missing/)
   assert.throws(() => selectReleaseGateClosure(manifest, ['gate:a']), /release_gate_only_selection_dependency_cycle:gate:a->gate:b->gate:a/)
 })
+
+async function waitForInProgressSummary(root: string): Promise<any> {
+  const reportRoot = path.join(root, '.sneakoscope', 'reports', 'release-gates')
+  const deadline = Date.now() + 5_000
+  while (Date.now() < deadline) {
+    const names = await fs.readdir(reportRoot).catch(() => [])
+    for (const name of names) {
+      const file = path.join(reportRoot, name, 'summary.json')
+      try {
+        const parsed = JSON.parse(await fs.readFile(file, 'utf8'))
+        if (parsed?.in_progress === true && Number(parsed?.completed || 0) + Number(parsed?.failed || 0) < Number(parsed?.selected_gates || 0)) return parsed
+      } catch {}
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+  throw new Error('in-progress release DAG summary was not observed')
+}

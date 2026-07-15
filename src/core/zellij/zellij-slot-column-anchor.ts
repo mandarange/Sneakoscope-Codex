@@ -21,7 +21,7 @@ export interface ZellijSlotColumnAnchorInput {
   completedWorkers?: number
   failedWorkers?: number
   updateAvailableVersion?: string | null
-  madDbActive?: boolean
+  madSksSqlPlaneActive?: boolean
   qaAppHandoffPending?: boolean
   qaAppHandoffArtifact?: string | null
   loopsTotal?: number
@@ -55,14 +55,14 @@ export function renderZellijSlotColumnAnchor(input: ZellijSlotColumnAnchorInput 
   const done = nonNegativeInt(input.completedWorkers, 0)
   const fail = nonNegativeInt(input.failedWorkers, 0)
   const update = input.updateAvailableVersion ? ` · update ${trimInline(input.updateAvailableVersion, 18)} available` : ''
-  const madDb = input.madDbActive ? ' · MAD-DB ACTIVE' : ''
+  const sqlPlane = input.madSksSqlPlaneActive ? ' · MAD-SKS SQL-PLANE ACTIVE' : ''
   const appHandoff = input.qaAppHandoffPending ? ' · QA /app handoff pending' : ''
   const loopHeader = input.loopsTotal != null
     ? `LOOPS ${nonNegativeInt(input.loopsTotal, 0)} · running ${nonNegativeInt(input.loopsRunning, 0)} · blocked ${nonNegativeInt(input.loopsBlocked, 0)} · done ${nonNegativeInt(input.loopsCompleted, 0)} · workers ${active}`
     : null
   const header = loopHeader || (done || fail
-    ? `SLOTS active ${active} · headless ${headless} · done ${done} · fail ${fail} · q ${queue}${update}${madDb}${appHandoff}`
-    : `SLOTS active ${active}/${visible} · headless ${headless} · q ${queue}${update}${madDb}${appHandoff}`)
+    ? `SLOTS active ${active} · headless ${headless} · done ${done} · fail ${fail} · q ${queue}${update}${sqlPlane}${appHandoff}`
+    : `SLOTS active ${active}/${visible} · headless ${headless} · q ${queue}${update}${sqlPlane}${appHandoff}`)
   const workers = Array.isArray(input.workerRows) ? input.workerRows : []
   const handoffLine = input.qaAppHandoffPending ? `QA app handoff pending · ${trimInline(input.qaAppHandoffArtifact || 'qa-loop/app-handoff.json', 64)}` : null
   if (!workers.length) return [header, handoffLine, 'visible slot panes stack below this anchor'].filter(Boolean).join('\n')
@@ -88,23 +88,23 @@ export async function renderZellijSlotColumnAnchorFromArtifacts(input: {
   const missionDir = inferMissionDir(root, input.missionId)
   const telemetry = await readZellijSlotTelemetrySnapshot(root, input.missionId).catch(() => null)
   const updateNotice = await readJson(path.join(missionDir, 'update-notice.json'))
-  const madDb = await readJson(path.join(missionDir, 'mad-db-capability.json'))
+  const sqlPlaneCapability = await readJson(path.join(missionDir, 'mad-sks', 'sql-plane', 'capability.json'))
   const appHandoff = await readJson(path.join(missionDir, 'qa-loop', 'app-handoff.json'))
   if (telemetry && Object.keys(telemetry.slots || {}).length) {
-    return renderTelemetryAnchor(telemetry, updateNotice, madDb, appHandoff)
+    return renderTelemetryAnchor(telemetry, updateNotice, sqlPlaneCapability, appHandoff)
   }
   const snapshot = await readJson(path.join(missionDir, 'zellij-dashboard-snapshot.json'))
   const rightColumn = await readJson(path.join(missionDir, 'zellij-right-column-state.json'))
-  const swarm = await readJson(path.join(root, 'agent-native-cli-session-swarm.json'))
-    || await readJson(path.join(missionDir, 'agents', 'agent-native-cli-session-swarm.json'))
-  const workerRows = await buildWorkerRows(root, missionDir, rightColumn, swarm)
+  const runtime = await readJson(path.join(root, 'native-cli-worker-runtime.json'))
+    || await readJson(path.join(missionDir, 'agents', 'native-cli-worker-runtime.json'))
+  const workerRows = await buildWorkerRows(root, missionDir, rightColumn, runtime)
   const activeWorkers = Number(snapshot?.active_workers ?? workerRows.filter((row) => row.status === 'running' || row.status === 'launching').length ?? 0)
   const visiblePaneCap = Number(snapshot?.visible_panes ?? Math.max(1, rightColumn?.visible_worker_panes?.length || activeWorkers || 1))
   const headlessWorkers = Number(snapshot?.headless_workers ?? workerRows.filter((row) => row.placement === 'headless' && (!row.status || row.status === 'running')).length ?? 0)
   const queueDepth = Number(snapshot?.queue_depth ?? 0)
   const anchorInput: ZellijSlotColumnAnchorInput = { activeWorkers, visiblePaneCap, headlessWorkers, queueDepth, workerRows }
   if (updateNotice?.update_available && updateNotice.latest_version) anchorInput.updateAvailableVersion = String(updateNotice.latest_version)
-  if (isMadDbActive(madDb)) anchorInput.madDbActive = true
+  if (isMadSksSqlPlaneActive(sqlPlaneCapability)) anchorInput.madSksSqlPlaneActive = true
   if (['pending', 'blocked_for_desktop_review'].includes(String(appHandoff?.status || ''))) {
     anchorInput.qaAppHandoffPending = true
     anchorInput.qaAppHandoffArtifact = appHandoff?.artifact_path || 'qa-loop/app-handoff.json'
@@ -113,20 +113,20 @@ export async function renderZellijSlotColumnAnchorFromArtifacts(input: {
   return renderZellijSlotColumnAnchor(anchorInput)
 }
 
-function renderTelemetryAnchor(snapshot: any, updateNotice: any = null, madDbCapability: any = null, appHandoff: any = null): string {
+function renderTelemetryAnchor(snapshot: any, updateNotice: any = null, sqlPlaneCapability: any = null, appHandoff: any = null): string {
   const updatedAt = Date.parse(snapshot.updated_at || '')
   const staleSeconds = Number.isFinite(updatedAt) ? Math.max(0, Math.round((Date.now() - updatedAt) / 1000)) : null
   const counts = snapshot.counts || {}
   const active = Number(counts.running || 0) + Number(counts.verifying || 0)
   const update = updateNotice?.update_available && updateNotice?.latest_version ? ` · update ${trimInline(String(updateNotice.latest_version), 18)} available` : ''
-  const madDb = isMadDbActive(madDbCapability) ? ' · MAD-DB ACTIVE' : ''
+  const sqlPlane = isMadSksSqlPlaneActive(sqlPlaneCapability) ? ' · MAD-SKS SQL-PLANE ACTIVE' : ''
   const qaHandoff = ['pending', 'blocked_for_desktop_review'].includes(String(appHandoff?.status || '')) ? ' · QA /app handoff pending' : ''
   // Compact SKS branding header: package version + mission id so the SLOTS column self-identifies.
   const brand = `SKS v${readPackageVersion()} · mission ${trimInline(String(snapshot.mission_id || '-'), 28)}`
   if (staleSeconds != null && staleSeconds > 60) {
-    return [brand, `SLOTS telemetry stale ${staleSeconds}s · active ?${update}${madDb}${qaHandoff}`].join('\n')
+    return [brand, `SLOTS telemetry stale ${staleSeconds}s · active ?${update}${sqlPlane}${qaHandoff}`].join('\n')
   }
-  const countsLine = `SLOTS active ${active} · run ${Number(counts.running || 0)} · verify ${Number(counts.verifying || 0)} · headless ${Number(counts.headless || 0)} · done ${Number(counts.completed || 0)} · fail ${Number(counts.failed || 0)} · q ${Number(counts.queued || 0)}${update}${madDb}${qaHandoff}`
+  const countsLine = `SLOTS active ${active} · run ${Number(counts.running || 0)} · verify ${Number(counts.verifying || 0)} · headless ${Number(counts.headless || 0)} · done ${Number(counts.completed || 0)} · fail ${Number(counts.failed || 0)} · q ${Number(counts.queued || 0)}${update}${sqlPlane}${qaHandoff}`
   const slotRows = renderTelemetrySlotRows(snapshot)
   return [brand, countsLine, ...slotRows].join('\n')
 }
@@ -151,10 +151,10 @@ function renderTelemetrySlotRows(snapshot: any): string[] {
   })
 }
 
-function isMadDbActive(capability: any) {
+function isMadSksSqlPlaneActive(capability: any) {
   if (!capability) return false
-  if (capability.schema === 'sks.mad-db-capability.v2' && !['transport_ready', 'active'].includes(String(capability.status || ''))) return false
-  if (capability.schema !== 'sks.mad-db-capability.v2' && (capability.enabled !== true || capability.consumed === true)) return false
+  if (capability.schema !== 'sks.mad-sks-sql-plane-capability.v2') return false
+  if (!['transport_ready', 'active'].includes(String(capability.status || ''))) return false
   const expires = Date.parse(capability.expires_at || '')
   return Number.isFinite(expires) && expires > Date.now()
 }
@@ -192,9 +192,9 @@ async function readJson(file: string): Promise<any | null> {
   }
 }
 
-async function buildWorkerRows(root: string, missionDir: string, rightColumn: any, swarm: any): Promise<ZellijSlotColumnWorkerRow[]> {
+async function buildWorkerRows(root: string, missionDir: string, rightColumn: any, runtime: any): Promise<ZellijSlotColumnWorkerRow[]> {
   const byKey = new Map<string, ZellijSlotColumnWorkerRow & { yOrder?: number }>()
-  const records = Array.isArray(swarm?.records) ? swarm.records : []
+  const records = Array.isArray(runtime?.records) ? runtime.records : []
   const recordByKey = new Map<string, any>()
   for (const record of records) {
     const key = workerKey(record?.slot_id, record?.generation_index)

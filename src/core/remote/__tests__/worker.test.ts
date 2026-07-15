@@ -21,7 +21,7 @@ async function setup(): Promise<{
   await writeJsonAtomic(stateFileForSession(root, 'session-1'), {
     _session_key: 'session-1',
     mission_id: 'M-fixture',
-    route_command: '$Team',
+    route_command: '$Naruto',
     phase: 'IMPLEMENT',
     active_generation: 2,
     updated_at: new Date().toISOString()
@@ -160,6 +160,32 @@ test('cancel requires owner proof and exact approval, and duplicate delivery nev
   const watched = await worker.handle({ schema: 'sks.remote-worker.request.v1', id: 'watch', type: 'watch', after_seq: 0 });
   assert.equal(watched.ok, true);
   assert.equal((watched.data as { events: unknown[] }).events.length, 1);
+});
+
+test('prepare_cancel returns an owner-bound generation challenge and refuses stale bindings', async () => {
+  const fx = await setup();
+  const worker = new RemoteWorker({ root: fx.root, machine: fx.machine, projectId: 'project-1', owners: fx.owners });
+  const prepared = await worker.handle({
+    schema: 'sks.remote-worker.request.v1', id: 'prepare-1', type: 'prepare_cancel', session_id: 'session-1', command_id: 'command-cancel'
+  });
+  assert.equal(prepared.ok, true);
+  assert.deepEqual(prepared.data, {
+    schema: 'sks.remote-cancel-challenge.v1',
+    command_id: 'command-cancel',
+    session_id: 'session-1',
+    owner_nonce: fx.owner.owner_nonce,
+    expected_pid: fx.owner.pid,
+    expected_process_start_time: fx.owner.process_start_time,
+    expected_command: fx.owner.expected_command,
+    expected_project_root: fx.root,
+    expected_generation: 2
+  });
+  await fx.owners.register({ ...fx.owner, active_generation: 1 });
+  const stale = await worker.handle({
+    schema: 'sks.remote-worker.request.v1', id: 'prepare-2', type: 'prepare_cancel', session_id: 'session-1', command_id: 'command-cancel-2'
+  });
+  assert.equal(stale.ok, false);
+  assert.equal(stale.error?.code, 'session_binding_generation_stale');
 });
 
 test('worker rejects unknown machine/project envelopes before claiming idempotency', async () => {

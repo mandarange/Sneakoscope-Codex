@@ -7,6 +7,7 @@ import {
   RELEASE_REAL_REQUIRED_CHECK_IDS
 } from '../../dist/core/release/release-real-contract.js';
 import { releaseAuthorizationSnapshot } from '../../dist/core/release/release-authorization-snapshot.js';
+import { releaseGateContractSnapshot } from '../../dist/core/release/release-gate-contract.js';
 import { currentDistFreshness } from '../../dist/scripts/lib/ensure-dist-fresh.js';
 
 export function createReleaseStampProof(root = process.cwd()) {
@@ -17,9 +18,7 @@ export function createReleaseStampProof(root = process.cwd()) {
   const stampPath = path.join(dir, 'release-check-stamp.json');
   fs.mkdirSync(dir, { recursive: true });
   const releaseManifest = JSON.parse(fs.readFileSync(path.join(root, 'release-gates.v2.json'), 'utf8'));
-  const releaseGateIds = releaseManifest.gates
-    .filter((gate) => Array.isArray(gate?.preset) && gate.preset.includes('release'))
-    .map((gate) => String(gate.id));
+  const releaseGateIds = [...releaseGateContractSnapshot().ids];
   const freshness = currentDistFreshness();
   const currentPackage = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const authorizationSnapshot = releaseAuthorizationSnapshot(root, currentPackage);

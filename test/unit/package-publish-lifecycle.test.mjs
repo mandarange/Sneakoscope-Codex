@@ -21,7 +21,14 @@ test('publish lifecycle separates full release stamps from lifecycle-disabled pu
   assert.doesNotMatch(scripts['feature-quality:check'], /--rc/);
   assert.equal(scripts.prepack, 'npm run build');
   assert.equal(scripts.check, undefined);
-  assert.match(scripts['build:incremental'], /tsc -p tsconfig\.json/);
+  assert.match(scripts['build:incremental'], /tsc -p tsconfig\.build\.json/);
+  const buildTsconfig = JSON.parse(fs.readFileSync('tsconfig.build.json', 'utf8'));
+  assert.equal(buildTsconfig.compilerOptions.declaration, false);
+  assert.equal(buildTsconfig.compilerOptions.declarationMap, false);
+  assert.equal(buildTsconfig.compilerOptions.sourceMap, false);
+  assert.ok(fs.existsSync('dist/native/sks-menubar/Sources/AppDelegate.swift'));
+  assert.ok(fs.existsSync('dist/native/sks-menubar/Resources/AppIcon.icns'));
+  assert.ok(pkg.files.includes('!dist/core/telegram/mini-app.js'), 'incomplete Mini App runtime must stay out of the 6.3 package');
   assert.equal(scripts['release:check'], 'npm run release:check:affected');
   assert.match(scripts['release:check:affected'], /--preset affected/);
   assert.match(scripts['release:check:affected'], /release:ensure-build/);
@@ -48,33 +55,19 @@ test('publish lifecycle separates full release stamps from lifecycle-disabled pu
   assert.doesNotMatch(prepublishVerifier, /runReleaseCheck|npmCmd/);
   assert.doesNotMatch(prepublishVerifier, /SKS_PREPUBLISH_RELEASE_CHECK_CMD/);
   assert.match(prepublishVerifier, /current authoritative full-release stamp/);
-  assert.doesNotMatch(scripts['publish:dry'], /release:check:full/);
-  assert.match(scripts['publish:dry'], /npm run publish:prep-ignore-scripts/);
-  assert.match(scripts['publish:dry'], /npm pack --dry-run --ignore-scripts --json/);
-  assert.match(scripts['publish:dry'], /--ignore-scripts/);
-  assert.doesNotMatch(Object.values(scripts).join('\n'), /npm\s+publish\s+--dry-run/);
-  assert.doesNotMatch(scripts['publish:dry'], /--tag rc/);
-  assert.doesNotMatch(scripts['publish:prep-ignore-scripts'], /prepublishOnly/);
-  assert.match(scripts['publish:prep-ignore-scripts'], /publish:verify-ignore-scripts/);
-  assert.equal(count(scripts['publish:prep-ignore-scripts'], 'release-check-stamp.js verify'), 2);
-  const prep = scripts['publish:prep-ignore-scripts'];
-  assert.ok(prep.indexOf('release-check-stamp.js verify') < prep.indexOf('publish:verify-ignore-scripts'));
-  assert.ok(prep.indexOf('publish:verify-ignore-scripts') < prep.indexOf('release-registry-check.js'));
-  assert.ok(prep.lastIndexOf('release-check-stamp.js verify') > prep.indexOf('publish:verify-ignore-scripts'));
-  assert.doesNotMatch(scripts['publish:verify-ignore-scripts'], /build:incremental/);
-  assert.doesNotMatch(scripts['publish:verify-ignore-scripts'], /build:clean/);
-  assert.doesNotMatch(scripts['publish:verify-ignore-scripts'], /npm test/);
-  assert.doesNotMatch(scripts['publish:prep-ignore-scripts'], /npm test/);
-  assert.doesNotMatch(scripts['publish:verify-ignore-scripts'], /typecheck/);
-  assert.match(scripts['publish:verify-ignore-scripts'], /release:dist-freshness/);
-  assert.match(scripts['publish:verify-ignore-scripts'], /release:version-truth/);
-  assert.match(scripts['publish:verify-ignore-scripts'], /publish:packlist-performance/);
-  assert.match(scripts['publish:verify-ignore-scripts'], /package-published-contract-check\.js/);
-  assert.match(scripts['publish:prep-ignore-scripts'], /release-registry-check\.js --require-unpublished --require-publish-auth --require-pack-proof/);
-  assert.match(scripts['publish:verify-ignore-scripts'], /publish-tag:check/);
-  assert.match(scripts['publish:ignore-scripts'], /npm run publish:prep-ignore-scripts/);
-  assert.match(scripts['publish:ignore-scripts'], /--ignore-scripts/);
-  assert.doesNotMatch(scripts['publish:ignore-scripts'], /--tag rc/);
+  for (const removed of ['publish:dry', 'publish:verify-ignore-scripts', 'publish:prep-ignore-scripts', 'publish:ignore-scripts']) {
+    assert.equal(scripts[removed], undefined, `${removed} must not expose a direct-publish path`);
+  }
+  assert.doesNotMatch(Object.values(scripts).join('\n'), /\bnpm\s+publish\b/);
+  for (const required of [
+    'release:file-ownership',
+    'release:macos-menubar-proof',
+    'release:main-push-guard',
+    'release:main-push-receipt',
+    'release:pack-receipt',
+    'runtime:installed-smoke'
+  ]) assert.ok(scripts[required], `${required} must be wired`);
+  assert.equal(Object.keys(scripts).length <= 100, true, 'package script budget must remain frozen');
   assert.equal(scripts['publish:npm'], undefined);
   assert.equal(scripts['release:publish'], undefined);
   const officialSubagentGates = releaseGates.gates.filter((gate) => gate.command === 'node ./dist/scripts/official-subagent-workflow-check.js');
@@ -82,6 +75,10 @@ test('publish lifecycle separates full release stamps from lifecycle-disabled pu
   const packlistGate = releaseGates.gates.find((gate) => gate.id === 'publish:packlist-performance');
   assert.ok(packlistGate, 'publish:packlist-performance gate must exist');
   assert.equal(packlistGate.cache?.enabled, true, 'packlist proof may be reused only while its required artifacts remain current');
+  assert.deepEqual(packlistGate.deps, ['publish:runtime-script-closure']);
+  const closureGate = releaseGates.gates.find((gate) => gate.id === 'publish:runtime-script-closure');
+  assert.ok(closureGate, 'publish:runtime-script-closure gate must exist');
+  assert.equal(closureGate.command, 'node ./dist/scripts/runtime-script-pack-closure-check.js');
   const runtimeManifests = {
     'release-gates.v2.json': 'sks.release-gates.v2',
     'infra-harness-gates.json': 'sks.infra-harness-gates.v1',
@@ -91,26 +88,9 @@ test('publish lifecycle separates full release stamps from lifecycle-disabled pu
     assert.ok(pkg.files.includes(manifest), `installed package must include ${manifest}`);
     assert.equal(JSON.parse(fs.readFileSync(manifest, 'utf8')).schema, schema);
   }
-});
-
-test('lifecycle-disabled publish prep fails before registry or build work when the full-release stamp is missing', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-publish-prep-stamp-'));
-  const stampPath = path.join(dir, 'missing-release-check-stamp.json');
-  const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-  const result = spawnSync(npmCmd, ['run', 'publish:prep-ignore-scripts', '--silent'], {
-    cwd: process.cwd(),
-    encoding: 'utf8',
-    env: {
-      ...process.env,
-      SKS_RELEASE_STAMP_PATH: stampPath,
-      SKS_SKIP_REGISTRY_NETWORK_CHECK: '1'
-    }
-  });
-
-  assert.notEqual(result.status, 0, result.stderr || result.stdout);
-  assert.match(result.stderr, /missing release:check stamp/);
-  assert.doesNotMatch(`${result.stdout}\n${result.stderr}`, /publish auth check cannot run|bin executable|dist-freshness/);
-  assert.equal(fs.existsSync(stampPath), false);
+  const commonJsBin = fs.readFileSync('dist/bin/sks.js', 'utf8');
+  assert.match(commonJsBin, /const \{ version: PACKAGE_VERSION \} = require\('\.\.\/\.\.\/package\.json'\);/);
+  assert.doesNotMatch(commonJsBin, /require\('\.\.\/core\/version\.js'\)/);
 });
 
 test('plain lifecycle publish is blocked before the prepack rebuild can invalidate authorization', () => {
@@ -120,21 +100,23 @@ test('plain lifecycle publish is blocked before the prepack rebuild can invalida
   });
   assert.equal(result.status, 2);
   assert.match(result.stderr, /Lifecycle-enabled npm publish is unsupported/);
-  assert.match(result.stderr, /publish:prep-ignore-scripts/);
+  assert.match(result.stderr, /stage-only GitHub workflow/);
+  assert.match(result.stderr, /npm stage publish/);
   assert.doesNotMatch(buildManifestWriter, /generated_at/);
   assert.match(distRuntimeCheck, /build_manifest_generated_at_non_deterministic/);
 });
 
 test('build-dist CommonJS conversion is byte-idempotent across incremental rebuilds', () => {
-  const files = ['dist/bin/sks-dispatch.js', 'dist/bin/fast-inline.js'];
+  const files = ['dist/bin/sks.js', 'dist/bin/sks-dispatch.js', 'dist/bin/fast-inline.js'];
   runBuildDist();
   const first = Object.fromEntries(files.map((file) => [file, fs.readFileSync(file, 'utf8')]));
   runBuildDist();
   const second = Object.fromEntries(files.map((file) => [file, fs.readFileSync(file, 'utf8')]));
   assert.deepEqual(second, first);
-  assert.equal(count(first[files[0]], 'exports.runSks = runSks;'), 1);
+  assert.match(first[files[0]], /require\('\.\.\/\.\.\/package\.json'\)/);
+  assert.equal(count(first[files[1]], 'exports.runSks = runSks;'), 1);
   for (const name of ['rootJsonFastInline', 'doctorJsonFastInline', 'narutoHelpJsonFastInline', 'hookUserPromptSubmitPerfInline']) {
-    assert.equal(count(first[files[1]], `exports.${name} = ${name};`), 1);
+    assert.equal(count(first[files[2]], `exports.${name} = ${name};`), 1);
   }
 });
 

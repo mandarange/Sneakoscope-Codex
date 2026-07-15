@@ -1,6 +1,6 @@
 {
   "schema": "sks.perf-budgets.v1",
-  "_note": "budget_p50_ms/budget_p95_ms are judged against raw wall-clock time (no node-startup-baseline deduction, 20차 P0-11). Calibrated from raw measurement on a warm dev machine (2026-07-09: version/root/commands/super-search-doctor ~40-70ms, dollar-commands ~50-130ms, doctor --json fast-mode ~40ms, plan --help/status --json/commands/mad-sks --help added after P2-2/P2-5d verification ~45-167ms) with headroom for slower/CI hosts; retighten once real CI raw numbers are collected. Gate-runtime and $Swarm-overhead budgets from the 20차 P2-6 table are NOT covered here — the former needs the P3 gate consolidation (207->~30) done first, the latter needs a real-backend E2E run (P4 E2E-1) to measure against plain `codex exec`, neither of which this repo state has yet.",
+  "_note": "budget_p50_ms/budget_p95_ms are judged against raw wall-clock time (no node-startup-baseline deduction, 20차 P0-11). Calibrated from raw measurement on a warm dev machine (2026-07-09: version/root/commands/super-search-doctor ~40-70ms, dollar-commands ~50-130ms, doctor --json fast-mode ~40ms, plan --help/status --json/commands/mad-sks --help added after P2-2/P2-5d verification ~45-167ms) with headroom for slower/CI hosts; retighten once real CI raw numbers are collected. Gate-runtime overhead is not covered here and needs a separate real-backend E2E comparison against plain `codex exec`.",
   "commands": [
     { "name": "version", "argv": ["node", "./dist/bin/sks.js", "--version"], "budget_p50_ms": 100, "budget_p95_ms": 150 },
     { "name": "commands-json", "argv": ["node", "./dist/bin/sks.js", "commands", "--json"], "budget_p50_ms": 150, "budget_p95_ms": 220 },
@@ -12,5 +12,13 @@
     { "name": "status-json", "argv": ["node", "./dist/bin/sks.js", "status", "--json"], "budget_p50_ms": 220, "budget_p95_ms": 300 },
     { "name": "plan-help", "argv": ["node", "./dist/bin/sks.js", "plan", "--help"], "budget_p50_ms": 100, "budget_p95_ms": 150 },
     { "name": "mad-sks-help", "argv": ["node", "./dist/bin/sks.js", "mad-sks", "--help"], "budget_p50_ms": 100, "budget_p95_ms": 150 }
+  ],
+  "release_latency_slos": [
+    { "id": "menubar_first_state_render", "budget_p95_ms": 250, "measured_runs": 5 },
+    { "id": "control_center_open", "budget_p95_ms": 400, "measured_runs": 5 },
+    { "id": "mcp_static_list", "budget_p95_ms": 250, "measured_runs": 9 },
+    { "id": "update_cache_read", "budget_p95_ms": 50, "measured_runs": 15 },
+    { "id": "telegram_callback_ack", "budget_p95_ms": 1000, "measured_runs": 7 },
+    { "id": "ssh_worker_hello", "budget_p95_ms": 3000, "measured_runs": 5 }
   ]
 }

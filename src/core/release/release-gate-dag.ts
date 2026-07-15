@@ -9,7 +9,7 @@ import { RELEASE_GATE_NODE_SCHEMA, validateReleaseGateManifest, type ReleaseGate
 import { countReleaseGateResources, defaultReleaseGateBudget, summarizeReleaseGateBudget, type ReleaseGateBudget } from './release-gate-resource-governor.js'
 import { selectAffectedReleaseGates, type ReleaseGateAffectedSelection } from './release-gate-affected-selector.js'
 import { computeTriWikiAffectedGraph, type TriWikiAffectedGraph } from '../triwiki/triwiki-affected-graph.js'
-import { executeExtremeSchedule } from './extreme-parallel-scheduler.js'
+import { executeExtremeSchedule, type ExtremeSchedulerRunReport } from './extreme-parallel-scheduler.js'
 import { computeResourceClassBudget } from './resource-class-budget.js'
 import { guardedProcessKill, guardContextForRoute } from '../safety/mutation-guard.js'
 import { createRequestedScopeContract } from '../safety/requested-scope-contract.js'
@@ -74,7 +74,7 @@ export interface ReleaseGateCompletionCertificate {
   schema: 'sks.five-minute-completion-certificate.v1'
   ok: boolean
   tier: string
-  confidence: 'release-equivalent-for-affected-scope' | 'full-release-proof'
+  confidence: 'incomplete' | 'release-equivalent-for-affected-scope' | 'full-release-proof'
   sla_ms: number
   sla_met: boolean
   changed_files: string[]
@@ -136,6 +136,15 @@ export function selectReleaseGateClosure(manifest: ReleaseGateManifestV2, reques
   }
   for (const id of requested) visit(id)
   return manifest.gates.filter((gate) => selected.has(gate.id))
+}
+
+export function gatePackRunCoverageComplete(selectedGateCount: number, packRun: Pick<ExtremeSchedulerRunReport, 'executed_packs' | 'pack_reports' | 'executed_gate_count' | 'reused_proof_count'>): boolean {
+  const reportIds = new Set(packRun.pack_reports.map((report) => report.pack_id))
+  return selectedGateCount > 0
+    && reportIds.size === packRun.executed_packs.length
+    && reportIds.size === packRun.pack_reports.length
+    && packRun.executed_packs.every((id) => reportIds.has(id))
+    && packRun.executed_gate_count + packRun.reused_proof_count >= selectedGateCount
 }
 
 export async function runReleaseGateDag(input: {
@@ -213,9 +222,14 @@ export async function runReleaseGateDag(input: {
   let sumGateMs = 0
   let peakRunning = 0
 
-  const writeSummarySnapshot = (finished = false): ReleaseGateDagRunResult & { in_progress?: boolean; pending?: number; running?: number } => {
+  const writeSummarySnapshot = (finished = false, completionOverride: boolean | null = null): ReleaseGateDagRunResult & { in_progress?: boolean; pending?: number; running?: number } => {
     const wallMs = Date.now() - started
     const failures = [...failed.values()].map((row) => ({ id: row.id, exit_code: row.exit_code, stderr_tail: row.stderr_tail, timed_out: row.timed_out, signal: row.signal }))
+    const runComplete = completionOverride ?? (finished
+      && pending.size === 0
+      && running.size === 0
+      && completed.size + failed.size === selected.length)
+    const snapshotOk = runComplete && failures.length === 0
     const affectedGraph = buildAffectedGraph({
       selection: affected.selection,
       selected,
@@ -224,7 +238,8 @@ export async function runReleaseGateDag(input: {
       proofBankFile: releaseGateProofBankFile(root)
     })
     const completionCertificate = buildCompletionCertificate({
-      ok: failures.length === 0,
+      ok: snapshotOk,
+      complete: runComplete,
       preset,
       slaMs,
       wallMs,
@@ -235,7 +250,7 @@ export async function runReleaseGateDag(input: {
     })
     const snapshot: ReleaseGateDagRunResult & { in_progress?: boolean; pending?: number; running?: number } = {
       schema: 'sks.release-gate-dag-run.v1',
-      ok: failures.length === 0,
+      ok: snapshotOk,
       run_id: runId,
       selected_preset: preset,
 	      total_gates: manifest.gates.length,
@@ -301,13 +316,22 @@ export async function runReleaseGateDag(input: {
       else failed.set(report.pack_id, { id: report.pack_id, ok: false, exit_code: 1, signal: null, timed_out: false, duration_ms: report.critical_path_ms || 0, cached: false, stderr_tail: report.blockers.join('\n') })
       sumGateMs += report.critical_path_ms || 0
     }
-    const packed = writeSummarySnapshot(true)
+    const packCoverageComplete = gatePackRunCoverageComplete(selected.length, packRun)
+    if (!packCoverageComplete) failed.set('gate-pack-coverage', {
+      id: 'gate-pack-coverage', ok: false, exit_code: null, signal: null, timed_out: false, duration_ms: 0, cached: false,
+      stderr_tail: `gate_pack_selected_coverage_incomplete:${packRun.executed_gate_count + packRun.reused_proof_count}/${selected.length}`
+    })
+    if (!packRun.ok) failed.set('gate-pack-scheduler', {
+      id: 'gate-pack-scheduler', ok: false, exit_code: null, signal: null, timed_out: false, duration_ms: packRun.wall_ms, cached: false,
+      stderr_tail: packRun.blockers.join('\n') || 'gate_pack_scheduler_failed'
+    })
+    const packed = writeSummarySnapshot(true, packCoverageComplete)
     cleanupReleaseGateRunTemp(runId)
     return {
       ...packed,
       ok: packed.ok && packRun.ok,
-      completed: packRun.pack_reports.filter((report) => report.ok).length,
-      failed: packRun.failed_pack_count,
+      completed: completed.size,
+      failed: failed.size,
       executed_packs: packRun.executed_packs,
       pack_parallelism_gain: packRun.wall_ms > 0 ? Number((packRun.sequential_ms / packRun.wall_ms).toFixed(2)) : 1,
       triwiki_proof_bank_hits: packRun.reused_proof_count,
@@ -436,6 +460,7 @@ function buildAffectedGraph(input: {
 
 function buildCompletionCertificate(input: {
   ok: boolean
+  complete: boolean
   preset: string
   slaMs: number
   wallMs: number
@@ -449,9 +474,9 @@ function buildCompletionCertificate(input: {
     schema: 'sks.five-minute-completion-certificate.v1',
     ok: input.ok,
     tier: input.preset === 'affected' ? 'confidence' : input.preset,
-    confidence: affectedScope ? 'release-equivalent-for-affected-scope' : 'full-release-proof',
+    confidence: !input.complete ? 'incomplete' : affectedScope ? 'release-equivalent-for-affected-scope' : 'full-release-proof',
     sla_ms: input.slaMs,
-    sla_met: input.wallMs <= input.slaMs,
+    sla_met: input.complete && input.wallMs <= input.slaMs,
     changed_files: input.affectedGraph.changed_files,
     affected_gates: input.affectedGraph.affected_gates.length,
     reused_proofs: input.affectedGraph.reused_proofs.length,
@@ -460,7 +485,7 @@ function buildCompletionCertificate(input: {
     skipped_as_unaffected: input.skippedByAffected.length,
     critical_path_ms: input.criticalPathMs,
     wall_ms: input.wallMs,
-    full_release_proof: affectedScope ? 'background_or_release_before_publish_required' : 'current_run',
+    full_release_proof: input.complete && !affectedScope ? 'current_run' : 'background_or_release_before_publish_required',
     proof_bank_file: input.affectedGraph.proof_bank_file,
     affected_graph_file: input.affectedGraphFile
   }

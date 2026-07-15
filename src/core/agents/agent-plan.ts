@@ -1,5 +1,6 @@
-import { AGENT_INTAKE_STAGE_ID } from './agent-schema.js'
+import { OFFICIAL_SUBAGENT_EXECUTION_STAGE_ID } from './agent-schema.js'
 import { classifyTaskProfile, isTaskProfile, type TaskProfile } from '../runtime/task-profile.js'
+import { routePrompt, routeRequiresSubagents } from '../routes.js'
 import {
   DEFAULT_NARUTO_MAX_THREADS,
   DEFAULT_NARUTO_REQUESTED_SUBAGENTS,
@@ -7,24 +8,18 @@ import {
 } from '../subagents/thread-budget.js'
 
 const OFFICIAL_SUBAGENT_ROUTE_KEYS = new Set([
-  'team', '$team',
   'naruto', '$naruto',
-  'shadowclone', '$shadowclone',
-  'shadow-clone', '$shadow-clone',
-  'kagebunshin', '$kagebunshin',
-  'kage-bunshin', '$kage-bunshin',
-  'swarm', '$swarm',
   'work', '$work'
 ])
 
-const EXPLICIT_SUBAGENT_RE = /\$(Team|Naruto|ShadowClone|Shadow-Clone|Kagebunshin|Kage-Bunshin|Swarm|Work)\b/i
+const EXPLICIT_SUBAGENT_RE = /\$(Naruto|Work)\b/i
 const PARALLELIZABLE_RE = /\b(parallel|subagents?|fan out|one agent per|independent|disjoint|multiple files|all files)\b|병렬|하위\s*에이전트|서브\s*에이전트|독립|분리된|여러\s*파일|모든\s*파일|분담/i
 
 function routeKey(route: any): string {
   return String(route?.id || route?.command || route?.name || route || '').trim().toLowerCase()
 }
 
-export function routeRequiresAgentIntake(route: any, input: any = {}): boolean {
+export function routeRequiresOfficialSubagents(route: any, input: any = {}): boolean {
   const options = normalizeOptions(input)
   if (options.noAgents === true || options.agents === false) return false
   if (options.force === true || options.forceAgents === true) return true
@@ -40,14 +35,16 @@ export function routeRequiresAgentIntake(route: any, input: any = {}): boolean {
   if (positiveNumber(options.requestedSubagents) || positiveNumber(options.agents)) return true
 
   const profile = taskProfile(options.taskProfile, task)
-  if (profile === 'parallel-read' || profile === 'parallel-write') return true
-  return profile === 'high-risk' && explicitlyParallelizable(task)
+  const resolvedRoute = typeof route === 'string' ? routePrompt(route) : route
+  return routeRequiresSubagents(resolvedRoute, task, profile)
 }
 
-export function normalizeAgentPolicy(route: any, task: any = '', input: any = {}) {
+export function normalizeOfficialSubagentPolicy(route: any, task: any = '', input: any = {}) {
   const options = normalizeOptions(input)
   const profile = taskProfile(options.taskProfile, String(task || ''))
-  const required = routeRequiresAgentIntake(route, { ...options, task, taskProfile: profile })
+  const required = typeof options.required === 'boolean'
+    ? options.required
+    : routeRequiresOfficialSubagents(route, { ...options, task, taskProfile: profile })
   const requested = firstPositiveNumber(
     options.requestedSubagents,
     options.agents,
@@ -61,48 +58,44 @@ export function normalizeAgentPolicy(route: any, task: any = '', input: any = {}
   const requestedSubagents = required ? budget.requestedSubagents : 0
 
   return {
-    schema: 'sks.subagent-intake-policy.v1',
+    schema: 'sks.official-subagent-policy.v1',
     required,
     subagents_required: required,
     task_profile: profile,
-    stage_id: AGENT_INTAKE_STAGE_ID,
+    stage_id: OFFICIAL_SUBAGENT_EXECUTION_STAGE_ID,
     workflow: 'official_codex_subagent',
     requested_subagents: requestedSubagents,
     max_threads: budget.maxThreads,
     max_depth: budget.maxDepth,
     first_wave: required ? budget.firstWave : 0,
     wave_count: required ? budget.waveCount : 0,
-    agent_count: requestedSubagents,
     backend: 'official-codex-subagent',
     reason: policyReason(route, task, profile, required),
-    outputs: ['subagent-plan.json', 'subagent-events.jsonl', 'subagent-parent-summary.json', 'subagent-evidence.json'],
-    deprecated_fields: ['agent_count']
+    outputs: ['subagent-plan.json', 'subagent-events.jsonl', 'subagent-parent-summary.json', 'subagent-evidence.json']
   }
 }
 
-export function agentPipelineStage(policy: any = {}) {
+export function officialSubagentPipelineStage(policy: any = {}) {
   const required = policy.required !== false
   const requestedSubagents = required
-    ? Math.max(1, Math.floor(Number(policy.requested_subagents || policy.agent_count || DEFAULT_NARUTO_REQUESTED_SUBAGENTS)))
+    ? Math.max(1, Math.floor(Number(policy.requested_subagents || DEFAULT_NARUTO_REQUESTED_SUBAGENTS)))
     : 0
   const maxThreads = required
     ? Math.max(1, Math.floor(Number(policy.max_threads || DEFAULT_NARUTO_MAX_THREADS)))
     : 0
 
   return {
-    id: AGENT_INTAKE_STAGE_ID,
+    id: OFFICIAL_SUBAGENT_EXECUTION_STAGE_ID,
     goal: 'Run a Codex official subagent workflow with disjoint ownership and correlated event evidence.',
     workflow: 'official_codex_subagent',
     requested_subagents: requestedSubagents,
     max_parallel_agent_threads: Math.min(requestedSubagents, maxThreads),
     max_threads: maxThreads,
     max_depth: 1,
-    agent_count: requestedSubagents,
     backend: 'official-codex-subagent',
     read_only: false,
     write_policy: 'bounded workspace-write with disjoint path leases; parent-owned integration',
-    outputs: policy.outputs || ['subagent-plan.json', 'subagent-events.jsonl', 'subagent-parent-summary.json', 'subagent-evidence.json'],
-    deprecated_fields: ['agent_count']
+    outputs: policy.outputs || ['subagent-plan.json', 'subagent-events.jsonl', 'subagent-parent-summary.json', 'subagent-evidence.json']
   }
 }
 

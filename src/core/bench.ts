@@ -18,7 +18,7 @@ export const CORE_BENCH_BUDGET_TIERS = Object.freeze({
     'sks trust validate bench-fixture --json': 300,
     'sks wiki image-validate --json': 300,
     'sks features check --json': 1200,
-    'sks agent status --json': 1000
+    'sks naruto status --json': 1000
   },
   'source-ci': {
     'sks --version': 80,
@@ -29,7 +29,7 @@ export const CORE_BENCH_BUDGET_TIERS = Object.freeze({
     'sks trust validate bench-fixture --json': 450,
     'sks wiki image-validate --json': 450,
     'sks features check --json': 1800,
-    'sks agent status --json': 1400
+    'sks naruto status --json': 1400
   },
   'packed-local': {
     'sks --version': 100,
@@ -40,7 +40,7 @@ export const CORE_BENCH_BUDGET_TIERS = Object.freeze({
     'sks trust validate bench-fixture --json': 650,
     'sks wiki image-validate --json': 650,
     'sks features check --json': 2400,
-    'sks agent status --json': 1800
+    'sks naruto status --json': 1800
   },
   'global-shim': {
     'sks --version': 140,
@@ -51,7 +51,7 @@ export const CORE_BENCH_BUDGET_TIERS = Object.freeze({
     'sks trust validate bench-fixture --json': 800,
     'sks wiki image-validate --json': 800,
     'sks features check --json': 2800,
-    'sks agent status --json': 2200
+    'sks naruto status --json': 2200
   },
   'npx-one-shot': {
     'sks --version': 3000,
@@ -62,7 +62,7 @@ export const CORE_BENCH_BUDGET_TIERS = Object.freeze({
     'sks trust validate bench-fixture --json': 3500,
     'sks wiki image-validate --json': 3500,
     'sks features check --json': 5000,
-    'sks agent status --json': 5000
+    'sks naruto status --json': 5000
   }
 });
 
@@ -79,7 +79,7 @@ export const UX_REVIEW_STAGED_LATENCY_BUDGETS = Object.freeze({
   codex_compat_probe_batch: 5_000,
   computer_use_status_probe_batch: 5_000,
   codex_lb_status_probe_batch: 5_000,
-  agent_status_probe_batch: 5_000
+  naruto_status_probe_batch: 5_000
 });
 
 export const LEAN_POLICY_BENCH_SCENARIOS = Object.freeze([
@@ -103,7 +103,7 @@ const STATIC_CORE_COMMANDS: readonly CoreBenchCommand[] = Object.freeze([
   ['sks proof validate --json', ['proof', 'validate', '--json']],
   ['sks wiki image-validate --json', ['wiki', 'image-validate', '--json']],
   ['sks features check --json', ['features', 'check', '--json']],
-  ['sks agent status --json', ['agent', 'status', '--json']]
+  ['sks naruto status --json', ['naruto', 'status', '--json']]
 ]);
 
 function coreCommands(benchTrustMission: any): CoreBenchCommand[] {

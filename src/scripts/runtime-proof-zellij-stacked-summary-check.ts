@@ -23,7 +23,7 @@ await fs.writeFile(path.join(agents, 'parallel-runtime-proof.json'), JSON.string
   blockers: []
 }, null, 2))
 await fs.writeFile(path.join(agents, 'agent-scheduler-state.json'), JSON.stringify({ target_active_slots: 32, max_observed_active_slots: 32, largest_batch_size: 32, scheduler_utilization: 0.91 }, null, 2))
-await fs.writeFile(path.join(agents, 'agent-native-cli-session-swarm.json'), JSON.stringify({ process_ids: Array.from({ length: 32 }, (_, i) => 9000 + i), zellij_pane_worker_sessions: 8, headless_overflow_worker_count: 24 }, null, 2))
+await fs.writeFile(path.join(agents, 'native-cli-worker-runtime.json'), JSON.stringify({ process_ids: Array.from({ length: 32 }, (_, i) => 9000 + i), zellij_pane_worker_sessions: 8, headless_overflow_worker_count: 24 }, null, 2))
 await fs.writeFile(path.join(agents, 'naruto-concurrency-governor.json'), JSON.stringify({ target_active_slots: 32 }, null, 2))
 await fs.writeFile(path.join(dir, 'zellij', 'slot-telemetry.snapshot.json'), JSON.stringify({ schema: 'sks.zellij-slot-telemetry-snapshot.v1', mission_id: missionId, updated_at: new Date(Date.now() - 500).toISOString(), slots: {}, counts: {} }, null, 2))
 await fs.writeFile(path.join(dir, 'zellij-right-column-state.json'), JSON.stringify({ schema: 'sks.zellij-right-column-state.v1', mission_id: missionId, session_name: 'fixture', status: 'active', slot_column_anchor_pane_id: 'terminal_1', visible_worker_panes: [], headless_workers: [], blockers: [] }, null, 2))

@@ -42,7 +42,7 @@ const malformed = await resolveProviderContext({
   root,
   codexHome,
   env: { HOME: root } as any,
-  route: '$Agent',
+  route: '$Naruto',
   serviceTier: 'standard'
 })
 

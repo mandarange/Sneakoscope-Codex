@@ -45,7 +45,7 @@ export function compileStrategy(input: {
   agentCount?: number
   visualRequired?: boolean
 }): StrategyCompileResult {
-  const route = String(input.route || '$Agent')
+  const route = String(input.route || '$Naruto')
   const gate = runAdhdOrchestratingGate({
     prompt: input.prompt,
     route,

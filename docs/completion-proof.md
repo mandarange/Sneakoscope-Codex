@@ -1,8 +1,8 @@
 # Completion Proof
 
-SKS `0.9.14` makes Completion Proof a route-bound completion requirement for serious routes. Serious route finalization writes a valid proof through the central finalizer, and Stop/Honest/HProof-style gates block missing, failed, blocked, invalid, or secret-bearing proof artifacts.
+SKS makes Completion Proof a route-bound completion requirement for serious routes. Serious route finalization writes a valid proof through the central finalizer, and Stop/Honest/HProof-style gates block missing, failed, blocked, invalid, or secret-bearing proof artifacts.
 
-In `0.9.20`, route finalization also writes a Trust Kernel envelope:
+Route finalization also writes a Trust Kernel envelope:
 
 - `.sneakoscope/missions/<id>/route-completion-contract.json`
 - `.sneakoscope/missions/<id>/evidence-index.json`
@@ -21,24 +21,23 @@ Completion Proof includes links to the evidence router and trust report so proof
 - `.sneakoscope/missions/<id>/completion-proof.json`
 - `.sneakoscope/missions/<id>/completion-proof.md`
 
-In SKS 1.16.0, serious route proof uses native agent evidence for multi-session collaboration:
+The current `$Naruto` workflow binds official Codex subagent evidence through the route gate:
 
 ```json
 {
-  "schema": "sks.agent-proof-evidence.v1",
-  "backend": "codex-exec",
-  "real_parallel_claim": true,
-  "agent_count": 5,
-  "all_sessions_closed": true,
-  "ledger_hash_chain_ok": true,
-  "no_overlap_ok": true,
-  "consensus_ok": true,
-  "cleanup_report": "agent-cleanup.json",
-  "trust_report": "agent-trust-report.json"
+  "schema": "sks.completion-proof.v1",
+  "route": "$Naruto",
+  "evidence": {
+    "route_gate": {
+      "workflow": "official_codex_subagent",
+      "official_subagent_evidence": true,
+      "parent_summary_present": true
+    }
+  }
 }
 ```
 
-`evidence.agents` is the route collaboration proof surface for 1.16. Removed legacy multi-agent evidence fields do not satisfy completion proof.
+The supporting mission artifacts are `subagent-plan.json`, `subagent-events.jsonl`, `subagent-parent-summary.json`, `subagent-evidence.json`, and `naruto-gate.json`. Process counts, pane counts, or synthetic worker output do not satisfy the current collaboration proof contract.
 
 ## Status Values
 
@@ -46,13 +45,14 @@ Proof status must be one of:
 
 - `verified`
 - `verified_partial`
+- `mock_only`
 - `blocked`
 - `not_verified`
 - `failed`
 
 Mock fixture evidence can support selftest coverage, but it must not be promoted to `verified` real-run evidence.
 
-For SKS 1.0.8 UX-Review missions, Completion Proof includes `evidence.image_ux_review` with source screenshot count, generated gpt-image-2 callout image count, callout extraction schema status, open/fixed P0/P1 counts, recapture/re-review status, Image Voxel relation count, and official capture evidence mode. Text-only UX reviews and mock generated callouts cannot produce a real `verified` claim.
+For UX-Review missions, Completion Proof includes `evidence.image_ux_review` with source screenshot count, generated gpt-image-2 callout image count, callout extraction schema status, open/fixed P0/P1 counts, recapture/re-review status, Image Voxel relation count, and official capture evidence mode. Text-only UX reviews and mock generated callouts cannot produce a real `verified` claim.
 
 ## Commands
 
@@ -66,7 +66,7 @@ sks proof route latest --json
 sks proof route <mission-id> --json
 sks proof finalize latest --json
 sks proof finalize <mission-id> --json
-sks proof finalize latest --route '$Team' --json
+sks proof finalize latest --route '$Naruto' --json
 sks proof finalize latest --strict --json
 sks proof export --md
 sks proof repair latest --json

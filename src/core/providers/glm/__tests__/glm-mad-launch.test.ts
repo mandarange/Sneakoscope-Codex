@@ -5,7 +5,7 @@ import {
   buildMadGlmLaunchProfileNoWrite
 } from '../glm-mad-launch.js';
 import { GLM_52_OPENROUTER_MODEL } from '../glm-52-settings.js';
-import { resolveMadNativeSwarmOptions } from '../../../commands/mad-sks-command.js';
+import { findUnsupportedMadArgumentErrors } from '../../../commands/mad-sks-command.js';
 
 test('GLM MAD launch profile targets OpenRouter GLM without codex-lb or OpenAI fallback', () => {
   const profile = buildMadGlmLaunchProfileNoWrite();
@@ -57,11 +57,15 @@ test('GLM MAD wrapper reads stored key at runtime without embedding raw OpenRout
   assert.doesNotMatch(script, /sk-or-/);
 });
 
-test('GLM MAD blocks explicitly requested native swarm to prevent GPT fallback panes', () => {
-  const swarm = resolveMadNativeSwarmOptions(['--glm', '--mad-native-swarm'], {}, {
-    glmLaunch: { provider: 'openrouter', model: GLM_52_OPENROUTER_MODEL }
-  });
-
-  assert.equal(swarm.enabled, false);
-  assert.equal(swarm.disabled_reason, 'glm_mad_native_swarm_disabled_to_block_gpt_fallback');
+test('GLM MAD rejects removed native-swarm launch arguments', () => {
+  assert.deepEqual(findUnsupportedMadArgumentErrors([
+    '--glm',
+    '--mad-native-swarm',
+    '--mad-swarm-backend=codex-sdk',
+    '--no-swarm'
+  ]), [
+    'unsupported_argument:--mad-native-swarm',
+    'unsupported_argument:--mad-swarm-backend',
+    'unsupported_argument:--no-swarm'
+  ]);
 });

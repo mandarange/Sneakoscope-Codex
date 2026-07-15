@@ -1,6 +1,6 @@
 # Fast Mode Default
 
-SKS 6.1.0 defaults agent runs to Fast mode. A user can explicitly pass `--no-fast` or `--service-tier standard` for one run, or use the project-local commands to toggle the default:
+SKS stores the project preference through the current Fast Mode commands:
 
 ```bash
 sks fast-mode on
@@ -9,17 +9,8 @@ sks fast-mode status
 sks fast-mode clear
 ```
 
-Codex App aliases:
-
-```text
-$Fast-On
-$Fast-Off
-$Fast-Mode
-```
-
-The toggle writes `.sneakoscope/state/fast-mode.json` in the active project. Per-run flags still take precedence over the saved preference.
-
-Default policy artifact:
+Codex App aliases are `$Fast-On`, `$Fast-Off`, and `$Fast-Mode`. The project
+preference is written to `.sneakoscope/state/fast-mode.json`.
 
 ```json
 {
@@ -30,30 +21,17 @@ Default policy artifact:
 }
 ```
 
-Propagation env:
+SKS normalizes its service-tier vocabulary to `fast` and `standard`. Codex
+Desktop may describe the equivalent choices as `priority` and `default`.
+Routes that support this preference record it in their current policy and
+propagation evidence.
 
-```text
-SKS_FAST_MODE=1
-SKS_SERVICE_TIER=fast
-SKS_CODEX_DESKTOP_SERVICE_TIER=priority
-SKS_REASONING_PROFILE_SUFFIX=fast
-```
+Naruto uses the fixed official model-routing policy described in
+[`docs/naruto.md`](naruto.md). Its public controls are the official thread
+budget, read-only mode, and JSON/status/proof surfaces; backend, scheduler,
+worker-model, and service-tier controls are not part of that public contract.
 
-SKS keeps its canonical service tiers as `fast` and `standard`. Codex Desktop
-may surface the same choice as `priority` and `default`; SKS normalizes
-`priority -> fast` and `default -> standard` at the command boundary so agent
-reports and CLI overrides stay consistent.
-
-The policy is attached to the roster, concurrency policy, backend report, native worker process reports, `fast-mode-propagation-proof.json`, and runtime truth matrix row `fast_mode_default`.
-
-Explicit one-run opt-out:
-
-```bash
-sks agent run "fixture" --no-fast
-sks agent run "fixture" --service-tier standard
-```
-
-The historical `agent:fast-mode-policy` release-gate id is retired. Naruto's single `naruto:canonical-stop-gate` now validates the official Sol/Luna Max model policy and `SubagentStart`/`SubagentStop` evidence instead of repeating the same custom-worker compatibility check. Execute ordinary change-aware verification through the bounded release checks:
+Use the bounded current release checks after changing Fast Mode behavior:
 
 ```bash
 npm run release:check:affected

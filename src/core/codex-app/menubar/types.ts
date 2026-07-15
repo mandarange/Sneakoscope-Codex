@@ -12,6 +12,24 @@ export interface SksMenuBarBuildStamp {
   launch_agent_sha256: string;
   swiftc_version: string;
   codesign_identifier: string;
+  legacy_v1?: {
+    original_schema: 'sks.sks-menubar-build-stamp.v1';
+    original_stamp_sha256: string;
+    source_file: 'SKSMenuBar.swift';
+    source_file_sha256: string;
+    executable_sha256: string;
+  };
+}
+
+export interface SksMenuBarLegacyBuildStampV1 {
+  schema: 'sks.sks-menubar-build-stamp.v1';
+  package_version: string;
+  source_sha256: string;
+  action_script_sha256: string;
+  info_plist_sha256: string;
+  launch_agent_sha256: string;
+  swiftc_version: string;
+  codesign_identifier: string;
 }
 
 export interface SksMenuBarTargetCheck {
@@ -48,11 +66,86 @@ export interface SksMenuBarInstallOptions {
   quiet?: boolean;
 }
 
+export interface SksMenuBarArtifactVerification {
+  checked: boolean;
+  ok: boolean;
+  app_exists: boolean;
+  executable_exists: boolean;
+  executable_hash_ok: boolean;
+  build_stamp_exists: boolean;
+  action_script_exists: boolean;
+  action_script_executable: boolean;
+  action_script_hash_ok: boolean;
+  info_plist_hash_ok: boolean;
+  launch_agent_hash_ok: boolean;
+  signature: SksMenuBarStatusResult['signature'];
+  resources: SksMenuBarStatusResult['resources'];
+  package_version: string | null;
+  legacy_v1_normalized: boolean;
+  blockers: string[];
+}
+
+export interface SksMenuBarRollbackOptions {
+  home?: string;
+  root?: string;
+  env?: NodeJS.ProcessEnv;
+  launch?: boolean;
+}
+
+export type SksMenuBarGenerationPurpose = 'install' | 'rollback';
+export type SksMenuBarGenerationArtifact = 'app' | 'build_stamp' | 'action_script' | 'launch_agent';
+
+export interface SksMenuBarGenerationPairOutcome {
+  kind: SksMenuBarGenerationArtifact;
+  step: string;
+  active: string;
+  backup: string;
+  staged: string | null;
+  temporary: string;
+  displaced: string | null;
+  active_exists: boolean;
+  backup_exists: boolean;
+  staged_exists: boolean;
+  temporary_exists: boolean;
+  displaced_exists: boolean;
+}
+
+export interface SksMenuBarGenerationTransactionOutcome {
+  schema: 'sks.menubar-generation-transaction-outcome.v1';
+  ok: boolean;
+  purpose: SksMenuBarGenerationPurpose;
+  status: 'none' | 'applied' | 'committed' | 'rolled_back' | 'completed_commit' | 'terminal_uncertain';
+  journal_path: string;
+  failure_point: string | null;
+  failure_pair: SksMenuBarGenerationArtifact | null;
+  recovery_failure_point: string | null;
+  recovery_failure_pair: SksMenuBarGenerationArtifact | null;
+  error: string | null;
+  pairs: SksMenuBarGenerationPairOutcome[];
+}
+
+export interface SksMenuBarRollbackResult {
+  schema: 'sks.menubar-rollback.v1';
+  ok: boolean;
+  platform: NodeJS.Platform;
+  status: 'rolled_back' | 'rolled_back_launch_skipped' | 'failed' | 'terminal_uncertain' | 'unsupported_platform';
+  paths: ReturnType<typeof sksMenuBarPaths>;
+  previous_version: string | null;
+  replaced_version: string | null;
+  verification_before: SksMenuBarArtifactVerification | null;
+  verification_after: SksMenuBarArtifactVerification | null;
+  launch: SksMenuBarInstallResult['launch'];
+  actions: string[];
+  warnings: string[];
+  blockers: string[];
+  transaction?: SksMenuBarGenerationTransactionOutcome | null;
+}
+
 export interface SksMenuBarInstallResult {
   schema: 'sks.codex-app-sks-menubar.v1';
   ok: boolean;
   apply: boolean;
-  status: 'planned' | 'installed' | 'installed_launch_skipped' | 'installed_open_fallback' | 'unsupported_platform' | 'blocked';
+  status: 'planned' | 'installed' | 'installed_launch_skipped' | 'installed_open_fallback' | 'unsupported_platform' | 'blocked' | 'terminal_uncertain';
   platform: NodeJS.Platform;
   app_path: string | null;
   executable_path: string | null;
@@ -69,8 +162,12 @@ export interface SksMenuBarInstallResult {
     method: 'launchctl' | 'open-fallback' | 'skipped' | 'none';
     ok: boolean;
     bootstrap_code?: number | null;
+    bootstrap_timed_out?: boolean;
     kickstart_code?: number | null;
+    kickstart_timed_out?: boolean;
     print_code?: number | null;
+    verified_running_after_timeout?: boolean;
+    terminal_uncertain?: boolean;
     open_code?: number | null;
     error?: string | null;
   };
@@ -82,6 +179,8 @@ export interface SksMenuBarInstallResult {
   blockers: string[];
   warnings: string[];
   report_write_failed?: boolean;
+  rollback?: SksMenuBarRollbackResult | null;
+  transaction?: SksMenuBarGenerationTransactionOutcome | null;
 }
 
 export interface SksMenuBarStatusResult {
@@ -131,6 +230,7 @@ export interface SksMenuBarUninstallResult {
 
 export interface NativeSourceInput {
   actionScriptPath: string;
+  projectRootPath?: string;
   buildStampPath: string;
   configPath: string;
   lastActionLogPath: string;

@@ -53,7 +53,7 @@ export function validatePersonaUniqueness(personas: AgentPersona[]) {
   const stableIds = personas.map((p) => p.stable_id)
   const duplicates = ids.filter((id, index) => ids.indexOf(id) !== index)
   const duplicateStableIds = stableIds.filter((id, index) => stableIds.indexOf(id) !== index)
-  const recursive = personas.filter((p) => /\$Team|\$Research|\$AutoResearch|\$QA-LOOP|\$Goal|sks\s+(?:team|agent|research|autoresearch|qa-loop|goal)/i.test(p.prompt))
+  const recursive = personas.filter((p) => /\$Naruto|\$Work|\$Research|\$AutoResearch|\$QA-LOOP|\$Goal|sks\s+(?:naruto|agent|research|autoresearch|qa-loop|goal)/i.test(p.prompt))
   const incomplete = personas.filter((p) => !p.denied_tools || !p.output_schema_reminder || !p.recursion_ban || !p.docs_example)
   return {
     ok: duplicates.length === 0 && duplicateStableIds.length === 0 && recursive.length === 0 && incomplete.length === 0,

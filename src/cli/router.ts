@@ -123,7 +123,6 @@ async function dispatchInner(argv: readonly string[]): Promise<unknown> {
         || entry.readonly === true
         || safeReadOnlySubcommand(command, rest)
         || safeActiveRouteVisualQuery(command, rest)
-        || safeActiveRouteRecoverySubcommand(command, rest)
     });
     if (!migrationGate.ok) {
       console.error('SKS project migration blocked.');
@@ -165,7 +164,6 @@ async function ensureActiveRouteCommandGate(command: CommandNameLite, args: read
   if (entry.mutatesRouteState !== true) return { ok: true, status: 'allowed' };
   if (safeReadOnlySubcommand(command, args)) return { ok: true, status: 'allowed_status_subcommand' };
   if (safeActiveRouteVisualQuery(command, args)) return { ok: true, status: 'allowed_visual_query' };
-  if (safeActiveRouteRecoverySubcommand(command, args)) return { ok: true, status: 'allowed_active_route_recovery' };
   const [{ projectRoot, readJson }, { stateFile }] = await Promise.all([
     import('../core/fsx.js'),
     import('../core/mission.js')
@@ -216,17 +214,11 @@ function printHandledCommandBlock(result: any) {
 
 export function safeReadOnlySubcommand(command: CommandNameLite, args: readonly string[]) {
   const sub = String(args[0] || '').toLowerCase();
-  if (command === 'naruto' && ['status', 'subagents', 'workers', 'proof'].includes(sub)) {
+  if (command === 'naruto' && ['status', 'subagents', 'proof'].includes(sub)) {
     return !args.some((arg) => ['--fix', '--yes', '-y', '--write', '--apply', '--execute', '--force', '--real'].includes(String(arg)));
   }
   if (!['status', 'show', 'list', 'observe', 'watch', 'doctor', 'help'].includes(sub)) return false;
   return !args.some((arg) => ['--fix', '--yes', '-y', '--write', '--apply', '--execute', '--force', '--real'].includes(String(arg)));
-}
-
-function safeActiveRouteRecoverySubcommand(command: CommandNameLite, args: readonly string[]) {
-  if (command !== 'agent') return false;
-  const sub = String(args.find((arg) => !String(arg).startsWith('-')) || '').toLowerCase();
-  return ['close', 'cleanup', 'rollback-patches'].includes(sub);
 }
 
 function safeActiveRouteContinuation(command: CommandNameLite, args: readonly string[], state: any = {}) {
@@ -257,5 +249,5 @@ function activeRouteStateBlocksCommand(state: any = {}) {
   const mode = String(state.mode || '').toUpperCase();
   if (!mode || ['WIKI', 'STATUS', 'HELP'].includes(mode)) return false;
   if (/(?:DONE|COMPLETE|CLOSED|BLOCKED|FAILED)$/i.test(String(state.phase || ''))) return false;
-  return Boolean(state.route || state.route_command || ['NARUTO', 'AGENT', 'QALOOP', 'RESEARCH', 'LOOP', 'MADSKS', 'MADDB', 'GOAL'].includes(mode));
+  return Boolean(state.route || state.route_command || ['NARUTO', 'QALOOP', 'RESEARCH', 'LOOP', 'MADSKS', 'GOAL'].includes(mode));
 }

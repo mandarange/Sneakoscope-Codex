@@ -93,7 +93,7 @@ export function triwikiContextTracking(commandPrefix: any = 'sks') {
       'before_each_handoff_validate_context_pack',
       'before_final_answer_recheck_relevant_wiki_claims_against_sources'
     ],
-    required_for: ['every_work_stage', 'long_running_routes', 'team_handoffs', 'context_pressure', 'cross_turn_continuity']
+    required_for: ['every_work_stage', 'long_running_routes', 'subagent_handoffs', 'context_pressure', 'cross_turn_continuity']
   };
 }
 
@@ -152,7 +152,7 @@ export function outcomeRubricPolicyText() {
 }
 
 export function speedLanePolicyText() {
-  return 'Proof Field speed lane policy: after the intended write scope is known, run or mentally apply `sks proof-field scan --intent "<goal>" --changed <files>`. Fast lanes keep the parent-owned minimal patch, listed verification, TriWiki validate, and Honest Mode; DB, security, visual-forensic, unknown surface, broad changes, failed verification, or unsupported claims fail closed to the normal Team/Honest path.';
+  return 'Proof Field speed lane policy: after the intended write scope is known, run or mentally apply `sks proof-field scan --intent "<goal>" --changed <files>`. Fast lanes keep the parent-owned minimal patch, listed verification, TriWiki validate, and Honest Mode; DB, security, visual-forensic, unknown surface, broad changes, failed verification, or unsupported claims fail closed to the normal Naruto/Honest path.';
 }
 
 export function hasFromChatImgSignal(prompt: any = '') {
@@ -285,42 +285,21 @@ export const ROUTES = [
     examples: ['$with-local-llm-on', '$with-local-llm-off', 'sks with-local-llm status --json']
   },
   {
-    id: 'Team',
-    command: '$Team',
-    mode: 'TEAM',
-    route: 'deprecated alias to Naruto',
-    description: 'Deprecated compatibility alias. New substantial work is routed to $Naruto, the Codex official subagent workflow SSOT.',
-    requiredSkills: ['team', 'pipeline-runner', 'context7-docs', 'prompt-pipeline', REFLECTION_SKILL_NAME, 'honest-mode'],
-    dollarAliases: ['$From-Chat-IMG'],
-    appSkillAliases: ['from-chat-img'],
-    deprecated: true,
-    hidden: true,
-    aliasTo: '$Naruto',
-    deprecationMessage: '$Team is deprecated and redirects new execution missions to $Naruto. Only read-only Team log/tail/watch/lane/status commands remain for old missions.',
-    lifecycle: ['deprecated_alias_redirect', 'naruto_gate', 'honest_mode'],
-    context7Policy: 'optional',
-    reasoningPolicy: 'high',
-    stopGate: 'naruto-gate.json',
-    coverage_required: true,
-    cliEntrypoint: 'sks team "task" | sks team log|tail|watch|lane|status',
-    examples: ['$Team executor:5 agree on the best plan and implement it', '$From-Chat-IMG 채팅+첨부 이미지 작업 지시서']
-  },
-  {
     id: 'Naruto',
     command: '$Naruto',
     mode: 'NARUTO',
     route: 'Codex official subagent workflow',
     description: '$Naruto prepares a lightweight Codex official subagent workflow. The Sol Max parent owns decomposition, delegates only defensible direct-child slices, reuses bounded query-aware TriWiki attention anchors, waits for every requested thread, integrates the results, and reports scoped verification. Automatic fan-out is two for non-trivial work and at most three for critical multi-domain risk; explicit --agents remains authoritative.',
     requiredSkills: ['naruto', 'pipeline-runner', 'prompt-pipeline', 'honest-mode'],
-    dollarAliases: ['$ShadowClone', '$Kagebunshin', '$Work', '$Swarm'],
-    appSkillAliases: ['shadow-clone', 'kage-bunshin', 'work', 'swarm'],
+    dollarAliases: ['$Work'],
+    appSkillAliases: ['work'],
     lifecycle: ['task_profile', 'subagent_plan', 'official_delegation_context', 'subagent_events', 'parent_integration', 'scoped_verification', 'honest_mode'],
     context7Policy: 'optional',
     reasoningPolicy: 'high',
     stopGate: 'naruto-gate.json',
     coverage_required: true,
     cliEntrypoint: 'sks naruto run "task" [--agents N] [--max-threads N] | sks naruto status|subagents|proof',
-    examples: ['$Naruto run review twelve independent packages with --agents 12', '$Work', '$Swarm "fix all lint errors"']
+    examples: ['$Naruto run review twelve independent packages with --agents 12', '$Work']
   },
   {
     id: 'ReleaseReview',
@@ -460,7 +439,7 @@ export const ROUTES = [
     command: '$Super-Search',
     mode: 'SUPER_SEARCH',
     route: 'provider-independent source intelligence',
-    description: 'Run Super-Search source acquisition, source normalization, claim/proof ledgers, and provider-independent citation evidence without requiring xAI/Grok.',
+    description: 'Run Super-Search source acquisition, source normalization, claim/proof ledgers, and provider-independent citation evidence without requiring provider-specific credentials.',
     requiredSkills: ['super-search', 'pipeline-runner', 'context7-docs', 'honest-mode'],
     appSkillAliases: ['super-search'],
     lifecycle: ['source_intent', 'query_variants', 'provider_plan', 'source_ledgers', 'claim_ledgers', 'super_search_gate', 'honest_mode'],
@@ -509,36 +488,17 @@ export const ROUTES = [
     context7Policy: 'required',
     reasoningPolicy: 'high',
     stopGate: 'db-review.json',
-    cliEntrypoint: 'Codex App prompt route only; the legacy `sks db` CLI is removed',
+    cliEntrypoint: 'Codex App prompt route only',
     codexAppOnly: true,
-    codexAppOnlyReason: '$DB remains a route-level safety policy. The legacy `sks db` CLI is removed from public dispatch and returns unknown_command.',
+    codexAppOnlyReason: '$DB is a route-level safety policy and has no standalone CLI command.',
     examples: ['$DB check this migration safely']
-  },
-  {
-    id: 'MadDB',
-    command: '$MAD-DB',
-    mode: 'MADDB',
-    route: 'deprecated alias to MAD-SKS SQL-plane executor',
-    description: 'Deprecated compatibility alias. $MAD-DB is merged into $MAD-SKS; SQL-plane execution now runs as the MAD-SKS sql-plane executor with the same read-back and control-plane safeguards.',
-    deprecated: true,
-    hidden: true,
-    aliasTo: '$MAD-SKS',
-    deprecationMessage: '$MAD-DB is merged into $MAD-SKS. SQL-plane execution now runs as the MAD-SKS sql-plane executor with the same read-back and control-plane safeguards.',
-    requiredSkills: ['mad-sks', 'db-safety-guard', 'pipeline-runner', 'context7-docs', REFLECTION_SKILL_NAME, 'honest-mode'],
-    appSkillAliases: ['mad-db'],
-    lifecycle: ['deprecated_alias_redirect', 'mad_sks_gate', 'honest_mode'],
-    context7Policy: 'required',
-    reasoningPolicy: 'xhigh',
-    stopGate: 'mad-sks-gate.json',
-    cliEntrypoint: 'sks mad-db run|exec|apply-migration|status|close|revoke|doctor (deprecated; redirects to sks mad-sks sql|apply-migration)',
-    examples: ['$MAD-DB public.users legacy_code 컬럼 삭제', '$MAD-DB truncate public.staging_events']
   },
   {
     id: 'MadSKS',
     command: '$MAD-SKS',
     mode: 'MADSKS',
     route: 'explicit scoped permission-widening modifier plus SQL-plane execution',
-    description: 'Explicit high-risk authorization modifier that can be combined with other $ commands to temporarily open approved target-project scopes such as files, shell, package installs, services, network, Computer Use/browser workflows, generated assets, file permissions, migrations, Supabase MCP DB writes, direct execute SQL, schema cleanup, and normal targeted DB writes for the active invocation. It also includes the merged MadDB SQL-plane executor: CREATE, ALTER, table/schema DROP, column add/drop/rename, INSERT, UPDATE, DELETE including all-row mutations, TRUNCATE, execute_sql, and apply_migration are authorized only for the bound Supabase project, must keep Supabase project/account/billing/credential control-plane actions denied, and must finish with tool-result plus read-back proof and read-only restoration.',
+    description: 'Explicit high-risk authorization modifier that can be combined with other $ commands to temporarily open approved target-project scopes such as files, shell, package installs, services, network, Computer Use/browser workflows, generated assets, file permissions, migrations, Supabase MCP DB writes, direct execute SQL, schema cleanup, and normal targeted DB writes for the active invocation. Its SQL-plane executor authorizes CREATE, ALTER, table/schema DROP, column add/drop/rename, INSERT, UPDATE, DELETE including all-row mutations, TRUNCATE, execute_sql, and apply_migration only for the bound Supabase project, keeps Supabase project/account/billing/credential control-plane actions denied, and requires tool-result plus read-back proof and final read-only restoration.',
     requiredSkills: ['mad-sks', 'db-safety-guard', 'pipeline-runner', 'context7-docs', REFLECTION_SKILL_NAME, 'honest-mode'],
     appSkillAliases: ['mad-sks'],
     lifecycle: ['explicit_invocation', 'auto_sealed_permission_scope', 'single_mission_capability_v2', 'ephemeral_write_profile', 'tool_inventory', 'scoped_permission_override', 'catastrophic_guard', 'execute_sql_or_apply_migration', 'read_back_verification', 'close_and_read_only_restore', 'permission_deactivation', 'post_route_reflection', 'honest_mode'],
@@ -546,7 +506,7 @@ export const ROUTES = [
     reasoningPolicy: 'xhigh',
     stopGate: 'mad-sks-gate.json',
     cliEntrypoint: 'sks mad-sks plan|run|apply|sql|apply-migration|status|close|rollback-apply',
-    examples: ['$MAD-SKS $Team target project maintenance with package/service/file and DB scopes', '$DB Supabase 점검 $MAD-SKS']
+    examples: ['$MAD-SKS $Naruto target project maintenance with package/service/file and DB scopes', '$DB Supabase 점검 $MAD-SKS']
   },
   {
     id: 'GX',
@@ -626,16 +586,15 @@ for (const route of ROUTES as any[]) {
   }
 }
 
-ROUTE_BY_DOLLAR_COMMAND.set('team', ROUTE_BY_ID.get('naruto'));
 ROUTE_BY_DOLLAR_COMMAND.set('from-chat-img', ROUTE_BY_ID.get('naruto'));
 ROUTE_BY_DOLLAR_COMMAND.set('work', ROUTE_BY_ID.get('naruto'));
-ROUTE_BY_DOLLAR_COMMAND.set('swarm', ROUTE_BY_ID.get('naruto'));
 ROUTE_BY_DOLLAR_COMMAND.set('plan', ROUTE_BY_ID.get('planner'));
 
 export const COMMAND_CATALOG = [
   { name: 'help', usage: 'sks help [topic]', description: 'Show CLI help or focused help for a topic.' },
   { name: 'version', usage: 'sks version | sks --version', description: 'Print the installed Sneakoscope Codex version.' },
-  { name: 'update-check', usage: 'sks update-check [--json]', description: 'Check npm for the latest Sneakoscope Codex version.' },
+  { name: 'update-check', usage: 'sks update-check [--json]', description: 'Refresh the shared update-status.v3 snapshot.' },
+  { name: 'mcp', usage: 'sks mcp config list|get|add|edit|duplicate|enable|disable|remove|test|login|logout|backups|restore [--scope global|project|effective] [--stdin-json] [--json]', description: 'Manage global/project MCP configuration through the shared guarded MCP Config Domain v2.' },
   { name: 'wizard', usage: 'sks wizard', description: 'Open an interactive setup UI for install scope, setup, doctor, and verification.' },
   { name: 'commands', usage: 'sks commands [--json]', description: 'List every user-facing command with a short description.' },
   { name: 'check', usage: 'sks check --tier instant|affected|confidence|release|real-check [--sla 5m] [--changed-since auto] [--json]', description: 'Run build-once proof-bank checks: affected/confidence use incremental build and cached proof reuse; release keeps full clean proof for publish readiness.' },
@@ -645,14 +604,14 @@ export const COMMAND_CATALOG = [
   { name: 'daemon', usage: 'sks daemon status|warm|stop [--json]', description: 'Inspect or warm the local SKS daemon cache state for build/proof reuse.' },
   { name: 'run', usage: 'sks run "task" [--visual|--research|--db] [--json]', description: 'Classify a plain-language task, materialize a mission, and route it through the SKS trust kernel.' },
   { name: 'plan', usage: 'sks plan "task" [--json]', description: 'Write a planning-only artifact under .sneakoscope/plans without editing code.' },
-  { name: 'status', usage: 'sks status [--json]', description: 'Show the active mission, route, phase, proof, trust, subagent or legacy-agent evidence, image voxel, DB safety, and next action.' },
+  { name: 'status', usage: 'sks status [--json]', description: 'Show the active mission, route, phase, proof, trust, official-subagent evidence, image voxel, DB safety, and next action.' },
   { name: 'review', usage: 'sks review [--staged|--diff <ref>] [--fix] [--json]', description: 'Review a diff with machine-evidence findings sorted above LLM review notes.' },
   { name: 'ui', usage: 'sks ui [--port 4477] [--mission latest] [--once] [--json]', description: 'Open the localhost SKS dashboard with live agent-thread slots, events, and gate status.' },
   { name: 'usage', usage: `sks usage [${USAGE_TOPICS}]`, description: 'Print copy-ready workflows for common tasks.' },
   { name: 'quickstart', usage: 'sks quickstart', description: 'Show the shortest safe setup and verification flow.' },
   { name: 'bootstrap', usage: 'sks bootstrap [--install-scope global|project] [--local-only] [--json]', description: 'Initialize the current project, install SKS Codex App files/skills, check Context7/Codex App/Zellij, and print ready true/false.' },
   { name: 'root', usage: 'sks root [--json]', description: 'Show whether SKS is using a project root or the per-user global SKS runtime root.' },
-  { name: 'update', usage: 'sks update [check|now] [--version <version>] [--json] [--dry-run]', description: 'Check npm for the latest SKS release and update the global package by default; use `check` for status-only.' },
+  { name: 'update', usage: 'sks update status|check|review|now|rollback [--refresh] [--version <version>] [--json] [--dry-run]', description: 'Inspect update-status.v3, review the exact staged operation, update the global package, or run guarded rollback.' },
   { name: 'uninstall', usage: 'sks uninstall [--dry-run] [--yes] [--keep-config] [--keep-data] [--purge-projects] [--json]', description: 'Remove SKS global skills, hooks, menu bar, state, temp files, and optional project residue while preserving user-owned content by default.' },
   { name: 'deps', usage: 'sks deps check [--json] [--yes]', description: 'Check Node/npm, Codex CLI, and Zellij readiness; pass --yes to repair missing Codex CLI/Zellij tooling when supported.' },
   { name: 'codex', usage: 'sks codex compatibility|version|update-status [--refresh]|update|doctor|schema|0.144 [--json]', description: 'Check Codex CLI compatibility/version/update status, run the official `codex update`, and inspect current manifest, capability, and hook-schema evidence.' },
@@ -660,8 +619,9 @@ export const COMMAND_CATALOG = [
   { name: 'codex-native', usage: 'sks codex-native status|feature-broker|invocation-plan|init-deep [--json]', description: 'Inspect Codex Native feature broker readiness, invocation routing, pattern evidence, and managed memory setup.' },
   { name: 'hooks', usage: 'sks hooks explain|status|trust-report|replay|codex-validate|warning-check ... [--json]', description: 'Explain Codex hook events, validate vendored latest 10-event output schemas, replay fixtures, and enforce warning-zero SKS hook policies under the 0.134 compatibility matrix.' },
   { name: 'codex-lb', usage: 'sks codex-lb status|health|metrics|doctor|circuit|repair|setup ...', description: 'Configure, health-check, repair, and record circuit evidence for codex-lb provider auth without confusing ChatGPT OAuth and proxy keys.' },
+  { name: 'remote', usage: 'sks remote readiness|machines|worker ... [--json]', description: 'Inspect official Codex Remote readiness and the allowlisted proof-aware SSH stdio worker surface.' },
+  { name: 'telegram', usage: 'sks telegram status|config|hub ... [--json]', description: 'Inspect and run the single-owner private Telegram Hub without exposing hidden reasoning or raw credentials.' },
   { name: 'zellij', usage: 'sks zellij status|repair [--json] | sks --mad', description: 'Inspect Zellij runtime status, explain repair (no auto-install), and open the SKS Zellij runtime used by MAD. Zellij panes are not official Naruto subagent evidence.' },
-  { name: 'tmux', usage: 'removed-runtime migration notice (replacement: zellij)', description: 'Show the removed-runtime migration notice and point operators to Zellij.' },
   { name: 'mad-sks', usage: 'sks mad-sks plan|run|apply|sql|apply-migration|status|close|rollback-apply ... | sks --mad [--high]', description: 'Open or inspect MAD-SKS scoped permission workflows, merged SQL-plane execution, and the Zellij permission launcher.' },
   { name: 'auto-review', usage: 'sks auto-review status|enable|start [--high] | sks --Auto-review --high', description: 'Enable Codex automatic approval review and launch SKS Zellij with the auto-review profile.' },
   { name: 'dollar-commands', usage: 'sks dollar-commands [--json]', description: 'List Codex App $ commands such as $DFix and $Naruto.' },
@@ -676,7 +636,6 @@ export const COMMAND_CATALOG = [
   { name: 'computer-use', usage: 'sks computer-use import|status|smoke|require ... [--json]', description: 'Record native Mac/non-web Computer Use visual evidence while keeping web verification on the Chrome Extension path.' },
   { name: 'context7', usage: 'sks context7 check|setup|tools|resolve|docs|evidence ...', description: 'Check, configure, and call the local Context7 MCP requirement.' },
   { name: 'super-search', usage: 'sks super-search doctor|run|x|fetch|status|inspect|sources|claims|cache|bench', description: 'Run Super-Search provider-independent source intelligence.' },
-  { name: 'xai', usage: 'sks xai check|status|docs', description: 'Deprecated compatibility notice; use sks super-search.' },
   { name: 'recallpulse', usage: 'sks recallpulse run|status|eval|governance|checklist <mission-id|latest>', description: 'Run report-only RecallPulse active recall, durable status, proof capsule, evidence envelope, and governance checks.' },
   { name: 'pipeline', usage: 'sks pipeline status|resume|plan|answer ...', description: 'Inspect the active skill-first route, materialized execution plan, ambiguity gates, and completion gates.' },
   { name: 'guard', usage: 'sks guard check [--json]', description: 'Check SKS harness self-protection lock, fingerprints, and source-repo exception state.' },
@@ -707,13 +666,11 @@ export const COMMAND_CATALOG = [
   { name: 'skill-dream', usage: 'sks skill-dream status|run|record [--json]', description: 'Track generated-skill usage in lightweight JSON and periodically report keep, merge, prune, and improvement candidates without deleting skills automatically.' },
   { name: 'code-structure', usage: 'sks code-structure scan [--json]', description: 'Scan handwritten source files for 1000/2000/3000-line structure gates and split-review exceptions.' },
   { name: 'rust', usage: 'sks rust status|smoke [--json] [--require-native]', description: 'Inspect optional Rust accelerator availability and verify JS fallback parity for image hash, voxel validation, and secret scanning.' },
-  { name: 'validate-artifacts', usage: 'sks validate-artifacts [mission-id|latest] [--json]', description: 'Validate schema-backed mission artifacts for work orders, effort decisions, visual maps, dogfood reports, skills, mistake memory, Team dashboard state, and Honest Mode.' },
+  { name: 'validate-artifacts', usage: 'sks validate-artifacts [mission-id|latest] [--json]', description: 'Validate schema-backed mission artifacts for work orders, official subagent evidence, visual maps, dogfood reports, skills, mistake memory, and Honest Mode.' },
   { name: 'wiki', usage: 'sks wiki coords|pack|refresh|publish|rebuild-index|validate|validate-shared|wrongness ...', description: 'Build, refresh, publish shared shards, rebuild ignored indexes, validate, and attach wrongness-memory context to RGBA/trig LLM Wiki packs with attention.use_first and attention.hydrate_first for compact recall plus source hydration.' },
   { name: 'memory', usage: 'sks memory build [--json] | sks memory gc [--dry-run]', description: 'Project TriWiki context-pack memory into managed AGENTS.md blocks or run bounded memory cleanup.' },
   { name: 'hproof', usage: 'sks hproof check [mission-id|latest]', description: 'Evaluate the H-Proof done gate for a mission.' },
-  { name: 'agent', usage: 'sks agent run|status|close|cleanup <mission-id|latest> [--agents N] [--work-items N] [--target-active-slots N] [--mock] [--apply|--dry-run] [--drain] [--stale-ms N] [--json] | sks agent rollback-patches [mission-id|latest] [--patch-entry-id id] [--dry-run|--apply] [--json]', description: 'Run, inspect, close, clean, or roll back Codex subagent missions with an explicit requested-agent/thread budget, disjoint work ownership, official event evidence, and parent-owned integration.' },
   { name: 'naruto', usage: 'sks naruto run \"task\" [--agents N] [--max-threads N] [--json] | sks naruto status|subagents|proof [latest|M-...] [--json]', description: 'Run or inspect the Codex official subagent workflow with a Sol Max parent and fixed Luna Max mechanical, Sol High implementation, Sol Max judgment, and Terra Medium long-context/tool profiles, max_depth=1, and structured parent-thread completion evidence.' },
-  { name: 'team', usage: 'sks team \"task\" | sks team log|tail|watch|lane|status ...', description: 'Deprecated compatibility command: new tasks redirect to Naruto; only read-only observation subcommands remain for old Team missions.' },
   { name: 'reasoning', usage: 'sks reasoning ["prompt"] [--json]', description: 'Show SKS temporary reasoning-effort routing: medium for simple tasks, high for logic, xhigh for research.' },
   { name: 'gx', usage: 'sks gx init|render|validate|drift|snapshot [name]', description: 'Create and verify deterministic SVG/HTML visual context cartridges.' },
   { name: 'profile', usage: 'sks profile show|set <model>', description: 'Inspect or set the current SKS model profile metadata.' },
@@ -854,12 +811,11 @@ export function routePrompt(prompt: any): any {
   const text = stripVisibleDecisionAnswerBlocks(prompt);
   const intentScores = scorePromptIntent(text);
   const taskProfile = classifyTaskProfile(text);
-  const explicitCommand = Boolean(dollarCommand(text)) || /^\$?(?:plan|swarm)\b/i.test(text);
+  const explicitCommand = Boolean(dollarCommand(text)) || /^\$?plan\b/i.test(text);
   const select = (route: any) => withTaskProfile(withPromptIntentScores(route, intentScores), taskProfile, explicitCommand);
   if (!explicitCommand && taskProfile === 'passthrough') return null;
   if (/^\$?plan\b/i.test(text)) return select(routeById('Planner'));
   if (/^\$work\b/i.test(text)) return select(routeById('Naruto'));
-  if (/^\$?swarm\b/i.test(text)) return select(routeById('Naruto'));
   const command = dollarCommand(text);
   if (command) {
     if (command === 'MAD-SKS') {
@@ -870,9 +826,8 @@ export function routePrompt(prompt: any): any {
       if (looksLikeCodeChangingWork(afterModifier) || looksLikeDirectWorkRequest(afterModifier)) return select(routeById('Naruto'));
       return select(routeById('MadSKS'));
     }
-    const route = routeByDollarCommand(command) || routeById('SKS');
-    if (route?.id === 'SKS' && looksLikeTeamDefaultWork(stripDollarCommand(text))) return select(routeById('Naruto'));
-    if (route?.id === 'Team') return select(routeById('Naruto'));
+    const route = routeByDollarCommand(command);
+    if (!route) return null;
     return select(route);
   }
   if (hasFromChatImgSignal(text)) return select(routeById('Naruto'));
@@ -901,7 +856,7 @@ export function routePrompt(prompt: any): any {
   if (/\b(research|hypothesis|falsify|novelty|frontier|조사|연구)\b/i.test(text)) return select(routeById('Research'));
   if (/(wiki\s+(refresh|pack|validate|prune)|triwiki\s+(refresh|pack|validate)|위키\s*(갱신|리프레시|정리|검증|패킹)|트라이위키|triwiki)/i.test(text) && !looksLikeDirectWorkRequest(text)) return select(routeById('Wiki'));
   if (/\b(GX|vgraph|visual context|render cartridge|wiki coordinate|rgba|trig|llm wiki)\b/i.test(text)) return select(routeById('GX'));
-  if (looksLikeTeamDefaultWork(text)) return select(routeById('Naruto'));
+  if (looksLikeNarutoDefaultWork(text)) return select(routeById('Naruto'));
   if (taskProfile === 'answer') return select(routeById('Answer'));
   return select(routeById('SKS'));
 }
@@ -999,7 +954,7 @@ export function looksLikeComputerUseFastLane(prompt: any = '') {
   return /\b(native|macos|desktop|os\s*settings|system\s*settings|visual|screen|screenshot|fast|lane|pipeline|app)\b|맥|맥OS|데스크톱|네이티브|시스템\s*설정|화면|시각|스크린|캡처|빠른|고속|파이프라인|작업|속도/i.test(text);
 }
 
-export function looksLikeTeamDefaultWork(prompt: any = '') {
+export function looksLikeNarutoDefaultWork(prompt: any = '') {
   const text = String(prompt || '').trim();
   if (!text) return false;
   if (looksLikeTinyDirectFix(text) || looksLikeAnswerOnlyRequest(text)) return false;
@@ -1113,7 +1068,6 @@ const NARUTO_GATE_SPECIALIZED_PARALLEL_ROUTE_IDS = new Set([
   'SuperSearch',
   'SEOGEOOptimizer',
   'DB',
-  'MadDB',
   'MadSKS',
   'GX'
 ]);
@@ -1135,10 +1089,10 @@ export function narutoDecisionForRoute(
   if (NARUTO_GATE_BYPASS_ROUTE_IDS.has(routeId)) {
     return narutoRouteDecision('none', routeId, profile, `lightweight_route_bypass:${routeId}`, true);
   }
-  if ((routeId === 'Team' || routeId === 'Naruto') && route.explicit_invocation !== false) {
+  if (routeId === 'Naruto' && route.explicit_invocation !== false) {
     return narutoRouteDecision('generic_naruto', routeId, profile, 'explicit_official_subagent_route', false);
   }
-  if (/(?:^|\s)--(?:agents|clones)(?:=|\s+)\d+\b/i.test(String(prompt || ''))) {
+  if (/(?:^|\s)--agents(?:=|\s+)\d+\b/i.test(String(prompt || ''))) {
     return narutoRouteDecision('generic_naruto', routeId, profile, 'explicit_subagent_count', false);
   }
   if (NARUTO_GATE_SPECIALIZED_PARALLEL_ROUTE_IDS.has(routeId)) {
@@ -1194,7 +1148,7 @@ export function simpleGitOnlyRouteId(prompt: any = '') {
 
 export function reflectionRequiredForRoute(route: any) {
   const id = String(route?.id || route?.mode || route?.route || route || '').replace(/^\$/, '');
-  return /^(team|naruto|shadowclone|shadow-clone|kagebunshin|kage-bunshin|qaloop|qa-loop|ppt|imageuxreview|image-ux-review|research|autoresearch|seo|geo|db|database|madsks|mad-sks|maddb|mad-db|gx)$/i.test(id);
+  return /^(naruto|qaloop|qa-loop|ppt|imageuxreview|image-ux-review|research|autoresearch|seo|geo|db|database|madsks|mad-sks|gx)$/i.test(id);
 }
 
 export function looksLikeCodeChangingWork(prompt: any = '') {
@@ -1237,8 +1191,8 @@ export function routeReasoning(route: any, prompt: any = '') {
   const text = String(prompt || '');
   const base = ALLOWED_REASONING_EFFORTS.has(route?.reasoningPolicy) ? route.reasoningPolicy : 'medium';
   if (hasFromChatImgSignal(text)) return reasoning('xhigh', 'from_chat_img_image_work_order_analysis');
-  if (/(?:^|\s)sks\s+--mad\b|(?:^|\s)--mad\b|\$MAD-SKS\b|\$MAD-DB\b|\bmad-sks\b|\bmadsks\b|\bmad-db\b|\bmaddb\b/i.test(text)) return reasoning('xhigh', 'mad_sks_or_mad_launch_default');
-  if (route?.id === 'Team' || route?.id === 'Naruto') return narutoRouteReasoning(text);
+  if (/(?:^|\s)sks\s+--mad\b|(?:^|\s)--mad\b|\$MAD-SKS\b|\bmad-sks\b|\bmadsks\b/i.test(text)) return reasoning('xhigh', 'mad_sks_or_mad_launch_default');
+  if (route?.id === 'Naruto') return narutoRouteReasoning(text);
   if (route?.id === 'Research' || route?.id === 'AutoResearch') return reasoning('xhigh', 'research_or_experiment_route');
   if (route?.id === 'SuperSearch') return reasoning('high', 'source_intelligence_route');
   if (route?.id === 'SEOGEOOptimizer') return reasoning('high', 'search_visibility_route');

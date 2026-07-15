@@ -61,7 +61,7 @@ export function buildAgentTaskGraph(input: {
   strategyRefs?: Record<string, unknown> | null
   microWins?: AgentTaskGraphMicroWin[]
 }): AgentTaskGraph {
-  const routeType = normalizeRouteType(input.routeType || '$Agent')
+  const routeType = normalizeRouteType(input.routeType || '$Naruto')
   const targetActiveSlots = Math.max(1, Math.min(4, Math.floor(Number(input.targetActiveSlots || 4))))
   const minimumWorkItems = Math.max(1, Math.floor(Number(input.minimumWorkItems || targetActiveSlots)))
   const desiredWorkItems = Math.max(minimumWorkItems, Math.floor(Number(input.desiredWorkItems || minimumWorkItems)))
@@ -180,7 +180,7 @@ export async function writeAgentTaskGraph(root: string, graph: AgentTaskGraph) {
 
 function routeTemplates(routeType: string) {
   const route = routeType.toLowerCase()
-  if (route.includes('team')) return [
+  if (route.includes('naruto') || route.includes('$work')) return [
     template('implementation', 'implementer', 'implementation task'),
     template('review', 'verifier', 'review task'),
     template('verification', 'verifier', 'verification task'),
@@ -242,7 +242,7 @@ function template(id: string, role: AgentRole | string, description: string) {
 }
 
 function normalizeRouteType(routeType: string) {
-  const value = String(routeType || '$Agent').trim()
+  const value = String(routeType || '$Naruto').trim()
   return value.startsWith('$') ? value : `$${value}`
 }
 

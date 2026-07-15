@@ -3,6 +3,20 @@ export type ArgsRun = (args: string[]) => Promise<unknown> | unknown;
 export type SubcommandRun = (subcommand: string, args: string[]) => Promise<unknown> | unknown;
 export type CommandArgsRun = (command: string, args: string[]) => Promise<unknown> | unknown;
 
+export type CommandRisk = 'R0' | 'R1' | 'R2' | 'R3';
+export type CommandLatency = 'fast' | 'normal' | 'long';
+export type CommandInputProfile =
+  | 'none'
+  | 'json-only'
+  | 'paths'
+  | 'pipeline-status'
+  | 'stats'
+  | 'stop-gate'
+  | 'proof'
+  | 'trust'
+  | 'gates'
+  | 'validate-artifacts';
+
 export interface CommandModule {
   run: CommandRun;
 }
@@ -20,7 +34,27 @@ export interface CommandEntry {
   mutatesRouteState?: boolean;
   ownsGates?: boolean;
   ownedGateFiles?: readonly string[];
+  risk: CommandRisk;
+  latency: CommandLatency;
+  supportsJson: boolean;
+  remoteAllowed: boolean;
+  telegramAllowed: boolean;
+  inputProfile: CommandInputProfile;
+  requiredCapabilities: readonly string[];
 }
+
+type CommandContractMetadata = Pick<CommandEntry,
+  'risk' | 'latency' | 'supportsJson' | 'remoteAllowed' | 'telegramAllowed' | 'inputProfile' | 'requiredCapabilities'>;
+
+const SAFE_COMMAND_CONTRACT: CommandContractMetadata = {
+  risk: 'R2',
+  latency: 'normal',
+  supportsJson: false,
+  remoteAllowed: false,
+  telegramAllowed: false,
+  inputProfile: 'none',
+  requiredCapabilities: []
+};
 
 type CommandCallable = (...args: unknown[]) => Promise<unknown> | unknown;
 
@@ -130,7 +164,7 @@ function entry(
   lazy: () => Promise<CommandModule>,
   contract: Partial<Omit<CommandEntry, 'maturity' | 'summary' | 'lazy' | 'packageRequiredFiles'>> = {}
 ): CommandEntry {
-  return { maturity, summary, packageRequiredFiles: [packageRequiredFile], lazy, ...contract };
+  return { maturity, summary, packageRequiredFiles: [packageRequiredFile], lazy, ...SAFE_COMMAND_CONTRACT, ...contract };
 }
 
 function skipMigrationGate(command: CommandEntry): CommandEntry {
@@ -138,7 +172,16 @@ function skipMigrationGate(command: CommandEntry): CommandEntry {
 }
 
 function readOnly(command: CommandEntry): CommandEntry {
-  return { ...command, readonly: true, diagnostic: true, allowedDuringActiveRoute: true, activeRoutePolicy: 'always', skipMigrationGate: true };
+  return {
+    ...command,
+    readonly: true,
+    diagnostic: true,
+    allowedDuringActiveRoute: true,
+    activeRoutePolicy: 'always',
+    skipMigrationGate: true,
+    risk: 'R0',
+    latency: 'fast'
+  };
 }
 
 function activeRouteDiagnostic(command: CommandEntry): CommandEntry {
@@ -155,7 +198,18 @@ const basicNoArgs = (exportName: string) => noArgsCommand(() => import(basicModu
 const gcArgs = (exportName: 'gcCommand' | 'statsCommand' | 'memoryCommand') =>
   argsCommand(() => import('../core/commands/gc-command.js'), exportName, 'dist/core/commands/gc-command.js');
 
-export const COMMANDS = {
+function applyCommandContractOverrides<const T extends Record<string, CommandEntry>>(
+  commands: T,
+  overrides: { readonly [K in keyof T]?: Partial<CommandContractMetadata> }
+): T {
+  for (const name of Object.keys(commands) as Array<keyof T>) {
+    const override = overrides[name];
+    if (override) Object.assign(commands[name], override);
+  }
+  return commands;
+}
+
+const COMMAND_DEFINITIONS = {
   help: readOnly(entry('stable', 'Show SKS help', 'dist/commands/help.js', directCommand(() => import('../commands/help.js'), 'dist/commands/help.js'))),
   version: readOnly(entry('stable', 'Show SKS version', 'dist/commands/version.js', directCommand(() => import('../commands/version.js'), 'dist/commands/version.js'))),
   commands: readOnly(entry('stable', 'List SKS commands', 'dist/core/commands/basic-cli.js', basicArgs('commandsCommand'))),
@@ -172,21 +226,22 @@ export const COMMANDS = {
     allowedDuringActiveRoute: true,
     activeRoutePolicy: 'always'
   }),
-  ui: readOnly(entry('stable', 'Open the localhost SKS swarm dashboard', 'dist/core/commands/ui-command.js', argsCommand(() => import('../core/commands/ui-command.js'), 'uiCommand', 'dist/core/commands/ui-command.js'))),
+  ui: readOnly(entry('stable', 'Open the localhost SKS agent dashboard', 'dist/core/commands/ui-command.js', argsCommand(() => import('../core/commands/ui-command.js'), 'uiCommand', 'dist/core/commands/ui-command.js'))),
   root: readOnly(entry('stable', 'Show active SKS root', 'dist/commands/root.js', directCommand(() => import('../commands/root.js'), 'dist/commands/root.js'))),
-  update: skipMigrationGate(entry('stable', 'Update the global SKS npm package', 'dist/core/commands/basic-cli.js', subcommand(() => import(basicModule), 'updateCommand', 'dist/core/commands/basic-cli.js', 'now'))),
+  update: skipMigrationGate(entry('stable', 'Inspect, review, apply, or roll back the global SKS update', 'dist/core/commands/basic-cli.js', subcommand(() => import(basicModule), 'updateCommand', 'dist/core/commands/basic-cli.js', 'now'))),
   uninstall: entry('stable', 'Uninstall SKS global skills, hooks, config, menu bar, and optional project residue', 'dist/core/commands/uninstall-command.js', argsCommand(() => import('../core/commands/uninstall-command.js'), 'uninstallCommand', 'dist/core/commands/uninstall-command.js'), {
     skipMigrationGate: true,
     readonly: false,
     allowedDuringActiveRoute: true,
     activeRoutePolicy: 'always'
   }),
-  'update-check': readOnly(entry('stable', 'Check npm package freshness', 'dist/core/commands/basic-cli.js', basicArgs('updateCheckCommand'))),
+  'update-check': readOnly(entry('stable', 'Show the shared SKS, Codex CLI, and Menu Bar update status', 'dist/core/commands/basic-cli.js', basicArgs('updateCheckCommand'))),
+  mcp: entry('beta', 'Manage scoped Codex MCP configuration', 'dist/core/commands/mcp-config-command.js', argsCommand(() => import('../core/commands/mcp-config-command.js'), 'mcpConfigCommand', 'dist/core/commands/mcp-config-command.js')),
   wizard: entry('stable', 'Open setup wizard help', 'dist/core/commands/basic-cli.js', basicNoArgs('quickstartCommand')),
   usage: readOnly(entry('stable', 'Show focused usage topic', 'dist/core/commands/basic-cli.js', basicArgs('usageCommand'))),
   quickstart: entry('stable', 'Show quickstart flow', 'dist/core/commands/basic-cli.js', basicNoArgs('quickstartCommand')),
   setup: skipMigrationGate(entry('stable', 'Initialize SKS state', 'dist/core/commands/basic-cli.js', basicArgs('setupCommand'))),
-  bootstrap: entry('stable', 'Initialize SKS project files', 'dist/core/commands/basic-cli.js', basicArgs('bootstrapCommand')),
+  bootstrap: skipMigrationGate(entry('stable', 'Initialize SKS project files', 'dist/core/commands/basic-cli.js', basicArgs('bootstrapCommand'))),
   init: entry('stable', 'Initialize local control surface', 'dist/core/commands/basic-cli.js', basicArgs('initCommand')),
   deps: entry('stable', 'Check local dependencies', 'dist/core/commands/basic-cli.js', subcommand(() => import(basicModule), 'depsCommand', 'dist/core/commands/basic-cli.js', 'check')),
   'fix-path': entry('stable', 'Repair hook command paths', 'dist/core/commands/basic-cli.js', basicArgs('fixPathCommand')),
@@ -200,25 +255,23 @@ export const COMMANDS = {
   'codex-native': entry('beta', 'Inspect Codex Native broker and routing readiness', 'dist/commands/codex-native.js', directCommand(() => import('../commands/codex-native.js'), 'dist/commands/codex-native.js')),
   'codex-lb': entry('beta', 'Inspect codex-lb status and circuit health', 'dist/commands/codex-lb.js', directCommand(() => import('../commands/codex-lb.js'), 'dist/commands/codex-lb.js')),
   menubar: activeRouteDiagnostic(entry('beta', 'Inspect/install/restart/uninstall SKS menu bar', 'dist/core/commands/menubar-command.js', subcommand(() => import('../core/commands/menubar-command.js'), 'menubarCommand', 'dist/core/commands/menubar-command.js', 'status'))),
+  remote: entry('beta', 'Inspect official Remote readiness and run the proof-aware SSH stdio worker', 'dist/core/commands/remote-command.js', argsCommand(() => import('../core/commands/remote-command.js'), 'remoteCommand', 'dist/core/commands/remote-command.js')),
+  telegram: entry('beta', 'Inspect and run the private proof-aware Telegram Hub', 'dist/core/commands/telegram-command.js', argsCommand(() => import('../core/commands/telegram-command.js'), 'telegramCommand', 'dist/core/commands/telegram-command.js')),
   hooks: entry('beta', 'Explain and inspect Codex hooks', 'dist/commands/hooks.js', directCommand(() => import('../commands/hooks.js'), 'dist/commands/hooks.js')),
-  tmux: entry('beta', 'Show removed-runtime migration notice', 'dist/commands/tmux.js', directCommand(() => import('../commands/tmux.js'), 'dist/commands/tmux.js')),
   'zellij-lane': entry('beta', 'Render a Zellij lane frame for SKS sessions', 'dist/commands/zellij-lane.js', directCommand(() => import('../commands/zellij-lane.js'), 'dist/commands/zellij-lane.js')),
   'zellij-slot-pane': entry('beta', 'Render a compact Zellij worker slot pane', 'dist/commands/zellij-slot-pane.js', directCommand(() => import('../commands/zellij-slot-pane.js'), 'dist/commands/zellij-slot-pane.js')),
   'zellij-monitor-pane': skipMigrationGate(readOnly(entry('beta', 'Render the live Zellij MAD/Naruto monitor pane', 'dist/commands/zellij-monitor-pane.js', directCommand(() => import('../commands/zellij-monitor-pane.js'), 'dist/commands/zellij-monitor-pane.js')))),
   'zellij-viewport-pane': skipMigrationGate(readOnly(entry('beta', 'Render a dynamically bound Zellij worker viewport pane', 'dist/commands/zellij-viewport-pane.js', directCommand(() => import('../commands/zellij-viewport-pane.js'), 'dist/commands/zellij-viewport-pane.js')))),
   'zellij-slot-column-anchor': entry('beta', 'Render the compact SLOTS anchor pane for first-slot-down Zellij stacks', 'dist/commands/zellij-slot-column-anchor.js', directCommand(() => import('../commands/zellij-slot-column-anchor.js'), 'dist/commands/zellij-slot-column-anchor.js')),
   zellij: activeRouteDiagnostic(entry('beta', 'Inspect Zellij runtime status and explain repair (no auto-install)', 'dist/commands/zellij.js', directCommand(() => import('../commands/zellij.js'), 'dist/commands/zellij.js'))),
-  'mad-sks': routeStateMutator(entry('beta', 'MAD-SKS scoped permission modifier + SQL-plane execution (merged MAD-DB)', 'dist/commands/mad-sks.js', directCommand(() => import('../commands/mad-sks.js'), 'dist/commands/mad-sks.js')), ['mad-sks-gate.json']),
+  'mad-sks': routeStateMutator(entry('beta', 'MAD-SKS scoped permission modifier + SQL-plane execution', 'dist/commands/mad-sks.js', directCommand(() => import('../commands/mad-sks.js'), 'dist/commands/mad-sks.js')), ['mad-sks-gate.json']),
   glm: entry('beta', 'Run GLM 5.2 MAD mode through OpenRouter', 'dist/core/commands/glm-command.js', argsCommand(() => import('../core/commands/glm-command.js'), 'glmCommand', 'dist/core/commands/glm-command.js')),
-  'mad-db': routeStateMutator(entry('beta', 'Deprecated alias for MAD-SKS SQL-plane execution; redirects to sks mad-sks sql|apply-migration', 'dist/commands/mad-db.js', directCommand(() => import('../commands/mad-db.js'), 'dist/commands/mad-db.js')), ['mad-sks-gate.json']),
   'auto-review': entry('beta', 'Manage auto-review profile', 'dist/commands/auto-review.js', directCommand(() => import('../commands/auto-review.js'), 'dist/commands/auto-review.js')),
   'dollar-commands': entry('stable', 'List Codex App dollar commands', 'dist/core/commands/basic-cli.js', basicArgs('dollarCommandsCommand')),
   'fast-mode': skipMigrationGate(entry('stable', 'Toggle SKS Fast mode default for dollar-command routes', 'dist/core/commands/fast-mode-command.js', argsCommand(() => import('../core/commands/fast-mode-command.js'), 'fastModeCommand', 'dist/core/commands/fast-mode-command.js'))),
   commit: entry('stable', 'Create a simple git commit', 'dist/commands/commit.js', directCommand(() => import('../commands/commit.js'), 'dist/commands/commit.js')),
   'commit-and-push': entry('stable', 'Create a simple git commit and push', 'dist/commands/commit-and-push.js', directCommand(() => import('../commands/commit-and-push.js'), 'dist/commands/commit-and-push.js')),
   dfix: routeStateMutator(entry('stable', 'Run DFix diagnose/plan/patch/verify loop', 'dist/core/commands/dfix-command.js', commandArgsCommand(() => import('../core/commands/dfix-command.js'), 'dfixCommand', 'dist/core/commands/dfix-command.js')), ['dfix-gate.json']),
-  team: routeStateMutator(entry('beta', 'Deprecated alias. New execution redirects to Naruto; legacy observe/watch remains.', 'dist/core/commands/team-command.js', argsCommand(() => import('../core/commands/team-command.js'), 'team', 'dist/core/commands/team-command.js')), ['team-gate.json', 'naruto-gate.json']),
-  agent: routeStateMutator(entry('beta', 'Run native multi-session agent missions', 'dist/core/commands/agent-command.js', argsCommand(() => import('../core/commands/agent-command.js'), 'agentCommand', 'dist/core/commands/agent-command.js')), ['agent-gate.json']),
   'with-local-llm': entry('beta', 'Enable or inspect local Ollama worker backend', 'dist/core/commands/local-model-command.js', argsCommand(() => import('../core/commands/local-model-command.js'), 'localModelCommand', 'dist/core/commands/local-model-command.js')),
   naruto: routeStateMutator(entry('labs', 'Run the $Naruto Codex official subagent workflow', 'dist/core/commands/naruto-command.js', argsCommand(() => import('../core/commands/naruto-command.js'), 'narutoCommand', 'dist/core/commands/naruto-command.js')), ['naruto-gate.json', 'stop-gate.json']),
   'stop-gate': readOnly(entry('beta', 'Check canonical stop-gate resolution for a route/mission', 'dist/core/commands/stop-gate-command.js', commandArgsCommand(() => import('../core/commands/stop-gate-command.js'), 'stopGateCommand', 'dist/core/commands/stop-gate-command.js'))),
@@ -237,7 +290,6 @@ export const COMMANDS = {
     'dist/cli/super-search-command.js',
     subcommand(() => import('./super-search-command.js'), 'superSearchCommand', 'dist/cli/super-search-command.js', 'doctor')
   ),
-  xai: entry('beta', 'Deprecated compatibility notice for removed xAI/Grok setup', 'dist/cli/xai-command.js', subcommand(() => import('./xai-command.js'), 'xaiCommand', 'dist/cli/xai-command.js', 'check')),
   recallpulse: entry('labs', 'RecallPulse evidence route', 'dist/commands/recallpulse.js', directCommand(() => import('../commands/recallpulse.js'), 'dist/commands/recallpulse.js')),
   pipeline: activeRouteDiagnostic(entry('beta', 'Inspect pipeline missions', 'dist/commands/pipeline.js', directCommand(() => import('../commands/pipeline.js'), 'dist/commands/pipeline.js'))),
   guard: entry('beta', 'Check harness guard', 'dist/commands/guard.js', directCommand(() => import('../commands/guard.js'), 'dist/commands/guard.js')),
@@ -278,6 +330,77 @@ export const COMMANDS = {
   'agent-bridge': readOnly(entry('beta', 'Publish the agent-bridge manifest and print host registration snippets for external agent systems', 'dist/core/commands/agent-bridge-command.js', subcommand(() => import('../core/commands/agent-bridge-command.js'), 'agentBridgeCommand', 'dist/core/commands/agent-bridge-command.js', 'setup')))
 } satisfies Record<string, CommandEntry>;
 
+export const COMMANDS = applyCommandContractOverrides(COMMAND_DEFINITIONS, {
+  autoresearch: { latency: 'long' },
+  bench: { latency: 'long' },
+  check: { risk: 'R1', latency: 'long' },
+  'commit-and-push': { risk: 'R3' },
+  'computer-use': { latency: 'long' },
+  dfix: { latency: 'long' },
+  eval: { latency: 'long' },
+  gates: {
+    risk: 'R1', latency: 'long', supportsJson: true, remoteAllowed: true, telegramAllowed: true,
+    inputProfile: 'gates', requiredCapabilities: ['project.git', 'proof.gates']
+  },
+  glm: { latency: 'long' },
+  harness: { latency: 'long' },
+  'image-ux-review': { latency: 'long' },
+  loop: { latency: 'long' },
+  'mad-sks': { risk: 'R3', latency: 'long' },
+  mcp: { risk: 'R2', latency: 'long', supportsJson: true, inputProfile: 'json-only' },
+  naruto: { latency: 'long' },
+  paths: {
+    supportsJson: true, remoteAllowed: true, inputProfile: 'paths',
+    requiredCapabilities: ['project.fs.read']
+  },
+  perf: { latency: 'long' },
+  pipeline: {
+    supportsJson: true, remoteAllowed: true, inputProfile: 'pipeline-status',
+    requiredCapabilities: ['proof.pipeline']
+  },
+  postinstall: { latency: 'long' },
+  ppt: { latency: 'long' },
+  proof: {
+    risk: 'R0', latency: 'fast', supportsJson: true, remoteAllowed: true, telegramAllowed: true,
+    inputProfile: 'proof', requiredCapabilities: ['proof.read']
+  },
+  'qa-loop': { latency: 'long' },
+  recallpulse: { latency: 'long' },
+  release: { risk: 'R1', latency: 'long' },
+  remote: { risk: 'R2', latency: 'long', supportsJson: true, remoteAllowed: false, telegramAllowed: false, inputProfile: 'json-only' },
+  research: { latency: 'long' },
+  review: { risk: 'R1' },
+  run: { latency: 'long' },
+  stats: {
+    supportsJson: true, remoteAllowed: true, inputProfile: 'stats',
+    requiredCapabilities: ['project.fs.read']
+  },
+  status: {
+    supportsJson: true, remoteAllowed: true, telegramAllowed: true, inputProfile: 'json-only',
+    requiredCapabilities: ['proof.read']
+  },
+  'stop-gate': {
+    supportsJson: true, remoteAllowed: true, telegramAllowed: true, inputProfile: 'stop-gate',
+    requiredCapabilities: ['proof.stop-gate']
+  },
+  task: { risk: 'R1', latency: 'long' },
+  telegram: { risk: 'R2', latency: 'long', supportsJson: true, remoteAllowed: false, telegramAllowed: false, inputProfile: 'json-only' },
+  trust: {
+    risk: 'R0', latency: 'fast', supportsJson: true, remoteAllowed: true, telegramAllowed: true,
+    inputProfile: 'trust', requiredCapabilities: ['proof.trust']
+  },
+  uninstall: { risk: 'R3', latency: 'long' },
+  update: { latency: 'long' },
+  'update-check': {
+    supportsJson: true, remoteAllowed: true, inputProfile: 'json-only',
+    requiredCapabilities: ['network.npm.read']
+  },
+  'validate-artifacts': {
+    risk: 'R1', supportsJson: true, remoteAllowed: true, inputProfile: 'validate-artifacts',
+    requiredCapabilities: ['proof.artifacts']
+  }
+});
+
 export const TYPED_COMMANDS = COMMANDS;
 
 export type CommandName = Extract<keyof typeof COMMANDS, string>;
@@ -296,10 +419,7 @@ export const COMMAND_ALIASES = {
   '--mad-sks': 'mad-sks',
   'ux-review': 'image-ux-review',
   'visual-review': 'image-ux-review',
-  'ui-ux-review': 'image-ux-review',
-  '--agent': 'agent',
-  '--naruto': 'naruto',
-  swarm: 'naruto'
+  'ui-ux-review': 'image-ux-review'
 } as const satisfies Record<string, CommandName>;
 
 export function commandNames(): CommandName[] {

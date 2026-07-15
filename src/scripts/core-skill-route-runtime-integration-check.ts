@@ -18,7 +18,7 @@ const { selectRouteSkill, skillProofRecord } = await importDist('core/skills/cor
 const { createRequestedScopeContract } = await importDist('core/safety/requested-scope-contract.js');
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-skill-rt-'));
-const route = '$Agent';
+const route = '$Naruto';
 const skillId = routeSkillId(route);
 const promotionContract = createRequestedScopeContract({
   route: 'core-skill-route-runtime-integration',

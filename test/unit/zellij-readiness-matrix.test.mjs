@@ -21,7 +21,8 @@ test('zellij missing keeps cli_ready true but mad_ready false', () => {
   });
   assert.equal(m.cli_ready, true);
   assert.equal(m.mad_ready, false);
-  assert.equal(m.tmux_removed_runtime, true);
+  assert.equal(Object.hasOwn(m, 'tmux_removed_runtime'), false);
+  assert.equal(Object.hasOwn(m, 'tmux'), false);
 });
 
 test('zellij ok with readable config makes mad_ready true', () => {

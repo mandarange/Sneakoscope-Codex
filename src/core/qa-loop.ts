@@ -192,7 +192,7 @@ export function inferQaLoopAnswers(prompt: any = '') {
     CREDENTIAL_STORAGE_ACK: 'never_store_credentials_in_artifacts_or_wiki',
     UI_CHROME_EXTENSION_ACK: UI_SURFACE_ROUTER_ACK,
     QA_VISUAL_REVIEW_IMAGEGEN_REQUIRED: wantsGptImage2Review ? GPT_IMAGE_2_ANNOTATED_REVIEW_REQUIRED_ACK : 'not_required',
-    TEAM_MODE_ALLOWED: 'no_parent_only',
+    SUBAGENT_MODE_ALLOWED: 'no_parent_only',
     MAX_QA_CYCLES: String(DEFAULT_QA_MAX_CYCLES),
     ACCEPTANCE_CRITERIA: acceptance,
     NON_GOALS: [
@@ -262,7 +262,7 @@ export function qaLoopQuestionSlots() {
       { id: 'TEST_CREDENTIALS_RUNTIME_SOURCE', question: 'If login is required, how will test-only credentials be provided without saving the values?', required: true, type: 'enum', options: ['not_required', 'ephemeral_chat_only', 'environment_variables', 'secret_manager'] },
       { id: 'CREDENTIAL_STORAGE_ACK', question: 'Acknowledge credential handling policy.', required: true, type: 'enum', options: ['never_store_credentials_in_artifacts_or_wiki'] },
       { id: 'UI_CHROME_EXTENSION_ACK', question: 'Acknowledge UI E2E evidence policy: QA-LOOP routes local/public web to @Browser, signed-in web to @Chrome, native/cross-app GUI to @Computer, and never treats synthetic artifacts as real proof.', required: true, type: 'enum', options: [UI_SURFACE_ROUTER_ACK, LEGACY_UI_CHROME_EXTENSION_FIRST_ACK] },
-      { id: 'TEAM_MODE_ALLOWED', question: 'May QA-LOOP use Team/subagents where useful?', required: true, type: 'enum', options: ['yes_parallel_where_safe', 'no_parent_only'] },
+      { id: 'SUBAGENT_MODE_ALLOWED', question: 'May QA-LOOP use official subagents where useful?', required: true, type: 'enum', options: ['yes_parallel_where_safe', 'no_parent_only'] },
       { id: 'MAX_QA_CYCLES', question: 'How many no-question QA cycles are allowed before pausing?', required: true, type: 'string' },
       { id: 'ACCEPTANCE_CRITERIA', question: 'List the QA completion criteria.', required: true, type: 'array_or_string' },
       { id: 'NON_GOALS', question: 'List anything QA-LOOP must not test.', required: true, type: 'array_or_string', allow_empty: true },

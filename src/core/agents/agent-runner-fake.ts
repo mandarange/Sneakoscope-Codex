@@ -66,7 +66,7 @@ export function buildFixturePatchEnvelopes(agent: any, slice: any, opts: any = {
       schema: 'sks.agent-patch-envelope.v1',
       source: 'fixture',
       mission_id: String(opts.missionId || opts.mission_id || ''),
-      route: String(opts.route || '$Agent'),
+      route: String(opts.route || '$Naruto'),
       agent_id: String(agent.id),
       session_id: String(agent.session_id || ''),
       slot_id: String(agent.slot_id || agent.worker_slot_id || agent.id),

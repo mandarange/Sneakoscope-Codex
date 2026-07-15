@@ -12,7 +12,7 @@ export function validateGitPolicy(policy: unknown): ValidationResult {
   const issues: string[] = [];
   const row = asRecord(policy);
   if (row.schema !== GIT_POLICY_SCHEMA) issues.push('schema');
-  if (!['solo', 'team', 'strict-team', 'ci'].includes(String(row.mode || ''))) issues.push('mode');
+  if (!['solo', 'work', 'strict-work', 'ci'].includes(String(row.mode || ''))) issues.push('mode');
   if (!Array.isArray(asRecord(row.shared_memory).track)) issues.push('shared_memory.track');
   if (!Array.isArray(asRecord(row.local_runtime).ignore)) issues.push('local_runtime.ignore');
   if (!Number.isFinite(Number(asRecord(row.large_artifacts).max_tracked_file_bytes))) issues.push('large_artifacts.max_tracked_file_bytes');

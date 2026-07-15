@@ -41,6 +41,11 @@ test('not_applicable satisfies only the active gate and still enforces proof ref
       status: 'verified',
       executionClass: 'real',
       lightweightEvidence: true,
+      gate: {
+        workflow: 'official_codex_subagent',
+        official_subagent_evidence: true,
+        parent_summary_present: true
+      },
       summary: { manual_review_required: false }
     })
     const noQuestionReflectionBlocked: any = await evaluateStop(root, state, { last_assistant_message: 'DB review complete.' }, { noQuestion: true })
@@ -259,6 +264,11 @@ test('Naruto not_applicable skips only official artifacts and still requires pro
       status: 'verified',
       executionClass: 'real',
       lightweightEvidence: true,
+      gate: {
+        workflow: 'official_codex_subagent',
+        official_subagent_evidence: true,
+        parent_summary_present: true
+      },
       summary: { manual_review_required: false }
     })
     const reflectionBlocked: any = await evaluateStop(root, state, { last_assistant_message: 'Done.' })

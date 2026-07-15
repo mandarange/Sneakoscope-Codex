@@ -19,12 +19,6 @@ sks git policy --json
 sks paths git-policy --json
 ```
 
-Modes:
-
-- `solo`: relaxed local development
-- `team`: default collaboration mode
-- `strict-team`: generated indexes become precommit blockers
-- `ci`: CI-oriented validation mode
+The policy file records the selected collaboration strictness and CI behavior. Inspect the generated policy with `sks git policy --json`; do not hand-edit implementation-level mode values.
 
 Large visual artifacts default to manual/LFS policy. Raw screenshots should not be tracked unless the policy explicitly allows it.
-

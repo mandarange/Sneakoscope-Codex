@@ -5,7 +5,7 @@ import { assertGate, emitGate, importDist } from './sks-1-18-gate-lib.js'
 const manifest = await importDist('core/managed-assets/managed-assets-manifest.js')
 const agentConfig = await importDist('core/agents/agent-role-config.js')
 
-const allRoles = [...manifest.MANAGED_OFFICIAL_SUBAGENT_ROLES, ...manifest.MANAGED_AGENT_ROLES]
+const allRoles = [...manifest.MANAGED_OFFICIAL_SUBAGENT_ROLES]
 const roles = allRoles.map((role) => role.id)
 const files = allRoles.map((role) => role.filename)
 const generated = allRoles.every((role) => agentConfig.managedAgentRoleConfigForRole(role.id)?.file === role.filename)

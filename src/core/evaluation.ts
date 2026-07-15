@@ -82,7 +82,7 @@ export const DEFAULT_MULTIAGENT_V2 = Object.freeze({
   subagent_output: 'structured_summary_only'
 });
 
-export const TMUX_COCKPIT_VIEWS = Object.freeze([
+export const ZELLIJ_COCKPIT_VIEWS = Object.freeze([
   'Mission / Goal View',
   'Agent Grid View',
   'MultiAgentV2 Graph View',
@@ -278,7 +278,7 @@ export function harnessGrowthReport(input: any = {}) {
         title: 'Visible ambiguity question delivery',
         hypothesis: 'Stop gates that require visible question blocks reduce hidden clarification failures.',
         change_surface: ['prompt', 'tool', 'eval'],
-        offline_eval_suite: ['selftest:team-visible-questions']
+        offline_eval_suite: ['selftest:route-visible-questions']
       })
     },
     codex_native: {
@@ -287,8 +287,8 @@ export function harnessGrowthReport(input: any = {}) {
       goal_checkpoint_required_fields: ['goal_id', 'phase', 'summary', 'completed_checkboxes', 'open_checkboxes', 'blockers', 'evidence'],
       external_session_import: 'structured_summary_only_with_utility_score_and_forgetting_metadata'
     },
-    tmux: {
-      views: TMUX_COCKPIT_VIEWS,
+    zellij: {
+      views: ZELLIJ_COCKPIT_VIEWS,
       status_terms: ['idle', 'planning', 'exploring', 'implementing', 'waiting_for_tool', 'waiting_for_approval', 'dogfooding', 'verifying', 'summarizing', 'blocked', 'failed', 'completed', 'paused', 'resuming']
     },
     reliability: {

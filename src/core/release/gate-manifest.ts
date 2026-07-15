@@ -21,9 +21,7 @@ export const FORBIDDEN_RECURSIVE_GATES = new Set<string>([
   'release:check:dynamic:execute',
   'release:real-check',
   'release:publish',
-  'publish:ignore-scripts',
   'publish:npm',
-  'publish:dry',
   'prepublishOnly'
 ])
 
@@ -36,7 +34,7 @@ export const ALWAYS_ON_GATES = new Set<string>([
   'runtime:dist-parity',
   'runtime:ts-source-of-truth',
   'runtime:no-src-mjs',
-  'runtime:no-tmux',
+  'runtime:terminal-current',
   'runtime:ts-rust-boundary',
   'safety:side-effect-zero',
   'safety:mutation-callsite-coverage',
@@ -47,11 +45,13 @@ export const ALWAYS_ON_GATES = new Set<string>([
   'core-skill:legacy-promotion-api-audit',
   'postinstall:safe-side-effects',
   'publish:packlist-performance',
+  'publish:runtime-script-closure',
   'legacy:gate-inventory',
   'legacy:gate-purge',
   'legacy:strong-inventory',
   'migration:upgrade-safety',
   'release:proof-truth',
+  'release:latency-slo',
   'release:dynamic-performance',
   'release:provenance',
   'changelog:check'
@@ -67,6 +67,7 @@ export const REQUIRED_FOR_PUBLISH = new Set<string>([
   'safety:mutation-callsite-coverage',
   'side-effect:runtime-report',
   'release:proof-truth',
+  'release:latency-slo',
   'release:provenance',
   'codex:0144:manifest',
   'codex:0144:binary-identity',
@@ -75,6 +76,7 @@ export const REQUIRED_FOR_PUBLISH = new Set<string>([
   'codex:0144:thread-store',
   'codex:0144:capability',
   'publish:packlist-performance',
+  'publish:runtime-script-closure',
   'postinstall:safe-side-effects',
   'legacy:gate-inventory',
   'legacy:gate-purge',
@@ -98,7 +100,7 @@ function tierFor(id: string): GateTier {
 }
 
 function costFor(id: string): GateCost {
-  if (id.includes(':require-real') || id.includes(':actual') || id.startsWith('agent:real-codex') || id.includes('real-session') || id === 'zellij:pane-proof' || id === 'zellij:screen-proof' || id === 'publish:dry-run-performance') {
+  if (id.includes(':require-real') || id.includes(':actual') || id.startsWith('agent:real-codex') || id.includes('real-session') || id === 'zellij:pane-proof' || id === 'zellij:screen-proof') {
     return 'real'
   }
   return 'hermetic'
@@ -109,7 +111,7 @@ export function affectedGlobsFor(id: string): string[] {
   const prefix = id.split(':')[0]
   switch (prefix) {
     case 'architecture':
-      return ['src/core/safety/ssot-guard.ts', 'src/core/pipeline-internals/runtime-core.ts', 'src/core/pipeline-internals/runtime-gates.ts', 'src/core/commands/team-command.ts', 'src/scripts/release-parallel-check.ts', 'src/scripts/architecture-guard-check.ts', 'docs/architecture-ts-rust-boundary.md', 'package.json']
+      return ['src/core/safety/ssot-guard.ts', 'src/core/pipeline-internals/runtime-core.ts', 'src/core/pipeline-internals/runtime-gates.ts', 'src/core/commands/naruto-command.ts', 'src/scripts/release-parallel-check.ts', 'src/scripts/architecture-guard-check.ts', 'docs/architecture-ts-rust-boundary.md', 'package.json']
     case 'core-skill':
       return ['src/core/skills/**', 'schemas/skills/**', 'src/scripts/core-skill-*.ts']
     case 'zellij':
@@ -120,7 +122,7 @@ export function affectedGlobsFor(id: string): string[] {
       return ['src/core/safety/**', 'src/scripts/side-effect-runtime-report-check.ts', '.sneakoscope/missions/**/mutation-ledger.jsonl', '.sneakoscope/mutation-ledger.jsonl']
     case 'legacy':
     case 'migration':
-      return ['src/core/migration/**', 'src/core/codex/**', 'src/core/init.ts', 'src/cli/install-helpers.ts', 'src/scripts/legacy-upgrade-matrix-check.ts']
+      return ['src/core/migration/**', 'src/core/codex/**', 'src/core/init.ts', 'src/cli/install-helpers.ts', 'src/scripts/current-upgrade-matrix-check.ts']
     case 'publish':
       return ['package.json', '.npmignore', 'src/scripts/packlist-performance-check.ts', 'src/scripts/npm-publish-performance-check.ts', 'dist/**']
     case 'postinstall':
@@ -128,7 +130,6 @@ export function affectedGlobsFor(id: string): string[] {
     case 'runtime':
       return ['src/**', 'src/scripts/runtime-*.ts', 'src/scripts/build-dist.ts', 'src/scripts/clean-dist.ts', 'package.json']
     case 'agent':
-    case 'team':
     case 'research':
     case 'qa':
     case 'naruto':

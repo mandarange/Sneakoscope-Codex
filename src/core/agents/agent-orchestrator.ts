@@ -21,13 +21,7 @@ import { coordinateAgentPatchMerge, writeAgentMergeCoordinatorArtifacts } from '
 import { buildAgentPatchProof } from './agent-patch-proof.js'
 import { executeAgentPatchConflictRebase } from './agent-patch-conflict-rebase.js'
 import { AgentPatchTransactionJournal } from './agent-patch-transaction-journal.js'
-import { normalizeAgentPatchEnvelope, type AgentPatchEnvelope } from './agent-patch-schema.js'
-import { runFakeAgent } from './agent-runner-fake.js'
-import { runProcessAgent } from './agent-runner-process.js'
-import { classifyOllamaWorkerSlice, runOllamaAgent } from './agent-runner-ollama.js'
-import { resolveOllamaWorkerConfig } from './ollama-worker-config.js'
 import { decideAgentWorkerModel } from './agent-effort-policy.js'
-import { validateAgentWorkerResult } from './agent-worker-pipeline.js'
 import { writeAgentCleanupReport } from './agent-cleanup.js'
 import { writeAgentTrustReport } from './agent-trust-report.js'
 import { writeAgentWrongnessRecords } from './agent-wrongness.js'
@@ -49,13 +43,10 @@ import { writeAdhdOrchestrationArtifacts } from '../strategy/adhd-orchestrating-
 import { compileStrategy, writeStrategyCompilerArtifacts } from '../strategy/strategy-compiler.js'
 import { evaluateStrategyGate, writeStrategyGateArtifact } from '../strategy/strategy-gate.js'
 import { applyFastModeToRoster, resolveFastModePolicy, writeFastModePropagationProof } from './fast-mode-policy.js'
-import { createNativeCliSessionSwarmRecorder } from './native-cli-session-swarm.js'
-import { writeNativeCliSessionProof } from './native-cli-session-proof.js'
+import { createNativeCliWorkerRuntimeRecorder } from './native-cli-worker-runtime.js'
+import { writeNativeCliWorkerRuntimeProof } from './native-cli-worker-runtime-proof.js'
 import { writeNoSubagentScalingPolicy } from './no-subagent-scaling-policy.js'
 import { writeOfficialSubagentHelperPolicy } from './official-subagent-helper-policy.js'
-import { runCodexTask } from '../codex-control/codex-control-plane.js'
-import { codexTimeoutClassForRoute } from '../codex-control/codex-reliability-shield.js'
-import { CODEX_AGENT_WORKER_RESULT_SCHEMA_ID, codexAgentWorkerResultSchema } from '../codex-control/schemas/agent-worker-result.schema.js'
 import { resolveLocalCollaborationPolicy, localCollaborationParticipated } from '../local-llm/local-collaboration-policy.js'
 import { runFinalGptReviewStage } from '../pipeline/final-gpt-review-stage.js'
 import { selectFinalGptPatchSource } from '../pipeline/final-gpt-patch-stage.js'
@@ -77,24 +68,23 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
   const root = path.resolve(opts.root || process.cwd())
   const sessionKey = opts.sessionKey || null
   const prompt = await resolveAgentMissionPrompt(root, opts)
-  const route = opts.route || '$Agent'
+  const route = opts.route || 'internal-worker-runtime'
   const routeCommand = String(opts.routeCommand || defaultRouteCommand(route))
   const routeBlackboxKind = String(opts.routeBlackboxKind || defaultRouteBlackboxKind(route))
   const fastModePolicy = resolveFastModePolicy({ ...opts, root })
   const requestedBackend = String(opts.backend || (opts.mock ? 'fake' : 'codex-sdk'))
-  const legacyCodexExecRequested = requestedBackend === 'codex-exec'
-  const backend = legacyCodexExecRequested ? 'codex-sdk' : normalizeAgentBackend(requestedBackend)
+  const backend = normalizeAgentBackend(requestedBackend)
   const maxAgentCount = Number.isFinite(Number(opts.maxAgentCount)) && Number(opts.maxAgentCount) >= 1 ? Math.floor(Number(opts.maxAgentCount)) : MAX_AGENT_COUNT
   const realZellij = backend === 'zellij' && opts.real === true
   const realZellijProofRequired = realZellij && process.env.SKS_REQUIRE_ZELLIJ === '1'
   const created = opts.missionId
-    ? { id: opts.missionId, dir: missionDir(root, opts.missionId), mission: { id: opts.missionId, mode: 'agent', prompt } }
-    : await createMission(root, { mode: 'agent', prompt, sessionKey })
+    ? { id: opts.missionId, dir: missionDir(root, opts.missionId), mission: { id: opts.missionId, mode: 'internal-worker-runtime', prompt } }
+    : await createMission(root, { mode: 'internal-worker-runtime', prompt, sessionKey })
   const missionId = created.id
   const dir = created.dir
-  if (legacyCodexExecRequested) {
-    await setCurrent(root, { mission_id: missionId, mode: 'AGENT', phase: 'AGENT_LEGACY_CODEX_EXEC_BLOCKED', route_command: routeCommand, native_agent_backend: 'codex-sdk', updated_at: nowIso() }, { sessionKey })
-    return legacyCodexExecBlockedRun({ root, missionId, dir, route, routeCommand, routeBlackboxKind, backend: 'codex-sdk' })
+  if (!backend) {
+    await setCurrent(root, { mission_id: missionId, mode: 'WORKER_RUNTIME', phase: 'WORKER_RUNTIME_UNSUPPORTED_ARGUMENT', route_command: routeCommand, requested_backend: requestedBackend, updated_at: nowIso() }, { sessionKey })
+    return unsupportedBackendRun({ root, missionId, dir, route, routeCommand, routeBlackboxKind, requestedBackend })
   }
   // Route start: consult this route's deployed Core Skill snapshot (read-only).
   // Graceful fallback when none is deployed — zero-risk, never invokes the optimizer.
@@ -114,7 +104,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     })
   }))
   const targetActiveSlots = normalizeTargetActiveSlots(opts.targetActiveSlots ?? opts.agents ?? roster.agent_count, maxAgentCount)
-  const visualLaneCount = normalizeVisualLaneCount(opts.visualLaneCount ?? opts.clones ?? opts.agents ?? roster.agent_count, roster.agent_count, Math.min(maxAgentCount, DEFAULT_AGENT_CONCURRENCY))
+  const visualLaneCount = normalizeVisualLaneCount(opts.visualLaneCount ?? opts.agents ?? roster.agent_count, roster.agent_count, Math.min(maxAgentCount, DEFAULT_AGENT_CONCURRENCY))
   const desiredWorkItemCount = normalizeDesiredWorkItemCount(opts.desiredWorkItemCount, opts.minimumWorkItems, targetActiveSlots)
   const minimumWorkItems = normalizeMinimumWorkItems(opts.minimumWorkItems, targetActiveSlots)
   const sourceIntelligence = await runSourceIntelligence({ root, missionDir: dir, route, query: prompt, offline: true, context7Available: true })
@@ -163,7 +153,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     appshots_operator_action_required: strategyGate.appshots_operator_action_required
   }
   if (!strategyGate.scheduler_allowed) {
-    await setCurrent(root, { mission_id: missionId, mode: 'AGENT', phase: 'AGENT_STRATEGY_GATE_BLOCKED', route_command: routeCommand, native_agent_backend: backend, updated_at: nowIso() }, { sessionKey })
+    await setCurrent(root, { mission_id: missionId, mode: 'WORKER_RUNTIME', phase: 'WORKER_RUNTIME_STRATEGY_GATE_BLOCKED', route_command: routeCommand, native_agent_backend: backend, updated_at: nowIso() }, { sessionKey })
     const blockedLedgerRoot = path.join(dir, 'agents')
     return {
       schema: 'sks.agent-run.v1',
@@ -337,7 +327,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
       await writeJsonAtomic(path.join(ledgerRoot, 'agent-git-worktree-runtime.json'), gitWorktreeRuntime)
     }
   }
-  const nativeCliSwarm = createNativeCliSessionSwarmRecorder(ledgerRoot, {
+  const workerSessionRuntime = createNativeCliWorkerRuntimeRecorder(ledgerRoot, {
     missionId,
     requestedAgents: Number(opts.agents || roster.agent_count || targetActiveSlots),
     targetActiveSlots,
@@ -358,8 +348,8 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     lastTimeoutReapMs = now
     return killTimedOutAgentSessions(ledgerRoot, now, { hardTimeoutMs: schedulerHardTimeoutMs })
   }
-  await nativeCliSwarm.initialize()
-  await setCurrent(root, { mission_id: missionId, mode: 'AGENT', phase: 'AGENT_NATIVE_KERNEL_RUNNING', route_command: routeCommand, native_agent_backend: backend }, { sessionKey })
+  await workerSessionRuntime.initialize()
+  await setCurrent(root, { mission_id: missionId, mode: 'WORKER_RUNTIME', phase: 'WORKER_RUNTIME_RUNNING', route_command: routeCommand, native_agent_backend: backend }, { sessionKey })
   const scheduler = await runAgentScheduler({
     root: ledgerRoot,
     missionId,
@@ -412,9 +402,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
         requireGeneration: true
       })
       const backendOpts = { ...opts, missionId, agentRoot: ledgerRoot, cwd: workerWorktree?.context.path || root, projectRoot: root, projectHash: namespace.root_hash, route, prompt, fastMode: fastModePolicy.fast_mode, serviceTier: fastModePolicy.service_tier, ...(workerWorktree ? { worktree: workerWorktree.context } : {}) }
-      const result = opts.nativeCliSwarm === false
-        ? await runAgentByBackend(backend, runtimeAgent, runtimeSlice, backendOpts)
-        : await nativeCliSwarm.launchWorker({ agent: runtimeAgent, slice: runtimeSlice, opts: backendOpts })
+      const result = await workerSessionRuntime.launchWorker({ agent: runtimeAgent, slice: runtimeSlice, opts: backendOpts })
       await reapTimedOutAgentSessions()
       if (route === '$Naruto') attachNarutoRuntimeProof(result, runtimeAgent, runtimeSlice)
       if (workerWorktree) await finalizeWorkerGitWorktree({
@@ -486,7 +474,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     }
   })
   await reapTimedOutAgentSessions(true)
-  await nativeCliSwarm.finalize()
+  await workerSessionRuntime.finalize()
   const parallelRuntimeProof = await writeParallelRuntimeProof(ledgerRoot, missionId, {
     requestedWorkers: Number(opts.agents || roster.agent_count || targetActiveSlots),
     targetActiveSlots,
@@ -495,20 +483,20 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     minActiveWorkers: Math.min(targetActiveSlots, desiredWorkItemCount),
     ...(backend === 'codex-sdk' && opts.real === true ? { minSpeedupRatio: 3 } : {}),
     proofMode: opts.mock === true ? 'mock-process' : 'production',
-    requireWorkerPids: opts.nativeCliSwarm !== false && targetActiveSlots >= 16,
+    requireWorkerPids: targetActiveSlots >= 16,
     requireChangedFiles: writeCapable && effectiveWriteMode === 'parallel',
     minChangedFiles: Math.min(2, desiredWorkItemCount)
   })
   let results = scheduler.results
   const tournamentSelection = await selectSolutionTournamentWinners(root, ledgerRoot, results)
   results = tournamentSelection.results
-  const nativeCliSessionProof = await writeNativeCliSessionProof(ledgerRoot, {
+  const nativeCliWorkerRuntimeProof = await writeNativeCliWorkerRuntimeProof(ledgerRoot, {
     requestedAgents: Number(opts.agents || roster.agent_count || targetActiveSlots),
     targetActiveSlots,
     totalWorkItems: partition.task_graph?.total_work_items || partition.slices.length
   })
-  const officialSubagentHelperPolicy = await writeOfficialSubagentHelperPolicy(ledgerRoot, { nativeProof: nativeCliSessionProof })
-  const noSubagentScalingPolicy = await writeNoSubagentScalingPolicy(ledgerRoot, { nativeProof: nativeCliSessionProof, officialSubagentHelperPolicy })
+  const officialSubagentHelperPolicy = await writeOfficialSubagentHelperPolicy(ledgerRoot, { nativeProof: nativeCliWorkerRuntimeProof })
+  const noSubagentScalingPolicy = await writeNoSubagentScalingPolicy(ledgerRoot, { nativeProof: nativeCliWorkerRuntimeProof, officialSubagentHelperPolicy })
   const fastModePropagation = await writeFastModePropagationProof(ledgerRoot, { policy: fastModePolicy, backend, results })
   const localCollaborationPolicy = resolveLocalCollaborationPolicy()
   await writeJsonAtomic(path.join(ledgerRoot, 'local-collaboration-policy.json'), localCollaborationPolicy)
@@ -544,16 +532,16 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
   const finalGptPatchStage = gptFinalRequired
     ? selectFinalGptPatchSource(gptFinalArbiter, candidatePatchEnvelopes)
     : null
-  const resultsForPatchSwarm = gptFinalRequired && finalGptPatchStage?.ok === true && gptFinalArbiter?.result?.status === 'modified'
+  const resultsForPatchHandoff = gptFinalRequired && finalGptPatchStage?.ok === true && gptFinalArbiter?.result?.status === 'modified'
     ? withFinalGptPatchEnvelopes(results, finalGptPatchStage.patch_envelopes)
     : results
-  const patchSwarm = await runAgentPatchSwarmRuntime(root, ledgerRoot, {
+  const patchHandoff = await runAgentPatchHandoffRuntime(root, ledgerRoot, {
     missionId,
     sessionKey,
     route,
     routeCommand,
     writeCapable,
-    results: resultsForPatchSwarm,
+    results: resultsForPatchHandoff,
     parallelWritePolicy,
     verificationRollbackDag: strategyCompiled.verification_rollback_dag,
     dryRun: opts.dryRunPatches === true || opts.applyPatches !== true || (gptFinalRequired && gptFinalArbiter?.ok !== true),
@@ -580,14 +568,14 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     ...(stale.ok ? [] : stale.stale_sessions.map((id: string) => 'stale_heartbeat:' + id)),
     ...(timeoutKill.killed_sessions || []).map((id: string) => 'timeout_killed:' + id),
     ...(recursion.ok ? [] : recursion.violations.map((id: string) => 'recursion:' + id)),
-    ...(nativeCliSessionProof.ok ? [] : nativeCliSessionProof.blockers),
+    ...(nativeCliWorkerRuntimeProof.ok ? [] : nativeCliWorkerRuntimeProof.blockers),
     ...(officialSubagentHelperPolicy.ok ? [] : officialSubagentHelperPolicy.blockers),
     ...(noSubagentScalingPolicy.ok ? [] : noSubagentScalingPolicy.blockers),
     ...(fastModePropagation.ok ? [] : fastModePropagation.blockers),
     ...(gitWorktreeRuntime.required === true && gitWorktreeRuntime.ok === false ? gitWorktreeRuntime.blockers || ['git_worktree_runtime_not_ok'] : []),
     ...(gptFinalRequired && gptFinalArbiter?.ok !== true ? gptFinalArbiter?.blockers || ['gpt_final_arbiter_not_ok'] : []),
     ...(gptFinalRequired && finalGptPatchStage?.ok === false ? finalGptPatchStage.blockers || ['final_gpt_patch_stage_not_ok'] : []),
-    ...(patchSwarm.ok ? [] : patchSwarm.blockers),
+    ...(patchHandoff.ok ? [] : patchHandoff.blockers),
     ...(janitor.ok ? [] : janitor.blockers)
   ]
   const trust = await writeAgentTrustReport(ledgerRoot, { missionId, backend, roster, partition, cleanup, outputTails, timeoutKill, backendReport, outputValidation, scheduler: scheduler.state, blockers })
@@ -615,9 +603,9 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     wrongness,
     scheduler: scheduler.state,
     parallelWritePolicy,
-    patchSwarm,
+    patchHandoff,
     strategyGate,
-    nativeCliSessionProof,
+    nativeCliWorkerRuntimeProof,
     noSubagentScalingPolicy,
     officialSubagentHelperPolicy,
     fastModePolicy,
@@ -631,7 +619,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
   })
   await writeAgentCodexCockpitArtifacts(dir, { missionId, projectHash: namespace.root_hash })
   await enforceRetention(root, { afterRoute: true, completedMissionId: missionId, rotateLargeJsonl: true, lightweight: true }).catch(() => null)
-  await setCurrent(root, { mission_id: missionId, mode: 'AGENT', phase: proof.ok ? 'AGENT_NATIVE_KERNEL_DONE' : 'AGENT_NATIVE_KERNEL_BLOCKED', native_agent_backend: backend, updated_at: nowIso() }, { sessionKey })
+  await setCurrent(root, { mission_id: missionId, mode: 'WORKER_RUNTIME', phase: proof.ok ? 'WORKER_RUNTIME_DONE' : 'WORKER_RUNTIME_BLOCKED', native_agent_backend: backend, updated_at: nowIso() }, { sessionKey })
   return {
     schema: 'sks.agent-run.v1',
     ok: proof.ok,
@@ -664,7 +652,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     trust,
     wrongness,
     parallel_write_policy: parallelWritePolicy,
-    native_cli_session_proof: nativeCliSessionProof,
+    native_cli_worker_runtime_proof: nativeCliWorkerRuntimeProof,
     no_subagent_scaling_policy: noSubagentScalingPolicy,
     official_subagent_helper_policy: officialSubagentHelperPolicy,
     fast_mode_policy: fastModePolicy,
@@ -673,7 +661,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     local_collaboration_policy: localCollaborationPolicy,
     gpt_final_arbiter: gptFinalArbiter,
     final_gpt_patch_stage: finalGptPatchStage,
-    patch_swarm: patchSwarm,
+    patch_handoff: patchHandoff,
     parallel_runtime_proof: parallelRuntimeProof,
     proof
   }
@@ -855,7 +843,7 @@ function uniqueWritableSlicesForWorktrees(slices: any[] = [], limit: number) {
 function applyNarutoWorkGraphToPartition(partition: any, graph: any, roster: any, targetActiveSlots: number, parentPrompt = '') {
   const activeRoster = (Array.isArray(roster?.roster) ? roster.roster : []).slice(0, Math.max(1, targetActiveSlots))
   const activeAgentIds = new Set(activeRoster.map((row: any) => String(row.id || '')).filter(Boolean))
-  const fallbackOwners = activeRoster.length ? activeRoster : [{ id: 'naruto_clone_001', role: 'verifier' }]
+  const fallbackOwners = activeRoster.length ? activeRoster : [{ id: 'naruto_worker_001', role: 'verifier' }]
   const referenceWorkItem = Array.isArray(partition?.task_graph?.work_items) ? partition.task_graph.work_items.find(Boolean) : null
   const sourceIntelligenceRefs = referenceWorkItem?.source_intelligence_refs || partition?.source_intelligence_refs || null
   const goalModeRef = referenceWorkItem?.goal_mode_ref || partition?.goal_mode_ref || null
@@ -876,7 +864,7 @@ function applyNarutoWorkGraphToPartition(partition: any, graph: any, roster: any
       const candidateSliceId = candidateCount > 1 ? `${sliceId}-cand${candidateIndex}` : sliceId
       const owner = requestedOwner && activeAgentIds.has(requestedOwner) && candidateCount === 1
         ? requestedOwner
-        : String(fallbackOwners[(index + candidateOffset) % fallbackOwners.length]?.id || requestedOwner || `naruto_clone_${String(index + candidateIndex).padStart(3, '0')}`)
+        : String(fallbackOwners[(index + candidateOffset) % fallbackOwners.length]?.id || requestedOwner || `naruto_worker_${String(index + candidateIndex).padStart(3, '0')}`)
       const verificationNodeId = writePaths.length ? `verify:${candidateSliceId}` : null
       const rollbackNodeId = writePaths.length ? `rollback:${candidateSliceId}` : null
       const approachDirective = candidateCount > 1 ? APPROACHES[candidateOffset] || APPROACHES[APPROACHES.length - 1] || '' : null
@@ -1314,19 +1302,19 @@ async function finalizeWorkerGitWorktree(input: {
   await writeJsonAtomic(path.join(input.ledgerRoot, 'agent-git-worktree-runtime.json'), input.runtime)
 }
 
-async function legacyCodexExecBlockedRun(input: { root: string; missionId: string; dir: string; route: string; routeCommand: string; routeBlackboxKind: string; backend: string }) {
-  const blockers = ['legacy_codex_exec_runtime_removed']
+async function unsupportedBackendRun(input: { root: string; missionId: string; dir: string; route: string; routeCommand: string; routeBlackboxKind: string; requestedBackend: string }) {
+  const blockers = ['unsupported_argument:backend']
   const ledgerRoot = path.join(input.dir, 'agents')
   const artifact = {
-    schema: 'sks.codex-sdk-legacy-runtime-removal.v1',
+    schema: 'sks.worker-runtime-unsupported-argument.v1',
     generated_at: nowIso(),
     ok: false,
-    requested_backend: 'codex-exec',
-    selected_backend: input.backend,
-    blockers,
-    message: 'The raw Codex exec runtime has been removed. Use the Codex SDK Control Plane backend.'
+    code: 'unsupported_argument',
+    argument: 'backend',
+    value: input.requestedBackend,
+    blockers
   }
-  await writeJsonAtomic(path.join(input.dir, 'codex-exec-runtime-removed.json'), artifact)
+  await writeJsonAtomic(path.join(input.dir, 'unsupported-worker-backend.json'), artifact)
   return {
     schema: 'sks.agent-run.v1',
     ok: false,
@@ -1335,7 +1323,7 @@ async function legacyCodexExecBlockedRun(input: { root: string; missionId: strin
     route: input.route,
     route_command: input.routeCommand,
     route_blackbox_kind: input.routeBlackboxKind,
-    backend: input.backend,
+    backend: input.requestedBackend,
     ledger_root: path.relative(input.root, ledgerRoot),
     roster: { schema: 'sks.agent-roster.v1', agent_count: 0, roster: [] },
     partition: { ok: false, slice_count: 0, lease_count: 0, blockers },
@@ -1363,13 +1351,13 @@ async function legacyCodexExecBlockedRun(input: { root: string; missionId: strin
       ok: false,
       status: 'blocked',
       blockers,
-      artifacts: ['codex-exec-runtime-removed.json']
+      artifacts: ['unsupported-worker-backend.json']
     }
   }
 }
 
-async function runAgentPatchSwarmRuntime(root: string, ledgerRoot: string, input: { missionId: string; sessionKey?: string | null; route: string; routeCommand: string; writeCapable: boolean; results: any[]; parallelWritePolicy: any; verificationRollbackDag?: any; dryRun: boolean; gptFinalArbiter?: any; finalGptPatchStage?: any }) {
-  await setCurrent(root, { mission_id: input.missionId, mode: 'AGENT', phase: 'AGENT_PATCH_SWARM_RUNNING', route_command: input.routeCommand, updated_at: nowIso() }, { sessionKey: input.sessionKey })
+async function runAgentPatchHandoffRuntime(root: string, ledgerRoot: string, input: { missionId: string; sessionKey?: string | null; route: string; routeCommand: string; writeCapable: boolean; results: any[]; parallelWritePolicy: any; verificationRollbackDag?: any; dryRun: boolean; gptFinalArbiter?: any; finalGptPatchStage?: any }) {
+  await setCurrent(root, { mission_id: input.missionId, mode: 'WORKER_RUNTIME', phase: 'WORKER_RUNTIME_PATCH_HANDOFF_RUNNING', route_command: input.routeCommand, updated_at: nowIso() }, { sessionKey: input.sessionKey })
   const queueStore = new PersistentAgentPatchQueueStore(ledgerRoot)
   for (const result of input.results || []) {
     for (const envelope of result.patch_envelopes || []) {
@@ -1579,7 +1567,7 @@ async function runAgentPatchSwarmRuntime(root: string, ledgerRoot: string, input
     ...(verificationResults.ok ? [] : ['patch_verification_failed'])
   ].map(String)
   const report = {
-    schema: 'sks.agent-patch-swarm-runtime.v1',
+    schema: 'sks.agent-patch-handoff-runtime.v2',
     generated_at: nowIso(),
     ok: blockers.length === 0,
     mission_id: input.missionId,
@@ -1635,7 +1623,7 @@ async function runAgentPatchSwarmRuntime(root: string, ledgerRoot: string, input
   await writeJsonAtomic(path.join(ledgerRoot, 'agent-patch-verification-results.json'), verificationResults)
   await writeJsonAtomic(path.join(ledgerRoot, 'agent-patch-rollback-proof.json'), rollbackProof)
   await writeJsonAtomic(path.join(ledgerRoot, 'agent-patch-proof.json'), proof)
-  await writeJsonAtomic(path.join(ledgerRoot, 'agent-patch-swarm-runtime.json'), report)
+  await writeJsonAtomic(path.join(ledgerRoot, 'agent-patch-handoff-runtime.json'), report)
   return report
 }
 
@@ -1890,19 +1878,19 @@ function isWriteCapableRun(opts: AgentRunOptions) {
 }
 
 function defaultRouteCommand(route: string) {
-  const normalized = String(route || '$Agent')
-  if (/team/i.test(normalized)) return 'sks team'
+  const normalized = String(route || 'internal-worker-runtime')
+  if (/naruto|\$work/i.test(normalized)) return 'sks naruto run'
   if (/research|autoresearch/i.test(normalized)) return 'sks research run'
   if (/qa/i.test(normalized)) return 'sks qa-loop run'
-  return 'sks agent run'
+  return 'internal-worker-runtime'
 }
 
 function defaultRouteBlackboxKind(route: string) {
-  const normalized = String(route || '$Agent')
-  if (/team/i.test(normalized)) return 'actual_team_command'
+  const normalized = String(route || 'internal-worker-runtime')
+  if (/naruto|\$work/i.test(normalized)) return 'actual_naruto_command'
   if (/research|autoresearch/i.test(normalized)) return 'actual_research_command'
   if (/qa/i.test(normalized)) return 'actual_qa_command'
-  return 'actual_agent_command'
+  return 'internal_worker_runtime'
 }
 
 function buildProvidedAgentRoster(input: any, opts: any = {}) {
@@ -1964,170 +1952,6 @@ function buildProvidedAgentRoster(input: any, opts: any = {}) {
     roster,
     effort_policy: input?.effort_policy || { schema: 'sks.agent-effort-policy.v1', dynamic: true, decisions: [] }
   }
-}
-
-async function runAgentByBackend(backend: string, agent: any, slice: any, opts: any) {
-  backend = await maybeSelectOllamaBackend(backend, agent, slice, opts)
-  if (backend === 'process') return runProcessAgent(agent, slice, opts)
-  if (backend === 'ollama') return runOllamaAgent(agent, slice, opts)
-  if (backend === 'codex-sdk' || backend === 'zellij' || backend === 'local-llm') {
-    const localPreferred = backend === 'local-llm'
-    const ledgerRoot = path.resolve(opts.agentRoot || opts.cwd || process.cwd())
-    const workerDir = path.join(ledgerRoot, 'codex-sdk-workers', String(agent.session_id || agent.id || 'agent'), String(slice?.id || 'slice'))
-    const writePaths = sdkWritePaths(slice, opts)
-    const sdkTask = await runCodexTask({
-      route: String(opts.route || '$Agent'),
-      missionId: String(opts.missionId || opts.mission_id || ''),
-      workItemId: String(slice?.id || ''),
-      slotId: String(agent.slot_id || agent.id || ''),
-      generationIndex: Number(agent.generation_index || 1),
-      sessionId: String(agent.session_id || ''),
-      cwd: String(opts.cwd || process.cwd()),
-      prompt: buildDirectSdkWorkerPrompt(slice),
-      model: agent.model || null,
-      reasoningEffort: agent.reasoning_effort || null,
-      modelReasoningEffort: agent.model_reasoning_effort || agent.reasoning_effort || null,
-      serviceTier: agent.service_tier || opts.serviceTier || 'fast',
-      inputFiles: Array.isArray(opts.inputFiles) ? opts.inputFiles.map(String) : [],
-      inputImages: Array.isArray(opts.inputImages) ? opts.inputImages.map(String) : [],
-      outputSchemaId: CODEX_AGENT_WORKER_RESULT_SCHEMA_ID,
-      outputSchema: codexAgentWorkerResultSchema as Record<string, unknown>,
-      sandboxPolicy: writePaths.length ? 'workspace-write' : 'read-only',
-      requestedScopeContract: {
-        id: String(slice?.lease_id || slice?.id || ''),
-        route: String(opts.route || '$Agent'),
-        read_only: writePaths.length === 0,
-        allowed_paths: writePaths,
-        write_paths: writePaths,
-        user_confirmed_full_access: false,
-        mad_sks_authorized: opts.madSksAuthorized === true || process.env.SKS_MAD_SKS_ACTIVE === '1'
-      },
-      backendPreference: localPreferred ? ['local-llm', 'codex-sdk'] : ['codex-sdk'],
-      allowLocalLlm: localPreferred,
-      ...(localPreferred ? { localLlmPolicy: { mode: 'local_preferred', requiresGptFinal: true } } : {}),
-      mutationLedgerRoot: workerDir,
-      zellijPaneId: null,
-      reliabilityPolicy: {
-        maxEmptyResultRetries: writePaths.length ? 1 : 2,
-        timeoutClass: codexTimeoutClassForRoute(opts.route, writePaths.length ? 'standard' : 'short')
-      }
-    })
-    const sdkWorkerResult = await readJson<any>(sdkTask.workerResultPath, null)
-    const patchEnvelopes = normalizeDirectSdkPatchEnvelopes(sdkWorkerResult?.patch_envelopes || [], agent, opts, sdkTask.sdkThreadId)
-    const sdkReport = {
-      schema: 'sks.codex-sdk-worker-adapter.v1',
-      backend: sdkTask.backend === 'local-llm' ? 'local-llm' : 'codex-sdk',
-      backend_family: sdkTask.backend_family,
-      sdk_thread_id: sdkTask.sdkThreadId,
-      sdk_run_id: sdkTask.sdkRunId,
-      local_llm_proof_path: sdkTask.localLlmProofPath || null,
-      stream_event_count: sdkTask.streamEventCount,
-      structured_output_valid: sdkTask.structuredOutputValid,
-      worker_result_path: path.relative(ledgerRoot, sdkTask.workerResultPath),
-      patch_envelope_path: sdkTask.patchEnvelopePath ? path.relative(ledgerRoot, sdkTask.patchEnvelopePath) : null,
-      model: agent.model || null,
-      model_reasoning_effort: agent.model_reasoning_effort || null,
-      model_tier: agent.model_tier || null,
-      service_tier: opts.serviceTier || 'fast',
-      fast_mode: opts.fastMode !== false,
-      blockers: sdkTask.blockers
-    }
-    return validateAgentWorkerResult({
-      ...sdkWorkerResult,
-      backend: sdkTask.backend === 'local-llm' ? 'local-llm' : 'codex-sdk',
-      patch_envelopes: patchEnvelopes,
-      ...(patchEnvelopes.length ? {} : { no_patch_reason: buildDirectNoPatchReason(slice, opts) }),
-      codex_child_report: sdkReport,
-      codex_sdk_thread: sdkReport,
-      model_authored_patch_envelopes: patchEnvelopes.length > 0,
-      fixture_patch_envelopes: false,
-      artifacts: [...new Set([
-        ...(sdkWorkerResult?.artifacts || []),
-        path.relative(ledgerRoot, sdkTask.workerResultPath),
-        path.join(path.relative(ledgerRoot, workerDir), 'codex-control-proof.json'),
-        path.join(path.relative(ledgerRoot, workerDir), 'codex-thread-registry.json'),
-        path.join(path.relative(ledgerRoot, workerDir), sdkTask.backend === 'local-llm' ? 'local-llm-events.jsonl' : 'codex-sdk-events.jsonl'),
-        ...(sdkTask.localLlmProofPath ? [path.relative(ledgerRoot, sdkTask.localLlmProofPath)] : [])
-      ])],
-      blockers: [...(sdkWorkerResult?.blockers || []), ...sdkTask.blockers],
-      verification: {
-        status: sdkTask.ok ? 'passed' : 'failed',
-        checks: [
-          ...(sdkWorkerResult?.verification?.checks || []),
-          sdkTask.backend === 'local-llm' ? 'local-llm-control-plane' : 'codex-sdk-control-plane',
-          sdkTask.backend === 'local-llm' ? 'local-llm-event-stream' : 'codex-sdk-event-stream',
-          sdkTask.backend === 'local-llm' ? 'local-llm-structured-output' : 'codex-sdk-structured-output',
-          ...(sdkTask.backend === 'local-llm' ? ['gpt-final-required-before-acceptance'] : [])
-        ]
-      }
-    })
-  }
-  return runFakeAgent(agent, slice, opts)
-}
-
-async function maybeSelectOllamaBackend(backend: string, agent: any, slice: any, opts: any) {
-  if (backend !== 'codex-sdk') return backend
-  if (opts.backendExplicit === true || opts.backend_explicit === true || opts.noOllama === true || opts.no_ollama === true) return backend
-  const config = await resolveOllamaWorkerConfig({
-    ollamaEnabled: opts.ollamaEnabled === true || opts.ollama_enabled === true,
-    model: opts.ollamaModel || opts.ollama_model || null,
-    baseUrl: opts.ollamaBaseUrl || opts.ollama_base_url || null
-  }).catch(() => null)
-  if (!config?.ok || config.enabled !== true) return backend
-  const policy = classifyOllamaWorkerSlice(slice, { route: opts.route, agent })
-  return policy.ok ? 'local-llm' : backend
-}
-
-function buildDirectSdkWorkerPrompt(slice: any) {
-  const write = sdkWritePaths(slice, {})
-  return [
-    String(slice?.description || slice?.title || 'Complete the assigned worker task.'),
-    slice?.work_item_kind ? `Work item kind: ${String(slice.work_item_kind)}.` : '',
-    slice?.approach_directive ? `Solution tournament candidate directive: ${String(slice.approach_directive)}.` : '',
-    '',
-    write.length
-      ? `Write-capable slice. Return JSON matching ${CODEX_AGENT_WORKER_RESULT_SCHEMA_ID}; include patch_envelopes for write_paths=${JSON.stringify(write)}. Each patch envelope must include schema, source "model_authored", agent_id, session_id, slot_id, generation_index, task_slice_id, lease_id, allowed_paths, operations, and rationale. Each operation must include op, path, search, replace, content, and diff; use empty strings for operation fields that do not apply. Impact-scan, machine-feedback, diff-quality, and mistake-rule gates run before queue acceptance; exported signature changes require cochanged callers or cochange_acknowledged_reason. Bugfixes require regression_proof failed_before true and passed_after true; repair patches require repair_hypothesis.`
-      : `Read-only slice. Return JSON matching ${CODEX_AGENT_WORKER_RESULT_SCHEMA_ID}; inspect at most three targeted relevant files/artifacts, then return final JSON. Do not mutate files, do not create temporary/build outputs, do not recursively enumerate .sneakoscope, do not run broad find scans, do not run git commands, do not run package scripts/build/test commands unless explicitly required, and do not report pre-existing repository dirtiness as changed_files.`,
-    write.length
-      ? ''
-      : 'For synthetic read-only smoke fixtures, minimal package-only workspaces, non-git cwd, missing optional target artifacts, draft parent gates, or pre-existing unfinished mission ledgers are findings only. If your own assigned read-only inspection and Codex SDK structured output succeeded, set status to "done" and blockers to [].',
-    'Required JSON fields: status, summary, findings, changed_files, patch_envelopes, verification, rollback_notes, blockers, work_item_kind, regression_proof, repair_hypothesis, tournament. Use null for optional proof fields that do not apply.'
-  ].join('\n')
-}
-
-function buildDirectNoPatchReason(slice: any, opts: any) {
-  const writePathCount = sdkWritePaths(slice, opts).length
-  return {
-    schema: 'sks.native-cli-worker-no-patch-reason.v1',
-    generated_at: nowIso(),
-    ok: writePathCount === 0,
-    reason: writePathCount ? 'write_capable_task_without_backend_patch_envelope' : 'read_only_or_no_write_paths',
-    route_justification: writePathCount ? 'backend returned no patch envelopes for a write-capable task' : 'task has no write paths',
-    read_only_or_noop_evidence: writePathCount === 0,
-    task_slice_id: slice?.id || null,
-    backend: 'codex-sdk',
-    blockers: writePathCount ? ['write_capable_no_patch_envelope'] : []
-  }
-}
-
-function sdkWritePaths(slice: any, opts: any) {
-  return [
-    ...(Array.isArray(slice?.write_paths) ? slice.write_paths : []),
-    ...(Array.isArray(opts?.write_paths) ? opts.write_paths : [])
-  ].map(String).filter(Boolean)
-}
-
-function normalizeDirectSdkPatchEnvelopes(envelopes: AgentPatchEnvelope[], agent: any, opts: any, sdkThreadId: string) {
-  return envelopes.map((envelope) => normalizeAgentPatchEnvelope({
-    ...envelope,
-    source: 'model_authored',
-    native_cli_worker_session_id: agent.session_id,
-    native_cli_process_id: process.pid,
-    worker_process_id: process.pid,
-    backend_sdk_thread_id: sdkThreadId,
-    fast_mode: opts.fastMode !== false,
-    service_tier: opts.serviceTier || 'fast'
-  }))
 }
 
 async function readZellijPaneIdsBySlot(root: string) {

@@ -15,7 +15,6 @@ const original = {
   noAttach: process.env.SKS_NO_ZELLIJ_ATTACH,
   requireZellij: process.env.SKS_REQUIRE_ZELLIJ,
   zellijSocketDir: process.env.ZELLIJ_SOCKET_DIR,
-  madSwarm: process.env.SKS_MAD_NATIVE_SWARM,
   skipNpm: process.env.SKS_SKIP_NPM_FRESHNESS_CHECK
 }
 
@@ -49,11 +48,10 @@ try {
   process.env.SKS_NO_ZELLIJ_ATTACH = '1'
   process.env.SKS_REQUIRE_ZELLIJ = '0'
   process.env.ZELLIJ_SOCKET_DIR = socketDir
-  process.env.SKS_MAD_NATIVE_SWARM = '0'
   process.env.SKS_SKIP_NPM_FRESHNESS_CHECK = '1'
   process.exitCode = 0
 
-  const launch = await madHighCommand(['--no-attach', '--no-swarm', '--session', sessionName], {
+  const launch = await madHighCommand(['--no-attach', '--session', sessionName], {
     maybePromptSksUpdateForLaunch: async () => ({ status: 'skipped' }),
     maybePromptCodexUpdateForLaunch: async () => ({ status: 'skipped' }),
     ensureMadLaunchDependencies: async () => ({ ready: true, actions: [] }),
@@ -98,7 +96,6 @@ try {
   restoreEnv('SKS_NO_ZELLIJ_ATTACH', original.noAttach)
   restoreEnv('SKS_REQUIRE_ZELLIJ', original.requireZellij)
   restoreEnv('ZELLIJ_SOCKET_DIR', original.zellijSocketDir)
-  restoreEnv('SKS_MAD_NATIVE_SWARM', original.madSwarm)
   restoreEnv('SKS_SKIP_NPM_FRESHNESS_CHECK', original.skipNpm)
   if (cleanup.ok) {
     fixtureRemoval = await removeFixtureRootAfterQuiescence(tmp)

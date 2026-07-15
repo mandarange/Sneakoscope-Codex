@@ -47,7 +47,7 @@ Every `sks ...` token in the footer is a real, runnable command (enforced by
 `scripts/zellij-ui-design-check.mjs`). The palette is:
 
 ```
-Ctrl+q detach · sks doctor --fix · sks zellij status · sks agent rollback-patches
+Ctrl+q detach · sks doctor --fix · sks zellij status · sks rollback list
 ```
 
 `Ctrl+q` is the Zellij detach keybind; the remaining tokens are SKS commands.
@@ -98,7 +98,7 @@ Blockers ───────────────────────�
 Reports ────────────────────────────────────────────────────────────────────
   proof: .sneakoscope/reports/lane-executor-1.json
 Keys ───────────────────────────────────────────────────────────────────────
-Keys: Ctrl+q detach · sks doctor --fix · sks zellij status · sks agent rollback-patches
+Keys: Ctrl+q detach · sks doctor --fix · sks zellij status · sks rollback list
 ```
 
 ## Enforcing gates

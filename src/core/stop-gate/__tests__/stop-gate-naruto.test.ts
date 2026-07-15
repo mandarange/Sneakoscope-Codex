@@ -10,6 +10,7 @@ import { evaluateStop } from '../../pipeline-internals/runtime-gates.js';
 import { hasSubagentEvidence } from '../../pipeline-internals/runtime-core.js';
 import { writeRouteCompletionProof } from '../../proof/route-adapter.js';
 import { buildSubagentEvidence } from '../../subagents/subagent-evidence.js';
+import { buildSsotGuard } from '../../safety/ssot-guard.js';
 
 async function makeTempRoot(): Promise<string> {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-sg-root-'));
@@ -159,7 +160,7 @@ test('passed legacy Naruto gate is not accepted as official evidence without a l
   assert.match(decision?.reason, /subagent-plan\.json/);
 });
 
-test('legacy subagent-evidence.jsonl is ignored by default and accepted only with an explicit legacy marker', async () => {
+test('non-canonical subagent-evidence.jsonl is never accepted as official evidence', async () => {
   const root = await makeTempRoot();
   const missionId = 'M-test-legacy-jsonl';
   const dir = await setupMission(root, missionId);
@@ -168,7 +169,7 @@ test('legacy subagent-evidence.jsonl is ignored by default and accepted only wit
     JSON.stringify({ stage: 'result', workflow: 'legacy_process_swarm' })
   ].join('\n') + '\n');
   assert.equal(await hasSubagentEvidence(root, { mission_id: missionId, subagents_required: true, native_sessions_required: false }), false);
-  assert.equal(await hasSubagentEvidence(root, { mission_id: missionId, legacy_subagent_workflow: true }), true);
+  assert.equal(await hasSubagentEvidence(root, { mission_id: missionId, legacy_subagent_workflow: true }), false);
 });
 
 test('stop hook does not hidden-block after canonical Naruto allow_stop', async () => {
@@ -224,6 +225,7 @@ test('stop hook does not hidden-block after canonical Naruto allow_stop', async 
       { event_name: 'SubagentStop', thread_id: 'a2' }
     ]
   })));
+  await fsp.writeFile(path.join(dir, 'ssot-guard.json'), JSON.stringify(buildSsotGuard({ route: 'Naruto', mode: 'NARUTO', task: 'fixture' })));
   await fsp.writeFile(path.join(dir, 'naruto-summary.json'), JSON.stringify({
     schema: 'sks.naruto-subagent-workflow.v1',
     ok: true,
@@ -238,7 +240,6 @@ test('stop hook does not hidden-block after canonical Naruto allow_stop', async 
     completed_subagents: 2,
     failed_subagents: 0,
     verification: { budget: 'affected', checks: [] },
-    legacy_process_swarm_used: false,
     parent_summary_present: true,
     parent_summary: 'Both independent slices completed and were integrated.',
     parent_thread_outcomes: parentSummary.thread_outcomes
@@ -254,6 +255,7 @@ test('stop hook does not hidden-block after canonical Naruto allow_stop', async 
     subagent_plan_ready: true,
     official_subagent_evidence: true,
     parent_summary_present: true,
+    ssot_guard: true,
     session_cleanup: true,
     blockers: [],
     missing_fields: []
@@ -280,6 +282,11 @@ test('stop hook does not hidden-block after canonical Naruto allow_stop', async 
     status: 'verified',
     executionClass: 'real',
     lightweightEvidence: true,
+    gate: {
+      workflow: 'official_codex_subagent',
+      official_subagent_evidence: true,
+      parent_summary_present: true
+    },
     summary: { manual_review_required: false }
   });
   await fsp.writeFile(path.join(dir, 'reflection.md'), '# Reflection\n\nNo issue found.\n');
@@ -447,7 +454,7 @@ test('writeFinalStopGate preserves existing native gate fields', async () => {
   const root = await makeTempRoot();
   const missionId = 'M-test-009';
   const dir = await setupMission(root, missionId);
-  await fsp.writeFile(path.join(dir, 'naruto-gate.json'), JSON.stringify({ schema: 'sks.naruto-gate.v1', clone_roster_built: true, custom_detail: 'keep-me', passed: false }));
+  await fsp.writeFile(path.join(dir, 'naruto-gate.json'), JSON.stringify({ schema: 'sks.naruto-gate.v1', worker_roster_built: true, custom_detail: 'keep-me', passed: false }));
   await writeFinalStopGate({
     root,
     missionId,
@@ -460,7 +467,7 @@ test('writeFinalStopGate preserves existing native gate fields', async () => {
     nativeGateFile: 'naruto-gate.json'
   });
   const native = JSON.parse(await fsp.readFile(path.join(dir, 'naruto-gate.json'), 'utf8'));
-  assert.equal(native.clone_roster_built, true);
+  assert.equal(native.worker_roster_built, true);
   assert.equal(native.custom_detail, 'keep-me');
   assert.equal(native.passed, true);
   const canonical = JSON.parse(await fsp.readFile(path.join(dir, 'stop-gate.json'), 'utf8'));

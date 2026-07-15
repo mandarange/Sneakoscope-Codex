@@ -15,9 +15,9 @@ test('parallel runtime proof v2 requires worker diversity, changed files, and ti
 
   await appendParallelRuntimeEvent(root, missionId, {
     event_type: 'worker_launch_invoked',
-    slot_id: 'clone-001',
+    slot_id: 'worker-001',
     generation_index: 1,
-    session_id: 'clone-001-gen-1',
+    session_id: 'worker-001-gen-1',
     pid: 111,
     backend: 'process',
     placement: 'process',
@@ -25,9 +25,9 @@ test('parallel runtime proof v2 requires worker diversity, changed files, and ti
   });
   await appendParallelRuntimeEvent(root, missionId, {
     event_type: 'worker_launch_invoked',
-    slot_id: 'clone-002',
+    slot_id: 'worker-002',
     generation_index: 1,
-    session_id: 'clone-002-gen-1',
+    session_id: 'worker-002-gen-1',
     pid: 222,
     backend: 'process',
     placement: 'process',
@@ -36,9 +36,9 @@ test('parallel runtime proof v2 requires worker diversity, changed files, and ti
   await new Promise((resolve) => setTimeout(resolve, 5));
   await appendParallelRuntimeEvent(root, missionId, {
     event_type: 'worker_completed',
-    slot_id: 'clone-001',
+    slot_id: 'worker-001',
     generation_index: 1,
-    session_id: 'clone-001-gen-1',
+    session_id: 'worker-001-gen-1',
     pid: 111,
     backend: 'process',
     placement: 'process',
@@ -46,9 +46,9 @@ test('parallel runtime proof v2 requires worker diversity, changed files, and ti
   });
   await appendParallelRuntimeEvent(root, missionId, {
     event_type: 'worker_completed',
-    slot_id: 'clone-002',
+    slot_id: 'worker-002',
     generation_index: 1,
-    session_id: 'clone-002-gen-1',
+    session_id: 'worker-002-gen-1',
     pid: 222,
     backend: 'process',
     placement: 'process',
@@ -66,10 +66,10 @@ test('parallel runtime proof v2 requires worker diversity, changed files, and ti
   assert.equal(proof.production_runtime, true);
   assert.equal(proof.mock_only, false);
   assert.equal(proof.observed_worker_count, 2);
-  assert.deepEqual(proof.changed_files_by_worker['clone-001'], ['src/a.ts']);
-  assert.deepEqual(proof.changed_files_by_worker['clone-002'], ['src/b.ts']);
+  assert.deepEqual(proof.changed_files_by_worker['worker-001'], ['src/a.ts']);
+  assert.deepEqual(proof.changed_files_by_worker['worker-002'], ['src/b.ts']);
   assert.equal(proof.changed_file_count, 2);
-  assert.ok(proof.overlap_windows.some((window: any) => window.worker_a === 'clone-001' && window.worker_b === 'clone-002' && window.overlap_ms > 0));
+  assert.ok(proof.overlap_windows.some((window: any) => window.worker_a === 'worker-001' && window.worker_b === 'worker-002' && window.overlap_ms > 0));
   assert.equal(proof.ok, true);
 });
 
@@ -80,10 +80,10 @@ test('parallel runtime proof does not invent overlap at worker handoff boundary'
   await fsp.mkdir(path.dirname(file), { recursive: true });
   const base = Date.UTC(2026, 0, 1);
   const rows = [
-    eventRow(missionId, base, 'worker_launch_invoked', 'clone-001', {}),
-    eventRow(missionId, base + 100, 'worker_completed', 'clone-001', { changed_files: ['src/a.ts'] }),
-    eventRow(missionId, base + 100, 'worker_launch_invoked', 'clone-002', {}),
-    eventRow(missionId, base + 200, 'worker_completed', 'clone-002', { changed_files: ['src/b.ts'] }),
+    eventRow(missionId, base, 'worker_launch_invoked', 'worker-001', {}),
+    eventRow(missionId, base + 100, 'worker_completed', 'worker-001', { changed_files: ['src/a.ts'] }),
+    eventRow(missionId, base + 100, 'worker_launch_invoked', 'worker-002', {}),
+    eventRow(missionId, base + 200, 'worker_completed', 'worker-002', { changed_files: ['src/b.ts'] }),
   ];
   await fsp.writeFile(file, `${rows.map((row) => JSON.stringify(row)).join('\n')}\n`);
 
@@ -96,7 +96,7 @@ test('parallel runtime proof does not invent overlap at worker handoff boundary'
     minChangedFiles: 2,
   });
 
-  assert.equal(proof.overlap_windows.some((window: any) => window.worker_a === 'clone-001' && window.worker_b === 'clone-002'), false);
+  assert.equal(proof.overlap_windows.some((window: any) => window.worker_a === 'worker-001' && window.worker_b === 'worker-002'), false);
   assert.ok(proof.blockers.includes('worker_timestamp_overlap_missing'));
   assert.equal(proof.ok, false);
 });
@@ -111,7 +111,7 @@ function eventRow(missionId: string, ms: number, eventType: string, workerId: st
     slot_id: workerId,
     generation_index: 1,
     session_id: `${workerId}-gen-1`,
-    pid: workerId === 'clone-001' ? 111 : 222,
+    pid: workerId === 'worker-001' ? 111 : 222,
     backend: 'process',
     placement: 'process',
     meta,

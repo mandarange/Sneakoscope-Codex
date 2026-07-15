@@ -137,7 +137,7 @@ try {
   const facade = fs.readFileSync(path.join(root, 'src', 'core', 'commands', 'naruto-command.ts'), 'utf8')
   const preparationOwner = fs.readFileSync(path.join(root, 'src', 'core', 'subagents', 'official-subagent-preparation.ts'), 'utf8')
   assertGate(!facade.includes('naruto-command-legacy') && !fs.existsSync(path.join(root, 'src', 'core', 'commands', 'naruto-command-legacy.ts')), 'legacy Naruto process swarm command must be removed and unreachable')
-  assertGate(!facade.includes("from '../agents/agent-orchestrator.js'") && !facade.includes("from '../agents/native-cli-session-swarm.js'"), 'default Naruto facade must not eager-import the process orchestrator')
+  assertGate(!facade.includes("from '../agents/agent-orchestrator.js'") && !facade.includes("from '../agents/native-cli-worker-runtime.js'"), 'default Naruto facade must not eager-import the process orchestrator')
   assertGate(facade.includes('prepareOfficialSubagentMission'), 'Naruto facade must delegate preparation to the shared official-subagent owner')
   assertGate(preparationOwner.includes('delegation_prompt: delegationPrompt'), 'canonical subagent plan must persist the official delegation prompt required by the stop gate')
 

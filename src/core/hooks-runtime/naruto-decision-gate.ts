@@ -150,18 +150,19 @@ function decisionFromState(event: CodexHookEventName | string, state: any): Hook
   const required = state?.route_closed === true
     ? false
     : state?.subagents_required === true
-      || (/^(?:NARUTO|TEAM)$/i.test(String(state?.mode || state?.route || '')) && state?.subagents_required !== false);
+      || (/^NARUTO$/i.test(String(state?.mode || state?.route || '')) && state?.subagents_required !== false);
   const profile = isTaskProfile(state?.task_profile)
     ? state.task_profile
     : required
       ? 'bounded-work'
       : 'passthrough';
+  const activeRouteId = route?.id || (required ? 'Naruto' : null);
   return decision({
     event,
     mode: required ? 'generic_naruto' : 'none',
     required,
     action: required ? 'observe_required' : 'observe_bypass',
-    routeId: state?.route_command || state?.route || state?.mode || null,
+    routeId: activeRouteId,
     profile,
     reason: state?.route_closed === true
       ? 'active_route_closed'

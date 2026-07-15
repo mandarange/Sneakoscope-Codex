@@ -1,5 +1,6 @@
+import fsp from 'node:fs/promises';
 import path from 'node:path';
-import { readJson } from '../fsx.js';
+import { readJson, runProcess } from '../fsx.js';
 import { listSessionStates, missionDir, stateFile } from '../mission.js';
 import { readRouteProof } from '../proof/proof-reader.js';
 import { trustReportPath } from '../trust-kernel/trust-report.js';
@@ -57,6 +58,11 @@ export async function readRemoteSessionSnapshot(input: {
   const gateStatus = String(proofRecord?.evidence?.gates?.status ?? proofRecord?.gate_status ?? 'not_recorded');
   const gatesPass = gateStatus === 'passed' || gateStatus === 'verified' || proofRecord?.evidence?.gates?.ok === true;
   const trustAcceptable = trust?.ok === true || trust?.status === 'verified' || trust?.status === 'verified_partial';
+  const branchResult = await runProcess('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+    cwd: input.root,
+    timeoutMs: 5_000,
+    maxOutputBytes: 8 * 1024
+  }).catch(() => null);
   return {
     schema: 'sks.remote-session-snapshot.v1',
     machine_id: input.machineId,
@@ -67,6 +73,10 @@ export async function readRemoteSessionSnapshot(input: {
     phase: stringOrNull(session.state.phase),
     generation: remoteSessionGeneration(session.state),
     updated_at: stringOrNull(session.state.updated_at),
+    project: {
+      name: path.basename(path.resolve(input.root)),
+      branch: branchResult?.code === 0 ? stringOrNull(branchResult.stdout) : null
+    },
     session_state: remoteSessionState(session.state),
     execution_terminal: executionTerminal,
     completion_proof_status: proofRecord?.status ?? 'not_verified',
@@ -79,6 +89,65 @@ export async function readRemoteSessionSnapshot(input: {
       trust_report: path.relative(input.root, trustReportPath(input.root, missionId))
     } : null
   };
+}
+
+export async function readRemoteSessionView(input: {
+  readonly root: string;
+  readonly machineId: string;
+  readonly projectId: string;
+  readonly sessionId: string;
+  readonly view: string;
+}): Promise<RemoteSessionJson> {
+  const snapshot = await readRemoteSessionSnapshot(input);
+  const view = normalizeView(input.view);
+  if (view === 'status' || view === 'refresh' || view === 'open' || view === 'verify') {
+    return { ...snapshot, requested_view: view };
+  }
+  if (view === 'diff') {
+    const [status, stat] = await Promise.all([
+      runProcess('git', ['status', '--short'], { cwd: input.root, timeoutMs: 5_000, maxOutputBytes: 32 * 1024 }),
+      runProcess('git', ['diff', '--stat', '--'], { cwd: input.root, timeoutMs: 5_000, maxOutputBytes: 32 * 1024 })
+    ]);
+    return {
+      ...snapshot,
+      requested_view: view,
+      diff: {
+        status: publicLines(status.stdout, 80),
+        stat: publicLines(stat.stdout, 80),
+        truncated: status.truncated || stat.truncated
+      }
+    };
+  }
+  const session = await remoteSessionRecord(input.root, input.sessionId);
+  const missionId = stringOrNull(session.state.mission_id);
+  if (!missionId) return { ...snapshot, requested_view: view, view_status: 'mission_not_available' };
+  const dir = missionDir(input.root, missionId);
+  if (view === 'tail') {
+    return { ...snapshot, requested_view: view, events: await publicEventTail(path.join(dir, 'events.jsonl')) };
+  }
+  if (view === 'artifacts') {
+    const entries = await fsp.readdir(dir, { withFileTypes: true }).catch(() => []);
+    return {
+      ...snapshot,
+      requested_view: view,
+      artifacts: entries.filter((entry) => entry.isFile() && !entry.isSymbolicLink()).map((entry) => entry.name).sort().slice(0, 128)
+    };
+  }
+  if (view === 'gates') {
+    const entries = await fsp.readdir(dir, { withFileTypes: true }).catch(() => []);
+    const gates: Array<Record<string, unknown>> = [];
+    for (const entry of entries.filter((candidate) => candidate.isFile() && /gate\.json$/i.test(candidate.name)).slice(0, 64)) {
+      const value = await readJson<Record<string, unknown> | null>(path.join(dir, entry.name), null).catch(() => null);
+      gates.push({ file: entry.name, ...publicVerdict(value) });
+    }
+    return { ...snapshot, requested_view: view, gates };
+  }
+  if (view === 'trust') {
+    const value = await readJson<Record<string, unknown> | null>(trustReportPath(input.root, missionId), null).catch(() => null);
+    return { ...snapshot, requested_view: view, trust: publicVerdict(value) };
+  }
+  const value = await readJson<Record<string, unknown> | null>(path.join(dir, 'completion-proof.json'), null).catch(() => null);
+  return { ...snapshot, requested_view: 'proof', proof: publicVerdict(value) };
 }
 
 export function remoteSessionGeneration(state: RemoteSessionJson): number {
@@ -104,4 +173,50 @@ function isTerminalPhase(phase: string): boolean {
 function stringOrNull(value: unknown): string | null {
   const text = String(value ?? '').trim();
   return text || null;
+}
+
+function normalizeView(value: string): 'status' | 'tail' | 'diff' | 'gates' | 'trust' | 'proof' | 'artifacts' | 'refresh' | 'open' | 'verify' {
+  const view = String(value || '').toLowerCase();
+  return ['status', 'tail', 'diff', 'gates', 'trust', 'proof', 'artifacts', 'refresh', 'open', 'verify'].includes(view)
+    ? view as ReturnType<typeof normalizeView>
+    : 'status';
+}
+
+async function publicEventTail(file: string): Promise<Array<Record<string, unknown>>> {
+  const text = await fsp.readFile(file, 'utf8').catch(() => '');
+  return text.split('\n').filter(Boolean).slice(-50).flatMap((line) => {
+    try {
+      const value = JSON.parse(line) as Record<string, unknown>;
+      return [{
+        at: stringOrNull(value.at ?? value.ts ?? value.occurred_at),
+        type: stringOrNull(value.type ?? value.event ?? value.event_name),
+        phase: stringOrNull(value.phase),
+        status: stringOrNull(value.status ?? value.outcome)
+      }];
+    } catch {
+      return [];
+    }
+  });
+}
+
+function publicVerdict(value: Record<string, unknown> | null): Record<string, unknown> {
+  if (!value) return { status: 'not_recorded', ok: false };
+  const missing = Array.isArray(value.missing) ? value.missing.map(String).slice(0, 64) : [];
+  const blockers = Array.isArray(value.blockers) ? value.blockers.map(String).slice(0, 64) : [];
+  return {
+    schema: stringOrNull(value.schema),
+    status: stringOrNull(value.status ?? value.gate_status),
+    ok: value.ok === true,
+    missing: publicLines(missing.join('\n'), 64),
+    blockers: publicLines(blockers.join('\n'), 64)
+  };
+}
+
+function publicLines(value: string, max: number): string[] {
+  const home = process.env.HOME ? path.resolve(process.env.HOME) : '';
+  return String(value || '').split(/\r?\n/).filter(Boolean).slice(0, max).map((line) => line
+    .replace(home, '~')
+    .replace(/\b(?:Bearer\s+)?(?:sk|xai)-[A-Za-z0-9_-]{16,}\b/gi, '[redacted]')
+    .replace(/\b\d{5,}:[A-Za-z0-9_-]{20,}\b/g, '[redacted]')
+    .slice(0, 500));
 }

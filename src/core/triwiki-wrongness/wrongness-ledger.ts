@@ -370,10 +370,10 @@ export async function recordAgentMismatchWrongness(root: string, input: unknown 
     wrongness_kind: 'agent_output_error',
     severity: 'medium',
     claim: { text: `Agent ${agentId} produced a parse or claim mismatch: ${issues.join(', ')}` },
-    detected_by: { source: 'agent_validation', command: 'sks agent run', artifact: typeof row.artifact === 'string' ? row.artifact : null, detail: issues.join(', ') },
+    detected_by: { source: 'agent_validation', command: 'sks naruto run', artifact: typeof row.artifact === 'string' ? row.artifact : null, detail: issues.join(', ') },
     root_cause: { category: 'agent_reasoning_error', explanation: 'Agent output could not be accepted as clean handoff evidence.' },
     corrective_action: { summary: 'Repair agent output parsing or downgrade the agent claim before consensus uses it.', required_evidence: ['agent result json'], patch_status: 'pending' },
-    avoidance_rule: { text: 'Do not promote agent findings with parse issues or claim mismatches into consensus without correction.', applies_to: ['agents', '$Team'], severity: 'medium' },
+    avoidance_rule: { text: 'Do not promote agent findings with parse issues or claim mismatches into consensus without correction.', applies_to: ['agents', '$Naruto'], severity: 'medium' },
     links: { artifacts: typeof row.artifact === 'string' ? [row.artifact] : [] }
   }, { missionId });
   return saved.record;

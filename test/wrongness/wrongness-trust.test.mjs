@@ -9,7 +9,7 @@ test('active high-severity wrongness blocks verified trust status', async () => 
   const proof = {
     schema: 'sks.completion-proof.v1',
     mission_id: 'M-trust',
-    route: '$Team',
+    route: '$Naruto',
     status: 'verified',
     evidence: {
       wrongness: {

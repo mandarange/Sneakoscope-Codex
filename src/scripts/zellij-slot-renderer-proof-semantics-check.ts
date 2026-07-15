@@ -6,7 +6,7 @@ import { buildWorkerPaneArtifact } from '../core/zellij/zellij-worker-pane-manag
 
 const root = process.cwd()
 const managerSource = fs.readFileSync(path.join(root, 'src/core/zellij/zellij-worker-pane-manager.ts'), 'utf8')
-const swarmSource = fs.readFileSync(path.join(root, 'src/core/agents/native-cli-session-swarm.ts'), 'utf8')
+const runtimeSource = fs.readFileSync(path.join(root, 'src/core/agents/native-cli-worker-runtime.ts'), 'utf8')
 
 const base = {
   root,
@@ -35,18 +35,18 @@ const workerCommand = buildWorkerPaneArtifact({
   ...base,
   slotId: 'slot-002',
   sessionId: 'slot-002-gen-1',
-  workerCommand: 'node dist/bin/sks.js --agent worker --intake worker-intake.json --json'
+  workerCommand: 'node dist/core/agents/native-cli-worker-entry.js --intake worker-intake.json --json'
 })
 
 const report = {
-  schema: 'sks.zellij-slot-renderer-proof-semantics-check.v1',
+  schema: 'sks.zellij-slot-renderer-proof-semantics-check.v2',
   ok: true,
   slot_renderer_pane_kind: slotRenderer.pane_kind,
   slot_renderer_scaling_primitive: slotRenderer.scaling_primitive,
   worker_pane_kind: workerCommand.pane_kind,
   worker_scaling_primitive: workerCommand.scaling_primitive,
   launch_ledger_uses_record_values: managerSource.includes('pane_kind: record.pane_kind') && managerSource.includes('scaling_primitive: record.scaling_primitive'),
-  swarm_uses_pane_record_values: swarmSource.includes('input.record.pane_kind = paneRecord.pane_kind') && swarmSource.includes('input.record.scaling_primitive = paneRecord.scaling_primitive'),
+  runtime_uses_pane_record_values: runtimeSource.includes('input.record.pane_kind = paneRecord.pane_kind') && runtimeSource.includes('input.record.scaling_primitive = paneRecord.scaling_primitive'),
   blockers: [] as string[]
 }
 
@@ -56,7 +56,7 @@ report.blockers = [
   ...(workerCommand.pane_kind === 'worker_codex_sdk' ? [] : ['worker_pane_kind_regressed']),
   ...(workerCommand.scaling_primitive === 'native_cli_process_in_zellij_worker_pane' ? [] : ['worker_scaling_primitive_regressed']),
   ...(report.launch_ledger_uses_record_values ? [] : ['launch_ledger_semantics_not_record_backed']),
-  ...(report.swarm_uses_pane_record_values ? [] : ['swarm_semantics_not_record_backed'])
+  ...(report.runtime_uses_pane_record_values ? [] : ['runtime_semantics_not_record_backed'])
 ]
 report.ok = report.blockers.length === 0
 

@@ -39,7 +39,7 @@ await fs.writeFile(path.join(agents, 'parallel-runtime-proof.json'), `${JSON.str
   blockers: []
 })}\n`)
 await fs.writeFile(path.join(agents, 'agent-scheduler-state.json'), `${JSON.stringify({ target_active_slots: 32, max_observed_active_slots: 32, largest_batch_size: 32, scheduler_utilization: 0.88, wall_time_ms: 12100 })}\n`)
-await fs.writeFile(path.join(agents, 'agent-native-cli-session-swarm.json'), `${JSON.stringify({ process_ids: Array.from({ length: 32 }, (_, i) => 8000 + i), zellij_pane_worker_sessions: 8, headless_overflow_worker_count: 24 })}\n`)
+await fs.writeFile(path.join(agents, 'native-cli-worker-runtime.json'), `${JSON.stringify({ process_ids: Array.from({ length: 32 }, (_, i) => 8000 + i), zellij_pane_worker_sessions: 8, headless_overflow_worker_count: 24 })}\n`)
 await fs.writeFile(path.join(agents, 'naruto-concurrency-governor.json'), `${JSON.stringify({ target_active_slots: 32 })}\n`)
 await fs.writeFile(path.join(dir, 'zellij', 'slot-telemetry.snapshot.json'), `${JSON.stringify({ schema: 'sks.zellij-slot-telemetry-snapshot.v1', mission_id: missionId, updated_at: new Date(Date.now() - 800).toISOString(), slots: {}, counts: {} })}\n`)
 const summary = await buildRuntimeProofSummary(root, missionId)

@@ -1,34 +1,39 @@
-# Parallel Write Agent Runtime
+# Parallel Write With Official Subagents
 
-The default Naruto path delegates parallel work through Codex official
-subagents:
+Parallel implementation uses the Codex official subagent workflow:
 
 ```bash
 sks naruto run "update independent packages" --agents 8 --max-threads 12
 ```
 
-`--agents` requests total subagents. `--max-threads` bounds concurrent official
-agent threads, and larger requests are handled in waves. `max_depth = 1`
-prohibits nested delegation.
+`--agents` is the requested total thread count. `--max-threads` bounds concurrent
+official threads, and larger requests run in waves. Project configuration keeps
+`max_depth = 1`, so a delegated child cannot delegate again.
 
-Parallel writes are safe only when the parent assigns independent slices with
-disjoint file ownership. Overlapping paths must be serialized. Workers do not
-integrate each other's output; the parent collects all results, resolves
-conflicts, runs scoped verification, and writes the final summary.
+## Ownership
 
-A Naruto run is not proven by recorded flags, process counts, patch-envelope
-counts, or Zellij panes. Completion requires matched official
-`SubagentStart`/`SubagentStop` thread IDs, no failed or open thread, the final
-requested count, and a trustworthy `sks.subagent-parent-summary.v1` object with
-an explicit completed outcome for every thread. `SubagentStop` alone has no
-success status and therefore fails closed without that parent correlation.
+The parent decomposes work before spawning threads. Parallel write slices must
+have independent objectives and disjoint file ownership. Overlapping paths are
+serialized. Children do not integrate one another's work; the parent collects
+every result, resolves conflicts, applies the final integration, and runs the
+verification appropriate to the affected risk.
 
-The separate `sks agent run` command retains its documented patch queue,
-parallel write-mode, apply, and rollback surfaces. Those artifacts may prove an
-agent-runtime mission, but they are not substituted for official Naruto event
-evidence.
+Each write-capable mission keeps these parent-owned artifacts current:
 
-Historical Naruto process-swarm flags such as `--write-mode`, `--apply-patches`,
-`--work-items`, and custom backends are rejected. The historical Naruto process
-swarm and its environment opt-in are removed; no flag or environment variable
-can reactivate that runtime.
+- `subagent-plan.json`
+- `subagent-events.jsonl`
+- `subagent-parent-summary.json`
+- `subagent-evidence.json`
+- `work-order-ledger.json`
+
+## Completion
+
+Flags, pane count, or process count do not prove completion. A parallel run
+passes only when official start/stop events correlate to unique thread IDs,
+every requested thread has a trustworthy parent outcome, no thread remains
+open or failed, the parent integration is complete, and scoped verification
+passes.
+
+Zellij is an observability surface. It may show running and verifying threads,
+but its display state never substitutes for the official event and parent
+summary contract.

@@ -1,9 +1,5 @@
-# Native Agent Orchestration
+# Official Subagent Orchestration
 
-See [Native Agent Kernel](native-agent-kernel.md). This page is the 1.16.0 route-facing overview for `sks agent`, `sks --agent`, non-recursive workers, proof evidence, and the native-only route collaboration backend.
+The current execution workflow is documented in [Codex Official Subagent Workflow](native-agent-kernel.md).
 
-## 1.16.1 Runtime Closure
-
-SKS 1.16.1 routes release-critical Team, Research, QA, and native agent proof checks through the native agent orchestrator, Codex exec output-last-message parsing, central ledger proof, and no-scout runtime gates.
-
-SKS 1.16.2 keeps that closure intact for the prompt-side Team agent budget patch release.
+Use `$Naruto` for general execution and `$Work` when an execution alias is preferable. CLI automation uses `sks naruto run`, while `status`, `subagents`, and `proof` provide read-only mission inspection. Parent-owned decomposition, single-depth child delegation, disjoint write scopes, structured parent integration, scoped verification, and Honest Mode are mandatory parts of the workflow.

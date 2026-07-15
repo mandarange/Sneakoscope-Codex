@@ -204,7 +204,7 @@ function buildOllamaGenerateRequest(agent: any, slice: any, opts: any, config: O
     JSON.stringify({
       request_id: requestId,
       mission_id: opts.missionId || opts.mission_id || '',
-      route: opts.route || '$Agent',
+      route: opts.route || '$Naruto',
       agent: {
         id: agent.id || '',
         session_id: agent.session_id || '',
@@ -291,7 +291,7 @@ function normalizeOllamaPatchEnvelopes(value: any, agent: any, slice: any, opts:
       ...raw,
       source: 'model_authored',
       mission_id: String(opts.missionId || opts.mission_id || raw?.mission_id || ''),
-      route: String(opts.route || raw?.route || '$Agent'),
+      route: String(opts.route || raw?.route || '$Naruto'),
       agent_id: String(agent.id || raw?.agent_id || 'ollama-worker'),
       session_id: String(agent.session_id || raw?.session_id || ''),
       slot_id: String(agent.slot_id || raw?.slot_id || agent.id || 'ollama-worker'),

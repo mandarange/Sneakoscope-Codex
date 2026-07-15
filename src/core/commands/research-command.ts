@@ -306,7 +306,7 @@ async function researchRun(args: any) {
       'source-ledger.json',
       'claim-evidence-matrix.json',
       'implementation-blueprint.json',
-      'team-handoff-goal.md',
+      'naruto-handoff-goal.md',
       RESEARCH_ADVERSARIAL_REVIEW_ARTIFACT,
       RESEARCH_REVISION_LEDGER_ARTIFACT,
       RESEARCH_CONVERGENCE_GATE_ARTIFACT,
@@ -361,7 +361,7 @@ function printResearchCompletion(id: string, root: string, dir: string, plan: an
   console.log(`Gate: ${gate?.passed ? 'passed' : 'blocked'}`);
   console.log(`Quality: ${metrics.report_word_count ?? 0} words / ${metrics.source_entries_total_with_counterevidence ?? metrics.source_entries ?? 0} sources / ${metrics.key_claims ?? 0} key claims / repetition ${synthesis.repetition_ratio ?? metrics.report_repetition?.repeated_paragraph_ratio ?? 'n/a'}`);
   console.log(`Final review: static ${metrics.final_review_blockers?.length ? 'block' : 'pass'} / codex ${synthesis.codex_final_review_verdict || 'missing'}`);
-  console.log(`Handoff: ${rel('team-handoff-goal.md')}`);
+  console.log(`Handoff: ${rel('naruto-handoff-goal.md')}`);
 }
 
 async function researchStatus(args: any) {

@@ -4,6 +4,44 @@
     {
       "path": "dist/scripts/codex-config-load-probe.js",
       "reason": "doctor/install runtime probes Codex config load behavior after package install"
+    },
+    {
+      "path": "dist/scripts/release-file-ownership-check.js",
+      "reason": "release integration verifies worker ownership before accepting a workstream commit"
+    },
+    {
+      "path": "dist/scripts/release-macos-menubar-proof.js",
+      "reason": "macOS release proof validates the native Menu Bar build and install receipts"
+    },
+    {
+      "path": "dist/scripts/release-main-push-guard.js",
+      "reason": "release director verifies the immutable pre-push authorization boundary"
+    },
+    {
+      "path": "dist/scripts/release-main-push-receipt.js",
+      "reason": "release director records and verifies the exact main push result"
+    },
+    {
+      "path": "dist/scripts/release-pack-receipt.js",
+      "reason": "release jobs bind, inspect, and compare the immutable local and staged tarballs"
+    }
+  ],
+  "dynamic_reference_policies": [
+    {
+      "source": "dist/core/build/build-once-runner.js",
+      "reason": "derives script paths only from package.json scripts, which are closure roots"
+    },
+    {
+      "source": "dist/core/release/runtime-script-pack-closure.js",
+      "reason": "formats the verified package allowlist and does not dispatch a runtime script"
+    },
+    {
+      "source": "dist/scripts/release-gate-script-parity-check.js",
+      "reason": "derives script paths only from release-gates.v2.json commands, which are closure roots"
+    },
+    {
+      "source": "dist/scripts/release-real-check.js",
+      "reason": "nodeScript call sites are literal-scanned and the release task contract is independently validated"
     }
   ]
 }

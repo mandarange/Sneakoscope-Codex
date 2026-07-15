@@ -10,7 +10,7 @@ const summary = await narutoCommand([
   '--json',
   '--backend',
   'fake',
-  '--clones',
+  '--agents',
   '2',
   '--work-items',
   '2',

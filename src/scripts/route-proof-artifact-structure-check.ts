@@ -10,30 +10,23 @@ const issues = [];
 
 for (const rel of [
   'src/core/proof/route-proof-gate.ts',
-  'src/core/agents/agent-proof-evidence.ts',
-  'src/core/agents/agent-gate.ts',
-  'src/core/agents/agent-ledger-schemas.ts'
+  'src/core/proof/route-proof-policy.ts',
+  'src/core/agents/agent-plan.ts',
+  'src/core/subagents/official-subagent-preparation.ts'
 ]) {
   if (!fs.existsSync(path.join(root, rel))) issues.push(`missing:${rel}`);
 }
 
 const gateText = read('src/core/proof/route-proof-gate.ts');
 for (const token of [
-  "agents.status !== 'passed' || agents.ok !== true",
-  'agent_no_overlap_not_ok',
-  'agent_ledger_hash_chain_not_ok',
-  'agent_consensus_not_ok',
-  'agent_blockers_present',
-  'agent_proof_evidence_missing',
-  'agent_count_below_5',
-  'agent_count_above_20'
+  'routeRequiresOfficialSubagents',
+  'officialSubagentsRequired',
+  'official_subagent_route_gate_missing',
+  'official_subagent_workflow_missing',
+  'official_subagent_evidence_missing',
+  'official_subagent_parent_summary_missing'
 ]) {
   if (!gateText.includes(token)) issues.push(`route_gate_missing:${token}`);
-}
-
-const agentGateText = read('src/core/agents/agent-gate.ts');
-for (const token of ['agent_proof_not_ok', 'agent_proof_status_not_passed', 'agent_count_below_5', 'agent_janitor_missing_or_not_ok']) {
-  if (!agentGateText.includes(token)) issues.push(`agent_gate_missing:${token}`);
 }
 
 await runNegativeFixture();
@@ -67,21 +60,14 @@ async function runNegativeFixture() {
     generated_at: '2026-05-25T00:00:00.000Z',
     mission_id: mission,
     status: 'verified',
-    route: '$Team',
+    route: '$Naruto',
     execution_class: 'real',
     summary: { files_changed: 0, commands_run: 0, tests_passed: 0, tests_failed: 0, manual_review_required: false },
     evidence: {
-      agents: {
-        schema: 'sks.agent-proof-evidence.v1',
-        ok: true,
-        status: 'blocked',
-        agent_count: 5,
-        all_sessions_closed: true,
-        no_overlap_ok: true,
-        ledger_hash_chain_ok: true,
-        consensus_ok: true,
-        janitor_ok: true,
-        blockers: []
+      route_gate: {
+        workflow: 'official_codex_subagent',
+        official_subagent_evidence: true,
+        parent_summary_present: true
       }
     },
     claims: [],
@@ -89,51 +75,56 @@ async function runNegativeFixture() {
     blockers: [],
     next_human_actions: []
   };
-  fs.writeFileSync(proofPath, JSON.stringify(baseProof, null, 2));
   const { validateRouteCompletionProof } = await import(pathToFileURL(built).href);
-  const result = await validateRouteCompletionProof(tmp, { missionId: mission, route: '$Team', state: { agents_required: true } });
-  if (result.ok || !result.issues.includes('agent_gate_not_passed')) issues.push('negative_fixture_false_passed_agent_status');
+
   fs.writeFileSync(proofPath, JSON.stringify({ ...baseProof, evidence: {} }, null, 2));
-  const missingAgents = await validateRouteCompletionProof(tmp, { missionId: mission, route: '$Team' });
-  if (missingAgents.ok || !missingAgents.issues.includes('agent_proof_evidence_missing')) issues.push('negative_fixture_false_passed_missing_agents');
+  const missingRouteGate = await validateRouteCompletionProof(tmp, { missionId: mission, route: '$Naruto' });
+  if (missingRouteGate.ok || !missingRouteGate.issues.includes('official_subagent_route_gate_missing')) issues.push('negative_fixture_false_passed_missing_subagent_route_gate');
+
   fs.writeFileSync(proofPath, JSON.stringify({
     ...baseProof,
     evidence: {
-      agents: {
-        schema: 'sks.agent-proof-evidence.v1',
-        ok: true,
-        status: 'passed',
-        agent_count: 8,
-        all_sessions_closed: true,
-        no_overlap_ok: true,
-        ledger_hash_chain_ok: true,
-        consensus_ok: true,
-        janitor_ok: true,
-        blockers: []
+      route_gate: {
+        workflow: 'invalid_fixture',
+        official_subagent_evidence: true,
+        parent_summary_present: true
       }
     }
   }, null, 2));
-  const scaledAgents = await validateRouteCompletionProof(tmp, { missionId: mission, route: '$Team' });
-  if (!scaledAgents.ok || scaledAgents.issues.includes('agent_count_not_5')) issues.push('positive_fixture_scaled_agents_failed');
+  const wrongWorkflow = await validateRouteCompletionProof(tmp, { missionId: mission, route: '$Naruto' });
+  if (wrongWorkflow.ok || !wrongWorkflow.issues.includes('official_subagent_workflow_missing')) issues.push('negative_fixture_false_passed_wrong_subagent_workflow');
+
   fs.writeFileSync(proofPath, JSON.stringify({
     ...baseProof,
     evidence: {
-      agents: {
-        schema: 'sks.agent-proof-evidence.v1',
-        ok: true,
-        status: 'passed',
-        agent_count: 5,
-        all_sessions_closed: true,
-        no_overlap_ok: true,
-        ledger_hash_chain_ok: true,
-        consensus_ok: true,
-        blockers: []
+      route_gate: {
+        workflow: 'official_codex_subagent',
+        official_subagent_evidence: false,
+        parent_summary_present: true
       }
     }
   }, null, 2));
-  const missingJanitor = await validateRouteCompletionProof(tmp, { missionId: mission, route: '$Team' });
-  if (missingJanitor.ok || !missingJanitor.issues.includes('agent_janitor_missing_or_not_ok')) issues.push('negative_fixture_missing_janitor_false_passed');
+  const missingEvidence = await validateRouteCompletionProof(tmp, { missionId: mission, route: '$Naruto' });
+  if (missingEvidence.ok || !missingEvidence.issues.includes('official_subagent_evidence_missing')) issues.push('negative_fixture_false_passed_missing_subagent_evidence');
+
+  fs.writeFileSync(proofPath, JSON.stringify({
+    ...baseProof,
+    evidence: {
+      route_gate: {
+        workflow: 'official_codex_subagent',
+        official_subagent_evidence: true,
+        parent_summary_present: false
+      }
+    }
+  }, null, 2));
+  const missingParentSummary = await validateRouteCompletionProof(tmp, { missionId: mission, route: '$Naruto' });
+  if (missingParentSummary.ok || !missingParentSummary.issues.includes('official_subagent_parent_summary_missing')) issues.push('negative_fixture_false_passed_missing_subagent_parent_summary');
+
+  fs.writeFileSync(proofPath, JSON.stringify(baseProof, null, 2));
+  const completeSubagentProof = await validateRouteCompletionProof(tmp, { missionId: mission, route: '$Naruto' });
+  if (!completeSubagentProof.ok) issues.push('positive_fixture_official_subagent_proof_failed');
+
   fs.writeFileSync(proofPath, JSON.stringify({ ...baseProof, route: '$Release-Review', evidence: {} }, null, 2));
   const releaseReview = await validateRouteCompletionProof(tmp, { missionId: mission, route: '$Release-Review' });
-  if (releaseReview.ok || !releaseReview.issues.includes('agent_proof_evidence_missing')) issues.push('negative_fixture_release_review_missing_agents_false_passed');
+  if (releaseReview.ok || !releaseReview.issues.includes('official_subagent_route_gate_missing')) issues.push('negative_fixture_release_review_missing_subagent_gate_false_passed');
 }

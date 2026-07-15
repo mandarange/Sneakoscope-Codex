@@ -13,7 +13,7 @@ test('feature fixtures expose the current quality taxonomy', () => {
     'missing'
   ]);
   assert.equal(fixtureForFeature('cli-proof').quality, 'runtime_verified');
-  assert.equal(fixtureForFeature('route-team').quality, 'runtime_verified');
+  assert.equal(fixtureForFeature('route-naruto').quality, 'runtime_verified');
   assert.equal(fixtureForFeature('route-answer').quality, 'wiring_only');
   assert.equal(fixtureForFeature('cli-doctor').quality, 'runtime_verified');
   assert.equal(fixtureForFeature('cli-help').quality, 'runtime_verified');

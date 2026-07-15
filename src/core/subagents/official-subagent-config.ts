@@ -3,10 +3,9 @@ import os from 'node:os'
 import path from 'node:path'
 import { parse } from 'smol-toml'
 import { ensureDir, exists, PACKAGE_VERSION, readText, sha256, writeTextAtomic } from '../fsx.js'
+import { ensureConfinedDirectory, inspectConfinedPath } from '../managed-path-safety.js'
 import {
-  MANAGED_AGENT_ROLES,
   MANAGED_OFFICIAL_SUBAGENT_ROLES,
-  managedAgentRoleOwnsText,
   managedOfficialSubagentRoleContent,
   managedOfficialSubagentRoleOwnsText,
   type ManagedOfficialSubagentRole
@@ -59,9 +58,6 @@ export interface OfficialSubagentAgentInstallResult {
   preserved: string[]
   invalid: string[]
   backups: string[]
-  legacy_stale: string[]
-  removed_legacy: string[]
-  preserved_legacy: string[]
   manual_blockers: string[]
   generated_files: string[]
 }
@@ -221,42 +217,59 @@ export async function installOfficialSubagentAgentConfigs(
   const preserved: string[] = []
   const invalid: string[] = []
   const backups: string[] = []
-  const legacyStale: string[] = []
-  const removedLegacy: string[] = []
-  const preservedLegacy: string[] = []
   const manualBlockers: string[] = []
   const generatedFiles: string[] = []
 
-  if (apply) await ensureDir(agentsDir)
-  for (const role of MANAGED_AGENT_ROLES) {
-    const absolute = path.join(agentsDir, role.filename)
-    const relative = `.codex/agents/${role.filename}`
-    if (!(await exists(absolute))) continue
-    const current = await readText(absolute, '')
-    if (!managedAgentRoleOwnsText(current, role)) {
-      preserved.push(relative)
-      preservedLegacy.push(relative)
-      continue
-    }
-    legacyStale.push(relative)
-    if (apply) {
-      await fs.rm(absolute, { force: true })
-      removedLegacy.push(relative)
+  const agentsInspection = await inspectConfinedPath(root, agentsDir).catch(() => null)
+  if (!agentsInspection) {
+    manualBlockers.push('official_subagent_agents_dir_unsafe')
+  } else if (agentsInspection.leafSymlink) {
+    manualBlockers.push('official_subagent_agents_dir_symlink_refused')
+  } else if (agentsInspection.exists && !agentsInspection.stat?.isDirectory()) {
+    manualBlockers.push('official_subagent_agents_dir_not_directory')
+  }
+  if (manualBlockers.length) {
+    return {
+      schema: 'sks.official-subagent-agent-install.v1',
+      ok: false,
+      apply,
+      installed_agents: MANAGED_OFFICIAL_SUBAGENT_ROLES.map((role) => role.codex_name),
+      missing: MANAGED_OFFICIAL_SUBAGENT_ROLES.map((role) => role.filename),
+      existing,
+      stale,
+      created,
+      updated,
+      preserved,
+      invalid,
+      backups,
+      manual_blockers: manualBlockers,
+      generated_files: generatedFiles
     }
   }
-
+  if (apply) await ensureConfinedDirectory(root, agentsDir)
   for (const role of MANAGED_OFFICIAL_SUBAGENT_ROLES) {
     const absolute = path.join(agentsDir, role.filename)
     const relative = `.codex/agents/${role.filename}`
     const expected = managedOfficialSubagentRoleContent(role)
-    const present = await exists(absolute)
-    if (!present) {
+    const inspected = await inspectConfinedPath(root, absolute).catch(() => null)
+    if (!inspected) {
+      preserved.push(relative)
+      manualBlockers.push(`manual_unsafe_official_subagent_path:${relative}`)
+      continue
+    }
+    if (!inspected.exists) {
       missing.push(role.filename)
       if (apply) {
         await writeTextAtomic(absolute, expected)
         created.push(relative)
         generatedFiles.push(relative)
       }
+      continue
+    }
+
+    if (inspected.leafSymlink || !inspected.stat?.isFile()) {
+      preserved.push(relative)
+      manualBlockers.push(`manual_non_regular_official_subagent_collision:${relative}`)
       continue
     }
 
@@ -309,9 +322,6 @@ export async function installOfficialSubagentAgentConfigs(
     preserved,
     invalid,
     backups,
-    legacy_stale: legacyStale,
-    removed_legacy: removedLegacy,
-    preserved_legacy: preservedLegacy,
     manual_blockers: manualBlockers,
     generated_files: [...new Set(generatedFiles)].sort()
   }
@@ -431,7 +441,7 @@ function migrationReceiptProvesManagedMaxThreads(value: unknown): boolean {
 
   const stages = [
     ...(Array.isArray(root.update_stages) ? root.update_stages : []),
-    ...(Array.isArray(root.legacy_migration_stages) ? root.legacy_migration_stages : [])
+    ...(Array.isArray(root.migration_stages) ? root.migration_stages : [])
   ]
   if (!stages.length || stages.some((stage) => migrationStageFailed(stage))) return false
   return stages.some((stage) => migrationStageSucceeded(stage) && migrationStageProvesManagedMaxThreads(stage))

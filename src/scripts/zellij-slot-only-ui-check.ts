@@ -7,7 +7,7 @@ import { assertGate, emitGate, root } from './sks-1-18-gate-lib.js'
 const uiMode = fs.readFileSync(path.join(root, 'src/core/zellij/zellij-ui-mode.ts'), 'utf8')
 const manager = fs.readFileSync(path.join(root, 'src/core/zellij/zellij-right-column-manager.ts'), 'utf8')
 const worker = fs.readFileSync(path.join(root, 'src/core/zellij/zellij-worker-pane-manager.ts'), 'utf8')
-const swarm = fs.readFileSync(path.join(root, 'src/core/agents/native-cli-session-swarm.ts'), 'utf8')
+const runtime = fs.readFileSync(path.join(root, 'src/core/agents/native-cli-worker-runtime.ts'), 'utf8')
 const report = {
   schema: 'sks.zellij-slot-only-ui-check.v1',
   default_compact_slots: uiMode.includes("return 'compact-slots'"),
@@ -22,9 +22,9 @@ const report = {
     && worker.includes("'--near-current-pane'")
     && worker.includes("'--stacked'")
     && worker.includes('slot_column_anchor_pane_id'),
-  explicit_compact_uses_renderer: swarm.includes('buildZellijSlotPaneCommand') && swarm.includes("liveWorkerPane ? 'worker-command-pane' : 'zellij-slot-pane-renderer'")
-    && swarm.includes('paneRecord.pane_kind')
-    && swarm.includes('paneRecord.scaling_primitive')
+  explicit_compact_uses_renderer: runtime.includes('buildZellijSlotPaneCommand') && runtime.includes("liveWorkerPane ? 'worker-command-pane' : 'zellij-slot-pane-renderer'")
+    && runtime.includes('paneRecord.pane_kind')
+    && runtime.includes('paneRecord.scaling_primitive')
 }
 const ok = Object.values(report).every((value) => value === true || typeof value === 'string')
 assertGate(ok, 'Zellij default UI must be compact slot-only with opt-in dashboard', report)

@@ -14,13 +14,9 @@ export const AGENT_WORKER_PIPELINE = 'AGENT_WORKER_PIPELINE'
 export const AGENT_ORCHESTRATOR_PIPELINE = 'AGENT_ORCHESTRATOR_PIPELINE'
 export const DEFAULT_AGENT_COUNT = 5
 export const AGENT_COUNT = DEFAULT_AGENT_COUNT
-export const AGENT_INTAKE_STAGE_ID = 'native_agent_intake'
+export const OFFICIAL_SUBAGENT_EXECUTION_STAGE_ID = 'official_subagent_execution'
 export const MAX_AGENT_COUNT = 20
 export const DEFAULT_AGENT_CONCURRENCY = 4
-/** @deprecated Legacy process-swarm queue ceiling; never an official thread cap. */
-export const MAX_NARUTO_AGENT_COUNT = 100
-/** @deprecated Legacy clone default; official workflows use two default children unless --agents is explicit. */
-export const DEFAULT_NARUTO_CLONES = 8
 export const AGENT_BACKENDS = ['fake', 'process', 'codex-sdk', 'zellij', 'ollama', 'local-llm'] as const
 
 export type AgentBackend = typeof AGENT_BACKENDS[number]
@@ -129,8 +125,6 @@ export interface AgentRunOptions {
   serviceTier?: AgentServiceTier
   env?: NodeJS.ProcessEnv
   noFast?: boolean
-  /** @deprecated Legacy process-swarm rollback option. */
-  nativeCliSwarm?: boolean
   ollamaEnabled?: boolean
   noOllama?: boolean
   ollamaModel?: string | null
@@ -146,10 +140,6 @@ export interface AgentRunOptions {
   } | null
   maxAgentCount?: number
   visualLaneCount?: number
-  /** @deprecated Use requestedSubagents. */
-  clones?: number
-  /** @deprecated Use subagentWorkflow. */
-  narutoMode?: boolean
   narutoWorkGraph?: NarutoWorkGraph | null
   narutoAllocationPolicy?: unknown
   narutoRebalancePolicy?: unknown
@@ -259,9 +249,9 @@ export interface AgentRunnerResult {
   control_plane_result?: Record<string, unknown>
 }
 
-export function normalizeAgentBackend(input: unknown): AgentBackend {
+export function normalizeAgentBackend(input: unknown): AgentBackend | null {
   const value = String(input || 'codex-sdk')
-  return (AGENT_BACKENDS as readonly string[]).includes(value) ? value as AgentBackend : 'codex-sdk'
+  return (AGENT_BACKENDS as readonly string[]).includes(value) ? value as AgentBackend : null
 }
 
 export function agentSessionId(agentId: string, index = 1): string {

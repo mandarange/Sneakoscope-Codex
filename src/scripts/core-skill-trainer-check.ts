@@ -22,14 +22,14 @@ const typesMod = await importDist('core/skills/core-skill-types.js');
 
 const baseCard = cardMod.createCandidateCard({
   skillId: 'trainer-fixture',
-  route: 'team',
+  route: 'naruto',
   baseVersion: 0,
   body: '# Skill\n\n## method\n- Do the task.\n'
 });
 
 const deficientTrace = {
   schema: typesMod.CORE_ROLLOUT_TRACE_SCHEMA,
-  route: 'team',
+  route: 'naruto',
   prompt: 'fixture',
   skill_id: baseCard.skill_id,
   skill_version: baseCard.version,

@@ -41,6 +41,7 @@ const waivers = loadWaivers();
 const baseRef = optionValue('--base-ref') || process.env.SKS_ARCH_BASE_REF || defaultBaseRef();
 const baseSha = mergeBaseSha(baseRef);
 const baseFiles = trackedFileSet(baseSha);
+const renamedPredecessors = renamedPredecessorMap(baseSha);
 const changedFiles = changedFileSet(baseSha);
 let scannedFiles = 0;
 
@@ -94,12 +95,13 @@ function checkLargeFiles() {
     scannedFiles += 1;
     const lines = lineCount(fs.readFileSync(file, 'utf8'));
     const rule = budgetRule(relPath);
-    const existedAtBase = baseFiles.has(relPath);
+    const basePath = basePathFor(relPath);
+    const existedAtBase = basePath !== null;
     const changed = changedFiles.has(relPath);
     if (!strictAll && !changed) continue;
 
     if (lines >= budgets.split_review_lines) {
-      const baseLines = existedAtBase ? baseLineCount(relPath, baseSha) : null;
+      const baseLines = basePath ? baseLineCount(basePath, baseSha) : null;
       const waiverFailure = waiverFailureFor(relPath, lines, baseLines);
       if (waiverFailure) failures.push(`${relPath}: handwritten file ${lines} lines >= ${budgets.split_review_lines} split-review gate (${waiverFailure})`);
       continue;
@@ -109,7 +111,7 @@ function checkLargeFiles() {
       ? rule.max_lines
       : Math.min(rule.max_lines, rule.new_file_max_lines ?? budgets.default_new_file_max_lines);
     if (lines > maxLines) {
-      const baseLines = existedAtBase ? baseLineCount(relPath, baseSha) : null;
+      const baseLines = basePath ? baseLineCount(basePath, baseSha) : null;
       const waiverFailure = waiverFailureFor(relPath, lines, baseLines);
       if (waiverFailure) failures.push(`${relPath}: ${lines} lines > ${maxLines} ${rule.id} budget (${waiverFailure})`);
     }
@@ -192,6 +194,23 @@ function changedFileSet(base: string | null): Set<string> {
 function trackedFileSet(base: string | null): Set<string> {
   if (!base) return new Set<string>();
   return new Set(gitLines(['ls-tree', '-r', '--name-only', base]));
+}
+
+function renamedPredecessorMap(base: string | null): Map<string, string> {
+  const predecessors = new Map<string, string>();
+  if (!base) return predecessors;
+  for (const line of gitLines(['diff', '--name-status', '--find-renames', base, '--'])) {
+    const [status, predecessor, current] = line.split('\t');
+    if (!/^R\d*$/.test(status || '') || !predecessor || !current) continue;
+    predecessors.set(normalize(current), normalize(predecessor));
+  }
+  return predecessors;
+}
+
+function basePathFor(relPath: string): string | null {
+  if (baseFiles.has(relPath)) return relPath;
+  const predecessor = renamedPredecessors.get(relPath);
+  return predecessor && baseFiles.has(predecessor) ? predecessor : null;
 }
 
 function baseLineCount(relPath: string, base: string | null): number | null {

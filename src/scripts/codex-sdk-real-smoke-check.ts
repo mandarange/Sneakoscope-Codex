@@ -13,7 +13,7 @@ if (!requireReal) {
   const mod = await importDist('core/codex-control/codex-control-plane.js');
   const schema = await importDist('core/codex-control/schemas/agent-worker-result.schema.js');
   const result = await mod.runCodexTask({
-    route: '$Agent',
+    route: '$Naruto',
     missionId: 'M-codex-sdk-real-smoke',
     workItemId: 'real-smoke',
     slotId: 'slot-real',

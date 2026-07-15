@@ -97,7 +97,7 @@ export async function resolveProviderContext(input: {
     generated_at: nowIso(),
     provider,
     auth_mode: authMode,
-    route: String(input.route || env.SKS_ROUTE || '$Agent'),
+    route: String(input.route || env.SKS_ROUTE || '$Naruto'),
     service_tier: normalizeServiceTier(input.serviceTier || env.SKS_SERVICE_TIER),
     source,
     confidence,

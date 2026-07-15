@@ -8,7 +8,7 @@ SKS keeps `src/core/pipeline.ts` as the only compatibility facade and exposes sp
 - `stage-policy.mjs`: stage policy exports.
 - `agent-stage-policy.mjs`: native agent stage policy exports.
 - `route-prep.mjs`: route preparation entrypoint.
-- `route-prep-team.mjs`, `route-prep-research.mjs`, `route-prep-qa.mjs`, `route-prep-ppt.mjs`, `route-prep-image-ux.mjs`, `route-prep-db.mjs`, `route-prep-gx.mjs`: route-family preparation surfaces.
+- `route-prep-research.mjs`, `route-prep-qa.mjs`, `route-prep-ppt.mjs`, `route-prep-image-ux.mjs`, `route-prep-db.mjs`, `route-prep-gx.mjs`: route-family preparation surfaces.
 - `stop-gate.mjs`: Context7, subagent, proof, reflection, and stop-gate exports.
 - `stop-gate-context7.mjs`, `stop-gate-subagents.mjs`, `stop-gate-proof.mjs`: focused stop-gate surfaces.
 - `active-context.mjs`: active route context export.

@@ -113,7 +113,6 @@ export function visibleHookMessage(name: any, text: any = '') {
     if (body.includes('Computer Use fast lane active')) return 'SKS: native Computer Use lane injected; defer TriWiki/Honest Mode to final closeout.';
     if (body.includes('MANDATORY ambiguity-removal gate') || body.includes('VISIBLE RESPONSE CONTRACT') || body.includes('Required questions still pending')) return 'SKS: stale clarification gate detected; continue from inferred route contract.';
     if (body.includes('$Naruto route prepared') || body.includes('Codex subagent workflow')) return 'SKS: Naruto Codex subagent delegation context injected.';
-    if (body.includes('$Team route prepared') || body.includes('Team route')) return 'SKS: Team compatibility route redirected to the Naruto Codex subagent workflow.';
     if (body.includes('$Research route prepared')) return 'SKS: Research route, xhigh Eureka agent council, source/debate ledgers, paper output, and falsification gate injected.';
     if (body.includes('$AutoResearch route prepared')) return 'SKS: AutoResearch experiment loop and evidence gate injected.';
     if (body.includes('$PPT route prepared')) return 'SKS: PPT route and delivery-context gate injected.';

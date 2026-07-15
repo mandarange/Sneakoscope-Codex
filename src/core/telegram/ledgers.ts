@@ -48,7 +48,9 @@ export class TelegramTopicRegistry {
     return withFileLock({ lockPath: `${this.file}.lock`, timeoutMs: 5_000, staleMs: 30_000 }, async () => {
       const routes = await this.list();
       const sessionIndex = routes.findIndex((route) => route.machine_id === input.machine_id && route.project_id === input.project_id && route.session_id === input.session_id);
-      const collision = routes.find((route, index) => index !== sessionIndex && route.chat_id === input.chat_id && route.message_thread_id === input.message_thread_id);
+      const collision = input.message_thread_id > 0
+        ? routes.find((route, index) => index !== sessionIndex && route.chat_id === input.chat_id && route.message_thread_id === input.message_thread_id)
+        : undefined;
       if (collision) throw new Error('telegram_topic_collision');
       const current = sessionIndex >= 0 ? routes[sessionIndex] : undefined;
       const at = nowIso();

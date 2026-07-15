@@ -48,6 +48,11 @@ export interface TelegramHubRouteResult {
   session_picker: boolean;
 }
 
+export interface TelegramUpdateProcessor {
+  processUpdate(update: TelegramUpdate): Promise<TelegramHubRouteResult>;
+  tick?(): Promise<void>;
+}
+
 export interface TelegramHubOptions {
   config: TelegramHubConfigV1;
   topics: TelegramTopicRegistry;
@@ -80,11 +85,10 @@ export class TelegramHubRouter {
 
     const callback = update.callback_query;
     if (callback?.data?.startsWith('cb:')) {
-      if (actor.topicId === null) return this.reject(update, actor, 'callback', 'wrong_topic');
       const resolution = await this.options.actions.resolve({
         callback_data: callback.data,
         chat_id: actor.chatId,
-        message_thread_id: actor.topicId,
+        message_thread_id: actor.topicId ?? 0,
         revision: this.commandRevision,
         now: this.now()
       });
@@ -112,7 +116,10 @@ export class TelegramHubRouter {
     if (!route) return this.reject(update, actor, command || 'free_text', 'wrong_topic');
 
     if (policy) {
-      const action = makeAction(route, policy.kind, policy.risk, command || staticUiAction?.command || '', this.commandRevision, this.now());
+      const prompt = policy.kind === 'input'
+        ? inputText(text, command, Boolean(staticUiAction))
+        : command || staticUiAction?.command || '';
+      const action = makeAction(route, policy.kind, policy.risk, prompt, this.commandRevision, this.now());
       if (action.risk === 'R2') {
         const created = await this.options.actions.create(action, { chat_id: route.chat_id, message_thread_id: route.message_thread_id });
         await this.audit(update, actor.chatId, actor.topicId, created.callback_data.slice(3), command, 'accepted', 'approval_required');
@@ -126,7 +133,7 @@ export class TelegramHubRouter {
 
     if (!text) return this.reject(update, actor, 'empty', 'unsupported_update');
     const forceReply = message?.reply_to_message?.message_id;
-    const action = makeAction(route, 'input', 'R1', forceReply ? 'force_reply_input' : 'topic_follow_up', this.commandRevision, this.now());
+    const action = makeAction(route, 'input', 'R1', text, this.commandRevision, this.now());
     const authorization = authorizeTelegramAction(action.risk, { exactTopic: true, explicitUserMessage: true });
     if (!authorization.ok) return this.reject(update, actor, 'input', authorization.reason);
     await this.audit(update, actor.chatId, actor.topicId, null, 'input', 'accepted', forceReply ? 'force_reply_routed' : 'topic_follow_up');
@@ -186,7 +193,7 @@ export class TelegramPollingHub {
 
   constructor(
     private readonly client: TelegramBotApiClient,
-    private readonly router: TelegramHubRouter,
+    private readonly processor: TelegramUpdateProcessor,
     private readonly ownerLock: TelegramOwnerLock,
     private readonly longPollTimeoutSeconds = 25
   ) {}
@@ -200,9 +207,10 @@ export class TelegramPollingHub {
     try {
       const updates = await this.client.getUpdates({ offset: this.offset, timeout: this.longPollTimeoutSeconds });
       for (const update of updates) {
-        await this.router.handleUpdate(update);
+        await this.processor.processUpdate(update);
         this.offset = Math.max(this.offset, update.update_id + 1);
       }
+      await this.processor.tick?.();
       await this.ownerLock.heartbeat();
       return { ok: true, processed: updates.length, stopped_reason: null };
     } catch (error: unknown) {
@@ -232,6 +240,7 @@ export function telegramHubPaths(root = globalSksRoot()): {
   topics: string;
   actions: string;
   audit: string;
+  projection: string;
 } {
   const base = path.join(root, 'telegram');
   return {
@@ -240,7 +249,8 @@ export function telegramHubPaths(root = globalSksRoot()): {
     idempotency: path.join(base, 'idempotency.jsonl'),
     topics: path.join(base, 'topic-registry.json'),
     actions: path.join(base, 'actions.json'),
-    audit: path.join(base, 'audit.jsonl')
+    audit: path.join(base, 'audit.jsonl'),
+    projection: path.join(base, 'projection-state.json')
   };
 }
 
@@ -281,12 +291,19 @@ function makeAction(
     session_id: route.session_id,
     kind,
     risk,
-    prompt: prompt.slice(0, 120),
+    prompt: prompt.slice(0, kind === 'input' ? 16 * 1024 : 120),
     exact_scope: [route.machine_id, route.project_id, route.session_id],
     expires_at: new Date(now + (risk === 'R2' ? 2 * 60_000 : 10 * 60_000)).toISOString(),
     revision,
     status: 'open'
   };
+}
+
+function inputText(text: string, command: string, staticAction: boolean): string {
+  if (staticAction) return '/input';
+  if (command !== '/input') return text;
+  const value = text.slice(command.length).trim();
+  return value || '/input';
 }
 
 function result(ok: boolean, status: string): TelegramHubRouteResult {

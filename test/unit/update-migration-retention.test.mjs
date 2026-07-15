@@ -6,8 +6,11 @@ import path from 'node:path';
 
 test('project update migration receipt cleans disposable closed-mission runtime sessions', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-update-retention-unit-'));
-  const globalRoot = path.join(root, 'global');
+  const home = path.join(root, 'home');
+  const globalRoot = path.join(home, '.sneakoscope-global');
+  const previousHome = process.env.HOME;
   const previousGlobalRoot = process.env.SKS_GLOBAL_ROOT;
+  process.env.HOME = home;
   process.env.SKS_GLOBAL_ROOT = globalRoot;
   try {
     const { writeProjectUpdateMigrationReceipt } = await import('../../dist/core/update/update-migration-state.js');
@@ -36,8 +39,11 @@ test('project update migration receipt cleans disposable closed-mission runtime 
     await assertExists(path.join(terminal, 'agents', 'sessions', 'slot-001', 'gen-1', 'worker', 'worker-result.json'));
     await assertMissing(path.join(terminal, 'agents', 'sessions', 'slot-001', 'gen-1', 'worker', 'codex-sdk-home', 'codex', 'cache.bin'));
   } finally {
+    if (previousHome === undefined) delete process.env.HOME;
+    else process.env.HOME = previousHome;
     if (previousGlobalRoot === undefined) delete process.env.SKS_GLOBAL_ROOT;
     else process.env.SKS_GLOBAL_ROOT = previousGlobalRoot;
+    await fs.rm(root, { recursive: true, force: true });
   }
 });
 
@@ -85,13 +91,13 @@ test('project update migration repairs legacy menubar and fast-mode config', asy
       warnings: []
     });
 
-    const stages = new Map((receipt.legacy_migration_stages || []).map((stage) => [stage.id, stage]));
+    const stages = new Map((receipt.migration_stages || []).map((stage) => [stage.id, stage]));
     assert.equal(stages.get('menubar-retarget')?.ok, true);
-    assert.ok(stages.get('menubar-retarget')?.actions.includes('retargeted_menubar_action_script'));
-    assert.ok(stages.get('menubar-retarget')?.actions.includes('restored_menubar_action_executable_bit'));
     assert.equal(stages.get('config-fastmode-normalize')?.ok, true);
-    assert.ok(stages.get('config-fastmode-normalize')?.actions.includes('stripped_removed_fastmode_config_schema_keys'));
-    assert.ok(stages.get('config-fastmode-normalize')?.actions.includes('migrated_legacy_fast_default_to_service_tier'));
+    assert.equal(Object.hasOwn(receipt, 'legacy_migration_stages'), false);
+    for (const stage of receipt.migration_stages || []) {
+      assert.deepEqual(Object.keys(stage).sort(), ['action_count', 'blocker_count', 'id', 'ok', 'status', 'warning_count']);
+    }
 
     const expectedEntry = path.join(packageRoot(), 'dist', 'bin', 'sks.js');
     const scriptAfter = await fs.readFile(actionScript, 'utf8');
@@ -114,6 +120,197 @@ test('project update migration repairs legacy menubar and fast-mode config', asy
   }
 });
 
+test('project update migration removes obsolete runtime and managed skill residue idempotently', async () => {
+  const fixture = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-update-obsolete-residue-'));
+  const home = path.join(fixture, 'home');
+  const project = path.join(fixture, 'project');
+  const globalRuntimeRoot = path.join(home, '.sneakoscope-global');
+  const previousHome = process.env.HOME;
+  const previousGlobalRoot = process.env.SKS_GLOBAL_ROOT;
+  process.env.HOME = home;
+  process.env.SKS_GLOBAL_ROOT = globalRuntimeRoot;
+  try {
+    const { writeProjectUpdateMigrationReceipt } = await import('../../dist/core/update/update-migration-state.js');
+    await writeText(path.join(project, '.sneakoscope', 'team', 'runtime.json'), '{"legacy":true}\n');
+    await writeJson(path.join(project, '.sneakoscope', 'team-dashboard-state.json'), { schema: 'sks.team-dashboard-state.v1' });
+    await writeJson(path.join(project, '.sneakoscope', 'work-order-ledger.json'), { schema_version: 1, route: 'team', items: [] });
+    await writeJson(path.join(project, '.sneakoscope', 'update', 'legacy-team-artifacts.json'), { schema: 'sks.legacy-team-artifacts-migration.v1' });
+    await writeText(path.join(project, '.sneakoscope', 'customer-state.json'), '{"keep":true}\n');
+    await writeJson(path.join(home, '.sneakoscope', 'team-dashboard-state.json'), { schema: 'sks.team-dashboard-state.v1' });
+    await writeJson(path.join(globalRuntimeRoot, '.sneakoscope', 'work-order-ledger.json'), { schema: 'sks.work-order-ledger.v1', route: 'team' });
+    await writeManagedSkill(path.join(home, '.agents', 'skills', 'team'), 'team');
+    await writeManagedSkill(path.join(home, '.codex', 'skills', 'tmux'), 'tmux');
+    await writeManagedSkill(path.join(project, '.agents', 'skills', 'mad-db'), 'mad-db');
+    await writeManagedSkill(path.join(project, '.agents', 'skills', 'xai'), 'xai');
+    await writeManagedSkill(path.join(project, '.codex', 'skills', 'shadow-clone'), 'shadow-clone');
+    await writeText(path.join(project, '.agents', 'skills', 'customer-skill', 'SKILL.md'), '---\nname: customer-skill\n---\n\nkeep customer skill\n');
+
+    const first = await writeProjectUpdateMigrationReceipt({
+      root: project,
+      source: 'unit-obsolete-residue-cleanup',
+      fromVersion: '6.2.0',
+      blockers: [],
+      warnings: []
+    });
+    const firstStages = new Map((first.migration_stages || []).map((stage) => [stage.id, stage]));
+    const cleanup = firstStages.get('current-public-surface-reconcile');
+    assert.equal(cleanup?.ok, true);
+    assert.ok((cleanup?.action_count || 0) > 0);
+    assert.equal(Object.hasOwn(first, 'legacy_migration_stages'), false);
+    assert.doesNotMatch(JSON.stringify(first), /(?:team|mad-db|tmux|xai|swarm|shadow-clone|kage-bunshin)/i);
+    for (const target of [
+      path.join(project, '.sneakoscope', 'team'),
+      path.join(project, '.sneakoscope', 'team-dashboard-state.json'),
+      path.join(project, '.sneakoscope', 'work-order-ledger.json'),
+      path.join(project, '.sneakoscope', 'update', 'legacy-team-artifacts.json'),
+      path.join(home, '.sneakoscope', 'team-dashboard-state.json'),
+      path.join(globalRuntimeRoot, '.sneakoscope', 'work-order-ledger.json'),
+      path.join(home, '.agents', 'skills', 'team'),
+      path.join(home, '.codex', 'skills', 'tmux'),
+      path.join(project, '.agents', 'skills', 'mad-db'),
+      path.join(project, '.agents', 'skills', 'xai'),
+      path.join(project, '.codex', 'skills', 'shadow-clone')
+    ]) await assertMissing(target);
+    await assertExists(path.join(project, '.sneakoscope', 'customer-state.json'));
+    await assertExists(path.join(project, '.agents', 'skills', 'customer-skill', 'SKILL.md'));
+
+    const second = await writeProjectUpdateMigrationReceipt({
+      root: project,
+      source: 'unit-obsolete-residue-cleanup-repeat',
+      fromVersion: '6.2.0',
+      blockers: [],
+      warnings: []
+    });
+    const secondCleanup = (second.migration_stages || []).find((stage) => stage.id === 'current-public-surface-reconcile');
+    assert.equal(secondCleanup?.ok, true);
+    assert.equal(Object.hasOwn(second, 'legacy_migration_stages'), false);
+    assert.doesNotMatch(JSON.stringify(second), /(?:team|mad-db|tmux|xai|swarm|shadow-clone|kage-bunshin)/i);
+    await assertMissing(path.join(project, '.sneakoscope', 'update', 'legacy-team-artifacts.json'));
+  } finally {
+    if (previousHome === undefined) delete process.env.HOME;
+    else process.env.HOME = previousHome;
+    if (previousGlobalRoot === undefined) delete process.env.SKS_GLOBAL_ROOT;
+    else process.env.SKS_GLOBAL_ROOT = previousGlobalRoot;
+    await fs.rm(fixture, { recursive: true, force: true });
+  }
+});
+
+test('project update migration reconciles HOME and global-runtime guidance and retired config profiles', async () => {
+  const fixture = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-update-global-guidance-'));
+  const home = path.join(fixture, 'home');
+  const project = path.join(fixture, 'project');
+  const globalRuntimeRoot = path.join(fixture, 'global-runtime');
+  const previousHome = process.env.HOME;
+  const previousGlobalRoot = process.env.SKS_GLOBAL_ROOT;
+  process.env.HOME = home;
+  process.env.SKS_GLOBAL_ROOT = globalRuntimeRoot;
+  try {
+    const { writeProjectUpdateMigrationReceipt } = await import('../../dist/core/update/update-migration-state.js');
+    for (const root of [project, home, globalRuntimeRoot]) {
+      await writeText(path.join(root, 'AGENTS.md'), [
+        '<!-- BEGIN Sneakoscope Codex GX MANAGED BLOCK -->',
+        '# Retired execution guidance',
+        '- Use `$Team` and `sks mad-db`.',
+        '<!-- END Sneakoscope Codex GX MANAGED BLOCK -->',
+        ''
+      ].join('\n'));
+      await writeText(path.join(root, '.codex', 'SNEAKOSCOPE.md'), [
+        '# ㅅㅋㅅ',
+        `Install scope: \`${root === project ? 'project' : 'global'}\``,
+        'Command: `sks <command>`',
+        'Files: AGENTS.md, .codex/hooks.json, .codex/config.toml, .codex/SNEAKOSCOPE.md, .agents/skills, .codex/agents, .sneakoscope/missions.',
+        'Use `$Team` and `sks mad-db`.',
+        ''
+      ].join('\n'));
+    }
+    const nestedManaged = path.join(project, 'packages', 'web', 'AGENTS.md');
+    const nestedUser = path.join(project, 'services', 'api', 'AGENTS.md');
+    const nestedUserBytes = Buffer.from('# Customer API instructions\nUse `sks agent run` for this service.\n');
+    const skippedNested = path.join(project, 'node_modules', 'dependency', 'AGENTS.md');
+    const homeNested = path.join(home, 'nested', 'AGENTS.md');
+    const globalNested = path.join(globalRuntimeRoot, 'nested', 'AGENTS.md');
+    const legacyNestedBytes = Buffer.from([
+      '<!-- BEGIN Sneakoscope Codex GX MANAGED BLOCK -->',
+      '# Retired nested execution guidance',
+      '- Use `$Team` and `sks mad-db`.',
+      '<!-- END Sneakoscope Codex GX MANAGED BLOCK -->',
+      ''
+    ].join('\n'));
+    await writeText(nestedManaged, legacyNestedBytes.toString('utf8'));
+    await fs.mkdir(path.dirname(nestedUser), { recursive: true });
+    await fs.writeFile(nestedUser, nestedUserBytes);
+    for (const file of [skippedNested, homeNested, globalNested]) {
+      await fs.mkdir(path.dirname(file), { recursive: true });
+      await fs.writeFile(file, legacyNestedBytes);
+    }
+    await writeText(path.join(home, '.codex', 'config.toml'), [
+      'model = "future-model"',
+      '',
+      '[profiles.sks-team]',
+      'service_tier = "fast"',
+      'approval_policy = "on-request"',
+      'sandbox_mode = "workspace-write"',
+      'model_reasoning_effort = "medium"',
+      ''
+    ].join('\n'));
+    await writeText(path.join(home, '.codex', 'sks-team.config.toml'), [
+      'service_tier = "fast"',
+      'approval_policy = "on-request"',
+      'sandbox_mode = "workspace-write"',
+      'model_reasoning_effort = "medium"',
+      ''
+    ].join('\n'));
+
+    const receipt = await writeProjectUpdateMigrationReceipt({
+      root: project,
+      source: 'unit-global-guidance-cleanup',
+      fromVersion: '6.2.0',
+      blockers: [],
+      warnings: []
+    });
+    const cleanup = (receipt.migration_stages || []).find((stage) => stage.id === 'current-public-surface-reconcile');
+    assert.equal(cleanup?.ok, true);
+    for (const root of [project, home, globalRuntimeRoot]) {
+      const text = `${await fs.readFile(path.join(root, 'AGENTS.md'), 'utf8')}\n${await fs.readFile(path.join(root, '.codex', 'SNEAKOSCOPE.md'), 'utf8')}`;
+      assert.match(text, /\$Naruto|naruto run/);
+      assert.doesNotMatch(text, /\$Team|sks team|\$MAD-DB|sks mad-db/i);
+    }
+    const homeConfig = await fs.readFile(path.join(home, '.codex', 'config.toml'), 'utf8');
+    assert.doesNotMatch(homeConfig, /profiles\.sks-team/);
+    await assertMissing(path.join(home, '.codex', 'sks-team.config.toml'));
+
+    for (const file of [nestedManaged, nestedUser]) {
+      const text = await fs.readFile(file, 'utf8');
+      assert.match(text, /BEGIN Sneakoscope Codex GX MANAGED BLOCK/);
+      assert.doesNotMatch(text, /\$Team|\$Agent|sks team|sks agent|sks mad-db/i);
+    }
+    assert.deepEqual(await fs.readFile(skippedNested), legacyNestedBytes);
+    assert.deepEqual(await fs.readFile(homeNested), legacyNestedBytes);
+    assert.deepEqual(await fs.readFile(globalNested), legacyNestedBytes);
+    const quarantineRoot = path.join(project, '.sneakoscope', 'quarantine');
+    const quarantinedAfterFirst = await findFiles(quarantineRoot, 'AGENTS.md');
+    assert.equal(quarantinedAfterFirst.length, 1);
+    assert.deepEqual(await fs.readFile(quarantinedAfterFirst[0]), nestedUserBytes);
+
+    const secondReceipt = await writeProjectUpdateMigrationReceipt({
+      root: project,
+      source: 'unit-global-guidance-cleanup-repeat',
+      fromVersion: '6.2.0',
+      blockers: [],
+      warnings: []
+    });
+    const secondCleanup = (secondReceipt.migration_stages || []).find((stage) => stage.id === 'current-public-surface-reconcile');
+    assert.equal(secondCleanup?.ok, true);
+    assert.equal((await findFiles(quarantineRoot, 'AGENTS.md')).length, 1);
+  } finally {
+    if (previousHome === undefined) delete process.env.HOME;
+    else process.env.HOME = previousHome;
+    if (previousGlobalRoot === undefined) delete process.env.SKS_GLOBAL_ROOT;
+    else process.env.SKS_GLOBAL_ROOT = previousGlobalRoot;
+    await fs.rm(fixture, { recursive: true, force: true });
+  }
+});
+
 async function writeJson(file, data) {
   await writeText(file, `${JSON.stringify(data, null, 2)}\n`);
 }
@@ -121,6 +318,10 @@ async function writeJson(file, data) {
 async function writeText(file, text) {
   await fs.mkdir(path.dirname(file), { recursive: true });
   await fs.writeFile(file, text, 'utf8');
+}
+
+async function writeManagedSkill(dir, name) {
+  await writeText(path.join(dir, 'SKILL.md'), `---\nname: ${name}\ndescription: Sneakoscope generated legacy skill\n---\n\n<!-- BEGIN SKS MANAGED SKILL v6.2.0 name=${name} -->\n`);
 }
 
 async function assertExists(file) {
@@ -133,4 +334,15 @@ async function assertMissing(file) {
 
 function escapeRegExp(value) {
   return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+async function findFiles(root, fileName) {
+  const rows = await fs.readdir(root, { withFileTypes: true }).catch(() => []);
+  const files = [];
+  for (const row of rows) {
+    const target = path.join(root, row.name);
+    if (row.isDirectory()) files.push(...await findFiles(target, fileName));
+    else if (row.name === fileName) files.push(target);
+  }
+  return files;
 }

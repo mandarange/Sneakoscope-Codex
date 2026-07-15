@@ -1,12 +1,23 @@
 import path from 'node:path';
 import fsp from 'node:fs/promises';
+import os from 'node:os';
+import type { Dirent } from 'node:fs';
 import { ensureDir, exists, nowIso, PACKAGE_VERSION, readJson, readText, sha256, withScratchDir, writeJsonAtomic, writeTextAtomic } from '../fsx.js';
-import { MIN_TEAM_REVIEWER_LANES, MIN_TEAM_REVIEW_POLICY_TEXT } from '../team-review-policy.js';
 import { buildSksCoreSkillManifest, isCoreSkillName } from '../codex-native/core-skill-manifest.js';
 import { syncCoreSkillsIntegrity } from '../codex-native/core-skill-integrity.js';
-import { dbSafetyGuardSkillText, madDbSkillText } from '../mad-db/mad-db-policy.js';
+import { dbSafetyGuardSkillText, madSksSqlPlanePolicyText } from '../mad-sks/sql-plane/policy.js';
 import { SKILL_DREAM_POLICY, skillDreamPolicyText } from '../skill-forge.js';
 import { installOfficialSubagentAgentConfigs } from '../subagents/official-subagent-config.js';
+import { reconcileRetiredAgentRoleResidue } from '../agents/agent-role-config.js';
+import {
+  ensureConfinedDirectory,
+  inspectConfinedPath,
+  moveConfinedPath,
+  publicPathError,
+  removeConfinedDirectoryIfEmpty,
+  removeManagedPathVerified,
+  uniqueConfinedPath
+} from '../managed-path-safety.js';
 import { AWESOME_DESIGN_MD_REFERENCE, CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_IMAGEGEN_EVIDENCE_SOURCE, CODEX_IMAGEGEN_REQUIRED_POLICY, CODEX_WEB_VERIFICATION_POLICY, DEFAULT_CODEX_APP_PLUGINS, DESIGN_SYSTEM_SSOT, DOLLAR_COMMANDS, DOLLAR_SKILL_NAMES, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, GETDESIGN_REFERENCE, IMAGEGEN_SOCIAL_SOURCE_POLICY, OPENAI_CHATGPT_IMAGES_2_DOC_URL, OPENAI_GPT_IMAGE_2_MODEL_DOC_URL, OPENAI_IMAGE_GENERATION_DOC_URL, PPT_CONDITIONAL_SKILL_ALLOWLIST, PPT_PIPELINE_MCP_ALLOWLIST, PPT_PIPELINE_SKILL_ALLOWLIST, RECOMMENDED_SKILLS, RESERVED_CODEX_PLUGIN_SKILL_NAMES, SOLUTION_SCOUT_SKILL_NAME, chatCaptureIntakeText, context7ConfigToml, getdesignReferencePolicyText, imageUxReviewPipelinePolicyText, leanEngineeringCompactText, outcomeRubricPolicyText, pptPipelineAllowlistPolicyText, productDesignPluginPolicyText, solutionScoutPolicyText, speedLanePolicyText, stackCurrentDocsPolicyText, triwikiContextTrackingText, triwikiStagePolicyText } from '../routes.js';
 
 const SKS_SKILL_MANIFEST_FILE = '.sks-generated.json';
@@ -15,14 +26,28 @@ const GENERATED_PRUNE_POLICY = 'remove_previous_sks_generated_paths_absent_from_
 const REFLECTION_MEMORY_PATH = '.sneakoscope/memory/q2_facts/post-route-reflection.md';
 const MANAGED_SKILL_MARKER_RE = /BEGIN SKS (?:IMMUTABLE CORE|MANAGED) SKILL/;
 const FORGE_SKILL_MARKER_RE = /BEGIN SKS FORGE SKILL/;
-const REMOVED_OFFICIAL_SKILLS = ['old-workflow', 'team-legacy'];
-const DEPRECATED_SKILL_ALIASES: Record<string, string[]> = {
-  naruto: ['shadow-clone-legacy'],
-  team: ['agent-team'],
-  'qa-loop': ['qaloop'],
-  wiki: ['wiki-refresh', 'wikirefresh'],
-  sks: ['ralph', 'Ralph', 'ralph-supervisor', 'ralph-resolver']
-};
+export const REMOVED_SKS_SKILL_NAMES = [
+  'old-workflow',
+  'team-legacy',
+  'team',
+  'agent-team',
+  'agent',
+  'mad-db',
+  'tmux',
+  'xai',
+  'swarm',
+  'shadow-clone',
+  'shadow-clone-legacy',
+  'kage-bunshin',
+  'qaloop',
+  'wiki-refresh',
+  'wikirefresh',
+  'ralph',
+  'ralph-supervisor',
+  'ralph-resolver'
+] as const;
+const REMOVED_SKS_SKILL_NAME_SET = new Set<string>(REMOVED_SKS_SKILL_NAMES);
+const SKILL_ALIASES: Record<string, string[]> = {};
 
 function reflectionInstructionText(commandPrefix: any = 'sks') {
   return `Post-route reflection: full routes load \`reflection\` after work/tests and before final; DFix/Answer/Help/Wiki/SKS discovery are exempt. Write reflection.md; record only real misses/gaps, or no_issue_acknowledged. For lessons, append TriWiki claim rows to ${REFLECTION_MEMORY_PATH}. Run "${commandPrefix} wiki refresh" or pack, validate, then pass reflection-gate.json.`;
@@ -30,46 +55,43 @@ function reflectionInstructionText(commandPrefix: any = 'sks') {
 
 async function installOfficialSkills(root: any) {
   const imageUxReviewSkill = (name: any) => `---\nname: ${name}\ndescription: $Image-UX-Review/$UX-Review imagegen/gpt-image-2 annotated UI/UX review loop.\n---\n\nUse only for $Image-UX-Review, $UX-Review, $visual-review, or $ui-ux-review UI/UX review requests. ${imageUxReviewPipelinePolicyText()} Route start must check Codex App imagegen capability and run the SKS imagegen repair loop once; if $imagegen/gpt-image-2 is still unavailable, stop with codex_imagegen_unavailable instead of doing text-only review or direct API substitution. Core loop: capture or attach source UI screenshots, then invoke Codex App $imagegen with gpt-image-2 to create a new generated annotated review image from each source screenshot, then analyze the generated review image with vision/OCR into image-ux-issue-ledger.json, then apply only requested safe fixes and recheck changed screens. Text-only screenshot critique cannot satisfy full verification; missing generated annotated review images keep full image-ux-review-gate.json verification blocked, but may close verified_partial/reference-only when source screenshots plus hashes, docs evidence, source Image Voxel anchors, and Honest Mode evidence exist. For live web/browser/webapp capture use Codex Chrome Extension first and halt if it is not installed/enabled; use Codex Computer Use only for native Mac/non-web app screens. Required artifacts: image-ux-review-policy.json, image-ux-screen-inventory.json, image-ux-generated-review-ledger.json, image-ux-issue-ledger.json, image-ux-iteration-report.json, image-ux-review-gate.json. Finish with reflection and Honest Mode.\n`;
-  const mergedMadDbSqlPlanePolicy = madDbSkillText().replace(/^---[\s\S]*?---\s*/, '').trim();
+  const canonicalMadSksSqlPlanePolicy = madSksSqlPlanePolicyText()
+    .replace(/^---[\s\S]*?---\s*/, '')
+    .trim();
   const skills = {
-    'dfix': `---\nname: dfix\ndescription: Direct Fix mode for $DFix or $dfix requests and inferred tiny copy/config/docs/labels/spacing/translation/simple mechanical edits.\n---\n\nUse for tiny copy/config/docs/labels/spacing/translation/simple mechanical edits. List exact micro-edits, inspect only needed files, apply only those edits, and run cheap verification. Keep broad implementation routed to Team; for UI/UX micro-edits read \`design.md\` when present and use imagegen for image/logo/raster assets. Bypass broad SKS routing, mission state, TriWiki/TriFix/reflection/state recording, Goal, Research, eval, redesign, and repeated full-route Honest Mode loops. Start the final answer with \`DFix 완료 요약:\` and include one \`DFix 솔직모드:\` line covering verified, not verified, and remaining issues. ${CODEX_IMAGEGEN_REQUIRED_POLICY}\n`,
+    'dfix': `---\nname: dfix\ndescription: Direct Fix mode for $DFix or $dfix requests and inferred tiny copy/config/docs/labels/spacing/translation/simple mechanical edits.\n---\n\nUse for tiny copy/config/docs/labels/spacing/translation/simple mechanical edits. List exact micro-edits, inspect only needed files, apply only those edits, and run cheap verification. Keep broad implementation routed to Naruto; for UI/UX micro-edits read \`design.md\` when present and use imagegen for image/logo/raster assets. Bypass broad SKS routing, mission state, TriWiki/TriFix/reflection/state recording, Goal, Research, eval, redesign, and repeated full-route Honest Mode loops. Start the final answer with \`DFix 완료 요약:\` and include one \`DFix 솔직모드:\` line covering verified, not verified, and remaining issues. ${CODEX_IMAGEGEN_REQUIRED_POLICY}\n`,
     'answer': `---\nname: answer\ndescription: Answer-only research route for ordinary questions that should not start implementation.\n---\n\nUse for explanations, comparisons, status, facts, source-backed research, or docs guidance. Use repo/TriWiki first for project-local facts; hydrate low-trust claims from source. Browse or use Context7 for current external package/API/framework/MCP docs. End with a concise answer summary plus Honest Mode; do not create missions, subagents, or file edits.\n`,
-    'sks': `---\nname: sks\ndescription: General Sneakoscope Codex command route for $SKS or $sks usage, setup, status, and workflow help.\n---\n\nUse local SKS commands: bootstrap, deps, commands, quickstart, codex-app, context7, guard, conflicts, reasoning, wiki, pipeline status, pipeline plan, skill-dream. Promote code-changing work to Team unless Answer/DFix/Help/Wiki/safety route fits. Surface route/guard/scope, use TriWiki, do not edit installed harness files outside this engine repo, and require human-approved conflict cleanup. ${skillDreamPolicyText()}\n`,
+    'sks': `---\nname: sks\ndescription: General Sneakoscope Codex command route for $SKS or $sks usage, setup, status, and workflow help.\n---\n\nUse local SKS commands: bootstrap, deps, commands, quickstart, codex-app, context7, guard, conflicts, reasoning, wiki, pipeline status, pipeline plan, skill-dream. Promote code-changing work to Naruto unless Answer/DFix/Help/Wiki/safety route fits. Surface route/guard/scope, use TriWiki, do not edit installed harness files outside this engine repo, and require human-approved conflict cleanup. ${skillDreamPolicyText()}\n`,
     'plan': `---\nname: plan\ndescription: Plan scaffold only - writes a fixed-template .sneakoscope/plans/<slug>.md, never touches code. Not project-specific decision-complete planning. 예: $Plan "결제 모듈 리팩터"\n---\n\nUse when the user invokes $Plan or asks for a plan-only frontdoor. Produce a concrete plan artifact under .sneakoscope/plans/<slug>.md with goal, scope, files to inspect, implementation steps, acceptance checks, and rollback notes. Do not edit product/source files, generated harness files, package metadata, or docs beyond the plan artifact. Keep implementation_allowed=false and hand off execution to $Work only after the user or route explicitly moves from planning to work. Finish with what is planned, what remains unimplemented, and Honest Mode.\n`,
-    'work': `---\nname: work\ndescription: Execute the latest plan with evidence-gated completion. 예: $Work\n---\n\nUse when the user invokes $Work or asks to execute the latest SKS plan. Resolve the newest .sneakoscope/plans/*.md, route execution through Naruto/Team evidence gates, keep leases and verification artifacts current, and do not claim completion without machine evidence or explicit blocker evidence. If no plan exists, block with a clear next action: run $Plan first or provide a task.\n`,
-    'swarm': `---\nname: swarm\ndescription: Deprecated $Swarm compatibility alias for the $Naruto Codex official subagent workflow.\n---\n\nWarn once that $Swarm is a deprecated alias, then follow the naruto skill. Use Codex official subagents and agent threads through \`sks naruto run "<task>" [--agents N] [--max-threads N] [--json]\`. The parent runs on GPT-5.6 Sol Max. Luna Max is only for tiny short-context mechanical slices; ordinary implementation uses Sol High; review/debug/planning/security and other judgment uses Sol Max; long-context and Computer Use, Browser/Chrome, or image-generation execution uses Terra Medium. Split execution from judgment where possible, with Sol Max winning unsplittable conflicts. Wait for all requested subagents and keep write slices disjoint. SubagentStart/SubagentStop prove lifecycle only; completion requires subagent-parent-summary.json with one structured parent outcome per thread. Canonical artifacts are subagent-plan.json, subagent-events.jsonl, subagent-parent-summary.json, subagent-evidence.json, naruto-summary.json, and naruto-gate.json. Finish with scoped verification, reflection when required, and Honest Mode.\n`,
+    'work': `---\nname: work\ndescription: Execute the latest plan with evidence-gated completion. 예: $Work\n---\n\nUse when the user invokes $Work or asks to execute the latest SKS plan. Resolve the newest .sneakoscope/plans/*.md, route execution through Naruto evidence gates, keep leases and verification artifacts current, and do not claim completion without machine evidence or explicit blocker evidence. If no plan exists, block with a clear next action: run $Plan first or provide a task.\n`,
     'review': `---\nname: review\ndescription: Parallel diff review with machine-evidence first findings. 예: $Review 또는 sks review --staged\n---\n\nUse when the user asks for $Review or sks review. Review the selected diff read-only unless --fix is explicitly supplied. Machine evidence such as TypeScript, lint, tests, conflict markers, or secret scans outranks LLM findings and must be tagged evidence: machine; judgment-only findings must be tagged evidence: llm. --fix may attempt at most one machine-evidence fix pass and must re-run verification once. Do not mutate code for LLM-only opinions.\n`,
-    'fast-mode': `---\nname: fast-mode\ndescription: Dollar-command route for $Fast-Mode, $Fast-On, and $Fast-Off global Codex Desktop Fast mode toggles.\n---\n\nUse when the user invokes $Fast-Mode, $Fast-On, $Fast-Off, or asks to turn SKS Fast mode on/off. Prefer \`sks fast-mode on|off|status|clear --json\`. By default on/off updates the global Codex Desktop config so GPT 5.5 Fast persists and also keeps .sneakoscope/state/fast-mode.json in sync for SKS workers. Use \`--project\` only when the user explicitly wants project-local worker preference without touching global Codex config. Explicit runtime flags still win: \`--fast\`, \`--no-fast\`, and \`--service-tier standard|fast\` override the saved preference for that run. Finish with a short status and Honest Mode; do not start Team or broad implementation for a toggle-only request.\n`,
+    'fast-mode': `---\nname: fast-mode\ndescription: Dollar-command route for $Fast-Mode, $Fast-On, and $Fast-Off global Codex Desktop Fast mode toggles.\n---\n\nUse when the user invokes $Fast-Mode, $Fast-On, $Fast-Off, or asks to turn SKS Fast mode on/off. Prefer \`sks fast-mode on|off|status|clear --json\`. By default on/off updates the global Codex Desktop config so GPT 5.5 Fast persists and also keeps .sneakoscope/state/fast-mode.json in sync for SKS workers. Use \`--project\` only when the user explicitly wants project-local worker preference without touching global Codex config. Explicit runtime flags still win: \`--fast\`, \`--no-fast\`, and \`--service-tier standard|fast\` override the saved preference for that run. Finish with a short status and Honest Mode; do not start Naruto or broad implementation for a toggle-only request.\n`,
     'fast-on': `---\nname: fast-on\ndescription: Alias for $Fast-On global Codex Desktop GPT 5.5 Fast enablement.\n---\n\nUse the same rules as fast-mode. Run or instruct \`sks fast-mode on --json\`, then report Global (desktop), Project (sks workers), state file, and the fact that explicit per-run flags still override the saved preference.\n`,
     'fast-off': `---\nname: fast-off\ndescription: Alias for $Fast-Off global Codex Desktop Fast mode disablement.\n---\n\nUse the same rules as fast-mode. Run or instruct \`sks fast-mode off --json\`, then report Global (desktop), Project (sks workers), state file, and the fact that explicit per-run flags still override the saved preference.\n`,
-    'with-local-llm-on': `---\nname: with-local-llm-on\ndescription: Dollar-command route for $with-local-llm-on local Ollama worker enablement.\n---\n\nUse when the user invokes $with-local-llm-on or asks to enable the optional local Ollama worker backend. Prefer \`sks with-local-llm on --json\`. The command writes the machine-local config at \`~/.sneakoscope/local-model.json\`. Default off means SKS stays GPT-only until this command enables local workers. Enabled mode only lets policy-eligible simple code patch-envelope or read-only collection worker slices use Ollama; GPT/Codex still owns strategy, planning, design, review, verification, safety, and integration. \`--no-ollama\` and \`SKS_OLLAMA_WORKERS=0\` still force local workers off for a run. Finish with a short status and Honest Mode; do not start Team for a toggle-only request.\n`,
-    'with-local-llm-off': `---\nname: with-local-llm-off\ndescription: Dollar-command route for $with-local-llm-off local Ollama worker disablement.\n---\n\nUse when the user invokes $with-local-llm-off or asks to disable the optional local Ollama worker backend. Prefer \`sks with-local-llm off --json\`. The command writes the machine-local config at \`~/.sneakoscope/local-model.json\`. Disabled mode keeps SKS GPT-only by default. Strategy, planning, design, review, verification, safety, and integration remain GPT/Codex-owned regardless of this toggle. Finish with a short status and Honest Mode; do not start Team for a toggle-only request.\n`,
+    'with-local-llm-on': `---\nname: with-local-llm-on\ndescription: Dollar-command route for $with-local-llm-on local Ollama worker enablement.\n---\n\nUse when the user invokes $with-local-llm-on or asks to enable the optional local Ollama worker backend. Prefer \`sks with-local-llm on --json\`. The command writes the machine-local config at \`~/.sneakoscope/local-model.json\`. Default off means SKS stays GPT-only until this command enables local workers. Enabled mode only lets policy-eligible simple code patch-envelope or read-only collection worker slices use Ollama; GPT/Codex still owns strategy, planning, design, review, verification, safety, and integration. \`--no-ollama\` and \`SKS_OLLAMA_WORKERS=0\` still force local workers off for a run. Finish with a short status and Honest Mode; do not start Naruto for a toggle-only request.\n`,
+    'with-local-llm-off': `---\nname: with-local-llm-off\ndescription: Dollar-command route for $with-local-llm-off local Ollama worker disablement.\n---\n\nUse when the user invokes $with-local-llm-off or asks to disable the optional local Ollama worker backend. Prefer \`sks with-local-llm off --json\`. The command writes the machine-local config at \`~/.sneakoscope/local-model.json\`. Disabled mode keeps SKS GPT-only by default. Strategy, planning, design, review, verification, safety, and integration remain GPT/Codex-owned regardless of this toggle. Finish with a short status and Honest Mode; do not start Naruto for a toggle-only request.\n`,
     'wiki': `---\nname: wiki\ndescription: Dollar-command route for $Wiki TriWiki refresh, pack, validate, and prune commands.\n---\n\nUse for $Wiki or Korean wiki-refresh requests. Refresh/update/갱신: run sks wiki refresh, then validate .sneakoscope/wiki/context-pack.json. Pack: run sks wiki pack, then validate. Prune/clean/정리: use sks wiki refresh --prune, or sks wiki prune --dry-run for inspection. Report claims, anchors, trust, attention.use_first/hydrate_first, validation, and blockers. Do not start ambiguity-gated implementation, subagents, or unrelated work.\n`,
-    'team': `---\nname: team\ndescription: Deprecated $Team compatibility alias; new execution missions use the $Naruto Codex official subagent workflow.\n---\n\nWarn once that $Team and \`sks team "<task>"\` are deprecated for new execution, then redirect implementation to \`sks naruto run "<task>" [--agents N] [--max-threads N] [--json]\`. Only legacy \`sks team log|tail|watch|lane|status\` remains, and it is strictly read-only observability for old missions. New work uses a GPT-5.6 Sol Max parent and the fixed four-profile policy: Luna Max for tiny short-context mechanical work, Sol High for ordinary implementation, Sol Max for judgment-heavy work, and Terra Medium for long-context or Computer Use, Browser/Chrome, and image-generation execution. Split mixed execution/judgment slices when possible and prefer Sol Max when they cannot be separated. SubagentStart/SubagentStop are lifecycle-only evidence, and completion requires a durable subagent-parent-summary.json containing one structured outcome per thread. Follow the canonical six-artifact Naruto contract. ${leanEngineeringCompactText()} ${outcomeRubricPolicyText()} ${speedLanePolicyText()} ${solutionScoutPolicyText('fix this broken behavior')} ${skillDreamPolicyText()}\n`,
-    'from-chat-img': `---\nname: from-chat-img\ndescription: Explicit $From-Chat-IMG Naruto add-on gate for chat screenshot plus attachment analysis.\n---\n\nUse only for From-Chat-IMG/$From-Chat-IMG. It enters the Naruto pipeline with from_chat_img_required=true and an add-on coverage gate, not the legacy Team pipeline. Treat uploads as chat screenshot plus originals. For web/browser/webapp targets use Codex Chrome Extension first; for native Mac/non-web app surfaces use Codex Computer Use visual inspection when available. List requirements first, match regions to attachments with confidence, write ${FROM_CHAT_IMG_COVERAGE_ARTIFACT}, ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT}, ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT}, and ${FROM_CHAT_IMG_QA_LOOP_ARTIFACT}, then continue Naruto worker proof, review, reflection, and Honest Mode. ${CODEX_WEB_VERIFICATION_POLICY} ${CODEX_COMPUTER_USE_ONLY_POLICY} The ledger must account for every visible customer request, screenshot image region, and separate attachment; ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT} must have a checked item for each request, image-region/attachment match, work item, scoped QA-LOOP, and verification step; ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT} stores temporary TriWiki-backed session context with expires_after_sessions=${FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS}. ${FROM_CHAT_IMG_QA_LOOP_ARTIFACT} must prove QA-LOOP ran over the exact customer-request work-order range after implementation, with every work item covered, post-fix verification complete, and zero unresolved findings. naruto-gate.json cannot pass From-Chat-IMG completion until from_chat_img_request_coverage=true, unresolved_items is empty, every checklist box is checked, and scoped_qa_loop_completed=true.\n`,
-    'shadow-clone': `---\nname: shadow-clone\ndescription: Deprecated $ShadowClone compatibility alias for the $Naruto Codex official subagent workflow.\n---\n\nEmit one deprecation warning, translate the request to $Naruto, and use \`sks naruto run "<task>" [--agents N] [--max-threads N] [--json]\`. Do not describe the new default as clones, a process swarm, or a native kernel. Follow the naruto skill's Sol Max parent and four-profile child policy: Luna Max mechanical, Sol High implementation, Sol Max judgment, Terra Medium long-context/tool execution. Preserve lifecycle-only event evidence, structured subagent-parent-summary.json, max_depth=1, the canonical six-artifact contract, scoped verification, reflection, and Honest Mode rules.\n`,
-    'kage-bunshin': `---\nname: kage-bunshin\ndescription: Deprecated $Kagebunshin compatibility alias for the $Naruto Codex official subagent workflow.\n---\n\nEmit one deprecation warning, translate the request to $Naruto, and use \`sks naruto run "<task>" [--agents N] [--max-threads N] [--json]\`. Legacy 影分身 terminology is compatibility-only and must not define the new runtime. Follow the naruto skill's Sol Max parent and four-profile child policy: Luna Max mechanical, Sol High implementation, Sol Max judgment, Terra Medium long-context/tool execution. Preserve lifecycle-only event evidence, structured subagent-parent-summary.json, max_depth=1, the canonical six-artifact contract, scoped verification, reflection, and Honest Mode rules.\n`,
+    'from-chat-img': `---\nname: from-chat-img\ndescription: Explicit $From-Chat-IMG Naruto add-on gate for chat screenshot plus attachment analysis.\n---\n\nUse only for From-Chat-IMG/$From-Chat-IMG. It enters the Naruto pipeline with from_chat_img_required=true and an add-on coverage gate. Treat uploads as chat screenshot plus originals. For web/browser/webapp targets use Codex Chrome Extension first; for native Mac/non-web app surfaces use Codex Computer Use visual inspection when available. List requirements first, match regions to attachments with confidence, write ${FROM_CHAT_IMG_COVERAGE_ARTIFACT}, ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT}, ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT}, and ${FROM_CHAT_IMG_QA_LOOP_ARTIFACT}, then continue Naruto worker proof, review, reflection, and Honest Mode. ${CODEX_WEB_VERIFICATION_POLICY} ${CODEX_COMPUTER_USE_ONLY_POLICY} The ledger must account for every visible customer request, screenshot image region, and separate attachment; ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT} must have a checked item for each request, image-region/attachment match, work item, scoped QA-LOOP, and verification step; ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT} stores temporary TriWiki-backed session context with expires_after_sessions=${FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS}. ${FROM_CHAT_IMG_QA_LOOP_ARTIFACT} must prove QA-LOOP ran over the exact customer-request work-order range after implementation, with every work item covered, post-fix verification complete, and zero unresolved findings. naruto-gate.json cannot pass From-Chat-IMG completion until from_chat_img_request_coverage=true, unresolved_items is empty, every checklist box is checked, and scoped_qa_loop_completed=true.\n`,
     'qa-loop': `---\nname: qa-loop\ndescription: $QA-LOOP dogfoods UI/API as human proxy with safety gates, Codex Chrome Extension-first web UI evidence, safe fixes, rechecks, and a QA report.\n---\n\nUse only $QA-LOOP. Infer scope, target, mutation policy, and login boundary from the prompt plus TriWiki/current-code defaults; do not surface a prequestion sheet. Credentials are runtime-only; never save secrets. Web/browser/webapp UI-level E2E must run the Codex Chrome Extension readiness gate first; if the extension is missing or disabled, rapidly halt and ask the user to set it up, then resume only after the user confirms installation is complete. Codex Computer Use is reserved for native Mac/non-web surfaces and must not satisfy web UI evidence. Playwright, Selenium, Puppeteer, Browser Use, Chrome MCP, screenshots fabricated from code, and prose-only checks do not satisfy web UI/browser verification. ${CODEX_WEB_VERIFICATION_POLICY} Deployed targets are read-only; destructive removal is forbidden. After answer/run, dogfood real flows, apply safe contract-allowed code/test/docs fixes, recheck, and do not pass qa-gate.json with unresolved findings or without post_fix_verification_complete. Finish qa-ledger, date/version report, gate, completion summary, and Honest Mode.\n`,
     'ppt': `---\nname: ppt\ndescription: $PPT information-first HTML/PDF presentation pipeline with inferred STP, audience, pain-point, format, research, design-system, and verification contract.\n---\n\nUse only when the user invokes $PPT or asks to create a presentation, deck, slides, pitch deck, proposal deck, HTML presentation, or PDF presentation artifact. Before artifact work, auto-seal presentation-specific answers from prompt, TriWiki/current-code defaults, and conservative policy: delivery context, target audience profile including role/average age/job/industry/topic familiarity/decision power, STP strategy, decision context and objections, and 3+ pain-point to solution mappings with expected aha moments. Do not surface a prequestion sheet. Presentation design must be simple, restrained, and information-first: avoid over-designed decoration, ornamental gradients, nested cards, and effects that compete with the message. Design detail should be embedded through typography hierarchy, spacing, alignment, thin rules, source clarity, and subtle accents. ${pptPipelineAllowlistPolicyText()} Use Product Design plugin first for context, ideation, prototype direction, audit, design QA, and share handoff. Use design.md only as an existing project-local cache or fallback SSOT when Product Design is unavailable; if fallback creation is needed, use docs/Design-Sys-Prompt.md plus getdesign-reference and curated DESIGN.md examples from ${AWESOME_DESIGN_MD_REFERENCE.url} only as source inputs, then fuse them into route-local PPT style tokens with a recorded design_ssot instead of treating references as parallel authorities. The $PPT route always loads imagegen as a required skill, checks Codex App imagegen at route start, and runs SKS auto-repair once before any image-dependent build/review work. If repair fails, stop with codex_imagegen_unavailable and do not continue with image-free or API-substituted evidence. When the sealed contract needs a generated raster asset or generated slide visual critique, immediately invoke Codex App \`$imagegen\` with gpt-image-2, move/copy the selected output into the mission assets or review evidence path, and record the real file path in ppt-image-asset-ledger.json or ppt-review-ledger.json before building or passing the gate. Direct API fallback, placeholder files, HTML/CSS stand-ins, and prose-only substitutes do not satisfy the route gate. ${productDesignPluginPolicyText()} ${CODEX_IMAGEGEN_REQUIRED_POLICY} Use web or Context7 evidence only when external facts/libraries/current docs are required by the PPT contract, record verified claims in ppt-fact-ledger.json, record generated image asset plans/results/blockers in ppt-image-asset-ledger.json, then create the PDF plus editable source HTML under source-html/, keep independent strategy/render/file-write phases parallel where inputs allow, record ppt-parallel-report.json, run the bounded ppt-review-policy/ppt-review-ledger/ppt-iteration-report loop, and verify readability, overlap, format fit, source coverage, export state, unsupported-claim status, image-asset completion, review-loop termination, and temporary build files cleanup. Finish with reflection and Honest Mode.\n`,
-    'computer-use-fast': `---\nname: computer-use-fast\ndescription: Alias for the maximum-speed $Computer-Use/$CU native Codex Computer Use lane.\n---\n\nUse the same rules as computer-use: skip Team debate, QA-LOOP clarification, upfront TriWiki refresh, Context7, subagents, and reflection unless explicitly requested. Use Codex Computer Use directly only for native macOS, desktop-app, OS-settings, or non-web visual tasks. Browser, localhost, website, webapp, and web-based app verification must use the Codex Chrome Extension path first and must halt if that extension is not installed/enabled. At the end only, refresh/pack TriWiki, validate it, then provide a concise completion summary plus Honest Mode. ${CODEX_WEB_VERIFICATION_POLICY} ${CODEX_COMPUTER_USE_ONLY_POLICY}\n`,
+    'computer-use-fast': `---\nname: computer-use-fast\ndescription: Alias for the maximum-speed $Computer-Use/$CU native Codex Computer Use lane.\n---\n\nUse the same rules as computer-use: skip Naruto delegation, QA-LOOP clarification, upfront TriWiki refresh, Context7, subagents, and reflection unless explicitly requested. Use Codex Computer Use directly only for native macOS, desktop-app, OS-settings, or non-web visual tasks. Browser, localhost, website, webapp, and web-based app verification must use the Codex Chrome Extension path first and must halt if that extension is not installed/enabled. At the end only, refresh/pack TriWiki, validate it, then provide a concise completion summary plus Honest Mode. ${CODEX_WEB_VERIFICATION_POLICY} ${CODEX_COMPUTER_USE_ONLY_POLICY}\n`,
     'cu': `---\nname: cu\ndescription: Short alias for the maximum-speed native $Computer-Use Codex Computer Use lane.\n---\n\nUse the same rules as computer-use. This is a speed lane for native macOS, desktop-app, OS-settings, and non-web visual tasks requiring Codex Computer Use evidence, with TriWiki refresh/validate and Honest Mode deferred to final closeout. Web/browser/webapp verification must use Codex Chrome Extension first and stop if the extension is not installed/enabled. ${CODEX_WEB_VERIFICATION_POLICY} ${CODEX_COMPUTER_USE_ONLY_POLICY}\n`,
-    'goal': `---\nname: goal\ndescription: Fast $Goal/$goal bridge overlay for Codex native persisted /goal workflows.\n---\n\nUse when the user invokes $Goal/$goal or asks to persist a workflow with Codex native /goal continuation. Prepare with sks goal create or the $Goal route, write only the lightweight bridge artifacts, then use native Codex /goal create, pause, resume, and clear controls where available. Goal does not replace Team, QA, DB, or other SKS execution routes; continue implementation through the selected route and use Context7 only when external API/library docs are involved. Do not recreate the old no-question loop.\n`,
-    'release-review': `---\nname: release-review\ndescription: Official Codex subagent release review route for $Release-Review.\n---\n\nUse only when the user invokes $Release-Review or asks for a release-readiness review. Run it through \`sks naruto run \"$Release-Review release audit\" --agents <n> --read-only --json\` or the current Codex parent session. The parent owns decomposition, waits for every official worker/expert thread, integrates one structured outcome per thread, and records subagent-plan.json, subagent-events.jsonl, subagent-parent-summary.json, and subagent-evidence.json. Do not also start \`sks agent run\` or another scheduler for the same mission. The historical native process fixture is available only with explicit \`--legacy-native-runtime --mock\` and cannot satisfy current release collaboration proof. Finish with release-readiness verification and Honest Mode.\n`,
-    'commit': `---\nname: commit\ndescription: Simple git-only route for $Commit requests that stage current changes and create one commit without the full SKS pipeline.\n---\n\nUse only when the user invokes $Commit or explicitly asks to commit the current repository changes without pushing. Keep this route lightweight: inspect git status and the relevant diff summary, avoid Team/pipeline/TriWiki route work unless separately requested, stage the intended current changes, and create one git commit. The commit message must summarize the actual work and include exactly one trailer: Co-authored-by: Codex <noreply@openai.com>. Do not push. If there are no changes, report that no commit was created. Finish with a concise result and a one-line Honest Mode covering the commit hash and any unverified items.\n`,
-    'commit-and-push': `---\nname: commit-and-push\ndescription: Simple git-only route for $Commit-And-Push requests that stage current changes, create one commit, and push without the full SKS pipeline.\n---\n\nUse only when the user invokes $Commit-And-Push or explicitly asks to commit and push the current repository changes. Keep this route lightweight: inspect git status and the relevant diff summary, avoid Team/pipeline/TriWiki route work unless separately requested, stage the intended current changes, create one git commit, then push the current branch. The commit message must summarize the actual work and include exactly one trailer: Co-authored-by: Codex <noreply@openai.com>. If there are no changes, do not create an empty commit unless the user explicitly asks for one. Finish with a concise result and a one-line Honest Mode covering the commit hash, pushed branch, and any unverified items.\n`,
+    'goal': `---\nname: goal\ndescription: Fast $Goal/$goal bridge overlay for Codex native persisted /goal workflows.\n---\n\nUse when the user invokes $Goal/$goal or asks to persist a workflow with Codex native /goal continuation. Prepare with sks goal create or the $Goal route, write only the lightweight bridge artifacts, then use native Codex /goal create, pause, resume, and clear controls where available. Goal does not replace Naruto, QA, DB, or other SKS execution routes; continue implementation through the selected route and use Context7 only when external API/library docs are involved. Do not recreate the old no-question loop.\n`,
+    'release-review': `---\nname: release-review\ndescription: Official Codex subagent release review route for $Release-Review.\n---\n\nUse only when the user invokes $Release-Review or asks for a release-readiness review. Run it through \`sks naruto run \"$Release-Review release audit\" --agents <n> --read-only --json\` or the current Codex parent session. The parent owns decomposition, waits for every official worker/expert thread, integrates one structured outcome per thread, and records subagent-plan.json, subagent-events.jsonl, subagent-parent-summary.json, and subagent-evidence.json. No alternate Release-Review runtime is supported. Finish with release-readiness verification and Honest Mode.\n`,
+    'commit': `---\nname: commit\ndescription: Simple git-only route for $Commit requests that stage current changes and create one commit without the full SKS pipeline.\n---\n\nUse only when the user invokes $Commit or explicitly asks to commit the current repository changes without pushing. Keep this route lightweight: inspect git status and the relevant diff summary, avoid Naruto/pipeline/TriWiki route work unless separately requested, stage the intended current changes, and create one git commit. The commit message must summarize the actual work and include exactly one trailer: Co-authored-by: Codex <noreply@openai.com>. Do not push. If there are no changes, report that no commit was created. Finish with a concise result and a one-line Honest Mode covering the commit hash and any unverified items.\n`,
+    'commit-and-push': `---\nname: commit-and-push\ndescription: Simple git-only route for $Commit-And-Push requests that stage current changes, create one commit, and push without the full SKS pipeline.\n---\n\nUse only when the user invokes $Commit-And-Push or explicitly asks to commit and push the current repository changes. Keep this route lightweight: inspect git status and the relevant diff summary, avoid Naruto/pipeline/TriWiki route work unless separately requested, stage the intended current changes, create one git commit, then push the current branch. The commit message must summarize the actual work and include exactly one trailer: Co-authored-by: Codex <noreply@openai.com>. If there are no changes, do not create an empty commit unless the user explicitly asks for one. Finish with a concise result and a one-line Honest Mode covering the commit hash, pushed branch, and any unverified items.\n`,
     'research': `---\nname: research\ndescription: Dollar-command route for $Research or $research frontier discovery workflows.\n---\n\nUse when the user invokes $Research/$research or asks for research, hypotheses, new mechanisms, falsification, or testable predictions. Prefer sks research prepare and sks research run. Research is not an implementation route: do not edit repository source, docs, package metadata, generated skills, or harness files; write only route-local mission artifacts under .sneakoscope/missions/<mission-id>/. First run layered Super Search across current papers, primary/official sources, standards, public discourse, practitioner evidence, background sources, and explicit counterevidence; only verified-content source rows may support real-run reviewer claims. Then run exactly three independent official Codex subagent threads using the project custom agent research_reviewer with GPT-5.6 Sol Max: Einstein Agent (first principles, explanation, experiments), von Neumann Agent (formal systems, algorithms, strategy, scaling), and Skeptic Agent (counterevidence, base rates, replication). These are composite persona-inspired lenses, not impersonations. Do not launch a custom debate scheduler, worker pool, or synthetic model fanout. Each reviewer must return the structured adversarial outcome, one literal "Eureka!" idea, source ids, falsifiers, cheap probes, and zero unresolved objections before approval. If any reviewer requests revision, revise the manuscript and run a fresh three-thread review cycle within the bounded cycle cap; convergence requires unanimous approval and trustworthy parent outcomes for all threads. agent-ledger.json and debate-ledger.json are compatibility projections from official reviewer outcomes, not independent runtime proof. Record research-source-skill.md, source-ledger.json, claim-evidence-matrix.json, novelty-ledger.json, falsification-ledger.json, research-report.md, the dated research paper, research-adversarial-review.json, research-revision-ledger.json, research-adversarial-convergence.json, genius-opinion-summary.md, research-honest-mode.json, and research-gate.json. Context7 is required only when the topic depends on current package/API/framework docs. Do not use --mock except for selftests; if live source execution is unavailable, record a blocker and keep the gate unpassed. Do not use for ordinary code edits.\n`,
     'autoresearch': `---\nname: autoresearch\ndescription: Dollar-command route for $AutoResearch or $autoresearch iterative experiment loops.\n---\n\nUse for $AutoResearch, iterative improvement, ranking, workflow, benchmark, or experiments. Define program, hypothesis, experiment, metric, keep/discard, falsification, next step, and Honest Mode. Do not become the parent identity for SEO/GEO; $SEO-GEO-OPTIMIZER may call research as a child stage for query, market, or competitor discovery while keeping the parent mission, gate, and Completion Proof on $SEO-GEO-OPTIMIZER.\n`,
     'db': `---\nname: db\ndescription: Dollar-command route for $DB or $db database and Supabase safety checks.\n---\n\nUse when the user invokes $DB/$db or the task touches SQL, Supabase, Postgres, migrations, Prisma, Drizzle, Knex, MCP database tools, or production data. The $DB route automatically materializes db-safety-scan.json and db-review.json from the internal DB safety engine; inspect those artifacts and current source/docs evidence instead of invoking a separate CLI. The legacy sks db command is removed and must remain unknown. Keep analysis read-only by default. Destructive database operations remain forbidden; explicitly authorized SQL-plane work uses sks mad-sks plan|sql|apply-migration under an active scoped permission mission.\n`,
-    'mad-db': `---\nname: mad-db\ndescription: Deprecated $MAD-DB compatibility alias; merged into mad-sks.\n---\n\n$MAD-DB and \`sks mad-db run|exec|apply-migration\` are deprecated aliases for MAD-SKS sql-plane. Warn the operator, translate to \`sks mad-sks sql|apply-migration\`, and follow the mad-sks skill as the single current authority.\n`,
-    'mad-sks': `---\nname: mad-sks\ndescription: Explicit high-risk authorization modifier plus merged SQL-plane executor for $MAD-SKS.\n---\n\nUse only when the user explicitly invokes $MAD-SKS, top-level sks --mad, or \`sks mad-sks plan|run|apply|sql|apply-migration|status|close|rollback-apply\`. MAD-SKS is the single high-risk MAD route: it combines scoped permission widening across approved target-project surfaces with the former MAD-DB SQL-plane execution model. It can be combined with another route, such as $MAD-SKS $Team or $DB ... $MAD-SKS; in that case the other command remains the primary workflow and MAD-SKS is the temporary permission grant or sql-plane executor. The widened permission applies only while the active mission gate is open, must be deactivated when the task ends, and can open approved scopes such as target-project file writes, shell commands, package installs, local service control, network operations, browser/Computer Use workflows, generated assets, file permissions, migrations, Supabase MCP database writes, column/schema cleanup, direct execute SQL, and normal targeted DB writes.\n\nMerged SQL-plane policy from mad-db:\n${mergedMadDbSqlPlanePolicy}\n\nCatastrophic SQL boundary: TRUNCATE, all-row UPDATE/DELETE, table/schema/database DROP, and equivalent reset operations are allowed only through the sql-plane executor and only when the user's prompt or CLI SQL statement literally names that operation. Other MAD-SKS executors, including db-write, keep those catastrophic categories blocked. Whole database/schema/table removal outside sql-plane, dangerous project/branch management, credential exfiltration, persistent security weakening, destructive delete without explicit confirmation, and unrequested fallback implementation remain blocked. Do not carry MAD-SKS permission into later prompts or routes. The permission profile source is centralized in src/core/permission-gates.ts and emitted as dist/core/permission-gates.js so skill/hook/MCP-style gates share one decision function.\n`,
+    'mad-sks': `---\nname: mad-sks\ndescription: Explicit high-risk authorization modifier plus SQL-plane executor for $MAD-SKS.\n---\n\nUse only when the user explicitly invokes $MAD-SKS, top-level sks --mad, or \`sks mad-sks plan|run|apply|sql|apply-migration|status|close|rollback-apply\`. MAD-SKS is the single high-risk route for scoped permission widening and bound SQL-plane execution. It can be combined with another route, such as $MAD-SKS $Naruto or $DB ... $MAD-SKS; in that case the other command remains the primary workflow and MAD-SKS is the temporary permission grant or SQL-plane executor. The widened permission applies only while the active mission gate is open, must be deactivated when the task ends, and can open approved scopes such as target-project file writes, shell commands, package installs, local service control, network operations, browser/Computer Use workflows, generated assets, file permissions, migrations, Supabase MCP database writes, column/schema cleanup, direct execute SQL, and normal targeted DB writes.\n\nSQL-plane policy:\n${canonicalMadSksSqlPlanePolicy}\n\nCatastrophic SQL boundary: TRUNCATE, all-row UPDATE/DELETE, table/schema/database DROP, and equivalent reset operations are allowed only through the SQL-plane executor and only when the user's prompt or CLI SQL statement literally names that operation. Other MAD-SKS executors, including db-write, keep those catastrophic categories blocked. Whole database/schema/table removal outside SQL-plane, dangerous project/branch management, credential exfiltration, persistent security weakening, destructive delete without explicit confirmation, and unrequested fallback implementation remain blocked. Do not carry MAD-SKS permission into later prompts or routes. The permission profile source is centralized in src/core/permission-gates.ts and emitted as dist/core/permission-gates.js so skill/hook/MCP-style gates share one decision function.\n`,
     'gx': `---\nname: gx\ndescription: Dollar-command route for $GX or $gx deterministic GX visual context cartridges.\n---\n\nUse when the user invokes $GX/$gx or asks for architecture/context visualization through SKS. Prefer sks gx init, render, validate, drift, and snapshot. vgraph.json remains the source of truth.\n`,
     'help': `---\nname: help\ndescription: Dollar-command route for $Help or $help explaining installed SKS commands and workflows.\n---\n\nUse when the user invokes $Help/$help or asks what commands exist. Prefer concise output from sks commands, sks usage <topic>, sks quickstart, sks aliases, and sks codex-app.\n`,
-    'prompt-pipeline': `---\nname: prompt-pipeline\ndescription: Default SKS prompt optimization pipeline for execution prompts; Answer and DFix bypass it.\n---\n\nClassify intent: Answer only for real questions; question-shaped implicit instructions, complaints, and mandatory-policy statements route to Team. DFix handles Direct Fix work: tiny copy/config/docs/labels/spacing/translation/simple mechanical edits; code and broad implementation default to Team unless safety/research/GX route fits. Infer goal, target, constraints, acceptance, risk, and smallest safe route from prompt, TriWiki/current-code defaults, and conservative SKS policy. Do not surface a prequestion sheet. Materialize pipeline-plan.json for the runtime lane, kept/skipped stages, no-fallback invariant, lean_decision, and verification; inspect with sks pipeline plan, adding --proof-field when changed files are known. Code work surfaces route/guard/scopes, materializes team-roster.json from default or explicit counts before implementation, compiles concrete Team runtime graph/inbox artifacts after consensus, and parent owns integration/tests/Context7/Honest Mode. ${leanEngineeringCompactText()} ${outcomeRubricPolicyText()} ${speedLanePolicyText()} ${solutionScoutPolicyText('fix this broken behavior')} ${skillDreamPolicyText()}\n\n${chatCaptureIntakeText()}\n\nDesign: non-PPT UI/UX uses Product Design plugin first; legacy design.md/design-system-builder/design-ui-editor/design-artifact-expert/getdesign-reference are fallback only when the plugin is unavailable or an existing project design.md must be respected. Use imagegen for image/logo/raster, and imagegen must prefer Codex App built-in image generation (${CODEX_APP_IMAGE_GENERATION_DOC_URL}) before API generation. ${productDesignPluginPolicyText()} ${CODEX_IMAGEGEN_REQUIRED_POLICY} For UI/UX review/audit requests that mention image generation, gpt-image-2, callouts, or annotated review images, route to $Image-UX-Review/$UX-Review and require generated annotated review image evidence before issue extraction; do not satisfy that route with text-only critique. For $PPT, ${pptPipelineAllowlistPolicyText()} ${getdesignReferencePolicyText()} TriWiki context-tracking SSOT: .sneakoscope/wiki/context-pack.json; read only the latest coordinate+voxel overlay pack before every route stage, run sks wiki refresh/pack after changes, validate before handoffs/final.\n`,
+    'prompt-pipeline': `---\nname: prompt-pipeline\ndescription: Default SKS prompt optimization pipeline for execution prompts; Answer and DFix bypass it.\n---\n\nClassify intent: Answer only for real questions; question-shaped implicit instructions, complaints, and mandatory-policy statements route to Naruto. DFix handles Direct Fix work: tiny copy/config/docs/labels/spacing/translation/simple mechanical edits; code and broad implementation default to Naruto unless safety/research/GX route fits. Infer goal, target, constraints, acceptance, risk, and smallest safe route from prompt, TriWiki/current-code defaults, and conservative SKS policy. Do not surface a prequestion sheet. Materialize pipeline-plan.json for the runtime lane, kept/skipped stages, no-fallback invariant, lean_decision, and verification; inspect with sks pipeline plan, adding --proof-field when changed files are known. Code work surfaces route/guard/scopes, materializes the official subagent plan with disjoint write scopes, and keeps parent-owned integration/tests/Context7/Honest Mode. ${leanEngineeringCompactText()} ${outcomeRubricPolicyText()} ${speedLanePolicyText()} ${solutionScoutPolicyText('fix this broken behavior')} ${skillDreamPolicyText()}\n\n${chatCaptureIntakeText()}\n\nDesign: non-PPT UI/UX uses Product Design plugin first; legacy design.md/design-system-builder/design-ui-editor/design-artifact-expert/getdesign-reference are fallback only when the plugin is unavailable or an existing project design.md must be respected. Use imagegen for image/logo/raster, and imagegen must prefer Codex App built-in image generation (${CODEX_APP_IMAGE_GENERATION_DOC_URL}) before API generation. ${productDesignPluginPolicyText()} ${CODEX_IMAGEGEN_REQUIRED_POLICY} For UI/UX review/audit requests that mention image generation, gpt-image-2, callouts, or annotated review images, route to $Image-UX-Review/$UX-Review and require generated annotated review image evidence before issue extraction; do not satisfy that route with text-only critique. For $PPT, ${pptPipelineAllowlistPolicyText()} ${getdesignReferencePolicyText()} TriWiki context-tracking SSOT: .sneakoscope/wiki/context-pack.json; read only the latest coordinate+voxel overlay pack before every route stage, run sks wiki refresh/pack after changes, validate before handoffs/final.\n`,
     [SOLUTION_SCOUT_SKILL_NAME]: `---\nname: ${SOLUTION_SCOUT_SKILL_NAME}\ndescription: Web-similarity scout hook for SKS problem-solving and repair requests.\n---\n\n${solutionScoutPolicyText('fix this broken behavior')}\n\nUse this as a pipeline hook, not as a standalone route: when a user asks to solve, fix, repair, troubleshoot, or investigate broken behavior, search first for similar resolution cases, summarize the useful patterns with sources, then combine them with current repo evidence before editing. If browsing is unavailable, mark the external scout unverified and continue with local evidence only.\n`,
     'reasoning-router': `---\nname: reasoning-router\ndescription: Temporary SKS reasoning-effort routing for every command and pipeline route.\n---\n\nmedium: simple copy/color/discovery/setup/mechanical edits. high: logic, safety, architecture, DB, orchestration, refactor, multi-file work. xhigh: research, AutoResearch, falsification, benchmarks, SEO/GEO, open-ended discovery, and From-Chat-IMG image work-order analysis. Routing is temporary; return to default after the gate. Inspect with sks reasoning and sks pipeline status.\n`,
-    'pipeline-runner': `---\nname: pipeline-runner\ndescription: Execute SKS dollar-command routes as stateful pipelines with mission artifacts, route gates, Context7 evidence, temporary reasoning routing, reflection, and Honest Mode.\n---\n\nEvery $ command is a route. Use current.json, mission artifacts, and pipeline-plan.json as the execution plan: it records the lane, skipped stages, kept stages, verification, lean_decision, and no-unrequested-fallback invariant. Use temporary reasoning, TriWiki before stages, source hydration, Context7 when required, Team cleanup before reflection, reflection for full routes, and completion summary plus Honest Mode before final. Surface guard/scopes, record evidence, refresh/pack/validate TriWiki, and check sks pipeline status/resume/plan. ${leanEngineeringCompactText()} ${speedLanePolicyText()} ${skillDreamPolicyText()}\n`,
+    'pipeline-runner': `---\nname: pipeline-runner\ndescription: Execute SKS dollar-command routes as stateful pipelines with mission artifacts, route gates, Context7 evidence, temporary reasoning routing, reflection, and Honest Mode.\n---\n\nEvery $ command is a route. Use current.json, mission artifacts, and pipeline-plan.json as the execution plan: it records the lane, skipped stages, kept stages, verification, lean_decision, and no-unrequested-fallback invariant. Use temporary reasoning, TriWiki before stages, source hydration, Context7 when required, Naruto cleanup before reflection, reflection for full routes, and completion summary plus Honest Mode before final. Surface guard/scopes, record evidence, refresh/pack/validate TriWiki, and check sks pipeline status/resume/plan. ${leanEngineeringCompactText()} ${speedLanePolicyText()} ${skillDreamPolicyText()}\n`,
     'context7-docs': `---\nname: context7-docs\ndescription: Enforce Context7 MCP documentation evidence for SKS routes that depend on external libraries, frameworks, APIs, MCPs, package managers, DB SDKs, or generated docs.\n---\n\nWhen required, resolve-library-id, then query-docs for the resolved id. Legacy get-library-docs evidence is accepted. Prefer sks context7 tools/resolve/docs/evidence and finish only after both evidence stages exist. Check setup with sks context7 check.\n`,
-    'super-search': `---\nname: super-search\ndescription: Dollar-command route for $Super-Search provider-independent source intelligence.\n---\n\nUse when the user invokes $Super-Search or asks for Super-Search source intelligence, source acquisition, X-search-style collection, URL acquisition, source normalization, claim ledgers, or citation proof. Prefer \`sks super-search doctor --json\` for readiness and \`sks super-search run "<query>" --mode balanced --json\` for provider-independent source proof; use \`sks super-search x "<query>" --json\` for X-search intent and \`sks super-search fetch "<url>" --json\` for URL acquisition. Context7 is required only when the query depends on current package/API/framework/MCP/generated documentation behavior. xAI/Grok credentials are optional and must not be required for route readiness. Evidence/artifacts remain under \`.sneakoscope/missions/<super-search-* or route mission>/super-search/\`: intent.json, axes.json, query-variants.json, provider-plan.json, source-ledger.json, lead-ledger.json, claim-ledger.json, attempt-ledger.json, synthesis.md, super-search-proof.json, super-search-gate.json, and super-search-result.json. Do not turn weak discovery into supported claims; finish with an Honest Mode summary of verified sources, blockers, and unverified external coverage.\n`,
+    'super-search': `---\nname: super-search\ndescription: Dollar-command route for $Super-Search provider-independent source intelligence.\n---\n\nUse when the user invokes $Super-Search or asks for Super-Search source intelligence, source acquisition, X-search-style collection, URL acquisition, source normalization, claim ledgers, or citation proof. Prefer \`sks super-search doctor --json\` for readiness and \`sks super-search run "<query>" --mode balanced --json\` for provider-independent source proof; use \`sks super-search x "<query>" --json\` for X-search intent and \`sks super-search fetch "<url>" --json\` for URL acquisition. Context7 is required only when the query depends on current package/API/framework/MCP/generated documentation behavior. Provider-specific credentials are optional and must not be required for route readiness. Evidence/artifacts remain under \`.sneakoscope/missions/<super-search-* or route mission>/super-search/\`: intent.json, axes.json, query-variants.json, provider-plan.json, source-ledger.json, lead-ledger.json, claim-ledger.json, attempt-ledger.json, synthesis.md, super-search-proof.json, super-search-gate.json, and super-search-result.json. Do not turn weak discovery into supported claims; finish with an Honest Mode summary of verified sources, blockers, and unverified external coverage.\n`,
     'search-visibility-core': `---\nname: search-visibility-core\ndescription: Shared kernel for seo-geo-optimizer audit, plan, explicit apply, rollback, verification, gates, and Completion Proof.\n---\n\nPurpose: keep Search Engine Optimization and Generative Engine Optimization on one typed search-visibility kernel instead of duplicate implementations. Use when $SEO-GEO-OPTIMIZER or \`sks seo-geo-optimizer\` is selected. Workflow: doctor detects package/static/Next evidence; audit writes source-backed inventory and findings; plan compiles safe mutation operations; apply requires explicit \`--apply\`; verify separates source, build, HTTP, browser, production, and measured outcome; rollback only reverses mission-owned operations. Safety: default read-only, never overwrite unmanaged robots.txt, sitemap, llms.txt, metadata, or structured data; do not hard-code customer routes; do not invent prices, reviews, availability, rankings, traffic, or AI citation outcomes. Evidence/artifacts: search-visibility/intake.json, adapter-detection.json, site-inventory.json, route-graph.json, robots-policy.json, structured-data-ledger.json, mutation-plan.json, mutation-journal.jsonl, rollback-manifest.json, verification-report.json, route gate, and completion-proof.json. Failure/recovery: unsupported frameworks stay audit/plan-only; missing production/browser/Search Console evidence remains unverified, not fabricated. CLI entrypoint: \`sks seo-geo-optimizer ... --mode seo|geo\`.\n`,
     'seo-geo-optimizer': `---\nname: seo-geo-optimizer\ndescription: Unified $SEO-GEO-OPTIMIZER route for Search Engine Optimization and Generative Engine Optimization.\n---\n\nPurpose: use one route name for SEO and GEO work while keeping the internal search-visibility mode explicit. Use when: the user asks for SEO audit/fix/verification, package/npm/GitHub search visibility, canonical, sitemap, robots.txt, hreflang, metadata, structured data, AI answer visibility, LLM citation readiness, answerability, entity/claim provenance, crawler policy, OAI-SearchBot/GPTBot/ChatGPT-User, Claude-SearchBot/ClaudeBot/Claude-User, or optional llms.txt planning. GEO means Generative Engine Optimization, not geolocation, GeoIP, maps, CDN geography, location permission, or regional redirect bugs. Workflow: run \`sks seo-geo-optimizer doctor --mode seo|geo\`, then audit, plan, explicit apply, verify, status, and rollback. Use \`--mode seo\` for technical/package search optimization and \`--mode geo\` for entity facts, claim evidence, answerability, crawler policy, and optional llms.txt. Safety: audit and plan must not mutate source; apply checks base hashes, ownership, scope, protected paths, rollback manifest, and post-verify. AI crawler policy must split search, training, user-directed retrieval, and ads/other; never use one allow_ai toggle and never auto-allow training crawlers. Evidence/artifacts: site-inventory.json, route-graph.json, seo-findings.json or geo-findings.json, entity-facts.json, claim-evidence-ledger.json, answerability-report.json, ai-crawler-policy.json, llms-txt-plan.json, mutation-plan.json, verification-report.json, seo-gate.json or geo-gate.json, completion-proof.json. Failure/recovery: unsupported frameworks stay plan-only; browser/production/Search Console/analytics outcomes are marked unverified when not actually run. Forbidden claims: no ranking, indexing, traffic lift, rich-result, answer inclusion, or AI citation guarantee; no keyword stuffing, doorway pages, fake reviews, fake prices, fake availability, fake shipping, fake awards, hidden AI-only text, or scaled spam. CLI entrypoint: \`sks seo-geo-optimizer doctor|audit|plan|apply|verify|status|rollback|fixture --mode seo|geo\`.\n`,
     'reflection': `---\nname: reflection\ndescription: Post-route self-review for full SKS routes that records real misses, gaps, and corrective lessons into TriWiki memory.\n---\n\nUse after full route work/tests and before final. DFix, Answer, Help, Wiki, SKS discovery are exempt. Do not invent faults. Write reflection.md; append real lessons to ${REFLECTION_MEMORY_PATH}; refresh/pack, validate context-pack.json, pass reflection-gate.json.\n\n${reflectionInstructionText()}\n`,
@@ -89,7 +111,7 @@ async function installOfficialSkills(root: any) {
     'visual-review': imageUxReviewSkill('visual-review'),
     'ui-ux-review': imageUxReviewSkill('ui-ux-review'),
     'imagegen': `---\nname: imagegen\ndescription: Required bridge to Codex App built-in image generation for logos, image assets, raster visuals, and image edits.\n---\n\nUse for generated or edited image assets: logo, product image, illustration, sprite, mockup, texture, cutout, or bitmap. Prefer the official Codex App built-in image generation feature documented at ${CODEX_APP_IMAGE_GENERATION_DOC_URL}: ask naturally or invoke \`$imagegen\`. SKS route code checks capability before image-dependent routes, attempts doctor imagegen repair once, and reports codex_imagegen_unavailable if Codex App $imagegen still is not ready. For newest-model requests, make the prompt explicit: "Use ChatGPT Images 2.0 / GPT Image 2.0 with gpt-image-2." Useful official references are ${OPENAI_CHATGPT_IMAGES_2_DOC_URL}, ${OPENAI_GPT_IMAGE_2_MODEL_DOC_URL}, and ${OPENAI_IMAGE_GENERATION_DOC_URL}. Codex App image generation counts against Codex usage limits. Capability detection is not output proof; full SKS evidence requires a real selected raster output path or generated review image artifact. Direct OpenAI API fallback is non-Codex evidence and does not satisfy SKS route evidence unless a separate non-Codex API task is explicitly requested. ${IMAGEGEN_SOCIAL_SOURCE_POLICY} ${CODEX_IMAGEGEN_REQUIRED_POLICY} Do not substitute placeholder SVG/HTML/CSS for requested raster assets; follow design.md when relevant.\n`,
-    'imagegen-source-scout': `---\nname: imagegen-source-scout\ndescription: Source scout for current GPT Image 2.0/gpt-image-2 prompt guidance, official docs, and X/social workflow signals.\n---\n\nUse when the user asks for the latest imagegen docs, ChatGPT Images 2.0 / GPT Image 2.0 / gpt-image-2 behavior, X/social reactions, prompt examples, or community workflow hints before creating an image prompt or SKS imagegen policy. Source order: official OpenAI announcement (${OPENAI_CHATGPT_IMAGES_2_DOC_URL}), Codex App image generation docs (${CODEX_APP_IMAGE_GENERATION_DOC_URL}), gpt-image-2 model docs (${OPENAI_GPT_IMAGE_2_MODEL_DOC_URL}), OpenAI Image Generation API docs (${OPENAI_IMAGE_GENERATION_DOC_URL}), then public X/social/community search for prompt-quality heuristics only. ${IMAGEGEN_SOCIAL_SOURCE_POLICY} If X/Grok or web search is unavailable, record that social coverage is unverified and continue from official docs. Output a compact evidence split: official capability/evidence rules, prompt heuristics, social/workflow signals, and blockers. Do not generate images itself; pair this with the imagegen skill for actual raster output.\n`,
+    'imagegen-source-scout': `---\nname: imagegen-source-scout\ndescription: Source scout for current GPT Image 2.0/gpt-image-2 prompt guidance, official docs, and X/social workflow signals.\n---\n\nUse when the user asks for the latest imagegen docs, ChatGPT Images 2.0 / GPT Image 2.0 / gpt-image-2 behavior, X/social reactions, prompt examples, or community workflow hints before creating an image prompt or SKS imagegen policy. Source order: official OpenAI announcement (${OPENAI_CHATGPT_IMAGES_2_DOC_URL}), Codex App image generation docs (${CODEX_APP_IMAGE_GENERATION_DOC_URL}), gpt-image-2 model docs (${OPENAI_GPT_IMAGE_2_MODEL_DOC_URL}), OpenAI Image Generation API docs (${OPENAI_IMAGE_GENERATION_DOC_URL}), then public X/social/community search for prompt-quality heuristics only. ${IMAGEGEN_SOCIAL_SOURCE_POLICY} If social or web search is unavailable, record that social coverage is unverified and continue from official docs. Output a compact evidence split: official capability/evidence rules, prompt heuristics, social/workflow signals, and blockers. Do not generate images itself; pair this with the imagegen skill for actual raster output.\n`,
     'getdesign-reference': `---\nname: getdesign-reference\ndescription: Use getdesign.md official design reference as an input to the design.md SSOT for UI/UX, presentation, and HTML/PDF systems.\n---\n\nUse when creating or improving design.md, UI/UX design systems, deck-like HTML artifacts, presentation PDFs, or brand-inspired visual systems. design.md is the only design decision SSOT; reference ${GETDESIGN_REFERENCE.url}, ${GETDESIGN_REFERENCE.docs_url}, and ${AWESOME_DESIGN_MD_REFERENCE.url} only as source inputs to synthesize or update that SSOT or a route-local style-token artifact. Prefer the official Codex skill if available with \`${GETDESIGN_REFERENCE.codex_skill_install}\`. If the skill CLI is unavailable, use this generated skill plus official docs/API/CLI/SDK references and curated DESIGN.md examples as inputs. Do not claim getdesign MCP is configured unless a current official MCP surface is actually installed.\n`,
     'design-system-builder': `---\nname: design-system-builder\ndescription: Legacy fallback to create design.md from docs/Design-Sys-Prompt.md only when Product Design plugin is unavailable or explicit local SSOT is required.\n---\n\nUse Product Design plugin first. Only when the plugin is unavailable or the route explicitly needs a local fallback SSOT, read docs/Design-Sys-Prompt.md as the builder prompt, inspect product/UI context, and use getdesign-reference, official getdesign.md docs, and curated DESIGN.md examples from ${AWESOME_DESIGN_MD_REFERENCE.url} only as source inputs. Fuse those inputs into one design.md fallback/cache with tokens, components, states, imagery, accessibility, and verification rules; do not leave multiple design files or references as competing authorities. Use the plan tool only for real ambiguity plus default font recommendation. Use imagegen for assets. ${productDesignPluginPolicyText()} ${CODEX_IMAGEGEN_REQUIRED_POLICY}\n`,
     'design-ui-editor': `---\nname: design-ui-editor\ndescription: Legacy fallback UI/UX editor for existing design.md systems when Product Design plugin is unavailable.\n---\n\nUse Product Design plugin first. When falling back, read \`design.md\`, inspect relevant UI/assets/tests, consult getdesign-reference when improving the design system, apply the smallest design-system-conformant change, use imagegen for image/logo/raster assets, and verify render quality. ${productDesignPluginPolicyText()} ${CODEX_IMAGEGEN_REQUIRED_POLICY} If design.md is missing and Product Design is unavailable, use design-system-builder as fallback.\n`,
@@ -99,14 +121,14 @@ async function installOfficialSkills(root: any) {
   for (const [name, content] of Object.entries(skills)) {
     if (isCoreSkillName(name)) continue;
     const dir = path.join(root, '.agents', 'skills', name);
-    const skillContent = markManagedSkill(name, enrichSkillContent(name, content));
-    const existingText = await readText(path.join(dir, 'SKILL.md'), null);
+    const skillContent = markManagedSkill(name, currentSurfaceSkillText(enrichSkillContent(name, content)));
+    const existingText = await readConfinedOfficialSkillText(root, dir, name);
     if (typeof existingText === 'string' && !isSksManagedOrGeneratedOfficialSkill(existingText)) {
       await quarantineSkillDir(root, dir, name, 'global-official-name-user-collision');
     }
-    await ensureDir(dir);
+    await ensureConfinedDirectory(root, dir);
     await writeTextAtomic(path.join(dir, 'SKILL.md'), `${skillContent.trim()}\n`);
-    await writeSkillMetadata(dir, name);
+    await writeSkillMetadata(root, dir, name);
   }
   const coreManifest = buildSksCoreSkillManifest();
   const coreByName = new Map(coreManifest.skills.map((skill) => [skill.canonical_name, skill.content_sha256]));
@@ -120,7 +142,7 @@ async function installOfficialSkills(root: any) {
     .filter((row) => row.after_sha256 === coreByName.get(row.canonical_name) && row.action !== 'skip-user-authored')
     .map((row) => row.canonical_name);
   for (const name of managedCoreSkillNames) {
-    await writeSkillMetadata(path.join(root, '.agents', 'skills', name), name);
+    await writeSkillMetadata(root, path.join(root, '.agents', 'skills', name), name);
   }
   const skillNames = [...nonCoreSkillNames, ...managedCoreSkillNames];
   const removedStaleGeneratedSkills = await removeStaleGeneratedSkillsFromManifest(root, skillNames);
@@ -143,8 +165,41 @@ async function installOfficialSkills(root: any) {
   };
 }
 
+async function readConfinedOfficialSkillText(root: string, dir: string, name: string): Promise<string | null> {
+  const dirInspection = await inspectConfinedPath(root, dir);
+  if (!dirInspection.exists) return null;
+  if (dirInspection.leafSymlink || !dirInspection.stat?.isDirectory()) {
+    await quarantineSkillDir(root, dir, name, 'global-official-path-collision');
+    return null;
+  }
+  const expected = [
+    { target: path.join(dir, 'SKILL.md'), kind: 'file' },
+    { target: path.join(dir, 'agents'), kind: 'directory' },
+    { target: path.join(dir, 'agents', 'openai.yaml'), kind: 'file' }
+  ] as const;
+  for (const row of expected) {
+    const inspected = await inspectConfinedPath(root, row.target);
+    if (!inspected.exists) continue;
+    const wrongType = row.kind === 'file' ? !inspected.stat?.isFile() : !inspected.stat?.isDirectory();
+    if (inspected.leafSymlink || wrongType) {
+      await quarantineSkillDir(root, dir, name, 'global-official-nested-path-collision');
+      return null;
+    }
+  }
+  const skillPath = path.join(dir, 'SKILL.md');
+  const skillInspection = await inspectConfinedPath(root, skillPath);
+  return skillInspection.exists ? fsp.readFile(skillPath, 'utf8') : null;
+}
+
+function currentSurfaceSkillText(content: unknown): string {
+  return String(content || '')
+    .replaceAll('$From-Chat-IMG', 'from-chat-img')
+    .replaceAll('From-Chat-IMG', 'from-chat-img');
+}
+
 export interface SkillReconcileReport {
   schema: 'sks.skill-reconcile.v1';
+  ok: boolean;
   scope: 'global' | 'project';
   target_dir: string;
   fix: boolean;
@@ -168,6 +223,28 @@ export interface SkillReconcileReport {
   removed_stale_generated_skills?: string[];
   removed_agent_skill_aliases?: string[];
   removed_codex_skill_mirrors?: string[];
+  retired_residue?: {
+    detected_count: number;
+    removed_count: number;
+    quarantined_user_collision_count: number;
+    rewritten_manifest_count?: number;
+    quarantined_manifest_collision_count?: number;
+    remaining_count: number;
+    error_count: number;
+  };
+}
+
+export interface RemovedSksSkillResidueReport {
+  schema: 'sks.removed-skill-residue.v1';
+  ok: boolean;
+  fix: boolean;
+  detected: Array<{ scope: string; name: string; path: string; ownership: 'sks_managed' | 'user_authored' }>;
+  removed: string[];
+  quarantined_user_collisions: string[];
+  rewritten_manifests?: string[];
+  quarantined_manifest_collisions?: string[];
+  remaining: string[];
+  errors: string[];
 }
 
 export async function installGlobalSkills(home: string): Promise<SkillReconcileReport> {
@@ -182,6 +259,387 @@ export async function installSkills(root: any) {
   return installGlobalSkills(root);
 }
 
+type RemovedSkillCleanupTarget = {
+  scope: 'global' | 'global-codex' | 'project' | 'project-codex' | 'global-runtime' | 'global-runtime-codex';
+  ownerRoot: string;
+  targetDir: string;
+};
+
+export async function cleanupRemovedSksSkillResidue(opts: {
+  root: string;
+  home?: string;
+  globalRuntimeRoot?: string;
+  fix: boolean;
+}): Promise<RemovedSksSkillResidueReport> {
+  const projectRoot = path.resolve(opts.root);
+  const home = path.resolve(opts.home || os.homedir());
+  const globalRuntimeRoot = path.resolve(opts.globalRuntimeRoot || process.env.SKS_GLOBAL_ROOT || path.join(home, '.sneakoscope-global'));
+  return reconcileRemovedSkillTargets([
+    { scope: 'global', ownerRoot: home, targetDir: path.join(home, '.agents', 'skills') },
+    { scope: 'global-codex', ownerRoot: home, targetDir: path.join(home, '.codex', 'skills') },
+    { scope: 'project', ownerRoot: projectRoot, targetDir: path.join(projectRoot, '.agents', 'skills') },
+    { scope: 'project-codex', ownerRoot: projectRoot, targetDir: path.join(projectRoot, '.codex', 'skills') },
+    { scope: 'global-runtime', ownerRoot: globalRuntimeRoot, targetDir: path.join(globalRuntimeRoot, '.agents', 'skills') },
+    { scope: 'global-runtime-codex', ownerRoot: globalRuntimeRoot, targetDir: path.join(globalRuntimeRoot, '.codex', 'skills') }
+  ], opts.fix);
+}
+
+async function reconcileRemovedSkillTargets(
+  targets: RemovedSkillCleanupTarget[],
+  fix: boolean
+): Promise<RemovedSksSkillResidueReport> {
+  const detected: RemovedSksSkillResidueReport['detected'] = [];
+  const removed: string[] = [];
+  const quarantinedUserCollisions: string[] = [];
+  const rewrittenManifests: string[] = [];
+  const quarantinedManifestCollisions: string[] = [];
+  const remaining: string[] = [];
+  const errors: string[] = [];
+  const uniqueTargets = new Map<string, RemovedSkillCleanupTarget>();
+  for (const target of targets) {
+    const key = path.resolve(target.targetDir);
+    if (!uniqueTargets.has(key)) uniqueTargets.set(key, target);
+  }
+
+  for (const target of uniqueTargets.values()) {
+    const ownerRoot = path.resolve(target.ownerRoot);
+    const targetDir = path.resolve(target.targetDir);
+    let ownerStat;
+    try {
+      ownerStat = await fsp.lstat(ownerRoot);
+    } catch (error: unknown) {
+      if (nodeErrorCode(error) === 'ENOENT') continue;
+      errors.push(`${displayRemovedSkillPath(target, targetDir)}:${publicPathError(error, ownerRoot)}`);
+      remaining.push(displayRemovedSkillPath(target, targetDir));
+      continue;
+    }
+    if (ownerStat.isSymbolicLink() || !ownerStat.isDirectory()) {
+      const code = ownerStat.isSymbolicLink() ? 'managed_path_boundary_symlink_refused' : 'managed_path_boundary_not_directory';
+      errors.push(`${displayRemovedSkillPath(target, targetDir)}:${code}:${ownerRoot}`);
+      remaining.push(displayRemovedSkillPath(target, targetDir));
+      continue;
+    }
+
+    let targetInspection;
+    try {
+      targetInspection = await inspectConfinedPath(ownerRoot, targetDir);
+    } catch (error: unknown) {
+      errors.push(`${displayRemovedSkillPath(target, targetDir)}:${publicPathError(error, targetDir)}`);
+      remaining.push(displayRemovedSkillPath(target, targetDir));
+      continue;
+    }
+    if (!targetInspection.exists) continue;
+    if (targetInspection.leafSymlink) {
+      const displayPath = displayRemovedSkillPath(target, targetDir);
+      detected.push({
+        scope: target.scope,
+        name: '@skills-root',
+        path: displayPath,
+        ownership: 'user_authored'
+      });
+      if (fix) {
+        try {
+          await quarantineSkillDir(ownerRoot, targetDir, 'skills-root', 'skills-root-symlink-collision');
+          quarantinedUserCollisions.push(displayPath);
+        } catch (error: unknown) {
+          errors.push(`${displayPath}:${publicPathError(error, targetDir)}`);
+        }
+      }
+      if (await confinedPathStillExists(ownerRoot, targetDir, errors, displayPath)) remaining.push(displayPath);
+      if (fix) await removeEmptySkillParents(target, errors);
+      continue;
+    }
+    if (!targetInspection.stat?.isDirectory()) {
+      const displayPath = displayRemovedSkillPath(target, targetDir);
+      errors.push(`${displayPath}:managed_path_directory_not_directory:${targetDir}`);
+      remaining.push(displayPath);
+      continue;
+    }
+
+    let rows: Dirent[];
+    try {
+      rows = await fsp.readdir(targetDir, { withFileTypes: true, encoding: 'utf8' });
+    } catch (error: unknown) {
+      const displayPath = displayRemovedSkillPath(target, targetDir);
+      errors.push(`${displayPath}:${publicPathError(error, targetDir)}`);
+      remaining.push(displayPath);
+      continue;
+    }
+    const rowByName = new Map(rows.map((row) => [row.name, row]));
+
+    for (const name of REMOVED_SKS_SKILL_NAMES) {
+      if (!rowByName.has(name)) continue;
+      const dir = path.join(targetDir, name);
+      const displayPath = displayRemovedSkillPath(target, dir);
+      let managed = false;
+      try {
+        managed = await isManagedRemovedSkillPath(ownerRoot, dir, name);
+      } catch (error: unknown) {
+        errors.push(`${displayPath}:${publicPathError(error, dir)}`);
+        remaining.push(displayPath);
+        continue;
+      }
+      detected.push({
+        scope: target.scope,
+        name,
+        path: displayPath,
+        ownership: managed ? 'sks_managed' : 'user_authored'
+      });
+      if (fix) {
+        try {
+          if (managed) {
+            await removeManagedPathVerified(ownerRoot, dir);
+            removed.push(displayPath);
+          } else {
+            await quarantineSkillDir(ownerRoot, dir, name, 'removed-skill-name-user-collision');
+            quarantinedUserCollisions.push(displayPath);
+          }
+        } catch (error: unknown) {
+          errors.push(`${displayPath}:${publicPathError(error, dir)}`);
+        }
+      }
+      if (await confinedPathStillExists(ownerRoot, dir, errors, displayPath)) remaining.push(displayPath);
+    }
+
+    await reconcileRemovedSkillManifests(target, rowByName, fix, {
+      rewrittenManifests,
+      quarantinedManifestCollisions,
+      remaining,
+      errors
+    });
+    if (fix) await removeEmptySkillParents(target, errors);
+  }
+
+  return {
+    schema: 'sks.removed-skill-residue.v1',
+    ok: remaining.length === 0 && errors.length === 0,
+    fix,
+    detected,
+    removed: Array.from(new Set(removed)).sort(),
+    quarantined_user_collisions: Array.from(new Set(quarantinedUserCollisions)).sort(),
+    rewritten_manifests: Array.from(new Set(rewrittenManifests)).sort(),
+    quarantined_manifest_collisions: Array.from(new Set(quarantinedManifestCollisions)).sort(),
+    remaining: Array.from(new Set(remaining)).sort(),
+    errors: Array.from(new Set(errors)).sort()
+  };
+}
+
+function displayRemovedSkillPath(target: RemovedSkillCleanupTarget, dir: string) {
+  const rel = path.relative(target.ownerRoot, dir).split(path.sep).join('/');
+  if (target.scope.startsWith('global-runtime')) return `$SKS_GLOBAL_ROOT/${rel}`;
+  return target.scope.startsWith('global') ? `~/${rel}` : rel;
+}
+
+async function isManagedRemovedSkillPath(ownerRoot: string, dir: string, name: string): Promise<boolean> {
+  const dirInspection = await inspectConfinedPath(ownerRoot, dir);
+  if (!dirInspection.exists || dirInspection.leafSymlink || !dirInspection.stat?.isDirectory()) return false;
+  const skillPath = path.join(dir, 'SKILL.md');
+  const skillInspection = await inspectConfinedPath(ownerRoot, skillPath);
+  if (!skillInspection.exists || skillInspection.leafSymlink || !skillInspection.stat?.isFile()) return false;
+  const text = await fsp.readFile(skillPath, 'utf8');
+  return isGeneratedRemovedSksSkill(text, name);
+}
+
+async function confinedPathStillExists(
+  ownerRoot: string,
+  targetPath: string,
+  errors: string[],
+  displayPath: string
+): Promise<boolean> {
+  try {
+    return (await inspectConfinedPath(ownerRoot, targetPath)).exists;
+  } catch (error: unknown) {
+    errors.push(`${displayPath}:${publicPathError(error, targetPath)}`);
+    return true;
+  }
+}
+
+async function removeEmptySkillParents(target: RemovedSkillCleanupTarget, errors: string[]): Promise<void> {
+  for (const directory of [target.targetDir, path.dirname(target.targetDir)]) {
+    try {
+      await removeConfinedDirectoryIfEmpty(target.ownerRoot, directory);
+    } catch (error: unknown) {
+      errors.push(`${displayRemovedSkillPath(target, directory)}:${publicPathError(error, directory)}`);
+    }
+  }
+}
+
+async function reconcileRemovedSkillManifests(
+  target: RemovedSkillCleanupTarget,
+  rowByName: Map<string, Dirent>,
+  fix: boolean,
+  report: {
+    rewrittenManifests: string[];
+    quarantinedManifestCollisions: string[];
+    remaining: string[];
+    errors: string[];
+  }
+): Promise<void> {
+  for (const fileName of [SKS_SKILL_MANIFEST_FILE, 'skills-manifest.json']) {
+    if (!rowByName.has(fileName)) continue;
+    const manifestPath = path.join(target.targetDir, fileName);
+    const displayPath = displayRemovedSkillPath(target, manifestPath);
+    let inspection;
+    try {
+      inspection = await inspectConfinedPath(target.ownerRoot, manifestPath);
+    } catch (error: unknown) {
+      report.errors.push(`${displayPath}:${publicPathError(error, manifestPath)}`);
+      report.remaining.push(displayPath);
+      continue;
+    }
+    if (!inspection.exists) continue;
+    if (inspection.leafSymlink || !inspection.stat?.isFile()) {
+      if (fix) {
+        try {
+          await quarantineSkillDir(target.ownerRoot, manifestPath, fileName, 'removed-skill-manifest-collision');
+          report.quarantinedManifestCollisions.push(displayPath);
+        } catch (error: unknown) {
+          report.errors.push(`${displayPath}:${publicPathError(error, manifestPath)}`);
+        }
+      }
+      if (await confinedPathStillExists(target.ownerRoot, manifestPath, report.errors, displayPath)) {
+        report.remaining.push(displayPath);
+      }
+      continue;
+    }
+
+    let text: string;
+    try {
+      text = await fsp.readFile(manifestPath, 'utf8');
+    } catch (error: unknown) {
+      report.errors.push(`${displayPath}:${publicPathError(error, manifestPath)}`);
+      report.remaining.push(displayPath);
+      continue;
+    }
+    let parsed: any;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      if (!manifestTextContainsRetiredJsonValue(text)) continue;
+      if (fix) {
+        try {
+          await quarantineSkillDir(target.ownerRoot, manifestPath, fileName, 'unparseable-removed-skill-manifest-collision');
+          report.quarantinedManifestCollisions.push(displayPath);
+        } catch (error: unknown) {
+          report.errors.push(`${displayPath}:${publicPathError(error, manifestPath)}`);
+        }
+      }
+      if (await confinedPathStillExists(target.ownerRoot, manifestPath, report.errors, displayPath)) {
+        report.remaining.push(displayPath);
+      }
+      continue;
+    }
+
+    const scrubbed = scrubRemovedSkillManifest(fileName, parsed);
+    if (!scrubbed.valid) {
+      if (!scrubbed.hasRetiredResidue) continue;
+      if (fix) {
+        try {
+          await quarantineSkillDir(target.ownerRoot, manifestPath, fileName, 'unmanaged-removed-skill-manifest-collision');
+          report.quarantinedManifestCollisions.push(displayPath);
+        } catch (error: unknown) {
+          report.errors.push(`${displayPath}:${publicPathError(error, manifestPath)}`);
+        }
+      }
+      if (await confinedPathStillExists(target.ownerRoot, manifestPath, report.errors, displayPath)) {
+        report.remaining.push(displayPath);
+      }
+      continue;
+    }
+    if (!scrubbed.changed) continue;
+    if (!fix) {
+      report.remaining.push(displayPath);
+      continue;
+    }
+    try {
+      await writeJsonAtomic(manifestPath, scrubbed.next);
+      const verified = JSON.parse(await fsp.readFile(manifestPath, 'utf8'));
+      if (manifestHasRetiredResidue(fileName, verified)) {
+        throw new Error('removed_skill_manifest_verification_failed');
+      }
+      report.rewrittenManifests.push(displayPath);
+    } catch (error: unknown) {
+      report.errors.push(`${displayPath}:${publicPathError(error, manifestPath)}`);
+      report.remaining.push(displayPath);
+    }
+  }
+}
+
+function scrubRemovedSkillManifest(fileName: string, parsed: any): {
+  valid: boolean;
+  changed: boolean;
+  hasRetiredResidue: boolean;
+  next: any;
+} {
+  const hasRetiredResidue = manifestHasRetiredResidue(fileName, parsed);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return { valid: false, changed: false, hasRetiredResidue, next: parsed };
+  }
+  if (fileName === SKS_SKILL_MANIFEST_FILE) {
+    if (parsed.generated_by !== 'sneakoscope' || !Array.isArray(parsed.skills) || !Array.isArray(parsed.files)) {
+      return { valid: false, changed: false, hasRetiredResidue, next: parsed };
+    }
+    const next = {
+      ...parsed,
+      skills: parsed.skills.filter((name: unknown) => !isRemovedSkillName(name)),
+      files: parsed.files.filter((file: unknown) => !generatedFileReferencesRemovedSkill(file))
+    };
+    return {
+      valid: true,
+      changed: JSON.stringify(next) !== JSON.stringify(parsed),
+      hasRetiredResidue,
+      next
+    };
+  }
+  if (parsed.schema !== PACKAGED_SKILLS_MANIFEST_SCHEMA || !Array.isArray(parsed.skills)) {
+    return { valid: false, changed: false, hasRetiredResidue, next: parsed };
+  }
+  const next = normalizeSkillsManifest(parsed);
+  return {
+    valid: true,
+    changed: JSON.stringify(next) !== JSON.stringify(parsed),
+    hasRetiredResidue,
+    next
+  };
+}
+
+function manifestHasRetiredResidue(fileName: string, parsed: any): boolean {
+  if (!parsed || typeof parsed !== 'object') return false;
+  if (fileName === SKS_SKILL_MANIFEST_FILE) {
+    return (Array.isArray(parsed.skills) && parsed.skills.some(isRemovedSkillName))
+      || (Array.isArray(parsed.files) && parsed.files.some(generatedFileReferencesRemovedSkill));
+  }
+  return Object.hasOwn(parsed, 'removed_skills')
+    || (Array.isArray(parsed.skills) && parsed.skills.some((skill: any) => (
+      isRemovedSkillName(skill?.canonical_name)
+      || (Array.isArray(skill?.deprecated_aliases) && skill.deprecated_aliases.some(isRemovedSkillName))
+    )));
+}
+
+function manifestTextContainsRetiredJsonValue(text: string): boolean {
+  return REMOVED_SKS_SKILL_NAMES.some((name) => new RegExp(`"${escapeRegExp(name)}"`, 'i').test(text));
+}
+
+function isRemovedSkillName(value: unknown): boolean {
+  return REMOVED_SKS_SKILL_NAME_SET.has(canonicalSkillNameFromValue(value));
+}
+
+function generatedFileReferencesRemovedSkill(value: unknown): boolean {
+  const parts = String(value || '').replaceAll('\\', '/').split('/').filter(Boolean);
+  return parts.some((part, index) => canonicalSkillNameFromValue(part) === 'skills'
+    && isRemovedSkillName(parts[index + 1]));
+}
+
+function nodeErrorCode(error: unknown): string {
+  return error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
+}
+
+function isGeneratedRemovedSksSkill(text: string | null, name: string) {
+  if (typeof text !== 'string') return false;
+  if (MANAGED_SKILL_MARKER_RE.test(text)) return true;
+  return isGeneratedSksAgentSkill(text, name) || isGeneratedSksLegacySkill(text, name);
+}
+
 export async function reconcileSkills(opts: {
   targetDir: string;
   scope: 'global' | 'project';
@@ -192,9 +650,10 @@ export async function reconcileSkills(opts: {
   const manifest = await loadSkillsManifest();
   const officialNames = new Set<string>(manifest.skills.map((skill: any) => canonicalSkillNameFromValue(skill.canonical_name)));
   const aliasNames = new Set<string>(manifest.skills.flatMap((skill: any) => (skill.deprecated_aliases || []).map((name: any) => canonicalSkillNameFromValue(name))));
-  const removedNames = new Set<string>((manifest.removed_skills || []).map((name: any) => canonicalSkillNameFromValue(name)));
+  const removedNames = new Set<string>(REMOVED_SKS_SKILL_NAMES.map((name: any) => canonicalSkillNameFromValue(name)));
   const report: SkillReconcileReport = {
     schema: 'sks.skill-reconcile.v1',
+    ok: true,
     scope: opts.scope,
     target_dir: targetDir,
     fix: opts.fix === true,
@@ -207,7 +666,55 @@ export async function reconcileSkills(opts: {
     warnings: [],
     core_skill_integrity: { ok: true, installed_count: 0, restored_count: 0, user_collision_count: 0 }
   };
-  await ensureDir(targetDir);
+  const removedResidueTargets: RemovedSkillCleanupTarget[] = [
+    {
+      scope: opts.scope === 'global' ? 'global' : 'project',
+      ownerRoot: root,
+      targetDir
+    },
+    {
+      scope: opts.scope === 'global' ? 'global-codex' : 'project-codex',
+      ownerRoot: root,
+      targetDir: path.join(root, '.codex', 'skills')
+    }
+  ];
+  if (opts.scope === 'global') {
+    const globalRuntimeRoot = path.resolve(process.env.SKS_GLOBAL_ROOT || path.join(root, '.sneakoscope-global'));
+    removedResidueTargets.push(
+      {
+        scope: 'global-runtime',
+        ownerRoot: globalRuntimeRoot,
+        targetDir: path.join(globalRuntimeRoot, '.agents', 'skills')
+      },
+      {
+        scope: 'global-runtime-codex',
+        ownerRoot: globalRuntimeRoot,
+        targetDir: path.join(globalRuntimeRoot, '.codex', 'skills')
+      }
+    );
+  }
+  const removedResidue = await reconcileRemovedSkillTargets(removedResidueTargets, opts.fix);
+  report.retired_residue = {
+    detected_count: removedResidue.detected.length,
+    removed_count: removedResidue.removed.length,
+    quarantined_user_collision_count: removedResidue.quarantined_user_collisions.length,
+    rewritten_manifest_count: removedResidue.rewritten_manifests?.length || 0,
+    quarantined_manifest_collision_count: removedResidue.quarantined_manifest_collisions?.length || 0,
+    remaining_count: removedResidue.remaining.length,
+    error_count: removedResidue.errors.length
+  };
+  if (removedResidue.errors.length) report.warnings.push(`retired_skill_cleanup_failed:${removedResidue.errors.length}`);
+  report.ok = removedResidue.errors.length === 0 && (!opts.fix || removedResidue.remaining.length === 0);
+  if (!report.ok && opts.fix) return report;
+  try {
+    await ensureConfinedDirectory(root, targetDir);
+  } catch (error: unknown) {
+    report.ok = false;
+    report.retired_residue.error_count += 1;
+    report.retired_residue.remaining_count += 1;
+    report.warnings.push(`skill_target_prepare_failed:${publicPathError(error, targetDir)}`);
+    return report;
+  }
   const existing = await listSkillDirs(targetDir);
 
   if (opts.scope === 'project') {
@@ -221,12 +728,15 @@ export async function reconcileSkills(opts: {
     if (opts.fix) await pruneProjectGeneratedManifest(targetDir);
     report.installed_skills = [];
     report.generated_files = [];
+    report.removed = currentSurfaceSkillPaths(report.removed);
+    report.quarantined_user_collisions = currentSurfaceSkillPaths(report.quarantined_user_collisions);
     report.removed_stale_generated_skills = [...report.removed];
     report.removed_agent_skill_aliases = [];
     report.removed_codex_skill_mirrors = [];
     report.core_skill_integrity = { ok: true, installed_count: 0, restored_count: 0, user_collision_count: 0 };
     await removeDirIfEmpty(targetDir);
     await removeDirIfEmpty(path.dirname(targetDir));
+    report.ok = report.ok && report.retired_residue.error_count === 0 && report.retired_residue.remaining_count === 0;
     return report;
   }
 
@@ -235,7 +745,7 @@ export async function reconcileSkills(opts: {
   if (opts.fix) {
     install = await installOfficialSkills(root);
     report.installed.push(...(install.installed_skills || []));
-    report.removed.push(...(install.removed_stale_generated_skills || []));
+    report.removed.push(...currentSurfaceSkillPaths(install.removed_stale_generated_skills || []));
   } else {
     for (const skill of manifest.skills) {
       if (!before.has(canonicalSkillNameFromValue(skill.canonical_name))) report.installed.push(skill.canonical_name);
@@ -250,10 +760,20 @@ export async function reconcileSkills(opts: {
   report.installed_skills = install?.installed_skills || [...report.installed];
   report.generated_files = install?.generated_files || generatedSkillFiles(report.installed_skills);
   report.core_skill_integrity = install?.core_skill_integrity || { ok: true, installed_count: 0, restored_count: 0, user_collision_count: 0 };
-  report.removed_stale_generated_skills = install?.removed_stale_generated_skills || [...report.removed];
-  report.removed_agent_skill_aliases = install?.removed_agent_skill_aliases || [];
-  report.removed_codex_skill_mirrors = install?.removed_codex_skill_mirrors || [];
+  report.removed_stale_generated_skills = currentSurfaceSkillPaths(install?.removed_stale_generated_skills || report.removed);
+  report.removed_agent_skill_aliases = currentSurfaceSkillPaths(install?.removed_agent_skill_aliases || []);
+  report.removed_codex_skill_mirrors = currentSurfaceSkillPaths(install?.removed_codex_skill_mirrors || []);
+  report.removed = currentSurfaceSkillPaths(report.removed);
+  report.quarantined_user_collisions = currentSurfaceSkillPaths(report.quarantined_user_collisions);
+  report.ok = report.ok && report.core_skill_integrity.ok && report.retired_residue.error_count === 0 && report.retired_residue.remaining_count === 0;
   return report;
+}
+
+function currentSurfaceSkillPaths(values: readonly string[]): string[] {
+  return Array.from(new Set(values.filter((value) => {
+    const segments = String(value || '').split(/[\\/]/).map((segment) => canonicalSkillNameFromValue(segment));
+    return !segments.some((segment) => REMOVED_SKS_SKILL_NAME_SET.has(segment));
+  }))).sort();
 }
 
 function looksGeneratedOfficialSkill(text: string) {
@@ -289,7 +809,7 @@ async function reconcileProjectSkillEntries(
       continue;
     }
     if (managed) {
-      if (fix) await fsp.rm(entry.dir, { recursive: true, force: true });
+      if (fix) await removeManagedPathVerified(root, entry.dir);
       report.removed.push(path.relative(root, entry.dir).split(path.sep).join('/'));
       continue;
     }
@@ -300,13 +820,13 @@ async function reconcileProjectSkillEntries(
 
 async function quarantineSkillDir(root: string, sourceDir: string, name: string, reason: string) {
   const stamp = `${Date.now()}-${process.pid}-${Math.random().toString(36).slice(2, 8)}`;
-  const target = path.join(root, '.sneakoscope', 'quarantine', 'skills', canonicalSkillNameFromValue(name), stamp, path.basename(sourceDir));
-  await ensureDir(path.dirname(target));
-  await fsp.rename(sourceDir, target).catch(async () => {
-    await fsp.cp(sourceDir, target, { recursive: true, force: false });
-    await fsp.rm(sourceDir, { recursive: true, force: true });
-  });
-  await writeJsonAtomic(path.join(target, 'quarantine-record.json'), {
+  const boundary = path.resolve(root);
+  const base = path.join(boundary, '.sneakoscope', 'quarantine', 'skills', canonicalSkillNameFromValue(name), stamp);
+  const container = await uniqueConfinedPath(boundary, base);
+  const target = path.join(container, path.basename(sourceDir));
+  await ensureConfinedDirectory(boundary, container);
+  const recordPath = path.join(container, 'quarantine-record.json');
+  await writeJsonAtomic(recordPath, {
     schema: 'sks.skill-quarantine-record.v1',
     generated_at: nowIso(),
     source_path: sourceDir,
@@ -314,6 +834,13 @@ async function quarantineSkillDir(root: string, sourceDir: string, name: string,
     canonical_name: canonicalSkillNameFromValue(name),
     reason
   });
+  try {
+    await moveConfinedPath(boundary, sourceDir, target);
+  } catch (error: unknown) {
+    await removeManagedPathVerified(boundary, recordPath).catch(() => undefined);
+    await removeConfinedDirectoryIfEmpty(boundary, container).catch(() => undefined);
+    throw error;
+  }
   return target;
 }
 
@@ -324,9 +851,21 @@ export async function loadSkillsManifest(): Promise<any> {
   ];
   for (const file of candidates) {
     const data = await readJson(file, null);
-    if (data?.schema === PACKAGED_SKILLS_MANIFEST_SCHEMA && Array.isArray(data.skills)) return data;
+    if (data?.schema === PACKAGED_SKILLS_MANIFEST_SCHEMA && Array.isArray(data.skills)) return normalizeSkillsManifest(data);
   }
   return buildFallbackSkillsManifest();
+}
+
+function normalizeSkillsManifest(manifest: any) {
+  const skills = (manifest.skills || [])
+    .map((skill: any) => ({
+      ...skill,
+      deprecated_aliases: (skill.deprecated_aliases || [])
+        .filter((name: any) => !REMOVED_SKS_SKILL_NAME_SET.has(canonicalSkillNameFromValue(name)))
+    }))
+    .filter((skill: any) => !REMOVED_SKS_SKILL_NAME_SET.has(canonicalSkillNameFromValue(skill.canonical_name)));
+  const { removed_skills: _retiredInventory, ...current } = manifest || {};
+  return { ...current, skills };
 }
 
 export async function generatePackagedSkillsManifest(): Promise<any> {
@@ -341,14 +880,13 @@ export async function generatePackagedSkillsManifest(): Promise<any> {
         type: isCoreSkillName(entry.canonical) ? 'core' : 'official',
         content_sha256: entry.hash,
         hash_history: [],
-        deprecated_aliases: DEPRECATED_SKILL_ALIASES[entry.canonical] || []
+        deprecated_aliases: SKILL_ALIASES[entry.canonical] || []
       }))
       .sort((a, b) => a.canonical_name.localeCompare(b.canonical_name));
     return {
       schema: PACKAGED_SKILLS_MANIFEST_SCHEMA,
       package_version: PACKAGE_VERSION,
-      skills,
-      removed_skills: REMOVED_OFFICIAL_SKILLS
+      skills
     };
   });
 }
@@ -365,7 +903,7 @@ function buildFallbackSkillsManifest() {
     ...RECOMMENDED_SKILLS.map((name: any) => canonicalSkillNameFromValue(name)),
     ...DOLLAR_COMMANDS.map((command: any) => canonicalSkillNameFromValue(String(command.command || '').replace(/^\$/, ''))),
     ...buildSksCoreSkillManifest().skills.map((skill) => skill.canonical_name)
-  ].filter(Boolean));
+  ].filter((name) => Boolean(name) && !REMOVED_SKS_SKILL_NAME_SET.has(String(name))));
   return {
     schema: PACKAGED_SKILLS_MANIFEST_SCHEMA,
     package_version: PACKAGE_VERSION,
@@ -374,21 +912,33 @@ function buildFallbackSkillsManifest() {
       type: isCoreSkillName(name) ? 'core' : 'official',
       content_sha256: '',
       hash_history: [],
-      deprecated_aliases: DEPRECATED_SKILL_ALIASES[name] || []
-    })),
-    removed_skills: REMOVED_OFFICIAL_SKILLS
+      deprecated_aliases: SKILL_ALIASES[name] || []
+    }))
   };
 }
 
 async function listSkillDirs(targetDir: string) {
-  const rows = await fsp.readdir(targetDir, { withFileTypes: true }).catch(() => []);
+  const boundary = rootFromSkillsDir(targetDir);
+  let rootInspection;
+  try {
+    rootInspection = await inspectConfinedPath(boundary, targetDir);
+  } catch (error: unknown) {
+    if (nodeErrorCode(error) === 'ENOENT') return [];
+    throw error;
+  }
+  if (!rootInspection.exists) return [];
+  if (rootInspection.leafSymlink || !rootInspection.stat?.isDirectory()) {
+    throw new Error(`skill_target_not_safe_directory:${targetDir}`);
+  }
+  const rows = await fsp.readdir(targetDir, { withFileTypes: true });
   const out: any[] = [];
   for (const row of rows) {
-    if (!row.isDirectory()) continue;
+    if (row.isSymbolicLink() || !row.isDirectory()) continue;
     const dir = path.join(targetDir, row.name);
     const skillMdPath = path.join(dir, 'SKILL.md');
-    const text = await readText(skillMdPath, null);
-    if (typeof text !== 'string') continue;
+    const inspected = await inspectConfinedPath(boundary, skillMdPath);
+    if (!inspected.exists || inspected.leafSymlink || !inspected.stat?.isFile()) continue;
+    const text = await fsp.readFile(skillMdPath, 'utf8');
     const displayName = /^name:\s*(.+)\s*$/m.exec(text)?.[1] || row.name;
     out.push({
       name: row.name,
@@ -463,6 +1013,8 @@ async function removeStaleGeneratedSkillsFromManifest(root: any, skillNames: any
     if (isCoreSkillName(skillName)) continue;
     const dir = path.join(root, '.agents', 'skills', skillName);
     if (!(await exists(dir))) continue;
+    const text = await readText(path.join(dir, 'SKILL.md'), null);
+    if (!isSksManagedOrGeneratedOfficialSkill(String(text || ''))) continue;
     await fsp.rm(dir, { recursive: true, force: true });
     removed.push(path.relative(root, dir));
   }
@@ -491,7 +1043,7 @@ function isGeneratedSksPluginCollisionSkill(text: any, name: any) {
 }
 
 function enrichSkillContent(name: any, content: any) {
-  if (!['sks', 'answer', 'wiki', 'team', 'qa-loop', 'ppt', 'image-ux-review', 'ux-review', 'visual-review', 'ui-ux-review', 'computer-use-fast', 'cu', 'goal', 'research', 'autoresearch', 'db', 'gx', 'reflection', 'prompt-pipeline', 'pipeline-runner', 'context7-docs', 'turbo-context-pack', 'hproof-evidence-bind'].includes(name)) return content;
+  if (!['sks', 'answer', 'wiki', 'qa-loop', 'ppt', 'image-ux-review', 'ux-review', 'visual-review', 'ui-ux-review', 'computer-use-fast', 'cu', 'goal', 'research', 'autoresearch', 'db', 'gx', 'reflection', 'prompt-pipeline', 'pipeline-runner', 'context7-docs', 'turbo-context-pack', 'hproof-evidence-bind'].includes(name)) return content;
   const text = String(content || '').trimEnd();
   const activation = pipelineActivationText(name);
   if (text.includes('TriWiki context-tracking SSOT')) {
@@ -504,12 +1056,12 @@ Context tracking:
 - TriWiki SSOT: .sneakoscope/wiki/context-pack.json. Use only the latest coordinate+voxel overlay pack; coordinate-only legacy packs are invalid and must be refreshed before use. Use attention.use_first for compact high-trust recall and hydrate attention.hydrate_first from source before risky/lower-trust decisions. Refresh/pack after findings or artifact changes; validate before handoffs/final claims.
 - ${stackCurrentDocsPolicyText()}
 - Keep non-selected claims hydratable by id, hash, source path, and RGBA/trig coordinate. Hydrate low-trust claims before relying on them.
-- Hook output is limited; use mission files, team events, or normal updates for live detail.
+- Hook output is limited; use mission files, official subagent events, or normal updates for live detail.
 `;
 }
 
 function pipelineActivationText(name: any) {
-  const stateful = new Set(['sks', 'team', 'qa-loop', 'ppt', 'image-ux-review', 'ux-review', 'visual-review', 'ui-ux-review', 'computer-use-fast', 'cu', 'goal', 'research', 'autoresearch', 'db', 'gx', 'prompt-pipeline', 'pipeline-runner']);
+  const stateful = new Set(['sks', 'qa-loop', 'ppt', 'image-ux-review', 'ux-review', 'visual-review', 'ui-ux-review', 'computer-use-fast', 'cu', 'goal', 'research', 'autoresearch', 'db', 'gx', 'prompt-pipeline', 'pipeline-runner']);
   if (!stateful.has(name)) return '';
   return `Codex App pipeline activation:
 - If the SKS UserPromptSubmit hook already injected route context, follow that context.
@@ -518,13 +1070,13 @@ function pipelineActivationText(name: any) {
 - Do not treat this skill text alone as completion of the SKS route; a stateful SKS route must materialize mission/pipeline artifacts or explicitly report why the hook could not run.`;
 }
 
-async function writeSkillMetadata(dir: any, name: any) {
+async function writeSkillMetadata(root: string, dir: string, name: any) {
   const effort = ['computer-use-fast', 'cu'].includes(name)
     ? 'low'
     : ['research', 'autoresearch', 'research-discovery', 'autoresearch-loop', 'from-chat-img'].includes(name)
     ? 'xhigh'
     : (['dfix', 'sks', 'help'].includes(name) ? 'medium' : 'high');
-  await ensureDir(path.join(dir, 'agents'));
+  await ensureConfinedDirectory(root, path.join(dir, 'agents'));
   await writeTextAtomic(path.join(dir, 'agents', 'openai.yaml'), `name: ${name}\nmodel_reasoning_effort: ${effort}\nrouting: temporary\nreturn_to_default_after_route: true\n`);
 }
 
@@ -532,7 +1084,15 @@ async function removeGeneratedCodexSkillMirrors(root: any, skillNames: any) {
   const legacyRoot = path.join(root, '.codex', 'skills');
   if (!(await exists(legacyRoot))) return [];
   const removed: any[] = [];
-  const names = Array.from(new Set([...skillNames, ...DOLLAR_COMMANDS.map((c: any) => c.command.slice(1)), 'ralph', 'Ralph', 'ralph-supervisor', 'ralph-resolver']));
+  const names = Array.from(new Set([
+    ...skillNames,
+    ...DOLLAR_COMMANDS.map((c: any) => c.command.slice(1)),
+    ...REMOVED_SKS_SKILL_NAMES,
+    'ralph',
+    'Ralph',
+    'ralph-supervisor',
+    'ralph-resolver'
+  ]));
   for (const name of names) {
     const dir = path.join(legacyRoot, name);
     const skillPath = path.join(dir, 'SKILL.md');
@@ -548,7 +1108,15 @@ async function removeGeneratedCodexSkillMirrors(root: any, skillNames: any) {
 
 async function removeGeneratedAgentSkillAliases(root: any, skillNames: any) {
   const current = new Set(skillNames);
-  const obsolete = ['agent-team', 'qaloop', 'wiki-refresh', 'wikirefresh', 'ralph', 'ralph-supervisor', 'ralph-resolver'];
+  const obsolete = [
+    ...REMOVED_SKS_SKILL_NAMES,
+    'qaloop',
+    'wiki-refresh',
+    'wikirefresh',
+    'ralph',
+    'ralph-supervisor',
+    'ralph-resolver'
+  ];
   const removed: any[] = [];
   for (const name of obsolete) {
     if (current.has(name)) continue;
@@ -572,7 +1140,10 @@ function isGeneratedSksAgentSkill(text: any, name: any) {
 
 function isGeneratedSksLegacySkill(text: any, name: any) {
   if (typeof text !== 'string') return false;
-  return text.startsWith('---') && new RegExp(`^name:\\s*${escapeRegExp(name)}\\s*$`, 'm').test(text);
+  if (!text.startsWith('---') || !new RegExp(`^name:\\s*${escapeRegExp(name)}\\s*$`, 'm').test(text)) return false;
+  if (/\bnot generated by SKS\b/i.test(text)) return false;
+  return MANAGED_SKILL_MARKER_RE.test(text)
+    || /Sneakoscope generated|Fallback Codex App picker alias|Codex App picker alias for|Dollar-command route generated by SKS|Deprecated \$?(?:Team|MAD-DB|Swarm|ShadowClone|Kagebunshin) compatibility alias|Codex App pipeline activation:/i.test(text);
 }
 
 function escapeRegExp(value: any) {
@@ -587,7 +1158,9 @@ async function removeDirIfEmpty(dir: any) {
 }
 
 export async function installCodexAgents(root: any) {
-  return installOfficialSubagentAgentConfigs(root, { apply: true });
+  const retiredRoleCleanup = await reconcileRetiredAgentRoleResidue({ root, fix: true });
+  const installed = await installOfficialSubagentAgentConfigs(root, { apply: true });
+  return { ...installed, retired_role_cleanup: retiredRoleCleanup };
 }
 
 export function currentGeneratedFileInventory(skillInstall: any = {}, agentInstall: any = {}, opts: any = {}) {

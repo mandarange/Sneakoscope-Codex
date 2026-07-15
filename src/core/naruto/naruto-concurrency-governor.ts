@@ -3,7 +3,7 @@ import { applyNarutoBackpressure } from './naruto-backpressure.js'
 import { monitorNarutoResourcePressure } from './resource-pressure-monitor.js'
 
 export interface NarutoConcurrencyGovernorInput {
-  requestedClones?: number
+  requestedWorkers?: number
   totalWorkItems?: number
   pendingWorkQueueSize?: number
   activeLeaseConflicts?: number
@@ -15,7 +15,7 @@ export interface NarutoConcurrencyGovernorInput {
 
 export interface NarutoConcurrencyGovernorDecision {
   schema: 'sks.naruto-concurrency-governor.v1'
-  requested_clones: number
+  requested_workers: number
   total_work_items: number
   safe_active_workers: number
   safe_zellij_visible_panes: number
@@ -33,8 +33,8 @@ export interface NarutoConcurrencyGovernorDecision {
 }
 
 export function decideNarutoConcurrency(input: NarutoConcurrencyGovernorInput = {}): NarutoConcurrencyGovernorDecision {
-  const requestedClones = normalizePositiveInt(input.requestedClones, 8)
-  const totalWorkItems = normalizePositiveInt(input.totalWorkItems, requestedClones)
+  const requestedWorkers = normalizePositiveInt(input.requestedWorkers, 8)
+  const totalWorkItems = normalizePositiveInt(input.totalWorkItems, requestedWorkers)
   const pending = normalizeNonNegativeInt(input.pendingWorkQueueSize, totalWorkItems)
   const leaseConflicts = normalizeNonNegativeInt(input.activeLeaseConflicts, 0)
   const hardware = probeHardwareCapacity(input.hardware || {})
@@ -53,17 +53,17 @@ export function decideNarutoConcurrency(input: NarutoConcurrencyGovernorInput = 
   const ioCap = Math.max(1, Math.min(2, Math.floor(hardware.cpu_core_count / 4)))
   const configuredProcessCap = Math.max(1, Number(process.env.SKS_NARUTO_HEADLESS_PROCESS_CAP || 4))
   const processCap = Math.min(configuredProcessCap, cpuCap, 4)
-  const gitWorktreeCap = Math.max(1, Number(process.env.SKS_NARUTO_GIT_WORKTREE_CAP || Math.min(requestedClones, processCap)))
+  const gitWorktreeCap = Math.max(1, Number(process.env.SKS_NARUTO_GIT_WORKTREE_CAP || Math.min(requestedWorkers, processCap)))
   const localLlmParallel = Math.max(1, Math.min(4, hardware.local_llm_max_parallel_requests))
-  const remoteCodexParallel = Math.max(1, Math.min(hardware.remote_api_rate_limit_budget, requestedClones))
+  const remoteCodexParallel = Math.max(1, Math.min(hardware.remote_api_rate_limit_budget, requestedWorkers))
   const backendBudget = backend === 'ollama' || backend === 'local-llm'
     ? localLlmParallel
     : backend === 'codex-sdk' || backend === 'zellij'
       ? Math.min(remoteCodexParallel, processCap)
       : processCap
-  const queueCap = Math.max(1, Math.min(requestedClones, pending || totalWorkItems))
-  const leaseCap = Math.max(1, requestedClones - leaseConflicts)
-  const rawSafe = Math.max(1, Math.min(requestedClones, totalWorkItems, memoryCap, fdCap, cpuCap, ioCap + 1, gitWorktreeCap, processCap, backendBudget, queueCap, leaseCap, 4))
+  const queueCap = Math.max(1, Math.min(requestedWorkers, pending || totalWorkItems))
+  const leaseCap = Math.max(1, requestedWorkers - leaseConflicts)
+  const rawSafe = Math.max(1, Math.min(requestedWorkers, totalWorkItems, memoryCap, fdCap, cpuCap, ioCap + 1, gitWorktreeCap, processCap, backendBudget, queueCap, leaseCap, 4))
   const pressure = monitorNarutoResourcePressure(hardware, { activeWorkers: rawSafe, zellijVisiblePaneCap })
   const backpressure = applyNarutoBackpressure(rawSafe, pressure)
   const currentSafeActiveWorkers = Math.max(1, Math.min(rawSafe, backpressure.adjusted_active_workers))
@@ -76,12 +76,12 @@ export function decideNarutoConcurrency(input: NarutoConcurrencyGovernorInput = 
   const safeActiveWorkers = Math.max(1, Math.min(modeCap, currentSafeActiveWorkers))
   const safeVisible = Math.min(safeActiveWorkers, zellijVisiblePaneCap)
   const reasons = [
-    ...(memoryCap < requestedClones ? ['memory_cap'] : []),
-    ...(fdCap < requestedClones ? ['file_descriptor_budget'] : []),
-    ...(cpuCap + ioCap < requestedClones ? ['cpu_io_budget'] : []),
-    ...(gitWorktreeCap + processCap < requestedClones ? ['git_worktree_process_budget'] : []),
-    ...(backendBudget < requestedClones ? ['backend_parallel_budget'] : []),
-    ...(remoteCodexParallel < requestedClones ? ['remote_api_rate_limit_budget'] : []),
+    ...(memoryCap < requestedWorkers ? ['memory_cap'] : []),
+    ...(fdCap < requestedWorkers ? ['file_descriptor_budget'] : []),
+    ...(cpuCap + ioCap < requestedWorkers ? ['cpu_io_budget'] : []),
+    ...(gitWorktreeCap + processCap < requestedWorkers ? ['git_worktree_process_budget'] : []),
+    ...(backendBudget < requestedWorkers ? ['backend_parallel_budget'] : []),
+    ...(remoteCodexParallel < requestedWorkers ? ['remote_api_rate_limit_budget'] : []),
     ...(localLlmParallel <= 4 ? ['local_llm_max_parallel_requests'] : []),
     ...(safeVisible < safeActiveWorkers ? ['zellij_ui_pane_budget'] : []),
     ...(leaseConflicts > 0 ? ['active_lease_conflicts'] : []),
@@ -89,7 +89,7 @@ export function decideNarutoConcurrency(input: NarutoConcurrencyGovernorInput = 
   ]
   return {
     schema: 'sks.naruto-concurrency-governor.v1',
-    requested_clones: requestedClones,
+    requested_workers: requestedWorkers,
     total_work_items: totalWorkItems,
     safe_active_workers: safeActiveWorkers,
     safe_zellij_visible_panes: safeVisible,

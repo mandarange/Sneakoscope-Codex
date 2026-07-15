@@ -51,6 +51,30 @@ test('SKS Menu Bar uses the required split native source and resource inventory'
   assert.match(fs.readFileSync(path.join(root, 'Resources', 'AppIcon.icns')).subarray(0, 4).toString('ascii'), /icns/);
 });
 
+test('status template resources are distinct valid 18x18 PDFs', () => {
+  const resources = path.join(resolvePackagedMenuBarSourceRoot(), 'Resources');
+  const names = [
+    'SKSStatusTemplate.pdf',
+    'SKSStatusUpdateTemplate.pdf',
+    'SKSStatusWarningTemplate.pdf',
+    'SKSStatusAttentionTemplate.pdf'
+  ];
+  const digests = names.map((name) => {
+    const bytes = fs.readFileSync(path.join(resources, name));
+    const pdf = bytes.toString('latin1');
+    assert.match(pdf, /^%PDF-\d\.\d/, `${name}: PDF header`);
+    assert.match(pdf, /\/Type\s*\/Catalog\b/, `${name}: catalog`);
+    assert.match(pdf, /\/Type\s*\/Pages\b/, `${name}: pages tree`);
+    assert.match(pdf, /\/Type\s*\/Page\b/, `${name}: page`);
+    assert.match(pdf, /\/MediaBox\s*\[\s*0\s+0\s+18\s+18\s*\]/, `${name}: 18x18 MediaBox`);
+    const startXref = pdf.match(/startxref\s+(\d+)\s+%%EOF\s*$/);
+    assert.ok(startXref, `${name}: startxref and EOF`);
+    assert.equal(pdf.slice(Number(startXref[1]), Number(startXref[1]) + 4), 'xref', `${name}: xref offset`);
+    return sha256(bytes);
+  });
+  assert.equal(new Set(digests).size, names.length, 'every status glyph PDF must have a distinct SHA-256');
+});
+
 test('runtime materialization injects paths, version, and optional Codex bundle id without unresolved tokens', () => {
   const withCodex = source('com.openai.codex');
   const withoutCodex = source(null);
@@ -63,6 +87,8 @@ test('runtime materialization injects paths, version, and optional Codex bundle 
   assert.match(withCodex, /NSWorkspace\.didTerminateApplicationNotification/);
   assert.match(withCodex, /if config\?\["quit_with_codex"\] as\? Bool == true/);
   assert.match(withCodex, /else \{ self\?\.statusItem\.isVisible = false \}/);
+  assert.match(withCodex, /applicationShouldHandleReopen\(_ sender: NSApplication, hasVisibleWindows flag: Bool\)/);
+  assert.match(withCodex, /controlCenter\?\.show\(section: \.overview\)/);
 });
 
 test('Control Center is a non-modal seven-section AppKit sidebar with native accessibility', () => {
@@ -79,6 +105,17 @@ test('Control Center is a non-modal seven-section AppKit sidebar with native acc
   assert.match(swift, /button\.setAccessibilityLabel\(title\)/);
   assert.doesNotMatch(swift, /runModal\s*\(/);
   assert.doesNotMatch(swift, /NSAnimationContext|animator\(\)/);
+  assert.match(swift, /accessibilityDisplayShouldReduceMotion/);
+});
+
+test('Overview renders every release work-order health field from bounded local commands', () => {
+  const swift = source();
+  for (const field of ['SKS:', 'Codex CLI:', 'Codex app:', 'Menu Bar:', 'Updates:', 'MCP:', 'Telegram Hub:', 'Connected Macs:', 'Last operation:']) {
+    assert.match(swift, new RegExp(field));
+  }
+  assert.match(swift, /\["telegram", "status", "--project-root", AppRuntime\.projectRoot, "--json"\]/);
+  assert.match(swift, /\["mcp", "config", "list", "--scope", "effective", "--json"\]/);
+  assert.match(swift, /func latestSnapshot\(\) -> OperationSnapshot\?/);
 });
 
 test('status item is concise and applies the documented integrity-to-healthy priority', () => {
@@ -143,7 +180,9 @@ test('UserNotifications declares all categories/actions, redacts public bodies, 
   for (const action of ['OPEN_CONTROL_CENTER', 'OPEN_LOG', 'RETRY_OPERATION', 'OPEN_DASHBOARD']) assert.match(swift, new RegExp(action));
   assert.match(swift, /UNUserNotificationCenterDelegate/);
   assert.match(swift, /getNotificationSettings/);
-  assert.match(swift, /authorizationStatus == \.denied/);
+  assert.match(swift, /authorizationIsDenied\(settings\.authorizationStatus\)/);
+  assert.match(swift, /func dispatchActionIdentifier\(_ identifier: String\) -> String/);
+  assert.match(swift, /case UNNotificationDismissActionIdentifier: return "dismissed"/);
   assert.match(swift, /Notifications require attention/);
   assert.match(swift, /permission denied — operation results remain available in this Control Center inbox/);
   assert.match(swift, /api\[_-\]\?key\|secret\|token\|authorization/);
@@ -151,15 +190,44 @@ test('UserNotifications declares all categories/actions, redacts public bodies, 
   assert.doesNotMatch(swift, /display notification|osascript/);
 });
 
-test('MCP Control Center delegates typed scoped commands and refuses raw secret entry', () => {
+test('Remote and Telegram page uses the dedicated readiness contracts', () => {
   const swift = source();
-  assert.match(swift, /\["mcp", "config", "list", "--scope", "effective", "--json"\]/);
-  assert.match(swift, /\["mcp", "config", "add", "--scope", "global", "--stdin-json", "--json"\]/);
-  assert.match(swift, /\["mcp", "config", action, row\.name, "--scope", row\.scope, "--json"\]/);
-  assert.match(swift, /\["mcp", "config", "remove", row\.name, "--scope", row\.scope, "--json"\]/);
-  assert.match(swift, /\["mcp", "config", "test", row\.name, "--scope", row\.scope, "--json"\]/);
-  assert.match(swift, /Authentication must use OAuth or an environment-variable name/);
-  assert.match(swift, /raw secret values are not accepted/);
+  assert.match(swift, /\["remote", "readiness", "--project-root", AppRuntime\.projectRoot, "--json"\]/);
+  assert.match(swift, /\["telegram", "status", "--project-root", AppRuntime\.projectRoot, "--json"\]/);
+  assert.match(swift, /Official Remote compatibility:/);
+  assert.doesNotMatch(swift, /Mini App:|mini_app/);
+  assert.doesNotMatch(swift, /\["codex-app", "status", "--json"\]/);
+});
+
+test('MCP Control Center exposes scoped CRUD, health, OAuth, backups, policy editing, and redacted review without raw secret entry', () => {
+  const swift = source();
+  assert.match(swift, /scopePopup\.addItems\(withTitles: \["Effective", "Global", "Project"\]\)/);
+  assert.match(swift, /\["mcp", "config", "list", "--scope", scope\] \+ scopeContext\(scope, mutation: false\) \+ \["--json"\]/);
+  assert.match(swift, /\["mcp", "config", "add", "--scope", draft\.scope\].*\["--stdin-json", "--json"\]/s);
+  assert.match(swift, /\["mcp", "config", "edit", selection\.row\.name, "--scope", selection\.row\.scope\].*\["--stdin-json", "--json"\]/s);
+  assert.match(swift, /\["mcp", "config", "duplicate", selection\.row\.name, "--new-name", name, "--scope", selection\.row\.scope\]/);
+  assert.match(swift, /\["mcp", "config", action, selection\.row\.name, "--scope", selection\.row\.scope\]/);
+  assert.match(swift, /\["mcp", "config", "remove", selection\.row\.name, "--scope", selection\.row\.scope\]/);
+  assert.match(swift, /\["mcp", "config", "test", selection\.row\.name, "--scope", selection\.row\.scope\]/);
+  assert.match(swift, /let action = selection\.row\.authenticated == true \? "logout" : "login"/);
+  assert.match(swift, /\["mcp", "config", "backups", "--scope", scope\]/);
+  assert.match(swift, /\["mcp", "config", "restore", id, "--scope", scope\]/);
+  assert.match(swift, /\["--project-root", AppRuntime\.projectRoot, "--trusted-project"\]/);
+  assert.match(swift, /args\.append\("--confirm-project"\)/);
+  for (const label of ['Add…', 'Edit…', 'Duplicate…', 'Enable/Disable', 'Remove', 'Test Connection', 'OAuth Login/Logout', 'Backups…']) {
+    assert.match(swift, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  }
+  for (const field of ['startup_timeout_sec', 'tool_timeout_sec', 'enabled_tools', 'disabled_tools', 'default_tools_approval_mode', 'required']) {
+    assert.match(swift, new RegExp(field));
+  }
+  assert.match(swift, /Review is required before Apply/);
+  assert.match(swift, /No secret values are included/);
+  assert.match(swift, /environment-variable names only/);
+  assert.match(swift, /oauthButton\.isEnabled = .*streamable-http/s);
+  assert.match(swift, /guard selectedScope\(\) != "effective"/);
+  assert.match(swift, /writableScopeForBackup\(\).*global.*project/s);
+  assert.match(swift, /NSEvent\.addLocalMonitorForEvents\(matching: \.keyDown\)/);
+  assert.match(swift, /event\.keyCode == 53/);
   assert.doesNotMatch(swift, /KEY=VALUE/);
 });
 

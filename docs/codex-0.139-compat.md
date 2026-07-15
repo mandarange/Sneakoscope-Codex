@@ -24,7 +24,7 @@ SKS 5.8.0 keeps the historical Codex 0.139 compatibility notes as a fallback bas
 
 SKS 5.1.1 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while tightening dollar-command proof truth, mock fixture labeling, and release gate output contracts for the current package metadata.
 
-SKS 4.8.6 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while aligning the swarm gate honesty, release manifest consolidation, and lifecycle-disabled publish readiness evidence with the current 4.8.6 package metadata.
+SKS 4.8.6 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while aligning parallel-gate honesty, release manifest consolidation, and lifecycle-disabled publish readiness evidence with the package metadata used by that release.
 
 SKS 4.8.4 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while repairing the macOS SKS menu bar action surface: Terminal commands preserve Swift interpolation instead of running `(escaped)`, and codex-lb domain/API-key setup is visible from the status menu.
 
@@ -40,13 +40,13 @@ SKS 4.6.5 keeps the historical Codex 0.139 compatibility notes as a fallback bas
 
 SKS 4.6.4 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while hardening mission retention for closed/terminal agent sessions, project-scoped update cleanup, and `npm publish --ignore-scripts` readiness without changing the active Codex compatibility baseline.
 
-SKS 4.6.3 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while preserving the SuperSearch source-intelligence command rename, unified `seo-geo-optimizer` search-visibility route, Lean Engineering Policy evidence, MadDB direct Supabase MCP `apply_migration` hook fix, MadDB Supabase transport diagnostics hardening, and global npm update detection hardening without restoring legacy split `$SEO`/`$GEO` routes.
+SKS 4.6.3 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while preserving the SuperSearch source-intelligence command rename, unified `seo-geo-optimizer` search-visibility route, Lean Engineering Policy evidence, database write-hook and transport diagnostics hardening, and global npm update detection hardening without restoring retired split search routes.
 
-SKS 4.4.0 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while moving source intelligence to SuperSearch: provider-independent planning/proof, x-search parity gaps, and `npm publish --ignore-scripts` readiness are release-gated without restoring xAI/Grok runtime dependency.
+SKS 4.4.0 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while moving source intelligence to SuperSearch: provider-independent planning/proof, provider-specific search parity gaps, and `npm publish --ignore-scripts` readiness are release-gated without restoring a retired provider runtime.
 
 SKS 4.2.1 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while aligning the publish path with `npm publish --ignore-scripts`: the release wrapper now runs the full prepublish gate explicitly before invoking npm with lifecycle scripts disabled.
 
-SKS 4.2.0 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while stabilizing the active MadDB release surface: first-class `$MAD-DB` routing, capability v2 binding, mission-local Supabase write profiles, read-only restoration proof, and exact lifecycle correlation are release-gated without changing the Codex 0.139 compatibility baseline.
+SKS 4.2.0 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while stabilizing the database workflow used by that release: capability binding, mission-local Supabase write profiles, read-only restoration proof, and exact lifecycle correlation were release-gated without changing the Codex 0.139 compatibility baseline.
 
 SKS 4.1.1 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while tightening the active `rust-v0.142.0` Doctor/update readiness path: optional Computer Use and Chrome/web review stay route-gated, migration receipts use schema v2 with installation epoch evidence, migration Doctor runs on the fast profile, and release metadata remains publish-ready.
 

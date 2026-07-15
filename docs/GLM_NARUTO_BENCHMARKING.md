@@ -3,7 +3,7 @@
 The GLM Naruto bench command is:
 
 ```bash
-sks --mad --glm --naruto --bench --live --no-apply
+sks --mad --glm naruto --bench --live --no-apply
 ```
 
 Safety rules:

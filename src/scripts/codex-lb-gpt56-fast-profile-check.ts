@@ -33,7 +33,7 @@ const setup = await configureCodexLb({
   configPath,
   envPath,
   host: 'https://lb.example.test/backend-api/codex',
-  apiKey: 'sk-codex-lb-fast-fixture',
+  apiKey: 'fixture-codex-lb-fast-key',
   writeEnvFile: true,
   useDefaultProvider: true,
   forceFastMode: true,

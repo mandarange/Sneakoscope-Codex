@@ -9,6 +9,7 @@ import type { CodexCliMutationOperation, CodexMcpCliPort } from '../codex-cli-ad
 import { removeMcpServerText } from '../guarded-patch.js';
 import { listMcpInventory } from '../inventory.js';
 import { addMcpServer, duplicateMcpServer, editMcpServer, setMcpServerEnabled } from '../mutation.js';
+import { redactMcpError, sanitizeMcpArgs } from '../redaction.js';
 import { restoreMcpBackup } from '../restore.js';
 import { resolveMcpScope } from '../scope.js';
 
@@ -106,9 +107,15 @@ test('project inventory and mutations fail closed for untrusted or symlink-escap
 test('new mutations reject raw secrets, sensitive argv, sensitive URLs, and obsolete deny mode', async (t) => {
   const s = await fixture(t);
   const cli = new FakeCli();
+  const bareProviderToken = 'sk-proj-1234567890abcdefghijklmnop';
+  const githubToken = 'ghp_1234567890abcdefghijklmnopqrstuv';
+  const jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signaturevalue';
   const cases = [
     { input: { name: 'raw_env', transport: 'stdio', command: 'node', env: { TOKEN: 'secret' } }, blocker: 'mcp_raw_secret_storage_forbidden' },
     { input: { name: 'raw_arg', transport: 'stdio', command: 'node', args: ['--token', 'secret'] }, blocker: 'mcp_inline_secret_argument_forbidden' },
+    { input: { name: 'credential_arg', transport: 'stdio', command: 'node', args: ['--credential', bareProviderToken] }, blocker: 'mcp_inline_secret_argument_forbidden' },
+    { input: { name: 'bare_provider', transport: 'stdio', command: 'node', args: [githubToken] }, blocker: 'mcp_inline_secret_argument_forbidden' },
+    { input: { name: 'bare_jwt', transport: 'stdio', command: 'node', args: [jwt] }, blocker: 'mcp_inline_secret_argument_forbidden' },
     { input: { name: 'raw_url', transport: 'streamable-http', url: 'https://example.test/mcp?token=secret' }, blocker: 'mcp_url_secret_forbidden' },
     { input: { name: 'old_mode', transport: 'stdio', command: 'node', default_tools_approval_mode: 'deny' }, blocker: 'obsolete_mcp_approval_mode_deny' }
   ];
@@ -118,6 +125,10 @@ test('new mutations reject raw secrets, sensitive argv, sensitive URLs, and obso
     assert.ok(outcome.blockers.includes(row.blocker));
   }
   assert.equal(cli.transformCalls.length, 0);
+  assert.deepEqual(sanitizeMcpArgs(['--credential', bareProviderToken, githubToken, jwt]), [
+    '<redacted>', '<redacted>', '<redacted>', '<redacted>'
+  ]);
+  assert.doesNotMatch(redactMcpError(`failed ${bareProviderToken} ${githubToken} ${jwt}`), /sk-proj-|ghp_|eyJ/);
 });
 
 test('official CLI is primary for add/edit and guarded config carries current policy fields', async (t) => {
@@ -171,6 +182,58 @@ test('CLI-unavailable fallback is guarded and project mutation requires explicit
   assert.equal(added.ok, true);
   assert.equal(added.official_cli_used, false);
   assert.equal(added.fallback_used, true);
+});
+
+test('empty config and CRLF multiline comments round-trip through guarded CLI fallback', async (t) => {
+  const s = await fixture(t);
+  const cli = new FakeCli();
+  cli.available = false;
+
+  await fsp.writeFile(s.globalConfig, '', { mode: 0o600 });
+  const empty = await listMcpInventory('global', { home: s.home, cli });
+  assert.equal(empty.ok, true);
+  assert.deepEqual(empty.servers, []);
+
+  const original = [
+    '# preserve this comment',
+    '[settings]',
+    'banner = """line one',
+    '[mcp_servers.not_a_header]',
+    'line three"""',
+    ''
+  ].join('\r\n');
+  await fsp.writeFile(s.globalConfig, original, { mode: 0o600 });
+  const added = await addMcpServer({ name: 'docs', transport: 'stdio', command: 'node' }, 'global', {
+    home: s.home,
+    cli
+  });
+  assert.equal(added.ok, true);
+  assert.equal(added.official_cli_used, false);
+  assert.equal(added.fallback_used, true);
+  const after = await fsp.readFile(s.globalConfig, 'utf8');
+  assert.match(after, /^# preserve this comment\r\n\[settings\]/);
+  assert.match(after, /banner = """line one\r\n\[mcp_servers\.not_a_header\]\r\nline three"""/);
+  assert.match(after, /\r\n\r\n\[mcp_servers\."docs"\]\r\n/);
+  assert.doesNotMatch(after, /(^|[^\r])\n/);
+  assert.equal(parseCodexConfigToml(after).mcp_servers?.docs?.command, 'node');
+});
+
+test('unreadable config fails closed without falling back to an empty document', async (t) => {
+  if (process.platform === 'win32') return t.skip('POSIX permission semantics required');
+  const s = await fixture(t);
+  await fsp.writeFile(s.globalConfig, '[mcp_servers.docs]\ncommand = "node"\n', { mode: 0o600 });
+  if (process.getuid?.() === 0) {
+    await fsp.rm(s.globalConfig, { force: true });
+    await fsp.mkdir(s.globalConfig);
+    t.after(() => fsp.rm(s.globalConfig, { recursive: true, force: true }).catch(() => undefined));
+  } else {
+    await fsp.chmod(s.globalConfig, 0o000);
+    t.after(() => fsp.chmod(s.globalConfig, 0o600).catch(() => undefined));
+  }
+  const result = await listMcpInventory('global', { home: s.home, cli: new FakeCli() });
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.blockers, ['mcp_config_read_failed']);
+  assert.deepEqual(result.servers, []);
 });
 
 test('concurrent external write is preserved and mutation retries from the new base', async (t) => {
@@ -227,7 +290,7 @@ test('toggle edits only the target table and preserves multiline header-like con
     '[mcp_servers.real]', 'command = "node"', 'enabled = true # keep', '',
     '[mcp_servers.other]', 'command = "node"', '', '[mcp_servers.other.env]', 'CERT = """line1',
     '[mcp_servers.fake]', 'line2"""', ''
-  ].join('\n');
+  ].join('\r\n');
   await fsp.writeFile(s.globalConfig, original, { mode: 0o600 });
   const changed = await setMcpServerEnabled('real', false, 'global', { home: s.home, cli: new FakeCli() });
   assert.equal(changed.ok, true);

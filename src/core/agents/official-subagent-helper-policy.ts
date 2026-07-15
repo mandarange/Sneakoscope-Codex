@@ -4,7 +4,7 @@ import { nowIso, readJson, readText, writeJsonAtomic } from '../fsx.js'
 export const OFFICIAL_SUBAGENT_HELPER_POLICY_SCHEMA = 'sks.official-subagent-helper-policy.v1'
 
 export async function writeOfficialSubagentHelperPolicy(root: string, input: { nativeProof?: any } = {}) {
-  const nativeProof = input.nativeProof || await readJson<any>(path.join(root, 'native-cli-session-proof.json'), null)
+  const nativeProof = input.nativeProof || await readJson<any>(path.join(root, 'native-cli-worker-runtime-proof.json'), null)
   const events = await readText(path.join(root, 'agent-events.jsonl'), '')
   const subagentEventCount = String(events).split(/\n/).filter((line) => /Subagent(Start|Stop)|subagent/i.test(line)).length
   const nativeProcessCount = Number(nativeProof?.spawned_worker_process_count || 0)
@@ -36,7 +36,7 @@ export async function writeOfficialSubagentHelperPolicy(root: string, input: { n
     official_codex_subagents_allowed: true,
     helper_lane_role: 'capability_helper_only',
     helper_lane_may_run_in_parallel_with_native_workers: true,
-    worker_capacity_source: 'native-cli-session-proof.json',
+    worker_capacity_source: 'native-cli-worker-runtime-proof.json',
     worker_capacity_credit: workerCapacityCredit,
     subagent_events_counted_as_worker_sessions: subagentEventsCountedAsWorkerSessions,
     native_worker_process_count: nativeProcessCount,

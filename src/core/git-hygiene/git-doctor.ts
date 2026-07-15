@@ -33,7 +33,7 @@ export async function gitDoctor(root: string, opts: { fix?: boolean; mode?: unkn
   const actualRoot = await gitRoot(root);
   const reportRoot = actualRoot || root;
   if (opts.fix) {
-    const policy = await ensureGitPolicy(reportRoot, { mode: opts.mode || 'team', write: true });
+    const policy = await ensureGitPolicy(reportRoot, { mode: opts.mode || 'work', write: true });
     const ignore = await installGitignoreBlock(reportRoot);
     const exclude = await removeLegacyGitInfoExclude(reportRoot);
     const attrs = await installGitattributesBlock(reportRoot, policy);

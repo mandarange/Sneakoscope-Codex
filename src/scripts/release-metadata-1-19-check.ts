@@ -4,307 +4,40 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { assertGate, emitGate, root } from './sks-1-11-gate-lib.js';
 
-const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+const pkg = readJson('package.json');
+const lock = readJson('package-lock.json');
+const releaseManifest = readJson('release-gates.v2.json');
+const harnessManifest = readJson('infra-harness-gates.json');
 const RELEASE_VERSION = String(pkg.version || '');
-const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
-const distManifestPath = path.join(root, 'dist/build-manifest.json');
-const distManifest = fs.existsSync(distManifestPath) ? JSON.parse(fs.readFileSync(distManifestPath, 'utf8')) : null;
-const releaseManifest = readJsonIfExists('release-gates.v2.json');
-const harnessManifest = readJsonIfExists('infra-harness-gates.json');
+const distManifest = readJsonIfExists('dist/build-manifest.json');
 const releaseGates = Array.isArray(releaseManifest?.gates)
-  ? releaseManifest.gates.filter((gate) => Array.isArray(gate.preset) && gate.preset.includes('release'))
+  ? releaseManifest.gates.filter((gate: any) => Array.isArray(gate.preset) && gate.preset.includes('release'))
   : [];
 const harnessGates = Array.isArray(harnessManifest?.gates)
-  ? harnessManifest.gates.filter((gate) => Array.isArray(gate.preset) && gate.preset.includes('harness'))
+  ? harnessManifest.gates.filter((gate: any) => Array.isArray(gate.preset) && gate.preset.includes('harness'))
   : [];
-const releaseGateIds = new Set(releaseGates.map((gate) => gate.id));
-const harnessGateIds = new Set(harnessGates.map((gate) => gate.id));
+const releaseGateIds = new Set(releaseGates.map((gate: any) => gate.id));
+const harnessGateIds = new Set(harnessGates.map((gate: any) => gate.id));
 const allManifestGates = [...releaseGates, ...harnessGates];
-const releaseRealCheckPath = path.join(root, 'src/scripts/release-real-check.ts');
-const releaseRealCheckSource = fs.existsSync(releaseRealCheckPath) ? fs.readFileSync(releaseRealCheckPath, 'utf8') : '';
+
 const requiredDocs = [
   'README.md',
   'CHANGELOG.md',
-  'docs/source-intelligence-layer.md',
-  'docs/super-search-source-intelligence-policy.md',
-  'docs/main-no-scout-worker-scout-policy.md',
-  'docs/agent-terminal-lanes.md',
-  'docs/migration/tmux-to-zellij.md',
-  'docs/codex-0.139-compat.md',
-  'docs/codex-0.136-compat.md',
-  'docs/codex-0.135-compat.md',
-  'docs/triwiki-runtime-state.md',
-  'docs/codex-official-goal-mode.md',
-  'docs/dynamic-agent-pool.md',
-  'docs/work-queue-expansion.md',
-  'docs/follow-up-work-items.md',
-  'docs/scheduler-proof-gates.md',
-  'docs/agent-backfill-blackboxes.md',
-  'docs/session-generation.md',
-  'docs/real-codex-dynamic-smoke.md',
-  'docs/agent-cleanup-executor.md',
-  'docs/intelligent-work-graph.md',
-  'docs/fake-vs-real-proof-policy.md',
-  'docs/runtime-truth-matrix.md',
-  'docs/adhd-orchestrating-gate.md',
-  'docs/strategy-first-parallel-write.md',
-  'docs/appshots-pipeline.md',
-  'docs/codex-0.134-compat.md',
-  'docs/parallel-write-agents.md',
-  'docs/agent-patch-queue.md',
-  'docs/patch-swarm-runtime.md',
-  'docs/patch-conflict-rebase.md',
-  'docs/real-codex-patch-smoke.md',
-  'docs/patch-transaction-journal.md',
-  'docs/strategy-to-patch-wiring.md',
-  'docs/parallel-write-agent-runtime.md',
-  'docs/patch-proof-and-rollback.md',
-  'docs/appshots-thread-attachments.md',
-  'docs/mcp-readonly-runtime-scheduler.md',
-  'docs/mcp-readonly-scheduler.md',
-  'docs/native-cli-session-swarm.md',
-  'docs/no-subagent-scaling.md',
-  'docs/fast-mode-default.md',
-  'docs/real-codex-parallel-workers.md',
-  'docs/native-worker-backend-router.md',
-  'docs/real-codex-patch-envelope-contract.md',
-  'docs/codex-config-eperm-self-heal.md',
-  'docs/doctor-real-fix.md',
-  'docs/mad-launch-preflight.md',
-  'docs/fast-mode-official-service-tier.md',
-  'docs/codex-project-config-policy.md',
-  'docs/macos-tcc-operator-actions.md',
-  'docs/migration-1.18.7-to-1.18.8.md',
-  'docs/release-parallel-full-coverage.md',
-  'docs/priority-closure-p0-p4.md',
   'docs/release-readiness.md',
   'docs/release-proof-truth.md',
-  'docs/legacy-upgrade-1.19.md',
-  'docs/architecture-ts-rust-boundary.md',
-  'docs/zellij-ui-design.md',
-  'docs/core-skill-engine.md',
-  'docs/side-effect-zero-policy.md',
-  'docs/legacy-upgrade-1.20.md'
+  'docs/naruto.md',
+  'docs/zellij-ui.md',
+  'docs/AGENT-BRIDGE.md',
+  'docs/runtime-truth-matrix.md',
+  'docs/feature-fixtures.md',
+  'docs/orchestration-layers.md'
 ];
 const versionedDocs = new Set([
   'README.md',
   'CHANGELOG.md',
-  'docs/codex-0.139-compat.md',
   'docs/release-readiness.md',
   'docs/release-proof-truth.md'
 ]);
-const requiredScripts = [
-  'runtime:no-src-mjs',
-  'runtime:ts-source-of-truth',
-  'runtime:dist-parity',
-  'routes:proof-artifact-structure',
-  'agent:codex-app-cockpit',
-  'agent:janitor',
-  'agent:multi-project-isolation',
-  'verification:parallel-engine',
-  'super-search:provider-interface',
-  'source-intelligence:policy',
-  'source-intelligence:all-modes',
-  'codex-web:adapter',
-  'goal-mode:official-default',
-  'agent:main-no-scout',
-  'agent:worker-scout-limited',
-  'agent:background-terminals',
-  'agent:zellij-runtime',
-  'agent:task-graph-expansion',
-  'agent:follow-up-work-schema',
-  'agent:dynamic-pool-route-blackbox',
-  'agent:backfill-route-blackbox',
-  'agent:cli-options-to-task-graph',
-  'agent:route-truth-backfill',
-  'team:backfill-route-blackbox',
-  'team:actual-route-backfill',
-  'research:backfill-route-blackbox',
-  'research:actual-route-backfill',
-  'qa:backfill-route-blackbox',
-  'qa:actual-route-backfill',
-  'zellij:layout-valid',
-  'zellij:lane-renderer',
-  'zellij:pane-proof',
-  'zellij:screen-proof',
-  'agent:proof-contract-reconciled',
-  'agent:scheduler-proof-hardening',
-  'agent:dynamic-pool',
-  'agent:backfill-replenishment',
-  'agent:scheduler-proof',
-  'agent:session-generation',
-  'agent:terminal-generations',
-  'agent:zellij-runtime',
-  'zellij:pane-proof',
-  'zellij:screen-proof',
-  'agent:cleanup-executor',
-  'agent:cleanup-executor-v2',
-  'agent:cleanup-command-ux',
-  'retention:cleanup-safety',
-  'agent:intelligent-work-graph',
-  'agent:ast-aware-work-graph',
-  'proof:fake-vs-real-policy',
-  'proof:fake-real-policy-v2',
-  'release:runtime-truth-matrix',
-  'release:gate-existence-audit',
-  'codex:0.137-compat',
-  'doctor:codex-doctor-parity',
-  'codex:permission-profiles',
-  'codex:legacy-profile-consumers-removed',
-  'terminal:keyboard-enhancement-safety',
-  'terminal:tui-output-stability',
-  'codex:resume-cwd-truth',
-  'mcp:tool-naming-parity',
-  'responses:retry-policy-centralized',
-  'runtime:no-tmux',
-  'codex:0.134-compat',
-  'codex:0.134-official-compat',
-  'codex:profile-primary',
-  'codex:managed-proxy-env',
-  'strategy:adhd-orchestrating-gate',
-  'strategy:parallel-modification-plan',
-  'strategy:file-ownership-plan',
-  'strategy:verification-rollback-dag',
-  'appshots:capability',
-  'appshots:operator-policy',
-  'appshots:evidence',
-  'appshots:source-intelligence',
-  'appshots:triwiki-voxel',
-  'appshots:privacy-safety',
-  'mcp:0.134-modernization',
-  'mcp:readonly-concurrency',
-  'hooks:0.134-context-parity',
-  'source-intelligence:codex-history-search',
-  'agent:parallel-write-kernel',
-  'agent:parallel-write-blackbox',
-  'team:parallel-write-blackbox',
-  'dfix:parallel-write-blackbox',
-  'agent:patch-envelope-extraction',
-  'agent:patch-queue-runtime',
-  'agent:strategy-to-lease-wiring',
-  'agent:patch-swarm-runtime',
-  'agent:patch-swarm-runtime-truth',
-  'agent:patch-transaction-journal',
-  'agent:patch-conflict-rebase',
-  'agent:strategy-to-patch-strict',
-  'agent:rollback-command',
-  'agent:patch-verification-dag',
-  'agent:patch-rollback-dag',
-  'agent:patch-proof-runtime',
-  'agent:patch-swarm-route-blackbox',
-  'team:patch-swarm-route-blackbox',
-  'dfix:patch-swarm-route-blackbox',
-  'agent:patch-proof',
-  'agent:patch-rollback',
-  'appshots:thread-attachment-discovery',
-  'mcp:readonly-runtime-scheduler',
-  'agent:real-codex-patch-envelope-smoke',
-  'codex:0.134-runner-truth',
-  'agent:native-cli-session-swarm',
-  'naruto:shadow-clone-swarm',
-  'doctor:fix-recovers-corrupted-config',
-  'install:update-preserves-config',
-  'codex-lb:config-toml-safety',
-  'codex-app:ui-preservation',
-  'codex-app:fast-ui-preservation',
-  'codex-app:ui-clobber-guard',
-  'doctor:fixes-codex-app-fast-ui',
-  'provider:badge-context',
-  'codex-app:provider-badge',
-  'zellij:launch-command-truth',
-  'zellij:spawn-on-demand-layout',
-  'zellij:worker-pane-manager',
-  'agent:worker-pane-communication-contract',
-  'zellij:real-session-heartbeat',
-  'zellij:ui-design',
-  'legacy:gate-purge',
-  'legacy:gate-inventory',
-  'legacy:strong-inventory',
-  'publish:packlist-performance',
-  'postinstall:safe-side-effects',
-  'runtime:ts-rust-boundary',
-  'runtime:no-mjs-scripts',
-  'runtime:ts-python-boundary',
-  'core-skill:card-schema',
-  'core-skill:rollout-scoring',
-  'core-skill:patch',
-  'core-skill:heldout-validation',
-  'core-skill:deployment-snapshot',
-  'core-skill:no-inference-optimizer',
-  'core-skill:route-runtime-integration',
-  'core-skill:promotion-side-effect-ledger',
-  'core-skill:legacy-promotion-api-audit',
-  'core-skill:trainer-loop',
-  'safety:side-effect-zero',
-  'safety:mutation-callsite-coverage',
-  'side-effect:runtime-report',
-  'release:version-truth',
-  'zellij:doctor-readiness',
-  'release:gate-planner',
-  'release:dynamic-performance',
-  'release:provenance',
-  'release:gate-budget',
-  'agent:wiki-context-proof',
-  'shared-memory:check',
-  'wrongness:check',
-  'wrongness:fixtures',
-  'trust:check',
-  'git-collaboration:e2e',
-  'agent:native-cli-session-swarm-10',
-  'agent:native-cli-session-swarm-20',
-  'agent:no-subagent-scaling',
-  'agent:official-subagent-helper-policy',
-  'agent:native-cli-session-proof',
-  'agent:worker-backend-router',
-  'agent:codex-child-overlap',
-  'agent:model-authored-patch-envelope',
-  'runtime:no-tmux',
-  'mad-sks:zellij-launch',
-  'agent:fast-mode-default',
-  'agent:fast-mode-worker-propagation',
-  'codex:fast-mode-profile-propagation',
-  'mad-sks:fast-mode-propagation',
-  'route:blackbox-realism',
-  'agent:dynamic-cockpit',
-  'agent:source-intelligence-propagation',
-  'agent:goal-mode-propagation',
-  'agent:visual-consistency',
-  'release:parallel-full-coverage',
-  'priority:full-closure',
-  'release:native-agent-backend',
-  'all-features:completion',
-  'all-features:deep-completion',
-  'json-schema:recursive-check',
-  'evidence:flagship-coverage',
-  'ux-review:run-wires-imagegen',
-  'ppt:imagegen-review-fixture',
-  'ppt:full-e2e-blackbox',
-  'dfix:fixture',
-  'hooks:strict-subset-check',
-  'hooks:trust-warning-zero',
-  'codex-lb:setup-truthfulness',
-  'computer-use:visual-route-fixture',
-  'mad-sks:executor-proof-graph',
-  'blackbox:matrix:contract',
-  'test:blackbox',
-  'rust:check',
-  'perf:gate',
-  'release:check:parallel'
-];
-const requiredRealScripts = [
-  'doctor:codex-doctor-parity:actual',
-  'publish:dry-run-performance',
-  'zellij:capability',
-  'zellij:pane-proof',
-  'zellij:screen-proof',
-  'agent:real-codex-dynamic-smoke-v2',
-  'agent:real-codex-dynamic-smoke',
-  'agent:real-codex-patch-envelope-smoke',
-  'agent:real-codex-parallel-workers',
-  'agent:real-codex-parallel-workers-5',
-  'agent:real-codex-parallel-workers-10',
-  'agent:real-codex-parallel-workers-20'
-];
 const requiredPackageScripts = [
   'build',
   'build:incremental',
@@ -317,27 +50,36 @@ const requiredPackageScripts = [
   'release:check:confidence',
   'release:check:full',
   'prepublishOnly',
-  'publish:prep-ignore-scripts',
-  'publish:ignore-scripts',
+  'release:file-ownership',
+  'release:macos-menubar-proof',
+  'release:main-push-guard',
+  'release:main-push-receipt',
+  'release:pack-receipt',
+  'runtime:installed-smoke',
   'gates:run',
-  'policy:gate-audit'
+  'policy:gate-audit',
+  'naruto:e2e-hermetic',
+  'naruto:e2e-hermetic-write'
 ];
 const requiredReleaseGates = [
+  'commands:current-surface-only',
+  'naruto:canonical-stop-gate',
+  'test:official-subagent-policy',
   'codex:app-handoff-comprehensive',
   'qa-loop:comprehensive-verification',
   'loop-integration-finalizer-check',
-  'naruto:canonical-stop-gate',
   'codex-control:event-stream-ledger',
   'runtime:proof-summary',
+  'runtime:installed-smoke',
   'release:metadata-current',
   'docs:truthfulness',
   'publish:packlist-performance',
+  'publish:runtime-script-closure',
   'package:published-contract',
   'release:dag-runner',
   'release:gate-budget',
   'release:gate-selection-comprehensive',
   'policy:gate-audit',
-  'package:published-contract',
   'typecheck'
 ];
 const requiredHarnessGates = [
@@ -361,78 +103,98 @@ assertVersionSurface('crates/sks-core/src/main.rs', 'sks-rs {}", env!("CARGO_PKG
 assertGate(distManifest?.version === RELEASE_VERSION, `dist/build-manifest version must be ${RELEASE_VERSION}`, { version: distManifest?.version || null });
 assertGate(distManifest?.package_version === RELEASE_VERSION, `dist/build-manifest package_version must be ${RELEASE_VERSION}`, { package_version: distManifest?.package_version || null });
 assertGate(typeof distManifest?.source_digest === 'string' && distManifest.source_digest.length >= 32, 'dist/build-manifest must include source_digest', { source_digest: distManifest?.source_digest || null });
+
 assertGate(pkg.scripts?.['release:metadata']?.includes('dist/scripts/release-metadata-check.js'), 'release:metadata must point to the generic release metadata check');
 const releaseCheckScript = String(pkg.scripts?.['release:check'] || '');
 assertGate(
   releaseCheckScript.startsWith('npm run release:check:parallel')
     || releaseCheckScript.includes('release-gate-dag-runner.js --preset release')
     || releaseCheckScript.includes('release:check:affected'),
-  'release:check must use release:check:parallel, release:check:affected, or the release gate DAG runner'
+  'release:check must use the current release DAG'
 );
 assertGate(releaseManifest?.schema === 'sks.release-gates.v2', 'release gate manifest schema mismatch', { schema: releaseManifest?.schema || null });
 assertGate(harnessManifest?.schema === 'sks.infra-harness-gates.v1', 'infra harness manifest schema mismatch', { schema: harnessManifest?.schema || null });
-assertGate(releaseGates.length > 0 && releaseGates.length <= 200, 'release v2 manifest must include 1..200 release gates', { release_gates: releaseGates.length });
+assertGate(releaseGates.length > 0 && releaseGates.length <= 200, 'release manifest must include 1..200 release gates', { release_gates: releaseGates.length });
 assertGate(harnessGates.length > 0, 'infra harness manifest must include harness gates', { harness_gates: harnessGates.length });
-const PACKAGE_SCRIPT_BUDGET = 100;
-assertGate(Object.keys(pkg.scripts || {}).length <= PACKAGE_SCRIPT_BUDGET, 'package script budget exceeded', { script_count: Object.keys(pkg.scripts || {}).length, limit: PACKAGE_SCRIPT_BUDGET });
+assertGate(Object.keys(pkg.scripts || {}).length <= 100, 'package script budget exceeded', { script_count: Object.keys(pkg.scripts || {}).length, limit: 100 });
 for (const script of requiredPackageScripts) assertGate(Boolean(pkg.scripts?.[script]), `missing package script: ${script}`);
+
 const fullReleaseScript = String(pkg.scripts?.['release:check:full'] || '');
 assertGate((fullReleaseScript.match(/build:clean/g) || []).length === 1, 'release:check:full must perform exactly one clean build', { script: fullReleaseScript });
-assertGate((fullReleaseScript.match(/npm test --silent/g) || []).length === 1, 'release:check:full must run the canonical recursive test suite exactly once', { script: fullReleaseScript });
-for (const id of requiredReleaseGates) assertGate(releaseGateIds.has(id), `critical release gate missing from release v2 manifest: ${id}`, { id });
-for (const id of requiredHarnessGates) assertGate(harnessGateIds.has(id), `critical harness gate missing from infra-harness-gates.json: ${id}`, { id });
+assertGate((fullReleaseScript.match(/npm test --silent/g) || []).length === 1, 'release:check:full must run the canonical test suite exactly once', { script: fullReleaseScript });
+for (const id of requiredReleaseGates) assertGate(releaseGateIds.has(id), `critical release gate missing: ${id}`, { id });
+for (const id of requiredHarnessGates) assertGate(harnessGateIds.has(id), `critical harness gate missing: ${id}`, { id });
 const duplicateAcrossManifests = [...releaseGateIds].filter((id) => harnessGateIds.has(id));
-assertGate(duplicateAcrossManifests.length === 0, 'gate appears in both release and harness manifests', { duplicateAcrossManifests });
-const releaseZellij = [...releaseGateIds].filter((id) => id.startsWith('zellij:'));
-assertGate(releaseZellij.length === 0, 'zellij gates must not be in the release preset', { releaseZellij });
-const harnessNonZellij = [...harnessGateIds].filter((id) => !id.startsWith('zellij:'));
-assertGate(harnessNonZellij.length === 0, 'harness manifest must contain only zellij gates', { harnessNonZellij });
-const npmRunCommands = allManifestGates.filter((gate) => /\bnpm\s+run\b/.test(String(gate.command))).map((gate) => gate.id);
-assertGate(npmRunCommands.length === 0, 'gate manifest commands must not use npm run indirection', { npmRunCommands });
+assertGate(duplicateAcrossManifests.length === 0, 'gate appears in both release and harness manifests', { duplicate_count: duplicateAcrossManifests.length });
+assertGate([...releaseGateIds].every((id) => !id.startsWith('zellij:')), 'Zellij gates must remain in the harness preset');
+assertGate([...harnessGateIds].every((id) => id.startsWith('zellij:')), 'harness manifest must contain only Zellij gates');
+assertGate(allManifestGates.every((gate: any) => !/\bnpm\s+run\b/.test(String(gate.command))), 'gate manifest commands must not use npm run indirection');
+const retiredPublicSurfaceGateCount = allManifestGates.filter((gate: any) =>
+  /(?:^|[^a-z0-9])(?:team|mad-db|tmux|xai|swarm)(?:[^a-z0-9]|$)/i.test(`${String(gate.id || '')}\n${String(gate.command || '')}`)
+).length;
+assertGate(retiredPublicSurfaceGateCount === 0, 'release and harness manifests must use only the current public surface', { violation_count: retiredPublicSurfaceGateCount });
 for (const gate of allManifestGates) assertDistScriptTargetsExist(gate);
+
 assertGate(pkg.bin?.sks === 'dist/bin/sks.js', 'package runtime must use dist/bin/sks.js');
 assertGate(pkg.bin?.sneakoscope === 'dist/bin/sks.js', 'sneakoscope runtime must use dist/bin/sks.js');
-assertGate(!pkg.files?.includes('src'), 'package files must not include src runtime shadows');
-const publishPrepIgnoreScripts = String(pkg.scripts?.['publish:prep-ignore-scripts'] || '');
-const publishVerifyIgnoreScripts = String(pkg.scripts?.['publish:verify-ignore-scripts'] || '');
-const effectivePublishPreflight = `${publishPrepIgnoreScripts} ${publishVerifyIgnoreScripts}`;
-assertGate(!/npm test/.test(effectivePublishPreflight), 'publish preflight must reuse canonical test proof instead of rerunning tests', { script: effectivePublishPreflight });
-assertGate(
-  !/\bprepublishOnly\b/.test(publishPrepIgnoreScripts),
-  'publish:prep-ignore-scripts must not depend on npm lifecycle hooks that --ignore-scripts disables',
-  { script: publishPrepIgnoreScripts || null }
-);
-assertGate(!/build:(?:clean|incremental)/.test(effectivePublishPreflight), 'publish preflight must reuse the authoritative clean-build stamp instead of compiling again', { script: effectivePublishPreflight });
-assertGate((publishPrepIgnoreScripts.match(/release-check-stamp\.js verify/g) || []).length === 2, 'publish preflight must verify the full-release stamp before and after package inspection', { script: publishPrepIgnoreScripts });
-for (const required of [
-  'release:dist-freshness',
-  'release:version-truth',
-  'publish:packlist-performance',
-  'package-published-contract-check.js',
-  'release-registry-check.js --require-unpublished --require-publish-auth',
-  'publish-tag:check'
-]) {
-  assertGate(
-    effectivePublishPreflight.includes(required),
-    `publish:prep-ignore-scripts missing lifecycle-disabled publish preflight: ${required}`,
-    { script: publishPrepIgnoreScripts || null }
-  );
+assertGate(!pkg.files?.includes('src'), 'package files must not include source runtime shadows');
+for (const removed of ['publish:dry', 'publish:verify-ignore-scripts', 'publish:prep-ignore-scripts', 'publish:ignore-scripts']) {
+  assertGate(!pkg.scripts?.[removed], `direct publish package script must be removed: ${removed}`);
 }
-assertGate(
-  String(pkg.scripts?.['publish:ignore-scripts'] || '').includes('npm run publish:prep-ignore-scripts'),
-  'publish:ignore-scripts must run publish:prep-ignore-scripts before npm publish --ignore-scripts',
-  { script: pkg.scripts?.['publish:ignore-scripts'] || null }
-);
-assertGate(
-  String(pkg.scripts?.['publish:ignore-scripts'] || '').includes('--ignore-scripts'),
-  'publish:ignore-scripts must keep npm lifecycle scripts disabled for the final publish',
-  { script: pkg.scripts?.['publish:ignore-scripts'] || null }
-);
-assertGate(
-  /prepublish-release-check-or-fast\.js --block-lifecycle-publish/.test(String(pkg.scripts?.prepublishOnly || '')),
-  'prepublishOnly must fail closed before npm prepack can rebuild after authorization',
-  { script: pkg.scripts?.prepublishOnly || null }
-);
+assertGate(!/\bnpm\s+publish\b/.test(Object.values(pkg.scripts || {}).join('\n')), 'package scripts must not contain direct npm publish');
+
+const currentCommandManifest = text('src/cli/command-manifest-lite.ts');
+const currentDollarManifest = text('src/core/routes/dollar-manifest-lite.ts');
+for (const token of ["{ name: 'team',", "{ name: 'mad-db',", "{ name: 'tmux',", "{ name: 'xai',", "{ name: 'swarm',", "{ name: 'agent',"]) {
+  assertGate(!currentCommandManifest.includes(token), 'current command manifest contains a retired public command');
+}
+for (const token of ["command: '$Agent'", "command: '$Team'", "command: '$MAD-DB'", "command: '$Swarm'", "command: '$ShadowClone'", "command: '$Kagebunshin'"]) {
+  assertGate(!currentDollarManifest.includes(token), 'current dollar manifest contains a retired route identity');
+}
+assertGate(currentDollarManifest.includes("{ command: '$Naruto'") && currentDollarManifest.includes("{ command: '$Work'"), 'current dollar manifest must expose the canonical workflow and intended alias');
+
+const stageWorkflow = text('.github/workflows/publish-npm.yml');
+const stageJob = stageWorkflow.match(/^  stage-publish:\n[\s\S]*$/m)?.[0] || '';
+const workflowPermissions = stageWorkflow.match(/^permissions:\n(?:  [^\n]+\n)+/m)?.[0] || '';
+const stageVerifierSource = text('src/core/release/npm-stage-tarball-verifier.ts');
+const stageVerifierSupport = text('src/core/release/npm-stage-tarball-verifier-support.ts');
+const stageVerifierCli = text('src/scripts/npm-stage-tarball-verifier.ts');
+const releaseReadinessDoc = text('docs/release-readiness.md');
+for (const job of ['linux-release-proof', 'macos-menubar-proof', 'pack-and-compare', 'stage-publish']) {
+  assertGate(new RegExp(`^  ${job}:`, 'm').test(stageWorkflow), `stage workflow missing job: ${job}`);
+}
+assertGate(/npm install --global npm@\$\{NPM_STAGE_CLI_VERSION\}/.test(stageWorkflow), 'stage workflow must install the exact pinned npm CLI');
+assertGate(/NPM_STAGE_CLI_VERSION: 11\.15\.0/.test(stageWorkflow), 'stage workflow must pin npm 11.15.0');
+assertGate(/npm stage publish "\$TARBALL"/.test(stageWorkflow), 'stage workflow must stage the exact tarball path');
+assertGate((stageWorkflow.match(/npm stage publish "\$TARBALL"/g) || []).length === 1, 'stage workflow must contain exactly one registry mutation');
+assertGate(!/\bnpm\s+publish\b/.test(stageWorkflow), 'stage workflow must not call direct npm publish');
+assertGate(!/npm\s+stage\s+(?:list|view|download|approve|reject)\b/.test(stageWorkflow), 'OIDC stage job must not use maintainer-only stage subcommands');
+assertGate(/environment: npm-production/.test(stageWorkflow), 'stage workflow must use the npm-production environment');
+assertGate(!/id-token:/.test(workflowPermissions), 'workflow-global permissions must not grant OIDC identity');
+assertGate((stageWorkflow.match(/id-token: write/g) || []).length === 1 && /permissions:\n      contents: read\n      id-token: write/.test(stageJob), 'OIDC identity must be scoped only to stage-publish');
+for (const artifact of ['linux-release-proof', 'macos-menubar-proof', 'stage-input', 'npm-stage-receipt']) {
+  assertGate(new RegExp(`name: ${artifact}-\\$\\{\\{ github\\.sha \\}\\}`).test(stageWorkflow), `stage workflow artifact name mismatch: ${artifact}`);
+}
+for (const receiptField of ['tarball_sha256', 'tarball_sha512', 'tarball_integrity', 'packed_bytes', 'unpacked_bytes', 'file_count', 'workflow_run_id', 'local_pack_receipt_sha256', 'stage_command_digest', 'stage_output_digest', 'stage_id', 'review_verifier_schema', 'human_2fa_pending']) {
+  assertGate(new RegExp(`${receiptField}:`).test(stageJob), `stage receipt missing field: ${receiptField}`);
+}
+assertGate(/stage_id_uuid_invalid/.test(stageJob), 'stage workflow must fail closed on non-UUID stage IDs');
+assertGate(/sha512Integrity !== receipt\.sha512_integrity/.test(stageJob), 'stage workflow must recompute and verify tarball SHA-512 integrity');
+assertGate(/tarball_integrity: sha512Integrity/.test(stageJob), 'stage receipt must serialize recomputed tarball integrity');
+assertGate(/stage-receipt\/stage-output\.json/.test(stageJob) && /path: stage-receipt/.test(stageJob), 'stage receipt artifact must preserve digest-bound raw stage output');
+assertGate(/review_verifier_schema: 'sks\.npm-stage-review-receipt\.v1'/.test(stageJob), 'stage receipt must declare the maintainer verifier schema');
+assertGate(/localPackReceiptSha256 = crypto\.createHash\('sha256'\)\.update\(localPackReceiptBytes\)/.test(stageJob), 'stage receipt must bind immutable local pack receipt bytes');
+assertGate(!/approve_command/.test(stageWorkflow), 'stage workflow must not serialize an approval command');
+assertGate(!/\bnpm[ \t]+(?:ci|pack|run|publish|login|logout|whoami)\b/.test(stageJob), 'stage job must not install dependencies, repack, run lifecycle scripts, or use session credentials');
+assertGate(!/NODE_AUTH_TOKEN|NPM_TOKEN|_authToken/.test(stageWorkflow), 'stage workflow must not inject npm tokens');
+assertGate(/REQUIRED_NPM_STAGE_CLI_VERSION = '11\.15\.0'/.test(stageVerifierSupport), 'maintainer stage verifier must require exact npm 11.15.0');
+assertGate(/\['stage', 'view', stageId, '--json'/.test(stageVerifierSource), 'maintainer stage verifier must inspect the exact stage ID read-only');
+assertGate(/\['stage', 'download', stageId, '--json'/.test(stageVerifierSource), 'maintainer stage verifier must download the exact stage ID read-only');
+assertGate(/exact_bytes_match/.test(stageVerifierSource) && /sha256_match/.test(stageVerifierSource) && /sha512_match/.test(stageVerifierSource) && /integrity_match/.test(stageVerifierSource), 'maintainer stage verifier must compare bytes and digests');
+assertGate(/oidc_environment_not_allowed/.test(stageVerifierSupport), 'maintainer stage verifier must reject OIDC and GitHub Actions environments');
+assertGate(!/\['stage',\s*'(?:publish|approve|reject)'/.test(`${stageVerifierSource}\n${stageVerifierSupport}\n${stageVerifierCli}`), 'maintainer stage verifier must not contain mutating stage argv');
+assertGate(/npm-stage-tarball-verifier\.js/.test(releaseReadinessDoc) && /--local-receipt/.test(releaseReadinessDoc) && /--local-tarball/.test(releaseReadinessDoc) && /--stage-receipt/.test(releaseReadinessDoc), 'release readiness must document the maintainer-local read-only verifier inputs');
+assertGate(/prepublish-release-check-or-fast\.js --block-lifecycle-publish/.test(String(pkg.scripts?.prepublishOnly || '')), 'prepublishOnly must fail closed before lifecycle publication');
 
 for (const file of requiredDocs) {
   const absolute = path.join(root, file);
@@ -441,59 +203,28 @@ for (const file of requiredDocs) {
     assertGate(fs.readFileSync(absolute, 'utf8').includes(RELEASE_VERSION), `release doc does not mention ${RELEASE_VERSION}: ${file}`);
   }
 }
-
-const readinessText = fs.readFileSync(path.join(root, 'docs/release-readiness.md'), 'utf8');
-const activeVersionPatterns = [
-  /^SKS (\d+\.\d+\.\d+) is ready/m,
-  /cannot authorize the (\d+\.\d+\.\d+) release/,
-  /^(\d+\.\d+\.\d+) release readiness requires/m,
-  /^## Current publish authorization policy \((\d+\.\d+\.\d+)\)$/m,
-  /^The (\d+\.\d+\.\d+) implementation handoff/m,
-  /^the (\d+\.\d+\.\d+) command surface/m,
-  /^not the (\d+\.\d+\.\d+) release procedure/m,
-  /do not satisfy the (\d+\.\d+\.\d+) official-subagent gate\. Current (\d+\.\d+\.\d+) proof/,
-  /not represented as current (\d+\.\d+\.\d+) completion proof/,
-  /^For (\d+\.\d+\.\d+), a selected codex-lb/m,
-  /^The (\d+\.\d+\.\d+) SKS menu bar/m
-];
-for (const pattern of activeVersionPatterns) {
-  const match = readinessText.match(pattern);
-  assertGate(Boolean(match), `release-readiness active version surface missing: ${pattern}`);
-  for (const observed of (match || []).slice(1)) {
-    assertGate(observed === RELEASE_VERSION, `release-readiness active version mismatch: expected ${RELEASE_VERSION}, found ${observed}`, { pattern: String(pattern) });
-  }
-}
+const retiredPublicDocReferenceCount = requiredDocs
+  .filter((file) => file !== 'CHANGELOG.md')
+  .reduce((count, file) => {
+    const source = text(file);
+    const commandHit = /\bsks\s+(?:agent(?=\s|$)|--agent(?=\s|$)|team(?=\s|$)|mad-db(?=\s|$)|tmux(?=\s|$)|xai(?=\s|$)|swarm(?=\s|$))/i.test(source);
+    const routeHit = /\$(?:Team|MAD-DB|Swarm|ShadowClone|Kagebunshin)\b/.test(source);
+    return count + Number(commandHit || routeHit);
+  }, 0);
+assertGate(retiredPublicDocReferenceCount === 0, 'current release documentation must not republish retired command or route identities', { violation_count: retiredPublicDocReferenceCount });
 
 const report = {
-  schema: 'sks.version-metadata-1.19.v1',
+  schema: 'sks.version-metadata-current.v1',
   version: RELEASE_VERSION,
   package_version: pkg.version,
-  version_surfaces: [
-    'package.json',
-    'package-lock.json',
-    'src/core/version.ts',
-    'src/core/fsx.ts',
-    'src/bin/sks.ts',
-    'crates/sks-core/Cargo.toml',
-    'crates/sks-core/Cargo.lock',
-    'crates/sks-core/src/main.rs',
-    'dist/build-manifest.json'
-  ],
-  dist_build_manifest: {
-    version: distManifest?.version || null,
-    package_version: distManifest?.package_version || null,
-    source_digest: distManifest?.source_digest || null,
-    source_file_count: distManifest?.source_file_count || null
-  },
-  package_scripts: requiredPackageScripts,
-  release_gates: releaseGates.length,
-  harness_gates: harnessGates.length,
-  legacy_script_contract: {
-    replaced_by_release_manifest: true,
-    legacy_scripts: requiredScripts.length,
-    legacy_real_scripts: requiredRealScripts.length
-  },
-  docs: requiredDocs,
+  current_public_surface: true,
+  official_subagent_workflow: true,
+  version_surface_count: 9,
+  package_script_count: requiredPackageScripts.length,
+  release_gate_count: releaseGates.length,
+  harness_gate_count: harnessGates.length,
+  required_doc_count: requiredDocs.length,
+  dist_source_digest: distManifest?.source_digest || null,
   generated_at: new Date().toISOString(),
   ok: true
 };
@@ -506,26 +237,34 @@ emitGate('release:metadata', {
   package_scripts: requiredPackageScripts.length,
   release_gates: releaseGates.length,
   harness_gates: harnessGates.length,
-  docs: requiredDocs.length
+  docs: requiredDocs.length,
+  current_public_surface: true
 });
 
-function assertVersionSurface(relFile, needle) {
-  const absolute = path.join(root, relFile);
-  assertGate(fs.existsSync(absolute), `missing version surface: ${relFile}`);
-  const text = fs.readFileSync(absolute, 'utf8');
-  assertGate(text.includes(needle), `${relFile} must contain ${needle}`, { file: relFile, needle });
+function text(relFile: string): string {
+  return fs.readFileSync(path.join(root, relFile), 'utf8');
 }
 
-function readJsonIfExists(relFile) {
+function readJson(relFile: string): any {
+  return JSON.parse(text(relFile));
+}
+
+function readJsonIfExists(relFile: string): any {
   const absolute = path.join(root, relFile);
   return fs.existsSync(absolute) ? JSON.parse(fs.readFileSync(absolute, 'utf8')) : null;
 }
 
-function assertDistScriptTargetsExist(gate) {
+function assertVersionSurface(relFile: string, needle: string): void {
+  const absolute = path.join(root, relFile);
+  assertGate(fs.existsSync(absolute), `missing version surface: ${relFile}`);
+  const source = fs.readFileSync(absolute, 'utf8');
+  assertGate(source.includes(needle), `${relFile} must contain ${needle}`, { file: relFile, needle });
+}
+
+function assertDistScriptTargetsExist(gate: any): void {
   for (const match of String(gate.command || '').matchAll(/node\s+(\.\/dist\/scripts\/[^ &|;]+\.js)/g)) {
     assertGate(fs.existsSync(path.join(root, match[1])), `gate command target missing: ${gate.id}`, {
       id: gate.id,
-      command: gate.command,
       target: match[1]
     });
   }

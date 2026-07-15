@@ -106,5 +106,5 @@ function staticContractEvidence(evidenceIndex: unknown = {}) {
 }
 
 function runtimeRoute(route: unknown = '') {
-  return /^\$(Team|QA-LOOP|Research|Image-UX-Review|DB|PPT|GX|Computer-Use|CU|Wiki)$/i.test(String(route || ''));
+  return /^\$(Naruto|QA-LOOP|Research|Image-UX-Review|DB|PPT|GX|Computer-Use|CU|Wiki)$/i.test(String(route || ''));
 }

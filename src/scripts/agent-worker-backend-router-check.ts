@@ -17,7 +17,7 @@ try {
     intakeJson: {
       mission_id: 'M-router-check',
       parent_mission_id: 'M-router-check',
-      route: '$Agent',
+      route: '$Naruto',
       backend: 'process',
       agent_root: root,
       agent: { id: 'router-agent', session_id: 'router-session', slot_id: 'slot-001', generation_index: 1, persona_id: 'executor' },

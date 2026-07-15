@@ -8,6 +8,7 @@ import path from 'node:path';
 import { createReleaseStampProof } from '../helpers/release-stamp-proof.mjs';
 import { validateReleaseRealSkipProof } from '../../dist/core/release/release-real-contract.js';
 import { releaseAuthorizationSnapshot } from '../../dist/core/release/release-authorization-snapshot.js';
+import { releaseGateContractSnapshot } from '../../dist/core/release/release-gate-contract.js';
 import { currentDistFreshness } from '../../dist/scripts/lib/ensure-dist-fresh.js';
 
 const pkg = JSON.parse(fsSync.readFileSync('package.json', 'utf8'));
@@ -59,6 +60,10 @@ test('release-check stamp can be written and verified without rerunning release:
   assert.match(parsed.dist_build_sha256, /^[a-f0-9]{64}$/);
   assert.ok(parsed.dist_file_count > 0);
   assert.equal(parsed.release_gate_proof.full, true);
+  const summary = JSON.parse(await fs.readFile(proof.summaryPath, 'utf8'));
+  const expectedGateIds = [...releaseGateContractSnapshot().ids].sort();
+  assert.deepEqual([...summary.selected_gate_ids].sort(), expectedGateIds);
+  assert.deepEqual([...summary.affected_selection.selected_gate_ids].sort(), expectedGateIds);
   proof.cleanup();
 });
 

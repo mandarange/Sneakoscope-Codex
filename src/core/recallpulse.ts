@@ -181,7 +181,7 @@ export function buildEvidenceEnvelope(decision: any = {}) {
     stale_rules: ['stale_when_stage_changes', 'stale_when_gate_updates', 'stale_when_source_hash_changes'],
     route_extensions: {
       Research: ['source_layer_ids', 'agent_persona_ids', 'falsification_cases'],
-      Team: ['team_roster', 'review_lanes', 'runtime_task_ids'],
+      Naruto: ['official_subagent_roster', 'review_lanes', 'runtime_task_ids'],
       DB: ['db_scan_id', 'destructive_operation_zero'],
       QALoop: ['qa_report', 'checklist_status'],
       imagegen: ['generated_image_ledger', 'issue_ledger'],
@@ -268,7 +268,7 @@ export async function buildRecallPulseGovernanceReport(root: any, opts: any = {}
   const missionId = opts.missionId || null;
   const inventory = buildRouteGateInventory();
   const missions = await listMissionRows(root);
-  const requestedSamples = ['Research', 'Team', 'DFix', 'DB', 'QALoop'];
+  const requestedSamples = ['Research', 'Naruto', 'DFix', 'DB', 'QALoop'];
   const samples: any[] = [];
   for (const routeId of requestedSamples) {
     const mission = routeId === 'DFix' ? null : latestMissionForRoute(missions, routeId);
@@ -600,7 +600,7 @@ async function buildL2(root: any, dir: any) {
   const pipelinePlan = await readJson(path.join(dir, 'pipeline-plan.json'), null);
   const contract = await readJson(path.join(dir, 'decision-contract.json'), null);
   const statusLedger = await readJson(path.join(dir, MISSION_STATUS_LEDGER_ARTIFACT), null);
-  const gateFiles = ['naruto-gate.json', 'research-gate.evaluated.json', 'research-gate.json', 'db-review.json', 'qa-gate.json', 'ppt-gate.json', 'image-ux-review-gate.json', 'gx-gate.json', 'hard-blocker.json', 'team-gate.json']; // team-gate is legacy read-only recall for old missions.
+  const gateFiles = ['naruto-gate.json', 'research-gate.evaluated.json', 'research-gate.json', 'db-review.json', 'qa-gate.json', 'ppt-gate.json', 'image-ux-review-gate.json', 'gx-gate.json', 'hard-blocker.json'];
   const gates: any[] = [];
   for (const file of gateFiles) {
     const gate = await readJson(path.join(dir, file), null);
@@ -651,7 +651,7 @@ function buildL3(pack: any = {}, { stageId = '', routeId = '', l1 = {} }: any = 
     reason: row?.[1] || 'hydrate_source',
     selected_in_l1: selectedIds.has(row?.[0])
   })).filter((row: any) => row.id);
-  const broadRoute = /team|research|db|release|version|security/i.test(`${routeId} ${stageId}`);
+  const broadRoute = /naruto|research|db|release|version|security/i.test(`${routeId} ${stageId}`);
   return {
     tier: 'L3',
     label: RECALLPULSE_POLICY.cache.l3.label,
@@ -905,7 +905,7 @@ function preservedRoutePersonality(routeId: any = '', routeName: any = '') {
     DFix: 'ultralight direct-fix path stays tiny and does not start the full pipeline',
     Answer: 'answer-only path stays conversational and does not start implementation',
     SKS: 'general SKS discovery/help personality stays simple',
-    Team: 'Team redirects to the bounded official Naruto workflow with parent-owned integration and risk-scoped review',
+    Naruto: 'Naruto keeps the bounded official subagent workflow with parent-owned integration and risk-scoped review',
     QALoop: 'QA-LOOP keeps dogfood, checklist, remediation, and reverification identity',
     PPT: 'PPT keeps restrained information-first HTML/PDF delivery identity',
     ImageUXReview: 'Image UX Review keeps gpt-image-2 annotated raster review identity',
@@ -946,7 +946,7 @@ function latestMissionForRoute(missions: any = [], routeId: any = '') {
   const aliases = {
     qaloop: ['qaloop', 'qa', 'qa-loop'],
     db: ['db', 'database'],
-    team: ['team'],
+    naruto: ['naruto'],
     research: ['research'],
     goal: ['goal']
   }[target] || [target];

@@ -85,7 +85,7 @@ async function sseStream(res: http.ServerResponse, root: string, mission: string
 
 async function readLatestGateSummaries(root: string, missionId: string) {
   const dir = missionDir(root, missionId);
-  const files = ['stop-gate.json', 'naruto-gate.json', 'team-gate.json', 'qa-gate.json', 'reflection-gate.json', 'completion-proof.json'];
+  const files = ['stop-gate.json', 'naruto-gate.json', 'qa-gate.json', 'reflection-gate.json', 'completion-proof.json'];
   const rows = [];
   for (const file of files) {
     const gate = await readJson<any>(path.join(dir, file), null).catch(() => null);

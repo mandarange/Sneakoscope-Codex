@@ -108,7 +108,7 @@ test('profile migration removes stale model and provider pins from every SKS ove
   await fs.mkdir(codexHome, { recursive: true });
   const configPath = path.join(codexHome, 'config.toml');
   await fs.writeFile(configPath, '[features]\nfast_mode = true\n');
-  await fs.writeFile(path.join(codexHome, 'sks-team.config.toml'), [
+  await fs.writeFile(path.join(codexHome, 'sks-fast-high.config.toml'), [
     'model = "stale-pinned-model"',
     'model_provider = "stale-provider"',
     'model_reasoning_effort = "medium"',
@@ -116,8 +116,49 @@ test('profile migration removes stale model and provider pins from every SKS ove
   ].join('\n'));
 
   await mod.migrateSksProfilesToPerFile({ env: { HOME: home }, configPath });
-  const profile = await fs.readFile(path.join(codexHome, 'sks-team.config.toml'), 'utf8');
+  const profile = await fs.readFile(path.join(codexHome, 'sks-fast-high.config.toml'), 'utf8');
 
   assert.doesNotMatch(profile, /^(?:model|model_provider)\s*=/m);
-  assert.match(profile, /^model_reasoning_effort\s*=\s*"medium"/m);
+  assert.match(profile, /^model_reasoning_effort\s*=\s*"high"/m);
+});
+
+test('profile migration strips the retired execution profile and never recreates its overlay', async () => {
+  const mod = await import('../../dist/core/auto-review.js');
+  const home = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-retired-profile-'));
+  try {
+    const codexHome = path.join(home, '.codex');
+    const configPath = path.join(codexHome, 'config.toml');
+    await fs.mkdir(codexHome, { recursive: true });
+    await fs.writeFile(configPath, [
+      'profile = "sks-team"',
+      'model = "future-codex-model"',
+      '',
+      '[profiles.sks-team]',
+      'service_tier = "fast"',
+      'approval_policy = "on-request"',
+      'sandbox_mode = "workspace-write"',
+      'model_reasoning_effort = "medium"',
+      ''
+    ].join('\n'));
+    await fs.writeFile(path.join(codexHome, 'sks-team.config.toml'), [
+      'service_tier = "fast"',
+      'approval_policy = "on-request"',
+      'sandbox_mode = "workspace-write"',
+      'model_reasoning_effort = "medium"',
+      ''
+    ].join('\n'));
+
+    const result = await mod.migrateSksProfilesToPerFile({ env: { HOME: home }, configPath });
+    const config = await fs.readFile(configPath, 'utf8');
+    assert.equal(result.profiles_written.includes('sks-team'), false);
+    assert.equal(result.tables_stripped.includes('sks-team'), false);
+    assert.equal(result.retired_profile_table_count, 1);
+    assert.equal(result.retired_profile_file_removed_count, 1);
+    assert.doesNotMatch(JSON.stringify(result), /sks-team/i);
+    assert.doesNotMatch(config, /^profile\s*=\s*"sks-team"/m);
+    assert.doesNotMatch(config, /^\[profiles\.sks-team\]/m);
+    await assert.rejects(fs.access(path.join(codexHome, 'sks-team.config.toml')));
+  } finally {
+    await fs.rm(home, { recursive: true, force: true });
+  }
 });

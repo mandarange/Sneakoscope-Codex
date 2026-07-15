@@ -68,7 +68,7 @@ export async function repairContext7Mcp(input: { root: string; apply?: boolean; 
     await ensureDir(path.dirname(config.path));
     const backupPath = `${config.path}.context7-mcp-repair-${Date.now().toString(36)}.bak`;
     const contract = createRequestedScopeContract({
-      route: '$Team',
+      route: '$Naruto',
       userRequest: 'Write a scoped project backup before doctor Context7 MCP repair.',
       projectRoot: root
     });

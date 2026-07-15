@@ -51,10 +51,8 @@ export async function runNativeWorkerBackendRouter(input: {
     result = validateAgentWorkerResult(blockedResult(input, [blocker]))
   } else if (!input.guard?.ok) {
     result = validateAgentWorkerResult(blockedResult(input, ['native_cli_worker_recursion_guard_missing']))
-  } else if (requestedBackend === 'codex-exec') {
-    result = validateAgentWorkerResult(blockedResult(input, ['legacy_codex_exec_runtime_removed']))
   } else if (!backend) {
-    result = validateAgentWorkerResult(blockedResult(input, ['native_worker_backend_unknown']))
+    result = validateAgentWorkerResult(blockedResult(input, ['unsupported_argument:backend']))
   } else if (backend === 'fake') {
     patchEnvelopes = buildFixturePatchEnvelopes(input.agent, input.slice, envelopeOpts(input, 'fixture'))
     proofLevel = 'fixture_only'
@@ -94,7 +92,7 @@ export async function runNativeWorkerBackendRouter(input: {
       agentRoot: root,
       workerDirRel: input.workerDirRel,
       cwd: input.intake.cwd || root,
-      route: input.intake.route || '$Agent',
+      route: input.intake.route || '$Naruto',
       fastMode: input.fastModePolicy.fast_mode,
       serviceTier: input.fastModePolicy.service_tier
     })
@@ -117,7 +115,7 @@ export async function runNativeWorkerBackendRouter(input: {
       result = validateAgentWorkerResult(blockedResult(input, modelRouting.blockers))
     } else {
     const sdkTask = await runCodexTask({
-      route: String(input.intake.route || '$Agent'),
+      route: String(input.intake.route || '$Naruto'),
       tier: 'worker',
       missionId: String(input.intake.mission_id || input.intake.parent_mission_id || ''),
       workItemId: String(input.slice?.id || ''),
@@ -137,7 +135,7 @@ export async function runNativeWorkerBackendRouter(input: {
       sandboxPolicy: hasWriteLease(input.slice, input.intake) ? 'workspace-write' : 'read-only',
       requestedScopeContract: {
         id: String(input.intake.lease_id || input.slice?.id || ''),
-        route: String(input.intake.route || '$Agent'),
+        route: String(input.intake.route || '$Naruto'),
         read_only: !hasWriteLease(input.slice, input.intake),
         allowed_paths: writePaths(input.slice, input.intake),
         write_paths: writePaths(input.slice, input.intake),
@@ -406,7 +404,7 @@ function normalizeBackend(value: string): 'fake' | 'process' | 'codex-sdk' | 'ze
 function envelopeOpts(input: any, source: BackendSource, childPid?: number) {
   return {
     missionId: input.intake.mission_id || input.intake.parent_mission_id || '',
-    route: input.intake.route || '$Agent',
+    route: input.intake.route || '$Naruto',
     fastMode: input.fastModePolicy.fast_mode,
     serviceTier: input.fastModePolicy.service_tier,
     nativeCliWorkerSessionId: input.agent.session_id,

@@ -68,7 +68,7 @@
       "cache": {
         "enabled": false,
         "inputs": [
-          "src/scripts/zellij-developer-controls.ts",
+          "src/scripts/zellij-developer-controls-check.ts",
           "src/core/zellij/**",
           "src/core/naruto/**",
           "src/core/release/**",
@@ -124,7 +124,7 @@
       "cache": {
         "enabled": false,
         "inputs": [
-          "src/scripts/zellij-dynamic-pane-lifecycle.ts",
+          "src/scripts/zellij-dynamic-pane-lifecycle-check.ts",
           "src/core/zellij/**",
           "src/core/naruto/**",
           "src/core/release/**",
@@ -564,7 +564,7 @@
           "package.json",
           "release-gates.v2.json",
           "src/core/zellij/**",
-          "src/core/agents/native-cli-session-swarm.ts",
+          "src/core/agents/native-cli-worker-runtime.ts",
           "src/scripts/zellij-right-column-headless-overflow-check.ts"
         ]
       },
@@ -589,7 +589,7 @@
       "cache": {
         "enabled": false,
         "inputs": [
-          "src/scripts/zellij-right-column-manager.ts",
+          "src/scripts/zellij-right-column-manager-check.ts",
           "src/core/zellij/**",
           "src/core/naruto/**",
           "src/core/release/**",
@@ -827,7 +827,7 @@
           "package.json",
           "release-gates.v2.json",
           "src/core/zellij/**",
-          "src/core/agents/native-cli-session-swarm.ts",
+          "src/core/agents/native-cli-worker-runtime.ts",
           "src/scripts/zellij-slot-only-ui-check.ts"
         ]
       },
@@ -909,7 +909,7 @@
           "package.json",
           "release-gates.v2.json",
           "src/core/zellij/**",
-          "src/core/agents/native-cli-session-swarm.ts",
+          "src/core/agents/native-cli-worker-runtime.ts",
           "src/scripts/zellij-slot-renderer-proof-semantics-check.ts"
         ]
       },

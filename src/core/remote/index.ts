@@ -1,5 +1,6 @@
 export * from './types.js';
 export * from './machine-registry.js';
+export * from './session-index.js';
 export * from './readiness.js';
 export * from './audit-idempotency.js';
 export * from './owner-proof.js';

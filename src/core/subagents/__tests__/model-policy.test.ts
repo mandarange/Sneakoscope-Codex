@@ -14,7 +14,7 @@ import {
   THINKING_SUBAGENT_MODEL,
   decideSubagentModel
 } from '../model-policy.js'
-import { decideNarutoCloneEffort, decideOfficialSubagentModel } from '../../agents/agent-effort-policy.js'
+import { decideOfficialSubagentModel } from '../../agents/agent-effort-policy.js'
 import { routeModel, routeNarutoGpt56Model } from '../../provider/model-router.js'
 
 test('official parent and four child profiles expose the sealed model/effort matrix', () => {
@@ -91,8 +91,7 @@ test('judgment wins mixed or ambiguous work and Luna is excluded from long conte
   assert.equal(longMechanical.policy, 'terra_medium_context_tools')
 })
 
-test('official effort policy keeps the legacy function as an exact compatibility alias', () => {
-  assert.equal(decideNarutoCloneEffort, decideOfficialSubagentModel)
+test('official effort policy applies the sealed four-profile routing matrix', () => {
   const mechanical = decideOfficialSubagentModel({
     persona: { role: 'implementer', naruto_role: 'worker' },
     prompt: 'apply this exact one-line single-file rename'

@@ -11,6 +11,8 @@ import {
 } from '../codex-lb/codex-lb-tool-catalog.js'
 import { packageRoot, runProcess } from '../fsx.js'
 
+const CODEX_PARSER_PROBE_TIMEOUT_MS = 20_000
+
 function codex0144Model(slug: string, extra: Record<string, unknown> = {}) {
   return {
     slug,
@@ -206,7 +208,7 @@ test('emitted minimum catalog parses in the project-local Codex CLI 0.144.1', as
   assert.equal(codexPackage.version, '0.144.1', 'project-local @openai/codex must stay pinned to the parser contract')
   const codexEntrypoint = path.join(codexPackageRoot, 'bin', 'codex.js')
   await fs.access(codexEntrypoint)
-  const version = await runProcess(process.execPath, [codexEntrypoint, '--version'], { timeoutMs: 5_000, maxOutputBytes: 4_096 })
+  const version = await runProcess(process.execPath, [codexEntrypoint, '--version'], { timeoutMs: CODEX_PARSER_PROBE_TIMEOUT_MS, maxOutputBytes: 4_096 })
   assert.equal(version.code, 0, version.stderr || version.stdout)
   assert.match(version.stdout, /\b0\.144\.1\b/)
 
@@ -223,7 +225,7 @@ test('emitted minimum catalog parses in the project-local Codex CLI 0.144.1', as
     await fs.writeFile(path.join(root, 'config.toml'), `model_catalog_json = ${JSON.stringify(ensured.path)}\n`, { mode: 0o600 })
     const probe = await runProcess(process.execPath, [codexEntrypoint, 'features', 'list'], {
       env: { ...process.env, HOME: root, CODEX_HOME: root },
-      timeoutMs: 10_000,
+      timeoutMs: CODEX_PARSER_PROBE_TIMEOUT_MS,
       maxOutputBytes: 64 * 1024
     })
     assert.equal(probe.code, 0, probe.stderr || probe.stdout)

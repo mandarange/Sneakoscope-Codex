@@ -27,7 +27,7 @@ export async function gitPrecommit(root: string): Promise<GitPrecommitReport> {
   pushCheck(checks, blockers, 'runtime_noise_not_staged', runtime.length === 0, runtime);
 
   const generated = staged.filter((file) => isGeneratedIndexPath(file, policy));
-  if (policy.mode === 'strict-team') pushCheck(checks, blockers, 'generated_indexes_not_staged', generated.length === 0, generated);
+  if (policy.mode === 'strict-work') pushCheck(checks, blockers, 'generated_indexes_not_staged', generated.length === 0, generated);
   else {
     checks.push({ id: 'generated_indexes_not_staged', ok: generated.length === 0, files: generated });
     if (generated.length) warnings.push('generated_indexes_staged');

@@ -74,7 +74,7 @@ export async function runPatchWorkerPool(input: WorkerPoolInput): Promise<Worker
 
   const mutableShards = input.shards.filter((s) => s.mutable);
   const decision = decideConcurrency({
-    requestedClones: input.maxWorkers,
+    requestedWorkers: input.maxWorkers,
     activeWorkers: Math.min(input.maxWorkers, mutableShards.length),
     rateLimited429: 0,
     ttftP90Ms: 0,

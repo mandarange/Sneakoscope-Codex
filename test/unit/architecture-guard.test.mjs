@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { buildSsotGuard, validateSsotGuardArtifact } from '../../dist/core/safety/ssot-guard.js';
 
 test('architecture guard carries SSOT and SOLID expectations', () => {
-  const guard = buildSsotGuard({ route: 'Team', mode: 'TEAM', task: 'fixture' });
+  const guard = buildSsotGuard({ route: 'Naruto', mode: 'NARUTO', task: 'fixture' });
   assert.equal(guard.ok, true);
   assert.equal(guard.required, true);
   assert.equal(guard.solid_principles.length, 5);

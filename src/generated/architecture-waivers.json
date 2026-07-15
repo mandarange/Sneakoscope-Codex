@@ -27,6 +27,14 @@
     },
     {
       "schema": "sks.architecture-waiver.v1",
+      "file": "src/core/agents/native-cli-worker-runtime.ts",
+      "reason": "91% rename of the 1,107-line baseline native CLI session runtime to current worker-runtime terminology; 6.3.0 removes the retired public name while preserving shrink-only behavior",
+      "policy": "shrink-only",
+      "baseline_lines": 1107,
+      "expires_version": "6.4.0"
+    },
+    {
+      "schema": "sks.architecture-waiver.v1",
       "file": "src/core/codex-app/sks-menubar.ts",
       "reason": "6.3.0 W01 must shrink this compatibility facade to 80 lines or fewer",
       "policy": "shrink-only",

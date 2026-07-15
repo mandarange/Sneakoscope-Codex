@@ -285,7 +285,7 @@ export function buildWorkerPaneArtifact(input: Omit<ZellijWorkerPaneOpenInput, '
 
 export async function openHeadlessByDesignViewportWorker(input: ZellijWorkerPaneOpenInput): Promise<ZellijWorkerPaneRecord> {
   const root = path.resolve(input.root)
-  const providerInput: Parameters<typeof resolveProviderContext>[0] = { root, route: '$Agent' }
+  const providerInput: Parameters<typeof resolveProviderContext>[0] = { root, route: '$Naruto' }
   const serviceTier = input.serviceTier || process.env.SKS_SERVICE_TIER
   if (serviceTier != null) providerInput.serviceTier = serviceTier
   const providerContext = input.providerContext || await resolveProviderContext(providerInput)
@@ -323,7 +323,7 @@ export async function openHeadlessByDesignViewportWorker(input: ZellijWorkerPane
 export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<ZellijWorkerPaneRecord> {
   const root = path.resolve(input.root)
   const cwd = input.cwd || packageRoot()
-  const providerInput: Parameters<typeof resolveProviderContext>[0] = { root, route: '$Agent' }
+  const providerInput: Parameters<typeof resolveProviderContext>[0] = { root, route: '$Naruto' }
   const serviceTier = input.serviceTier || process.env.SKS_SERVICE_TIER
   if (serviceTier != null) providerInput.serviceTier = serviceTier
   const providerContext = input.providerContext || await resolveProviderContext(providerInput)
@@ -868,7 +868,7 @@ function normalizePaneProviderContext(context?: ProviderContext | null, serviceT
         generated_at: nowIso(),
         provider: 'unknown',
         auth_mode: 'unknown',
-        route: '$Agent',
+        route: '$Naruto',
         service_tier: tier,
         source: 'unknown',
         confidence: 'low',

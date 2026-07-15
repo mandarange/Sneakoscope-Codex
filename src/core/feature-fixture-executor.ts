@@ -7,7 +7,7 @@ import { findLatestMission } from './mission.js';
 const FIXTURE_COMMAND_TIMEOUT_MS = 60_000;
 
 /** Per-fixture override, set via the fixture()'s `extra.timeout_ms` for commands
- * that are legitimately slower than the 60s default (real agent/swarm orchestration,
+ * that are legitimately slower than the 60s default (real agent/runtime orchestration,
  * multi-step pipelines) rather than actually hung. */
 function fixtureTimeoutMs(fixture: any): number {
   const override = Number(fixture?.timeout_ms);

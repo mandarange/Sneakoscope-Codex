@@ -2,7 +2,7 @@ import path from 'node:path'
 import { nowIso, readJson, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
 
 export const IMPLEMENTATION_HANDOFF_PATCH_PLAN_ARTIFACT = 'implementation-handoff.patch-plan.json'
-export const TEAM_HANDOFF_GOAL_ARTIFACT = 'team-handoff-goal.md'
+export const NARUTO_HANDOFF_GOAL_ARTIFACT = 'naruto-handoff-goal.md'
 export const DECISION_LOG_ARTIFACT = 'decision-log.md'
 
 export async function writeResearchHandoffArtifacts(dir: string, plan: any = null, blueprint: any = null) {
@@ -89,9 +89,9 @@ export async function writeResearchHandoffArtifacts(dir: string, plan: any = nul
     '- Implementation decisions must be revalidated in the follow-up execution route.'
   ]
   await writeJsonAtomic(path.join(dir, IMPLEMENTATION_HANDOFF_PATCH_PLAN_ARTIFACT), patchPlan)
-  await writeTextAtomic(path.join(dir, TEAM_HANDOFF_GOAL_ARTIFACT), `${goalLines.join('\n')}\n`)
+  await writeTextAtomic(path.join(dir, NARUTO_HANDOFF_GOAL_ARTIFACT), `${goalLines.join('\n')}\n`)
   await writeTextAtomic(path.join(dir, DECISION_LOG_ARTIFACT), `${decisionLog.join('\n')}\n`)
-  return { patch_plan: patchPlan, goal_artifact: TEAM_HANDOFF_GOAL_ARTIFACT, decision_log: DECISION_LOG_ARTIFACT }
+  return { patch_plan: patchPlan, goal_artifact: NARUTO_HANDOFF_GOAL_ARTIFACT, decision_log: DECISION_LOG_ARTIFACT }
 }
 
 function parallelWorkItems(blueprint: any): any[] {

@@ -56,11 +56,12 @@ export interface ManagedHookAsset {
   risk: ManagedAssetRisk
 }
 
-export const MANAGED_AGENT_ROLES: readonly ManagedAgentRole[] = Object.freeze([
+/** Internal cleanup tombstones for SKS-owned role files retired from the installed catalog. */
+export const RETIRED_MANAGED_AGENT_ROLE_TOMBSTONES: readonly ManagedAgentRole[] = Object.freeze([
   role('sks-explorer', 'analysis-scout.toml', 'analysis_scout', 'SKS analysis scout for bounded read/write slices retained for stale Codex agent-role config repair.', 'workspace-write', ['analysis-scout', 'analysis_scout']),
   role('sks-native-agent', 'native-agent-intake.toml', 'native_agent', 'SKS native agent for bounded read/write intake slices.', 'workspace-write', ['native-agent-intake', 'native_agent']),
-  role('sks-planner', 'team-consensus.toml', 'team_consensus', 'Planning and debate specialist for bounded SKS Team mode write sets.', 'workspace-write', ['team-consensus', 'team_consensus']),
-  role('sks-implementer', 'implementation-worker.toml', 'implementation_worker', 'Implementation specialist for bounded SKS Team write sets.', 'workspace-write', ['implementation-worker', 'implementation_worker']),
+  role('sks-planner', 'team-consensus.toml', 'team_consensus', 'Planning and debate specialist for bounded SKS Naruto write sets.', 'workspace-write', ['team-consensus', 'team_consensus']),
+  role('sks-implementer', 'implementation-worker.toml', 'implementation_worker', 'Implementation specialist for bounded SKS Naruto write sets.', 'workspace-write', ['implementation-worker', 'implementation_worker']),
   role('sks-checker', 'qa-reviewer.toml', 'qa_reviewer', 'Strict verification reviewer for correctness, regressions, and final evidence with bounded write capability.', 'workspace-write', ['qa-reviewer', 'qa_reviewer']),
   role('sks-release-verifier', 'sks-release-verifier.toml', 'sks_release_verifier', 'Release verifier for repository, docs, tests, API, and risk slices with bounded write capability.', 'workspace-write', ['release-verifier']),
   role('sks-zellij-ui-verifier', 'sks-zellij-ui-verifier.toml', 'sks_zellij_ui_verifier', 'Zellij UI verifier for session, pane, layout, and terminal evidence with bounded write capability.', 'workspace-write', ['zellij-ui-verifier']),
@@ -537,12 +538,12 @@ export const CONTEXT7_MANAGED_SERVER = Object.freeze({
 export function managedAgentRoleByFile(filename: string): ManagedAgentRole | null {
   const base = filename.split(/[\\/]/).pop() || filename
   assertUniqueManagedAgentRoleFilenames()
-  return MANAGED_AGENT_ROLES.find((role) => role.filename === base) || null
+  return RETIRED_MANAGED_AGENT_ROLE_TOMBSTONES.find((role) => role.filename === base) || null
 }
 
 export function managedAgentRoleByName(name: string): ManagedAgentRole | null {
   const normalized = normalizeRoleName(name)
-  return MANAGED_AGENT_ROLES.find((role) => [
+  return RETIRED_MANAGED_AGENT_ROLE_TOMBSTONES.find((role) => [
     role.id,
     role.codex_name,
     role.filename.replace(/\.toml$/i, ''),
@@ -647,7 +648,7 @@ export function normalizeRoleName(name: string): string {
 
 export function assertUniqueManagedAgentRoleFilenames(): void {
   const seen = new Map<string, string>()
-  for (const role of [...MANAGED_AGENT_ROLES, ...MANAGED_OFFICIAL_SUBAGENT_ROLES]) {
+  for (const role of [...RETIRED_MANAGED_AGENT_ROLE_TOMBSTONES, ...MANAGED_OFFICIAL_SUBAGENT_ROLES]) {
     const existing = seen.get(role.filename)
     if (existing) throw new Error(`duplicate managed agent role filename: ${role.filename} for ${existing} and ${role.id}`)
     seen.set(role.filename, role.id)

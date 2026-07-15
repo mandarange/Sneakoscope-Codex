@@ -41,6 +41,49 @@ test('coordinate validation binds anchor hashes to available compact claims', ()
   assert.ok(result.issues.some((issue: any) => issue.id === 'anchor_hash_mismatch'));
 });
 
+test('nine-anchor positive recall packs hash the emitted text in compact and verbose modes', () => {
+  const claims = Array.from({ length: 9 }, (_, index) => ({
+    id: `wiki-eval-${index + 1}`,
+    text: index === 4
+      ? 'Unsupported TriWiki memory must never be used without source hydration.'
+      : `Supported source-backed claim ${index + 1}`,
+    authority: 'code',
+    status: 'supported',
+    freshness: 'fresh',
+    risk: index === 4 ? 'high' : 'low',
+    evidence_count: 2,
+    trust_score: 0.95,
+    required_weight: 2 - (index / 10)
+  }));
+
+  for (const verboseWiki of [false, true]) {
+    const pack = contextCapsule({
+      mission: { id: `nine-anchor-${verboseWiki ? 'verbose' : 'compact'}`, coord: { rgba: [48, 132, 212, 240] } },
+      claims,
+      budget: {
+        maxClaims: 9,
+        maxWikiAnchors: 9,
+        maxAttentionUse: 9,
+        maxAttentionHydrate: 9,
+        verboseWiki,
+        verboseClaims: verboseWiki,
+        includeTrustSummary: true
+      }
+    });
+    const rewritten = pack.claims.find((claim: any) => claim.id === 'wiki-eval-5');
+    assert.ok(rewritten);
+    assert.equal(rewritten.text_policy, 'positive_recall_negation_suppressed');
+    assert.doesNotMatch(String(rewritten.text || ''), /unsupported|must never/i);
+    assert.equal(validateWikiCoordinateIndex(pack.wiki, { claims: pack.claims }).ok, true);
+    assert.ok(pack.attention.hydrate_first.some((row: any[]) => row[0] === 'wiki-eval-5' && String(row[1]).includes('negative_priming')));
+
+    const sealed = sealTriWikiContextPack(pack, { generatedAt: '2026-07-14T00:00:00.000Z', root: process.cwd() });
+    const roundTrip = JSON.parse(JSON.stringify(sealed));
+    assert.equal(validateTriWikiContextPackProvenance(roundTrip, { root: process.cwd() }).ok, true);
+    assert.equal(validateWikiCoordinateIndex(roundTrip.wiki, { claims: roundTrip.claims }).ok, true);
+  }
+});
+
 test('context-pack provenance detects payload, source manifest, and missing provenance', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-triwiki-provenance-'));
   try {

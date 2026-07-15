@@ -1,8 +1,0 @@
-{
-  "schema": "sks.route-fixture-expected-artifacts.v1",
-  "route": "$Team",
-  "required": [
-    ".sneakoscope/missions/M-fixture-team/completion-proof.json",
-    ".sneakoscope/missions/M-fixture-team/completion-proof.md"
-  ]
-}

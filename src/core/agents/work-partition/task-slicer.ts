@@ -60,7 +60,7 @@ function isProtectedWritePath(file: string) {
 
 function selectDomainForAgent(agent: any, index: number, domains: any[]) {
   const role = String(agent.role || '')
-  const preferred = role.includes('safety') ? /qa|release|agent-kernel/ : role.includes('verifier') ? /qa|release|schemas/ : role.includes('integrator') ? /agent-kernel|team-route/ : role.includes('documentation') ? /docs/ : null
+  const preferred = role.includes('safety') ? /qa|release|agent-kernel/ : role.includes('verifier') ? /qa|release|schemas/ : role.includes('integrator') ? /agent-kernel|naruto-route/ : role.includes('documentation') ? /docs/ : null
   if (preferred) {
     const found = domains.find((domain) => preferred.test(String(domain.id || '')))
     if (found) return found

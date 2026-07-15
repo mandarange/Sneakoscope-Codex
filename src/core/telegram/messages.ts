@@ -1,5 +1,6 @@
 import { sha256 } from '../fsx.js';
 import { redactString } from '../secret-redaction.js';
+import { TelegramBotApiError } from './bot-api.js';
 import type { TelegramBotApiTransport, TelegramTopicRouteV1 } from './types.js';
 
 export interface TelegramCapabilities {
@@ -35,7 +36,7 @@ export class TelegramMessageProjector {
     publicPhase: string;
     text: string;
     existingMessageId?: number;
-  }): Promise<{ method: string; skipped: boolean; draft_id: number }> {
+  }): Promise<{ method: string; skipped: boolean; draft_id: number; message_id?: number }> {
     const now = this.now();
     const key = `${input.route.session_id}:${input.route.generation}`;
     const draftId = stableDraftId(key);
@@ -46,19 +47,39 @@ export class TelegramMessageProjector {
     if (previous && now > previous.expires_at) this.drafts.delete(key);
     await this.throttle(key);
     let method: string;
+    let messageId: number | undefined;
     if (this.capabilities.rich_draft) {
-      method = 'sendRichMessageDraft';
-      await this.api.call(method, this.basePayload(input.route, { draft_id: draftId, text }));
-    } else if (this.capabilities.plain_draft) {
-      method = 'sendMessageDraft';
-      await this.api.call(method, this.basePayload(input.route, { draft_id: draftId, text }));
-    } else {
-      if (!input.existingMessageId) throw new Error('telegram_draft_fallback_requires_message_id');
+      try {
+        method = 'sendRichMessageDraft';
+        await this.api.call(method, this.basePayload(input.route, { draft_id: draftId, rich_message: richMessage(text) }));
+        this.drafts.set(key, { digest, updated_at: this.now(), expires_at: this.now() + 30_000 });
+        return { method, skipped: false, draft_id: draftId };
+      } catch (error: unknown) {
+        if (!isUnsupportedMethod(error)) throw error;
+      }
+    }
+    if (this.capabilities.plain_draft) {
+      try {
+        method = 'sendMessageDraft';
+        await this.api.call(method, this.basePayload(input.route, { draft_id: draftId, text }));
+        this.drafts.set(key, { digest, updated_at: this.now(), expires_at: this.now() + 30_000 });
+        return { method, skipped: false, draft_id: draftId };
+      } catch (error: unknown) {
+        if (!isUnsupportedMethod(error)) throw error;
+      }
+    }
+    if (input.existingMessageId) {
       method = 'editMessageText';
-      await this.api.call(method, this.basePayload(input.route, { message_id: input.existingMessageId, text }));
+      messageId = input.existingMessageId;
+      await this.api.call(method, this.basePayload(input.route, { message_id: messageId, text }));
+    } else {
+      method = 'sendMessage';
+      const sent = await this.api.call<{ message_id: number }>(method, this.basePayload(input.route, { text }));
+      if (!Number.isInteger(sent?.message_id)) throw new Error('telegram_draft_fallback_receipt_missing');
+      messageId = sent.message_id;
     }
     this.drafts.set(key, { digest, updated_at: this.now(), expires_at: this.now() + 30_000 });
-    return { method, skipped: false, draft_id: draftId };
+    return { method, skipped: false, draft_id: draftId, ...(messageId === undefined ? {} : { message_id: messageId }) };
   }
 
   async createSessionTopic(chatId: string, name: string): Promise<{ message_thread_id: number; name: string }> {
@@ -82,13 +103,87 @@ export class TelegramMessageProjector {
 
   async sendFinal(input: { route: TelegramTopicRouteV1; text: string; replyMarkup?: Record<string, unknown> }): Promise<{ method: string; message_id: number }> {
     const text = publicSafeText(input.text);
-    const method = this.capabilities.rich_message ? 'sendRichMessage' : 'sendMessage';
-    const result = await this.api.call<{ message_id: number }>(method, this.basePayload(input.route, {
-      text,
-      ...(input.replyMarkup ? { reply_markup: input.replyMarkup } : {})
-    }));
+    let method = this.capabilities.rich_message ? 'sendRichMessage' : 'sendMessage';
+    let result: { message_id: number };
+    try {
+      result = await this.api.call<{ message_id: number }>(method, this.basePayload(input.route, {
+        ...(method === 'sendRichMessage' ? { rich_message: richMessage(text) } : { text }),
+        ...(input.replyMarkup ? { reply_markup: input.replyMarkup } : {})
+      }));
+    } catch (error: unknown) {
+      if (method !== 'sendRichMessage' || !isUnsupportedMethod(error)) throw error;
+      method = 'sendMessage';
+      result = await this.api.call<{ message_id: number }>(method, this.basePayload(input.route, {
+        text,
+        ...(input.replyMarkup ? { reply_markup: input.replyMarkup } : {})
+      }));
+    }
     if (!result || !Number.isInteger(result.message_id)) throw new Error('telegram_final_message_receipt_missing');
     return { method, message_id: result.message_id };
+  }
+
+  async sendFlat(input: { chatId: string; text: string; replyMarkup?: Record<string, unknown> }): Promise<number> {
+    const result = await this.api.call<{ message_id: number }>('sendMessage', {
+      chat_id: input.chatId,
+      text: publicSafeText(input.text),
+      protect_content: this.options.protectContent !== false,
+      disable_notification: this.options.silent === true,
+      ...(input.replyMarkup ? { reply_markup: input.replyMarkup } : {})
+    });
+    if (!Number.isInteger(result?.message_id)) throw new Error('telegram_flat_message_receipt_missing');
+    return result.message_id;
+  }
+
+  async sendArtifactManifest(input: {
+    route: TelegramTopicRouteV1;
+    artifacts: readonly unknown[];
+  }): Promise<{ method: 'sendDocument' | 'sendMessage'; message_id: number }> {
+    const artifacts = [...new Set(input.artifacts.map((value) => publicSafeText(String(value)).slice(0, 160)))]
+      .filter((value) => value.length > 0)
+      .slice(0, 128);
+    const manifest = JSON.stringify({
+      schema: 'sks.telegram-artifact-manifest.v1',
+      session_id: input.route.session_id,
+      generated_at: new Date(this.now()).toISOString(),
+      artifacts
+    }, null, 2);
+    const uploader = this.api.uploadDocument?.bind(this.api);
+    if (uploader) {
+      try {
+        const sent = await uploader({
+          chat_id: input.route.chat_id,
+          ...(input.route.message_thread_id > 0 ? { message_thread_id: input.route.message_thread_id } : {}),
+          filename: `sks-artifacts-${safeFilenamePart(input.route.session_id)}.json`,
+          content: Uint8Array.from(Buffer.from(manifest)),
+          caption: `${artifacts.length} bounded public-safe artifact entries`,
+          protect_content: this.options.protectContent !== false,
+          disable_notification: this.options.silent === true
+        });
+        if (!Number.isInteger(sent?.message_id)) throw new Error('telegram_document_receipt_missing');
+        return { method: 'sendDocument', message_id: sent.message_id };
+      } catch (error: unknown) {
+        if (!isUnsupportedMethod(error)) throw error;
+      }
+    }
+    const sent = await this.sendFinal({
+      route: input.route,
+      text: artifacts.length ? `Artifacts:\n${artifacts.map((value) => `- ${value}`).join('\n')}` : 'No bounded artifacts are available.'
+    });
+    return { method: 'sendMessage', message_id: sent.message_id };
+  }
+
+  async sendApproval(route: TelegramTopicRouteV1, callbackData: string, text = 'Cancel this exact session?'): Promise<number> {
+    const sent = await this.sendFinal({
+      route,
+      text,
+      replyMarkup: {
+        inline_keyboard: [[
+          { text: 'Confirm cancel', callback_data: callbackData },
+          { text: 'Keep running', callback_data: 'ui:status' }
+        ]]
+      }
+    });
+    return sent.message_id;
   }
 
   async upsertPinnedCard(input: {
@@ -144,7 +239,7 @@ export class TelegramMessageProjector {
   private basePayload(route: TelegramTopicRouteV1, extra: Record<string, unknown>): Record<string, unknown> {
     return {
       chat_id: route.chat_id,
-      message_thread_id: route.message_thread_id,
+      ...(route.message_thread_id > 0 ? { message_thread_id: route.message_thread_id } : {}),
       protect_content: this.options.protectContent !== false,
       disable_notification: this.options.silent === true,
       ...extra
@@ -221,8 +316,20 @@ function stableDraftId(value: string): number {
   return Number.parseInt(sha256(value).slice(0, 8), 16) & 0x7fffffff;
 }
 
+function safeFilenamePart(value: string): string {
+  return value.replace(/[^A-Za-z0-9._-]/g, '-').slice(0, 80) || 'session';
+}
+
 function publicSafeDraft(phase: string, text: string): string {
   return `<tg-thinking>${publicSafeText(phase).slice(0, 120)}</tg-thinking>\n${publicSafeText(text)}`;
+}
+
+function richMessage(text: string): Record<string, string> {
+  return { markdown: text };
+}
+
+function isUnsupportedMethod(error: unknown): boolean {
+  return error instanceof TelegramBotApiError && (error.errorCode === 400 || error.errorCode === 404);
 }
 
 export function publicSafeText(value: string): string {

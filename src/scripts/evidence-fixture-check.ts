@@ -13,7 +13,7 @@ await fs.writeFile(path.join(mission, 'route-gate.json'), '{}\n');
 const index = await writeEvidenceIndexForProof(root, {
   schema: 'sks.completion-proof.v1',
   mission_id: 'M-evidence',
-  route: '$Team',
+  route: '$Naruto',
   status: 'verified_partial',
   evidence: { artifacts: ['route-gate.json'] },
   claims: [],

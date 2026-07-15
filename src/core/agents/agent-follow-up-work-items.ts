@@ -32,7 +32,7 @@ const FOLLOW_UP_KEYS = new Set([
 ])
 
 const PROTECTED_WRITE_PATH_RE = /^(?:\.codex|\.agents|AGENTS\.md|node_modules\/sneakoscope|\.sneakoscope\/.*policy.*\.json)(?:\/|$)/
-const MAIN_ROUTE_RECURSION_RE = /(?:\bsks\s+(?:team|agent|research|qa-loop|goal)\b|\$(?:Team|Goal|Research|QA-LOOP|Agent)\b|main\s+route\s+recursion)/i
+const MAIN_ROUTE_RECURSION_RE = /(?:\bsks\s+(?:naruto|research|qa-loop|goal)\b|\$(?:Naruto|Work|Goal|Research|QA-LOOP)\b|main\s+route\s+recursion)/i
 const GLOBAL_SCOUT_LEDGER_RE = /global\s+scout\s+ledger/i
 
 export function normalizeAgentFollowUpWorkItems(rawItems: unknown, input: {

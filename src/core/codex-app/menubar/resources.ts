@@ -26,6 +26,7 @@ export function loadNativeMenuBarSources(input: NativeSourceInput): NativeSource
   const sourceRoot = resolvePackagedMenuBarSourceRoot();
   const replacements: Record<string, string> = {
     '__SKS_ACTION_SCRIPT__': swiftLiteral(input.actionScriptPath),
+    '__SKS_PROJECT_ROOT__': swiftLiteral(input.projectRootPath || process.cwd()),
     '__SKS_BUILD_STAMP__': swiftLiteral(input.buildStampPath),
     '__SKS_CONFIG_PATH__': swiftLiteral(input.configPath),
     '__SKS_LAST_LOG__': swiftLiteral(input.lastActionLogPath),
@@ -44,6 +45,7 @@ export function loadNativeMenuBarSources(input: NativeSourceInput): NativeSource
 export function swiftMenuSource(input: Omit<NativeSourceInput, 'operationDirPath'> & { operationDirPath?: string }): string {
   return loadNativeMenuBarSources({
     ...input,
+    projectRootPath: input.projectRootPath || process.cwd(),
     operationDirPath: input.operationDirPath || path.join(path.dirname(input.lastActionLogPath), '..', 'operations')
   }).map((entry) => `// MARK: - ${entry.name}\n${entry.content}`).join('\n\n');
 }

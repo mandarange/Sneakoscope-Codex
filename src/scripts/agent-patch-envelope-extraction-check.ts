@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 // @ts-nocheck
 import { assertGate, emitGate, importDist } from './sks-1-18-gate-lib.js';
-import { writeReport } from './agent-patch-swarm-gate-lib.js';
+import { writeReport } from './patch-handoff-gate-lib.js';
 
 const fake = await importDist('core/agents/agent-runner-fake.js');
 const schema = await importDist('core/agents/agent-patch-schema.js');
 const result = await fake.runFakeAgent(
   { id: 'agent-a', session_id: 'session-a', slot_id: 'slot-a', generation_index: 1, persona_id: 'implementer' },
   { id: 'slice-a', write_paths: ['fixture-a.txt'], micro_win_id: 'micro-win-a' },
-  { missionId: 'mission-a', route: '$Agent' }
+  { missionId: 'mission-a', route: '$Naruto' }
 );
 const envelope = result.patch_envelopes?.[0];
 const validation = envelope ? schema.validateAgentPatchEnvelope(envelope) : { ok: false, violations: ['missing_envelope'] };

@@ -49,7 +49,7 @@ export function evaluateMarketingTruthfulness(input: {
     if ((claim.claim_type === 'performance' || /p95|latency|performance|fast/i.test(text)) && !claim.source_ids.some((id) => /perf|budget|report/i.test(id))) {
       unsupported_claims.push(claim.id);
     }
-    if ((claim.claim_type === 'parallel' || /parallel|worker|clone|naruto/i.test(text)) && !claim.source_ids.some((id) => /parallel|naruto|agent|report/i.test(id))) {
+    if ((claim.claim_type === 'parallel' || /parallel|worker|naruto/i.test(text)) && !claim.source_ids.some((id) => /parallel|naruto|agent|report/i.test(id))) {
       unsupported_claims.push(claim.id);
     }
     if ((claim.claim_type === 'super_search' || /super-search|source-backed|source backed/i.test(text)) && !claim.source_ids.some((id) => /super-search|source|report/i.test(id))) {
@@ -136,7 +136,7 @@ function claimsFromStrategy(strategy: MarketingStrategy | null): MarketingClaim[
 
 export function classifyClaim(text: string): MarketingClaim['claim_type'] {
   if (/super-search|source-backed|source backed/i.test(text)) return 'super_search';
-  if (/parallel|worker|clone|naruto/i.test(text)) return 'parallel';
+  if (/parallel|worker|naruto/i.test(text)) return 'parallel';
   if (/p95|latency|performance|fast/i.test(text)) return 'performance';
   if (/competitor|alternative|compared/i.test(text)) return 'competitor';
   if (/codex|sneakoscope|sks/i.test(text)) return 'capability';

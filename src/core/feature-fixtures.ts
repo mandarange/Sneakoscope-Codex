@@ -28,6 +28,15 @@ const FIXTURES = Object.freeze({
   'cli-codex': fixture('execute', 'sks codex compatibility --json', [], 'pass'),
   'cli-codex-app': fixture('real_optional', 'sks codex-app check --json', [], 'pass'),
   'cli-codex-lb': fixture('execute_and_validate_artifacts', 'sks codex-lb metrics --json', [], 'pass'),
+  'cli-mcp': fixture('execute', 'sks mcp config list --scope project --trusted-project --json', [], 'pass', {
+    reason: 'Project-scoped MCP inventory is a read-only, hermetic runtime probe when the trusted-project boundary is explicit; mutation, health, auth, and merge behavior remain covered by dedicated tests.'
+  }),
+  'cli-remote': fixture('real_optional', 'sks remote readiness --json', [], 'pass', {
+    reason: 'Remote readiness is environment-dependent on the official Codex host and local project capabilities; SSH worker behavior is covered by dedicated hermetic protocol and policy tests.'
+  }),
+  'cli-telegram': fixture('real_optional', 'sks telegram status --json', [], 'pass', {
+    reason: 'Telegram status depends on owner-local bot configuration and must not create a poller during release fixtures; Hub routing, ownership, replay, redaction, and risk policy are covered by dedicated hermetic tests.'
+  }),
   'cli-hooks': fixture('execute', 'sks hooks trust-report --json', [], 'pass'),
   'cli-features': fixture('execute', 'sks features check --json', [], 'pass'),
   'cli-commands': fixture('execute', 'sks commands --json', [], 'pass'),
@@ -72,7 +81,6 @@ const FIXTURES = Object.freeze({
   'cli-hproof': fixture('execute_and_validate_artifacts', 'sks hproof check latest', ['done-gate.evaluated.json'], 'pass'),
   'cli-proof-field': fixture('execute', 'sks proof-field scan --json --intent fixture', [], 'pass'),
   'cli-recallpulse': fixture('execute_and_validate_artifacts', 'sks recallpulse run latest --json', ['mission-status-ledger.json'], 'pass'),
-  'cli-agent': fixture('execute_and_validate_artifacts', 'sks agent run fixture --mock --json', ['agents/agent-central-ledger.json', 'agents/agent-task-board.json', 'agents/agent-leases.json', 'agents/agent-no-overlap-proof.json', 'agents/agent-session-cleanup.json', 'agents/agent-proof-evidence.json', 'agents/agent-effort-policy.json'], 'pass', { timeout_ms: 120000 }),
   'cli-gx': fixture('execute_and_validate_artifacts', 'sks gx validate fixture --mock', ['gx-validation.json'], 'blocked', { reason: 'gxValidateFixture() intentionally exits non-zero (execution_class: mock_fixture) for an honest mock/blocked result; without --mock the command crashes on a missing cartridge instead.' }),
   'cli-perf': fixture('execute', 'sks perf cold-start --json --iterations 1', [], 'pass'),
   'cli-bench': fixture('execute_and_validate_artifacts', 'sks bench core --tier npx-one-shot --json --iterations 1', ['.sneakoscope/reports/performance/core-bench.json'], 'pass'),
@@ -93,11 +101,6 @@ const FIXTURES = Object.freeze({
   'cli-auth': fixture('execute', 'sks auth status --json', [], 'pass'),
   'cli-codex-native': fixture('execute', 'sks codex-native status --json', [], 'pass'),
   'cli-zellij': fixture('execute', 'npm run zellij:capability --silent', [], 'pass'),
-  'cli-tmux': fixture('not_available', null, [], 'not_required', {
-    quality: 'static_contract',
-    reason: 'tmux runtime was removed from SKS (see tmuxCommand in basic-cli.ts and `sks tmux` deprecation notice); the prior fixture command string was not a real invocable command ("removed runtime migration notice: sks tmux --json"), so it is reclassified as not_available instead of being mislabeled mock.',
-    root_mode: 'source_checkout_required'
-  }),
   'cli-mad': fixture('execute', 'sks mad --help', [], 'pass'),
   'cli-mad-sks': fixture('static', 'sks mad-sks status --json', [], 'pass'),
   'cli-auto-review': fixture('execute', 'sks auto-review status --json', [], 'pass'),
@@ -109,7 +112,6 @@ const FIXTURES = Object.freeze({
   }),
   'cli-context7': fixture('real_optional', 'sks context7 check --json', [], 'pass'),
   'cli-super-search': fixture('execute', 'sks super-search doctor --json', [], 'pass'),
-  'cli-xai': fixture('real_optional', 'sks xai check --json', [], 'pass'),
   'cli-task': fixture('execute', 'sks task instant --plan --json', [], 'pass'),
   'cli-release': fixture('execute', 'sks release affected --json', [], 'blocked', { reason: '18차: the phantom requiredSections schema mismatch (five_lane_review/integration_evidence/session_cleanup, from commit d4526f84 with no producer ever wired up) has been fixed -- missing_sections is now honestly empty. The release-gate DAG still legitimately fails/blocks on other real gates (e.g. release:readiness) independent of this fix, so the command still exits non-zero and this fixture stays honestly blocked rather than claiming full green.' }),
   'cli-triwiki': fixture('execute', 'sks triwiki index --json', [], 'pass'),
@@ -119,7 +121,6 @@ const FIXTURES = Object.freeze({
   'cli-eval': fixture('execute', 'sks eval run --mock --json', [], 'pass'),
   'cli-harness': fixture('execute', 'sks harness fixture --mock --json', [], 'pass'),
   'cli-naruto': fixture('execute_and_validate_artifacts', 'sks naruto run "fixture" --agents 4 --max-threads 4 --json', ['subagent-plan.json', 'subagent-events.jsonl', 'subagent-evidence.json', 'naruto-summary.json', 'naruto-gate.json', 'work-order-ledger.json'], 'pass', preparationFixtureContract()),
-  'cli-team': fixture('execute_and_validate_artifacts', 'sks team "fixture" --agents 4 --max-threads 4 --json', ['subagent-plan.json', 'subagent-events.jsonl', 'subagent-evidence.json', 'naruto-summary.json', 'naruto-gate.json', 'team-alias-to-naruto.json', 'work-order-ledger.json'], 'pass', preparationFixtureContract({ timeout_ms: 90000 })),
   'cli-reasoning': fixture('execute', 'sks reasoning status --json', [], 'pass'),
   'cli-profile': fixture('execute', 'sks profile status --json', [], 'pass'),
   'skill-db-safety-guard': fixture('execute', 'node --test test/unit/db-safety.test.mjs', [], 'pass', { root_mode: 'source_checkout_required' }),
@@ -137,21 +138,10 @@ const FIXTURES = Object.freeze({
   'cli-proof': fixture('execute_and_validate_artifacts', 'sks proof smoke --json', ['.sneakoscope/proof/latest.json'], 'pass'),
   'cli-trust': fixture('execute_and_validate_artifacts', 'sks trust report latest --json', ['trust-report.json'], 'pass'),
   'cli-wrongness': fixture('execute_and_validate_artifacts', 'sks wrongness add --kind missing_evidence --claim "fixture wrongness" --json', ['.sneakoscope/wiki/wrongness-ledger.json'], 'pass'),
-  'route-team': fixture('execute_and_validate_artifacts', 'sks team "fixture" --agents 4 --max-threads 4 --json', ['subagent-plan.json', 'subagent-events.jsonl', 'subagent-evidence.json', 'naruto-summary.json', 'naruto-gate.json', 'team-alias-to-naruto.json', 'work-order-ledger.json'], 'pass', preparationFixtureContract({ timeout_ms: 90000 })),
-  'route-team-alias': fixture('execute_and_validate_artifacts', 'sks team "fixture" --agents 4 --max-threads 4 --json', ['subagent-plan.json', 'subagent-events.jsonl', 'subagent-evidence.json', 'naruto-summary.json', 'naruto-gate.json', 'team-alias-to-naruto.json'], 'pass', preparationFixtureContract()),
   'route-naruto': fixture('execute_and_validate_artifacts', 'sks naruto run "fixture" --agents 4 --max-threads 4 --json', ['subagent-plan.json', 'subagent-events.jsonl', 'subagent-evidence.json', 'naruto-summary.json', 'naruto-gate.json', 'work-order-ledger.json'], 'pass', preparationFixtureContract({ timeout_ms: 90000 })),
   'route-work': fixture('static', '$Work compatibility alias for the Naruto Codex official subagent workflow', [], 'pass', { quality: 'wiring_only', reason: 'Pure alias of $Naruto; official workflow execution is covered by route-naruto.' }),
-  'route-swarm': fixture('static', '$Swarm compatibility alias for the Naruto Codex official subagent workflow', [], 'pass', { quality: 'wiring_only', reason: 'Pure alias of $Naruto; official workflow execution is covered by route-naruto.' }),
   'route-plan': fixture('execute', 'sks plan "fixture" --json', [], 'pass'),
   'route-review': fixture('execute', 'sks review --diff HEAD --json', [], 'pass'),
-  'route-shadowclone': fixture('static', '$ShadowClone compatibility alias for the Naruto Codex official subagent workflow', [], 'pass', {
-    quality: 'wiring_only',
-    reason: 'Pure alias of $Naruto; no independent behavior to verify beyond route-naruto\'s own execute_and_validate_artifacts fixture.'
-  }),
-  'route-kagebunshin': fixture('static', '$Kagebunshin compatibility alias for the Naruto Codex official subagent workflow', [], 'pass', {
-    quality: 'wiring_only',
-    reason: 'Pure alias of $Naruto; no independent behavior to verify beyond route-naruto\'s own execute_and_validate_artifacts fixture.'
-  }),
   'route-qa-loop': fixture('execute_and_validate_artifacts', 'sks qa-loop run latest --mock --json', ['completion-proof.json', 'qa-gate.json'], 'blocked', { timeout_ms: 180000, reason: 'qaLoopRun() resolves "latest" via the same globally-unscoped findLatestMission used everywhere else and qa-loop is a two-step prepare-then-run workflow gated between steps by an active-route-not-closed check a single fixture command cannot express.' }),
   'route-research': fixture('execute_and_validate_artifacts', 'sks research run latest --mock --json', ['completion-proof.json', 'research-gate.json'], 'pass', { timeout_ms: 180000 }),
   'route-ppt': fixture('mock', 'sks ppt fixture --mock --json', ['completion-proof.json', { path: 'image-voxel-ledger.json', schema: 'sks.image-voxel-ledger.v1' }, 'ppt-imagegen-review-gate.json', 'ppt-slide-issue-ledger.json'], 'pass', { reason: 'Underlying command intentionally exits non-zero and reports ok:false by honest design (mockPptFixtureGate() hardcodes a blocked mock PPT gate); it does write all four declared artifacts.' }),
@@ -174,16 +164,13 @@ const FIXTURES = Object.freeze({
     reason: 'Producing research-gate.json + completion-proof.json requires the two-step `research prepare` then `research run latest --mock --autoresearch --json` sequence (same as route-research\'s safe-args setup step), which a single spawned command cannot express; the $AutoResearch pipeline-dispatch route (`sks run "$AutoResearch ..."`) instead writes autoresearch-gate.json, a different contract. Left as documented mock pending multi-step fixture setup support.'
   }),
   'route-mad-sks': fixture('mock', '$MAD-SKS permission gate + sql_plane route', [{ path: 'mad-sks-gate.json', schema: 'sks.mad-sks-gate.v1' }, 'completion-proof.json'], 'pass', {
-    reason: 'mad-sks-gate.json is written by materializeAutoSealedMadSks() inside prepareClarificationGate() in pipeline-internals/runtime-core.ts, which only runs via the real Codex App route dispatch pipeline (prepareRoute), not via `sks run "<prompt>" --json` (that CLI command only classifies the route in lightweight prepare mode and never calls prepareRoute); `sks run ... --execute` instead maps $MAD-SKS to team execution, a different path entirely. No safe single sks CLI invocation reaches materializeAutoSealedMadSks; verified live in a hermetic run where mad-sks-gate.json was not produced. Left as documented mock.'
+    reason: 'mad-sks-gate.json is written by materializeAutoSealedMadSks() inside prepareClarificationGate() in pipeline-internals/runtime-core.ts, which only runs via the real Codex App route dispatch pipeline (prepareRoute), not via `sks run "<prompt>" --json` (that CLI command only classifies the route in lightweight prepare mode and never calls prepareRoute); `sks run ... --execute` enters the Naruto execution path instead. No safe single sks CLI invocation reaches materializeAutoSealedMadSks; verified live in a hermetic run where mad-sks-gate.json was not produced. Left as documented mock.'
   }),
   'route-from-chat-img': fixture('mock', '$From-Chat-IMG visual work order route', ['from-chat-img-work-order.md', 'image-voxel-ledger.json', 'completion-proof.json'], 'pass', {
     reason: 'hasFromChatImgSignal() routes $From-Chat-IMG to the full Naruto multi-agent work-order pipeline (routes.ts routeById(\'Naruto\')), which requires real chat-screenshot attachments to produce from-chat-img-work-order.md; there is no lightweight deterministic `--mock` single-command invocation that produces this route\'s specific work-order/coverage artifacts the way route-naruto\'s generic fixture prompt does. Left as documented mock.'
   }),
   'route-ux-review': fixture('mock', 'sks image-ux-review fixture --mock --json', ['completion-proof.json', { path: 'image-voxel-ledger.json', schema: 'sks.image-voxel-ledger.v1' }, 'image-ux-generated-review-ledger.json'], 'pass', { reason: 'Alias of route-image-ux-review ($UX-Review -> $Image-UX-Review); shares the identical underlying command and the same intentional exit-1/ok:false mock-fixture hardening in imageUxFixture().' }),
   'route-db': fixture('execute', 'node ./dist/scripts/db-route-materialization-check.js', [], 'pass', { root_mode: 'source_checkout_required' }),
-  'route-mad-db': fixture('mock', '$MAD-DB deprecated alias to $MAD-SKS sql-plane contract', ['mad-sks-gate.json', 'completion-proof.json'], 'pass', {
-    reason: 'Deprecated alias of $MAD-SKS; shares the same gap as route-mad-sks (mad-sks-gate.json is only written via the real Codex App route dispatch pipeline, not any safe single sks CLI invocation). Left as documented mock alongside route-mad-sks.'
-  }),
   'route-wiki': fixture('execute_and_validate_artifacts', 'sks wiki image-ingest test/fixtures/images/one-by-one.png --json', [{ path: 'completion-proof.json', schema: 'sks.completion-proof.v1' }, { path: 'image-voxel-ledger.json', schema: 'sks.image-voxel-ledger.v1' }], 'pass'),
   'route-gx': fixture('execute_and_validate_artifacts', 'sks gx validate fixture --mock --json', ['completion-proof.json', { path: 'image-voxel-ledger.json', schema: 'sks.image-voxel-ledger.v1' }, 'gx-validation.json'], 'blocked', { reason: 'gxValidateFixture() intentionally exits non-zero (execution_class: mock_fixture) for an honest mock/blocked result; it does write all three declared artifacts.' }),
   'route-sks': fixture('static', '$SKS control-surface route', ['completion-proof.json'], 'pass', {
@@ -218,9 +205,8 @@ const FIXTURES = Object.freeze({
   'route-commit-and-push': fixture('mock', '$Commit-And-Push git route', ['completion-proof.json'], 'pass', {
     reason: 'Dollar-command alias of cli-commit-and-push; dispatches to the same simpleGitCommitCommand() that performs a real commit and `git push` with no working --dry-run mode. Left as documented mock alongside cli-commit-and-push.'
   }),
-  'route-release-review': fixture('execute_and_validate_artifacts', 'sks agent run "release audit" --route "$Release-Review" --agents 10 --concurrency 4 --legacy-native-runtime --mock --json', ['release-review-native-agent-plan.json', 'agents/agent-proof-evidence.json', 'agents/agent-effort-policy.json'], 'pass', { timeout_ms: 90000, note: 'legacy compatibility fixture only; the public $Release-Review route uses official Codex subagents' }),
-  'route-native-agent-intake': fixture('execute_and_validate_artifacts', 'sks agent run "fixture" --route "$Team" --agents 5 --concurrency 4 --mock --json', ['agents/agent-central-ledger.json', 'agents/agent-task-board.json', 'agents/agent-leases.json', 'agents/agent-no-overlap-proof.json', 'agents/agent-session-cleanup.json', 'agents/agent-proof-evidence.json', 'agents/agent-effort-policy.json'], 'pass', { timeout_ms: 90000 }),
-  'proof-agent-evidence': fixture('execute_and_validate_artifacts', 'sks agent run "fixture" --mock --json', ['agents/agent-proof-evidence.json'], 'pass', { timeout_ms: 120000 })
+  'route-release-review': fixture('execute_and_validate_artifacts', 'sks naruto run "$Release-Review release audit" --agents 3 --max-threads 3 --read-only --json', ['subagent-plan.json', 'subagent-events.jsonl', 'subagent-evidence.json', 'naruto-summary.json', 'naruto-gate.json', 'work-order-ledger.json'], 'pass', preparationFixtureContract({ timeout_ms: 90000 })),
+  'proof-official-subagent-evidence': fixture('execute_and_validate_artifacts', 'sks naruto run "fixture" --agents 2 --max-threads 2 --json', ['subagent-plan.json', 'subagent-events.jsonl', 'subagent-parent-summary.json', 'subagent-evidence.json', 'naruto-gate.json'], 'pass', preparationFixtureContract({ timeout_ms: 90000 }))
 });
 
 const STATIC_CONTRACT_FEATURES = new Set([
@@ -230,7 +216,6 @@ const STATIC_CONTRACT_FEATURES = new Set([
   'cli-auth',
   'cli-codex-native',
   'cli-zellij',
-  'cli-tmux',
   'cli-mad',
   'cli-auto-review',
   'cli-commit',
@@ -240,7 +225,6 @@ const STATIC_CONTRACT_FEATURES = new Set([
   'cli-eval',
   'cli-harness',
   'cli-naruto',
-  'cli-team',
   'cli-reasoning',
   'cli-profile',
   'cli-gates',
@@ -252,7 +236,6 @@ const STATIC_CONTRACT_FEATURES = new Set([
   'cli-zellij-viewport-pane',
   'cli-zellij-slot-column-anchor',
   'cli-glm',
-  'cli-mad-db',
   'cli-stop-gate',
   'cli-route',
   'cli-loop',

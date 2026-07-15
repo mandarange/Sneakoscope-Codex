@@ -5,5 +5,6 @@ export * from './build-stamp.js';
 export * from './action-runner.js';
 export * from './resources.js';
 export * from './installer.js';
+export * from './rollback.js';
 export * from './status.js';
 export * from './migration.js';
