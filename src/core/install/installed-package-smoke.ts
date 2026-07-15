@@ -48,7 +48,20 @@ export const INSTALLED_REQUIRED_DOLLAR_COMMANDS = ['$Naruto', '$Work'] as const
 export const INSTALLED_REMOVED_COMMANDS = ['team', 'mad-db', 'tmux', 'xai', 'swarm', 'agent'] as const
 export const INSTALLED_REMOVED_DOLLAR_COMMANDS = ['$Agent', '$Team', '$MAD-DB', '$Swarm', '$ShadowClone', '$Kagebunshin'] as const
 
-type InstalledSurfaceRejectionReason = 'unknown_command' | 'unsupported_argument'
+type InstalledSurfaceRejectionReason = 'unknown_command' | 'unknown_subcommand' | 'unsupported_argument'
+
+export const INSTALLED_REMOVED_ARGUMENT_PROBES = [
+  { argv: ['--agent', 'fixture', '--json'], expected_reason: 'unknown_command' },
+  { argv: ['--naruto', '--json'], expected_reason: 'unknown_command' },
+  { argv: ['--clones', '2', '--json'], expected_reason: 'unknown_command' },
+  { argv: ['naruto', '--agent', 'worker', '--json'], expected_reason: 'unsupported_argument' },
+  { argv: ['naruto', '--clones', '2', '--json'], expected_reason: 'unsupported_argument' }
+] as const
+
+export const INSTALLED_REMOVED_SUBCOMMAND_PROBES = [
+  { argv: ['naruto', 'workers', '--json'], expected_reason: 'unknown_subcommand' },
+  { argv: ['menubar', 'mcp', 'list', '--json'], expected_reason: 'unknown_subcommand' }
+] as const
 
 export interface InstalledSurfaceClosureProbe {
   expected_reason: InstalledSurfaceRejectionReason
@@ -70,6 +83,7 @@ export interface InstalledSurfaceClosureSummary {
   command_probe_count: number
   dollar_command_probe_count: number
   argument_probe_count: number
+  subcommand_probe_count: number
   rejected_count: number
   expected_reason_counts: Record<InstalledSurfaceRejectionReason, number>
   observed_reason_counts: Record<InstalledSurfaceRejectionReason | 'other', number>
@@ -191,12 +205,14 @@ export async function runInstalledPackageSmoke(
     commands.push(sanitizeInstalledSurfaceProbeCommand(result.command, closureProbes.length, observed))
     if (!ok) blockers.push(`installed_surface_closure_probe_failed:${closureProbes.length}`)
   }
-  const agentOption = await runJsonCommand(tmp, [bin, 'naruto', '--agent', 'worker', '--help'], { home, codexHome, npmCache })
-  const agentReason = rejectionReason(agentOption)
-  const agentRejected = agentOption.exit_code !== 0 && agentReason === 'unsupported_argument'
-  closureProbes.push({ expected_reason: 'unsupported_argument', exit_code: agentOption.exit_code, observed_reason: agentReason, ok: agentRejected })
-  commands.push(sanitizeInstalledSurfaceProbeCommand(agentOption.command, closureProbes.length, agentReason))
-  if (!agentRejected) blockers.push(`installed_surface_closure_probe_failed:${closureProbes.length}`)
+  for (const probe of [...INSTALLED_REMOVED_ARGUMENT_PROBES, ...INSTALLED_REMOVED_SUBCOMMAND_PROBES]) {
+    const result = await runJsonCommand(tmp, [bin, ...probe.argv], { home, codexHome, npmCache })
+    const observed = rejectionReason(result)
+    const ok = result.exit_code !== 0 && observed === probe.expected_reason
+    closureProbes.push({ expected_reason: probe.expected_reason, exit_code: result.exit_code, observed_reason: observed, ok })
+    commands.push(sanitizeInstalledSurfaceProbeCommand(result.command, closureProbes.length, observed))
+    if (!ok) blockers.push(`installed_surface_closure_probe_failed:${closureProbes.length}`)
+  }
   const closure = summarizeInstalledSurfaceClosure(closureProbes)
 
   const forbiddenFindings: string[] = []
@@ -349,10 +365,12 @@ export function validateInstalledPublicSurface(commandManifest: unknown, dollarM
 export function summarizeInstalledSurfaceClosure(probes: readonly InstalledSurfaceClosureProbe[]): InstalledSurfaceClosureSummary {
   const expectedReasonCounts: InstalledSurfaceClosureSummary['expected_reason_counts'] = {
     unknown_command: 0,
+    unknown_subcommand: 0,
     unsupported_argument: 0
   }
   const observedReasonCounts: InstalledSurfaceClosureSummary['observed_reason_counts'] = {
     unknown_command: 0,
+    unknown_subcommand: 0,
     unsupported_argument: 0,
     other: 0
   }
@@ -363,12 +381,14 @@ export function summarizeInstalledSurfaceClosure(probes: readonly InstalledSurfa
   }
   const commandProbeCount = INSTALLED_REMOVED_COMMANDS.length
   const dollarCommandProbeCount = INSTALLED_REMOVED_DOLLAR_COMMANDS.length
-  const argumentProbeCount = Math.max(0, probes.length - commandProbeCount - dollarCommandProbeCount)
+  const argumentProbeCount = INSTALLED_REMOVED_ARGUMENT_PROBES.length
+  const subcommandProbeCount = INSTALLED_REMOVED_SUBCOMMAND_PROBES.length
   const allRejected = probes.length > 0 && probes.every((probe) => probe.ok)
   return {
     command_probe_count: commandProbeCount,
     dollar_command_probe_count: dollarCommandProbeCount,
     argument_probe_count: argumentProbeCount,
+    subcommand_probe_count: subcommandProbeCount,
     rejected_count: probes.filter((probe) => probe.ok).length,
     expected_reason_counts: expectedReasonCounts,
     observed_reason_counts: observedReasonCounts,
@@ -399,7 +419,15 @@ export function summarizeInstalledSmokeCommand(
 
 export function retiredSurfaceTokenFindings(text: string): number[] {
   const findings: number[] = []
-  const values = [...INSTALLED_REMOVED_COMMANDS, ...INSTALLED_REMOVED_DOLLAR_COMMANDS, '--agent']
+  const values = [
+    ...INSTALLED_REMOVED_COMMANDS,
+    ...INSTALLED_REMOVED_DOLLAR_COMMANDS,
+    '--agent',
+    '--naruto',
+    '--clones',
+    'naruto workers',
+    'menubar mcp'
+  ]
   for (const [index, value] of values.entries()) {
     if (containsRetiredSurfaceToken(text, value)) findings.push(index + 1)
   }
@@ -408,7 +436,7 @@ export function retiredSurfaceTokenFindings(text: string): number[] {
 
 function containsRetiredSurfaceToken(text: string, value: string): boolean {
   const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  if (value === '--agent') return new RegExp(`${escaped}(?=$|[\\s"'=:,}\\]])`).test(text)
+  if (value.startsWith('--')) return new RegExp(`${escaped}(?=$|[\\s"'=:,}\\]])`).test(text)
   if (value.startsWith('$')) return new RegExp(`${escaped}(?![A-Za-z0-9_-])`).test(text)
   return new RegExp(`(?<![A-Za-z0-9_-])${escaped}(?![A-Za-z0-9_-])`, 'i').test(text)
 }
@@ -441,9 +469,10 @@ export function validateInstalledMenubarStatus(value: unknown, platform: NodeJS.
 
 function rejectionReason(result: Awaited<ReturnType<typeof runJsonCommand>>): InstalledSurfaceRejectionReason | null {
   const jsonReason = String((result.json as any)?.reason || '')
-  if (jsonReason === 'unknown_command' || jsonReason === 'unsupported_argument') return jsonReason
+  if (jsonReason === 'unknown_command' || jsonReason === 'unknown_subcommand' || jsonReason === 'unsupported_argument') return jsonReason
   const text = `${result.stdout}\n${result.command.stderr_tail}`
-  if (/unsupported_argument:--agent/.test(text)) return 'unsupported_argument'
+  if (/unsupported_argument:/.test(text)) return 'unsupported_argument'
+  if (/unknown_subcommand/.test(text)) return 'unknown_subcommand'
   if (/unknown_command|Unknown command:/i.test(text)) return 'unknown_command'
   return null
 }

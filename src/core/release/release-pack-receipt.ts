@@ -275,6 +275,9 @@ const RETIRED_SURFACE_PATTERNS: ReleasePackContentPattern[] = [
   { kind: 'retired_dollar_command', regex: /\$(?:Agent|Team|MAD-DB|Swarm|ShadowClone|Kagebunshin)\b/gi },
   { kind: 'retired_cli_command', regex: /\bsks\s+(?:team|mad-db|tmux|xai|swarm|agent)(?=$|[\s"'`])/g },
   { kind: 'retired_agent_option', regex: /(^|[\s"'`])--agent(?=$|[=\s"'`])/gim },
+  { kind: 'retired_naruto_option', regex: /(^|[\s"'`])--naruto(?=$|[=\s"'`])/gim },
+  { kind: 'retired_clones_option', regex: /(^|[\s"'`])--clones(?=$|[=\s"'`])/gim },
+  { kind: 'retired_naruto_workers_command', regex: /(^|[^A-Za-z0-9_-])naruto\s+workers(?=$|[^A-Za-z0-9_-])/gim },
   { kind: 'retired_menubar_mcp_command', regex: /\bsks\s+menubar\s+mcp(?=$|[\s"'`])/gi },
   { kind: 'retired_menubar_mcp_identity', regex: /(^|[^A-Za-z0-9])menubar[-_. ]mcp(?=$|[^A-Za-z0-9])/gim },
   { kind: 'retired_team_runtime_identity', regex: /\b(?:team_trigger_matrix|full_team_recommended|full_team_honest_path|strict-team|team-alias-to-naruto)\b/gi },
@@ -283,6 +286,7 @@ const RETIRED_SURFACE_PATTERNS: ReleasePackContentPattern[] = [
 ]
 
 const RETIRED_SURFACE_ALLOWLIST = [
+  /^dist\/cli\/global-mode-router\.js$/,
   /^dist\/core\/doctor\/retired-auto-review-config\.js$/,
   /^dist\/core\/doctor\/(?:command-alias-cleanup|current-project-guidance|retired-managed-projection-residue)\.js$/,
   /^dist\/core\/doctor\/retired-managed-residue(?:-artifact-helpers|-artifacts|-missions|-private|-runtime|-state)?\.js$/,

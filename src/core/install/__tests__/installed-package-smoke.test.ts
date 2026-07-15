@@ -1,8 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  INSTALLED_REMOVED_ARGUMENT_PROBES,
   INSTALLED_REMOVED_COMMANDS,
   INSTALLED_REMOVED_DOLLAR_COMMANDS,
+  INSTALLED_REMOVED_SUBCOMMAND_PROBES,
   INSTALLED_REQUIRED_COMMANDS,
   INSTALLED_REQUIRED_DOLLAR_COMMANDS,
   retiredSurfaceTokenFindings,
@@ -63,15 +65,24 @@ test('installed handoff report keeps retired probes aggregate-only and receipt-s
   const probes = [
     ...INSTALLED_REMOVED_COMMANDS.map(() => ({ expected_reason: 'unknown_command' as const, exit_code: 1, observed_reason: 'unknown_command' as const, ok: true })),
     ...INSTALLED_REMOVED_DOLLAR_COMMANDS.map(() => ({ expected_reason: 'unknown_command' as const, exit_code: 1, observed_reason: 'unknown_command' as const, ok: true })),
-    { expected_reason: 'unsupported_argument' as const, exit_code: 1, observed_reason: 'unsupported_argument' as const, ok: true }
+    ...INSTALLED_REMOVED_ARGUMENT_PROBES.map((probe) => ({ expected_reason: probe.expected_reason, exit_code: 1, observed_reason: probe.expected_reason, ok: true })),
+    ...INSTALLED_REMOVED_SUBCOMMAND_PROBES.map((probe) => ({ expected_reason: probe.expected_reason, exit_code: 1, observed_reason: probe.expected_reason, ok: true }))
   ]
   const closure = summarizeInstalledSurfaceClosure(probes)
   const serialized = JSON.stringify({ commands: [safeCommand], public_surface: { closure } })
   assert.deepEqual(retiredSurfaceTokenFindings(serialized), [])
   assert.equal(closure.rejected_count, probes.length)
+  assert.equal(closure.argument_probe_count, INSTALLED_REMOVED_ARGUMENT_PROBES.length)
+  assert.equal(closure.subcommand_probe_count, INSTALLED_REMOVED_SUBCOMMAND_PROBES.length)
   assert.equal(closure.all_rejected, true)
   assert.equal(closure.receipt_safe, true)
   assert.deepEqual(Object.keys(safeCommand).sort(), ['duration_ms', 'exit_code', 'probe', 'stdout_json'])
+})
+
+test('retired token scan covers removed options and nested command surfaces', () => {
+  for (const value of ['--naruto', '--clones', 'naruto workers', 'menubar mcp']) {
+    assert.ok(retiredSurfaceTokenFindings(`probe=${value}`).length > 0, value)
+  }
 })
 
 test('installed handoff command summaries never persist raw argv or output tails', () => {

@@ -5,7 +5,7 @@ import { assertGate, emitGate, readText, root } from './sks-1-18-gate-lib.js';
 const registry = readText('src/cli/command-registry.ts');
 const routes = readText('src/core/routes.ts');
 const skills = readText('src/core/init/skills.ts');
-const removedCommands = ['team', 'mad-db', 'tmux', 'xai', 'swarm'];
+const removedCommands = ['team', 'mad-db', 'tmux', 'xai', 'swarm', 'agent'];
 const removedDollarCommands = ['$Agent', '$Team', '$MAD-DB', '$Swarm', '$ShadowClone', '$Kagebunshin'];
 const removedHandlers = [
   'src/commands/team.ts',
@@ -14,7 +14,9 @@ const removedHandlers = [
   'src/commands/mad-db.ts',
   'src/core/commands/mad-db-command.ts',
   'src/commands/tmux.ts',
-  'src/cli/xai-command.ts'
+  'src/cli/xai-command.ts',
+  'src/core/commands/agent-command.ts',
+  'src/core/agents/agent-command-surface.ts'
 ];
 
 assertGate(!registry.includes("auth: '") && !registry.includes("dollars: '"), 'obsolete compatibility aliases must be purged from command registry');

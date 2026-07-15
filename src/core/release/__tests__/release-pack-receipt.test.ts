@@ -103,6 +103,26 @@ test('release pack inspection still rejects an actual lowercase retired CLI comm
   }
 })
 
+test('release pack inspection rejects retired Naruto options and workers command outside the proof allowlist', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-release-pack-retired-naruto-surface-'))
+  const leaked = ['--naruto', '--clones', 'naruto workers']
+  try {
+    const tarball = createTarball(root, 'retired-naruto-surface', '6.3.0', '', {
+      'dist/core/runtime/leak.js': `export const leaked = ${JSON.stringify(leaked)};\n`
+    })
+    const receipt = inspectReleaseTarball({ tarball, kind: 'staged', root })
+    const kinds = new Set(receipt.retired_surface_scan.findings.map((finding) => finding.kind))
+    assert.equal(receipt.ok, false)
+    assert.equal(receipt.retired_surface_scan.ok, false)
+    assert.equal(kinds.has('retired_naruto_option'), true)
+    assert.equal(kinds.has('retired_clones_option'), true)
+    assert.equal(kinds.has('retired_naruto_workers_command'), true)
+    for (const value of leaked) assert.equal(JSON.stringify(receipt).includes(value), false)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
 test('release pack inspection rejects every packaged menu bar MCP identity spelling', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-release-pack-retired-mcp-identity-'))
   try {
