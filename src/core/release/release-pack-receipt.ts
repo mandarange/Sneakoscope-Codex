@@ -289,7 +289,7 @@ const RETIRED_SURFACE_PATTERNS: ReleasePackContentPattern[] = [
 const RETIRED_SURFACE_ALLOWLIST = [
   /^dist\/core\/doctor\/retired-auto-review-config\.js$/,
   /^dist\/core\/doctor\/(?:command-alias-cleanup|current-project-guidance|retired-managed-projection-residue)\.js$/,
-  /^dist\/core\/doctor\/retired-managed-residue(?:-artifact-helpers|-artifacts|-missions|-private|-runtime|-state)?\.js$/,
+  /^dist\/core\/doctor\/retired-managed-residue(?:-artifact-helpers|-artifacts|-goal|-missions|-private|-runtime|-state)?\.js$/,
   /^dist\/core\/init\/skills\.js$/,
   /^dist\/core\/install\/installed-package-smoke\.js$/,
   /^dist\/core\/release\/release-pack-receipt\.js$/,

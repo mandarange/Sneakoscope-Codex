@@ -5,8 +5,8 @@ import { assertGate, emitGate, readText, root } from './sks-1-18-gate-lib.js';
 const registry = readText('src/cli/command-registry.ts');
 const routes = readText('src/core/routes.ts');
 const skills = readText('src/core/init/skills.ts');
-const removedCommands = ['team', 'mad-db', 'tmux', 'xai', 'swarm', 'agent'];
-const removedDollarCommands = ['$Agent', '$Team', '$MAD-DB', '$Swarm', '$ShadowClone', '$Kagebunshin'];
+const removedCommands = ['team', 'mad-db', 'tmux', 'xai', 'swarm', 'agent', 'ralph'];
+const removedDollarCommands = ['$Agent', '$Team', '$MAD-DB', '$Swarm', '$ShadowClone', '$Kagebunshin', '$Ralph'];
 const removedHandlers = [
   'src/commands/team.ts',
   'src/core/commands/team-command.ts',
@@ -27,7 +27,7 @@ for (const command of removedCommands) {
 for (const command of removedDollarCommands) {
   assertGate(!routes.includes(`command: '${command}'`), `retired dollar command must not have a route entry: ${command}`);
 }
-for (const skill of ['team', 'mad-db', 'swarm', 'shadow-clone', 'kage-bunshin']) {
+for (const skill of ['team', 'mad-db', 'swarm', 'shadow-clone', 'kage-bunshin', 'ralph']) {
   assertGate(!skills.includes(`'${skill}': \``), `retired skill template must not be generated: ${skill}`);
 }
 for (const file of removedHandlers) {

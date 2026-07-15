@@ -71,7 +71,7 @@ try {
   const badStages = migrationStages.filter((stage: any) => stage.ok !== true);
   assertGate(badStages.length === 0, 'migration stages must all be ok', { badStages, receipt });
   assertGate(!Object.hasOwn(receipt || {}, 'legacy_migration_stages'), 'receipt must expose only the current migration summary contract', { receipt });
-  assertGate(!/\$(?:Agent|Team|MAD-DB|Swarm|ShadowClone|Kagebunshin)\b|\bsks\s+(?:team|mad-db|tmux|xai|swarm|agent)\b/i.test(JSON.stringify(receipt)), 'customer migration receipt must not publish retired surface names', { receipt });
+  assertGate(!/\$(?:Agent|Team|MAD-DB|Swarm|ShadowClone|Kagebunshin|Ralph)\b|\bsks\s+(?:team|mad-db|tmux|xai|swarm|agent|ralph)\b/i.test(JSON.stringify(receipt)), 'customer migration receipt must not publish retired surface names', { receipt });
 
   const retiredResidue = [
     path.join(project, '.sneakoscope', 'team'),
@@ -83,6 +83,7 @@ try {
     path.join(project, '.sneakoscope', 'missions', 'M-kage-surface'),
     path.join(home, '.agents', 'skills', 'team'),
     path.join(home, '.agents', 'skills', 'agent'),
+    path.join(home, '.agents', 'skills', 'ralph'),
     path.join(home, '.codex', 'skills', 'mad-db'),
     path.join(home, '.codex', 'sks-team.config.toml'),
     path.join(home, '.sneakoscope-global', '.codex', 'sks-team.config.toml'),
@@ -97,6 +98,12 @@ try {
   }
   assertGate(fs.existsSync(path.join(project, '.agents', 'skills', 'customer-skill', 'SKILL.md')), 'simulated update must preserve user-authored skills', {});
   assertGate(fs.existsSync(path.join(project, '.sneakoscope', 'customer-state.json')), 'simulated update must preserve unrelated customer state', {});
+  const currentGoalRoot = path.join(project, '.sneakoscope', 'missions', 'M-current-goal');
+  const currentGoalWorkflow = await readJson<any>(path.join(currentGoalRoot, 'goal-workflow.json'), null);
+  const currentGoalBridge = await fsp.readFile(path.join(currentGoalRoot, 'goal-bridge.md'), 'utf8');
+  assertGate(fs.existsSync(path.join(currentGoalRoot, 'mission.json')), 'simulated update must preserve the current Goal mission', {});
+  assertGate(!Object.hasOwn(currentGoalWorkflow?.pipeline_contract || {}, 'ralph_removed'), 'simulated update must remove retired Goal workflow metadata', {});
+  assertGate(!/ralph/i.test(currentGoalBridge), 'simulated update must remove retired Goal bridge prose', {});
   const secondSurfacePass = await runDoctorCommandAliasCleanup({
     root: project,
     home,
@@ -113,7 +120,7 @@ try {
   assertGate(fromChatImgSkill.includes('from-chat-img'), 'simulated update must retain the Naruto visual add-on skill name', {});
   const reconciledAgents = await fsp.readFile(path.join(project, 'AGENTS.md'), 'utf8');
   const reconciledQuickReference = await fsp.readFile(path.join(project, '.codex', 'SNEAKOSCOPE.md'), 'utf8');
-  const removedSurface = /\$(?:Agent|Team|MAD-DB|Swarm|ShadowClone|Kagebunshin)\b|\bsks\s+(?:team|mad-db|tmux|xai|swarm|agent)\b/i;
+  const removedSurface = /\$(?:Agent|Team|MAD-DB|Swarm|ShadowClone|Kagebunshin|Ralph)\b|\bsks\s+(?:team|mad-db|tmux|xai|swarm|agent|ralph)\b/i;
   assertGate(!removedSurface.test(reconciledAgents), 'simulated update must rewrite the managed AGENTS block to the current surface', {});
   assertGate(!removedSurface.test(reconciledQuickReference), 'simulated update must rewrite the managed Codex quick reference to the current surface', {});
   assertGate(reconciledAgents.includes('customer-authored-prefix'), 'managed AGENTS reconciliation must preserve user-authored content outside the SKS block', {});
@@ -255,6 +262,7 @@ async function seedUpgradeFixture(home: string, project: string): Promise<void> 
     '- General work defaults to `$Team`.',
     '- Database work uses `$MAD-DB`.',
     '- Clone work uses `$ShadowClone` or `$Kagebunshin`.',
+    '- Persisted work uses `$Ralph`.',
     '<!-- END Sneakoscope Codex GX MANAGED BLOCK -->',
     ''
   ].join('\n'));
@@ -263,7 +271,7 @@ async function seedUpgradeFixture(home: string, project: string): Promise<void> 
     'Install scope: `global`',
     'Command: `sks <command>`',
     'Files: AGENTS.md, .codex/hooks.json, .codex/config.toml, .codex/SNEAKOSCOPE.md, .agents/skills, .codex/agents, .sneakoscope/missions.',
-    `Retired shortcuts: \`$Agent\`, \`$Team\`, \`$MAD-DB\`, \`$Swarm\`, \`$ShadowClone\`, \`$Kagebunshin\`, \`sks team\`, \`sks mad-db\`, \`sks ${['tm', 'ux'].join('')}\`, \`sks xai\`, \`sks swarm\`, \`sks agent\`.`,
+    `Retired shortcuts: \`$Agent\`, \`$Team\`, \`$MAD-DB\`, \`$Swarm\`, \`$ShadowClone\`, \`$Kagebunshin\`, \`$Ralph\`, \`sks team\`, \`sks mad-db\`, \`sks ${['tm', 'ux'].join('')}\`, \`sks xai\`, \`sks swarm\`, \`sks agent\`, \`sks ralph\`.`,
     ''
   ].join('\n'));
   for (const root of [home, globalRuntimeRoot]) {
@@ -272,6 +280,7 @@ async function seedUpgradeFixture(home: string, project: string): Promise<void> 
       '# Retired SKS guidance',
       '- General work defaults to `$Team`.',
       '- Database work uses `sks mad-db`.',
+      '- Persisted work uses `sks ralph`.',
       '<!-- END Sneakoscope Codex GX MANAGED BLOCK -->',
       ''
     ].join('\n'));
@@ -280,7 +289,7 @@ async function seedUpgradeFixture(home: string, project: string): Promise<void> 
       'Install scope: `global`',
       'Command: `sks <command>`',
       'Files: AGENTS.md, .codex/hooks.json, .codex/config.toml, .codex/SNEAKOSCOPE.md, .agents/skills, .codex/agents, .sneakoscope/missions.',
-      'Retired shortcuts: `$Team`, `$MAD-DB`, `sks team`, `sks mad-db`.',
+      'Retired shortcuts: `$Team`, `$MAD-DB`, `$Ralph`, `sks team`, `sks mad-db`, `sks ralph`.',
       ''
     ].join('\n'));
     await fsp.writeFile(path.join(root, '.codex', 'sks-team.config.toml'), [
@@ -369,8 +378,38 @@ async function seedUpgradeFixture(home: string, project: string): Promise<void> 
       implementation_allowed: false
     }, null, 2) + '\n');
   }
+  const currentGoalRoot = path.join(project, '.sneakoscope', 'missions', 'M-current-goal');
+  await fsp.mkdir(currentGoalRoot, { recursive: true });
+  await fsp.writeFile(path.join(currentGoalRoot, 'mission.json'), JSON.stringify({
+    id: 'M-current-goal',
+    mode: 'Goal',
+    prompt: 'keep current goal mission',
+    created_at: '2026-01-01T00:00:00.000Z',
+    phase: 'intake',
+    questions_allowed: true,
+    implementation_allowed: false
+  }, null, 2) + '\n');
+  await fsp.writeFile(path.join(currentGoalRoot, 'goal-workflow.json'), JSON.stringify({
+    schema_version: 1,
+    mission_id: 'M-current-goal',
+    route: 'Goal',
+    native_goal: { workflow_kind: 'native /goal persistence bridge' },
+    pipeline_contract: { overlay_only: true, ralph_removed: true }
+  }, null, 2) + '\n');
+  await fsp.writeFile(path.join(currentGoalRoot, 'goal-bridge.md'), [
+    '# SKS Goal Persistence Bridge',
+    '',
+    '## Native Codex Goal Control',
+    '',
+    '## SKS Bridge Contract',
+    '',
+    '- Ralph route is removed from the user-facing SKS surface.',
+    '- This file is a fast SKS overlay.',
+    ''
+  ].join('\n'));
   await writeManagedSkill(path.join(home, '.agents', 'skills', 'team'), 'team');
   await writeManagedSkill(path.join(home, '.agents', 'skills', 'agent'), 'agent');
+  await writeManagedSkill(path.join(home, '.agents', 'skills', 'ralph'), 'ralph');
   await writeManagedSkill(path.join(home, '.codex', 'skills', 'mad-db'), 'mad-db');
   await writeManagedSkill(path.join(project, '.agents', 'skills', 'tmux'), 'tmux');
   await writeManagedSkill(path.join(project, '.agents', 'skills', 'swarm'), 'swarm');

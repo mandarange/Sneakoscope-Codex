@@ -10,7 +10,7 @@ import {
 } from '../managed-path-safety.js';
 
 /** Cleanup-only inventory. These names are never registered, listed, or redirected. */
-export const REMOVED_PUBLIC_COMMANDS = ['team', 'mad-db', 'tmux', 'xai', 'swarm', 'agent'] as const;
+export const REMOVED_PUBLIC_COMMANDS = ['team', 'mad-db', 'tmux', 'xai', 'swarm', 'agent', 'ralph'] as const;
 
 const RETIRED_COMMAND_TOMBSTONES = new Set<string>(REMOVED_PUBLIC_COMMANDS);
 const RETIRED_MISSION_MODES = new Set<string>([

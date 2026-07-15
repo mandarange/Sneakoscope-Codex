@@ -2,8 +2,8 @@
 import fs from 'node:fs';
 import { assertGate, emitGate, importDist, readText, root } from './sks-1-18-gate-lib.js';
 
-const removed = ['team', 'mad-db', 'tmux', 'xai', 'swarm', 'agent'];
-const removedDollar = ['$Agent', '$Team', '$MAD-DB', '$Swarm', '$ShadowClone', '$Kagebunshin'];
+const removed = ['team', 'mad-db', 'tmux', 'xai', 'swarm', 'agent', 'ralph'];
+const removedDollar = ['$Agent', '$Team', '$MAD-DB', '$Swarm', '$ShadowClone', '$Kagebunshin', '$Ralph'];
 const removedHandlers = [
   'src/commands/team.ts',
   'src/core/commands/team-command.ts',
@@ -47,7 +47,7 @@ for (const command of removedDollar) {
   assertGate(routes.routePrompt(`${command} fixture`) === null, `removed dollar command must not redirect: ${command}`);
   assertGate(!liteManifest.includes(`command: '${command}'`), `removed dollar command must not remain in the lite manifest: ${command}`);
 }
-for (const skill of ['$agent', '$team', '$mad-db', '$swarm', '$shadow-clone', '$kage-bunshin']) {
+for (const skill of ['$agent', '$team', '$mad-db', '$swarm', '$shadow-clone', '$kage-bunshin', '$ralph']) {
   assertGate(!listedSkillAliases.includes(skill), `removed skill alias must not be listed: ${skill}`);
   assertGate(!liteManifest.includes(`app_skill: '${skill}'`), `removed skill alias must not remain in the lite manifest: ${skill}`);
 }

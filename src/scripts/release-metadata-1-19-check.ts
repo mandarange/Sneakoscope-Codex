@@ -130,7 +130,7 @@ assertGate([...releaseGateIds].every((id) => !id.startsWith('zellij:')), 'Zellij
 assertGate([...harnessGateIds].every((id) => id.startsWith('zellij:')), 'harness manifest must contain only Zellij gates');
 assertGate(allManifestGates.every((gate: any) => !/\bnpm\s+run\b/.test(String(gate.command))), 'gate manifest commands must not use npm run indirection');
 const retiredPublicSurfaceGateCount = allManifestGates.filter((gate: any) =>
-  /(?:^|[^a-z0-9])(?:team|mad-db|tmux|xai|swarm)(?:[^a-z0-9]|$)/i.test(`${String(gate.id || '')}\n${String(gate.command || '')}`)
+  /(?:^|[^a-z0-9])(?:team|mad-db|tmux|xai|swarm|ralph)(?:[^a-z0-9]|$)/i.test(`${String(gate.id || '')}\n${String(gate.command || '')}`)
 ).length;
 assertGate(retiredPublicSurfaceGateCount === 0, 'release and harness manifests must use only the current public surface', { violation_count: retiredPublicSurfaceGateCount });
 for (const gate of allManifestGates) assertDistScriptTargetsExist(gate);
@@ -145,10 +145,10 @@ assertGate(!/\bnpm\s+publish\b/.test(Object.values(pkg.scripts || {}).join('\n')
 
 const currentCommandManifest = text('src/cli/command-manifest-lite.ts');
 const currentDollarManifest = text('src/core/routes/dollar-manifest-lite.ts');
-for (const token of ["{ name: 'team',", "{ name: 'mad-db',", "{ name: 'tmux',", "{ name: 'xai',", "{ name: 'swarm',", "{ name: 'agent',"]) {
+for (const token of ["{ name: 'team',", "{ name: 'mad-db',", "{ name: 'tmux',", "{ name: 'xai',", "{ name: 'swarm',", "{ name: 'agent',", "{ name: 'ralph',"]) {
   assertGate(!currentCommandManifest.includes(token), 'current command manifest contains a retired public command');
 }
-for (const token of ["command: '$Agent'", "command: '$Team'", "command: '$MAD-DB'", "command: '$Swarm'", "command: '$ShadowClone'", "command: '$Kagebunshin'"]) {
+for (const token of ["command: '$Agent'", "command: '$Team'", "command: '$MAD-DB'", "command: '$Swarm'", "command: '$ShadowClone'", "command: '$Kagebunshin'", "command: '$Ralph'"]) {
   assertGate(!currentDollarManifest.includes(token), 'current dollar manifest contains a retired route identity');
 }
 assertGate(currentDollarManifest.includes("{ command: '$Naruto'") && currentDollarManifest.includes("{ command: '$Work'"), 'current dollar manifest must expose the canonical workflow and intended alias');
@@ -207,8 +207,8 @@ const retiredPublicDocReferenceCount = requiredDocs
   .filter((file) => file !== 'CHANGELOG.md')
   .reduce((count, file) => {
     const source = text(file);
-    const commandHit = /\bsks\s+(?:agent(?=\s|$)|--agent(?=\s|$)|team(?=\s|$)|mad-db(?=\s|$)|tmux(?=\s|$)|xai(?=\s|$)|swarm(?=\s|$))/i.test(source);
-    const routeHit = /\$(?:Team|MAD-DB|Swarm|ShadowClone|Kagebunshin)\b/.test(source);
+    const commandHit = /\bsks\s+(?:agent(?=\s|$)|--agent(?=\s|$)|team(?=\s|$)|mad-db(?=\s|$)|tmux(?=\s|$)|xai(?=\s|$)|swarm(?=\s|$)|ralph(?=\s|$))/i.test(source);
+    const routeHit = /\$(?:Team|MAD-DB|Swarm|ShadowClone|Kagebunshin|Ralph)\b/.test(source);
     return count + Number(commandHit || routeHit);
   }, 0);
 assertGate(retiredPublicDocReferenceCount === 0, 'current release documentation must not republish retired command or route identities', { violation_count: retiredPublicDocReferenceCount });

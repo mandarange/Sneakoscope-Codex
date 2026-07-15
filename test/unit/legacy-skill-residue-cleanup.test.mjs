@@ -12,7 +12,7 @@ import {
 import { initProject } from '../../dist/core/init.js';
 import { runDoctorCommandAliasCleanup } from '../../dist/core/doctor/command-alias-cleanup.js';
 
-const PRIMARY_REMOVED = ['team', 'mad-db', 'tmux', 'xai', 'swarm', 'shadow-clone', 'kage-bunshin'];
+const PRIMARY_REMOVED = ['team', 'mad-db', 'tmux', 'xai', 'swarm', 'shadow-clone', 'kage-bunshin', 'ralph'];
 
 test('packaged skill manifest excludes retired skills and aliases', async () => {
   const manifest = await loadSkillsManifest();
@@ -34,6 +34,7 @@ test('removed SKS skill cleanup covers global, project, and codex mirrors while 
     await writeManagedSkill(path.join(home, '.agents', 'skills', 'team'), 'team');
     await writeManagedSkill(path.join(home, '.codex', 'skills', 'mad-db'), 'mad-db');
     await writeManagedSkill(path.join(home, '.agents', 'skills', 'tmux'), 'tmux');
+    await writeManagedSkill(path.join(home, '.agents', 'skills', 'ralph'), 'ralph');
     await writeManagedSkill(path.join(root, '.agents', 'skills', 'swarm'), 'swarm');
     await writeManagedSkill(path.join(root, '.codex', 'skills', 'shadow-clone'), 'shadow-clone');
     await writeManagedSkill(path.join(root, '.codex', 'skills', 'xai'), 'xai');
@@ -44,13 +45,14 @@ test('removed SKS skill cleanup covers global, project, and codex mirrors while 
 
     const first = await cleanupRemovedSksSkillResidue({ root, home, fix: true });
     assert.equal(first.ok, true);
-    assert.equal(first.removed.length, 6);
+    assert.equal(first.removed.length, 7);
     assert.equal(first.quarantined_user_collisions.length, 1);
     assert.deepEqual(first.remaining, []);
     for (const rel of [
       path.join(home, '.agents', 'skills', 'team'),
       path.join(home, '.codex', 'skills', 'mad-db'),
       path.join(home, '.agents', 'skills', 'tmux'),
+      path.join(home, '.agents', 'skills', 'ralph'),
       path.join(root, '.agents', 'skills', 'swarm'),
       path.join(root, '.codex', 'skills', 'shadow-clone'),
       path.join(root, '.codex', 'skills', 'xai'),
@@ -182,7 +184,7 @@ test('removed skill cleanup scrubs HOME and SKS_GLOBAL_ROOT generated manifests 
       assert.equal(Object.hasOwn(packaged, 'removed_skills'), false);
       assert.deepEqual(packaged.skills.map((skill) => skill.canonical_name), ['naruto', 'answer']);
       assert.deepEqual(packaged.skills[0].deprecated_aliases, []);
-      assert.doesNotMatch(JSON.stringify({ generated, packaged }), /"(?:team|mad-db|tmux|xai|swarm|shadow-clone|kage-bunshin)"/i);
+      assert.doesNotMatch(JSON.stringify({ generated, packaged }), /"(?:team|mad-db|tmux|xai|swarm|shadow-clone|kage-bunshin|ralph)"/i);
     }
 
     const second = await cleanupRemovedSksSkillResidue({ root, home, globalRuntimeRoot, fix: true });
@@ -301,7 +303,7 @@ test('project skill reconciliation deletes generated retired entries without tou
     assert.equal(report.retired_residue?.removed_count, 2);
     assert.equal(Object.hasOwn(report, 'legacy_skill_residue_remaining'), false);
     assert.equal(Object.hasOwn(report, 'removed_legacy_skill_dirs'), false);
-    assert.doesNotMatch(JSON.stringify(report), /(?:team|mad-db|tmux|xai|swarm|shadow-clone|kage-bunshin)/i);
+    assert.doesNotMatch(JSON.stringify(report), /(?:team|mad-db|tmux|xai|swarm|shadow-clone|kage-bunshin|ralph)/i);
     await assertMissing(path.join(root, '.agents', 'skills', 'team'));
     await assertMissing(path.join(root, '.codex', 'skills', 'mad-db'));
     assert.equal(await readSkill(path.join(root, '.agents', 'skills', 'customer-workflow')), 'customer content');
@@ -318,7 +320,7 @@ test('generated project guidance advertises Naruto and no retired compatibility 
     const quickReference = await fs.readFile(path.join(root, '.codex', 'SNEAKOSCOPE.md'), 'utf8');
     for (const text of [agents, quickReference]) {
       assert.match(text, /\$Naruto|naruto run/);
-      assert.doesNotMatch(text, /\$Agent|\$Team|sks team|\$MAD-DB|sks mad-db|\$Swarm|\$ShadowClone|\$Kagebunshin/i);
+      assert.doesNotMatch(text, /\$Agent|\$Team|sks team|\$MAD-DB|sks mad-db|\$Swarm|\$ShadowClone|\$Kagebunshin|\$Ralph|sks ralph/i);
     }
     for (const name of PRIMARY_REMOVED) {
       await assertMissing(path.join(root, '.agents', 'skills', name));

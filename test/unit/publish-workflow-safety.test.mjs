@@ -76,12 +76,12 @@ test('workflow proves Node 20, 22, and 24 and runs exact-tarball smoke plus secr
   assert.match(stageJob, /comparison\.local_sha256 !== receipt\.sha256/);
   assert.match(stageJob, /smoke\.tarball_sha256 !== receipt\.sha256/);
   assert.match(stageJob, /closure\.rejected_count !== closure\.command_probe_count \+ closure\.dollar_command_probe_count \+ closure\.argument_probe_count \+ closure\.subcommand_probe_count/);
-  assert.match(stageJob, /closure\.command_probe_count !== 6/);
-  assert.match(stageJob, /closure\.dollar_command_probe_count !== 6/);
+  assert.match(stageJob, /closure\.command_probe_count !== 7/);
+  assert.match(stageJob, /closure\.dollar_command_probe_count !== 7/);
   assert.match(stageJob, /closure\.argument_probe_count !== 5/);
   assert.match(stageJob, /closure\.subcommand_probe_count !== 2/);
-  assert.match(stageJob, /closure\.rejected_count !== 19/);
-  assert.match(stageJob, /expected_reason_counts\?\.unknown_command !== 15/);
+  assert.match(stageJob, /closure\.rejected_count !== 21/);
+  assert.match(stageJob, /expected_reason_counts\?\.unknown_command !== 17/);
   assert.match(stageJob, /expected_reason_counts\?\.unknown_subcommand !== 2/);
   assert.match(stageJob, /expected_reason_counts\?\.unsupported_argument !== 2/);
 });

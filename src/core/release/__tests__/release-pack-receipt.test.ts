@@ -63,12 +63,13 @@ test('release pack inspection allows retired tokens only in explicit cleanup and
       'dist/core/doctor/retired-managed-residue-private.js': 'const tombstone = "sks team --json";\n',
       'dist/core/doctor/retired-managed-projection-residue.js': 'const oldMode = "strict-team";\n',
       'dist/core/doctor/retired-managed-residue-missions.js': 'const oldRoute = "$Team";\n',
+      'dist/core/doctor/retired-managed-residue-goal.js': 'const oldGoalField = "ralph_removed";\n',
       'dist/core/init/skills.js': 'const retiredSkill = "ralph-supervisor";\n'
     })
     const receipt = inspectReleaseTarball({ tarball, kind: 'staged', root })
     assert.equal(receipt.ok, true, receipt.blockers.join(','))
     assert.equal(receipt.retired_surface_scan.ok, true)
-    assert.equal(receipt.retired_surface_scan.allowlisted_finding_count, 4)
+    assert.equal(receipt.retired_surface_scan.allowlisted_finding_count, 5)
     assert.equal(receipt.retired_surface_scan.findings.length, 0)
   } finally {
     fs.rmSync(root, { recursive: true, force: true })

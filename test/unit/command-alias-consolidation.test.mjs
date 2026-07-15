@@ -37,7 +37,7 @@ test('removed public commands and dollar aliases are unknown instead of redirect
     assert.equal(normalized.command, null, name);
     assert.equal(normalized.aliasTarget, null, name);
   }
-  for (const command of ['$Agent', '$Team', '$MAD-DB', '$Tmux', '$XAI', '$Swarm', '$ShadowClone', '$Kagebunshin']) {
+  for (const command of ['$Agent', '$Team', '$MAD-DB', '$Tmux', '$XAI', '$Swarm', '$ShadowClone', '$Kagebunshin', '$Ralph']) {
     assert.equal(routePrompt(command), null, command);
   }
 
@@ -78,7 +78,7 @@ test('doctor command alias cleanup writes a clean report during fix', async () =
     assert.equal(report.cleanup.removed_count, 3);
     assert.equal(report.cleanup.remaining_count, 0);
     assert.equal(report.actions[0].action, 'doctor_fix_reconciled_current_public_surface');
-    assert.doesNotMatch(JSON.stringify(report), /(?:team|mad-db|tmux|xai|swarm|shadow-clone|kage-bunshin)/i);
+    assert.doesNotMatch(JSON.stringify(report), /(?:team|mad-db|tmux|xai|swarm|shadow-clone|kage-bunshin|ralph)/i);
     await assert.rejects(fs.access(path.join(home, '.agents', 'skills', 'team')));
     await assert.rejects(fs.access(path.join(project, '.agents', 'skills', 'mad-db')));
     await assert.rejects(fs.access(path.join(project, '.codex', 'skills', 'swarm')));

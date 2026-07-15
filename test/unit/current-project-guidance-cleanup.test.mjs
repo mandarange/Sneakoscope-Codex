@@ -18,6 +18,7 @@ test('retired guidance detection uses exact argv, option, and dollar-command bou
     'sks xai status',
     'sks swarm --json',
     'sks agent run task',
+    'sks ralph status',
     'sks --agent reviewer',
     'sks --agent=reviewer',
     '$Agent',
@@ -25,7 +26,8 @@ test('retired guidance detection uses exact argv, option, and dollar-command bou
     '$MAD-DB',
     '$Swarm',
     '$ShadowClone',
-    '$Kagebunshin'
+    '$Kagebunshin',
+    '$Ralph'
   ]) assert.equal(containsRetiredPublicSurface(value), true, value);
 
   for (const value of [
@@ -34,10 +36,12 @@ test('retired guidance detection uses exact argv, option, and dollar-command bou
     'AGENT_BRIDGE_READY',
     'sks teamcity status',
     'sks mad-db2 run',
+    'sks ralph2 status',
     'sks naruto run task --agents 5',
     '$TeamCity',
     '$MAD-DB2',
-    '$Agent_Bridge'
+    '$Agent_Bridge',
+    '$Ralph2'
   ]) assert.equal(containsRetiredPublicSurface(value), false, value);
 });
 
@@ -116,7 +120,7 @@ test('doctor reconciles nested project AGENTS.md without entering excluded or sy
     const userAfter = await fs.readFile(nestedUser, 'utf8');
     for (const text of [managedAfter, userAfter]) {
       assert.match(text, /BEGIN Sneakoscope Codex GX MANAGED BLOCK/);
-      assert.doesNotMatch(text, /\$Team|\$Agent|sks team|sks agent|sks mad-db/i);
+      assert.doesNotMatch(text, /\$Team|\$Agent|\$Ralph|sks team|sks agent|sks mad-db|sks ralph/i);
     }
     const quarantinedAgents = await findFiles(path.join(project, '.sneakoscope', 'quarantine'), 'AGENTS.md');
     const quarantinedUserAgents = [];
@@ -247,7 +251,7 @@ test('doctor guidance cleanup reconciles project, HOME, and SKS_GLOBAL_ROOT and 
       const quickReference = await fs.readFile(path.join(root, '.codex', 'SNEAKOSCOPE.md'), 'utf8');
       assert.match(agents, /\$Naruto/);
       assert.match(quickReference, /naruto run/);
-      assert.doesNotMatch(`${agents}\n${quickReference}`, /\$Team|sks team|\$MAD-DB|sks mad-db/i);
+      assert.doesNotMatch(`${agents}\n${quickReference}`, /\$Team|sks team|\$MAD-DB|sks mad-db|\$Ralph|sks ralph/i);
     }
 
     const homeConfig = await fs.readFile(path.join(home, '.codex', 'config.toml'), 'utf8');
@@ -282,7 +286,7 @@ function legacyManagedAgents() {
   return [
     '<!-- BEGIN Sneakoscope Codex GX MANAGED BLOCK -->',
     '# Retired SKS guidance',
-    '- Use `$Team` and `sks mad-db`.',
+    '- Use `$Team`, `sks mad-db`, and `$Ralph`.',
     '<!-- END Sneakoscope Codex GX MANAGED BLOCK -->',
     ''
   ].join('\n');
@@ -294,7 +298,7 @@ function legacyManagedQuickReference() {
     'Install scope: `global`',
     'Command: `sks <command>`',
     'Files: AGENTS.md, .codex/hooks.json, .codex/config.toml, .codex/SNEAKOSCOPE.md, .agents/skills, .codex/agents, .sneakoscope/missions.',
-    'Use `$Team` and `sks mad-db`.',
+    'Use `$Team`, `sks mad-db`, and `sks ralph`.',
     ''
   ].join('\n');
 }

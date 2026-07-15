@@ -45,8 +45,8 @@ export interface InstalledPackageSmokeReport {
 
 export const INSTALLED_REQUIRED_COMMANDS = ['naruto', 'mcp', 'update', 'menubar'] as const
 export const INSTALLED_REQUIRED_DOLLAR_COMMANDS = ['$Naruto', '$Work'] as const
-export const INSTALLED_REMOVED_COMMANDS = ['team', 'mad-db', 'tmux', 'xai', 'swarm', 'agent'] as const
-export const INSTALLED_REMOVED_DOLLAR_COMMANDS = ['$Agent', '$Team', '$MAD-DB', '$Swarm', '$ShadowClone', '$Kagebunshin'] as const
+export const INSTALLED_REMOVED_COMMANDS = ['team', 'mad-db', 'tmux', 'xai', 'swarm', 'agent', 'ralph'] as const
+export const INSTALLED_REMOVED_DOLLAR_COMMANDS = ['$Agent', '$Team', '$MAD-DB', '$Swarm', '$ShadowClone', '$Kagebunshin', '$Ralph'] as const
 
 type InstalledSurfaceRejectionReason = 'unknown_command' | 'unknown_subcommand' | 'unsupported_argument'
 

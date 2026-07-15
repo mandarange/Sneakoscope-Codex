@@ -22,6 +22,7 @@ import {
   walkEntries
 } from './retired-managed-residue-private.js';
 import { reconcileMissionTrustProjection } from './retired-managed-projection-residue.js';
+import { reconcileRetiredGoalArtifactResidue } from './retired-managed-residue-goal.js';
 
 const RETIRED_DB_ROOT_FILES = new Set([
   'mad-db-capability.json',
@@ -102,6 +103,7 @@ export async function reconcileMissionArtifacts(
       }
       continue;
     }
+    await reconcileRetiredGoalArtifactResidue({ root, missionRoot, fix, quarantineRoot, counters });
     await reconcileMissionTrustProjection(root, missionRoot, fix, quarantineRoot, counters);
     await reconcileRetiredMissionRuntime(root, missionRoot, fix, quarantineRoot, counters);
     for (const name of RETIRED_DB_ROOT_FILES) {
