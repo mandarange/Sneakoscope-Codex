@@ -157,7 +157,7 @@ test('project update migration removes obsolete runtime and managed skill residu
     assert.equal(cleanup?.ok, true);
     assert.ok((cleanup?.action_count || 0) > 0);
     assert.equal(Object.hasOwn(first, 'legacy_migration_stages'), false);
-    assert.doesNotMatch(JSON.stringify(first), /(?:team|mad-db|tmux|xai|swarm|shadow-clone|kage-bunshin)/i);
+    assert.doesNotMatch(JSON.stringify(first), /(?:team|mad-db|tmux|xai|swarm|shadow-clone|kage-bunshin|ralph)/i);
     for (const target of [
       path.join(project, '.sneakoscope', 'team'),
       path.join(project, '.sneakoscope', 'team-dashboard-state.json'),
@@ -184,7 +184,7 @@ test('project update migration removes obsolete runtime and managed skill residu
     const secondCleanup = (second.migration_stages || []).find((stage) => stage.id === 'current-public-surface-reconcile');
     assert.equal(secondCleanup?.ok, true);
     assert.equal(Object.hasOwn(second, 'legacy_migration_stages'), false);
-    assert.doesNotMatch(JSON.stringify(second), /(?:team|mad-db|tmux|xai|swarm|shadow-clone|kage-bunshin)/i);
+    assert.doesNotMatch(JSON.stringify(second), /(?:team|mad-db|tmux|xai|swarm|shadow-clone|kage-bunshin|ralph)/i);
     await assertMissing(path.join(project, '.sneakoscope', 'update', 'legacy-team-artifacts.json'));
   } finally {
     if (previousHome === undefined) delete process.env.HOME;
