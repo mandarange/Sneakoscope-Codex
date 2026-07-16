@@ -5,6 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { configureCodexLb } from '../../dist/cli/install-helpers.js';
 
+const compatibleRecoveryFetch = async () => new Response('{}', { status: 200, headers: { 'x-app-version': '1.21.0-beta.3' } });
+
 test('codex-lb shell-profile zsh modifies only .zshrc and reports shell_profile', async () => {
   const home = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-lb-zsh-'));
   const result = await configureCodexLb({
@@ -14,7 +16,8 @@ test('codex-lb shell-profile zsh modifies only .zshrc and reports shell_profile'
     writeEnvFile: true,
     storeKeychain: false,
     syncLaunchctl: false,
-    shellProfile: 'zsh'
+    shellProfile: 'zsh',
+    toolOutputRecoveryFetch: compatibleRecoveryFetch
   });
   assert.ok(result.persistence?.applied_modes.includes('shell_profile'));
   assert.match(await fs.readFile(path.join(home, '.zshrc'), 'utf8'), /BEGIN SKS CODEX-LB/);

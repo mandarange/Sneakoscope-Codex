@@ -17,11 +17,11 @@ const NESTED_AGENTS_SKIPPED_DIRECTORIES = new Set([
   'out'
 ]);
 
-export async function collectNestedProjectAgents(
+export async function collectNestedProjectRoots(
   projectRoot: string,
   excludedRoots: Set<string>
-): Promise<{ files: string[]; errorCount: number; truncated: boolean }> {
-  const files: string[] = [];
+): Promise<{ roots: string[]; errorCount: number; truncated: boolean }> {
+  const roots = new Set<string>();
   const queue: Array<{ directory: string; depth: number }> = [{ directory: projectRoot, depth: 0 }];
   const excluded = new Set([...excludedRoots].map((root) => path.resolve(root)));
   let cursor = 0;
@@ -52,10 +52,16 @@ export async function collectNestedProjectAgents(
     for (const entry of entries) {
       if (entry.isSymbolicLink()) continue;
       const target = path.join(current.directory, entry.name);
-      if (current.depth > 0 && entry.name === 'AGENTS.md' && entry.isFile()) files.push(target);
+      if (current.depth > 0 && entry.name === 'AGENTS.md' && entry.isFile()) {
+        roots.add(current.directory);
+      }
       if (!entry.isDirectory()) continue;
       if (NESTED_AGENTS_SKIPPED_DIRECTORIES.has(entry.name.toLowerCase())) continue;
       if (excluded.has(path.resolve(target))) continue;
+      if (entry.name === '.agents' || entry.name === '.codex') {
+        if (current.depth > 0) roots.add(current.directory);
+        continue;
+      }
       if (current.depth >= NESTED_AGENTS_MAX_DEPTH) {
         truncated = true;
         continue;
@@ -68,5 +74,5 @@ export async function collectNestedProjectAgents(
     }
   }
 
-  return { files, errorCount, truncated };
+  return { roots: [...roots].sort(), errorCount, truncated };
 }

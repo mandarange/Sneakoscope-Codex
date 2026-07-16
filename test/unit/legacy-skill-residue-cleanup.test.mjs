@@ -75,6 +75,35 @@ test('removed SKS skill cleanup covers global, project, and codex mirrors while 
   }
 });
 
+test('removed skill cleanup canonicalizes managed variants across nested mirrors', async () => {
+  const fixture = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-removed-skill-variants-'));
+  const home = path.join(fixture, 'home');
+  const root = path.join(fixture, 'project');
+  const nested = path.join(root, 'packages', 'app');
+  try {
+    await writeManagedSkill(path.join(home, '.agents', 'skills', 'Team'), 'Team');
+    await writeManagedSkill(path.join(nested, '.agents', 'skills', 'MAD-DB'), 'MAD-DB');
+    await writeManagedSkill(path.join(nested, '.codex', 'skills', 'mad_db'), 'mad_db');
+    await writeManagedSkill(path.join(nested, '.agents', 'skills', 'MAD-SKS'), 'MAD-SKS');
+    await writeUserSkill(path.join(root, 'services', 'api', '.agents', 'skills', 'TEAM'), 'TEAM', 'keep me in quarantine');
+
+    const report = await cleanupRemovedSksSkillResidue({ root, home, fix: true });
+    assert.equal(report.ok, true, JSON.stringify(report.errors));
+    assert.equal(report.removed.length, 3);
+    assert.equal(report.quarantined_user_collisions.length, 1);
+    await assertMissing(path.join(home, '.agents', 'skills', 'Team'));
+    await assertMissing(path.join(nested, '.agents', 'skills', 'MAD-DB'));
+    await assertMissing(path.join(nested, '.codex', 'skills', 'mad_db'));
+    await assertMissing(path.join(root, 'services', 'api', '.agents', 'skills', 'TEAM'));
+    assert.match(await fs.readFile(path.join(nested, '.agents', 'skills', 'MAD-SKS', 'SKILL.md'), 'utf8'), /name: MAD-SKS/);
+    const quarantined = await findFiles(path.join(root, '.sneakoscope', 'quarantine', 'skills'), 'SKILL.md');
+    assert.equal(quarantined.length, 1);
+    assert.match(await fs.readFile(quarantined[0], 'utf8'), /keep me in quarantine/);
+  } finally {
+    await fs.rm(fixture, { recursive: true, force: true });
+  }
+});
+
 test('removed skill cleanup quarantines link objects without reading or mutating external targets', async () => {
   const fixture = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-removed-skill-symlinks-'));
   const home = path.join(fixture, 'home');

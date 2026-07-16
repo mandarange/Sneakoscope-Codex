@@ -4,13 +4,15 @@ import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import { runProcess } from '../../dist/core/fsx.js';
+import { codexLbFixtureEnv } from '../../dist/scripts/codex-lb-fixture-env.js';
 
 test('codex-lb setup with stdin writes env file without leaking secret', async () => {
   const home = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-bb-codex-lb-stdin-'));
   const secret = 'sk-fixture-no-leak';
-  const result = await runProcess(process.execPath, ['./dist/bin/sks.js', 'codex-lb', 'setup', '--host', 'lb.example.test', '--api-key-stdin', '--yes', '--json'], {
+  const result = await runProcess(process.execPath, [path.resolve('dist/bin/sks.js'), 'codex-lb', 'setup', '--host', 'lb.example.test', '--api-key-stdin', '--yes', '--json'], {
+    cwd: home,
     input: `${secret}\n`,
-    env: { ...process.env, HOME: home, CI: 'true', SKS_CODEX_LB_CHAIN_CHECK: '0', SKS_SKIP_CODEX_LB_LAUNCH_ENV: '1' },
+    env: codexLbFixtureEnv(home),
     timeoutMs: 20_000,
     maxOutputBytes: 256 * 1024
   });

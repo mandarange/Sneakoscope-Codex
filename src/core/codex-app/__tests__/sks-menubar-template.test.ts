@@ -159,6 +159,16 @@ test('confirmation and input flows use sheets and never nest modal loops', () =>
   assert.doesNotMatch(swift, /tell application "Terminal"|runInTerminal|runSksInTerminal/);
 });
 
+test('Providers saves Codex LB keys through secure stdin', () => {
+  const providers = fs.readFileSync(path.join(resolvePackagedMenuBarSourceRoot(), 'Sources', 'ProvidersViewController.swift'), 'utf8');
+  assert.match(providers, /Set Domain and Key…/);
+  assert.match(providers, /Replace Key…/);
+  assert.match(providers, /secure: true/);
+  assert.match(providers, /"--api-key-stdin"/);
+  assert.match(providers, /stdin: key \+ "\\n"/);
+  assert.doesNotMatch(providers, /"--api-key",\s*key/);
+});
+
 test('operation coordinator persists redacted bounded-tail receipts and excludes concurrent mutations', () => {
   const swift = source();
   for (const state of ['queued', 'running', 'waitingForConfirmation', 'succeeded', 'failed', 'cancelled', 'terminalUncertain']) {

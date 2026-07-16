@@ -136,7 +136,6 @@ export async function run(command: any, args: any = []) {
     return;
   }
   if (action === 'set-key' || action === 'update-key' || action === 'rotate-key') {
-    // Swap ONLY the API key, reusing the already-stored base URL (no need to re-type the host).
     const status = await codexLbStatus();
     const host = status.base_url;
     if (!host) {
@@ -156,13 +155,19 @@ export async function run(command: any, args: any = []) {
         process.exitCode = 1;
         return printJson(result);
       }
-      console.error('No new API key provided. Run: sks codex-lb set-key --api-key-stdin   (or --api-key <key>)');
+      console.error('No new API key provided. Run: sks codex-lb set-key --api-key-stdin');
       process.exitCode = 1;
       return;
     }
+    const keychainPresent = status.env_loader?.api_key?.source === 'keychain'
+      || ['found', 'present'].includes(status.env_loader?.keychain?.status)
+      || flag(args, '--keychain');
     const result = await configureCodexLb({
       host,
       apiKey: newKey,
+      keychain: keychainPresent,
+      storeKeychain: keychainPresent,
+      useDefaultProvider: flag(args, '--preserve-auth') ? status.selected === true : true,
       authMode: flag(args, '--preserve-auth') ? 'preserve' : 'codex-lb',
       forceCodexLbApiKeyAuth: !flag(args, '--preserve-auth'),
       allowUnverifiedToolOutputRecovery: codexLbToolOutputRecoveryOverrideAcknowledged({ args })
@@ -179,7 +184,6 @@ export async function run(command: any, args: any = []) {
     return;
   }
   if (action === 'use-codex-lb' || action === 'use-lb') {
-    // Switch auth mode -> codex-lb (API key). Re-selects the provider and re-syncs auth.
     const result = await repairCodexLbAuth({
       forceCodexLbApiKeyAuth: true,
       authMode: 'codex-lb',
@@ -198,7 +202,6 @@ export async function run(command: any, args: any = []) {
     return;
   }
   if (action === 'use-oauth' || action === 'use-chatgpt') {
-    // Switch auth mode -> ChatGPT OAuth. Restores the saved OAuth login if present.
     const result = await releaseCodexLbAuthHold({ force: flag(args, '--force') });
     const authOk = !['no_backup', 'auth_in_use', 'failed'].includes(result.status);
     const fastUi = await repairCodexAppFastUiAfterMutation(root, authOk);
@@ -538,8 +541,6 @@ function normalizeTier(value: unknown) {
 }
 
 async function resolveNewApiKey(args: any = []): Promise<string> {
-  const flagKey = readOption(args, '--api-key', '');
-  if (flagKey) return String(flagKey).trim();
   if (flag(args, '--api-key-stdin')) return String(await readStdin()).trim();
   if (input.isTTY && !flag(args, '--yes')) {
     const rl = readline.createInterface({ input, output });
@@ -592,8 +593,8 @@ function shapeCodexLbStatus(status: any = {}) {
 async function codexLbSetupOptions(args: any = []) {
   const baseUrl = readOption(args, '--base-url', null);
   let host = baseUrl || readOption(args, '--host', readOption(args, '--domain', null));
-  let apiKey = readOption(args, '--api-key', readOption(args, '--key', null));
-  let apiKeySource: 'hidden_prompt' | 'stdin' | 'cli_option' | 'keychain_existing' = apiKey ? 'cli_option' : 'hidden_prompt';
+  let apiKey: string | null = null;
+  let apiKeySource: 'hidden_prompt' | 'stdin' | 'keychain_existing' = 'hidden_prompt';
   let keychain = flag(args, '--keychain');
   if (flag(args, '--api-key-stdin')) apiKey = (await readStdin()).trim();
   if (flag(args, '--api-key-stdin')) apiKeySource = 'stdin';

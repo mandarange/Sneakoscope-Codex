@@ -4,19 +4,22 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { runProcess } from '../core/fsx.js';
+import { codexLbFixtureEnv } from './codex-lb-fixture-env.js';
 
 const home = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-codex-lb-fixture-home-'));
 const entry = path.resolve('dist/bin/sks.js');
 
 const status = await runProcess(process.execPath, [entry, 'codex-lb', 'status', '--json'], {
-  env: { ...process.env, HOME: home, CI: 'true' },
+  cwd: home,
+  env: codexLbFixtureEnv(home),
   timeoutMs: 15_000,
   maxOutputBytes: 128 * 1024
 });
 
 const setup = await runProcess(process.execPath, [entry, 'codex-lb', 'setup', '--host', 'lb.example.test', '--api-key-stdin', '--yes', '--json'], {
+  cwd: home,
   input: 'sk-fixture-secret\n',
-  env: { ...process.env, HOME: home, CI: 'true', SKS_CODEX_LB_CHAIN_CHECK: '0', SKS_SKIP_CODEX_LB_LAUNCH_ENV: '1' },
+  env: codexLbFixtureEnv(home),
   timeoutMs: 15_000,
   maxOutputBytes: 128 * 1024
 });

@@ -3,7 +3,7 @@ import path from 'node:path';
 import { ensureDir, exists, readText, writeTextAtomic } from '../fsx.js';
 import { codexLbEnvPath, codexLbMetadataPath, normalizeCodexLbBaseUrl } from './codex-lb-env.js';
 
-export type CodexLbApiKeySource = 'hidden_prompt' | 'stdin' | 'cli_option' | 'keychain_existing';
+export type CodexLbApiKeySource = 'hidden_prompt' | 'stdin' | 'keychain_existing';
 export type CodexLbShellProfileChoice = 'zsh' | 'bash' | 'fish' | 'all' | 'skip';
 export type CodexLbPersistenceMode =
   | 'durable_env_file'
@@ -85,7 +85,7 @@ export function buildCodexLbSetupPlan(answers: CodexLbSetupAnswers, opts: {
     actions.push({ type: 'write_env_file', target: envPath, effect: 'write CODEX_LB_BASE_URL and redacted CODEX_LB_API_KEY env loader with chmod 0600' });
   }
   if (answers.store_keychain) {
-    actions.push({ type: 'store_keychain', target: 'macOS Keychain service sks-codex-lb', effect: 'store redacted codex-lb API key when Keychain is available', command: 'security add-generic-password -U ...' });
+    actions.push({ type: 'store_keychain', target: 'macOS Keychain service sks-codex-lb', effect: 'store the redacted codex-lb API key through Security.framework with stdin-only secret input' });
   }
   if (answers.sync_launchctl) {
     actions.push({ type: 'sync_launchctl', target: 'macOS launchctl user environment', effect: 'sync non-secret CODEX_LB_BASE_URL only and remove API-key launchd env', command: 'launchctl setenv CODEX_LB_BASE_URL ...; launchctl unsetenv CODEX_LB_API_KEY OPENROUTER_API_KEY' });

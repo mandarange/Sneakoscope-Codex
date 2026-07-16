@@ -48,7 +48,10 @@ export async function runValidatedReleaseUpgradeLifecycle(
       'baseline_bootstrap_failed')
     : failedReleaseUpgradeProbe('baseline_version_unverified')
   const baselineDoctor = baselineBootstrap.ok
-    ? await doctorProbe(input, runner, commands, 'baseline_doctor', bin, RELEASE_UPGRADE_BASELINE_VERSION)
+    ? await doctorProbe(
+      input, runner, commands, 'baseline_doctor', bin, RELEASE_UPGRADE_BASELINE_VERSION,
+      'pinned_6_2_stdout_compatible'
+    )
     : failedReleaseUpgradeProbe('baseline_bootstrap_unverified')
   completeReleaseUpgradeState(states.baseline_package, RELEASE_UPGRADE_BASELINE_VERSION, baselineVersion.version, [
     'baseline_install', 'baseline_version', 'baseline_bootstrap', 'baseline_doctor'
@@ -151,7 +154,10 @@ export async function runValidatedReleaseUpgradeLifecycle(
       ? await versionProbe(input, runner, commands, 'package_rollback_version', bin, RELEASE_UPGRADE_BASELINE_VERSION)
       : failedReleaseUpgradeProbe('package_rollback_install_failed')
     const rollbackDoctor = rollbackVersion.ok
-      ? await doctorProbe(input, runner, commands, 'package_rollback_doctor', bin, RELEASE_UPGRADE_BASELINE_VERSION)
+      ? await doctorProbe(
+        input, runner, commands, 'package_rollback_doctor', bin, RELEASE_UPGRADE_BASELINE_VERSION,
+        'pinned_6_2_stdout_compatible'
+      )
       : failedReleaseUpgradeProbe('package_rollback_version_unverified')
     completeReleaseUpgradeState(states.package_rollback, RELEASE_UPGRADE_BASELINE_VERSION, rollbackVersion.version, [
       'package_rollback_install', 'package_rollback_version', 'package_rollback_doctor'

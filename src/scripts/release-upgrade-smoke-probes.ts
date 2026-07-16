@@ -8,6 +8,7 @@ import type {
   ReleaseUpgradeIsolation,
   ReleaseUpgradeLifecycleInput
 } from './release-upgrade-smoke-contract.js'
+import { RELEASE_UPGRADE_BASELINE_VERSION } from './release-upgrade-smoke-contract.js'
 import { verifySealedTarball } from './release-upgrade-smoke-isolation.js'
 import {
   canonicalJson,
@@ -95,7 +96,8 @@ export async function doctorProbe(
   commands: ReleaseUpgradeCommandReceipt[],
   stage: string,
   bin: string,
-  expectedVersion: string
+  expectedVersion: string,
+  evidencePolicy: 'strict_report_file' | 'pinned_6_2_stdout_compatible' = 'strict_report_file'
 ): Promise<{ ok: boolean; version: null; json: any; blockers: string[] }> {
   const reportPath = path.join(input.isolation.commandReportsDir, `${stage}.json`)
   const result = await runLifecycleCommand(
@@ -109,11 +111,23 @@ export async function doctorProbe(
     && typeof json?.root === 'string'
     && samePath(json.root, input.isolation.workspace)
   const inspected = inspectDoctorReport(reportPath, input.isolation, json, expectedVersion)
+  const stdoutOnlyCompatible = evidencePolicy === 'pinned_6_2_stdout_compatible'
+    && expectedVersion === RELEASE_UPGRADE_BASELINE_VERSION
+    && expectedVersion === '6.2.0'
+    && stdoutOk
+    && inspected.reportAbsentByEnoent
+    && inspected.reportParentSafe
+    && inspected.blockers.length === 2
+    && inspected.blockers.every((blocker) => blocker === 'doctor_report_missing_or_unreadable'
+      || blocker === 'doctor_report_stdout_mismatch')
+  inspected.binding.validation_mode = stdoutOnlyCompatible
+    ? 'pinned_6_2_stdout_only'
+    : 'strict_report_file'
   const receipt = commands.at(-1)
   if (receipt?.stage === stage) receipt.report_file = inspected.binding
   const blockers = unique([
     ...(stdoutOk ? [] : [`${stage}_stdout_failed`]),
-    ...inspected.blockers.map((blocker) => `${stage}:${blocker}`)
+    ...(stdoutOnlyCompatible ? [] : inspected.blockers.map((blocker) => `${stage}:${blocker}`))
   ])
   return { ok: blockers.length === 0, version: null, json, blockers }
 }
@@ -160,15 +174,29 @@ function inspectDoctorReport(
 ): {
   binding: NonNullable<ReleaseUpgradeCommandReceipt['report_file']>
   blockers: string[]
+  reportAbsentByEnoent: boolean
+  reportParentSafe: boolean
 } {
   const blockers: string[] = []
   const lexicalInside = isSubpath(reportPath, isolation.sandbox)
     && isSubpath(reportPath, isolation.commandReportsDir)
   if (!lexicalInside) blockers.push('doctor_report_path_outside_sandbox')
+  const reportParent = path.dirname(reportPath)
+  let reportParentSafe = false
+  try {
+    const parentStat = fs.lstatSync(reportParent)
+    const parentRealPath = fs.realpathSync(reportParent)
+    reportParentSafe = parentStat.isDirectory()
+      && !parentStat.isSymbolicLink()
+      && samePath(reportParent, isolation.commandReportsDir)
+      && isSubpath(parentRealPath, isolation.sandbox)
+  } catch {}
   let stat: fs.Stats | null = null
+  let reportAbsentByEnoent = false
   try {
     stat = fs.lstatSync(reportPath)
-  } catch {
+  } catch (error) {
+    reportAbsentByEnoent = (error as NodeJS.ErrnoException).code === 'ENOENT'
     blockers.push('doctor_report_missing_or_unreadable')
   }
   const symlink = stat?.isSymbolicLink() === true
@@ -209,6 +237,7 @@ function inspectDoctorReport(
   if (!matchesStdout) blockers.push('doctor_report_stdout_mismatch')
   return {
     binding: {
+      validation_mode: 'strict_report_file',
       path: reportPath,
       real_path: realPath,
       inside_sandbox: Boolean(
@@ -228,6 +257,8 @@ function inspectDoctorReport(
       root: typeof reportJson?.root === 'string' ? reportJson.root : null,
       expected_package_version: expectedVersion
     },
-    blockers: unique(blockers)
+    blockers: unique(blockers),
+    reportAbsentByEnoent,
+    reportParentSafe
   }
 }

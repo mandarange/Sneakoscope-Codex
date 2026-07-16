@@ -4,7 +4,8 @@ import { spawnSync } from 'node:child_process'
 import {
   inspectReleaseClosure,
   MAIN_PUSH_GUARD_SCHEMA,
-  RELEASE_630_MISSION_ID
+  RELEASE_630_MISSION_ID,
+  validateReleaseUpgradeProof
 } from './main-push-guard.js'
 import { readMacosMenubarProof, validateMacosMenubarProofArtifacts } from './macos-menubar-proof.js'
 import { releaseProofDir, validateLocalReleasePackBinding } from './release-pack-receipt.js'
@@ -87,6 +88,10 @@ export function inspectMainPushReceipt(input: {
   if (!packValidation.ok) blockers.push(...packValidation.blockers.map((blocker) => `pack_receipt:${blocker}`))
   if (pack?.package_version !== input.version) blockers.push('pack_receipt_version_mismatch')
   if (pack?.source_commit !== head) blockers.push('pack_receipt_source_commit_mismatch')
+  const upgrade = validateReleaseUpgradeProof(input.root, input.version, head, pack)
+  if (!upgrade.ok) blockers.push(...upgrade.blockers.map((blocker) => `upgrade_proof:${blocker}`))
+  if (guard?.upgrade_proof?.ok !== true || guard?.upgrade_proof?.path !== upgrade.path
+    || guard?.upgrade_proof?.sha256 !== upgrade.sha256) blockers.push('pre_push_guard_upgrade_proof_mismatch')
   const macos = readMacosMenubarProof(input.root, input.version)
   const macosValidation = validateMacosMenubarProofArtifacts(input.root, macos, { version: input.version, sourceCommit: head })
   if (!macosValidation.ok) blockers.push(...macosValidation.blockers)

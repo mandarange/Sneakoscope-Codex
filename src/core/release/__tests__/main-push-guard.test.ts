@@ -45,6 +45,29 @@ test('main push guard requires clean, source-bound release proofs', () => {
     assert.equal(passing.ok, true, passing.blockers.join(','))
     assert.equal(passing.release_closure.mission_id, RELEASE_630_MISSION_ID)
 
+    const upgradeProof = path.join(root, '.sneakoscope', 'reports', 'release', '6.3.0', 'upgrade-6.2-to-6.3.0.json')
+    const upgrade = JSON.parse(fs.readFileSync(upgradeProof, 'utf8'))
+    upgrade.target.tarball_sha256 = '0'.repeat(64)
+    fs.writeFileSync(upgradeProof, JSON.stringify(upgrade))
+    const staleUpgrade = inspectMainPushGuard({
+      root,
+      expectedVersion: '6.3.0',
+      expectedOriginMain: baseline,
+      expectedOriginIdentity,
+      requireReleaseStamp: true,
+      requirePackProof: true,
+      requireMacosProof: true,
+      requireCleanTree: true,
+      expectedWorkOrderSha256: closure.workOrderSha256
+    })
+    assert.equal(staleUpgrade.ok, false)
+    assert.equal(staleUpgrade.blockers.includes('upgrade_proof:target_tarball_sha256_mismatch'), true)
+    upgrade.target.tarball_sha256 = JSON.parse(fs.readFileSync(
+      path.join(root, '.sneakoscope', 'reports', 'release', '6.3.0', 'pack-receipt.json'),
+      'utf8'
+    )).sha256
+    fs.writeFileSync(upgradeProof, JSON.stringify(upgrade))
+
     const wrongMission = inspectMainPushGuard({
       root,
       expectedVersion: '6.3.0',

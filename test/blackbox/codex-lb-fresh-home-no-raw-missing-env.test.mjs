@@ -4,13 +4,15 @@ import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import { runProcess } from '../../dist/core/fsx.js';
+import { codexLbFixtureEnv } from '../../dist/scripts/codex-lb-fixture-env.js';
 
 const rawMissingEnvPattern = new RegExp(['Missing environment variable:', '\\s*`?CODEX_LB_API_KEY`?'].join(''), 'i');
 
 test('blackbox fresh HOME codex-lb status has no raw missing-env output', async () => {
   const home = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-bb-codex-lb-fresh-'));
-  const result = await runProcess(process.execPath, ['./dist/bin/sks.js', 'codex-lb', 'status', '--json'], {
-    env: { ...process.env, HOME: home, CI: 'true', CODEX_LB_API_KEY: '', CODEX_LB_BASE_URL: '' },
+  const result = await runProcess(process.execPath, [path.resolve('dist/bin/sks.js'), 'codex-lb', 'status', '--json'], {
+    cwd: home,
+    env: codexLbFixtureEnv(home),
     timeoutMs: 20_000,
     maxOutputBytes: 256 * 1024
   });

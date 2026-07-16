@@ -44,6 +44,41 @@ test('menu global-only doctor preserves global skills and never runs project rec
   }
 });
 
+test('global-only doctor removes managed global legacy guidance without touching the project', async () => {
+  const fixture = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-global-doctor-legacy-'));
+  const home = path.join(fixture, 'home');
+  const root = path.join(fixture, 'project');
+  const globalRuntimeRoot = path.join(fixture, 'global-runtime');
+  const sentinel = path.join(root, 'sentinel.txt');
+  try {
+    await fsp.mkdir(path.join(home, '.codex'), { recursive: true });
+    await fsp.mkdir(path.join(globalRuntimeRoot, '.agents', 'skills', 'Team'), { recursive: true });
+    await fsp.mkdir(root, { recursive: true });
+    await fsp.writeFile(sentinel, 'keep project bytes\n');
+    await fsp.writeFile(path.join(home, 'AGENTS.md'), '<!-- BEGIN Sneakoscope Codex GX MANAGED BLOCK -->\nUse `$Team` and `sks db`.\n<!-- END Sneakoscope Codex GX MANAGED BLOCK -->\n');
+    await fsp.writeFile(path.join(home, '.codex', 'SNEAKOSCOPE.md'), '# ㅅㅋㅅ\nInstall scope: `global`\nCommand: `sks <command>`\nFiles: AGENTS.md, .codex/hooks.json, .codex/config.toml, .codex/SNEAKOSCOPE.md\nUse `sks mad-db`.\n');
+    await fsp.writeFile(path.join(globalRuntimeRoot, '.agents', 'skills', 'Team', 'SKILL.md'), '---\nname: Team\ndescription: Sneakoscope generated legacy skill\n---\n\n<!-- BEGIN SKS MANAGED SKILL -->\n');
+
+    const result: any = await executeDoctorGlobalOnlyFix(['--fix', '--global-only', '--json'], root, {
+      home,
+      globalRuntimeRoot,
+      reconcileSkillsImpl: async () => ({ schema: 'sks.skill-reconcile.v1', scope: 'global', core_skill_integrity: { ok: true } }),
+      ensureGlobalCodexFastModeDuringInstallImpl: async () => ({ status: 'current', ok: true }),
+      installSksMenuBarImpl: async () => ({ schema: 'sks.codex-app-sks-menubar.v1', ok: true, status: 'installed_launch_skipped', blockers: [], warnings: [] }),
+      codexLbStatusImpl: async () => ({ selected: false, provider_ready: true, tool_output_recovery: { ok: true, status: 'not_selected', blockers: [], operator_actions: [] } })
+    });
+
+    assert.equal(result.ok, true, JSON.stringify(result.blockers));
+    assert.equal(result.current_public_surface.ok, true);
+    assert.doesNotMatch(`${await fsp.readFile(path.join(home, 'AGENTS.md'), 'utf8')}\n${await fsp.readFile(path.join(home, '.codex', 'SNEAKOSCOPE.md'), 'utf8')}`, /\$Team|sks team|sks mad-db|sks db/i);
+    await assert.rejects(fsp.access(path.join(globalRuntimeRoot, '.agents', 'skills', 'Team')));
+    assert.equal(await fsp.readFile(sentinel, 'utf8'), 'keep project bytes\n');
+    await assert.rejects(fsp.access(path.join(root, '.sneakoscope')));
+  } finally {
+    await fsp.rm(fixture, { recursive: true, force: true });
+  }
+});
+
 test('menu global-only doctor fails closed when codex-lb recovery status cannot be inspected', async () => {
   const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-menubar-global-doctor-probe-failure-'));
   try {

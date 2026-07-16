@@ -399,11 +399,6 @@ async function executeRouteCommand(
   }
   if (route.command === '$DB') return executeInternalDbRoute(root, route, prompt);
   const commandArgs = safeRouteExecutionArgs(route, prompt, { auto });
-  // safeRouteExecutionArgs() returns null for any route it doesn't have a
-  // dedicated safe live command for. Routes without a dedicated branch cannot
-  // be executed by `run --execute` at all — no silent `team --mock` fallback
-  // (20차 P0-1): a route with no real execution path must fail explicitly,
-  // not report a mock run as if it were progress on that route.
   if (!commandArgs) {
     return {
       schema: 'sks.run-route-execution.v1',
@@ -419,10 +414,6 @@ async function executeRouteCommand(
       next_action: `${route.command} has no dedicated run --execute branch; run it directly via its own sks command instead.`,
     };
   }
-  // Several dedicated branches (DB/Wiki/Fast-Mode/with-local-llm-on/Commit/
-  // Commit-And-Push) run a fixed command that never references the prompt at
-  // all; that must be labeled honestly rather than as a completion that
-  // addressed the prompt.
   const isMockFallback = commandArgs.includes('--mock');
   const promptDelivered = Boolean(prompt) && commandArgs.includes(prompt);
   const deterministicRoute = isSafeDeterministicRoute(route.command);
@@ -484,7 +475,7 @@ async function executeInternalDbRoute(root: string, route: RouteSelection, promp
       nested_mission_id: null,
       blockers: [`db_route_materialization_failed:${error?.message || String(error)}`],
       unverified: [],
-      next_action: 'inspect the internal $DB preparation failure; do not fall back to the removed sks db command',
+      next_action: 'inspect the internal $DB preparation failure and resolve it within the current route surface',
     };
   }
 }
@@ -633,10 +624,6 @@ function safeRouteExecutionArgs(route: RouteSelection, prompt: string, { auto = 
   if (route.command === '$with-local-llm-on') return ['with-local-llm', localModelActionFromPrompt(prompt), '--json'];
   if (route.command === '$Commit') return ['commit', '--json'];
   if (route.command === '$Commit-And-Push') return ['commit-and-push', '--json'];
-  // No silent fallback: $Naruto/$SKS and any other route without a dedicated
-  // safe live-execution branch above must fail explicitly (20차 P0-1) rather
-  // than proxy through `team --mock`, which used to reach the fake Codex SDK
-  // adapter for a route the caller believed was executing for real.
   return null;
 }
 
@@ -660,14 +647,8 @@ function superSearchExecutionArgs(prompt = ''): string[] {
 function stripSuperSearchPrompt(prompt = ''): string {
   return String(prompt || '')
     .trim()
-    .replace(/^\[\$Super-Search\]\([^)]+\)(?:\s|:)?\s*/i, '')
-    .replace(/^\[\$Super-Search\]\([^)]+\)(?:\s|:)?\s*/i, '')
-    .replace(/^\[\$Super-Search\]\([^)]+\)(?:\s|:)?\s*/i, '')
-    .replace(/^\[\$Super-Search\]\([^)]+\)(?:\s|:)?\s*/i, '')
-    .replace(/^\$Super-Search(?:\s|:)?\s*/i, '')
-    .replace(/^\$Super-Search(?:\s|:)?\s*/i, '')
-    .replace(/^\$Super-Search(?:\s|:)?\s*/i, '')
-    .replace(/^\$Super-Search(?:\s|:)?\s*/i, '')
+    .replace(/^(?:\[\$Super-Search\]\([^)]+\)(?:\s|:)?\s*)+/i, '')
+    .replace(/^(?:\$Super-Search(?:\s|:)?\s*)+/i, '')
     .trim();
 }
 

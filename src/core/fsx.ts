@@ -606,14 +606,10 @@ export function runProcess(
 }
 
 export async function readStdin(): Promise<string> {
-  return new Promise<string>((resolve) => {
-    let data = '';
-    process.stdin.setEncoding('utf8');
-    process.stdin.on('data', (chunk: string) => {
-      data += chunk;
-    });
-    process.stdin.on('end', () => resolve(data));
-  });
+  let data = '';
+  process.stdin.setEncoding('utf8');
+  for await (const chunk of process.stdin) data += chunk;
+  return data;
 }
 
 export function managedSksTmpRoot(baseDir = os.tmpdir()): string {

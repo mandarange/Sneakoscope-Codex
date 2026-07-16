@@ -18,6 +18,7 @@ import {
   removeManagedPathVerified,
   uniqueConfinedPath
 } from '../managed-path-safety.js';
+import { collectNestedProjectRoots } from '../doctor/current-project-guidance-nested.js';
 import { AWESOME_DESIGN_MD_REFERENCE, CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_IMAGEGEN_EVIDENCE_SOURCE, CODEX_IMAGEGEN_REQUIRED_POLICY, CODEX_WEB_VERIFICATION_POLICY, DEFAULT_CODEX_APP_PLUGINS, DESIGN_SYSTEM_SSOT, DOLLAR_COMMANDS, DOLLAR_SKILL_NAMES, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, GETDESIGN_REFERENCE, IMAGEGEN_SOCIAL_SOURCE_POLICY, OPENAI_CHATGPT_IMAGES_2_DOC_URL, OPENAI_GPT_IMAGE_2_MODEL_DOC_URL, OPENAI_IMAGE_GENERATION_DOC_URL, PPT_CONDITIONAL_SKILL_ALLOWLIST, PPT_PIPELINE_MCP_ALLOWLIST, PPT_PIPELINE_SKILL_ALLOWLIST, RECOMMENDED_SKILLS, RESERVED_CODEX_PLUGIN_SKILL_NAMES, SOLUTION_SCOUT_SKILL_NAME, chatCaptureIntakeText, context7ConfigToml, getdesignReferencePolicyText, imageUxReviewPipelinePolicyText, leanEngineeringCompactText, outcomeRubricPolicyText, pptPipelineAllowlistPolicyText, productDesignPluginPolicyText, solutionScoutPolicyText, speedLanePolicyText, stackCurrentDocsPolicyText, triwikiContextTrackingText, triwikiStagePolicyText } from '../routes.js';
 
 const SKS_SKILL_MANIFEST_FILE = '.sks-generated.json';
@@ -82,7 +83,7 @@ async function installOfficialSkills(root: any) {
     'commit-and-push': `---\nname: commit-and-push\ndescription: Simple git-only route for $Commit-And-Push requests that stage current changes, create one commit, and push without the full SKS pipeline.\n---\n\nUse only when the user invokes $Commit-And-Push or explicitly asks to commit and push the current repository changes. Keep this route lightweight: inspect git status and the relevant diff summary, avoid Naruto/pipeline/TriWiki route work unless separately requested, stage the intended current changes, create one git commit, then push the current branch. The commit message must summarize the actual work and include exactly one trailer: Co-authored-by: Codex <noreply@openai.com>. If there are no changes, do not create an empty commit unless the user explicitly asks for one. Finish with a concise result and a one-line Honest Mode covering the commit hash, pushed branch, and any unverified items.\n`,
     'research': `---\nname: research\ndescription: Dollar-command route for $Research or $research frontier discovery workflows.\n---\n\nUse when the user invokes $Research/$research or asks for research, hypotheses, new mechanisms, falsification, or testable predictions. Prefer sks research prepare and sks research run. Research is not an implementation route: do not edit repository source, docs, package metadata, generated skills, or harness files; write only route-local mission artifacts under .sneakoscope/missions/<mission-id>/. First run layered Super Search across current papers, primary/official sources, standards, public discourse, practitioner evidence, background sources, and explicit counterevidence; only verified-content source rows may support real-run reviewer claims. Then run exactly three independent official Codex subagent threads using the project custom agent research_reviewer with GPT-5.6 Sol Max: Einstein Agent (first principles, explanation, experiments), von Neumann Agent (formal systems, algorithms, strategy, scaling), and Skeptic Agent (counterevidence, base rates, replication). These are composite persona-inspired lenses, not impersonations. Do not launch a custom debate scheduler, worker pool, or synthetic model fanout. Each reviewer must return the structured adversarial outcome, one literal "Eureka!" idea, source ids, falsifiers, cheap probes, and zero unresolved objections before approval. If any reviewer requests revision, revise the manuscript and run a fresh three-thread review cycle within the bounded cycle cap; convergence requires unanimous approval and trustworthy parent outcomes for all threads. agent-ledger.json and debate-ledger.json are compatibility projections from official reviewer outcomes, not independent runtime proof. Record research-source-skill.md, source-ledger.json, claim-evidence-matrix.json, novelty-ledger.json, falsification-ledger.json, research-report.md, the dated research paper, research-adversarial-review.json, research-revision-ledger.json, research-adversarial-convergence.json, genius-opinion-summary.md, research-honest-mode.json, and research-gate.json. Context7 is required only when the topic depends on current package/API/framework docs. Do not use --mock except for selftests; if live source execution is unavailable, record a blocker and keep the gate unpassed. Do not use for ordinary code edits.\n`,
     'autoresearch': `---\nname: autoresearch\ndescription: Dollar-command route for $AutoResearch or $autoresearch iterative experiment loops.\n---\n\nUse for $AutoResearch, iterative improvement, ranking, workflow, benchmark, or experiments. Define program, hypothesis, experiment, metric, keep/discard, falsification, next step, and Honest Mode. Do not become the parent identity for SEO/GEO; $SEO-GEO-OPTIMIZER may call research as a child stage for query, market, or competitor discovery while keeping the parent mission, gate, and Completion Proof on $SEO-GEO-OPTIMIZER.\n`,
-    'db': `---\nname: db\ndescription: Dollar-command route for $DB or $db database and Supabase safety checks.\n---\n\nUse when the user invokes $DB/$db or the task touches SQL, Supabase, Postgres, migrations, Prisma, Drizzle, Knex, MCP database tools, or production data. The $DB route automatically materializes db-safety-scan.json and db-review.json from the internal DB safety engine; inspect those artifacts and current source/docs evidence instead of invoking a separate CLI. The legacy sks db command is removed and must remain unknown. Keep analysis read-only by default. Destructive database operations remain forbidden; explicitly authorized SQL-plane work uses sks mad-sks plan|sql|apply-migration under an active scoped permission mission.\n`,
+    'db': `---\nname: db\ndescription: Dollar-command route for $DB or $db database and Supabase safety checks.\n---\n\nUse when the user invokes $DB/$db or the task touches SQL, Supabase, Postgres, migrations, Prisma, Drizzle, Knex, MCP database tools, or production data. The $DB route automatically materializes db-safety-scan.json and db-review.json from the internal DB safety engine; inspect those artifacts and current source/docs evidence directly. Keep analysis read-only by default. Destructive database operations remain forbidden; explicitly authorized SQL-plane work uses sks mad-sks plan|sql|apply-migration under an active scoped permission mission.\n`,
     'mad-sks': `---\nname: mad-sks\ndescription: Explicit high-risk authorization modifier plus SQL-plane executor for $MAD-SKS.\n---\n\nUse only when the user explicitly invokes $MAD-SKS, top-level sks --mad, or \`sks mad-sks plan|run|apply|sql|apply-migration|status|close|rollback-apply\`. MAD-SKS is the single high-risk route for scoped permission widening and bound SQL-plane execution. It can be combined with another route, such as $MAD-SKS $Naruto or $DB ... $MAD-SKS; in that case the other command remains the primary workflow and MAD-SKS is the temporary permission grant or SQL-plane executor. The widened permission applies only while the active mission gate is open, must be deactivated when the task ends, and can open approved scopes such as target-project file writes, shell commands, package installs, local service control, network operations, browser/Computer Use workflows, generated assets, file permissions, migrations, Supabase MCP database writes, column/schema cleanup, direct execute SQL, and normal targeted DB writes.\n\nSQL-plane policy:\n${canonicalMadSksSqlPlanePolicy}\n\nCatastrophic SQL boundary: TRUNCATE, all-row UPDATE/DELETE, table/schema/database DROP, and equivalent reset operations are allowed only through the SQL-plane executor and only when the user's prompt or CLI SQL statement literally names that operation. Other MAD-SKS executors, including db-write, keep those catastrophic categories blocked. Whole database/schema/table removal outside SQL-plane, dangerous project/branch management, credential exfiltration, persistent security weakening, destructive delete without explicit confirmation, and unrequested fallback implementation remain blocked. Do not carry MAD-SKS permission into later prompts or routes. The permission profile source is centralized in src/core/permission-gates.ts and emitted as dist/core/permission-gates.js so skill/hook/MCP-style gates share one decision function.\n`,
     'gx': `---\nname: gx\ndescription: Dollar-command route for $GX or $gx deterministic GX visual context cartridges.\n---\n\nUse when the user invokes $GX/$gx or asks for architecture/context visualization through SKS. Prefer sks gx init, render, validate, drift, and snapshot. vgraph.json remains the source of truth.\n`,
     'help': `---\nname: help\ndescription: Dollar-command route for $Help or $help explaining installed SKS commands and workflows.\n---\n\nUse when the user invokes $Help/$help or asks what commands exist. Prefer concise output from sks commands, sks usage <topic>, sks quickstart, sks aliases, and sks codex-app.\n`,
@@ -274,14 +275,22 @@ export async function cleanupRemovedSksSkillResidue(opts: {
   const projectRoot = path.resolve(opts.root);
   const home = path.resolve(opts.home || os.homedir());
   const globalRuntimeRoot = path.resolve(opts.globalRuntimeRoot || process.env.SKS_GLOBAL_ROOT || path.join(home, '.sneakoscope-global'));
-  return reconcileRemovedSkillTargets([
+  const targets: RemovedSkillCleanupTarget[] = [
     { scope: 'global', ownerRoot: home, targetDir: path.join(home, '.agents', 'skills') },
     { scope: 'global-codex', ownerRoot: home, targetDir: path.join(home, '.codex', 'skills') },
     { scope: 'project', ownerRoot: projectRoot, targetDir: path.join(projectRoot, '.agents', 'skills') },
     { scope: 'project-codex', ownerRoot: projectRoot, targetDir: path.join(projectRoot, '.codex', 'skills') },
     { scope: 'global-runtime', ownerRoot: globalRuntimeRoot, targetDir: path.join(globalRuntimeRoot, '.agents', 'skills') },
     { scope: 'global-runtime-codex', ownerRoot: globalRuntimeRoot, targetDir: path.join(globalRuntimeRoot, '.codex', 'skills') }
-  ], opts.fix);
+  ];
+  if (projectRoot !== home && projectRoot !== globalRuntimeRoot) {
+    const scan = await collectNestedProjectRoots(projectRoot, new Set([home, globalRuntimeRoot]));
+    for (const root of scan.roots) targets.push(
+      { scope: 'project', ownerRoot: projectRoot, targetDir: path.join(root, '.agents', 'skills') },
+      { scope: 'project-codex', ownerRoot: projectRoot, targetDir: path.join(root, '.codex', 'skills') }
+    );
+  }
+  return reconcileRemovedSkillTargets(targets, opts.fix);
 }
 
 async function reconcileRemovedSkillTargets(
@@ -367,9 +376,10 @@ async function reconcileRemovedSkillTargets(
     }
     const rowByName = new Map(rows.map((row) => [row.name, row]));
 
-    for (const name of REMOVED_SKS_SKILL_NAMES) {
-      if (!rowByName.has(name)) continue;
-      const dir = path.join(targetDir, name);
+    for (const row of rows) {
+      const name = canonicalSkillNameFromValue(row.name);
+      if (!REMOVED_SKS_SKILL_NAME_SET.has(name)) continue;
+      const dir = path.join(targetDir, row.name);
       const displayPath = displayRemovedSkillPath(target, dir);
       let managed = false;
       try {
@@ -391,7 +401,7 @@ async function reconcileRemovedSkillTargets(
             await removeManagedPathVerified(ownerRoot, dir);
             removed.push(displayPath);
           } else {
-            await quarantineSkillDir(ownerRoot, dir, name, 'removed-skill-name-user-collision');
+            await quarantineSkillDir(ownerRoot, dir, row.name, 'removed-skill-name-user-collision');
             quarantinedUserCollisions.push(displayPath);
           }
         } catch (error: unknown) {
@@ -637,7 +647,9 @@ function nodeErrorCode(error: unknown): string {
 function isGeneratedRemovedSksSkill(text: string | null, name: string) {
   if (typeof text !== 'string') return false;
   if (MANAGED_SKILL_MARKER_RE.test(text)) return true;
-  return isGeneratedSksAgentSkill(text, name) || isGeneratedSksLegacySkill(text, name);
+  const declared = /^name:\s*(.+)\s*$/m.exec(text)?.[1]?.trim() || '';
+  if (canonicalSkillNameFromValue(declared) !== canonicalSkillNameFromValue(name)) return false;
+  return isGeneratedSksAgentSkill(text, declared) || isGeneratedSksLegacySkill(text, declared);
 }
 
 export async function reconcileSkills(opts: {
@@ -1202,9 +1214,6 @@ function normalizeGeneratedRelPath(value: any) {
 
 function isPrunableGeneratedPath(rel: any) {
   if (rel.startsWith('.agents/skills/')) return true;
-  // Inventory drift alone never proves agent-file ownership. The official
-  // installer separately removes exact marker-backed legacy SKS templates;
-  // this generic pruner preserves user-authored or modified role TOMLs.
   if (rel.startsWith('.codex/agents/')) return false;
   if (rel.startsWith('.codex/skills/')) return true;
   return new Set([

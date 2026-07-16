@@ -82,6 +82,8 @@ export async function executeDoctorGlobalOnlyFix(args: any[] = [], root: string,
   const home = path.resolve(deps.home || process.env.HOME || os.homedir());
   const reconcileSkillsImpl = deps.reconcileSkillsImpl
     || (await import('../core/init/skills.js')).reconcileSkills;
+  const reconcileCurrentSurfaceImpl = deps.runDoctorCommandAliasCleanupImpl
+    || (await import('../core/doctor/command-alias-cleanup.js')).runDoctorCommandAliasCleanup;
   const ensureGlobalFastModeImpl = deps.ensureGlobalCodexFastModeDuringInstallImpl
     || (await import('../cli/install-helpers.js')).ensureGlobalCodexFastModeDuringInstall;
   const installMenuBarImpl = deps.installSksMenuBarImpl || installSksMenuBar;
@@ -114,6 +116,15 @@ export async function executeDoctorGlobalOnlyFix(args: any[] = [], root: string,
     error: err?.message || String(err),
     core_skill_integrity: { ok: false, installed_count: 0, restored_count: 0 }
   }));
+  const currentSurface = await reconcileCurrentSurfaceImpl({
+    root: home,
+    home,
+    globalRuntimeRoot: path.resolve(deps.globalRuntimeRoot || process.env.SKS_GLOBAL_ROOT || path.join(home, '.sneakoscope-global')),
+    fix: true
+  }).catch((err: any) => ({
+    ok: false,
+    blockers: [err?.message || String(err)]
+  }));
   const globalFastMode = await ensureGlobalFastModeImpl().catch((err: any) => ({
     status: 'failed',
     error: err?.message || String(err)
@@ -140,6 +151,7 @@ export async function executeDoctorGlobalOnlyFix(args: any[] = [], root: string,
   const menuBarReady = (menuBar as any)?.ok !== false;
   const blockers = [...new Set([
     ...(!globalSkillsReady ? [`global_skills_reconcile_failed:${(globalSkills as any)?.error || 'core_skill_integrity'}`] : []),
+    ...((currentSurface as any)?.ok !== true ? ((currentSurface as any)?.blockers || ['global_current_surface_reconcile_failed']) : []),
     ...(!globalFastModeReady ? [`global_fast_mode_repair_failed:${(globalFastMode as any)?.error || (globalFastMode as any)?.status || 'unknown'}`] : []),
     ...(!menuBarReady ? ((menuBar as any)?.blockers || ['sks_menubar_repair_failed']) : []),
     ...(!recoveryReady ? ((providerStatus as any)?.tool_output_recovery?.blockers || ['codex_lb_tool_output_recovery_unverified']) : [])
@@ -167,6 +179,7 @@ export async function executeDoctorGlobalOnlyFix(args: any[] = [], root: string,
       'project_migration_receipt'
     ],
     skills: { global: globalSkills, project: { skipped: true, reason: 'global_only_doctor' } },
+    current_public_surface: currentSurface,
     codex_app_fast_mode: globalFastMode,
     sks_menubar: menuBar,
     codex_lb: {
@@ -410,8 +423,6 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
   let sksUpdate: any = null;
   let migrationPreFix: Record<string, string | null> | null = null;
   if (doctorFix) {
-    // Snapshot config content before ANY mutation so the migration journal can
-    // record real before/after hashes for the whole --fix transaction.
     migrationPreFix = await captureCodexConfigSnapshot();
     const installScope = installScopeFromArgs(args);
     setupRepair = {
@@ -425,9 +436,6 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
       global_skills: installScope === 'global' && !flag(args, '--local-only')
         ? deepDiagnostics ? await (await import('../cli/install-helpers.js')).ensureGlobalCodexSkillsDuringInstall({ force: true }) : { status: 'skipped', reason: 'default_doctor_no_global_skill_regeneration' }
         : { status: 'skipped', reason: 'project or local-only repair' },
-      // Normalize global Codex fast-mode config to the 2026-07 schema: preserve
-      // service_tier="fast" when requested, strip legacy [user.fast_mode] and
-      // [profiles.sks-fast-high] stamps, and parse-validate before writing.
       codex_app_fast_mode: flag(args, '--local-only')
         ? { status: 'skipped', reason: 'local-only repair' }
         : await (await import('../cli/install-helpers.js')).ensureGlobalCodexFastModeDuringInstall().catch((err: any) => ({ status: 'failed', error: err?.message || String(err) }))
@@ -1142,13 +1150,6 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
   const codexNativeFeatureMatrix = deepDiagnostics
     ? await buildCodexNativeFeatureMatrix({ root, mode: 'read-only' }).catch((err: any) => fallbackCodexNativeFeatureMatrix(codex, [err?.message || String(err)]))
     : fallbackCodexNativeFeatureMatrix(codex, [], ['native_feature_matrix_deferred_to_full_doctor_or_route_gate']);
-  // Re-probe the Codex config AFTER the MCP transport repairs (Context7 remote
-  // migration, Supabase read-only, startup config) have landed. `repairCodexConfigEperm`
-  // ran its config-load probe ~before~ those repairs, so a config that those repairs
-  // fix in THIS run would otherwise keep `codexConfig.ok === false`, making the doctor
-  // report `cli_ready: no` / `codex_cli_config_toml_parse_error` on the very run that
-  // fixed it — the endless "rerun sks doctor --fix" loop. Only re-probe when the initial
-  // probe failed and we are in --fix mode, so healthy configs pay no extra probe cost.
   if (doctorFix && codexConfig?.ok === false) {
     const reinspected = await inspectCodexConfigReadability(root, configProbeOpts).catch(() => null);
     if (reinspected) codexConfig = reinspected;
@@ -1747,12 +1748,6 @@ function doctorDedupeStatus(skillDedupe: any): string {
   return 'none';
 }
 
-// Assemble the explicit Zellij readiness block for `doctor --json` from the
-// capability probe + readiness matrix. Proof statuses are availability-derived:
-// `verified` is reserved for a real environment run (SKS_REQUIRE_ZELLIJ=1 gates);
-// here they report `optional` when the binary is usable and `unavailable` when
-// Zellij is missing/too old. Zellij missing keeps mad_ready=false while cli_ready
-// can remain true (the matrix already enforces this).
 function buildZellijReadiness(root: string, zellij: any, ready: any) {
   const status = String(zellij?.status || 'missing');
   const usable = status === 'ok';
@@ -1799,8 +1794,6 @@ async function captureCodexConfigSnapshot(): Promise<Record<string, string | nul
   };
 }
 
-// Build a migration journal for the --fix transaction with real before/after
-// content hashes and the backup paths produced by setup/structure/split repair.
 async function writeFixMigrationJournal(
   root: string,
   preFix: Record<string, string | null> | null,

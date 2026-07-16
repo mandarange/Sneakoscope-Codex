@@ -85,6 +85,17 @@ test('main push receipt independently revalidates remote main and the exact pre-
     assert.equal(mismatchedGuard.blockers.includes('pre_push_guard_release_closure_manifest_mismatch'), true)
     writeJson(guardFile, originalGuard)
 
+    const upgradeFile = path.join(releaseProofDir(root, '6.3.0'), 'upgrade-6.2-to-6.3.0.json')
+    const originalUpgrade = JSON.parse(fs.readFileSync(upgradeFile, 'utf8'))
+    const driftedUpgrade = structuredClone(originalUpgrade)
+    driftedUpgrade.target.receipt_source_commit = '0'.repeat(40)
+    writeJson(upgradeFile, driftedUpgrade)
+    const mismatchedUpgrade = inspect()
+    assert.equal(mismatchedUpgrade.ok, false)
+    assert.equal(mismatchedUpgrade.blockers.includes('upgrade_proof:target_source_commit_mismatch'), true)
+    assert.equal(mismatchedUpgrade.blockers.includes('pre_push_guard_upgrade_proof_mismatch'), true)
+    writeJson(upgradeFile, originalUpgrade)
+
     fs.writeFileSync(path.join(root, 'unpushed.txt'), 'not on remote\n')
     git(root, ['add', 'unpushed.txt'])
     git(root, ['commit', '-m', 'unpushed source'])

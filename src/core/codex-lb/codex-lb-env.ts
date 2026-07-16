@@ -2,6 +2,16 @@ import path from 'node:path';
 import os from 'node:os';
 import { exists, readJson, readText, runProcess, which } from '../fsx.js';
 
+const KEYCHAIN_WRITER_SWIFT = `import Foundation
+import Security
+let a=CommandLine.arguments[1],s=CommandLine.arguments[2]
+guard let k=String(data:FileHandle.standardInput.readDataToEndOfFile(),encoding:.utf8)?.trimmingCharacters(in:.whitespacesAndNewlines),!k.isEmpty else{exit(64)}
+let q:[String:Any]=[kSecClass as String:kSecClassGenericPassword,kSecAttrAccount as String:a,kSecAttrService as String:s]
+let v:[String:Any]=[kSecValueData as String:Data(k.utf8)]
+var r=SecItemUpdate(q as CFDictionary,v as CFDictionary)
+if r==errSecItemNotFound{var n=q;n[kSecValueData as String]=Data(k.utf8);r=SecItemAdd(n as CFDictionary,nil)}
+if r != errSecSuccess{FileHandle.standardError.write(Data("keychain_status=\\(r)\\n".utf8));exit(1)}`;
+
 export type CodexLbEnvSource = 'process.env' | 'keychain' | 'env-file' | 'legacy-env-file' | 'project-local' | 'missing';
 
 export type CodexLbEnvLoadResult = {
@@ -244,12 +254,13 @@ export async function writeCodexLbKeychain(apiKey: unknown, opts: any = {}) {
   const key = String(apiKey || '').trim();
   if (!key) return { ok: false, status: 'missing_api_key' };
   if (process.platform !== 'darwin' && !opts.forceMacos) return { ok: false, status: 'not_macos' };
-  const security = opts.securityBin || await which('security').catch(() => null) || (await exists('/usr/bin/security') ? '/usr/bin/security' : null);
-  if (!security) return { ok: false, status: 'keychain_unavailable' };
+  const swift = opts.swiftBin || await which('swift').catch(() => null) || (await exists('/usr/bin/swift') ? '/usr/bin/swift' : null);
+  if (!swift) return { ok: false, status: 'keychain_writer_unavailable' };
   const account = opts.account || process.env.USER || 'sks';
   const service = opts.service || 'sks-codex-lb';
-  const result = await runProcess(security, ['add-generic-password', '-U', '-a', account, '-s', service, '-w', key], {
-    timeoutMs: 5000,
+  const result = await runProcess(swift, ['-e', KEYCHAIN_WRITER_SWIFT, account, service], {
+    input: `${key}\n`,
+    timeoutMs: 30000,
     maxOutputBytes: 8192
   });
   return {
@@ -257,7 +268,7 @@ export async function writeCodexLbKeychain(apiKey: unknown, opts: any = {}) {
     status: result.code === 0 ? 'stored' : 'keychain_store_failed',
     account,
     service,
-    error: result.code === 0 ? null : redactSecret(result.stderr || result.stdout || 'security add-generic-password failed', key)
+    error: result.code === 0 ? null : redactSecret(result.stderr || result.stdout || 'Security.framework keychain write failed', key)
   };
 }
 

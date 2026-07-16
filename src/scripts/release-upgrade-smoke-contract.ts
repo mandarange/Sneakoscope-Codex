@@ -99,6 +99,7 @@ export interface ReleaseUpgradeCommandReceipt {
   json_schema: string | null
   json_ok: boolean | null
   report_file: {
+    validation_mode: 'strict_report_file' | 'pinned_6_2_stdout_only'
     path: string
     real_path: string | null
     inside_sandbox: boolean

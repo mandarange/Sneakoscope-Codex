@@ -19,6 +19,7 @@ test('retired guidance detection uses exact argv, option, and dollar-command bou
     'sks swarm --json',
     'sks agent run task',
     'sks ralph status',
+    'sks db check',
     'sks --agent reviewer',
     'sks --agent=reviewer',
     '$Agent',
@@ -37,6 +38,7 @@ test('retired guidance detection uses exact argv, option, and dollar-command bou
     'sks teamcity status',
     'sks mad-db2 run',
     'sks ralph2 status',
+    'sks db2 check',
     'sks naruto run task --agents 5',
     '$TeamCity',
     '$MAD-DB2',
@@ -84,9 +86,15 @@ test('doctor reconciles nested project AGENTS.md without entering excluded or sy
   try {
     for (const root of [project, home, globalRuntimeRoot, outsideDirectory]) await fs.mkdir(root, { recursive: true });
     const nestedManaged = path.join(project, 'packages', 'app', 'AGENTS.md');
+    const nestedQuickReference = path.join(project, 'packages', 'app', '.codex', 'SNEAKOSCOPE.md');
+    const nestedConfig = path.join(project, 'packages', 'app', '.codex', 'config.toml');
+    const nestedProfile = path.join(project, 'packages', 'app', '.codex', 'sks-team.config.toml');
     const nestedUser = path.join(project, 'services', 'api', 'AGENTS.md');
     const nestedUserBytes = Buffer.from('# Customer API guidance\nRun `sks agent run` for this service.\n');
     await writeText(nestedManaged, legacyManagedAgents());
+    await writeText(nestedQuickReference, legacyManagedQuickReference());
+    await writeText(nestedConfig, '[profiles.sks-team]\nservice_tier = "fast"\napproval_policy = "on-request"\nsandbox_mode = "workspace-write"\nmodel_reasoning_effort = "medium"\n');
+    await writeText(nestedProfile, 'service_tier = "fast"\napproval_policy = "on-request"\nsandbox_mode = "workspace-write"\nmodel_reasoning_effort = "medium"\n');
     await writeBytes(nestedUser, nestedUserBytes);
 
     const excludedFiles = [
@@ -117,11 +125,14 @@ test('doctor reconciles nested project AGENTS.md without entering excluded or sy
     assert.ok(first.reconciled_count >= 2, JSON.stringify(first));
 
     const managedAfter = await fs.readFile(nestedManaged, 'utf8');
+    const quickReferenceAfter = await fs.readFile(nestedQuickReference, 'utf8');
     const userAfter = await fs.readFile(nestedUser, 'utf8');
-    for (const text of [managedAfter, userAfter]) {
-      assert.match(text, /BEGIN Sneakoscope Codex GX MANAGED BLOCK/);
-      assert.doesNotMatch(text, /\$Team|\$Agent|\$Ralph|sks team|sks agent|sks mad-db|sks ralph/i);
-    }
+    assert.match(managedAfter, /BEGIN Sneakoscope Codex GX MANAGED BLOCK/);
+    assert.match(userAfter, /BEGIN Sneakoscope Codex GX MANAGED BLOCK/);
+    assert.match(quickReferenceAfter, /naruto run/);
+    for (const text of [managedAfter, quickReferenceAfter, userAfter]) assert.doesNotMatch(text, /\$Team|\$Agent|\$Ralph|sks team|sks agent|sks mad-db|sks ralph|sks db/i);
+    assert.doesNotMatch(await fs.readFile(nestedConfig, 'utf8'), /profiles\.sks-team/);
+    await assert.rejects(fs.access(nestedProfile));
     const quarantinedAgents = await findFiles(path.join(project, '.sneakoscope', 'quarantine'), 'AGENTS.md');
     const quarantinedUserAgents = [];
     for (const file of quarantinedAgents) {

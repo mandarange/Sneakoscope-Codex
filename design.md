@@ -17,6 +17,7 @@ Sneakoscope Codex is an operator utility. Interfaces should feel native, compact
 ## MCP manager
 
 - Present MCP servers in the resizable Control Center and support Global, Project, and read-only Effective views.
+- Codex LB secrets use secure sheets and stdin; provider selection stays explicit.
 - Order information as: title, scope/restart explanation, scope selector, server table, live status, actions.
 - The table columns are State, Name, Transport, and Configuration. Never display command arguments, environment values, bearer tokens, URL paths, URL credentials, fragments, or query values.
 - Actions are Add, Edit, Duplicate, Remove, Enable/Disable, Test Connection, OAuth Login/Logout, Backups/Restore, and Refresh. Disable selection-dependent actions until a writable row is selected and disable all mutation controls while work is in progress.

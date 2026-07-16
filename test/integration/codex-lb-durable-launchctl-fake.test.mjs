@@ -5,7 +5,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { configureCodexLb } from '../../dist/cli/install-helpers.js';
 
-test('codex-lb fake launchctl success reports durable_launchctl', async () => {
+const compatibleRecoveryFetch = async () => new Response('{}', { status: 200, headers: { 'x-app-version': '1.21.0-beta.3' } });
+
+test('codex-lb fake launchctl syncs only the non-secret base URL', async () => {
   const home = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-lb-launchctl-'));
   const bin = path.join(home, 'launchctl');
   await fs.writeFile(bin, '#!/usr/bin/env sh\nexit 0\n');
@@ -19,8 +21,11 @@ test('codex-lb fake launchctl success reports durable_launchctl', async () => {
     syncLaunchctl: true,
     forceLaunchEnv: true,
     launchctlBin: bin,
-    shellProfile: 'skip'
+    shellProfile: 'skip',
+    toolOutputRecoveryFetch: compatibleRecoveryFetch
   });
   assert.equal(result.codex_environment?.launch_environment?.status, 'synced');
-  assert.ok(result.persistence?.applied_modes.includes('durable_launchctl'));
+  assert.ok(result.persistence?.applied_modes.includes('durable_env_file'));
+  assert.equal(result.persistence?.applied_modes.includes('durable_launchctl'), false);
+  assert.equal(result.applied_actions?.find((action) => action.type === 'sync_launchctl')?.ok, true);
 });

@@ -15,12 +15,12 @@ import {
   removeManagedPathVerified,
   uniqueConfinedPath
 } from '../managed-path-safety.js';
-import { collectNestedProjectAgents } from './current-project-guidance-nested.js';
+import { collectNestedProjectRoots } from './current-project-guidance-nested.js';
 
 export const CURRENT_PROJECT_GUIDANCE_SCHEMA = 'sks.current-project-guidance.v1' as const;
 
 const AGENTS_MARKER = 'BEGIN Sneakoscope Codex GX MANAGED BLOCK';
-const RETIRED_COMMAND_NAMES = ['team', 'mad-db', 'tmux', 'xai', 'swarm', 'agent', 'ralph'] as const;
+const RETIRED_COMMAND_NAMES = ['team', 'mad-db', 'tmux', 'xai', 'swarm', 'agent', 'ralph', 'db'] as const;
 const RETIRED_DOLLAR_COMMAND_NAMES = ['Agent', 'Team', 'MAD-DB', 'Swarm', 'ShadowClone', 'Kagebunshin', 'Ralph'] as const;
 const TOKEN_CONTINUATION = '-A-Za-z0-9_.';
 const RETIRED_COMMAND_RE = new RegExp(
@@ -88,7 +88,7 @@ export async function reconcileCurrentProjectGuidance(opts: {
     await reconcileGuidanceScope(scope, opts.fix, runId, counters);
   }
   if (projectRoot !== home && projectRoot !== globalRuntimeRoot) {
-    await reconcileNestedProjectAgents(
+    await reconcileNestedProjectGuidance(
       projectRoot,
       new Set([home, globalRuntimeRoot]),
       opts.fix,
@@ -185,7 +185,7 @@ async function reconcileAgentsGuidance(
   }
 }
 
-async function reconcileNestedProjectAgents(
+async function reconcileNestedProjectGuidance(
   projectRoot: string,
   excludedRoots: Set<string>,
   fix: boolean,
@@ -194,7 +194,7 @@ async function reconcileNestedProjectAgents(
 ): Promise<void> {
   const rootStat = await fsp.lstat(projectRoot).catch(() => null);
   if (!rootStat?.isDirectory() || rootStat.isSymbolicLink()) return;
-  const scan = await collectNestedProjectAgents(projectRoot, excludedRoots);
+  const scan = await collectNestedProjectRoots(projectRoot, excludedRoots);
   if (scan.errorCount > 0) {
     counters.errors += scan.errorCount;
     counters.remaining += scan.errorCount;
@@ -205,8 +205,11 @@ async function reconcileNestedProjectAgents(
   }
   const scope: GuidanceScope = { root: projectRoot, installScope: 'project' };
   const quarantineRoot = path.join(projectRoot, '.sneakoscope', 'quarantine', 'current-project-guidance', runId);
-  for (const file of scan.files) {
-    await reconcileAgentsGuidance(scope, file, quarantineRoot, fix, counters);
+  for (const root of scan.roots) {
+    await reconcileAgentsGuidance(scope, path.join(root, 'AGENTS.md'), quarantineRoot, fix, counters);
+    await reconcileQuickReference(scope, quarantineRoot, fix, counters, path.join(root, '.codex', 'SNEAKOSCOPE.md'));
+    await reconcileCodexConfig(scope, quarantineRoot, fix, counters, path.join(root, '.codex', 'config.toml'));
+    await reconcileRetiredProfileFile(scope, quarantineRoot, fix, counters, path.join(root, '.codex'));
   }
 }
 
@@ -214,9 +217,9 @@ async function reconcileQuickReference(
   scope: GuidanceScope,
   quarantineRoot: string,
   fix: boolean,
-  counters: GuidanceCounters
+  counters: GuidanceCounters,
+  file = path.join(scope.root, '.codex', 'SNEAKOSCOPE.md')
 ): Promise<void> {
-  const file = path.join(scope.root, '.codex', 'SNEAKOSCOPE.md');
   const inspection = await inspectGuidancePath(scope.root, file, counters);
   if (!inspection?.exists) return;
   if (inspection.leafSymlink || !inspection.stat?.isFile()) {
@@ -275,9 +278,9 @@ async function reconcileCodexConfig(
   scope: GuidanceScope,
   quarantineRoot: string,
   fix: boolean,
-  counters: GuidanceCounters
+  counters: GuidanceCounters,
+  file = path.join(scope.root, '.codex', 'config.toml')
 ): Promise<void> {
-  const file = path.join(scope.root, '.codex', 'config.toml');
   const inspection = await inspectGuidancePath(scope.root, file, counters);
   if (!inspection?.exists) return;
   if (inspection.leafSymlink || !inspection.stat?.isFile()) {
@@ -318,10 +321,11 @@ async function reconcileRetiredProfileFile(
   scope: GuidanceScope,
   quarantineRoot: string,
   fix: boolean,
-  counters: GuidanceCounters
+  counters: GuidanceCounters,
+  codexRoot = path.join(scope.root, '.codex')
 ): Promise<void> {
   for (const profile of RETIRED_SKS_CONFIG_PROFILE_NAMES) {
-    const file = path.join(scope.root, '.codex', `${profile}.config.toml`);
+    const file = path.join(codexRoot, `${profile}.config.toml`);
     const inspection = await inspectGuidancePath(scope.root, file, counters);
     if (!inspection?.exists) continue;
     counters.detected += 1;

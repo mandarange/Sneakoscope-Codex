@@ -14,5 +14,9 @@ test('codex-lb setup keychain action follows the keychain answer', () => {
     run_health_check: false,
     allow_insecure_localhost: false
   });
-  assert.equal(plan.actions.some((action) => action.type === 'store_keychain'), true);
+  const action = plan.actions.find((entry) => entry.type === 'store_keychain');
+  assert.ok(action);
+  assert.equal(action.command, undefined);
+  assert.doesNotMatch(JSON.stringify(action), /security add-generic-password|-w\b|--api-key\b|--key\b/i);
+  assert.match(action.effect, /Security\.framework.*stdin-only/i);
 });

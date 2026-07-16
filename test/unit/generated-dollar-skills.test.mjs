@@ -63,8 +63,7 @@ test('generated DB skill uses route-owned safety artifacts and never revives sks
 
   const db = await fs.readFile(path.join(root, '.agents', 'skills', 'db', 'SKILL.md'), 'utf8');
   assert.match(db, /automatically materializes db-safety-scan\.json and db-review\.json/);
-  assert.match(db, /legacy sks db command is removed and must remain unknown/);
-  assert.doesNotMatch(db, /sks db (?:policy|scan|classify|check)/);
+  assert.doesNotMatch(db, /sks db/i);
   assert.match(db, /sks mad-sks plan\|sql\|apply-migration/);
 });
 

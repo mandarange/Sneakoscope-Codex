@@ -1,9 +1,5 @@
 #!/usr/bin/env node
 // @ts-nocheck
-// Gate: migration:upgrade-safety
-// Proves an upgrade never breaks user Codex config across historical
-// states. Operates entirely on temp dirs (os.tmpdir + fs.mkdtemp); never touches
-// the real ~/.codex. Always restores process.env.CODEX_HOME / HOME in finally.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -25,7 +21,6 @@ function rmTmp(dir) {
   try {
     fs.rmSync(dir, { recursive: true, force: true });
   } catch {
-    // best-effort cleanup; never fail the gate on teardown
   }
 }
 
@@ -35,12 +30,6 @@ const savedHome = process.env.HOME;
 const summary = { states: {}, generated_at: new Date().toISOString() };
 
 try {
-  // ---------------------------------------------------------------------------
-  // State 6 — corrupted config (machine-local key absorbed into a TOML table).
-  // The pre-fix mover appended top-level machine-local keys after the last
-  // [table], so TOML absorbed them into that table. repairCodexConfigStructure
-  // hoists them back above the first table header.
-  // ---------------------------------------------------------------------------
   {
     const dir = mkTmp('sks-legacy-corrupt-');
     tmpDirs.push(dir);
@@ -56,7 +45,6 @@ try {
       'corrupted_config: repair status not recognized',
       { status: result.status, expected: okStatuses }
     );
-    // If it hoisted, a backup must exist on disk.
     if (result.status === 'structure_repaired') {
       assertGate(
         Boolean(result.backup_path) && fs.existsSync(result.backup_path),
@@ -64,8 +52,6 @@ try {
         { backup_path: result.backup_path }
       );
     }
-    // Tolerant structural check: either the keys were hoisted ABOVE the first
-    // table header, or the structure was already ok.
     const repaired = fs.readFileSync(configPath, 'utf8');
     const firstTableIdx = repaired.indexOf('\n[');
     const headRegion = firstTableIdx === -1 ? repaired : repaired.slice(0, firstTableIdx);
@@ -83,12 +69,6 @@ try {
     };
   }
 
-  // ---------------------------------------------------------------------------
-  // States 1-4 — user global config preserved + user-disabled flags not
-  // re-enabled. ensureGlobalCodexFastModeDuringInstall reads the Codex home
-  // config (HOME/.codex/config.toml; honors opts.home). It is set-if-absent and
-  // backs up the prior good config before any mutation.
-  // ---------------------------------------------------------------------------
   {
     const tmpHome = mkTmp('sks-legacy-home-');
     tmpDirs.push(tmpHome);
@@ -119,14 +99,11 @@ try {
       'user_config_preserved: user model_reasoning_effort was overwritten',
       { status: result.status }
     );
-    // User-disabled feature must NOT be re-enabled (set-if-absent only).
     assertGate(
       after.includes('browser_use = false'),
       'flags_not_reenabled: user-disabled browser_use was re-enabled',
       { status: result.status }
     );
-    // When the managed defaults were applied, the prior good config must be
-    // backed up to a sibling config.toml.*bak file.
     if (result.status === 'updated') {
       const siblings = fs.readdirSync(codexDir);
       const backup = siblings.find((name) => /config\.toml\..*bak/.test(name));
@@ -141,17 +118,12 @@ try {
     }
     summary.states.flags_not_reenabled = { browser_use_preserved: true };
 
-    // Restore env immediately after this state to avoid leaking into spawns.
     if (savedCodexHome === undefined) delete process.env.CODEX_HOME;
     else process.env.CODEX_HOME = savedCodexHome;
     if (savedHome === undefined) delete process.env.HOME;
     else process.env.HOME = savedHome;
   }
 
-  // ---------------------------------------------------------------------------
-  // State 6b — splitter preserves project keys. The project config keeps its
-  // own [profiles.*] table; only machine-local top-level keys are moved out.
-  // ---------------------------------------------------------------------------
   {
     const projectRoot = mkTmp('sks-legacy-project-');
     const tmpHome2 = mkTmp('sks-legacy-home2-');
@@ -159,8 +131,6 @@ try {
     const projectCodexDir = path.join(projectRoot, '.codex');
     fs.mkdirSync(projectCodexDir, { recursive: true });
     const projectConfigPath = path.join(projectCodexDir, 'config.toml');
-    // Machine-local keys/tables (model_provider, [profiles.*]) move out to CODEX_HOME;
-    // project-scoped settings (sandbox_mode, [features]) must be PRESERVED in place.
     fs.writeFileSync(
       projectConfigPath,
       '# Sneakoscope managed fixture\nmodel_provider = "codex-lb"\nsandbox_mode = "workspace-write"\n\n[features]\nhooks = true\n',
@@ -195,10 +165,6 @@ try {
     };
   }
 
-  // ---------------------------------------------------------------------------
-  // State 7/10 — removed public input is unknown; Zellij status is current and informational.
-  // The removed spelling stays only inside this negative migration fixture.
-  // ---------------------------------------------------------------------------
   {
     const removedCommand = spawnSync(process.execPath, ['dist/bin/sks.js', 'tmux', '--json'], {
       cwd: root,
@@ -252,7 +218,6 @@ try {
       'zellij_status_informational: missing status field',
       { json: zjJson }
     );
-    // Informational status must not hard-fail when zellij is missing.
     assertGate(
       zjJson.ok === true,
       'zellij_status_informational: informational status hard-failed (ok !== true)',
@@ -261,9 +226,6 @@ try {
     summary.states.zellij_status_informational = { status: zjJson.status, ok: zjJson.ok };
   }
 
-  // ---------------------------------------------------------------------------
-  // Migration journal contract — before/after hash, change + rollback flags.
-  // ---------------------------------------------------------------------------
   {
     const ev = journal.buildMigrationEvent({
       step: 't',
@@ -292,11 +254,6 @@ try {
     summary.states.migration_journal = { mutated: true, noop: true };
   }
 
-  // ---------------------------------------------------------------------------
-  // State 1.19.x_zellij_project_noop — a clean 1.19.x config (no machine-local
-  // issues) is a no-op for the upgrade. repairCodexConfigStructure returns
-  // 'structure_ok' and the file is byte-identical afterwards.
-  // ---------------------------------------------------------------------------
   {
     const dir = mkTmp('sks-legacy-noop-');
     tmpDirs.push(dir);
@@ -329,12 +286,6 @@ try {
     };
   }
 
-  // ---------------------------------------------------------------------------
-  // State existing_skill_cards_preserved — an upgrade never clobbers existing
-  // deployed skill cards. Deploy an accepted card, then read it back twice and
-  // assert the deployed snapshot's body_hash is byte-preserved across the
-  // simulated "upgrade read".
-  // ---------------------------------------------------------------------------
   {
     const skillRootDir = mkTmp('sks-legacy-skill-');
     tmpDirs.push(skillRootDir);
@@ -365,7 +316,6 @@ try {
       { deployed }
     );
 
-    // Simulate an "upgrade read": loading the snapshot again must not clobber it.
     const reread = await skillCard.loadDeployedSnapshot(skillRootDir, 'DFix', 'legacy-skill');
     assertGate(
       Boolean(reread) && reread.body_hash === deployed.body_hash,
@@ -379,9 +329,6 @@ try {
     };
   }
 
-  // ---------------------------------------------------------------------------
-  // Write the report and emit the gate.
-  // ---------------------------------------------------------------------------
   const reportDir = path.join(root, '.sneakoscope', 'reports');
   fs.mkdirSync(reportDir, { recursive: true });
   const reportPath = path.join(reportDir, 'current-upgrade-matrix.json');

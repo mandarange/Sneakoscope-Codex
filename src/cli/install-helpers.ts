@@ -245,8 +245,8 @@ async function reportPostinstallCodexLbAuth() {
   else if (codexLbAuth.status === 'synced' || codexLbAuth.status === 'present' || codexLbAuth.status === 'repaired') console.log(`codex-lb auth: preserved from ${codexLbAuth.env_path}.`);
   else if (codexLbAuth.status === 'present_unselected') console.log('codex-lb auth: preserved but not selected; ChatGPT OAuth remains active.');
   else if (codexLbAuth.status === 'skipped') console.log(`codex-lb auth: skipped (${codexLbAuth.reason}).`);
-  else if (codexLbAuth.status === 'missing_env_key') console.log('codex-lb auth: stored key missing. Run `sks codex-lb setup --host <domain> --api-key <key>` to repair.');
-  else if (codexLbAuth.status === 'missing_base_url') console.log('codex-lb auth: stored key has no recoverable base URL. Run `sks codex-lb reconfigure --host <domain> --api-key <key>` once.');
+  else if (codexLbAuth.status === 'missing_env_key') console.log('codex-lb auth: stored key missing. Run `sks codex-lb setup --host <domain> --api-key-stdin` to repair.');
+  else if (codexLbAuth.status === 'missing_base_url') console.log('codex-lb auth: stored key has no recoverable base URL. Run `sks codex-lb reconfigure --host <domain> --api-key-stdin` once.');
   else if (codexLbAuth.status === 'not_configured') console.log('codex-lb (optional multi-account load balancer): not configured — opt in anytime with `sks codex-lb setup` (your choice; never applied automatically, never edits your Codex config without it). Swap key later: `sks codex-lb set-key`; switch auth: `sks codex-lb use-oauth` / `use-codex-lb`.');
   else if (codexLbAuth.status && codexLbAuth.status !== 'not_configured') console.log(`codex-lb auth: repair skipped (${codexLbAuth.status}${codexLbAuth.error ? `: ${codexLbAuth.error}` : ''}).`);
   const reconcile = codexLbAuth.auth_reconcile;
@@ -549,7 +549,7 @@ export async function configureCodexLb(opts: any = {}): Promise<ConfigureCodexLb
   const shellProfile = opts.shellProfile || 'skip';
   const setupAnswers = {
     host_or_base_url: rawHost,
-    api_key_source: opts.apiKeySource || 'cli_option',
+    api_key_source: opts.apiKeySource || 'stdin',
     use_as_default_provider: useDefaultProvider,
     write_env_file: writeEnvFile,
     store_keychain: storeKeychain,
@@ -828,7 +828,7 @@ export function formatCodexLbStatusText(status: any = {}, opts: any = {}) {
   else if (status.ok && !status.selected) lines.push('', 'Run: sks codex-lb repair to activate codex-lb for Codex App.');
   else if (status.ok) lines.push('', 'Status: codex-lb active; no repair needed.');
   else if (!status.ok && status.base_url && status.env_key_configured) lines.push('', 'Run: sks codex-lb repair to restore the upstream codex-lb provider block.');
-  else if (!status.ok) lines.push('', 'Run: sks codex-lb setup --host <domain> --api-key <key>');
+  else if (!status.ok) lines.push('', 'Run: sks codex-lb setup --host <domain> --api-key-stdin');
   if (backupPresent) lines.push('Switch fully away from codex-lb: sks codex-lb release');
   return `${lines.join('\n')}\n`;
 }
@@ -1144,7 +1144,8 @@ export async function reconcileCodexLbAuthConflict(opts: any = {}): Promise<Code
   const authExists = await exists(authPath);
   const authText = authExists ? await readText(authPath, '') : '';
   const envText = await readText(status.env_path, '');
-  const apiKey = parseCodexLbEnvKey(envText);
+  const apiKey = parseCodexLbEnvKey(envText)
+    || String(opts.apiKey || (opts.env || process.env).CODEX_LB_API_KEY || '').trim();
   if (!apiKey) {
     return { status: 'skipped', reason: 'missing_env_key', auth_path: authPath };
   }

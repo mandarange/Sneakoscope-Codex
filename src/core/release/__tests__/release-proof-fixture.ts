@@ -75,6 +75,25 @@ export function writeCompleteReleaseProofs(root: string, head: string, baseline 
     ...inspected,
     npm_pack_proof: { proof_id: npmProof.proof_id, info_sha256: npmProof.info_digest, file_list_sha256: npmProof.file_list_digest }
   }))
+  fs.writeFileSync(path.join(proofDir, 'upgrade-6.2-to-6.3.0.json'), JSON.stringify({
+    schema: 'sks.release-upgrade-smoke.v1', ok: true, platform: 'darwin', baseline_version: '6.2.0', target_version: '6.3.0', blockers: [],
+    baseline: {
+      pinned_sha256: 'dd0bfc022348c11dc737055845708f6272beaf2a8f9c16d068acf3c8c612f9bc',
+      tarball_sha256: 'dd0bfc022348c11dc737055845708f6272beaf2a8f9c16d068acf3c8c612f9bc'
+    },
+    source_tree: { ok: true, head, dirty_entries: [], blockers: [] },
+    target: {
+      binding_ok: true, receipt_source_commit: head, tarball_sha256: inspected.sha256,
+      receipt_path: path.join(proofDir, 'pack-receipt.json'), tarball_path: path.resolve(root, inspected.tarball_path)
+    },
+    states: Object.fromEntries([
+      'baseline_package', 'baseline_menubar', 'target_package', 'target_menubar', 'menubar_rollback',
+      'target_menubar_reinstall', 'package_rollback'
+    ].map((key) => {
+      const expected = key.startsWith('target_') ? '6.3.0' : '6.2.0'
+      return [key, { status: 'passed', expected_version: expected, observed_version: expected, blockers: [] }]
+    }))
+  }))
 
   const installChecks = Object.fromEntries(MACOS_INSTALL_REQUIRED_CHECKS.map((key) => [key, true]))
   const buildStamp = {
