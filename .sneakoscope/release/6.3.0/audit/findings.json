@@ -1,7 +1,7 @@
 {
   "schema": "sks.release-findings.v1",
   "baseline": "a6634b42f3406f8d567183c611726d0c0e355421",
-  "source_commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+  "source_commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
   "mission_id": "M-20260715-150100-34bb",
   "captured_before_product_implementation": true,
   "allowed_terminal_statuses": [
@@ -30,14 +30,14 @@
         "install smoke"
       ],
       "closure": {
-        "commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+        "commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
         "proof": [
           {
             "schema": "sks.release-finding-proof.v1",
             "path": ".sneakoscope/reports/release-closure/findings/F-001.json",
-            "sha256": "d31af4f0a00f9a99627b23c5584c1c7c19a832cfb2700dd3647ccd96086dacd6",
+            "sha256": "75956762c4086c329d2a9e8a37a2f209e8679c52ce29ee60245e0336aab77a22",
             "line_count": 20,
-            "source_commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+            "source_commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
             "mission_id": "M-20260715-150100-34bb"
           }
         ]
@@ -62,14 +62,14 @@
         "resource SHA"
       ],
       "closure": {
-        "commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+        "commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
         "proof": [
           {
             "schema": "sks.release-finding-proof.v1",
             "path": ".sneakoscope/reports/release-closure/findings/F-002.json",
-            "sha256": "ba28ce4d5a602cad0cc5d1b6d2c405edc47b4290fbdcef4e706323d90fc80d4d",
+            "sha256": "098229d178bbd434d624a83de6a188ba9933fa8c90b6a7579ad5e141eace77ad",
             "line_count": 20,
-            "source_commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+            "source_commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
             "mission_id": "M-20260715-150100-34bb"
           }
         ]
@@ -92,14 +92,14 @@
         "action callback"
       ],
       "closure": {
-        "commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+        "commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
         "proof": [
           {
             "schema": "sks.release-finding-proof.v1",
             "path": ".sneakoscope/reports/release-closure/findings/F-003.json",
-            "sha256": "0865d2b123f1bc7dbb912f17c2f82df62eb95d4d49e80a7e133ec98b6e244913",
+            "sha256": "428e9a6fa2997a1aa2cf5008cfd3a9aa4795159ad32ec0c4c8a0e26020353cbc",
             "line_count": 19,
-            "source_commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+            "source_commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
             "mission_id": "M-20260715-150100-34bb"
           }
         ]
@@ -122,14 +122,14 @@
         "operation state tests"
       ],
       "closure": {
-        "commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+        "commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
         "proof": [
           {
             "schema": "sks.release-finding-proof.v1",
             "path": ".sneakoscope/reports/release-closure/findings/F-004.json",
-            "sha256": "b09e6863ef2c0ea87b0941580ed5028bb36b417891814cd04d91b7cb801bf473",
+            "sha256": "8d259c64aeda71502ca1bd2b151214dfd6ac22e8807b81b3246d9aca84cc21bd",
             "line_count": 19,
-            "source_commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+            "source_commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
             "mission_id": "M-20260715-150100-34bb"
           }
         ]
@@ -151,14 +151,14 @@
         "Control Center sidebar"
       ],
       "closure": {
-        "commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+        "commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
         "proof": [
           {
             "schema": "sks.release-finding-proof.v1",
             "path": ".sneakoscope/reports/release-closure/findings/F-005.json",
-            "sha256": "7ebc6d94caa874e2ed1632ca04927afcd9b0e7883e77af2615538c73adbe4a60",
+            "sha256": "d5d23303c7cb6794f0067bfc0c0a4c34f425201754b056418c3200aef24aa8ed",
             "line_count": 19,
-            "source_commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+            "source_commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
             "mission_id": "M-20260715-150100-34bb"
           }
         ]
@@ -183,14 +183,14 @@
         "fresh/stale/offline tests"
       ],
       "closure": {
-        "commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+        "commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
         "proof": [
           {
             "schema": "sks.release-finding-proof.v1",
             "path": ".sneakoscope/reports/release-closure/findings/F-006.json",
-            "sha256": "0a6dff7b1328071832964291f88e8f592fb697b02307147b99b4b6b272cc4ca3",
+            "sha256": "c163612f286a3ea2d04770fdc61c782fdabc502484c9e2c79c3555be615d07e2",
             "line_count": 19,
-            "source_commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+            "source_commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
             "mission_id": "M-20260715-150100-34bb"
           }
         ]
@@ -214,14 +214,14 @@
         "offline last-known state"
       ],
       "closure": {
-        "commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+        "commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
         "proof": [
           {
             "schema": "sks.release-finding-proof.v1",
             "path": ".sneakoscope/reports/release-closure/findings/F-007.json",
-            "sha256": "87e56221e107e43098845ef85e35d1e5a4d6affc492f60296ba13f40000b0192",
+            "sha256": "98100871d0cec3fecbaf3b645cae5c8154381a9bdfbce1a32d9d8f61712e0713",
             "line_count": 18,
-            "source_commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+            "source_commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
             "mission_id": "M-20260715-150100-34bb"
           }
         ]
@@ -246,14 +246,14 @@
         "UI wiring"
       ],
       "closure": {
-        "commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+        "commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
         "proof": [
           {
             "schema": "sks.release-finding-proof.v1",
             "path": ".sneakoscope/reports/release-closure/findings/F-008.json",
-            "sha256": "03d3d633aa1f117c0ca8526998d9f0af5c5f8f3e9b2abe4186a680acfa1d488b",
+            "sha256": "16fa16d602872a0801c7006c3ec96231993f5c9b79c7cbda4822ed7cf0a310bc",
             "line_count": 20,
-            "source_commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+            "source_commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
             "mission_id": "M-20260715-150100-34bb"
           }
         ]
@@ -278,14 +278,14 @@
         "secret leak scan"
       ],
       "closure": {
-        "commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+        "commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
         "proof": [
           {
             "schema": "sks.release-finding-proof.v1",
             "path": ".sneakoscope/reports/release-closure/findings/F-009.json",
-            "sha256": "e3b0d111e1d0729660e42e1b1d14dbbe57a8166fe7ed27d1140a74bc0f5d855d",
+            "sha256": "3ac323c4edb5584cbc858abd040584b703d5a1049ce644caa5336198a8aa0772",
             "line_count": 19,
-            "source_commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+            "source_commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
             "mission_id": "M-20260715-150100-34bb"
           }
         ]
@@ -308,14 +308,14 @@
         "TOML round-trip matrix"
       ],
       "closure": {
-        "commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+        "commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
         "proof": [
           {
             "schema": "sks.release-finding-proof.v1",
             "path": ".sneakoscope/reports/release-closure/findings/F-010.json",
-            "sha256": "0bb992837b848f72b84b6a3b53b68dbfe579735ba3eb09c03e7fff093978d8c4",
+            "sha256": "31ec6d8b213f37267a20233bc170cfb4ce9db78d4fd199ee67d8431759b438b2",
             "line_count": 20,
-            "source_commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+            "source_commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
             "mission_id": "M-20260715-150100-34bb"
           }
         ]
@@ -341,14 +341,14 @@
         "process cleanup"
       ],
       "closure": {
-        "commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+        "commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
         "proof": [
           {
             "schema": "sks.release-finding-proof.v1",
             "path": ".sneakoscope/reports/release-closure/findings/F-011.json",
-            "sha256": "ed8017cf11dad1660fa7a4b9077a380079ef52205a5aa0cbc660b463f079fe7e",
+            "sha256": "481dc6ab851d27b723312e458569e3b57d57ea1c0668ccbf54b0e85483e09ef1",
             "line_count": 20,
-            "source_commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+            "source_commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
             "mission_id": "M-20260715-150100-34bb"
           }
         ]
@@ -373,14 +373,14 @@
         "lifecycle tests"
       ],
       "closure": {
-        "commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+        "commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
         "proof": [
           {
             "schema": "sks.release-finding-proof.v1",
             "path": ".sneakoscope/reports/release-closure/findings/F-012.json",
-            "sha256": "1c94ade79e7723611150b9540cf9fba986f38edea3617e59bae3a3a73fd04b94",
+            "sha256": "e6f8789e647d2a64aafc1515493d40c6b9d1444d754ddcda8863a26a0b05dd43",
             "line_count": 19,
-            "source_commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+            "source_commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
             "mission_id": "M-20260715-150100-34bb"
           }
         ]
@@ -405,14 +405,14 @@
         "invalid input/no-spawn tests"
       ],
       "closure": {
-        "commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+        "commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
         "proof": [
           {
             "schema": "sks.release-finding-proof.v1",
             "path": ".sneakoscope/reports/release-closure/findings/F-013.json",
-            "sha256": "49b26e488340105edba886ea63915820e111308c61ba418e384bf2cfd40d2e86",
+            "sha256": "9a17686938fc1581b24d9f998538761e1e875aadccec73f8ea53230dc41b12ba",
             "line_count": 19,
-            "source_commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+            "source_commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
             "mission_id": "M-20260715-150100-34bb"
           }
         ]
@@ -436,14 +436,14 @@
         "compile-time parity"
       ],
       "closure": {
-        "commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+        "commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
         "proof": [
           {
             "schema": "sks.release-finding-proof.v1",
             "path": ".sneakoscope/reports/release-closure/findings/F-014.json",
-            "sha256": "c2ce490b4259fc76a586deae8feb9013bc043c63d53cff994cb80caa9fd57c2d",
+            "sha256": "6e35386f0cbb06d4e36c06aa2d1f90460b7b03233cad28e61eb324f75ea28725",
             "line_count": 18,
-            "source_commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+            "source_commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
             "mission_id": "M-20260715-150100-34bb"
           }
         ]
@@ -466,14 +466,14 @@
         "strict-all"
       ],
       "closure": {
-        "commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+        "commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
         "proof": [
           {
             "schema": "sks.release-finding-proof.v1",
             "path": ".sneakoscope/reports/release-closure/findings/F-015.json",
-            "sha256": "c5d65d27d90d8cfd5b50578e6691434efd3685a23596948b9d05332924bee2d7",
+            "sha256": "621aefbab6364e2d5c5c8e45e9e84370c8dc8291bc9b89f18e86617d25f86752",
             "line_count": 18,
-            "source_commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+            "source_commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
             "mission_id": "M-20260715-150100-34bb"
           }
         ]
@@ -497,14 +497,14 @@
         "shrink-only growth refusal"
       ],
       "closure": {
-        "commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+        "commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
         "proof": [
           {
             "schema": "sks.release-finding-proof.v1",
             "path": ".sneakoscope/reports/release-closure/findings/F-016.json",
-            "sha256": "025ac139b6ef837edcb483c8e83f9cf909ef8344f60fda9ae9074f0fa1a22c92",
+            "sha256": "d90edd567e4e6663aeae6cec7fdb83e70512054e11e69695f2cef5dc5bcc85c9",
             "line_count": 19,
-            "source_commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+            "source_commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
             "mission_id": "M-20260715-150100-34bb"
           }
         ]
@@ -529,14 +529,14 @@
         "no generated-then-deleted maps"
       ],
       "closure": {
-        "commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+        "commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
         "proof": [
           {
             "schema": "sks.release-finding-proof.v1",
             "path": ".sneakoscope/reports/release-closure/findings/F-017.json",
-            "sha256": "55047ec09f640dd2b2639be3e8467b9c29fa78cc23cb27028b45f47aa7a4251b",
+            "sha256": "5ca9bf9cfaec448ceed262f1d8264925e11eedc92408009adf0bfd0b7f6a6755",
             "line_count": 18,
-            "source_commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+            "source_commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
             "mission_id": "M-20260715-150100-34bb"
           }
         ]
@@ -559,14 +559,14 @@
         "stage dependency"
       ],
       "closure": {
-        "commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+        "commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
         "proof": [
           {
             "schema": "sks.release-finding-proof.v1",
             "path": ".sneakoscope/reports/release-closure/findings/F-018.json",
-            "sha256": "53bceb712cd8de8bf7c4d31e657c38a49c0a63b29a97fc06ab2ca1d2ab832138",
+            "sha256": "5fa2ed16149c30f814462986a4102e20b56f09d3212250f37f942731e1b1bb7c",
             "line_count": 19,
-            "source_commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+            "source_commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
             "mission_id": "M-20260715-150100-34bb"
           }
         ]
@@ -590,14 +590,14 @@
         "2FA stop"
       ],
       "closure": {
-        "commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+        "commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
         "proof": [
           {
             "schema": "sks.release-finding-proof.v1",
             "path": ".sneakoscope/reports/release-closure/findings/F-019.json",
-            "sha256": "079cd018e05ace8614ca9cb17862363ebb8af6a1e7623643fada8980ed244b86",
+            "sha256": "72a1b35fe55aca7ea3daf11b4666e4582e349f1f1990ff511f517a441b4b68d6",
             "line_count": 19,
-            "source_commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+            "source_commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
             "mission_id": "M-20260715-150100-34bb"
           }
         ]
@@ -620,14 +620,14 @@
         "workflow contract test"
       ],
       "closure": {
-        "commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+        "commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
         "proof": [
           {
             "schema": "sks.release-finding-proof.v1",
             "path": ".sneakoscope/reports/release-closure/findings/F-020.json",
-            "sha256": "d0c5b68b7e219285865661ba979b4b1007e4fb458ced333844beabda0070e5ac",
+            "sha256": "4e61a0f74894e920a5a32b6af2cbb14ff2e41e3f509b0b90cfd03fa9de06fff1",
             "line_count": 18,
-            "source_commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+            "source_commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
             "mission_id": "M-20260715-150100-34bb"
           }
         ]
@@ -650,14 +650,14 @@
         "clean build/test/pack"
       ],
       "closure": {
-        "commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+        "commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
         "proof": [
           {
             "schema": "sks.release-finding-proof.v1",
             "path": ".sneakoscope/reports/release-closure/findings/F-021.json",
-            "sha256": "32e9ec484c49fd2305b4805f9a6753d5cdf9ac101e96e2176ef13266bd6c9551",
+            "sha256": "5ccfe7045829f62e6bcc75c138209877510779d066dace183c4c11dcd7110199",
             "line_count": 18,
-            "source_commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+            "source_commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
             "mission_id": "M-20260715-150100-34bb"
           }
         ]
@@ -683,14 +683,14 @@
         "no cap increase"
       ],
       "closure": {
-        "commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+        "commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
         "proof": [
           {
             "schema": "sks.release-finding-proof.v1",
             "path": ".sneakoscope/reports/release-closure/findings/F-022.json",
-            "sha256": "50ffb910f1ee617d13d2f45e0229d36961cdce5f289cad5cb9b82deef4086867",
+            "sha256": "81ab635ffa120ab681f4ef9dea45e8768b00fba1a061a47edd8545b2bbcc1e99",
             "line_count": 19,
-            "source_commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+            "source_commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
             "mission_id": "M-20260715-150100-34bb"
           }
         ]
@@ -712,14 +712,14 @@
         "docs parity"
       ],
       "closure": {
-        "commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+        "commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
         "proof": [
           {
             "schema": "sks.release-finding-proof.v1",
             "path": ".sneakoscope/reports/release-closure/findings/F-023.json",
-            "sha256": "c5eae9bc453193958008bdf7d8c1e3e91ff1561fea3caa39ab7b18b5c1367870",
+            "sha256": "4609dd91baed48916f42c50eebef38e5d79c89061db43331caf2badacfbb4b64",
             "line_count": 18,
-            "source_commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+            "source_commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
             "mission_id": "M-20260715-150100-34bb"
           }
         ]
@@ -744,14 +744,14 @@
         "terminal_uncertain"
       ],
       "closure": {
-        "commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+        "commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
         "proof": [
           {
             "schema": "sks.release-finding-proof.v1",
             "path": ".sneakoscope/reports/release-closure/findings/F-024.json",
-            "sha256": "0341f738ee07c9c0d326e44f75de86a6e50a1095231f07e71612057fdb92e25d",
+            "sha256": "cee9323b4022f28f4cbaf2e3eff0dade5b1fe40fbee7bfadc7cff5323a83ad07",
             "line_count": 19,
-            "source_commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+            "source_commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
             "mission_id": "M-20260715-150100-34bb"
           }
         ]
@@ -775,14 +775,14 @@
         "official Remote readiness only"
       ],
       "closure": {
-        "commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+        "commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
         "proof": [
           {
             "schema": "sks.release-finding-proof.v1",
             "path": ".sneakoscope/reports/release-closure/findings/F-025.json",
-            "sha256": "1081140f355e6a05049702d8ef1057da2e929d0f54cd555d48fc051a8d3b8c3e",
+            "sha256": "3fcc73a86d407dd180850559aedb8baaeba08d5d09cce86630d0f34053e3b2f2",
             "line_count": 18,
-            "source_commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+            "source_commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
             "mission_id": "M-20260715-150100-34bb"
           }
         ]
@@ -805,14 +805,14 @@
         "owner lock recovery"
       ],
       "closure": {
-        "commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+        "commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
         "proof": [
           {
             "schema": "sks.release-finding-proof.v1",
             "path": ".sneakoscope/reports/release-closure/findings/F-026.json",
-            "sha256": "f6d7e847fc58d6ec54c140c61d35680de2b6498319769eaf6d1926cf4f1c300d",
+            "sha256": "37d0687c3d092f04fd56da04b41004089979a29bc1c01172f7fd53572e506e0d",
             "line_count": 19,
-            "source_commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+            "source_commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
             "mission_id": "M-20260715-150100-34bb"
           }
         ]
@@ -838,14 +838,14 @@
         "R3 deny"
       ],
       "closure": {
-        "commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+        "commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
         "proof": [
           {
             "schema": "sks.release-finding-proof.v1",
             "path": ".sneakoscope/reports/release-closure/findings/F-027.json",
-            "sha256": "e808bc08027ab240a122fd74fed22b72ab96d8df26532847f9f0436b3708ec37",
+            "sha256": "7c064a391d11398e4b3d4900fbc7a693fd15f259a2c3978782767b810d4060d6",
             "line_count": 19,
-            "source_commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+            "source_commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
             "mission_id": "M-20260715-150100-34bb"
           }
         ]
@@ -870,14 +870,14 @@
         "429/replay tests"
       ],
       "closure": {
-        "commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+        "commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
         "proof": [
           {
             "schema": "sks.release-finding-proof.v1",
             "path": ".sneakoscope/reports/release-closure/findings/F-028.json",
-            "sha256": "3e162b761d3eb1173d7ac2b51743dc0439438d97f6ea7718d96636d5ea38e588",
+            "sha256": "07f41488da1a1752e9e14c9261eddc4a5f3972070d87623961c3dbbe13212444",
             "line_count": 19,
-            "source_commit": "fb00637d55a32c5dd48c75d0dddf9d4ce99c18a8",
+            "source_commit": "8af7942e1478e1291d6e71ddefe53da66a0f1d24",
             "mission_id": "M-20260715-150100-34bb"
           }
         ]
