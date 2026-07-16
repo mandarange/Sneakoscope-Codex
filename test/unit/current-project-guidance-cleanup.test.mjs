@@ -9,6 +9,7 @@ import {
 } from '../../dist/core/doctor/current-project-guidance.js';
 
 const RETIRED_POLICY = 'In MAD-SKS launches, allow only scoped non-MadDB high-risk work approved for the active invocation and keep catastrophic DB wipe/all-row safeguards active. In first-class MAD-DB cycles, the explicit $MAD-DB or sks mad-db run|exec|apply-migration invocation is the SQL-plane approval boundary: execute requested execute_sql/apply_migration mutations with mission-local write transport, read-back proof, and final read-only restoration. Supabase project/account/billing/credential control-plane actions remain denied.';
+const OBSERVED_RETIRED_POLICY = 'In MAD-SKS launches, allow only the scoped non-MadDB high-risk surfaces approved for the active invocation and keep catastrophic DB wipe/all-row safeguards active. In first-class MAD-DB cycles, the explicit $MAD-DB or sks mad-db run|exec|apply-migration invocation is the SQL-plane approval boundary: execute requested execute_sql/apply_migration mutations with mission-local write transport, read-back proof, and final read-only restoration. Supabase project/account/billing/credential control-plane actions remain denied.';
 
 test('retired guidance detection uses exact argv, option, and dollar-command boundaries', () => {
   for (const value of [
@@ -45,6 +46,49 @@ test('retired guidance detection uses exact argv, option, and dollar-command bou
     '$Agent_Bridge',
     '$Ralph2'
   ]) assert.equal(containsRetiredPublicSurface(value), false, value);
+});
+
+test('doctor replaces the observed managed retired policy in HOME and global runtime without rewriting customer policy', async () => {
+  const fixture = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-guidance-retired-policy-'));
+  const project = path.join(fixture, 'project');
+  const home = path.join(fixture, 'home');
+  const globalRuntimeRoot = path.join(fixture, 'global-runtime');
+  const customerConfig = Buffer.from([
+    '[auto_review]',
+    'policy = "Customer policy may mention $MAD-DB or sks mad-db and must stay byte-for-byte."',
+    ''
+  ].join('\n'));
+  try {
+    for (const root of [project, home, globalRuntimeRoot]) {
+      await fs.mkdir(path.join(root, '.codex'), { recursive: true });
+    }
+    await fs.writeFile(path.join(project, '.codex', 'config.toml'), customerConfig);
+    for (const root of [home, globalRuntimeRoot]) {
+      await fs.writeFile(path.join(root, '.codex', 'config.toml'), [
+        '[auto_review]',
+        `policy = "${OBSERVED_RETIRED_POLICY}"`,
+        ''
+      ].join('\n'));
+    }
+
+    const first = await reconcileCurrentProjectGuidance({ root: project, home, globalRuntimeRoot, fix: true });
+    assert.equal(first.ok, true, JSON.stringify(first));
+    assert.equal(first.detected_count, 2, JSON.stringify(first));
+    assert.equal(first.reconciled_count, 2, JSON.stringify(first));
+    assert.deepEqual(await fs.readFile(path.join(project, '.codex', 'config.toml')), customerConfig);
+    for (const root of [home, globalRuntimeRoot]) {
+      const config = await fs.readFile(path.join(root, '.codex', 'config.toml'), 'utf8');
+      assert.match(config, /\$MAD-SKS/);
+      assert.doesNotMatch(config, /\$MAD-DB|sks mad-db/i);
+    }
+
+    const second = await reconcileCurrentProjectGuidance({ root: project, home, globalRuntimeRoot, fix: true });
+    assert.equal(second.ok, true, JSON.stringify(second));
+    assert.equal(second.detected_count, 0, JSON.stringify(second));
+    assert.equal(second.reconciled_count, 0, JSON.stringify(second));
+  } finally {
+    await fs.rm(fixture, { recursive: true, force: true });
+  }
 });
 
 test('guidance reconciliation refuses a symlinked .codex ancestor without external writes', async () => {

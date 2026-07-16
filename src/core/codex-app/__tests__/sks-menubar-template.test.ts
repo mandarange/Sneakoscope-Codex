@@ -161,12 +161,16 @@ test('confirmation and input flows use sheets and never nest modal loops', () =>
 
 test('Providers saves Codex LB keys through secure stdin', () => {
   const providers = fs.readFileSync(path.join(resolvePackagedMenuBarSourceRoot(), 'Sources', 'ProvidersViewController.swift'), 'utf8');
+  const processClient = fs.readFileSync(path.join(resolvePackagedMenuBarSourceRoot(), 'Sources', 'ProcessClient.swift'), 'utf8');
   assert.match(providers, /Set Domain and Key…/);
   assert.match(providers, /Replace Key…/);
   assert.match(providers, /secure: true/);
   assert.match(providers, /"--api-key-stdin"/);
   assert.match(providers, /stdin: key \+ "\\n"/);
   assert.doesNotMatch(providers, /"--api-key",\s*key/);
+  assert.match(processClient, /arguments\.contains\("--api-key-stdin"\)/);
+  assert.match(processClient, /redact\(value, sensitiveValues: sensitiveValues\)/);
+  assert.match(processClient, /Child output was suppressed\./);
 });
 
 test('operation coordinator persists redacted bounded-tail receipts and excludes concurrent mutations', () => {
@@ -180,7 +184,7 @@ test('operation coordinator persists redacted bounded-tail receipts and excludes
   assert.match(swift, /private var activeMutation: \(id: String, group: String\)\?/);
   assert.match(swift, /if mutationGroup != nil, activeMutation != nil \{ return nil \}/);
   assert.match(swift, /if activeMutation\?\.id == snapshot\.id \{ activeMutation = nil \}/);
-  assert.match(swift, /redact\(command\.joined\(separator: " "\)\)/);
+  assert.match(swift, /redact\(command\.joined\(separator: " "\), sensitiveValues: sensitiveValues\)/);
   assert.match(swift, /64 \* 1024/);
 });
 

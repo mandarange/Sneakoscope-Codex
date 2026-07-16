@@ -4,6 +4,8 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
+const OBSERVED_RETIRED_POLICY = 'In MAD-SKS launches, allow only the scoped non-MadDB high-risk surfaces approved for the active invocation and keep catastrophic DB wipe/all-row safeguards active. In first-class MAD-DB cycles, the explicit $MAD-DB or sks mad-db run|exec|apply-migration invocation is the SQL-plane approval boundary: execute requested execute_sql/apply_migration mutations with mission-local write transport, read-back proof, and final read-only restoration. Supabase project/account/billing/credential control-plane actions remain denied.';
+
 test('project update migration receipt cleans disposable closed-mission runtime sessions', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-update-retention-unit-'));
   const home = path.join(root, 'home');
@@ -251,6 +253,14 @@ test('project update migration reconciles HOME and global-runtime guidance and r
       'approval_policy = "on-request"',
       'sandbox_mode = "workspace-write"',
       'model_reasoning_effort = "medium"',
+      '',
+      '[auto_review]',
+      `policy = "${OBSERVED_RETIRED_POLICY}"`,
+      ''
+    ].join('\n'));
+    await writeText(path.join(globalRuntimeRoot, '.codex', 'config.toml'), [
+      '[auto_review]',
+      `policy = "${OBSERVED_RETIRED_POLICY}"`,
       ''
     ].join('\n'));
     await writeText(path.join(home, '.codex', 'sks-team.config.toml'), [
@@ -276,7 +286,11 @@ test('project update migration reconciles HOME and global-runtime guidance and r
       assert.doesNotMatch(text, /\$Team|sks team|\$MAD-DB|sks mad-db/i);
     }
     const homeConfig = await fs.readFile(path.join(home, '.codex', 'config.toml'), 'utf8');
-    assert.doesNotMatch(homeConfig, /profiles\.sks-team/);
+    assert.match(homeConfig, /\$MAD-SKS/);
+    assert.doesNotMatch(homeConfig, /profiles\.sks-team|\$MAD-DB|sks mad-db/i);
+    const globalConfig = await fs.readFile(path.join(globalRuntimeRoot, '.codex', 'config.toml'), 'utf8');
+    assert.match(globalConfig, /\$MAD-SKS/);
+    assert.doesNotMatch(globalConfig, /\$MAD-DB|sks mad-db/i);
     await assertMissing(path.join(home, '.codex', 'sks-team.config.toml'));
 
     for (const file of [nestedManaged, nestedUser]) {
