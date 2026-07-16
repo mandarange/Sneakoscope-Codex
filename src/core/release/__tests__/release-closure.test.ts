@@ -99,11 +99,13 @@ test('release closure fails closed for ledger inventory and post-main blocker dr
       needed_to_unblock: 'push verified main, then obtain maintainer approval'
     }
     ledger.items[19] = { ...ledger.items[19], status: 'blocked', blocker: validBlocker }
+    ledger.items[24] = { ...ledger.items[24], status: 'blocked', blocker: validBlocker }
     ledger.items[5] = { ...ledger.items[5], status: 'blocked', blocker: validBlocker }
     ledger.all_work_items_verified = false
     writeFixtureJson(ledgerFile, ledger)
     const result = inspect(blockedFixture)
     assert.equal(result.blockers.includes('work_order_item_invalid:WO-019'), false)
+    assert.equal(result.blockers.includes('work_order_item_invalid:WO-024'), false)
     assert.equal(result.blockers.includes('work_order_item_invalid:WO-005'), true)
   } finally {
     fs.rmSync(blockedFixture.root, { recursive: true, force: true })

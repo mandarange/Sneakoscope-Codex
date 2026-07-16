@@ -14,7 +14,7 @@ export const WORK_ORDER_IDS = Array.from({ length: 28 }, (_, index) => `WO-${Str
 export const P0 = new Set(['F-001', 'F-002', 'F-003', 'F-006', 'F-009', 'F-013', 'F-015', 'F-018', 'F-019', 'F-020', 'F-025', 'F-027'])
 export const P2 = new Set(['F-017', 'F-023'])
 export const WORK_ORDER_SHA256 = '601bb141c9365c541a0abf3f361c2bafbd7b5a7c80557bccb8dd1dedaa12aa11'
-export const POST_MAIN_WORK_ORDERS = new Set(['WO-002', 'WO-019', 'WO-020', 'WO-022', 'WO-023', 'WO-026'])
+export const POST_MAIN_WORK_ORDERS = new Set(['WO-002', 'WO-019', 'WO-020', 'WO-022', 'WO-023', 'WO-024', 'WO-026'])
 
 export const REQUIRED_ARTIFACTS = {
   findings: { path: (version: string) => `.sneakoscope/release/${version}/audit/findings.json`, schema: 'sks.release-findings.v1' },
