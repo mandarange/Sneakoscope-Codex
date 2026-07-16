@@ -225,6 +225,7 @@ function codexLbRecoveryStatusReady(status: any, probeRequired = false): boolean
 
 async function runDoctorJsonFastPath(args: any = [], root: string) {
   const startedAtMs = Date.now();
+  const reportFile = readOption(args, '--report-file', null);
   const codexBin = readOption(args, '--codex-bin', process.env.SKS_DOCTOR_CODEX_BIN || '');
   const configProbeOpts = {
     codexProbe: false,
@@ -284,7 +285,7 @@ async function runDoctorJsonFastPath(args: any = [], root: string) {
     next_actions: ['Run sks doctor --full --json for deep diagnostics.'],
     root,
     fast_path: true,
-    no_fix_write_policy: 'no_writes_performed',
+    no_fix_write_policy: reportFile ? 'report_file_only' : 'no_writes_performed',
     arg_warnings: doctorArgWarnings(args),
     node: { ok: Number(process.versions.node.split('.')[0]) >= 20, version: process.version },
     codex,
@@ -341,7 +342,7 @@ async function runDoctorJsonFastPath(args: any = [], root: string) {
     local_model: null,
     agent_role_config: { schema: 'sks.agent-role-config-repair.v1', ok: true, apply: false, skipped: true, blockers: [] },
     zellij_readiness: zellijReadiness,
-    codex_permission_profiles: { skipped: true, reason: 'doctor_json_fast_path_no_report_write' },
+    codex_permission_profiles: { skipped: true, reason: 'doctor_json_fast_path_optional_diagnostics_skipped' },
     command_aliases: { schema: 'sks.command-alias-cleanup.v1', ok: true, skipped: true, reason: 'doctor_json_fast_path_no_write' },
     sks_temp_sweep: { ok: true, skipped: true, action_count: 0, reason: 'doctor_without_fix', error: null },
     imagegen: { ok: false, auth_readiness: null, codex_app_builtin_available: false },
@@ -383,6 +384,7 @@ async function runDoctorJsonFastPath(args: any = [], root: string) {
       sks_temp_sweep: { ok: true, skipped: true, reason: 'doctor_without_fix', actions: [] }
     }
   };
+  if (reportFile) await writeJsonReportFile(reportFile, result);
   printJson(result);
   if (!result.ok) process.exitCode = 1;
   return result;

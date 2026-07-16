@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 // @ts-nocheck
 import { spawnSync } from 'node:child_process'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { assertGate, emitGate, root } from './sks-1-18-gate-lib.js'
 
 const started = Date.now()
@@ -25,5 +28,23 @@ assertGate(parsed.doctor_fix_transaction === null, 'doctor --json no-fix must no
 assertGate(parsed.repair?.setup === null, 'doctor --json no-fix must not run setup repair', parsed.repair?.setup)
 assertGate(parsed.repair?.sks_temp_sweep?.skipped === true, 'doctor --json no-fix must not sweep runtime state', parsed.repair?.sks_temp_sweep)
 assertGate(elapsedMs <= 1200, 'doctor --json fast path must stay under 1200ms p95 target in this gate', { elapsed_ms: elapsedMs })
+
+const reportRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-doctor-fast-report-'))
+try {
+  const reportFile = path.join(reportRoot, 'doctor.json')
+  const withReport = spawnSync(process.execPath, ['dist/bin/sks.js', 'doctor', '--json', '--report-file', reportFile], {
+    cwd: root,
+    encoding: 'utf8',
+    maxBuffer: 16 * 1024 * 1024
+  })
+  const stdoutReport = JSON.parse(withReport.stdout || '{}')
+  const fileReport = fs.existsSync(reportFile) ? JSON.parse(fs.readFileSync(reportFile, 'utf8')) : null
+  assertGate(withReport.status === 0, 'doctor --json --report-file must exit 0', { status: withReport.status, stderr: withReport.stderr.slice(-2000), stdout: withReport.stdout.slice(-2000) })
+  assertGate(fs.existsSync(reportFile) && fs.statSync(reportFile).isFile(), 'doctor --json --report-file must write a regular report file', { report_file: reportFile })
+  assertGate(JSON.stringify(fileReport) === JSON.stringify(stdoutReport), 'doctor report file must match stdout JSON', { report_file: reportFile })
+  assertGate(fileReport?.no_fix_write_policy === 'report_file_only', 'doctor report output must disclose report-file-only writes', fileReport)
+} finally {
+  fs.rmSync(reportRoot, { recursive: true, force: true })
+}
 
 emitGate('doctor:fastpath', { elapsed_ms: elapsedMs })
