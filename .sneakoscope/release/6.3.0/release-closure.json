@@ -1,0 +1,770 @@
+{
+  "schema": "sks.release-closure-manifest.v1",
+  "version": "6.3.0",
+  "baseline": "a6634b42f3406f8d567183c611726d0c0e355421",
+  "source_commit": "1a69932279659c57b3d6aaf7e36c9124db73a0ea",
+  "mission_id": "M-20260715-150100-34bb",
+  "head_binding": "tracked_manifest_git_blob_at_head_v1",
+  "artifacts": {
+    "findings": {
+      "path": ".sneakoscope/release/6.3.0/audit/findings.json",
+      "sha256": "a5101e2ae7dcf477aee6a16a473d2c0f534eef562987b7b0b7a5c399593345bd",
+      "line_count": 887,
+      "schema": "sks.release-findings.v1"
+    },
+    "deletion": {
+      "path": ".sneakoscope/release/6.3.0/audit/overengineering-deletions.json",
+      "sha256": "d62830a28956c78111a4aaaddaa2c8f97676b5112b95c23d1ea75a1c761ddb16",
+      "line_count": 245,
+      "schema": "sks.release-overengineering-deletions.v1"
+    },
+    "mission": {
+      "path": ".sneakoscope/missions/M-20260715-150100-34bb/mission.json",
+      "sha256": "3896ca8938c6a823a67bcfbcb2d526a80d4e82e136642b4e1fac0a3f89b109e8",
+      "line_count": 15,
+      "schema": null
+    },
+    "plan": {
+      "path": ".sneakoscope/missions/M-20260715-150100-34bb/subagent-plan.json",
+      "sha256": "a2be7a89af990deb82d42d7ea071ccd1c87877272190f91d8bf0933eeb330b94",
+      "line_count": 80,
+      "schema": "sks.subagent-plan.v1"
+    },
+    "events": {
+      "path": ".sneakoscope/missions/M-20260715-150100-34bb/subagent-events.jsonl",
+      "sha256": "a8c33548d8c307ac8edad2263318a7a98936c0a0771bdf041fa74282ec5caae7",
+      "line_count": 6,
+      "schema": "sks.subagent-event-log.v1"
+    },
+    "parent_summary": {
+      "path": ".sneakoscope/missions/M-20260715-150100-34bb/subagent-parent-summary.json",
+      "sha256": "a2e30272695daea0d0e433c05147e1ea30c6eb22e0da2fd1838b32bba1b2de0e",
+      "line_count": 39,
+      "schema": "sks.subagent-parent-summary.v1"
+    },
+    "evidence": {
+      "path": ".sneakoscope/missions/M-20260715-150100-34bb/subagent-evidence.json",
+      "sha256": "32e5bc312cc49feb9075f4ca22be4991eb6e33fe4b1281a9313232d39ac20eac",
+      "line_count": 39,
+      "schema": "sks.subagent-evidence.v1"
+    },
+    "summary": {
+      "path": ".sneakoscope/missions/M-20260715-150100-34bb/naruto-summary.json",
+      "sha256": "79c84631599366565cc45c66cbeb7a1c0ef8315dd14dd6796b9f31547f952390",
+      "line_count": 91,
+      "schema": "sks.naruto-subagent-workflow.v1"
+    },
+    "gate": {
+      "path": ".sneakoscope/missions/M-20260715-150100-34bb/naruto-gate.json",
+      "sha256": "7fc21ebb0a5dc84424935236bb6a1804ddb7598eb48dfc85f06f4b5467b42555",
+      "line_count": 34,
+      "schema": "sks.naruto-gate.v1"
+    },
+    "ssot": {
+      "path": ".sneakoscope/missions/M-20260715-150100-34bb/ssot-guard.json",
+      "sha256": "2c95272ca004f5e5d52680ab919b7b413526cefb3bb92fa3c21e6fb8a00633c5",
+      "line_count": 128,
+      "schema": "sks.ssot-guard.v1"
+    },
+    "ledger": {
+      "path": ".sneakoscope/missions/M-20260715-150100-34bb/work-order-ledger.json",
+      "sha256": "2f012d6624029b5e0e60d2f3c02f3c70046047c17d8443fe15705e4c3005769b",
+      "line_count": 1393,
+      "schema": null
+    }
+  },
+  "finding_proofs": [
+    {
+      "finding_id": "F-001",
+      "path": ".sneakoscope/reports/release-closure/findings/F-001.json",
+      "sha256": "1e86be2ea0af9d826d4b5c5b546af82b52b2ade87583605320df3e72f164532e",
+      "line_count": 20
+    },
+    {
+      "finding_id": "F-002",
+      "path": ".sneakoscope/reports/release-closure/findings/F-002.json",
+      "sha256": "f7e507f3fc5e0936fe611ad58f079e4b73aa1fccba9a81204e67f9445a55dee6",
+      "line_count": 20
+    },
+    {
+      "finding_id": "F-003",
+      "path": ".sneakoscope/reports/release-closure/findings/F-003.json",
+      "sha256": "b30ed3530cb03093613a125c56ae11a0a7cddeb4270c49cebe6e69adc69ccd59",
+      "line_count": 19
+    },
+    {
+      "finding_id": "F-004",
+      "path": ".sneakoscope/reports/release-closure/findings/F-004.json",
+      "sha256": "02202b3a084d9ea9044dc5f7ddfe67ebd98f3f0b92490bc2b13222febd932f39",
+      "line_count": 19
+    },
+    {
+      "finding_id": "F-005",
+      "path": ".sneakoscope/reports/release-closure/findings/F-005.json",
+      "sha256": "9d852bb8f5db8f22488262d02221f3438d3fbb533907cad0c5aa81bf58026cbc",
+      "line_count": 19
+    },
+    {
+      "finding_id": "F-006",
+      "path": ".sneakoscope/reports/release-closure/findings/F-006.json",
+      "sha256": "cc0d32271e37af18256b1f5456c55422e7c3c0b08d6ea6c1241b548ed9f0314e",
+      "line_count": 19
+    },
+    {
+      "finding_id": "F-007",
+      "path": ".sneakoscope/reports/release-closure/findings/F-007.json",
+      "sha256": "b26d6e17d0d932f143a8ecc7ea44c4342630ebd1f60207f9401b206c01c993f8",
+      "line_count": 18
+    },
+    {
+      "finding_id": "F-008",
+      "path": ".sneakoscope/reports/release-closure/findings/F-008.json",
+      "sha256": "22790cb9795e5c46e70af2c038a3fcf9a07f9f36e82b112b827292b3ca11d256",
+      "line_count": 20
+    },
+    {
+      "finding_id": "F-009",
+      "path": ".sneakoscope/reports/release-closure/findings/F-009.json",
+      "sha256": "1b0bba286652b96f42fe7e544f2d91f6a502e599f70a27e1bbded51003b58881",
+      "line_count": 19
+    },
+    {
+      "finding_id": "F-010",
+      "path": ".sneakoscope/reports/release-closure/findings/F-010.json",
+      "sha256": "404e6fbef7b60e308ddc7e371b68266b50893975ff9dc2fe80b37d7a382a0e2d",
+      "line_count": 20
+    },
+    {
+      "finding_id": "F-011",
+      "path": ".sneakoscope/reports/release-closure/findings/F-011.json",
+      "sha256": "8541ac4c6c3b56a381f8bc4d30d0ba174861ff3386c748a50c61f88cf3107612",
+      "line_count": 20
+    },
+    {
+      "finding_id": "F-012",
+      "path": ".sneakoscope/reports/release-closure/findings/F-012.json",
+      "sha256": "2156edfe4a8e7698c9057e4cb10a646ecc006cbc8e6f8723245e10ec907a8a20",
+      "line_count": 19
+    },
+    {
+      "finding_id": "F-013",
+      "path": ".sneakoscope/reports/release-closure/findings/F-013.json",
+      "sha256": "612f05d93733628b91d1a4cd4c5e9ba511dab70609cc5425330efefd713848ff",
+      "line_count": 19
+    },
+    {
+      "finding_id": "F-014",
+      "path": ".sneakoscope/reports/release-closure/findings/F-014.json",
+      "sha256": "2699def0de812025a61ee7d0c011a080797734fe22935073ea37a0d6e171ebbe",
+      "line_count": 18
+    },
+    {
+      "finding_id": "F-015",
+      "path": ".sneakoscope/reports/release-closure/findings/F-015.json",
+      "sha256": "8b0ec3819ce315d810bb3fb4772cf2b22936324d62f7eed917947c9f5c951570",
+      "line_count": 18
+    },
+    {
+      "finding_id": "F-016",
+      "path": ".sneakoscope/reports/release-closure/findings/F-016.json",
+      "sha256": "3862b925dabda8411c30711fa1840ebb68a600aa1c93bde54032ad49568c6f5d",
+      "line_count": 19
+    },
+    {
+      "finding_id": "F-017",
+      "path": ".sneakoscope/reports/release-closure/findings/F-017.json",
+      "sha256": "ba73350c548c364b7a33830208197ddcff3536420ad4350576622fe74e41de6b",
+      "line_count": 18
+    },
+    {
+      "finding_id": "F-018",
+      "path": ".sneakoscope/reports/release-closure/findings/F-018.json",
+      "sha256": "6e902a745be72ebb97448c0d5e45913f9f433d71ae84b22a917168f3498d9b87",
+      "line_count": 19
+    },
+    {
+      "finding_id": "F-019",
+      "path": ".sneakoscope/reports/release-closure/findings/F-019.json",
+      "sha256": "c4769b5c4cbdc16ed7a0af125e34af883b529900488cebb6c7417b8b2b648705",
+      "line_count": 19
+    },
+    {
+      "finding_id": "F-020",
+      "path": ".sneakoscope/reports/release-closure/findings/F-020.json",
+      "sha256": "c4239c9898c446de9d840bc9d64ff314818b54d790483cbde7a874edfb952d64",
+      "line_count": 18
+    },
+    {
+      "finding_id": "F-021",
+      "path": ".sneakoscope/reports/release-closure/findings/F-021.json",
+      "sha256": "57710b421411e1c1314efab2f167b51f53a19ceba257e23ae94c852928af2e62",
+      "line_count": 18
+    },
+    {
+      "finding_id": "F-022",
+      "path": ".sneakoscope/reports/release-closure/findings/F-022.json",
+      "sha256": "7de4aa766518ff9282615373d23a9f353d347040ae64d2332b75f8496ea21331",
+      "line_count": 19
+    },
+    {
+      "finding_id": "F-023",
+      "path": ".sneakoscope/reports/release-closure/findings/F-023.json",
+      "sha256": "9cfe9bc4c3c995d61931d35d99f402147bed5ebfc4c8179062ac62459ac828ba",
+      "line_count": 18
+    },
+    {
+      "finding_id": "F-024",
+      "path": ".sneakoscope/reports/release-closure/findings/F-024.json",
+      "sha256": "f0f0ceb07ebbfc3b79dc8459611c680a0522d1fa351c671cc74a7238c9622c35",
+      "line_count": 19
+    },
+    {
+      "finding_id": "F-025",
+      "path": ".sneakoscope/reports/release-closure/findings/F-025.json",
+      "sha256": "2357069f29b348d803888aa4a6d97f3b07338b468262915775f9b39a565b72fe",
+      "line_count": 18
+    },
+    {
+      "finding_id": "F-026",
+      "path": ".sneakoscope/reports/release-closure/findings/F-026.json",
+      "sha256": "304d8ff11cf27850b12910ae82619ed4916559d7a864011d1857c2c6cef87092",
+      "line_count": 19
+    },
+    {
+      "finding_id": "F-027",
+      "path": ".sneakoscope/reports/release-closure/findings/F-027.json",
+      "sha256": "d85ab2d958aa0b4c56cf5b67a08bc4b9df8f3463ea3a15d3a50d6350fdcda132",
+      "line_count": 19
+    },
+    {
+      "finding_id": "F-028",
+      "path": ".sneakoscope/reports/release-closure/findings/F-028.json",
+      "sha256": "4ec47058aa4f929137bb0e6cdf36ede320c41e4c3a0ffe1576a84d91cf6e870d",
+      "line_count": 19
+    }
+  ],
+  "work_order_evidence": [
+    {
+      "work_order_id": "WO-000",
+      "kind": "implementation",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-000.json",
+      "sha256": "aa840178cfbd42d4d996af977cec93c7d9a85a2add57bb1dace6a979f99eaadf",
+      "line_count": 20
+    },
+    {
+      "work_order_id": "WO-000",
+      "kind": "verification",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-000.json",
+      "sha256": "aa840178cfbd42d4d996af977cec93c7d9a85a2add57bb1dace6a979f99eaadf",
+      "line_count": 20
+    },
+    {
+      "work_order_id": "WO-001",
+      "kind": "implementation",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-001.json",
+      "sha256": "ce9cfcfe2c646394fd1b24b1dbeeee52d9faa0a8770f1034df6a1b02c6c3a64d",
+      "line_count": 20
+    },
+    {
+      "work_order_id": "WO-001",
+      "kind": "verification",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-001.json",
+      "sha256": "ce9cfcfe2c646394fd1b24b1dbeeee52d9faa0a8770f1034df6a1b02c6c3a64d",
+      "line_count": 20
+    },
+    {
+      "work_order_id": "WO-002",
+      "kind": "implementation",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-002.json",
+      "sha256": "2ca36bff89a801e2463672ca7e1c4d31ae1cbdbe624853e3873644a3b2026882",
+      "line_count": 18
+    },
+    {
+      "work_order_id": "WO-003",
+      "kind": "implementation",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-003.json",
+      "sha256": "aa4b1110d55dd66cfb8ffc647408c1b59f680029ef0a06c561a4bcb137b87d2a",
+      "line_count": 20
+    },
+    {
+      "work_order_id": "WO-003",
+      "kind": "verification",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-003.json",
+      "sha256": "aa4b1110d55dd66cfb8ffc647408c1b59f680029ef0a06c561a4bcb137b87d2a",
+      "line_count": 20
+    },
+    {
+      "work_order_id": "WO-004",
+      "kind": "implementation",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-004.json",
+      "sha256": "4af5ec8454332becc2c52dd8fff0a4e94f4218fab723d62b735a9dd60212dcc5",
+      "line_count": 21
+    },
+    {
+      "work_order_id": "WO-004",
+      "kind": "verification",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-004.json",
+      "sha256": "4af5ec8454332becc2c52dd8fff0a4e94f4218fab723d62b735a9dd60212dcc5",
+      "line_count": 21
+    },
+    {
+      "work_order_id": "WO-005",
+      "kind": "implementation",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-005.json",
+      "sha256": "ea819a85e9b0970a73b484afc8290423a9f2570ef4c1f00ba18bae3dbd170a0f",
+      "line_count": 21
+    },
+    {
+      "work_order_id": "WO-005",
+      "kind": "verification",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-005.json",
+      "sha256": "ea819a85e9b0970a73b484afc8290423a9f2570ef4c1f00ba18bae3dbd170a0f",
+      "line_count": 21
+    },
+    {
+      "work_order_id": "WO-006",
+      "kind": "implementation",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-006.json",
+      "sha256": "122b7f71f7e66d058dd001ad7bba7e0afb4e91ce8e5f2d371bd7b605d8a493a9",
+      "line_count": 20
+    },
+    {
+      "work_order_id": "WO-006",
+      "kind": "verification",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-006.json",
+      "sha256": "122b7f71f7e66d058dd001ad7bba7e0afb4e91ce8e5f2d371bd7b605d8a493a9",
+      "line_count": 20
+    },
+    {
+      "work_order_id": "WO-007",
+      "kind": "implementation",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-007.json",
+      "sha256": "9f4f51f89a0c3c6d3b2a727fadb47ad083423c3e7180b0c7f2dbf1d26b16abd9",
+      "line_count": 20
+    },
+    {
+      "work_order_id": "WO-007",
+      "kind": "verification",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-007.json",
+      "sha256": "9f4f51f89a0c3c6d3b2a727fadb47ad083423c3e7180b0c7f2dbf1d26b16abd9",
+      "line_count": 20
+    },
+    {
+      "work_order_id": "WO-008",
+      "kind": "implementation",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-008.json",
+      "sha256": "84fb2b495192929bc27e6e83c0ee8067d8af6e9ca7af71819414f9faa0debaac",
+      "line_count": 20
+    },
+    {
+      "work_order_id": "WO-008",
+      "kind": "verification",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-008.json",
+      "sha256": "84fb2b495192929bc27e6e83c0ee8067d8af6e9ca7af71819414f9faa0debaac",
+      "line_count": 20
+    },
+    {
+      "work_order_id": "WO-009",
+      "kind": "implementation",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-009.json",
+      "sha256": "6727be8024d4415c821ef520a9e58b1da736b930f9d57b1ffdc808777a924054",
+      "line_count": 20
+    },
+    {
+      "work_order_id": "WO-009",
+      "kind": "verification",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-009.json",
+      "sha256": "6727be8024d4415c821ef520a9e58b1da736b930f9d57b1ffdc808777a924054",
+      "line_count": 20
+    },
+    {
+      "work_order_id": "WO-010",
+      "kind": "implementation",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-010.json",
+      "sha256": "cd2fda20682bd2d04edb31d11d747f115f27adc1fc6e7a5e3e29bc8b4880cb80",
+      "line_count": 20
+    },
+    {
+      "work_order_id": "WO-010",
+      "kind": "verification",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-010.json",
+      "sha256": "cd2fda20682bd2d04edb31d11d747f115f27adc1fc6e7a5e3e29bc8b4880cb80",
+      "line_count": 20
+    },
+    {
+      "work_order_id": "WO-011",
+      "kind": "implementation",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-011.json",
+      "sha256": "66d3203c0700f5ec3c211dbc2e0c14a3d2f0749cc648e209e488ac65626fc71c",
+      "line_count": 21
+    },
+    {
+      "work_order_id": "WO-011",
+      "kind": "verification",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-011.json",
+      "sha256": "66d3203c0700f5ec3c211dbc2e0c14a3d2f0749cc648e209e488ac65626fc71c",
+      "line_count": 21
+    },
+    {
+      "work_order_id": "WO-012",
+      "kind": "implementation",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-012.json",
+      "sha256": "fc3e10d680512ac68a0f4f7c23267301426950ac4539f98aa80adb177b465308",
+      "line_count": 20
+    },
+    {
+      "work_order_id": "WO-012",
+      "kind": "verification",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-012.json",
+      "sha256": "fc3e10d680512ac68a0f4f7c23267301426950ac4539f98aa80adb177b465308",
+      "line_count": 20
+    },
+    {
+      "work_order_id": "WO-013",
+      "kind": "implementation",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-013.json",
+      "sha256": "c7d68c469193692360b3db0958148d0aaea49dfeae296d52406da9b1f997c786",
+      "line_count": 20
+    },
+    {
+      "work_order_id": "WO-013",
+      "kind": "verification",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-013.json",
+      "sha256": "c7d68c469193692360b3db0958148d0aaea49dfeae296d52406da9b1f997c786",
+      "line_count": 20
+    },
+    {
+      "work_order_id": "WO-014",
+      "kind": "implementation",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-014.json",
+      "sha256": "54f66bb6ebc337e805a2c55f921922d46d2e3f944655f719afddc4756e7a3acb",
+      "line_count": 20
+    },
+    {
+      "work_order_id": "WO-014",
+      "kind": "verification",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-014.json",
+      "sha256": "54f66bb6ebc337e805a2c55f921922d46d2e3f944655f719afddc4756e7a3acb",
+      "line_count": 20
+    },
+    {
+      "work_order_id": "WO-015",
+      "kind": "implementation",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-015.json",
+      "sha256": "98eb07d8834b3ac7746d064ecf6339fe766db4893de505b5d180f47c06230a73",
+      "line_count": 20
+    },
+    {
+      "work_order_id": "WO-015",
+      "kind": "verification",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-015.json",
+      "sha256": "98eb07d8834b3ac7746d064ecf6339fe766db4893de505b5d180f47c06230a73",
+      "line_count": 20
+    },
+    {
+      "work_order_id": "WO-016",
+      "kind": "implementation",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-016.json",
+      "sha256": "00fb18e25792d751d953efe7b636c2f43257a3a14cb2a1970079d6b0e63beefa",
+      "line_count": 20
+    },
+    {
+      "work_order_id": "WO-016",
+      "kind": "verification",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-016.json",
+      "sha256": "00fb18e25792d751d953efe7b636c2f43257a3a14cb2a1970079d6b0e63beefa",
+      "line_count": 20
+    },
+    {
+      "work_order_id": "WO-017",
+      "kind": "implementation",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-017.json",
+      "sha256": "9e44e6d59f08fc12bf4d3b333fe4dd0ce092cd0e553cfb817c7099fe7857ab60",
+      "line_count": 21
+    },
+    {
+      "work_order_id": "WO-017",
+      "kind": "verification",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-017.json",
+      "sha256": "9e44e6d59f08fc12bf4d3b333fe4dd0ce092cd0e553cfb817c7099fe7857ab60",
+      "line_count": 21
+    },
+    {
+      "work_order_id": "WO-018",
+      "kind": "implementation",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-018.json",
+      "sha256": "59644a4e3568d268e743ab40efc1a90c580dc6c6ca668d107f9ba2dd75025105",
+      "line_count": 21
+    },
+    {
+      "work_order_id": "WO-018",
+      "kind": "verification",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-018.json",
+      "sha256": "59644a4e3568d268e743ab40efc1a90c580dc6c6ca668d107f9ba2dd75025105",
+      "line_count": 21
+    },
+    {
+      "work_order_id": "WO-019",
+      "kind": "implementation",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-019.json",
+      "sha256": "e0160d70da11df430ae43ab0b4f91bb9aa4fc01376f5abb26457dc9bbe907b13",
+      "line_count": 18
+    },
+    {
+      "work_order_id": "WO-020",
+      "kind": "implementation",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-020.json",
+      "sha256": "5d5d1116b236cd52c27bde7e72517072714b04d98f137b5fd9712f54e611a3d9",
+      "line_count": 18
+    },
+    {
+      "work_order_id": "WO-021",
+      "kind": "implementation",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-021.json",
+      "sha256": "74566bfa16fee6f5c66785e177e26322b78f416e3d0a6ce3a4836db311c4bbf7",
+      "line_count": 21
+    },
+    {
+      "work_order_id": "WO-021",
+      "kind": "verification",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-021.json",
+      "sha256": "74566bfa16fee6f5c66785e177e26322b78f416e3d0a6ce3a4836db311c4bbf7",
+      "line_count": 21
+    },
+    {
+      "work_order_id": "WO-022",
+      "kind": "implementation",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-022.json",
+      "sha256": "7df4cf987b998d3a63791c1585da7fb96f3b6839bd670b132374b52b08aab251",
+      "line_count": 18
+    },
+    {
+      "work_order_id": "WO-023",
+      "kind": "implementation",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-023.json",
+      "sha256": "52e94117ef6adcd6dc05cc43acc9533ed0790999d8cd6509d445a97f411080f9",
+      "line_count": 18
+    },
+    {
+      "work_order_id": "WO-024",
+      "kind": "implementation",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-024.json",
+      "sha256": "236cd67fbc18d06b5a8fb68563fd558f06168c55c611a06cf819fe1a619f06f0",
+      "line_count": 20
+    },
+    {
+      "work_order_id": "WO-024",
+      "kind": "verification",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-024.json",
+      "sha256": "236cd67fbc18d06b5a8fb68563fd558f06168c55c611a06cf819fe1a619f06f0",
+      "line_count": 20
+    },
+    {
+      "work_order_id": "WO-025",
+      "kind": "implementation",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-025.json",
+      "sha256": "7499bcb719cd167a3d37f7fefe3ea8ce919802133b14ff976e5087c4944b679e",
+      "line_count": 20
+    },
+    {
+      "work_order_id": "WO-025",
+      "kind": "verification",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-025.json",
+      "sha256": "7499bcb719cd167a3d37f7fefe3ea8ce919802133b14ff976e5087c4944b679e",
+      "line_count": 20
+    },
+    {
+      "work_order_id": "WO-026",
+      "kind": "implementation",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-026.json",
+      "sha256": "b345aeac21f5fa42471bbe8661a3ad4047a1d8b888018e887a61102515e847c8",
+      "line_count": 18
+    },
+    {
+      "work_order_id": "WO-027",
+      "kind": "implementation",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-027.json",
+      "sha256": "2d6402019d4c83948c5a6cf2e9d0f376e888beb1769703e8e6a84fb1701327fb",
+      "line_count": 21
+    },
+    {
+      "work_order_id": "WO-027",
+      "kind": "verification",
+      "path": ".sneakoscope/reports/release-closure/work-orders/WO-027.json",
+      "sha256": "2d6402019d4c83948c5a6cf2e9d0f376e888beb1769703e8e6a84fb1701327fb",
+      "line_count": 21
+    }
+  ],
+  "source_attachment": {
+    "path": "/Users/weklem/Desktop/111_SKS_6.3.0_a6634b42_GPT-5.6-Sol-Ultra_Parallel_Release_Work_Order_v5.md",
+    "sha256": "601bb141c9365c541a0abf3f361c2bafbd7b5a7c80557bccb8dd1dedaa12aa11",
+    "line_count": 3021,
+    "slice_hash_semantics": "utf8_lf_lines_with_terminal_lf_v1",
+    "slices": [
+      {
+        "id": "WO-000",
+        "line_start": 1,
+        "line_end": 34,
+        "sha256": "289af04f328cbc126ef39e39a2a74ce83cb7e2f99defb636d11972bd7b366131"
+      },
+      {
+        "id": "WO-001",
+        "line_start": 35,
+        "line_end": 150,
+        "sha256": "a416da849b2614a49817ba3ed00361528134e8db73ad3233d65aa8b684170a87"
+      },
+      {
+        "id": "WO-002",
+        "line_start": 151,
+        "line_end": 224,
+        "sha256": "851edfb2cd6801dac5cae6bee8cfa880f0b3b97761c2e11064fdb7c109bfabf4"
+      },
+      {
+        "id": "WO-003",
+        "line_start": 225,
+        "line_end": 339,
+        "sha256": "886bcff4c25f89ed1d40be85f97eed5ff593dfc233ff281faa69349448e6336a"
+      },
+      {
+        "id": "WO-004",
+        "line_start": 340,
+        "line_end": 421,
+        "sha256": "99a787d05bf5e663c6b04b1d8c8c1de7df00a175cec5db52ed6fa1894ee9961e"
+      },
+      {
+        "id": "WO-005",
+        "line_start": 422,
+        "line_end": 731,
+        "sha256": "bba114bbc1ce3a397dbdb460ad49c9affaf35d608d43f47c7b52764908aa9a9f"
+      },
+      {
+        "id": "WO-006",
+        "line_start": 732,
+        "line_end": 988,
+        "sha256": "fbd76e051ae8891808582c937b367a80e896de9494723972a096576990e5f1ae"
+      },
+      {
+        "id": "WO-007",
+        "line_start": 989,
+        "line_end": 1147,
+        "sha256": "47b7a620e6276e8579786526a3b5df846d6dcc7ea69ace0c89436e2a2eb33d2e"
+      },
+      {
+        "id": "WO-008",
+        "line_start": 1148,
+        "line_end": 1221,
+        "sha256": "0dc6e5499efc1f8ded0f984753dc88526b7be5bd8e27e4160a2c77bc1908efd6"
+      },
+      {
+        "id": "WO-009",
+        "line_start": 1222,
+        "line_end": 1291,
+        "sha256": "8cd49f384e439c48fcbeaf840a59ae42e4985bb97e65ded1e489df46c352671d"
+      },
+      {
+        "id": "WO-010",
+        "line_start": 1292,
+        "line_end": 1339,
+        "sha256": "97a478617740a2178539dadd3a8dd6ff468940d5d08814d9831b59b041c72252"
+      },
+      {
+        "id": "WO-011",
+        "line_start": 1340,
+        "line_end": 1592,
+        "sha256": "b74562b6076f4468d287fa6052543b11b0881d2a51374e7637384fc607dc3380"
+      },
+      {
+        "id": "WO-012",
+        "line_start": 1593,
+        "line_end": 1653,
+        "sha256": "a90d764413dd3d5311795c738abadcdc1927dc1a460bf7c30190d5e7f2150473"
+      },
+      {
+        "id": "WO-013",
+        "line_start": 1654,
+        "line_end": 1744,
+        "sha256": "b5ca81c67f68c85b3711f9af04ff3d86565d09ad58577e60fd032f0fea7d86b8"
+      },
+      {
+        "id": "WO-014",
+        "line_start": 1745,
+        "line_end": 2155,
+        "sha256": "a5a9bb9be0fe5ee38f00b8cfe5986d6b47028dbc1a72854a2fc9f2d87e9a76ce"
+      },
+      {
+        "id": "WO-015",
+        "line_start": 2156,
+        "line_end": 2259,
+        "sha256": "f05fa71d87ce35ebb789dbdbac3ba1f7fe73cab41a3efde2c2d497f695f42657"
+      },
+      {
+        "id": "WO-016",
+        "line_start": 2260,
+        "line_end": 2393,
+        "sha256": "a8eaccbd47cf029668ff0876e02dfbacc301e482d90f4e6faed3646a9f01e1d8"
+      },
+      {
+        "id": "WO-017",
+        "line_start": 2394,
+        "line_end": 2436,
+        "sha256": "a3f0f13b62b9a75bce1c5a9d055f5ccf49c0c17829df2d9445c5dfafa4ceae9a"
+      },
+      {
+        "id": "WO-018",
+        "line_start": 2437,
+        "line_end": 2487,
+        "sha256": "a9c57968fbb76845295806f035973e996b892852a9dd5d50829d3f2ca0906349"
+      },
+      {
+        "id": "WO-019",
+        "line_start": 2488,
+        "line_end": 2698,
+        "sha256": "4fb80f061e7a63430a8c3423b066dcc92ed70f92936eff34a821669df40d9b10"
+      },
+      {
+        "id": "WO-020",
+        "line_start": 2699,
+        "line_end": 2775,
+        "sha256": "6acc7c8509597622f54085f413879b7cf05215ed130e21da7f8548a88d9f156c"
+      },
+      {
+        "id": "WO-021",
+        "line_start": 2776,
+        "line_end": 2811,
+        "sha256": "7e2990c9f0f6a98cad15d8eefb5ef7dec96a202c68f062b3652873147034e2dd"
+      },
+      {
+        "id": "WO-022",
+        "line_start": 2812,
+        "line_end": 2887,
+        "sha256": "d50b63ab52f9f342bc50998e20c75ce6b5b827834f9b2ddd9021ea930287d6ae"
+      },
+      {
+        "id": "WO-023",
+        "line_start": 2888,
+        "line_end": 2940,
+        "sha256": "1dda50c4c451eb97a4734c13c90e5e87b61ca56eca9ffb3fe3312c221e4ecaa2"
+      },
+      {
+        "id": "WO-024",
+        "line_start": 2941,
+        "line_end": 3004,
+        "sha256": "df11041e7d3d66f2b6d41f40b4a82b77ba99ebd6ba9aa28ff8f6f8270c312b20"
+      },
+      {
+        "id": "WO-025",
+        "line_start": 3005,
+        "line_end": 3021,
+        "sha256": "9a02d72864db9bfb725c0d54b3e7e1e113d794099f55b87d18a55550479bb0cb"
+      }
+    ]
+  },
+  "deletion_truth": {
+    "counting_semantics": "git_diff_deleted_files_numstat_v1",
+    "removed_file_count": 215,
+    "removed_lines": 11892,
+    "total_diff_deletions": 25150,
+    "removed_path_manifest_sha256": "2dc253b509f5c1d5b314516b2a8572b2403fd4f109926d5cc90dc999129bc343"
+  },
+  "generated_at": "2026-07-16T07:07:46.993Z"
+}
