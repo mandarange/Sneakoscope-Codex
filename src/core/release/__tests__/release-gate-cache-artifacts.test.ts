@@ -95,6 +95,29 @@ test('npm pack input digest ignores in-flight atomic temp files', () => {
   }
 })
 
+test('npm pack proof ignores files excluded from the recorded pack surface', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-pack-digest-excluded-'))
+  try {
+    fs.mkdirSync(path.join(root, 'dist'), { recursive: true })
+    fs.writeFileSync(path.join(root, 'package.json'), '{"name":"fixture","version":"1.0.0","files":["dist","!dist/*.json"]}\n')
+    fs.writeFileSync(path.join(root, 'dist', 'index.js'), 'export const ready = true\n')
+    writeNpmPackProof(root, {
+      entryCount: 2,
+      size: 120,
+      unpackedSize: 240,
+      files: [{ path: 'package.json' }, { path: 'dist/index.js' }]
+    }, 25)
+
+    fs.writeFileSync(path.join(root, 'dist', 'release-proof-truth.json'), '{"generated_at":"later"}\n')
+    assert.equal(readCurrentNpmPackProof(root).ok, true, 'excluded dist JSON must not stale the npm pack proof')
+
+    fs.writeFileSync(path.join(root, 'dist', 'index.js'), 'export const ready = false\n')
+    assert.ok(readCurrentNpmPackProof(root).blockers.includes('npm_pack_proof_stale'), 'included package bytes must still stale the proof')
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
 function writePackArtifacts(root: string, info: Record<string, any>) {
   const proof = writeNpmPackProof(root, info, 25)
   const reports = path.join(root, '.sneakoscope', 'reports')

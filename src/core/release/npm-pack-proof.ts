@@ -28,12 +28,12 @@ export function npmPackProofPath(root: string): string {
 
 export function writeNpmPackProof(root: string, info: Record<string, any>, packMs: number): NpmPackProof {
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
-  const inputDigest = currentNpmPackInputDigest(root)
   const normalizedInfo = normalizeNpmPackInfo(info)
   const atomicTempPaths = npmPackAtomicTempPaths(normalizedInfo)
   if (atomicTempPaths.length > 0) {
     throw new Error(`npm_pack_info_contains_atomic_temp:${atomicTempPaths.join(',')}`)
   }
+  const inputDigest = currentNpmPackInputDigest(root, normalizedInfo.files)
   const infoDigest = sha256Json(normalizedInfo)
   const fileListDigest = sha256Json(normalizedInfo.files)
   const proof: NpmPackProof = {
@@ -70,7 +70,7 @@ export function readCurrentNpmPackProof(root: string): { ok: boolean; proof: Npm
   if (proof?.schema !== NPM_PACK_PROOF_SCHEMA || proof?.ok !== true) blockers.push('npm_pack_proof_schema_invalid')
   if (!sameStringList([...(proof?.command || [])], [...NPM_PACK_PROOF_COMMAND])) blockers.push('npm_pack_proof_command_invalid')
   if (proof?.package_name !== pkg.name || proof?.package_version !== pkg.version) blockers.push('npm_pack_proof_package_identity_mismatch')
-  if (proof?.input_digest !== currentNpmPackInputDigest(root)) blockers.push('npm_pack_proof_stale')
+  if (proof?.input_digest !== currentNpmPackInputDigest(root, proof?.info?.files)) blockers.push('npm_pack_proof_stale')
   if (!proof?.info || !Array.isArray(proof.info.files)) blockers.push('npm_pack_proof_files_missing')
   if (proof?.info) {
     const normalizedInfo = normalizeNpmPackInfo(proof.info)
@@ -138,17 +138,21 @@ export function readCurrentNpmPackGateArtifacts(root: string): {
   }
 }
 
-export function currentNpmPackInputDigest(root: string): string {
+export function currentNpmPackInputDigest(root: string, packedFiles?: Array<{ path?: unknown }>): string {
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
   const roots = new Set(['package.json', 'package-lock.json', 'npm-shrinkwrap.json', '.npmignore', '.gitignore'])
-  for (const entry of fs.readdirSync(root)) {
-    if (/^(?:README|LICEN[CS]E|NOTICE)(?:\.|$)/i.test(entry)) roots.add(entry)
-  }
-  for (const raw of Array.isArray(pkg.files) ? pkg.files : []) {
-    const value = String(raw || '').trim()
-    if (!value || value.startsWith('!')) continue
-    const prefix = value.split(/[*?]/, 1)[0]?.replace(/\/+$/, '') || ''
-    if (prefix) roots.add(prefix)
+  if (Array.isArray(packedFiles)) {
+    for (const file of packedFiles) addPackagePath(roots, file?.path)
+  } else {
+    for (const entry of fs.readdirSync(root)) {
+      if (/^(?:README|LICEN[CS]E|NOTICE)(?:\.|$)/i.test(entry)) roots.add(entry)
+    }
+    for (const raw of Array.isArray(pkg.files) ? pkg.files : []) {
+      const value = String(raw || '').trim()
+      if (!value || value.startsWith('!')) continue
+      const prefix = value.split(/[*?]/, 1)[0]?.replace(/\/+$/, '') || ''
+      if (prefix) roots.add(prefix)
+    }
   }
   addPackagePath(roots, pkg.main)
   addPackagePath(roots, pkg.browser)
