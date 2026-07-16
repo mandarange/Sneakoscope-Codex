@@ -2,25 +2,25 @@
   "schema": "sks.release-closure-manifest.v1",
   "version": "6.3.0",
   "baseline": "a6634b42f3406f8d567183c611726d0c0e355421",
-  "source_commit": "1a69932279659c57b3d6aaf7e36c9124db73a0ea",
+  "source_commit": "3b897b26c59d352ab71a3a68cea0dea05aa7f5de",
   "mission_id": "M-20260715-150100-34bb",
   "head_binding": "tracked_manifest_git_blob_at_head_v1",
   "artifacts": {
     "findings": {
       "path": ".sneakoscope/release/6.3.0/audit/findings.json",
-      "sha256": "a5101e2ae7dcf477aee6a16a473d2c0f534eef562987b7b0b7a5c399593345bd",
+      "sha256": "c455546aa6b1aa937079b550b5cff5e32794a1d3f8562b493973bbbbdb0c9187",
       "line_count": 887,
       "schema": "sks.release-findings.v1"
     },
     "deletion": {
       "path": ".sneakoscope/release/6.3.0/audit/overengineering-deletions.json",
-      "sha256": "d62830a28956c78111a4aaaddaa2c8f97676b5112b95c23d1ea75a1c761ddb16",
+      "sha256": "9a38d9e4c21a6ad08f564d3ce257f7bde1f1977dff644d1a9b8f15c817ca40d4",
       "line_count": 245,
       "schema": "sks.release-overengineering-deletions.v1"
     },
     "mission": {
       "path": ".sneakoscope/missions/M-20260715-150100-34bb/mission.json",
-      "sha256": "3896ca8938c6a823a67bcfbcb2d526a80d4e82e136642b4e1fac0a3f89b109e8",
+      "sha256": "465043d91400f41c5cf2bc7fc7291d40fe62764e9502c7cf0e3ffd7f0e069b88",
       "line_count": 15,
       "schema": null
     },
@@ -68,7 +68,7 @@
     },
     "ledger": {
       "path": ".sneakoscope/missions/M-20260715-150100-34bb/work-order-ledger.json",
-      "sha256": "2f012d6624029b5e0e60d2f3c02f3c70046047c17d8443fe15705e4c3005769b",
+      "sha256": "a4ae5facc2e1671e6e612063a2aa52f5557c592165ed0daaefe6c3d1b90be5e1",
       "line_count": 1393,
       "schema": null
     }
@@ -77,169 +77,169 @@
     {
       "finding_id": "F-001",
       "path": ".sneakoscope/reports/release-closure/findings/F-001.json",
-      "sha256": "1e86be2ea0af9d826d4b5c5b546af82b52b2ade87583605320df3e72f164532e",
+      "sha256": "18796560dfcce29f028ffd4193bce091a45480b1708801592e9925e2037143c8",
       "line_count": 20
     },
     {
       "finding_id": "F-002",
       "path": ".sneakoscope/reports/release-closure/findings/F-002.json",
-      "sha256": "f7e507f3fc5e0936fe611ad58f079e4b73aa1fccba9a81204e67f9445a55dee6",
+      "sha256": "0d77a6b5e39c5dd61a62b054ac07a623aec5cfd033fd488364b44b1ce2fb7130",
       "line_count": 20
     },
     {
       "finding_id": "F-003",
       "path": ".sneakoscope/reports/release-closure/findings/F-003.json",
-      "sha256": "b30ed3530cb03093613a125c56ae11a0a7cddeb4270c49cebe6e69adc69ccd59",
+      "sha256": "20110c43f85bac2de06139fde866f101d6a8997ad0990d6ab82f003bc4d890de",
       "line_count": 19
     },
     {
       "finding_id": "F-004",
       "path": ".sneakoscope/reports/release-closure/findings/F-004.json",
-      "sha256": "02202b3a084d9ea9044dc5f7ddfe67ebd98f3f0b92490bc2b13222febd932f39",
+      "sha256": "751cf40865e57e6bd9b73286f9031b2842bb16efa8624271a9b4e048ff77dc44",
       "line_count": 19
     },
     {
       "finding_id": "F-005",
       "path": ".sneakoscope/reports/release-closure/findings/F-005.json",
-      "sha256": "9d852bb8f5db8f22488262d02221f3438d3fbb533907cad0c5aa81bf58026cbc",
+      "sha256": "50e51f644faf05fde1bba765524223fc9ddee74a328a755ac8f575d7cedd9769",
       "line_count": 19
     },
     {
       "finding_id": "F-006",
       "path": ".sneakoscope/reports/release-closure/findings/F-006.json",
-      "sha256": "cc0d32271e37af18256b1f5456c55422e7c3c0b08d6ea6c1241b548ed9f0314e",
+      "sha256": "777a1d993392430b6bd00d5d8b40a967d544a365d062a6ae17d01424d9930d9f",
       "line_count": 19
     },
     {
       "finding_id": "F-007",
       "path": ".sneakoscope/reports/release-closure/findings/F-007.json",
-      "sha256": "b26d6e17d0d932f143a8ecc7ea44c4342630ebd1f60207f9401b206c01c993f8",
+      "sha256": "c824a0bd414de5b3fc1edf34826a534efc825113abd5dbee4d9ddb9cdb691250",
       "line_count": 18
     },
     {
       "finding_id": "F-008",
       "path": ".sneakoscope/reports/release-closure/findings/F-008.json",
-      "sha256": "22790cb9795e5c46e70af2c038a3fcf9a07f9f36e82b112b827292b3ca11d256",
+      "sha256": "7edaa53cb2a38b71efd6a84748322f31ee39f1b4bc0cfd76c461037b44cf3b12",
       "line_count": 20
     },
     {
       "finding_id": "F-009",
       "path": ".sneakoscope/reports/release-closure/findings/F-009.json",
-      "sha256": "1b0bba286652b96f42fe7e544f2d91f6a502e599f70a27e1bbded51003b58881",
+      "sha256": "536b4def2140f20fb7c5dd3c3ba8b21d9e13111b765794630d3ca28d4d17d202",
       "line_count": 19
     },
     {
       "finding_id": "F-010",
       "path": ".sneakoscope/reports/release-closure/findings/F-010.json",
-      "sha256": "404e6fbef7b60e308ddc7e371b68266b50893975ff9dc2fe80b37d7a382a0e2d",
+      "sha256": "e72d42c018f8d86effebd0b1d90e1547570611c3bacb782a2fdd98b0e293cc68",
       "line_count": 20
     },
     {
       "finding_id": "F-011",
       "path": ".sneakoscope/reports/release-closure/findings/F-011.json",
-      "sha256": "8541ac4c6c3b56a381f8bc4d30d0ba174861ff3386c748a50c61f88cf3107612",
+      "sha256": "7ca9dbb9b1bf3593d3787d1746f25486c785da2bd27ed70164f9297e16ddaab8",
       "line_count": 20
     },
     {
       "finding_id": "F-012",
       "path": ".sneakoscope/reports/release-closure/findings/F-012.json",
-      "sha256": "2156edfe4a8e7698c9057e4cb10a646ecc006cbc8e6f8723245e10ec907a8a20",
+      "sha256": "82d1b68b87528b17069c1a0f94f6418f2ba3359c4f878e6783b46bb33b781d4c",
       "line_count": 19
     },
     {
       "finding_id": "F-013",
       "path": ".sneakoscope/reports/release-closure/findings/F-013.json",
-      "sha256": "612f05d93733628b91d1a4cd4c5e9ba511dab70609cc5425330efefd713848ff",
+      "sha256": "a1b218defab3efd054c44f6f9bd5d0d9aaa909453007970febbfdd5e555346a0",
       "line_count": 19
     },
     {
       "finding_id": "F-014",
       "path": ".sneakoscope/reports/release-closure/findings/F-014.json",
-      "sha256": "2699def0de812025a61ee7d0c011a080797734fe22935073ea37a0d6e171ebbe",
+      "sha256": "98a4beded207e859287565a592b8e5ba2c48c5cbd8d551699cefc0babe03d725",
       "line_count": 18
     },
     {
       "finding_id": "F-015",
       "path": ".sneakoscope/reports/release-closure/findings/F-015.json",
-      "sha256": "8b0ec3819ce315d810bb3fb4772cf2b22936324d62f7eed917947c9f5c951570",
+      "sha256": "e04d921ffd4c6d987fe50c0aca17b10804656651a1c690642078807fc3e597a1",
       "line_count": 18
     },
     {
       "finding_id": "F-016",
       "path": ".sneakoscope/reports/release-closure/findings/F-016.json",
-      "sha256": "3862b925dabda8411c30711fa1840ebb68a600aa1c93bde54032ad49568c6f5d",
+      "sha256": "c8bfddb1c98aa3b19f9952bdddd551e74b2a3273759c01b12a6e433a189056e6",
       "line_count": 19
     },
     {
       "finding_id": "F-017",
       "path": ".sneakoscope/reports/release-closure/findings/F-017.json",
-      "sha256": "ba73350c548c364b7a33830208197ddcff3536420ad4350576622fe74e41de6b",
+      "sha256": "aecac0bfa3b30fc737d949b4d5ec940053488443357d3fc4841cb1d18e1d3bbc",
       "line_count": 18
     },
     {
       "finding_id": "F-018",
       "path": ".sneakoscope/reports/release-closure/findings/F-018.json",
-      "sha256": "6e902a745be72ebb97448c0d5e45913f9f433d71ae84b22a917168f3498d9b87",
+      "sha256": "06e3f5d4a2e351d0b3e8df9d3bc2012bce382e1644a91fbaa6e98505df94d62d",
       "line_count": 19
     },
     {
       "finding_id": "F-019",
       "path": ".sneakoscope/reports/release-closure/findings/F-019.json",
-      "sha256": "c4769b5c4cbdc16ed7a0af125e34af883b529900488cebb6c7417b8b2b648705",
+      "sha256": "1d656908d84dfc083c091372c503f0f2efdb567ffcab11021e321dbb19db8619",
       "line_count": 19
     },
     {
       "finding_id": "F-020",
       "path": ".sneakoscope/reports/release-closure/findings/F-020.json",
-      "sha256": "c4239c9898c446de9d840bc9d64ff314818b54d790483cbde7a874edfb952d64",
+      "sha256": "aef71ea86d44e2bb4b49c87abe1b91d491f66eeb22ed3fcc30b55177ad346d8f",
       "line_count": 18
     },
     {
       "finding_id": "F-021",
       "path": ".sneakoscope/reports/release-closure/findings/F-021.json",
-      "sha256": "57710b421411e1c1314efab2f167b51f53a19ceba257e23ae94c852928af2e62",
+      "sha256": "0a4ca6e1e049268b765b0a39e22729d4448879fe348eb976a4a8c1ecd1c16457",
       "line_count": 18
     },
     {
       "finding_id": "F-022",
       "path": ".sneakoscope/reports/release-closure/findings/F-022.json",
-      "sha256": "7de4aa766518ff9282615373d23a9f353d347040ae64d2332b75f8496ea21331",
+      "sha256": "4f5d68ddda78112902a7e67704391bf22f2c855901f8d679d1f1f5e812d5d8b9",
       "line_count": 19
     },
     {
       "finding_id": "F-023",
       "path": ".sneakoscope/reports/release-closure/findings/F-023.json",
-      "sha256": "9cfe9bc4c3c995d61931d35d99f402147bed5ebfc4c8179062ac62459ac828ba",
+      "sha256": "41e1b5a36d88de3a2abecb04bd28dd66726a21ad54e7d2d745df9f6da0c3b4ab",
       "line_count": 18
     },
     {
       "finding_id": "F-024",
       "path": ".sneakoscope/reports/release-closure/findings/F-024.json",
-      "sha256": "f0f0ceb07ebbfc3b79dc8459611c680a0522d1fa351c671cc74a7238c9622c35",
+      "sha256": "b212b0fb94531916d1061995e72123b018cacd835dac8ab7e7b401c9c8b0e518",
       "line_count": 19
     },
     {
       "finding_id": "F-025",
       "path": ".sneakoscope/reports/release-closure/findings/F-025.json",
-      "sha256": "2357069f29b348d803888aa4a6d97f3b07338b468262915775f9b39a565b72fe",
+      "sha256": "d06c9f26370310aa1cd8b4fc4a178f44b316072c4cf7541eae63970569b97cdc",
       "line_count": 18
     },
     {
       "finding_id": "F-026",
       "path": ".sneakoscope/reports/release-closure/findings/F-026.json",
-      "sha256": "304d8ff11cf27850b12910ae82619ed4916559d7a864011d1857c2c6cef87092",
+      "sha256": "2644a3632cda81926599a54b670e5e90189194a6e9c80cd6ced7892087ec287b",
       "line_count": 19
     },
     {
       "finding_id": "F-027",
       "path": ".sneakoscope/reports/release-closure/findings/F-027.json",
-      "sha256": "d85ab2d958aa0b4c56cf5b67a08bc4b9df8f3463ea3a15d3a50d6350fdcda132",
+      "sha256": "a578201c29b55585689f37fdc58ebb9ab8e657d4f6bb4f97d52fb61ce730929e",
       "line_count": 19
     },
     {
       "finding_id": "F-028",
       "path": ".sneakoscope/reports/release-closure/findings/F-028.json",
-      "sha256": "4ec47058aa4f929137bb0e6cdf36ede320c41e4c3a0ffe1576a84d91cf6e870d",
+      "sha256": "a890fe8e3e58a8b8720b3ee1e5238543e385f701240f149b499d3745089ef525",
       "line_count": 19
     }
   ],
@@ -248,350 +248,350 @@
       "work_order_id": "WO-000",
       "kind": "implementation",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-000.json",
-      "sha256": "aa840178cfbd42d4d996af977cec93c7d9a85a2add57bb1dace6a979f99eaadf",
+      "sha256": "5dda656992bdf2e3379a123945966016f5a120399627e30ffab3b087bd5dde6c",
       "line_count": 20
     },
     {
       "work_order_id": "WO-000",
       "kind": "verification",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-000.json",
-      "sha256": "aa840178cfbd42d4d996af977cec93c7d9a85a2add57bb1dace6a979f99eaadf",
+      "sha256": "5dda656992bdf2e3379a123945966016f5a120399627e30ffab3b087bd5dde6c",
       "line_count": 20
     },
     {
       "work_order_id": "WO-001",
       "kind": "implementation",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-001.json",
-      "sha256": "ce9cfcfe2c646394fd1b24b1dbeeee52d9faa0a8770f1034df6a1b02c6c3a64d",
+      "sha256": "9e8ddd5e439c24c7be35fcedb4cc00ff935a99c6199ed8481d4ee7bfc1d6314c",
       "line_count": 20
     },
     {
       "work_order_id": "WO-001",
       "kind": "verification",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-001.json",
-      "sha256": "ce9cfcfe2c646394fd1b24b1dbeeee52d9faa0a8770f1034df6a1b02c6c3a64d",
+      "sha256": "9e8ddd5e439c24c7be35fcedb4cc00ff935a99c6199ed8481d4ee7bfc1d6314c",
       "line_count": 20
     },
     {
       "work_order_id": "WO-002",
       "kind": "implementation",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-002.json",
-      "sha256": "2ca36bff89a801e2463672ca7e1c4d31ae1cbdbe624853e3873644a3b2026882",
+      "sha256": "bd4cb1805a271040af67f6027755357ef564ff249081bcf800552a2e0bef6828",
       "line_count": 18
     },
     {
       "work_order_id": "WO-003",
       "kind": "implementation",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-003.json",
-      "sha256": "aa4b1110d55dd66cfb8ffc647408c1b59f680029ef0a06c561a4bcb137b87d2a",
+      "sha256": "5fc43e3a0fea46dbe0c8d61b0c036898388175b810c0767c3e1a8d04f13fdce9",
       "line_count": 20
     },
     {
       "work_order_id": "WO-003",
       "kind": "verification",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-003.json",
-      "sha256": "aa4b1110d55dd66cfb8ffc647408c1b59f680029ef0a06c561a4bcb137b87d2a",
+      "sha256": "5fc43e3a0fea46dbe0c8d61b0c036898388175b810c0767c3e1a8d04f13fdce9",
       "line_count": 20
     },
     {
       "work_order_id": "WO-004",
       "kind": "implementation",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-004.json",
-      "sha256": "4af5ec8454332becc2c52dd8fff0a4e94f4218fab723d62b735a9dd60212dcc5",
+      "sha256": "a7f2184d9c15b0f9624c2b86876e5614f3c9bf4fe3858c4c7b827040750d172d",
       "line_count": 21
     },
     {
       "work_order_id": "WO-004",
       "kind": "verification",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-004.json",
-      "sha256": "4af5ec8454332becc2c52dd8fff0a4e94f4218fab723d62b735a9dd60212dcc5",
+      "sha256": "a7f2184d9c15b0f9624c2b86876e5614f3c9bf4fe3858c4c7b827040750d172d",
       "line_count": 21
     },
     {
       "work_order_id": "WO-005",
       "kind": "implementation",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-005.json",
-      "sha256": "ea819a85e9b0970a73b484afc8290423a9f2570ef4c1f00ba18bae3dbd170a0f",
+      "sha256": "43a4f015361cffc057fd269ef2ebd86d7b3098b0f9cfd48de08024e4aa7635d0",
       "line_count": 21
     },
     {
       "work_order_id": "WO-005",
       "kind": "verification",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-005.json",
-      "sha256": "ea819a85e9b0970a73b484afc8290423a9f2570ef4c1f00ba18bae3dbd170a0f",
+      "sha256": "43a4f015361cffc057fd269ef2ebd86d7b3098b0f9cfd48de08024e4aa7635d0",
       "line_count": 21
     },
     {
       "work_order_id": "WO-006",
       "kind": "implementation",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-006.json",
-      "sha256": "122b7f71f7e66d058dd001ad7bba7e0afb4e91ce8e5f2d371bd7b605d8a493a9",
+      "sha256": "84561dc49972b266ee7186529052f34ec951392f653bc63815b20b8b4e21a962",
       "line_count": 20
     },
     {
       "work_order_id": "WO-006",
       "kind": "verification",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-006.json",
-      "sha256": "122b7f71f7e66d058dd001ad7bba7e0afb4e91ce8e5f2d371bd7b605d8a493a9",
+      "sha256": "84561dc49972b266ee7186529052f34ec951392f653bc63815b20b8b4e21a962",
       "line_count": 20
     },
     {
       "work_order_id": "WO-007",
       "kind": "implementation",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-007.json",
-      "sha256": "9f4f51f89a0c3c6d3b2a727fadb47ad083423c3e7180b0c7f2dbf1d26b16abd9",
+      "sha256": "6d89aaf89c365d401d2735d20dda1bd67376206b52f1d1692e1a2d7026bd1c6e",
       "line_count": 20
     },
     {
       "work_order_id": "WO-007",
       "kind": "verification",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-007.json",
-      "sha256": "9f4f51f89a0c3c6d3b2a727fadb47ad083423c3e7180b0c7f2dbf1d26b16abd9",
+      "sha256": "6d89aaf89c365d401d2735d20dda1bd67376206b52f1d1692e1a2d7026bd1c6e",
       "line_count": 20
     },
     {
       "work_order_id": "WO-008",
       "kind": "implementation",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-008.json",
-      "sha256": "84fb2b495192929bc27e6e83c0ee8067d8af6e9ca7af71819414f9faa0debaac",
+      "sha256": "eec0a7756736c2fa5b6c2681e451f2996c1934b0a8ae8a53f9ba7580ee3e8f72",
       "line_count": 20
     },
     {
       "work_order_id": "WO-008",
       "kind": "verification",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-008.json",
-      "sha256": "84fb2b495192929bc27e6e83c0ee8067d8af6e9ca7af71819414f9faa0debaac",
+      "sha256": "eec0a7756736c2fa5b6c2681e451f2996c1934b0a8ae8a53f9ba7580ee3e8f72",
       "line_count": 20
     },
     {
       "work_order_id": "WO-009",
       "kind": "implementation",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-009.json",
-      "sha256": "6727be8024d4415c821ef520a9e58b1da736b930f9d57b1ffdc808777a924054",
+      "sha256": "c331cc21cc1b4d5ec781dd072e4ece31e9c6b042e6f49e84ba7bb8b036ad4327",
       "line_count": 20
     },
     {
       "work_order_id": "WO-009",
       "kind": "verification",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-009.json",
-      "sha256": "6727be8024d4415c821ef520a9e58b1da736b930f9d57b1ffdc808777a924054",
+      "sha256": "c331cc21cc1b4d5ec781dd072e4ece31e9c6b042e6f49e84ba7bb8b036ad4327",
       "line_count": 20
     },
     {
       "work_order_id": "WO-010",
       "kind": "implementation",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-010.json",
-      "sha256": "cd2fda20682bd2d04edb31d11d747f115f27adc1fc6e7a5e3e29bc8b4880cb80",
+      "sha256": "655896a1d5219acb3e27fb32fdbfcf06aba09fc86c88577589261782097d867f",
       "line_count": 20
     },
     {
       "work_order_id": "WO-010",
       "kind": "verification",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-010.json",
-      "sha256": "cd2fda20682bd2d04edb31d11d747f115f27adc1fc6e7a5e3e29bc8b4880cb80",
+      "sha256": "655896a1d5219acb3e27fb32fdbfcf06aba09fc86c88577589261782097d867f",
       "line_count": 20
     },
     {
       "work_order_id": "WO-011",
       "kind": "implementation",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-011.json",
-      "sha256": "66d3203c0700f5ec3c211dbc2e0c14a3d2f0749cc648e209e488ac65626fc71c",
+      "sha256": "5c4f8b112b5419977c864346baf8efaca1bbfc8867f1a3a9d659d9b7e14ee03e",
       "line_count": 21
     },
     {
       "work_order_id": "WO-011",
       "kind": "verification",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-011.json",
-      "sha256": "66d3203c0700f5ec3c211dbc2e0c14a3d2f0749cc648e209e488ac65626fc71c",
+      "sha256": "5c4f8b112b5419977c864346baf8efaca1bbfc8867f1a3a9d659d9b7e14ee03e",
       "line_count": 21
     },
     {
       "work_order_id": "WO-012",
       "kind": "implementation",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-012.json",
-      "sha256": "fc3e10d680512ac68a0f4f7c23267301426950ac4539f98aa80adb177b465308",
+      "sha256": "4e41910a14a5b491b823ff9025c39dc2cb791ca22e50216e2d66152b9836e38c",
       "line_count": 20
     },
     {
       "work_order_id": "WO-012",
       "kind": "verification",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-012.json",
-      "sha256": "fc3e10d680512ac68a0f4f7c23267301426950ac4539f98aa80adb177b465308",
+      "sha256": "4e41910a14a5b491b823ff9025c39dc2cb791ca22e50216e2d66152b9836e38c",
       "line_count": 20
     },
     {
       "work_order_id": "WO-013",
       "kind": "implementation",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-013.json",
-      "sha256": "c7d68c469193692360b3db0958148d0aaea49dfeae296d52406da9b1f997c786",
+      "sha256": "f1ae206d410b6adc7587ad1efc3bc2cba760bd1ff817ce7801456ccbebc28e47",
       "line_count": 20
     },
     {
       "work_order_id": "WO-013",
       "kind": "verification",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-013.json",
-      "sha256": "c7d68c469193692360b3db0958148d0aaea49dfeae296d52406da9b1f997c786",
+      "sha256": "f1ae206d410b6adc7587ad1efc3bc2cba760bd1ff817ce7801456ccbebc28e47",
       "line_count": 20
     },
     {
       "work_order_id": "WO-014",
       "kind": "implementation",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-014.json",
-      "sha256": "54f66bb6ebc337e805a2c55f921922d46d2e3f944655f719afddc4756e7a3acb",
+      "sha256": "c6151e138e624d69c55cdfbff7ad7ad2e85e5fe3600630be681be561e2962860",
       "line_count": 20
     },
     {
       "work_order_id": "WO-014",
       "kind": "verification",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-014.json",
-      "sha256": "54f66bb6ebc337e805a2c55f921922d46d2e3f944655f719afddc4756e7a3acb",
+      "sha256": "c6151e138e624d69c55cdfbff7ad7ad2e85e5fe3600630be681be561e2962860",
       "line_count": 20
     },
     {
       "work_order_id": "WO-015",
       "kind": "implementation",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-015.json",
-      "sha256": "98eb07d8834b3ac7746d064ecf6339fe766db4893de505b5d180f47c06230a73",
+      "sha256": "a605e076ab39987b37557d779059b6927844f72fbdc65162839798ea9f28819c",
       "line_count": 20
     },
     {
       "work_order_id": "WO-015",
       "kind": "verification",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-015.json",
-      "sha256": "98eb07d8834b3ac7746d064ecf6339fe766db4893de505b5d180f47c06230a73",
+      "sha256": "a605e076ab39987b37557d779059b6927844f72fbdc65162839798ea9f28819c",
       "line_count": 20
     },
     {
       "work_order_id": "WO-016",
       "kind": "implementation",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-016.json",
-      "sha256": "00fb18e25792d751d953efe7b636c2f43257a3a14cb2a1970079d6b0e63beefa",
+      "sha256": "8c2e5de3e287917e1c855bb515639cccf59fb7d00ce55eb167dc5eaa5e0ac2f7",
       "line_count": 20
     },
     {
       "work_order_id": "WO-016",
       "kind": "verification",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-016.json",
-      "sha256": "00fb18e25792d751d953efe7b636c2f43257a3a14cb2a1970079d6b0e63beefa",
+      "sha256": "8c2e5de3e287917e1c855bb515639cccf59fb7d00ce55eb167dc5eaa5e0ac2f7",
       "line_count": 20
     },
     {
       "work_order_id": "WO-017",
       "kind": "implementation",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-017.json",
-      "sha256": "9e44e6d59f08fc12bf4d3b333fe4dd0ce092cd0e553cfb817c7099fe7857ab60",
+      "sha256": "dcf36d1a0f30e510992914c77cc74697a0d627c6ef8bb1d75e02383806c0d6ed",
       "line_count": 21
     },
     {
       "work_order_id": "WO-017",
       "kind": "verification",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-017.json",
-      "sha256": "9e44e6d59f08fc12bf4d3b333fe4dd0ce092cd0e553cfb817c7099fe7857ab60",
+      "sha256": "dcf36d1a0f30e510992914c77cc74697a0d627c6ef8bb1d75e02383806c0d6ed",
       "line_count": 21
     },
     {
       "work_order_id": "WO-018",
       "kind": "implementation",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-018.json",
-      "sha256": "59644a4e3568d268e743ab40efc1a90c580dc6c6ca668d107f9ba2dd75025105",
+      "sha256": "cdc90bcb1c692346ae3ae8ae373c0e5b4dc62e270315833c81b8f802b225a3a0",
       "line_count": 21
     },
     {
       "work_order_id": "WO-018",
       "kind": "verification",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-018.json",
-      "sha256": "59644a4e3568d268e743ab40efc1a90c580dc6c6ca668d107f9ba2dd75025105",
+      "sha256": "cdc90bcb1c692346ae3ae8ae373c0e5b4dc62e270315833c81b8f802b225a3a0",
       "line_count": 21
     },
     {
       "work_order_id": "WO-019",
       "kind": "implementation",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-019.json",
-      "sha256": "e0160d70da11df430ae43ab0b4f91bb9aa4fc01376f5abb26457dc9bbe907b13",
+      "sha256": "2e8ef2edb921f7d9befa8d96345cbb622efe3451422a0f68e83587f940e71e67",
       "line_count": 18
     },
     {
       "work_order_id": "WO-020",
       "kind": "implementation",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-020.json",
-      "sha256": "5d5d1116b236cd52c27bde7e72517072714b04d98f137b5fd9712f54e611a3d9",
+      "sha256": "f906a1909eb0a838c66e699ba5a82beba5fa60a6b6a22920a27973bfed3e7efb",
       "line_count": 18
     },
     {
       "work_order_id": "WO-021",
       "kind": "implementation",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-021.json",
-      "sha256": "74566bfa16fee6f5c66785e177e26322b78f416e3d0a6ce3a4836db311c4bbf7",
+      "sha256": "52dcccb07e4bfe2c89551d91e965b03110fda6ee860926559ce2b9aed5e6e8e8",
       "line_count": 21
     },
     {
       "work_order_id": "WO-021",
       "kind": "verification",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-021.json",
-      "sha256": "74566bfa16fee6f5c66785e177e26322b78f416e3d0a6ce3a4836db311c4bbf7",
+      "sha256": "52dcccb07e4bfe2c89551d91e965b03110fda6ee860926559ce2b9aed5e6e8e8",
       "line_count": 21
     },
     {
       "work_order_id": "WO-022",
       "kind": "implementation",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-022.json",
-      "sha256": "7df4cf987b998d3a63791c1585da7fb96f3b6839bd670b132374b52b08aab251",
+      "sha256": "1870efc2731000d4bf8192085d9595009fe3e34fe66e98a7ca4903abe6f3c470",
       "line_count": 18
     },
     {
       "work_order_id": "WO-023",
       "kind": "implementation",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-023.json",
-      "sha256": "52e94117ef6adcd6dc05cc43acc9533ed0790999d8cd6509d445a97f411080f9",
+      "sha256": "25ab918db9886c131ec115a2947f0ad81aebebc99d34221ebed85e5176df1444",
       "line_count": 18
     },
     {
       "work_order_id": "WO-024",
       "kind": "implementation",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-024.json",
-      "sha256": "236cd67fbc18d06b5a8fb68563fd558f06168c55c611a06cf819fe1a619f06f0",
+      "sha256": "c0b5c482d427be61d1c9323a9db65856eaa95f9df3d3365b7ee936f486035b64",
       "line_count": 20
     },
     {
       "work_order_id": "WO-024",
       "kind": "verification",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-024.json",
-      "sha256": "236cd67fbc18d06b5a8fb68563fd558f06168c55c611a06cf819fe1a619f06f0",
+      "sha256": "c0b5c482d427be61d1c9323a9db65856eaa95f9df3d3365b7ee936f486035b64",
       "line_count": 20
     },
     {
       "work_order_id": "WO-025",
       "kind": "implementation",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-025.json",
-      "sha256": "7499bcb719cd167a3d37f7fefe3ea8ce919802133b14ff976e5087c4944b679e",
+      "sha256": "6661c6c9a0834739f40f4867af33610691062593c2c1c24adc0e05a865e95ab8",
       "line_count": 20
     },
     {
       "work_order_id": "WO-025",
       "kind": "verification",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-025.json",
-      "sha256": "7499bcb719cd167a3d37f7fefe3ea8ce919802133b14ff976e5087c4944b679e",
+      "sha256": "6661c6c9a0834739f40f4867af33610691062593c2c1c24adc0e05a865e95ab8",
       "line_count": 20
     },
     {
       "work_order_id": "WO-026",
       "kind": "implementation",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-026.json",
-      "sha256": "b345aeac21f5fa42471bbe8661a3ad4047a1d8b888018e887a61102515e847c8",
+      "sha256": "7a5d3c0d4c4d29d0716cc7397eb52d772804f8da5f407e0c8986f31dc0106509",
       "line_count": 18
     },
     {
       "work_order_id": "WO-027",
       "kind": "implementation",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-027.json",
-      "sha256": "2d6402019d4c83948c5a6cf2e9d0f376e888beb1769703e8e6a84fb1701327fb",
+      "sha256": "a49b31455f4aa537715befdcba33d91d3892db346f9224f06582eb04af146bc1",
       "line_count": 21
     },
     {
       "work_order_id": "WO-027",
       "kind": "verification",
       "path": ".sneakoscope/reports/release-closure/work-orders/WO-027.json",
-      "sha256": "2d6402019d4c83948c5a6cf2e9d0f376e888beb1769703e8e6a84fb1701327fb",
+      "sha256": "a49b31455f4aa537715befdcba33d91d3892db346f9224f06582eb04af146bc1",
       "line_count": 21
     }
   ],
@@ -763,8 +763,8 @@
     "counting_semantics": "git_diff_deleted_files_numstat_v1",
     "removed_file_count": 215,
     "removed_lines": 11892,
-    "total_diff_deletions": 25150,
+    "total_diff_deletions": 25151,
     "removed_path_manifest_sha256": "2dc253b509f5c1d5b314516b2a8572b2403fd4f109926d5cc90dc999129bc343"
   },
-  "generated_at": "2026-07-16T07:07:46.993Z"
+  "generated_at": "2026-07-16T07:31:18.420Z"
 }

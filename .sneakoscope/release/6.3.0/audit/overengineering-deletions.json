@@ -1,7 +1,7 @@
 {
   "schema": "sks.release-overengineering-deletions.v1",
   "baseline": "a6634b42f3406f8d567183c611726d0c0e355421",
-  "source_commit": "1a69932279659c57b3d6aaf7e36c9124db73a0ea",
+  "source_commit": "3b897b26c59d352ab71a3a68cea0dea05aa7f5de",
   "counting_semantics": "git_diff_deleted_files_numstat_v1",
   "removed_modules": [
     "docs/adhd-orchestrating-gate.md",
@@ -222,7 +222,7 @@
   ],
   "removed_file_count": 215,
   "removed_lines": 11892,
-  "total_diff_deletions": 25150,
+  "total_diff_deletions": 25151,
   "removed_path_manifest_sha256": "2dc253b509f5c1d5b314516b2a8572b2403fd4f109926d5cc90dc999129bc343",
   "avoided_dependencies": [
     "new database",
