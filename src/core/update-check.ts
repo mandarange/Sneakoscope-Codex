@@ -6,6 +6,7 @@ import { createRequestedScopeContract } from './safety/requested-scope-contract.
 import { guardedPackageInstall, guardContextForRoute } from './safety/mutation-guard.js';
 import {
   isUpdateMigrationReceiptCurrent,
+  projectUpdateMigrationReceiptPath,
   resolveInstalledSksEntrypoint,
   runPackageLocalDoctor,
   type PackageLocalDoctorRun,
@@ -1093,7 +1094,7 @@ async function writeUpdatedPackageMigrationReceipt(input: {
     "for await (const chunk of process.stdin) raw += chunk;",
     `const m = await import(${JSON.stringify(moduleHref)});`,
     'const receipt = await m.writeProjectUpdateMigrationReceipt(JSON.parse(raw));',
-    'console.log(JSON.stringify(receipt));'
+    "console.log(JSON.stringify({ schema: 'sks.update-migration-write-ack.v1', status: receipt.status, sks_version: receipt.sks_version, generated_at: receipt.generated_at }));"
   ].join('\n');
   const payload = {
     root: input.root,
@@ -1113,21 +1114,38 @@ async function writeUpdatedPackageMigrationReceipt(input: {
   }).catch((error: unknown) => ({
     code: 1,
     stdout: '',
-    stderr: error instanceof Error ? error.message : String(error)
+    stderr: error instanceof Error ? error.message : String(error),
+    timedOut: false
   }));
-  let receipt: UpdateMigrationReceipt | null = null;
+  let ack: any = null;
   for (const line of String(run.stdout || '').trim().split(/\r?\n/).reverse()) {
     try {
-      receipt = JSON.parse(line) as UpdateMigrationReceipt;
+      ack = JSON.parse(line);
       break;
     } catch {}
   }
-  const current = run.code === 0 && isUpdateMigrationReceiptCurrent(receipt, input.expectedVersion);
+  const receipt = run.code === 0
+    ? await readJson<UpdateMigrationReceipt | null>(projectUpdateMigrationReceiptPath(input.root), null).catch(() => null)
+    : null;
+  const acknowledgementMatches = ack?.schema === 'sks.update-migration-write-ack.v1'
+    && ack.status === receipt?.status
+    && ack.sks_version === receipt?.sks_version
+    && ack.generated_at === receipt?.generated_at;
+  const current = run.code === 0
+    && acknowledgementMatches
+    && isUpdateMigrationReceiptCurrent(receipt, input.expectedVersion);
+  const receiptError = run.code !== 0
+    ? run.timedOut === true
+      ? `new package migration receipt writer timed out after ${updateDoctorTimeoutMs(input.env)}ms`
+      : String(run.stderr || run.stdout || 'new package migration receipt writer failed').trim()
+    : !acknowledgementMatches
+      ? 'new package migration receipt acknowledgement did not match the written receipt'
+      : `new package migration receipt did not bind to ${input.expectedVersion}`;
   return {
     receipt,
     error: current
       ? null
-      : String(run.stderr || `new package migration receipt did not bind to ${input.expectedVersion}`).trim().slice(-500)
+      : receiptError.slice(-500)
   };
 }
 
@@ -1403,12 +1421,13 @@ export async function installUpdateSksMenuBar(input: {
     input.stage('menubar_rebuild', true, 'skipped', { reason: 'SKS_UPDATE_SKIP_SKS_MENUBAR=1' });
     return null;
   }
+  const restartDeferred = input.env.SKS_UPDATE_DEFER_MENUBAR_RESTART === '1';
   const work = (input.entrypoint
     ? installSksMenuBarFromEntrypoint(input.entrypoint, input)
     : installSksMenuBar({
         root: input.root,
         apply: true,
-        launch: true,
+        launch: !restartDeferred,
         env: input.env,
         quiet: input.quiet === true
       })).catch((err: any) => ({
@@ -1425,7 +1444,7 @@ export async function installUpdateSksMenuBar(input: {
     report_path: path.join(input.root, '.sneakoscope', 'reports', 'sks-menubar.json'),
     menu_items: [],
     actions: [],
-    launch: { requested: true, method: 'none', ok: false, error: err?.message || String(err) },
+    launch: { requested: !restartDeferred, method: 'none', ok: false, error: err?.message || String(err) },
     tcc_automation_status: 'unknown',
     next_actions: [
       'Run: sks menubar status',
@@ -1440,7 +1459,8 @@ export async function installUpdateSksMenuBar(input: {
   input.stage('menubar_rebuild', result.ok !== false, result.status, {
     app_path: result.app_path,
     launch_agent_path: result.launch_agent_path,
-    launch: result.launch
+    launch: result.launch,
+    restart_deferred: restartDeferred
   });
   return result;
 }
@@ -1449,7 +1469,14 @@ async function installSksMenuBarFromEntrypoint(
   entrypoint: string,
   input: { root: string; env: NodeJS.ProcessEnv; quiet?: boolean }
 ): Promise<SksMenuBarInstallResult> {
-  const run = await runProcess(process.execPath, [entrypoint, 'menubar', 'install', '--json'], {
+  const restartDeferred = input.env.SKS_UPDATE_DEFER_MENUBAR_RESTART === '1';
+  const run = await runProcess(process.execPath, [
+    entrypoint,
+    'menubar',
+    'install',
+    ...(restartDeferred ? ['--no-launch'] : []),
+    '--json'
+  ], {
     cwd: input.root,
     env: {
       ...input.env,

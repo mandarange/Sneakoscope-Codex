@@ -29,7 +29,7 @@ const REQUIRED_CODEX_0144_MODEL_FIELDS: Record<string, readonly string[]> = {
   experimental_supported_tools: ['array']
 }
 
-// Exact union observed in Codex CLI 0.144.1's native cache and codex-lb catalog.
+// Exact union observed in Codex CLI 0.144.5's native cache and codex-lb catalog.
 // Unknown response fields are deliberately not persisted into a Codex-owned file.
 const CODEX_0144_MODEL_FIELD_TYPES: Record<string, readonly string[]> = {
   ...REQUIRED_CODEX_0144_MODEL_FIELDS,
@@ -68,7 +68,7 @@ type CatalogIdentity = {
   origin: string
   base_url_sha256: string
   api_key_sha256: string
-  contract: 'codex-cli-0.144.1-model-catalog'
+  contract: 'codex-cli-0.144.5-model-catalog'
 }
 
 export function isCodexLbGpt56Model(model: unknown): boolean {
@@ -105,7 +105,7 @@ export function normalizeCodexLbToolCatalog(payload: any, opts: { maxModels?: nu
     validationIssues.push(...validateCodex0144Model(sanitized, index))
     if (!isCodexLbGpt56Model(model)) return sanitized
     if (row.use_responses_lite !== false) patchedModels.push(model)
-    // Codex 0.144.1 omits the request's `tools` field for Responses Lite.
+    // Codex 0.144.5 omits the request's `tools` field for Responses Lite.
     // Preserve the provider's tool_mode contract, but force full Responses.
     return { ...sanitized, use_responses_lite: false }
   })
@@ -411,7 +411,7 @@ function catalogIdentity(baseUrl: string, apiKey: string): CatalogIdentity {
     origin: new URL(baseUrl).origin,
     base_url_sha256: sha256(baseUrl),
     api_key_sha256: sha256(apiKey),
-    contract: 'codex-cli-0.144.1-model-catalog'
+    contract: 'codex-cli-0.144.5-model-catalog'
   }
 }
 

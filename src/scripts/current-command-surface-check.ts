@@ -23,11 +23,13 @@ const [{ COMMANDS, COMMAND_ALIASES, commandNames }, { REMOVED_PUBLIC_COMMANDS },
   importDist('core/init.js')
 ]);
 const catalogNames = routes.COMMAND_CATALOG.map((entry: any) => entry.name);
+const catalogDollarTokens = JSON.stringify(routes.COMMAND_CATALOG).match(/\$[A-Za-z][A-Za-z0-9_-]*/g) || [];
 const listedDollarCommands = routes.DOLLAR_COMMANDS.map((entry: any) => entry.command);
 const listedSkillAliases = routes.DOLLAR_COMMAND_ALIASES.map((entry: any) => entry.app_skill);
 const liteManifest = readText('src/core/routes/dollar-manifest-lite.ts');
 const commandManifestLite = readText('src/cli/command-manifest-lite.ts');
 const argsSource = readText('src/cli/args.ts');
+const installerSource = readText('src/bin/install.ts');
 
 assertGate(
   JSON.stringify([...REMOVED_PUBLIC_COMMANDS].sort()) === JSON.stringify([...removed].sort()),
@@ -59,15 +61,25 @@ const managedAgents = init.agentsBlockText();
 assertGate(!/\bralph\b/i.test(managedAgents), 'managed project guidance must describe only the current Goal surface');
 assertGate(!managedAgents.includes('$From-Chat-IMG'), 'managed project guidance must not advertise an unregistered visual route name');
 assertGate(!managedAgents.includes('$from-chat-img'), 'managed project guidance must not advertise the visual add-on skill as another execution alias');
-assertGate(managedAgents.includes('from-chat-img'), 'managed project guidance must retain the Naruto visual add-on skill name');
-assertGate(listedDollarCommands.includes('$Naruto') && listedDollarCommands.includes('$Work'), 'current execution surface must list the canonical workflow and its intended alias');
+assertGate(managedAgents.includes('$sks-from-chat-img'), 'managed project guidance must retain the namespaced Naruto visual add-on skill');
+assertGate(listedSkillAliases.every((name: string) => name === '$sks' || name.startsWith('$sks-')), 'every visible Codex App picker skill must use the sks- namespace');
+assertGate(new Set(listedSkillAliases).size === listedSkillAliases.length, 'visible Codex App picker skills must not contain duplicates');
+assertGate(listedDollarCommands.every((name: string) => name === '$sks' || name.startsWith('$sks-')), 'every visible dollar command must use the sks- namespace');
+assertGate(catalogDollarTokens.every((name: string) => name === '$sks' || name.startsWith('$sks-')), 'public CLI catalog descriptions must use only namespaced SKS dollar commands', { invalid: catalogDollarTokens.filter((name: string) => name !== '$sks' && !name.startsWith('$sks-')) });
+assertGate(listedDollarCommands.includes('$sks-naruto') && listedDollarCommands.includes('$sks-work'), 'current execution surface must list the namespaced canonical workflow and its intended alias');
+assertGate(!listedDollarCommands.includes('$Naruto') && !listedDollarCommands.includes('$Work'), 'legacy unprefixed workflow commands must not remain visible');
 const narutoRoute = routes.ROUTES.find((entry: any) => entry.id === 'Naruto');
 assertGate(
   JSON.stringify(narutoRoute?.dollarAliases || []) === JSON.stringify(['$Work']),
   'canonical official subagent route must have exactly one execution alias',
   { alias_count: narutoRoute?.dollarAliases?.length || 0 }
 );
-assertGate(routes.routePrompt('$Work fixture')?.id === 'Naruto', 'the intended execution alias must resolve to the canonical official subagent route');
+assertGate(routes.routePrompt('$sks-work fixture')?.id === 'Naruto', 'the namespaced execution alias must resolve to the canonical official subagent route');
+assertGate(routes.routePrompt('$sks-from-chat-img fixture')?.id === 'Naruto', 'the namespaced chat-image add-on must resolve to Naruto');
+assertGate(routes.hasFromChatImgSignal('$sks-from-chat-img fixture') === true, 'the namespaced chat-image add-on must activate forensic intake');
+assertGate(routes.routePrompt('$sks-mad-sks $sks-naruto fixture')?.id === 'Naruto', 'the namespaced MAD-SKS modifier must preserve nested route selection');
+assertGate(!/\$(?:Plan|Work)\b/.test(installerSource), 'installer guidance must not advertise legacy unprefixed dollar commands');
+assertGate(installerSource.includes('$sks-plan') && installerSource.includes('$sks-work'), 'installer guidance must advertise namespaced planning and execution commands');
 
 emitGate('commands:current-surface-only', {
   removed_command_count: removed.length,

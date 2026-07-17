@@ -22,6 +22,7 @@ export interface OfficialSubagentWorkflowInput {
   timeoutMs?: number | null
   env?: NodeJS.ProcessEnv
   runProcessImpl?: typeof runProcess
+  onChildSpawn?: (pid: number) => void | Promise<void>
 }
 
 export function detectCodexAppSession(env: NodeJS.ProcessEnv = process.env): boolean {
@@ -117,7 +118,8 @@ export async function runOfficialSubagentWorkflow(input: OfficialSubagentWorkflo
       cwd: input.root,
       timeoutMs: input.timeoutMs || 60 * 60 * 1000,
       maxOutputBytes: 256 * 1024,
-      env: childEnv
+      env: childEnv,
+      ...(input.onChildSpawn ? { onSpawn: input.onChildSpawn } : {})
     })
   } catch (error: any) {
     processResult = {
@@ -132,6 +134,13 @@ export async function runOfficialSubagentWorkflow(input: OfficialSubagentWorkflo
   }
   const parentSummary = await fsp.readFile(parentSummaryFile, 'utf8').catch(() => '')
   await fsp.rm(parentSummaryFile, { force: true }).catch(() => undefined)
+  const blockers = processResult.spawnRegistrationFailed === true
+    ? ['codex_parent_spawn_registration_failed']
+    : processResult.timedOut
+      ? ['codex_parent_timeout']
+      : processResult.code === 0
+        ? []
+        : ['codex_parent_exit:' + String(processResult.code ?? 'unknown')]
 
   return {
     ...base,
@@ -140,6 +149,7 @@ export async function runOfficialSubagentWorkflow(input: OfficialSubagentWorkflo
     codex_exit_code: processResult.code,
     parent_summary: parentSummary.trim() || null,
     parent_summary_file: null,
+    blockers,
     tool_output_recovery: toolOutputRecovery,
     process: {
       pid: processResult.pid || null,

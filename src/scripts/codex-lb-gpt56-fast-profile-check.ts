@@ -138,12 +138,12 @@ function assertGpt56ToolCatalogContract() {
     ...(models.every((model: any) => model.use_responses_lite === false) ? [] : ['codex_lb_gpt56_responses_lite_not_disabled']),
     ...(models.every((model: any) => model.tool_mode === 'code_mode_only') ? [] : ['codex_lb_gpt56_native_tool_mode_not_preserved']),
     ...(models.every((model: any) => model.supports_parallel_tool_calls === true) ? [] : ['codex_lb_gpt56_parallel_tool_calls_not_preserved']),
-    ...(models.every((model: any) => model.minimal_client_version === '0.144.1') ? [] : ['codex_lb_gpt56_codex_0144_contract_missing'])
+    ...(models.every((model: any) => model.minimal_client_version === '0.144.5') ? [] : ['codex_lb_gpt56_codex_0144_contract_missing'])
   ]
   return {
     schema: normalized.schema,
     ok: blockers.length === 0,
-    codex_cli_contract: '0.144.1',
+    codex_cli_contract: '0.144.5',
     models: normalized.gpt56_models,
     patched_models: normalized.patched_models,
     tools_transport: normalized.tools_transport,
@@ -169,7 +169,7 @@ function codex0144Model(slug: string) {
     experimental_supported_tools: [],
     tool_mode: 'code_mode_only',
     use_responses_lite: true,
-    minimal_client_version: '0.144.1'
+    minimal_client_version: '0.144.5'
   }
 }
 

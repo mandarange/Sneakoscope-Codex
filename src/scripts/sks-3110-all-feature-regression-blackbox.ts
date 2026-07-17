@@ -16,11 +16,11 @@ const parity = buildReleaseGateScriptParityReport();
 
 const coreA = await syncCoreSkillsIntegrity({ root, apply: true });
 const coreB = await syncCoreSkillsIntegrity({ root, apply: true });
-const loopPath = path.join(root, '.agents', 'skills', 'loop', 'SKILL.md');
+const loopPath = path.join(root, '.agents', 'skills', 'sks-loop', 'SKILL.md');
 await fs.appendFile(loopPath, '\ncorruption\n', 'utf8');
 const coreC = await syncCoreSkillsIntegrity({ root, apply: true });
 
-await writeManagedCoreSkill(root, '.codex/skills', 'loop');
+await writeManagedCoreSkill(root, '.codex/skills', 'sks-loop');
 const dedupeA = await dedupeProjectSkills({ root, fix: true, yes: true });
 await writeUserSkill(root, '.agents/skills', 'user-loop-a', 'Loop');
 await writeUserSkill(root, '.codex/skills', 'user-loop-b', 'loop');

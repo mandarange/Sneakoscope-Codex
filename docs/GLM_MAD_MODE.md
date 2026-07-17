@@ -1,6 +1,6 @@
 # GLM 5.2 MAD Mode
 
-SKS keeps GLM optimization scoped to `sks --mad --glm`. The default GLM path is a bounded speed profile with no high/xhigh reasoning effort, while ordinary `sks --mad`, `$Naruto`, and non-GLM Codex routes keep their existing defaults.
+SKS keeps GLM optimization scoped to `sks --mad --glm`. The default GLM path is a bounded speed profile with no high/xhigh reasoning effort, while ordinary `sks --mad`, `$sks-naruto`, and non-GLM Codex routes keep their existing defaults.
 
 ```bash
 sks --mad --glm
@@ -21,7 +21,7 @@ The 4.0.6 speed defaults apply only when GLM mode is selected:
 
 - `sks --mad --glm` uses the GLM speed profile.
 - Non-GLM `sks --mad` does not inherit GLM routing or reasoning defaults.
-- `$Naruto` and Codex default model routing are unchanged outside the GLM path.
+- `$sks-naruto` and Codex default model routing are unchanged outside the GLM path.
 - GLM bench and trace artifacts live under `.sneakoscope/glm/`.
 
 ## Model Lock

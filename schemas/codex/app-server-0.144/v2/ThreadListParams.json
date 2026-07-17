@@ -3,9 +3,15 @@
   "title": "ThreadListParams",
   "type": "object",
   "properties": {
-    "useStateDbOnly": {
-      "description": "If true, return from the state DB without scanning JSONL rollouts to repair thread metadata. Omitted or false preserves scan-and-repair behavior.",
-      "type": "boolean"
+    "sourceKinds": {
+      "description": "Optional source filter; when set, only sessions from these source kinds are returned. When omitted or empty, defaults to interactive sources.",
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/ThreadSourceKind"
+      }
     },
     "archived": {
       "description": "Optional archived filter; when set to true, only archived threads are returned. If false or null, only non-archived threads are returned.",
@@ -51,15 +57,9 @@
         "type": "string"
       }
     },
-    "sourceKinds": {
-      "description": "Optional source filter; when set, only sessions from these source kinds are returned. When omitted or empty, defaults to interactive sources.",
-      "type": [
-        "array",
-        "null"
-      ],
-      "items": {
-        "$ref": "#/definitions/ThreadSourceKind"
-      }
+    "useStateDbOnly": {
+      "description": "If true, return from the state DB without scanning JSONL rollouts to repair thread metadata. Omitted or false preserves scan-and-repair behavior.",
+      "type": "boolean"
     },
     "searchTerm": {
       "description": "Optional substring filter for the extracted thread title.",

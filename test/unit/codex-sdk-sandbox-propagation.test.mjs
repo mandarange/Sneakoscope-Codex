@@ -47,7 +47,7 @@ test('Codex SDK execution policy preserves read-only Naruto scope without blocki
   assert.equal(buildCodexExecutionPolicy(implementationTask).mutation, 'ledgered');
 });
 
-test('Codex SDK 0.144.1 receives the resolved read-only sandbox in its CLI arguments', async () => {
+test('Codex SDK 0.144.5 receives the resolved read-only sandbox in its CLI arguments', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-codex-sdk-sandbox-args-'));
   const fakeCodex = path.join(root, 'fake-codex.mjs');
   const capture = path.join(root, 'args.json');

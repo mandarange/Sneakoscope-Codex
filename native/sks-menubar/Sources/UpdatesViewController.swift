@@ -1,6 +1,7 @@
 import Cocoa
 
 final class UpdatesViewController: NSViewController {
+    private static let controlCenterUpdateEnvironment = ["SKS_UPDATE_DEFER_MENUBAR_RESTART": "1"]
     private let processClient: ProcessClient
     private let operations: OperationCoordinator
     private let notifications: NotificationCoordinator
@@ -74,17 +75,21 @@ final class UpdatesViewController: NSViewController {
         status.stringValue = "\(kind.replacingOccurrences(of: "-", with: " ").capitalized)…"
         _ = operations.update(operation, state: .running, stage: "running", progress: nil, summary: status.stringValue)
         if kind == "update" { startReceiptPolling(for: operation) }
-        processClient.run(args) { [weak self] result in
+        let environment = kind == "update" ? Self.controlCenterUpdateEnvironment : [:]
+        processClient.run(args, environment: environment) { [weak self] result in
             guard let self = self else { return }
             self.stopReceiptPolling()
             self.progress.stopAnimation(nil); self.progress.isHidden = true
             var authoritativeState: OperationState?
+            var restartMenuBarAfterCompletion = false
             if kind == "update" {
                 if let receipt = self.operations.updateReceipt(fromProcessOutput: result.output) ?? self.operations.latestUpdateReceipt(),
                    self.receipt(receipt, belongsTo: operation) {
                     authoritativeState = OperationCoordinator.authoritativeState(for: receipt, processCompleted: true)
                     _ = self.operations.synchronize(operation, with: receipt, processCompleted: true)
                     self.render(receipt: receipt)
+                    restartMenuBarAfterCompletion = authoritativeState == .succeeded
+                        && receipt.stages.contains { $0.id == "menubar_rebuild" && $0.status == "installed_launch_skipped" }
                 } else {
                     authoritativeState = .terminalUncertain
                     _ = self.operations.update(
@@ -131,8 +136,28 @@ final class UpdatesViewController: NSViewController {
                 body: notificationBody
             ))
             if kind == "update-status" { self.render(statusResult: result) }
-            else if kind == "update" { self.reloadSnapshot() }
+            else if kind == "update" {
+                if restartMenuBarAfterCompletion {
+                    self.status.stringValue = "Update completed. Restarting Control Center…"
+                    self.restartMenuBarAfterUpdateCompletion()
+                } else {
+                    self.reloadSnapshot()
+                }
+            }
             completion?(result)
+        }
+    }
+
+    private func restartMenuBarAfterUpdateCompletion() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+            guard let self = self else { return }
+            do {
+                try self.processClient.runDetached(["menubar", "restart", "--json"])
+            } catch {
+                self.status.stringValue = "Update completed, but Control Center restart could not be started."
+                self.remediation.stringValue = "Remediation: run sks menubar restart, then reopen Control Center."
+                self.reloadSnapshot()
+            }
         }
     }
 

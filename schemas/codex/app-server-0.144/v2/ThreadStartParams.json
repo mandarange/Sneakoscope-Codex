@@ -59,12 +59,6 @@
         "null"
       ]
     },
-    "serviceName": {
-      "type": [
-        "string",
-        "null"
-      ]
-    },
     "threadSource": {
       "description": "Optional client-supplied analytics source classification for this thread.",
       "anyOf": [
@@ -74,6 +68,12 @@
         {
           "type": "null"
         }
+      ]
+    },
+    "serviceTier": {
+      "type": [
+        "string",
+        "null"
       ]
     },
     "ephemeral": {
@@ -92,12 +92,6 @@
         }
       ]
     },
-    "serviceTier": {
-      "type": [
-        "string",
-        "null"
-      ]
-    },
     "sessionStartSource": {
       "anyOf": [
         {
@@ -106,6 +100,12 @@
         {
           "type": "null"
         }
+      ]
+    },
+    "serviceName": {
+      "type": [
+        "string",
+        "null"
       ]
     },
     "model": {

@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { agentsBlockText, codexAppQuickReference, normalizeInstallScope, sksCommandPrefix } from '../init.js';
 import { mergeManagedBlock, readText, writeTextAtomic } from '../fsx.js';
+import { LEGACY_DOLLAR_SKILL_NAMES } from '../routes.js';
 import {
   isSksGeneratedRetiredProfileText,
   reconcileRetiredSksConfigText,
@@ -22,6 +23,10 @@ export const CURRENT_PROJECT_GUIDANCE_SCHEMA = 'sks.current-project-guidance.v1'
 const AGENTS_MARKER = 'BEGIN Sneakoscope Codex GX MANAGED BLOCK';
 const RETIRED_COMMAND_NAMES = ['team', 'mad-db', 'tmux', 'xai', 'swarm', 'agent', 'ralph', 'db'] as const;
 const RETIRED_DOLLAR_COMMAND_NAMES = ['Agent', 'Team', 'MAD-DB', 'Swarm', 'ShadowClone', 'Kagebunshin', 'Ralph'] as const;
+const LEGACY_UNPREFIXED_DOLLAR_COMMAND_NAMES = Array.from(new Set([
+  ...RETIRED_DOLLAR_COMMAND_NAMES,
+  ...LEGACY_DOLLAR_SKILL_NAMES.filter((name) => name !== 'sks')
+]));
 const TOKEN_CONTINUATION = '-A-Za-z0-9_.';
 const RETIRED_COMMAND_RE = new RegExp(
   `(?:^|[^${TOKEN_CONTINUATION}])sks\\s+(?:${RETIRED_COMMAND_NAMES.map(escapeRegExp).join('|')})(?![${TOKEN_CONTINUATION}])`,
@@ -29,7 +34,7 @@ const RETIRED_COMMAND_RE = new RegExp(
 );
 const RETIRED_AGENT_OPTION_RE = new RegExp(`(?:^|[^${TOKEN_CONTINUATION}])--agent(?![${TOKEN_CONTINUATION}])`, 'i');
 const RETIRED_DOLLAR_COMMAND_RE = new RegExp(
-  `(?:^|[^${TOKEN_CONTINUATION}$])\\$(?:${RETIRED_DOLLAR_COMMAND_NAMES.map(escapeRegExp).join('|')})(?![${TOKEN_CONTINUATION}])`,
+  `(?:^|[^${TOKEN_CONTINUATION}$])\\$(?:${LEGACY_UNPREFIXED_DOLLAR_COMMAND_NAMES.map(escapeRegExp).join('|')})(?![${TOKEN_CONTINUATION}])`,
   'i'
 );
 export interface CurrentProjectGuidanceReport {

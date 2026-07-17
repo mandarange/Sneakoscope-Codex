@@ -3,6 +3,7 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { runProcess, writeJsonAtomic } from '../fsx.js'
+import { LEGACY_DOLLAR_COMMAND_NAMES, LEGACY_DOLLAR_SKILL_NAMES } from '../routes.js'
 
 export interface InstalledPackageSmokeOptions {
   tarball?: string
@@ -44,9 +45,13 @@ export interface InstalledPackageSmokeReport {
 }
 
 export const INSTALLED_REQUIRED_COMMANDS = ['naruto', 'mcp', 'update', 'menubar'] as const
-export const INSTALLED_REQUIRED_DOLLAR_COMMANDS = ['$Naruto', '$Work'] as const
+export const INSTALLED_REQUIRED_DOLLAR_COMMANDS = ['$sks-naruto', '$sks-work'] as const
 export const INSTALLED_REMOVED_COMMANDS = ['team', 'mad-db', 'tmux', 'xai', 'swarm', 'agent', 'ralph'] as const
-export const INSTALLED_REMOVED_DOLLAR_COMMANDS = ['$Agent', '$Team', '$MAD-DB', '$Swarm', '$ShadowClone', '$Kagebunshin', '$Ralph'] as const
+export const INSTALLED_REMOVED_DOLLAR_COMMANDS = Array.from(new Set([
+  '$Agent', '$Team', '$MAD-DB', '$Swarm', '$ShadowClone', '$Kagebunshin', '$Ralph',
+  ...LEGACY_DOLLAR_COMMAND_NAMES.filter((command) => command.toLowerCase() !== '$sks'),
+  ...LEGACY_DOLLAR_SKILL_NAMES.filter((name) => name !== 'sks').map((name) => `$${name}`)
+]))
 
 type InstalledSurfaceRejectionReason = 'unknown_command' | 'unknown_subcommand' | 'unsupported_argument'
 
@@ -446,7 +451,7 @@ function installedDiagnosticBlockers(
   result: Awaited<ReturnType<typeof runJsonCommand>>,
   platform: NodeJS.Platform
 ): string[] {
-  if (name === 'naruto') return result.exit_code === 0 && /\$Naruto/.test(result.stdout)
+  if (name === 'naruto') return result.exit_code === 0 && /\$sks-naruto/.test(result.stdout)
     ? [] : ['installed_diagnostic_failed:naruto']
   const expectedSchema: Record<string, string> = {
     mcp: 'sks.mcp-inventory.v2',

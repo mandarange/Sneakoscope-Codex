@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://sneakoscope.local/schemas/codex/codex-0139-real-probe-result.schema.json",
-  "title": "SKS Codex 0.144.1 core real probe result (0.139 contract lineage)",
+  "title": "SKS Codex 0.144.5 core real probe result (0.139 contract lineage)",
   "type": "object",
   "required": [
     "schema",
@@ -26,7 +26,7 @@
   ],
   "properties": {
     "schema": { "const": "sks.codex-0139-real-probe-result.v1" },
-    "target_version": { "const": "0.144.1" },
+    "target_version": { "const": "0.144.5" },
     "compatibility_origin": { "const": "codex-0139-real-probe-result-v1" },
     "compatibility_authority": { "const": "deprecated_non_authoritative_lineage_only" },
     "generated_at": { "type": "string" },

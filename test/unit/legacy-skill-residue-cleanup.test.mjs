@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   cleanupRemovedSksSkillResidue,
+  LEGACY_UNPREFIXED_SKS_SKILL_NAMES,
   loadSkillsManifest,
   reconcileSkills,
   REMOVED_SKS_SKILL_NAMES
@@ -23,6 +24,10 @@ test('packaged skill manifest excludes retired skills and aliases', async () => 
   for (const name of REMOVED_SKS_SKILL_NAMES) {
     assert.equal(names.has(name), false, name);
     assert.equal(aliases.has(name), false, name);
+  }
+  for (const name of LEGACY_UNPREFIXED_SKS_SKILL_NAMES) {
+    assert.equal(names.has(name), false, `legacy unprefixed skill published: ${name}`);
+    assert.equal(aliases.has(name), false, `legacy unprefixed alias published: ${name}`);
   }
 });
 
@@ -89,13 +94,13 @@ test('removed skill cleanup canonicalizes managed variants across nested mirrors
 
     const report = await cleanupRemovedSksSkillResidue({ root, home, fix: true });
     assert.equal(report.ok, true, JSON.stringify(report.errors));
-    assert.equal(report.removed.length, 3);
+    assert.equal(report.removed.length, 4);
     assert.equal(report.quarantined_user_collisions.length, 1);
     await assertMissing(path.join(home, '.agents', 'skills', 'Team'));
     await assertMissing(path.join(nested, '.agents', 'skills', 'MAD-DB'));
     await assertMissing(path.join(nested, '.codex', 'skills', 'mad_db'));
+    await assertMissing(path.join(nested, '.agents', 'skills', 'MAD-SKS'));
     await assertMissing(path.join(root, 'services', 'api', '.agents', 'skills', 'TEAM'));
-    assert.match(await fs.readFile(path.join(nested, '.agents', 'skills', 'MAD-SKS', 'SKILL.md'), 'utf8'), /name: MAD-SKS/);
     const quarantined = await findFiles(path.join(root, '.sneakoscope', 'quarantine', 'skills'), 'SKILL.md');
     assert.equal(quarantined.length, 1);
     assert.match(await fs.readFile(quarantined[0], 'utf8'), /keep me in quarantine/);
@@ -204,22 +209,48 @@ test('removed skill cleanup scrubs HOME and SKS_GLOBAL_ROOT generated manifests 
     assert.deepEqual(first.remaining, []);
     for (const target of targets) {
       const generated = JSON.parse(await fs.readFile(path.join(target, '.sks-generated.json'), 'utf8'));
-      assert.deepEqual(generated.skills, ['naruto', 'answer']);
-      assert.deepEqual(generated.files, [
-        '.agents/skills/naruto/SKILL.md',
-        '.agents/skills/answer/SKILL.md'
-      ]);
+      assert.deepEqual(generated.skills, []);
+      assert.deepEqual(generated.files, []);
       const packaged = JSON.parse(await fs.readFile(path.join(target, 'skills-manifest.json'), 'utf8'));
       assert.equal(Object.hasOwn(packaged, 'removed_skills'), false);
-      assert.deepEqual(packaged.skills.map((skill) => skill.canonical_name), ['naruto', 'answer']);
-      assert.deepEqual(packaged.skills[0].deprecated_aliases, []);
-      assert.doesNotMatch(JSON.stringify({ generated, packaged }), /"(?:team|mad-db|tmux|xai|swarm|shadow-clone|kage-bunshin|ralph)"/i);
+      assert.deepEqual(packaged.skills, []);
+      assert.doesNotMatch(JSON.stringify({ generated, packaged }), /"(?:team|mad-db|tmux|xai|swarm|shadow-clone|kage-bunshin|ralph|naruto|answer)"/i);
     }
 
     const second = await cleanupRemovedSksSkillResidue({ root, home, globalRuntimeRoot, fix: true });
     assert.equal(second.ok, true, JSON.stringify(second.errors));
     assert.deepEqual(second.rewritten_manifests, []);
     assert.deepEqual(second.quarantined_manifest_collisions, []);
+  } finally {
+    await fs.rm(fixture, { recursive: true, force: true });
+  }
+});
+
+test('skill reconcile replaces managed prefixless dollar commands with one sks-prefixed picker surface', async () => {
+  const fixture = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-prefixed-dollar-reconcile-'));
+  const home = path.join(fixture, 'home');
+  try {
+    for (const name of ['naruto', 'dfix', 'qa-loop']) {
+      await writeManagedSkill(path.join(home, '.agents', 'skills', name), name);
+    }
+    await writeManagedSkill(path.join(home, '.codex', 'skills', 'work'), 'work');
+    await writeUserSkill(path.join(home, '.agents', 'skills', 'customer-helper'), 'customer-helper', 'keep customer helper');
+
+    const report = await reconcileSkills({
+      targetDir: path.join(home, '.agents', 'skills'),
+      scope: 'global',
+      fix: true
+    });
+
+    assert.equal(report.ok, true, report.warnings.join('\n'));
+    assert.ok((report.retired_residue?.removed_count || 0) >= 4);
+    for (const name of ['naruto', 'dfix', 'qa-loop', 'work']) {
+      await assertMissing(path.join(home, '.agents', 'skills', name));
+      await assertMissing(path.join(home, '.codex', 'skills', name));
+      assert.equal((await fs.stat(path.join(home, '.agents', 'skills', `sks-${name}`, 'SKILL.md'))).isFile(), true);
+    }
+    assert.equal(await readSkill(path.join(home, '.agents', 'skills', 'customer-helper')), 'keep customer helper');
+    assert.ok(report.installed_skills.every((name) => name === 'sks' || !LEGACY_UNPREFIXED_SKS_SKILL_NAMES.includes(name)));
   } finally {
     await fs.rm(fixture, { recursive: true, force: true });
   }
@@ -253,8 +284,8 @@ test('global reconcile includes the configured SKS_GLOBAL_ROOT cleanup surface',
     assert.equal(report.retired_residue?.rewritten_manifest_count, 1);
     await assertMissing(path.join(globalRuntimeRoot, '.agents', 'skills', 'team'));
     const generated = JSON.parse(await fs.readFile(path.join(globalRuntimeRoot, '.agents', 'skills', '.sks-generated.json'), 'utf8'));
-    assert.deepEqual(generated.skills, ['naruto']);
-    assert.deepEqual(generated.files, ['.agents/skills/naruto/SKILL.md']);
+    assert.deepEqual(generated.skills, []);
+    assert.deepEqual(generated.files, []);
   } finally {
     if (previousGlobalRoot === undefined) delete process.env.SKS_GLOBAL_ROOT;
     else process.env.SKS_GLOBAL_ROOT = previousGlobalRoot;
@@ -348,7 +379,8 @@ test('generated project guidance advertises Naruto and no retired compatibility 
     const agents = await fs.readFile(path.join(root, 'AGENTS.md'), 'utf8');
     const quickReference = await fs.readFile(path.join(root, '.codex', 'SNEAKOSCOPE.md'), 'utf8');
     for (const text of [agents, quickReference]) {
-      assert.match(text, /\$Naruto|naruto run/);
+      assert.match(text, /\$sks-naruto|naruto run/);
+      assert.doesNotMatch(text, /\$(?:Naruto|Work|DFix|QA-LOOP)\b/);
       assert.doesNotMatch(text, /\$Agent|\$Team|sks team|\$MAD-DB|sks mad-db|\$Swarm|\$ShadowClone|\$Kagebunshin|\$Ralph|sks ralph/i);
     }
     for (const name of PRIMARY_REMOVED) {
@@ -390,7 +422,8 @@ test('doctor fix rewrites only SKS-managed guidance to the current public surfac
     const quickReference = await fs.readFile(path.join(root, '.codex', 'SNEAKOSCOPE.md'), 'utf8');
     assert.match(agents, /customer-authored-prefix/);
     for (const text of [agents, quickReference]) {
-      assert.match(text, /\$Naruto|naruto run/);
+      assert.match(text, /\$sks-naruto|naruto run/);
+      assert.doesNotMatch(text, /\$(?:Naruto|Work|DFix|QA-LOOP)\b/);
       assert.doesNotMatch(text, /\$Agent|\$Team|sks team|\$MAD-DB|sks mad-db/i);
     }
 
@@ -420,7 +453,8 @@ test('doctor fix quarantines user-authored guidance collisions before installing
     const agents = await fs.readFile(path.join(root, 'AGENTS.md'), 'utf8');
     const quickReference = await fs.readFile(path.join(root, '.codex', 'SNEAKOSCOPE.md'), 'utf8');
     for (const text of [agents, quickReference]) {
-      assert.match(text, /\$Naruto|naruto run/);
+      assert.match(text, /\$sks-naruto|naruto run/);
+      assert.doesNotMatch(text, /\$(?:Naruto|Work|DFix|QA-LOOP)\b/);
       assert.doesNotMatch(text, /\$ShadowClone|sks xai/i);
     }
 

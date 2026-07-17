@@ -33,7 +33,7 @@ if (run('sks', ['doctor', '--fix', ...(autonomous ? ['--yes'] : [])]) !== 0) {
 
 console.log(`
 SKS ready. 다음 3개만 기억하세요 (Codex 입력창에서):
-   $Plan "무엇을 만들지"     - 계획만 세움 (코드 안 건드림)
-   $Work                     - 계획을 증거 기반으로 실행
+   $sks-plan "무엇을 만들지" - 계획만 세움 (코드 안 건드림)
+   $sks-work                 - 계획을 증거 기반으로 실행
    실시간 화면: sks ui  (웹 대시보드) / zellij 세션은 자동
 `);

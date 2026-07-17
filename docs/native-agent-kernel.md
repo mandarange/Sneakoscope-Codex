@@ -1,6 +1,6 @@
 # Codex Official Subagent Workflow
 
-SKS execution work is coordinated through `$Naruto`. `$Work` is the single intended execution alias. The parent owns decomposition, write-scope separation, integration, verification, and the final answer; child threads receive bounded, non-overlapping slices and cannot delegate again.
+SKS execution work is coordinated through `$sks-naruto`. `$sks-work` is the single intended execution alias. The parent owns decomposition, write-scope separation, integration, verification, and the final answer; child threads receive bounded, non-overlapping slices and cannot delegate again.
 
 ## Current command surface
 

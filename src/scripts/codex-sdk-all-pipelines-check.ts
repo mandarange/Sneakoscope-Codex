@@ -11,6 +11,7 @@ const sources = {
   qa: readText('src/core/commands/qa-loop-command.ts'),
   research: readText('src/core/commands/research-command.ts'),
   naruto: readText('src/core/commands/naruto-command.ts'),
+  narutoPreparation: readText('src/core/subagents/official-subagent-preparation.ts'),
   dfix: readText('src/core/commands/dfix-command.ts'),
   coreSkill: readText('src/core/skills/core-skill-types.ts')
 };
@@ -21,7 +22,7 @@ assertGate(
   'Research must use the Codex SDK stage backend plus the official subagent reviewer workflow'
 );
 assertGate(sources.naruto.includes('runOfficialSubagentWorkflow'), 'Naruto must invoke the official Codex subagent runner');
-assertGate(sources.naruto.includes("workflow: 'official_codex_subagent'"), 'Naruto must persist the official subagent workflow contract');
+assertGate(sources.narutoPreparation.includes("workflow: 'official_codex_subagent'"), 'Naruto preparation must persist the official subagent workflow contract');
 assertGate(!sources.naruto.includes("backend: 'codex-sdk'"), 'Naruto must not select the legacy codex-sdk backend');
 assertGate(sources.coreSkill.includes("'codex-sdk'"), 'Core skill backend type must include codex-sdk');
 const fixture = await runFakeCodexSdkTaskFixture('all-pipelines');

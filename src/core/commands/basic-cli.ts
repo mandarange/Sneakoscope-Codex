@@ -6,7 +6,7 @@ import { flag } from '../../cli/args.js';
 import { printJson, sksTextLogo } from '../../cli/output.js';
 import { ui as cliUi } from '../../cli/cli-theme.js';
 import { PACKAGE_VERSION, ensureDir, exists, nowIso, projectRoot, readJson, rmrf, sksRoot, tmpdir, writeJsonAtomic } from '../fsx.js';
-import { DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS, USAGE_TOPICS, routePrompt, routeReasoning, reasoningInstruction } from '../routes.js';
+import { DOLLAR_COMMANDS, USAGE_TOPICS, routePrompt, routeReasoning, reasoningInstruction, sksPrefixedDollarCommand } from '../routes.js';
 import { DOLLAR_COMMAND_ALIASES_LITE, DOLLAR_COMMANDS_LITE } from '../routes/dollar-manifest-lite.js';
 import { initProject, normalizeInstallScope, sksCommandPrefix } from '../init.js';
 import { buildFeatureRegistry, validateFeatureRegistry } from '../feature-registry.js';
@@ -67,23 +67,23 @@ export function dollarCommandsCommand(args: any = []) {
   const out = { dollar_commands: DOLLAR_COMMANDS_LITE, app_skill_aliases: DOLLAR_COMMAND_ALIASES_LITE };
   if (flag(args, '--json')) return printJson(out);
   console.log(`${sksTextLogo()}\n\n$ Commands\n`);
-  const width = Math.max(...DOLLAR_COMMANDS.map((entry: any) => entry.command.length));
-  for (const entry of DOLLAR_COMMANDS) console.log(`${entry.command.padEnd(width)}  ${entry.route}: ${entry.description}`);
-  console.log(`\nCanonical Codex App picker skills: ${DOLLAR_COMMAND_ALIASES.map((entry: any) => entry.app_skill).join(', ')}`);
+  const width = Math.max(...DOLLAR_COMMANDS_LITE.map((entry: any) => entry.command.length));
+  for (const entry of DOLLAR_COMMANDS_LITE) console.log(`${entry.command.padEnd(width)}  ${entry.route}: ${entry.description}`);
+  console.log(`\nCanonical Codex App picker skills: ${DOLLAR_COMMAND_ALIASES_LITE.map((entry: any) => entry.app_skill).join(', ')}`);
 }
 
 export function aliasesCommand() {
   console.log('Aliases');
   console.log('- sks, sneakoscope');
   console.log('- $ aliases:');
-  for (const entry of DOLLAR_COMMAND_ALIASES) console.log(`  ${entry.app_skill} -> ${entry.canonical}`);
+  for (const entry of DOLLAR_COMMAND_ALIASES_LITE) console.log(`  ${entry.app_skill} -> ${entry.canonical}`);
 }
 
 export function dfixCommand() {
   console.log(`SKS Direct Fix Mode
 
 Prompt command:
-  $DFix <tiny direct fix request>
+  $sks-dfix <tiny direct fix request>
 
 Rules:
   Apply only the requested tiny copy/config/docs/labels/spacing/translation/simple mechanical edit.
@@ -115,9 +115,9 @@ export function usageCommand(args: any = []) {
   }
   const route = REMOVED_USAGE_TOPICS.has(String(topic).toLowerCase())
     ? null
-    : DOLLAR_COMMANDS.find((entry: any) => entry.command.toLowerCase() === `$${topic}`.toLowerCase());
+    : DOLLAR_COMMANDS.find((entry: any) => entry.command.toLowerCase() === sksPrefixedDollarCommand(topic).toLowerCase());
   if (route) {
-    console.log(`${route.command}\n`);
+    console.log(`${sksPrefixedDollarCommand(route.command)}\n`);
     console.log(`${route.route}: ${route.description}`);
     return;
   }
@@ -134,7 +134,7 @@ export function quickstartCommand() {
   sks dollar-commands
   sks all-features selftest --mock --execute-fixtures --strict-artifacts --json
 
-For implementation work, use Codex App prompt routes such as $Naruto, $Goal, $QA-LOOP, $Image-UX-Review, and $Computer-Use.`);
+For implementation work, use Codex App prompt routes such as $sks-naruto, $sks-goal, $sks-qa-loop, $sks-image-ux-review, and $sks-computer-use.`);
 }
 
 export async function updateStatusCommand(args: any = []) {

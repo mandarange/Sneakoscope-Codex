@@ -277,7 +277,7 @@ async function skillContent(id: string): Promise<void> {
   const mod = await importDist('core/codex-app/codex-skill-sync.js')
   const skillsRoot = path.join(tmp, 'skills')
   const report = await mod.syncCodexSksSkills({ root: tmp, skillsRoot, apply: true })
-  const skill = fs.readFileSync(path.join(skillsRoot, 'loop', 'SKILL.md'), 'utf8')
+  const skill = fs.readFileSync(path.join(skillsRoot, 'sks-loop', 'SKILL.md'), 'utf8')
   assertGate(skill.includes('Purpose:') && skill.includes('Route:') && skill.includes('Proof paths:') && skill.includes('Failure recovery:'), 'managed skill content incomplete', { skill, report })
   assertGate(report.interop.clobbered_user_skills === false, 'skill sync clobbered user skills', report)
   emitGate(id)

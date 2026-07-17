@@ -61,7 +61,7 @@ export async function runCodex0139ImageReferencedPathRealProbe(input: {
   }
   const outputFile = path.join(tempDir, 'last-message.txt')
   const prompt = [
-    'This is a Codex 0.144.1 image path routing probe.',
+    'This is a Codex 0.144.5 image path routing probe.',
     `Only the image file named ${path.basename(inputB)} is intentionally referenced.`,
     `Return compact JSON {"referenced_path":"${inputB.replace(/\\/g, '\\\\')}","saw_image":true}.`,
     'Do not edit files and do not reference any other image path.'

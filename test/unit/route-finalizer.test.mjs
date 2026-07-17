@@ -10,13 +10,13 @@ test('route finalizer writes completion proof and visual image anchors', async (
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-route-finalizer-'));
   const result = await finalizeRouteWithProof(root, {
     missionId: 'M-fixture',
-    route: '$Image-UX-Review',
+    route: '$sks-image-ux-review',
     mock: true,
     requireRelation: true,
     statusHint: 'verified_partial'
   });
   assert.equal(result.ok, true);
-  assert.equal(result.proof.route, '$Image-UX-Review');
+  assert.equal(result.proof.route, '$sks-image-ux-review');
   assert.equal(result.proof.status, 'mock_only');
   assert.equal(result.proof.evidence.image_voxels.anchor_count, 1);
   assert.equal(result.proof.evidence.image_voxels.relations, 1);

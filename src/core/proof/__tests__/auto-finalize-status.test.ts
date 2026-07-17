@@ -93,7 +93,7 @@ test('mock official-subagent blockers remain visible and mock proof is not passi
   const proof = await readProof(dir);
   assert.equal(proof.status, 'mock_only');
   assert.equal(proof.execution_class, 'mock_fixture');
-  assert.equal(proof.route, '$Naruto');
+  assert.equal(proof.route, '$sks-naruto');
   assert.ok(proof.blockers.includes('official_subagent_evidence_missing'));
   assert.ok(proof.blockers.includes('official_subagent_parent_summary_missing'));
   assert.equal(proof.evidence.route_gate.workflow, 'official_codex_subagent');

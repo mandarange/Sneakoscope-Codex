@@ -57,10 +57,10 @@ const run = await runProcess(process.execPath, args, {
 const parsed = parseJsonObjectFromStdout(run.stdout)
 
 const ok = realMode
-  ? run.code === 0 && parsed?.ok === true && parsed?.route === '$Naruto' && parsed?.status === 'completed'
+  ? run.code === 0 && parsed?.ok === true && parsed?.route === '$sks-naruto' && parsed?.status === 'completed'
   : run.code === 0
     && parsed?.ok === false
-    && parsed?.route === '$Naruto'
+    && parsed?.route === '$sks-naruto'
     && parsed?.status === 'delegation_context_ready'
     && parsed?.app_session === true
 assertGate(ok || (realMode && !requireReal), `${mode} Naruto E2E failed`, {

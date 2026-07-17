@@ -11,7 +11,7 @@ export interface FileLockInput {
   staleMs: number;
 }
 
-interface FileLockOwner {
+export interface FileLockOwnerSnapshot {
   schema: 'sks.file-lock-owner.v1';
   owner: string;
   pid: number;
@@ -19,6 +19,24 @@ interface FileLockOwner {
   acquired_at: string;
   heartbeat_at: string;
   stale_ms: number;
+  protected_pids?: number[];
+}
+
+export interface FileLockLease {
+  readonly owner: string;
+  readonly pid: number;
+  readonly recovered: boolean;
+  protectPid(pid: number): Promise<void>;
+}
+
+export type TryFileLockResult<T> =
+  | { acquired: true; recovered: boolean; value: T }
+  | { acquired: false; owner: FileLockOwnerSnapshot | null };
+
+interface HeldFileLock {
+  owner: string;
+  protectedPids: Set<number>;
+  recovered: boolean;
 }
 
 const HEARTBEAT_MARGIN = 3;
@@ -28,24 +46,78 @@ export async function withFileLock<T>(input: FileLockInput, fn: () => Promise<T>
   const timeoutMs = Math.max(1, input.timeoutMs);
   const staleMs = Math.max(1, input.staleMs);
   const started = Date.now();
-  const owner = `${process.pid}-${randomId(8)}`;
   await ensureDir(path.dirname(lockPath));
 
+  let held: HeldFileLock | null = null;
   while (true) {
+    held = await tryAcquireFileLock(lockPath, staleMs);
+    if (held) {
+      break;
+    }
+    if (Date.now() - started > timeoutMs) {
+      throw new Error(`file_lock_timeout:${lockPath}`);
+    }
+    await sleep(jitterDelay());
+  }
+
+  return holdFileLock(lockPath, staleMs, held, async () => fn());
+}
+
+export async function tryWithFileLock<T>(
+  input: Omit<FileLockInput, 'timeoutMs'>,
+  fn: (lease: FileLockLease) => Promise<T>
+): Promise<TryFileLockResult<T>> {
+  const lockPath = path.resolve(input.lockPath);
+  const staleMs = Math.max(1, input.staleMs);
+  await ensureDir(path.dirname(lockPath));
+  const held = await tryAcquireFileLock(lockPath, staleMs);
+  if (!held) {
+    return {
+      acquired: false,
+      owner: await readJson<FileLockOwnerSnapshot | null>(path.join(lockPath, 'owner.json'), null)
+    };
+  }
+  const value = await holdFileLock(lockPath, staleMs, held, fn);
+  return { acquired: true, recovered: held.recovered, value };
+}
+
+async function tryAcquireFileLock(lockPath: string, staleMs: number): Promise<HeldFileLock | null> {
+  let recovered = false;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const owner = `${process.pid}-${randomId(8)}`;
+    const protectedPids = new Set<number>();
     try {
       await fsp.mkdir(lockPath);
-      await writeOwnerFile(lockPath, owner, staleMs);
-      break;
+      await writeOwnerFile(lockPath, owner, staleMs, protectedPids);
+      return { owner, protectedPids, recovered };
     } catch (err: unknown) {
-      const code = errorCode(err);
-      if (code !== 'EEXIST') throw err;
-      await recoverStaleLock(lockPath);
-      if (Date.now() - started > timeoutMs) {
-        throw new Error(`file_lock_timeout:${lockPath}`);
-      }
-      await sleep(jitterDelay());
+      if (errorCode(err) !== 'EEXIST') throw err;
+      if (attempt > 0) return null;
+      recovered = await recoverStaleLock(lockPath);
+      if (!recovered) return null;
     }
   }
+  return null;
+}
+
+async function holdFileLock<T>(
+  lockPath: string,
+  staleMs: number,
+  held: HeldFileLock,
+  fn: (lease: FileLockLease) => Promise<T>
+): Promise<T> {
+  const lease: FileLockLease = {
+    owner: held.owner,
+    pid: process.pid,
+    recovered: held.recovered,
+    protectPid: async (pid: number) => {
+      if (!Number.isSafeInteger(pid) || pid <= 0 || pid === process.pid) {
+        throw new Error(`file_lock_invalid_protected_pid:${String(pid)}`);
+      }
+      held.protectedPids.add(pid);
+      await writeOwnerFile(lockPath, held.owner, staleMs, held.protectedPids);
+    }
+  };
 
   // Touch the owner file's heartbeat_at while we hold the lock so a stale
   // waiter never mistakes genuinely slow-but-alive work for an abandoned
@@ -53,22 +125,27 @@ export async function withFileLock<T>(input: FileLockInput, fn: () => Promise<T>
   // heartbeat is old AND the owning pid is actually dead.
   const heartbeat = setInterval(() => {
     /* intentional: a missed heartbeat tick just gets retried next interval; only matters if it stays stale for the full staleMs window */
-    writeOwnerFile(lockPath, owner, staleMs).catch(() => undefined);
+    writeOwnerFile(lockPath, held.owner, staleMs, held.protectedPids).catch(() => undefined);
   }, Math.max(250, Math.floor(staleMs / HEARTBEAT_MARGIN)));
   if (typeof heartbeat.unref === 'function') heartbeat.unref();
 
   try {
-    return await fn();
+    return await fn(lease);
   } finally {
     clearInterval(heartbeat);
     /* intentional: best-effort release — if it fails, the lock will still be reclaimed once it goes stale (owner-token/pid checked, never blind rm) */
-    await releaseIfOwned(lockPath, owner).catch(() => undefined);
+    await releaseIfOwned(lockPath, held.owner).catch(() => undefined);
   }
 }
 
-async function writeOwnerFile(lockPath: string, owner: string, staleMs: number): Promise<void> {
+async function writeOwnerFile(
+  lockPath: string,
+  owner: string,
+  staleMs: number,
+  protectedPids: ReadonlySet<number>
+): Promise<void> {
   const now = nowIso();
-  const existing = await readJson<FileLockOwner | null>(path.join(lockPath, 'owner.json'), null);
+  const existing = await readJson<FileLockOwnerSnapshot | null>(path.join(lockPath, 'owner.json'), null);
   await writeJsonAtomic(path.join(lockPath, 'owner.json'), {
     schema: 'sks.file-lock-owner.v1',
     owner,
@@ -76,8 +153,9 @@ async function writeOwnerFile(lockPath: string, owner: string, staleMs: number):
     hostname: os.hostname(),
     acquired_at: existing?.owner === owner ? existing.acquired_at : now,
     heartbeat_at: now,
-    stale_ms: staleMs
-  } satisfies FileLockOwner);
+    stale_ms: staleMs,
+    ...(protectedPids.size > 0 ? { protected_pids: [...protectedPids].sort((a, b) => a - b) } : {})
+  } satisfies FileLockOwnerSnapshot);
 }
 
 // Reclaims an abandoned lock without ever directly deleting a lock another
@@ -86,9 +164,9 @@ async function writeOwnerFile(lockPath: string, owner: string, staleMs: number):
 // waiter whose rename succeeds proceeds to retry acquisition, so two
 // concurrent waiters can never both believe they reclaimed the same lock
 // (the previous mtime-only check + direct rm -rf allowed exactly that).
-async function recoverStaleLock(lockPath: string): Promise<void> {
+async function recoverStaleLock(lockPath: string): Promise<boolean> {
   const ownerPath = path.join(lockPath, 'owner.json');
-  const info = await readJson<FileLockOwner | null>(ownerPath, null);
+  const info = await readJson<FileLockOwnerSnapshot | null>(ownerPath, null);
   let stale: boolean;
   if (!info || typeof info.pid !== 'number' || !info.heartbeat_at) {
     // No readable owner record: fall back to directory mtime so a lock left
@@ -98,30 +176,37 @@ async function recoverStaleLock(lockPath: string): Promise<void> {
     const heartbeatAgeMs = Date.now() - Date.parse(info.heartbeat_at);
     stale = Number.isFinite(heartbeatAgeMs)
       && heartbeatAgeMs > info.stale_ms
-      && !isPidAlive(info.pid, info.hostname);
+      && !ownerHasLivePid(info);
   }
-  if (!stale) return;
+  if (!stale) return false;
   const quarantinePath = `${lockPath}.stale-${Date.now()}-${randomId(6)}`;
   try {
     await fsp.rename(lockPath, quarantinePath);
   } catch {
     // Another waiter already reclaimed (or the holder released) it first.
-    return;
+    return false;
   }
   /* intentional: the quarantine rename already reclaimed the lock name; this is just disk cleanup of the orphaned directory and can be swept up later if it fails */
   await guardedRm(guardContextForRoute(process.cwd(), lockScopeContract(quarantinePath), 'remove quarantined stale SKS file lock directory'), quarantinePath, {
     recursive: true,
     force: true
   }).catch(() => undefined);
+  return true;
 }
 
 async function releaseIfOwned(lockPath: string, owner: string): Promise<void> {
-  const info = await readJson<FileLockOwner | null>(path.join(lockPath, 'owner.json'), null);
+  const info = await readJson<FileLockOwnerSnapshot | null>(path.join(lockPath, 'owner.json'), null);
   // If the owner record is missing or names a different owner, this lock was
   // already reclaimed as stale out from under us — removing it now would
   // delete whoever holds it legitimately next.
   if (info && info.owner !== owner) return;
   await removeLockDir(lockPath);
+}
+
+function ownerHasLivePid(info: FileLockOwnerSnapshot): boolean {
+  if (isPidAlive(info.pid, info.hostname)) return true;
+  return Array.isArray(info.protected_pids)
+    && info.protected_pids.some((pid) => Number.isSafeInteger(pid) && pid > 0 && isPidAlive(pid, info.hostname));
 }
 
 async function removeLockDir(lockPath: string): Promise<void> {

@@ -1,15 +1,14 @@
 import { PRODUCT_DESIGN_LEGACY_DESIGN_FALLBACK_SKILLS, PRODUCT_DESIGN_PLUGIN, productDesignPluginPolicyText } from '../product-design-plugin.js';
-import { REFLECTION_SKILL_NAME } from './constants.js';
 import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_IMAGEGEN_REQUIRED_POLICY } from './evidence.js';
 import { DESIGN_SYSTEM_SSOT, PRODUCT_DESIGN_PLUGIN_TOOL_ALLOWLIST } from './design-policy.js';
 
 export const PPT_PIPELINE_SKILL_ALLOWLIST = Object.freeze([
-  'ppt',
-  'imagegen',
-  'getdesign-reference',
-  'prompt-pipeline',
-  REFLECTION_SKILL_NAME,
-  'honest-mode'
+  'sks-ppt',
+  'sks-imagegen',
+  'sks-getdesign-reference',
+  'sks-prompt-pipeline',
+  'sks-reflection',
+  'sks-honest-mode'
 ]);
 
 export const PPT_CONDITIONAL_SKILL_ALLOWLIST = Object.freeze([]);

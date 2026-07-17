@@ -100,7 +100,7 @@
         <line x1="0" y1="0" x2="44" y2="-22"/><line x1="0" y1="0" x2="-44" y2="22"/>
       </g>
     </g>
-    <text x="123" y="158" text-anchor="middle" font-size="22" font-weight="700" fill="#f6f2e8">$Naruto Runtime</text>
+    <text x="123" y="158" text-anchor="middle" font-size="22" font-weight="700" fill="#f6f2e8">$sks-naruto Runtime</text>
     <text x="123" y="188" text-anchor="middle" font-size="15" fill="#8b98a5">up to <tspan fill="#f0b85a" font-weight="700">100</tspan> parallel workers</text>
   </g>
 

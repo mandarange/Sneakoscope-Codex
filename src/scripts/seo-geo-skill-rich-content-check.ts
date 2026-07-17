@@ -11,7 +11,7 @@ await init.installSkills(root);
 
 assertGate(!fs.existsSync(path.join(root, '.agents', 'skills', 'seo-geo', 'SKILL.md')), 'generated skills must not recreate legacy seo-geo alias');
 
-for (const name of ['search-visibility-core', 'seo-geo-optimizer']) {
+for (const name of ['sks-search-visibility-core', 'sks-seo-geo-optimizer']) {
   const file = path.join(root, '.agents', 'skills', name, 'SKILL.md');
   assertGate(fs.existsSync(file), `generated skill missing: ${name}`);
   const text = fs.readFileSync(file, 'utf8');
@@ -23,7 +23,7 @@ for (const name of ['search-visibility-core', 'seo-geo-optimizer']) {
   assertGate(/ranking|citation|traffic|guarantee|보장/i.test(text), `skill must name forbidden guarantee boundary: ${name}`, text);
 }
 
-const optimizer = fs.readFileSync(path.join(root, '.agents', 'skills', 'seo-geo-optimizer', 'SKILL.md'), 'utf8');
+const optimizer = fs.readFileSync(path.join(root, '.agents', 'skills', 'sks-seo-geo-optimizer', 'SKILL.md'), 'utf8');
 for (const token of [
   'SEO intent map',
   'canonical URL map',

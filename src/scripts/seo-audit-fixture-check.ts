@@ -14,6 +14,6 @@ const proof = assertMissionArtifact(json.mission_id, 'completion-proof.json', fi
 assertGate(inventory.detected_adapter.adapterId === 'static-site', 'fixture should detect static-site adapter', inventory.detected_adapter);
 assertGate(Array.isArray(findings.findings) && findings.findings.every((finding) => finding.evidence?.length > 0), 'SEO findings must be atomic and evidence-backed', findings);
 assertGate(gate.route === '$SEO-GEO-OPTIMIZER' && gate.completion_proof.endsWith('/completion-proof.json'), 'seo gate must link completion proof', gate);
-assertGate(proof.schema === 'sks.completion-proof.v1' && proof.route === '$SEO-GEO-OPTIMIZER', 'completion proof must retain unified route identity', proof);
+assertGate(proof.schema === 'sks.completion-proof.v1' && proof.route === '$sks-seo-geo-optimizer', 'completion proof must retain current public route identity', proof);
 
 emitGate('seo:audit-fixture', { mission_id: json.mission_id, findings: findings.findings.length });

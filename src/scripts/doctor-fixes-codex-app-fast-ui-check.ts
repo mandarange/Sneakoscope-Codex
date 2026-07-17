@@ -41,17 +41,18 @@ const ok = plan.fast_selector === 'manual_action_required'
   && plan.provider_actions.includes('sks codex-lb setup --host <domain> --api-key-stdin --yes')
   && plan.safe_auto_apply === true
   && repaired.fast_selector === 'repaired'
-  && repaired.provider_selector === 'manual_action_required'
+  && repaired.provider_selector === 'selected_provider_ready'
+  && repaired.selected_provider_blockers.length === 0
   && repaired.safe_auto_apply === true
   && backups.length >= 1
   && /^model\s*=\s*"future-codex-model"$/m.test(projectAfter.split(/\n\s*\[/)[0] || '')
   && /^model_reasoning_effort\s*=\s*"medium"$/m.test(projectAfter.split(/\n\s*\[/)[0] || '')
   && !/^model\s*=/m.test(homeTopLevel)
   && !/^model_reasoning_effort\s*=/m.test(homeTopLevel)
+  && !/^model_provider\s*=/m.test(homeTopLevel)
   && /model_provider\s*=\s*"codex-lb"/.test(projectAfter)
   && /^service_tier\s*=\s*"fast"$/m.test(homeTopLevel)
   && /fast_mode = false/.test(homeAfter)
-  && /model_provider = "codex-lb"/.test(homeAfter)
   && !/\[user\.fast_mode\]/.test(homeAfter)
   && !/\[profiles\.sks-fast-high\]/.test(homeAfter)
   && /\[model_providers\.codex-lb\]/.test(homeAfter)

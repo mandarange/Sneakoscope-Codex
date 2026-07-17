@@ -5,14 +5,14 @@ Generated from `sks commands --json`, `src/cli/command-registry.ts COMMANDS`, `s
 ## Coverage
 
 - Status: coverage-ok
-- Features: 137
+- Features: 138
 - CLI commands: 101
 - Handler keys: 101
 - Dollar routes: 31
-- App skill aliases: 35
-- Skills: 0
-- Fixture statuses: pass=127, blocked=10
-- Feature quality: runtime_verified=94, wiring_only=19, integration_optional=7, static_contract=17, missing=0
+- App skill aliases: 34
+- Skills: 1
+- Fixture statuses: pass=128, blocked=10
+- Feature quality: runtime_verified=95, wiring_only=19, integration_optional=6, static_contract=18, missing=0
 
 ## Release Coverage Rule
 
@@ -40,7 +40,7 @@ Generated from `sks commands --json`, `src/cli/command-registry.ts COMMANDS`, `s
 | `cli-update` | core-cli | stable | sks update status\|check\|review\|now\|rollback [--refresh] [--version <version>] [--json] [--dry-run] | execute:pass | runtime_verified | none recorded |
 | `cli-uninstall` | core-cli | stable | sks uninstall [--dry-run] [--yes] [--keep-config] [--keep-data] [--purge-projects] [--json] | execute:pass | runtime_verified | none recorded |
 | `cli-update-check` | core-cli | stable | sks update-check [--json] | static:pass | static_contract | none recorded |
-| `cli-mcp` | core-cli | beta | sks mcp config list\|get\|add\|edit\|duplicate\|enable\|disable\|remove\|test\|login\|logout\|backups\|restore [--scope global\|project\|effective] [--stdin-json] [--json] | real_optional:pass | integration_optional | none recorded |
+| `cli-mcp` | core-cli | beta | sks mcp config list\|get\|add\|edit\|duplicate\|enable\|disable\|remove\|test\|login\|logout\|backups\|restore [--scope global\|project\|effective] [--stdin-json] [--json] | execute:pass | runtime_verified | none recorded |
 | `cli-wizard` | core-cli | stable | sks wizard<br>sks ui | execute:pass | runtime_verified | none recorded |
 | `cli-usage` | core-cli | stable | sks usage [install\|setup\|bootstrap\|root\|deps\|zellij\|auto-review\|naruto\|qa-loop\|ppt\|image-ux-review\|computer-use\|goal\|fast-mode\|review\|ui\|research\|seo-geo-optimizer\|git\|codex\|codex-app\|codex-native\|hooks\|features\|all-features\|dfix\|commit\|commit-and-push\|design\|imagegen\|dollar\|context7\|super-search\|pipeline\|reasoning\|guard\|conflicts\|versioning\|eval\|harness\|hproof\|gx\|wiki\|memory\|wrongness\|code-structure\|proof-field\|skill-dream\|rust] | execute:pass | runtime_verified | none recorded |
 | `cli-quickstart` | core-cli | stable | sks quickstart | execute:pass | runtime_verified | none recorded |
@@ -123,42 +123,43 @@ Generated from `sks commands --json`, `src/cli/command-registry.ts COMMANDS`, `s
 | `cli-bench` | core-cli | beta | sks bench core\|route-fixtures\|blackbox\|trust-kernel [--json] | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
 | `cli-mcp-server` | core-cli | beta | sks mcp-server [--expose-exec] [--probe] | execute:pass | runtime_verified | none recorded |
 | `cli-agent-bridge` | core-cli | beta | sks agent-bridge setup [--json] | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
-| `route-dfix` | route | stable | $DFix<br>$dfix | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
-| `route-answer` | route | stable | $Answer<br>$answer | static:pass | wiring_only | none recorded |
-| `route-sks` | route | stable | $SKS<br>$sks | static:pass | wiring_only | none recorded |
-| `route-plan` | route | labs | $Plan<br>$plan | execute:pass | runtime_verified | none recorded |
-| `route-review` | route | labs | $Review<br>$review | execute:pass | runtime_verified | none recorded |
-| `route-fast-mode` | route | stable | $Fast-Mode<br>$fast-mode<br>$fast-on<br>$fast-off | execute:pass | runtime_verified | none recorded |
-| `route-fast-on` | route | labs | $Fast-On | static:pass | wiring_only | none recorded |
-| `route-fast-off` | route | labs | $Fast-Off | static:pass | wiring_only | none recorded |
-| `route-with-local-llm-on` | route | labs | $with-local-llm-on<br>$with-local-llm-on<br>$with-local-llm-off | static:pass | wiring_only | none recorded |
-| `route-with-local-llm-off` | route | labs | $with-local-llm-off | static:pass | wiring_only | none recorded |
-| `route-naruto` | route | beta | $Naruto<br>$naruto<br>$work | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
-| `route-work` | route | labs | $Work | static:pass | wiring_only | none recorded |
-| `route-release-review` | route | labs | $Release-Review<br>$release-review | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
-| `route-qa-loop` | route | beta | $QA-LOOP<br>$qa-loop | execute_and_validate_artifacts:blocked | runtime_verified | none recorded |
-| `route-ppt` | route | labs | $PPT<br>$ppt | mock:pass | wiring_only | live imagegen/CU evidence required |
-| `route-image-ux-review` | route | labs | $Image-UX-Review<br>$image-ux-review<br>$ux-review<br>$visual-review<br>$ui-ux-review | mock:pass | wiring_only | live imagegen/CU evidence required |
-| `route-ux-review` | route | labs | $UX-Review | mock:pass | wiring_only | live imagegen/CU evidence required |
-| `route-computer-use` | route | beta | $Computer-Use<br>$computer-use-fast<br>$cu | execute_and_validate_artifacts:blocked | runtime_verified | none recorded |
-| `route-cu` | route | beta | $CU | execute_and_validate_artifacts:blocked | runtime_verified | none recorded |
-| `route-goal` | route | beta | $Goal<br>$goal | mock:pass | wiring_only | none recorded |
-| `route-commit` | route | labs | $Commit<br>$commit | mock:pass | wiring_only | none recorded |
-| `route-commit-and-push` | route | labs | $Commit-And-Push<br>$commit-and-push | mock:pass | wiring_only | none recorded |
-| `route-research` | route | labs | $Research<br>$research | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
-| `route-super-search` | route | labs | $Super-Search<br>$super-search<br>$super-search | execute:pass | runtime_verified | none recorded |
-| `route-seo-geo-optimizer` | route | labs | $SEO-GEO-OPTIMIZER<br>$seo-geo-optimizer | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
-| `route-autoresearch` | route | labs | $AutoResearch<br>$autoresearch | mock:pass | wiring_only | none recorded |
-| `route-db` | route | beta | $DB<br>$db | execute:pass | runtime_verified | none recorded |
-| `route-mad-sks` | route | beta | $MAD-SKS<br>$mad-sks<br>$mad-sks | mock:pass | wiring_only | permission closed by owning gate |
-| `route-gx` | route | labs | $GX<br>$gx | execute_and_validate_artifacts:blocked | runtime_verified | none recorded |
-| `route-wiki` | route | stable | $Wiki<br>$wiki | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
-| `route-help` | route | stable | $Help<br>$help | static:pass | wiring_only | none recorded |
+| `route-dfix` | route | stable | $sks-dfix | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
+| `route-answer` | route | stable | $sks-answer | static:pass | wiring_only | none recorded |
+| `route-sks` | route | stable | $sks | static:pass | wiring_only | none recorded |
+| `route-plan` | route | labs | $sks-plan | execute:pass | runtime_verified | none recorded |
+| `route-review` | route | labs | $sks-review | execute:pass | runtime_verified | none recorded |
+| `route-fast-mode` | route | stable | $sks-fast-mode<br>$sks-fast-on<br>$sks-fast-off | execute:pass | runtime_verified | none recorded |
+| `route-fast-on` | route | labs | $sks-fast-on | static:pass | wiring_only | none recorded |
+| `route-fast-off` | route | labs | $sks-fast-off | static:pass | wiring_only | none recorded |
+| `route-with-local-llm-on` | route | labs | $sks-with-local-llm-on<br>$sks-with-local-llm-off | static:pass | wiring_only | none recorded |
+| `route-with-local-llm-off` | route | labs | $sks-with-local-llm-off | static:pass | wiring_only | none recorded |
+| `route-naruto` | route | beta | $sks-naruto<br>$sks-work<br>$sks-from-chat-img | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
+| `route-work` | route | labs | $sks-work | static:pass | wiring_only | none recorded |
+| `route-release-review` | route | labs | $sks-release-review | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
+| `route-qa-loop` | route | beta | $sks-qa-loop | execute_and_validate_artifacts:blocked | runtime_verified | none recorded |
+| `route-ppt` | route | labs | $sks-ppt | mock:pass | wiring_only | live imagegen/CU evidence required |
+| `route-image-ux-review` | route | labs | $sks-image-ux-review<br>$sks-ux-review<br>$sks-visual-review<br>$sks-ui-ux-review | mock:pass | wiring_only | live imagegen/CU evidence required |
+| `route-ux-review` | route | labs | $sks-ux-review | mock:pass | wiring_only | live imagegen/CU evidence required |
+| `route-computer-use` | route | beta | $sks-computer-use<br>$sks-computer-use-fast<br>$sks-cu | execute_and_validate_artifacts:blocked | runtime_verified | none recorded |
+| `route-cu` | route | beta | $sks-cu | execute_and_validate_artifacts:blocked | runtime_verified | none recorded |
+| `route-goal` | route | beta | $sks-goal | mock:pass | wiring_only | none recorded |
+| `route-commit` | route | labs | $sks-commit | mock:pass | wiring_only | none recorded |
+| `route-commit-and-push` | route | labs | $sks-commit-and-push | mock:pass | wiring_only | none recorded |
+| `route-research` | route | labs | $sks-research | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
+| `route-super-search` | route | labs | $sks-super-search | execute:pass | runtime_verified | none recorded |
+| `route-seo-geo-optimizer` | route | labs | $sks-seo-geo-optimizer | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
+| `route-autoresearch` | route | labs | $sks-autoresearch | mock:pass | wiring_only | none recorded |
+| `route-db` | route | beta | $sks-db | execute:pass | runtime_verified | none recorded |
+| `route-mad-sks` | route | beta | $sks-mad-sks | mock:pass | wiring_only | permission closed by owning gate |
+| `route-gx` | route | labs | $sks-gx | execute_and_validate_artifacts:blocked | runtime_verified | none recorded |
+| `route-wiki` | route | stable | $sks-wiki | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
+| `route-help` | route | stable | $sks-help | static:pass | wiring_only | none recorded |
 | `proof-official-subagent-evidence` | proof-route | stable | subagent-plan.json + subagent-parent-summary.json + subagent-evidence.json | execute_and_validate_artifacts:pass | runtime_verified | parallel speed claims still require measured runtime evidence |
 | `doctor:imagegen-repair` | safety | beta | sks doctor --json<br>sks doctor --fix --json<br>repair.imagegen<br>imagegen_repair | execute_and_validate_artifacts:pass | runtime_verified | live Codex App feature enablement remains environment-dependent and reports manual actions when unavailable |
-| `ux-review:run-wires-imagegen` | visual-memory | beta | npm run ux-review:run-wires-imagegen<br>sks ux-review run --image <screenshot> --generate-callouts --json<br>$Image-UX-Review<br>$UX-Review | execute_and_validate_artifacts:pass | runtime_verified | live Codex App image generation remains environment-dependent |
-| `ppt:real-imagegen-wiring` | visual-memory | beta | npm run ppt:real-imagegen-wiring<br>sks ppt review --deck <pptx> --json<br>$PPT | execute_and_validate_artifacts:pass | runtime_verified | live deck export and live Codex App image generation remain environment-dependent |
+| `ux-review:run-wires-imagegen` | visual-memory | beta | npm run ux-review:run-wires-imagegen<br>sks ux-review run --image <screenshot> --generate-callouts --json<br>$sks-image-ux-review<br>$sks-ux-review | execute_and_validate_artifacts:pass | runtime_verified | live Codex App image generation remains environment-dependent |
+| `ppt:real-imagegen-wiring` | visual-memory | beta | npm run ppt:real-imagegen-wiring<br>sks ppt review --deck <pptx> --json<br>$sks-ppt | execute_and_validate_artifacts:pass | runtime_verified | live deck export and live Codex App image generation remain environment-dependent |
 | `cli-wiki-code` | triwiki | beta | sks wiki refresh --code --json<br>sks wiki validate --json<br>wiki.code_pack<br>code_pack_refresh | execute_and_validate_artifacts:pass | runtime_verified | ranking is by trust_score only, not live per-prompt keyword relevance, since contextCapsule's call site here refreshes a project-wide pack rather than a per-mission one |
+| `skill-quarantine` | skill | labs | $quarantine | static:pass | static_contract | runtime fixtures owned by route |
 
 ## Unmapped Coverage
 

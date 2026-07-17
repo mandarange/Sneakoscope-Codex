@@ -304,7 +304,7 @@ test('doctor guidance cleanup reconciles project, HOME, and SKS_GLOBAL_ROOT and 
     for (const root of [home, globalRuntimeRoot]) {
       const agents = await fs.readFile(path.join(root, 'AGENTS.md'), 'utf8');
       const quickReference = await fs.readFile(path.join(root, '.codex', 'SNEAKOSCOPE.md'), 'utf8');
-      assert.match(agents, /\$Naruto/);
+      assert.match(agents, /\$sks-naruto/);
       assert.match(quickReference, /naruto run/);
       assert.doesNotMatch(`${agents}\n${quickReference}`, /\$Team|sks team|\$MAD-DB|sks mad-db|\$Ralph|sks ralph/i);
     }

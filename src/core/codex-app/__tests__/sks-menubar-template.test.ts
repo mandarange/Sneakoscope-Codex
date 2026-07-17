@@ -173,6 +173,24 @@ test('Providers saves Codex LB keys through secure stdin', () => {
   assert.match(processClient, /Child output was suppressed\./);
 });
 
+test('Menu Bar exposes truthful accessible Fast state with direct on and off actions', () => {
+  const swift = source();
+  const providers = fs.readFileSync(path.join(resolvePackagedMenuBarSourceRoot(), 'Sources', 'ProvidersViewController.swift'), 'utf8');
+  for (const label of ['Fast: Checking…', 'Fast Mode On', 'Fast Mode Off']) assert.match(swift, new RegExp(label));
+  assert.match(swift, /\["fast-mode", "status", "--json"\]/);
+  assert.match(swift, /\["fast-mode", "on", "--json"\]/);
+  assert.match(swift, /\["fast-mode", "off", "--json"\]/);
+  assert.match(swift, /let global = json\["global"\] as\? \[String: Any\], let on = global\["on"\] as\? Bool/);
+  assert.match(swift, /fastLine\.title = "Fast: Unavailable"/);
+  assert.match(swift, /guard !fastRefreshInFlight else \{ fastRefreshPending = true; return \}/);
+  assert.match(swift, /private func completeFastRefresh\(\)/);
+  assert.match(swift, /setAccessibilityLabel\("Current Fast mode state"\)/);
+  assert.match(swift, /setAccessibilityLabel\("Turn Fast mode on"\)/);
+  assert.match(swift, /setAccessibilityLabel\("Turn Fast mode off"\)/);
+  assert.match(providers, /\["fast-mode", "status", "--json"\]/);
+  assert.match(providers, /Fast Mode: unavailable — no state was assumed\./);
+});
+
 test('operation coordinator persists redacted bounded-tail receipts and excludes concurrent mutations', () => {
   const swift = source();
   for (const state of ['queued', 'running', 'waitingForConfirmation', 'succeeded', 'failed', 'cancelled', 'terminalUncertain']) {

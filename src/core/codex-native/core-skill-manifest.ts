@@ -1,8 +1,9 @@
 import { PACKAGE_VERSION, nowIso, sha256 } from '../fsx.js';
 import { leanPolicyReference } from '../lean-engineering-policy.js';
+import { normalizeDollarSkillName, prefixKnownSksDollarReferences, sksPrefixedDollarCommand, sksPrefixedSkillName } from '../routes/dollar-prefix.js';
 import { canonicalSkillName } from './skill-name-canonicalizer.js';
 
-export type SksCoreSkillRoute =
+type LegacySksCoreSkillRoute =
   | '$Loop'
   | '$Naruto'
   | '$QA-LOOP'
@@ -12,6 +13,8 @@ export type SksCoreSkillRoute =
   | '$Computer-Use'
   | '$Init-Deep'
   | '$SEO-GEO-OPTIMIZER';
+
+export type SksCoreSkillRoute = '$sks' | `$sks-${string}`;
 
 export interface SksCoreSkillTemplate {
   id: string;
@@ -41,7 +44,7 @@ const CORE_SKILL_DEFINITIONS: Array<{
   id: string;
   canonical_name: string;
   display_name: string;
-  route: SksCoreSkillRoute;
+  route: LegacySksCoreSkillRoute;
   purpose: string;
   when: string;
   workflow?: string;
@@ -67,7 +70,7 @@ const CORE_SKILL_DEFINITIONS: Array<{
     route: '$Naruto',
     purpose: 'run a Codex official subagent workflow with official agent threads while parent integration remains owner.',
     when: 'Use when the user explicitly invokes $Naruto or the selected route requires bounded parallel delegation.',
-    workflow: 'Use sks naruto run "<task>" [--agents N] [--max-threads N] [--json]. Automatic fan-out is two for non-trivial work and at most three for critical multi-domain risk; an explicit operator --agents N remains authoritative. The GPT-5.6 Sol Max parent selects the narrow project-scoped custom role whose description matches each defensible slice. Model policy is fixed: Luna Max only for tiny short-context mechanical work; Sol High for ordinary UI, logic, backend, and native implementation; Sol Max for review, debugging, planning, architecture, security, DB, research, release, ambiguity, and judgment; Terra Medium for long-context analysis plus direct Computer Use, Browser/Chrome, and image-generation execution. Split mixed work into execution and judgment slices when possible; if one slice cannot be split safely, Sol Max judgment wins. Read-only roles declare sandbox_mode="read-only"; write roles inherit the parent permission mode. Treat Codex [agents].max_threads as the concurrency authority, keep max_depth=1, avoid duplicate or overlapping write slices, wait for every requested subagent, reuse only four ordinary or six complex query-aware TriWiki trust/hydration anchors, treat SubagentStart/SubagentStop as lifecycle-only evidence, require subagent-parent-summary.json with one structured outcome per thread, and let the parent own integration and final judgment.',
+    workflow: 'Use sks naruto run "<task>" [--agents N] [--max-threads N] [--json]. Naruto is the default execution route for non-trivial change requests; Answer and truly tiny DFix work stay lightweight. Automatic fan-out starts at two for bounded work, four for explicit parallel work, and six for large-scale work, then may expand to ten only after decomposition proves useful independent slices. Before every wave compute C_t as the minimum of ready DAG width, disjoint ownership, verifier capacity, tool concurrency, available slots after parent/reviewer reservations, and workers with positive marginal usefulness; max_threads is a cap, never a target. An explicit operator --agents N remains authoritative. The GPT-5.6 Sol Max parent selects the narrow project-scoped custom role matching each slice. Luna Max is only for tiny short-context mechanical work; Sol High handles ordinary implementation; Sol Max handles review, debugging, planning, architecture, security, DB, research, release, ambiguity, and judgment; Terra Medium handles long-context analysis plus direct Computer Use, Browser/Chrome, and image-generation execution. Split mixed execution and judgment where safe; otherwise Sol Max wins. Reject duplicate slice fingerprints and overlapping or unassigned parallel writes. Reviewer-only fan-out is capped at two ordinarily and three for critical multi-domain review; protected security/DB/release/irreversible gates cannot be offset by aggregate gains. Keep max_depth=1, wait for every requested subagent, reuse only four ordinary or six complex query-aware TriWiki trust/hydration anchors, treat SubagentStart/SubagentStop as lifecycle-only evidence, require subagent-parent-summary.json with one structured outcome per thread, and let the parent own integration and final judgment.',
     safety: 'Preserve user-authored content, inherit the parent permission mode, do not spawn nested subagents, do not inject the full pack or the full TriWiki context into every child, and do not fall back to another model, process runtime, custom scheduler, or worker pool. The historical Naruto process runtime is removed; stop with explicit blocker evidence when the official path is unavailable.',
     cli: 'sks naruto run "<task>" [--agents N] [--max-threads N] [--json]; sks naruto status|subagents|proof [--mission <id>] [--json]',
     evidence: 'subagent-plan.json, subagent-events.jsonl, subagent-parent-summary.json, subagent-evidence.json, naruto-summary.json, and naruto-gate.json.',
@@ -163,19 +166,52 @@ const CORE_SKILL_DEFINITIONS: Array<{
   }
 ];
 
-export function coreSkillDefinitions(): ReadonlyArray<typeof CORE_SKILL_DEFINITIONS[number]> {
-  return CORE_SKILL_DEFINITIONS;
+const LEGACY_CORE_DOLLAR_NAMES = Array.from(new Set(CORE_SKILL_DEFINITIONS.flatMap((skill) => [
+  skill.canonical_name,
+  normalizeDollarSkillName(skill.route)
+])));
+
+export function legacyCoreSkillNames(): string[] {
+  return CORE_SKILL_DEFINITIONS.map((skill) => skill.canonical_name);
+}
+
+export function currentCoreSkillName(name: string): string {
+  return sksPrefixedSkillName(name);
+}
+
+function currentCoreSkillDefinition(skill: typeof CORE_SKILL_DEFINITIONS[number]) {
+  const rewrite = (value: string | undefined) => value === undefined
+    ? undefined
+    : prefixKnownSksDollarReferences(value, LEGACY_CORE_DOLLAR_NAMES);
+  return {
+    ...skill,
+    canonical_name: currentCoreSkillName(skill.canonical_name),
+    display_name: currentCoreSkillName(skill.display_name),
+    route: sksPrefixedDollarCommand(skill.route) as SksCoreSkillRoute,
+    when: rewrite(skill.when) as string,
+    workflow: rewrite(skill.workflow),
+    safety: rewrite(skill.safety),
+    cli: rewrite(skill.cli),
+    fallback: rewrite(skill.fallback) as string
+  };
+}
+
+export function coreSkillDefinitions(): ReadonlyArray<ReturnType<typeof currentCoreSkillDefinition>> {
+  return CORE_SKILL_DEFINITIONS.map(currentCoreSkillDefinition);
 }
 
 export function isCoreSkillName(name: string): boolean {
   const canonical = canonicalSkillName(name);
-  return CORE_SKILL_DEFINITIONS.some((skill) => skill.canonical_name === canonical);
+  return CORE_SKILL_DEFINITIONS.some((skill) => currentCoreSkillName(skill.canonical_name) === canonical);
 }
 
 export function renderCoreSkillTemplate(name: string): string {
   const canonical = canonicalSkillName(name);
-  const skill = CORE_SKILL_DEFINITIONS.find((entry) => entry.canonical_name === canonical);
-  if (!skill) throw new Error(`Unknown SKS core skill: ${name}`);
+  const legacy = CORE_SKILL_DEFINITIONS.find((entry) => (
+    entry.canonical_name === canonical || currentCoreSkillName(entry.canonical_name) === canonical
+  ));
+  if (!legacy) throw new Error(`Unknown SKS core skill: ${name}`);
+  const skill = currentCoreSkillDefinition(legacy);
   const lean = leanPolicyReference();
   return [
     '---',
@@ -215,7 +251,7 @@ export function buildSksCoreSkillManifest(generatedAt: string = nowIso()): SksCo
     schema: 'sks.core-skill-manifest.v1',
     generated_at: generatedAt,
     package_version: PACKAGE_VERSION,
-    skills: CORE_SKILL_DEFINITIONS.map((skill) => {
+    skills: coreSkillDefinitions().map((skill) => {
       const content = renderCoreSkillTemplate(skill.canonical_name);
       return {
         id: skill.id,
@@ -234,7 +270,7 @@ export function buildSksCoreSkillManifest(generatedAt: string = nowIso()): SksCo
 }
 
 export function coreSkillTemplateByCanonicalName(name: string): SksCoreSkillTemplate | null {
-  const canonical = canonicalSkillName(name);
+  const canonical = currentCoreSkillName(canonicalSkillName(name));
   return buildSksCoreSkillManifest('1970-01-01T00:00:00.000Z').skills.find((skill) => skill.canonical_name === canonical) || null;
 }
 

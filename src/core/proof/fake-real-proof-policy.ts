@@ -1,5 +1,6 @@
 import path from 'node:path'
 import { nowIso, readJson, writeJsonAtomic } from '../fsx.js'
+import { normalizeProofRoute } from './route-proof-policy.js'
 
 export const FAKE_REAL_PROOF_POLICY_SCHEMA = 'sks.fake-real-proof-policy.v3'
 export const OFFICIAL_SUBAGENT_EXECUTION_AUTHORITY = 'official_codex_subagent'
@@ -269,7 +270,7 @@ function validatePlan(plan: Record<string, any>): string[] {
   return uniqueStrings([
     ...(plan.schema !== 'sks.subagent-plan.v1' ? ['official_subagent_plan_schema_invalid'] : []),
     ...(plan.workflow !== OFFICIAL_SUBAGENT_EXECUTION_AUTHORITY ? ['official_subagent_plan_workflow_invalid'] : []),
-    ...(plan.route !== '$Naruto' ? ['official_subagent_plan_route_invalid'] : []),
+    ...(normalizeProofRoute(plan.route) !== '$Naruto' ? ['official_subagent_plan_route_invalid'] : []),
     ...(Number(plan.requested_subagents || 0) < 1 ? ['official_subagent_plan_requested_subagents_invalid'] : []),
     ...(Number(plan.max_depth) !== 1 ? ['official_subagent_plan_max_depth_invalid'] : []),
     ...(Array.isArray(plan.config_blockers) && plan.config_blockers.length ? plan.config_blockers.map((value: unknown) => `official_subagent_config:${String(value)}`) : [])
@@ -303,7 +304,7 @@ function validateSummary(summary: Record<string, any>): string[] {
   return uniqueStrings([
     ...(summary.schema !== 'sks.naruto-subagent-workflow.v1' ? ['naruto_summary_schema_invalid'] : []),
     ...(summary.workflow !== OFFICIAL_SUBAGENT_EXECUTION_AUTHORITY ? ['naruto_summary_workflow_invalid'] : []),
-    ...(summary.route !== '$Naruto' ? ['naruto_summary_route_invalid'] : []),
+    ...(normalizeProofRoute(summary.route) !== '$Naruto' ? ['naruto_summary_route_invalid'] : []),
     ...(summary.ok !== true || summary.completion_evidence !== true || summary.status !== 'completed' ? ['naruto_summary_not_completed'] : []),
     ...(summary.parent_summary_present !== true ? ['naruto_summary_parent_summary_missing'] : []),
     ...(Array.isArray(summary.blockers) ? summary.blockers.map((value: unknown) => `naruto_summary:${String(value)}`) : [])
@@ -314,7 +315,7 @@ function validateGate(gate: Record<string, any>): string[] {
   return uniqueStrings([
     ...(gate.schema !== 'sks.naruto-gate.v1' ? ['naruto_gate_schema_invalid'] : []),
     ...(gate.workflow !== OFFICIAL_SUBAGENT_EXECUTION_AUTHORITY ? ['naruto_gate_workflow_invalid'] : []),
-    ...(gate.route !== '$Naruto' ? ['naruto_gate_route_invalid'] : []),
+    ...(normalizeProofRoute(gate.route) !== '$Naruto' ? ['naruto_gate_route_invalid'] : []),
     ...(gate.passed !== true || gate.status !== 'passed' || gate.terminal !== true || gate.terminal_state !== 'completed' ? ['naruto_gate_not_passed'] : []),
     ...(gate.official_subagent_evidence !== true || gate.subagent_evidence_ready !== true ? ['naruto_gate_official_subagent_evidence_missing'] : []),
     ...(gate.parent_summary_present !== true ? ['naruto_gate_parent_summary_missing'] : []),

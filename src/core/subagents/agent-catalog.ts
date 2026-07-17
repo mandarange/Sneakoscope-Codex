@@ -6,9 +6,12 @@ import {
 import type { SubagentModelPolicyId, SubagentModelReasoningEffort } from './model-policy.js'
 
 export const DEFAULT_AUTOMATIC_SUBAGENT_COUNT = 2
-export const MAX_AUTOMATIC_SUBAGENT_COUNT = 3
+export const PARALLEL_AUTOMATIC_SUBAGENT_COUNT = 4
+export const LARGE_SCALE_AUTOMATIC_SUBAGENT_COUNT = 6
+export const MAX_AUTOMATIC_SUBAGENT_COUNT = 10
 export const MAX_AUTOMATIC_REVIEWER_COUNT = 2
-export const MAX_ON_DEMAND_SUBAGENT_ROLE_COUNT = MAX_AUTOMATIC_SUBAGENT_COUNT
+export const MAX_CRITICAL_AUTOMATIC_REVIEWER_COUNT = 3
+export const MAX_ON_DEMAND_SUBAGENT_ROLE_COUNT = LARGE_SCALE_AUTOMATIC_SUBAGENT_COUNT
 
 export interface OfficialSubagentRoleSummary {
   name: string
@@ -74,7 +77,7 @@ export function recommendOfficialSubagentRoles(input: {
     input.expectedOutput,
     ...(input.paths || [])
   ])
-  const limit = clamp(input.limit ?? MAX_AUTOMATIC_SUBAGENT_COUNT, 1, MAX_AUTOMATIC_SUBAGENT_COUNT)
+  const limit = clamp(input.limit ?? MAX_ON_DEMAND_SUBAGENT_ROLE_COUNT, 1, MAX_ON_DEMAND_SUBAGENT_ROLE_COUNT)
   const scored = MANAGED_OFFICIAL_SUBAGENT_ROLES
     .map((role, index) => ({ role, index, score: roleScore(role, text, input) }))
     .filter((row) => input.readOnly !== true || row.role.sandbox === 'read-only')
@@ -103,6 +106,7 @@ export function officialSubagentFanoutPolicy(input: {
   taskProfile?: string | null
   suggestedRoles?: readonly string[] | null
   goal?: string | null
+  independentSliceCount?: number | null
 } = {}) {
   const countSource = input.requestedSource === 'route_contract'
     ? 'route_contract'
@@ -116,11 +120,12 @@ export function officialSubagentFanoutPolicy(input: {
   const automatic = automaticSubagentFanout({
     ...(input.taskProfile === undefined ? {} : { taskProfile: input.taskProfile }),
     ...(input.goal === undefined ? {} : { goal: input.goal }),
-    ...(input.suggestedRoles === undefined ? {} : { suggestedRoles: input.suggestedRoles })
+    ...(input.suggestedRoles === undefined ? {} : { suggestedRoles: input.suggestedRoles }),
+    ...(input.independentSliceCount === undefined ? {} : { independentSliceCount: input.independentSliceCount })
   })
   const requested = explicit ? explicitRequested : automatic.count
   const automaticReviewerCeiling = automatic.criticalMultiDomain
-    ? MAX_AUTOMATIC_SUBAGENT_COUNT
+    ? MAX_CRITICAL_AUTOMATIC_REVIEWER_COUNT
     : MAX_AUTOMATIC_REVIEWER_COUNT
   return {
     mode: countSource === 'operator'
@@ -142,7 +147,7 @@ export function officialSubagentFanoutPolicy(input: {
     risk_domains: automatic.riskDomains,
     critical_multi_domain: automatic.criticalMultiDomain,
     requires_independent_non_overlapping_slices: true,
-    suggested_agents: unique((input.suggestedRoles || []).map(String)).slice(0, MAX_AUTOMATIC_SUBAGENT_COUNT)
+    suggested_agents: unique((input.suggestedRoles || []).map(String)).slice(0, MAX_ON_DEMAND_SUBAGENT_ROLE_COUNT)
   }
 }
 
@@ -150,6 +155,7 @@ function automaticSubagentFanout(input: {
   taskProfile?: string | null
   goal?: string | null
   suggestedRoles?: readonly string[] | null
+  independentSliceCount?: number | null
 }) {
   const text = normalizeText([input.goal])
   const riskDomains = unique([
@@ -159,11 +165,56 @@ function automaticSubagentFanout(input: {
   const parallel = input.taskProfile === 'parallel-read' || input.taskProfile === 'parallel-write'
   const highRisk = input.taskProfile === 'high-risk'
   const critical = CRITICAL_RISK_RE.test(text)
+  const largeScale = LARGE_SCALE_WORK_RE.test(text)
   const criticalMultiDomain = highRisk && critical && riskDomains.length >= 3
+  const reviewerOnly = isReviewerOnlyFanout(input.suggestedRoles || [])
+  const decomposedSliceCount = Number(input.independentSliceCount)
+
+  if (Number.isFinite(decomposedSliceCount) && decomposedSliceCount > 0) {
+    const reviewerCeiling = criticalMultiDomain
+      ? MAX_CRITICAL_AUTOMATIC_REVIEWER_COUNT
+      : MAX_AUTOMATIC_REVIEWER_COUNT
+    const ceiling = reviewerOnly ? reviewerCeiling : MAX_AUTOMATIC_SUBAGENT_COUNT
+    return {
+      count: clamp(decomposedSliceCount, 1, ceiling),
+      ceiling,
+      reason: 'parent_decomposed_independent_slices',
+      riskDomains,
+      criticalMultiDomain
+    }
+  }
+
+  if (reviewerOnly) {
+    const count = criticalMultiDomain
+      ? MAX_CRITICAL_AUTOMATIC_REVIEWER_COUNT
+      : MAX_AUTOMATIC_REVIEWER_COUNT
+    return {
+      count,
+      ceiling: count,
+      reason: criticalMultiDomain
+        ? 'critical_multi_domain_reviewer_cap'
+        : 'independent_reviewer_cap',
+      riskDomains,
+      criticalMultiDomain
+    }
+  }
+
+  if (largeScale) {
+    return {
+      count: LARGE_SCALE_AUTOMATIC_SUBAGENT_COUNT,
+      ceiling: MAX_AUTOMATIC_SUBAGENT_COUNT,
+      reason: 'large_scale_dynamic_parallel',
+      riskDomains,
+      criticalMultiDomain
+    }
+  }
 
   if (criticalMultiDomain) {
     return {
-      count: MAX_AUTOMATIC_SUBAGENT_COUNT,
+      count: Math.min(
+        LARGE_SCALE_AUTOMATIC_SUBAGENT_COUNT,
+        Math.max(PARALLEL_AUTOMATIC_SUBAGENT_COUNT, riskDomains.length + 1)
+      ),
       ceiling: MAX_AUTOMATIC_SUBAGENT_COUNT,
       reason: 'critical_multi_domain_risk',
       riskDomains,
@@ -172,8 +223,8 @@ function automaticSubagentFanout(input: {
   }
   if (parallel) {
     return {
-      count: 2,
-      ceiling: 2,
+      count: PARALLEL_AUTOMATIC_SUBAGENT_COUNT,
+      ceiling: MAX_AUTOMATIC_SUBAGENT_COUNT,
       reason: 'explicit_parallel_or_independent_slices',
       riskDomains,
       criticalMultiDomain: false
@@ -181,8 +232,8 @@ function automaticSubagentFanout(input: {
   }
   if (highRisk && riskDomains.length >= 2) {
     return {
-      count: 2,
-      ceiling: 2,
+      count: 3,
+      ceiling: MAX_AUTOMATIC_SUBAGENT_COUNT,
       reason: 'independent_multi_domain_risk',
       riskDomains,
       criticalMultiDomain: false
@@ -190,11 +241,20 @@ function automaticSubagentFanout(input: {
   }
   return {
     count: DEFAULT_AUTOMATIC_SUBAGENT_COUNT,
-    ceiling: DEFAULT_AUTOMATIC_SUBAGENT_COUNT,
+    ceiling: MAX_AUTOMATIC_SUBAGENT_COUNT,
     reason: 'non_trivial_default_parallel',
     riskDomains,
     criticalMultiDomain: false
   }
+}
+
+function isReviewerOnlyFanout(roles: readonly string[]): boolean {
+  const normalized = unique(roles.map((role) => String(role || '').trim()).filter(Boolean))
+  return normalized.length > 0 && normalized.every((role) => (
+    role === 'expert'
+    || role === 'debugger'
+    || role.endsWith('_reviewer')
+  ))
 }
 
 function riskDomainsFromText(text: string): string[] {
@@ -311,6 +371,8 @@ const ROLE_PRIORITY_PATTERNS: Readonly<Record<string, RegExp>> = {
 const JUDGMENT_PRIORITY_RE = /\b(?:review|audit|debug|diagnos|root cause|planning|strategy|architecture|security|database|research|release|risk|judgment|ambiguous)\b|리뷰|검토|감사|디버깅|진단|원인|기획|전략|아키텍처|보안|데이터베이스|연구|릴리스|위험|판단|모호/i
 
 const CRITICAL_RISK_RE = /\b(?:critical|catastrophic|production|data loss|security incident|breaking release)\b|치명|중대|운영|데이터\s*손실|보안\s*사고/i
+
+const LARGE_SCALE_WORK_RE = /\b(?:large[- ]scale|repo(?:sitory)?[- ]wide|many (?:files|tasks|modules)|bulk change|mass migration|wide fan[- ]?out|maximum parallel)\b|대규모|저장소\s*전체|많은\s*(?:파일|작업|모듈)|대량\s*(?:변경|마이그레이션)|최대한\s*병렬|한번에\s*(?:많은|대규모)/i
 
 const RISK_DOMAIN_PATTERNS: readonly (readonly [string, RegExp])[] = [
   ['database', /\b(?:database|db|sql|postgres|supabase|migration|rls)\b|데이터베이스|디비|마이그레이션/i],

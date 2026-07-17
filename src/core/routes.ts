@@ -4,12 +4,14 @@ import { ALLOWED_REASONING_EFFORTS, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_
 import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_IMAGEGEN_REQUIRED_POLICY, CODEX_WEB_VERIFICATION_POLICY, RESERVED_CODEX_PLUGIN_SKILL_NAMES } from './routes/evidence.js';
 import { getdesignReferencePolicyText, imageUxReviewPipelinePolicyText } from './routes/design-policy.js';
 import { PPT_PIPELINE_SKILL_ALLOWLIST, pptPipelineAllowlistPolicyText } from './routes/ppt-policy.js';
+import { normalizeDollarSkillName, prefixKnownSksDollarReferences, sksPrefixedDollarCommand, sksPrefixedSkillName, unprefixedSksSkillName } from './routes/dollar-prefix.js';
 import { classifyTaskProfile, looksLikeDatabaseWorkRequest, type TaskProfile } from './runtime/task-profile.js';
 
 export * from './routes/constants.js';
 export * from './routes/design-policy.js';
 export * from './routes/evidence.js';
 export * from './routes/ppt-policy.js';
+export * from './routes/dollar-prefix.js';
 
 export interface PromptIntentScores {
   answerOnly: number;
@@ -51,7 +53,7 @@ export function solutionScoutPolicyText(prompt: any = '') {
 }
 
 export function dollarSkillName(commandOrId: any) {
-  return String(commandOrId || '').replace(/^\$/, '').toLowerCase();
+  return normalizeDollarSkillName(commandOrId);
 }
 
 export function stripVisibleDecisionAnswerBlocks(value: any = '') {
@@ -156,7 +158,7 @@ export function speedLanePolicyText() {
 }
 
 export function hasFromChatImgSignal(prompt: any = '') {
-  return /(?:^|\s)\$?from-chat-img(?:\s|:|$)/i.test(String(prompt || ''));
+  return /(?:^|\s)\$?(?:sks-)?from-chat-img(?:\s|:|$)/i.test(String(prompt || ''));
 }
 
 export function looksLikeChatCaptureRequest(prompt: any = '') {
@@ -289,10 +291,10 @@ export const ROUTES = [
     command: '$Naruto',
     mode: 'NARUTO',
     route: 'Codex official subagent workflow',
-    description: '$Naruto prepares a lightweight Codex official subagent workflow. The Sol Max parent owns decomposition, delegates only defensible direct-child slices, reuses bounded query-aware TriWiki attention anchors, waits for every requested thread, integrates the results, and reports scoped verification. Automatic fan-out is two for non-trivial work and at most three for critical multi-domain risk; explicit --agents remains authoritative.',
+    description: '$Naruto prepares a lightweight Codex official subagent workflow. The Sol Max parent owns decomposition, delegates only defensible direct-child slices, reuses bounded query-aware TriWiki attention anchors, waits for every requested thread, integrates the results, and reports scoped verification. Automatic fan-out starts at two for bounded work, four for explicit parallel work, and six for large-scale work, then is capped dynamically by ready DAG width, disjoint ownership, verifier/tool capacity, reserved thread slots, and positive marginal usefulness; explicit --agents remains authoritative.',
     requiredSkills: ['naruto', 'pipeline-runner', 'prompt-pipeline', 'honest-mode'],
     dollarAliases: ['$Work'],
-    appSkillAliases: ['work'],
+    appSkillAliases: ['work', 'from-chat-img'],
     lifecycle: ['task_profile', 'subagent_plan', 'official_delegation_context', 'subagent_events', 'parent_integration', 'scoped_verification', 'honest_mode'],
     context7Policy: 'optional',
     reasoningPolicy: 'high',
@@ -554,19 +556,46 @@ export const ROUTES = [
   }
 ];
 
-export const DOLLAR_COMMANDS = ROUTES.filter((route: any) => route.hidden !== true).flatMap(({ command, route, description, dollarAliases = [] }: any) => [
-  { command, route, description },
-  ...dollarAliases.map((alias: any) => ({ command: alias, route, description }))
-]);
-export function routeAppSkillNames(route: any) {
-  const canonical = dollarSkillName(route.command);
-  const reserved = new Set(RESERVED_CODEX_PLUGIN_SKILL_NAMES);
-  return [canonical, ...(route.appSkillAliases || [])].filter((name: any) => !reserved.has(name));
+for (const route of ROUTES as any[]) {
+  if (Array.isArray(route.requiredSkills)) {
+    route.requiredSkills = Array.from(new Set(route.requiredSkills.map((name: any) => sksPrefixedSkillName(name))));
+  }
 }
 
-export const DOLLAR_SKILL_NAMES = ROUTES.flatMap((route: any) => routeAppSkillNames(route));
+export function legacyRouteAppSkillNames(route: any) {
+  const canonical = dollarSkillName(route.command);
+  const reserved = new Set(RESERVED_CODEX_PLUGIN_SKILL_NAMES);
+  return Array.from(new Set([canonical, ...(route.appSkillAliases || [])].filter((name: any) => !reserved.has(name))));
+}
+
+export function routeAppSkillNames(route: any) {
+  return Array.from(new Set(legacyRouteAppSkillNames(route).map((name: any) => sksPrefixedSkillName(name))));
+}
+
+export const LEGACY_DOLLAR_COMMAND_NAMES = Array.from(new Set(ROUTES
+  .filter((route: any) => route.hidden !== true)
+  .flatMap((route: any) => [route.command, ...(route.dollarAliases || [])])));
+export const LEGACY_DOLLAR_SKILL_NAMES = Array.from(new Set(ROUTES.flatMap((route: any) => legacyRouteAppSkillNames(route))));
+export const DOLLAR_SKILL_NAMES = Array.from(new Set(ROUTES.flatMap((route: any) => routeAppSkillNames(route))));
+const LEGACY_DOLLAR_REFERENCE_NAMES = Array.from(new Set([
+  ...LEGACY_DOLLAR_SKILL_NAMES,
+  ...LEGACY_DOLLAR_COMMAND_NAMES.map((command: any) => normalizeDollarSkillName(command)),
+  'from-chat-img'
+]));
+export const DOLLAR_COMMANDS = ROUTES.filter((route: any) => route.hidden !== true).flatMap(({ command, route, description, dollarAliases = [] }: any) => [
+  {
+    command: sksPrefixedDollarCommand(command),
+    route,
+    description: prefixKnownSksDollarReferences(description, LEGACY_DOLLAR_REFERENCE_NAMES)
+  },
+  ...dollarAliases.map((alias: any) => ({
+    command: sksPrefixedDollarCommand(alias),
+    route,
+    description: prefixKnownSksDollarReferences(description, LEGACY_DOLLAR_REFERENCE_NAMES)
+  }))
+]);
 export const DOLLAR_COMMAND_ALIASES = ROUTES.flatMap((route: any) => [
-  ...routeAppSkillNames(route).map((alias: any) => ({ canonical: route.command, app_skill: `$${alias}` }))
+  ...routeAppSkillNames(route).map((alias: any) => ({ canonical: sksPrefixedDollarCommand(route.command), app_skill: `$${alias}` }))
 ]);
 
 const ROUTE_BY_ID = new Map<string, any>();
@@ -580,13 +609,15 @@ for (const route of ROUTES as any[]) {
     dollarSkillName(route.command),
     ...(route.dollarAliases || []).map((alias: any) => dollarSkillName(alias)),
     ...(route.hiddenDollarAliases || []).map((alias: any) => dollarSkillName(alias)),
-    ...(route.appSkillAliases || [])
+    ...(route.appSkillAliases || []),
+    ...routeAppSkillNames(route)
   ]) {
     if (key) ROUTE_BY_DOLLAR_COMMAND.set(String(key).toLowerCase(), route);
   }
 }
 
 ROUTE_BY_DOLLAR_COMMAND.set('from-chat-img', ROUTE_BY_ID.get('naruto'));
+ROUTE_BY_DOLLAR_COMMAND.set('sks-from-chat-img', ROUTE_BY_ID.get('naruto'));
 ROUTE_BY_DOLLAR_COMMAND.set('work', ROUTE_BY_ID.get('naruto'));
 ROUTE_BY_DOLLAR_COMMAND.set('plan', ROUTE_BY_ID.get('planner'));
 
@@ -624,15 +655,15 @@ export const COMMAND_CATALOG = [
   { name: 'zellij', usage: 'sks zellij status|repair [--json] | sks --mad', description: 'Inspect Zellij runtime status, explain repair (no auto-install), and open the SKS Zellij runtime used by MAD. Zellij panes are not official Naruto subagent evidence.' },
   { name: 'mad-sks', usage: 'sks mad-sks plan|run|apply|sql|apply-migration|status|close|rollback-apply ... | sks --mad [--high]', description: 'Open or inspect MAD-SKS scoped permission workflows, merged SQL-plane execution, and the Zellij permission launcher.' },
   { name: 'auto-review', usage: 'sks auto-review status|enable|start [--high] | sks --Auto-review --high', description: 'Enable Codex automatic approval review and launch SKS Zellij with the auto-review profile.' },
-  { name: 'dollar-commands', usage: 'sks dollar-commands [--json]', description: 'List Codex App $ commands such as $DFix and $Naruto.' },
-  { name: 'fast-mode', usage: 'sks fast-mode on|off|status|clear [--project] [--json]', description: 'Toggle the global Codex Desktop GPT 5.5 Fast default used by $Fast-On/$Fast-Off and keep project worker preference in sync; pass --project for project-local only.' },
-  { name: 'with-local-llm', usage: 'sks with-local-llm on|off|status|set-model [--json]', description: 'Toggle the optional local Ollama worker backend used by $with-local-llm-on/$with-local-llm-off and eligible simple worker slices.' },
+  { name: 'dollar-commands', usage: 'sks dollar-commands [--json]', description: 'List Codex App $ commands such as $sks-dfix and $sks-naruto.' },
+  { name: 'fast-mode', usage: 'sks fast-mode on|off|status|clear [--project] [--json]', description: 'Toggle the global Codex Desktop GPT 5.5 Fast default used by $sks-fast-on/$sks-fast-off and keep project worker preference in sync; pass --project for project-local only.' },
+  { name: 'with-local-llm', usage: 'sks with-local-llm on|off|status|set-model [--json]', description: 'Toggle the optional local Ollama worker backend used by $sks-with-local-llm-on/$sks-with-local-llm-off and eligible simple worker slices.' },
   { name: 'commit', usage: 'sks commit [--message "msg"] [--json]', description: 'Stage current changes, summarize them, and create a simple git commit without the full SKS pipeline.' },
   { name: 'commit-and-push', usage: 'sks commit-and-push [--message "msg"] [--json]', description: 'Stage current changes, create a simple git commit, and push without the full SKS pipeline.' },
-  { name: 'dfix', usage: 'sks dfix', description: 'Explain $DFix ultralight direct-fix mode.' },
+  { name: 'dfix', usage: 'sks dfix', description: 'Explain $sks-dfix ultralight direct-fix mode.' },
   { name: 'qa-loop', usage: 'sks qa-loop prepare|answer|run|status ...', description: 'Dogfood UI/API as human proxy with safety gates, safe fixes, rechecks, Codex Chrome Extension-first web UI evidence, report.' },
-  { name: 'ppt', usage: 'sks ppt build|status <mission-id|latest> [--json]', description: 'Build or inspect $PPT HTML/PDF artifacts from a sealed presentation decision contract.' },
-  { name: 'image-ux-review', usage: 'sks ux-review run --image <path> --fix --json | sks image-ux-review status <mission-id|latest> [--json]', description: 'Run or inspect $Image-UX-Review gpt-image-2/imagegen annotated UI/UX review artifacts, issue ledgers, safe fix loops, recapture, and proof gates.' },
+  { name: 'ppt', usage: 'sks ppt build|status <mission-id|latest> [--json]', description: 'Build or inspect $sks-ppt HTML/PDF artifacts from a sealed presentation decision contract.' },
+  { name: 'image-ux-review', usage: 'sks ux-review run --image <path> --fix --json | sks image-ux-review status <mission-id|latest> [--json]', description: 'Run or inspect $sks-image-ux-review gpt-image-2/imagegen annotated UI/UX review artifacts, issue ledgers, safe fix loops, recapture, and proof gates.' },
   { name: 'computer-use', usage: 'sks computer-use import|status|smoke|require ... [--json]', description: 'Record native Mac/non-web Computer Use visual evidence while keeping web verification on the Chrome Extension path.' },
   { name: 'context7', usage: 'sks context7 check|setup|tools|resolve|docs|evidence ...', description: 'Check, configure, and call the local Context7 MCP requirement.' },
   { name: 'super-search', usage: 'sks super-search doctor|run|x|fetch|status|inspect|sources|claims|cache|bench', description: 'Run Super-Search provider-independent source intelligence.' },
@@ -682,12 +713,12 @@ export const COMMAND_CATALOG = [
 
 export function routeById(id: any): any {
   const key = String(id || '').replace(/^\$/, '').toLowerCase();
-  return ROUTE_BY_ID.get(key) || null;
+  return ROUTE_BY_ID.get(key) || ROUTE_BY_ID.get(unprefixedSksSkillName(key)) || null;
 }
 
 export function routeByDollarCommand(commandName: any): any {
   const key = String(commandName || '').replace(/^\$/, '').toLowerCase();
-  return ROUTE_BY_DOLLAR_COMMAND.get(key) || null;
+  return ROUTE_BY_DOLLAR_COMMAND.get(key) || ROUTE_BY_DOLLAR_COMMAND.get(unprefixedSksSkillName(key)) || null;
 }
 
 function leadingDollarCommandMatch(prompt: any) {
@@ -714,12 +745,12 @@ export function dollarCommand(prompt: any) {
 }
 
 export function hasMadSksSignal(prompt: any = '') {
-  return /(?:^|\s)(?:\$MAD-SKS|\[\$MAD-SKS\]\([^)]+\))(?:\s|:|$)/i.test(String(prompt || ''));
+  return /(?:^|\s)(?:\$(?:sks-)?MAD-SKS|\[\$(?:sks-)?MAD-SKS\]\([^)]+\))(?:\s|:|$)/i.test(String(prompt || ''));
 }
 
 export function stripMadSksSignal(prompt: any = '') {
   return String(prompt || '')
-    .replace(/(?:^|\s)(?:\$MAD-SKS|\[\$MAD-SKS\]\([^)]+\))(?:\s|:)?/ig, ' ')
+    .replace(/(?:^|\s)(?:\$(?:sks-)?MAD-SKS|\[\$(?:sks-)?MAD-SKS\]\([^)]+\))(?:\s|:)?/ig, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -734,7 +765,7 @@ export function stripDollarCommand(prompt: any) {
 export function looksLikeTinyDirectFix(prompt: any) {
   const text = String(prompt || '');
   if (looksLikeDirectFixQuestion(text)) return false;
-  const broadCodeCue = /(구현|개발|리팩터|마이그레이션|버그|기능|로직|인증|데이터베이스|스키마|서버|API|테스트|동작|작동|호환|배포|릴리즈|다음\s*버전|컨텍스트7|context7|MCP|implement|build|develop|refactor|rewrite|migrate|bug|feature|logic|auth|database|schema|server|endpoint|test|deploy|release|publish|compat(?:ible|ibility)?|next\s+version|generator|workflow|flow|work(?:ing)?)/i.test(text);
+  const broadCodeCue = /(구현|개발|리팩터|마이그레이션|버그|기능|로직|인증|데이터베이스|스키마|서버|API|테스트|동작|작동|호환|배포|릴리즈|다음\s*버전|컨텍스트7|커맨드|명령어|닥터|업데이트|업그레이드|설치|정리|중복|레거시|접두사|별칭|매니페스트|context7|MCP|implement|build|develop|refactor|rewrite|migrate|bug|feature|logic|auth|database|schema|server|endpoint|test|deploy|release|publish|compat(?:ible|ibility)?|next\s+version|command|cli|doctor|update|upgrade|install|cleanup|dedup(?:e|lication)?|legacy|prefix|namespace|alias|manifest|generator|workflow|flow|work(?:ing)?)/i.test(text);
   if (broadCodeCue) return false;
   const creationCue = /(?:\b(?:create|add|make|build|implement)\b.*\b(?:button|component|page|screen|form|modal|endpoint|feature|route|view|flow)\b)|(?:(?:버튼|컴포넌트|페이지|화면|폼|모달|엔드포인트|기능|플로우).*(?:만들|생성|추가|구현))/i.test(text);
   if (creationCue && !/(라벨|문구|텍스트|글자|색|컬러|간격|여백|정렬|label|copy|text|color|spacing|padding|margin|align)/i.test(text)) return false;
@@ -818,7 +849,7 @@ export function routePrompt(prompt: any): any {
   if (/^\$work\b/i.test(text)) return select(routeById('Naruto'));
   const command = dollarCommand(text);
   if (command) {
-    if (command === 'MAD-SKS') {
+    if (unprefixedSksSkillName(command) === 'mad-sks') {
       const afterModifier = stripMadSksSignal(text);
       const nestedCommand = dollarCommand(afterModifier);
       if (nestedCommand) return select(routeByDollarCommand(nestedCommand) || routeById('MadSKS'));

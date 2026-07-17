@@ -133,6 +133,20 @@ test('invokeSksTool rejects invalid arguments before spawning', async () => {
   assert.equal(spawned, false);
 });
 
+test('Naruto unknown input is rejected before spawn even though execution is local-only', async () => {
+  const contract = commandContract('naruto');
+  assert.ok(contract);
+  let spawned = false;
+  await assert.rejects(
+    invokeSksTool(contract, { action: 'run', task: 'x', model: 'unsupported' }, async () => {
+      spawned = true;
+      throw new Error('must not run');
+    }),
+    /Invalid arguments for naruto/
+  );
+  assert.equal(spawned, false);
+});
+
 test('runMcpServer tools/call on a safe read-only tool spawns sks and returns its stdout', async () => {
   const { clientToServer, serverToClient, responses } = makeHarness();
   await runMcpServer({ input: clientToServer, output: serverToClient });

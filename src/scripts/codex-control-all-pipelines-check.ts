@@ -13,6 +13,7 @@ const sources = {
   research: readText('src/core/commands/research-command.ts'),
   researchStage: readText('src/core/research/research-stage-runner.ts'),
   naruto: readText('src/core/commands/naruto-command.ts'),
+  narutoPreparation: readText('src/core/subagents/official-subagent-preparation.ts'),
   dfix: readText('src/core/commands/dfix-command.ts'),
   workerRouter: readText('src/core/agents/native-worker-backend-router.ts')
 };
@@ -23,7 +24,7 @@ assertGate(
   'Research must route real stages through the Codex control backend'
 );
 assertGate(sources.naruto.includes('runOfficialSubagentWorkflow'), 'Naruto must invoke the official Codex subagent runner');
-assertGate(sources.naruto.includes("workflow: 'official_codex_subagent'"), 'Naruto must persist the official subagent workflow contract');
+assertGate(sources.narutoPreparation.includes("workflow: 'official_codex_subagent'"), 'Naruto preparation must persist the official subagent workflow contract');
 assertGate(!sources.naruto.includes("backend: 'codex-sdk'"), 'Naruto must not fall back to the legacy codex-sdk backend selector');
 assertGate(sources.workerRouter.includes('runCodexTask({'), 'native worker router must call runCodexTask');
 const fixture = await runFakeCodexSdkTaskFixture('control-all-pipelines');

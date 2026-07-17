@@ -16,6 +16,11 @@ export const PROJECT_LOCAL_FORBIDDEN_CODEX_KEYS = [
 
 const HOST_OWNED_KEY_RE = /^(?:model|model_reasoning_effort|openai_base_url|chatgpt_base_url|apps_mcp_product_sku|model_provider|model_providers(?:\.|$)|notify|profile|profiles(?:\.|$)|experimental_realtime_ws_base_url|otel(?:\.|$)|features\.fast_mode|service_tier|user\.fast_mode(?:\.|$))/
 const SECRET_KEY_RE = /(?:key|token|secret|password|credential|cookie|authorization|auth|bearer|refresh|access|headers?|env)/i
+const SKS_GLOBAL_UI_LOCK_KEYS = new Set(['model_provider', 'model', 'model_reasoning_effort'])
+const SKS_GLOBAL_UI_LOCK_CONTEXT_KEYS = new Set([
+  'service_tier', 'model_provider', 'model', 'model_reasoning_effort',
+  'approval_policy', 'sandbox_mode', 'web_search', 'notify', 'preferred_auth_method'
+])
 
 export interface CodexAppConfigSignal {
   key_path: string
@@ -84,7 +89,7 @@ export async function snapshotCodexAppUiState(root: string = process.cwd(), inpu
   const fastSelectorLocked = baseConfigHostOwnedSignals.some((signal) => {
     if (signal.key_path === 'features.fast_mode' && signal.value_preview === 'false') return true
     if (signal.key_path.startsWith('user.fast_mode') && /hidden|fixed|disabled|false/i.test(signal.value_preview)) return true
-    if ((signal.key_path === 'model' || signal.key_path === 'model_reasoning_effort') && signal.sks_related) return true
+    if (SKS_GLOBAL_UI_LOCK_KEYS.has(signal.key_path) && signal.sks_related) return true
     return false
   })
   return {
@@ -143,9 +148,6 @@ export function scanTomlSignals(text: string): { signals: CodexAppConfigSignal[]
   const tables: string[] = []
   let table: string | null = null
   const lines = text.split(/\r?\n/)
-  const firstTableIndex = lines.findIndex((line) => /^\s*\[/.test(line))
-  const topLevelLines = firstTableIndex === -1 ? lines : lines.slice(0, firstTableIndex)
-  const sksManagedTopLevel = topLevelLines.some((line) => /(?:SKS|Sneakoscope|codex-lb|sks fast)/i.test(line))
   lines.forEach((lineText, index) => {
     const tableMatch = lineText.match(/^\s*\[([^\]]+)\]\s*(?:#.*)?$/)
     if (tableMatch?.[1]) {
@@ -170,11 +172,33 @@ export function scanTomlSignals(text: string): { signals: CodexAppConfigSignal[]
       host_owned: HOST_OWNED_KEY_RE.test(keyPath),
       fast_ui_related: /(?:fast_mode|service_tier|model_reasoning_effort|^model$)/i.test(keyPath) || /(?:fast|priority|default)/i.test(value),
       provider_related: /(?:provider|base_url|auth|profile|openai|chatgpt|codex-lb)/i.test(lowerPath),
-      sks_related: /(?:sks|sneakoscope|codex-lb)/i.test(lineText)
-        || (table == null && sksManagedTopLevel && (key === 'model' || key === 'model_reasoning_effort'))
+      sks_related: /(?:SKS|Sneakoscope|sks-mad|sks fast)/i.test(lineText)
+        || (table == null && isSksOwnedGlobalUiLock(lines, index))
     })
   })
   return { signals, tables: [...new Set(tables)] }
+}
+
+export function isSksOwnedGlobalUiLock(lines: string[], index: number) {
+  const current = String(lines[index] || '')
+  const key = current.match(/^\s*([A-Za-z0-9_-]+)\s*=/)?.[1] || ''
+  if (!SKS_GLOBAL_UI_LOCK_KEYS.has(key)) return false
+  const inlineComment = current.includes('#') ? current.slice(current.indexOf('#')) : ''
+  if (isSksGlobalUiLockMarker(inlineComment)) return true
+  const lowerBound = Math.max(0, index - 16)
+  for (let cursor = index - 1; cursor >= lowerBound; cursor -= 1) {
+    const candidate = String(lines[cursor] || '').trim()
+    if (!candidate) continue
+    if (candidate.startsWith('#')) return isSksGlobalUiLockMarker(candidate)
+    if (/^\s*\[/.test(candidate)) return false
+    const previousKey = candidate.match(/^([A-Za-z0-9_-]+)\s*=/)?.[1] || ''
+    if (!SKS_GLOBAL_UI_LOCK_CONTEXT_KEYS.has(previousKey)) return false
+  }
+  return false
+}
+
+function isSksGlobalUiLockMarker(value: string) {
+  return /^#\s*(?:SKS|Sneakoscope)\b.*(?:moved machine-local Codex config|forced fast UI|legacy (?:provider|model|reasoning) lock|managed (?:Codex )?(?:provider|model|reasoning)|codex-lb (?:provider|model|reasoning))/i.test(String(value || '').trim())
 }
 
 export function scanProjectLocalForbiddenKeys(text: string) {

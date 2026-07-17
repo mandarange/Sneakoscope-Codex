@@ -11,12 +11,12 @@ sks computer-use status --json
 sks computer-use doctor --json
 sks computer-use enable --macos --json
 sks codex-app chrome-extension --json
-sks computer-use require --route '$Image-UX-Review' --json
+sks computer-use require --route '$sks-image-ux-review' --json
 sks computer-use smoke --json
 SKS_TEST_REAL_COMPUTER_USE=1 sks computer-use smoke --real --json
 sks computer-use smoke --real --capture-screenshot --json
 sks computer-use smoke --real --require-real --json
-sks computer-use smoke --route '$Image-UX-Review' --mission latest --real --json
+sks computer-use smoke --route '$sks-image-ux-review' --mission latest --real --json
 ```
 
 Status values:

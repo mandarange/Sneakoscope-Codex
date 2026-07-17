@@ -4,7 +4,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { COMMAND_MANIFEST_LITE } from '../cli/command-manifest-lite.js';
 import { COMMANDS } from '../cli/command-registry.js';
-import { COMMAND_CATALOG, DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS, ROUTES } from './routes.js';
+import { COMMAND_CATALOG, DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS, LEGACY_DOLLAR_COMMAND_NAMES, LEGACY_DOLLAR_SKILL_NAMES, ROUTES, prefixKnownSksDollarReferences, routeByDollarCommand, sksPrefixedDollarCommand } from './routes.js';
 import { FEATURE_QUALITY_LEVELS, fixtureForFeature, fixtureSummary, validateFeatureFixtures } from './feature-fixtures.js';
 import { runFeatureFixture, writeFeatureFixtureReports } from './feature-fixture-runner.js';
 import { PACKAGE_VERSION, exists, nowIso, packageRoot, readJson, readText, runProcess, writeJsonAtomic, writeTextAtomic, type JsonData } from './fsx.js';
@@ -30,6 +30,11 @@ const FEATURE_ACCEPTANCE_DEFAULTS = Object.freeze([
   'unknowns explicit',
   'release-mapped'
 ]);
+const FEATURE_DOLLAR_REFERENCE_NAMES = Array.from(new Set([
+  ...LEGACY_DOLLAR_COMMAND_NAMES,
+  ...LEGACY_DOLLAR_SKILL_NAMES,
+  'from-chat-img'
+]));
 
 export async function buildFeatureRegistry({ root = packageRoot(), generatedAt = nowIso() }: any = {}): Promise<JsonData> {
   const handlerKeys = actualCommandHandlerKeys();
@@ -655,7 +660,7 @@ function routeFeature(route: any) {
     .filter((entry: any) => entry.canonical === route.command)
     .map((entry: any) => entry.app_skill);
   return baseFeature({
-    id: `route-${slug(route.command)}`,
+    id: `route-${slug(dollarPolicyKey(route.command))}`,
     commands: [route.command],
     aliases,
     category: 'route',
@@ -814,10 +819,39 @@ function baseFeature(feature: any) {
     acceptance: FEATURE_ACCEPTANCE_DEFAULTS,
     ...feature
   };
-  return {
+  return dedupeFeatureCommandSurface(namespaceFeatureDollarReferences({
     ...merged,
     fixture: fixtureForFeature(merged.id)
+  }));
+}
+
+function dedupeFeatureCommandSurface(feature: any) {
+  const commands = uniqueStrings(feature.commands || []);
+  const commandSet = new Set(commands);
+  const aliases = uniqueStrings(feature.aliases || []).filter((alias) => !commandSet.has(alias));
+  const sourceRefs = feature.source_refs && typeof feature.source_refs === 'object'
+    ? Object.fromEntries(Object.entries(feature.source_refs).map(([key, values]) => [
+        key,
+        Array.isArray(values) ? uniqueStrings(values) : values
+      ]))
+    : feature.source_refs;
+  return {
+    ...feature,
+    commands,
+    aliases,
+    source_refs: sourceRefs
   };
+}
+
+function uniqueStrings(values: any[]) {
+  return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))];
+}
+
+function namespaceFeatureDollarReferences(value: any): any {
+  if (typeof value === 'string') return prefixKnownSksDollarReferences(value, FEATURE_DOLLAR_REFERENCE_NAMES);
+  if (Array.isArray(value)) return value.map(namespaceFeatureDollarReferences);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, namespaceFeatureDollarReferences(entry)]));
 }
 
 function mapHandlerKeysToFeatureIds(handlerKeys: any = []) {
@@ -916,7 +950,8 @@ function canonicalDollar(value: any) {
   const hit = DOLLAR_COMMANDS.find((entry: any) => entry.command.toLowerCase() === raw.toLowerCase());
   if (hit) return hit.command;
   const aliasHit = DOLLAR_COMMAND_ALIASES.find((entry: any) => entry.app_skill.toLowerCase() === raw.toLowerCase());
-  return aliasHit ? aliasHit.app_skill : raw;
+  if (aliasHit) return aliasHit.app_skill;
+  return routeByDollarCommand(raw) ? sksPrefixedDollarCommand(raw) : raw;
 }
 
 function normalizeDollar(value: any) {
@@ -944,8 +979,9 @@ function commandMaturity(name: any) {
 }
 
 function routeMaturity(command: any) {
-  if (['$Answer', '$DFix', '$SKS', '$Fast-Mode', '$Wiki', '$Help'].includes(command)) return 'stable';
-  if (['$Naruto', '$Goal', '$DB', '$Computer-Use', '$CU', '$QA-LOOP', '$MAD-SKS'].includes(command)) return 'beta';
+  const key = dollarPolicyKey(command);
+  if (['answer', 'dfix', 'sks', 'fast-mode', 'wiki', 'help'].includes(key)) return 'stable';
+  if (['naruto', 'goal', 'db', 'computer-use', 'cu', 'qa-loop', 'mad-sks'].includes(key)) return 'beta';
   return 'labs';
 }
 
@@ -968,15 +1004,22 @@ function knownGapsForCommand(name: any) {
 }
 
 function routeVoxelContract(command: any) {
-  if (['$Image-UX-Review', '$UX-Review', '$PPT', '$From-Chat-IMG', '$GX'].includes(command)) return 'image/source/bbox voxel required';
-  if (command === '$DB' || command === '$MAD-SKS') return 'DB policy voxel required';
+  const key = dollarPolicyKey(command);
+  if (['image-ux-review', 'ux-review', 'ppt', 'from-chat-img', 'gx'].includes(key)) return 'image/source/bbox voxel required';
+  if (key === 'db' || key === 'mad-sks') return 'DB policy voxel required';
   return 'TriWiki anchors required';
 }
 
 function routeKnownGaps(command: any) {
-  if (['$Image-UX-Review', '$UX-Review', '$PPT'].includes(command)) return ['live imagegen/CU evidence required'];
-  if (command === '$MAD-SKS') return ['permission closed by owning gate'];
+  const key = dollarPolicyKey(command);
+  if (['image-ux-review', 'ux-review', 'ppt'].includes(key)) return ['live imagegen/CU evidence required'];
+  if (key === 'mad-sks') return ['permission closed by owning gate'];
   return [];
+}
+
+function dollarPolicyKey(value: any) {
+  const normalized = String(value || '').trim().replace(/^\$/, '').toLowerCase();
+  return normalized === 'sks' ? normalized : normalized.replace(/^sks-/, '');
 }
 
 function checkRow(id: any, ok: any, blockers: any = []) {

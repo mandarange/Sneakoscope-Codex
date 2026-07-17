@@ -2,7 +2,41 @@
 
 ## [Unreleased]
 
+## [6.5.1] - 2026-07-17
 
+### Changed
+
+- Stabilize the non-interactive Naruto proof projection with bounded parent-summary results and deterministic six-artifact fingerprints.
+- Enforce same-mission single-run behavior for standalone Naruto callers, including deterministic running, terminal reuse, stale recovery, and protected Codex child ownership.
+- Verify generic project-scoped MCP host compatibility through the existing Codex configuration and standalone parent path.
+
+### Removed
+
+- Remove retired Naruto process-worker, finalizer, allocation, rebalance, verification-pool, and obsolete package-check code.
+
+## [6.5.0] - 2026-07-17
+
+### Added
+
+- Add a first-class Fast status row and direct Fast On/Off actions to the macOS menu bar, with accessibility labels and an explicit unavailable state when the live status cannot be verified.
+
+### Changed
+
+- Keep Fast service tier selection independent from model reasoning effort across Codex Desktop repair and menu-bar controls.
+- Advance the stable Codex compatibility baseline from `rust-v0.144.1` to the official July 16, 2026 `rust-v0.144.5` release, including the exact SDK/CLI dependency graph, regenerated App Server schemas, canonical schema digest, release manifest, and package allowlist; `0.145.0-alpha` remains outside the stable release contract.
+
+### Fixed
+
+- Keep the SKS Control Center alive while an update installs and verifies the new package, synchronize the final operation receipt, and only then relaunch the menu companion in a detached process.
+- Restore the latest Codex Desktop Chat entry, Pro model access, and Fast selector when SKS-owned global provider/model locks hid them; remove only provenance-marked SKS locks while preserving user-owned providers, credentials, and explicit settings.
+- Keep release metadata aligned after an explicit SKS version bump advances the package version.
+
+## [6.4.0] - 2026-07-16
+
+### Fixed
+
+- Keep release metadata aligned after an explicit SKS version bump advances the package version.
+- Restore official `npm publish` support while preserving release-stamp verification both before and after the lifecycle `prepack` rebuild.
 
 ## [6.3.0] - 2026-07-15
 

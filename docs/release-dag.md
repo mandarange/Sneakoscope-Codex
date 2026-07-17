@@ -8,4 +8,4 @@ Gates declare resources, side-effect class, cache inputs, timeout, isolation, an
 
 The full-coverage gate verifies that important package scripts are represented in the release DAG and that required 2.0.12 hardening gates are release-preset members.
 
-Use `npm run release:check:dag:explain` to inspect the planned DAG, and use `npm run release:real-check` only on a host where the required real dependencies are installed and intentionally enabled.
+Use `npm run gates:run -- --preset affected --changed-since auto --explain` to inspect the planned DAG, and use `npm run release:real-check` only on a host where the required real dependencies are installed and intentionally enabled.

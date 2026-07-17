@@ -5,6 +5,7 @@ import { normalizeProofRoute, routeRequiresImageVoxelAnchors } from './route-pro
 import { linkProofClaimsToEvidence, proofEvidenceSummary } from '../evidence/evidence-proof-linker.js';
 import { writeTrustArtifactsForProof } from '../trust-kernel/trust-report.js';
 import { enforceRetention } from '../retention.js';
+import { sksPrefixedDollarCommand } from '../routes/dollar-prefix.js';
 
 export async function writeRouteCompletionProof(root: any, {
   missionId = null,
@@ -25,6 +26,9 @@ export async function writeRouteCompletionProof(root: any, {
 }: any = {}) {
   const collected = lightweightEvidence ? { files: [] } : await collectProofEvidence(root);
   const normalizedRoute = normalizeProofRoute(route);
+  const publicRoute = normalizedRoute?.startsWith('$')
+    ? sksPrefixedDollarCommand(normalizedRoute)
+    : normalizedRoute;
   const mergedEvidence = {
     ...collected,
     ...evidence,
@@ -32,7 +36,7 @@ export async function writeRouteCompletionProof(root: any, {
     artifacts: normalizeArtifacts(root, artifacts)
   };
   const normalizedStatus = normalizeRouteProofStatus(status, {
-    route: normalizedRoute,
+    route: publicRoute,
     evidence: mergedEvidence,
     blockers,
     unverified
@@ -40,7 +44,7 @@ export async function writeRouteCompletionProof(root: any, {
   const written = await writeCompletionProof(root, {
     execution_class: executionClass,
     mission_id: missionId,
-    route: normalizedRoute,
+    route: publicRoute,
     status: normalizedStatus,
     summary: {
       files_changed: collected.files?.length || 0,
@@ -60,7 +64,7 @@ export async function writeRouteCompletionProof(root: any, {
   }, {
     command: {
       cmd: `sks proof route ${missionId || 'latest'}`,
-      route: normalizedRoute,
+      route: publicRoute,
       status: normalizedStatus
     }
   });
@@ -80,7 +84,7 @@ export async function writeRouteCompletionProof(root: any, {
   }, {
     command: {
       cmd: `sks trust finalize ${missionId}`,
-      route: normalizedRoute,
+      route: publicRoute,
       status: firstTrust.report?.status || normalizedStatus
     }
   });

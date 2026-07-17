@@ -1,6 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import {
+  INSTALLED_REMOVED_ARGUMENT_PROBES,
+  INSTALLED_REMOVED_COMMANDS,
+  INSTALLED_REMOVED_DOLLAR_COMMANDS,
+  INSTALLED_REMOVED_SUBCOMMAND_PROBES
+} from '../../dist/core/install/installed-package-smoke.js';
 
 const workflow = fs.readFileSync('.github/workflows/publish-npm.yml', 'utf8');
 const globalPermissions = sectionBetween('permissions:', 'concurrency:');
@@ -11,6 +17,21 @@ const stageJob = jobBlock('stage-publish');
 const stageVerifier = fs.readFileSync('src/core/release/npm-stage-tarball-verifier.ts', 'utf8');
 const stageVerifierSupport = fs.readFileSync('src/core/release/npm-stage-tarball-verifier-support.ts', 'utf8');
 const stageVerifierCli = fs.readFileSync('src/scripts/npm-stage-tarball-verifier.ts', 'utf8');
+const closureProbeCounts = {
+  command_probe_count: INSTALLED_REMOVED_COMMANDS.length,
+  dollar_command_probe_count: INSTALLED_REMOVED_DOLLAR_COMMANDS.length,
+  argument_probe_count: INSTALLED_REMOVED_ARGUMENT_PROBES.length,
+  subcommand_probe_count: INSTALLED_REMOVED_SUBCOMMAND_PROBES.length
+};
+const closureRejectedCount = Object.values(closureProbeCounts).reduce((sum, count) => sum + count, 0);
+const closureReasonCounts = {
+  unknown_command: INSTALLED_REMOVED_COMMANDS.length + INSTALLED_REMOVED_DOLLAR_COMMANDS.length,
+  unknown_subcommand: 0,
+  unsupported_argument: 0
+};
+for (const probe of [...INSTALLED_REMOVED_ARGUMENT_PROBES, ...INSTALLED_REMOVED_SUBCOMMAND_PROBES]) {
+  closureReasonCounts[probe.expected_reason] += 1;
+}
 
 test('npm workflow stages one immutable tarball after Linux and macOS proof', () => {
   assert.match(workflow, /workflow_dispatch:/);
@@ -76,14 +97,15 @@ test('workflow proves Node 20, 22, and 24 and runs exact-tarball smoke plus secr
   assert.match(stageJob, /comparison\.local_sha256 !== receipt\.sha256/);
   assert.match(stageJob, /smoke\.tarball_sha256 !== receipt\.sha256/);
   assert.match(stageJob, /closure\.rejected_count !== closure\.command_probe_count \+ closure\.dollar_command_probe_count \+ closure\.argument_probe_count \+ closure\.subcommand_probe_count/);
-  assert.match(stageJob, /closure\.command_probe_count !== 7/);
-  assert.match(stageJob, /closure\.dollar_command_probe_count !== 7/);
-  assert.match(stageJob, /closure\.argument_probe_count !== 5/);
-  assert.match(stageJob, /closure\.subcommand_probe_count !== 2/);
-  assert.match(stageJob, /closure\.rejected_count !== 21/);
-  assert.match(stageJob, /expected_reason_counts\?\.unknown_command !== 17/);
-  assert.match(stageJob, /expected_reason_counts\?\.unknown_subcommand !== 2/);
-  assert.match(stageJob, /expected_reason_counts\?\.unsupported_argument !== 2/);
+  for (const [field, count] of Object.entries(closureProbeCounts)) {
+    assert.match(stageJob, new RegExp(`closure\\.${field} !== ${count}`));
+  }
+  assert.match(stageJob, new RegExp(`closure\\.rejected_count !== ${closureRejectedCount}`));
+  for (const [reason, count] of Object.entries(closureReasonCounts)) {
+    assert.match(stageJob, new RegExp(`expected_reason_counts\\?\\.${reason} !== ${count}`));
+    assert.match(stageJob, new RegExp(`observed_reason_counts\\?\\.${reason} !== ${count}`));
+  }
+  assert.match(stageJob, /observed_reason_counts\?\.other !== 0/);
 });
 
 test('stage receipt is content-bound and review-only', () => {

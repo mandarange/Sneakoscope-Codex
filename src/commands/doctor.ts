@@ -446,7 +446,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
   const skillsReconcile = doctorFix
     ? {
         global: await (await import('../core/init/skills.js')).reconcileSkills({
-          targetDir: path.join(os.homedir(), '.agents', 'skills'),
+          targetDir: path.join(process.env.HOME || os.homedir(), '.agents', 'skills'),
           scope: 'global',
           fix: true
         }).catch((err: any) => ({ ok: false, error: err?.message || String(err) })),

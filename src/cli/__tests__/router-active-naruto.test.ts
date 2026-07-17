@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { dispatch, safeReadOnlySubcommand } from '../router.js'
+import { dispatch, safeActiveRouteContinuation, safeReadOnlySubcommand } from '../router.js'
 
 test('active Naruto permits only its read-only observation subcommands', () => {
   for (const subcommand of ['status', 'subagents', 'proof']) {
@@ -15,6 +15,21 @@ test('active Naruto permits only its read-only observation subcommands', () => {
   assert.equal(safeReadOnlySubcommand('naruto', ['--json', 'status', 'latest']), false)
   assert.equal(safeReadOnlySubcommand('naruto', ['--agents=8', 'status']), false)
   assert.equal(safeReadOnlySubcommand('naruto', ['--max-threads=12', 'proof', 'latest']), false)
+})
+
+test('active Naruto admits only an explicit same-mission run continuation', () => {
+  const state = {
+    mission_id: 'M-active',
+    mode: 'NARUTO',
+    phase: 'NARUTO_DELEGATION_CONTEXT_READY',
+    route_closed: false
+  }
+  assert.equal(safeActiveRouteContinuation('naruto', ['run', 'task', '--mission', 'M-active'], state), true)
+  assert.equal(safeActiveRouteContinuation('naruto', ['run', 'task', '--mission=M-active'], state), true)
+  assert.equal(safeActiveRouteContinuation('naruto', ['run', 'task', '--mission', 'latest'], state), true)
+  assert.equal(safeActiveRouteContinuation('naruto', ['run', 'task', '--mission', 'M-other'], state), false)
+  assert.equal(safeActiveRouteContinuation('naruto', ['run', 'task'], state), false)
+  assert.equal(safeActiveRouteContinuation('naruto', ['proof', 'M-active'], state), false)
 })
 
 test('Naruto observation dispatch skips migration repair and remains read-only', async () => {

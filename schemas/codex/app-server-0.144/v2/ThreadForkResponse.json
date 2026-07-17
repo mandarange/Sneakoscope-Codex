@@ -12,11 +12,8 @@
     "thread"
   ],
   "properties": {
-    "serviceTier": {
-      "type": [
-        "string",
-        "null"
-      ]
+    "thread": {
+      "$ref": "#/definitions/Thread"
     },
     "approvalPolicy": {
       "$ref": "#/definitions/AskForApproval"
@@ -64,8 +61,11 @@
         }
       ]
     },
-    "thread": {
-      "$ref": "#/definitions/Thread"
+    "serviceTier": {
+      "type": [
+        "string",
+        "null"
+      ]
     }
   },
   "definitions": {

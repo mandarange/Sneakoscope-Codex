@@ -100,7 +100,21 @@ async function probeStdio(
     return result(name, scope, 'healthy', protocol, list.length, instructions, null, null, options);
   } catch (error) {
     const message = redactMcpError(error);
-    return result(name, scope, message.includes('timeout') ? 'timeout' : message.includes('output_cap') ? 'protocol_error' : 'startup_failed', null, null, null, null, message, options);
+    return result(
+      name,
+      scope,
+      message.includes('timeout')
+        ? 'timeout'
+        : message.includes('output_cap') || message.includes('protocol')
+          ? 'protocol_error'
+          : 'startup_failed',
+      null,
+      null,
+      null,
+      null,
+      message,
+      options
+    );
   } finally {
     channel.close();
   }
@@ -206,7 +220,12 @@ class JsonLineChannel {
       this.buffer = this.buffer.slice(newline + 1);
       if (!line) continue;
       let parsed: unknown;
-      try { parsed = JSON.parse(line); } catch { continue; }
+      try {
+        parsed = JSON.parse(line);
+      } catch {
+        this.failAll(new Error('mcp_protocol_pollution'));
+        return;
+      }
       if (!isRecord(parsed) || !Number.isInteger(parsed.id)) continue;
       const id = Number(parsed.id);
       const waiter = this.waiters.get(id);

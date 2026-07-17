@@ -3526,11 +3526,11 @@
         "threadId"
       ],
       "properties": {
-        "personality": {
-          "description": "Override the personality for this turn and subsequent turns.",
+        "sandboxPolicy": {
+          "description": "Override the sandbox policy for this turn and subsequent turns.",
           "anyOf": [
             {
-              "$ref": "#/definitions/Personality"
+              "$ref": "#/definitions/SandboxPolicy"
             },
             {
               "type": "null"
@@ -3565,12 +3565,8 @@
             "null"
           ]
         },
-        "serviceTier": {
-          "description": "Override the service tier for this turn and subsequent turns.",
-          "type": [
-            "string",
-            "null"
-          ]
+        "threadId": {
+          "type": "string"
         },
         "cwd": {
           "description": "Override the working directory for this turn and subsequent turns.",
@@ -3590,15 +3586,11 @@
             }
           ]
         },
-        "sandboxPolicy": {
-          "description": "Override the sandbox policy for this turn and subsequent turns.",
-          "anyOf": [
-            {
-              "$ref": "#/definitions/SandboxPolicy"
-            },
-            {
-              "type": "null"
-            }
+        "serviceTier": {
+          "description": "Override the service tier for this turn and subsequent turns.",
+          "type": [
+            "string",
+            "null"
           ]
         },
         "input": {
@@ -3614,8 +3606,16 @@
             "null"
           ]
         },
-        "threadId": {
-          "type": "string"
+        "personality": {
+          "description": "Override the personality for this turn and subsequent turns.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Personality"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "outputSchema": {
           "description": "Optional JSON Schema used to constrain the final assistant message for this turn."
@@ -4889,12 +4889,6 @@
             "null"
           ]
         },
-        "serviceName": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
         "threadSource": {
           "description": "Optional client-supplied analytics source classification for this thread.",
           "anyOf": [
@@ -4904,6 +4898,12 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "serviceTier": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "ephemeral": {
@@ -4922,12 +4922,6 @@
             }
           ]
         },
-        "serviceTier": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
         "sessionStartSource": {
           "anyOf": [
             {
@@ -4936,6 +4930,12 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "serviceName": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "model": {
@@ -6469,6 +6469,12 @@
             "null"
           ]
         },
+        "serviceTier": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "sandbox": {
           "anyOf": [
             {
@@ -6477,12 +6483,6 @@
             {
               "type": "null"
             }
-          ]
-        },
-        "serviceTier": {
-          "type": [
-            "string",
-            "null"
           ]
         },
         "threadSource": {
@@ -6661,12 +6661,6 @@
             "null"
           ]
         },
-        "serviceTier": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
         "personality": {
           "anyOf": [
             {
@@ -6679,6 +6673,12 @@
         },
         "threadId": {
           "type": "string"
+        },
+        "serviceTier": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "model": {
           "description": "Configuration overrides for the resumed thread, if any.",
@@ -6721,9 +6721,15 @@
     "ThreadListParams": {
       "type": "object",
       "properties": {
-        "useStateDbOnly": {
-          "description": "If true, return from the state DB without scanning JSONL rollouts to repair thread metadata. Omitted or false preserves scan-and-repair behavior.",
-          "type": "boolean"
+        "sourceKinds": {
+          "description": "Optional source filter; when set, only sessions from these source kinds are returned. When omitted or empty, defaults to interactive sources.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/ThreadSourceKind"
+          }
         },
         "archived": {
           "description": "Optional archived filter; when set to true, only archived threads are returned. If false or null, only non-archived threads are returned.",
@@ -6769,15 +6775,9 @@
             "type": "string"
           }
         },
-        "sourceKinds": {
-          "description": "Optional source filter; when set, only sessions from these source kinds are returned. When omitted or empty, defaults to interactive sources.",
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "$ref": "#/definitions/ThreadSourceKind"
-          }
+        "useStateDbOnly": {
+          "description": "If true, return from the state DB without scanning JSONL rollouts to repair thread metadata. Omitted or false preserves scan-and-repair behavior.",
+          "type": "boolean"
         },
         "searchTerm": {
           "description": "Optional substring filter for the extracted thread title.",

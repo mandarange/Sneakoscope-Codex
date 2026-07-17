@@ -26,6 +26,7 @@ export interface RunProcessOptions {
   stderrFile?: string;
   onStdout?: (chunk: string) => void;
   onStderr?: (chunk: string) => void;
+  onSpawn?: (pid: number) => void | Promise<void>;
 }
 
 export interface RunProcessResult {
@@ -37,6 +38,7 @@ export interface RunProcessResult {
   stderrBytes: number;
   truncated: boolean;
   timedOut: boolean;
+  spawnRegistrationFailed?: boolean;
 }
 
 export interface ListFilesOptions {
@@ -515,6 +517,7 @@ export function runProcess(
     const stderrTail = new TailBuffer(tailBytes);
     const timeoutMs = options.timeoutMs ?? DEFAULT_PROCESS_TIMEOUT_MS;
     let killedByTimeout = false;
+    let spawnRegistrationFailed = false;
     let settled = false;
     let stdoutStream: WriteStream | null = null;
     let stderrStream: WriteStream | null = null;
@@ -529,9 +532,12 @@ export function runProcess(
     }
 
     const child = spawn(command, args, spawnOptions);
-    if (options.input !== undefined && child.stdin) {
-      child.stdin.end(options.input);
-    }
+    const pausedForSpawnRegistration = Boolean(
+      options.onSpawn
+        && child.pid
+        && process.platform !== 'win32'
+        && child.kill('SIGSTOP')
+    );
 
     const finish = async (result: RunProcessResult) => {
       if (settled) return;
@@ -588,6 +594,7 @@ export function runProcess(
         stderrBytes: stderrTail.totalBytesCounted,
         truncated: stdoutTail.truncated || stderrTail.truncated,
         timedOut: killedByTimeout,
+        ...(spawnRegistrationFailed ? { spawnRegistrationFailed: true } : {}),
       })
     );
     child.on('close', (code: number | null) =>
@@ -600,8 +607,29 @@ export function runProcess(
         stderrBytes: stderrTail.totalBytesCounted,
         truncated: stdoutTail.truncated || stderrTail.truncated,
         timedOut: killedByTimeout,
+        ...(spawnRegistrationFailed ? { spawnRegistrationFailed: true } : {}),
       })
     );
+
+    void (async () => {
+      if (options.onSpawn) {
+        const pid = child.pid;
+        if (!pid) {
+          spawnRegistrationFailed = true;
+          child.kill('SIGKILL');
+          return;
+        }
+        try {
+          await options.onSpawn(pid);
+        } catch {
+          spawnRegistrationFailed = true;
+          child.kill('SIGKILL');
+          return;
+        }
+        if (pausedForSpawnRegistration) child.kill('SIGCONT');
+      }
+      if (options.input !== undefined && child.stdin) child.stdin.end(options.input);
+    })();
   });
 }
 

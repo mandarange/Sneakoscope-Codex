@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { ensureDir, nowIso, readText, sha256, writeJsonAtomic, writeTextAtomic } from '../fsx.js';
-import { CORE_SKILL_TEMPLATE_VERSION, buildSksCoreSkillManifest, isSksManagedCoreSkillContent, renderCoreSkillTemplate } from './core-skill-manifest.js';
+import { CORE_SKILL_TEMPLATE_VERSION, buildSksCoreSkillManifest, currentCoreSkillName, isSksManagedCoreSkillContent, renderCoreSkillTemplate } from './core-skill-manifest.js';
 import { canonicalSkillName } from './skill-name-canonicalizer.js';
 
 export type CoreSkillSyncAction =
@@ -129,5 +129,5 @@ export async function syncCoreSkillsIntegrity(input: {
 }
 
 export function coreSkillPath(skillsRoot: string, name: string): string {
-  return path.join(skillsRoot, canonicalSkillName(name), 'SKILL.md');
+  return path.join(skillsRoot, currentCoreSkillName(canonicalSkillName(name)), 'SKILL.md');
 }

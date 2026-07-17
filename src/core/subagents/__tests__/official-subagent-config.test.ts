@@ -564,7 +564,7 @@ test('generated Naruto skill describes the official workflow and retired aliases
   })
 
   const agentsRules = await fs.readFile(path.join(root, 'AGENTS.md'), 'utf8')
-  const naruto = await fs.readFile(path.join(root, '.agents', 'skills', 'naruto', 'SKILL.md'), 'utf8')
+  const naruto = await fs.readFile(path.join(root, '.agents', 'skills', 'sks-naruto', 'SKILL.md'), 'utf8')
   assert.match(naruto, /Codex official subagent workflow/)
   assert.match(naruto, /--agents N/)
   assert.match(naruto, /GPT-5\.6 Sol Max/)
@@ -577,7 +577,7 @@ test('generated Naruto skill describes the official workflow and retired aliases
   assert.match(naruto, /lifecycle[- ]only/)
   assert.doesNotMatch(naruto, /verification-summary\.json|five-artifact/)
   assert.doesNotMatch(naruto, /native shadow-clone|up to 100|--backend codex-exec|--clones N/)
-  assert.match(agentsRules, /default to the `\$Naruto` Codex official subagent workflow/)
+  assert.match(agentsRules, /default to the `\$sks-naruto` Codex official subagent workflow/)
   assert.match(agentsRules, /subagent-parent-summary\.json/)
   assert.match(agentsRules, /Luna Max only for tiny short-context mechanical work/)
   assert.match(agentsRules, /Terra Medium for long-context analysis/)

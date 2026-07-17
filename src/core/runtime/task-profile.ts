@@ -30,6 +30,11 @@ const NON_DATABASE_HIGH_RISK_RE =
 const DATABASE_DOMAIN_RE =
   /\b(?:SQL|Supabase|Postgres|PostgreSQL|RLS|Prisma|Drizzle|Knex|database|DB|execute_sql|migrate|migration|migrations)\b|데이터베이스|디비|마이그레이션/i
 
+const STRONG_DATABASE_DOMAIN_RE =
+  /\b(?:SQL|Supabase|Postgres|PostgreSQL|RLS|Prisma|Drizzle|Knex|database|execute_sql|migrate|migration|migrations)\b|데이터베이스|마이그레이션/i
+
+const GENERIC_DATABASE_DOMAIN_RE = /\bDB\b|디비/i
+
 const DATABASE_WORK_RE =
   /\b(?:apply|execute|run|fix|change|modify|migrate|audit|review|inspect|analy[sz]e|query|seed|backfill|optimi[sz]e|create|alter|drop|truncate|update|delete|repair)\b|적용|실행|수정|변경|검수|검토|점검|분석|조회|쿼리|시드|백필|최적화|생성|추가|삭제|복구|만들어/i
 
@@ -82,7 +87,23 @@ export function looksLikeDatabaseWorkRequest(prompt: unknown): boolean {
   const text = String(prompt ?? '').trim()
   if (!text || !DATABASE_DOMAIN_RE.test(text)) return false
   if (DATABASE_CONTROL_SURFACE_META_RE.test(text)) return false
-  return DATABASE_WORK_RE.test(text)
+  if (!DATABASE_WORK_RE.test(text)) return false
+  if (STRONG_DATABASE_DOMAIN_RE.test(text)) return true
+  return GENERIC_DATABASE_DOMAIN_RE.test(text)
+    && hasNearbyMatches(text, GENERIC_DATABASE_DOMAIN_RE, DATABASE_WORK_RE, 96)
+}
+
+function hasNearbyMatches(text: string, left: RegExp, right: RegExp, maxDistance: number): boolean {
+  const leftIndexes = matchIndexes(text, left)
+  const rightIndexes = matchIndexes(text, right)
+  return leftIndexes.some((leftIndex) => rightIndexes.some((rightIndex) => Math.abs(leftIndex - rightIndex) <= maxDistance))
+}
+
+function matchIndexes(text: string, pattern: RegExp): number[] {
+  const flags = pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`
+  return [...text.matchAll(new RegExp(pattern.source, flags))]
+    .map((match) => match.index)
+    .filter((index): index is number => Number.isInteger(index))
 }
 
 function looksLikeTinyChange(text: string): boolean {

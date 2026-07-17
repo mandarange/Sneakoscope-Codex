@@ -3,7 +3,7 @@ import fsp from 'node:fs/promises';
 import os from 'node:os';
 import type { Dirent } from 'node:fs';
 import { ensureDir, exists, nowIso, PACKAGE_VERSION, readJson, readText, sha256, withScratchDir, writeJsonAtomic, writeTextAtomic } from '../fsx.js';
-import { buildSksCoreSkillManifest, isCoreSkillName } from '../codex-native/core-skill-manifest.js';
+import { buildSksCoreSkillManifest, isCoreSkillName, legacyCoreSkillNames } from '../codex-native/core-skill-manifest.js';
 import { syncCoreSkillsIntegrity } from '../codex-native/core-skill-integrity.js';
 import { dbSafetyGuardSkillText, madSksSqlPlanePolicyText } from '../mad-sks/sql-plane/policy.js';
 import { SKILL_DREAM_POLICY, skillDreamPolicyText } from '../skill-forge.js';
@@ -19,7 +19,8 @@ import {
   uniqueConfinedPath
 } from '../managed-path-safety.js';
 import { collectNestedProjectRoots } from '../doctor/current-project-guidance-nested.js';
-import { AWESOME_DESIGN_MD_REFERENCE, CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_IMAGEGEN_EVIDENCE_SOURCE, CODEX_IMAGEGEN_REQUIRED_POLICY, CODEX_WEB_VERIFICATION_POLICY, DEFAULT_CODEX_APP_PLUGINS, DESIGN_SYSTEM_SSOT, DOLLAR_COMMANDS, DOLLAR_SKILL_NAMES, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, GETDESIGN_REFERENCE, IMAGEGEN_SOCIAL_SOURCE_POLICY, OPENAI_CHATGPT_IMAGES_2_DOC_URL, OPENAI_GPT_IMAGE_2_MODEL_DOC_URL, OPENAI_IMAGE_GENERATION_DOC_URL, PPT_CONDITIONAL_SKILL_ALLOWLIST, PPT_PIPELINE_MCP_ALLOWLIST, PPT_PIPELINE_SKILL_ALLOWLIST, RECOMMENDED_SKILLS, RESERVED_CODEX_PLUGIN_SKILL_NAMES, SOLUTION_SCOUT_SKILL_NAME, chatCaptureIntakeText, context7ConfigToml, getdesignReferencePolicyText, imageUxReviewPipelinePolicyText, leanEngineeringCompactText, outcomeRubricPolicyText, pptPipelineAllowlistPolicyText, productDesignPluginPolicyText, solutionScoutPolicyText, speedLanePolicyText, stackCurrentDocsPolicyText, triwikiContextTrackingText, triwikiStagePolicyText } from '../routes.js';
+import { AWESOME_DESIGN_MD_REFERENCE, CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_IMAGEGEN_EVIDENCE_SOURCE, CODEX_IMAGEGEN_REQUIRED_POLICY, CODEX_WEB_VERIFICATION_POLICY, DEFAULT_CODEX_APP_PLUGINS, DESIGN_SYSTEM_SSOT, DOLLAR_COMMANDS, DOLLAR_SKILL_NAMES, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, GETDESIGN_REFERENCE, IMAGEGEN_SOCIAL_SOURCE_POLICY, LEGACY_DOLLAR_SKILL_NAMES, OPENAI_CHATGPT_IMAGES_2_DOC_URL, OPENAI_GPT_IMAGE_2_MODEL_DOC_URL, OPENAI_IMAGE_GENERATION_DOC_URL, PPT_CONDITIONAL_SKILL_ALLOWLIST, PPT_PIPELINE_MCP_ALLOWLIST, PPT_PIPELINE_SKILL_ALLOWLIST, RECOMMENDED_SKILLS, RESERVED_CODEX_PLUGIN_SKILL_NAMES, SOLUTION_SCOUT_SKILL_NAME, chatCaptureIntakeText, context7ConfigToml, getdesignReferencePolicyText, imageUxReviewPipelinePolicyText, leanEngineeringCompactText, outcomeRubricPolicyText, pptPipelineAllowlistPolicyText, productDesignPluginPolicyText, solutionScoutPolicyText, speedLanePolicyText, stackCurrentDocsPolicyText, triwikiContextTrackingText, triwikiStagePolicyText } from '../routes.js';
+import { prefixKnownSksDollarReferences, sksPrefixedSkillName } from '../routes/dollar-prefix.js';
 
 const SKS_SKILL_MANIFEST_FILE = '.sks-generated.json';
 const PACKAGED_SKILLS_MANIFEST_SCHEMA = 'sks.skills-manifest.v1';
@@ -47,7 +48,42 @@ export const REMOVED_SKS_SKILL_NAMES = [
   'ralph-supervisor',
   'ralph-resolver'
 ] as const;
-const REMOVED_SKS_SKILL_NAME_SET = new Set<string>(REMOVED_SKS_SKILL_NAMES);
+const LEGACY_SKS_SUPPORT_SKILL_NAMES = [
+  'autoresearch-loop',
+  'context7-docs',
+  'db-safety-guard',
+  'design-artifact-expert',
+  'design-system-builder',
+  'design-ui-editor',
+  'from-chat-img',
+  'getdesign-reference',
+  'gx-visual-generate',
+  'gx-visual-read',
+  'gx-visual-validate',
+  'honest-mode',
+  'hproof-claim-ledger',
+  'hproof-evidence-bind',
+  'imagegen',
+  'imagegen-source-scout',
+  'performance-evaluator',
+  'pipeline-runner',
+  'prompt-pipeline',
+  'reasoning-router',
+  'reflection',
+  'research-discovery',
+  'solution-scout',
+  'turbo-context-pack'
+] as const;
+export const LEGACY_UNPREFIXED_SKS_SKILL_NAMES = Array.from(new Set([
+  ...LEGACY_DOLLAR_SKILL_NAMES,
+  ...legacyCoreSkillNames(),
+  ...LEGACY_SKS_SUPPORT_SKILL_NAMES
+].map((name) => canonicalSkillNameFromValue(name)).filter((name) => name && name !== 'sks'))).sort();
+const SKS_SKILL_NAMES_TO_CLEAN_UP = Array.from(new Set([
+  ...REMOVED_SKS_SKILL_NAMES,
+  ...LEGACY_UNPREFIXED_SKS_SKILL_NAMES
+]));
+const REMOVED_SKS_SKILL_NAME_SET = new Set<string>(SKS_SKILL_NAMES_TO_CLEAN_UP);
 const SKILL_ALIASES: Record<string, string[]> = {};
 
 function reflectionInstructionText(commandPrefix: any = 'sks') {
@@ -118,11 +154,14 @@ async function installOfficialSkills(root: any) {
     'design-ui-editor': `---\nname: design-ui-editor\ndescription: Legacy fallback UI/UX editor for existing design.md systems when Product Design plugin is unavailable.\n---\n\nUse Product Design plugin first. When falling back, read \`design.md\`, inspect relevant UI/assets/tests, consult getdesign-reference when improving the design system, apply the smallest design-system-conformant change, use imagegen for image/logo/raster assets, and verify render quality. ${productDesignPluginPolicyText()} ${CODEX_IMAGEGEN_REQUIRED_POLICY} If design.md is missing and Product Design is unavailable, use design-system-builder as fallback.\n`,
     'design-artifact-expert': `---\nname: design-artifact-expert\ndescription: Legacy fallback for high-fidelity HTML/UI/prototype artifacts when Product Design plugin cannot be used.\n---\n\nUse Product Design plugin first for design/UI/prototype work. When falling back, read design.md when present, consult getdesign-reference for design-system grounding, build the usable artifact first, preserve state, verify overlap/readability/responsiveness, and use imagegen for required assets. ${productDesignPluginPolicyText()} ${CODEX_IMAGEGEN_REQUIRED_POLICY}\n`
   };
-  const nonCoreSkillNames = Object.keys(skills).filter((name) => !isCoreSkillName(name));
-  for (const [name, content] of Object.entries(skills)) {
+  const nonCoreSkillNames = Array.from(new Set(Object.keys(skills)
+    .map(currentSksInstalledSkillName)
+    .filter((name) => !isCoreSkillName(name))));
+  for (const [legacyName, content] of Object.entries(skills)) {
+    const name = currentSksInstalledSkillName(legacyName);
     if (isCoreSkillName(name)) continue;
     const dir = path.join(root, '.agents', 'skills', name);
-    const skillContent = markManagedSkill(name, currentSurfaceSkillText(enrichSkillContent(name, content)));
+    const skillContent = markManagedSkill(name, currentSurfaceSkillText(enrichSkillContent(legacyName, content), name));
     const existingText = await readConfinedOfficialSkillText(root, dir, name);
     if (typeof existingText === 'string' && !isSksManagedOrGeneratedOfficialSkill(existingText)) {
       await quarantineSkillDir(root, dir, name, 'global-official-name-user-collision');
@@ -192,10 +231,20 @@ async function readConfinedOfficialSkillText(root: string, dir: string, name: st
   return skillInspection.exists ? fsp.readFile(skillPath, 'utf8') : null;
 }
 
-function currentSurfaceSkillText(content: unknown): string {
-  return String(content || '')
-    .replaceAll('$From-Chat-IMG', 'from-chat-img')
-    .replaceAll('From-Chat-IMG', 'from-chat-img');
+function currentSksInstalledSkillName(value: unknown): string {
+  const canonical = canonicalSkillNameFromValue(value);
+  return sksPrefixedSkillName(canonical);
+}
+
+function currentSurfaceSkillText(content: unknown, installedName?: string): string {
+  const prefixed = prefixKnownSksDollarReferences(content, [
+    ...LEGACY_DOLLAR_SKILL_NAMES,
+    ...legacyCoreSkillNames(),
+    ...LEGACY_SKS_SUPPORT_SKILL_NAMES.filter((name) => name !== 'imagegen')
+  ]);
+  return installedName
+    ? prefixed.replace(/^name:\s*.+$/m, `name: ${installedName}`)
+    : prefixed;
 }
 
 export interface SkillReconcileReport {
@@ -627,7 +676,7 @@ function manifestHasRetiredResidue(fileName: string, parsed: any): boolean {
 }
 
 function manifestTextContainsRetiredJsonValue(text: string): boolean {
-  return REMOVED_SKS_SKILL_NAMES.some((name) => new RegExp(`"${escapeRegExp(name)}"`, 'i').test(text));
+  return SKS_SKILL_NAMES_TO_CLEAN_UP.some((name) => new RegExp(`"${escapeRegExp(name)}"`, 'i').test(text));
 }
 
 function isRemovedSkillName(value: unknown): boolean {
@@ -662,7 +711,7 @@ export async function reconcileSkills(opts: {
   const manifest = await loadSkillsManifest();
   const officialNames = new Set<string>(manifest.skills.map((skill: any) => canonicalSkillNameFromValue(skill.canonical_name)));
   const aliasNames = new Set<string>(manifest.skills.flatMap((skill: any) => (skill.deprecated_aliases || []).map((name: any) => canonicalSkillNameFromValue(name))));
-  const removedNames = new Set<string>(REMOVED_SKS_SKILL_NAMES.map((name: any) => canonicalSkillNameFromValue(name)));
+  const removedNames = new Set<string>(SKS_SKILL_NAMES_TO_CLEAN_UP.map((name: any) => canonicalSkillNameFromValue(name)));
   const report: SkillReconcileReport = {
     schema: 'sks.skill-reconcile.v1',
     ok: true,
@@ -1083,11 +1132,12 @@ function pipelineActivationText(name: any) {
 }
 
 async function writeSkillMetadata(root: string, dir: string, name: any) {
-  const effort = ['computer-use-fast', 'cu'].includes(name)
+  const policyName = String(name || '').replace(/^sks-/, '');
+  const effort = ['computer-use-fast', 'cu'].includes(policyName)
     ? 'low'
-    : ['research', 'autoresearch', 'research-discovery', 'autoresearch-loop', 'from-chat-img'].includes(name)
+    : ['research', 'autoresearch', 'research-discovery', 'autoresearch-loop', 'from-chat-img'].includes(policyName)
     ? 'xhigh'
-    : (['dfix', 'sks', 'help'].includes(name) ? 'medium' : 'high');
+    : (['dfix', 'sks', 'help'].includes(policyName) ? 'medium' : 'high');
   await ensureConfinedDirectory(root, path.join(dir, 'agents'));
   await writeTextAtomic(path.join(dir, 'agents', 'openai.yaml'), `name: ${name}\nmodel_reasoning_effort: ${effort}\nrouting: temporary\nreturn_to_default_after_route: true\n`);
 }
@@ -1099,7 +1149,7 @@ async function removeGeneratedCodexSkillMirrors(root: any, skillNames: any) {
   const names = Array.from(new Set([
     ...skillNames,
     ...DOLLAR_COMMANDS.map((c: any) => c.command.slice(1)),
-    ...REMOVED_SKS_SKILL_NAMES,
+    ...SKS_SKILL_NAMES_TO_CLEAN_UP,
     'ralph',
     'Ralph',
     'ralph-supervisor',
@@ -1121,7 +1171,7 @@ async function removeGeneratedCodexSkillMirrors(root: any, skillNames: any) {
 async function removeGeneratedAgentSkillAliases(root: any, skillNames: any) {
   const current = new Set(skillNames);
   const obsolete = [
-    ...REMOVED_SKS_SKILL_NAMES,
+    ...SKS_SKILL_NAMES_TO_CLEAN_UP,
     'qaloop',
     'wiki-refresh',
     'wikirefresh',

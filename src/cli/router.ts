@@ -221,15 +221,21 @@ export function safeReadOnlySubcommand(command: CommandNameLite, args: readonly 
   return !args.some((arg) => ['--fix', '--yes', '-y', '--write', '--apply', '--execute', '--force', '--real'].includes(String(arg)));
 }
 
-function safeActiveRouteContinuation(command: CommandNameLite, args: readonly string[], state: any = {}) {
+export function safeActiveRouteContinuation(command: CommandNameLite, args: readonly string[], state: any = {}) {
+  const subcommand = String(args[0] || '').toLowerCase();
+  const activeRoute = String(state.route || state.route_command || state.mode || '').replace(/^\$/, '').replace(/[-_]/g, '').toUpperCase();
+  if (command === 'naruto') {
+    if (activeRoute !== 'NARUTO' || subcommand !== 'run') return false;
+    const requestedMission = optionValue(args, ['--mission', '--mission-id']);
+    return Boolean(state.mission_id)
+      && (requestedMission === String(state.mission_id) || requestedMission === 'latest');
+  }
   const expectedRoutes = new Map<CommandNameLite, readonly string[]>([
     ['research', ['RESEARCH']],
     ['autoresearch', ['AUTORESEARCH', 'RESEARCH']],
     ['qa-loop', ['QALOOP']]
   ]).get(command);
   if (!expectedRoutes) return false;
-  const subcommand = String(args[0] || '').toLowerCase();
-  const activeRoute = String(state.route || state.route_command || state.mode || '').replace(/^\$/, '').replace(/[-_]/g, '').toUpperCase();
   if (!expectedRoutes.includes(activeRoute)) return false;
   if (subcommand === 'prepare') {
     const parentMissionId = String(process.env.SKS_RUN_PARENT_MISSION_ID || '').trim();
@@ -242,6 +248,20 @@ function safeActiveRouteContinuation(command: CommandNameLite, args: readonly st
   if (subcommand !== 'run') return false;
   const requestedMission = String(args[1] || '').trim();
   return Boolean(state.mission_id) && (requestedMission === String(state.mission_id) || requestedMission === 'latest');
+}
+
+function optionValue(args: readonly string[], names: readonly string[]): string {
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = String(args[index] || '');
+    for (const name of names) {
+      if (arg === name) {
+        const next = String(args[index + 1] || '').trim();
+        return next && !next.startsWith('-') ? next : '';
+      }
+      if (arg.startsWith(name + '=')) return arg.slice(name.length + 1).trim();
+    }
+  }
+  return '';
 }
 
 function activeRouteStateBlocksCommand(state: any = {}) {

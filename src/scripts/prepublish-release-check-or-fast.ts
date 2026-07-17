@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 // @ts-nocheck
-// Publish-time release stamp verifier.
+// Publish-time release stamp verifier and prepack build bridge.
 //
-// The final registry operation is deliberately not a release-check runner.
-// It accepts only an authoritative full-release stamp that is already current
-// and fails closed when the stamp is missing or stale. Operators refresh proof
-// separately with `npm run release:check:full` so publish latency stays bounded
-// and a registry command cannot silently launch the entire canonical test DAG.
+// `npm publish` verifies the authoritative release stamp before prepack, rebuilds
+// dist through the normal prepack lifecycle, then verifies the same stamp again
+// before npm creates the publish tarball. Ordinary `npm pack` keeps build-only
+// behavior and does not require release authorization.
 import { spawnSync } from 'node:child_process';
 import process from 'node:process';
+
+const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
 function runFastCheck() {
   const result = spawnSync(process.execPath, ['./dist/scripts/prepublish-fast-check.js'], {
@@ -32,27 +33,36 @@ function runStampVerify() {
   return result;
 }
 
+function runBuild() {
+  return spawnSync(npmCmd, ['run', 'build'], {
+    cwd: process.cwd(),
+    env: process.env,
+    stdio: 'inherit'
+  });
+}
+
 function failClosed(status = 1) {
   console.error('Prepublish requires a current authoritative full-release stamp.');
   console.error('Run `npm run release:check:full` separately, then rerun the publish command.');
   process.exit(status || 1);
 }
 
-function blockLifecyclePublish() {
-  console.error('Lifecycle-enabled npm publish is unsupported because prepack would rebuild after authorization.');
-  console.error('Direct npm publish is disabled. Use the reviewed stage-only GitHub workflow, which submits the exact receipt-bound tarball with `npm stage publish`.');
-  process.exit(2);
-}
-
-function main() {
-  if (process.argv.includes('--block-lifecycle-publish') || process.env.npm_lifecycle_event === 'prepublishOnly') {
-    blockLifecyclePublish();
-  }
+function verifyReleaseStamp() {
   const fast = runFastCheck();
   if (fast.status !== 0) failClosed(fast.status);
 
   const stamp = runStampVerify();
   if (stamp.status !== 0) failClosed(stamp.status);
+}
+
+function main() {
+  if (process.argv.includes('--prepack-build')) {
+    const build = runBuild();
+    if (build.status !== 0) process.exit(build.status || 1);
+    if (String(process.env.npm_command || '').toLowerCase() === 'publish') verifyReleaseStamp();
+    return;
+  }
+  verifyReleaseStamp();
 }
 
 main();

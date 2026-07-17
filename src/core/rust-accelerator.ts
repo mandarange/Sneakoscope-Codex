@@ -105,7 +105,7 @@ export async function rustInfo(): Promise<any> {
 async function rustAcceleratorProbe() {
   const bin = await findRustAccelerator();
   if (!bin) return { bin: null, compatible: false };
-  const result = await runProcess(bin, ['--version'], { timeoutMs: 3000, maxOutputBytes: 20_000 }).catch((err: any) => ({ code: 1, stdout: '', stderr: err.message }));
+  const result = await runProcess(bin, ['--version'], { timeoutMs: 5000, maxOutputBytes: 20_000 }).catch((err: any) => ({ code: 1, stdout: '', stderr: err.message }));
   const version = `${result.stdout || ''}${result.stderr || ''}`.trim();
   const compatible = result.code === 0 && version === `sks-rs ${PACKAGE_VERSION}`;
   return {

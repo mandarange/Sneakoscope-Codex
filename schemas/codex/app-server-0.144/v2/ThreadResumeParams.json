@@ -53,12 +53,6 @@
         "null"
       ]
     },
-    "serviceTier": {
-      "type": [
-        "string",
-        "null"
-      ]
-    },
     "personality": {
       "anyOf": [
         {
@@ -71,6 +65,12 @@
     },
     "threadId": {
       "type": "string"
+    },
+    "serviceTier": {
+      "type": [
+        "string",
+        "null"
+      ]
     },
     "model": {
       "description": "Configuration overrides for the resumed thread, if any.",

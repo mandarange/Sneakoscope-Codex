@@ -36,14 +36,14 @@ function codex0144Model(slug: string, extra: Record<string, unknown> = {}) {
 
 const remoteCatalog = {
   models: [
-    codex0144Model('gpt-5.6-sol', { minimal_client_version: '0.144.1', debug_echoed_authorization: 'sk-must-not-persist' }),
+    codex0144Model('gpt-5.6-sol', { minimal_client_version: '0.144.5', debug_echoed_authorization: 'sk-must-not-persist' }),
     codex0144Model('gpt-5.6-terra'),
     codex0144Model('gpt-5.6-luna'),
     codex0144Model('gpt-5.4', { tool_mode: null, use_responses_lite: false })
   ]
 }
 
-test('normalizes the Codex 0.144.1 catalog and preserves native GPT-5.6 tool transport', () => {
+test('normalizes the Codex 0.144.5 catalog and preserves native GPT-5.6 tool transport', () => {
   const result = normalizeCodexLbToolCatalog(remoteCatalog)
   assert.equal(result.ok, true)
   assert.equal(result.tools_transport, 'full_responses')
@@ -53,11 +53,11 @@ test('normalizes the Codex 0.144.1 catalog and preserves native GPT-5.6 tool tra
     assert.equal(model.tool_mode, 'code_mode_only')
     assert.equal(model.supports_parallel_tool_calls, true)
   }
-  assert.equal(result.catalog.models[0].minimal_client_version, '0.144.1')
+  assert.equal(result.catalog.models[0].minimal_client_version, '0.144.5')
   assert.equal('debug_echoed_authorization' in result.catalog.models[0], false)
 })
 
-test('rejects generic API model rows that Codex 0.144.1 cannot parse', () => {
+test('rejects generic API model rows that Codex 0.144.5 cannot parse', () => {
   const result = normalizeCodexLbToolCatalog({ data: [
     { id: 'gpt-5.6-sol' },
     { id: 'gpt-5.6-terra' },
@@ -202,15 +202,15 @@ test('coalesces concurrent cold-cache fetches for the same identity', async () =
   }
 })
 
-test('emitted minimum catalog parses in the project-local Codex CLI 0.144.1', async () => {
+test('emitted minimum catalog parses in the project-local Codex CLI 0.144.5', async () => {
   const codexPackageRoot = path.join(packageRoot(), 'node_modules', '@openai', 'codex')
   const codexPackage = JSON.parse(await fs.readFile(path.join(codexPackageRoot, 'package.json'), 'utf8'))
-  assert.equal(codexPackage.version, '0.144.1', 'project-local @openai/codex must stay pinned to the parser contract')
+  assert.equal(codexPackage.version, '0.144.5', 'project-local @openai/codex must stay pinned to the parser contract')
   const codexEntrypoint = path.join(codexPackageRoot, 'bin', 'codex.js')
   await fs.access(codexEntrypoint)
   const version = await runProcess(process.execPath, [codexEntrypoint, '--version'], { timeoutMs: CODEX_PARSER_PROBE_TIMEOUT_MS, maxOutputBytes: 4_096 })
   assert.equal(version.code, 0, version.stderr || version.stdout)
-  assert.match(version.stdout, /\b0\.144\.1\b/)
+  assert.match(version.stdout, /\b0\.144\.5\b/)
 
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-codex-lb-tool-catalog-parser-'))
   try {

@@ -8,6 +8,7 @@ export type CommandLatency = 'fast' | 'normal' | 'long';
 export type CommandInputProfile =
   | 'none'
   | 'json-only'
+  | 'naruto'
   | 'paths'
   | 'pipeline-status'
   | 'stats'
@@ -273,7 +274,7 @@ const COMMAND_DEFINITIONS = {
   'commit-and-push': entry('stable', 'Create a simple git commit and push', 'dist/commands/commit-and-push.js', directCommand(() => import('../commands/commit-and-push.js'), 'dist/commands/commit-and-push.js')),
   dfix: routeStateMutator(entry('stable', 'Run DFix diagnose/plan/patch/verify loop', 'dist/core/commands/dfix-command.js', commandArgsCommand(() => import('../core/commands/dfix-command.js'), 'dfixCommand', 'dist/core/commands/dfix-command.js')), ['dfix-gate.json']),
   'with-local-llm': entry('beta', 'Enable or inspect local Ollama worker backend', 'dist/core/commands/local-model-command.js', argsCommand(() => import('../core/commands/local-model-command.js'), 'localModelCommand', 'dist/core/commands/local-model-command.js')),
-  naruto: routeStateMutator(entry('labs', 'Run the $Naruto Codex official subagent workflow', 'dist/core/commands/naruto-command.js', argsCommand(() => import('../core/commands/naruto-command.js'), 'narutoCommand', 'dist/core/commands/naruto-command.js')), ['naruto-gate.json', 'stop-gate.json']),
+  naruto: routeStateMutator(entry('labs', 'Run the $sks-naruto Codex official subagent workflow', 'dist/core/commands/naruto-command.js', argsCommand(() => import('../core/commands/naruto-command.js'), 'narutoCommand', 'dist/core/commands/naruto-command.js')), ['naruto-gate.json', 'stop-gate.json']),
   'stop-gate': readOnly(entry('beta', 'Check canonical stop-gate resolution for a route/mission', 'dist/core/commands/stop-gate-command.js', commandArgsCommand(() => import('../core/commands/stop-gate-command.js'), 'stopGateCommand', 'dist/core/commands/stop-gate-command.js'))),
   route: activeRouteDiagnostic(entry('beta', 'Inspect or close active route state', 'dist/core/commands/route-command.js', subcommand(() => import('../core/commands/route-command.js'), 'routeCommand', 'dist/core/commands/route-command.js', 'status'))),
   loop: routeStateMutator(entry('labs', 'Dynamic Loop Runtime: plan/run/status/proof loop graphs.', 'dist/core/commands/loop-command.js', subcommand(() => import('../core/commands/loop-command.js'), 'loopCommand', 'dist/core/commands/loop-command.js', 'help')), ['loop-graph-proof.json']),
@@ -348,7 +349,10 @@ export const COMMANDS = applyCommandContractOverrides(COMMAND_DEFINITIONS, {
   loop: { latency: 'long' },
   'mad-sks': { risk: 'R3', latency: 'long' },
   mcp: { risk: 'R2', latency: 'long', supportsJson: true, inputProfile: 'json-only' },
-  naruto: { latency: 'long' },
+  naruto: {
+    risk: 'R2', latency: 'long', supportsJson: true, remoteAllowed: false, telegramAllowed: false,
+    inputProfile: 'naruto'
+  },
   paths: {
     supportsJson: true, remoteAllowed: true, inputProfile: 'paths',
     requiredCapabilities: ['project.fs.read']

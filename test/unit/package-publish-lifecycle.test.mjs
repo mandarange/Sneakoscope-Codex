@@ -13,13 +13,13 @@ const distRuntimeCheck = fs.readFileSync('dist/scripts/check-dist-runtime.js', '
 const prepublishVerifier = fs.readFileSync('dist/scripts/prepublish-release-check-or-fast.js', 'utf8');
 const npmrc = fs.readFileSync('.npmrc', 'utf8');
 
-test('publish lifecycle separates full release stamps from lifecycle-disabled publish readiness', () => {
+test('publish lifecycle supports official npm publish with prepack post-build verification', () => {
   assert.match(pkg.version, /^\d+\.\d+\.\d+$/);
   assert.equal(pkg.publishConfig?.tag, 'latest');
   assert.match(npmrc, /^tag=latest$/m);
   assert.match(scripts['feature-quality:check'], /--release/);
   assert.doesNotMatch(scripts['feature-quality:check'], /--rc/);
-  assert.equal(scripts.prepack, 'npm run build');
+  assert.equal(scripts.prepack, 'node ./dist/scripts/prepublish-release-check-or-fast.js --prepack-build');
   assert.equal(scripts.check, undefined);
   assert.match(scripts['build:incremental'], /tsc -p tsconfig\.build\.json/);
   const buildTsconfig = JSON.parse(fs.readFileSync('tsconfig.build.json', 'utf8'));
@@ -50,11 +50,14 @@ test('publish lifecycle separates full release stamps from lifecycle-disabled pu
   assert.ok(scripts['release:check:full'].indexOf('build:clean') < scripts['release:check:full'].indexOf('npm test --silent'));
   assert.match(scripts['release:check:full'], /release-real-check\.js --skip-release-check && npm run release:dist-freshness --silent && node \.\/dist\/scripts\/release-check-stamp\.js write/);
   assert.match(scripts.prepublishOnly, /prepublish-release-check-or-fast\.js/);
-  assert.match(scripts.prepublishOnly, /--block-lifecycle-publish/);
+  assert.doesNotMatch(scripts.prepublishOnly, /--block-lifecycle-publish/);
   assert.doesNotMatch(scripts.prepublishOnly, /publish:packlist-performance|release-registry-check/);
-  assert.doesNotMatch(prepublishVerifier, /runReleaseCheck|npmCmd/);
+  assert.doesNotMatch(prepublishVerifier, /runReleaseCheck/);
   assert.doesNotMatch(prepublishVerifier, /SKS_PREPUBLISH_RELEASE_CHECK_CMD/);
   assert.match(prepublishVerifier, /current authoritative full-release stamp/);
+  assert.match(prepublishVerifier, /--prepack-build/);
+  assert.match(prepublishVerifier, /npm_command/);
+  assert.match(prepublishVerifier, /\['run', 'build'\]/);
   for (const removed of ['publish:dry', 'publish:verify-ignore-scripts', 'publish:prep-ignore-scripts', 'publish:ignore-scripts']) {
     assert.equal(scripts[removed], undefined, `${removed} must not expose a direct-publish path`);
   }
@@ -93,15 +96,22 @@ test('publish lifecycle separates full release stamps from lifecycle-disabled pu
   assert.doesNotMatch(commonJsBin, /require\('\.\.\/core\/version\.js'\)/);
 });
 
-test('plain lifecycle publish is blocked before the prepack rebuild can invalidate authorization', () => {
-  const result = spawnSync(process.execPath, ['./dist/scripts/prepublish-release-check-or-fast.js', '--block-lifecycle-publish'], {
+test('plain lifecycle publish requires release proof instead of being categorically blocked', () => {
+  const missingStamp = path.join(os.tmpdir(), `sks-missing-release-stamp-${process.pid}.json`);
+  const result = spawnSync(process.execPath, ['./dist/scripts/prepublish-release-check-or-fast.js'], {
     cwd: process.cwd(),
-    encoding: 'utf8'
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      npm_lifecycle_event: 'prepublishOnly',
+      npm_command: 'publish',
+      SKS_RELEASE_STAMP_PATH: missingStamp
+    }
   });
-  assert.equal(result.status, 2);
-  assert.match(result.stderr, /Lifecycle-enabled npm publish is unsupported/);
-  assert.match(result.stderr, /stage-only GitHub workflow/);
-  assert.match(result.stderr, /npm stage publish/);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /current authoritative full-release stamp/);
+  assert.doesNotMatch(result.stderr, /Lifecycle-enabled npm publish is unsupported/);
+  assert.doesNotMatch(result.stderr, /Direct npm publish is disabled/);
   assert.doesNotMatch(buildManifestWriter, /generated_at/);
   assert.match(distRuntimeCheck, /build_manifest_generated_at_non_deterministic/);
 });

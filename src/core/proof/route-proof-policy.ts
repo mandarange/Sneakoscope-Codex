@@ -1,3 +1,5 @@
+import { unprefixedSksSkillName } from '../routes/dollar-prefix.js';
+
 export const SERIOUS_ROUTE_ALIASES = Object.freeze([
   '$Naruto',
   '$DFix',
@@ -79,7 +81,7 @@ export function normalizeProofRoute(route: any) {
   const raw = String(route || '').trim();
   if (!raw) return null;
   if (SERIOUS_ROUTE_ALIASES.includes(raw) || VISUAL_ROUTE_ALIASES.includes(raw)) return raw;
-  const stripped = raw.replace(/^\$/, '').replace(/[^A-Za-z0-9-]+/g, '').toLowerCase();
+  const stripped = unprefixedSksSkillName(raw).replace(/[^A-Za-z0-9-]+/g, '').toLowerCase();
   if (/^(?:agent|team|mad-?db|swarm|shadow-?clone|kage-?bunshin|tmux|xai)$/.test(stripped)) return null;
   return (ROUTE_NORMALIZATION as Record<string, string>)[stripped] || raw;
 }

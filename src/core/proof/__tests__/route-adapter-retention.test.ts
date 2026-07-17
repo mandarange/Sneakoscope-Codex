@@ -16,6 +16,7 @@ test('post-route retention preserves an active managed temp project and its comp
     });
 
     assert.equal(result.retention?.ok, true);
+    assert.equal(result.proof?.route, '$sks-wiki');
     const proof = path.join(root, '.sneakoscope', 'missions', 'M-route-retention-active', 'completion-proof.json');
     assert.equal(await fsp.access(proof).then(() => true, () => false), true);
     const afterProof = await fsp.mkdtemp(path.join(root, 'after-proof-'));

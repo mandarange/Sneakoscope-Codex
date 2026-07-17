@@ -30,23 +30,23 @@ export const RECOMMENDED_MCP_SERVERS = [
 ];
 
 export const RECOMMENDED_SKILLS = [
-  'reasoning-router',
-  'pipeline-runner',
-  'solution-scout',
-  'context7-docs',
-  'super-search',
-  'search-visibility-core',
-  'seo-geo-optimizer',
-  'autoresearch-loop',
-  'performance-evaluator',
-  'getdesign-reference',
-  'imagegen',
-  'imagegen-source-scout',
-  'image-ux-review',
-  'computer-use-fast',
-  'db-safety-guard',
-  REFLECTION_SKILL_NAME,
-  'honest-mode'
+  'sks-reasoning-router',
+  'sks-pipeline-runner',
+  'sks-solution-scout',
+  'sks-context7-docs',
+  'sks-super-search',
+  'sks-search-visibility-core',
+  'sks-seo-geo-optimizer',
+  'sks-autoresearch-loop',
+  'sks-performance-evaluator',
+  'sks-getdesign-reference',
+  'sks-imagegen',
+  'sks-imagegen-source-scout',
+  'sks-image-ux-review',
+  'sks-computer-use-fast',
+  'sks-db-safety-guard',
+  'sks-reflection',
+  'sks-honest-mode'
 ];
 
 // Route-level effort names are scheduling intents, not model compatibility

@@ -101,11 +101,52 @@ struct Harness {
   assert.match(executed.stdout, /update-receipt-runtime-ok/);
 });
 
+test('compiled ProcessClient passes the Control Center update deferral only to its child process', async (t) => {
+  if (process.platform !== 'darwin') return t.skip('Swift ProcessClient harness is macOS-only');
+  const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-process-client-update-env-'));
+  t.after(() => fs.rm(temp, { recursive: true, force: true }));
+  const actionScript = path.join(temp, 'action.sh');
+  await fs.writeFile(actionScript, '#!/bin/zsh\nprintf \'%s\\n\' "${SKS_UPDATE_DEFER_MENUBAR_RESTART:-missing}"\n', { mode: 0o755 });
+  const harness = path.join(temp, 'Harness.swift');
+  const binary = path.join(temp, 'process-client-update-env-harness');
+  await fs.writeFile(harness, `
+import Foundation
+import Darwin
+
+@main
+struct Harness {
+    static func main() {
+        let temp = CommandLine.arguments[1]
+        let actionScript = CommandLine.arguments[2]
+        let client = ProcessClient(
+            actionScript: actionScript,
+            logPath: temp + "/process-client.log",
+            projectRoot: temp
+        )
+        client.run(["probe"], environment: ["SKS_UPDATE_DEFER_MENUBAR_RESTART": "1"]) { result in
+            precondition(result.code == 0)
+            precondition(result.output.trimmingCharacters(in: .whitespacesAndNewlines) == "1")
+            print("process-client-update-env-ok")
+            Darwin.exit(0)
+        }
+        dispatchMain()
+    }
+}
+`);
+  const source = path.join(process.cwd(), 'native', 'sks-menubar', 'Sources', 'ProcessClient.swift');
+  const compiled = await run('swiftc', [source, harness, '-o', binary]);
+  assert.equal(compiled.code, 0, `${compiled.stdout}\n${compiled.stderr}`);
+  const executed = await run(binary, [temp, actionScript]);
+  assert.equal(executed.code, 0, `${executed.stdout}\n${executed.stderr}`);
+  assert.match(executed.stdout, /process-client-update-env-ok/);
+});
+
 test('native reliability source binds menu-open expiry, status keys, and receipt-driven update UI', async () => {
   const sourceRoot = path.join(process.cwd(), 'native', 'sks-menubar', 'Sources');
   const statusItem = await fs.readFile(path.join(sourceRoot, 'StatusItemController.swift'), 'utf8');
   const overview = await fs.readFile(path.join(sourceRoot, 'OverviewViewController.swift'), 'utf8');
   const updates = await fs.readFile(path.join(sourceRoot, 'UpdatesViewController.swift'), 'utf8');
+  const processClient = await fs.readFile(path.join(sourceRoot, 'ProcessClient.swift'), 'utf8');
   assert.match(statusItem, /func menuWillOpen\(_ menu: NSMenu\)[\s\S]*refreshExpiredUpdateStatusIfNeeded\(\)/);
   assert.match(statusItem, /guard !updateRefreshInFlight, StatusItemController\.updateStatusNeedsRefresh\(update\) else \{ return \}/);
   assert.match(statusItem, /\["update", "status", "--json"\]/);
@@ -122,6 +163,13 @@ test('native reliability source binds menu-open expiry, status keys, and receipt
   assert.match(updates, /Last checked .*generatedAt.*expires .*expiresAt/s);
   assert.match(updates, /Rollback .*receipt\.rollbackCommand/);
   assert.match(updates, /state: \.terminalUncertain/);
+  assert.match(processClient, /environment: \[String: String\] = \[:\]/);
+  assert.match(processClient, /ProcessInfo\.processInfo\.environment\.merging\(environment\)/);
+  assert.match(updates, /SKS_UPDATE_DEFER_MENUBAR_RESTART/);
+  assert.match(updates, /processClient\.run\(args, environment: environment\)/);
+  assert.match(updates, /receipt\.stages\.contains \{ \$0\.id == "menubar_rebuild" && \$0\.status == "installed_launch_skipped" \}/);
+  assert.match(updates, /operations\.synchronize\(operation, with: receipt, processCompleted: true\)[\s\S]*self\.notifications\.send\([\s\S]*self\.restartMenuBarAfterUpdateCompletion\(\)/);
+  assert.match(updates, /runDetached\(\["menubar", "restart", "--json"\]\)/);
 });
 
 function run(command: string, args: string[]): Promise<{ code: number | null; stdout: string; stderr: string }> {

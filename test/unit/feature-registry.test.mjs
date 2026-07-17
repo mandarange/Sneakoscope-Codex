@@ -8,8 +8,16 @@ test('feature registry carries fixture contracts', async () => {
   const registry = await buildFeatureRegistry({ root: process.cwd() });
   const proof = registry.features.find((feature) => feature.id === 'cli-proof');
   assert.equal(proof.fixture.status, 'pass');
-  assert.ok(registry.source_inventory.dollar_commands.includes('$Commit'));
-  assert.ok(registry.source_inventory.dollar_commands.includes('$Commit-And-Push'));
+  assert.ok(registry.source_inventory.dollar_commands.includes('$sks-commit'));
+  assert.ok(registry.source_inventory.dollar_commands.includes('$sks-commit-and-push'));
+  assert.ok(registry.source_inventory.dollar_commands.every((command) => command === '$sks' || command.startsWith('$sks-')));
+  for (const feature of registry.features) {
+    const commands = new Set(feature.commands || []);
+    assert.equal((feature.aliases || []).some((alias) => commands.has(alias)), false, `duplicate command/alias surface: ${feature.id}`);
+  }
+  const naruto = registry.features.find((feature) => feature.id === 'route-naruto');
+  assert.deepEqual(naruto.aliases, ['$sks-work', '$sks-from-chat-img']);
+  assert.equal(new Set(registry.source_inventory.app_skill_aliases).size, registry.source_inventory.app_skill_aliases.length);
   assert.ok(registry.source_inventory.cli_command_names.includes('commit'));
   assert.ok(registry.source_inventory.cli_command_names.includes('commit-and-push'));
   assert.ok(registry.source_inventory.cli_command_names.includes('codex-lb'));

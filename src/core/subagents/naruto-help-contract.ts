@@ -2,10 +2,12 @@ import {
   NARUTO_PARENT_EFFORT,
   NARUTO_PARENT_MODEL
 } from './model-policy.js'
+import { NARUTO_ACTIONS } from '../safety/command-contract/types.js'
 import {
   DEFAULT_AUTOMATIC_SUBAGENT_COUNT,
   MAX_AUTOMATIC_REVIEWER_COUNT,
   MAX_AUTOMATIC_SUBAGENT_COUNT,
+  MAX_CRITICAL_AUTOMATIC_REVIEWER_COUNT,
   officialSubagentRolePlan
 } from './agent-catalog.js'
 
@@ -17,19 +19,20 @@ export function buildNarutoHelpResult() {
     ok: true,
     action: 'help',
     workflow: 'official_codex_subagent',
-    description: '$Naruto is the canonical SKS execution route for the Codex official subagent workflow; $Work is its intended execution alias.',
+    description: '$sks-naruto is the canonical SKS execution route for the Codex official subagent workflow; $sks-work is its intended execution alias.',
     usage: [
       'sks naruto run "<task>" [--agents N] [--max-threads N] [--json]',
       'sks naruto status [latest|M-...] [--json]',
       'sks naruto subagents [latest|M-...] [--json]',
       'sks naruto proof [latest|M-...] [--json]'
     ],
-    commands: ['help', 'status', 'subagents', 'proof', 'run'],
+    commands: [...NARUTO_ACTIONS],
     default_requested_subagents: DEFAULT_AUTOMATIC_SUBAGENT_COUNT,
-    scaling_policy: 'two_independent_children_for_non_trivial_work_parent_owned_risk_based_expansion',
+    scaling_policy: 'dynamic_capacity_min_ready_dag_disjoint_verifier_tools_available_marginal',
     automatic_subagent_ceiling: MAX_AUTOMATIC_SUBAGENT_COUNT,
     automatic_reviewer_ceiling: MAX_AUTOMATIC_REVIEWER_COUNT,
-    critical_multi_domain_reviewer_ceiling: MAX_AUTOMATIC_SUBAGENT_COUNT,
+    critical_multi_domain_reviewer_ceiling: MAX_CRITICAL_AUTOMATIC_REVIEWER_COUNT,
+    max_threads_is_cap_not_target: true,
     max_depth: 1,
     triwiki_context: 'bounded_attention_use_first_with_on_demand_hydration',
     model_routing_policy: {

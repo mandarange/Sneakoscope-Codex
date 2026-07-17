@@ -3,6 +3,7 @@ import path from 'node:path'
 import { ensureDir, nowIso, readText, sha256, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
 import {
   codexHome,
+  isSksOwnedGlobalUiLock,
   scanProjectLocalForbiddenKeys,
   snapshotCodexAppUiState
 } from './codex-app-ui-state-snapshot.js'
@@ -12,13 +13,11 @@ import { cleanupCodexConfigBackups } from '../codex/codex-config-toml.js'
 
 export const CODEX_APP_FAST_UI_REPAIR_SCHEMA = 'sks.codex-app-fast-ui-repair.v1'
 
-// `service_tier = "fast"` is the current Codex Desktop default-selection
-// contract. Removing it would silently turn Fast mode off, not restore the
-// selector. Only legacy SKS model/effort pins lock the native picker.
-const FAST_UI_TOP_LEVEL_RE = /^\s*(?:model|model_reasoning_effort)\s*=/
-const FAST_UI_FEATURE_LINE_RE = /^\s*fast_mode\s*=/
+// `service_tier = "fast"` and `[features].fast_mode = true` are capability
+// signals. Removing either would turn Fast off rather than restore native UI.
+// Only provenance-backed SKS global provider/model/reasoning locks are removed.
+const FAST_UI_TOP_LEVEL_RE = /^\s*(?:model_provider|model|model_reasoning_effort)\s*=/
 const FAST_UI_LEGACY_TABLES = new Set(['user.fast_mode', 'profiles.sks-fast-high'])
-const SKS_CAUSED_RE = /(?:SKS|Sneakoscope|codex-lb|sks-mad|sks fast)/i
 
 export async function repairCodexAppFastUi(root: string = process.cwd(), input: {
   codexHome?: string | null
@@ -175,21 +174,16 @@ function stripProjectLocalForbiddenKeys(text: string) {
 }
 
 function stripSksCausedHostOwnedLines(text: string) {
-  const topLevel = String(text || '').split(/\n\s*\[/)[0] || ''
-  const sksManagedTopLevel = SKS_CAUSED_RE.test(topLevel)
-  const sksManagedDocument = SKS_CAUSED_RE.test(String(text || ''))
-  const stripped = stripMatchingLines(text, (line, table, previous, next) => {
+  const sourceLines = String(text || '').split(/\r?\n/)
+  const stripped = stripMatchingLines(text, (line, table, _previous, _next, index) => {
     const isLegacyFastTable = table ? FAST_UI_LEGACY_TABLES.has(table) : false
-    const isFastUiLine = FAST_UI_TOP_LEVEL_RE.test(line)
-      || (table === 'features' && FAST_UI_FEATURE_LINE_RE.test(line))
-      || isLegacyFastTable
-    const sksMarked = (!table && sksManagedTopLevel) || (isLegacyFastTable && sksManagedDocument) || SKS_CAUSED_RE.test(line) || SKS_CAUSED_RE.test(previous) || SKS_CAUSED_RE.test(next)
-    return isFastUiLine && sksMarked
+    if (isLegacyFastTable) return true
+    return !table && FAST_UI_TOP_LEVEL_RE.test(line) && isSksOwnedGlobalUiLock(sourceLines, index)
   })
   return stripped
 }
 
-function stripMatchingLines(text: string, shouldRemove: (line: string, table: string | null, previous: string, next: string) => boolean) {
+function stripMatchingLines(text: string, shouldRemove: (line: string, table: string | null, previous: string, next: string, index: number) => boolean) {
   const lines = text.split(/\r?\n/)
   let table: string | null = null
   let removingTable: string | null = null
@@ -204,7 +198,7 @@ function stripMatchingLines(text: string, shouldRemove: (line: string, table: st
       continue
     }
     const currentTable = tableMatch?.[1] || table
-    const remove = shouldRemove(line, currentTable, lines[i - 1] || '', lines[i + 1] || '')
+    const remove = shouldRemove(line, currentTable, lines[i - 1] || '', lines[i + 1] || '', i)
     if (remove) {
       removedKeys.push(tableMatch?.[1] || line.match(/^\s*([A-Za-z0-9_.-]+)\s*=/)?.[1] || '<table-body>')
       if (tableMatch?.[1]) {

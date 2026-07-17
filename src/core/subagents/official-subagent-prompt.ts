@@ -1,8 +1,9 @@
-import { HARD_NARUTO_MAX_THREADS } from './thread-budget.js'
+import { HARD_NARUTO_MAX_THREADS, type SubagentCapacityController } from './thread-budget.js'
 import type { BoundedTriwikiAttention } from './triwiki-attention.js'
 import {
   MAX_AUTOMATIC_REVIEWER_COUNT,
   MAX_AUTOMATIC_SUBAGENT_COUNT,
+  MAX_CRITICAL_AUTOMATIC_REVIEWER_COUNT,
   officialSubagentOnDemandRoleCatalog,
   officialSubagentRoleCatalog,
   selectOfficialSubagentRole
@@ -26,12 +27,20 @@ export function buildOfficialSubagentPrompt(input: {
   requestedSubagentsExplicit?: boolean
   requestedSubagentsSource?: 'operator' | 'route_contract' | 'automatic'
   decompositionStatus?: 'ready' | 'parent_required'
+  firstWave?: number
+  waveCount?: number
+  capacity?: SubagentCapacityController
   triwikiAttention?: BoundedTriwikiAttention
   recommendedAgents?: readonly string[]
 }): string {
   const maxThreads = clampThreads(input.maxThreads)
   const requestedSubagents = normalizeRequestedSubagents(input.requestedSubagents, input.slices.length)
-  const waveCount = requestedSubagents === 0 ? 0 : Math.ceil(requestedSubagents / maxThreads)
+  const firstWave = input.firstWave === undefined
+    ? Math.min(requestedSubagents, maxThreads)
+    : normalizeRequestedSubagents(input.firstWave, 0)
+  const waveCount = input.waveCount === undefined
+    ? firstWave > 0 ? Math.ceil(requestedSubagents / firstWave) : 0
+    : normalizeRequestedSubagents(input.waveCount, 0)
   const parentDecompositionRequired = input.decompositionStatus === 'parent_required'
   const requestedSource = input.requestedSubagentsSource === 'route_contract'
     ? 'route_contract'
@@ -42,7 +51,7 @@ export function buildOfficialSubagentPrompt(input: {
     ? `${requestedSubagents} (explicit operator request)`
     : requestedSource === 'route_contract'
       ? `${requestedSubagents} (route-owned exact orchestration contract)`
-      : `${requestedSubagents} (risk-based automatic count; two independent children are the non-trivial default; keep the plan and evidence count exact)`
+      : `${requestedSubagents} (dynamic automatic target; keep the final decomposed plan and evidence count exact)`
   const triwiki = renderBoundedTriwikiAttention(input.triwikiAttention)
   const resolvedSlices = input.slices.map((slice) => ({
     slice,
@@ -55,6 +64,10 @@ export function buildOfficialSubagentPrompt(input: {
       requiresWrite: slice.readOnly !== true
     })
   }))
+  const sliceSafety = validateOfficialSubagentSlices(resolvedSlices.map(({ slice, agentName }) => ({
+    ...slice,
+    agent: agentName
+  })))
   const catalog = renderAgentCatalog([
     ...resolvedSlices.map((row) => row.agentName),
     ...(input.recommendedAgents || [])
@@ -91,16 +104,20 @@ Subagent rules:
 - use gpt-5.6-terra with medium reasoning for long-context analysis and direct Computer Use, Browser/Chrome, or image-generation execution
 - split mixed work when possible: Terra gathers or operates, Sol High implements, and Sol Max judges; when one slice cannot be split safely, judgment takes priority
 - never assign Luna to long-context, exploration, review, debugging, planning, or tool-heavy work
-- automatic fan-out is selected before execution: two independent children for non-trivial work,
-  and at most ${MAX_AUTOMATIC_SUBAGENT_COUNT} only for critical multi-domain risk; trivial Answer/DFix work is filtered before this route
-- automatic reviewer-only fan-out is capped at ${MAX_AUTOMATIC_REVIEWER_COUNT} for ordinary work; critical multi-domain review may use the overall cap of ${MAX_AUTOMATIC_SUBAGENT_COUNT}
+- automatic fan-out starts at two for bounded non-trivial work, four for explicit parallel work, and six for large-scale work; it may expand only up to ${MAX_AUTOMATIC_SUBAGENT_COUNT} when decomposition proves more independent useful slices
+- automatic reviewer-only fan-out is capped at ${MAX_AUTOMATIC_REVIEWER_COUNT} for ordinary work and ${MAX_CRITICAL_AUTOMATIC_REVIEWER_COUNT} for critical multi-domain review
 - requested subagents: ${requestedPolicy}
-- max open agent threads: ${maxThreads}
+- max open agent threads: ${maxThreads} (hard cap, never a utilization target)
+- selected first-wave concurrency: ${firstWave}
 - planned waves: ${waveCount}
+- before every wave compute C_t = min(ready DAG width, disjoint ownership, verifier capacity, tool concurrency, available thread slots after reservations, marginal-useful workers); launch n_t <= C_t only while marginal useful throughput stays positive
+- capacity snapshot: ${renderCapacity(input.capacity)}
 - max depth: 1
 - subagents must not spawn subagents
 - parallel writes require disjoint paths
 - if paths overlap, run those slices serially
+- reject duplicate slice fingerprints and homogeneous clone work; diversity may come from roles, disjoint shards, or different tool surfaces
+- security, database, release, authorization, and irreversible-effect checks are protected strata; aggregate speed or accuracy never offsets a failed protected gate
 - wait for every requested subagent before integrating
 - close completed threads after collecting results
 ${parentDecompositionRequired ? `- decomposition status: parent_required
@@ -110,7 +127,11 @@ ${requestedSource === 'operator'
     ? '- the explicit operator count is authoritative; if it cannot be defended safely, block and report instead of silently changing it'
     : requestedSource === 'route_contract'
       ? '- the route-owned exact count is authoritative; preserve it and follow the route-specific orchestration contract'
-      : '- if fewer defensible slices exist, reduce the delegation plan and requested count before execution; never increase automatically beyond the selected count'}` : '- decomposition status: ready'}
+      : `- after decomposition, resize the automatic plan to the useful independent slice count, bounded by C_t and ${MAX_AUTOMATIC_SUBAGENT_COUNT}; update plan/evidence before the first spawn
+- if fewer defensible slices exist, reduce the count; if more defensible slices and positive capacity exist, increase only within the automatic ceiling`}` : '- decomposition status: ready'}
+
+Slice safety:
+${renderSliceSafety(sliceSafety, parentDecompositionRequired)}
 
 Central TriWiki context:
 ${triwiki}
@@ -141,6 +162,71 @@ Final parent output:
 - include one thread_outcomes row for every requested subagent; a SubagentStop event alone never proves success
 - keep completion summary and Honest Mode wording inside the JSON fields; do not add prose outside the object
 `.trim()
+}
+
+export interface OfficialSubagentSliceSafety {
+  safe: boolean
+  blockers: string[]
+  duplicate_slice_ids: string[][]
+  overlapping_write_scopes: Array<{ left: string; right: string; path: string }>
+  unassigned_write_scopes: string[]
+  distinct_role_count: number
+}
+
+export function validateOfficialSubagentSlices(slices: readonly OfficialSubagentSlice[]): OfficialSubagentSliceSafety {
+  const blockers: string[] = []
+  const duplicateSliceIds: string[][] = []
+  const overlappingWriteScopes: Array<{ left: string; right: string; path: string }> = []
+  const unassignedWriteScopes: string[] = []
+  const fingerprints = new Map<string, string[]>()
+
+  for (const slice of slices) {
+    const id = String(slice.id || '').trim() || 'unnamed'
+    const paths = normalizedPaths(slice.paths)
+    const fingerprint = [
+      normalizedIntent(slice.title),
+      normalizedIntent(slice.description),
+      String(slice.agent || slice.kind || '').trim().toLowerCase(),
+      paths.join('|'),
+      slice.readOnly === true ? 'read-only' : 'write'
+    ].join('::')
+    const ids = fingerprints.get(fingerprint) || []
+    ids.push(id)
+    fingerprints.set(fingerprint, ids)
+    if (slice.readOnly !== true && paths.length === 0) unassignedWriteScopes.push(id)
+  }
+
+  for (const ids of fingerprints.values()) {
+    if (ids.length < 2) continue
+    duplicateSliceIds.push(ids)
+    blockers.push(`duplicate_slice_fingerprint:${ids.join(',')}`)
+  }
+
+  const writable = slices
+    .filter((slice) => slice.readOnly !== true)
+    .map((slice) => ({ id: String(slice.id || '').trim() || 'unnamed', paths: normalizedPaths(slice.paths) }))
+  for (let leftIndex = 0; leftIndex < writable.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < writable.length; rightIndex += 1) {
+      const left = writable[leftIndex]!
+      const right = writable[rightIndex]!
+      const overlap = firstOverlappingPath(left.paths, right.paths)
+      if (!overlap) continue
+      overlappingWriteScopes.push({ left: left.id, right: right.id, path: overlap })
+      blockers.push(`overlapping_write_scope:${left.id}:${right.id}:${overlap}`)
+    }
+  }
+  if (writable.length > 1) {
+    for (const id of unassignedWriteScopes) blockers.push(`unassigned_parallel_write_scope:${id}`)
+  }
+
+  return {
+    safe: blockers.length === 0,
+    blockers: [...new Set(blockers)],
+    duplicate_slice_ids: duplicateSliceIds,
+    overlapping_write_scopes: overlappingWriteScopes,
+    unassigned_write_scopes: unassignedWriteScopes,
+    distinct_role_count: new Set(slices.map((slice) => String(slice.agent || slice.kind || '').trim()).filter(Boolean)).size
+  }
 }
 
 function renderBoundedTriwikiAttention(value: BoundedTriwikiAttention | undefined): string {
@@ -175,6 +261,69 @@ function renderAgentCatalog(requested: readonly string[]): string {
       return `- \`${role.name}\`${marker}: ${role.model_policy}, ${role.model}/${role.model_reasoning_effort}, ${role.sandbox_mode}; ${role.description}`
     })
   ].join('\n')
+}
+
+function renderCapacity(capacity: SubagentCapacityController | undefined): string {
+  if (!capacity) return 'parent recomputes after decomposition; no pre-decomposition capacity snapshot available'
+  return JSON.stringify({
+    formula: capacity.formula,
+    selected_capacity: capacity.selected_capacity,
+    available_thread_slots: capacity.available_thread_slots,
+    limiting_factors: capacity.limiting_factors,
+    reservations: capacity.reservations,
+    marginal_useful_throughput_positive: capacity.marginal_useful_throughput_positive
+  })
+}
+
+function renderSliceSafety(value: OfficialSubagentSliceSafety, parentDecompositionRequired: boolean): string {
+  if (parentDecompositionRequired) {
+    return [
+      '- pending parent decomposition; validate duplicate fingerprints, write-scope overlap, ownership assignment, and role/shard/tool diversity before spawning',
+      '- unsafe decomposition must be merged, serialized, or blocked before any child starts'
+    ].join('\n')
+  }
+  if (value.safe) {
+    return `- validated safe: ${value.distinct_role_count} distinct role(s), no duplicate slice fingerprint, and no overlapping write scope`
+  }
+  return `- blocked: ${value.blockers.join(', ')}`
+}
+
+function normalizedIntent(value: unknown): string {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9가-힣]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ')
+}
+
+function normalizedPaths(paths: readonly string[] | undefined): string[] {
+  return [...new Set((paths || [])
+    .map((entry) => String(entry || '').trim().replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+$/, ''))
+    .filter(Boolean))]
+    .sort()
+}
+
+function firstOverlappingPath(leftPaths: readonly string[], rightPaths: readonly string[]): string | null {
+  for (const left of leftPaths) {
+    for (const right of rightPaths) {
+      const leftPrefix = pathPrefix(left)
+      const rightPrefix = pathPrefix(right)
+      if (leftPrefix === '.'
+        || rightPrefix === '.'
+        || leftPrefix === rightPrefix
+        || leftPrefix.startsWith(`${rightPrefix}/`)
+        || rightPrefix.startsWith(`${leftPrefix}/`)) {
+        return left.length <= right.length ? left : right
+      }
+    }
+  }
+  return null
+}
+
+function pathPrefix(value: string): string {
+  const wildcard = value.search(/[?*[{]/)
+  const prefix = wildcard >= 0 ? value.slice(0, wildcard) : value
+  return prefix.replace(/\/+$/, '') || '.'
 }
 
 function clampThreads(value: unknown): number {

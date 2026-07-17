@@ -7,11 +7,11 @@
     "threadId"
   ],
   "properties": {
-    "personality": {
-      "description": "Override the personality for this turn and subsequent turns.",
+    "sandboxPolicy": {
+      "description": "Override the sandbox policy for this turn and subsequent turns.",
       "anyOf": [
         {
-          "$ref": "#/definitions/Personality"
+          "$ref": "#/definitions/SandboxPolicy"
         },
         {
           "type": "null"
@@ -46,12 +46,8 @@
         "null"
       ]
     },
-    "serviceTier": {
-      "description": "Override the service tier for this turn and subsequent turns.",
-      "type": [
-        "string",
-        "null"
-      ]
+    "threadId": {
+      "type": "string"
     },
     "cwd": {
       "description": "Override the working directory for this turn and subsequent turns.",
@@ -71,15 +67,11 @@
         }
       ]
     },
-    "sandboxPolicy": {
-      "description": "Override the sandbox policy for this turn and subsequent turns.",
-      "anyOf": [
-        {
-          "$ref": "#/definitions/SandboxPolicy"
-        },
-        {
-          "type": "null"
-        }
+    "serviceTier": {
+      "description": "Override the service tier for this turn and subsequent turns.",
+      "type": [
+        "string",
+        "null"
       ]
     },
     "input": {
@@ -95,8 +87,16 @@
         "null"
       ]
     },
-    "threadId": {
-      "type": "string"
+    "personality": {
+      "description": "Override the personality for this turn and subsequent turns.",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/Personality"
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "outputSchema": {
       "description": "Optional JSON Schema used to constrain the final assistant message for this turn."

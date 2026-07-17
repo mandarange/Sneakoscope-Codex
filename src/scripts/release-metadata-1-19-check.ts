@@ -194,7 +194,8 @@ assertGate(/exact_bytes_match/.test(stageVerifierSource) && /sha256_match/.test(
 assertGate(/oidc_environment_not_allowed/.test(stageVerifierSupport), 'maintainer stage verifier must reject OIDC and GitHub Actions environments');
 assertGate(!/\['stage',\s*'(?:publish|approve|reject)'/.test(`${stageVerifierSource}\n${stageVerifierSupport}\n${stageVerifierCli}`), 'maintainer stage verifier must not contain mutating stage argv');
 assertGate(/npm-stage-tarball-verifier\.js/.test(releaseReadinessDoc) && /--local-receipt/.test(releaseReadinessDoc) && /--local-tarball/.test(releaseReadinessDoc) && /--stage-receipt/.test(releaseReadinessDoc), 'release readiness must document the maintainer-local read-only verifier inputs');
-assertGate(/prepublish-release-check-or-fast\.js --block-lifecycle-publish/.test(String(pkg.scripts?.prepublishOnly || '')), 'prepublishOnly must fail closed before lifecycle publication');
+assertGate(pkg.scripts?.prepublishOnly === 'node ./dist/scripts/prepublish-release-check-or-fast.js', 'prepublishOnly must verify release proof during official npm publish');
+assertGate(pkg.scripts?.prepack === 'node ./dist/scripts/prepublish-release-check-or-fast.js --prepack-build', 'prepack must rebuild and reverify official npm publish output');
 
 for (const file of requiredDocs) {
   const absolute = path.join(root, file);

@@ -52,7 +52,11 @@ try {
       SKS_UPDATE_SKIP_SKS_MENUBAR: '1',
       SKS_REQUIRE_ZELLIJ: '0',
       SKS_POSTINSTALL_GLOBAL_DOCTOR: '0',
-      SKS_MIGRATION_DOCTOR_TIMEOUT_MS: '5000'
+      SKS_MIGRATION_DOCTOR_TIMEOUT_MS: '30000',
+      // The updated-package doctor and receipt writer repeat the expensive
+      // migration passes. Keep their dedicated budget above parallel CI load
+      // without weakening the 30-second migration-timeout retry fixture below.
+      SKS_UPDATE_NEW_DOCTOR_TIMEOUT_MS: '90000'
     }
   }));
 
@@ -99,6 +103,23 @@ try {
   }
   assertGate(fs.existsSync(path.join(project, '.agents', 'skills', 'customer-skill', 'SKILL.md')), 'simulated update must preserve user-authored skills', {});
   assertGate(fs.existsSync(path.join(project, '.sneakoscope', 'customer-state.json')), 'simulated update must preserve unrelated customer state', {});
+  for (const target of [
+    path.join(home, '.agents', 'skills', 'naruto'),
+    path.join(home, '.codex', 'skills', 'research-discovery'),
+    path.join(home, '.sneakoscope-global', '.agents', 'skills', 'answer'),
+    path.join(project, '.agents', 'skills', 'imagegen'),
+    path.join(project, '.codex', 'skills', 'qa-loop'),
+    path.join(project, 'packages', 'app', '.agents', 'skills', 'dfix')
+  ]) {
+    assertGate(!fs.existsSync(target), 'simulated update must remove every managed legacy unprefixed SKS skill', { target });
+  }
+  for (const name of ['sks-naruto', 'sks-research-discovery', 'sks-answer', 'sks-imagegen', 'sks-qa-loop', 'sks-dfix']) {
+    assertGate(fs.existsSync(path.join(home, '.agents', 'skills', name, 'SKILL.md')), 'simulated update must install the namespaced global picker skill', { name });
+  }
+  assertGate(!fs.existsSync(path.join(project, '.agents', 'skills', 'research')), 'simulated update must remove a user-authored legacy-name collision from the active picker surface', {});
+  const quarantinedLegacySkills = await findFiles(path.join(project, '.sneakoscope', 'quarantine', 'skills'), 'SKILL.md');
+  assertGate(quarantinedLegacySkills.length >= 1, 'simulated update must quarantine user-authored legacy-name collisions', { quarantinedLegacySkills });
+  assertGate((await Promise.all(quarantinedLegacySkills.map((file) => fsp.readFile(file, 'utf8')))).some((text) => text.includes('keep user research collision')), 'simulated update quarantine must preserve the user-authored legacy skill content', { quarantinedLegacySkills });
   const currentGoalRoot = path.join(project, '.sneakoscope', 'missions', 'M-current-goal');
   const currentGoalWorkflow = await readJson<any>(path.join(currentGoalRoot, 'goal-workflow.json'), null);
   const currentGoalBridge = await fsp.readFile(path.join(currentGoalRoot, 'goal-bridge.md'), 'utf8');
@@ -115,10 +136,11 @@ try {
   assertGate(secondSurfacePass.cleanup.detected_count === 0, 'second current-surface pass must detect no removed skills', { cleanup: secondSurfacePass.cleanup });
   assertGate(secondSurfacePass.cleanup.managed_runtime.detected_managed_artifact_count === 0, 'second current-surface pass must detect no managed runtime residue', { cleanup: secondSurfacePass.cleanup });
   assertGate(secondSurfacePass.cleanup.project_guidance.reconciled_count === 0, 'second current-surface pass must rewrite no guidance', { cleanup: secondSurfacePass.cleanup });
-  const fromChatImgSkill = await fsp.readFile(path.join(home, '.agents', 'skills', 'from-chat-img', 'SKILL.md'), 'utf8');
+  const fromChatImgSkill = await fsp.readFile(path.join(home, '.agents', 'skills', 'sks-from-chat-img', 'SKILL.md'), 'utf8');
+  assertGate(!fs.existsSync(path.join(home, '.agents', 'skills', 'from-chat-img')), 'simulated update must remove the legacy unprefixed visual skill directory', {});
   assertGate(!fromChatImgSkill.includes('$From-Chat-IMG'), 'simulated update must remove the unregistered visual route spelling from generated skills', {});
   assertGate(!fromChatImgSkill.includes('$from-chat-img'), 'simulated update must not advertise the visual add-on skill as another execution alias', {});
-  assertGate(fromChatImgSkill.includes('from-chat-img'), 'simulated update must retain the Naruto visual add-on skill name', {});
+  assertGate(fromChatImgSkill.includes('$sks-from-chat-img'), 'simulated update must retain the namespaced Naruto visual add-on skill name', {});
   const reconciledAgents = await fsp.readFile(path.join(project, 'AGENTS.md'), 'utf8');
   const reconciledQuickReference = await fsp.readFile(path.join(project, '.codex', 'SNEAKOSCOPE.md'), 'utf8');
   const removedSurface = /\$(?:Agent|Team|MAD-DB|Swarm|ShadowClone|Kagebunshin|Ralph)\b|\bsks\s+(?:team|mad-db|tmux|xai|swarm|agent|ralph)\b/i;
@@ -139,6 +161,7 @@ try {
 
   const retryProject = path.join(tempRoot, 'retry-project');
   await fsp.mkdir(path.join(retryProject, '.sneakoscope'), { recursive: true });
+  await fsp.writeFile(path.join(retryProject, '.sneakoscope', 'manifest.json'), '{}\n');
   const retry = await ensureCurrentMigrationBeforeCommand({
     command: 'update-e2e',
     cwd: retryProject,
@@ -155,6 +178,7 @@ try {
 
   const failProject = path.join(tempRoot, 'fail-project');
   await fsp.mkdir(path.join(failProject, '.sneakoscope'), { recursive: true });
+  await fsp.writeFile(path.join(failProject, '.sneakoscope', 'manifest.json'), '{}\n');
   const failed = await ensureCurrentMigrationBeforeCommand({
     command: 'update-e2e',
     cwd: failProject,
@@ -252,9 +276,11 @@ async function seedUpgradeFixture(home: string, project: string): Promise<void> 
   await fsp.mkdir(path.join(home, '.agents', 'skills'), { recursive: true });
   await fsp.mkdir(path.join(home, '.codex', 'skills'), { recursive: true });
   await fsp.mkdir(path.join(home, '.codex', 'sks-menubar'), { recursive: true });
+  await fsp.mkdir(path.join(globalRuntimeRoot, '.agents', 'skills'), { recursive: true });
   await fsp.mkdir(path.join(globalRuntimeRoot, '.codex'), { recursive: true });
   await fsp.mkdir(path.join(project, '.sneakoscope'), { recursive: true });
   await fsp.mkdir(path.join(project, '.codex'), { recursive: true });
+  await fsp.mkdir(path.join(project, 'packages', 'app', '.sneakoscope'), { recursive: true });
   await fsp.writeFile(path.join(project, 'AGENTS.md'), [
     'customer-authored-prefix',
     '<!-- BEGIN Sneakoscope Codex GX MANAGED BLOCK -->',
@@ -404,12 +430,19 @@ async function seedUpgradeFixture(home: string, project: string): Promise<void> 
   await writeManagedSkill(path.join(home, '.agents', 'skills', 'team'), 'team');
   await writeManagedSkill(path.join(home, '.agents', 'skills', 'agent'), 'agent');
   await writeManagedSkill(path.join(home, '.agents', 'skills', 'ralph'), 'ralph');
+  await writeManagedSkill(path.join(home, '.agents', 'skills', 'naruto'), 'naruto');
   await writeManagedSkill(path.join(home, '.codex', 'skills', 'mad-db'), 'mad-db');
+  await writeManagedSkill(path.join(home, '.codex', 'skills', 'research-discovery'), 'research-discovery');
+  await writeManagedSkill(path.join(globalRuntimeRoot, '.agents', 'skills', 'answer'), 'answer');
   await writeManagedSkill(path.join(project, '.agents', 'skills', 'tmux'), 'tmux');
   await writeManagedSkill(path.join(project, '.agents', 'skills', 'swarm'), 'swarm');
+  await writeManagedSkill(path.join(project, '.agents', 'skills', 'imagegen'), 'imagegen');
   await writeManagedSkill(path.join(project, '.codex', 'skills', 'xai'), 'xai');
   await writeManagedSkill(path.join(project, '.codex', 'skills', 'shadow-clone'), 'shadow-clone');
   await writeManagedSkill(path.join(project, '.codex', 'skills', 'kage-bunshin'), 'kage-bunshin');
+  await writeManagedSkill(path.join(project, '.codex', 'skills', 'qa-loop'), 'qa-loop');
+  await writeManagedSkill(path.join(project, 'packages', 'app', '.agents', 'skills', 'dfix'), 'dfix');
+  await writeUserSkill(path.join(project, '.agents', 'skills', 'research'), 'research', 'keep user research collision');
   await fsp.mkdir(path.join(project, '.agents', 'skills', 'customer-skill'), { recursive: true });
   await fsp.writeFile(path.join(project, '.agents', 'skills', 'customer-skill', 'SKILL.md'), '---\nname: customer-skill\n---\n\nkeep customer skill\n');
   await fsp.writeFile(path.join(project, '.codex', 'config.toml'), [
@@ -425,6 +458,22 @@ async function seedUpgradeFixture(home: string, project: string): Promise<void> 
 async function writeManagedSkill(dir: string, name: string): Promise<void> {
   await fsp.mkdir(dir, { recursive: true });
   await fsp.writeFile(path.join(dir, 'SKILL.md'), `---\nname: ${name}\ndescription: Sneakoscope generated retired skill\n---\n\n<!-- BEGIN SKS MANAGED SKILL v6.2.0 name=${name} -->\n`);
+}
+
+async function writeUserSkill(dir: string, name: string, body: string): Promise<void> {
+  await fsp.mkdir(dir, { recursive: true });
+  await fsp.writeFile(path.join(dir, 'SKILL.md'), `---\nname: ${name}\ndescription: User-authored skill\n---\n\n${body}\n`);
+}
+
+async function findFiles(root: string, fileName: string): Promise<string[]> {
+  const rows = await fsp.readdir(root, { withFileTypes: true }).catch(() => []);
+  const files: string[] = [];
+  for (const row of rows) {
+    const target = path.join(root, row.name);
+    if (row.isDirectory()) files.push(...await findFiles(target, fileName));
+    else if (row.name === fileName) files.push(target);
+  }
+  return files;
 }
 
 async function captureConsole<T>(fn: () => Promise<T>): Promise<{ value: T; text: string }> {

@@ -52,7 +52,7 @@ function passingOfficialReports() {
   const runId = 'runtime-truth-v2-test';
   return {
     'subagent-plan.json': {
-      schema: 'sks.subagent-plan.v1', workflow: 'official_codex_subagent', route: '$Naruto', workflow_run_id: runId,
+      schema: 'sks.subagent-plan.v1', workflow: 'official_codex_subagent', route: '$sks-naruto', workflow_run_id: runId,
       requested_subagents: 1, max_depth: 1, config_blockers: []
     },
     'subagent-evidence.json': {
@@ -63,11 +63,11 @@ function passingOfficialReports() {
       status: 'completed', ok: true, blockers: []
     },
     'naruto-summary.json': {
-      schema: 'sks.naruto-subagent-workflow.v1', workflow: 'official_codex_subagent', route: '$Naruto', workflow_run_id: runId,
+      schema: 'sks.naruto-subagent-workflow.v1', workflow: 'official_codex_subagent', route: '$sks-naruto', workflow_run_id: runId,
       requested_subagents: 1, status: 'completed', ok: true, completion_evidence: true, parent_summary_present: true, blockers: []
     },
     'naruto-gate.json': {
-      schema: 'sks.naruto-gate.v1', workflow: 'official_codex_subagent', route: '$Naruto', workflow_run_id: runId,
+      schema: 'sks.naruto-gate.v1', workflow: 'official_codex_subagent', route: '$sks-naruto', workflow_run_id: runId,
       requested_subagents: 1, status: 'passed', passed: true, terminal: true, terminal_state: 'completed',
       official_subagent_evidence: true, subagent_evidence_ready: true, parent_summary_present: true,
       session_cleanup: true, native_process_proof_required: false, blockers: []

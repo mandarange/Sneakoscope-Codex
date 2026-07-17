@@ -27,15 +27,15 @@ const required = {
   'docs/codex-lb.md': ['durable_env_file', 'durable_keychain', 'shell_profile', 'process_only_ephemeral', 'base URL only'],
   'docs/codex-0.136-compat.md': ['rust-v0.136.0', 'codex:0.136-compat', 'codex archive', 'codex app-server --stdio', 'CODEX_API_KEY', 'server tokens'],
   'docs/codex-0.135-compat.md': ['rust-v0.135.0', 'codex:0.135-compat', 'named permission profiles'],
-  'docs/codex-cli-compat.md': ['rust-v0.144.1', 'sks codex 0.144', 'Inherited Codex 0.136 Capabilities', 'session_archive_restore', 'profile_primary_selector', 'managed_network_proxy_env', 'goals_default_enabled', 'permission_profiles_requirements', 'SubagentStart', 'sks_zero_warning_disallowed', 'strict subset'],
-  'docs/codex-app.md': ['rust-v0.144.1', 'sks codex 0.144', 'App Server v2', 'Codex Chrome Extension', 'gpt-image-2'],
-  'docs/official-docs-compat.md': ['official-docs-compat-report.js', 'rust-v0.144.1', 'gpt-image-2', 'input_fidelity', 'additionalProperties:false'],
+  'docs/codex-cli-compat.md': ['rust-v0.144.5', 'sks codex 0.144', 'Inherited Codex 0.136 Capabilities', 'session_archive_restore', 'profile_primary_selector', 'managed_network_proxy_env', 'goals_default_enabled', 'permission_profiles_requirements', 'SubagentStart', 'sks_zero_warning_disallowed', 'strict subset'],
+  'docs/codex-app.md': ['rust-v0.144.5', 'sks codex 0.144', 'App Server v2', 'Codex Chrome Extension', 'gpt-image-2'],
+  'docs/official-docs-compat.md': ['official-docs-compat-report.js', 'rust-v0.144.5', 'gpt-image-2', 'input_fidelity', 'additionalProperties:false'],
   'docs/hooks-pat.md': ['SubagentStop', 'strict subset', 'zero-warning'],
   'docs/known-gaps.md': ['No P0', 'P1'],
   'docs/release-readiness.md': [
-    'SKS 6.3.0 Release Readiness',
-    '$Naruto',
-    '$Work',
+    'SKS 6.5.0 Release Readiness',
+    '$sks-naruto',
+    '$sks-work',
     'sks doctor --fix',
     'sks.update-status.v3',
     'generation parent commit',
@@ -46,7 +46,7 @@ const required = {
     'proof-aware fleet control',
     'npm stage publish',
     'npm stage approve <stage-id>',
-    '6.2.0 to 6.3.0 upgrade smoke'
+    '6.4.0 to 6.5.0 upgrade smoke'
   ]
 };
 
@@ -57,6 +57,32 @@ const forbidden = [
   /process-only setup is durable/i,
   /screenshots are published to shared TriWiki automatically/i
 ];
+
+const currentDollarSurfaceFiles = [
+  'README.md',
+  'AGENTS.md',
+  '.codex/SNEAKOSCOPE.md',
+  'docs/GLM_MAD_MODE.md',
+  'docs/STOP_GATE_CONTRACT.md',
+  'docs/codex-app.md',
+  'docs/completion-proof.md',
+  'docs/computer-use-evidence.md',
+  'docs/fast-mode-default.md',
+  'docs/feature-inventory.md',
+  'docs/naruto-worktree-parallelism.md',
+  'docs/naruto.md',
+  'docs/native-agent-kernel.md',
+  'docs/native-agent-orchestration.md',
+  'docs/no-subagent-scaling.md',
+  'docs/orchestration-layers.md',
+  'docs/release-readiness.md',
+  'docs/research-implementation-handoff.md',
+  'docs/research-pipeline.md',
+  'docs/route-finalization.md',
+  'docs/triwiki-wrongness-memory.md',
+  'docs/ux-review-real-loop.md'
+];
+const legacyDollarCommandPattern = /\$(?:Naruto|Work|DFix|Answer|Plan|Review|Fast-Mode|Fast-On|Fast-Off|Release-Review|QA-LOOP|PPT|Image-UX-Review|UX-Review|Visual-Review|UI-UX-Review|Computer-Use|CU|Goal|Commit|Commit-And-Push|Research|Super-Search|SEO-GEO-OPTIMIZER|AutoResearch|DB|MAD-SKS|GX|Wiki|Help|From-Chat-IMG)\b/g;
 
 const results = [];
 for (const file of files) {
@@ -69,6 +95,18 @@ for (const file of files) {
     ok: Boolean(text) && missing.length === 0 && forbiddenMatches.length === 0,
     missing,
     forbidden: forbiddenMatches
+  });
+}
+
+for (const file of currentDollarSurfaceFiles) {
+  const full = path.join(root, file);
+  const text = fs.existsSync(full) ? fs.readFileSync(full, 'utf8') : '';
+  const legacyDollarCommands = [...new Set(text.match(legacyDollarCommandPattern) || [])];
+  results.push({
+    file: `${file}#dollar-surface`,
+    ok: Boolean(text) && legacyDollarCommands.length === 0,
+    missing: text ? [] : ['file'],
+    forbidden: legacyDollarCommands
   });
 }
 

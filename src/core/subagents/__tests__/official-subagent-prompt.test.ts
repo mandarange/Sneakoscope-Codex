@@ -1,6 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildOfficialSubagentPrompt } from '../official-subagent-prompt.js'
+import {
+  buildOfficialSubagentPrompt,
+  validateOfficialSubagentSlices
+} from '../official-subagent-prompt.js'
+import { resolveSubagentThreadBudget } from '../thread-budget.js'
 import { extractBoundedTriwikiAttention } from '../triwiki-attention.js'
 
 test('official prompt seals model, ownership, wait, and no-nesting rules', () => {
@@ -34,6 +38,8 @@ test('official prompt seals model, ownership, wait, and no-nesting rules', () =>
   assert.match(prompt, /split mixed work when possible/)
   assert.match(prompt, /requested subagents: 2/)
   assert.match(prompt, /max open agent threads: 12/)
+  assert.match(prompt, /hard cap, never a utilization target/)
+  assert.match(prompt, /C_t = min\(ready DAG width, disjoint ownership, verifier capacity/)
   assert.match(prompt, /max depth: 1/)
   assert.match(prompt, /parallel writes require disjoint paths/)
   assert.match(prompt, /wait for every requested subagent/)
@@ -85,7 +91,7 @@ test('official prompt carries only bounded TriWiki attention anchors', () => {
     triwikiAttention
   })
 
-  assert.match(prompt, /two independent children are the non-trivial default/)
+  assert.match(prompt, /dynamic automatic target/)
   assert.match(prompt, /attention\.use_first anchors/)
   assert.match(prompt, /claim-a/)
   assert.match(prompt, /claim-b/)
@@ -126,7 +132,7 @@ test('TriWiki attention keeps core trust anchors and promotes query-relevant hyd
   assert.equal(triwikiAttention.full_pack_injected, false)
 })
 
-test('official prompt injects at most three recommended role descriptions instead of the full catalog', () => {
+test('official prompt injects only the bounded relevant role catalog instead of the full catalog', () => {
   const prompt = buildOfficialSubagentPrompt({
     goal: 'Review native MCP runtime and TriWiki evidence boundaries',
     maxThreads: 12,
@@ -142,10 +148,79 @@ test('official prompt injects at most three recommended role descriptions instea
     ]
   })
 
-  assert.match(prompt, /metadata mode: on-demand \(3\/25 roles included; full catalog is not injected\)/)
+  assert.match(prompt, /metadata mode: on-demand \(5\/25 roles included; full catalog is not injected\)/)
   assert.match(prompt, /`native_app_specialist`/)
   assert.match(prompt, /`protocol_reviewer`/)
   assert.match(prompt, /`runtime_reliability_reviewer`/)
-  assert.doesNotMatch(prompt, /`triwiki_evidence_reviewer`/)
-  assert.doesNotMatch(prompt, /`toolchain_specialist`/)
+  assert.match(prompt, /`triwiki_evidence_reviewer`/)
+  assert.match(prompt, /`toolchain_specialist`/)
+})
+
+test('prompt carries the dynamic capacity snapshot and selected first wave', () => {
+  const budget = resolveSubagentThreadBudget({
+    requested: 8,
+    configuredMaxThreads: 12,
+    readyDagWidth: 7,
+    disjointOwnershipCount: 6,
+    verifierCapacity: 3,
+    toolConcurrency: 5,
+    marginalUsefulWorkers: 4
+  })
+  const prompt = buildOfficialSubagentPrompt({
+    goal: 'Implement independent shards',
+    maxThreads: budget.maxThreads,
+    requestedSubagents: budget.requestedSubagents,
+    firstWave: budget.firstWave,
+    waveCount: budget.waveCount,
+    capacity: budget.capacity,
+    decompositionStatus: 'parent_required',
+    slices: []
+  })
+
+  assert.match(prompt, /selected first-wave concurrency: 3/)
+  assert.match(prompt, /"limiting_factors":\["verifier_capacity"\]/)
+  assert.match(prompt, /marginal useful throughput stays positive/)
+})
+
+test('slice validator rejects duplicate work, overlapping writes, and unassigned parallel ownership', () => {
+  const result = validateOfficialSubagentSlices([
+    {
+      id: 'A',
+      title: 'Parser fix',
+      description: 'Implement parser fix',
+      kind: 'worker',
+      agent: 'implementation_specialist',
+      paths: ['src/parser']
+    },
+    {
+      id: 'B',
+      title: 'Parser test',
+      description: 'Add parser tests',
+      kind: 'worker',
+      agent: 'test_engineer',
+      paths: ['src/parser/parser.test.ts']
+    },
+    {
+      id: 'C',
+      title: 'Parser fix',
+      description: 'Implement parser fix',
+      kind: 'worker',
+      agent: 'implementation_specialist',
+      paths: ['src/parser']
+    },
+    {
+      id: 'D',
+      title: 'Unowned write',
+      description: 'Change another file',
+      kind: 'worker'
+    }
+  ])
+
+  assert.equal(result.safe, false)
+  assert.deepEqual(result.duplicate_slice_ids, [['A', 'C']])
+  assert.ok(result.overlapping_write_scopes.some((row) => row.left === 'A' && row.right === 'B'))
+  assert.deepEqual(result.unassigned_write_scopes, ['D'])
+  assert.ok(result.blockers.some((blocker) => blocker.startsWith('duplicate_slice_fingerprint:')))
+  assert.ok(result.blockers.some((blocker) => blocker.startsWith('overlapping_write_scope:')))
+  assert.ok(result.blockers.includes('unassigned_parallel_write_scope:D'))
 })

@@ -8,7 +8,7 @@ const preparation = readText('src/core/subagents/official-subagent-preparation.t
 const routes = readText('src/core/routes/dollar-manifest-lite.ts');
 
 assertGate(naruto.includes('runOfficialSubagentWorkflow'), 'Naruto must use the official Codex subagent workflow');
-assertGate(runner.includes("workflow: 'official_codex_subagent'"), 'Naruto must persist the official subagent workflow contract');
+assertGate(preparation.includes("workflow: 'official_codex_subagent'"), 'Naruto preparation must persist the official subagent workflow contract');
 assertGate(runner.includes("'agents.max_depth=1'"), 'official subagent delegation must remain single-depth');
 assertGate(preparation.includes('requestedSubagentsExplicit'), 'explicit subagent count intent must be preserved during preparation');
 assertGate(preparation.includes('SUBAGENT_PLAN_FILENAME'), 'official workflow must persist its parent-owned subagent plan');

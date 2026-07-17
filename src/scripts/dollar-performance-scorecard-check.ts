@@ -7,12 +7,12 @@ import { fileURLToPath } from 'node:url'
 import { assertGate, emitGate, importDist, root } from './sks-1-18-gate-lib.js'
 
 export const CRITICAL_DOLLAR_COMMANDS = new Set([
-  '$Naruto',
-  '$Super-Search',
-  '$SEO-GEO-OPTIMIZER',
-  '$DB',
-  '$MAD-SKS',
-  '$Commit-And-Push'
+  '$sks-naruto',
+  '$sks-super-search',
+  '$sks-seo-geo-optimizer',
+  '$sks-db',
+  '$sks-mad-sks',
+  '$sks-commit-and-push'
 ])
 
 export const DOLLAR_SMOKE_MAX_AGE_MS = 60 * 60 * 1000
@@ -60,7 +60,7 @@ export function scoreDollarEntry(entry, routePromptSmoke, commandSmoke, options 
   const p95 = routePromptSmoke?.p95_ms ?? Infinity
   const metadataComplete = Boolean(entry.command && entry.route && entry.description)
   const routed = routePromptSmoke?.routed || null
-  const stopGateOrExempt = Boolean(routed?.stopGate || routed?.coverageExemptReason || entry.command === '$Help' || entry.command === '$Answer')
+  const stopGateOrExempt = Boolean(routed?.stopGate || routed?.coverageExemptReason || entry.command === '$sks-help' || entry.command === '$sks-answer')
   const routePromptOk = classifyDollarSmoke(routePromptSmoke, now) === 'pass'
   const commandSmokeOk = classifyDollarSmoke(commandSmoke, now) === 'pass'
   const metadataSynced = isDollarMetadataSynced(entry, routed, commandSmoke)
@@ -157,18 +157,18 @@ export function commandRouteSmokeFor(entry, routed = null) {
 export function reportBackedDollarSmoke(entry, routed = null) {
   const synced = isDollarMetadataSynced(entry, routed, null)
   const now = new Date().toISOString()
-  if (entry.command === '$Naruto') {
+  if (entry.command === '$sks-naruto') {
     const real = readReport('naruto-real-write-e2e.json')
     if (real?.ok === true) return smoke('read_only', true, now, synced, { report: 'naruto-real-write-e2e.json' })
     const hermetic = readReport('naruto-write-e2e.json')
     if (hermetic?.ok === true) return smoke('fixture', true, now, synced, { report: 'naruto-write-e2e.json' })
   }
-  if (entry.command === '$Super-Search') {
+  if (entry.command === '$sks-super-search') {
     const offline = readReport('super-search-offline-contract.json')
     const local = readReport('super-search-local-http-smoke.json')
     if (offline?.ok === true || local?.ok === true) return smoke('read_only', true, now, synced, { report: offline?.ok === true ? 'super-search-offline-contract.json' : 'super-search-local-http-smoke.json' })
   }
-  if (entry.command === '$SEO-GEO-OPTIMIZER') {
+  if (entry.command === '$sks-seo-geo-optimizer') {
     const metadata = readReport('seo-metadata-sync.json')
     const truth = readReport('seo-marketing-truthfulness.json')
     if (metadata?.ok === true && truth?.ok === true) return smoke('read_only', true, now, synced, { report: 'seo-metadata-sync.json+seo-marketing-truthfulness.json' })
@@ -181,9 +181,9 @@ export function reportBackedDollarSmoke(entry, routed = null) {
 function highRiskSmokeForDollar(command) {
   const report = readReport('high-risk-contracts.json')
   const target = {
-    '$DB': '$DB',
-    '$MAD-SKS': 'mad-sks',
-    '$Commit-And-Push': 'commit-and-push'
+    '$sks-db': '$DB',
+    '$sks-mad-sks': 'mad-sks',
+    '$sks-commit-and-push': 'commit-and-push'
   }[command]
   if (!target || !Array.isArray(report?.cli_negative_smokes)) return null
   const row = report.cli_negative_smokes.find((item) => item?.target === target)
@@ -213,9 +213,16 @@ function readReport(fileName) {
 export function isDollarMetadataSynced(entry, routed, commandSmoke = null) {
   if (commandSmoke?.metadata_synced === false) return false
   if (!routed) return Boolean(entry.command && entry.route)
-  const commandSynced = entry.command === routed.command || (Array.isArray(routed.dollarAliases) && routed.dollarAliases.includes(entry.command))
+  const publicCommands = [routed.command, ...(routed.dollarAliases || [])].map(publicDollarCommand)
+  const commandSynced = publicCommands.includes(String(entry.command || '').toLowerCase())
   const routeSynced = !entry.route || !routed.route || entry.route === routed.route
   return Boolean(commandSynced && routeSynced)
+}
+
+function publicDollarCommand(value) {
+  const name = String(value || '').trim().replace(/^\$/, '').toLowerCase()
+  if (!name || name === 'sks' || name.startsWith('sks-')) return `$${name || 'sks'}`
+  return `$sks-${name}`
 }
 
 export function criticalDollarEvidenceTier(smoke) {

@@ -57,10 +57,10 @@ test('critical command fixture smoke is capped below production score', () => {
 })
 
 test('critical dollar command requires routePrompt smoke and command/route smoke', () => {
-  const entry = { command: '$Naruto', route: 'hardware-safe official subagent workflow', description: 'work route' }
+  const entry = { command: '$sks-naruto', route: 'hardware-safe official subagent workflow', description: 'work route' }
   const onlyRoutePrompt = scoreDollarEntry(
     entry,
-    { kind: 'route_prompt', ok: true, generated_at: NOW, p95_ms: 1, routed: { id: 'Naruto', command: '$Naruto', stopGate: 'naruto' } },
+    { kind: 'route_prompt', ok: true, generated_at: NOW, p95_ms: 1, routed: { id: 'Naruto', command: '$sks-naruto', stopGate: 'naruto' } },
     undefined,
     { now: NOW }
   )
@@ -69,7 +69,7 @@ test('critical dollar command requires routePrompt smoke and command/route smoke
 
   const metadataOnlyCommandRoute = scoreDollarEntry(
     entry,
-    { kind: 'route_prompt', ok: true, generated_at: NOW, p95_ms: 1, routed: { id: 'Naruto', command: '$Naruto', stopGate: 'naruto' } },
+    { kind: 'route_prompt', ok: true, generated_at: NOW, p95_ms: 1, routed: { id: 'Naruto', command: '$sks-naruto', stopGate: 'naruto' } },
     { kind: 'command_route', ok: true, generated_at: NOW },
     { now: NOW }
   )
@@ -78,7 +78,7 @@ test('critical dollar command requires routePrompt smoke and command/route smoke
 
   const complete = scoreDollarEntry(
     entry,
-    { kind: 'route_prompt', ok: true, generated_at: NOW, p95_ms: 1, routed: { id: 'Naruto', command: '$Naruto', stopGate: 'naruto' } },
+    { kind: 'route_prompt', ok: true, generated_at: NOW, p95_ms: 1, routed: { id: 'Naruto', command: '$sks-naruto', stopGate: 'naruto' } },
     { kind: 'read_only', ok: true, generated_at: NOW, metadata_synced: true },
     { now: NOW }
   )
@@ -89,8 +89,8 @@ test('critical dollar command requires routePrompt smoke and command/route smoke
 })
 
 test('noncritical dollar aliases can score from route prompt metadata contract', () => {
-  const entry = { command: '$Help', route: 'command help', description: 'Show command help' }
-  const routed = { id: 'Help', command: '$Help', coverageExemptReason: 'help route is metadata backed' }
+  const entry = { command: '$sks-help', route: 'command help', description: 'Show command help' }
+  const routed = { id: 'Help', command: '$sks-help', coverageExemptReason: 'help route is metadata backed' }
   const routePrompt = { kind: 'route_prompt', ok: true, generated_at: NOW, p95_ms: 1, routed }
   const commandSmoke = commandRouteSmokeFor(entry as any, routed as any)
   const row = scoreDollarEntry(entry, routePrompt, commandSmoke, { now: NOW })

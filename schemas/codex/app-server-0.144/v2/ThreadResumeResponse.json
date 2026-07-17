@@ -12,8 +12,11 @@
     "thread"
   ],
   "properties": {
-    "thread": {
-      "$ref": "#/definitions/Thread"
+    "serviceTier": {
+      "type": [
+        "string",
+        "null"
+      ]
     },
     "approvalPolicy": {
       "$ref": "#/definitions/AskForApproval"
@@ -29,13 +32,8 @@
     "cwd": {
       "$ref": "#/definitions/AbsolutePathBuf"
     },
-    "sandbox": {
-      "description": "Legacy sandbox policy retained for compatibility. Experimental clients should prefer `activePermissionProfile` for profile provenance.",
-      "allOf": [
-        {
-          "$ref": "#/definitions/SandboxPolicy"
-        }
-      ]
+    "thread": {
+      "$ref": "#/definitions/Thread"
     },
     "instructionSources": {
       "description": "Environment-native paths to instruction source files currently loaded for this thread.",
@@ -51,10 +49,12 @@
     "modelProvider": {
       "type": "string"
     },
-    "serviceTier": {
-      "type": [
-        "string",
-        "null"
+    "sandbox": {
+      "description": "Legacy sandbox policy retained for compatibility. Experimental clients should prefer `activePermissionProfile` for profile provenance.",
+      "allOf": [
+        {
+          "$ref": "#/definitions/SandboxPolicy"
+        }
       ]
     },
     "reasoningEffort": {

@@ -48,11 +48,8 @@
     "modelProvider": {
       "type": "string"
     },
-    "serviceTier": {
-      "type": [
-        "string",
-        "null"
-      ]
+    "thread": {
+      "$ref": "#/definitions/Thread"
     },
     "reasoningEffort": {
       "anyOf": [
@@ -64,8 +61,11 @@
         }
       ]
     },
-    "thread": {
-      "$ref": "#/definitions/Thread"
+    "serviceTier": {
+      "type": [
+        "string",
+        "null"
+      ]
     }
   },
   "definitions": {

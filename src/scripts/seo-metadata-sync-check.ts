@@ -13,7 +13,7 @@ const requiredLifecycle = ['marketing_research', 'source_backed_strategy', 'mark
 const route = ROUTES.find((entry) => entry.command === '$SEO-GEO-OPTIMIZER');
 const command = COMMAND_CATALOG.find((entry) => entry.name === 'seo-geo-optimizer');
 const liteCommand = COMMAND_MANIFEST_LITE.find((entry) => entry.name === 'seo-geo-optimizer');
-const dollar = DOLLAR_COMMANDS_LITE.find((entry) => entry.command === '$SEO-GEO-OPTIMIZER');
+const dollar = DOLLAR_COMMANDS_LITE.find((entry) => entry.command === '$sks-seo-geo-optimizer');
 const seoCommandSource = read('src/core/commands/seo-command.ts');
 const readme = read('README.md');
 

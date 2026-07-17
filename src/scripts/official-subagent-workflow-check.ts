@@ -21,7 +21,7 @@ assertGate(implicitCount.requestedSubagents === 2, 'implicit Naruto must default
 assertGate(counts[0]?.requestedSubagents === 4, 'requested 4 must remain 4', counts)
 assertGate(counts[1]?.requestedSubagents === 8, 'requested 8 must remain 8', counts)
 assertGate(counts[2]?.requestedSubagents === 12, 'requested 12 must remain 12', counts)
-assertGate(counts[3]?.requestedSubagents === 20 && counts[3]?.firstWave === 12 && counts[3]?.waveCount === 2, 'requested 20/maxThreads 12 must plan two waves without a 4/5 cap', counts)
+assertGate(counts[3]?.requestedSubagents === 20 && counts[3]?.firstWave === 10 && counts[3]?.waveCount === 2, 'requested 20/maxThreads 12 must reserve parent/reviewer capacity and plan two waves', counts)
 assertGate(counts[4]?.requestedSubagents === 32, 'requested 100 must use the official hard safety cap 32', counts)
 
 const prompt = buildOfficialSubagentPrompt({
@@ -34,6 +34,7 @@ const prompt = buildOfficialSubagentPrompt({
 assertGate(/worker/i.test(prompt) && /expert/i.test(prompt), 'official delegation prompt must include worker and expert policy', { prompt })
 assertGate(/wait|await/i.test(prompt) && /all/i.test(prompt), 'official delegation prompt must require waiting for every requested subagent', { prompt })
 assertGate(/max.depth|max_depth|depth\s*1/i.test(prompt), 'official delegation prompt must keep max depth at 1', { prompt })
+assertGate(/cap, never a utilization target/i.test(prompt) && /C_t = min/i.test(prompt), 'official delegation prompt must carry the dynamic capacity contract', { prompt })
 
 const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-official-subagent-gate-'))
 try {

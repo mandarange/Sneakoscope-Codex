@@ -481,7 +481,8 @@ async function runSessionStateSplitStage(root: string): Promise<Omit<UpdateMigra
 }
 
 async function runSkillsReconcileStage(root: string): Promise<Omit<UpdateMigrationStageRun, 'schema' | 'id' | 'min_from_version' | 'from_version'>> {
-  const global = await reconcileSkills({ targetDir: path.join(os.homedir(), '.agents', 'skills'), scope: 'global', fix: true })
+  const home = path.resolve(process.env.HOME || os.homedir());
+  const global = await reconcileSkills({ targetDir: path.join(home, '.agents', 'skills'), scope: 'global', fix: true })
     .catch((err: any) => ({ ok: false, error: err?.message || String(err) }));
   const project = await reconcileSkills({ targetDir: path.join(root, '.agents', 'skills'), scope: 'project', fix: true })
     .catch((err: any) => ({ ok: false, error: err?.message || String(err) }));
@@ -813,6 +814,13 @@ export async function ensureCurrentMigrationBeforeCommand(input: {
   if (root === path.parse(root).root) {
     return { ...empty, ok: true, status: 'skipped', receipt: null, doctor: null, failed_stage_id: null, blockers: [], warnings: ['no_project_workspace_at_filesystem_root'] };
   }
+  // A git repository is not automatically an SKS project. Global Codex skills
+  // (including DFix) may run in ordinary repositories, and route-local state or
+  // a stale failed migration receipt can leave a partial `.sneakoscope` folder
+  // behind. Only strong installed-project markers authorize project migration.
+  if (!(await hasSksProjectMigrationMarker(root))) {
+    return { ...empty, ok: true, status: 'skipped', receipt: null, doctor: null, failed_stage_id: null, blockers: [], warnings: ['non_sks_workspace_migration_gate_skipped'] };
+  }
 
   const [epoch, receipt] = await Promise.all([
     ensureInstallationEpoch('first-command-gate'),
@@ -864,7 +872,8 @@ export async function ensureCurrentMigrationBeforeCommand(input: {
         maxOutputBytes: 32 * 1024
       });
     }
-    if (!doctor.ok) {
+    const preservedUserOwnedConfig = migrationDoctorOnlyPreservedUserOwnedConfig(doctor);
+    if (!doctor.ok && !preservedUserOwnedConfig) {
       const blocker = doctor.timedOut ? 'doctor_migration_timeout' : 'doctor_migration_failed';
       const requiredBlockers = [blocker, ...(doctor.required_blockers.length ? doctor.required_blockers : [])];
       const warnings = [
@@ -882,15 +891,53 @@ export async function ensureCurrentMigrationBeforeCommand(input: {
       });
       return { ...empty, ok: false, status: 'blocked', receipt: blocked, doctor, failed_stage_id: 'doctor:migration-profile', blockers: requiredBlockers, warnings };
     }
+    const preservationWarnings = preservedUserOwnedConfig
+      ? [
+          'migration_doctor_preserved_user_owned_project_config',
+          ...doctor.required_blockers.map((blocker) => `migration_optional_blocker:${blocker}`)
+        ]
+      : [];
+    const warnings = [...new Set([
+      ...timeoutWarnings,
+      ...doctor.optional_warnings,
+      ...preservationWarnings
+    ])];
     const current = await writeProjectUpdateMigrationReceipt({
       root,
       source: 'first-command-gate',
       doctor,
       blockers: [],
-      warnings: [...timeoutWarnings, ...doctor.optional_warnings]
+      warnings
     });
-    return { ...empty, ok: true, status: 'repaired', receipt: current, doctor, failed_stage_id: null, blockers: [], warnings: [...timeoutWarnings, ...doctor.optional_warnings] };
+    return { ...empty, ok: true, status: 'repaired', receipt: current, doctor, failed_stage_id: null, blockers: [], warnings };
   }, recheck ? { recheck } : {});
+}
+
+function migrationDoctorOnlyPreservedUserOwnedConfig(doctor: PackageLocalDoctorRun): boolean {
+  const blockers = doctor.required_blockers.map((blocker) => String(blocker || '').trim()).filter(Boolean);
+  if (!blockers.length || !blockers.every(isUserOwnedProjectConfigBlocker)) return false;
+  return doctor.optional_warnings.some((warning) => {
+    const value = String(warning || '').trim();
+    return value === 'unmanaged_project_config_preserved'
+      || value.endsWith(':unmanaged_project_config_preserved');
+  });
+}
+
+function isUserOwnedProjectConfigBlocker(blocker: string): boolean {
+  return blocker === 'user_owned_file_without_sks_marker'
+    || blocker.endsWith(':user_owned_file_without_sks_marker')
+    || blocker === 'config_write_guard:blocked_unmanaged_project_config'
+    || blocker.endsWith(':config_write_guard:blocked_unmanaged_project_config');
+}
+
+async function hasSksProjectMigrationMarker(root: string): Promise<boolean> {
+  const markers = [
+    path.join(root, '.sneakoscope', 'manifest.json'),
+    path.join(root, '.sneakoscope', 'policy.json'),
+    path.join(root, '.codex', 'SNEAKOSCOPE.md')
+  ];
+  const present = await Promise.all(markers.map((marker) => exists(marker)));
+  return present.some(Boolean);
 }
 
 export async function runPostinstallGlobalDoctorAndMarkPending(input: {
@@ -1046,6 +1093,18 @@ function testPackageLocalDoctorRun(input: {
       timedOut: false,
       exitCode: 1,
       blockers: ['test_doctor_failed']
+    });
+  }
+  if (input.env.SKS_TEST_DOCTOR_USER_CONFIG_PRESERVED === '1') {
+    return mockPackageLocalDoctorRun(input, {
+      ok: false,
+      timedOut: false,
+      exitCode: 1,
+      blockers: [
+        'project:user_owned_file_without_sks_marker',
+        'user_owned_file_without_sks_marker'
+      ],
+      warnings: ['project:unmanaged_project_config_preserved']
     });
   }
   if (input.env.SKS_TEST_DOCTOR_OK === '1') {

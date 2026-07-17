@@ -12,6 +12,9 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let statusLine = NSMenuItem(title: "Status: Starting", action: nil, keyEquivalent: "")
     private let pendingLine = NSMenuItem(title: "Pending approvals (0)", action: nil, keyEquivalent: "")
+    private let fastLine = NSMenuItem(title: "Fast: Checking…", action: nil, keyEquivalent: "")
+    private var fastOnItem: NSMenuItem?
+    private var fastOffItem: NSMenuItem?
     private var timer: Timer?
     private var lastOperationArguments: [String]?
     private var operationFailed = false
@@ -19,6 +22,8 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private var actionRequired = false
     private var notificationAuthorizationDenied = false
     private var updateRefreshInFlight = false
+    private var fastRefreshInFlight = false
+    private var fastRefreshPending = false
     private var lastUpdateNotificationFingerprint: String?
 
     init(processClient: ProcessClient, operations: OperationCoordinator, notifications: NotificationCoordinator, openControlCenter: @escaping (SidebarItem) -> Void) {
@@ -40,12 +45,24 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         version.isEnabled = false
         statusLine.isEnabled = false
         pendingLine.isEnabled = false
+        fastLine.isEnabled = false
+        fastLine.setAccessibilityLabel("Current Fast mode state")
         menu.addItem(version)
         menu.addItem(statusLine)
         menu.addItem(NSMenuItem.separator())
         menu.addItem(item("Open SKS Control Center…", #selector(openCenter)))
         menu.addItem(item("Open Dashboard", #selector(openDashboardAction)))
         menu.addItem(pendingLine)
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(fastLine)
+        let fastOn = item("Fast Mode On", #selector(fastOn))
+        fastOn.setAccessibilityLabel("Turn Fast mode on")
+        fastOnItem = fastOn
+        menu.addItem(fastOn)
+        let fastOff = item("Fast Mode Off", #selector(fastOff))
+        fastOff.setAccessibilityLabel("Turn Fast mode off")
+        fastOffItem = fastOff
+        menu.addItem(fastOff)
         menu.addItem(NSMenuItem.separator())
         menu.addItem(item("Check for Updates", #selector(checkUpdates)))
         menu.addItem(item("View Last Operation", #selector(viewLastOperation)))
@@ -54,6 +71,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         statusItem.menu = menu
         configureCodexLifecycle()
         refreshLocalState()
+        refreshFastState()
         timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in self?.refreshLocalState() }
     }
 
@@ -61,6 +79,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     func menuWillOpen(_ menu: NSMenu) {
         refreshLocalState()
+        refreshFastState()
         refreshExpiredUpdateStatusIfNeeded()
     }
 
@@ -124,6 +143,39 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         }
     }
 
+    private func refreshFastState() {
+        guard !fastRefreshInFlight else { fastRefreshPending = true; return }
+        fastRefreshInFlight = true
+        fastLine.title = "Fast: Checking…"
+        processClient.run(["fast-mode", "status", "--json"]) { [weak self] result in
+            guard let self = self else { return }
+            self.fastRefreshInFlight = false
+            guard result.code == 0, let json = self.readJson(text: result.output),
+                  let global = json["global"] as? [String: Any], let on = global["on"] as? Bool else {
+                self.fastLine.title = "Fast: Unavailable"
+                self.fastOnItem?.state = .off
+                self.fastOffItem?.state = .off
+                self.fastOnItem?.isEnabled = true
+                self.fastOffItem?.isEnabled = true
+                self.completeFastRefresh()
+                return
+            }
+            let tier = global["service_tier"] as? String ?? (on ? "fast" : "default")
+            self.fastLine.title = "Fast: \(on ? "On" : "Off") · \(tier)"
+            self.fastOnItem?.state = on ? .on : .off
+            self.fastOffItem?.state = on ? .off : .on
+            self.fastOnItem?.isEnabled = !on
+            self.fastOffItem?.isEnabled = on
+            self.completeFastRefresh()
+        }
+    }
+
+    private func completeFastRefresh() {
+        guard fastRefreshPending else { return }
+        fastRefreshPending = false
+        refreshFastState()
+    }
+
     private func updateNotificationFingerprint(_ output: String) -> String? {
         guard let data = output.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
@@ -160,7 +212,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         statusItem.button?.imagePosition = .imageOnly
     }
 
-    private func run(_ arguments: [String], kind: String, mutationGroup: String?, summary: String) {
+    private func run(_ arguments: [String], kind: String, mutationGroup: String?, summary: String, completion: (() -> Void)? = nil) {
         guard let snapshot = operations.begin(kind: kind, mutationGroup: mutationGroup, summary: summary) else {
             actionRequired = true
             notifications.send(PublicNotificationEvent(
@@ -169,6 +221,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
                 body: "Another guarded mutation is already running. Open Control Center to review the active operation."
             ))
             refreshLocalState()
+            completion?()
             return
         }
         actionRequired = false
@@ -192,6 +245,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
                     : result.code == 0 ? "The requested operation completed." : "The requested operation failed. Open Control Center for redacted details."
             ))
             self.refreshLocalState()
+            completion?()
         }
     }
 
@@ -214,6 +268,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private func item(_ title: String, _ action: Selector) -> NSMenuItem {
         let value = NSMenuItem(title: title, action: action, keyEquivalent: "")
         value.target = self
+        value.setAccessibilityLabel(title.replacingOccurrences(of: "…", with: ""))
         return value
     }
 
@@ -222,9 +277,26 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
     }
 
+    private func readJson(text: String) -> [String: Any]? {
+        guard let data = text.data(using: .utf8) else { return nil }
+        return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    }
+
     @objc private func openCenter() { openControlCenter(.overview) }
     @objc private func openDashboardAction() { openDashboard() }
     @objc private func checkUpdates() { run(["update", "status", "--refresh", "--json"], kind: "update-status", mutationGroup: nil, summary: "Check for updates") }
+    @objc private func fastOn() {
+        fastLine.title = "Fast: Turning On…"
+        fastOnItem?.isEnabled = false
+        fastOffItem?.isEnabled = false
+        run(["fast-mode", "on", "--json"], kind: "fast-mode-on", mutationGroup: "codex-config", summary: "Turn Fast Mode on") { [weak self] in self?.refreshFastState() }
+    }
+    @objc private func fastOff() {
+        fastLine.title = "Fast: Turning Off…"
+        fastOnItem?.isEnabled = false
+        fastOffItem?.isEnabled = false
+        run(["fast-mode", "off", "--json"], kind: "fast-mode-off", mutationGroup: "codex-config", summary: "Turn Fast Mode off") { [weak self] in self?.refreshFastState() }
+    }
     @objc private func viewLastOperation() {
         if FileManager.default.fileExists(atPath: AppRuntime.lastActionLogPath) { NSWorkspace.shared.open(URL(fileURLWithPath: AppRuntime.lastActionLogPath)) }
         else { openControlCenter(.overview) }

@@ -1,8 +1,21 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ensureDir, exists, nowIso, projectRoot, runProcess, writeJsonAtomic } from '../fsx.js';
-import { buildAgentManifest, validateAgentManifest } from '../agent-bridge/agent-manifest.js';
+import {
+  buildAgentManifest,
+  validateAgentManifest,
+  type AgentManifest
+} from '../agent-bridge/agent-manifest.js';
 import { flag } from './command-utils.js';
+
+interface NonInteractiveSmoke {
+  ok: boolean;
+  command: string;
+  exit_code: number | null;
+  note: string;
+  issues: string[];
+  starts_mission: false;
+}
 
 async function resolveSksEntrypoint(): Promise<string> {
   // Mirrors src/core/agent-bridge/mcp-server.ts's own bin resolution: prefer the
@@ -12,8 +25,13 @@ async function resolveSksEntrypoint(): Promise<string> {
   return (await exists(packedBin)) ? packedBin : sourceBin;
 }
 
-async function runNonInteractiveSmoke(entrypoint: string): Promise<{ ok: boolean; command: string; exit_code: number | null; note: string }> {
-  const result = await runProcess(process.execPath, [entrypoint, 'status', '--json'], {
+async function runJsonSmoke(
+  entrypoint: string,
+  args: readonly string[],
+  validate: (value: Record<string, unknown>) => string[],
+  run: typeof runProcess
+): Promise<NonInteractiveSmoke> {
+  const result = await run(process.execPath, [entrypoint, ...args], {
     env: { SKS_AGENT_MODE: '1' },
     timeoutMs: 15_000,
     // Status is intentionally bounded but can exceed 32 KiB when several
@@ -21,21 +39,47 @@ async function runNonInteractiveSmoke(entrypoint: string): Promise<{ ok: boolean
     // bridge report a false non-interactive failure.
     maxOutputBytes: 512 * 1024
   }).catch((err: unknown) => ({ code: 1, stdout: '', stderr: err instanceof Error ? err.message : String(err) }));
-  let stdoutIsCleanJson = false;
+  let parsed: Record<string, unknown> | null = null;
   try {
-    JSON.parse(result.stdout);
-    stdoutIsCleanJson = true;
+    const value = JSON.parse(result.stdout);
+    parsed = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
   } catch {
-    stdoutIsCleanJson = false;
+    parsed = null;
   }
+  const issues = parsed ? validate(parsed) : ['stdout_not_clean_json_object'];
+  if (result.code !== 0) issues.push(`exit_code:${String(result.code)}`);
   return {
-    ok: result.code === 0 && stdoutIsCleanJson,
-    command: `SKS_AGENT_MODE=1 ${entrypoint} status --json`,
+    ok: result.code === 0 && issues.length === 0,
+    command: `SKS_AGENT_MODE=1 ${entrypoint} ${args.join(' ')}`,
     exit_code: result.code,
-    note: stdoutIsCleanJson
-      ? 'stdout parsed as clean JSON with SKS_AGENT_MODE=1 set — non-interactive contract verified end-to-end for this one command.'
-      : 'stdout did not parse as clean JSON; a real agent host would fail to consume this — see exit_code/stderr in the report.'
+    note: issues.length === 0
+      ? 'stdout parsed as one clean JSON object with SKS_AGENT_MODE=1 set.'
+      : `non-interactive JSON contract failed: ${issues.join(', ')}`,
+    issues,
+    starts_mission: false
   };
+}
+
+export async function runAgentBridgeContractSmokes(
+  entrypoint: string,
+  manifest: AgentManifest,
+  run: typeof runProcess = runProcess
+): Promise<{ status: NonInteractiveSmoke; naruto_help: NonInteractiveSmoke }> {
+  const naruto = manifest.tools.find((tool) => tool.name === 'naruto');
+  const manifestActions = (naruto?.input_schema as any)?.properties?.action?.enum;
+  const [status, narutoHelp] = await Promise.all([
+    runJsonSmoke(entrypoint, ['status', '--json'], () => [], run),
+    runJsonSmoke(entrypoint, ['naruto', 'help', '--json'], (value) => {
+      const issues: string[] = [];
+      if (value.schema !== 'sks.naruto-subagent-workflow.v1') issues.push('naruto_help_schema');
+      if (value.action !== 'help') issues.push('naruto_help_action');
+      if (value.workflow !== 'official_codex_subagent') issues.push('naruto_help_workflow');
+      if (value.max_depth !== 1) issues.push('naruto_help_max_depth');
+      if (JSON.stringify(value.commands) !== JSON.stringify(manifestActions)) issues.push('naruto_help_manifest_actions');
+      return issues;
+    }, run)
+  ]);
+  return { status, naruto_help: narutoHelp };
 }
 
 function registrationSnippets(): Record<string, unknown> {
@@ -81,18 +125,20 @@ export async function agentBridgeCommand(subcommand: string, args: readonly stri
   await writeJsonAtomic(manifestPath, manifest);
 
   const entrypoint = await resolveSksEntrypoint();
-  const smoke = await runNonInteractiveSmoke(entrypoint);
+  const smokes = await runAgentBridgeContractSmokes(entrypoint, manifest);
 
   const result = {
     schema: 'sks.agent-bridge-setup.v1',
     generated_at: nowIso(),
-    ok: smoke.ok,
+    ok: smokes.status.ok && smokes.naruto_help.ok,
     manifest_path: manifestPath,
     tool_count: manifest.tools.length,
     manifest_validation: manifestValidation,
     registration_snippets: registrationSnippets(),
-    non_interactive_smoke: smoke
+    non_interactive_smoke: smokes.status,
+    naruto_help_smoke: smokes.naruto_help
   };
+  if (!result.ok) process.exitCode = 1;
 
   if (flag(args as any, '--json')) {
     console.log(JSON.stringify(result, null, 2));
@@ -102,7 +148,8 @@ export async function agentBridgeCommand(subcommand: string, args: readonly stri
     console.log(`  ${JSON.stringify(registrationSnippets().generic_mcp_host)}`);
     console.log('Register with Codex CLI:');
     console.log(`  ${registrationSnippets().codex_cli}`);
-    console.log(`Non-interactive smoke test: ${smoke.ok ? 'ok' : 'FAILED'} (${smoke.note})`);
+    console.log(`Non-interactive status smoke: ${smokes.status.ok ? 'ok' : 'FAILED'} (${smokes.status.note})`);
+    console.log(`Naruto help contract smoke: ${smokes.naruto_help.ok ? 'ok' : 'FAILED'} (${smokes.naruto_help.note})`);
   }
   return result;
 }

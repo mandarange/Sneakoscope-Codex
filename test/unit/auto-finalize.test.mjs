@@ -13,10 +13,10 @@ test('maybeFinalizeRoute writes a route completion proof when gate passes', asyn
   await fs.mkdir(dir, { recursive: true });
   const gate = { passed: true };
   await writeJsonAtomic(path.join(dir, 'wiki-gate.json'), gate);
-  const result = await maybeFinalizeRoute(root, { missionId, route: '$Wiki', gateFile: 'wiki-gate.json', gate, mock: true });
+  const result = await maybeFinalizeRoute(root, { missionId, route: '$sks-wiki', gateFile: 'wiki-gate.json', gate, mock: true });
   assert.equal(result.ok, true);
   const proof = JSON.parse(await fs.readFile(path.join(dir, 'completion-proof.json'), 'utf8'));
   assert.equal(proof.schema, 'sks.completion-proof.v1');
-  assert.equal(proof.route, '$Wiki');
+  assert.equal(proof.route, '$sks-wiki');
   await assert.rejects(fs.access(path.join(dir, 'agents')));
 });

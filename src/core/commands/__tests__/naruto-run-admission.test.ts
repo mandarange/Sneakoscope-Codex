@@ -1,0 +1,653 @@
+import { spawn } from 'node:child_process'
+import crypto from 'node:crypto'
+import fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import {
+  NARUTO_MISSION_RUN_LOCK,
+  withNarutoMissionRunAdmission
+} from '../../subagents/official-subagent-preparation.js'
+
+const TERMINAL_FILES = [
+  'subagent-plan.json',
+  'subagent-events.jsonl',
+  'subagent-parent-summary.json',
+  'subagent-evidence.json',
+  'naruto-summary.json',
+  'naruto-gate.json'
+]
+
+test('20 concurrent callers admit one owner and never create a second workflow run', async () => {
+  await withFixture('same-process', async ({ dir, missionId }) => {
+    let executions = 0
+    const results = await Promise.all(Array.from({ length: 20 }, () => withNarutoMissionRunAdmission({
+      missionId,
+      missionDir: dir,
+      staleMs: 1_000
+    }, async () => {
+      executions += 1
+      await delay(80)
+      await writeCompletedBundle(dir, missionId, 'run-single-owner')
+      return 'executed'
+    })))
+
+    assert.equal(executions, 1)
+    assert.equal(results.filter((result) => result.kind === 'executed').length, 1)
+    assert.equal(results.every((result) => ['executed', 'running', 'reused'].includes(result.kind)), true)
+    for (const result of results) {
+      if (result.kind === 'running') assert.equal(result.response.workflow_run_id, null)
+    }
+    const reentry = await withNarutoMissionRunAdmission({ missionId, missionDir: dir }, async () => 'unexpected')
+    assert.equal(reentry.kind, 'reused')
+    if (reentry.kind === 'reused') {
+      assert.equal(reentry.response.status, 'completed')
+      assert.equal(reentry.response.workflow_run_id, 'run-single-owner')
+      assert.equal(reentry.response.reused, true)
+    }
+  })
+})
+
+test('20 separate processes observe one mission-wide owner', async () => {
+  await withFixture('multi-process', async ({ dir, missionId }) => {
+    const marker = path.join(dir, 'owner-markers.jsonl')
+    const release = path.join(dir, 'release-owner')
+    const moduleUrl = new URL('../../subagents/official-subagent-preparation.js', import.meta.url).href
+    assert.equal(await exists(fileURLToPath(moduleUrl)), true, 'compiled admission module is required for process black-box')
+    const processes = Array.from({ length: 20 }, () => spawnAdmissionChild({ moduleUrl, dir, missionId, marker, release }))
+    await waitFor(async () => await exists(marker), 5_000)
+    await delay(400)
+    await fs.writeFile(release, 'release\n')
+    const results = await Promise.all(processes)
+    const markerLines = (await fs.readFile(marker, 'utf8')).trim().split(/\r?\n/).filter(Boolean)
+
+    assert.equal(markerLines.length, 1)
+    assert.equal(results.filter((result) => result.kind === 'executed').length, 1)
+    assert.equal(results.filter((result) => result.kind === 'running').length, 19)
+    assert.equal(results.filter((result) => result.kind === 'running').every((result) => result.already_running === true), true)
+  })
+})
+
+test('20 standalone CLI processes launch one Codex parent for one mission', { timeout: 30_000 }, async (t) => {
+  if (process.platform === 'win32') return t.skip('executable fixture uses a POSIX shebang')
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-naruto-cli-single-owner-'))
+  const project = path.join(root, 'project')
+  const home = path.join(root, 'home')
+  const binDir = path.join(root, 'bin')
+  const missionId = 'M-cli-single-owner'
+  const dir = path.join(project, '.sneakoscope', 'missions', missionId)
+  const marker = path.join(project, 'codex-parent-markers.jsonl')
+  const release = path.join(project, 'release-codex-parent')
+  const fakeCodex = path.join(binDir, 'codex')
+  const sksBin = fileURLToPath(new URL('../../../bin/sks.js', import.meta.url))
+  t.after(async () => fs.rm(root, { recursive: true, force: true }))
+
+  await fs.mkdir(dir, { recursive: true })
+  await fs.mkdir(path.join(project, '.sneakoscope', 'state'), { recursive: true })
+  await fs.mkdir(path.join(project, '.codex'), { recursive: true })
+  await fs.mkdir(path.join(home, '.codex'), { recursive: true })
+  await fs.mkdir(binDir, { recursive: true })
+  await writeJson(path.join(dir, 'mission.json'), {
+    id: missionId,
+    mode: 'naruto',
+    prompt: 'same mission fixture'
+  })
+  await writeJson(path.join(project, '.sneakoscope', 'state', 'current.json'), {
+    mission_id: missionId,
+    mode: 'NARUTO',
+    phase: 'PREPARE'
+  })
+  await fs.writeFile(path.join(project, '.codex', 'config.toml'), [
+    '[agents]',
+    'max_threads = 4',
+    'max_depth = 1',
+    ''
+  ].join('\n'))
+  await fs.writeFile(fakeCodex, [
+    '#!/usr/bin/env node',
+    "const fs = require('node:fs')",
+    "const path = require('node:path')",
+    ";(async () => {",
+    "const args = process.argv.slice(2)",
+    "const outputIndex = args.indexOf('--output-last-message')",
+    "const outputFile = outputIndex >= 0 ? args[outputIndex + 1] : ''",
+    "const missionId = String(process.env.SKS_NARUTO_PARENT_MISSION_ID || '')",
+    "const missionDir = path.join(process.cwd(), '.sneakoscope', 'missions', missionId)",
+    "const plan = JSON.parse(fs.readFileSync(path.join(missionDir, 'subagent-plan.json'), 'utf8'))",
+    "fs.appendFileSync(path.join(process.cwd(), 'codex-parent-markers.jsonl'), JSON.stringify({ pid: process.pid, run_id: plan.workflow_run_id }) + '\\n')",
+    "while (!fs.existsSync(path.join(process.cwd(), 'release-codex-parent'))) await new Promise((resolve) => setTimeout(resolve, 20))",
+    "const threadId = 'thread-cli-fixture'",
+    "const events = [",
+    "  { schema: 'sks.subagent-event.v1', event_name: 'SubagentStart', thread_id: threadId, run_id: plan.workflow_run_id, outcome: 'started', occurred_at: '2026-07-17T00:00:00.000Z' },",
+    "  { schema: 'sks.subagent-event.v1', event_name: 'SubagentStop', thread_id: threadId, run_id: plan.workflow_run_id, outcome: 'stopped', occurred_at: '2026-07-17T00:00:01.000Z' }",
+    "]",
+    "fs.writeFileSync(path.join(missionDir, 'subagent-events.jsonl'), events.map((row) => JSON.stringify(row)).join('\\n') + '\\n')",
+    "const summary = { schema: 'sks.subagent-parent-summary.v1', status: 'completed', summary: 'CLI single owner complete', run_id: plan.workflow_run_id, thread_outcomes: [{ thread_id: threadId, status: 'completed', summary: 'done' }], changed_files: [], verification: [{ name: 'cli-concurrency', status: 'passed' }], blockers: [] }",
+    "if (!outputFile) throw new Error('parent_summary_output_missing')",
+    "fs.writeFileSync(outputFile, JSON.stringify(summary))",
+    "})().catch((error) => { console.error(String(error && error.stack || error)); process.exit(70) })"
+  ].join('\n'), { mode: 0o700 })
+  assert.equal(await exists(sksBin), true)
+
+  const env = {
+    ...process.env,
+    HOME: home,
+    CODEX_HOME: path.join(home, '.codex'),
+    PATH: binDir + path.delimiter + String(process.env.PATH || ''),
+    SKS_AGENT_MODE: '1',
+    SKS_DISABLE_UPDATE_CHECK: '1',
+    SKS_UPDATE_MIGRATION_GATE_DISABLED: '1',
+    SKS_NARUTO_STANDALONE_CLI: '1',
+    SKS_PROVIDER: '',
+    SKS_USE_CODEX_LB: '',
+    SKS_MODEL_PROVIDER: '',
+    CODEX_MODEL_PROVIDER: '',
+    OPENAI_MODEL_PROVIDER: '',
+    CODEX_THREAD_ID: ''
+  }
+  const processes = Array.from({ length: 20 }, () => spawnCliNarutoChild({
+    sksBin,
+    cwd: project,
+    env,
+    missionId
+  }))
+  const allResults = Promise.all(processes)
+  await Promise.race([
+    waitFor(async () => await exists(marker), 10_000),
+    allResults.then(async (results) => {
+      if (!(await exists(marker))) {
+        throw new Error('CLI children exited before Codex parent spawn: ' + JSON.stringify(results))
+      }
+    })
+  ])
+  await delay(400)
+  await fs.writeFile(release, 'release\n')
+  const results = await allResults
+  const markerLines = (await fs.readFile(marker, 'utf8')).trim().split(/\r?\n/).filter(Boolean)
+
+  assert.equal(markerLines.length, 1)
+  assert.equal(
+    results.filter((result) => result.json.status === 'completed' && result.json.reused !== true).length,
+    1,
+    JSON.stringify(results)
+  )
+  assert.equal(results.every((result) => result.code === 0), true, JSON.stringify(results))
+  assert.equal(results.every((result) => {
+    return result.json.status === 'running' || result.json.status === 'completed'
+  }), true, JSON.stringify(results))
+})
+
+test('20 stale-lock waiters elect one recovery owner', async () => {
+  await withFixture('stale-race', async ({ dir, missionId }) => {
+    await writeOwner(dir, { pid: 999_999, heartbeatAt: '1970-01-01T00:00:00.000Z', staleMs: 1 })
+    let executions = 0
+    const results = await Promise.all(Array.from({ length: 20 }, () => withNarutoMissionRunAdmission({
+      missionId,
+      missionDir: dir,
+      staleMs: 1
+    }, async (lease) => {
+      executions += 1
+      assert.equal(lease.recovered, true)
+      await delay(60)
+      await writeCompletedBundle(dir, missionId, 'run-recovered')
+      return 'recovered'
+    })))
+
+    assert.equal(executions, 1)
+    assert.equal(results.filter((result) => result.kind === 'executed').length, 1)
+    assert.equal(results.filter((result) => result.kind === 'executed' && result.recovered).length, 1)
+  })
+})
+
+test('live owner wins before identity conflict and is never reclaimed by elapsed time alone', async () => {
+  await withFixture('live-owner', async ({ dir, missionId }) => {
+    await writeJson(path.join(dir, 'subagent-plan.json'), {
+      schema: 'sks.subagent-plan.v1',
+      workflow: 'official_codex_subagent',
+      mission_id: 'M-conflicting',
+      workflow_run_id: 'run-live'
+    })
+    await writeOwner(dir, { pid: process.pid, heartbeatAt: '1970-01-01T00:00:00.000Z', staleMs: 1 })
+    let executed = false
+    const result = await withNarutoMissionRunAdmission({ missionId, missionDir: dir, staleMs: 1 }, async () => {
+      executed = true
+      return null
+    })
+
+    assert.equal(executed, false)
+    assert.equal(result.kind, 'running')
+    if (result.kind === 'running') {
+      assert.equal(result.response.status, 'running')
+      assert.equal(result.response.already_running, true)
+      assert.equal(result.response.workflow_run_id, 'run-live')
+    }
+  })
+})
+
+test('completed and blocked proof win before a live owner and completed bytes stay immutable', async () => {
+  await withFixture('terminal', async ({ dir, missionId }) => {
+    await writeCompletedBundle(dir, missionId, 'run-terminal')
+    await writeOwner(dir, { pid: process.pid, heartbeatAt: new Date().toISOString(), staleMs: 60_000 })
+    const before = await terminalMetadata(dir)
+    for (let index = 0; index < 5; index += 1) {
+      const result = await withNarutoMissionRunAdmission({ missionId, missionDir: dir }, async () => 'unexpected')
+      assert.equal(result.kind, 'reused')
+      if (result.kind === 'reused') assert.equal(result.response.status, 'completed')
+    }
+    assert.deepEqual(await terminalMetadata(dir), before)
+  })
+
+  await withFixture('blocked-terminal', async ({ dir, missionId }) => {
+    await writeBlockedBundle(dir, missionId, 'run-blocked')
+    await writeOwner(dir, { pid: process.pid, heartbeatAt: new Date().toISOString(), staleMs: 60_000 })
+    const result = await withNarutoMissionRunAdmission({ missionId, missionDir: dir }, async () => 'unexpected')
+    assert.equal(result.kind, 'reused')
+    if (result.kind === 'reused') {
+      assert.equal(result.response.status, 'blocked')
+      assert.equal(result.response.ok, false)
+      assert.equal(result.response.reused, true)
+    }
+  })
+})
+
+test('artifact mission and workflow-run identity conflicts block without reset or execution', async () => {
+  await withFixture('identity-conflict', async ({ dir, missionId }) => {
+    await writeJson(path.join(dir, 'subagent-plan.json'), {
+      schema: 'sks.subagent-plan.v1',
+      workflow: 'official_codex_subagent',
+      mission_id: missionId,
+      workflow_run_id: 'run-a'
+    })
+    await writeJson(path.join(dir, 'subagent-evidence.json'), {
+      schema: 'sks.subagent-evidence.v1',
+      workflow: 'official_codex_subagent',
+      run_id: 'run-b'
+    })
+    const planBefore = await fs.readFile(path.join(dir, 'subagent-plan.json'))
+    let executed = false
+    const result = await withNarutoMissionRunAdmission({ missionId, missionDir: dir }, async () => {
+      executed = true
+      return null
+    })
+
+    assert.equal(executed, false)
+    assert.equal(result.kind, 'blocked')
+    if (result.kind === 'blocked') {
+      assert.deepEqual(result.response.blockers, ['naruto_mission_identity_conflict:workflow_run_id'])
+    }
+    assert.deepEqual(await fs.readFile(path.join(dir, 'subagent-plan.json')), planBefore)
+  })
+})
+
+test('a stale incomplete mission cannot be restarted with a different task prompt', async () => {
+  await withFixture('prompt-conflict', async ({ dir, missionId }) => {
+    let executed = false
+    const result = await withNarutoMissionRunAdmission({
+      missionId,
+      missionDir: dir,
+      prompt: 'different task'
+    }, async () => {
+      executed = true
+      return 'unexpected'
+    })
+    assert.equal(executed, false)
+    assert.equal(result.kind, 'blocked')
+    if (result.kind === 'blocked') {
+      assert.deepEqual(result.response.blockers, ['naruto_mission_identity_conflict:mission_prompt'])
+    }
+  })
+})
+
+test('protected child PID prevents stale recovery after the parent owner dies', async () => {
+  await withFixture('protected-child', async ({ dir, missionId }) => {
+    const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
+    assert.ok(child.pid)
+    try {
+      await writeOwner(dir, {
+        pid: 999_999,
+        protectedPids: [child.pid],
+        heartbeatAt: '1970-01-01T00:00:00.000Z',
+        staleMs: 1
+      })
+      const live = await withNarutoMissionRunAdmission({ missionId, missionDir: dir, staleMs: 1 }, async () => 'unexpected')
+      assert.equal(live.kind, 'running')
+
+      child.kill('SIGKILL')
+      await new Promise<void>((resolve) => child.once('close', () => resolve()))
+      const recovered = await withNarutoMissionRunAdmission({ missionId, missionDir: dir, staleMs: 1 }, async (lease) => {
+        assert.equal(lease.recovered, true)
+        return 'recovered-after-child-exit'
+      })
+      assert.equal(recovered.kind, 'executed')
+      if (recovered.kind === 'executed') assert.equal(recovered.value, 'recovered-after-child-exit')
+    } finally {
+      child.kill('SIGKILL')
+    }
+  })
+})
+
+test('admission lease persists a protected child PID in the existing lock owner record', async () => {
+  await withFixture('lease-child', async ({ dir, missionId }) => {
+    const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
+    assert.ok(child.pid)
+    try {
+      let persisted: unknown = null
+      const result = await withNarutoMissionRunAdmission({ missionId, missionDir: dir }, async (lease) => {
+        await lease.protectChildPid(child.pid as number)
+        persisted = JSON.parse(await fs.readFile(path.join(dir, NARUTO_MISSION_RUN_LOCK, 'owner.json'), 'utf8'))
+        return 'protected'
+      })
+      assert.equal(result.kind, 'executed')
+      assert.deepEqual((persisted as { protected_pids?: number[] }).protected_pids, [child.pid])
+    } finally {
+      child.kill('SIGKILL')
+    }
+  })
+})
+
+test('macOS black-box: an ordinary spawned child survives parent SIGKILL', { skip: process.platform !== 'darwin' }, async () => {
+  const parentCode = [
+    'const { spawn } = require("node:child_process")',
+    'const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: ["ignore", "pipe", "pipe"] })',
+    'console.log(child.pid)',
+    'setInterval(() => {}, 1000)'
+  ].join(';')
+  const parent = spawn(process.execPath, ['-e', parentCode], { stdio: ['ignore', 'pipe', 'pipe'] })
+  const childPid = await firstPid(parent)
+  parent.kill('SIGKILL')
+  await delay(250)
+  assert.equal(pidAlive(childPid), true)
+  process.kill(childPid, 'SIGKILL')
+})
+
+test('crashes before preparation and after plan, parent summary, or gate recover once in the same mission', { timeout: 20_000 }, async () => {
+  const moduleUrl = new URL('../../subagents/official-subagent-preparation.js', import.meta.url).href
+  const checkpoints = ['before-preparation', 'after-plan', 'after-parent-summary', 'after-gate'] as const
+
+  for (const checkpoint of checkpoints) {
+    await withFixture(`crash-${checkpoint}`, async ({ dir, missionId }) => {
+      const ready = path.join(dir, `crash-ready-${checkpoint}`)
+      const child = spawnCrashCheckpointOwner({ moduleUrl, dir, missionId, ready, checkpoint })
+      await waitFor(async () => await exists(ready), 5_000)
+      const closed = new Promise<void>((resolve) => child.once('close', () => resolve()))
+      child.kill('SIGKILL')
+      await closed
+      await delay(80)
+
+      let recoveries = 0
+      const recoveredRunId = `run-recovered-${checkpoint}`
+      const recovered = await withNarutoMissionRunAdmission({
+        missionId,
+        missionDir: dir,
+        staleMs: 20
+      }, async (lease) => {
+        recoveries += 1
+        assert.equal(lease.recovered, true)
+        await writeCompletedBundle(dir, missionId, recoveredRunId)
+        return checkpoint
+      })
+
+      assert.equal(recovered.kind, 'executed')
+      assert.equal(recoveries, 1)
+      const replay = await withNarutoMissionRunAdmission({ missionId, missionDir: dir }, async () => 'unexpected')
+      assert.equal(replay.kind, 'reused')
+      if (replay.kind === 'reused') {
+        assert.equal(replay.response.status, 'completed')
+        assert.equal(replay.response.workflow_run_id, recoveredRunId)
+      }
+    })
+  }
+})
+
+async function withFixture(
+  name: string,
+  fn: (fixture: { root: string; dir: string; missionId: string }) => Promise<void>
+): Promise<void> {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), `sks-naruto-admission-${name}-`))
+  const missionId = `M-${name}`
+  const dir = path.join(root, '.sneakoscope', 'missions', missionId)
+  await fs.mkdir(dir, { recursive: true })
+  await writeJson(path.join(dir, 'mission.json'), { id: missionId, mode: 'naruto', prompt: 'fixture' })
+  try {
+    await fn({ root, dir, missionId })
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
+  }
+}
+
+async function writeCompletedBundle(dir: string, missionId: string, runId: string): Promise<void> {
+  await Promise.all([
+    writeJson(path.join(dir, 'subagent-plan.json'), {
+      schema: 'sks.subagent-plan.v1', workflow: 'official_codex_subagent', route: '$sks-naruto', mission_id: missionId, workflow_run_id: runId
+    }),
+    fs.writeFile(path.join(dir, 'subagent-events.jsonl'), [
+      JSON.stringify({ event_name: 'SubagentStart', thread_id: 'thread-a', workflow_run_id: runId }),
+      JSON.stringify({ event_name: 'SubagentStop', thread_id: 'thread-a', workflow_run_id: runId })
+    ].join('\n') + '\n'),
+    writeJson(path.join(dir, 'subagent-parent-summary.json'), {
+      schema: 'sks.subagent-parent-summary.v1', status: 'completed', summary: 'fixture completed', run_id: runId,
+      thread_outcomes: [{ thread_id: 'thread-a', status: 'completed', summary: 'done' }], changed_files: [], verification: [], blockers: []
+    }),
+    writeJson(path.join(dir, 'subagent-evidence.json'), {
+      schema: 'sks.subagent-evidence.v1', workflow: 'official_codex_subagent', run_id: runId, status: 'completed', ok: true,
+      parent_summary_trustworthy: true, blockers: []
+    }),
+    writeJson(path.join(dir, 'naruto-summary.json'), {
+      schema: 'sks.naruto-subagent-workflow.v1', workflow: 'official_codex_subagent', route: '$sks-naruto', mission_id: missionId,
+      workflow_run_id: runId, status: 'completed', ok: true, completion_evidence: true, blockers: []
+    }),
+    writeJson(path.join(dir, 'naruto-gate.json'), {
+      schema: 'sks.naruto-gate.v1', workflow: 'official_codex_subagent', route: '$sks-naruto', mission_id: missionId,
+      workflow_run_id: runId, status: 'passed', passed: true, terminal: true, terminal_state: 'completed', blockers: []
+    })
+  ])
+}
+
+async function writeBlockedBundle(dir: string, missionId: string, runId: string): Promise<void> {
+  await Promise.all([
+    writeJson(path.join(dir, 'subagent-plan.json'), {
+      schema: 'sks.subagent-plan.v1', workflow: 'official_codex_subagent', route: '$sks-naruto', mission_id: missionId, workflow_run_id: runId
+    }),
+    fs.writeFile(path.join(dir, 'subagent-events.jsonl'), ''),
+    writeJson(path.join(dir, 'subagent-evidence.json'), {
+      schema: 'sks.subagent-evidence.v1', workflow: 'official_codex_subagent', run_id: runId, status: 'blocked', ok: false, blockers: ['fixture_blocker']
+    }),
+    writeJson(path.join(dir, 'naruto-summary.json'), {
+      schema: 'sks.naruto-subagent-workflow.v1', workflow: 'official_codex_subagent', route: '$sks-naruto', mission_id: missionId,
+      workflow_run_id: runId, status: 'blocked', ok: false, completion_evidence: false, blockers: ['fixture_blocker']
+    }),
+    writeJson(path.join(dir, 'naruto-gate.json'), {
+      schema: 'sks.naruto-gate.v1', workflow: 'official_codex_subagent', route: '$sks-naruto', mission_id: missionId,
+      workflow_run_id: runId, status: 'blocked', passed: false, terminal: false, terminal_state: 'blocked', blockers: ['fixture_blocker']
+    })
+  ])
+}
+
+async function writeOwner(dir: string, input: {
+  pid: number
+  protectedPids?: number[]
+  heartbeatAt: string
+  staleMs: number
+}): Promise<void> {
+  const lock = path.join(dir, NARUTO_MISSION_RUN_LOCK)
+  await fs.mkdir(lock, { recursive: true })
+  await writeJson(path.join(lock, 'owner.json'), {
+    schema: 'sks.file-lock-owner.v1',
+    owner: 'fixture-owner',
+    pid: input.pid,
+    hostname: os.hostname(),
+    acquired_at: input.heartbeatAt,
+    heartbeat_at: input.heartbeatAt,
+    stale_ms: input.staleMs,
+    ...(input.protectedPids ? { protected_pids: input.protectedPids } : {})
+  })
+}
+
+async function terminalMetadata(dir: string): Promise<Record<string, { hash: string; mtimeMs: number }>> {
+  const entries = await Promise.all(TERMINAL_FILES.map(async (name) => {
+    const file = path.join(dir, name)
+    const [bytes, stat] = await Promise.all([fs.readFile(file), fs.stat(file)])
+    return [name, { hash: crypto.createHash('sha256').update(bytes).digest('hex'), mtimeMs: stat.mtimeMs }] as const
+  }))
+  return Object.fromEntries(entries)
+}
+
+function spawnAdmissionChild(input: {
+  moduleUrl: string
+  dir: string
+  missionId: string
+  marker: string
+  release: string
+}): Promise<Record<string, unknown>> {
+  const script = [
+    'import fs from "node:fs/promises"',
+    `const mod = await import(${JSON.stringify(input.moduleUrl)})`,
+    `const result = await mod.withNarutoMissionRunAdmission({ missionId: ${JSON.stringify(input.missionId)}, missionDir: ${JSON.stringify(input.dir)}, staleMs: 5000 }, async () => {`,
+    `  await fs.appendFile(${JSON.stringify(input.marker)}, JSON.stringify({ pid: process.pid }) + "\\n")`,
+    `  while (true) { try { await fs.access(${JSON.stringify(input.release)}); break } catch {} await new Promise(resolve => setTimeout(resolve, 20)) }`,
+    '  return "owner"',
+    '})',
+    'console.log(JSON.stringify(result.kind === "running" ? { kind: result.kind, already_running: result.response.already_running } : { kind: result.kind }))'
+  ].join('\n')
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, ['--input-type=module', '-e', script], { stdio: ['ignore', 'pipe', 'pipe'] })
+    let stdout = ''
+    let stderr = ''
+    child.stdout.on('data', (chunk) => { stdout += String(chunk) })
+    child.stderr.on('data', (chunk) => { stderr += String(chunk) })
+    child.on('error', reject)
+    child.on('close', (code) => {
+      if (code !== 0) return reject(new Error(`admission child failed (${code}): ${stderr}`))
+      try {
+        resolve(JSON.parse(stdout.trim()))
+      } catch (error) {
+        reject(new Error(`admission child returned invalid JSON: ${stdout}\n${stderr}\n${String(error)}`))
+      }
+    })
+  })
+}
+
+function spawnCrashCheckpointOwner(input: {
+  moduleUrl: string
+  dir: string
+  missionId: string
+  ready: string
+  checkpoint: 'before-preparation' | 'after-plan' | 'after-parent-summary' | 'after-gate'
+}): ReturnType<typeof spawn> {
+  const runId = `run-crashed-${input.checkpoint}`
+  const script = [
+    'import fs from "node:fs/promises"',
+    'import path from "node:path"',
+    `const mod = await import(${JSON.stringify(input.moduleUrl)})`,
+    `const dir = ${JSON.stringify(input.dir)}`,
+    `const missionId = ${JSON.stringify(input.missionId)}`,
+    `const checkpoint = ${JSON.stringify(input.checkpoint)}`,
+    `const runId = ${JSON.stringify(runId)}`,
+    'const writeJson = (name, value) => fs.writeFile(path.join(dir, name), JSON.stringify(value) + "\\n")',
+    'await mod.withNarutoMissionRunAdmission({ missionId, missionDir: dir, staleMs: 20 }, async () => {',
+    "  if (checkpoint !== 'before-preparation') {",
+    "    await writeJson('subagent-plan.json', { schema: 'sks.subagent-plan.v1', workflow: 'official_codex_subagent', mission_id: missionId, workflow_run_id: runId })",
+    "    await fs.writeFile(path.join(dir, 'subagent-events.jsonl'), '')",
+    '  }',
+    "  if (checkpoint === 'after-parent-summary' || checkpoint === 'after-gate') {",
+    "    await writeJson('subagent-parent-summary.json', { schema: 'sks.subagent-parent-summary.v1', status: 'completed', summary: 'crashed parent summary', run_id: runId, thread_outcomes: [], changed_files: [], verification: [], blockers: [] })",
+    "    await writeJson('subagent-evidence.json', { schema: 'sks.subagent-evidence.v1', workflow: 'official_codex_subagent', run_id: runId, status: 'incomplete', ok: false, blockers: ['crash_fixture'] })",
+    '  }',
+    "  if (checkpoint === 'after-gate') {",
+    "    await writeJson('naruto-gate.json', { schema: 'sks.naruto-gate.v1', workflow: 'official_codex_subagent', mission_id: missionId, workflow_run_id: runId, status: 'blocked', passed: false, terminal: false, terminal_state: 'blocked', blockers: ['crash_fixture'] })",
+    '  }',
+    `  await fs.writeFile(${JSON.stringify(input.ready)}, 'ready\\n')`,
+    '  setInterval(() => {}, 1000)',
+    '  await new Promise(() => {})',
+    '})'
+  ].join('\n')
+  return spawn(process.execPath, ['--input-type=module', '-e', script], { stdio: 'ignore' })
+}
+
+function spawnCliNarutoChild(input: {
+  sksBin: string
+  cwd: string
+  env: NodeJS.ProcessEnv
+  missionId: string
+}): Promise<{ code: number | null; json: Record<string, unknown>; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [
+      input.sksBin,
+      'naruto',
+      'run',
+      'same mission fixture',
+      '--mission',
+      input.missionId,
+      '--agents',
+      '1',
+      '--max-threads',
+      '4',
+      '--readonly',
+      '--json'
+    ], {
+      cwd: input.cwd,
+      env: input.env,
+      stdio: ['ignore', 'pipe', 'pipe']
+    })
+    let stdout = ''
+    let stderr = ''
+    child.stdout.on('data', (chunk) => { stdout += String(chunk) })
+    child.stderr.on('data', (chunk) => { stderr += String(chunk) })
+    child.on('error', reject)
+    child.on('close', (code) => {
+      try {
+        resolve({
+          code,
+          json: JSON.parse(stdout.trim()) as Record<string, unknown>,
+          stderr
+        })
+      } catch (error) {
+        reject(new Error('CLI admission child returned invalid JSON: ' + stdout + '\n' + stderr + '\n' + String(error)))
+      }
+    })
+  })
+}
+
+async function firstPid(child: ReturnType<typeof spawn>): Promise<number> {
+  return new Promise((resolve, reject) => {
+    let stdout = ''
+    child.stdout?.on('data', (chunk) => {
+      stdout += String(chunk)
+      const pid = Number(stdout.trim())
+      if (Number.isSafeInteger(pid) && pid > 0) resolve(pid)
+    })
+    child.once('error', reject)
+    child.once('close', (code) => reject(new Error(`parent fixture closed before child pid (${code})`)))
+  })
+}
+
+async function waitFor(predicate: () => Promise<boolean>, timeoutMs: number): Promise<void> {
+  const started = Date.now()
+  while (!(await predicate())) {
+    if (Date.now() - started > timeoutMs) throw new Error('wait_for_timeout')
+    await delay(20)
+  }
+}
+
+function pidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function exists(file: string): Promise<boolean> {
+  return fs.access(file).then(() => true, () => false)
+}
+
+async function writeJson(file: string, value: unknown): Promise<void> {
+  await fs.writeFile(file, `${JSON.stringify(value, null, 2)}\n`)
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}

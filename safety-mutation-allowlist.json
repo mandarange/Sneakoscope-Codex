@@ -335,7 +335,7 @@
       "file": "src/core/codex-control/codex-0144-capability.ts",
       "symbol": "generateSchemaProbe",
       "token": "fsp.rm",
-      "reason": "Codex 0.144.1 schema probe removes only its scoped generated schema output directory before refresh."
+      "reason": "Codex 0.144.5 schema probe removes only its scoped generated schema output directory before refresh."
     },
     {
       "file": "src/core/codex-control/python-codex-sdk-adapter.ts",
@@ -3300,6 +3300,12 @@
       "symbol": "writeManagedSkill",
       "token": "fsp.writeFile",
       "reason": "Current-surface fixture writes only a generated SKS skill manifest under its isolated fixture directory."
+    },
+    {
+      "file": "src/scripts/current-surface-update-e2e-check.ts",
+      "symbol": "writeUserSkill",
+      "token": "fsp.writeFile",
+      "reason": "Current-surface update E2E writes only the user-authored legacy-name collision skill fixture under its mkdtemp-owned project root."
     },
     {
       "file": "src/scripts/current-upgrade-matrix-check.ts",

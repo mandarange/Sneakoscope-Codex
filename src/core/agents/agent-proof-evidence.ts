@@ -38,7 +38,6 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
   const narutoConcurrencyGovernor = await readJson<any>(path.join(root, 'naruto-concurrency-governor.json'), null)
   const narutoActivePool = await readJson<any>(path.join(root, 'naruto-active-pool.json'), null)
   const narutoVerificationDag = await readJson<any>(path.join(root, 'naruto-verification-dag.json'), null)
-  const narutoGptFinalPack = await readJson<any>(path.join(root, 'naruto-gpt-final-pack.json'), null)
   const narutoZellijDashboard = await readJson<any>(path.join(root, 'naruto-zellij-dashboard.json'), null)
   const localParticipated = localCollaborationParticipated(input.results || []) || Number(gptFinalArbiter?.local_outputs_count || 0) > 0
   const finalGptPatchStage = input.finalGptPatchStage || null
@@ -225,7 +224,6 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     ...(isNarutoRoute && !narutoActivePool ? ['naruto_active_pool_missing'] : []),
     ...(isNarutoRoute && narutoActivePool?.ok === false ? narutoActivePool.blockers || ['naruto_active_pool_not_ok'] : []),
     ...(isNarutoRoute && !narutoVerificationDag ? ['naruto_verification_dag_missing'] : []),
-    ...(isNarutoRoute && !narutoGptFinalPack ? ['naruto_gpt_final_pack_missing'] : []),
     ...(isNarutoRoute && !narutoZellijDashboard ? ['naruto_zellij_dashboard_missing'] : []),
     ...changedFileLeaseBlockers
   ]
@@ -305,7 +303,6 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     naruto_active_pool: narutoActivePool ? 'naruto-active-pool.json' : null,
     naruto_active_pool_refill_events: Number(narutoActivePool?.refill_events || 0),
     naruto_verification_dag: narutoVerificationDag ? 'naruto-verification-dag.json' : null,
-    naruto_gpt_final_pack: narutoGptFinalPack ? 'naruto-gpt-final-pack.json' : null,
     naruto_zellij_dashboard: narutoZellijDashboard ? 'naruto-zellij-dashboard.json' : null,
     patch_handoff_runtime: patchHandoff ? 'agent-patch-handoff-runtime.json' : null,
     patch_queue: patchHandoff ? 'agent-patch-queue.json' : null,

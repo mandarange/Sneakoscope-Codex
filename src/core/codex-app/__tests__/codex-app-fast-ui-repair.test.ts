@@ -25,6 +25,7 @@ test('Codex App Fast UI repair removes blank-separated SKS model locks but prese
     'suppress_unstable_features_warning = true',
     '# SKS moved machine-local Codex config from .codex/config.toml',
     '',
+    'model_provider = "codex-lb"',
     'service_tier = "fast"',
     'model = "gpt-5.6-sol"',
     'model_reasoning_effort = "ultra"',
@@ -52,7 +53,8 @@ test('Codex App Fast UI repair removes blank-separated SKS model locks but prese
   assert.equal(repaired.fast_selector, 'repaired')
   assert.equal(repaired.before_fast_selector, 'maybe_hidden_or_locked')
   assert.equal(repaired.after_fast_selector, 'available')
-  assert.deepEqual(globalAction?.removed_keys, ['model', 'model_reasoning_effort'])
+  assert.deepEqual(globalAction?.removed_keys, ['model_provider', 'model', 'model_reasoning_effort'])
+  assert.doesNotMatch(after, /^model_provider =/m)
   assert.match(after, /^service_tier = "fast"$/m)
   assert.doesNotMatch(after, /^model =/m)
   assert.doesNotMatch(after, /^model_reasoning_effort =/m)
@@ -70,6 +72,7 @@ test('Codex App Fast UI repair removes blank-separated SKS model locks but prese
 
 test('Codex App Fast UI repair preserves unmarked user model and effort choices', async (t) => {
   const input = [
+    'model_provider = "user-provider"',
     'service_tier = "fast"',
     'model = "user-model"',
     'model_reasoning_effort = "high"',
@@ -85,8 +88,27 @@ test('Codex App Fast UI repair preserves unmarked user model and effort choices'
   assert.equal(await fs.readFile(configPath, 'utf8'), input)
 })
 
+test('Codex App Fast UI repair preserves unmarked codex-lb selection and provider credentials', async (t) => {
+  const input = [
+    'model_provider = "codex-lb"',
+    'service_tier = "fast"',
+    '[features]',
+    'fast_mode = true # SKS Fast capability',
+    '[model_providers.codex-lb]',
+    'name = "openai"',
+    'base_url = "https://lb.example.test/backend-api/codex"',
+    'env_key = "CODEX_LB_API_KEY"',
+    ''
+  ].join('\n')
+  const { root, codexHome, configPath } = await fixture(t, input)
+
+  await repairCodexAppFastUi(root, { codexHome, apply: true, env: {} })
+
+  assert.equal(await fs.readFile(configPath, 'utf8'), input)
+})
+
 test('documented SKS Fast service tier is an available selector signal, not a lock', async (t) => {
-  const input = 'service_tier = "fast" # SKS Fast default\n[features]\nfast_mode = true\n'
+  const input = 'service_tier = "fast" # SKS Fast default\n[features]\nfast_mode = true # SKS Fast capability\n'
   const { root, codexHome } = await fixture(t, input)
 
   const snapshot = await snapshotCodexAppUiState(root, { codexHome })

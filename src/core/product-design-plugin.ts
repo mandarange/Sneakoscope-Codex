@@ -12,10 +12,10 @@ export const PRODUCT_DESIGN_REQUIRED_SKILLS = Object.freeze([
 ]);
 
 export const PRODUCT_DESIGN_LEGACY_DESIGN_FALLBACK_SKILLS = Object.freeze([
-  'design-artifact-expert',
-  'design-ui-editor',
-  'design-system-builder',
-  'getdesign-reference'
+  'sks-design-artifact-expert',
+  'sks-design-ui-editor',
+  'sks-design-system-builder',
+  'sks-getdesign-reference'
 ]);
 
 export const PRODUCT_DESIGN_PLUGIN = Object.freeze({

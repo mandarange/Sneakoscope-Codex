@@ -140,8 +140,8 @@ function statusFixture(providerModelUi: any) {
   return {
     ok: providerModelUi.ok,
     app: { installed: true, path: '/Applications/Codex.app' },
-    codex_cli: { ok: true, version: '0.144.1' },
-    remote_control: { ok: true, min_version: '0.130.0', codex_cli: { version_number: '0.144.1' } },
+    codex_cli: { ok: true, version: '0.144.5' },
+    remote_control: { ok: true, min_version: '0.130.0', codex_cli: { version_number: '0.144.5' } },
     features: {
       checked: true,
       required_flags_ok: true,

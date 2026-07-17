@@ -2,7 +2,7 @@
 
 SKS uses `src/core/proof/route-finalizer.ts` as the central completion path for serious routes, with `src/core/proof/auto-finalize.ts` as the command-facing helper. The finalizer accepts a mission id, route, gate/artifact evidence, command/test evidence, claims, unverified items, blockers, and optional visual evidence policy.
 
-Route fixture commands call `maybeFinalizeRoute` directly. The release-gated set includes `$Naruto`, QA-LOOP, Research, PPT, Image UX Review, Computer Use, DB, Wiki, and GX. Their E2E tests execute actual route commands and then inspect mission-local `completion-proof.json` rather than using `sks proof finalize latest` as the route test itself.
+Route fixture commands call `maybeFinalizeRoute` directly. The release-gated set includes `$sks-naruto`, `$sks-qa-loop`, `$sks-research`, `$sks-ppt`, `$sks-image-ux-review`, `$sks-computer-use`, `$sks-db`, `$sks-wiki`, and `$sks-gx`. Their E2E tests execute actual route commands and then inspect mission-local `completion-proof.json` rather than using `sks proof finalize latest` as the route test itself.
 
 `maybeFinalizeRoute` and `writeRouteCompletionProof` also bind finalization to the Trust Kernel. A route finalization path is incomplete unless the mission has:
 
@@ -19,8 +19,8 @@ Useful commands:
 
 ```bash
 sks proof finalize latest --json
-sks proof finalize latest --route '$Naruto' --json
-sks proof finalize latest --route '$Image-UX-Review' --mock --require-relation --json
+sks proof finalize latest --route '$sks-naruto' --json
+sks proof finalize latest --route '$sks-image-ux-review' --mock --require-relation --json
 sks proof route latest --json
 sks trust report latest --json
 sks trust explain latest

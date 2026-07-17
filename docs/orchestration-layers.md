@@ -5,8 +5,8 @@ terminal observability, and completion proof separate.
 
 ## Public Entry Points
 
-- `$Naruto` / `sks naruto run`: canonical Codex official subagent workflow.
-- `$Work`: executes the newest explicit SKS plan through the same workflow.
+- `$sks-naruto` / `sks naruto run`: canonical Codex official subagent workflow.
+- `$sks-work`: executes the newest explicit SKS plan through the same workflow.
 - Research, AutoResearch, QA-Loop, MAD-SKS, PPT, and visual routes keep their
   own route contracts while using official child threads where required.
 

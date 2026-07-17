@@ -7,8 +7,8 @@ SNEAKOSCOPE CODEX v${PACKAGE_VERSION}
 
 3-pillar frontdoor
 
-  $Plan "task"              plan only; writes .sneakoscope/plans, no code edits
-  $Work                     execute the latest plan with evidence gates
+  $sks-plan "task"          plan only; writes .sneakoscope/plans, no code edits
+  $sks-work                 execute the latest plan with evidence gates
 
 Local surfaces
 

@@ -19,5 +19,5 @@ const report = {
   invocation_defaults: matrix.invocation_defaults
 }
 
-assertGate(report.codex_0144 === true && report.multi_agent_mode === true && report.rollout_budget === true && report.indexed_web_search === true && report.current_time_read === true, 'Codex 0.144.1 capability must feed Doctor/native runtime feature matrix', report)
+assertGate(report.codex_0144 === true && report.multi_agent_mode === true && report.rollout_budget === true && report.indexed_web_search === true && report.current_time_read === true, 'Codex 0.144.5 capability must feed Doctor/native runtime feature matrix', report)
 emitGate('codex-native:0144-doctor-wiring', report)

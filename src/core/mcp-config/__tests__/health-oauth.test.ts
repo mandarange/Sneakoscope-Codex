@@ -101,6 +101,75 @@ test('stdio handshake timeout terminates the spawned process tree', { timeout: 1
   assert.equal(processExists(pids.child), false);
 });
 
+test('stdio startup failure returns a bounded public code', async (t) => {
+  const s = await fixture(t);
+  await fsp.writeFile(s.configPath, [
+    '[mcp_servers.missing]',
+    `command = ${JSON.stringify(path.join(s.home, 'missing-mcp-executable'))}`,
+    'startup_timeout_sec = 1',
+    ''
+  ].join('\n'), { mode: 0o600 });
+
+  const health = await testMcpConnection('missing', 'global', { home: s.home });
+  assert.equal(health.status, 'startup_failed');
+  assert.equal(health.public_error, 'mcp_process_error');
+  assert.doesNotMatch(JSON.stringify(health), /missing-mcp-executable/);
+});
+
+test('stdio tool-list timeout is bounded independently from startup', { timeout: 8_000 }, async (t) => {
+  const s = await fixture(t);
+  const server = path.join(s.home, 'tool-timeout-server.mjs');
+  await fsp.writeFile(server, [
+    "import readline from 'node:readline';",
+    "const rl = readline.createInterface({ input: process.stdin });",
+    "rl.on('line', (line) => {",
+    "  const msg = JSON.parse(line);",
+    "  if (msg.method === 'initialize') console.log(JSON.stringify({ jsonrpc:'2.0', id:msg.id, result:{ protocolVersion:'2024-11-05' } }));",
+    "});",
+    "setInterval(() => {}, 1000);"
+  ].join('\n'), { mode: 0o600 });
+  await fsp.writeFile(s.configPath, [
+    '[mcp_servers.tool_timeout]',
+    `command = ${JSON.stringify(process.execPath)}`,
+    `args = [${JSON.stringify(server)}]`,
+    'startup_timeout_sec = 2',
+    'tool_timeout_sec = 1',
+    ''
+  ].join('\n'), { mode: 0o600 });
+
+  const health = await testMcpConnection('tool_timeout', 'global', { home: s.home });
+  assert.equal(health.status, 'timeout');
+  assert.equal(health.public_error, 'mcp_handshake_timeout');
+});
+
+test('stdio stdout protocol pollution fails closed without echoing polluted output', async (t) => {
+  const s = await fixture(t);
+  const server = path.join(s.home, 'polluted-server.mjs');
+  await fsp.writeFile(server, [
+    "import readline from 'node:readline';",
+    "const rl = readline.createInterface({ input: process.stdin });",
+    "rl.on('line', (line) => {",
+    "  const msg = JSON.parse(line);",
+    "  if (msg.method === 'initialize') {",
+    "    console.log('polluted stdout detail must stay private');",
+    "    console.log(JSON.stringify({ jsonrpc:'2.0', id:msg.id, result:{ protocolVersion:'2024-11-05' } }));",
+    "  }",
+    "});"
+  ].join('\n'), { mode: 0o600 });
+  await fsp.writeFile(s.configPath, [
+    '[mcp_servers.polluted]',
+    `command = ${JSON.stringify(process.execPath)}`,
+    `args = [${JSON.stringify(server)}]`,
+    'startup_timeout_sec = 2',
+    ''
+  ].join('\n'), { mode: 0o600 });
+
+  const health = await testMcpConnection('polluted', 'global', { home: s.home });
+  assert.equal(health.status, 'protocol_error');
+  assert.equal(health.public_error, 'mcp_protocol_pollution');
+  assert.doesNotMatch(JSON.stringify(health), /polluted stdout detail/);
+});
+
 test('streamable HTTP health initializes, lists tools, preserves session ID, and reports OAuth required', async (t) => {
   const s = await fixture(t);
   const sessionHeaders: string[] = [];

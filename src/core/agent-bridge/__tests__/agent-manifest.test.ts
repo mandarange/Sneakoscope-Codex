@@ -78,6 +78,39 @@ test('generated manifest exactly matches the command registry in sorted order', 
   assert.deepEqual(validation.duplicate_names, []);
 });
 
+test('Naruto manifest metadata and actions match the parser help contract', () => {
+  const manifest = buildAgentManifest();
+  const naruto = manifest.tools.find((tool) => tool.name === 'naruto');
+  assert.ok(naruto);
+  assert.equal(naruto.risk, 'R2');
+  assert.equal(naruto.latency_class, 'long');
+  assert.equal(naruto.json_output_supported, true);
+  assert.equal(naruto.remote_allowed, false);
+  assert.equal(naruto.telegram_allowed, false);
+  assert.equal(naruto.requires_explicit_opt_in, true);
+  assert.equal(naruto.example_invocation, 'sks naruto help --json');
+  assert.deepEqual((naruto.input_schema as any).properties.action.enum, ['run', 'status', 'subagents', 'proof', 'help']);
+});
+
+test('manifest validation rejects Naruto risk, opt-in, and action drift', () => {
+  const manifest: any = buildAgentManifest();
+  const naruto = manifest.tools.find((tool: any) => tool.name === 'naruto');
+  naruto.risk = 'R1';
+  naruto.requires_explicit_opt_in = false;
+  naruto.input_schema = {
+    ...naruto.input_schema,
+    properties: {
+      ...naruto.input_schema.properties,
+      action: { ...naruto.input_schema.properties.action, enum: ['run', 'status'] }
+    }
+  };
+  const validation = validateAgentManifest(manifest);
+  assert.equal(validation.ok, false);
+  assert.ok(validation.issues.includes('contract_risk_mismatch:naruto'));
+  assert.ok(validation.issues.includes('contract_opt_in_mismatch:naruto'));
+  assert.ok(validation.issues.includes('naruto_action_contract_mismatch'));
+});
+
 test('manifest validation rejects stale removed commands, missing canonical commands, and duplicates', () => {
   const manifest: any = buildAgentManifest();
   const withoutSuperSearch = manifest.tools.filter((tool: any) => tool.name !== 'super-search');

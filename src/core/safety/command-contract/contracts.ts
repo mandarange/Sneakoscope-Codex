@@ -9,6 +9,7 @@ import type {
   CommandContractV2,
   CommandLatency
 } from './types.js';
+import { NARUTO_ACTIONS } from './types.js';
 
 type JsonObject = Record<string, unknown>;
 type ArgvBuilder = (input: JsonObject) => string[];
@@ -26,6 +27,35 @@ const ARGUMENT_PROFILES: Record<CommandInputProfile, ArgumentProfile> = {
   'json-only': {
     schema: objectSchema({ json: { type: 'boolean' } }),
     build: jsonFlag
+  },
+  naruto: {
+    schema: objectSchema({
+      action: { type: 'string', enum: [...NARUTO_ACTIONS] },
+      task: boundedString(1, 32_768),
+      prompt: boundedString(1, 32_768),
+      mission: boundedString(1, 160),
+      agents: { type: 'integer', minimum: 1 },
+      max_threads: { type: 'integer', minimum: 1 },
+      readonly: { type: 'boolean' },
+      json: { type: 'boolean' }
+    }),
+    build: (input) => {
+      const task = typeof input.prompt === 'string'
+        ? input.prompt
+        : typeof input.task === 'string'
+          ? input.task
+          : '';
+      const action = stringValue(input.action, task ? 'run' : 'help');
+      return [
+        action,
+        ...(task ? [task] : []),
+        ...valueFlag(input, 'mission', '--mission'),
+        ...numberFlag(input, 'agents', '--agents'),
+        ...numberFlag(input, 'max_threads', '--max-threads'),
+        ...booleanFlag(input, 'readonly', '--readonly'),
+        ...jsonFlag(input)
+      ];
+    }
   },
   paths: {
     schema: objectSchema({
@@ -138,6 +168,10 @@ function booleanFlag(input: JsonObject, key: string, flag: string): string[] {
 
 function valueFlag(input: JsonObject, key: string, flag: string): string[] {
   return typeof input[key] === 'string' ? [flag, input[key] as string] : [];
+}
+
+function numberFlag(input: JsonObject, key: string, flag: string): string[] {
+  return typeof input[key] === 'number' ? [flag, String(input[key])] : [];
 }
 
 function maturityFor(command: CommandEntry): CommandContractV2['maturity'] {

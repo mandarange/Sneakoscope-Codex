@@ -32,6 +32,42 @@ test('post-update menu bar install runs through the updated package entrypoint',
   }
 });
 
+test('Control Center update installs the new menu bar generation without launching it', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-updated-menubar-deferred-'));
+  const entrypoint = path.join(root, 'updated-sks.mjs');
+  const invocation = path.join(root, 'invocation.json');
+  await fs.writeFile(entrypoint, [
+    "import fs from 'node:fs';",
+    `fs.writeFileSync(${JSON.stringify(invocation)}, JSON.stringify({ argv: process.argv.slice(2) }));`,
+    "console.log(JSON.stringify({ schema: 'sks.codex-app-sks-menubar.v1', ok: true, apply: true, status: 'installed_launch_skipped', platform: process.platform, app_path: '/tmp/SKS Menu Bar.app', executable_path: '/tmp/SKS Menu Bar', launch_agent_path: '/tmp/launch.plist', action_script_path: '/tmp/action.sh', build_stamp_path: '/tmp/stamp.json', report_path: '/tmp/report.json', menu_items: [], actions: [], launch: { requested: false, method: 'skipped', ok: true, error: null }, tcc_automation_status: 'unknown', next_actions: [], blockers: [], warnings: [] }));"
+  ].join('\n'));
+  const stages: Array<{ id: string; ok: boolean; status: string; detail?: Record<string, unknown> }> = [];
+  try {
+    const result = await installUpdateSksMenuBar({
+      root,
+      entrypoint,
+      env: {
+        ...process.env,
+        SKS_MIGRATION_DOCTOR_TIMEOUT_MS: '5000',
+        SKS_UPDATE_DEFER_MENUBAR_RESTART: '1'
+      },
+      quiet: true,
+      stage: (id, ok, status, detail) => stages.push({
+        id,
+        ok,
+        status,
+        ...(detail === undefined ? {} : { detail })
+      })
+    });
+    const recorded = JSON.parse(await fs.readFile(invocation, 'utf8'));
+    assert.deepEqual(recorded.argv, ['menubar', 'install', '--no-launch', '--json']);
+    assert.equal(result?.status, 'installed_launch_skipped');
+    assert.equal(stages[0]?.detail?.restart_deferred, true);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
 test('post-update menu bar build failure is a failed progress stage', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-updated-menubar-fail-'));
   const entrypoint = path.join(root, 'updated-sks.mjs');

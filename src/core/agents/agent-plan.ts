@@ -53,7 +53,8 @@ export function normalizeOfficialSubagentPolicy(route: any, task: any = '', inpu
   const budget = resolveSubagentThreadBudget({
     ...(requested === null ? {} : { requested }),
     ...(positiveNumber(options.maxThreads) ? { configuredMaxThreads: Number(options.maxThreads) } : {}),
-    ...(positiveNumber(options.independentSliceCount) ? { independentSliceCount: Number(options.independentSliceCount) } : {})
+    ...(positiveNumber(options.independentSliceCount) ? { independentSliceCount: Number(options.independentSliceCount) } : {}),
+    ...capacityOptions(options)
   })
   const requestedSubagents = required ? budget.requestedSubagents : 0
 
@@ -69,6 +70,7 @@ export function normalizeOfficialSubagentPolicy(route: any, task: any = '', inpu
     max_depth: budget.maxDepth,
     first_wave: required ? budget.firstWave : 0,
     wave_count: required ? budget.waveCount : 0,
+    capacity_controller: budget.capacity,
     backend: 'official-codex-subagent',
     reason: policyReason(route, task, profile, required),
     outputs: ['subagent-plan.json', 'subagent-events.jsonl', 'subagent-parent-summary.json', 'subagent-evidence.json']
@@ -83,20 +85,38 @@ export function officialSubagentPipelineStage(policy: any = {}) {
   const maxThreads = required
     ? Math.max(1, Math.floor(Number(policy.max_threads || DEFAULT_NARUTO_MAX_THREADS)))
     : 0
+  const firstWave = required
+    ? Math.max(0, Math.floor(Number(policy.first_wave ?? Math.min(requestedSubagents, maxThreads))))
+    : 0
 
   return {
     id: OFFICIAL_SUBAGENT_EXECUTION_STAGE_ID,
     goal: 'Run a Codex official subagent workflow with disjoint ownership and correlated event evidence.',
     workflow: 'official_codex_subagent',
     requested_subagents: requestedSubagents,
-    max_parallel_agent_threads: Math.min(requestedSubagents, maxThreads),
+    max_parallel_agent_threads: firstWave,
     max_threads: maxThreads,
     max_depth: 1,
+    capacity_controller: policy.capacity_controller || null,
     backend: 'official-codex-subagent',
     read_only: false,
     write_policy: 'bounded workspace-write with disjoint path leases; parent-owned integration',
     outputs: policy.outputs || ['subagent-plan.json', 'subagent-events.jsonl', 'subagent-parent-summary.json', 'subagent-evidence.json']
   }
+}
+
+function capacityOptions(options: Record<string, any>) {
+  return Object.fromEntries([
+    ['readyDagWidth', options.readyDagWidth],
+    ['disjointOwnershipCount', options.disjointOwnershipCount],
+    ['verifierCapacity', options.verifierCapacity],
+    ['toolConcurrency', options.toolConcurrency],
+    ['activeThreadCount', options.activeThreadCount],
+    ['parentReservedThreads', options.parentReservedThreads],
+    ['reviewerReservedThreads', options.reviewerReservedThreads],
+    ['marginalUsefulWorkers', options.marginalUsefulWorkers],
+    ['marginalUsefulThroughputPositive', options.marginalUsefulThroughputPositive]
+  ].filter(([, value]) => value !== undefined))
 }
 
 export function explicitlyParallelizable(prompt: unknown): boolean {

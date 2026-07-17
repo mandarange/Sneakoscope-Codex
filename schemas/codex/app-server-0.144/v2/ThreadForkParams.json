@@ -79,6 +79,12 @@
         "null"
       ]
     },
+    "serviceTier": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "sandbox": {
       "anyOf": [
         {
@@ -87,12 +93,6 @@
         {
           "type": "null"
         }
-      ]
-    },
-    "serviceTier": {
-      "type": [
-        "string",
-        "null"
       ]
     },
     "threadSource": {

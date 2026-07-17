@@ -1,3 +1,5 @@
+import { normalizeDollarSkillName, prefixKnownSksDollarReferences, sksPrefixedDollarCommand } from './dollar-prefix.js';
+
 export interface DollarCommandLiteEntry {
   command: string;
   route: string;
@@ -9,10 +11,10 @@ export interface DollarCommandAliasLiteEntry {
   app_skill: string;
 }
 
-const NARUTO_DESCRIPTION = '$Naruto is the lightweight Codex official subagent workflow. The Sol Max parent uses two independent children for non-trivial work and at most three for critical multi-domain risk; explicit --agents remains authoritative. Child routing is fixed to Luna Max mechanical, Sol High implementation, Sol Max judgment, and Terra Medium long-context/Computer Use/Browser/ImageGen execution. It delegates only defensible independent slices, reuses bounded query-aware TriWiki attention anchors, and requires official lifecycle events plus a trustworthy structured parent summary.';
+const NARUTO_DESCRIPTION = '$Naruto is the lightweight Codex official subagent workflow and the default for non-trivial execution. The Sol Max parent dynamically scales useful independent children from a bounded two/four/six starting policy up to the safe capacity ceiling; max_threads is a cap, never a target. Capacity is the minimum of ready DAG width, disjoint ownership, verifier/tool capacity, reserved thread slots, and positive marginal usefulness. Child routing is fixed to Luna Max mechanical, Sol High implementation, Sol Max judgment, and Terra Medium long-context/Computer Use/Browser/ImageGen execution. Duplicate slices and overlapping writes are blocked; explicit --agents remains authoritative.';
 const COMPUTER_USE_DESCRIPTION = 'Maximum-speed Codex Computer Use lane for native macOS, desktop-app, OS-settings, and non-web visual tasks only. Browser, localhost, website, webapp, and web-based app verification must route through Codex Chrome Extension readiness first.';
 
-export const DOLLAR_COMMANDS_LITE = [
+const DOLLAR_COMMANDS_LITE_BASE = [
   { command: '$DFix', route: 'fast direct fix', description: 'Tiny simple direct edits such as copy, labels, typos, wording, spacing, colors, or clearly scoped one-line changes. Bypasses the general SKS pipeline and runs an ultralight, no-record task-list path.' },
   { command: '$Answer', route: 'answer-only research', description: 'Answer questions without starting implementation. Uses TriWiki, web, Context7 when relevant, and Honest Mode fact-checking.' },
   { command: '$SKS', route: 'general SKS workflow', description: 'General Sneakoscope setup, help, status, and workflow routing.' },
@@ -46,7 +48,7 @@ export const DOLLAR_COMMANDS_LITE = [
   { command: '$Help', route: 'command help', description: 'Explain installed SKS commands and workflows.' }
 ] as const satisfies readonly DollarCommandLiteEntry[];
 
-export const DOLLAR_COMMAND_ALIASES_LITE = [
+const DOLLAR_COMMAND_ALIASES_LITE_BASE = [
   { canonical: '$DFix', app_skill: '$dfix' },
   { canonical: '$Answer', app_skill: '$answer' },
   { canonical: '$SKS', app_skill: '$sks' },
@@ -82,6 +84,22 @@ export const DOLLAR_COMMAND_ALIASES_LITE = [
   { canonical: '$Wiki', app_skill: '$wiki' },
   { canonical: '$Help', app_skill: '$help' }
 ] as const satisfies readonly DollarCommandAliasLiteEntry[];
+
+const LEGACY_LITE_DOLLAR_NAMES = Array.from(new Set([
+  ...DOLLAR_COMMANDS_LITE_BASE.map((entry) => normalizeDollarSkillName(entry.command)),
+  ...DOLLAR_COMMAND_ALIASES_LITE_BASE.map((entry) => normalizeDollarSkillName(entry.app_skill))
+]));
+
+export const DOLLAR_COMMANDS_LITE = DOLLAR_COMMANDS_LITE_BASE.map((entry) => ({
+  ...entry,
+  command: sksPrefixedDollarCommand(entry.command),
+  description: prefixKnownSksDollarReferences(entry.description, LEGACY_LITE_DOLLAR_NAMES)
+})) satisfies readonly DollarCommandLiteEntry[];
+
+export const DOLLAR_COMMAND_ALIASES_LITE = DOLLAR_COMMAND_ALIASES_LITE_BASE.map((entry) => ({
+  canonical: sksPrefixedDollarCommand(entry.canonical),
+  app_skill: sksPrefixedDollarCommand(entry.app_skill)
+})) satisfies readonly DollarCommandAliasLiteEntry[];
 
 export function dollarCommandsJsonFast(): void {
   process.stdout.write(`${JSON.stringify({

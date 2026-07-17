@@ -15,7 +15,7 @@ import {
 } from '../agent-catalog.js'
 import { prepareOfficialSubagentMission } from '../official-subagent-preparation.js'
 
-test('automatic official subagent fanout defaults non-trivial work to two and reserves three for critical multi-domain risk', () => {
+test('automatic fanout scales bounded, parallel, large-scale, and reviewer-only work differently', () => {
   const bounded = officialSubagentFanoutPolicy({
     taskProfile: classifyTaskProfile('implement the parser fix'),
     goal: 'implement the parser fix',
@@ -37,9 +37,18 @@ test('automatic official subagent fanout defaults non-trivial work to two and re
     goal: 'fix independent files in parallel',
     suggestedRoles: ['implementation_specialist', 'test_engineer']
   })
-  assert.equal(parallel.requested_subagents, 2)
+  assert.equal(parallel.requested_subagents, 4)
   assert.equal(parallel.selection_reason, 'explicit_parallel_or_independent_slices')
   assert.equal(parallel.automatic_reviewer_ceiling, 2)
+
+  const largeScale = officialSubagentFanoutPolicy({
+    taskProfile: classifyTaskProfile('implement a large-scale repository-wide migration with many independent files'),
+    goal: 'implement a large-scale repository-wide migration with many independent files',
+    suggestedRoles: ['implementation_specialist', 'test_engineer', 'integration_reviewer']
+  })
+  assert.equal(largeScale.requested_subagents, 6)
+  assert.equal(largeScale.automatic_ceiling, 10)
+  assert.equal(largeScale.selection_reason, 'large_scale_dynamic_parallel')
 
   const independentRisk = officialSubagentFanoutPolicy({
     taskProfile: classifyTaskProfile('audit database migration security and permissions'),
@@ -122,15 +131,18 @@ test('on-demand role metadata is unique, alias-aware, and bounded independently 
     'native_app_specialist',
     'protocol-reviewer',
     'runtime-reliability-reviewer',
-    'triwiki-evidence-reviewer'
+    'triwiki-evidence-reviewer',
+    'toolchain-specialist'
   ])
 
   assert.equal(full.length, 25)
-  assert.equal(selected.length, MAX_ON_DEMAND_SUBAGENT_ROLE_COUNT)
+  assert.equal(selected.length, 5)
   assert.deepEqual(selected.map((role) => role.name), [
     'native_app_specialist',
     'protocol_reviewer',
-    'runtime_reliability_reviewer'
+    'runtime_reliability_reviewer',
+    'triwiki_evidence_reviewer',
+    'toolchain_specialist'
   ])
   assert.equal(new Set(selected.map((role) => role.description)).size, selected.length)
   assert.ok(full.every((role) => role.model_policy.length > 0))
@@ -156,6 +168,27 @@ test('explicit operator agent count remains authoritative', () => {
   assert.equal(policy.requested_subagents, 7)
   assert.equal(policy.mode, 'explicit_operator_count')
   assert.equal(policy.selection_reason, 'explicit_operator_count_preserved')
+})
+
+test('parent decomposition may expand useful implementation shards but not reviewer-only clones', () => {
+  const implementation = officialSubagentFanoutPolicy({
+    taskProfile: 'parallel-write',
+    goal: 'implement independent modules',
+    suggestedRoles: ['implementation_specialist', 'test_engineer'],
+    independentSliceCount: 8
+  })
+  assert.equal(implementation.requested_subagents, 8)
+  assert.equal(implementation.automatic_ceiling, 10)
+  assert.equal(implementation.selection_reason, 'parent_decomposed_independent_slices')
+
+  const reviewers = officialSubagentFanoutPolicy({
+    taskProfile: 'parallel-read',
+    goal: 'review independent modules',
+    suggestedRoles: ['architecture_reviewer', 'security_reviewer'],
+    independentSliceCount: 8
+  })
+  assert.equal(reviewers.requested_subagents, 2)
+  assert.equal(reviewers.automatic_ceiling, 2)
 })
 
 test('route-owned orchestration count remains authoritative without masquerading as an operator request', () => {
@@ -185,11 +218,12 @@ test('mission preparation writes the selected automatic count into plan, budget,
     route: '$Naruto',
     mode: 'naruto'
   })
-  assert.equal(automatic.plan.requested_subagents, 2)
-  assert.equal(automatic.budget.requestedSubagents, 2)
-  assert.equal(automatic.evidence.requested_subagents, 2)
-  assert.equal(automatic.fanoutPolicy.requested_subagents, 2)
-  assert.match(automatic.delegationPrompt, /requested subagents: 2/)
+  assert.equal(automatic.plan.requested_subagents, 4)
+  assert.equal(automatic.budget.requestedSubagents, 4)
+  assert.equal(automatic.evidence.requested_subagents, 4)
+  assert.equal(automatic.fanoutPolicy.requested_subagents, 4)
+  assert.match(automatic.delegationPrompt, /requested subagents: 4/)
+  assert.equal(automatic.plan.capacity_controller.max_threads_is_cap_not_target, true)
   assert.equal(automatic.plan.agent_catalog.mode, 'on_demand')
   assert.equal(automatic.plan.agent_catalog.full_catalog_injected, false)
   assert.equal(automatic.plan.agent_catalog.total_available, 25)
@@ -249,4 +283,52 @@ test('mission preparation writes the selected automatic count into plan, budget,
   assert.equal(autoresearch.plan.requested_subagents, 3)
   assert.equal(autoresearch.plan.requested_subagents_source, 'route_contract')
   assert.equal(autoresearch.plan.route_owned_count_contract?.reason, 'autoresearch_exact_three_independent_reviewers')
+})
+
+test('prepared decomposition applies capacity bounds and fails closed on overlapping writes', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-agent-capacity-plan-'))
+  const safeDir = path.join(root, '.sneakoscope', 'missions', 'M-safe-capacity')
+  await fs.mkdir(safeDir, { recursive: true })
+  const safe = await prepareOfficialSubagentMission({
+    root,
+    dir: safeDir,
+    missionId: 'M-safe-capacity',
+    goal: 'implement four independent modules in parallel',
+    route: '$Naruto',
+    mode: 'naruto',
+    slices: Array.from({ length: 4 }, (_, index) => ({
+      id: `S${index + 1}`,
+      title: `Module ${index + 1}`,
+      description: `Implement module ${index + 1}`,
+      kind: 'worker' as const,
+      agent: 'implementation_specialist',
+      paths: [`src/module-${index + 1}`]
+    })),
+    capacity: { verifierCapacity: 2 }
+  })
+  assert.equal(safe.plan.decomposition_status, 'ready')
+  assert.equal(safe.plan.requested_subagents, 4)
+  assert.equal(safe.plan.first_wave, 2)
+  assert.equal(safe.plan.capacity_controller.limiting_factors.includes('verifier_capacity'), true)
+  assert.equal(safe.plan.slice_safety.safe, true)
+
+  const blockedDir = path.join(root, '.sneakoscope', 'missions', 'M-blocked-capacity')
+  await fs.mkdir(blockedDir, { recursive: true })
+  const blocked = await prepareOfficialSubagentMission({
+    root,
+    dir: blockedDir,
+    missionId: 'M-blocked-capacity',
+    goal: 'implement overlapping modules in parallel',
+    route: '$Naruto',
+    mode: 'naruto',
+    slices: [
+      { id: 'A', title: 'Core', description: 'Change core', kind: 'worker', paths: ['src/core'] },
+      { id: 'B', title: 'Nested', description: 'Change nested core', kind: 'worker', paths: ['src/core/subagents'] }
+    ]
+  })
+  assert.equal(blocked.plan.slice_safety.safe, false)
+  assert.equal(blocked.plan.first_wave, 0)
+  assert.ok(blocked.plan.config_blockers.some((value: string) => value.startsWith('subagent_slice:overlapping_write_scope:')))
+  assert.ok(blocked.plan.config_blockers.includes('subagent_capacity_exhausted'))
+  assert.equal(blocked.evidence.ok, false)
 })

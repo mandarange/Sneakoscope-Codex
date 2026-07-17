@@ -21,15 +21,16 @@ for (const skill of manifest.skills) {
   assertGate(Array.isArray(skill.hash_history), `hash_history must be array:${skill.canonical_name}`, skill);
   assertGate(Array.isArray(skill.deprecated_aliases), `deprecated_aliases must be array:${skill.canonical_name}`, skill);
 }
-for (const required of ['naruto', 'answer', 'dfix', 'fast-mode', 'honest-mode']) {
+for (const required of ['sks-naruto', 'sks-answer', 'sks-dfix', 'sks-fast-mode', 'sks-honest-mode']) {
   assertGate(names.has(required), `manifest missing required skill:${required}`, manifest);
 }
+assertGate([...names].every((name) => name === 'sks' || name.startsWith('sks-')), 'packaged manifest must expose only namespaced SKS skills', { names: [...names].filter((name) => name !== 'sks' && !name.startsWith('sks-')) });
 assertGate(!Object.hasOwn(manifest, 'removed_skills'), 'current packaged manifest must not publish retired skill names', manifest);
 
 const home = await makeTempRoot('skills-manifest-global-collision-');
 await writeText(path.join(home, '.agents', 'skills', 'answer', 'SKILL.md'), '---\nname: answer\ndescription: user global answer\n---\n\nuser-owned global answer.\n');
 const install = await installGlobalSkills(home);
-const answerExists = fs.existsSync(path.join(home, '.agents', 'skills', 'answer', 'SKILL.md'));
+const answerExists = fs.existsSync(path.join(home, '.agents', 'skills', 'sks-answer', 'SKILL.md'));
 const quarantined = await findFiles(path.join(home, '.sneakoscope', 'quarantine', 'skills', 'answer'), 'SKILL.md');
 assertGate(answerExists && quarantined.length === 1, 'global install must quarantine user official-name collision before writing official skill', install);
 

@@ -21,12 +21,12 @@ Completion Proof includes links to the evidence router and trust report so proof
 - `.sneakoscope/missions/<id>/completion-proof.json`
 - `.sneakoscope/missions/<id>/completion-proof.md`
 
-The current `$Naruto` workflow binds official Codex subagent evidence through the route gate:
+The current `$sks-naruto` workflow binds official Codex subagent evidence through the route gate:
 
 ```json
 {
   "schema": "sks.completion-proof.v1",
-  "route": "$Naruto",
+  "route": "$sks-naruto",
   "evidence": {
     "route_gate": {
       "workflow": "official_codex_subagent",
@@ -37,7 +37,14 @@ The current `$Naruto` workflow binds official Codex subagent evidence through th
 }
 ```
 
-The supporting mission artifacts are `subagent-plan.json`, `subagent-events.jsonl`, `subagent-parent-summary.json`, `subagent-evidence.json`, and `naruto-gate.json`. Process counts, pane counts, or synthetic worker output do not satisfy the current collaboration proof contract.
+The supporting mission artifacts are `subagent-plan.json`, `subagent-events.jsonl`, `subagent-parent-summary.json`, `subagent-evidence.json`, `naruto-summary.json`, and `naruto-gate.json`. Process counts, pane counts, or synthetic worker output do not satisfy the current collaboration proof contract.
+
+`sks naruto proof <mission> --json` is the stable external projection of that
+six-artifact bundle. It returns `completed`, `blocked`, or `incomplete`, carries
+the validated parent-owned summary, repository-relative changed files, bounded
+verification rows, and exposes a deterministic `proof_fingerprint`. It does not
+rewrite the terminal artifacts or include prompts, environment values, tokens,
+or raw stdout/stderr.
 
 ## Status Values
 
@@ -66,7 +73,7 @@ sks proof route latest --json
 sks proof route <mission-id> --json
 sks proof finalize latest --json
 sks proof finalize <mission-id> --json
-sks proof finalize latest --route '$Naruto' --json
+sks proof finalize latest --route '$sks-naruto' --json
 sks proof finalize latest --strict --json
 sks proof export --md
 sks proof repair latest --json

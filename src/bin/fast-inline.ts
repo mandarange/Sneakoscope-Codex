@@ -80,11 +80,11 @@ export async function hookUserPromptSubmitPerfInline(): Promise<void> {
     })}\n`);
     return;
   }
-  const route = /\$Super-Search|\bsuper-search\b|site:(?:x|twitter)\.com/i.test(prompt)
-    ? '$Super-Search'
+  const route = /\$(?:sks-)?Super-Search|\bsuper-search\b|site:(?:x|twitter)\.com/i.test(prompt)
+    ? '$sks-super-search'
     : /\b(?:fix|failing|failing tests|고쳐|수정|깨져)\b/i.test(prompt)
-      ? '$Naruto'
-      : '$Answer';
+      ? '$sks-naruto'
+      : '$sks-answer';
   const contexts = [
     'SKS hook perf inline path active for bounded latency measurement.',
     `Route: ${route}`,

@@ -78,6 +78,46 @@ test('JSON-capable local R2 commands preserve the explicit JSON flag without exp
   }
 });
 
+test('Naruto contract matches its local-only explicit-opt-in CLI surface', () => {
+  const contract = commandContract('naruto');
+  assert.ok(contract);
+  assert.equal(contract.risk, 'R2');
+  assert.equal(contract.latency, 'long');
+  assert.equal(contract.supports_json, true);
+  assert.equal(contract.remote_allowed, false);
+  assert.equal(contract.telegram_allowed, false);
+  assert.equal(contract.input_schema.additionalProperties, false);
+  assert.deepEqual((contract.input_schema as any).properties.action.enum, ['run', 'status', 'subagents', 'proof', 'help']);
+
+  const run = validateJsonSchema({ action: 'run', task: 'bounded task', mission: 'M-1', agents: 2, max_threads: 4, readonly: true, json: true }, contract.input_schema);
+  assert.equal(run.ok, true);
+  if (run.ok) {
+    assert.deepEqual(contract.argv_builder(run.value), [
+      'naruto', 'run', 'bounded task', '--mission', 'M-1', '--agents', '2', '--max-threads', '4', '--readonly', '--json'
+    ]);
+  }
+
+  const prompt = validateJsonSchema({ action: 'run', prompt: 'prompt alias', json: true }, contract.input_schema);
+  assert.equal(prompt.ok, true);
+  if (prompt.ok) assert.deepEqual(contract.argv_builder(prompt.value), ['naruto', 'run', 'prompt alias', '--json']);
+
+  const proof = validateJsonSchema({ action: 'proof', mission: 'M-1', json: true }, contract.input_schema);
+  assert.equal(proof.ok, true);
+  if (proof.ok) assert.deepEqual(contract.argv_builder(proof.value), ['naruto', 'proof', '--mission', 'M-1', '--json']);
+
+  const misplacedTask = validateJsonSchema({ action: 'status', task: 'must not be silently dropped', json: true }, contract.input_schema);
+  assert.equal(misplacedTask.ok, true);
+  if (misplacedTask.ok) {
+    assert.deepEqual(contract.argv_builder(misplacedTask.value), ['naruto', 'status', 'must not be silently dropped', '--json']);
+  }
+
+  const unknownAction = validateJsonSchema({ action: 'dashboard', json: true }, contract.input_schema);
+  assert.equal(unknownAction.ok, false);
+  const unknownInput = validateJsonSchema({ action: 'run', task: 'x', model: 'gpt-5.6-terra' }, contract.input_schema);
+  assert.equal(unknownInput.ok, false);
+  assert.ok(!unknownInput.ok && unknownInput.issues.some((entry) => entry.code === 'additionalProperties'));
+});
+
 test('latency classes have bounded timeout and output caps', () => {
   assert.deepEqual(
     ['fast', 'normal', 'long'].map((latency) => [timeoutFor(latency as 'fast' | 'normal' | 'long'), outputCapFor(latency as 'fast' | 'normal' | 'long')]),

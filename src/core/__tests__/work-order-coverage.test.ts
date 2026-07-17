@@ -69,7 +69,7 @@ async function writePassingOfficialNarutoArtifacts(dir: string, missionId: strin
     schema: 'sks.naruto-subagent-workflow.v1',
     ok: true,
     status: 'completed',
-    route: '$Naruto',
+    route: '$sks-naruto',
     workflow: 'official_codex_subagent',
     parent: { model: 'gpt-5.6-sol', model_reasoning_effort: 'max', observed_model_match: null },
     requested_subagents: 1,

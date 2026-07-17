@@ -13,6 +13,8 @@ const DEFAULT_TAIL_BYTES = 256 * 1024
 const DEFAULT_REFRESH_MIN_MS = 2_000
 const DEFAULT_HEARTBEAT_MS = 5_000
 const MAX_DISCOVERY_DAY_DIRS = 45
+// The current release baseline is 0.144.5, but this rollout format has been
+// stable since 0.144.1 and remains readable for compatible older sessions.
 const MIN_SUPPORTED_CODEX_ROLLOUT_VERSION = '0.144.1'
 const rolloutPathCache = new Map<string, { checked_at_ms: number; file: string | null }>()
 

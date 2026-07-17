@@ -18,12 +18,15 @@ final class ProcessClient {
         self.projectRoot = projectRoot
     }
 
-    func run(_ arguments: [String], stdin: String? = nil, completion: @escaping (ProcessResult) -> Void) {
+    func run(_ arguments: [String], stdin: String? = nil, environment: [String: String] = [:], completion: @escaping (ProcessResult) -> Void) {
         let process = Process()
         let output = Pipe()
         let sensitiveValues = sensitiveStdinValues(arguments: arguments, stdin: stdin)
         process.executableURL = URL(fileURLWithPath: actionScript)
         process.arguments = arguments
+        if !environment.isEmpty {
+            process.environment = ProcessInfo.processInfo.environment.merging(environment) { _, override in override }
+        }
         if FileManager.default.fileExists(atPath: projectRoot) { process.currentDirectoryURL = URL(fileURLWithPath: projectRoot) }
         process.standardOutput = output
         process.standardError = output

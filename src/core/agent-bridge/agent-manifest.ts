@@ -1,6 +1,11 @@
 import { COMMANDS, type CommandEntry, type CommandName } from '../../cli/command-registry.js';
 import { nowIso } from '../fsx.js';
-import { commandContract, validateCommandContractRegistry, type CommandRisk } from '../safety/command-contract/index.js';
+import {
+  NARUTO_ACTIONS,
+  commandContract,
+  validateCommandContractRegistry,
+  type CommandRisk
+} from '../safety/command-contract/index.js';
 
 export type LatencyClass = 'fast' | 'normal' | 'long';
 
@@ -38,6 +43,7 @@ export interface AgentManifestValidation {
 }
 
 function exampleInvocation(name: string, jsonSupported: boolean): string {
+  if (name === 'naruto') return 'sks naruto help --json';
   return jsonSupported ? `sks ${name} --json` : `sks ${name}`;
 }
 
@@ -107,6 +113,18 @@ export function validateAgentManifest(manifest: unknown): AgentManifestValidatio
     if (typeof (tool as any)?.telegram_allowed !== 'boolean') issues.push(`invalid_telegram_allowed:${name || '<missing>'}`);
     if (!(tool as any)?.input_schema || typeof (tool as any).input_schema !== 'object') issues.push(`invalid_input_schema:${name || '<missing>'}`);
   }
+
+  const naruto = tools.find((tool: any) => tool?.name === 'naruto') as any;
+  const expectedNaruto = commandContract('naruto');
+  const narutoActions = naruto?.input_schema?.properties?.action?.enum;
+  if (JSON.stringify(narutoActions) !== JSON.stringify(NARUTO_ACTIONS)) issues.push('naruto_action_contract_mismatch');
+  if (naruto?.risk !== expectedNaruto?.risk || naruto?.risk !== 'R2') issues.push('contract_risk_mismatch:naruto');
+  if (naruto?.latency_class !== expectedNaruto?.latency || naruto?.latency_class !== 'long') issues.push('contract_latency_mismatch:naruto');
+  if (naruto?.json_output_supported !== expectedNaruto?.supports_json || naruto?.json_output_supported !== true) issues.push('contract_json_mismatch:naruto');
+  if (naruto?.remote_allowed !== expectedNaruto?.remote_allowed || naruto?.remote_allowed !== false) issues.push('contract_remote_mismatch:naruto');
+  if (naruto?.telegram_allowed !== expectedNaruto?.telegram_allowed || naruto?.telegram_allowed !== false) issues.push('contract_telegram_mismatch:naruto');
+  if (naruto?.requires_explicit_opt_in !== true) issues.push('contract_opt_in_mismatch:naruto');
+  if (JSON.stringify(naruto?.input_schema) !== JSON.stringify(expectedNaruto?.input_schema)) issues.push('contract_input_schema_mismatch:naruto');
 
   return {
     ok: issues.length === 0,
