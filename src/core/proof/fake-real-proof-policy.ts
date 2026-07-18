@@ -1,6 +1,11 @@
 import path from 'node:path'
 import { nowIso, readJson, writeJsonAtomic } from '../fsx.js'
 import { normalizeProofRoute } from './route-proof-policy.js'
+import {
+  effectiveSubagentTarget,
+  normalizeLegacySubagentCountFields,
+  subagentCountContractBlockers
+} from '../subagents/wave-lifecycle.js'
 
 export const FAKE_REAL_PROOF_POLICY_SCHEMA = 'sks.fake-real-proof-policy.v3'
 export const OFFICIAL_SUBAGENT_EXECUTION_AUTHORITY = 'official_codex_subagent'
@@ -60,9 +65,9 @@ export function evaluateOfficialSubagentExecutionProof(
 ): OfficialSubagentExecutionEvaluation {
   const required = options.required === true
   const plan = record(input.subagent_plan || input.plan)
-  const evidence = officialEvidence(input)
-  const summary = record(input.naruto_summary || input.summary)
-  const gate = record(input.naruto_gate || input.route_gate || input.gate)
+  const evidence = record(normalizeLegacySubagentCountFields(officialEvidence(input), plan))
+  const summary = record(normalizeLegacySubagentCountFields(record(input.naruto_summary || input.summary), plan))
+  const gate = record(normalizeLegacySubagentCountFields(record(input.naruto_gate || input.route_gate || input.gate), plan))
   const present = Boolean(plan || evidence || summary || gate)
 
   if (!present) {
@@ -78,12 +83,14 @@ export function evaluateOfficialSubagentExecutionProof(
     }
   }
 
+  const observedStarts = runScopedObservedStarts(plan, evidence)
+  const countTarget = effectiveSubagentTarget(plan, observedStarts)
   const blockers = uniqueStrings([
-    ...(!plan ? ['official_subagent_plan_missing'] : validatePlan(plan)),
+    ...(!plan ? ['official_subagent_plan_missing'] : validatePlan(plan, observedStarts)),
     ...(!evidence ? ['official_subagent_evidence_missing'] : validateEvidence(evidence)),
     ...(!summary ? ['naruto_summary_missing'] : validateSummary(summary)),
     ...(!gate ? ['naruto_gate_missing'] : validateGate(gate)),
-    ...validateRunBinding(plan, evidence, summary, gate)
+    ...validateRunBinding(plan, evidence, summary, gate, countTarget)
   ])
 
   return {
@@ -266,19 +273,21 @@ function officialEvidence(input: any): Record<string, any> | null {
   return record(input?.official_subagent_evidence || input?.subagent_evidence)
 }
 
-function validatePlan(plan: Record<string, any>): string[] {
+function validatePlan(plan: Record<string, any>, observedStarts: number): string[] {
   return uniqueStrings([
     ...(plan.schema !== 'sks.subagent-plan.v1' ? ['official_subagent_plan_schema_invalid'] : []),
     ...(plan.workflow !== OFFICIAL_SUBAGENT_EXECUTION_AUTHORITY ? ['official_subagent_plan_workflow_invalid'] : []),
     ...(normalizeProofRoute(plan.route) !== '$Naruto' ? ['official_subagent_plan_route_invalid'] : []),
     ...(Number(plan.requested_subagents || 0) < 1 ? ['official_subagent_plan_requested_subagents_invalid'] : []),
     ...(Number(plan.max_depth) !== 1 ? ['official_subagent_plan_max_depth_invalid'] : []),
+    ...subagentCountContractBlockers(plan, observedStarts),
     ...(Array.isArray(plan.config_blockers) && plan.config_blockers.length ? plan.config_blockers.map((value: unknown) => `official_subagent_config:${String(value)}`) : [])
   ])
 }
 
 function validateEvidence(evidence: Record<string, any>): string[] {
   const requested = Number(evidence.requested_subagents || 0)
+  const target = Number(evidence.target_subagents || 0)
   const started = Number(evidence.started_threads || 0)
   const completed = Number(evidence.completed_threads || 0)
   const failed = Number(evidence.failed_threads || 0)
@@ -289,8 +298,10 @@ function validateEvidence(evidence: Record<string, any>): string[] {
     ...(evidence.ok !== true || evidence.status !== 'completed' ? ['official_subagent_evidence_not_completed'] : []),
     ...(evidence.preparation_only === true ? ['official_subagent_evidence_preparation_only'] : []),
     ...(requested < 1 ? ['official_subagent_requested_subagents_invalid'] : []),
-    ...(requested > 0 && started !== requested ? ['official_subagent_start_count_mismatch'] : []),
-    ...(requested > 0 && completed !== requested ? ['official_subagent_completion_count_mismatch'] : []),
+    ...(!['exact', 'dynamic_automatic'].includes(String(evidence.count_policy || '')) ? ['official_subagent_count_policy_invalid'] : []),
+    ...(target < 1 ? ['official_subagent_target_subagents_invalid'] : []),
+    ...(target > 0 && started !== target ? ['official_subagent_start_count_mismatch'] : []),
+    ...(target > 0 && completed !== target ? ['official_subagent_completion_count_mismatch'] : []),
     ...(failed !== 0 ? ['official_subagent_failed_threads_present'] : []),
     ...(Array.isArray(evidence.open_thread_ids) && evidence.open_thread_ids.length ? ['official_subagent_open_threads_present'] : []),
     ...(!eventSources.has('SubagentStart') || !eventSources.has('SubagentStop') ? ['official_subagent_event_sources_incomplete'] : []),
@@ -329,7 +340,8 @@ function validateRunBinding(
   plan: Record<string, any> | null,
   evidence: Record<string, any> | null,
   summary: Record<string, any> | null,
-  gate: Record<string, any> | null
+  gate: Record<string, any> | null,
+  countTarget: ReturnType<typeof effectiveSubagentTarget>
 ): string[] {
   const runIds = [plan?.workflow_run_id, evidence?.run_id, summary?.workflow_run_id, gate?.workflow_run_id]
     .map((value) => String(value || '').trim())
@@ -338,7 +350,25 @@ function validateRunBinding(
   const requested = [plan?.requested_subagents, evidence?.requested_subagents, summary?.requested_subagents, gate?.requested_subagents]
     .map((value) => Number(value || 0))
   if (requested.some((value) => value < 1) || new Set(requested).size !== 1) return ['official_subagent_requested_subagents_mismatch']
+  const policies = [countTarget.countPolicy, evidence?.count_policy, summary?.count_policy, gate?.count_policy]
+    .map((value) => String(value || '').trim())
+  if (policies.some((value) => !['exact', 'dynamic_automatic'].includes(value)) || new Set(policies).size !== 1) {
+    return ['official_subagent_count_policy_mismatch']
+  }
+  const targets = [countTarget.targetSubagents, evidence?.target_subagents, summary?.target_subagents, gate?.target_subagents]
+    .map((value) => Number(value || 0))
+  if (targets.some((value) => value < 1) || new Set(targets).size !== 1) return ['official_subagent_target_subagents_mismatch']
   return []
+}
+
+function runScopedObservedStarts(
+  plan: Record<string, any> | null,
+  evidence: Record<string, any> | null
+): number {
+  const planRunId = String(plan?.workflow_run_id || '').trim()
+  const evidenceRunId = String(evidence?.run_id || '').trim()
+  if (!planRunId || evidenceRunId !== planRunId) return 0
+  return Math.max(0, Math.floor(Number(evidence?.started_threads) || 0))
 }
 
 function record(value: unknown): Record<string, any> | null {

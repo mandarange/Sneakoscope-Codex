@@ -1,3 +1,4 @@
+import path from 'node:path'
 import {
   RELEASE_AUTHORIZATION_SNAPSHOT_KEYS,
   sameReleaseAuthorizationSnapshot,
@@ -32,6 +33,20 @@ export const RELEASE_REAL_CHECK_IDS = Object.freeze([
   ...RELEASE_REAL_REQUIRED_CHECK_IDS,
   ...RELEASE_REAL_OPTIONAL_CHECK_IDS
 ])
+
+export function releaseDagSummaryIdentityBlockers(summary: any, summaryPath: string, releaseGateReportsRoot: string): string[] {
+  const blockers: string[] = []
+  const runId = String(summary?.run_id || '')
+  const reportsRoot = path.resolve(releaseGateReportsRoot)
+  const expectedRunDir = path.resolve(reportsRoot, runId)
+  const expectedSummaryPath = path.join(expectedRunDir, 'summary.json')
+  if (!runId) blockers.push('release_dag_summary_run_id_missing')
+  if (runId && !/^rg-\d{4}-/.test(runId)) blockers.push('release_dag_summary_run_id_prefix_invalid')
+  if (runId && path.basename(expectedRunDir) !== runId) blockers.push('release_dag_summary_run_id_path_invalid')
+  if (path.resolve(summaryPath) !== expectedSummaryPath) blockers.push('release_dag_summary_path_identity_mismatch')
+  if (!summary?.report_dir || path.resolve(String(summary.report_dir)) !== expectedRunDir) blockers.push('release_dag_summary_report_dir_identity_mismatch')
+  return blockers
+}
 
 export type ReleaseRealOutcome = 'passed' | 'failed' | 'blocked' | 'skipped' | 'optional'
 export type ReleaseRealRequirement = 'release_authorizing' | 'live_optional'
@@ -245,6 +260,11 @@ export interface ReleaseRealSkipProofInput {
   distStamp: any
   distStampPath: string | null
   distStampMtimeMs: number | null
+  canonicalTestProof: any
+  canonicalTestProofPath: string | null
+  canonicalTestProofSha256: string | null
+  canonicalTestProofMtimeMs: number | null
+  canonicalTestProofBlockers: string[]
   authorizationSnapshot: ReleaseAuthorizationSnapshot
   currentDistSourceDigest: string | null
   currentDistSourceFileCount: number | null
@@ -256,6 +276,8 @@ export function validateReleaseRealSkipProof(input: ReleaseRealSkipProofInput) {
   const blockers: string[] = []
   const summary = input.summary
   const stamp = input.distStamp
+  const canonicalTestProof = input.canonicalTestProof
+  const canonicalTestProofBlockers = Array.isArray(input.canonicalTestProofBlockers) ? input.canonicalTestProofBlockers : []
   const authorization = input.authorizationSnapshot
   const summaryAuthorization = summary?.release_authorization_snapshot
   if (!input.summaryPath || !summary) blockers.push('release_real_skip_full_summary_missing')
@@ -274,6 +296,13 @@ export function validateReleaseRealSkipProof(input: ReleaseRealSkipProofInput) {
   if (expectedReleaseGateIds.length && !sameStringList(expectedReleaseGateIds, selectedReleaseGateIds)) blockers.push('release_real_skip_full_summary_gate_ids_mismatch')
   if (summary?.failed !== 0 || summary?.completed !== summary?.selected_gates) blockers.push('release_real_skip_full_summary_incomplete')
   if (!/^[a-f0-9]{64}$/i.test(String(input.summarySha256 || ''))) blockers.push('release_real_skip_full_summary_hash_missing')
+  if (!input.canonicalTestProofPath || !canonicalTestProof) blockers.push('release_real_skip_canonical_test_proof_missing')
+  if (!/^[a-f0-9]{64}$/i.test(String(input.canonicalTestProofSha256 || ''))) blockers.push('release_real_skip_canonical_test_proof_hash_missing')
+  if (canonicalTestProof?.schema !== 'sks.canonical-test-proof.v1') blockers.push('release_real_skip_canonical_test_proof_schema_invalid')
+  if (canonicalTestProof?.ok !== true || canonicalTestProofBlockers.length > 0) {
+    blockers.push('release_real_skip_canonical_test_proof_invalid')
+    blockers.push(...canonicalTestProofBlockers.map((blocker) => `release_real_skip_canonical_test_proof:${blocker}`))
+  }
   if (!/^[a-f0-9]{40,64}$/i.test(String(authorization?.git_commit || ''))) blockers.push('release_real_skip_git_commit_missing')
   if (!/^[a-f0-9]{64}$/i.test(String(authorization?.source_digest || ''))) blockers.push('release_real_skip_current_source_digest_missing')
   if (!Number.isInteger(authorization?.source_file_count) || Number(authorization?.source_file_count) <= 0) blockers.push('release_real_skip_source_file_count_missing')
@@ -289,20 +318,24 @@ export function validateReleaseRealSkipProof(input: ReleaseRealSkipProofInput) {
       if (summaryAuthorization[key] !== authorization?.[key]) blockers.push(`release_real_skip_full_summary_authorization_mismatch:${key}`)
     }
   }
+  if (!canonicalTestProof?.release_authorization_snapshot || !sameReleaseAuthorizationSnapshot(canonicalTestProof.release_authorization_snapshot, authorization)) {
+    blockers.push('release_real_skip_canonical_test_proof_authorization_mismatch')
+  }
   if (!/^[a-f0-9]{64}$/i.test(String(input.currentDistSourceDigest || ''))) blockers.push('release_real_skip_dist_source_digest_missing')
   if (!stamp || !stamp.source_digest) blockers.push('release_real_skip_dist_source_stamp_missing')
   if (stamp && !['sks.dist-build-stamp.v1', 'sks.dist-build.v2'].includes(String(stamp.schema || ''))) blockers.push('release_real_skip_dist_source_stamp_schema_invalid')
   if (stamp?.source_digest && input.currentDistSourceDigest && stamp.source_digest !== input.currentDistSourceDigest) blockers.push('release_real_skip_dist_source_digest_mismatch')
   if (!Number.isInteger(input.currentDistSourceFileCount) || !Number.isInteger(stamp?.source_file_count)) blockers.push('release_real_skip_dist_source_file_count_missing')
   if (Number.isInteger(input.currentDistSourceFileCount) && Number.isInteger(stamp?.source_file_count) && stamp.source_file_count !== input.currentDistSourceFileCount) blockers.push('release_real_skip_dist_source_file_count_mismatch')
-  if (!Number.isFinite(input.summaryMtimeMs) || !Number.isFinite(input.distStampMtimeMs)) blockers.push('release_real_skip_proof_mtime_missing')
+  if (!Number.isFinite(input.summaryMtimeMs) || !Number.isFinite(input.distStampMtimeMs) || !Number.isFinite(input.canonicalTestProofMtimeMs)) blockers.push('release_real_skip_proof_mtime_missing')
   if (Number.isFinite(input.summaryMtimeMs) && Number.isFinite(input.distStampMtimeMs) && Number(input.summaryMtimeMs) < Number(input.distStampMtimeMs)) blockers.push('release_real_skip_full_summary_predates_current_build')
+  if (Number.isFinite(input.summaryMtimeMs) && Number.isFinite(input.canonicalTestProofMtimeMs) && Number(input.summaryMtimeMs) < Number(input.canonicalTestProofMtimeMs)) blockers.push('release_real_skip_full_summary_predates_canonical_test_proof')
   const ageMs = Number.isFinite(input.summaryMtimeMs) ? Math.max(0, input.nowMs - Number(input.summaryMtimeMs)) : null
   if (ageMs !== null && ageMs > input.maxAgeMs) blockers.push('release_real_skip_full_summary_expired')
   return {
     schema: RELEASE_REAL_SKIP_PROOF_SCHEMA,
     ok: blockers.length === 0,
-    proof_source: 'latest_full_dag_receipt+release_authorization_snapshot+current_dist_source_stamp',
+    proof_source: 'latest_full_dag_receipt+current_canonical_test_proof+release_authorization_snapshot+current_dist_source_stamp',
     latest_summary_path: input.summaryPath,
     latest_summary_sha256: input.summarySha256,
     run_id: summary?.run_id || null,
@@ -314,6 +347,9 @@ export function validateReleaseRealSkipProof(input: ReleaseRealSkipProofInput) {
     dist_source_file_count: input.currentDistSourceFileCount,
     dist_stamp_path: input.distStampPath,
     dist_stamp_source_digest: stamp?.source_digest || null,
+    canonical_test_proof_path: input.canonicalTestProofPath,
+    canonical_test_proof_sha256: input.canonicalTestProofSha256,
+    canonical_test_proof_mtime_ms: input.canonicalTestProofMtimeMs,
     summary_mtime_ms: input.summaryMtimeMs,
     dist_stamp_mtime_ms: input.distStampMtimeMs,
     age_ms: ageMs,

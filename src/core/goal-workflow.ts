@@ -1,151 +1,100 @@
-import path from 'node:path';
-import { appendJsonl, nowIso, readJson, writeJsonAtomic, writeTextAtomic } from './fsx.js';
-import { detectOfficialGoalMode, writeOfficialGoalModeArtifact } from './codex/official-goal-mode.js';
+export const NATIVE_GOAL_REQUEST_SCHEMA = 'sks.codex-native-goal-request.v1';
+export const NATIVE_GOAL_MAX_CHARS = 4_000;
 
-export const GOAL_WORKFLOW_ARTIFACT = 'goal-workflow.json';
-export const GOAL_BRIDGE_ARTIFACT = 'goal-bridge.md';
+export type NativeGoalAction = 'create' | 'edit' | 'pause' | 'resume' | 'clear' | 'status';
 
-export function nativeGoalCommand(action: any = 'create', prompt: any = '') {
-  const cleanAction = String(action || 'create').toLowerCase();
-  const cleanPrompt = String(prompt || '').trim();
-  if (cleanAction === 'pause') return '/goal pause';
-  if (cleanAction === 'resume') return '/goal resume';
-  if (cleanAction === 'clear') return '/goal clear';
-  return cleanPrompt ? `/goal create ${cleanPrompt}` : '/goal create';
+export interface NativeGoalRequest {
+  schema: typeof NATIVE_GOAL_REQUEST_SCHEMA;
+  ok: true;
+  action: NativeGoalAction;
+  native_only: true;
+  sks_state_written: false;
+  objective: string | null;
+  slash_command: string;
+  completion_contract: {
+    outcome: true;
+    scope: true;
+    constraints: true;
+    verification: true;
+    done_when: true;
+    stop_conditions: true;
+    non_goals: true;
+  } | null;
 }
 
-export async function writeGoalWorkflow(dir: any, mission: any, opts: any = {}) {
-  const action = String(opts.action || 'create').toLowerCase();
-  const prompt = String(opts.prompt || mission?.prompt || '').trim();
-  const goalMode = await detectOfficialGoalMode({ runCommand: opts.detectOfficialGoalMode !== false });
-  const goalModeArtifact = await writeOfficialGoalModeArtifact(dir, goalMode);
-  const workflow = {
-    schema_version: 1,
-    mission_id: mission.id,
-    route: 'Goal',
+export function buildDetailedNativeGoalObjective(prompt: unknown): string {
+  const outcome = normalizePrompt(prompt);
+  if (!outcome) throw new Error('Missing goal task prompt.');
+  const objective = [
+    'Outcome:',
+    outcome,
+    '',
+    'Scope:',
+    '- Inspect the current authoritative state before changing anything.',
+    '- Do only the work directly required to achieve the outcome.',
+    '- Preserve unrelated user changes and existing behavior outside this scope.',
+    '',
+    'Constraints:',
+    '- Use Codex native Goal as the only persisted goal owner; do not create SKS goal missions, bridge artifacts, compatibility loops, or fallback goal state.',
+    '- Do not add unrelated refactors, speculative features, or substitute implementations.',
+    '- Do not perform irreversible or external actions unless the user explicitly authorized them.',
+    '',
+    'Verification:',
+    '- Run checks that cover every changed behavior and inspect their actual results.',
+    '- Confirm the final diff and external state match the requested outcome and constraints.',
+    '',
+    'Done when:',
+    '- The requested outcome is implemented completely.',
+    '- All relevant verification passes and no required work remains.',
+    '- Any explicitly excluded action remains unperformed.',
+    '',
+    'Stop conditions:',
+    '- Stop and request direction only when a hard blocker requires new user authority, missing information that materially changes the result, or an external-state change.',
+    '- Do not continue merely to improve, generalize, or polish after every Done when condition is satisfied.',
+    '',
+    'Non-goals:',
+    '- No unrelated cleanup, architecture expansion, new framework, or open-ended optimization.',
+    '- No success redefinition around a smaller or easier subset.'
+  ].join('\n');
+  if (objective.length > NATIVE_GOAL_MAX_CHARS) {
+    throw new Error(`Detailed native goal exceeds Codex's ${NATIVE_GOAL_MAX_CHARS}-character limit.`);
+  }
+  return objective;
+}
+
+export function nativeGoalCommand(action: NativeGoalAction = 'create', prompt: unknown = ''): string {
+  if (action === 'pause') return '/goal pause';
+  if (action === 'resume') return '/goal resume';
+  if (action === 'clear') return '/goal clear';
+  if (action === 'status') return '/goal';
+  const objective = buildDetailedNativeGoalObjective(prompt);
+  return action === 'edit' ? `/goal edit ${objective}` : `/goal ${objective}`;
+}
+
+export function buildNativeGoalRequest(action: NativeGoalAction = 'create', prompt: unknown = ''): NativeGoalRequest {
+  const objective = action === 'create' || action === 'edit'
+    ? buildDetailedNativeGoalObjective(prompt)
+    : null;
+  return {
+    schema: NATIVE_GOAL_REQUEST_SCHEMA,
+    ok: true,
     action,
-    status: action === 'clear' ? 'cleared' : action === 'pause' ? 'paused' : action === 'resume' ? 'resumed' : 'created',
-    created_at: nowIso(),
-    prompt,
-    native_goal: {
-      slash_command: nativeGoalCommand(action, prompt),
-      workflow_kind: 'native /goal persistence bridge',
-      controls: ['create', 'pause', 'resume', 'clear'],
-      runtime_continuation: true,
-      app_server_api_backed: true,
-      model_tools_available: true,
-      official_goal_available: goalMode.official_goal_available,
-      default_enabled: goalMode.default_enabled,
-      fallback_mode: goalMode.mode === 'sks_goal_fallback'
-    },
-    goal_mode: {
-      artifact: path.basename(goalModeArtifact),
-      official_goal_available: goalMode.official_goal_available,
-      official_goal_applied: goalMode.default_enabled,
-      fallback_used: goalMode.mode === 'sks_goal_fallback'
-    },
-    pipeline_contract: {
-      overlay_only: true,
-      ambiguity_gate: 'Goal creates/controls the native /goal persistence bridge only; use normal SKS ambiguity gates on the selected execution route when implementation is needed',
-      context7: 'optional for Goal bridge/control unless external API/library documentation is involved',
-      implementation: 'continue implementation through the selected SKS execution route; Goal is not a heavyweight independent implementation pipeline',
-      evidence: ['goal-workflow.json', 'goal-bridge.md']
-    },
-    repeated_blocker_policy: {
-      aligned_with_codex_0_133: true,
-      aligned_with_codex_0_132: true,
-      stop_after_same_blocker_count: 2,
-      structured_blocker: 'sks.loop-blocker.v1',
-      applies_to: ['Goal continuation', 'QA loop', 'Research loop', 'UX-Review fix loop']
-    },
-    phase: action === 'clear' ? 'reporting' : 'intake',
-    user_outcome: prompt,
-    work_order_ledger_id: null,
-    checkpoints: [
-      {
-        timestamp: nowIso(),
-        phase: 'intake',
-        summary: 'Goal workflow bridge created as a native /goal persistence overlay.',
-        completed_checkboxes: ['goal bridge artifact written'],
-        open_checkboxes: ['continue the selected SKS execution route when implementation is needed'],
-        blockers: [],
-        evidence: [GOAL_WORKFLOW_ARTIFACT, GOAL_BRIDGE_ARTIFACT, path.basename(goalModeArtifact)]
-      }
-    ],
-    resume_context: {
-      stable_requirements: prompt ? [prompt] : [],
-      current_files: [GOAL_WORKFLOW_ARTIFACT, GOAL_BRIDGE_ARTIFACT, path.basename(goalModeArtifact)],
-      decisions: ['Codex native /goal is the persisted continuation surface', '$Goal is a lightweight bridge overlay, not an independent implementation pipeline'],
-      known_mistakes_to_avoid: ['do not clear noisy context without writing a structured handoff first'],
-      active_skills: ['goal'],
-      active_agents: []
-    },
-    clear_policy: {
-      preserve_work_order: true,
-      preserve_decisions: true,
-      preserve_evidence_links: true,
-      discard_noisy_logs: true
-    }
+    native_only: true,
+    sks_state_written: false,
+    objective,
+    slash_command: nativeGoalCommand(action, prompt),
+    completion_contract: objective ? {
+      outcome: true,
+      scope: true,
+      constraints: true,
+      verification: true,
+      done_when: true,
+      stop_conditions: true,
+      non_goals: true
+    } : null
   };
-  await writeJsonAtomic(path.join(dir, GOAL_WORKFLOW_ARTIFACT), workflow);
-  await writeTextAtomic(path.join(dir, GOAL_BRIDGE_ARTIFACT), goalBridgeMarkdown(workflow));
-  await appendJsonl(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: `goal.${action}`, native_goal_command: workflow.native_goal.slash_command });
-  return workflow;
 }
 
-export async function updateGoalWorkflow(dir: any, action: any) {
-  const current = await readJson(path.join(dir, GOAL_WORKFLOW_ARTIFACT), {});
-  const next = {
-    ...current,
-    action,
-    status: action === 'clear' ? 'cleared' : action === 'pause' ? 'paused' : action === 'resume' ? 'resumed' : current.status || 'created',
-    updated_at: nowIso(),
-    phase: action === 'pause' ? 'reporting' : action === 'resume' ? 'continuation' : action === 'clear' ? 'retro' : current.phase || 'intake',
-    native_goal: {
-      ...(current.native_goal || {}),
-      slash_command: nativeGoalCommand(action, current.prompt || '')
-    },
-    checkpoints: [
-      ...(Array.isArray(current.checkpoints) ? current.checkpoints : []),
-      {
-        timestamp: nowIso(),
-        phase: action,
-        summary: `Goal ${action} requested through native /goal bridge overlay.`,
-        completed_checkboxes: [`goal ${action} artifact update`],
-        open_checkboxes: action === 'clear' ? ['handoff preserved before noisy context clear'] : [],
-        blockers: [],
-        evidence: [GOAL_WORKFLOW_ARTIFACT, GOAL_BRIDGE_ARTIFACT]
-      }
-    ]
-  };
-  await writeJsonAtomic(path.join(dir, GOAL_WORKFLOW_ARTIFACT), next);
-  await writeTextAtomic(path.join(dir, GOAL_BRIDGE_ARTIFACT), goalBridgeMarkdown(next));
-  await appendJsonl(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: `goal.${action}`, native_goal_command: next.native_goal.slash_command });
-  return next;
-}
-
-function goalBridgeMarkdown(workflow: any) {
-  return `# SKS Goal Persistence Bridge
-
-Mission: ${workflow.mission_id}
-Status: ${workflow.status}
-Task: ${workflow.prompt || '(no prompt)'}
-
-## Native Codex Goal Control
-
-Run this in the Codex TUI when interactive native goal control is available:
-
-\`\`\`text
-${workflow.native_goal.slash_command}
-\`\`\`
-
-## SKS Bridge Contract
-
-- This file is a fast SKS overlay for Codex native persisted \`/goal\` workflow semantics.
-- Official Goal mode: ${workflow.goal_mode?.official_goal_available ? 'available/default-enabled' : 'unavailable; SKS fallback bridge used'}.
-- \`$Goal\` is not a heavyweight independent implementation pipeline.
-- SKS still records route evidence in \`${GOAL_WORKFLOW_ARTIFACT}\` and this bridge file.
-- If implementation work is needed, continue through the selected SKS execution route gates for that work and report verification evidence honestly.
-- Context7 is optional for Goal bridge/control unless external API/library documentation becomes relevant.
-`;
+function normalizePrompt(value: unknown): string {
+  return String(value || '').replace(/\r\n/g, '\n').trim();
 }

@@ -9,6 +9,7 @@ import {
   buildReleaseRealLiveCoverage,
   dependencyReleaseRealResult,
   normalizeReleaseRealProcessResult,
+  releaseDagSummaryIdentityBlockers,
   releaseRealDependencySatisfied,
   summarizeReleaseRealPhases,
   validateReleaseRealSkipProof,
@@ -19,6 +20,7 @@ import {
   releaseAuthorizationSnapshot,
   sameReleaseAuthorizationSnapshot
 } from '../core/release/release-authorization-snapshot.js'
+import { readCurrentCanonicalTestProof } from '../core/release/canonical-test-proof.js'
 
 const args = process.argv.slice(2)
 const skipReleaseCheck = args.includes('--skip-release-check') || process.env.SKS_RELEASE_REAL_CHECK_SKIP_RELEASE_CHECK === '1'
@@ -444,6 +446,8 @@ async function finish(ok, trigger = 'finish') {
       && finalProof.dist_source_digest === initialProof.dist_source_digest
       && finalProof.dist_source_file_count === initialProof.dist_source_file_count
       && finalProof.dist_stamp_source_digest === initialProof.dist_stamp_source_digest
+      && finalProof.canonical_test_proof_path === initialProof.canonical_test_proof_path
+      && finalProof.canonical_test_proof_sha256 === initialProof.canonical_test_proof_sha256
     report.skip_release_check_proof = {
       ...initialProof,
       stable_through_real_checks: identityMatches,
@@ -509,9 +513,12 @@ function buildSkipReleaseCheckProof() {
   const summary = readJson(summaryPath)
   const freshness = currentDistFreshness()
   const pkg = readJson(path.join(root, 'package.json'))
-  const authorizationSnapshot = releaseAuthorizationSnapshot(root, pkg)
+  let authorizationSnapshot = {}
+  try { authorizationSnapshot = releaseAuthorizationSnapshot(root, pkg) } catch {}
   const summaryMtimeMs = fileMtime(summaryPath)
   const distStampMtimeMs = fileMtime(freshness.stamp_path)
+  const canonicalInspection = readCurrentCanonicalTestProof(root)
+  const canonicalProofPath = canonicalInspection.proof_path || null
   const maxAgeMs = Math.max(60_000, Number(process.env.SKS_RELEASE_REAL_SKIP_MAX_AGE_MS || 6 * 60 * 60 * 1000))
   return validateReleaseRealSkipProof({
     summary,
@@ -522,6 +529,11 @@ function buildSkipReleaseCheckProof() {
     distStamp: freshness.stamp,
     distStampPath: freshness.stamp_path ? path.relative(root, freshness.stamp_path).split(path.sep).join('/') : null,
     distStampMtimeMs,
+    canonicalTestProof: canonicalInspection.proof,
+    canonicalTestProofPath: canonicalProofPath ? path.relative(root, canonicalProofPath).split(path.sep).join('/') : null,
+    canonicalTestProofSha256: canonicalInspection.proof_sha256 || null,
+    canonicalTestProofMtimeMs: fileMtime(canonicalProofPath),
+    canonicalTestProofBlockers: canonicalInspection.blockers || [],
     authorizationSnapshot,
     currentDistSourceDigest: freshness.source_digest || null,
     currentDistSourceFileCount: Number.isInteger(freshness.source_file_count) ? freshness.source_file_count : null,
@@ -545,6 +557,10 @@ function latestReleaseGateSummaryPath() {
     .filter((entry) => entry.isDirectory())
     .map((entry) => path.join(dir, entry.name, 'summary.json'))
     .filter((file) => fs.existsSync(file))
+    .filter((file) => {
+      const summary = readJson(file)
+      return summary && releaseDagSummaryIdentityBlockers(summary, file, dir).length === 0
+    })
     .sort((left, right) => Number(fileMtime(right) || 0) - Number(fileMtime(left) || 0))[0] || null
 }
 

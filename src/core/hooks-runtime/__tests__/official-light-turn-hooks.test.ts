@@ -7,7 +7,7 @@ import { evaluateHookPayload, evaluateHookPayloadOnce } from '../../hooks-runtim
 import { lightTurnReceiptPath } from '../light-turn.js';
 import { toolOutputQuarantinePath } from '../tool-output-quarantine.js';
 import { prepareRoute } from '../../pipeline.js';
-import { loadStateForSession, missionDir, setCurrent } from '../../mission.js';
+import { createMission, loadStateForSession, missionDir, setCurrent } from '../../mission.js';
 
 async function tempRoot(prefix: string) {
   return fsp.mkdtemp(path.join(os.tmpdir(), prefix));
@@ -395,7 +395,8 @@ test('light classifier never bypasses no-question mode', async () => {
 test('SubagentStart uses configured official max_threads and SubagentStop is evidence-only', async () => {
   const root = await tempRoot('sks-official-hook-events-');
   const missionId = 'M-official-events';
-  const state = { mission_id: missionId, mode: 'NARUTO', route: 'Naruto', stop_gate: 'naruto-gate.json' };
+  const workflowRunId = 'run-official-events';
+  const state = { mission_id: missionId, mode: 'NARUTO', route: 'Naruto', stop_gate: 'naruto-gate.json', official_subagent_run_id: workflowRunId };
   try {
     await fsp.mkdir(path.join(root, '.codex'), { recursive: true });
     await fsp.writeFile(path.join(root, '.codex', 'config.toml'), '[agents]\nmax_threads = 9\nmax_depth = 1\n');
@@ -404,6 +405,7 @@ test('SubagentStart uses configured official max_threads and SubagentStop is evi
       schema: 'sks.subagent-plan.v1',
       workflow: 'official_codex_subagent',
       mission_id: missionId,
+      workflow_run_id: workflowRunId,
       requested_subagents: 1
     }));
     const started: any = await evaluateHookPayload('subagent-start', officialSubagentHookPayload('SubagentStart', 'agent-a1'), { root, state });
@@ -427,6 +429,101 @@ test('SubagentStart uses configured official max_threads and SubagentStop is evi
     const stoppedEvidence = JSON.parse(await fsp.readFile(path.join(missionDir(root, missionId), 'subagent-evidence.json'), 'utf8'));
     assert.equal(stoppedEvidence.started_threads, 1);
     assert.deepEqual(stoppedEvidence.event_sources, ['SubagentStart', 'SubagentStop']);
+  } finally {
+    await fsp.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('Naruto hooks accumulate later root waves under one workflow run and clear the rescan state', async () => {
+  const root = await tempRoot('sks-official-multi-wave-');
+  const session = 'official-multi-wave-parent';
+  try {
+    await fsp.mkdir(path.join(root, '.codex'), { recursive: true });
+    await fsp.writeFile(path.join(root, '.codex', 'config.toml'), '[agents]\nmax_threads = 4\nmax_depth = 1\n');
+    await prepareRoute(root, '$Naruto --agents 4 implement four independent checks', {}, {
+      sessionKey: session,
+      parentModel: 'gpt-5.6-sol'
+    });
+    const state: any = await loadStateForSession(root, session);
+    const dir = missionDir(root, state.mission_id);
+    const initialPlan = JSON.parse(await fsp.readFile(path.join(dir, 'subagent-plan.json'), 'utf8'));
+    assert.equal(initialPlan.first_wave, 2);
+    assert.equal(initialPlan.wave_count, 2);
+
+    for (const threadId of ['wave-1-a', 'wave-1-b']) {
+      await evaluateHookPayload('subagent-start', officialSubagentHookPayload('SubagentStart', threadId), { root, state });
+    }
+    for (const threadId of ['wave-1-a', 'wave-1-b']) {
+      await evaluateHookPayload('subagent-stop', officialSubagentHookPayload('SubagentStop', threadId, `${threadId} complete.`), { root, state });
+    }
+    const afterWaveOne = JSON.parse(await fsp.readFile(path.join(dir, 'subagent-plan.json'), 'utf8'));
+    assert.equal(afterWaveOne.wave_lifecycle.workflow_run_id, initialPlan.workflow_run_id);
+    assert.equal(afterWaveOne.wave_lifecycle.current_wave, 1);
+    assert.equal(afterWaveOne.wave_lifecycle.completed_waves, 1);
+    assert.equal(afterWaveOne.wave_lifecycle.open_threads, 0);
+    assert.equal(afterWaveOne.wave_lifecycle.recovered_capacity, 2);
+    assert.equal(afterWaveOne.wave_lifecycle.remaining_to_start, 2);
+    assert.equal(afterWaveOne.wave_lifecycle.post_wave_rescan_required, true);
+
+    for (const threadId of ['wave-2-a', 'wave-2-b']) {
+      await evaluateHookPayload('subagent-start', officialSubagentHookPayload('SubagentStart', threadId), { root, state });
+    }
+    for (const threadId of ['wave-2-a', 'wave-2-b']) {
+      await evaluateHookPayload('subagent-stop', officialSubagentHookPayload('SubagentStop', threadId, `${threadId} complete.`), { root, state });
+    }
+    const finalPlan = JSON.parse(await fsp.readFile(path.join(dir, 'subagent-plan.json'), 'utf8'));
+    const events = (await fsp.readFile(path.join(dir, 'subagent-events.jsonl'), 'utf8'))
+      .trim()
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .map((line) => JSON.parse(line));
+
+    assert.equal(finalPlan.wave_lifecycle.workflow_run_id, initialPlan.workflow_run_id);
+    assert.equal(finalPlan.wave_lifecycle.max_depth, 1);
+    assert.equal(finalPlan.wave_lifecycle.current_wave, 2);
+    assert.equal(finalPlan.wave_lifecycle.completed_waves, 2);
+    assert.equal(finalPlan.wave_lifecycle.cumulative_started, 4);
+    assert.equal(finalPlan.wave_lifecycle.open_threads, 0);
+    assert.equal(finalPlan.wave_lifecycle.remaining_to_start, 0);
+    assert.equal(finalPlan.wave_lifecycle.post_wave_rescan_required, false);
+    assert.equal(events.length, 8);
+    assert.ok(events.every((row) => row.run_id === initialPlan.workflow_run_id));
+  } finally {
+    await fsp.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('reused pipeline Naruto missions rebuild request intake from the current prompt and TriWiki context', async () => {
+  const root = await tempRoot('sks-official-reused-intake-');
+  const session = 'official-reused-intake-parent';
+  try {
+    const prior: any = await createMission(root, {
+      mode: 'naruto',
+      prompt: 'old request',
+      sessionKey: session
+    });
+    await fsp.writeFile(path.join(prior.dir, 'request-intake.json'), JSON.stringify({
+      schema: 'sks.request-intake.v1',
+      original_prompt: 'old request',
+      prompt_hash: 'stale'
+    }));
+    await fsp.mkdir(path.join(root, '.sneakoscope', 'wiki'), { recursive: true });
+    await fsp.writeFile(path.join(root, '.sneakoscope', 'wiki', 'context-pack.json'), JSON.stringify({
+      claims: [{ id: 'Q2-current', claim: 'Use current code and official Codex subagent semantics.' }],
+      attention: { mode: 'bounded', use_first: [['Q2-current']], hydrate_first: [] }
+    }));
+
+    const prepared: any = await prepareRoute(root, '$Naruto --agents 2 implement the current request', {}, {
+      sessionKey: session,
+      parentModel: 'gpt-5.6-sol'
+    });
+    const intake = JSON.parse(await fsp.readFile(path.join(prior.dir, 'request-intake.json'), 'utf8'));
+
+    assert.equal(prepared.mission_id, prior.id);
+    assert.match(intake.original_prompt, /implement the current request/);
+    assert.notEqual(intake.prompt_hash, 'stale');
+    assert.equal(intake.wiki_context_used.source, '.sneakoscope/wiki/context-pack.json');
+    assert.deepEqual(intake.wiki_context_used.use_first_ids, ['Q2-current']);
   } finally {
     await fsp.rm(root, { recursive: true, force: true });
   }
@@ -466,7 +563,7 @@ test('official events plus parent summary pass Naruto without legacy process art
       last_assistant_message: structuredParentSummary(['agent-a1', 'agent-a2'])
     }, { root, state });
     assert.equal(decision.decision, 'block');
-    assert.match(decision.reason, /Completion Proof/i);
+    assert.match(decision.reason, /reflection/i);
 
     state = await loadStateForSession(root, session);
     const dir = missionDir(root, state.mission_id);
@@ -480,6 +577,7 @@ test('official events plus parent summary pass Naruto without legacy process art
     const persistedParentSummary = JSON.parse(await fsp.readFile(path.join(dir, 'subagent-parent-summary.json'), 'utf8'));
     const summary = JSON.parse(await fsp.readFile(path.join(dir, 'naruto-summary.json'), 'utf8'));
     const gate = JSON.parse(await fsp.readFile(path.join(dir, 'naruto-gate.json'), 'utf8'));
+    const proof = JSON.parse(await fsp.readFile(path.join(dir, 'completion-proof.json'), 'utf8'));
     assert.equal(evidence.ok, true);
     assert.equal(evidence.started_threads, 2);
     assert.equal(evidence.completed_threads, 2);
@@ -501,6 +599,8 @@ test('official events plus parent summary pass Naruto without legacy process art
     assert.equal(gate.evidence.official_subagent_evidence, 'subagent-evidence.json');
     assert.equal(gate.evidence.parent_summary, 'subagent-parent-summary.json');
     assert.equal(gate.evidence.ssot_guard, 'ssot-guard.json');
+    assert.equal(proof.evidence.route_gate.workflow_run_id, plan.workflow_run_id);
+    assert.equal(state.reflection_invalidation_required, true);
     const terminalEvents = await fsp.readFile(path.join(dir, 'subagent-events.jsonl'), 'utf8');
     await evaluateHookPayload('subagent-stop', officialSubagentHookPayload('SubagentStop', 'agent-late', 'Unrelated later result.'), { root, state });
     assert.equal(await fsp.readFile(path.join(dir, 'subagent-events.jsonl'), 'utf8'), terminalEvents);

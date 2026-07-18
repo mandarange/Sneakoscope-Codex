@@ -1,12 +1,12 @@
 # Sneakoscope Codex performance and leak policy
 
-Sneakoscope Codex 6.5 is designed to keep runtime, package size, RAM, and storage bounded.
+Sneakoscope Codex 6.7.0 is designed to keep runtime, package size, RAM, and storage bounded.
 
 ## Speed
 
 - `codex exec` output is streamed to files and only a bounded tail is retained in memory.
 - `sks perf run --json` records structured startup and package-payload measurements and writes `.sneakoscope/perf/budgets.json`.
-- Codex native `/goal` workflows handle persisted continuation; SKS records only bounded bridge artifacts.
+- Codex native `/goal` workflows exclusively own persisted goals; SKS creates no Goal mission, bridge artifact, compatibility loop, or fallback state.
 - `sks wiki sweep` records intentional forgetting and promotion candidates so default recall stays top-K instead of becoming an unbounded memory dump.
 - `sks code-structure scan` flags 1000/2000/3000-line handwritten source files before new logic is added to oversized modules.
 - TriWiki claim selection uses bounded top-K selection plus the latest RGBA/trig wiki anchors and required voxel overlay metadata instead of sorting unbounded context into prompts.
@@ -22,17 +22,18 @@ Sneakoscope Codex 6.5 is designed to keep runtime, package size, RAM, and storag
 
 Tracked metrics:
 
-- `estimated_tokens`: deterministic chars/4 prompt-size estimate for local regression tracking
-- `token_savings_pct`: prompt-size reduction versus baseline
+- `serialized_size_bytes`: deterministic UTF-8 JSON size used as a non-token payload-size proxy; it never proves token usage
+- `token_count`: actual tokenizer or API-reported count, accepted only with a nonempty `token_evidence.source`
+- `token_savings_pct`: actual token reduction, available only when baseline and candidate use the same `token_evidence.source` measurement identity
 - `accuracy_proxy`: evidence-weighted context-selection quality score
 - `required_recall`: required claim coverage
 - `relevance_precision`: selected required claims divided by selected claims
 - `support_ratio`: selected claims that are supported or weakly supported
 - `unsupported_critical_selected`: critical/high unsupported claims that survived compression
 - `context_build_ms_per_run`: local context construction runtime
-- `meaningful_improvement`: true only when token savings, accuracy delta, recall, unsupported-critical filtering, and runtime thresholds pass
+- `meaningful_improvement`: true only when comparable actual-token evidence, token savings, accuracy delta, recall, unsupported-critical filtering, and runtime thresholds pass
 
-Default meaningful-improvement thresholds are intentionally explicit: at least 10% token savings with the required voxel overlay included, at least +0.03 accuracy-proxy delta, at least 0.95 required recall, zero unsupported critical claims selected, and candidate context construction under 25 ms per run. `sks eval compare --baseline old.json --candidate new.json` compares saved reports across implementations.
+Default meaningful-improvement thresholds are intentionally explicit: at least 10% measured token savings with matching evidence identity, at least +0.03 accuracy-proxy delta, at least 0.95 required recall, zero unsupported critical claims selected, and candidate context construction under 25 ms per run. Without comparable actual-token evidence, token savings are `null` and meaningful improvement cannot pass. `sks eval compare --baseline old.json --candidate new.json` compares saved reports across implementations; legacy estimated-token reports remain readable but do not become token evidence.
 
 The accuracy metric is not a live model task score. It is a deterministic proxy for whether the context handed to a model is smaller, better supported, and less contaminated by unsupported critical claims.
 
@@ -51,7 +52,7 @@ Each anchor stores id, RGBA key, `[domain, layer, phase, concentration]`, source
 
 ## Package size
 
-- Runtime dependencies remain explicit in `package.json`; the 6.5.0 package pins `@openai/codex-sdk` exactly to 0.144.5 and npm resolves its exact `@openai/codex` 0.144.5 dependency without vendoring that CLI package inside the SKS tarball. `SKS_CODEX_BIN` may select a separately installed compatible CLI.
+- Runtime dependencies remain explicit in `package.json`; the 6.7.0 package pins `@openai/codex-sdk` exactly to 0.144.5 and npm resolves its exact `@openai/codex` 0.144.5 dependency without vendoring that CLI package inside the SKS tarball. `SKS_CODEX_BIN` may select a separately installed compatible CLI.
 - Optional Rust source is in `crates/sks-core/` and is included in the npm package as source only. Build artifacts under `target/` stay excluded.
 - GX rendering uses only built-in Node.js APIs and ships as source in the npm package.
 - `npm run sizecheck` enforces package limits during `release:check`, `publish:dry`, and publish: `<=2414 KiB` packed, `<=10 MiB` unpacked, `<=2100` package files, and `<=384 KiB` per tracked file by default.

@@ -20,6 +20,28 @@ test('release closure binds exact findings, three official Naruto threads, 28 wo
   }
 })
 
+test('release closure accepts legacy exact-three artifacts without count fields under the same sealed plan', () => {
+  const fixture = createRepo({ legacySubagentCountFields: true })
+  try {
+    const result = inspect(fixture)
+    assert.equal(result.ok, true, result.blockers.join(','))
+  } finally {
+    fs.rmSync(fixture.root, { recursive: true, force: true })
+  }
+})
+
+test('release closure rejects legacy count artifacts when the exact plan drifts from three', () => {
+  const fixture = createRepo({ legacySubagentCountFields: true, planRequestedSubagents: 2 })
+  try {
+    const result = inspect(fixture)
+    assert.equal(result.ok, false)
+    assert.equal(result.blockers.includes('subagent_plan_invalid'), true, result.blockers.join(','))
+    assert.equal(result.blockers.includes('naruto:official_subagent_requested_subagents_mismatch'), true, result.blockers.join(','))
+  } finally {
+    fs.rmSync(fixture.root, { recursive: true, force: true })
+  }
+})
+
 test('release closure fails closed for finding terminal-state and structured proof drift', () => {
   const fixture = createRepo()
   try {
@@ -163,6 +185,38 @@ test('release closure rejects an unrelated mission and product changes after sou
   }
 })
 
+test('post-6.3 releases do not inherit the version-scoped 6.3 audit closure', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-release-closure-scope-'))
+  try {
+    git(root, ['init', '-b', 'main'])
+    git(root, ['config', 'user.email', 'fixture@example.test'])
+    git(root, ['config', 'user.name', 'Release Fixture'])
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'sneakoscope', version: '6.7.0' }))
+    git(root, ['add', '.'])
+    git(root, ['commit', '-m', 'baseline'])
+    const baseline = gitText(root, ['rev-parse', 'HEAD'])
+    fs.writeFileSync(path.join(root, 'release.txt'), 'release\n')
+    git(root, ['add', '.'])
+    git(root, ['commit', '-m', 'release'])
+    const head = gitText(root, ['rev-parse', 'HEAD'])
+    const result = inspectReleaseClosure({
+      root,
+      version: '6.7.0',
+      expectedBaseline: baseline,
+      expectedHead: head,
+      expectedMissionId: 'M-release-670'
+    })
+    assert.equal(result.ok, true, result.blockers.join(','))
+    assert.equal(result.applicable, false)
+    assert.equal(result.source_commit, head)
+    assert.equal(result.mission_id, 'M-release-670')
+    assert.equal(result.manifest_path, null)
+    assert.equal(result.manifest_sha256, null)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
 function inspect(fixture: ReturnType<typeof createRepo>) {
   return inspectReleaseClosure({
     root: fixture.root,
@@ -173,7 +227,7 @@ function inspect(fixture: ReturnType<typeof createRepo>) {
   })
 }
 
-function createRepo() {
+function createRepo(options: { legacySubagentCountFields?: boolean; planRequestedSubagents?: number } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-release-closure-'))
   git(root, ['init', '-b', 'main'])
   git(root, ['config', 'user.email', 'fixture@example.test'])
@@ -191,7 +245,14 @@ function createRepo() {
   git(root, ['add', '-A'])
   git(root, ['commit', '-m', 'release source'])
   const sourceCommit = gitText(root, ['rev-parse', 'HEAD'])
-  const written = writeReleaseClosureFixture({ root, baseline, sourceCommit, removedModules: ['legacy.txt'], removedLines: 3 })
+  const written = writeReleaseClosureFixture({
+    root,
+    baseline,
+    sourceCommit,
+    removedModules: ['legacy.txt'],
+    removedLines: 3,
+    ...options
+  })
   return { root, preBaseline, baseline, ...written }
 }
 

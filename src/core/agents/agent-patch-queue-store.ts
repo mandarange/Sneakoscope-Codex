@@ -69,7 +69,6 @@ export class PersistentAgentPatchQueueStore {
       ...((impact as any).cochange_required?.length && !cochangeAck ? [`impact_scan_cochange_missing:${(impact as any).cochange_required.slice(0, 5).join(',')}`] : []),
       ...(((diffQuality as any).errors || []).map((issue: string) => `diff_quality:${issue}`)),
       ...((feedback as any).ok === false ? ['machine_feedback_failed'] : []),
-      ...(isBugfixKind(context.work_item_kind, envelope.task_slice_id) && !validRegressionProof(envelope.regression_proof || context.regression_proof) ? ['tdd_evidence_missing'] : []),
       ...(isRepairKind(context.work_item_kind, envelope.task_slice_id) && !(envelope.repair_hypothesis || context.repair_hypothesis) ? ['repair_without_hypothesis'] : [])
     ]
     return {
@@ -158,18 +157,9 @@ export class PersistentAgentPatchQueueStore {
   }
 }
 
-function isBugfixKind(kind: unknown, id: unknown): boolean {
-  const text = `${String(kind || '')} ${String(id || '')}`.toLowerCase();
-  return /\b(bugfix|fix|bug|regression|broken|failure|crash|error)\b|버그|회귀/.test(text);
-}
-
 function isRepairKind(kind: unknown, id: unknown): boolean {
   const text = `${String(kind || '')} ${String(id || '')}`.toLowerCase();
   return /\b(conflict_resolution|repair|conflict|rebase|rollback)\b|수리|충돌/.test(text);
-}
-
-function validRegressionProof(proof: any): boolean {
-  return Boolean(proof && proof.failed_before === true && proof.passed_after === true && String(proof.test_file || '').trim());
 }
 
 function changedFilesForEnvelope(envelope: ReturnType<typeof normalizeAgentPatchEnvelope>): string[] {

@@ -35,10 +35,11 @@ test('pinned 6.2 baseline records expected legacy content without masking struct
     'secret_content_detected:openai_token:dist/scripts/naruto-gpt-final-pack-check.js:4ac5c1dbbc7ee46b',
     'retired_surface_scan_finding_limit_reached',
     'retired_surface_content_detected:retired_dollar_command:README.md:c0388f4e7a979d2e',
+    'retired_package_file_present:package/dist/core/commands/ui-command.js',
     'tarball_secret_scan_extract_failed'
   ])
   assert.deepEqual(classified.blockers, ['tarball_secret_scan_extract_failed'])
-  assert.equal(classified.warnings.length, 3)
+  assert.equal(classified.warnings.length, 4)
   assert.ok(classified.warnings.every((warning) => warning.startsWith('published_6_2_expected_content:')))
 })
 

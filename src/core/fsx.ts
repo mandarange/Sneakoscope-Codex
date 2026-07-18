@@ -19,6 +19,7 @@ const gunzipAsync = promisify(gunzipCallback);
 export interface RunProcessOptions {
   cwd?: string;
   env?: NodeJS.ProcessEnv;
+  envMode?: 'merge' | 'replace';
   input?: string | Buffer;
   timeoutMs?: number;
   maxOutputBytes?: number;
@@ -506,6 +507,90 @@ export class TailBuffer {
   }
 }
 
+interface ActiveDetachedProcessGroup {
+  pid: number;
+  child: ReturnType<typeof spawn>;
+}
+
+const activeDetachedProcessGroups = new Map<number, ActiveDetachedProcessGroup>();
+let processGroupLifecycleHandlersInstalled = false;
+let relayingParentSignal = false;
+
+export function registerDetachedProcessGroup(child: ReturnType<typeof spawn>): () => void {
+  const pid = child.pid;
+  if (process.platform === 'win32' || !pid) return () => {};
+  const group = { pid, child };
+  activeDetachedProcessGroups.set(pid, group);
+  installProcessGroupLifecycleHandlers();
+  return () => {
+    if (activeDetachedProcessGroups.get(pid) !== group) return;
+    activeDetachedProcessGroups.delete(pid);
+    if (activeDetachedProcessGroups.size === 0) uninstallProcessGroupLifecycleHandlers();
+  };
+}
+
+function installProcessGroupLifecycleHandlers(): void {
+  if (processGroupLifecycleHandlersInstalled || process.platform === 'win32') return;
+  processGroupLifecycleHandlersInstalled = true;
+  process.on('exit', terminateRegisteredProcessGroups);
+  // Run before existing once listeners remove themselves so rawListeners still
+  // reflects whether Node's default signal termination was already suppressed.
+  process.prependListener('SIGHUP', handleParentSighup);
+  process.prependListener('SIGINT', handleParentSigint);
+  process.prependListener('SIGTERM', handleParentSigterm);
+}
+
+function uninstallProcessGroupLifecycleHandlers(): void {
+  if (!processGroupLifecycleHandlersInstalled) return;
+  processGroupLifecycleHandlersInstalled = false;
+  process.off('exit', terminateRegisteredProcessGroups);
+  process.off('SIGHUP', handleParentSighup);
+  process.off('SIGINT', handleParentSigint);
+  process.off('SIGTERM', handleParentSigterm);
+}
+
+function handleParentSighup(): void {
+  relayParentSignal('SIGHUP', handleParentSighup);
+}
+
+function handleParentSigint(): void {
+  relayParentSignal('SIGINT', handleParentSigint);
+}
+
+function handleParentSigterm(): void {
+  relayParentSignal('SIGTERM', handleParentSigterm);
+}
+
+function relayParentSignal(signal: 'SIGHUP' | 'SIGINT' | 'SIGTERM', ownHandler: () => void): void {
+  if (relayingParentSignal) return;
+  terminateRegisteredProcessGroups();
+  if (process.rawListeners(signal).some((listener) => listener !== ownHandler)) return;
+  relayingParentSignal = true;
+  uninstallProcessGroupLifecycleHandlers();
+  try {
+    process.kill(process.pid, signal);
+  } catch {
+    process.exit(signal === 'SIGHUP' ? 129 : signal === 'SIGINT' ? 130 : 143);
+  }
+  setImmediate(() => {
+    relayingParentSignal = false;
+    if (activeDetachedProcessGroups.size > 0) installProcessGroupLifecycleHandlers();
+  });
+}
+
+function terminateRegisteredProcessGroups(): void {
+  for (const group of [...activeDetachedProcessGroups.values()]) {
+    if (activeDetachedProcessGroups.get(group.pid) !== group) continue;
+    try {
+      process.kill(-group.pid, 'SIGKILL');
+      continue;
+    } catch {}
+    try {
+      group.child.kill('SIGKILL');
+    } catch {}
+  }
+}
+
 export function runProcess(
   command: string,
   args: readonly string[],
@@ -519,6 +604,7 @@ export function runProcess(
     let killedByTimeout = false;
     let spawnRegistrationFailed = false;
     let settled = false;
+    let processTreeCleanup: Promise<void> | null = null;
     let stdoutStream: WriteStream | null = null;
     let stderrStream: WriteStream | null = null;
 
@@ -526,12 +612,16 @@ export function runProcess(
       cwd: options.cwd || process.cwd(),
       shell: false,
       stdio: [options.input !== undefined ? 'pipe' : 'ignore', 'pipe', 'pipe'],
+      detached: process.platform !== 'win32',
     };
-    if (options.env) {
+    if (options.envMode === 'replace') {
+      spawnOptions.env = { ...(options.env || {}) };
+    } else if (options.env) {
       spawnOptions.env = { ...process.env, ...options.env };
     }
 
     const child = spawn(command, args, spawnOptions);
+    const unregisterDetachedProcessGroup = registerDetachedProcessGroup(child);
     const pausedForSpawnRegistration = Boolean(
       options.onSpawn
         && child.pid
@@ -543,6 +633,8 @@ export function runProcess(
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      await processTreeCleanup;
+      unregisterDetachedProcessGroup();
       try {
         await stdoutStream?.end?.();
       } catch {}
@@ -563,14 +655,7 @@ export function runProcess(
 
     const timer = setTimeout(() => {
       killedByTimeout = true;
-      try {
-        child.kill('SIGTERM');
-      } catch {}
-      setTimeout(() => {
-        try {
-          child.kill('SIGKILL');
-        } catch {}
-      }, 1500).unref?.();
+      processTreeCleanup = terminateProcessTree(child.pid, child);
     }, timeoutMs);
     timer.unref?.();
 
@@ -623,7 +708,8 @@ export function runProcess(
           await options.onSpawn(pid);
         } catch {
           spawnRegistrationFailed = true;
-          child.kill('SIGKILL');
+          processTreeCleanup = terminateProcessTree(pid, child);
+          await processTreeCleanup;
           return;
         }
         if (pausedForSpawnRegistration) child.kill('SIGCONT');
@@ -631,6 +717,50 @@ export function runProcess(
       if (options.input !== undefined && child.stdin) child.stdin.end(options.input);
     })();
   });
+}
+
+async function terminateProcessTree(pid: number | undefined, child: ReturnType<typeof spawn>): Promise<void> {
+  signalProcessTree(pid, 'SIGTERM', child);
+  if (await waitForProcessTreeExit(pid, 1_000)) return;
+  signalProcessTree(pid, 'SIGKILL', child);
+  await waitForProcessTreeExit(pid, 1_500);
+}
+
+function signalProcessTree(pid: number | undefined, signal: NodeJS.Signals, child: ReturnType<typeof spawn>): void {
+  if (pid && process.platform !== 'win32') {
+    try {
+      process.kill(-pid, signal);
+      return;
+    } catch {}
+  }
+  try {
+    child.kill(signal);
+  } catch {}
+}
+
+async function waitForProcessTreeExit(pid: number | undefined, timeoutMs: number): Promise<boolean> {
+  if (!pid) return true;
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (!processTreeIsAlive(pid)) return true;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  return !processTreeIsAlive(pid);
+}
+
+function processTreeIsAlive(pid: number): boolean {
+  if (process.platform !== 'win32') {
+    try {
+      process.kill(-pid, 0);
+      return true;
+    } catch {}
+  }
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function readStdin(): Promise<string> {

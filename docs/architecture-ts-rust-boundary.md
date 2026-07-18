@@ -39,7 +39,7 @@ and the gates that enforce it.
 
 | Gate | Enforces |
 |------|----------|
-| `architecture:guard` | every pipeline/gate carries the SSOT guard and default SOLID expectations: SRP, OCP, LSP, ISP, and DIP |
+| `architecture:guard` | every pipeline/gate identifies authoritative sources, generated-output boundaries, and current architecture budgets |
 | `runtime:ts-source-of-truth` | `src/**/*.ts` is the authoritative runtime source |
 | `runtime:no-src-mjs` | no `src/**/*.mjs` runtime mirrors exist |
 | `runtime:dist-parity` | `dist/**` matches the compiled `src/**` (never hand-edited) |

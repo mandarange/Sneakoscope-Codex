@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { spawn, spawnSync } from 'node:child_process';
 import test from 'node:test';
 import { managedSksTmpRoot } from '../fsx.js';
@@ -39,6 +40,10 @@ test('canonical test runner isolates direct os.tmpdir allocations and removes th
     assert.ok(Number(observed.lease.pid) > 0);
     assert.ok(String(observed.TMPDIR).startsWith(`${managedSksTmpRoot()}${path.sep}sks-canonical-test-`));
     assert.equal(fs.existsSync(observed.TMPDIR), false);
+    const proof = JSON.parse(await fsp.readFile(path.join(fixture, '.sneakoscope', 'reports', 'canonical-test-proof.json'), 'utf8'));
+    assert.equal(proof.schema, 'sks.canonical-test-proof.v1');
+    assert.equal(proof.ok, true);
+    assert.equal(proof.total_tests, 2);
   } finally {
     await fsp.rm(fixture, { recursive: true, force: true });
   }
@@ -57,6 +62,8 @@ test('canonical test runner removes the run root after a forwarded termination s
         await new Promise(() => {});
       });
     `);
+    await fsp.mkdir(path.join(fixture, '.sneakoscope', 'reports'), { recursive: true });
+    await fsp.writeFile(path.join(fixture, '.sneakoscope', 'reports', 'canonical-test-proof.json'), '{"stale":true}\n');
     child = spawn(process.execPath, [runner], { cwd: fixture, env: standaloneTestEnv(), stdio: 'ignore' });
     await waitForFile(path.join(fixture, 'observed.json'));
     const observed = JSON.parse(await fsp.readFile(path.join(fixture, 'observed.json'), 'utf8'));
@@ -71,8 +78,102 @@ test('canonical test runner removes the run root after a forwarded termination s
     child = null;
     assert.ok(closed.signal === 'SIGTERM' || closed.code === 143, JSON.stringify(closed));
     assert.equal(fs.existsSync(observed.TMPDIR), false);
+    assert.equal(fs.existsSync(path.join(fixture, '.sneakoscope', 'reports', 'canonical-test-proof.json')), false);
   } finally {
     child?.kill('SIGKILL');
+    await fsp.rm(fixture, { recursive: true, force: true });
+  }
+});
+
+test('canonical test runner rejects successful tests when release state drifts', async () => {
+  const fixture = await fixtureRoot('sks-canonical-runner-drift-');
+  try {
+    await writeFixtureTests(fixture, `
+      const fs = require('node:fs');
+      const path = require('node:path');
+      const test = require('node:test');
+      test('mutates tracked release state', () => {
+        fs.appendFileSync(path.join(process.cwd(), 'src', 'index.ts'), '// drift\\n');
+      });
+    `);
+    const run = spawnSync(process.execPath, [runner], {
+      cwd: fixture,
+      env: standaloneTestEnv(),
+      encoding: 'utf8',
+      timeout: 10_000,
+      maxBuffer: 2 * 1024 * 1024
+    });
+    assert.equal(run.status, 1, `${run.stdout}\n${run.stderr}`);
+    assert.match(run.stderr, /canonical_test_release_authorization_drift/);
+    assert.equal(fs.existsSync(path.join(fixture, '.sneakoscope', 'reports', 'canonical-test-proof.json')), false);
+  } finally {
+    await fsp.rm(fixture, { recursive: true, force: true });
+  }
+});
+
+test('canonical test runner removes a child-forged current proof when the child fails', async () => {
+  const fixture = await fixtureRoot('sks-canonical-runner-forged-proof-');
+  try {
+    const proofModule = pathToFileURL(path.join(repoRoot, 'dist', 'core', 'release', 'canonical-test-proof.js')).href;
+    const authorizationModule = pathToFileURL(path.join(repoRoot, 'dist', 'core', 'release', 'release-authorization-snapshot.js')).href;
+    await writeFixtureTests(fixture, `
+      const fs = require('node:fs');
+      const path = require('node:path');
+      const assert = require('node:assert/strict');
+      const test = require('node:test');
+      test('writes a current-looking canonical proof before failing', async () => {
+        const proof = await import(${JSON.stringify(proofModule)});
+        const authorization = await import(${JSON.stringify(authorizationModule)});
+        const root = process.cwd();
+        const now = new Date().toISOString();
+        await proof.writeCanonicalTestProof(root, {
+          started_at: now,
+          completed_at: now,
+          corpus: proof.canonicalTestCorpus(root),
+          release_authorization_snapshot: authorization.releaseAuthorizationSnapshot(
+            root,
+            JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
+          )
+        });
+        assert.fail('intentional failure after proof recreation');
+      });
+    `);
+    const run = spawnSync(process.execPath, [runner], {
+      cwd: fixture,
+      env: standaloneTestEnv(),
+      encoding: 'utf8',
+      timeout: 10_000,
+      maxBuffer: 2 * 1024 * 1024
+    });
+    assert.equal(run.status, 1, `${run.stdout}\n${run.stderr}`);
+    assert.match(run.stdout, /intentional failure after proof recreation/);
+    assert.equal(fs.existsSync(path.join(fixture, '.sneakoscope', 'reports', 'canonical-test-proof.json')), false);
+  } finally {
+    await fsp.rm(fixture, { recursive: true, force: true });
+  }
+});
+
+test('canonical test runner does not allow ambient NODE_OPTIONS to skip the corpus', async () => {
+  const fixture = await fixtureRoot('sks-canonical-runner-node-options-');
+  try {
+    await writeFixtureTests(fixture, `
+      const assert = require('node:assert/strict');
+      const test = require('node:test');
+      test('must execute despite an ambient name filter', () => {
+        assert.fail('canonical corpus executed');
+      });
+    `);
+    const run = spawnSync(process.execPath, [runner], {
+      cwd: fixture,
+      env: { ...standaloneTestEnv(), NODE_OPTIONS: '--test-name-pattern=__definitely_no_match__' },
+      encoding: 'utf8',
+      timeout: 10_000,
+      maxBuffer: 2 * 1024 * 1024
+    });
+    assert.equal(run.status, 1, `${run.stdout}\n${run.stderr}`);
+    assert.match(run.stdout, /canonical corpus executed/);
+    assert.equal(fs.existsSync(path.join(fixture, '.sneakoscope', 'reports', 'canonical-test-proof.json')), false);
+  } finally {
     await fsp.rm(fixture, { recursive: true, force: true });
   }
 });
@@ -111,8 +212,18 @@ async function fixtureRoot(prefix: string): Promise<string> {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), prefix));
   await Promise.all([
     fsp.mkdir(path.join(root, 'dist', 'fixture', '__tests__'), { recursive: true }),
-    fsp.mkdir(path.join(root, 'test', 'unit'), { recursive: true })
+    fsp.mkdir(path.join(root, 'test', 'unit'), { recursive: true }),
+    fsp.mkdir(path.join(root, 'src'), { recursive: true })
   ]);
+  await Promise.all([
+    fsp.writeFile(path.join(root, 'package.json'), JSON.stringify({ name: 'runner-fixture', version: '1.0.0', files: ['dist', 'src', 'test'] })),
+    fsp.writeFile(path.join(root, 'release-gates.v2.json'), '{}'),
+    fsp.writeFile(path.join(root, 'infra-harness-gates.json'), '{}'),
+    fsp.writeFile(path.join(root, 'src', 'index.ts'), 'export const value = 1\n')
+  ]);
+  git(root, ['init', '-q']);
+  git(root, ['config', 'user.email', 'fixture@example.invalid']);
+  git(root, ['config', 'user.name', 'Fixture']);
   return root;
 }
 
@@ -125,6 +236,8 @@ async function writeFixtureTests(root: string, compiledSource: string): Promise<
       test('unit surface exists', () => assert.ok(true));
     `)
   ]);
+  git(root, ['add', '.']);
+  git(root, ['commit', '-qm', 'fixture']);
 }
 
 async function waitForFile(file: string): Promise<void> {
@@ -148,4 +261,9 @@ function pidAlive(pid: number): boolean {
   } catch {
     return false;
   }
+}
+
+function git(root: string, args: string[]): void {
+  const result = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
 }

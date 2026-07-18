@@ -1,5 +1,6 @@
 import { HARD_NARUTO_MAX_THREADS, type SubagentCapacityController } from './thread-budget.js'
 import type { BoundedTriwikiAttention } from './triwiki-attention.js'
+import { coreEngineeringDirectiveReferenceText } from '../lean-engineering-policy.js'
 import {
   MAX_AUTOMATIC_REVIEWER_COUNT,
   MAX_AUTOMATIC_SUBAGENT_COUNT,
@@ -90,6 +91,8 @@ export function buildOfficialSubagentPrompt(input: {
   return `
 Use a Codex subagent workflow for the independent slices below.
 
+${coreEngineeringDirectiveReferenceText()}
+
 Parent agent:
 - model policy: gpt-5.6-sol with max reasoning
 - owns decomposition, integration, and final answer
@@ -100,9 +103,9 @@ Subagent rules:
 - select the narrowest matching project custom agent by its description; the custom agent name is the spawn type
 - use \`worker\` with gpt-5.6-luna and max reasoning only for tiny, short-context, mechanical work with no exploration or judgment
 - use gpt-5.6-sol with high reasoning for ordinary UI, logic, backend, and native implementation
-- use gpt-5.6-sol with max reasoning for review, debugging, planning, architecture, security, database, research, release, ambiguity, and every judgment-bearing slice
-- use gpt-5.6-terra with medium reasoning for long-context analysis and direct Computer Use, Browser/Chrome, or image-generation execution
-- split mixed work when possible: Terra gathers or operates, Sol High implements, and Sol Max judges; when one slice cannot be split safely, judgment takes priority
+- use gpt-5.6-sol with max reasoning only for focused unresolved, high-risk, final-review, architecture, security, database, research, release, or other explicit judgment slices
+- use gpt-5.6-terra with medium reasoning for read-heavy documentation/exploration, long-context analysis, and direct Computer Use, Browser/Chrome, or image-generation execution
+- explicit task class and phase win over incidental keywords: Terra gathers/explores, Sol High implements, and Sol Max performs the focused judgment pass
 - never assign Luna to long-context, exploration, review, debugging, planning, or tool-heavy work
 - automatic fan-out starts at two for bounded non-trivial work, four for explicit parallel work, and six for large-scale work; it may expand only up to ${MAX_AUTOMATIC_SUBAGENT_COUNT} when decomposition proves more independent useful slices
 - automatic reviewer-only fan-out is capped at ${MAX_AUTOMATIC_REVIEWER_COUNT} for ordinary work and ${MAX_CRITICAL_AUTOMATIC_REVIEWER_COUNT} for critical multi-domain review
@@ -110,15 +113,19 @@ Subagent rules:
 - max open agent threads: ${maxThreads} (hard cap, never a utilization target)
 - selected first-wave concurrency: ${firstWave}
 - planned waves: ${waveCount}
+- wave lifecycle authority: root parent updates \`subagent-plan.json.wave_lifecycle\` under the same workflow_run_id after every SubagentStart/SubagentStop
 - before every wave compute C_t = min(ready DAG width, disjoint ownership, verifier capacity, tool concurrency, available thread slots after reservations, marginal-useful workers); launch n_t <= C_t only while marginal useful throughput stays positive
 - capacity snapshot: ${renderCapacity(input.capacity)}
-- max depth: 1
+- max depth: 1 applies only to child nesting; the root parent may and should launch later direct-child waves after earlier children settle
 - subagents must not spawn subagents
 - parallel writes require disjoint paths
 - if paths overlap, run those slices serially
 - reject duplicate slice fingerprints and homogeneous clone work; diversity may come from roles, disjoint shards, or different tool surfaces
 - security, database, release, authorization, and irreversible-effect checks are protected strata; aggregate speed or accuracy never offsets a failed protected gate
-- wait for every requested subagent before integrating
+- after each settled wave: collect results, close completed threads, refresh evidence and the wave lifecycle ledger, rescan the ready DAG, then launch the next defensible direct-child wave when useful work remains
+- recovered thread capacity is reusable by later root-owned waves; completed child threads do not permanently consume the mission fan-out budget
+- automatic targets may resize between waves when the ready DAG changes, but update plan/evidence before spawning; explicit operator and route-owned counts remain exact
+- wait for every final planned subagent before integrating
 - close completed threads after collecting results
 ${parentDecompositionRequired ? `- decomposition status: parent_required
 - before spawning, decompose the goal into independent, non-overlapping slices
@@ -156,10 +163,13 @@ Final parent output:
     { "thread_id": "official agent/thread id", "status": "completed|blocked|failed", "summary": "slice result" }
   ],
   "changed_files": [],
-  "verification": [],
+  "verification": [
+    { "name": "focused check", "status": "passed|not_applicable", "reason": "required when not_applicable" }
+  ],
   "blockers": []
 }
 - include one thread_outcomes row for every requested subagent; a SubagentStop event alone never proves success
+- if changed_files is non-empty, include at least one passed named check or a specifically justified not_applicable verification row
 - keep completion summary and Honest Mode wording inside the JSON fields; do not add prose outside the object
 `.trim()
 }

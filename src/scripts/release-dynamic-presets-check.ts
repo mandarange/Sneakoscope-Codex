@@ -6,6 +6,8 @@ const scripts = packageScripts()
 const dagMod = await importDist('core/release/release-gate-dag.js')
 const manifest = dagMod.loadReleaseGateManifest(root)
 const releaseCount = dagMod.selectReleaseGatePreset(manifest, 'release').length
+const incrementalCount = dagMod.selectReleaseGatePreset(manifest, 'incremental').length
+const dynamicCount = releaseCount + incrementalCount
 const dag = readText('src/core/release/release-gate-dag.ts')
 const runner = readText('src/scripts/release-gate-dag-runner.ts')
 for (const name of ['release:check:affected', 'release:check:full', 'release:check:fast', 'release:check:confidence']) {
@@ -18,8 +20,9 @@ assertGate(
   'affected/fast/confidence checks must reuse a source-bound fresh build and keep the five-minute SLA'
 )
 assertGate(dag.includes('selectAffectedReleaseGates'), 'release DAG must use affected selector')
-assertGate(dagMod.selectReleaseGatePreset(manifest, 'affected').length === releaseCount, 'affected preset must select the release gate universe before affected filtering')
-assertGate(dagMod.selectReleaseGatePreset(manifest, 'fast').length === releaseCount, 'fast preset must select the release gate universe before affected filtering')
+assertGate(dagMod.selectReleaseGatePreset(manifest, 'affected').length === dynamicCount, 'affected preset must select release and incremental gates before affected filtering')
+assertGate(dagMod.selectReleaseGatePreset(manifest, 'fast').length === dynamicCount, 'fast preset must select release and incremental gates before affected filtering')
+assertGate(dagMod.selectReleaseGatePreset(manifest, 'confidence').length === dynamicCount, 'confidence preset must select release and incremental gates before affected filtering')
 let unknownPresetBlocked = false
 try {
   dagMod.selectReleaseGatePreset(manifest, 'unknown-preset')

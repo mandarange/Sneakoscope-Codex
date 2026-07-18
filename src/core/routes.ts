@@ -150,7 +150,7 @@ export function noUnrequestedFallbackCodePolicyText() {
 }
 
 export function outcomeRubricPolicyText() {
-  return 'Outcome rubric policy: use the Lean Engineering Policy plus existing Proof Field, route gate, reflection, and Honest Mode evidence as the compact rubric: goal fit, minimum touched surface, bounded verification, and explicit escalation triggers.';
+  return 'Outcome rubric: apply the Core Engineering Directive, then use Proof Field, route-gate, reflection, and Honest Mode evidence to judge goal fit, touched surface, verification, and escalation.';
 }
 
 export function speedLanePolicyText() {
@@ -381,16 +381,17 @@ export const ROUTES = [
     id: 'Goal',
     command: '$Goal',
     mode: 'GOAL',
-    route: 'native /goal persistence bridge',
-    description: 'Fast overlay that records a bridge artifact for Codex native persisted /goal create, pause, resume, and clear controls; implementation continues through the selected SKS execution route.',
-    requiredSkills: ['goal', 'honest-mode'],
-    lifecycle: ['goal_bridge_artifact', 'native_goal_create_or_control', 'selected_sks_route_continuation', 'honest_mode'],
-    context7Policy: 'if_external_docs',
-    reasoningPolicy: 'medium',
-    stopGate: 'loop-graph-proof.json',
-    coverage_required: true,
-    cliEntrypoint: 'sks goal create|pause|resume|clear|status',
-    examples: ['$Goal persist this migration workflow with native /goal continuation']
+    route: 'Codex native /goal control',
+    description: 'Use Codex native Goal directly with a detailed outcome, scope, constraints, verification, completion conditions, stop conditions, and non-goals. SKS writes no Goal state.',
+    requiredSkills: ['goal'],
+    lifecycle: ['native_goal_create_or_control'],
+    context7Policy: 'not_required',
+    reasoningPolicy: 'low',
+    stopGate: 'none',
+    coverage_required: false,
+    coverageExemptReason: 'Goal creation and lifecycle are owned entirely by Codex native /goal; SKS creates no route mission or evidence artifacts.',
+    cliEntrypoint: 'Codex native /goal; sks goal is a stateless command-rendering compatibility helper only',
+    examples: ['$Goal define a measurable migration outcome and completion criteria']
   },
   {
     id: 'Commit',
@@ -682,7 +683,7 @@ export const COMMAND_CATALOG = [
   { name: 'rollback', usage: 'sks rollback list|apply <id> [--json]', description: 'List or explicitly apply managed-path rollback actions with confirmation.' },
   { name: 'init', usage: 'sks init [--force] [--local-only] [--install-scope global|project]', description: 'Initialize the local SKS control surface.' },
   { name: 'selftest', usage: 'sks selftest [--mock]', description: 'Run local smoke tests without calling a model.' },
-  { name: 'goal', usage: 'sks goal create|pause|resume|clear|status ...', description: 'Prepare and control the fast SKS bridge overlay for Codex native persisted /goal workflows.' },
+  { name: 'goal', usage: 'sks goal create|edit|pause|resume|clear|status ...', description: 'Print a detailed Codex native /goal command without creating SKS Goal state.' },
   { name: 'seo-geo-optimizer', usage: 'sks seo-geo-optimizer [seo|geo] doctor|audit|research|strategy|plan|apply|verify|status|rollback|fixture [mission|latest] [--mode seo|geo] [--target auto|website|docs|package] [--include-marketing] [--json]', description: 'Run the unified SEO/GEO optimizer on the shared search-visibility kernel with mode-specific gates, marketing research/strategy, safe apply, and proof.' },
   { name: 'research', usage: 'sks research prepare|run|status ...', description: 'Run long-form real research missions with xhigh agent Eureka ideas, debate, layered sources, paper, novelty, and falsification gates.' },
   { name: 'eval', usage: 'sks eval run|compare|thresholds ...', description: 'Run deterministic context-quality and performance evidence checks.' },
@@ -1197,11 +1198,10 @@ export function looksLikeExecutionWork(prompt: any = '') {
 export function subagentExecutionPolicyText(route: any, prompt: any = '') {
   const required = routeRequiresSubagents(route, prompt);
   if (route?.id === 'Goal') {
-    if (!required) return 'Subagent policy: Goal is a lightweight native /goal persistence overlay; a subagent workflow is not required for bridge creation or control.';
+    if (!required) return 'Subagent policy: Goal uses Codex native /goal only; no SKS mission or subagent workflow is created for Goal control.';
     return [
-      'Subagent policy: Goal remains a lightweight native /goal persistence overlay.',
-      'Because the prompt also requests explicitly parallel execution, continue through the selected SKS execution route and use that route\'s Codex subagent workflow.',
-      noUnrequestedFallbackCodePolicyText()
+      'Subagent policy: Goal remains a Codex-native control turn with no SKS-owned state.',
+      'Because the prompt also requests explicitly parallel execution, continue through the selected SKS execution route and use that route\'s Codex subagent workflow.'
     ].join(' ');
   }
   if (!required) {
@@ -1212,8 +1212,7 @@ export function subagentExecutionPolicyText(route: any, prompt: any = '') {
     'The parent agent owns decomposition, integration, scoped verification, and the final answer.',
     'Delegate only genuinely independent slices. Use Luna Max only for tiny short-context mechanical work, Sol High for ordinary implementation, Sol Max for review/debug/planning/architecture/integration/risk judgment, and Terra Medium for long-context or Computer Use, Browser/Chrome, and image-generation execution.',
     'Parallel writes require disjoint paths; serialize overlapping paths, prohibit nested delegation, avoid duplicate work, wait for all requested agent threads, and close completed threads after collecting results.',
-    'Completion evidence comes from official SubagentStart/SubagentStop events plus the parent integration summary, not process counts or PID evidence.',
-    noUnrequestedFallbackCodePolicyText()
+    'Completion evidence comes from official SubagentStart/SubagentStop events plus the parent integration summary, not process counts or PID evidence.'
   ].join(' ');
 }
 

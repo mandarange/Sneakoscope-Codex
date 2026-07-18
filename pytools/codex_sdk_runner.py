@@ -18,6 +18,17 @@ def main():
         return 2
 
     if os.environ.get("SKS_PYTHON_CODEX_SDK_FAKE") == "1":
+        probe_keys = (
+            "SKS_PYTHON_CODEX_SDK_FAKE",
+            "CODEX_LB_API_KEY",
+            "CODEX_LB_BASE_URL",
+            "SKS_PYTHON_CODEX_SDK_TEST_SECRET",
+        )
+        emit({
+            "event": "child_environment_proof",
+            "present_keys": [key for key in probe_keys if key in os.environ],
+            "absent_keys": [key for key in probe_keys if key not in os.environ],
+        })
         emit({"event": "thread_started", "thread_id": "py-fixture-thread"})
         emit({"event": "turn_started", "turn_id": "py-fixture-turn"})
         emit({"event": "notification", "turn_id": "py-fixture-turn", "type": "tool_call_started"})

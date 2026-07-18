@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
+import { randomUUID } from 'node:crypto';
 import { exists, readJson, writeJsonAtomic, ensureDir, dirSize, fileSize, formatBytes, rmrf, nowIso, appendJsonlBounded, listFilesRecursive, managedSksTmpRoot, sha256, SKS_TEMP_LEASE_FILE } from './fsx.js';
 import { FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS } from './routes.js';
 
@@ -507,6 +508,91 @@ async function liveTempLease(target: string): Promise<{ path: string; pid: numbe
     pid,
     kind: lease?.kind ? String(lease.kind) : null
   };
+}
+
+async function removeDeadCanonicalTestLease(
+  base: string,
+  target: string,
+  targetStat: Awaited<ReturnType<typeof fs.lstat>>,
+  dryRun: boolean,
+  actions: any[]
+) {
+  if (!targetStat.isDirectory() || targetStat.isSymbolicLink() || !currentProcessOwns(targetStat)) return false;
+  const [realBase, realTarget] = await Promise.all([
+    fs.realpath(base).catch(() => null),
+    fs.realpath(target).catch(() => null)
+  ]);
+  if (!realBase || !realTarget || path.dirname(realTarget) !== realBase || !isWithin(realBase, realTarget)) return false;
+
+  const leasePath = path.join(target, SKS_TEMP_LEASE_FILE);
+  const leaseLstat = await fs.lstat(leasePath).catch(() => null);
+  if (!leaseLstat?.isFile() || leaseLstat.isSymbolicLink() || !currentProcessOwns(leaseLstat) || leaseLstat.size > 4096) return false;
+
+  const leaseHandle = await fs.open(leasePath, 'r').catch(() => null);
+  if (!leaseHandle) return false;
+  let lease: any = null;
+  try {
+    const leaseStat = await leaseHandle.stat();
+    if (!leaseStat.isFile()
+      || !currentProcessOwns(leaseStat)
+      || leaseStat.dev !== leaseLstat.dev
+      || leaseStat.ino !== leaseLstat.ino) return false;
+    lease = JSON.parse(await leaseHandle.readFile({ encoding: 'utf8' }));
+  } catch {
+    return false;
+  } finally {
+    await leaseHandle.close().catch(() => undefined);
+  }
+
+  const leaseKeys = lease && typeof lease === 'object' && !Array.isArray(lease)
+    ? Object.keys(lease).sort()
+    : [];
+  const pid = Number(lease?.pid);
+  if (lease?.schema !== 'sks.temp-lease.v1'
+    || lease?.kind !== 'canonical-test-runner'
+    || !Number.isSafeInteger(pid)
+    || pid <= 0
+    || typeof lease?.created_at !== 'string'
+    || !Number.isFinite(Date.parse(lease.created_at))
+    || leaseKeys.join(',') !== 'created_at,kind,pid,schema'
+    || processIdAlive(pid)) return false;
+
+  const currentTargetStat = await fs.lstat(target).catch(() => null);
+  if (!currentTargetStat?.isDirectory()
+    || currentTargetStat.isSymbolicLink()
+    || !currentProcessOwns(currentTargetStat)
+    || currentTargetStat.dev !== targetStat.dev
+    || currentTargetStat.ino !== targetStat.ino) return false;
+
+  const action = {
+    action: 'remove_sks_temp',
+    path: target,
+    reason: 'dead_canonical_test_lease',
+    lease_path: leasePath,
+    owner_pid: pid,
+    lease_kind: lease.kind
+  };
+  if (dryRun) {
+    actions.push(action);
+    return true;
+  }
+
+  const quarantine = path.join(realBase, `.sks-retention-quarantine-${process.pid}-${randomUUID()}`);
+  try {
+    await fs.rename(target, quarantine);
+  } catch {
+    return false;
+  }
+  const quarantinedStat = await fs.lstat(quarantine).catch(() => null);
+  if (!quarantinedStat
+    || quarantinedStat.dev !== targetStat.dev
+    || quarantinedStat.ino !== targetStat.ino) {
+    if (!(await exists(target))) await fs.rename(quarantine, target).catch(() => undefined);
+    return false;
+  }
+  await rmrf(quarantine);
+  actions.push(action);
+  return true;
 }
 
 function processIdAlive(pid: number) {
@@ -1096,7 +1182,7 @@ export async function sweepSksTempDirs(root: any, opts: any = {}) {
     // are intentionally named by feature prefixes (not by project hash), so
     // ownership, symlink and descendant-activity checks below are the safety
     // boundary for every child in this root.
-    { base: managedSksTmpRoot(), external: true, shared: false },
+    { base: managedSksTmpRoot(), external: true, shared: false, canonicalLeaseCleanup: true },
     { base: path.join(os.tmpdir(), `sks-${projectHash}`), external: true, shared: false },
     { base: path.join(root, '.sneakoscope', 'tmp'), external: false, shared: false }
   ];
@@ -1128,6 +1214,11 @@ export async function sweepSksTempDirs(root: any, opts: any = {}) {
           reason: 'active_temp_environment',
           environment_key: environmentKey
         });
+        continue;
+      }
+      if (rootSpec.canonicalLeaseCleanup
+        && await removeDeadCanonicalTestLease(base, target, stat, dryRun, actions)) {
+        plannedPaths.add(resolvedTarget);
         continue;
       }
       const lease = stat.isDirectory() ? await liveTempLease(target) : null;

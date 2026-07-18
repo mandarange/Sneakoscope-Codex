@@ -46,11 +46,28 @@ function pct(x: any) {
   return `${(100 * x).toFixed(1)}%`;
 }
 
+function printSizeAndTokens(report: any, comparison: any) {
+  const baselineSize = report.baseline.serialized_size_bytes;
+  const candidateSize = report.candidate.serialized_size_bytes;
+  if (baselineSize !== undefined && candidateSize !== undefined) {
+    const delta = comparison.serialized_size_savings_pct;
+    const suffix = delta === null || delta === undefined
+      ? ''
+      : delta >= 0 ? ` (${pct(delta)} smaller)` : ` (${pct(-delta)} larger)`;
+    console.log(`JSON size: ${baselineSize} B -> ${candidateSize} B${suffix} (non-token proxy)`);
+  }
+  if (comparison.token_measurement?.available) {
+    console.log(`Tokens:    ${report.baseline.token_count} -> ${report.candidate.token_count} (${pct(comparison.token_savings_pct)} saved)`);
+  } else {
+    console.log('Tokens:    not measured (actual token counts with evidence required)');
+  }
+}
+
 function printEvalRun(report: any, saved: any) {
   const c = report.comparison;
   console.log('Sneakoscope Eval');
   console.log(`Scenario:  ${report.scenario.id}`);
-  console.log(`Tokens:    ${report.baseline.estimated_tokens} -> ${report.candidate.estimated_tokens} (${pct(c.token_savings_pct)} saved)`);
+  printSizeAndTokens(report, c);
   console.log(`Accuracy:  ${report.baseline.quality.accuracy_proxy} -> ${report.candidate.quality.accuracy_proxy} (${c.accuracy_delta >= 0 ? '+' : ''}${c.accuracy_delta})`);
   console.log(`Meaningful improvement: ${c.meaningful_improvement ? 'yes' : 'no'}`);
   if (saved) console.log(`Report:    ${saved}`);
@@ -61,7 +78,7 @@ function printEvalCompare(report: any, saved: any) {
   console.log('Sneakoscope Eval Compare');
   console.log(`Baseline:  ${report.baseline_label}`);
   console.log(`Candidate: ${report.candidate_label}`);
-  console.log(`Tokens:    ${report.baseline.estimated_tokens} -> ${report.candidate.estimated_tokens} (${pct(c.token_savings_pct)} saved)`);
+  printSizeAndTokens(report, c);
   console.log(`Accuracy:  ${report.baseline.quality.accuracy_proxy} -> ${report.candidate.quality.accuracy_proxy} (${c.accuracy_delta >= 0 ? '+' : ''}${c.accuracy_delta})`);
   console.log(`Meaningful improvement: ${c.meaningful_improvement ? 'yes' : 'no'}`);
   if (saved) console.log(`Report:    ${saved}`);

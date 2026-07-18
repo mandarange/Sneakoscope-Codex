@@ -103,16 +103,20 @@ function qualityProtocolBlockers(result: AgentRunnerResult): string[] {
   if (!writesPatch) return [];
   const kind = String(result.work_item_kind || result.naruto_runtime?.work_item_kind || '').toLowerCase();
   const text = [kind, result.task_slice_id].join(' ').toLowerCase();
-  const proof = result.regression_proof || result.patch_envelopes?.find((envelope) => envelope.regression_proof)?.regression_proof || null;
   const repair = result.repair_hypothesis || result.patch_envelopes?.find((envelope) => envelope.repair_hypothesis)?.repair_hypothesis || null;
   const blockers: string[] = [];
-  if ((kind === 'bugfix' || /\b(fix|bug|regression|broken|failure|crash|error)\b|버그|회귀/.test(text)) && !validRegressionProof(proof)) blockers.push('tdd_evidence_missing');
+  if (!validWriteVerification(result.verification)) blockers.push('verification_evidence_missing');
   if ((kind === 'conflict_resolution' || /\b(repair|conflict|rebase|rollback)\b|수리|충돌/.test(text)) && !repair) blockers.push('repair_without_hypothesis');
   return blockers;
 }
 
-function validRegressionProof(proof: any): boolean {
-  return Boolean(proof && proof.failed_before === true && proof.passed_after === true && String(proof.test_file || '').trim());
+function validWriteVerification(verification: AgentRunnerResult['verification']): boolean {
+  const status = String(verification?.status || '').trim().toLowerCase();
+  const checks = Array.isArray(verification?.checks)
+    ? verification.checks.map((check) => String(check || '').trim()).filter(Boolean)
+    : [];
+  if (status === 'passed') return checks.length > 0;
+  return status === 'not_applicable' && Boolean(String(verification?.reason || '').trim());
 }
 
 export function agentWorkerPipelineContract() {
@@ -176,7 +180,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function normalizeVerification(value: any) {
   return {
     status: String(value?.status || 'not_run'),
-    checks: Array.isArray(value?.checks) ? value.checks : []
+    checks: Array.isArray(value?.checks) ? value.checks : [],
+    ...(String(value?.reason || '').trim() ? { reason: String(value.reason).trim() } : {})
   }
 }
 

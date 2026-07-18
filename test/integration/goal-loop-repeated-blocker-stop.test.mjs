@@ -1,22 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import { detectRepeatedBlocker } from '../../dist/core/loop-blocker.js';
-import { writeGoalWorkflow } from '../../dist/core/goal-workflow.js';
-import { tempImageRoot } from '../helpers/ux-review-1-0-8-fixtures.mjs';
+import { buildNativeGoalRequest } from '../../dist/core/goal-workflow.js';
 
-test('Goal loop repeated blocker policy aligns with Codex 0.133 stop behavior', () => {
-  const report = detectRepeatedBlocker([{ reason: 'usage_limit' }, { reason: 'usage_limit' }], 2);
-  assert.equal(report.stop_required, true);
+test('Goal request defines bounded stop conditions instead of an SKS loop policy', () => {
+  const request = buildNativeGoalRequest('create', 'Fix the release cache regression');
+  assert.match(request.objective, /Stop conditions:/);
+  assert.match(request.objective, /Do not continue merely to improve, generalize, or polish/i);
+  assert.equal(Object.hasOwn(request, 'loop_plan'), false);
+  assert.equal(Object.hasOwn(request, 'repeated_blocker_policy'), false);
+  assert.equal(Object.hasOwn(request, 'mission_id'), false);
 });
 
-test('Goal workflow artifact records repeated blocker stop policy', async () => {
-  const { root } = await tempImageRoot('sks-goal-loop-');
-  const dir = path.join(root, '.sneakoscope/missions/M-goal');
-  await fs.mkdir(dir, { recursive: true });
-  const workflow = await writeGoalWorkflow(dir, { id: 'M-goal', prompt: 'fixture goal' });
-  assert.equal(workflow.repeated_blocker_policy.aligned_with_codex_0_133, true);
-  assert.equal(workflow.repeated_blocker_policy.aligned_with_codex_0_132, true);
-  assert.equal(workflow.repeated_blocker_policy.stop_after_same_blocker_count, 2);
+test('Goal edit keeps the detailed contract on the native edit surface', () => {
+  const request = buildNativeGoalRequest('edit', 'Narrow the release to version 6.7.0 and do not publish');
+  assert.equal(request.slash_command.startsWith('/goal edit Outcome:\n'), true);
+  assert.equal(request.completion_contract.done_when, true);
+  assert.equal(request.completion_contract.non_goals, true);
 });

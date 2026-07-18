@@ -98,7 +98,13 @@ export function decideOfficialSubagentModel(input: { persona?: Partial<AgentPers
   const role = String(persona.role || '')
   const agentId = String(input.agentId || persona.id || 'subagent')
   const routingRole = [agentId, persona.naruto_role, persona.work_kind, role].filter(Boolean).join(' ')
-  const taskClass = /(?:implementation_specialist|ui_implementer|native_app_specialist)/i.test(routingRole)
+  const promptIsDocsExploration = /\b(?:read|scan|explore|compare|summarize|review)\b[^\n]{0,64}\b(?:docs?|documentation|manual|notes?|references?)\b/i.test(prompt)
+  const promptIsFocusedJudgment = !promptIsDocsExploration
+    && /^(?:\s*)(?:review|audit|debug(?:ger|ging)?|diagnos|investigat|plan|assess)\b|\b(?:security|database|release|production|high[- ]?risk)\b[^\n]{0,48}\b(?:review|audit|decision|plan|assessment)\b/i.test(prompt)
+  const taskClass = promptIsFocusedJudgment
+    || /(?:debugger|expert|_reviewer|research_synthesizer)/i.test(routingRole)
+    ? 'judgment' as const
+    : /(?:implementation_specialist|ui_implementer|native_app_specialist)/i.test(routingRole)
     ? 'implementation' as const
     : /(?:explorer|docs_maintainer|long_context_analyst|computer_use_operator|browser_use_operator|image_generation_operator)/i.test(routingRole)
       ? 'context_tools' as const
@@ -133,8 +139,8 @@ export function decideOfficialSubagentModel(input: { persona?: Partial<AgentPers
     reason: routed.reason,
     dynamic: true,
     escalation_triggers: [
-      'review, debugging, planning, architecture, integration, security, database, research, release, or ambiguity selects Sol Max',
-      'mixed tool-and-judgment work is split; an unsplittable slice selects Sol Max',
+      'focused review, debugging, planning, integration, security, database, research, release, or unresolved ambiguity selects Sol Max',
+      'incidental judgment vocabulary does not override a clearly classified implementation or context/tools slice',
       'requested model/effort profile unavailable blocks instead of silently falling back'
     ],
     downshift_triggers: [

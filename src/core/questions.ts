@@ -224,7 +224,11 @@ export function inferAnswersForPrompt(prompt: any, explicitAnswers: any = {}) {
     .replace(/\s+/g, ' ')
     .trim();
   const version = String(text || '').match(/\bv?(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)\b/)?.[1] || null;
-  const versionWork = /버전|version|bump|release|publish:dry|npm\s+pack/.test(lower);
+  const versionWork = /\b(?:versioning\s+bump|version\s+bump|bump\s+(?:the\s+)?version|publish:dry|npm\s+pack)\b/.test(lower)
+    || /(?:버전|version)[^\n]{0,48}(?:올려|올리|상향|증가|bump|upgrade|publish|배포|출시)/.test(lower)
+    || /(?:올려|올리|상향|증가|bump|upgrade|publish|배포|출시)[^\n]{0,48}(?:버전|version)/.test(lower)
+    || /(?:릴리스|release)[^\n]{0,48}(?:준비|prepare|cut|ship|publish)/.test(lower)
+    || /(?:준비|prepare|cut|ship|publish)[^\n]{0,48}(?:릴리스|release)/.test(lower);
   const installWork = /bootstrap|postinstall|doctor|deps|zellij|homebrew|first install|최초\s*설치|설치\s*ux|셋업|setup/.test(lower);
   const questionGateWork = /모호|ambiguity|clarification|질문|triwiki|추론|infer|predict|예측|answers?\.json|decision-contract/.test(lower);
   const requestIntakeWork = /(모호|ambiguity|ambiguous|vague|rough|의도|intent|요청사항|requirements?|프롬프트|prompt|triwiki|위키|wiki)/.test(lower)
@@ -239,7 +243,10 @@ export function inferAnswersForPrompt(prompt: any, explicitAnswers: any = {}) {
   const dbApplyMigrationWork = /(apply|run|execute|적용|실행).*(migration|migrate|마이그레이션)|((migration|migrate|마이그레이션).*(apply|run|execute|적용|실행))/.test(lower);
   const paymentWork = /결제|payment|billing|invoice|checkout|order/.test(lower);
   const authWork = /로그인|auth|session|token|인증/.test(lower);
-  const prioritySignalWork = /화|짜증|답답|;;|!!|강력|기억|우선|자주|반복|카운팅|count|frequency|frequent|priority|weight/.test(lower);
+  const strongFeedbackCue = /화(?:가\s*나|났|남|나요|나네)|짜증|답답|;;|!!/.test(lower);
+  const explicitPriorityMemoryCue = /(?:triwiki|위키|기억|memory|선호|preference|반복\s*(?:요청|선호)|frequency|frequent|카운팅|count)[^\n]{0,80}(?:우선순위|priority|required_weight|weight)|(?:우선순위|priority|required_weight|weight)[^\n]{0,80}(?:triwiki|위키|기억|memory|선호|preference|반복|frequency|frequent|카운팅|count)/.test(lower);
+  const prioritySignalWork = explicitPriorityMemoryCue
+    || (strongFeedbackCue && /기억해|기억하|remember|우선순위|priority/.test(lower));
   const cliSurfaceWork = /\b(cli|command|route|usage|help|sks)\b|명령|커맨드|사용법/.test(lower);
   const explicitRouteWork = /^\s*(?:\$|\[\$)(?:research|naruto|work|goal|dfix|ppt|qa-loop|image-ux-review|ux-review|visual-review|ui-ux-review|wiki|db|gx|computer-use|cu|autoresearch|sks|answer|help)\b/i.test(String(prompt || ''));
   const triwikiAuditWork = /(triwiki|tri\s*wiki|wiki|복셀|voxel)/.test(lower)
@@ -282,7 +289,15 @@ export function inferAnswersForPrompt(prompt: any, explicitAnswers: any = {}) {
       inferred,
       notes,
       'GOAL_PRECISE',
-      explicitPromptedGoal || (presentationWork ? goals.presentation : (kind ? goals[kind] : (normalizedPrompt ? `사용자 요청을 현재 코드 기준으로 구현한다: ${normalizedPrompt}` : '사용자 요청을 현재 코드 기준으로 구현한다'))),
+      explicitPromptedGoal || (presentationWork
+        ? goals.presentation
+        : kind === 'priority' && normalizedPrompt
+          ? normalizedPrompt
+          : kind
+            ? goals[kind]
+            : normalizedPrompt
+              ? `사용자 요청을 현재 코드 기준으로 구현한다: ${normalizedPrompt}`
+              : '사용자 요청을 현재 코드 기준으로 구현한다'),
       explicitPromptedGoal ? 'user-answered-dynamic-intent' : (presentationWork ? 'presentation' : (kind || 'prompt-derived-goal'))
     );
   }
@@ -306,7 +321,7 @@ export function inferAnswersForPrompt(prompt: any, explicitAnswers: any = {}) {
   if (!hasAnswer(explicitAnswers.PUBLIC_API_CHANGE_ALLOWED)) addInferred(inferred, notes, 'PUBLIC_API_CHANGE_ALLOWED', cliSurfaceWork || installWork ? 'yes_if_needed' : 'no', 'public-api');
   if (!hasAnswer(explicitAnswers.DEPENDENCY_CHANGE_ALLOWED)) addInferred(inferred, notes, 'DEPENDENCY_CHANGE_ALLOWED', 'no', 'no-new-deps');
   if (!hasAnswer(explicitAnswers.TEST_SCOPE)) {
-    const releaseLike = versionWork || installWork || questionGateWork || prioritySignalWork || chatCaptureWork || /\bsneakoscope\b|\bsks\b/.test(lower);
+    const releaseLike = versionWork || installWork;
     addInferred(inferred, notes, 'TEST_SCOPE', releaseLike ? ['packcheck', 'selftest', 'sizecheck', 'publish:dry'] : ['focused relevant tests or documented justification'], 'tests');
   }
   if (!hasAnswer(explicitAnswers.MID_RUN_UNKNOWN_POLICY)) {
@@ -455,7 +470,17 @@ export function inferAnswersForPrompt(prompt: any, explicitAnswers: any = {}) {
       );
     }
   }
-  return { answers: inferred, notes };
+  return {
+    answers: inferred,
+    notes,
+    signals: {
+      priority_memory: {
+        requested: effectivePrioritySignalWork,
+        source: effectivePrioritySignalWork ? 'explicit_priority_memory_cue' : 'not_requested',
+        preserves_literal_goal: true
+      }
+    }
+  };
 }
 
 export function buildRequestIntake(prompt: any, explicitAnswers: any = {}, opts: any = {}) {
@@ -500,6 +525,7 @@ export function buildRequestIntake(prompt: any, explicitAnswers: any = {}, opts:
       source: 'prompt_plus_triwiki_current_code_defaults',
       confidence: ambiguity.ready_for_contract ? 'high' : ambiguity.overall_score <= 0.35 ? 'medium' : 'needs_human_only_if_scope_changes'
     },
+    priority_signal: inferred.signals?.priority_memory || { requested: false, source: 'not_requested', preserves_literal_goal: true },
     ambiguity_assessment: ambiguity,
     wiki_context_used: wikiContext,
     request_items: requirements,

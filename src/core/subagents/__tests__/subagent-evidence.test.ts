@@ -105,6 +105,20 @@ test('evidence completes only unique correlated start and stop thread ids with a
   assert.equal(evidence.ok, true)
 })
 
+test('changed files require a named passed check or a justified not-applicable verification row', () => {
+  const events = [
+    { event_name: 'SubagentStart', thread_id: 'thread-a' },
+    { event_name: 'SubagentStop', thread_id: 'thread-a' }
+  ]
+  const missing = { ...parentSummary(['thread-a']), changed_files: ['src/a.ts'] }
+  const blocked = buildSubagentEvidence({ requestedSubagents: 1, parentSummary: missing, events })
+  assert.equal(blocked.ok, false)
+  assert.ok(blocked.blockers.includes('parent_summary_verification_missing'))
+
+  const verified = { ...missing, verification: [{ name: 'focused typecheck', status: 'passed' }] }
+  assert.equal(buildSubagentEvidence({ requestedSubagents: 1, parentSummary: verified, events }).ok, true)
+})
+
 test('evidence rejects observed fanout that exceeds the planned subagent count', () => {
   const evidence = buildSubagentEvidence({
     requestedSubagents: 1,
@@ -123,6 +137,94 @@ test('evidence rejects observed fanout that exceeds the planned subagent count',
   assert.equal(evidence.ok, false)
   assert.ok(evidence.blockers.includes('requested_subagent_starts_exceeded:2/1'))
   assert.ok(evidence.blockers.includes('requested_subagent_completions_exceeded:2/1'))
+})
+
+test('dynamic automatic evidence grows a two-thread request to four observed trustworthy outcomes', () => {
+  const threadIds = ['thread-a', 'thread-b', 'thread-c', 'thread-d']
+  const evidence = buildSubagentEvidence({
+    requestedSubagents: 2,
+    countPolicy: 'dynamic_automatic',
+    targetSubagents: 4,
+    parentSummary: parentSummary(threadIds),
+    events: threadIds.flatMap((threadId) => [
+      { event_name: 'SubagentStart', thread_id: threadId },
+      { event_name: 'SubagentStop', thread_id: threadId }
+    ])
+  })
+
+  assert.equal(evidence.requested_subagents, 2)
+  assert.equal(evidence.count_policy, 'dynamic_automatic')
+  assert.equal(evidence.target_subagents, 4)
+  assert.equal(evidence.started_threads, 4)
+  assert.equal(evidence.completed_threads, 4)
+  assert.equal(evidence.ok, true)
+})
+
+test('exact evidence keeps a two-thread target and blocks four observed outcomes', () => {
+  const threadIds = ['thread-a', 'thread-b', 'thread-c', 'thread-d']
+  const evidence = buildSubagentEvidence({
+    requestedSubagents: 2,
+    countPolicy: 'exact',
+    targetSubagents: 4,
+    parentSummary: parentSummary(threadIds),
+    events: threadIds.flatMap((threadId) => [
+      { event_name: 'SubagentStart', thread_id: threadId },
+      { event_name: 'SubagentStop', thread_id: threadId }
+    ])
+  })
+
+  assert.equal(evidence.requested_subagents, 2)
+  assert.equal(evidence.count_policy, 'exact')
+  assert.equal(evidence.target_subagents, 2)
+  assert.equal(evidence.ok, false)
+  assert.ok(evidence.blockers.includes('requested_subagent_starts_exceeded:4/2'))
+  assert.ok(evidence.blockers.includes('requested_subagent_completions_exceeded:4/2'))
+})
+
+test('unsafe terminal thread states still block a dynamic target', () => {
+  const cases = [
+    {
+      name: 'open',
+      events: [{ event_name: 'SubagentStart', thread_id: 'thread-a' }],
+      summary: parentSummary(['thread-a']),
+      blocker: 'subagent_threads_still_open:1'
+    },
+    {
+      name: 'failed',
+      events: [
+        { event_name: 'SubagentStart', thread_id: 'thread-a' },
+        { event_name: 'SubagentStop', thread_id: 'thread-a', failed: true }
+      ],
+      summary: parentSummary(['thread-a'], 'failed'),
+      blocker: 'subagent_threads_failed:1'
+    },
+    {
+      name: 'unmatched',
+      events: [{ event_name: 'SubagentStop', thread_id: 'thread-a' }],
+      summary: parentSummary([]),
+      blocker: 'subagent_stops_without_start:1'
+    },
+    {
+      name: 'ambiguous',
+      events: [
+        { event_name: 'SubagentStart', thread_id: 'thread-a' },
+        { event_name: 'SubagentStop', thread_id: 'thread-a' }
+      ],
+      summary: null,
+      blocker: 'subagent_thread_outcomes_ambiguous:1'
+    }
+  ]
+  for (const fixture of cases) {
+    const evidence = buildSubagentEvidence({
+      requestedSubagents: 1,
+      countPolicy: 'dynamic_automatic',
+      targetSubagents: 1,
+      events: fixture.events,
+      parentSummary: fixture.summary
+    })
+    assert.equal(evidence.ok, false, fixture.name)
+    assert.ok(evidence.blockers.includes(fixture.blocker), fixture.name)
+  }
 })
 
 test('parent thread outcomes must exactly equal the observed started thread ids', () => {

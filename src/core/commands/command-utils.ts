@@ -91,10 +91,10 @@ export function ambientGoalContinuation() {
   return {
     schema_version: 1,
     enabled: true,
-    mode: 'ambient_codex_native_goal_overlay',
+    mode: 'codex_native_goal_only',
     native_slash_command: '/goal',
     non_disruptive: true,
-    rule: 'Use Codex native goal persistence to keep long work resumable when available, but never replace Naruto, TriWiki, verification, or Honest Mode route gates.'
+    rule: 'Use Codex native Goal as the only persisted goal owner. Never create SKS Goal missions, bridge artifacts, compatibility loops, or fallback goal state.'
   };
 }
 

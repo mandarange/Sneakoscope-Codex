@@ -14,6 +14,10 @@ export function buildCodexSdkConfig(input: CodexTaskInput) {
   const model = String(input.model || process.env.SKS_CODEX_MODEL || process.env.CODEX_MODEL || '').trim()
   const serviceTier = String(input.serviceTier || process.env.SKS_SERVICE_TIER || 'fast')
   const config: Record<string, unknown> = {
+    // Internal control-plane work is always native Codex. Ambient proxy
+    // credentials are not provider-selection consent.
+    model_provider: 'openai',
+    forced_login_method: 'chatgpt',
     service_tier: serviceTier === 'standard' ? 'standard' : 'fast',
     model_reasoning_effort: String(input.modelReasoningEffort || input.reasoningEffort || process.env.SKS_CODEX_REASONING || process.env.CODEX_MODEL_REASONING_EFFORT || 'medium'),
     mcp_servers: {},
@@ -29,21 +33,6 @@ export function buildCodexSdkConfig(input: CodexTaskInput) {
   if (input.requestedScopeContract?.no_mcp === true) {
     config.mcp_servers = {}
     config.sks = { ...(config.sks as Record<string, unknown>), no_mcp: true }
-  }
-  const codexLbApiKey = String(process.env.CODEX_LB_API_KEY || '').trim()
-  const codexLbBaseUrl = normalizeCodexLbBaseUrl(process.env.CODEX_LB_BASE_URL)
-  if (process.env.SKS_CODEX_LB_AUTOBYPASS !== '1' && codexLbApiKey && codexLbBaseUrl) {
-    config.model_provider = 'codex-lb'
-    config.model_providers = {
-      'codex-lb': {
-        name: 'openai',
-        base_url: codexLbBaseUrl,
-        wire_api: 'responses',
-        env_key: 'CODEX_LB_API_KEY',
-        supports_websockets: true,
-        requires_openai_auth: true
-      }
-    }
   }
   return config
 }
@@ -70,12 +59,4 @@ export function redactCodexSdkConfig(config: Record<string, unknown>) {
     if (typeof value === 'string' && /(?:key|token|secret|password|credential|auth|cookie)/i.test(value)) return '<redacted>'
     return value
   }))
-}
-
-function normalizeCodexLbBaseUrl(value: unknown) {
-  let host = String(value || '').trim()
-  if (!host) return ''
-  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(host)) host = `https://${host}`
-  host = host.replace(/\/+$/, '')
-  return /\/backend-api\/codex$/i.test(host) ? host : `${host}/backend-api/codex`
 }

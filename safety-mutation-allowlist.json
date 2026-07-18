@@ -338,6 +338,36 @@
       "reason": "Codex 0.144.5 schema probe removes only its scoped generated schema output directory before refresh."
     },
     {
+      "file": "src/core/codex-control/codex-sdk-env-policy.ts",
+      "symbol": "cleanupOwnedTempRoot",
+      "token": "chmod",
+      "reason": "Native Codex auth bridging applies 0700/0600 only inside its unique OS-temp HOME, CODEX_HOME, and exclusive auth copy."
+    },
+    {
+      "file": "src/core/codex-control/codex-sdk-env-policy.ts",
+      "symbol": "removeOwnedTempRoot",
+      "token": "fsp.rm",
+      "reason": "Native Codex auth cleanup removes only the inode-verified unique OS-temp root that this bridge created and owns."
+    },
+    {
+      "file": "src/core/codex-control/codex-sdk-env-policy.ts",
+      "symbol": "writeAuthFileAtomic",
+      "token": "chmod",
+      "reason": "Native ChatGPT token refresh enforces 0600 only on its exclusive same-directory atomic auth writeback file."
+    },
+    {
+      "file": "src/core/codex-control/codex-sdk-env-policy.ts",
+      "symbol": "writeAuthFileAtomic",
+      "token": "rename",
+      "reason": "Native ChatGPT token refresh atomically replaces only the validated host auth.json after source identity and content CAS checks pass."
+    },
+    {
+      "file": "src/core/codex-control/codex-sdk-env-policy.ts",
+      "symbol": "writeAuthFileAtomic",
+      "token": "fsp.rm",
+      "reason": "Native ChatGPT token refresh removes only its exclusive same-directory temporary auth writeback file when atomic persistence does not complete."
+    },
+    {
       "file": "src/core/codex-control/python-codex-sdk-adapter.ts",
       "symbol": "terminatePythonRunner",
       "token": "process.kill",
@@ -573,6 +603,24 @@
     },
     {
       "file": "src/core/fsx.ts",
+      "symbol": "relayParentSignal",
+      "token": "process.kill",
+      "reason": "Parent signal relay re-signals only the current process after owned child groups are terminated and no other listener suppresses default termination."
+    },
+    {
+      "file": "src/core/fsx.ts",
+      "symbol": "signalProcessTree",
+      "token": "process.kill",
+      "reason": "Timeout and spawn-failure cleanup signal only the detached process group whose leader PID came from the owned child process."
+    },
+    {
+      "file": "src/core/fsx.ts",
+      "symbol": "terminateRegisteredProcessGroups",
+      "token": "process.kill",
+      "reason": "Lifecycle cleanup sends SIGKILL only to detached process groups registered from children spawned by runProcess."
+    },
+    {
+      "file": "src/core/fsx.ts",
       "symbol": "withScratchDir",
       "token": "fsp.rm",
       "reason": "Scratch directory helper removes only the mkdtemp directory it created unless keep is requested."
@@ -630,6 +678,12 @@
       "symbol": "writeTextAtomic",
       "token": "rename",
       "reason": "Central filesystem primitive kept as an audited helper for higher-level guarded flows."
+    },
+    {
+      "file": "src/core/retention.ts",
+      "symbol": "removeDeadCanonicalTestLease",
+      "token": "rename",
+      "reason": "Dead canonical-test lease cleanup quarantines only a verified direct-child temp directory and restores that same inode if verification fails."
     },
     {
       "file": "src/core/git/git-worktree-manager.ts",
@@ -1392,6 +1446,12 @@
       "symbol": "finalize",
       "token": "process.kill",
       "reason": "Canonical test cleanup re-raises only a forwarded or observed child signal after the owned test child has closed."
+    },
+    {
+      "file": "src/scripts/canonical-test-runner.ts",
+      "symbol": "removeCanonicalTestProof",
+      "token": "rmSync",
+      "reason": "Canonical test proof cleanup removes only the fixed SKS-owned proof file before a run and on every non-success path."
     },
     {
       "file": "src/scripts/canonical-test-runner.ts",
@@ -3051,9 +3111,21 @@
     },
     {
       "file": "src/core/subagents/official-subagent-preparation.ts",
-      "symbol": "prepareOfficialSubagentMission",
+      "symbol": "prepareOfficialSubagentMissionLocked",
       "token": "fsp.rm",
-      "reason": "Mission preparation clears only stale summary, evidence, and gate artifacts inside the selected mission directory."
+      "reason": "Preparation clears only its target-run staging directory whose fixed prefix and basename are resolved inside the selected mission directory."
+    },
+    {
+      "file": "src/core/subagents/official-subagent-preparation.ts",
+      "symbol": "promoteOfficialSubagentPreparationBundle",
+      "token": "fsp.rm",
+      "reason": "Promotion removes only the fixed transaction-declared stale parent-summary and proof/trust tombstone inventory inside the selected mission directory."
+    },
+    {
+      "file": "src/core/subagents/official-subagent-preparation.ts",
+      "symbol": "cleanupOfficialSubagentPreparationTransaction",
+      "token": "fsp.rm",
+      "reason": "Committed or safely abandoned preparation cleanup removes only the fixed marker and validated mission-local staging directory."
     },
     {
       "file": "src/core/subagents/official-subagent-runner.ts",

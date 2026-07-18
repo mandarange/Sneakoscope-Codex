@@ -96,9 +96,14 @@ function scanCommandGateContract() {
     const entry = (COMMANDS as Record<string, any>)[required]
     if (!entry?.skipMigrationGate) issues.push(`${required}:missing_skipMigrationGate`)
   }
-  for (const routeStarter of ['naruto', 'goal', 'dfix', 'loop', 'qa-loop', 'research', 'autoresearch', 'mad-sks', 'ppt', 'image-ux-review', 'computer-use']) {
+  for (const routeStarter of ['naruto', 'dfix', 'loop', 'qa-loop', 'research', 'autoresearch', 'mad-sks', 'ppt', 'image-ux-review', 'computer-use']) {
     const entry = (COMMANDS as Record<string, any>)[routeStarter]
     if (entry?.mutatesRouteState !== true) issues.push(`${routeStarter}:missing_route_state_mutator_contract`)
+  }
+  const goal = (COMMANDS as Record<string, any>).goal
+  if (!goal) issues.push('goal:missing_native_goal_command_contract')
+  if (goal?.mutatesRouteState === true || goal?.ownsGates === true || (goal?.ownedGateFiles?.length ?? 0) > 0) {
+    issues.push('goal:native_goal_command_must_be_stateless')
   }
   for (const migrationBypass of ['check', 'gates', 'task', 'release', 'triwiki', 'daemon', 'pipeline', 'wiki', 'stop-gate']) {
     const entry = (COMMANDS as Record<string, any>)[migrationBypass]

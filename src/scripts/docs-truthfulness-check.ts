@@ -16,6 +16,7 @@ const files = [
   'docs/codex-app.md',
   'docs/official-docs-compat.md',
   'docs/hooks-pat.md',
+  'docs/goal-to-loop-migration.md',
   'docs/known-gaps.md',
   'docs/release-readiness.md'
 ];
@@ -31,9 +32,10 @@ const required = {
   'docs/codex-app.md': ['rust-v0.144.5', 'sks codex 0.144', 'App Server v2', 'Codex Chrome Extension', 'gpt-image-2'],
   'docs/official-docs-compat.md': ['official-docs-compat-report.js', 'rust-v0.144.5', 'gpt-image-2', 'input_fidelity', 'additionalProperties:false'],
   'docs/hooks-pat.md': ['SubagentStop', 'strict subset', 'zero-warning'],
+  'docs/goal-to-loop-migration.md': ['only persisted goal owner', 'creates no SKS mission', '--legacy-goal-runtime', 'fail with an instruction'],
   'docs/known-gaps.md': ['No P0', 'P1'],
   'docs/release-readiness.md': [
-    'SKS 6.5.1 Release Readiness',
+    'SKS 6.7.0 Release Readiness',
     '$sks-naruto',
     '$sks-work',
     'sks doctor --fix',
@@ -46,7 +48,7 @@ const required = {
     'proof-aware fleet control',
     'npm stage publish',
     'npm stage approve <stage-id>',
-    '6.4.0 to 6.5.1 upgrade smoke'
+    '6.2.0 to 6.7.0 upgrade smoke'
   ]
 };
 

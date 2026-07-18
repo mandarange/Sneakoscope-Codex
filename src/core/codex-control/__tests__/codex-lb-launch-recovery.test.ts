@@ -15,7 +15,7 @@ import { launchMadZellijUi } from '../../zellij/zellij-launcher.js'
 import { runCodex0139ImageReferencedPathRealProbe } from '../codex-0139-image-path-real-probe.js'
 import { runCodex0139WebSearchRealProbe } from '../codex-0139-web-search-probe.js'
 
-test('selected incompatible codex-lb blocks both SDK launch paths before an adapter turn', async () => {
+test('ambient codex-lb credentials cannot select the native SDK control paths', async () => {
   let authorization: string | undefined
   const server = http.createServer((request, response) => {
     authorization = request.headers.authorization
@@ -51,27 +51,23 @@ test('selected incompatible codex-lb blocks both SDK launch paths before an adap
 
     const sdkRoot = path.join(root, 'sdk')
     const sdkResult: any = await runCodexTask(taskInput(sdkRoot, ['codex-sdk']))
-    assert.equal(sdkResult.ok, false)
-    assert.equal(sdkResult.streamEventCount, 0)
-    assert.equal(sdkResult.codexLbToolOutputRecovery.status, 'version_too_old')
-    assert.ok(sdkResult.blockers.includes('codex_lb_tool_output_recovery_version_too_old'))
-    assert.equal(sdkResult.blockers.some((item: string) => item.includes('event_stream_missing')), false)
+    assert.equal(sdkResult.ok, true)
+    assert.equal(sdkResult.codexLbToolOutputRecovery.status, 'not_selected')
     assert.equal(authorization, undefined)
     assert.doesNotMatch(JSON.stringify(sdkResult), /sk-launch-recovery-fixture/)
     const sdkProof = JSON.parse(await fsp.readFile(path.join(sdkRoot, 'codex-control-proof.json'), 'utf8'))
-    assert.equal(sdkProof.env.codex_lb_tool_output_recovery.status, 'version_too_old')
+    assert.equal(sdkProof.config.model_provider, 'openai')
+    assert.equal(sdkProof.env.codex_lb_env_injected, false)
+    assert.equal(sdkProof.env.codex_lb_tool_output_recovery.status, 'not_selected')
 
     const pythonRoot = path.join(root, 'python')
     const pythonResult: any = await runCodexTask(taskInput(pythonRoot, ['python-codex-sdk']))
-    assert.equal(pythonResult.ok, false)
-    assert.equal(pythonResult.streamEventCount, 0)
-    assert.equal(pythonResult.codexLbToolOutputRecovery.status, 'version_too_old')
-    assert.ok(pythonResult.blockers.includes('codex_lb_tool_output_recovery_version_too_old'))
-    assert.equal(pythonResult.blockers.some((item: string) => item.includes('event_stream_missing')), false)
+    assert.equal(pythonResult.ok, true)
+    assert.equal(pythonResult.codexLbToolOutputRecovery.status, 'not_selected')
     assert.equal(authorization, undefined)
     assert.doesNotMatch(JSON.stringify(pythonResult), /sk-launch-recovery-fixture/)
     const pythonProof = JSON.parse(await fsp.readFile(path.join(pythonRoot, 'python-codex-sdk-proof.json'), 'utf8'))
-    assert.equal(pythonProof.codex_lb_tool_output_recovery.status, 'version_too_old')
+    assert.equal(pythonProof.codex_lb_tool_output_recovery.status, 'not_selected')
   } finally {
     restoreEnv(previous)
     await new Promise<void>((resolve) => server.close(() => resolve()))
@@ -243,6 +239,39 @@ test('CLI recovery rejects project-local provider state and follows user/profile
       fetchImpl: oldFetch
     })
     assert.equal(ignoredUser.status, 'not_selected')
+  } finally {
+    await fsp.rm(root, { recursive: true, force: true })
+  }
+})
+
+test('CLI recovery rejects a project base URL before an explicit openai provider override', async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-codex-project-base-url-'))
+  const home = path.join(root, 'home')
+  const codexHome = path.join(home, '.codex')
+  const projectCodex = path.join(root, '.codex')
+  await Promise.all([
+    fsp.mkdir(codexHome, { recursive: true }),
+    fsp.mkdir(projectCodex, { recursive: true })
+  ])
+  try {
+    await fsp.writeFile(
+      path.join(projectCodex, 'config.toml'),
+      'openai_base_url = "https://project-redirect.example.test/v1"\n'
+    )
+    let fetchCalls = 0
+    const result = await inspectCodexLbCliLaunchRecovery({
+      root,
+      env: { HOME: home, CODEX_HOME: codexHome },
+      cliArgs: ['--config=model_provider="openai"'],
+      fetchImpl: async () => {
+        fetchCalls += 1
+        return new Response('{}', { status: 200 })
+      }
+    })
+
+    assert.equal(result.status, 'version_unverified')
+    assert.ok(result.blockers.includes('codex_lb_launch_project_provider_config_forbidden'))
+    assert.equal(fetchCalls, 0)
   } finally {
     await fsp.rm(root, { recursive: true, force: true })
   }

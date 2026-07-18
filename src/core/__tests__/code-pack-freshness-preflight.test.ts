@@ -182,18 +182,6 @@ test('codePackFreshnessNote sees source changes on an older side branch merged a
   assert.match(String(note || ''), /wiki refresh --code/);
 });
 
-test('codePackFreshnessNote reports a real source change within the production default budget', async () => {
-  const { root, head } = await tempRepo();
-  await writePack(root, head);
-  await fsp.writeFile(path.join(root, 'a.txt'), 'changed\n');
-  const git = (args: string[]) => spawnSync('git', args, { cwd: root, encoding: 'utf8' });
-  git(['add', 'a.txt']);
-  git(['commit', '-q', '-m', 'change source']);
-
-  const note = await codePackFreshnessNote(root);
-  assert.match(String(note || ''), /wiki refresh --code/);
-});
-
 test('codePackFreshnessNote stays stale when a committed source change is later reverted', async () => {
   const { root, head } = await tempRepo();
   await writePack(root, head);

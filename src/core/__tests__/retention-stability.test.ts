@@ -256,6 +256,109 @@ test('managed SKS temp cleanup preserves the active environment and live leased 
   }
 });
 
+test('managed SKS temp cleanup removes a dead canonical-test lease without the bounded recursive scan', async () => {
+  const root = await makeRoot('sks-retention-dead-canonical-lease-');
+  const isolatedTmp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-retention-dead-canonical-root-'));
+  const previousTmpdir = process.env.TMPDIR;
+  process.env.TMPDIR = isolatedTmp;
+  const target = path.join(managedSksTmpRoot(), `sks-canonical-test-dead-${process.pid}`);
+  try {
+    let nested = target;
+    for (let depth = 0; depth <= 21; depth += 1) nested = path.join(nested, `depth-${depth}`);
+    await fs.mkdir(nested, { recursive: true });
+    await fs.writeFile(path.join(nested, 'payload.txt'), 'would exceed the normal temp scan depth\n');
+    await writeJson(path.join(target, SKS_TEMP_LEASE_FILE), {
+      schema: 'sks.temp-lease.v1',
+      kind: 'canonical-test-runner',
+      pid: 2_147_483_647,
+      created_at: new Date().toISOString()
+    });
+
+    const result = await sweepSksTempDirs(root, { maxAgeHours: 0 });
+    assert.equal(await fs.access(target).then(() => true, () => false), false);
+    assert.ok(result.actions.some((action: any) => action.action === 'remove_sks_temp'
+      && action.path === target
+      && action.reason === 'dead_canonical_test_lease'));
+    assert.equal(result.actions.some((action: any) => action.path === target
+      && String(action.reason).includes('temp_path_max_depth_exceeded')), false);
+  } finally {
+    if (previousTmpdir === undefined) delete process.env.TMPDIR;
+    else process.env.TMPDIR = previousTmpdir;
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(isolatedTmp, { recursive: true, force: true });
+  }
+});
+
+test('managed SKS temp cleanup retains a live canonical-test lease', async () => {
+  const root = await makeRoot('sks-retention-live-canonical-lease-');
+  const isolatedTmp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-retention-live-canonical-root-'));
+  const previousTmpdir = process.env.TMPDIR;
+  process.env.TMPDIR = isolatedTmp;
+  const target = path.join(managedSksTmpRoot(), `sks-canonical-test-live-${process.pid}`);
+  try {
+    await fs.mkdir(target, { recursive: true });
+    await writeJson(path.join(target, SKS_TEMP_LEASE_FILE), {
+      schema: 'sks.temp-lease.v1',
+      kind: 'canonical-test-runner',
+      pid: process.pid,
+      created_at: new Date().toISOString()
+    });
+
+    const result = await sweepSksTempDirs(root, { maxAgeHours: 0 });
+    assert.equal(await fs.access(target).then(() => true, () => false), true);
+    assert.ok(result.actions.some((action: any) => action.action === 'retain_active_sks_temp'
+      && action.path === target
+      && action.reason === 'active_temp_lease'));
+    assert.equal(result.actions.some((action: any) => action.path === target
+      && action.reason === 'dead_canonical_test_lease'), false);
+  } finally {
+    if (previousTmpdir === undefined) delete process.env.TMPDIR;
+    else process.env.TMPDIR = previousTmpdir;
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(isolatedTmp, { recursive: true, force: true });
+  }
+});
+
+test('managed SKS temp cleanup leaves malformed and unknown dead leases on the full inspection path', async () => {
+  const root = await makeRoot('sks-retention-unknown-canonical-lease-');
+  const isolatedTmp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-retention-unknown-canonical-root-'));
+  const previousTmpdir = process.env.TMPDIR;
+  process.env.TMPDIR = isolatedTmp;
+  const managed = managedSksTmpRoot();
+  const malformed = path.join(managed, `sks-canonical-test-malformed-${process.pid}`);
+  const unknown = path.join(managed, `sks-canonical-test-unknown-${process.pid}`);
+  try {
+    for (const target of [malformed, unknown]) {
+      let nested = target;
+      for (let depth = 0; depth <= 21; depth += 1) nested = path.join(nested, `depth-${depth}`);
+      await fs.mkdir(nested, { recursive: true });
+      await fs.writeFile(path.join(nested, 'payload.txt'), 'requires the normal bounded inspection\n');
+    }
+    await fs.writeFile(path.join(malformed, SKS_TEMP_LEASE_FILE), '{"schema":"sks.temp-lease.v1"\n');
+    await writeJson(path.join(unknown, SKS_TEMP_LEASE_FILE), {
+      schema: 'sks.temp-lease.v1',
+      kind: 'unknown-runner',
+      pid: 2_147_483_647,
+      created_at: new Date().toISOString()
+    });
+
+    const result = await sweepSksTempDirs(root, { maxAgeHours: 0 });
+    for (const target of [malformed, unknown]) {
+      assert.equal(await fs.access(target).then(() => true, () => false), true);
+      assert.ok(result.actions.some((action: any) => action.action === 'skip_unsafe_temp_entry'
+        && action.path === target
+        && String(action.reason).includes('temp_path_max_depth_exceeded')));
+      assert.equal(result.actions.some((action: any) => action.path === target
+        && action.reason === 'dead_canonical_test_lease'), false);
+    }
+  } finally {
+    if (previousTmpdir === undefined) delete process.env.TMPDIR;
+    else process.env.TMPDIR = previousTmpdir;
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(isolatedTmp, { recursive: true, force: true });
+  }
+});
+
 test('from-chat-image temp context is retained for active or resumable missions and pruned only after close', async () => {
   const root = await makeRoot('sks-retention-from-chat-context-');
   try {

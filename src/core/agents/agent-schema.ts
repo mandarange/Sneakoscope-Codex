@@ -244,7 +244,7 @@ export interface AgentRunnerResult {
   goal_mode_ref?: Record<string, unknown> | null
   follow_up_work_items?: import('./agent-follow-up-work-items.js').AgentFollowUpWorkItem[]
   recursion_guard: { ok: boolean; violations: string[] }
-  verification: { status: string; checks: string[] }
+  verification: { status: string; checks: string[]; reason?: string }
   naruto_runtime?: Record<string, unknown>
   control_plane_result?: Record<string, unknown>
 }

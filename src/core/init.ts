@@ -6,8 +6,9 @@ import { DEFAULT_DB_SAFETY_POLICY } from './db-safety.js';
 import { isHarnessSourceProject, writeHarnessGuardPolicy } from './harness-guard.js';
 import { repairSksGeneratedArtifacts } from './harness-conflicts.js';
 import { disableVersionGitHook } from './version-manager.js';
+import { coreEngineeringDirectiveReferenceText, coreEngineeringDirectiveText } from './lean-engineering-policy.js';
 import { OFFICIAL_SUBAGENT_REVIEW_POLICY_TEXT } from './official-subagent-review-policy.js';
-import { AWESOME_DESIGN_MD_REFERENCE, CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_IMAGEGEN_REQUIRED_POLICY, CODEX_WEB_VERIFICATION_POLICY, DEFAULT_CODEX_APP_PLUGINS, DESIGN_SYSTEM_SSOT, DOLLAR_COMMANDS, DOLLAR_COMMAND_ALIASES, DOLLAR_SKILL_NAMES, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, GETDESIGN_REFERENCE, IMAGEGEN_SOCIAL_SOURCE_POLICY, LEGACY_DOLLAR_SKILL_NAMES, OPENAI_CHATGPT_IMAGES_2_DOC_URL, OPENAI_GPT_IMAGE_2_MODEL_DOC_URL, OPENAI_IMAGE_GENERATION_DOC_URL, PPT_CONDITIONAL_SKILL_ALLOWLIST, PPT_PIPELINE_MCP_ALLOWLIST, PPT_PIPELINE_SKILL_ALLOWLIST, RECOMMENDED_DESIGN_REFERENCES, RECOMMENDED_MCP_SERVERS, RECOMMENDED_SKILLS, RESERVED_CODEX_PLUGIN_SKILL_NAMES, SOLUTION_SCOUT_SKILL_NAME, chatCaptureIntakeText, context7ConfigToml, getdesignReferencePolicyText, imageUxReviewPipelinePolicyText, leanEngineeringCompactText, outcomeRubricPolicyText, pptPipelineAllowlistPolicyText, prefixKnownSksDollarReferences, productDesignPluginPolicyText, sksPrefixedDollarCommand, solutionScoutPolicyText, speedLanePolicyText, stackCurrentDocsPolicyText, triwikiContextTracking, triwikiContextTrackingText, triwikiStagePolicyText } from './routes.js';
+import { AWESOME_DESIGN_MD_REFERENCE, CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_IMAGEGEN_REQUIRED_POLICY, CODEX_WEB_VERIFICATION_POLICY, DEFAULT_CODEX_APP_PLUGINS, DESIGN_SYSTEM_SSOT, DOLLAR_COMMANDS, DOLLAR_COMMAND_ALIASES, DOLLAR_SKILL_NAMES, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, GETDESIGN_REFERENCE, IMAGEGEN_SOCIAL_SOURCE_POLICY, LEGACY_DOLLAR_SKILL_NAMES, OPENAI_CHATGPT_IMAGES_2_DOC_URL, OPENAI_GPT_IMAGE_2_MODEL_DOC_URL, OPENAI_IMAGE_GENERATION_DOC_URL, PPT_CONDITIONAL_SKILL_ALLOWLIST, PPT_PIPELINE_MCP_ALLOWLIST, PPT_PIPELINE_SKILL_ALLOWLIST, RECOMMENDED_DESIGN_REFERENCES, RECOMMENDED_MCP_SERVERS, RECOMMENDED_SKILLS, RESERVED_CODEX_PLUGIN_SKILL_NAMES, SOLUTION_SCOUT_SKILL_NAME, chatCaptureIntakeText, context7ConfigToml, getdesignReferencePolicyText, imageUxReviewPipelinePolicyText, outcomeRubricPolicyText, pptPipelineAllowlistPolicyText, prefixKnownSksDollarReferences, productDesignPluginPolicyText, sksPrefixedDollarCommand, speedLanePolicyText, stackCurrentDocsPolicyText, triwikiContextTracking, triwikiContextTrackingText, triwikiStagePolicyText } from './routes.js';
 import { SKILL_DREAM_POLICY, skillDreamPolicyText } from './skill-forge.js';
 import { CODEX_HOOK_EVENT_STATE_KEYS } from './codex-compat/codex-hook-events.js';
 import { codexCommandHookCurrentHash } from './codex-hooks/codex-hook-hash.js';
@@ -268,16 +269,48 @@ function isSksManagedHook(hook: any) {
   const command = String(hook.command || '');
   return hook.type === 'command' && /\bhook\s+(?:session-start|user-prompt-submit|pre-tool|post-tool|permission-request|pre-compact|post-compact|subagent-start|subagent-stop|stop)\b/.test(command) && /\b(?:sks|sneakoscope|sks\.js)\b/.test(command);
 }
-
-const AGENTS_BLOCK = "\n# Sneakoscope Codex Managed Rules\n\nThis repository uses Sneakoscope Codex.\n\n## Core Rules\n\n- Codex native `/goal` workflows are the persisted continuation surface.\n- Keep runtime state bounded: raw logs go to files, prompts get tails/summaries, and `sks gc` may prune stale artifacts.\n- Codex App hooks, launch paths, and `sks doctor --fix` do not force SKS update prompts during ordinary work. Manual CLI update surfaces (`sks update-check`, `sks update check`, and `sks update now`) remain available when the operator explicitly asks for them.\n- Versioning is explicit: use `sks versioning bump` when preparing release metadata. SKS must not install Git pre-commit hooks.\n- Installed harness files are immutable to LLM edits: `.codex/*`, `.agents/skills/`, `.codex/agents/`, `.sneakoscope/*policy*.json`, `AGENTS.md`, and `node_modules/sneakoscope`. The Sneakoscope engine source repo is the only automatic exception.\n- OMX/DCodex conflicts block setup/doctor. Show `sks conflicts prompt`; cleanup requires explicit human approval.\n- Do not stop at a plan when implementation was requested. Finish, verify, or report the hard blocker.\n- Do not create unrequested fallback implementation code. If the requested path is impossible, block with evidence instead of inventing substitute behavior.\n\n## Routes\n\n- General execution/code-changing prompts default to the `$Naruto` Codex official subagent workflow: parent-owned decomposition, project-scoped custom agents, disjoint write scopes, bounded query-aware TriWiki use, one focused child by default, risk-scoped expansion to at most three automatic children, parent integration, and Honest Mode.\n- Official subagent model routing is fixed: Luna Max only for tiny short-context mechanical work; Sol High for ordinary UI/logic/backend/native implementation; Sol Max for review, debugging, planning, architecture, security, database, research, release, ambiguity, and judgment; Terra Medium for long-context analysis and direct Computer Use, Browser/Chrome, or image-generation execution. Split mixed execution and judgment when possible; otherwise Sol Max wins.\n- `$Computer-Use` / `$CU` is the maximum-speed Codex Computer Use lane for native macOS, desktop-app, OS-settings, and non-web visual tasks only. Web, browser, localhost, website, webapp, and web-based app verification must use the Codex Chrome Extension path first and halt rapidly if the extension is not installed/enabled.\n- `$Goal` is a fast bridge/overlay for Codex native `/goal` create/pause/resume/clear persistence controls; implementation continues through the selected SKS execution route.\n- TriWiki recall must stay bounded. Use `sks wiki sweep` to record demote, soft-forget, archive, delete, promote-to-skill, and promote-to-rule candidates instead of injecting every old claim.\n- Naruto missions must keep `subagent-plan.json`, `subagent-events.jsonl`, `subagent-parent-summary.json`, `subagent-evidence.json`, the work-order ledger, and route-specific visual/dogfood artifacts current where applicable. Use one focused reviewer by default, two only for independent review domains, and at most three automatic reviewers for critical multi-domain risk. Use `sks validate-artifacts latest` before claiming artifacts pass.\n- `$DFix` is Direct Fix: only tiny copy/config/docs/labels/spacing/translation/simple mechanical edits, bypassing the main pipeline, Naruto, TriWiki/TriFix/reflection recording, and persistent route state; it still uses a one-line DFix-specific Honest check before final. Broad implementation stays on `$Naruto`, while UI design specifics follow the relevant design/UI route rules. `$PPT` is the restrained, information-first HTML/PDF presentation route and must seal delivery context, audience profile, STP, decision context, and 3+ pain-point/solution/aha mappings before design/render work. It must avoid over-designed visuals, carry detail through hierarchy, spacing, alignment, thin rules, source clarity, and subtle accents, preserve editable source HTML under `source-html/`, record `ppt-parallel-report.json`, and clean PPT-only temporary build files before completion. `$Image-UX-Review` / `$UX-Review` is the imagegen/gpt-image-2 UI/UX review route: source screenshots must become generated annotated review images, those generated images must be extracted into issue ledgers, and text-only critique cannot pass the route gate. `$Answer`, `$Help`, and `$Wiki` stay lightweight.\n- For code work, surface route/guard/write scopes first, split independent worker scopes when available, and keep parent-owned integration and verification.\n- Design work reads `design.md` as the only design decision SSOT. If missing, create it through `design-system-builder` from `docs/Design-Sys-Prompt.md`; getdesign.md, getdesign-reference, and curated DESIGN.md examples from https://github.com/VoltAgent/awesome-design-md are source inputs to fuse into that SSOT or route-local style tokens, not parallel design authorities. Image/logo/raster assets use `imagegen`, which must prefer official Codex App built-in image generation via `$imagegen` / `gpt-image-2`; for newest-model image requests prompt explicitly for ChatGPT Images 2.0 / GPT Image 2.0 with `gpt-image-2`. Do not replace required raster evidence with placeholder SVG/HTML/CSS, prose-only reviews, or fabricated files.\n- Research, AutoResearch, performance, token, accuracy, SEO/GEO, or workflow-improvement claims need experiment/eval evidence. Do not claim live model accuracy without a scored dataset.\n- Treat handwritten files above 3000 lines as split-review risks. Run `sks code-structure scan` and prefer extraction before adding substantial logic.\n- Skill dreaming stays lightweight: route use records JSON counters in `.sneakoscope/skills/dream-state.json`, and full skill inventory/recommendation runs only after the configured 10-route-event threshold and cooldown. Reports are recommendation-only; deleting or merging skills needs explicit user approval.\n\n## Evidence And Context\n\n- Context7 is required for external libraries, APIs, MCPs, package managers, SDKs, and generated docs: resolve-library-id then query-docs.\n- When tech stack, framework, package, runtime, or deployment-platform versions change, use Context7 or official vendor web docs, record current syntax/security/limit guidance as high-priority TriWiki claims, then refresh and validate before coding.\n- TriWiki is the context-tracking SSOT for long-running missions, official subagent handoffs, and context-pressure recovery. Read `.sneakoscope/wiki/context-pack.json` before each stage, use `attention.use_first` for compact high-trust recall, hydrate `attention.hydrate_first` from source before risky or lower-trust decisions, refresh after findings or artifact changes, and validate before handoffs/final claims.\n- Source priority: current code/tests/config, decision contract, vgraph, beta, GX render/snapshot metadata, LLM Wiki coordinate index, then model knowledge only if allowed.\n- Final response before stop: summarize what was done, what changed for the user/repo, what was verified, and what remains unverified or blocked; then run Honest Mode. Say what passed and what was not verified.\n- `$From-Chat-IMG` uses forensic visual effort, not ordinary Naruto effort. Completion is blocked until source inventory, visual mapping, work-order coverage, scoped dogfood/QA, and post-fix verification artifacts are present and valid.\n\n## Safety\n\n- Database access is high risk. Use read-only inspection by default; live data mutation is out of scope unless a sealed contract allows local or branch-only migration files.\n- MAD-SKS widens only explicit scoped permissions; it still does not authorize unrequested fallback implementation code.\n- Task completion requires relevant tests or justification, zero unsupported critical claims, accepted visual/wiki drift, and final evidence.\n\n## Codex App\n\nUse `.codex/SNEAKOSCOPE.md`, generated `.agents/skills`, `.codex/hooks.json`, and SKS dollar commands (`$sks`, `$naruto`, `$computer-use`, `$cu`, `$ppt`, `$image-ux-review`, `$ux-review`, `$goal`, `$dfix`, `$qa-loop`, etc.) as the app control surface.\n";
-
-const LEGACY_NARUTO_SCALING_RULE = '- General execution/code-changing prompts default to the `$Naruto` Codex official subagent workflow: parent-owned decomposition, project-scoped custom agents, disjoint write scopes, bounded query-aware TriWiki use, one focused child by default, risk-scoped expansion to at most three automatic children, parent integration, and Honest Mode.';
-const DYNAMIC_NARUTO_SCALING_RULE = '- General execution/code-changing prompts default to the `$Naruto` Codex official subagent workflow; only Answer and genuinely tiny DFix work remain lightweight. The Sol Max parent owns decomposition and integration, starts automatic fan-out at two for bounded work, four for explicit parallel work, and six for large-scale work, and may expand to ten only when ready DAG width, disjoint ownership, verifier/tool capacity, reserved thread slots, and positive marginal usefulness all permit it. `max_threads` is a cap, never a target; duplicate slices and overlapping writes are blocked.';
+const AGENTS_BLOCK = [
+  '',
+  '# Sneakoscope Codex Managed Rules',
+  '',
+  'This repository uses Sneakoscope Codex.',
+  '',
+  '## Engineering',
+  '',
+  ...coreEngineeringDirectiveText().split('\n'),
+  '',
+  '## Execution',
+  '',
+  '- Codex native `/goal` is the only persisted goal owner. Goal objectives must state the outcome, scope, constraints, verification, done-when conditions, stop conditions, and non-goals.',
+  '- General code-changing work uses the `$Naruto` Codex official subagent workflow; Answer and genuinely tiny DFix work stay lightweight.',
+  '- The parent owns decomposition, integration, verification, and the final answer. Delegate only independent slices with disjoint write scopes, reuse capacity across root-owned waves, and never nest subagents.',
+  '- Route model by the slice: Luna Max for tiny mechanical work, Sol High for implementation, Terra Medium for read-heavy context or direct tool operation, and Sol Max only for focused judgment, risk, or final review.',
+  '- Route-specific skills own route-specific details. Do not inject unrelated Design, PPT, image, browser, research, DB, or release policy into ordinary work.',
+  '- Do not stop at a plan when implementation was requested. Finish and verify, or report a concrete hard blocker.',
+  '',
+  '## Evidence And Context',
+  '',
+  '- Prefer current code, tests, configuration, contracts, and specifications over memory. Use Context7 or official vendor docs when external APIs, SDKs, packages, MCPs, or versions matter.',
+  '- Keep TriWiki recall bounded: read the current context pack before a stage, hydrate risky or stale claims from source, refresh after material changes, and validate before handoff or final.',
+  '- Mock, fixture, synthetic, or capability evidence never proves real execution. Completion claims require relevant checks or an explicit justification for why a check is not useful.',
+  '- Final output must summarize the result, verification, and remaining gaps, then run Honest Mode.',
+  '',
+  '## Safety',
+  '',
+  '- Preserve user-authored content and unrelated changes. Installed harness files remain immutable outside the Sneakoscope engine source repository.',
+  '- Keep trust-boundary validation, secrets, permissions, data integrity, rollback, accessibility, and explicit user requirements intact.',
+  '- Database and destructive operations are read-only by default. Live mutation, publishing, deployment, credential changes, and other irreversible external actions require explicit scoped authorization.',
+  '- Never fabricate fallback implementations or success evidence. If the real requested path is unavailable, stop with evidence.',
+  '- OMX/DCodex conflict cleanup requires explicit human approval.',
+  '',
+  '## Codex App',
+  '',
+  'Use `.codex/SNEAKOSCOPE.md`, generated `.agents/skills`, `.codex/hooks.json`, and SKS dollar commands as the app control surface.',
+  ''
+].join('\n');
 
 export function agentsBlockText() {
-  return prefixKnownSksDollarReferences(AGENTS_BLOCK
-    .replace(LEGACY_NARUTO_SCALING_RULE, DYNAMIC_NARUTO_SCALING_RULE)
-  , [...LEGACY_DOLLAR_SKILL_NAMES, ...legacyCoreSkillNames(), 'from-chat-img']);
+  return prefixKnownSksDollarReferences(AGENTS_BLOCK, [...LEGACY_DOLLAR_SKILL_NAMES, ...legacyCoreSkillNames(), 'from-chat-img']);
 }
 
 export async function initProject(root: any, opts: any = {}) {
@@ -846,29 +879,15 @@ function removeTomlTableKey(text: any, table: any, key: any) {
 
 function managedCodexConfigBlocks() {
   return [
-    // Context7 credentials may live directly in this table as args/env/headers/url
-    // depending on the user's MCP client setup. Seed the default only when absent;
-    // never replace an existing Context7 block during setup/update.
-    // Seed the REMOTE (streamable HTTP `url`) transport, not local stdio: Codex
-    // merges the global ~/.codex/config.toml and the project config per-key, so a
-    // local-stdio `command` here merging with a remote `url` in the global config
-    // yields a stdio server that also carries a `url` — which Codex 0.140 rejects
-    // with `url is not supported for stdio`. Remote is also the transport the doctor
-    // migrates everyone to (local stdio can block interactive Codex launch).
+    // Preserve existing Context7 credentials; seed remote transport to avoid invalid merged command/url stdio config.
     { table: 'mcp_servers.context7', text: context7ConfigToml('remote').trim(), preserveExisting: true },
-    // NOTE: SKS config profiles are NO LONGER emitted as `[profiles.sks-*]` tables.
-    // Codex 0.134+ deprecated config-profile tables / the `profile=` selector (warns at
-    // startup) in favor of per-file `$CODEX_HOME/<name>.config.toml` overlays loaded by
-    // `--profile <name>`. Those per-file profiles are owned by migrateSksProfilesToPerFile
-    // (src/core/auto-review.ts), invoked on `sks --mad`. Emitting the tables here only got
-    // them relocated into the home config by the splitter, re-triggering the warning.
+    // Profiles use per-file CODEX_HOME overlays owned by auto-review migration; do not emit deprecated profile tables.
     {
       table: 'auto_review',
       text: '[auto_review]\npolicy = "In MAD-SKS launches, allow only the scoped high-risk surfaces approved for the active invocation. The explicit sks mad-sks sql|apply-migration invocation is the SQL-plane approval boundary: execute only requested SQL-plane mutations with mission-local write transport, literal catastrophic-intent binding, read-back proof, and final read-only restoration. Supabase project/account/billing/credential control-plane actions remain denied."'
     }
   ];
 }
-
 
 function upsertTomlTableKey(text: any, table: any, line: any) {
   const key = (String(line).split('=')[0] || '').trim();
@@ -1161,21 +1180,17 @@ export function codexAppQuickReference(scope: any, commandPrefix: any) {
     `Command: \`${commandPrefix} <command>\``,
     'Files: AGENTS.md, .codex/hooks.json, .codex/config.toml, .codex/SNEAKOSCOPE.md, .agents/skills, .codex/agents, .sneakoscope/missions.',
     `Discover: ${commandPrefix} bootstrap; ${commandPrefix} deps check; ${commandPrefix} commands; ${commandPrefix} codex-app check; ${commandPrefix} codex-app remote-control --status; npm run zellij:capability; ${commandPrefix} dollar-commands; ${commandPrefix} pipeline status; ${commandPrefix} pipeline plan.`,
+    coreEngineeringDirectiveReferenceText(),
     'dollar-commands:',
     ...currentDollarCommands().map((c: any) => `- \`${sksPrefixedDollarCommand(c.command)}\`: ${c.route}`),
     `Picker skills: ${currentDollarCommandAliases().map((x: any) => x.app_skill).join(', ')}.`,
-    'Routing: Answer direct, DFix ultralight no-record, execution routes infer scope/safety/behavior/acceptance answers from prompt, TriWiki/current-code defaults, and conservative policy before sealing contracts.',
-    getdesignReferencePolicyText(),
-    CODEX_IMAGEGEN_REQUIRED_POLICY,
-    `Full routes write reflection.md, record lessons to ${REFLECTION_MEMORY_PATH}, refresh/pack TriWiki, validate, then final-answer with a user-visible completion summary plus Honest Mode.`,
-    `Runtime root: ${commandPrefix} root shows whether SKS is using the nearest project root or the per-user global SKS runtime root; outside any project marker, runtime commands use the global root instead of writing .sneakoscope into the current random directory.`,
-    `Context Tracking: TriWiki SSOT. Before each route phase read only the latest coordinate+voxel overlay pack at .sneakoscope/wiki/context-pack.json; coordinate-only legacy packs are invalid. Use attention.use_first for compact high-trust recall and hydrate attention.hydrate_first from source before risky/lower-trust decisions. During every stage hydrate low-trust claims from source/hash/RGBA anchors; after changes run ${commandPrefix} wiki refresh or pack; before handoff/final run ${commandPrefix} wiki validate .sneakoscope/wiki/context-pack.json.`,
-    stackCurrentDocsPolicyText(commandPrefix),
-    `Official subagent review: ${OFFICIAL_SUBAGENT_REVIEW_POLICY_TEXT}`,
-    `Official subagents: ${commandPrefix} naruto run "task" [--agents N] [--max-threads N] prepares bounded Codex agent threads and requires subagent-plan.json, lifecycle events, a trustworthy subagent-parent-summary.json, and correlated evidence.`,
-    `Runtime: open Codex App once, then run ${commandPrefix} bootstrap and ${commandPrefix} deps check. Zellij remains optional for ${commandPrefix} --mad only. Official Naruto execution uses Codex agent threads. ${commandPrefix} bootstrap --yes, ${commandPrefix} deps check --yes, and ${commandPrefix} --mad --yes can install or repair Codex CLI/Zellij on macOS/Homebrew. npm postinstall reports missing CLI tools but does not mutate Homebrew/npm globals unless SKS_POSTINSTALL_AUTO_INSTALL_CLI_TOOLS=1 is set. Launch paths do not run sneakoscope npm update checks; use ${commandPrefix} update-check or ${commandPrefix} update now explicitly when you want that. ${commandPrefix} doctor --fix repairs the local SKS/Codex setup without running a global SKS package update. ${commandPrefix} codex-app remote-control wraps the supported Codex CLI headless remote-control entrypoint.`,
-    'Naruto execution uses official Codex agent threads and does not use Zellij as an execution runtime.',
-    `Guard: generated harness files are immutable outside the engine source repo; check ${commandPrefix} guard check; conflicts use ${commandPrefix} conflicts prompt with human approval.`
+    'Routing: Answer is read-only, DFix is tiny and lightweight, and general code-changing work uses Naruto with official Codex subagent threads and parent-owned integration.',
+    'Goal: Codex native /goal is the only persisted goal owner; no SKS Goal mission, bridge, compatibility loop, or fallback state is allowed.',
+    `Context: use bounded TriWiki recall, refresh after material changes, validate before handoff/final, and use Context7 or official vendor docs when external contracts or versions matter.`,
+    `Full routes write reflection.md, record only real lessons to ${REFLECTION_MEMORY_PATH}, then finish with a completion summary and Honest Mode.`,
+    `Runtime root: ${commandPrefix} root reports the active project or global runtime root.`,
+    `Guard: generated harness files are immutable outside the engine source repo; conflicts require ${commandPrefix} conflicts prompt plus human approval.`,
+    'Publishing, deployment, live database mutation, destructive actions, and other irreversible external effects require explicit scoped authorization.'
   ].join('\n') + '\n';
 }
 

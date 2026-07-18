@@ -96,7 +96,13 @@ test('writeFinalStopGate writes canonical stop-gate.json and updates current sta
     status: 'passed',
     terminal: true,
     terminalState: 'completed',
-    evidence: { build_passed: true, tests_passed: true, route_evidence_passed: true },
+    evidence: {
+      build_passed: true,
+      tests_passed: true,
+      route_evidence_passed: true,
+      regression_test_added: false,
+      regression_test_failed_before_fix: false
+    },
     nativeGateFile: 'naruto-gate.json',
   });
 

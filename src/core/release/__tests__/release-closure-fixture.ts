@@ -18,6 +18,8 @@ export function writeReleaseClosureFixture(input: {
   sourceCommit: string
   removedModules?: string[]
   removedLines?: number
+  legacySubagentCountFields?: boolean
+  planRequestedSubagents?: number
 }) {
   excludeIgnoredFixtureArtifacts(input.root)
   const mission = path.join(input.root, '.sneakoscope', 'missions', RELEASE_MISSION_ID)
@@ -76,6 +78,7 @@ export function writeReleaseClosureFixture(input: {
   })
 
   const runId = 'naruto-release-fixture'
+  const planRequestedSubagents = input.planRequestedSubagents ?? 3
   const threads = [
     { id: 'thread-a', slice: 'release-guard', agent: 'release_guard', path: '/root/release_guard' },
     { id: 'thread-b', slice: 'evidence-audit', agent: 'evidence_auditor', path: '/root/evidence_auditor' },
@@ -94,7 +97,15 @@ export function writeReleaseClosureFixture(input: {
     route: '$Naruto',
     workflow: 'official_codex_subagent',
     workflow_run_id: runId,
-    requested_subagents: 3,
+    requested_subagents: planRequestedSubagents,
+    requested_subagents_source: 'route_contract',
+    wave_lifecycle: {
+      schema: 'sks.subagent-wave-lifecycle.v1',
+      workflow_run_id: runId,
+      count_policy: 'exact',
+      requested_target_subagents: planRequestedSubagents,
+      target_subagents: planRequestedSubagents
+    },
     max_depth: 1,
     parent_model_match: true,
     observed_parent_model: 'gpt-5.6-sol-max',
@@ -119,13 +130,15 @@ export function writeReleaseClosureFixture(input: {
     summary: 'Completion Summary: release closure fixture. Honest Mode: verified.',
     thread_outcomes: threads.map((thread) => ({ thread_id: thread.id, status: 'completed', summary: `${thread.slice} verified` })),
     changed_files: ['release.txt'],
-    verification: ['focused release closure tests passed'],
+    verification: [{ name: 'focused release closure tests', status: 'passed' }],
     blockers: []
   }
   write(path.join(mission, 'subagent-parent-summary.json'), parentSummary)
-  write(path.join(mission, 'subagent-evidence.json'), {
+  const evidence = {
     ...buildSubagentEvidence({
       requestedSubagents: 3,
+      countPolicy: 'exact',
+      targetSubagents: 3,
       events: lifecycle.events,
       parentSummary,
       parentSummaryPresent: true,
@@ -134,9 +147,9 @@ export function writeReleaseClosureFixture(input: {
       runId
     }),
     mission_id: RELEASE_MISSION_ID
-  })
+  }
   const parentThreadOutcomes = parentSummary.thread_outcomes.map((row) => ({ ...row }))
-  write(path.join(mission, 'naruto-summary.json'), {
+  const summary = {
     schema: 'sks.naruto-subagent-workflow.v1',
     ok: true,
     completion_evidence: true,
@@ -146,11 +159,13 @@ export function writeReleaseClosureFixture(input: {
     workflow_run_id: runId,
     mission_id: RELEASE_MISSION_ID,
     requested_subagents: 3,
+    count_policy: 'exact',
+    target_subagents: 3,
     parent_summary_present: true,
     parent_thread_outcomes: parentThreadOutcomes,
     blockers: []
-  })
-  write(path.join(mission, 'naruto-gate.json'), {
+  }
+  const gate = {
     schema: 'sks.naruto-gate.v1',
     route: '$Naruto',
     workflow: 'official_codex_subagent',
@@ -167,11 +182,21 @@ export function writeReleaseClosureFixture(input: {
     ssot_guard: true,
     native_process_proof_required: false,
     requested_subagents: 3,
+    count_policy: 'exact',
+    target_subagents: 3,
     started_subagents: 3,
     completed_subagents: 3,
     failed_subagents: 0,
     blockers: []
-  })
+  }
+  if (input.legacySubagentCountFields) {
+    deleteLegacyCountFields(evidence)
+    deleteLegacyCountFields(summary)
+    deleteLegacyCountFields(gate)
+  }
+  write(path.join(mission, 'subagent-evidence.json'), evidence)
+  write(path.join(mission, 'naruto-summary.json'), summary)
+  write(path.join(mission, 'naruto-gate.json'), gate)
   write(path.join(mission, 'ssot-guard.json'), buildSsotGuard({ route: 'Naruto', mode: 'NARUTO', task: 'release fixture' }))
 
   const attachment = path.join(proofs, 'release-work-order.md')
@@ -250,6 +275,11 @@ export function writeReleaseClosureFixture(input: {
     sourceCommit: input.sourceCommit,
     head
   }
+}
+
+function deleteLegacyCountFields(value: Record<string, unknown>) {
+  delete value.count_policy
+  delete value.target_subagents
 }
 
 export function readFixtureJson(file: string) {

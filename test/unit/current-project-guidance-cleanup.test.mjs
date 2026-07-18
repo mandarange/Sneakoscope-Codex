@@ -173,7 +173,7 @@ test('doctor reconciles nested project AGENTS.md without entering excluded or sy
     const userAfter = await fs.readFile(nestedUser, 'utf8');
     assert.match(managedAfter, /BEGIN Sneakoscope Codex GX MANAGED BLOCK/);
     assert.match(userAfter, /BEGIN Sneakoscope Codex GX MANAGED BLOCK/);
-    assert.match(quickReferenceAfter, /naruto run/);
+    assert.match(quickReferenceAfter, /\$sks-naruto|Codex official subagent workflow/);
     for (const text of [managedAfter, quickReferenceAfter, userAfter]) assert.doesNotMatch(text, /\$Team|\$Agent|\$Ralph|sks team|sks agent|sks mad-db|sks ralph|sks db/i);
     assert.doesNotMatch(await fs.readFile(nestedConfig, 'utf8'), /profiles\.sks-team/);
     await assert.rejects(fs.access(nestedProfile));
@@ -305,7 +305,7 @@ test('doctor guidance cleanup reconciles project, HOME, and SKS_GLOBAL_ROOT and 
       const agents = await fs.readFile(path.join(root, 'AGENTS.md'), 'utf8');
       const quickReference = await fs.readFile(path.join(root, '.codex', 'SNEAKOSCOPE.md'), 'utf8');
       assert.match(agents, /\$sks-naruto/);
-      assert.match(quickReference, /naruto run/);
+      assert.match(quickReference, /\$sks-naruto|Codex official subagent workflow/);
       assert.doesNotMatch(`${agents}\n${quickReference}`, /\$Team|sks team|\$MAD-DB|sks mad-db|\$Ralph|sks ralph/i);
     }
 

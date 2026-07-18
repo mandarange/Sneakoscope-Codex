@@ -422,8 +422,10 @@ export async function runReleaseGateDag(input: {
 }
 
 export function selectReleaseGatePreset(manifest: ReleaseGateManifestV2, preset: string): ReleaseGateNode[] {
-  const effectivePreset = preset === 'affected' || preset === 'fast' || preset === 'confidence' ? 'release' : preset
-  const selected = manifest.gates.filter((gate) => gate.preset.includes(effectivePreset))
+  const effectivePresets = preset === 'affected' || preset === 'fast' || preset === 'confidence'
+    ? ['release', 'incremental']
+    : [preset]
+  const selected = manifest.gates.filter((gate) => effectivePresets.some((candidate) => gate.preset.includes(candidate)))
   if (!selected.length) throw new Error(`release_gate_preset_empty_or_unknown:${preset}`)
   return selected
 }

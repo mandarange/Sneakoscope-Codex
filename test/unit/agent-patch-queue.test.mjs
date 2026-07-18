@@ -5,6 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { InMemoryAgentPatchQueue } from '../../dist/core/agents/agent-patch-queue.js';
 import { PersistentAgentPatchQueueStore } from '../../dist/core/agents/agent-patch-queue-store.js';
+import { runMachineFeedback, selectTests } from '../../dist/core/verification/machine-feedback.js';
+import { runProcess } from '../../dist/core/fsx.js';
 
 test('agent patch queue records transitions and ownership ledger', () => {
   const queue = new InMemoryAgentPatchQueue();
@@ -27,9 +29,14 @@ test('agent patch queue records transitions and ownership ledger', () => {
   assert.deepEqual(json.ownership_ledger[0].write_paths, ['a.txt']);
 });
 
-test('persistent agent patch queue writes queue, events, and ownership artifacts', async () => {
+test('persistent agent patch queue writes queue, events, and ownership artifacts', async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-patch-queue-store-'));
-  const store = new PersistentAgentPatchQueueStore(root);
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const artifactDir = path.join(root, 'artifacts');
+  const projectRoot = path.join(root, 'project');
+  await fs.mkdir(projectRoot, { recursive: true });
+  await fs.writeFile(path.join(projectRoot, 'package.json'), '{"private":true}\n');
+  const store = new PersistentAgentPatchQueueStore(artifactDir);
   const entry = await store.enqueue({
     agent_id: 'agent-a',
     session_id: 'session-a',
@@ -38,13 +45,107 @@ test('persistent agent patch queue writes queue, events, and ownership artifacts
     lease_proof: { lease_id: 'lease-a', allowed_paths: ['a.txt'] },
     rollback_hint: { node_id: 'rollback-a' },
     operations: [{ op: 'write', path: 'a.txt', content: 'a' }]
-  }, { mission_id: 'M-test', route: '$Fixture' });
+  }, { mission_id: 'M-test', route: '$Fixture', root: projectRoot });
   await store.markApplied(entry.id);
-  const queue = JSON.parse(await fs.readFile(path.join(root, 'agent-patch-queue.json'), 'utf8'));
-  const events = await fs.readFile(path.join(root, 'agent-patch-queue-events.jsonl'), 'utf8');
-  const ledger = JSON.parse(await fs.readFile(path.join(root, 'agent-patch-ownership-ledger.json'), 'utf8'));
+  const queue = JSON.parse(await fs.readFile(path.join(artifactDir, 'agent-patch-queue.json'), 'utf8'));
+  const events = await fs.readFile(path.join(artifactDir, 'agent-patch-queue-events.jsonl'), 'utf8');
+  const ledger = JSON.parse(await fs.readFile(path.join(artifactDir, 'agent-patch-ownership-ledger.json'), 'utf8'));
   assert.equal(queue.entries[0].mission_id, 'M-test');
   assert.equal(queue.entries[0].generation_index, 2);
   assert.match(events, /"event_type":"enqueue"/);
   assert.equal(ledger.entries[0].status, 'applied');
 });
+
+test('machine feedback excludes recursive worktrees, managed caches, and the executing test', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-machine-feedback-select-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const candidates = [
+    'test/widget.test.mjs',
+    'test/credible/widget.test.mjs',
+    '.claude/worktrees/copy/test/widget.test.mjs',
+    '.codex/worktrees/copy/test/widget.test.mjs',
+    '.codex/cache/widget.test.mjs',
+    '.opensks/runtime/worktrees/copy/test/widget.test.mjs',
+    '.sneakoscope/cache/widget.test.mjs',
+    '.sneakoscope/tmp/widget.test.mjs'
+  ];
+  await Promise.all(candidates.map(async (file) => {
+    const target = path.join(root, file);
+    await fs.mkdir(path.dirname(target), { recursive: true });
+    await fs.writeFile(target, "import '../../src/widget.js';\n");
+  }));
+  const originalEntrypoint = process.argv[1];
+  process.argv[1] = path.join(root, 'test/widget.test.mjs');
+  try {
+    assert.deepEqual(await selectTests(root, ['src/widget.ts']), ['test/credible/widget.test.mjs']);
+  } finally {
+    process.argv[1] = originalEntrypoint;
+  }
+});
+
+test('machine feedback never falls back to a broad npm test command', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-machine-feedback-bounded-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  await fs.mkdir(path.join(root, 'test'), { recursive: true });
+  await fs.writeFile(path.join(root, 'package.json'), JSON.stringify({
+    private: true,
+    scripts: { test: "node -e \"require('node:fs').writeFileSync('broad-test-ran','yes')\"" }
+  }));
+  await fs.writeFile(path.join(root, 'test/widget.test.ts'), "import '../src/widget.js';\n");
+  const feedback = await runMachineFeedback(root, ['src/widget.js'], { timeoutMs: 5_000 });
+  assert.equal(feedback.tests.ok, true);
+  assert.deepEqual(feedback.tests.selected, []);
+  assert.equal(feedback.tests.skipped_reason, 'no_directly_runnable_tests');
+  await assert.rejects(fs.access(path.join(root, 'broad-test-ran')));
+});
+
+test('machine feedback treats timed-out typecheck, lint, and selected tests as failures', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-machine-feedback-timeout-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  await fs.mkdir(path.join(root, 'test'), { recursive: true });
+  const wait = "node -e \"setInterval(() => {}, 1000)\"";
+  await fs.writeFile(path.join(root, 'package.json'), JSON.stringify({
+    private: true,
+    scripts: { typecheck: wait, lint: wait }
+  }));
+  await fs.writeFile(path.join(root, 'test/widget.test.mjs'), "setInterval(() => {}, 1000);\n");
+  const feedback = await runMachineFeedback(root, ['src/widget.ts'], { timeoutMs: 5_000 });
+  assert.equal(feedback.ok, false);
+  assert.deepEqual(feedback.typecheck.errors, ['typecheck_timeout']);
+  assert.equal(feedback.lint.errors[0], 'lint_timeout');
+  assert.match(feedback.tests.failed[0] || '', /widget\.test\.mjs: timeout/);
+});
+
+test('runProcess timeout terminates its POSIX descendant process group', { skip: process.platform === 'win32' }, async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-run-process-tree-'));
+  const pidFile = path.join(root, 'descendant.pid');
+  let descendantPid = 0;
+  t.after(async () => {
+    if (descendantPid && processAlive(descendantPid)) {
+      try { process.kill(descendantPid, 'SIGKILL'); } catch {}
+    }
+    await fs.rm(root, { recursive: true, force: true });
+  });
+  const descendant = "process.on('SIGTERM',()=>{});setInterval(()=>{},1000)";
+  const parent = [
+    "const fs=require('node:fs')",
+    "const {spawn}=require('node:child_process')",
+    `const child=spawn(process.execPath,['-e',${JSON.stringify(descendant)}],{stdio:'ignore'})`,
+    "fs.writeFileSync(process.argv[1],String(child.pid))",
+    "setInterval(()=>{},1000)"
+  ].join(';');
+  const result = await runProcess(process.execPath, ['-e', parent, pidFile], { timeoutMs: 250 });
+  assert.equal(result.timedOut, true);
+  assert.equal(result.code, 124);
+  descendantPid = Number(await fs.readFile(pidFile, 'utf8'));
+  assert.equal(processAlive(descendantPid), false);
+});
+
+function processAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}

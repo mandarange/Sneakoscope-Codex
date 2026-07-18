@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import {
   HEAD_BINDING_MODE,
+  RELEASE_CLOSURE_AUDIT_VERSION,
   RELEASE_630_MISSION_ID,
   RELEASE_CLOSURE_MANIFEST_SCHEMA,
   RELEASE_CLOSURE_SCHEMA,
@@ -16,6 +17,7 @@ import {
   fileSha256,
   flattenFindingProofs,
   flattenWorkOrderEvidence,
+  gitOk,
   positiveLineCount,
   readJson,
   readJsonl,
@@ -38,6 +40,7 @@ import {
 } from './release-closure-validation.js'
 
 export {
+  RELEASE_CLOSURE_AUDIT_VERSION,
   RELEASE_630_MISSION_ID,
   RELEASE_CLOSURE_MANIFEST_SCHEMA,
   RELEASE_CLOSURE_SCHEMA
@@ -51,12 +54,32 @@ export function releaseClosureManifestPath(root: string, version: string) {
 export function inspectReleaseClosure(input: ReleaseClosureInput) {
   const blockers: string[] = []
   const expectedMissionId = input.expectedMissionId || RELEASE_630_MISSION_ID
+  if (input.version !== RELEASE_CLOSURE_AUDIT_VERSION) {
+    if (!sha40(input.expectedBaseline)) blockers.push('expected_baseline_invalid')
+    if (!sha40(input.expectedHead)) blockers.push('expected_head_invalid')
+    if (sha40(input.expectedBaseline) && sha40(input.expectedHead)
+      && !sourceCommitAtOrAfterBaseline(input.root, input.expectedHead, input.expectedBaseline)) {
+      blockers.push('head_not_descended_from_baseline')
+    }
+    return {
+      schema: RELEASE_CLOSURE_SCHEMA,
+      ok: blockers.length === 0,
+      applicable: false,
+      applicability: `version_scoped_to_${RELEASE_CLOSURE_AUDIT_VERSION}`,
+      version: input.version,
+      head: sha40(input.expectedHead) ? input.expectedHead : null,
+      source_commit: sha40(input.expectedHead) ? input.expectedHead : null,
+      mission_id: expectedMissionId,
+      manifest_path: null,
+      manifest_sha256: null,
+      blockers: unique(blockers)
+    }
+  }
   const manifestFile = releaseClosureManifestPath(input.root, input.version)
   const manifestRel = relative(input.root, manifestFile)
   const manifest = readJson(manifestFile)
   const expectedWorkOrderSha256 = input.expectedWorkOrderSha256 || WORK_ORDER_SHA256
 
-  if (input.version !== '6.3.0') blockers.push(`contract_unsupported:${input.version || 'missing'}`)
   if (!sha40(input.expectedBaseline)) blockers.push('expected_baseline_invalid')
   if (!sha40(input.expectedHead)) blockers.push('expected_head_invalid')
   if (!manifest || manifest.schema !== RELEASE_CLOSURE_MANIFEST_SCHEMA) blockers.push('closure_manifest_missing_or_invalid')
@@ -117,6 +140,8 @@ export function inspectReleaseClosure(input: ReleaseClosureInput) {
   return {
     schema: RELEASE_CLOSURE_SCHEMA,
     ok: blockers.length === 0,
+    applicable: true,
+    applicability: `version_scoped_to_${RELEASE_CLOSURE_AUDIT_VERSION}`,
     version: input.version,
     head: sha40(input.expectedHead) ? input.expectedHead : null,
     source_commit: sha40(sourceCommit) ? sourceCommit : null,
@@ -128,6 +153,9 @@ export function inspectReleaseClosure(input: ReleaseClosureInput) {
 }
 
 export function buildReleaseClosureManifest(input: ReleaseClosureManifestInput) {
+  if (input.version !== RELEASE_CLOSURE_AUDIT_VERSION) {
+    throw new Error(`Release closure manifest is version-scoped to ${RELEASE_CLOSURE_AUDIT_VERSION}; received ${input.version || 'missing'}.`)
+  }
   const missionId = input.missionId || RELEASE_630_MISSION_ID
   const paths = requiredArtifactPaths(input.version, missionId)
   const artifacts: Record<string, { path: string; sha256: string | null; line_count: number | null; schema: string | null }> = {}
@@ -158,6 +186,10 @@ export function buildReleaseClosureManifest(input: ReleaseClosureManifestInput) 
     deletion_truth: deletion.ok ? deletion.manifest : null,
     generated_at: new Date().toISOString()
   }
+}
+
+function sourceCommitAtOrAfterBaseline(root: string, head: string, baseline: string) {
+  return gitOk(root, ['merge-base', '--is-ancestor', baseline, head])
 }
 
 export function writeReleaseClosureManifest(input: ReleaseClosureManifestInput) {

@@ -96,7 +96,7 @@ Generated from `sks commands --json`, `src/cli/command-registry.ts COMMANDS`, `s
 | `cli-reasoning` | core-cli | labs | sks reasoning ["prompt"] [--json] | execute:pass | runtime_verified | none recorded |
 | `cli-aliases` | core-cli | stable | sks aliases | execute:pass | runtime_verified | none recorded |
 | `cli-selftest` | core-cli | stable | sks selftest [--mock] | execute:pass | runtime_verified | none recorded |
-| `cli-goal` | proof-route | beta | sks goal create\|pause\|resume\|clear\|status ... | execute_and_validate_artifacts:blocked | runtime_verified | none recorded |
+| `cli-goal` | core-cli | beta | sks goal create\|edit\|pause\|resume\|clear\|status ... | execute:pass | runtime_verified | stateless Codex-native command renderer; no SKS Goal artifacts |
 | `cli-seo-geo-optimizer` | core-cli | beta | sks seo-geo-optimizer [seo\|geo] doctor\|audit\|research\|strategy\|plan\|apply\|verify\|status\|rollback\|fixture [mission\|latest] [--mode seo\|geo] [--target auto\|website\|docs\|package] [--include-marketing] [--json] | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
 | `cli-hook` | core-cli | beta | sks hook | static:pass | static_contract | none recorded |
 | `cli-profile` | core-cli | labs | sks profile show\|set <model> | execute:pass | runtime_verified | none recorded |
@@ -141,7 +141,7 @@ Generated from `sks commands --json`, `src/cli/command-registry.ts COMMANDS`, `s
 | `route-ux-review` | route | labs | $sks-ux-review | mock:pass | wiring_only | live imagegen/CU evidence required |
 | `route-computer-use` | route | beta | $sks-computer-use<br>$sks-computer-use-fast<br>$sks-cu | execute_and_validate_artifacts:blocked | runtime_verified | none recorded |
 | `route-cu` | route | beta | $sks-cu | execute_and_validate_artifacts:blocked | runtime_verified | none recorded |
-| `route-goal` | route | beta | $sks-goal | mock:pass | wiring_only | none recorded |
+| `route-goal` | route | beta | $sks-goal | static:pass | wiring_only | none recorded |
 | `route-commit` | route | labs | $sks-commit | mock:pass | wiring_only | none recorded |
 | `route-commit-and-push` | route | labs | $sks-commit-and-push | mock:pass | wiring_only | none recorded |
 | `route-research` | route | labs | $sks-research | execute_and_validate_artifacts:pass | runtime_verified | none recorded |

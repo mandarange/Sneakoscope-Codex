@@ -5,19 +5,18 @@ import { createMission, getOrCreateSessionMission, missionDir, sessionStateKey, 
 import { buildQuestionSchemaForRoute, buildRequestIntake, REQUEST_INTAKE_ARTIFACT, writeQuestions } from '../questions.js';
 import { sealContract } from '../decision-contract.js';
 import { scanDbSafety } from '../db-safety.js';
-import { GOAL_WORKFLOW_ARTIFACT, writeGoalWorkflow } from '../goal-workflow.js';
 import { createAndWriteWorkOrderLedgerForPrompt } from '../work-order-ledger.js';
 import { writeCodeStructureReport } from '../code-structure.js';
 import { writeMemorySweepReport } from '../memory-governor.js';
 import { writeMistakeMemoryReport } from '../mistake-memory.js';
 import { MISTAKE_RECALL_ARTIFACT, mistakeRecallGateStatus } from '../mistake-recall.js';
-import { recordSkillDreamEvent, SKILL_DREAM_POLICY, skillDreamPolicyText, writeSkillForgeReport } from '../skill-forge.js';
+import { recordSkillDreamEvent, SKILL_DREAM_POLICY, writeSkillForgeReport } from '../skill-forge.js';
 import { evaluateResearchGate, researchPaperArtifactForPlan, writeResearchPlan } from '../research.js';
 import { PPT_REQUIRED_GATE_FIELDS, writePptRouteArtifacts } from '../ppt.js';
 import { writeQaLoopArtifacts } from '../qa-loop.js';
 import { IMAGE_UX_REVIEW_GATE_ARTIFACT, IMAGE_UX_REVIEW_POLICY_ARTIFACT, IMAGE_UX_REVIEW_SCREEN_INVENTORY_ARTIFACT, IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT, IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT, IMAGE_UX_REVIEW_ITERATION_REPORT_ARTIFACT, IMAGE_UX_REVIEW_REQUIRED_GATE_FIELDS, writeImageUxReviewRouteArtifacts } from '../image-ux-review.js';
 import { responseLanguageInstruction } from '../language-preference.js';
-import { buildSsotGuard, ssotGuardPolicyText } from '../safety/ssot-guard.js';
+import { buildSsotGuard } from '../safety/ssot-guard.js';
 import { SPEED_LANE_POLICY } from '../proof-field.js';
 import { validateRouteCompletionProof } from '../proof/route-proof-gate.js';
 import { routeFromState, routeRequiresCompletionProof } from '../proof/route-proof-policy.js';
@@ -26,8 +25,8 @@ import { prepareMadSksSqlPlaneMission } from '../mad-sks/sql-plane/coordinator.j
 import { MAD_SKS_SQL_PLANE_CAPABILITY_FILE, madSksSqlPlaneRelativePath } from '../mad-sks/sql-plane/paths.js';
 import { OFFICIAL_SUBAGENT_EXECUTION_STAGE_ID } from '../agents/agent-schema.js';
 import { normalizeOfficialSubagentPolicy, officialSubagentPipelineStage } from '../agents/agent-plan.js';
-import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_IMAGEGEN_REQUIRED_POLICY, CODEX_WEB_VERIFICATION_POLICY, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, SOLUTION_SCOUT_STAGE_ID, chatCaptureIntakeText, context7RequirementText, dollarCommand, evidenceMentionsForbiddenBrowserAutomation, getdesignReferencePolicyText, hasFromChatImgSignal, hasMadSksSignal, imageUxReviewPipelinePolicyText, leanEngineeringCompactText, looksLikeProblemSolvingRequest, pptPipelineAllowlistPolicyText, reflectionRequiredForRoute, reasoningInstruction, routeNeedsContext7, routePrompt, routeReasoning, routeRequiresSubagents, solutionScoutPolicyText, stripDollarCommand, stripMadSksSignal, stripVisibleDecisionAnswerBlocks, subagentExecutionPolicyText, stackCurrentDocsPolicyText, triwikiContextTracking, triwikiContextTrackingText, triwikiStagePolicyText } from '../routes.js';
-import { normalizeLeanDecision, validateLeanDecision } from '../lean-engineering-policy.js';
+import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_IMAGEGEN_REQUIRED_POLICY, CODEX_WEB_VERIFICATION_POLICY, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, chatCaptureIntakeText, context7RequirementText, dollarCommand, evidenceMentionsForbiddenBrowserAutomation, hasFromChatImgSignal, hasMadSksSignal, imageUxReviewPipelinePolicyText, pptPipelineAllowlistPolicyText, reflectionRequiredForRoute, reasoningInstruction, routeNeedsContext7, routePrompt, routeReasoning, routeRequiresSubagents, stripDollarCommand, stripMadSksSignal, stripVisibleDecisionAnswerBlocks, subagentExecutionPolicyText, stackCurrentDocsPolicyText, triwikiContextTracking } from '../routes.js';
+import { coreEngineeringDirectiveReferenceText } from '../lean-engineering-policy.js';
 import { classifyTaskProfile, gateProfileForTask, type GateProfile, type TaskProfile } from '../runtime/task-profile.js';
 import { chooseVerificationBudget, type VerificationBudget } from '../runtime/verification-budget.js';
 import { NARUTO_PARENT_MODEL } from '../subagents/model-policy.js';
@@ -45,6 +44,11 @@ import {
   SUBAGENT_EVENT_LOG_FILENAME,
   SUBAGENT_PARENT_SUMMARY_FILENAME
 } from '../subagents/subagent-evidence.js';
+import {
+  effectiveSubagentTarget,
+  normalizeLegacySubagentCountFields,
+  subagentCountContractBlockers
+} from '../subagents/wave-lifecycle.js';
 
 export { routePrompt };
 
@@ -56,10 +60,10 @@ function ambientGoalContinuation() {
   return {
     schema_version: 1,
     enabled: true,
-    mode: 'ambient_codex_native_goal_overlay',
+    mode: 'codex_native_goal_only',
     native_slash_command: '/goal',
     non_disruptive: true,
-    rule: 'Use Codex native goal persistence when available to keep work resumable until completion; it never replaces the selected SKS route, Naruto, TriWiki, verification, reflection, or Honest Mode gates.'
+    rule: 'Codex native Goal is the only persisted goal owner. SKS must not create Goal missions, bridge artifacts, compatibility loops, or fallback goal state.'
   };
 }
 const REFLECTION_ARTIFACT = 'reflection.md';
@@ -70,7 +74,7 @@ const HARD_BLOCKER_ARTIFACT = 'hard-blocker.json';
 const DEFAULT_COMPLIANCE_LOOP_LIMIT = 3;
 const CLARIFICATION_BYPASS_ROUTES = new Set(['Answer', 'DFix', 'Help', 'Wiki', 'ComputerUse', 'Goal']);
 const QUESTION_GATE_ROUTES = new Set(['QALoop', 'PPT']);
-const LIGHTWEIGHT_ROUTES = new Set(['Answer', 'DFix', 'Help', 'Wiki']);
+const LIGHTWEIGHT_ROUTES = new Set(['Answer', 'DFix', 'Help', 'Wiki', 'Goal']);
 const GATE_PROFILE_STAGES = Object.freeze({
   none: [],
   minimal: ['route_classification', 'listed_verification'],
@@ -87,7 +91,6 @@ const STAGE_BLOCKING_GATE = Object.freeze({
   ownership: 'ownership',
   pipeline_plan: 'ownership',
   focused_implementation: 'ownership',
-  [SOLUTION_SCOUT_STAGE_ID]: 'ownership',
   triwiki_use_first: 'ownership',
   subagent_plan: 'ownership',
   official_subagent_execution: 'ownership',
@@ -145,13 +148,6 @@ export function buildPipelinePlan(input: any = {}) {
   const skipped = stages.filter((stage: any) => stage.status === 'skipped').map((stage: any) => stage.id);
   const kept = stages.filter((stage: any) => stage.status !== 'skipped' && stage.status !== 'not_applicable').map((stage: any) => stage.id);
   const routeEconomy = routeEconomyPlan(proof);
-  const leanDecision = normalizeLeanDecision(input.leanDecision, {
-    selected_rung: gateProfile === 'none' ? 'skip' : 'minimal-custom',
-    task_requires_change: !['passthrough', 'answer'].includes(taskProfile),
-    root_cause_target: route?.id ? `${route.id} route selected implementation surface` : null,
-    expected_changed_paths: input.expectedChangedPaths || input.touchedFiles || [],
-    verification_minimum: verification.slice(0, 3).map((item: any) => String(item || '').trim()).filter(Boolean)
-  });
   const invariants = pipelineInvariants({ taskProfile, gateProfile, stages, verificationBudget });
   return {
     schema_version: PIPELINE_PLAN_SCHEMA_VERSION,
@@ -204,7 +200,6 @@ export function buildPipelinePlan(input: any = {}) {
     verification,
     invariants,
     proof_field: proof,
-    lean_decision: leanDecision,
     ssot_guard: buildSsotGuard({ route: route?.id || 'SKS', mode: route?.mode || 'SKS', task }),
     route_economy: routeEconomy,
     official_subagents: officialSubagentPolicy,
@@ -288,8 +283,6 @@ export function validatePipelinePlan(plan: any = {}) {
   if (!plan.route_economy?.mode) issues.push('route_economy');
   const routeEconomyLatticeIssues = validateRouteEconomyDecisionLattice(plan.route_economy, plan.proof_field);
   if (routeEconomyLatticeIssues.length) issues.push(...routeEconomyLatticeIssues.map((issue: any) => `route_economy.decision_lattice:${issue}`));
-  const leanDecision = validateLeanDecision(plan.lean_decision);
-  if (!leanDecision.ok) issues.push(...leanDecision.issues.map((issue: any) => `lean_decision:${issue}`));
   if (plan.no_unrequested_fallback_code !== true || !plan.invariants?.includes('no_unrequested_fallback_code')) issues.push('fallback_guard');
   if (plan.invariants?.includes('ssot_guard')) {
     if (!plan.ssot_guard?.required) issues.push('ssot_guard');
@@ -486,7 +479,6 @@ function buildPipelineStages(
   if (gateProfile === 'none') return [];
   const ids: string[] = [...GATE_PROFILE_STAGES[gateProfile]];
   const specializedRoute = Boolean(route?.id && !LIGHTWEIGHT_ROUTES.has(route.id) && route.id !== 'SKS');
-  if (looksLikeProblemSolvingRequest(task) && !['Answer', 'Help', 'Wiki'].includes(route?.id)) ids.push(SOLUTION_SCOUT_STAGE_ID);
   if (gateProfile === 'scoped' || gateProfile === 'full' || specializedRoute) ids.push('pipeline_plan', 'focused_implementation');
   if ((gateProfile === 'full' || specializedRoute) && !ids.includes('ssot_guard')) ids.push('ssot_guard');
   if (context7Required) ids.push('context7_evidence');
@@ -545,7 +537,6 @@ function planNextActions(route: any, task: any, taskProfile: TaskProfile, ambigu
     return [
       `read ${REQUEST_INTAKE_ARTIFACT} and preserve its source-order requirements`,
       'auto-seal execution contract from inferred answers',
-      ...(looksLikeProblemSolvingRequest(task) ? ['run Solution Scout web search for similar fixes before editing'] : []),
       'continue with decision-contract.json'
     ];
   }
@@ -555,7 +546,6 @@ function planNextActions(route: any, task: any, taskProfile: TaskProfile, ambigu
       ? 'read subagent-plan.json, create independent disjoint slices, run the official Codex subagent workflow, wait for all requested agent threads, and integrate their results'
       : 'materialize the route-specific subagent plan before implementation');
   }
-  if (looksLikeProblemSolvingRequest(task)) actions.splice(1, 0, 'run Solution Scout web search for similar fixes before editing');
   actions.push('refresh/validate TriWiki when required', 'finish with completion summary and Honest Mode');
   return actions;
 }
@@ -569,42 +559,26 @@ export function promptPipelineContext(prompt: any, route: any = null) {
   const directFix = route?.id === 'DFix';
   if (directFix) return dfixQuickContext(cleanPrompt, route);
   if (route?.id === 'Answer') return answerOnlyContext(cleanPrompt, route);
+  if (route?.id === 'Goal') return goalNativeOnlyContext(cleanPrompt, route);
   if (route?.id === 'ComputerUse') return computerUseFastContext(cleanPrompt, route);
   const lines = [
     `SKS skill-first pipeline active. Route: ${route?.command || '$SKS'} (${route?.route || 'general SKS workflow'}).`,
     reasoningInstruction(reasoning),
-    'Before work, load the required SKS skill context and follow the route lifecycle instead of treating the command as plain text.',
-    'Codex App visibility: briefly surface what SKS is doing before tools run, mirror important worker/tool status to mission artifacts, and keep progress legible to the user.',
     responseLanguageInstruction(cleanPrompt),
-    'Hook visibility limit: hooks can inject context/status or block/continue a turn, but they cannot create arbitrary live chat bubbles; use official subagent events, mission files, or normal assistant updates for live transcript details.',
-    'Ambient Goal continuation: even without an explicit $Goal keyword, use Codex native /goal persistence when it helps keep long work resumable and complete; do not let it replace or skip the selected SKS route gates.',
-    'Route contract: execution routes infer contract answers from the prompt, TriWiki/current-code defaults, and conservative SKS policy. DFix and Answer bypass stateful execution because they do not start implementation.',
-    `Wiki-informed request intake: when a mission exists, read ${REQUEST_INTAKE_ARTIFACT} before execution; preserve every source-order requirement, apply TriWiki attention/use_first and hydrate_first context, and execute request_intake.transformed_prompt through the selected route instead of relying on the vague original wording alone.`,
-    'Plan-first interaction: when ambiguity questions are truly required, show the user only the missing human decision(s), then seal the decision contract internally and execute/verify.',
-    'Question-shaped directive policy: before using Answer, decide whether a question is a real information request or an implicit instruction/complaint about broken behavior. Rhetorical bug reports, mandatory-policy statements, and "why is this not happening?" execution complaints must route to Naruto, not Answer.',
-    'Best-practice prompt shape: extract Goal, Context, Constraints, and Done-when before implementation; keep questions compact and only ask for answers that can change scope, safety, user-facing behavior, or acceptance criteria.',
-    chatCaptureIntakeText(),
-    'Default execution routing: general implementation/code-changing prompts use the profile-selected parent-owned path; explicit Naruto or parallel work uses the Codex subagent workflow with disjoint slices, official agent threads, parent integration, and scoped verification. Answer, DFix, Help, Wiki maintenance, and safety-specific routes remain intentional exceptions.',
-    'Stance: infer the user intent aggressively from rough wording, local context, TriWiki, and conservative defaults; do not surface prequestion sheets before work.',
+    coreEngineeringDirectiveReferenceText(),
+    'Load only the selected route skills and route-specific instructions; do not inject unrelated route policy.',
+    'Codex native /goal is the only persisted goal owner. Goal persistence must not replace or skip the selected route gates.',
+    `When a mission exists, read ${REQUEST_INTAKE_ARTIFACT} as a structured projection of the current request. Preserve the literal request and current code as authority; never let generic intake heuristics replace an explicit requirement.`,
     subagentExecutionPolicyText(route, cleanPrompt),
-    solutionScoutPolicyText(cleanPrompt),
-    leanEngineeringCompactText(),
-    ssotGuardPolicyText(),
-    skillDreamPolicyText(),
-    route?.id === 'PPT'
-      ? `${pptPipelineAllowlistPolicyText()} ${getdesignReferencePolicyText()}`
-      : `Design routing: UI/UX uses the Codex App Product Design plugin first for get-context/user-context, research/ideate, index/image-to-code/url-to-code, audit/design-qa, and share when available. Treat design.md, design-system-builder, design-ui-editor, design-artifact-expert, and getdesign-reference as compatibility fallback only when the Product Design plugin is unavailable or an existing local design.md must be preserved. Image/logo/raster assets use imagegen, which must prefer Codex App built-in image generation documented at ${CODEX_APP_IMAGE_GENERATION_DOC_URL}. ${CODEX_IMAGEGEN_REQUIRED_POLICY} ${getdesignReferencePolicyText()}`,
-    triwikiContextTrackingText(),
-    triwikiStagePolicyText(),
-    stackCurrentDocsPolicyText(),
-    'Extract intent, target files/surfaces, constraints, acceptance criteria, risks, and the smallest safe atomic step before acting.',
-    'Do not stop at a plan when implementation was requested; continue until the route gate passes or a hard blocker is honestly recorded.',
+    'TriWiki: read the bounded current context pack before each stage, hydrate risky or stale claims from source, refresh after material changes, and validate before handoff or final.',
+    required ? stackCurrentDocsPolicyText() : '',
     context7RequirementText(required),
+    'Do not stop at a plan when implementation was requested; continue until the route gate passes or a hard blocker is honestly recorded.',
     'Before final answer, include a user-visible completion summary that explains what changed and how it was verified, then run SKS Honest Mode: verify evidence/tests, state gaps, and confirm the goal is genuinely complete.'
-  ];
+  ].filter(Boolean);
+  if (hasFromChatImgSignal(cleanPrompt)) lines.push(chatCaptureIntakeText());
   if (reflectionRequiredForRoute(route)) lines.push(reflectionInstructionText());
   if (route?.id === 'Naruto') lines.push('Naruto route: prepare subagent-plan.json, delegate independent slices through official Codex worker/expert agent threads, record SubagentStart/SubagentStop events, wait for every requested thread, integrate the parent summary, run scoped verification, and pass naruto-gate.json. Process counts, PID evidence, custom process pools, and verification DAGs are not completion evidence.');
-  if (route?.id === 'Goal') lines.push('Goal route: write SKS goal bridge artifacts, then use Codex native /goal persistence for create, pause, resume, and clear continuation controls.');
   if (route?.id === 'PPT') lines.push(`PPT route: before design or PDF work, infer and seal delivery context, audience profile including average age/job/industry, STP strategy, decision context, and at least three pain-point to solution mappings from the prompt, TriWiki/current-code defaults, and conservative policy. Keep the visual system simple, restrained, and information-first; design detail should come from hierarchy, spacing, alignment, rules, and subtle accents rather than decorative overdesign. ${pptPipelineAllowlistPolicyText()} If generated image assets or slide visual critique are needed, actively invoke the loaded imagegen skill through Codex App $imagegen/gpt-image-2 (${CODEX_APP_IMAGE_GENERATION_DOC_URL}), save the selected raster output into the mission assets/review evidence path, and record that real path before build/final. Direct API fallback, placeholders, HTML/CSS stand-ins, and prose-only substitutes do not satisfy the route gate. ${CODEX_IMAGEGEN_REQUIRED_POLICY} Then build source ledger, fact ledger, image asset ledger, storyboard with aha moments, style tokens, editable source HTML under source-html/, PDF artifact, render QA, bounded review ledger/iteration report, PPT-only temporary build file cleanup, and ppt-parallel-report.json so independent strategy/render/file-write phases stay parallel-friendly, then reflection and Honest Mode.`);
   if (route?.id === 'ImageUXReview') lines.push(`Image UX Review route: ${imageUxReviewPipelinePolicyText()} Use ${IMAGE_UX_REVIEW_POLICY_ARTIFACT}, ${IMAGE_UX_REVIEW_SCREEN_INVENTORY_ARTIFACT}, ${IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT}, ${IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT}, ${IMAGE_UX_REVIEW_ITERATION_REPORT_ARTIFACT}, and ${IMAGE_UX_REVIEW_GATE_ARTIFACT} as the route evidence set. The route may suggest safe fixes only when the user requested fixing; otherwise report findings and blockers.`);
   if (route?.id === 'AutoResearch') lines.push('AutoResearch route: load autoresearch-loop for experiments and benchmarking. SEO/GEO, discoverability, README, npm, GitHub search visibility, and AI-search visibility should use the first-class $SEO-GEO-OPTIMIZER parent route unless the selected route explicitly needs a child experiment.');
@@ -650,6 +624,20 @@ export function answerOnlyContext(prompt: any, route: any = routePrompt(prompt))
   ].join('\n');
 }
 
+export function goalNativeOnlyContext(prompt: any, route: any = routePrompt(prompt)) {
+  const task = stripDollarCommand(prompt) || String(prompt || '').trim();
+  return [
+    `Codex native Goal control requested. Route label: ${route?.command || '$Goal'}.`,
+    responseLanguageInstruction(task),
+    'Use only Codex native Goal functionality. Do not create or continue an SKS mission, bridge artifact, compatibility loop, fallback goal state, work-order ledger, TriWiki route, or subagent workflow for this control turn.',
+    'If a native goal tool is callable, use it directly. Otherwise provide the exact native /goal, /goal edit, /goal pause, /goal resume, or /goal clear command for the user to run.',
+    `Requested goal: ${task}`,
+    'Before create or edit, expand the objective into explicit Outcome, Scope, Constraints, Verification, Done when, Stop conditions, and Non-goals.',
+    'Completion conditions must be measurable and must stop the run once satisfied; prohibit unrelated refactors, speculative expansion, and open-ended polishing.',
+    'Codex native Goal remains the sole persisted source of truth.'
+  ].join('\n');
+}
+
 export async function prepareRoute(root: any, prompt: any, state: any = {}, opts: any = {}): Promise<any> {
   const cleanPrompt = stripVisibleDecisionAnswerBlocks(prompt);
   const route = routePrompt(cleanPrompt);
@@ -673,7 +661,7 @@ export async function prepareRoute(root: any, prompt: any, state: any = {}, opts
   if (route.id === 'Answer') return finish(await prepareAnswerOnlyRoute(route, task));
   if (route.id === 'ComputerUse') return finish(await prepareComputerUseFastRoute(route, task));
   if (route.id === 'Wiki') return finish(await prepareWikiQuickRoute(route, task));
-  if (route.id === 'Goal') return finish(await prepareGoal(root, route, task, required, { sessionKey }));
+  if (route.id === 'Goal') return finish(await prepareGoalNativeOnlyRoute(route, task));
   if (route.id === 'ImageUXReview') return finish(await prepareImageUxReview(root, route, task, required, { sessionKey }));
   if (route.id === 'MadSKS') return finish(await prepareMadSksSqlPlane(root, route, task, required, { sessionKey }));
   if (QUESTION_GATE_ROUTES.has(route.id)) return finish(await prepareClarificationGate(root, route, task, required, { madSksAuthorization, sessionKey }));
@@ -849,7 +837,7 @@ export async function activeRouteContext(root: any, state: any) {
   if (state.subagents_required && !(await hasSubagentEvidence(root, state))) {
     return `Active SKS route ${id} requires official subagent evidence before completion. Delegate independent slices to worker/expert custom agents, record matched SubagentStart/SubagentStop thread ids, wait for every requested agent thread, and provide the parent integration summary.${reasoningNote}${planNote}`;
   }
-  if (state.mode === 'GOAL') return `Active Goal mission ${state.mission_id || 'latest'} uses Codex native /goal continuation. Inspect .sneakoscope/missions/${state.mission_id || 'latest'}/${GOAL_WORKFLOW_ARTIFACT}, then use /goal create, pause, resume, or clear in the Codex runtime as appropriate.${planNote}`;
+  if (state.mode === 'GOAL') return `Legacy SKS Goal state ${state.mission_id || 'latest'} is non-authoritative. Do not update its mission or artifacts; use Codex native /goal controls as the sole persisted Goal surface.${planNote}`;
   if (state.context7_required && !(await hasContext7DocsEvidence(root, state))) {
     return `Active SKS route ${id} still requires Context7 evidence. Use resolve-library-id, then query-docs for relevant docs/APIs before completing.${reasoningNote}${planNote}`;
   }
@@ -868,42 +856,13 @@ async function activePipelinePlanNote(root: any, state: any = {}) {
   return ` Pipeline plan: .sneakoscope/missions/${state.mission_id}/${PIPELINE_PLAN_ARTIFACT} (${lane}; kept=${kept}, skipped=${skipped}).${intake}${next}`;
 }
 
-async function prepareGoal(root: any, route: any, task: any, required: any, opts: any = {}): Promise<any> {
-  const { id, dir, mission } = await createMission(root, { mode: 'goal', prompt: task, sessionKey: opts.sessionKey });
-  const workflow = await writeGoalWorkflow(dir, mission, { action: 'create', prompt: task });
-  await writeJsonAtomic(path.join(dir, 'route-context.json'), { route: route.id, command: route.command, mode: route.mode, task, required_skills: route.requiredSkills, context7_required: required, native_goal: workflow.native_goal, stop_gate: route.stopGate });
-  const pipelinePlan = await writePipelinePlan(dir, {
-    missionId: id,
+async function prepareGoalNativeOnlyRoute(route: any, task: any): Promise<any> {
+  return {
     route,
-    task,
-    required,
-    ambiguity: { required: false, status: 'not_required' },
-    // Goal is a lightweight persistence overlay, but its mission still owns the
-    // durable request-intake/plan contract. Question-shaped or vague Goal tasks
-    // must not be mistaken for answer-only work and skip artifact writes.
-    forceLightweightPlan: true
-  });
-  const executionRoute = routePrompt(task);
-  const shouldDelegateExecution = routeRequiresSubagents(route, task)
-    && executionRoute
-    && !['Answer', 'DFix', 'Goal', 'Help'].includes(executionRoute.id);
-  if (shouldDelegateExecution) {
-    await appendJsonl(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'goal.delegated_execution_route', route: executionRoute.id, command: executionRoute.command });
-    const delegated: any = await prepareRoute(root, task, {}, { sessionKey: opts.sessionKey });
-    return {
-      route,
-      additionalContext: [
-        `$Goal bridge prepared as a lightweight native /goal persistence overlay.
-Goal bridge mission: ${id}
-Goal artifact: .sneakoscope/missions/${id}/${GOAL_WORKFLOW_ARTIFACT}
-Native Codex control: ${workflow.native_goal.slash_command}
-Delegated execution route: ${executionRoute.command}. The delegated route mission is authoritative for implementation, verification, and final gates.`,
-        delegated.additionalContext
-      ].filter(Boolean).join('\n\n')
-    };
-  }
-  await setCurrent(root, routeState(id, route, 'GOAL_READY', required, { prompt: task, native_goal: workflow.native_goal, stop_gate: route.stopGate, implementation_allowed: true, questions_allowed: true, pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok, pipeline_plan_path: PIPELINE_PLAN_ARTIFACT }), { sessionKey: opts.sessionKey });
-  return routeContext(route, id, task, required, `Use Codex native ${workflow.native_goal.slash_command} control for persisted continuation, then continue the relevant SKS route gates for any implementation work.`);
+    additionalContext: goalNativeOnlyContext(`${route.command || '$Goal'} ${task}`.trim(), route),
+    native_goal_only: true,
+    state_written: false
+  };
 }
 
 async function prepareClarificationGate(root: any, route: any, task: any, required: any, opts: any = {}) {
@@ -1313,7 +1272,15 @@ async function prepareNaruto(root: any, route: any, task: any, required: any, op
       from_chat_img_request_coverage: false
     });
   }
-  const pipelinePlan = await writePipelinePlan(dir, { missionId: id, route, task: cleanTask, taskProfile, required, ambiguity: { required: false, status: 'direct_naruto' } });
+  const pipelinePlan = await writePipelinePlan(dir, {
+    missionId: id,
+    route,
+    task: cleanTask,
+    taskProfile,
+    required,
+    forceRequestIntakeRewrite: mission.reused === true,
+    ambiguity: { required: false, status: 'direct_naruto' }
+  });
   await setCurrent(root, routeState(id, route, 'NARUTO_READY', required, {
     prompt: cleanTask,
     route: 'Naruto',
@@ -1484,17 +1451,29 @@ export async function subagentEvidence(root: any, state: any): Promise<any> {
       readJson(path.join(dir, 'naruto-summary.json'), null).catch(() => null),
       readJson(path.join(dir, SUBAGENT_EVIDENCE_FILENAME), null).catch(() => null)
     ]);
+    const workflowRunId = String(plan.workflow_run_id || '').trim();
+    const observedStarts = new Set(events
+        .filter((event: any) => event.event_name === 'SubagentStart' && event.run_id === workflowRunId)
+        .map((event: any) => event.thread_id)
+        .filter(Boolean)).size;
+    const countTarget = effectiveSubagentTarget(plan, observedStarts);
     const evidence = buildSubagentEvidence({
-      requestedSubagents: Number(plan.requested_subagents || 0),
+      requestedSubagents: countTarget.requestedSubagents,
+      countPolicy: countTarget.countPolicy,
+      targetSubagents: countTarget.targetSubagents,
       events,
       parentSummary: persistedParentSummary,
       workflowStatus: summary?.status || null,
       preparationOnly: summary?.status === 'delegation_context_ready' || canonical?.preparation_only === true,
+      runId: workflowRunId || null,
       additionalBlockers: Array.isArray(plan.config_blockers)
-        ? plan.config_blockers.map((item: any) => `official_subagent_config:${String(item)}`)
-        : []
+        ? [
+            ...plan.config_blockers.map((item: any) => `official_subagent_config:${String(item)}`),
+            ...subagentCountContractBlockers(plan, observedStarts)
+          ]
+        : subagentCountContractBlockers(plan, observedStarts)
     });
-    const canonicalMismatch = canonicalEvidenceMismatch(canonical, evidence);
+    const canonicalMismatch = canonicalEvidenceMismatch(normalizeLegacySubagentCountFields(canonical, plan), evidence);
     const blockers = [...new Set([
       ...(Array.isArray(evidence.blockers) ? evidence.blockers : []),
       ...(canonicalMismatch ? [canonicalMismatch] : [])
@@ -1517,7 +1496,7 @@ function canonicalEvidenceMismatch(canonical: any, recomputed: any): string | nu
     return 'persisted_subagent_evidence_schema_invalid';
   }
   const scalarKeys = [
-    'requested_subagents', 'started_threads', 'completed_threads', 'failed_threads',
+    'requested_subagents', 'count_policy', 'target_subagents', 'started_threads', 'completed_threads', 'failed_threads',
     'parent_summary_present', 'parent_summary_trustworthy', 'parent_summary_status',
     'preparation_only', 'status', 'ok'
   ];

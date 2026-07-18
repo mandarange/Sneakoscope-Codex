@@ -31,6 +31,7 @@ export async function writeCodexControlProof(root: string, input: {
     zellij_pane_id: input.task.zellijPaneId || null,
     sdk_thread_id: input.result.sdkThreadId,
     sdk_run_id: input.result.sdkRunId,
+    runtime_identity: input.result.runtimeIdentity || null,
     stream_event_count: input.result.streamEventCount,
     structured_output_valid: input.result.structuredOutputValid,
     output_schema_id: input.task.outputSchemaId,

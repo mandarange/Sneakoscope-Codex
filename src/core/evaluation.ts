@@ -1,5 +1,10 @@
 import path from 'node:path';
 import { nowIso, sha256, writeJsonAtomic } from './fsx.js';
+import {
+  DEFAULT_OFFICIAL_SUBAGENT_JOB_MAX_RUNTIME_SECONDS,
+  DEFAULT_OFFICIAL_SUBAGENT_MAX_DEPTH,
+  DEFAULT_OFFICIAL_SUBAGENT_MAX_THREADS
+} from './subagents/official-subagent-config.js';
 import { contextCapsule } from './triwiki-attention.js';
 import { validateWikiCoordinateIndex } from './wiki-coordinate.js';
 
@@ -75,9 +80,9 @@ export const PERMISSION_PROFILES = Object.freeze({
 });
 
 export const DEFAULT_MULTIAGENT_V2 = Object.freeze({
-  max_threads: 4,
-  max_depth: 1,
-  job_max_runtime_seconds: 1800,
+  max_threads: DEFAULT_OFFICIAL_SUBAGENT_MAX_THREADS,
+  max_depth: DEFAULT_OFFICIAL_SUBAGENT_MAX_DEPTH,
+  job_max_runtime_seconds: DEFAULT_OFFICIAL_SUBAGENT_JOB_MAX_RUNTIME_SECONDS,
   wait_control: 'bounded_wait_then_structured_summary',
   subagent_output: 'structured_summary_only'
 });
@@ -98,9 +103,9 @@ export const ZELLIJ_COCKPIT_VIEWS = Object.freeze([
   'Statusline / Terminal Title Preview'
 ]);
 
-export function estimateTokens(value: any) {
+export function serializedSizeBytes(value: any) {
   const text = typeof value === 'string' ? value : JSON.stringify(value);
-  return Math.max(1, Math.ceil(String(text || '').length / 4));
+  return Buffer.byteLength(String(text ?? ''), 'utf8');
 }
 
 export function classifyToolError(input: any = {}) {
@@ -480,7 +485,20 @@ function scoreSelection(allClaims: any, selectedIds: any) {
   };
 }
 
-function metricBlock({ label, context, scenario, msPerRun }: any) {
+function tokenMeasurementFromEvidence(evidence: any, label: 'baseline' | 'candidate') {
+  const rawCount = evidence?.[`${label}_tokens`];
+  const source = String(evidence?.source || '').trim();
+  if (rawCount === null || rawCount === undefined || !source) {
+    return { token_count: null, token_evidence: null };
+  }
+  const count = Number(rawCount);
+  if (!Number.isInteger(count) || count < 0) {
+    return { token_count: null, token_evidence: null };
+  }
+  return { token_count: count, token_evidence: { source } };
+}
+
+function metricBlock({ label, context, scenario, msPerRun, tokenMeasurement }: any) {
   const selectedIds = (context.claims || []).map((claim: any) => claim.id);
   const wikiValidation: any = context.wiki ? validateWikiCoordinateIndex(context.wiki) : { ok: false };
   const voxel = context.wiki?.vx || context.wiki?.voxel_overlay || null;
@@ -488,7 +506,14 @@ function metricBlock({ label, context, scenario, msPerRun }: any) {
   return {
     label,
     context_hash: sha256(JSON.stringify(context)),
-    estimated_tokens: estimateTokens(context),
+    serialized_size_bytes: serializedSizeBytes(context),
+    size_metric: {
+      name: 'serialized_json_bytes',
+      unit: 'bytes',
+      proxy_for_tokens: false
+    },
+    token_count: tokenMeasurement?.token_count ?? null,
+    token_evidence: tokenMeasurement?.token_evidence ?? null,
     context_build_ms_per_run: Number(msPerRun.toFixed(4)),
     wiki: context.wiki ? {
       schema: context.wiki.schema,
@@ -502,16 +527,42 @@ function metricBlock({ label, context, scenario, msPerRun }: any) {
   };
 }
 
+function measuredTokenEvidence(metric: any) {
+  const count = metric?.token_count;
+  const identity = String(metric?.token_evidence?.source || '').trim();
+  return Number.isInteger(count) && count >= 0 && identity ? { count, identity } : null;
+}
+
+function serializedSize(metric: any) {
+  const size = metric?.serialized_size_bytes;
+  return Number.isFinite(size) && size >= 0 ? Number(size) : null;
+}
+
 export function compareMetricBlocks(baseline: any, candidate: any, thresholds: any = DEFAULT_EVAL_THRESHOLDS) {
-  const tokenSavingsPct = baseline.estimated_tokens
-    ? (baseline.estimated_tokens - candidate.estimated_tokens) / baseline.estimated_tokens
-    : 0;
+  const baselineTokenEvidence = measuredTokenEvidence(baseline);
+  const candidateTokenEvidence = measuredTokenEvidence(candidate);
+  const comparableTokenEvidence = baselineTokenEvidence !== null
+    && baselineTokenEvidence.count > 0
+    && candidateTokenEvidence !== null
+    && baselineTokenEvidence.identity === candidateTokenEvidence.identity
+    ? { baseline: baselineTokenEvidence.count, candidate: candidateTokenEvidence.count, identity: baselineTokenEvidence.identity }
+    : null;
+  const tokenEvidenceAvailable = comparableTokenEvidence !== null;
+  const tokenSavingsPct = comparableTokenEvidence
+    ? (comparableTokenEvidence.baseline - comparableTokenEvidence.candidate) / comparableTokenEvidence.baseline
+    : null;
+  const baselineSize = serializedSize(baseline);
+  const candidateSize = serializedSize(candidate);
+  const serializedSizeSavingsPct = baselineSize !== null && baselineSize > 0 && candidateSize !== null
+    ? (baselineSize - candidateSize) / baselineSize
+    : null;
   const accuracyDelta = candidate.quality.accuracy_proxy - baseline.quality.accuracy_proxy;
   const precisionDelta = candidate.quality.relevance_precision - baseline.quality.relevance_precision;
   const supportDelta = candidate.quality.support_ratio - baseline.quality.support_ratio;
   const buildRuntimeDeltaMs = candidate.context_build_ms_per_run - baseline.context_build_ms_per_run;
-  const checks: Record<string, boolean> = {
-    token_savings: tokenSavingsPct >= thresholds.min_token_savings_pct,
+  const checks: Record<string, boolean | null> = {
+    token_evidence: tokenEvidenceAvailable,
+    token_savings: tokenSavingsPct === null ? null : tokenSavingsPct >= thresholds.min_token_savings_pct,
     accuracy_delta: accuracyDelta >= thresholds.min_accuracy_delta,
     required_recall: candidate.quality.required_recall >= thresholds.min_required_recall,
     unsupported_critical: candidate.quality.unsupported_critical_selected <= thresholds.max_unsupported_critical_selected,
@@ -519,13 +570,23 @@ export function compareMetricBlocks(baseline: any, candidate: any, thresholds: a
   };
   if (candidate.wiki) checks.wiki_index = candidate.wiki.valid === true;
   return {
-    token_savings_pct: Number(tokenSavingsPct.toFixed(4)),
+    token_savings_pct: tokenSavingsPct === null ? null : Number(tokenSavingsPct.toFixed(4)),
+    serialized_size_savings_pct: serializedSizeSavingsPct === null ? null : Number(serializedSizeSavingsPct.toFixed(4)),
+    token_measurement: {
+      available: tokenEvidenceAvailable,
+      evidence_identity: comparableTokenEvidence?.identity ?? null,
+      reason: tokenEvidenceAvailable
+        ? null
+        : baselineTokenEvidence && candidateTokenEvidence && baselineTokenEvidence.identity !== candidateTokenEvidence.identity
+          ? 'matching_token_evidence_identity_required'
+          : 'actual_token_counts_with_evidence_required'
+    },
     accuracy_delta: Number(accuracyDelta.toFixed(4)),
     precision_delta: Number(precisionDelta.toFixed(4)),
     support_ratio_delta: Number(supportDelta.toFixed(4)),
     build_runtime_delta_ms: Number(buildRuntimeDeltaMs.toFixed(4)),
     checks,
-    meaningful_improvement: Object.values(checks).every(Boolean)
+    meaningful_improvement: Object.values(checks).every((value) => value === true)
   };
 }
 
@@ -545,17 +606,19 @@ export function runEvaluationBenchmark(opts: any = {}) {
     label: 'uncompressed-all-claims',
     context: baselineTiming.result,
     scenario,
-    msPerRun: baselineTiming.ms_per_run
+    msPerRun: baselineTiming.ms_per_run,
+    tokenMeasurement: tokenMeasurementFromEvidence(opts.tokenEvidence, 'baseline')
   });
   const candidate = metricBlock({
     label: 'triwiki-compressed-capsule',
     context: candidateTiming.result,
     scenario,
-    msPerRun: candidateTiming.ms_per_run
+    msPerRun: candidateTiming.ms_per_run,
+    tokenMeasurement: tokenMeasurementFromEvidence(opts.tokenEvidence, 'candidate')
   });
   const comparison = compareMetricBlocks(baseline, candidate, opts.thresholds || DEFAULT_EVAL_THRESHOLDS);
   return {
-    schema_version: 1,
+    schema_version: 2,
     generated_at: nowIso(),
     scenario: {
       id: scenario.id,
@@ -569,24 +632,31 @@ export function runEvaluationBenchmark(opts: any = {}) {
     candidate,
     comparison,
     notes: [
-      'estimated_tokens uses a deterministic chars/4 approximation for local regression tracking.',
+      'serialized_size_bytes is a deterministic UTF-8 JSON byte-size metric, not a token estimate.',
+      'Token savings are unavailable unless actual baseline and candidate token counts share the same nonempty token_evidence.source identity.',
       'accuracy_proxy scores evidence-weighted context selection quality; it is not a live model task accuracy measurement.'
     ]
   };
 }
 
 function reportMetric(report: any) {
-  if (report?.candidate?.quality && report?.candidate?.estimated_tokens) return report.candidate;
-  if (report?.metrics?.quality && report?.metrics?.estimated_tokens) return report.metrics;
-  if (report?.quality && report?.estimated_tokens) return report;
+  if (report?.candidate?.quality && hasSizeOrTokenMetric(report.candidate)) return report.candidate;
+  if (report?.metrics?.quality && hasSizeOrTokenMetric(report.metrics)) return report.metrics;
+  if (report?.quality && hasSizeOrTokenMetric(report)) return report;
   throw new Error('Unsupported eval report shape.');
+}
+
+function hasSizeOrTokenMetric(metric: any) {
+  return metric?.serialized_size_bytes !== undefined
+    || metric?.token_count !== undefined
+    || metric?.estimated_tokens !== undefined;
 }
 
 export function compareEvaluationReports(baselineReport: any, candidateReport: any, thresholds: any = DEFAULT_EVAL_THRESHOLDS) {
   const baseline = reportMetric(baselineReport);
   const candidate = reportMetric(candidateReport);
   return {
-    schema_version: 1,
+    schema_version: 2,
     generated_at: nowIso(),
     baseline_label: baseline.label || baselineReport?.scenario?.id || 'baseline',
     candidate_label: candidate.label || candidateReport?.scenario?.id || 'candidate',

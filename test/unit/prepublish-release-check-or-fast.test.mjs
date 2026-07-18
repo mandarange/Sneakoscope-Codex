@@ -38,13 +38,12 @@ test('prepublish wrapper fails closed on a stale stamp without running a release
 });
 
 test('prepublish wrapper fails closed when authoritative verification finds drift after the cheap check', async () => {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-prepublish-authoritative-stamp-'));
-  const stampPath = path.join(dir, 'release-check-stamp.json');
   const proof = createReleaseStampProof();
+  const stampPath = proof.stampPath;
   const write = spawnSync(process.execPath, ['./dist/scripts/release-check-stamp.js', ...proof.writeArgs], {
     cwd: root,
     encoding: 'utf8',
-    env: { ...process.env, SKS_RELEASE_STAMP_PATH: stampPath }
+    env: { ...process.env, ...proof.env }
   });
   assert.equal(write.status, 0, write.stderr || write.stdout);
 
@@ -57,7 +56,7 @@ test('prepublish wrapper fails closed when authoritative verification finds drif
     encoding: 'utf8',
     env: {
       ...process.env,
-      SKS_RELEASE_STAMP_PATH: stampPath
+      ...proof.env
     }
   });
 

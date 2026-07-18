@@ -3,7 +3,7 @@ import crypto from 'node:crypto'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
@@ -50,133 +50,169 @@ test('20 concurrent callers admit one owner and never create a second workflow r
   })
 })
 
-test('20 separate processes observe one mission-wide owner', async () => {
+test('20 separate processes observe one mission-wide owner', { timeout: 30_000 }, async () => {
   await withFixture('multi-process', async ({ dir, missionId }) => {
     const marker = path.join(dir, 'owner-markers.jsonl')
+    const ready = path.join(dir, 'admission-ready')
+    const admit = path.join(dir, 'release-admission')
     const release = path.join(dir, 'release-owner')
     const moduleUrl = new URL('../../subagents/official-subagent-preparation.js', import.meta.url).href
     assert.equal(await exists(fileURLToPath(moduleUrl)), true, 'compiled admission module is required for process black-box')
-    const processes = Array.from({ length: 20 }, () => spawnAdmissionChild({ moduleUrl, dir, missionId, marker, release }))
-    await waitFor(async () => await exists(marker), 5_000)
-    await delay(400)
-    await fs.writeFile(release, 'release\n')
-    const results = await Promise.all(processes)
-    const markerLines = (await fs.readFile(marker, 'utf8')).trim().split(/\r?\n/).filter(Boolean)
+    const observations: Array<Record<string, unknown>> = []
+    const processes = Array.from({ length: 20 }, () => spawnAdmissionChild({
+      moduleUrl,
+      dir,
+      missionId,
+      marker,
+      ready,
+      admit,
+      release
+    }).then((result) => {
+      observations.push(result)
+      return result
+    }))
+    const allResults = Promise.all(processes)
 
-    assert.equal(markerLines.length, 1)
-    assert.equal(results.filter((result) => result.kind === 'executed').length, 1)
-    assert.equal(results.filter((result) => result.kind === 'running').length, 19)
-    assert.equal(results.filter((result) => result.kind === 'running').every((result) => result.already_running === true), true)
+    try {
+      await waitFor(async () => await exists(ready) && (await fs.readdir(ready)).length === 20, 10_000)
+      await fs.writeFile(admit, 'admit\n')
+      await waitFor(async () => await exists(marker), 5_000)
+      await Promise.race([
+        waitFor(async () => observations.filter((result) => result.kind === 'running').length === 19, 10_000),
+        allResults.then((results) => {
+          throw new Error(`admission children completed before observer quorum: ${JSON.stringify(results)}`)
+        })
+      ])
+      await fs.writeFile(release, 'release\n')
+      const results = await allResults
+      const markerLines = (await fs.readFile(marker, 'utf8')).trim().split(/\r?\n/).filter(Boolean)
+
+      assert.equal(markerLines.length, 1)
+      assert.equal(results.filter((result) => result.kind === 'executed').length, 1)
+      assert.equal(results.filter((result) => result.kind === 'running').length, 19)
+      assert.equal(results.filter((result) => result.kind === 'running').every((result) => result.already_running === true), true)
+    } finally {
+      await fs.writeFile(admit, 'admit\n').catch(() => undefined)
+      await fs.writeFile(release, 'release\n').catch(() => undefined)
+      await allResults.catch(() => undefined)
+    }
   })
 })
 
-test('20 standalone CLI processes launch one Codex parent for one mission', { timeout: 30_000 }, async (t) => {
-  if (process.platform === 'win32') return t.skip('executable fixture uses a POSIX shebang')
+test('20 standalone CLI callers attempt one pinned Codex parent for one mission', { timeout: 30_000 }, async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-naruto-cli-single-owner-'))
   const project = path.join(root, 'project')
   const home = path.join(root, 'home')
-  const binDir = path.join(root, 'bin')
   const missionId = 'M-cli-single-owner'
   const dir = path.join(project, '.sneakoscope', 'missions', missionId)
-  const marker = path.join(project, 'codex-parent-markers.jsonl')
-  const release = path.join(project, 'release-codex-parent')
-  const fakeCodex = path.join(binDir, 'codex')
+  const ready = path.join(root, 'cli-ready')
+  const admit = path.join(root, 'release-cli-admission')
+  const barrierModule = path.join(root, 'cli-admission-barrier.mjs')
   const sksBin = fileURLToPath(new URL('../../../bin/sks.js', import.meta.url))
-  t.after(async () => fs.rm(root, { recursive: true, force: true }))
+  let children: ReturnType<typeof spawnCliNarutoChild>[] = []
+  let allResults: Promise<Array<{ code: number | null; json: Record<string, unknown>; stderr: string }>> | null = null
 
-  await fs.mkdir(dir, { recursive: true })
-  await fs.mkdir(path.join(project, '.sneakoscope', 'state'), { recursive: true })
-  await fs.mkdir(path.join(project, '.codex'), { recursive: true })
-  await fs.mkdir(path.join(home, '.codex'), { recursive: true })
-  await fs.mkdir(binDir, { recursive: true })
-  await writeJson(path.join(dir, 'mission.json'), {
-    id: missionId,
-    mode: 'naruto',
-    prompt: 'same mission fixture'
-  })
-  await writeJson(path.join(project, '.sneakoscope', 'state', 'current.json'), {
-    mission_id: missionId,
-    mode: 'NARUTO',
-    phase: 'PREPARE'
-  })
-  await fs.writeFile(path.join(project, '.codex', 'config.toml'), [
-    '[agents]',
-    'max_threads = 4',
-    'max_depth = 1',
-    ''
-  ].join('\n'))
-  await fs.writeFile(fakeCodex, [
-    '#!/usr/bin/env node',
-    "const fs = require('node:fs')",
-    "const path = require('node:path')",
-    ";(async () => {",
-    "const args = process.argv.slice(2)",
-    "const outputIndex = args.indexOf('--output-last-message')",
-    "const outputFile = outputIndex >= 0 ? args[outputIndex + 1] : ''",
-    "const missionId = String(process.env.SKS_NARUTO_PARENT_MISSION_ID || '')",
-    "const missionDir = path.join(process.cwd(), '.sneakoscope', 'missions', missionId)",
-    "const plan = JSON.parse(fs.readFileSync(path.join(missionDir, 'subagent-plan.json'), 'utf8'))",
-    "fs.appendFileSync(path.join(process.cwd(), 'codex-parent-markers.jsonl'), JSON.stringify({ pid: process.pid, run_id: plan.workflow_run_id }) + '\\n')",
-    "while (!fs.existsSync(path.join(process.cwd(), 'release-codex-parent'))) await new Promise((resolve) => setTimeout(resolve, 20))",
-    "const threadId = 'thread-cli-fixture'",
-    "const events = [",
-    "  { schema: 'sks.subagent-event.v1', event_name: 'SubagentStart', thread_id: threadId, run_id: plan.workflow_run_id, outcome: 'started', occurred_at: '2026-07-17T00:00:00.000Z' },",
-    "  { schema: 'sks.subagent-event.v1', event_name: 'SubagentStop', thread_id: threadId, run_id: plan.workflow_run_id, outcome: 'stopped', occurred_at: '2026-07-17T00:00:01.000Z' }",
-    "]",
-    "fs.writeFileSync(path.join(missionDir, 'subagent-events.jsonl'), events.map((row) => JSON.stringify(row)).join('\\n') + '\\n')",
-    "const summary = { schema: 'sks.subagent-parent-summary.v1', status: 'completed', summary: 'CLI single owner complete', run_id: plan.workflow_run_id, thread_outcomes: [{ thread_id: threadId, status: 'completed', summary: 'done' }], changed_files: [], verification: [{ name: 'cli-concurrency', status: 'passed' }], blockers: [] }",
-    "if (!outputFile) throw new Error('parent_summary_output_missing')",
-    "fs.writeFileSync(outputFile, JSON.stringify(summary))",
-    "})().catch((error) => { console.error(String(error && error.stack || error)); process.exit(70) })"
-  ].join('\n'), { mode: 0o700 })
-  assert.equal(await exists(sksBin), true)
-
-  const env = {
-    ...process.env,
-    HOME: home,
-    CODEX_HOME: path.join(home, '.codex'),
-    PATH: binDir + path.delimiter + String(process.env.PATH || ''),
-    SKS_AGENT_MODE: '1',
-    SKS_DISABLE_UPDATE_CHECK: '1',
-    SKS_UPDATE_MIGRATION_GATE_DISABLED: '1',
-    SKS_NARUTO_STANDALONE_CLI: '1',
-    SKS_PROVIDER: '',
-    SKS_USE_CODEX_LB: '',
-    SKS_MODEL_PROVIDER: '',
-    CODEX_MODEL_PROVIDER: '',
-    OPENAI_MODEL_PROVIDER: '',
-    CODEX_THREAD_ID: ''
-  }
-  const processes = Array.from({ length: 20 }, () => spawnCliNarutoChild({
-    sksBin,
-    cwd: project,
-    env,
-    missionId
-  }))
-  const allResults = Promise.all(processes)
-  await Promise.race([
-    waitFor(async () => await exists(marker), 10_000),
-    allResults.then(async (results) => {
-      if (!(await exists(marker))) {
-        throw new Error('CLI children exited before Codex parent spawn: ' + JSON.stringify(results))
-      }
+  try {
+    await fs.mkdir(dir, { recursive: true })
+    await fs.mkdir(path.join(project, '.sneakoscope', 'state'), { recursive: true })
+    await fs.mkdir(path.join(project, '.codex'), { recursive: true })
+    await fs.mkdir(path.join(home, '.codex'), { recursive: true })
+    await writeJson(path.join(dir, 'mission.json'), {
+      id: missionId,
+      mode: 'naruto',
+      prompt: 'same mission fixture'
     })
-  ])
-  await delay(400)
-  await fs.writeFile(release, 'release\n')
-  const results = await allResults
-  const markerLines = (await fs.readFile(marker, 'utf8')).trim().split(/\r?\n/).filter(Boolean)
+    await writeJson(path.join(project, '.sneakoscope', 'state', 'current.json'), {
+      mission_id: missionId,
+      mode: 'NARUTO',
+      phase: 'PREPARE'
+    })
+    await fs.writeFile(path.join(project, '.codex', 'config.toml'), [
+      '[agents]',
+      'max_threads = 4',
+      'max_depth = 1',
+      ''
+    ].join('\n'))
+    await fs.writeFile(path.join(home, '.codex', 'config.toml'), [
+      'cli_auth_credentials_store = "file"',
+      ''
+    ].join('\n'))
+    await fs.writeFile(barrierModule, [
+      "import fs from 'node:fs'",
+      "import path from 'node:path'",
+      "const ready = String(process.env.SKS_TEST_ADMISSION_READY || '')",
+      "const admit = String(process.env.SKS_TEST_ADMISSION_ADMIT || '')",
+      "const caller = String(process.env.SKS_TEST_ADMISSION_CALLER || '')",
+      "if (!ready || !admit || !caller) throw new Error('cli_admission_barrier_env_missing')",
+      "fs.mkdirSync(ready, { recursive: true })",
+      "fs.writeFileSync(path.join(ready, caller), 'ready\\n')",
+      "const signal = new Int32Array(new SharedArrayBuffer(4))",
+      "while (!fs.existsSync(admit)) Atomics.wait(signal, 0, 0, 20)"
+    ].join('\n'))
+    assert.equal(await exists(sksBin), true)
 
-  assert.equal(markerLines.length, 1)
-  assert.equal(
-    results.filter((result) => result.json.status === 'completed' && result.json.reused !== true).length,
-    1,
-    JSON.stringify(results)
-  )
-  assert.equal(results.every((result) => result.code === 0), true, JSON.stringify(results))
-  assert.equal(results.every((result) => {
-    return result.json.status === 'running' || result.json.status === 'completed'
-  }), true, JSON.stringify(results))
+    const env = {
+      ...process.env,
+      HOME: home,
+      CODEX_HOME: path.join(home, '.codex'),
+      CODEX_CI: '1',
+      SKS_AGENT_MODE: '1',
+      SKS_DISABLE_UPDATE_CHECK: '1',
+      SKS_UPDATE_MIGRATION_GATE_DISABLED: '1',
+      SKS_NARUTO_STANDALONE_CLI: '1',
+      SKS_PROVIDER: '',
+      SKS_USE_CODEX_LB: '',
+      SKS_MODEL_PROVIDER: '',
+      CODEX_MODEL_PROVIDER: '',
+      OPENAI_MODEL_PROVIDER: '',
+      CODEX_THREAD_ID: ''
+    }
+    children = Array.from({ length: 20 }, (_, index) => spawnCliNarutoChild({
+      sksBin,
+      cwd: project,
+      env,
+      missionId,
+      ready,
+      admit,
+      barrierModule: pathToFileURL(barrierModule).href,
+      caller: String(index)
+    }))
+    allResults = Promise.all(children.map((entry) => entry.result))
+
+    await waitFor(async () => await exists(ready) && (await fs.readdir(ready)).length === 20, 10_000)
+    await fs.writeFile(admit, 'admit\n')
+    const results = await allResults
+    const ownerAttempts = results.filter((result) => {
+      const blockers = Array.isArray(result.json.blockers) ? result.json.blockers.map(String) : []
+      return result.code === 1
+        && result.json.status === 'blocked'
+        && result.json.reused !== true
+        && blockers.some((blocker) => {
+          const match = /^codex_parent_exit:(\d+)$/.exec(blocker)
+          return match !== null && Number(match[1]) > 0
+        })
+    })
+    const observers = results.filter((result) => {
+      return (result.code === 0
+          && result.json.status === 'running'
+          && result.json.already_running === true)
+        || (result.json.status === 'blocked' && result.json.reused === true)
+    })
+
+    assert.equal(ownerAttempts.length, 1, JSON.stringify(results))
+    assert.equal(observers.length, 19, JSON.stringify(results))
+  } finally {
+    await fs.writeFile(admit, 'admit\n').catch(() => undefined)
+    if (allResults) {
+      await Promise.race([allResults.catch(() => undefined), delay(5_000)])
+    }
+    for (const entry of children) {
+      if (entry.child.exitCode === null) entry.child.kill('SIGKILL')
+    }
+    await killProtectedAdmissionChildren(dir)
+    if (allResults) await allResults.catch(() => undefined)
+    await fs.rm(root, { recursive: true, force: true })
+  }
 })
 
 test('20 stale-lock waiters elect one recovery owner', async () => {
@@ -499,11 +535,17 @@ function spawnAdmissionChild(input: {
   dir: string
   missionId: string
   marker: string
+  ready: string
+  admit: string
   release: string
 }): Promise<Record<string, unknown>> {
   const script = [
     'import fs from "node:fs/promises"',
+    'import path from "node:path"',
     `const mod = await import(${JSON.stringify(input.moduleUrl)})`,
+    `await fs.mkdir(${JSON.stringify(input.ready)}, { recursive: true })`,
+    `await fs.writeFile(path.join(${JSON.stringify(input.ready)}, String(process.pid)), "ready\\n")`,
+    `while (true) { try { await fs.access(${JSON.stringify(input.admit)}); break } catch {} await new Promise(resolve => setTimeout(resolve, 20)) }`,
     `const result = await mod.withNarutoMissionRunAdmission({ missionId: ${JSON.stringify(input.missionId)}, missionDir: ${JSON.stringify(input.dir)}, staleMs: 5000 }, async () => {`,
     `  await fs.appendFile(${JSON.stringify(input.marker)}, JSON.stringify({ pid: process.pid }) + "\\n")`,
     `  while (true) { try { await fs.access(${JSON.stringify(input.release)}); break } catch {} await new Promise(resolve => setTimeout(resolve, 20)) }`,
@@ -571,30 +613,43 @@ function spawnCliNarutoChild(input: {
   cwd: string
   env: NodeJS.ProcessEnv
   missionId: string
-}): Promise<{ code: number | null; json: Record<string, unknown>; stderr: string }> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [
-      input.sksBin,
-      'naruto',
-      'run',
-      'same mission fixture',
-      '--mission',
-      input.missionId,
-      '--agents',
-      '1',
-      '--max-threads',
-      '4',
-      '--readonly',
-      '--json'
-    ], {
-      cwd: input.cwd,
-      env: input.env,
-      stdio: ['ignore', 'pipe', 'pipe']
-    })
+  ready: string
+  admit: string
+  barrierModule: string
+  caller: string
+}): {
+  child: ReturnType<typeof spawn>
+  result: Promise<{ code: number | null; json: Record<string, unknown>; stderr: string }>
+} {
+  const child = spawn(process.execPath, [
+    input.sksBin,
+    'naruto',
+    'run',
+    'same mission fixture',
+    '--mission',
+    input.missionId,
+    '--agents',
+    '1',
+    '--max-threads',
+    '4',
+    '--readonly',
+    '--json'
+  ], {
+    cwd: input.cwd,
+    env: {
+      ...input.env,
+      NODE_OPTIONS: `--import=${input.barrierModule}`,
+      SKS_TEST_ADMISSION_READY: input.ready,
+      SKS_TEST_ADMISSION_ADMIT: input.admit,
+      SKS_TEST_ADMISSION_CALLER: input.caller
+    },
+    stdio: ['ignore', 'pipe', 'pipe']
+  })
+  const result = new Promise<{ code: number | null; json: Record<string, unknown>; stderr: string }>((resolve, reject) => {
     let stdout = ''
     let stderr = ''
-    child.stdout.on('data', (chunk) => { stdout += String(chunk) })
-    child.stderr.on('data', (chunk) => { stderr += String(chunk) })
+    child.stdout?.on('data', (chunk) => { stdout += String(chunk) })
+    child.stderr?.on('data', (chunk) => { stderr += String(chunk) })
     child.on('error', reject)
     child.on('close', (code) => {
       try {
@@ -608,6 +663,20 @@ function spawnCliNarutoChild(input: {
       }
     })
   })
+  return { child, result }
+}
+
+async function killProtectedAdmissionChildren(dir: string): Promise<void> {
+  const owner = await fs.readFile(path.join(dir, NARUTO_MISSION_RUN_LOCK, 'owner.json'), 'utf8')
+    .then((text) => JSON.parse(text) as { protected_pids?: unknown[] })
+    .catch(() => null)
+  for (const value of owner?.protected_pids || []) {
+    const pid = Number(value)
+    if (!Number.isSafeInteger(pid) || pid <= 0 || !pidAlive(pid)) continue
+    try {
+      process.kill(pid, 'SIGKILL')
+    } catch {}
+  }
 }
 
 async function firstPid(child: ReturnType<typeof spawn>): Promise<number> {

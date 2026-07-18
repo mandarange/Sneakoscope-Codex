@@ -83,12 +83,24 @@ test('generated Naruto skill keeps official threads lightweight and TriWiki-boun
   await installSkills(root);
 
   const naruto = await fs.readFile(path.join(root, '.agents', 'skills', 'sks-naruto', 'SKILL.md'), 'utf8');
-  assert.match(naruto, /Automatic fan-out starts at two for bounded work, four for explicit parallel work, and six for large-scale work.*expand to ten/i);
+  assert.match(naruto, /Automatic targets begin at 2\/4\/6 by task size and may expand to 10/i);
   assert.match(naruto, /max_threads is a cap, never a target/i);
+  assert.match(naruto, /later root-owned waves/i);
   assert.match(naruto, /historical Naruto process runtime is removed/i);
   assert.match(naruto, /custom scheduler, or worker pool/i);
-  assert.match(naruto, /four ordinary or six complex query-aware TriWiki trust\/hydration anchors/);
   assert.match(naruto, /do not inject the full pack/);
+});
+
+test('generated pipeline skills reference the single core directive without legacy global instructions', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-core-directive-skills-'));
+  await installSkills(root);
+
+  for (const name of ['sks-prompt-pipeline', 'sks-pipeline-runner']) {
+    const content = await fs.readFile(path.join(root, '.agents', 'skills', name, 'SKILL.md'), 'utf8');
+    assert.equal(content.match(/Core Engineering Directive/g)?.length, 1, name);
+    assert.match(content, /from AGENTS\.md exactly/, name);
+    assert.doesNotMatch(content, /lean_decision|sks\.lean-decision|sks-lean:/i, name);
+  }
 });
 
 test('generated Research skills use three official research reviewers without the legacy five-agent scheduler', async () => {

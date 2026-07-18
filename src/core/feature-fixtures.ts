@@ -65,7 +65,7 @@ const FIXTURES = Object.freeze({
   'cli-selftest': fixture('execute', 'sks selftest --mock', [], 'pass'),
   'cli-git': fixture('execute', 'sks git policy --json', [], 'pass'),
   'cli-uninstall': fixture('execute', 'sks uninstall --dry-run --json', [], 'pass'),
-  'cli-goal': fixture('execute_and_validate_artifacts', 'sks goal create "Fixture smoke: create a minimal Node.js CLI health-check script" --json', ['goal-workflow.json', 'work-order-ledger.json'], 'blocked', { timeout_ms: 300000, reason: 'goal create drives a real loop-graph -> $Naruto multi-agent orchestration pass that requires live agent infrastructure (GPT dispatch, Zellij worker transport, verification DAG) unavailable in a fixture/CI sandbox, so loop_result/gate legitimately reports blocked (naruto_*_missing, loop-graph-proof.json_missing) and the command exits 1 by design; goal-workflow.json and a work-order-ledger honestly closed to blocked (18차) are still written.' }),
+  'cli-goal': fixture('execute', 'sks goal create "Fixture smoke: create a minimal Node.js CLI health-check script" --json', [], 'pass', { reason: 'The compatibility command is stateless: it prints a detailed Codex native /goal request and writes no SKS mission, artifact, loop, or fallback state.' }),
   'cli-seo-geo-optimizer': fixture('execute_and_validate_artifacts', 'sks seo-geo-optimizer fixture --mode seo --json', ['search-visibility/site-inventory.json', 'search-visibility/seo-findings.json', 'search-visibility/verification-report.json', 'seo-gate.json', 'completion-proof.json'], 'pass'),
   'cli-research': fixture('execute_and_validate_artifacts', 'sks research run latest --mock --json', ['research-gate.json', 'completion-proof.json'], 'blocked', { timeout_ms: 180000, reason: '"run" (not "status") is the command that actually writes research-gate.json/completion-proof.json, but research is a two-step prepare-then-run workflow gated by an active-route-not-closed check between steps that a single fixture command cannot express; on a hermetic run "latest" will not be a properly prepared+closed research mission.' }),
   'cli-qa-loop': fixture('execute_and_validate_artifacts', 'sks qa-loop run latest --mock --json', ['qa-gate.json', 'completion-proof.json'], 'pass', { timeout_ms: 180000 }),
@@ -151,8 +151,9 @@ const FIXTURES = Object.freeze({
     quality: 'wiring_only',
     reason: 'Policy-only route (answer-only conversational mode with no writes); nothing executable to run beyond static contract text.'
   }),
-  'route-goal': fixture('mock', '$Goal bridge route', ['goal-workflow.json', 'completion-proof.json'], 'pass', {
-    reason: 'sks goal create "<prompt>" --json never calls maybeFinalizeRoute, so it does not write completion-proof.json even on success; live-testing it also surfaced a real defect (loop-worker-runtime.ts omitted an explicit `agents` value, so buildAgentRoster() fell back to DEFAULT_AGENT_COUNT=5 while maxAgentCount was capped to the loop\'s smaller worker budget, throwing "Agent count 5 exceeds max N" for any ordinary fixture prompt) which has been fixed in this change, but goal-workflow.json/completion-proof.json parity still requires either wiring maybeFinalizeRoute into goalCreate or relaxing this fixture\'s expected_artifacts, both out of scope here; left as documented mock.'
+  'route-goal': fixture('static', '$Goal Codex-native control route', [], 'pass', {
+    quality: 'wiring_only',
+    reason: 'Goal lifecycle is owned entirely by Codex native /goal. The SKS surface only builds a detailed native objective and command; it creates no mission, proof artifact, compatibility loop, or fallback goal state.'
   }),
   'route-super-search': fixture('execute', 'sks run "$Super-Search doctor" --execute --json', [], 'pass'),
   'route-seo-geo-optimizer': fixture('execute_and_validate_artifacts', 'sks seo-geo-optimizer fixture --mode geo --json', ['search-visibility/site-inventory.json', 'search-visibility/geo-findings.json', 'search-visibility/verification-report.json', 'geo-gate.json', 'completion-proof.json'], 'pass'),

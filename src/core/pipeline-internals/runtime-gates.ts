@@ -22,6 +22,11 @@ import {
   subagentEvidence,
 } from './runtime-core.js';
 import { projectTriwikiToAgentsMd } from '../triwiki/agents-md-projector.js';
+import {
+  effectiveSubagentTarget,
+  normalizeLegacySubagentCountFields,
+  subagentCountContractBlockers
+} from '../subagents/wave-lifecycle.js';
 
 const REFLECTION_ARTIFACT = 'reflection.md';
 const REFLECTION_GATE = 'reflection-gate.json';
@@ -685,7 +690,7 @@ async function missingFromChatImgCoverageArtifacts(root: any, state: any = {}) {
 
 function gateFilesForState(state: any) {
   if (state.stop_gate) return [state.stop_gate];
-  if (state.mode === 'GOAL') return ['goal-workflow.json'];
+  if (state.mode === 'GOAL') return [];
   if (state.mode === 'RESEARCH') return ['research-gate.json', 'research-gate.evaluated.json'];
   if (state.mode === 'NARUTO') return ['naruto-gate.json'];
   if (state.mode === 'AUTORESEARCH') return ['autoresearch-gate.json'];
@@ -713,17 +718,20 @@ async function missingNarutoArtifacts(root: any, state: any = {}, gate: any = {}
   for (const file of required) {
     if (!(await exists(path.join(dir, file)))) missing.push(file);
   }
-  if (gate.ssot_guard === true) {
+  if (gate?.ssot_guard === true) {
     const ssotGuard = await readJson(path.join(dir, SSOT_GUARD_ARTIFACT), null);
     const validation = validateSsotGuardArtifact(ssotGuard);
     if (!validation.ok) missing.push(...validation.issues.map((issue) => `${SSOT_GUARD_ARTIFACT}:${issue}`));
   }
-  const [plan, evidenceFile, summary, recomputedEvidence] = await Promise.all([
+  const [plan, rawEvidenceFile, rawSummary, recomputedEvidence] = await Promise.all([
     readJson(path.join(dir, 'subagent-plan.json'), null),
     readJson(path.join(dir, 'subagent-evidence.json'), null),
     readJson(path.join(dir, 'naruto-summary.json'), null),
     subagentEvidence(root, state)
   ]);
+  const normalizedGate: any = normalizeLegacySubagentCountFields(gate, plan);
+  const evidenceFile = normalizeLegacySubagentCountFields(rawEvidenceFile, plan);
+  const summary = normalizeLegacySubagentCountFields(rawSummary, plan);
   if (plan?.schema !== 'sks.subagent-plan.v1') missing.push('subagent-plan.json:schema');
   if (plan?.workflow !== 'official_codex_subagent') missing.push('subagent-plan.json:workflow');
   if (Number(plan?.requested_subagents || 0) < 1) missing.push('subagent-plan.json:requested_subagents');
@@ -731,20 +739,29 @@ async function missingNarutoArtifacts(root: any, state: any = {}, gate: any = {}
   if (Number(plan?.max_depth || 0) !== 1) missing.push('subagent-plan.json:max_depth');
   if (!String(plan?.delegation_prompt || '').trim()) missing.push('subagent-plan.json:delegation_prompt');
   if (plan?.parent_model_match === false) missing.push('subagent-plan.json:parent_model_match');
+  missing.push(...subagentCountContractBlockers(plan, Number(recomputedEvidence?.started_threads || 0)).map((item) => `subagent-plan.json:${item}`));
   if (evidenceFile?.schema !== 'sks.subagent-evidence.v1') missing.push('subagent-evidence.json:schema');
   if (evidenceFile?.workflow !== 'official_codex_subagent') missing.push('subagent-evidence.json:workflow');
   if (recomputedEvidence?.ok !== true) missing.push(...(Array.isArray(recomputedEvidence?.blockers) && recomputedEvidence.blockers.length ? recomputedEvidence.blockers.map((item: any) => `subagent-evidence.json:${String(item)}`) : ['subagent-evidence.json:ok']));
   if (recomputedEvidence?.parent_summary_present !== true || recomputedEvidence?.parent_summary_trustworthy !== true) missing.push('subagent-evidence.json:parent_summary_trustworthy');
-  if (Number(recomputedEvidence?.requested_subagents || 0) !== Number(plan?.requested_subagents || 0)) missing.push('subagent-evidence.json:requested_subagents');
+  const countTarget = effectiveSubagentTarget(plan, Number(recomputedEvidence?.started_threads || 0));
+  const legacyCountContract = !plan?.wave_lifecycle?.count_policy;
+  if (Number(recomputedEvidence?.requested_subagents || 0) !== countTarget.requestedSubagents) missing.push('subagent-evidence.json:requested_subagents');
+  if (recomputedEvidence?.count_policy !== countTarget.countPolicy) missing.push('subagent-evidence.json:count_policy');
+  if (Number(recomputedEvidence?.target_subagents || 0) !== countTarget.targetSubagents) missing.push('subagent-evidence.json:target_subagents');
   if (Number(recomputedEvidence?.failed_threads || 0) !== 0) missing.push('subagent-evidence.json:failed_threads');
-  if (Number(recomputedEvidence?.completed_threads || 0) < Number(plan?.requested_subagents || 0)) missing.push('subagent-evidence.json:completed_threads');
+  if (Number(recomputedEvidence?.completed_threads || 0) !== countTarget.targetSubagents) missing.push('subagent-evidence.json:completed_threads');
   if (summary?.schema !== 'sks.naruto-subagent-workflow.v1') missing.push('naruto-summary.json:schema');
   if (summary?.workflow !== 'official_codex_subagent') missing.push('naruto-summary.json:workflow');
+  if (summary?.count_policy !== countTarget.countPolicy) missing.push('naruto-summary.json:count_policy');
+  if (Number(summary?.target_subagents || 0) !== countTarget.targetSubagents) missing.push('naruto-summary.json:target_subagents');
+  if (!legacyCountContract && normalizedGate?.count_policy !== countTarget.countPolicy) missing.push('naruto-gate.json:count_policy');
+  if (!legacyCountContract && Number(normalizedGate?.target_subagents || 0) !== countTarget.targetSubagents) missing.push('naruto-gate.json:target_subagents');
   if (summary?.ok !== true || summary?.status !== 'completed') missing.push('naruto-summary.json:completed');
   if (summary?.parent_summary_present !== true || !String(summary?.parent_summary || '').trim()) missing.push('naruto-summary.json:parent_summary');
   if (!String(summary?.verification?.budget || '').trim()) missing.push('naruto-summary.json:verification.budget');
   if (summary?.parent?.observed_model_match === false) missing.push('naruto-summary.json:parent.observed_model_match');
-  if (fromChatImgCoverageRequired(state, gate) && gate.from_chat_img_request_coverage === true) {
+  if (fromChatImgCoverageRequired(state, normalizedGate) && normalizedGate.from_chat_img_request_coverage === true) {
     missing.push(...await missingFromChatImgCoverageArtifacts(root, state));
   }
   return missing;

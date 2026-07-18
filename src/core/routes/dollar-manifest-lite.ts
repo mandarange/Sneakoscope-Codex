@@ -34,7 +34,7 @@ const DOLLAR_COMMANDS_LITE_BASE = [
   { command: '$UX-Review', route: 'image-generation UI/UX review loop', description: 'Review UI/UX through the imagegen/gpt-image-2 visual critique loop: source screenshots become generated annotated review images, those images become issue ledgers, then fixes are rechecked.' },
   { command: '$Computer-Use', route: 'native Computer Use fast lane', description: COMPUTER_USE_DESCRIPTION },
   { command: '$CU', route: 'native Computer Use fast lane', description: COMPUTER_USE_DESCRIPTION },
-  { command: '$Goal', route: 'native /goal persistence bridge', description: 'Fast overlay that records a bridge artifact for Codex native persisted /goal create, pause, resume, and clear controls; implementation continues through the selected SKS execution route.' },
+  { command: '$Goal', route: 'Codex native /goal control', description: 'Use Codex native Goal directly with detailed completion criteria; SKS creates no Goal mission, artifact, loop, or fallback state.' },
   { command: '$Commit', route: 'simple git commit', description: 'Summarize current git changes, stage them, and create one commit without the full SKS pipeline.' },
   { command: '$Commit-And-Push', route: 'simple git commit and push', description: 'Summarize current git changes, stage them, create one commit, then run git push without the full SKS pipeline.' },
   { command: '$Research', route: 'research mission', description: 'Frontier discovery with named xhigh persona-lens agents, Eureka ideas, vigorous evidence-bound debate, layered public source retrieval, falsification, a paper manuscript, a final genius-opinion summary, and testable predictions.' },

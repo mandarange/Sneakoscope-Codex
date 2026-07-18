@@ -90,12 +90,14 @@ test('simple commit and push request is lightweight git work, not a parallel Nar
   assert.equal(routeRequiresSubagents(route, prompt), false);
 });
 
-test('subagent-start hook injects lean engineering context', async () => {
+test('subagent-start hook references the single core engineering directive', async () => {
   const root = await makeRoot();
   const { evaluateHookPayload } = await import('../../dist/core/hooks-runtime.js');
   const result = await evaluateHookPayload('subagent-start', { cwd: root }, { root, state: {} });
-  assert.match(String(result.additionalContext || ''), /Lean Engineering Policy/);
-  assert.match(String(result.additionalContext || ''), /No unrequested route\/command\/daemon\/dependency/);
+  const context = String(result.additionalContext || '');
+  assert.equal(context.match(/Core Engineering Directive/g)?.length, 1);
+  assert.match(context, /from AGENTS\.md exactly/);
+  assert.doesNotMatch(context, /low-value test matrices|unreachable or speculative conditions/);
 });
 
 test('natural language commit and push bypasses hook pipeline preparation', async () => {

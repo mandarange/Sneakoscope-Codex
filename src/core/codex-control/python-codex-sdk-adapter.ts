@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import path from 'node:path'
-import { packageRoot, randomId, runProcess, which } from '../fsx.js'
+import { packageRoot, randomId, registerDetachedProcessGroup, runProcess, which } from '../fsx.js'
 import type { CodexTaskInput } from './codex-control-plane.js'
 import { translatePythonCodexSdkEvents } from './python-codex-sdk-event-translator.js'
 
@@ -105,8 +105,11 @@ export async function runPythonCodexSdkTask(input: CodexTaskInput, opts: {
 
 function pythonRunnerEnv(envOverride: Record<string, string> | undefined, moduleParentPath: unknown) {
   const env: Record<string, string> = {}
-  for (const [key, value] of Object.entries(envOverride || process.env)) {
+  for (const [key, value] of Object.entries(envOverride || {})) {
     if (value !== undefined) env[key] = String(value)
+  }
+  if (process.env.SKS_PYTHON_CODEX_SDK_FAKE === '1' && env.SKS_PYTHON_CODEX_SDK_FAKE === undefined) {
+    env.SKS_PYTHON_CODEX_SDK_FAKE = '1'
   }
   const parent = String(moduleParentPath || '').trim()
   if (!parent) return env
@@ -119,21 +122,35 @@ function prependPath(value: string | undefined, entry: string) {
   return [entry, ...parts.filter((part) => part !== entry)].join(path.delimiter)
 }
 
-function runPythonRunner(python: string, request: unknown, envOverride: Record<string, string> | undefined, timeoutMs: number): Promise<any[]> {
+export function runPythonRunner(
+  python: string,
+  request: unknown,
+  envOverride: Record<string, string> | undefined,
+  timeoutMs: number,
+  forceKillDelayMs = 5000
+): Promise<any[]> {
   const runner = path.join(packageRoot(), 'pytools', 'codex_sdk_runner.py')
   return new Promise((resolve, reject) => {
     const child = spawn(python, [runner], {
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: envOverride ? { ...process.env, ...envOverride } : process.env,
+      env: envOverride || {},
       detached: process.platform !== 'win32'
     })
+    const unregisterDetachedProcessGroup = registerDetachedProcessGroup(child)
     const events: any[] = []
     let stderr = ''
     let timedOut = false
+    let settled = false
+    let cancelForceKill = () => {}
+    const cleanupLifecycle = () => {
+      clearTimeout(timer)
+      cancelForceKill()
+      unregisterDetachedProcessGroup()
+    }
     const timer = setTimeout(() => {
       timedOut = true
       events.push({ event: 'error', retryable: true, message: `python_codex_sdk_timeout:${timeoutMs}` })
-      terminatePythonRunner(child)
+      cancelForceKill = terminatePythonRunner(child, forceKillDelayMs)
     }, timeoutMs)
     timer.unref?.()
     child.stdout.setEncoding('utf8')
@@ -148,9 +165,16 @@ function runPythonRunner(python: string, request: unknown, envOverride: Record<s
       }
     })
     child.stderr.on('data', (chunk) => { stderr += String(chunk) })
-    child.on('error', reject)
-    child.on('close', () => {
-      clearTimeout(timer)
+    child.once('error', (error) => {
+      if (settled) return
+      settled = true
+      cleanupLifecycle()
+      reject(error)
+    })
+    child.once('close', () => {
+      if (settled) return
+      settled = true
+      cleanupLifecycle()
       if (stderr.trim()) events.push({ event: 'stderr', message: stderr.slice(-1000) })
       if (timedOut && !events.some((event) => String(event?.message || '').startsWith('python_codex_sdk_timeout:'))) {
         events.push({ event: 'error', retryable: true, message: `python_codex_sdk_timeout:${timeoutMs}` })
@@ -176,20 +200,23 @@ function positiveFinite(value: unknown): number | null {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null
 }
 
-function terminatePythonRunner(child: ReturnType<typeof spawn>) {
-  if (!child.pid) return
+function terminatePythonRunner(child: ReturnType<typeof spawn>, forceKillDelayMs: number): () => void {
+  const pid = child.pid
+  if (!pid) return () => {}
   try {
-    if (process.platform !== 'win32') process.kill(-child.pid, 'SIGTERM')
+    if (process.platform !== 'win32') process.kill(-pid, 'SIGTERM')
     else child.kill('SIGTERM')
   } catch {
     try { child.kill('SIGTERM') } catch {}
   }
-  setTimeout(() => {
+  const forceKillTimer = setTimeout(() => {
     try {
-      if (process.platform !== 'win32') process.kill(-child.pid!, 'SIGKILL')
+      if (process.platform !== 'win32') process.kill(-pid, 'SIGKILL')
       else child.kill('SIGKILL')
     } catch {}
-  }, 5000).unref?.()
+  }, forceKillDelayMs)
+  forceKillTimer.unref?.()
+  return () => clearTimeout(forceKillTimer)
 }
 
 function mapSandbox(value: string) {

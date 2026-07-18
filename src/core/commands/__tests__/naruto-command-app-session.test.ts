@@ -3,8 +3,10 @@ import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { createMission, loadStateForSession } from '../../mission.js'
-import { narutoCommand } from '../naruto-command.js'
+import { createMission, loadStateForSession, setCurrent } from '../../mission.js'
+import { evaluateHookPayload } from '../../hooks-runtime.js'
+import { OFFICIAL_SUBAGENT_PREPARATION_TRANSACTION } from '../../subagents/official-subagent-preparation.js'
+import { injectNextNarutoPreparationFailureForTest, narutoCommand } from '../naruto-command.js'
 
 test('App Naruto reuses the active mission bound to the current Codex thread state', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-naruto-app-session-'))
@@ -28,9 +30,14 @@ test('App Naruto reuses the active mission bound to the current Codex thread sta
     console.log = () => undefined
     console.warn = () => undefined
 
-    const result: any = await narutoCommand(['run', 'review independent packages', '--agents', '2', '--json'])
+    const task = 'review independent packages'
+    const result: any = await narutoCommand(['run', task, '--agents', '2', '--json'])
     const sessionState: any = await loadStateForSession(root, threadId)
-    const plan = JSON.parse(await fs.readFile(path.join(previous.dir, 'subagent-plan.json'), 'utf8'))
+    const [mission, intake, plan] = await Promise.all([
+      fs.readFile(path.join(previous.dir, 'mission.json'), 'utf8').then(JSON.parse),
+      fs.readFile(path.join(previous.dir, 'request-intake.json'), 'utf8').then(JSON.parse),
+      fs.readFile(path.join(previous.dir, 'subagent-plan.json'), 'utf8').then(JSON.parse)
+    ])
 
     assert.equal(result.mission_id, previous.id)
     assert.equal(result.ok, false)
@@ -44,6 +51,9 @@ test('App Naruto reuses the active mission bound to the current Codex thread sta
     assert.equal(sessionState.session_scope, threadId)
     assert.equal(plan.session_scope, threadId)
     assert.equal(plan.workflow_run_id, result.workflow_run_id)
+    assert.equal(mission.prompt, task)
+    assert.equal(intake.original_prompt, task)
+    assert.equal(plan.goal, task)
   } finally {
     process.chdir(oldCwd)
     restoreEnv('CODEX_THREAD_ID', oldThreadId)
@@ -96,6 +106,15 @@ test('a reused App Naruto mission resets stale completion artifacts and binds a 
     await fs.writeFile(path.join(dir, 'subagent-parent-summary.json'), JSON.stringify(staleSummary))
     await fs.writeFile(path.join(dir, 'subagent-evidence.json'), JSON.stringify({ schema: 'sks.subagent-evidence.v1', ok: true, run_id: firstPlan.workflow_run_id }))
     await fs.writeFile(path.join(dir, 'naruto-gate.json'), JSON.stringify({ schema: 'sks.naruto-gate.v1', passed: true, workflow_run_id: firstPlan.workflow_run_id }))
+    await fs.writeFile(path.join(dir, 'completion-proof.json'), JSON.stringify({ mission_id: first.mission_id, evidence: { route_gate: { workflow_run_id: firstPlan.workflow_run_id } } }))
+    await fs.writeFile(path.join(dir, 'completion-proof.md'), `# stale proof ${firstPlan.workflow_run_id}\n`)
+    await setCurrent(root, {
+      reflection_invalidation_required: true,
+      reflection_invalidated_at: 'stale-r1-reflection',
+      reflection_invalidation_reason: 'naruto_terminal_proof_committed',
+      reflection_invalidated_for_workflow_run_id: firstPlan.workflow_run_id,
+      reflection_invalidated_for_proof_digest: 'stale-r1-digest'
+    }, { sessionKey: threadId })
 
     const second: any = await narutoCommand(['run', 'new task', '--agents', '1', '--json'])
     const secondPlan = JSON.parse(await fs.readFile(path.join(dir, 'subagent-plan.json'), 'utf8'))
@@ -114,8 +133,80 @@ test('a reused App Naruto mission resets stale completion artifacts and binds a 
     assert.equal(gate.passed, false)
     assert.equal(events, '')
     await assert.rejects(fs.access(path.join(dir, 'subagent-parent-summary.json')))
+    await assert.rejects(fs.access(path.join(dir, 'completion-proof.json')))
+    await assert.rejects(fs.access(path.join(dir, 'completion-proof.md')))
     assert.equal(state.official_subagent_run_id, secondPlan.workflow_run_id)
+    assert.equal(state.reflection_invalidation_required, false)
+    assert.equal(state.reflection_invalidated_at, null)
+    assert.equal(state.reflection_invalidated_for_workflow_run_id, null)
+    assert.equal(state.reflection_invalidated_for_proof_digest, null)
   } finally {
+    process.chdir(oldCwd)
+    restoreEnv('CODEX_THREAD_ID', oldThreadId)
+    restoreEnv('SKS_GLOBAL_ROOT', oldGlobalRoot)
+    restoreEnv('HOME', oldHome)
+    restoreEnv('CODEX_HOME', oldCodexHome)
+    console.log = oldLog
+    console.warn = oldWarn
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})
+
+test('App Naruto retry recovers a post-state preparation marker before using the pending fast path', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-naruto-app-preparation-recovery-'))
+  const threadId = 'thread-app-preparation-recovery'
+  const oldCwd = process.cwd()
+  const oldThreadId = process.env.CODEX_THREAD_ID
+  const oldGlobalRoot = process.env.SKS_GLOBAL_ROOT
+  const oldHome = process.env.HOME
+  const oldCodexHome = process.env.CODEX_HOME
+  const oldLog = console.log
+  const oldWarn = console.warn
+  try {
+    process.chdir(root)
+    process.env.CODEX_THREAD_ID = threadId
+    process.env.SKS_GLOBAL_ROOT = root
+    process.env.HOME = path.join(root, 'home')
+    process.env.CODEX_HOME = path.join(root, 'home', '.codex')
+    console.log = () => undefined
+    console.warn = () => undefined
+
+    const first: any = await narutoCommand(['run', 'first app task', '--agents', '1', '--json'])
+    const dir = path.join(root, '.sneakoscope', 'missions', first.mission_id)
+    const markerFile = path.join(dir, OFFICIAL_SUBAGENT_PREPARATION_TRANSACTION)
+    injectNextNarutoPreparationFailureForTest('after_state_commit_before_marker_clear')
+    await assert.rejects(
+      narutoCommand(['run', 'second app task', '--agents', '1', '--json']),
+      /after_state_commit_before_marker_clear/
+    )
+    const interruptedPlan = JSON.parse(await fs.readFile(path.join(dir, 'subagent-plan.json'), 'utf8'))
+    const interruptedState: any = await loadStateForSession(root, threadId)
+    await fs.access(markerFile)
+    assert.notEqual(interruptedPlan.workflow_run_id, first.workflow_run_id)
+    assert.equal(interruptedState.official_subagent_run_id, interruptedPlan.workflow_run_id)
+
+    const recovered: any = await narutoCommand(['run', 'second app task', '--agents', '1', '--json'])
+    const recoveredState: any = await loadStateForSession(root, threadId)
+    assert.equal(recovered.workflow_run_id, interruptedPlan.workflow_run_id)
+    assert.equal(recoveredState.official_subagent_run_id, interruptedPlan.workflow_run_id)
+    await assert.rejects(fs.access(markerFile))
+
+    const eventsBefore = await fs.readFile(path.join(dir, 'subagent-events.jsonl'), 'utf8')
+    await evaluateHookPayload('subagent-start', {
+      conversation_id: threadId,
+      session_id: threadId,
+      turn_id: 'post-recovery-start',
+      hook_event_name: 'SubagentStart',
+      workflow_run_id: interruptedPlan.workflow_run_id,
+      agent_id: 'post-recovery-agent',
+      agent_type: 'worker',
+      model: 'gpt-5.6-luna'
+    }, { root, state: recoveredState })
+    const eventsAfter = await fs.readFile(path.join(dir, 'subagent-events.jsonl'), 'utf8')
+    assert.notEqual(eventsAfter, eventsBefore)
+    assert.match(eventsAfter, /post-recovery-agent/)
+  } finally {
+    injectNextNarutoPreparationFailureForTest(null)
     process.chdir(oldCwd)
     restoreEnv('CODEX_THREAD_ID', oldThreadId)
     restoreEnv('SKS_GLOBAL_ROOT', oldGlobalRoot)
@@ -221,6 +312,12 @@ test('concurrent App Naruto runs atomically reuse one mission for the same Codex
     assert.equal(summary.session_scope, threadId)
     assert.equal(evidence.preparation_only, true)
     assert.equal(gate.passed, false)
+    const [mission, intake] = await Promise.all([
+      fs.readFile(path.join(dir, 'mission.json'), 'utf8').then(JSON.parse),
+      fs.readFile(path.join(dir, 'request-intake.json'), 'utf8').then(JSON.parse)
+    ])
+    assert.equal(mission.prompt, 'review the same two independent files')
+    assert.equal(intake.original_prompt, mission.prompt)
     const sessionState: any = await loadStateForSession(root, threadId)
     assert.equal(sessionState.mission_id, first.mission_id)
     assert.equal(sessionState.official_subagent_run_id, first.workflow_run_id)

@@ -366,9 +366,15 @@ process.exit(0);
     SKS_MENUBAR_LAUNCHCTL: launchctl,
     SKS_MENUBAR_CODESIGN: codesign,
     SKS_MENUBAR_BOOTSTRAP_TIMEOUT_MS: mode.startsWith('bootstrap-timeout-') ? '250' : '2000',
-    SKS_MENUBAR_KICKSTART_TIMEOUT_MS: mode === 'success' ? '2000' : '250',
-    SKS_MENUBAR_PRINT_TIMEOUT_MS: '500',
-    SKS_MENUBAR_LAUNCH_READBACK_TIMEOUT_MS: mode.endsWith('spawn-stuck') || mode.endsWith('-unknown') ? '750' : '1500',
+    SKS_MENUBAR_KICKSTART_TIMEOUT_MS: mode.startsWith('success') ? '3000' : '250',
+    SKS_MENUBAR_PRINT_TIMEOUT_MS: '2000',
+    SKS_MENUBAR_LAUNCH_READBACK_TIMEOUT_MS: mode === 'success-print-unknown'
+      ? '3000'
+      : mode === 'timeout-spawn-running'
+        ? '6000'
+        : mode === 'timeout-spawn-stuck'
+          ? '3000'
+          : '1500',
     SKS_MENUBAR_LAUNCH_READBACK_INTERVAL_MS: '50'
   };
   // The release DAG disables real Menu Bar launches globally. These fixtures

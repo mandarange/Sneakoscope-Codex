@@ -156,8 +156,7 @@ function buildArbiterPrompt(input: GptFinalArbiterInput, compressed: ReturnType<
     'You are the GPT Final Arbiter for an SKS local collaboration run.',
     'Local model outputs are drafts only. Review the proof pack, candidate diff, patch envelopes, verification results, side effects, mutation ledger, and rollback plan.',
     leanEngineeringCompactText(),
-    'Lean review: check for reused helpers before reimplementation, unjustified dependencies, one-implementation factories/interfaces, hidden mock or provider fallbacks, duplicated caller guards instead of root-cause fixes, forwarding-only files, missing runnable checks for non-trivial logic, and safety/validation removal disguised as simplification.',
-    'Approve or modify only when the candidate is safe, supported, and no more complex than the request requires. Reject unsafe local patches. Return only the requested structured JSON schema.',
+    'Judge the candidate against that directive and the recorded evidence. Reject fabricated substitutes, unsupported complexity, or unsafe changes. Return only the requested structured JSON schema.',
     JSON.stringify({
       route: input.route,
       mission_id: input.mission_id,

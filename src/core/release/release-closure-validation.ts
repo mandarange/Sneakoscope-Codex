@@ -3,6 +3,7 @@ import { validateWorkOrderLedger } from '../artifact-schemas.js'
 import { evaluateOfficialSubagentExecutionProof } from '../proof/fake-real-proof-policy.js'
 import { validateSsotGuardArtifact } from '../safety/ssot-guard.js'
 import { buildSubagentEvidence } from '../subagents/subagent-evidence.js'
+import { normalizeLegacySubagentCountFields } from '../subagents/wave-lifecycle.js'
 import {
   DELETION_COUNTING_SEMANTICS,
   FINDING_IDS,
@@ -81,6 +82,9 @@ export function validateMission(mission: any, sourceCommit: string, missionId: s
 
 export function validateOfficialThreads(root: string, value: any, blockers: string[]) {
   const { plan, rawEvents, parent, evidence, summary, gate, ssot, missionId } = value
+  const normalizedEvidence = normalizeLegacySubagentCountFields(evidence, plan)
+  const normalizedSummary = normalizeLegacySubagentCountFields(summary, plan)
+  const normalizedGate = normalizeLegacySubagentCountFields(gate, plan)
   const runId = String(plan?.workflow_run_id || '')
   const slices: any[] = Array.isArray(plan?.slices) ? plan.slices : []
   if (plan?.schema !== 'sks.subagent-plan.v1' || plan?.mission_id !== missionId || plan?.route !== '$Naruto'
@@ -112,10 +116,17 @@ export function validateOfficialThreads(root: string, value: any, blockers: stri
     if (startPathByThread.get(slice.thread_id) !== slice.agent_path) blockers.push(`subagent_plan_agent_path_mismatch:${slice.id}`)
   }
 
-  const official = evaluateOfficialSubagentExecutionProof({ subagent_plan: plan, subagent_evidence: evidence, naruto_summary: summary, naruto_gate: gate }, { required: true })
+  const official = evaluateOfficialSubagentExecutionProof({
+    subagent_plan: plan,
+    subagent_evidence: normalizedEvidence,
+    naruto_summary: normalizedSummary,
+    naruto_gate: normalizedGate
+  }, { required: true })
   if (official.proof_level !== 'proven') blockers.push(...official.blockers.map((item) => `naruto:${item}`))
   const rebuilt = buildSubagentEvidence({
     requestedSubagents: 3,
+    countPolicy: 'exact',
+    targetSubagents: 3,
     events,
     parentSummary: parent,
     parentSummaryPresent: Boolean(parent),
@@ -124,27 +135,29 @@ export function validateOfficialThreads(root: string, value: any, blockers: stri
     runId
   })
   const evidenceKeys = [
-    'ok', 'status', 'preparation_only', 'requested_subagents', 'started_threads', 'completed_threads', 'failed_threads',
+    'ok', 'status', 'preparation_only', 'requested_subagents', 'count_policy', 'target_subagents', 'started_threads', 'completed_threads', 'failed_threads',
     'started_thread_ids', 'completed_thread_ids', 'failed_thread_ids', 'open_thread_ids', 'unmatched_stop_thread_ids',
     'ambiguous_stop_thread_ids', 'event_sources', 'parent_summary_present', 'parent_summary_trustworthy',
     'parent_summary_status', 'run_id', 'blockers'
   ]
-  if (!rebuilt.ok || evidenceKeys.some((key) => JSON.stringify((rebuilt as any)[key]) !== JSON.stringify(evidence?.[key]))) blockers.push('subagent_evidence_recompute_mismatch')
+  if (!rebuilt.ok || evidenceKeys.some((key) => JSON.stringify((rebuilt as any)[key]) !== JSON.stringify(normalizedEvidence?.[key]))) blockers.push('subagent_evidence_recompute_mismatch')
 
   const parentIds = strings((parent?.thread_outcomes || []).map((row: any) => row?.thread_id)).sort()
   if (parent?.schema !== 'sks.subagent-parent-summary.v1' || parent?.status !== 'completed' || parent?.run_id !== runId
     || !parent?.changed_files?.length || !parent?.verification?.length || (parent?.blockers || []).length
     || parent?.thread_outcomes?.length !== 3 || !sameSet(parentIds, startIds)
     || parent.thread_outcomes.some((row: any) => row?.status !== 'completed' || !text(row?.summary))) blockers.push('parent_summary_invalid')
-  if (summary?.mission_id !== missionId || summary?.workflow_run_id !== runId || summary?.requested_subagents !== 3
-    || summary?.ok !== true || summary?.completion_evidence !== true || summary?.status !== 'completed'
-    || summary?.parent_summary_present !== true || !sameSet(strings((summary?.parent_thread_outcomes || []).map((row: any) => row?.thread_id)), startIds)) blockers.push('naruto_summary_inconsistent')
-  if (gate?.mission_id !== missionId || gate?.workflow_run_id !== runId || gate?.requested_subagents !== 3
-    || gate?.started_subagents !== 3 || gate?.completed_subagents !== 3 || gate?.failed_subagents !== 0
-    || gate?.passed !== true || gate?.terminal !== true || gate?.terminal_state !== 'completed'
-    || gate?.official_subagent_evidence !== true || gate?.subagent_evidence_ready !== true
-    || gate?.parent_summary_present !== true || gate?.session_cleanup !== true || gate?.ssot_guard !== true
-    || (gate?.blockers || []).length) blockers.push('naruto_gate_inconsistent')
+  if (normalizedSummary?.mission_id !== missionId || normalizedSummary?.workflow_run_id !== runId || normalizedSummary?.requested_subagents !== 3
+    || normalizedSummary?.count_policy !== 'exact' || normalizedSummary?.target_subagents !== 3
+    || normalizedSummary?.ok !== true || normalizedSummary?.completion_evidence !== true || normalizedSummary?.status !== 'completed'
+    || normalizedSummary?.parent_summary_present !== true || !sameSet(strings((normalizedSummary?.parent_thread_outcomes || []).map((row: any) => row?.thread_id)), startIds)) blockers.push('naruto_summary_inconsistent')
+  if (normalizedGate?.mission_id !== missionId || normalizedGate?.workflow_run_id !== runId || normalizedGate?.requested_subagents !== 3
+    || normalizedGate?.count_policy !== 'exact' || normalizedGate?.target_subagents !== 3
+    || normalizedGate?.started_subagents !== 3 || normalizedGate?.completed_subagents !== 3 || normalizedGate?.failed_subagents !== 0
+    || normalizedGate?.passed !== true || normalizedGate?.terminal !== true || normalizedGate?.terminal_state !== 'completed'
+    || normalizedGate?.official_subagent_evidence !== true || normalizedGate?.subagent_evidence_ready !== true
+    || normalizedGate?.parent_summary_present !== true || normalizedGate?.session_cleanup !== true || normalizedGate?.ssot_guard !== true
+    || (normalizedGate?.blockers || []).length) blockers.push('naruto_gate_inconsistent')
   if (!validateSsotGuardArtifact(ssot).ok) blockers.push('ssot_guard_invalid')
 }
 

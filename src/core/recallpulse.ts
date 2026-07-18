@@ -910,7 +910,7 @@ function preservedRoutePersonality(routeId: any = '', routeName: any = '') {
     PPT: 'PPT keeps restrained information-first HTML/PDF delivery identity',
     ImageUXReview: 'Image UX Review keeps gpt-image-2 annotated raster review identity',
     ComputerUse: 'Computer Use keeps maximum-speed native Mac/non-web visual lane identity',
-    Goal: 'Goal stays a native /goal persistence bridge, not a heavyweight route',
+    Goal: 'Goal uses Codex native /goal only and creates no SKS-owned persistence, artifact, loop, or fallback state',
     Research: 'Research keeps Super Search evidence, three composite Sol Max adversarial lenses, bounded revision, paper, and falsification identity',
     AutoResearch: 'AutoResearch keeps iterative experiment loop identity',
     DB: 'DB keeps conservative read-first destructive-operation safety identity',

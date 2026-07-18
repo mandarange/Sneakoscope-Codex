@@ -1,4 +1,5 @@
 import Cocoa
+import Darwin
 
 struct ProcessResult {
     let code: Int32
@@ -18,20 +19,39 @@ final class ProcessClient {
         self.projectRoot = projectRoot
     }
 
-    func run(_ arguments: [String], stdin: String? = nil, environment: [String: String] = [:], completion: @escaping (ProcessResult) -> Void) {
+    func run(
+        _ arguments: [String],
+        stdin: String? = nil,
+        environment: [String: String] = [:],
+        timeout: TimeInterval? = nil,
+        completion: @escaping (ProcessResult) -> Void
+    ) {
         let process = Process()
         let output = Pipe()
         let sensitiveValues = sensitiveStdinValues(arguments: arguments, stdin: stdin)
+        let childEnvironment = ProcessInfo.processInfo.environment.merging(environment) { _, override in override }
         process.executableURL = URL(fileURLWithPath: actionScript)
         process.arguments = arguments
         if !environment.isEmpty {
-            process.environment = ProcessInfo.processInfo.environment.merging(environment) { _, override in override }
+            process.environment = childEnvironment
         }
-        if FileManager.default.fileExists(atPath: projectRoot) { process.currentDirectoryURL = URL(fileURLWithPath: projectRoot) }
+        // The action script intentionally starts from HOME. Launching zsh with a
+        // protected project directory as its initial cwd can block in getcwd()
+        // before the script runs (for example when the project lives on Desktop).
+        // Commands that need project context pass --project-root explicitly.
+        process.currentDirectoryURL = homeDirectory(for: childEnvironment)
         process.standardOutput = output
         process.standardError = output
         var input: Pipe?
-        if stdin != nil { input = Pipe(); process.standardInput = input }
+        if stdin != nil {
+            input = Pipe()
+            process.standardInput = input
+        } else {
+            // GUI/launchd stdin can remain open indefinitely. Commands that do
+            // not explicitly receive input must observe EOF instead of keeping
+            // Node's event loop alive after their JSON result is ready.
+            process.standardInput = FileHandle.nullDevice
+        }
         do {
             try process.run()
             output.fileHandleForWriting.closeFile()
@@ -39,9 +59,23 @@ final class ProcessClient {
                 input.fileHandleForWriting.write(Data(stdin.utf8))
                 input.fileHandleForWriting.closeFile()
             }
+            var timeoutWorkItem: DispatchWorkItem?
+            if let timeout = timeout, timeout > 0 {
+                let item = DispatchWorkItem {
+                    guard process.isRunning else { return }
+                    let pid = process.processIdentifier
+                    process.terminate()
+                    DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 1) {
+                        if process.isRunning { Darwin.kill(pid, SIGKILL) }
+                    }
+                }
+                timeoutWorkItem = item
+                DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + timeout, execute: item)
+            }
             DispatchQueue.global(qos: .utility).async {
                 let data = output.fileHandleForReading.readDataToEndOfFile()
                 process.waitUntilExit()
+                timeoutWorkItem?.cancel()
                 let truncated = data.count > self.outputLimit
                 let bounded = Data(data.suffix(self.outputLimit))
                 let rawText = String(data: bounded, encoding: .utf8) ?? ""
@@ -60,10 +94,18 @@ final class ProcessClient {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: actionScript)
         process.arguments = arguments
-        if FileManager.default.fileExists(atPath: projectRoot) { process.currentDirectoryURL = URL(fileURLWithPath: projectRoot) }
+        process.currentDirectoryURL = homeDirectory(for: ProcessInfo.processInfo.environment)
+        process.standardInput = FileHandle.nullDevice
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
         try process.run()
+    }
+
+    private func homeDirectory(for environment: [String: String]) -> URL {
+        guard let home = environment["HOME"], !home.isEmpty else {
+            return FileManager.default.homeDirectoryForCurrentUser
+        }
+        return URL(fileURLWithPath: home, isDirectory: true)
     }
 
     func redact(_ value: String, sensitiveValues: [String] = []) -> String {

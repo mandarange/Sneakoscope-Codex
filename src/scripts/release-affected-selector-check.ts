@@ -4,7 +4,13 @@ import { assertGate, emitGate, importDist, root } from './sks-1-18-gate-lib.js'
 const dag = await importDist('core/release/release-gate-dag.js')
 const selectorMod = await importDist('core/release/release-gate-affected-selector.js')
 const manifest = dag.loadReleaseGateManifest(root)
-const gates = manifest.gates.filter((gate: any) => gate.preset.includes('release'))
+const gates = dag.selectReleaseGatePreset(manifest, 'affected')
+const releaseIds = new Set<string>(dag.selectReleaseGatePreset(manifest, 'release').map((gate: any) => String(gate.id)))
+const incrementalIds = new Set<string>(dag.selectReleaseGatePreset(manifest, 'incremental').map((gate: any) => String(gate.id)))
+for (const id of ['test:commands-regression', 'test:menubar-doctor', 'test:core-root-regression']) {
+  assertGate(!releaseIds.has(id), `${id} must stay outside the full release preset`, { release_ids: [...releaseIds] })
+  assertGate(incrementalIds.has(id), `${id} must remain available to incremental selection`, { incremental_ids: [...incrementalIds] })
+}
 const selected = selectorMod.selectAffectedReleaseGates(root, manifest, gates, { changedSince: 'HEAD', preset: 'affected' })
 const ids = new Set(selected.selection.selected_gate_ids)
 for (const id of ['release:proof-truth', 'typecheck', 'schema:check']) {

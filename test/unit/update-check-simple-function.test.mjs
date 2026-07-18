@@ -9,7 +9,9 @@ const fakeNpmTimeoutMs = 5_000;
 
 function npmFixtureEnv(overrides = {}) {
   const env = { ...process.env, ...overrides };
-  delete env.SKS_NPM_VIEW_SNEAKOSCOPE_VERSION;
+  if (!Object.hasOwn(overrides, 'SKS_NPM_VIEW_SNEAKOSCOPE_VERSION')) {
+    delete env.SKS_NPM_VIEW_SNEAKOSCOPE_VERSION;
+  }
   return env;
 }
 
@@ -165,6 +167,8 @@ process.exit(1);
     dryRun: true,
     timeoutMs: fakeNpmTimeoutMs,
     env: npmFixtureEnv({
+      HOME: tmp,
+      SKS_GLOBAL_ROOT: path.join(tmp, 'global'),
       SKS_FAKE_NPM_LOG: log,
       SKS_MUTATION_LEDGER_ROOT: tmp,
       SKS_UPDATE_CHECK_CACHE_ROOT: path.join(tmp, 'update-cache'),
@@ -183,6 +187,9 @@ process.exit(1);
   assert.ok(result.stages.some((stage) => stage.id === 'global_install' && stage.status === 'dry_run'));
   const calls = (await fs.readFile(log, 'utf8')).trim().split(/\r?\n/).map((line) => JSON.parse(line));
   assert.ok(!calls.some((call) => call.args[0] === 'install'));
+  const receipt = JSON.parse(await fs.readFile(path.join(tmp, 'global', 'operations', 'update-latest.json'), 'utf8'));
+  assert.equal(receipt.target_version, '99.99.99');
+  assert.ok(receipt.receipt_path.startsWith(path.join(tmp, 'global', 'operations') + path.sep));
 });
 
 test('SKS update check treats current global npm package as installed even when runtime is older', async () => {
@@ -266,14 +273,25 @@ process.exit(1);
 
 test('SKS update check can run without npm through the hermetic env override', async () => {
   const { runSksUpdateCheck } = await import('../../dist/core/update-check.js');
-  const result = await runSksUpdateCheck({
-    npmBin: null,
-    currentVersion: '1.10.0',
-    env: { ...process.env, SKS_NPM_VIEW_SNEAKOSCOPE_VERSION: '99.99.99' }
-  });
-  assert.equal(result.status, 'available');
-  assert.equal(result.latest, '99.99.99');
-  assert.equal(result.pipeline_required, false);
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-update-check-hermetic-'));
+  try {
+    const statusPath = path.join(tmp, 'update-status.json');
+    const result = await runSksUpdateCheck({
+      npmBin: null,
+      currentVersion: '1.10.0',
+      env: npmFixtureEnv({
+        HOME: tmp,
+        SKS_UPDATE_STATUS_PATH: statusPath,
+        SKS_NPM_VIEW_SNEAKOSCOPE_VERSION: '99.99.99'
+      })
+    });
+    assert.equal(result.status, 'available');
+    assert.equal(result.latest, '99.99.99');
+    assert.equal(result.pipeline_required, false);
+    assert.equal(JSON.parse(await fs.readFile(statusPath, 'utf8')).sks.latest, '99.99.99');
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
 });
 
 test('SKS update check override does not call npm view', async () => {
@@ -304,11 +322,12 @@ process.exit(0);
   const result = await runSksUpdateCheck({
     npmBin: fakeNpm,
     currentVersion: '1.10.0',
-    env: {
-      ...process.env,
+    env: npmFixtureEnv({
+      HOME: tmp,
+      SKS_UPDATE_STATUS_PATH: path.join(tmp, 'update-status.json'),
       SKS_FAKE_NPM_LOG: log,
       SKS_NPM_VIEW_SNEAKOSCOPE_VERSION: '99.99.99'
-    }
+    })
   });
   assert.equal(result.status, 'available');
   assert.equal(result.latest, '99.99.99');

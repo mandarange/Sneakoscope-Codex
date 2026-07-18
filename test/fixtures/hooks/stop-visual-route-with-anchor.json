@@ -37,6 +37,11 @@
         "anchor_count": 1,
         "relations": 1
       },
+      "route_gate": {
+        "workflow": "official_codex_subagent",
+        "official_subagent_evidence": true,
+        "parent_summary_present": true
+      },
       "triwiki": null
     },
     "claims": [],

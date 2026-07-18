@@ -78,6 +78,7 @@ export function routeNarutoGpt56Model(input: {
   const explicitRequested = String(input.explicitModel || '').trim();
   const explicit = normalizeNarutoGpt56Model(input.explicitModel);
   const invalidExplicit = Boolean(explicitRequested && !explicit);
+  const explicitHighRisk = /critical|forensic|security|database|migration|release|production|high[- ]?risk|data\s*loss|permission|auth|보안|데이터베이스|마이그레이션|릴리스|운영|고위험/i.test(String(input.riskText || ''));
   const automatic = decideSubagentModel({
     title: input.taskText,
     description: input.riskText,
@@ -87,6 +88,7 @@ export function routeNarutoGpt56Model(input: {
       || category === 'refactor'
       || category === 'strategy'
       || category === 'ultrabrain'
+      || explicitHighRisk
   });
   const preferred: NarutoGpt56Model = explicit || automatic.model;
   const available = input.availableModels == null

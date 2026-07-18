@@ -7,7 +7,7 @@ import { buildCodexSdkEnv } from './codex-sdk-env-policy.js'
 import { translateCodexSdkEvent } from './codex-event-translator.js'
 import type { CodexSdkSandboxMode } from './codex-sdk-sandbox-policy.js'
 import { codexTimeoutClassForRoute } from './codex-reliability-shield.js'
-import { resolveCodexRuntime } from '../codex-runtime/resolve-codex-runtime.js'
+import { resolveOfficialCodexPackageRuntime } from '../codex-runtime/resolve-codex-runtime.js'
 import {
   codexLbToolCatalogPath,
   ensureCodexLbToolCatalog,
@@ -34,14 +34,13 @@ export async function runRealCodexSdkTask(input: CodexTaskInput, policy: {
       raw: { aborted: true, hard_deadline_exceeded: true }
     }
   }
+  const runtime = await resolveCodexSdkRuntime(input)
+  if (!runtime.ok || !runtime.identity) {
+    throw new Error(`Trusted Codex SDK runtime unavailable: ${runtime.blockers.join(',')}`)
+  }
   const mod: any = await import('@openai/codex-sdk')
   const Codex = mod.Codex || mod.default?.Codex || mod.default
   if (typeof Codex !== 'function') throw new Error('Codex SDK export Codex not found')
-  const runtime = await resolveCodexRuntime({
-    explicitPath: typeof input.requestedScopeContract?.codex_bin === 'string' ? input.requestedScopeContract.codex_bin : null,
-    requestedBy: 'codex-sdk-adapter'
-  })
-  if (!runtime.identity) throw new Error(`Codex runtime not found: ${runtime.blockers.join(',')}`)
   const toolCatalog = await prepareCodexLbToolCatalog(input, policy)
   if (toolCatalog.required && !toolCatalog.ok) {
     return {
@@ -164,6 +163,10 @@ export async function runRealCodexSdkTask(input: CodexTaskInput, policy: {
     liveEventsWritten,
     raw: { item_count: events.filter((event) => String(event?.type || '').startsWith('item.')).length, tool_catalog: toolCatalog }
   }
+}
+
+export async function resolveCodexSdkRuntime(_input?: Pick<CodexTaskInput, 'requestedScopeContract'>) {
+  return resolveOfficialCodexPackageRuntime({ requestedBy: 'codex-sdk-adapter' })
 }
 
 export function codexSdkRuntimePolicies(input: CodexTaskInput) {

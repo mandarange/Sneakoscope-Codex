@@ -1,5 +1,7 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -110,12 +112,112 @@ test('Control Center is a non-modal seven-section AppKit sidebar with native acc
 
 test('Overview renders every release work-order health field from bounded local commands', () => {
   const swift = source();
-  for (const field of ['SKS:', 'Codex CLI:', 'Codex app:', 'Menu Bar:', 'Updates:', 'MCP:', 'Telegram Hub:', 'Connected Macs:', 'Last operation:']) {
-    assert.match(swift, new RegExp(field));
+  const overview = fs.readFileSync(path.join(resolvePackagedMenuBarSourceRoot(), 'Sources', 'OverviewViewController.swift'), 'utf8');
+  for (const field of ['SKS install:', 'Codex CLI:', 'Codex app:', 'Menu Bar:', 'Updates:', 'MCP:', 'Telegram Hub:', 'Remote fleet:', 'Last operation:']) {
+    assert.match(overview, new RegExp(field));
   }
-  assert.match(swift, /\["telegram", "status", "--project-root", AppRuntime\.projectRoot, "--json"\]/);
-  assert.match(swift, /\["mcp", "config", "list", "--scope", "effective", "--json"\]/);
+  assert.ok(overview.includes('Menu Bar build \\(AppRuntime.packageVersion)'));
+  assert.ok(overview.includes('running build \\(menuBarBuild)'));
+  assert.match(overview, /snapshotSource\(update\["source"\] as\? String\)/);
+  assert.ok(overview.includes('notice: \\(error)'));
+  assert.match(overview, /diagnosticNotice\(update\["public_error"\] as\? String, update: update\)/);
+  assert.match(overview, /MCP: unavailable/);
+  assert.match(overview, /Telegram Hub: unavailable · Remote fleet: unavailable/);
+  assert.match(overview, /validatedUpdate\(update\)/);
+  assert.match(overview, /validatedMCP\(mcp\)/);
+  assert.match(overview, /validatedTelegram\(telegram\)/);
+  assert.ok(!overview.includes('installed \\(menu?["installed_version"] as? String ?? "unknown")'));
+  assert.match(overview, /\["telegram", "status", "--project-root", AppRuntime\.projectRoot, "--json"\]/);
+  assert.match(overview, /"mcp", "config", "list", "--scope", "effective",[\s\S]*"--project-root", AppRuntime\.projectRoot, "--trusted-project", "--json"/);
+  assert.match(overview, /\], timeout: 3\)/);
+  assert.match(overview, /loadStatus\(forceUpdateRefresh: false\)/);
+  assert.match(overview, /loadStatus\(forceUpdateRefresh: true\)/);
+  assert.match(overview, /if forceUpdateRefresh \{ updateArguments\.append\("--refresh"\) \}/);
+  assert.match(overview, /DispatchQueue\.main\.asyncAfter\(deadline: \.now\(\) \+ 5\)/);
+  assert.match(overview, /if age > 24 \* 60 \* 60 \{ return "None in the last 24 hours" \}/);
+  assert.ok(overview.includes('stale \\(operation.state.rawValue) record · review operation log'));
   assert.match(swift, /func latestSnapshot\(\) -> OperationSnapshot\?/);
+});
+
+test('Overview summary distinguishes Menu Bar build, installed SKS, cached status, and unavailable probes', (t) => {
+  if (process.platform !== 'darwin') return t.skip('Swift AppKit overview harness is macOS-only');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-overview-summary-'));
+  const harness = path.join(root, 'OverviewHarness.swift');
+  const binary = path.join(root, 'overview-harness');
+  try {
+    fs.writeFileSync(harness, `
+import Cocoa
+
+enum AppRuntime {
+    static let packageVersion = "6.2.0"
+    static let codexBundleId: String? = nil
+    static let projectRoot = "/tmp"
+}
+
+struct ProcessResult { let code: Int32; let output: String; let truncated: Bool }
+final class ProcessClient {
+    func run(_ arguments: [String], stdin: String? = nil, environment: [String: String] = [:], timeout: TimeInterval? = nil, completion: @escaping (ProcessResult) -> Void) {}
+}
+enum OperationState: String { case succeeded }
+struct OperationSnapshot { let kind: String; let state: OperationState; let publicSummary: String; let updatedAt: String }
+final class OperationCoordinator { func latestSnapshot() -> OperationSnapshot? { nil } }
+
+@main
+struct OverviewHarness {
+    static func main() {
+        let update: [String: Any] = [
+            "schema": "sks.update-status.v3",
+            "source": "cache",
+            "sks": ["current": "1.10.0", "latest": "99.99.99", "update_available": true],
+            "codex_cli": ["current": "0.144.4", "latest": "0.144.4", "update_available": false],
+            "menubar": [
+                "expected_version": "6.2.0", "installed_version": NSNull(),
+                "signature_ok": true, "resources_ok": true, "rebuild_required": true
+            ],
+            "update_count": 2,
+            "warnings": [],
+            "public_error": "fixture cache"
+        ]
+        let rendered = OverviewSummary.render(
+            update: update, mcp: nil,
+            telegram: ["schema": "sks.telegram-status.v1", "configured": false, "machine_count": 0, "target_count": 0, "config_issues": [], "remote_config_issues": []],
+            menuBarBuild: "6.2.0", codexRunning: true, operationSummary: "None recorded"
+        )
+        precondition(rendered.contains("SKS install: 1.10.0 → 99.99.99 available"))
+        precondition(rendered.contains("Menu Bar: running build 6.2.0 · expected 6.2.0 · rebuild required"))
+        precondition(!rendered.contains("installed unknown"))
+        precondition(rendered.contains("Updates: 2 pending · cache snapshot · notice: fixture cache"))
+        precondition(rendered.contains("MCP: unavailable"))
+        precondition(rendered.contains("Telegram Hub: Not configured · Remote fleet: 0 registered Macs · 0 configured targets"))
+
+        let unavailable = OverviewSummary.render(
+            update: nil, mcp: nil, telegram: nil,
+            menuBarBuild: "6.2.0", codexRunning: nil, operationSummary: "None recorded"
+        )
+        precondition(unavailable.contains("SKS install: unavailable"))
+        precondition(unavailable.contains("Updates: unavailable"))
+        precondition(unavailable.contains("Telegram Hub: unavailable · Remote fleet: unavailable"))
+
+        let partial = OverviewSummary.render(
+            update: ["source": "cache", "sks": [:], "codex_cli": [:], "menubar": [:]],
+            mcp: [:], telegram: [:],
+            menuBarBuild: "6.2.0", codexRunning: nil, operationSummary: "None recorded"
+        )
+        precondition(partial.contains("Menu Bar: running build 6.2.0 · update status unavailable"))
+        precondition(partial.contains("Updates: unavailable"))
+        precondition(partial.contains("MCP: unavailable"))
+        precondition(partial.contains("Telegram Hub: unavailable · Remote fleet: unavailable"))
+    }
+}
+`);
+    const overview = path.join(resolvePackagedMenuBarSourceRoot(), 'Sources', 'OverviewViewController.swift');
+    const compiled = spawnSync('swiftc', [overview, harness, '-o', binary], { encoding: 'utf8' });
+    assert.equal(compiled.status, 0, compiled.stderr || compiled.stdout);
+    const executed = spawnSync(binary, [], { encoding: 'utf8' });
+    assert.equal(executed.status, 0, executed.stderr || executed.stdout);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('status item is concise and applies the documented integrity-to-healthy priority', () => {

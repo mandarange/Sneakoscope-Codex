@@ -439,7 +439,7 @@ function buildWorkerPrompt(slice: any) {
       ? 'Quality gates run before queue acceptance: impact-scan requires cochanged callers for exported signature changes, machine-feedback runs type/lint/related tests, diff-quality blocks dead exports, and compiled mistake rules block repeated mistakes.'
       : '',
     write.length
-      ? 'If this is a bugfix, create a regression test first and include regression_proof with failed_before true and passed_after true. For repair work, include repair_hypothesis before patching.'
+      ? 'Every write result must report verification status passed with at least one concrete check, or status not_applicable with a specific reason. For a reproducible bug or changed observable behavior, add the smallest regression check that would catch it. Do not manufacture a dedicated test when a smaller real check is sufficient. For repair work, include repair_hypothesis before patching.'
       : '',
     leanEngineeringCompactText(),
     'Required JSON fields: status, summary, findings, changed_files, patch_envelopes, verification, rollback_notes, blockers.'

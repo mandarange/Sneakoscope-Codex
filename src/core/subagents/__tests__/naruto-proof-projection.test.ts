@@ -21,6 +21,7 @@ import {
   NARUTO_SUMMARY_FILENAME,
   SUBAGENT_PLAN_FILENAME
 } from '../official-subagent-preparation.js'
+import { createSubagentWaveLifecycle } from '../wave-lifecycle.js'
 
 type FixtureStatus = 'completed' | 'blocked' | 'incomplete'
 
@@ -47,6 +48,60 @@ test('completed fixture projects validated parent result and a deterministic byt
     const byteChanged = await buildNarutoProofProjection({ artifactDir: dir, missionId: MISSION_ID })
     assert.equal(byteChanged.status, 'completed')
     assert.notEqual(byteChanged.proof_fingerprint, first.proof_fingerprint)
+  } finally {
+    await fsp.rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('dynamic automatic projection binds initial request, policy, and effective four-thread target', async () => {
+  const dir = await writeProofFixture('completed', { dynamicThreadCount: 4 })
+  try {
+    const proof = await buildNarutoProofProjection({ artifactDir: dir, missionId: MISSION_ID })
+    assert.equal(proof.status, 'completed')
+    assert.equal((proof.evidence as any).requested_subagents, 2)
+    assert.equal((proof.evidence as any).count_policy, 'dynamic_automatic')
+    assert.equal((proof.evidence as any).target_subagents, 4)
+    assert.equal((proof.gate as any).target_subagents, 4)
+    assert.equal((proof.summary as any).target_subagents, 4)
+  } finally {
+    await fsp.rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('dynamic automatic projection ignores stale-run starts when computing its effective target', async () => {
+  const dir = await writeProofFixture('completed', {
+    dynamicThreadCount: 2,
+    staleRunThreadCount: 2
+  })
+  try {
+    const proof = await buildNarutoProofProjection({ artifactDir: dir, missionId: MISSION_ID })
+    assert.equal(proof.status, 'completed')
+    assert.equal((proof.evidence as any).requested_subagents, 2)
+    assert.equal((proof.evidence as any).target_subagents, 2)
+    assert.equal((proof.evidence as any).started_threads, 2)
+    assert.equal((proof.evidence as any).rejected_stale_events, 4)
+  } finally {
+    await fsp.rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('legacy automatic artifacts without count fields inherit the plan lifecycle contract', async () => {
+  const dir = await writeProofFixture('completed', { dynamicThreadCount: 4 })
+  try {
+    for (const filename of [SUBAGENT_EVIDENCE_FILENAME, NARUTO_SUMMARY_FILENAME, NARUTO_GATE_FILENAME]) {
+      const artifact = JSON.parse(await fsp.readFile(path.join(dir, filename), 'utf8'))
+      delete artifact.count_policy
+      delete artifact.target_subagents
+      await writeJson(path.join(dir, filename), artifact)
+    }
+
+    const proof = await buildNarutoProofProjection({ artifactDir: dir, missionId: MISSION_ID })
+    assert.equal(proof.status, 'completed')
+    assert.equal(proof.ok, true)
+    assert.equal((proof.evidence as any).count_policy, 'dynamic_automatic')
+    assert.equal((proof.evidence as any).target_subagents, 4)
+    assert.equal((proof.summary as any).count_policy, 'dynamic_automatic')
+    assert.equal((proof.gate as any).target_subagents, 4)
   } finally {
     await fsp.rm(dir, { recursive: true, force: true })
   }
@@ -176,31 +231,46 @@ test('killing an active proof reader leaves all six terminal artifacts byte-for-
 
 async function writeProofFixture(
   status: FixtureStatus,
-  overrides: { changedFiles?: string[]; verification?: unknown[] } = {}
+  overrides: {
+    changedFiles?: string[]
+    verification?: unknown[]
+    dynamicThreadCount?: number
+    staleRunThreadCount?: number
+  } = {}
 ): Promise<string> {
   const dir = await fsp.mkdtemp(path.join(os.tmpdir(), `sks-proof-${status}-`))
-  const threadId = 'thread-a'
+  const threadIds = Array.from({ length: overrides.dynamicThreadCount || 1 }, (_, index) => `thread-${index + 1}`)
+  const staleThreadIds = Array.from({ length: overrides.staleRunThreadCount || 0 }, (_, index) => `stale-thread-${index + 1}`)
   const parentStatus = status === 'blocked' ? 'failed' : 'completed'
   const parentSummary = {
     schema: 'sks.subagent-parent-summary.v1',
     status: parentStatus,
     summary: status === 'blocked' ? 'fixture blocked' : 'fixture complete',
-    thread_outcomes: [{
+    thread_outcomes: threadIds.map((threadId) => ({
       thread_id: threadId,
       status: parentStatus,
       summary: status === 'blocked' ? 'thread failed' : 'thread complete'
-    }],
+    })),
     changed_files: overrides.changedFiles ?? ['./src//example.ts'],
     verification: overrides.verification ?? [{ name: 'test', status: 'passed' }],
     blockers: status === 'blocked' ? ['fixture_blocker'] : [],
     run_id: RUN_ID
   }
   const events = [
-    event('SubagentStart', threadId, 'started'),
-    ...(status === 'incomplete' ? [] : [event('SubagentStop', threadId, status === 'blocked' ? 'failed' : 'stopped')])
+    ...threadIds.flatMap((threadId) => [
+      event('SubagentStart', threadId, 'started'),
+      ...(status === 'incomplete' ? [] : [event('SubagentStop', threadId, status === 'blocked' ? 'failed' : 'stopped')])
+    ]),
+    ...staleThreadIds.flatMap((threadId) => [
+      event('SubagentStart', threadId, 'started', 'stale-run'),
+      event('SubagentStop', threadId, 'stopped', 'stale-run')
+    ])
   ]
+  const dynamic = Boolean(overrides.dynamicThreadCount)
   const evidence = buildSubagentEvidence({
-    requestedSubagents: 1,
+    requestedSubagents: dynamic ? 2 : 1,
+    countPolicy: dynamic ? 'dynamic_automatic' : 'exact',
+    targetSubagents: threadIds.length,
     events,
     parentSummary,
     parentSummaryPresent: true,
@@ -212,7 +282,13 @@ async function writeProofFixture(
     mission_id: MISSION_ID,
     workflow: 'official_codex_subagent',
     workflow_run_id: RUN_ID,
-    requested_subagents: 1
+    requested_subagents: dynamic ? 2 : 1,
+    requested_subagents_source: dynamic ? 'automatic' : 'operator',
+    wave_lifecycle: createSubagentWaveLifecycle({
+      workflowRunId: RUN_ID,
+      targetSubagents: threadIds.length,
+      countPolicy: dynamic ? 'dynamic_automatic' : 'exact'
+    })
   }
   const summary = {
     schema: NARUTO_RESULT_SCHEMA,
@@ -221,7 +297,10 @@ async function writeProofFixture(
     workflow_run_id: RUN_ID,
     status,
     ok: status === 'completed',
-    completion_evidence: status === 'completed'
+    completion_evidence: status === 'completed',
+    requested_subagents: evidence.requested_subagents,
+    count_policy: evidence.count_policy,
+    target_subagents: evidence.target_subagents
   }
   const gate = {
     schema: 'sks.naruto-gate.v1',
@@ -231,7 +310,10 @@ async function writeProofFixture(
     passed: status === 'completed',
     terminal: status !== 'incomplete',
     terminal_state: status,
-    blockers: status === 'completed' ? [] : evidence.blockers
+    blockers: status === 'completed' ? [] : evidence.blockers,
+    requested_subagents: evidence.requested_subagents,
+    count_policy: evidence.count_policy,
+    target_subagents: evidence.target_subagents
   }
   await Promise.all([
     writeJson(path.join(dir, SUBAGENT_PLAN_FILENAME), plan),
@@ -244,12 +326,17 @@ async function writeProofFixture(
   return dir
 }
 
-function event(eventName: 'SubagentStart' | 'SubagentStop', threadId: string, outcome: 'started' | 'stopped' | 'failed') {
+function event(
+  eventName: 'SubagentStart' | 'SubagentStop',
+  threadId: string,
+  outcome: 'started' | 'stopped' | 'failed',
+  runId = RUN_ID
+) {
   return {
     schema: 'sks.subagent-event.v1',
     event_name: eventName,
     thread_id: threadId,
-    run_id: RUN_ID,
+    run_id: runId,
     outcome,
     occurred_at: '2026-07-17T00:00:00.000Z'
   }

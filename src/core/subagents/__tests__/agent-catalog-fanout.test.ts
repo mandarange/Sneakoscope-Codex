@@ -124,6 +124,17 @@ test('mixed tool and judgment recommendations put Sol Max judgment first and ret
   assert.ok(debugLongContext.includes('long_context_analyst'))
 })
 
+test('writable documentation plus code-fix goals retain implementation coverage', () => {
+  const roles = recommendOfficialSubagentRoles({
+    description: 'Update the Codex integration documentation and implement the scheduler fix',
+    requiresWrite: true,
+    limit: 6
+  })
+
+  assert.ok(roles.includes('docs_maintainer'))
+  assert.ok(roles.includes('implementation_specialist'))
+})
+
 test('on-demand role metadata is unique, alias-aware, and bounded independently of the installed catalog', () => {
   const full = officialSubagentRoleCatalog()
   const selected = officialSubagentOnDemandRoleCatalog([

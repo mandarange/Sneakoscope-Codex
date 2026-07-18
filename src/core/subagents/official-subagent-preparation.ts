@@ -25,6 +25,7 @@ import {
   resolveSubagentThreadBudget,
   type SubagentThreadBudgetInput
 } from './thread-budget.js'
+import { createSubagentWaveLifecycle } from './wave-lifecycle.js'
 import { readBoundedTriwikiAttention } from './triwiki-attention.js'
 import {
   SUBAGENT_EVIDENCE_FILENAME,
@@ -35,14 +36,27 @@ import {
 } from './subagent-evidence.js'
 import { sksPrefixedDollarCommand, unprefixedSksSkillName } from '../routes/dollar-prefix.js'
 import {
+  withFileLock,
   tryWithFileLock,
   type FileLockLease
 } from '../locks/file-lock.js'
+import { updateCurrentIfMissionAndRun } from '../mission.js'
 
 export const NARUTO_RESULT_SCHEMA = 'sks.naruto-subagent-workflow.v1'
 export const SUBAGENT_PLAN_FILENAME = 'subagent-plan.json'
 export const NARUTO_SUMMARY_FILENAME = 'naruto-summary.json'
 export const NARUTO_GATE_FILENAME = 'naruto-gate.json'
+export const OFFICIAL_SUBAGENT_LIFECYCLE_LOCK = '.subagent-evidence.lock'
+export const OFFICIAL_SUBAGENT_PREPARATION_TRANSACTION = '.official-subagent-preparation-transaction.json'
+const OFFICIAL_SUBAGENT_PREPARATION_STAGE_PREFIX = '.official-subagent-preparation-stage-'
+
+export function withOfficialSubagentLifecycleLock<T>(dir: string, fn: () => Promise<T>): Promise<T> {
+  return withFileLock({
+    lockPath: path.join(dir, OFFICIAL_SUBAGENT_LIFECYCLE_LOCK),
+    timeoutMs: 5_000,
+    staleMs: 60_000
+  }, fn)
+}
 
 export interface OfficialSubagentPreparationInput {
   root: string
@@ -59,6 +73,16 @@ export interface OfficialSubagentPreparationInput {
   readOnly?: boolean
   observedParentModel?: string | null
   preparationOnly?: boolean
+  statePatch?: (prepared: {
+    plan: Record<string, any>
+    budget: ReturnType<typeof resolveSubagentThreadBudget>
+    workflowRunId: string
+  }) => Record<string, any>
+  failureInjection?:
+    | 'after_marker_before_artifact'
+    | 'after_cleanup_and_evidence_promotion_before_plan'
+    | 'after_artifact_commit_before_state'
+    | 'after_state_commit_before_marker_clear'
   slices?: OfficialSubagentSlice[]
   capacity?: Omit<
     SubagentThreadBudgetInput,
@@ -67,6 +91,17 @@ export interface OfficialSubagentPreparationInput {
 }
 
 export async function prepareOfficialSubagentMission(input: OfficialSubagentPreparationInput) {
+  return withOfficialSubagentLifecycleLock(input.dir, () => prepareOfficialSubagentMissionLocked(input))
+}
+
+async function prepareOfficialSubagentMissionLocked(input: OfficialSubagentPreparationInput) {
+  const recovered = await recoverOfficialSubagentPreparationTransaction(input)
+  if (recovered) return recovered
+  const previousPlan = await readJson<Record<string, any> | null>(
+    path.join(input.dir, SUBAGENT_PLAN_FILENAME),
+    null
+  ).catch(() => null)
+  const expectedWorkflowRunId = String(previousPlan?.workflow_run_id || '').trim()
   const goal = String(input.goal || '').trim()
   const mode = input.mode === 'naruto' ? 'naruto' : 'generic'
   const taskProfile = classifyTaskProfile(goal)
@@ -175,6 +210,11 @@ export async function prepareOfficialSubagentMission(input: OfficialSubagentPrep
     first_wave: budget.firstWave,
     wave_count: budget.waveCount,
     max_depth: budget.maxDepth,
+    wave_lifecycle: createSubagentWaveLifecycle({
+      workflowRunId,
+      targetSubagents: budget.requestedSubagents,
+      countPolicy: requestedSource === 'automatic' ? 'dynamic_automatic' : 'exact'
+    }),
     config_source: input.maxThreads === undefined ? officialConfig.sources.maxThreads : 'cli',
     config_sources: officialConfig.sources,
     config_blockers: configBlockers,
@@ -198,66 +238,9 @@ export async function prepareOfficialSubagentMission(input: OfficialSubagentPrep
     verification: { budget: verification },
     created_at: nowIso()
   }
-
-  const cleanup = [
-    fsp.rm(path.join(input.dir, SUBAGENT_PARENT_SUMMARY_FILENAME), { force: true }),
-    fsp.rm(path.join(input.dir, SUBAGENT_EVIDENCE_FILENAME), { force: true })
-  ]
-  if (mode === 'naruto') {
-    cleanup.push(
-      fsp.rm(path.join(input.dir, NARUTO_SUMMARY_FILENAME), { force: true }),
-      fsp.rm(path.join(input.dir, NARUTO_GATE_FILENAME), { force: true })
-    )
-  }
-  await Promise.all(cleanup)
-  await writeTextAtomic(path.join(input.dir, SUBAGENT_EVENT_LOG_FILENAME), '')
-  await writeJsonAtomic(path.join(input.dir, SSOT_GUARD_ARTIFACT), ssotGuard)
-  await writeJsonAtomic(path.join(input.dir, SUBAGENT_PLAN_FILENAME), plan)
-  const evidence = await writeSubagentEvidence(input.dir, {
-    requestedSubagents: budget.requestedSubagents,
-    events: [],
-    parentSummaryPresent: false,
-    workflowStatus: 'delegation_context_ready',
-    preparationOnly: input.preparationOnly !== false,
-    runId: workflowRunId,
-    additionalBlockers: configBlockers
-  })
-
-  if (mode === 'naruto') {
-    const blockers = uniqueStrings([
-      ...evidence.blockers,
-      ...configBlockers,
-      ...(parentModelMatch === false ? [`parent_model_mismatch:${observedParentModel}`] : [])
-    ])
-    await writeJsonAtomic(path.join(input.dir, NARUTO_SUMMARY_FILENAME), buildNarutoSummary({
-      missionId: input.missionId,
-      workflowRunId,
-      budget,
-      evidence,
-      verification,
-      status: 'delegation_context_ready',
-      ok: false,
-      blockers,
-      sessionKey: input.sessionScope || null,
-      suggestedAgents,
-      observedParentModel,
-      parentModelMatch
-    }))
-    await writeNarutoGate(input.dir, {
-      missionId: input.missionId,
-      workflowRunId,
-      evidence,
-      passed: false,
-      blockers,
-      configBlockers,
-      observedParentModel,
-      parentModelMatch
-    })
-  }
-
-  return {
+  const statePatch = input.statePatch?.({ plan, budget, workflowRunId }) || null
+  const preparedResultBase = {
     plan,
-    evidence,
     budget,
     verification,
     taskProfile,
@@ -271,6 +254,345 @@ export async function prepareOfficialSubagentMission(input: OfficialSubagentPrep
     observedParentModel,
     parentModelMatch
   }
+  const transactionFile = path.join(input.dir, OFFICIAL_SUBAGENT_PREPARATION_TRANSACTION)
+  const stageName = `${OFFICIAL_SUBAGENT_PREPARATION_STAGE_PREFIX}${safePreparationStageId(workflowRunId)}`
+  const stageDir = path.join(input.dir, stageName)
+  const artifactInventory = officialSubagentPreparationArtifactInventory(mode)
+  const tombstoneInventory = officialSubagentPreparationTombstoneInventory(mode)
+  let transaction = {
+    schema: 'sks.official-subagent-preparation-transaction.v2',
+    status: 'staging',
+    mission_id: input.missionId,
+    session_scope: input.sessionScope || null,
+    route: input.route,
+    mode,
+    goal,
+    previous_workflow_run_id: expectedWorkflowRunId || null,
+    target_workflow_run_id: workflowRunId,
+    stage_dir: stageName,
+    artifact_inventory: artifactInventory,
+    tombstone_inventory: tombstoneInventory,
+    state_patch: statePatch,
+    prepared_result: preparedResultBase,
+    created_at: nowIso()
+  }
+  await writeJsonAtomic(transactionFile, transaction)
+  if (input.failureInjection === 'after_marker_before_artifact') {
+    throw new Error('official_subagent_preparation_injected_failure:after_marker_before_artifact')
+  }
+  await fsp.rm(stageDir, { recursive: true, force: true })
+  await fsp.mkdir(stageDir, { recursive: true })
+  const evidence = await writeOfficialSubagentPreparationStage(stageDir, {
+    mode,
+    plan,
+    ssotGuard,
+    budget,
+    workflowRunId,
+    preparationOnly: input.preparationOnly !== false,
+    configBlockers,
+    parentModelMatch,
+    observedParentModel,
+    verification,
+    missionId: input.missionId,
+    sessionScope: input.sessionScope || null,
+    suggestedAgents
+  })
+  await validateOfficialSubagentPreparationBundle(stageDir, transaction)
+  transaction = { ...transaction, status: 'staged' }
+  await writeJsonAtomic(transactionFile, transaction)
+
+  const promote = async () => {
+    transaction = { ...transaction, status: 'promoting' }
+    await writeJsonAtomic(transactionFile, transaction)
+    await promoteOfficialSubagentPreparationBundle(input.dir, stageDir, transaction, input.failureInjection)
+  }
+
+  if (statePatch) {
+    const committed = await updateCurrentIfMissionAndRun(
+      input.root,
+      input.missionId,
+      expectedWorkflowRunId,
+      async () => {
+        await promote()
+        if (input.failureInjection === 'after_artifact_commit_before_state') {
+          throw new Error('official_subagent_preparation_injected_failure:after_artifact_commit_before_state')
+        }
+        return statePatch
+      },
+      { sessionKey: input.sessionScope || null }
+    )
+    if (committed.updated !== true) {
+      throw new Error(`official_subagent_preparation_state_generation_mismatch:${committed.status}`)
+    }
+    if (input.failureInjection === 'after_state_commit_before_marker_clear') {
+      throw new Error('official_subagent_preparation_injected_failure:after_state_commit_before_marker_clear')
+    }
+  } else {
+    await promote()
+  }
+  await cleanupOfficialSubagentPreparationTransaction(transactionFile, stageDir)
+
+  return {
+    ...preparedResultBase,
+    evidence,
+  }
+}
+
+async function recoverOfficialSubagentPreparationTransaction(input: OfficialSubagentPreparationInput) {
+  const file = path.join(input.dir, OFFICIAL_SUBAGENT_PREPARATION_TRANSACTION)
+  const marker = await readJson<Record<string, any> | null>(file, null).catch(() => null)
+  if (!marker) return null
+  if (marker.schema !== 'sks.official-subagent-preparation-transaction.v2'
+    || String(marker.mission_id || '') !== String(input.missionId || '')
+    || String(marker.session_scope || '') !== String(input.sessionScope || '')) {
+    throw new Error('official_subagent_preparation_transaction_identity_mismatch')
+  }
+  const previousRunId = String(marker.previous_workflow_run_id || '').trim()
+  const targetRunId = String(marker.target_workflow_run_id || '').trim()
+  const stageName = String(marker.stage_dir || '')
+  if (!stageName.startsWith(OFFICIAL_SUBAGENT_PREPARATION_STAGE_PREFIX)
+    || path.basename(stageName) !== stageName) {
+    throw new Error('official_subagent_preparation_transaction_stage_identity_invalid')
+  }
+  const stageDir = path.join(input.dir, stageName)
+  const plan = await readJson<Record<string, any> | null>(
+    path.join(input.dir, SUBAGENT_PLAN_FILENAME),
+    null
+  ).catch(() => null)
+  const planRunId = String(plan?.workflow_run_id || '').trim()
+  const stageValidation = await validateOfficialSubagentPreparationBundle(stageDir, marker, { throwOnError: false })
+  if (planRunId === previousRunId) {
+    if (!stageValidation.ok) {
+      if (marker.status === 'staging') {
+        await cleanupOfficialSubagentPreparationTransaction(file, stageDir)
+        return null
+      }
+      throw new Error(`official_subagent_preparation_transaction_stage_incomplete:${stageValidation.issues.join(',')}`)
+    }
+    if (marker.state_patch) {
+      const committed = await updateCurrentIfMissionAndRun(
+        input.root,
+        input.missionId,
+        previousRunId,
+        async () => {
+          await promoteOfficialSubagentPreparationBundle(input.dir, stageDir, marker)
+          return marker.state_patch
+        },
+        { sessionKey: input.sessionScope || null }
+      )
+      if (committed.updated !== true) {
+        throw new Error(`official_subagent_preparation_transaction_state_generation_mismatch:${committed.status}`)
+      }
+    } else {
+      await promoteOfficialSubagentPreparationBundle(input.dir, stageDir, marker)
+    }
+  } else if (planRunId === targetRunId) {
+    await validateOfficialSubagentPreparationBundle(input.dir, marker, { exactInventory: false })
+    if (marker.state_patch) {
+      let committed = await updateCurrentIfMissionAndRun(
+        input.root,
+        input.missionId,
+        previousRunId,
+        marker.state_patch,
+        { sessionKey: input.sessionScope || null }
+      )
+      if (committed.updated !== true) {
+        committed = await updateCurrentIfMissionAndRun(
+          input.root,
+          input.missionId,
+          targetRunId,
+          () => null,
+          { sessionKey: input.sessionScope || null }
+        )
+        if (committed.status !== 'unchanged') {
+          throw new Error(`official_subagent_preparation_transaction_state_generation_mismatch:${committed.status}`)
+        }
+      }
+    }
+  } else {
+    throw new Error('official_subagent_preparation_transaction_plan_generation_mismatch')
+  }
+  const evidence = await readJson<Record<string, any> | null>(
+    path.join(input.dir, SUBAGENT_EVIDENCE_FILENAME),
+    null
+  ).catch(() => null)
+  const committedPlan = await readJson<Record<string, any> | null>(
+    path.join(input.dir, SUBAGENT_PLAN_FILENAME),
+    null
+  ).catch(() => null)
+  await cleanupOfficialSubagentPreparationTransaction(file, stageDir)
+  const preparedResult = marker.prepared_result && typeof marker.prepared_result === 'object'
+    ? marker.prepared_result
+    : null
+  const sameRequest = String(marker.goal || '') === String(input.goal || '').trim()
+    && String(marker.route || '') === String(input.route || '')
+  return sameRequest && preparedResult
+    ? { ...preparedResult, plan: committedPlan, evidence }
+    : null
+}
+
+export async function officialSubagentPreparationInProgress(dir: string) {
+  return fsp.access(path.join(dir, OFFICIAL_SUBAGENT_PREPARATION_TRANSACTION))
+    .then(() => true)
+    .catch(() => false)
+}
+
+function safePreparationStageId(value: string) {
+  return value.replace(/[^A-Za-z0-9._-]+/g, '-').slice(0, 120) || 'unknown'
+}
+
+function officialSubagentPreparationArtifactInventory(mode: 'generic' | 'naruto') {
+  return [
+    SUBAGENT_EVENT_LOG_FILENAME,
+    SSOT_GUARD_ARTIFACT,
+    SUBAGENT_EVIDENCE_FILENAME,
+    ...(mode === 'naruto' ? [NARUTO_SUMMARY_FILENAME, NARUTO_GATE_FILENAME] : []),
+    SUBAGENT_PLAN_FILENAME
+  ]
+}
+
+function officialSubagentPreparationTombstoneInventory(mode: 'generic' | 'naruto') {
+  return [
+    SUBAGENT_PARENT_SUMMARY_FILENAME,
+    ...(mode === 'naruto'
+      ? [
+          'completion-proof.json',
+          'completion-proof.md',
+          'evidence-index.json',
+          'route-completion-contract.json',
+          'trust-report.json'
+        ]
+      : [])
+  ]
+}
+
+async function writeOfficialSubagentPreparationStage(stageDir: string, input: any) {
+  await writeTextAtomic(path.join(stageDir, SUBAGENT_EVENT_LOG_FILENAME), '')
+  await writeJsonAtomic(path.join(stageDir, SSOT_GUARD_ARTIFACT), input.ssotGuard)
+  const evidence = await writeSubagentEvidence(stageDir, {
+    requestedSubagents: input.budget.requestedSubagents,
+    countPolicy: input.plan.wave_lifecycle.count_policy,
+    targetSubagents: input.plan.wave_lifecycle.target_subagents,
+    events: [],
+    parentSummaryPresent: false,
+    workflowStatus: 'delegation_context_ready',
+    preparationOnly: input.preparationOnly,
+    runId: input.workflowRunId,
+    additionalBlockers: input.configBlockers
+  })
+  if (input.mode === 'naruto') {
+    const blockers = uniqueStrings([
+      ...evidence.blockers,
+      ...input.configBlockers,
+      ...(input.parentModelMatch === false ? [`parent_model_mismatch:${input.observedParentModel}`] : [])
+    ])
+    await writeJsonAtomic(path.join(stageDir, NARUTO_SUMMARY_FILENAME), buildNarutoSummary({
+      missionId: input.missionId,
+      workflowRunId: input.workflowRunId,
+      budget: input.budget,
+      evidence,
+      verification: input.verification,
+      status: 'delegation_context_ready',
+      ok: false,
+      blockers,
+      sessionKey: input.sessionScope,
+      suggestedAgents: input.suggestedAgents,
+      observedParentModel: input.observedParentModel,
+      parentModelMatch: input.parentModelMatch,
+      waveLifecycle: input.plan.wave_lifecycle
+    }))
+    await writeNarutoGate(stageDir, {
+      missionId: input.missionId,
+      workflowRunId: input.workflowRunId,
+      evidence,
+      passed: false,
+      blockers,
+      configBlockers: input.configBlockers,
+      observedParentModel: input.observedParentModel,
+      parentModelMatch: input.parentModelMatch
+    })
+  }
+  await writeJsonAtomic(path.join(stageDir, SUBAGENT_PLAN_FILENAME), input.plan)
+  return evidence
+}
+
+async function validateOfficialSubagentPreparationBundle(
+  dir: string,
+  marker: Record<string, any>,
+  opts: { throwOnError?: boolean; exactInventory?: boolean } = {}
+) {
+  const issues: string[] = []
+  const mode = marker.mode === 'naruto' ? 'naruto' : 'generic'
+  const expectedInventory = officialSubagentPreparationArtifactInventory(mode)
+  const expectedTombstones = officialSubagentPreparationTombstoneInventory(mode)
+  if (JSON.stringify(marker.artifact_inventory) !== JSON.stringify(expectedInventory)) issues.push('artifact_inventory')
+  if (JSON.stringify(marker.tombstone_inventory) !== JSON.stringify(expectedTombstones)) issues.push('tombstone_inventory')
+  if (opts.exactInventory !== false) {
+    const actual = await fsp.readdir(dir).catch(() => [])
+    if (JSON.stringify([...actual].sort()) !== JSON.stringify([...expectedInventory].sort())) issues.push('stage_inventory')
+  }
+  const [plan, evidence, ssot, events] = await Promise.all([
+    readJson<Record<string, any> | null>(path.join(dir, SUBAGENT_PLAN_FILENAME), null).catch(() => null),
+    readJson<Record<string, any> | null>(path.join(dir, SUBAGENT_EVIDENCE_FILENAME), null).catch(() => null),
+    readJson<Record<string, any> | null>(path.join(dir, SSOT_GUARD_ARTIFACT), null).catch(() => null),
+    fsp.readFile(path.join(dir, SUBAGENT_EVENT_LOG_FILENAME), 'utf8').catch(() => null)
+  ])
+  const targetRunId = String(marker.target_workflow_run_id || '')
+  const missionId = String(marker.mission_id || '')
+  if (plan?.schema !== 'sks.subagent-plan.v1'
+    || plan?.workflow !== 'official_codex_subagent'
+    || String(plan?.mission_id || '') !== missionId
+    || String(plan?.workflow_run_id || '') !== targetRunId) issues.push('plan_identity')
+  if (evidence?.schema !== 'sks.subagent-evidence.v1'
+    || evidence?.workflow !== 'official_codex_subagent'
+    || String(evidence?.run_id || '') !== targetRunId) issues.push('evidence_identity')
+  if (!validateSsotGuardArtifact(ssot).ok) issues.push('ssot_guard')
+  if (events !== '') issues.push('events_not_empty')
+  if (mode === 'naruto') {
+    const [summary, gate] = await Promise.all([
+      readJson<Record<string, any> | null>(path.join(dir, NARUTO_SUMMARY_FILENAME), null).catch(() => null),
+      readJson<Record<string, any> | null>(path.join(dir, NARUTO_GATE_FILENAME), null).catch(() => null)
+    ])
+    if (summary?.schema !== NARUTO_RESULT_SCHEMA
+      || String(summary?.mission_id || '') !== missionId
+      || String(summary?.workflow_run_id || '') !== targetRunId) issues.push('summary_identity')
+    if (gate?.schema !== 'sks.naruto-gate.v1'
+      || String(gate?.mission_id || '') !== missionId
+      || String(gate?.workflow_run_id || '') !== targetRunId) issues.push('gate_identity')
+  }
+  const result = { ok: issues.length === 0, issues }
+  if (!result.ok && opts.throwOnError !== false) {
+    throw new Error(`official_subagent_preparation_bundle_invalid:${issues.join(',')}`)
+  }
+  return result
+}
+
+async function promoteOfficialSubagentPreparationBundle(
+  dir: string,
+  stageDir: string,
+  marker: Record<string, any>,
+  failureInjection?: OfficialSubagentPreparationInput['failureInjection']
+) {
+  await validateOfficialSubagentPreparationBundle(stageDir, marker)
+  const inventory = officialSubagentPreparationArtifactInventory(marker.mode === 'naruto' ? 'naruto' : 'generic')
+  const tombstones = officialSubagentPreparationTombstoneInventory(marker.mode === 'naruto' ? 'naruto' : 'generic')
+  await Promise.all(tombstones.map((name) => fsp.rm(path.join(dir, name), { force: true })))
+  for (const name of inventory.filter((item) => item !== SUBAGENT_PLAN_FILENAME)) {
+    await writeTextAtomic(path.join(dir, name), await fsp.readFile(path.join(stageDir, name), 'utf8'))
+  }
+  if (failureInjection === 'after_cleanup_and_evidence_promotion_before_plan') {
+    throw new Error('official_subagent_preparation_injected_failure:after_cleanup_and_evidence_promotion_before_plan')
+  }
+  await writeTextAtomic(
+    path.join(dir, SUBAGENT_PLAN_FILENAME),
+    await fsp.readFile(path.join(stageDir, SUBAGENT_PLAN_FILENAME), 'utf8')
+  )
+  await validateOfficialSubagentPreparationBundle(dir, marker, { exactInventory: false })
+}
+
+async function cleanupOfficialSubagentPreparationTransaction(markerFile: string, stageDir: string) {
+  await fsp.rm(markerFile, { force: true })
+  await fsp.rm(stageDir, { recursive: true, force: true })
 }
 
 function triwikiAttentionLimit(taskProfile: string): number {
@@ -309,12 +631,15 @@ export function buildNarutoSummary(input: any) {
       observed_model: input.observedParentModel || null,
       observed_model_match: input.parentModelMatch ?? null
     },
-    requested_subagents: input.budget.requestedSubagents,
+    requested_subagents: input.evidence?.requested_subagents ?? input.budget.requestedSubagents,
+    count_policy: input.evidence?.count_policy || input.waveLifecycle?.count_policy || 'exact',
+    target_subagents: input.evidence?.target_subagents ?? input.waveLifecycle?.target_subagents ?? input.budget.requestedSubagents,
     max_threads: input.budget.maxThreads,
     first_wave: input.budget.firstWave,
     wave_count: input.budget.waveCount,
     capacity_controller: input.budget.capacity,
     max_depth: input.budget.maxDepth,
+    wave_lifecycle: input.waveLifecycle || null,
     started_subagents: Number(input.evidence?.started_threads || 0),
     completed_subagents: Number(input.evidence?.completed_threads || 0),
     failed_subagents: Number(input.evidence?.failed_threads || 0),
@@ -368,8 +693,13 @@ export async function writeNarutoGate(dir: string, input: any) {
 export function buildNarutoGateResult(input: any) {
   const passed = input.passed === true
   const requested = Number(input.evidence?.requested_subagents || 0)
+  const target = Number(input.evidence?.target_subagents || requested || 0)
   const completed = Number(input.evidence?.completed_threads || 0)
   const failed = Number(input.evidence?.failed_threads || 0)
+  const started = Number(input.evidence?.started_threads || 0)
+  const open = Array.isArray(input.evidence?.open_thread_ids) ? input.evidence.open_thread_ids.length : 0
+  const unmatched = Array.isArray(input.evidence?.unmatched_stop_thread_ids) ? input.evidence.unmatched_stop_thread_ids.length : 0
+  const ambiguous = Array.isArray(input.evidence?.ambiguous_stop_thread_ids) ? input.evidence.ambiguous_stop_thread_ids.length : 0
   return {
     schema: 'sks.naruto-gate.v1',
     route: sksPrefixedDollarCommand('naruto'),
@@ -385,10 +715,18 @@ export function buildNarutoGateResult(input: any) {
     terminal_state: passed ? 'completed' : 'blocked',
     subagent_plan_ready: true,
     official_subagent_evidence: input.evidence?.ok === true,
-    session_cleanup: failed === 0 && requested > 0 && completed >= requested,
+    session_cleanup: target > 0
+      && started === target
+      && completed === target
+      && failed === 0
+      && open === 0
+      && unmatched === 0
+      && ambiguous === 0,
     subagent_evidence_ready: input.evidence?.ok === true,
     requested_subagents: requested || null,
-    started_subagents: Number(input.evidence?.started_threads || 0),
+    count_policy: input.evidence?.count_policy || 'exact',
+    target_subagents: target || null,
+    started_subagents: started,
     completed_subagents: Number(input.evidence?.completed_threads || 0),
     failed_subagents: Number(input.evidence?.failed_threads || 0),
     parent_summary_present: input.evidence?.parent_summary_present === true,
@@ -399,7 +737,9 @@ export function buildNarutoGateResult(input: any) {
       parent_summary: SUBAGENT_PARENT_SUMMARY_FILENAME,
       ssot_guard: SSOT_GUARD_ARTIFACT,
       requested_subagents: requested,
-      started_threads: Number(input.evidence?.started_threads || 0),
+      count_policy: input.evidence?.count_policy || 'exact',
+      target_subagents: target,
+      started_threads: started,
       completed_threads: completed,
       failed_threads: failed
     },

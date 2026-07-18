@@ -9,13 +9,12 @@ const routeDesignPolicySource = readText('src/core/routes/design-policy.ts');
 const routePptPolicySource = readText('src/core/routes/ppt-policy.ts');
 const routePolicySource = [routesSource, routeConstantsSource, routeDesignPolicySource, routePptPolicySource].join('\n');
 const productDesignSource = readText('src/core/product-design-plugin.ts');
-const runtimeSource = readText('src/core/pipeline-internals/runtime-core.ts');
 const pptSource = [
   readText('src/core/ppt.ts'),
   readText('src/core/ppt/style-tokens.ts')
 ].join('\n');
 const codexAppSource = readText('src/core/codex-app.ts');
-const initSource = readText('src/core/init.ts');
+const initSkillsSource = readText('src/core/init/skills.ts');
 const releaseGates = releaseGateIds();
 
 assertGate(PRODUCT_DESIGN_PLUGIN.id === 'product-design@openai-curated-remote', 'Product Design plugin id must use the remote marketplace');
@@ -79,13 +78,12 @@ for (const token of [
   assertGate(productDesignSource.includes(token), `product-design-plugin.ts missing policy token: ${token}`);
 }
 
-for (const token of [
-  'Product Design plugin first',
-  'design-system-builder',
-  'design-ui-editor',
-  'design-artifact-expert'
-]) {
-  assertGate(runtimeSource.includes(token) || initSource.includes(token), `runtime/init missing fallback token: ${token}`);
+assertGate(
+  routePolicySource.includes('Product Design plugin first'),
+  'route-owned design policy must prefer the Product Design plugin'
+);
+for (const token of ['design-system-builder', 'design-ui-editor', 'design-artifact-expert']) {
+  assertGate(initSkillsSource.includes(token), `generated design fallback skill missing token: ${token}`);
 }
 
 for (const token of [

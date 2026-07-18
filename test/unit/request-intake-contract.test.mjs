@@ -38,12 +38,39 @@ test('request intake turns vague prompts into wiki-informed execution prompts', 
   assert.match(intake.transformed_prompt, /## Pipeline Instruction/);
 });
 
-test('prepareRoute writes request-intake artifact and attaches it to the pipeline plan', async () => {
+test('current-version documentation requests do not masquerade as a Sneakoscope version bump', () => {
+  const docsPrompt = '나루토 모드가 병렬에 특화되지 않은 문제를 고치기 위해 Codex CLI와 Desktop app의 최신 버전 문서를 보고 수정해줘';
+  const directivePrompt = '아래 내용을 모든 작업의 핵심 지침으로 만들고 영문으로 단순하고 강력하게 준수하도록 반영해줘';
+  const docsIntake = buildRequestIntake(docsPrompt, {}, { wikiContext });
+  const directiveIntake = buildRequestIntake(directivePrompt, {}, { wikiContext });
+  const bumpIntake = buildRequestIntake('Sneakoscope 버전을 다음 patch로 올려줘', {}, { wikiContext });
+
+  assert.doesNotMatch(docsIntake.interpreted_intent.goal, /sneakoscope 버전을 .*올린다/i);
+  assert.doesNotMatch(docsIntake.interpreted_intent.goal, /우선순위 신호/);
+  assert.match(docsIntake.interpreted_intent.goal, /나루토 병렬 구조|사용자 요청/);
+  assert.doesNotMatch(directiveIntake.interpreted_intent.goal, /우선순위 신호/);
+  assert.match(directiveIntake.interpreted_intent.goal, /핵심 지침/);
+  assert.match(bumpIntake.interpreted_intent.goal, /sneakoscope 버전을 다음 patch 버전으로 올린다/i);
+});
+
+test('explicit priority-memory requests keep their literal goal and focused verification scope', () => {
+  const prompt = '이 선호를 TriWiki 우선순위로 기억해줘';
+  const intake = buildRequestIntake(prompt, {}, { wikiContext });
+
+  assert.equal(intake.interpreted_intent.goal, prompt);
+  assert.equal(intake.priority_signal.requested, true);
+  assert.equal(intake.priority_signal.preserves_literal_goal, true);
+  assert.deepEqual(intake.acceptance_criteria.length > 0, true);
+  assert.doesNotMatch(intake.transformed_prompt, /packcheck|publish:dry|sizecheck/);
+});
+
+test('Naruto prepareRoute writes request-intake artifact and attaches it to the pipeline plan', async () => {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-request-intake-'));
   await fsp.mkdir(path.join(root, '.sneakoscope', 'wiki'), { recursive: true });
   await fsp.writeFile(path.join(root, '.sneakoscope', 'wiki', 'context-pack.json'), JSON.stringify(wikiContext, null, 2));
 
-  const result = await prepareRoute(root, `$Goal ${vaguePrompt}`, {});
+  const narutoPrompt = `${vaguePrompt.replace(/\s*\$goal$/i, '')} 실제 코드를 수정하고 검증까지 완료해줘`;
+  const result = await prepareRoute(root, `$Naruto ${narutoPrompt}`, {});
   const missionId = result.additionalContext.match(/Mission: (M-[^\n]+)/)?.[1]
     || (await fsp.readdir(path.join(root, '.sneakoscope', 'missions'))).find((name) => name.startsWith('M-'));
   assert.ok(missionId);

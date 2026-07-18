@@ -40,7 +40,7 @@ export async function runDynamicPoolFixture(opts = {}) {
     prompt: 'dynamic pool fixture',
     targetActiveSlots: target,
     sourceIntelligenceRefs: { artifact: 'source-intelligence-evidence.json', ok: true, mode: 'offline_context7_only' },
-    goalModeRef: { artifact: 'goal-mode-applied.json', ok: true, mode: 'sks_goal_fallback' },
+    goalModeRef: { artifact: 'goal-mode-applied.json', ok: true, mode: 'official_goal_default' },
     launchSession: async ({ agent, workItem, generation }) => {
       launched.push({ session_id: generation.session_id, slot_id: agent.slot_id, generation_index: agent.generation_index, work_item_id: workItem.id, started_at: Date.now() });
       await delay(Number(workItem.slice?.delay_ms || 1));

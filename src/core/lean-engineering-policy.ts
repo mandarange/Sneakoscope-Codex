@@ -59,21 +59,24 @@ export interface LeanFinding {
   line?: number;
 }
 
-const LEAN_ENGINEERING_POLICY_CANONICAL = [
-  'Understand the real flow before changing code.',
-  'Stop at the highest sufficient rung: skip, reuse existing code, stdlib, native platform, installed dependency, safe single expression, minimal custom code.',
-  'Do not add unrequested routes, commands, daemons, dependencies, abstractions, config flags, shims, or hidden fallbacks.',
-  'Fix shared root causes instead of duplicating caller-specific symptom guards.',
-  'Capability and compatibility fallbacks require one authority, proof, bounded scope, and honest verification level.',
-  'Never remove trust-boundary validation, data-loss protection, security, permissions, rollback, accessibility, or explicit user requirements to shrink a diff.',
-  'Release verification must stay lean: release preset gates <= 200, package scripts <= 100, and one distinct user concern per gate.',
-  'Non-trivial logic needs one smallest runnable check.'
-].join('\n');
+const CORE_ENGINEERING_DIRECTIVE_LINES = Object.freeze([
+  'Build for the stated goal. Make the smallest sufficient change. Test the main path, meaningful boundaries, and credible failures; do not manufacture low-value test matrices.',
+  'Follow reality. Trace actual callers, inputs, data, and control flow; do not add defenses for unreachable or speculative conditions.',
+  'Use the real project mechanism. Follow current code and specifications and use authoritative tools or data; never substitute invented mocks, guessed heuristics, remembered architectures, or unsupported fallbacks.',
+  'Preserve security, permissions, data integrity, rollback, accessibility, and explicit user requirements. If the real path is unavailable, stop and report evidence.'
+]);
+
+const LEAN_ENGINEERING_POLICY_CANONICAL = CORE_ENGINEERING_DIRECTIVE_LINES.join('\n');
 
 export const LEAN_ENGINEERING_POLICY_HASH = createHash('sha256')
   .update(LEAN_ENGINEERING_POLICY_CANONICAL)
   .digest('hex')
   .slice(0, 16);
+
+// Keep the legacy policy identifiers stable for persisted evidence while the
+// user-facing directive stays concise and authoritative.
+export const CORE_ENGINEERING_DIRECTIVE_ID = 'sks.core-engineering-directive.v1';
+export const CORE_ENGINEERING_DIRECTIVE_HASH = LEAN_ENGINEERING_POLICY_HASH;
 
 export function leanPolicyReference() {
   return {
@@ -82,23 +85,27 @@ export function leanPolicyReference() {
   };
 }
 
+export function coreEngineeringDirectiveReference() {
+  return {
+    directive_id: CORE_ENGINEERING_DIRECTIVE_ID,
+    directive_hash: CORE_ENGINEERING_DIRECTIVE_HASH
+  };
+}
+
+export function coreEngineeringDirectiveText() {
+  return ['Core Engineering Directive:', ...CORE_ENGINEERING_DIRECTIVE_LINES].join('\n');
+}
+
+export function coreEngineeringDirectiveReferenceText() {
+  return `Apply the Core Engineering Directive (${CORE_ENGINEERING_DIRECTIVE_ID}/${CORE_ENGINEERING_DIRECTIVE_HASH}) from AGENTS.md exactly; do not expand it with legacy global rules.`;
+}
+
 export function leanEngineeringCompactText() {
-  return [
-    `Lean Engineering Policy (${LEAN_ENGINEERING_POLICY_ID}/${LEAN_ENGINEERING_POLICY_HASH}):`,
-    'Read the touched flow first, then stop at the highest sufficient rung: skip, reuse existing, stdlib, native platform, installed dependency, safe single expression, minimal custom.',
-    'No unrequested route/command/daemon/dependency/abstraction/config flag/shim/hidden fallback; required capability/compatibility fallback needs one authority, proof, and bounded scope.',
-    'Fix root cause once, preserve trust-boundary validation/security/rollback/accessibility/user requirements, keep release gates <= 200 and package scripts <= 100, and leave one runnable check for non-trivial logic.'
-  ].join('\n');
+  return coreEngineeringDirectiveText();
 }
 
 export function leanEngineeringLongText() {
-  return [
-    leanEngineeringCompactText(),
-    'Forbidden fallback: silent mock/fixture success, provider contract switching without authority, catch-all empty success, unused future shims, duplicate legacy/new SSOTs, or production proof from test fakes.',
-    'Allowed fallback: same contract or explicit narrower contract, capability detection, one selection authority, recorded provider/proof level, honest downgrade when used, and a bounded chain.',
-    'Compatibility bridge: one canonical implementation; legacy entry only converts arguments, emits deprecation context, and has a sunset trigger.',
-    'Intentional simplification marker: `sks-lean: ceiling=<known limit>; revisit_when=<measurable trigger>; upgrade=<specific path>`.'
-  ].join('\n');
+  return coreEngineeringDirectiveText();
 }
 
 export function normalizeLeanDecision(input: unknown = {}, defaults: Partial<LeanDecision> = {}): LeanDecision {

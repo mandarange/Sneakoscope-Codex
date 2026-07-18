@@ -101,12 +101,12 @@ struct Harness {
   assert.match(executed.stdout, /update-receipt-runtime-ok/);
 });
 
-test('compiled ProcessClient passes the Control Center update deferral only to its child process', async (t) => {
+test('compiled ProcessClient uses HOME as its safe launch cwd and passes update deferral only to its child', async (t) => {
   if (process.platform !== 'darwin') return t.skip('Swift ProcessClient harness is macOS-only');
   const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-process-client-update-env-'));
   t.after(() => fs.rm(temp, { recursive: true, force: true }));
   const actionScript = path.join(temp, 'action.sh');
-  await fs.writeFile(actionScript, '#!/bin/zsh\nprintf \'%s\\n\' "${SKS_UPDATE_DEFER_MENUBAR_RESTART:-missing}"\n', { mode: 0o755 });
+  await fs.writeFile(actionScript, '#!/bin/zsh\n/usr/bin/printf \'%s\\n\' "${SKS_UPDATE_DEFER_MENUBAR_RESTART:-missing}"\nhome_path="$(cd "$HOME" && /bin/pwd -P)"\ncwd_path="$(/bin/pwd -P)"\nif [ "$cwd_path" = "$home_path" ]; then /usr/bin/printf \'cwd_is_home=1\\n\'; else /usr/bin/printf \'cwd_is_home=0\\n\'; fi\n/usr/bin/printf \'payload_ready=1\\n\'\n/bin/sleep 30\n', { mode: 0o755 });
   const harness = path.join(temp, 'Harness.swift');
   const binary = path.join(temp, 'process-client-update-env-harness');
   await fs.writeFile(harness, `
@@ -123,10 +123,12 @@ struct Harness {
             logPath: temp + "/process-client.log",
             projectRoot: temp
         )
-        client.run(["probe"], environment: ["SKS_UPDATE_DEFER_MENUBAR_RESTART": "1"]) { result in
-            precondition(result.code == 0)
-            precondition(result.output.trimmingCharacters(in: .whitespacesAndNewlines) == "1")
-            print("process-client-update-env-ok")
+        let started = Date()
+        client.run(["probe"], environment: ["SKS_UPDATE_DEFER_MENUBAR_RESTART": "1"], timeout: 2.0) { result in
+            print("code=" + String(result.code))
+            print("elapsed_lt_5=" + String(Date().timeIntervalSince(started) < 5))
+            print(result.output)
+            print("process-client-safe-cwd-timeout-and-update-env-ok")
             Darwin.exit(0)
         }
         dispatchMain()
@@ -138,7 +140,12 @@ struct Harness {
   assert.equal(compiled.code, 0, `${compiled.stdout}\n${compiled.stderr}`);
   const executed = await run(binary, [temp, actionScript]);
   assert.equal(executed.code, 0, `${executed.stdout}\n${executed.stderr}`);
-  assert.match(executed.stdout, /process-client-update-env-ok/);
+  assert.doesNotMatch(executed.stdout, /code=0(?:\D|$)/);
+  assert.match(executed.stdout, /elapsed_lt_5=true/);
+  assert.match(executed.stdout, /^1$/m);
+  assert.match(executed.stdout, /^cwd_is_home=1$/m);
+  assert.match(executed.stdout, /^payload_ready=1$/m);
+  assert.match(executed.stdout, /process-client-safe-cwd-timeout-and-update-env-ok/);
 });
 
 test('native reliability source binds menu-open expiry, status keys, and receipt-driven update UI', async () => {
@@ -165,6 +172,9 @@ test('native reliability source binds menu-open expiry, status keys, and receipt
   assert.match(updates, /state: \.terminalUncertain/);
   assert.match(processClient, /environment: \[String: String\] = \[:\]/);
   assert.match(processClient, /ProcessInfo\.processInfo\.environment\.merging\(environment\)/);
+  assert.match(processClient, /process\.currentDirectoryURL = homeDirectory\(for:/);
+  assert.match(processClient, /else \{[\s\S]*process\.standardInput = FileHandle\.nullDevice/);
+  assert.match(processClient, /DispatchQueue\.global\(qos: \.utility\)\.asyncAfter\(deadline: \.now\(\) \+ timeout/);
   assert.match(updates, /SKS_UPDATE_DEFER_MENUBAR_RESTART/);
   assert.match(updates, /processClient\.run\(args, environment: environment\)/);
   assert.match(updates, /receipt\.stages\.contains \{ \$0\.id == "menubar_rebuild" && \$0\.status == "installed_launch_skipped" \}/);

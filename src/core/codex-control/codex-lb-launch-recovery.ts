@@ -89,9 +89,8 @@ export async function inspectCodexLbCliLaunchRecovery(
   const overrides = cliConfigOverrides(args)
   const environmentSelectsCodexLb = env.SKS_PROVIDER === 'codex-lb' || env.SKS_USE_CODEX_LB === '1'
 
-  // Codex CLI options are the final operator intent. They override SKS's
-  // environment-selected default just as `-c` overrides config.toml.
-  if (cliSelectsLocalProvider(args) || (overrides.modelProvider && overrides.modelProvider !== 'codex-lb')) {
+  // Local-provider CLI options are the final operator intent.
+  if (cliSelectsLocalProvider(args)) {
     return codexLbToolOutputRecoveryNotSelected()
   }
 
@@ -103,6 +102,12 @@ export async function inspectCodexLbCliLaunchRecovery(
 
   if (projectConfig.hasMachineLocalProviderConfig) {
     return projectProviderConfigBlocked()
+  }
+
+  // Explicit model-provider overrides still win over user/profile defaults,
+  // but only after repository-local provider redirects have been rejected.
+  if (overrides.modelProvider && overrides.modelProvider !== 'codex-lb') {
+    return codexLbToolOutputRecoveryNotSelected()
   }
 
   const selectedProvider = overrides.modelProvider

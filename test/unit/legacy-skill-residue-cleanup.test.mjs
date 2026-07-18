@@ -378,10 +378,15 @@ test('generated project guidance advertises Naruto and no retired compatibility 
     await initProject(root, { installScope: 'project', localOnly: true });
     const agents = await fs.readFile(path.join(root, 'AGENTS.md'), 'utf8');
     const quickReference = await fs.readFile(path.join(root, '.codex', 'SNEAKOSCOPE.md'), 'utf8');
+    assert.equal(agents.match(/Core Engineering Directive/g)?.length, 1);
+    assert.match(agents, /do not manufacture low-value test matrices/);
+    assert.equal(quickReference.match(/Core Engineering Directive/g)?.length, 1);
+    assert.match(quickReference, /from AGENTS\.md exactly/);
     for (const text of [agents, quickReference]) {
       assert.match(text, /\$sks-naruto|naruto run/);
       assert.doesNotMatch(text, /\$(?:Naruto|Work|DFix|QA-LOOP)\b/);
       assert.doesNotMatch(text, /\$Agent|\$Team|sks team|\$MAD-DB|sks mad-db|\$Swarm|\$ShadowClone|\$Kagebunshin|\$Ralph|sks ralph/i);
+      assert.doesNotMatch(text, /Lean Engineering Policy|safe single expression|release gates <= 200/i);
     }
     for (const name of PRIMARY_REMOVED) {
       await assertMissing(path.join(root, '.agents', 'skills', name));

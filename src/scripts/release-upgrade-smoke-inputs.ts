@@ -144,9 +144,9 @@ export async function fetchReleaseUpgradeBaseline(
 /**
  * The published 6.2.0 tarball is immutable and verified against
  * RELEASE_UPGRADE_BASELINE_SHA256 before this classifier is used. Legacy
- * surface strings and scanner-only token fixtures are expected in that exact
- * baseline, but malformed archives and structural inspection failures still
- * block the upgrade proof.
+ * surface strings, retired packaged files, and scanner-only token fixtures are
+ * expected in that exact baseline, but malformed archives and structural
+ * inspection failures still block the upgrade proof.
  */
 export function classifyPinnedReleaseUpgradeBaselineInspection(values: string[]): { blockers: string[]; warnings: string[] } {
   const warnings: string[] = []
@@ -155,6 +155,7 @@ export function classifyPinnedReleaseUpgradeBaselineInspection(values: string[])
     if (
       /^secret_content_detected:[a-z0-9_]+:.+:[a-f0-9]{16}$/.test(value)
       || /^retired_surface_content_detected:[a-z0-9_]+:.+:[a-f0-9]{16}$/.test(value)
+      || /^retired_package_file_present:package\/.+/.test(value)
       || value === 'retired_surface_scan_finding_limit_reached'
     ) {
       warnings.push(`published_6_2_expected_content:${value}`)

@@ -134,7 +134,7 @@ const report = {
   scope: {
     release_version: version,
     gate: `${version} current release DAG`,
-    ok_means: 'current 6.5 release contract, Codex 0.144.5, native capability self-repair, Voxel TriWiki, flagship routes, and signed full-run stamp have no structural blocker',
+    ok_means: 'current 6.7.0 release contract, Codex 0.144.5, native capability self-repair, Voxel TriWiki, flagship routes, and signed full-run stamp have no structural blocker',
     legacy_report_surfaces_removed: true,
     strict_readiness_mode: true
   },

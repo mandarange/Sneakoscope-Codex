@@ -15,6 +15,11 @@ import {
   NARUTO_SUMMARY_FILENAME,
   SUBAGENT_PLAN_FILENAME
 } from './official-subagent-preparation.js'
+import {
+  effectiveSubagentTarget,
+  normalizeLegacySubagentCountFields,
+  subagentCountContractBlockers
+} from './wave-lifecycle.js'
 
 export const NARUTO_PROOF_ARTIFACT_FILENAMES = Object.freeze([
   SUBAGENT_PLAN_FILENAME,
@@ -118,9 +123,9 @@ export function projectNarutoProofSnapshot(input: {
   const blockers = [...input.snapshot.read_blockers]
   const plan = parseJsonArtifact(input.snapshot, SUBAGENT_PLAN_FILENAME, blockers)
   const parentSummaryValue = parseJsonArtifact(input.snapshot, SUBAGENT_PARENT_SUMMARY_FILENAME, blockers)
-  const persistedEvidence = parseJsonArtifact(input.snapshot, SUBAGENT_EVIDENCE_FILENAME, blockers)
-  const summary = parseJsonArtifact(input.snapshot, NARUTO_SUMMARY_FILENAME, blockers)
-  const gate = parseJsonArtifact(input.snapshot, NARUTO_GATE_FILENAME, blockers)
+  const persistedEvidence = normalizeLegacySubagentCountFields(parseJsonArtifact(input.snapshot, SUBAGENT_EVIDENCE_FILENAME, blockers), isRecord(plan) ? plan : null)
+  const summary = normalizeLegacySubagentCountFields(parseJsonArtifact(input.snapshot, NARUTO_SUMMARY_FILENAME, blockers), isRecord(plan) ? plan : null)
+  const gate = normalizeLegacySubagentCountFields(parseJsonArtifact(input.snapshot, NARUTO_GATE_FILENAME, blockers), isRecord(plan) ? plan : null)
   const events = parseJsonlArtifact(input.snapshot, blockers)
   const workflowRunId = firstText(recordValue(plan, 'workflow_run_id')) || null
 
@@ -133,19 +138,35 @@ export function projectNarutoProofSnapshot(input: {
     blockers.push('proof_parent_summary_run_identity_mismatch')
   }
 
-  const requestedSubagents = positiveInteger(recordValue(plan, 'requested_subagents'))
-  const rebuiltEvidence = requestedSubagents === null
+  const planRequestedSubagents = positiveInteger(recordValue(plan, 'requested_subagents'))
+  const observedStarts = new Set(events
+    .filter((event) => recordValue(event, 'event_name') === 'SubagentStart'
+      && firstText(recordValue(event, 'run_id')) === workflowRunId)
+    .map((event) => firstText(recordValue(event, 'thread_id')))
+    .filter(Boolean)).size
+  const countTarget = effectiveSubagentTarget(isRecord(plan) ? plan : null, observedStarts)
+  validateCountContractArtifacts({
+    persistedEvidence,
+    summary,
+    gate,
+    countPolicy: countTarget.countPolicy,
+    targetSubagents: countTarget.targetSubagents
+  }, blockers)
+  const rebuiltEvidence = planRequestedSubagents === null
     ? null
     : buildSubagentEvidence({
-        requestedSubagents,
+        requestedSubagents: countTarget.requestedSubagents,
+        countPolicy: countTarget.countPolicy,
+        targetSubagents: countTarget.targetSubagents,
         events,
         parentSummary: parentSummaryValue,
         parentSummaryPresent: parentSummaryValue !== null,
         workflowStatus: firstText(recordValue(summary, 'status')),
         preparationOnly: recordValue(persistedEvidence, 'preparation_only') === true,
-        runId: workflowRunId
+        runId: workflowRunId,
+        additionalBlockers: subagentCountContractBlockers(isRecord(plan) ? plan : null, observedStarts)
       })
-  if (requestedSubagents === null && plan !== null) blockers.push('proof_plan_requested_subagents_invalid')
+  if (planRequestedSubagents === null && plan !== null) blockers.push('proof_plan_requested_subagents_invalid')
   const evidenceInputsPresent = input.snapshot.bytes[SUBAGENT_PLAN_FILENAME] !== null
     && input.snapshot.bytes[SUBAGENT_EVENT_LOG_FILENAME] !== null
     && input.snapshot.bytes[SUBAGENT_PARENT_SUMMARY_FILENAME] !== null
@@ -305,7 +326,7 @@ function validateMissionRunArtifact(
 function validatePersistedEvidence(persisted: unknown, rebuilt: ReturnType<typeof buildSubagentEvidence> | null, blockers: string[]): void {
   if (!isRecord(persisted) || !rebuilt) return
   const scalarKeys = [
-    'requested_subagents', 'started_threads', 'completed_threads', 'failed_threads',
+    'requested_subagents', 'count_policy', 'target_subagents', 'started_threads', 'completed_threads', 'failed_threads',
     'parent_summary_present', 'parent_summary_trustworthy', 'status', 'ok'
   ] as const
   for (const key of scalarKeys) {
@@ -319,6 +340,24 @@ function validatePersistedEvidence(persisted: unknown, rebuilt: ReturnType<typeo
     if (JSON.stringify(persisted[key]) !== JSON.stringify(rebuilt[key])) {
       blockers.push(`proof_evidence_rebuild_mismatch:${key}`)
     }
+  }
+}
+
+function validateCountContractArtifacts(input: {
+  persistedEvidence: unknown
+  summary: unknown
+  gate: unknown
+  countPolicy: string
+  targetSubagents: number
+}, blockers: string[]): void {
+  for (const [label, value] of [
+    ['evidence', input.persistedEvidence],
+    ['summary', input.summary],
+    ['gate', input.gate]
+  ] as const) {
+    if (!isRecord(value)) continue
+    if (value.count_policy !== input.countPolicy) blockers.push(`proof_${label}_count_policy_mismatch`)
+    if (Number(value.target_subagents || 0) !== input.targetSubagents) blockers.push(`proof_${label}_target_subagents_mismatch`)
   }
 }
 

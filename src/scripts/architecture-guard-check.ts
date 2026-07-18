@@ -56,15 +56,8 @@ assertIncludes('docs/architecture.md', '`config/architecture-budgets.v1.json`', 
 for (const token of ['`80`', '`250`', '`450`', '`500`', '`900`', '`1200`', '`1800`', '`3000`', '`--strict-all`', 'shrink-only']) {
   assertIncludes('docs/architecture.md', token, `architecture docs missing ${token}`);
 }
-assertIncludes('src/core/safety/ssot-guard.ts', 'solid_principles');
-assertIncludes('src/core/safety/ssot-guard.ts', 'single_responsibility');
-assertIncludes('src/core/safety/ssot-guard.ts', 'open_closed');
-assertIncludes('src/core/safety/ssot-guard.ts', 'liskov_substitution');
-assertIncludes('src/core/safety/ssot-guard.ts', 'interface_segregation');
-assertIncludes('src/core/safety/ssot-guard.ts', 'dependency_inversion');
 assertIncludes('src/core/pipeline-internals/runtime-core.ts', "'ssot_guard'");
 assertIncludes('src/core/pipeline-internals/runtime-core.ts', 'buildSsotGuard');
-assertIncludes('src/core/pipeline-internals/runtime-core.ts', 'ssotGuardPolicyText');
 assertIncludes('src/core/pipeline-internals/runtime-gates.ts', 'validateSsotGuardArtifact');
 assertIncludes('src/core/pipeline-internals/runtime-gates.ts', "'ssot_guard'");
 assertIncludes('src/core/subagents/official-subagent-preparation.ts', 'SSOT_GUARD_ARTIFACT');
@@ -74,13 +67,12 @@ assertIncludes('src/scripts/release-parallel-check.ts', "'--preset', 'release', 
 assertIncludes('src/core/release/gate-manifest.ts', "'architecture:guard'");
 assertIncludes('src/core/release/gate-manifest.ts', "'architecture:'");
 assertIncludes('docs/architecture-ts-rust-boundary.md', '`architecture:guard`');
-assertIncludes('docs/architecture-ts-rust-boundary.md', 'SOLID');
 
 const report = {
   schema: 'sks.architecture-guard-check.v1',
   ok: issues.length === 0,
   gate: 'architecture:guard',
-  guarantees: ['ssot', 'solid', 'merge-base', 'shrink-only'],
+  guarantees: ['ssot', 'merge-base', 'shrink-only'],
   issues
 };
 

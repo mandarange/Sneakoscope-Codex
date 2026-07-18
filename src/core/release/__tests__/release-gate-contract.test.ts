@@ -3,6 +3,13 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import { evaluateReleaseParallelFullCoverage } from '../../release-parallel-full-coverage.js'
 import { RELEASE_GATE_CONTRACT_IDS, releaseGateContractSnapshot } from '../release-gate-contract.js'
+import { selectReleaseGateClosure, selectReleaseGatePreset } from '../release-gate-dag.js'
+
+const INCREMENTAL_ONLY_GATE_IDS = [
+  'test:commands-regression',
+  'test:core-root-regression',
+  'test:menubar-doctor'
+]
 
 test('release manifest matches the independent full gate contract exactly', () => {
   const manifest = JSON.parse(fs.readFileSync('release-gates.v2.json', 'utf8'))
@@ -22,6 +29,24 @@ test('release manifest matches the independent full gate contract exactly', () =
   const contract = releaseGateContractSnapshot()
   assert.equal(contract.count, ids.length)
   assert.match(contract.sha256, /^[a-f0-9]{64}$/)
+})
+
+test('full release excludes duplicate canonical suites while incremental selectors retain them', () => {
+  const manifest = JSON.parse(fs.readFileSync('release-gates.v2.json', 'utf8'))
+  const releaseIds = selectReleaseGatePreset(manifest, 'release').map((gate) => gate.id).sort()
+  const incrementalIds = selectReleaseGatePreset(manifest, 'incremental').map((gate) => gate.id).sort()
+  assert.deepEqual(incrementalIds, INCREMENTAL_ONLY_GATE_IDS)
+  for (const id of INCREMENTAL_ONLY_GATE_IDS) assert.equal(releaseIds.includes(id), false, id)
+
+  const combinedIds = [...releaseIds, ...incrementalIds].sort()
+  for (const preset of ['affected', 'fast', 'confidence']) {
+    assert.deepEqual(selectReleaseGatePreset(manifest, preset).map((gate) => gate.id).sort(), combinedIds, preset)
+  }
+
+  assert.deepEqual(
+    selectReleaseGateClosure(manifest, ['test:commands-regression']).map((gate) => gate.id),
+    ['test:commands-regression']
+  )
 })
 
 test('release coverage rejects both removed and uncontracted gates', () => {

@@ -40,3 +40,37 @@ test('agent worker result blocks recursive route attempts', () => {
   assert.equal(result.status, 'blocked');
   assert.ok(result.blockers.some((blocker) => blocker.includes('recursion:sks naruto')));
 });
+
+test('bugfix workers may use focused verification without synthetic failed-before test proof', () => {
+  const writeResult = (verification) => validateAgentWorkerResult({
+    ...validResult,
+    work_item_kind: 'bugfix',
+    task_slice_id: 'fix-config-rendering',
+    changed_files: ['owned.ts'],
+    writes: ['owned.ts'],
+    verification,
+    patch_envelopes: [{
+      schema: 'sks.agent-patch-envelope.v1',
+      source: 'fixture',
+      agent_id: 'agent_architect',
+      session_id: 'agent_architect-session-01',
+      slot_id: 'slot-01',
+      generation_index: 1,
+      task_slice_id: 'fix-config-rendering',
+      lease_id: 'fix-config-rendering',
+      allowed_paths: ['owned.ts'],
+      operations: [{ op: 'write', path: 'owned.ts', content: 'export const fixed = true;\n' }]
+    }]
+  });
+
+  const result = writeResult({ status: 'passed', checks: ['focused rendering check'] });
+  assert.equal(result.status, 'done');
+  assert.equal(result.blockers.some((blocker) => blocker === 'tdd_evidence_missing'), false);
+
+  const unverified = writeResult({ status: 'not_run', checks: [] });
+  assert.equal(unverified.status, 'blocked');
+  assert.ok(unverified.blockers.includes('verification_evidence_missing'));
+
+  const justified = writeResult({ status: 'not_applicable', checks: [], reason: 'documentation-only generated text change has no runnable behavior' });
+  assert.equal(justified.status, 'done');
+});

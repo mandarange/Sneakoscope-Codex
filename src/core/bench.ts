@@ -353,7 +353,7 @@ export async function runLeanPolicyBench(root: any = process.cwd()) {
 async function fakeGptFinalScenario(candidate: string, leanEnabled: boolean) {
   const prompt = [
     leanEnabled ? leanEngineeringCompactText() : 'Baseline implementation context without lean policy.',
-    leanEnabled ? 'Lean review: evaluate over-build, dependency, fallback, root-cause, and validation safety.' : 'Review only catastrophic safety issues.',
+    leanEnabled ? 'Apply the Core Engineering Directive to the candidate and the available evidence.' : 'Review only catastrophic safety issues.',
     `Candidate: ${candidate}`
   ].join('\n');
   const result = await runFakeCodexSdkTask({

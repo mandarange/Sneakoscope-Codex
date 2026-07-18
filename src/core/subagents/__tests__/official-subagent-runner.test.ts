@@ -6,14 +6,15 @@ import path from 'node:path'
 import fsp from 'node:fs/promises'
 import {
   buildOfficialSubagentCodexArgs,
+  buildOfficialSubagentChildEnv,
   codexAppSessionKey,
   detectCodexAppSession,
   runOfficialSubagentWorkflow
 } from '../official-subagent-runner.js'
 import { writeNarutoGate } from '../official-subagent-preparation.js'
-import { CODEX_LB_TOOL_OUTPUT_RECOVERY_MIN_VERSION } from '../../codex-lb/codex-lb-tool-output-recovery.js'
 import { addMcpServer, editMcpServer } from '../../mcp-config/mutation.js'
 import type { CodexCliMutationOperation, CodexMcpCliPort } from '../../mcp-config/codex-cli-adapter.js'
+import { runProcess } from '../../fsx.js'
 
 class UnavailableMcpCli implements CodexMcpCliPort {
   async list() {
@@ -47,6 +48,8 @@ test('standalone parent args launch one Sol Max Codex parent with the official t
     parentSummaryFile: '/tmp/parent-summary.txt'
   })
   assert.deepEqual(args.slice(0, 5), ['exec', '-m', 'gpt-5.6-sol', '-c', 'model_reasoning_effort="max"'])
+  assert.ok(args.includes('model_provider="openai"'))
+  assert.ok(args.includes('forced_login_method="chatgpt"'))
   assert.ok(args.includes('agents.max_threads=12'))
   assert.ok(args.includes('agents.max_depth=1'))
   assert.equal(args.filter((arg) => arg === 'exec').length, 1)
@@ -81,6 +84,139 @@ test('Codex thread environment selects the in-app path unless standalone is expl
   assert.equal(codexAppSessionKey({ CODEX_THREAD_ID: 'thread' }), 'thread')
   assert.equal(codexAppSessionKey({ SKS_NARUTO_APP_SESSION: '1' }), null)
   assert.equal(codexAppSessionKey({ CODEX_THREAD_ID: 'thread', SKS_NARUTO_STANDALONE_CLI: '1' }), null)
+})
+
+test('standalone child environment keeps only the official runtime allowlist and launch ownership', () => {
+  const env = buildOfficialSubagentChildEnv({
+    missionId: 'M-isolated-parent',
+    env: {
+      HOME: '/tmp/official-home',
+      CODEX_HOME: '/tmp/official-home/.codex',
+      PATH: '/usr/bin:/bin',
+      OPENAI_API_KEY: 'sk-official-auth',
+      CODEX_API_KEY: 'codex-api-auth',
+      CODEX_AUTH_TOKEN: 'codex-auth-token',
+      OPENAI_ORGANIZATION: 'org-must-not-inherit',
+      OPENAI_PROJECT: 'project-must-not-inherit',
+      HTTPS_PROXY: 'https://proxy.example.test',
+      CODEX_THREAD_ID: 'must-not-inherit-app-session',
+      CODEX_LB_API_KEY: 'must-not-inherit-lb-auth',
+      AWS_SECRET_ACCESS_KEY: 'must-not-inherit-cloud-auth',
+      PROJECT_MCP_ALLOWED: 'must-not-inherit-arbitrary-project-env'
+    }
+  })
+  assert.equal(env.HOME, '/tmp/official-home')
+  assert.equal(env.CODEX_HOME, '/tmp/official-home/.codex')
+  assert.equal(env.PATH, '/usr/bin:/bin')
+  assert.equal(env.SKS_NARUTO_STANDALONE_CLI, '0')
+  assert.equal(env.SKS_NARUTO_PARENT_LAUNCH, '1')
+  assert.equal(env.SKS_NARUTO_PARENT_MISSION_ID, 'M-isolated-parent')
+  assert.equal(env.OPENAI_API_KEY, undefined)
+  assert.equal(env.CODEX_API_KEY, undefined)
+  assert.equal(env.CODEX_AUTH_TOKEN, undefined)
+  assert.equal(env.OPENAI_ORGANIZATION, undefined)
+  assert.equal(env.OPENAI_PROJECT, undefined)
+  assert.equal(env.HTTPS_PROXY, undefined)
+  assert.equal(env.CODEX_THREAD_ID, undefined)
+  assert.equal(env.CODEX_LB_API_KEY, undefined)
+  assert.equal(env.AWS_SECRET_ACCESS_KEY, undefined)
+  assert.equal(env.PROJECT_MCP_ALLOWED, undefined)
+})
+
+test('standalone parent replaces the real child environment and redacts inherited secret values from output', { timeout: 20_000 }, async (t) => {
+  if (process.platform === 'win32') return t.skip('executable fixture uses a POSIX shebang')
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-official-subagent-env-isolation-'))
+  const home = path.join(root, 'home')
+  const codexHome = path.join(home, '.codex')
+  const fakeCodex = path.join(root, 'codex-env-fixture.mjs')
+  const envReceipt = path.join(root, 'child-env.json')
+  const inheritedAuthSecret = 'sk-official-child-auth-secret'
+  const blockedSecret = 'blocked-host-secret-value'
+  const previousHostSecret = process.env.HOST_INHERITED_SECRET
+  process.env.HOST_INHERITED_SECRET = blockedSecret
+  t.after(async () => {
+    if (previousHostSecret === undefined) delete process.env.HOST_INHERITED_SECRET
+    else process.env.HOST_INHERITED_SECRET = previousHostSecret
+    await fsp.rm(root, { recursive: true, force: true })
+  })
+  await fsp.mkdir(codexHome, { recursive: true })
+  await fsp.writeFile(fakeCodex, [
+    '#!/usr/bin/env node',
+    "import fs from 'node:fs'",
+    `fs.writeFileSync(${JSON.stringify(envReceipt)}, JSON.stringify(process.env))`,
+    "const args = process.argv.slice(2)",
+    "const outputIndex = args.indexOf('--output-last-message')",
+    "const outputFile = outputIndex >= 0 ? args[outputIndex + 1] : ''",
+    `console.log('stdout auth=${inheritedAuthSecret} blocked=${blockedSecret} short=ok')`,
+    `console.error('stderr auth=${inheritedAuthSecret} blocked=${blockedSecret} short=ok')`,
+    `fs.writeFileSync(outputFile, 'summary auth=${inheritedAuthSecret} blocked=${blockedSecret} short=ok')`
+  ].join('\n'), { mode: 0o700 })
+
+  const result = await runOfficialSubagentWorkflow({
+    root,
+    prompt: 'inspect isolated environment',
+    requestedSubagents: 1,
+    maxThreads: 1,
+    appSession: false,
+    missionId: 'M-real-env-isolation',
+    codexBin: fakeCodex,
+    runProcessImpl: async (_command, args, options) => runProcess(fakeCodex, args, options),
+    env: {
+      HOME: home,
+      CODEX_HOME: codexHome,
+      PATH: process.env.PATH,
+      OPENAI_API_KEY: inheritedAuthSecret,
+      SHORT_TOKEN: 'ok',
+      HTTPS_PROXY: 'https://user:proxy-secret@proxy.example.test',
+      CODEX_THREAD_ID: 'outer-app-thread',
+      CODEX_LB_API_KEY: 'blocked-lb-secret',
+      UNRELATED_RUNTIME_VALUE: 'must-not-reach-child'
+    }
+  })
+
+  const actualChildEnv = JSON.parse(await fsp.readFile(envReceipt, 'utf8'))
+  assert.equal(actualChildEnv.HOME, home)
+  assert.equal(actualChildEnv.CODEX_HOME, codexHome)
+  assert.equal(actualChildEnv.OPENAI_API_KEY, undefined)
+  assert.equal(actualChildEnv.HTTPS_PROXY, undefined)
+  assert.equal(actualChildEnv.SKS_NARUTO_PARENT_MISSION_ID, 'M-real-env-isolation')
+  assert.equal(actualChildEnv.CODEX_THREAD_ID, undefined)
+  assert.equal(actualChildEnv.CODEX_LB_API_KEY, undefined)
+  assert.equal(actualChildEnv.UNRELATED_RUNTIME_VALUE, undefined)
+  assert.equal(actualChildEnv.HOST_INHERITED_SECRET, undefined)
+  assert.doesNotMatch(result.process.stdout_tail, new RegExp(inheritedAuthSecret + '|' + blockedSecret))
+  assert.doesNotMatch(result.process.stderr_tail, new RegExp(inheritedAuthSecret + '|' + blockedSecret))
+  assert.doesNotMatch(result.parent_summary, new RegExp(inheritedAuthSecret + '|' + blockedSecret))
+  assert.match(result.process.stdout_tail, /stdout auth=<redacted> blocked=<redacted> short=ok/)
+  assert.match(result.process.stderr_tail, /stderr auth=<redacted> blocked=<redacted> short=ok/)
+  assert.equal(result.parent_summary, 'summary auth=<redacted> blocked=<redacted> short=ok')
+})
+
+test('production standalone launch rejects arbitrary executable overrides outside the explicit process seam', async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-official-subagent-executable-override-'))
+  const home = path.join(root, 'home')
+  const codexHome = path.join(home, '.codex')
+  await fsp.mkdir(codexHome, { recursive: true })
+  try {
+    const result = await runOfficialSubagentWorkflow({
+      root,
+      prompt: 'must use official package runtime',
+      requestedSubagents: 1,
+      maxThreads: 1,
+      appSession: false,
+      codexBin: path.join(root, 'untrusted-codex'),
+      env: {
+        HOME: home,
+        CODEX_HOME: codexHome,
+        PATH: root
+      }
+    })
+    assert.equal(result.ok, false)
+    assert.equal(result.status, 'trusted_runtime_blocked')
+    assert.deepEqual(result.blockers, ['codex_parent_executable_override_forbidden'])
+  } finally {
+    await fsp.rm(root, { recursive: true, force: true })
+  }
 })
 
 test('Naruto gate cannot pass when the required SSOT guard artifact is missing', async () => {
@@ -133,6 +269,7 @@ test('standalone parent launch exports the owning mission id to child hooks', as
       },
       runProcessImpl: async (_command, _args, opts: any) => {
         childEnv = opts.env
+        assert.equal(opts.envMode, 'replace')
         return { code: 1, stdout: '', stderr: 'fixture stop', stdoutBytes: 0, stderrBytes: 12, truncated: false, timedOut: false }
       }
     })
@@ -243,14 +380,13 @@ test('standalone parent converts timeout and non-zero exits into bounded blocker
   }
 })
 
-test('standalone official subagent launch blocks an incompatible selected codex-lb and permits a verified version', async () => {
-  let version = '1.20.0'
+test('standalone official subagent launch overrides selected codex-lb with the native provider', async () => {
   let authorization: string | undefined
   const server = http.createServer((request, response) => {
     authorization = request.headers.authorization
     response.writeHead(200, {
       'content-type': 'application/json',
-      'x-app-version': version
+      'x-app-version': '1.20.0'
     })
     response.end(JSON.stringify({ status: 'ok' }))
   })
@@ -284,7 +420,7 @@ test('standalone official subagent launch blocks an incompatible selected codex-
     return { code: 1, stdout: '', stderr: 'fixture stop', stdoutBytes: 0, stderrBytes: 12, truncated: false, timedOut: false }
   }
   try {
-    const blocked = await runOfficialSubagentWorkflow({
+    const result = await runOfficialSubagentWorkflow({
       root,
       prompt: 'delegate and wait',
       requestedSubagents: 2,
@@ -293,27 +429,12 @@ test('standalone official subagent launch blocks an incompatible selected codex-
       env,
       runProcessImpl
     })
-    assert.equal(blocked.ok, false)
-    assert.equal(blocked.status, 'tool_output_recovery_blocked')
-    assert.equal(blocked.tool_output_recovery.status, 'version_too_old')
-    assert.equal(launches, 0)
-    assert.equal(authorization, undefined)
-    assert.doesNotMatch(JSON.stringify(blocked), /sk-official-subagent-secret/)
-
-    version = CODEX_LB_TOOL_OUTPUT_RECOVERY_MIN_VERSION
-    const permitted = await runOfficialSubagentWorkflow({
-      root,
-      prompt: 'delegate and wait',
-      requestedSubagents: 2,
-      maxThreads: 2,
-      appSession: false,
-      env,
-      runProcessImpl
-    })
-    assert.equal(permitted.status, 'parent_failed')
-    assert.equal(permitted.tool_output_recovery.status, 'compatible')
+    assert.equal(result.ok, false)
+    assert.equal(result.status, 'parent_failed')
+    assert.equal(result.tool_output_recovery.status, 'not_selected')
     assert.equal(launches, 1)
     assert.equal(authorization, undefined)
+    assert.doesNotMatch(JSON.stringify(result), /sk-official-subagent-secret/)
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()))
     await fsp.rm(root, { recursive: true, force: true })
@@ -427,6 +548,7 @@ test('standalone Naruto parent consumes the existing project MCP config and call
     appSession: false,
     missionId: 'M-project-mcp-fixture',
     codexBin: fakeCodex,
+    runProcessImpl: async (_command, args, options) => runProcess(fakeCodex, args, options),
     env: {
       HOME: home,
       CODEX_HOME: codexHome,

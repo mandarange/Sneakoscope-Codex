@@ -282,7 +282,7 @@ test('project update migration reconciles HOME and global-runtime guidance and r
     assert.equal(cleanup?.ok, true);
     for (const root of [project, home, globalRuntimeRoot]) {
       const text = `${await fs.readFile(path.join(root, 'AGENTS.md'), 'utf8')}\n${await fs.readFile(path.join(root, '.codex', 'SNEAKOSCOPE.md'), 'utf8')}`;
-      assert.match(text, /\$Naruto|naruto run/);
+      assert.match(text, /\$sks-naruto/);
       assert.doesNotMatch(text, /\$Team|sks team|\$MAD-DB|sks mad-db/i);
     }
     const homeConfig = await fs.readFile(path.join(home, '.codex', 'config.toml'), 'utf8');

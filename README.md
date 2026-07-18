@@ -18,16 +18,18 @@ Proof-first orchestration for Codex CLI, ChatGPT Desktop, AI coding agents, mult
 Sneakoscope Codex (`sks`) is an open-source trust layer for Codex CLI and ChatGPT Desktop. It coordinates bounded AI coding agents, records machine-verifiable evidence, preserves project memory, and blocks release claims that are not supported by current tests or artifacts. Search visibility outcomes are measured separately; SKS does not promise rankings or traffic.
 <!-- END SKS SEARCH VISIBILITY MARKETING -->
 
-Current release: **SKS 6.5.1**, validated against the official stable **Codex CLI 0.144.5** release from July 16, 2026. It keeps the Control Center alive through self-update completion, restores SKS-hidden Chat/Pro model access in the latest Codex desktop surface, makes Fast mode independently visible and selectable from the menu bar, and stabilizes same-mission Naruto admission, deterministic proof receipts, and project-scoped MCP inheritance. The `0.145.0-alpha` line is intentionally excluded from the stable release baseline. See [CHANGELOG.md](CHANGELOG.md).
+Current release: **SKS 6.7.0**, validated against the official stable **Codex CLI 0.144.5** release from July 16, 2026. It makes the Control Center Overview report build, install, cache, rebuild, and probe health from their real authorities; adds root-owned Naruto follow-up waves with recovered thread capacity; separates Terra Medium exploration, Sol High implementation, and Sol Max judgment; and replaces duplicated global guidance with one concise Core Engineering Directive. The `0.145.0-alpha` line is intentionally excluded from the stable release baseline. See [CHANGELOG.md](CHANGELOG.md).
 
-## What 6.5.1 Fixes
+## What 6.7.0 Fixes
 
-| Problem | 6.5.1 behavior |
+| Problem | 6.7.0 behavior |
 | --- | --- |
-| Control Center disappeared during an update | The new package is installed and verified without killing the active Control Center; the final receipt is synchronized before a detached menu-bar relaunch. |
-| Chat entry and Pro model access disappeared in Codex Desktop | SKS removes only provenance-marked global provider/model locks that it owns, while preserving user-owned providers, credentials, and explicit settings. |
-| Fast mode was missing from Codex Desktop and the menu bar | Desktop Fast selection is repaired without conflating it with reasoning effort, and the menu bar exposes current Fast status plus direct On/Off actions. |
-| Concurrent hosts could duplicate a Naruto mission or reinterpret its proof | One mission admits one standalone Codex parent, terminal bundles are reused immutably, proof returns a deterministic six-artifact fingerprint, and trusted project MCP configuration is inherited by the parent. |
+| Overview mixed Menu Bar, installed SKS, and cached registry versions | Each value is labeled by authority, stale or unavailable probes remain explicit, and Refresh forces a bounded update-status refresh. |
+| Naruto stopped creating children after its first wave | The root parent records settled waves, recovers open-thread capacity, rescans the ready DAG, and can launch later direct-child waves under the same workflow run. |
+| Most delegated work drifted to Sol Max | Read-heavy discovery uses Terra Medium, ordinary implementation uses Sol High, and Sol Max is reserved for focused high-risk or final judgment slices. |
+| Goal creation started a second SKS-owned mission and loop | Codex native Goal is the only persisted owner; create/edit objectives are detailed and bounded, while SKS writes no Goal state or fallback loop. |
+| Global instructions accumulated duplicated route rules and forced synthetic tests | One Core Engineering Directive anchors all work, route-specific details stay with their route, and verification targets normal behavior, meaningful boundaries, and plausible failures. |
+| GUI-launched status commands could hang or contaminate real update state during tests | Menu Bar commands use a safe HOME cwd, closed stdin, and timeouts; update fixtures use isolated HOME and cache paths. |
 
 ## Install In One Command
 

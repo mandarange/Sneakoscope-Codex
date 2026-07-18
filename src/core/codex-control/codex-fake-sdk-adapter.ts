@@ -35,7 +35,7 @@ export async function runFakeCodexSdkTask(input: CodexTaskInput) {
 function fakeStructuredOutput(input: CodexTaskInput) {
   if (input.outputSchemaId === GPT_FINAL_ARBITER_RESULT_SCHEMA_ID) {
     const prompt = String(input.prompt || '')
-    const leanEnabled = /\b(Lean review|Lean Engineering Policy|sks\.lean-engineering-policy)\b/i.test(prompt)
+    const leanEnabled = /\b(Core Engineering Directive|sks\.lean-engineering-policy)\b/i.test(prompt)
     const unsafe = /\b(truncate|delete all|drop table|credential|delete validation|validation removed|path traversal|sql injection|secret leak)\b/i.test(prompt)
     const overbuild = leanEnabled ? classifyLeanOverbuild(prompt) : null
     const status = unsafe ? 'rejected' : overbuild ? 'needs_more_work' : 'approved'

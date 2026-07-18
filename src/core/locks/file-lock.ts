@@ -93,7 +93,7 @@ async function tryAcquireFileLock(lockPath: string, staleMs: number): Promise<He
     } catch (err: unknown) {
       if (errorCode(err) !== 'EEXIST') throw err;
       if (attempt > 0) return null;
-      recovered = await recoverStaleLock(lockPath);
+      recovered = await recoverStaleLock(lockPath, staleMs);
       if (!recovered) return null;
     }
   }
@@ -164,18 +164,22 @@ async function writeOwnerFile(
 // waiter whose rename succeeds proceeds to retry acquisition, so two
 // concurrent waiters can never both believe they reclaimed the same lock
 // (the previous mtime-only check + direct rm -rf allowed exactly that).
-async function recoverStaleLock(lockPath: string): Promise<boolean> {
+async function recoverStaleLock(lockPath: string, requestedStaleMs: number): Promise<boolean> {
   const ownerPath = path.join(lockPath, 'owner.json');
   const info = await readJson<FileLockOwnerSnapshot | null>(ownerPath, null);
   let stale: boolean;
   if (!info || typeof info.pid !== 'number' || !info.heartbeat_at) {
     // No readable owner record: fall back to directory mtime so a lock left
     // over from before this format existed can still be reclaimed.
-    stale = await isDirMtimeStale(lockPath, Math.max(1, info?.stale_ms || 30_000));
+    stale = await isDirMtimeStale(lockPath, Math.max(1, requestedStaleMs));
   } else {
     const heartbeatAgeMs = Date.now() - Date.parse(info.heartbeat_at);
+    const effectiveStaleMs = Math.min(
+      Math.max(1, requestedStaleMs),
+      Math.max(1, Number(info.stale_ms) || requestedStaleMs)
+    );
     stale = Number.isFinite(heartbeatAgeMs)
-      && heartbeatAgeMs > info.stale_ms
+      && heartbeatAgeMs > effectiveStaleMs
       && !ownerHasLivePid(info);
   }
   if (!stale) return false;

@@ -63,7 +63,10 @@ const managedAgents = init.agentsBlockText();
 assertGate(!/\bralph\b/i.test(managedAgents), 'managed project guidance must describe only the current Goal surface');
 assertGate(!managedAgents.includes('$From-Chat-IMG'), 'managed project guidance must not advertise an unregistered visual route name');
 assertGate(!managedAgents.includes('$from-chat-img'), 'managed project guidance must not advertise the visual add-on skill as another execution alias');
-assertGate(managedAgents.includes('$sks-from-chat-img'), 'managed project guidance must retain the namespaced Naruto visual add-on skill');
+assertGate(
+  listedSkillAliases.includes('$sks-from-chat-img'),
+  'visible Codex App picker skills must retain the namespaced Naruto visual add-on skill'
+);
 assertGate(listedSkillAliases.every((name: string) => name === '$sks' || name.startsWith('$sks-')), 'every visible Codex App picker skill must use the sks- namespace');
 assertGate(new Set(listedSkillAliases).size === listedSkillAliases.length, 'visible Codex App picker skills must not contain duplicates');
 assertGate(listedDollarCommands.every((name: string) => name === '$sks' || name.startsWith('$sks-')), 'every visible dollar command must use the sks- namespace');

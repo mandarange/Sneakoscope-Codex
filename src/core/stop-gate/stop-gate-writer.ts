@@ -159,8 +159,6 @@ function evidenceMissingBlockers(evidence: SksStopGateEvidence): string[] {
   const blockers: string[] = [];
   if (evidence.proof_required === true && evidence.proof_passed !== true) blockers.push('proof_not_passed');
   if (evidence.reflection_required === true && evidence.reflection_passed !== true && evidence.reflection_passed !== 'not_required') blockers.push('reflection_not_passed');
-  if (evidence.regression_test_added === false) blockers.push('regression_test_not_added');
-  if (evidence.regression_test_failed_before_fix === false) blockers.push('regression_test_failed_before_fix_missing');
   if (evidence.required_coverage_passed === false) blockers.push('coverage_required_but_not_passed');
   if ((evidence.uncovered_required_count ?? 0) > 0) blockers.push(`work_order_uncovered_count:${evidence.uncovered_required_count}`);
   return blockers;

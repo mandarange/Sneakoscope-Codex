@@ -160,6 +160,11 @@ const CONTEXT_TOOL_TASK_RE = new RegExp([
   '(?:repository|repo)[- ]?wide',
   'read[- ]?heavy',
   'supporting[- ]?documents?',
+  '\\bdocs?\\b',
+  'documentation',
+  'reference[- ]?manual',
+  'architecture[- ]?notes?',
+  '\\bcompare\\b[^\\n]{0,48}\\b(?:notes?|documents?|references?)\\b',
   'multi[- ]?(?:document|file) scan',
   '\\bexplor(?:e|er|ation)\\b',
   '\\bscan(?:ning)?\\b',
@@ -177,6 +182,8 @@ const CONTEXT_TOOL_TASK_RE = new RegExp([
   '대규모',
   '저장소\\s*전체',
   '여러\\s*(?:문서|파일)',
+  '문서\\s*(?:조사|탐색|읽기|정리)',
+  '공식\\s*문서',
   '탐색',
   '스캔',
   '추출',
@@ -244,6 +251,9 @@ const IMPLEMENTATION_TASK_RE = new RegExp([
   '스위프트'
 ].join('|'), 'i')
 
+const CLEAR_IMPLEMENTATION_ACTION_RE = /(?:^|[.!?]\s*|\bphase\s*:\s*)\s*(?:implement|build|create|add|modify|fix|code|refactor)\b|(?:^|[.!?]\s*)\s*(?:구현|개발|추가|수정|고쳐|코딩|리팩터)/i
+const DOCUMENT_EXPLORATION_RE = /\b(?:read|scan|explore|compare|summarize|review)\b[^\n]{0,64}\b(?:docs?|documentation|manual|notes?|references?)\b|(?:문서|매뉴얼|노트|자료)[^\n]{0,32}(?:읽|탐색|조사|비교|정리|검토)/i
+
 export function subagentModelProfile(policy: SubagentModelPolicyId): SubagentModelProfile {
   return SUBAGENT_MODEL_POLICIES[policy]
 }
@@ -269,33 +279,63 @@ export function decideSubagentModel(input: {
     input.expectedOutput
   ].filter(Boolean).join(' ')
 
-  const judgment = input.requiresJudgment === true
-    || input.taskClass === 'judgment'
-    || JUDGMENT_TASK_RE.test(text)
-  if (judgment) return decision('sol_max_judgment')
+  // Explicit phase/task classification is authoritative. Free-form prompts
+  // often mention review, risk, architecture, or debugging as incidental
+  // context for an otherwise clear implementation or exploration slice.
+  if (input.taskClass === 'judgment') return decision('sol_max_judgment')
+  if (input.taskClass === 'context_tools') return decision('terra_medium_context_tools')
+  if (input.taskClass === 'mechanical') return decision('luna_max_mechanical')
+  if (input.taskClass === 'implementation') return decision('sol_high_implementation')
 
-  const contextOrTools = input.longContext === true
+  const explicitContextOrTools = input.longContext === true
     || input.toolHeavy === true
-    || input.taskClass === 'context_tools'
     || input.contextMode === 'long'
     || (input.toolSurface !== undefined && input.toolSurface !== 'none')
     || input.scopeSize === 'large'
-    || CONTEXT_TOOL_TASK_RE.test(text)
-  if (contextOrTools) return decision('terra_medium_context_tools')
+  if (explicitContextOrTools) return decision('terra_medium_context_tools')
+
+  if (input.requiresJudgment === true) return decision('sol_max_judgment')
 
   const simpleMechanical = input.simpleMechanical === true
-    || input.taskClass === 'mechanical'
     || input.scopeSize === 'tiny'
     || SIMPLE_MECHANICAL_TASK_RE.test(text)
   if (simpleMechanical) return decision('luna_max_mechanical')
 
-  const implementation = input.taskClass === 'implementation' || IMPLEMENTATION_TASK_RE.test(text)
+  const implementation = IMPLEMENTATION_TASK_RE.test(text)
+  if (implementation && CLEAR_IMPLEMENTATION_ACTION_RE.test(text)) return decision('sol_high_implementation')
+
+  if (DOCUMENT_EXPLORATION_RE.test(text)) return decision('terra_medium_context_tools')
+
+  const focusedJudgment = FOCUSED_JUDGMENT_TASK_RE.test(text)
+  if (focusedJudgment) return decision('sol_max_judgment')
+
+  const contextOrTools = CONTEXT_TOOL_TASK_RE.test(text)
+  if (contextOrTools) return decision('terra_medium_context_tools')
+
   if (implementation) return decision('sol_high_implementation')
+
+  const judgment = JUDGMENT_TASK_RE.test(text)
+  if (judgment) return decision('sol_max_judgment')
 
   // Ambiguous work defaults to the trust-first lane. Sol High is reserved for
   // clearly identified implementation, not for underspecified judgment.
   return decision('sol_max_judgment')
 }
+
+const FOCUSED_JUDGMENT_TASK_RE = new RegExp([
+  '^\\s*(?:review|audit|debug|diagnos|investigat|plan|assess|refactor)\\b',
+  '\\bfinal[- ]?(?:review|decision|assessment)\\b',
+  '\\b(?:security|database|release|production|high[- ]?risk)\\b[^\\n]{0,48}\\b(?:review|audit|decision|plan|assessment)\\b',
+  '\\b(?:debug(?:ger|ging)?|diagnos(?:e|ing|is|tic)?|investigat(?:e|ing|ion|or)?)\\b',
+  'root[- ]?cause',
+  '\\barchitecture\\b[^\\n]{0,32}\\b(?:decision|review|design|plan)\\b',
+  '\\b(?:unresolved|ambiguous)\\b[^\\n]{0,32}\\b(?:decision|risk|trade[- ]?off|judgment)\\b',
+  '최종\\s*(?:리뷰|검토|판정)',
+  '^\\s*(?:리뷰|검토|감사|디버깅|진단|조사|계획|평가)',
+  '(?:보안|데이터베이스|릴리스|운영|고위험)[^\\n]{0,32}(?:리뷰|감사|판정|계획)',
+  '디버깅|진단|근본\\s*원인',
+  '아키텍처[^\\n]{0,24}(?:결정|리뷰|설계|계획)'
+].join('|'), 'i')
 
 export function isReasoningSensitiveSubagentTask(input: Parameters<typeof decideSubagentModel>[0] = {}): boolean {
   return decideSubagentModel(input).policy === 'sol_max_judgment'

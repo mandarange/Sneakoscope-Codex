@@ -1,5 +1,6 @@
 export const RELEASE_CLOSURE_SCHEMA = 'sks.release-closure.v1'
 export const RELEASE_CLOSURE_MANIFEST_SCHEMA = 'sks.release-closure-manifest.v1'
+export const RELEASE_CLOSURE_AUDIT_VERSION = '6.3.0'
 export const RELEASE_630_MISSION_ID = 'M-20260715-150100-34bb'
 
 export const FINDING_PROOF_SCHEMA = 'sks.release-finding-proof.v1'

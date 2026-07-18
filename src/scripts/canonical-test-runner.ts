@@ -3,8 +3,28 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { SKS_TEMP_LEASE_FILE, tmpdir, writeJsonAtomic } from '../core/fsx.js';
+import {
+  canonicalTestCorpus,
+  canonicalTestProofPath,
+  sameCanonicalTestCorpus,
+  writeCanonicalTestProof
+} from '../core/release/canonical-test-proof.js';
+import {
+  releaseAuthorizationSnapshot,
+  sameReleaseAuthorizationSnapshot
+} from '../core/release/release-authorization-snapshot.js';
 
 const root = process.cwd();
+const proofPath = canonicalTestProofPath(root);
+function removeCanonicalTestProof(): void {
+  fs.rmSync(proofPath, { force: true });
+}
+
+removeCanonicalTestProof();
+const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+const startedAt = new Date().toISOString();
+const initialAuthorization = releaseAuthorizationSnapshot(root, pkg);
+const initialCorpus = canonicalTestCorpus(root);
 const compiled = discover(path.join(root, 'dist'), (file) => file.endsWith('.test.js') && file.includes(`${path.sep}__tests__${path.sep}`));
 const unit = discover(path.join(root, 'test', 'unit'), (file) => file.endsWith('.test.mjs'));
 const files = [...compiled, ...unit].sort();
@@ -23,6 +43,7 @@ if (!compiled.length || !unit.length) {
 const scratch = tmpdir('sks-canonical-test-');
 let cleaned = false;
 let finalized = false;
+let proofCommitted = false;
 const removeScratchSync = (): Error | null => {
   if (cleaned) return null;
   try {
@@ -59,6 +80,7 @@ const cleanup = async (): Promise<Error | null> => {
 process.once('exit', () => {
   const error = removeScratchSync();
   if (error) console.error(`canonical test cleanup failed during exit: ${error.message}`);
+  if (!proofCommitted) removeCanonicalTestProof();
 });
 
 await writeJsonAtomic(path.join(scratch, SKS_TEMP_LEASE_FILE), {
@@ -69,16 +91,18 @@ await writeJsonAtomic(path.join(scratch, SKS_TEMP_LEASE_FILE), {
 });
 
 const isolatedProcessGroup = process.platform !== 'win32';
+const childEnv: NodeJS.ProcessEnv = {
+  ...process.env,
+  TMPDIR: scratch,
+  TMP: scratch,
+  TEMP: scratch,
+  SKS_TMP_DIR: scratch
+};
+delete childEnv.NODE_OPTIONS;
 const child = spawn(process.execPath, ['--test', '--test-concurrency=1', ...files, ...process.argv.slice(2)], {
   cwd: root,
   detached: isolatedProcessGroup,
-  env: {
-    ...process.env,
-    TMPDIR: scratch,
-    TMP: scratch,
-    TEMP: scratch,
-    SKS_TMP_DIR: scratch
-  },
+  env: childEnv,
   stdio: 'inherit'
 });
 child.on('error', (error) => {
@@ -121,9 +145,34 @@ async function finalize(code: number, signal: NodeJS.Signals | null, spawnError:
   removeSignalHandlers();
   if (spawnError) console.error(`canonical test runner failed: ${spawnError.message}`);
   if (cleanupError) console.error(`canonical test cleanup failed: ${cleanupError.message}`);
+  let proofError: Error | null = null;
+  const successfulRun = code === 0 && !signal && !forwardedSignal && !spawnError && !cleanupError;
+  if (successfulRun) {
+    try {
+      const finalAuthorization = releaseAuthorizationSnapshot(root, pkg);
+      const finalCorpus = canonicalTestCorpus(root);
+      if (!sameReleaseAuthorizationSnapshot(initialAuthorization, finalAuthorization)) {
+        throw new Error('canonical_test_release_authorization_drift');
+      }
+      if (!sameCanonicalTestCorpus(initialCorpus, finalCorpus)) {
+        throw new Error('canonical_test_corpus_drift');
+      }
+      await writeCanonicalTestProof(root, {
+        started_at: startedAt,
+        completed_at: new Date().toISOString(),
+        corpus: finalCorpus,
+        release_authorization_snapshot: finalAuthorization
+      });
+      proofCommitted = true;
+    } catch (error: unknown) {
+      proofError = error instanceof Error ? error : new Error(String(error));
+      console.error(`canonical test proof failed: ${proofError.message}`);
+    }
+  }
+  if (!proofCommitted) removeCanonicalTestProof();
   if (forwardedSignal) process.kill(process.pid, forwardedSignal);
   else if (signal) process.kill(process.pid, signal);
-  else process.exitCode = spawnError || cleanupError ? 1 : code;
+  else process.exitCode = spawnError || cleanupError || proofError ? 1 : code;
 }
 
 function signalChildTree(signal: NodeJS.Signals): void {

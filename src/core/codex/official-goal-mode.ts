@@ -9,7 +9,7 @@ export interface OfficialGoalModeDetection {
   ok: boolean
   official_goal_available: boolean
   default_enabled: boolean
-  mode: 'official_goal_default' | 'sks_goal_fallback'
+  mode: 'official_goal_default' | 'official_goal_unavailable'
   codex_help_checked: boolean
   codex_goal_help_checked: boolean
   codex_features_checked: boolean
@@ -46,7 +46,7 @@ export async function detectOfficialGoalMode(opts: {
     ok: true,
     official_goal_available: official,
     default_enabled: official,
-    mode: official ? 'official_goal_default' : 'sks_goal_fallback',
+    mode: official ? 'official_goal_default' : 'official_goal_unavailable',
     codex_help_checked: Boolean(helpText),
     codex_goal_help_checked: Boolean(goalHelpText),
     codex_features_checked: Boolean(featuresText),
@@ -54,10 +54,12 @@ export async function detectOfficialGoalMode(opts: {
     codex_goals_feature_enabled: goalsFeature,
     config_goal_defaults_detected: configDefault,
     blockers: [],
-    warnings: official ? [] : ['official_goal_unavailable_using_sks_goal_fallback']
+    warnings: official ? [] : ['official_goal_unavailable_no_fallback']
   }
 }
 
+// Capability evidence for non-Goal routes. This records whether the active
+// Codex runtime exposes native Goal; it never creates or controls a goal.
 export async function writeOfficialGoalModeArtifact(dir: string, detection: OfficialGoalModeDetection): Promise<string> {
   const artifact = path.join(dir, 'goal-mode-applied.json')
   await writeJsonAtomic(artifact, detection)

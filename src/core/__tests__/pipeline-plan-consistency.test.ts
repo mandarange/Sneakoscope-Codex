@@ -88,6 +88,15 @@ test('implicit bounded Naruto routing uses the bounded official subagent workflo
   assert.equal(explicitWork.stages.some((stage: any) => stage.id === 'native_agent_intake'), false);
 });
 
+test('ordinary local bugfixes do not inherit an automatic web-scout stage', () => {
+  const task = '로그인 버그 수정해줘';
+  const plan: any = buildPipelinePlan({ route: routePrompt(task), task });
+
+  assert.equal(plan.stages.some((stage: any) => stage.id === 'solution_scout'), false);
+  assert.doesNotMatch(plan.next_actions.join('\n'), /Solution Scout|web search for similar fixes/i);
+  assert.equal('lean_decision' in plan, false);
+});
+
 test('subagent policy uses official natural-language delegation without unstable tool contracts', () => {
   const text = subagentExecutionPolicyText(routePrompt('$Naruto'), 'implement the repair');
   assert.match(text, /Codex subagent workflow/i);

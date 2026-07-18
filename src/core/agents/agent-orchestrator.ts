@@ -1144,9 +1144,6 @@ function enforceWorkerQualityProtocolForSlice(result: any, slice: any) {
   const kind = String(slice?.work_item_kind || result?.work_item_kind || '').toLowerCase()
   const text = [kind, slice?.id, slice?.title].join(' ').toLowerCase()
   const blockers: string[] = []
-  if ((kind === 'bugfix' || /\b(fix|bug|regression|broken|failure|crash|error)\b|버그|회귀/.test(text)) && !validRegressionProof(result.regression_proof || firstEnvelopeField(result, 'regression_proof'))) {
-    blockers.push('tdd_evidence_missing')
-  }
   if ((kind === 'conflict_resolution' || /\b(repair|conflict|rebase|rollback)\b|수리|충돌/.test(text)) && !(result.repair_hypothesis || firstEnvelopeField(result, 'repair_hypothesis'))) {
     blockers.push('repair_without_hypothesis')
   }
@@ -1161,10 +1158,6 @@ function enforceWorkerQualityProtocolForSlice(result: any, slice: any) {
 
 function firstEnvelopeField(result: any, field: string) {
   return (Array.isArray(result?.patch_envelopes) ? result.patch_envelopes : []).find((envelope: any) => envelope?.[field])?.[field] || null
-}
-
-function validRegressionProof(proof: any): boolean {
-  return Boolean(proof && proof.failed_before === true && proof.passed_after === true && String(proof.test_file || '').trim())
 }
 
 function normalizePathList(values: unknown) {

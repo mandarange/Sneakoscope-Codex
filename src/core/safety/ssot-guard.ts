@@ -21,8 +21,6 @@ export interface SsotGuardReport {
   contract_hash: string | null
   task_present: boolean
   canonical_sources: SsotGuardSource[]
-  solid_principles: Array<{ id: string; principle: string; gate_expectation: string }>
-  solid_risk_flags: string[]
   forbidden_patterns: string[]
   required_checks: string[]
   gate_rule: string
@@ -39,14 +37,6 @@ export function buildSsotGuard(input: { route?: string | null; mode?: string | n
     contract_hash: input.contractHash || null,
     task_present: Boolean(String(input.task || '').trim()),
     canonical_sources: canonicalSsotSources(),
-    solid_principles: solidPrinciples(),
-    solid_risk_flags: [
-      'god_object_or_god_module',
-      'unbounded_conditional_routing_for_extension',
-      'subtype_or_adapter_contract_narrowing',
-      'fat_interface_for_small_callers',
-      'direct_dependency_on_concrete_infrastructure_when_boundary_exists'
-    ],
     forbidden_patterns: [
       'hand_edit_dist_or_generated_runtime_output',
       'duplicate_runtime_logic_outside_src_source',
@@ -64,7 +54,7 @@ export function buildSsotGuard(input: { route?: string | null; mode?: string | n
       'release_dag_runs_architecture_guard',
       'release_manifest_marks_architecture_guard_p0_and_publish_required'
     ],
-    gate_rule: `${SSOT_GUARD_ARTIFACT} must validate SSOT and SOLID expectations before a Naruto gate may set ssot_guard=true.`
+    gate_rule: `${SSOT_GUARD_ARTIFACT} must validate authoritative sources and derived-output boundaries before a Naruto gate may set ssot_guard=true.`
   }
 }
 
@@ -115,10 +105,6 @@ export function canonicalSsotSources(): SsotGuardSource[] {
   ]
 }
 
-export function ssotGuardPolicyText(commandPrefix = 'sks') {
-  return `SSOT/SOLID guard: before creating or changing code, identify the authoritative source for the surface being edited, edit only that source, regenerate derived outputs, and reject duplicated or fallback behavior that would compete with the source of truth. Keep changes aligned to SOLID by preserving single responsibility, extension boundaries, substitutable adapters, narrow interfaces, and dependency inversion at existing seams. Naruto routes must write ${SSOT_GUARD_ARTIFACT}, set naruto-gate.json ssot_guard=true only after it validates, and run ${commandPrefix} wiki validate .sneakoscope/wiki/context-pack.json before final claims.`
-}
-
 export function validateSsotGuardArtifact(value: unknown): { ok: boolean; issues: string[] } {
   const issues: string[] = []
   if (!isRecord(value)) return { ok: false, issues: ['artifact_not_object'] }
@@ -138,54 +124,12 @@ export function validateSsotGuardArtifact(value: unknown): { ok: boolean; issues
   }
   const forbidden = stringArray(value.forbidden_patterns)
   if (forbidden.length < 5) issues.push('forbidden_patterns')
-  const solid = Array.isArray(value.solid_principles) ? value.solid_principles : []
-  if (solid.length !== 5) issues.push('solid_principles')
-  const solidIds = new Set(
-    solid
-      .filter(isRecord)
-      .map((principle) => typeof principle.id === 'string' ? principle.id : '')
-      .filter(Boolean)
-  )
-  for (const id of ['single_responsibility', 'open_closed', 'liskov_substitution', 'interface_segregation', 'dependency_inversion']) {
-    if (!solidIds.has(id)) issues.push(`solid_principles:${id}`)
-  }
-  if (stringArray(value.solid_risk_flags).length < 5) issues.push('solid_risk_flags')
   const checks = stringArray(value.required_checks)
   for (const check of ['naruto_gate_requires_ssot_guard_true', 'stop_gate_validates_ssot_guard_artifact', 'release_dag_runs_ssot_guard', 'release_dag_runs_architecture_guard']) {
     if (!checks.includes(check)) issues.push(`required_checks:${check}`)
   }
   if (typeof value.gate_rule !== 'string' || !value.gate_rule.includes(SSOT_GUARD_ARTIFACT)) issues.push('gate_rule')
   return { ok: issues.length === 0, issues }
-}
-
-function solidPrinciples(): Array<{ id: string; principle: string; gate_expectation: string }> {
-  return [
-    {
-      id: 'single_responsibility',
-      principle: 'Single Responsibility Principle',
-      gate_expectation: 'A pipeline or gate change should have one clear reason to change; split mixed release, routing, UI, DB, or publishing concerns before they become coupled.'
-    },
-    {
-      id: 'open_closed',
-      principle: 'Open/Closed Principle',
-      gate_expectation: 'Prefer adding a new gate, manifest entry, strategy, or adapter over editing unrelated conditional paths for each new behavior.'
-    },
-    {
-      id: 'liskov_substitution',
-      principle: 'Liskov Substitution Principle',
-      gate_expectation: 'Adapters, fallbacks, and fake/real backends must satisfy the same contract without weakening output, safety, or evidence guarantees.'
-    },
-    {
-      id: 'interface_segregation',
-      principle: 'Interface Segregation Principle',
-      gate_expectation: 'Keep route, gate, and worker contracts narrow so callers do not depend on unused DB, browser, release, image, or native-session capabilities.'
-    },
-    {
-      id: 'dependency_inversion',
-      principle: 'Dependency Inversion Principle',
-      gate_expectation: 'High-level route orchestration should depend on stable contracts and manifests, not concrete shell, npm, browser, or native-agent implementation details.'
-    }
-  ]
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

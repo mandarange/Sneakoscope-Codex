@@ -89,6 +89,13 @@ export function recommendOfficialSubagentRoles(input: {
     .sort((left, right) => right.score - left.score || left.index - right.index)
     .map((row) => row.role.codex_name)
 
+  if (input.requiresWrite === true && WRITABLE_IMPLEMENTATION_RE.test(text)) {
+    const writableSpecialist = ranked.find((name) => {
+      return WRITABLE_IMPLEMENTATION_SPECIALIST_ROLES.has(name)
+    })
+    if (!writableSpecialist) return unique(['implementation_specialist', ...ranked]).slice(0, limit)
+  }
+
   if (ranked.length) return unique(ranked).slice(0, limit)
   if (input.readOnly === true) return ['expert']
   if (looksClearBounded(text)) return ['worker']
@@ -281,9 +288,10 @@ function roleScore(
   if (semanticScore <= 0) return 0
   let score = semanticScore
   if (ROLE_PRIORITY_PATTERNS[role.codex_name]?.test(text)) score += 8
-  if (JUDGMENT_PRIORITY_RE.test(text) && role.model_policy === 'sol_max_judgment') score += 10
+  if (FOCUSED_ROLE_REVIEW_PATTERNS[role.codex_name]?.test(text)) score += 12
   if (input.readOnly === true) score += role.sandbox === 'read-only' ? 2 : role.sandbox ? -3 : 0
-  if (input.requiresWrite === true) score += role.sandbox === 'read-only' ? -3 : role.sandbox === 'workspace-write' ? 2 : 1
+  if (input.requiresWrite === true) score += role.sandbox === 'read-only' ? -8 : role.sandbox === 'workspace-write' ? 3 : 1
+  if (input.requiresWrite === true && WRITABLE_IMPLEMENTATION_RE.test(text) && role.codex_name === 'implementation_specialist') score += 12
   if (role.codex_name === 'worker' && !looksClearBounded(text)) score -= 4
   if (role.codex_name === 'expert') score -= 1
   return score
@@ -355,7 +363,8 @@ const ROLE_LANGUAGE_HINTS: Record<string, string[]> = {
 }
 
 const ROLE_PRIORITY_PATTERNS: Readonly<Record<string, RegExp>> = {
-  debugger: /\b(?:debug|diagnos|root cause|failure|flaky|regression)\b|디버깅|진단|원인|실패|회귀/i,
+  debugger: /\b(?:debug|diagnos|root cause|failure|flaky)\b|디버깅|진단|원인|실패/i,
+  test_engineer: /\b(?:add|write|create|implement)\b[^\n]{0,48}\b(?:test|fixture|coverage|regression)\b|(?:테스트|픽스처|커버리지|회귀\s*테스트)[^\n]{0,24}(?:추가|작성|구현)/i,
   architecture_reviewer: /\b(?:architecture|architect|refactor|state ownership|coupling)\b|아키텍처|리팩터|결합도/i,
   security_reviewer: /\b(?:security|permission|secret|auth|trust boundary|abuse)\b|보안|권한|인증|비밀|신뢰\s*경계/i,
   database_reviewer: /\b(?:database|db|sql|migration|rls|rollback)\b|데이터베이스|디비|마이그레이션|롤백/i,
@@ -368,7 +377,22 @@ const ROLE_PRIORITY_PATTERNS: Readonly<Record<string, RegExp>> = {
   triwiki_evidence_reviewer: /\b(?:triwiki|context pack|provenance|trust anchor|wrongness memory|source hydration)\b|트라이위키|컨텍스트\s*팩|출처\s*계보|신뢰\s*앵커/i
 }
 
-const JUDGMENT_PRIORITY_RE = /\b(?:review|audit|debug|diagnos|root cause|planning|strategy|architecture|security|database|research|release|risk|judgment|ambiguous)\b|리뷰|검토|감사|디버깅|진단|원인|기획|전략|아키텍처|보안|데이터베이스|연구|릴리스|위험|판단|모호/i
+const WRITABLE_IMPLEMENTATION_RE = /\b(?:implement|build|create|modify|fix|code|feature|handler|parser|component|backend|frontend|logic)\b|구현|기능\s*추가|수정|코드|로직|백엔드|프론트엔드|컴포넌트/i
+
+const WRITABLE_IMPLEMENTATION_SPECIALIST_ROLES = new Set([
+  'implementation_specialist',
+  'ui_implementer',
+  'native_app_specialist',
+  'toolchain_specialist'
+])
+
+const FOCUSED_ROLE_REVIEW_PATTERNS: Readonly<Record<string, RegExp>> = {
+  debugger: /\b(?:debug|diagnos|root cause|failure|flaky|regression)\b|디버깅|진단|원인|실패|회귀/i,
+  architecture_reviewer: /\barchitecture\b[^\n]{0,32}\b(?:review|decision|design|plan)\b|아키텍처[^\n]{0,24}(?:리뷰|결정|설계|계획)/i,
+  security_reviewer: /\bsecurity\b[^\n]{0,48}\b(?:review|audit|risk|permission|trust boundary)\b|보안[^\n]{0,32}(?:리뷰|감사|위험|권한|신뢰\s*경계)/i,
+  database_reviewer: /\b(?:database|db)\b[^\n]{0,48}\b(?:review|audit|migration|schema|rollback)\b|데이터베이스[^\n]{0,32}(?:리뷰|감사|마이그레이션|스키마|롤백)/i,
+  release_reviewer: /\brelease\b[^\n]{0,48}\b(?:review|audit|publish|version|distribution)\b|릴리스[^\n]{0,32}(?:리뷰|감사|배포|버전)/i
+}
 
 const CRITICAL_RISK_RE = /\b(?:critical|catastrophic|production|data loss|security incident|breaking release)\b|치명|중대|운영|데이터\s*손실|보안\s*사고/i
 

@@ -91,6 +91,28 @@ test('judgment wins mixed or ambiguous work and Luna is excluded from long conte
   assert.equal(longMechanical.policy, 'terra_medium_context_tools')
 })
 
+test('clear docs exploration and implementation intent outrank incidental judgment vocabulary', () => {
+  const docsExploration = decideSubagentModel({
+    description: 'Read the latest Codex CLI and Desktop app documentation, explore the repository, and compare the architecture notes'
+  })
+  assert.equal(docsExploration.policy, 'terra_medium_context_tools')
+  assert.equal(docsExploration.model, 'gpt-5.6-terra')
+  assert.equal(docsExploration.modelReasoningEffort, 'medium')
+
+  const boundedImplementation = decideSubagentModel({
+    description: 'Implement the bounded scheduler fix; the architecture review and debug context are already resolved'
+  })
+  assert.equal(boundedImplementation.policy, 'sol_high_implementation')
+  assert.equal(boundedImplementation.model, 'gpt-5.6-sol')
+  assert.equal(boundedImplementation.modelReasoningEffort, 'high')
+
+  const finalHighRiskJudgment = decideSubagentModel({
+    description: 'Perform the final high-risk security judgment before release'
+  })
+  assert.equal(finalHighRiskJudgment.policy, 'sol_max_judgment')
+  assert.equal(finalHighRiskJudgment.modelReasoningEffort, 'max')
+})
+
 test('official effort policy applies the sealed four-profile routing matrix', () => {
   const mechanical = decideOfficialSubagentModel({
     persona: { role: 'implementer', naruto_role: 'worker' },

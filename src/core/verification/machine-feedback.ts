@@ -18,6 +18,21 @@ export interface MachineFeedback {
   duration_ms: number;
 }
 
+const TEST_DISCOVERY_IGNORES = [
+  '.git',
+  'node_modules',
+  'dist',
+  '.claude',
+  '.codex/worktrees',
+  '.codex/tmp',
+  '.codex/cache',
+  '.opensks/runtime/worktrees',
+  '.sneakoscope/arenas',
+  '.sneakoscope/blocked-worktrees',
+  '.sneakoscope/cache',
+  '.sneakoscope/tmp'
+];
+
 export async function runMachineFeedback(root: string, changedFiles: string[], opts: { timeoutMs?: number } = {}): Promise<MachineFeedback> {
   const t0 = Date.now();
   const timeoutMs = Math.max(5_000, opts.timeoutMs ?? 60_000);
@@ -54,7 +69,7 @@ async function runTypecheck(root: string, changedFiles: string[], timeoutMs: num
   if (!script && !tsconfig) return { ok: true, errors: [], skipped_reason: 'tool_not_found' };
   const command = script ? ['npm', ['run', 'typecheck', '--silent']] as const : await resolveTypeScriptCommand(root);
   const result = await runProcess(command[0], command[1], { cwd: root, timeoutMs, maxOutputBytes: 512 * 1024 });
-  if (result.timedOut) return { ok: true, errors: [], skipped_reason: 'timeout' };
+  if (result.timedOut) return { ok: false, errors: ['typecheck_timeout'] };
   return {
     ok: result.code === 0,
     errors: result.code === 0 ? [] : summarizeErrors(result.stderr || result.stdout)
@@ -89,7 +104,7 @@ async function runLint(root: string, changedFiles: string[], timeoutMs: number):
   }
   const args = ['run', 'lint', '--silent'];
   const result = await runProcess('npm', args, { cwd: root, timeoutMs, maxOutputBytes: 512 * 1024 });
-  if (result.timedOut) return { ok: rules.ok, errors: ruleErrors.slice(0, 20), skipped_reason: 'timeout' };
+  if (result.timedOut) return { ok: false, errors: ['lint_timeout', ...ruleErrors].slice(0, 20) };
   return {
     ok: result.code === 0 && rules.ok,
     errors: [...(result.code === 0 ? [] : summarizeErrors(result.stderr || result.stdout)), ...ruleErrors].slice(0, 20)
@@ -97,30 +112,31 @@ async function runLint(root: string, changedFiles: string[], timeoutMs: number):
 }
 
 async function runSelectedTests(root: string, changedFiles: string[], timeoutMs: number): Promise<MachineFeedback['tests']> {
-  const selected = await selectTests(root, changedFiles);
-  if (!selected.length) return { ok: true, selected: [], failed: [], skipped_reason: 'no_related_tests' };
+  const candidates = await selectTests(root, changedFiles);
+  if (!candidates.length) return { ok: true, selected: [], failed: [], skipped_reason: 'no_related_tests' };
   const failed: string[] = [];
-  const runnable = selected.filter((file) => /\.(?:mjs|cjs|js)$/.test(file)).slice(0, 10);
-  if (!runnable.length) {
-    const pkg = await packageJson(root);
-    if (!scriptNamed(pkg, 'test')) return { ok: true, selected, failed: [], skipped_reason: 'no_directly_runnable_tests' };
-    const result = await runProcess('npm', ['test', '--silent'], { cwd: root, timeoutMs, maxOutputBytes: 512 * 1024 });
-    if (result.timedOut) return { ok: true, selected, failed: [], skipped_reason: 'timeout' };
-    return { ok: result.code === 0, selected, failed: result.code === 0 ? [] : summarizeErrors(result.stderr || result.stdout).slice(0, 10) };
+  const selected = candidates.filter((file) => /\.(?:mjs|cjs|js)$/.test(file)).slice(0, 10);
+  if (!selected.length) {
+    return { ok: true, selected: [], failed: [], skipped_reason: 'no_directly_runnable_tests' };
   }
-  await Promise.all(runnable.map(async (file) => {
-    const result = await runProcess(process.execPath, [file], { cwd: root, timeoutMs: Math.max(5_000, Math.floor(timeoutMs / runnable.length)), maxOutputBytes: 256 * 1024 });
-    if (result.timedOut) return;
+  await Promise.all(selected.map(async (file) => {
+    const result = await runProcess(process.execPath, [file], { cwd: root, timeoutMs: Math.max(5_000, Math.floor(timeoutMs / selected.length)), maxOutputBytes: 256 * 1024 });
+    if (result.timedOut) {
+      failed.push(`${file}: timeout`);
+      return;
+    }
     if (result.code !== 0) failed.push(`${file}: ${summarizeErrors(result.stderr || result.stdout).join(' | ')}`);
   }));
   return { ok: failed.length === 0, selected, failed: failed.slice(0, 10) };
 }
 
 async function globTests(root: string, base: string): Promise<string[]> {
-  const files = await listFilesRecursive(root, { ignore: ['.git', 'node_modules', 'dist', '.sneakoscope/tmp'], maxFiles: 30_000 });
+  const currentTest = currentTestPath(root);
+  const files = await listFilesRecursive(root, { ignore: TEST_DISCOVERY_IGNORES, maxFiles: 30_000 });
   return files
     .map((file) => normalizePath(path.relative(root, file)))
     .filter((file) => isTestFile(file))
+    .filter((file) => file !== currentTest)
     .filter((file) => {
       const name = path.basename(file);
       return name.startsWith(`${base}.test.`)
@@ -130,12 +146,13 @@ async function globTests(root: string, base: string): Promise<string[]> {
 }
 
 async function testsImporting(root: string, changedFile: string): Promise<string[]> {
-  const files = await listFilesRecursive(root, { ignore: ['.git', 'node_modules', 'dist', '.sneakoscope/tmp'], maxFiles: 30_000 });
+  const currentTest = currentTestPath(root);
+  const files = await listFilesRecursive(root, { ignore: TEST_DISCOVERY_IGNORES, maxFiles: 30_000 });
   const stem = normalizePath(changedFile).replace(/\.(?:[cm]?[jt]sx?)$/, '');
   const out: string[] = [];
   await Promise.all(files.map(async (abs) => {
     const rel = normalizePath(path.relative(root, abs));
-    if (!isTestFile(rel)) return;
+    if (!isTestFile(rel) || rel === currentTest) return;
     const text = await import('node:fs/promises').then((fs) => fs.readFile(abs, 'utf8')).catch(() => '');
     if (String(text).includes(changedFile) || String(text).includes(stem) || String(text).includes(`../${stem}`)) out.push(rel);
   }));
@@ -144,6 +161,13 @@ async function testsImporting(root: string, changedFile: string): Promise<string
 
 function isTestFile(file: string): boolean {
   return /(?:^|\/)__tests__\//.test(file) || /\.(?:test|spec)\.(?:[cm]?[jt]sx?)$/.test(file);
+}
+
+function currentTestPath(root: string): string {
+  const entrypoint = process.argv[1];
+  if (!entrypoint) return '';
+  const relative = normalizePath(path.relative(root, path.resolve(entrypoint)));
+  return relative === '..' || relative.startsWith('../') ? '' : relative;
 }
 
 async function packageJson(root: string): Promise<any> {

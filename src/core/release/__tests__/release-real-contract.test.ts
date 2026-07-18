@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict'
+import path from 'node:path'
 import test from 'node:test'
 import {
   buildReleaseRealLiveCoverage,
   dependencyReleaseRealResult,
   normalizeReleaseRealProcessResult,
+  releaseDagSummaryIdentityBlockers,
   summarizeReleaseRealPhases,
   validateReleaseRealSkipProof,
   type ReleaseRealTaskLike,
@@ -11,6 +13,18 @@ import {
 } from '../release-real-contract.js'
 
 const terminal = ['failed', 'blocked', 'skipped', 'integration_optional', 'optional']
+
+test('release DAG summary identity binds run id, directory, and summary path', () => {
+  const reportsRoot = path.resolve('/tmp/release-gates')
+  const runId = 'rg-2026-07-18T00-00-00-000Z-1'
+  const runDir = path.join(reportsRoot, runId)
+  const summaryPath = path.join(runDir, 'summary.json')
+  assert.deepEqual(releaseDagSummaryIdentityBlockers({ run_id: runId, report_dir: runDir }, summaryPath, reportsRoot), [])
+  assert.ok(releaseDagSummaryIdentityBlockers({ run_id: runId, report_dir: reportsRoot }, summaryPath, reportsRoot)
+    .includes('release_dag_summary_report_dir_identity_mismatch'))
+  assert.ok(releaseDagSummaryIdentityBlockers({ run_id: runId, report_dir: runDir }, path.join(reportsRoot, 'other', 'summary.json'), reportsRoot)
+    .includes('release_dag_summary_path_identity_mismatch'))
+})
 
 function policy(requirement: ReleaseRealTaskPolicy['requirement'], options: Partial<ReleaseRealTaskPolicy> = {}): ReleaseRealTaskPolicy {
   return {
@@ -219,6 +233,11 @@ test('skip proof requires the latest full receipt to postdate a matching current
     distStamp: { schema: 'sks.dist-build-stamp.v1', source_digest: 'b'.repeat(64), source_file_count: 9 },
     distStampPath: 'dist/.sks-build-stamp.json',
     distStampMtimeMs: 1_000,
+    canonicalTestProof: { schema: 'sks.canonical-test-proof.v1', ok: true, release_authorization_snapshot: { ...authorizationSnapshot } },
+    canonicalTestProofPath: '.sneakoscope/reports/canonical-test-proof.json',
+    canonicalTestProofSha256: '8'.repeat(64),
+    canonicalTestProofMtimeMs: 1_500,
+    canonicalTestProofBlockers: [],
     authorizationSnapshot,
     currentDistSourceDigest: 'b'.repeat(64),
     currentDistSourceFileCount: 9,
@@ -260,6 +279,31 @@ test('skip proof requires the latest full receipt to postdate a matching current
   const predated = validateReleaseRealSkipProof({ ...base, summaryMtimeMs: 500 })
   assert.equal(predated.ok, false)
   assert.ok(predated.blockers.includes('release_real_skip_full_summary_predates_current_build'))
+  assert.ok(predated.blockers.includes('release_real_skip_full_summary_predates_canonical_test_proof'))
+
+  const missingCanonical = validateReleaseRealSkipProof({
+    ...base,
+    canonicalTestProof: null,
+    canonicalTestProofPath: null,
+    canonicalTestProofSha256: null,
+    canonicalTestProofMtimeMs: null
+  })
+  assert.equal(missingCanonical.ok, false)
+  assert.ok(missingCanonical.blockers.includes('release_real_skip_canonical_test_proof_missing'))
+
+  const tamperedCanonical = validateReleaseRealSkipProof({
+    ...base,
+    canonicalTestProof: { ...base.canonicalTestProof, schema: 'tampered' }
+  })
+  assert.equal(tamperedCanonical.ok, false)
+  assert.ok(tamperedCanonical.blockers.includes('release_real_skip_canonical_test_proof_schema_invalid'))
+
+  const staleCanonical = validateReleaseRealSkipProof({
+    ...base,
+    canonicalTestProofBlockers: ['canonical_test_proof_authorization_stale']
+  })
+  assert.equal(staleCanonical.ok, false)
+  assert.ok(staleCanonical.blockers.includes('release_real_skip_canonical_test_proof_invalid'))
 
   const expired = validateReleaseRealSkipProof({ ...base, nowMs: 20_001 })
   assert.equal(expired.ok, false)

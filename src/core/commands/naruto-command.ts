@@ -7,7 +7,8 @@ import {
   loadStateForSession,
   loadMission,
   sessionStateKey,
-  setCurrent
+  setCurrent,
+  updateCurrentIfMissionAndRun
 } from '../mission.js'
 import {
   closeWorkOrderLedgerForRouteResult,
@@ -44,12 +45,15 @@ import {
   SUBAGENT_PLAN_FILENAME,
   buildNarutoGateResult,
   buildNarutoSummary,
+  officialSubagentPreparationInProgress,
   prepareOfficialSubagentMission,
+  withOfficialSubagentLifecycleLock,
   withNarutoMissionRunAdmission,
   type NarutoMissionRunLease,
   writeNarutoGate
 } from '../subagents/official-subagent-preparation.js'
 import { recordOfficialSubagentParentOutcomesTelemetry } from '../zellij/zellij-official-subagent-telemetry.js'
+import { effectiveSubagentTarget, refreshSubagentWaveLifecycle } from '../subagents/wave-lifecycle.js'
 
 export { buildNarutoGateResult } from '../subagents/official-subagent-preparation.js'
 
@@ -64,6 +68,18 @@ export interface NarutoArgs {
   json: boolean
   readOnly: boolean
   argumentErrors: string[]
+}
+
+type NarutoPreparationFailureInjection =
+  | 'after_marker_before_artifact'
+  | 'after_cleanup_and_evidence_promotion_before_plan'
+  | 'after_artifact_commit_before_state'
+  | 'after_state_commit_before_marker_clear'
+
+let nextNarutoPreparationFailureInjectionForTest: NarutoPreparationFailureInjection | null = null
+
+export function injectNextNarutoPreparationFailureForTest(value: NarutoPreparationFailureInjection | null) {
+  nextNarutoPreparationFailureInjectionForTest = value
 }
 
 export async function narutoCommand(commandOrArgs: string | string[] = 'naruto', maybeArgs: string[] = []) {
@@ -122,7 +138,7 @@ async function narutoRunTransaction(
   if (!mission) return missingRunMission(parsed)
   const { id, dir } = mission
   if (appSession && sessionKey) {
-    const pending = await readPendingAppNarutoRun(root, { id, dir }, sessionKey)
+    const pending = await readPendingAppNarutoRun(root, { id, dir }, sessionKey, parsed.prompt)
     if (pending) return emit(parsed, pending, () => renderRunResult(pending))
   }
   await createAndWriteWorkOrderLedgerForPrompt(dir, {
@@ -131,11 +147,10 @@ async function narutoRunTransaction(
     prompt: parsed.prompt
   })
 
-  const preparation = await withFileLock({
-    lockPath: path.join(dir, '.naruto-preparation.lock'),
-    timeoutMs: 5_000,
-    staleMs: 60_000
-  }, () => prepareOfficialSubagentMission({
+  const preparationFailureInjection = nextNarutoPreparationFailureInjectionForTest
+  nextNarutoPreparationFailureInjectionForTest = null
+
+  const preparation = await prepareOfficialSubagentMission({
     root,
     dir,
     missionId: id,
@@ -147,8 +162,42 @@ async function narutoRunTransaction(
     ...(parsed.maxThreads === undefined ? {} : { maxThreads: parsed.maxThreads }),
     mode: 'naruto',
     readOnly: parsed.readOnly,
-    preparationOnly: true
-  }))
+    preparationOnly: true,
+    ...(preparationFailureInjection ? { failureInjection: preparationFailureInjection } : {}),
+    statePatch: ({ budget: preparedBudget, workflowRunId: preparedRunId }) => ({
+      mission_id: id,
+      route: 'Naruto',
+      route_command: '$Naruto',
+      mode: 'NARUTO',
+      phase: 'NARUTO_DELEGATION_CONTEXT_READY',
+      questions_allowed: false,
+      implementation_allowed: true,
+      subagents_required: true,
+      subagents_verified: false,
+      subagents_spawned: false,
+      subagents_reported: false,
+      subagent_evidence_file: 'subagent-evidence.json',
+      parent_summary_present: false,
+      native_sessions_required: false,
+      native_sessions_verified: false,
+      agents_required: false,
+      requested_subagents: preparedBudget.requestedSubagents,
+      target_subagents: preparedBudget.requestedSubagents,
+      max_threads: preparedBudget.maxThreads,
+      max_depth: preparedBudget.maxDepth,
+      official_subagent_run_id: preparedRunId,
+      session_scope: sessionKey,
+      stop_gate: NARUTO_GATE_FILENAME,
+      naruto_gate_file: NARUTO_GATE_FILENAME,
+      naruto_gate_passed: false,
+      reflection_invalidation_required: false,
+      reflection_invalidated_at: null,
+      reflection_invalidation_reason: null,
+      reflection_invalidated_for_workflow_run_id: null,
+      reflection_invalidated_for_proof_digest: null,
+      prompt: parsed.prompt
+    })
+  })
   const {
     plan,
     evidence: preparationEvidence,
@@ -158,29 +207,6 @@ async function narutoRunTransaction(
     workflowRunId,
     configBlockers
   } = preparation
-  await setCurrent(root, {
-    mission_id: id,
-    route: 'Naruto',
-    route_command: '$Naruto',
-    mode: 'NARUTO',
-    phase: 'NARUTO_DELEGATION_CONTEXT_READY',
-    questions_allowed: false,
-    implementation_allowed: true,
-    subagents_required: true,
-    subagents_verified: false,
-    native_sessions_required: false,
-    native_sessions_verified: false,
-    agents_required: false,
-    requested_subagents: budget.requestedSubagents,
-    max_threads: budget.maxThreads,
-    max_depth: budget.maxDepth,
-    official_subagent_run_id: workflowRunId,
-    session_scope: sessionKey,
-    stop_gate: NARUTO_GATE_FILENAME,
-    naruto_gate_file: NARUTO_GATE_FILENAME,
-    prompt: parsed.prompt
-  }, { sessionKey })
-
   const run = await runOfficialSubagentWorkflow({
     root,
     prompt: delegationPrompt,
@@ -191,7 +217,10 @@ async function narutoRunTransaction(
     sessionKey,
     ...(missionLease ? { onChildSpawn: missionLease.protectChildPid } : {})
   })
+  const result = await withOfficialSubagentLifecycleLock(dir, async () => {
+  if (await officialSubagentPreparationInProgress(dir)) return null
   const completedPlan = await readJson<any>(path.join(dir, SUBAGENT_PLAN_FILENAME), plan).catch(() => plan)
+  if (String(completedPlan?.workflow_run_id || '').trim() !== workflowRunId) return null
   const finalBudget = {
     ...budget,
     requestedSubagents: Number(completedPlan?.requested_subagents || budget.requestedSubagents),
@@ -205,8 +234,17 @@ async function narutoRunTransaction(
     workflowStatus: run.status,
     runId: workflowRunId
   })
+  const waveLifecycle = await refreshSubagentWaveLifecycle(dir, {
+    plan: completedPlan
+  }).catch(() => completedPlan?.wave_lifecycle || null)
+  const countTarget = effectiveSubagentTarget(
+    waveLifecycle ? { ...completedPlan, wave_lifecycle: waveLifecycle } : completedPlan,
+    waveLifecycle?.cumulative_started || 0
+  )
   const evidence = await writeSubagentEvidence(dir, {
     requestedSubagents: finalBudget.requestedSubagents,
+    countPolicy: countTarget.countPolicy,
+    targetSubagents: countTarget.targetSubagents,
     parentSummary: effectiveParentSummary,
     workflowStatus: run.status,
     preparationOnly: appSession,
@@ -271,16 +309,18 @@ async function narutoRunTransaction(
     blockers: gate.blockers,
     appSession,
     sessionKey,
-    suggestedAgents: Array.isArray(completedPlan?.suggested_agents) ? completedPlan.suggested_agents : []
+    suggestedAgents: Array.isArray(completedPlan?.suggested_agents) ? completedPlan.suggested_agents : [],
+    waveLifecycle
   })
   await writeJsonAtomic(path.join(dir, NARUTO_SUMMARY_FILENAME), summary)
-  await setCurrent(root, {
+  await updateCurrentIfMissionAndRun(root, id, workflowRunId, {
     mission_id: id,
     official_subagent_run_id: workflowRunId,
     session_scope: sessionKey,
     phase: passed ? 'NARUTO_COMPLETE' : appSession ? 'NARUTO_DELEGATION_CONTEXT_READY' : 'NARUTO_BLOCKED',
     subagents_verified: evidence.ok === true,
     requested_subagents: finalBudget.requestedSubagents,
+    target_subagents: evidence.target_subagents,
     max_threads: finalBudget.maxThreads,
     naruto_gate_passed: passed,
     route_closed: false
@@ -290,12 +330,28 @@ async function narutoRunTransaction(
     if (!passed) process.exitCode = 1
   }
 
-  const result = {
+  return {
     ...summary,
     mission_id: id,
     attached_to_pending_run: false,
     additionalContext: appSession ? run.additionalContext : undefined,
     artifacts: narutoArtifactLinks(evidence)
+  }
+  })
+  if (!result) {
+    const currentSummary = await readJson<any>(path.join(dir, NARUTO_SUMMARY_FILENAME), null).catch(() => null)
+    const currentEvidence = await readJson<any>(path.join(dir, 'subagent-evidence.json'), null).catch(() => null)
+    const staleResult = {
+      ...(currentSummary || {}),
+      schema: NARUTO_RESULT_SCHEMA,
+      ok: currentSummary?.ok === true,
+      completion_evidence: currentSummary?.completion_evidence === true,
+      mission_id: id,
+      attached_to_pending_run: true,
+      stale_run_discarded: workflowRunId,
+      artifacts: narutoArtifactLinks(currentEvidence)
+    }
+    return emit(parsed, staleResult, () => renderRunResult(staleResult))
   }
   return emit(parsed, result, () => renderRunResult(result))
 }
@@ -303,8 +359,10 @@ async function narutoRunTransaction(
 async function readPendingAppNarutoRun(
   root: string,
   mission: { id: string; dir: string },
-  sessionKey: string
+  sessionKey: string,
+  prompt: string
 ) {
+  if (await officialSubagentPreparationInProgress(mission.dir)) return null
   const [plan, evidence, summary, gate, state] = await Promise.all([
     readJson<any>(path.join(mission.dir, SUBAGENT_PLAN_FILENAME), null),
     readJson<any>(path.join(mission.dir, 'subagent-evidence.json'), null),
@@ -319,6 +377,7 @@ async function readPendingAppNarutoRun(
       && plan?.schema === 'sks.subagent-plan.v1'
       && plan?.workflow === 'official_codex_subagent'
       && plan?.mission_id === mission.id
+      && String(plan?.goal || '').trim() === String(prompt || '').trim()
       && plan?.session_scope === sessionKey
       && evidence?.run_id === workflowRunId
       && evidence?.preparation_only === true
@@ -396,7 +455,10 @@ async function narutoStatus(parsed: NarutoArgs) {
     mission_id: resolved.id,
     status: summary?.status || evidence?.status || 'prepared',
     requested_subagents: plan?.requested_subagents ?? evidence?.requested_subagents ?? null,
+    count_policy: evidence?.count_policy ?? plan?.wave_lifecycle?.count_policy ?? null,
+    target_subagents: evidence?.target_subagents ?? plan?.wave_lifecycle?.target_subagents ?? null,
     max_threads: plan?.max_threads ?? null,
+    wave_lifecycle: plan?.wave_lifecycle ?? null,
     started_subagents: evidence?.started_threads ?? 0,
     completed_subagents: evidence?.completed_threads ?? 0,
     failed_subagents: evidence?.failed_threads ?? 0,
@@ -419,6 +481,8 @@ async function narutoSubagents(parsed: NarutoArgs) {
     action: 'subagents',
     mission_id: resolved.id,
     requested_subagents: evidence?.requested_subagents ?? null,
+    count_policy: evidence?.count_policy ?? null,
+    target_subagents: evidence?.target_subagents ?? null,
     started_subagents: evidence?.started_threads ?? 0,
     completed_subagents: evidence?.completed_threads ?? 0,
     failed_subagents: evidence?.failed_threads ?? 0,
@@ -469,6 +533,7 @@ async function resolveRunMission(root: string, parsed: NarutoArgs, sessionKey: s
       mode: 'naruto',
       prompt: parsed.prompt,
       sessionKey,
+      syncRequestIntake: true,
       selectMissionId: (state) => {
         const route = String(state?.route || state?.route_command || state?.mode || '').replace(/^\$/, '').toUpperCase()
         const sessionMatches = state?._session_key === sessionStateKey(sessionKey)
@@ -716,7 +781,7 @@ function emit(parsed: Pick<NarutoArgs, 'json'>, result: any, human: () => void, 
 
 function renderRunResult(result: any) {
   console.log(`$sks-naruto ${result.status}: ${result.mission_id}`)
-  console.log(`Official subagents: requested ${result.requested_subagents}, max threads ${result.max_threads}`)
+  console.log(`Official subagents: requested ${result.requested_subagents}, target ${result.target_subagents ?? result.requested_subagents}, policy ${result.count_policy || 'exact'}, max threads ${result.max_threads}`)
   console.log(`Started/completed/failed: ${result.started_subagents}/${result.completed_subagents}/${result.failed_subagents}`)
   if (result.status === 'delegation_context_ready') console.log('Continue in the current Codex parent and wait for every requested subagent before summarizing.')
   if (Array.isArray(result.blockers) && result.blockers.length) console.log(`Blockers: ${result.blockers.join(', ')}`)
@@ -724,6 +789,7 @@ function renderRunResult(result: any) {
 
 function renderStatusResult(result: any) {
   console.log(`Naruto ${result.action || 'status'}: ${result.mission_id}`)
+  console.log(`Requested/target/policy: ${result.requested_subagents ?? 0}/${result.target_subagents ?? result.requested_subagents ?? 0}/${result.count_policy || 'exact'}`)
   console.log(`Started/completed/failed: ${result.started_subagents || 0}/${result.completed_subagents || 0}/${result.failed_subagents || 0}`)
 }
 

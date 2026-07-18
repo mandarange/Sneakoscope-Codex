@@ -23,22 +23,23 @@ function passingOfficialEvidence() {
   return {
     subagent_plan: {
       schema: 'sks.subagent-plan.v1', workflow: 'official_codex_subagent', route: '$Naruto', workflow_run_id: runId,
-      requested_subagents: 1, max_depth: 1, config_blockers: []
+      requested_subagents: 1, max_depth: 1, config_blockers: [],
+      wave_lifecycle: { count_policy: 'exact', target_subagents: 1 }
     },
     subagent_evidence: {
       schema: 'sks.subagent-evidence.v1', workflow: 'official_codex_subagent', run_id: runId,
-      requested_subagents: 1, started_threads: 1, completed_threads: 1, failed_threads: 0,
+      requested_subagents: 1, count_policy: 'exact', target_subagents: 1, started_threads: 1, completed_threads: 1, failed_threads: 0,
       open_thread_ids: [], event_sources: ['SubagentStart', 'SubagentStop'], parent_summary_present: true,
       parent_summary_trustworthy: true, parent_summary_status: 'completed', preparation_only: false,
       status: 'completed', ok: true, blockers: []
     },
     naruto_summary: {
       schema: 'sks.naruto-subagent-workflow.v1', workflow: 'official_codex_subagent', route: '$Naruto', workflow_run_id: runId,
-      requested_subagents: 1, status: 'completed', ok: true, completion_evidence: true, parent_summary_present: true, blockers: []
+      requested_subagents: 1, count_policy: 'exact', target_subagents: 1, status: 'completed', ok: true, completion_evidence: true, parent_summary_present: true, blockers: []
     },
     naruto_gate: {
       schema: 'sks.naruto-gate.v1', workflow: 'official_codex_subagent', route: '$Naruto', workflow_run_id: runId,
-      requested_subagents: 1, status: 'passed', passed: true, terminal: true, terminal_state: 'completed',
+      requested_subagents: 1, count_policy: 'exact', target_subagents: 1, status: 'passed', passed: true, terminal: true, terminal_state: 'completed',
       official_subagent_evidence: true, subagent_evidence_ready: true, parent_summary_present: true,
       session_cleanup: true, native_process_proof_required: false, blockers: []
     }

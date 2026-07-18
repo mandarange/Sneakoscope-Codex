@@ -596,10 +596,9 @@
           "src/core/routes.ts",
           "src/core/routes/**",
           "src/core/product-design-plugin.ts",
-          "src/core/pipeline-internals/runtime-core.ts",
           "src/core/ppt.ts",
           "src/core/codex-app.ts",
-          "src/core/init.ts",
+          "src/core/init/skills.ts",
           "src/scripts/product-design-plugin-routing-check.ts"
         ]
       },
@@ -859,12 +858,12 @@
       "command": "node ./dist/scripts/doctor-fix-proves-codex-read-check.js",
       "deps": [],
       "resource": [
-        "cpu-light",
-        "fs-read",
+        "cpu-heavy",
+        "fs-write",
         "timing-sensitive"
       ],
       "side_effect": "hermetic",
-      "timeout_ms": 120000,
+      "timeout_ms": 380000,
       "cache": {
         "enabled": true,
         "inputs": [
@@ -1429,11 +1428,11 @@
       "command": "node ./dist/scripts/loop-integration-finalizer-check.js",
       "deps": [],
       "resource": [
-        "cpu-light",
-        "fs-read"
+        "cpu-heavy",
+        "fs-write"
       ],
       "side_effect": "hermetic",
-      "timeout_ms": 120000,
+      "timeout_ms": 240000,
       "cache": {
         "enabled": true,
         "inputs": [
@@ -2975,11 +2974,11 @@
       "command": "node --test --test-concurrency=1 dist/core/commands/__tests__/*.test.js dist/cli/__tests__/*.test.js",
       "deps": [],
       "resource": [
-        "cpu-light",
-        "fs-read"
+        "cpu-heavy",
+        "fs-write"
       ],
       "side_effect": "hermetic",
-      "timeout_ms": 120000,
+      "timeout_ms": 180000,
       "cache": {
         "enabled": true,
         "inputs": [
@@ -2997,7 +2996,7 @@
         "report_dir": "per-gate"
       },
       "preset": [
-        "release"
+        "incremental"
       ],
       "contract_note": "node --test prints TAP/test-runner output only and does not emit the sks.gate-result.v1 JSON line as its final stdout; the DAG runner falls back to legacy exit-code-only semantics for this gate."
     },
@@ -3034,11 +3033,11 @@
       "command": "node --test --test-concurrency=1 dist/core/codex-app/__tests__/*.test.js dist/core/doctor/__tests__/*.test.js",
       "deps": [],
       "resource": [
-        "cpu-light",
-        "fs-read"
+        "cpu-heavy",
+        "fs-write"
       ],
       "side_effect": "hermetic",
-      "timeout_ms": 180000,
+      "timeout_ms": 240000,
       "cache": {
         "enabled": true,
         "inputs": [
@@ -3059,7 +3058,7 @@
         "report_dir": "per-gate"
       },
       "preset": [
-        "release"
+        "incremental"
       ],
       "contract_note": "node --test prints TAP/test-runner output only and does not emit the sks.gate-result.v1 JSON line as its final stdout; the DAG runner falls back to legacy exit-code-only semantics for this gate."
     },
@@ -3188,11 +3187,11 @@
       "command": "node --test --test-concurrency=1 dist/core/__tests__/*.test.js",
       "deps": [],
       "resource": [
-        "cpu-light",
-        "fs-read"
+        "cpu-heavy",
+        "fs-write"
       ],
       "side_effect": "hermetic",
-      "timeout_ms": 120000,
+      "timeout_ms": 240000,
       "cache": {
         "enabled": true,
         "inputs": [
@@ -3212,7 +3211,7 @@
         "report_dir": "per-gate"
       },
       "preset": [
-        "release"
+        "incremental"
       ],
       "contract_note": "node --test prints TAP/test-runner output only and does not emit the sks.gate-result.v1 JSON line as its final stdout; the DAG runner falls back to legacy exit-code-only semantics for this gate."
     },

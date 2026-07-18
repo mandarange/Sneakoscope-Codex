@@ -33,22 +33,24 @@ test('official prompt seals model, ownership, wait, and no-nesting rules', () =>
   assert.match(prompt, /gpt-5\.6-sol with max reasoning/)
   assert.match(prompt, /worker.*gpt-5\.6-luna.*max reasoning.*tiny, short-context, mechanical/)
   assert.match(prompt, /gpt-5\.6-sol with high reasoning.*ordinary UI, logic, backend, and native implementation/)
-  assert.match(prompt, /gpt-5\.6-sol with max reasoning.*review, debugging, planning, architecture, security/)
-  assert.match(prompt, /gpt-5\.6-terra with medium reasoning.*long-context analysis.*Computer Use, Browser\/Chrome, or image-generation/)
-  assert.match(prompt, /split mixed work when possible/)
+  assert.match(prompt, /gpt-5\.6-sol with max reasoning only for focused unresolved, high-risk, final-review, architecture, security/)
+  assert.match(prompt, /gpt-5\.6-terra with medium reasoning for read-heavy documentation\/exploration, long-context analysis.*Computer Use, Browser\/Chrome, or image-generation/)
+  assert.match(prompt, /explicit task class and phase win over incidental keywords/)
   assert.match(prompt, /requested subagents: 2/)
   assert.match(prompt, /max open agent threads: 12/)
   assert.match(prompt, /hard cap, never a utilization target/)
   assert.match(prompt, /C_t = min\(ready DAG width, disjoint ownership, verifier capacity/)
   assert.match(prompt, /max depth: 1/)
   assert.match(prompt, /parallel writes require disjoint paths/)
-  assert.match(prompt, /wait for every requested subagent/)
+  assert.match(prompt, /wait for every final planned subagent/)
   assert.match(prompt, /\[A\].*`worker`/)
   assert.match(prompt, /\[B\].*`architecture_reviewer`/)
   assert.match(prompt, /model policy: luna_max_mechanical \(gpt-5\.6-luna\/max\)/)
   assert.match(prompt, /model policy: sol_max_judgment \(gpt-5\.6-sol\/max\)/)
   assert.match(prompt, /mode: read-only/)
   assert.match(prompt, /metadata mode: on-demand \(2\/25 roles included; full catalog is not injected\)/)
+  assert.equal(prompt.match(/Core Engineering Directive/g)?.length, 1)
+  assert.match(prompt, /from AGENTS\.md exactly/)
 })
 
 test('preparation prompt preserves requested count without inventing write slices', () => {
@@ -180,6 +182,37 @@ test('prompt carries the dynamic capacity snapshot and selected first wave', () 
   assert.match(prompt, /selected first-wave concurrency: 3/)
   assert.match(prompt, /"limiting_factors":\["verifier_capacity"\]/)
   assert.match(prompt, /marginal useful throughput stays positive/)
+})
+
+test('prompt makes later root waves and between-wave count authority explicit', () => {
+  const automatic = buildOfficialSubagentPrompt({
+    goal: 'Implement independent shards discovered over multiple waves',
+    maxThreads: 4,
+    requestedSubagents: 4,
+    requestedSubagentsSource: 'automatic',
+    firstWave: 2,
+    waveCount: 2,
+    decompositionStatus: 'parent_required',
+    slices: []
+  })
+
+  assert.match(automatic, /max depth: 1 applies only to child nesting.*root parent.*later direct-child waves/i)
+  assert.match(automatic, /close completed threads.*refresh evidence.*rescan the ready DAG.*next defensible direct-child wave when useful work remains/is)
+  assert.match(automatic, /automatic targets may resize between waves/i)
+
+  for (const requestedSubagentsSource of ['operator', 'route_contract'] as const) {
+    const exact = buildOfficialSubagentPrompt({
+      goal: 'Run the exact contracted review waves',
+      maxThreads: 4,
+      requestedSubagents: 4,
+      requestedSubagentsSource,
+      firstWave: 2,
+      waveCount: 2,
+      decompositionStatus: 'parent_required',
+      slices: []
+    })
+    assert.match(exact, /explicit operator and route-owned counts remain exact/i)
+  }
 })
 
 test('slice validator rejects duplicate work, overlapping writes, and unassigned parallel ownership', () => {

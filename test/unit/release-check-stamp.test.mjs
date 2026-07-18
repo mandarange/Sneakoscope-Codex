@@ -13,6 +13,17 @@ import { currentDistFreshness } from '../../dist/scripts/lib/ensure-dist-fresh.j
 
 const pkg = JSON.parse(fsSync.readFileSync('package.json', 'utf8'));
 
+test('release stamp fixtures stay in a non-selectable managed fixture subtree', (t) => {
+  const proof = createReleaseStampProof();
+  t.after(() => proof.cleanup());
+  const releaseGateReports = path.resolve('.sneakoscope', 'reports', 'release-gates');
+  const relative = path.relative(releaseGateReports, proof.summaryPath).split(path.sep);
+  assert.equal(relative[0], '.fixtures');
+  assert.equal(relative.at(-1), 'summary.json');
+  assert.equal(fsSync.existsSync(path.join(releaseGateReports, '.fixtures', 'summary.json')), false);
+  assert.ok(fsSync.existsSync(proof.summaryPath));
+});
+
 test('affected or synthetic checks cannot write a publish-authorizing stamp', () => {
   const tmp = fsSync.mkdtempSync(path.join(os.tmpdir(), 'sks-release-stamp-reject-'));
   const stamp = path.join(tmp, 'stamp.json');
@@ -26,11 +37,85 @@ test('affected or synthetic checks cannot write a publish-authorizing stamp', ()
   assert.equal(fsSync.existsSync(stamp), false);
 });
 
-test('release-check stamp can be written and verified without rerunning release:check', async () => {
-  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-release-stamp-'));
-  const stamp = path.join(tmp, 'stamp.json');
-  const env = { ...process.env, SKS_RELEASE_STAMP_PATH: stamp };
+test('release-check stamp rejects an external artifact-root override against the production stamp', (t) => {
   const proof = createReleaseStampProof();
+  const externalRoot = fsSync.mkdtempSync(path.join(os.tmpdir(), 'sks-release-external-proof-'));
+  const externalRunDir = path.join(externalRoot, 'release-gates', 'external-run');
+  const externalSummary = path.join(externalRunDir, 'summary.json');
+  const productionStamp = path.resolve('.sneakoscope', 'reports', 'release-check-stamp.json');
+  const productionBefore = fsSync.existsSync(productionStamp) ? fsSync.readFileSync(productionStamp) : null;
+  t.after(() => {
+    proof.cleanup();
+    fsSync.rmSync(externalRoot, { recursive: true, force: true });
+    if (productionBefore) fsSync.writeFileSync(productionStamp, productionBefore);
+    else fsSync.rmSync(productionStamp, { force: true });
+  });
+  fsSync.mkdirSync(externalRunDir, { recursive: true });
+  const summary = JSON.parse(fsSync.readFileSync(proof.summaryPath, 'utf8'));
+  summary.run_id = 'external-run';
+  summary.report_dir = externalRunDir;
+  fsSync.writeFileSync(externalSummary, `${JSON.stringify(summary, null, 2)}\n`);
+
+  const write = spawnSync(process.execPath, [
+    'dist/scripts/release-check-stamp.js',
+    'write', '--preset', 'release', '--full',
+    '--artifact-root', externalRoot,
+    '--summary', externalSummary,
+    '--real-summary', proof.realSummaryPath,
+    '--canonical-proof', proof.canonicalProofPath
+  ], {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+    env: process.env
+  });
+  assert.equal(write.status, 2);
+  assert.match(write.stderr, /release DAG summary is outside the managed report root/);
+  const productionAfter = fsSync.existsSync(productionStamp) ? fsSync.readFileSync(productionStamp) : null;
+  assert.deepEqual(productionAfter, productionBefore);
+});
+
+test('managed fixture DAG evidence cannot write the production release stamp', (t) => {
+  const proof = createReleaseStampProof();
+  const productionStamp = path.resolve('.sneakoscope', 'reports', 'release-check-stamp.json');
+  const productionBefore = fsSync.existsSync(productionStamp) ? fsSync.readFileSync(productionStamp) : null;
+  t.after(() => {
+    proof.cleanup();
+    if (productionBefore) fsSync.writeFileSync(productionStamp, productionBefore);
+    else fsSync.rmSync(productionStamp, { force: true });
+  });
+  const write = spawnSync(process.execPath, ['dist/scripts/release-check-stamp.js', ...proof.writeArgs], {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+    env: process.env
+  });
+  assert.equal(write.status, 2);
+  assert.match(write.stderr, /fixture release DAG evidence requires a stamp inside the same fixture root/);
+  const productionAfter = fsSync.existsSync(productionStamp) ? fsSync.readFileSync(productionStamp) : null;
+  assert.deepEqual(productionAfter, productionBefore);
+});
+
+test('managed fixture DAG evidence cannot write an unrelated external stamp', (t) => {
+  const proof = createReleaseStampProof();
+  const externalRoot = fsSync.mkdtempSync(path.join(os.tmpdir(), 'sks-release-unrelated-stamp-'));
+  const externalStamp = path.join(externalRoot, 'release-check-stamp.json');
+  t.after(() => {
+    proof.cleanup();
+    fsSync.rmSync(externalRoot, { recursive: true, force: true });
+  });
+  const write = spawnSync(process.execPath, ['dist/scripts/release-check-stamp.js', ...proof.writeArgs], {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+    env: { ...process.env, SKS_RELEASE_STAMP_PATH: externalStamp }
+  });
+  assert.equal(write.status, 2);
+  assert.match(write.stderr, /fixture release DAG evidence requires a stamp inside the same fixture root/);
+  assert.equal(fsSync.existsSync(externalStamp), false);
+});
+
+test('release-check stamp can be written and verified without rerunning release:check', async () => {
+  const proof = createReleaseStampProof();
+  const stamp = proof.stampPath;
+  const env = { ...process.env, ...proof.env };
 
   const write = spawnSync(process.execPath, ['dist/scripts/release-check-stamp.js', ...proof.writeArgs], {
     cwd: process.cwd(),
@@ -65,6 +150,83 @@ test('release-check stamp can be written and verified without rerunning release:
   assert.deepEqual([...summary.selected_gate_ids].sort(), expectedGateIds);
   assert.deepEqual([...summary.affected_selection.selected_gate_ids].sort(), expectedGateIds);
   proof.cleanup();
+});
+
+test('release-check stamp write rejects a missing canonical test proof', () => {
+  const proof = createReleaseStampProof();
+  const original = fsSync.readFileSync(proof.canonicalProofPath);
+  try {
+    fsSync.rmSync(proof.canonicalProofPath);
+    const write = spawnSync(process.execPath, ['dist/scripts/release-check-stamp.js', ...proof.writeArgs], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      env: { ...process.env, ...proof.env }
+    });
+    assert.equal(write.status, 2);
+    assert.match(write.stderr, /canonical test proof is not current|canonical_test_proof_missing/);
+  } finally {
+    fsSync.writeFileSync(proof.canonicalProofPath, original);
+    proof.cleanup();
+  }
+});
+
+test('release-check stamp verify rejects a changed canonical test proof hash', () => {
+  const proof = createReleaseStampProof();
+  const original = fsSync.readFileSync(proof.canonicalProofPath);
+  try {
+    const write = spawnSync(process.execPath, ['dist/scripts/release-check-stamp.js', ...proof.writeArgs], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      env: { ...process.env, ...proof.env }
+    });
+    assert.equal(write.status, 0, write.stderr);
+    const canonical = JSON.parse(original.toString('utf8'));
+    const completed = new Date(Date.parse(canonical.completed_at) + 1_000);
+    const started = new Date(completed.getTime() - 1);
+    canonical.started_at = started.toISOString();
+    canonical.completed_at = completed.toISOString();
+    canonical.duration_ms = 1;
+    fsSync.writeFileSync(proof.canonicalProofPath, `${JSON.stringify(canonical, null, 2)}\n`);
+    const verify = spawnSync(process.execPath, ['dist/scripts/release-check-stamp.js', 'verify'], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      env: { ...process.env, ...proof.env }
+    });
+    assert.equal(verify.status, 2);
+    assert.match(verify.stderr, /canonical_test_proof_hash_mismatch/);
+  } finally {
+    fsSync.writeFileSync(proof.canonicalProofPath, original);
+    proof.cleanup();
+  }
+});
+
+test('release-check stamp verify rejects a stale canonical test proof', () => {
+  const proof = createReleaseStampProof();
+  const original = fsSync.readFileSync(proof.canonicalProofPath);
+  try {
+    const write = spawnSync(process.execPath, ['dist/scripts/release-check-stamp.js', ...proof.writeArgs], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      env: { ...process.env, ...proof.env }
+    });
+    assert.equal(write.status, 0, write.stderr);
+    const canonical = JSON.parse(original.toString('utf8'));
+    canonical.release_authorization_snapshot = {
+      ...canonical.release_authorization_snapshot,
+      source_digest: '0'.repeat(64)
+    };
+    fsSync.writeFileSync(proof.canonicalProofPath, `${JSON.stringify(canonical, null, 2)}\n`);
+    const verify = spawnSync(process.execPath, ['dist/scripts/release-check-stamp.js', 'verify'], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      env: { ...process.env, ...proof.env }
+    });
+    assert.equal(verify.status, 2);
+    assert.match(verify.stderr, /canonical_test_proof_authorization_stale/);
+  } finally {
+    fsSync.writeFileSync(proof.canonicalProofPath, original);
+    proof.cleanup();
+  }
 });
 
 test('release-check stamp rejects HEAD-only identity drift', async () => {
@@ -167,6 +329,11 @@ test('DAG-to-real proof rejects same-id release gate command drift in an isolate
       distStamp: { schema: 'sks.dist-build-stamp.v1', source_digest: 'b'.repeat(64), source_file_count: 3 },
       distStampPath: 'dist/.sks-build-stamp.json',
       distStampMtimeMs: 1_000,
+      canonicalTestProof: { schema: 'sks.canonical-test-proof.v1', ok: true, release_authorization_snapshot: { ...authorizationAfter } },
+      canonicalTestProofPath: '.sneakoscope/reports/canonical-test-proof.json',
+      canonicalTestProofSha256: '8'.repeat(64),
+      canonicalTestProofMtimeMs: 1_500,
+      canonicalTestProofBlockers: [],
       authorizationSnapshot: authorizationAfter,
       currentDistSourceDigest: 'b'.repeat(64),
       currentDistSourceFileCount: 3,
@@ -201,6 +368,24 @@ test('release-check stamp rejects a self-asserted truncated release DAG', () => 
   }
 });
 
+test('release-check stamp rejects a DAG summary whose report_dir does not match its run path', () => {
+  const proof = createReleaseStampProof();
+  try {
+    const summary = JSON.parse(fsSync.readFileSync(proof.summaryPath, 'utf8'));
+    summary.report_dir = path.dirname(path.dirname(proof.summaryPath));
+    fsSync.writeFileSync(proof.summaryPath, `${JSON.stringify(summary, null, 2)}\n`);
+    const write = spawnSync(process.execPath, ['dist/scripts/release-check-stamp.js', ...proof.writeArgs], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      env: { ...process.env, ...proof.env }
+    });
+    assert.equal(write.status, 2);
+    assert.match(write.stderr, /release_dag_summary_report_dir_identity_mismatch/);
+  } finally {
+    proof.cleanup();
+  }
+});
+
 test('release-check stamp rejects an incomplete release-real check list', () => {
   const proof = createReleaseStampProof();
   try {
@@ -221,13 +406,12 @@ test('release-check stamp rejects an incomplete release-real check list', () => 
 });
 
 test('release-check stamp ensure refreshes a stale publish stamp', async () => {
-  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-release-stamp-ensure-'));
-  const stamp = path.join(tmp, 'stamp.json');
-  await fs.writeFile(stamp, '{"schema":"stale","package_version":"0.0.0"}\n');
   const proof = createReleaseStampProof();
+  const stamp = proof.stampPath;
+  await fs.writeFile(stamp, '{"schema":"stale","package_version":"0.0.0"}\n');
   const env = {
     ...process.env,
-    SKS_RELEASE_STAMP_PATH: stamp,
+    ...proof.env,
     SKS_RELEASE_CHECK_REFRESH_COMMAND: proof.writeCommand
   };
 
@@ -247,11 +431,9 @@ test('release-check stamp ensure refreshes a stale publish stamp', async () => {
 });
 
 test('release-check stamp ignores dist root json files excluded from npm package files', async () => {
-  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-release-stamp-dist-json-'));
-  const stamp = path.join(tmp, 'stamp.json');
   const volatileDistJson = path.join(process.cwd(), 'dist', '__release-check-stamp-volatile-test.json');
-  const env = { ...process.env, SKS_RELEASE_STAMP_PATH: stamp };
   const proof = createReleaseStampProof();
+  const env = { ...process.env, ...proof.env };
 
   await fs.writeFile(volatileDistJson, '{"attempt":1}\n');
   try {

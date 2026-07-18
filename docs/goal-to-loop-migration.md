@@ -1,7 +1,7 @@
-# Goal To Loop Migration
+# Goal Runtime Migration
 
-In SKS 3.1.0, `sks goal "<request>"` compiles the goal into a Loop Graph by default. The goal remains the user intent and continuation surface, while the Loop Graph becomes the execution SSOT.
+SKS 3.1.0 temporarily compiled `sks goal` requests into SKS-owned Loop Graphs and wrote `goal-compat.json`. That runtime is historical and is not a supported execution path in SKS 6.7.0.
 
-Each goal mission writes `goal-compat.json` with the legacy goal text, loop plan path, loop graph proof path, runtime `loop-graph`, and compat mode. Existing goal artifacts can continue to exist, but execution proof now references loop proof.
+Codex native `/goal` is now the only persisted goal owner. `sks goal create|edit|pause|resume|clear|status` is a stateless helper that renders a detailed native Goal command; it creates no SKS mission, compatibility artifact, loop, or fallback state. Implementation work continues through the selected SKS execution route rather than through a Goal-owned runtime.
 
-The temporary escape hatch is `sks goal "<request>" --legacy-goal-runtime` or `SKS_LEGACY_GOAL_RUNTIME=1`. This keeps old behavior available while the default moves to loop runtime.
+`--legacy-goal-runtime` and `SKS_LEGACY_GOAL_RUNTIME=1` no longer restore the old runtime; they fail with an instruction to use native `/goal`. Treat existing `goal-compat.json` and legacy Goal mission state as non-authoritative historical artifacts.

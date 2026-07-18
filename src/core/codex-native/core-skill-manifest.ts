@@ -1,5 +1,5 @@
 import { PACKAGE_VERSION, nowIso, sha256 } from '../fsx.js';
-import { leanPolicyReference } from '../lean-engineering-policy.js';
+import { coreEngineeringDirectiveReference } from '../lean-engineering-policy.js';
 import { normalizeDollarSkillName, prefixKnownSksDollarReferences, sksPrefixedDollarCommand, sksPrefixedSkillName } from '../routes/dollar-prefix.js';
 import { canonicalSkillName } from './skill-name-canonicalizer.js';
 
@@ -70,7 +70,7 @@ const CORE_SKILL_DEFINITIONS: Array<{
     route: '$Naruto',
     purpose: 'run a Codex official subagent workflow with official agent threads while parent integration remains owner.',
     when: 'Use when the user explicitly invokes $Naruto or the selected route requires bounded parallel delegation.',
-    workflow: 'Use sks naruto run "<task>" [--agents N] [--max-threads N] [--json]. Naruto is the default execution route for non-trivial change requests; Answer and truly tiny DFix work stay lightweight. Automatic fan-out starts at two for bounded work, four for explicit parallel work, and six for large-scale work, then may expand to ten only after decomposition proves useful independent slices. Before every wave compute C_t as the minimum of ready DAG width, disjoint ownership, verifier capacity, tool concurrency, available slots after parent/reviewer reservations, and workers with positive marginal usefulness; max_threads is a cap, never a target. An explicit operator --agents N remains authoritative. The GPT-5.6 Sol Max parent selects the narrow project-scoped custom role matching each slice. Luna Max is only for tiny short-context mechanical work; Sol High handles ordinary implementation; Sol Max handles review, debugging, planning, architecture, security, DB, research, release, ambiguity, and judgment; Terra Medium handles long-context analysis plus direct Computer Use, Browser/Chrome, and image-generation execution. Split mixed execution and judgment where safe; otherwise Sol Max wins. Reject duplicate slice fingerprints and overlapping or unassigned parallel writes. Reviewer-only fan-out is capped at two ordinarily and three for critical multi-domain review; protected security/DB/release/irreversible gates cannot be offset by aggregate gains. Keep max_depth=1, wait for every requested subagent, reuse only four ordinary or six complex query-aware TriWiki trust/hydration anchors, treat SubagentStart/SubagentStop as lifecycle-only evidence, require subagent-parent-summary.json with one structured outcome per thread, and let the parent own integration and final judgment.',
+    workflow: 'Run sks naruto run "<task>" [--agents N] [--max-threads N] [--json] with Codex official subagent threads only. The parent owns decomposition, per-wave capacity, later root-owned waves, integration, and final verification. Automatic targets begin at 2/4/6 by task size and may expand to 10 only for independent useful slices; max_threads is a cap, never a target, and max_depth=1 blocks nested delegation. Route each slice to the narrowest matching Codex role and wait for every planned thread before final.',
     safety: 'Preserve user-authored content, inherit the parent permission mode, do not spawn nested subagents, do not inject the full pack or the full TriWiki context into every child, and do not fall back to another model, process runtime, custom scheduler, or worker pool. The historical Naruto process runtime is removed; stop with explicit blocker evidence when the official path is unavailable.',
     cli: 'sks naruto run "<task>" [--agents N] [--max-threads N] [--json]; sks naruto status|subagents|proof [--mission <id>] [--json]',
     evidence: 'subagent-plan.json, subagent-events.jsonl, subagent-parent-summary.json, subagent-evidence.json, naruto-summary.json, and naruto-gate.json.',
@@ -212,7 +212,7 @@ export function renderCoreSkillTemplate(name: string): string {
   ));
   if (!legacy) throw new Error(`Unknown SKS core skill: ${name}`);
   const skill = currentCoreSkillDefinition(legacy);
-  const lean = leanPolicyReference();
+  const directive = coreEngineeringDirectiveReference();
   return [
     '---',
     `name: ${skill.display_name}`,
@@ -235,13 +235,10 @@ export function renderCoreSkillTemplate(name: string): string {
     `Use when: ${skill.when}`,
     `Workflow: ${skill.workflow || 'Run the selected route lifecycle, read source evidence before mutation planning, keep changes scoped, verify with the cheapest sufficient check, and record blockers honestly.'}`,
     `CLI entrypoint: ${skill.cli || skill.route}`,
-    `Lean policy: ${lean.policy_id}/${lean.policy_hash}`,
+    `Core directive: ${directive.directive_id}/${directive.directive_hash}`,
     `Safety: ${skill.safety || 'Preserve user-authored content, keep route state bounded, avoid unsupported guarantees, and stop on hard blockers instead of fabricating fallback behavior.'}`,
     `Evidence/artifacts: ${skill.evidence}`,
-    `Proof paths: ${skill.evidence}`,
-    'Safety rules: preserve user-authored skills, keep route state bounded, and stop on hard blockers instead of fabricating fallback behavior.',
     `Failure/recovery: ${skill.fallback}`,
-    `Failure recovery: ${skill.fallback}`,
     ''
   ].join('\n');
 }

@@ -31,6 +31,157 @@ enum NativeView {
     }
 }
 
+enum OverviewSummary {
+    static func render(
+        update: [String: Any]?,
+        mcp: [String: Any]?,
+        telegram: [String: Any]?,
+        menuBarBuild: String,
+        codexRunning: Bool?,
+        operationSummary: String
+    ) -> String {
+        let codexAppState = codexRunning.map { $0 ? "Running" : "Not running" } ?? "Not configured"
+        var lines: [String] = []
+        let update = validatedUpdate(update)
+        let mcp = validatedMCP(mcp)
+        let telegram = validatedTelegram(telegram)
+
+        if let update = update {
+            let sks = update["sks"] as? [String: Any]
+            let codex = update["codex_cli"] as? [String: Any]
+            let menu = update["menubar"] as? [String: Any]
+            lines.append("SKS install: \(versionSummary(sks))")
+            lines.append("Codex CLI: \(versionSummary(codex)) · Codex app: \(codexAppState)")
+
+            var menuParts = ["running build \(menuBarBuild)"]
+            if let expected = menu?["expected_version"] as? String { menuParts.append("expected \(expected)") }
+            if let installed = menu?["installed_version"] as? String, installed != menuBarBuild {
+                menuParts.append("snapshot installed \(installed)")
+            }
+            if let rebuildRequired = menu?["rebuild_required"] as? Bool {
+                menuParts.append(rebuildRequired ? "rebuild required" : "current")
+            } else {
+                menuParts.append("rebuild state unknown")
+            }
+            menuParts.append("signature \(verificationState(menu?["signature_ok"]))")
+            menuParts.append("resources \(verificationState(menu?["resources_ok"]))")
+            lines.append("Menu Bar: \(menuParts.joined(separator: " · "))")
+
+            let source = snapshotSource(update["source"] as? String)
+            var updateParts = [integer(update["update_count"]).map { "\($0) pending" } ?? "pending count unknown", "\(source) snapshot"]
+            if let error = diagnosticNotice(update["public_error"] as? String, update: update) {
+                updateParts.append("notice: \(error)")
+            } else if let warnings = update["warnings"] as? [String], !warnings.isEmpty {
+                updateParts.append("\(warnings.count) warning\(warnings.count == 1 ? "" : "s")")
+            }
+            lines.append("Updates: \(updateParts.joined(separator: " · "))")
+        } else {
+            lines.append("SKS install: unavailable")
+            lines.append("Codex CLI: unavailable · Codex app: \(codexAppState)")
+            lines.append("Menu Bar: running build \(menuBarBuild) · update status unavailable")
+            lines.append("Updates: unavailable")
+        }
+
+        if let mcp = mcp,
+           let enabled = integer(mcp["enabled_count"]),
+           let failed = integer(mcp["failed_count"]) {
+            lines.append("MCP: \(enabled) enabled · \(failed) failed")
+        } else {
+            lines.append("MCP: unavailable")
+        }
+
+        if let telegram = telegram {
+            let owner = telegram["owner"] as? [String: Any]
+            let configured = telegram["configured"] as? Bool
+            let hubState = owner != nil ? "Running" : configured == true ? "Stopped" : configured == false ? "Not configured" : "Unknown"
+            let machines = integer(telegram["machine_count"]).map { "\($0) registered Macs" } ?? "registered Macs unknown"
+            let targets = integer(telegram["target_count"]).map { "\($0) configured targets" } ?? "configured targets unknown"
+            let issues = ((telegram["config_issues"] as? [String]) ?? []).count
+                + ((telegram["remote_config_issues"] as? [String]) ?? []).count
+            var fleet = "Remote fleet: \(machines) · \(targets)"
+            if issues > 0 { fleet += " · \(issues) issue\(issues == 1 ? "" : "s")" }
+            lines.append("Telegram Hub: \(hubState) · \(fleet)")
+        } else {
+            lines.append("Telegram Hub: unavailable · Remote fleet: unavailable")
+        }
+
+        lines.append("Last operation: \(operationSummary) · Logs and snapshots use mode 0600")
+        return lines.joined(separator: "\n")
+    }
+
+    private static func validatedUpdate(_ value: [String: Any]?) -> [String: Any]? {
+        guard value?["schema"] as? String == "sks.update-status.v3",
+              value?["source"] is String,
+              integer(value?["update_count"]) != nil,
+              let sks = value?["sks"] as? [String: Any],
+              let codex = value?["codex_cli"] as? [String: Any],
+              let menu = value?["menubar"] as? [String: Any],
+              sks["update_available"] is Bool,
+              codex["update_available"] is Bool,
+              menu["expected_version"] is String,
+              menu["rebuild_required"] is Bool else { return nil }
+        return value
+    }
+
+    private static func validatedMCP(_ value: [String: Any]?) -> [String: Any]? {
+        guard value?["schema"] as? String == "sks.mcp-inventory.v2",
+              integer(value?["enabled_count"]) != nil,
+              integer(value?["failed_count"]) != nil else { return nil }
+        return value
+    }
+
+    private static func validatedTelegram(_ value: [String: Any]?) -> [String: Any]? {
+        guard value?["schema"] as? String == "sks.telegram-status.v1",
+              value?["configured"] is Bool,
+              integer(value?["machine_count"]) != nil,
+              integer(value?["target_count"]) != nil,
+              value?["config_issues"] is [String],
+              value?["remote_config_issues"] is [String] else { return nil }
+        return value
+    }
+
+    private static func versionSummary(_ value: [String: Any]?) -> String {
+        guard let current = nonEmpty(value?["current"] as? String) else { return "not detected" }
+        guard let latest = nonEmpty(value?["latest"] as? String) else { return current }
+        if value?["update_available"] as? Bool == true, latest != current { return "\(current) → \(latest) available" }
+        if latest == current { return "\(current) (current)" }
+        return "\(current) · latest \(latest)"
+    }
+
+    private static func verificationState(_ value: Any?) -> String {
+        guard let value = value as? Bool else { return "unknown" }
+        return value ? "verified" : "needs attention"
+    }
+
+    private static func snapshotSource(_ value: String?) -> String {
+        guard let value = nonEmpty(value) else { return "unknown" }
+        return value.replacingOccurrences(of: "_", with: " ")
+    }
+
+    private static func diagnosticNotice(_ value: String?, update: [String: Any]) -> String? {
+        guard let value = nonEmpty(value) else { return nil }
+        let versions = [
+            (update["sks"] as? [String: Any])?["current"] as? String,
+            (update["sks"] as? [String: Any])?["latest"] as? String,
+            (update["codex_cli"] as? [String: Any])?["current"] as? String,
+            (update["codex_cli"] as? [String: Any])?["latest"] as? String
+        ].compactMap { $0 }
+        if versions.contains(value) { return nil }
+        if value.range(of: #"^v?\d+(?:\.\d+){1,3}(?:[-+][A-Za-z0-9.-]+)?$"#, options: .regularExpression) != nil { return nil }
+        return value
+    }
+
+    private static func integer(_ value: Any?) -> Int? {
+        if let value = value as? Int { return value }
+        return (value as? NSNumber)?.intValue
+    }
+
+    private static func nonEmpty(_ value: String?) -> String? {
+        guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
+        return value
+    }
+}
+
 final class OverviewViewController: NSViewController {
     private let processClient: ProcessClient
     private let operations: OperationCoordinator
@@ -53,12 +204,12 @@ final class OverviewViewController: NSViewController {
         buttons.spacing = 8
         view = NativeView.stack([
             NativeView.title("Overview"),
-            NativeView.detail("SKS \(AppRuntime.packageVersion) · Menu Bar build, update, MCP, Remote, and operation health."),
+            NativeView.detail("Menu Bar build \(AppRuntime.packageVersion) · Local health for SKS, Codex CLI, MCP, Remote, and operations."),
             status,
             notificationInbox,
             buttons
         ])
-        refreshStatus()
+        loadStatus(forceUpdateRefresh: false)
     }
 
     func setNotificationAuthorizationDenied(_ denied: Bool) {
@@ -68,21 +219,31 @@ final class OverviewViewController: NSViewController {
     }
 
     @objc private func refreshStatus() {
+        loadStatus(forceUpdateRefresh: true)
+    }
+
+    private func loadStatus(forceUpdateRefresh: Bool) {
         generation += 1
         let requestGeneration = generation
-        status.stringValue = "Checking versions, MCP servers, Telegram Hub, connected Macs, and operations…"
+        status.stringValue = "Checking versions, MCP servers, Telegram Hub, remote fleet, and operations…"
         var update: [String: Any]?
         var mcp: [String: Any]?
         var telegram: [String: Any]?
         let group = DispatchGroup()
         group.enter()
-        processClient.run(["update", "status", "--json"]) { [weak self] result in
+        var updateArguments = ["update", "status"]
+        if forceUpdateRefresh { updateArguments.append("--refresh") }
+        updateArguments.append("--json")
+        processClient.run(updateArguments) { [weak self] result in
             update = result.code == 0 ? self?.json(result.output) : nil
             group.leave()
         }
         group.enter()
-        processClient.run(["mcp", "config", "list", "--scope", "effective", "--json"]) { [weak self] result in
-            mcp = result.code == 0 ? self?.json(result.output) : nil
+        processClient.run([
+            "mcp", "config", "list", "--scope", "effective",
+            "--project-root", AppRuntime.projectRoot, "--trusted-project", "--json"
+        ], timeout: 3) { [weak self] result in
+            mcp = self?.json(result.output)
             group.leave()
         }
         group.enter()
@@ -91,6 +252,10 @@ final class OverviewViewController: NSViewController {
             group.leave()
         }
         group.notify(queue: .main) { [weak self] in
+            guard let self = self, self.generation == requestGeneration else { return }
+            self.status.stringValue = self.summary(update: update, mcp: mcp, telegram: telegram)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
             guard let self = self, self.generation == requestGeneration else { return }
             self.status.stringValue = self.summary(update: update, mcp: mcp, telegram: telegram)
         }
@@ -104,28 +269,33 @@ final class OverviewViewController: NSViewController {
     }
 
     private func summary(update: [String: Any]?, mcp: [String: Any]?, telegram: [String: Any]?) -> String {
-        let sks = update?["sks"] as? [String: Any]
-        let codex = update?["codex_cli"] as? [String: Any]
-        let menu = update?["menubar"] as? [String: Any]
-        let signature = menu?["signature_ok"] as? Bool
-        let resources = menu?["resources_ok"] as? Bool
         let codexRunning = AppRuntime.codexBundleId.map { bundle in
             NSWorkspace.shared.runningApplications.contains { $0.bundleIdentifier == bundle }
         }
-        let hub = telegram?["owner"] as? [String: Any]
-        let configuredTargets = telegram?["target_count"] as? Int ?? 0
-        let connectedMacs = hub == nil ? 0 : configuredTargets
         let operation = operations.latestSnapshot()
-        let operationSummary = operation.map { "\($0.kind) · \($0.state.rawValue) · \($0.publicSummary)" } ?? "None recorded"
-        let lines = [
-            "SKS: \(sks?["current"] as? String ?? AppRuntime.packageVersion) (latest \(sks?["latest"] as? String ?? "unknown"))",
-            "Codex CLI: \(codex?["current"] as? String ?? "unknown") (latest \(codex?["latest"] as? String ?? "unknown")) · Codex app: \(codexRunning == true ? "Running" : codexRunning == false ? "Not running" : "Not configured")",
-            "Menu Bar: expected \(menu?["expected_version"] as? String ?? AppRuntime.packageVersion) · installed \(menu?["installed_version"] as? String ?? "unknown") · signature \(signature == true ? "Verified" : signature == false ? "Needs attention" : "Unknown") · resources \(resources == true ? "Verified" : resources == false ? "Needs attention" : "Unknown")",
-            "Updates: \(update?["update_count"] as? Int ?? 0) · MCP: \(mcp?["enabled_count"] as? Int ?? 0) enabled / \(mcp?["failed_count"] as? Int ?? 0) failed",
-            "Telegram Hub: \(hub == nil ? "Stopped" : "Running") · Connected Macs: \(connectedMacs) / \(configuredTargets) configured targets",
-            "Last operation: \(operationSummary) · Logs and snapshots use mode 0600"
-        ]
-        return lines.joined(separator: "\n")
+        let operationSummary = recentOperationSummary(operation)
+        return OverviewSummary.render(
+            update: update,
+            mcp: mcp,
+            telegram: telegram,
+            menuBarBuild: AppRuntime.packageVersion,
+            codexRunning: codexRunning,
+            operationSummary: operationSummary
+        )
+    }
+
+    private func recentOperationSummary(_ operation: OperationSnapshot?) -> String {
+        guard let operation = operation else { return "None recorded" }
+        guard let updatedAt = ISO8601DateFormatter().date(from: operation.updatedAt) else {
+            return "\(operation.kind) · \(operation.state.rawValue) · \(operation.publicSummary)"
+        }
+        let age = Date().timeIntervalSince(updatedAt)
+        if age > 24 * 60 * 60 { return "None in the last 24 hours" }
+        let activeStates = ["queued", "running", "waitingForConfirmation"]
+        if age > 15 * 60, activeStates.contains(operation.state.rawValue) {
+            return "\(operation.kind) · stale \(operation.state.rawValue) record · review operation log"
+        }
+        return "\(operation.kind) · \(operation.state.rawValue) · \(operation.publicSummary)"
     }
 
     private func json(_ text: String) -> [String: Any]? {

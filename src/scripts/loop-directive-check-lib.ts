@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { COMMANDS } from '../cli/command-registry.js';
 import { runProcess } from '../core/fsx.js';
-import { compileGoalToLoopPlan } from '../core/loops/goal-to-loop-compat.js';
+import { buildNativeGoalRequest } from '../core/goal-workflow.js';
 import { loopGraphProofPath, loopPlanPath, loopProofPath, loopRoot, loopStatePath } from '../core/loops/loop-artifacts.js';
 import { decomposeRequestIntoLoopDomains } from '../core/loops/loop-decomposer.js';
 import { selectLoopGates } from '../core/loops/loop-gate-selector.js';
@@ -36,8 +36,7 @@ export async function runLoopDirectiveCheck(id) {
     || id === 'loop:maker-checker-real'
     || id === 'loop:integration-finalizer-real'
     || id === 'loop:real-maker-checker-blackbox'
-    || id === 'naruto:loop-mesh-real-blackbox'
-    || id === 'goal:loop-runtime-real-blackbox';
+    || id === 'naruto:loop-mesh-real-blackbox';
   if (!realRuntimeMode && process.env.SKS_LOOP_RUNTIME_FIXTURE !== '1') {
     process.env.SKS_LOOP_RUNTIME_FIXTURE = '1';
   }
@@ -165,11 +164,11 @@ export async function runLoopDirectiveCheck(id) {
     assert(result.proofs.every((proof) => proof.maker_result.artifacts.length && proof.checker_result.artifacts.length), 'worker runtime artifacts exist for every loop');
     assert(result.graph_proof.integration_merge, 'integration finalizer ran');
   } else if (id === 'goal:loop-runtime-real-blackbox') {
-    const goalPlan = await compileGoalToLoopPlan({ root, missionId: `${missionId}-goal-real`, goalText: 'fix release cache', legacyGoalOptions: {} });
-    const goalResult = await runLoopPlan({ root, plan: goalPlan, parallelism: 'balanced', noMutation: true });
-    assert(await exists(path.join(root, '.sneakoscope', 'missions', `${missionId}-goal-real`, 'goal-compat.json')), 'goal compat artifact exists');
-    assert(goalResult.proofs.some((proof) => proof.maker_result.artifacts.length), 'goal loop worker runtime artifacts exist');
-    assert(await exists(loopGraphProofPath(root, `${missionId}-goal-real`)), 'goal graph proof exists');
+    const goalMission = `${missionId}-goal-real`;
+    const request = buildNativeGoalRequest('create', 'fix release cache');
+    assert(request.native_only === true && request.sks_state_written === false, 'goal request is Codex-native only');
+    assert(!(await exists(path.join(root, '.sneakoscope', 'missions', goalMission))), 'goal request creates no SKS mission');
+    assert(!(await exists(loopGraphProofPath(root, goalMission))), 'goal request creates no loop graph proof');
   } else if (id === 'loop:status-ux') {
     assert(await exists(loopGraphProofPath(root, missionId)), 'status has graph proof source');
   } else if (id === 'loop:zellij-real-runtime-ui') {
@@ -267,11 +266,14 @@ export async function runLoopDirectiveCheck(id) {
   } else if (id === 'loop:proof-summary-cli') {
     assert(renderLoopProofSummary(await readJson(loopGraphProofPath(root, missionId))).includes('Loop graph:'), 'proof summary renders');
   } else if (id === 'goal:loop-compat' || id === 'goal:artifact-compat') {
-    const goalPlan = await compileGoalToLoopPlan({ root, missionId: `${missionId}-goal`, goalText: 'fix release cache', legacyGoalOptions: {} });
-    assert(goalPlan.compatibility.source_command === 'goal', 'goal compiles to loop plan');
-    assert(await exists(path.join(root, '.sneakoscope', 'missions', `${missionId}-goal`, 'goal-compat.json')), 'goal compat artifact exists');
+    const goalMission = `${missionId}-goal`;
+    const request = buildNativeGoalRequest('create', 'fix release cache');
+    assert(request.native_only === true && request.slash_command.startsWith('/goal Outcome:'), 'goal maps to a detailed native Codex command');
+    assert(!(await exists(path.join(root, '.sneakoscope', 'missions', goalMission, 'goal-compat.json'))), 'goal compat artifact is retired');
   } else if (id === 'goal:loop-runtime-default' || id === 'goal:legacy-runtime-escape') {
-    assert(await exists('../src/core/commands/goal-command.ts') || true, 'goal command has loop runtime default and legacy escape wiring');
+    const source = await fs.readFile(path.join(process.cwd(), 'src/core/commands/goal-command.ts'), 'utf8');
+    assert(!source.includes('createMission') && !source.includes('runLoopPlan') && !source.includes('compileGoalToLoopPlan'), 'goal command has no SKS mission or loop runtime');
+    assert(source.includes('Codex native Goal only'), 'goal command is an explicit stateless native-only helper');
   } else if (id === 'docs:loop-runtime') {
     const docs = await Promise.all(['docs/loop-runtime.md', 'docs/naruto-loop-mesh.md', 'docs/loop-gate-selector.md', 'docs/goal-to-loop-migration.md'].map((file) => fs.readFile(path.join(process.cwd(), file), 'utf8')));
     assert(docs.every((text) => text.includes('Loop Graph') || text.includes('loop graph')), 'loop docs mention loop graph');
@@ -297,7 +299,6 @@ function loopDirectiveNeedsRuntime(id) {
     'loop:integration-finalizer-real',
     'loop:real-maker-checker-blackbox',
     'naruto:loop-mesh-real-blackbox',
-    'goal:loop-runtime-real-blackbox',
     'loop:integration-finalizer'
   ]).has(id);
 }

@@ -1,6 +1,7 @@
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 import { appendJsonlBounded, nowIso, writeJsonAtomic } from '../fsx.js'
+import type { SubagentCountPolicy } from './wave-lifecycle.js'
 
 export const SUBAGENT_EVIDENCE_SCHEMA = 'sks.subagent-evidence.v1'
 export const SUBAGENT_EVENT_SCHEMA = 'sks.subagent-event.v1'
@@ -30,6 +31,8 @@ export interface SubagentEvidence {
   schema: typeof SUBAGENT_EVIDENCE_SCHEMA
   workflow: 'official_codex_subagent'
   requested_subagents: number
+  count_policy: SubagentCountPolicy
+  target_subagents: number
   started_threads: number
   completed_threads: number
   failed_threads: number
@@ -73,6 +76,8 @@ export interface StructuredSubagentParentSummary {
 
 export interface BuildSubagentEvidenceInput {
   requestedSubagents: number
+  countPolicy?: SubagentCountPolicy
+  targetSubagents?: number
   events?: readonly unknown[]
   parentSummary?: unknown
   parentSummaryPresent?: boolean
@@ -192,6 +197,9 @@ export function normalizeSubagentEvent(payload: unknown, explicitEventName?: unk
 
 export function buildSubagentEvidence(input: BuildSubagentEvidenceInput): SubagentEvidence {
   const requestedSubagents = normalizeRequested(input.requestedSubagents)
+  const countPolicy: SubagentCountPolicy = input.countPolicy === 'dynamic_automatic'
+    ? 'dynamic_automatic'
+    : 'exact'
   const normalizedEvents = (input.events || [])
     .map((event) => normalizeSubagentEvent(event))
     .filter((event): event is NormalizedSubagentEvent => Boolean(event))
@@ -281,6 +289,12 @@ export function buildSubagentEvidence(input: BuildSubagentEvidenceInput): Subage
     .filter((threadId) => starts.has(threadId))
     .sort()
   const startedThreadIds = [...starts].sort()
+  const configuredTargetSubagents = normalizeRequested(input.targetSubagents)
+  const targetSubagents = countPolicy === 'dynamic_automatic'
+    ? configuredTargetSubagents > 0
+      ? configuredTargetSubagents
+      : Math.max(requestedSubagents, startedThreadIds.length)
+    : requestedSubagents
   const stoppedThreadIds = new Set([...completedThreadIds, ...failedThreadIds])
   const openThreadIds = startedThreadIds.filter((threadId) => !stoppedThreadIds.has(threadId))
   const preparationOnly = input.preparationOnly === true || isPreparationStatus(input.workflowStatus)
@@ -290,16 +304,21 @@ export function buildSubagentEvidence(input: BuildSubagentEvidenceInput): Subage
 
   if (preparationOnly) blockers.push('subagent_workflow_preparation_only')
   if (requestedSubagents < 1) blockers.push('requested_subagents_missing')
-  if (missingThreadId) blockers.push('subagent_event_thread_id_missing')
-  if (startedThreadIds.length < requestedSubagents) {
-    blockers.push(`requested_subagent_starts_incomplete:${startedThreadIds.length}/${requestedSubagents}`)
-  } else if (startedThreadIds.length > requestedSubagents) {
-    blockers.push(`requested_subagent_starts_exceeded:${startedThreadIds.length}/${requestedSubagents}`)
+  if (countPolicy === 'dynamic_automatic'
+    && configuredTargetSubagents > 0
+    && requestedSubagents > configuredTargetSubagents) {
+    blockers.push(`requested_subagents_exceed_target:${requestedSubagents}/${configuredTargetSubagents}`)
   }
-  if (completedThreadIds.length < requestedSubagents) {
-    blockers.push(`requested_subagent_completions_incomplete:${completedThreadIds.length}/${requestedSubagents}`)
-  } else if (completedThreadIds.length > requestedSubagents) {
-    blockers.push(`requested_subagent_completions_exceeded:${completedThreadIds.length}/${requestedSubagents}`)
+  if (missingThreadId) blockers.push('subagent_event_thread_id_missing')
+  if (startedThreadIds.length < targetSubagents) {
+    blockers.push(`requested_subagent_starts_incomplete:${startedThreadIds.length}/${targetSubagents}`)
+  } else if (startedThreadIds.length > targetSubagents) {
+    blockers.push(`requested_subagent_starts_exceeded:${startedThreadIds.length}/${targetSubagents}`)
+  }
+  if (completedThreadIds.length < targetSubagents) {
+    blockers.push(`requested_subagent_completions_incomplete:${completedThreadIds.length}/${targetSubagents}`)
+  } else if (completedThreadIds.length > targetSubagents) {
+    blockers.push(`requested_subagent_completions_exceeded:${completedThreadIds.length}/${targetSubagents}`)
   }
   if (failedThreadIds.length > 0) blockers.push(`subagent_threads_failed:${failedThreadIds.length}`)
   if (openThreadIds.length > 0) blockers.push(`subagent_threads_still_open:${openThreadIds.length}`)
@@ -329,6 +348,8 @@ export function buildSubagentEvidence(input: BuildSubagentEvidenceInput): Subage
     schema: SUBAGENT_EVIDENCE_SCHEMA,
     workflow: 'official_codex_subagent',
     requested_subagents: requestedSubagents,
+    count_policy: countPolicy,
+    target_subagents: targetSubagents,
     started_threads: startedThreadIds.length,
     completed_threads: completedThreadIds.length,
     failed_threads: failedThreadIds.length,
@@ -527,6 +548,12 @@ export function normalizeSubagentParentSummary(value: unknown): {
     blockers.push('parent_summary_changed_files_invalid')
   }
   if (parsed.verification !== undefined && !Array.isArray(parsed.verification)) blockers.push('parent_summary_verification_invalid')
+  const changedFiles = Array.isArray(parsed.changed_files)
+    ? parsed.changed_files.map((item) => String(item || '').trim()).filter(Boolean)
+    : []
+  if (changedFiles.length > 0 && !hasFocusedParentVerification(parsed.verification)) {
+    blockers.push('parent_summary_verification_missing')
+  }
   if (parsed.blockers !== undefined && (!Array.isArray(parsed.blockers) || parsed.blockers.some((item) => typeof item !== 'string'))) {
     blockers.push('parent_summary_blockers_invalid')
   }
@@ -600,6 +627,17 @@ function validStructuredParentSummary(value: unknown): StructuredSubagentParentS
   if (!isRecord(value) || value.schema !== SUBAGENT_PARENT_SUMMARY_SCHEMA) return null
   if (!Array.isArray(value.thread_outcomes)) return null
   return value as unknown as StructuredSubagentParentSummary
+}
+
+function hasFocusedParentVerification(value: unknown): boolean {
+  if (!Array.isArray(value)) return false
+  return value.some((row) => {
+    if (!isRecord(row)) return false
+    const status = String(row.status || '').trim().toLowerCase()
+    if (status === 'not_applicable') return Boolean(firstText(row.reason))
+    if (status !== 'passed') return false
+    return Boolean(firstText(row.name, row.check, row.command))
+  })
 }
 
 function strictTerminalOutcome(value: unknown): 'completed' | 'failed' | 'ambiguous' {

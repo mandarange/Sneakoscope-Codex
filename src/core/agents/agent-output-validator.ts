@@ -63,7 +63,8 @@ export const AGENT_RESULT_RUNTIME_SCHEMA = {
       required: ['status', 'checks'],
       properties: {
         status: { type: 'string' },
-        checks: { type: 'array', items: { type: 'string' } }
+        checks: { type: 'array', items: { type: 'string' } },
+        reason: { type: 'string', minLength: 1 }
       },
       additionalProperties: false
     },

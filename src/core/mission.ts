@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { ensureDir, nowIso, randomId, writeJsonAtomic, appendJsonl, readJson, exists, sha256, type JsonData } from './fsx.js';
 import { withFileLock } from './locks/file-lock.js';
+import { buildRequestIntake, REQUEST_INTAKE_ARTIFACT } from './questions.js';
 
 export function missionId() {
   const d = new Date();
@@ -54,21 +55,82 @@ export async function getOrCreateSessionMission(root: any, input: {
   prompt: string;
   sessionKey: string;
   selectMissionId: (state: JsonData) => string | null;
+  syncRequestIntake?: boolean;
 }): Promise<JsonData> {
   return withStateLock(root, async () => {
     const state = await loadStateForSessionUnlocked(root, input.sessionKey);
     const selectedMissionId = String(input.selectMissionId(state) || '').trim();
     if (selectedMissionId) {
       const loaded = await loadMission(root, selectedMissionId).catch(() => null);
-      if (loaded) return { ...loaded, reused: true };
+      if (loaded) {
+        const synced = await syncSessionMissionPrompt(root, selectedMissionId, input.prompt, loaded.mission, {
+          ensureRequestIntake: input.syncRequestIntake === true
+        });
+        return { ...loaded, mission: synced, reused: true };
+      }
     }
     const created = await createMissionUnlocked(root, {
       mode: input.mode,
       prompt: input.prompt,
       sessionKey: input.sessionKey
     });
-    return { ...created, reused: false };
+    const synced = await syncSessionMissionPrompt(root, String(created.id), input.prompt, created.mission, {
+      ensureRequestIntake: input.syncRequestIntake === true
+    });
+    return { ...created, mission: synced, reused: false };
   });
+}
+
+export async function syncSessionMissionPrompt(
+  root: string,
+  id: string,
+  prompt: string,
+  loadedMission?: any,
+  opts: { ensureRequestIntake?: boolean } = {}
+) {
+  const normalizedPrompt = String(prompt || '').trim();
+  const dir = missionDir(root, id);
+  const missionFile = path.join(dir, 'mission.json');
+  const mission = loadedMission || await readJson(missionFile, {});
+  if (!normalizedPrompt) return mission;
+  if (String(mission?.prompt || '').trim() === normalizedPrompt) {
+    if (opts.ensureRequestIntake === true) await ensureSessionRequestIntake(dir, normalizedPrompt);
+    return mission;
+  }
+
+  const previousPrompt = String(mission?.prompt || '').trim();
+  const updated = {
+    ...mission,
+    original_prompt: String(mission?.original_prompt || previousPrompt || normalizedPrompt),
+    prompt: normalizedPrompt,
+    active_prompt: normalizedPrompt,
+    prompt_updated_at: nowIso()
+  };
+  await writeJsonAtomic(missionFile, updated);
+
+  if (opts.ensureRequestIntake === true) await ensureSessionRequestIntake(dir, normalizedPrompt);
+  await appendJsonl(path.join(dir, 'events.jsonl'), {
+    ts: nowIso(),
+    type: 'mission.prompt.synchronized',
+    mission: id,
+    previous_prompt_hash: previousPrompt ? sha256(previousPrompt).slice(0, 16) : null,
+    prompt_hash: sha256(normalizedPrompt).slice(0, 16)
+  });
+  return updated;
+}
+
+async function ensureSessionRequestIntake(dir: string, prompt: string) {
+  const intakeFile = path.join(dir, REQUEST_INTAKE_ARTIFACT);
+  const intake = await readJson<any>(intakeFile, null).catch(() => null);
+  if (intake?.schema === 'sks.request-intake.v1' && intake.original_prompt === prompt) return intake;
+  const refreshed = buildRequestIntake(prompt);
+  await writeJsonAtomic(intakeFile, {
+    ...refreshed,
+    wiki_context_used: intake?.wiki_context_used || refreshed.wiki_context_used,
+    supersedes_prompt_hash: intake?.prompt_hash || null,
+    refreshed_for_session_reuse: true
+  });
+  return refreshed;
 }
 
 export async function loadMission(root: any, id: any): Promise<JsonData> {
@@ -120,6 +182,55 @@ export async function findLatestMission(root: any, opts: FindLatestMissionOption
 
 export async function setCurrent(root: any, patch: any, opts: any = {}) {
   return withStateLock(root, () => setCurrentUnlocked(root, patch, opts));
+}
+
+export async function updateCurrentIfMissionAndRun(
+  root: any,
+  expectedMissionId: any,
+  expectedWorkflowRunId: any,
+  update: any | ((current: JsonData) => any),
+  opts: any = {}
+) {
+  return withStateLock(root, async () => {
+    const explicitSessionKey = opts.sessionKey || null;
+    const sessionKey = explicitSessionKey ? sessionStateKey(explicitSessionKey) : null;
+    const targetFile = sessionKey ? path.join(stateSessionsDir(root), `${sessionKey}.json`) : stateFile(root);
+    const current = await readJson(targetFile, {});
+    const expected = String(expectedMissionId || '');
+    const actual = String(current?.mission_id || '');
+    const expectedRun = String(expectedWorkflowRunId || '');
+    const actualRun = String(current?.official_subagent_run_id || '');
+    if (!expected || actual !== expected || actualRun !== expectedRun) {
+      return {
+        updated: false,
+        status: actual !== expected ? 'mission_mismatch' : 'workflow_run_mismatch',
+        expected_mission_id: expected || null,
+        current_mission_id: actual || null,
+        expected_workflow_run_id: expectedRun || null,
+        current_workflow_run_id: actualRun || null
+      };
+    }
+    const patch = typeof update === 'function' ? await update(current) : update;
+    if (!patch || typeof patch !== 'object') {
+      return {
+        updated: false,
+        status: 'unchanged',
+        expected_mission_id: expected,
+        current_mission_id: actual,
+        expected_workflow_run_id: expectedRun || null,
+        current_workflow_run_id: actualRun || null
+      };
+    }
+    await setCurrentUnlocked(root, patch, { ...opts, sessionKey: explicitSessionKey });
+    return {
+      updated: true,
+      status: 'updated',
+      expected_mission_id: expected,
+      current_mission_id: actual,
+      expected_workflow_run_id: expectedRun || null,
+      current_workflow_run_id: actualRun || null
+    };
+  });
 }
 
 async function setCurrentUnlocked(root: any, patch: any, opts: any = {}) {

@@ -35,6 +35,19 @@ test('bootstrap bypasses migration gating in both command manifests so it can cr
   assert.equal(result.status, 'skipped');
 });
 
+test('hooks diagnostics and repair remain available when migration state is stale', async () => {
+  assert.equal(COMMANDS.hooks.skipMigrationGate, true);
+  assert.equal(COMMAND_MANIFEST_BY_NAME.hooks.skipMigrationGate, true);
+  const result = await ensureCurrentMigrationBeforeCommand({
+    command: 'hooks',
+    args: ['replay', 'fixture.json', '--json'],
+    cwd: process.cwd(),
+    env: { ...process.env, SKS_REQUIRE_UPDATE_MIGRATION_RECEIPT: '1' }
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.status, 'skipped');
+});
+
 test('doctor consumes migration gate machine flags and validates profile values', () => {
   assert.equal(doctorProfileFromArgs(['--profile', 'migration'], true), 'migration');
   assert.deepEqual(doctorArgWarnings(['--fix', '--yes', '--machine-only', '--report-file', 'out.json', '--profile', 'migration']), []);

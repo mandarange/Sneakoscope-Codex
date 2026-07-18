@@ -152,6 +152,8 @@ test('standalone and hook completion share the canonical Naruto gate fields', ()
     evidence: {
       ok: true,
       requested_subagents: 2,
+      count_policy: 'exact',
+      target_subagents: 2,
       started_threads: 2,
       completed_threads: 2,
       failed_threads: 0,
@@ -165,4 +167,58 @@ test('standalone and hook completion share the canonical Naruto gate fields', ()
   assert.equal(gate.official_subagent_evidence, true)
   assert.equal(gate.session_cleanup, true)
   assert.deepEqual(gate.missing_fields, [])
+})
+
+test('Naruto gate cleanup binds the effective target and rejects unsafe thread state', () => {
+  const dynamic = buildNarutoGateResult({
+    missionId: 'M-dynamic-gate',
+    passed: true,
+    ssotGuard: true,
+    blockers: [],
+    evidence: {
+      ok: true,
+      requested_subagents: 2,
+      count_policy: 'dynamic_automatic',
+      target_subagents: 4,
+      started_threads: 4,
+      completed_threads: 4,
+      failed_threads: 0,
+      open_thread_ids: [],
+      unmatched_stop_thread_ids: [],
+      ambiguous_stop_thread_ids: [],
+      parent_summary_present: true
+    }
+  })
+  assert.equal(dynamic.requested_subagents, 2)
+  assert.equal(dynamic.count_policy, 'dynamic_automatic')
+  assert.equal(dynamic.target_subagents, 4)
+  assert.equal(dynamic.session_cleanup, true)
+
+  for (const unsafe of [
+    { open_thread_ids: ['open'] },
+    { unmatched_stop_thread_ids: ['unmatched'] },
+    { ambiguous_stop_thread_ids: ['ambiguous'] },
+    { failed_threads: 1 },
+    { completed_threads: 3 }
+  ]) {
+    const gate = buildNarutoGateResult({
+      missionId: 'M-unsafe-gate',
+      passed: false,
+      evidence: {
+        ...dynamic.evidence,
+        ok: false,
+        requested_subagents: 2,
+        count_policy: 'dynamic_automatic',
+        target_subagents: 4,
+        started_threads: 4,
+        completed_threads: 4,
+        failed_threads: 0,
+        open_thread_ids: [],
+        unmatched_stop_thread_ids: [],
+        ambiguous_stop_thread_ids: [],
+        ...unsafe
+      }
+    })
+    assert.equal(gate.session_cleanup, false)
+  }
 })
