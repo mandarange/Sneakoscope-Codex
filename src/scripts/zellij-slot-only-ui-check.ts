@@ -14,8 +14,8 @@ const report = {
   worker_panes_default_live_renderer: uiMode.includes('resolveZellijWorkerPaneUiMode') && uiMode.includes("|| 'compact-slots'"),
   full_debug_opt_in_available: uiMode.includes("'--zellij-full-debug'") && uiMode.includes("fromEnv === 'full-debug'"),
   compact_explicit_fallback: uiMode.includes("'--zellij-compact-slots'") && uiMode.includes("fromEnv === 'compact-slots'"),
+  supported_modes_present: ["'compact-slots'", "'full-debug'"].every((token) => uiMode.includes(token)),
   state_records_ui_mode: manager.includes('ui_mode: uiMode'),
-  compact_skips_dashboard: manager.includes('if (!createDashboard)') && manager.includes('dashboard_created: false'),
   first_slot_creates_slot_anchor_right: worker.includes('buildZellijSlotColumnAnchorCommand') && worker.includes("'--direction', 'right', '--name', 'SLOTS'"),
   anchor_creation_serialized: worker.includes('withZellijPaneCreationLock'),
   workers_stack_down_from_anchor: worker.includes("const directionRequested: 'right' | 'down' = 'down'")
@@ -27,5 +27,5 @@ const report = {
     && runtime.includes('paneRecord.scaling_primitive')
 }
 const ok = Object.values(report).every((value) => value === true || typeof value === 'string')
-assertGate(ok, 'Zellij default UI must be compact slot-only with opt-in dashboard', report)
+assertGate(ok, 'Zellij UI must remain compact slot and viewport based', report)
 emitGate('zellij:slot-only-ui', report)

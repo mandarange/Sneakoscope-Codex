@@ -5,7 +5,6 @@ export const SECRET_LAUNCH_ENV_KEYS = ['CODEX_LB_API_KEY', 'OPENROUTER_API_KEY']
 
 export const MENU_ITEMS = [
   'Open SKS Control Center',
-  'Open Dashboard',
   'Pending approvals',
   'Check for Updates',
   'View Last Operation',

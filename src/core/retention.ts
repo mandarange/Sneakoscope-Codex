@@ -55,7 +55,6 @@ const DURABLE_RETENTION_CLASSES = Object.freeze([
 const CANONICAL_MISSION_ID_RE = /^M-[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 const DISPOSABLE_MISSION_DIRS = Object.freeze([
-  'team-inbox',
   'bus',
   'tmp',
   'cycles',
@@ -76,12 +75,9 @@ const DISPOSABLE_MISSION_FILES = Object.freeze([
   'agents/agent-intelligent-work-graph.json',
   'agents/agent-intelligent-work-graph-v2.json',
   'agents/agent-codex-cockpit-events.jsonl',
-  'agents/agent-codex-dashboard.json',
-  'agents/agent-codex-dashboard.md',
   'agents/agent-events.jsonl',
   'agents/agent-live-summary.json',
   'agents/agent-personas.json',
-  'agents/agent-progress-timeline.md',
   'agents/agent-scheduler-events.jsonl',
   'agents/agent-scheduler-state.json',
   'agents/agent-task-board.json',
@@ -107,8 +103,7 @@ const MISSION_CLOSE_GATES = Object.freeze([
   'gx-gate.json',
   'db-safety-gate.json',
   'goal-gate.json',
-  'dfix-gate.json',
-  'team-gate.json' // legacy Team missions only; new execution closes through naruto-gate.json.
+  'dfix-gate.json'
 ]);
 
 const DISPOSABLE_LOG_RE = /\.(?:stdout|stderr)\.log$/;
@@ -355,9 +350,14 @@ export async function refreshMissionIndex(root: any, opts: any = {}) {
   const base = path.join(root, '.sneakoscope', 'missions');
   await ensureDir(base);
   if (!(await safeRetentionBase(root, base))) throw new Error('unsafe_missions_root_symlink');
+  const excludedMissionIds = new Set(
+    Array.from(opts.excludeMissionIds || [], (value: any) => String(value || '')).filter(Boolean)
+  );
   const entries = await fs.readdir(base, { withFileTypes: true }).catch(() => []);
   const missions = (await Promise.all(entries
-    .filter((entry) => entry.isDirectory() && isCanonicalMissionId(entry.name))
+    .filter((entry) => entry.isDirectory()
+      && isCanonicalMissionId(entry.name)
+      && !excludedMissionIds.has(entry.name))
     .map(async (entry) => {
       const dir = path.join(base, entry.name);
       const st = await fs.stat(dir).catch(() => null);
@@ -365,7 +365,6 @@ export async function refreshMissionIndex(root: any, opts: any = {}) {
       const createdMs = Date.parse(String(mission.created_at || ''));
       return {
         id: entry.name,
-        mode: mission.mode || null,
         created_at: mission.created_at || null,
         created_ms: Number.isFinite(createdMs) ? createdMs : 0,
         mtime_ms: st?.mtimeMs || 0,
@@ -588,14 +587,9 @@ async function missionClosed(mission: any, opts: any = {}) {
   const proof = await readJson(path.join(mission.path, 'completion-proof.json'), null).catch(() => null);
   if (opts.completedMissionId && mission.id === opts.completedMissionId) return proofClosed(proof);
   if (proofClosed(proof)) return true;
-  const cleanup = await readJson(path.join(mission.path, 'team-session-cleanup.json'), null).catch(() => null);
   for (const gateFile of MISSION_CLOSE_GATES) {
     const gate = await readJson(path.join(mission.path, gateFile), null).catch(() => null);
     if (!gatePassed(gate)) continue;
-    if (gateFile === 'team-gate.json') {
-      if (gatePassed(cleanup) || cleanup?.all_sessions_closed === true || cleanup?.status === 'clean') return true;
-      continue;
-    }
     return true;
   }
   return false;
@@ -604,7 +598,6 @@ async function missionClosed(mission: any, opts: any = {}) {
 async function missionSessionsTerminal(mission: any) {
   const cleanupFiles = [
     'agents/agent-session-cleanup.json',
-    'team-session-cleanup.json',
     'agent-session-cleanup.json'
   ];
   for (const rel of cleanupFiles) {

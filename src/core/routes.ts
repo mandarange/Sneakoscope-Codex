@@ -236,7 +236,7 @@ export const ROUTES = [
     reasoningPolicy: 'high',
     stopGate: 'plan-only',
     cliEntrypoint: 'Codex App prompt route only: $Plan "task"',
-    examples: ['$Plan "결제 모듈 리팩터"', '$Plan "dashboard polish without editing code"']
+    examples: ['$Plan "결제 모듈 리팩터"', '$Plan "settings polish without editing code"']
   },
   {
     id: 'Review',
@@ -637,7 +637,6 @@ export const COMMAND_CATALOG = [
   { name: 'plan', usage: 'sks plan "task" [--json]', description: 'Write a planning-only artifact under .sneakoscope/plans without editing code.' },
   { name: 'status', usage: 'sks status [--json]', description: 'Show the active mission, route, phase, proof, trust, official-subagent evidence, image voxel, DB safety, and next action.' },
   { name: 'review', usage: 'sks review [--staged|--diff <ref>] [--fix] [--json]', description: 'Review a diff with machine-evidence findings sorted above LLM review notes.' },
-  { name: 'ui', usage: 'sks ui [--port 4477] [--mission latest] [--once] [--json]', description: 'Open the localhost SKS dashboard with live agent-thread slots, events, and gate status.' },
   { name: 'usage', usage: `sks usage [${USAGE_TOPICS}]`, description: 'Print copy-ready workflows for common tasks.' },
   { name: 'quickstart', usage: 'sks quickstart', description: 'Show the shortest safe setup and verification flow.' },
   { name: 'bootstrap', usage: 'sks bootstrap [--install-scope global|project] [--local-only] [--json]', description: 'Initialize the current project, install SKS Codex App files/skills, check Context7/Codex App/Zellij, and print ready true/false.' },

@@ -8,5 +8,5 @@ test('ADHD orchestrating gate builds micro-wins before scheduler work', () => {
   assert.equal(gate.ok, true);
   assert.equal(gate.scheduler_requires_gate, true);
   assert.ok(gate.micro_wins.length >= 4);
-  assert.equal(artifacts.microWinBoard.dashboard_visible, true);
+  assert.equal(artifacts.microWinBoard.summary_available, true);
 });

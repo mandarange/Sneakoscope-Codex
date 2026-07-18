@@ -351,7 +351,7 @@ test('missing custom tool output in prior assistant and raw error fields quarant
   }
 });
 
-test('plain answer fast path avoids mission, TriWiki, team digest, and code-pack preparation', async () => {
+test('plain answer fast path avoids mission, TriWiki, route digest, and code-pack preparation', async () => {
   const root = await tempRoot('sks-light-answer-');
   const session = 'answer-session';
   try {

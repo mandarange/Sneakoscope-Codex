@@ -212,38 +212,38 @@ export async function renderZellijLaneFrame(opts: ZellijLaneRenderOptions) {
   const laneJson = await readJson<any>(path.join(laneDir, 'lane.json'), null)
   const laneMd = await readText(path.join(laneDir, 'lane.md'), '')
   const commandBus = await processZellijLaneCommandBus(root, slot)
-  // The persistent MAD/Naruto cockpit lane watches its OWN mission ledger, but the
+  // The persistent MAD/Naruto lane watches its OWN mission ledger, but the
   // the internal worker runtime writes scheduler state to
   // a separate mission ledger. When this lane's own ledger has no live scheduler
-  // state, mirror the most-recent active agent mission so the cockpit reflects real
+  // state, mirror the most-recent active agent mission so the lane reflects real
   // parallel work instead of a permanent "Workers idle". Artifacts/heartbeat still
   // write to the requested `root` so launch/heartbeat gates are unaffected; only the
-  // displayed dashboard is sourced from `dataRoot`. Disable with
+  // displayed lane state is sourced from `dataRoot`. Disable with
   // SKS_LANE_FOLLOW_ACTIVE_MISSION=0.
   const dataRoot = await resolveActiveLedgerRoot(root)
-  const dashboard = await buildLaneDashboard(dataRoot, slot, laneJson)
+  const laneState = await buildLaneState(dataRoot, slot, laneJson)
   const baseLaneNote = laneMd
     ? String(laneMd)
     : path.resolve(dataRoot) === path.resolve(root)
       ? 'no lane.md; rendering canonical ledger state'
       : `following active mission ${path.basename(path.dirname(dataRoot))}`
-  const liveLaneNote = firstString([dashboard.live_worker_note])
+  const liveLaneNote = firstString([laneState.live_worker_note])
   const view: ZellijLaneFrameView = {
     missionId: opts.missionId,
     slot,
     updatedAt: nowIso(),
-    mode: dashboard.mode,
-    fast: dashboard.fast,
-    workers: dashboard.workers,
-    codexChild: dashboard.codex_child,
-    currentFile: dashboard.current_file,
-    queue: dashboard.queue,
-    patch: dashboard.patch,
-    lease: dashboard.lease,
-    protectedPaths: dashboard.protected,
-    rollback: dashboard.rollback,
-    blockers: dashboard.blocker_list,
-    reports: dashboard.reports,
+    mode: laneState.mode,
+    fast: laneState.fast,
+    workers: laneState.workers,
+    codexChild: laneState.codex_child,
+    currentFile: laneState.current_file,
+    queue: laneState.queue,
+    patch: laneState.patch,
+    lease: laneState.lease,
+    protectedPaths: laneState.protected,
+    rollback: laneState.rollback,
+    blockers: laneState.blocker_list,
+    reports: laneState.reports,
     laneNote: [baseLaneNote, liveLaneNote].filter(Boolean).join('\n')
   }
   const frame = composeLaneFrame(view, { width: opts.width, color: opts.color })
@@ -254,7 +254,7 @@ export async function renderZellijLaneFrame(opts: ZellijLaneRenderOptions) {
     slot,
     ledger_root: root,
     status: laneJson?.status || 'idle',
-    dashboard,
+    lane_state: laneState,
     command_bus: commandBus,
     view,
     frame_bytes: Buffer.byteLength(frame),
@@ -361,7 +361,7 @@ function normalizeSlot(value: unknown): string {
   return `slot-${String(Number.isFinite(n) && n > 0 ? n : 1).padStart(3, '0')}`
 }
 
-async function buildLaneDashboard(root: string, slot: string, laneJson: any) {
+async function buildLaneState(root: string, slot: string, laneJson: any) {
   const artifacts = [
     'agent-scheduler-state.json',
     'native-cli-worker-runtime.json',

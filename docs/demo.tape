@@ -19,7 +19,7 @@ Type "sks review --staged"
 Enter
 Sleep 1s
 
-Type "sks ui --once"
+Type "sks status --json"
 Enter
 Sleep 1s
 

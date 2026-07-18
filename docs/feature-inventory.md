@@ -5,14 +5,14 @@ Generated from `sks commands --json`, `src/cli/command-registry.ts COMMANDS`, `s
 ## Coverage
 
 - Status: coverage-ok
-- Features: 138
-- CLI commands: 101
-- Handler keys: 101
+- Features: 137
+- CLI commands: 100
+- Handler keys: 100
 - Dollar routes: 31
 - App skill aliases: 34
 - Skills: 1
-- Fixture statuses: pass=128, blocked=10
-- Feature quality: runtime_verified=95, wiring_only=19, integration_optional=6, static_contract=18, missing=0
+- Fixture statuses: pass=127, blocked=10
+- Feature quality: runtime_verified=95, wiring_only=19, integration_optional=6, static_contract=17, missing=0
 
 ## Release Coverage Rule
 
@@ -35,14 +35,13 @@ Generated from `sks commands --json`, `src/cli/command-registry.ts COMMANDS`, `s
 | `cli-plan` | core-cli | stable | sks plan "task" [--json] | execute:pass | runtime_verified | none recorded |
 | `cli-status` | core-cli | stable | sks status [--json] | execute:pass | runtime_verified | none recorded |
 | `cli-review` | core-cli | stable | sks review [--staged\|--diff <ref>] [--fix] [--json] | execute:pass | runtime_verified | none recorded |
-| `cli-ui` | core-cli | stable | sks ui [--port 4477] [--mission latest] [--once] [--json] | static:pass | static_contract | none recorded |
 | `cli-root` | core-cli | stable | sks root [--json] | execute:pass | runtime_verified | none recorded |
 | `cli-update` | core-cli | stable | sks update status\|check\|review\|now\|rollback [--refresh] [--version <version>] [--json] [--dry-run] | execute:pass | runtime_verified | none recorded |
 | `cli-uninstall` | core-cli | stable | sks uninstall [--dry-run] [--yes] [--keep-config] [--keep-data] [--purge-projects] [--json] | execute:pass | runtime_verified | none recorded |
 | `cli-update-check` | core-cli | stable | sks update-check [--json] | static:pass | static_contract | none recorded |
 | `cli-mcp` | core-cli | beta | sks mcp config list\|get\|add\|edit\|duplicate\|enable\|disable\|remove\|test\|login\|logout\|backups\|restore [--scope global\|project\|effective] [--stdin-json] [--json] | execute:pass | runtime_verified | none recorded |
-| `cli-wizard` | core-cli | stable | sks wizard<br>sks ui | execute:pass | runtime_verified | none recorded |
-| `cli-usage` | core-cli | stable | sks usage [install\|setup\|bootstrap\|root\|deps\|zellij\|auto-review\|naruto\|qa-loop\|ppt\|image-ux-review\|computer-use\|goal\|fast-mode\|review\|ui\|research\|seo-geo-optimizer\|git\|codex\|codex-app\|codex-native\|hooks\|features\|all-features\|dfix\|commit\|commit-and-push\|design\|imagegen\|dollar\|context7\|super-search\|pipeline\|reasoning\|guard\|conflicts\|versioning\|eval\|harness\|hproof\|gx\|wiki\|memory\|wrongness\|code-structure\|proof-field\|skill-dream\|rust] | execute:pass | runtime_verified | none recorded |
+| `cli-wizard` | core-cli | stable | sks wizard | execute:pass | runtime_verified | none recorded |
+| `cli-usage` | core-cli | stable | sks usage [install\|setup\|bootstrap\|root\|deps\|zellij\|auto-review\|naruto\|qa-loop\|ppt\|image-ux-review\|computer-use\|goal\|fast-mode\|review\|research\|seo-geo-optimizer\|git\|codex\|codex-app\|codex-native\|hooks\|features\|all-features\|dfix\|commit\|commit-and-push\|design\|imagegen\|dollar\|context7\|super-search\|pipeline\|reasoning\|guard\|conflicts\|versioning\|eval\|harness\|hproof\|gx\|wiki\|memory\|wrongness\|code-structure\|proof-field\|skill-dream\|rust] | execute:pass | runtime_verified | none recorded |
 | `cli-quickstart` | core-cli | stable | sks quickstart | execute:pass | runtime_verified | none recorded |
 | `cli-setup` | install | stable | sks setup [--bootstrap] [--install-scope global\|project] [--local-only] [--force] [--json] | real_optional:pass | integration_optional | none recorded |
 | `cli-bootstrap` | install | stable | sks bootstrap [--install-scope global\|project] [--local-only] [--json] | execute:pass | runtime_verified | none recorded |

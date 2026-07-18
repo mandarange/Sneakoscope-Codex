@@ -97,7 +97,10 @@ test('doctor current-surface reconciliation removes managed residue and quaranti
       mad_db_capability_path: 'old-capability.json',
       shadow_clone_runtime: 'obsolete',
       kage_bunshin_state: 'obsolete',
-      keep: { value: 1 }
+      keep: {
+        value: 1,
+        nested_customer_metadata: { mode: 'team', note: 'not route state' }
+      }
     }, null, 2)}\n`);
     await fs.writeFile(agentStateFile, `${JSON.stringify({
       schema: 'sks.session-state.v1',
@@ -163,7 +166,10 @@ test('doctor current-surface reconciliation removes managed residue and quaranti
     assert.equal(state.mad_db_capability_path, undefined);
     assert.equal(state.shadow_clone_runtime, undefined);
     assert.equal(state.kage_bunshin_state, undefined);
-    assert.deepEqual(state.keep, { value: 1 });
+    assert.deepEqual(state.keep, {
+      value: 1,
+      nested_customer_metadata: { mode: 'team', note: 'not route state' }
+    });
     assert.equal(state.implementation_allowed, false);
     assert.equal(state.questions_allowed, false);
     assert.equal(state.route_closed, true);
@@ -189,12 +195,38 @@ test('doctor current-surface reconciliation removes managed residue and quaranti
     assert.equal(missionIndex.mission_count, 1);
     assert.equal(missionIndex.latest_mission_id, 'M-naruto');
     assert.deepEqual(missionIndex.missions.map((row: any) => row.id), ['M-naruto']);
+    assert.ok(missionIndex.missions.every((row: any) => !Object.hasOwn(row, 'mode')));
 
     const manifest = JSON.parse(await fs.readFile(manifestFile, 'utf8'));
     const names = manifest.tools.map((tool: any) => tool.name);
     assert.equal(names.includes('team'), false);
     assert.equal(names.includes('mad-db'), false);
     assert.equal(JSON.parse(await fs.readFile(gitPolicyFile, 'utf8')).mode, 'work');
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('doctor maps only explicit legacy git-policy modes and quarantines unknown modes byte for byte', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-current-surface-git-policy-'));
+  try {
+    const gitPolicyFile = path.join(root, '.sneakoscope', 'git-policy.json');
+    await fs.mkdir(path.dirname(gitPolicyFile), { recursive: true });
+    await fs.writeFile(gitPolicyFile, '{"schema":"sks.git-policy.v1","version":"6.2.0","mode":"strict-team"}\n');
+
+    const strictFixed = await reconcileRetiredManagedResidue({ root, fix: true });
+    assert.equal(strictFixed.ok, true);
+    assert.equal(JSON.parse(await fs.readFile(gitPolicyFile, 'utf8')).mode, 'strict-work');
+
+    const unknownBytes = Buffer.from('{ "schema": "sks.git-policy.v1", "version": "future", "mode": "future-collaboration", "keep": true }\n');
+    await fs.writeFile(gitPolicyFile, unknownBytes);
+    const unknownFixed = await reconcileRetiredManagedResidue({ root, fix: true });
+    assert.equal(unknownFixed.ok, true);
+    assert.equal(unknownFixed.preserved_user_file_count, 1);
+    await assert.rejects(fs.access(gitPolicyFile));
+    const quarantined = await findFile(root, 'git-policy.json');
+    assert.ok(quarantined?.includes(path.join('.sneakoscope', 'quarantine', 'retired-public-surface')));
+    assert.deepEqual(await fs.readFile(quarantined!), unknownBytes);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }

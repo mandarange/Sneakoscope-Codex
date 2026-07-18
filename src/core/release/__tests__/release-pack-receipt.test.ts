@@ -56,6 +56,27 @@ test('release pack inspection fails closed on retired runtime identity outside t
   }
 })
 
+test('release pack inspection rejects Team workdirs, current wording, and mixed-case commands outside migration modules', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-release-pack-team-current-surface-'))
+  try {
+    const tarball = createTarball(root, 'team-current-surface', '6.3.0', '', {
+      'dist/core/runtime/leak.js': [
+        'export const workdir = "team-inbox";',
+        'export const wording = "Team architecture";',
+        'export const command = "SKS TEAM --json";'
+      ].join('\n')
+    })
+    const receipt = inspectReleaseTarball({ tarball, kind: 'staged', root })
+    const kinds = new Set(receipt.retired_surface_scan.findings.map((finding) => finding.kind))
+    assert.equal(receipt.ok, false)
+    assert.equal(kinds.has('retired_team_workdir'), true)
+    assert.equal(kinds.has('retired_team_current_wording'), true)
+    assert.equal(kinds.has('retired_cli_command'), true)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
 test('release pack inspection allows retired tokens only in explicit cleanup and migration modules', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-release-pack-retired-allowlist-'))
   try {
@@ -104,16 +125,52 @@ test('release pack inspection rejects retired Ralph identity in generated custom
   }
 })
 
-test('release pack inspection does not mistake uppercase SKS product prose for a lowercase CLI command', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-release-pack-command-prose-'))
+test('release pack inspection rejects removed dashboard prose and command surfaces', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-release-pack-dashboard-surface-'))
   try {
-    const tarball = createTarball(root, 'command-prose', '6.3.0', '', {
-      'dist/cli/command-manifest-lite.js': 'export const summary = "Open the localhost SKS agent dashboard";\n',
-      'dist/core/doctor/doctor-codex-startup-repair.js': 'export const result = "created missing SKS agent role config";\n'
+    const tarball = createTarball(root, 'dashboard-surface', '6.3.0', '', {
+      'dist/cli/command-manifest-lite.js': 'export const summary = "Open Dashboard with sks ui";\n',
+      'dist/core/runtime/leak.js': 'export const option = "--zellij-dashboard"; export const artifact = "agent-codex-dashboard.json";\n'
     })
     const receipt = inspectReleaseTarball({ tarball, kind: 'staged', root })
-    assert.equal(receipt.ok, true, receipt.blockers.join(','))
-    assert.equal(receipt.retired_surface_scan.findings.length, 0)
+    const kinds = new Set(receipt.retired_surface_scan.findings.map((finding) => finding.kind))
+    assert.equal(receipt.ok, false)
+    assert.equal(kinds.has('retired_ui_command'), true)
+    assert.equal(kinds.has('retired_zellij_dashboard_option'), true)
+    assert.equal(kinds.has('retired_dashboard_surface'), true)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('release pack inspection rejects removed dashboard files even when their contents are empty', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-release-pack-dashboard-file-'))
+  try {
+    const tarball = createTarball(root, 'dashboard-file', '6.3.0', '', {
+      'dist/core/commands/ui-command.js': '',
+      'dist/core/ui/dashboard-html.js': '',
+      'dist/core/zellij/zellij-dashboard-pane.js': ''
+    })
+    const receipt = inspectReleaseTarball({ tarball, kind: 'staged', root })
+    assert.equal(receipt.ok, false)
+    assert.equal(receipt.blockers.filter((blocker) => blocker.startsWith('retired_package_file_present:')).length, 3)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('release pack inspection does not allow Team injection into current generated guidance', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-release-pack-current-guidance-team-'))
+  try {
+    const tarball = createTarball(root, 'current-guidance-team', '6.3.0', '', {
+      'dist/core/init/skills.js': 'export const currentSkill = "$Team";\n',
+      'dist/core/doctor/current-project-guidance.js': 'export const currentGuidance = "Team architecture";\n'
+    })
+    const receipt = inspectReleaseTarball({ tarball, kind: 'staged', root })
+    const kinds = new Set(receipt.retired_surface_scan.findings.map((finding) => finding.kind))
+    assert.equal(receipt.ok, false)
+    assert.equal(kinds.has('retired_dollar_command'), true)
+    assert.equal(kinds.has('retired_team_current_wording'), true)
   } finally {
     fs.rmSync(root, { recursive: true, force: true })
   }

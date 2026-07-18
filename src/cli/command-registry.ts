@@ -227,7 +227,6 @@ const COMMAND_DEFINITIONS = {
     allowedDuringActiveRoute: true,
     activeRoutePolicy: 'always'
   }),
-  ui: readOnly(entry('stable', 'Open the localhost SKS agent dashboard', 'dist/core/commands/ui-command.js', argsCommand(() => import('../core/commands/ui-command.js'), 'uiCommand', 'dist/core/commands/ui-command.js'))),
   root: readOnly(entry('stable', 'Show active SKS root', 'dist/commands/root.js', directCommand(() => import('../commands/root.js'), 'dist/commands/root.js'))),
   update: skipMigrationGate(entry('stable', 'Inspect, review, apply, or roll back the global SKS update', 'dist/core/commands/basic-cli.js', subcommand(() => import(basicModule), 'updateCommand', 'dist/core/commands/basic-cli.js', 'now'))),
   uninstall: entry('stable', 'Uninstall SKS global skills, hooks, config, menu bar, and optional project residue', 'dist/core/commands/uninstall-command.js', argsCommand(() => import('../core/commands/uninstall-command.js'), 'uninstallCommand', 'dist/core/commands/uninstall-command.js'), {

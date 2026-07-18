@@ -75,7 +75,7 @@ try {
   const badStages = migrationStages.filter((stage: any) => stage.ok !== true);
   assertGate(badStages.length === 0, 'migration stages must all be ok', { badStages, receipt });
   assertGate(!Object.hasOwn(receipt || {}, 'legacy_migration_stages'), 'receipt must expose only the current migration summary contract', { receipt });
-  assertGate(!/\$(?:Agent|Team|MAD-DB|Swarm|ShadowClone|Kagebunshin|Ralph)\b|\bsks\s+(?:team|mad-db|tmux|xai|swarm|agent|ralph)\b/i.test(JSON.stringify(receipt)), 'customer migration receipt must not publish retired surface names', { receipt });
+  assertGate(!/\$(?:Agent|Team|MAD-DB|Swarm|ShadowClone|Kagebunshin|Ralph)\b|\bsks\s+(?:team|mad-db|tmux|xai|swarm|agent|ralph|ui)\b/i.test(JSON.stringify(receipt)), 'customer migration receipt must not publish retired surface names', { receipt });
 
   const retiredResidue = [
     path.join(project, '.sneakoscope', 'team'),
@@ -143,7 +143,7 @@ try {
   assertGate(fromChatImgSkill.includes('$sks-from-chat-img'), 'simulated update must retain the namespaced Naruto visual add-on skill name', {});
   const reconciledAgents = await fsp.readFile(path.join(project, 'AGENTS.md'), 'utf8');
   const reconciledQuickReference = await fsp.readFile(path.join(project, '.codex', 'SNEAKOSCOPE.md'), 'utf8');
-  const removedSurface = /\$(?:Agent|Team|MAD-DB|Swarm|ShadowClone|Kagebunshin|Ralph)\b|\bsks\s+(?:team|mad-db|tmux|xai|swarm|agent|ralph)\b/i;
+  const removedSurface = /\$(?:Agent|Team|MAD-DB|Swarm|ShadowClone|Kagebunshin|Ralph)\b|\bsks\s+(?:team|mad-db|tmux|xai|swarm|agent|ralph|ui)\b/i;
   assertGate(!removedSurface.test(reconciledAgents), 'simulated update must rewrite the managed AGENTS block to the current surface', {});
   assertGate(!removedSurface.test(reconciledQuickReference), 'simulated update must rewrite the managed Codex quick reference to the current surface', {});
   assertGate(reconciledAgents.includes('customer-authored-prefix'), 'managed AGENTS reconciliation must preserve user-authored content outside the SKS block', {});

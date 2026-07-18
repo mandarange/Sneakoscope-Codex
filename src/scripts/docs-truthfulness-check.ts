@@ -33,7 +33,7 @@ const required = {
   'docs/hooks-pat.md': ['SubagentStop', 'strict subset', 'zero-warning'],
   'docs/known-gaps.md': ['No P0', 'P1'],
   'docs/release-readiness.md': [
-    'SKS 6.5.0 Release Readiness',
+    'SKS 6.5.1 Release Readiness',
     '$sks-naruto',
     '$sks-work',
     'sks doctor --fix',
@@ -46,7 +46,7 @@ const required = {
     'proof-aware fleet control',
     'npm stage publish',
     'npm stage approve <stage-id>',
-    '6.4.0 to 6.5.0 upgrade smoke'
+    '6.4.0 to 6.5.1 upgrade smoke'
   ]
 };
 
@@ -82,7 +82,7 @@ const currentDollarSurfaceFiles = [
   'docs/triwiki-wrongness-memory.md',
   'docs/ux-review-real-loop.md'
 ];
-const legacyDollarCommandPattern = /\$(?:Naruto|Work|DFix|Answer|Plan|Review|Fast-Mode|Fast-On|Fast-Off|Release-Review|QA-LOOP|PPT|Image-UX-Review|UX-Review|Visual-Review|UI-UX-Review|Computer-Use|CU|Goal|Commit|Commit-And-Push|Research|Super-Search|SEO-GEO-OPTIMIZER|AutoResearch|DB|MAD-SKS|GX|Wiki|Help|From-Chat-IMG)\b/g;
+const legacyDollarCommandPattern = /\$(?:Agent|Team|MAD-DB|Swarm|ShadowClone|Kagebunshin|Ralph|Naruto|Work|DFix|Answer|Plan|Review|Fast-Mode|Fast-On|Fast-Off|Release-Review|QA-LOOP|PPT|Image-UX-Review|UX-Review|Visual-Review|UI-UX-Review|Computer-Use|CU|Goal|Commit|Commit-And-Push|Research|Super-Search|SEO-GEO-OPTIMIZER|AutoResearch|DB|MAD-SKS|GX|Wiki|Help|From-Chat-IMG)\b/g;
 
 const results = [];
 for (const file of files) {

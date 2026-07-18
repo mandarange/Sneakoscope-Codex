@@ -11,6 +11,11 @@ test('generated Codex App skills cover every dollar route skill name', async () 
   const result = await installSkills(root);
   const installed = new Set(result.installed_skills);
 
+  for (const retired of ['team', 'sks-team']) {
+    assert.equal(installed.has(retired), false, `retired generated skill survived: ${retired}`);
+    await assert.rejects(fs.access(path.join(root, '.agents', 'skills', retired)));
+  }
+
   for (const name of installed) {
     assert.ok(name === 'sks' || name.startsWith('sks-'), `unprefixed SKS-generated picker skill: ${name}`);
   }

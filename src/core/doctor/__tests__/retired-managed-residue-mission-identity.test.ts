@@ -19,7 +19,8 @@ test('retired public value matching uses exact command and option boundaries', (
     'sks xai ask',
     'sks swarm run',
     'sks agent run',
-    'sks --agent codex'
+    'sks --agent codex',
+    'sks ui --json'
   ]) assert.equal(isRetiredPublicValue(value), true, value);
 
   for (const value of [
@@ -118,6 +119,68 @@ test('doctor removes missions identified by retired route metadata and refreshes
     const index = JSON.parse(await fs.readFile(path.join(missionsRoot, 'index.json'), 'utf8'));
     assert.equal(index.mission_count, 2);
     assert.deepEqual(index.missions.map((row: any) => row.id).sort(), ['M-agent-bridge', 'M-maddb2']);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('doctor does not hide a current Naruto mission when a stale index row reuses its id with Team metadata', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-current-surface-stale-index-id-'));
+  try {
+    const missionsRoot = path.join(root, '.sneakoscope', 'missions');
+    const missionId = 'M-current-reused-id';
+    const missionRoot = path.join(missionsRoot, missionId);
+    await fs.mkdir(missionRoot, { recursive: true });
+    await fs.writeFile(path.join(missionRoot, 'mission.json'), `${JSON.stringify({
+      id: missionId,
+      mode: 'NARUTO',
+      route: '$sks-naruto',
+      created_at: '2026-07-17T00:00:00.000Z'
+    })}\n`);
+    await fs.writeFile(path.join(missionsRoot, 'index.json'), `${JSON.stringify({
+      schema: 'sks.mission-index.v1',
+      mission_count: 1,
+      latest_mission_id: missionId,
+      missions: [{ id: missionId, mode: 'team', route: '$Team' }]
+    }, null, 2)}\n`);
+
+    const fixed = await reconcileRetiredManagedResidue({ root, fix: true });
+    assert.equal(fixed.ok, true);
+    assert.equal(JSON.parse(await fs.readFile(path.join(missionRoot, 'mission.json'), 'utf8')).mode, 'NARUTO');
+    const index = JSON.parse(await fs.readFile(path.join(missionsRoot, 'index.json'), 'utf8'));
+    assert.equal(index.mission_count, 1);
+    assert.equal(index.latest_mission_id, missionId);
+    assert.deepEqual(index.missions.map((row: any) => row.id), [missionId]);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('doctor quarantines a malformed mission index and rebuilds it from authoritative mission records', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-current-surface-malformed-index-'));
+  try {
+    const missionsRoot = path.join(root, '.sneakoscope', 'missions');
+    const missionId = 'M-current-after-malformed-index';
+    const missionRoot = path.join(missionsRoot, missionId);
+    const malformedBytes = Buffer.from('{"schema":"customer.index","missions":\n');
+    await fs.mkdir(missionRoot, { recursive: true });
+    await fs.writeFile(path.join(missionRoot, 'mission.json'), `${JSON.stringify({
+      id: missionId,
+      mode: 'NARUTO',
+      route: '$sks-naruto',
+      created_at: '2026-07-17T00:00:00.000Z'
+    })}\n`);
+    await fs.writeFile(path.join(missionsRoot, 'index.json'), malformedBytes);
+
+    const fixed = await reconcileRetiredManagedResidue({ root, fix: true });
+    assert.equal(fixed.ok, true);
+    assert.ok(fixed.preserved_user_file_count >= 1);
+    const index = JSON.parse(await fs.readFile(path.join(missionsRoot, 'index.json'), 'utf8'));
+    assert.equal(index.schema, 'sks.mission-index.v1');
+    assert.deepEqual(index.missions.map((row: any) => row.id), [missionId]);
+    const quarantined = await findFile(path.join(root, '.sneakoscope', 'quarantine', 'retired-public-surface'), 'index.json');
+    assert.ok(quarantined);
+    assert.deepEqual(await fs.readFile(quarantined!), malformedBytes);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }

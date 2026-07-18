@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { gzipSync } from 'node:zlib';
-import { applyRetentionPlan, enforceRetention, pruneWikiArtifacts, sweepSksTempDirs } from '../retention.js';
+import { applyRetentionPlan, enforceRetention, pruneWikiArtifacts, refreshMissionIndex, sweepSksTempDirs } from '../retention.js';
 import { managedSksTmpRoot, readJson, sha256, SKS_TEMP_LEASE_FILE } from '../fsx.js';
 import { FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT } from '../routes/constants.js';
 import { backdate, makeRoot, quietPolicy, writeJson } from './retention-test-helpers.js';
@@ -32,6 +32,32 @@ test('readJson transparently hydrates and verifies legacy retention gzip archive
     assert.equal(hydrated.schema, 'fixture.proof.v1');
     assert.equal(hydrated.ok, true);
     assert.deepEqual(hydrated.rows, [{ id: 'proof' }]);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('mission index omits route modes and honors migration-owned exclusions', async () => {
+  const root = await makeRoot('sks-retention-current-index-');
+  try {
+    const missions = path.join(root, '.sneakoscope', 'missions');
+    await writeJson(path.join(missions, 'M-current', 'mission.json'), {
+      id: 'M-current',
+      mode: 'naruto',
+      created_at: '2026-07-17T00:00:00.000Z'
+    });
+    await writeJson(path.join(missions, 'M-retired', 'mission.json'), {
+      id: 'M-retired',
+      mode: 'team',
+      created_at: '2026-07-16T00:00:00.000Z'
+    });
+
+    const index = await refreshMissionIndex(root, { excludeMissionIds: ['M-retired'] });
+    assert.deepEqual(index.missions.map((row: any) => row.id), ['M-current']);
+    const currentRow = index.missions[0];
+    assert.ok(currentRow);
+    assert.equal(Object.hasOwn(currentRow, 'mode'), false);
+    assert.doesNotMatch(JSON.stringify(index), /\bteam\b/i);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
@@ -402,12 +428,12 @@ test('full GC preserves blocked mission diagnostics even when inactive-open comp
   const root = await makeRoot('sks-retention-blocked-diagnostics-');
   try {
     const mission = path.join(root, '.sneakoscope', 'missions', 'M-blocked-diagnostics');
-    const inbox = path.join(mission, 'team-inbox', 'blocked.md');
+    const diagnostics = path.join(mission, 'agents', 'tmp', 'blocked.md');
     const stderr = path.join(mission, 'scout.stderr.log');
     await writeJson(path.join(mission, 'mission.json'), { id: 'M-blocked-diagnostics', created_at: '2020-01-01T00:00:00.000Z' });
     await writeJson(path.join(mission, 'completion-proof.json'), { status: 'blocked', blockers: ['fixture_blocker'] });
-    await fs.mkdir(path.dirname(inbox), { recursive: true });
-    await fs.writeFile(inbox, 'diagnostic context\n');
+    await fs.mkdir(path.dirname(diagnostics), { recursive: true });
+    await fs.writeFile(diagnostics, 'diagnostic context\n');
     await fs.writeFile(stderr, 'diagnostic stderr\n');
     await backdate(mission);
 
@@ -423,7 +449,7 @@ test('full GC preserves blocked mission diagnostics even when inactive-open comp
       }
     });
 
-    assert.equal(await fs.readFile(inbox, 'utf8'), 'diagnostic context\n');
+    assert.equal(await fs.readFile(diagnostics, 'utf8'), 'diagnostic context\n');
     assert.equal(await fs.readFile(stderr, 'utf8'), 'diagnostic stderr\n');
     assert.ok(result.actions.some((action: any) => action.action === 'retain_mission_blocked_diagnostics' && action.mission === 'M-blocked-diagnostics'));
     assert.equal(result.actions.some((action: any) => action.action === 'compact_inactive_open_mission_context' && action.mission === 'M-blocked-diagnostics'), false);
@@ -436,12 +462,12 @@ test('full GC preserves diagnostics for a blocked mission gate without a complet
   const root = await makeRoot('sks-retention-blocked-gate-diagnostics-');
   try {
     const mission = path.join(root, '.sneakoscope', 'missions', 'M-blocked-gate-diagnostics');
-    const inbox = path.join(mission, 'team-inbox', 'blocked.md');
+    const diagnostics = path.join(mission, 'agents', 'tmp', 'blocked.md');
     const stderr = path.join(mission, 'worker.stderr.log');
     await writeJson(path.join(mission, 'mission.json'), { id: 'M-blocked-gate-diagnostics', created_at: '2020-01-01T00:00:00.000Z' });
     await writeJson(path.join(mission, 'naruto-gate.json'), { status: 'blocked', passed: false, blockers: ['fixture_gate_blocker'] });
-    await fs.mkdir(path.dirname(inbox), { recursive: true });
-    await fs.writeFile(inbox, 'blocked gate diagnostic context\n');
+    await fs.mkdir(path.dirname(diagnostics), { recursive: true });
+    await fs.writeFile(diagnostics, 'blocked gate diagnostic context\n');
     await fs.writeFile(stderr, 'blocked gate diagnostic stderr\n');
     await backdate(mission);
 
@@ -457,7 +483,7 @@ test('full GC preserves diagnostics for a blocked mission gate without a complet
       }
     });
 
-    assert.equal(await fs.readFile(inbox, 'utf8'), 'blocked gate diagnostic context\n');
+    assert.equal(await fs.readFile(diagnostics, 'utf8'), 'blocked gate diagnostic context\n');
     assert.equal(await fs.readFile(stderr, 'utf8'), 'blocked gate diagnostic stderr\n');
     assert.ok(result.actions.some((action: any) => action.action === 'retain_mission_blocked_diagnostics' && action.mission === 'M-blocked-gate-diagnostics'));
     assert.equal(result.actions.some((action: any) => action.action === 'compact_inactive_open_mission_context' && action.mission === 'M-blocked-gate-diagnostics'), false);

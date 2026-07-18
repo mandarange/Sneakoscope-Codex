@@ -31,7 +31,7 @@ interface CommandRow {
   maturity: CommandManifestLiteEntry['maturity'];
 }
 
-const REMOVED_USAGE_TOPICS = new Set(['db']);
+const REMOVED_USAGE_TOPICS = new Set(['db', 'ui']);
 
 export async function helpCommand(args: string[] = []): Promise<void | unknown> {
   const topic = args[0];

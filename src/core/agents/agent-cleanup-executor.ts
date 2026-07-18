@@ -196,8 +196,7 @@ export async function runAgentCleanupExecutor(opts: AgentCleanupExecutorOptions)
       .some((row: any) => !row?.status || row.status === 'running')
     const anchorPaneIds = [...new Set([
       report?.slot_column_anchor_pane_id,
-      report?.right_anchor_pane_id,
-      report?.dashboard_pane_id
+      report?.right_anchor_pane_id
     ].map(String).filter((paneId) => paneId && paneId !== 'null' && paneId !== 'undefined'))]
     for (const paneId of anchorPaneIds) {
       if (seenZellijPaneIds.has(paneId)) continue

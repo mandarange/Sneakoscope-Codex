@@ -27,7 +27,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         notifications.onOpenControlCenter = { [weak self] in self?.controlCenter.show(section: .overview) }
         notifications.onOpenLog = { NSWorkspace.shared.open(URL(fileURLWithPath: AppRuntime.lastActionLogPath)) }
         notifications.onRetryOperation = { [weak self] in self?.statusItemController.retryLastOperation() }
-        notifications.onOpenDashboard = { [weak self] in self?.statusItemController.openDashboard() }
         notifications.onAuthorizationChanged = { [weak self] denied in
             self?.statusItemController.setNotificationAuthorizationDenied(denied)
             self?.controlCenter.setNotificationAuthorizationDenied(denied)

@@ -10,7 +10,7 @@ Proof-first orchestration for Codex CLI, ChatGPT Desktop, AI coding agents, mult
 [![node](https://img.shields.io/badge/node-%3E%3D20.11-339933?logo=node.js&logoColor=white)](#requirements)
 [![license](https://img.shields.io/badge/license-MIT-blue)](#license)
 
-![SKS live dashboard preview](https://raw.githubusercontent.com/mandarange/Sneakoscope-Codex/main/docs/assets/sneakoscope-architecture-pipeline.jpg)
+![SKS architecture pipeline](https://raw.githubusercontent.com/mandarange/Sneakoscope-Codex/main/docs/assets/sneakoscope-architecture-pipeline.jpg)
 
 </div>
 
@@ -57,7 +57,6 @@ The SKS menu bar shows the installed Codex CLI version and latest known version.
 | `$sks-naruto "task"` | Runs the Codex official subagent workflow with parent-owned integration and evidence. |
 | `$sks-mad-sks` / `sks mad-sks` | Single high-risk MAD route for scoped permission widening plus SQL-plane execution, including read-back proof and profile closure. |
 | `$sks-review` / `sks review --staged` | Reviews diffs with `evidence: machine` findings sorted above `evidence: llm`. |
-| `sks ui` | Opens the local live dashboard at `http://127.0.0.1:4477`. |
 
 `sks --mad` now prioritizes the interactive ready path: independent macOS config probes run concurrently, failed read-only preflight does not repeat mutation-capable repair inspection, verified Zellij/codex-lb evidence is reused, and the remote Zellij update lookup runs after the UI is ready. Existing unreadable or malformed config still blocks safely; pass an explicit repair flag such as `--repair-config` when repair is intended.
 
@@ -82,19 +81,7 @@ Official subagent requests use `--agents`; removed scheduler, pool, backend, and
 | Did tests/typecheck fail? | Another model may say so. | Machine check output is tagged `evidence: machine`. |
 | Are findings ranked? | Usually one blended opinion. | Machine evidence sorts before LLM findings. |
 | Can work stop? | The model decides. | Stop gates, Completion Proof, and Honest Mode decide. |
-| Can I inspect agent-thread progress? | Usually no runtime UI. | `sks ui` plus the official Codex subagent/thread surfaces. |
-
-## Dashboard
-
-`sks ui` serves a dependency-free localhost dashboard with:
-
-- mission, route, elapsed time, and gate badge
-- live official subagent thread grid with role/model badge, progress, and current task
-- run/verify/queue/done/fail counters
-- recent mission events
-- current gate checklist
-
-The dashboard binds to `127.0.0.1` only and exposes telemetry/gates/events, not config secrets.
+| Can I inspect agent-thread progress? | Usually no runtime UI. | Use the official Codex subagent/thread surfaces and SKS Zellij monitor/viewport panes. |
 
 ## Demo
 
@@ -104,7 +91,7 @@ The reproducible VHS script lives at [docs/demo.tape](docs/demo.tape).
 vhs docs/demo.tape
 ```
 
-It shows the current quickstart flow: one-line install, `$sks-plan`, `sks review`, `sks ui`, and an official `$sks-naruto` subagent run.
+It shows the current quickstart flow: one-line install, `$sks-plan`, `sks review`, `sks status --json`, and an official `$sks-naruto` subagent run.
 
 ## Proof Surfaces
 

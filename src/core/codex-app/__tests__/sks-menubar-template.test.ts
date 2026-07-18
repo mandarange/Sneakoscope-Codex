@@ -121,9 +121,10 @@ test('Overview renders every release work-order health field from bounded local 
 test('status item is concise and applies the documented integrity-to-healthy priority', () => {
   const swift = source();
   for (const item of [
-    'Open SKS Control Center…', 'Open Dashboard', 'Pending approvals (0)',
+    'Open SKS Control Center…', 'Pending approvals (0)',
     'Check for Updates', 'View Last Operation', 'Quit SKS Menu'
   ]) assert.match(swift, new RegExp(item.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.doesNotMatch(swift, /Open Dashboard|openDashboard|127\.0\.0\.1:4477/);
   assert.match(swift, /enum SKSStatusIcon \{\s*case healthy, working, attention, updateAvailable, warning\s*\}/);
   const priority = [
     'if integrityBroken', 'else if operationFailed',
@@ -209,7 +210,8 @@ test('operation coordinator persists redacted bounded-tail receipts and excludes
 test('UserNotifications declares all categories/actions, redacts public bodies, and surfaces denial without failing operations', () => {
   const swift = source();
   for (const category of ['SKS_OPERATION_RESULT', 'SKS_UPDATE_AVAILABLE', 'SKS_ACTION_REQUIRED']) assert.match(swift, new RegExp(category));
-  for (const action of ['OPEN_CONTROL_CENTER', 'OPEN_LOG', 'RETRY_OPERATION', 'OPEN_DASHBOARD']) assert.match(swift, new RegExp(action));
+  for (const action of ['OPEN_CONTROL_CENTER', 'OPEN_LOG', 'RETRY_OPERATION']) assert.match(swift, new RegExp(action));
+  assert.doesNotMatch(swift, /OPEN_DASHBOARD|onOpenDashboard/);
   assert.match(swift, /UNUserNotificationCenterDelegate/);
   assert.match(swift, /getNotificationSettings/);
   assert.match(swift, /authorizationIsDenied\(settings\.authorizationStatus\)/);

@@ -23,16 +23,14 @@ struct Harness {
         coordinator.onOpenControlCenter = { calls.append("center") }
         coordinator.onOpenLog = { calls.append("log") }
         coordinator.onRetryOperation = { calls.append("retry") }
-        coordinator.onOpenDashboard = { calls.append("dashboard") }
         let routes = [
             coordinator.dispatchActionIdentifier("OPEN_LOG"),
             coordinator.dispatchActionIdentifier("RETRY_OPERATION"),
-            coordinator.dispatchActionIdentifier("OPEN_DASHBOARD"),
             coordinator.dispatchActionIdentifier("OPEN_CONTROL_CENTER"),
             coordinator.dispatchActionIdentifier(UNNotificationDismissActionIdentifier)
         ]
-        precondition(routes == ["open_log", "retry_operation", "open_dashboard", "open_control_center", "dismissed"])
-        precondition(calls == ["log", "retry", "dashboard", "center"])
+        precondition(routes == ["open_log", "retry_operation", "open_control_center", "dismissed"])
+        precondition(calls == ["log", "retry", "center"])
         precondition(NotificationCoordinator.authorizationIsDenied(.denied))
         precondition(!NotificationCoordinator.authorizationIsDenied(.authorized))
         precondition(!NotificationCoordinator.authorizationIsDenied(.notDetermined))

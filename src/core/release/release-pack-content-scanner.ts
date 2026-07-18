@@ -37,7 +37,7 @@ interface ReleasePackContentScanOptions {
   max_findings: number
   patterns: ReleasePackContentPattern[]
   finding_blocker: (finding: ReleasePackContentFinding) => string
-  allow_finding?: (relative: string) => boolean
+  allow_finding?: (finding: ReleasePackContentFinding) => boolean
   include_allowlisted_count?: boolean
 }
 
@@ -78,15 +78,16 @@ export function scanTarballTextContents(
         pattern.regex.lastIndex = 0
         for (let match = pattern.regex.exec(text); match; match = pattern.regex.exec(text)) {
           const value = String(match[0] || '')
-          if (input.allow_finding?.(relative)) {
-            allowlistedFindingCount += 1
-            continue
-          }
-          findings.push({
+          const finding = {
             file: relative,
             kind: pattern.kind,
             fingerprint: fingerprint(value)
-          })
+          }
+          if (input.allow_finding?.(finding)) {
+            allowlistedFindingCount += 1
+            continue
+          }
+          findings.push(finding)
           if (findings.length >= input.max_findings) {
             blockers.push(input.finding_limit_blocker)
             break

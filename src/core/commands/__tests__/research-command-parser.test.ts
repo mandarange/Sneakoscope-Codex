@@ -63,14 +63,14 @@ test('Research latest ignores non-Research state and resolves only Research miss
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-research-filtered-latest-'))
   const missionsDir = path.join(root, '.sneakoscope', 'missions')
   const researchMission = 'M-20260713-000000-research'
-  const newerTeamMission = 'M-20260713-010000-team'
+  const newerNarutoMission = 'M-20260713-010000-naruto'
   await fsp.mkdir(path.join(root, '.sneakoscope', 'state'), { recursive: true })
   await fsp.mkdir(path.join(missionsDir, researchMission), { recursive: true })
-  await fsp.mkdir(path.join(missionsDir, newerTeamMission), { recursive: true })
+  await fsp.mkdir(path.join(missionsDir, newerNarutoMission), { recursive: true })
   await fsp.writeFile(path.join(missionsDir, researchMission, 'mission.json'), JSON.stringify({ id: researchMission, mode: 'research', created_at: '2026-07-13T00:00:00.000Z' }))
-  await fsp.writeFile(path.join(missionsDir, newerTeamMission, 'mission.json'), JSON.stringify({ id: newerTeamMission, mode: 'naruto', created_at: '2026-07-13T01:00:00.000Z' }))
+  await fsp.writeFile(path.join(missionsDir, newerNarutoMission, 'mission.json'), JSON.stringify({ id: newerNarutoMission, mode: 'naruto', created_at: '2026-07-13T01:00:00.000Z' }))
   await fsp.writeFile(path.join(root, '.sneakoscope', 'state', 'current.json'), JSON.stringify({
-    mission_id: newerTeamMission,
+    mission_id: newerNarutoMission,
     route: 'Research',
     mode: 'RESEARCH',
     phase: 'RESEARCH_PREPARED'

@@ -49,14 +49,24 @@ export async function reconcileRetiredGitPolicyMode(
   }
   const value = await readJson<any>(file, null).catch(() => null);
   if (value?.schema !== 'sks.git-policy.v1') return;
-  if (['solo', 'work', 'strict-work', 'ci'].includes(String(value.mode || ''))) return;
+  const mode = String(value.mode || '');
+  if (['solo', 'work', 'strict-work', 'ci'].includes(mode)) return;
+  const replacement = mode === 'team'
+    ? 'work'
+    : mode === 'strict-team'
+      ? 'strict-work'
+      : null;
+  if (!replacement) {
+    await reconcileKnownRetiredPath(root, file, false, fix, quarantineRoot, counters);
+    return;
+  }
   counters.detected += 1;
   if (!fix) {
     counters.remaining += 1;
     return;
   }
   try {
-    await writeJsonAtomic(file, { ...value, mode: 'work' });
+    await writeJsonAtomic(file, { ...value, mode: replacement });
     counters.removed += 1;
     counters.rewrittenState += 1;
   } catch {

@@ -19,5 +19,5 @@ fs.writeFileSync(out, `${JSON.stringify(report, null, 2)}\n`);
 assertGate(gate.ok === true, 'ADHD orchestration gate must pass a concrete prompt', report);
 assertGate(gate.scheduler_requires_gate === true, 'strategy scheduler gate must be explicit', report);
 assertGate(gate.micro_wins.length >= 4, 'micro-win board must contain executable slices', report);
-assertGate(artifacts.microWinBoard.dashboard_visible === true, 'micro-win board must be dashboard visible', report);
+assertGate(artifacts.microWinBoard.summary_available === true, 'micro-win board summary must remain available', report);
 emitGate('strategy:adhd-orchestrating-gate', { micro_wins: gate.micro_wins.length });

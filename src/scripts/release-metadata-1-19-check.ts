@@ -63,6 +63,10 @@ const requiredPackageScripts = [
 ];
 const requiredReleaseGates = [
   'commands:current-surface-only',
+  'naruto:ssot-routing',
+  'naruto:ssot-route-normalization',
+  'naruto:ssot-gate-aliases',
+  'naruto:ssot-pipeline-default',
   'naruto:canonical-stop-gate',
   'test:official-subagent-policy',
   'codex:app-handoff-comprehensive',

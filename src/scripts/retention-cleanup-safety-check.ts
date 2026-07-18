@@ -42,11 +42,11 @@ try {
     '.sneakoscope/missions/M-old/completion-proof.json',
     '.sneakoscope/missions/M-old/trust-report.json',
     '.sneakoscope/missions/M-old/reflection.md',
-    '.sneakoscope/missions/M-active/team-inbox/active.md',
+    '.sneakoscope/missions/M-active/agents/tmp/active.md',
     '.sneakoscope/missions/M-active/agents/sessions/session-1/gen-1/worker/codex-sdk-home/codex/cache.bin',
-    '.sneakoscope/missions/M-blocked/team-inbox/blocked.md',
+    '.sneakoscope/missions/M-blocked/agents/tmp/blocked.md',
     '.sneakoscope/missions/M-blocked/scout.stderr.log',
-    '.sneakoscope/missions/M-blocked-terminal/team-inbox/blocked.md',
+    '.sneakoscope/missions/M-blocked-terminal/agents/tmp/blocked.md',
     '.sneakoscope/missions/M-blocked-terminal/agents/sessions/session-1/gen-1/worker/worker-result.json'
   ]) {
     assertGate(exists(path.join(applyRoot, rel)), `durable or active artifact was removed: ${rel}`, { rel, actions: applied.actions });
@@ -54,7 +54,7 @@ try {
 
   for (const rel of [
     '.sneakoscope/tmp/scratch.txt',
-    '.sneakoscope/missions/M-done/team-inbox/worker.md',
+    '.sneakoscope/missions/M-done/agents/tmp/worker.md',
     '.sneakoscope/missions/M-done/bus/event.jsonl',
     '.sneakoscope/missions/M-done/agents/lanes/lane-1.json',
     '.sneakoscope/missions/M-done/sessions/terminal-transcript.log',
@@ -62,7 +62,7 @@ try {
     '.sneakoscope/missions/M-done/agents/sessions/session-1/gen-1/worker/codex-sdk-home/codex/cache.bin',
     '.sneakoscope/missions/M-done/scout.stdout.log',
     '.sneakoscope/missions/M-done/scout.stderr.log',
-    '.sneakoscope/missions/M-old/team-inbox/worker.md',
+    '.sneakoscope/missions/M-old/agents/tmp/worker.md',
     '.sneakoscope/missions/M-old/agents/sessions/session-1/gen-1/worker/codex-sdk-home/codex/cache.bin',
     '.sneakoscope/missions/M-old/scout.stdout.log',
     '.sneakoscope/missions/M-blocked-terminal/agents/sessions/session-1/gen-1/worker/codex-sdk-home/codex/cache.bin',
@@ -123,17 +123,17 @@ async function writeMission(projectRoot, missionId, closed) {
     await write(path.join(dir, 'trust-report.json'), { mission_id: missionId, status: 'verified_partial' });
     await writeText(path.join(dir, 'reflection.md'), '# retained reflection\n');
     await write(path.join(dir, 'reflection-gate.json'), { passed: true });
-    await write(path.join(dir, 'team-gate.json'), { passed: true });
-    await write(path.join(dir, 'team-session-cleanup.json'), { passed: true, all_sessions_closed: true });
+    await write(path.join(dir, 'naruto-gate.json'), { passed: true });
+    await write(path.join(dir, 'agents', 'agent-session-cleanup.json'), { passed: true, all_sessions_terminal: true });
     await write(path.join(dir, 'agents', 'agent-proof-evidence.json'), { ok: true, all_sessions_closed: true });
     await writeText(path.join(dir, 'sessions', 'terminal-transcript.log'), 'transcript is disposable after close\n');
     await writeText(path.join(dir, 'agents', 'sessions', 'session-1', 'terminal-transcript.log'), 'agent transcript is disposable after close\n');
     await writeText(path.join(dir, 'agents', 'sessions', 'session-1', 'gen-1', 'worker', 'codex-sdk-home', 'codex', 'cache.bin'), 'large sdk cache\n');
     await writeText(path.join(dir, 'scout.stdout.log'), 'raw stdout\n');
     await writeText(path.join(dir, 'scout.stderr.log'), 'raw stderr\n');
-    await writeText(path.join(dir, 'team-inbox', 'worker.md'), 'temporary inbox\n');
+    await writeText(path.join(dir, 'agents', 'tmp', 'worker.md'), 'temporary scratch\n');
   } else {
-    await writeText(path.join(dir, 'team-inbox', 'active.md'), 'active mission scratch stays\n');
+    await writeText(path.join(dir, 'agents', 'tmp', 'active.md'), 'active mission scratch stays\n');
     await writeText(path.join(dir, 'agents', 'sessions', 'session-1', 'gen-1', 'worker', 'codex-sdk-home', 'codex', 'cache.bin'), 'active sdk cache stays\n');
   }
   await writeText(path.join(dir, 'bus', 'event.jsonl'), '{"event":"temporary"}\n');
@@ -146,7 +146,7 @@ async function writeOldDurableMission(projectRoot) {
   await write(path.join(dir, 'trust-report.json'), { status: 'verified' });
   await write(path.join(dir, 'evidence-index.json'), { evidence: [] });
   await writeText(path.join(dir, 'reflection.md'), '# old retained reflection\n');
-  await writeText(path.join(dir, 'team-inbox', 'worker.md'), 'old scratch\n');
+  await writeText(path.join(dir, 'agents', 'tmp', 'worker.md'), 'old scratch\n');
   await writeText(path.join(dir, 'agents', 'sessions', 'session-1', 'gen-1', 'worker', 'codex-sdk-home', 'codex', 'cache.bin'), 'old sdk cache\n');
   await writeText(path.join(dir, 'scout.stdout.log'), 'old raw log\n');
   await old(dir);
@@ -155,7 +155,7 @@ async function writeOldDurableMission(projectRoot) {
 async function writeBlockedMission(projectRoot) {
   const dir = path.join(projectRoot, '.sneakoscope', 'missions', 'M-blocked');
   await write(path.join(dir, 'completion-proof.json'), { schema: 'sks.completion-proof.v1', status: 'blocked', blockers: ['fixture_blocker'] });
-  await writeText(path.join(dir, 'team-inbox', 'blocked.md'), 'diagnostic scratch\n');
+  await writeText(path.join(dir, 'agents', 'tmp', 'blocked.md'), 'diagnostic scratch\n');
   await writeText(path.join(dir, 'scout.stderr.log'), 'diagnostic raw log\n');
 }
 
@@ -163,7 +163,7 @@ async function writeTerminalBlockedMission(projectRoot) {
   const dir = path.join(projectRoot, '.sneakoscope', 'missions', 'M-blocked-terminal');
   await write(path.join(dir, 'completion-proof.json'), { schema: 'sks.completion-proof.v1', status: 'blocked', blockers: ['fixture_blocker'] });
   await write(path.join(dir, 'agents', 'agent-session-cleanup.json'), { all_sessions_terminal: true, terminal_session_count: 1, total_sessions: 1 });
-  await writeText(path.join(dir, 'team-inbox', 'blocked.md'), 'diagnostic scratch\n');
+  await writeText(path.join(dir, 'agents', 'tmp', 'blocked.md'), 'diagnostic scratch\n');
   await writeText(path.join(dir, 'agents', 'sessions', 'session-1', 'gen-1', 'worker', 'worker-result.json'), '{"status":"blocked"}\n');
   await writeText(path.join(dir, 'agents', 'sessions', 'session-1', 'gen-1', 'worker', 'codex-sdk-home', 'codex', 'cache.bin'), 'terminal sdk cache\n');
 }

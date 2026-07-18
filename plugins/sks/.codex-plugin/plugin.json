@@ -3,7 +3,7 @@
   "name": "sks",
   "display_name": "Sneakoscope Codex",
   "version": "5.1.0",
-  "description": "Proof-first Codex harness with official subagent workflows, machine gates, TriWiki memory, and a localhost dashboard.",
+  "description": "Proof-first Codex harness with official subagent workflows, machine gates, and TriWiki memory.",
   "publisher": "mandarange",
   "repository": "https://github.com/mandarange/Sneakoscope-Codex",
   "homepage": "https://github.com/mandarange/Sneakoscope-Codex#readme",
@@ -15,10 +15,6 @@
     {
       "name": "sks",
       "description": "Run the Sneakoscope Codex CLI."
-    },
-    {
-      "name": "sks-ui",
-      "description": "Open the local SKS dashboard with `sks ui`."
     }
   ],
   "skills": [

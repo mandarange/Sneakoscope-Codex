@@ -7,7 +7,6 @@ import { checkZellijCapability } from '../core/zellij/zellij-capability.js';
 import { checkZellijUpdateNotice, upgradeZellijToLatest } from '../core/zellij/zellij-update.js';
 import { runZellij } from '../core/zellij/zellij-command.js';
 import { appendZellijLaneCommand, normalizeZellijSlot } from '../core/zellij/zellij-lane-runtime.js';
-import { buildZellijDashboardSnapshot, renderZellijDashboardText } from '../core/zellij/zellij-dashboard-renderer.js';
 import { readZellijSlotTelemetrySnapshot } from '../core/zellij/zellij-slot-telemetry.js';
 
 export const ZELLIJ_COMMAND_SCHEMA = 'sks.zellij-command.v1';
@@ -29,10 +28,24 @@ export async function run(_command: string = 'zellij', args: string[] = []) {
   if (sub === 'dispatch' || sub === 'send') return zellijDispatch(root, args, json);
   if (sub === 'focus-worker') return zellijFocusWorker(root, args, json);
   if (sub === 'worker-logs') return zellijWorkerLogs(root, args, json);
-  if (sub === 'dashboard') return zellijDashboard(root, args, json);
   if (sub === 'close-drained') return zellijCloseDrained(root, args, json);
   if (sub === 'pin' || sub === 'unpin') return zellijViewportPin(root, sub, args, json);
+  if (sub !== 'status' && sub !== 'capability') return zellijUnknownSubcommand(sub, json);
   return zellijStatus(root, args, json);
+}
+
+function zellijUnknownSubcommand(subcommand: string, json: boolean) {
+  const result = {
+    schema: ZELLIJ_COMMAND_SCHEMA,
+    subcommand,
+    ok: false,
+    status: 'unsupported_subcommand',
+    blockers: [`unsupported_zellij_subcommand:${subcommand}`]
+  };
+  if (json) printJson(result);
+  else console.error(`Unsupported Zellij subcommand: ${subcommand}. Run \`sks zellij help\` for the current surface.`);
+  process.exitCode = 1;
+  return result;
 }
 
 async function zellijStatus(root: string, args: string[], json: boolean) {
@@ -162,26 +175,6 @@ async function zellijWorkerLogs(root: string, args: string[], json: boolean) {
   };
   if (json) printJson(out);
   else for (const log of out.logs) console.log(`${log.slot_id} gen-${log.generation_index} ${log.status}\nstdout: ${log.stdout_log}\nstderr: ${log.stderr_log}`);
-  if (!out.ok) process.exitCode = 1;
-}
-
-async function zellijDashboard(root: string, args: string[], json: boolean) {
-  const missionId = resolveMissionId(root, readOption(args, '--mission', readOption(args, '--mission-id', 'latest') || 'latest') || 'latest');
-  const snapshot = await readJson<any>(path.join(root, '.sneakoscope', 'missions', missionId, 'zellij-dashboard-snapshot.json'), null);
-  const state = await readJson<any>(path.join(root, '.sneakoscope', 'missions', missionId, 'zellij-right-column-state.json'), null);
-  const watch = flag(args, '--watch');
-  const out = {
-    schema: 'sks.zellij-dashboard-command.v1',
-    ok: Boolean(snapshot || state),
-    mission_id: missionId,
-    snapshot,
-    right_column_state: state,
-    watch,
-    watch_command: `sks zellij dashboard --mission ${missionId} --watch`
-  };
-  if (json) printJson(out);
-  else if (snapshot) console.log(renderZellijDashboardText(buildZellijDashboardSnapshot({ ...snapshot, mission_id: snapshot.mission_id || missionId })));
-  else console.log(JSON.stringify(state || out, null, 2));
   if (!out.ok) process.exitCode = 1;
 }
 
@@ -324,7 +317,7 @@ function printHelp(json: boolean) {
     schema: ZELLIJ_COMMAND_SCHEMA,
     subcommand: 'help',
     ok: true,
-    usage: 'sks zellij status|update|repair|dispatch|send|focus-worker|worker-logs|dashboard|pin|unpin|close-drained [--json]',
+    usage: 'sks zellij status|update|repair|dispatch|send|focus-worker|worker-logs|pin|unpin|close-drained [--json]',
     subcommands: {
       status: 'Report Zellij runtime capability and interactive-route readiness.',
       update: 'Check the latest stable Zellij release; apply the upgrade with --yes (Homebrew).',
@@ -333,7 +326,6 @@ function printHelp(json: boolean) {
       send: 'Alias for dispatch.',
       'focus-worker': 'Focus a visible right-column worker pane by slot.',
       'worker-logs': 'Print stdout/stderr log paths for worker slots.',
-      dashboard: 'Render the latest dashboard snapshot; --watch prints watch metadata.',
       pin: 'Pin a dynamic worker slot to a viewport.',
       unpin: 'Remove a worker slot pin from a viewport.',
       'close-drained': 'Close drained right-column panes.',
@@ -349,7 +341,6 @@ function printHelp(json: boolean) {
     console.log('  sks zellij dispatch --mission M --slot slot-001 --text "..." [--write-pane] [--json]');
     console.log('  sks zellij focus-worker slot-001 [--mission M] [--json]');
     console.log('  sks zellij worker-logs [slot-001] [--mission M] [--json]');
-    console.log('  sks zellij dashboard [--mission M] [--watch] [--json]');
     console.log('  sks zellij pin slot-001 [--viewport 2] [--mission M] [--json]');
     console.log('  sks zellij unpin slot-001 [--viewport 2] [--mission M] [--json]');
     console.log('  sks zellij close-drained [--mission M] [--json]');

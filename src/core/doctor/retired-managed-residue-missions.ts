@@ -152,27 +152,45 @@ export async function reconcileMissionIndex(
     return;
   }
   const value = await readJson<any>(file, null).catch(() => null);
-  if (!value || !Array.isArray(value.missions)) return;
-  const retiredCount = value.missions.filter((row: any) => isRetiredMissionIdentity(row)).length;
-  if (retiredCount === 0) return;
-  counters.detected += retiredCount;
+  const indexSchemaCurrent = value?.schema === 'sks.mission-index.v1';
+  const missionRows = Array.isArray(value?.missions) ? value.missions : [];
+  const retiredRows = missionRows.filter((row: any) => isRetiredMissionIdentity(row));
+  const retiredCount = retiredRows.length;
+  const malformedOrForeign = !value || !indexSchemaCurrent || !Array.isArray(value?.missions);
+  if (!malformedOrForeign && retiredCount === 0) return;
+  const retiredMissionIds = retiredRows
+    .map((row: any) => String(row?.id || ''))
+    .filter(Boolean);
+  const detectedCount = Math.max(1, retiredCount);
+  counters.detected += detectedCount;
   if (!fix) {
-    counters.remaining += retiredCount;
-    if (value.schema !== 'sks.mission-index.v1') counters.preserved += 1;
+    counters.remaining += detectedCount;
+    if (malformedOrForeign) counters.preserved += 1;
     return;
   }
   try {
-    if (value.schema !== 'sks.mission-index.v1') {
+    if (malformedOrForeign) {
       await quarantineUserPath(root, file, quarantineRoot);
       counters.preserved += 1;
     }
+    const verifiedRetiredMissionIds: string[] = [];
+    for (const missionId of retiredMissionIds) {
+      const mission = await readJson<any>(
+        path.join(root, '.sneakoscope', 'missions', missionId, 'mission.json'),
+        null
+      ).catch(() => null);
+      if (mission && isRetiredMissionIdentity(mission)) verifiedRetiredMissionIds.push(missionId);
+    }
     const { refreshMissionIndex } = await import('../retention.js');
-    await refreshMissionIndex(root);
-    counters.removed += retiredCount;
+    const refreshed = await refreshMissionIndex(root, { excludeMissionIds: verifiedRetiredMissionIds });
+    if (refreshed.missions.some((row: any) => isRetiredMissionIdentity(row))) {
+      throw new Error('retired_mission_index_identity_survived');
+    }
+    counters.removed += detectedCount;
     counters.rewrittenState += 1;
   } catch {
     counters.errors += 1;
-    counters.remaining += retiredCount;
+    counters.remaining += detectedCount;
   }
 }
 

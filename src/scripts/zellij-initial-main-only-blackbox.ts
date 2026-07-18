@@ -12,19 +12,14 @@ const report = {
   schema: 'sks.zellij-initial-main-only-blackbox.v1',
   ok: true,
   mad_slot_zero: /launchMadZellijUi\([\s\S]*slotCount:\s*0/.test(mad),
-  mad_no_launch_dashboard: !/launch\.dashboard_pane\s*=\s*await openZellijDashboardPane/.test(mad),
   mad_initial_ui_artifact: mad.includes('zellij-initial-ui.json') && mad.includes("ui_architecture: 'monitor_plus_viewports'") && mad.includes('worker_panes_created: 0'),
-  naruto_slot_zero: /launchZellijLayout\([\s\S]*slotCount:\s*0/.test(naruto),
-  naruto_no_launch_dashboard: !/liveZellij\.dashboard_pane\s*=\s*await openZellijDashboardPane/.test(naruto),
-  naruto_initial_ui_artifact: naruto.includes('zellij-initial-ui.json'),
+  naruto_uses_official_subagents: naruto.includes('runOfficialSubagentWorkflow'),
   launcher_uses_layout_builder: launcher.includes('writeZellijLayout(root, layoutInput)')
 }
 report.ok = report.mad_slot_zero
-  && report.mad_no_launch_dashboard
   && report.mad_initial_ui_artifact
-  && report.naruto_slot_zero
-  && report.naruto_no_launch_dashboard
-  && report.naruto_initial_ui_artifact
+  && report.naruto_uses_official_subagents
+  && report.launcher_uses_layout_builder
 
 assertGate(report.ok, 'Zellij initial UI must use monitor plus fixed viewports with no worker panes at launch', report)
 emitGate('zellij:initial-main-only-blackbox', report)

@@ -11,7 +11,6 @@ final class NotificationCoordinator: NSObject, UNUserNotificationCenterDelegate 
     var onOpenControlCenter: (() -> Void)?
     var onOpenLog: (() -> Void)?
     var onRetryOperation: (() -> Void)?
-    var onOpenDashboard: (() -> Void)?
     var onAuthorizationChanged: ((Bool) -> Void)?
     private(set) var authorizationDenied = false
 
@@ -21,7 +20,7 @@ final class NotificationCoordinator: NSObject, UNUserNotificationCenterDelegate 
         center.setNotificationCategories([
             category("SKS_OPERATION_RESULT", actions: ["OPEN_CONTROL_CENTER", "OPEN_LOG", "RETRY_OPERATION"]),
             category("SKS_UPDATE_AVAILABLE", actions: ["OPEN_CONTROL_CENTER"]),
-            category("SKS_ACTION_REQUIRED", actions: ["OPEN_CONTROL_CENTER", "OPEN_DASHBOARD"])
+            category("SKS_ACTION_REQUIRED", actions: ["OPEN_CONTROL_CENTER"])
         ])
         refreshAuthorizationState()
     }
@@ -58,7 +57,6 @@ final class NotificationCoordinator: NSObject, UNUserNotificationCenterDelegate 
         switch identifier {
         case "OPEN_LOG": onOpenLog?(); return "open_log"
         case "RETRY_OPERATION": onRetryOperation?(); return "retry_operation"
-        case "OPEN_DASHBOARD": onOpenDashboard?(); return "open_dashboard"
         case UNNotificationDismissActionIdentifier: return "dismissed"
         default: onOpenControlCenter?(); return "open_control_center"
         }

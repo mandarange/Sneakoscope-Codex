@@ -50,8 +50,8 @@ assertGate(decision.mad_sks_sql_plane.state_source === 'persisted_sks_state', 'd
 assertGate(updated?.counters.reserved === 1, 'direct apply_migration reservation must land on the real MAD-SKS SQL-plane mission capability', updated || {})
 assertGate(wrongMissionDirExists === false, 'direct apply_migration must not create or write under the drifted payload mission id')
 
-const unrelatedMission = await createMission(root, { mode: 'team', prompt: 'unrelated current-state drift fixture' })
-const unrelatedStateFromCodex = { mission_id: unrelatedMission.id, mode: 'TEAM', phase: 'TOOL_CALL' }
+const unrelatedMission = await createMission(root, { mode: 'naruto', prompt: 'unrelated current-state drift fixture' })
+const unrelatedStateFromCodex = { mission_id: unrelatedMission.id, mode: 'NARUTO', phase: 'TOOL_CALL' }
 const executeDecision: any = await checkDbOperation(root, unrelatedStateFromCodex, {
   tool_name: 'mcp__supabase__execute_sql',
   tool_call_id: 'direct-execute-sql-drop-delete-call',

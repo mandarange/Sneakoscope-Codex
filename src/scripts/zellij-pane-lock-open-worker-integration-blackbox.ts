@@ -108,8 +108,7 @@ function workerInput(slot) {
     statusLabel: 'running',
     rightColumnMode: 'spawn-on-first-worker',
     visiblePaneCap: visible,
-    uiMode: 'compact-slots',
-    dashboardSnapshot: { mission_id: missionId, active_workers: workers, visible_panes: visible }
+    uiMode: 'compact-slots'
   }
 }
 

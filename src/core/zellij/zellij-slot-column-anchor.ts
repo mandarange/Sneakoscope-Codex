@@ -93,15 +93,14 @@ export async function renderZellijSlotColumnAnchorFromArtifacts(input: {
   if (telemetry && Object.keys(telemetry.slots || {}).length) {
     return renderTelemetryAnchor(telemetry, updateNotice, sqlPlaneCapability, appHandoff)
   }
-  const snapshot = await readJson(path.join(missionDir, 'zellij-dashboard-snapshot.json'))
   const rightColumn = await readJson(path.join(missionDir, 'zellij-right-column-state.json'))
   const runtime = await readJson(path.join(root, 'native-cli-worker-runtime.json'))
     || await readJson(path.join(missionDir, 'agents', 'native-cli-worker-runtime.json'))
   const workerRows = await buildWorkerRows(root, missionDir, rightColumn, runtime)
-  const activeWorkers = Number(snapshot?.active_workers ?? workerRows.filter((row) => row.status === 'running' || row.status === 'launching').length ?? 0)
-  const visiblePaneCap = Number(snapshot?.visible_panes ?? Math.max(1, rightColumn?.visible_worker_panes?.length || activeWorkers || 1))
-  const headlessWorkers = Number(snapshot?.headless_workers ?? workerRows.filter((row) => row.placement === 'headless' && (!row.status || row.status === 'running')).length ?? 0)
-  const queueDepth = Number(snapshot?.queue_depth ?? 0)
+  const activeWorkers = workerRows.filter((row) => row.status === 'running' || row.status === 'launching').length
+  const visiblePaneCap = Math.max(1, rightColumn?.visible_worker_panes?.length || activeWorkers || 1)
+  const headlessWorkers = workerRows.filter((row) => row.placement === 'headless' && (!row.status || row.status === 'running')).length
+  const queueDepth = Number(runtime?.queue_depth || 0)
   const anchorInput: ZellijSlotColumnAnchorInput = { activeWorkers, visiblePaneCap, headlessWorkers, queueDepth, workerRows }
   if (updateNotice?.update_available && updateNotice.latest_version) anchorInput.updateAvailableVersion = String(updateNotice.latest_version)
   if (isMadSksSqlPlaneActive(sqlPlaneCapability)) anchorInput.madSksSqlPlaneActive = true

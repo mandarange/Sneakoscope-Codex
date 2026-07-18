@@ -20,14 +20,13 @@ The rollout tail is display-only and never contributes completion proof. Unsuppo
 | Mode | Use |
 | --- | --- |
 | `compact-slots` | Default worker-slot view with concise status, task, progress, file, blockers, and log tail. |
-| `dashboard-plus-slots` | Slightly taller slot frames for missions that need more live context. |
 | `full-debug` | Adds session, loop, gate, and event details for diagnostics. |
 
 ## Environment
 
 | Variable | Default | Effect |
 | --- | --- | --- |
-| `SKS_ZELLIJ_UI_MODE` | `compact-slots` | `compact-slots`, `dashboard-plus-slots`, or `full-debug`. |
+| `SKS_ZELLIJ_UI_MODE` | `compact-slots` | `compact-slots` or `full-debug`. |
 | `SKS_ZELLIJ_COLOR` | enabled | Set `0` to disable color. `NO_COLOR=1` also disables color. |
 | `SKS_ZELLIJ_VIEWPORTS` | `1` | Number of fixed viewport panes, clamped to `0..3`. `0` means monitor only. |
 | `SKS_ZELLIJ_MONITOR_ROWS` | `12` | Maximum visible activity rows in the monitor, minimum `4`. |
@@ -38,7 +37,7 @@ The rollout tail is display-only and never contributes completion proof. Unsuppo
 
 ## CLI Flags
 
-`sks --mad --zellij-compact-slots`, `sks --mad --zellij-dashboard`, and `sks --mad --zellij-full-debug` select the UI mode for the launch.
+`sks --mad --zellij-compact-slots` and `sks --mad --zellij-full-debug` select the UI mode for the launch. The Zellij surface uses compact slot and viewport panes only.
 
 Use `sks --mad --zellij-viewports 3 --zellij-refresh-ms 750` (or the matching environment variables) to start with the maximum three fixed viewport panes plus the monitor and a 750 ms render interval.
 

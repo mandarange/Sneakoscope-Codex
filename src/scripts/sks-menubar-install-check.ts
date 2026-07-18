@@ -103,8 +103,10 @@ const launchAgentSafe = !launchAgent.includes('<key>KeepAlive</key>')
 const nativeSources = await Promise.all(NATIVE_SOURCE_FILES.map((name) => fs.readFile(path.join(sourcesDir, name), 'utf8')));
 const nativeSource = nativeSources.join('\n');
 const notificationContract = ['SKS_OPERATION_RESULT', 'SKS_UPDATE_AVAILABLE', 'SKS_ACTION_REQUIRED',
-  'OPEN_CONTROL_CENTER', 'OPEN_LOG', 'RETRY_OPERATION', 'OPEN_DASHBOARD']
+  'OPEN_CONTROL_CENTER', 'OPEN_LOG', 'RETRY_OPERATION']
   .every((token) => nativeSource.includes(token))
+  && !nativeSource.includes('OPEN_DASHBOARD')
+  && !nativeSource.includes('onOpenDashboard')
   && nativeSource.includes('UNUserNotificationCenterDelegate')
   && nativeSource.includes('didReceive response: UNNotificationResponse')
   && !nativeSource.includes('display notification')
@@ -308,16 +310,14 @@ struct NotificationHarness {
         coordinator.onOpenControlCenter = { calls.append("center") }
         coordinator.onOpenLog = { calls.append("log") }
         coordinator.onRetryOperation = { calls.append("retry") }
-        coordinator.onOpenDashboard = { calls.append("dashboard") }
         let routes = [
             coordinator.dispatchActionIdentifier("OPEN_LOG"),
             coordinator.dispatchActionIdentifier("RETRY_OPERATION"),
-            coordinator.dispatchActionIdentifier("OPEN_DASHBOARD"),
             coordinator.dispatchActionIdentifier("OPEN_CONTROL_CENTER"),
             coordinator.dispatchActionIdentifier(UNNotificationDismissActionIdentifier)
         ]
-        precondition(routes == ["open_log", "retry_operation", "open_dashboard", "open_control_center", "dismissed"])
-        precondition(calls == ["log", "retry", "dashboard", "center"])
+        precondition(routes == ["open_log", "retry_operation", "open_control_center", "dismissed"])
+        precondition(calls == ["log", "retry", "center"])
         precondition(NotificationCoordinator.authorizationIsDenied(.denied))
         precondition(!NotificationCoordinator.authorizationIsDenied(.authorized))
         precondition(!NotificationCoordinator.authorizationIsDenied(.notDetermined))

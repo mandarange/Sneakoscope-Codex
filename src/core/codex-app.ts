@@ -579,7 +579,7 @@ export function codexAppGuidance({ appInstalled, codex, mcpList, featureList, re
     lines.push(`Browser tooling is visible via ${source}; SKS web verification still gates on the Codex Chrome Extension before proceeding.`);
   }
   if (browserUseReady && !browserUseMcpListed) {
-    lines.push('Browser Use plugin files are installed, but `codex mcp list` does not list a browser-use MCP server. Treat Browser Use as plugin-scoped, not as SKS UI verification evidence.');
+    lines.push('Browser Use plugin files are installed, but `codex mcp list` does not list a browser-use MCP server. Treat Browser Use as plugin-scoped, not as SKS browser verification evidence.');
   }
   if (!lines.length) lines.push('Codex App, Codex CLI, Chrome Extension, native Computer Use, Browser tooling, and image generation checks look ready. Web UI E2E uses the Chrome Extension path; native non-web visual evidence uses Computer Use; generated image evidence still requires $imagegen/gpt-image-2 output.');
   return lines;

@@ -12,7 +12,7 @@ test('removed public commands are unknown and never mutate an existing Naruto mi
   await fs.writeFile(path.join(missionDir, 'mission.json'), `${JSON.stringify({ id: 'M-current-naruto', mode: 'NARUTO' })}\n`);
   await fs.writeFile(sentinel, 'preserve-current-mission\n');
 
-  for (const command of ['team', 'mad-db', 'tmux', 'xai', 'swarm', 'agent', 'ralph', 'db']) {
+  for (const command of ['team', 'mad-db', 'tmux', 'xai', 'swarm', 'agent', 'ralph', 'db', 'ui']) {
     const before = await fs.readdir(missionDir);
     const result = await runSksInRoot(root, [command, 'status', '--json'], { expectCode: 1 });
     assert.equal(result.ok, false, command);

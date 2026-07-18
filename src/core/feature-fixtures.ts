@@ -43,10 +43,6 @@ const FIXTURES = Object.freeze({
   'cli-check': fixture('execute', 'sks check --tier confidence --sla 5m --plan --json', [], 'pass'),
   'cli-plan': fixture('execute', 'sks plan "fixture" --json', [], 'pass'),
   'cli-review': fixture('execute', 'sks review --diff HEAD --json', [], 'pass'),
-  'cli-ui': fixture('static', 'sks ui [--port 4477] [--mission latest] [--once] [--json]', [], 'pass', {
-    quality: 'static_contract',
-    reason: 'UI command opens a localhost dashboard; release fixture tracks the CLI contract without launching a server.'
-  }),
   'cli-run': fixture('execute_and_validate_artifacts', 'sks run "fixture" --mock --json', ['run-classification.json', 'completion-proof.json', 'evidence-index.json', 'route-completion-contract.json', 'trust-report.json', 'work-order-ledger.json'], 'blocked', { reason: 'finalizeMockRun() in run-command.ts intentionally hardcodes gate.passed=false for every --mock invocation so a mock run can never claim a real completion; it does write all declared artifacts, including a work-order-ledger honestly closed to blocked (18차).' }),
   'cli-status': fixture('execute', 'sks status --json', [], 'pass'),
   'cli-usage': fixture('execute', 'sks usage overview', [], 'pass'),
@@ -69,7 +65,7 @@ const FIXTURES = Object.freeze({
   'cli-selftest': fixture('execute', 'sks selftest --mock', [], 'pass'),
   'cli-git': fixture('execute', 'sks git policy --json', [], 'pass'),
   'cli-uninstall': fixture('execute', 'sks uninstall --dry-run --json', [], 'pass'),
-  'cli-goal': fixture('execute_and_validate_artifacts', 'sks goal create "Fixture smoke: create a minimal Node.js CLI health-check script" --json', ['goal-workflow.json', 'work-order-ledger.json'], 'blocked', { timeout_ms: 300000, reason: 'goal create drives a real loop-graph -> $Naruto multi-agent orchestration pass that requires live agent infrastructure (GPT dispatch, zellij dashboard, verification DAG) unavailable in a fixture/CI sandbox, so loop_result/gate legitimately reports blocked (naruto_*_missing, loop-graph-proof.json_missing) and the command exits 1 by design; goal-workflow.json and a work-order-ledger honestly closed to blocked (18차) are still written.' }),
+  'cli-goal': fixture('execute_and_validate_artifacts', 'sks goal create "Fixture smoke: create a minimal Node.js CLI health-check script" --json', ['goal-workflow.json', 'work-order-ledger.json'], 'blocked', { timeout_ms: 300000, reason: 'goal create drives a real loop-graph -> $Naruto multi-agent orchestration pass that requires live agent infrastructure (GPT dispatch, Zellij worker transport, verification DAG) unavailable in a fixture/CI sandbox, so loop_result/gate legitimately reports blocked (naruto_*_missing, loop-graph-proof.json_missing) and the command exits 1 by design; goal-workflow.json and a work-order-ledger honestly closed to blocked (18차) are still written.' }),
   'cli-seo-geo-optimizer': fixture('execute_and_validate_artifacts', 'sks seo-geo-optimizer fixture --mode seo --json', ['search-visibility/site-inventory.json', 'search-visibility/seo-findings.json', 'search-visibility/verification-report.json', 'seo-gate.json', 'completion-proof.json'], 'pass'),
   'cli-research': fixture('execute_and_validate_artifacts', 'sks research run latest --mock --json', ['research-gate.json', 'completion-proof.json'], 'blocked', { timeout_ms: 180000, reason: '"run" (not "status") is the command that actually writes research-gate.json/completion-proof.json, but research is a two-step prepare-then-run workflow gated by an active-route-not-closed check between steps that a single fixture command cannot express; on a hermetic run "latest" will not be a properly prepared+closed research mission.' }),
   'cli-qa-loop': fixture('execute_and_validate_artifacts', 'sks qa-loop run latest --mock --json', ['qa-gate.json', 'completion-proof.json'], 'pass', { timeout_ms: 180000 }),

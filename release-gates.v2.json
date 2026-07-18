@@ -1512,6 +1512,134 @@
       "output_contract": "sks.gate-result.v1"
     },
     {
+      "id": "naruto:ssot-routing",
+      "command": "node ./dist/scripts/naruto-ssot-routing-check.js",
+      "deps": [
+        "commands:current-surface-only"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/core/routes.ts",
+          "src/scripts/naruto-ssot-routing-check.ts"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "naruto:ssot-route-normalization",
+      "command": "node ./dist/scripts/naruto-ssot-route-normalization-check.js",
+      "deps": [
+        "naruto:ssot-routing"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/core/routes.ts",
+          "src/scripts/naruto-ssot-route-normalization-check.ts"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "naruto:ssot-gate-aliases",
+      "command": "node ./dist/scripts/naruto-ssot-gate-aliases-check.js",
+      "deps": [
+        "naruto:ssot-route-normalization"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/core/proof/route-proof-policy.ts",
+          "src/core/proof/route-proof-gate.ts",
+          "src/core/pipeline-internals/runtime-gates.ts",
+          "src/scripts/naruto-ssot-gate-aliases-check.ts"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "naruto:ssot-pipeline-default",
+      "command": "node ./dist/scripts/naruto-ssot-pipeline-default-check.js",
+      "deps": [
+        "naruto:ssot-gate-aliases"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/core/pipeline-internals/runtime-core.ts",
+          "src/core/agents/agent-plan.ts",
+          "src/core/routes.ts",
+          "src/scripts/naruto-ssot-pipeline-default-check.ts"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
       "id": "mad-sks:launch-sql-plane-boundary",
       "command": "node ./dist/scripts/mad-sks-launch-sql-plane-boundary-check.js",
       "deps": [],
@@ -1655,7 +1783,9 @@
     {
       "id": "naruto:canonical-stop-gate",
       "command": "node ./dist/scripts/official-subagent-workflow-check.js",
-      "deps": [],
+      "deps": [
+        "naruto:ssot-pipeline-default"
+      ],
       "resource": [
         "cpu-light",
         "fs-read"
@@ -1845,7 +1975,6 @@
           "src/scripts/cli-output-consistency-check.ts",
           "src/scripts/harness-benchmark-check.ts",
           "src/cli/cli-theme.ts",
-          "src/core/commands/ui-command.ts",
           "src/core/commands/review-command.ts"
         ]
       },

@@ -51,7 +51,6 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         menu.addItem(statusLine)
         menu.addItem(NSMenuItem.separator())
         menu.addItem(item("Open SKS Control Center…", #selector(openCenter)))
-        menu.addItem(item("Open Dashboard", #selector(openDashboardAction)))
         menu.addItem(pendingLine)
         menu.addItem(NSMenuItem.separator())
         menu.addItem(fastLine)
@@ -91,14 +90,6 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     func retryLastOperation() {
         guard let arguments = lastOperationArguments else { openControlCenter(.overview); return }
         run(arguments, kind: "retry", mutationGroup: nil, summary: "Retry operation")
-    }
-
-    func openDashboard() {
-        do { try processClient.runDetached(["ui"]) }
-        catch { AlertFactory.fatal(title: "Open Dashboard failed", message: String(describing: error)) }
-        if let url = URL(string: "http://127.0.0.1:4477") {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { NSWorkspace.shared.open(url) }
-        }
     }
 
     private func refreshLocalState() {
@@ -283,7 +274,6 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     }
 
     @objc private func openCenter() { openControlCenter(.overview) }
-    @objc private func openDashboardAction() { openDashboard() }
     @objc private func checkUpdates() { run(["update", "status", "--refresh", "--json"], kind: "update-status", mutationGroup: nil, summary: "Check for updates") }
     @objc private func fastOn() {
         fastLine.title = "Fast: Turning On…"

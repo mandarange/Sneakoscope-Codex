@@ -64,7 +64,7 @@ async function reconcileStateFiles(root: string, fix: boolean, quarantineRoot: s
     if (!file.endsWith('.json') || !inspected.stat?.isFile()) continue;
     const value = await readJson<any>(file, null).catch(() => null);
     if (!value || typeof value !== 'object') continue;
-    const stripped = stripRetiredPublicState(value);
+    const stripped = stripRetiredPublicState(value, true);
     if (!stripped.changed) continue;
     counters.detected += 1;
     if (!fix) {
@@ -122,12 +122,12 @@ async function reconcileUserStateCollision(
   }
 }
 
-function stripRetiredPublicState(value: unknown): { value: unknown; changed: boolean } {
+function stripRetiredPublicState(value: unknown, routeStateRoot: boolean): { value: unknown; changed: boolean } {
   if (Array.isArray(value)) {
     let changed = false;
     const next: unknown[] = [];
     for (const entry of value) {
-      const result = stripRetiredPublicState(entry);
+      const result = stripRetiredPublicState(entry, false);
       changed ||= result.changed;
       next.push(result.value);
     }
@@ -136,16 +136,16 @@ function stripRetiredPublicState(value: unknown): { value: unknown; changed: boo
   if (!value || typeof value !== 'object') return { value, changed: false };
   const next: Record<string, unknown> = {};
   let changed = false;
-  const retiredRoute = isRetiredStateObject(value as Record<string, unknown>);
+  const retiredRoute = routeStateRoot && isRetiredStateObject(value as Record<string, unknown>);
   for (const [key, entry] of Object.entries(value)) {
     if (RETIRED_DB_STATE_KEY_RE.test(key)) {
       changed = true;
       continue;
     }
-    if (key === 'preempted_missions' && Array.isArray(entry)) {
+    if (routeStateRoot && key === 'preempted_missions' && Array.isArray(entry)) {
       const filtered = entry.filter((row) => !row || typeof row !== 'object' || !isRetiredStateObject(row as Record<string, unknown>));
       changed ||= filtered.length !== entry.length;
-      const nested = stripRetiredPublicState(filtered);
+      const nested = stripRetiredPublicState(filtered, false);
       changed ||= nested.changed;
       next[key] = nested.value;
       continue;
@@ -158,7 +158,7 @@ function stripRetiredPublicState(value: unknown): { value: unknown; changed: boo
       changed = true;
       continue;
     }
-    const nested = stripRetiredPublicState(entry);
+    const nested = stripRetiredPublicState(entry, false);
     changed ||= nested.changed;
     next[key] = nested.value;
   }

@@ -427,22 +427,7 @@ class NativeCliWorkerRuntimeRecorder {
         projectRoot: input.ctx.opts.projectRoot || this.input.projectRoot || input.ctx.opts.cwd,
         rightColumnMode: 'spawn-on-first-worker',
         visiblePaneCap: this.zellijVisiblePaneCap(input.ctx.opts),
-        plannedAgentCount: this.input.targetActiveSlots,
-        dashboardSnapshot: {
-          mode: this.input.route || '$Naruto',
-          backend_counts: { [this.input.backend]: this.input.targetActiveSlots },
-          placement_counts: {
-            'zellij-pane': 0,
-            headless_by_design_viewport_ui: this.input.targetActiveSlots
-          },
-          active_workers: this.input.targetActiveSlots,
-          visible_panes: Number(process.env.SKS_ZELLIJ_VIEWPORTS || 1),
-          headless_workers: this.input.targetActiveSlots,
-          queue_depth: Math.max(0, this.input.requestedAgents - this.input.targetActiveSlots),
-          local_llm: { tps: 0, queue: 0 },
-          gpt_final_status: 'pending',
-          gate_progress: 'worker-spawn'
-        }
+        plannedAgentCount: this.input.targetActiveSlots
     }
     let paneRecord: any = await openHeadlessByDesignViewportWorker(paneInput)
     const zellijRequired = process.env.SKS_REQUIRE_ZELLIJ === '1'

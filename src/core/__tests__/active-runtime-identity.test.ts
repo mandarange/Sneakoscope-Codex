@@ -26,16 +26,25 @@ const ACTIVE_IDENTITY_SOURCES = [
   'src/core/commands/command-utils.ts',
   'src/core/questions.ts',
   'src/core/hooks-runtime/naruto-decision-gate.ts',
-  'src/core/hooks-runtime.ts'
+  'src/core/hooks-runtime.ts',
+  'src/core/retention.ts',
+  'src/scripts/check-architecture.ts'
 ] as const;
 
-const RETIRED_ACTIVE_IDENTITY = /team_trigger_matrix|full_team_recommended|full_team_honest_path|balanced_team_lane|team_trigger_count|active_team_triggers|explicit_team|fresh_executor_team|Balanced Team Lane|Full Team Honest Path|full Team\/Honest proof path|\$Team\b|routes:\s*\[[^\]]*['"]Team['"]|\broute\s*=\s*['"]team['"]|\broute:\s*[^\n]*['"]team['"]/i;
+const RETIRED_ACTIVE_IDENTITY = /team-inbox|team-gate\.json|team-session-cleanup\.json|team_live|team_trigger_matrix|full_team_recommended|full_team_honest_path|balanced_team_lane|team_trigger_count|active_team_triggers|explicit_team|fresh_executor_team|Balanced Team Lane|Full Team Honest Path|full Team\/Honest proof path|\$Team\b|\bsks\.team(?:[-.]|\b)|routes:\s*\[[^\]]*['"]Team['"]|\broute\s*=\s*['"]team['"]|\broute:\s*[^\n]*['"]team['"]/i;
 
 test('active runtime source surfaces contain no retired Team route or schema identity', async () => {
   for (const relative of ACTIVE_IDENTITY_SOURCES) {
     const source = await fsp.readFile(path.join(process.cwd(), relative), 'utf8');
     assert.doesNotMatch(source, RETIRED_ACTIVE_IDENTITY, relative);
   }
+});
+
+test('architecture route-domain inventory uses Naruto and cannot revive Team', async () => {
+  const source = await fsp.readFile(path.join(process.cwd(), 'src/scripts/check-architecture.ts'), 'utf8');
+  const declaration = source.match(/CURRENT_ROUTE_DOMAIN_IMPORT_SEGMENTS\s*=\s*Object\.freeze\(\[([\s\S]*?)\]\)/)?.[1] || '';
+  assert.match(declaration, /['"]naruto['"]/);
+  assert.doesNotMatch(declaration, /['"]team['"]/i);
 });
 
 test('Proof Field, pipeline economy, and perf reports expose only Naruto trigger identity', async () => {

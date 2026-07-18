@@ -37,7 +37,7 @@ export interface ZellijSlotPaneRenderInput {
   progress?: { done: number; total: number; label?: string | null } | null
   blockers?: string[] | null
   telemetryTs?: string | null
-  mode?: 'compact-slots' | 'dashboard-plus-slots' | 'full-debug'
+  mode?: 'compact-slots' | 'full-debug'
 }
 
 export function renderZellijSlotPane(input: ZellijSlotPaneRenderInput): string {
@@ -45,7 +45,7 @@ export function renderZellijSlotPane(input: ZellijSlotPaneRenderInput): string {
   const W = Math.max(20, theme.width - 4)
   const t = (s: unknown, w: number = W) => trimInline(String(s ?? ''), w)
   const mode = input.mode || 'compact-slots'
-  const maxLines = mode === 'compact-slots' ? 14 : mode === 'dashboard-plus-slots' ? 18 : 30
+  const maxLines = mode === 'compact-slots' ? 14 : 30
   const events = (input.eventLines || []).filter(Boolean).slice(-10)
   const stdout = (input.stdoutTail || []).filter(Boolean).slice(-6)
   const stderr = (input.stderrTail || []).filter(Boolean).slice(-1)

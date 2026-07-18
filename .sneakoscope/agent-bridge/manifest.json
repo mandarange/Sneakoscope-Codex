@@ -1800,26 +1800,6 @@
       ]
     },
     {
-      "name": "ui",
-      "description": "Open the localhost SKS agent dashboard",
-      "read_only": true,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": false,
-      "latency_class": "fast",
-      "example_invocation": "sks ui",
-      "maturity": "stable",
-      "contract_schema": "sks.command-contract.v2",
-      "risk": "R0",
-      "remote_allowed": false,
-      "telegram_allowed": false,
-      "input_schema": {
-        "type": "object",
-        "properties": {},
-        "additionalProperties": false
-      },
-      "required_capabilities": []
-    },
-    {
       "name": "uninstall",
       "description": "Uninstall SKS global skills, hooks, config, menu bar, and optional project residue",
       "read_only": false,

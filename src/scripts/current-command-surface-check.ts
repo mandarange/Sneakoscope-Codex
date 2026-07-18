@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import { assertGate, emitGate, importDist, readText, root } from './sks-1-18-gate-lib.js';
 
-const removed = ['team', 'mad-db', 'tmux', 'xai', 'swarm', 'agent', 'ralph'];
+const removed = ['team', 'mad-db', 'tmux', 'xai', 'swarm', 'agent', 'ralph', 'ui'];
 const removedDollar = ['$Agent', '$Team', '$MAD-DB', '$Swarm', '$ShadowClone', '$Kagebunshin', '$Ralph'];
 const removedHandlers = [
   'src/commands/team.ts',
@@ -13,7 +13,9 @@ const removedHandlers = [
   'src/commands/tmux.ts',
   'src/cli/xai-command.ts',
   'src/core/commands/agent-command.ts',
-  'src/core/agents/agent-command-surface.ts'
+  'src/core/agents/agent-command-surface.ts',
+  'src/core/commands/ui-command.ts',
+  'src/core/ui/dashboard-html.ts'
 ];
 
 const [{ COMMANDS, COMMAND_ALIASES, commandNames }, { REMOVED_PUBLIC_COMMANDS }, routes, init] = await Promise.all([

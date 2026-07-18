@@ -27,7 +27,6 @@ export const COMMAND_MANIFEST_LITE = [
   { name: 'plan', summary: 'Write a planning-only SKS plan artifact without code edits', maturity: 'stable' },
   { name: 'status', summary: 'Show concise active mission and trust status', maturity: 'stable', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'review', summary: 'Review a git diff with machine evidence first', maturity: 'stable', allowedDuringActiveRoute: true },
-  { name: 'ui', summary: 'Open the localhost SKS agent dashboard', maturity: 'stable', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'root', summary: 'Show active SKS root', maturity: 'stable', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'update', summary: 'Inspect, review, apply, or roll back the global SKS update', maturity: 'stable' },
   { name: 'uninstall', summary: 'Uninstall SKS global skills, hooks, config, menu bar, and optional project residue', maturity: 'stable', allowedDuringActiveRoute: true },

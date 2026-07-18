@@ -43,6 +43,7 @@ test('an explicitly R3 command requires explicit opt-in without name regex infer
 
 test('manifest never fabricates a command name absent from the registry', () => {
   const manifest = buildAgentManifest();
+  assert.equal(manifest.tools.some((tool) => tool.name === 'ui'), false);
   for (const tool of manifest.tools) {
     assert.ok(tool.name in COMMANDS, `manifest contains a name not in COMMANDS: ${tool.name}`);
   }

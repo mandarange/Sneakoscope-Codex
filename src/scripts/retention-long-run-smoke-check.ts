@@ -125,7 +125,7 @@ async function seedFixtureProject() {
     await fsp.mkdir(missionDir, { recursive: true })
     await writeJson(path.join(missionDir, 'mission.json'), {
       id,
-      mode: index % 3 === 0 ? 'naruto' : 'team',
+      mode: 'naruto',
       prompt: `retention long-run fixture ${index}`,
       created_at: `2026-07-08T01:00:${String(index).padStart(2, '0')}.000Z`,
       phase: index === 99 ? 'RUNNING' : 'DONE'

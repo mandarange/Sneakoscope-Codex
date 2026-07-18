@@ -12,7 +12,6 @@ SNEAKOSCOPE CODEX v${PACKAGE_VERSION}
 
 Local surfaces
 
-  sks ui                    localhost live dashboard
   sks review --staged       machine-first diff review
   sks doctor --fix          repair/validate the harness
 

@@ -784,7 +784,7 @@ function statusLedgerProjections(entries: any = []) {
   const blockers = entries.filter((entry: any) => entry.category === 'blocker').slice(-5);
   const userVisible = entries.filter((entry: any) => entry.visibility?.user).slice(-5);
   return {
-    team_live: {
+    route_live: {
       latest_user_visible: latest?.visibility?.user ? latest.message : userVisible[userVisible.length - 1]?.message || null,
       blocker_count: blockers.length
     },

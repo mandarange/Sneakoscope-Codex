@@ -32,6 +32,17 @@ interface ArchitectureWaiver {
   expires_version: string;
 }
 
+const CURRENT_ROUTE_DOMAIN_IMPORT_SEGMENTS = Object.freeze([
+  'naruto',
+  'qa-loop',
+  'research',
+  'ppt',
+  'image-ux-review',
+  'db',
+  'gx',
+  'wiki'
+]);
+
 const root = process.cwd();
 const failures: string[] = [];
 const args = process.argv.slice(2);
@@ -254,7 +265,7 @@ function importsUnrelatedRouteDomains(file: string): boolean {
   const text = fs.readFileSync(file, 'utf8');
   const domains = new Set<string>();
   const imports = importSpecs(text);
-  for (const domain of ['team', 'qa-loop', 'research', 'ppt', 'image-ux-review', 'db', 'gx', 'wiki']) {
+  for (const domain of CURRENT_ROUTE_DOMAIN_IMPORT_SEGMENTS) {
     if (imports.some((spec) => new RegExp(`(^|[/_-])${domain}([/_-]|\\.|$)`, 'i').test(spec))) domains.add(domain);
   }
   return domains.size >= 5;

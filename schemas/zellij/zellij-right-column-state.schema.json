@@ -8,7 +8,6 @@
     "mission_id": { "type": "string" },
     "session_name": { "type": "string" },
     "status": { "enum": ["absent", "creating", "active", "draining", "closed"] },
-    "dashboard_pane_id": { "type": ["string", "null"] },
     "right_anchor_pane_id": { "type": ["string", "null"] },
     "visible_worker_panes": {
       "type": "array",

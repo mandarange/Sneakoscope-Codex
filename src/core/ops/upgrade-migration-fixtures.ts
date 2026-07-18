@@ -25,8 +25,22 @@ export async function seedUpgradeMigrationFixture(root: string): Promise<Upgrade
   await fs.mkdir(path.join(root, '.sneakoscope', 'missions'), { recursive: true });
   await fs.mkdir(path.join(root, '.sneakoscope', 'state'), { recursive: true });
   await fs.writeFile(path.join(root, 'package.json'), '{"name":"upgrade-migration-fixture","private":true}\n', 'utf8');
+  await fs.writeFile(path.join(root, 'USER-NOTES.md'), 'customer-owned upgrade notes\n', 'utf8');
+  await writeJson(path.join(root, '.sneakoscope', 'state', 'customer-metadata.json'), {
+    schema: 'customer.metadata.v1',
+    profile: { mode: 'team', label: 'customer taxonomy, not SKS route state' }
+  });
+  await writeJson(path.join(root, '.sneakoscope', 'team-dashboard-state.json'), {
+    schema: 'sks.team-dashboard-state.v1',
+    route: '$Team'
+  });
+  await writeJson(path.join(root, '.sneakoscope', 'team', 'manifest.json'), {
+    schema: 'sks.team-runtime.v1',
+    mode: 'team'
+  });
   for (const fixture of UPGRADE_MIGRATION_FIXTURES) {
     const dir = path.join(root, '.sneakoscope', 'missions', fixture.id);
+    const route = routeForMode(fixture.mode);
     await fs.mkdir(dir, { recursive: true });
     await writeJson(path.join(dir, 'mission.json'), {
       id: fixture.id,
@@ -34,16 +48,28 @@ export async function seedUpgradeMigrationFixture(root: string): Promise<Upgrade
       prompt: fixture.label,
       created_at: createdAtFor(fixture.id),
       phase: fixture.legacy ? 'LEGACY_DONE' : 'DONE',
-      package_version: fixture.version
+      package_version: fixture.version,
+      questions_allowed: true,
+      implementation_allowed: false,
+      ...(fixture.mode === 'team' ? { route, route_command: route } : {})
     });
     await writeJson(path.join(dir, 'completion-proof.json'), {
       schema: 'sks.completion-proof.v1',
       status: fixture.legacy ? 'verified_partial' : 'verified',
-      route: routeForMode(fixture.mode),
+      route,
       mission_id: fixture.id,
       blockers: [],
       unverified: fixture.legacy ? ['legacy_state_requires_migration_or_explicit_block'] : []
     });
+    if (fixture.legacy && ['team', 'mad-db'].includes(fixture.mode)) {
+      await fs.writeFile(path.join(dir, 'events.jsonl'), `${JSON.stringify({
+        ts: createdAtFor(fixture.id),
+        type: 'mission.created',
+        mission: fixture.id,
+        mode: fixture.mode,
+        route
+      })}\n`, 'utf8');
+    }
     if (fixture.mode === 'super-search') await seedSuperSearch(dir, fixture.id);
     if (fixture.mode === 'seo') await seedSeo(dir, fixture.id);
     if (fixture.mode === 'naruto') await fs.writeFile(path.join(dir, 'events.jsonl'), `${'x'.repeat(8192)}\n`, 'utf8');
@@ -84,6 +110,7 @@ async function seedSeo(dir: string, missionId: string): Promise<void> {
 function routeForMode(mode: string): string {
   if (mode === 'super-search') return '$Super-Search';
   if (mode === 'seo') return '$SEO-GEO-OPTIMIZER';
+  if (mode === 'team') return '$Team';
   if (mode === 'mad-db') return '$MAD-SKS';
   return '$Naruto';
 }

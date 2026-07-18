@@ -1,12 +1,8 @@
 import path from 'node:path'
-import { appendJsonl, exists, nowIso, readJson, readText, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
+import { appendJsonl, exists, nowIso, readJson, readText, writeJsonAtomic } from '../fsx.js'
 import { normalizeAgentSessionRows } from './agent-session-rows.js'
 
-export const AGENT_CODEX_DASHBOARD_MD = 'agent-codex-dashboard.md'
-export const AGENT_CODEX_DASHBOARD_JSON = 'agent-codex-dashboard.json'
-export const AGENT_SESSION_CARDS_MD = 'agent-session-cards.md'
 export const AGENT_LIVE_SUMMARY_JSON = 'agent-live-summary.json'
-export const AGENT_PROGRESS_TIMELINE_MD = 'agent-progress-timeline.md'
 export const AGENT_CODEX_COCKPIT_EVENTS = 'agent-codex-cockpit-events.jsonl'
 
 export type CodexCockpitHookPayload = {
@@ -81,11 +77,7 @@ export async function writeAgentCodexCockpitArtifacts(
 ): Promise<{ ok: boolean; issues: string[]; state: AgentCodexCockpitState }> {
   const state = await buildAgentCodexCockpitState(missionDir, opts)
   const root = agentRoot(missionDir)
-  await writeJsonAtomic(path.join(root, AGENT_CODEX_DASHBOARD_JSON), state)
   await writeJsonAtomic(path.join(root, AGENT_LIVE_SUMMARY_JSON), summarizeLiveState(state))
-  await writeTextAtomic(path.join(root, AGENT_CODEX_DASHBOARD_MD), renderAgentCodexDashboard(state))
-  await writeTextAtomic(path.join(root, AGENT_SESSION_CARDS_MD), renderAgentSessionCards(state))
-  await writeTextAtomic(path.join(root, AGENT_PROGRESS_TIMELINE_MD), renderAgentProgressTimeline(state))
   return { ok: state.blockers.length === 0, issues: state.blockers, state }
 }
 
@@ -163,82 +155,10 @@ export async function buildAgentCodexCockpitState(
     agents,
     recent_events: [...eventsTail, ...cockpitEventsTail, ...subagentTail].slice(-12),
     artifacts: {
-      markdown: path.join('agents', AGENT_CODEX_DASHBOARD_MD),
-      json: path.join('agents', AGENT_CODEX_DASHBOARD_JSON),
-      cards: path.join('agents', AGENT_SESSION_CARDS_MD),
       live_summary: path.join('agents', AGENT_LIVE_SUMMARY_JSON),
-      timeline: path.join('agents', AGENT_PROGRESS_TIMELINE_MD),
       event_stream: path.join('agents', AGENT_CODEX_COCKPIT_EVENTS),
     },
   }
-}
-
-export function renderAgentCodexDashboard(state: AgentCodexCockpitState): string {
-  const header = [
-    '# Agent Codex Dashboard',
-    '',
-    `- Mission: ${state.mission_id || 'unknown'}`,
-    `- Project hash: ${state.project_hash || 'unknown'}`,
-    `- Backend: ${state.backend || 'unknown'}`,
-    `- Agents: ${state.agent_count}`,
-    `- Concurrency: ${state.concurrency ?? 'unknown'}`,
-    `- Proof: ${state.proof_status || 'unknown'}`,
-    `- Source intelligence: ${state.source_intelligence_status || 'unknown'}`,
-    `- Super-Search: ${state.super_search_status || 'unknown'}`,
-    `- Codex Web Search: ${state.codex_web_search_status || 'unknown'}`,
-    `- Goal mode: ${state.goal_mode_status || 'unknown'}`,
-    `- Terminal sessions: ${state.terminal_session_status || 'unknown'}`,
-    `- Zellij attach: ${state.zellij_attach_command || 'unknown'}`,
-    `- All sessions closed: ${state.all_sessions_closed ?? 'unknown'}`,
-    `- Scheduler: ${state.scheduler_status || 'unknown'}`,
-    `- Patch handoff: ${state.patch_handoff_phase || 'unknown'}`,
-    `- Patch queue depth: ${state.patch_queue_depth ?? 'unknown'}`,
-    `- Patch apply groups: ${state.patch_apply_groups.length}`,
-    `- Target active slots: ${state.target_active_slots ?? 'unknown'}`,
-    `- Active slots: ${state.active_slot_count ?? 'unknown'}`,
-    `- Pending queue: ${state.pending_queue_count ?? 'unknown'}`,
-    `- Backfill events: ${state.backfill_count ?? 'unknown'}`,
-    '',
-    '| Agent | Persona | Task | State | Heartbeat age | Lease | Blockers | Artifact |',
-    '| --- | --- | --- | --- | --- | --- | --- | --- |',
-  ]
-  const rows = state.agents.map((agent) => {
-    const id = cell(agent.id)
-    const persona = cell(agent.persona || agent.persona_id)
-    const task = cell(agent.task || agent.task_slice_id || agent.slice_id)
-    const status = cell(agent.status || agent.lifecycle_state)
-    const heartbeat = cell(agent.heartbeat_age_ms === undefined ? '' : `${agent.heartbeat_age_ms}ms`)
-    const lease = cell(agent.lease || agent.lease_id || agent.write_policy)
-    const blockers = Array.isArray(agent.blockers) ? cell(agent.blockers.join(', ')) : cell(agent.blockers)
-    const artifact = cell(agent.output_artifact || agent.artifact || '')
-    return `| ${id} | ${persona} | ${task} | ${status} | ${heartbeat} | ${lease} | ${blockers} | ${artifact} |`
-  })
-  return `${[...header, ...rows].join('\n')}\n`
-}
-
-export function renderAgentSessionCards(state: AgentCodexCockpitState): string {
-  const slotBlocks = state.worker_slots.map((slot) => [
-    `## ${cell(slot.slot_id)}`,
-    '',
-    `- Status: ${cell(slot.status)}`,
-    `- Current generation: ${cell(slot.current_generation_index)}`,
-    `- Current session: ${cell(slot.current_session_id)}`,
-    `- Generation count: ${cell(slot.generation_count)}`,
-  ].join('\n'))
-  const blocks = state.agents.map((agent) => [
-    `## ${cell(agent.id)}`,
-    '',
-    `- Persona: ${cell(agent.persona || agent.persona_id)}`,
-    `- Task: ${cell(agent.task || agent.task_slice_id || agent.slice_id)}`,
-    `- State: ${cell(agent.status || agent.lifecycle_state)}`,
-    `- Lease: ${cell(agent.lease || agent.lease_id || agent.write_policy)}`,
-    `- Artifact: ${cell(agent.output_artifact || agent.artifact || '')}`,
-  ].join('\n'))
-  return `# Agent Session Cards\n\n${[...slotBlocks, ...blocks].join('\n\n')}\n`
-}
-
-export function renderAgentProgressTimeline(state: AgentCodexCockpitState): string {
-  return `# Agent Progress Timeline\n\n${state.recent_events.map((line) => `- ${line}`).join('\n')}\n`
 }
 
 function summarizeLiveState(state: AgentCodexCockpitState) {
@@ -318,8 +238,4 @@ async function readTailLines(file: string, count: number): Promise<string[]> {
 
 function agentRoot(missionDir: string): string {
   return path.join(missionDir, 'agents')
-}
-
-function cell(value: unknown): string {
-  return String(value ?? '').replace(/\|/g, '\\|').replace(/\s+/g, ' ').trim()
 }

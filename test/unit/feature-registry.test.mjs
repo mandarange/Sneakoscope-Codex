@@ -27,6 +27,7 @@ test('feature registry carries fixture contracts', async () => {
   assert.equal(registry.source_inventory.cli_command_names.includes('auth'), false);
   assert.equal(registry.source_inventory.cli_command_names.includes('ux-review'), false);
   assert.equal(registry.source_inventory.cli_command_names.includes('cu'), false);
+  assert.equal(registry.source_inventory.cli_command_names.includes('ui'), false);
   assert.equal(registry.source_inventory.cli_command_names.includes('memory'), true);
   assert.deepEqual(
     [...registry.source_inventory.cli_command_names].sort(),
@@ -39,6 +40,7 @@ test('feature registry carries fixture contracts', async () => {
   );
   assert.ok(registry.features.some((feature) => feature.id === 'cli-gates'));
   assert.ok(registry.features.some((feature) => feature.id === 'cli-naruto'));
+  assert.equal(registry.features.some((feature) => feature.id === 'cli-ui'), false);
   const computerUse = registry.features.find((feature) => feature.id === 'cli-computer-use');
   assert.equal(computerUse.fixture.status, 'pass');
   const selftest = buildAllFeaturesSelftest(registry);

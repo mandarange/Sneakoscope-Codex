@@ -30,33 +30,6 @@
       ]
     },
     {
-      "id": "zellij:dashboard-pane",
-      "command": "node ./dist/scripts/zellij-dashboard-pane-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": false,
-        "inputs": [
-          "src/core/zellij/zellij-dashboard-pane.ts",
-          "src/core/zellij/zellij-dashboard-renderer.ts",
-          "src/scripts/zellij-dashboard-pane-check.ts",
-          "src/scripts/zellij-dashboard-watch.ts"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "harness"
-      ]
-    },
-    {
       "id": "zellij:developer-controls",
       "command": "node ./dist/scripts/zellij-developer-controls-check.js",
       "deps": [],

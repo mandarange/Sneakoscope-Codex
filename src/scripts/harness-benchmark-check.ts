@@ -4,9 +4,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { assertGate, emitGate, root } from './sks-1-18-gate-lib.js';
+import { COMMAND_MANIFEST_LITE } from '../cli/command-manifest-lite.js';
 import { ensureDir, nowIso, runProcess, writeJsonAtomic } from '../core/fsx.js';
 import { reviewCommand } from '../core/commands/review-command.js';
-import { collectUiState } from '../core/commands/ui-command.js';
 import { simulateNarutoActivePool } from '../core/naruto/naruto-active-pool.js';
 import { decideNarutoConcurrency } from '../core/naruto/naruto-concurrency-governor.js';
 import { buildNarutoWorkGraph } from '../core/naruto/naruto-work-graph.js';
@@ -64,9 +64,9 @@ metrics.push(await measure('review_10_file_diff', 120000, async () => {
   };
 }));
 
-metrics.push(await measure('dashboard_first_state', 2000, async () => {
-  const state = await collectUiState(root, 'latest');
-  return { ok: state.ok === true, mission_id: state.mission_id || null, gates: Array.isArray(state.gates) ? state.gates.length : 0 };
+metrics.push(await measure('public_command_manifest', 2000, async () => {
+  const names = COMMAND_MANIFEST_LITE.map((entry) => entry.name);
+  return { ok: names.length > 0 && !names.includes('ui' as any), command_count: names.length };
 }));
 
 const report = {

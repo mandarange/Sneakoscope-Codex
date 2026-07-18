@@ -12,7 +12,7 @@ const newPaneIndex = worker.indexOf("action', 'new-pane'")
 const report = {
   schema: 'sks.zellij-right-column-headless-overflow-check.v1',
   headless_source: worker.includes("'zellij_worker_headless_overflow'"),
-  headless_scaling_primitive: worker.includes('native_cli_process_headless_with_slot_dashboard'),
+  headless_scaling_primitive: worker.includes('native_cli_process_headless_with_slot_column'),
   returns_before_new_pane: headlessReturnIndex >= 0 && newPaneIndex >= 0 && headlessReturnIndex < newPaneIndex,
   manager_records_overflow: manager.includes('worker_headless_overflow') && manager.includes('visible_pane_cap'),
   runtime_records_overflow: runtime.includes('recordHeadlessWorkerInRightColumn')

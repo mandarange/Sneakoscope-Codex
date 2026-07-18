@@ -20,8 +20,14 @@ const ROUTES = [
 ];
 
 test('route fixture contracts include required artifacts and visual ledgers', async () => {
+  const fixtureRoot = path.join(process.cwd(), 'test/fixtures/routes');
+  const fixtureDirectories = (await fs.readdir(fixtureRoot, { withFileTypes: true }))
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort();
+  assert.deepEqual(fixtureDirectories, ROUTES.map(([name]) => name).sort());
   for (const [name, visual] of ROUTES) {
-    const dir = path.join(process.cwd(), 'test/fixtures/routes', name);
+    const dir = path.join(fixtureRoot, name);
     for (const file of ['input.json', 'expected-artifacts.json', 'expected-proof.json', 'expected-gate.json']) {
       await assert.doesNotReject(() => fs.access(path.join(dir, file)), `${name}/${file}`);
     }

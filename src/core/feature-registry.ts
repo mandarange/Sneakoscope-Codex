@@ -15,7 +15,6 @@ export const ALL_FEATURES_SELFTEST_SCHEMA = 'sks.all-features-selftest.v1';
 export const ALL_FEATURE_COMPLETION_SCHEMA = 'sks.all-feature-completion.v1';
 
 const HANDLER_ALIAS_TO_COMMAND = Object.freeze({
-  ui: 'wizard',
   auth: 'codex-lb',
   hook: 'hooks',
   memory: 'gc',

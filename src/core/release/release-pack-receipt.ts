@@ -49,6 +49,8 @@ export function inspectReleaseTarball(input: {
   const packageJson = bytes.length ? tarPackageJson(tarball) : null
   if (!packageJson) blockers.push('tarball_package_json_missing_or_invalid')
   const files = [...inventory.files].sort()
+  const retiredPackagedFiles = files.filter((file) => RETIRED_PACKAGED_FILE_PATTERNS.some((pattern) => pattern.test(file)))
+  blockers.push(...retiredPackagedFiles.map((file) => `retired_package_file_present:${file}`))
   const unpackedBytes = bytes.length && inventory.blockers.length === 0 ? tarUnpackedBytes(tarball) : 0
   const secretScan = bytes.length && inventory.blockers.length === 0
     ? scanTarballContents(tarball)
@@ -273,7 +275,14 @@ const SECRET_PATTERNS: ReleasePackContentPattern[] = [
 
 const RETIRED_SURFACE_PATTERNS: ReleasePackContentPattern[] = [
   { kind: 'retired_dollar_command', regex: /\$(?:Agent|Team|MAD-DB|Swarm|ShadowClone|Kagebunshin)\b/gi },
-  { kind: 'retired_cli_command', regex: /\bsks\s+(?:team|mad-db|tmux|xai|swarm|agent)(?=$|[\s"'`])/g },
+  { kind: 'retired_cli_command', regex: /\bsks\s+team(?=$|[\s"'`])/gi },
+  { kind: 'retired_cli_command', regex: /\bsks\s+(?:mad-db|tmux|xai|swarm|agent)(?=$|[\s"'`])/g },
+  { kind: 'retired_ui_command', regex: /\bsks\s+ui(?=$|[\s"'`])/gi },
+  { kind: 'retired_zellij_dashboard_command', regex: /\bsks\s+zellij\s+dashboard(?=$|[\s"'`])/gi },
+  { kind: 'retired_zellij_dashboard_option', regex: /(^|[\s"'`])--zellij-dashboard(?=$|[=\s"'`])/gim },
+  { kind: 'retired_dashboard_surface', regex: /\b(?:Open Dashboard|SKS Dashboard|dashboard-plus-slots|zellij-dashboard-(?:pane|renderer|watch)|agent-codex-dashboard)\b/gi },
+  { kind: 'retired_team_workdir', regex: /\bteam-inbox\b/gi },
+  { kind: 'retired_team_current_wording', regex: /\bTeam\s+(?:workflow|architecture)\b/gi },
   { kind: 'retired_agent_option', regex: /(^|[\s"'`])--agent(?=$|[=\s"'`])/gim },
   { kind: 'retired_naruto_option', regex: /(^|[\s"'`])--naruto(?=$|[=\s"'`])/gim },
   { kind: 'retired_clones_option', regex: /(^|[\s"'`])--clones(?=$|[=\s"'`])/gim },
@@ -281,24 +290,37 @@ const RETIRED_SURFACE_PATTERNS: ReleasePackContentPattern[] = [
   { kind: 'retired_menubar_mcp_command', regex: /\bsks\s+menubar\s+mcp(?=$|[\s"'`])/gi },
   { kind: 'retired_menubar_mcp_identity', regex: /(^|[^A-Za-z0-9])menubar[-_. ]mcp(?=$|[^A-Za-z0-9])/gim },
   { kind: 'retired_ralph_identity', regex: /\bralph(?:[_-](?:removed|supervisor|resolver))?\b/gi },
-  { kind: 'retired_team_runtime_identity', regex: /\b(?:team_trigger_matrix|full_team_recommended|full_team_honest_path|strict-team|team-alias-to-naruto)\b/gi },
+  { kind: 'retired_team_runtime_identity', regex: /\b(?:team_live|team_trigger_matrix|full_team_recommended|full_team_honest_path|strict-team|team-alias-to-naruto)\b/gi },
   { kind: 'retired_team_profile', regex: /\bsks-team(?:\.config\.toml)?\b/gi },
   { kind: 'retired_team_lane_label', regex: /\b(?:Balanced Team Lane|Full Team Honest Path|full Team\/Honest proof path)\b/gi }
 ]
 
-const RETIRED_SURFACE_ALLOWLIST = [
-  /^dist\/core\/doctor\/retired-auto-review-config\.js$/,
-  /^dist\/core\/doctor\/(?:command-alias-cleanup|current-project-guidance|retired-managed-projection-residue)\.js$/,
-  /^dist\/core\/doctor\/retired-managed-residue(?:-artifact-helpers|-artifacts|-missions|-private|-runtime|-state)?\.js$/,
-  /^dist\/core\/init\/skills\.js$/,
-  /^dist\/core\/install\/installed-package-smoke\.js$/,
-  /^dist\/core\/release\/release-pack-receipt\.js$/,
-  /^dist\/core\/update\/update-migration-state\.js$/,
-  /^dist\/scripts\/(?:current-command-surface-check|current-surface-update-e2e-check|current-upgrade-matrix-check|legacy-gate-inventory-check|legacy-gate-purge-check|legacy-strong-inventory-check|release-metadata-1-19-check|runtime-current-terminal-check)\.js$/
+const RETIRED_PACKAGED_FILE_PATTERNS = [
+  /^package\/dist\/core\/commands\/ui-command\.js$/,
+  /^package\/dist\/core\/ui\/dashboard-html\.js$/,
+  /^package\/dist\/core\/zellij\/zellij-dashboard-(?:pane|renderer)\.js$/,
+  /^package\/dist\/core\/zellij\/zellij-naruto-dashboard\.js$/,
+  /^package\/dist\/scripts\/zellij-dashboard-(?:pane-check|watch)\.js$/
 ]
 
-function retiredSurfaceFindingAllowed(relative: string): boolean {
-  return RETIRED_SURFACE_ALLOWLIST.some((pattern) => pattern.test(relative))
+const RETIRED_SURFACE_ALLOWLIST: Array<{ path: RegExp; kinds: Set<string> }> = [
+  { path: /^dist\/core\/doctor\/retired-auto-review-config\.js$/, kinds: new Set(['retired_cli_command', 'retired_dollar_command', 'retired_ralph_identity', 'retired_team_profile']) },
+  { path: /^dist\/core\/doctor\/(?:command-alias-cleanup|current-project-guidance)\.js$/, kinds: new Set(['retired_ralph_identity']) },
+  { path: /^dist\/core\/doctor\/retired-managed-projection-residue\.js$/, kinds: new Set(['retired_team_runtime_identity']) },
+  { path: /^dist\/core\/doctor\/retired-managed-residue(?:-artifact-helpers|-artifacts|-missions|-private|-runtime|-state)?\.js$/, kinds: new Set(['retired_cli_command', 'retired_dollar_command', 'retired_ralph_identity', 'retired_team_current_wording', 'retired_team_profile', 'retired_team_runtime_identity', 'retired_team_workdir']) },
+  { path: /^dist\/core\/init\/skills\.js$/, kinds: new Set(['retired_ralph_identity']) },
+  { path: /^dist\/core\/install\/installed-package-smoke\.js$/, kinds: new Set(['retired_agent_option', 'retired_clones_option', 'retired_dollar_command', 'retired_menubar_mcp_identity', 'retired_naruto_option', 'retired_naruto_workers_command', 'retired_ralph_identity']) },
+  { path: /^dist\/core\/ops\/upgrade-migration-fixtures\.js$/, kinds: new Set(['retired_dollar_command']) },
+  { path: /^dist\/core\/release\/release-pack-receipt\.js$/, kinds: new Set(RETIRED_SURFACE_PATTERNS.map((pattern) => pattern.kind)) },
+  { path: /^dist\/core\/update\/update-migration-state\.js$/, kinds: new Set(['retired_cli_command', 'retired_dollar_command', 'retired_team_profile', 'retired_team_runtime_identity']) },
+  { path: /^dist\/scripts\/docs-truthfulness-check\.js$/, kinds: new Set(['retired_ralph_identity']) },
+  { path: /^dist\/scripts\/naruto-ssot-(?:routing|route-normalization|gate-aliases|pipeline-default)-check\.js$/, kinds: new Set(['retired_cli_command', 'retired_dollar_command', 'retired_team_runtime_identity']) },
+  { path: /^dist\/scripts\/upgrade-migration-matrix-check\.js$/, kinds: new Set(['retired_team_workdir']) },
+  { path: /^dist\/scripts\/(?:current-command-surface-check|current-surface-update-e2e-check|current-upgrade-matrix-check|legacy-gate-inventory-check|legacy-gate-purge-check|legacy-strong-inventory-check|release-metadata-1-19-check|runtime-current-terminal-check)\.js$/, kinds: new Set(RETIRED_SURFACE_PATTERNS.map((pattern) => pattern.kind)) }
+]
+
+function retiredSurfaceFindingAllowed(finding: { file: string; kind: string }): boolean {
+  return RETIRED_SURFACE_ALLOWLIST.some((rule) => rule.path.test(finding.file) && rule.kinds.has(finding.kind))
 }
 
 function hash(value: crypto.BinaryLike, algorithm: 'sha256' | 'sha512', encoding: 'hex' | 'base64'): string {

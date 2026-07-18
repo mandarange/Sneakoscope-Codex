@@ -11,8 +11,7 @@ const report = {
   schema: 'sks.zellij-right-column-manager-check.v1',
   ok: true,
   exports: ['ensureRightColumn', 'prepareWorkerInRightColumn', 'recordWorkerPaneInRightColumn', 'recordHeadlessWorkerInRightColumn', 'closeWorkerInRightColumn'].every((name) => source.includes(`function ${name}`)),
-  dashboard_after_worker_reservation: source.includes('right_column_creating') && source.includes('scheduler_slot_reserved'),
-  dashboard_opt_in: source.includes('zellijUiModeCreatesDashboard') && source.includes('dashboard_created: false'),
+  slot_state_after_worker_reservation: source.includes('right_column_creating') && source.includes('scheduler_slot_reserved'),
   slot_column_anchor_right: worker.includes('buildZellijSlotColumnAnchorCommand') && worker.includes("'--direction', 'right', '--name', 'SLOTS'"),
   worker_direction_stack: worker.includes("'--direction', directionRequested")
     && worker.includes("const directionRequested: 'right' | 'down' = 'down'")
@@ -22,6 +21,6 @@ const report = {
   headless_overflow: source.includes('worker_headless_overflow') && source.includes('visible_pane_cap'),
   schema_exists: schemaExists
 }
-report.ok = report.exports && report.dashboard_after_worker_reservation && report.dashboard_opt_in && report.slot_column_anchor_right && report.worker_direction_stack && report.headless_overflow && report.schema_exists
-assertGate(report.ok, 'right-column manager must own opt-in dashboard, stacked workers, headless overflow, and state schema', report)
+report.ok = report.exports && report.slot_state_after_worker_reservation && report.slot_column_anchor_right && report.worker_direction_stack && report.headless_overflow && report.schema_exists
+assertGate(report.ok, 'right-column manager must own neutral slot state, stacked workers, headless overflow, and state schema', report)
 emitGate('zellij:right-column-manager', report)

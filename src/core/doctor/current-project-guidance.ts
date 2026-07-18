@@ -21,7 +21,7 @@ import { collectNestedProjectRoots } from './current-project-guidance-nested.js'
 export const CURRENT_PROJECT_GUIDANCE_SCHEMA = 'sks.current-project-guidance.v1' as const;
 
 const AGENTS_MARKER = 'BEGIN Sneakoscope Codex GX MANAGED BLOCK';
-const RETIRED_COMMAND_NAMES = ['team', 'mad-db', 'tmux', 'xai', 'swarm', 'agent', 'ralph', 'db'] as const;
+const RETIRED_COMMAND_NAMES = ['team', 'mad-db', 'tmux', 'xai', 'swarm', 'agent', 'ralph', 'db', 'ui'] as const;
 const RETIRED_DOLLAR_COMMAND_NAMES = ['Agent', 'Team', 'MAD-DB', 'Swarm', 'ShadowClone', 'Kagebunshin', 'Ralph'] as const;
 const LEGACY_UNPREFIXED_DOLLAR_COMMAND_NAMES = Array.from(new Set([
   ...RETIRED_DOLLAR_COMMAND_NAMES,

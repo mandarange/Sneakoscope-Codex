@@ -752,12 +752,6 @@
       "reason": "Naruto active pool sends signals only to tracked worker process or process-group ids during cleanup."
     },
     {
-      "file": "src/core/naruto/naruto-real-worker-runtime.ts",
-      "symbol": "sendProcessGroupSignal",
-      "token": "process.kill",
-      "reason": "Naruto worker cleanup signals only tracked worker and process-group IDs registered by the active worker runtime."
-    },
-    {
       "file": "src/core/naruto/naruto-write-e2e.ts",
       "symbol": "cleanupTempRoot",
       "token": "fs.rm",

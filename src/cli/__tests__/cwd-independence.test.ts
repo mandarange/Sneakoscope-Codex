@@ -11,15 +11,13 @@ const SKS_BIN = path.resolve(__dirname, '..', '..', 'bin', 'sks.js');
 // launchd-spawned callers (the menu bar app) and other non-project invocations run
 // with cwd=/. A read-only command must never assume a project workspace exists
 // under the current directory — the historical bug class here was `mkdir '/.sneakoscope'`
-// crashing the whole command before it could even report a diagnostic. `ui` is
-// excluded: it deliberately stays resident (starts a local HTTP server) rather than
-// terminating, so it doesn't fit a "spawn and expect it to exit" sweep.
+// crashing the whole command before it could even report a diagnostic.
 const READ_ONLY_COMMANDS = (Object.keys(COMMANDS) as CommandName[])
-  .filter((name) => COMMANDS[name].readonly === true && name !== 'ui')
+  .filter((name) => COMMANDS[name].readonly === true)
   .sort();
 
 test('at least the expected number of read-only commands are covered by this sweep', () => {
-  assert.ok(READ_ONLY_COMMANDS.length >= 12, `expected >=12 read-only commands (minus ui), got ${READ_ONLY_COMMANDS.length}: ${READ_ONLY_COMMANDS.join(', ')}`);
+  assert.ok(READ_ONLY_COMMANDS.length >= 12, `expected >=12 read-only commands, got ${READ_ONLY_COMMANDS.length}: ${READ_ONLY_COMMANDS.join(', ')}`);
 });
 
 for (const name of READ_ONLY_COMMANDS) {

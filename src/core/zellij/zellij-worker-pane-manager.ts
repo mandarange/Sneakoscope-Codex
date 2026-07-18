@@ -66,7 +66,6 @@ export interface ZellijWorkerPaneOpenInput {
   visiblePaneCap?: number
   plannedAgentCount?: number
   preallocatedSlotCount?: number
-  dashboardSnapshot?: Record<string, unknown>
   uiMode?: SksZellijUiMode
 }
 
@@ -104,7 +103,7 @@ export interface ZellijWorkerPaneRecord {
   scaling_primitive:
     | 'native_cli_process_with_zellij_slot_renderer'
     | 'native_cli_process_in_zellij_worker_pane'
-    | 'native_cli_process_headless_with_slot_dashboard'
+    | 'native_cli_process_headless_with_slot_column'
   command: string
   create_session: ZellijCommandResult | null
   launch: ZellijCommandResult | null
@@ -307,7 +306,7 @@ export async function openHeadlessByDesignViewportWorker(input: ZellijWorkerPane
     providerContext,
     serviceTier: input.serviceTier || providerContext.service_tier,
     paneKind: 'slot_status_renderer',
-    scalingPrimitive: 'native_cli_process_headless_with_slot_dashboard',
+    scalingPrimitive: 'native_cli_process_headless_with_slot_column',
     workerCommand: '<headless-by-design-viewport-ui>',
     blockers: []
   })
@@ -345,16 +344,9 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
         ...(input.projectRoot ? { projectRoot: input.projectRoot } : {}),
         missionId: input.missionId,
         sessionName: input.sessionName,
-        cwd,
         worker: { slotId: input.slotId, generationIndex: input.generationIndex },
         visiblePaneCap,
-        uiMode: input.uiMode || 'compact-slots',
-        dashboardSnapshot: {
-          ...(input.dashboardSnapshot || {}),
-          mode: String(input.dashboardSnapshot?.mode || 'naruto'),
-          active_workers: Number(input.dashboardSnapshot?.active_workers || visiblePaneCap),
-          visible_panes: Number(input.dashboardSnapshot?.visible_panes || visiblePaneCap)
-        }
+        uiMode: input.uiMode || 'compact-slots'
       })
     : null
   if (rightColumn?.placement === 'headless') {
@@ -381,7 +373,7 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
       status: 'running',
       providerContext,
       serviceTier: input.serviceTier || providerContext.service_tier,
-      scalingPrimitive: 'native_cli_process_headless_with_slot_dashboard',
+      scalingPrimitive: 'native_cli_process_headless_with_slot_column',
       blockers: []
     })
     await writeWorkerPaneArtifact(root, record)
@@ -413,7 +405,6 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
   const freshFocusCandidate = lastVisibleWorkerPaneId
     || slotColumnAnchorPaneId
     || freshState?.right_anchor_pane_id
-    || freshState?.dashboard_pane_id
     || rightColumn?.focusPaneId
     || null
   let anchorLaunch: ZellijCommandResult | null = null

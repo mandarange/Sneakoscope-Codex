@@ -13,7 +13,7 @@ const scenarios = [
   { name: 'active-route', prompt: 'continue current route', budget_p95_ms: 230, state: { mission_id: 'M-active', mode: 'NARUTO', route: 'Naruto', route_command: '$Naruto', phase: 'EXECUTE', implementation_allowed: true } },
   { name: 'stale-code-pack-note', prompt: 'status?', budget_p95_ms: 230, files: { '.sneakoscope/wiki/code-pack.json': JSON.stringify({ generated_at: '2000-01-01T00:00:00.000Z' }) } },
   { name: 'no-question-queue', prompt: 'can I interrupt?', budget_p95_ms: 230, state: { mission_id: 'M-noq', mode: 'RESEARCH', phase: 'RESEARCH_RUNNING_NO_QUESTIONS' } },
-  { name: 'clarification-awaiting', prompt: 'here is the answer', budget_p95_ms: 230, state: { mission_id: 'M-clarify', mode: 'TEAM', phase: 'CLARIFICATION_AWAITING_ANSWERS', stop_gate: 'clarification-gate', ambiguity_gate_required: true, clarification_required: true, implementation_allowed: false } },
+  { name: 'clarification-awaiting', prompt: 'here is the answer', budget_p95_ms: 230, state: { mission_id: 'M-clarify', mode: 'NARUTO', phase: 'CLARIFICATION_AWAITING_ANSWERS', stop_gate: 'clarification-gate', ambiguity_gate_required: true, clarification_required: true, implementation_allowed: false } },
   { name: 'super-search-prompt', prompt: '$Super-Search run "npm release notes"', budget_p95_ms: 420 },
   { name: 'question-shaped-work-request', prompt: 'Can you fix the failing tests?', budget_p95_ms: 420 }
 ]
@@ -106,7 +106,7 @@ function seedRoot(tmp, scenario) {
     if (missionId) {
       const dir = path.join(tmp, '.sneakoscope', 'missions', missionId)
       fs.mkdirSync(dir, { recursive: true })
-      fs.writeFileSync(path.join(dir, 'mission.json'), `${JSON.stringify({ id: missionId, mode: scenario.state.mode || 'TEAM', created_at: new Date().toISOString() }, null, 2)}\n`)
+      fs.writeFileSync(path.join(dir, 'mission.json'), `${JSON.stringify({ id: missionId, mode: scenario.state.mode || 'NARUTO', created_at: new Date().toISOString() }, null, 2)}\n`)
     }
   }
   for (const [rel, text] of Object.entries(scenario.files || {})) {

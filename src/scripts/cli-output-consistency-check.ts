@@ -5,7 +5,6 @@ import { assertGate, emitGate, root } from './sks-1-18-gate-lib.js';
 import { PACKAGE_VERSION } from '../core/version.js';
 
 const executed = [
-  ['ui', '--once'],
   ['review'],
   ['fast-mode', 'status'],
   ['menubar', 'status'],
@@ -18,7 +17,6 @@ const staticFiles = [
   'src/core/commands/basic-cli.ts',
   'src/core/commands/naruto-command.ts',
   'src/core/commands/review-command.ts',
-  'src/core/commands/ui-command.ts',
   'src/core/commands/fast-mode-command.ts',
   'src/core/commands/menubar-command.ts',
   'src/core/commands/uninstall-command.ts'
