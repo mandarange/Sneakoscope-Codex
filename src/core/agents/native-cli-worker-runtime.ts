@@ -182,6 +182,10 @@ class NativeCliWorkerRuntimeRecorder {
       },
       stdio: ['ignore', 'pipe', 'pipe']
     })
+    const exitPromise = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve) => {
+      child.once('close', (code, signal) => resolve({ code, signal }))
+      child.once('error', () => resolve({ code: 1, signal: null }))
+    })
     record.pid = child.pid || null
     record.process_id = child.pid || null
     const loopHandle = await registerLoopWorkerHandle({
@@ -213,10 +217,7 @@ class NativeCliWorkerRuntimeRecorder {
     await this.record(record)
     child.stdout?.pipe(stdout)
     child.stderr?.pipe(stderr)
-    const exit = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve) => {
-      child.on('close', (code, signal) => resolve({ code, signal }))
-      child.on('error', () => resolve({ code: 1, signal: null }))
-    })
+    const exit = await exitPromise
     stdout.end()
     stderr.end()
     if (child.pid) this.active.delete(child.pid)
