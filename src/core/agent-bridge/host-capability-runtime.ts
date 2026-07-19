@@ -1707,10 +1707,15 @@ function hasDirectHostExecutionIntent(text: string): boolean {
   return matchesIntent(text, [
     /\b(?:create|generate|make|render)\s+(?:an?\s+|the\s+)?(?:xlsx|excel workbook|spreadsheet(?: file)?|pdf(?: file| document| report)?|png(?: file| image)?)\b/i,
     /\b(?:deliver|export|save|produce)\b.{0,32}\b(?:xlsx|excel|spreadsheet|workbook|pdf|png|artifact|deliverable)\b/i,
-    /\b(?:run|execute)\b.{0,32}\b(?:read[- ]only\s+)?(?:query|select|cte)\b/i,
+    /\b(?:edit|update|modify|populate|fill|append|import|inspect)\s+(?:the\s+|an?\s+)?(?:existing\s+)?(?:xlsx|excel(?: workbook)?|spreadsheet|workbook)\b(?!\s+(?:parser|reader|writer|module|tests?|specs?|fixtures?|code|implementation)\b)/i,
+    /\b(?:edit|update|modify|populate|fill|append|import)\b.{0,48}\b[A-Za-z0-9._/-]+\.xlsx\b/i,
+    /\b(?:inspect|open)\b.{0,64}\b[A-Za-z0-9._/-]+\.xlsx\b.{0,48}\b(?:and\s+)?(?:edit|update|modify|populate|fill|append|import)\s+(?:it|the\s+(?:file|workbook|spreadsheet))\b/i,
+    /\b(?:run|execute)\b.{0,32}\b(?:read[- ]only\s+)?(?:query|select|cte)\b(?!\s+(?:(?:unit|integration|regression)\s+)?tests?\b)/i,
     /\b(?:query|retrieve|fetch|load)\b.{0,40}\b(?:database|datasource|rows?|records?|results?|(?:customer|sales|database)?\s*data)\b/i,
     /\banaly[sz]e\b.{0,40}\b(?:database\s+data|datasource\s+data|rows?|records?|query\s+results?|customer\s+data|sales\s+data)\b/i,
     /\b(?:test|inspect|review)\b.{0,32}\b(?:pdf|png)\b.{0,24}\band\s+(?:export|deliver|save|render)\s+(?:it|the\s+(?:file|document|image))\b/i,
+    /(?:엑셀|스프레드시트|xlsx)(?!\s*(?:파서|리더|라이터|모듈|코드|테스트|스펙|픽스처)).{0,20}(?:업데이트|수정|편집|입력|채우|반영)/i,
+    /(?:업데이트|수정|편집|입력|채우|반영).{0,20}(?:엑셀|스프레드시트|xlsx)/i,
     /(?:엑셀|스프레드시트|xlsx|pdf|png).{0,24}(?:파일|문서|보고서|산출물).{0,24}(?:생성|작성|만들|렌더|내보내|납품|저장)/i,
     /(?:생성|작성|만들|렌더|내보내|납품|저장).{0,24}(?:엑셀|스프레드시트|xlsx|pdf|png)(?:\s*(?:파일|문서|보고서|산출물))?/i,
     /(?:실행|조회|가져오).{0,24}(?:읽기\s*전용\s*)?(?:쿼리|질의|행|레코드|결과)/i

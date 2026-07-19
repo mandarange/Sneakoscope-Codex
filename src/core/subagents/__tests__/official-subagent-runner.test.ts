@@ -304,7 +304,9 @@ test('host capability requests select the minimum task tools and recognize workb
   for (const prompt of [
     'Analyze the database module data flow and report code-review findings.',
     'Update the spreadsheet parser unit tests.',
-    'Create tests for the PDF renderer.'
+    'Create tests for the PDF renderer.',
+    'Run the database query unit tests.',
+    'Execute the read-only database query integration tests.'
   ]) {
     assert.deepEqual(requestHostCapabilities(prompt), {
       capability_ids: [],
@@ -325,7 +327,10 @@ test('host capability requests select the minimum task tools and recognize workb
   for (const [prompt, capability] of [
     ['Test the database and fetch customer data.', 'host.datasource.query.readonly.v1'],
     ['In this test, analyze database data and report anomalies.', 'host.datasource.query.readonly.v1'],
-    ['Test the PDF and export it.', 'host.document.render.v1']
+    ['Test the PDF and export it.', 'host.document.render.v1'],
+    ['Update the spreadsheet with the latest test results.', 'host.spreadsheet.workbook.v1'],
+    ['Inspect reports/q3.xlsx and update it with integration test results.', 'host.spreadsheet.workbook.v1'],
+    ['최신 테스트 결과로 스프레드시트를 업데이트해줘.', 'host.spreadsheet.workbook.v1']
   ] as const) {
     assert.ok(requestHostCapabilities(prompt).capability_ids.includes(capability), prompt)
   }
