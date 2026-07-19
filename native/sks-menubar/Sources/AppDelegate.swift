@@ -10,6 +10,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         AppIdentity.configure()
+        // Accessory/menubar apps have no system Edit menu by default, so Cmd+C/V
+        // never reaches NSTextField/NSTextView responders without an explicit menu.
+        AppIdentity.installStandardEditMenu()
         processClient = ProcessClient(actionScript: AppRuntime.actionScript, logPath: AppRuntime.lastActionLogPath, projectRoot: AppRuntime.projectRoot)
         operations = OperationCoordinator(directory: AppRuntime.operationDirectory)
         notifications = NotificationCoordinator()

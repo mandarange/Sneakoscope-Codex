@@ -18,18 +18,19 @@ final class ProvidersViewController: NSViewController, ControlCenterPage {
     override func loadView() {
         let setDomain = NativeView.button("Set Domain and Key…", target: self, action: #selector(setDomainAndKey))
         let replace = NativeView.button("Replace Key…", target: self, action: #selector(replaceKey))
+        let testConnection = NativeView.button("Test Connection", target: self, action: #selector(testConnection))
         let useOAuth = NativeView.button("Use ChatGPT OAuth", target: self, action: #selector(useOAuth))
         let useLb = NativeView.button("Use codex-lb", target: self, action: #selector(useCodexLb))
         let fastOn = NativeView.button("Fast Mode On", target: self, action: #selector(fastOn))
         let fastOff = NativeView.button("Fast Mode Off", target: self, action: #selector(fastOff))
-        actionButtons = [setDomain, replace, useOAuth, useLb, fastOn, fastOff]
-        let credentials = NSStackView(views: [setDomain, replace])
+        actionButtons = [setDomain, replace, testConnection, useOAuth, useLb, fastOn, fastOff]
+        let credentials = NSStackView(views: [setDomain, replace, testConnection])
         credentials.orientation = .horizontal; credentials.spacing = 8
         let buttons = NSStackView(views: [useOAuth, useLb, fastOn, fastOff])
         buttons.orientation = .horizontal; buttons.spacing = 8
         view = NativeView.stack([
             NativeView.title("Providers"),
-            NativeView.detail("Set Domain and Key only stores credentials. Use codex-lb activates them with a shared OpenAI routing guard so sk-clb keys never hit api.openai.com. Secrets stay on stdin and out of logs."),
+            NativeView.detail("Set Domain and Key only stores credentials. Domain may be a hostname or full https URL — SKS adds https:// and /backend-api/codex when needed. Use codex-lb activates them with a shared OpenAI routing guard so sk-clb keys never hit api.openai.com. Keys are typed/pasted in clear text here, then sent through stdin and kept out of logs."),
             credentials, providerStatus, fastStatus, buttons
         ])
         refresh()
@@ -104,7 +105,7 @@ final class ProvidersViewController: NSViewController, ControlCenterPage {
             return "Codex LB: active (auth=\(authMode), routing guarded)."
         }
         if selected && !ok {
-            return "Codex LB: selected but not ready. Click Use codex-lb or check Diagnostics."
+            return "Codex LB: selected but not ready. Click Use codex-lb or Test Connection."
         }
         if keyInShared {
             return "Codex LB: credentials in shared auth but provider not selected. Click Use ChatGPT OAuth or Use codex-lb."
@@ -133,7 +134,13 @@ final class ProvidersViewController: NSViewController, ControlCenterPage {
 
     @objc private func setDomainAndKey() {
         guard let window = view.window else { return }
-        AlertFactory.textSheet(window: window, title: "Codex LB Domain", message: "Enter a codex-lb domain or base URL.") { [weak self] host in
+        AlertFactory.textSheet(
+            window: window,
+            title: "Codex LB Domain",
+            message: "Enter a hostname or full base URL. https:// is optional — SKS adds https:// and /backend-api/codex when missing.\nExamples: lb.example.com  or  https://lb.example.com",
+            secure: false,
+            placeholder: "https://lb.example.com"
+        ) { [weak self] host in
             guard let self = self, let host = host else { return }
             self.promptForKey(window: window, args: ["codex-lb", "setup", "--host", host, "--api-key-stdin", "--yes", "--no-default-provider", "--preserve-auth", "--no-keychain", "--no-restart-app", "--json"], kind: "codex-lb-setup", title: "Save Codex LB credentials")
         }
@@ -145,7 +152,13 @@ final class ProvidersViewController: NSViewController, ControlCenterPage {
     }
 
     private func promptForKey(window: NSWindow, args: [String], kind: String, title: String) {
-        AlertFactory.textSheet(window: window, title: "Codex LB API Key", message: "Paste a new key. It is sent through stdin and never shown again.", secure: true) { [weak self] key in
+        AlertFactory.textSheet(
+            window: window,
+            title: "Codex LB API Key",
+            message: "Paste your Codex LB API key (usually starts with sk-clb-). It is shown here so you can verify the paste, then sent through stdin and never logged.",
+            secure: false,
+            placeholder: "sk-clb-…"
+        ) { [weak self] key in
             guard let self = self, let key = key else { return }
             guard !self.busy else {
                 self.providerStatus.stringValue = "Another provider action is already running."
@@ -173,6 +186,40 @@ final class ProvidersViewController: NSViewController, ControlCenterPage {
                 }
                 self.refresh()
             }
+        }
+    }
+
+    @objc private func testConnection() {
+        guard !busy else {
+            providerStatus.stringValue = "Another provider action is already running."
+            return
+        }
+        guard let snapshot = operations.begin(kind: "codex-lb-health", mutationGroup: nil, summary: "Test Codex LB connection") else {
+            providerStatus.stringValue = "Another guarded mutation is already running. Wait or open Diagnostics."
+            return
+        }
+        setBusy(true)
+        providerStatus.stringValue = "Testing Codex LB connection…"
+        _ = operations.update(snapshot, state: .running, stage: "running", progress: nil, summary: "Test Codex LB connection")
+        processClient.run(["codex-lb", "health", "--json"], timeout: NativeView.mutationTimeout) { [weak self] result in
+            guard let self = self else { return }
+            self.setBusy(false)
+            let json = self.json(result.output)
+            let ok = result.code == 0 && (json?["ok"] as? Bool == true)
+            let status = json?["status"] as? String ?? (result.code == 0 ? "ok" : "failed")
+            _ = self.operations.update(
+                snapshot,
+                state: ok ? .succeeded : .failed,
+                stage: "complete",
+                progress: 1,
+                summary: ok ? "Codex LB connection ok" : "Codex LB connection failed"
+            )
+            if ok {
+                self.providerStatus.stringValue = "Connection test passed (\(status))."
+            } else {
+                self.providerStatus.stringValue = "Connection test failed (\(status)) · \(NativeView.redactPreview(result.output))"
+            }
+            self.refresh()
         }
     }
 

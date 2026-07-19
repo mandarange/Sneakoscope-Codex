@@ -270,12 +270,20 @@ test('confirmation and input flows use sheets and never nest modal loops', () =>
   assert.doesNotMatch(swift, /tell application "Terminal"|runInTerminal|runSksInTerminal/);
 });
 
-test('Providers saves Codex LB keys through secure stdin', () => {
+test('Providers saves Codex LB keys through visible paste fields and stdin', () => {
   const providers = fs.readFileSync(path.join(resolvePackagedMenuBarSourceRoot(), 'Sources', 'ProvidersViewController.swift'), 'utf8');
   const processClient = fs.readFileSync(path.join(resolvePackagedMenuBarSourceRoot(), 'Sources', 'ProcessClient.swift'), 'utf8');
+  const alertFactory = fs.readFileSync(path.join(resolvePackagedMenuBarSourceRoot(), 'Sources', 'AlertFactory.swift'), 'utf8');
+  const appIdentity = fs.readFileSync(path.join(resolvePackagedMenuBarSourceRoot(), 'Sources', 'AppIdentity.swift'), 'utf8');
+  const appDelegate = fs.readFileSync(path.join(resolvePackagedMenuBarSourceRoot(), 'Sources', 'AppDelegate.swift'), 'utf8');
   assert.match(providers, /Set Domain and Key…/);
   assert.match(providers, /Replace Key…/);
-  assert.match(providers, /secure: true/);
+  assert.match(providers, /Test Connection/);
+  assert.match(providers, /secure: false/);
+  assert.match(providers, /placeholder: "https:\/\/lb\.example\.com"/);
+  assert.match(providers, /placeholder: "sk-clb-…"/);
+  assert.match(providers, /https:\/\/ is optional/);
+  assert.match(providers, /\["codex-lb", "health", "--json"\]/);
   assert.match(providers, /"--api-key-stdin"/);
   assert.match(providers, /stdin: key \+ "\\n"/);
   assert.doesNotMatch(providers, /"--api-key",\s*key/);
@@ -284,6 +292,13 @@ test('Providers saves Codex LB keys through secure stdin', () => {
   assert.match(providers, /shared OpenAI routing guard/);
   assert.match(providers, /operations\.begin\(kind: kind, mutationGroup: group/);
   assert.match(providers, /ControlCenterPage/);
+  assert.match(alertFactory, /placeholderString = placeholder/);
+  assert.match(alertFactory, /isEditable = true/);
+  assert.match(alertFactory, /isSelectable = true/);
+  assert.match(alertFactory, /makeFirstResponder\(field\)/);
+  assert.match(appIdentity, /installStandardEditMenu/);
+  assert.match(appIdentity, /#selector\(NSText\.paste\(_:\)\)/);
+  assert.match(appDelegate, /installStandardEditMenu\(\)/);
   assert.match(processClient, /arguments\.contains\("--api-key-stdin"\)/);
   assert.match(processClient, /redact\(value, sensitiveValues: sensitiveValues\)/);
   assert.match(processClient, /Child output was suppressed\./);

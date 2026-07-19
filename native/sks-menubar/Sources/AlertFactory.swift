@@ -26,19 +26,38 @@ enum AlertFactory {
         alert.beginSheetModal(for: window) { completion($0 == .alertFirstButtonReturn) }
     }
 
-    static func textSheet(window: NSWindow, title: String, message: String, secure: Bool = false, completion: @escaping (String?) -> Void) {
+    static func textSheet(
+        window: NSWindow,
+        title: String,
+        message: String,
+        secure: Bool = false,
+        placeholder: String? = nil,
+        completion: @escaping (String?) -> Void
+    ) {
         let alert = NSAlert()
         alert.messageText = title
         alert.informativeText = message
         alert.addButton(withTitle: "Apply")
         alert.addButton(withTitle: "Cancel")
-        let field: NSTextField = secure ? NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 360, height: 24)) : NSTextField(frame: NSRect(x: 0, y: 0, width: 360, height: 24))
+        let field: NSTextField = secure
+            ? NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 420, height: 24))
+            : NSTextField(frame: NSRect(x: 0, y: 0, width: 420, height: 24))
+        field.isEditable = true
+        field.isSelectable = true
+        field.placeholderString = placeholder
         field.setAccessibilityLabel(title)
+        if let placeholder, !placeholder.isEmpty {
+            field.setAccessibilityPlaceholderValue(placeholder)
+        }
         alert.accessoryView = field
+        alert.window.initialFirstResponder = field
         AppIdentity.applyIcon(to: alert)
         alert.beginSheetModal(for: window) { response in
             let value = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
             completion(response == .alertFirstButtonReturn && !value.isEmpty ? value : nil)
+        }
+        DispatchQueue.main.async {
+            alert.window.makeFirstResponder(field)
         }
     }
 

@@ -4,6 +4,19 @@
 
 
 
+
+## [7.0.1] - 2026-07-19
+
+### Fixed
+
+- Show Codex LB domain and API-key placeholders in SKS Center, keep the API key visible while pasting, and install a standard Edit menu so Cut/Copy/Paste work under the menubar accessory activation policy.
+- Add a Providers "Test Connection" action that runs `sks codex-lb health --json` and reports the live result.
+- Keep release metadata aligned after an explicit SKS version bump advances the package version.
+
+### Changed
+
+- Patch release for SKS Center Providers input/paste UX.
+
 ## [7.0.0] - 2026-07-19
 
 ### Fixed
