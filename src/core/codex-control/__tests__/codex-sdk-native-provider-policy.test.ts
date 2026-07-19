@@ -102,6 +102,70 @@ test('Codex SDK bridges native auth without inheriting ambient codex-lb or user 
   }
 })
 
+test('Codex SDK uses the preserved ChatGPT OAuth backup while codex-lb API-key auth stays active', async () => {
+  const previousCodexHome = process.env.CODEX_HOME
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-native-provider-oauth-backup-'))
+  const nativeCodexHome = path.join(root, 'native-codex-home')
+  let bridge: Awaited<ReturnType<typeof prepareNativeCodexAuthBridge>> | null = null
+  try {
+    await fsp.mkdir(nativeCodexHome, { mode: 0o700 })
+    const primaryAuthPath = path.join(nativeCodexHome, 'auth.json')
+    const backupAuthPath = path.join(nativeCodexHome, 'auth.chatgpt-backup.json')
+    await fsp.writeFile(primaryAuthPath, `${JSON.stringify({
+      auth_mode: 'apikey',
+      OPENAI_API_KEY: 'codex-lb-key-fixture'
+    })}\n`, { mode: 0o600 })
+    await fsp.writeFile(backupAuthPath, `${JSON.stringify({
+      auth_mode: 'chatgpt',
+      OPENAI_API_KEY: 'backup-host-only-key',
+      tokens: {
+        access_token: 'oauth-access-fixture',
+        refresh_token: 'oauth-refresh-fixture',
+        id_token: 'oauth-id-fixture'
+      }
+    })}\n`, { mode: 0o600 })
+    process.env.CODEX_HOME = nativeCodexHome
+    const env = buildCodexSdkEnv(taskInput(root))
+    bridge = await prepareNativeCodexAuthBridge(env.env)
+
+    assert.equal(bridge.ok, true)
+    assert.equal(bridge.proof.status, 'ready')
+    assert.equal(bridge.proof.source, 'host_codex_home/auth.chatgpt-backup.json')
+    assert.equal(bridge.proof.oauth_backup_used, true)
+    assert.equal(bridge.proof.active_api_key_auth_preserved, true)
+    const tempAuthPath = path.join(String(env.env.CODEX_HOME), 'auth.json')
+    const tempAuth = JSON.parse(await fsp.readFile(tempAuthPath, 'utf8'))
+    assert.equal(tempAuth.auth_mode, 'chatgpt')
+    assert.equal(tempAuth.tokens.access_token, 'oauth-access-fixture')
+    assert.equal('OPENAI_API_KEY' in tempAuth, false)
+
+    tempAuth.tokens = {
+      access_token: 'refreshed-access-fixture',
+      refresh_token: 'refreshed-refresh-fixture',
+      id_token: 'refreshed-id-fixture'
+    }
+    await fsp.writeFile(tempAuthPath, `${JSON.stringify(tempAuth, null, 2)}\n`, { mode: 0o600 })
+    const cleanup = await bridge.cleanup()
+    bridge = null
+
+    assert.equal(cleanup.ok, true)
+    assert.equal(cleanup.outcome, 'refreshed_persisted')
+    const primaryAfter = JSON.parse(await fsp.readFile(primaryAuthPath, 'utf8'))
+    const backupAfter = JSON.parse(await fsp.readFile(backupAuthPath, 'utf8'))
+    assert.equal(primaryAfter.auth_mode, 'apikey')
+    assert.equal(primaryAfter.OPENAI_API_KEY, 'codex-lb-key-fixture')
+    assert.equal('tokens' in primaryAfter, false)
+    assert.equal(backupAfter.auth_mode, 'chatgpt')
+    assert.equal(backupAfter.tokens.access_token, 'refreshed-access-fixture')
+    assert.equal(backupAfter.OPENAI_API_KEY, 'backup-host-only-key')
+  } finally {
+    await bridge?.cleanup()
+    if (previousCodexHome === undefined) delete process.env.CODEX_HOME
+    else process.env.CODEX_HOME = previousCodexHome
+    await fsp.rm(root, { recursive: true, force: true })
+  }
+})
+
 test('Codex SDK blocks API-key and tokenless auth in native-only mode', async () => {
   const previousCodexHome = process.env.CODEX_HOME
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-native-provider-apikey-'))

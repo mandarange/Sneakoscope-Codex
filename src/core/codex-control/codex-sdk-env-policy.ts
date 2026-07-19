@@ -94,7 +94,11 @@ export async function prepareNativeCodexAuthBridge(
 
   const nativeHome = String(process.env.HOME || os.homedir())
   const sourceHome = path.resolve(String(process.env.CODEX_HOME || path.join(nativeHome, '.codex')))
-  const sourceAuthCandidate = path.join(sourceHome, 'auth.json')
+  const primaryAuthCandidate = path.join(sourceHome, 'auth.json')
+  const backupAuthCandidate = path.join(sourceHome, 'auth.chatgpt-backup.json')
+  let sourceAuthCandidate = primaryAuthCandidate
+  let sourceAuthProof = 'host_codex_home/auth.json'
+  let oauthBackupUsed = false
   const originalHome = String(env.HOME || '')
   const originalCodexHome = String(env.CODEX_HOME || '')
   let tempRoot: string | null = null
@@ -178,22 +182,27 @@ export async function prepareNativeCodexAuthBridge(
   }
 
   try {
-    const sourcePathStat = await fsp.lstat(sourceAuthCandidate)
-    if (sourcePathStat.isSymbolicLink()) throw new Error('native_codex_auth_source_symlink_forbidden')
-    if (!sourcePathStat.isFile()) throw new Error('native_codex_auth_source_not_file')
+    let source: Awaited<ReturnType<typeof readNativeCodexOAuthSource>>
+    try {
+      source = await readNativeCodexOAuthSource(primaryAuthCandidate, 'native_codex_auth_source')
+    } catch (error: any) {
+      if (String(error?.message || error) !== 'native_codex_auth_api_key_forbidden') throw error
+      try {
+        source = await readNativeCodexOAuthSource(backupAuthCandidate, 'native_codex_auth_backup')
+        sourceAuthCandidate = backupAuthCandidate
+        sourceAuthProof = 'host_codex_home/auth.chatgpt-backup.json'
+        oauthBackupUsed = true
+      } catch {
+        throw error
+      }
+    }
+    const { pathStat: sourcePathStat, text: sourceText, auth: sourceAuth } = source
     const noFollow = process.platform === 'win32' ? 0 : fsConstants.O_NOFOLLOW
-    let sanitizedAuthText = ''
-    const sourceText = await readValidatedAuthFile(sourceAuthCandidate, {
-      expectedIdentity: { dev: sourcePathStat.dev, ino: sourcePathStat.ino },
-      requirePrivateMode: true,
-      errorPrefix: 'native_codex_auth_source'
-    })
-    const sourceAuth = parseStrictChatGptAuth(sourceText)
     sourceAuthIdentity = { dev: sourcePathStat.dev, ino: sourcePathStat.ino }
     sourceAuthFingerprint = fingerprintText(sourceText)
     originalTokenFingerprint = fingerprintJson(sourceAuth.tokens)
     originalApiKeyFields = Object.fromEntries(Object.entries(sourceAuth).filter(([key]) => isTopLevelApiKeyField(key)))
-    sanitizedAuthText = `${JSON.stringify(removeTopLevelApiKeyFields(sourceAuth), null, 2)}\n`
+    const sanitizedAuthText = `${JSON.stringify(removeTopLevelApiKeyFields(sourceAuth), null, 2)}\n`
 
     const tempBase = await fsp.realpath(os.tmpdir())
     tempRoot = await fsp.mkdtemp(path.join(tempBase, 'sks-native-codex-'))
@@ -252,7 +261,9 @@ export async function prepareNativeCodexAuthBridge(
       status: 'ready',
       method: 'exclusive_copy',
       auth_mode: 'chatgpt_oauth',
-      source: 'host_codex_home/auth.json',
+      source: sourceAuthProof,
+      oauth_backup_used: oauthBackupUsed,
+      active_api_key_auth_preserved: oauthBackupUsed,
       destination: 'private_temp_codex_home/auth.json',
       temp_root_location: 'os_tmpdir',
       temp_root_mode: '0700',
@@ -290,7 +301,7 @@ export async function prepareNativeCodexAuthBridge(
         ok: false,
         status: 'blocked',
         method: null,
-        source: 'host_codex_home/auth.json',
+        source: sourceAuthProof,
         destination: 'private_temp_codex_home/auth.json',
         cleanup_required: Boolean(tempRoot && !cleanupComplete),
         blockers: [blocker]
@@ -305,6 +316,23 @@ export async function prepareNativeCodexAuthBridge(
         }
       }
     }
+  }
+}
+
+async function readNativeCodexOAuthSource(filePath: string, errorPrefix: string) {
+  const pathStat = await fsp.lstat(filePath)
+  if (pathStat.isSymbolicLink()) throw new Error(`${errorPrefix}_symlink_forbidden`)
+  if (!pathStat.isFile()) throw new Error(`${errorPrefix}_not_file`)
+  const text = await readValidatedAuthFile(filePath, {
+    expectedIdentity: { dev: pathStat.dev, ino: pathStat.ino },
+    requirePrivateMode: true,
+    requireSingleLink: true,
+    errorPrefix
+  })
+  return {
+    pathStat,
+    text,
+    auth: parseStrictChatGptAuth(text)
   }
 }
 
