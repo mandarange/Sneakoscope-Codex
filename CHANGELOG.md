@@ -23,6 +23,7 @@
 - Launch Menu Bar child commands from a safe HOME working directory with closed stdin and bounded timeouts so GUI actions cannot hang before producing JSON status.
 - Preserve literal requests when generic wording such as "strong" appears; ordinary local fixes no longer trigger invented pre-inspection decisions, automatic precedent searches, or synthetic failed-before tests, while every write still requires a focused real check or a specific not-applicable reason.
 - Keep release metadata aligned after an explicit SKS version bump advances the package version.
+- Keep an authorized release stamp valid across the deterministic `npm publish` clean rebuild when the complete source, package, dist, gate, canonical-test, and real-check identities are unchanged, while still rejecting actual proof drift.
 
 ## [6.5.1] - 2026-07-17
 

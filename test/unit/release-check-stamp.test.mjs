@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import fsSync from 'node:fs';
 import os from 'node:os';
@@ -12,6 +13,20 @@ import { releaseGateContractSnapshot } from '../../dist/core/release/release-gat
 import { currentDistFreshness } from '../../dist/scripts/lib/ensure-dist-fresh.js';
 
 const pkg = JSON.parse(fsSync.readFileSync('package.json', 'utf8'));
+
+function setProofBeforeCurrentBuild(proof) {
+  const buildStampMtimeMs = fsSync.statSync(currentDistFreshness().stamp_path).mtimeMs;
+  const canonicalTime = new Date(buildStampMtimeMs - 2_000);
+  const summaryTime = new Date(buildStampMtimeMs - 1_000);
+  fsSync.utimesSync(proof.canonicalProofPath, canonicalTime, canonicalTime);
+  fsSync.utimesSync(proof.summaryPath, summaryTime, summaryTime);
+  assert.ok(fsSync.statSync(proof.summaryPath).mtimeMs < buildStampMtimeMs);
+  assert.ok(fsSync.statSync(proof.canonicalProofPath).mtimeMs <= fsSync.statSync(proof.summaryPath).mtimeMs);
+}
+
+function sha256(value) {
+  return crypto.createHash('sha256').update(value).digest('hex');
+}
 
 test('release stamp fixtures stay in a non-selectable managed fixture subtree', (t) => {
   const proof = createReleaseStampProof();
@@ -150,6 +165,71 @@ test('release-check stamp can be written and verified without rerunning release:
   assert.deepEqual([...summary.selected_gate_ids].sort(), expectedGateIds);
   assert.deepEqual([...summary.affected_selection.selected_gate_ids].sort(), expectedGateIds);
   proof.cleanup();
+});
+
+test('release-check stamp survives an unchanged rebuild with a newer build-stamp mtime', (t) => {
+  const proof = createReleaseStampProof();
+  t.after(() => proof.cleanup());
+  const env = { ...process.env, ...proof.env };
+
+  const write = spawnSync(process.execPath, ['dist/scripts/release-check-stamp.js', ...proof.writeArgs], {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+    env
+  });
+  assert.equal(write.status, 0, write.stderr);
+
+  setProofBeforeCurrentBuild(proof);
+
+  const verify = spawnSync(process.execPath, ['dist/scripts/release-check-stamp.js', 'verify'], {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+    env
+  });
+  assert.equal(verify.status, 0, verify.stderr);
+  assert.match(verify.stdout, /Release check stamp verified/);
+});
+
+test('release-check stamp rejects summary authorization drift even when the summary is newer than the build', (t) => {
+  const proof = createReleaseStampProof();
+  t.after(() => proof.cleanup());
+  const env = { ...process.env, ...proof.env };
+
+  const write = spawnSync(process.execPath, ['dist/scripts/release-check-stamp.js', ...proof.writeArgs], {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+    env
+  });
+  assert.equal(write.status, 0, write.stderr);
+
+  const summary = JSON.parse(fsSync.readFileSync(proof.summaryPath, 'utf8'));
+  summary.release_authorization_snapshot.dist_build_sha256 = '0'.repeat(64);
+  const summaryBytes = Buffer.from(`${JSON.stringify(summary, null, 2)}\n`);
+  const summarySha256 = sha256(summaryBytes);
+  fsSync.writeFileSync(proof.summaryPath, summaryBytes);
+
+  const real = JSON.parse(fsSync.readFileSync(proof.realSummaryPath, 'utf8'));
+  real.skip_release_check_proof.latest_summary_sha256 = summarySha256;
+  real.skip_release_check_proof.final_revalidation.latest_summary_sha256 = summarySha256;
+  real.release_check.proof = real.skip_release_check_proof;
+  const realBytes = Buffer.from(`${JSON.stringify(real, null, 2)}\n`);
+  fsSync.writeFileSync(proof.realSummaryPath, realBytes);
+
+  const stamp = JSON.parse(fsSync.readFileSync(proof.stampPath, 'utf8'));
+  stamp.release_gate_proof.summary_sha256 = summarySha256;
+  stamp.release_gate_proof.real_check_sha256 = sha256(realBytes);
+  fsSync.writeFileSync(proof.stampPath, `${JSON.stringify(stamp, null, 2)}\n`);
+  const buildStampMtimeMs = fsSync.statSync(currentDistFreshness().stamp_path).mtimeMs;
+  assert.ok(fsSync.statSync(proof.summaryPath).mtimeMs > buildStampMtimeMs);
+
+  const verify = spawnSync(process.execPath, ['dist/scripts/release-check-stamp.js', 'verify'], {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+    env
+  });
+  assert.equal(verify.status, 2, verify.stdout);
+  assert.match(verify.stderr, /release_gate_proof:summary_authorization_mismatch:dist_build_sha256/);
+  assert.doesNotMatch(verify.stderr, /summary_predates_current_build|summary_hash_mismatch|real_skip_proof_summary_hash_mismatch/);
 });
 
 test('release-check stamp write rejects a missing canonical test proof', () => {

@@ -13,7 +13,8 @@ import {
 } from '../core/release/release-real-contract.js';
 import {
   RELEASE_AUTHORIZATION_SNAPSHOT_KEYS,
-  releaseAuthorizationSnapshot
+  releaseAuthorizationSnapshot,
+  sameReleaseAuthorizationSnapshot
 } from '../core/release/release-authorization-snapshot.js';
 import { releaseGateContractSnapshot } from '../core/release/release-gate-contract.js';
 import { readCurrentCanonicalTestProof } from '../core/release/canonical-test-proof.js';
@@ -409,9 +410,23 @@ function inspectFullReleaseGateProof(proof, currentPayload) {
           blockers.push('fixture_canonical_test_proof_outside_fixture_root');
         }
         const summaryMtimeMs = fileMtime(summaryPath);
-        const buildStampMtimeMs = fileMtime(currentDistFreshness().stamp_path);
+        const distFreshness = currentDistFreshness();
+        const buildStampMtimeMs = fileMtime(distFreshness.stamp_path);
         const canonicalProofMtimeMs = fileMtime(canonicalProofPath);
-        if (!Number.isFinite(summaryMtimeMs) || !Number.isFinite(buildStampMtimeMs) || summaryMtimeMs < buildStampMtimeMs) blockers.push('summary_predates_current_build');
+        for (const key of RELEASE_AUTHORIZATION_SNAPSHOT_KEYS) {
+          if (summary.release_authorization_snapshot?.[key] !== currentPayload[key]) {
+            blockers.push(`summary_authorization_mismatch:${key}`);
+          }
+        }
+        const identicalAuthorizedBuild = distFreshness.ok === true && sameReleaseAuthorizationSnapshot(
+          summary.release_authorization_snapshot,
+          currentPayload
+        );
+        if (!Number.isFinite(summaryMtimeMs) || !Number.isFinite(buildStampMtimeMs)) blockers.push('proof_mtime_missing');
+        // npm publish performs a deterministic clean rebuild after the full
+        // release run. Permit only that content-identical case; any source,
+        // package, dist, or gate identity drift still fails the checks above.
+        if (Number.isFinite(summaryMtimeMs) && Number.isFinite(buildStampMtimeMs) && summaryMtimeMs < buildStampMtimeMs && !identicalAuthorizedBuild) blockers.push('summary_predates_current_build');
         if (!Number.isFinite(summaryMtimeMs) || !Number.isFinite(canonicalProofMtimeMs) || summaryMtimeMs < canonicalProofMtimeMs) blockers.push('summary_predates_current_canonical_test_proof');
         if (summary.run_id !== proof.run_id || summary.selected_gates !== proof.selected_gates || summary.completed !== proof.completed || summary.failed !== proof.failed) blockers.push('summary_identity_mismatch');
         if (sha256([...summary.selected_gate_ids].sort().join('\n')) !== proof.release_preset_gate_ids_sha256) blockers.push('release_preset_gate_ids_hash_mismatch');

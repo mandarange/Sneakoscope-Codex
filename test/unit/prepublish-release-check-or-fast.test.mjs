@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createReleaseStampProof } from '../helpers/release-stamp-proof.mjs';
+import { currentDistFreshness } from '../../dist/scripts/lib/ensure-dist-fresh.js';
 
 const root = process.cwd();
 
@@ -69,4 +70,41 @@ test('prepublish wrapper fails closed when authoritative verification finds drif
   const unchanged = JSON.parse(await fs.readFile(stampPath, 'utf8'));
   assert.equal(unchanged.package_files_sha256, 'stale');
   proof.cleanup();
+});
+
+test('prepublish wrapper accepts an equivalent rebuild and still rejects dist digest drift', async (t) => {
+  const proof = createReleaseStampProof();
+  t.after(() => proof.cleanup());
+  const env = { ...process.env, ...proof.env, npm_command: 'publish' };
+  const write = spawnSync(process.execPath, ['./dist/scripts/release-check-stamp.js', ...proof.writeArgs], {
+    cwd: root,
+    encoding: 'utf8',
+    env
+  });
+  assert.equal(write.status, 0, write.stderr || write.stdout);
+
+  const rebuilt = spawnSync(process.execPath, ['./dist/scripts/prepublish-release-check-or-fast.js', '--prepack-build'], {
+    cwd: root,
+    encoding: 'utf8',
+    env
+  });
+  assert.equal(rebuilt.status, 0, rebuilt.stderr || rebuilt.stdout);
+  assert.match(rebuilt.stdout, /Release check stamp verified/);
+  const summaryStat = await fs.stat(proof.summaryPath);
+  const buildStampStat = await fs.stat(currentDistFreshness().stamp_path);
+  assert.ok(summaryStat.mtimeMs < buildStampStat.mtimeMs);
+
+  const stamp = JSON.parse(await fs.readFile(proof.stampPath, 'utf8'));
+  stamp.dist_build_sha256 = '0'.repeat(64);
+  await fs.writeFile(proof.stampPath, `${JSON.stringify(stamp, null, 2)}\n`);
+
+  const drifted = spawnSync(process.execPath, ['./dist/scripts/prepublish-release-check-or-fast.js'], {
+    cwd: root,
+    encoding: 'utf8',
+    env
+  });
+  assert.notEqual(drifted.status, 0, drifted.stderr || drifted.stdout);
+  assert.match(drifted.stdout, /"ok":true/);
+  assert.match(drifted.stderr, /dist_build_sha256/);
+  assert.match(drifted.stderr, /requires a current authoritative full-release stamp/);
 });
