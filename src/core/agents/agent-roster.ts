@@ -1,7 +1,7 @@
 import { DEFAULT_AGENT_CONCURRENCY, DEFAULT_AGENT_COUNT, MAX_AGENT_COUNT, agentSessionId } from './agent-schema.js'
 import type { AgentRosterEntry } from './agent-schema.js'
 import { defaultAgentPersonas, validatePersonaUniqueness } from './agent-persona.js'
-import { buildAgentEffortPolicy, decideAgentEffort } from './agent-effort-policy.js'
+import { buildAgentEffortPolicy, decideAgentEffort, decideOfficialSubagentModel } from './agent-effort-policy.js'
 
 function resolveMaxAgentCount(value: unknown): number {
   const parsed = Number(value)
@@ -25,7 +25,15 @@ export function normalizeAgentConcurrency(value: unknown, agents: number, maxAge
   return Math.min(Math.floor(parsed), desktopSafeCap)
 }
 
-export function buildAgentRoster(opts: { agents?: unknown; concurrency?: unknown; prompt?: string; readonly?: boolean; maxAgentCount?: number } = {}) {
+export function buildAgentRoster(opts: {
+  agents?: unknown
+  concurrency?: unknown
+  prompt?: string
+  readonly?: boolean
+  maxAgentCount?: number
+  /** Official Naruto / GPT-5.6 four-profile matrix instead of legacy effort inheritance. */
+  officialSubagentPolicy?: boolean
+} = {}) {
   const maxAgentCount = resolveMaxAgentCount(opts.maxAgentCount)
   const agentCount = normalizeAgentCount(opts.agents, DEFAULT_AGENT_COUNT, maxAgentCount)
   const concurrency = normalizeAgentConcurrency(opts.concurrency, agentCount, maxAgentCount)
@@ -33,7 +41,9 @@ export function buildAgentRoster(opts: { agents?: unknown; concurrency?: unknown
   const uniqueness = validatePersonaUniqueness(personas)
   if (!uniqueness.ok) throw new Error('Invalid agent personas: ' + JSON.stringify(uniqueness))
   const roster: AgentRosterEntry[] = personas.map((persona, index) => {
-    const effort = decideAgentEffort({ persona, prompt: opts.prompt || '', agentId: persona.id, readonly: opts.readonly === true || persona.read_only })
+    const effort = opts.officialSubagentPolicy === true
+      ? decideOfficialSubagentModel({ persona, prompt: opts.prompt || '', agentId: persona.id, readonly: opts.readonly === true || persona.read_only })
+      : decideAgentEffort({ persona, prompt: opts.prompt || '', agentId: persona.id, readonly: opts.readonly === true || persona.read_only })
     return {
       id: persona.id,
       session_id: agentSessionId(persona.id, index + 1),

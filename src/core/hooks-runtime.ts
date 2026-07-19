@@ -59,6 +59,8 @@ import {
   refreshSubagentWaveLifecycle,
   subagentCountContractBlockers
 } from './subagents/wave-lifecycle.js';
+import { buildWaveParentGuidance, renderWaveParentGuidance } from './subagents/wave-parent-guidance.js';
+import { managedOfficialSubagentRoleByName } from './managed-assets/managed-assets-manifest.js';
 import { SSOT_GUARD_ARTIFACT, validateSsotGuardArtifact } from './safety/ssot-guard.js';
 const LIGHT_ROUTE_STOP_ARTIFACT = 'light-route-stop.json';
 const CODEX_GIT_ACTION_STOP_ARTIFACT = 'codex-git-action-stop-bypass.json';
@@ -180,15 +182,58 @@ async function hookSubagentStart(root: any, state: any, payload: any = {}, sessi
   const config = await readOfficialSubagentConfig(root);
   const budget = resolveSubagentThreadBudget({ configuredMaxThreads: config.maxThreads });
   const active = subagentRouteContext(state);
+  const routingContext = await sealedSubagentRoutingContext(artifactDir, payload);
   const resourceGuard = [
     `SKS subagent policy: Codex [agents].max_threads is ${budget.maxThreads}.`,
     'Use max_depth=1. Subagents must not spawn subagents.',
     'Do not duplicate an already assigned slice.',
     'Parallel writes require disjoint paths; serialize overlapping paths.',
-    'Close completed agent threads when no longer needed.'
+    'Finish only your assigned slice, return a concise result, then stop so the root parent can close this thread.'
   ].join(' ');
-  const additionalContext = [coreEngineeringDirectiveReferenceText(), resourceGuard, active].filter(Boolean).join('\n\n');
+  const additionalContext = [coreEngineeringDirectiveReferenceText(), resourceGuard, routingContext, active].filter(Boolean).join('\n\n');
   return { continue: true, additionalContext };
+}
+
+async function sealedSubagentRoutingContext(artifactDir: string, payload: any = {}) {
+  const plan: any = await readJson(path.join(artifactDir, 'subagent-plan.json'), null).catch(() => null);
+  if (!plan || plan.workflow !== 'official_codex_subagent') return '';
+  const agentName = extractSubagentAgentName(payload);
+  const agents = plan.agents && typeof plan.agents === 'object' ? plan.agents : {};
+  const planned = agentName && agents[agentName] ? agents[agentName] : null;
+  const role = agentName ? managedOfficialSubagentRoleByName(agentName) : null;
+  const model = String(planned?.routed_model || planned?.model || role?.model || '').trim();
+  const effort = String(planned?.routed_model_reasoning_effort || planned?.model_reasoning_effort || role?.model_reasoning_effort || '').trim();
+  if (!agentName && !model) return '';
+  return [
+    'SKS sealed child routing:',
+    agentName ? `- custom agent: ${agentName}` : null,
+    model ? `- model: ${model}` : null,
+    effort ? `- model_reasoning_effort: ${effort}` : null,
+    '- keep this sealed profile; do not retarget model/effort or spawn nested agents'
+  ].filter(Boolean).join('\n');
+}
+
+function extractSubagentAgentName(payload: any = {}) {
+  const candidates = [
+    payload.agent_type,
+    payload.agentType,
+    payload.subagent_type,
+    payload.subagentType,
+    payload.agent_name,
+    payload.agentName,
+    payload.agent,
+    payload.role,
+    payload.payload?.agent_type,
+    payload.payload?.agentType,
+    payload.payload?.subagent_type,
+    payload.data?.agent_type,
+    payload.input?.agent_type
+  ];
+  for (const value of candidates) {
+    const name = String(value || '').trim();
+    if (name) return name;
+  }
+  return '';
 }
 
 function subagentRouteContext(state: any = {}) {
@@ -526,7 +571,6 @@ function activeGoalOverlayContext(state: any = {}, route: any = null) {
 }
 
 async function hookPreTool(root: any, state: any, payload: any, noQuestion: any, sessionKey: any = null) {
-  void sessionKey;
   if (needsMutationSafetyCheck(payload)) {
     const madSksImmutableDecision = await checkMadSksImmutableModification(root, state, payload);
     if (madSksImmutableDecision.action === 'block') {
@@ -548,7 +592,32 @@ async function hookPreTool(root: any, state: any, payload: any, noQuestion: any,
   const agentRecursionDecision = agentWorkerHookRecursionDecision(state, payload, command);
   if (agentRecursionDecision) return agentRecursionDecision;
   if (noQuestion && looksInteractiveCommand(command)) return { decision: 'block', reason: interactiveCommandReason(command) };
+  const waveGuidance = await parentWaveGuidanceContext(root, state, sessionKey).catch(() => '');
+  if (waveGuidance) {
+    return {
+      continue: true,
+      additionalContext: waveGuidance,
+      systemMessage: visibleHookMessage('pre-tool', 'SKS Naruto wave lifecycle requires root-parent follow-up.')
+    };
+  }
   return { continue: true };
+}
+
+async function parentWaveGuidanceContext(root: any, state: any = {}, sessionKey: any = null) {
+  if (!state?.mission_id && !state?.official_subagent_run_id) return '';
+  const isNaruto = String(state?.mode || '').toUpperCase() === 'NARUTO'
+    || String(state?.route || state?.route_command || '').replace(/^\$/, '').toUpperCase() === 'NARUTO'
+    || state?.subagents_required === true;
+  if (!isNaruto) return '';
+  // Child worker hooks must not receive parent wave spawn instructions.
+  if (agentWorkerHookContext(state, {})) return '';
+  const artifactDir = officialSubagentArtifactDir(root, state, sessionKey);
+  const plan: any = await readJson(path.join(artifactDir, 'subagent-plan.json'), null).catch(() => null);
+  if (!plan || plan.workflow !== 'official_codex_subagent') return '';
+  const lifecycle = plan.wave_lifecycle || null;
+  const guidance = lifecycle?.parent_guidance || buildWaveParentGuidance(lifecycle);
+  if (!guidance?.required) return '';
+  return renderWaveParentGuidance(guidance);
 }
 
 function agentWorkerHookRecursionDecision(state: any = {}, payload: any = {}, command: any = '') {

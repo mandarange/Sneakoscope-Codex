@@ -1,6 +1,6 @@
 import Cocoa
 
-final class UpdatesViewController: NSViewController {
+final class UpdatesViewController: NSViewController, ControlCenterPage {
     private static let controlCenterUpdateEnvironment = ["SKS_UPDATE_DEFER_MENUBAR_RESTART": "1"]
     private let processClient: ProcessClient
     private let operations: OperationCoordinator
@@ -11,6 +11,9 @@ final class UpdatesViewController: NSViewController {
     private let progress = NSProgressIndicator()
     private var receiptTimer: Timer?
     private var activeReceiptId: String?
+    private var checkButton: NSButton!
+    private var reviewButton: NSButton!
+    private var busy = false
 
     init(processClient: ProcessClient, operations: OperationCoordinator, notifications: NotificationCoordinator) {
         self.processClient = processClient; self.operations = operations; self.notifications = notifications
@@ -22,9 +25,9 @@ final class UpdatesViewController: NSViewController {
         progress.isIndeterminate = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         progress.controlSize = .small
         progress.isHidden = true
-        let check = NativeView.button("Check Now", target: self, action: #selector(checkNow))
-        let review = NativeView.button("Review and Update", target: self, action: #selector(reviewAndUpdate))
-        let buttons = NSStackView(views: [check, review, progress])
+        checkButton = NativeView.button("Check Now", target: self, action: #selector(checkNow))
+        reviewButton = NativeView.button("Review and Update", target: self, action: #selector(reviewAndUpdate))
+        let buttons = NSStackView(views: [checkButton, reviewButton, progress])
         buttons.orientation = .horizontal; buttons.spacing = 8
         view = NativeView.stack([
             NativeView.title("Updates"),
@@ -37,17 +40,36 @@ final class UpdatesViewController: NSViewController {
 
     deinit { receiptTimer?.invalidate() }
 
+    func refreshOnAppear() { reloadSnapshot() }
+
     private func loadCached() {
         reloadSnapshot()
+    }
+
+    private func setBusy(_ value: Bool) {
+        busy = value
+        checkButton?.isEnabled = !value
+        reviewButton?.isEnabled = !value
     }
 
     @objc private func checkNow() { run(["update", "status", "--refresh", "--json"], kind: "update-status", group: nil) }
 
     @objc private func reviewAndUpdate() {
         run(["update", "review", "--json"], kind: "update-review", group: nil) { [weak self] result in
-            guard result.code == 0, let self = self, let window = self.view.window else { return }
+            guard let self = self else { return }
+            guard result.code == 0, let window = self.view.window else {
+                self.status.stringValue = "Update review failed. Open Diagnostics for the redacted log."
+                return
+            }
+            let pending = self.operations.latestSnapshot()
             AlertFactory.confirmSheet(window: window, title: "Update SKS?", message: "Review completed. Continue with the verified staged update?", destructive: false) { approved in
-                if approved { self.run(["update", "now", "--json"], kind: "update", group: "update") }
+                if approved {
+                    self.run(["update", "now", "--json"], kind: "update", group: "update")
+                } else if let pending = pending, pending.kind == "update-review" {
+                    _ = self.operations.update(pending, state: .cancelled, stage: "confirmation", progress: 1, summary: "Update review cancelled")
+                    self.status.stringValue = "Update review cancelled. No staged update was applied."
+                    self.reloadSnapshot()
+                }
             }
         }
     }
@@ -62,6 +84,7 @@ final class UpdatesViewController: NSViewController {
             ))
             return
         }
+        setBusy(true)
         progress.isHidden = false
         if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
             progress.isIndeterminate = false
@@ -76,10 +99,12 @@ final class UpdatesViewController: NSViewController {
         _ = operations.update(operation, state: .running, stage: "running", progress: nil, summary: status.stringValue)
         if kind == "update" { startReceiptPolling(for: operation) }
         let environment = kind == "update" ? Self.controlCenterUpdateEnvironment : [:]
-        processClient.run(args, environment: environment) { [weak self] result in
+        let timeout: TimeInterval? = kind == "update" ? nil : NativeView.mutationTimeout
+        processClient.run(args, environment: environment, timeout: timeout) { [weak self] result in
             guard let self = self else { return }
             self.stopReceiptPolling()
             self.progress.stopAnimation(nil); self.progress.isHidden = true
+            self.setBusy(false)
             var authoritativeState: OperationState?
             var restartMenuBarAfterCompletion = false
             if kind == "update" {
@@ -106,6 +131,11 @@ final class UpdatesViewController: NSViewController {
             } else {
                 let state: OperationState = kind == "update-review" && result.code == 0 ? .waitingForConfirmation : result.code == 0 ? .succeeded : .failed
                 _ = self.operations.update(operation, state: state, stage: state == .waitingForConfirmation ? "confirmation" : "complete", progress: 1, summary: state == .waitingForConfirmation ? "Update review is waiting for confirmation" : result.code == 0 ? "Update operation completed" : "Update operation failed")
+                if result.code != 0 {
+                    self.status.stringValue = "\(kind.replacingOccurrences(of: "-", with: " ").capitalized) failed · \(NativeView.redactPreview(result.output))"
+                } else if state == .waitingForConfirmation {
+                    self.status.stringValue = "Review ready. Confirm to continue, or cancel to leave the current install unchanged."
+                }
             }
             let updateOutput = kind == "update-status" ? result.output : nil
             let approvalRequired = kind == "update-review" && result.code == 0
@@ -162,7 +192,7 @@ final class UpdatesViewController: NSViewController {
     }
 
     private func reloadSnapshot() {
-        processClient.run(["update", "status", "--json"]) { [weak self] result in self?.render(statusResult: result) }
+        processClient.run(["update", "status", "--json"], timeout: NativeView.statusTimeout) { [weak self] result in self?.render(statusResult: result) }
     }
 
     private func render(statusResult result: ProcessResult) {

@@ -86,9 +86,12 @@ export async function snapshotCodexAppUiState(root: string = process.cwd(), inpu
   const baseConfigHostOwnedSignals = files
     .filter((file) => !isProfileConfigSnapshotPath(file.path))
     .flatMap((file) => file.signals.filter((signal) => signal.host_owned))
+  const activeCodexLbSelection = hasActiveCodexLbProviderSelectionSignals(baseConfigHostOwnedSignals)
   const fastSelectorLocked = baseConfigHostOwnedSignals.some((signal) => {
     if (signal.key_path === 'features.fast_mode' && signal.value_preview === 'false') return true
     if (signal.key_path.startsWith('user.fast_mode') && /hidden|fixed|disabled|false/i.test(signal.value_preview)) return true
+    // Active contract-valid codex-lb selection is a provider choice, not a Fast UI lock.
+    if (signal.key_path === 'model_provider' && activeCodexLbSelection) return false
     if (SKS_GLOBAL_UI_LOCK_KEYS.has(signal.key_path) && signal.sks_related) return true
     return false
   })
@@ -321,6 +324,18 @@ function hostOwnedFingerprint(snapshot: CodexAppUiStateSnapshot) {
     .filter((signal) => signal.host_owned)
     .map((signal) => `${file.path}:${signal.key_path}:${signal.value_hash}`))
     .sort()
+}
+
+function hasActiveCodexLbProviderSelectionSignals(signals: CodexAppConfigSignal[]) {
+  const selected = signals.some((signal) => signal.key_path === 'model_provider' && signal.value_preview === 'codex-lb')
+  if (!selected) return false
+  const has = (key: string, value: string) => signals.some((signal) => signal.key_path === key && signal.value_preview === value)
+  const present = (key: string) => signals.some((signal) => signal.key_path === key)
+  // env_key / requires_openai_auth previews are redacted by SECRET_KEY_RE ("key"/"auth").
+  return has('model_providers.codex-lb.name', 'openai')
+    && has('model_providers.codex-lb.wire_api', 'responses')
+    && present('model_providers.codex-lb.env_key')
+    && present('model_providers.codex-lb.requires_openai_auth')
 }
 
 function redactValuePreview(keyPath: string, value: string) {

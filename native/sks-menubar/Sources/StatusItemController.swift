@@ -93,6 +93,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     }
 
     private func refreshLocalState() {
+        hydrateFromLatestOperation()
         let update = readJson(path: FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".sneakoscope-global/cache/update-status.json").path)
         let sksUpdate = ((update?["sks"] as? [String: Any])?["update_available"] as? Bool) == true
@@ -101,16 +102,43 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         let signatureBroken = menuBar?["signature_ok"] as? Bool == false
         let resourcesBroken = menuBar?["resources_ok"] as? Bool == false
         let integrityBroken = signatureBroken || resourcesBroken || !FileManager.default.fileExists(atPath: AppRuntime.buildStampPath)
+        let pendingCount = operations.latestSnapshot()?.state == .waitingForConfirmation ? 1 : 0
+        pendingLine.title = "Pending approvals (\(pendingCount))"
         let icon: SKSStatusIcon
         let summary: String
         if integrityBroken { icon = .warning; summary = "Needs attention — Menu Bar integrity" }
         else if operationFailed { icon = .warning; summary = "Needs attention — last operation failed" }
-        else if actionRequired || notificationAuthorizationDenied { icon = .attention; summary = notificationAuthorizationDenied ? "Notifications require attention" : "Input or approval required" }
+        else if actionRequired || notificationAuthorizationDenied || pendingCount > 0 {
+            icon = .attention
+            summary = notificationAuthorizationDenied ? "Notifications require attention" : pendingCount > 0 ? "Input or approval required" : "Input or approval required"
+        }
         else if sksUpdate || codexUpdate { icon = .updateAvailable; summary = "Update available" }
         else if operationRunning { icon = .working; summary = "Working" }
         else { icon = .healthy; summary = "Healthy" }
-        apply(icon)
+        apply(icon, summary: summary)
         statusLine.title = "Status: \(summary)"
+    }
+
+    private func hydrateFromLatestOperation() {
+        guard let latest = operations.latestSnapshot() else { return }
+        switch latest.state {
+        case .queued, .running:
+            operationRunning = true
+            operationFailed = false
+            actionRequired = false
+        case .waitingForConfirmation:
+            operationRunning = false
+            operationFailed = false
+            actionRequired = true
+        case .failed, .terminalUncertain:
+            operationRunning = false
+            operationFailed = true
+            actionRequired = false
+        case .succeeded, .cancelled:
+            operationRunning = false
+            operationFailed = false
+            actionRequired = false
+        }
     }
 
     private func refreshExpiredUpdateStatusIfNeeded() {
@@ -190,7 +218,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         return expiry <= now
     }
 
-    private func apply(_ state: SKSStatusIcon) {
+    private func apply(_ state: SKSStatusIcon, summary: String) {
         let pair: (String, String)
         switch state {
         case .healthy: pair = ("SKSStatusTemplate", "checkmark.circle")
@@ -201,6 +229,9 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         }
         statusItem.button?.image = AppIdentity.statusImage(resource: pair.0, symbol: pair.1)
         statusItem.button?.imagePosition = .imageOnly
+        statusItem.button?.setAccessibilityLabel("SKS status")
+        statusItem.button?.setAccessibilityValue(summary)
+        statusItem.button?.toolTip = "SKS Control Center — \(summary)"
     }
 
     private func run(_ arguments: [String], kind: String, mutationGroup: String?, summary: String, completion: (() -> Void)? = nil) {

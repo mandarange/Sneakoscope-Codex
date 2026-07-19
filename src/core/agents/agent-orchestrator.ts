@@ -21,7 +21,7 @@ import { coordinateAgentPatchMerge, writeAgentMergeCoordinatorArtifacts } from '
 import { buildAgentPatchProof } from './agent-patch-proof.js'
 import { executeAgentPatchConflictRebase } from './agent-patch-conflict-rebase.js'
 import { AgentPatchTransactionJournal } from './agent-patch-transaction-journal.js'
-import { decideAgentWorkerModel } from './agent-effort-policy.js'
+import { decideAgentWorkerModel, decideOfficialSubagentModel } from './agent-effort-policy.js'
 import { writeAgentCleanupReport } from './agent-cleanup.js'
 import { writeAgentTrustReport } from './agent-trust-report.js'
 import { writeAgentWrongnessRecords } from './agent-wrongness.js'
@@ -92,7 +92,21 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
   const selectedCoreSkill = routeSkillSelection ? skillProofRecord(routeSkillSelection) : null
   const namespace = await buildProjectNamespace({ root, missionId })
   await writeProjectNamespaceArtifact(dir, namespace)
-  let roster = buildProvidedAgentRoster(opts.roster, { concurrency: opts.concurrency, readonly: opts.readonly, maxAgentCount, prompt }) || buildAgentRoster({ agents: opts.agents, concurrency: opts.concurrency, prompt, maxAgentCount, ...(opts.readonly === undefined ? {} : { readonly: opts.readonly }) })
+  const officialSubagentPolicy = /(?:^|\$)naruto\b/i.test(String(route || routeCommand || ''))
+  let roster = buildProvidedAgentRoster(opts.roster, {
+    concurrency: opts.concurrency,
+    readonly: opts.readonly,
+    maxAgentCount,
+    prompt,
+    officialSubagentPolicy
+  }) || buildAgentRoster({
+    agents: opts.agents,
+    concurrency: opts.concurrency,
+    prompt,
+    maxAgentCount,
+    officialSubagentPolicy,
+    ...(opts.readonly === undefined ? {} : { readonly: opts.readonly })
+  })
   roster = applyFastModeToRoster(roster, fastModePolicy)
   roster.roster = roster.roster.map((agent: any) => ({
     ...agent,
@@ -1897,11 +1911,48 @@ function buildProvidedAgentRoster(input: any, opts: any = {}) {
   const roster = sourceRows.map((entry: any, index: number) => {
     const readOnly = opts.readonly === true || entry.read_only === true
     const id = String(entry.id || entry.agent_id || `agent_${index + 1}`)
+    const role = String(entry.role || 'verifier')
+    const prompt = opts.prompt || input?.prompt || ''
+    if (opts.officialSubagentPolicy === true) {
+      const official = decideOfficialSubagentModel({
+        persona: {
+          role: role as any,
+          naruto_role: entry.naruto_role || entry.work_kind || role,
+          write_policy: entry.write_policy,
+          read_only: readOnly
+        },
+        prompt,
+        agentId: id,
+        readonly: readOnly
+      })
+      return {
+        id,
+        session_id: String(entry.session_id || `${id}-session-${String(index + 1).padStart(2, '0')}`),
+        persona_id: String(entry.persona_id || id),
+        role,
+        index: index + 1,
+        write_policy: String(entry.write_policy || (readOnly ? 'read-only' : 'route-local-artifact')),
+        status: 'pending',
+        model: official.model,
+        reasoning_effort: official.reasoning_effort,
+        model_reasoning_effort: official.model_reasoning_effort,
+        model_tier: official.model_tier,
+        model_profile: official.model_profile,
+        model_selection_reason: official.model_selection_reason,
+        reasoning_profile: official.reasoning_profile,
+        service_tier: official.service_tier,
+        reasoning_reason: official.reason,
+        dynamic_effort_policy: {
+          escalation_triggers: official.escalation_triggers,
+          downshift_triggers: official.downshift_triggers
+        }
+      }
+    }
     const reasoningEffort = entry.reasoning_effort || entry.model_reasoning_effort || (readOnly ? 'high' : 'medium')
     const modelDecision = decideAgentWorkerModel({
       effort: reasoningEffort,
-      prompt: opts.prompt || input?.prompt || '',
-      role: String(entry.role || 'verifier'),
+      prompt,
+      role,
       agentId: id,
       readonly: readOnly,
       writePolicy: String(entry.write_policy || '')
@@ -1914,7 +1965,7 @@ function buildProvidedAgentRoster(input: any, opts: any = {}) {
       id,
       session_id: String(entry.session_id || `${id}-session-${String(index + 1).padStart(2, '0')}`),
       persona_id: String(entry.persona_id || id),
-      role: String(entry.role || 'verifier'),
+      role,
       index: index + 1,
       write_policy: String(entry.write_policy || (readOnly ? 'read-only' : 'route-local-artifact')),
       status: 'pending',

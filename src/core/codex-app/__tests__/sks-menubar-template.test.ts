@@ -105,6 +105,10 @@ test('Control Center is a non-modal seven-section AppKit sidebar with native acc
   assert.match(swift, /setAccessibilityLabel\("Control Center sections"\)/);
   assert.match(swift, /setAccessibilityLabel\("Effective MCP servers"\)/);
   assert.match(swift, /button\.setAccessibilityLabel\(title\)/);
+  assert.match(swift, /protocol ControlCenterPage: AnyObject/);
+  assert.match(swift, /func refreshOnAppear\(\)/);
+  assert.match(swift, /NativeView\.scrollable\(controller\.view\)/);
+  assert.match(swift, /if !hasPresented/);
   assert.doesNotMatch(swift, /runModal\s*\(/);
   assert.doesNotMatch(swift, /NSAnimationContext|animator\(\)/);
   assert.match(swift, /accessibilityDisplayShouldReduceMotion/);
@@ -230,13 +234,17 @@ test('status item is concise and applies the documented integrity-to-healthy pri
   assert.match(swift, /enum SKSStatusIcon \{\s*case healthy, working, attention, updateAvailable, warning\s*\}/);
   const priority = [
     'if integrityBroken', 'else if operationFailed',
-    'else if actionRequired || notificationAuthorizationDenied',
+    'else if actionRequired || notificationAuthorizationDenied || pendingCount > 0',
     'else if sksUpdate || codexUpdate', 'else if operationRunning',
     'else { icon = .healthy'
   ].map((needle) => swift.indexOf(needle));
   assert.ok(priority.every((index) => index >= 0));
   assert.deepEqual(priority, [...priority].sort((a, b) => a - b));
+  assert.match(swift, /hydrateFromLatestOperation/);
+  assert.match(swift, /setAccessibilityValue\(summary\)/);
+  assert.match(swift, /Pending approvals \(\\\(pendingCount\)\)/);
   assert.match(swift, /NSImage\(systemSymbolName: symbol, accessibilityDescription: "SKS status"\)/);
+  assert.match(swift, /Bundle\.main\.image\(forResource: resource\)/);
   assert.match(swift, /SKSStatusWarningTemplate/);
   assert.doesNotMatch(swift, /SKS [↑⚠⬆⋯]/);
 });
@@ -271,6 +279,11 @@ test('Providers saves Codex LB keys through secure stdin', () => {
   assert.match(providers, /"--api-key-stdin"/);
   assert.match(providers, /stdin: key \+ "\\n"/);
   assert.doesNotMatch(providers, /"--api-key",\s*key/);
+  assert.match(providers, /describeProviderStatus/);
+  assert.match(providers, /routing unsafe/);
+  assert.match(providers, /shared OpenAI routing guard/);
+  assert.match(providers, /operations\.begin\(kind: kind, mutationGroup: group/);
+  assert.match(providers, /ControlCenterPage/);
   assert.match(processClient, /arguments\.contains\("--api-key-stdin"\)/);
   assert.match(processClient, /redact\(value, sensitiveValues: sensitiveValues\)/);
   assert.match(processClient, /Child output was suppressed\./);
@@ -328,9 +341,13 @@ test('UserNotifications declares all categories/actions, redacts public bodies, 
 
 test('Remote and Telegram page uses the dedicated readiness contracts', () => {
   const swift = source();
+  const remote = fs.readFileSync(path.join(resolvePackagedMenuBarSourceRoot(), 'Sources', 'RemoteTelegramViewController.swift'), 'utf8');
   assert.match(swift, /\["remote", "readiness", "--project-root", AppRuntime\.projectRoot, "--json"\]/);
   assert.match(swift, /\["telegram", "status", "--project-root", AppRuntime\.projectRoot, "--json"\]/);
   assert.match(swift, /Official Remote compatibility:/);
+  assert.match(remote, /remoteFailed/);
+  assert.match(remote, /unavailable — probe failed/);
+  assert.match(remote, /ControlCenterPage/);
   assert.doesNotMatch(swift, /Mini App:|mini_app/);
   assert.doesNotMatch(swift, /\["codex-app", "status", "--json"\]/);
 });
@@ -362,6 +379,8 @@ test('MCP Control Center exposes scoped CRUD, health, OAuth, backups, policy edi
   assert.match(swift, /oauthButton\.isEnabled = .*streamable-http/s);
   assert.match(swift, /guard selectedScope\(\) != "effective"/);
   assert.match(swift, /writableScopeForBackup\(\).*global.*project/s);
+  assert.match(swift, /selection\.row\.managedBy != "plugin"/);
+  assert.match(swift, /orderedLines\(args\.string\)/);
   assert.match(swift, /NSEvent\.addLocalMonitorForEvents\(matching: \.keyDown\)/);
   assert.match(swift, /event\.keyCode == 53/);
   assert.doesNotMatch(swift, /KEY=VALUE/);
@@ -374,6 +393,8 @@ test('update UI reads the v3 snapshot and refreshes only through explicit refres
   assert.match(swift, /\["update", "status", "--refresh", "--json"\]/);
   assert.match(swift, /\["update", "review", "--json"\]/);
   assert.match(swift, /\["update", "now", "--json"\]/);
+  assert.match(swift, /Update review cancelled\. No staged update was applied\./);
+  assert.match(swift, /state: \.cancelled/);
   assert.match(swift, /Timer\.scheduledTimer\(withTimeInterval: 30, repeats: true\).*refreshLocalState\(\)/s);
   assert.match(swift, /Rollback guidance and the previous Menu Bar app remain available/);
   assert.match(swift, /No success state was assumed/);

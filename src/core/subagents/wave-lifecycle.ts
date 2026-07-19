@@ -6,6 +6,7 @@ import {
   type SubagentEvidence
 } from './subagent-evidence.js'
 import { MAX_AUTOMATIC_SUBAGENT_COUNT } from './agent-catalog.js'
+import { buildWaveParentGuidance, type WaveParentGuidance } from './wave-parent-guidance.js'
 
 export const SUBAGENT_WAVE_LIFECYCLE_SCHEMA = 'sks.subagent-wave-lifecycle.v1'
 
@@ -113,6 +114,8 @@ export interface SubagentWaveLifecycle {
   remaining_to_start: number
   post_wave_rescan_required: boolean
   recovered_capacity: number
+  next_parent_actions: string[]
+  parent_guidance: WaveParentGuidance
   waves: SubagentWaveRecord[]
   last_event: 'SubagentStart' | 'SubagentStop' | null
   updated_at: string
@@ -143,6 +146,15 @@ export function createSubagentWaveLifecycle(input: {
     remaining_to_start: normalizeCount(input.targetSubagents),
     post_wave_rescan_required: false,
     recovered_capacity: 0,
+    next_parent_actions: [],
+    parent_guidance: buildWaveParentGuidance({
+      remaining_to_start: normalizeCount(input.targetSubagents),
+      open_threads: 0,
+      recovered_capacity: 0,
+      post_wave_rescan_required: false,
+      current_wave: 0,
+      completed_waves: 0
+    }),
     waves: [],
     last_event: null,
     updated_at: nowIso()
@@ -270,6 +282,14 @@ function projectLifecycle(
       && openThreads === 0
       && remainingToStart > 0
   )
+  const parentGuidance = buildWaveParentGuidance({
+    remaining_to_start: remainingToStart,
+    open_threads: openThreads,
+    recovered_capacity: cumulativeSettled,
+    post_wave_rescan_required: postWaveRescanRequired,
+    current_wave: lastWave?.wave || 0,
+    completed_waves: waves.filter((wave) => wave.status === 'settled').length
+  })
 
   return {
     ...previous,
@@ -288,6 +308,8 @@ function projectLifecycle(
     remaining_to_start: remainingToStart,
     post_wave_rescan_required: postWaveRescanRequired,
     recovered_capacity: cumulativeSettled,
+    next_parent_actions: parentGuidance.actions,
+    parent_guidance: parentGuidance,
     waves,
     last_event: input.lastEvent,
     updated_at: nowIso()

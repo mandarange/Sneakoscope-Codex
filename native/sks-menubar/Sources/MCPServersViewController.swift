@@ -65,7 +65,7 @@ private struct McpRow {
 
 private struct McpDraft { let scope: String; let payload: [String: Any] }
 
-final class MCPServersViewController: NSViewController, NSTableViewDataSource, NSTableViewDelegate {
+final class MCPServersViewController: NSViewController, NSTableViewDataSource, NSTableViewDelegate, ControlCenterPage {
     private let processClient: ProcessClient
     private let operations: OperationCoordinator
     private let notifications: NotificationCoordinator
@@ -197,11 +197,18 @@ final class MCPServersViewController: NSViewController, NSTableViewDataSource, N
         }
     }
 
+    func refreshOnAppear() { refresh() }
+
     @objc private func testConnection() {
-        guard let selection = selected(), isWritable(selection.row) else { return }
+        guard let selection = selected(), selection.row.managedBy != "plugin" else { return }
         status.stringValue = "Testing \(selection.row.name) with bounded initialize and tools/list…"
-        processClient.run(["mcp", "config", "test", selection.row.name, "--scope", selection.row.scope] + scopeContext(selection.row.scope, mutation: false) + ["--json"]) { [weak self] result in
-            guard let self = self, let json = self.json(result.output) else { self?.status.stringValue = "Connection test failed without a readable receipt."; return }
+        processClient.run(["mcp", "config", "test", selection.row.name, "--scope", selection.row.scope] + scopeContext(selection.row.scope, mutation: false) + ["--json"], timeout: NativeView.mutationTimeout) { [weak self] result in
+            guard let self = self, let json = self.json(result.output) else {
+                self?.status.stringValue = result.code == 0
+                    ? "Connection test failed without a readable receipt."
+                    : "Connection test failed · \(NativeView.redactPreview(result.output))"
+                return
+            }
             let state = json["status"] as? String ?? "unknown"
             let latency = json["latency_ms"] as? Int
             let tools = json["tool_count"] as? Int
@@ -363,6 +370,8 @@ private final class McpEditorSheet: NSObject {
 
     private func build() {
         panel.title = row == nil ? "Add MCP Server" : "Edit \(row!.name)"
+        panel.styleMask = [.titled, .resizable]
+        panel.minSize = NSSize(width: 560, height: 480)
         let grid = NSGridView(views: [
             pair("Scope", scope), pair("Transport", transport), pair("Name", name), pair("Executable", command), pair("Remote URL", url),
             pair("Arguments — one per line", area(args, "Command arguments")), pair("Working directory", cwd), pair("Environment names — no values", area(env, "Environment-variable names")),
@@ -399,20 +408,52 @@ private final class McpEditorSheet: NSObject {
         guard (payload["startup_timeout_sec"] as? Int).map({ 1...30 ~= $0 }) == true, (payload["tool_timeout_sec"] as? Int).map({ 1...3600 ~= $0 }) == true else { return nil }
         if selectedTransport == "stdio" {
             let executable = command.stringValue.trimmingCharacters(in: .whitespacesAndNewlines); if row == nil || row?.transport != selectedTransport { guard !executable.isEmpty else { return nil } }; if !executable.isEmpty { payload["command"] = executable }
-            let argv = lines(args.string); if argv.contains(where: { $0.contains("=") || $0.lowercased().contains("token") || $0.lowercased().contains("secret") }) { return nil }; if !argv.isEmpty { payload["args"] = argv }
-            let names = lines(env.string); guard names.allSatisfy({ $0.range(of: #"^[A-Za-z_][A-Za-z0-9_]*$"#, options: .regularExpression) != nil }) else { return nil }; if !names.isEmpty { payload["env_vars"] = names }
+            let argv = orderedLines(args.string); if argv.contains(where: { $0.contains("=") || $0.lowercased().contains("token") || $0.lowercased().contains("secret") }) { return nil }; if !argv.isEmpty { payload["args"] = argv }
+            let names = uniqueSortedLines(env.string); guard names.allSatisfy({ $0.range(of: #"^[A-Za-z_][A-Za-z0-9_]*$"#, options: .regularExpression) != nil }) else { return nil }; if !names.isEmpty { payload["env_vars"] = names }
             let directory = cwd.stringValue.trimmingCharacters(in: .whitespacesAndNewlines); if !directory.isEmpty { guard directory.hasPrefix("/") else { return nil }; payload["cwd"] = directory }
             if remote.state == .on { payload["experimental_environment"] = "remote" }
         } else {
             let endpoint = url.stringValue.trimmingCharacters(in: .whitespacesAndNewlines); if row == nil || row?.transport != selectedTransport { guard !endpoint.isEmpty else { return nil } }; if !endpoint.isEmpty { guard let parsed = URL(string: endpoint), ["http", "https"].contains(parsed.scheme?.lowercased() ?? ""), parsed.user == nil, parsed.password == nil else { return nil }; payload["url"] = endpoint }
             let envName = bearer.stringValue.trimmingCharacters(in: .whitespacesAndNewlines); if !envName.isEmpty { guard envName.range(of: #"^[A-Za-z_][A-Za-z0-9_]*$"#, options: .regularExpression) != nil else { return nil }; payload["bearer_token_env_var"] = envName }
         }
-        let allow = lines(enabledTools.string); let deny = lines(disabledTools.string); guard Set(allow).isDisjoint(with: Set(deny)) else { return nil }; if !allow.isEmpty { payload["enabled_tools"] = allow }; if !deny.isEmpty { payload["disabled_tools"] = deny }
+        let allow = uniqueSortedLines(enabledTools.string); let deny = uniqueSortedLines(disabledTools.string); guard Set(allow).isDisjoint(with: Set(deny)) else { return nil }; if !allow.isEmpty { payload["enabled_tools"] = allow }; if !deny.isEmpty { payload["disabled_tools"] = deny }
         return McpDraft(scope: scope.titleOfSelectedItem?.lowercased() ?? "global", payload: payload)
     }
 
-    private func validationMessage() -> String { "Check the server name, selected connection field, timeout ranges, environment names, tool lists, and secret-free arguments before review." }
+    private func validationMessage() -> String {
+        let server = name.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if server.range(of: #"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"#, options: .regularExpression) == nil {
+            return "Fix the server name: use 1–64 letters, numbers, underscores, or hyphens."
+        }
+        if transport.indexOfSelectedItem == 0 {
+            let executable = command.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            if (row == nil || row?.transport != "stdio") && executable.isEmpty { return "Executable is required for a local command server." }
+            if orderedLines(args.string).contains(where: { $0.contains("=") || $0.lowercased().contains("token") || $0.lowercased().contains("secret") }) {
+                return "Arguments must stay secret-free. Remove token/secret values and inline assignments."
+            }
+            if !uniqueSortedLines(env.string).allSatisfy({ $0.range(of: #"^[A-Za-z_][A-Za-z0-9_]*$"#, options: .regularExpression) != nil }) {
+                return "Environment names must be bare variable names with no values."
+            }
+        } else {
+            let endpoint = url.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            if (row == nil || row?.transport != "streamable-http") && endpoint.isEmpty { return "Remote URL is required for a remote MCP server." }
+        }
+        let startupSec = Int(startup.stringValue) ?? 0
+        let toolSec = Int(tool.stringValue) ?? 0
+        if !(1...30 ~= startupSec) { return "Startup timeout must be between 1 and 30 seconds." }
+        if !(1...3600 ~= toolSec) { return "Tool timeout must be between 1 and 3600 seconds." }
+        let allow = uniqueSortedLines(enabledTools.string); let deny = uniqueSortedLines(disabledTools.string)
+        if !Set(allow).isDisjoint(with: Set(deny)) { return "Enabled and disabled tool lists must not overlap." }
+        return "Check the selected connection field, timeout ranges, environment names, tool lists, and secret-free arguments before review."
+    }
     private func pair(_ label: String, _ control: NSView) -> [NSView] { [NSTextField(labelWithString: label), control] }
     private func area(_ text: NSTextView, _ label: String) -> NSScrollView { text.isRichText = false; text.font = NSFont.systemFont(ofSize: 12); text.setAccessibilityLabel(label); let scroll = NSScrollView(); scroll.documentView = text; scroll.hasVerticalScroller = true; scroll.borderType = .bezelBorder; scroll.heightAnchor.constraint(equalToConstant: 52).isActive = true; return scroll }
-    private func lines(_ value: String) -> [String] { Array(Set(value.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty })).sorted() }
+    private func uniqueSortedLines(_ value: String) -> [String] { Array(Set(rawLines(value))).sorted() }
+    private func orderedLines(_ value: String) -> [String] {
+        var seen = Set<String>()
+        return rawLines(value).filter { seen.insert($0).inserted }
+    }
+    private func rawLines(_ value: String) -> [String] {
+        value.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+    }
 }

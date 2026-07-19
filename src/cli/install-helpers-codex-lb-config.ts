@@ -36,6 +36,58 @@ export function upsertCodexLbConfig(text: any = '', baseUrl: any, selectDefault 
   return `${next.trim()}\n`;
 }
 
+export type CodexLbSharedOpenAiRoutingState = {
+  status: 'missing' | 'matched' | 'conflict';
+  expected_base_url: string;
+  configured_base_url: string | null;
+  managed: boolean;
+};
+
+const CODEX_LB_SHARED_OPENAI_ROUTING_MARKER = '# sks-codex-lb-managed-openai-base-url';
+
+// Codex App can retain a per-thread `model_provider = "openai"` selection even
+// after the global provider changes. While SKS places the codex-lb key in the
+// shared OpenAI auth store, pin the built-in provider to the same LB endpoint so
+// that stale threads cannot send that key to api.openai.com. A different existing
+// override is user-owned and must never be clobbered.
+export function codexLbSharedOpenAiRoutingState(text: any = '', baseUrl: any = ''): CodexLbSharedOpenAiRoutingState {
+  const expectedBaseUrl = normalizeCodexLbBaseUrl(baseUrl);
+  const configuredBaseUrl = topLevelTomlString(text, 'openai_base_url');
+  return {
+    status: !configuredBaseUrl ? 'missing' : configuredBaseUrl === expectedBaseUrl ? 'matched' : 'conflict',
+    expected_base_url: expectedBaseUrl,
+    configured_base_url: configuredBaseUrl || null,
+    managed: topLevelHasLine(text, CODEX_LB_SHARED_OPENAI_ROUTING_MARKER)
+  };
+}
+
+export function upsertCodexLbSharedOpenAiRouting(text: any = '', baseUrl: any = '') {
+  const state = codexLbSharedOpenAiRoutingState(text, baseUrl);
+  if (!state.expected_base_url) return { ...state, routing_status: state.status, ok: false, status: 'missing_base_url', text: String(text || '') };
+  if (state.status === 'conflict') return { ...state, routing_status: state.status, ok: false, status: 'conflicting_user_openai_base_url', text: String(text || '') };
+  if (state.status === 'matched' && state.managed) {
+    return { ...state, routing_status: state.status, ok: true, status: 'present', text: String(text || '') };
+  }
+  // Matched-but-unmanaged means the URL already points at codex-lb. Claim the SKS
+  // marker so release/unselect can remove only this activation pin later.
+  const withValue = state.status === 'matched'
+    ? String(text || '')
+    : upsertTopLevelTomlString(text, 'openai_base_url', state.expected_base_url);
+  const next = addTopLevelMarkerBeforeKey(withValue, 'openai_base_url', CODEX_LB_SHARED_OPENAI_ROUTING_MARKER);
+  return { ...state, routing_status: state.status, ok: true, status: 'added', text: `${next.trim()}\n`, managed: true };
+}
+
+export function removeCodexLbSharedOpenAiRouting(text: any = '', baseUrl: any = '') {
+  const state = codexLbSharedOpenAiRoutingState(text, baseUrl);
+  if (state.status !== 'matched' || !state.managed) return { ...state, changed: false, text: String(text || '') };
+  const withoutValue = removeTopLevelTomlKeyIfValue(text, 'openai_base_url', state.expected_base_url);
+  return {
+    ...state,
+    changed: true,
+    text: removeTopLevelLine(withoutValue, CODEX_LB_SHARED_OPENAI_ROUTING_MARKER)
+  };
+}
+
 export function upsertCodexAppGlmConfig(text: any = '') {
   let next = String(text || '');
   const providerBlock = [
@@ -189,4 +241,33 @@ export async function sha256Text(value: any = '') {
 
 function escapeRegExp(value: any) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function topLevelTomlString(text: any = '', key: string) {
+  const topLevel = String(text || '').split(/\n\s*\[/)[0] || '';
+  return topLevel.match(new RegExp(`(^|\\n)\\s*${escapeRegExp(key)}\\s*=\\s*"([^"]+)"\\s*(?:#.*)?(?=\\n|$)`))?.[2] || '';
+}
+
+function topLevelHasLine(text: any = '', line: string) {
+  const topLevel = String(text || '').split(/\n\s*\[/)[0] || '';
+  return topLevel.split(/\r?\n/).some((candidate) => candidate.trim() === line);
+}
+
+function addTopLevelMarkerBeforeKey(text: any = '', key: string, marker: string) {
+  const lines = String(text || '').split('\n');
+  const firstTable = lines.findIndex((line) => /^\s*\[/.test(line));
+  const end = firstTable === -1 ? lines.length : firstTable;
+  const keyIndex = lines.slice(0, end).findIndex((line) => new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`).test(line));
+  if (keyIndex >= 0 && !lines.slice(0, end).some((line) => line.trim() === marker)) lines.splice(keyIndex, 0, marker);
+  return lines.join('\n');
+}
+
+function removeTopLevelLine(text: any = '', target: string) {
+  const lines = String(text || '').split('\n');
+  const firstTable = lines.findIndex((line) => /^\s*\[/.test(line));
+  const end = firstTable === -1 ? lines.length : firstTable;
+  for (let index = end - 1; index >= 0; index -= 1) {
+    if (lines[index]?.trim() === target) lines.splice(index, 1);
+  }
+  return lines.join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n');
 }

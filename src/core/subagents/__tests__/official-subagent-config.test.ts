@@ -445,7 +445,7 @@ test('official config reader resolves project over global and preserves inherite
   assert.deepEqual(config.warnings, [])
 })
 
-test('max_depth above one is preserved and reported as a warning', async () => {
+test('max_depth above one is coerced to one and reported as a warning', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-official-config-depth-warning-'))
   const codexHome = path.join(root, 'home', '.codex')
   await fs.mkdir(path.join(root, '.codex'), { recursive: true })
@@ -456,8 +456,9 @@ test('max_depth above one is preserved and reported as a warning', async () => {
   const merged = mergeOfficialSubagentConfig(original)
   assert.equal((parse(merged) as Record<string, any>).agents.max_depth, 4)
   const config = await readOfficialSubagentConfig(root, { codexHome })
-  assert.equal(config.maxDepth, 4)
-  assert.deepEqual(config.warnings, ['official_subagent_max_depth_above_one_preserved:4:project'])
+  assert.equal(config.maxDepth, 1)
+  assert.equal(config.sources.maxDepth, 'default')
+  assert.deepEqual(config.warnings, ['official_subagent_max_depth_coerced_to_one:4:project'])
 })
 
 test('project setup migrates marker-proven legacy max_threads without requiring a current manifest', async () => {
@@ -494,7 +495,7 @@ test('doctor repair migrates an SKS-owned legacy thread value and preserves max_
   assert.equal(parsed.agents.max_depth, 4)
   assert.equal(parsed.agents.job_max_runtime_seconds, 1200)
   assert.equal(parsed.agents.interrupt_message, true)
-  assert.ok(result.config_file_repair.warnings.includes('official_subagent_max_depth_above_one_preserved:4:project'))
+  assert.ok(result.config_file_repair.warnings.includes('official_subagent_max_depth_coerced_to_one:4:project'))
   assert.deepEqual(
     (await fs.readdir(path.join(root, '.codex', 'agents'))).sort(),
     MANAGED_OFFICIAL_SUBAGENT_ROLES.map((role) => role.filename).sort()

@@ -122,11 +122,12 @@ Subagent rules:
 - if paths overlap, run those slices serially
 - reject duplicate slice fingerprints and homogeneous clone work; diversity may come from roles, disjoint shards, or different tool surfaces
 - security, database, release, authorization, and irreversible-effect checks are protected strata; aggregate speed or accuracy never offsets a failed protected gate
-- after each settled wave: collect results, close completed threads, refresh evidence and the wave lifecycle ledger, rescan the ready DAG, then launch the next defensible direct-child wave when useful work remains
+- after each settled wave: collect results, close completed threads, refresh evidence and the wave lifecycle ledger, read \`wave_lifecycle.next_parent_actions\` / \`parent_guidance\`, rescan the ready DAG, then launch the next defensible direct-child wave when \`remaining_to_start > 0\`
 - recovered thread capacity is reusable by later root-owned waves; completed child threads do not permanently consume the mission fan-out budget
+- when PreTool/UserPrompt guidance says \`spawn_next_direct_child_wave_upto:N\`, spawn that next wave immediately with sealed custom-agent model/effort profiles; do not wait for another user message
 - automatic targets may resize between waves when the ready DAG changes, but update plan/evidence before spawning; explicit operator and route-owned counts remain exact
 - wait for every final planned subagent before integrating
-- close completed threads after collecting results
+- close completed threads after collecting results so capacity returns to the root parent
 ${parentDecompositionRequired ? `- decomposition status: parent_required
 - before spawning, decompose the goal into independent, non-overlapping slices
 - do not invent write scopes merely to reach the requested count

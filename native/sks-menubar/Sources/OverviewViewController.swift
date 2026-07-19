@@ -1,6 +1,14 @@
 import Cocoa
 
+/// Pages that should reload local status whenever the Control Center section becomes visible.
+protocol ControlCenterPage: AnyObject {
+    func refreshOnAppear()
+}
+
 enum NativeView {
+    static let statusTimeout: TimeInterval = 8
+    static let mutationTimeout: TimeInterval = 90
+
     static func title(_ value: String) -> NSTextField {
         let field = NSTextField(labelWithString: value)
         field.font = NSFont.systemFont(ofSize: 18, weight: .semibold)
@@ -28,6 +36,35 @@ enum NativeView {
         stack.spacing = 12
         stack.edgeInsets = NSEdgeInsets(top: 22, left: 24, bottom: 22, right: 24)
         return stack
+    }
+
+    static func scrollable(_ document: NSView) -> NSScrollView {
+        let scroll = NSScrollView()
+        scroll.drawsBackground = false
+        scroll.hasVerticalScroller = true
+        scroll.hasHorizontalScroller = false
+        scroll.borderType = .noBorder
+        scroll.autohidesScrollers = true
+        scroll.translatesAutoresizingMaskIntoConstraints = false
+        document.translatesAutoresizingMaskIntoConstraints = false
+        scroll.documentView = document
+        if let content = scroll.contentView.documentView {
+            NSLayoutConstraint.activate([
+                content.leadingAnchor.constraint(equalTo: scroll.contentView.leadingAnchor),
+                content.trailingAnchor.constraint(equalTo: scroll.contentView.trailingAnchor),
+                content.topAnchor.constraint(equalTo: scroll.contentView.topAnchor)
+            ])
+        }
+        return scroll
+    }
+
+    static func redactPreview(_ output: String, limit: Int = 160) -> String {
+        let compact = output
+            .replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !compact.isEmpty else { return "No public detail was returned." }
+        if compact.count <= limit { return compact }
+        return String(compact.prefix(limit)) + "…"
     }
 }
 
@@ -182,12 +219,14 @@ enum OverviewSummary {
     }
 }
 
-final class OverviewViewController: NSViewController {
+final class OverviewViewController: NSViewController, ControlCenterPage {
     private let processClient: ProcessClient
     private let operations: OperationCoordinator
     private let status = NativeView.detail("Loading local SKS status…")
     private let notificationInbox = NativeView.detail("Notifications: checking authorization…")
     private var generation = 0
+    private var doctorButton: NSButton!
+    private var refreshButton: NSButton!
 
     init(processClient: ProcessClient, operations: OperationCoordinator) {
         self.processClient = processClient
@@ -197,9 +236,9 @@ final class OverviewViewController: NSViewController {
     required init?(coder: NSCoder) { nil }
 
     override func loadView() {
-        let runDoctor = NativeView.button("Run Doctor", target: self, action: #selector(doctor))
-        let refresh = NativeView.button("Refresh", target: self, action: #selector(refreshStatus))
-        let buttons = NSStackView(views: [runDoctor, refresh])
+        doctorButton = NativeView.button("Run Doctor", target: self, action: #selector(doctor))
+        refreshButton = NativeView.button("Refresh", target: self, action: #selector(refreshStatus))
+        let buttons = NSStackView(views: [doctorButton, refreshButton])
         buttons.orientation = .horizontal
         buttons.spacing = 8
         view = NativeView.stack([
@@ -209,6 +248,10 @@ final class OverviewViewController: NSViewController {
             notificationInbox,
             buttons
         ])
+        loadStatus(forceUpdateRefresh: false)
+    }
+
+    func refreshOnAppear() {
         loadStatus(forceUpdateRefresh: false)
     }
 
@@ -225,6 +268,7 @@ final class OverviewViewController: NSViewController {
     private func loadStatus(forceUpdateRefresh: Bool) {
         generation += 1
         let requestGeneration = generation
+        refreshButton?.isEnabled = false
         status.stringValue = "Checking versions, MCP servers, Telegram Hub, remote fleet, and operations…"
         var update: [String: Any]?
         var mcp: [String: Any]?
@@ -234,7 +278,7 @@ final class OverviewViewController: NSViewController {
         var updateArguments = ["update", "status"]
         if forceUpdateRefresh { updateArguments.append("--refresh") }
         updateArguments.append("--json")
-        processClient.run(updateArguments) { [weak self] result in
+        processClient.run(updateArguments, timeout: NativeView.statusTimeout) { [weak self] result in
             update = result.code == 0 ? self?.json(result.output) : nil
             group.leave()
         }
@@ -247,24 +291,33 @@ final class OverviewViewController: NSViewController {
             group.leave()
         }
         group.enter()
-        processClient.run(["telegram", "status", "--project-root", AppRuntime.projectRoot, "--json"]) { [weak self] result in
+        processClient.run(["telegram", "status", "--project-root", AppRuntime.projectRoot, "--json"], timeout: NativeView.statusTimeout) { [weak self] result in
             telegram = result.code == 0 ? self?.json(result.output) : nil
             group.leave()
         }
         group.notify(queue: .main) { [weak self] in
             guard let self = self, self.generation == requestGeneration else { return }
+            self.refreshButton?.isEnabled = true
             self.status.stringValue = self.summary(update: update, mcp: mcp, telegram: telegram)
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
             guard let self = self, self.generation == requestGeneration else { return }
+            self.refreshButton?.isEnabled = true
             self.status.stringValue = self.summary(update: update, mcp: mcp, telegram: telegram)
         }
     }
 
     @objc private func doctor() {
+        doctorButton?.isEnabled = false
         status.stringValue = "Doctor is running…"
-        processClient.run(["doctor", "--json"]) { [weak self] result in
-            self?.status.stringValue = result.code == 0 ? "Doctor completed. No blocking issue was reported." : "Doctor found an issue. Open Diagnostics or the operation log."
+        processClient.run(["doctor", "--json"], timeout: NativeView.mutationTimeout) { [weak self] result in
+            guard let self = self else { return }
+            self.doctorButton?.isEnabled = true
+            if result.code == 0 {
+                self.status.stringValue = "Doctor completed. No blocking issue was reported."
+            } else {
+                self.status.stringValue = "Doctor found an issue. Open Diagnostics · \(NativeView.redactPreview(result.output))"
+            }
         }
     }
 

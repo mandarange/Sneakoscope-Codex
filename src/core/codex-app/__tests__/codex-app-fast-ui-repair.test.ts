@@ -20,7 +20,7 @@ async function fixture(t: TestContext, config: string) {
   return { root, codexHome, configPath }
 }
 
-test('Codex App Fast UI repair removes blank-separated SKS model locks but preserves the Fast service tier', async (t) => {
+test('Codex App Fast UI repair removes blank-separated SKS model locks but preserves active codex-lb selection', async (t) => {
   const input = [
     'suppress_unstable_features_warning = true',
     '# SKS moved machine-local Codex config from .codex/config.toml',
@@ -44,8 +44,22 @@ test('Codex App Fast UI repair removes blank-separated SKS model locks but prese
   const { root, codexHome, configPath } = await fixture(t, input)
   const oldBackup = `${configPath}.sks-old-fixture.bak`
   await fs.writeFile(oldBackup, input, { mode: 0o644 })
+  await fs.writeFile(path.join(codexHome, 'sks-codex-lb.env'), [
+    "export CODEX_LB_BASE_URL='https://lb.example.test/backend-api/codex'",
+    "export CODEX_LB_API_KEY='fixture-secret'",
+    ''
+  ].join('\n'), { mode: 0o600 })
 
-  const repaired = await repairCodexAppFastUi(root, { codexHome, apply: true })
+  const repaired = await repairCodexAppFastUi(root, {
+    codexHome,
+    apply: true,
+    env: { HOME: path.dirname(codexHome) },
+    codexLbModelCatalog: {
+      ok: true,
+      models: ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'],
+      blockers: []
+    }
+  } as any)
   const after = await fs.readFile(configPath, 'utf8')
   const globalAction = repaired.actions.find((action) => action.scope === 'codex_home')
 
@@ -53,8 +67,8 @@ test('Codex App Fast UI repair removes blank-separated SKS model locks but prese
   assert.equal(repaired.fast_selector, 'repaired')
   assert.equal(repaired.before_fast_selector, 'maybe_hidden_or_locked')
   assert.equal(repaired.after_fast_selector, 'available')
-  assert.deepEqual(globalAction?.removed_keys, ['model_provider', 'model', 'model_reasoning_effort'])
-  assert.doesNotMatch(after, /^model_provider =/m)
+  assert.deepEqual(globalAction?.removed_keys, ['model', 'model_reasoning_effort'])
+  assert.match(after, /^model_provider = "codex-lb"$/m)
   assert.match(after, /^service_tier = "fast"$/m)
   assert.doesNotMatch(after, /^model =/m)
   assert.doesNotMatch(after, /^model_reasoning_effort =/m)
@@ -66,8 +80,43 @@ test('Codex App Fast UI repair removes blank-separated SKS model locks but prese
   assert.equal((await fs.stat(String(globalAction?.backup_path))).mode & 0o777, 0o600)
   assert.ok(repaired.permissions_hardened >= 2)
 
-  const second = await repairCodexAppFastUi(root, { codexHome, apply: true })
+  const second = await repairCodexAppFastUi(root, {
+    codexHome,
+    apply: true,
+    env: { HOME: path.dirname(codexHome) },
+    codexLbModelCatalog: {
+      ok: true,
+      models: ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'],
+      blockers: []
+    }
+  } as any)
   assert.equal(second.actions.some((action) => action.changed), false)
+})
+
+test('Codex App Fast UI repair still removes SKS-marked non-lb provider locks after migration', async (t) => {
+  const input = [
+    '# SKS moved machine-local Codex config from .codex/config.toml',
+    '',
+    'model_provider = "openai"',
+    'model = "gpt-5.6-sol"',
+    'model_reasoning_effort = "high"',
+    'service_tier = "fast"',
+    '[features]',
+    'fast_mode = true',
+    ''
+  ].join('\n')
+  const { root, codexHome, configPath } = await fixture(t, input)
+  const repaired = await repairCodexAppFastUi(root, { codexHome, apply: true })
+  const after = await fs.readFile(configPath, 'utf8')
+  assert.deepEqual(repaired.actions.find((action) => action.scope === 'codex_home')?.removed_keys, [
+    'model_provider',
+    'model',
+    'model_reasoning_effort'
+  ])
+  assert.doesNotMatch(after, /^model_provider =/m)
+  assert.doesNotMatch(after, /^model =/m)
+  assert.doesNotMatch(after, /^model_reasoning_effort =/m)
+  assert.match(after, /^service_tier = "fast"$/m)
 })
 
 test('Codex App Fast UI repair preserves unmarked user model and effort choices', async (t) => {

@@ -10,6 +10,11 @@ import { GLM_CODEX_CONFIG_PROVIDER_ID, GLM_CODEX_CONFIG_REASONING_PROFILES } fro
 import { GLM_52_OPENROUTER_MODEL } from './providers/glm/glm-52-settings.js';
 import { resolveOpenRouterApiKey } from './providers/openrouter/openrouter-secret-store.js';
 import { codexLbEnvPath, loadCodexLbEnv, parseShellEnvValue, readCodexLbModelCatalog } from './codex-lb/codex-lb-env.js';
+import {
+  codexLbToolCatalogPath,
+  inspectCodexLbToolCatalog
+} from './codex-lb/codex-lb-tool-catalog.js';
+import { isSksOwnedGlobalUiLock } from './codex-app/codex-app-ui-state-snapshot.js';
 import { redactString } from './secret-redaction.js';
 
 export const CODEX_APP_DOCS_URL = 'https://developers.openai.com/codex/app/features';
@@ -841,8 +846,17 @@ async function codexFastModeConfigStatus(opts: any = {}) {
   const blockers: any[] = [];
   for (const config of configs) {
     if (!config.text) continue;
-    const topLevel = topLevelToml(config.text);
-    if (/(^|\n)\s*model_reasoning_effort\s*=/.test(topLevel)) blockers.push(`${config.scope}:top_level_model_reasoning_effort`);
+    const lines = String(config.text).split(/\r?\n/);
+    const topLevelEnd = lines.findIndex((line) => /^\s*\[/.test(line));
+    const topLevelBound = topLevelEnd === -1 ? lines.length : topLevelEnd;
+    for (let index = 0; index < topLevelBound; index += 1) {
+      const line = lines[index] || '';
+      if (!/^\s*model_reasoning_effort\s*=/.test(line)) continue;
+      // Preserve unmarked user reasoning choices. Only SKS-provenanced locks hide Fast UI.
+      if (config.scope === 'global' ? isSksOwnedGlobalUiLock(lines, index) : true) {
+        blockers.push(`${config.scope}:top_level_model_reasoning_effort`);
+      }
+    }
     if (/(^|\n)\s*fast_default_opt_out\s*=\s*true\s*(?:#.*)?(?=\n|$)/.test(tomlTable(config.text, 'notice'))) blockers.push(`${config.scope}:fast_default_opt_out`);
   }
   // 2026-07 renewal: [user.fast_mode] left the config schema. Its PRESENCE is now
@@ -917,11 +931,39 @@ export async function codexProviderModelUiStatus(opts: any = {}) {
     && hasTomlBoolean(codexLbProvider, 'supports_websockets', true)
     && hasTomlBoolean(codexLbProvider, 'requires_openai_auth', true);
   const codexLbSelectedDefault = /(?:^|\n)\s*model_provider\s*=\s*"codex-lb"\s*(?:#.*)?(?=\n|$)/.test(topLevelToml(globalConfig));
-  let codexLbModelCatalog = opts.codexLbModelCatalog || null;
-  if (!codexLbModelCatalog && codexLbProviderContractOk && codexLbApiKeySource !== 'missing' && codexLbBaseUrlSource !== 'missing') {
-    const loadedEnv = await loadCodexLbEnv({ home, envPath: codexLbEnvFilePath }).catch(() => null);
-    codexLbModelCatalog = loadedEnv ? await readCodexLbModelCatalog({ loadedEnv }).catch(() => null) : null;
+  const managedCatalogPath = codexLbToolCatalogPath(path.join(home || '', '.codex'));
+  const configuredCatalogPath = topLevelToml(globalConfig).match(/(?:^|\n)\s*model_catalog_json\s*=\s*"([^"]+)"\s*(?:#.*)?(?=\n|$)/)?.[1] || '';
+  const managedCatalogConfigured = Boolean(configuredCatalogPath)
+    && path.resolve(configuredCatalogPath) === path.resolve(managedCatalogPath);
+  let persistedCatalog: any = null;
+  if (!opts.codexLbModelCatalog && managedCatalogConfigured) {
+    persistedCatalog = await inspectCodexLbToolCatalog(managedCatalogPath).catch(() => null);
   }
+  let liveCatalog = opts.codexLbModelCatalog || null;
+  if (!liveCatalog && !persistedCatalog?.ok && codexLbProviderContractOk && codexLbApiKeySource !== 'missing' && codexLbBaseUrlSource !== 'missing') {
+    const loadedEnv = await loadCodexLbEnv({ home, envPath: codexLbEnvFilePath }).catch(() => null);
+    liveCatalog = loadedEnv ? await readCodexLbModelCatalog({ loadedEnv }).catch(() => null) : null;
+  }
+  // Prefer the persisted Codex-owned catalog that Desktop actually loads. Live
+  // /models remains freshness telemetry and a fallback when no managed file exists.
+  const codexLbModelCatalog = opts.codexLbModelCatalog || (persistedCatalog?.ok
+    ? {
+        ok: true,
+        models: Array.isArray(persistedCatalog.gpt56_models) ? persistedCatalog.gpt56_models : [],
+        blockers: [],
+        source: 'persisted_model_catalog_json',
+        tools_transport: persistedCatalog.tools_transport || null
+      }
+    : liveCatalog
+      ? { ...liveCatalog, source: liveCatalog.source || 'live_models' }
+      : persistedCatalog
+        ? {
+            ok: false,
+            models: Array.isArray(persistedCatalog.gpt56_models) ? persistedCatalog.gpt56_models : [],
+            blockers: persistedCatalog.blockers || ['codex_lb_persisted_catalog_invalid'],
+            source: 'persisted_model_catalog_json'
+          }
+        : null);
   const expectedCodexLbModels = ['gpt-5.6-luna', 'gpt-5.6-terra', 'gpt-5.6-sol'];
   const catalogModels = Array.isArray(codexLbModelCatalog?.models) ? codexLbModelCatalog.models.map(String) : [];
   const expectedCodexLbModelsPresent = expectedCodexLbModels.every((model) => catalogModels.includes(model));
@@ -935,6 +977,9 @@ export async function codexProviderModelUiStatus(opts: any = {}) {
     ...(codexLbProviderPresent && !codexLbProviderContractOk ? ['codex_lb_provider_contract_drift'] : []),
     ...(codexLbApiKeySource !== 'missing' ? [] : ['codex_lb_api_key_missing']),
     ...(codexLbBaseUrlSource !== 'missing' ? [] : ['codex_lb_base_url_missing']),
+    ...(codexLbSelectedDefault && !managedCatalogConfigured && !expectedCodexLbModelsPresent
+      ? ['codex_lb_model_catalog_json_unselected']
+      : []),
     ...(codexLbProviderContractOk && codexLbApiKeySource !== 'missing' && codexLbBaseUrlSource !== 'missing' && !expectedCodexLbModelsPresent
       ? ['codex_lb_gpt_5_6_catalog_unverified']
       : [])
@@ -993,9 +1038,13 @@ export async function codexProviderModelUiStatus(opts: any = {}) {
       base_url_source: codexLbBaseUrlSource,
       model_catalog_checked: Boolean(codexLbModelCatalog),
       model_catalog_ok: codexLbModelCatalog?.ok === true,
+      model_catalog_source: codexLbModelCatalog?.source || null,
+      model_catalog_json_configured: managedCatalogConfigured,
+      model_catalog_json_path: managedCatalogConfigured ? managedCatalogPath : configuredCatalogPath || null,
       model_catalog_models: catalogModels,
       expected_models: expectedCodexLbModels,
       expected_models_present: expectedCodexLbModelsPresent,
+      tools_transport: codexLbModelCatalog?.tools_transport || null,
       model_catalog_blockers: codexLbModelCatalog?.blockers || [],
       setup_command: setupCommand,
       set_key_command: setKeyCommand,

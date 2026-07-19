@@ -3,6 +3,20 @@
 ## [Unreleased]
 
 
+
+## [7.0.0] - 2026-07-19
+
+### Fixed
+
+- Seal official Naruto child routing onto the GPT-5.6 four-profile matrix in preparation, SubagentStart context, and native `$Naruto` roster construction so model/effort assignment is no longer prompt-only or legacy-effort inheritance.
+- Persist actionable `wave_lifecycle.next_parent_actions` / `parent_guidance` after settled waves and inject that guidance into the root parent PreTool path so completed children are closed and later direct-child waves can start.
+- Coerce official `[agents].max_depth > 1` to depth=1 so inherited/project settings cannot contradict the launcher hard-enforcement.
+- Keep Codex LB Desktop App picker/catalog readiness coherent: preserve active `codex-lb` during Fast UI repair, bind `model_catalog_json` before selecting the provider, prefer persisted catalog over live `/models`, and refuse shared `sk-clb` activation until selection is ready.
+
+### Changed
+
+- Bump the package major to 7.0.0 for the official-subagent lifecycle and Codex LB Desktop routing contract hardening.
+
 ## [6.7.0] - 2026-07-18
 
 ### Added

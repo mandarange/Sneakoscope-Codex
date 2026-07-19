@@ -148,18 +148,21 @@ export async function readOfficialSubagentConfig(
     DEFAULT_OFFICIAL_SUBAGENT_INTERRUPT_MESSAGE,
     booleanValue
   )
-  const warnings = maxDepth.value > 1
-    ? [`official_subagent_max_depth_above_one_preserved:${maxDepth.value}:${maxDepth.source}`]
+  // Official Naruto admits only depth=1. Coerce higher values so they cannot
+  // contradict the launcher hard-enforcement or look "supported".
+  const depthCoerced = maxDepth.value > 1
+  const warnings = depthCoerced
+    ? [`official_subagent_max_depth_coerced_to_one:${maxDepth.value}:${maxDepth.source}`]
     : []
 
   return {
     maxThreads: maxThreads.value,
-    maxDepth: maxDepth.value,
+    maxDepth: depthCoerced ? DEFAULT_OFFICIAL_SUBAGENT_MAX_DEPTH : maxDepth.value,
     jobMaxRuntimeSeconds: jobMaxRuntimeSeconds.value,
     interruptMessage: interruptMessage.value,
     sources: {
       maxThreads: maxThreads.source,
-      maxDepth: maxDepth.source,
+      maxDepth: depthCoerced ? 'default' : maxDepth.source,
       jobMaxRuntimeSeconds: jobMaxRuntimeSeconds.source,
       interruptMessage: interruptMessage.source
     },
@@ -181,7 +184,7 @@ export function officialSubagentConfigWarnings(text: string = '', inheritedText:
     positiveInteger
   )
   return maxDepth.value > 1
-    ? [`official_subagent_max_depth_above_one_preserved:${maxDepth.value}:${maxDepth.source}`]
+    ? [`official_subagent_max_depth_coerced_to_one:${maxDepth.value}:${maxDepth.source}`]
     : []
 }
 

@@ -46,11 +46,13 @@ test('Python SDK runner cancels delayed SIGKILL after the child closes', { skip:
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-python-sdk-timeout-close-'))
   const groupPidFile = path.join(root, 'group.pid')
   const sentinelPidFile = path.join(root, 'sentinel.pid')
+  // Publish readiness before the long-lived wait so concurrent release-gate
+  // load cannot race the adapter timeout against pid-file creation.
   const runner = await writeExecutable(root, 'timeout-runner.sh', [
     '#!/bin/sh',
+    'printf \'%s\' "$$" > "$SKS_PYTHON_GROUP_PID_FILE"',
     '/bin/sh -c \'trap "" HUP INT TERM; while :; do /bin/sleep 1; done\' </dev/null >/dev/null 2>&1 &',
     'sentinel_pid=$!',
-    'printf \'%s\' "$$" > "$SKS_PYTHON_GROUP_PID_FILE"',
     'printf \'%s\' "$sentinel_pid" > "$SKS_PYTHON_SENTINEL_PID_FILE"',
     'trap \'exit 0\' HUP INT TERM',
     'while :; do /bin/sleep 1; done'
@@ -63,13 +65,13 @@ test('Python SDK runner cancels delayed SIGKILL after the child closes', { skip:
     await fsp.rm(root, { recursive: true, force: true })
   })
 
-  const timeoutMs = 500
-  const forceKillDelayMs = 150
+  const timeoutMs = 2_500
+  const forceKillDelayMs = 250
   const run = runPythonRunner(runner, {}, {
     SKS_PYTHON_GROUP_PID_FILE: groupPidFile,
     SKS_PYTHON_SENTINEL_PID_FILE: sentinelPidFile
   }, timeoutMs, forceKillDelayMs)
-  await Promise.all([waitForFile(groupPidFile, 2_000), waitForFile(sentinelPidFile, 2_000)])
+  await Promise.all([waitForFile(groupPidFile, 5_000), waitForFile(sentinelPidFile, 5_000)])
   groupPid = Number(await fsp.readFile(groupPidFile, 'utf8'))
   sentinelPid = Number(await fsp.readFile(sentinelPidFile, 'utf8'))
 

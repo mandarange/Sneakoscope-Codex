@@ -200,6 +200,7 @@ async function writeSelectedCodexLbFixture(home: string) {
   await fsp.mkdir(codexHome, { recursive: true });
   await fsp.writeFile(path.join(codexHome, 'config.toml'), [
     'model_provider = "codex-lb"',
+    'openai_base_url = "https://lb.fixture.internal/backend-api/codex"',
     '',
     '[model_providers.codex-lb]',
     'name = "openai"',

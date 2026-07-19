@@ -26,6 +26,7 @@ import {
   type SubagentThreadBudgetInput
 } from './thread-budget.js'
 import { createSubagentWaveLifecycle } from './wave-lifecycle.js'
+import { decideOfficialSubagentModel } from '../agents/agent-effort-policy.js'
 import { readBoundedTriwikiAttention } from './triwiki-attention.js'
 import {
   SUBAGENT_EVIDENCE_FILENAME,
@@ -181,6 +182,28 @@ async function prepareOfficialSubagentMissionLocked(input: OfficialSubagentPrepa
     recommendedAgents: suggestedAgents
   })
   const selectedAgentPlan = officialSubagentOnDemandRolePlan(suggestedAgents)
+  const agentRouting = Object.fromEntries(Object.entries(selectedAgentPlan).map(([name, config]) => {
+    const decision = decideOfficialSubagentModel({
+      persona: {
+        role: name as any,
+        naruto_role: name,
+        write_policy: config.sandbox_mode === 'read-only' ? 'read-only' : 'route-local-artifact',
+        read_only: config.sandbox_mode === 'read-only'
+      },
+      prompt: goal,
+      agentId: name,
+      readonly: config.sandbox_mode === 'read-only'
+    })
+    return [name, {
+      ...config,
+      // Catalog TOML remains the spawn-type contract; dynamic decision records why
+      // this role maps onto the sealed four-profile matrix for this goal.
+      routed_model: decision.model,
+      routed_model_reasoning_effort: decision.model_reasoning_effort,
+      routed_model_policy: decision.model_selection_reason,
+      routing_dynamic: true
+    }]
+  }))
   const agentCatalog = onDemandAgentCatalogMetadata(selectedAgentPlan)
   const ssotGuard = buildSsotGuard({ route: input.route, mode: mode === 'naruto' ? 'NARUTO' : 'OFFICIAL_SUBAGENT', task: goal })
   const ssotGuardValidation = validateSsotGuardArtifact(ssotGuard)
@@ -232,7 +255,7 @@ async function prepareOfficialSubagentMissionLocked(input: OfficialSubagentPrepa
       model_reasoning_effort: NARUTO_PARENT_EFFORT
     },
     agent_catalog: agentCatalog,
-    agents: selectedAgentPlan,
+    agents: agentRouting,
     verification_budget: verification,
     verification_checks: [],
     verification: { budget: verification },

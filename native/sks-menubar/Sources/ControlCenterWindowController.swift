@@ -6,6 +6,7 @@ final class ControlCenterWindowController: NSWindowController, NSTableViewDataSo
     private let controllers: [SidebarItem: NSViewController]
     private let overviewController: OverviewViewController
     private var selected: SidebarItem = .overview
+    private var hasPresented = false
 
     init(processClient: ProcessClient, operations: OperationCoordinator, notifications: NotificationCoordinator) {
         let overview = OverviewViewController(processClient: processClient, operations: operations)
@@ -14,9 +15,9 @@ final class ControlCenterWindowController: NSWindowController, NSTableViewDataSo
             .overview: overview,
             .updates: UpdatesViewController(processClient: processClient, operations: operations, notifications: notifications),
             .mcpServers: MCPServersViewController(processClient: processClient, operations: operations, notifications: notifications),
-            .providers: ProvidersViewController(processClient: processClient),
+            .providers: ProvidersViewController(processClient: processClient, operations: operations),
             .remoteTelegram: RemoteTelegramViewController(processClient: processClient),
-            .diagnostics: DiagnosticsViewController(processClient: processClient),
+            .diagnostics: DiagnosticsViewController(processClient: processClient, operations: operations),
             .settings: SettingsViewController(notifications: notifications)
         ]
         let window = NSWindow(
@@ -38,7 +39,10 @@ final class ControlCenterWindowController: NSWindowController, NSTableViewDataSo
         if let row = SidebarItem.allCases.firstIndex(of: section) { sidebar.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false) }
         display(section)
         NSApp.activate(ignoringOtherApps: true)
-        window?.center()
+        if !hasPresented {
+            window?.center()
+            hasPresented = true
+        }
         showWindow(nil)
         window?.makeKeyAndOrderFront(nil)
     }
@@ -97,12 +101,14 @@ final class ControlCenterWindowController: NSWindowController, NSTableViewDataSo
     private func display(_ section: SidebarItem) {
         contentHost.subviews.forEach { $0.removeFromSuperview() }
         guard let controller = controllers[section] else { return }
-        let view = controller.view
-        view.translatesAutoresizingMaskIntoConstraints = false
-        contentHost.addSubview(view)
+        let page = NativeView.scrollable(controller.view)
+        contentHost.addSubview(page)
         NSLayoutConstraint.activate([
-            view.leadingAnchor.constraint(equalTo: contentHost.leadingAnchor), view.trailingAnchor.constraint(equalTo: contentHost.trailingAnchor),
-            view.topAnchor.constraint(equalTo: contentHost.topAnchor), view.bottomAnchor.constraint(equalTo: contentHost.bottomAnchor)
+            page.leadingAnchor.constraint(equalTo: contentHost.leadingAnchor),
+            page.trailingAnchor.constraint(equalTo: contentHost.trailingAnchor),
+            page.topAnchor.constraint(equalTo: contentHost.topAnchor),
+            page.bottomAnchor.constraint(equalTo: contentHost.bottomAnchor)
         ])
+        (controller as? ControlCenterPage)?.refreshOnAppear()
     }
 }

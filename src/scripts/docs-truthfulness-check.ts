@@ -35,7 +35,7 @@ const required = {
   'docs/goal-to-loop-migration.md': ['only persisted goal owner', 'creates no SKS mission', '--legacy-goal-runtime', 'fail with an instruction'],
   'docs/known-gaps.md': ['No P0', 'P1'],
   'docs/release-readiness.md': [
-    'SKS 6.7.0 Release Readiness',
+    'SKS 7.0.0 Release Readiness',
     '$sks-naruto',
     '$sks-work',
     'sks doctor --fix',
@@ -48,7 +48,7 @@ const required = {
     'proof-aware fleet control',
     'npm stage publish',
     'npm stage approve <stage-id>',
-    '6.2.0 to 6.7.0 upgrade smoke'
+    '6.2.0 to 7.0.0 upgrade smoke'
   ]
 };
 

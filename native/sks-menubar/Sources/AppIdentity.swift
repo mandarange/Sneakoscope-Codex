@@ -13,7 +13,9 @@ enum AppIdentity {
     }
 
     static func statusImage(resource: String, symbol: String) -> NSImage? {
-        let image = NSImage(systemSymbolName: symbol, accessibilityDescription: "SKS status") ?? Bundle.main.image(forResource: resource)
+        // Prefer the validated custom status PDFs; fall back to SF Symbols only when missing.
+        let image = Bundle.main.image(forResource: resource)
+            ?? NSImage(systemSymbolName: symbol, accessibilityDescription: "SKS status")
         image?.isTemplate = true
         return image
     }

@@ -197,7 +197,8 @@ test('prompt makes later root waves and between-wave count authority explicit', 
   })
 
   assert.match(automatic, /max depth: 1 applies only to child nesting.*root parent.*later direct-child waves/i)
-  assert.match(automatic, /close completed threads.*refresh evidence.*rescan the ready DAG.*next defensible direct-child wave when useful work remains/is)
+  assert.match(automatic, /close completed threads.*refresh evidence.*rescan the ready DAG.*next defensible direct-child wave when `remaining_to_start > 0`/is)
+  assert.match(automatic, /spawn_next_direct_child_wave_upto:N/)
   assert.match(automatic, /automatic targets may resize between waves/i)
 
   for (const requestedSubagentsSource of ['operator', 'route_contract'] as const) {

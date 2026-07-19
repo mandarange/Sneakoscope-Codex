@@ -206,10 +206,10 @@ export async function selftestCodexLb(tmp: any) {
   const codexLbReconcileRestoreJson = JSON.parse(codexLbReconcileRestoreRepair.stdout);
   const codexLbReconcileRestoreAuth = await safeReadText(path.join(codexLbHome, '.codex', 'auth.json'));
   const codexLbReconcileRestoreConfig = await safeReadText(path.join(codexLbHome, '.codex', 'config.toml'));
-  if (codexLbReconcileRestoreJson.auth_reconcile?.status !== 'oauth_restored' || !codexLbReconcileRestoreAuth.includes('oauth-id') || codexLbReconcileRestoreAuth.includes('sk-test') || !hasTopLevelCodexLbSelected(codexLbReconcileRestoreConfig)) throw new Error('selftest: codex-lb oauth restore should replace apikey auth.json with ChatGPT OAuth backup while keeping codex-lb selected');
+  if (codexLbReconcileRestoreJson.auth_reconcile?.status !== 'oauth_restored' || !codexLbReconcileRestoreAuth.includes('oauth-id') || codexLbReconcileRestoreAuth.includes('sk-test') || hasTopLevelCodexLbSelected(codexLbReconcileRestoreConfig) || /sks-codex-lb-managed-openai-base-url/.test(codexLbReconcileRestoreConfig)) throw new Error('selftest: codex-lb oauth restore should replace apikey auth.json with ChatGPT OAuth backup and leave an unselected, unpinned provider state');
   // codex-lb auth: release flow — restore ChatGPT OAuth from backup so the user can return to
-  // the official ChatGPT account login. Default deselects model_provider; flags control whether
-  // the provider stays selected and whether the backup file is removed after restore.
+  // the official ChatGPT account login. Default deselects model_provider; keeping codex-lb
+  // selected with shared OAuth is rejected because it would route OAuth credentials to the LB.
   const codexLbReleaseConfig = 'model_provider = "codex-lb"\n\n[model_providers.codex-lb]\nname = "openai"\nbase_url = "https://lb.example.test/backend-api/codex"\nwire_api = "responses"\nenv_key = "CODEX_LB_API_KEY"\nsupports_websockets = true\nrequires_openai_auth = true\n';
   const codexLbReleaseEnv = "export CODEX_LB_BASE_URL='https://lb.example.test/backend-api/codex'\nexport CODEX_LB_API_KEY='sk-test'\n";
   const codexLbReleaseApikeyAuth = '{"auth_mode":"apikey","OPENAI_API_KEY":"sk-test"}\n';
@@ -226,15 +226,15 @@ export async function selftestCodexLb(tmp: any) {
   const codexLbReleaseBackupAfter = await safeReadText(path.join(codexLbHome, '.codex', 'auth.chatgpt-backup.json'));
   const codexLbReleaseConfigAfter = await safeReadText(path.join(codexLbHome, '.codex', 'config.toml'));
   if (codexLbReleaseJson.status !== 'released' || codexLbReleaseJson.provider_unselected !== true || codexLbReleaseJson.backup_removed !== false || !codexLbReleaseAuth.includes('oauth-id') || !codexLbReleaseAuth.includes('oauth-refresh') || codexLbReleaseAuth.includes('apikey') || !codexLbReleaseBackupAfter.includes('oauth-id') || hasTopLevelCodexLbSelected(codexLbReleaseConfigAfter)) throw new Error('selftest: codex-lb release happy path did not restore OAuth, preserve backup, and deselect model_provider');
-  // --keep-provider: restore auth.json but leave model_provider = "codex-lb" alone.
+  // --keep-provider is unsafe with shared OpenAI auth and must fail without changing either file.
   await writeTextAtomic(path.join(codexLbHome, '.codex', 'auth.json'), codexLbReleaseApikeyAuth);
   await writeTextAtomic(path.join(codexLbHome, '.codex', 'auth.chatgpt-backup.json'), codexLbReleaseOauthBackup);
   await writeTextAtomic(path.join(codexLbHome, '.codex', 'config.toml'), codexLbReleaseConfig);
   const codexLbReleaseKeepRun = await runProcess(process.execPath, [packagedSksEntrypoint(), 'codex-lb', 'release', '--keep-provider', '--json'], { cwd: tmp, env: codexLbEnvForSelftest, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
-  if (codexLbReleaseKeepRun.code !== 0) throw new Error(`selftest: codex-lb release --keep-provider exited ${codexLbReleaseKeepRun.code}: ${codexLbReleaseKeepRun.stderr}`);
   const codexLbReleaseKeepJson = JSON.parse(codexLbReleaseKeepRun.stdout);
   const codexLbReleaseKeepConfig = await safeReadText(path.join(codexLbHome, '.codex', 'config.toml'));
-  if (codexLbReleaseKeepJson.status !== 'released' || codexLbReleaseKeepJson.provider_unselected !== false || !hasTopLevelCodexLbSelected(codexLbReleaseKeepConfig)) throw new Error('selftest: codex-lb release --keep-provider should leave model_provider = "codex-lb" intact');
+  const codexLbReleaseKeepAuth = await safeReadText(path.join(codexLbHome, '.codex', 'auth.json'));
+  if (codexLbReleaseKeepRun.code === 0 || codexLbReleaseKeepJson.status !== 'failed' || codexLbReleaseKeepJson.reason !== 'keep_provider_unsafe_with_shared_auth' || !hasTopLevelCodexLbSelected(codexLbReleaseKeepConfig) || !codexLbReleaseKeepAuth.includes('apikey')) throw new Error('selftest: codex-lb release --keep-provider should fail closed without changing the coherent codex-lb state');
   // --delete-backup: restore auth.json and remove the backup file.
   await writeTextAtomic(path.join(codexLbHome, '.codex', 'auth.json'), codexLbReleaseApikeyAuth);
   await writeTextAtomic(path.join(codexLbHome, '.codex', 'auth.chatgpt-backup.json'), codexLbReleaseOauthBackup);
@@ -252,15 +252,14 @@ export async function selftestCodexLb(tmp: any) {
   const codexLbReleaseMissingJson = JSON.parse(codexLbReleaseMissingRun.stdout || '{}');
   const codexLbReleaseMissingAuth = await safeReadText(path.join(codexLbHome, '.codex', 'auth.json'));
   if (codexLbReleaseMissingRun.code === 0 || codexLbReleaseMissingJson.status !== 'no_backup' || !codexLbReleaseMissingAuth.includes('apikey')) throw new Error('selftest: codex-lb release with no backup should exit non-zero and report no_backup without touching auth.json');
-  // unselect: flip model_provider off without touching auth.json or env file.
+  // unselect must refuse while the shared auth store still contains the codex-lb key.
   await writeTextAtomic(path.join(codexLbHome, '.codex', 'auth.json'), codexLbReleaseApikeyAuth);
   await writeTextAtomic(path.join(codexLbHome, '.codex', 'config.toml'), codexLbReleaseConfig);
   const codexLbUnselectRun = await runProcess(process.execPath, [packagedSksEntrypoint(), 'codex-lb', 'unselect', '--json'], { cwd: tmp, env: codexLbEnvForSelftest, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
-  if (codexLbUnselectRun.code !== 0) throw new Error(`selftest: codex-lb unselect exited ${codexLbUnselectRun.code}: ${codexLbUnselectRun.stderr}`);
   const codexLbUnselectJson = JSON.parse(codexLbUnselectRun.stdout);
   const codexLbUnselectConfig = await safeReadText(path.join(codexLbHome, '.codex', 'config.toml'));
   const codexLbUnselectAuth = await safeReadText(path.join(codexLbHome, '.codex', 'auth.json'));
-  if (codexLbUnselectJson.status !== 'unselected' || hasTopLevelCodexLbSelected(codexLbUnselectConfig) || !codexLbUnselectConfig.includes('[model_providers.codex-lb]') || !codexLbUnselectAuth.includes('apikey')) throw new Error('selftest: codex-lb unselect should drop model_provider but preserve [model_providers.codex-lb] and auth.json');
+  if (codexLbUnselectRun.code === 0 || codexLbUnselectJson.status !== 'failed' || codexLbUnselectJson.reason !== 'shared_codex_lb_auth_active' || !hasTopLevelCodexLbSelected(codexLbUnselectConfig) || !codexLbUnselectAuth.includes('apikey')) throw new Error('selftest: codex-lb unselect should fail closed while shared codex-lb auth is active');
   // Restore the doctor-test auth.json shape so downstream selftest assertions still hold.
   await writeTextAtomic(path.join(codexLbHome, '.codex', 'auth.json'), '{"auth_mode":"browser"}\n');
   await fsp.rm(path.join(codexLbHome, '.codex', 'auth.chatgpt-backup.json'), { force: true });
