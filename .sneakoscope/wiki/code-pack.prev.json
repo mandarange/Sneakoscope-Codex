@@ -1,7 +1,7 @@
 {
   "schema": "sks.code-pack.v1",
-  "generated_at": "2026-07-19T19:14:41.117Z",
-  "git_head_sha": "403f8cb6920a033f93a84608aa031bf9d814cfc7",
+  "generated_at": "2026-07-19T19:53:39.867Z",
+  "git_head_sha": "28ca2b29e2fc9617fd3ef08d07578210d6fe6bfb",
   "source_file_count": 3579,
   "index_digest": "39ae760e40e8ed5f1c72384adfbaf9db1051b8ac0a8583156a2c137bd1cecf21",
   "entries": [
@@ -43,7 +43,7 @@
     },
     {
       "id": "code:core",
-      "text": "core is a core module at src/core (127 files, 38612 loc, high risk). Key exports: const quietPolicy =; async function makeRoot(prefix: string); async function writeJson(file: string, value: unknown); async function backdate(file: string); const ARTIFACT_SCHEMA_VERSION = 1;, and 497 more. It has no detected cross-module dependencies.",
+      "text": "core is a core module at src/core (127 files, 38593 loc, high risk). Key exports: const quietPolicy =; async function makeRoot(prefix: string); async function writeJson(file: string, value: unknown); async function backdate(file: string); const ARTIFACT_SCHEMA_VERSION = 1;, and 497 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core"
@@ -190,7 +190,7 @@
     },
     {
       "id": "code:core-commands",
-      "text": "core-commands is a command module at src/core/commands (80 files, 13997 loc, high risk). Key exports: async function runAgentBridgeContractSmokes(; function buildAgentBridgeSetupMetadata(manifest: CurrentAgentManifest):; async function inspectAgentBridgeHostCapabilities(; async function autoresearchCommand(sub: any, args: any = []); async function helpCommand(args: string[] = []): Promise<void | unknown>, and 100 more. It has no detected cross-module dependencies.",
+      "text": "core-commands is a command module at src/core/commands (80 files, 13995 loc, high risk). Key exports: async function runAgentBridgeContractSmokes(; function buildAgentBridgeSetupMetadata(manifest: CurrentAgentManifest):; async function inspectAgentBridgeHostCapabilities(; async function autoresearchCommand(sub: any, args: any = []); async function helpCommand(args: string[] = []): Promise<void | unknown>, and 100 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/commands"
@@ -310,7 +310,7 @@
     },
     {
       "id": "code:core-hooks-runtime",
-      "text": "core-hooks-runtime is a core module at src/core/hooks-runtime (14 files, 3309 loc, low risk). Key exports: async function codePackFreshnessNote(root: string, opts: { budgetMs?: number } = {}): Promise<string | null>; async function claimHookInvocation(root: string, name: unknown, payload: any = {}); async function loadHookPayload(); function normalizeHookResult(name: any, result: any = {}); function codexHookEventName(name: any), and 34 more. It has no detected cross-module dependencies.",
+      "text": "core-hooks-runtime is a core module at src/core/hooks-runtime (14 files, 3314 loc, low risk). Key exports: async function codePackFreshnessNote(root: string, opts: { budgetMs?: number } = {}): Promise<string | null>; async function claimHookInvocation(root: string, name: unknown, payload: any = {}); async function loadHookPayload(); function normalizeHookResult(name: any, result: any = {}); function codexHookEventName(name: any), and 34 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/hooks-runtime"
