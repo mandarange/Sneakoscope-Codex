@@ -451,10 +451,7 @@ export function buildHostCapabilityEvidenceFromHookObservations(input: {
 }
 
 export function requestHostCapabilities(goal: unknown): HostCapabilityRequest {
-  const text = String(goal || '').normalize('NFKC');
-  if (isHostCapabilityCodeMaintenanceTask(text) && !hasDirectHostExecutionIntent(text)) {
-    return { capability_ids: [], workflows: [], tool_names: [] };
-  }
+  const text = hostCapabilityIntentText(String(goal || '').normalize('NFKC'));
   const capabilityIds = new Set<string>();
   const workflows = new Set<HostCapabilityWorkflow>();
   const toolNames = new Set<string>();
@@ -1688,12 +1685,19 @@ function matchesIntent(text: string, patterns: readonly RegExp[]): boolean {
   return patterns.some((pattern) => pattern.test(text));
 }
 
-function isHostCapabilityCodeMaintenanceTask(text: string): boolean {
+function hostCapabilityIntentText(text: string): string {
+  return text
+    .split(/(?:\r?\n)+|(?<=[.!?。！？])\s+|;\s+/)
+    .filter((clause) => !isHostCapabilityCodeMaintenanceClause(clause) || hasDirectHostExecutionIntent(clause))
+    .join('\n');
+}
+
+function isHostCapabilityCodeMaintenanceClause(text: string): boolean {
   return matchesIntent(text, [
-    /\b(?:tests?|specs?|fixtures?|code[- ]review)\b/i,
+    /\b(?:tests?|specs?|fixtures?|code[- ]review|implementation|source code|support|policy|contract|workflow)\b/i,
     /\b(?:database|datasource|spreadsheet|xlsx|excel|workbook|pdf|png)\b.{0,40}\b(?:module|parser|renderer|handler|adapter|client|library|implementation|code|source)\b/i,
     /\b(?:module|parser|renderer|handler|adapter|library|implementation|code|source)\b.{0,40}\b(?:database|datasource|spreadsheet|xlsx|excel|workbook|pdf|png)\b/i,
-    /(?:테스트|스펙|픽스처|코드\s*리뷰)/i,
+    /(?:테스트|스펙|픽스처|코드\s*리뷰|구현|지원|정책|계약|워크플로|요구사항|가능하게)/i,
     /(?:데이터베이스|데이터소스|스프레드시트|엑셀|xlsx|pdf|png).{0,28}(?:모듈|파서|렌더러|핸들러|어댑터|라이브러리|구현|코드|소스)/i,
     /(?:모듈|파서|렌더러|핸들러|어댑터|라이브러리|구현|코드|소스).{0,28}(?:데이터베이스|데이터소스|스프레드시트|엑셀|xlsx|pdf|png)/i
   ]);
@@ -1704,7 +1708,9 @@ function hasDirectHostExecutionIntent(text: string): boolean {
     /\b(?:create|generate|make|render)\s+(?:an?\s+|the\s+)?(?:xlsx|excel workbook|spreadsheet(?: file)?|pdf(?: file| document| report)?|png(?: file| image)?)\b/i,
     /\b(?:deliver|export|save|produce)\b.{0,32}\b(?:xlsx|excel|spreadsheet|workbook|pdf|png|artifact|deliverable)\b/i,
     /\b(?:run|execute)\b.{0,32}\b(?:read[- ]only\s+)?(?:query|select|cte)\b/i,
-    /\b(?:retrieve|fetch|load)\b.{0,32}\b(?:rows?|records?|results?)\b/i,
+    /\b(?:query|retrieve|fetch|load)\b.{0,40}\b(?:database|datasource|rows?|records?|results?|(?:customer|sales|database)?\s*data)\b/i,
+    /\banaly[sz]e\b.{0,40}\b(?:database\s+data|datasource\s+data|rows?|records?|query\s+results?|customer\s+data|sales\s+data)\b/i,
+    /\b(?:test|inspect|review)\b.{0,32}\b(?:pdf|png)\b.{0,24}\band\s+(?:export|deliver|save|render)\s+(?:it|the\s+(?:file|document|image))\b/i,
     /(?:엑셀|스프레드시트|xlsx|pdf|png).{0,24}(?:파일|문서|보고서|산출물).{0,24}(?:생성|작성|만들|렌더|내보내|납품|저장)/i,
     /(?:생성|작성|만들|렌더|내보내|납품|저장).{0,24}(?:엑셀|스프레드시트|xlsx|pdf|png)(?:\s*(?:파일|문서|보고서|산출물))?/i,
     /(?:실행|조회|가져오).{0,24}(?:읽기\s*전용\s*)?(?:쿼리|질의|행|레코드|결과)/i

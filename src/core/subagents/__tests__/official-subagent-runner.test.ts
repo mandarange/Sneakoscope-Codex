@@ -321,6 +321,14 @@ test('host capability requests select the minimum task tools and recognize workb
       tool_names: ['html_to_pdf', 'write_file']
     }
   )
+
+  for (const [prompt, capability] of [
+    ['Test the database and fetch customer data.', 'host.datasource.query.readonly.v1'],
+    ['In this test, analyze database data and report anomalies.', 'host.datasource.query.readonly.v1'],
+    ['Test the PDF and export it.', 'host.document.render.v1']
+  ] as const) {
+    assert.ok(requestHostCapabilities(prompt).capability_ids.includes(capability), prompt)
+  }
 })
 
 test('spreadsheet evidence requires one bounded mutation, a final inspect, and one resource identity', async () => {
