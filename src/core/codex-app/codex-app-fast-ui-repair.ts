@@ -93,6 +93,7 @@ export async function repairCodexAppFastUi(root: string = process.cwd(), input: 
   const applied = actions.some((action) => action.status === 'repaired')
   const pending = actions.some((action) => action.changed && action.status !== 'repaired')
   const requiresConfirmation = unsafeReasons.length > 0 && input.force !== true
+  const chatgptOauthInactive = after.indicators.chat_surface === 'chatgpt_oauth_inactive'
   const selectedProviderBlockers = Array.isArray(providerModelUi.selected_provider_blockers)
     ? providerModelUi.selected_provider_blockers
     : []
@@ -126,7 +127,10 @@ export async function repairCodexAppFastUi(root: string = process.cwd(), input: 
     actions,
     before_fast_selector: before.indicators.fast_selector,
     after_fast_selector: after.indicators.fast_selector,
-    next_action: requiresConfirmation ? 'Run `sks doctor --fix --repair-codex-app-ui` after reviewing the repair plan.' : manual && safeAutoApply ? 'Run `sks doctor --fix` to apply the safe Codex App UI repair.' : manual ? 'Run `sks doctor --fix --repair-codex-app-ui` after reviewing the repair plan.' : changed ? 'Restart Codex App if the selector was already hidden.' : 'No Codex App UI repair needed.',
+    auth_mode: after.indicators.auth_mode,
+    chat_surface: after.indicators.chat_surface,
+    chatgpt_oauth_backup_available: after.indicators.chatgpt_oauth_backup_available,
+    next_action: requiresConfirmation ? 'Run `sks doctor --fix --repair-codex-app-ui` after reviewing the repair plan.' : manual && safeAutoApply ? 'Run `sks doctor --fix` to apply the safe Codex App UI repair.' : manual ? 'Run `sks doctor --fix --repair-codex-app-ui` after reviewing the repair plan.' : chatgptOauthInactive ? 'Run `sks codex-lb use-oauth --restart-app` to restore the Codex App Chat/Pro surface. This explicit switch leaves saved codex-lb credentials available for later reuse.' : changed ? 'Restart Codex App if the selector was already hidden.' : 'No Codex App UI repair needed.',
     blockers
   }
   if (input.reportPath) await writeJsonAtomic(input.reportPath, report)

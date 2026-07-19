@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { promptRequirementItems } from '../questions.js';
+import { inferAnswersForPrompt, promptRequirementItems } from '../questions.js';
 
 test('promptRequirementItems parses a 20-item numbered Korean list into 20 items without truncation', () => {
   let prompt = '';
@@ -34,4 +34,22 @@ test('promptRequirementItems truncates pathologically large inputs and signals t
   assert.equal(result.items.length, 128);
   assert.equal(result.truncated, true);
   assert.equal(result.truncated_count, 22);
+});
+
+test('release inference names the real non-publishing npm dry-run command', () => {
+  const result = inferAnswersForPrompt('Prepare Sneakoscope version 7.0.3 for release without publishing');
+  const answers = result.answers as Record<string, unknown>;
+
+  assert.deepEqual(answers.ACCEPTANCE_CRITERIA, [
+    'version refs are 7.0.3',
+    'npm publish --dry-run gate passes',
+    'npm publish is not run'
+  ]);
+  assert.deepEqual(answers.TEST_SCOPE, [
+    'packcheck',
+    'selftest',
+    'sizecheck',
+    'npm publish --dry-run'
+  ]);
+  assert.doesNotMatch(JSON.stringify(answers), /publish:dry/);
 });

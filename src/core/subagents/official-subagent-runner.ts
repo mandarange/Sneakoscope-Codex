@@ -8,6 +8,13 @@ import {
 } from './model-policy.js'
 import { inspectCodexLbCliLaunchRecovery } from '../codex-control/codex-lb-launch-recovery.js'
 import { resolveOfficialCodexPackageRuntime } from '../codex-runtime/resolve-codex-runtime.js'
+import {
+  createHostCapabilityEventCollector,
+  hostCapabilityCodexConfigArgs,
+  inspectHostCapabilityRuntime,
+  requestHostCapabilities,
+  type HostCapabilityRuntimeDependencies
+} from '../agent-bridge/host-capability-runtime.js'
 
 export const OFFICIAL_SUBAGENT_WORKFLOW_SCHEMA = 'sks.subagent-workflow.v1'
 
@@ -66,6 +73,7 @@ const SECRET_BEARING_ENV_KEYS = new Set([
 
 export interface OfficialSubagentWorkflowInput {
   root: string
+  goal: string
   prompt: string
   requestedSubagents: number
   maxThreads: number
@@ -77,6 +85,7 @@ export interface OfficialSubagentWorkflowInput {
   env?: NodeJS.ProcessEnv
   runProcessImpl?: typeof runProcess
   onChildSpawn?: (pid: number) => void | Promise<void>
+  hostCapabilityDependencies?: HostCapabilityRuntimeDependencies
 }
 
 export function detectCodexAppSession(env: NodeJS.ProcessEnv = process.env): boolean {
@@ -95,15 +104,18 @@ export function buildOfficialSubagentCodexArgs(input: {
   prompt: string
   maxThreads: number
   parentSummaryFile: string
+  hostCapabilityConfigArgs?: readonly string[]
 }): string[] {
   return [
     'exec',
+    '--json',
     '-m', NARUTO_PARENT_MODEL,
     '-c', `model_reasoning_effort="${NARUTO_PARENT_EFFORT}"`,
     '-c', 'model_provider="openai"',
     '-c', 'forced_login_method="chatgpt"',
     '-c', `agents.max_threads=${Math.max(1, Math.floor(input.maxThreads))}`,
     '-c', 'agents.max_depth=1',
+    ...(input.hostCapabilityConfigArgs || []),
     '--output-last-message', input.parentSummaryFile,
     input.prompt
   ]
@@ -139,6 +151,7 @@ function redactKnownValues(text: string, values: readonly string[]): string {
 }
 
 export async function runOfficialSubagentWorkflow(input: OfficialSubagentWorkflowInput): Promise<any> {
+  const hostCapabilityRequest = requestHostCapabilities(input.goal)
   const base = {
     schema: OFFICIAL_SUBAGENT_WORKFLOW_SCHEMA,
     workflow: 'official_codex_subagent',
@@ -147,7 +160,8 @@ export async function runOfficialSubagentWorkflow(input: OfficialSubagentWorkflo
     max_depth: 1,
     parent_model: NARUTO_PARENT_MODEL,
     parent_reasoning_effort: NARUTO_PARENT_EFFORT,
-    session_scope: input.sessionKey || null
+    session_scope: input.sessionKey || null,
+    host_capability_request: hostCapabilityRequest
   }
 
   if (input.appSession) {
@@ -168,10 +182,33 @@ export async function runOfficialSubagentWorkflow(input: OfficialSubagentWorkflo
   })
   const inheritedSecretValues = knownInheritedSecretValues(input.env)
   const parentSummaryFile = path.join(os.tmpdir(), `sks-naruto-parent-summary-${process.pid}-${Date.now()}.txt`)
+  const hostCapabilityRuntime = await inspectHostCapabilityRuntime({
+    root: input.root,
+    request: hostCapabilityRequest,
+    ...(input.hostCapabilityDependencies ? { dependencies: input.hostCapabilityDependencies } : {})
+  })
+  const hostCapabilityCollector = createHostCapabilityEventCollector(hostCapabilityRuntime)
+  if (!hostCapabilityRuntime.ok) {
+    const hostCapabilityEvidence = hostCapabilityCollector.finish()
+    return {
+      ...base,
+      ok: false,
+      status: 'host_capability_blocked',
+      prepared: false,
+      codex_exit_code: null,
+      parent_summary: null,
+      parent_summary_file: null,
+      host_capability_runtime: hostCapabilityRuntime,
+      host_capability_evidence: hostCapabilityEvidence,
+      blockers: hostCapabilityEvidence.blockers,
+      completion_evidence: false
+    }
+  }
   const args = buildOfficialSubagentCodexArgs({
     prompt: input.prompt,
     maxThreads: input.maxThreads,
-    parentSummaryFile
+    parentSummaryFile,
+    hostCapabilityConfigArgs: hostCapabilityCodexConfigArgs(hostCapabilityRuntime)
   })
   const toolOutputRecovery = await inspectCodexLbCliLaunchRecovery({
     root: input.root,
@@ -187,6 +224,8 @@ export async function runOfficialSubagentWorkflow(input: OfficialSubagentWorkflo
       codex_exit_code: null,
       parent_summary: null,
       parent_summary_file: null,
+      host_capability_runtime: hostCapabilityRuntime,
+      host_capability_evidence: hostCapabilityCollector.finish(),
       tool_output_recovery: toolOutputRecovery,
       blockers: toolOutputRecovery.blockers,
       operator_actions: toolOutputRecovery.operator_actions,
@@ -207,6 +246,8 @@ export async function runOfficialSubagentWorkflow(input: OfficialSubagentWorkflo
         codex_exit_code: null,
         parent_summary: null,
         parent_summary_file: null,
+        host_capability_runtime: hostCapabilityRuntime,
+        host_capability_evidence: hostCapabilityCollector.finish(),
         tool_output_recovery: toolOutputRecovery,
         blockers: ['codex_parent_executable_override_forbidden'],
         completion_evidence: false
@@ -222,6 +263,8 @@ export async function runOfficialSubagentWorkflow(input: OfficialSubagentWorkflo
         codex_exit_code: null,
         parent_summary: null,
         parent_summary_file: null,
+        host_capability_runtime: hostCapabilityRuntime,
+        host_capability_evidence: hostCapabilityCollector.finish(),
         tool_output_recovery: toolOutputRecovery,
         blockers: [...runtime.blockers],
         completion_evidence: false
@@ -240,6 +283,7 @@ export async function runOfficialSubagentWorkflow(input: OfficialSubagentWorkflo
       maxOutputBytes: 256 * 1024,
       env: childEnv,
       envMode: 'replace',
+      onStdout: hostCapabilityCollector.push,
       ...(input.onChildSpawn ? { onSpawn: input.onChildSpawn } : {})
     })
   } catch (error: any) {
@@ -258,32 +302,81 @@ export async function runOfficialSubagentWorkflow(input: OfficialSubagentWorkflo
     inheritedSecretValues
   )
   await fsp.rm(parentSummaryFile, { force: true }).catch(() => undefined)
-  const stdout = redactKnownValues(processResult.stdout, inheritedSecretValues)
-  const stderr = redactKnownValues(processResult.stderr, inheritedSecretValues)
-  const blockers = processResult.spawnRegistrationFailed === true
-    ? ['codex_parent_spawn_registration_failed']
-    : processResult.timedOut
-      ? ['codex_parent_timeout']
-      : processResult.code === 0
-        ? []
-        : ['codex_parent_exit:' + String(processResult.code ?? 'unknown')]
+  const hostCapabilityEvidence = hostCapabilityCollector.finish(processResult.stdout)
+  const stdout = summarizeCodexJsonlOutput(processResult.stdout, inheritedSecretValues)
+  const stderr = redactKnownValues(processResult.stderr, inheritedSecretValues).slice(-12_000)
+  const blockers = uniqueStrings([
+    ...(processResult.spawnRegistrationFailed === true
+      ? ['codex_parent_spawn_registration_failed']
+      : processResult.timedOut
+        ? ['codex_parent_timeout']
+        : processResult.code === 0
+          ? []
+          : ['codex_parent_exit:' + String(processResult.code ?? 'unknown')]),
+    ...hostCapabilityEvidence.blockers
+  ])
+  const ok = processResult.code === 0 && hostCapabilityEvidence.ok
+  const status = processResult.code !== 0
+    ? 'parent_failed'
+    : hostCapabilityEvidence.ok
+      ? 'parent_completed'
+      : 'host_capability_blocked'
 
   return {
     ...base,
-    ok: processResult.code === 0,
-    status: processResult.code === 0 ? 'parent_completed' : 'parent_failed',
+    ok,
+    status,
     codex_exit_code: processResult.code,
     parent_summary: parentSummary.trim() || null,
     parent_summary_file: null,
     blockers,
+    host_capability_runtime: hostCapabilityRuntime,
+    host_capability_evidence: hostCapabilityEvidence,
     tool_output_recovery: toolOutputRecovery,
     process: {
       pid: processResult.pid || null,
       timed_out: processResult.timedOut,
-      stdout_tail: stdout,
+      stdout_tail: stdout.tail,
       stderr_tail: stderr,
+      jsonl_event_count: stdout.event_count,
+      jsonl_event_types: stdout.event_types,
       output_truncated: processResult.truncated
     },
     completion_evidence: false
   }
+}
+
+function summarizeCodexJsonlOutput(text: string, secretValues: readonly string[]): {
+  tail: string
+  event_count: number
+  event_types: string[]
+} {
+  const redacted = redactKnownValues(String(text || ''), secretValues)
+  const eventTypes: string[] = []
+  let eventCount = 0
+  for (const line of redacted.split(/\r?\n/)) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    try {
+      const parsed = JSON.parse(trimmed)
+      eventCount += 1
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const type = String((parsed as Record<string, unknown>).type || '').trim()
+        if (type) eventTypes.push(type)
+      }
+      continue
+    } catch {}
+  }
+  return {
+    // `codex exec --json` stdout is an evidence stream. Even an apparently
+    // non-JSON tail can be a truncated JSONL tool-call record, so never return
+    // raw stdout content from this path.
+    tail: '',
+    event_count: eventCount,
+    event_types: uniqueStrings(eventTypes)
+  }
+}
+
+function uniqueStrings(values: readonly unknown[]): string[] {
+  return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))].sort()
 }

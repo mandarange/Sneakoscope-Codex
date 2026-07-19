@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const packageVersion = String(JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version || '').trim();
 const files = [
   'README.md',
   'CHANGELOG.md',
@@ -35,7 +36,7 @@ const required = {
   'docs/goal-to-loop-migration.md': ['only persisted goal owner', 'creates no SKS mission', '--legacy-goal-runtime', 'fail with an instruction'],
   'docs/known-gaps.md': ['No P0', 'P1'],
   'docs/release-readiness.md': [
-    'SKS 7.0.0 Release Readiness',
+    `SKS ${packageVersion} Release Readiness`,
     '$sks-naruto',
     '$sks-work',
     'sks doctor --fix',
@@ -48,7 +49,7 @@ const required = {
     'proof-aware fleet control',
     'npm stage publish',
     'npm stage approve <stage-id>',
-    '6.2.0 to 7.0.0 upgrade smoke'
+    `6.2.0 to ${packageVersion} upgrade smoke`
   ]
 };
 

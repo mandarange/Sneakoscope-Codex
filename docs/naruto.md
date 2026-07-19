@@ -123,6 +123,28 @@ layer. MCP configuration writes continue to use the guarded project mutation
 path, store only approved environment variable names, and fail closed on
 startup, timeout, or stdout protocol errors.
 
+Host capability use is inventory-driven: a parent may use a host tool only when
+it is actually present in the project MCP inventory. It does not infer a tool
+from configuration text, duplicate host-tool schemas, or auto-repair a missing
+or unhealthy capability. If the task requests such a capability, Naruto returns
+a blocked proof; capabilities not requested do not block ordinary coding or text
+work.
+
+For database work, SKS owns the schema-first query plan and SQL generation, but
+the host owns credentials, connector policy, and read-only execution. A
+SQL-generation-only task first calls `datasource_schema_context`, then uses only
+reported tables and columns and may complete without executing SQL. Actual data
+retrieval first obtains that schema context, creates one bounded parameterized
+`SELECT`/CTE query, calls `datasource_query_readonly`, and retains its receipt.
+
+For spreadsheets, creation follows `spreadsheet_create` →
+`spreadsheet_inspect` → optional one minimal `spreadsheet_update` →
+`spreadsheet_inspect`; editing follows `spreadsheet_inspect` → one minimal
+`spreadsheet_update` → `spreadsheet_inspect`. Document delivery follows
+editable source → render → artifact receipt. Slack delivery is ACAS-runtime
+owned and is never a model tool. These are host-MCP contracts only: SKS adds no
+SKS DB, Excel, Slack, or Center dependency or service.
+
 ## Completion Evidence
 
 Preparation is not completion. A run passes only when:
@@ -153,3 +175,15 @@ plus `workflow_run_id`, a validated `result` projection, and a deterministic
 workflow identity, the raw byte hash of every canonical artifact, and the
 bounded result; timestamps, PIDs, lock ownership, prompts, environment dumps,
 and raw process output are excluded.
+
+`result.artifacts` and `result.capabilities_used` are optional additive arrays.
+An artifact receipt contains only workspace-relative POSIX `path`, `kind`,
+`media_type`, `sha256`, positive integer `bytes`, and `role`; it rejects
+absolute or escaping paths, symlinks, non-regular files, duplicate paths, and
+non-deliverables presented as deliverables. At proof time Naruto stats and hashes
+the referenced file again, so the receipt's path, byte count, and SHA-256 must
+match the on-disk artifact. Capability-use rows contain only capability ID,
+status, tool names, and a receipt hash. The bounded projection carries no raw
+tool arguments, query rows, tokens, credentials, prompts, environment dumps, or
+raw process output. `blockers` is always an array, and the proof fingerprint
+includes the projected optional arrays whenever they are present.

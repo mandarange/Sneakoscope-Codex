@@ -6,6 +6,7 @@ import path from 'node:path';
 import { packageRoot } from '../../fsx.js';
 import {
   CODEX_CLI_UPDATE_STATUS_SCHEMA,
+  codexCliUpdateConsoleLines,
   compareCodexCliVersions,
   inspectCodexCliUpdate,
   resolveOperatorCodexCli,
@@ -84,6 +85,82 @@ test('Codex CLI update action invokes the official operator codex update command
   } finally {
     await fixture.cleanup();
   }
+});
+
+test('Codex CLI update keeps its structured result below the menu-bar capture boundary', async () => {
+  const fixture = await operatorFixture('sks-codex-cli-update-bounded-output-');
+  const secret = 'sk-proj-abcdefghijklmnopqrstuvwxyz123456';
+  const noisyOutput = `prefix OPENAI_API_KEY=${secret}\n${'\u0000\u0001\u0002\b\f'.repeat(32 * 1024)}\nuseful tail\n`;
+  try {
+    const result = await updateCodexCliNow({
+      home: fixture.home,
+      env: fixture.env,
+      deps: {
+        runProcessImpl: async (command: string, args: string[]) => {
+          if (command === fixture.codex && args[0] === '--version') return processResult(0, 'codex-cli 0.144.1\n');
+          if (command === fixture.codex && args.join(' ') === 'update --help') return processResult(0, 'Usage: codex update [OPTIONS]\n');
+          if (command === fixture.codex && args.join(' ') === 'update') return processResult(0, noisyOutput);
+          return processResult(1, '', `unexpected command: ${command} ${args.join(' ')}`);
+        },
+        inspectCodexCliUpdateImpl: async () => ({
+          schema: CODEX_CLI_UPDATE_STATUS_SCHEMA,
+          ok: true,
+          status: 'current',
+          installed: true,
+          bin: fixture.codex,
+          cli_path: fixture.codex,
+          cli_source: 'path',
+          current_version: '0.144.1',
+          raw_version: `codex-cli 0.144.1 OPENAI_API_KEY=${secret}`,
+          latest_version: '0.144.1',
+          update_available: false,
+          update_command: 'sks codex update',
+          source: 'cache',
+          checked_at: '2026-07-19T00:00:00.000Z',
+          cache_path: `${path.join(fixture.home, '.sneakoscope', 'cache', 'codex-cli-update.json')}${'x'.repeat(16 * 1024)}`,
+          warnings: Array.from({ length: 512 }, (_, index) => `warning-${index}-${'w'.repeat(2048)} OPENAI_API_KEY=${secret}`),
+          blockers: Array.from({ length: 512 }, (_, index) => `blocker-${index}-${'b'.repeat(2048)}`),
+          guidance: Array.from({ length: 512 }, (_, index) => `guidance-${index}-${'g'.repeat(2048)}`)
+        })
+      }
+    });
+    assert.equal(result.ok, true, JSON.stringify(result));
+    assert.equal(result.raw_output_truncated, true);
+    assert.match(result.raw_output, /useful tail/);
+    const serialized = `${JSON.stringify(result, null, 2)}\n`;
+    assert.ok(Buffer.byteLength(serialized, 'utf8') < 64 * 1024);
+    assert.doesNotMatch(serialized, new RegExp(secret));
+    assert.doesNotMatch(serialized, /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/);
+    assert.ok((result.update_status?.warnings.length || 0) <= 12);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test('Codex CLI non-JSON update summary never renders raw updater output', () => {
+  const result = {
+    schema: 'sks.codex-cli-update-result.v1' as const,
+    ok: false,
+    status: 'failed' as const,
+    command: 'codex update',
+    update_method: 'native-self-update' as const,
+    bin: '/usr/local/bin/codex',
+    cli_path: '/usr/local/bin/codex',
+    cli_source: 'path' as const,
+    post_update_cli_path: '/usr/local/bin/codex',
+    post_update_cli_source: 'path' as const,
+    before_version: '0.144.5',
+    after_version: '0.144.5',
+    raw_output: 'RAW_UPDATER_SECRET_SHOULD_NOT_RENDER',
+    raw_output_truncated: true,
+    update_status: null,
+    blockers: ['codex_cli_self_update_failed'],
+    guidance: ['Retry from a terminal.']
+  };
+  const rendered = codexCliUpdateConsoleLines(result).join('\n');
+  assert.match(rendered, /Codex CLI update: failed/);
+  assert.match(rendered, /codex_cli_self_update_failed/);
+  assert.doesNotMatch(rendered, /RAW_UPDATER_SECRET_SHOULD_NOT_RENDER/);
 });
 
 test('Codex CLI update falls back to the official standalone installer when native self-update is unavailable', async () => {

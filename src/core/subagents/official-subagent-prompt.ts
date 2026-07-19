@@ -98,6 +98,16 @@ Parent agent:
 - owns decomposition, integration, and final answer
 - do not do duplicate work already delegated
 
+Host capability policy:
+- use a host tool only when it is actually available in the project MCP inventory; do not infer availability from config text or duplicate host tool schemas
+- SQL-generation-only requests: call \`datasource_schema_context\` first, use only reported tables and columns, and may complete without \`datasource_query_readonly\`
+- actual data retrieval: call \`datasource_schema_context\`, generate one bounded parameterized SELECT/CTE, call \`datasource_query_readonly\`, and retain its receipt
+- spreadsheet create: \`spreadsheet_create\` -> \`spreadsheet_inspect\` -> optional one minimal \`spreadsheet_update\` -> \`spreadsheet_inspect\`
+- spreadsheet edit: \`spreadsheet_inspect\` -> one minimal \`spreadsheet_update\` -> \`spreadsheet_inspect\`
+- document delivery: editable source -> render -> artifact receipt
+- when a requested host capability is missing or unhealthy, return blocked proof; do not fabricate a fallback or success evidence
+- Slack delivery belongs to the ACAS runtime and is never a model tool
+
 Subagent rules:
 - use only Codex official subagent threads; do not launch shell workers, a custom scheduler, a worker pool, or model fanout
 - select the narrowest matching project custom agent by its description; the custom agent name is the spawn type
@@ -167,10 +177,29 @@ Final parent output:
   "verification": [
     { "name": "focused check", "status": "passed|not_applicable", "reason": "required when not_applicable" }
   ],
+  "artifacts": [
+    {
+      "path": "workspace-relative/verified-output.xlsx",
+      "kind": "spreadsheet",
+      "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "sha256": "sha256:<64 lowercase hex>",
+      "bytes": 1,
+      "role": "deliverable|scratch|temp|log"
+    }
+  ],
+  "capabilities_used": [
+    {
+      "id": "declared host capability id",
+      "status": "passed|failed",
+      "tool_names": ["actually called host tool"],
+      "receipt_sha256": "sha256:<64 lowercase hex>"
+    }
+  ],
   "blockers": []
 }
 - include one thread_outcomes row for every requested subagent; a SubagentStop event alone never proves success
 - if changed_files is non-empty, include at least one passed named check or a specifically justified not_applicable verification row
+- use empty artifacts/capabilities_used arrays when no host capability was used; SKS overwrites these fields with observed Codex JSONL evidence before persistence
 - keep completion summary and Honest Mode wording inside the JSON fields; do not add prose outside the object
 `.trim()
 }

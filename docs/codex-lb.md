@@ -99,6 +99,8 @@ Provider auth invariant:
 
 - `[model_providers.codex-lb]` uses `name = "openai"`, `wire_api = "responses"`, `env_key = "CODEX_LB_API_KEY"`, `supports_websockets = true`, and `requires_openai_auth = true`.
 - `CODEX_LB_API_KEY` is SKS's persisted key source. When the user selects codex-lb auth, SKS also writes Codex's OpenAI-style `auth.json` API-key entry so Codex App actually authenticates through the codex-lb key. ChatGPT OAuth can be preserved as a backup and restored by `sks codex-lb use-oauth`.
+- Codex App Chat/Pro account features require the ChatGPT OAuth auth class. Center exposes **Restore Chat / Pro (OAuth)** for that explicit switch and keeps the codex-lb provider definition and stored credentials ready for later `sks codex-lb use-codex-lb --restart-app` reuse.
+- `sks update` is mode-preserving: active codex-lb remains selected with the same model/reasoning/catalog/routing state, while an existing OAuth/unselected state remains OAuth. Only explicit `use-oauth`, `release`, or `use-codex-lb` actions may change the provider/auth class.
 - Imagegen capability checks may record codex-lb as configured routing, but codex-lb is not official Codex App `$imagegen` evidence and must not be used for full generated-image verification unless a separate non-Codex API fallback task is explicitly requested.
 
 Exact setup-choice effects:

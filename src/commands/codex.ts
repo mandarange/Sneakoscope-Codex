@@ -6,7 +6,7 @@ import { codexSchemaSnapshotReport } from '../core/codex-compat/codex-schema-sna
 import { detectCodex0141Capability } from '../core/codex-control/codex-0141-capability.js';
 import { detectCodex0144Capability } from '../core/codex-control/codex-0144-capability.js';
 import { CURRENT_CODEX_RELEASE_MANIFEST } from '../core/codex-compat/codex-release-manifest.js';
-import { inspectCodexCliUpdate, updateCodexCliNow } from '../core/codex/codex-cli-update.js';
+import { codexCliUpdateConsoleLines, inspectCodexCliUpdate, updateCodexCliNow } from '../core/codex/codex-cli-update.js';
 
 export async function run(_command: any, args: any = []) {
   const action = args[0] || 'compatibility';
@@ -46,10 +46,7 @@ export async function run(_command: any, args: any = []) {
       if (!result.ok) process.exitCode = 1;
       return;
     }
-    console.log(`Codex CLI update: ${result.status}${result.after_version ? ` (${result.before_version || 'unknown'} -> ${result.after_version})` : ''}`);
-    if (result.raw_output) console.log(result.raw_output);
-    for (const blocker of result.blockers) console.log(`- blocker: ${blocker}`);
-    for (const actionLine of result.guidance) console.log(`- ${actionLine}`);
+    for (const line of codexCliUpdateConsoleLines(result)) console.log(line);
     if (!result.ok) process.exitCode = 1;
     return;
   }

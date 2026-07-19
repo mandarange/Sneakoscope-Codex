@@ -198,7 +198,7 @@ export async function selftestCodexLb(tmp: any) {
   const codexLbReconcileOptOutBackup = await safeReadText(path.join(codexLbHome, '.codex', 'auth.chatgpt-backup.json'));
   if (codexLbReconcileOptOutJson.auth_reconcile?.status !== 'backup_only' || !codexLbReconcileOptOutAuth.includes('oauth-id') || !codexLbReconcileOptOutBackup.includes('oauth-id')) throw new Error('selftest: codex-lb oauth reconcile opt-out should back up but not rewrite auth.json');
   // Restore path: older SKS versions could leave the codex-lb API key in auth.json. Repair should
-  // restore the ChatGPT OAuth backup while keeping codex-lb selected for provider routing.
+  // restore the ChatGPT OAuth backup and clear codex-lb provider selection for coherent routing.
   await writeTextAtomic(path.join(codexLbHome, '.codex', 'auth.json'), '{"auth_mode":"apikey","OPENAI_API_KEY":"sk-test"}\n');
   await writeTextAtomic(path.join(codexLbHome, '.codex', 'auth.chatgpt-backup.json'), `${oauthAuthJson}\n`);
   const codexLbReconcileRestoreRepair = await runProcess(process.execPath, [packagedSksEntrypoint(), 'auth', 'repair', '--json'], { cwd: tmp, env: codexLbEnvForSelftest, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });

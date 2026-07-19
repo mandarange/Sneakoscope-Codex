@@ -52,6 +52,7 @@ export interface CodexAppUiStateSnapshot {
   codex_home: string
   files: CodexAppUiSnapshotFile[]
   auth_metadata: Record<string, unknown> | null
+  auth_backup_metadata: Record<string, unknown> | null
   app_preference_files: Array<{ path: string; exists: boolean; sha256: string | null; bytes: number }>
   sks_managed_blocks: Array<{ path: string; marker: string; line: number }>
   indicators: {
@@ -61,6 +62,9 @@ export interface CodexAppUiStateSnapshot {
     host_owned_signal_count: number
     project_local_forbidden_keys: string[]
     secret_leak_suspected: boolean
+    auth_mode: 'chatgpt_oauth' | 'apikey' | 'browser_marker' | 'missing' | 'unknown'
+    chatgpt_oauth_backup_available: boolean
+    chat_surface: 'available' | 'chatgpt_oauth_inactive' | 'unknown'
   }
 }
 
@@ -73,6 +77,7 @@ export async function snapshotCodexAppUiState(root: string = process.cwd(), inpu
   const home = codexHome(input)
   const files = await snapshotConfigFiles(resolvedRoot, home)
   const authMetadata = await readAuthMetadata(path.join(home, 'auth.json'))
+  const authBackupMetadata = await readAuthMetadata(path.join(home, 'auth.chatgpt-backup.json'))
   const appPreferenceFiles = await discoverAppPreferenceFiles(home)
   const sksManagedBlocks = files.flatMap((file) => findSksManagedBlocks(file))
   const projectLocalForbiddenKeys = files.flatMap((file) => file.forbidden_project_local_keys || [])
@@ -95,6 +100,13 @@ export async function snapshotCodexAppUiState(root: string = process.cwd(), inpu
     if (SKS_GLOBAL_UI_LOCK_KEYS.has(signal.key_path) && signal.sks_related) return true
     return false
   })
+  const authMode = authMetadataMode(authMetadata)
+  const chatgptOauthBackupAvailable = authMetadataMode(authBackupMetadata) === 'chatgpt_oauth'
+  const chatSurface = authMode === 'chatgpt_oauth' || authMode === 'browser_marker'
+    ? 'available'
+    : authMode === 'apikey' && chatgptOauthBackupAvailable
+      ? 'chatgpt_oauth_inactive'
+      : 'unknown'
   return {
     schema: CODEX_APP_UI_STATE_SNAPSHOT_SCHEMA,
     generated_at: nowIso(),
@@ -102,6 +114,7 @@ export async function snapshotCodexAppUiState(root: string = process.cwd(), inpu
     codex_home: redactHome(home),
     files,
     auth_metadata: authMetadata,
+    auth_backup_metadata: authBackupMetadata,
     app_preference_files: appPreferenceFiles,
     sks_managed_blocks: sksManagedBlocks,
     indicators: {
@@ -110,7 +123,10 @@ export async function snapshotCodexAppUiState(root: string = process.cwd(), inpu
       provider_signals: providerSignals,
       host_owned_signal_count: hostOwnedSignals.length,
       project_local_forbidden_keys: [...new Set(projectLocalForbiddenKeys)],
-      secret_leak_suspected: JSON.stringify({ files, authMetadata }).match(/sk-[A-Za-z0-9_-]{16,}|CODEX_LB_API_KEY\s*=\s*["'][^"']+/) != null
+      secret_leak_suspected: JSON.stringify({ files, authMetadata, authBackupMetadata }).match(/sk-[A-Za-z0-9_-]{16,}|CODEX_LB_API_KEY\s*=\s*["'][^"']+/) != null,
+      auth_mode: authMode,
+      chatgpt_oauth_backup_available: chatgptOauthBackupAvailable,
+      chat_surface: chatSurface
     }
   }
 }
@@ -192,7 +208,10 @@ export function isSksOwnedGlobalUiLock(lines: string[], index: number) {
   for (let cursor = index - 1; cursor >= lowerBound; cursor -= 1) {
     const candidate = String(lines[cursor] || '').trim()
     if (!candidate) continue
-    if (candidate.startsWith('#')) return isSksGlobalUiLockMarker(candidate)
+    if (candidate.startsWith('#')) {
+      if (isSksGlobalUiLockMarker(candidate)) return true
+      continue
+    }
     if (/^\s*\[/.test(candidate)) return false
     const previousKey = candidate.match(/^([A-Za-z0-9_-]+)\s*=/)?.[1] || ''
     if (!SKS_GLOBAL_UI_LOCK_CONTEXT_KEYS.has(previousKey)) return false
@@ -274,12 +293,34 @@ function sanitizeAuthMetadata(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object') return { type: typeof value }
   const record = value as Record<string, unknown>
   const keys = Object.keys(record).sort()
+  const authMode = normalizeAuthMode(record)
   return {
     keys,
-    has_chatgpt_auth: keys.some((key) => /chatgpt|account|user|oauth/i.test(key)),
-    has_api_key_material: keys.some((key) => SECRET_KEY_RE.test(key)),
+    auth_mode: authMode,
+    has_chatgpt_auth: authMode === 'chatgpt_oauth' || authMode === 'browser_marker',
+    has_api_key_material: authMode === 'apikey',
     redacted: Object.fromEntries(keys.map((key) => [key, SECRET_KEY_RE.test(key) ? '<redacted>' : summarizeMetadataValue(record[key])]))
   }
+}
+
+function authMetadataMode(value: Record<string, unknown> | null): 'chatgpt_oauth' | 'apikey' | 'browser_marker' | 'missing' | 'unknown' {
+  if (value == null) return 'missing'
+  const mode = String(value.auth_mode || '')
+  return ['chatgpt_oauth', 'apikey', 'browser_marker'].includes(mode)
+    ? mode as 'chatgpt_oauth' | 'apikey' | 'browser_marker'
+    : 'unknown'
+}
+
+function normalizeAuthMode(record: Record<string, unknown>): 'chatgpt_oauth' | 'apikey' | 'browser_marker' | 'unknown' {
+  const rawMode = String(record.auth_mode || record.authMode || record.mode || '').trim().toLowerCase()
+  const tokens = record.tokens && typeof record.tokens === 'object' ? record.tokens as Record<string, unknown> : null
+  const hasOauthTokens = Boolean(tokens && Object.keys(tokens).some((key) => /access|refresh|id[_-]?token/i.test(key)))
+    || Object.keys(record).some((key) => /^(?:access|refresh|id)[_-]?token$/i.test(key))
+  const hasApiKey = Object.keys(record).some((key) => /^(?:openai_)?api[_-]?key$|^key$/i.test(key))
+  if (/chatgpt|oauth/.test(rawMode) || hasOauthTokens) return 'chatgpt_oauth'
+  if (rawMode === 'browser') return 'browser_marker'
+  if (/api[-_]?key|apikey/.test(rawMode) || hasApiKey) return 'apikey'
+  return 'unknown'
 }
 
 function summarizeMetadataValue(value: unknown): unknown {

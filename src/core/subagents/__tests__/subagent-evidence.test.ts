@@ -33,6 +33,61 @@ function parentSummary(threadIds: string[], status: 'completed' | 'blocked' | 'f
   }
 }
 
+function hostCapabilityEvidence(status: 'passed' | 'failed' = 'passed') {
+  const artifact = {
+    path: 'reports/monthly.xlsx',
+    kind: 'spreadsheet',
+    media_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    sha256: `sha256:${'a'.repeat(64)}`,
+    bytes: 4,
+    role: 'deliverable' as const
+  }
+  const blocker = status === 'failed' ? 'host_capability_call_failed:host.spreadsheet.workbook.v1' : null
+  return {
+    schema: 'sks.host-capability-evidence.v1' as const,
+    ok: status === 'passed',
+    runtime: {
+      schema: 'sks.host-capability-runtime.v1' as const,
+      ok: true,
+      server: 'acas-tools' as const,
+      server_present: true,
+      server_enabled: true,
+      server_scope: 'project' as const,
+      inventory_source: 'fixture',
+      health_status: 'healthy',
+      requested_capability_ids: ['host.spreadsheet.workbook.v1', 'host.artifact.receipt.v1'],
+      task_workflows: ['spreadsheet_create' as const, 'artifact_delivery' as const],
+      observed_tool_names: ['spreadsheet_create', 'spreadsheet_inspect', 'spreadsheet_update'],
+      allowed_tool_names: ['spreadsheet_create', 'spreadsheet_inspect', 'spreadsheet_update'],
+      denied_tool_names: [],
+      explicit_denied_tool_names: [],
+      allowlist_digest: `sha256:${'b'.repeat(64)}`,
+      capability_digest: `sha256:${'c'.repeat(64)}`,
+      capabilities: [],
+      blockers: []
+    },
+    tool_calls: [{
+      server: 'acas-tools',
+      tool: 'spreadsheet_create',
+      status,
+      event_sha256: `sha256:${'d'.repeat(64)}`
+    }],
+    capabilities_used: [{
+      id: 'host.spreadsheet.workbook.v1',
+      status,
+      tool_names: status === 'passed' ? ['spreadsheet_create', 'spreadsheet_inspect'] : [],
+      receipt_sha256: `sha256:${'e'.repeat(64)}`
+    }, {
+      id: 'host.artifact.receipt.v1',
+      status,
+      tool_names: status === 'passed' ? ['spreadsheet_create'] : [],
+      receipt_sha256: `sha256:${'f'.repeat(64)}`
+    }],
+    artifacts: status === 'passed' ? [artifact] : [],
+    blockers: blocker ? [blocker] : []
+  }
+}
+
 test('event normalization prefers explicit thread ids, supports official agent ids, and never promotes a session id', () => {
   const explicit = normalizeSubagentEvent({
     hook_event_name: 'SubagentStart',
@@ -117,6 +172,37 @@ test('changed files require a named passed check or a justified not-applicable v
 
   const verified = { ...missing, verification: [{ name: 'focused typecheck', status: 'passed' }] }
   assert.equal(buildSubagentEvidence({ requestedSubagents: 1, parentSummary: verified, events }).ok, true)
+})
+
+test('parent artifact and capability receipts require trusted host evidence and completed summaries reject failed receipts', () => {
+  const trusted = hostCapabilityEvidence()
+  const completed = {
+    ...parentSummary(['thread-a']),
+    artifacts: trusted.artifacts,
+    capabilities_used: trusted.capabilities_used
+  }
+  const events = [
+    { event_name: 'SubagentStart', thread_id: 'thread-a' },
+    { event_name: 'SubagentStop', thread_id: 'thread-a' }
+  ]
+  const withoutEvidence = buildSubagentEvidence({ requestedSubagents: 1, parentSummary: completed, events })
+  assert.equal(withoutEvidence.ok, false)
+  assert.ok(withoutEvidence.blockers.includes('parent_summary_host_capability_evidence_missing'))
+
+  const failed = hostCapabilityEvidence('failed')
+  const contradicted = buildSubagentEvidence({
+    requestedSubagents: 1,
+    parentSummary: {
+      ...parentSummary(['thread-a']),
+      artifacts: failed.artifacts,
+      capabilities_used: failed.capabilities_used
+    },
+    events,
+    hostCapabilityEvidence: failed
+  })
+  assert.equal(contradicted.ok, false)
+  assert.equal(contradicted.parent_summary_trustworthy, false)
+  assert.ok(contradicted.blockers.includes('parent_summary_capability_not_passed:host.spreadsheet.workbook.v1'))
 })
 
 test('evidence rejects observed fanout that exceeds the planned subagent count', () => {
@@ -745,6 +831,37 @@ test('event recorder and evidence writer use the canonical artifact names', asyn
     assert.equal(evidence.ok, true)
     assert.equal((await fsp.stat(path.join(dir, SUBAGENT_EVENT_LOG_FILENAME))).isFile(), true)
     assert.equal((await fsp.stat(path.join(dir, SUBAGENT_EVIDENCE_FILENAME))).isFile(), true)
+  } finally {
+    await fsp.rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('trusted host capability evidence persists with the reusable structured parent summary', async () => {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-subagent-host-capability-evidence-'))
+  try {
+    const trusted = hostCapabilityEvidence()
+    const summary = {
+      ...parentSummary(['thread-a']),
+      artifacts: trusted.artifacts,
+      capabilities_used: trusted.capabilities_used
+    }
+    await recordSubagentEvent(dir, { thread_id: 'thread-a' }, 'SubagentStart')
+    await recordSubagentEvent(dir, { thread_id: 'thread-a' }, 'SubagentStop')
+    assert.deepEqual(await persistOrReuseTrustworthySubagentParentSummary(dir, summary), summary)
+    const evidence = await writeSubagentEvidence(dir, {
+      requestedSubagents: 1,
+      parentSummary: summary,
+      hostCapabilityEvidence: trusted
+    })
+
+    assert.equal(evidence.ok, true)
+    assert.deepEqual(evidence.host_capability_evidence, trusted)
+    const persisted = JSON.parse(await fsp.readFile(path.join(dir, SUBAGENT_EVIDENCE_FILENAME), 'utf8'))
+    assert.deepEqual(persisted.host_capability_evidence, trusted)
+    assert.deepEqual(
+      await persistOrReuseTrustworthySubagentParentSummary(dir, 'Completion Summary: prose retry'),
+      summary
+    )
   } finally {
     await fsp.rm(dir, { recursive: true, force: true })
   }

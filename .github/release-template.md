@@ -17,4 +17,4 @@ Copy the matching `CHANGELOG.md` version section here before publishing the GitH
 ## Verification
 
 - `npm run release:check`
-- `npm run publish:dry`
+- `npm publish --dry-run --json --registry https://registry.npmjs.org/ --tag latest --access public`

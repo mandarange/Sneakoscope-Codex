@@ -2,6 +2,14 @@ import fsp from 'node:fs/promises'
 import path from 'node:path'
 import { appendJsonlBounded, nowIso, writeJsonAtomic } from '../fsx.js'
 import type { SubagentCountPolicy } from './wave-lifecycle.js'
+import { HOST_CAPABILITY_DESCRIPTORS } from '../agent-bridge/agent-manifest.js'
+import {
+  HOST_CAPABILITY_EVIDENCE_SCHEMA,
+  HOST_CAPABILITY_RUNTIME_SCHEMA,
+  type HostArtifactReceipt,
+  type HostCapabilityExecutionEvidence,
+  type HostCapabilityUseReceipt
+} from '../agent-bridge/host-capability-runtime.js'
 
 export const SUBAGENT_EVIDENCE_SCHEMA = 'sks.subagent-evidence.v1'
 export const SUBAGENT_EVENT_SCHEMA = 'sks.subagent-event.v1'
@@ -56,6 +64,7 @@ export interface SubagentEvidence {
   status: 'completed' | 'incomplete' | 'blocked' | 'preparation_only'
   ok: boolean
   blockers: string[]
+  host_capability_evidence?: HostCapabilityExecutionEvidence
 }
 
 export interface StructuredSubagentParentSummary {
@@ -72,6 +81,8 @@ export interface StructuredSubagentParentSummary {
   blockers?: string[]
   run_id?: string
   run_epoch?: string | number
+  artifacts?: HostArtifactReceipt[]
+  capabilities_used?: HostCapabilityUseReceipt[]
 }
 
 export interface BuildSubagentEvidenceInput {
@@ -86,7 +97,18 @@ export interface BuildSubagentEvidenceInput {
   additionalBlockers?: readonly unknown[]
   runId?: string | null
   runEpoch?: string | number | null
+  hostCapabilityEvidence?: HostCapabilityExecutionEvidence | null
 }
+
+const MAX_PARENT_ARTIFACTS = 64
+const MAX_PARENT_ARTIFACT_PATH_CHARS = 512
+const MAX_PARENT_CAPABILITY_USES = 64
+const MAX_PARENT_CAPABILITY_TOOL_NAMES = 64
+const SHA256_RECEIPT_PATTERN = /^sha256:[a-f0-9]{64}$/
+const ARTIFACT_ROLES = new Set<HostArtifactReceipt['role']>(['deliverable', 'scratch', 'temp', 'log'])
+const PARENT_ARTIFACT_KEYS = new Set(['path', 'kind', 'media_type', 'sha256', 'bytes', 'role'])
+const PARENT_CAPABILITY_KEYS = new Set(['id', 'status', 'tool_names', 'receipt_sha256'])
+const HOST_CAPABILITY_BY_ID = new Map(HOST_CAPABILITY_DESCRIPTORS.map((descriptor) => [descriptor.id, descriptor]))
 
 export function normalizeSubagentEvent(payload: unknown, explicitEventName?: unknown): NormalizedSubagentEvent | null {
   const row = isRecord(payload) ? payload : {}
@@ -204,6 +226,8 @@ export function buildSubagentEvidence(input: BuildSubagentEvidenceInput): Subage
     .map((event) => normalizeSubagentEvent(event))
     .filter((event): event is NormalizedSubagentEvent => Boolean(event))
   const parentSummary = normalizeSubagentParentSummary(input.parentSummary)
+  const hostCapabilityEvidence = normalizeTrustedHostCapabilityEvidence(input.hostCapabilityEvidence)
+  const hostCapabilityBlockers = validateParentHostCapabilityBinding(parentSummary.raw, hostCapabilityEvidence)
   const runScope = resolveRunScope(input, normalizedEvents, parentSummary)
   const scopedEvents = scopeSubagentEvents(normalizedEvents, runScope)
   const events = scopedEvents.events
@@ -215,6 +239,7 @@ export function buildSubagentEvidence(input: BuildSubagentEvidenceInput): Subage
   const eventSources = new Set<SubagentEventName>()
   let missingThreadId = false
   const parentSummaryStructurallyTrustworthy = parentSummary.trustworthy
+    && hostCapabilityBlockers.length === 0
     && runScope.blockers.length === 0
     && runScope.parentBlockers.length === 0
   const parentCompletedStructurallyTrustworthy = parentSummaryStructurallyTrustworthy
@@ -329,6 +354,17 @@ export function buildSubagentEvidence(input: BuildSubagentEvidenceInput): Subage
   if (!parentSummaryPresent) blockers.push('parent_summary_missing')
   else if (!parentSummary.trustworthy) blockers.push(...parentSummary.blockers)
   if (parentSummary.status === 'failed') blockers.push('parent_summary_failed')
+  blockers.push(...hostCapabilityBlockers)
+  if (input.hostCapabilityEvidence !== undefined && input.hostCapabilityEvidence !== null && !hostCapabilityEvidence) {
+    blockers.push('host_capability_evidence_invalid')
+  }
+  if (hostCapabilityEvidence) {
+    blockers.push(...hostCapabilityEvidence.blockers)
+    if (hostCapabilityEvidence.ok !== (hostCapabilityEvidence.blockers.length === 0
+      && hostCapabilityEvidence.capabilities_used.every((receipt) => receipt.status === 'passed'))) {
+      blockers.push('host_capability_evidence_status_inconsistent')
+    }
+  }
   for (const blocker of input.additionalBlockers || []) {
     const normalized = String(blocker || '').trim()
     if (normalized) blockers.push(normalized)
@@ -340,7 +376,7 @@ export function buildSubagentEvidence(input: BuildSubagentEvidenceInput): Subage
     ? 'preparation_only'
     : ok
       ? 'completed'
-      : failedThreadIds.length > 0
+      : failedThreadIds.length > 0 || hostCapabilityBlockers.length > 0 || Boolean(hostCapabilityEvidence && !hostCapabilityEvidence.ok)
         ? 'blocked'
         : 'incomplete'
 
@@ -372,7 +408,8 @@ export function buildSubagentEvidence(input: BuildSubagentEvidenceInput): Subage
     preparation_only: preparationOnly,
     status,
     ok,
-    blockers: uniqueBlockers
+    blockers: uniqueBlockers,
+    ...(hostCapabilityEvidence ? { host_capability_evidence: hostCapabilityEvidence } : {})
   }
 }
 
@@ -540,7 +577,19 @@ export function normalizeSubagentParentSummary(value: unknown): {
 
   const summary = String(parsed.summary || '').trim()
   if (typeof parsed.summary !== 'string' || !summary) blockers.push('parent_summary_text_missing')
-  const topLevelKeys = new Set(['schema', 'status', 'summary', 'thread_outcomes', 'changed_files', 'verification', 'blockers', 'run_id', 'run_epoch'])
+  const topLevelKeys = new Set([
+    'schema',
+    'status',
+    'summary',
+    'thread_outcomes',
+    'changed_files',
+    'verification',
+    'blockers',
+    'run_id',
+    'run_epoch',
+    'artifacts',
+    'capabilities_used'
+  ])
   for (const key of Object.keys(parsed as any)) {
     if (!topLevelKeys.has(key)) blockers.push(`parent_summary_unknown_field:${key}`)
   }
@@ -557,6 +606,8 @@ export function normalizeSubagentParentSummary(value: unknown): {
   if (parsed.blockers !== undefined && (!Array.isArray(parsed.blockers) || parsed.blockers.some((item) => typeof item !== 'string'))) {
     blockers.push('parent_summary_blockers_invalid')
   }
+  validateParentArtifactReceipts(parsed.artifacts, blockers)
+  const parentCapabilities = validateParentCapabilityUseReceipts(parsed.capabilities_used, blockers)
   if (!Array.isArray(parsed.thread_outcomes) || parsed.thread_outcomes.length === 0) {
     blockers.push('parent_thread_outcomes_missing')
   }
@@ -594,6 +645,11 @@ export function normalizeSubagentParentSummary(value: unknown): {
   if (status === 'completed' && Array.isArray(parsed.blockers) && parsed.blockers.length > 0) {
     blockers.push('parent_summary_completed_with_blockers')
   }
+  if (status === 'completed') {
+    for (const receipt of parentCapabilities || []) {
+      if (receipt.status !== 'passed') blockers.push(`parent_summary_capability_not_passed:${receipt.id}`)
+    }
+  }
   return {
     present: true,
     trustworthy: blockers.length === 0,
@@ -627,6 +683,189 @@ function validStructuredParentSummary(value: unknown): StructuredSubagentParentS
   if (!isRecord(value) || value.schema !== SUBAGENT_PARENT_SUMMARY_SCHEMA) return null
   if (!Array.isArray(value.thread_outcomes)) return null
   return value as unknown as StructuredSubagentParentSummary
+}
+
+function validateParentArtifactReceipts(value: unknown, blockers: string[]): HostArtifactReceipt[] | undefined {
+  if (value === undefined) return undefined
+  if (!Array.isArray(value)) {
+    blockers.push('parent_summary_artifacts_invalid')
+    return undefined
+  }
+  if (value.length > MAX_PARENT_ARTIFACTS) blockers.push('parent_summary_artifacts_too_many')
+  const result: HostArtifactReceipt[] = []
+  const seen = new Set<string>()
+  for (const row of value.slice(0, MAX_PARENT_ARTIFACTS)) {
+    if (!isRecord(row)) {
+      blockers.push('parent_summary_artifact_invalid')
+      continue
+    }
+    if (Object.keys(row).some((key) => !PARENT_ARTIFACT_KEYS.has(key))) {
+      blockers.push('parent_summary_artifact_unknown_field')
+    }
+    const artifactPath = normalizeParentArtifactPath(row.path)
+    const kind = boundedParentToken(row.kind, 64, /^[a-z][a-z0-9_-]*$/)
+    const mediaType = boundedParentToken(
+      row.media_type,
+      160,
+      /^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*$/i
+    )
+    const receiptHash = typeof row.sha256 === 'string' && SHA256_RECEIPT_PATTERN.test(row.sha256)
+      ? row.sha256
+      : null
+    const bytes = typeof row.bytes === 'number' && Number.isSafeInteger(row.bytes) && row.bytes > 0
+      ? row.bytes
+      : null
+    const role = typeof row.role === 'string' && ARTIFACT_ROLES.has(row.role as HostArtifactReceipt['role'])
+      ? row.role as HostArtifactReceipt['role']
+      : null
+    if (!artifactPath) blockers.push('parent_summary_artifact_path_invalid')
+    if (!kind) blockers.push('parent_summary_artifact_kind_invalid')
+    if (!mediaType) blockers.push('parent_summary_artifact_media_type_invalid')
+    if (!receiptHash) blockers.push('parent_summary_artifact_sha256_invalid')
+    if (bytes === null) blockers.push('parent_summary_artifact_bytes_invalid')
+    if (!role) blockers.push('parent_summary_artifact_role_invalid')
+    if (!artifactPath || !kind || !mediaType || !receiptHash || bytes === null || !role) continue
+    if (seen.has(artifactPath)) {
+      blockers.push('parent_summary_artifact_path_duplicate')
+      continue
+    }
+    seen.add(artifactPath)
+    result.push({ path: artifactPath, kind, media_type: mediaType, sha256: receiptHash, bytes, role })
+  }
+  return result
+}
+
+function validateParentCapabilityUseReceipts(value: unknown, blockers: string[]): HostCapabilityUseReceipt[] | undefined {
+  if (value === undefined) return undefined
+  if (!Array.isArray(value)) {
+    blockers.push('parent_summary_capabilities_used_invalid')
+    return undefined
+  }
+  if (value.length > MAX_PARENT_CAPABILITY_USES) blockers.push('parent_summary_capabilities_used_too_many')
+  const result: HostCapabilityUseReceipt[] = []
+  const seen = new Set<string>()
+  for (const row of value.slice(0, MAX_PARENT_CAPABILITY_USES)) {
+    if (!isRecord(row)) {
+      blockers.push('parent_summary_capability_use_invalid')
+      continue
+    }
+    if (Object.keys(row).some((key) => !PARENT_CAPABILITY_KEYS.has(key))) {
+      blockers.push('parent_summary_capability_use_unknown_field')
+    }
+    const id = typeof row.id === 'string' ? row.id.trim() : ''
+    const descriptor = HOST_CAPABILITY_BY_ID.get(id)
+    const status = row.status === 'passed' || row.status === 'failed' ? row.status : null
+    const toolNames = normalizeParentCapabilityToolNames(row.tool_names, descriptor?.tool_names || [], status)
+    const receiptHash = typeof row.receipt_sha256 === 'string' && SHA256_RECEIPT_PATTERN.test(row.receipt_sha256)
+      ? row.receipt_sha256
+      : null
+    if (!descriptor) blockers.push(`parent_summary_capability_use_unknown:${id || '<missing>'}`)
+    if (!status) blockers.push('parent_summary_capability_use_status_invalid')
+    if (!toolNames) blockers.push('parent_summary_capability_use_tool_names_invalid')
+    if (!receiptHash) blockers.push('parent_summary_capability_use_receipt_sha256_invalid')
+    if (!descriptor || !status || !toolNames || !receiptHash) continue
+    if (seen.has(id)) {
+      blockers.push(`parent_summary_capability_use_duplicate:${id}`)
+      continue
+    }
+    seen.add(id)
+    result.push({ id, status, tool_names: toolNames, receipt_sha256: receiptHash })
+  }
+  return result
+}
+
+function normalizeParentArtifactPath(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const original = value.trim()
+  if (!original || original.length > MAX_PARENT_ARTIFACT_PATH_CHARS || /[\r\n\0\\]/.test(original)) return null
+  if (path.posix.isAbsolute(original) || path.win32.isAbsolute(original)) return null
+  const normalized = path.posix.normalize(original).replace(/^\.\//, '')
+  if (!normalized || normalized === '.' || normalized === '..' || normalized.startsWith('../')) return null
+  return normalized.length <= MAX_PARENT_ARTIFACT_PATH_CHARS ? normalized : null
+}
+
+function normalizeParentCapabilityToolNames(
+  value: unknown,
+  allowed: readonly string[],
+  status: HostCapabilityUseReceipt['status'] | null
+): string[] | null {
+  if (!Array.isArray(value) || value.length > MAX_PARENT_CAPABILITY_TOOL_NAMES) return null
+  if (status === 'passed' && value.length === 0) return null
+  const allowedSet = new Set(allowed)
+  const result: string[] = []
+  const seen = new Set<string>()
+  for (const item of value) {
+    const tool = boundedParentToken(item, 128, /^[A-Za-z][A-Za-z0-9_.:-]*$/)
+    if (!tool || !allowedSet.has(tool) || seen.has(tool)) return null
+    seen.add(tool)
+    result.push(tool)
+  }
+  return result
+}
+
+function boundedParentToken(value: unknown, maxChars: number, pattern: RegExp): string | null {
+  if (typeof value !== 'string') return null
+  const text = value.trim()
+  return text && text.length <= maxChars && !/[\r\n\0]/.test(text) && pattern.test(text) ? text : null
+}
+
+function normalizeTrustedHostCapabilityEvidence(value: unknown): HostCapabilityExecutionEvidence | null {
+  if (value === undefined || value === null) return null
+  if (!isRecord(value)
+    || value.schema !== HOST_CAPABILITY_EVIDENCE_SCHEMA
+    || typeof value.ok !== 'boolean'
+    || !isRecord(value.runtime)
+    || value.runtime.schema !== HOST_CAPABILITY_RUNTIME_SCHEMA
+    || value.runtime.server !== 'acas-tools'
+    || !Array.isArray(value.runtime.requested_capability_ids)
+    || value.runtime.requested_capability_ids.some((id) => typeof id !== 'string' || !HOST_CAPABILITY_BY_ID.has(id))
+    || !Array.isArray(value.tool_calls)
+    || !Array.isArray(value.capabilities_used)
+    || !Array.isArray(value.artifacts)
+    || !Array.isArray(value.blockers)
+    || value.blockers.some((blocker) => typeof blocker !== 'string')) {
+    return null
+  }
+  const validationBlockers: string[] = []
+  const capabilities = validateParentCapabilityUseReceipts(value.capabilities_used, validationBlockers)
+  const artifacts = validateParentArtifactReceipts(value.artifacts, validationBlockers)
+  if (!capabilities || !artifacts || validationBlockers.length > 0) return null
+  const knownTools = new Set(HOST_CAPABILITY_DESCRIPTORS.flatMap((descriptor) => descriptor.tool_names))
+  if (value.tool_calls.length > 1024 || value.tool_calls.some((row) => {
+    if (!isRecord(row)) return true
+    return row.server !== 'acas-tools'
+      || typeof row.tool !== 'string'
+      || !knownTools.has(row.tool)
+      || (row.status !== 'passed' && row.status !== 'failed')
+      || typeof row.event_sha256 !== 'string'
+      || !SHA256_RECEIPT_PATTERN.test(row.event_sha256)
+  })) return null
+  return value as unknown as HostCapabilityExecutionEvidence
+}
+
+function validateParentHostCapabilityBinding(
+  parent: StructuredSubagentParentSummary | null,
+  evidence: HostCapabilityExecutionEvidence | null
+): string[] {
+  const parentClaims = Boolean(parent?.artifacts !== undefined || parent?.capabilities_used !== undefined)
+  if (!evidence) return parentClaims ? ['parent_summary_host_capability_evidence_missing'] : []
+  const bindingRequired = parentClaims
+    || evidence.runtime.requested_capability_ids.length > 0
+    || evidence.tool_calls.length > 0
+    || evidence.artifacts.length > 0
+  if (!bindingRequired) return []
+  const blockers: string[] = []
+  const artifactBlockers: string[] = []
+  const capabilityBlockers: string[] = []
+  const parentArtifacts = validateParentArtifactReceipts(parent?.artifacts, artifactBlockers)
+  const parentCapabilities = validateParentCapabilityUseReceipts(parent?.capabilities_used, capabilityBlockers)
+  if (artifactBlockers.length > 0 || JSON.stringify(parentArtifacts || []) !== JSON.stringify(evidence.artifacts)) {
+    blockers.push('parent_summary_host_artifacts_mismatch')
+  }
+  if (capabilityBlockers.length > 0 || JSON.stringify(parentCapabilities || []) !== JSON.stringify(evidence.capabilities_used)) {
+    blockers.push('parent_summary_host_capabilities_mismatch')
+  }
+  return blockers
 }
 
 function hasFocusedParentVerification(value: unknown): boolean {
@@ -724,7 +963,7 @@ function parentResultExplicitlyFailed(value: unknown): boolean {
 }
 
 function isFailureWorkflowStatus(value: unknown): boolean {
-  return /^(parent_failed|failed|blocked|incomplete|cancelled|canceled|timed[_ -]?out)$/i.test(String(value || '').trim())
+  return /^(parent_failed|host_capability_blocked|failed|blocked|incomplete|cancelled|canceled|timed[_ -]?out)$/i.test(String(value || '').trim())
 }
 
 interface ResolvedRunScope {

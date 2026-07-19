@@ -55,6 +55,7 @@ import {
 } from '../subagents/official-subagent-preparation.js'
 import { recordOfficialSubagentParentOutcomesTelemetry } from '../zellij/zellij-official-subagent-telemetry.js'
 import { effectiveSubagentTarget, refreshSubagentWaveLifecycle } from '../subagents/wave-lifecycle.js'
+import { bindParentSummaryToHostCapabilityEvidence } from '../agent-bridge/host-capability-runtime.js'
 
 export { buildNarutoGateResult } from '../subagents/official-subagent-preparation.js'
 
@@ -212,6 +213,7 @@ async function narutoRunTransaction(
   } = preparation
   const run = await runOfficialSubagentWorkflow({
     root,
+    goal: parsed.prompt,
     prompt: delegationPrompt,
     requestedSubagents: budget.requestedSubagents,
     maxThreads: budget.maxThreads,
@@ -232,7 +234,10 @@ async function narutoRunTransaction(
     waveCount: Number(completedPlan?.wave_count ?? budget.waveCount),
     capacity: completedPlan?.capacity_controller || budget.capacity
   }
-  const runBoundParentSummary = bindTrustworthySubagentParentSummaryToRun(run.parent_summary, workflowRunId)
+  const hostCapabilityBinding = run.host_capability_evidence
+    ? bindParentSummaryToHostCapabilityEvidence(run.parent_summary, run.host_capability_evidence)
+    : { value: run.parent_summary, blockers: [] }
+  const runBoundParentSummary = bindTrustworthySubagentParentSummaryToRun(hostCapabilityBinding.value, workflowRunId)
   const effectiveParentSummary = await persistOrReuseTrustworthySubagentParentSummary(dir, runBoundParentSummary, {
     workflowStatus: run.status,
     runId: workflowRunId
@@ -252,7 +257,8 @@ async function narutoRunTransaction(
     workflowStatus: run.status,
     preparationOnly: appSession,
     runId: workflowRunId,
-    additionalBlockers: configBlockers
+    additionalBlockers: [...configBlockers, ...hostCapabilityBinding.blockers],
+    ...(run.host_capability_evidence ? { hostCapabilityEvidence: run.host_capability_evidence } : {})
   })
   if (!appSession) {
     const parentTelemetry = await recordOfficialSubagentParentOutcomesTelemetry({
@@ -282,6 +288,7 @@ async function narutoRunTransaction(
   const blockers = uniqueStrings([
     ...(Array.isArray(evidence.blockers) ? evidence.blockers : []),
     ...configBlockers,
+    ...hostCapabilityBinding.blockers,
     ...(Array.isArray(run.blockers) ? run.blockers : []),
     ...(appSession ? ['official_subagent_execution_pending_in_current_parent'] : [])
   ])

@@ -322,8 +322,9 @@ async function runOfficialReviewCycle(
     paths: researchReviewArtifacts(input.plan),
     description: reviewerTaskDescription(agent, cycle, reviewArtifacts.bundle_sha256)
   }))
+  const goal = reviewGoal(input, cycle, reviewArtifacts)
   const prompt = buildOfficialSubagentPrompt({
-    goal: reviewGoal(input, cycle, reviewArtifacts),
+    goal,
     slices,
     maxThreads,
     requestedSubagents: slices.length,
@@ -339,6 +340,7 @@ async function runOfficialReviewCycle(
   })
   const run = await runWorkflow(input, {
     root: input.root,
+    goal,
     prompt,
     requestedSubagents: slices.length,
     maxThreads,
@@ -426,8 +428,9 @@ async function runOfficialRevisionCycle(input: ResearchAdversarialReviewLoopInpu
       'Your thread outcome summary must itself be JSON: {"schema":"sks.research-revision-outcome.v1","status":"revised|blocked","addressed_objection_ids":[],"changed_artifacts":[],"remaining_blockers":[]}.'
     ].join(' ')
   }
+  const goal = `Revise the Research manuscript in .sneakoscope/missions/${input.plan?.mission_id || ''}/ using review cycle ${cycle}. Preserve source IDs and falsifiability; never claim guaranteed genius, novelty, breakthrough, or publication acceptance.`
   const prompt = buildOfficialSubagentPrompt({
-    goal: `Revise the Research manuscript in .sneakoscope/missions/${input.plan?.mission_id || ''}/ using review cycle ${cycle}. Preserve source IDs and falsifiability; never claim guaranteed genius, novelty, breakthrough, or publication acceptance.`,
+    goal,
     slices: [slice],
     maxThreads: Math.min(1, maxThreads),
     requestedSubagents: 1,
@@ -442,6 +445,7 @@ async function runOfficialRevisionCycle(input: ResearchAdversarialReviewLoopInpu
   })
   const run = await runWorkflow(input, {
     root: input.root,
+    goal,
     prompt,
     requestedSubagents: 1,
     maxThreads: 1,

@@ -124,6 +124,7 @@ try {
   let nestedLaunch = false
   const appResult = await runOfficialSubagentWorkflow({
     root,
+    goal: prompt,
     prompt,
     requestedSubagents: 3,
     maxThreads: 12,

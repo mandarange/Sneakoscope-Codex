@@ -14,6 +14,10 @@ test('version bump updates every current release and Codex document surface', as
     'CHANGELOG.md': '# Changelog\n\n## [Unreleased]\n',
     'README.md': 'Current release: SKS **1.2.3**.\n\n## Naruto In 1.2.3\n',
     'docs/release-readiness.md': [
+      '# SKS 1.2.0 Release Readiness',
+      '',
+      'This document is the current fail-closed release contract for `sneakoscope`',
+      '1.2.0. The current package version on this branch is 1.2.3. It is a readiness checklist.',
       'SKS 1.2.3 is ready for publication.',
       'Codex 0.142 references later in this document are historical release records and cannot authorize the 1.2.3 release.',
       '1.2.3 release readiness requires current proof.',
@@ -66,6 +70,8 @@ test('version bump updates every current release and Codex document surface', as
     const expected: Record<string, RegExp[]> = {
       'README.md': [/SKS \*\*1\.2\.4\*\*/, /## Naruto In 1\.2\.4/],
       'docs/release-readiness.md': [
+        /^# SKS 1\.2\.4 Release Readiness$/m,
+        /`sneakoscope`\n1\.2\.4\. The current package version on this branch is 1\.2\.4\./,
         /^SKS 1\.2\.4 is ready/m,
         /cannot authorize the 1\.2\.4 release/,
         /^1\.2\.4 release readiness requires/m,

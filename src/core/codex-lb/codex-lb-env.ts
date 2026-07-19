@@ -23,11 +23,22 @@ export type CodexLbEnvLoadResult = {
   base_url: string | null;
   api_key: {
     present: boolean;
+    usable: boolean;
     source: CodexLbEnvSource | null;
     redacted: true;
     fingerprint: string | null;
   };
   secret_api_key: string | null;
+  credential_binding: {
+    checked: boolean;
+    present: boolean;
+    valid: boolean;
+    status: 'matched' | 'missing' | 'invalid_metadata' | 'key_missing' | 'api_key_mismatch' | 'base_url_mismatch';
+    metadata_path: string;
+    api_key_matches: boolean | null;
+    base_url_matches: boolean | null;
+    blockers: string[];
+  };
   env_paths: string[];
   keychain: {
     checked: boolean;
@@ -111,6 +122,7 @@ export async function readCodexLbModelCatalog(opts: {
   try {
     const response = await fetchImpl(`${loaded.base_url}/models`, {
       headers: { Authorization: `Bearer ${loaded.secret_api_key}` },
+      redirect: 'error',
       signal: AbortSignal.timeout(Math.max(250, Number(opts.timeoutMs || 5000)))
     });
     const payload = await response.json().catch(() => null);
@@ -197,11 +209,12 @@ export function codexLbBaseUrlSecurityBlocker(input: unknown): string | null {
 
 export async function loadCodexLbEnv(opts: any = {}): Promise<CodexLbEnvLoadResult> {
   const home = opts.home || process.env.HOME || os.homedir();
+  const metadataPath = opts.metadataPath || codexLbMetadataPath(home);
   const envPaths = [
     opts.envPath || codexLbEnvPath(home),
     opts.legacyEnvPath || legacyCodexLbEnvPath(home)
   ];
-  const sourcePriority: CodexLbEnvSource[] = ['process.env', 'keychain', 'env-file', 'legacy-env-file'];
+  const sourcePriority: CodexLbEnvSource[] = ['process.env', 'env-file', 'keychain', 'legacy-env-file'];
   if (opts.allowProjectSecrets) sourcePriority.push('project-local');
 
   const processEnv = pickEnv(opts.processEnv || process.env);
@@ -209,44 +222,151 @@ export async function loadCodexLbEnv(opts: any = {}): Promise<CodexLbEnvLoadResu
   const legacyEnv = await readEnvFile(envPaths[1]);
   const keychain = await readMacKeychain(opts);
   const projectLocal: { apiKey?: string; baseUrl?: string } = opts.allowProjectSecrets ? await readEnvFile(path.join(opts.root || process.cwd(), '.env')) : {};
+  const metadata = await readCodexLbCredentialMetadata(metadataPath);
 
-  const keySource = processEnv.apiKey ? 'process.env'
-    : keychain.apiKey ? 'keychain'
-      : envFile.apiKey ? 'env-file'
-        : legacyEnv.apiKey ? 'legacy-env-file'
-          : projectLocal.apiKey ? 'project-local'
-            : 'missing';
-  const baseUrlSource = processEnv.baseUrl ? 'process.env'
-    : envFile.baseUrl ? 'env-file'
-      : legacyEnv.baseUrl ? 'legacy-env-file'
-        : projectLocal.baseUrl ? 'project-local'
-          : 'missing';
-  const apiKey = processEnv.apiKey || keychain.apiKey || envFile.apiKey || legacyEnv.apiKey || projectLocal.apiKey || '';
-  const baseUrl = normalizeCodexLbBaseUrl(processEnv.baseUrl || envFile.baseUrl || legacyEnv.baseUrl || projectLocal.baseUrl || '');
+  const apiKeyCandidates = [
+    { source: 'process.env' as const, apiKey: processEnv.apiKey },
+    { source: 'env-file' as const, apiKey: envFile.apiKey },
+    { source: 'keychain' as const, apiKey: keychain.apiKey },
+    { source: 'legacy-env-file' as const, apiKey: legacyEnv.apiKey },
+    ...(opts.allowProjectSecrets ? [{ source: 'project-local' as const, apiKey: String(projectLocal.apiKey || '') }] : [])
+  ].filter((candidate) => Boolean(candidate.apiKey));
+  const candidateFingerprints = await Promise.all(apiKeyCandidates.map(async (candidate) => ({
+    ...candidate,
+    sha256: await sha256Full(candidate.apiKey)
+  })));
+  const selectedApiKey = metadata.valid
+    ? candidateFingerprints.find((candidate) => candidate.sha256 === metadata.apiKeySha256) || candidateFingerprints[0]
+    : candidateFingerprints[0];
+  const keySource = selectedApiKey?.source || 'missing';
+  const apiKey = selectedApiKey?.apiKey || '';
+  const configuredBaseUrl = normalizeCodexLbBaseUrl(processEnv.baseUrl || envFile.baseUrl || legacyEnv.baseUrl || projectLocal.baseUrl || '');
+  const apiKeySha256 = selectedApiKey?.sha256 || '';
+  const binding = evaluateCodexLbCredentialBinding({
+    metadata,
+    metadataPath,
+    apiKeySha256,
+    configuredBaseUrl
+  });
+  const baseUrl = binding.present && metadata.baseUrl ? metadata.baseUrl : configuredBaseUrl;
+  const apiKeyUsable = Boolean(apiKey) && binding.blockers.length === 0;
   const missing = [
     ...(apiKey ? [] : ['CODEX_LB_API_KEY']),
-    ...(baseUrl ? [] : ['CODEX_LB_BASE_URL'])
+    ...(baseUrl ? [] : ['CODEX_LB_BASE_URL']),
+    ...(binding.blockers.length ? ['CODEX_LB_CREDENTIAL_BINDING'] : [])
   ];
   return {
     schema: 'sks.codex-lb-env.v1',
-    configured: missing.length === 0,
+    configured: missing.length === 0 && apiKeyUsable,
     missing,
     source: apiKey ? keySource : 'missing',
     source_priority: sourcePriority,
     base_url: baseUrl || null,
     api_key: {
       present: Boolean(apiKey),
+      usable: apiKeyUsable,
       source: apiKey ? keySource : null,
       redacted: true,
-      fingerprint: apiKey ? await sha256Prefix(apiKey) : null
+      fingerprint: apiKeySha256 ? apiKeySha256.slice(0, 16) : null
     },
-    secret_api_key: apiKey || null,
+    secret_api_key: apiKeyUsable ? apiKey : null,
+    credential_binding: binding,
     env_paths: envPaths,
     keychain: {
       checked: keychain.checked,
       available: keychain.available,
       status: keychain.status
     }
+  };
+}
+
+async function readCodexLbCredentialMetadata(file: string): Promise<{
+  present: boolean;
+  valid: boolean;
+  baseUrl: string;
+  apiKeySha256: string;
+}> {
+  if (!(await exists(file))) return { present: false, valid: false, baseUrl: '', apiKeySha256: '' };
+  const value = await readJson<any>(file, null).catch(() => null);
+  const baseUrl = normalizeCodexLbBaseUrl(value?.base_url || '');
+  const apiKeySha256 = String(value?.api_key?.sha256 || '').trim().toLowerCase();
+  const valid = value?.schema === 'sks.codex-lb-metadata.v1'
+    && Boolean(baseUrl)
+    && codexLbBaseUrlSecurityBlocker(baseUrl) === null
+    && /^[a-f0-9]{64}$/.test(apiKeySha256);
+  return { present: true, valid, baseUrl, apiKeySha256 };
+}
+
+function evaluateCodexLbCredentialBinding(input: {
+  metadata: { present: boolean; valid: boolean; baseUrl: string; apiKeySha256: string };
+  metadataPath: string;
+  apiKeySha256: string;
+  configuredBaseUrl: string;
+}): CodexLbEnvLoadResult['credential_binding'] {
+  const base = {
+    checked: input.metadata.present,
+    present: input.metadata.present,
+    metadata_path: input.metadataPath
+  };
+  if (!input.metadata.present) {
+    return {
+      ...base,
+      valid: false,
+      status: 'missing',
+      api_key_matches: null,
+      base_url_matches: null,
+      blockers: []
+    };
+  }
+  if (!input.metadata.valid) {
+    return {
+      ...base,
+      valid: false,
+      status: 'invalid_metadata',
+      api_key_matches: null,
+      base_url_matches: null,
+      blockers: ['codex_lb_credential_metadata_invalid']
+    };
+  }
+  if (!input.apiKeySha256) {
+    return {
+      ...base,
+      valid: false,
+      status: 'key_missing',
+      api_key_matches: false,
+      base_url_matches: input.configuredBaseUrl ? input.configuredBaseUrl === input.metadata.baseUrl : true,
+      blockers: []
+    };
+  }
+  const apiKeyMatches = input.apiKeySha256 === input.metadata.apiKeySha256;
+  const baseUrlMatches = input.configuredBaseUrl ? input.configuredBaseUrl === input.metadata.baseUrl : true;
+  if (!apiKeyMatches) {
+    return {
+      ...base,
+      valid: false,
+      status: 'api_key_mismatch',
+      api_key_matches: false,
+      base_url_matches: baseUrlMatches,
+      blockers: ['codex_lb_credential_key_fingerprint_mismatch']
+    };
+  }
+  if (!baseUrlMatches) {
+    return {
+      ...base,
+      valid: false,
+      status: 'base_url_mismatch',
+      api_key_matches: true,
+      base_url_matches: false,
+      blockers: ['codex_lb_credential_base_url_mismatch']
+    };
+  }
+  return {
+    ...base,
+    valid: true,
+    status: 'matched',
+    api_key_matches: true,
+    base_url_matches: true,
+    blockers: []
   };
 }
 
@@ -312,9 +432,9 @@ export function parseShellEnvValue(text: unknown = '', key: unknown = ''): strin
   return raw;
 }
 
-async function sha256Prefix(value: string): Promise<string> {
+async function sha256Full(value: string): Promise<string> {
   const { createHash } = await import('node:crypto');
-  return createHash('sha256').update(value).digest('hex').slice(0, 16);
+  return createHash('sha256').update(value).digest('hex');
 }
 
 function redactSecret(text: unknown, secret: unknown): string {

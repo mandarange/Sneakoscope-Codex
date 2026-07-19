@@ -355,6 +355,11 @@ async function syncSourcePackageVersion(root: any, version: any) {
     {
       rel: 'docs/release-readiness.md',
       replace: (text: string) => text
+        .replace(/^# SKS \d+\.\d+\.\d+ Release Readiness$/m, `# SKS ${version} Release Readiness`)
+        .replace(
+          /(`sneakoscope`\r?\n)\d+\.\d+\.\d+\. The current package version on this branch is \d+\.\d+\.\d+\./m,
+          (_match: string, prefix: string) => `${prefix}${version}. The current package version on this branch is ${version}.`
+        )
         .replace(/^SKS \d+\.\d+\.\d+ is ready/m, `SKS ${version} is ready`)
         .replace(/^Codex 0\.142 references later in this document are historical release records and cannot authorize the \d+\.\d+\.\d+ release\./m, `Codex 0.142 references later in this document are historical release records and cannot authorize the ${version} release.`)
         .replace(/^\d+\.\d+\.\d+ release readiness requires/m, `${version} release readiness requires`)

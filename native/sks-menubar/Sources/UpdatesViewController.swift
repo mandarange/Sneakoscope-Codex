@@ -6,13 +6,16 @@ final class UpdatesViewController: NSViewController, ControlCenterPage {
     private let operations: OperationCoordinator
     private let notifications: NotificationCoordinator
     private let status = NativeView.detail("Update status has not been checked yet.")
+    private let codexUpdateStatus = NativeView.detail("Codex CLI update has not been run yet.")
     private let stageStatus = NativeView.detail("Update stages: no update receipt recorded yet.")
     private let remediation = NativeView.detail("Remediation and rollback guidance will appear here when needed.")
     private let progress = NSProgressIndicator()
     private var receiptTimer: Timer?
     private var activeReceiptId: String?
     private var checkButton: NSButton!
+    private var codexUpdateButton: NSButton!
     private var reviewButton: NSButton!
+    private var refreshSharedSnapshotOnNextReload = false
     private var busy = false
 
     init(processClient: ProcessClient, operations: OperationCoordinator, notifications: NotificationCoordinator) {
@@ -26,13 +29,16 @@ final class UpdatesViewController: NSViewController, ControlCenterPage {
         progress.controlSize = .small
         progress.isHidden = true
         checkButton = NativeView.button("Check Now", target: self, action: #selector(checkNow))
+        codexUpdateButton = NativeView.button("Update Codex CLI", target: self, action: #selector(updateCodexCLI))
+        codexUpdateButton.setAccessibilityHelp("Update the operator Codex CLI using its verified installation method.")
         reviewButton = NativeView.button("Review and Update", target: self, action: #selector(reviewAndUpdate))
-        let buttons = NSStackView(views: [checkButton, reviewButton, progress])
+        codexUpdateStatus.setAccessibilityLabel("Codex CLI update result")
+        let buttons = NSStackView(views: [checkButton, codexUpdateButton, reviewButton, progress])
         buttons.orientation = .horizontal; buttons.spacing = 8
         view = NativeView.stack([
             NativeView.title("Updates"),
             NativeView.detail("SKS, Codex CLI, and Menu Bar status share one local snapshot. Network refresh only runs on demand or after expiry."),
-            status, stageStatus, remediation, buttons,
+            status, codexUpdateStatus, stageStatus, remediation, buttons,
             NativeView.detail("Rollback guidance and the previous Menu Bar app remain available if final verification fails. The update receipt records the exact recovery command and stage state.")
         ])
         loadCached()
@@ -49,10 +55,20 @@ final class UpdatesViewController: NSViewController, ControlCenterPage {
     private func setBusy(_ value: Bool) {
         busy = value
         checkButton?.isEnabled = !value
+        codexUpdateButton?.isEnabled = !value
         reviewButton?.isEnabled = !value
     }
 
     @objc private func checkNow() { run(["update", "status", "--refresh", "--json"], kind: "update-status", group: nil) }
+
+    @objc private func updateCodexCLI() {
+        run(["codex", "update", "--json"], kind: "codex-cli-update", group: "update") { [weak self] result in
+            guard let self = self else { return }
+            self.renderCodexUpdate(result: result)
+            self.refreshSharedSnapshotOnNextReload = true
+            self.reloadSnapshot()
+        }
+    }
 
     @objc private func reviewAndUpdate() {
         run(["update", "review", "--json"], kind: "update-review", group: nil) { [weak self] result in
@@ -99,12 +115,13 @@ final class UpdatesViewController: NSViewController, ControlCenterPage {
         _ = operations.update(operation, state: .running, stage: "running", progress: nil, summary: status.stringValue)
         if kind == "update" { startReceiptPolling(for: operation) }
         let environment = kind == "update" ? Self.controlCenterUpdateEnvironment : [:]
-        let timeout: TimeInterval? = kind == "update" ? nil : NativeView.mutationTimeout
+        let timeout: TimeInterval? = kind == "update" || kind == "codex-cli-update" ? nil : NativeView.mutationTimeout
         processClient.run(args, environment: environment, timeout: timeout) { [weak self] result in
             guard let self = self else { return }
             self.stopReceiptPolling()
             self.progress.stopAnimation(nil); self.progress.isHidden = true
             self.setBusy(false)
+            let codexUpdateSucceeded = kind == "codex-cli-update" && self.codexUpdateResultIsSuccessful(result)
             var authoritativeState: OperationState?
             var restartMenuBarAfterCompletion = false
             if kind == "update" {
@@ -129,10 +146,20 @@ final class UpdatesViewController: NSViewController, ControlCenterPage {
                     self.remediation.stringValue = "Remediation: open the last operation log and run sks update status --refresh --json before retrying or rolling back."
                 }
             } else {
-                let state: OperationState = kind == "update-review" && result.code == 0 ? .waitingForConfirmation : result.code == 0 ? .succeeded : .failed
-                _ = self.operations.update(operation, state: state, stage: state == .waitingForConfirmation ? "confirmation" : "complete", progress: 1, summary: state == .waitingForConfirmation ? "Update review is waiting for confirmation" : result.code == 0 ? "Update operation completed" : "Update operation failed")
+                let state: OperationState
+                if kind == "update-review" && result.code == 0 { state = .waitingForConfirmation }
+                else if kind == "codex-cli-update" { state = codexUpdateSucceeded ? .succeeded : .failed }
+                else { state = result.code == 0 ? .succeeded : .failed }
+                let summary = state == .waitingForConfirmation
+                    ? "Update review is waiting for confirmation"
+                    : state == .succeeded ? "Update operation completed" : "Update operation failed"
+                _ = self.operations.update(operation, state: state, stage: state == .waitingForConfirmation ? "confirmation" : "complete", progress: 1, summary: summary)
                 if result.code != 0 {
-                    self.status.stringValue = "\(kind.replacingOccurrences(of: "-", with: " ").capitalized) failed · \(NativeView.redactPreview(result.output))"
+                    self.status.stringValue = kind == "codex-cli-update"
+                        ? "Codex CLI update failed. Structured guidance is shown below."
+                        : "\(kind.replacingOccurrences(of: "-", with: " ").capitalized) failed · \(NativeView.redactPreview(result.output))"
+                } else if kind == "codex-cli-update" && !codexUpdateSucceeded {
+                    self.status.stringValue = "Codex CLI update returned an unreadable or unsuccessful result. No success state was assumed."
                 } else if state == .waitingForConfirmation {
                     self.status.stringValue = "Review ready. Confirm to continue, or cancel to leave the current install unchanged."
                 }
@@ -140,7 +167,9 @@ final class UpdatesViewController: NSViewController, ControlCenterPage {
             let updateOutput = kind == "update-status" ? result.output : nil
             let approvalRequired = kind == "update-review" && result.code == 0
             let updateAvailable = updateOutput != nil && NotificationCoordinator.updateIsAvailable(in: result.output)
-            let authoritativeFailure = kind == "update" ? authoritativeState != .succeeded : result.code != 0
+            let authoritativeFailure = kind == "update"
+                ? authoritativeState != .succeeded
+                : kind == "codex-cli-update" ? !codexUpdateSucceeded : result.code != 0
             let terminalUncertain = kind == "update" && authoritativeState == .terminalUncertain
             let notificationTitle: String
             let notificationBody: String
@@ -154,11 +183,15 @@ final class UpdatesViewController: NSViewController, ControlCenterPage {
                 notificationTitle = "SKS update outcome is uncertain"
                 notificationBody = "The authoritative update receipt could not confirm completion. Open Control Center before retrying or rolling back."
             } else if authoritativeFailure {
-                notificationTitle = "SKS update needs attention"
-                notificationBody = "The authoritative update state did not complete successfully. Open Control Center for redacted remediation."
+                notificationTitle = kind == "codex-cli-update" ? "Codex CLI update needs attention" : "SKS update needs attention"
+                notificationBody = kind == "codex-cli-update"
+                    ? "The Codex CLI update did not complete successfully. Open Control Center for structured guidance."
+                    : "The authoritative update state did not complete successfully. Open Control Center for redacted remediation."
             } else {
-                notificationTitle = "SKS update operation completed"
-                notificationBody = "The authoritative update receipt confirmed completion."
+                notificationTitle = kind == "codex-cli-update" ? "Codex CLI update completed" : "SKS update operation completed"
+                notificationBody = kind == "codex-cli-update"
+                    ? "The operator Codex CLI update completed and its shared update status is refreshing."
+                    : "The authoritative update receipt confirmed completion."
             }
             self.notifications.send(PublicNotificationEvent(
                 category: NotificationCoordinator.categoryIdentifier(updateStatusOutput: updateOutput, failed: authoritativeFailure, actionRequired: approvalRequired),
@@ -192,7 +225,57 @@ final class UpdatesViewController: NSViewController, ControlCenterPage {
     }
 
     private func reloadSnapshot() {
-        processClient.run(["update", "status", "--json"], timeout: NativeView.statusTimeout) { [weak self] result in self?.render(statusResult: result) }
+        let args = refreshSharedSnapshotOnNextReload
+            ? ["update", "status", "--refresh", "--json"]
+            : ["update", "status", "--json"]
+        refreshSharedSnapshotOnNextReload = false
+        let timeout = args.contains("--refresh") ? NativeView.mutationTimeout : NativeView.statusTimeout
+        processClient.run(args, timeout: timeout) { [weak self] result in self?.render(statusResult: result) }
+    }
+
+    private func codexUpdateResultIsSuccessful(_ result: ProcessResult) -> Bool {
+        guard result.code == 0,
+              !result.truncated,
+              let data = result.output.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              json["schema"] as? String == "sks.codex-cli-update-result.v1" else { return false }
+        return json["ok"] as? Bool == true
+    }
+
+    private func renderCodexUpdate(result: ProcessResult) {
+        guard !result.truncated,
+              let data = result.output.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              json["schema"] as? String == "sks.codex-cli-update-result.v1" else {
+            codexUpdateStatus.stringValue = result.code == 0
+                ? "Codex CLI update returned invalid structured output. No success state was assumed."
+                : "Codex CLI update failed without readable structured guidance. Open Diagnostics for the redacted log."
+            return
+        }
+
+        let ok = result.code == 0 && json["ok"] as? Bool == true
+        let resultStatus = (json["status"] as? String ?? "unknown").replacingOccurrences(of: "_", with: " ")
+        let method = (json["update_method"] as? String ?? "unknown").replacingOccurrences(of: "-", with: " ")
+        let before = json["before_version"] as? String
+        let after = json["after_version"] as? String
+        let blockers = json["blockers"] as? [String] ?? []
+        let guidance = json["guidance"] as? [String] ?? []
+        var lines: [String] = []
+
+        if ok {
+            let version: String
+            if let before = before, let after = after, before != after { version = "\(before) → \(after)" }
+            else { version = after ?? before ?? "version unavailable" }
+            lines.append("Codex CLI update: \(resultStatus) · \(version) · method \(method).")
+            if !guidance.isEmpty { lines.append("Follow-up: \(guidance.joined(separator: " "))") }
+        } else {
+            lines.append("Codex CLI update: \(resultStatus) · no success state was assumed.")
+            if !blockers.isEmpty { lines.append("Blockers: \(blockers.joined(separator: "; "))") }
+            lines.append(guidance.isEmpty
+                ? "Next step: open Diagnostics for the redacted log before retrying."
+                : "Next steps: \(guidance.joined(separator: " "))")
+        }
+        codexUpdateStatus.stringValue = lines.joined(separator: "\n")
     }
 
     private func render(statusResult result: ProcessResult) {

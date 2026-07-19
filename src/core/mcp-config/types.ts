@@ -111,6 +111,7 @@ export interface McpHealthResultV1 {
     | 'unknown';
   readonly protocol_version: string | null;
   readonly tool_count: number | null;
+  readonly tool_names: string[] | null;
   readonly instructions_present: boolean | null;
   readonly latency_ms: number | null;
   readonly checked_at: string;

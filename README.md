@@ -18,7 +18,7 @@ Proof-first orchestration for Codex CLI, ChatGPT Desktop, AI coding agents, mult
 Sneakoscope Codex (`sks`) is an open-source trust layer for Codex CLI and ChatGPT Desktop. It coordinates bounded AI coding agents, records machine-verifiable evidence, preserves project memory, and blocks release claims that are not supported by current tests or artifacts. Search visibility outcomes are measured separately; SKS does not promise rankings or traffic.
 <!-- END SKS SEARCH VISIBILITY MARKETING -->
 
-Current release: **SKS 7.0.2**, validated against the official stable **Codex CLI 0.144.5** release from July 16, 2026. It makes the Control Center Overview report build, install, cache, rebuild, and probe health from their real authorities; adds root-owned Naruto follow-up waves with recovered thread capacity; separates Terra Medium exploration, Sol High implementation, and Sol Max judgment; and replaces duplicated global guidance with one concise Core Engineering Directive. The `0.145.0-alpha` line is intentionally excluded from the stable release baseline. See [CHANGELOG.md](CHANGELOG.md).
+Current release: **SKS 7.0.3**, with the package compatibility baseline pinned to **Codex CLI 0.144.5**. It fixes codex-lb readiness, preserves provider/auth/model state across `sks update`, restores explicit Chat/Pro OAuth recovery, and adds a guarded Codex CLI updater that discovers newer stable operator releases independently. Prerelease `0.145.0-alpha` artifacts remain excluded from the pinned release contract. See [CHANGELOG.md](CHANGELOG.md).
 
 ## What 7.0.0 Ships
 
@@ -106,7 +106,7 @@ It shows the current quickstart flow: one-line install, `$sks-plan`, `sks review
 - codex-lb continuity: `sks codex-lb status --json` verifies the selected proxy's unauthenticated `/health` `X-App-Version`. Tool-heavy continuation requires codex-lb `1.21.0-beta.3` or later; older or unverified deployments block setup, doctor, and launch instead of silently falling back.
 - Agent bridge for any agent system: `sks mcp-server`, `sks agent-bridge setup`, `SKS_AGENT_MODE=1` — see [docs/AGENT-BRIDGE.md](docs/AGENT-BRIDGE.md)
 - Release gates: `npm run release:check:affected` for ordinary change-aware verification and `npm run release:check:confidence` for the final local confidence pass.
-- Release preparation handoff: run `npm run typecheck --silent`, one `npm run build:clean --silent`, focused tests for the changed surfaces, `npm run release:check:affected`, `npm run release:check:confidence`, and finally `npm pack --dry-run --ignore-scripts --json`. Publish authorization and publication remain a distinct repository-maintainer workflow.
+- Release preparation: typecheck, one clean build, focused tests, affected/confidence gates, then `npm publish --dry-run --json --registry https://registry.npmjs.org/ --tag latest --access public`. The dry-run does not publish; authorization remains a separate maintainer workflow.
 - Release readiness notes: [docs/release-readiness.md](docs/release-readiness.md) and [CHANGELOG.md](CHANGELOG.md)
 - Image generation review routes require Codex App `$imagegen`/`gpt-image-2` evidence with recorded output hashes; direct API fallback and mock fixtures do not satisfy full route gates.
 
@@ -117,7 +117,9 @@ It shows the current quickstart flow: one-line install, `$sks-plan`, `sks review
 - macOS optional: menu bar integration and `/usr/bin/open`
   - The menubar icon shows and hides itself automatically as the Codex desktop app launches/quits; set `quit_with_codex: true` in `~/.codex/sks-menubar/config.json` to have the menubar fully quit with Codex instead of just hiding (default `false`).
   - Native input dialogs (API keys, codex-lb setup) pass secrets to `sks` via `--api-key-stdin` instead of a visible Terminal window or process arguments.
-  - Auth/provider changes wait for the ChatGPT/Codex app to exit and reopen by bundle id; a failed restart is reported as a failed menu action.
+  - Auth/provider changes require a successful app restart; skipped or failed restarts fail the action.
+  - `sks update` preserves the selected codex-lb or ChatGPT OAuth mode, model, reasoning, catalog, and routing state.
+  - Providers exposes **Restore Chat / Pro (OAuth)** as an explicit auth-mode switch while retaining saved codex-lb credentials.
   - Update installs always rebuild the companion with the newly installed SKS package, preventing a previous-version updater from restoring a stale menu binary.
   - The menubar dropdown's `View Last Log` item opens the most recent background action's log file, so you don't need to keep a Terminal window open to see command output.
   - `Manage MCP Servers…` provides a resizable native table and add/remove/enable/disable controls for global Codex MCP configuration. Secret environment values and command arguments are accepted through native dialogs/stdin but omitted from list output and logs.

@@ -304,6 +304,40 @@ test('Providers saves Codex LB keys through visible paste fields and stdin', () 
   assert.match(processClient, /Child output was suppressed\./);
 });
 
+test('Providers keeps codex-lb activation and connection health feedback coherent', () => {
+  const providers = fs.readFileSync(path.join(resolvePackagedMenuBarSourceRoot(), 'Sources', 'ProvidersViewController.swift'), 'utf8');
+  const slice = (start: string, end: string) => {
+    const startIndex = providers.indexOf(start);
+    const endIndex = providers.indexOf(end, startIndex + start.length);
+    assert.ok(startIndex >= 0, `missing ${start}`);
+    assert.ok(endIndex > startIndex, `missing ${end} after ${start}`);
+    return providers.slice(startIndex, endIndex);
+  };
+  const connectionFlow = slice('@objc private func testConnection()', '@objc private func useOAuth()');
+  const oauthFlow = slice('@objc private func useOAuth()', '@objc private func useCodexLb()');
+  const activationFlow = slice('@objc private func useCodexLb()', '@objc private func fastOn()');
+
+  assert.match(activationFlow, /\["codex-lb", "use-codex-lb",[\s\S]{0,120}"--json"\]/);
+  assert.match(connectionFlow, /processClient\.run\(\["codex-lb", "health", "--json"\]/);
+  assert.match(providers, /\["codex_lb"\]\s+as\?\s+\[String: Any\]/);
+  for (const field of ['selected', 'provider_ready', 'auth_routing_coherent']) {
+    assert.match(providers, new RegExp(`\\["${field}"\\]`));
+  }
+  assert.match(providers, /\["shared_openai_routing"\]\s+as\?\s+\[String: Any\][\s\S]{0,400}\["safe"\]/);
+  const statusProbeCount = providers.match(/\["codex-lb", "status", "--json"\]/g)?.length ?? 0;
+  const activationCount = providers.match(/\["codex-lb", "use-codex-lb",[\s\S]{0,120}"--json"\]/g)?.length ?? 0;
+  assert.ok(statusProbeCount >= 2 || activationCount >= 2, 'activation must establish or recheck readiness after the desktop restart');
+  assert.match(providers, /(?:status\s*==\s*"not_configured"|case\s+"not_configured")[\s\S]{0,1200}Use codex-lb/);
+  assert.match(providers, /if chainOk \{[\s\S]{0,700}return \(true,[\s\S]{0,300}Activation required: click Use codex-lb/);
+  assert.doesNotMatch(connectionFlow, /NativeView\.redactPreview\(result\.output\)/);
+  assert.match(oauthFlow, /processClient\.run\(\["codex-lb", "use-oauth", "--restart-app", "--json"\]/);
+  assert.doesNotMatch(oauthFlow, /^\s*run\(/m);
+  assert.doesNotMatch(oauthFlow, /self\.refresh\(\)/);
+  assert.match(providers, /\["restart_performed"\]\s+as\?\s+Bool\s*==\s*true/);
+  assert.match(providers, /restart_not_performed/);
+  assert.match(providers, /No OAuth switch was assumed/);
+});
+
 test('Menu Bar exposes truthful accessible Fast state with direct on and off actions', () => {
   const swift = source();
   const providers = fs.readFileSync(path.join(resolvePackagedMenuBarSourceRoot(), 'Sources', 'ProvidersViewController.swift'), 'utf8');
@@ -413,6 +447,35 @@ test('update UI reads the v3 snapshot and refreshes only through explicit refres
   assert.match(swift, /Timer\.scheduledTimer\(withTimeInterval: 30, repeats: true\).*refreshLocalState\(\)/s);
   assert.match(swift, /Rollback guidance and the previous Menu Bar app remain available/);
   assert.match(swift, /No success state was assumed/);
+});
+
+test('Updates exposes a guarded Codex CLI update action and refreshes its snapshot after completion', () => {
+  const updates = fs.readFileSync(path.join(resolvePackagedMenuBarSourceRoot(), 'Sources', 'UpdatesViewController.swift'), 'utf8');
+  const button = updates.match(/(\w+)\s*=\s*NativeView\.button\("Update Codex CLI", target: self, action: #selector\((\w+)\)\)/);
+  assert.ok(button, 'missing visible Update Codex CLI button');
+  const buttonName = button[1];
+  const actionName = button[2];
+  assert.ok(buttonName && actionName, 'Codex CLI update button must name its control and action');
+  assert.match(updates, new RegExp(`NSStackView\\(views: \\[[^\\]]*\\b${buttonName}\\b`));
+
+  const actionStart = updates.indexOf(`@objc private func ${actionName}()`);
+  assert.ok(actionStart >= 0, `missing ${actionName} action`);
+  const actionTail = updates.slice(actionStart + actionName.length);
+  const nextMethodOffset = actionTail.search(/\n    (?:@objc )?private func /);
+  const actionFlow = updates.slice(actionStart, nextMethodOffset >= 0 ? actionStart + actionName.length + nextMethodOffset : updates.length);
+  assert.match(actionFlow, /run\(\["codex", "update", "--json"\], kind: "[^"]+", group: "[^"]+"/);
+  assert.match(actionFlow, /reloadSnapshot\(\)/);
+  assert.match(updates, /operations\.begin\(kind: kind, mutationGroup: group/);
+  assert.match(updates, /codexUpdateButton\?\.isEnabled\s*=\s*!value/);
+  assert.match(updates, /codexUpdateResultIsSuccessful[\s\S]{0,900}!result\.truncated[\s\S]{0,900}sks\.codex-cli-update-result\.v1[\s\S]{0,500}\["ok"\]\s+as\?\s+Bool\s*==\s*true/);
+  assert.match(updates, /args\.contains\("--refresh"\)\s*\?\s*NativeView\.mutationTimeout\s*:\s*NativeView\.statusTimeout/);
+  assert.match(updates, /kind\s*==\s*"codex-cli-update"\s*\?\s*!codexUpdateSucceeded/);
+  const codexUpdateFailureStart = updates.indexOf('if result.code != 0 {');
+  const codexUpdateFailureEnd = updates.indexOf('} else if state == .waitingForConfirmation', codexUpdateFailureStart);
+  assert.ok(codexUpdateFailureStart >= 0 && codexUpdateFailureEnd > codexUpdateFailureStart);
+  const codexUpdateFailureFlow = updates.slice(codexUpdateFailureStart, codexUpdateFailureEnd);
+  assert.match(codexUpdateFailureFlow, /kind\s*==\s*"codex-cli-update"\s*\n\s*\?\s*"Codex CLI update failed\. Structured guidance is shown below\."\s*\n\s*:\s*[^\n]*NativeView\.redactPreview\(result\.output\)/);
+  assert.doesNotMatch(actionFlow, /(?:npm|npx|brew)\s+(?:install|update|upgrade)|curl\s/);
 });
 
 test('Menu Bar action runner executes from HOME and prefers the pinned package entry', () => {

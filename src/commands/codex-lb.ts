@@ -13,6 +13,7 @@ import {
 } from '../core/codex-lb/codex-lb-tool-output-recovery.js';
 import { restartCodexApp } from '../core/codex-app/codex-app-restart.js';
 import { repairCodexAppFastUi } from '../core/codex-app/codex-app-fast-ui-repair.js';
+import { loadCodexLbEnv } from '../core/codex-lb/codex-lb-env.js';
 
 export async function run(command: any, args: any = []) {
   const root = await projectRoot();
@@ -46,26 +47,50 @@ export async function run(command: any, args: any = []) {
   if (action === 'health' || action === 'verify-chain' || action === 'chain') {
     const allowUnverifiedToolOutputRecovery = codexLbToolOutputRecoveryOverrideAcknowledged({ args });
     const status = await codexLbStatus({ probeToolOutputRecovery: true, allowUnverifiedToolOutputRecovery });
-    const blocker = !status.env_key_configured ? 'missing_env_key' : !status.base_url ? 'missing_base_url' : 'not_configured';
-    const result = status.selected && status.tool_output_recovery?.ok !== true
+    const modelSelection = await resolveCodexLbHealthModel(status);
+    const loadedEnv = await loadCodexLbEnv({ home: path.dirname(path.dirname(status.env_path)), envPath: status.env_path });
+    const bindingBlocker = loadedEnv.credential_binding.blockers[0] || null;
+    const providerUrlMismatch = status.provider_configured === true && status.provider_base_url_matches_credential !== true;
+    const blocker = bindingBlocker
+      || (providerUrlMismatch ? 'provider_base_url_mismatch' : null)
+      || (!status.env_key_configured
+      ? 'missing_env_key'
+      : !status.base_url
+        ? 'missing_base_url'
+        : !modelSelection.model
+          ? 'model_unselected'
+          : 'not_configured');
+    const chain = status.selected && status.tool_output_recovery?.ok !== true
       ? { ok: false, status: 'tool_output_recovery_blocked', codex_lb: status, tool_output_recovery: status.tool_output_recovery }
-      : status.ok
-        ? await checkCodexLbResponseChain(status, { force: true, root, fastMode: flag(args, '--fast') || flag(args, '--priority') })
+      : !bindingBlocker && !providerUrlMismatch && status.env_key_configured && loadedEnv.base_url && loadedEnv.secret_api_key && modelSelection.model
+        ? await checkCodexLbResponseChain(status, {
+            force: true,
+            root,
+            fastMode: flag(args, '--fast') || flag(args, '--priority'),
+            model: modelSelection.model,
+            baseUrl: loadedEnv.base_url,
+            apiKey: loadedEnv.secret_api_key
+          })
         : { ok: false, status: blocker, codex_lb: status };
+    const result = { ...chain, codex_lb: status, model_selection: modelSelection };
+    if (!result.ok) process.exitCode = 1;
     if (flag(args, '--json')) return printJson(result);
     console.log(`codex-lb response chain: ${result.ok ? 'ok' : `failed (${result.status})`}`);
-    if (!result.ok) process.exitCode = 1;
     return;
   }
   if (action === 'fast-check' || action === 'fast' || action === 'verify-fast') {
     const allowUnverifiedToolOutputRecovery = codexLbToolOutputRecoveryOverrideAcknowledged({ args });
     const status = await codexLbStatus({ probeToolOutputRecovery: true, allowUnverifiedToolOutputRecovery });
-    const blocker = !status.env_key_configured ? 'missing_env_key' : !status.base_url ? 'missing_base_url' : !status.provider_contract_ok ? 'provider_contract_drift' : 'not_configured';
+    const loadedEnv = await loadCodexLbEnv({ home: path.dirname(path.dirname(status.env_path)), envPath: status.env_path });
+    const bindingBlocker = loadedEnv.credential_binding.blockers[0] || null;
+    const providerUrlMismatch = status.provider_configured === true && status.provider_base_url_matches_credential !== true;
+    const blocker = bindingBlocker || (providerUrlMismatch ? 'provider_base_url_mismatch' : null)
+      || (!status.env_key_configured ? 'missing_env_key' : !status.base_url ? 'missing_base_url' : !status.provider_contract_ok ? 'provider_contract_drift' : 'not_configured');
     const modelSelection = await resolveCodexLbFastCheckModel(status);
     const chain = status.selected && status.tool_output_recovery?.ok !== true
       ? { ok: false, status: 'tool_output_recovery_blocked', codex_lb: status, tool_output_recovery: status.tool_output_recovery }
-      : status.env_key_configured && status.base_url && modelSelection.model
-      ? await checkCodexLbResponseChain(status, { force: true, cache: false, root, fastMode: true, model: modelSelection.model })
+      : !bindingBlocker && !providerUrlMismatch && status.env_key_configured && loadedEnv.base_url && loadedEnv.secret_api_key && modelSelection.model
+      ? await checkCodexLbResponseChain(status, { force: true, cache: false, root, fastMode: true, model: modelSelection.model, baseUrl: loadedEnv.base_url, apiKey: loadedEnv.secret_api_key })
       : { ok: false, status: modelSelection.model ? blocker : 'model_unselected', codex_lb: status };
     const evidence = await fastEvidenceFromChain(chain, readOption(args, '--request-log', readOption(args, '--request-log-json', null)));
     const providerReady = status.provider_contract_ok === true;
@@ -184,30 +209,60 @@ export async function run(command: any, args: any = []) {
     return;
   }
   if (action === 'use-codex-lb' || action === 'use-lb') {
-    const result = await repairCodexLbAuth({
+    const restartRequired = flag(args, '--restart-app') || flag(args, '--restart');
+    const repairOptions = {
       forceCodexLbApiKeyAuth: true,
       authMode: 'codex-lb',
       forceFastMode: !flag(args, '--no-fast'),
       allowUnverifiedToolOutputRecovery: codexLbToolOutputRecoveryOverrideAcknowledged({ args })
-    });
+    };
+    const result = await repairCodexLbAuth(repairOptions);
     const fastUi = await repairCodexAppFastUiAfterMutation(root, Boolean(result.ok));
     const restart = await maybeRestartCodexAppForAuthSwitch(args, Boolean(result.ok && fastUi.ok));
-    const ok = Boolean(result.ok && fastUi.ok && restart?.ok !== false);
-    const shaped = { ...result, ok, mode: 'codex-lb', codex_app_fast_ui: fastUi, restart_app: restart };
+    const postRestart = await reconcileCodexLbAfterRestart(restart, repairOptions, Boolean(result.ok && fastUi.ok), restartRequired);
+    const finalStatus = postRestart.attempted ? postRestart.stable_status : result.codex_lb;
+    const readiness = codexLbActivationReadiness(finalStatus);
+    const restartRequirement = codexLbRestartPostcondition(restart, restartRequired);
+    const restartPerformed = restartRequirement.performed;
+    const restartSatisfied = restartRequirement.satisfied;
+    const ok = Boolean(result.ok && fastUi.ok && restart?.ok !== false && restartSatisfied && postRestart.ok && readiness.ok);
+    const shaped = {
+      ...result,
+      ok,
+      mode: 'codex-lb',
+      codex_lb: finalStatus,
+      readiness,
+      restart_required: restartRequired,
+      restart_performed: restartPerformed,
+      codex_app_fast_ui: fastUi,
+      restart_app: restart,
+      post_restart: postRestart
+    };
     if (!ok) process.exitCode = 1;
     if (flag(args, '--json')) return printJson(shaped);
-    console.log(result.ok ? 'Auth mode: codex-lb selected (API key).' : `Switch to codex-lb failed: ${result.status}${result.error ? `: ${result.error}` : ''}`);
+    const failureStatus = !restartSatisfied ? 'restart_not_performed' : postRestart.status || result.status;
+    console.log(ok ? 'Auth mode: codex-lb selected (API key).' : `Switch to codex-lb failed: ${failureStatus}${result.error ? `: ${result.error}` : ''}`);
     if (restart?.status === 'restarted') console.log('Codex App restarted for codex-lb auth.');
     if (!ok) process.exitCode = 1;
     return;
   }
   if (action === 'use-oauth' || action === 'use-chatgpt') {
+    const restartRequired = flag(args, '--restart-app') || flag(args, '--restart');
     const result = await releaseCodexLbAuthHold({ force: flag(args, '--force') });
     const authOk = !['no_backup', 'auth_in_use', 'failed'].includes(result.status);
     const fastUi = await repairCodexAppFastUiAfterMutation(root, authOk);
     const restart = await maybeRestartCodexAppForAuthSwitch(args, Boolean(authOk && fastUi.ok));
-    const ok = Boolean(authOk && fastUi.ok && restart?.ok !== false);
-    const shaped = { ...result, ok, mode: 'oauth', codex_app_fast_ui: fastUi, restart_app: restart };
+    const restartRequirement = codexLbRestartPostcondition(restart, restartRequired);
+    const ok = Boolean(authOk && fastUi.ok && restart?.ok !== false && restartRequirement.satisfied);
+    const shaped = {
+      ...result,
+      ok,
+      mode: 'oauth',
+      restart_required: restartRequired,
+      restart_performed: restartRequirement.performed,
+      codex_app_fast_ui: fastUi,
+      restart_app: restart
+    };
     if (!ok) process.exitCode = 1;
     if (flag(args, '--json')) return printJson(shaped);
     if (result.status === 'no_backup') {
@@ -217,7 +272,9 @@ export async function run(command: any, args: any = []) {
       process.exitCode = 1;
       return;
     }
-    console.log(`Auth mode: ${['released', 'oauth_restored'].includes(result.status) ? 'ChatGPT OAuth restored' : result.status}.`);
+    console.log(ok
+      ? `Auth mode: ${['released', 'oauth_restored'].includes(result.status) ? 'ChatGPT OAuth restored' : result.status}.`
+      : `Switch to ChatGPT OAuth failed: ${restartRequirement.satisfied ? result.status : 'restart_not_performed'}.`);
     if (restart?.status === 'restarted') console.log('Codex App restarted for ChatGPT OAuth.');
     if (['auth_in_use', 'failed'].includes(result.status)) process.exitCode = 1;
     return;
@@ -386,6 +443,98 @@ async function maybeRestartCodexAppForAuthSwitch(args: any[] = [], enabled: bool
   return restartCodexApp({ enabled: shouldRestart });
 }
 
+export function codexLbRestartPostcondition(restart: any = {}, required = false) {
+  const performed = restart?.status === 'restarted';
+  return {
+    required: Boolean(required),
+    performed,
+    satisfied: !required || performed
+  };
+}
+
+async function reconcileCodexLbAfterRestart(restart: any, repairOptions: any, enabled: boolean, restartRequired = false) {
+  if (!enabled || restart?.status !== 'restarted') {
+    const restartRequirement = codexLbRestartPostcondition(restart, restartRequired);
+    return {
+      schema: 'sks.codex-lb-post-restart.v1',
+      ok: Boolean(enabled && restart?.ok !== false && restartRequirement.satisfied),
+      attempted: false,
+      status: restartRequired && !restartRequirement.performed ? 'restart_not_performed' : 'skipped',
+      reason: !enabled ? 'previous_step_failed' : restart?.reason || restart?.status || 'restart_not_performed',
+      attempts: 0,
+      observations: [],
+      selected: null,
+      provider_ready: null,
+      auth_routing_coherent: null,
+      shared_openai_routing_safe: null,
+      reconcile: null,
+      codex_lb: null,
+      repair: null,
+      stable_status: null,
+      readiness: null
+    };
+  }
+  await codexLbRestartSettle(750);
+  const repair = await repairCodexLbAuth(repairOptions);
+  const observations: any[] = [];
+  let stableStatus: any = null;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    if (attempt > 1) await codexLbRestartSettle(750);
+    stableStatus = await codexLbStatus({
+      probeToolOutputRecovery: false
+    });
+    observations.push({ attempt, readiness: codexLbActivationReadiness(stableStatus) });
+  }
+  const readiness = codexLbActivationReadiness(stableStatus);
+  const finalTwoReady = observations.slice(-2).every((observation) => observation.readiness.ok === true);
+  const regressed = observations.some((observation, index) => index > 0
+    && observations[index - 1].readiness.ok === true
+    && observation.readiness.ok !== true);
+  const stable = finalTwoReady && !regressed;
+  return {
+    schema: 'sks.codex-lb-post-restart.v1',
+    ok: Boolean(repair.ok && readiness.ok && stable),
+    attempted: true,
+    status: repair.ok && readiness.ok && stable ? 'reconciled_stable' : 'reconcile_failed',
+    attempts: observations.length,
+    stable,
+    observations,
+    selected: readiness.selected,
+    provider_ready: readiness.provider_ready,
+    auth_routing_coherent: readiness.auth_routing_coherent,
+    shared_openai_routing_safe: readiness.shared_openai_routing_safe,
+    reconcile: repair,
+    codex_lb: stableStatus,
+    repair,
+    stable_status: stableStatus,
+    readiness
+  };
+}
+
+function codexLbRestartSettle(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
+}
+
+function codexLbActivationReadiness(status: any = {}) {
+  const selected = status?.selected === true;
+  const providerReady = status?.provider_ready === true;
+  const authRoutingCoherent = status?.auth_routing_coherent === true;
+  const sharedOpenAiRoutingSafe = status?.shared_openai_routing?.safe === true;
+  return {
+    ok: selected && providerReady && authRoutingCoherent && sharedOpenAiRoutingSafe,
+    selected,
+    provider_ready: providerReady,
+    auth_routing_coherent: authRoutingCoherent,
+    shared_openai_routing_safe: sharedOpenAiRoutingSafe,
+    blockers: [
+      ...(selected ? [] : ['codex_lb_not_selected']),
+      ...(providerReady ? [] : ['codex_lb_provider_not_ready']),
+      ...(authRoutingCoherent ? [] : ['codex_lb_auth_routing_incoherent']),
+      ...(sharedOpenAiRoutingSafe ? [] : ['codex_lb_shared_openai_routing_unsafe'])
+    ]
+  };
+}
+
 async function repairCodexAppFastUiAfterMutation(root: string, enabled: boolean) {
   if (!enabled) {
     return {
@@ -417,6 +566,14 @@ export function isCodexLbFastChainVerified(chain: any = {}) {
 }
 
 export async function resolveCodexLbFastCheckModel(status: any = {}, env: NodeJS.ProcessEnv = process.env) {
+  return resolveCodexLbModel(status, env, { requirePriority: true, blockerPrefix: 'codex_lb_fast_check' });
+}
+
+export async function resolveCodexLbHealthModel(status: any = {}, env: NodeJS.ProcessEnv = process.env) {
+  return resolveCodexLbModel(status, env, { requirePriority: false, blockerPrefix: 'codex_lb_health' });
+}
+
+async function resolveCodexLbModel(status: any = {}, env: NodeJS.ProcessEnv = process.env, opts: any = {}) {
   const explicit = String(env.SKS_CODEX_MODEL || env.CODEX_MODEL || '').trim();
   if (explicit) return { model: explicit, source: env.SKS_CODEX_MODEL ? 'SKS_CODEX_MODEL' : 'CODEX_MODEL', blockers: [] };
 
@@ -426,7 +583,7 @@ export async function resolveCodexLbFastCheckModel(status: any = {}, env: NodeJS
   if (configured) return { model: configured, source: 'global_config', blockers: [] };
 
   const configuredCatalogPath = topLevelTomlString(config, 'model_catalog_json');
-  if (!configuredCatalogPath) return { model: null, source: null, blockers: ['codex_lb_fast_check_model_unselected'] };
+  if (!configuredCatalogPath) return { model: null, source: null, blockers: [`${opts.blockerPrefix}_model_unselected`] };
   const home = String(env.HOME || '').trim();
   const expandedCatalogPath = configuredCatalogPath.startsWith('~/') && home
     ? path.join(home, configuredCatalogPath.slice(2))
@@ -436,12 +593,12 @@ export async function resolveCodexLbFastCheckModel(status: any = {}, env: NodeJS
     : path.resolve(path.dirname(configPath), expandedCatalogPath);
   try {
     const payload = JSON.parse(await readText(catalogPath, ''));
-    const model = selectPriorityCapableCatalogModel(payload);
+    const model = selectCatalogModel(payload, opts.requirePriority === true);
     return model
       ? { model, source: 'model_catalog_json', blockers: [] }
-      : { model: null, source: 'model_catalog_json', blockers: ['codex_lb_fast_check_priority_model_unavailable'] };
+      : { model: null, source: 'model_catalog_json', blockers: [`${opts.blockerPrefix}_${opts.requirePriority === true ? 'priority_' : ''}model_unavailable`] };
   } catch {
-    return { model: null, source: 'model_catalog_json', blockers: ['codex_lb_fast_check_catalog_invalid'] };
+    return { model: null, source: 'model_catalog_json', blockers: [`${opts.blockerPrefix}_catalog_invalid`] };
   }
 }
 
@@ -451,11 +608,12 @@ function topLevelTomlString(text: string, key: string) {
   return (topLevel.match(new RegExp(`(?:^|\\n)\\s*${escaped}\\s*=\\s*"([^"]+)"`))?.[1] || '').trim();
 }
 
-function selectPriorityCapableCatalogModel(payload: any = {}) {
+function selectCatalogModel(payload: any = {}, requirePriority = false) {
   const models = Array.isArray(payload?.models) ? payload.models : Array.isArray(payload?.data) ? payload.data : [];
   return models
     .filter((row: any) => {
       if (!row || typeof row !== 'object' || row.supported_in_api !== true || typeof row.slug !== 'string' || !row.slug.trim()) return false;
+      if (!requirePriority) return true;
       const serviceTiers = Array.isArray(row.service_tiers) ? row.service_tiers : [];
       const speedTiers = Array.isArray(row.additional_speed_tiers) ? row.additional_speed_tiers : [];
       return serviceTiers.some((tier: any) => normalizeTier(typeof tier === 'string' ? tier : tier?.id) === 'priority')

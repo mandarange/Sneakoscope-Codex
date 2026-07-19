@@ -122,7 +122,24 @@ for await (const line of readLines(child.stdout)) {
 }
 ```
 
-## Manifest schema (`sks.agent-manifest.v1`)
+## Compatibility and manifest schema (`sks.agent-manifest.v1`)
+
+Host compatibility is determined by these four schema contracts, not by an SKS
+package-version comparison:
+
+```text
+bridge_contract = sks.agent-bridge.v1
+agent_manifest_schema = sks.agent-manifest.v1
+naruto_proof_schema = sks.naruto-subagent-workflow.v1
+host_capability_schema = sks.host-capabilities.v1
+```
+
+Within a schema major, SKS preserves required keys, field types, and enum
+meanings; additive optional fields and new capabilities are allowed. A breaking
+change requires a new version of the affected schema. `compatibility.package_version`
+reports the running package version for diagnostics only: hosts must not use it
+for exact-version checks, semver ranges, admission, branching, support lists,
+or binary fallback.
 
 `sks agent-bridge setup` writes `.sneakoscope/agent-bridge/manifest.json`:
 
@@ -130,6 +147,18 @@ for await (const line of readLines(child.stdout)) {
 {
   "schema": "sks.agent-manifest.v1",
   "generated_at": "...",
+  "compatibility": {
+    "bridge_contract": "sks.agent-bridge.v1",
+    "manifest_schema": "sks.agent-manifest.v1",
+    "proof_schema": "sks.naruto-subagent-workflow.v1",
+    "host_capability_schema": "sks.host-capabilities.v1",
+    "package_version": "7.0.3"
+  },
+  "host_capabilities": {
+    "schema": "sks.host-capabilities.v1",
+    "capabilities": [],
+    "capability_digest": "sha256:..."
+  },
   "tools": [
     {
       "name": "status",
@@ -154,6 +183,38 @@ for await (const line of readLines(child.stdout)) {
 - `json_output_supported` — best-effort static scan of the compiled command module for a
   `--json` literal; conservatively `false` (never fabricated `true`) when the file can't be
   read (e.g. `dist` not built yet).
+
+### Host capability pack
+
+`host_capabilities` describes the capabilities that an ACAS host MCP may make
+available to a Naruto parent. Each descriptor records only its ID, provider,
+MCP server, tool names, side-effect class, ordinary requested uses, and
+`required: false`; SKS does not copy a host tool's full JSON schema. The seven
+descriptors are:
+
+| Capability | Host MCP tools | Purpose |
+| --- | --- | --- |
+| `host.workspace.files.v1` | `read_file`, `write_file`, `edit_file`, `find_workspace_files`, `list_workspace`, `download_url_to_workspace` | Workspace file access |
+| `host.web.capture.v1` | `capture_url_screenshot` | Allowed URL screenshot capture |
+| `host.document.render.v1` | `html_to_pdf`, `html_to_screenshot` | HTML-to-PDF/PNG rendering |
+| `host.datasource.schema.v1` | `datasource_schema_context` | Allowed datasource and schema snapshot |
+| `host.datasource.query.readonly.v1` | `datasource_query_readonly` | Parameterized read-only query execution |
+| `host.spreadsheet.workbook.v1` | `spreadsheet_create`, `spreadsheet_inspect`, `spreadsheet_update` | XLSX creation, inspection, and update |
+| `host.artifact.receipt.v1` | Common output of the write tools | Artifact path, hash, media type, and byte receipt |
+
+`required: false` means ordinary coding or text work is not blocked merely
+because a capability is absent. Availability is determined only from the real
+project-MCP tool inventory, the setup-declared expected descriptor, and the MCP
+inventory actually received by the Codex parent. SKS never guesses capability
+availability from configuration-file text and never auto-repairs a `missing` or
+`unhealthy` requested capability; existing setup/doctor MCP repair paths remain
+the repair mechanism. A requested capability that is missing or unhealthy must
+produce a blocked proof.
+
+`capability_digest` is `sha256:` over a code-point-sorted canonical JSON list.
+For each capability, only `id`, `mcp_server`, sorted `tool_names`, `side_effect`,
+and sorted `required_for` participate. Descriptions, generation time, provider,
+`required`, and package version do not participate.
 
 ## Naruto host contract fixtures
 

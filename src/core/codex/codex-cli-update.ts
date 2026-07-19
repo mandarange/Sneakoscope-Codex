@@ -2,10 +2,15 @@ import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { ensureDir, exists, packageRoot, readJson, runProcess, writeJsonAtomic, type RunProcessResult } from '../fsx.js';
+import { redactString } from '../secret-redaction.js';
 
 export const CODEX_CLI_UPDATE_STATUS_SCHEMA = 'sks.codex-cli-update-status.v1';
 export const CODEX_CLI_UPDATE_RESULT_SCHEMA = 'sks.codex-cli-update-result.v1';
 const DEFAULT_CACHE_TTL_MS = 60 * 60 * 1000;
+const CODEX_CLI_UPDATE_JSON_OUTPUT_LIMIT_BYTES = 60 * 1024;
+const CODEX_CLI_UPDATE_RAW_OUTPUT_LIMIT_BYTES = 20 * 1024;
+const CODEX_CLI_UPDATE_ARRAY_LIMIT = 12;
+const CODEX_CLI_UPDATE_ARRAY_ITEM_LIMIT_BYTES = 768;
 const CODEX_STANDALONE_INSTALLER_URL = 'https://chatgpt.com/codex/install.sh';
 const CODEX_STANDALONE_INSTALLER_PS1_URL = 'https://chatgpt.com/codex/install.ps1';
 
@@ -65,9 +70,19 @@ export interface CodexCliUpdateResult {
   before_version: string | null;
   after_version: string | null;
   raw_output: string;
+  raw_output_truncated: boolean;
   update_status: CodexCliUpdateStatus | null;
   blockers: string[];
   guidance: string[];
+}
+
+export function codexCliUpdateConsoleLines(result: CodexCliUpdateResult): string[] {
+  return [
+    `Codex CLI update: ${safeUpdateText(result.status, 64)}${result.after_version ? ` (${safeUpdateText(result.before_version || 'unknown', 128)} -> ${safeUpdateText(result.after_version, 128)})` : ''}`,
+    ...(result.raw_output_truncated ? ['- updater diagnostics were redacted and truncated; use --json for the bounded structured result.'] : []),
+    ...safeUpdateStringArray(result.blockers).map((blocker) => `- blocker: ${blocker}`),
+    ...safeUpdateStringArray(result.guidance).map((line) => `- ${line}`)
+  ];
 }
 
 export interface CodexCliUpdateDependencies {
@@ -837,24 +852,123 @@ function updateResult(input: {
   blockers: string[];
   guidance: string[];
 }): CodexCliUpdateResult {
-  return {
+  const base: Omit<CodexCliUpdateResult, 'raw_output' | 'raw_output_truncated'> = {
     schema: CODEX_CLI_UPDATE_RESULT_SCHEMA,
     ok: input.ok,
     status: input.status,
-    command: input.command,
+    command: input.command ? safeUpdateText(input.command, 512) : null,
     update_method: input.updateMethod,
-    bin: input.before.path,
-    cli_path: input.before.path,
+    bin: input.before.path ? safeUpdateText(input.before.path, 2 * 1024) : null,
+    cli_path: input.before.path ? safeUpdateText(input.before.path, 2 * 1024) : null,
     cli_source: input.before.source,
-    post_update_cli_path: input.after?.path || null,
+    post_update_cli_path: input.after?.path ? safeUpdateText(input.after.path, 2 * 1024) : null,
     post_update_cli_source: input.after?.source || 'unavailable',
-    before_version: input.before.version,
-    after_version: input.after?.version || null,
-    raw_output: input.rawOutput,
-    update_status: input.updateStatus,
-    blockers: input.blockers,
-    guidance: input.guidance
+    before_version: input.before.version ? safeUpdateText(input.before.version, 128) : null,
+    after_version: input.after?.version ? safeUpdateText(input.after.version, 128) : null,
+    update_status: sanitizeCodexCliUpdateStatus(input.updateStatus),
+    blockers: safeUpdateStringArray(input.blockers),
+    guidance: safeUpdateStringArray(input.guidance)
   };
+  const rawOutput = boundedCodexCliUpdateRawOutput(input.rawOutput);
+  return boundCodexCliUpdateResult({
+    ...base,
+    raw_output: rawOutput.value,
+    raw_output_truncated: rawOutput.truncated
+  });
+}
+
+function boundedCodexCliUpdateRawOutput(value: unknown) {
+  const original = String(value || '');
+  const sanitized = sanitizeUpdateControlCharacters(redactString(original));
+  const bounded = boundUtf8Text(sanitized, CODEX_CLI_UPDATE_RAW_OUTPUT_LIMIT_BYTES, true);
+  return {
+    value: bounded.value,
+    truncated: bounded.truncated || sanitized !== original
+  };
+}
+
+function sanitizeCodexCliUpdateStatus(value: CodexCliUpdateStatus | null): CodexCliUpdateStatus | null {
+  if (!value) return null;
+  return {
+    schema: CODEX_CLI_UPDATE_STATUS_SCHEMA,
+    ok: value.ok === true,
+    status: value.status,
+    installed: value.installed === true,
+    bin: value.bin ? safeUpdateText(value.bin, 2 * 1024) : null,
+    cli_path: value.cli_path ? safeUpdateText(value.cli_path, 2 * 1024) : null,
+    cli_source: value.cli_source,
+    current_version: value.current_version ? safeUpdateText(value.current_version, 128) : null,
+    raw_version: value.raw_version ? safeUpdateText(value.raw_version, 1024) : null,
+    latest_version: value.latest_version ? safeUpdateText(value.latest_version, 128) : null,
+    update_available: typeof value.update_available === 'boolean' ? value.update_available : null,
+    update_command: 'sks codex update',
+    source: value.source,
+    checked_at: safeUpdateText(value.checked_at, 128),
+    cache_path: safeUpdateText(value.cache_path, 2 * 1024),
+    warnings: safeUpdateStringArray(value.warnings),
+    blockers: safeUpdateStringArray(value.blockers),
+    guidance: safeUpdateStringArray(value.guidance)
+  };
+}
+
+function boundCodexCliUpdateResult(result: CodexCliUpdateResult): CodexCliUpdateResult {
+  if (codexCliUpdateSerializedBytes(result) <= CODEX_CLI_UPDATE_JSON_OUTPUT_LIMIT_BYTES) return result;
+  const withoutRaw: CodexCliUpdateResult = {
+    ...result,
+    raw_output: '',
+    raw_output_truncated: true
+  };
+  if (codexCliUpdateSerializedBytes(withoutRaw) <= CODEX_CLI_UPDATE_JSON_OUTPUT_LIMIT_BYTES) return withoutRaw;
+  const withoutNestedStatus: CodexCliUpdateResult = {
+    ...withoutRaw,
+    update_status: null,
+    blockers: safeUpdateStringArray(withoutRaw.blockers, 6, 384),
+    guidance: safeUpdateStringArray(withoutRaw.guidance, 6, 384)
+  };
+  if (codexCliUpdateSerializedBytes(withoutNestedStatus) <= CODEX_CLI_UPDATE_JSON_OUTPUT_LIMIT_BYTES) return withoutNestedStatus;
+  return {
+    ...withoutNestedStatus,
+    command: withoutNestedStatus.command ? safeUpdateText(withoutNestedStatus.command, 256) : null,
+    bin: withoutNestedStatus.bin ? safeUpdateText(withoutNestedStatus.bin, 512) : null,
+    cli_path: withoutNestedStatus.cli_path ? safeUpdateText(withoutNestedStatus.cli_path, 512) : null,
+    post_update_cli_path: withoutNestedStatus.post_update_cli_path ? safeUpdateText(withoutNestedStatus.post_update_cli_path, 512) : null,
+    blockers: safeUpdateStringArray(withoutNestedStatus.blockers, 4, 256),
+    guidance: safeUpdateStringArray(withoutNestedStatus.guidance, 4, 256)
+  };
+}
+
+function codexCliUpdateSerializedBytes(value: CodexCliUpdateResult): number {
+  return Buffer.byteLength(`${JSON.stringify(value, null, 2)}\n`, 'utf8');
+}
+
+function safeUpdateStringArray(values: readonly unknown[] = [], maxItems = CODEX_CLI_UPDATE_ARRAY_LIMIT, maxBytes = CODEX_CLI_UPDATE_ARRAY_ITEM_LIMIT_BYTES): string[] {
+  return values.slice(0, maxItems).map((value) => safeUpdateText(value, maxBytes));
+}
+
+function safeUpdateText(value: unknown, maxBytes: number): string {
+  const sanitized = sanitizeUpdateControlCharacters(redactString(String(value || '')));
+  return boundUtf8Text(sanitized, Math.max(0, maxBytes), false).value;
+}
+
+function sanitizeUpdateControlCharacters(value: string): string {
+  return value
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, ' ')
+    .replace(/[ \t]+\n/g, '\n');
+}
+
+function boundUtf8Text(value: string, maxBytes: number, keepTail: boolean): { value: string; truncated: boolean } {
+  if (Buffer.byteLength(value, 'utf8') <= maxBytes) return { value, truncated: false };
+  const codePoints = Array.from(value);
+  let low = 0;
+  let high = codePoints.length;
+  while (low < high) {
+    const midpoint = Math.floor((low + high + 1) / 2);
+    const candidate = keepTail ? codePoints.slice(codePoints.length - midpoint).join('') : codePoints.slice(0, midpoint).join('');
+    if (Buffer.byteLength(candidate, 'utf8') <= maxBytes) low = midpoint;
+    else high = midpoint - 1;
+  }
+  const bounded = keepTail ? codePoints.slice(codePoints.length - low).join('') : codePoints.slice(0, low).join('');
+  return { value: bounded, truncated: true };
 }
 
 function failedProcessResult(err: unknown): RunProcessResult {

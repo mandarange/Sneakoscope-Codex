@@ -1,13 +1,110 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { COMMANDS } from '../../../cli/command-registry.js';
-import { buildAgentManifest, validateAgentManifest } from '../agent-manifest.js';
+import { PACKAGE_VERSION } from '../../fsx.js';
+import {
+  HOST_CAPABILITY_DESCRIPTORS,
+  buildAgentManifest,
+  hostCapabilityDigest,
+  validateAgentManifest
+} from '../agent-manifest.js';
 
 test('agent manifest is non-empty and schema-tagged', () => {
   const manifest = buildAgentManifest();
   assert.equal(manifest.schema, 'sks.agent-manifest.v1');
   assert.equal(typeof manifest.generated_at, 'string');
   assert.ok(manifest.tools.length > 0);
+});
+
+test('agent manifest declares additive contract compatibility and the ACAS host capability pack', () => {
+  const manifest = buildAgentManifest();
+  assert.deepEqual(
+    {
+      bridge_contract: manifest.compatibility.bridge_contract,
+      manifest_schema: manifest.compatibility.manifest_schema,
+      proof_schema: manifest.compatibility.proof_schema,
+      host_capability_schema: manifest.compatibility.host_capability_schema
+    },
+    {
+      bridge_contract: 'sks.agent-bridge.v1',
+      manifest_schema: 'sks.agent-manifest.v1',
+      proof_schema: 'sks.naruto-subagent-workflow.v1',
+      host_capability_schema: 'sks.host-capabilities.v1'
+    }
+  );
+  assert.equal(manifest.compatibility.package_version, PACKAGE_VERSION);
+  assert.equal(manifest.host_capabilities.schema, 'sks.host-capabilities.v1');
+  assert.equal(manifest.host_capabilities.capabilities.length, 7);
+  assert.deepEqual(manifest.host_capabilities.capabilities, HOST_CAPABILITY_DESCRIPTORS);
+  assert.equal(
+    manifest.host_capabilities.capability_digest,
+    hostCapabilityDigest(manifest.host_capabilities.capabilities)
+  );
+  assert.match(manifest.host_capabilities.capability_digest, /^sha256:[a-f0-9]{64}$/);
+});
+
+test('host capability digest is canonical and ignores non-contract metadata and package version', () => {
+  const manifest: any = buildAgentManifest();
+  const originalDigest = manifest.host_capabilities.capability_digest;
+  manifest.compatibility.package_version = '999.0.0-observation-only';
+  manifest.generated_at = '2099-01-01T00:00:00.000Z';
+  manifest.host_capabilities.capabilities = [...manifest.host_capabilities.capabilities]
+    .reverse()
+    .map((capability: any) => ({
+      description: 'not part of the digest contract',
+      ...capability,
+      tool_names: [...capability.tool_names].reverse(),
+      required_for: [...capability.required_for].reverse()
+    }));
+  assert.equal(hostCapabilityDigest(manifest.host_capabilities.capabilities), originalDigest);
+  assert.equal(validateAgentManifest({
+    ...manifest,
+    host_capabilities: {
+      ...manifest.host_capabilities,
+      capabilities: manifest.host_capabilities.capabilities,
+      capability_digest: hostCapabilityDigest(manifest.host_capabilities.capabilities)
+    }
+  }).ok, true);
+});
+
+test('manifest validation permits a well-formed additive v1 host capability', () => {
+  const manifest: any = buildAgentManifest();
+  manifest.host_capabilities.capabilities.push({
+    id: 'host.future.additive.v1',
+    provider: 'host_mcp',
+    mcp_server: 'acas-tools',
+    tool_names: ['future_read_tool'],
+    side_effect: 'read',
+    required_for: ['future_read_task'],
+    required: false
+  });
+  manifest.host_capabilities.capability_digest = hostCapabilityDigest(manifest.host_capabilities.capabilities);
+  const validation = validateAgentManifest(manifest);
+  assert.equal(validation.ok, true, validation.issues.join(', '));
+});
+
+test('manifest validation preserves the prior v1 shape when additive capability fields are absent', () => {
+  const current = buildAgentManifest();
+  const priorV1 = {
+    schema: current.schema,
+    generated_at: current.generated_at,
+    tools: current.tools
+  };
+  const validation = validateAgentManifest(priorV1);
+  assert.equal(validation.ok, true, validation.issues.join(', '));
+});
+
+test('host capability descriptors expose the project MCP Office/Data tool names without executing them', () => {
+  const names = new Set(buildAgentManifest().host_capabilities.capabilities.flatMap((capability) => capability.tool_names));
+  for (const expected of [
+    'datasource_schema_context',
+    'datasource_query_readonly',
+    'spreadsheet_create',
+    'spreadsheet_inspect',
+    'spreadsheet_update'
+  ]) {
+    assert.ok(names.has(expected), `host capability pack missing project MCP tool ${expected}`);
+  }
 });
 
 test('agent manifest includes well-known confirmed-existing commands', () => {

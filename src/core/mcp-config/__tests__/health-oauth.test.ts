@@ -64,6 +64,7 @@ test('stdio health performs initialize and tools/list with bounded secret-safe o
   assert.equal(health.status, 'healthy');
   assert.equal(health.protocol_version, '2024-11-05');
   assert.equal(health.tool_count, 2);
+  assert.deepEqual(health.tool_names, ['one', 'two']);
   assert.equal(health.instructions_present, true);
   assert.doesNotMatch(JSON.stringify(health), /must-never-appear/);
 });
@@ -207,6 +208,7 @@ test('streamable HTTP health initializes, lists tools, preserves session ID, and
   const healthy = await testMcpConnection('http_health', 'global', { home: s.home });
   assert.equal(healthy.status, 'healthy');
   assert.equal(healthy.tool_count, 1);
+  assert.deepEqual(healthy.tool_names, ['one']);
   assert.ok(sessionHeaders.includes('session-1'));
   const auth = await testMcpConnection('http_auth', 'global', { home: s.home });
   assert.equal(auth.status, 'oauth_required');

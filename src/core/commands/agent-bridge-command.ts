@@ -2,10 +2,16 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ensureDir, exists, nowIso, projectRoot, runProcess, writeJsonAtomic } from '../fsx.js';
 import {
+  agentManifestDigest,
   buildAgentManifest,
   validateAgentManifest,
-  type AgentManifest
+  type CurrentAgentManifest
 } from '../agent-bridge/agent-manifest.js';
+import {
+  inspectHostCapabilityRuntime,
+  type HostCapabilityRuntime,
+  type HostCapabilityRuntimeDependencies
+} from '../agent-bridge/host-capability-runtime.js';
 import { flag } from './command-utils.js';
 
 interface NonInteractiveSmoke {
@@ -62,7 +68,7 @@ async function runJsonSmoke(
 
 export async function runAgentBridgeContractSmokes(
   entrypoint: string,
-  manifest: AgentManifest,
+  manifest: CurrentAgentManifest,
   run: typeof runProcess = runProcess
 ): Promise<{ status: NonInteractiveSmoke; naruto_help: NonInteractiveSmoke }> {
   const naruto = manifest.tools.find((tool) => tool.name === 'naruto');
@@ -94,6 +100,31 @@ function registrationSnippets(): Record<string, unknown> {
   };
 }
 
+export function buildAgentBridgeSetupMetadata(manifest: CurrentAgentManifest): {
+  compatibility: CurrentAgentManifest['compatibility'];
+  host_capabilities: CurrentAgentManifest['host_capabilities'];
+  manifest_digest: string;
+  capability_digest: string;
+} {
+  return {
+    compatibility: manifest.compatibility,
+    host_capabilities: manifest.host_capabilities,
+    manifest_digest: agentManifestDigest(manifest),
+    capability_digest: manifest.host_capabilities.capability_digest
+  };
+}
+
+export async function inspectAgentBridgeHostCapabilities(
+  root: string,
+  dependencies?: HostCapabilityRuntimeDependencies
+): Promise<HostCapabilityRuntime> {
+  return inspectHostCapabilityRuntime({
+    root,
+    request: { capability_ids: [], workflows: [] },
+    ...(dependencies ? { dependencies } : {})
+  });
+}
+
 export async function agentBridgeCommand(subcommand: string, args: readonly string[] = []): Promise<unknown> {
   const sub = subcommand || 'setup';
   if (sub !== 'setup') {
@@ -106,6 +137,7 @@ export async function agentBridgeCommand(subcommand: string, args: readonly stri
   const root = await projectRoot();
   const manifest = buildAgentManifest();
   const manifestValidation = validateAgentManifest(manifest);
+  const setupMetadata = buildAgentBridgeSetupMetadata(manifest);
   const manifestPath = path.join(root, '.sneakoscope', 'agent-bridge', 'manifest.json');
   if (!manifestValidation.ok) {
     const result = {
@@ -114,6 +146,7 @@ export async function agentBridgeCommand(subcommand: string, args: readonly stri
       ok: false,
       status: 'manifest_validation_failed',
       manifest_path: manifestPath,
+      ...setupMetadata,
       manifest_validation: manifestValidation
     };
     process.exitCode = 1;
@@ -125,7 +158,10 @@ export async function agentBridgeCommand(subcommand: string, args: readonly stri
   await writeJsonAtomic(manifestPath, manifest);
 
   const entrypoint = await resolveSksEntrypoint();
-  const smokes = await runAgentBridgeContractSmokes(entrypoint, manifest);
+  const [smokes, hostCapabilityInventory] = await Promise.all([
+    runAgentBridgeContractSmokes(entrypoint, manifest),
+    inspectAgentBridgeHostCapabilities(root)
+  ]);
 
   const result = {
     schema: 'sks.agent-bridge-setup.v1',
@@ -133,10 +169,12 @@ export async function agentBridgeCommand(subcommand: string, args: readonly stri
     ok: smokes.status.ok && smokes.naruto_help.ok,
     manifest_path: manifestPath,
     tool_count: manifest.tools.length,
+    ...setupMetadata,
     manifest_validation: manifestValidation,
     registration_snippets: registrationSnippets(),
     non_interactive_smoke: smokes.status,
-    naruto_help_smoke: smokes.naruto_help
+    naruto_help_smoke: smokes.naruto_help,
+    host_capability_inventory: hostCapabilityInventory
   };
   if (!result.ok) process.exitCode = 1;
 
@@ -150,6 +188,7 @@ export async function agentBridgeCommand(subcommand: string, args: readonly stri
     console.log(`  ${registrationSnippets().codex_cli}`);
     console.log(`Non-interactive status smoke: ${smokes.status.ok ? 'ok' : 'FAILED'} (${smokes.status.note})`);
     console.log(`Naruto help contract smoke: ${smokes.naruto_help.ok ? 'ok' : 'FAILED'} (${smokes.naruto_help.note})`);
+    console.log(`Host capability inventory: ${hostCapabilityInventory.health_status} (${hostCapabilityInventory.capabilities.filter((entry) => entry.state === 'available').length}/${hostCapabilityInventory.capabilities.length} available)`);
   }
   return result;
 }

@@ -224,7 +224,7 @@ export function inferAnswersForPrompt(prompt: any, explicitAnswers: any = {}) {
     .replace(/\s+/g, ' ')
     .trim();
   const version = String(text || '').match(/\bv?(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)\b/)?.[1] || null;
-  const versionWork = /\b(?:versioning\s+bump|version\s+bump|bump\s+(?:the\s+)?version|publish:dry|npm\s+pack)\b/.test(lower)
+  const versionWork = /\b(?:versioning\s+bump|version\s+bump|bump\s+(?:the\s+)?version|npm\s+publish\s+--dry-run|npm\s+pack)\b/.test(lower)
     || /(?:버전|version)[^\n]{0,48}(?:올려|올리|상향|증가|bump|upgrade|publish|배포|출시)/.test(lower)
     || /(?:올려|올리|상향|증가|bump|upgrade|publish|배포|출시)[^\n]{0,48}(?:버전|version)/.test(lower)
     || /(?:릴리스|release)[^\n]{0,48}(?:준비|prepare|cut|ship|publish)/.test(lower)
@@ -273,7 +273,7 @@ export function inferAnswersForPrompt(prompt: any, explicitAnswers: any = {}) {
     install: 'SKS 최초 설치와 bootstrap을 한 번에 준비 상태까지 연결한다'
   };
   const criteria = {
-    version: [version ? `version refs are ${version}` : 'version refs advance consistently', 'publish:dry gate passes', 'npm publish is not run'],
+    version: [version ? `version refs are ${version}` : 'version refs advance consistently', 'npm publish --dry-run gate passes', 'npm publish is not run'],
     chat_capture: ['From-Chat-IMG activates chat-image intake only here', 'all visible chat requirements are listed before implementation', `${FROM_CHAT_IMG_COVERAGE_ARTIFACT} maps every customer request, screenshot region, and attachment to work-order item(s)`, `${FROM_CHAT_IMG_CHECKLIST_ARTIFACT} is updated as each request, image match, work item, scoped QA-LOOP, and verification step is completed`, `${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT} records temporary TriWiki-backed session context with retention metadata`, `${FROM_CHAT_IMG_QA_LOOP_ARTIFACT} proves QA-LOOP ran over the exact customer-request work-order range after implementation`, 'unresolved_items is empty before Naruto completion', 'scoped_qa_loop_completed is true with zero unresolved QA findings', 'Web/browser visual inspection uses Codex Chrome Extension readiness first; native Mac/non-web visual inspection uses Codex Computer Use when available', CODEX_WEB_VERIFICATION_POLICY, CODEX_COMPUTER_USE_ONLY_POLICY, 'client requests follow normal SKS gates and verification'],
     triwiki_audit: ['TriWiki ingestion, voxel attention, and contract consumption paths are inspected against current code', 'repeat-mistake prevention gaps are fixed in the relevant code path or blocked with evidence', 'regression coverage proves fresh/high-weight mistake memory can influence future missions', 'final status separates supported behavior from anything still unverified'],
     priority: ['strong feedback raises required_weight', 'request topics are counted in wiki packs', 'future inference uses priority signals'],
@@ -322,7 +322,7 @@ export function inferAnswersForPrompt(prompt: any, explicitAnswers: any = {}) {
   if (!hasAnswer(explicitAnswers.DEPENDENCY_CHANGE_ALLOWED)) addInferred(inferred, notes, 'DEPENDENCY_CHANGE_ALLOWED', 'no', 'no-new-deps');
   if (!hasAnswer(explicitAnswers.TEST_SCOPE)) {
     const releaseLike = versionWork || installWork;
-    addInferred(inferred, notes, 'TEST_SCOPE', releaseLike ? ['packcheck', 'selftest', 'sizecheck', 'publish:dry'] : ['focused relevant tests or documented justification'], 'tests');
+    addInferred(inferred, notes, 'TEST_SCOPE', releaseLike ? ['packcheck', 'selftest', 'sizecheck', 'npm publish --dry-run'] : ['focused relevant tests or documented justification'], 'tests');
   }
   if (!hasAnswer(explicitAnswers.MID_RUN_UNKNOWN_POLICY)) {
     addInferred(inferred, notes, 'MID_RUN_UNKNOWN_POLICY', ['preserve_existing_behavior', 'smallest_reversible_change', 'defer_optional_scope', 'block_only_if_no_safe_path'], 'ladder');

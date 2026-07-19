@@ -1,6 +1,17 @@
 import Cocoa
 
 final class ProvidersViewController: NSViewController, ControlCenterPage {
+    private struct CodexLbReadiness {
+        let selected: Bool
+        let providerReady: Bool
+        let authRoutingCoherent: Bool
+        let sharedOpenAiRoutingSafe: Bool
+
+        var ready: Bool {
+            selected && providerReady && authRoutingCoherent && sharedOpenAiRoutingSafe
+        }
+    }
+
     private let processClient: ProcessClient
     private let operations: OperationCoordinator
     private let providerStatus = NativeView.detail("Provider status unchecked.")
@@ -19,7 +30,7 @@ final class ProvidersViewController: NSViewController, ControlCenterPage {
         let setDomain = NativeView.button("Set Domain and Key…", target: self, action: #selector(setDomainAndKey))
         let replace = NativeView.button("Replace Key…", target: self, action: #selector(replaceKey))
         let testConnection = NativeView.button("Test Connection", target: self, action: #selector(testConnection))
-        let useOAuth = NativeView.button("Use ChatGPT OAuth", target: self, action: #selector(useOAuth))
+        let useOAuth = NativeView.button("Restore Chat / Pro (OAuth)", target: self, action: #selector(useOAuth))
         let useLb = NativeView.button("Use codex-lb", target: self, action: #selector(useCodexLb))
         let fastOn = NativeView.button("Fast Mode On", target: self, action: #selector(fastOn))
         let fastOff = NativeView.button("Fast Mode Off", target: self, action: #selector(fastOff))
@@ -30,7 +41,7 @@ final class ProvidersViewController: NSViewController, ControlCenterPage {
         buttons.orientation = .horizontal; buttons.spacing = 8
         view = NativeView.stack([
             NativeView.title("Providers"),
-            NativeView.detail("Set Domain and Key only stores credentials. Domain may be a hostname or full https URL — SKS adds https:// and /backend-api/codex when needed. Use codex-lb activates them with a shared OpenAI routing guard so sk-clb keys never hit api.openai.com. Keys are typed/pasted in clear text here, then sent through stdin and kept out of logs."),
+            NativeView.detail("Saving stores credentials only. Use codex-lb activates them with a routing guard so sk-clb keys cannot reach api.openai.com. Keys travel through stdin and stay out of logs."),
             credentials, providerStatus, fastStatus, buttons
         ])
         refresh()
@@ -86,31 +97,148 @@ final class ProvidersViewController: NSViewController, ControlCenterPage {
     }
 
     private func describeProviderStatus(_ json: [String: Any]) -> String {
-        let configured = json["provider_configured"] as? Bool == true
-        let selected = json["selected"] as? Bool == true
-        let ok = json["ok"] as? Bool == true
-        let authMode = json["auth_mode"] as? String ?? "unknown"
-        let coherent = json["auth_routing_coherent"] as? Bool
-        let routing = json["shared_openai_routing"] as? [String: Any]
-        let routingSafe = routing?["safe"] as? Bool
-        let keyInShared = json["codex_lb_key_in_shared_auth"] as? Bool == true
+        let codexLb = codexLbPayload(json)
+        let configured = codexLb["provider_configured"] as? Bool == true
+        let readiness = codexLbReadiness(codexLb)
+        let ok = codexLb["ok"] as? Bool == true
+        let authMode = codexLb["auth_mode"] as? String ?? "unknown"
+        let keyInShared = codexLb["codex_lb_key_in_shared_auth"] as? Bool == true
 
         if !configured {
             return "Codex LB: not configured. Use Set Domain and Key, then Use codex-lb."
         }
-        if routingSafe == false || (keyInShared && coherent == false) {
+        if !readiness.sharedOpenAiRoutingSafe || (keyInShared && !readiness.authRoutingCoherent) {
             return "Codex LB: routing unsafe — shared key can hit api.openai.com. Click Use codex-lb to repair."
         }
-        if selected && ok {
-            return "Codex LB: active (auth=\(authMode), routing guarded)."
+        if readiness.ready && ok {
+            return "Codex LB: active (auth=\(authMode), routing guarded). Restore Chat / Pro switches to ChatGPT OAuth."
         }
-        if selected && !ok {
+        if readiness.selected && (!readiness.providerReady || !ok) {
             return "Codex LB: selected but not ready. Click Use codex-lb or Test Connection."
         }
         if keyInShared {
             return "Codex LB: credentials in shared auth but provider not selected. Click Use ChatGPT OAuth or Use codex-lb."
         }
         return "Codex LB: credentials stored, not selected (auth=\(authMode)). Click Use codex-lb to activate."
+    }
+
+    private func codexLbPayload(_ json: [String: Any]) -> [String: Any] {
+        if let codexLb = json["codex_lb"] as? [String: Any] { return codexLb }
+        return json
+    }
+
+    private func codexLbReadiness(_ codexLb: [String: Any]) -> CodexLbReadiness {
+        let sharedOpenAiRouting = codexLb["shared_openai_routing"] as? [String: Any]
+        return CodexLbReadiness(
+            selected: codexLb["selected"] as? Bool == true,
+            providerReady: codexLb["provider_ready"] as? Bool == true,
+            authRoutingCoherent: codexLb["auth_routing_coherent"] as? Bool == true,
+            sharedOpenAiRoutingSafe: sharedOpenAiRouting?["safe"] as? Bool == true
+        )
+    }
+
+    private func modelSelectionSummary(_ json: [String: Any]) -> String? {
+        guard let modelSelection = json["model_selection"] as? [String: Any] else { return nil }
+        let model = modelSelection["model"] as? String
+        let source = modelSelection["source"] as? String
+        if let model = model, !model.isEmpty, let source = source, !source.isEmpty {
+            return "model \(model) via \(source)"
+        }
+        if let model = model, !model.isEmpty { return "model \(model)" }
+        return nil
+    }
+
+    private func structuredReason(_ json: [String: Any], codexLb: [String: Any], readiness: CodexLbReadiness) -> String {
+        if codexLb["env_key_configured"] as? Bool != true { return "API key is missing" }
+        if (codexLb["base_url"] as? String)?.isEmpty != false { return "base URL is missing" }
+        if let status = json["status"] as? String,
+           ["transport_blocked", "first_request_failed", "missing_response_id", "second_request_failed", "previous_response_not_found", "tool_output_recovery_blocked"].contains(status) {
+            return status.replacingOccurrences(of: "_", with: " ")
+        }
+        if !readiness.selected { return "saved credentials are not selected" }
+        if !readiness.providerReady { return "provider configuration is not ready" }
+        if !readiness.authRoutingCoherent { return "provider and authentication routing disagree" }
+        if !readiness.sharedOpenAiRoutingSafe { return "shared OpenAI routing guard is unsafe" }
+        if let reason = json["reason"] as? String, !reason.isEmpty { return reason.replacingOccurrences(of: "_", with: " ") }
+        return "response-chain verification did not pass"
+    }
+
+    private func nextAction(status: String, codexLb: [String: Any], readiness: CodexLbReadiness) -> String {
+        let credentialsSaved = codexLb["env_key_configured"] as? Bool == true
+            && (codexLb["base_url"] as? String)?.isEmpty == false
+        if status == "not_configured" {
+            return credentialsSaved
+                ? "click Use codex-lb to activate the saved credentials"
+                : "click Set Domain and Key"
+        }
+        if status == "missing_env_key" || status == "missing_base_url" || !credentialsSaved {
+            return "click Set Domain and Key"
+        }
+        if status == "model_unselected" { return "select a Codex model, then retry" }
+        if !readiness.ready { return "click Use codex-lb; if it still fails, open Diagnostics" }
+        return "verify the domain, key, and network, then retry"
+    }
+
+    private func describeConnectionResult(_ json: [String: Any], processCode: Int32) -> (ok: Bool, message: String) {
+        let codexLb = codexLbPayload(json)
+        let readiness = codexLbReadiness(codexLb)
+        let chainOk = processCode == 0 && json["ok"] as? Bool == true
+        let status = json["status"] as? String ?? (processCode == 0 ? "unknown" : "command_failed")
+        let model = modelSelectionSummary(json).map { " · \($0)" } ?? ""
+        if chainOk {
+            if readiness.ready {
+                return (true, "Connection test passed (\(status)) · provider ready · routing safe\(model).")
+            }
+            return (true, "Connection test passed (\(status)) · saved credentials reached codex-lb\(model) · Activation required: click Use codex-lb.")
+        }
+        let reason = structuredReason(json, codexLb: codexLb, readiness: readiness)
+        let next = nextAction(status: status, codexLb: codexLb, readiness: readiness)
+        return (false, "Connection test: \(status) · Reason: \(reason) · Next: \(next)\(model).")
+    }
+
+    private func describeActivationResult(_ activation: [String: Any]?, status: [String: Any]?, activationCode: Int32, statusCode: Int32) -> (ok: Bool, message: String) {
+        let authoritative = status ?? activation ?? [:]
+        let codexLb = codexLbPayload(authoritative)
+        let readiness = codexLbReadiness(codexLb)
+        let activationOk = activationCode == 0 && activation?["ok"] as? Bool == true
+        let postRestart = activation?["post_restart"] as? [String: Any]
+        let activationStatus = postRestart?["status"] as? String
+            ?? activation?["status"] as? String
+            ?? (activationCode == 0 ? "unknown" : "command_failed")
+        let postStatusOk = status == nil ? activationOk : statusCode == 0
+        let ready = activationOk && postStatusOk && readiness.ready
+        if ready {
+            return (true, "Use codex-lb: active after restart · provider, auth, and routing ready.")
+        }
+        let reason = structuredReason(authoritative, codexLb: codexLb, readiness: readiness)
+        let next = nextAction(status: activationStatus, codexLb: codexLb, readiness: readiness)
+        return (false, "Use codex-lb: \(activationStatus) · Reason: \(reason) · Next: \(next).")
+    }
+
+    private func describeOAuthResult(_ json: [String: Any]?, processCode: Int32) -> (ok: Bool, message: String) {
+        let noSwitch = "No OAuth switch was assumed."
+        guard let json = json else {
+            return (false, "Restore Chat / Pro failed · Invalid JSON. Retry or open Diagnostics. \(noSwitch)")
+        }
+        let status = json["status"] as? String ?? (processCode == 0 ? "unknown" : "command_failed")
+        let mode = json["mode"] as? String
+        let restartRequired = json["restart_required"] as? Bool == true
+        let restartPerformed = json["restart_performed"] as? Bool == true
+        let commandOk = processCode == 0 && json["ok"] as? Bool == true
+        let ok = commandOk && mode == "oauth" && restartRequired && restartPerformed
+        if ok {
+            return (true, "Chat / Pro restored with ChatGPT OAuth · Codex App restarted · codex-lb credentials kept.")
+        }
+        if status == "no_backup" {
+            return (false, "Restore Chat / Pro failed (no_backup) · Run codex login, then retry. \(noSwitch)")
+        }
+        if status == "auth_in_use" {
+            return (false, "Restore Chat / Pro failed (auth_in_use) · Open Diagnostics; auth was not replaced. \(noSwitch)")
+        }
+        if !restartPerformed {
+            return (false, "Restore Chat / Pro failed (restart_not_performed) · Retry, then reopen Codex App. \(noSwitch)")
+        }
+        return (false, "Restore Chat / Pro failed (\(status)) · Retry or open Diagnostics. \(noSwitch)")
     }
 
     private func refreshFastStatus() {
@@ -204,27 +332,85 @@ final class ProvidersViewController: NSViewController, ControlCenterPage {
         processClient.run(["codex-lb", "health", "--json"], timeout: NativeView.mutationTimeout) { [weak self] result in
             guard let self = self else { return }
             self.setBusy(false)
-            let json = self.json(result.output)
-            let ok = result.code == 0 && (json?["ok"] as? Bool == true)
-            let status = json?["status"] as? String ?? (result.code == 0 ? "ok" : "failed")
+            let parsed = self.json(result.output)
+            let outcome = parsed.map { self.describeConnectionResult($0, processCode: result.code) }
+                ?? (ok: false, message: "Connection test: invalid response · Reason: health output was not structured JSON · Next: retry or open Diagnostics.")
             _ = self.operations.update(
                 snapshot,
-                state: ok ? .succeeded : .failed,
+                state: outcome.ok ? .succeeded : .failed,
                 stage: "complete",
                 progress: 1,
-                summary: ok ? "Codex LB connection ok" : "Codex LB connection failed"
+                summary: outcome.ok ? "Codex LB connection ready" : "Codex LB connection needs action"
             )
-            if ok {
-                self.providerStatus.stringValue = "Connection test passed (\(status))."
-            } else {
-                self.providerStatus.stringValue = "Connection test failed (\(status)) · \(NativeView.redactPreview(result.output))"
-            }
-            self.refresh()
+            self.providerStatus.stringValue = outcome.message
         }
     }
 
-    @objc private func useOAuth() { run(["codex-lb", "use-oauth", "--restart-app", "--json"], title: "Use ChatGPT OAuth", kind: "codex-lb-use-oauth", group: "codex-config") }
-    @objc private func useCodexLb() { run(["codex-lb", "use-codex-lb", "--restart-app", "--json"], title: "Use codex-lb", kind: "codex-lb-use-lb", group: "codex-config") }
+    @objc private func useOAuth() {
+        guard !busy else {
+            providerStatus.stringValue = "Another provider action is already running."
+            return
+        }
+        guard let snapshot = operations.begin(kind: "codex-lb-use-oauth", mutationGroup: "codex-config", summary: "Restore Chat / Pro") else {
+            providerStatus.stringValue = "Another guarded mutation is already running. Wait or open Diagnostics."
+            return
+        }
+        setBusy(true)
+        providerStatus.stringValue = "Restoring Chat / Pro with ChatGPT OAuth and restarting Codex App…"
+        _ = operations.update(snapshot, state: .running, stage: "switching", progress: nil, summary: "Restore Chat / Pro")
+        processClient.run(["codex-lb", "use-oauth", "--restart-app", "--json"], timeout: NativeView.mutationTimeout) { [weak self] result in
+            guard let self = self else { return }
+            self.setBusy(false)
+            let outcome = self.describeOAuthResult(self.json(result.output), processCode: result.code)
+            _ = self.operations.update(
+                snapshot,
+                state: outcome.ok ? .succeeded : .failed,
+                stage: "complete",
+                progress: 1,
+                summary: outcome.ok ? "Chat / Pro restored after restart" : "Chat / Pro restore needs action"
+            )
+            self.providerStatus.stringValue = outcome.message
+            self.refreshFastStatus()
+        }
+    }
+    @objc private func useCodexLb() {
+        guard !busy else {
+            providerStatus.stringValue = "Another provider action is already running."
+            return
+        }
+        guard let snapshot = operations.begin(kind: "codex-lb-use-lb", mutationGroup: "codex-config", summary: "Use codex-lb") else {
+            providerStatus.stringValue = "Another guarded mutation is already running. Wait or open Diagnostics."
+            return
+        }
+        setBusy(true)
+        providerStatus.stringValue = "Activating codex-lb and restarting Codex App…"
+        _ = operations.update(snapshot, state: .running, stage: "activating", progress: nil, summary: "Use codex-lb")
+        processClient.run(["codex-lb", "use-codex-lb", "--restart-app", "--json"], timeout: NativeView.mutationTimeout) { [weak self] activationResult in
+            guard let self = self else { return }
+            let activationJson = self.json(activationResult.output)
+            _ = self.operations.update(snapshot, state: .running, stage: "verifying", progress: nil, summary: "Verify codex-lb after restart")
+            self.providerStatus.stringValue = "Verifying codex-lb readiness after restart…"
+            self.processClient.run(["codex-lb", "status", "--json"], timeout: NativeView.statusTimeout) { [weak self] statusResult in
+                guard let self = self else { return }
+                self.setBusy(false)
+                let statusJson = self.json(statusResult.output)
+                let outcome = self.describeActivationResult(
+                    activationJson,
+                    status: statusJson,
+                    activationCode: activationResult.code,
+                    statusCode: statusResult.code
+                )
+                _ = self.operations.update(
+                    snapshot,
+                    state: outcome.ok ? .succeeded : .failed,
+                    stage: "complete",
+                    progress: 1,
+                    summary: outcome.ok ? "codex-lb active after restart" : "codex-lb activation needs action"
+                )
+                self.providerStatus.stringValue = outcome.message
+            }
+        }
+    }
     @objc private func fastOn() { run(["fast-mode", "on", "--json"], title: "Fast Mode On", kind: "fast-mode-on", group: "codex-config", timeout: NativeView.statusTimeout) { [weak self] in self?.refreshFastStatus() } }
     @objc private func fastOff() { run(["fast-mode", "off", "--json"], title: "Fast Mode Off", kind: "fast-mode-off", group: "codex-config", timeout: NativeView.statusTimeout) { [weak self] in self?.refreshFastStatus() } }
 }

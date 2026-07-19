@@ -15,6 +15,7 @@ import { writeNarutoGate } from '../official-subagent-preparation.js'
 import { addMcpServer, editMcpServer } from '../../mcp-config/mutation.js'
 import type { CodexCliMutationOperation, CodexMcpCliPort } from '../../mcp-config/codex-cli-adapter.js'
 import { runProcess } from '../../fsx.js'
+import { bindParentSummaryToHostCapabilityEvidence } from '../../agent-bridge/host-capability-runtime.js'
 
 class UnavailableMcpCli implements CodexMcpCliPort {
   async list() {
@@ -41,13 +42,43 @@ class UnavailableMcpCli implements CodexMcpCliPort {
   }
 }
 
+function hostCapabilityDependencies(toolNames: string[]) {
+  return {
+    inventory: async () => ({
+      schema: 'sks.mcp-inventory.v2',
+      ok: true,
+      scope: 'project',
+      source: 'fixture_inventory',
+      servers: [{
+        name: 'acas-tools',
+        enabled: true,
+        enabled_tools: [...toolNames],
+        disabled_tools: []
+      }],
+      server_count: 1,
+      enabled_count: 1,
+      failed_count: 0,
+      blockers: [],
+      warnings: []
+    }) as any,
+    health: async () => ({
+      schema: 'sks.mcp-health.v1',
+      ok: true,
+      name: 'acas-tools',
+      scope: 'project',
+      status: 'healthy',
+      tool_names: [...toolNames]
+    }) as any
+  }
+}
+
 test('standalone parent args launch one Sol Max Codex parent with the official thread budget', () => {
   const args = buildOfficialSubagentCodexArgs({
     prompt: 'delegate and wait',
     maxThreads: 12,
     parentSummaryFile: '/tmp/parent-summary.txt'
   })
-  assert.deepEqual(args.slice(0, 5), ['exec', '-m', 'gpt-5.6-sol', '-c', 'model_reasoning_effort="max"'])
+  assert.deepEqual(args.slice(0, 6), ['exec', '--json', '-m', 'gpt-5.6-sol', '-c', 'model_reasoning_effort="max"'])
   assert.ok(args.includes('model_provider="openai"'))
   assert.ok(args.includes('forced_login_method="chatgpt"'))
   assert.ok(args.includes('agents.max_threads=12'))
@@ -59,6 +90,7 @@ test('app sessions return delegation context without launching nested Codex', as
   let launched = false
   const result = await runOfficialSubagentWorkflow({
     root: process.cwd(),
+    goal: 'delegate and wait',
     prompt: 'delegate and wait',
     requestedSubagents: 8,
     maxThreads: 12,
@@ -75,6 +107,121 @@ test('app sessions return delegation context without launching nested Codex', as
   assert.equal(result.completion_evidence, false)
   assert.equal(result.parent_model, 'gpt-5.6-sol')
   assert.equal(result.parent_reasoning_effort, 'max')
+})
+
+test('standalone launch blocks requested host capabilities before Codex when the project MCP inventory is incomplete', async () => {
+  let launched = false
+  const result = await runOfficialSubagentWorkflow({
+    root: process.cwd(),
+    goal: 'Create and deliver an Excel workbook.',
+    prompt: 'delegation prompt',
+    requestedSubagents: 1,
+    maxThreads: 1,
+    appSession: false,
+    hostCapabilityDependencies: hostCapabilityDependencies(['spreadsheet_create']),
+    runProcessImpl: async () => {
+      launched = true
+      throw new Error('must not launch')
+    }
+  })
+
+  assert.equal(launched, false)
+  assert.equal(result.ok, false)
+  assert.equal(result.status, 'host_capability_blocked')
+  assert.ok(result.blockers.includes('host_capability_missing:host.spreadsheet.workbook.v1'))
+  assert.equal(result.host_capability_evidence.ok, false)
+})
+
+test('standalone launch allowlists requested ACAS tools and projects only hashed JSONL evidence', async () => {
+  const tools = ['spreadsheet_create', 'spreadsheet_inspect', 'spreadsheet_update', 'slack_send']
+  const artifact = {
+    path: 'reports/monthly.xlsx',
+    kind: 'spreadsheet',
+    media_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    sha256: `sha256:${'a'.repeat(64)}`,
+    bytes: 4,
+    role: 'deliverable'
+  }
+  let launchedArgs: readonly string[] = []
+  const result = await runOfficialSubagentWorkflow({
+    root: process.cwd(),
+    goal: 'Create and deliver an Excel workbook.',
+    prompt: 'delegation prompt',
+    requestedSubagents: 1,
+    maxThreads: 1,
+    appSession: false,
+    hostCapabilityDependencies: hostCapabilityDependencies(tools),
+    runProcessImpl: async (_command, args, options) => {
+      launchedArgs = args
+      const outputIndex = args.indexOf('--output-last-message')
+      await fsp.writeFile(args[outputIndex + 1]!, JSON.stringify({
+        schema: 'sks.subagent-parent-summary.v1',
+        status: 'completed',
+        summary: 'Workbook created.',
+        thread_outcomes: [{ thread_id: 'thread-a', status: 'completed', summary: 'complete' }],
+        changed_files: [],
+        verification: [],
+        blockers: []
+      }))
+      const lines = [
+        JSON.stringify({
+          type: 'item.completed',
+          item: {
+            type: 'mcp_tool_call',
+            server: 'acas-tools',
+            tool: 'spreadsheet_create',
+            status: 'completed',
+            arguments: { api_key: 'raw-jsonl-secret-must-not-return' },
+            result: { structured_content: { artifact } }
+          }
+        }),
+        JSON.stringify({
+          type: 'item.completed',
+          item: {
+            type: 'mcp_tool_call',
+            server: 'acas-tools',
+            tool: 'spreadsheet_inspect',
+            status: 'completed',
+            result: { structured_content: { ok: true } }
+          }
+        })
+      ]
+      for (const line of lines) options?.onStdout?.(`${line}\n`)
+      return {
+        code: 0,
+        stdout: `${lines.join('\n')}\n`,
+        stderr: '',
+        stdoutBytes: Buffer.byteLength(lines.join('\n')),
+        stderrBytes: 0,
+        truncated: false,
+        timedOut: false
+      }
+    }
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.status, 'parent_completed')
+  assert.ok(launchedArgs.includes('--json'))
+  assert.ok(launchedArgs.includes('mcp_servers."acas-tools".enabled_tools=["spreadsheet_create", "spreadsheet_inspect", "spreadsheet_update"]'))
+  assert.ok(launchedArgs.includes('mcp_servers."acas-tools".disabled_tools=["slack_send"]'))
+  assert.equal(result.process.stdout_tail, '')
+  assert.equal(result.process.jsonl_event_count, 2)
+  assert.doesNotMatch(JSON.stringify(result.process), /raw-jsonl-secret-must-not-return|arguments|structured_content/)
+  assert.deepEqual(result.host_capability_evidence.artifacts, [artifact])
+  assert.equal(result.host_capability_evidence.capabilities_used.every((row: any) => row.status === 'passed'), true)
+
+  const rebound = bindParentSummaryToHostCapabilityEvidence({
+    schema: 'sks.subagent-parent-summary.v1',
+    status: 'completed',
+    summary: 'unobserved claim',
+    thread_outcomes: [{ thread_id: 'thread-a', status: 'completed', summary: 'complete' }],
+    artifacts: [{ ...artifact, bytes: 999 }],
+    capabilities_used: [],
+    blockers: []
+  }, result.host_capability_evidence)
+  assert.equal((rebound.value as any).status, 'blocked')
+  assert.deepEqual((rebound.value as any).artifacts, [artifact])
+  assert.ok(rebound.blockers.includes('host_artifact_parent_receipts_mismatch'))
 })
 
 test('Codex thread environment selects the in-app path unless standalone is explicit', () => {
@@ -200,6 +347,7 @@ test('standalone parent replaces the real child environment and redacts inherite
 
   const result = await runOfficialSubagentWorkflow({
     root,
+    goal: 'inspect isolated environment',
     prompt: 'inspect isolated environment',
     requestedSubagents: 1,
     maxThreads: 1,
@@ -233,7 +381,7 @@ test('standalone parent replaces the real child environment and redacts inherite
   assert.doesNotMatch(result.process.stdout_tail, new RegExp(inheritedAuthSecret + '|' + blockedSecret))
   assert.doesNotMatch(result.process.stderr_tail, new RegExp(inheritedAuthSecret + '|' + blockedSecret))
   assert.doesNotMatch(result.parent_summary, new RegExp(inheritedAuthSecret + '|' + blockedSecret))
-  assert.match(result.process.stdout_tail, /stdout auth=<redacted> blocked=<redacted> short=ok/)
+  assert.equal(result.process.stdout_tail, '')
   assert.match(result.process.stderr_tail, /stderr auth=<redacted> blocked=<redacted> short=ok/)
   assert.equal(result.parent_summary, 'summary auth=<redacted> blocked=<redacted> short=ok')
 })
@@ -246,6 +394,7 @@ test('production standalone launch rejects arbitrary executable overrides outsid
   try {
     const result = await runOfficialSubagentWorkflow({
       root,
+      goal: 'must use official package runtime',
       prompt: 'must use official package runtime',
       requestedSubagents: 1,
       maxThreads: 1,
@@ -299,6 +448,7 @@ test('standalone parent launch exports the owning mission id to child hooks', as
   try {
     await runOfficialSubagentWorkflow({
       root: process.cwd(),
+      goal: 'delegate and wait',
       prompt: 'delegate and wait',
       requestedSubagents: 2,
       maxThreads: 2,
@@ -332,6 +482,7 @@ test('standalone parent registers the child PID before waiting and exposes a bou
   try {
     const result = await runOfficialSubagentWorkflow({
       root: process.cwd(),
+      goal: 'delegate and wait',
       prompt: 'delegate and wait',
       requestedSubagents: 1,
       maxThreads: 1,
@@ -402,6 +553,7 @@ test('standalone parent converts timeout and non-zero exits into bounded blocker
     for (const fixture of cases) {
       const result = await runOfficialSubagentWorkflow({
         root: process.cwd(),
+        goal: 'delegate and wait',
         prompt: 'delegate and wait',
         requestedSubagents: 1,
         maxThreads: 1,
@@ -468,6 +620,7 @@ test('standalone official subagent launch overrides selected codex-lb with the n
   try {
     const result = await runOfficialSubagentWorkflow({
       root,
+      goal: 'delegate and wait',
       prompt: 'delegate and wait',
       requestedSubagents: 2,
       maxThreads: 2,
@@ -502,11 +655,12 @@ test('standalone Naruto parent consumes the existing project MCP config and call
 
   await fsp.writeFile(serverFile, [
     "import readline from 'node:readline'",
+    "const tools = ['read_project_marker', 'datasource_schema_context', 'datasource_query_readonly', 'spreadsheet_create', 'spreadsheet_inspect', 'spreadsheet_update'].map((name) => ({ name, description: `Fixture tool ${name}`, inputSchema: { type: 'object', additionalProperties: false } }))",
     "const rl = readline.createInterface({ input: process.stdin })",
     "rl.on('line', (line) => {",
     "  const message = JSON.parse(line)",
     "  if (message.method === 'initialize') console.log(JSON.stringify({ jsonrpc: '2.0', id: message.id, result: { protocolVersion: '2024-11-05', capabilities: { tools: {} } } }))",
-    "  if (message.method === 'tools/list') console.log(JSON.stringify({ jsonrpc: '2.0', id: message.id, result: { tools: [{ name: 'read_project_marker', description: 'Read a fixed project marker', inputSchema: { type: 'object', additionalProperties: false } }] } }))",
+    "  if (message.method === 'tools/list') console.log(JSON.stringify({ jsonrpc: '2.0', id: message.id, result: { tools } }))",
     "  if (message.method === 'tools/call') console.log(JSON.stringify({ jsonrpc: '2.0', id: message.id, result: { content: [{ type: 'text', text: 'project-mcp-ok' }], isError: false } }))",
     "})"
   ].join('\n'), { mode: 0o600 })
@@ -538,6 +692,7 @@ test('standalone Naruto parent consumes the existing project MCP config and call
     "child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized', params: {} }) + '\\n')",
     "const listed = await request(2, 'tools/list')",
     "if (!listed.result.tools.some((tool) => tool.name === 'read_project_marker')) throw new Error('project_mcp_tool_missing')",
+    "for (const name of ['datasource_schema_context', 'datasource_query_readonly', 'spreadsheet_create', 'spreadsheet_inspect', 'spreadsheet_update']) if (!listed.result.tools.some((tool) => tool.name === name)) throw new Error(`project_mcp_capability_tool_missing:${name}`)",
     "const called = await request(3, 'tools/call', { name: 'read_project_marker', arguments: {} })",
     "const text = called.result.content?.[0]?.text",
     "fs.writeFileSync(path.join(process.cwd(), 'project-mcp-call.json'), JSON.stringify({ tool: 'read_project_marker', text }))",
@@ -563,7 +718,14 @@ test('standalone Naruto parent consumes the existing project MCP config and call
     args: [serverFile],
     env_vars: ['PROJECT_MCP_ALLOWED'],
     cwd: project,
-    enabled_tools: ['read_project_marker'],
+    enabled_tools: [
+      'read_project_marker',
+      'datasource_schema_context',
+      'datasource_query_readonly',
+      'spreadsheet_create',
+      'spreadsheet_inspect',
+      'spreadsheet_update'
+    ],
     default_tools_approval_mode: 'auto',
     required: true
   }
@@ -588,6 +750,7 @@ test('standalone Naruto parent consumes the existing project MCP config and call
 
   const result = await runOfficialSubagentWorkflow({
     root: project,
+    goal: 'Use the registered read-only project tool and report its marker.',
     prompt: 'Use the registered read-only project tool and report its marker.',
     requestedSubagents: 1,
     maxThreads: 1,

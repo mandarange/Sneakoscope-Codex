@@ -3,7 +3,23 @@
 ## [Unreleased]
 
 
+## [7.0.3] - 2026-07-19
 
+### Added
+
+- Add a dedicated guarded Codex CLI update action to SKS Center, serialized through the existing mutation coordinator and followed by a fresh update-status snapshot.
+- Add the version-independent Agent Bridge host-capability contract: four compatibility schemas, seven ACAS host-MCP descriptors, inventory-driven Office/Data workflows, and bounded optional Naruto artifact/capability proof receipts.
+
+### Changed
+
+- Raise the shared packed-package budget by the minimum sufficient 24 KiB, from 2464 KiB to 2488 KiB, after the required host-capability runtime and proof-time artifact verification measured 2,542,713 packed bytes.
+
+### Fixed
+
+- Make SKS Center codex-lb activation establish provider and connection readiness before testing, and render structured, redacted success or failure feedback instead of an opaque raw `not_configured` payload.
+- Preserve the user's active Codex provider, model, reasoning, routing, and authentication class across `sks update`; an active codex-lb install no longer silently restores ChatGPT OAuth and unselects the proxy.
+- Restore truthful Chat/Pro recovery guidance in SKS Center, remove only provenance-owned Desktop model locks, and require an actual Codex App restart before OAuth or codex-lb switches can report success.
+- Block codex-lb health requests before any credential is sent to an insecure non-loopback transport, and keep the native Codex updater's complete structured JSON below the Menu Bar capture boundary.
 
 ## [7.0.2] - 2026-07-19
 

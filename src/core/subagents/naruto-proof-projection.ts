@@ -1,5 +1,7 @@
+import { constants as fsConstants } from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
+import { createHash } from 'node:crypto'
 import { sha256 } from '../fsx.js'
 import {
   SUBAGENT_EVIDENCE_FILENAME,
@@ -20,6 +22,15 @@ import {
   normalizeLegacySubagentCountFields,
   subagentCountContractBlockers
 } from './wave-lifecycle.js'
+import {
+  HOST_CAPABILITY_DESCRIPTORS,
+  hostCapabilityDigest
+} from '../agent-bridge/agent-manifest.js'
+import {
+  HOST_CAPABILITY_EVIDENCE_SCHEMA,
+  HOST_CAPABILITY_RUNTIME_SCHEMA,
+  type HostCapabilityExecutionEvidence
+} from '../agent-bridge/host-capability-runtime.js'
 
 export const NARUTO_PROOF_ARTIFACT_FILENAMES = Object.freeze([
   SUBAGENT_PLAN_FILENAME,
@@ -39,10 +50,28 @@ export interface NarutoProofVerification {
   status: 'passed' | 'failed' | 'blocked' | 'skipped' | 'pending' | 'unknown' | 'reported'
 }
 
+export interface NarutoProofArtifactReceipt {
+  path: string
+  kind: string
+  media_type: string
+  sha256: string
+  bytes: number
+  role: 'deliverable' | 'scratch' | 'temp' | 'log'
+}
+
+export interface NarutoProofCapabilityUse {
+  id: string
+  status: 'passed' | 'failed'
+  tool_names: string[]
+  receipt_sha256: string
+}
+
 export interface NarutoProofResult {
   summary: string
   changed_files: string[]
   verification: NarutoProofVerification[]
+  artifacts?: NarutoProofArtifactReceipt[]
+  capabilities_used?: NarutoProofCapabilityUse[]
 }
 
 export interface NarutoProofArtifactSnapshot {
@@ -72,6 +101,25 @@ const MAX_CHANGED_FILES = 256
 const MAX_CHANGED_FILE_CHARS = 512
 const MAX_VERIFICATION_ROWS = 32
 const MAX_VERIFICATION_NAME_CHARS = 240
+const MAX_ARTIFACTS = 64
+const MAX_ARTIFACT_PATH_CHARS = 512
+const MAX_ARTIFACT_KIND_CHARS = 64
+const MAX_MEDIA_TYPE_CHARS = 160
+const MAX_CAPABILITY_USES = 64
+const MAX_CAPABILITY_ID_CHARS = 160
+const MAX_CAPABILITY_TOOL_NAMES = 64
+const MAX_CAPABILITY_TOOL_NAME_CHARS = 128
+const MAX_CANONICAL_PROOF_ARTIFACT_BYTES = 4 * 1024 * 1024
+const MAX_CANONICAL_PROOF_AGGREGATE_BYTES = 16 * 1024 * 1024
+const MAX_DELIVERABLE_ARTIFACT_BYTES = 128 * 1024 * 1024
+const MAX_DELIVERABLE_ARTIFACT_AGGREGATE_BYTES = 512 * 1024 * 1024
+const SHA256_RECEIPT_PATTERN = /^sha256:[a-f0-9]{64}$/
+const ARTIFACT_ROLES = new Set<NarutoProofArtifactReceipt['role']>(['deliverable', 'scratch', 'temp', 'log'])
+const NON_DELIVERABLE_ARTIFACT_KINDS = new Set(['scratch', 'temp', 'tmp', 'log'])
+const NON_DELIVERABLE_PATH_SEGMENTS = new Set(['scratch', 'temp', 'tmp', 'log', 'logs'])
+const ARTIFACT_RECEIPT_KEYS = new Set(['path', 'kind', 'media_type', 'sha256', 'bytes', 'role'])
+const CAPABILITY_USE_KEYS = new Set(['id', 'status', 'tool_names', 'receipt_sha256'])
+const HOST_CAPABILITY_BY_ID = new Map(HOST_CAPABILITY_DESCRIPTORS.map((descriptor) => [descriptor.id, descriptor]))
 const INCOMPLETE_BLOCKER_PATTERNS = [
   /^proof_artifact_missing:/,
   /^requested_subagent_(?:starts|completions)_incomplete:/,
@@ -84,7 +132,13 @@ const INCOMPLETE_BLOCKER_PATTERNS = [
 export async function readNarutoProofArtifactSnapshot(artifactDir: string): Promise<NarutoProofArtifactSnapshot> {
   const rows = await Promise.all(NARUTO_PROOF_ARTIFACT_FILENAMES.map(async (filename) => {
     try {
-      return { filename, bytes: await fsp.readFile(path.join(artifactDir, filename)), blocker: null }
+      const file = path.join(artifactDir, filename)
+      const stat = await fsp.stat(file)
+      if (!stat.isFile()) return { filename, bytes: null, blocker: `proof_artifact_unreadable:${filename}` }
+      if (stat.size > MAX_CANONICAL_PROOF_ARTIFACT_BYTES) {
+        return { filename, bytes: null, blocker: `proof_artifact_too_large:${filename}` }
+      }
+      return { filename, bytes: await fsp.readFile(file), blocker: null }
     } catch (error: unknown) {
       const code = errorCode(error)
       return {
@@ -99,20 +153,38 @@ export async function readNarutoProofArtifactSnapshot(artifactDir: string): Prom
   const bytes = {} as Record<NarutoProofArtifactFilename, Buffer | null>
   const byteHashes = {} as Record<NarutoProofArtifactFilename, string | null>
   const blockers: string[] = []
+  let aggregateBytes = 0
   for (const row of rows) {
     bytes[row.filename] = row.bytes
     byteHashes[row.filename] = row.bytes ? `sha256:${sha256(row.bytes)}` : null
+    aggregateBytes += row.bytes?.length || 0
     if (row.blocker) blockers.push(row.blocker)
   }
+  if (aggregateBytes > MAX_CANONICAL_PROOF_AGGREGATE_BYTES) blockers.push('proof_artifacts_aggregate_too_large')
   return { bytes, byte_hashes: byteHashes, read_blockers: blockers }
 }
 
 export async function buildNarutoProofProjection(input: {
   artifactDir: string
   missionId: string
+  workspaceRoot?: string
 }): Promise<NarutoProofProjection> {
   const snapshot = await readNarutoProofArtifactSnapshot(input.artifactDir)
-  return projectNarutoProofSnapshot({ snapshot, missionId: input.missionId })
+  const projected = projectNarutoProofSnapshot({ snapshot, missionId: input.missionId })
+  if (!projected.result.artifacts?.length) return projected
+  const artifactBlockers = await verifyProjectedArtifactFiles({
+    artifacts: projected.result.artifacts,
+    artifactDir: input.artifactDir,
+    workspaceRoot: input.workspaceRoot
+  })
+  if (artifactBlockers.length === 0) return projected
+  return projectNarutoProofSnapshot({
+    snapshot: {
+      ...snapshot,
+      read_blockers: [...snapshot.read_blockers, ...artifactBlockers]
+    },
+    missionId: input.missionId
+  })
 }
 
 export function projectNarutoProofSnapshot(input: {
@@ -120,10 +192,18 @@ export function projectNarutoProofSnapshot(input: {
   missionId: string
 }): NarutoProofProjection {
   const missionId = String(input.missionId || '').trim()
-  const blockers = [...input.snapshot.read_blockers]
+  const readBlockers = input.snapshot.read_blockers
+  const blockers = Array.isArray(readBlockers)
+    ? readBlockers.filter((blocker): blocker is string => typeof blocker === 'string')
+    : ['proof_read_blockers_invalid']
+  if (Array.isArray(readBlockers) && blockers.length !== readBlockers.length) blockers.push('proof_read_blockers_invalid')
   const plan = parseJsonArtifact(input.snapshot, SUBAGENT_PLAN_FILENAME, blockers)
   const parentSummaryValue = parseJsonArtifact(input.snapshot, SUBAGENT_PARENT_SUMMARY_FILENAME, blockers)
   const persistedEvidence = normalizeLegacySubagentCountFields(parseJsonArtifact(input.snapshot, SUBAGENT_EVIDENCE_FILENAME, blockers), isRecord(plan) ? plan : null)
+  const trustedHostCapabilityEvidence = projectTrustedHostCapabilityEvidence(
+    recordValue(persistedEvidence, 'host_capability_evidence'),
+    blockers
+  )
   const summary = normalizeLegacySubagentCountFields(parseJsonArtifact(input.snapshot, NARUTO_SUMMARY_FILENAME, blockers), isRecord(plan) ? plan : null)
   const gate = normalizeLegacySubagentCountFields(parseJsonArtifact(input.snapshot, NARUTO_GATE_FILENAME, blockers), isRecord(plan) ? plan : null)
   const events = parseJsonlArtifact(input.snapshot, blockers)
@@ -164,6 +244,7 @@ export function projectNarutoProofSnapshot(input: {
         workflowStatus: firstText(recordValue(summary, 'status')),
         preparationOnly: recordValue(persistedEvidence, 'preparation_only') === true,
         runId: workflowRunId,
+        ...(trustedHostCapabilityEvidence ? { hostCapabilityEvidence: trustedHostCapabilityEvidence } : {}),
         additionalBlockers: subagentCountContractBlockers(isRecord(plan) ? plan : null, observedStarts)
       })
   if (planRequestedSubagents === null && plan !== null) blockers.push('proof_plan_requested_subagents_invalid')
@@ -174,6 +255,37 @@ export function projectNarutoProofSnapshot(input: {
 
   const changedFiles = projectChangedFiles(normalizedParentSummary.raw?.changed_files, blockers)
   const verification = projectVerification(normalizedParentSummary.raw?.verification, blockers)
+  const parentArtifacts = projectArtifacts(recordValue(parentSummaryValue, 'artifacts'), blockers)
+  const parentCapabilitiesUsed = projectCapabilityUses(recordValue(parentSummaryValue, 'capabilities_used'), blockers)
+  const trustedArtifacts = trustedHostCapabilityEvidence
+    ? projectArtifacts(trustedHostCapabilityEvidence.artifacts, blockers) || []
+    : undefined
+  const trustedCapabilitiesUsed = trustedHostCapabilityEvidence
+    ? projectCapabilityUses(trustedHostCapabilityEvidence.capabilities_used, blockers) || []
+    : undefined
+  const parentHostClaimsPresent = recordValue(parentSummaryValue, 'artifacts') !== undefined
+    || recordValue(parentSummaryValue, 'capabilities_used') !== undefined
+  const trustedHostBindingRequired = Boolean(trustedHostCapabilityEvidence && (
+    trustedHostCapabilityEvidence.runtime.requested_capability_ids.length > 0
+      || trustedHostCapabilityEvidence.tool_calls.length > 0
+      || trustedHostCapabilityEvidence.artifacts.length > 0
+      || parentHostClaimsPresent
+  ))
+  if (trustedHostCapabilityEvidence) {
+    if (trustedHostBindingRequired && JSON.stringify(parentArtifacts || []) !== JSON.stringify(trustedArtifacts || [])) {
+      blockers.push('proof_parent_host_artifacts_mismatch')
+    }
+    if (trustedHostBindingRequired && JSON.stringify(parentCapabilitiesUsed || []) !== JSON.stringify(trustedCapabilitiesUsed || [])) {
+      blockers.push('proof_parent_host_capabilities_mismatch')
+    }
+  } else if (parentHostClaimsPresent) {
+    blockers.push('proof_host_capability_evidence_missing')
+  }
+  const artifacts = trustedHostBindingRequired ? trustedArtifacts : parentArtifacts
+  const capabilitiesUsed = trustedHostBindingRequired ? trustedCapabilitiesUsed : parentCapabilitiesUsed
+  for (const receipt of capabilitiesUsed || []) {
+    if (receipt.status !== 'passed') blockers.push(`proof_capability_use_not_passed:${receipt.id}`)
+  }
   const parentText = normalizedParentSummary.summary || ''
   if (parentText.length > MAX_RESULT_SUMMARY_CHARS) blockers.push('proof_result_summary_too_large')
   if (containsLeakageMarker(parentText)) blockers.push('proof_result_summary_sensitive')
@@ -184,7 +296,9 @@ export function projectNarutoProofSnapshot(input: {
       ? parentText
       : '',
     changed_files: changedFiles,
-    verification
+    verification,
+    ...(artifacts === undefined ? {} : { artifacts }),
+    ...(capabilitiesUsed === undefined ? {} : { capabilities_used: capabilitiesUsed })
   }
 
   const completed = gatePassed(gate)
@@ -240,6 +354,186 @@ export function validateNarutoProofStatus(value: { status: unknown; ok: unknown 
     return ['proof_status_invalid']
   }
   return value.ok === (status === 'completed') ? [] : ['proof_status_ok_inconsistent']
+}
+
+function projectTrustedHostCapabilityEvidence(
+  value: unknown,
+  blockers: string[]
+): HostCapabilityExecutionEvidence | null {
+  if (value === undefined || value === null) return null
+  if (!isRecord(value)
+    || value.schema !== HOST_CAPABILITY_EVIDENCE_SCHEMA
+    || typeof value.ok !== 'boolean'
+    || !isRecord(value.runtime)
+    || value.runtime.schema !== HOST_CAPABILITY_RUNTIME_SCHEMA
+    || value.runtime.server !== 'acas-tools'
+    || value.runtime.capability_digest !== hostCapabilityDigest(HOST_CAPABILITY_DESCRIPTORS)
+    || !Array.isArray(value.runtime.requested_capability_ids)
+    || !Array.isArray(value.runtime.blockers)
+    || !Array.isArray(value.tool_calls)
+    || !Array.isArray(value.capabilities_used)
+    || !Array.isArray(value.artifacts)
+    || !Array.isArray(value.blockers)) {
+    blockers.push('proof_host_capability_evidence_invalid')
+    return null
+  }
+  const requestedIds = value.runtime.requested_capability_ids.map((id) => String(id || '').trim())
+  if (requestedIds.some((id) => !HOST_CAPABILITY_BY_ID.has(id))
+    || new Set(requestedIds).size !== requestedIds.length
+    || value.runtime.blockers.some((blocker) => !isBoundedBlockerCode(blocker))
+    || value.blockers.some((blocker) => !isBoundedBlockerCode(blocker))) {
+    blockers.push('proof_host_capability_runtime_invalid')
+    return null
+  }
+  const knownTools = new Set(HOST_CAPABILITY_DESCRIPTORS.flatMap((descriptor) => descriptor.tool_names))
+  if (value.tool_calls.length > 1024 || value.tool_calls.some((row) => {
+    if (!isRecord(row)) return true
+    return row.server !== 'acas-tools'
+      || typeof row.tool !== 'string'
+      || !knownTools.has(row.tool)
+      || (row.status !== 'passed' && row.status !== 'failed')
+      || typeof row.event_sha256 !== 'string'
+      || !SHA256_RECEIPT_PATTERN.test(row.event_sha256)
+  })) {
+    blockers.push('proof_host_capability_tool_calls_invalid')
+    return null
+  }
+  const receiptBlockers: string[] = []
+  const capabilities = projectCapabilityUses(value.capabilities_used, receiptBlockers)
+  const artifacts = projectArtifacts(value.artifacts, receiptBlockers)
+  if (!capabilities || !artifacts || receiptBlockers.length > 0
+    || capabilities.length !== value.capabilities_used.length
+    || artifacts.length !== value.artifacts.length) {
+    blockers.push(...receiptBlockers, 'proof_host_capability_receipts_invalid')
+    return null
+  }
+  const observedIds = capabilities.map((receipt) => receipt.id)
+  if (JSON.stringify([...observedIds].sort()) !== JSON.stringify([...requestedIds].sort())) {
+    blockers.push('proof_host_capability_requested_receipts_mismatch')
+  }
+  const expectedOk = value.blockers.length === 0 && capabilities.every((receipt) => receipt.status === 'passed')
+  if (value.ok !== expectedOk) blockers.push('proof_host_capability_evidence_status_inconsistent')
+  blockers.push(...value.blockers)
+  return value as unknown as HostCapabilityExecutionEvidence
+}
+
+async function verifyProjectedArtifactFiles(input: {
+  artifacts: NarutoProofArtifactReceipt[]
+  artifactDir: string
+  workspaceRoot: string | undefined
+}): Promise<string[]> {
+  const workspaceRoot = await resolveArtifactWorkspaceRoot(input.artifactDir, input.workspaceRoot)
+  if (!workspaceRoot) return ['proof_artifact_workspace_root_missing']
+  const blockers: string[] = []
+  for (const artifact of input.artifacts) {
+    blockers.push(...await verifyProjectedArtifactFile(workspaceRoot, artifact))
+  }
+  return uniqueStrings(blockers)
+}
+
+async function resolveArtifactWorkspaceRoot(artifactDir: string, explicitRoot: string | undefined): Promise<string | null> {
+  let candidate = explicitRoot ? path.resolve(explicitRoot) : ''
+  if (!candidate) {
+    let cursor = path.resolve(artifactDir)
+    while (true) {
+      if (path.basename(cursor) === '.sneakoscope') {
+        candidate = path.dirname(cursor)
+        break
+      }
+      const parent = path.dirname(cursor)
+      if (parent === cursor) break
+      cursor = parent
+    }
+  }
+  if (!candidate) return null
+  try {
+    const realRoot = await fsp.realpath(candidate)
+    return (await fsp.stat(realRoot)).isDirectory() ? realRoot : null
+  } catch {
+    return null
+  }
+}
+
+async function verifyProjectedArtifactFile(
+  workspaceRoot: string,
+  artifact: NarutoProofArtifactReceipt
+): Promise<string[]> {
+  if (artifact.bytes > MAX_DELIVERABLE_ARTIFACT_BYTES) return ['proof_artifact_file_too_large']
+  const segments = artifact.path.split('/')
+  const candidate = path.join(workspaceRoot, ...segments)
+  if (!pathWithinRoot(workspaceRoot, candidate)) return ['proof_artifact_file_escape']
+  let cursor = workspaceRoot
+  for (let index = 0; index < segments.length; index += 1) {
+    cursor = path.join(cursor, segments[index]!)
+    try {
+      const stat = await fsp.lstat(cursor)
+      if (stat.isSymbolicLink()) return ['proof_artifact_file_symlink']
+      if (index < segments.length - 1 && !stat.isDirectory()) return ['proof_artifact_file_not_regular']
+      if (index === segments.length - 1 && !stat.isFile()) return ['proof_artifact_file_not_regular']
+    } catch (error: unknown) {
+      return [errorCode(error) === 'ENOENT' ? 'proof_artifact_file_missing' : 'proof_artifact_file_unreadable']
+    }
+  }
+  try {
+    const realCandidate = await fsp.realpath(candidate)
+    if (!pathWithinRoot(workspaceRoot, realCandidate)) return ['proof_artifact_file_escape']
+    const expected = await fsp.stat(realCandidate)
+    if (expected.size > MAX_DELIVERABLE_ARTIFACT_BYTES) return ['proof_artifact_file_too_large']
+    const handle = await fsp.open(candidate, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW)
+    try {
+      const before = await handle.stat()
+      if (!before.isFile()) return ['proof_artifact_file_not_regular']
+      if (before.dev !== expected.dev || before.ino !== expected.ino) {
+        return ['proof_artifact_file_changed_during_hash']
+      }
+      const header = Buffer.alloc(8)
+      const headerRead = await handle.read(header, 0, header.length, 0)
+      const digest = createHash('sha256')
+      for await (const chunk of handle.createReadStream({ autoClose: false, start: 0 })) digest.update(chunk)
+      const after = await handle.stat()
+      const finalPathStat = await fsp.lstat(candidate)
+      if (finalPathStat.isSymbolicLink()) return ['proof_artifact_file_symlink']
+      if (before.dev !== after.dev
+        || before.ino !== after.ino
+        || before.size !== after.size
+        || before.mtimeMs !== after.mtimeMs
+        || finalPathStat.dev !== after.dev
+        || finalPathStat.ino !== after.ino) {
+        return ['proof_artifact_file_changed_during_hash']
+      }
+      const blockers: string[] = []
+      if (after.size !== artifact.bytes) blockers.push('proof_artifact_file_bytes_mismatch')
+      if (`sha256:${digest.digest('hex')}` !== artifact.sha256) blockers.push('proof_artifact_file_sha256_mismatch')
+      blockers.push(...artifactSignatureBlockers(artifact, header.subarray(0, headerRead.bytesRead)))
+      return blockers
+    } finally {
+      await handle.close()
+    }
+  } catch (error: unknown) {
+    return [errorCode(error) === 'ELOOP' ? 'proof_artifact_file_symlink' : 'proof_artifact_file_unreadable']
+  }
+}
+
+function artifactSignatureBlockers(artifact: NarutoProofArtifactReceipt, header: Buffer): string[] {
+  if (artifact.media_type === 'application/pdf') {
+    return header.subarray(0, 5).equals(Buffer.from('%PDF-')) ? [] : ['proof_artifact_pdf_signature_invalid']
+  }
+  if (artifact.media_type === 'image/png') {
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+    return header.subarray(0, png.length).equals(png) ? [] : ['proof_artifact_png_signature_invalid']
+  }
+  if (artifact.media_type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
+    const zipLocalHeader = Buffer.from([0x50, 0x4b, 0x03, 0x04])
+    return header.subarray(0, zipLocalHeader.length).equals(zipLocalHeader)
+      ? []
+      : ['proof_artifact_xlsx_signature_invalid']
+  }
+  return []
+}
+
+function pathWithinRoot(root: string, candidate: string): boolean {
+  const relative = path.relative(root, candidate)
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative))
 }
 
 function parseJsonArtifact(
@@ -341,6 +635,9 @@ function validatePersistedEvidence(persisted: unknown, rebuilt: ReturnType<typeo
       blockers.push(`proof_evidence_rebuild_mismatch:${key}`)
     }
   }
+  if (JSON.stringify(persisted.host_capability_evidence) !== JSON.stringify(rebuilt.host_capability_evidence)) {
+    blockers.push('proof_evidence_rebuild_mismatch:host_capability_evidence')
+  }
 }
 
 function validateCountContractArtifacts(input: {
@@ -428,6 +725,211 @@ function projectVerificationRow(value: unknown): NarutoProofVerification | null 
   return { name, status: normalizeVerificationStatus(rawStatus, name) }
 }
 
+function projectArtifacts(value: unknown, blockers: string[]): NarutoProofArtifactReceipt[] | undefined {
+  if (value === undefined) return undefined
+  if (!Array.isArray(value)) {
+    blockers.push('proof_artifacts_invalid')
+    return []
+  }
+  if (value.length > MAX_ARTIFACTS) blockers.push('proof_artifacts_too_many')
+  const result: NarutoProofArtifactReceipt[] = []
+  const seenPaths = new Set<string>()
+  let aggregateBytes = 0
+  for (const row of value.slice(0, MAX_ARTIFACTS)) {
+    if (!isRecord(row)) {
+      blockers.push('proof_artifact_invalid')
+      continue
+    }
+    if (Object.keys(row).some((key) => !ARTIFACT_RECEIPT_KEYS.has(key))) {
+      blockers.push('proof_artifact_unknown_field')
+    }
+    const artifactPath = normalizeArtifactPath(row.path, blockers)
+    const kind = boundedToken(row.kind, MAX_ARTIFACT_KIND_CHARS, /^[a-z][a-z0-9_-]*$/)
+    const mediaType = boundedToken(
+      row.media_type,
+      MAX_MEDIA_TYPE_CHARS,
+      /^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*$/i
+    )
+    const artifactSha256 = typeof row.sha256 === 'string' && SHA256_RECEIPT_PATTERN.test(row.sha256)
+      ? row.sha256
+      : null
+    const bytes = typeof row.bytes === 'number' && Number.isSafeInteger(row.bytes) && row.bytes > 0
+      ? row.bytes
+      : null
+    const role = typeof row.role === 'string' && ARTIFACT_ROLES.has(row.role as NarutoProofArtifactReceipt['role'])
+      ? row.role as NarutoProofArtifactReceipt['role']
+      : null
+    if (!kind) blockers.push('proof_artifact_kind_invalid')
+    if (!mediaType) blockers.push('proof_artifact_media_type_invalid')
+    if (!artifactSha256) blockers.push('proof_artifact_sha256_invalid')
+    if (bytes === null) blockers.push('proof_artifact_bytes_invalid')
+    if (bytes !== null && bytes > MAX_DELIVERABLE_ARTIFACT_BYTES) blockers.push('proof_artifact_bytes_too_large')
+    if (!role) blockers.push('proof_artifact_role_invalid')
+    if (!artifactPath || !kind || !mediaType || !artifactSha256 || bytes === null || !role) continue
+    if (seenPaths.has(artifactPath)) {
+      blockers.push('proof_artifact_path_duplicate')
+      continue
+    }
+    if (role === 'deliverable' && isNonDeliverableArtifact(artifactPath, kind)) {
+      blockers.push('proof_artifact_deliverable_role_invalid')
+      continue
+    }
+    blockers.push(...artifactMediaConsistencyBlockers(artifactPath, mediaType))
+    seenPaths.add(artifactPath)
+    aggregateBytes += bytes
+    result.push({ path: artifactPath, kind, media_type: mediaType, sha256: artifactSha256, bytes, role })
+  }
+  if (aggregateBytes > MAX_DELIVERABLE_ARTIFACT_AGGREGATE_BYTES) blockers.push('proof_artifact_bytes_aggregate_too_large')
+  return result
+}
+
+function normalizeArtifactPath(value: unknown, blockers: string[]): string | null {
+  if (typeof value !== 'string') {
+    blockers.push('proof_artifact_path_invalid')
+    return null
+  }
+  const original = value.trim()
+  if (!original || original.length > MAX_ARTIFACT_PATH_CHARS || /[\r\n\0]/.test(original)) {
+    blockers.push('proof_artifact_path_invalid')
+    return null
+  }
+  if (original.includes('\\')) {
+    blockers.push('proof_artifact_path_not_posix')
+    return null
+  }
+  if (path.posix.isAbsolute(original) || path.win32.isAbsolute(original)) {
+    blockers.push('proof_artifact_path_absolute')
+    return null
+  }
+  const normalized = path.posix.normalize(original).replace(/^\.\//, '')
+  if (!normalized || normalized === '.' || normalized === '..' || normalized.startsWith('../')) {
+    blockers.push('proof_artifact_path_escape')
+    return null
+  }
+  if (normalized.length > MAX_ARTIFACT_PATH_CHARS) {
+    blockers.push('proof_artifact_path_invalid')
+    return null
+  }
+  return normalized
+}
+
+function isNonDeliverableArtifact(artifactPath: string, kind: string): boolean {
+  if (NON_DELIVERABLE_ARTIFACT_KINDS.has(kind.toLowerCase())) return true
+  const segments = artifactPath.toLowerCase().split('/')
+  return segments.some((segment) => NON_DELIVERABLE_PATH_SEGMENTS.has(segment))
+    || artifactPath.toLowerCase().endsWith('.log')
+}
+
+function artifactMediaConsistencyBlockers(artifactPath: string, mediaType: string): string[] {
+  const extension = path.posix.extname(artifactPath).toLowerCase()
+  const expectedByExtension: Record<string, string> = {
+    '.csv': 'text/csv',
+    '.pdf': 'application/pdf',
+    '.png': 'image/png',
+    '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  }
+  const expectedExtensionsByMedia: Record<string, string[]> = {
+    'text/csv': ['.csv'],
+    'application/pdf': ['.pdf'],
+    'image/png': ['.png'],
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx']
+  }
+  const blockers: string[] = []
+  const expectedMedia = expectedByExtension[extension]
+  if (expectedMedia && mediaType !== expectedMedia) blockers.push('proof_artifact_media_extension_mismatch')
+  const expectedExtensions = expectedExtensionsByMedia[mediaType]
+  if (expectedExtensions && !expectedExtensions.includes(extension)) blockers.push('proof_artifact_extension_media_mismatch')
+  return blockers
+}
+
+function projectCapabilityUses(value: unknown, blockers: string[]): NarutoProofCapabilityUse[] | undefined {
+  if (value === undefined) return undefined
+  if (!Array.isArray(value)) {
+    blockers.push('proof_capabilities_used_invalid')
+    return []
+  }
+  if (value.length > MAX_CAPABILITY_USES) blockers.push('proof_capabilities_used_too_many')
+  const result: NarutoProofCapabilityUse[] = []
+  const seenIds = new Set<string>()
+  for (const row of value.slice(0, MAX_CAPABILITY_USES)) {
+    if (!isRecord(row)) {
+      blockers.push('proof_capability_use_invalid')
+      continue
+    }
+    if (Object.keys(row).some((key) => !CAPABILITY_USE_KEYS.has(key))) {
+      blockers.push('proof_capability_use_unknown_field')
+    }
+    const id = boundedToken(row.id, MAX_CAPABILITY_ID_CHARS, /^[a-z][a-z0-9._-]*$/)
+    const descriptor = id ? HOST_CAPABILITY_BY_ID.get(id) : undefined
+    const status = normalizeCapabilityStatus(row.status)
+    const toolNames = projectCapabilityToolNames(row.tool_names, descriptor?.tool_names || [], status, blockers)
+    const receiptSha256 = typeof row.receipt_sha256 === 'string' && SHA256_RECEIPT_PATTERN.test(row.receipt_sha256)
+      ? row.receipt_sha256
+      : null
+    if (!id) blockers.push('proof_capability_use_id_invalid')
+    else if (!descriptor) blockers.push('proof_capability_use_unknown_id')
+    if (!status) blockers.push('proof_capability_use_status_invalid')
+    if (!receiptSha256) blockers.push('proof_capability_use_receipt_sha256_invalid')
+    if (!id || !descriptor || !status || !toolNames || !receiptSha256) continue
+    if (seenIds.has(id)) {
+      blockers.push('proof_capability_use_duplicate')
+      continue
+    }
+    seenIds.add(id)
+    result.push({ id, status, tool_names: toolNames, receipt_sha256: receiptSha256 })
+  }
+  return result
+}
+
+function projectCapabilityToolNames(
+  value: unknown,
+  allowedToolNames: readonly string[],
+  status: NarutoProofCapabilityUse['status'] | null,
+  blockers: string[]
+): string[] | null {
+  if (!Array.isArray(value) || (status === 'passed' && value.length === 0)) {
+    blockers.push('proof_capability_use_tool_names_invalid')
+    return null
+  }
+  if (value.length > MAX_CAPABILITY_TOOL_NAMES) {
+    blockers.push('proof_capability_use_tool_names_too_many')
+    return null
+  }
+  const result: string[] = []
+  const seen = new Set<string>()
+  const allowed = new Set(allowedToolNames)
+  for (const valueItem of value) {
+    const toolName = boundedToken(valueItem, MAX_CAPABILITY_TOOL_NAME_CHARS, /^[A-Za-z][A-Za-z0-9_.:-]*$/)
+    if (!toolName) {
+      blockers.push('proof_capability_use_tool_name_invalid')
+      return null
+    }
+    if (seen.has(toolName)) {
+      blockers.push('proof_capability_use_tool_name_duplicate')
+      return null
+    }
+    if (!allowed.has(toolName)) {
+      blockers.push('proof_capability_use_tool_name_not_declared')
+      return null
+    }
+    seen.add(toolName)
+    result.push(toolName)
+  }
+  return result
+}
+
+function normalizeCapabilityStatus(value: unknown): NarutoProofCapabilityUse['status'] | null {
+  const status = typeof value === 'string' ? value.trim().toLowerCase() : ''
+  return status === 'passed' || status === 'failed' ? status : null
+}
+
+function boundedToken(value: unknown, maxChars: number, pattern: RegExp): string | null {
+  if (typeof value !== 'string') return null
+  const text = value.trim()
+  if (!text || text.length > maxChars || containsLeakageMarker(text) || !pattern.test(text)) return null
+  return text
+}
+
 function normalizeVerificationStatus(value: string, name: string): NarutoProofVerification['status'] {
   const normalized = value.trim().toLowerCase()
   if (normalized === 'passed' || normalized === 'pass' || normalized === 'ok' || normalized === 'verified') return 'passed'
@@ -447,6 +949,13 @@ function normalizeVerificationStatus(value: string, name: string): NarutoProofVe
 function containsLeakageMarker(value: string): boolean {
   return /(?:^|\s)(?:prompt|system_prompt|user_prompt|stdout|stderr|environment|env_dump)\s*[:=]/i.test(value)
     || /\b(?:api[_-]?key|access[_-]?token|secret|password)\s*[:=]/i.test(value)
+}
+
+function isBoundedBlockerCode(value: unknown): value is string {
+  return typeof value === 'string'
+    && value.length > 0
+    && value.length <= 240
+    && /^[A-Za-z0-9_.:-]+$/.test(value)
 }
 
 function isExplicitlyBlocked(input: {

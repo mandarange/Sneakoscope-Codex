@@ -1,0 +1,746 @@
+import { sha256 } from '../fsx.js';
+import { testMcpConnection, type McpHealthOptions } from '../mcp-config/health-check.js';
+import { listMcpInventory, type McpInventoryOptions } from '../mcp-config/inventory.js';
+import {
+  HOST_CAPABILITY_DESCRIPTORS,
+  hostCapabilityDigest,
+  type HostCapabilityDescriptor
+} from './agent-manifest.js';
+
+export const HOST_CAPABILITY_RUNTIME_SCHEMA = 'sks.host-capability-runtime.v1' as const;
+export const HOST_CAPABILITY_EVIDENCE_SCHEMA = 'sks.host-capability-evidence.v1' as const;
+export const HOST_CAPABILITY_MCP_SERVER = 'acas-tools';
+
+const MAX_OBSERVED_TOOL_NAMES = 256;
+const MAX_EVENT_LINE_BYTES = 512 * 1024;
+const MAX_MCP_TOOL_CALLS = 1024;
+const MAX_RECEIPT_JSON_STRING_BYTES = 64 * 1024;
+const MAX_ARTIFACT_RECEIPTS = 64;
+const MAX_ARTIFACT_PATH_CHARS = 512;
+const SHA256_RECEIPT_PATTERN = /^sha256:[a-f0-9]{64}$/;
+const EXPLICIT_DENIAL_PATTERN = /(?:^|[_.:-])(?:slack|center|tenant|lease|connector|outbox|message|upload|send|post)(?:$|[_.:-])/i;
+
+export type HostCapabilityState = 'available' | 'missing' | 'unhealthy' | 'not_requested';
+export type HostCapabilityWorkflow =
+  | 'datasource_sql_generation'
+  | 'datasource_query'
+  | 'spreadsheet_create'
+  | 'spreadsheet_edit'
+  | 'document_render'
+  | 'web_capture'
+  | 'workspace_files'
+  | 'artifact_delivery';
+
+export interface HostCapabilityRequest {
+  capability_ids: string[];
+  workflows: HostCapabilityWorkflow[];
+}
+
+export interface HostCapabilityRuntimeEntry {
+  id: string;
+  requested: boolean;
+  state: HostCapabilityState;
+  expected_tool_names: string[];
+  observed_tool_names: string[];
+  allowed_tool_names: string[];
+  blockers: string[];
+}
+
+export interface HostCapabilityRuntime {
+  schema: typeof HOST_CAPABILITY_RUNTIME_SCHEMA;
+  ok: boolean;
+  server: typeof HOST_CAPABILITY_MCP_SERVER;
+  server_present: boolean;
+  server_enabled: boolean;
+  server_scope: 'project' | null;
+  inventory_source: string | null;
+  health_status: string;
+  requested_capability_ids: string[];
+  task_workflows: HostCapabilityWorkflow[];
+  observed_tool_names: string[];
+  allowed_tool_names: string[];
+  denied_tool_names: string[];
+  explicit_denied_tool_names: string[];
+  allowlist_digest: string;
+  capability_digest: string;
+  capabilities: HostCapabilityRuntimeEntry[];
+  blockers: string[];
+}
+
+export interface HostCapabilityUseReceipt {
+  id: string;
+  status: 'passed' | 'failed';
+  tool_names: string[];
+  receipt_sha256: string;
+}
+
+export interface HostArtifactReceipt {
+  path: string;
+  kind: string;
+  media_type: string;
+  sha256: string;
+  bytes: number;
+  role: 'deliverable' | 'scratch' | 'temp' | 'log';
+}
+
+export interface HostToolCallReceipt {
+  server: string;
+  tool: string;
+  status: 'passed' | 'failed';
+  event_sha256: string;
+}
+
+export interface HostCapabilityExecutionEvidence {
+  schema: typeof HOST_CAPABILITY_EVIDENCE_SCHEMA;
+  ok: boolean;
+  runtime: HostCapabilityRuntime;
+  tool_calls: HostToolCallReceipt[];
+  capabilities_used: HostCapabilityUseReceipt[];
+  artifacts: HostArtifactReceipt[];
+  blockers: string[];
+}
+
+export interface HostCapabilityRuntimeDependencies {
+  inventory?: typeof listMcpInventory;
+  health?: typeof testMcpConnection;
+  inventoryOptions?: McpInventoryOptions;
+  healthOptions?: McpHealthOptions;
+}
+
+export function requestHostCapabilities(goal: unknown): HostCapabilityRequest {
+  const text = String(goal || '').normalize('NFKC');
+  const capabilityIds = new Set<string>();
+  const workflows = new Set<HostCapabilityWorkflow>();
+
+  const spreadsheetCreate = matchesIntent(text, [
+    /\b(?:create|generate|produce|deliver|make)\b.{0,48}\b(?:xlsx|excel|spreadsheet|workbook)\b/i,
+    /\b(?:xlsx|excel|spreadsheet|workbook)\b.{0,48}\b(?:create|generate|produce|deliver|make)\b/i,
+    /(?:엑셀|스프레드시트|xlsx).{0,32}(?:생성|작성|만들|납품)/i,
+    /(?:생성|작성|만들|납품).{0,32}(?:엑셀|스프레드시트|xlsx)/i
+  ]);
+  const spreadsheetEdit = matchesIntent(text, [
+    /\b(?:edit|update|modify|inspect)\b.{0,48}\b(?:xlsx|excel|spreadsheet|workbook)\b/i,
+    /\b(?:xlsx|excel|spreadsheet|workbook)\b.{0,48}\b(?:edit|update|modify|inspect)\b/i,
+    /(?:엑셀|스프레드시트|xlsx).{0,32}(?:수정|편집|업데이트|검사|점검)/i,
+    /(?:수정|편집|업데이트|검사|점검).{0,32}(?:엑셀|스프레드시트|xlsx)/i
+  ]);
+  const datasourceQuery = matchesIntent(text, [
+    /\b(?:query|retrieve|fetch|load|analy[sz]e)\b.{0,56}\b(?:database|datasource|data|rows?)\b/i,
+    /\b(?:database|datasource|data|rows?)\b.{0,56}\b(?:query|retrieve|fetch|load|analy[sz]e)\b/i,
+    /(?:db|데이터베이스|데이터소스|데이터).{0,36}(?:조회|가져오|검색|분석|질의)/i,
+    /(?:조회|가져오|검색|분석|질의).{0,36}(?:db|데이터베이스|데이터소스|데이터)/i
+  ]);
+  const sqlGeneration = matchesIntent(text, [
+    /\b(?:write|generate|draft|prepare)\b.{0,32}\bsql\b/i,
+    /\bsql\b.{0,32}\b(?:write|generate|draft|prepare)\b/i,
+    /sql.{0,24}(?:작성|생성|초안|준비)/i,
+    /(?:작성|생성|초안|준비).{0,24}sql/i
+  ]);
+  const documentRender = matchesIntent(text, [
+    /\b(?:render|generate|create|export|deliver)\b.{0,48}\b(?:pdf|png|document screenshot)\b/i,
+    /\b(?:pdf|png|document screenshot)\b.{0,48}\b(?:render|generate|create|export|deliver)\b/i,
+    /(?:pdf|png|문서).{0,32}(?:렌더|생성|작성|내보내|납품)/i,
+    /(?:렌더|생성|작성|내보내|납품).{0,32}(?:pdf|png|문서)/i
+  ]);
+  const webCapture = matchesIntent(text, [
+    /\b(?:capture|take|create)\b.{0,40}\b(?:url|web|page)\b.{0,24}\bscreenshot\b/i,
+    /\b(?:url|web|page)\b.{0,40}\bscreenshot\b/i,
+    /(?:url|웹|페이지).{0,32}(?:스크린샷|캡처)/i
+  ]);
+  const workspaceFiles = matchesIntent(text, [
+    /\b(?:workspace)\b.{0,40}\b(?:read|write|edit|find|list|download)\b/i,
+    /\b(?:read|write|edit|find|list|download)\b.{0,40}\bworkspace\b/i,
+    /워크스페이스.{0,32}(?:읽|쓰|수정|검색|목록|다운로드)/i
+  ]);
+  const workspaceWrites = matchesIntent(text, [
+    /\b(?:workspace)\b.{0,40}\b(?:write|edit|download)\b/i,
+    /\b(?:write|edit|download)\b.{0,40}\bworkspace\b/i,
+    /워크스페이스.{0,32}(?:쓰|수정|다운로드)/i
+  ]);
+
+  if (sqlGeneration || datasourceQuery) capabilityIds.add('host.datasource.schema.v1');
+  if (sqlGeneration) workflows.add('datasource_sql_generation');
+  if (datasourceQuery) {
+    capabilityIds.add('host.datasource.query.readonly.v1');
+    workflows.add('datasource_query');
+  }
+  if (spreadsheetCreate || spreadsheetEdit) capabilityIds.add('host.spreadsheet.workbook.v1');
+  if (spreadsheetCreate) workflows.add('spreadsheet_create');
+  if (spreadsheetEdit) workflows.add('spreadsheet_edit');
+  if (documentRender) {
+    capabilityIds.add('host.document.render.v1');
+    workflows.add('document_render');
+  }
+  if (webCapture) {
+    capabilityIds.add('host.web.capture.v1');
+    workflows.add('web_capture');
+  }
+  if (workspaceFiles) {
+    capabilityIds.add('host.workspace.files.v1');
+    workflows.add('workspace_files');
+  }
+  if (spreadsheetCreate || spreadsheetEdit || documentRender || webCapture || workspaceWrites) {
+    capabilityIds.add('host.artifact.receipt.v1');
+    workflows.add('artifact_delivery');
+  }
+
+  return {
+    capability_ids: [...capabilityIds].sort(),
+    workflows: [...workflows].sort()
+  };
+}
+
+export async function inspectHostCapabilityRuntime(input: {
+  root: string;
+  request?: HostCapabilityRequest;
+  dependencies?: HostCapabilityRuntimeDependencies;
+}): Promise<HostCapabilityRuntime> {
+  const request = input.request || { capability_ids: [], workflows: [] };
+  const knownIds = new Set(HOST_CAPABILITY_DESCRIPTORS.map((capability) => capability.id));
+  const requestedCapabilityIds = uniqueStrings(request.capability_ids);
+  const unknownRequested = requestedCapabilityIds.filter((id) => !knownIds.has(id));
+  const requested = new Set(requestedCapabilityIds.filter((id) => knownIds.has(id)));
+  const workflows = uniqueWorkflows(request.workflows);
+  const inventoryFn = input.dependencies?.inventory || listMcpInventory;
+  const healthFn = input.dependencies?.health || testMcpConnection;
+  const inventory = await inventoryFn('project', {
+    projectRoot: input.root,
+    projectTrusted: true,
+    ...(input.dependencies?.inventoryOptions || {})
+  });
+  const server = inventory.servers.find((entry) => entry.name === HOST_CAPABILITY_MCP_SERVER) || null;
+  const inventoryBlockers = inventory.ok ? [] : ['host_capability_project_mcp_inventory_unhealthy'];
+
+  if (!server) {
+    const capabilities = HOST_CAPABILITY_DESCRIPTORS.map((descriptor) => capabilityRuntimeEntry(
+      descriptor,
+      requested.has(descriptor.id),
+      requested.has(descriptor.id) ? 'missing' : 'not_requested',
+      [],
+      [],
+      requested.has(descriptor.id) ? [`host_capability_missing:${descriptor.id}`] : []
+    ));
+    const blockers = uniqueStrings([
+      ...unknownRequested.map((id) => `host_capability_unknown:${id}`),
+      ...(requested.size ? inventoryBlockers : []),
+      ...capabilities.flatMap((entry) => entry.blockers)
+    ]);
+    return runtimeResult({
+      serverPresent: false,
+      serverEnabled: false,
+      inventorySource: inventory.source,
+      healthStatus: 'missing',
+      requestedCapabilityIds,
+      workflows,
+      observedToolNames: [],
+      allowedToolNames: [],
+      capabilities,
+      blockers
+    });
+  }
+
+  if (!server.enabled) {
+    const capabilities = HOST_CAPABILITY_DESCRIPTORS.map((descriptor) => capabilityRuntimeEntry(
+      descriptor,
+      requested.has(descriptor.id),
+      requested.has(descriptor.id) ? 'unhealthy' : 'not_requested',
+      [],
+      [],
+      requested.has(descriptor.id) ? [`host_capability_unhealthy:${descriptor.id}:disabled`] : []
+    ));
+    const blockers = uniqueStrings([
+      ...unknownRequested.map((id) => `host_capability_unknown:${id}`),
+      ...(requested.size ? inventoryBlockers : []),
+      ...capabilities.flatMap((entry) => entry.blockers)
+    ]);
+    return runtimeResult({
+      serverPresent: true,
+      serverEnabled: false,
+      inventorySource: inventory.source,
+      healthStatus: 'disabled',
+      requestedCapabilityIds,
+      workflows,
+      observedToolNames: [],
+      allowedToolNames: [],
+      capabilities,
+      blockers
+    });
+  }
+
+  const health = await healthFn(HOST_CAPABILITY_MCP_SERVER, 'project', {
+    projectRoot: input.root,
+    projectTrusted: true,
+    ...(input.dependencies?.healthOptions || {})
+  });
+  const observedToolNames = health.status === 'healthy' && Array.isArray(health.tool_names)
+    ? uniqueStrings(health.tool_names).slice(0, MAX_OBSERVED_TOOL_NAMES)
+    : [];
+  const observed = new Set(observedToolNames);
+  const configuredEnabled = Array.isArray(server.enabled_tools) ? new Set(server.enabled_tools) : null;
+  const configuredDisabled = new Set(server.disabled_tools || []);
+  const configuredAvailable = (name: string) => observed.has(name)
+    && (!configuredEnabled || configuredEnabled.has(name))
+    && !configuredDisabled.has(name);
+  const healthReady = health.status === 'healthy' && Array.isArray(health.tool_names);
+  const capabilities = HOST_CAPABILITY_DESCRIPTORS.map((descriptor) => {
+    const isRequested = requested.has(descriptor.id);
+    const descriptorTools = descriptor.tool_names.filter(configuredAvailable);
+    const available = descriptor.executable === false
+      ? descriptorTools.length > 0
+      : descriptorTools.length === descriptor.tool_names.length;
+    const state: HostCapabilityState = !healthReady
+      ? isRequested ? 'unhealthy' : 'not_requested'
+      : available
+        ? 'available'
+        : isRequested ? 'missing' : 'not_requested';
+    const entryBlockers = isRequested && state !== 'available'
+      ? [`host_capability_${state}:${descriptor.id}${state === 'unhealthy' ? `:${health.status}` : ''}`]
+      : [];
+    return capabilityRuntimeEntry(
+      descriptor,
+      isRequested,
+      state,
+      descriptorTools,
+      isRequested && descriptor.executable !== false ? descriptorTools : [],
+      entryBlockers
+    );
+  });
+  const allowedToolNames = uniqueStrings(HOST_CAPABILITY_DESCRIPTORS
+    .filter((descriptor) => descriptor.executable !== false && requested.has(descriptor.id))
+    .flatMap((descriptor) => descriptor.tool_names.filter(configuredAvailable)));
+  const allowed = new Set(allowedToolNames);
+  const deniedToolNames = observedToolNames.filter((name) => !allowed.has(name));
+  const blockers = uniqueStrings([
+    ...unknownRequested.map((id) => `host_capability_unknown:${id}`),
+    ...(requested.size ? inventoryBlockers : []),
+    ...capabilities.flatMap((entry) => entry.blockers)
+  ]);
+  return runtimeResult({
+    serverPresent: true,
+    serverEnabled: true,
+    inventorySource: inventory.source,
+    healthStatus: health.status,
+    requestedCapabilityIds,
+    workflows,
+    observedToolNames,
+    allowedToolNames,
+    deniedToolNames,
+    capabilities,
+    blockers
+  });
+}
+
+export function hostCapabilityCodexConfigArgs(runtime: HostCapabilityRuntime): string[] {
+  if (!runtime.server_present) return [];
+  const serverKey = JSON.stringify(runtime.server);
+  return [
+    '-c', `mcp_servers.${serverKey}.enabled_tools=${tomlStringArray(runtime.allowed_tool_names)}`,
+    '-c', `mcp_servers.${serverKey}.disabled_tools=${tomlStringArray(runtime.denied_tool_names)}`
+  ];
+}
+
+export function createHostCapabilityEventCollector(runtime: HostCapabilityRuntime): {
+  push(chunk: string): void;
+  finish(fallbackOutput?: string): HostCapabilityExecutionEvidence;
+} {
+  let buffer = '';
+  let parsedEvents = 0;
+  let callIndex = 0;
+  const internalCalls: Array<HostToolCallReceipt & { index: number; raw_hash: string }> = [];
+  const observedArtifacts: Array<HostArtifactReceipt & { source_tool: string; source_hash: string }> = [];
+  const blockers: string[] = [];
+
+  const parseLine = (line: string) => {
+    const trimmed = line.trim();
+    if (!trimmed) return;
+    if (Buffer.byteLength(trimmed, 'utf8') > MAX_EVENT_LINE_BYTES) {
+      blockers.push('host_tool_event_line_too_large');
+      return;
+    }
+    let event: any;
+    try {
+      event = JSON.parse(trimmed);
+    } catch {
+      return;
+    }
+    parsedEvents += 1;
+    const item = event?.type === 'item.completed' ? event.item : null;
+    if (!item || item.type !== 'mcp_tool_call') return;
+    if (internalCalls.length >= MAX_MCP_TOOL_CALLS) {
+      blockers.push('host_tool_call_receipts_too_many');
+      return;
+    }
+    const server = String(item.server || '').trim();
+    const tool = String(item.tool || '').trim();
+    const status = item.status === 'completed' ? 'passed' : item.status === 'failed' ? 'failed' : null;
+    if (!server || !tool || !status) return;
+    callIndex += 1;
+    if (server !== runtime.server) return;
+    const rawHash = `sha256:${sha256(trimmed)}`;
+    internalCalls.push({ server, tool, status, event_sha256: rawHash, raw_hash: rawHash, index: callIndex });
+    if (!runtime.allowed_tool_names.includes(tool)) blockers.push(`host_tool_call_not_allowed:${tool}`);
+    if (EXPLICIT_DENIAL_PATTERN.test(tool)) blockers.push(`host_tool_call_explicitly_denied:${tool}`);
+    if (status === 'failed') blockers.push(`host_tool_call_failed:${tool}`);
+    if (status === 'passed') {
+      for (const artifact of extractArtifactReceipts(item.result?.structured_content ?? item.result?.structuredContent ?? item.result)) {
+        observedArtifacts.push({ ...artifact, source_tool: tool, source_hash: rawHash });
+      }
+    }
+  };
+
+  const push = (chunk: string) => {
+    buffer += String(chunk || '');
+    if (Buffer.byteLength(buffer, 'utf8') > MAX_EVENT_LINE_BYTES * 2 && !buffer.includes('\n')) {
+      blockers.push('host_tool_event_buffer_too_large');
+      buffer = '';
+      return;
+    }
+    const lines = buffer.split(/\r?\n/);
+    buffer = lines.pop() || '';
+    for (const line of lines) parseLine(line);
+  };
+
+  const finish = (fallbackOutput = '') => {
+    if (parsedEvents === 0 && fallbackOutput) push(fallbackOutput);
+    if (buffer.trim()) parseLine(buffer);
+    buffer = '';
+    return buildExecutionEvidence(runtime, internalCalls, observedArtifacts, blockers);
+  };
+
+  return { push, finish };
+}
+
+export function bindParentSummaryToHostCapabilityEvidence(value: unknown, evidence: HostCapabilityExecutionEvidence): {
+  value: unknown;
+  blockers: string[];
+} {
+  const parsed = parseJsonObject(value);
+  const hostEvidenceRequired = evidence.runtime.requested_capability_ids.length > 0
+    || evidence.tool_calls.length > 0
+    || evidence.artifacts.length > 0;
+  if (!parsed) {
+    return {
+      value,
+      blockers: hostEvidenceRequired ? ['host_capability_parent_summary_not_structured'] : []
+    };
+  }
+  const blockers: string[] = [...evidence.blockers];
+  if (parsed.capabilities_used !== undefined
+    && JSON.stringify(parsed.capabilities_used) !== JSON.stringify(evidence.capabilities_used)) {
+    blockers.push('host_capability_parent_receipts_mismatch');
+  }
+  if (parsed.artifacts !== undefined
+    && JSON.stringify(parsed.artifacts) !== JSON.stringify(evidence.artifacts)) {
+    blockers.push('host_artifact_parent_receipts_mismatch');
+  }
+  const bindReceipts = hostEvidenceRequired
+    || parsed.capabilities_used !== undefined
+    || parsed.artifacts !== undefined;
+  const mergedBlockers = uniqueStrings([
+    ...arrayStrings(parsed.blockers),
+    ...blockers
+  ]);
+  const next = {
+    ...parsed,
+    ...(bindReceipts ? {
+      capabilities_used: evidence.capabilities_used,
+      artifacts: evidence.artifacts
+    } : {}),
+    ...(mergedBlockers.length > 0 ? { blockers: mergedBlockers } : {}),
+    ...(parsed.status === 'completed' && mergedBlockers.length > 0 ? { status: 'blocked' } : {})
+  };
+  return { value: next, blockers: uniqueStrings(blockers) };
+}
+
+function buildExecutionEvidence(
+  runtime: HostCapabilityRuntime,
+  calls: Array<HostToolCallReceipt & { index: number; raw_hash: string }>,
+  artifactRows: Array<HostArtifactReceipt & { source_tool: string; source_hash: string }>,
+  initialBlockers: string[]
+): HostCapabilityExecutionEvidence {
+  const blockers = [...runtime.blockers, ...initialBlockers];
+  const requested = new Set(runtime.requested_capability_ids);
+  const dedupedArtifacts = dedupeArtifacts(artifactRows);
+  if (dedupedArtifacts.length > MAX_ARTIFACT_RECEIPTS) blockers.push('host_artifact_receipts_too_many');
+  const artifacts = dedupedArtifacts.slice(0, MAX_ARTIFACT_RECEIPTS);
+  if (requested.size === 0 && calls.length > 0) {
+    for (const call of calls) blockers.push(`host_tool_call_not_requested:${call.tool}`);
+  }
+  const capabilitiesUsed: HostCapabilityUseReceipt[] = [];
+  for (const descriptor of HOST_CAPABILITY_DESCRIPTORS) {
+    if (!requested.has(descriptor.id)) continue;
+    const relevantCalls = calls.filter((call) => descriptor.tool_names.includes(call.tool));
+    const capabilityBlockers = validateCapabilityWorkflow(runtime, descriptor, relevantCalls, calls, artifacts);
+    blockers.push(...capabilityBlockers);
+    const status = capabilityBlockers.length === 0 && relevantCalls.every((call) => call.status === 'passed')
+      ? 'passed'
+      : 'failed';
+    const artifactSources = descriptor.executable === false
+      ? artifactRows.map((artifact) => ({ tool: artifact.source_tool, hash: artifact.source_hash }))
+      : [];
+    const toolNames = uniqueStrings([
+      ...relevantCalls.map((call) => call.tool),
+      ...artifactSources.map((source) => source.tool)
+    ]);
+    const receiptSha256 = `sha256:${sha256(JSON.stringify({
+      id: descriptor.id,
+      calls: relevantCalls.map((call) => call.raw_hash),
+      artifacts: artifactSources.map((source) => source.hash)
+    }))}`;
+    capabilitiesUsed.push({ id: descriptor.id, status, tool_names: toolNames, receipt_sha256: receiptSha256 });
+  }
+  const uniqueBlockersValue = uniqueStrings(blockers);
+  return {
+    schema: HOST_CAPABILITY_EVIDENCE_SCHEMA,
+    ok: uniqueBlockersValue.length === 0 && capabilitiesUsed.every((receipt) => receipt.status === 'passed'),
+    runtime,
+    tool_calls: calls.map(({ server, tool, status, event_sha256 }) => ({ server, tool, status, event_sha256 })),
+    capabilities_used: capabilitiesUsed,
+    artifacts,
+    blockers: uniqueBlockersValue
+  };
+}
+
+function validateCapabilityWorkflow(
+  runtime: HostCapabilityRuntime,
+  descriptor: HostCapabilityDescriptor,
+  calls: Array<HostToolCallReceipt & { index: number }>,
+  allCalls: Array<HostToolCallReceipt & { index: number }>,
+  artifacts: HostArtifactReceipt[]
+): string[] {
+  const blockers: string[] = [];
+  const passed = (tool: string) => calls.filter((call) => call.tool === tool && call.status === 'passed');
+  if (descriptor.executable !== false && calls.length === 0) blockers.push(`host_capability_call_missing:${descriptor.id}`);
+  if (calls.some((call) => call.status !== 'passed')) blockers.push(`host_capability_call_failed:${descriptor.id}`);
+  if (descriptor.id === 'host.datasource.schema.v1' && passed('datasource_schema_context').length === 0) {
+    blockers.push('host_capability_schema_call_missing');
+  }
+  if (descriptor.id === 'host.datasource.query.readonly.v1') {
+    const schemaIndex = allCalls.find((call) => call.tool === 'datasource_schema_context' && call.status === 'passed')?.index ?? -1;
+    const queryIndex = passed('datasource_query_readonly')[0]?.index ?? -1;
+    if (queryIndex < 0) blockers.push('host_capability_readonly_query_call_missing');
+    if (runtime.task_workflows.includes('datasource_query') && (schemaIndex < 0 || queryIndex <= schemaIndex)) {
+      blockers.push('host_capability_datasource_sequence_invalid');
+    }
+  }
+  if (descriptor.id === 'host.spreadsheet.workbook.v1') {
+    const create = passed('spreadsheet_create')[0]?.index ?? -1;
+    const updates = passed('spreadsheet_update').map((call) => call.index);
+    const inspections = passed('spreadsheet_inspect').map((call) => call.index);
+    if (runtime.task_workflows.includes('spreadsheet_create')
+      && (create < 0 || !inspections.some((index) => index > create))) {
+      blockers.push('host_capability_spreadsheet_create_sequence_invalid');
+    }
+    if (runtime.task_workflows.includes('spreadsheet_edit')) {
+      const update = updates[0] ?? -1;
+      if (update < 0
+        || !inspections.some((index) => index < update)
+        || !inspections.some((index) => index > update)) {
+        blockers.push('host_capability_spreadsheet_edit_sequence_invalid');
+      }
+    }
+  }
+  if (descriptor.id === 'host.document.render.v1'
+    && runtime.task_workflows.includes('document_render')
+    && passed('html_to_pdf').length === 0
+    && passed('html_to_screenshot').length === 0) {
+    blockers.push('host_capability_document_render_call_missing');
+  }
+  if (descriptor.id === 'host.web.capture.v1'
+    && runtime.task_workflows.includes('web_capture')
+    && passed('capture_url_screenshot').length === 0) {
+    blockers.push('host_capability_web_capture_call_missing');
+  }
+  if (descriptor.id === 'host.artifact.receipt.v1' && artifacts.length === 0) {
+    blockers.push('host_capability_artifact_receipt_missing');
+  }
+  return uniqueStrings(blockers);
+}
+
+function extractArtifactReceipts(value: unknown): HostArtifactReceipt[] {
+  const result: HostArtifactReceipt[] = [];
+  const queue: Array<{ value: unknown; depth: number }> = [{ value, depth: 0 }];
+  let visited = 0;
+  while (queue.length > 0 && visited < 512) {
+    const current = queue.shift()!;
+    visited += 1;
+    if (current.depth > 6 || current.value === null || current.value === undefined) continue;
+    if (typeof current.value === 'string') {
+      const text = current.value.trim();
+      if (text && Buffer.byteLength(text, 'utf8') <= MAX_RECEIPT_JSON_STRING_BYTES && /^[{[]/.test(text)) {
+        try {
+          queue.push({ value: JSON.parse(text), depth: current.depth + 1 });
+        } catch {}
+      }
+      continue;
+    }
+    if (Array.isArray(current.value)) {
+      for (const child of current.value) queue.push({ value: child, depth: current.depth + 1 });
+      continue;
+    }
+    if (!isRecord(current.value)) continue;
+    const artifact = normalizeArtifactReceipt(current.value);
+    if (artifact) result.push(artifact);
+    for (const child of Object.values(current.value)) queue.push({ value: child, depth: current.depth + 1 });
+  }
+  return dedupeArtifacts(result);
+}
+
+function normalizeArtifactReceipt(value: Record<string, unknown>): HostArtifactReceipt | null {
+  const rawArtifactPath = typeof value.path === 'string' ? value.path.trim() : '';
+  const artifactPath = rawArtifactPath.includes('\\') ? '' : rawArtifactPath;
+  const kind = typeof value.kind === 'string' ? value.kind.trim().toLowerCase() : '';
+  const mediaType = typeof value.media_type === 'string'
+    ? value.media_type.trim().toLowerCase()
+    : typeof value.mediaType === 'string' ? value.mediaType.trim().toLowerCase() : '';
+  const receiptHash = typeof value.sha256 === 'string' ? value.sha256.trim().toLowerCase() : '';
+  const bytes = typeof value.bytes === 'number' && Number.isSafeInteger(value.bytes) && value.bytes > 0 ? value.bytes : 0;
+  const role = typeof value.role === 'string' && ['deliverable', 'scratch', 'temp', 'log'].includes(value.role)
+    ? value.role as HostArtifactReceipt['role']
+    : null;
+  if (!artifactPath
+    || artifactPath.length > MAX_ARTIFACT_PATH_CHARS
+    || /[\r\n\0]/.test(artifactPath)
+    || artifactPath.startsWith('/')
+    || artifactPath === '..'
+    || artifactPath.startsWith('../')) return null;
+  if (!kind
+    || kind.length > 64
+    || !mediaType
+    || mediaType.length > 160
+    || !SHA256_RECEIPT_PATTERN.test(receiptHash)
+    || !bytes
+    || !role) return null;
+  return { path: artifactPath, kind, media_type: mediaType, sha256: receiptHash, bytes, role };
+}
+
+function dedupeArtifacts<T extends HostArtifactReceipt>(values: readonly T[]): HostArtifactReceipt[] {
+  const byReceipt = new Map<string, HostArtifactReceipt>();
+  for (const value of values) {
+    const key = `${value.path}\u0000${value.sha256}\u0000${value.bytes}`;
+    if (!byReceipt.has(key)) {
+      byReceipt.set(key, {
+        path: value.path,
+        kind: value.kind,
+        media_type: value.media_type,
+        sha256: value.sha256,
+        bytes: value.bytes,
+        role: value.role
+      });
+    }
+  }
+  return [...byReceipt.values()].sort((left, right) => left.path.localeCompare(right.path));
+}
+
+function runtimeResult(input: {
+  serverPresent: boolean;
+  serverEnabled: boolean;
+  inventorySource: string | null;
+  healthStatus: string;
+  requestedCapabilityIds: string[];
+  workflows: HostCapabilityWorkflow[];
+  observedToolNames: string[];
+  allowedToolNames: string[];
+  deniedToolNames?: string[];
+  capabilities: HostCapabilityRuntimeEntry[];
+  blockers: string[];
+}): HostCapabilityRuntime {
+  const observedToolNames = uniqueStrings(input.observedToolNames).slice(0, MAX_OBSERVED_TOOL_NAMES);
+  const allowedToolNames = uniqueStrings(input.allowedToolNames);
+  const deniedToolNames = uniqueStrings(input.deniedToolNames || observedToolNames.filter((name) => !allowedToolNames.includes(name)));
+  const blockers = uniqueStrings(input.blockers);
+  return {
+    schema: HOST_CAPABILITY_RUNTIME_SCHEMA,
+    ok: blockers.length === 0,
+    server: HOST_CAPABILITY_MCP_SERVER,
+    server_present: input.serverPresent,
+    server_enabled: input.serverEnabled,
+    server_scope: input.serverPresent ? 'project' : null,
+    inventory_source: input.inventorySource,
+    health_status: input.healthStatus,
+    requested_capability_ids: uniqueStrings(input.requestedCapabilityIds),
+    task_workflows: uniqueWorkflows(input.workflows),
+    observed_tool_names: observedToolNames,
+    allowed_tool_names: allowedToolNames,
+    denied_tool_names: deniedToolNames,
+    explicit_denied_tool_names: deniedToolNames.filter((name) => EXPLICIT_DENIAL_PATTERN.test(name)),
+    allowlist_digest: `sha256:${sha256(JSON.stringify({
+      server: HOST_CAPABILITY_MCP_SERVER,
+      requested: uniqueStrings(input.requestedCapabilityIds),
+      allowed: allowedToolNames,
+      denied: deniedToolNames
+    }))}`,
+    capability_digest: hostCapabilityDigest(HOST_CAPABILITY_DESCRIPTORS),
+    capabilities: input.capabilities,
+    blockers
+  };
+}
+
+function capabilityRuntimeEntry(
+  descriptor: HostCapabilityDescriptor,
+  requested: boolean,
+  state: HostCapabilityState,
+  observedToolNames: string[],
+  allowedToolNames: string[],
+  blockers: string[]
+): HostCapabilityRuntimeEntry {
+  return {
+    id: descriptor.id,
+    requested,
+    state,
+    expected_tool_names: [...descriptor.tool_names],
+    observed_tool_names: uniqueStrings(observedToolNames),
+    allowed_tool_names: uniqueStrings(allowedToolNames),
+    blockers: uniqueStrings(blockers)
+  };
+}
+
+function parseJsonObject(value: unknown): Record<string, unknown> | null {
+  if (isRecord(value)) return value;
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const trimmed = value.trim();
+  const fenced = /^```(?:json)?\s*([\s\S]*?)\s*```$/i.exec(trimmed)?.[1]?.trim();
+  for (const candidate of [trimmed, ...(fenced ? [fenced] : [])]) {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (isRecord(parsed)) return parsed;
+    } catch {}
+  }
+  return null;
+}
+
+function matchesIntent(text: string, patterns: readonly RegExp[]): boolean {
+  return patterns.some((pattern) => pattern.test(text));
+}
+
+function tomlStringArray(values: readonly string[]): string {
+  return `[${values.map((value) => JSON.stringify(value)).join(', ')}]`;
+}
+
+function uniqueStrings(values: readonly unknown[]): string[] {
+  return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))].sort();
+}
+
+function arrayStrings(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.map((item) => String(item || '').trim()).filter(Boolean)
+    : [];
+}
+
+function uniqueWorkflows(values: readonly unknown[]): HostCapabilityWorkflow[] {
+  const valid = new Set<HostCapabilityWorkflow>([
+    'datasource_sql_generation',
+    'datasource_query',
+    'spreadsheet_create',
+    'spreadsheet_edit',
+    'document_render',
+    'web_capture',
+    'workspace_files',
+    'artifact_delivery'
+  ]);
+  return uniqueStrings(values).filter((value): value is HostCapabilityWorkflow => valid.has(value as HostCapabilityWorkflow));
+}
+
+function isRecord(value: unknown): value is Record<string, any> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}

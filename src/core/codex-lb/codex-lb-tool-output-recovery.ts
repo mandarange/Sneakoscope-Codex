@@ -104,7 +104,7 @@ export async function probeCodexLbToolOutputRecovery(
     const response = await fetchImpl(healthUrl, {
       method: 'GET',
       headers: { accept: 'application/json' },
-      redirect: 'follow',
+      redirect: 'error',
       signal: controller.signal
     });
     if (!response.ok) {

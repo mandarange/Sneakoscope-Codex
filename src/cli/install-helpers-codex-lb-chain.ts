@@ -3,6 +3,7 @@ import os from 'node:os';
 import fsp from 'node:fs/promises';
 import { ensureDir, packageRoot, readText, writeTextAtomic } from '../core/fsx.js';
 import { recordCodexLbHealthEvent } from '../core/codex-lb-circuit.js';
+import { codexLbBaseUrlSecurityBlocker } from '../core/codex-lb/codex-lb-env.js';
 import {
   CODEX_LB_CANONICAL_FAST_SERVICE_TIER,
   codexLbEnvPath,
@@ -175,6 +176,7 @@ async function fetchCodexLbResponse(fetchImpl: any, endpoint: any, apiKey: any, 
         'content-type': 'application/json'
       },
       body: JSON.stringify(body),
+      redirect: 'error',
       signal: controller.signal
     });
     const text = await response.text();
@@ -194,8 +196,29 @@ async function fetchCodexLbResponse(fetchImpl: any, endpoint: any, apiKey: any, 
 export async function checkCodexLbResponseChain(status: any = {}, opts: any = {}) {
   const env = opts.env || process.env;
   if (!codexLbChainCheckEnabled(env) && !opts.force) return { ok: true, status: 'skipped', skipped: true, reason: 'SKS_CODEX_LB_CHAIN_CHECK=0' };
-  const endpoint = codexLbResponsesEndpoint(opts.baseUrl || status.base_url);
+  if (status.provider_base_url_matches_credential === false) {
+    return recordCodexLbChainHealth({
+      ok: false,
+      status: 'provider_base_url_mismatch',
+      chain_unhealthy: true,
+      blockers: ['codex_lb_provider_base_url_mismatch'],
+      error: 'codex_lb_provider_base_url_mismatch'
+    }, opts);
+  }
+  const baseUrl = opts.baseUrl || status.base_url;
+  const endpoint = codexLbResponsesEndpoint(baseUrl);
   if (!endpoint) return recordCodexLbChainHealth({ ok: false, status: 'missing_base_url', chain_unhealthy: true }, opts);
+  const transportBlocker = codexLbBaseUrlSecurityBlocker(baseUrl);
+  if (transportBlocker) {
+    return recordCodexLbChainHealth({
+      ok: false,
+      status: 'transport_blocked',
+      chain_unhealthy: true,
+      endpoint,
+      blockers: [transportBlocker],
+      error: transportBlocker
+    }, opts);
+  }
   const home = opts.home || env.HOME || os.homedir();
   const apiKey = opts.apiKey || parseCodexLbEnvKey(await readText(opts.envPath || status.env_path || codexLbEnvPath(home), ''));
   if (!apiKey) return recordCodexLbChainHealth({ ok: false, status: 'missing_env_key', chain_unhealthy: true }, opts);

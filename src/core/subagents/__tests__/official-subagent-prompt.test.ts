@@ -68,6 +68,30 @@ test('preparation prompt preserves requested count without inventing write slice
   assert.match(prompt, /parent decomposition required before any subagent is spawned/)
 })
 
+test('official prompt carries deterministic host capability workflows', () => {
+  const prompt = buildOfficialSubagentPrompt({
+    goal: 'Prepare SQL, retrieve data, and deliver spreadsheet and PDF artifacts',
+    maxThreads: 4,
+    requestedSubagents: 1,
+    decompositionStatus: 'parent_required',
+    slices: []
+  })
+
+  assert.match(prompt, /only when it is actually available in the project MCP inventory/)
+  assert.match(prompt, /SQL-generation-only requests: call `datasource_schema_context` first.*may complete without `datasource_query_readonly`/)
+  assert.match(prompt, /actual data retrieval: call `datasource_schema_context`, generate one bounded parameterized SELECT\/CTE, call `datasource_query_readonly`, and retain its receipt/)
+  assert.match(prompt, /spreadsheet create: `spreadsheet_create` -> `spreadsheet_inspect` -> optional one minimal `spreadsheet_update` -> `spreadsheet_inspect`/)
+  assert.match(prompt, /spreadsheet edit: `spreadsheet_inspect` -> one minimal `spreadsheet_update` -> `spreadsheet_inspect`/)
+  assert.match(prompt, /document delivery: editable source -> render -> artifact receipt/)
+  assert.match(prompt, /requested host capability is missing or unhealthy, return blocked proof/)
+  assert.match(prompt, /Slack delivery belongs to the ACAS runtime and is never a model tool/)
+  assert.match(prompt, /do not infer availability from config text or duplicate host tool schemas/)
+  assert.match(prompt, /"artifacts": \[/)
+  assert.match(prompt, /"capabilities_used": \[/)
+  assert.match(prompt, /"status": "passed\|failed"/)
+  assert.match(prompt, /SKS overwrites these fields with observed Codex JSONL evidence before persistence/)
+})
+
 test('official prompt carries only bounded TriWiki attention anchors', () => {
   const triwikiAttention = extractBoundedTriwikiAttention({
     attention: {

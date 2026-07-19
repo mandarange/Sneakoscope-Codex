@@ -93,6 +93,68 @@ test('Codex App Fast UI repair removes blank-separated SKS model locks but prese
   assert.equal(second.actions.some((action) => action.changed), false)
 })
 
+test('Codex App Fast UI repair follows SKS provenance past unrelated managed comments and notify', async (t) => {
+  const input = [
+    '# SKS moved machine-local Codex config from .codex/config.toml',
+    '',
+    'model_provider = "codex-lb"',
+    '# sks-codex-lb-managed-openai-base-url',
+    'notify = ["/tmp/turn-ended"]',
+    'model = "gpt-5.6-sol"',
+    'model_reasoning_effort = "max"',
+    '',
+    '[features]',
+    'fast_mode = true',
+    '',
+    '[model_providers.codex-lb]',
+    'name = "openai"',
+    'base_url = "https://lb.example.test/backend-api/codex"',
+    'wire_api = "responses"',
+    'env_key = "CODEX_LB_API_KEY"',
+    'supports_websockets = true',
+    'requires_openai_auth = true',
+    ''
+  ].join('\n')
+  const { root, codexHome, configPath } = await fixture(t, input)
+  await fs.writeFile(path.join(codexHome, 'sks-codex-lb.env'), [
+    "export CODEX_LB_BASE_URL='https://lb.example.test/backend-api/codex'",
+    "export CODEX_LB_API_KEY='fixture-secret'",
+    ''
+  ].join('\n'), { mode: 0o600 })
+
+  const repaired = await repairCodexAppFastUi(root, {
+    codexHome,
+    apply: true,
+    env: { HOME: path.dirname(codexHome) },
+    codexLbModelCatalog: { ok: true, models: ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'], blockers: [] }
+  } as any)
+  const after = await fs.readFile(configPath, 'utf8')
+
+  assert.equal(repaired.ok, true)
+  assert.deepEqual(repaired.actions.find((action) => action.scope === 'codex_home')?.removed_keys, ['model', 'model_reasoning_effort'])
+  assert.match(after, /^model_provider = "codex-lb"$/m)
+  assert.match(after, /^notify = /m)
+  assert.doesNotMatch(after, /^model =/m)
+  assert.doesNotMatch(after, /^model_reasoning_effort =/m)
+})
+
+test('Codex App UI snapshot reports API-key auth with an OAuth backup as Chat/Pro inactive without exposing secrets', async (t) => {
+  const secret = 'sk-secret-that-must-never-appear'
+  const oauthAccess = 'oauth-access-that-must-never-appear'
+  const { root, codexHome } = await fixture(t, '[features]\nfast_mode = true\n')
+  await fs.writeFile(path.join(codexHome, 'auth.json'), `${JSON.stringify({ auth_mode: 'apikey', OPENAI_API_KEY: secret })}\n`, { mode: 0o600 })
+  await fs.writeFile(path.join(codexHome, 'auth.chatgpt-backup.json'), `${JSON.stringify({ auth_mode: 'chatgpt', tokens: { access_token: oauthAccess, refresh_token: 'refresh-secret' } })}\n`, { mode: 0o600 })
+
+  const snapshot = await snapshotCodexAppUiState(root, { codexHome })
+  const serialized = JSON.stringify(snapshot)
+
+  assert.equal(snapshot.indicators.auth_mode, 'apikey')
+  assert.equal(snapshot.indicators.chatgpt_oauth_backup_available, true)
+  assert.equal(snapshot.indicators.chat_surface, 'chatgpt_oauth_inactive')
+  assert.doesNotMatch(serialized, new RegExp(secret))
+  assert.doesNotMatch(serialized, new RegExp(oauthAccess))
+})
+
 test('Codex App Fast UI repair still removes SKS-marked non-lb provider locks after migration', async (t) => {
   const input = [
     '# SKS moved machine-local Codex config from .codex/config.toml',

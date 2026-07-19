@@ -97,7 +97,7 @@ async function probeStdio(
     const tools = await channel.wait(2, timeoutMs(raw.tool_timeout_sec, 30));
     const list = isRecord(tools) && isRecord(tools.result) && Array.isArray(tools.result.tools) ? tools.result.tools : null;
     if (!list) return result(name, scope, 'protocol_error', protocol, null, instructions, null, 'mcp_tools_list_invalid', options);
-    return result(name, scope, 'healthy', protocol, list.length, instructions, null, null, options);
+    return result(name, scope, 'healthy', protocol, list.length, instructions, null, null, options, toolNames(list));
   } catch (error) {
     const message = redactMcpError(error);
     return result(
@@ -152,7 +152,7 @@ async function probeHttp(
     const list = tools.ok && isRecord(tools.json) && isRecord(tools.json.result) && Array.isArray(tools.json.result.tools)
       ? tools.json.result.tools : null;
     if (!list) return result(name, scope, 'protocol_error', protocol, null, instructions, null, `mcp_http_tools_${tools.status}`, options);
-    return result(name, scope, 'healthy', protocol, list.length, instructions, null, null, options);
+    return result(name, scope, 'healthy', protocol, list.length, instructions, null, null, options, toolNames(list));
   } catch (error) {
     const message = redactMcpError(error);
     return result(name, scope, message.includes('AbortError') || message.includes('timeout') ? 'timeout' : 'startup_failed', null, null, null, null, message, options);
@@ -321,14 +321,23 @@ function result(
   instructions: boolean | null,
   latency: number | null,
   error: string | null,
-  options: McpHealthOptions
+  options: McpHealthOptions,
+  toolNames: string[] | null = null
 ): McpHealthResultV1 {
   return {
     schema: MCP_HEALTH_SCHEMA, server, scope, status, protocol_version: protocol, tool_count: toolCount,
+    tool_names: toolNames,
     instructions_present: instructions, latency_ms: latency,
     checked_at: options.dependencies?.checkedAt?.() ?? nowIso(),
     public_error: error, log_ref: null
   };
+}
+
+function toolNames(list: unknown[]): string[] {
+  return [...new Set(list
+    .map((entry) => isRecord(entry) && typeof entry.name === 'string' ? entry.name.trim() : '')
+    .filter(Boolean))]
+    .sort();
 }
 
 function defaultSpawn(command: string, args: readonly string[], options: { cwd?: string; env: NodeJS.ProcessEnv }): ChildProcessWithoutNullStreams {
