@@ -145,6 +145,12 @@ editable source → render → artifact receipt. Slack delivery is ACAS-runtime
 owned and is never a model tool. These are host-MCP contracts only: SKS adds no
 SKS DB, Excel, Slack, or Center dependency or service.
 
+The standalone runtime narrows the MCP allowlist to the tools required by the
+sealed task. Spreadsheet receipts must bind every create/inspect/update call to
+one workspace resource, permit at most one update, and include an inspection
+after the final mutation. Document proof requires an observed editable-source
+write before render plus an artifact receipt emitted by the render call.
+
 ## Completion Evidence
 
 Preparation is not completion. A run passes only when:

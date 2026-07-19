@@ -95,7 +95,8 @@ test('manifest validation preserves the prior v1 shape when additive capability 
 });
 
 test('host capability descriptors expose the project MCP Office/Data tool names without executing them', () => {
-  const names = new Set(buildAgentManifest().host_capabilities.capabilities.flatMap((capability) => capability.tool_names));
+  const capabilities = buildAgentManifest().host_capabilities.capabilities;
+  const names = new Set(capabilities.flatMap((capability) => capability.tool_names));
   for (const expected of [
     'datasource_schema_context',
     'datasource_query_readonly',
@@ -105,6 +106,10 @@ test('host capability descriptors expose the project MCP Office/Data tool names 
   ]) {
     assert.ok(names.has(expected), `host capability pack missing project MCP tool ${expected}`);
   }
+  assert.equal(
+    capabilities.find((capability) => capability.id === 'host.spreadsheet.workbook.v1')?.side_effect,
+    'workspace_read_write'
+  );
 });
 
 test('agent manifest includes well-known confirmed-existing commands', () => {

@@ -34,6 +34,7 @@ export type HostCapabilityWorkflow =
 export interface HostCapabilityRequest {
   capability_ids: string[];
   workflows: HostCapabilityWorkflow[];
+  tool_names?: string[];
 }
 
 export interface HostCapabilityRuntimeEntry {
@@ -90,6 +91,18 @@ export interface HostToolCallReceipt {
   event_sha256: string;
 }
 
+interface InternalHostToolCallReceipt extends HostToolCallReceipt {
+  index: number;
+  raw_hash: string;
+  resource_key: string | null;
+}
+
+interface ObservedHostArtifactReceipt extends HostArtifactReceipt {
+  source_tool: string;
+  source_hash: string;
+  source_index: number;
+}
+
 export interface HostCapabilityExecutionEvidence {
   schema: typeof HOST_CAPABILITY_EVIDENCE_SCHEMA;
   ok: boolean;
@@ -111,6 +124,11 @@ export function requestHostCapabilities(goal: unknown): HostCapabilityRequest {
   const text = String(goal || '').normalize('NFKC');
   const capabilityIds = new Set<string>();
   const workflows = new Set<HostCapabilityWorkflow>();
+  const toolNames = new Set<string>();
+  const requestCapability = (id: string, tools: readonly string[] = []) => {
+    capabilityIds.add(id);
+    for (const tool of tools) toolNames.add(tool);
+  };
 
   const spreadsheetCreate = matchesIntent(text, [
     /\b(?:create|generate|produce|deliver|make)\b.{0,48}\b(?:xlsx|excel|spreadsheet|workbook)\b/i,
@@ -119,10 +137,10 @@ export function requestHostCapabilities(goal: unknown): HostCapabilityRequest {
     /(?:생성|작성|만들|납품).{0,32}(?:엑셀|스프레드시트|xlsx)/i
   ]);
   const spreadsheetEdit = matchesIntent(text, [
-    /\b(?:edit|update|modify|inspect)\b.{0,48}\b(?:xlsx|excel|spreadsheet|workbook)\b/i,
-    /\b(?:xlsx|excel|spreadsheet|workbook)\b.{0,48}\b(?:edit|update|modify|inspect)\b/i,
-    /(?:엑셀|스프레드시트|xlsx).{0,32}(?:수정|편집|업데이트|검사|점검)/i,
-    /(?:수정|편집|업데이트|검사|점검).{0,32}(?:엑셀|스프레드시트|xlsx)/i
+    /\b(?:edit|update|modify|inspect|populate|fill|append|import)\b.{0,56}\b(?:xlsx|excel|spreadsheet|workbook)\b/i,
+    /\b(?:xlsx|excel|spreadsheet|workbook)\b.{0,56}\b(?:edit|update|modify|inspect|populate|fill|append|import)\b/i,
+    /(?:엑셀|스프레드시트|xlsx).{0,36}(?:수정|편집|업데이트|검사|점검|입력|채우|반영|추가)/i,
+    /(?:수정|편집|업데이트|검사|점검|입력|채우|반영|추가).{0,36}(?:엑셀|스프레드시트|xlsx)/i
   ]);
   const datasourceQuery = matchesIntent(text, [
     /\b(?:query|retrieve|fetch|load|analy[sz]e)\b.{0,56}\b(?:database|datasource|data|rows?)\b/i,
@@ -147,46 +165,92 @@ export function requestHostCapabilities(goal: unknown): HostCapabilityRequest {
     /\b(?:url|web|page)\b.{0,40}\bscreenshot\b/i,
     /(?:url|웹|페이지).{0,32}(?:스크린샷|캡처)/i
   ]);
-  const workspaceFiles = matchesIntent(text, [
-    /\b(?:workspace)\b.{0,40}\b(?:read|write|edit|find|list|download)\b/i,
-    /\b(?:read|write|edit|find|list|download)\b.{0,40}\bworkspace\b/i,
-    /워크스페이스.{0,32}(?:읽|쓰|수정|검색|목록|다운로드)/i
+  const workspaceRead = matchesIntent(text, [
+    /\bworkspace\b.{0,48}\b(?:read|open|inspect)\b/i,
+    /\b(?:read|open|inspect)\b.{0,48}\bworkspace\b/i,
+    /워크스페이스.{0,36}(?:읽|열|검사|점검)/i,
+    /(?:읽|열|검사|점검).{0,36}워크스페이스/i
   ]);
-  const workspaceWrites = matchesIntent(text, [
-    /\b(?:workspace)\b.{0,40}\b(?:write|edit|download)\b/i,
-    /\b(?:write|edit|download)\b.{0,40}\bworkspace\b/i,
-    /워크스페이스.{0,32}(?:쓰|수정|다운로드)/i
+  const workspaceFind = matchesIntent(text, [
+    /\bworkspace\b.{0,48}\b(?:find|search)\b/i,
+    /\b(?:find|search)\b.{0,48}\bworkspace\b/i,
+    /워크스페이스.{0,36}(?:찾|검색)/i,
+    /(?:찾|검색).{0,36}워크스페이스/i
+  ]);
+  const workspaceList = matchesIntent(text, [
+    /\bworkspace\b.{0,48}\blist\b/i,
+    /\blist\b.{0,48}\bworkspace\b/i,
+    /워크스페이스.{0,36}목록/i,
+    /목록.{0,36}워크스페이스/i
+  ]);
+  const workspaceWrite = matchesIntent(text, [
+    /\bworkspace\b.{0,48}\b(?:write|create|save)\b/i,
+    /\b(?:write|create|save)\b.{0,48}\bworkspace\b/i,
+    /워크스페이스.{0,36}(?:쓰|작성|생성|저장)/i,
+    /(?:쓰|작성|생성|저장).{0,36}워크스페이스/i
+  ]);
+  const workspaceEdit = matchesIntent(text, [
+    /\bworkspace\b.{0,48}\b(?:edit|modify|update)\b/i,
+    /\b(?:edit|modify|update)\b.{0,48}\bworkspace\b/i,
+    /워크스페이스.{0,36}(?:수정|편집|업데이트)/i,
+    /(?:수정|편집|업데이트).{0,36}워크스페이스/i
+  ]);
+  const workspaceDownload = matchesIntent(text, [
+    /\bworkspace\b.{0,48}\bdownload\b/i,
+    /\bdownload\b.{0,48}\bworkspace\b/i,
+    /워크스페이스.{0,36}다운로드/i,
+    /다운로드.{0,36}워크스페이스/i
   ]);
 
-  if (sqlGeneration || datasourceQuery) capabilityIds.add('host.datasource.schema.v1');
+  if (sqlGeneration || datasourceQuery) requestCapability('host.datasource.schema.v1', ['datasource_schema_context']);
   if (sqlGeneration) workflows.add('datasource_sql_generation');
   if (datasourceQuery) {
-    capabilityIds.add('host.datasource.query.readonly.v1');
+    requestCapability('host.datasource.query.readonly.v1', ['datasource_query_readonly']);
     workflows.add('datasource_query');
   }
-  if (spreadsheetCreate || spreadsheetEdit) capabilityIds.add('host.spreadsheet.workbook.v1');
-  if (spreadsheetCreate) workflows.add('spreadsheet_create');
-  if (spreadsheetEdit) workflows.add('spreadsheet_edit');
+  if (spreadsheetCreate) {
+    requestCapability('host.spreadsheet.workbook.v1', ['spreadsheet_create', 'spreadsheet_inspect', 'spreadsheet_update']);
+    workflows.add('spreadsheet_create');
+  }
+  if (spreadsheetEdit) {
+    requestCapability('host.spreadsheet.workbook.v1', ['spreadsheet_inspect', 'spreadsheet_update']);
+    workflows.add('spreadsheet_edit');
+  }
   if (documentRender) {
-    capabilityIds.add('host.document.render.v1');
+    const renderTools = [
+      ...(/\bpdf\b/i.test(text) ? ['html_to_pdf'] : []),
+      ...(/\b(?:png|document screenshot)\b/i.test(text) || /(?:png|문서 스크린샷)/i.test(text) ? ['html_to_screenshot'] : [])
+    ];
+    requestCapability('host.workspace.files.v1', ['write_file']);
+    requestCapability('host.document.render.v1', renderTools.length > 0 ? renderTools : ['html_to_pdf', 'html_to_screenshot']);
+    workflows.add('workspace_files');
     workflows.add('document_render');
   }
   if (webCapture) {
-    capabilityIds.add('host.web.capture.v1');
+    requestCapability('host.web.capture.v1', ['capture_url_screenshot']);
     workflows.add('web_capture');
   }
-  if (workspaceFiles) {
-    capabilityIds.add('host.workspace.files.v1');
+  const workspaceToolNames = [
+    ...(workspaceRead ? ['read_file'] : []),
+    ...(workspaceFind ? ['find_workspace_files'] : []),
+    ...(workspaceList ? ['list_workspace'] : []),
+    ...(workspaceWrite ? ['write_file'] : []),
+    ...(workspaceEdit ? ['edit_file'] : []),
+    ...(workspaceDownload ? ['download_url_to_workspace'] : [])
+  ];
+  if (workspaceToolNames.length > 0) {
+    requestCapability('host.workspace.files.v1', workspaceToolNames);
     workflows.add('workspace_files');
   }
-  if (spreadsheetCreate || spreadsheetEdit || documentRender || webCapture || workspaceWrites) {
-    capabilityIds.add('host.artifact.receipt.v1');
+  if (spreadsheetCreate || spreadsheetEdit || documentRender || webCapture || workspaceWrite || workspaceEdit || workspaceDownload) {
+    requestCapability('host.artifact.receipt.v1');
     workflows.add('artifact_delivery');
   }
 
   return {
     capability_ids: [...capabilityIds].sort(),
-    workflows: [...workflows].sort()
+    workflows: [...workflows].sort(),
+    tool_names: [...toolNames].sort()
   };
 }
 
@@ -197,10 +261,22 @@ export async function inspectHostCapabilityRuntime(input: {
 }): Promise<HostCapabilityRuntime> {
   const request = input.request || { capability_ids: [], workflows: [] };
   const knownIds = new Set(HOST_CAPABILITY_DESCRIPTORS.map((capability) => capability.id));
+  const knownToolNames = new Set(HOST_CAPABILITY_DESCRIPTORS.flatMap((capability) => capability.tool_names));
   const requestedCapabilityIds = uniqueStrings(request.capability_ids);
+  const requestedToolNames = uniqueStrings(request.tool_names || []);
+  const hasExplicitToolScope = Array.isArray(request.tool_names);
   const unknownRequested = requestedCapabilityIds.filter((id) => !knownIds.has(id));
+  const unknownRequestedTools = requestedToolNames.filter((name) => !knownToolNames.has(name));
   const requested = new Set(requestedCapabilityIds.filter((id) => knownIds.has(id)));
+  const requestedTools = new Set(requestedToolNames.filter((name) => knownToolNames.has(name)));
   const workflows = uniqueWorkflows(request.workflows);
+  const requestedDescriptorTools = (descriptor: HostCapabilityDescriptor) => hasExplicitToolScope
+    ? descriptor.tool_names.filter((name) => requestedTools.has(name))
+    : descriptor.tool_names;
+  const boundRequestedTools = new Set(HOST_CAPABILITY_DESCRIPTORS
+    .filter((descriptor) => descriptor.executable !== false && requested.has(descriptor.id))
+    .flatMap((descriptor) => requestedDescriptorTools(descriptor)));
+  const unboundRequestedTools = requestedToolNames.filter((name) => knownToolNames.has(name) && !boundRequestedTools.has(name));
   const inventoryFn = input.dependencies?.inventory || listMcpInventory;
   const healthFn = input.dependencies?.health || testMcpConnection;
   const inventory = await inventoryFn('project', {
@@ -222,6 +298,8 @@ export async function inspectHostCapabilityRuntime(input: {
     ));
     const blockers = uniqueStrings([
       ...unknownRequested.map((id) => `host_capability_unknown:${id}`),
+      ...unknownRequestedTools.map((name) => `host_capability_tool_unknown:${name}`),
+      ...unboundRequestedTools.map((name) => `host_capability_tool_scope_unbound:${name}`),
       ...(requested.size ? inventoryBlockers : []),
       ...capabilities.flatMap((entry) => entry.blockers)
     ]);
@@ -250,6 +328,8 @@ export async function inspectHostCapabilityRuntime(input: {
     ));
     const blockers = uniqueStrings([
       ...unknownRequested.map((id) => `host_capability_unknown:${id}`),
+      ...unknownRequestedTools.map((name) => `host_capability_tool_unknown:${name}`),
+      ...unboundRequestedTools.map((name) => `host_capability_tool_scope_unbound:${name}`),
       ...(requested.size ? inventoryBlockers : []),
       ...capabilities.flatMap((entry) => entry.blockers)
     ]);
@@ -284,34 +364,44 @@ export async function inspectHostCapabilityRuntime(input: {
   const healthReady = health.status === 'healthy' && Array.isArray(health.tool_names);
   const capabilities = HOST_CAPABILITY_DESCRIPTORS.map((descriptor) => {
     const isRequested = requested.has(descriptor.id);
+    const requiredTools = requestedDescriptorTools(descriptor);
     const descriptorTools = descriptor.tool_names.filter(configuredAvailable);
     const available = descriptor.executable === false
       ? descriptorTools.length > 0
-      : descriptorTools.length === descriptor.tool_names.length;
+      : requiredTools.length > 0 && requiredTools.every(configuredAvailable);
     const state: HostCapabilityState = !healthReady
       ? isRequested ? 'unhealthy' : 'not_requested'
       : available
         ? 'available'
         : isRequested ? 'missing' : 'not_requested';
-    const entryBlockers = isRequested && state !== 'available'
-      ? [`host_capability_${state}:${descriptor.id}${state === 'unhealthy' ? `:${health.status}` : ''}`]
+    const entryBlockers = isRequested
+      ? [
+          ...(descriptor.executable !== false && requiredTools.length === 0
+            ? [`host_capability_tool_scope_empty:${descriptor.id}`]
+            : []),
+          ...(state !== 'available'
+            ? [`host_capability_${state}:${descriptor.id}${state === 'unhealthy' ? `:${health.status}` : ''}`]
+            : [])
+        ]
       : [];
     return capabilityRuntimeEntry(
       descriptor,
       isRequested,
       state,
       descriptorTools,
-      isRequested && descriptor.executable !== false ? descriptorTools : [],
+      isRequested && descriptor.executable !== false ? requiredTools.filter(configuredAvailable) : [],
       entryBlockers
     );
   });
   const allowedToolNames = uniqueStrings(HOST_CAPABILITY_DESCRIPTORS
     .filter((descriptor) => descriptor.executable !== false && requested.has(descriptor.id))
-    .flatMap((descriptor) => descriptor.tool_names.filter(configuredAvailable)));
+    .flatMap((descriptor) => requestedDescriptorTools(descriptor).filter(configuredAvailable)));
   const allowed = new Set(allowedToolNames);
   const deniedToolNames = observedToolNames.filter((name) => !allowed.has(name));
   const blockers = uniqueStrings([
     ...unknownRequested.map((id) => `host_capability_unknown:${id}`),
+    ...unknownRequestedTools.map((name) => `host_capability_tool_unknown:${name}`),
+    ...unboundRequestedTools.map((name) => `host_capability_tool_scope_unbound:${name}`),
     ...(requested.size ? inventoryBlockers : []),
     ...capabilities.flatMap((entry) => entry.blockers)
   ]);
@@ -346,8 +436,8 @@ export function createHostCapabilityEventCollector(runtime: HostCapabilityRuntim
   let buffer = '';
   let parsedEvents = 0;
   let callIndex = 0;
-  const internalCalls: Array<HostToolCallReceipt & { index: number; raw_hash: string }> = [];
-  const observedArtifacts: Array<HostArtifactReceipt & { source_tool: string; source_hash: string }> = [];
+  const internalCalls: InternalHostToolCallReceipt[] = [];
+  const observedArtifacts: ObservedHostArtifactReceipt[] = [];
   const blockers: string[] = [];
 
   const parseLine = (line: string) => {
@@ -377,13 +467,21 @@ export function createHostCapabilityEventCollector(runtime: HostCapabilityRuntim
     callIndex += 1;
     if (server !== runtime.server) return;
     const rawHash = `sha256:${sha256(trimmed)}`;
-    internalCalls.push({ server, tool, status, event_sha256: rawHash, raw_hash: rawHash, index: callIndex });
+    internalCalls.push({
+      server,
+      tool,
+      status,
+      event_sha256: rawHash,
+      raw_hash: rawHash,
+      index: callIndex,
+      resource_key: extractToolResourceKey(item)
+    });
     if (!runtime.allowed_tool_names.includes(tool)) blockers.push(`host_tool_call_not_allowed:${tool}`);
     if (EXPLICIT_DENIAL_PATTERN.test(tool)) blockers.push(`host_tool_call_explicitly_denied:${tool}`);
     if (status === 'failed') blockers.push(`host_tool_call_failed:${tool}`);
     if (status === 'passed') {
       for (const artifact of extractArtifactReceipts(item.result?.structured_content ?? item.result?.structuredContent ?? item.result)) {
-        observedArtifacts.push({ ...artifact, source_tool: tool, source_hash: rawHash });
+        observedArtifacts.push({ ...artifact, source_tool: tool, source_hash: rawHash, source_index: callIndex });
       }
     }
   };
@@ -454,8 +552,8 @@ export function bindParentSummaryToHostCapabilityEvidence(value: unknown, eviden
 
 function buildExecutionEvidence(
   runtime: HostCapabilityRuntime,
-  calls: Array<HostToolCallReceipt & { index: number; raw_hash: string }>,
-  artifactRows: Array<HostArtifactReceipt & { source_tool: string; source_hash: string }>,
+  calls: InternalHostToolCallReceipt[],
+  artifactRows: ObservedHostArtifactReceipt[],
   initialBlockers: string[]
 ): HostCapabilityExecutionEvidence {
   const blockers = [...runtime.blockers, ...initialBlockers];
@@ -470,7 +568,7 @@ function buildExecutionEvidence(
   for (const descriptor of HOST_CAPABILITY_DESCRIPTORS) {
     if (!requested.has(descriptor.id)) continue;
     const relevantCalls = calls.filter((call) => descriptor.tool_names.includes(call.tool));
-    const capabilityBlockers = validateCapabilityWorkflow(runtime, descriptor, relevantCalls, calls, artifacts);
+    const capabilityBlockers = validateCapabilityWorkflow(runtime, descriptor, relevantCalls, calls, artifactRows);
     blockers.push(...capabilityBlockers);
     const status = capabilityBlockers.length === 0 && relevantCalls.every((call) => call.status === 'passed')
       ? 'passed'
@@ -504,9 +602,9 @@ function buildExecutionEvidence(
 function validateCapabilityWorkflow(
   runtime: HostCapabilityRuntime,
   descriptor: HostCapabilityDescriptor,
-  calls: Array<HostToolCallReceipt & { index: number }>,
-  allCalls: Array<HostToolCallReceipt & { index: number }>,
-  artifacts: HostArtifactReceipt[]
+  calls: InternalHostToolCallReceipt[],
+  allCalls: InternalHostToolCallReceipt[],
+  artifacts: ObservedHostArtifactReceipt[]
 ): string[] {
   const blockers: string[] = [];
   const passed = (tool: string) => calls.filter((call) => call.tool === tool && call.status === 'passed');
@@ -524,27 +622,70 @@ function validateCapabilityWorkflow(
     }
   }
   if (descriptor.id === 'host.spreadsheet.workbook.v1') {
-    const create = passed('spreadsheet_create')[0]?.index ?? -1;
-    const updates = passed('spreadsheet_update').map((call) => call.index);
-    const inspections = passed('spreadsheet_inspect').map((call) => call.index);
-    if (runtime.task_workflows.includes('spreadsheet_create')
-      && (create < 0 || !inspections.some((index) => index > create))) {
-      blockers.push('host_capability_spreadsheet_create_sequence_invalid');
+    const creates = passed('spreadsheet_create');
+    const updates = passed('spreadsheet_update');
+    const inspections = passed('spreadsheet_inspect');
+    const create = creates[0]?.index ?? -1;
+    const updateIndexes = updates.map((call) => call.index);
+    const inspectionIndexes = inspections.map((call) => call.index);
+    if (runtime.task_workflows.includes('spreadsheet_create')) {
+      if (creates.length !== 1) blockers.push('host_capability_spreadsheet_create_sequence_invalid');
+      if (updates.length > 1) blockers.push('host_capability_spreadsheet_create_update_count_invalid');
+      const update = updateIndexes[0] ?? -1;
+      const inspectedAfterCreate = inspectionIndexes.some((index) => index > create && (update < 0 || index < update));
+      const inspectedAfterMutation = update >= 0
+        ? inspectionIndexes.some((index) => index > update)
+        : inspectionIndexes.some((index) => index > create);
+      if (create < 0
+        || !inspectedAfterCreate
+        || !inspectedAfterMutation
+        || (update >= 0 && update <= create)) {
+        blockers.push('host_capability_spreadsheet_create_sequence_invalid');
+      }
     }
     if (runtime.task_workflows.includes('spreadsheet_edit')) {
-      const update = updates[0] ?? -1;
+      const update = updateIndexes[0] ?? -1;
+      if (updates.length !== 1) blockers.push('host_capability_spreadsheet_edit_update_count_invalid');
       if (update < 0
-        || !inspections.some((index) => index < update)
-        || !inspections.some((index) => index > update)) {
+        || !inspectionIndexes.some((index) => index < update)
+        || !inspectionIndexes.some((index) => index > update)) {
         blockers.push('host_capability_spreadsheet_edit_sequence_invalid');
       }
     }
+    if (runtime.task_workflows.includes('spreadsheet_create') || runtime.task_workflows.includes('spreadsheet_edit')) {
+      const passedSpreadsheetCalls = calls.filter((call) => call.status === 'passed');
+      const resourceKeys = uniqueStrings(passedSpreadsheetCalls.map((call) => call.resource_key));
+      const lastMutation = [...creates, ...updates].sort((left, right) => right.index - left.index)[0] || null;
+      if (passedSpreadsheetCalls.some((call) => !call.resource_key)) {
+        blockers.push('host_capability_spreadsheet_resource_missing');
+      }
+      if (resourceKeys.length > 1) blockers.push('host_capability_spreadsheet_resource_mismatch');
+      if (!lastMutation || !artifacts.some((artifact) => (
+        artifact.source_index === lastMutation.index
+        && artifact.source_tool === lastMutation.tool
+      ))) {
+        blockers.push('host_capability_spreadsheet_final_artifact_missing');
+      }
+    }
   }
-  if (descriptor.id === 'host.document.render.v1'
-    && runtime.task_workflows.includes('document_render')
-    && passed('html_to_pdf').length === 0
-    && passed('html_to_screenshot').length === 0) {
-    blockers.push('host_capability_document_render_call_missing');
+  if (descriptor.id === 'host.document.render.v1' && runtime.task_workflows.includes('document_render')) {
+    const renderCalls = [...passed('html_to_pdf'), ...passed('html_to_screenshot')].sort((left, right) => left.index - right.index);
+    if (renderCalls.length === 0) {
+      blockers.push('host_capability_document_render_call_missing');
+    } else {
+      const sourceWrite = allCalls.find((call) => (
+        call.status === 'passed'
+        && (call.tool === 'write_file' || call.tool === 'edit_file')
+        && call.index < renderCalls[0]!.index
+      ));
+      if (!sourceWrite) blockers.push('host_capability_document_source_sequence_invalid');
+      if (!artifacts.some((artifact) => (
+        (artifact.source_tool === 'html_to_pdf' || artifact.source_tool === 'html_to_screenshot')
+        && artifact.source_index >= renderCalls[0]!.index
+      ))) {
+        blockers.push('host_capability_document_render_artifact_missing');
+      }
+    }
   }
   if (descriptor.id === 'host.web.capture.v1'
     && runtime.task_workflows.includes('web_capture')
@@ -555,6 +696,46 @@ function validateCapabilityWorkflow(
     blockers.push('host_capability_artifact_receipt_missing');
   }
   return uniqueStrings(blockers);
+}
+
+function extractToolResourceKey(item: unknown): string | null {
+  if (!isRecord(item)) return null;
+  const queue: Array<{ value: unknown; depth: number }> = [
+    { value: item.arguments, depth: 0 },
+    { value: item.input, depth: 0 },
+    { value: item.result?.structured_content ?? item.result?.structuredContent ?? item.result, depth: 0 }
+  ];
+  let visited = 0;
+  while (queue.length > 0 && visited < 256) {
+    const current = queue.shift()!;
+    visited += 1;
+    if (current.depth > 5 || current.value === null || current.value === undefined) continue;
+    if (Array.isArray(current.value)) {
+      for (const child of current.value) queue.push({ value: child, depth: current.depth + 1 });
+      continue;
+    }
+    if (!isRecord(current.value)) continue;
+    for (const [key, value] of Object.entries(current.value)) {
+      if (/^(?:path|file_path|filepath|workbook_path|workbook|source_path|target_path|output_path)$/i.test(key)) {
+        const resourcePath = normalizeWorkspaceResourcePath(value);
+        if (resourcePath) return `sha256:${sha256(resourcePath)}`;
+      }
+      queue.push({ value, depth: current.depth + 1 });
+    }
+  }
+  return null;
+}
+
+function normalizeWorkspaceResourcePath(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const original = value.trim();
+  if (!original
+    || original.length > MAX_ARTIFACT_PATH_CHARS
+    || /[\r\n\0\\]/.test(original)
+    || original.startsWith('/')) return null;
+  const segments = original.split('/').filter(Boolean);
+  if (segments.length === 0 || segments.some((segment) => segment === '.' || segment === '..')) return null;
+  return segments.join('/');
 }
 
 function extractArtifactReceipts(value: unknown): HostArtifactReceipt[] {
@@ -615,21 +796,18 @@ function normalizeArtifactReceipt(value: Record<string, unknown>): HostArtifactR
 }
 
 function dedupeArtifacts<T extends HostArtifactReceipt>(values: readonly T[]): HostArtifactReceipt[] {
-  const byReceipt = new Map<string, HostArtifactReceipt>();
+  const byPath = new Map<string, HostArtifactReceipt>();
   for (const value of values) {
-    const key = `${value.path}\u0000${value.sha256}\u0000${value.bytes}`;
-    if (!byReceipt.has(key)) {
-      byReceipt.set(key, {
-        path: value.path,
-        kind: value.kind,
-        media_type: value.media_type,
-        sha256: value.sha256,
-        bytes: value.bytes,
-        role: value.role
-      });
-    }
+    byPath.set(value.path, {
+      path: value.path,
+      kind: value.kind,
+      media_type: value.media_type,
+      sha256: value.sha256,
+      bytes: value.bytes,
+      role: value.role
+    });
   }
-  return [...byReceipt.values()].sort((left, right) => left.path.localeCompare(right.path));
+  return [...byPath.values()].sort((left, right) => left.path.localeCompare(right.path));
 }
 
 function runtimeResult(input: {

@@ -132,7 +132,7 @@ export const HOST_CAPABILITY_DESCRIPTORS: readonly HostCapabilityDescriptor[] = 
     provider: 'host_mcp',
     mcp_server: 'acas-tools',
     tool_names: ['spreadsheet_create', 'spreadsheet_inspect', 'spreadsheet_update'],
-    side_effect: 'workspace_write',
+    side_effect: 'workspace_read_write',
     required_for: ['spreadsheet_create', 'spreadsheet_edit'],
     required: false
   },

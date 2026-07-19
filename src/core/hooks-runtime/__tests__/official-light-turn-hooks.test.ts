@@ -7,7 +7,7 @@ import { evaluateHookPayload, evaluateHookPayloadOnce } from '../../hooks-runtim
 import { lightTurnReceiptPath } from '../light-turn.js';
 import { toolOutputQuarantinePath } from '../tool-output-quarantine.js';
 import { prepareRoute } from '../../pipeline.js';
-import { createMission, loadStateForSession, missionDir, setCurrent } from '../../mission.js';
+import { createMission, loadStateForSession, missionDir, setCurrent, stateFileForSession } from '../../mission.js';
 
 async function tempRoot(prefix: string) {
   return fsp.mkdtemp(path.join(os.tmpdir(), prefix));
@@ -429,6 +429,34 @@ test('SubagentStart uses configured official max_threads and SubagentStop is evi
     const stoppedEvidence = JSON.parse(await fsp.readFile(path.join(missionDir(root, missionId), 'subagent-evidence.json'), 'utf8'));
     assert.equal(stoppedEvidence.started_threads, 1);
     assert.deepEqual(stoppedEvidence.event_sources, ['SubagentStart', 'SubagentStop']);
+  } finally {
+    await fsp.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('an explicit foreign hook session never inherits the active legacy global mission', async () => {
+  const root = await tempRoot('sks-official-hook-session-isolation-');
+  const parentSession = 'official-parent-session';
+  const foreignSession = 'unrelated-parent-session';
+  try {
+    await prepareRoute(root, '$Naruto --agents 1 inspect one bounded slice', {}, {
+      sessionKey: parentSession,
+      parentModel: 'gpt-5.6-sol'
+    });
+    const parentState: any = await loadStateForSession(root, parentSession);
+    const dir = missionDir(root, parentState.mission_id);
+    const eventsPath = path.join(dir, 'subagent-events.jsonl');
+    const before = await fsp.readFile(eventsPath, 'utf8');
+
+    const result: any = await evaluateHookPayload('subagent-start', {
+      ...officialSubagentHookPayload('SubagentStart', 'foreign-agent'),
+      session_id: foreignSession,
+      turn_id: 'foreign-turn'
+    }, { root });
+
+    assert.doesNotMatch(String(result.additionalContext || ''), new RegExp(parentState.mission_id));
+    assert.equal(await fsp.readFile(eventsPath, 'utf8'), before);
+    await assert.rejects(fsp.access(stateFileForSession(root, foreignSession)));
   } finally {
     await fsp.rm(root, { recursive: true, force: true });
   }

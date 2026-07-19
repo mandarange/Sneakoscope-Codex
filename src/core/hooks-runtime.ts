@@ -1,7 +1,14 @@
 import path from 'node:path';
 import { projectRoot, readJson, readText, writeJsonAtomic, appendJsonl, nowIso, runProcess, sha256, packageRoot, tmpdir, type JsonData } from './fsx.js';
 import { looksInteractiveCommand, interactiveCommandReason } from './no-question-guard.js';
-import { loadStateForSession, missionDir, setCurrent, updateCurrentIfMissionAndRun } from './mission.js';
+import {
+  loadStateForSession,
+  missionDir,
+  sessionStateKey,
+  setCurrent,
+  stateFileForSession,
+  updateCurrentIfMissionAndRun
+} from './mission.js';
 import { checkDbOperation, dbBlockReason, handleMadSksUserConfirmation } from './db-safety.js';
 import { maybeRecordMadSksSqlPlaneToolResultFromToolUse } from './mad-sks/sql-plane/result-lifecycle.js';
 import { checkHarnessModification, harnessGuardBlockReason, isHarnessSourceProject } from './harness-guard.js';
@@ -98,7 +105,11 @@ import {
 export { loadHookPayload, normalizeHookResult };
 
 async function loadState(root: any, payload: any = {}) {
-  return loadStateForSession(root, conversationId(payload));
+  const sessionKey = conversationId(payload);
+  if (!explicitConversationId(payload)) return loadStateForSession(root, sessionKey);
+  const hashed = sessionStateKey(sessionKey);
+  const sessionState = await readJson(stateFileForSession(root, sessionKey), null).catch(() => null);
+  return sessionState ? { ...sessionState, _session_key: sessionState._session_key || hashed } : {};
 }
 
 function isNoQuestionRunning(state: any) {

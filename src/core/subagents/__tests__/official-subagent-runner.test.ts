@@ -15,7 +15,12 @@ import { writeNarutoGate } from '../official-subagent-preparation.js'
 import { addMcpServer, editMcpServer } from '../../mcp-config/mutation.js'
 import type { CodexCliMutationOperation, CodexMcpCliPort } from '../../mcp-config/codex-cli-adapter.js'
 import { runProcess } from '../../fsx.js'
-import { bindParentSummaryToHostCapabilityEvidence } from '../../agent-bridge/host-capability-runtime.js'
+import {
+  bindParentSummaryToHostCapabilityEvidence,
+  createHostCapabilityEventCollector,
+  inspectHostCapabilityRuntime,
+  requestHostCapabilities
+} from '../../agent-bridge/host-capability-runtime.js'
 
 class UnavailableMcpCli implements CodexMcpCliPort {
   async list() {
@@ -70,6 +75,28 @@ function hostCapabilityDependencies(toolNames: string[]) {
       tool_names: [...toolNames]
     }) as any
   }
+}
+
+function completedHostToolEvent(input: {
+  tool: string
+  path?: string
+  artifact?: Record<string, unknown>
+}) {
+  return JSON.stringify({
+    type: 'item.completed',
+    item: {
+      type: 'mcp_tool_call',
+      server: 'acas-tools',
+      tool: input.tool,
+      status: 'completed',
+      ...(input.path ? { arguments: { path: input.path } } : {}),
+      result: {
+        structured_content: input.artifact
+          ? { artifact: input.artifact }
+          : { ok: true, ...(input.path ? { path: input.path } : {}) }
+      }
+    }
+  })
 }
 
 test('standalone parent args launch one Sol Max Codex parent with the official thread budget', () => {
@@ -171,7 +198,7 @@ test('standalone launch allowlists requested ACAS tools and projects only hashed
             server: 'acas-tools',
             tool: 'spreadsheet_create',
             status: 'completed',
-            arguments: { api_key: 'raw-jsonl-secret-must-not-return' },
+            arguments: { path: artifact.path, api_key: 'raw-jsonl-secret-must-not-return' },
             result: { structured_content: { artifact } }
           }
         }),
@@ -182,6 +209,7 @@ test('standalone launch allowlists requested ACAS tools and projects only hashed
             server: 'acas-tools',
             tool: 'spreadsheet_inspect',
             status: 'completed',
+            arguments: { path: artifact.path },
             result: { structured_content: { ok: true } }
           }
         })
@@ -222,6 +250,142 @@ test('standalone launch allowlists requested ACAS tools and projects only hashed
   assert.equal((rebound.value as any).status, 'blocked')
   assert.deepEqual((rebound.value as any).artifacts, [artifact])
   assert.ok(rebound.blockers.includes('host_artifact_parent_receipts_mismatch'))
+})
+
+test('host capability requests select the minimum task tools and recognize workbook population', async () => {
+  const workspaceTools = [
+    'read_file',
+    'write_file',
+    'edit_file',
+    'find_workspace_files',
+    'list_workspace',
+    'download_url_to_workspace'
+  ]
+  const readRequest = requestHostCapabilities('Read README.md from the workspace.')
+  assert.deepEqual(readRequest.tool_names, ['read_file'])
+  const readRuntime = await inspectHostCapabilityRuntime({
+    root: process.cwd(),
+    request: readRequest,
+    dependencies: hostCapabilityDependencies(workspaceTools)
+  })
+  assert.equal(readRuntime.ok, true)
+  assert.deepEqual(readRuntime.allowed_tool_names, ['read_file'])
+  assert.ok(readRuntime.denied_tool_names.includes('write_file'))
+  assert.ok(readRuntime.denied_tool_names.includes('download_url_to_workspace'))
+
+  const editRequest = requestHostCapabilities('Populate quarterly numbers into reports/q3.xlsx.')
+  assert.ok(editRequest.workflows.includes('spreadsheet_edit'))
+  assert.deepEqual(editRequest.tool_names, ['spreadsheet_inspect', 'spreadsheet_update'])
+  const editRuntime = await inspectHostCapabilityRuntime({
+    root: process.cwd(),
+    request: editRequest,
+    dependencies: hostCapabilityDependencies(['spreadsheet_create', 'spreadsheet_inspect', 'spreadsheet_update'])
+  })
+  assert.equal(editRuntime.ok, true)
+  assert.deepEqual(editRuntime.allowed_tool_names, ['spreadsheet_inspect', 'spreadsheet_update'])
+})
+
+test('spreadsheet evidence requires one bounded mutation, a final inspect, and one resource identity', async () => {
+  const workbookPath = 'reports/q3.xlsx'
+  const createArtifact = {
+    path: workbookPath,
+    kind: 'spreadsheet',
+    media_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    sha256: `sha256:${'a'.repeat(64)}`,
+    bytes: 10,
+    role: 'deliverable'
+  }
+  const updateArtifact = { ...createArtifact, sha256: `sha256:${'b'.repeat(64)}`, bytes: 12 }
+  const request = requestHostCapabilities('Create and deliver an Excel workbook.')
+  const runtime = await inspectHostCapabilityRuntime({
+    root: process.cwd(),
+    request,
+    dependencies: hostCapabilityDependencies(['spreadsheet_create', 'spreadsheet_inspect', 'spreadsheet_update'])
+  })
+  assert.equal(runtime.ok, true)
+
+  const missingFinalInspect = createHostCapabilityEventCollector(runtime)
+  for (const event of [
+    completedHostToolEvent({ tool: 'spreadsheet_create', path: workbookPath, artifact: createArtifact }),
+    completedHostToolEvent({ tool: 'spreadsheet_inspect', path: workbookPath }),
+    completedHostToolEvent({ tool: 'spreadsheet_update', path: workbookPath, artifact: updateArtifact })
+  ]) missingFinalInspect.push(`${event}\n`)
+  const missingFinalEvidence = missingFinalInspect.finish()
+  assert.equal(missingFinalEvidence.ok, false)
+  assert.ok(missingFinalEvidence.blockers.includes('host_capability_spreadsheet_create_sequence_invalid'))
+
+  const repeatedUpdate = createHostCapabilityEventCollector(runtime)
+  for (const event of [
+    completedHostToolEvent({ tool: 'spreadsheet_create', path: workbookPath, artifact: createArtifact }),
+    completedHostToolEvent({ tool: 'spreadsheet_inspect', path: workbookPath }),
+    completedHostToolEvent({ tool: 'spreadsheet_update', path: workbookPath, artifact: updateArtifact }),
+    completedHostToolEvent({ tool: 'spreadsheet_inspect', path: workbookPath }),
+    completedHostToolEvent({ tool: 'spreadsheet_update', path: workbookPath, artifact: { ...updateArtifact, sha256: `sha256:${'c'.repeat(64)}` } }),
+    completedHostToolEvent({ tool: 'spreadsheet_inspect', path: workbookPath })
+  ]) repeatedUpdate.push(`${event}\n`)
+  const repeatedUpdateEvidence = repeatedUpdate.finish()
+  assert.equal(repeatedUpdateEvidence.ok, false)
+  assert.ok(repeatedUpdateEvidence.blockers.includes('host_capability_spreadsheet_create_update_count_invalid'))
+
+  const resourceMismatch = createHostCapabilityEventCollector(runtime)
+  for (const event of [
+    completedHostToolEvent({ tool: 'spreadsheet_create', path: workbookPath, artifact: createArtifact }),
+    completedHostToolEvent({ tool: 'spreadsheet_inspect', path: 'reports/other.xlsx' })
+  ]) resourceMismatch.push(`${event}\n`)
+  const resourceMismatchEvidence = resourceMismatch.finish()
+  assert.equal(resourceMismatchEvidence.ok, false)
+  assert.ok(resourceMismatchEvidence.blockers.includes('host_capability_spreadsheet_resource_mismatch'))
+
+  const valid = createHostCapabilityEventCollector(runtime)
+  for (const event of [
+    completedHostToolEvent({ tool: 'spreadsheet_create', path: workbookPath, artifact: createArtifact }),
+    completedHostToolEvent({ tool: 'spreadsheet_inspect', path: workbookPath }),
+    completedHostToolEvent({ tool: 'spreadsheet_update', path: workbookPath, artifact: updateArtifact }),
+    completedHostToolEvent({ tool: 'spreadsheet_inspect', path: workbookPath })
+  ]) valid.push(`${event}\n`)
+  assert.equal(valid.finish().ok, true)
+})
+
+test('document evidence requires an editable source before render and a render artifact receipt', async () => {
+  const request = requestHostCapabilities('Create and deliver a PDF document.')
+  assert.deepEqual(request.tool_names, ['html_to_pdf', 'write_file'])
+  const runtime = await inspectHostCapabilityRuntime({
+    root: process.cwd(),
+    request,
+    dependencies: hostCapabilityDependencies(['write_file', 'edit_file', 'html_to_pdf', 'html_to_screenshot'])
+  })
+  assert.equal(runtime.ok, true)
+  assert.deepEqual(runtime.allowed_tool_names, ['html_to_pdf', 'write_file'])
+  const pdfArtifact = {
+    path: 'reports/brief.pdf',
+    kind: 'pdf',
+    media_type: 'application/pdf',
+    sha256: `sha256:${'d'.repeat(64)}`,
+    bytes: 20,
+    role: 'deliverable'
+  }
+
+  const renderOnly = createHostCapabilityEventCollector(runtime)
+  renderOnly.push(`${completedHostToolEvent({ tool: 'html_to_pdf', path: 'reports/brief.pdf', artifact: pdfArtifact })}\n`)
+  const renderOnlyEvidence = renderOnly.finish()
+  assert.equal(renderOnlyEvidence.ok, false)
+  assert.ok(renderOnlyEvidence.blockers.includes('host_capability_document_source_sequence_invalid'))
+
+  const valid = createHostCapabilityEventCollector(runtime)
+  valid.push(`${completedHostToolEvent({
+    tool: 'write_file',
+    path: 'reports/brief.html',
+    artifact: {
+      path: 'reports/brief.html',
+      kind: 'html',
+      media_type: 'text/html',
+      sha256: `sha256:${'e'.repeat(64)}`,
+      bytes: 12,
+      role: 'scratch'
+    }
+  })}\n`)
+  valid.push(`${completedHostToolEvent({ tool: 'html_to_pdf', path: 'reports/brief.pdf', artifact: pdfArtifact })}\n`)
+  assert.equal(valid.finish().ok, true)
 })
 
 test('Codex thread environment selects the in-app path unless standalone is explicit', () => {
