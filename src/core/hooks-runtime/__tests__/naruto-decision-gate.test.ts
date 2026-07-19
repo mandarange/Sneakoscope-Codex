@@ -6,6 +6,15 @@ import path from 'node:path';
 import { CODEX_HOOK_EVENTS } from '../../codex-compat/codex-hook-events.js';
 import { evaluateHookPayload } from '../../hooks-runtime.js';
 import { normalizeHookResult } from '../hook-io.js';
+import { runOfficialSubagentWorkflow } from '../../subagents/official-subagent-runner.js';
+import {
+  HOST_CAPABILITY_HOOK_EVIDENCE_FILENAME,
+  HOST_CAPABILITY_HOOK_OBSERVATIONS_FILENAME,
+  HOST_CAPABILITY_HOOK_RUNTIME_FILENAME,
+  createHostCapabilityHookRuntimeBinding,
+  inspectHostCapabilityRuntime,
+  requestHostCapabilities
+} from '../../agent-bridge/host-capability-runtime.js';
 import {
   decideHookNaruto,
   hookNarutoDecisionLogPath
@@ -124,3 +133,199 @@ test('all ten Codex hook events pass through and record the common Naruto decisi
     await fsp.rm(root, { recursive: true, force: true });
   }
 });
+
+test('App preparation blocks a missing requested host capability before returning delegation context', async () => {
+  const result = await runOfficialSubagentWorkflow({
+    root: process.cwd(),
+    goal: 'Create and deliver an Excel workbook.',
+    prompt: 'sealed delegation prompt',
+    requestedSubagents: 1,
+    maxThreads: 1,
+    appSession: true,
+    sessionKey: 'host-capability-preparation-session',
+    hostCapabilityDependencies: hostCapabilityDependencies(['spreadsheet_create'])
+  });
+
+  assert.equal(result.status, 'host_capability_blocked');
+  assert.equal(result.prepared, false);
+  assert.equal(result.additionalContext, null);
+  assert.ok(result.blockers.includes('host_capability_missing:host.spreadsheet.workbook.v1'));
+});
+
+test('host capability hooks enforce the exact allowlist and persist only bounded sanitized current-session evidence', async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-hook-host-capability-'));
+  const missionId = 'M-20260719-host-capability-hooks';
+  const workflowRunId = 'naruto-host-capability-hooks-run';
+  const sessionId = 'host-capability-hooks-session';
+  const dir = path.join(root, '.sneakoscope', 'missions', missionId);
+  const state = {
+    mission_id: missionId,
+    official_subagent_run_id: workflowRunId,
+    session_scope: sessionId,
+    mode: 'NARUTO',
+    route: 'Naruto',
+    subagents_required: true
+  };
+  try {
+    await fsp.mkdir(dir, { recursive: true });
+    const runtime = await inspectHostCapabilityRuntime({
+      root,
+      request: requestHostCapabilities('Create and deliver an Excel workbook.'),
+      dependencies: hostCapabilityDependencies([
+        'spreadsheet_create',
+        'spreadsheet_inspect',
+        'spreadsheet_update',
+        'slack_send',
+        'center_outbox_post'
+      ])
+    });
+    assert.equal(runtime.ok, true);
+    await fsp.writeFile(
+      path.join(dir, HOST_CAPABILITY_HOOK_RUNTIME_FILENAME),
+      `${JSON.stringify(createHostCapabilityHookRuntimeBinding({
+        missionId,
+        workflowRunId,
+        sessionScope: sessionId,
+        runtime
+      }), null, 2)}\n`
+    );
+
+    const allowed: any = await evaluateHookPayload('pre-tool', {
+      session_id: sessionId,
+      turn_id: 'turn-host-allowed',
+      tool_name: 'mcp__acas-tools__spreadsheet_create',
+      tool_input: { path: 'reports/monthly.xlsx', api_token: 'must-not-persist' },
+      tool_use_id: 'tool-use-create'
+    }, { root, state });
+    assert.equal(allowed.decision, undefined);
+
+    const denied: any = await evaluateHookPayload('pre-tool', {
+      session_id: sessionId,
+      turn_id: 'turn-host-denied',
+      tool_name: 'mcp__acas-tools__slack_send',
+      tool_input: { channel: 'secret-channel', token: 'must-not-persist' },
+      tool_use_id: 'tool-use-slack'
+    }, { root, state });
+    assert.equal(denied.decision, 'block');
+    assert.match(denied.reason, /outside runtime\.allowed_tool_names/);
+
+    const unrelated: any = await evaluateHookPayload('pre-tool', {
+      session_id: sessionId,
+      turn_id: 'turn-host-unrelated',
+      tool_name: 'Read',
+      tool_input: { path: 'README.md' },
+      tool_use_id: 'tool-use-read'
+    }, { root, state });
+    assert.equal(unrelated.decision, undefined);
+
+    const artifact = {
+      path: 'reports/monthly.xlsx',
+      kind: 'spreadsheet',
+      media_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      sha256: `sha256:${'a'.repeat(64)}`,
+      bytes: 48211,
+      role: 'deliverable'
+    };
+    const createPayload = {
+      session_id: sessionId,
+      turn_id: 'turn-host-create-post',
+      tool_name: 'mcp__acas-tools__spreadsheet_create',
+      tool_input: { path: artifact.path, credential: 'raw-input-secret-must-not-persist' },
+      tool_response: {
+        structured_content: {
+          artifact,
+          rows: Array.from({ length: 500 }, (_, index) => ({ index, value: `raw-row-${index}` })),
+          access_token: 'raw-response-secret-must-not-persist'
+        }
+      },
+      tool_use_id: 'tool-use-create'
+    };
+    await evaluateHookPayload('post-tool', createPayload, { root, state });
+    await evaluateHookPayload('post-tool', createPayload, { root, state });
+    await evaluateHookPayload('pre-tool', {
+      session_id: sessionId,
+      turn_id: 'turn-host-inspect-pre',
+      tool_name: 'mcp__acas-tools__spreadsheet_inspect',
+      tool_input: { path: artifact.path },
+      tool_use_id: 'tool-use-inspect'
+    }, { root, state });
+    await evaluateHookPayload('post-tool', {
+      session_id: sessionId,
+      turn_id: 'turn-host-inspect-post',
+      tool_name: 'mcp__acas-tools__spreadsheet_inspect',
+      tool_input: { path: artifact.path },
+      tool_response: { structured_content: { ok: true, path: artifact.path } },
+      tool_use_id: 'tool-use-inspect'
+    }, { root, state });
+
+    const observationsText = await fsp.readFile(path.join(dir, HOST_CAPABILITY_HOOK_OBSERVATIONS_FILENAME), 'utf8');
+    const observations = JSON.parse(observationsText);
+    const evidence = JSON.parse(await fsp.readFile(path.join(dir, HOST_CAPABILITY_HOOK_EVIDENCE_FILENAME), 'utf8'));
+    assert.equal(observations.tool_calls.length, 2);
+    assert.deepEqual(observations.tool_calls.map((row: any) => row.tool), ['spreadsheet_create', 'spreadsheet_inspect']);
+    assert.ok(observations.pre_tool_uses.some((row: any) => row.tool === 'spreadsheet_create' && row.decision === 'allowed'));
+    assert.ok(observations.pre_tool_uses.some((row: any) => row.tool === 'slack_send' && row.decision === 'denied'));
+    assert.equal(observationsText.includes('must-not-persist'), false);
+    assert.equal(observationsText.includes('raw-row-'), false);
+    assert.ok(Buffer.byteLength(observationsText, 'utf8') < 32 * 1024);
+    assert.equal(evidence.ok, true);
+    assert.deepEqual(evidence.tool_calls.map((row: any) => row.tool), ['spreadsheet_create', 'spreadsheet_inspect']);
+
+    await evaluateHookPayload('post-tool', {
+      session_id: sessionId,
+      turn_id: 'turn-host-denied-post',
+      tool_name: 'mcp__acas-tools__slack_send',
+      tool_input: { channel: 'secret-channel', token: 'must-not-persist' },
+      tool_response: { structured_content: { ok: true, token: 'must-not-persist' } },
+      tool_use_id: 'tool-use-slack'
+    }, { root, state });
+    const deniedEvidence = JSON.parse(await fsp.readFile(path.join(dir, HOST_CAPABILITY_HOOK_EVIDENCE_FILENAME), 'utf8'));
+    assert.equal(deniedEvidence.ok, false);
+    assert.ok(deniedEvidence.blockers.includes('host_tool_call_pre_use_denied:slack_send'));
+    assert.ok(deniedEvidence.blockers.includes('host_tool_call_not_allowed:slack_send'));
+    assert.ok(deniedEvidence.blockers.includes('host_tool_call_explicitly_denied:slack_send'));
+
+    const beforeForeign = await fsp.readFile(path.join(dir, HOST_CAPABILITY_HOOK_OBSERVATIONS_FILENAME), 'utf8');
+    const foreign: any = await evaluateHookPayload('pre-tool', {
+      session_id: 'foreign-session',
+      turn_id: 'turn-host-foreign',
+      tool_name: 'mcp__acas-tools__slack_send',
+      tool_input: { token: 'foreign-secret' },
+      tool_use_id: 'tool-use-foreign'
+    }, { root, state });
+    assert.equal(foreign.decision, undefined);
+    assert.equal(await fsp.readFile(path.join(dir, HOST_CAPABILITY_HOOK_OBSERVATIONS_FILENAME), 'utf8'), beforeForeign);
+  } finally {
+    await fsp.rm(root, { recursive: true, force: true });
+  }
+});
+
+function hostCapabilityDependencies(toolNames: string[]) {
+  return {
+    inventory: async () => ({
+      schema: 'sks.mcp-inventory.v2',
+      ok: true,
+      scope: 'project',
+      source: 'fixture_inventory',
+      servers: [{
+        name: 'acas-tools',
+        enabled: true,
+        enabled_tools: [...toolNames],
+        disabled_tools: []
+      }],
+      server_count: 1,
+      enabled_count: 1,
+      failed_count: 0,
+      blockers: [],
+      warnings: []
+    }) as any,
+    health: async () => ({
+      schema: 'sks.mcp-health.v1',
+      ok: true,
+      name: 'acas-tools',
+      scope: 'project',
+      status: 'healthy',
+      tool_names: [...toolNames]
+    }) as any
+  };
+}

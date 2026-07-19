@@ -336,6 +336,63 @@ test('spreadsheet evidence requires one bounded mutation, a final inspect, and o
   assert.equal(resourceMismatchEvidence.ok, false)
   assert.ok(resourceMismatchEvidence.blockers.includes('host_capability_spreadsheet_resource_mismatch'))
 
+  const receiptResourceMismatch = createHostCapabilityEventCollector(runtime)
+  for (const event of [
+    completedHostToolEvent({
+      tool: 'spreadsheet_create',
+      path: workbookPath,
+      artifact: { ...createArtifact, path: 'reports/other.xlsx' }
+    }),
+    completedHostToolEvent({ tool: 'spreadsheet_inspect', path: workbookPath })
+  ]) receiptResourceMismatch.push(`${event}\n`)
+  const receiptResourceMismatchEvidence = receiptResourceMismatch.finish()
+  assert.equal(receiptResourceMismatchEvidence.ok, false)
+  assert.ok(receiptResourceMismatchEvidence.blockers.includes('host_capability_spreadsheet_resource_mismatch'))
+  assert.ok(receiptResourceMismatchEvidence.blockers.includes('host_capability_spreadsheet_final_artifact_missing'))
+
+  const invalidReceipts = [
+    ...(['scratch', 'temp', 'log'] as const).map((role) => ({ label: role, artifact: { ...createArtifact, role } })),
+    { label: 'text kind', artifact: { ...createArtifact, kind: 'text' } },
+    { label: 'text media', artifact: { ...createArtifact, media_type: 'text/plain' } },
+    { label: 'text extension', artifact: { ...createArtifact, path: 'reports/q3.txt' } }
+  ]
+  for (const invalid of invalidReceipts) {
+    const invalidReceipt = createHostCapabilityEventCollector(runtime)
+    for (const event of [
+      completedHostToolEvent({ tool: 'spreadsheet_create', path: workbookPath, artifact: invalid.artifact }),
+      completedHostToolEvent({ tool: 'spreadsheet_inspect', path: workbookPath })
+    ]) invalidReceipt.push(`${event}\n`)
+    const invalidReceiptEvidence = invalidReceipt.finish()
+    assert.equal(invalidReceiptEvidence.ok, false, invalid.label)
+    assert.ok(invalidReceiptEvidence.blockers.includes('host_capability_spreadsheet_final_artifact_missing'), invalid.label)
+  }
+
+  const detachedMutationReceipt = createHostCapabilityEventCollector(runtime)
+  for (const event of [
+    completedHostToolEvent({ tool: 'spreadsheet_create', path: workbookPath, artifact: createArtifact }),
+    completedHostToolEvent({ tool: 'spreadsheet_inspect', path: workbookPath }),
+    completedHostToolEvent({ tool: 'spreadsheet_update', path: workbookPath }),
+    completedHostToolEvent({ tool: 'spreadsheet_inspect', path: workbookPath })
+  ]) detachedMutationReceipt.push(`${event}\n`)
+  const detachedMutationEvidence = detachedMutationReceipt.finish()
+  assert.equal(detachedMutationEvidence.ok, false)
+  assert.ok(detachedMutationEvidence.blockers.includes('host_capability_spreadsheet_final_artifact_missing'))
+
+  for (const unsafePath of ['reports/./q3.xlsx', 'reports/archive/../q3.xlsx', '/reports/q3.xlsx', 'C:/reports/q3.xlsx', 'reports\\q3.xlsx']) {
+    const unsafeReceipt = createHostCapabilityEventCollector(runtime)
+    for (const event of [
+      completedHostToolEvent({
+        tool: 'spreadsheet_create',
+        path: workbookPath,
+        artifact: { ...createArtifact, path: unsafePath }
+      }),
+      completedHostToolEvent({ tool: 'spreadsheet_inspect', path: workbookPath })
+    ]) unsafeReceipt.push(`${event}\n`)
+    const unsafeReceiptEvidence = unsafeReceipt.finish()
+    assert.equal(unsafeReceiptEvidence.ok, false, unsafePath)
+    assert.ok(unsafeReceiptEvidence.blockers.includes('host_capability_spreadsheet_final_artifact_missing'), unsafePath)
+  }
+
   const valid = createHostCapabilityEventCollector(runtime)
   for (const event of [
     completedHostToolEvent({ tool: 'spreadsheet_create', path: workbookPath, artifact: createArtifact }),
@@ -371,6 +428,33 @@ test('document evidence requires an editable source before render and a render a
   assert.equal(renderOnlyEvidence.ok, false)
   assert.ok(renderOnlyEvidence.blockers.includes('host_capability_document_source_sequence_invalid'))
 
+  const invalidRenderReceipts = [
+    ...(['scratch', 'temp', 'log'] as const).map((role) => ({ label: role, artifact: { ...pdfArtifact, role } })),
+    { label: 'png kind', artifact: { ...pdfArtifact, kind: 'png' } },
+    { label: 'png media', artifact: { ...pdfArtifact, media_type: 'image/png' } },
+    { label: 'png extension', artifact: { ...pdfArtifact, path: 'reports/brief.png' } }
+  ]
+  for (const invalid of invalidRenderReceipts) {
+    const invalidRenderReceipt = createHostCapabilityEventCollector(runtime)
+    invalidRenderReceipt.push(`${completedHostToolEvent({ tool: 'write_file', path: 'reports/brief.html' })}\n`)
+    invalidRenderReceipt.push(`${completedHostToolEvent({
+      tool: 'html_to_pdf',
+      path: 'reports/brief.pdf',
+      artifact: invalid.artifact
+    })}\n`)
+    const invalidRenderReceiptEvidence = invalidRenderReceipt.finish()
+    assert.equal(invalidRenderReceiptEvidence.ok, false, invalid.label)
+    assert.ok(invalidRenderReceiptEvidence.blockers.includes('host_capability_document_render_artifact_missing'), invalid.label)
+  }
+
+  const detachedRenderReceipt = createHostCapabilityEventCollector(runtime)
+  detachedRenderReceipt.push(`${completedHostToolEvent({ tool: 'write_file', path: 'reports/brief.html' })}\n`)
+  detachedRenderReceipt.push(`${completedHostToolEvent({ tool: 'html_to_pdf', path: 'reports/brief.pdf', artifact: pdfArtifact })}\n`)
+  detachedRenderReceipt.push(`${completedHostToolEvent({ tool: 'html_to_pdf', path: 'reports/final.pdf' })}\n`)
+  const detachedRenderReceiptEvidence = detachedRenderReceipt.finish()
+  assert.equal(detachedRenderReceiptEvidence.ok, false)
+  assert.ok(detachedRenderReceiptEvidence.blockers.includes('host_capability_document_render_artifact_missing'))
+
   const valid = createHostCapabilityEventCollector(runtime)
   valid.push(`${completedHostToolEvent({
     tool: 'write_file',
@@ -386,6 +470,28 @@ test('document evidence requires an editable source before render and a render a
   })}\n`)
   valid.push(`${completedHostToolEvent({ tool: 'html_to_pdf', path: 'reports/brief.pdf', artifact: pdfArtifact })}\n`)
   assert.equal(valid.finish().ok, true)
+
+  const pngRequest = requestHostCapabilities('Create and deliver a PNG document screenshot.')
+  const pngRuntime = await inspectHostCapabilityRuntime({
+    root: process.cwd(),
+    request: pngRequest,
+    dependencies: hostCapabilityDependencies(['write_file', 'html_to_screenshot'])
+  })
+  const validPng = createHostCapabilityEventCollector(pngRuntime)
+  validPng.push(`${completedHostToolEvent({ tool: 'write_file', path: 'reports/brief.html' })}\n`)
+  validPng.push(`${completedHostToolEvent({
+    tool: 'html_to_screenshot',
+    path: 'reports/brief.png',
+    artifact: {
+      path: 'reports/brief.png',
+      kind: 'png',
+      media_type: 'image/png',
+      sha256: `sha256:${'f'.repeat(64)}`,
+      bytes: 24,
+      role: 'deliverable'
+    }
+  })}\n`)
+  assert.equal(validPng.finish().ok, true)
 })
 
 test('Codex thread environment selects the in-app path unless standalone is explicit', () => {

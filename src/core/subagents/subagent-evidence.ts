@@ -847,7 +847,8 @@ function validateParentHostCapabilityBinding(
   parent: StructuredSubagentParentSummary | null,
   evidence: HostCapabilityExecutionEvidence | null
 ): string[] {
-  const parentClaims = Boolean(parent?.artifacts !== undefined || parent?.capabilities_used !== undefined)
+  const parentClaims = hasNonEmptyHostCapabilityClaim(parent?.artifacts)
+    || hasNonEmptyHostCapabilityClaim(parent?.capabilities_used)
   if (!evidence) return parentClaims ? ['parent_summary_host_capability_evidence_missing'] : []
   const bindingRequired = parentClaims
     || evidence.runtime.requested_capability_ids.length > 0
@@ -866,6 +867,10 @@ function validateParentHostCapabilityBinding(
     blockers.push('parent_summary_host_capabilities_mismatch')
   }
   return blockers
+}
+
+function hasNonEmptyHostCapabilityClaim(value: unknown): boolean {
+  return Array.isArray(value) ? value.length > 0 : value !== undefined
 }
 
 function hasFocusedParentVerification(value: unknown): boolean {

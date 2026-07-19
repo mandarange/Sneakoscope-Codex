@@ -189,6 +189,17 @@ test('parent artifact and capability receipts require trusted host evidence and 
   assert.equal(withoutEvidence.ok, false)
   assert.ok(withoutEvidence.blockers.includes('parent_summary_host_capability_evidence_missing'))
 
+  const emptyReceipts = buildSubagentEvidence({
+    requestedSubagents: 1,
+    parentSummary: {
+      ...parentSummary(['thread-a']),
+      artifacts: [],
+      capabilities_used: []
+    },
+    events
+  })
+  assert.equal(emptyReceipts.ok, true)
+
   const failed = hostCapabilityEvidence('failed')
   const contradicted = buildSubagentEvidence({
     requestedSubagents: 1,

@@ -9,15 +9,22 @@ import {
 
 export const HOST_CAPABILITY_RUNTIME_SCHEMA = 'sks.host-capability-runtime.v1' as const;
 export const HOST_CAPABILITY_EVIDENCE_SCHEMA = 'sks.host-capability-evidence.v1' as const;
+export const HOST_CAPABILITY_HOOK_RUNTIME_SCHEMA = 'sks.host-capability-hook-runtime.v1' as const;
+export const HOST_CAPABILITY_HOOK_OBSERVATIONS_SCHEMA = 'sks.host-capability-hook-observations.v1' as const;
+export const HOST_CAPABILITY_HOOK_RUNTIME_FILENAME = 'host-capability-runtime.json';
+export const HOST_CAPABILITY_HOOK_OBSERVATIONS_FILENAME = 'host-capability-hook-observations.json';
+export const HOST_CAPABILITY_HOOK_EVIDENCE_FILENAME = 'host-capability-evidence.json';
 export const HOST_CAPABILITY_MCP_SERVER = 'acas-tools';
 
 const MAX_OBSERVED_TOOL_NAMES = 256;
 const MAX_EVENT_LINE_BYTES = 512 * 1024;
 const MAX_MCP_TOOL_CALLS = 1024;
+const MAX_PRE_TOOL_OBSERVATIONS = 2048;
 const MAX_RECEIPT_JSON_STRING_BYTES = 64 * 1024;
 const MAX_ARTIFACT_RECEIPTS = 64;
 const MAX_ARTIFACT_PATH_CHARS = 512;
 const SHA256_RECEIPT_PATTERN = /^sha256:[a-f0-9]{64}$/;
+const XLSX_MEDIA_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const EXPLICIT_DENIAL_PATTERN = /(?:^|[_.:-])(?:slack|center|tenant|lease|connector|outbox|message|upload|send|post)(?:$|[_.:-])/i;
 
 export type HostCapabilityState = 'available' | 'missing' | 'unhealthy' | 'not_requested';
@@ -113,11 +120,270 @@ export interface HostCapabilityExecutionEvidence {
   blockers: string[];
 }
 
+export interface HostCapabilityHookRuntimeBinding {
+  schema: typeof HOST_CAPABILITY_HOOK_RUNTIME_SCHEMA;
+  mission_id: string;
+  workflow_run_id: string;
+  session_scope: string;
+  runtime: HostCapabilityRuntime;
+}
+
+export interface HostCapabilityPreToolObservation {
+  tool_use_id_sha256: string;
+  tool: string;
+  decision: 'allowed' | 'denied';
+}
+
+export interface HostCapabilityPostToolObservation {
+  sequence: number;
+  tool_use_id_sha256: string;
+  tool: string;
+  status: 'passed' | 'failed';
+  event_sha256: string;
+  resource_key: string | null;
+  artifacts: HostArtifactReceipt[];
+}
+
+export interface HostCapabilityHookObservations {
+  schema: typeof HOST_CAPABILITY_HOOK_OBSERVATIONS_SCHEMA;
+  mission_id: string;
+  workflow_run_id: string;
+  session_scope: string;
+  allowlist_digest: string;
+  pre_tool_uses: HostCapabilityPreToolObservation[];
+  tool_calls: HostCapabilityPostToolObservation[];
+  blockers: string[];
+}
+
 export interface HostCapabilityRuntimeDependencies {
   inventory?: typeof listMcpInventory;
   health?: typeof testMcpConnection;
   inventoryOptions?: McpInventoryOptions;
   healthOptions?: McpHealthOptions;
+}
+
+export function createHostCapabilityHookRuntimeBinding(input: {
+  missionId: unknown;
+  workflowRunId: unknown;
+  sessionScope: unknown;
+  runtime: HostCapabilityRuntime;
+}): HostCapabilityHookRuntimeBinding {
+  const missionId = boundedIdentity(input.missionId);
+  const workflowRunId = boundedIdentity(input.workflowRunId);
+  const sessionScope = boundedIdentity(input.sessionScope);
+  if (!missionId || !workflowRunId || !sessionScope) {
+    throw new Error('host_capability_hook_runtime_identity_missing');
+  }
+  return {
+    schema: HOST_CAPABILITY_HOOK_RUNTIME_SCHEMA,
+    mission_id: missionId,
+    workflow_run_id: workflowRunId,
+    session_scope: sessionScope,
+    runtime: input.runtime
+  };
+}
+
+export function normalizeHostCapabilityHookRuntimeBinding(value: unknown): HostCapabilityHookRuntimeBinding | null {
+  if (!isRecord(value)
+    || value.schema !== HOST_CAPABILITY_HOOK_RUNTIME_SCHEMA
+    || !boundedIdentity(value.mission_id)
+    || !boundedIdentity(value.workflow_run_id)
+    || !boundedIdentity(value.session_scope)
+    || !isHostCapabilityRuntime(value.runtime)) return null;
+  return value as unknown as HostCapabilityHookRuntimeBinding;
+}
+
+export function hostCapabilityHookBindingMatches(
+  binding: HostCapabilityHookRuntimeBinding,
+  input: { missionId: unknown; workflowRunId: unknown; sessionScope: unknown }
+): boolean {
+  return binding.mission_id === boundedIdentity(input.missionId)
+    && binding.workflow_run_id === boundedIdentity(input.workflowRunId)
+    && binding.session_scope === boundedIdentity(input.sessionScope);
+}
+
+export function acasHostToolName(value: unknown): string | null {
+  const toolName = String(value || '').trim();
+  if (!toolName || toolName.length > 256 || /[\r\n\0]/.test(toolName)) return null;
+  const match = toolName.match(/^mcp__(?:acas-tools|acas_tools)__([A-Za-z][A-Za-z0-9_.:-]{0,127})$/);
+  return match?.[1] || null;
+}
+
+export function sanitizeHostCapabilityPreToolUse(
+  runtime: HostCapabilityRuntime,
+  payload: unknown
+): HostCapabilityPreToolObservation | null {
+  if (!isRecord(payload)) return null;
+  const tool = acasHostToolName(payload.tool_name);
+  const toolUseId = boundedIdentity(payload.tool_use_id);
+  if (!tool || !toolUseId) return null;
+  const allowed = runtime.ok
+    && runtime.allowed_tool_names.includes(tool)
+    && !EXPLICIT_DENIAL_PATTERN.test(tool);
+  return {
+    tool_use_id_sha256: `sha256:${sha256(toolUseId)}`,
+    tool,
+    decision: allowed ? 'allowed' : 'denied'
+  };
+}
+
+export function sanitizeHostCapabilityPostToolUse(payload: unknown): HostCapabilityPostToolObservation | null {
+  if (!isRecord(payload)) return null;
+  const tool = acasHostToolName(payload.tool_name);
+  const toolUseId = boundedIdentity(payload.tool_use_id);
+  if (!tool || !toolUseId) return null;
+  const status = hostToolResponseFailed(payload.tool_response) ? 'failed' : 'passed';
+  const artifacts = status === 'passed'
+    ? extractArtifactReceipts(payload.tool_response)
+    : [];
+  const resourceKey = extractToolResourceKey({
+    arguments: payload.tool_input,
+    result: payload.tool_response
+  });
+  const toolUseIdSha256 = `sha256:${sha256(toolUseId)}`;
+  const eventSha256 = `sha256:${sha256(JSON.stringify({
+    server: HOST_CAPABILITY_MCP_SERVER,
+    tool,
+    status,
+    tool_use_id_sha256: toolUseIdSha256,
+    resource_key: resourceKey,
+    artifacts
+  }))}`;
+  return {
+    sequence: 0,
+    tool_use_id_sha256: toolUseIdSha256,
+    tool,
+    status,
+    event_sha256: eventSha256,
+    resource_key: resourceKey,
+    artifacts
+  };
+}
+
+export function mergeHostCapabilityPreToolObservation(input: {
+  binding: HostCapabilityHookRuntimeBinding;
+  current?: unknown;
+  observation: HostCapabilityPreToolObservation;
+}): HostCapabilityHookObservations {
+  const current = normalizeHostCapabilityHookObservations(input.current, input.binding)
+    || emptyHookObservations(input.binding);
+  const key = `${input.observation.tool_use_id_sha256}:${input.observation.tool}`;
+  const existing = current.pre_tool_uses.find((row) => `${row.tool_use_id_sha256}:${row.tool}` === key);
+  const preToolUses: HostCapabilityPreToolObservation[] = existing
+    ? current.pre_tool_uses.map((row) => `${row.tool_use_id_sha256}:${row.tool}` === key
+        ? {
+            ...row,
+            decision: row.decision === 'denied' || input.observation.decision === 'denied'
+              ? 'denied' as const
+              : 'allowed' as const
+          }
+        : row)
+    : [...current.pre_tool_uses, input.observation].slice(-MAX_PRE_TOOL_OBSERVATIONS);
+  return { ...current, pre_tool_uses: preToolUses };
+}
+
+export function mergeHostCapabilityPostToolObservation(input: {
+  binding: HostCapabilityHookRuntimeBinding;
+  current?: unknown;
+  observation: HostCapabilityPostToolObservation;
+}): HostCapabilityHookObservations {
+  const current = normalizeHostCapabilityHookObservations(input.current, input.binding)
+    || emptyHookObservations(input.binding);
+  if (current.tool_calls.some((row) => row.tool_use_id_sha256 === input.observation.tool_use_id_sha256)) {
+    return current;
+  }
+  if (current.tool_calls.length >= MAX_MCP_TOOL_CALLS) {
+    return { ...current, blockers: uniqueStrings([...current.blockers, 'host_tool_call_receipts_too_many']) };
+  }
+  const existingArtifactCount = current.tool_calls.reduce((sum, row) => sum + row.artifacts.length, 0);
+  const remainingArtifactSlots = Math.max(0, MAX_ARTIFACT_RECEIPTS - existingArtifactCount);
+  const sequence = current.tool_calls.reduce((max, row) => Math.max(max, row.sequence), 0) + 1;
+  const observation = {
+    ...input.observation,
+    sequence,
+    artifacts: input.observation.artifacts.slice(0, remainingArtifactSlots)
+  };
+  return {
+    ...current,
+    tool_calls: [...current.tool_calls, observation],
+    blockers: input.observation.artifacts.length > remainingArtifactSlots
+      ? uniqueStrings([...current.blockers, 'host_artifact_receipts_too_many'])
+      : current.blockers
+  };
+}
+
+export function normalizeHostCapabilityHookObservations(
+  value: unknown,
+  binding: HostCapabilityHookRuntimeBinding
+): HostCapabilityHookObservations | null {
+  if (!isRecord(value)
+    || value.schema !== HOST_CAPABILITY_HOOK_OBSERVATIONS_SCHEMA
+    || value.mission_id !== binding.mission_id
+    || value.workflow_run_id !== binding.workflow_run_id
+    || value.session_scope !== binding.session_scope
+    || value.allowlist_digest !== binding.runtime.allowlist_digest
+    || !Array.isArray(value.pre_tool_uses)
+    || !Array.isArray(value.tool_calls)
+    || !Array.isArray(value.blockers)
+    || value.pre_tool_uses.length > MAX_PRE_TOOL_OBSERVATIONS
+    || value.tool_calls.length > MAX_MCP_TOOL_CALLS
+    || value.blockers.length > 16
+    || value.blockers.some((blocker) => typeof blocker !== 'string' || blocker.length > 128)) return null;
+  const preToolUses = value.pre_tool_uses.filter(isPreToolObservation);
+  const toolCalls = value.tool_calls.filter(isPostToolObservation);
+  if (preToolUses.length !== value.pre_tool_uses.length || toolCalls.length !== value.tool_calls.length) return null;
+  if (toolCalls.reduce((sum, row) => sum + row.artifacts.length, 0) > MAX_ARTIFACT_RECEIPTS) return null;
+  return {
+    schema: HOST_CAPABILITY_HOOK_OBSERVATIONS_SCHEMA,
+    mission_id: binding.mission_id,
+    workflow_run_id: binding.workflow_run_id,
+    session_scope: binding.session_scope,
+    allowlist_digest: binding.runtime.allowlist_digest,
+    pre_tool_uses: preToolUses,
+    tool_calls: [...toolCalls].sort((left, right) => left.sequence - right.sequence),
+    blockers: uniqueStrings(value.blockers)
+  };
+}
+
+export function buildHostCapabilityEvidenceFromHookObservations(input: {
+  binding: HostCapabilityHookRuntimeBinding;
+  observations?: unknown;
+}): HostCapabilityExecutionEvidence {
+  const observations = normalizeHostCapabilityHookObservations(input.observations, input.binding)
+    || emptyHookObservations(input.binding);
+  const observationBlockers = [...observations.blockers];
+  const preToolUses = new Map(observations.pre_tool_uses.map((row) => [
+    `${row.tool_use_id_sha256}:${row.tool}`,
+    row
+  ]));
+  for (const row of observations.tool_calls) {
+    const preToolUse = preToolUses.get(`${row.tool_use_id_sha256}:${row.tool}`);
+    if (!preToolUse) observationBlockers.push(`host_tool_call_pre_use_missing:${row.tool}`);
+    else if (preToolUse.decision !== 'allowed') observationBlockers.push(`host_tool_call_pre_use_denied:${row.tool}`);
+    if (!input.binding.runtime.allowed_tool_names.includes(row.tool)) {
+      observationBlockers.push(`host_tool_call_not_allowed:${row.tool}`);
+    }
+    if (EXPLICIT_DENIAL_PATTERN.test(row.tool)) {
+      observationBlockers.push(`host_tool_call_explicitly_denied:${row.tool}`);
+    }
+    if (row.status === 'failed') observationBlockers.push(`host_tool_call_failed:${row.tool}`);
+  }
+  const calls: InternalHostToolCallReceipt[] = observations.tool_calls.map((row) => ({
+    server: HOST_CAPABILITY_MCP_SERVER,
+    tool: row.tool,
+    status: row.status,
+    event_sha256: row.event_sha256,
+    raw_hash: row.event_sha256,
+    index: row.sequence,
+    resource_key: row.resource_key
+  }));
+  const artifacts: ObservedHostArtifactReceipt[] = observations.tool_calls.flatMap((row) => row.artifacts.map((artifact) => ({
+    ...artifact,
+    source_tool: row.tool,
+    source_hash: row.event_sha256,
+    source_index: row.sequence
+  })));
+  return buildExecutionEvidence(input.binding.runtime, calls, artifacts, observationBlockers);
 }
 
 export function requestHostCapabilities(goal: unknown): HostCapabilityRequest {
@@ -660,9 +926,21 @@ function validateCapabilityWorkflow(
         blockers.push('host_capability_spreadsheet_resource_missing');
       }
       if (resourceKeys.length > 1) blockers.push('host_capability_spreadsheet_resource_mismatch');
-      if (!lastMutation || !artifacts.some((artifact) => (
-        artifact.source_index === lastMutation.index
-        && artifact.source_tool === lastMutation.tool
+      const finalMutationArtifacts = lastMutation
+        ? artifacts.filter((artifact) => (
+            artifact.source_index === lastMutation.index
+            && artifact.source_tool === lastMutation.tool
+          ))
+        : [];
+      if (lastMutation && finalMutationArtifacts.some((artifact) => (
+        isSpreadsheetDeliverable(artifact)
+        && !artifactMatchesResource(artifact, lastMutation.resource_key)
+      ))) {
+        blockers.push('host_capability_spreadsheet_resource_mismatch');
+      }
+      if (!lastMutation || !finalMutationArtifacts.some((artifact) => (
+        isSpreadsheetDeliverable(artifact)
+        && artifactMatchesResource(artifact, lastMutation.resource_key)
       ))) {
         blockers.push('host_capability_spreadsheet_final_artifact_missing');
       }
@@ -679,9 +957,11 @@ function validateCapabilityWorkflow(
         && call.index < renderCalls[0]!.index
       ));
       if (!sourceWrite) blockers.push('host_capability_document_source_sequence_invalid');
+      const finalRender = renderCalls.at(-1)!;
       if (!artifacts.some((artifact) => (
-        (artifact.source_tool === 'html_to_pdf' || artifact.source_tool === 'html_to_screenshot')
-        && artifact.source_index >= renderCalls[0]!.index
+        artifact.source_tool === finalRender.tool
+        && artifact.source_index === finalRender.index
+        && isDocumentRenderDeliverable(artifact, finalRender.tool)
       ))) {
         blockers.push('host_capability_document_render_artifact_missing');
       }
@@ -732,10 +1012,38 @@ function normalizeWorkspaceResourcePath(value: unknown): string | null {
   if (!original
     || original.length > MAX_ARTIFACT_PATH_CHARS
     || /[\r\n\0\\]/.test(original)
-    || original.startsWith('/')) return null;
-  const segments = original.split('/').filter(Boolean);
-  if (segments.length === 0 || segments.some((segment) => segment === '.' || segment === '..')) return null;
+    || original.startsWith('/')
+    || /^[a-z]:/i.test(original)) return null;
+  const segments = original.split('/');
+  if (segments.length === 0 || segments.some((segment) => !segment || segment === '.' || segment === '..')) return null;
   return segments.join('/');
+}
+
+function isSpreadsheetDeliverable(artifact: ObservedHostArtifactReceipt): boolean {
+  const artifactPath = normalizeWorkspaceResourcePath(artifact.path);
+  return artifact.role === 'deliverable'
+    && (artifact.kind === 'xlsx' || artifact.kind === 'spreadsheet')
+    && artifact.media_type === XLSX_MEDIA_TYPE
+    && Boolean(artifactPath && /\.xlsx$/i.test(artifactPath));
+}
+
+function artifactMatchesResource(artifact: ObservedHostArtifactReceipt, resourceKey: string | null): boolean {
+  const artifactPath = normalizeWorkspaceResourcePath(artifact.path);
+  return Boolean(resourceKey && artifactPath && `sha256:${sha256(artifactPath)}` === resourceKey);
+}
+
+function isDocumentRenderDeliverable(
+  artifact: ObservedHostArtifactReceipt,
+  tool: string
+): boolean {
+  const artifactPath = normalizeWorkspaceResourcePath(artifact.path);
+  const expected = tool === 'html_to_pdf'
+    ? { kind: 'pdf', mediaType: 'application/pdf', extension: /\.pdf$/i }
+    : { kind: 'png', mediaType: 'image/png', extension: /\.png$/i };
+  return artifact.role === 'deliverable'
+    && artifact.kind === expected.kind
+    && artifact.media_type === expected.mediaType
+    && Boolean(artifactPath && expected.extension.test(artifactPath));
 }
 
 function extractArtifactReceipts(value: unknown): HostArtifactReceipt[] {
@@ -769,7 +1077,7 @@ function extractArtifactReceipts(value: unknown): HostArtifactReceipt[] {
 
 function normalizeArtifactReceipt(value: Record<string, unknown>): HostArtifactReceipt | null {
   const rawArtifactPath = typeof value.path === 'string' ? value.path.trim() : '';
-  const artifactPath = rawArtifactPath.includes('\\') ? '' : rawArtifactPath;
+  const artifactPath = normalizeWorkspaceResourcePath(rawArtifactPath) || '';
   const kind = typeof value.kind === 'string' ? value.kind.trim().toLowerCase() : '';
   const mediaType = typeof value.media_type === 'string'
     ? value.media_type.trim().toLowerCase()
@@ -780,11 +1088,7 @@ function normalizeArtifactReceipt(value: Record<string, unknown>): HostArtifactR
     ? value.role as HostArtifactReceipt['role']
     : null;
   if (!artifactPath
-    || artifactPath.length > MAX_ARTIFACT_PATH_CHARS
-    || /[\r\n\0]/.test(artifactPath)
-    || artifactPath.startsWith('/')
-    || artifactPath === '..'
-    || artifactPath.startsWith('../')) return null;
+    || artifactPath.length > MAX_ARTIFACT_PATH_CHARS) return null;
   if (!kind
     || kind.length > 64
     || !mediaType
@@ -808,6 +1112,120 @@ function dedupeArtifacts<T extends HostArtifactReceipt>(values: readonly T[]): H
     });
   }
   return [...byPath.values()].sort((left, right) => left.path.localeCompare(right.path));
+}
+
+function emptyHookObservations(binding: HostCapabilityHookRuntimeBinding): HostCapabilityHookObservations {
+  return {
+    schema: HOST_CAPABILITY_HOOK_OBSERVATIONS_SCHEMA,
+    mission_id: binding.mission_id,
+    workflow_run_id: binding.workflow_run_id,
+    session_scope: binding.session_scope,
+    allowlist_digest: binding.runtime.allowlist_digest,
+    pre_tool_uses: [],
+    tool_calls: [],
+    blockers: []
+  };
+}
+
+function isPreToolObservation(value: unknown): value is HostCapabilityPreToolObservation {
+  return isRecord(value)
+    && SHA256_RECEIPT_PATTERN.test(String(value.tool_use_id_sha256 || ''))
+    && typeof value.tool === 'string'
+    && value.tool.length > 0
+    && value.tool.length <= 128
+    && (value.decision === 'allowed' || value.decision === 'denied');
+}
+
+function isPostToolObservation(value: unknown): value is HostCapabilityPostToolObservation {
+  if (!isRecord(value)
+    || !Number.isSafeInteger(value.sequence)
+    || Number(value.sequence) < 1
+    || !SHA256_RECEIPT_PATTERN.test(String(value.tool_use_id_sha256 || ''))
+    || typeof value.tool !== 'string'
+    || value.tool.length === 0
+    || value.tool.length > 128
+    || (value.status !== 'passed' && value.status !== 'failed')
+    || !SHA256_RECEIPT_PATTERN.test(String(value.event_sha256 || ''))
+    || (value.resource_key !== null && !SHA256_RECEIPT_PATTERN.test(String(value.resource_key || '')))
+    || !Array.isArray(value.artifacts)) return false;
+  return value.artifacts.length <= MAX_ARTIFACT_RECEIPTS
+    && value.artifacts.every((artifact) => isRecord(artifact) && normalizeArtifactReceipt(artifact) !== null);
+}
+
+function isHostCapabilityRuntime(value: unknown): value is HostCapabilityRuntime {
+  if (!isRecord(value)
+    || value.schema !== HOST_CAPABILITY_RUNTIME_SCHEMA
+    || typeof value.ok !== 'boolean'
+    || value.server !== HOST_CAPABILITY_MCP_SERVER
+    || !Array.isArray(value.requested_capability_ids)
+    || !Array.isArray(value.task_workflows)
+    || !Array.isArray(value.observed_tool_names)
+    || !Array.isArray(value.allowed_tool_names)
+    || !Array.isArray(value.denied_tool_names)
+    || !Array.isArray(value.explicit_denied_tool_names)
+    || !Array.isArray(value.capabilities)
+    || !Array.isArray(value.blockers)) return false;
+  const knownIds = new Set(HOST_CAPABILITY_DESCRIPTORS.map((descriptor) => descriptor.id));
+  const knownTools = new Set(HOST_CAPABILITY_DESCRIPTORS.flatMap((descriptor) => descriptor.tool_names));
+  const requested = uniqueStrings(value.requested_capability_ids);
+  const observed = uniqueStrings(value.observed_tool_names);
+  const allowed = uniqueStrings(value.allowed_tool_names);
+  const denied = uniqueStrings(value.denied_tool_names);
+  const blockers = uniqueStrings(value.blockers);
+  if (requested.length !== value.requested_capability_ids.length
+    || requested.some((id) => !knownIds.has(id))
+    || observed.length !== value.observed_tool_names.length
+    || allowed.length !== value.allowed_tool_names.length
+    || allowed.some((tool) => !knownTools.has(tool) || !observed.includes(tool) || EXPLICIT_DENIAL_PATTERN.test(tool))
+    || denied.length !== value.denied_tool_names.length
+    || JSON.stringify(denied) !== JSON.stringify(observed.filter((tool) => !allowed.includes(tool)))
+    || blockers.length !== value.blockers.length
+    || value.ok !== (blockers.length === 0)
+    || JSON.stringify(uniqueWorkflows(value.task_workflows)) !== JSON.stringify(value.task_workflows)
+    || value.capabilities.length !== HOST_CAPABILITY_DESCRIPTORS.length
+    || value.capabilities.some((entry) => !isHostCapabilityRuntimeEntry(entry, requested))) return false;
+  const allowedFromEntries = uniqueStrings(value.capabilities.flatMap((entry: any) => entry.allowed_tool_names));
+  if (JSON.stringify(allowedFromEntries) !== JSON.stringify(allowed)) return false;
+  const explicitDenied = denied.filter((tool) => EXPLICIT_DENIAL_PATTERN.test(tool));
+  if (JSON.stringify(explicitDenied) !== JSON.stringify(value.explicit_denied_tool_names)) return false;
+  const expectedDigest = `sha256:${sha256(JSON.stringify({
+    server: HOST_CAPABILITY_MCP_SERVER,
+    requested,
+    allowed,
+    denied
+  }))}`;
+  return value.allowlist_digest === expectedDigest
+    && value.capability_digest === hostCapabilityDigest(HOST_CAPABILITY_DESCRIPTORS);
+}
+
+function isHostCapabilityRuntimeEntry(value: unknown, requested: readonly string[]): boolean {
+  if (!isRecord(value)
+    || typeof value.id !== 'string'
+    || typeof value.requested !== 'boolean'
+    || !['available', 'missing', 'unhealthy', 'not_requested'].includes(String(value.state || ''))
+    || !Array.isArray(value.expected_tool_names)
+    || !Array.isArray(value.observed_tool_names)
+    || !Array.isArray(value.allowed_tool_names)
+    || !Array.isArray(value.blockers)) return false;
+  const descriptor = HOST_CAPABILITY_DESCRIPTORS.find((entry) => entry.id === value.id);
+  if (!descriptor) return false;
+  return value.requested === requested.includes(value.id)
+    && JSON.stringify(value.expected_tool_names) === JSON.stringify(descriptor.tool_names)
+    && value.allowed_tool_names.every((tool: unknown) => typeof tool === 'string' && descriptor.tool_names.includes(tool))
+    && value.observed_tool_names.every((tool: unknown) => typeof tool === 'string' && descriptor.tool_names.includes(tool))
+    && value.blockers.every((blocker: unknown) => typeof blocker === 'string');
+}
+
+function hostToolResponseFailed(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  if (value.isError === true || value.is_error === true || value.ok === false || value.success === false) return true;
+  const status = String(value.status || '').trim().toLowerCase();
+  return status === 'failed' || status === 'error';
+}
+
+function boundedIdentity(value: unknown): string | null {
+  const text = typeof value === 'string' ? value.trim() : '';
+  return text && text.length <= 256 && !/[\r\n\0]/.test(text) ? text : null;
 }
 
 function runtimeResult(input: {

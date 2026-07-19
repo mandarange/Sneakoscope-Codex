@@ -60,6 +60,28 @@ test('completed fixture projects validated parent result and a deterministic byt
   }
 })
 
+test('completed proof accepts explicit empty host receipt arrays when no host capability was used', async () => {
+  const dir = await writeProofFixture('completed')
+  try {
+    const parentSummaryPath = path.join(dir, SUBAGENT_PARENT_SUMMARY_FILENAME)
+    const parentSummary = JSON.parse(await fsp.readFile(parentSummaryPath, 'utf8'))
+    await writeJson(parentSummaryPath, {
+      ...parentSummary,
+      artifacts: [],
+      capabilities_used: []
+    })
+
+    const proof = await buildNarutoProofProjection({ artifactDir: dir, missionId: MISSION_ID })
+    assert.equal(proof.status, 'completed')
+    assert.equal(proof.ok, true)
+    assert.deepEqual(proof.result.artifacts, [])
+    assert.deepEqual(proof.result.capabilities_used, [])
+    assert.equal(proof.blockers.includes('proof_host_capability_evidence_missing'), false)
+  } finally {
+    await fsp.rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('dynamic automatic projection binds initial request, policy, and effective four-thread target', async () => {
   const dir = await writeProofFixture('completed', { dynamicThreadCount: 4 })
   try {

@@ -164,13 +164,46 @@ export async function runOfficialSubagentWorkflow(input: OfficialSubagentWorkflo
     host_capability_request: hostCapabilityRequest
   }
 
+  const hostCapabilityRuntime = await inspectHostCapabilityRuntime({
+    root: input.root,
+    request: hostCapabilityRequest,
+    ...(input.hostCapabilityDependencies ? { dependencies: input.hostCapabilityDependencies } : {})
+  })
+
   if (input.appSession) {
+    if (hostCapabilityRequest.capability_ids.length > 0 && !input.sessionKey) {
+      return {
+        ...base,
+        ok: false,
+        status: 'host_capability_blocked',
+        prepared: false,
+        additionalContext: null,
+        host_capability_runtime: hostCapabilityRuntime,
+        blockers: ['host_capability_session_scope_missing'],
+        completion_evidence: false,
+        note: 'Requested host capabilities cannot be safely bound without the current Codex session identity.'
+      }
+    }
+    if (!hostCapabilityRuntime.ok) {
+      return {
+        ...base,
+        ok: false,
+        status: 'host_capability_blocked',
+        prepared: false,
+        additionalContext: null,
+        host_capability_runtime: hostCapabilityRuntime,
+        blockers: hostCapabilityRuntime.blockers,
+        completion_evidence: false,
+        note: 'Requested project-scoped host capabilities are missing or unhealthy. No runnable delegation context was returned.'
+      }
+    }
     return {
       ...base,
       ok: false,
       status: 'delegation_context_ready',
       prepared: true,
       additionalContext: input.prompt,
+      host_capability_runtime: hostCapabilityRuntime,
       completion_evidence: false,
       note: 'The current Codex parent must spawn and await the official subagents. Preparation is not completion evidence.'
     }
@@ -182,11 +215,6 @@ export async function runOfficialSubagentWorkflow(input: OfficialSubagentWorkflo
   })
   const inheritedSecretValues = knownInheritedSecretValues(input.env)
   const parentSummaryFile = path.join(os.tmpdir(), `sks-naruto-parent-summary-${process.pid}-${Date.now()}.txt`)
-  const hostCapabilityRuntime = await inspectHostCapabilityRuntime({
-    root: input.root,
-    request: hostCapabilityRequest,
-    ...(input.hostCapabilityDependencies ? { dependencies: input.hostCapabilityDependencies } : {})
-  })
   const hostCapabilityCollector = createHostCapabilityEventCollector(hostCapabilityRuntime)
   if (!hostCapabilityRuntime.ok) {
     const hostCapabilityEvidence = hostCapabilityCollector.finish()

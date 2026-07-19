@@ -263,8 +263,10 @@ export function projectNarutoProofSnapshot(input: {
   const trustedCapabilitiesUsed = trustedHostCapabilityEvidence
     ? projectCapabilityUses(trustedHostCapabilityEvidence.capabilities_used, blockers) || []
     : undefined
-  const parentHostClaimsPresent = recordValue(parentSummaryValue, 'artifacts') !== undefined
-    || recordValue(parentSummaryValue, 'capabilities_used') !== undefined
+  const rawParentArtifacts = recordValue(parentSummaryValue, 'artifacts')
+  const rawParentCapabilitiesUsed = recordValue(parentSummaryValue, 'capabilities_used')
+  const parentHostClaimsPresent = hasNonEmptyHostCapabilityClaim(rawParentArtifacts)
+    || hasNonEmptyHostCapabilityClaim(rawParentCapabilitiesUsed)
   const trustedHostBindingRequired = Boolean(trustedHostCapabilityEvidence && (
     trustedHostCapabilityEvidence.runtime.requested_capability_ids.length > 0
       || trustedHostCapabilityEvidence.tool_calls.length > 0
@@ -346,6 +348,10 @@ export function projectNarutoProofSnapshot(input: {
     result,
     proof_fingerprint: proofFingerprint
   }
+}
+
+function hasNonEmptyHostCapabilityClaim(value: unknown): boolean {
+  return Array.isArray(value) ? value.length > 0 : value !== undefined
 }
 
 export function validateNarutoProofStatus(value: { status: unknown; ok: unknown }): string[] {

@@ -4,6 +4,7 @@ import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { evaluateHookPayload, refreshOfficialSubagentCompletionArtifacts } from '../../hooks-runtime.js'
+import { sha256 } from '../../fsx.js'
 import { withFileLock } from '../../locks/file-lock.js'
 import { loadStateForSession, setCurrent } from '../../mission.js'
 import { validateRouteCompletionProof } from '../../proof/route-proof-gate.js'
@@ -16,6 +17,13 @@ import {
   createSubagentWaveLifecycle,
   type SubagentCountPolicy
 } from '../../subagents/wave-lifecycle.js'
+import { buildNarutoProofProjection } from '../../subagents/naruto-proof-projection.js'
+import {
+  HOST_CAPABILITY_HOOK_RUNTIME_FILENAME,
+  createHostCapabilityHookRuntimeBinding,
+  inspectHostCapabilityRuntime,
+  requestHostCapabilities
+} from '../../agent-bridge/host-capability-runtime.js'
 
 test('valid current-run Naruto proof is full, byte-stable, and invalidates reflection once', async () => {
   const fixture = await createNarutoFixture()
@@ -616,6 +624,134 @@ test('a dead Naruto finalization lock is reclaimed promptly', { timeout: 8_000 }
   }
 })
 
+test('Naruto Stop binds observed host receipts into the parent summary and completion proof', async () => {
+  const fixture = await createNarutoFixture()
+  try {
+    const planFile = path.join(fixture.dir, 'subagent-plan.json')
+    const plan = await readJson(planFile)
+    plan.goal = 'Create and deliver an Excel workbook.'
+    await writeJson(planFile, plan)
+    const runtime = await inspectHostCapabilityRuntime({
+      root: fixture.root,
+      request: requestHostCapabilities(plan.goal),
+      dependencies: hostCapabilityDependencies([
+        'spreadsheet_create',
+        'spreadsheet_inspect',
+        'spreadsheet_update'
+      ])
+    })
+    await writeJson(path.join(fixture.dir, HOST_CAPABILITY_HOOK_RUNTIME_FILENAME), createHostCapabilityHookRuntimeBinding({
+      missionId: fixture.missionId,
+      workflowRunId: fixture.runId,
+      sessionScope: fixture.sessionKey,
+      runtime
+    }))
+    const artifactBytes = Buffer.concat([
+      Buffer.from([0x50, 0x4b, 0x03, 0x04]),
+      Buffer.from('bounded-xlsx-fixture')
+    ])
+    await fsp.mkdir(path.join(fixture.root, 'reports'), { recursive: true })
+    await fsp.writeFile(path.join(fixture.root, 'reports', 'final.xlsx'), artifactBytes)
+    const artifact = {
+      path: 'reports/final.xlsx',
+      kind: 'spreadsheet',
+      media_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      sha256: `sha256:${sha256(artifactBytes)}`,
+      bytes: artifactBytes.length,
+      role: 'deliverable'
+    }
+    for (const payload of [
+      {
+        turn_id: 'host-create',
+        tool_name: 'mcp__acas-tools__spreadsheet_create',
+        tool_input: { path: artifact.path },
+        tool_response: { structured_content: { artifact } },
+        tool_use_id: 'host-create-use'
+      },
+      {
+        turn_id: 'host-inspect',
+        tool_name: 'mcp__acas-tools__spreadsheet_inspect',
+        tool_input: { path: artifact.path },
+        tool_response: { structured_content: { ok: true, path: artifact.path } },
+        tool_use_id: 'host-inspect-use'
+      }
+    ]) {
+      await evaluateHookPayload('pre-tool', {
+        ...payload,
+        session_id: fixture.sessionKey
+      }, { root: fixture.root, state: fixture.state })
+      await evaluateHookPayload('post-tool', {
+        ...payload,
+        session_id: fixture.sessionKey
+      }, { root: fixture.root, state: fixture.state })
+    }
+
+    await refreshOfficialSubagentCompletionArtifacts(
+      fixture.root,
+      fixture.state,
+      fixture.parentSummary,
+      fixture.sessionKey
+    )
+    const [parentSummary, evidence, gate, proof] = await Promise.all([
+      readJson(path.join(fixture.dir, 'subagent-parent-summary.json')),
+      readJson(path.join(fixture.dir, 'subagent-evidence.json')),
+      readJson(path.join(fixture.dir, 'naruto-gate.json')),
+      buildNarutoProofProjection({
+        artifactDir: fixture.dir,
+        missionId: fixture.missionId,
+        workspaceRoot: fixture.root
+      })
+    ])
+    assert.equal(gate.passed, true)
+    assert.equal(evidence.host_capability_evidence.ok, true)
+    assert.deepEqual(parentSummary.artifacts, [artifact])
+    assert.deepEqual(parentSummary.capabilities_used, evidence.host_capability_evidence.capabilities_used)
+    assert.deepEqual(proof.result.artifacts, [artifact])
+    assert.deepEqual(proof.result.capabilities_used, evidence.host_capability_evidence.capabilities_used)
+  } finally {
+    await fixture.cleanup()
+  }
+})
+
+test('Naruto Stop blocks host capability claims when no observed runtime evidence exists', async () => {
+  const fixture = await createNarutoFixture()
+  try {
+    const planFile = path.join(fixture.dir, 'subagent-plan.json')
+    const plan = await readJson(planFile)
+    plan.goal = 'Create and deliver an Excel workbook.'
+    await writeJson(planFile, plan)
+    const claimed = {
+      ...fixture.parentSummary,
+      artifacts: [{
+        path: 'reports/unobserved.xlsx',
+        kind: 'spreadsheet',
+        media_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        sha256: `sha256:${'c'.repeat(64)}`,
+        bytes: 64,
+        role: 'deliverable'
+      }],
+      capabilities_used: [{
+        id: 'host.spreadsheet.workbook.v1',
+        status: 'passed',
+        tool_names: ['spreadsheet_create', 'spreadsheet_inspect'],
+        receipt_sha256: `sha256:${'d'.repeat(64)}`
+      }]
+    }
+    await refreshOfficialSubagentCompletionArtifacts(
+      fixture.root,
+      fixture.state,
+      claimed,
+      fixture.sessionKey
+    )
+    const gate = await readJson(path.join(fixture.dir, 'naruto-gate.json'))
+    assert.equal(gate.passed, false)
+    assert.ok(gate.blockers.includes('host_capability_hook_runtime_missing'))
+    await assert.rejects(fsp.access(path.join(fixture.dir, 'completion-proof.json')))
+  } finally {
+    await fixture.cleanup()
+  }
+})
+
 interface NarutoFixtureOptions {
   countPolicy?: SubagentCountPolicy
   requestedSubagents?: number
@@ -774,4 +910,34 @@ function deadPid() {
     }
   }
   throw new Error('dead_pid_fixture_unavailable')
+}
+
+function hostCapabilityDependencies(toolNames: string[]) {
+  return {
+    inventory: async () => ({
+      schema: 'sks.mcp-inventory.v2',
+      ok: true,
+      scope: 'project',
+      source: 'fixture_inventory',
+      servers: [{
+        name: 'acas-tools',
+        enabled: true,
+        enabled_tools: [...toolNames],
+        disabled_tools: []
+      }],
+      server_count: 1,
+      enabled_count: 1,
+      failed_count: 0,
+      blockers: [],
+      warnings: []
+    }) as any,
+    health: async () => ({
+      schema: 'sks.mcp-health.v1',
+      ok: true,
+      name: 'acas-tools',
+      scope: 'project',
+      status: 'healthy',
+      tool_names: [...toolNames]
+    }) as any
+  }
 }

@@ -69,6 +69,23 @@ import {
 import { buildWaveParentGuidance, renderWaveParentGuidance } from './subagents/wave-parent-guidance.js';
 import { managedOfficialSubagentRoleByName } from './managed-assets/managed-assets-manifest.js';
 import { SSOT_GUARD_ARTIFACT, validateSsotGuardArtifact } from './safety/ssot-guard.js';
+import {
+  HOST_CAPABILITY_HOOK_EVIDENCE_FILENAME,
+  HOST_CAPABILITY_HOOK_OBSERVATIONS_FILENAME,
+  HOST_CAPABILITY_HOOK_RUNTIME_FILENAME,
+  acasHostToolName,
+  bindParentSummaryToHostCapabilityEvidence,
+  buildHostCapabilityEvidenceFromHookObservations,
+  hostCapabilityHookBindingMatches,
+  mergeHostCapabilityPostToolObservation,
+  mergeHostCapabilityPreToolObservation,
+  normalizeHostCapabilityHookRuntimeBinding,
+  requestHostCapabilities,
+  sanitizeHostCapabilityPostToolUse,
+  sanitizeHostCapabilityPreToolUse,
+  type HostCapabilityExecutionEvidence,
+  type HostCapabilityHookRuntimeBinding
+} from './agent-bridge/host-capability-runtime.js';
 const LIGHT_ROUTE_STOP_ARTIFACT = 'light-route-stop.json';
 const CODEX_GIT_ACTION_STOP_ARTIFACT = 'codex-git-action-stop-bypass.json';
 const CODEX_GIT_ACTION_STOP_TTL_MS = 15 * 60 * 1000;
@@ -582,6 +599,8 @@ function activeGoalOverlayContext(state: any = {}, route: any = null) {
 }
 
 async function hookPreTool(root: any, state: any, payload: any, noQuestion: any, sessionKey: any = null) {
+  const hostCapabilityDecision = await enforceHostCapabilityPreTool(root, state, payload, sessionKey);
+  if (hostCapabilityDecision) return hostCapabilityDecision;
   if (needsMutationSafetyCheck(payload)) {
     const madSksImmutableDecision = await checkMadSksImmutableModification(root, state, payload);
     if (madSksImmutableDecision.action === 'block') {
@@ -660,6 +679,7 @@ function agentWorkerHookContext(state: any = {}, payload: any = {}) {
 async function hookPostTool(root: any, state: any, payload: any, noQuestion: any, sessionKey: any = null) {
   state = { ...state, _session_key: state?._session_key || sessionKey };
   await Promise.all([
+    recordHostCapabilityPostTool(root, state, payload, sessionKey).catch(() => null),
     recordMadSksSqlPlanePostToolLifecycle(root, state, payload).catch(() => null),
     recordContext7Evidence(root, state, payload).catch(() => null),
     recordSubagentEvidence(root, state, payload).catch(() => null),
@@ -673,6 +693,117 @@ async function hookPostTool(root: any, state: any, payload: any, noQuestion: any
     };
   }
   return { continue: true };
+}
+
+async function enforceHostCapabilityPreTool(root: string, state: any = {}, payload: any = {}, sessionKey: any = null) {
+  if (!acasHostToolName(payload.tool_name)) return null;
+  const context = await loadHostCapabilityHookContext(root, state, payload, sessionKey);
+  if (!context) return null;
+  if (!context.binding) {
+    return {
+      decision: 'block',
+      permissionDecision: 'deny',
+      reason: `SKS denied this acas-tools call because the current Naruto mission has no valid task-scoped host capability runtime: ${context.blocker}`
+    };
+  }
+  const observation = sanitizeHostCapabilityPreToolUse(context.binding.runtime, payload);
+  if (!observation) {
+    return {
+      decision: 'block',
+      permissionDecision: 'deny',
+      reason: 'SKS denied this acas-tools call because its official PreToolUse identity fields are invalid.'
+    };
+  }
+  try {
+    await withFileLock({
+      lockPath: path.join(context.dir, '.host-capability-hooks.lock'),
+      timeoutMs: 5_000,
+      staleMs: 60_000
+    }, async () => {
+      const current = await readJson(path.join(context.dir, HOST_CAPABILITY_HOOK_OBSERVATIONS_FILENAME), null).catch(() => null);
+      const next = mergeHostCapabilityPreToolObservation({
+        binding: context.binding!,
+        current,
+        observation
+      });
+      await writeJsonAtomic(path.join(context.dir, HOST_CAPABILITY_HOOK_OBSERVATIONS_FILENAME), next);
+    });
+  } catch {
+    return {
+      decision: 'block',
+      permissionDecision: 'deny',
+      reason: 'SKS denied this acas-tools call because its bounded PreToolUse evidence could not be persisted.'
+    };
+  }
+  if (observation.decision === 'denied') {
+    return {
+      decision: 'block',
+      permissionDecision: 'deny',
+      reason: `SKS denied acas-tools.${observation.tool}; it is outside runtime.allowed_tool_names for this mission, run, and session.`
+    };
+  }
+  return { continue: true };
+}
+
+async function recordHostCapabilityPostTool(root: string, state: any = {}, payload: any = {}, sessionKey: any = null) {
+  if (!acasHostToolName(payload.tool_name)) return null;
+  const context = await loadHostCapabilityHookContext(root, state, payload, sessionKey);
+  if (!context?.binding) return null;
+  const observation = sanitizeHostCapabilityPostToolUse(payload);
+  if (!observation) return null;
+  return withFileLock({
+    lockPath: path.join(context.dir, '.host-capability-hooks.lock'),
+    timeoutMs: 5_000,
+    staleMs: 60_000
+  }, async () => {
+    const current = await readJson(path.join(context.dir, HOST_CAPABILITY_HOOK_OBSERVATIONS_FILENAME), null).catch(() => null);
+    const next = mergeHostCapabilityPostToolObservation({
+      binding: context.binding!,
+      current,
+      observation
+    });
+    const evidence = buildHostCapabilityEvidenceFromHookObservations({
+      binding: context.binding!,
+      observations: next
+    });
+    await Promise.all([
+      writeJsonAtomic(path.join(context.dir, HOST_CAPABILITY_HOOK_OBSERVATIONS_FILENAME), next),
+      writeJsonAtomic(path.join(context.dir, HOST_CAPABILITY_HOOK_EVIDENCE_FILENAME), evidence)
+    ]);
+    return evidence;
+  });
+}
+
+async function loadHostCapabilityHookContext(
+  root: string,
+  state: any = {},
+  payload: any = {},
+  sessionKey: any = null
+): Promise<{
+  dir: string;
+  binding: HostCapabilityHookRuntimeBinding | null;
+  blocker: string;
+} | null> {
+  const missionId = String(state?.mission_id || '').trim();
+  const workflowRunId = String(state?.official_subagent_run_id || '').trim();
+  const payloadSession = String(payload?.session_id || '').trim();
+  const expectedSession = String(state?.session_scope || sessionKey || '').trim();
+  const isNaruto = String(state?.mode || '').toUpperCase() === 'NARUTO'
+    || String(state?.route || state?.route_command || '').replace(/^\$/, '').toUpperCase() === 'NARUTO'
+    || state?.subagents_required === true;
+  if (!isNaruto || !missionId || !workflowRunId || !payloadSession || !expectedSession) return null;
+  if (payloadSession !== expectedSession || (sessionKey && String(sessionKey) !== payloadSession)) return null;
+  const dir = missionDir(root, missionId);
+  const raw = await readJson(path.join(dir, HOST_CAPABILITY_HOOK_RUNTIME_FILENAME), null).catch(() => null);
+  if (!raw) return { dir, binding: null, blocker: 'host_capability_hook_runtime_missing' };
+  const binding = normalizeHostCapabilityHookRuntimeBinding(raw);
+  if (!binding) return { dir, binding: null, blocker: 'host_capability_hook_runtime_invalid' };
+  if (!hostCapabilityHookBindingMatches(binding, {
+    missionId,
+    workflowRunId,
+    sessionScope: payloadSession
+  })) return { dir, binding: null, blocker: 'host_capability_hook_runtime_scope_mismatch' };
+  return { dir, binding, blocker: '' };
 }
 
 function needsMutationSafetyCheck(payload: any = {}) {
@@ -962,7 +1093,18 @@ async function refreshOfficialSubagentCompletionArtifactsLocked(root: any, state
   const refreshedPlan = lifecycle ? { ...plan, wave_lifecycle: lifecycle } : plan;
   const countTarget = effectiveSubagentTarget(refreshedPlan, lifecycle?.cumulative_started || 0);
   const requestedSubagents = countTarget.requestedSubagents || Number(state.requested_subagents || 0);
-  const runBoundParentSummary = bindTrustworthySubagentParentSummaryToRun(parentSummary, workflowRunId);
+  const hostCapabilityCompletion = await rebuildHostCapabilityEvidenceForFinalization({
+    dir,
+    state,
+    plan: refreshedPlan,
+    parentSummary,
+    sessionKey,
+    workflowRunId
+  });
+  const runBoundParentSummary = bindTrustworthySubagentParentSummaryToRun(
+    hostCapabilityCompletion.parentSummary,
+    workflowRunId
+  );
   const effectiveParentSummary = await persistOrReuseTrustworthySubagentParentSummary(dir, runBoundParentSummary, {
     workflowStatus: 'parent_completed',
     runId: workflowRunId || null
@@ -977,12 +1119,16 @@ async function refreshOfficialSubagentCompletionArtifactsLocked(root: any, state
     workflowStatus: 'parent_completed',
     preparationOnly: false,
     runId: workflowRunId || null,
-    additionalBlockers: Array.isArray(plan.config_blockers)
-      ? [
-          ...plan.config_blockers.map((item: any) => `official_subagent_config:${String(item)}`),
-          ...subagentCountContractBlockers(refreshedPlan, lifecycle?.cumulative_started || 0)
-        ]
-      : subagentCountContractBlockers(refreshedPlan, lifecycle?.cumulative_started || 0)
+    additionalBlockers: [
+      ...(Array.isArray(plan.config_blockers)
+        ? plan.config_blockers.map((item: any) => `official_subagent_config:${String(item)}`)
+        : []),
+      ...subagentCountContractBlockers(refreshedPlan, lifecycle?.cumulative_started || 0),
+      ...hostCapabilityCompletion.blockers
+    ],
+    ...(hostCapabilityCompletion.evidence
+      ? { hostCapabilityEvidence: hostCapabilityCompletion.evidence }
+      : {})
   });
   if (structuredParentSummary.trustworthy) {
     const parentTelemetry = await recordOfficialSubagentParentOutcomesTelemetry({
@@ -1098,6 +1244,62 @@ async function refreshOfficialSubagentCompletionArtifactsLocked(root: any, state
   return {
     evidence,
     terminal: passed ? { passed: true, missionId: id, workflowRunId, gate } : null
+  };
+}
+
+async function rebuildHostCapabilityEvidenceForFinalization(input: {
+  dir: string;
+  state: any;
+  plan: any;
+  parentSummary: unknown;
+  sessionKey: any;
+  workflowRunId: string;
+}): Promise<{
+  parentSummary: unknown;
+  evidence: HostCapabilityExecutionEvidence | null;
+  blockers: string[];
+}> {
+  const request = requestHostCapabilities(input.plan?.goal || input.state?.prompt || '');
+  const hostEvidenceRequired = request.capability_ids.length > 0;
+  const sessionScope = String(input.state?.session_scope || input.sessionKey || '').trim();
+  const rawBinding = await readJson(path.join(input.dir, HOST_CAPABILITY_HOOK_RUNTIME_FILENAME), null).catch(() => null);
+  if (!rawBinding) {
+    return {
+      parentSummary: input.parentSummary,
+      evidence: null,
+      blockers: hostEvidenceRequired ? ['host_capability_hook_runtime_missing'] : []
+    };
+  }
+  const binding = normalizeHostCapabilityHookRuntimeBinding(rawBinding);
+  if (!binding) {
+    return {
+      parentSummary: input.parentSummary,
+      evidence: null,
+      blockers: hostEvidenceRequired ? ['host_capability_hook_runtime_invalid'] : []
+    };
+  }
+  if (!hostCapabilityHookBindingMatches(binding, {
+    missionId: input.state?.mission_id,
+    workflowRunId: input.workflowRunId,
+    sessionScope
+  })) {
+    return {
+      parentSummary: input.parentSummary,
+      evidence: null,
+      blockers: hostEvidenceRequired ? ['host_capability_hook_runtime_scope_mismatch'] : []
+    };
+  }
+  const observations = await readJson(
+    path.join(input.dir, HOST_CAPABILITY_HOOK_OBSERVATIONS_FILENAME),
+    null
+  ).catch(() => null);
+  const evidence = buildHostCapabilityEvidenceFromHookObservations({ binding, observations });
+  const bound = bindParentSummaryToHostCapabilityEvidence(input.parentSummary, evidence);
+  await writeJsonAtomic(path.join(input.dir, HOST_CAPABILITY_HOOK_EVIDENCE_FILENAME), evidence);
+  return {
+    parentSummary: bound.value,
+    evidence,
+    blockers: bound.blockers
   };
 }
 

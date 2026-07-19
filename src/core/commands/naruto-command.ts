@@ -55,7 +55,13 @@ import {
 } from '../subagents/official-subagent-preparation.js'
 import { recordOfficialSubagentParentOutcomesTelemetry } from '../zellij/zellij-official-subagent-telemetry.js'
 import { effectiveSubagentTarget, refreshSubagentWaveLifecycle } from '../subagents/wave-lifecycle.js'
-import { bindParentSummaryToHostCapabilityEvidence } from '../agent-bridge/host-capability-runtime.js'
+import {
+  HOST_CAPABILITY_HOOK_RUNTIME_FILENAME,
+  bindParentSummaryToHostCapabilityEvidence,
+  createHostCapabilityHookRuntimeBinding,
+  hostCapabilityHookBindingMatches,
+  normalizeHostCapabilityHookRuntimeBinding
+} from '../agent-bridge/host-capability-runtime.js'
 
 export { buildNarutoGateResult } from '../subagents/official-subagent-preparation.js'
 
@@ -234,6 +240,17 @@ async function narutoRunTransaction(
     waveCount: Number(completedPlan?.wave_count ?? budget.waveCount),
     capacity: completedPlan?.capacity_controller || budget.capacity
   }
+  const hostCapabilityHookBinding = appSession && sessionKey && run.host_capability_runtime
+    ? createHostCapabilityHookRuntimeBinding({
+        missionId: id,
+        workflowRunId,
+        sessionScope: sessionKey,
+        runtime: run.host_capability_runtime
+      })
+    : null
+  if (hostCapabilityHookBinding) {
+    await writeJsonAtomic(path.join(dir, HOST_CAPABILITY_HOOK_RUNTIME_FILENAME), hostCapabilityHookBinding)
+  }
   const hostCapabilityBinding = run.host_capability_evidence
     ? bindParentSummaryToHostCapabilityEvidence(run.parent_summary, run.host_capability_evidence)
     : { value: run.parent_summary, blockers: [] }
@@ -290,7 +307,9 @@ async function narutoRunTransaction(
     ...configBlockers,
     ...hostCapabilityBinding.blockers,
     ...(Array.isArray(run.blockers) ? run.blockers : []),
-    ...(appSession ? ['official_subagent_execution_pending_in_current_parent'] : [])
+    ...(appSession && run.status === 'delegation_context_ready'
+      ? ['official_subagent_execution_pending_in_current_parent']
+      : [])
   ])
   const gate = await writeNarutoGate(dir, {
     missionId: id,
@@ -302,7 +321,7 @@ async function narutoRunTransaction(
   const passed = gate.passed === true
   const status = passed
     ? 'completed'
-    : appSession
+    : appSession && run.status === 'delegation_context_ready'
       ? 'delegation_context_ready'
       : run.ok === true
         ? 'incomplete'
@@ -327,7 +346,11 @@ async function narutoRunTransaction(
     mission_id: id,
     official_subagent_run_id: workflowRunId,
     session_scope: sessionKey,
-    phase: passed ? 'NARUTO_COMPLETE' : appSession ? 'NARUTO_DELEGATION_CONTEXT_READY' : 'NARUTO_BLOCKED',
+    phase: passed
+      ? 'NARUTO_COMPLETE'
+      : appSession && run.status === 'delegation_context_ready'
+        ? 'NARUTO_DELEGATION_CONTEXT_READY'
+        : 'NARUTO_BLOCKED',
     subagents_verified: evidence.ok === true,
     requested_subagents: finalBudget.requestedSubagents,
     target_subagents: evidence.target_subagents,
@@ -344,7 +367,7 @@ async function narutoRunTransaction(
     ...summary,
     mission_id: id,
     attached_to_pending_run: false,
-    additionalContext: appSession ? run.additionalContext : undefined,
+    additionalContext: appSession && run.status === 'delegation_context_ready' ? run.additionalContext : undefined,
     artifacts: narutoArtifactLinks(evidence)
   }
   })
@@ -373,15 +396,22 @@ async function readPendingAppNarutoRun(
   prompt: string
 ) {
   if (await officialSubagentPreparationInProgress(mission.dir)) return null
-  const [plan, evidence, summary, gate, state] = await Promise.all([
+  const [plan, evidence, summary, gate, state, rawHostCapabilityBinding] = await Promise.all([
     readJson<any>(path.join(mission.dir, SUBAGENT_PLAN_FILENAME), null),
     readJson<any>(path.join(mission.dir, 'subagent-evidence.json'), null),
     readJson<any>(path.join(mission.dir, NARUTO_SUMMARY_FILENAME), null),
     readJson<any>(path.join(mission.dir, NARUTO_GATE_FILENAME), null),
-    loadStateForSession(root, sessionKey).catch(() => null)
+    loadStateForSession(root, sessionKey).catch(() => null),
+    readJson<any>(path.join(mission.dir, HOST_CAPABILITY_HOOK_RUNTIME_FILENAME), null).catch(() => null)
   ])
   const workflowRunId = String(plan?.workflow_run_id || '').trim()
   const sessionMatches = state?._session_key === sessionStateKey(sessionKey)
+  const hostCapabilityBinding = normalizeHostCapabilityHookRuntimeBinding(rawHostCapabilityBinding)
+  const hostCapabilityScopeMatches = Boolean(hostCapabilityBinding && hostCapabilityHookBindingMatches(hostCapabilityBinding, {
+    missionId: mission.id,
+    workflowRunId,
+    sessionScope: sessionKey
+  }))
   const pending = Boolean(
     workflowRunId
       && plan?.schema === 'sks.subagent-plan.v1'
@@ -408,6 +438,7 @@ async function readPendingAppNarutoRun(
       && state?.session_scope === sessionKey
       && state?.route_closed !== true
       && state?.phase === 'NARUTO_DELEGATION_CONTEXT_READY'
+      && hostCapabilityScopeMatches
   )
   if (!pending) return null
 

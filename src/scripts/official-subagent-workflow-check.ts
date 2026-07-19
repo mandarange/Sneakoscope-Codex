@@ -122,10 +122,11 @@ try {
   assertGate(failedResultText.ok === false && failedResultText.failed_thread_ids.includes('a2'), 'unambiguous failed result text must override a contradictory completed claim', failedResultText)
 
   let nestedLaunch = false
+  const appPreparationPrompt = 'Review repository code and report findings.'
   const appResult = await runOfficialSubagentWorkflow({
     root,
-    goal: prompt,
-    prompt,
+    goal: appPreparationPrompt,
+    prompt: appPreparationPrompt,
     requestedSubagents: 3,
     maxThreads: 12,
     appSession: true,
