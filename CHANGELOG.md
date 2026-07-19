@@ -12,7 +12,7 @@
 
 ### Changed
 
-- Raise the shared packed-package budget by the minimum sufficient 28 KiB, from 2464 KiB to 2492 KiB, after the final host-capability runtime and proof-validation contract measured 2,551,472 packed bytes.
+- Keep the shared packed-package budget at 2488 KiB while adding the final host-capability runtime and proof-validation contract by removing non-runtime comments from emitted JavaScript; the resulting package measured 2,496,337 packed bytes.
 
 ### Fixed
 

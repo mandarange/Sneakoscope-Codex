@@ -3,6 +3,7 @@
   "compilerOptions": {
     "declaration": false,
     "declarationMap": false,
+    "removeComments": true,
     "sourceMap": false,
     "tsBuildInfoFile": ".sneakoscope/cache/tsbuildinfo/tsconfig.build.tsbuildinfo"
   }
