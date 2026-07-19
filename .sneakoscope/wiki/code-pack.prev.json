@@ -1,7 +1,7 @@
 {
   "schema": "sks.code-pack.v1",
-  "generated_at": "2026-07-19T21:11:58.926Z",
-  "git_head_sha": "56910220c95d08666801b4f3214ef79eb818b224",
+  "generated_at": "2026-07-19T23:57:33.461Z",
+  "git_head_sha": "ce3b0279c1921084cbbabb6916e37c0a1c522d7d",
   "source_file_count": 3579,
   "index_digest": "39ae760e40e8ed5f1c72384adfbaf9db1051b8ac0a8583156a2c137bd1cecf21",
   "entries": [
@@ -43,7 +43,7 @@
     },
     {
       "id": "code:core",
-      "text": "core is a core module at src/core (127 files, 38599 loc, high risk). Key exports: const quietPolicy =; async function makeRoot(prefix: string); async function writeJson(file: string, value: unknown); async function backdate(file: string); const ARTIFACT_SCHEMA_VERSION = 1;, and 497 more. It has no detected cross-module dependencies.",
+      "text": "core is a core module at src/core (127 files, 38614 loc, high risk). Key exports: const quietPolicy =; async function makeRoot(prefix: string); async function writeJson(file: string, value: unknown); async function backdate(file: string); const ARTIFACT_SCHEMA_VERSION = 1;, and 497 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core"
@@ -55,7 +55,7 @@
     },
     {
       "id": "code:core-agent-bridge",
-      "text": "core-agent-bridge is a core module at src/core/agent-bridge (8 files, 2881 loc, low risk). Key exports: type LatencyClass = 'fast' | 'normal' | 'long';; interface AgentManifestEntry; interface AgentBridgeCompatibility; interface HostCapabilityDescriptor; interface HostCapabilitiesManifest, and 30 more. It has no detected cross-module dependencies.",
+      "text": "core-agent-bridge is a core module at src/core/agent-bridge (8 files, 2922 loc, low risk). Key exports: type LatencyClass = 'fast' | 'normal' | 'long';; interface AgentManifestEntry; interface AgentBridgeCompatibility; interface HostCapabilityDescriptor; interface HostCapabilitiesManifest, and 30 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/agent-bridge"
@@ -310,7 +310,7 @@
     },
     {
       "id": "code:core-hooks-runtime",
-      "text": "core-hooks-runtime is a core module at src/core/hooks-runtime (14 files, 3579 loc, low risk). Key exports: async function codePackFreshnessNote(root: string, opts: { budgetMs?: number } = {}): Promise<string | null>; async function claimHookInvocation(root: string, name: unknown, payload: any = {}); async function loadHookPayload(); function normalizeHookResult(name: any, result: any = {}); function codexHookEventName(name: any), and 34 more. It has no detected cross-module dependencies.",
+      "text": "core-hooks-runtime is a core module at src/core/hooks-runtime (14 files, 3651 loc, low risk). Key exports: async function codePackFreshnessNote(root: string, opts: { budgetMs?: number } = {}): Promise<string | null>; async function claimHookInvocation(root: string, name: unknown, payload: any = {}); async function loadHookPayload(); function normalizeHookResult(name: any, result: any = {}); function codexHookEventName(name: any), and 34 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/hooks-runtime"
