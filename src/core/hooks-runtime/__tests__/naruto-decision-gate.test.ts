@@ -242,6 +242,10 @@ test('host capability hooks enforce the exact allowlist and persist only bounded
     };
     await evaluateHookPayload('post-tool', createPayload, { root, state });
     await evaluateHookPayload('post-tool', createPayload, { root, state });
+    const tamperedObservationsPath = path.join(dir, HOST_CAPABILITY_HOOK_OBSERVATIONS_FILENAME);
+    const tamperedObservations = JSON.parse(await fsp.readFile(tamperedObservationsPath, 'utf8'));
+    tamperedObservations.raw_secret = 'tampered-secret-must-not-persist';
+    await fsp.writeFile(tamperedObservationsPath, `${JSON.stringify(tamperedObservations, null, 2)}\n`);
     await evaluateHookPayload('pre-tool', {
       session_id: sessionId,
       turn_id: 'turn-host-inspect-pre',
@@ -266,6 +270,7 @@ test('host capability hooks enforce the exact allowlist and persist only bounded
     assert.ok(observations.pre_tool_uses.some((row: any) => row.tool === 'spreadsheet_create' && row.decision === 'allowed'));
     assert.ok(observations.pre_tool_uses.some((row: any) => row.tool === 'slack_send' && row.decision === 'denied'));
     assert.equal(observationsText.includes('must-not-persist'), false);
+    assert.equal(observationsText.includes('tampered-secret'), false);
     assert.equal(observationsText.includes('raw-row-'), false);
     assert.ok(Buffer.byteLength(observationsText, 'utf8') < 32 * 1024);
     assert.equal(evidence.ok, true);

@@ -202,6 +202,18 @@ export function hostCapabilityHookBindingMatches(
     && binding.session_scope === boundedIdentity(input.sessionScope);
 }
 
+export function resolveHostCapabilityHookRuntimeBinding(
+  value: unknown,
+  input: { missionId: unknown; workflowRunId: unknown; sessionScope: unknown }
+): { binding: HostCapabilityHookRuntimeBinding | null; blocker: string } {
+  if (!value) return { binding: null, blocker: 'host_capability_hook_runtime_missing' };
+  const binding = normalizeHostCapabilityHookRuntimeBinding(value);
+  if (!binding) return { binding: null, blocker: 'host_capability_hook_runtime_invalid' };
+  return hostCapabilityHookBindingMatches(binding, input)
+    ? { binding, blocker: '' }
+    : { binding: null, blocker: 'host_capability_hook_runtime_scope_mismatch' };
+}
+
 export function acasHostToolName(value: unknown): string | null {
   const toolName = String(value || '').trim();
   if (!toolName || toolName.length > 256 || /[\r\n\0]/.test(toolName)) return null;
@@ -360,13 +372,6 @@ export function buildHostCapabilityEvidenceFromHookObservations(input: {
     const preToolUse = preToolUses.get(`${row.tool_use_id_sha256}:${row.tool}`);
     if (!preToolUse) observationBlockers.push(`host_tool_call_pre_use_missing:${row.tool}`);
     else if (preToolUse.decision !== 'allowed') observationBlockers.push(`host_tool_call_pre_use_denied:${row.tool}`);
-    if (!input.binding.runtime.allowed_tool_names.includes(row.tool)) {
-      observationBlockers.push(`host_tool_call_not_allowed:${row.tool}`);
-    }
-    if (EXPLICIT_DENIAL_PATTERN.test(row.tool)) {
-      observationBlockers.push(`host_tool_call_explicitly_denied:${row.tool}`);
-    }
-    if (row.status === 'failed') observationBlockers.push(`host_tool_call_failed:${row.tool}`);
   }
   const calls: InternalHostToolCallReceipt[] = observations.tool_calls.map((row) => ({
     server: HOST_CAPABILITY_MCP_SERVER,
@@ -742,9 +747,6 @@ export function createHostCapabilityEventCollector(runtime: HostCapabilityRuntim
       index: callIndex,
       resource_key: extractToolResourceKey(item)
     });
-    if (!runtime.allowed_tool_names.includes(tool)) blockers.push(`host_tool_call_not_allowed:${tool}`);
-    if (EXPLICIT_DENIAL_PATTERN.test(tool)) blockers.push(`host_tool_call_explicitly_denied:${tool}`);
-    if (status === 'failed') blockers.push(`host_tool_call_failed:${tool}`);
     if (status === 'passed') {
       for (const artifact of extractArtifactReceipts(item.result?.structured_content ?? item.result?.structuredContent ?? item.result)) {
         observedArtifacts.push({ ...artifact, source_tool: tool, source_hash: rawHash, source_index: callIndex });
@@ -824,6 +826,11 @@ function buildExecutionEvidence(
 ): HostCapabilityExecutionEvidence {
   const blockers = [...runtime.blockers, ...initialBlockers];
   const requested = new Set(runtime.requested_capability_ids);
+  for (const call of calls) {
+    if (!runtime.allowed_tool_names.includes(call.tool)) blockers.push(`host_tool_call_not_allowed:${call.tool}`);
+    if (EXPLICIT_DENIAL_PATTERN.test(call.tool)) blockers.push(`host_tool_call_explicitly_denied:${call.tool}`);
+    if (call.status === 'failed') blockers.push(`host_tool_call_failed:${call.tool}`);
+  }
   const dedupedArtifacts = dedupeArtifacts(artifactRows);
   if (dedupedArtifacts.length > MAX_ARTIFACT_RECEIPTS) blockers.push('host_artifact_receipts_too_many');
   const artifacts = dedupedArtifacts.slice(0, MAX_ARTIFACT_RECEIPTS);
@@ -1037,13 +1044,11 @@ function isDocumentRenderDeliverable(
   tool: string
 ): boolean {
   const artifactPath = normalizeWorkspaceResourcePath(artifact.path);
-  const expected = tool === 'html_to_pdf'
-    ? { kind: 'pdf', mediaType: 'application/pdf', extension: /\.pdf$/i }
-    : { kind: 'png', mediaType: 'image/png', extension: /\.png$/i };
+  const pdf = tool === 'html_to_pdf';
   return artifact.role === 'deliverable'
-    && artifact.kind === expected.kind
-    && artifact.media_type === expected.mediaType
-    && Boolean(artifactPath && expected.extension.test(artifactPath));
+    && artifact.kind === (pdf ? 'pdf' : 'png')
+    && artifact.media_type === (pdf ? 'application/pdf' : 'image/png')
+    && Boolean(artifactPath && (pdf ? /\.pdf$/i : /\.png$/i).test(artifactPath));
 }
 
 function extractArtifactReceipts(value: unknown): HostArtifactReceipt[] {
@@ -1076,8 +1081,7 @@ function extractArtifactReceipts(value: unknown): HostArtifactReceipt[] {
 }
 
 function normalizeArtifactReceipt(value: Record<string, unknown>): HostArtifactReceipt | null {
-  const rawArtifactPath = typeof value.path === 'string' ? value.path.trim() : '';
-  const artifactPath = normalizeWorkspaceResourcePath(rawArtifactPath) || '';
+  const artifactPath = normalizeWorkspaceResourcePath(value.path) || '';
   const kind = typeof value.kind === 'string' ? value.kind.trim().toLowerCase() : '';
   const mediaType = typeof value.media_type === 'string'
     ? value.media_type.trim().toLowerCase()
@@ -1088,8 +1092,7 @@ function normalizeArtifactReceipt(value: Record<string, unknown>): HostArtifactR
     ? value.role as HostArtifactReceipt['role']
     : null;
   if (!artifactPath
-    || artifactPath.length > MAX_ARTIFACT_PATH_CHARS) return null;
-  if (!kind
+    || !kind
     || kind.length > 64
     || !mediaType
     || mediaType.length > 160
@@ -1100,17 +1103,14 @@ function normalizeArtifactReceipt(value: Record<string, unknown>): HostArtifactR
 }
 
 function dedupeArtifacts<T extends HostArtifactReceipt>(values: readonly T[]): HostArtifactReceipt[] {
-  const byPath = new Map<string, HostArtifactReceipt>();
-  for (const value of values) {
-    byPath.set(value.path, {
+  const byPath = new Map(values.map((value) => [value.path, {
       path: value.path,
       kind: value.kind,
       media_type: value.media_type,
       sha256: value.sha256,
       bytes: value.bytes,
       role: value.role
-    });
-  }
+    }]));
   return [...byPath.values()].sort((left, right) => left.path.localeCompare(right.path));
 }
 

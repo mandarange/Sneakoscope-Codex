@@ -59,8 +59,7 @@ import {
   HOST_CAPABILITY_HOOK_RUNTIME_FILENAME,
   bindParentSummaryToHostCapabilityEvidence,
   createHostCapabilityHookRuntimeBinding,
-  hostCapabilityHookBindingMatches,
-  normalizeHostCapabilityHookRuntimeBinding
+  resolveHostCapabilityHookRuntimeBinding
 } from '../agent-bridge/host-capability-runtime.js'
 
 export { buildNarutoGateResult } from '../subagents/official-subagent-preparation.js'
@@ -406,12 +405,11 @@ async function readPendingAppNarutoRun(
   ])
   const workflowRunId = String(plan?.workflow_run_id || '').trim()
   const sessionMatches = state?._session_key === sessionStateKey(sessionKey)
-  const hostCapabilityBinding = normalizeHostCapabilityHookRuntimeBinding(rawHostCapabilityBinding)
-  const hostCapabilityScopeMatches = Boolean(hostCapabilityBinding && hostCapabilityHookBindingMatches(hostCapabilityBinding, {
+  const hostCapabilityScopeMatches = Boolean(resolveHostCapabilityHookRuntimeBinding(rawHostCapabilityBinding, {
     missionId: mission.id,
     workflowRunId,
     sessionScope: sessionKey
-  }))
+  }).binding)
   const pending = Boolean(
     workflowRunId
       && plan?.schema === 'sks.subagent-plan.v1'

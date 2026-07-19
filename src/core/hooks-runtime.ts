@@ -76,11 +76,10 @@ import {
   acasHostToolName,
   bindParentSummaryToHostCapabilityEvidence,
   buildHostCapabilityEvidenceFromHookObservations,
-  hostCapabilityHookBindingMatches,
   mergeHostCapabilityPostToolObservation,
   mergeHostCapabilityPreToolObservation,
-  normalizeHostCapabilityHookRuntimeBinding,
   requestHostCapabilities,
+  resolveHostCapabilityHookRuntimeBinding,
   sanitizeHostCapabilityPostToolUse,
   sanitizeHostCapabilityPreToolUse,
   type HostCapabilityExecutionEvidence,
@@ -795,15 +794,11 @@ async function loadHostCapabilityHookContext(
   if (payloadSession !== expectedSession || (sessionKey && String(sessionKey) !== payloadSession)) return null;
   const dir = missionDir(root, missionId);
   const raw = await readJson(path.join(dir, HOST_CAPABILITY_HOOK_RUNTIME_FILENAME), null).catch(() => null);
-  if (!raw) return { dir, binding: null, blocker: 'host_capability_hook_runtime_missing' };
-  const binding = normalizeHostCapabilityHookRuntimeBinding(raw);
-  if (!binding) return { dir, binding: null, blocker: 'host_capability_hook_runtime_invalid' };
-  if (!hostCapabilityHookBindingMatches(binding, {
+  return { dir, ...resolveHostCapabilityHookRuntimeBinding(raw, {
     missionId,
     workflowRunId,
     sessionScope: payloadSession
-  })) return { dir, binding: null, blocker: 'host_capability_hook_runtime_scope_mismatch' };
-  return { dir, binding, blocker: '' };
+  }) };
 }
 
 function needsMutationSafetyCheck(payload: any = {}) {
@@ -1263,37 +1258,23 @@ async function rebuildHostCapabilityEvidenceForFinalization(input: {
   const hostEvidenceRequired = request.capability_ids.length > 0;
   const sessionScope = String(input.state?.session_scope || input.sessionKey || '').trim();
   const rawBinding = await readJson(path.join(input.dir, HOST_CAPABILITY_HOOK_RUNTIME_FILENAME), null).catch(() => null);
-  if (!rawBinding) {
-    return {
-      parentSummary: input.parentSummary,
-      evidence: null,
-      blockers: hostEvidenceRequired ? ['host_capability_hook_runtime_missing'] : []
-    };
-  }
-  const binding = normalizeHostCapabilityHookRuntimeBinding(rawBinding);
-  if (!binding) {
-    return {
-      parentSummary: input.parentSummary,
-      evidence: null,
-      blockers: hostEvidenceRequired ? ['host_capability_hook_runtime_invalid'] : []
-    };
-  }
-  if (!hostCapabilityHookBindingMatches(binding, {
+  const resolved = resolveHostCapabilityHookRuntimeBinding(rawBinding, {
     missionId: input.state?.mission_id,
     workflowRunId: input.workflowRunId,
     sessionScope
-  })) {
+  });
+  if (!resolved.binding) {
     return {
       parentSummary: input.parentSummary,
       evidence: null,
-      blockers: hostEvidenceRequired ? ['host_capability_hook_runtime_scope_mismatch'] : []
+      blockers: hostEvidenceRequired ? [resolved.blocker] : []
     };
   }
   const observations = await readJson(
     path.join(input.dir, HOST_CAPABILITY_HOOK_OBSERVATIONS_FILENAME),
     null
   ).catch(() => null);
-  const evidence = buildHostCapabilityEvidenceFromHookObservations({ binding, observations });
+  const evidence = buildHostCapabilityEvidenceFromHookObservations({ binding: resolved.binding, observations });
   const bound = bindParentSummaryToHostCapabilityEvidence(input.parentSummary, evidence);
   await writeJsonAtomic(path.join(input.dir, HOST_CAPABILITY_HOOK_EVIDENCE_FILENAME), evidence);
   return {
