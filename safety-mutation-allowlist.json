@@ -74,6 +74,12 @@
       "reason": "Codex auth rollback removes only the selected auth file when the rollback contract proves that file did not exist before the operation."
     },
     {
+      "file": "src/cli/install-helpers.ts",
+      "symbol": "rollbackAuth",
+      "token": "fsp.rm",
+      "reason": "Shared-auth activation rollback removes only the selected auth.json when that file did not exist before the failed write, restoring the pre-operation absence."
+    },
+    {
       "file": "src/cli/install-helpers-codex-lb-selftest.ts",
       "symbol": "selftestCodexLb",
       "token": "codex config write",

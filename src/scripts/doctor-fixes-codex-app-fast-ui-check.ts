@@ -41,15 +41,19 @@ const ok = plan.fast_selector === 'manual_action_required'
   && plan.provider_actions.includes('sks codex-lb setup --host <domain> --api-key-stdin --yes')
   && plan.safe_auto_apply === true
   && repaired.fast_selector === 'repaired'
-  && repaired.provider_selector === 'selected_provider_ready'
-  && repaired.selected_provider_blockers.length === 0
+  // Contract-valid codex-lb selection is preserved through Fast UI repair; without
+  // hermetic credentials/catalog the selected provider stays setup-required.
+  && repaired.provider_selector === 'manual_action_required'
+  && repaired.selected_provider_blockers.includes('codex_lb_api_key_missing')
+  && repaired.selected_provider_blockers.includes('codex_lb_base_url_missing')
+  && repaired.selected_provider_blockers.includes('codex_lb_model_catalog_json_unselected')
   && repaired.safe_auto_apply === true
   && backups.length >= 1
   && /^model\s*=\s*"future-codex-model"$/m.test(projectAfter.split(/\n\s*\[/)[0] || '')
   && /^model_reasoning_effort\s*=\s*"medium"$/m.test(projectAfter.split(/\n\s*\[/)[0] || '')
   && !/^model\s*=/m.test(homeTopLevel)
   && !/^model_reasoning_effort\s*=/m.test(homeTopLevel)
-  && !/^model_provider\s*=/m.test(homeTopLevel)
+  && /^model_provider\s*=\s*"codex-lb"$/m.test(homeTopLevel)
   && /model_provider\s*=\s*"codex-lb"/.test(projectAfter)
   && /^service_tier\s*=\s*"fast"$/m.test(homeTopLevel)
   && /fast_mode = false/.test(homeAfter)
