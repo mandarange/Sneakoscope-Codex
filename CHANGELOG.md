@@ -5,6 +5,18 @@
 
 
 
+## [7.0.2] - 2026-07-19
+
+### Fixed
+
+- Support first-create and safe re-entry for externally reserved Naruto mission IDs on `sks naruto run --mission <id>`, while keeping status/proof create-free and prompt drift fail-closed.
+- Emit a stable nonterminal Naruto proof outer envelope so completed, blocked, and incomplete projections always share the same top-level keys with array `blockers` / `changed_files` / `verification`.
+- Pass only the bounded nonsecret host MCP context env keys through the Codex parent child allowlist.
+
+### Changed
+
+- Patch release for external-host Naruto contract closure (WO-FOLLOWUP-01).
+
 ## [7.0.1] - 2026-07-19
 
 ### Fixed

@@ -1,0 +1,95 @@
+{
+  "schema": "sks.naruto-subagent-workflow.v1",
+  "action": "proof",
+  "ok": false,
+  "status": "blocked",
+  "mission_id": "M-proof-projection-fixture",
+  "workflow": "official_codex_subagent",
+  "workflow_run_id": "naruto-proof-projection-fixture-1",
+  "blockers": [],
+  "evidence": {
+    "schema": "sks.subagent-evidence.v1",
+    "workflow": "official_codex_subagent",
+    "requested_subagents": 2,
+    "count_policy": "dynamic_automatic",
+    "target_subagents": 2,
+    "started_threads": 2,
+    "completed_threads": 0,
+    "failed_threads": 2,
+    "started_thread_ids": [
+      "thread-1",
+      "thread-2"
+    ],
+    "completed_thread_ids": [],
+    "failed_thread_ids": [
+      "thread-1",
+      "thread-2"
+    ],
+    "open_thread_ids": [],
+    "unmatched_stop_thread_ids": [],
+    "event_sources": [
+      "SubagentStart",
+      "SubagentStop"
+    ],
+    "parent_summary_present": true,
+    "parent_summary_trustworthy": true,
+    "parent_summary_status": "failed",
+    "ambiguous_stop_thread_ids": [],
+    "run_id": "naruto-proof-projection-fixture-1",
+    "run_epoch": null,
+    "run_scope_source": "input",
+    "rejected_stale_events": 0,
+    "rejected_stale_thread_ids": [],
+    "unbound_run_events": 0,
+    "preparation_only": false,
+    "status": "blocked",
+    "ok": false,
+    "blockers": [
+      "requested_subagent_completions_incomplete:0/2",
+      "subagent_threads_failed:2",
+      "parent_summary_failed"
+    ]
+  },
+  "summary": {
+    "schema": "sks.naruto-subagent-workflow.v1",
+    "mission_id": "M-proof-projection-fixture",
+    "workflow": "official_codex_subagent",
+    "workflow_run_id": "naruto-proof-projection-fixture-1",
+    "status": "blocked",
+    "ok": false,
+    "completion_evidence": false,
+    "requested_subagents": 2,
+    "count_policy": "dynamic_automatic",
+    "target_subagents": 2
+  },
+  "gate": {
+    "schema": "sks.naruto-gate.v1",
+    "mission_id": "M-proof-projection-fixture",
+    "workflow": "official_codex_subagent",
+    "workflow_run_id": "naruto-proof-projection-fixture-1",
+    "passed": false,
+    "terminal": true,
+    "terminal_state": "blocked",
+    "blockers": [
+      "requested_subagent_completions_incomplete:0/2",
+      "subagent_threads_failed:2",
+      "parent_summary_failed"
+    ],
+    "requested_subagents": 2,
+    "count_policy": "dynamic_automatic",
+    "target_subagents": 2
+  },
+  "result": {
+    "summary": "fixture blocked",
+    "changed_files": [
+      "src/example.ts"
+    ],
+    "verification": [
+      {
+        "name": "test",
+        "status": "passed"
+      }
+    ]
+  },
+  "proof_fingerprint": "sha256:ef2e6152e3125fe4119ad9298d9b8b7f31404448bdbcba0e1cdf260996761b13"
+}

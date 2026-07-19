@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process'
 import os from 'node:os'
 import path from 'node:path'
 import fsp from 'node:fs/promises'
+import { fileURLToPath } from 'node:url'
 import {
   buildNarutoProofProjection,
   readNarutoProofArtifactSnapshot,
@@ -41,7 +42,8 @@ test('completed fixture projects validated parent result and a deterministic byt
     assert.deepEqual(first.result.verification, [{ name: 'test', status: 'passed' }])
     assert.match(first.proof_fingerprint, /^sha256:[a-f0-9]{64}$/)
     assert.equal(first.proof_fingerprint, second.proof_fingerprint)
-    assert.equal('blockers' in first, false)
+    assert.ok(Array.isArray(first.blockers))
+    assert.deepEqual(first.blockers, [])
     assert.deepEqual(validateNarutoProofStatus(first), [])
 
     await fsp.appendFile(path.join(dir, SUBAGENT_EVENT_LOG_FILENAME), '\n')
@@ -117,6 +119,8 @@ test('blocked and incomplete source fixtures preserve the three-state proof cont
     assert.equal(blocked.ok, false)
     assert.equal(incomplete.status, 'incomplete')
     assert.equal(incomplete.ok, false)
+    assert.ok(Array.isArray(blocked.blockers))
+    assert.ok(Array.isArray(incomplete.blockers))
     assert.match(blocked.proof_fingerprint, /^sha256:[a-f0-9]{64}$/)
     assert.match(incomplete.proof_fingerprint, /^sha256:[a-f0-9]{64}$/)
     assert.deepEqual(validateNarutoProofStatus(blocked), [])
@@ -126,6 +130,36 @@ test('blocked and incomplete source fixtures preserve the three-state proof cont
       fsp.rm(blockedDir, { recursive: true, force: true }),
       fsp.rm(incompleteDir, { recursive: true, force: true })
     ])
+  }
+})
+
+test('contract fixtures match projected completed/blocked/incomplete envelopes exactly', async () => {
+  const cases = [
+    ['completed', 'completed.json'],
+    ['blocked', 'blocked.json'],
+    ['incomplete', 'incomplete.json']
+  ] as const
+  const fixtureRoot = path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    '../../../../fixtures/contracts/naruto-proof-v1'
+  )
+  for (const [status, filename] of cases) {
+    const dir = await writeProofFixture(status, { dynamicThreadCount: 2 })
+    try {
+      const projected = await buildNarutoProofProjection({ artifactDir: dir, missionId: MISSION_ID })
+      const second = await buildNarutoProofProjection({ artifactDir: dir, missionId: MISSION_ID })
+      const expected = JSON.parse(await fsp.readFile(path.join(fixtureRoot, filename), 'utf8'))
+      assert.deepEqual(projected, expected)
+      assert.equal(projected.proof_fingerprint, second.proof_fingerprint)
+      assert.ok(Array.isArray(projected.blockers))
+      assert.deepEqual(projected.result.changed_files, expected.result.changed_files)
+      assert.deepEqual(projected.result.verification, expected.result.verification)
+      if (status === 'completed') {
+        assert.ok(String(projected.result.summary || '').trim().length > 0)
+      }
+    } finally {
+      await fsp.rm(dir, { recursive: true, force: true })
+    }
   }
 })
 
@@ -284,11 +318,14 @@ async function writeProofFixture(
     workflow_run_id: RUN_ID,
     requested_subagents: dynamic ? 2 : 1,
     requested_subagents_source: dynamic ? 'automatic' : 'operator',
-    wave_lifecycle: createSubagentWaveLifecycle({
-      workflowRunId: RUN_ID,
-      targetSubagents: threadIds.length,
-      countPolicy: dynamic ? 'dynamic_automatic' : 'exact'
-    })
+    wave_lifecycle: {
+      ...createSubagentWaveLifecycle({
+        workflowRunId: RUN_ID,
+        targetSubagents: threadIds.length,
+        countPolicy: dynamic ? 'dynamic_automatic' : 'exact'
+      }),
+      updated_at: '2026-07-17T00:00:00.000Z'
+    }
   }
   const summary = {
     schema: NARUTO_RESULT_SCHEMA,

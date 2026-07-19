@@ -3,6 +3,7 @@ import { ui as cliUi } from '../../cli/cli-theme.js'
 import {
   createMission,
   findLatestMission,
+  getOrCreateExplicitNarutoMission,
   getOrCreateSessionMission,
   loadStateForSession,
   loadMission,
@@ -114,6 +115,7 @@ async function narutoRun(parsed: NarutoArgs) {
   if (appSession) return narutoRunTransaction(parsed, root, true, null)
   const mission = await resolveRunMission(root, parsed, sessionKey)
   if (!mission) return missingRunMission(parsed)
+  if (!mission.ok) return blockedRunMission(parsed, mission.blockers)
   const admission = await withNarutoMissionRunAdmission({
     missionId: mission.id,
     missionDir: mission.dir,
@@ -131,11 +133,12 @@ async function narutoRunTransaction(
   root: string,
   appSession: boolean,
   sessionKey: string | null,
-  resolvedMission?: { id: string; dir: string },
+  resolvedMission?: { ok: true; id: string; dir: string },
   missionLease?: NarutoMissionRunLease
 ) {
   const mission = resolvedMission || await resolveRunMission(root, parsed, sessionKey)
   if (!mission) return missingRunMission(parsed)
+  if (!mission.ok) return blockedRunMission(parsed, mission.blockers)
   const { id, dir } = mission
   if (appSession && sessionKey) {
     const pending = await readPendingAppNarutoRun(root, { id, dir }, sessionKey, parsed.prompt)
@@ -523,10 +526,19 @@ function narutoHelp(parsed: NarutoArgs) {
   })
 }
 
-async function resolveRunMission(root: string, parsed: NarutoArgs, sessionKey: string | null = null) {
+async function resolveRunMission(
+  root: string,
+  parsed: NarutoArgs,
+  sessionKey: string | null = null
+): Promise<{ ok: true; id: string; dir: string } | { ok: false; blockers: string[] } | null> {
   if (parsed.missionId && parsed.missionId !== 'latest') {
-    const loaded = await loadMission(root, parsed.missionId).catch(() => null)
-    return loaded ? { id: parsed.missionId, dir: loaded.dir } : null
+    const resolved = await getOrCreateExplicitNarutoMission(root, {
+      requestedId: parsed.missionId,
+      prompt: parsed.prompt,
+      sessionKey
+    })
+    if (!resolved.ok) return { ok: false, blockers: resolved.blockers }
+    return { ok: true, id: resolved.id, dir: resolved.dir }
   }
   if (sessionKey) {
     const resolved = await getOrCreateSessionMission(root, {
@@ -542,10 +554,10 @@ async function resolveRunMission(root: string, parsed: NarutoArgs, sessionKey: s
           : null
       }
     })
-    return { id: resolved.id, dir: resolved.dir }
+    return { ok: true, id: String(resolved.id), dir: String(resolved.dir) }
   }
   const created = await createMission(root, { mode: 'naruto', prompt: parsed.prompt, sessionKey })
-  return { id: created.id, dir: created.dir }
+  return { ok: true, id: String(created.id), dir: String(created.dir) }
 }
 
 async function resolveReadMission(parsed: NarutoArgs) {
@@ -770,6 +782,15 @@ function missingRunMission(parsed: NarutoArgs) {
     status: 'blocked',
     blockers: [`naruto_mission_not_found:${parsed.missionId}`]
   }, () => console.error(`Naruto mission not found: ${parsed.missionId}`), true)
+}
+
+function blockedRunMission(parsed: NarutoArgs, blockers: string[]) {
+  return emit(parsed, {
+    schema: NARUTO_RESULT_SCHEMA,
+    ok: false,
+    status: 'blocked',
+    blockers
+  }, () => console.error(`Naruto mission blocked: ${blockers.join(', ')}`), true)
 }
 
 function emit(parsed: Pick<NarutoArgs, 'json'>, result: any, human: () => void, failed = false) {

@@ -137,6 +137,7 @@ id_ed25519
 .sneakoscope/release-proof-truth.json
 .sneakoscope/triwiki/
 .sneakoscope/manifest.json
+.sneakoscope/agent-bridge/manifest.json
 .sneakoscope/policy.json
 .sneakoscope/db-safety.json
 .sneakoscope/db-safety-scan.json

@@ -10,6 +10,7 @@ import {
   NARUTO_MISSION_RUN_LOCK,
   withNarutoMissionRunAdmission
 } from '../../subagents/official-subagent-preparation.js'
+import { getOrCreateExplicitNarutoMission } from '../../mission.js'
 
 const TERMINAL_FILES = [
   'subagent-plan.json',
@@ -334,6 +335,103 @@ test('a stale incomplete mission cannot be restarted with a different task promp
       assert.deepEqual(result.response.blockers, ['naruto_mission_identity_conflict:mission_prompt'])
     }
   })
+})
+
+test('absent explicit mission id is created once and admits one execution', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-naruto-explicit-first-create-'))
+  const missionId = 'M-acas-33333333-3333-4333-8333-333333333333-g000004'
+  const prompt = 'reserved host task'
+  try {
+    let executions = 0
+    const resolved = await getOrCreateExplicitNarutoMission(root, { requestedId: missionId, prompt })
+    assert.equal(resolved.ok, true)
+    if (!resolved.ok) return
+    const result = await withNarutoMissionRunAdmission({
+      missionId: resolved.id,
+      missionDir: resolved.dir,
+      prompt
+    }, async () => {
+      executions += 1
+      return 'created-once'
+    })
+    assert.equal(executions, 1)
+    assert.equal(result.kind, 'executed')
+    const missions = await fs.readdir(path.join(root, '.sneakoscope', 'missions'))
+    assert.deepEqual(missions, [missionId])
+    const mission = JSON.parse(await fs.readFile(path.join(resolved.dir, 'mission.json'), 'utf8'))
+    assert.equal(mission.id, missionId)
+    assert.equal(mission.prompt, prompt)
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})
+
+test('same explicit id and prompt admit only one concurrent execution', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-naruto-explicit-concurrent-'))
+  const missionId = 'M-acas-44444444-4444-4444-8444-444444444444-g000001'
+  const prompt = 'same reserved task'
+  try {
+    let executions = 0
+    const results = await Promise.all(Array.from({ length: 2 }, async () => {
+      const resolved = await getOrCreateExplicitNarutoMission(root, { requestedId: missionId, prompt })
+      assert.equal(resolved.ok, true)
+      if (!resolved.ok) return { kind: 'blocked' as const }
+      return withNarutoMissionRunAdmission({
+        missionId: resolved.id,
+        missionDir: resolved.dir,
+        prompt,
+        staleMs: 1_000
+      }, async () => {
+        executions += 1
+        await delay(80)
+        await writeCompletedBundle(resolved.dir, resolved.id, 'run-explicit-single')
+        return 'executed'
+      })
+    }))
+    assert.equal(executions, 1)
+    assert.equal(results.filter((result) => result.kind === 'executed').length, 1)
+    const missions = await fs.readdir(path.join(root, '.sneakoscope', 'missions'))
+    assert.deepEqual(missions, [missionId])
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})
+
+test('same explicit id with a different prompt fail-closes without an extra execution', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-naruto-explicit-prompt-drift-'))
+  const missionId = 'M-acas-55555555-5555-4555-8555-555555555555-g000002'
+  try {
+    let executions = 0
+    const first = await getOrCreateExplicitNarutoMission(root, {
+      requestedId: missionId,
+      prompt: 'original reserved task'
+    })
+    assert.equal(first.ok, true)
+    if (!first.ok) return
+    const admitted = await withNarutoMissionRunAdmission({
+      missionId: first.id,
+      missionDir: first.dir,
+      prompt: 'original reserved task'
+    }, async () => {
+      executions += 1
+      return 'first'
+    })
+    assert.equal(admitted.kind, 'executed')
+    assert.equal(executions, 1)
+
+    const second = await getOrCreateExplicitNarutoMission(root, {
+      requestedId: missionId,
+      prompt: 'drifted reserved task'
+    })
+    assert.equal(second.ok, false)
+    if (second.ok) return
+    assert.deepEqual(second.blockers, ['naruto_mission_identity_conflict:mission_prompt'])
+    assert.equal(executions, 1)
+    const missions = await fs.readdir(path.join(root, '.sneakoscope', 'missions'))
+    assert.deepEqual(missions, [missionId])
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
+  }
 })
 
 test('protected child PID prevents stale recovery after the parent owner dies', async () => {

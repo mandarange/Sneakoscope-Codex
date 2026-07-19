@@ -87,6 +87,27 @@ test('Codex thread environment selects the in-app path unless standalone is expl
 })
 
 test('standalone child environment keeps only the official runtime allowlist and launch ownership', () => {
+  const allowedHostKeys = [
+    'SKS_AGENT_MODE',
+    'ACAS_AGENT_SLUG',
+    'ACAS_AGENT_WORKSPACE',
+    'ALFREDO_AGENT_SOULS_FILE',
+    'ACAS_CHROME_PATH',
+    'ACAS_HTML_TO_PDF_ENGINE',
+    'ACAS_HTML_TO_PDF_ALLOW_CHROME_CLI_FALLBACK'
+  ] as const
+  const deniedHostKeys = [
+    'ACAS_CONNECTION_TOKEN',
+    'ACAS_CENTER_BASE_URL',
+    'ACAS_CENTRAL_API_BASE',
+    'ACAS_EDGE_NODE_SLUG',
+    'OPENAI_API_KEY',
+    'ANTHROPIC_API_KEY',
+    'OPENROUTER_API_KEY',
+    'CODEX_LB_API_KEY',
+    'SLACK_BOT_TOKEN',
+    'HTTPS_PROXY'
+  ] as const
   const env = buildOfficialSubagentChildEnv({
     missionId: 'M-isolated-parent',
     env: {
@@ -102,7 +123,23 @@ test('standalone child environment keeps only the official runtime allowlist and
       CODEX_THREAD_ID: 'must-not-inherit-app-session',
       CODEX_LB_API_KEY: 'must-not-inherit-lb-auth',
       AWS_SECRET_ACCESS_KEY: 'must-not-inherit-cloud-auth',
-      PROJECT_MCP_ALLOWED: 'must-not-inherit-arbitrary-project-env'
+      PROJECT_MCP_ALLOWED: 'must-not-inherit-arbitrary-project-env',
+      SKS_AGENT_MODE: '1',
+      ACAS_AGENT_SLUG: 'agent-slug',
+      ACAS_AGENT_WORKSPACE: '/tmp/agent-workspace',
+      ALFREDO_AGENT_SOULS_FILE: '/tmp/souls.json',
+      ACAS_CHROME_PATH: '/tmp/chrome',
+      ACAS_HTML_TO_PDF_ENGINE: 'chrome',
+      ACAS_HTML_TO_PDF_ALLOW_CHROME_CLI_FALLBACK: '1',
+      ACAS_CONNECTION_TOKEN: 'must-not-inherit-connection-token',
+      ACAS_CENTER_BASE_URL: 'https://center.example.test',
+      ACAS_CENTRAL_API_BASE: 'https://central.example.test',
+      ACAS_EDGE_NODE_SLUG: 'edge-node',
+      ANTHROPIC_API_KEY: 'anthropic-secret',
+      OPENROUTER_API_KEY: 'openrouter-secret',
+      SLACK_BOT_TOKEN: 'slack-secret',
+      HTTP_PROXY: 'http://proxy.example.test',
+      ALL_PROXY: 'socks5://proxy.example.test'
     }
   })
   assert.equal(env.HOME, '/tmp/official-home')
@@ -111,16 +148,25 @@ test('standalone child environment keeps only the official runtime allowlist and
   assert.equal(env.SKS_NARUTO_STANDALONE_CLI, '0')
   assert.equal(env.SKS_NARUTO_PARENT_LAUNCH, '1')
   assert.equal(env.SKS_NARUTO_PARENT_MISSION_ID, 'M-isolated-parent')
-  assert.equal(env.OPENAI_API_KEY, undefined)
+  assert.deepEqual(allowedHostKeys.map((key) => env[key]), [
+    '1',
+    'agent-slug',
+    '/tmp/agent-workspace',
+    '/tmp/souls.json',
+    '/tmp/chrome',
+    'chrome',
+    '1'
+  ])
+  assert.deepEqual(deniedHostKeys.map((key) => env[key]), Array.from({ length: deniedHostKeys.length }, () => undefined))
   assert.equal(env.CODEX_API_KEY, undefined)
   assert.equal(env.CODEX_AUTH_TOKEN, undefined)
   assert.equal(env.OPENAI_ORGANIZATION, undefined)
   assert.equal(env.OPENAI_PROJECT, undefined)
-  assert.equal(env.HTTPS_PROXY, undefined)
   assert.equal(env.CODEX_THREAD_ID, undefined)
-  assert.equal(env.CODEX_LB_API_KEY, undefined)
   assert.equal(env.AWS_SECRET_ACCESS_KEY, undefined)
   assert.equal(env.PROJECT_MCP_ALLOWED, undefined)
+  assert.equal(env.HTTP_PROXY, undefined)
+  assert.equal(env.ALL_PROXY, undefined)
 })
 
 test('standalone parent replaces the real child environment and redacts inherited secret values from output', { timeout: 20_000 }, async (t) => {

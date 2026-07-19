@@ -59,12 +59,12 @@ export interface NarutoProofProjection {
   mission_id: string
   workflow: 'official_codex_subagent'
   workflow_run_id: string | null
+  blockers: string[]
   evidence: unknown
   summary: unknown
   gate: unknown
   result: NarutoProofResult
   proof_fingerprint: string
-  blockers?: string[]
 }
 
 const MAX_RESULT_SUMMARY_CHARS = 4096
@@ -225,12 +225,12 @@ export function projectNarutoProofSnapshot(input: {
     mission_id: missionId,
     workflow: 'official_codex_subagent',
     workflow_run_id: workflowRunId,
+    blockers: uniqueBlockers,
     evidence: persistedEvidence,
     summary,
     gate,
     result,
-    proof_fingerprint: proofFingerprint,
-    ...(uniqueBlockers.length > 0 ? { blockers: uniqueBlockers } : {})
+    proof_fingerprint: proofFingerprint
   }
 }
 

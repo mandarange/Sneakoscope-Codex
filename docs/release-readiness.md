@@ -1,8 +1,8 @@
 # SKS 7.0.0 Release Readiness
 
 This document is the current fail-closed release contract for `sneakoscope`
-7.0.0. It is a readiness checklist, not evidence that the version has already
-been published.
+7.0.0. The current package version on this branch is 7.0.2. It is a readiness
+checklist, not evidence that the version has already been published.
 
 ## Completion Boundary
 

@@ -1,0 +1,87 @@
+{
+  "schema": "sks.naruto-subagent-workflow.v1",
+  "action": "proof",
+  "ok": true,
+  "status": "completed",
+  "mission_id": "M-proof-projection-fixture",
+  "workflow": "official_codex_subagent",
+  "workflow_run_id": "naruto-proof-projection-fixture-1",
+  "blockers": [],
+  "evidence": {
+    "schema": "sks.subagent-evidence.v1",
+    "workflow": "official_codex_subagent",
+    "requested_subagents": 2,
+    "count_policy": "dynamic_automatic",
+    "target_subagents": 2,
+    "started_threads": 2,
+    "completed_threads": 2,
+    "failed_threads": 0,
+    "started_thread_ids": [
+      "thread-1",
+      "thread-2"
+    ],
+    "completed_thread_ids": [
+      "thread-1",
+      "thread-2"
+    ],
+    "failed_thread_ids": [],
+    "open_thread_ids": [],
+    "unmatched_stop_thread_ids": [],
+    "event_sources": [
+      "SubagentStart",
+      "SubagentStop"
+    ],
+    "parent_summary_present": true,
+    "parent_summary_trustworthy": true,
+    "parent_summary_status": "completed",
+    "ambiguous_stop_thread_ids": [],
+    "run_id": "naruto-proof-projection-fixture-1",
+    "run_epoch": null,
+    "run_scope_source": "input",
+    "rejected_stale_events": 0,
+    "rejected_stale_thread_ids": [],
+    "unbound_run_events": 0,
+    "preparation_only": false,
+    "status": "completed",
+    "ok": true,
+    "blockers": []
+  },
+  "summary": {
+    "schema": "sks.naruto-subagent-workflow.v1",
+    "mission_id": "M-proof-projection-fixture",
+    "workflow": "official_codex_subagent",
+    "workflow_run_id": "naruto-proof-projection-fixture-1",
+    "status": "completed",
+    "ok": true,
+    "completion_evidence": true,
+    "requested_subagents": 2,
+    "count_policy": "dynamic_automatic",
+    "target_subagents": 2
+  },
+  "gate": {
+    "schema": "sks.naruto-gate.v1",
+    "mission_id": "M-proof-projection-fixture",
+    "workflow": "official_codex_subagent",
+    "workflow_run_id": "naruto-proof-projection-fixture-1",
+    "passed": true,
+    "terminal": true,
+    "terminal_state": "completed",
+    "blockers": [],
+    "requested_subagents": 2,
+    "count_policy": "dynamic_automatic",
+    "target_subagents": 2
+  },
+  "result": {
+    "summary": "fixture complete",
+    "changed_files": [
+      "src/example.ts"
+    ],
+    "verification": [
+      {
+        "name": "test",
+        "status": "passed"
+      }
+    ]
+  },
+  "proof_fingerprint": "sha256:21ce5a84d1ef1ec67ddc12b3b8ee0b7e2b20a38bed1ca107fdbc4d83d2189940"
+}

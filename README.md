@@ -18,7 +18,7 @@ Proof-first orchestration for Codex CLI, ChatGPT Desktop, AI coding agents, mult
 Sneakoscope Codex (`sks`) is an open-source trust layer for Codex CLI and ChatGPT Desktop. It coordinates bounded AI coding agents, records machine-verifiable evidence, preserves project memory, and blocks release claims that are not supported by current tests or artifacts. Search visibility outcomes are measured separately; SKS does not promise rankings or traffic.
 <!-- END SKS SEARCH VISIBILITY MARKETING -->
 
-Current release: **SKS 7.0.0**, validated against the official stable **Codex CLI 0.144.5** release from July 16, 2026. It makes the Control Center Overview report build, install, cache, rebuild, and probe health from their real authorities; adds root-owned Naruto follow-up waves with recovered thread capacity; separates Terra Medium exploration, Sol High implementation, and Sol Max judgment; and replaces duplicated global guidance with one concise Core Engineering Directive. The `0.145.0-alpha` line is intentionally excluded from the stable release baseline. See [CHANGELOG.md](CHANGELOG.md).
+Current release: **SKS 7.0.2**, validated against the official stable **Codex CLI 0.144.5** release from July 16, 2026. It makes the Control Center Overview report build, install, cache, rebuild, and probe health from their real authorities; adds root-owned Naruto follow-up waves with recovered thread capacity; separates Terra Medium exploration, Sol High implementation, and Sol Max judgment; and replaces duplicated global guidance with one concise Core Engineering Directive. The `0.145.0-alpha` line is intentionally excluded from the stable release baseline. See [CHANGELOG.md](CHANGELOG.md).
 
 ## What 7.0.0 Ships
 

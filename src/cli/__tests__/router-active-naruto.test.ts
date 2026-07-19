@@ -58,6 +58,7 @@ test('Naruto observation dispatch skips migration repair and remains read-only',
 
     const result: any = await dispatch(['naruto', 'status', 'latest', '--json'])
     assert.equal(result.status, 'missing_mission')
+    await assert.rejects(fsp.access(path.join(root, '.sneakoscope', 'missions')))
     await assert.rejects(fsp.access(path.join(root, '.sneakoscope', 'update', 'doctor-migration.json')))
   } finally {
     process.chdir(oldCwd)

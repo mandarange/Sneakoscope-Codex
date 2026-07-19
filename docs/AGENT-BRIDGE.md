@@ -155,6 +155,35 @@ for await (const line of readLines(child.stdout)) {
   `--json` literal; conservatively `false` (never fabricated `true`) when the file can't be
   read (e.g. `dist` not built yet).
 
+## Naruto host contract fixtures
+
+External hosts that consume `sks naruto proof --json` should treat these checked-in envelopes as
+the stable outer contract for `sks.naruto-subagent-workflow.v1`:
+
+- `fixtures/contracts/naruto-proof-v1/completed.json`
+- `fixtures/contracts/naruto-proof-v1/blocked.json`
+- `fixtures/contracts/naruto-proof-v1/incomplete.json`
+
+All three states share the same top-level key set. `blockers`, `result.changed_files`, and
+`result.verification` are always arrays. Explicit reserved mission IDs may first-create on
+`sks naruto run --mission <id>`; `status` / `subagents` / `proof` remain create-free.
+
+## Codex parent nonsecret host env allowlist
+
+When SKS launches a standalone Codex parent for Naruto, only these additional host keys may pass
+through the fixed child-env allowlist (exact names, no wildcards):
+
+- `SKS_AGENT_MODE`
+- `ACAS_AGENT_SLUG`
+- `ACAS_AGENT_WORKSPACE`
+- `ALFREDO_AGENT_SOULS_FILE`
+- `ACAS_CHROME_PATH`
+- `ACAS_HTML_TO_PDF_ENGINE`
+- `ACAS_HTML_TO_PDF_ALLOW_CHROME_CLI_FALLBACK`
+
+Connection tokens, Center URLs, provider API keys, Slack tokens, and proxy variables are never
+copied into the child environment.
+
 ## Security notes
 
 - `--expose-exec` is off by default on `sks mcp-server`. A generic MCP client only sees
@@ -163,6 +192,8 @@ for await (const line of readLines(child.stdout)) {
   `--expose-exec` is set.
 - Every subprocess invocation runs with `SKS_AGENT_MODE=1`, so it inherits the same
   never-block-on-a-prompt guarantee described above.
-- The generated manifest contains only the current command registry. `sks doctor --fix` and
-  `sks update` reconcile SKS-owned installed manifests and remove retired managed entries;
-  user-authored collisions are preserved in quarantine instead of overwritten.
+- The generated manifest contains only the current command registry and is written to
+  `.sneakoscope/agent-bridge/manifest.json` as a local generated artifact (not tracked in git).
+  `sks doctor --fix` and `sks update` reconcile SKS-owned installed manifests and remove
+  retired managed entries; user-authored collisions are preserved in quarantine instead of
+  overwritten.

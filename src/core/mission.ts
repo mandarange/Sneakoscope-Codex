@@ -24,12 +24,81 @@ export function stateFileForSession(root: any, sessionKey: any) {
   return path.join(stateSessionsDir(root), `${sessionStateKey(sessionKey)}.json`);
 }
 
-export async function createMission(root: any, { mode, prompt, sessionKey }: any): Promise<JsonData> {
-  return withStateLock(root, () => createMissionUnlocked(root, { mode, prompt, sessionKey }));
+export function validateExternallyReservedMissionId(rawId: unknown): { ok: true; id: string } | { ok: false; reason: string } {
+  const id = String(rawId ?? '');
+  if (!id.startsWith('M-')) return { ok: false, reason: 'missing_m_prefix' };
+  if (id.length < 3 || id.length > 160) return { ok: false, reason: 'length' };
+  if (id.trim() !== id) return { ok: false, reason: 'normalization' };
+  if (id.includes('/') || id.includes('\\') || id.includes('\0') || /\s/.test(id) || id.includes('..')) {
+    return { ok: false, reason: 'path' };
+  }
+  if (!/^[A-Za-z0-9._-]+$/.test(id)) return { ok: false, reason: 'charset' };
+  return { ok: true, id };
 }
 
-async function createMissionUnlocked(root: any, { mode, prompt, sessionKey }: any): Promise<JsonData> {
-  const id = missionId();
+export async function createMission(root: any, { mode, prompt, sessionKey, requestedId }: any): Promise<JsonData> {
+  return withStateLock(root, () => createMissionUnlocked(root, { mode, prompt, sessionKey, requestedId }));
+}
+
+export async function getOrCreateExplicitNarutoMission(root: any, input: {
+  requestedId: string;
+  prompt: string;
+  sessionKey?: string | null;
+}): Promise<{ ok: true; id: string; dir: string } | { ok: false; blockers: string[] }> {
+  const validated = validateExternallyReservedMissionId(input.requestedId);
+  if (!validated.ok) {
+    return { ok: false, blockers: [`naruto_mission_id_invalid:${validated.reason}`] };
+  }
+  const normalizedPrompt = String(input.prompt || '').trim();
+  return withStateLock(root, async () => {
+    let loaded = await loadMission(root, validated.id).catch(() => null);
+    if (!loaded) {
+      try {
+        const created = await createMissionUnlocked(root, {
+          mode: 'naruto',
+          prompt: normalizedPrompt,
+          sessionKey: input.sessionKey,
+          requestedId: validated.id
+        });
+        return { ok: true, id: String(created.id), dir: String(created.dir) };
+      } catch (error: any) {
+        if (error?.code !== 'mission_already_exists') throw error;
+        loaded = await loadMission(root, validated.id).catch(() => null);
+        if (!loaded) {
+          return { ok: false, blockers: [`naruto_mission_not_found:${validated.id}`] };
+        }
+      }
+    }
+    if (String(loaded.mission?.mode || '') !== 'naruto') {
+      return { ok: false, blockers: ['naruto_mission_identity_conflict:mission_mode'] };
+    }
+    if (String(loaded.mission?.prompt || '').trim() !== normalizedPrompt) {
+      return { ok: false, blockers: ['naruto_mission_identity_conflict:mission_prompt'] };
+    }
+    return { ok: true, id: String(loaded.id), dir: String(loaded.dir) };
+  });
+}
+
+async function createMissionUnlocked(root: any, { mode, prompt, sessionKey, requestedId }: any): Promise<JsonData> {
+  let id: string;
+  if (requestedId != null && String(requestedId).length > 0) {
+    const validated = validateExternallyReservedMissionId(requestedId);
+    if (!validated.ok) {
+      const err = new Error(`invalid_mission_id:${validated.reason}`);
+      (err as any).code = 'invalid_mission_id';
+      (err as any).reason = validated.reason;
+      throw err;
+    }
+    id = validated.id;
+    if (await exists(path.join(missionDir(root, id), 'mission.json'))) {
+      const err = new Error('mission_already_exists');
+      (err as any).code = 'mission_already_exists';
+      (err as any).id = id;
+      throw err;
+    }
+  } else {
+    id = missionId();
+  }
   const dir = missionDir(root, id);
   await ensureDir(dir);
   await ensureDir(path.join(dir, 'bus'));
