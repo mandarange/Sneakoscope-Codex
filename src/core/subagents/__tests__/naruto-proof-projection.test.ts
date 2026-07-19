@@ -211,7 +211,7 @@ test('changed file escapes, normalized duplicates, and sensitive verification te
   }
 })
 
-test('additive artifact and capability receipts preserve core proof fields and nested evidence', async () => {
+test('additive artifact and capability receipt fields are projected from proof output and fingerprints', async () => {
   const artifacts = [{
     path: 'reports/monthly-finance.xlsx',
     kind: 'spreadsheet',
@@ -231,9 +231,23 @@ test('additive artifact and capability receipts preserve core proof fields and n
     tool_names: ['spreadsheet_create'],
     receipt_sha256: SHA256_A
   }]
-  const dir = await writeProofFixture('completed', { artifacts, capabilitiesUsed })
+  const additiveArtifacts = artifacts.map((receipt) => ({
+    ...receipt,
+    arguments: { token: 'artifact-secret-not-projected' }
+  }))
+  const additiveCapabilitiesUsed = capabilitiesUsed.map((receipt) => ({
+    ...receipt,
+    rows: ['capability-secret-not-projected']
+  }))
+  const canonicalDir = await writeProofFixture('completed', { artifacts, capabilitiesUsed })
+  const additiveDir = await writeProofFixture('completed', {
+    artifacts: additiveArtifacts,
+    capabilitiesUsed: additiveCapabilitiesUsed
+  })
   try {
-    const snapshot = await readNarutoProofArtifactSnapshot(dir)
+    const canonicalSnapshot = await readNarutoProofArtifactSnapshot(canonicalDir)
+    const snapshot = await readNarutoProofArtifactSnapshot(additiveDir)
+    const canonicalProof = projectNarutoProofSnapshot({ snapshot: canonicalSnapshot, missionId: MISSION_ID })
     const proof = projectNarutoProofSnapshot({ snapshot, missionId: MISSION_ID })
     assert.equal(proof.status, 'completed')
     assert.equal(proof.ok, true)
@@ -246,6 +260,11 @@ test('additive artifact and capability receipts preserve core proof fields and n
     assert.equal(Object.hasOwn(proof.evidence as object, 'artifacts'), false)
     assert.equal(Object.hasOwn(proof.evidence as object, 'capabilities_used'), false)
     assert.deepEqual((proof.evidence as any).host_capability_evidence.artifacts, artifacts)
+    assert.equal(proof.proof_fingerprint, canonicalProof.proof_fingerprint)
+    assert.doesNotMatch(
+      JSON.stringify(proof),
+      /artifact-secret-not-projected|capability-secret-not-projected|arguments|rows/
+    )
 
     const changedParent = JSON.parse(snapshot.bytes[SUBAGENT_PARENT_SUMMARY_FILENAME]!.toString('utf8'))
     changedParent.artifacts[0].bytes += 1
@@ -261,7 +280,10 @@ test('additive artifact and capability receipts preserve core proof fields and n
     })
     assert.notEqual(resultChanged.proof_fingerprint, proof.proof_fingerprint)
   } finally {
-    await fsp.rm(dir, { recursive: true, force: true })
+    await Promise.all([
+      fsp.rm(canonicalDir, { recursive: true, force: true }),
+      fsp.rm(additiveDir, { recursive: true, force: true })
+    ])
   }
 })
 
@@ -400,7 +422,7 @@ test('artifact receipts enforce path, hash, size, count, and deliverable-role bo
     assert.ok(proof.blockers.includes('proof_artifact_sha256_invalid'))
     assert.ok(proof.blockers.includes('proof_artifact_bytes_invalid'))
     assert.ok(proof.blockers.includes('proof_artifact_deliverable_role_invalid'))
-    assert.ok(proof.blockers.includes('proof_artifact_unknown_field'))
+    assert.equal(proof.blockers.includes('proof_artifact_unknown_field'), false)
     assert.ok((proof.result.artifacts?.length || 0) <= 64)
     assert.doesNotMatch(JSON.stringify(proof.result), /do-not-project|arguments/)
   } finally {
@@ -429,7 +451,7 @@ test('capability receipts are bounded to identifiers, statuses, tool names, and 
     const proof = await buildNarutoProofProjection({ artifactDir: dir, missionId: MISSION_ID })
     assert.equal(proof.status, 'blocked')
     assert.ok(proof.blockers.includes('proof_capabilities_used_too_many'))
-    assert.ok(proof.blockers.includes('proof_capability_use_unknown_field'))
+    assert.equal(proof.blockers.includes('proof_capability_use_unknown_field'), false)
     assert.ok(proof.blockers.includes('proof_capability_use_unknown_id'))
     assert.ok(proof.blockers.includes('proof_capability_use_tool_names_invalid'))
     assert.ok(proof.blockers.includes('proof_capability_use_receipt_sha256_invalid'))

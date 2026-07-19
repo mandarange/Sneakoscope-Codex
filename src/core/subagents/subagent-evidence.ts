@@ -106,8 +106,6 @@ const MAX_PARENT_CAPABILITY_USES = 64
 const MAX_PARENT_CAPABILITY_TOOL_NAMES = 64
 const SHA256_RECEIPT_PATTERN = /^sha256:[a-f0-9]{64}$/
 const ARTIFACT_ROLES = new Set<HostArtifactReceipt['role']>(['deliverable', 'scratch', 'temp', 'log'])
-const PARENT_ARTIFACT_KEYS = new Set(['path', 'kind', 'media_type', 'sha256', 'bytes', 'role'])
-const PARENT_CAPABILITY_KEYS = new Set(['id', 'status', 'tool_names', 'receipt_sha256'])
 const HOST_CAPABILITY_BY_ID = new Map(HOST_CAPABILITY_DESCRIPTORS.map((descriptor) => [descriptor.id, descriptor]))
 
 export function normalizeSubagentEvent(payload: unknown, explicitEventName?: unknown): NormalizedSubagentEvent | null {
@@ -606,7 +604,7 @@ export function normalizeSubagentParentSummary(value: unknown): {
   if (parsed.blockers !== undefined && (!Array.isArray(parsed.blockers) || parsed.blockers.some((item) => typeof item !== 'string'))) {
     blockers.push('parent_summary_blockers_invalid')
   }
-  validateParentArtifactReceipts(parsed.artifacts, blockers)
+  const parentArtifacts = validateParentArtifactReceipts(parsed.artifacts, blockers)
   const parentCapabilities = validateParentCapabilityUseReceipts(parsed.capabilities_used, blockers)
   if (!Array.isArray(parsed.thread_outcomes) || parsed.thread_outcomes.length === 0) {
     blockers.push('parent_thread_outcomes_missing')
@@ -650,6 +648,11 @@ export function normalizeSubagentParentSummary(value: unknown): {
       if (receipt.status !== 'passed') blockers.push(`parent_summary_capability_not_passed:${receipt.id}`)
     }
   }
+  const raw = {
+    ...parsed,
+    ...(parsed.artifacts === undefined ? {} : { artifacts: parentArtifacts || [] }),
+    ...(parsed.capabilities_used === undefined ? {} : { capabilities_used: parentCapabilities || [] })
+  }
   return {
     present: true,
     trustworthy: blockers.length === 0,
@@ -659,7 +662,7 @@ export function normalizeSubagentParentSummary(value: unknown): {
     run_epoch: firstText(parsed.run_epoch) || null,
     thread_outcomes: threadOutcomes,
     blockers: uniqueStrings(blockers.length ? blockers : []),
-    raw: parsed
+    raw
   }
 }
 
@@ -698,9 +701,6 @@ function validateParentArtifactReceipts(value: unknown, blockers: string[]): Hos
     if (!isRecord(row)) {
       blockers.push('parent_summary_artifact_invalid')
       continue
-    }
-    if (Object.keys(row).some((key) => !PARENT_ARTIFACT_KEYS.has(key))) {
-      blockers.push('parent_summary_artifact_unknown_field')
     }
     const artifactPath = normalizeParentArtifactPath(row.path)
     const kind = boundedParentToken(row.kind, 64, /^[a-z][a-z0-9_-]*$/)
@@ -748,9 +748,6 @@ function validateParentCapabilityUseReceipts(value: unknown, blockers: string[])
     if (!isRecord(row)) {
       blockers.push('parent_summary_capability_use_invalid')
       continue
-    }
-    if (Object.keys(row).some((key) => !PARENT_CAPABILITY_KEYS.has(key))) {
-      blockers.push('parent_summary_capability_use_unknown_field')
     }
     const id = typeof row.id === 'string' ? row.id.trim() : ''
     const descriptor = HOST_CAPABILITY_BY_ID.get(id)
@@ -840,7 +837,11 @@ function normalizeTrustedHostCapabilityEvidence(value: unknown): HostCapabilityE
       || typeof row.event_sha256 !== 'string'
       || !SHA256_RECEIPT_PATTERN.test(row.event_sha256)
   })) return null
-  return value as unknown as HostCapabilityExecutionEvidence
+  return {
+    ...value,
+    capabilities_used: capabilities,
+    artifacts
+  } as unknown as HostCapabilityExecutionEvidence
 }
 
 function validateParentHostCapabilityBinding(

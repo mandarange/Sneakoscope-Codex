@@ -7,6 +7,7 @@ import { CODEX_HOOK_EVENTS } from '../../codex-compat/codex-hook-events.js';
 import { evaluateHookPayload } from '../../hooks-runtime.js';
 import { normalizeHookResult } from '../hook-io.js';
 import { runOfficialSubagentWorkflow } from '../../subagents/official-subagent-runner.js';
+import { sha256 } from '../../fsx.js';
 import {
   HOST_CAPABILITY_HOOK_EVIDENCE_FILENAME,
   HOST_CAPABILITY_HOOK_OBSERVATIONS_FILENAME,
@@ -158,19 +159,22 @@ test('host capability hooks enforce the exact allowlist and persist only bounded
   const workflowRunId = 'naruto-host-capability-hooks-run';
   const sessionId = 'host-capability-hooks-session';
   const dir = path.join(root, '.sneakoscope', 'missions', missionId);
+  const goal = 'Create and deliver an Excel workbook.';
   const state = {
     mission_id: missionId,
     official_subagent_run_id: workflowRunId,
     session_scope: sessionId,
     mode: 'NARUTO',
     route: 'Naruto',
-    subagents_required: true
+    subagents_required: true,
+    prompt: goal
   };
   try {
     await fsp.mkdir(dir, { recursive: true });
+    await fsp.writeFile(path.join(dir, 'subagent-plan.json'), `${JSON.stringify({ goal }, null, 2)}\n`);
     const runtime = await inspectHostCapabilityRuntime({
       root,
-      request: requestHostCapabilities('Create and deliver an Excel workbook.'),
+      request: requestHostCapabilities(goal),
       dependencies: hostCapabilityDependencies([
         'spreadsheet_create',
         'spreadsheet_inspect',
@@ -258,7 +262,17 @@ test('host capability hooks enforce the exact allowlist and persist only bounded
       turn_id: 'turn-host-inspect-post',
       tool_name: 'mcp__acas-tools__spreadsheet_inspect',
       tool_input: { path: artifact.path },
-      tool_response: { structured_content: { ok: true, path: artifact.path } },
+      tool_response: {
+        structured_content: {
+          ok: true,
+          path: artifact.path,
+          sheet_names: ['Summary'],
+          row_counts: { Summary: 12 },
+          formulas: ['=SUM(B2:B11)'],
+          error_cells: [],
+          raw_formula_values: ['must-not-persist']
+        }
+      },
       tool_use_id: 'tool-use-inspect'
     }, { root, state });
 
@@ -272,6 +286,7 @@ test('host capability hooks enforce the exact allowlist and persist only bounded
     assert.equal(observationsText.includes('must-not-persist'), false);
     assert.equal(observationsText.includes('tampered-secret'), false);
     assert.equal(observationsText.includes('raw-row-'), false);
+    assert.equal(observationsText.includes('raw_formula_values'), false);
     assert.ok(Buffer.byteLength(observationsText, 'utf8') < 32 * 1024);
     assert.equal(evidence.ok, true);
     assert.deepEqual(evidence.tool_calls.map((row: any) => row.tool), ['spreadsheet_create', 'spreadsheet_inspect']);
@@ -300,6 +315,247 @@ test('host capability hooks enforce the exact allowlist and persist only bounded
     }, { root, state });
     assert.equal(foreign.decision, undefined);
     assert.equal(await fsp.readFile(path.join(dir, HOST_CAPABILITY_HOOK_OBSERVATIONS_FILENAME), 'utf8'), beforeForeign);
+  } finally {
+    await fsp.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('host capability hooks reject a valid runtime whose canonical request scope was replaced', async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-hook-host-scope-tamper-'));
+  const missionId = 'M-20260719-host-scope-tamper';
+  const workflowRunId = 'naruto-host-scope-tamper-run';
+  const sessionId = 'host-scope-tamper-session';
+  const dir = path.join(root, '.sneakoscope', 'missions', missionId);
+  const goal = 'Create and deliver an Excel workbook.';
+  const state = {
+    mission_id: missionId,
+    official_subagent_run_id: workflowRunId,
+    session_scope: sessionId,
+    mode: 'NARUTO',
+    route: 'Naruto',
+    subagents_required: true,
+    prompt: goal
+  };
+  try {
+    await fsp.mkdir(dir, { recursive: true });
+    await fsp.writeFile(path.join(dir, 'subagent-plan.json'), `${JSON.stringify({ goal }, null, 2)}\n`);
+    const narrowedRuntime = await inspectHostCapabilityRuntime({
+      root,
+      request: requestHostCapabilities('Populate quarterly numbers into reports/q3.xlsx.'),
+      dependencies: hostCapabilityDependencies(['spreadsheet_create', 'spreadsheet_inspect', 'spreadsheet_update'])
+    });
+    await fsp.writeFile(path.join(dir, HOST_CAPABILITY_HOOK_RUNTIME_FILENAME), `${JSON.stringify(
+      createHostCapabilityHookRuntimeBinding({
+        missionId,
+        workflowRunId,
+        sessionScope: sessionId,
+        runtime: narrowedRuntime
+      }),
+      null,
+      2
+    )}\n`);
+
+    const result: any = await evaluateHookPayload('pre-tool', {
+      session_id: sessionId,
+      tool_name: 'mcp__acas-tools__spreadsheet_inspect',
+      tool_input: { path: 'reports/q3.xlsx' },
+      tool_use_id: 'scope-tamper-inspect'
+    }, { root, state });
+    assert.equal(result.decision, 'block');
+    assert.match(result.reason, /host_capability_hook_runtime_request_scope_mismatch/);
+  } finally {
+    await fsp.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('host capability PostToolUse fails closed for missing or malformed datasource receipts', async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-hook-host-db-receipts-'));
+  const missionId = 'M-20260719-host-db-receipts';
+  const workflowRunId = 'naruto-host-db-receipts-run';
+  const sessionId = 'host-db-receipts-session';
+  const dir = path.join(root, '.sneakoscope', 'missions', missionId);
+  const goal = 'Query database rows and retrieve the results.';
+  const state = {
+    mission_id: missionId,
+    official_subagent_run_id: workflowRunId,
+    session_scope: sessionId,
+    mode: 'NARUTO',
+    route: 'Naruto',
+    subagents_required: true,
+    prompt: goal
+  };
+  try {
+    await fsp.mkdir(dir, { recursive: true });
+    await fsp.writeFile(path.join(dir, 'subagent-plan.json'), `${JSON.stringify({ goal }, null, 2)}\n`);
+    const runtime = await inspectHostCapabilityRuntime({
+      root,
+      request: requestHostCapabilities(goal),
+      dependencies: hostCapabilityDependencies(['datasource_schema_context', 'datasource_query_readonly'])
+    });
+    await fsp.writeFile(path.join(dir, HOST_CAPABILITY_HOOK_RUNTIME_FILENAME), `${JSON.stringify(
+      createHostCapabilityHookRuntimeBinding({ missionId, workflowRunId, sessionScope: sessionId, runtime }),
+      null,
+      2
+    )}\n`);
+    const schemaSnapshotId = 'schema-snapshot-finance-v4';
+    const query = 'SELECT account_id, balance FROM accounts WHERE active = ?';
+    const calls = [
+      {
+        tool: 'datasource_schema_context',
+        id: 'db-schema',
+        input: {},
+        response: {
+          structured_content: {
+            datasource: 'mysql:finance',
+            schema_snapshot_id: schemaSnapshotId,
+            tables: ['must-not-persist']
+          }
+        }
+      },
+      {
+        tool: 'datasource_query_readonly',
+        id: 'db-query-with-center-bound-datasource',
+        input: { schema_snapshot_id: schemaSnapshotId, query, bindings: [true] },
+        response: {
+          structured_content: {
+            datasource: 'mysql:finance',
+            schema_snapshot_id: schemaSnapshotId,
+            query_sha256: `sha256:${sha256(query)}`,
+            row_count: 2,
+            column_count: 2,
+            truncated: false,
+            status: 'passed'
+          }
+        }
+      },
+      {
+        tool: 'datasource_query_readonly',
+        id: 'db-query-missing-receipt',
+        input: { schema_snapshot_id: schemaSnapshotId, query, bindings: [true] },
+        response: {
+          structured_content: {
+            datasource: 'mysql:finance',
+            schema_snapshot_id: schemaSnapshotId,
+            query_sha256: `sha256:${sha256(query)}`,
+            column_count: 2,
+            truncated: false,
+            status: 'passed',
+            rows: [{ account_id: 'must-not-persist', balance: 10 }]
+          }
+        }
+      },
+      {
+        tool: 'datasource_query_readonly',
+        id: 'db-query-malformed',
+        input: { datasource: 'mysql:finance', schema_snapshot_id: schemaSnapshotId, query, bindings: [true] },
+        response: 'malformed-host-response'
+      },
+      {
+        tool: 'datasource_query_readonly',
+        id: 'db-query-cross-datasource',
+        input: { datasource: 'mysql:hr', schema_snapshot_id: schemaSnapshotId, query, bindings: [true] },
+        response: {
+          structured_content: {
+            datasource: 'mysql:hr',
+            schema_snapshot_id: schemaSnapshotId,
+            query_sha256: `sha256:${sha256(query)}`,
+            row_count: 1,
+            column_count: 2,
+            truncated: false,
+            status: 'passed'
+          }
+        }
+      }
+    ];
+    for (const call of calls) {
+      await evaluateHookPayload('pre-tool', {
+        session_id: sessionId,
+        tool_name: `mcp__acas-tools__${call.tool}`,
+        tool_input: call.input,
+        tool_use_id: call.id
+      }, { root, state });
+      await evaluateHookPayload('post-tool', {
+        session_id: sessionId,
+        tool_name: `mcp__acas-tools__${call.tool}`,
+        tool_input: call.input,
+        tool_response: call.response,
+        tool_use_id: call.id
+      }, { root, state });
+    }
+    const observationsText = await fsp.readFile(path.join(dir, HOST_CAPABILITY_HOOK_OBSERVATIONS_FILENAME), 'utf8');
+    const observations = JSON.parse(observationsText);
+    const evidenceText = await fsp.readFile(path.join(dir, HOST_CAPABILITY_HOOK_EVIDENCE_FILENAME), 'utf8');
+    const evidence = JSON.parse(evidenceText);
+    const centerBoundQuery = observations.tool_calls.find((row: any) => row.tool_use_id_sha256 === `sha256:${sha256('db-query-with-center-bound-datasource')}`);
+    assert.equal(centerBoundQuery.status, 'passed');
+    assert.equal(centerBoundQuery.semantic_receipt.datasource_sha256, `sha256:${sha256('mysql:finance')}`);
+    assert.equal(evidence.ok, false);
+    assert.ok(evidence.blockers.includes('host_capability_readonly_query_receipt_invalid'));
+    assert.ok(evidence.blockers.includes('host_tool_response_malformed:datasource_query_readonly'));
+    assert.ok(evidence.blockers.includes('host_capability_readonly_query_datasource_mismatch'));
+    assert.ok(evidence.blockers.includes('host_capability_readonly_query_count_invalid'));
+    assert.equal(evidenceText.includes('must-not-persist'), false);
+    assert.equal(evidenceText.includes('mysql:finance'), false);
+    assert.equal(evidenceText.includes('mysql:hr'), false);
+    assert.equal(observationsText.includes('mysql:finance'), false);
+    assert.equal(observationsText.includes('mysql:hr'), false);
+  } finally {
+    await fsp.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('spreadsheet inspection receipts fail closed when logical error cells are reported', async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-hook-host-sheet-errors-'));
+  const missionId = 'M-20260719-host-sheet-errors';
+  const workflowRunId = 'naruto-host-sheet-errors-run';
+  const sessionId = 'host-sheet-errors-session';
+  const dir = path.join(root, '.sneakoscope', 'missions', missionId);
+  const goal = 'Create and deliver an Excel workbook.';
+  const state = {
+    mission_id: missionId,
+    official_subagent_run_id: workflowRunId,
+    session_scope: sessionId,
+    mode: 'NARUTO',
+    route: 'Naruto',
+    subagents_required: true,
+    prompt: goal
+  };
+  try {
+    await fsp.mkdir(dir, { recursive: true });
+    await fsp.writeFile(path.join(dir, 'subagent-plan.json'), `${JSON.stringify({ goal }, null, 2)}\n`);
+    const runtime = await inspectHostCapabilityRuntime({
+      root,
+      request: requestHostCapabilities(goal),
+      dependencies: hostCapabilityDependencies(['spreadsheet_create', 'spreadsheet_inspect', 'spreadsheet_update'])
+    });
+    await fsp.writeFile(path.join(dir, HOST_CAPABILITY_HOOK_RUNTIME_FILENAME), `${JSON.stringify(
+      createHostCapabilityHookRuntimeBinding({ missionId, workflowRunId, sessionScope: sessionId, runtime }),
+      null,
+      2
+    )}\n`);
+    const payload = {
+      session_id: sessionId,
+      tool_name: 'mcp__acas-tools__spreadsheet_inspect',
+      tool_input: { path: 'reports/error.xlsx' },
+      tool_response: {
+        structured_content: {
+          ok: true,
+          sheet_names: ['Summary'],
+          row_counts: { Summary: 4 },
+          formulas: ['=1/0'],
+          error_cells: [{ cell: 'B2', error: '#DIV/0!', secret_formula: 'must-not-persist' }]
+        }
+      },
+      tool_use_id: 'sheet-error-inspect'
+    };
+    await evaluateHookPayload('pre-tool', payload, { root, state });
+    await evaluateHookPayload('post-tool', payload, { root, state });
+    const observationsText = await fsp.readFile(path.join(dir, HOST_CAPABILITY_HOOK_OBSERVATIONS_FILENAME), 'utf8');
+    const evidence = JSON.parse(await fsp.readFile(path.join(dir, HOST_CAPABILITY_HOOK_EVIDENCE_FILENAME), 'utf8'));
+    assert.equal(evidence.ok, false);
+    assert.ok(evidence.blockers.includes('host_capability_spreadsheet_error_cells_present'));
+    assert.equal(observationsText.includes('must-not-persist'), false);
+    assert.equal(observationsText.includes('#DIV/0!'), false);
   } finally {
     await fsp.rm(root, { recursive: true, force: true });
   }

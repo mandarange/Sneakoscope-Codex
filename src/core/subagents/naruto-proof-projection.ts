@@ -200,10 +200,17 @@ export function projectNarutoProofSnapshot(input: {
   const plan = parseJsonArtifact(input.snapshot, SUBAGENT_PLAN_FILENAME, blockers)
   const parentSummaryValue = parseJsonArtifact(input.snapshot, SUBAGENT_PARENT_SUMMARY_FILENAME, blockers)
   const persistedEvidence = normalizeLegacySubagentCountFields(parseJsonArtifact(input.snapshot, SUBAGENT_EVIDENCE_FILENAME, blockers), isRecord(plan) ? plan : null)
+  const receiptProjectedPersistedEvidence = projectReceiptAdditiveFields(
+    SUBAGENT_EVIDENCE_FILENAME,
+    persistedEvidence
+  )
   const trustedHostCapabilityEvidence = projectTrustedHostCapabilityEvidence(
-    recordValue(persistedEvidence, 'host_capability_evidence'),
+    recordValue(receiptProjectedPersistedEvidence, 'host_capability_evidence'),
     blockers
   )
+  const projectedPersistedEvidence = isRecord(receiptProjectedPersistedEvidence) && trustedHostCapabilityEvidence
+    ? { ...receiptProjectedPersistedEvidence, host_capability_evidence: trustedHostCapabilityEvidence }
+    : receiptProjectedPersistedEvidence
   const summary = normalizeLegacySubagentCountFields(parseJsonArtifact(input.snapshot, NARUTO_SUMMARY_FILENAME, blockers), isRecord(plan) ? plan : null)
   const gate = normalizeLegacySubagentCountFields(parseJsonArtifact(input.snapshot, NARUTO_GATE_FILENAME, blockers), isRecord(plan) ? plan : null)
   const events = parseJsonlArtifact(input.snapshot, blockers)
@@ -251,7 +258,7 @@ export function projectNarutoProofSnapshot(input: {
   const evidenceInputsPresent = input.snapshot.bytes[SUBAGENT_PLAN_FILENAME] !== null
     && input.snapshot.bytes[SUBAGENT_EVENT_LOG_FILENAME] !== null
     && input.snapshot.bytes[SUBAGENT_PARENT_SUMMARY_FILENAME] !== null
-  if (evidenceInputsPresent) validatePersistedEvidence(persistedEvidence, rebuiltEvidence, blockers)
+  if (evidenceInputsPresent) validatePersistedEvidence(projectedPersistedEvidence, rebuiltEvidence, blockers)
 
   const changedFiles = projectChangedFiles(normalizedParentSummary.raw?.changed_files, blockers)
   const verification = projectVerification(normalizedParentSummary.raw?.verification, blockers)
@@ -304,8 +311,8 @@ export function projectNarutoProofSnapshot(input: {
   }
 
   const completed = gatePassed(gate)
-    && recordValue(persistedEvidence, 'ok') === true
-    && firstText(recordValue(persistedEvidence, 'status')).toLowerCase() === 'completed'
+    && recordValue(projectedPersistedEvidence, 'ok') === true
+    && firstText(recordValue(projectedPersistedEvidence, 'status')).toLowerCase() === 'completed'
     && rebuiltEvidence?.ok === true
     && normalizedParentSummary.trustworthy
     && normalizedParentSummary.status === 'completed'
@@ -316,8 +323,8 @@ export function projectNarutoProofSnapshot(input: {
   const explicitBlocked = !completed && isExplicitlyBlocked({
     blockers,
     parentStatus: normalizedParentSummary.status,
-    evidenceStatus: firstText(recordValue(persistedEvidence, 'status')),
-    failedThreads: Number(recordValue(persistedEvidence, 'failed_threads') || 0),
+    evidenceStatus: firstText(recordValue(projectedPersistedEvidence, 'status')),
+    failedThreads: Number(recordValue(projectedPersistedEvidence, 'failed_threads') || 0),
     summaryStatus: firstText(recordValue(summary, 'status')),
     gate
   })
@@ -329,7 +336,7 @@ export function projectNarutoProofSnapshot(input: {
     status,
     missionId,
     workflowRunId,
-    artifactHashes: input.snapshot.byte_hashes,
+    artifactHashes: projectFingerprintArtifactHashes(input.snapshot),
     result
   })
 
@@ -342,7 +349,7 @@ export function projectNarutoProofSnapshot(input: {
     workflow: 'official_codex_subagent',
     workflow_run_id: workflowRunId,
     blockers: uniqueBlockers,
-    evidence: persistedEvidence,
+    evidence: projectedPersistedEvidence,
     summary,
     gate,
     result,
@@ -420,7 +427,11 @@ function projectTrustedHostCapabilityEvidence(
   const expectedOk = value.blockers.length === 0 && capabilities.every((receipt) => receipt.status === 'passed')
   if (value.ok !== expectedOk) blockers.push('proof_host_capability_evidence_status_inconsistent')
   blockers.push(...value.blockers)
-  return value as unknown as HostCapabilityExecutionEvidence
+  return {
+    ...value,
+    capabilities_used: capabilities,
+    artifacts
+  } as unknown as HostCapabilityExecutionEvidence
 }
 
 async function verifyProjectedArtifactFiles(input: {
@@ -746,9 +757,6 @@ function projectArtifacts(value: unknown, blockers: string[]): NarutoProofArtifa
       blockers.push('proof_artifact_invalid')
       continue
     }
-    if (Object.keys(row).some((key) => !ARTIFACT_RECEIPT_KEYS.has(key))) {
-      blockers.push('proof_artifact_unknown_field')
-    }
     const artifactPath = normalizeArtifactPath(row.path, blockers)
     const kind = boundedToken(row.kind, MAX_ARTIFACT_KIND_CHARS, /^[a-z][a-z0-9_-]*$/)
     const mediaType = boundedToken(
@@ -861,9 +869,6 @@ function projectCapabilityUses(value: unknown, blockers: string[]): NarutoProofC
     if (!isRecord(row)) {
       blockers.push('proof_capability_use_invalid')
       continue
-    }
-    if (Object.keys(row).some((key) => !CAPABILITY_USE_KEYS.has(key))) {
-      blockers.push('proof_capability_use_unknown_field')
     }
     const id = boundedToken(row.id, MAX_CAPABILITY_ID_CHARS, /^[a-z][a-z0-9._-]*$/)
     const descriptor = id ? HOST_CAPABILITY_BY_ID.get(id) : undefined
@@ -1004,6 +1009,66 @@ function fingerprintProof(input: {
     result: input.result
   }
   return `sha256:${sha256(JSON.stringify(stableInput))}`
+}
+
+function projectFingerprintArtifactHashes(
+  snapshot: NarutoProofArtifactSnapshot
+): NarutoProofArtifactSnapshot['byte_hashes'] {
+  const hashes = { ...snapshot.byte_hashes }
+  for (const filename of [SUBAGENT_PARENT_SUMMARY_FILENAME, SUBAGENT_EVIDENCE_FILENAME] as const) {
+    const bytes = snapshot.bytes[filename]
+    if (!bytes) continue
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(bytes.toString('utf8'))
+    } catch {
+      continue
+    }
+    const projected = projectReceiptAdditiveFields(filename, parsed)
+    if (projected === parsed) continue
+    hashes[filename] = `sha256:${sha256(`${JSON.stringify(projected, null, 2)}\n`)}`
+  }
+  return hashes
+}
+
+function projectReceiptAdditiveFields(
+  filename: typeof SUBAGENT_PARENT_SUMMARY_FILENAME | typeof SUBAGENT_EVIDENCE_FILENAME,
+  value: unknown
+): unknown {
+  if (!isRecord(value)) return value
+  if (filename === SUBAGENT_PARENT_SUMMARY_FILENAME) {
+    return projectReceiptContainerAdditiveFields(value)
+  }
+  const hostEvidence = recordValue(value, 'host_capability_evidence')
+  if (!isRecord(hostEvidence)) return value
+  const projectedHostEvidence = projectReceiptContainerAdditiveFields(hostEvidence)
+  return projectedHostEvidence === hostEvidence
+    ? value
+    : { ...value, host_capability_evidence: projectedHostEvidence }
+}
+
+function projectReceiptContainerAdditiveFields(value: Record<string, unknown>): Record<string, unknown> {
+  const artifacts = projectReceiptRowsAdditiveFields(value.artifacts, ARTIFACT_RECEIPT_KEYS)
+  const capabilitiesUsed = projectReceiptRowsAdditiveFields(value.capabilities_used, CAPABILITY_USE_KEYS)
+  if (artifacts === value.artifacts && capabilitiesUsed === value.capabilities_used) return value
+  return {
+    ...value,
+    ...(artifacts === value.artifacts ? {} : { artifacts }),
+    ...(capabilitiesUsed === value.capabilities_used ? {} : { capabilities_used: capabilitiesUsed })
+  }
+}
+
+function projectReceiptRowsAdditiveFields(value: unknown, allowedKeys: ReadonlySet<string>): unknown {
+  if (!Array.isArray(value)) return value
+  let changed = false
+  const projected = value.map((row) => {
+    if (!isRecord(row)) return row
+    const unknownKeys = Object.keys(row).filter((key) => !allowedKeys.has(key))
+    if (unknownKeys.length === 0) return row
+    changed = true
+    return Object.fromEntries(Object.entries(row).filter(([key]) => allowedKeys.has(key)))
+  })
+  return changed ? projected : value
 }
 
 function recordValue(value: unknown, key: string): unknown {

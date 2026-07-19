@@ -93,7 +93,16 @@ function completedHostToolEvent(input: {
       result: {
         structured_content: input.artifact
           ? { artifact: input.artifact }
-          : { ok: true, ...(input.path ? { path: input.path } : {}) }
+          : input.tool === 'spreadsheet_inspect'
+            ? {
+                ok: true,
+                ...(input.path ? { path: input.path } : {}),
+                sheet_names: ['Summary'],
+                row_counts: { Summary: 1 },
+                formulas: [],
+                error_cells: []
+              }
+            : { ok: true, ...(input.path ? { path: input.path } : {}) }
       }
     }
   })
@@ -210,7 +219,15 @@ test('standalone launch allowlists requested ACAS tools and projects only hashed
             tool: 'spreadsheet_inspect',
             status: 'completed',
             arguments: { path: artifact.path },
-            result: { structured_content: { ok: true } }
+            result: {
+              structured_content: {
+                ok: true,
+                sheet_names: ['Summary'],
+                row_counts: { Summary: 1 },
+                formulas: [],
+                error_cells: []
+              }
+            }
           }
         })
       ]

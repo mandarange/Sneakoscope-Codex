@@ -793,11 +793,16 @@ async function loadHostCapabilityHookContext(
   if (!isNaruto || !missionId || !workflowRunId || !payloadSession || !expectedSession) return null;
   if (payloadSession !== expectedSession || (sessionKey && String(sessionKey) !== payloadSession)) return null;
   const dir = missionDir(root, missionId);
-  const raw = await readJson(path.join(dir, HOST_CAPABILITY_HOOK_RUNTIME_FILENAME), null).catch(() => null);
+  const [raw, plan] = await Promise.all([
+    readJson(path.join(dir, HOST_CAPABILITY_HOOK_RUNTIME_FILENAME), null).catch(() => null),
+    readJson(path.join(dir, 'subagent-plan.json'), null).catch(() => null)
+  ]);
+  const request = requestHostCapabilities(plan?.goal || state?.prompt || '');
   return { dir, ...resolveHostCapabilityHookRuntimeBinding(raw, {
     missionId,
     workflowRunId,
-    sessionScope: payloadSession
+    sessionScope: payloadSession,
+    request
   }) };
 }
 
@@ -1261,7 +1266,8 @@ async function rebuildHostCapabilityEvidenceForFinalization(input: {
   const resolved = resolveHostCapabilityHookRuntimeBinding(rawBinding, {
     missionId: input.state?.mission_id,
     workflowRunId: input.workflowRunId,
-    sessionScope
+    sessionScope,
+    request
   });
   if (!resolved.binding) {
     return {

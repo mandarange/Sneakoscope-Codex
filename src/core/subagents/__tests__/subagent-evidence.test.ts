@@ -57,6 +57,7 @@ function hostCapabilityEvidence(status: 'passed' | 'failed' = 'passed') {
       health_status: 'healthy',
       requested_capability_ids: ['host.spreadsheet.workbook.v1', 'host.artifact.receipt.v1'],
       task_workflows: ['spreadsheet_create' as const, 'artifact_delivery' as const],
+      requested_tool_names: ['spreadsheet_create', 'spreadsheet_inspect', 'spreadsheet_update'],
       observed_tool_names: ['spreadsheet_create', 'spreadsheet_inspect', 'spreadsheet_update'],
       allowed_tool_names: ['spreadsheet_create', 'spreadsheet_inspect', 'spreadsheet_update'],
       denied_tool_names: [],
@@ -847,31 +848,54 @@ test('event recorder and evidence writer use the canonical artifact names', asyn
   }
 })
 
-test('trusted host capability evidence persists with the reusable structured parent summary', async () => {
+test('trusted host capability receipts discard additive fields before persistence and reuse', async () => {
   const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-subagent-host-capability-evidence-'))
   try {
     const trusted = hostCapabilityEvidence()
-    const summary = {
+    const additiveTrusted = {
+      ...trusted,
+      artifacts: trusted.artifacts.map((receipt) => ({
+        ...receipt,
+        arguments: { token: 'artifact-secret-not-persisted' }
+      })),
+      capabilities_used: trusted.capabilities_used.map((receipt) => ({
+        ...receipt,
+        rows: ['capability-secret-not-persisted']
+      }))
+    }
+    const additiveSummary = {
+      ...parentSummary(['thread-a']),
+      artifacts: additiveTrusted.artifacts,
+      capabilities_used: additiveTrusted.capabilities_used
+    }
+    const canonicalSummary = {
       ...parentSummary(['thread-a']),
       artifacts: trusted.artifacts,
       capabilities_used: trusted.capabilities_used
     }
     await recordSubagentEvent(dir, { thread_id: 'thread-a' }, 'SubagentStart')
     await recordSubagentEvent(dir, { thread_id: 'thread-a' }, 'SubagentStop')
-    assert.deepEqual(await persistOrReuseTrustworthySubagentParentSummary(dir, summary), summary)
+    assert.deepEqual(await persistOrReuseTrustworthySubagentParentSummary(dir, additiveSummary), canonicalSummary)
     const evidence = await writeSubagentEvidence(dir, {
       requestedSubagents: 1,
-      parentSummary: summary,
-      hostCapabilityEvidence: trusted
+      parentSummary: additiveSummary,
+      hostCapabilityEvidence: additiveTrusted
     })
 
     assert.equal(evidence.ok, true)
     assert.deepEqual(evidence.host_capability_evidence, trusted)
     const persisted = JSON.parse(await fsp.readFile(path.join(dir, SUBAGENT_EVIDENCE_FILENAME), 'utf8'))
     assert.deepEqual(persisted.host_capability_evidence, trusted)
+    assert.doesNotMatch(JSON.stringify(persisted), /secret-not-persisted|arguments|rows/)
+    assert.doesNotMatch(
+      await fsp.readFile(path.join(dir, SUBAGENT_PARENT_SUMMARY_FILENAME), 'utf8'),
+      /secret-not-persisted|arguments|rows/
+    )
+    assert.equal(evidence.blockers.includes('parent_summary_artifact_unknown_field'), false)
+    assert.equal(evidence.blockers.includes('parent_summary_capability_use_unknown_field'), false)
     assert.deepEqual(
       await persistOrReuseTrustworthySubagentParentSummary(dir, 'Completion Summary: prose retry'),
-      summary
+      canonicalSummary
     )
   } finally {
     await fsp.rm(dir, { recursive: true, force: true })

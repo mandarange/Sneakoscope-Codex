@@ -23,6 +23,7 @@ const MAX_PRE_TOOL_OBSERVATIONS = 2048;
 const MAX_RECEIPT_JSON_STRING_BYTES = 64 * 1024;
 const MAX_ARTIFACT_RECEIPTS = 64;
 const MAX_ARTIFACT_PATH_CHARS = 512;
+const MAX_SEMANTIC_RECEIPT_ITEMS = 10_000;
 const SHA256_RECEIPT_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const XLSX_MEDIA_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const EXPLICIT_DENIAL_PATTERN = /(?:^|[_.:-])(?:slack|center|tenant|lease|connector|outbox|message|upload|send|post)(?:$|[_.:-])/i;
@@ -65,6 +66,7 @@ export interface HostCapabilityRuntime {
   health_status: string;
   requested_capability_ids: string[];
   task_workflows: HostCapabilityWorkflow[];
+  requested_tool_names: string[];
   observed_tool_names: string[];
   allowed_tool_names: string[];
   denied_tool_names: string[];
@@ -102,7 +104,33 @@ interface InternalHostToolCallReceipt extends HostToolCallReceipt {
   index: number;
   raw_hash: string;
   resource_key: string | null;
+  semantic_receipt: HostToolSemanticReceipt | null;
 }
+
+type HostToolSemanticReceipt =
+  | {
+      kind: 'datasource_schema';
+      datasource_sha256: string;
+      schema_snapshot_sha256: string;
+    }
+  | {
+      kind: 'datasource_query';
+      datasource_sha256: string;
+      schema_snapshot_sha256: string;
+      query_sha256: string;
+      row_count: number;
+      column_count: number;
+      truncated: boolean;
+      status: 'passed';
+    }
+  | {
+      kind: 'spreadsheet_inspection';
+      sheet_names_sha256: string;
+      sheet_count: number;
+      row_count: number;
+      formula_count: number;
+      error_cell_count: 0;
+    };
 
 interface ObservedHostArtifactReceipt extends HostArtifactReceipt {
   source_tool: string;
@@ -141,6 +169,8 @@ export interface HostCapabilityPostToolObservation {
   status: 'passed' | 'failed';
   event_sha256: string;
   resource_key: string | null;
+  semantic_receipt: HostToolSemanticReceipt | null;
+  validation_blocker: string | null;
   artifacts: HostArtifactReceipt[];
 }
 
@@ -204,14 +234,23 @@ export function hostCapabilityHookBindingMatches(
 
 export function resolveHostCapabilityHookRuntimeBinding(
   value: unknown,
-  input: { missionId: unknown; workflowRunId: unknown; sessionScope: unknown }
+  input: {
+    missionId: unknown;
+    workflowRunId: unknown;
+    sessionScope: unknown;
+    request?: HostCapabilityRequest;
+  }
 ): { binding: HostCapabilityHookRuntimeBinding | null; blocker: string } {
   if (!value) return { binding: null, blocker: 'host_capability_hook_runtime_missing' };
   const binding = normalizeHostCapabilityHookRuntimeBinding(value);
   if (!binding) return { binding: null, blocker: 'host_capability_hook_runtime_invalid' };
-  return hostCapabilityHookBindingMatches(binding, input)
-    ? { binding, blocker: '' }
-    : { binding: null, blocker: 'host_capability_hook_runtime_scope_mismatch' };
+  if (!hostCapabilityHookBindingMatches(binding, input)) {
+    return { binding: null, blocker: 'host_capability_hook_runtime_scope_mismatch' };
+  }
+  if (input.request && !hostCapabilityRuntimeMatchesRequest(binding.runtime, input.request)) {
+    return { binding: null, blocker: 'host_capability_hook_runtime_request_scope_mismatch' };
+  }
+  return { binding, blocker: '' };
 }
 
 export function acasHostToolName(value: unknown): string | null {
@@ -244,7 +283,17 @@ export function sanitizeHostCapabilityPostToolUse(payload: unknown): HostCapabil
   const tool = acasHostToolName(payload.tool_name);
   const toolUseId = boundedIdentity(payload.tool_use_id);
   if (!tool || !toolUseId) return null;
-  const status = hostToolResponseFailed(payload.tool_response) ? 'failed' : 'passed';
+  const response = structuredHostToolResponse(payload.tool_response);
+  const malformed = !response || Object.keys(response).length === 0;
+  const semantic = malformed
+    ? { receipt: null, blocker: `host_tool_response_malformed:${tool}` }
+    : normalizeHostToolSemanticReceipt(tool, payload.tool_input, response);
+  const status = hostToolResponseFailed(payload.tool_response)
+    || hostToolResponseFailed(response)
+    || malformed
+    || Boolean(semantic.blocker)
+    ? 'failed'
+    : 'passed';
   const artifacts = status === 'passed'
     ? extractArtifactReceipts(payload.tool_response)
     : [];
@@ -259,6 +308,8 @@ export function sanitizeHostCapabilityPostToolUse(payload: unknown): HostCapabil
     status,
     tool_use_id_sha256: toolUseIdSha256,
     resource_key: resourceKey,
+    semantic_receipt: semantic.receipt,
+    validation_blocker: semantic.blocker,
     artifacts
   }))}`;
   return {
@@ -268,6 +319,8 @@ export function sanitizeHostCapabilityPostToolUse(payload: unknown): HostCapabil
     status,
     event_sha256: eventSha256,
     resource_key: resourceKey,
+    semantic_receipt: semantic.receipt,
+    validation_blocker: semantic.blocker,
     artifacts
   };
 }
@@ -341,8 +394,8 @@ export function normalizeHostCapabilityHookObservations(
     || value.tool_calls.length > MAX_MCP_TOOL_CALLS
     || value.blockers.length > 16
     || value.blockers.some((blocker) => typeof blocker !== 'string' || blocker.length > 128)) return null;
-  const preToolUses = value.pre_tool_uses.filter(isPreToolObservation);
-  const toolCalls = value.tool_calls.filter(isPostToolObservation);
+  const preToolUses = value.pre_tool_uses.map(normalizePreToolObservation).filter(Boolean) as HostCapabilityPreToolObservation[];
+  const toolCalls = value.tool_calls.map(normalizePostToolObservation).filter(Boolean) as HostCapabilityPostToolObservation[];
   if (preToolUses.length !== value.pre_tool_uses.length || toolCalls.length !== value.tool_calls.length) return null;
   if (toolCalls.reduce((sum, row) => sum + row.artifacts.length, 0) > MAX_ARTIFACT_RECEIPTS) return null;
   return {
@@ -372,6 +425,7 @@ export function buildHostCapabilityEvidenceFromHookObservations(input: {
     const preToolUse = preToolUses.get(`${row.tool_use_id_sha256}:${row.tool}`);
     if (!preToolUse) observationBlockers.push(`host_tool_call_pre_use_missing:${row.tool}`);
     else if (preToolUse.decision !== 'allowed') observationBlockers.push(`host_tool_call_pre_use_denied:${row.tool}`);
+    if (row.validation_blocker) observationBlockers.push(row.validation_blocker);
   }
   const calls: InternalHostToolCallReceipt[] = observations.tool_calls.map((row) => ({
     server: HOST_CAPABILITY_MCP_SERVER,
@@ -380,7 +434,8 @@ export function buildHostCapabilityEvidenceFromHookObservations(input: {
     event_sha256: row.event_sha256,
     raw_hash: row.event_sha256,
     index: row.sequence,
-    resource_key: row.resource_key
+    resource_key: row.resource_key,
+    semantic_receipt: row.semantic_receipt
   }));
   const artifacts: ObservedHostArtifactReceipt[] = observations.tool_calls.flatMap((row) => row.artifacts.map((artifact) => ({
     ...artifact,
@@ -581,6 +636,7 @@ export async function inspectHostCapabilityRuntime(input: {
       healthStatus: 'missing',
       requestedCapabilityIds,
       workflows,
+      requestedToolNames,
       observedToolNames: [],
       allowedToolNames: [],
       capabilities,
@@ -611,6 +667,7 @@ export async function inspectHostCapabilityRuntime(input: {
       healthStatus: 'disabled',
       requestedCapabilityIds,
       workflows,
+      requestedToolNames,
       observedToolNames: [],
       allowedToolNames: [],
       capabilities,
@@ -683,6 +740,7 @@ export async function inspectHostCapabilityRuntime(input: {
     healthStatus: health.status,
     requestedCapabilityIds,
     workflows,
+    requestedToolNames,
     observedToolNames,
     allowedToolNames,
     deniedToolNames,
@@ -733,7 +791,15 @@ export function createHostCapabilityEventCollector(runtime: HostCapabilityRuntim
     }
     const server = String(item.server || '').trim();
     const tool = String(item.tool || '').trim();
-    const status = item.status === 'completed' ? 'passed' : item.status === 'failed' ? 'failed' : null;
+    const declaredStatus = item.status === 'completed' ? 'passed' : item.status === 'failed' ? 'failed' : null;
+    const response = structuredHostToolResponse(item.result);
+    const malformed = !response || Object.keys(response).length === 0;
+    const semantic = malformed
+      ? { receipt: null, blocker: `host_tool_response_malformed:${tool}` }
+      : normalizeHostToolSemanticReceipt(tool, item.arguments, response);
+    const status = declaredStatus === 'passed' && (malformed || semantic.blocker)
+      ? 'failed'
+      : declaredStatus;
     if (!server || !tool || !status) return;
     callIndex += 1;
     if (server !== runtime.server) return;
@@ -745,8 +811,10 @@ export function createHostCapabilityEventCollector(runtime: HostCapabilityRuntim
       event_sha256: rawHash,
       raw_hash: rawHash,
       index: callIndex,
-      resource_key: extractToolResourceKey(item)
+      resource_key: extractToolResourceKey(item),
+      semantic_receipt: semantic.receipt
     });
+    if (semantic.blocker) blockers.push(semantic.blocker);
     if (status === 'passed') {
       for (const artifact of extractArtifactReceipts(item.result?.structured_content ?? item.result?.structuredContent ?? item.result)) {
         observedArtifacts.push({ ...artifact, source_tool: tool, source_hash: rawHash, source_index: callIndex });
@@ -887,11 +955,34 @@ function validateCapabilityWorkflow(
     blockers.push('host_capability_schema_call_missing');
   }
   if (descriptor.id === 'host.datasource.query.readonly.v1') {
-    const schemaIndex = allCalls.find((call) => call.tool === 'datasource_schema_context' && call.status === 'passed')?.index ?? -1;
-    const queryIndex = passed('datasource_query_readonly')[0]?.index ?? -1;
+    const schemaCall = allCalls.find((call) => call.tool === 'datasource_schema_context' && call.status === 'passed') || null;
+    const queryCalls = passed('datasource_query_readonly');
+    const queryCall = queryCalls[0] || null;
+    const schemaIndex = schemaCall?.index ?? -1;
+    const queryIndex = queryCall?.index ?? -1;
     if (queryIndex < 0) blockers.push('host_capability_readonly_query_call_missing');
+    if (runtime.task_workflows.includes('datasource_query') && queryCalls.length !== 1) {
+      blockers.push('host_capability_readonly_query_count_invalid');
+    }
     if (runtime.task_workflows.includes('datasource_query') && (schemaIndex < 0 || queryIndex <= schemaIndex)) {
       blockers.push('host_capability_datasource_sequence_invalid');
+    }
+    const schemaReceipt = schemaCall?.semantic_receipt?.kind === 'datasource_schema'
+      ? schemaCall.semantic_receipt
+      : null;
+    const queryReceipts = queryCalls
+      .map((call) => call.semantic_receipt?.kind === 'datasource_query' ? call.semantic_receipt : null);
+    if (queryCalls.length > 0 && queryReceipts.some((receipt) => !receipt)) {
+      blockers.push('host_capability_readonly_query_receipt_invalid');
+    }
+    if (schemaCall && !schemaReceipt) blockers.push('host_capability_schema_receipt_invalid');
+    if (schemaReceipt && queryReceipts.some((receipt) => receipt
+      && schemaReceipt.schema_snapshot_sha256 !== receipt.schema_snapshot_sha256)) {
+      blockers.push('host_capability_readonly_query_schema_mismatch');
+    }
+    if (schemaReceipt && queryReceipts.some((receipt) => receipt
+      && schemaReceipt.datasource_sha256 !== receipt.datasource_sha256)) {
+      blockers.push('host_capability_readonly_query_datasource_mismatch');
     }
   }
   if (descriptor.id === 'host.spreadsheet.workbook.v1') {
@@ -926,6 +1017,9 @@ function validateCapabilityWorkflow(
       }
     }
     if (runtime.task_workflows.includes('spreadsheet_create') || runtime.task_workflows.includes('spreadsheet_edit')) {
+      if (inspections.some((call) => call.semantic_receipt?.kind !== 'spreadsheet_inspection')) {
+        blockers.push('host_capability_spreadsheet_inspection_receipt_invalid');
+      }
       const passedSpreadsheetCalls = calls.filter((call) => call.status === 'passed');
       const resourceKeys = uniqueStrings(passedSpreadsheetCalls.map((call) => call.resource_key));
       const lastMutation = [...creates, ...updates].sort((left, right) => right.index - left.index)[0] || null;
@@ -1136,6 +1230,15 @@ function isPreToolObservation(value: unknown): value is HostCapabilityPreToolObs
     && (value.decision === 'allowed' || value.decision === 'denied');
 }
 
+function normalizePreToolObservation(value: unknown): HostCapabilityPreToolObservation | null {
+  if (!isPreToolObservation(value)) return null;
+  return {
+    tool_use_id_sha256: value.tool_use_id_sha256,
+    tool: value.tool,
+    decision: value.decision
+  };
+}
+
 function isPostToolObservation(value: unknown): value is HostCapabilityPostToolObservation {
   if (!isRecord(value)
     || !Number.isSafeInteger(value.sequence)
@@ -1147,9 +1250,29 @@ function isPostToolObservation(value: unknown): value is HostCapabilityPostToolO
     || (value.status !== 'passed' && value.status !== 'failed')
     || !SHA256_RECEIPT_PATTERN.test(String(value.event_sha256 || ''))
     || (value.resource_key !== null && !SHA256_RECEIPT_PATTERN.test(String(value.resource_key || '')))
+    || !isHostToolSemanticReceipt(value.semantic_receipt)
+    || (value.validation_blocker !== null
+      && (typeof value.validation_blocker !== 'string' || value.validation_blocker.length > 160))
     || !Array.isArray(value.artifacts)) return false;
   return value.artifacts.length <= MAX_ARTIFACT_RECEIPTS
     && value.artifacts.every((artifact) => isRecord(artifact) && normalizeArtifactReceipt(artifact) !== null);
+}
+
+function normalizePostToolObservation(value: unknown): HostCapabilityPostToolObservation | null {
+  if (!isPostToolObservation(value)) return null;
+  const semanticReceipt = normalizeStoredSemanticReceipt(value.semantic_receipt);
+  if (value.semantic_receipt !== null && !semanticReceipt) return null;
+  return {
+    sequence: value.sequence,
+    tool_use_id_sha256: value.tool_use_id_sha256,
+    tool: value.tool,
+    status: value.status,
+    event_sha256: value.event_sha256,
+    resource_key: value.resource_key,
+    semantic_receipt: semanticReceipt,
+    validation_blocker: value.validation_blocker,
+    artifacts: value.artifacts.map((artifact) => normalizeArtifactReceipt(artifact as unknown as Record<string, unknown>)!)
+  };
 }
 
 function isHostCapabilityRuntime(value: unknown): value is HostCapabilityRuntime {
@@ -1159,6 +1282,7 @@ function isHostCapabilityRuntime(value: unknown): value is HostCapabilityRuntime
     || value.server !== HOST_CAPABILITY_MCP_SERVER
     || !Array.isArray(value.requested_capability_ids)
     || !Array.isArray(value.task_workflows)
+    || !Array.isArray(value.requested_tool_names)
     || !Array.isArray(value.observed_tool_names)
     || !Array.isArray(value.allowed_tool_names)
     || !Array.isArray(value.denied_tool_names)
@@ -1168,37 +1292,48 @@ function isHostCapabilityRuntime(value: unknown): value is HostCapabilityRuntime
   const knownIds = new Set(HOST_CAPABILITY_DESCRIPTORS.map((descriptor) => descriptor.id));
   const knownTools = new Set(HOST_CAPABILITY_DESCRIPTORS.flatMap((descriptor) => descriptor.tool_names));
   const requested = uniqueStrings(value.requested_capability_ids);
+  const requestedTools = uniqueStrings(value.requested_tool_names);
   const observed = uniqueStrings(value.observed_tool_names);
   const allowed = uniqueStrings(value.allowed_tool_names);
   const denied = uniqueStrings(value.denied_tool_names);
   const blockers = uniqueStrings(value.blockers);
   if (requested.length !== value.requested_capability_ids.length
     || requested.some((id) => !knownIds.has(id))
+    || requestedTools.length !== value.requested_tool_names.length
+    || requestedTools.some((tool) => !knownTools.has(tool))
     || observed.length !== value.observed_tool_names.length
     || allowed.length !== value.allowed_tool_names.length
     || allowed.some((tool) => !knownTools.has(tool) || !observed.includes(tool) || EXPLICIT_DENIAL_PATTERN.test(tool))
     || denied.length !== value.denied_tool_names.length
     || JSON.stringify(denied) !== JSON.stringify(observed.filter((tool) => !allowed.includes(tool)))
     || blockers.length !== value.blockers.length
+    || value.blockers.some((blocker: unknown) => typeof blocker !== 'string' || blocker.length > 256)
     || value.ok !== (blockers.length === 0)
     || JSON.stringify(uniqueWorkflows(value.task_workflows)) !== JSON.stringify(value.task_workflows)
     || value.capabilities.length !== HOST_CAPABILITY_DESCRIPTORS.length
-    || value.capabilities.some((entry) => !isHostCapabilityRuntimeEntry(entry, requested))) return false;
+    || JSON.stringify(value.capabilities.map((entry: any) => entry?.id))
+      !== JSON.stringify(HOST_CAPABILITY_DESCRIPTORS.map((descriptor) => descriptor.id))
+    || value.capabilities.some((entry) => !isHostCapabilityRuntimeEntry(entry, requested, observed, allowed))
+    || typeof value.server_present !== 'boolean'
+    || typeof value.server_enabled !== 'boolean'
+    || value.server_scope !== (value.server_present ? 'project' : null)
+    || (value.inventory_source !== null && !boundedRuntimeText(value.inventory_source, 512))
+    || !boundedRuntimeText(value.health_status, 128)) return false;
   const allowedFromEntries = uniqueStrings(value.capabilities.flatMap((entry: any) => entry.allowed_tool_names));
   if (JSON.stringify(allowedFromEntries) !== JSON.stringify(allowed)) return false;
   const explicitDenied = denied.filter((tool) => EXPLICIT_DENIAL_PATTERN.test(tool));
   if (JSON.stringify(explicitDenied) !== JSON.stringify(value.explicit_denied_tool_names)) return false;
-  const expectedDigest = `sha256:${sha256(JSON.stringify({
-    server: HOST_CAPABILITY_MCP_SERVER,
-    requested,
-    allowed,
-    denied
-  }))}`;
+  const expectedDigest = hostCapabilityRuntimeDigest(value as unknown as HostCapabilityRuntime);
   return value.allowlist_digest === expectedDigest
     && value.capability_digest === hostCapabilityDigest(HOST_CAPABILITY_DESCRIPTORS);
 }
 
-function isHostCapabilityRuntimeEntry(value: unknown, requested: readonly string[]): boolean {
+function isHostCapabilityRuntimeEntry(
+  value: unknown,
+  requested: readonly string[],
+  observed: readonly string[],
+  allowed: readonly string[]
+): boolean {
   if (!isRecord(value)
     || typeof value.id !== 'string'
     || typeof value.requested !== 'boolean'
@@ -1209,11 +1344,249 @@ function isHostCapabilityRuntimeEntry(value: unknown, requested: readonly string
     || !Array.isArray(value.blockers)) return false;
   const descriptor = HOST_CAPABILITY_DESCRIPTORS.find((entry) => entry.id === value.id);
   if (!descriptor) return false;
+  const expectedObserved = uniqueStrings(descriptor.tool_names.filter((tool) => observed.includes(tool)));
+  const expectedAllowed = descriptor.executable !== false && requested.includes(value.id)
+    ? uniqueStrings(descriptor.tool_names.filter((tool) => allowed.includes(tool)))
+    : [];
+  const entryBlockers = uniqueStrings(value.blockers);
   return value.requested === requested.includes(value.id)
     && JSON.stringify(value.expected_tool_names) === JSON.stringify(descriptor.tool_names)
-    && value.allowed_tool_names.every((tool: unknown) => typeof tool === 'string' && descriptor.tool_names.includes(tool))
-    && value.observed_tool_names.every((tool: unknown) => typeof tool === 'string' && descriptor.tool_names.includes(tool))
-    && value.blockers.every((blocker: unknown) => typeof blocker === 'string');
+    && JSON.stringify(value.allowed_tool_names) === JSON.stringify(expectedAllowed)
+    && JSON.stringify(value.observed_tool_names) === JSON.stringify(expectedObserved)
+    && JSON.stringify(value.blockers) === JSON.stringify(entryBlockers)
+    && entryBlockers.every((blocker) => blocker.length <= 256)
+    && (requested.includes(value.id) ? value.state !== 'not_requested' : value.state === 'not_requested');
+}
+
+function hostCapabilityRuntimeMatchesRequest(
+  runtime: HostCapabilityRuntime,
+  request: HostCapabilityRequest
+): boolean {
+  return JSON.stringify(runtime.requested_capability_ids) === JSON.stringify(uniqueStrings(request.capability_ids))
+    && JSON.stringify(runtime.task_workflows) === JSON.stringify(uniqueWorkflows(request.workflows))
+    && JSON.stringify(runtime.requested_tool_names) === JSON.stringify(uniqueStrings(request.tool_names || []));
+}
+
+function hostCapabilityRuntimeDigest(runtime: HostCapabilityRuntime): string {
+  return `sha256:${sha256(JSON.stringify({
+    server: runtime.server,
+    server_present: runtime.server_present,
+    server_enabled: runtime.server_enabled,
+    server_scope: runtime.server_scope,
+    inventory_source: runtime.inventory_source,
+    health_status: runtime.health_status,
+    requested_capability_ids: runtime.requested_capability_ids,
+    task_workflows: runtime.task_workflows,
+    requested_tool_names: runtime.requested_tool_names,
+    observed_tool_names: runtime.observed_tool_names,
+    allowed_tool_names: runtime.allowed_tool_names,
+    denied_tool_names: runtime.denied_tool_names,
+    explicit_denied_tool_names: runtime.explicit_denied_tool_names,
+    capability_digest: runtime.capability_digest,
+    capabilities: runtime.capabilities,
+    blockers: runtime.blockers,
+    ok: runtime.ok
+  }))}`;
+}
+
+function structuredHostToolResponse(value: unknown): Record<string, any> | null {
+  if (!isRecord(value)) return null;
+  const nested = value.structured_content ?? value.structuredContent;
+  if (nested !== undefined) return parseJsonObject(nested);
+  return value;
+}
+
+function normalizeHostToolSemanticReceipt(
+  tool: string,
+  toolInput: unknown,
+  response: Record<string, any>
+): { receipt: HostToolSemanticReceipt | null; blocker: string | null } {
+  if (tool === 'datasource_schema_context') {
+    const input = isRecord(toolInput) ? toolInput : {};
+    const datasource = boundedIdentity(response.datasource);
+    const inputDatasource = boundedIdentity(input.datasource);
+    const snapshotId = boundedIdentity(response.schema_snapshot_id);
+    return datasource && (!inputDatasource || datasource === inputDatasource) && snapshotId
+      ? {
+          receipt: {
+            kind: 'datasource_schema',
+            datasource_sha256: `sha256:${sha256(datasource)}`,
+            schema_snapshot_sha256: `sha256:${sha256(snapshotId)}`
+          },
+          blocker: null
+        }
+      : {
+          receipt: null,
+          blocker: datasource && inputDatasource && datasource !== inputDatasource
+            ? 'host_capability_schema_datasource_mismatch'
+            : 'host_capability_schema_receipt_invalid'
+        };
+  }
+  if (tool === 'datasource_query_readonly') {
+    const input = isRecord(toolInput) ? toolInput : {};
+    const datasource = boundedIdentity(response.datasource);
+    const inputDatasource = boundedIdentity(input.datasource);
+    const snapshotId = boundedIdentity(response.schema_snapshot_id);
+    const inputSnapshotId = boundedIdentity(input.schema_snapshot_id);
+    const query = boundedQueryText(input.query ?? input.sql);
+    const querySha256 = typeof response.query_sha256 === 'string'
+      ? response.query_sha256.trim().toLowerCase()
+      : '';
+    const rowCount = nonnegativeSafeInteger(response.row_count);
+    const columnCount = nonnegativeSafeInteger(response.column_count);
+    const status = String(response.status || '').trim().toLowerCase();
+    if (!datasource) {
+      return { receipt: null, blocker: 'host_capability_readonly_query_receipt_invalid' };
+    }
+    if (inputDatasource && datasource !== inputDatasource) {
+      return { receipt: null, blocker: 'host_capability_readonly_query_datasource_mismatch' };
+    }
+    if (!snapshotId || !inputSnapshotId || snapshotId !== inputSnapshotId) {
+      return { receipt: null, blocker: 'host_capability_readonly_query_schema_mismatch' };
+    }
+    if (!query || !SHA256_RECEIPT_PATTERN.test(querySha256)
+      || querySha256 !== `sha256:${sha256(query)}`) {
+      return { receipt: null, blocker: 'host_capability_readonly_query_hash_mismatch' };
+    }
+    if (rowCount === null || columnCount === null || typeof response.truncated !== 'boolean' || status !== 'passed') {
+      return { receipt: null, blocker: 'host_capability_readonly_query_receipt_invalid' };
+    }
+    return {
+      receipt: {
+        kind: 'datasource_query',
+        datasource_sha256: `sha256:${sha256(datasource)}`,
+        schema_snapshot_sha256: `sha256:${sha256(snapshotId)}`,
+        query_sha256: querySha256,
+        row_count: rowCount,
+        column_count: columnCount,
+        truncated: response.truncated,
+        status: 'passed'
+      },
+      blocker: null
+    };
+  }
+  if (tool === 'spreadsheet_inspect') {
+    const sheetNames = Array.isArray(response.sheet_names)
+      ? response.sheet_names.map((value: unknown) => boundedIdentity(value)).filter(Boolean) as string[]
+      : [];
+    const rowCountKeys = isRecord(response.row_counts) ? Object.keys(response.row_counts).sort() : [];
+    const rowCounts = isRecord(response.row_counts)
+      ? Object.values(response.row_counts).map(nonnegativeSafeInteger)
+      : [];
+    const formulas = Array.isArray(response.formulas) ? response.formulas : null;
+    const errorCells = Array.isArray(response.error_cells) ? response.error_cells : null;
+    const successful = response.ok === true || response.success === true
+      || ['passed', 'success', 'completed'].includes(String(response.status || '').trim().toLowerCase());
+    if (!successful
+      || sheetNames.length === 0
+      || sheetNames.length > 256
+      || uniqueStrings(sheetNames).length !== sheetNames.length
+      || sheetNames.length !== response.sheet_names.length
+      || rowCounts.length !== sheetNames.length
+      || JSON.stringify(rowCountKeys) !== JSON.stringify([...sheetNames].sort())
+      || rowCounts.some((count) => count === null)
+      || formulas === null
+      || formulas.length > MAX_SEMANTIC_RECEIPT_ITEMS
+      || errorCells === null
+      || errorCells.length > MAX_SEMANTIC_RECEIPT_ITEMS) {
+      return { receipt: null, blocker: 'host_capability_spreadsheet_inspection_receipt_invalid' };
+    }
+    if (errorCells.length > 0) {
+      return { receipt: null, blocker: 'host_capability_spreadsheet_error_cells_present' };
+    }
+    const totalRowCount = (rowCounts as number[]).reduce((sum, count) => sum + count, 0);
+    if (!Number.isSafeInteger(totalRowCount)) {
+      return { receipt: null, blocker: 'host_capability_spreadsheet_inspection_receipt_invalid' };
+    }
+    return {
+      receipt: {
+        kind: 'spreadsheet_inspection',
+        sheet_names_sha256: `sha256:${sha256(JSON.stringify(sheetNames))}`,
+        sheet_count: sheetNames.length,
+        row_count: totalRowCount,
+        formula_count: formulas.length,
+        error_cell_count: 0
+      },
+      blocker: null
+    };
+  }
+  return { receipt: null, blocker: null };
+}
+
+function isHostToolSemanticReceipt(value: unknown): value is HostToolSemanticReceipt | null {
+  if (value === null) return true;
+  if (!isRecord(value)) return false;
+  if (value.kind === 'datasource_schema') {
+    return SHA256_RECEIPT_PATTERN.test(String(value.datasource_sha256 || ''))
+      && SHA256_RECEIPT_PATTERN.test(String(value.schema_snapshot_sha256 || ''));
+  }
+  if (value.kind === 'datasource_query') {
+    return SHA256_RECEIPT_PATTERN.test(String(value.datasource_sha256 || ''))
+      && SHA256_RECEIPT_PATTERN.test(String(value.schema_snapshot_sha256 || ''))
+      && SHA256_RECEIPT_PATTERN.test(String(value.query_sha256 || ''))
+      && nonnegativeSafeInteger(value.row_count) !== null
+      && nonnegativeSafeInteger(value.column_count) !== null
+      && typeof value.truncated === 'boolean'
+      && value.status === 'passed';
+  }
+  if (value.kind === 'spreadsheet_inspection') {
+    return SHA256_RECEIPT_PATTERN.test(String(value.sheet_names_sha256 || ''))
+      && nonnegativeSafeInteger(value.sheet_count) !== null
+      && nonnegativeSafeInteger(value.row_count) !== null
+      && nonnegativeSafeInteger(value.formula_count) !== null
+      && value.error_cell_count === 0;
+  }
+  return false;
+}
+
+function normalizeStoredSemanticReceipt(value: unknown): HostToolSemanticReceipt | null {
+  if (value === null) return null;
+  if (!isHostToolSemanticReceipt(value)) return null;
+  if (value.kind === 'datasource_schema') {
+    return {
+      kind: value.kind,
+      datasource_sha256: value.datasource_sha256,
+      schema_snapshot_sha256: value.schema_snapshot_sha256
+    };
+  }
+  if (value.kind === 'datasource_query') {
+    return {
+      kind: value.kind,
+      datasource_sha256: value.datasource_sha256,
+      schema_snapshot_sha256: value.schema_snapshot_sha256,
+      query_sha256: value.query_sha256,
+      row_count: value.row_count,
+      column_count: value.column_count,
+      truncated: value.truncated,
+      status: 'passed'
+    };
+  }
+  return {
+    kind: value.kind,
+    sheet_names_sha256: value.sheet_names_sha256,
+    sheet_count: value.sheet_count,
+    row_count: value.row_count,
+    formula_count: value.formula_count,
+    error_cell_count: 0
+  };
+}
+
+function nonnegativeSafeInteger(value: unknown): number | null {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
+
+function boundedRuntimeText(value: unknown, maxLength: number): string | null {
+  const text = typeof value === 'string' ? value.trim() : '';
+  return text && text.length <= maxLength && !/[\r\n\0]/.test(text) ? text : null;
+}
+
+function boundedQueryText(value: unknown): string | null {
+  const text = typeof value === 'string' ? value : '';
+  return text.trim()
+    && Buffer.byteLength(text, 'utf8') <= MAX_RECEIPT_JSON_STRING_BYTES
+    && !/[\0]/.test(text)
+    ? text
+    : null;
 }
 
 function hostToolResponseFailed(value: unknown): boolean {
@@ -1235,6 +1608,7 @@ function runtimeResult(input: {
   healthStatus: string;
   requestedCapabilityIds: string[];
   workflows: HostCapabilityWorkflow[];
+  requestedToolNames: string[];
   observedToolNames: string[];
   allowedToolNames: string[];
   deniedToolNames?: string[];
@@ -1245,7 +1619,7 @@ function runtimeResult(input: {
   const allowedToolNames = uniqueStrings(input.allowedToolNames);
   const deniedToolNames = uniqueStrings(input.deniedToolNames || observedToolNames.filter((name) => !allowedToolNames.includes(name)));
   const blockers = uniqueStrings(input.blockers);
-  return {
+  const runtime: HostCapabilityRuntime = {
     schema: HOST_CAPABILITY_RUNTIME_SCHEMA,
     ok: blockers.length === 0,
     server: HOST_CAPABILITY_MCP_SERVER,
@@ -1256,20 +1630,18 @@ function runtimeResult(input: {
     health_status: input.healthStatus,
     requested_capability_ids: uniqueStrings(input.requestedCapabilityIds),
     task_workflows: uniqueWorkflows(input.workflows),
+    requested_tool_names: uniqueStrings(input.requestedToolNames),
     observed_tool_names: observedToolNames,
     allowed_tool_names: allowedToolNames,
     denied_tool_names: deniedToolNames,
     explicit_denied_tool_names: deniedToolNames.filter((name) => EXPLICIT_DENIAL_PATTERN.test(name)),
-    allowlist_digest: `sha256:${sha256(JSON.stringify({
-      server: HOST_CAPABILITY_MCP_SERVER,
-      requested: uniqueStrings(input.requestedCapabilityIds),
-      allowed: allowedToolNames,
-      denied: deniedToolNames
-    }))}`,
+    allowlist_digest: '',
     capability_digest: hostCapabilityDigest(HOST_CAPABILITY_DESCRIPTORS),
     capabilities: input.capabilities,
     blockers
   };
+  runtime.allowlist_digest = hostCapabilityRuntimeDigest(runtime);
+  return runtime;
 }
 
 function capabilityRuntimeEntry(

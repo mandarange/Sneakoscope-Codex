@@ -672,7 +672,16 @@ test('Naruto Stop binds observed host receipts into the parent summary and compl
         turn_id: 'host-inspect',
         tool_name: 'mcp__acas-tools__spreadsheet_inspect',
         tool_input: { path: artifact.path },
-        tool_response: { structured_content: { ok: true, path: artifact.path } },
+        tool_response: {
+          structured_content: {
+            ok: true,
+            path: artifact.path,
+            sheet_names: ['Summary'],
+            row_counts: { Summary: 1 },
+            formulas: [],
+            error_cells: []
+          }
+        },
         tool_use_id: 'host-inspect-use'
       }
     ]) {

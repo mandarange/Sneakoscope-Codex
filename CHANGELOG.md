@@ -12,7 +12,7 @@
 
 ### Changed
 
-- Raise the shared packed-package budget by the minimum sufficient 24 KiB, from 2464 KiB to 2488 KiB, after the required host-capability runtime and proof-time artifact verification measured 2,542,713 packed bytes.
+- Raise the shared packed-package budget by the minimum sufficient 28 KiB, from 2464 KiB to 2492 KiB, after the final host-capability runtime and proof-validation contract measured 2,551,472 packed bytes.
 
 ### Fixed
 
