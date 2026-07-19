@@ -1,8 +1,8 @@
 {
   "schema": "sks.code-pack.v1",
-  "generated_at": "2026-07-19T10:20:30.555Z",
-  "git_head_sha": "4582b8db0f248951857f32397ed4a42c464e393f",
-  "source_file_count": 3578,
+  "generated_at": "2026-07-19T19:14:41.117Z",
+  "git_head_sha": "403f8cb6920a033f93a84608aa031bf9d814cfc7",
+  "source_file_count": 3579,
   "index_digest": "39ae760e40e8ed5f1c72384adfbaf9db1051b8ac0a8583156a2c137bd1cecf21",
   "entries": [
     {
@@ -19,7 +19,7 @@
     },
     {
       "id": "code:cli",
-      "text": "cli is a CLI module at src/cli (33 files, 6802 loc, medium risk). Key exports: function flag(args: any = [], name: any); function readOption(args: any = [], name: any, fallback: any = null); function positionalArgs(args: any = []); const ui =; function withHeartbeat<T>(label: string, work: Promise<T>, opts: { warnAfterMs?: number } = {}): Promise<T>, and 70 more. It has no detected cross-module dependencies.",
+      "text": "cli is a CLI module at src/cli (33 files, 7140 loc, medium risk). Key exports: function flag(args: any = [], name: any); function readOption(args: any = [], name: any, fallback: any = null); function positionalArgs(args: any = []); const ui =; function withHeartbeat<T>(label: string, work: Promise<T>, opts: { warnAfterMs?: number } = {}): Promise<T>, and 70 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/cli"
@@ -31,7 +31,7 @@
     },
     {
       "id": "code:commands",
-      "text": "commands is a command module at src/commands (73 files, 4109 loc, high risk). Key exports: async function run() { return aliasesCommand(); }; async function run(_command: any, args: any = []); async function run(_command: any, args: any = []); async function run(_command: any, args: any = []); async function run(_command: any, args: any = []), and 74 more. It has no detected cross-module dependencies.",
+      "text": "commands is a command module at src/commands (73 files, 4264 loc, high risk). Key exports: async function run() { return aliasesCommand(); }; async function run(_command: any, args: any = []); async function run(_command: any, args: any = []); async function run(_command: any, args: any = []); async function run(_command: any, args: any = []), and 74 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/commands"
@@ -43,7 +43,7 @@
     },
     {
       "id": "code:core",
-      "text": "core is a core module at src/core (127 files, 38280 loc, high risk). Key exports: const quietPolicy =; async function makeRoot(prefix: string); async function writeJson(file: string, value: unknown); async function backdate(file: string); const ARTIFACT_SCHEMA_VERSION = 1;, and 500 more. It has no detected cross-module dependencies.",
+      "text": "core is a core module at src/core (127 files, 38612 loc, high risk). Key exports: const quietPolicy =; async function makeRoot(prefix: string); async function writeJson(file: string, value: unknown); async function backdate(file: string); const ARTIFACT_SCHEMA_VERSION = 1;, and 497 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core"
@@ -55,7 +55,7 @@
     },
     {
       "id": "code:core-agent-bridge",
-      "text": "core-agent-bridge is a core module at src/core/agent-bridge (7 files, 844 loc, low risk). Key exports: type LatencyClass = 'fast' | 'normal' | 'long';; interface AgentManifestEntry; interface AgentManifest; interface AgentManifestValidation; function buildAgentManifest(): AgentManifest, and 11 more. It has no detected cross-module dependencies.",
+      "text": "core-agent-bridge is a core module at src/core/agent-bridge (8 files, 2509 loc, low risk). Key exports: type LatencyClass = 'fast' | 'normal' | 'long';; interface AgentManifestEntry; interface AgentBridgeCompatibility; interface HostCapabilityDescriptor; interface HostCapabilitiesManifest, and 31 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/agent-bridge"
@@ -63,7 +63,7 @@
       ],
       "trust_score": 0.8,
       "freshness": "unknown",
-      "token_cost": 87
+      "token_cost": 88
     },
     {
       "id": "code:core-agents",
@@ -79,7 +79,7 @@
     },
     {
       "id": "code:core-codex",
-      "text": "core-codex is a core module at src/core/codex (22 files, 4975 loc, medium risk). Key exports: interface AgentConfigFileRepairReport; async function repairAgentConfigFileReferences(input:; const CODEX_APP_MENTIONS_SCHEMA = 'sks.codex-app-mentions.v1'; function buildCodexAppMentionInventory(input: { files?: string[]; apps?: string[]; commands?: string[] } = {}); const APPSHOTS_CAPABILITY_SCHEMA = 'sks.appshots-capability.v1', and 100 more. It has no detected cross-module dependencies.",
+      "text": "core-codex is a core module at src/core/codex (22 files, 5166 loc, medium risk). Key exports: interface AgentConfigFileRepairReport; async function repairAgentConfigFileReferences(input:; const CODEX_APP_MENTIONS_SCHEMA = 'sks.codex-app-mentions.v1'; function buildCodexAppMentionInventory(input: { files?: string[]; apps?: string[]; commands?: string[] } = {}); const APPSHOTS_CAPABILITY_SCHEMA = 'sks.appshots-capability.v1', and 101 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/codex"
@@ -91,7 +91,7 @@
     },
     {
       "id": "code:core-codex-app",
-      "text": "core-codex-app is a core module at src/core/codex-app (53 files, 7701 loc, high risk). Key exports: async function syncCodexAgentRoles(input:; async function probeCodexAgentTypeSupport(root: string, input:; function agentRolePayloadFor(role: string, probe: CodexAgentTypeProbe): CodexAgentRolePayload; async function resolveCodexAppExecutionProfile(input: { root: string; matrix?: CodexAppHarnessMatrix | unknown } = { root: process.cwd() }): Promise<CodexAppExecutionProfile>; const CODEX_APP_FAST_UI_PRESERVATION_SCHEMA = 'sks.codex-app-fast-ui-preservation.v1', and 143 more. It has no detected cross-module dependencies.",
+      "text": "core-codex-app is a core module at src/core/codex-app (53 files, 7871 loc, high risk). Key exports: async function syncCodexAgentRoles(input:; async function probeCodexAgentTypeSupport(root: string, input:; function agentRolePayloadFor(role: string, probe: CodexAgentTypeProbe): CodexAgentRolePayload; async function resolveCodexAppExecutionProfile(input: { root: string; matrix?: CodexAppHarnessMatrix | unknown } = { root: process.cwd() }): Promise<CodexAppExecutionProfile>; const CODEX_APP_FAST_UI_PRESERVATION_SCHEMA = 'sks.codex-app-fast-ui-preservation.v1', and 142 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/codex-app"
@@ -118,7 +118,7 @@
     },
     {
       "id": "code:core-codex-control",
-      "text": "core-codex-control is a core module at src/core/codex-control (53 files, 8256 loc, high risk). Key exports: interface Codex0138Capability; async function detectCodex0138Capability(input: { codexBin?: string | null } = {}): Promise<Codex0138Capability>; async function writeCodex0138CapabilityArtifacts(root: string, input: { missionId?: string | null; codexBin?: string | null } = {}); function parseCodexVersion(text: unknown): string | null; function semverGte(actual: unknown, minimum: unknown): boolean, and 146 more. It has no detected cross-module dependencies.",
+      "text": "core-codex-control is a core module at src/core/codex-control (53 files, 8401 loc, high risk). Key exports: interface Codex0138Capability; async function detectCodex0138Capability(input: { codexBin?: string | null } = {}): Promise<Codex0138Capability>; async function writeCodex0138CapabilityArtifacts(root: string, input: { missionId?: string | null; codexBin?: string | null } = {}); function parseCodexVersion(text: unknown): string | null; function semverGte(actual: unknown, minimum: unknown): boolean, and 146 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/codex-control"
@@ -142,7 +142,7 @@
     },
     {
       "id": "code:core-codex-lb",
-      "text": "core-codex-lb is a core module at src/core/codex-lb (6 files, 1661 loc, low risk). Key exports: type CodexLbEnvSource = 'process.env' | 'keychain' | 'env-file' | 'legacy-env-file' | 'project-local' | 'missing';; type CodexLbEnvLoadResult =; type CodexLbModelCatalogResult =; function codexLbEnvPath(home: unknown = process.env.HOME || os.homedir()): string; function legacyCodexLbEnvPath(home: unknown = process.env.HOME || os.homedir()): string, and 31 more. It has no detected cross-module dependencies.",
+      "text": "core-codex-lb is a core module at src/core/codex-lb (6 files, 1781 loc, low risk). Key exports: type CodexLbEnvSource = 'process.env' | 'keychain' | 'env-file' | 'legacy-env-file' | 'project-local' | 'missing';; type CodexLbEnvLoadResult =; type CodexLbModelCatalogResult =; function codexLbEnvPath(home: unknown = process.env.HOME || os.homedir()): string; function legacyCodexLbEnvPath(home: unknown = process.env.HOME || os.homedir()): string, and 31 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/codex-lb"
@@ -190,7 +190,7 @@
     },
     {
       "id": "code:core-commands",
-      "text": "core-commands is a command module at src/core/commands (80 files, 13827 loc, high risk). Key exports: async function runAgentBridgeContractSmokes(; async function agentBridgeCommand(subcommand: string, args: readonly string[] = []): Promise<unknown>; async function autoresearchCommand(sub: any, args: any = []); async function helpCommand(args: string[] = []): Promise<void | unknown>; function commandsCommand(args: string[] = []): unknown, and 99 more. It has no detected cross-module dependencies.",
+      "text": "core-commands is a command module at src/core/commands (80 files, 13997 loc, high risk). Key exports: async function runAgentBridgeContractSmokes(; function buildAgentBridgeSetupMetadata(manifest: CurrentAgentManifest):; async function inspectAgentBridgeHostCapabilities(; async function autoresearchCommand(sub: any, args: any = []); async function helpCommand(args: string[] = []): Promise<void | unknown>, and 100 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/commands"
@@ -198,7 +198,7 @@
       ],
       "trust_score": 0.55,
       "freshness": "unknown",
-      "token_cost": 126
+      "token_cost": 117
     },
     {
       "id": "code:core-config",
@@ -310,7 +310,7 @@
     },
     {
       "id": "code:core-hooks-runtime",
-      "text": "core-hooks-runtime is a core module at src/core/hooks-runtime (14 files, 2910 loc, low risk). Key exports: async function codePackFreshnessNote(root: string, opts: { budgetMs?: number } = {}): Promise<string | null>; async function claimHookInvocation(root: string, name: unknown, payload: any = {}); async function loadHookPayload(); function normalizeHookResult(name: any, result: any = {}); function codexHookEventName(name: any), and 34 more. It has no detected cross-module dependencies.",
+      "text": "core-hooks-runtime is a core module at src/core/hooks-runtime (14 files, 3309 loc, low risk). Key exports: async function codePackFreshnessNote(root: string, opts: { budgetMs?: number } = {}): Promise<string | null>; async function claimHookInvocation(root: string, name: unknown, payload: any = {}); async function loadHookPayload(); function normalizeHookResult(name: any, result: any = {}); function codexHookEventName(name: any), and 34 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/hooks-runtime"
@@ -433,7 +433,7 @@
     },
     {
       "id": "code:core-managed-assets",
-      "text": "core-managed-assets is a core module at src/core/managed-assets (1 file, 749 loc, low risk). Key exports: const MANAGED_ASSET_SCHEMA_VERSION = 1; const MANAGED_ASSET_VERSION = '7.0.2'; const MANAGED_ASSET_MARKER = 'SKS-MANAGED-ASSET'; const MANAGED_OFFICIAL_SUBAGENT_MARKER = 'SKS-MANAGED-OFFICIAL-SUBAGENT'; type ManagedAssetRisk = 'read-only' | 'managed-write' | 'user-confirmation' | 'manual', and 7 more. It has no detected cross-module dependencies.",
+      "text": "core-managed-assets is a core module at src/core/managed-assets (1 file, 749 loc, low risk). Key exports: const MANAGED_ASSET_SCHEMA_VERSION = 1; const MANAGED_ASSET_VERSION = '7.0.3'; const MANAGED_ASSET_MARKER = 'SKS-MANAGED-ASSET'; const MANAGED_OFFICIAL_SUBAGENT_MARKER = 'SKS-MANAGED-OFFICIAL-SUBAGENT'; type ManagedAssetRisk = 'read-only' | 'managed-write' | 'user-confirmation' | 'manual', and 7 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/managed-assets"
@@ -457,7 +457,7 @@
     },
     {
       "id": "code:core-mcp-config",
-      "text": "core-mcp-config is a core module at src/core/mcp-config (19 files, 3249 loc, medium risk). Key exports: interface PendingMcpBackup; async function createMcpBackup(; async function finalizeMcpBackup(pending: PendingMcpBackup, after: string): Promise<McpBackupMetadataV1>; async function listMcpBackups(ref: ResolvedMcpScope): Promise<McpBackupMetadataV1[]>; async function loadMcpBackup(ref: ResolvedMcpScope, id: string): Promise<{ metadata: McpBackupMetadataV1; text: string }>, and 83 more. It has no detected cross-module dependencies.",
+      "text": "core-mcp-config is a core module at src/core/mcp-config (19 files, 3261 loc, medium risk). Key exports: interface PendingMcpBackup; async function createMcpBackup(; async function finalizeMcpBackup(pending: PendingMcpBackup, after: string): Promise<McpBackupMetadataV1>; async function listMcpBackups(ref: ResolvedMcpScope): Promise<McpBackupMetadataV1[]>; async function loadMcpBackup(ref: ResolvedMcpScope, id: string): Promise<{ metadata: McpBackupMetadataV1; text: string }>, and 83 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/mcp-config"
@@ -730,7 +730,7 @@
     },
     {
       "id": "code:core-research",
-      "text": "core-research is a core module at src/core/research (40 files, 7805 loc, high risk). Key exports: async function writeVerifiedSuperSearchFixture(dir: string, ids: string[], name = 'verified-fixture'); interface ClaimEvidenceMatrix; interface ClaimEvidenceMatrixSummary; const CLAIM_EVIDENCE_MATRIX_ARTIFACT = 'claim-evidence-matrix.json';; function defaultClaimEvidenceMatrix(missionId = ''): ClaimEvidenceMatrix, and 112 more. It has no detected cross-module dependencies.",
+      "text": "core-research is a core module at src/core/research (40 files, 7809 loc, high risk). Key exports: async function writeVerifiedSuperSearchFixture(dir: string, ids: string[], name = 'verified-fixture'); interface ClaimEvidenceMatrix; interface ClaimEvidenceMatrixSummary; const CLAIM_EVIDENCE_MATRIX_ARTIFACT = 'claim-evidence-matrix.json';; function defaultClaimEvidenceMatrix(missionId = ''): ClaimEvidenceMatrix, and 112 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/research"
@@ -889,8 +889,20 @@
       "trust_score": 0.8,
       "freshness": "unknown",
       "token_cost": 118
+    },
+    {
+      "id": "code:scripts-fixtures",
+      "text": "scripts-fixtures is a module at src/scripts/fixtures (1 file, 59 loc, low risk). It has no detected top-level exports. It has no detected cross-module dependencies.",
+      "citations": [
+        {
+          "path": "src/scripts/fixtures"
+        }
+      ],
+      "trust_score": 0.6,
+      "freshness": "unknown",
+      "token_cost": 41
     }
   ],
   "token_budget": 8000,
-  "total_token_cost": 7967
+  "total_token_cost": 8000
 }
