@@ -1,6 +1,6 @@
 {
   "schema": "sks.agent-manifest.v1",
-  "generated_at": "2026-07-15T09:15:58.047Z",
+  "generated_at": "2026-07-18T11:16:27.163Z",
   "tools": [
     {
       "name": "agent-bridge",
@@ -990,12 +990,12 @@
     },
     {
       "name": "naruto",
-      "description": "Run the $Naruto Codex official subagent workflow",
+      "description": "Run the $sks-naruto Codex official subagent workflow",
       "read_only": false,
       "requires_explicit_opt_in": true,
-      "json_output_supported": false,
+      "json_output_supported": true,
       "latency_class": "long",
-      "example_invocation": "sks naruto",
+      "example_invocation": "sks naruto help --json",
       "maturity": "labs",
       "contract_schema": "sks.command-contract.v2",
       "risk": "R2",
@@ -1003,7 +1003,47 @@
       "telegram_allowed": false,
       "input_schema": {
         "type": "object",
-        "properties": {},
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "run",
+              "status",
+              "subagents",
+              "proof",
+              "help"
+            ]
+          },
+          "task": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32768
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32768
+          },
+          "mission": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "agents": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "max_threads": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "readonly": {
+            "type": "boolean"
+          },
+          "json": {
+            "type": "boolean"
+          }
+        },
         "additionalProperties": false
       },
       "required_capabilities": []
