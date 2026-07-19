@@ -300,6 +300,27 @@ test('host capability requests select the minimum task tools and recognize workb
   })
   assert.equal(editRuntime.ok, true)
   assert.deepEqual(editRuntime.allowed_tool_names, ['spreadsheet_inspect', 'spreadsheet_update'])
+
+  for (const prompt of [
+    'Analyze the database module data flow and report code-review findings.',
+    'Update the spreadsheet parser unit tests.',
+    'Create tests for the PDF renderer.'
+  ]) {
+    assert.deepEqual(requestHostCapabilities(prompt), {
+      capability_ids: [],
+      workflows: [],
+      tool_names: []
+    }, prompt)
+  }
+
+  assert.deepEqual(
+    requestHostCapabilities('Update the PDF renderer code, then create a PDF document.'),
+    {
+      capability_ids: ['host.artifact.receipt.v1', 'host.document.render.v1', 'host.workspace.files.v1'],
+      workflows: ['artifact_delivery', 'document_render', 'workspace_files'],
+      tool_names: ['html_to_pdf', 'write_file']
+    }
+  )
 })
 
 test('spreadsheet evidence requires one bounded mutation, a final inspect, and one resource identity', async () => {

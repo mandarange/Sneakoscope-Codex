@@ -76,6 +76,7 @@ import {
   acasHostToolName,
   bindParentSummaryToHostCapabilityEvidence,
   buildHostCapabilityEvidenceFromHookObservations,
+  explicitlyDeniedHostCapabilityTool,
   mergeHostCapabilityPostToolObservation,
   mergeHostCapabilityPreToolObservation,
   requestHostCapabilities,
@@ -695,9 +696,23 @@ async function hookPostTool(root: any, state: any, payload: any, noQuestion: any
 }
 
 async function enforceHostCapabilityPreTool(root: string, state: any = {}, payload: any = {}, sessionKey: any = null) {
-  if (!acasHostToolName(payload.tool_name)) return null;
+  const tool = acasHostToolName(payload.tool_name);
+  if (!tool) return null;
+  if (explicitlyDeniedHostCapabilityTool(tool)) {
+    return {
+      decision: 'block',
+      permissionDecision: 'deny',
+      reason: `SKS denied acas-tools.${tool}; this tool is explicitly denied for model execution.`
+    };
+  }
   const context = await loadHostCapabilityHookContext(root, state, payload, sessionKey);
-  if (!context) return null;
+  if (!context) {
+    return {
+      decision: 'block',
+      permissionDecision: 'deny',
+      reason: 'SKS denied this acas-tools call because it has no valid task-scoped Naruto mission, run, and session context.'
+    };
+  }
   if (!context.binding) {
     return {
       decision: 'block',

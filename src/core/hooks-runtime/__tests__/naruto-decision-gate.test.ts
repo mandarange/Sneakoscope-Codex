@@ -211,7 +211,7 @@ test('host capability hooks enforce the exact allowlist and persist only bounded
       tool_use_id: 'tool-use-slack'
     }, { root, state });
     assert.equal(denied.decision, 'block');
-    assert.match(denied.reason, /outside runtime\.allowed_tool_names/);
+    assert.match(denied.reason, /explicitly denied for model execution/);
 
     const unrelated: any = await evaluateHookPayload('pre-tool', {
       session_id: sessionId,
@@ -282,7 +282,7 @@ test('host capability hooks enforce the exact allowlist and persist only bounded
     assert.equal(observations.tool_calls.length, 2);
     assert.deepEqual(observations.tool_calls.map((row: any) => row.tool), ['spreadsheet_create', 'spreadsheet_inspect']);
     assert.ok(observations.pre_tool_uses.some((row: any) => row.tool === 'spreadsheet_create' && row.decision === 'allowed'));
-    assert.ok(observations.pre_tool_uses.some((row: any) => row.tool === 'slack_send' && row.decision === 'denied'));
+    assert.equal(observations.pre_tool_uses.some((row: any) => row.tool === 'slack_send'), false);
     assert.equal(observationsText.includes('must-not-persist'), false);
     assert.equal(observationsText.includes('tampered-secret'), false);
     assert.equal(observationsText.includes('raw-row-'), false);
@@ -301,7 +301,7 @@ test('host capability hooks enforce the exact allowlist and persist only bounded
     }, { root, state });
     const deniedEvidence = JSON.parse(await fsp.readFile(path.join(dir, HOST_CAPABILITY_HOOK_EVIDENCE_FILENAME), 'utf8'));
     assert.equal(deniedEvidence.ok, false);
-    assert.ok(deniedEvidence.blockers.includes('host_tool_call_pre_use_denied:slack_send'));
+    assert.ok(deniedEvidence.blockers.includes('host_tool_call_pre_use_missing:slack_send'));
     assert.ok(deniedEvidence.blockers.includes('host_tool_call_not_allowed:slack_send'));
     assert.ok(deniedEvidence.blockers.includes('host_tool_call_explicitly_denied:slack_send'));
 
@@ -313,7 +313,47 @@ test('host capability hooks enforce the exact allowlist and persist only bounded
       tool_input: { token: 'foreign-secret' },
       tool_use_id: 'tool-use-foreign'
     }, { root, state });
-    assert.equal(foreign.decision, undefined);
+    assert.equal(foreign.decision, 'block');
+    assert.match(foreign.reason, /explicitly denied for model execution/);
+
+    for (const [label, payload, scopedState] of [
+      [
+        'foreign session',
+        {
+          session_id: 'foreign-session',
+          turn_id: 'turn-host-foreign-allowed',
+          tool_name: 'mcp__acas-tools__spreadsheet_create',
+          tool_input: { path: 'reports/foreign.xlsx' },
+          tool_use_id: 'tool-use-foreign-allowed'
+        },
+        state
+      ],
+      [
+        'missing session',
+        {
+          turn_id: 'turn-host-missing-session',
+          tool_name: 'mcp__acas-tools__spreadsheet_create',
+          tool_input: { path: 'reports/missing-session.xlsx' },
+          tool_use_id: 'tool-use-missing-session'
+        },
+        state
+      ],
+      [
+        'non-Naruto state',
+        {
+          session_id: sessionId,
+          turn_id: 'turn-host-non-naruto',
+          tool_name: 'mcp__acas-tools__spreadsheet_create',
+          tool_input: { path: 'reports/non-naruto.xlsx' },
+          tool_use_id: 'tool-use-non-naruto'
+        },
+        { session_scope: sessionId, mode: 'ANSWER', route: 'Answer' }
+      ]
+    ] as const) {
+      const blocked: any = await evaluateHookPayload('pre-tool', payload, { root, state: scopedState });
+      assert.equal(blocked.decision, 'block', label);
+      assert.match(blocked.reason, /no valid task-scoped Naruto mission, run, and session context/, label);
+    }
     assert.equal(await fsp.readFile(path.join(dir, HOST_CAPABILITY_HOOK_OBSERVATIONS_FILENAME), 'utf8'), beforeForeign);
   } finally {
     await fsp.rm(root, { recursive: true, force: true });

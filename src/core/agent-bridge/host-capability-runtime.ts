@@ -260,6 +260,10 @@ export function acasHostToolName(value: unknown): string | null {
   return match?.[1] || null;
 }
 
+export function explicitlyDeniedHostCapabilityTool(value: unknown): boolean {
+  return EXPLICIT_DENIAL_PATTERN.test(String(value || ''));
+}
+
 export function sanitizeHostCapabilityPreToolUse(
   runtime: HostCapabilityRuntime,
   payload: unknown
@@ -270,7 +274,7 @@ export function sanitizeHostCapabilityPreToolUse(
   if (!tool || !toolUseId) return null;
   const allowed = runtime.ok
     && runtime.allowed_tool_names.includes(tool)
-    && !EXPLICIT_DENIAL_PATTERN.test(tool);
+    && !explicitlyDeniedHostCapabilityTool(tool);
   return {
     tool_use_id_sha256: `sha256:${sha256(toolUseId)}`,
     tool,
@@ -448,6 +452,9 @@ export function buildHostCapabilityEvidenceFromHookObservations(input: {
 
 export function requestHostCapabilities(goal: unknown): HostCapabilityRequest {
   const text = String(goal || '').normalize('NFKC');
+  if (isHostCapabilityCodeMaintenanceTask(text) && !hasDirectHostExecutionIntent(text)) {
+    return { capability_ids: [], workflows: [], tool_names: [] };
+  }
   const capabilityIds = new Set<string>();
   const workflows = new Set<HostCapabilityWorkflow>();
   const toolNames = new Set<string>();
@@ -1679,6 +1686,29 @@ function parseJsonObject(value: unknown): Record<string, unknown> | null {
 
 function matchesIntent(text: string, patterns: readonly RegExp[]): boolean {
   return patterns.some((pattern) => pattern.test(text));
+}
+
+function isHostCapabilityCodeMaintenanceTask(text: string): boolean {
+  return matchesIntent(text, [
+    /\b(?:tests?|specs?|fixtures?|code[- ]review)\b/i,
+    /\b(?:database|datasource|spreadsheet|xlsx|excel|workbook|pdf|png)\b.{0,40}\b(?:module|parser|renderer|handler|adapter|client|library|implementation|code|source)\b/i,
+    /\b(?:module|parser|renderer|handler|adapter|library|implementation|code|source)\b.{0,40}\b(?:database|datasource|spreadsheet|xlsx|excel|workbook|pdf|png)\b/i,
+    /(?:테스트|스펙|픽스처|코드\s*리뷰)/i,
+    /(?:데이터베이스|데이터소스|스프레드시트|엑셀|xlsx|pdf|png).{0,28}(?:모듈|파서|렌더러|핸들러|어댑터|라이브러리|구현|코드|소스)/i,
+    /(?:모듈|파서|렌더러|핸들러|어댑터|라이브러리|구현|코드|소스).{0,28}(?:데이터베이스|데이터소스|스프레드시트|엑셀|xlsx|pdf|png)/i
+  ]);
+}
+
+function hasDirectHostExecutionIntent(text: string): boolean {
+  return matchesIntent(text, [
+    /\b(?:create|generate|make|render)\s+(?:an?\s+|the\s+)?(?:xlsx|excel workbook|spreadsheet(?: file)?|pdf(?: file| document| report)?|png(?: file| image)?)\b/i,
+    /\b(?:deliver|export|save|produce)\b.{0,32}\b(?:xlsx|excel|spreadsheet|workbook|pdf|png|artifact|deliverable)\b/i,
+    /\b(?:run|execute)\b.{0,32}\b(?:read[- ]only\s+)?(?:query|select|cte)\b/i,
+    /\b(?:retrieve|fetch|load)\b.{0,32}\b(?:rows?|records?|results?)\b/i,
+    /(?:엑셀|스프레드시트|xlsx|pdf|png).{0,24}(?:파일|문서|보고서|산출물).{0,24}(?:생성|작성|만들|렌더|내보내|납품|저장)/i,
+    /(?:생성|작성|만들|렌더|내보내|납품|저장).{0,24}(?:엑셀|스프레드시트|xlsx|pdf|png)(?:\s*(?:파일|문서|보고서|산출물))?/i,
+    /(?:실행|조회|가져오).{0,24}(?:읽기\s*전용\s*)?(?:쿼리|질의|행|레코드|결과)/i
+  ]);
 }
 
 function tomlStringArray(values: readonly string[]): string {
