@@ -203,6 +203,38 @@ test('host capability hooks enforce the exact allowlist and persist only bounded
     }, { root, state });
     assert.equal(allowed.decision, undefined);
 
+    const clarificationBlocked: any = await evaluateHookPayload('pre-tool', {
+      session_id: sessionId,
+      turn_id: 'turn-host-clarification-locked',
+      tool_name: 'mcp__acas-tools__spreadsheet_create',
+      tool_input: { path: 'reports/clarification-locked.xlsx' },
+      tool_use_id: 'tool-use-clarification-locked'
+    }, {
+      root,
+      state: {
+        ...state,
+        phase: 'CLARIFICATION_AWAITING_ANSWERS',
+        stop_gate: 'clarification-gate',
+        ambiguity_gate_required: true,
+        ambiguity_gate_passed: false,
+        clarification_required: true,
+        implementation_allowed: false
+      }
+    });
+    assert.equal(clarificationBlocked.decision, 'block');
+    assert.match(clarificationBlocked.reason, /ambiguity gate is paused and waiting for explicit user answers/);
+
+    const harnessBlocked: any = await evaluateHookPayload('pre-tool', {
+      session_id: sessionId,
+      turn_id: 'turn-host-harness-blocked',
+      tool_name: 'mcp__acas-tools__spreadsheet_create',
+      type: 'file_write',
+      tool_input: { path: '.codex/config.toml' },
+      tool_use_id: 'tool-use-harness-blocked'
+    }, { root, state });
+    assert.equal(harnessBlocked.decision, 'block');
+    assert.match(harnessBlocked.reason, /harness guard blocked this tool call/);
+
     const denied: any = await evaluateHookPayload('pre-tool', {
       session_id: sessionId,
       turn_id: 'turn-host-denied',

@@ -600,7 +600,7 @@ function activeGoalOverlayContext(state: any = {}, route: any = null) {
 
 async function hookPreTool(root: any, state: any, payload: any, noQuestion: any, sessionKey: any = null) {
   const hostCapabilityDecision = await enforceHostCapabilityPreTool(root, state, payload, sessionKey);
-  if (hostCapabilityDecision) return hostCapabilityDecision;
+  if (hostCapabilityDecision && hostCapabilityDecision.continue !== true) return hostCapabilityDecision;
   if (needsMutationSafetyCheck(payload)) {
     const madSksImmutableDecision = await checkMadSksImmutableModification(root, state, payload);
     if (madSksImmutableDecision.action === 'block') {
