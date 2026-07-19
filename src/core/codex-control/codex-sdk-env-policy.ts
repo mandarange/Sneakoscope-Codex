@@ -99,6 +99,7 @@ export async function prepareNativeCodexAuthBridge(
   let sourceAuthCandidate = primaryAuthCandidate
   let sourceAuthProof = 'host_codex_home/auth.json'
   let oauthBackupUsed = false
+  let primaryAuthStatus: 'chatgpt_oauth' | 'api_key' | 'missing' = 'chatgpt_oauth'
   const originalHome = String(env.HOME || '')
   const originalCodexHome = String(env.CODEX_HOME || '')
   let tempRoot: string | null = null
@@ -186,7 +187,10 @@ export async function prepareNativeCodexAuthBridge(
     try {
       source = await readNativeCodexOAuthSource(primaryAuthCandidate, 'native_codex_auth_source')
     } catch (error: any) {
-      if (String(error?.message || error) !== 'native_codex_auth_api_key_forbidden') throw error
+      const reason = String(error?.message || error)
+      if (reason === 'native_codex_auth_api_key_forbidden') primaryAuthStatus = 'api_key'
+      else if (reason === 'native_codex_auth_source_missing') primaryAuthStatus = 'missing'
+      else throw error
       try {
         source = await readNativeCodexOAuthSource(backupAuthCandidate, 'native_codex_auth_backup')
         sourceAuthCandidate = backupAuthCandidate
@@ -263,7 +267,8 @@ export async function prepareNativeCodexAuthBridge(
       auth_mode: 'chatgpt_oauth',
       source: sourceAuthProof,
       oauth_backup_used: oauthBackupUsed,
-      active_api_key_auth_preserved: oauthBackupUsed,
+      primary_auth_status: primaryAuthStatus,
+      active_api_key_auth_preserved: oauthBackupUsed && primaryAuthStatus === 'api_key',
       destination: 'private_temp_codex_home/auth.json',
       temp_root_location: 'os_tmpdir',
       temp_root_mode: '0700',
@@ -320,7 +325,13 @@ export async function prepareNativeCodexAuthBridge(
 }
 
 async function readNativeCodexOAuthSource(filePath: string, errorPrefix: string) {
-  const pathStat = await fsp.lstat(filePath)
+  let pathStat
+  try {
+    pathStat = await fsp.lstat(filePath)
+  } catch (error: any) {
+    if (error?.code === 'ENOENT') throw new Error(`${errorPrefix}_missing`)
+    throw new Error(`${errorPrefix}_unreadable`)
+  }
   if (pathStat.isSymbolicLink()) throw new Error(`${errorPrefix}_symlink_forbidden`)
   if (!pathStat.isFile()) throw new Error(`${errorPrefix}_not_file`)
   const text = await readValidatedAuthFile(filePath, {
