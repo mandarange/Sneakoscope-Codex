@@ -377,6 +377,9 @@ export async function runOfficialSubagentWorkflow(input: OfficialSubagentWorkflo
     ...(input.workflowRunId ? { workflowRunId: input.workflowRunId } : {}),
     ...(hostCapabilityLaunchNonce ? { hostCapabilityLaunchNonce } : {})
   })
+  const outputSecretValues = hostCapabilityLaunchNonce
+    ? [...inheritedSecretValues, hostCapabilityLaunchNonce]
+    : inheritedSecretValues
 
   let codexCommand: string
   if (input.runProcessImpl) {
@@ -527,12 +530,12 @@ export async function runOfficialSubagentWorkflow(input: OfficialSubagentWorkflo
   }
   const parentSummary = redactKnownValues(
     await fsp.readFile(parentSummaryFile, 'utf8').catch(() => ''),
-    inheritedSecretValues
+    outputSecretValues
   )
   await fsp.rm(parentSummaryFile, { force: true }).catch(() => undefined)
   const hostCapabilityEvidence = hostCapabilityCollector.finish(processResult.stdout)
-  const stdout = summarizeCodexJsonlOutput(processResult.stdout, inheritedSecretValues)
-  const stderr = redactKnownValues(processResult.stderr, inheritedSecretValues).slice(-12_000)
+  const stdout = summarizeCodexJsonlOutput(processResult.stdout, outputSecretValues)
+  const stderr = redactKnownValues(processResult.stderr, outputSecretValues).slice(-12_000)
   const blockers = uniqueStrings([
     ...(processResult.spawnRegistrationFailed === true
       ? ['codex_parent_spawn_registration_failed']

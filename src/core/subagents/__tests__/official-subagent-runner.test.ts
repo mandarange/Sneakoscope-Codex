@@ -553,6 +553,49 @@ test('trusted host runtime allowlists requested ACAS tools and projects only has
   assert.ok(rebound.blockers.includes('host_artifact_parent_receipts_mismatch'))
 })
 
+test('standalone host-capability launch redacts the raw nonce from exposed parent output', async (t) => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-host-capability-nonce-redaction-'))
+  t.after(async () => fsp.rm(root, { recursive: true, force: true }))
+  let launchNonce = ''
+
+  const result = await runOfficialSubagentWorkflow({
+    root,
+    goal: 'Create and save a file in the workspace.',
+    prompt: 'echo launch nonce fixture',
+    requestedSubagents: 1,
+    maxThreads: 1,
+    appSession: false,
+    projectTrusted: true,
+    missionId: 'M-host-capability-nonce-redaction',
+    workflowRunId: 'run-host-capability-nonce-redaction',
+    hostCapabilityDependencies: hostCapabilityDependencies(['write_file']),
+    runProcessImpl: async (_command, args, options) => {
+      launchNonce = String(options?.env?.SKS_NARUTO_PARENT_HOST_CAPABILITY_NONCE || '')
+      assert.match(launchNonce, /^[a-f0-9]{32}$/)
+      const outputIndex = args.indexOf('--output-last-message')
+      await fsp.writeFile(args[outputIndex + 1]!, `summary nonce=${launchNonce}`)
+      const event = completedArtifactHostToolEvent('write_file', 'nonce-redaction-tool', 'reports/nonce.txt')
+      const stdout = `${event}\nnonce=${launchNonce}\n`
+      const stderr = `stderr nonce=${launchNonce}`
+      options?.onStdout?.(stdout)
+      return {
+        code: 0,
+        stdout,
+        stderr,
+        stdoutBytes: Buffer.byteLength(stdout),
+        stderrBytes: Buffer.byteLength(stderr),
+        truncated: false,
+        timedOut: false
+      }
+    }
+  })
+
+  assert.doesNotMatch(JSON.stringify(result), new RegExp(launchNonce))
+  assert.equal(result.parent_summary, 'summary nonce=<redacted>')
+  assert.equal(result.process.stdout_tail, '')
+  assert.equal(result.process.stderr_tail, 'stderr nonce=<redacted>')
+})
+
 test('host capability requests select the minimum task tools and recognize workbook population', async () => {
   const workspaceTools = [
     'read_file',

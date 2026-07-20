@@ -432,7 +432,7 @@ export function authorizeAndMergeHostCapabilityPreToolObservation(input: {
     return { observations: current, observation, decision: 'denied', blocker: observation.blocker };
   }
 
-  const observation = authorizePreToolReservation(current, input.observation);
+  const observation = authorizePreToolReservation(input.binding.runtime, current, input.observation);
   const observations = {
     ...current,
     pre_tool_uses: [...current.pre_tool_uses, observation]
@@ -446,6 +446,7 @@ export function authorizeAndMergeHostCapabilityPreToolObservation(input: {
 }
 
 function authorizePreToolReservation(
+  runtime: HostCapabilityRuntime,
   current: HostCapabilityHookObservations,
   observation: HostCapabilityPreToolObservation
 ): HostCapabilityPreToolObservation {
@@ -483,6 +484,16 @@ function authorizePreToolReservation(
   if (observation.tool === 'spreadsheet_update') {
     if (hasReservedOrObservedToolCall(current, observation.tool)) {
       return denyPreToolReservation(observation, 'host_capability_spreadsheet_update_already_reserved');
+    }
+    if (runtime.task_workflows.includes('spreadsheet_create')) {
+      const completedCreates = completedPassedToolCalls(current, 'spreadsheet_create');
+      if (completedCreates.length === 0) {
+        return denyPreToolReservation(observation, 'host_capability_spreadsheet_update_create_not_completed');
+      }
+      if (!observation.resource_key
+        || !completedCreates.some((call) => call.resource_key === observation.resource_key)) {
+        return denyPreToolReservation(observation, 'host_capability_spreadsheet_update_resource_mismatch');
+      }
     }
     const completedInspections = completedPassedToolCalls(current, 'spreadsheet_inspect');
     if (completedInspections.length === 0) {

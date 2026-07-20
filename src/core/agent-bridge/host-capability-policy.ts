@@ -76,10 +76,15 @@ export function requestHostCapabilities(goal: unknown): HostCapabilityRequest {
     /\b(?:create|generate|produce|deliver|make|build|prepare|convert|export)\b.{0,48}\b(?:xlsx|excel|spreadsheet|workbook)\b/i, /\b(?:xlsx|excel|spreadsheet|workbook)\b.{0,48}\b(?:create|generate|produce|deliver|make|build|prepare|convert|export)\b/i,
     /(?:엑셀|스프레드시트|xlsx).{0,32}(?:생성|작성|만들|납품)/i, /(?:생성|작성|만들|납품).{0,32}(?:엑셀|스프레드시트|xlsx)/i
   ]);
-  const spreadsheetEdit = !blankWorkbook && matches(text, [
-    /\b(?:edit|update|modify|inspect|populate|fill|append|import)\b.{0,56}\b(?:xlsx|excel|spreadsheet|workbook)\b/i, /\b(?:xlsx|excel|spreadsheet|workbook)\b.{0,56}\b(?:edit|update|modify|inspect|populate|fill|append|import)\b/i,
-    /(?:엑셀|스프레드시트|xlsx).{0,36}(?:수정|편집|업데이트|검사|점검|입력|채우|반영|추가)/i, /(?:수정|편집|업데이트|검사|점검|입력|채우|반영|추가).{0,36}(?:엑셀|스프레드시트|xlsx)/i
+  const spreadsheetMutation = matches(text, [
+    /\b(?:edit|update|modify|populate|fill|append|import)\b.{0,56}\b(?:xlsx|excel|spreadsheet|workbook)\b/i, /\b(?:xlsx|excel|spreadsheet|workbook)\b.{0,56}\b(?:edit|update|modify|populate|fill|append|import)\b/i,
+    /(?:엑셀|스프레드시트|xlsx).{0,36}(?:수정|편집|업데이트|입력|채우|반영|추가)/i, /(?:수정|편집|업데이트|입력|채우|반영|추가).{0,36}(?:엑셀|스프레드시트|xlsx)/i
   ]);
+  const spreadsheetInspection = matches(text, [
+    /\binspect\b.{0,56}\b(?:xlsx|excel|spreadsheet|workbook)\b/i, /\b(?:xlsx|excel|spreadsheet|workbook)\b.{0,56}\binspect\b/i,
+    /(?:엑셀|스프레드시트|xlsx).{0,36}(?:검사|점검)/i, /(?:검사|점검).{0,36}(?:엑셀|스프레드시트|xlsx)/i
+  ]);
+  const spreadsheetEdit = !blankWorkbook && (spreadsheetMutation || (!spreadsheetCreate && spreadsheetInspection));
   const sqlPatterns = [/\b(?:write|generate|draft|prepare)\b.{0,32}\bsql\b/i, /\bsql\b.{0,32}\b(?:write|generate|draft|prepare)\b/i, /sql.{0,24}(?:작성|생성|초안|준비)/i, /(?:작성|생성|초안|준비).{0,24}sql/i];
   const executionExclusions = [/\b(?:do\s+not|don't|never)\s+(?:actually\s+)?(?:run|execute)\b/i, /\bwithout\s+(?:actually\s+)?(?:running|executing)\b/i, /\b(?:no|without)\s+(?:query|sql)\s+execution\b/i, /\b(?:sql|query)\s+(?:generation|draft|text)\s+only\b/i];
   const queryPatterns = [

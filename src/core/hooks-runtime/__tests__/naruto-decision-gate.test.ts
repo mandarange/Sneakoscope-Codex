@@ -804,6 +804,166 @@ test('host capability hooks deny spreadsheet updates without a completed same-wo
   }
 });
 
+test('spreadsheet create missions deny existing-workbook updates before a completed same-resource create', async () => {
+  const fixture = await createHostHookFixture({
+    label: 'spreadsheet-create-update-order',
+    goal: 'Create an Excel workbook and update it.',
+    toolNames: ['spreadsheet_create', 'spreadsheet_inspect', 'spreadsheet_update']
+  });
+  const existingWorkbookPath = 'reports/existing.xlsx';
+  const createdWorkbookPath = 'reports/created.xlsx';
+  try {
+    await evaluateHookPayload('pre-tool', {
+      session_id: fixture.sessionId,
+      tool_name: 'mcp__acas-tools__spreadsheet_inspect',
+      tool_input: { path: existingWorkbookPath },
+      tool_use_id: 'inspect-existing-before-create'
+    }, { root: fixture.root, state: fixture.state });
+    await evaluateHookPayload('post-tool', {
+      session_id: fixture.sessionId,
+      tool_name: 'mcp__acas-tools__spreadsheet_inspect',
+      tool_input: { path: existingWorkbookPath },
+      tool_response: {
+        structured_content: {
+          ok: true,
+          path: existingWorkbookPath,
+          sheet_names: ['Summary'],
+          row_counts: { Summary: 4 },
+          formulas: [],
+          error_cells: []
+        }
+      },
+      tool_use_id: 'inspect-existing-before-create'
+    }, { root: fixture.root, state: fixture.state });
+
+    const denied: any = await evaluateHookPayload('pre-tool', {
+      session_id: fixture.sessionId,
+      tool_name: 'mcp__acas-tools__spreadsheet_update',
+      tool_input: { path: existingWorkbookPath, patch: { sheet: 'Summary', range: 'B2' } },
+      tool_use_id: 'update-existing-before-create'
+    }, { root: fixture.root, state: fixture.state });
+    assert.equal(denied.decision, 'block');
+    assert.match(denied.reason, /host_capability_spreadsheet_update_create_not_completed/);
+
+    await evaluateHookPayload('pre-tool', {
+      session_id: fixture.sessionId,
+      tool_name: 'mcp__acas-tools__spreadsheet_create',
+      tool_input: { path: createdWorkbookPath },
+      tool_use_id: 'create-different-workbook'
+    }, { root: fixture.root, state: fixture.state });
+    await evaluateHookPayload('post-tool', {
+      session_id: fixture.sessionId,
+      tool_name: 'mcp__acas-tools__spreadsheet_create',
+      tool_input: { path: createdWorkbookPath },
+      tool_response: {
+        structured_content: {
+          ok: true,
+          path: createdWorkbookPath,
+          artifact: {
+            path: createdWorkbookPath,
+            kind: 'spreadsheet',
+            media_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            sha256: `sha256:${'c'.repeat(64)}`,
+            bytes: 4096,
+            role: 'deliverable'
+          }
+        }
+      },
+      tool_use_id: 'create-different-workbook'
+    }, { root: fixture.root, state: fixture.state });
+
+    const wrongResource: any = await evaluateHookPayload('pre-tool', {
+      session_id: fixture.sessionId,
+      tool_name: 'mcp__acas-tools__spreadsheet_update',
+      tool_input: { path: existingWorkbookPath, patch: { sheet: 'Summary', range: 'B2' } },
+      tool_use_id: 'update-existing-after-other-create'
+    }, { root: fixture.root, state: fixture.state });
+    assert.equal(wrongResource.decision, 'block');
+    assert.match(wrongResource.reason, /host_capability_spreadsheet_update_resource_mismatch/);
+  } finally {
+    await fsp.rm(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test('create and inspect spreadsheet intent remains create-only and completes without an update', async () => {
+  const goal = 'Create an Excel workbook and inspect it.';
+  assert.deepEqual(requestHostCapabilities(goal), {
+    capability_ids: ['host.artifact.receipt.v1', 'host.spreadsheet.workbook.v1'],
+    workflows: ['artifact_delivery', 'spreadsheet_create'],
+    tool_names: ['spreadsheet_create', 'spreadsheet_inspect', 'spreadsheet_update']
+  });
+  const fixture = await createHostHookFixture({
+    label: 'spreadsheet-create-inspect',
+    goal,
+    toolNames: ['spreadsheet_create', 'spreadsheet_inspect', 'spreadsheet_update']
+  });
+  const workbookPath = 'reports/created.xlsx';
+  try {
+    await evaluateHookPayload('pre-tool', {
+      session_id: fixture.sessionId,
+      tool_name: 'mcp__acas-tools__spreadsheet_create',
+      tool_input: { path: workbookPath },
+      tool_use_id: 'create-for-inspection'
+    }, { root: fixture.root, state: fixture.state });
+    await evaluateHookPayload('post-tool', {
+      session_id: fixture.sessionId,
+      tool_name: 'mcp__acas-tools__spreadsheet_create',
+      tool_input: { path: workbookPath },
+      tool_response: {
+        structured_content: {
+          ok: true,
+          path: workbookPath,
+          artifact: {
+            path: workbookPath,
+            kind: 'spreadsheet',
+            media_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            sha256: `sha256:${'d'.repeat(64)}`,
+            bytes: 4096,
+            role: 'deliverable'
+          }
+        }
+      },
+      tool_use_id: 'create-for-inspection'
+    }, { root: fixture.root, state: fixture.state });
+    await evaluateHookPayload('pre-tool', {
+      session_id: fixture.sessionId,
+      tool_name: 'mcp__acas-tools__spreadsheet_inspect',
+      tool_input: { path: workbookPath },
+      tool_use_id: 'inspect-created-workbook'
+    }, { root: fixture.root, state: fixture.state });
+    await evaluateHookPayload('post-tool', {
+      session_id: fixture.sessionId,
+      tool_name: 'mcp__acas-tools__spreadsheet_inspect',
+      tool_input: { path: workbookPath },
+      tool_response: {
+        structured_content: {
+          ok: true,
+          path: workbookPath,
+          sheet_names: ['Summary'],
+          row_counts: { Summary: 4 },
+          formulas: [],
+          error_cells: []
+        }
+      },
+      tool_use_id: 'inspect-created-workbook'
+    }, { root: fixture.root, state: fixture.state });
+
+    const evidence = JSON.parse(await fsp.readFile(path.join(
+      fixture.dir,
+      HOST_CAPABILITY_HOOK_EVIDENCE_FILENAME
+    ), 'utf8'));
+    assert.equal(evidence.ok, true);
+    assert.deepEqual(evidence.runtime.task_workflows, ['artifact_delivery', 'spreadsheet_create']);
+    assert.deepEqual(evidence.tool_calls.map((row: any) => row.tool), [
+      'spreadsheet_create',
+      'spreadsheet_inspect'
+    ]);
+    assert.deepEqual(evidence.blockers, []);
+  } finally {
+    await fsp.rm(fixture.root, { recursive: true, force: true });
+  }
+});
+
 test('host capability PostToolUse fails closed for missing or malformed datasource receipts', async () => {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-hook-host-db-receipts-'));
   const missionId = 'M-20260719-host-db-receipts';
