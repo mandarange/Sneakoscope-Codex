@@ -1,7 +1,7 @@
 {
   "schema": "sks.code-pack.v1",
-  "generated_at": "2026-07-20T10:14:16.766Z",
-  "git_head_sha": "123de1232d7753ed37c26bdd533389a20dfae1f4",
+  "generated_at": "2026-07-20T10:51:02.910Z",
+  "git_head_sha": "de74faa3995d72c727b97da73ec4e7b98277cf3a",
   "source_file_count": 3579,
   "index_digest": "39ae760e40e8ed5f1c72384adfbaf9db1051b8ac0a8583156a2c137bd1cecf21",
   "entries": [
@@ -55,7 +55,7 @@
     },
     {
       "id": "code:core-agent-bridge",
-      "text": "core-agent-bridge is a core module at src/core/agent-bridge (8 files, 2929 loc, low risk). Key exports: type LatencyClass = 'fast' | 'normal' | 'long';; interface AgentManifestEntry; interface AgentBridgeCompatibility; interface HostCapabilityDescriptor; interface HostCapabilitiesManifest, and 30 more. It has no detected cross-module dependencies.",
+      "text": "core-agent-bridge is a core module at src/core/agent-bridge (8 files, 2976 loc, low risk). Key exports: type LatencyClass = 'fast' | 'normal' | 'long';; interface AgentManifestEntry; interface AgentBridgeCompatibility; interface HostCapabilityDescriptor; interface HostCapabilitiesManifest, and 30 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/agent-bridge"
