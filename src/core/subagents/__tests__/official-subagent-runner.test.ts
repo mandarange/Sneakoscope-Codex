@@ -12,6 +12,7 @@ import {
   runOfficialSubagentWorkflow
 } from '../official-subagent-runner.js'
 import { writeNarutoGate } from '../official-subagent-preparation.js'
+import { trustedHostCapabilityReceiptBindingBlockers } from '../subagent-evidence.js'
 import { addMcpServer, editMcpServer } from '../../mcp-config/mutation.js'
 import type { CodexCliMutationOperation, CodexMcpCliPort } from '../../mcp-config/codex-cli-adapter.js'
 import { runProcess } from '../../fsx.js'
@@ -307,7 +308,18 @@ test('host capability requests select the minimum task tools and recognize workb
     'Create tests for the PDF renderer.',
     'Run the database query unit tests.',
     'Execute the read-only database query integration tests.',
-    'Update the documentation explaining how to create an Excel workbook.'
+    'Update the documentation explaining how to create an Excel workbook.',
+    'Update the documentation explaining how to build an Excel workbook.',
+    'Update the documentation explaining how to prepare an Excel report.',
+    'Update the documentation explaining how to populate a new Excel workbook.',
+    'Explain how to build an Excel workbook.',
+    'Show me how to prepare an Excel report.',
+    'How do I populate a new Excel workbook?',
+    'Explain how to get active customer records from the database.',
+    'Show me how to read the latest rows in the database.',
+    'How do I pull Q2 sales from the database?',
+    'Build the Excel workbook parser.',
+    'Prepare Excel workbook tests.'
   ]) {
     assert.deepEqual(requestHostCapabilities(prompt), {
       capability_ids: [],
@@ -329,7 +341,9 @@ test('host capability requests select the minimum task tools and recognize workb
 
   for (const prompt of [
     'Show me sales data from the database',
-    'List active customer records from the database'
+    'List active customer records from the database',
+    'Get active customer records from the database',
+    'Please read the latest rows in the database'
   ]) {
     assert.deepEqual(requestHostCapabilities(prompt), {
       capability_ids: ['host.datasource.query.readonly.v1', 'host.datasource.schema.v1'],
@@ -337,6 +351,98 @@ test('host capability requests select the minimum task tools and recognize workb
       tool_names: ['datasource_query_readonly', 'datasource_schema_context']
     }, prompt)
   }
+
+  assert.deepEqual(
+    requestHostCapabilities('Pull Q2 sales from the database and export them as XLSX.'),
+    {
+      capability_ids: [
+        'host.artifact.receipt.v1',
+        'host.datasource.query.readonly.v1',
+        'host.datasource.schema.v1',
+        'host.spreadsheet.workbook.v1'
+      ],
+      workflows: ['artifact_delivery', 'datasource_query', 'spreadsheet_create'],
+      tool_names: [
+        'datasource_query_readonly',
+        'datasource_schema_context',
+        'spreadsheet_create',
+        'spreadsheet_inspect',
+        'spreadsheet_update'
+      ]
+    }
+  )
+
+  for (const prompt of [
+    'Build an Excel workbook.',
+    'Prepare an Excel report.',
+    'Populate a new Excel workbook.'
+  ]) {
+    assert.deepEqual(requestHostCapabilities(prompt), {
+      capability_ids: ['host.artifact.receipt.v1', 'host.spreadsheet.workbook.v1'],
+      workflows: ['artifact_delivery', 'spreadsheet_create'],
+      tool_names: ['spreadsheet_create', 'spreadsheet_inspect', 'spreadsheet_update']
+    }, prompt)
+  }
+
+  for (const prompt of [
+    'Write SQL to fetch customer data; do not execute it.',
+    'Write SQL to fetch customer data without running it.',
+    'Write SQL to fetch customer data without running the query.',
+    'Write SQL to fetch customer data without actually executing it.'
+  ]) {
+    assert.deepEqual(requestHostCapabilities(prompt), {
+      capability_ids: ['host.datasource.schema.v1'],
+      workflows: ['datasource_sql_generation'],
+      tool_names: ['datasource_schema_context']
+    }, prompt)
+  }
+
+  assert.deepEqual(
+    requestHostCapabilities('Write SQL to fetch customer data and execute it.'),
+    {
+      capability_ids: ['host.datasource.query.readonly.v1', 'host.datasource.schema.v1'],
+      workflows: ['datasource_query', 'datasource_sql_generation'],
+      tool_names: ['datasource_query_readonly', 'datasource_schema_context']
+    }
+  )
+
+  for (const prompt of [
+    'Write SQL to fetch customer data; do not execute it. Then read the latest rows in the database.',
+    'Write SQL to fetch customer data without running it. Then show current rows from the database.'
+  ]) {
+    assert.deepEqual(requestHostCapabilities(prompt), {
+      capability_ids: ['host.datasource.query.readonly.v1', 'host.datasource.schema.v1'],
+      workflows: ['datasource_query', 'datasource_sql_generation'],
+      tool_names: ['datasource_query_readonly', 'datasource_schema_context']
+    }, prompt)
+  }
+
+  assert.deepEqual(
+    requestHostCapabilities('Update the workbook parser, then build an Excel workbook.'),
+    {
+      capability_ids: ['host.artifact.receipt.v1', 'host.spreadsheet.workbook.v1'],
+      workflows: ['artifact_delivery', 'spreadsheet_create'],
+      tool_names: ['spreadsheet_create', 'spreadsheet_inspect', 'spreadsheet_update']
+    }
+  )
+
+  assert.deepEqual(
+    requestHostCapabilities('Test the database and get active customer records from the database.'),
+    {
+      capability_ids: ['host.datasource.query.readonly.v1', 'host.datasource.schema.v1'],
+      workflows: ['datasource_query'],
+      tool_names: ['datasource_query_readonly', 'datasource_schema_context']
+    }
+  )
+
+  assert.deepEqual(
+    requestHostCapabilities('Create an Excel workbook and update it.'),
+    {
+      capability_ids: ['host.artifact.receipt.v1', 'host.spreadsheet.workbook.v1'],
+      workflows: ['artifact_delivery', 'spreadsheet_create', 'spreadsheet_edit'],
+      tool_names: ['spreadsheet_create', 'spreadsheet_inspect', 'spreadsheet_update']
+    }
+  )
 
   assert.deepEqual(
     requestHostCapabilities('Update the PDF renderer code, then create a PDF document.'),
@@ -474,7 +580,10 @@ test('spreadsheet evidence requires one bounded mutation, a final inspect, and o
     completedHostToolEvent({ tool: 'spreadsheet_update', path: workbookPath, artifact: updateArtifact }),
     completedHostToolEvent({ tool: 'spreadsheet_inspect', path: workbookPath })
   ]) valid.push(`${event}\n`)
-  assert.equal(valid.finish().ok, true)
+  const validEvidence = valid.finish()
+  assert.equal(validEvidence.ok, true)
+  assert.equal(validEvidence.artifacts.length, 1)
+  assert.deepEqual(trustedHostCapabilityReceiptBindingBlockers(validEvidence), [])
 })
 
 test('document evidence requires an editable source before render and a render artifact receipt', async () => {
@@ -543,7 +652,9 @@ test('document evidence requires an editable source before render and a render a
     }
   })}\n`)
   valid.push(`${completedHostToolEvent({ tool: 'html_to_pdf', path: 'reports/brief.pdf', artifact: pdfArtifact })}\n`)
-  assert.equal(valid.finish().ok, true)
+  const validEvidence = valid.finish()
+  assert.equal(validEvidence.ok, true)
+  assert.deepEqual(trustedHostCapabilityReceiptBindingBlockers(validEvidence), [])
 
   const pngRequest = requestHostCapabilities('Create and deliver a PNG document screenshot.')
   const pngRuntime = await inspectHostCapabilityRuntime({
@@ -565,7 +676,9 @@ test('document evidence requires an editable source before render and a render a
       role: 'deliverable'
     }
   })}\n`)
-  assert.equal(validPng.finish().ok, true)
+  const validPngEvidence = validPng.finish()
+  assert.equal(validPngEvidence.ok, true)
+  assert.deepEqual(trustedHostCapabilityReceiptBindingBlockers(validPngEvidence), [])
 })
 
 test('Codex thread environment selects the in-app path unless standalone is explicit', () => {

@@ -765,7 +765,7 @@ function fixtureHostCapabilityEvidence(artifacts: unknown[] | undefined, capabil
       ...row,
       receipt_sha256: `sha256:${sha256(JSON.stringify({
         id: descriptor.id,
-        calls: descriptor.executable === false ? [] : relevantCalls.map((call) => call.event_sha256),
+        calls: relevantCalls.map((call) => call.event_sha256),
         artifacts: artifactSources
       }))}`
     }

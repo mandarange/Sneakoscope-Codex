@@ -89,10 +89,10 @@ function hostCapabilityEvidence(status: 'passed' | 'failed' = 'passed') {
     }, {
       id: 'host.artifact.receipt.v1',
       status,
-      tool_names: status === 'passed' ? ['spreadsheet_create'] : [],
+      tool_names: ['spreadsheet_create'],
       receipt_sha256: capabilityReceiptHash(
         'host.artifact.receipt.v1',
-        [],
+        [createEventHash],
         status === 'passed' ? [createEventHash] : []
       )
     }],
@@ -270,7 +270,14 @@ test('trusted artifact capability receipts bind artifact production to the sourc
   const forged = {
     ...trusted,
     capabilities_used: trusted.capabilities_used.map((receipt) => receipt.id === 'host.artifact.receipt.v1'
-      ? { ...receipt, receipt_sha256: capabilityReceiptHash(receipt.id, [], [`sha256:${'8'.repeat(64)}`]) }
+      ? {
+          ...receipt,
+          receipt_sha256: capabilityReceiptHash(
+            receipt.id,
+            [trusted.tool_calls[0]!.event_sha256],
+            [`sha256:${'8'.repeat(64)}`]
+          )
+        }
       : receipt)
   }
   const evidence = buildSubagentEvidence({

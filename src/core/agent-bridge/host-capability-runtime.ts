@@ -460,30 +460,52 @@ export function requestHostCapabilities(goal: unknown): HostCapabilityRequest {
     for (const tool of tools) toolNames.add(tool);
   };
 
-  const spreadsheetCreate = matchesIntent(text, [
-    /\b(?:create|generate|produce|deliver|make|convert|export)\b.{0,48}\b(?:xlsx|excel|spreadsheet|workbook)\b/i,
-    /\b(?:xlsx|excel|spreadsheet|workbook)\b.{0,48}\b(?:create|generate|produce|deliver|make|convert|export)\b/i,
+  const spreadsheetCreatesBlankWorkbook = matchesIntent(text, [
+    /\b(?:populate|fill)\b.{0,24}\b(?:new|blank|empty)\b.{0,24}\b(?:xlsx|excel|spreadsheet|workbook)\b/i,
+    /\b(?:new|blank|empty)\b.{0,24}\b(?:xlsx|excel|spreadsheet|workbook)\b.{0,24}\b(?:populate|fill)\b/i
+  ]);
+  const spreadsheetCreate = spreadsheetCreatesBlankWorkbook || matchesIntent(text, [
+    /\b(?:create|generate|produce|deliver|make|build|prepare|convert|export)\b.{0,48}\b(?:xlsx|excel|spreadsheet|workbook)\b/i,
+    /\b(?:xlsx|excel|spreadsheet|workbook)\b.{0,48}\b(?:create|generate|produce|deliver|make|build|prepare|convert|export)\b/i,
     /(?:엑셀|스프레드시트|xlsx).{0,32}(?:생성|작성|만들|납품)/i,
     /(?:생성|작성|만들|납품).{0,32}(?:엑셀|스프레드시트|xlsx)/i
   ]);
-  const spreadsheetEdit = matchesIntent(text, [
+  const spreadsheetEdit = !spreadsheetCreatesBlankWorkbook && matchesIntent(text, [
     /\b(?:edit|update|modify|inspect|populate|fill|append|import)\b.{0,56}\b(?:xlsx|excel|spreadsheet|workbook)\b/i,
     /\b(?:xlsx|excel|spreadsheet|workbook)\b.{0,56}\b(?:edit|update|modify|inspect|populate|fill|append|import)\b/i,
     /(?:엑셀|스프레드시트|xlsx).{0,36}(?:수정|편집|업데이트|검사|점검|입력|채우|반영|추가)/i,
     /(?:수정|편집|업데이트|검사|점검|입력|채우|반영|추가).{0,36}(?:엑셀|스프레드시트|xlsx)/i
   ]);
-  const datasourceQuery = matchesIntent(text, [
-    /\b(?:query|retrieve|fetch|load|analy[sz]e|show|list)\b.{0,56}\b(?:database|datasource|data|rows?|records?|results?)\b/i,
-    /\b(?:database|datasource|data|rows?|records?|results?)\b.{0,56}\b(?:query|retrieve|fetch|load|analy[sz]e|show|list)\b/i,
-    /(?:db|데이터베이스|데이터소스|데이터).{0,36}(?:조회|가져오|검색|분석|질의)/i,
-    /(?:조회|가져오|검색|분석|질의).{0,36}(?:db|데이터베이스|데이터소스|데이터)/i
-  ]);
-  const sqlGeneration = matchesIntent(text, [
+  const sqlGenerationPatterns = [
     /\b(?:write|generate|draft|prepare)\b.{0,32}\bsql\b/i,
     /\bsql\b.{0,32}\b(?:write|generate|draft|prepare)\b/i,
     /sql.{0,24}(?:작성|생성|초안|준비)/i,
     /(?:작성|생성|초안|준비).{0,24}sql/i
-  ]);
+  ];
+  const datasourceExecutionExclusionPatterns = [
+    /\b(?:do\s+not|don't|never)\s+(?:actually\s+)?(?:run|execute)\b/i,
+    /\bwithout\s+(?:actually\s+)?(?:running|executing)\b/i,
+    /\b(?:no|without)\s+(?:query|sql)\s+execution\b/i,
+    /\b(?:sql|query)\s+(?:generation|draft|text)\s+only\b/i
+  ];
+  const datasourceQueryPatterns = [
+    /\b(?:query|retrieve|fetch|load|analy[sz]e|show|list)\b.{0,56}\b(?:database|datasource|data|rows?|records?|results?)\b/i,
+    /\b(?:database|datasource|data|rows?|records?|results?)\b.{0,56}\b(?:query|retrieve|fetch|load|analy[sz]e|show|list)\b/i,
+    /\b(?:get|read)\b.{0,56}\b(?:data|rows?|records?|results?)\b.{0,48}\b(?:from|in)\s+(?:the\s+)?(?:database|datasource|db)\b/i,
+    /\bpull\b.{0,64}\b(?:from|out\s+of)\s+(?:the\s+)?(?:database|datasource|db)\b/i,
+    /\b(?:from|in)\s+(?:the\s+)?(?:database|datasource|db)\b.{0,56}\b(?:get|read|pull)\b.{0,48}\b(?:data|rows?|records?|results?)\b/i,
+    /(?:db|데이터베이스|데이터소스|데이터).{0,36}(?:조회|가져오|검색|분석|질의)/i,
+    /(?:조회|가져오|검색|분석|질의).{0,36}(?:db|데이터베이스|데이터소스|데이터)/i
+  ];
+  const sqlGeneration = matchesIntent(text, sqlGenerationPatterns);
+  const intentClauses = text.split(/\n+/).map((clause) => clause.trim()).filter(Boolean);
+  const datasourceQuery = intentClauses.some((clause, index) => {
+    const sqlOnlyClause = matchesIntent(clause, sqlGenerationPatterns)
+      && [intentClauses[index - 1], clause, intentClauses[index + 1]]
+        .filter((candidate): candidate is string => Boolean(candidate))
+        .some((candidate) => matchesIntent(candidate, datasourceExecutionExclusionPatterns));
+    return !sqlOnlyClause && matchesIntent(clause, datasourceQueryPatterns);
+  });
   const documentRender = matchesIntent(text, [
     /\b(?:render|generate|create|export|deliver)\b.{0,48}\b(?:pdf|png|document screenshot)\b/i,
     /\b(?:pdf|png|document screenshot)\b.{0,48}\b(?:render|generate|create|export|deliver)\b/i,
@@ -903,9 +925,10 @@ function buildExecutionEvidence(
     if (EXPLICIT_DENIAL_PATTERN.test(call.tool)) blockers.push(`host_tool_call_explicitly_denied:${call.tool}`);
     if (call.status === 'failed') blockers.push(`host_tool_call_failed:${call.tool}`);
   }
-  const dedupedArtifacts = dedupeArtifacts(artifactRows);
-  if (dedupedArtifacts.length > MAX_ARTIFACT_RECEIPTS) blockers.push('host_artifact_receipts_too_many');
-  const artifacts = dedupedArtifacts.slice(0, MAX_ARTIFACT_RECEIPTS);
+  const dedupedArtifactRows = dedupeObservedArtifacts(artifactRows);
+  if (dedupedArtifactRows.length > MAX_ARTIFACT_RECEIPTS) blockers.push('host_artifact_receipts_too_many');
+  const receiptArtifactRows = dedupedArtifactRows.slice(0, MAX_ARTIFACT_RECEIPTS);
+  const artifacts = receiptArtifactRows.map(projectArtifactReceipt);
   if (requested.size === 0 && calls.length > 0) {
     for (const call of calls) blockers.push(`host_tool_call_not_requested:${call.tool}`);
   }
@@ -919,7 +942,9 @@ function buildExecutionEvidence(
       ? 'passed'
       : 'failed';
     const artifactSources = descriptor.executable === false
-      ? artifactRows.map((artifact) => ({ tool: artifact.source_tool, hash: artifact.source_hash }))
+      ? [...receiptArtifactRows]
+        .sort((left, right) => left.source_index - right.source_index || left.path.localeCompare(right.path))
+        .map((artifact) => ({ tool: artifact.source_tool, hash: artifact.source_hash }))
       : [];
     const toolNames = uniqueStrings([
       ...relevantCalls.map((call) => call.tool),
@@ -1210,6 +1235,22 @@ function dedupeArtifacts<T extends HostArtifactReceipt>(values: readonly T[]): H
       role: value.role
     }]));
   return [...byPath.values()].sort((left, right) => left.path.localeCompare(right.path));
+}
+
+function dedupeObservedArtifacts(values: readonly ObservedHostArtifactReceipt[]): ObservedHostArtifactReceipt[] {
+  const byPath = new Map(values.map((value) => [value.path, value]));
+  return [...byPath.values()].sort((left, right) => left.path.localeCompare(right.path));
+}
+
+function projectArtifactReceipt(value: HostArtifactReceipt): HostArtifactReceipt {
+  return {
+    path: value.path,
+    kind: value.kind,
+    media_type: value.media_type,
+    sha256: value.sha256,
+    bytes: value.bytes,
+    role: value.role
+  };
 }
 
 function emptyHookObservations(binding: HostCapabilityHookRuntimeBinding): HostCapabilityHookObservations {
@@ -1687,7 +1728,7 @@ function matchesIntent(text: string, patterns: readonly RegExp[]): boolean {
 
 function hostCapabilityIntentText(text: string): string {
   return text
-    .split(/(?:\r?\n)+|(?<=[.!?。！？])\s+|;\s+/)
+    .split(/(?:\r?\n)+|(?<=[.!?。！？])\s+|;\s+|,\s*(?:and\s+)?then\s+|\b(?:and\s+)?then\s+/i)
     .filter((clause) => !isHostCapabilityDocumentationOnlyClause(clause))
     .filter((clause) => !isHostCapabilityCodeMaintenanceClause(clause) || hasDirectHostExecutionIntent(clause))
     .join('\n');
@@ -1695,7 +1736,9 @@ function hostCapabilityIntentText(text: string): string {
 
 function isHostCapabilityDocumentationOnlyClause(text: string): boolean {
   return matchesIntent(text, [
-    /\b(?:documentation|docs?|readme|guide|tutorial)\b.{0,96}\b(?:explain(?:ing)?|describ(?:e|ing)|document(?:ing)?|show(?:ing)?)\b.{0,32}\bhow\s+to\b.{0,64}\b(?:create|generate|make|convert|export|edit|update|query|fetch)\b/i
+    /\b(?:documentation|docs?|readme|guide|tutorial)\b.{0,96}\b(?:explain(?:ing)?|describ(?:e|ing)|document(?:ing)?|show(?:ing)?)\b.{0,32}\bhow\s+to\b.{0,64}\b(?:create|generate|produce|deliver|make|build|prepare|convert|export|edit|update|modify|inspect|populate|fill|append|import|query|retrieve|fetch|load|analy[sz]e|show|list|get|read|pull|run|execute|render|capture|write|save|download)\b/i,
+    /\b(?:explain|describe|show)\b.{0,48}\bhow\s+to\b.{0,64}\b(?:create|generate|produce|deliver|make|build|prepare|convert|export|edit|update|modify|inspect|populate|fill|append|import|query|retrieve|fetch|load|analy[sz]e|show|list|get|read|pull|run|execute|render|capture|write|save|download)\b/i,
+    /\bhow\s+(?:do|can|should|would)\s+(?:i|we|you)\b.{0,80}\b(?:create|generate|produce|deliver|make|build|prepare|convert|export|edit|update|modify|inspect|populate|fill|append|import|query|retrieve|fetch|load|analy[sz]e|show|list|get|read|pull|run|execute|render|capture|write|save|download)\b/i
   ]);
 }
 
@@ -1712,13 +1755,17 @@ function isHostCapabilityCodeMaintenanceClause(text: string): boolean {
 
 function hasDirectHostExecutionIntent(text: string): boolean {
   return matchesIntent(text, [
-    /\b(?:create|generate|make|render)\s+(?:an?\s+|the\s+)?(?:xlsx|excel workbook|spreadsheet(?: file)?|pdf(?: file| document| report)?|png(?: file| image)?)\b/i,
+    /\b(?:create|generate|make|build|prepare|render)\s+(?:an?\s+|the\s+)?(?:xlsx|excel workbook|excel report|spreadsheet(?: file| report)?|workbook(?: file)?|pdf(?: file| document| report)?|png(?: file| image)?)\b(?!\s+(?:parser|reader|writer|module|tests?|specs?|fixtures?|code|implementation)\b)/i,
+    /\b(?:populate|fill)\b.{0,24}\b(?:new|blank|empty)\b.{0,24}\b(?:xlsx|excel(?: workbook)?|spreadsheet|workbook)\b/i,
     /\b(?:deliver|export|save|produce)\b.{0,32}\b(?:xlsx|excel|spreadsheet|workbook|pdf|png|artifact|deliverable)\b/i,
     /\b(?:edit|update|modify|populate|fill|append|import|inspect)\s+(?:the\s+|an?\s+)?(?:existing\s+)?(?:xlsx|excel(?: workbook)?|spreadsheet|workbook)\b(?!\s+(?:parser|reader|writer|module|tests?|specs?|fixtures?|code|implementation)\b)/i,
     /\b(?:edit|update|modify|populate|fill|append|import)\b.{0,48}\b[A-Za-z0-9._/-]+\.xlsx\b/i,
     /\b(?:inspect|open)\b.{0,64}\b[A-Za-z0-9._/-]+\.xlsx\b.{0,48}\b(?:and\s+)?(?:edit|update|modify|populate|fill|append|import)\s+(?:it|the\s+(?:file|workbook|spreadsheet))\b/i,
     /\b(?:run|execute)\b.{0,32}\b(?:read[- ]only\s+)?(?:query|select|cte)\b(?!\s+(?:(?:unit|integration|regression)\s+)?tests?\b)/i,
     /\b(?:query|retrieve|fetch|load)\b.{0,40}\b(?:database|datasource|rows?|records?|results?|(?:customer|sales|database)?\s*data)\b/i,
+    /\b(?:get|read)\b.{0,56}\b(?:data|rows?|records?|results?)\b.{0,48}\b(?:from|in)\s+(?:the\s+)?(?:database|datasource|db)\b/i,
+    /\bpull\b.{0,64}\b(?:from|out\s+of)\s+(?:the\s+)?(?:database|datasource|db)\b/i,
+    /\b(?:from|in)\s+(?:the\s+)?(?:database|datasource|db)\b.{0,56}\b(?:get|read|pull)\b.{0,48}\b(?:data|rows?|records?|results?)\b/i,
     /\banaly[sz]e\b.{0,40}\b(?:database\s+data|datasource\s+data|rows?|records?|query\s+results?|customer\s+data|sales\s+data)\b/i,
     /\b(?:test|inspect|review)\b.{0,32}\b(?:pdf|png)\b.{0,24}\band\s+(?:export|deliver|save|render)\s+(?:it|the\s+(?:file|document|image))\b/i,
     /(?:엑셀|스프레드시트|xlsx)(?!\s*(?:파서|리더|라이터|모듈|코드|테스트|스펙|픽스처)).{0,20}(?:업데이트|수정|편집|입력|채우|반영)/i,

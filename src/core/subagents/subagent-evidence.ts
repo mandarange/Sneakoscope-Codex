@@ -131,7 +131,7 @@ export function trustedHostCapabilityReceiptBindingBlockers(
       blockers.push(...validateArtifactCapabilityReceipt(receipt, relevantCalls, evidence.artifacts.length))
       continue
     }
-    const expectedTools = uniqueStrings(relevantCalls.map((call) => call.tool))
+    const expectedTools = uniqueStrings(relevantCalls.map((call) => call.tool)).sort()
     const expectedHash = capabilityReceiptSha256(id, relevantCalls.map((call) => call.event_sha256), [])
     if (JSON.stringify(receipt.tool_names) !== JSON.stringify(expectedTools)) {
       blockers.push(`host_capability_receipt_tool_calls_mismatch:${id}`)
@@ -156,14 +156,20 @@ function validateArtifactCapabilityReceipt(
 ): string[] {
   const id = receipt.id
   const blockers: string[] = []
-  const expectedTools = uniqueStrings(relevantCalls.map((call) => call.tool))
+  const expectedTools = uniqueStrings(relevantCalls.map((call) => call.tool)).sort()
   const sourceCalls = relevantCalls.filter((call) => (
     call.status === 'passed' && receipt.tool_names.includes(call.tool)
   ))
   if (JSON.stringify(receipt.tool_names) !== JSON.stringify(expectedTools)) {
     blockers.push(`host_capability_receipt_artifact_sources_mismatch:${id}`)
   }
-  const sourceHashes = resolveArtifactSourceHashes(sourceCalls, artifactCount, receipt.receipt_sha256, id)
+  const sourceHashes = resolveArtifactSourceHashes(
+    sourceCalls,
+    artifactCount,
+    receipt.receipt_sha256,
+    id,
+    relevantCalls.map((call) => call.event_sha256)
+  )
   if (!sourceHashes) blockers.push(`host_capability_receipt_sha256_mismatch:${id}`)
   if (receipt.status === 'passed') {
     if (artifactCount === 0) blockers.push(`host_capability_passed_artifact_missing:${id}`)
@@ -179,25 +185,24 @@ function resolveArtifactSourceHashes(
   calls: HostCapabilityExecutionEvidence['tool_calls'],
   artifactCount: number,
   receiptSha256: string,
-  capabilityId: string
+  capabilityId: string,
+  callHashes: string[]
 ): string[] | null {
   if (artifactCount === 0) {
-    return receiptSha256 === capabilityReceiptSha256(capabilityId, [], []) ? [] : null
+    return receiptSha256 === capabilityReceiptSha256(capabilityId, callHashes, []) ? [] : null
   }
-  if (calls.length === 0 || artifactCount < calls.length) return null
-  const counts = new Array<number>(calls.length).fill(1)
+  if (calls.length === 0) return null
+  const counts = new Array<number>(calls.length).fill(0)
   let attempts = 0
   const search = (index: number, remaining: number): string[] | null => {
     if (attempts >= 10_000) return null
     if (index === calls.length - 1) {
-      if (remaining < 1) return null
       counts[index] = remaining
       attempts += 1
       const hashes = calls.flatMap((call, callIndex) => Array(counts[callIndex]).fill(call.event_sha256))
-      return receiptSha256 === capabilityReceiptSha256(capabilityId, [], hashes) ? hashes : null
+      return receiptSha256 === capabilityReceiptSha256(capabilityId, callHashes, hashes) ? hashes : null
     }
-    const remainingCalls = calls.length - index - 1
-    for (let count = 1; count <= remaining - remainingCalls; count += 1) {
+    for (let count = 0; count <= remaining; count += 1) {
       counts[index] = count
       const result = search(index + 1, remaining - count)
       if (result) return result
