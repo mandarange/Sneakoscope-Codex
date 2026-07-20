@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import path from 'node:path'
+import { performance } from 'node:perf_hooks'
 import type { ReleaseGateNode } from './release-gate-node.js'
 import { cleanupReleaseGateHermeticEnv, createReleaseGateHermeticEnv } from './release-gate-hermetic-env.js'
 import { writeReleaseGateJson } from './release-gate-report.js'
@@ -63,7 +64,7 @@ export async function runReleaseGateBatch(root: string, gates: ReleaseGateNode[]
 }
 
 function runOne(root: string, runId: string, reportRoot: string, gate: ReleaseGateNode): Promise<ReleaseGateBatchResult['results'][number]> {
-  const started = Date.now()
+  const started = performance.now()
   const hermetic = createReleaseGateHermeticEnv({ root, runId, gate, reportRoot })
   return new Promise((resolve) => {
     const child = spawn(gate.command, { cwd: root, shell: true, env: hermetic.env, stdio: ['ignore', 'ignore', 'ignore'], detached: process.platform !== 'win32' })
@@ -79,7 +80,15 @@ function runOne(root: string, runId: string, reportRoot: string, gate: ReleaseGa
         clearTimeout(timer)
         if (timeoutCleanup) await timeoutCleanup
         const exitCode = timedOut ? 124 : code
-        const result = { id: gate.id, ok: exitCode === 0, exit_code: exitCode, signal, timed_out: timedOut, duration_ms: Date.now() - started, report_dir: hermetic.report_dir }
+        const result = {
+          id: gate.id,
+          ok: exitCode === 0,
+          exit_code: exitCode,
+          signal,
+          timed_out: timedOut,
+          duration_ms: Math.max(1, Math.round(performance.now() - started)),
+          report_dir: hermetic.report_dir
+        }
         cleanupReleaseGateHermeticEnv(hermetic)
         resolve(result)
       })()

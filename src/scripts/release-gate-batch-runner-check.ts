@@ -43,4 +43,28 @@ assertGate(result.results.some((row: any) => row.id === 'batch:pass' && row.ok =
 const timeoutResult = await batch.runReleaseGateBatch(root, [timeoutGate], { concurrency: 1, reportRoot })
 assertGate(timeoutResult.results.some((row: any) => row.id === 'batch:timeout' && row.ok === false && row.exit_code === 124 && row.timed_out === true), 'batch runner must report timed-out child process trees explicitly', timeoutResult)
 assertGate(timeoutResult.results.some((row: any) => row.id === 'batch:timeout' && row.duration_ms >= 1400), 'batch runner must wait for timed-out process tree hard-kill cleanup before resolving', timeoutResult)
+const dateNowDescriptor = Object.getOwnPropertyDescriptor(Date, 'now')
+let regressingWallClock = Date.now()
+Object.defineProperty(Date, 'now', {
+  configurable: true,
+  value: () => {
+    regressingWallClock -= 1000
+    return regressingWallClock
+  }
+})
+try {
+  const clockRollbackGate = {
+    ...base,
+    id: 'batch:clock-rollback',
+    command: `${process.execPath} -e "setTimeout(() => process.exit(0), 50)"`
+  }
+  const clockRollbackResult = await batch.runReleaseGateBatch(root, [clockRollbackGate], { concurrency: 1, reportRoot })
+  assertGate(
+    clockRollbackResult.results.some((row: any) => row.id === 'batch:clock-rollback' && row.ok === true && row.duration_ms > 0),
+    'batch runner duration evidence must remain positive across wall-clock rollback',
+    clockRollbackResult
+  )
+} finally {
+  if (dateNowDescriptor) Object.defineProperty(Date, 'now', dateNowDescriptor)
+}
 emitGate('release:gate-batch-runner', { batch_size: result.batch_size, failed_child: 'batch:fail' })

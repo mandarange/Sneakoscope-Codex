@@ -3,13 +3,14 @@
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import { performance } from 'node:perf_hooks'
 import { runReleaseGateBatch } from '../core/release/release-gate-batch-runner.js'
 import { assertGate, emitGate, root } from './sks-1-18-gate-lib.js'
 const reportRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-release-full-'))
 const gates = Array.from({ length: 80 }, (_, i) => ({ id: `synthetic:${i + 1}`, command: `${process.execPath} -e \"setTimeout(()=>process.exit(0),1000)\"`, deps: [], resource: ['cpu-light', 'fs-read'], side_effect: 'hermetic', timeout_ms: 15000, cache: { enabled: false, inputs: [] }, isolation: { home: 'temp', codex_home: 'temp', report_dir: 'per-gate' }, preset: ['release'] }))
-const started = Date.now()
+const started = performance.now()
 const result = await runReleaseGateBatch(root, gates, { concurrency: 40, reportRoot })
-const wallMs = Date.now() - started
+const wallMs = Math.max(1, Math.round(performance.now() - started))
 const completedDurations = result.results
   .map((row) => Number(row.duration_ms || 0))
   .filter((duration) => Number.isFinite(duration) && duration > 0)
