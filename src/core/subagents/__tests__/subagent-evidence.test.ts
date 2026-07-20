@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import os from 'node:os'
 import path from 'node:path'
 import fsp from 'node:fs/promises'
+import { sha256 } from '../../fsx.js'
+import { HOST_CAPABILITY_DESCRIPTORS, hostCapabilityDigest } from '../../agent-bridge/agent-manifest.js'
 import {
   SUBAGENT_PARENT_SUMMARY_SCHEMA,
   SUBAGENT_PARENT_SUMMARY_FILENAME,
@@ -43,6 +45,13 @@ function hostCapabilityEvidence(status: 'passed' | 'failed' = 'passed') {
     role: 'deliverable' as const
   }
   const blocker = status === 'failed' ? 'host_capability_call_failed:host.spreadsheet.workbook.v1' : null
+  const createEventHash = `sha256:${'d'.repeat(64)}`
+  const inspectEventHash = `sha256:${'1'.repeat(64)}`
+  const toolCalls = status === 'passed'
+    ? [{ server: 'acas-tools', tool: 'spreadsheet_create', status, event_sha256: createEventHash },
+        { server: 'acas-tools', tool: 'spreadsheet_inspect', status, event_sha256: inspectEventHash }]
+    : [{ server: 'acas-tools', tool: 'spreadsheet_create', status, event_sha256: createEventHash }]
+  const workbookTools = status === 'passed' ? ['spreadsheet_create', 'spreadsheet_inspect'] : ['spreadsheet_create']
   return {
     schema: 'sks.host-capability-evidence.v1' as const,
     ok: status === 'passed',
@@ -63,30 +72,37 @@ function hostCapabilityEvidence(status: 'passed' | 'failed' = 'passed') {
       denied_tool_names: [],
       explicit_denied_tool_names: [],
       allowlist_digest: `sha256:${'b'.repeat(64)}`,
-      capability_digest: `sha256:${'c'.repeat(64)}`,
+      capability_digest: hostCapabilityDigest(HOST_CAPABILITY_DESCRIPTORS),
       capabilities: [],
       blockers: []
     },
-    tool_calls: [{
-      server: 'acas-tools',
-      tool: 'spreadsheet_create',
-      status,
-      event_sha256: `sha256:${'d'.repeat(64)}`
-    }],
+    tool_calls: toolCalls,
     capabilities_used: [{
       id: 'host.spreadsheet.workbook.v1',
       status,
-      tool_names: status === 'passed' ? ['spreadsheet_create', 'spreadsheet_inspect'] : [],
-      receipt_sha256: `sha256:${'e'.repeat(64)}`
+      tool_names: workbookTools,
+      receipt_sha256: capabilityReceiptHash(
+        'host.spreadsheet.workbook.v1',
+        status === 'passed' ? [createEventHash, inspectEventHash] : [createEventHash],
+        []
+      )
     }, {
       id: 'host.artifact.receipt.v1',
       status,
       tool_names: status === 'passed' ? ['spreadsheet_create'] : [],
-      receipt_sha256: `sha256:${'f'.repeat(64)}`
+      receipt_sha256: capabilityReceiptHash(
+        'host.artifact.receipt.v1',
+        [],
+        status === 'passed' ? [createEventHash] : []
+      )
     }],
     artifacts: status === 'passed' ? [artifact] : [],
     blockers: blocker ? [blocker] : []
   }
+}
+
+function capabilityReceiptHash(id: string, calls: string[], artifacts: string[]): string {
+  return `sha256:${sha256(JSON.stringify({ id, calls, artifacts }))}`
 }
 
 test('event normalization prefers explicit thread ids, supports official agent ids, and never promotes a session id', () => {
@@ -215,6 +231,102 @@ test('parent artifact and capability receipts require trusted host evidence and 
   assert.equal(contradicted.ok, false)
   assert.equal(contradicted.parent_summary_trustworthy, false)
   assert.ok(contradicted.blockers.includes('parent_summary_capability_not_passed:host.spreadsheet.workbook.v1'))
+})
+
+test('trusted passed capability receipts must bind to observed tool call hashes', () => {
+  const trusted = hostCapabilityEvidence()
+  const forged = {
+    ...trusted,
+    tool_calls: [],
+    artifacts: [],
+    capabilities_used: trusted.capabilities_used.map((receipt) => ({
+      ...receipt,
+      tool_names: [],
+      receipt_sha256: `sha256:${'9'.repeat(64)}`
+    }))
+  }
+  const summary = {
+    ...parentSummary(['thread-a']),
+    artifacts: forged.artifacts,
+    capabilities_used: forged.capabilities_used
+  }
+  const evidence = buildSubagentEvidence({
+    requestedSubagents: 1,
+    parentSummary: summary,
+    events: [
+      { event_name: 'SubagentStart', thread_id: 'thread-a' },
+      { event_name: 'SubagentStop', thread_id: 'thread-a' }
+    ],
+    hostCapabilityEvidence: forged as any
+  })
+
+  assert.equal(evidence.ok, false)
+  assert.equal(evidence.host_capability_evidence, undefined)
+  assert.ok(evidence.blockers.includes('host_capability_evidence_invalid'))
+})
+
+test('trusted artifact capability receipts bind artifact production to the source event hash', () => {
+  const trusted = hostCapabilityEvidence()
+  const forged = {
+    ...trusted,
+    capabilities_used: trusted.capabilities_used.map((receipt) => receipt.id === 'host.artifact.receipt.v1'
+      ? { ...receipt, receipt_sha256: capabilityReceiptHash(receipt.id, [], [`sha256:${'8'.repeat(64)}`]) }
+      : receipt)
+  }
+  const evidence = buildSubagentEvidence({
+    requestedSubagents: 1,
+    parentSummary: {
+      ...parentSummary(['thread-a']),
+      artifacts: forged.artifacts,
+      capabilities_used: forged.capabilities_used
+    },
+    events: [
+      { event_name: 'SubagentStart', thread_id: 'thread-a' },
+      { event_name: 'SubagentStop', thread_id: 'thread-a' }
+    ],
+    hostCapabilityEvidence: forged
+  })
+
+  assert.equal(evidence.ok, false)
+  assert.ok(evidence.blockers.includes('host_capability_evidence_invalid'))
+})
+
+test('trusted passed artifact receipts reject a failed duplicate source-tool call', () => {
+  const trusted = hostCapabilityEvidence()
+  const artifactReceipt = trusted.capabilities_used.find((receipt) => receipt.id === 'host.artifact.receipt.v1')!
+  const forged = {
+    ...trusted,
+    runtime: {
+      ...trusted.runtime,
+      requested_capability_ids: ['host.artifact.receipt.v1']
+    },
+    tool_calls: [
+      trusted.tool_calls[0]!,
+      {
+        server: 'acas-tools',
+        tool: 'spreadsheet_create',
+        status: 'failed' as const,
+        event_sha256: `sha256:${'7'.repeat(64)}`
+      }
+    ],
+    capabilities_used: [artifactReceipt]
+  }
+  const evidence = buildSubagentEvidence({
+    requestedSubagents: 1,
+    parentSummary: {
+      ...parentSummary(['thread-a']),
+      artifacts: forged.artifacts,
+      capabilities_used: forged.capabilities_used
+    },
+    events: [
+      { event_name: 'SubagentStart', thread_id: 'thread-a' },
+      { event_name: 'SubagentStop', thread_id: 'thread-a' }
+    ],
+    hostCapabilityEvidence: forged
+  })
+
+  assert.equal(evidence.ok, false)
+  assert.ok(evidence.blockers.includes('host_capability_evidence_invalid'))
 })
 
 test('evidence rejects observed fanout that exceeds the planned subagent count', () => {

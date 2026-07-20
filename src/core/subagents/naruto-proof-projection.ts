@@ -9,7 +9,8 @@ import {
   SUBAGENT_PARENT_SUMMARY_FILENAME,
   buildSubagentEvidence,
   normalizeSubagentEvent,
-  normalizeSubagentParentSummary
+  normalizeSubagentParentSummary,
+  trustedHostCapabilityReceiptBindingBlockers
 } from './subagent-evidence.js'
 import {
   NARUTO_GATE_FILENAME,
@@ -426,6 +427,12 @@ function projectTrustedHostCapabilityEvidence(
   }
   const expectedOk = value.blockers.length === 0 && capabilities.every((receipt) => receipt.status === 'passed')
   if (value.ok !== expectedOk) blockers.push('proof_host_capability_evidence_status_inconsistent')
+  const bindingBlockers = trustedHostCapabilityReceiptBindingBlockers({
+    ...value,
+    capabilities_used: capabilities,
+    artifacts
+  } as unknown as HostCapabilityExecutionEvidence)
+  blockers.push(...bindingBlockers.map((blocker) => `proof_${blocker}`))
   blockers.push(...value.blockers)
   return {
     ...value,

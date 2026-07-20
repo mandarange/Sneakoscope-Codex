@@ -1,8 +1,8 @@
 import fsp from 'node:fs/promises'
 import path from 'node:path'
-import { appendJsonlBounded, nowIso, writeJsonAtomic } from '../fsx.js'
+import { appendJsonlBounded, nowIso, sha256, writeJsonAtomic } from '../fsx.js'
 import type { SubagentCountPolicy } from './wave-lifecycle.js'
-import { HOST_CAPABILITY_DESCRIPTORS } from '../agent-bridge/agent-manifest.js'
+import { HOST_CAPABILITY_DESCRIPTORS, hostCapabilityDigest } from '../agent-bridge/agent-manifest.js'
 import {
   HOST_CAPABILITY_EVIDENCE_SCHEMA,
   HOST_CAPABILITY_RUNTIME_SCHEMA,
@@ -107,6 +107,110 @@ const MAX_PARENT_CAPABILITY_TOOL_NAMES = 64
 const SHA256_RECEIPT_PATTERN = /^sha256:[a-f0-9]{64}$/
 const ARTIFACT_ROLES = new Set<HostArtifactReceipt['role']>(['deliverable', 'scratch', 'temp', 'log'])
 const HOST_CAPABILITY_BY_ID = new Map(HOST_CAPABILITY_DESCRIPTORS.map((descriptor) => [descriptor.id, descriptor]))
+
+export function trustedHostCapabilityReceiptBindingBlockers(
+  evidence: HostCapabilityExecutionEvidence
+): string[] {
+  const blockers: string[] = []
+  const requestedIds = evidence.runtime.requested_capability_ids
+  const requested = new Set(requestedIds)
+  const receiptsById = new Map(evidence.capabilities_used.map((receipt) => [receipt.id, receipt]))
+  if (requested.size !== requestedIds.length
+    || receiptsById.size !== evidence.capabilities_used.length
+    || evidence.capabilities_used.some((receipt) => !requested.has(receipt.id))
+    || requestedIds.some((id) => !receiptsById.has(id))) {
+    blockers.push('host_capability_requested_receipts_mismatch')
+  }
+
+  for (const id of requestedIds) {
+    const descriptor = HOST_CAPABILITY_BY_ID.get(id)
+    const receipt = receiptsById.get(id)
+    if (!descriptor || !receipt) continue
+    const relevantCalls = evidence.tool_calls.filter((call) => descriptor.tool_names.includes(call.tool))
+    if (descriptor.executable === false) {
+      blockers.push(...validateArtifactCapabilityReceipt(receipt, relevantCalls, evidence.artifacts.length))
+      continue
+    }
+    const expectedTools = uniqueStrings(relevantCalls.map((call) => call.tool))
+    const expectedHash = capabilityReceiptSha256(id, relevantCalls.map((call) => call.event_sha256), [])
+    if (JSON.stringify(receipt.tool_names) !== JSON.stringify(expectedTools)) {
+      blockers.push(`host_capability_receipt_tool_calls_mismatch:${id}`)
+    }
+    if (receipt.receipt_sha256 !== expectedHash) {
+      blockers.push(`host_capability_receipt_sha256_mismatch:${id}`)
+    }
+    if (receipt.status === 'passed') {
+      if (relevantCalls.length === 0) blockers.push(`host_capability_passed_call_missing:${id}`)
+      if (relevantCalls.some((call) => call.status !== 'passed')) {
+        blockers.push(`host_capability_passed_call_failed:${id}`)
+      }
+    }
+  }
+  return uniqueStrings(blockers)
+}
+
+function validateArtifactCapabilityReceipt(
+  receipt: HostCapabilityUseReceipt,
+  relevantCalls: HostCapabilityExecutionEvidence['tool_calls'],
+  artifactCount: number
+): string[] {
+  const id = receipt.id
+  const blockers: string[] = []
+  const expectedTools = uniqueStrings(relevantCalls.map((call) => call.tool))
+  const sourceCalls = relevantCalls.filter((call) => (
+    call.status === 'passed' && receipt.tool_names.includes(call.tool)
+  ))
+  if (JSON.stringify(receipt.tool_names) !== JSON.stringify(expectedTools)) {
+    blockers.push(`host_capability_receipt_artifact_sources_mismatch:${id}`)
+  }
+  const sourceHashes = resolveArtifactSourceHashes(sourceCalls, artifactCount, receipt.receipt_sha256, id)
+  if (!sourceHashes) blockers.push(`host_capability_receipt_sha256_mismatch:${id}`)
+  if (receipt.status === 'passed') {
+    if (artifactCount === 0) blockers.push(`host_capability_passed_artifact_missing:${id}`)
+    if (sourceCalls.length === 0) blockers.push(`host_capability_passed_artifact_source_missing:${id}`)
+    if (relevantCalls.some((call) => call.status !== 'passed')) {
+      blockers.push(`host_capability_passed_call_failed:${id}`)
+    }
+  }
+  return blockers
+}
+
+function resolveArtifactSourceHashes(
+  calls: HostCapabilityExecutionEvidence['tool_calls'],
+  artifactCount: number,
+  receiptSha256: string,
+  capabilityId: string
+): string[] | null {
+  if (artifactCount === 0) {
+    return receiptSha256 === capabilityReceiptSha256(capabilityId, [], []) ? [] : null
+  }
+  if (calls.length === 0 || artifactCount < calls.length) return null
+  const counts = new Array<number>(calls.length).fill(1)
+  let attempts = 0
+  const search = (index: number, remaining: number): string[] | null => {
+    if (attempts >= 10_000) return null
+    if (index === calls.length - 1) {
+      if (remaining < 1) return null
+      counts[index] = remaining
+      attempts += 1
+      const hashes = calls.flatMap((call, callIndex) => Array(counts[callIndex]).fill(call.event_sha256))
+      return receiptSha256 === capabilityReceiptSha256(capabilityId, [], hashes) ? hashes : null
+    }
+    const remainingCalls = calls.length - index - 1
+    for (let count = 1; count <= remaining - remainingCalls; count += 1) {
+      counts[index] = count
+      const result = search(index + 1, remaining - count)
+      if (result) return result
+      if (attempts >= 10_000) return null
+    }
+    return null
+  }
+  return search(0, artifactCount)
+}
+
+function capabilityReceiptSha256(id: string, calls: string[], artifacts: string[]): string {
+  return `sha256:${sha256(JSON.stringify({ id, calls, artifacts }))}`
+}
 
 export function normalizeSubagentEvent(payload: unknown, explicitEventName?: unknown): NormalizedSubagentEvent | null {
   const row = isRecord(payload) ? payload : {}
@@ -814,8 +918,10 @@ function normalizeTrustedHostCapabilityEvidence(value: unknown): HostCapabilityE
     || !isRecord(value.runtime)
     || value.runtime.schema !== HOST_CAPABILITY_RUNTIME_SCHEMA
     || value.runtime.server !== 'acas-tools'
+    || value.runtime.capability_digest !== hostCapabilityDigest(HOST_CAPABILITY_DESCRIPTORS)
     || !Array.isArray(value.runtime.requested_capability_ids)
     || value.runtime.requested_capability_ids.some((id) => typeof id !== 'string' || !HOST_CAPABILITY_BY_ID.has(id))
+    || new Set(value.runtime.requested_capability_ids).size !== value.runtime.requested_capability_ids.length
     || !Array.isArray(value.tool_calls)
     || !Array.isArray(value.capabilities_used)
     || !Array.isArray(value.artifacts)
@@ -837,11 +943,12 @@ function normalizeTrustedHostCapabilityEvidence(value: unknown): HostCapabilityE
       || typeof row.event_sha256 !== 'string'
       || !SHA256_RECEIPT_PATTERN.test(row.event_sha256)
   })) return null
-  return {
+  const evidence = {
     ...value,
     capabilities_used: capabilities,
     artifacts
   } as unknown as HostCapabilityExecutionEvidence
+  return trustedHostCapabilityReceiptBindingBlockers(evidence).length === 0 ? evidence : null
 }
 
 function validateParentHostCapabilityBinding(
@@ -1066,7 +1173,7 @@ function latestText<T>(values: readonly T[], pick: (value: T) => string | null):
   return ''
 }
 
-function uniqueStrings(values: string[]): string[] {
+function uniqueStrings(values: readonly string[]): string[] {
   return [...new Set(values.filter(Boolean))]
 }
 

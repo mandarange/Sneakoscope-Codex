@@ -461,8 +461,8 @@ export function requestHostCapabilities(goal: unknown): HostCapabilityRequest {
   };
 
   const spreadsheetCreate = matchesIntent(text, [
-    /\b(?:create|generate|produce|deliver|make)\b.{0,48}\b(?:xlsx|excel|spreadsheet|workbook)\b/i,
-    /\b(?:xlsx|excel|spreadsheet|workbook)\b.{0,48}\b(?:create|generate|produce|deliver|make)\b/i,
+    /\b(?:create|generate|produce|deliver|make|convert|export)\b.{0,48}\b(?:xlsx|excel|spreadsheet|workbook)\b/i,
+    /\b(?:xlsx|excel|spreadsheet|workbook)\b.{0,48}\b(?:create|generate|produce|deliver|make|convert|export)\b/i,
     /(?:엑셀|스프레드시트|xlsx).{0,32}(?:생성|작성|만들|납품)/i,
     /(?:생성|작성|만들|납품).{0,32}(?:엑셀|스프레드시트|xlsx)/i
   ]);
@@ -473,8 +473,8 @@ export function requestHostCapabilities(goal: unknown): HostCapabilityRequest {
     /(?:수정|편집|업데이트|검사|점검|입력|채우|반영|추가).{0,36}(?:엑셀|스프레드시트|xlsx)/i
   ]);
   const datasourceQuery = matchesIntent(text, [
-    /\b(?:query|retrieve|fetch|load|analy[sz]e)\b.{0,56}\b(?:database|datasource|data|rows?)\b/i,
-    /\b(?:database|datasource|data|rows?)\b.{0,56}\b(?:query|retrieve|fetch|load|analy[sz]e)\b/i,
+    /\b(?:query|retrieve|fetch|load|analy[sz]e|show|list)\b.{0,56}\b(?:database|datasource|data|rows?|records?|results?)\b/i,
+    /\b(?:database|datasource|data|rows?|records?|results?)\b.{0,56}\b(?:query|retrieve|fetch|load|analy[sz]e|show|list)\b/i,
     /(?:db|데이터베이스|데이터소스|데이터).{0,36}(?:조회|가져오|검색|분석|질의)/i,
     /(?:조회|가져오|검색|분석|질의).{0,36}(?:db|데이터베이스|데이터소스|데이터)/i
   ]);
@@ -1688,8 +1688,15 @@ function matchesIntent(text: string, patterns: readonly RegExp[]): boolean {
 function hostCapabilityIntentText(text: string): string {
   return text
     .split(/(?:\r?\n)+|(?<=[.!?。！？])\s+|;\s+/)
+    .filter((clause) => !isHostCapabilityDocumentationOnlyClause(clause))
     .filter((clause) => !isHostCapabilityCodeMaintenanceClause(clause) || hasDirectHostExecutionIntent(clause))
     .join('\n');
+}
+
+function isHostCapabilityDocumentationOnlyClause(text: string): boolean {
+  return matchesIntent(text, [
+    /\b(?:documentation|docs?|readme|guide|tutorial)\b.{0,96}\b(?:explain(?:ing)?|describ(?:e|ing)|document(?:ing)?|show(?:ing)?)\b.{0,32}\bhow\s+to\b.{0,64}\b(?:create|generate|make|convert|export|edit|update|query|fetch)\b/i
+  ]);
 }
 
 function isHostCapabilityCodeMaintenanceClause(text: string): boolean {

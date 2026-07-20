@@ -306,12 +306,35 @@ test('host capability requests select the minimum task tools and recognize workb
     'Update the spreadsheet parser unit tests.',
     'Create tests for the PDF renderer.',
     'Run the database query unit tests.',
-    'Execute the read-only database query integration tests.'
+    'Execute the read-only database query integration tests.',
+    'Update the documentation explaining how to create an Excel workbook.'
   ]) {
     assert.deepEqual(requestHostCapabilities(prompt), {
       capability_ids: [],
       workflows: [],
       tool_names: []
+    }, prompt)
+  }
+
+  for (const prompt of [
+    'Convert data.csv to XLSX',
+    'Export these rows as XLSX'
+  ]) {
+    assert.deepEqual(requestHostCapabilities(prompt), {
+      capability_ids: ['host.artifact.receipt.v1', 'host.spreadsheet.workbook.v1'],
+      workflows: ['artifact_delivery', 'spreadsheet_create'],
+      tool_names: ['spreadsheet_create', 'spreadsheet_inspect', 'spreadsheet_update']
+    }, prompt)
+  }
+
+  for (const prompt of [
+    'Show me sales data from the database',
+    'List active customer records from the database'
+  ]) {
+    assert.deepEqual(requestHostCapabilities(prompt), {
+      capability_ids: ['host.datasource.query.readonly.v1', 'host.datasource.schema.v1'],
+      workflows: ['datasource_query'],
+      tool_names: ['datasource_query_readonly', 'datasource_schema_context']
     }, prompt)
   }
 

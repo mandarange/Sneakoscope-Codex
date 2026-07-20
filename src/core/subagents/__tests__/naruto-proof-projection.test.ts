@@ -255,7 +255,8 @@ test('additive artifact and capability receipt fields are projected from proof o
     assert.deepEqual(proof.result.changed_files, ['src/example.ts'])
     assert.deepEqual(proof.result.verification, [{ name: 'test', status: 'passed' }])
     assert.deepEqual(proof.result.artifacts, artifacts)
-    assert.deepEqual(proof.result.capabilities_used, capabilitiesUsed)
+    const canonicalCapabilities = fixtureHostCapabilityEvidence(artifacts, capabilitiesUsed)!.capabilities_used
+    assert.deepEqual(proof.result.capabilities_used, canonicalCapabilities)
     assert.equal((proof.evidence as any).parent_summary_trustworthy, true)
     assert.equal(Object.hasOwn(proof.evidence as object, 'artifacts'), false)
     assert.equal(Object.hasOwn(proof.evidence as object, 'capabilities_used'), false)
@@ -481,6 +482,48 @@ test('a trusted non-passed host capability receipt blocks completion', async () 
   }
 })
 
+test('proof rejects passed host capability receipts not bound to observed event hashes and artifacts', async () => {
+  const artifacts = [{
+    path: 'reports/forged.xlsx',
+    kind: 'spreadsheet',
+    media_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    sha256: SHA256_A,
+    bytes: 4,
+    role: 'deliverable'
+  }]
+  const dir = await writeProofFixture('completed', {
+    artifacts,
+    capabilitiesUsed: [{
+      id: 'host.artifact.receipt.v1',
+      status: 'passed',
+      tool_names: ['spreadsheet_create'],
+      receipt_sha256: SHA256_B
+    }]
+  })
+  try {
+    const evidencePath = path.join(dir, SUBAGENT_EVIDENCE_FILENAME)
+    const parentPath = path.join(dir, SUBAGENT_PARENT_SUMMARY_FILENAME)
+    const evidence = JSON.parse(await fsp.readFile(evidencePath, 'utf8'))
+    evidence.host_capability_evidence.tool_calls = []
+    evidence.host_capability_evidence.capabilities_used[0] = {
+      ...evidence.host_capability_evidence.capabilities_used[0],
+      tool_names: ['spreadsheet_create'],
+      receipt_sha256: SHA256_B
+    }
+    const parent = JSON.parse(await fsp.readFile(parentPath, 'utf8'))
+    parent.capabilities_used = evidence.host_capability_evidence.capabilities_used
+    await Promise.all([writeJson(evidencePath, evidence), writeJson(parentPath, parent)])
+
+    const proof = await buildNarutoProofProjection({ artifactDir: dir, missionId: MISSION_ID })
+    assert.equal(proof.ok, false)
+    assert.equal(proof.status, 'blocked')
+    assert.ok(proof.blockers.includes('proof_host_capability_passed_artifact_source_missing:host.artifact.receipt.v1'))
+    assert.ok(proof.blockers.includes('proof_host_capability_receipt_sha256_mismatch:host.artifact.receipt.v1'))
+  } finally {
+    await fsp.rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('malformed JSONL returns only bounded blocker codes and cannot complete', async () => {
   const dir = await writeProofFixture('completed')
   try {
@@ -694,16 +737,39 @@ function fixtureHostCapabilityEvidence(artifacts: unknown[] | undefined, capabil
   const requestedIds = Array.isArray(receipts)
     ? receipts.map((row: any) => String(row?.id || '')).filter(Boolean)
     : []
-  const toolCalls = Array.isArray(receipts)
-    ? receipts.flatMap((row: any, receiptIndex) => Array.isArray(row?.tool_names)
-      ? row.tool_names.map((tool: unknown, toolIndex: number) => ({
-          server: 'acas-tools',
-          tool,
-          status: row?.status === 'failed' ? 'failed' : 'passed',
-          event_sha256: `sha256:${((receiptIndex * 17 + toolIndex + 1) % 16).toString(16).repeat(64)}`
-        }))
-      : [])
-    : []
+  const receiptRows = Array.isArray(receipts) ? receipts : []
+  const toolStatuses = new Map<string, 'passed' | 'failed'>()
+  for (const rowValue of receiptRows) {
+    const row = rowValue as any
+    if (!Array.isArray(row?.tool_names)) continue
+    for (const tool of row.tool_names) {
+      if (typeof tool !== 'string' || toolStatuses.has(tool)) continue
+      toolStatuses.set(tool, row?.status === 'failed' ? 'failed' : 'passed')
+    }
+  }
+  const toolCalls = [...toolStatuses].map(([tool, callStatus], index) => ({
+    server: 'acas-tools',
+    tool,
+    status: callStatus,
+    event_sha256: `sha256:${((index + 1) % 16).toString(16).repeat(64)}`
+  }))
+  const canonicalReceipts = receiptRows.map((row: any) => {
+    if (!/^sha256:[a-f0-9]{64}$/.test(String(row?.receipt_sha256 || ''))) return row
+    const descriptor = HOST_CAPABILITY_DESCRIPTORS.find((candidate) => candidate.id === row?.id)
+    if (!descriptor) return row
+    const relevantCalls = toolCalls.filter((call) => descriptor.tool_names.includes(call.tool))
+    const artifactSources = descriptor.executable === false && Array.isArray(artifacts) && artifacts.length > 0
+      ? Array(artifacts.length).fill(relevantCalls.find((call) => call.tool === inferredArtifactTool)?.event_sha256 || '')
+      : []
+    return {
+      ...row,
+      receipt_sha256: `sha256:${sha256(JSON.stringify({
+        id: descriptor.id,
+        calls: descriptor.executable === false ? [] : relevantCalls.map((call) => call.event_sha256),
+        artifacts: artifactSources
+      }))}`
+    }
+  })
   const failed = Array.isArray(receipts) && receipts.some((row: any) => row?.status === 'failed')
   return {
     schema: 'sks.host-capability-evidence.v1' as const,
@@ -729,7 +795,7 @@ function fixtureHostCapabilityEvidence(artifacts: unknown[] | undefined, capabil
       blockers: []
     },
     tool_calls: toolCalls,
-    capabilities_used: receipts,
+    capabilities_used: canonicalReceipts,
     artifacts: artifacts || [],
     blockers: failed ? ['host_capability_fixture_failed'] : []
   }
