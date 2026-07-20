@@ -226,6 +226,7 @@ async function narutoRunTransaction(
     appSession,
     projectTrusted: parsed.trustedProject,
     missionId: id,
+    workflowRunId,
     sessionKey,
     ...(missionLease ? { onChildSpawn: missionLease.protectChildPid } : {})
   })

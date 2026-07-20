@@ -300,7 +300,7 @@ export const ROUTES = [
     reasoningPolicy: 'high',
     stopGate: 'naruto-gate.json',
     coverage_required: true,
-    cliEntrypoint: 'sks naruto run "task" [--agents N] [--max-threads N] | sks naruto status|subagents|proof',
+    cliEntrypoint: 'sks naruto run "task" [--agents N] [--max-threads N] [--trusted-project] | sks naruto status|subagents|proof',
     examples: ['$Naruto run review twelve independent packages with --agents 12', '$Work']
   },
   {
@@ -701,7 +701,7 @@ export const COMMAND_CATALOG = [
   { name: 'wiki', usage: 'sks wiki coords|pack|refresh|publish|rebuild-index|validate|validate-shared|wrongness ...', description: 'Build, refresh, publish shared shards, rebuild ignored indexes, validate, and attach wrongness-memory context to RGBA/trig LLM Wiki packs with attention.use_first and attention.hydrate_first for compact recall plus source hydration.' },
   { name: 'memory', usage: 'sks memory build [--json] | sks memory gc [--dry-run]', description: 'Project TriWiki context-pack memory into managed AGENTS.md blocks or run bounded memory cleanup.' },
   { name: 'hproof', usage: 'sks hproof check [mission-id|latest]', description: 'Evaluate the H-Proof done gate for a mission.' },
-  { name: 'naruto', usage: 'sks naruto run \"task\" [--agents N] [--max-threads N] [--json] | sks naruto status|subagents|proof [latest|M-...] [--json]', description: 'Run or inspect the Codex official subagent workflow with a Sol Max parent and fixed Luna Max mechanical, Sol High implementation, Sol Max judgment, and Terra Medium long-context/tool profiles, max_depth=1, and structured parent-thread completion evidence.' },
+  { name: 'naruto', usage: 'sks naruto run \"task\" [--agents N] [--max-threads N] [--trusted-project] [--json] | sks naruto status|subagents|proof [latest|M-...] [--json]', description: 'Run or inspect the Codex official subagent workflow with a Sol Max parent and fixed Luna Max mechanical, Sol High implementation, Sol Max judgment, and Terra Medium long-context/tool profiles, max_depth=1, and structured parent-thread completion evidence.' },
   { name: 'reasoning', usage: 'sks reasoning ["prompt"] [--json]', description: 'Show SKS temporary reasoning-effort routing: medium for simple tasks, high for logic, xhigh for research.' },
   { name: 'gx', usage: 'sks gx init|render|validate|drift|snapshot [name]', description: 'Create and verify deterministic SVG/HTML visual context cartridges.' },
   { name: 'profile', usage: 'sks profile show|set <model>', description: 'Inspect or set the current SKS model profile metadata.' },

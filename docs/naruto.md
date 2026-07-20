@@ -126,10 +126,13 @@ by reentry or proof reads.
 
 ## Project MCP Compatibility
 
-Standalone Naruto launched with `--trusted-project` runs Codex from the project root without
-replacing the project `.codex/config.toml`. A trusted project-scoped stdio MCP registration is
-therefore discovered by the Codex parent through the existing configuration
-layer. MCP configuration writes continue to use the guarded project mutation
+Standalone Naruto launched with `--trusted-project` runs Codex from the canonical project root and
+adds an invocation-only `projects.<root>.trust_level="trusted"` override without replacing either
+the user config or project `.codex/config.toml`. The first child hook session atomically claims the
+prepared mission/run host-capability runtime from a nonce-hash grant and consumes that grant before
+any ACAS tool call. Without the flag, the standalone parent forces the canonical project to
+`untrusted`; if a global `acas-tools` registration actually exists, a read-only native inventory
+probe adds only `enabled=false`, preserving its stdio or URL transport. MCP configuration writes continue to use the guarded project mutation
 path, store only approved environment variable names, and fail closed on
 startup, timeout, or stdout protocol errors.
 

@@ -1,14 +1,19 @@
 import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { runProcess, type RunProcessResult } from '../fsx.js'
+import { randomId, runProcess, writeJsonAtomic, type RunProcessResult } from '../fsx.js'
+import { missionDir } from '../mission.js'
 import {
   NARUTO_PARENT_EFFORT,
   NARUTO_PARENT_MODEL
 } from './model-policy.js'
 import { inspectCodexLbCliLaunchRecovery } from '../codex-control/codex-lb-launch-recovery.js'
 import { resolveOfficialCodexPackageRuntime } from '../codex-runtime/resolve-codex-runtime.js'
+import { withFileLock } from '../locks/file-lock.js'
 import {
+  HOST_CAPABILITY_HOOK_PENDING_RUNTIME_FILENAME,
+  HOST_CAPABILITY_MCP_SERVER,
+  createHostCapabilityHookPendingRuntime,
   createHostCapabilityEventCollector,
   hostCapabilityCodexConfigArgs,
   inspectHostCapabilityRuntime,
@@ -80,6 +85,7 @@ export interface OfficialSubagentWorkflowInput {
   appSession: boolean
   projectTrusted?: boolean
   missionId?: string | null
+  workflowRunId?: string | null
   sessionKey?: string | null
   codexBin?: string | null
   timeoutMs?: number | null
@@ -105,17 +111,21 @@ export function buildOfficialSubagentCodexArgs(input: {
   prompt: string
   maxThreads: number
   parentSummaryFile: string
+  workingDirectory?: string
+  projectConfigArgs?: readonly string[]
   hostCapabilityConfigArgs?: readonly string[]
 }): string[] {
   return [
     'exec',
     '--json',
+    ...(input.workingDirectory ? ['-C', input.workingDirectory] : []),
     '-m', NARUTO_PARENT_MODEL,
     '-c', `model_reasoning_effort="${NARUTO_PARENT_EFFORT}"`,
     '-c', 'model_provider="openai"',
     '-c', 'forced_login_method="chatgpt"',
     '-c', `agents.max_threads=${Math.max(1, Math.floor(input.maxThreads))}`,
     '-c', 'agents.max_depth=1',
+    ...(input.projectConfigArgs || []),
     ...(input.hostCapabilityConfigArgs || []),
     '--output-last-message', input.parentSummaryFile,
     input.prompt
@@ -125,6 +135,8 @@ export function buildOfficialSubagentCodexArgs(input: {
 export function buildOfficialSubagentChildEnv(input: {
   env?: NodeJS.ProcessEnv
   missionId?: string | null
+  workflowRunId?: string | null
+  hostCapabilityLaunchNonce?: string | null
 } = {}): NodeJS.ProcessEnv {
   const source = { ...process.env, ...(input.env || {}) }
   const childEnv: NodeJS.ProcessEnv = {}
@@ -134,7 +146,99 @@ export function buildOfficialSubagentChildEnv(input: {
   childEnv.SKS_NARUTO_STANDALONE_CLI = '0'
   childEnv.SKS_NARUTO_PARENT_LAUNCH = '1'
   if (input.missionId) childEnv.SKS_NARUTO_PARENT_MISSION_ID = input.missionId
+  if (input.workflowRunId) childEnv.SKS_NARUTO_PARENT_WORKFLOW_RUN_ID = input.workflowRunId
+  if (input.hostCapabilityLaunchNonce) {
+    childEnv.SKS_NARUTO_PARENT_HOST_CAPABILITY_NONCE = input.hostCapabilityLaunchNonce
+  }
   return childEnv
+}
+
+export function hostCapabilityProjectCodexConfigArgs(input: {
+  canonicalRoot: string
+  projectTrusted: boolean
+  globalHostCapabilityConfigured?: boolean
+}): string[] {
+  const trustLevel = input.projectTrusted ? 'trusted' : 'untrusted'
+  return [
+    '-c', `projects={${JSON.stringify(input.canonicalRoot)}={trust_level="${trustLevel}"}}`,
+    ...(!input.projectTrusted && input.globalHostCapabilityConfigured
+      ? ['-c', `mcp_servers.${HOST_CAPABILITY_MCP_SERVER}.enabled=false`]
+      : [])
+  ]
+}
+
+async function inspectConfiguredGlobalHostCapabilityServer(input: {
+  codexCommand: string
+  canonicalRoot: string
+  env: NodeJS.ProcessEnv
+}): Promise<{ ok: boolean; present: boolean }> {
+  const result = await runProcess(input.codexCommand, [
+    '-C', input.canonicalRoot,
+    ...hostCapabilityProjectCodexConfigArgs({
+      canonicalRoot: input.canonicalRoot,
+      projectTrusted: false
+    }),
+    'mcp', 'list', '--json'
+  ], {
+    cwd: input.canonicalRoot,
+    timeoutMs: 10_000,
+    maxOutputBytes: 1024 * 1024,
+    env: input.env,
+    envMode: 'replace'
+  }).catch(() => null)
+  if (!result || result.code !== 0 || result.timedOut || result.truncated) {
+    return { ok: false, present: false }
+  }
+  try {
+    const rows = JSON.parse(result.stdout)
+    if (!Array.isArray(rows)) return { ok: false, present: false }
+    return {
+      ok: true,
+      present: rows.some((row) => row && typeof row === 'object' && row.name === HOST_CAPABILITY_MCP_SERVER)
+    }
+  } catch {
+    return { ok: false, present: false }
+  }
+}
+
+async function writeHostCapabilityPendingRuntime(input: {
+  dir: string
+  missionId: string
+  workflowRunId: string
+  launchNonce: string
+  runtime: Parameters<typeof createHostCapabilityHookPendingRuntime>[0]['runtime']
+}): Promise<boolean> {
+  try {
+    await withFileLock({
+      lockPath: path.join(input.dir, '.host-capability-hooks.lock'),
+      timeoutMs: 5_000,
+      staleMs: 60_000
+    }, async () => {
+      await fsp.rm(path.join(input.dir, HOST_CAPABILITY_HOOK_PENDING_RUNTIME_FILENAME), { force: true })
+      await writeJsonAtomic(
+        path.join(input.dir, HOST_CAPABILITY_HOOK_PENDING_RUNTIME_FILENAME),
+        createHostCapabilityHookPendingRuntime({
+          missionId: input.missionId,
+          workflowRunId: input.workflowRunId,
+          launchNonce: input.launchNonce,
+          runtime: input.runtime
+        })
+      )
+    })
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function removeHostCapabilityPendingRuntime(dir: string | null): Promise<void> {
+  if (!dir) return
+  await withFileLock({
+    lockPath: path.join(dir, '.host-capability-hooks.lock'),
+    timeoutMs: 5_000,
+    staleMs: 60_000
+  }, () => fsp.rm(path.join(dir, HOST_CAPABILITY_HOOK_PENDING_RUNTIME_FILENAME), { force: true }))
+    .catch(() => undefined)
 }
 
 function knownInheritedSecretValues(env: NodeJS.ProcessEnv | undefined): string[] {
@@ -211,10 +315,6 @@ export async function runOfficialSubagentWorkflow(input: OfficialSubagentWorkflo
     }
   }
 
-  const childEnv = buildOfficialSubagentChildEnv({
-    ...(input.env ? { env: input.env } : {}),
-    ...(input.missionId ? { missionId: input.missionId } : {})
-  })
   const inheritedSecretValues = knownInheritedSecretValues(input.env)
   const parentSummaryFile = path.join(os.tmpdir(), `sks-naruto-parent-summary-${process.pid}-${Date.now()}.txt`)
   const hostCapabilityCollector = createHostCapabilityEventCollector(hostCapabilityRuntime)
@@ -234,10 +334,122 @@ export async function runOfficialSubagentWorkflow(input: OfficialSubagentWorkflo
       completion_evidence: false
     }
   }
+  const canonicalRoot = await fsp.realpath(input.root).catch(() => null)
+  if (!canonicalRoot) {
+    return {
+      ...base,
+      ok: false,
+      status: 'trusted_runtime_blocked',
+      prepared: false,
+      codex_exit_code: null,
+      parent_summary: null,
+      parent_summary_file: null,
+      host_capability_runtime: hostCapabilityRuntime,
+      host_capability_evidence: hostCapabilityCollector.finish(),
+      blockers: ['host_capability_project_root_realpath_failed'],
+      completion_evidence: false
+    }
+  }
+  let hostCapabilityLaunchNonce: string | null = null
+  let hostCapabilityPendingDir: string | null = null
+  if (hostCapabilityRequest.capability_ids.length > 0) {
+    if (!input.missionId || !input.workflowRunId) {
+      return {
+        ...base,
+        ok: false,
+        status: 'host_capability_blocked',
+        prepared: false,
+        codex_exit_code: null,
+        parent_summary: null,
+        parent_summary_file: null,
+        host_capability_runtime: hostCapabilityRuntime,
+        host_capability_evidence: hostCapabilityCollector.finish(),
+        blockers: ['host_capability_parent_binding_identity_missing'],
+        completion_evidence: false
+      }
+    }
+    hostCapabilityLaunchNonce = randomId(32)
+    hostCapabilityPendingDir = missionDir(canonicalRoot, input.missionId)
+  }
+  const childEnv = buildOfficialSubagentChildEnv({
+    ...(input.env ? { env: input.env } : {}),
+    ...(input.missionId ? { missionId: input.missionId } : {}),
+    ...(input.workflowRunId ? { workflowRunId: input.workflowRunId } : {}),
+    ...(hostCapabilityLaunchNonce ? { hostCapabilityLaunchNonce } : {})
+  })
+
+  let codexCommand: string
+  if (input.runProcessImpl) {
+    codexCommand = input.codexBin || 'codex'
+  } else {
+    if (input.codexBin) {
+      return {
+        ...base,
+        ok: false,
+        status: 'trusted_runtime_blocked',
+        prepared: false,
+        codex_exit_code: null,
+        parent_summary: null,
+        parent_summary_file: null,
+        host_capability_runtime: hostCapabilityRuntime,
+        host_capability_evidence: hostCapabilityCollector.finish(),
+        blockers: ['codex_parent_executable_override_forbidden'],
+        completion_evidence: false
+      }
+    }
+    const runtime = await resolveOfficialCodexPackageRuntime({ requestedBy: 'official-subagent-runner' })
+    if (!runtime.ok || !runtime.identity) {
+      return {
+        ...base,
+        ok: false,
+        status: 'trusted_runtime_blocked',
+        prepared: false,
+        codex_exit_code: null,
+        parent_summary: null,
+        parent_summary_file: null,
+        host_capability_runtime: hostCapabilityRuntime,
+        host_capability_evidence: hostCapabilityCollector.finish(),
+        blockers: [...runtime.blockers],
+        completion_evidence: false
+      }
+    }
+    codexCommand = runtime.identity.realpath
+  }
+
+  let globalHostCapabilityConfigured = false
+  if (input.projectTrusted !== true && !input.runProcessImpl) {
+    const configured = await inspectConfiguredGlobalHostCapabilityServer({
+      codexCommand,
+      canonicalRoot,
+      env: childEnv
+    })
+    if (!configured.ok) {
+      return {
+        ...base,
+        ok: false,
+        status: 'trusted_runtime_blocked',
+        prepared: false,
+        codex_exit_code: null,
+        parent_summary: null,
+        parent_summary_file: null,
+        host_capability_runtime: hostCapabilityRuntime,
+        host_capability_evidence: hostCapabilityCollector.finish(),
+        blockers: ['host_capability_global_config_probe_failed'],
+        completion_evidence: false
+      }
+    }
+    globalHostCapabilityConfigured = configured.present
+  }
   const args = buildOfficialSubagentCodexArgs({
     prompt: input.prompt,
     maxThreads: input.maxThreads,
     parentSummaryFile,
+    workingDirectory: canonicalRoot,
+    projectConfigArgs: hostCapabilityProjectCodexConfigArgs({
+      canonicalRoot,
+      projectTrusted: input.projectTrusted === true,
+      globalHostCapabilityConfigured
+    }),
     hostCapabilityConfigArgs: hostCapabilityCodexConfigArgs(hostCapabilityRuntime)
   })
   const toolOutputRecovery = await inspectCodexLbCliLaunchRecovery({
@@ -262,53 +474,37 @@ export async function runOfficialSubagentWorkflow(input: OfficialSubagentWorkflo
       completion_evidence: false
     }
   }
-
-  let codexCommand: string
-  if (input.runProcessImpl) {
-    codexCommand = input.codexBin || 'codex'
-  } else {
-    if (input.codexBin) {
-      return {
-        ...base,
-        ok: false,
-        status: 'trusted_runtime_blocked',
-        prepared: false,
-        codex_exit_code: null,
-        parent_summary: null,
-        parent_summary_file: null,
-        host_capability_runtime: hostCapabilityRuntime,
-        host_capability_evidence: hostCapabilityCollector.finish(),
-        tool_output_recovery: toolOutputRecovery,
-        blockers: ['codex_parent_executable_override_forbidden'],
-        completion_evidence: false
-      }
-    }
-    const runtime = await resolveOfficialCodexPackageRuntime({ requestedBy: 'official-subagent-runner' })
-    if (!runtime.ok || !runtime.identity) {
-      return {
-        ...base,
-        ok: false,
-        status: 'trusted_runtime_blocked',
-        prepared: false,
-        codex_exit_code: null,
-        parent_summary: null,
-        parent_summary_file: null,
-        host_capability_runtime: hostCapabilityRuntime,
-        host_capability_evidence: hostCapabilityCollector.finish(),
-        tool_output_recovery: toolOutputRecovery,
-        blockers: [...runtime.blockers],
-        completion_evidence: false
-      }
-    }
-    codexCommand = runtime.identity.realpath
-  }
-
   await fsp.mkdir(path.dirname(parentSummaryFile), { recursive: true })
+  if (hostCapabilityPendingDir && hostCapabilityLaunchNonce && input.missionId && input.workflowRunId) {
+    const prepared = await writeHostCapabilityPendingRuntime({
+      dir: hostCapabilityPendingDir,
+      missionId: input.missionId,
+      workflowRunId: input.workflowRunId,
+      launchNonce: hostCapabilityLaunchNonce,
+      runtime: hostCapabilityRuntime
+    })
+    if (!prepared) {
+      return {
+        ...base,
+        ok: false,
+        status: 'host_capability_blocked',
+        prepared: false,
+        codex_exit_code: null,
+        parent_summary: null,
+        parent_summary_file: null,
+        host_capability_runtime: hostCapabilityRuntime,
+        host_capability_evidence: hostCapabilityCollector.finish(),
+        tool_output_recovery: toolOutputRecovery,
+        blockers: ['host_capability_pending_runtime_write_failed'],
+        completion_evidence: false
+      }
+    }
+  }
   const execute = input.runProcessImpl || runProcess
   let processResult: RunProcessResult
   try {
     processResult = await execute(codexCommand, args, {
-      cwd: input.root,
+      cwd: canonicalRoot,
       timeoutMs: input.timeoutMs || 60 * 60 * 1000,
       maxOutputBytes: 256 * 1024,
       env: childEnv,
@@ -326,6 +522,8 @@ export async function runOfficialSubagentWorkflow(input: OfficialSubagentWorkflo
       truncated: false,
       timedOut: false
     }
+  } finally {
+    await removeHostCapabilityPendingRuntime(hostCapabilityPendingDir)
   }
   const parentSummary = redactKnownValues(
     await fsp.readFile(parentSummaryFile, 'utf8').catch(() => ''),

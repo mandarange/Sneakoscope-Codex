@@ -23,6 +23,122 @@ import {
   officialSubagentConfigOwnershipProof,
   readOfficialSubagentConfig
 } from '../official-subagent-config.js'
+import {
+  buildOfficialSubagentCodexArgs,
+  buildOfficialSubagentChildEnv,
+  codexAppSessionKey,
+  detectCodexAppSession
+} from '../official-subagent-runner.js'
+
+test('standalone parent args launch one Sol Max Codex parent with the official thread budget', () => {
+  const args = buildOfficialSubagentCodexArgs({
+    prompt: 'delegate and wait',
+    maxThreads: 12,
+    parentSummaryFile: '/tmp/parent-summary.txt'
+  })
+  assert.deepEqual(args.slice(0, 6), ['exec', '--json', '-m', 'gpt-5.6-sol', '-c', 'model_reasoning_effort="max"'])
+  assert.ok(args.includes('model_provider="openai"'))
+  assert.ok(args.includes('forced_login_method="chatgpt"'))
+  assert.ok(args.includes('agents.max_threads=12'))
+  assert.ok(args.includes('agents.max_depth=1'))
+  assert.equal(args.filter((arg) => arg === 'exec').length, 1)
+})
+
+test('Codex thread environment selects the in-app path unless standalone is explicit', () => {
+  assert.equal(detectCodexAppSession({ CODEX_THREAD_ID: 'thread' }), true)
+  assert.equal(detectCodexAppSession({ CODEX_THREAD_ID: 'thread', SKS_NARUTO_STANDALONE_CLI: '1' }), false)
+  assert.equal(detectCodexAppSession({ SKS_NARUTO_APP_SESSION: '1' }), true)
+  assert.equal(codexAppSessionKey({ CODEX_THREAD_ID: 'thread' }), 'thread')
+  assert.equal(codexAppSessionKey({ SKS_NARUTO_APP_SESSION: '1' }), null)
+  assert.equal(codexAppSessionKey({ CODEX_THREAD_ID: 'thread', SKS_NARUTO_STANDALONE_CLI: '1' }), null)
+})
+
+test('standalone child environment keeps only the official runtime allowlist and launch ownership', () => {
+  const allowedHostKeys = [
+    'SKS_AGENT_MODE',
+    'ACAS_AGENT_SLUG',
+    'ACAS_AGENT_WORKSPACE',
+    'ALFREDO_AGENT_SOULS_FILE',
+    'ACAS_CHROME_PATH',
+    'ACAS_HTML_TO_PDF_ENGINE',
+    'ACAS_HTML_TO_PDF_ALLOW_CHROME_CLI_FALLBACK'
+  ] as const
+  const deniedHostKeys = [
+    'ACAS_CONNECTION_TOKEN',
+    'ACAS_CENTER_BASE_URL',
+    'ACAS_CENTRAL_API_BASE',
+    'ACAS_EDGE_NODE_SLUG',
+    'OPENAI_API_KEY',
+    'ANTHROPIC_API_KEY',
+    'OPENROUTER_API_KEY',
+    'CODEX_LB_API_KEY',
+    'SLACK_BOT_TOKEN',
+    'HTTPS_PROXY'
+  ] as const
+  const env = buildOfficialSubagentChildEnv({
+    missionId: 'M-isolated-parent',
+    workflowRunId: 'run-isolated-parent',
+    hostCapabilityLaunchNonce: 'nonce-isolated-parent',
+    env: {
+      HOME: '/tmp/official-home',
+      CODEX_HOME: '/tmp/official-home/.codex',
+      PATH: '/usr/bin:/bin',
+      OPENAI_API_KEY: 'sk-official-auth',
+      CODEX_API_KEY: 'codex-api-auth',
+      CODEX_AUTH_TOKEN: 'codex-auth-token',
+      OPENAI_ORGANIZATION: 'org-must-not-inherit',
+      OPENAI_PROJECT: 'project-must-not-inherit',
+      HTTPS_PROXY: 'https://proxy.example.test',
+      CODEX_THREAD_ID: 'must-not-inherit-app-session',
+      CODEX_LB_API_KEY: 'must-not-inherit-lb-auth',
+      AWS_SECRET_ACCESS_KEY: 'must-not-inherit-cloud-auth',
+      PROJECT_MCP_ALLOWED: 'must-not-inherit-arbitrary-project-env',
+      SKS_AGENT_MODE: '1',
+      ACAS_AGENT_SLUG: 'agent-slug',
+      ACAS_AGENT_WORKSPACE: '/tmp/agent-workspace',
+      ALFREDO_AGENT_SOULS_FILE: '/tmp/souls.json',
+      ACAS_CHROME_PATH: '/tmp/chrome',
+      ACAS_HTML_TO_PDF_ENGINE: 'chrome',
+      ACAS_HTML_TO_PDF_ALLOW_CHROME_CLI_FALLBACK: '1',
+      ACAS_CONNECTION_TOKEN: 'must-not-inherit-connection-token',
+      ACAS_CENTER_BASE_URL: 'https://center.example.test',
+      ACAS_CENTRAL_API_BASE: 'https://central.example.test',
+      ACAS_EDGE_NODE_SLUG: 'edge-node',
+      ANTHROPIC_API_KEY: 'anthropic-secret',
+      OPENROUTER_API_KEY: 'openrouter-secret',
+      SLACK_BOT_TOKEN: 'slack-secret',
+      HTTP_PROXY: 'http://proxy.example.test',
+      ALL_PROXY: 'socks5://proxy.example.test'
+    }
+  })
+  assert.equal(env.HOME, '/tmp/official-home')
+  assert.equal(env.CODEX_HOME, '/tmp/official-home/.codex')
+  assert.equal(env.PATH, '/usr/bin:/bin')
+  assert.equal(env.SKS_NARUTO_STANDALONE_CLI, '0')
+  assert.equal(env.SKS_NARUTO_PARENT_LAUNCH, '1')
+  assert.equal(env.SKS_NARUTO_PARENT_MISSION_ID, 'M-isolated-parent')
+  assert.equal(env.SKS_NARUTO_PARENT_WORKFLOW_RUN_ID, 'run-isolated-parent')
+  assert.equal(env.SKS_NARUTO_PARENT_HOST_CAPABILITY_NONCE, 'nonce-isolated-parent')
+  assert.deepEqual(allowedHostKeys.map((key) => env[key]), [
+    '1',
+    'agent-slug',
+    '/tmp/agent-workspace',
+    '/tmp/souls.json',
+    '/tmp/chrome',
+    'chrome',
+    '1'
+  ])
+  assert.deepEqual(deniedHostKeys.map((key) => env[key]), Array.from({ length: deniedHostKeys.length }, () => undefined))
+  assert.equal(env.CODEX_API_KEY, undefined)
+  assert.equal(env.CODEX_AUTH_TOKEN, undefined)
+  assert.equal(env.OPENAI_ORGANIZATION, undefined)
+  assert.equal(env.OPENAI_PROJECT, undefined)
+  assert.equal(env.CODEX_THREAD_ID, undefined)
+  assert.equal(env.AWS_SECRET_ACCESS_KEY, undefined)
+  assert.equal(env.PROJECT_MCP_ALLOWED, undefined)
+  assert.equal(env.HTTP_PROXY, undefined)
+  assert.equal(env.ALL_PROXY, undefined)
+})
 
 test('fresh project config receives the official Codex subagent defaults', () => {
   const text = mergeOfficialSubagentConfig('')

@@ -1,22 +1,41 @@
 import { sha256 } from '../fsx.js';
-import { testMcpConnection, type McpHealthOptions } from '../mcp-config/health-check.js';
-import { listMcpInventory, type McpInventoryOptions } from '../mcp-config/inventory.js';
 import {
   HOST_CAPABILITY_DESCRIPTORS,
   hostCapabilityDigest,
   type HostCapabilityDescriptor
 } from './agent-manifest.js';
+import {
+  HOST_CAPABILITY_MCP_SERVER,
+  HOST_CAPABILITY_RUNTIME_SCHEMA,
+  hostCapabilityRuntimeDigest,
+  type HostCapabilityRequest,
+  type HostCapabilityRuntime,
+  type HostCapabilityRuntimeEntry,
+  type HostCapabilityWorkflow
+} from './host-capability-policy.js';
+export {
+  HOST_CAPABILITY_MCP_SERVER,
+  HOST_CAPABILITY_RUNTIME_SCHEMA,
+  hostCapabilityCodexConfigArgs,
+  inspectHostCapabilityRuntime,
+  requestHostCapabilities,
+  type HostCapabilityRequest,
+  type HostCapabilityRuntime,
+  type HostCapabilityRuntimeDependencies,
+  type HostCapabilityRuntimeEntry,
+  type HostCapabilityState,
+  type HostCapabilityWorkflow
+} from './host-capability-policy.js';
 
-export const HOST_CAPABILITY_RUNTIME_SCHEMA = 'sks.host-capability-runtime.v1' as const;
 export const HOST_CAPABILITY_EVIDENCE_SCHEMA = 'sks.host-capability-evidence.v1' as const;
 export const HOST_CAPABILITY_HOOK_RUNTIME_SCHEMA = 'sks.host-capability-hook-runtime.v1' as const;
+export const HOST_CAPABILITY_HOOK_PENDING_RUNTIME_SCHEMA = 'sks.host-capability-hook-pending-runtime.v1' as const;
 export const HOST_CAPABILITY_HOOK_OBSERVATIONS_SCHEMA = 'sks.host-capability-hook-observations.v1' as const;
 export const HOST_CAPABILITY_HOOK_RUNTIME_FILENAME = 'host-capability-runtime.json';
+export const HOST_CAPABILITY_HOOK_PENDING_RUNTIME_FILENAME = 'host-capability-runtime-pending.json';
 export const HOST_CAPABILITY_HOOK_OBSERVATIONS_FILENAME = 'host-capability-hook-observations.json';
 export const HOST_CAPABILITY_HOOK_EVIDENCE_FILENAME = 'host-capability-evidence.json';
-export const HOST_CAPABILITY_MCP_SERVER = 'acas-tools';
 
-const MAX_OBSERVED_TOOL_NAMES = 256;
 const MAX_EVENT_LINE_BYTES = 512 * 1024;
 const MAX_MCP_TOOL_CALLS = 1024;
 const MAX_PRE_TOOL_OBSERVATIONS = 2048;
@@ -27,55 +46,6 @@ const MAX_SEMANTIC_RECEIPT_ITEMS = 10_000;
 const SHA256_RECEIPT_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const XLSX_MEDIA_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const EXPLICIT_DENIAL_PATTERN = /(?:^|[_.:-])(?:slack|center|tenant|lease|connector|outbox|message|upload|send|post)(?:$|[_.:-])/i;
-
-export type HostCapabilityState = 'available' | 'missing' | 'unhealthy' | 'not_requested';
-export type HostCapabilityWorkflow =
-  | 'datasource_sql_generation'
-  | 'datasource_query'
-  | 'spreadsheet_create'
-  | 'spreadsheet_edit'
-  | 'document_render'
-  | 'web_capture'
-  | 'workspace_files'
-  | 'artifact_delivery';
-
-export interface HostCapabilityRequest {
-  capability_ids: string[];
-  workflows: HostCapabilityWorkflow[];
-  tool_names?: string[];
-}
-
-export interface HostCapabilityRuntimeEntry {
-  id: string;
-  requested: boolean;
-  state: HostCapabilityState;
-  expected_tool_names: string[];
-  observed_tool_names: string[];
-  allowed_tool_names: string[];
-  blockers: string[];
-}
-
-export interface HostCapabilityRuntime {
-  schema: typeof HOST_CAPABILITY_RUNTIME_SCHEMA;
-  ok: boolean;
-  server: typeof HOST_CAPABILITY_MCP_SERVER;
-  server_present: boolean;
-  server_enabled: boolean;
-  server_scope: 'project' | null;
-  inventory_source: string | null;
-  health_status: string;
-  requested_capability_ids: string[];
-  task_workflows: HostCapabilityWorkflow[];
-  requested_tool_names: string[];
-  observed_tool_names: string[];
-  allowed_tool_names: string[];
-  denied_tool_names: string[];
-  explicit_denied_tool_names: string[];
-  allowlist_digest: string;
-  capability_digest: string;
-  capabilities: HostCapabilityRuntimeEntry[];
-  blockers: string[];
-}
 
 export interface HostCapabilityUseReceipt {
   id: string;
@@ -163,6 +133,14 @@ export interface HostCapabilityHookRuntimeBinding {
   runtime: HostCapabilityRuntime;
 }
 
+export interface HostCapabilityHookPendingRuntime {
+  schema: typeof HOST_CAPABILITY_HOOK_PENDING_RUNTIME_SCHEMA;
+  mission_id: string;
+  workflow_run_id: string;
+  launch_nonce_sha256: string;
+  runtime: HostCapabilityRuntime;
+}
+
 export interface HostCapabilityPreToolObservation {
   tool_use_id_sha256: string;
   tool: string;
@@ -204,11 +182,57 @@ export interface HostCapabilityHookObservations {
   blockers: string[];
 }
 
-export interface HostCapabilityRuntimeDependencies {
-  inventory?: typeof listMcpInventory;
-  health?: typeof testMcpConnection;
-  inventoryOptions?: McpInventoryOptions;
-  healthOptions?: McpHealthOptions;
+export function createHostCapabilityHookPendingRuntime(input: {
+  missionId: unknown;
+  workflowRunId: unknown;
+  launchNonce: unknown;
+  runtime: HostCapabilityRuntime;
+}): HostCapabilityHookPendingRuntime {
+  const missionId = boundedIdentity(input.missionId);
+  const workflowRunId = boundedIdentity(input.workflowRunId);
+  const launchNonce = boundedIdentity(input.launchNonce);
+  if (!missionId || !workflowRunId || !launchNonce || !isHostCapabilityRuntime(input.runtime)) {
+    throw new Error('host_capability_hook_pending_runtime_invalid');
+  }
+  return {
+    schema: HOST_CAPABILITY_HOOK_PENDING_RUNTIME_SCHEMA,
+    mission_id: missionId,
+    workflow_run_id: workflowRunId,
+    launch_nonce_sha256: `sha256:${sha256(launchNonce)}`,
+    runtime: input.runtime
+  };
+}
+
+export function resolveHostCapabilityHookPendingRuntime(
+  value: unknown,
+  input: {
+    missionId: unknown;
+    workflowRunId: unknown;
+    launchNonce: unknown;
+    request?: HostCapabilityRequest;
+  }
+): { pending: HostCapabilityHookPendingRuntime | null; blocker: string } {
+  if (!value) return { pending: null, blocker: 'host_capability_hook_pending_runtime_missing' };
+  if (!isRecord(value)
+    || value.schema !== HOST_CAPABILITY_HOOK_PENDING_RUNTIME_SCHEMA
+    || !boundedIdentity(value.mission_id)
+    || !boundedIdentity(value.workflow_run_id)
+    || !SHA256_RECEIPT_PATTERN.test(String(value.launch_nonce_sha256 || ''))
+    || !isHostCapabilityRuntime(value.runtime)) {
+    return { pending: null, blocker: 'host_capability_hook_pending_runtime_invalid' };
+  }
+  const pending = value as unknown as HostCapabilityHookPendingRuntime;
+  const launchNonce = boundedIdentity(input.launchNonce);
+  if (pending.mission_id !== boundedIdentity(input.missionId)
+    || pending.workflow_run_id !== boundedIdentity(input.workflowRunId)
+    || !launchNonce
+    || pending.launch_nonce_sha256 !== `sha256:${sha256(launchNonce)}`) {
+    return { pending: null, blocker: 'host_capability_hook_pending_runtime_scope_mismatch' };
+  }
+  if (input.request && !hostCapabilityRuntimeMatchesRequest(pending.runtime, input.request)) {
+    return { pending: null, blocker: 'host_capability_hook_pending_runtime_request_scope_mismatch' };
+  }
+  return { pending, blocker: '' };
 }
 
 export function createHostCapabilityHookRuntimeBinding(input: {
@@ -687,375 +711,6 @@ export function buildHostCapabilityEvidenceFromHookObservations(input: {
   })));
   return buildExecutionEvidence(input.binding.runtime, calls, artifacts, observationBlockers);
 }
-
-export function requestHostCapabilities(goal: unknown): HostCapabilityRequest {
-  const text = hostCapabilityIntentText(String(goal || '').normalize('NFKC'));
-  const capabilityIds = new Set<string>();
-  const workflows = new Set<HostCapabilityWorkflow>();
-  const toolNames = new Set<string>();
-  const requestCapability = (id: string, tools: readonly string[] = []) => {
-    capabilityIds.add(id);
-    for (const tool of tools) toolNames.add(tool);
-  };
-
-  const spreadsheetCreatesBlankWorkbook = matchesIntent(text, [
-    /\b(?:populate|fill)\b.{0,24}\b(?:new|blank|empty)\b.{0,24}\b(?:xlsx|excel|spreadsheet|workbook)\b/i,
-    /\b(?:new|blank|empty)\b.{0,24}\b(?:xlsx|excel|spreadsheet|workbook)\b.{0,24}\b(?:populate|fill)\b/i
-  ]);
-  const spreadsheetCreate = spreadsheetCreatesBlankWorkbook || matchesIntent(text, [
-    /\b(?:create|generate|produce|deliver|make|build|prepare|convert|export)\b.{0,48}\b(?:xlsx|excel|spreadsheet|workbook)\b/i,
-    /\b(?:xlsx|excel|spreadsheet|workbook)\b.{0,48}\b(?:create|generate|produce|deliver|make|build|prepare|convert|export)\b/i,
-    /(?:엑셀|스프레드시트|xlsx).{0,32}(?:생성|작성|만들|납품)/i,
-    /(?:생성|작성|만들|납품).{0,32}(?:엑셀|스프레드시트|xlsx)/i
-  ]);
-  const spreadsheetEdit = !spreadsheetCreatesBlankWorkbook && matchesIntent(text, [
-    /\b(?:edit|update|modify|inspect|populate|fill|append|import)\b.{0,56}\b(?:xlsx|excel|spreadsheet|workbook)\b/i,
-    /\b(?:xlsx|excel|spreadsheet|workbook)\b.{0,56}\b(?:edit|update|modify|inspect|populate|fill|append|import)\b/i,
-    /(?:엑셀|스프레드시트|xlsx).{0,36}(?:수정|편집|업데이트|검사|점검|입력|채우|반영|추가)/i,
-    /(?:수정|편집|업데이트|검사|점검|입력|채우|반영|추가).{0,36}(?:엑셀|스프레드시트|xlsx)/i
-  ]);
-  const sqlGenerationPatterns = [
-    /\b(?:write|generate|draft|prepare)\b.{0,32}\bsql\b/i,
-    /\bsql\b.{0,32}\b(?:write|generate|draft|prepare)\b/i,
-    /sql.{0,24}(?:작성|생성|초안|준비)/i,
-    /(?:작성|생성|초안|준비).{0,24}sql/i
-  ];
-  const datasourceExecutionExclusionPatterns = [
-    /\b(?:do\s+not|don't|never)\s+(?:actually\s+)?(?:run|execute)\b/i,
-    /\bwithout\s+(?:actually\s+)?(?:running|executing)\b/i,
-    /\b(?:no|without)\s+(?:query|sql)\s+execution\b/i,
-    /\b(?:sql|query)\s+(?:generation|draft|text)\s+only\b/i
-  ];
-  const datasourceQueryPatterns = [
-    /\b(?:query|retrieve|fetch|load|analy[sz]e|show|list)\b.{0,56}\b(?:database|datasource|data|rows?|records?|results?)\b/i,
-    /\b(?:database|datasource|data|rows?|records?|results?)\b.{0,56}\b(?:query|retrieve|fetch|load|analy[sz]e|show|list)\b/i,
-    /\b(?:get|read)\b.{0,56}\b(?:data|rows?|records?|results?)\b.{0,48}\b(?:from|in)\s+(?:the\s+)?(?:database|datasource|db)\b/i,
-    /\bpull\b.{0,64}\b(?:from|out\s+of)\s+(?:the\s+)?(?:database|datasource|db)\b/i,
-    /\b(?:from|in)\s+(?:the\s+)?(?:database|datasource|db)\b.{0,56}\b(?:get|read|pull)\b.{0,48}\b(?:data|rows?|records?|results?)\b/i,
-    /(?:db|데이터베이스|데이터소스|데이터).{0,36}(?:조회|가져오|검색|분석|질의)/i,
-    /(?:조회|가져오|검색|분석|질의).{0,36}(?:db|데이터베이스|데이터소스|데이터)/i
-  ];
-  const sqlGeneration = matchesIntent(text, sqlGenerationPatterns);
-  const intentClauses = text.split(/\n+/).map((clause) => clause.trim()).filter(Boolean);
-  const datasourceQuery = intentClauses.some((clause, index) => {
-    const sqlOnlyClause = matchesIntent(clause, sqlGenerationPatterns)
-      && [intentClauses[index - 1], clause, intentClauses[index + 1]]
-        .filter((candidate): candidate is string => Boolean(candidate))
-        .some((candidate) => matchesIntent(candidate, datasourceExecutionExclusionPatterns));
-    return !sqlOnlyClause && matchesIntent(clause, datasourceQueryPatterns);
-  });
-  const documentRender = matchesIntent(text, [
-    /\b(?:render|generate|create|export|deliver)\b.{0,48}\b(?:pdf|png|document screenshot)\b/i,
-    /\b(?:pdf|png|document screenshot)\b.{0,48}\b(?:render|generate|create|export|deliver)\b/i,
-    /(?:pdf|png|문서).{0,32}(?:렌더|생성|작성|내보내|납품)/i,
-    /(?:렌더|생성|작성|내보내|납품).{0,32}(?:pdf|png|문서)/i
-  ]);
-  const webCapture = matchesIntent(text, [
-    /\b(?:capture|take|create)\b.{0,40}\b(?:url|web|page)\b.{0,24}\bscreenshot\b/i,
-    /\b(?:url|web|page)\b.{0,40}\bscreenshot\b/i,
-    /(?:url|웹|페이지).{0,32}(?:스크린샷|캡처)/i
-  ]);
-  const workspaceRead = matchesIntent(text, [
-    /\bworkspace\b.{0,48}\b(?:read|open|inspect)\b/i,
-    /\b(?:read|open|inspect)\b.{0,48}\bworkspace\b/i,
-    /워크스페이스.{0,36}(?:읽|열|검사|점검)/i,
-    /(?:읽|열|검사|점검).{0,36}워크스페이스/i
-  ]);
-  const workspaceFind = matchesIntent(text, [
-    /\bworkspace\b.{0,48}\b(?:find|search)\b/i,
-    /\b(?:find|search)\b.{0,48}\bworkspace\b/i,
-    /워크스페이스.{0,36}(?:찾|검색)/i,
-    /(?:찾|검색).{0,36}워크스페이스/i
-  ]);
-  const workspaceList = matchesIntent(text, [
-    /\bworkspace\b.{0,48}\blist\b/i,
-    /\blist\b.{0,48}\bworkspace\b/i,
-    /워크스페이스.{0,36}목록/i,
-    /목록.{0,36}워크스페이스/i
-  ]);
-  const workspaceWrite = matchesIntent(text, [
-    /\bworkspace\b.{0,48}\b(?:write|create|save)\b/i,
-    /\b(?:write|create|save)\b.{0,48}\bworkspace\b/i,
-    /워크스페이스.{0,36}(?:쓰|작성|생성|저장)/i,
-    /(?:쓰|작성|생성|저장).{0,36}워크스페이스/i
-  ]);
-  const workspaceEdit = matchesIntent(text, [
-    /\bworkspace\b.{0,48}\b(?:edit|modify|update)\b/i,
-    /\b(?:edit|modify|update)\b.{0,48}\bworkspace\b/i,
-    /워크스페이스.{0,36}(?:수정|편집|업데이트)/i,
-    /(?:수정|편집|업데이트).{0,36}워크스페이스/i
-  ]);
-  const workspaceDownload = matchesIntent(text, [
-    /\bworkspace\b.{0,48}\bdownload\b/i,
-    /\bdownload\b.{0,48}\bworkspace\b/i,
-    /워크스페이스.{0,36}다운로드/i,
-    /다운로드.{0,36}워크스페이스/i
-  ]);
-
-  if (sqlGeneration || datasourceQuery) requestCapability('host.datasource.schema.v1', ['datasource_schema_context']);
-  if (sqlGeneration) workflows.add('datasource_sql_generation');
-  if (datasourceQuery) {
-    requestCapability('host.datasource.query.readonly.v1', ['datasource_query_readonly']);
-    workflows.add('datasource_query');
-  }
-  if (spreadsheetCreate) {
-    requestCapability('host.spreadsheet.workbook.v1', ['spreadsheet_create', 'spreadsheet_inspect', 'spreadsheet_update']);
-    workflows.add('spreadsheet_create');
-  }
-  if (spreadsheetEdit) {
-    requestCapability('host.spreadsheet.workbook.v1', ['spreadsheet_inspect', 'spreadsheet_update']);
-    workflows.add('spreadsheet_edit');
-  }
-  if (documentRender) {
-    const renderTools = [
-      ...(/\bpdf\b/i.test(text) ? ['html_to_pdf'] : []),
-      ...(/\b(?:png|document screenshot)\b/i.test(text) || /(?:png|문서 스크린샷)/i.test(text) ? ['html_to_screenshot'] : [])
-    ];
-    requestCapability('host.workspace.files.v1', ['write_file']);
-    requestCapability('host.document.render.v1', renderTools.length > 0 ? renderTools : ['html_to_pdf', 'html_to_screenshot']);
-    workflows.add('workspace_files');
-    workflows.add('document_render');
-  }
-  if (webCapture) {
-    requestCapability('host.web.capture.v1', ['capture_url_screenshot']);
-    workflows.add('web_capture');
-  }
-  const workspaceToolNames = [
-    ...(workspaceRead ? ['read_file'] : []),
-    ...(workspaceFind ? ['find_workspace_files'] : []),
-    ...(workspaceList ? ['list_workspace'] : []),
-    ...(workspaceWrite ? ['write_file'] : []),
-    ...(workspaceEdit ? ['edit_file'] : []),
-    ...(workspaceDownload ? ['download_url_to_workspace'] : [])
-  ];
-  if (workspaceToolNames.length > 0) {
-    requestCapability('host.workspace.files.v1', workspaceToolNames);
-    workflows.add('workspace_files');
-  }
-  if (spreadsheetCreate || spreadsheetEdit || documentRender || webCapture || workspaceWrite || workspaceEdit || workspaceDownload) {
-    requestCapability('host.artifact.receipt.v1');
-    workflows.add('artifact_delivery');
-  }
-
-  return {
-    capability_ids: [...capabilityIds].sort(),
-    workflows: [...workflows].sort(),
-    tool_names: [...toolNames].sort()
-  };
-}
-
-export async function inspectHostCapabilityRuntime(input: {
-  root: string;
-  request?: HostCapabilityRequest;
-  projectTrusted?: boolean;
-  dependencies?: HostCapabilityRuntimeDependencies;
-}): Promise<HostCapabilityRuntime> {
-  const request = input.request || { capability_ids: [], workflows: [] };
-  const knownIds = new Set(HOST_CAPABILITY_DESCRIPTORS.map((capability) => capability.id));
-  const knownToolNames = new Set(HOST_CAPABILITY_DESCRIPTORS.flatMap((capability) => capability.tool_names));
-  const requestedCapabilityIds = uniqueStrings(request.capability_ids);
-  const requestedToolNames = uniqueStrings(request.tool_names || []);
-  const hasExplicitToolScope = Array.isArray(request.tool_names);
-  const unknownRequested = requestedCapabilityIds.filter((id) => !knownIds.has(id));
-  const unknownRequestedTools = requestedToolNames.filter((name) => !knownToolNames.has(name));
-  const requested = new Set(requestedCapabilityIds.filter((id) => knownIds.has(id)));
-  const requestedTools = new Set(requestedToolNames.filter((name) => knownToolNames.has(name)));
-  const workflows = uniqueWorkflows(request.workflows);
-  const requestedDescriptorTools = (descriptor: HostCapabilityDescriptor) => hasExplicitToolScope
-    ? descriptor.tool_names.filter((name) => requestedTools.has(name))
-    : descriptor.tool_names;
-  const boundRequestedTools = new Set(HOST_CAPABILITY_DESCRIPTORS
-    .filter((descriptor) => descriptor.executable !== false && requested.has(descriptor.id))
-    .flatMap((descriptor) => requestedDescriptorTools(descriptor)));
-  const unboundRequestedTools = requestedToolNames.filter((name) => knownToolNames.has(name) && !boundRequestedTools.has(name));
-  const projectTrusted = input.projectTrusted === true;
-  if (!projectTrusted) {
-    const trustRequired = requestedCapabilityIds.length > 0
-      || requestedToolNames.length > 0
-      || workflows.length > 0;
-    const capabilities = HOST_CAPABILITY_DESCRIPTORS.map((descriptor) => capabilityRuntimeEntry(
-      descriptor,
-      requested.has(descriptor.id),
-      requested.has(descriptor.id) ? 'unhealthy' : 'not_requested',
-      [],
-      [],
-      requested.has(descriptor.id) ? [`host_capability_project_trust_missing:${descriptor.id}`] : []
-    ));
-    return runtimeResult({
-      serverPresent: false,
-      serverEnabled: false,
-      inventorySource: null,
-      healthStatus: 'untrusted',
-      requestedCapabilityIds,
-      workflows,
-      requestedToolNames,
-      observedToolNames: [],
-      allowedToolNames: [],
-      capabilities,
-      blockers: [
-        ...(trustRequired ? ['host_capability_project_trust_missing'] : []),
-        ...unknownRequested.map((id) => `host_capability_unknown:${id}`),
-        ...unknownRequestedTools.map((name) => `host_capability_tool_unknown:${name}`),
-        ...unboundRequestedTools.map((name) => `host_capability_tool_scope_unbound:${name}`),
-        ...capabilities.flatMap((entry) => entry.blockers)
-      ]
-    });
-  }
-  const inventoryFn = input.dependencies?.inventory || listMcpInventory;
-  const healthFn = input.dependencies?.health || testMcpConnection;
-  const inventory = await inventoryFn('project', {
-    projectRoot: input.root,
-    ...(input.dependencies?.inventoryOptions || {}),
-    projectTrusted
-  });
-  const server = inventory.servers.find((entry) => entry.name === HOST_CAPABILITY_MCP_SERVER) || null;
-  const inventoryBlockers = inventory.ok ? [] : ['host_capability_project_mcp_inventory_unhealthy'];
-
-  if (!server) {
-    const capabilities = HOST_CAPABILITY_DESCRIPTORS.map((descriptor) => capabilityRuntimeEntry(
-      descriptor,
-      requested.has(descriptor.id),
-      requested.has(descriptor.id) ? 'missing' : 'not_requested',
-      [],
-      [],
-      requested.has(descriptor.id) ? [`host_capability_missing:${descriptor.id}`] : []
-    ));
-    const blockers = uniqueStrings([
-      ...unknownRequested.map((id) => `host_capability_unknown:${id}`),
-      ...unknownRequestedTools.map((name) => `host_capability_tool_unknown:${name}`),
-      ...unboundRequestedTools.map((name) => `host_capability_tool_scope_unbound:${name}`),
-      ...(requested.size ? inventoryBlockers : []),
-      ...capabilities.flatMap((entry) => entry.blockers)
-    ]);
-    return runtimeResult({
-      serverPresent: false,
-      serverEnabled: false,
-      inventorySource: inventory.source,
-      healthStatus: 'missing',
-      requestedCapabilityIds,
-      workflows,
-      requestedToolNames,
-      observedToolNames: [],
-      allowedToolNames: [],
-      capabilities,
-      blockers
-    });
-  }
-
-  if (!server.enabled) {
-    const capabilities = HOST_CAPABILITY_DESCRIPTORS.map((descriptor) => capabilityRuntimeEntry(
-      descriptor,
-      requested.has(descriptor.id),
-      requested.has(descriptor.id) ? 'unhealthy' : 'not_requested',
-      [],
-      [],
-      requested.has(descriptor.id) ? [`host_capability_unhealthy:${descriptor.id}:disabled`] : []
-    ));
-    const blockers = uniqueStrings([
-      ...unknownRequested.map((id) => `host_capability_unknown:${id}`),
-      ...unknownRequestedTools.map((name) => `host_capability_tool_unknown:${name}`),
-      ...unboundRequestedTools.map((name) => `host_capability_tool_scope_unbound:${name}`),
-      ...(requested.size ? inventoryBlockers : []),
-      ...capabilities.flatMap((entry) => entry.blockers)
-    ]);
-    return runtimeResult({
-      serverPresent: true,
-      serverEnabled: false,
-      inventorySource: inventory.source,
-      healthStatus: 'disabled',
-      requestedCapabilityIds,
-      workflows,
-      requestedToolNames,
-      observedToolNames: [],
-      allowedToolNames: [],
-      capabilities,
-      blockers
-    });
-  }
-
-  const health = await healthFn(HOST_CAPABILITY_MCP_SERVER, 'project', {
-    projectRoot: input.root,
-    ...(input.dependencies?.healthOptions || {}),
-    projectTrusted
-  });
-  const observedToolNames = health.status === 'healthy' && Array.isArray(health.tool_names)
-    ? uniqueStrings(health.tool_names).slice(0, MAX_OBSERVED_TOOL_NAMES)
-    : [];
-  const observed = new Set(observedToolNames);
-  const configuredEnabled = Array.isArray(server.enabled_tools) ? new Set(server.enabled_tools) : null;
-  const configuredDisabled = new Set(server.disabled_tools || []);
-  const configuredAvailable = (name: string) => observed.has(name)
-    && (!configuredEnabled || configuredEnabled.has(name))
-    && !configuredDisabled.has(name);
-  const healthReady = health.status === 'healthy' && Array.isArray(health.tool_names);
-  const capabilities = HOST_CAPABILITY_DESCRIPTORS.map((descriptor) => {
-    const isRequested = requested.has(descriptor.id);
-    const requiredTools = requestedDescriptorTools(descriptor);
-    const descriptorTools = descriptor.tool_names.filter(configuredAvailable);
-    const available = descriptor.executable === false
-      ? descriptorTools.length > 0
-      : requiredTools.length > 0 && requiredTools.every(configuredAvailable);
-    const state: HostCapabilityState = !healthReady
-      ? isRequested ? 'unhealthy' : 'not_requested'
-      : available
-        ? 'available'
-        : isRequested ? 'missing' : 'not_requested';
-    const entryBlockers = isRequested
-      ? [
-          ...(descriptor.executable !== false && requiredTools.length === 0
-            ? [`host_capability_tool_scope_empty:${descriptor.id}`]
-            : []),
-          ...(state !== 'available'
-            ? [`host_capability_${state}:${descriptor.id}${state === 'unhealthy' ? `:${health.status}` : ''}`]
-            : [])
-        ]
-      : [];
-    return capabilityRuntimeEntry(
-      descriptor,
-      isRequested,
-      state,
-      descriptorTools,
-      isRequested && descriptor.executable !== false ? requiredTools.filter(configuredAvailable) : [],
-      entryBlockers
-    );
-  });
-  const allowedToolNames = uniqueStrings(HOST_CAPABILITY_DESCRIPTORS
-    .filter((descriptor) => descriptor.executable !== false && requested.has(descriptor.id))
-    .flatMap((descriptor) => requestedDescriptorTools(descriptor).filter(configuredAvailable)));
-  const allowed = new Set(allowedToolNames);
-  const deniedToolNames = observedToolNames.filter((name) => !allowed.has(name));
-  const blockers = uniqueStrings([
-    ...unknownRequested.map((id) => `host_capability_unknown:${id}`),
-    ...unknownRequestedTools.map((name) => `host_capability_tool_unknown:${name}`),
-    ...unboundRequestedTools.map((name) => `host_capability_tool_scope_unbound:${name}`),
-    ...(requested.size ? inventoryBlockers : []),
-    ...capabilities.flatMap((entry) => entry.blockers)
-  ]);
-  return runtimeResult({
-    serverPresent: true,
-    serverEnabled: true,
-    inventorySource: inventory.source,
-    healthStatus: health.status,
-    requestedCapabilityIds,
-    workflows,
-    requestedToolNames,
-    observedToolNames,
-    allowedToolNames,
-    deniedToolNames,
-    capabilities,
-    blockers
-  });
-}
-
-export function hostCapabilityCodexConfigArgs(runtime: HostCapabilityRuntime): string[] {
-  if (!runtime.server_present) return [];
-  const serverKey = JSON.stringify(runtime.server);
-  return [
-    '-c', `mcp_servers.${serverKey}.enabled_tools=${tomlStringArray(runtime.allowed_tool_names)}`,
-    '-c', `mcp_servers.${serverKey}.disabled_tools=${tomlStringArray(runtime.denied_tool_names)}`
-  ];
-}
-
 export function createHostCapabilityEventCollector(runtime: HostCapabilityRuntime): {
   push(chunk: string): void;
   finish(fallbackOutput?: string): HostCapabilityExecutionEvidence;
@@ -1723,29 +1378,6 @@ function hostCapabilityRuntimeMatchesRequest(
     && JSON.stringify(runtime.task_workflows) === JSON.stringify(uniqueWorkflows(request.workflows))
     && JSON.stringify(runtime.requested_tool_names) === JSON.stringify(uniqueStrings(request.tool_names || []));
 }
-
-function hostCapabilityRuntimeDigest(runtime: HostCapabilityRuntime): string {
-  return `sha256:${sha256(JSON.stringify({
-    server: runtime.server,
-    server_present: runtime.server_present,
-    server_enabled: runtime.server_enabled,
-    server_scope: runtime.server_scope,
-    inventory_source: runtime.inventory_source,
-    health_status: runtime.health_status,
-    requested_capability_ids: runtime.requested_capability_ids,
-    task_workflows: runtime.task_workflows,
-    requested_tool_names: runtime.requested_tool_names,
-    observed_tool_names: runtime.observed_tool_names,
-    allowed_tool_names: runtime.allowed_tool_names,
-    denied_tool_names: runtime.denied_tool_names,
-    explicit_denied_tool_names: runtime.explicit_denied_tool_names,
-    capability_digest: runtime.capability_digest,
-    capabilities: runtime.capabilities,
-    blockers: runtime.blockers,
-    ok: runtime.ok
-  }))}`;
-}
-
 function structuredHostToolResponse(value: unknown): Record<string, any> | null {
   if (!isRecord(value)) return null;
   const nested = value.structured_content ?? value.structuredContent;
@@ -1957,69 +1589,6 @@ function boundedIdentity(value: unknown): string | null {
   const text = typeof value === 'string' ? value.trim() : '';
   return text && text.length <= 256 && !/[\r\n\0]/.test(text) ? text : null;
 }
-
-function runtimeResult(input: {
-  serverPresent: boolean;
-  serverEnabled: boolean;
-  inventorySource: string | null;
-  healthStatus: string;
-  requestedCapabilityIds: string[];
-  workflows: HostCapabilityWorkflow[];
-  requestedToolNames: string[];
-  observedToolNames: string[];
-  allowedToolNames: string[];
-  deniedToolNames?: string[];
-  capabilities: HostCapabilityRuntimeEntry[];
-  blockers: string[];
-}): HostCapabilityRuntime {
-  const observedToolNames = uniqueStrings(input.observedToolNames).slice(0, MAX_OBSERVED_TOOL_NAMES);
-  const allowedToolNames = uniqueStrings(input.allowedToolNames);
-  const deniedToolNames = uniqueStrings(input.deniedToolNames || observedToolNames.filter((name) => !allowedToolNames.includes(name)));
-  const blockers = uniqueStrings(input.blockers);
-  const runtime: HostCapabilityRuntime = {
-    schema: HOST_CAPABILITY_RUNTIME_SCHEMA,
-    ok: blockers.length === 0,
-    server: HOST_CAPABILITY_MCP_SERVER,
-    server_present: input.serverPresent,
-    server_enabled: input.serverEnabled,
-    server_scope: input.serverPresent ? 'project' : null,
-    inventory_source: input.inventorySource,
-    health_status: input.healthStatus,
-    requested_capability_ids: uniqueStrings(input.requestedCapabilityIds),
-    task_workflows: uniqueWorkflows(input.workflows),
-    requested_tool_names: uniqueStrings(input.requestedToolNames),
-    observed_tool_names: observedToolNames,
-    allowed_tool_names: allowedToolNames,
-    denied_tool_names: deniedToolNames,
-    explicit_denied_tool_names: deniedToolNames.filter((name) => EXPLICIT_DENIAL_PATTERN.test(name)),
-    allowlist_digest: '',
-    capability_digest: hostCapabilityDigest(HOST_CAPABILITY_DESCRIPTORS),
-    capabilities: input.capabilities,
-    blockers
-  };
-  runtime.allowlist_digest = hostCapabilityRuntimeDigest(runtime);
-  return runtime;
-}
-
-function capabilityRuntimeEntry(
-  descriptor: HostCapabilityDescriptor,
-  requested: boolean,
-  state: HostCapabilityState,
-  observedToolNames: string[],
-  allowedToolNames: string[],
-  blockers: string[]
-): HostCapabilityRuntimeEntry {
-  return {
-    id: descriptor.id,
-    requested,
-    state,
-    expected_tool_names: [...descriptor.tool_names],
-    observed_tool_names: uniqueStrings(observedToolNames),
-    allowed_tool_names: uniqueStrings(allowedToolNames),
-    blockers: uniqueStrings(blockers)
-  };
-}
-
 function parseJsonObject(value: unknown): Record<string, unknown> | null {
   if (isRecord(value)) return value;
   if (typeof value !== 'string' || !value.trim()) return null;
@@ -2033,65 +1602,6 @@ function parseJsonObject(value: unknown): Record<string, unknown> | null {
   }
   return null;
 }
-
-function matchesIntent(text: string, patterns: readonly RegExp[]): boolean {
-  return patterns.some((pattern) => pattern.test(text));
-}
-
-function hostCapabilityIntentText(text: string): string {
-  return text
-    .split(/(?:\r?\n)+|(?<=[.!?。！？])\s+|;\s+|,\s*(?:and\s+)?then\s+|\b(?:and\s+)?then\s+/i)
-    .filter((clause) => !isHostCapabilityDocumentationOnlyClause(clause))
-    .filter((clause) => !isHostCapabilityCodeMaintenanceClause(clause) || hasDirectHostExecutionIntent(clause))
-    .join('\n');
-}
-
-function isHostCapabilityDocumentationOnlyClause(text: string): boolean {
-  return matchesIntent(text, [
-    /\b(?:documentation|docs?|readme|guide|tutorial)\b.{0,96}\b(?:explain(?:ing)?|describ(?:e|ing)|document(?:ing)?|show(?:ing)?)\b.{0,32}\bhow\s+to\b.{0,64}\b(?:create|generate|produce|deliver|make|build|prepare|convert|export|edit|update|modify|inspect|populate|fill|append|import|query|retrieve|fetch|load|analy[sz]e|show|list|get|read|pull|run|execute|render|capture|write|save|download)\b/i,
-    /\b(?:explain|describe|show)\b.{0,48}\bhow\s+to\b.{0,64}\b(?:create|generate|produce|deliver|make|build|prepare|convert|export|edit|update|modify|inspect|populate|fill|append|import|query|retrieve|fetch|load|analy[sz]e|show|list|get|read|pull|run|execute|render|capture|write|save|download)\b/i,
-    /\bhow\s+(?:do|can|should|would)\s+(?:i|we|you)\b.{0,80}\b(?:create|generate|produce|deliver|make|build|prepare|convert|export|edit|update|modify|inspect|populate|fill|append|import|query|retrieve|fetch|load|analy[sz]e|show|list|get|read|pull|run|execute|render|capture|write|save|download)\b/i
-  ]);
-}
-
-function isHostCapabilityCodeMaintenanceClause(text: string): boolean {
-  return matchesIntent(text, [
-    /\b(?:tests?|specs?|fixtures?|code[- ]review|implementation|source code|support|policy|contract|workflow)\b/i,
-    /\b(?:database|datasource|spreadsheet|xlsx|excel|workbook|pdf|png)\b.{0,40}\b(?:module|parser|renderer|handler|adapter|client|library|implementation|code|source)\b/i,
-    /\b(?:module|parser|renderer|handler|adapter|library|implementation|code|source)\b.{0,40}\b(?:database|datasource|spreadsheet|xlsx|excel|workbook|pdf|png)\b/i,
-    /(?:테스트|스펙|픽스처|코드\s*리뷰|구현|지원|정책|계약|워크플로|요구사항|가능하게)/i,
-    /(?:데이터베이스|데이터소스|스프레드시트|엑셀|xlsx|pdf|png).{0,28}(?:모듈|파서|렌더러|핸들러|어댑터|라이브러리|구현|코드|소스)/i,
-    /(?:모듈|파서|렌더러|핸들러|어댑터|라이브러리|구현|코드|소스).{0,28}(?:데이터베이스|데이터소스|스프레드시트|엑셀|xlsx|pdf|png)/i
-  ]);
-}
-
-function hasDirectHostExecutionIntent(text: string): boolean {
-  return matchesIntent(text, [
-    /\b(?:create|generate|make|build|prepare|render)\s+(?:an?\s+|the\s+)?(?:xlsx|excel workbook|excel report|spreadsheet(?: file| report)?|workbook(?: file)?|pdf(?: file| document| report)?|png(?: file| image)?)\b(?!\s+(?:parser|reader|writer|module|tests?|specs?|fixtures?|code|implementation)\b)/i,
-    /\b(?:populate|fill)\b.{0,24}\b(?:new|blank|empty)\b.{0,24}\b(?:xlsx|excel(?: workbook)?|spreadsheet|workbook)\b/i,
-    /\b(?:deliver|export|save|produce)\b.{0,32}\b(?:xlsx|excel|spreadsheet|workbook|pdf|png|artifact|deliverable)\b/i,
-    /\b(?:edit|update|modify|populate|fill|append|import|inspect)\s+(?:the\s+|an?\s+)?(?:existing\s+)?(?:xlsx|excel(?: workbook)?|spreadsheet|workbook)\b(?!\s+(?:parser|reader|writer|module|tests?|specs?|fixtures?|code|implementation)\b)/i,
-    /\b(?:edit|update|modify|populate|fill|append|import)\b.{0,48}\b[A-Za-z0-9._/-]+\.xlsx\b/i,
-    /\b(?:inspect|open)\b.{0,64}\b[A-Za-z0-9._/-]+\.xlsx\b.{0,48}\b(?:and\s+)?(?:edit|update|modify|populate|fill|append|import)\s+(?:it|the\s+(?:file|workbook|spreadsheet))\b/i,
-    /\b(?:run|execute)\b.{0,32}\b(?:read[- ]only\s+)?(?:query|select|cte)\b(?!\s+(?:(?:unit|integration|regression)\s+)?tests?\b)/i,
-    /\b(?:query|retrieve|fetch|load)\b.{0,40}\b(?:database|datasource|rows?|records?|results?|(?:customer|sales|database)?\s*data)\b/i,
-    /\b(?:get|read)\b.{0,56}\b(?:data|rows?|records?|results?)\b.{0,48}\b(?:from|in)\s+(?:the\s+)?(?:database|datasource|db)\b/i,
-    /\bpull\b.{0,64}\b(?:from|out\s+of)\s+(?:the\s+)?(?:database|datasource|db)\b/i,
-    /\b(?:from|in)\s+(?:the\s+)?(?:database|datasource|db)\b.{0,56}\b(?:get|read|pull)\b.{0,48}\b(?:data|rows?|records?|results?)\b/i,
-    /\banaly[sz]e\b.{0,40}\b(?:database\s+data|datasource\s+data|rows?|records?|query\s+results?|customer\s+data|sales\s+data)\b/i,
-    /\b(?:test|inspect|review)\b.{0,32}\b(?:pdf|png)\b.{0,24}\band\s+(?:export|deliver|save|render)\s+(?:it|the\s+(?:file|document|image))\b/i,
-    /(?:엑셀|스프레드시트|xlsx)(?!\s*(?:파서|리더|라이터|모듈|코드|테스트|스펙|픽스처)).{0,20}(?:업데이트|수정|편집|입력|채우|반영)/i,
-    /(?:업데이트|수정|편집|입력|채우|반영).{0,20}(?:엑셀|스프레드시트|xlsx)/i,
-    /(?:엑셀|스프레드시트|xlsx|pdf|png).{0,24}(?:파일|문서|보고서|산출물).{0,24}(?:생성|작성|만들|렌더|내보내|납품|저장)/i,
-    /(?:생성|작성|만들|렌더|내보내|납품|저장).{0,24}(?:엑셀|스프레드시트|xlsx|pdf|png)(?:\s*(?:파일|문서|보고서|산출물))?/i,
-    /(?:실행|조회|가져오).{0,24}(?:읽기\s*전용\s*)?(?:쿼리|질의|행|레코드|결과)/i
-  ]);
-}
-
-function tomlStringArray(values: readonly string[]): string {
-  return `[${values.map((value) => JSON.stringify(value)).join(', ')}]`;
-}
-
 function uniqueStrings(values: readonly unknown[]): string[] {
   return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))].sort();
 }

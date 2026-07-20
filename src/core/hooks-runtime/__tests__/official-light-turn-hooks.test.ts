@@ -8,6 +8,14 @@ import { lightTurnReceiptPath } from '../light-turn.js';
 import { toolOutputQuarantinePath } from '../tool-output-quarantine.js';
 import { prepareRoute } from '../../pipeline.js';
 import { createMission, loadStateForSession, missionDir, setCurrent, stateFileForSession } from '../../mission.js';
+import { sha256, writeJsonAtomic } from '../../fsx.js';
+import {
+  HOST_CAPABILITY_HOOK_PENDING_RUNTIME_FILENAME,
+  createHostCapabilityHookPendingRuntime,
+  inspectHostCapabilityRuntime,
+  requestHostCapabilities
+} from '../../agent-bridge/host-capability-runtime.js';
+import { prepareOfficialSubagentMission } from '../../subagents/official-subagent-preparation.js';
 
 async function tempRoot(prefix: string) {
   return fsp.mkdtemp(path.join(os.tmpdir(), prefix));
@@ -181,6 +189,172 @@ test('standalone parent launch attaches its child hook session to the owning mis
   } finally {
     restoreEnv('SKS_NARUTO_PARENT_LAUNCH', oldLaunch);
     restoreEnv('SKS_NARUTO_PARENT_MISSION_ID', oldMission);
+    await fsp.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('standalone trusted host launch consumes its nonce, blocks replay, and admits a fresh same-mission run', async () => {
+  const root = await tempRoot('sks-parent-host-binding-');
+  const outerSession = 'standalone-host-outer';
+  const childSession = 'standalone-host-child';
+  const oldLaunch = process.env.SKS_NARUTO_PARENT_LAUNCH;
+  const oldMission = process.env.SKS_NARUTO_PARENT_MISSION_ID;
+  const oldRun = process.env.SKS_NARUTO_PARENT_WORKFLOW_RUN_ID;
+  const oldNonce = process.env.SKS_NARUTO_PARENT_HOST_CAPABILITY_NONCE;
+  try {
+    await prepareRoute(root, '$Naruto Create and deliver an Excel workbook.', {}, {
+      sessionKey: outerSession,
+      parentModel: 'gpt-5.6-sol'
+    });
+    const outerState: any = await loadStateForSession(root, outerSession);
+    const dir = missionDir(root, outerState.mission_id);
+    const plan = JSON.parse(await fsp.readFile(path.join(dir, 'subagent-plan.json'), 'utf8'));
+    const tools = [
+      'spreadsheet_create',
+      'spreadsheet_inspect',
+      'spreadsheet_update',
+      'datasource_query_readonly',
+      'slack_send'
+    ];
+    const runtime = await inspectHostCapabilityRuntime({
+      root,
+      request: requestHostCapabilities(plan.goal),
+      projectTrusted: true,
+      dependencies: {
+        inventory: async () => ({
+          schema: 'sks.mcp-inventory.v2',
+          ok: true,
+          scope: 'project',
+          source: 'fixture_inventory',
+          servers: [{ name: 'acas-tools', enabled: true, enabled_tools: tools, disabled_tools: [] }],
+          server_count: 1,
+          enabled_count: 1,
+          failed_count: 0,
+          blockers: [],
+          warnings: []
+        }) as any,
+        health: async () => ({
+          schema: 'sks.mcp-health.v1',
+          ok: true,
+          name: 'acas-tools',
+          scope: 'project',
+          transport: 'stdio',
+          status: 'healthy',
+          tool_names: tools,
+          latency_ms: 1,
+          blockers: [],
+          warnings: []
+        }) as any
+      }
+    });
+    assert.equal(runtime.ok, true);
+    const nonce = 'standalone-host-nonce';
+    await writeJsonAtomic(
+      path.join(dir, HOST_CAPABILITY_HOOK_PENDING_RUNTIME_FILENAME),
+      createHostCapabilityHookPendingRuntime({
+        missionId: outerState.mission_id,
+        workflowRunId: plan.workflow_run_id,
+        launchNonce: nonce,
+        runtime
+      })
+    );
+    const pending = JSON.parse(await fsp.readFile(
+      path.join(dir, HOST_CAPABILITY_HOOK_PENDING_RUNTIME_FILENAME),
+      'utf8'
+    ));
+    assert.equal(pending.launch_nonce, undefined);
+    assert.equal(pending.launch_nonce_sha256, `sha256:${sha256(nonce)}`);
+    process.env.SKS_NARUTO_PARENT_LAUNCH = '1';
+    process.env.SKS_NARUTO_PARENT_MISSION_ID = outerState.mission_id;
+    process.env.SKS_NARUTO_PARENT_WORKFLOW_RUN_ID = plan.workflow_run_id;
+    process.env.SKS_NARUTO_PARENT_HOST_CAPABILITY_NONCE = nonce;
+
+    const submitted: any = await evaluateHookPayload('user-prompt-submit', {
+      cwd: root,
+      session_id: childSession,
+      turn_id: 'standalone-host-turn',
+      prompt: 'Create the workbook with the prepared host capability.'
+    }, { root });
+    assert.equal(submitted.continue, true);
+    const childState: any = await loadStateForSession(root, childSession);
+    assert.equal(childState.mission_id, outerState.mission_id);
+    assert.equal(childState.official_subagent_run_id, plan.workflow_run_id);
+    assert.equal(childState.session_scope, childSession);
+    await assert.rejects(fsp.access(path.join(dir, HOST_CAPABILITY_HOOK_PENDING_RUNTIME_FILENAME)));
+
+    const allowed: any = await evaluateHookPayload('pre-tool', {
+      cwd: root,
+      session_id: childSession,
+      turn_id: 'standalone-host-tool-allowed',
+      tool_name: 'mcp__acas-tools__spreadsheet_create',
+      tool_use_id: 'spreadsheet-create-1',
+      tool_input: { path: 'reports/result.xlsx' }
+    }, { root });
+    assert.equal(allowed.continue, true);
+
+    const denied: any = await evaluateHookPayload('pre-tool', {
+      cwd: root,
+      session_id: childSession,
+      turn_id: 'standalone-host-tool-denied',
+      tool_name: 'mcp__acas-tools__slack_send',
+      tool_use_id: 'slack-send-1',
+      tool_input: { channel: 'C123' }
+    }, { root });
+    assert.equal(denied.decision, 'block');
+    assert.match(String(denied.reason || ''), /explicitly denied/i);
+
+    const secondSession: any = await evaluateHookPayload('user-prompt-submit', {
+      cwd: root,
+      session_id: 'standalone-host-second-child',
+      turn_id: 'standalone-host-second-turn',
+      prompt: 'Try to reuse the prepared host capability.'
+    }, { root });
+    assert.equal(secondSession.decision, 'block');
+    assert.match(String(secondSession.reason || ''), /scope_mismatch/);
+
+    const freshRunId = 'run-standalone-host-fresh';
+    await prepareOfficialSubagentMission({
+      root,
+      dir,
+      missionId: outerState.mission_id,
+      goal: plan.goal,
+      route: '$Naruto',
+      sessionScope: outerSession,
+      requestedSubagents: 1,
+      requestedSubagentsExplicit: true,
+      maxThreads: 1,
+      workflowRunId: freshRunId,
+      mode: 'naruto',
+      preparationOnly: true
+    });
+    await assert.rejects(fsp.access(path.join(dir, 'host-capability-runtime.json')));
+    const freshNonce = 'standalone-host-fresh-nonce';
+    await writeJsonAtomic(
+      path.join(dir, HOST_CAPABILITY_HOOK_PENDING_RUNTIME_FILENAME),
+      createHostCapabilityHookPendingRuntime({
+        missionId: outerState.mission_id,
+        workflowRunId: freshRunId,
+        launchNonce: freshNonce,
+        runtime
+      })
+    );
+    process.env.SKS_NARUTO_PARENT_WORKFLOW_RUN_ID = freshRunId;
+    process.env.SKS_NARUTO_PARENT_HOST_CAPABILITY_NONCE = freshNonce;
+    const freshSession: any = await evaluateHookPayload('user-prompt-submit', {
+      cwd: root,
+      session_id: 'standalone-host-fresh-child',
+      turn_id: 'standalone-host-fresh-turn',
+      prompt: 'Claim the fresh same-mission host capability.'
+    }, { root });
+    assert.equal(freshSession.continue, true);
+    const freshState: any = await loadStateForSession(root, 'standalone-host-fresh-child');
+    assert.equal(freshState.official_subagent_run_id, freshRunId);
+    await assert.rejects(fsp.access(path.join(dir, HOST_CAPABILITY_HOOK_PENDING_RUNTIME_FILENAME)));
+  } finally {
+    restoreEnv('SKS_NARUTO_PARENT_LAUNCH', oldLaunch);
+    restoreEnv('SKS_NARUTO_PARENT_MISSION_ID', oldMission);
+    restoreEnv('SKS_NARUTO_PARENT_WORKFLOW_RUN_ID', oldRun);
+    restoreEnv('SKS_NARUTO_PARENT_HOST_CAPABILITY_NONCE', oldNonce);
     await fsp.rm(root, { recursive: true, force: true });
   }
 });

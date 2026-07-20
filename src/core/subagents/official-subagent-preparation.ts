@@ -42,6 +42,12 @@ import {
   type FileLockLease
 } from '../locks/file-lock.js'
 import { updateCurrentIfMissionAndRun } from '../mission.js'
+import {
+  HOST_CAPABILITY_HOOK_EVIDENCE_FILENAME,
+  HOST_CAPABILITY_HOOK_OBSERVATIONS_FILENAME,
+  HOST_CAPABILITY_HOOK_PENDING_RUNTIME_FILENAME,
+  HOST_CAPABILITY_HOOK_RUNTIME_FILENAME
+} from '../agent-bridge/host-capability-runtime.js'
 
 export const NARUTO_RESULT_SCHEMA = 'sks.naruto-subagent-workflow.v1'
 export const SUBAGENT_PLAN_FILENAME = 'subagent-plan.json'
@@ -483,7 +489,11 @@ function officialSubagentPreparationTombstoneInventory(mode: 'generic' | 'naruto
           'completion-proof.md',
           'evidence-index.json',
           'route-completion-contract.json',
-          'trust-report.json'
+          'trust-report.json',
+          HOST_CAPABILITY_HOOK_PENDING_RUNTIME_FILENAME,
+          HOST_CAPABILITY_HOOK_RUNTIME_FILENAME,
+          HOST_CAPABILITY_HOOK_OBSERVATIONS_FILENAME,
+          HOST_CAPABILITY_HOOK_EVIDENCE_FILENAME
         ]
       : [])
   ]

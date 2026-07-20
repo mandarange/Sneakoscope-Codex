@@ -89,11 +89,11 @@ test('Naruto contract matches its local-only explicit-opt-in CLI surface', () =>
   assert.equal(contract.input_schema.additionalProperties, false);
   assert.deepEqual((contract.input_schema as any).properties.action.enum, ['run', 'status', 'subagents', 'proof', 'help']);
 
-  const run = validateJsonSchema({ action: 'run', task: 'bounded task', mission: 'M-1', agents: 2, max_threads: 4, readonly: true, json: true }, contract.input_schema);
+  const run = validateJsonSchema({ action: 'run', task: 'bounded task', mission: 'M-1', agents: 2, max_threads: 4, readonly: true, trusted_project: true, json: true }, contract.input_schema);
   assert.equal(run.ok, true);
   if (run.ok) {
     assert.deepEqual(contract.argv_builder(run.value), [
-      'naruto', 'run', 'bounded task', '--mission', 'M-1', '--agents', '2', '--max-threads', '4', '--readonly', '--json'
+      'naruto', 'run', 'bounded task', '--mission', 'M-1', '--agents', '2', '--max-threads', '4', '--readonly', '--trusted-project', '--json'
     ]);
   }
 

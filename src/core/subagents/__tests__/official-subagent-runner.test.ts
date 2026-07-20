@@ -5,10 +5,6 @@ import os from 'node:os'
 import path from 'node:path'
 import fsp from 'node:fs/promises'
 import {
-  buildOfficialSubagentCodexArgs,
-  buildOfficialSubagentChildEnv,
-  codexAppSessionKey,
-  detectCodexAppSession,
   runOfficialSubagentWorkflow
 } from '../official-subagent-runner.js'
 import { writeNarutoGate } from '../official-subagent-preparation.js'
@@ -16,7 +12,9 @@ import { trustedHostCapabilityReceiptBindingBlockers } from '../subagent-evidenc
 import { addMcpServer, editMcpServer } from '../../mcp-config/mutation.js'
 import type { CodexCliMutationOperation, CodexMcpCliPort } from '../../mcp-config/codex-cli-adapter.js'
 import { runProcess, sha256 } from '../../fsx.js'
+import { missionDir } from '../../mission.js'
 import {
+  HOST_CAPABILITY_HOOK_PENDING_RUNTIME_FILENAME,
   authorizeAndMergeHostCapabilityPreToolObservation,
   bindParentSummaryToHostCapabilityEvidence,
   createHostCapabilityEventCollector,
@@ -179,20 +177,6 @@ function postPayload(
   }
 }
 
-test('standalone parent args launch one Sol Max Codex parent with the official thread budget', () => {
-  const args = buildOfficialSubagentCodexArgs({
-    prompt: 'delegate and wait',
-    maxThreads: 12,
-    parentSummaryFile: '/tmp/parent-summary.txt'
-  })
-  assert.deepEqual(args.slice(0, 6), ['exec', '--json', '-m', 'gpt-5.6-sol', '-c', 'model_reasoning_effort="max"'])
-  assert.ok(args.includes('model_provider="openai"'))
-  assert.ok(args.includes('forced_login_method="chatgpt"'))
-  assert.ok(args.includes('agents.max_threads=12'))
-  assert.ok(args.includes('agents.max_depth=1'))
-  assert.equal(args.filter((arg) => arg === 'exec').length, 1)
-})
-
 test('app sessions return delegation context without launching nested Codex', async () => {
   let launched = false
   const result = await runOfficialSubagentWorkflow({
@@ -332,7 +316,7 @@ test('standalone host-capability requests fail closed before project inventory, 
   assert.equal(result.host_capability_evidence.ok, false)
 })
 
-test('explicit standalone project trust reaches inventory, health, narrow host allowlist, and Codex spawn', async () => {
+test('explicit standalone project trust reaches inventory, health, narrow host allowlist, and Codex spawn', async (t) => {
   const cases = [
     {
       label: 'xlsx',
@@ -408,6 +392,14 @@ test('explicit standalone project trust reaches inventory, health, narrow host a
   ] as const
 
   for (const fixture of cases) {
+    const root = await fsp.mkdtemp(path.join(os.tmpdir(), `sks-trusted-host-${fixture.label}-`))
+    t.after(async () => fsp.rm(root, { recursive: true, force: true }))
+    const missionId = `M-trusted-${fixture.label}`
+    const workflowRunId = `run-trusted-${fixture.label}`
+    const pendingPath = path.join(
+      missionDir(root, missionId),
+      HOST_CAPABILITY_HOOK_PENDING_RUNTIME_FILENAME
+    )
     let inventoryCalls = 0
     let healthCalls = 0
     let spawnCalls = 0
@@ -423,18 +415,29 @@ test('explicit standalone project trust reaches inventory, health, narrow host a
       return health(...args)
     }
     let launchedArgs: readonly string[] = []
+    let launchedEnv: NodeJS.ProcessEnv = {}
     const result = await runOfficialSubagentWorkflow({
-      root: process.cwd(),
+      root,
       goal: fixture.goal,
       prompt: `trusted standalone ${fixture.label}`,
       requestedSubagents: 1,
       maxThreads: 1,
       appSession: false,
       projectTrusted: true,
+      missionId,
+      workflowRunId,
       hostCapabilityDependencies: dependencies,
       runProcessImpl: async (_command, args, options) => {
         spawnCalls += 1
         launchedArgs = args
+        launchedEnv = options?.env || {}
+        const pending = JSON.parse(await fsp.readFile(pendingPath, 'utf8'))
+        assert.equal(pending.launch_nonce, undefined, fixture.label)
+        assert.equal(
+          pending.launch_nonce_sha256,
+          `sha256:${sha256(String(launchedEnv.SKS_NARUTO_PARENT_HOST_CAPABILITY_NONCE || ''))}`,
+          fixture.label
+        )
         const outputIndex = args.indexOf('--output-last-message')
         await fsp.writeFile(args[outputIndex + 1]!, JSON.stringify({
           schema: 'sks.subagent-parent-summary.v1',
@@ -465,9 +468,15 @@ test('explicit standalone project trust reaches inventory, health, narrow host a
     assert.equal(result.status, 'parent_completed', fixture.label)
     assert.equal(result.host_capability_evidence.ok, true, fixture.label)
     assert.ok(launchedArgs.includes(
-      `mcp_servers."acas-tools".enabled_tools=[${fixture.allowed.map((tool) => JSON.stringify(tool)).join(', ')}]`
+      `mcp_servers.acas-tools.enabled_tools=[${fixture.allowed.map((tool) => JSON.stringify(tool)).join(', ')}]`
     ), fixture.label)
-    assert.ok(launchedArgs.includes('mcp_servers."acas-tools".disabled_tools=["slack_send"]'), fixture.label)
+    assert.ok(launchedArgs.includes('mcp_servers.acas-tools.disabled_tools=["slack_send"]'), fixture.label)
+    assert.ok(launchedArgs.includes(`projects={${JSON.stringify(await fsp.realpath(root))}={trust_level="trusted"}}`), fixture.label)
+    assert.ok(launchedArgs.includes('-C'), fixture.label)
+    assert.ok(launchedArgs.includes(await fsp.realpath(root)), fixture.label)
+    assert.equal(launchedEnv.SKS_NARUTO_PARENT_WORKFLOW_RUN_ID, workflowRunId)
+    assert.match(String(launchedEnv.SKS_NARUTO_PARENT_HOST_CAPABILITY_NONCE || ''), /^[a-f0-9]{32}$/)
+    await assert.rejects(fsp.access(pendingPath), fixture.label)
   }
 })
 
@@ -525,8 +534,8 @@ test('trusted host runtime allowlists requested ACAS tools and projects only has
   const evidence = collector.finish()
 
   assert.equal(runtime.ok, true)
-  assert.ok(launchedArgs.includes('mcp_servers."acas-tools".enabled_tools=["spreadsheet_create", "spreadsheet_inspect", "spreadsheet_update"]'))
-  assert.ok(launchedArgs.includes('mcp_servers."acas-tools".disabled_tools=["slack_send"]'))
+  assert.ok(launchedArgs.includes('mcp_servers.acas-tools.enabled_tools=["spreadsheet_create", "spreadsheet_inspect", "spreadsheet_update"]'))
+  assert.ok(launchedArgs.includes('mcp_servers.acas-tools.disabled_tools=["slack_send"]'))
   assert.deepEqual(evidence.artifacts, [artifact])
   assert.equal(evidence.capabilities_used.every((row: any) => row.status === 'passed'), true)
 
@@ -1253,98 +1262,6 @@ test('atomic spreadsheet update reservations require a completed same-workbook i
   )
 })
 
-test('Codex thread environment selects the in-app path unless standalone is explicit', () => {
-  assert.equal(detectCodexAppSession({ CODEX_THREAD_ID: 'thread' }), true)
-  assert.equal(detectCodexAppSession({ CODEX_THREAD_ID: 'thread', SKS_NARUTO_STANDALONE_CLI: '1' }), false)
-  assert.equal(detectCodexAppSession({ SKS_NARUTO_APP_SESSION: '1' }), true)
-  assert.equal(codexAppSessionKey({ CODEX_THREAD_ID: 'thread' }), 'thread')
-  assert.equal(codexAppSessionKey({ SKS_NARUTO_APP_SESSION: '1' }), null)
-  assert.equal(codexAppSessionKey({ CODEX_THREAD_ID: 'thread', SKS_NARUTO_STANDALONE_CLI: '1' }), null)
-})
-
-test('standalone child environment keeps only the official runtime allowlist and launch ownership', () => {
-  const allowedHostKeys = [
-    'SKS_AGENT_MODE',
-    'ACAS_AGENT_SLUG',
-    'ACAS_AGENT_WORKSPACE',
-    'ALFREDO_AGENT_SOULS_FILE',
-    'ACAS_CHROME_PATH',
-    'ACAS_HTML_TO_PDF_ENGINE',
-    'ACAS_HTML_TO_PDF_ALLOW_CHROME_CLI_FALLBACK'
-  ] as const
-  const deniedHostKeys = [
-    'ACAS_CONNECTION_TOKEN',
-    'ACAS_CENTER_BASE_URL',
-    'ACAS_CENTRAL_API_BASE',
-    'ACAS_EDGE_NODE_SLUG',
-    'OPENAI_API_KEY',
-    'ANTHROPIC_API_KEY',
-    'OPENROUTER_API_KEY',
-    'CODEX_LB_API_KEY',
-    'SLACK_BOT_TOKEN',
-    'HTTPS_PROXY'
-  ] as const
-  const env = buildOfficialSubagentChildEnv({
-    missionId: 'M-isolated-parent',
-    env: {
-      HOME: '/tmp/official-home',
-      CODEX_HOME: '/tmp/official-home/.codex',
-      PATH: '/usr/bin:/bin',
-      OPENAI_API_KEY: 'sk-official-auth',
-      CODEX_API_KEY: 'codex-api-auth',
-      CODEX_AUTH_TOKEN: 'codex-auth-token',
-      OPENAI_ORGANIZATION: 'org-must-not-inherit',
-      OPENAI_PROJECT: 'project-must-not-inherit',
-      HTTPS_PROXY: 'https://proxy.example.test',
-      CODEX_THREAD_ID: 'must-not-inherit-app-session',
-      CODEX_LB_API_KEY: 'must-not-inherit-lb-auth',
-      AWS_SECRET_ACCESS_KEY: 'must-not-inherit-cloud-auth',
-      PROJECT_MCP_ALLOWED: 'must-not-inherit-arbitrary-project-env',
-      SKS_AGENT_MODE: '1',
-      ACAS_AGENT_SLUG: 'agent-slug',
-      ACAS_AGENT_WORKSPACE: '/tmp/agent-workspace',
-      ALFREDO_AGENT_SOULS_FILE: '/tmp/souls.json',
-      ACAS_CHROME_PATH: '/tmp/chrome',
-      ACAS_HTML_TO_PDF_ENGINE: 'chrome',
-      ACAS_HTML_TO_PDF_ALLOW_CHROME_CLI_FALLBACK: '1',
-      ACAS_CONNECTION_TOKEN: 'must-not-inherit-connection-token',
-      ACAS_CENTER_BASE_URL: 'https://center.example.test',
-      ACAS_CENTRAL_API_BASE: 'https://central.example.test',
-      ACAS_EDGE_NODE_SLUG: 'edge-node',
-      ANTHROPIC_API_KEY: 'anthropic-secret',
-      OPENROUTER_API_KEY: 'openrouter-secret',
-      SLACK_BOT_TOKEN: 'slack-secret',
-      HTTP_PROXY: 'http://proxy.example.test',
-      ALL_PROXY: 'socks5://proxy.example.test'
-    }
-  })
-  assert.equal(env.HOME, '/tmp/official-home')
-  assert.equal(env.CODEX_HOME, '/tmp/official-home/.codex')
-  assert.equal(env.PATH, '/usr/bin:/bin')
-  assert.equal(env.SKS_NARUTO_STANDALONE_CLI, '0')
-  assert.equal(env.SKS_NARUTO_PARENT_LAUNCH, '1')
-  assert.equal(env.SKS_NARUTO_PARENT_MISSION_ID, 'M-isolated-parent')
-  assert.deepEqual(allowedHostKeys.map((key) => env[key]), [
-    '1',
-    'agent-slug',
-    '/tmp/agent-workspace',
-    '/tmp/souls.json',
-    '/tmp/chrome',
-    'chrome',
-    '1'
-  ])
-  assert.deepEqual(deniedHostKeys.map((key) => env[key]), Array.from({ length: deniedHostKeys.length }, () => undefined))
-  assert.equal(env.CODEX_API_KEY, undefined)
-  assert.equal(env.CODEX_AUTH_TOKEN, undefined)
-  assert.equal(env.OPENAI_ORGANIZATION, undefined)
-  assert.equal(env.OPENAI_PROJECT, undefined)
-  assert.equal(env.CODEX_THREAD_ID, undefined)
-  assert.equal(env.AWS_SECRET_ACCESS_KEY, undefined)
-  assert.equal(env.PROJECT_MCP_ALLOWED, undefined)
-  assert.equal(env.HTTP_PROXY, undefined)
-  assert.equal(env.ALL_PROXY, undefined)
-})
-
 test('standalone parent replaces the real child environment and redacts inherited secret values from output', { timeout: 20_000 }, async (t) => {
   if (process.platform === 'win32') return t.skip('executable fixture uses a POSIX shebang')
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-official-subagent-env-isolation-'))
@@ -1604,6 +1521,60 @@ test('standalone parent converts timeout and non-zero exits into bounded blocker
     }
   } finally {
     await fsp.rm(home, { recursive: true, force: true })
+  }
+})
+
+test('trusted host pending runtime is removed after child failure or launch exception', async (t) => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-official-subagent-pending-cleanup-'))
+  t.after(async () => fsp.rm(root, { recursive: true, force: true }))
+  const cases = [
+    {
+      label: 'nonzero',
+      execute: async () => ({
+        code: 70,
+        stdout: '',
+        stderr: 'fixture failure',
+        stdoutBytes: 0,
+        stderrBytes: 15,
+        truncated: false,
+        timedOut: false
+      })
+    },
+    {
+      label: 'throw',
+      execute: async () => {
+        throw new Error('fixture launch exception')
+      }
+    }
+  ]
+  for (const fixture of cases) {
+    const missionId = `M-pending-cleanup-${fixture.label}`
+    const pendingPath = path.join(
+      missionDir(root, missionId),
+      HOST_CAPABILITY_HOOK_PENDING_RUNTIME_FILENAME
+    )
+    const result = await runOfficialSubagentWorkflow({
+      root,
+      goal: 'Create and deliver an Excel workbook.',
+      prompt: `pending cleanup ${fixture.label}`,
+      requestedSubagents: 1,
+      maxThreads: 1,
+      appSession: false,
+      projectTrusted: true,
+      missionId,
+      workflowRunId: `run-pending-cleanup-${fixture.label}`,
+      hostCapabilityDependencies: hostCapabilityDependencies([
+        'spreadsheet_create',
+        'spreadsheet_inspect',
+        'spreadsheet_update'
+      ]),
+      runProcessImpl: async () => {
+        await fsp.access(pendingPath)
+        return fixture.execute()
+      }
+    })
+    assert.equal(result.status, 'parent_failed', fixture.label)
+    await assert.rejects(fsp.access(pendingPath), fixture.label)
   }
 })
 

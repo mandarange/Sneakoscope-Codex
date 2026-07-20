@@ -22,7 +22,9 @@ project inventory and health probe included in `host_capability_inventory`.
 `sks naruto run` uses the same non-persistent `--trusted-project` spelling when a standalone or
 Codex App task requests project-host database, spreadsheet, or render tools. App session identity
 scopes runtime evidence but never grants project trust, and neither command stores trust for later
-invocations.
+invocations. Machine consumers use the boolean `trusted_project` command-contract field, which maps
+to that exact CLI flag. The standalone child receives the raw one-time claim nonce only in its
+environment; mission artifacts persist only its SHA-256 and consume the pending grant on first bind.
 
 ## Contract 1: stdio MCP server
 

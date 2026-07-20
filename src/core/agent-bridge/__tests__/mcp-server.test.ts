@@ -1,9 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fsp from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { PassThrough } from 'node:stream';
 import { invokeSksTool, runMcpServer } from '../mcp-server.js';
 import { buildAgentManifest } from '../agent-manifest.js';
-import { commandContract } from '../../safety/command-contract/index.js';
+import {
+  hostCapabilityCodexConfigArgs,
+  inspectHostCapabilityRuntime,
+  requestHostCapabilities
+} from '../host-capability-runtime.js';
+import { commandContract, validateJsonSchema } from '../../safety/command-contract/index.js';
+import { runProcess } from '../../fsx.js';
+import { resolveOfficialCodexPackageRuntime } from '../../codex-runtime/resolve-codex-runtime.js';
+import { hostCapabilityProjectCodexConfigArgs } from '../../subagents/official-subagent-runner.js';
 
 interface JsonRpcResponse {
   jsonrpc: string;
@@ -31,6 +42,36 @@ function makeHarness() {
 
 function send(stream: PassThrough, message: Record<string, unknown>): void {
   stream.write(`${JSON.stringify(message)}\n`);
+}
+
+function nativeHostCapabilityDependencies(toolNames: string[]) {
+  return {
+    inventory: async () => ({
+      schema: 'sks.mcp-inventory.v2',
+      ok: true,
+      scope: 'project',
+      source: 'fixture_inventory',
+      servers: [{
+        name: 'acas-tools',
+        enabled: true,
+        enabled_tools: [...toolNames],
+        disabled_tools: []
+      }],
+      server_count: 1,
+      enabled_count: 1,
+      failed_count: 0,
+      blockers: [],
+      warnings: []
+    }) as any,
+    health: async () => ({
+      schema: 'sks.mcp-health.v1',
+      ok: true,
+      name: 'acas-tools',
+      scope: 'project',
+      status: 'healthy',
+      tool_names: [...toolNames]
+    }) as any
+  };
 }
 
 async function waitForResponseId(responses: JsonRpcResponse[], id: number, timeoutMs = 20_000): Promise<JsonRpcResponse> {
@@ -145,6 +186,158 @@ test('Naruto unknown input is rejected before spawn even though execution is loc
     /Invalid arguments for naruto/
   );
   assert.equal(spawned, false);
+});
+
+test('Naruto machine contract carries the explicit project-trust opt-in', () => {
+  const contract = commandContract('naruto');
+  assert.ok(contract);
+  const validated = validateJsonSchema({
+    action: 'run',
+    task: 'create an XLSX report',
+    trusted_project: true,
+    json: true
+  }, contract.input_schema);
+  assert.equal(validated.ok, true);
+  if (validated.ok) {
+    assert.deepEqual(contract.argv_builder(validated.value), [
+      'naruto', 'run', 'create an XLSX report', '--trusted-project', '--json'
+    ]);
+  }
+});
+
+test('standalone project trust is invocation-only and no-trust preserves any global ACAS transport', () => {
+  assert.deepEqual(hostCapabilityProjectCodexConfigArgs({
+    canonicalRoot: '/tmp/project root',
+    projectTrusted: true
+  }), ['-c', 'projects={"/tmp/project root"={trust_level="trusted"}}']);
+  assert.deepEqual(hostCapabilityProjectCodexConfigArgs({
+    canonicalRoot: '/tmp/project root',
+    projectTrusted: false
+  }), ['-c', 'projects={"/tmp/project root"={trust_level="untrusted"}}']);
+  assert.deepEqual(hostCapabilityProjectCodexConfigArgs({
+    canonicalRoot: '/tmp/project root',
+    projectTrusted: false,
+    globalHostCapabilityConfigured: true
+  }), [
+    '-c', 'projects={"/tmp/project root"={trust_level="untrusted"}}',
+    '-c', 'mcp_servers.acas-tools.enabled=false'
+  ]);
+});
+
+test('native Codex accepts project trust, the narrow ACAS allowlist, and transport-preserving no-trust', { timeout: 20_000 }, async (t) => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-native-project-trust-'));
+  const project = path.join(root, 'project');
+  const home = path.join(root, 'home');
+  const codexHome = path.join(home, '.codex');
+  t.after(async () => fsp.rm(root, { recursive: true, force: true }));
+  await Promise.all([
+    fsp.mkdir(path.join(project, '.codex'), { recursive: true }),
+    fsp.mkdir(codexHome, { recursive: true })
+  ]);
+  const gitInit = await runProcess('git', ['init', '--quiet'], {
+    cwd: project,
+    timeoutMs: 10_000,
+    maxOutputBytes: 16 * 1024
+  });
+  assert.equal(gitInit.code, 0, gitInit.stderr);
+  const projectMcpCommand = path.join(project, 'trusted-project-mcp-sentinel');
+  await fsp.writeFile(path.join(project, '.codex', 'config.toml'), [
+    '[mcp_servers."acas-tools"]',
+    `command = ${JSON.stringify(projectMcpCommand)}`,
+    'args = ["--version"]',
+    'enabled = true',
+    'enabled_tools = ["spreadsheet_create", "spreadsheet_inspect", "spreadsheet_update", "slack_send"]',
+    ''
+  ].join('\n'));
+  const runtime = await resolveOfficialCodexPackageRuntime({ requestedBy: 'native-project-trust-test' });
+  assert.equal(runtime.ok, true);
+  assert.ok(runtime.identity);
+  const canonicalRoot = await fsp.realpath(project);
+  const baseEnv = {
+    HOME: home,
+    USER: process.env.USER || 'codex-test',
+    LOGNAME: process.env.LOGNAME || process.env.USER || 'codex-test',
+    PATH: process.env.PATH || '/usr/bin:/bin',
+    TMPDIR: process.env.TMPDIR || os.tmpdir(),
+    CODEX_HOME: codexHome
+  };
+  const trustedRuntime = await inspectHostCapabilityRuntime({
+    root: project,
+    request: requestHostCapabilities('Create and deliver an Excel workbook.'),
+    projectTrusted: true,
+    dependencies: nativeHostCapabilityDependencies([
+      'spreadsheet_create',
+      'spreadsheet_inspect',
+      'spreadsheet_update',
+      'slack_send'
+    ])
+  });
+  assert.equal(trustedRuntime.ok, true);
+  const trusted = await runProcess(runtime.identity!.realpath, [
+    '-C', canonicalRoot,
+    ...hostCapabilityProjectCodexConfigArgs({ canonicalRoot, projectTrusted: true }),
+    ...hostCapabilityCodexConfigArgs(trustedRuntime),
+    'mcp', 'get', 'acas-tools', '--json'
+  ], {
+    cwd: project,
+    env: baseEnv,
+    envMode: 'replace',
+    timeoutMs: 10_000,
+    maxOutputBytes: 64 * 1024
+  });
+  assert.equal(trusted.code, 0, trusted.stderr);
+  const trustedRow = JSON.parse(trusted.stdout);
+  assert.equal(trustedRow.name, 'acas-tools');
+  assert.equal(trustedRow.enabled, true);
+  assert.equal(trustedRow.transport?.command, projectMcpCommand);
+  assert.deepEqual(trustedRow.enabled_tools, [
+    'spreadsheet_create',
+    'spreadsheet_inspect',
+    'spreadsheet_update'
+  ]);
+  assert.deepEqual(trustedRow.disabled_tools, ['slack_send']);
+
+  const untrustedProjectOnly = await runProcess(runtime.identity!.realpath, [
+    '-C', canonicalRoot,
+    ...hostCapabilityProjectCodexConfigArgs({ canonicalRoot, projectTrusted: false }),
+    'mcp', 'list', '--json'
+  ], {
+    cwd: project,
+    env: baseEnv,
+    envMode: 'replace',
+    timeoutMs: 10_000,
+    maxOutputBytes: 64 * 1024
+  });
+  assert.equal(untrustedProjectOnly.code, 0, untrustedProjectOnly.stderr);
+  assert.deepEqual(JSON.parse(untrustedProjectOnly.stdout), []);
+
+  const globalUrl = 'https://acas.example.invalid/mcp';
+  await fsp.writeFile(path.join(codexHome, 'config.toml'), [
+    '[mcp_servers."acas-tools"]',
+    `url = ${JSON.stringify(globalUrl)}`,
+    'enabled = true',
+    ''
+  ].join('\n'));
+  const untrustedGlobal = await runProcess(runtime.identity!.realpath, [
+    '-C', canonicalRoot,
+    ...hostCapabilityProjectCodexConfigArgs({
+      canonicalRoot,
+      projectTrusted: false,
+      globalHostCapabilityConfigured: true
+    }),
+    'mcp', 'get', 'acas-tools', '--json'
+  ], {
+    cwd: project,
+    env: baseEnv,
+    envMode: 'replace',
+    timeoutMs: 10_000,
+    maxOutputBytes: 64 * 1024
+  });
+  assert.equal(untrustedGlobal.code, 0, untrustedGlobal.stderr);
+  const untrustedGlobalRow = JSON.parse(untrustedGlobal.stdout);
+  assert.equal(untrustedGlobalRow.name, 'acas-tools');
+  assert.equal(untrustedGlobalRow.enabled, false);
+  assert.equal(untrustedGlobalRow.transport?.url, globalUrl);
 });
 
 test('runMcpServer tools/call on a safe read-only tool spawns sks and returns its stdout', async () => {

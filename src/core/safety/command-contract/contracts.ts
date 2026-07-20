@@ -37,6 +37,7 @@ const ARGUMENT_PROFILES: Record<CommandInputProfile, ArgumentProfile> = {
       agents: { type: 'integer', minimum: 1 },
       max_threads: { type: 'integer', minimum: 1 },
       readonly: { type: 'boolean' },
+      trusted_project: { type: 'boolean' },
       json: { type: 'boolean' }
     }),
     build: (input) => {
@@ -53,6 +54,7 @@ const ARGUMENT_PROFILES: Record<CommandInputProfile, ArgumentProfile> = {
         ...numberFlag(input, 'agents', '--agents'),
         ...numberFlag(input, 'max_threads', '--max-threads'),
         ...booleanFlag(input, 'readonly', '--readonly'),
+        ...booleanFlag(input, 'trusted_project', '--trusted-project'),
         ...jsonFlag(input)
       ];
     }
