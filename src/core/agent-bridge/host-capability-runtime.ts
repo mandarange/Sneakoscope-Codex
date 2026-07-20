@@ -93,6 +93,12 @@ export interface HostArtifactReceipt {
   role: 'deliverable' | 'scratch' | 'temp' | 'log';
 }
 
+export interface HostArtifactSourceReceipt {
+  path: string;
+  source_tool: string;
+  source_event_sha256: string;
+}
+
 export interface HostToolCallReceipt {
   server: string;
   tool: string;
@@ -145,6 +151,7 @@ export interface HostCapabilityExecutionEvidence {
   tool_calls: HostToolCallReceipt[];
   capabilities_used: HostCapabilityUseReceipt[];
   artifacts: HostArtifactReceipt[];
+  artifact_sources: HostArtifactSourceReceipt[];
   blockers: string[];
 }
 
@@ -159,7 +166,17 @@ export interface HostCapabilityHookRuntimeBinding {
 export interface HostCapabilityPreToolObservation {
   tool_use_id_sha256: string;
   tool: string;
+  resource_key: string | null;
   decision: 'allowed' | 'denied';
+  reservation_status: 'pending' | 'completed' | 'failed' | 'denied';
+  blocker: string | null;
+}
+
+export interface HostCapabilityPreToolAuthorizationResult {
+  observations: HostCapabilityHookObservations;
+  observation: HostCapabilityPreToolObservation;
+  decision: 'allowed' | 'denied';
+  blocker: string | null;
 }
 
 export interface HostCapabilityPostToolObservation {
@@ -272,13 +289,24 @@ export function sanitizeHostCapabilityPreToolUse(
   const tool = acasHostToolName(payload.tool_name);
   const toolUseId = boundedIdentity(payload.tool_use_id);
   if (!tool || !toolUseId) return null;
+  const resourceKey = extractToolResourceKey({ arguments: payload.tool_input });
   const allowed = runtime.ok
     && runtime.allowed_tool_names.includes(tool)
     && !explicitlyDeniedHostCapabilityTool(tool);
+  const blocker = !runtime.ok
+    ? 'host_capability_runtime_unavailable'
+    : explicitlyDeniedHostCapabilityTool(tool)
+      ? `host_tool_call_explicitly_denied:${tool}`
+      : !runtime.allowed_tool_names.includes(tool)
+        ? `host_tool_call_not_allowed:${tool}`
+        : null;
   return {
     tool_use_id_sha256: `sha256:${sha256(toolUseId)}`,
     tool,
-    decision: allowed ? 'allowed' : 'denied'
+    resource_key: resourceKey,
+    decision: allowed ? 'allowed' : 'denied',
+    reservation_status: allowed ? 'pending' : 'denied',
+    blocker
   };
 }
 
@@ -334,21 +362,120 @@ export function mergeHostCapabilityPreToolObservation(input: {
   current?: unknown;
   observation: HostCapabilityPreToolObservation;
 }): HostCapabilityHookObservations {
+  return authorizeAndMergeHostCapabilityPreToolObservation(input).observations;
+}
+
+export function authorizeAndMergeHostCapabilityPreToolObservation(input: {
+  binding: HostCapabilityHookRuntimeBinding;
+  current?: unknown;
+  observation: HostCapabilityPreToolObservation;
+}): HostCapabilityPreToolAuthorizationResult {
   const current = normalizeHostCapabilityHookObservations(input.current, input.binding)
     || emptyHookObservations(input.binding);
-  const key = `${input.observation.tool_use_id_sha256}:${input.observation.tool}`;
-  const existing = current.pre_tool_uses.find((row) => `${row.tool_use_id_sha256}:${row.tool}` === key);
-  const preToolUses: HostCapabilityPreToolObservation[] = existing
-    ? current.pre_tool_uses.map((row) => `${row.tool_use_id_sha256}:${row.tool}` === key
-        ? {
-            ...row,
-            decision: row.decision === 'denied' || input.observation.decision === 'denied'
-              ? 'denied' as const
-              : 'allowed' as const
-          }
-        : row)
-    : [...current.pre_tool_uses, input.observation].slice(-MAX_PRE_TOOL_OBSERVATIONS);
-  return { ...current, pre_tool_uses: preToolUses };
+  const existing = current.pre_tool_uses.find((row) => row.tool_use_id_sha256 === input.observation.tool_use_id_sha256);
+  if (existing) {
+    if (existing.tool === input.observation.tool && existing.resource_key === input.observation.resource_key) {
+      return {
+        observations: current,
+        observation: existing,
+        decision: existing.decision,
+        blocker: existing.blocker
+      };
+    }
+    const observation = denyPreToolReservation(input.observation, 'host_tool_reservation_identity_mismatch');
+    return { observations: current, observation, decision: 'denied', blocker: observation.blocker };
+  }
+  if (current.pre_tool_uses.length >= MAX_PRE_TOOL_OBSERVATIONS) {
+    const observation = denyPreToolReservation(input.observation, 'host_pre_tool_observations_too_many');
+    return { observations: current, observation, decision: 'denied', blocker: observation.blocker };
+  }
+
+  const observation = authorizePreToolReservation(current, input.observation);
+  const observations = {
+    ...current,
+    pre_tool_uses: [...current.pre_tool_uses, observation]
+  };
+  return {
+    observations,
+    observation,
+    decision: observation.decision,
+    blocker: observation.blocker
+  };
+}
+
+function authorizePreToolReservation(
+  current: HostCapabilityHookObservations,
+  observation: HostCapabilityPreToolObservation
+): HostCapabilityPreToolObservation {
+  if (observation.decision === 'denied') return denyPreToolReservation(observation, observation.blocker);
+
+  if (observation.tool === 'datasource_query_readonly') {
+    if (hasReservedOrObservedToolCall(current, observation.tool)) {
+      return denyPreToolReservation(observation, 'host_capability_readonly_query_already_reserved');
+    }
+    if (!hasCompletedPassedToolCall(current, 'datasource_schema_context')) {
+      return denyPreToolReservation(observation, 'host_capability_readonly_query_schema_not_completed');
+    }
+  }
+
+  if (observation.tool === 'spreadsheet_update') {
+    if (hasReservedOrObservedToolCall(current, observation.tool)) {
+      return denyPreToolReservation(observation, 'host_capability_spreadsheet_update_already_reserved');
+    }
+    const completedInspections = completedPassedToolCalls(current, 'spreadsheet_inspect');
+    if (completedInspections.length === 0) {
+      return denyPreToolReservation(observation, 'host_capability_spreadsheet_update_inspection_not_completed');
+    }
+    if (!observation.resource_key
+      || !completedInspections.some((call) => call.resource_key === observation.resource_key)) {
+      return denyPreToolReservation(observation, 'host_capability_spreadsheet_update_resource_mismatch');
+    }
+  }
+
+  return {
+    ...observation,
+    decision: 'allowed',
+    reservation_status: 'pending',
+    blocker: null
+  };
+}
+
+function hasReservedOrObservedToolCall(observations: HostCapabilityHookObservations, tool: string): boolean {
+  return observations.tool_calls.some((row) => row.tool === tool)
+    || observations.pre_tool_uses.some((row) => (
+      row.tool === tool && row.reservation_status !== 'denied'
+    ));
+}
+
+function denyPreToolReservation(
+  observation: HostCapabilityPreToolObservation,
+  blocker: string | null
+): HostCapabilityPreToolObservation {
+  return {
+    ...observation,
+    decision: 'denied',
+    reservation_status: 'denied',
+    blocker: blocker || 'host_tool_reservation_denied'
+  };
+}
+
+function completedPassedToolCalls(
+  observations: HostCapabilityHookObservations,
+  tool: string
+): HostCapabilityPostToolObservation[] {
+  return observations.tool_calls.filter((call) => {
+    if (call.tool !== tool || call.status !== 'passed') return false;
+    const reservation = observations.pre_tool_uses.find((row) => (
+      row.tool_use_id_sha256 === call.tool_use_id_sha256
+      && row.tool === call.tool
+      && row.resource_key === call.resource_key
+    ));
+    return reservation?.reservation_status === 'completed';
+  });
+}
+
+function hasCompletedPassedToolCall(observations: HostCapabilityHookObservations, tool: string): boolean {
+  return completedPassedToolCalls(observations, tool).length > 0;
 }
 
 export function mergeHostCapabilityPostToolObservation(input: {
@@ -372,12 +499,38 @@ export function mergeHostCapabilityPostToolObservation(input: {
     sequence,
     artifacts: input.observation.artifacts.slice(0, remainingArtifactSlots)
   };
+  const reservationById = current.pre_tool_uses.find((row) => (
+    row.tool_use_id_sha256 === observation.tool_use_id_sha256
+  ));
+  const matchingReservation = reservationById
+    && reservationById.tool === observation.tool
+    && reservationById.resource_key === observation.resource_key
+    ? reservationById
+    : null;
+  const preToolUses = matchingReservation && matchingReservation.decision === 'allowed'
+    ? current.pre_tool_uses.map((row) => row === matchingReservation
+        ? {
+            ...row,
+            reservation_status: observation.status === 'passed' ? 'completed' as const : 'failed' as const
+          }
+        : row)
+    : current.pre_tool_uses;
+  const reservationBlocker = reservationById && !matchingReservation
+    ? `host_tool_call_pre_use_identity_mismatch:${observation.tool}`
+    : matchingReservation?.decision === 'denied'
+    ? `host_tool_call_pre_use_denied:${observation.tool}`
+    : matchingReservation
+      ? null
+      : `host_tool_call_pre_use_missing:${observation.tool}`;
   return {
     ...current,
+    pre_tool_uses: preToolUses,
     tool_calls: [...current.tool_calls, observation],
-    blockers: input.observation.artifacts.length > remainingArtifactSlots
-      ? uniqueStrings([...current.blockers, 'host_artifact_receipts_too_many'])
-      : current.blockers
+    blockers: uniqueStrings([
+      ...current.blockers,
+      ...(input.observation.artifacts.length > remainingArtifactSlots ? ['host_artifact_receipts_too_many'] : []),
+      ...(reservationBlocker ? [reservationBlocker] : [])
+    ])
   };
 }
 
@@ -398,10 +551,21 @@ export function normalizeHostCapabilityHookObservations(
     || value.tool_calls.length > MAX_MCP_TOOL_CALLS
     || value.blockers.length > 16
     || value.blockers.some((blocker) => typeof blocker !== 'string' || blocker.length > 128)) return null;
-  const preToolUses = value.pre_tool_uses.map(normalizePreToolObservation).filter(Boolean) as HostCapabilityPreToolObservation[];
+  let preToolUses = value.pre_tool_uses.map(normalizePreToolObservation).filter(Boolean) as HostCapabilityPreToolObservation[];
   const toolCalls = value.tool_calls.map(normalizePostToolObservation).filter(Boolean) as HostCapabilityPostToolObservation[];
   if (preToolUses.length !== value.pre_tool_uses.length || toolCalls.length !== value.tool_calls.length) return null;
   if (toolCalls.reduce((sum, row) => sum + row.artifacts.length, 0) > MAX_ARTIFACT_RECEIPTS) return null;
+  preToolUses = preToolUses.map((row) => {
+    if (row.decision !== 'allowed') return row;
+    const call = toolCalls.find((candidate) => (
+      candidate.tool_use_id_sha256 === row.tool_use_id_sha256
+      && candidate.tool === row.tool
+      && candidate.resource_key === row.resource_key
+    ));
+    return call
+      ? { ...row, reservation_status: call.status === 'passed' ? 'completed' as const : 'failed' as const }
+      : row;
+  });
   return {
     schema: HOST_CAPABILITY_HOOK_OBSERVATIONS_SCHEMA,
     mission_id: binding.mission_id,
@@ -429,7 +593,12 @@ export function buildHostCapabilityEvidenceFromHookObservations(input: {
     const preToolUse = preToolUses.get(`${row.tool_use_id_sha256}:${row.tool}`);
     if (!preToolUse) observationBlockers.push(`host_tool_call_pre_use_missing:${row.tool}`);
     else if (preToolUse.decision !== 'allowed') observationBlockers.push(`host_tool_call_pre_use_denied:${row.tool}`);
+    else if (preToolUse.resource_key !== row.resource_key) observationBlockers.push(`host_tool_call_pre_use_identity_mismatch:${row.tool}`);
     if (row.validation_blocker) observationBlockers.push(row.validation_blocker);
+  }
+  for (const row of observations.pre_tool_uses) {
+    if (row.blocker) observationBlockers.push(row.blocker);
+    if (row.reservation_status === 'pending') observationBlockers.push(`host_tool_reservation_pending:${row.tool}`);
   }
   const calls: InternalHostToolCallReceipt[] = observations.tool_calls.map((row) => ({
     server: HOST_CAPABILITY_MCP_SERVER,
@@ -929,6 +1098,7 @@ function buildExecutionEvidence(
   if (dedupedArtifactRows.length > MAX_ARTIFACT_RECEIPTS) blockers.push('host_artifact_receipts_too_many');
   const receiptArtifactRows = dedupedArtifactRows.slice(0, MAX_ARTIFACT_RECEIPTS);
   const artifacts = receiptArtifactRows.map(projectArtifactReceipt);
+  const artifactSources = receiptArtifactRows.map(projectArtifactSourceReceipt);
   if (requested.size === 0 && calls.length > 0) {
     for (const call of calls) blockers.push(`host_tool_call_not_requested:${call.tool}`);
   }
@@ -941,19 +1111,17 @@ function buildExecutionEvidence(
     const status = capabilityBlockers.length === 0 && relevantCalls.every((call) => call.status === 'passed')
       ? 'passed'
       : 'failed';
-    const artifactSources = descriptor.executable === false
-      ? [...receiptArtifactRows]
-        .sort((left, right) => left.source_index - right.source_index || left.path.localeCompare(right.path))
-        .map((artifact) => ({ tool: artifact.source_tool, hash: artifact.source_hash }))
+    const capabilityArtifactSources = descriptor.executable === false
+      ? artifactSources
       : [];
     const toolNames = uniqueStrings([
       ...relevantCalls.map((call) => call.tool),
-      ...artifactSources.map((source) => source.tool)
+      ...capabilityArtifactSources.map((source) => source.source_tool)
     ]);
     const receiptSha256 = `sha256:${sha256(JSON.stringify({
       id: descriptor.id,
       calls: relevantCalls.map((call) => call.raw_hash),
-      artifacts: artifactSources.map((source) => source.hash)
+      artifacts: capabilityArtifactSources.map((source) => source.source_event_sha256)
     }))}`;
     capabilitiesUsed.push({ id: descriptor.id, status, tool_names: toolNames, receipt_sha256: receiptSha256 });
   }
@@ -965,6 +1133,7 @@ function buildExecutionEvidence(
     tool_calls: calls.map(({ server, tool, status, event_sha256 }) => ({ server, tool, status, event_sha256 })),
     capabilities_used: capabilitiesUsed,
     artifacts,
+    artifact_sources: artifactSources,
     blockers: uniqueBlockersValue
   };
 }
@@ -1253,6 +1422,14 @@ function projectArtifactReceipt(value: HostArtifactReceipt): HostArtifactReceipt
   };
 }
 
+function projectArtifactSourceReceipt(value: ObservedHostArtifactReceipt): HostArtifactSourceReceipt {
+  return {
+    path: value.path,
+    source_tool: value.source_tool,
+    source_event_sha256: value.source_hash
+  };
+}
+
 function emptyHookObservations(binding: HostCapabilityHookRuntimeBinding): HostCapabilityHookObservations {
   return {
     schema: HOST_CAPABILITY_HOOK_OBSERVATIONS_SCHEMA,
@@ -1266,21 +1443,40 @@ function emptyHookObservations(binding: HostCapabilityHookRuntimeBinding): HostC
   };
 }
 
-function isPreToolObservation(value: unknown): value is HostCapabilityPreToolObservation {
-  return isRecord(value)
-    && SHA256_RECEIPT_PATTERN.test(String(value.tool_use_id_sha256 || ''))
-    && typeof value.tool === 'string'
-    && value.tool.length > 0
-    && value.tool.length <= 128
-    && (value.decision === 'allowed' || value.decision === 'denied');
-}
-
 function normalizePreToolObservation(value: unknown): HostCapabilityPreToolObservation | null {
-  if (!isPreToolObservation(value)) return null;
+  if (!isRecord(value)
+    || !SHA256_RECEIPT_PATTERN.test(String(value.tool_use_id_sha256 || ''))
+    || typeof value.tool !== 'string'
+    || value.tool.length === 0
+    || value.tool.length > 128
+    || (value.decision !== 'allowed' && value.decision !== 'denied')) return null;
+  const resourceKey = value.resource_key === undefined || value.resource_key === null
+    ? null
+    : SHA256_RECEIPT_PATTERN.test(String(value.resource_key || ''))
+      ? String(value.resource_key)
+      : undefined;
+  if (resourceKey === undefined) return null;
+  const legacyStatus = value.decision === 'denied' ? 'denied' : 'pending';
+  const reservationStatus = value.reservation_status === undefined
+    ? legacyStatus
+    : ['pending', 'completed', 'failed', 'denied'].includes(String(value.reservation_status || ''))
+      ? value.reservation_status as HostCapabilityPreToolObservation['reservation_status']
+      : null;
+  const blocker = value.blocker === undefined || value.blocker === null
+    ? null
+    : typeof value.blocker === 'string' && value.blocker.length > 0 && value.blocker.length <= 160
+      ? value.blocker
+      : undefined;
+  if (!reservationStatus || blocker === undefined
+    || (value.decision === 'denied' && reservationStatus !== 'denied')
+    || (value.decision === 'allowed' && reservationStatus === 'denied')) return null;
   return {
     tool_use_id_sha256: value.tool_use_id_sha256,
     tool: value.tool,
-    decision: value.decision
+    resource_key: resourceKey,
+    decision: value.decision,
+    reservation_status: reservationStatus,
+    blocker
   };
 }
 

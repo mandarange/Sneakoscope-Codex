@@ -15,11 +15,17 @@ import { writeNarutoGate } from '../official-subagent-preparation.js'
 import { trustedHostCapabilityReceiptBindingBlockers } from '../subagent-evidence.js'
 import { addMcpServer, editMcpServer } from '../../mcp-config/mutation.js'
 import type { CodexCliMutationOperation, CodexMcpCliPort } from '../../mcp-config/codex-cli-adapter.js'
-import { runProcess } from '../../fsx.js'
+import { runProcess, sha256 } from '../../fsx.js'
 import {
+  authorizeAndMergeHostCapabilityPreToolObservation,
   bindParentSummaryToHostCapabilityEvidence,
   createHostCapabilityEventCollector,
+  createHostCapabilityHookRuntimeBinding,
   inspectHostCapabilityRuntime,
+  mergeHostCapabilityPostToolObservation,
+  sanitizeHostCapabilityPostToolUse,
+  sanitizeHostCapabilityPreToolUse,
+  type HostCapabilityExecutionEvidence,
   requestHostCapabilities
 } from '../../agent-bridge/host-capability-runtime.js'
 
@@ -107,6 +113,68 @@ function completedHostToolEvent(input: {
       }
     }
   })
+}
+
+function completedArtifactHostToolEvent(tool: string, toolUseId: string, artifactPath: string): string {
+  return JSON.stringify({
+    type: 'item.completed',
+    item: {
+      type: 'mcp_tool_call',
+      server: 'acas-tools',
+      tool,
+      status: 'completed',
+      id: toolUseId,
+      arguments: { path: artifactPath },
+      result: {
+        structured_content: {
+          artifact: {
+            path: artifactPath,
+            kind: 'text',
+            media_type: 'text/plain',
+            sha256: `sha256:${sha256(`contents:${artifactPath}`)}`,
+            bytes: artifactPath.length,
+            role: 'deliverable'
+          }
+        }
+      }
+    }
+  })
+}
+
+async function artifactCollectorEvidence(count: number): Promise<HostCapabilityExecutionEvidence> {
+  const request = requestHostCapabilities('Create and save files in the workspace.')
+  const runtime = await inspectHostCapabilityRuntime({
+    root: process.cwd(),
+    request,
+    dependencies: hostCapabilityDependencies(['write_file'])
+  })
+  assert.equal(runtime.ok, true)
+  const collector = createHostCapabilityEventCollector(runtime)
+  for (let index = count - 1; index >= 0; index -= 1) {
+    const artifactPath = `reports/artifact-${String(index).padStart(2, '0')}.txt`
+    collector.push(`${completedArtifactHostToolEvent('write_file', `tool-${index}`, artifactPath)}\n`)
+  }
+  return collector.finish()
+}
+
+function prePayload(toolUseId: string, tool: string, toolInput: Record<string, unknown> = {}) {
+  return {
+    tool_use_id: toolUseId,
+    tool_name: `mcp__acas-tools__${tool}`,
+    tool_input: toolInput
+  }
+}
+
+function postPayload(
+  toolUseId: string,
+  tool: string,
+  toolInput: Record<string, unknown>,
+  toolResponse: Record<string, unknown>
+) {
+  return {
+    ...prePayload(toolUseId, tool, toolInput),
+    tool_response: toolResponse
+  }
 }
 
 test('standalone parent args launch one Sol Max Codex parent with the official thread budget', () => {
@@ -679,6 +747,198 @@ test('document evidence requires an editable source before render and a render a
   const validPngEvidence = validPng.finish()
   assert.equal(validPngEvidence.ok, true)
   assert.deepEqual(trustedHostCapabilityReceiptBindingBlockers(validPngEvidence), [])
+})
+
+test('collector binds 8, 10, 12, and 64 artifacts to exact canonical source events without reconstruction', async () => {
+  for (const count of [8, 10, 12, 64]) {
+    const evidence = await artifactCollectorEvidence(count)
+    assert.equal(evidence.ok, true, `${count} artifacts`)
+    assert.equal(evidence.artifacts.length, count)
+    assert.equal(evidence.artifact_sources.length, count)
+    assert.deepEqual(
+      evidence.artifact_sources.map((source) => source.path),
+      evidence.artifacts.map((artifact) => artifact.path),
+      `${count} artifacts use the public canonical artifact order`
+    )
+    assert.deepEqual(trustedHostCapabilityReceiptBindingBlockers(evidence), [], `${count} artifacts`)
+  }
+})
+
+test('trusted receipt binding rejects forged, missing, and duplicate artifact source mappings', async () => {
+  const trusted = await artifactCollectorEvidence(8)
+  const forged = {
+    ...trusted,
+    artifact_sources: trusted.artifact_sources.map((source, index) => index === 0
+      ? { ...source, source_event_sha256: `sha256:${'f'.repeat(64)}` }
+      : source)
+  }
+  assert.ok(trustedHostCapabilityReceiptBindingBlockers(forged).includes('host_artifact_source_mapping_forged'))
+
+  const missing = { ...trusted, artifact_sources: trusted.artifact_sources.slice(1) }
+  assert.ok(trustedHostCapabilityReceiptBindingBlockers(missing).includes('host_artifact_source_mapping_missing'))
+
+  const duplicate = {
+    ...trusted,
+    artifact_sources: [trusted.artifact_sources[0]!, ...trusted.artifact_sources.slice(0, -1)]
+  }
+  assert.ok(trustedHostCapabilityReceiptBindingBlockers(duplicate).includes('host_artifact_source_mapping_duplicate'))
+})
+
+test('atomic reservations deny query races until one completed schema call and remain idempotent by tool_use_id', async () => {
+  const request = requestHostCapabilities('Get customer records from the database.')
+  const runtime = await inspectHostCapabilityRuntime({
+    root: process.cwd(),
+    request,
+    dependencies: hostCapabilityDependencies(['datasource_schema_context', 'datasource_query_readonly'])
+  })
+  const binding = createHostCapabilityHookRuntimeBinding({
+    missionId: 'mission', workflowRunId: 'run', sessionScope: 'session', runtime
+  })
+  const query = sanitizeHostCapabilityPreToolUse(runtime, prePayload('query-1', 'datasource_query_readonly', {
+    datasource: 'main', schema_snapshot_id: 'snapshot', query: 'select 1'
+  }))!
+  const deniedBeforeSchema = authorizeAndMergeHostCapabilityPreToolObservation({ binding, observation: query })
+  assert.equal(deniedBeforeSchema.decision, 'denied')
+  assert.equal(deniedBeforeSchema.blocker, 'host_capability_readonly_query_schema_not_completed')
+
+  const schema = sanitizeHostCapabilityPreToolUse(runtime, prePayload('schema-1', 'datasource_schema_context', {
+    datasource: 'main'
+  }))!
+  const schemaReserved = authorizeAndMergeHostCapabilityPreToolObservation({ binding, observation: schema })
+  const deniedWhilePending = authorizeAndMergeHostCapabilityPreToolObservation({
+    binding,
+    current: schemaReserved.observations,
+    observation: { ...query, tool_use_id_sha256: `sha256:${sha256('query-2')}` }
+  })
+  assert.equal(deniedWhilePending.blocker, 'host_capability_readonly_query_schema_not_completed')
+
+  const schemaPost = sanitizeHostCapabilityPostToolUse(postPayload(
+    'schema-1',
+    'datasource_schema_context',
+    { datasource: 'main' },
+    { structured_content: { datasource: 'main', schema_snapshot_id: 'snapshot' } }
+  ))!
+  const afterSchema = mergeHostCapabilityPostToolObservation({
+    binding, current: schemaReserved.observations, observation: schemaPost
+  })
+  const queryReserved = authorizeAndMergeHostCapabilityPreToolObservation({
+    binding,
+    current: afterSchema,
+    observation: query
+  })
+  assert.equal(queryReserved.decision, 'allowed')
+  assert.equal(queryReserved.observation.reservation_status, 'pending')
+
+  const repeated = authorizeAndMergeHostCapabilityPreToolObservation({
+    binding, current: queryReserved.observations, observation: query
+  })
+  assert.deepEqual(repeated.observations, queryReserved.observations)
+  assert.deepEqual(repeated.observation, queryReserved.observation)
+
+  const secondQuery = sanitizeHostCapabilityPreToolUse(runtime, prePayload('query-3', 'datasource_query_readonly', {
+    datasource: 'main', schema_snapshot_id: 'snapshot', query: 'select 2'
+  }))!
+  const deniedSecond = authorizeAndMergeHostCapabilityPreToolObservation({
+    binding, current: queryReserved.observations, observation: secondQuery
+  })
+  assert.equal(deniedSecond.blocker, 'host_capability_readonly_query_already_reserved')
+
+  const queryPost = sanitizeHostCapabilityPostToolUse(postPayload(
+    'query-1',
+    'datasource_query_readonly',
+    { datasource: 'main', schema_snapshot_id: 'snapshot', query: 'select 1' },
+    {
+      structured_content: {
+        datasource: 'main',
+        schema_snapshot_id: 'snapshot',
+        query_sha256: `sha256:${sha256('select 1')}`,
+        row_count: 1,
+        column_count: 1,
+        truncated: false,
+        status: 'passed'
+      }
+    }
+  ))!
+  const afterQuery = mergeHostCapabilityPostToolObservation({
+    binding, current: queryReserved.observations, observation: queryPost
+  })
+  const afterBoundedPreObservationEviction = {
+    ...afterQuery,
+    pre_tool_uses: afterQuery.pre_tool_uses.filter((row) => row.tool !== 'datasource_query_readonly')
+  }
+  const deniedAfterEviction = authorizeAndMergeHostCapabilityPreToolObservation({
+    binding, current: afterBoundedPreObservationEviction, observation: secondQuery
+  })
+  assert.equal(deniedAfterEviction.blocker, 'host_capability_readonly_query_already_reserved')
+})
+
+test('atomic spreadsheet update reservations require a completed same-workbook inspect and allow one update', async () => {
+  const request = requestHostCapabilities('Update the spreadsheet with the latest results.')
+  const runtime = await inspectHostCapabilityRuntime({
+    root: process.cwd(),
+    request,
+    dependencies: hostCapabilityDependencies(['spreadsheet_inspect', 'spreadsheet_update'])
+  })
+  const binding = createHostCapabilityHookRuntimeBinding({
+    missionId: 'mission', workflowRunId: 'run', sessionScope: 'session', runtime
+  })
+  const update = sanitizeHostCapabilityPreToolUse(runtime, prePayload('update-1', 'spreadsheet_update', {
+    path: 'reports/book.xlsx'
+  }))!
+  const deniedBeforeInspect = authorizeAndMergeHostCapabilityPreToolObservation({ binding, observation: update })
+  assert.equal(deniedBeforeInspect.blocker, 'host_capability_spreadsheet_update_inspection_not_completed')
+
+  const inspect = sanitizeHostCapabilityPreToolUse(runtime, prePayload('inspect-1', 'spreadsheet_inspect', {
+    path: 'reports/book.xlsx'
+  }))!
+  const inspectReserved = authorizeAndMergeHostCapabilityPreToolObservation({ binding, observation: inspect })
+  const inspectPost = sanitizeHostCapabilityPostToolUse(postPayload(
+    'inspect-1',
+    'spreadsheet_inspect',
+    { path: 'reports/book.xlsx' },
+    {
+      structured_content: {
+        ok: true,
+        path: 'reports/book.xlsx',
+        sheet_names: ['Summary'],
+        row_counts: { Summary: 1 },
+        formulas: [],
+        error_cells: []
+      }
+    }
+  ))!
+  const afterInspect = mergeHostCapabilityPostToolObservation({
+    binding, current: inspectReserved.observations, observation: inspectPost
+  })
+
+  const wrongResource = sanitizeHostCapabilityPreToolUse(runtime, prePayload('update-wrong', 'spreadsheet_update', {
+    path: 'reports/other.xlsx'
+  }))!
+  const deniedWrongResource = authorizeAndMergeHostCapabilityPreToolObservation({
+    binding, current: afterInspect, observation: wrongResource
+  })
+  assert.equal(deniedWrongResource.blocker, 'host_capability_spreadsheet_update_resource_mismatch')
+
+  const reserved = authorizeAndMergeHostCapabilityPreToolObservation({ binding, current: afterInspect, observation: update })
+  assert.equal(reserved.decision, 'allowed')
+  const secondUpdate = sanitizeHostCapabilityPreToolUse(runtime, prePayload('update-2', 'spreadsheet_update', {
+    path: 'reports/book.xlsx'
+  }))!
+  const deniedSecond = authorizeAndMergeHostCapabilityPreToolObservation({
+    binding, current: reserved.observations, observation: secondUpdate
+  })
+  assert.equal(deniedSecond.blocker, 'host_capability_spreadsheet_update_already_reserved')
+
+  const updatePost = sanitizeHostCapabilityPostToolUse(postPayload(
+    'update-1', 'spreadsheet_update', { path: 'reports/book.xlsx' }, { structured_content: { ok: true, path: 'reports/book.xlsx' } }
+  ))!
+  const completed = mergeHostCapabilityPostToolObservation({
+    binding, current: reserved.observations, observation: updatePost
+  })
+  assert.equal(
+    completed.pre_tool_uses.find((row) => row.tool_use_id_sha256 === update.tool_use_id_sha256)?.reservation_status,
+    'completed'
+  )
 })
 
 test('Codex thread environment selects the in-app path unless standalone is explicit', () => {

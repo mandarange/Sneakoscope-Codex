@@ -6,6 +6,7 @@ import { HOST_CAPABILITY_DESCRIPTORS, hostCapabilityDigest } from '../agent-brid
 import {
   HOST_CAPABILITY_EVIDENCE_SCHEMA,
   HOST_CAPABILITY_RUNTIME_SCHEMA,
+  type HostArtifactSourceReceipt,
   type HostArtifactReceipt,
   type HostCapabilityExecutionEvidence,
   type HostCapabilityUseReceipt
@@ -104,14 +105,19 @@ const MAX_PARENT_ARTIFACTS = 64
 const MAX_PARENT_ARTIFACT_PATH_CHARS = 512
 const MAX_PARENT_CAPABILITY_USES = 64
 const MAX_PARENT_CAPABILITY_TOOL_NAMES = 64
+const MAX_HOST_ARTIFACT_SOURCES = 64
 const SHA256_RECEIPT_PATTERN = /^sha256:[a-f0-9]{64}$/
 const ARTIFACT_ROLES = new Set<HostArtifactReceipt['role']>(['deliverable', 'scratch', 'temp', 'log'])
 const HOST_CAPABILITY_BY_ID = new Map(HOST_CAPABILITY_DESCRIPTORS.map((descriptor) => [descriptor.id, descriptor]))
+const HOST_ARTIFACT_SOURCE_TOOLS = new Set(
+  HOST_CAPABILITY_BY_ID.get('host.artifact.receipt.v1')?.tool_names || []
+)
 
 export function trustedHostCapabilityReceiptBindingBlockers(
   evidence: HostCapabilityExecutionEvidence
 ): string[] {
   const blockers: string[] = []
+  const artifactSources = validateHostArtifactSources(evidence, blockers)
   const requestedIds = evidence.runtime.requested_capability_ids
   const requested = new Set(requestedIds)
   const receiptsById = new Map(evidence.capabilities_used.map((receipt) => [receipt.id, receipt]))
@@ -128,7 +134,7 @@ export function trustedHostCapabilityReceiptBindingBlockers(
     if (!descriptor || !receipt) continue
     const relevantCalls = evidence.tool_calls.filter((call) => descriptor.tool_names.includes(call.tool))
     if (descriptor.executable === false) {
-      blockers.push(...validateArtifactCapabilityReceipt(receipt, relevantCalls, evidence.artifacts.length))
+      blockers.push(...validateArtifactCapabilityReceipt(receipt, relevantCalls, evidence.artifacts, artifactSources))
       continue
     }
     const expectedTools = uniqueStrings(relevantCalls.map((call) => call.tool)).sort()
@@ -152,28 +158,24 @@ export function trustedHostCapabilityReceiptBindingBlockers(
 function validateArtifactCapabilityReceipt(
   receipt: HostCapabilityUseReceipt,
   relevantCalls: HostCapabilityExecutionEvidence['tool_calls'],
-  artifactCount: number
+  artifacts: HostArtifactReceipt[],
+  artifactSources: HostArtifactSourceReceipt[]
 ): string[] {
   const id = receipt.id
   const blockers: string[] = []
   const expectedTools = uniqueStrings(relevantCalls.map((call) => call.tool)).sort()
-  const sourceCalls = relevantCalls.filter((call) => (
-    call.status === 'passed' && receipt.tool_names.includes(call.tool)
-  ))
   if (JSON.stringify(receipt.tool_names) !== JSON.stringify(expectedTools)) {
     blockers.push(`host_capability_receipt_artifact_sources_mismatch:${id}`)
   }
-  const sourceHashes = resolveArtifactSourceHashes(
-    sourceCalls,
-    artifactCount,
-    receipt.receipt_sha256,
+  const expectedHash = capabilityReceiptSha256(
     id,
-    relevantCalls.map((call) => call.event_sha256)
+    relevantCalls.map((call) => call.event_sha256),
+    artifactSources.map((source) => source.source_event_sha256)
   )
-  if (!sourceHashes) blockers.push(`host_capability_receipt_sha256_mismatch:${id}`)
+  if (receipt.receipt_sha256 !== expectedHash) blockers.push(`host_capability_receipt_sha256_mismatch:${id}`)
   if (receipt.status === 'passed') {
-    if (artifactCount === 0) blockers.push(`host_capability_passed_artifact_missing:${id}`)
-    if (sourceCalls.length === 0) blockers.push(`host_capability_passed_artifact_source_missing:${id}`)
+    if (artifacts.length === 0) blockers.push(`host_capability_passed_artifact_missing:${id}`)
+    if (artifactSources.length === 0) blockers.push(`host_capability_passed_artifact_source_missing:${id}`)
     if (relevantCalls.some((call) => call.status !== 'passed')) {
       blockers.push(`host_capability_passed_call_failed:${id}`)
     }
@@ -181,36 +183,63 @@ function validateArtifactCapabilityReceipt(
   return blockers
 }
 
-function resolveArtifactSourceHashes(
-  calls: HostCapabilityExecutionEvidence['tool_calls'],
-  artifactCount: number,
-  receiptSha256: string,
-  capabilityId: string,
-  callHashes: string[]
-): string[] | null {
-  if (artifactCount === 0) {
-    return receiptSha256 === capabilityReceiptSha256(capabilityId, callHashes, []) ? [] : null
+function validateHostArtifactSources(
+  evidence: HostCapabilityExecutionEvidence,
+  blockers: string[]
+): HostArtifactSourceReceipt[] {
+  const value: unknown = evidence.artifact_sources
+  if (!Array.isArray(value)) {
+    blockers.push('host_artifact_source_mapping_missing')
+    return []
   }
-  if (calls.length === 0) return null
-  const counts = new Array<number>(calls.length).fill(0)
-  let attempts = 0
-  const search = (index: number, remaining: number): string[] | null => {
-    if (attempts >= 10_000) return null
-    if (index === calls.length - 1) {
-      counts[index] = remaining
-      attempts += 1
-      const hashes = calls.flatMap((call, callIndex) => Array(counts[callIndex]).fill(call.event_sha256))
-      return receiptSha256 === capabilityReceiptSha256(capabilityId, callHashes, hashes) ? hashes : null
+  if (value.length > MAX_HOST_ARTIFACT_SOURCES) blockers.push('host_artifact_source_mapping_too_many')
+  const sources: HostArtifactSourceReceipt[] = []
+  for (const row of value.slice(0, MAX_HOST_ARTIFACT_SOURCES)) {
+    if (!isRecord(row)
+      || Object.keys(row).some((key) => !['path', 'source_tool', 'source_event_sha256'].includes(key))) {
+      blockers.push('host_artifact_source_mapping_invalid')
+      continue
     }
-    for (let count = 0; count <= remaining; count += 1) {
-      counts[index] = count
-      const result = search(index + 1, remaining - count)
-      if (result) return result
-      if (attempts >= 10_000) return null
+    const artifactPath = normalizeParentArtifactPath(row.path)
+    const sourceTool = boundedParentToken(row.source_tool, 128, /^[A-Za-z][A-Za-z0-9_.:-]*$/)
+    const sourceEventSha256 = typeof row.source_event_sha256 === 'string'
+      ? row.source_event_sha256.trim().toLowerCase()
+      : ''
+    if (!artifactPath || !sourceTool || !SHA256_RECEIPT_PATTERN.test(sourceEventSha256)) {
+      blockers.push('host_artifact_source_mapping_invalid')
+      continue
     }
-    return null
+    sources.push({ path: artifactPath, source_tool: sourceTool, source_event_sha256: sourceEventSha256 })
   }
-  return search(0, artifactCount)
+
+  const artifactPaths = evidence.artifacts.map((artifact) => artifact.path)
+  const sourcePaths = sources.map((source) => source.path)
+  if (JSON.stringify(artifactPaths) !== JSON.stringify([...artifactPaths].sort((left, right) => left.localeCompare(right)))) {
+    blockers.push('host_artifact_source_mapping_order_mismatch')
+  }
+  if (new Set(sourcePaths).size !== sourcePaths.length) blockers.push('host_artifact_source_mapping_duplicate')
+  if (artifactPaths.some((artifactPath) => !sourcePaths.includes(artifactPath))) {
+    blockers.push('host_artifact_source_mapping_missing')
+  }
+  if (sourcePaths.some((sourcePath) => !artifactPaths.includes(sourcePath))) {
+    blockers.push('host_artifact_source_mapping_forged')
+  }
+  if (JSON.stringify(sourcePaths) !== JSON.stringify(artifactPaths)) {
+    blockers.push('host_artifact_source_mapping_order_mismatch')
+  }
+  for (const source of sources) {
+    if (!HOST_ARTIFACT_SOURCE_TOOLS.has(source.source_tool)) {
+      blockers.push('host_artifact_source_mapping_forged')
+      continue
+    }
+    const exactPassedCalls = evidence.tool_calls.filter((call) => (
+      call.status === 'passed'
+      && call.tool === source.source_tool
+      && call.event_sha256 === source.source_event_sha256
+    ))
+    if (exactPassedCalls.length !== 1) blockers.push('host_artifact_source_mapping_forged')
+  }
+  return sources
 }
 
 function capabilityReceiptSha256(id: string, calls: string[], artifacts: string[]): string {
@@ -930,6 +959,7 @@ function normalizeTrustedHostCapabilityEvidence(value: unknown): HostCapabilityE
     || !Array.isArray(value.tool_calls)
     || !Array.isArray(value.capabilities_used)
     || !Array.isArray(value.artifacts)
+    || !Array.isArray(value.artifact_sources)
     || !Array.isArray(value.blockers)
     || value.blockers.some((blocker) => typeof blocker !== 'string')) {
     return null
@@ -951,7 +981,8 @@ function normalizeTrustedHostCapabilityEvidence(value: unknown): HostCapabilityE
   const evidence = {
     ...value,
     capabilities_used: capabilities,
-    artifacts
+    artifacts,
+    artifact_sources: value.artifact_sources
   } as unknown as HostCapabilityExecutionEvidence
   return trustedHostCapabilityReceiptBindingBlockers(evidence).length === 0 ? evidence : null
 }

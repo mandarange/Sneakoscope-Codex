@@ -97,6 +97,11 @@ function hostCapabilityEvidence(status: 'passed' | 'failed' = 'passed') {
       )
     }],
     artifacts: status === 'passed' ? [artifact] : [],
+    artifact_sources: status === 'passed' ? [{
+      path: artifact.path,
+      source_tool: 'spreadsheet_create',
+      source_event_sha256: createEventHash
+    }] : [],
     blockers: blocker ? [blocker] : []
   }
 }

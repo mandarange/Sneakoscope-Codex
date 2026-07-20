@@ -255,6 +255,7 @@ test('additive artifact and capability receipt fields are projected from proof o
     assert.deepEqual(proof.result.changed_files, ['src/example.ts'])
     assert.deepEqual(proof.result.verification, [{ name: 'test', status: 'passed' }])
     assert.deepEqual(proof.result.artifacts, artifacts)
+    assert.equal(Object.hasOwn(proof.result, 'artifact_sources'), false)
     const canonicalCapabilities = fixtureHostCapabilityEvidence(artifacts, capabilitiesUsed)!.capabilities_used
     assert.deepEqual(proof.result.capabilities_used, canonicalCapabilities)
     assert.equal((proof.evidence as any).parent_summary_trustworthy, true)
@@ -517,7 +518,7 @@ test('proof rejects passed host capability receipts not bound to observed event 
     const proof = await buildNarutoProofProjection({ artifactDir: dir, missionId: MISSION_ID })
     assert.equal(proof.ok, false)
     assert.equal(proof.status, 'blocked')
-    assert.ok(proof.blockers.includes('proof_host_capability_passed_artifact_source_missing:host.artifact.receipt.v1'))
+    assert.ok(proof.blockers.includes('proof_host_artifact_source_mapping_forged'))
     assert.ok(proof.blockers.includes('proof_host_capability_receipt_sha256_mismatch:host.artifact.receipt.v1'))
   } finally {
     await fsp.rm(dir, { recursive: true, force: true })
@@ -753,13 +754,21 @@ function fixtureHostCapabilityEvidence(artifacts: unknown[] | undefined, capabil
     status: callStatus,
     event_sha256: `sha256:${((index + 1) % 16).toString(16).repeat(64)}`
   }))
+  const artifactSourceCall = toolCalls.find((call) => call.tool === inferredArtifactTool)
+  const artifactSourceRows = Array.isArray(artifacts)
+    ? artifacts.map((artifact: any) => ({
+        path: String(artifact?.path || ''),
+        source_tool: inferredArtifactTool,
+        source_event_sha256: artifactSourceCall?.event_sha256 || ''
+      }))
+    : []
   const canonicalReceipts = receiptRows.map((row: any) => {
     if (!/^sha256:[a-f0-9]{64}$/.test(String(row?.receipt_sha256 || ''))) return row
     const descriptor = HOST_CAPABILITY_DESCRIPTORS.find((candidate) => candidate.id === row?.id)
     if (!descriptor) return row
     const relevantCalls = toolCalls.filter((call) => descriptor.tool_names.includes(call.tool))
-    const artifactSources = descriptor.executable === false && Array.isArray(artifacts) && artifacts.length > 0
-      ? Array(artifacts.length).fill(relevantCalls.find((call) => call.tool === inferredArtifactTool)?.event_sha256 || '')
+    const artifactSources = descriptor.executable === false
+      ? artifactSourceRows.map((source) => source.source_event_sha256)
       : []
     return {
       ...row,
@@ -797,6 +806,7 @@ function fixtureHostCapabilityEvidence(artifacts: unknown[] | undefined, capabil
     tool_calls: toolCalls,
     capabilities_used: canonicalReceipts,
     artifacts: artifacts || [],
+    artifact_sources: artifactSourceRows,
     blockers: failed ? ['host_capability_fixture_failed'] : []
   }
 }

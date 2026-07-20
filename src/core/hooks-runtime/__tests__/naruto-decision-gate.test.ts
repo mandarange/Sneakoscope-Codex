@@ -307,12 +307,63 @@ test('host capability hooks enforce the exact allowlist and persist only bounded
       },
       tool_use_id: 'tool-use-inspect'
     }, { root, state });
+    const updateArtifact = {
+      ...artifact,
+      sha256: `sha256:${'b'.repeat(64)}`,
+      bytes: artifact.bytes + 128
+    };
+    const updateAllowed: any = await evaluateHookPayload('pre-tool', {
+      session_id: sessionId,
+      turn_id: 'turn-host-update-pre',
+      tool_name: 'mcp__acas-tools__spreadsheet_update',
+      tool_input: { path: artifact.path, patch: { sheet: 'Summary', range: 'B2:B3' } },
+      tool_use_id: 'tool-use-update'
+    }, { root, state });
+    assert.equal(updateAllowed.decision, undefined);
+    await evaluateHookPayload('post-tool', {
+      session_id: sessionId,
+      turn_id: 'turn-host-update-post',
+      tool_name: 'mcp__acas-tools__spreadsheet_update',
+      tool_input: { path: artifact.path, patch: { sheet: 'Summary', range: 'B2:B3' } },
+      tool_response: { structured_content: { ok: true, path: artifact.path, artifact: updateArtifact } },
+      tool_use_id: 'tool-use-update'
+    }, { root, state });
+    const finalInspectAllowed: any = await evaluateHookPayload('pre-tool', {
+      session_id: sessionId,
+      turn_id: 'turn-host-final-inspect-pre',
+      tool_name: 'mcp__acas-tools__spreadsheet_inspect',
+      tool_input: { path: artifact.path },
+      tool_use_id: 'tool-use-final-inspect'
+    }, { root, state });
+    assert.equal(finalInspectAllowed.decision, undefined);
+    await evaluateHookPayload('post-tool', {
+      session_id: sessionId,
+      turn_id: 'turn-host-final-inspect-post',
+      tool_name: 'mcp__acas-tools__spreadsheet_inspect',
+      tool_input: { path: artifact.path },
+      tool_response: {
+        structured_content: {
+          ok: true,
+          path: artifact.path,
+          sheet_names: ['Summary'],
+          row_counts: { Summary: 12 },
+          formulas: ['=SUM(B2:B11)'],
+          error_cells: []
+        }
+      },
+      tool_use_id: 'tool-use-final-inspect'
+    }, { root, state });
 
     const observationsText = await fsp.readFile(path.join(dir, HOST_CAPABILITY_HOOK_OBSERVATIONS_FILENAME), 'utf8');
     const observations = JSON.parse(observationsText);
     const evidence = JSON.parse(await fsp.readFile(path.join(dir, HOST_CAPABILITY_HOOK_EVIDENCE_FILENAME), 'utf8'));
-    assert.equal(observations.tool_calls.length, 2);
-    assert.deepEqual(observations.tool_calls.map((row: any) => row.tool), ['spreadsheet_create', 'spreadsheet_inspect']);
+    assert.equal(observations.tool_calls.length, 4);
+    assert.deepEqual(observations.tool_calls.map((row: any) => row.tool), [
+      'spreadsheet_create',
+      'spreadsheet_inspect',
+      'spreadsheet_update',
+      'spreadsheet_inspect'
+    ]);
     assert.ok(observations.pre_tool_uses.some((row: any) => row.tool === 'spreadsheet_create' && row.decision === 'allowed'));
     assert.equal(observations.pre_tool_uses.some((row: any) => row.tool === 'slack_send'), false);
     assert.equal(observationsText.includes('must-not-persist'), false);
@@ -321,7 +372,12 @@ test('host capability hooks enforce the exact allowlist and persist only bounded
     assert.equal(observationsText.includes('raw_formula_values'), false);
     assert.ok(Buffer.byteLength(observationsText, 'utf8') < 32 * 1024);
     assert.equal(evidence.ok, true);
-    assert.deepEqual(evidence.tool_calls.map((row: any) => row.tool), ['spreadsheet_create', 'spreadsheet_inspect']);
+    assert.deepEqual(evidence.tool_calls.map((row: any) => row.tool), [
+      'spreadsheet_create',
+      'spreadsheet_inspect',
+      'spreadsheet_update',
+      'spreadsheet_inspect'
+    ]);
 
     await evaluateHookPayload('post-tool', {
       session_id: sessionId,
@@ -437,6 +493,282 @@ test('host capability hooks reject a valid runtime whose canonical request scope
     assert.match(result.reason, /host_capability_hook_runtime_request_scope_mismatch/);
   } finally {
     await fsp.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('host capability hooks allow one completed schema-to-readonly-query sequence', async () => {
+  const fixture = await createHostHookFixture({
+    label: 'db-valid-sequence',
+    goal: 'Get active customer records from the database.',
+    toolNames: ['datasource_schema_context', 'datasource_query_readonly']
+  });
+  const query = 'SELECT customer_id, status FROM customers WHERE active = ?';
+  const schemaSnapshotId = 'schema-snapshot-customers-v1';
+  try {
+    const schemaAllowed: any = await evaluateHookPayload('pre-tool', {
+      session_id: fixture.sessionId,
+      tool_name: 'mcp__acas-tools__datasource_schema_context',
+      tool_input: {},
+      tool_use_id: 'valid-schema'
+    }, { root: fixture.root, state: fixture.state });
+    assert.equal(schemaAllowed.decision, undefined);
+    await evaluateHookPayload('post-tool', {
+      session_id: fixture.sessionId,
+      tool_name: 'mcp__acas-tools__datasource_schema_context',
+      tool_input: {},
+      tool_response: {
+        structured_content: {
+          datasource: 'mysql:customers',
+          schema_snapshot_id: schemaSnapshotId
+        }
+      },
+      tool_use_id: 'valid-schema'
+    }, { root: fixture.root, state: fixture.state });
+
+    const queryAllowed: any = await evaluateHookPayload('pre-tool', {
+      session_id: fixture.sessionId,
+      tool_name: 'mcp__acas-tools__datasource_query_readonly',
+      tool_input: { schema_snapshot_id: schemaSnapshotId, query, bindings: [true] },
+      tool_use_id: 'valid-query'
+    }, { root: fixture.root, state: fixture.state });
+    assert.equal(queryAllowed.decision, undefined);
+    await evaluateHookPayload('post-tool', {
+      session_id: fixture.sessionId,
+      tool_name: 'mcp__acas-tools__datasource_query_readonly',
+      tool_input: { schema_snapshot_id: schemaSnapshotId, query, bindings: [true] },
+      tool_response: {
+        structured_content: {
+          datasource: 'mysql:customers',
+          schema_snapshot_id: schemaSnapshotId,
+          query_sha256: `sha256:${sha256(query)}`,
+          row_count: 2,
+          column_count: 2,
+          truncated: false,
+          status: 'passed'
+        }
+      },
+      tool_use_id: 'valid-query'
+    }, { root: fixture.root, state: fixture.state });
+
+    const observations = JSON.parse(await fsp.readFile(
+      path.join(fixture.dir, HOST_CAPABILITY_HOOK_OBSERVATIONS_FILENAME),
+      'utf8'
+    ));
+    const evidence = JSON.parse(await fsp.readFile(
+      path.join(fixture.dir, HOST_CAPABILITY_HOOK_EVIDENCE_FILENAME),
+      'utf8'
+    ));
+    assert.deepEqual(observations.pre_tool_uses.map((row: any) => [row.tool, row.reservation_status]), [
+      ['datasource_schema_context', 'completed'],
+      ['datasource_query_readonly', 'completed']
+    ]);
+    assert.equal(evidence.ok, true);
+    assert.deepEqual(evidence.blockers, []);
+  } finally {
+    await fsp.rm(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test('host capability hooks deny query-before-schema and concurrent or repeated readonly queries before side effects', async () => {
+  const fixture = await createHostHookFixture({
+    label: 'db-invalid-order',
+    goal: 'Get active customer records from the database.',
+    toolNames: ['datasource_schema_context', 'datasource_query_readonly']
+  });
+  const query = 'SELECT customer_id FROM customers WHERE active = ?';
+  const schemaSnapshotId = 'schema-snapshot-customers-v2';
+  const queryInput = { schema_snapshot_id: schemaSnapshotId, query, bindings: [true] };
+  try {
+    const beforeSchema: any = await evaluateHookPayload('pre-tool', {
+      session_id: fixture.sessionId,
+      tool_name: 'mcp__acas-tools__datasource_query_readonly',
+      tool_input: queryInput,
+      tool_use_id: 'query-before-schema'
+    }, { root: fixture.root, state: fixture.state });
+    assert.equal(beforeSchema.decision, 'block');
+    assert.match(beforeSchema.reason, /host_capability_readonly_query_schema_not_completed/);
+
+    const schemaAllowed: any = await evaluateHookPayload('pre-tool', {
+      session_id: fixture.sessionId,
+      tool_name: 'mcp__acas-tools__datasource_schema_context',
+      tool_input: {},
+      tool_use_id: 'ordered-schema'
+    }, { root: fixture.root, state: fixture.state });
+    assert.equal(schemaAllowed.decision, undefined);
+    const whileSchemaPending: any = await evaluateHookPayload('pre-tool', {
+      session_id: fixture.sessionId,
+      tool_name: 'mcp__acas-tools__datasource_query_readonly',
+      tool_input: queryInput,
+      tool_use_id: 'query-while-schema-pending'
+    }, { root: fixture.root, state: fixture.state });
+    assert.equal(whileSchemaPending.decision, 'block');
+    assert.match(whileSchemaPending.reason, /host_capability_readonly_query_schema_not_completed/);
+
+    await evaluateHookPayload('post-tool', {
+      session_id: fixture.sessionId,
+      tool_name: 'mcp__acas-tools__datasource_schema_context',
+      tool_input: {},
+      tool_response: {
+        structured_content: {
+          datasource: 'mysql:customers',
+          schema_snapshot_id: schemaSnapshotId
+        }
+      },
+      tool_use_id: 'ordered-schema'
+    }, { root: fixture.root, state: fixture.state });
+
+    const queryAllowed: any = await evaluateHookPayload('pre-tool', {
+      session_id: fixture.sessionId,
+      tool_name: 'mcp__acas-tools__datasource_query_readonly',
+      tool_input: queryInput,
+      tool_use_id: 'ordered-query'
+    }, { root: fixture.root, state: fixture.state });
+    assert.equal(queryAllowed.decision, undefined);
+    const concurrentQuery: any = await evaluateHookPayload('pre-tool', {
+      session_id: fixture.sessionId,
+      tool_name: 'mcp__acas-tools__datasource_query_readonly',
+      tool_input: { ...queryInput, query: `${query} LIMIT 1` },
+      tool_use_id: 'concurrent-query'
+    }, { root: fixture.root, state: fixture.state });
+    assert.equal(concurrentQuery.decision, 'block');
+    assert.match(concurrentQuery.reason, /host_capability_readonly_query_already_reserved/);
+
+    await evaluateHookPayload('post-tool', {
+      session_id: fixture.sessionId,
+      tool_name: 'mcp__acas-tools__datasource_query_readonly',
+      tool_input: queryInput,
+      tool_response: {
+        structured_content: {
+          datasource: 'mysql:customers',
+          schema_snapshot_id: schemaSnapshotId,
+          query_sha256: `sha256:${sha256(query)}`,
+          row_count: 1,
+          column_count: 1,
+          truncated: false,
+          status: 'passed'
+        }
+      },
+      tool_use_id: 'ordered-query'
+    }, { root: fixture.root, state: fixture.state });
+    const repeatedQuery: any = await evaluateHookPayload('pre-tool', {
+      session_id: fixture.sessionId,
+      tool_name: 'mcp__acas-tools__datasource_query_readonly',
+      tool_input: queryInput,
+      tool_use_id: 'query-after-completion'
+    }, { root: fixture.root, state: fixture.state });
+    assert.equal(repeatedQuery.decision, 'block');
+    assert.match(repeatedQuery.reason, /host_capability_readonly_query_already_reserved/);
+  } finally {
+    await fsp.rm(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test('host capability hooks deny spreadsheet updates without a completed same-workbook inspect and reserve one mutation', async () => {
+  const fixture = await createHostHookFixture({
+    label: 'spreadsheet-update-order',
+    goal: 'Update reports/book.xlsx with the latest results.',
+    toolNames: ['spreadsheet_inspect', 'spreadsheet_update']
+  });
+  const workbookPath = 'reports/book.xlsx';
+  const otherWorkbookPath = 'reports/other.xlsx';
+  try {
+    const beforeInspect: any = await evaluateHookPayload('pre-tool', {
+      session_id: fixture.sessionId,
+      tool_name: 'mcp__acas-tools__spreadsheet_update',
+      tool_input: { path: workbookPath, patch: { sheet: 'Summary', range: 'B2' } },
+      tool_use_id: 'update-before-inspect'
+    }, { root: fixture.root, state: fixture.state });
+    assert.equal(beforeInspect.decision, 'block');
+    assert.match(beforeInspect.reason, /host_capability_spreadsheet_update_inspection_not_completed/);
+
+    const inspectAllowed: any = await evaluateHookPayload('pre-tool', {
+      session_id: fixture.sessionId,
+      tool_name: 'mcp__acas-tools__spreadsheet_inspect',
+      tool_input: { path: workbookPath },
+      tool_use_id: 'ordered-inspect'
+    }, { root: fixture.root, state: fixture.state });
+    assert.equal(inspectAllowed.decision, undefined);
+    const whileInspectPending: any = await evaluateHookPayload('pre-tool', {
+      session_id: fixture.sessionId,
+      tool_name: 'mcp__acas-tools__spreadsheet_update',
+      tool_input: { path: workbookPath, patch: { sheet: 'Summary', range: 'B2' } },
+      tool_use_id: 'update-while-inspect-pending'
+    }, { root: fixture.root, state: fixture.state });
+    assert.equal(whileInspectPending.decision, 'block');
+    assert.match(whileInspectPending.reason, /host_capability_spreadsheet_update_inspection_not_completed/);
+
+    await evaluateHookPayload('post-tool', {
+      session_id: fixture.sessionId,
+      tool_name: 'mcp__acas-tools__spreadsheet_inspect',
+      tool_input: { path: workbookPath },
+      tool_response: {
+        structured_content: {
+          ok: true,
+          path: workbookPath,
+          sheet_names: ['Summary'],
+          row_counts: { Summary: 4 },
+          formulas: [],
+          error_cells: []
+        }
+      },
+      tool_use_id: 'ordered-inspect'
+    }, { root: fixture.root, state: fixture.state });
+
+    const wrongWorkbook: any = await evaluateHookPayload('pre-tool', {
+      session_id: fixture.sessionId,
+      tool_name: 'mcp__acas-tools__spreadsheet_update',
+      tool_input: { path: otherWorkbookPath, patch: { sheet: 'Summary', range: 'B2' } },
+      tool_use_id: 'wrong-workbook-update'
+    }, { root: fixture.root, state: fixture.state });
+    assert.equal(wrongWorkbook.decision, 'block');
+    assert.match(wrongWorkbook.reason, /host_capability_spreadsheet_update_resource_mismatch/);
+
+    const updateAllowed: any = await evaluateHookPayload('pre-tool', {
+      session_id: fixture.sessionId,
+      tool_name: 'mcp__acas-tools__spreadsheet_update',
+      tool_input: { path: workbookPath, patch: { sheet: 'Summary', range: 'B2' } },
+      tool_use_id: 'ordered-update'
+    }, { root: fixture.root, state: fixture.state });
+    assert.equal(updateAllowed.decision, undefined);
+    const concurrentUpdate: any = await evaluateHookPayload('pre-tool', {
+      session_id: fixture.sessionId,
+      tool_name: 'mcp__acas-tools__spreadsheet_update',
+      tool_input: { path: workbookPath, patch: { sheet: 'Summary', range: 'B3' } },
+      tool_use_id: 'concurrent-update'
+    }, { root: fixture.root, state: fixture.state });
+    assert.equal(concurrentUpdate.decision, 'block');
+    assert.match(concurrentUpdate.reason, /host_capability_spreadsheet_update_already_reserved/);
+
+    await evaluateHookPayload('post-tool', {
+      session_id: fixture.sessionId,
+      tool_name: 'mcp__acas-tools__spreadsheet_update',
+      tool_input: { path: workbookPath, patch: { sheet: 'Summary', range: 'B2' } },
+      tool_response: {
+        structured_content: {
+          ok: true,
+          path: workbookPath,
+          artifact: {
+            path: workbookPath,
+            kind: 'spreadsheet',
+            media_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            sha256: `sha256:${'c'.repeat(64)}`,
+            bytes: 4096,
+            role: 'deliverable'
+          }
+        }
+      },
+      tool_use_id: 'ordered-update'
+    }, { root: fixture.root, state: fixture.state });
+    const repeatedUpdate: any = await evaluateHookPayload('pre-tool', {
+      session_id: fixture.sessionId,
+      tool_name: 'mcp__acas-tools__spreadsheet_update',
+      tool_input: { path: workbookPath, patch: { sheet: 'Summary', range: 'B4' } },
+      tool_use_id: 'update-after-completion'
+    }, { root: fixture.root, state: fixture.state });
+    assert.equal(repeatedUpdate.decision, 'block');
+    assert.match(repeatedUpdate.reason, /host_capability_spreadsheet_update_already_reserved/);
+  } finally {
+    await fsp.rm(fixture.root, { recursive: true, force: true });
   }
 });
 
@@ -661,4 +993,39 @@ function hostCapabilityDependencies(toolNames: string[]) {
       tool_names: [...toolNames]
     }) as any
   };
+}
+
+async function createHostHookFixture(input: {
+  label: string;
+  goal: string;
+  toolNames: string[];
+}) {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), `sks-hook-${input.label}-`));
+  const missionId = `M-20260720-${input.label}`;
+  const workflowRunId = `naruto-${input.label}-run`;
+  const sessionId = `${input.label}-session`;
+  const dir = path.join(root, '.sneakoscope', 'missions', missionId);
+  const state = {
+    mission_id: missionId,
+    official_subagent_run_id: workflowRunId,
+    session_scope: sessionId,
+    mode: 'NARUTO',
+    route: 'Naruto',
+    subagents_required: true,
+    prompt: input.goal
+  };
+  await fsp.mkdir(dir, { recursive: true });
+  await fsp.writeFile(path.join(dir, 'subagent-plan.json'), `${JSON.stringify({ goal: input.goal }, null, 2)}\n`);
+  const runtime = await inspectHostCapabilityRuntime({
+    root,
+    request: requestHostCapabilities(input.goal),
+    dependencies: hostCapabilityDependencies(input.toolNames)
+  });
+  assert.equal(runtime.ok, true);
+  await fsp.writeFile(path.join(dir, HOST_CAPABILITY_HOOK_RUNTIME_FILENAME), `${JSON.stringify(
+    createHostCapabilityHookRuntimeBinding({ missionId, workflowRunId, sessionScope: sessionId, runtime }),
+    null,
+    2
+  )}\n`);
+  return { root, dir, state, sessionId };
 }
