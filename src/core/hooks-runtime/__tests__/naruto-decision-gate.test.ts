@@ -885,6 +885,77 @@ test('spreadsheet create missions deny existing-workbook updates before a comple
   }
 });
 
+test('spreadsheet create missions require a same-resource inspect completed after create before update', async () => {
+  const fixture = await createHostHookFixture({
+    label: 'spreadsheet-create-inspect-order',
+    goal: 'Create an Excel workbook and update it.',
+    toolNames: ['spreadsheet_create', 'spreadsheet_inspect', 'spreadsheet_update']
+  });
+  const workbookPath = 'reports/created.xlsx';
+  try {
+    await evaluateHookPayload('pre-tool', {
+      session_id: fixture.sessionId,
+      tool_name: 'mcp__acas-tools__spreadsheet_inspect',
+      tool_input: { path: workbookPath },
+      tool_use_id: 'inspect-before-create'
+    }, { root: fixture.root, state: fixture.state });
+    await evaluateHookPayload('post-tool', {
+      session_id: fixture.sessionId,
+      tool_name: 'mcp__acas-tools__spreadsheet_inspect',
+      tool_input: { path: workbookPath },
+      tool_response: {
+        structured_content: {
+          ok: true,
+          path: workbookPath,
+          sheet_names: ['Summary'],
+          row_counts: { Summary: 4 },
+          formulas: [],
+          error_cells: []
+        }
+      },
+      tool_use_id: 'inspect-before-create'
+    }, { root: fixture.root, state: fixture.state });
+
+    await evaluateHookPayload('pre-tool', {
+      session_id: fixture.sessionId,
+      tool_name: 'mcp__acas-tools__spreadsheet_create',
+      tool_input: { path: workbookPath },
+      tool_use_id: 'create-after-inspect'
+    }, { root: fixture.root, state: fixture.state });
+    await evaluateHookPayload('post-tool', {
+      session_id: fixture.sessionId,
+      tool_name: 'mcp__acas-tools__spreadsheet_create',
+      tool_input: { path: workbookPath },
+      tool_response: {
+        structured_content: {
+          ok: true,
+          path: workbookPath,
+          artifact: {
+            path: workbookPath,
+            kind: 'spreadsheet',
+            media_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            sha256: `sha256:${'e'.repeat(64)}`,
+            bytes: 4096,
+            role: 'deliverable'
+          }
+        }
+      },
+      tool_use_id: 'create-after-inspect'
+    }, { root: fixture.root, state: fixture.state });
+
+    const denied: any = await evaluateHookPayload('pre-tool', {
+      session_id: fixture.sessionId,
+      tool_name: 'mcp__acas-tools__spreadsheet_update',
+      tool_input: { path: workbookPath, patch: { sheet: 'Summary', range: 'B2' } },
+      tool_use_id: 'update-after-stale-inspect'
+    }, { root: fixture.root, state: fixture.state });
+    assert.equal(denied.decision, 'block');
+    assert.match(denied.reason, /host_capability_spreadsheet_update_inspection_not_completed/);
+  } finally {
+    await fsp.rm(fixture.root, { recursive: true, force: true });
+  }
+});
+
 test('create and inspect spreadsheet intent remains create-only and completes without an update', async () => {
   const goal = 'Create an Excel workbook and inspect it.';
   assert.deepEqual(requestHostCapabilities(goal), {

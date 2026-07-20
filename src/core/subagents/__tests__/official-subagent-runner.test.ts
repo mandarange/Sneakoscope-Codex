@@ -467,6 +467,14 @@ test('explicit standalone project trust reaches inventory, health, narrow host a
     assert.equal(spawnCalls, 1, fixture.label)
     assert.equal(result.status, 'parent_completed', fixture.label)
     assert.equal(result.host_capability_evidence.ok, true, fixture.label)
+    if (fixture.label === 'xlsx') {
+      assert.deepEqual(result.host_capability_evidence.artifacts.map((artifact: any) => artifact.path), [
+        'reports/trusted.xlsx'
+      ])
+      assert.deepEqual(result.host_capability_evidence.artifact_sources.map((artifact: any) => artifact.path), [
+        'reports/trusted.xlsx'
+      ])
+    }
     assert.ok(launchedArgs.includes(
       `mcp_servers.acas-tools.enabled_tools=[${fixture.allowed.map((tool) => JSON.stringify(tool)).join(', ')}]`
     ), fixture.label)
@@ -553,7 +561,7 @@ test('trusted host runtime allowlists requested ACAS tools and projects only has
   assert.ok(rebound.blockers.includes('host_artifact_parent_receipts_mismatch'))
 })
 
-test('standalone host-capability launch redacts the raw nonce from exposed parent output', async (t) => {
+test('standalone host-capability launch confines a nonce reflected in structured host evidence', async (t) => {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-host-capability-nonce-redaction-'))
   t.after(async () => fsp.rm(root, { recursive: true, force: true }))
   let launchNonce = ''
@@ -574,7 +582,7 @@ test('standalone host-capability launch redacts the raw nonce from exposed paren
       assert.match(launchNonce, /^[a-f0-9]{32}$/)
       const outputIndex = args.indexOf('--output-last-message')
       await fsp.writeFile(args[outputIndex + 1]!, `summary nonce=${launchNonce}`)
-      const event = completedArtifactHostToolEvent('write_file', 'nonce-redaction-tool', 'reports/nonce.txt')
+      const event = completedArtifactHostToolEvent('write_file', 'nonce-redaction-tool', `reports/${launchNonce}.txt`)
       const stdout = `${event}\nnonce=${launchNonce}\n`
       const stderr = `stderr nonce=${launchNonce}`
       options?.onStdout?.(stdout)
@@ -591,9 +599,64 @@ test('standalone host-capability launch redacts the raw nonce from exposed paren
   })
 
   assert.doesNotMatch(JSON.stringify(result), new RegExp(launchNonce))
+  assert.equal(result.ok, false)
+  assert.equal(result.status, 'host_capability_blocked')
+  assert.equal(result.host_capability_evidence.ok, false)
+  assert.deepEqual(result.host_capability_evidence.tool_calls, [])
+  assert.deepEqual(result.host_capability_evidence.artifacts, [])
+  assert.deepEqual(result.host_capability_evidence.artifact_sources, [])
+  assert.deepEqual(trustedHostCapabilityReceiptBindingBlockers(result.host_capability_evidence), [])
+  assert.ok(result.blockers.includes('host_capability_evidence_secret_reflection'))
   assert.equal(result.parent_summary, 'summary nonce=<redacted>')
   assert.equal(result.process.stdout_tail, '')
   assert.equal(result.process.stderr_tail, 'stderr nonce=<redacted>')
+})
+
+test('standalone host-capability launch confines an inherited secret reflected in structured host evidence', async (t) => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-host-capability-secret-confinement-'))
+  t.after(async () => fsp.rm(root, { recursive: true, force: true }))
+  const inheritedSecret = 'inherited-structured-host-secret'
+
+  const result = await runOfficialSubagentWorkflow({
+    root,
+    goal: 'Create and save a file in the workspace.',
+    prompt: 'echo inherited secret fixture',
+    requestedSubagents: 1,
+    maxThreads: 1,
+    appSession: false,
+    projectTrusted: true,
+    missionId: 'M-host-capability-secret-confinement',
+    workflowRunId: 'run-host-capability-secret-confinement',
+    env: { CODEX_API_KEY: inheritedSecret },
+    hostCapabilityDependencies: hostCapabilityDependencies(['write_file']),
+    runProcessImpl: async (_command, args, options) => {
+      const outputIndex = args.indexOf('--output-last-message')
+      await fsp.writeFile(args[outputIndex + 1]!, 'summary completed')
+      const event = completedArtifactHostToolEvent(
+        'write_file',
+        'inherited-secret-tool',
+        `reports/${inheritedSecret}.txt`
+      )
+      options?.onStdout?.(`${event}\n`)
+      return {
+        code: 0,
+        stdout: `${event}\n`,
+        stderr: '',
+        stdoutBytes: Buffer.byteLength(event),
+        stderrBytes: 0,
+        truncated: false,
+        timedOut: false
+      }
+    }
+  })
+
+  assert.doesNotMatch(JSON.stringify(result), new RegExp(inheritedSecret))
+  assert.equal(result.status, 'host_capability_blocked')
+  assert.deepEqual(result.host_capability_evidence.tool_calls, [])
+  assert.deepEqual(result.host_capability_evidence.artifacts, [])
+  assert.deepEqual(result.host_capability_evidence.artifact_sources, [])
+  assert.deepEqual(trustedHostCapabilityReceiptBindingBlockers(result.host_capability_evidence), [])
+  assert.ok(result.blockers.includes('host_capability_evidence_secret_reflection'))
 })
 
 test('host capability requests select the minimum task tools and recognize workbook population', async () => {

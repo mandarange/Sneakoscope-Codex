@@ -18,6 +18,7 @@ import {
   hostCapabilityCodexConfigArgs,
   inspectHostCapabilityRuntime,
   requestHostCapabilities,
+  type HostCapabilityExecutionEvidence,
   type HostCapabilityRuntimeDependencies
 } from '../agent-bridge/host-capability-runtime.js'
 
@@ -253,6 +254,29 @@ function redactKnownValues(text: string, values: readonly string[]): string {
   let redacted = text
   for (const value of values) redacted = redacted.split(value).join('<redacted>')
   return redacted
+}
+
+function structuredValueContainsKnownValue(value: unknown, values: readonly string[]): boolean {
+  if (typeof value === 'string') return values.some((secret) => value.includes(secret))
+  if (Array.isArray(value)) return value.some((item) => structuredValueContainsKnownValue(item, values))
+  if (!value || typeof value !== 'object') return false
+  return Object.values(value).some((item) => structuredValueContainsKnownValue(item, values))
+}
+
+function confineHostCapabilityEvidenceSecrets(
+  evidence: HostCapabilityExecutionEvidence,
+  secretValues: readonly string[]
+): HostCapabilityExecutionEvidence {
+  if (!structuredValueContainsKnownValue(evidence, secretValues)) return evidence
+  const confined = createHostCapabilityEventCollector(evidence.runtime).finish()
+  return {
+    ...confined,
+    ok: false,
+    blockers: uniqueStrings([
+      ...confined.blockers,
+      'host_capability_evidence_secret_reflection'
+    ])
+  }
 }
 
 export async function runOfficialSubagentWorkflow(input: OfficialSubagentWorkflowInput): Promise<any> {
@@ -533,7 +557,10 @@ export async function runOfficialSubagentWorkflow(input: OfficialSubagentWorkflo
     outputSecretValues
   )
   await fsp.rm(parentSummaryFile, { force: true }).catch(() => undefined)
-  const hostCapabilityEvidence = hostCapabilityCollector.finish(processResult.stdout)
+  const hostCapabilityEvidence = confineHostCapabilityEvidenceSecrets(
+    hostCapabilityCollector.finish(processResult.stdout),
+    outputSecretValues
+  )
   const stdout = summarizeCodexJsonlOutput(processResult.stdout, outputSecretValues)
   const stderr = redactKnownValues(processResult.stderr, outputSecretValues).slice(-12_000)
   const blockers = uniqueStrings([

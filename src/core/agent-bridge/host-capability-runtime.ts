@@ -485,23 +485,33 @@ function authorizePreToolReservation(
     if (hasReservedOrObservedToolCall(current, observation.tool)) {
       return denyPreToolReservation(observation, 'host_capability_spreadsheet_update_already_reserved');
     }
+    let completedCreateSequence: number | null = null;
     if (runtime.task_workflows.includes('spreadsheet_create')) {
       const completedCreates = completedPassedToolCalls(current, 'spreadsheet_create');
       if (completedCreates.length === 0) {
         return denyPreToolReservation(observation, 'host_capability_spreadsheet_update_create_not_completed');
       }
-      if (!observation.resource_key
-        || !completedCreates.some((call) => call.resource_key === observation.resource_key)) {
+      const matchingCreates = observation.resource_key
+        ? completedCreates.filter((call) => call.resource_key === observation.resource_key)
+        : [];
+      if (matchingCreates.length === 0) {
         return denyPreToolReservation(observation, 'host_capability_spreadsheet_update_resource_mismatch');
       }
+      completedCreateSequence = Math.max(...matchingCreates.map((call) => call.sequence));
     }
     const completedInspections = completedPassedToolCalls(current, 'spreadsheet_inspect');
     if (completedInspections.length === 0) {
       return denyPreToolReservation(observation, 'host_capability_spreadsheet_update_inspection_not_completed');
     }
-    if (!observation.resource_key
-      || !completedInspections.some((call) => call.resource_key === observation.resource_key)) {
+    const matchingInspections = observation.resource_key
+      ? completedInspections.filter((call) => call.resource_key === observation.resource_key)
+      : [];
+    if (matchingInspections.length === 0) {
       return denyPreToolReservation(observation, 'host_capability_spreadsheet_update_resource_mismatch');
+    }
+    if (completedCreateSequence !== null
+      && !matchingInspections.some((call) => call.sequence > completedCreateSequence)) {
+      return denyPreToolReservation(observation, 'host_capability_spreadsheet_update_inspection_not_completed');
     }
   }
 
