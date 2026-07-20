@@ -3098,6 +3098,12 @@
       "reason": "Light-turn consumption removes only the session-hashed single-use receipt before validation to prevent replay."
     },
     {
+      "file": "src/core/hooks-runtime/standalone-parent-host-capability.ts",
+      "symbol": "claimStandaloneParentHostCapabilityRuntime",
+      "token": "fsp.rm",
+      "reason": "The standalone parent claim atomically consumes only the fixed pending host-capability grant file inside the selected mission directory."
+    },
+    {
       "file": "src/core/hooks-runtime/light-turn.ts",
       "symbol": "clearLightTurnStopBypass",
       "token": "fsp.rm",
@@ -3138,6 +3144,18 @@
       "symbol": "runOfficialSubagentWorkflow",
       "token": "fsp.rm",
       "reason": "The standalone parent runner removes only its run-unique temporary parent-summary file after reading it."
+    },
+    {
+      "file": "src/core/subagents/official-subagent-runner.ts",
+      "symbol": "writeHostCapabilityPendingRuntime",
+      "token": "fsp.rm",
+      "reason": "Pending-grant replacement removes only the fixed mission-local host-capability pending file while holding its dedicated lock."
+    },
+    {
+      "file": "src/core/subagents/official-subagent-runner.ts",
+      "symbol": "removeHostCapabilityPendingRuntime",
+      "token": "fsp.rm",
+      "reason": "Failure and child-exit cleanup removes only the fixed mission-local host-capability pending file while holding its dedicated lock."
     },
     {
       "file": "src/core/subagents/subagent-evidence.ts",
