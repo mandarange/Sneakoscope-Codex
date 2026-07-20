@@ -63,6 +63,92 @@ test('valid current-run Naruto proof is full, byte-stable, and invalidates refle
   }
 })
 
+test('later mission compliance events do not stale the sealed current-run Naruto terminal bundle', async () => {
+  const fixture = await createNarutoFixture()
+  const terminalArtifacts = [
+    'subagent-plan.json',
+    'subagent-events.jsonl',
+    'subagent-parent-summary.json',
+    'subagent-evidence.json',
+    'naruto-summary.json',
+    'naruto-gate.json'
+  ] as const
+  try {
+    await fixture.refresh()
+    const initialValidation = await validateRouteCompletionProof(fixture.root, {
+      missionId: fixture.missionId,
+      route: '$Naruto',
+      state: fixture.state
+    })
+    assert.equal(initialValidation.ok, true)
+    assert.equal(initialValidation.proof.evidence.route_gate.workflow_run_id, fixture.runId)
+
+    const terminalStats = await Promise.all(terminalArtifacts.map((file) => fsp.stat(path.join(fixture.dir, file))))
+    const terminalBytes = await Promise.all(terminalArtifacts.map((file) => fsp.readFile(path.join(fixture.dir, file))))
+    const newestTerminalMtime = Math.max(...terminalStats.map((stat) => stat.mtimeMs))
+    await waitFor(async () => Date.now() > newestTerminalMtime + 5)
+    const complianceEvent = {
+      ts: new Date().toISOString(),
+      type: 'pipeline.compliance_loop_guard',
+      gate: 'reflection',
+      repeat_count: 1,
+      limit: 3,
+      tripped: false,
+      missing: []
+    }
+    await fsp.appendFile(path.join(fixture.dir, 'events.jsonl'), `${JSON.stringify(complianceEvent)}\n`)
+    const complianceEventTime = Date.parse(complianceEvent.ts)
+    for (const stat of terminalStats) assert.ok(stat.mtimeMs < complianceEventTime)
+
+    await Promise.all([
+      'completion-proof.json',
+      'completion-proof.md',
+      'evidence-index.json',
+      'route-completion-contract.json',
+      'trust-report.json'
+    ].map((file) => fsp.rm(path.join(fixture.dir, file), { force: true })))
+    await fixture.refresh()
+
+    const refreshedTerminalStats = await Promise.all(terminalArtifacts.map((file) => fsp.stat(path.join(fixture.dir, file))))
+    const refreshedTerminalBytes = await Promise.all(terminalArtifacts.map((file) => fsp.readFile(path.join(fixture.dir, file))))
+    for (const [index, file] of terminalArtifacts.entries()) {
+      assert.equal(refreshedTerminalStats[index]!.mtimeMs, terminalStats[index]!.mtimeMs, `${file}:mtime`)
+      assert.deepEqual(refreshedTerminalBytes[index], terminalBytes[index], `${file}:bytes`)
+    }
+
+    const [evidenceIndex, trust, validation] = await Promise.all([
+      readJson(path.join(fixture.dir, 'evidence-index.json')),
+      readJson(path.join(fixture.dir, 'trust-report.json')),
+      validateRouteCompletionProof(fixture.root, {
+        missionId: fixture.missionId,
+        route: '$Naruto',
+        state: fixture.state
+      })
+    ])
+    assert.equal(evidenceIndex.ok, true)
+    assert.equal(evidenceIndex.status, 'verified')
+    assert.deepEqual(evidenceIndex.issues, [])
+    for (const file of terminalArtifacts) {
+      const relativePath = `.sneakoscope/missions/${fixture.missionId}/${file}`
+      const records = evidenceIndex.records.filter((record: any) => record.path === relativePath)
+      assert.equal(records.length, 1, relativePath)
+      assert.equal(records[0].source, 'real', relativePath)
+      assert.equal(records[0].freshness, 'fresh', relativePath)
+      assert.equal(records[0].trust, 'high', relativePath)
+      assert.deepEqual(records[0].issues, [], relativePath)
+    }
+    assert.equal(trust.ok, true)
+    assert.equal(trust.status, 'verified')
+    assert.deepEqual(trust.issues, [])
+    assert.deepEqual(trust.blockers, [])
+    assert.equal(validation.ok, true)
+    assert.equal(validation.status, 'verified')
+    assert.equal(validation.proof.evidence.route_gate.workflow_run_id, fixture.runId)
+  } finally {
+    await fixture.cleanup()
+  }
+})
+
 test('missing, malformed, and wrong-run Naruto proofs are retried and repaired', async () => {
   const fixture = await createNarutoFixture()
   try {

@@ -45,12 +45,12 @@ export async function finalizeNarutoTerminalProof(
         gateFile: 'naruto-gate.json',
         gate: currentGate,
         artifacts: [
-          'subagent-plan.json',
-          'subagent-events.jsonl',
-          SUBAGENT_PARENT_SUMMARY_FILENAME,
-          SUBAGENT_EVIDENCE_FILENAME,
-          'naruto-summary.json',
-          'naruto-gate.json'
+          { path: 'subagent-plan.json', kind: 'agent', source: 'real', ignoreStale: true },
+          { path: 'subagent-events.jsonl', kind: 'agent', source: 'real', ignoreStale: true },
+          { path: SUBAGENT_PARENT_SUMMARY_FILENAME, kind: 'agent', source: 'real', ignoreStale: true },
+          { path: SUBAGENT_EVIDENCE_FILENAME, kind: 'agent', source: 'real', ignoreStale: true },
+          { path: 'naruto-summary.json', kind: 'agent', source: 'real', ignoreStale: true },
+          { path: 'naruto-gate.json', kind: 'agent', source: 'real', ignoreStale: true }
         ],
         claims: [{ id: 'naruto-official-subagent-completion', status: 'supported', evidence: 'naruto-gate.json' }],
         agents: true
