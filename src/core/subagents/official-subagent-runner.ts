@@ -78,6 +78,7 @@ export interface OfficialSubagentWorkflowInput {
   requestedSubagents: number
   maxThreads: number
   appSession: boolean
+  projectTrusted?: boolean
   missionId?: string | null
   sessionKey?: string | null
   codexBin?: string | null
@@ -167,7 +168,7 @@ export async function runOfficialSubagentWorkflow(input: OfficialSubagentWorkflo
   const hostCapabilityRuntime = await inspectHostCapabilityRuntime({
     root: input.root,
     request: hostCapabilityRequest,
-    projectTrusted: input.appSession === true && Boolean(String(input.sessionKey || '').trim()),
+    projectTrusted: input.projectTrusted === true,
     ...(input.hostCapabilityDependencies ? { dependencies: input.hostCapabilityDependencies } : {})
   })
 

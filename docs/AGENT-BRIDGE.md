@@ -19,6 +19,10 @@ prints host registration snippets, and runs a live non-interactive smoke test
 before wiring anything up. The default command does not read project MCP configuration or start a
 project MCP server. `--trusted-project` is the explicit operator decision that enables the bounded
 project inventory and health probe included in `host_capability_inventory`.
+`sks naruto run` uses the same non-persistent `--trusted-project` spelling when a standalone or
+Codex App task requests project-host database, spreadsheet, or render tools. App session identity
+scopes runtime evidence but never grants project trust, and neither command stores trust for later
+invocations.
 
 ## Contract 1: stdio MCP server
 

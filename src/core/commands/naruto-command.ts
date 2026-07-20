@@ -74,6 +74,7 @@ export interface NarutoArgs {
   missionId: string
   json: boolean
   readOnly: boolean
+  trustedProject: boolean
   argumentErrors: string[]
 }
 
@@ -223,6 +224,7 @@ async function narutoRunTransaction(
     requestedSubagents: budget.requestedSubagents,
     maxThreads: budget.maxThreads,
     appSession,
+    projectTrusted: parsed.trustedProject,
     missionId: id,
     sessionKey,
     ...(missionLease ? { onChildSpawn: missionLease.protectChildPid } : {})
@@ -684,6 +686,7 @@ export function parseNarutoArgs(args: string[]): NarutoArgs {
     missionId: String(missionFlag || positionalMission || 'latest'),
     json: normalized.includes('--json'),
     readOnly: normalized.includes('--readonly') || normalized.includes('--read-only'),
+    trustedProject: optionArgs.includes('--trusted-project'),
     argumentErrors: uniqueStrings(argumentErrors)
   }
 }
@@ -693,7 +696,7 @@ function positionalValues(args: string[]) {
     '--agents', '--max-threads', '--mission', '--mission-id'
   ])
   const booleanFlags = new Set([
-    '--json', '--readonly', '--read-only'
+    '--json', '--readonly', '--read-only', '--trusted-project'
   ])
   const result: string[] = []
   for (let index = 0; index < args.length; index += 1) {
@@ -752,7 +755,7 @@ function optionErrors(name: string, option: ReturnType<typeof optionValue>, nume
 function unknownOptionErrors(args: string[]): string[] {
   const canonical = new Set([
     '--agents', '--max-threads', '--mission', '--mission-id',
-    '--json', '--readonly', '--read-only', '--help', '-h', '--'
+    '--json', '--readonly', '--read-only', '--trusted-project', '--help', '-h', '--'
   ])
   const errors: string[] = []
   const optionArgs = args.includes('--') ? args.slice(0, args.indexOf('--')) : args
@@ -765,7 +768,7 @@ function unknownOptionErrors(args: string[]): string[] {
 }
 
 function booleanOptionErrors(args: string[]): string[] {
-  const booleanNames = new Set(['--json', '--readonly', '--read-only', '--help', '-h'])
+  const booleanNames = new Set(['--json', '--readonly', '--read-only', '--trusted-project', '--help', '-h'])
   const optionArgs = args.includes('--') ? args.slice(0, args.indexOf('--')) : args
   const errors: string[] = []
   for (const arg of optionArgs) {

@@ -22,12 +22,15 @@ test('normal Naruto blocks command-local GLM before any provider delegation', as
   }
 })
 
-test('Naruto keeps requested official subagent counts and canonical thread flags', () => {
-  const parsed = parseNarutoArgs(['run', 'review', 'the', 'packages', '--agents', '12', '--max-threads', '8', '--json'])
+test('Naruto keeps requested official subagent counts and canonical thread and project-trust flags', () => {
+  const parsed = parseNarutoArgs([
+    'run', 'review', 'the', 'packages', '--agents', '12', '--max-threads', '8', '--trusted-project', '--json'
+  ])
   assert.equal(parsed.action, 'run')
   assert.equal(parsed.prompt, 'review the packages')
   assert.equal(parsed.requestedSubagents, 12)
   assert.equal(parsed.maxThreads, 8)
+  assert.equal(parsed.trustedProject, true)
   assert.deepEqual(parsed.argumentErrors, [])
 })
 
@@ -61,7 +64,14 @@ test('Naruto parser accepts equals syntax and rejects malformed or empty paid fa
   assert.equal(explicitTaskAfterSeparator.prompt, 'dashboard')
   assert.deepEqual(explicitTaskAfterSeparator.argumentErrors, [])
 
-  for (const flag of ['--json=true', '--read-only=true', '--readonly=false', '--help=true']) {
+  const trustTokenAfterSeparator = parseNarutoArgs(['run', '--', '--trusted-project'])
+  assert.equal(trustTokenAfterSeparator.prompt, '--trusted-project')
+  assert.equal(trustTokenAfterSeparator.trustedProject, false)
+  assert.deepEqual(trustTokenAfterSeparator.argumentErrors, [])
+
+  assert.equal(parseNarutoArgs(['run', 'task']).trustedProject, false)
+
+  for (const flag of ['--json=true', '--read-only=true', '--readonly=false', '--trusted-project=true', '--help=true']) {
     const booleanValue = parseNarutoArgs(['run', 'task', flag])
     assert.ok(booleanValue.argumentErrors.some((error) => error.startsWith('boolean_option_value_not_supported:')), flag)
   }

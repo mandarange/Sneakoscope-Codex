@@ -64,7 +64,7 @@ The SKS menu bar shows the installed Codex CLI version and latest known version.
 
 ## Naruto Workflow
 
-`$sks-naruto` and `sks naruto run "task" --agents 8 --max-threads 12` use Codex official subagents. The parent is GPT-5.6 Sol Max. Tiny mechanical `worker` slices use Luna Max; ordinary UI, logic, backend, and native coding uses Sol High; review, testing, debugging, architecture, integration, security, database, research, release, and other judgment-sensitive work uses Sol Max; long-context scans and direct Computer Use, Browser/Chrome, or image-generation execution uses Terra Medium. Mixed execution/judgment work is split when possible, and unsplittable judgment defaults to Sol Max.
+`$sks-naruto` and `sks naruto run "task" --agents 8 --max-threads 12` use Codex official subagents. Standalone and Codex App tasks that request project-host database, spreadsheet, or render tools require the non-persistent `--trusted-project` flag after the operator reviews the checkout; an App session ID scopes evidence but does not grant trust. The parent is GPT-5.6 Sol Max. Tiny mechanical `worker` slices use Luna Max; ordinary UI, logic, backend, and native coding uses Sol High; review, testing, debugging, architecture, integration, security, database, research, release, and other judgment-sensitive work uses Sol Max; long-context scans and direct Computer Use, Browser/Chrome, or image-generation execution uses Terra Medium. Mixed execution/judgment work is split when possible, and unsplittable judgment defaults to Sol Max.
 
 Fresh SKS-owned project config uses `max_threads = 12`, `max_depth = 1`, `job_max_runtime_seconds = 1200`, and `interrupt_message = true`. `max_depth = 1` means subagents cannot spawn nested subagents. Explicit user limits are preserved, and larger requests run in waves.
 
@@ -97,7 +97,7 @@ It shows the current quickstart flow: one-line install, `$sks-plan`, `sks review
 
 ## Proof Surfaces
 
-- Official subagents: `sks naruto run "task" --agents 14 --max-threads 12 --json`
+- Official subagents: `sks naruto run "task" --agents 14 --max-threads 12 [--trusted-project] --json`
 - Review report: `.sneakoscope/reports/review-report.json`
 - Harness benchmark: `.sneakoscope/reports/harness-benchmark.json`
 - Project memory: `sks memory build`

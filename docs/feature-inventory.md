@@ -76,7 +76,7 @@ Generated from `sks commands --json`, `src/cli/command-registry.ts COMMANDS`, `s
 | `cli-commit-and-push` | core-cli | stable | sks commit-and-push [--message "msg"] [--json] | mock:pass | wiring_only | none recorded |
 | `cli-dfix` | core-cli | stable | sks dfix | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
 | `cli-with-local-llm` | core-cli | beta | sks with-local-llm on\|off\|status\|set-model [--json] | execute:pass | runtime_verified | none recorded |
-| `cli-naruto` | proof-route | labs | sks naruto run "task" [--agents N] [--max-threads N] [--json] \| sks naruto status\|subagents\|proof [latest\|M-...] [--json] | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
+| `cli-naruto` | proof-route | labs | sks naruto run "task" [--agents N] [--max-threads N] [--trusted-project] [--json] \| sks naruto status\|subagents\|proof [latest\|M-...] [--json] | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
 | `cli-stop-gate` | core-cli | beta | sks stop-gate | static:pass | static_contract | none recorded |
 | `cli-route` | core-cli | beta | sks route | static:pass | static_contract | none recorded |
 | `cli-loop` | core-cli | labs | sks loop | static:pass | static_contract | none recorded |

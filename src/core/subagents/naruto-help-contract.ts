@@ -21,7 +21,7 @@ export function buildNarutoHelpResult() {
     workflow: 'official_codex_subagent',
     description: '$sks-naruto is the canonical SKS execution route for the Codex official subagent workflow; $sks-work is its intended execution alias.',
     usage: [
-      'sks naruto run "<task>" [--agents N] [--max-threads N] [--json]',
+      'sks naruto run "<task>" [--agents N] [--max-threads N] [--trusted-project] [--json]',
       'sks naruto status [latest|M-...] [--json]',
       'sks naruto subagents [latest|M-...] [--json]',
       'sks naruto proof [latest|M-...] [--json]'

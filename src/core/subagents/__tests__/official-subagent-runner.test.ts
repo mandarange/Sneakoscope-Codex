@@ -216,6 +216,88 @@ test('app sessions return delegation context without launching nested Codex', as
   assert.equal(result.parent_reasoning_effort, 'max')
 })
 
+test('App session identity alone does not grant project trust for host-capability requests', async () => {
+  let projectCalls = 0
+  let launched = false
+  const result = await runOfficialSubagentWorkflow({
+    root: process.cwd(),
+    goal: 'Create and deliver an Excel workbook.',
+    prompt: 'sealed app delegation prompt',
+    requestedSubagents: 1,
+    maxThreads: 1,
+    appSession: true,
+    sessionKey: 'app-session-without-project-trust',
+    projectTrusted: false,
+    hostCapabilityDependencies: {
+      inventory: async () => {
+        projectCalls += 1
+        throw new Error('untrusted App inventory must not run')
+      },
+      health: async () => {
+        projectCalls += 1
+        throw new Error('untrusted App health must not run')
+      }
+    } as any,
+    runProcessImpl: async () => {
+      launched = true
+      throw new Error('App sessions must not launch nested Codex')
+    }
+  })
+
+  assert.equal(projectCalls, 0)
+  assert.equal(launched, false)
+  assert.equal(result.status, 'host_capability_blocked')
+  assert.ok(result.blockers.includes('host_capability_project_trust_missing'))
+})
+
+test('explicit App project trust performs bounded host probes and returns delegation context without nested spawn', async () => {
+  let inventoryCalls = 0
+  let healthCalls = 0
+  let launched = false
+  const dependencies: any = hostCapabilityDependencies([
+    'spreadsheet_create',
+    'spreadsheet_inspect',
+    'spreadsheet_update',
+    'slack_send'
+  ])
+  const inventory = dependencies.inventory
+  const health = dependencies.health
+  dependencies.inventory = async (...args: any[]) => {
+    inventoryCalls += 1
+    return inventory(...args)
+  }
+  dependencies.health = async (...args: any[]) => {
+    healthCalls += 1
+    return health(...args)
+  }
+  const result = await runOfficialSubagentWorkflow({
+    root: process.cwd(),
+    goal: 'Create and deliver an Excel workbook.',
+    prompt: 'sealed trusted app delegation prompt',
+    requestedSubagents: 1,
+    maxThreads: 1,
+    appSession: true,
+    sessionKey: 'trusted-app-session',
+    projectTrusted: true,
+    hostCapabilityDependencies: dependencies,
+    runProcessImpl: async () => {
+      launched = true
+      throw new Error('App sessions must not launch nested Codex')
+    }
+  })
+
+  assert.equal(inventoryCalls, 1)
+  assert.equal(healthCalls, 1)
+  assert.equal(launched, false)
+  assert.equal(result.status, 'delegation_context_ready')
+  assert.equal(result.prepared, true)
+  assert.deepEqual(result.host_capability_runtime.allowed_tool_names, [
+    'spreadsheet_create',
+    'spreadsheet_inspect',
+    'spreadsheet_update'
+  ])
+})
+
 test('standalone host-capability requests fail closed before project inventory, health, or Codex spawn', async () => {
   let projectCalls = 0
   let launched = false
@@ -248,6 +330,145 @@ test('standalone host-capability requests fail closed before project inventory, 
   assert.equal(result.status, 'host_capability_blocked')
   assert.ok(result.blockers.includes('host_capability_project_trust_missing'))
   assert.equal(result.host_capability_evidence.ok, false)
+})
+
+test('explicit standalone project trust reaches inventory, health, narrow host allowlist, and Codex spawn', async () => {
+  const cases = [
+    {
+      label: 'xlsx',
+      goal: 'Create and deliver an Excel workbook.',
+      tools: ['spreadsheet_create', 'spreadsheet_inspect', 'spreadsheet_update', 'slack_send'],
+      allowed: ['spreadsheet_create', 'spreadsheet_inspect', 'spreadsheet_update'],
+      events: () => {
+        const artifact = {
+          path: 'reports/trusted.xlsx',
+          kind: 'spreadsheet',
+          media_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          sha256: `sha256:${'a'.repeat(64)}`,
+          bytes: 4096,
+          role: 'deliverable'
+        }
+        return [
+          JSON.stringify({
+            type: 'item.completed',
+            item: {
+              type: 'mcp_tool_call', server: 'acas-tools', tool: 'spreadsheet_create', status: 'completed',
+              arguments: { path: artifact.path }, result: { structured_content: { ok: true, path: artifact.path, artifact } }
+            }
+          }),
+          JSON.stringify({
+            type: 'item.completed',
+            item: {
+              type: 'mcp_tool_call', server: 'acas-tools', tool: 'spreadsheet_inspect', status: 'completed',
+              arguments: { path: artifact.path },
+              result: { structured_content: {
+                ok: true, path: artifact.path, sheet_names: ['Summary'], row_counts: { Summary: 1 }, formulas: [], error_cells: []
+              } }
+            }
+          })
+        ]
+      }
+    },
+    {
+      label: 'database',
+      goal: 'Get active customer records from the database.',
+      tools: ['datasource_schema_context', 'datasource_query_readonly', 'slack_send'],
+      allowed: ['datasource_query_readonly', 'datasource_schema_context'],
+      events: () => {
+        const datasource = 'mysql:customers'
+        const schemaSnapshotId = 'schema-customers-v1'
+        const query = 'SELECT customer_id FROM customers WHERE active = ?'
+        return [
+          JSON.stringify({
+            type: 'item.completed',
+            item: {
+              type: 'mcp_tool_call', server: 'acas-tools', tool: 'datasource_schema_context', status: 'completed',
+              arguments: { datasource }, result: { structured_content: { datasource, schema_snapshot_id: schemaSnapshotId } }
+            }
+          }),
+          JSON.stringify({
+            type: 'item.completed',
+            item: {
+              type: 'mcp_tool_call', server: 'acas-tools', tool: 'datasource_query_readonly', status: 'completed',
+              arguments: { datasource, schema_snapshot_id: schemaSnapshotId, query, bindings: [true] },
+              result: { structured_content: {
+                datasource,
+                schema_snapshot_id: schemaSnapshotId,
+                query_sha256: `sha256:${sha256(query)}`,
+                row_count: 1,
+                column_count: 1,
+                truncated: false,
+                status: 'passed'
+              } }
+            }
+          })
+        ]
+      }
+    }
+  ] as const
+
+  for (const fixture of cases) {
+    let inventoryCalls = 0
+    let healthCalls = 0
+    let spawnCalls = 0
+    const dependencies: any = hostCapabilityDependencies([...fixture.tools])
+    const inventory = dependencies.inventory
+    const health = dependencies.health
+    dependencies.inventory = async (...args: any[]) => {
+      inventoryCalls += 1
+      return inventory(...args)
+    }
+    dependencies.health = async (...args: any[]) => {
+      healthCalls += 1
+      return health(...args)
+    }
+    let launchedArgs: readonly string[] = []
+    const result = await runOfficialSubagentWorkflow({
+      root: process.cwd(),
+      goal: fixture.goal,
+      prompt: `trusted standalone ${fixture.label}`,
+      requestedSubagents: 1,
+      maxThreads: 1,
+      appSession: false,
+      projectTrusted: true,
+      hostCapabilityDependencies: dependencies,
+      runProcessImpl: async (_command, args, options) => {
+        spawnCalls += 1
+        launchedArgs = args
+        const outputIndex = args.indexOf('--output-last-message')
+        await fsp.writeFile(args[outputIndex + 1]!, JSON.stringify({
+          schema: 'sks.subagent-parent-summary.v1',
+          status: 'completed',
+          summary: `${fixture.label} completed`,
+          thread_outcomes: [{ thread_id: `thread-${fixture.label}`, status: 'completed', summary: 'complete' }],
+          changed_files: [],
+          verification: [],
+          blockers: []
+        }))
+        const events = fixture.events()
+        for (const event of events) options?.onStdout?.(`${event}\n`)
+        return {
+          code: 0,
+          stdout: `${events.join('\n')}\n`,
+          stderr: '',
+          stdoutBytes: Buffer.byteLength(events.join('\n')),
+          stderrBytes: 0,
+          truncated: false,
+          timedOut: false
+        }
+      }
+    })
+
+    assert.equal(inventoryCalls, 1, fixture.label)
+    assert.equal(healthCalls, 1, fixture.label)
+    assert.equal(spawnCalls, 1, fixture.label)
+    assert.equal(result.status, 'parent_completed', fixture.label)
+    assert.equal(result.host_capability_evidence.ok, true, fixture.label)
+    assert.ok(launchedArgs.includes(
+      `mcp_servers."acas-tools".enabled_tools=[${fixture.allowed.map((tool) => JSON.stringify(tool)).join(', ')}]`
+    ), fixture.label)
+    assert.ok(launchedArgs.includes('mcp_servers."acas-tools".disabled_tools=["slack_send"]'), fixture.label)
+  }
 })
 
 test('trusted host runtime allowlists requested ACAS tools and projects only hashed JSONL evidence', async () => {

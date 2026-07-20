@@ -11,6 +11,7 @@ of warning, redirecting, or activating a compatibility runtime.
 ```bash
 sks naruto run "implement this change"
 sks naruto run "review independent release domains" --agents 3 --max-threads 12
+sks naruto run "create an XLSX report" --trusted-project
 sks naruto status latest --json
 sks naruto subagents latest --json
 sks naruto proof latest --json
@@ -39,6 +40,15 @@ An explicit `--agents N` remains authoritative, but every slice must still be
 independent and defensible. The parser accepts `--agents N` or `--agents=N` and
 the corresponding `--max-threads` forms. Empty tasks, malformed or conflicting
 values, and removed options fail before an agent workflow starts.
+
+Database, spreadsheet, document-render, and other project-host capability requests
+remain fail-closed unless the operator supplies `--trusted-project` after reviewing the checkout.
+The signal applies only to that invocation: it is not written to mission state or project config.
+When present, Naruto may perform the bounded project MCP inventory/health probe. Standalone runs
+launch Codex with only the requested healthy host tools enabled; Codex App runs return bounded
+delegation context without a nested spawn. App session identity is used only for mission/run/session
+correlation and never grants project trust, so App host-capability requests require the same explicit
+`--trusted-project` signal.
 
 ## Model Policy
 
@@ -116,8 +126,8 @@ by reentry or proof reads.
 
 ## Project MCP Compatibility
 
-Standalone Naruto launches Codex from the project root without replacing the
-project `.codex/config.toml`. A trusted project-scoped stdio MCP registration is
+Standalone Naruto launched with `--trusted-project` runs Codex from the project root without
+replacing the project `.codex/config.toml`. A trusted project-scoped stdio MCP registration is
 therefore discovered by the Codex parent through the existing configuration
 layer. MCP configuration writes continue to use the guarded project mutation
 path, store only approved environment variable names, and fail closed on

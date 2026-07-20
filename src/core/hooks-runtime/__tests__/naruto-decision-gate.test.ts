@@ -144,6 +144,7 @@ test('App preparation blocks a missing requested host capability before returnin
     maxThreads: 1,
     appSession: true,
     sessionKey: 'host-capability-preparation-session',
+    projectTrusted: true,
     hostCapabilityDependencies: hostCapabilityDependencies(['spreadsheet_create'])
   });
 
