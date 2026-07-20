@@ -12,7 +12,7 @@
 
 ### Changed
 
-- Keep the shared packed-package budget at 2488 KiB while adding the final host-capability runtime and proof-validation contract by removing non-runtime comments from emitted JavaScript; the resulting package measured 2,496,337 packed bytes.
+- Keep the shared packed-package budget at 2488 KiB while adding the final host-capability runtime and proof-validation contract by removing non-runtime comments from emitted JavaScript; release receipts remain authoritative for the exact packed byte count.
 
 ### Fixed
 
@@ -20,7 +20,7 @@
 - Preserve the user's active Codex provider, model, reasoning, routing, and authentication class across `sks update`; an active codex-lb install no longer silently restores ChatGPT OAuth and unselects the proxy.
 - Restore truthful Chat/Pro recovery guidance in SKS Center, remove only provenance-owned Desktop model locks, and require an actual Codex App restart before OAuth or codex-lb switches can report success.
 - Block codex-lb health requests before any credential is sent to an insecure non-loopback transport, and keep the native Codex updater's complete structured JSON below the Menu Bar capture boundary.
-- Scope ACAS host tools to the minimum task-required allowlist, require a single bound workbook mutation followed by final inspection, and prove editable-source-before-render document delivery from observed receipts; admitted host calls still pass through the shared mutation, harness, database, clarification, recursion, and no-question safety gates before execution.
+- Scope ACAS host tools to the minimum task-required allowlist, require explicit project trust before MCP inventory or health probing, reserve workbook creation/update and read-only queries atomically, bind query datasource/schema identity before execution, and prove final inspection or editable-source-before-render delivery from observed receipts; terminal hook replays fail closed and admitted host calls still pass through the shared mutation, harness, database, clarification, recursion, and no-question safety gates before execution.
 - Keep explicit Codex hook sessions isolated from the legacy global route state so unrelated subagent events cannot contaminate an active Naruto mission.
 
 ## [7.0.2] - 2026-07-19
