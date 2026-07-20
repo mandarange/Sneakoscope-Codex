@@ -167,6 +167,8 @@ export interface HostCapabilityPreToolObservation {
   tool_use_id_sha256: string;
   tool: string;
   resource_key: string | null;
+  datasource_sha256: string | null;
+  schema_snapshot_sha256: string | null;
   decision: 'allowed' | 'denied';
   reservation_status: 'pending' | 'completed' | 'failed' | 'denied';
   blocker: string | null;
@@ -289,7 +291,14 @@ export function sanitizeHostCapabilityPreToolUse(
   const tool = acasHostToolName(payload.tool_name);
   const toolUseId = boundedIdentity(payload.tool_use_id);
   if (!tool || !toolUseId) return null;
+  const toolInput = isRecord(payload.tool_input) ? payload.tool_input : {};
   const resourceKey = extractToolResourceKey({ arguments: payload.tool_input });
+  const datasource = tool === 'datasource_schema_context' || tool === 'datasource_query_readonly'
+    ? boundedIdentity(toolInput.datasource)
+    : null;
+  const schemaSnapshotId = tool === 'datasource_query_readonly'
+    ? boundedIdentity(toolInput.schema_snapshot_id)
+    : null;
   const allowed = runtime.ok
     && runtime.allowed_tool_names.includes(tool)
     && !explicitlyDeniedHostCapabilityTool(tool);
@@ -304,6 +313,8 @@ export function sanitizeHostCapabilityPreToolUse(
     tool_use_id_sha256: `sha256:${sha256(toolUseId)}`,
     tool,
     resource_key: resourceKey,
+    datasource_sha256: datasource ? `sha256:${sha256(datasource)}` : null,
+    schema_snapshot_sha256: schemaSnapshotId ? `sha256:${sha256(schemaSnapshotId)}` : null,
     decision: allowed ? 'allowed' : 'denied',
     reservation_status: allowed ? 'pending' : 'denied',
     blocker
@@ -374,12 +385,19 @@ export function authorizeAndMergeHostCapabilityPreToolObservation(input: {
     || emptyHookObservations(input.binding);
   const existing = current.pre_tool_uses.find((row) => row.tool_use_id_sha256 === input.observation.tool_use_id_sha256);
   if (existing) {
-    if (existing.tool === input.observation.tool && existing.resource_key === input.observation.resource_key) {
+    if (preToolReservationIdentityMatches(existing, input.observation)) {
+      if (existing.decision !== 'allowed' || existing.reservation_status !== 'pending') {
+        const observation = denyPreToolReservation(
+          input.observation,
+          `host_tool_reservation_replay_${existing.reservation_status}`
+        );
+        return { observations: current, observation, decision: 'denied', blocker: observation.blocker };
+      }
       return {
         observations: current,
         observation: existing,
-        decision: existing.decision,
-        blocker: existing.blocker
+        decision: 'allowed',
+        blocker: null
       };
     }
     const observation = denyPreToolReservation(input.observation, 'host_tool_reservation_identity_mismatch');
@@ -413,9 +431,29 @@ function authorizePreToolReservation(
     if (hasReservedOrObservedToolCall(current, observation.tool)) {
       return denyPreToolReservation(observation, 'host_capability_readonly_query_already_reserved');
     }
-    if (!hasCompletedPassedToolCall(current, 'datasource_schema_context')) {
+    const schemaReceipts = completedPassedToolCalls(current, 'datasource_schema_context')
+      .map((call) => call.semantic_receipt?.kind === 'datasource_schema' ? call.semantic_receipt : null)
+      .filter(Boolean) as Extract<HostToolSemanticReceipt, { kind: 'datasource_schema' }>[];
+    if (schemaReceipts.length === 0) {
       return denyPreToolReservation(observation, 'host_capability_readonly_query_schema_not_completed');
     }
+    const matchingDatasource = observation.datasource_sha256
+      ? schemaReceipts.filter((receipt) => receipt.datasource_sha256 === observation.datasource_sha256)
+      : [];
+    if (matchingDatasource.length === 0) {
+      return denyPreToolReservation(observation, 'host_capability_readonly_query_datasource_mismatch');
+    }
+    if (!observation.schema_snapshot_sha256
+      || !matchingDatasource.some((receipt) => (
+        receipt.schema_snapshot_sha256 === observation.schema_snapshot_sha256
+      ))) {
+      return denyPreToolReservation(observation, 'host_capability_readonly_query_schema_mismatch');
+    }
+  }
+
+  if (observation.tool === 'spreadsheet_create'
+    && hasReservedOrObservedToolCall(current, observation.tool)) {
+    return denyPreToolReservation(observation, 'host_capability_spreadsheet_create_already_reserved');
   }
 
   if (observation.tool === 'spreadsheet_update') {
@@ -447,6 +485,16 @@ function hasReservedOrObservedToolCall(observations: HostCapabilityHookObservati
     ));
 }
 
+function preToolReservationIdentityMatches(
+  left: HostCapabilityPreToolObservation,
+  right: HostCapabilityPreToolObservation
+): boolean {
+  return left.tool === right.tool
+    && left.resource_key === right.resource_key
+    && left.datasource_sha256 === right.datasource_sha256
+    && left.schema_snapshot_sha256 === right.schema_snapshot_sha256;
+}
+
 function denyPreToolReservation(
   observation: HostCapabilityPreToolObservation,
   blocker: string | null
@@ -474,10 +522,6 @@ function completedPassedToolCalls(
   });
 }
 
-function hasCompletedPassedToolCall(observations: HostCapabilityHookObservations, tool: string): boolean {
-  return completedPassedToolCalls(observations, tool).length > 0;
-}
-
 export function mergeHostCapabilityPostToolObservation(input: {
   binding: HostCapabilityHookRuntimeBinding;
   current?: unknown;
@@ -486,7 +530,13 @@ export function mergeHostCapabilityPostToolObservation(input: {
   const current = normalizeHostCapabilityHookObservations(input.current, input.binding)
     || emptyHookObservations(input.binding);
   if (current.tool_calls.some((row) => row.tool_use_id_sha256 === input.observation.tool_use_id_sha256)) {
-    return current;
+    return {
+      ...current,
+      blockers: uniqueStrings([
+        ...current.blockers,
+        `host_tool_call_post_replay:${input.observation.tool}`
+      ])
+    };
   }
   if (current.tool_calls.length >= MAX_MCP_TOOL_CALLS) {
     return { ...current, blockers: uniqueStrings([...current.blockers, 'host_tool_call_receipts_too_many']) };
@@ -505,6 +555,7 @@ export function mergeHostCapabilityPostToolObservation(input: {
   const matchingReservation = reservationById
     && reservationById.tool === observation.tool
     && reservationById.resource_key === observation.resource_key
+    && semanticReceiptMatchesReservation(reservationById, observation)
     ? reservationById
     : null;
   const preToolUses = matchingReservation && matchingReservation.decision === 'allowed'
@@ -532,6 +583,24 @@ export function mergeHostCapabilityPostToolObservation(input: {
       ...(reservationBlocker ? [reservationBlocker] : [])
     ])
   };
+}
+
+function semanticReceiptMatchesReservation(
+  reservation: HostCapabilityPreToolObservation,
+  observation: HostCapabilityPostToolObservation
+): boolean {
+  if (observation.status !== 'passed') return true;
+  if (observation.tool === 'datasource_schema_context') {
+    return observation.semantic_receipt?.kind === 'datasource_schema'
+      && (!reservation.datasource_sha256
+        || observation.semantic_receipt.datasource_sha256 === reservation.datasource_sha256);
+  }
+  if (observation.tool === 'datasource_query_readonly') {
+    return observation.semantic_receipt?.kind === 'datasource_query'
+      && observation.semantic_receipt.datasource_sha256 === reservation.datasource_sha256
+      && observation.semantic_receipt.schema_snapshot_sha256 === reservation.schema_snapshot_sha256;
+  }
+  return true;
 }
 
 export function normalizeHostCapabilityHookObservations(
@@ -562,7 +631,7 @@ export function normalizeHostCapabilityHookObservations(
       && candidate.tool === row.tool
       && candidate.resource_key === row.resource_key
     ));
-    return call
+    return call && semanticReceiptMatchesReservation(row, call)
       ? { ...row, reservation_status: call.status === 'passed' ? 'completed' as const : 'failed' as const }
       : row;
   });
@@ -778,6 +847,7 @@ export function requestHostCapabilities(goal: unknown): HostCapabilityRequest {
 export async function inspectHostCapabilityRuntime(input: {
   root: string;
   request?: HostCapabilityRequest;
+  projectTrusted?: boolean;
   dependencies?: HostCapabilityRuntimeDependencies;
 }): Promise<HostCapabilityRuntime> {
   const request = input.request || { capability_ids: [], workflows: [] };
@@ -798,12 +868,45 @@ export async function inspectHostCapabilityRuntime(input: {
     .filter((descriptor) => descriptor.executable !== false && requested.has(descriptor.id))
     .flatMap((descriptor) => requestedDescriptorTools(descriptor)));
   const unboundRequestedTools = requestedToolNames.filter((name) => knownToolNames.has(name) && !boundRequestedTools.has(name));
+  const projectTrusted = input.projectTrusted === true;
+  if (!projectTrusted) {
+    const trustRequired = requestedCapabilityIds.length > 0
+      || requestedToolNames.length > 0
+      || workflows.length > 0;
+    const capabilities = HOST_CAPABILITY_DESCRIPTORS.map((descriptor) => capabilityRuntimeEntry(
+      descriptor,
+      requested.has(descriptor.id),
+      requested.has(descriptor.id) ? 'unhealthy' : 'not_requested',
+      [],
+      [],
+      requested.has(descriptor.id) ? [`host_capability_project_trust_missing:${descriptor.id}`] : []
+    ));
+    return runtimeResult({
+      serverPresent: false,
+      serverEnabled: false,
+      inventorySource: null,
+      healthStatus: 'untrusted',
+      requestedCapabilityIds,
+      workflows,
+      requestedToolNames,
+      observedToolNames: [],
+      allowedToolNames: [],
+      capabilities,
+      blockers: [
+        ...(trustRequired ? ['host_capability_project_trust_missing'] : []),
+        ...unknownRequested.map((id) => `host_capability_unknown:${id}`),
+        ...unknownRequestedTools.map((name) => `host_capability_tool_unknown:${name}`),
+        ...unboundRequestedTools.map((name) => `host_capability_tool_scope_unbound:${name}`),
+        ...capabilities.flatMap((entry) => entry.blockers)
+      ]
+    });
+  }
   const inventoryFn = input.dependencies?.inventory || listMcpInventory;
   const healthFn = input.dependencies?.health || testMcpConnection;
   const inventory = await inventoryFn('project', {
     projectRoot: input.root,
-    projectTrusted: true,
-    ...(input.dependencies?.inventoryOptions || {})
+    ...(input.dependencies?.inventoryOptions || {}),
+    projectTrusted
   });
   const server = inventory.servers.find((entry) => entry.name === HOST_CAPABILITY_MCP_SERVER) || null;
   const inventoryBlockers = inventory.ok ? [] : ['host_capability_project_mcp_inventory_unhealthy'];
@@ -872,8 +975,8 @@ export async function inspectHostCapabilityRuntime(input: {
 
   const health = await healthFn(HOST_CAPABILITY_MCP_SERVER, 'project', {
     projectRoot: input.root,
-    projectTrusted: true,
-    ...(input.dependencies?.healthOptions || {})
+    ...(input.dependencies?.healthOptions || {}),
+    projectTrusted
   });
   const observedToolNames = health.status === 'healthy' && Array.isArray(health.tool_names)
     ? uniqueStrings(health.tool_names).slice(0, MAX_OBSERVED_TOOL_NAMES)
@@ -1456,6 +1559,17 @@ function normalizePreToolObservation(value: unknown): HostCapabilityPreToolObser
       ? String(value.resource_key)
       : undefined;
   if (resourceKey === undefined) return null;
+  const datasourceSha256 = value.datasource_sha256 === undefined || value.datasource_sha256 === null
+    ? null
+    : SHA256_RECEIPT_PATTERN.test(String(value.datasource_sha256 || ''))
+      ? String(value.datasource_sha256)
+      : undefined;
+  const schemaSnapshotSha256 = value.schema_snapshot_sha256 === undefined || value.schema_snapshot_sha256 === null
+    ? null
+    : SHA256_RECEIPT_PATTERN.test(String(value.schema_snapshot_sha256 || ''))
+      ? String(value.schema_snapshot_sha256)
+      : undefined;
+  if (datasourceSha256 === undefined || schemaSnapshotSha256 === undefined) return null;
   const legacyStatus = value.decision === 'denied' ? 'denied' : 'pending';
   const reservationStatus = value.reservation_status === undefined
     ? legacyStatus
@@ -1474,6 +1588,8 @@ function normalizePreToolObservation(value: unknown): HostCapabilityPreToolObser
     tool_use_id_sha256: value.tool_use_id_sha256,
     tool: value.tool,
     resource_key: resourceKey,
+    datasource_sha256: datasourceSha256,
+    schema_snapshot_sha256: schemaSnapshotSha256,
     decision: value.decision,
     reservation_status: reservationStatus,
     blocker

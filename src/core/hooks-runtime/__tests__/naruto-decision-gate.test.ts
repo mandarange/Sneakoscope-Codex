@@ -175,6 +175,7 @@ test('host capability hooks enforce the exact allowlist and persist only bounded
     const runtime = await inspectHostCapabilityRuntime({
       root,
       request: requestHostCapabilities(goal),
+      projectTrusted: true,
       dependencies: hostCapabilityDependencies([
         'spreadsheet_create',
         'spreadsheet_inspect',
@@ -206,8 +207,8 @@ test('host capability hooks enforce the exact allowlist and persist only bounded
     const clarificationBlocked: any = await evaluateHookPayload('pre-tool', {
       session_id: sessionId,
       turn_id: 'turn-host-clarification-locked',
-      tool_name: 'mcp__acas-tools__spreadsheet_create',
-      tool_input: { path: 'reports/clarification-locked.xlsx' },
+      tool_name: 'Read',
+      tool_input: { path: 'README.md' },
       tool_use_id: 'tool-use-clarification-locked'
     }, {
       root,
@@ -227,7 +228,7 @@ test('host capability hooks enforce the exact allowlist and persist only bounded
     const harnessBlocked: any = await evaluateHookPayload('pre-tool', {
       session_id: sessionId,
       turn_id: 'turn-host-harness-blocked',
-      tool_name: 'mcp__acas-tools__spreadsheet_create',
+      tool_name: 'Write',
       type: 'file_write',
       tool_input: { path: '.codex/config.toml' },
       tool_use_id: 'tool-use-harness-blocked'
@@ -276,7 +277,6 @@ test('host capability hooks enforce the exact allowlist and persist only bounded
       },
       tool_use_id: 'tool-use-create'
     };
-    await evaluateHookPayload('post-tool', createPayload, { root, state });
     await evaluateHookPayload('post-tool', createPayload, { root, state });
     const tamperedObservationsPath = path.join(dir, HOST_CAPABILITY_HOOK_OBSERVATIONS_FILENAME);
     const tamperedObservations = JSON.parse(await fsp.readFile(tamperedObservationsPath, 'utf8'));
@@ -470,6 +470,7 @@ test('host capability hooks reject a valid runtime whose canonical request scope
     const narrowedRuntime = await inspectHostCapabilityRuntime({
       root,
       request: requestHostCapabilities('Populate quarterly numbers into reports/q3.xlsx.'),
+      projectTrusted: true,
       dependencies: hostCapabilityDependencies(['spreadsheet_create', 'spreadsheet_inspect', 'spreadsheet_update'])
     });
     await fsp.writeFile(path.join(dir, HOST_CAPABILITY_HOOK_RUNTIME_FILENAME), `${JSON.stringify(
@@ -496,6 +497,36 @@ test('host capability hooks reject a valid runtime whose canonical request scope
   }
 });
 
+test('host capability hook lock atomically reserves exactly one spreadsheet create across concurrent IDs', async () => {
+  const fixture = await createHostHookFixture({
+    label: 'spreadsheet-create-concurrency',
+    goal: 'Create and deliver an Excel workbook.',
+    toolNames: ['spreadsheet_create', 'spreadsheet_inspect', 'spreadsheet_update']
+  });
+  try {
+    const results: any[] = await Promise.all(['create-a', 'create-b'].map((toolUseId) => evaluateHookPayload('pre-tool', {
+      session_id: fixture.sessionId,
+      turn_id: `turn-${toolUseId}`,
+      tool_name: 'mcp__acas-tools__spreadsheet_create',
+      tool_input: { path: 'reports/concurrent.xlsx' },
+      tool_use_id: toolUseId
+    }, { root: fixture.root, state: fixture.state })));
+
+    assert.equal(results.filter((result) => result.decision === undefined).length, 1);
+    const denied = results.find((result) => result.decision === 'block');
+    assert.match(denied?.reason || '', /host_capability_spreadsheet_create_already_reserved/);
+    const observations = JSON.parse(await fsp.readFile(
+      path.join(fixture.dir, HOST_CAPABILITY_HOOK_OBSERVATIONS_FILENAME),
+      'utf8'
+    ));
+    assert.equal(observations.pre_tool_uses.filter((row: any) => (
+      row.tool === 'spreadsheet_create' && row.decision === 'allowed'
+    )).length, 1);
+  } finally {
+    await fsp.rm(fixture.root, { recursive: true, force: true });
+  }
+});
+
 test('host capability hooks allow one completed schema-to-readonly-query sequence', async () => {
   const fixture = await createHostHookFixture({
     label: 'db-valid-sequence',
@@ -508,14 +539,14 @@ test('host capability hooks allow one completed schema-to-readonly-query sequenc
     const schemaAllowed: any = await evaluateHookPayload('pre-tool', {
       session_id: fixture.sessionId,
       tool_name: 'mcp__acas-tools__datasource_schema_context',
-      tool_input: {},
+      tool_input: { datasource: 'mysql:customers' },
       tool_use_id: 'valid-schema'
     }, { root: fixture.root, state: fixture.state });
     assert.equal(schemaAllowed.decision, undefined);
     await evaluateHookPayload('post-tool', {
       session_id: fixture.sessionId,
       tool_name: 'mcp__acas-tools__datasource_schema_context',
-      tool_input: {},
+      tool_input: { datasource: 'mysql:customers' },
       tool_response: {
         structured_content: {
           datasource: 'mysql:customers',
@@ -528,14 +559,14 @@ test('host capability hooks allow one completed schema-to-readonly-query sequenc
     const queryAllowed: any = await evaluateHookPayload('pre-tool', {
       session_id: fixture.sessionId,
       tool_name: 'mcp__acas-tools__datasource_query_readonly',
-      tool_input: { schema_snapshot_id: schemaSnapshotId, query, bindings: [true] },
+      tool_input: { datasource: 'mysql:customers', schema_snapshot_id: schemaSnapshotId, query, bindings: [true] },
       tool_use_id: 'valid-query'
     }, { root: fixture.root, state: fixture.state });
     assert.equal(queryAllowed.decision, undefined);
     await evaluateHookPayload('post-tool', {
       session_id: fixture.sessionId,
       tool_name: 'mcp__acas-tools__datasource_query_readonly',
-      tool_input: { schema_snapshot_id: schemaSnapshotId, query, bindings: [true] },
+      tool_input: { datasource: 'mysql:customers', schema_snapshot_id: schemaSnapshotId, query, bindings: [true] },
       tool_response: {
         structured_content: {
           datasource: 'mysql:customers',
@@ -577,7 +608,7 @@ test('host capability hooks deny query-before-schema and concurrent or repeated 
   });
   const query = 'SELECT customer_id FROM customers WHERE active = ?';
   const schemaSnapshotId = 'schema-snapshot-customers-v2';
-  const queryInput = { schema_snapshot_id: schemaSnapshotId, query, bindings: [true] };
+  const queryInput = { datasource: 'mysql:customers', schema_snapshot_id: schemaSnapshotId, query, bindings: [true] };
   try {
     const beforeSchema: any = await evaluateHookPayload('pre-tool', {
       session_id: fixture.sessionId,
@@ -591,7 +622,7 @@ test('host capability hooks deny query-before-schema and concurrent or repeated 
     const schemaAllowed: any = await evaluateHookPayload('pre-tool', {
       session_id: fixture.sessionId,
       tool_name: 'mcp__acas-tools__datasource_schema_context',
-      tool_input: {},
+      tool_input: { datasource: 'mysql:customers' },
       tool_use_id: 'ordered-schema'
     }, { root: fixture.root, state: fixture.state });
     assert.equal(schemaAllowed.decision, undefined);
@@ -607,7 +638,7 @@ test('host capability hooks deny query-before-schema and concurrent or repeated 
     await evaluateHookPayload('post-tool', {
       session_id: fixture.sessionId,
       tool_name: 'mcp__acas-tools__datasource_schema_context',
-      tool_input: {},
+      tool_input: { datasource: 'mysql:customers' },
       tool_response: {
         structured_content: {
           datasource: 'mysql:customers',
@@ -794,6 +825,7 @@ test('host capability PostToolUse fails closed for missing or malformed datasour
     const runtime = await inspectHostCapabilityRuntime({
       root,
       request: requestHostCapabilities(goal),
+      projectTrusted: true,
       dependencies: hostCapabilityDependencies(['datasource_schema_context', 'datasource_query_readonly'])
     });
     await fsp.writeFile(path.join(dir, HOST_CAPABILITY_HOOK_RUNTIME_FILENAME), `${JSON.stringify(
@@ -807,7 +839,7 @@ test('host capability PostToolUse fails closed for missing or malformed datasour
       {
         tool: 'datasource_schema_context',
         id: 'db-schema',
-        input: {},
+        input: { datasource: 'mysql:finance' },
         response: {
           structured_content: {
             datasource: 'mysql:finance',
@@ -819,7 +851,7 @@ test('host capability PostToolUse fails closed for missing or malformed datasour
       {
         tool: 'datasource_query_readonly',
         id: 'db-query-with-center-bound-datasource',
-        input: { schema_snapshot_id: schemaSnapshotId, query, bindings: [true] },
+        input: { datasource: 'mysql:finance', schema_snapshot_id: schemaSnapshotId, query, bindings: [true] },
         response: {
           structured_content: {
             datasource: 'mysql:finance',
@@ -835,7 +867,7 @@ test('host capability PostToolUse fails closed for missing or malformed datasour
       {
         tool: 'datasource_query_readonly',
         id: 'db-query-missing-receipt',
-        input: { schema_snapshot_id: schemaSnapshotId, query, bindings: [true] },
+        input: { datasource: 'mysql:finance', schema_snapshot_id: schemaSnapshotId, query, bindings: [true] },
         response: {
           structured_content: {
             datasource: 'mysql:finance',
@@ -930,6 +962,7 @@ test('spreadsheet inspection receipts fail closed when logical error cells are r
     const runtime = await inspectHostCapabilityRuntime({
       root,
       request: requestHostCapabilities(goal),
+      projectTrusted: true,
       dependencies: hostCapabilityDependencies(['spreadsheet_create', 'spreadsheet_inspect', 'spreadsheet_update'])
     });
     await fsp.writeFile(path.join(dir, HOST_CAPABILITY_HOOK_RUNTIME_FILENAME), `${JSON.stringify(
@@ -1019,6 +1052,7 @@ async function createHostHookFixture(input: {
   const runtime = await inspectHostCapabilityRuntime({
     root,
     request: requestHostCapabilities(input.goal),
+    projectTrusted: true,
     dependencies: hostCapabilityDependencies(input.toolNames)
   });
   assert.equal(runtime.ok, true);

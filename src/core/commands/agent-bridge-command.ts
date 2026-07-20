@@ -116,11 +116,13 @@ export function buildAgentBridgeSetupMetadata(manifest: CurrentAgentManifest): {
 
 export async function inspectAgentBridgeHostCapabilities(
   root: string,
-  dependencies?: HostCapabilityRuntimeDependencies
+  dependencies?: HostCapabilityRuntimeDependencies,
+  projectTrusted: boolean = false
 ): Promise<HostCapabilityRuntime> {
   return inspectHostCapabilityRuntime({
     root,
     request: { capability_ids: [], workflows: [] },
+    projectTrusted,
     ...(dependencies ? { dependencies } : {})
   });
 }
@@ -160,7 +162,7 @@ export async function agentBridgeCommand(subcommand: string, args: readonly stri
   const entrypoint = await resolveSksEntrypoint();
   const [smokes, hostCapabilityInventory] = await Promise.all([
     runAgentBridgeContractSmokes(entrypoint, manifest),
-    inspectAgentBridgeHostCapabilities(root)
+    inspectAgentBridgeHostCapabilities(root, undefined, flag(args as any, '--trusted-project'))
   ]);
 
   const result = {

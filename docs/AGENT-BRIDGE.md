@@ -9,12 +9,16 @@ answering a chat surface from a long-running SKS command.
 
 ```bash
 sks agent-bridge setup --json
+# After reviewing and trusting the checkout, also probe its project MCP inventory:
+sks agent-bridge setup --trusted-project --json
 ```
 
 This publishes the machine-readable command manifest to `.sneakoscope/agent-bridge/manifest.json`,
 prints host registration snippets, and runs a live non-interactive smoke test
 (`SKS_AGENT_MODE=1 sks status --json`) so you know the contract actually works on this machine
-before wiring anything up.
+before wiring anything up. The default command does not read project MCP configuration or start a
+project MCP server. `--trusted-project` is the explicit operator decision that enables the bounded
+project inventory and health probe included in `host_capability_inventory`.
 
 ## Contract 1: stdio MCP server
 
@@ -208,8 +212,10 @@ project-MCP tool inventory, the setup-declared expected descriptor, and the MCP
 inventory actually received by the Codex parent. SKS never guesses capability
 availability from configuration-file text and never auto-repairs a `missing` or
 `unhealthy` requested capability; existing setup/doctor MCP repair paths remain
-the repair mechanism. A requested capability that is missing or unhealthy must
-produce a blocked proof.
+the repair mechanism. `sks agent-bridge setup` reports the project inventory as
+untrusted/not requested until the operator supplies `--trusted-project`; it does
+not read or spawn project-configured MCP servers before that decision. A requested
+capability that is missing or unhealthy must produce a blocked proof.
 
 `capability_digest` is `sha256:` over a code-point-sorted canonical JSON list.
 For each capability, only `id`, `mcp_server`, sorted `tool_names`, `side_effect`,
@@ -251,6 +257,8 @@ copied into the child environment.
   read-only commands unless the operator explicitly opts in at server startup.
 - `tools/call` never spawns a tool name absent from the manifest, whether or not
   `--expose-exec` is set.
+- `sks agent-bridge setup` never reads or starts a project-configured MCP server unless the
+  operator explicitly supplies `--trusted-project` after reviewing the checkout.
 - Every subprocess invocation runs with `SKS_AGENT_MODE=1`, so it inherits the same
   never-block-on-a-prompt guarantee described above.
 - The generated manifest contains only the current command registry and is written to

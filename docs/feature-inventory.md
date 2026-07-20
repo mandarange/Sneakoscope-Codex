@@ -121,7 +121,7 @@ Generated from `sks commands --json`, `src/cli/command-registry.ts COMMANDS`, `s
 | `cli-perf` | loop | beta | sks perf run\|workflow\|cold-start [--json] [--iterations N] | execute:pass | runtime_verified | none recorded |
 | `cli-bench` | core-cli | beta | sks bench core\|route-fixtures\|blackbox\|trust-kernel [--json] | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
 | `cli-mcp-server` | core-cli | beta | sks mcp-server [--expose-exec] [--probe] | execute:pass | runtime_verified | none recorded |
-| `cli-agent-bridge` | core-cli | beta | sks agent-bridge setup [--json] | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
+| `cli-agent-bridge` | core-cli | beta | sks agent-bridge setup [--trusted-project] [--json] | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
 | `route-dfix` | route | stable | $sks-dfix | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
 | `route-answer` | route | stable | $sks-answer | static:pass | wiring_only | none recorded |
 | `route-sks` | route | stable | $sks | static:pass | wiring_only | none recorded |

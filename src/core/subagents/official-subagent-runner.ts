@@ -167,6 +167,7 @@ export async function runOfficialSubagentWorkflow(input: OfficialSubagentWorkflo
   const hostCapabilityRuntime = await inspectHostCapabilityRuntime({
     root: input.root,
     request: hostCapabilityRequest,
+    projectTrusted: input.appSession === true && Boolean(String(input.sessionKey || '').trim()),
     ...(input.hostCapabilityDependencies ? { dependencies: input.hostCapabilityDependencies } : {})
   })
 

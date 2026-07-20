@@ -634,6 +634,7 @@ test('Naruto Stop binds observed host receipts into the parent summary and compl
     const runtime = await inspectHostCapabilityRuntime({
       root: fixture.root,
       request: requestHostCapabilities(plan.goal),
+      projectTrusted: true,
       dependencies: hostCapabilityDependencies([
         'spreadsheet_create',
         'spreadsheet_inspect',

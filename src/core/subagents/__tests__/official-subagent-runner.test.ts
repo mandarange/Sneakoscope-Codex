@@ -21,6 +21,7 @@ import {
   bindParentSummaryToHostCapabilityEvidence,
   createHostCapabilityEventCollector,
   createHostCapabilityHookRuntimeBinding,
+  hostCapabilityCodexConfigArgs,
   inspectHostCapabilityRuntime,
   mergeHostCapabilityPostToolObservation,
   sanitizeHostCapabilityPostToolUse,
@@ -146,6 +147,7 @@ async function artifactCollectorEvidence(count: number): Promise<HostCapabilityE
   const runtime = await inspectHostCapabilityRuntime({
     root: process.cwd(),
     request,
+    projectTrusted: true,
     dependencies: hostCapabilityDependencies(['write_file'])
   })
   assert.equal(runtime.ok, true)
@@ -214,7 +216,8 @@ test('app sessions return delegation context without launching nested Codex', as
   assert.equal(result.parent_reasoning_effort, 'max')
 })
 
-test('standalone launch blocks requested host capabilities before Codex when the project MCP inventory is incomplete', async () => {
+test('standalone host-capability requests fail closed before project inventory, health, or Codex spawn', async () => {
+  let projectCalls = 0
   let launched = false
   const result = await runOfficialSubagentWorkflow({
     root: process.cwd(),
@@ -223,21 +226,31 @@ test('standalone launch blocks requested host capabilities before Codex when the
     requestedSubagents: 1,
     maxThreads: 1,
     appSession: false,
-    hostCapabilityDependencies: hostCapabilityDependencies(['spreadsheet_create']),
+    hostCapabilityDependencies: {
+      inventory: async () => {
+        projectCalls += 1
+        throw new Error('standalone project inventory must not run')
+      },
+      health: async () => {
+        projectCalls += 1
+        throw new Error('standalone project health must not run')
+      }
+    } as any,
     runProcessImpl: async () => {
       launched = true
       throw new Error('must not launch')
     }
   })
 
+  assert.equal(projectCalls, 0)
   assert.equal(launched, false)
   assert.equal(result.ok, false)
   assert.equal(result.status, 'host_capability_blocked')
-  assert.ok(result.blockers.includes('host_capability_missing:host.spreadsheet.workbook.v1'))
+  assert.ok(result.blockers.includes('host_capability_project_trust_missing'))
   assert.equal(result.host_capability_evidence.ok, false)
 })
 
-test('standalone launch allowlists requested ACAS tools and projects only hashed JSONL evidence', async () => {
+test('trusted host runtime allowlists requested ACAS tools and projects only hashed JSONL evidence', async () => {
   const tools = ['spreadsheet_create', 'spreadsheet_inspect', 'spreadsheet_update', 'slack_send']
   const artifact = {
     path: 'reports/monthly.xlsx',
@@ -247,82 +260,54 @@ test('standalone launch allowlists requested ACAS tools and projects only hashed
     bytes: 4,
     role: 'deliverable'
   }
-  let launchedArgs: readonly string[] = []
-  const result = await runOfficialSubagentWorkflow({
+  const runtime = await inspectHostCapabilityRuntime({
     root: process.cwd(),
-    goal: 'Create and deliver an Excel workbook.',
-    prompt: 'delegation prompt',
-    requestedSubagents: 1,
-    maxThreads: 1,
-    appSession: false,
-    hostCapabilityDependencies: hostCapabilityDependencies(tools),
-    runProcessImpl: async (_command, args, options) => {
-      launchedArgs = args
-      const outputIndex = args.indexOf('--output-last-message')
-      await fsp.writeFile(args[outputIndex + 1]!, JSON.stringify({
-        schema: 'sks.subagent-parent-summary.v1',
-        status: 'completed',
-        summary: 'Workbook created.',
-        thread_outcomes: [{ thread_id: 'thread-a', status: 'completed', summary: 'complete' }],
-        changed_files: [],
-        verification: [],
-        blockers: []
-      }))
-      const lines = [
-        JSON.stringify({
-          type: 'item.completed',
-          item: {
-            type: 'mcp_tool_call',
-            server: 'acas-tools',
-            tool: 'spreadsheet_create',
-            status: 'completed',
-            arguments: { path: artifact.path, api_key: 'raw-jsonl-secret-must-not-return' },
-            result: { structured_content: { artifact } }
-          }
-        }),
-        JSON.stringify({
-          type: 'item.completed',
-          item: {
-            type: 'mcp_tool_call',
-            server: 'acas-tools',
-            tool: 'spreadsheet_inspect',
-            status: 'completed',
-            arguments: { path: artifact.path },
-            result: {
-              structured_content: {
-                ok: true,
-                sheet_names: ['Summary'],
-                row_counts: { Summary: 1 },
-                formulas: [],
-                error_cells: []
-              }
-            }
-          }
-        })
-      ]
-      for (const line of lines) options?.onStdout?.(`${line}\n`)
-      return {
-        code: 0,
-        stdout: `${lines.join('\n')}\n`,
-        stderr: '',
-        stdoutBytes: Buffer.byteLength(lines.join('\n')),
-        stderrBytes: 0,
-        truncated: false,
-        timedOut: false
-      }
-    }
+    request: requestHostCapabilities('Create and deliver an Excel workbook.'),
+    projectTrusted: true,
+    dependencies: hostCapabilityDependencies(tools)
   })
+  const launchedArgs = hostCapabilityCodexConfigArgs(runtime)
+  const collector = createHostCapabilityEventCollector(runtime)
+  for (const line of [
+    JSON.stringify({
+      type: 'item.completed',
+      item: {
+        type: 'mcp_tool_call',
+        server: 'acas-tools',
+        tool: 'spreadsheet_create',
+        status: 'completed',
+        arguments: { path: artifact.path, api_key: 'raw-jsonl-secret-must-not-return' },
+        result: { structured_content: { artifact } }
+      }
+    }),
+    JSON.stringify({
+      type: 'item.completed',
+      item: {
+        type: 'mcp_tool_call',
+        server: 'acas-tools',
+        tool: 'spreadsheet_inspect',
+        status: 'completed',
+        arguments: { path: artifact.path },
+        result: {
+          structured_content: {
+            ok: true,
+            path: artifact.path,
+            sheet_names: ['Summary'],
+            row_counts: { Summary: 1 },
+            formulas: [],
+            error_cells: []
+          }
+        }
+      }
+    })
+  ]) collector.push(`${line}\n`)
+  const evidence = collector.finish()
 
-  assert.equal(result.ok, true)
-  assert.equal(result.status, 'parent_completed')
-  assert.ok(launchedArgs.includes('--json'))
+  assert.equal(runtime.ok, true)
   assert.ok(launchedArgs.includes('mcp_servers."acas-tools".enabled_tools=["spreadsheet_create", "spreadsheet_inspect", "spreadsheet_update"]'))
   assert.ok(launchedArgs.includes('mcp_servers."acas-tools".disabled_tools=["slack_send"]'))
-  assert.equal(result.process.stdout_tail, '')
-  assert.equal(result.process.jsonl_event_count, 2)
-  assert.doesNotMatch(JSON.stringify(result.process), /raw-jsonl-secret-must-not-return|arguments|structured_content/)
-  assert.deepEqual(result.host_capability_evidence.artifacts, [artifact])
-  assert.equal(result.host_capability_evidence.capabilities_used.every((row: any) => row.status === 'passed'), true)
+  assert.deepEqual(evidence.artifacts, [artifact])
+  assert.equal(evidence.capabilities_used.every((row: any) => row.status === 'passed'), true)
 
   const rebound = bindParentSummaryToHostCapabilityEvidence({
     schema: 'sks.subagent-parent-summary.v1',
@@ -332,7 +317,7 @@ test('standalone launch allowlists requested ACAS tools and projects only hashed
     artifacts: [{ ...artifact, bytes: 999 }],
     capabilities_used: [],
     blockers: []
-  }, result.host_capability_evidence)
+  }, evidence)
   assert.equal((rebound.value as any).status, 'blocked')
   assert.deepEqual((rebound.value as any).artifacts, [artifact])
   assert.ok(rebound.blockers.includes('host_artifact_parent_receipts_mismatch'))
@@ -352,6 +337,7 @@ test('host capability requests select the minimum task tools and recognize workb
   const readRuntime = await inspectHostCapabilityRuntime({
     root: process.cwd(),
     request: readRequest,
+    projectTrusted: true,
     dependencies: hostCapabilityDependencies(workspaceTools)
   })
   assert.equal(readRuntime.ok, true)
@@ -365,6 +351,7 @@ test('host capability requests select the minimum task tools and recognize workb
   const editRuntime = await inspectHostCapabilityRuntime({
     root: process.cwd(),
     request: editRequest,
+    projectTrusted: true,
     dependencies: hostCapabilityDependencies(['spreadsheet_create', 'spreadsheet_inspect', 'spreadsheet_update'])
   })
   assert.equal(editRuntime.ok, true)
@@ -548,6 +535,7 @@ test('spreadsheet evidence requires one bounded mutation, a final inspect, and o
   const runtime = await inspectHostCapabilityRuntime({
     root: process.cwd(),
     request,
+    projectTrusted: true,
     dependencies: hostCapabilityDependencies(['spreadsheet_create', 'spreadsheet_inspect', 'spreadsheet_update'])
   })
   assert.equal(runtime.ok, true)
@@ -660,6 +648,7 @@ test('document evidence requires an editable source before render and a render a
   const runtime = await inspectHostCapabilityRuntime({
     root: process.cwd(),
     request,
+    projectTrusted: true,
     dependencies: hostCapabilityDependencies(['write_file', 'edit_file', 'html_to_pdf', 'html_to_screenshot'])
   })
   assert.equal(runtime.ok, true)
@@ -728,6 +717,7 @@ test('document evidence requires an editable source before render and a render a
   const pngRuntime = await inspectHostCapabilityRuntime({
     root: process.cwd(),
     request: pngRequest,
+    projectTrusted: true,
     dependencies: hostCapabilityDependencies(['write_file', 'html_to_screenshot'])
   })
   const validPng = createHostCapabilityEventCollector(pngRuntime)
@@ -789,6 +779,7 @@ test('atomic reservations deny query races until one completed schema call and r
   const runtime = await inspectHostCapabilityRuntime({
     root: process.cwd(),
     request,
+    projectTrusted: true,
     dependencies: hostCapabilityDependencies(['datasource_schema_context', 'datasource_query_readonly'])
   })
   const binding = createHostCapabilityHookRuntimeBinding({
@@ -800,6 +791,11 @@ test('atomic reservations deny query races until one completed schema call and r
   const deniedBeforeSchema = authorizeAndMergeHostCapabilityPreToolObservation({ binding, observation: query })
   assert.equal(deniedBeforeSchema.decision, 'denied')
   assert.equal(deniedBeforeSchema.blocker, 'host_capability_readonly_query_schema_not_completed')
+  const deniedReplay = authorizeAndMergeHostCapabilityPreToolObservation({
+    binding, current: deniedBeforeSchema.observations, observation: query
+  })
+  assert.equal(deniedReplay.decision, 'denied')
+  assert.equal(deniedReplay.blocker, 'host_tool_reservation_replay_denied')
 
   const schema = sanitizeHostCapabilityPreToolUse(runtime, prePayload('schema-1', 'datasource_schema_context', {
     datasource: 'main'
@@ -821,6 +817,20 @@ test('atomic reservations deny query races until one completed schema call and r
   const afterSchema = mergeHostCapabilityPostToolObservation({
     binding, current: schemaReserved.observations, observation: schemaPost
   })
+  const wrongDatasource = sanitizeHostCapabilityPreToolUse(runtime, prePayload('query-wrong-datasource', 'datasource_query_readonly', {
+    datasource: 'other', schema_snapshot_id: 'snapshot', query: 'select 1'
+  }))!
+  const deniedWrongDatasource = authorizeAndMergeHostCapabilityPreToolObservation({
+    binding, current: afterSchema, observation: wrongDatasource
+  })
+  assert.equal(deniedWrongDatasource.blocker, 'host_capability_readonly_query_datasource_mismatch')
+  const wrongSnapshot = sanitizeHostCapabilityPreToolUse(runtime, prePayload('query-wrong-snapshot', 'datasource_query_readonly', {
+    datasource: 'main', schema_snapshot_id: 'other-snapshot', query: 'select 1'
+  }))!
+  const deniedWrongSnapshot = authorizeAndMergeHostCapabilityPreToolObservation({
+    binding, current: afterSchema, observation: wrongSnapshot
+  })
+  assert.equal(deniedWrongSnapshot.blocker, 'host_capability_readonly_query_schema_mismatch')
   const queryReserved = authorizeAndMergeHostCapabilityPreToolObservation({
     binding,
     current: afterSchema,
@@ -862,6 +872,36 @@ test('atomic reservations deny query races until one completed schema call and r
   const afterQuery = mergeHostCapabilityPostToolObservation({
     binding, current: queryReserved.observations, observation: queryPost
   })
+  const completedReplay = authorizeAndMergeHostCapabilityPreToolObservation({
+    binding, current: afterQuery, observation: query
+  })
+  assert.equal(completedReplay.decision, 'denied')
+  assert.equal(completedReplay.blocker, 'host_tool_reservation_replay_completed')
+  const duplicatePost = mergeHostCapabilityPostToolObservation({
+    binding, current: afterQuery, observation: queryPost
+  })
+  assert.ok(duplicatePost.blockers.includes('host_tool_call_post_replay:datasource_query_readonly'))
+
+  const failedSchema = sanitizeHostCapabilityPreToolUse(runtime, prePayload('schema-failed', 'datasource_schema_context', {
+    datasource: 'main'
+  }))!
+  const failedSchemaReserved = authorizeAndMergeHostCapabilityPreToolObservation({
+    binding, current: afterQuery, observation: failedSchema
+  })
+  const failedSchemaPost = sanitizeHostCapabilityPostToolUse(postPayload(
+    'schema-failed',
+    'datasource_schema_context',
+    { datasource: 'main' },
+    { isError: true, structured_content: { datasource: 'main', schema_snapshot_id: 'snapshot-failed' } }
+  ))!
+  const afterFailedSchema = mergeHostCapabilityPostToolObservation({
+    binding, current: failedSchemaReserved.observations, observation: failedSchemaPost
+  })
+  const failedReplay = authorizeAndMergeHostCapabilityPreToolObservation({
+    binding, current: afterFailedSchema, observation: failedSchema
+  })
+  assert.equal(failedReplay.decision, 'denied')
+  assert.equal(failedReplay.blocker, 'host_tool_reservation_replay_failed')
   const afterBoundedPreObservationEviction = {
     ...afterQuery,
     pre_tool_uses: afterQuery.pre_tool_uses.filter((row) => row.tool !== 'datasource_query_readonly')
@@ -872,11 +912,62 @@ test('atomic reservations deny query races until one completed schema call and r
   assert.equal(deniedAfterEviction.blocker, 'host_capability_readonly_query_already_reserved')
 })
 
+test('atomic spreadsheet create reservations allow one pending ID and deny distinct or terminal replays', async () => {
+  const request = requestHostCapabilities('Create and deliver an Excel workbook.')
+  const runtime = await inspectHostCapabilityRuntime({
+    root: process.cwd(),
+    request,
+    projectTrusted: true,
+    dependencies: hostCapabilityDependencies(['spreadsheet_create', 'spreadsheet_inspect', 'spreadsheet_update'])
+  })
+  const binding = createHostCapabilityHookRuntimeBinding({
+    missionId: 'mission', workflowRunId: 'run', sessionScope: 'session', runtime
+  })
+  const first = sanitizeHostCapabilityPreToolUse(runtime, prePayload('create-1', 'spreadsheet_create', {
+    path: 'reports/book.xlsx'
+  }))!
+  const second = sanitizeHostCapabilityPreToolUse(runtime, prePayload('create-2', 'spreadsheet_create', {
+    path: 'reports/book.xlsx'
+  }))!
+  const reserved = authorizeAndMergeHostCapabilityPreToolObservation({ binding, observation: first })
+  assert.equal(reserved.decision, 'allowed')
+  const pendingReplay = authorizeAndMergeHostCapabilityPreToolObservation({
+    binding, current: reserved.observations, observation: first
+  })
+  assert.equal(pendingReplay.decision, 'allowed')
+  assert.deepEqual(pendingReplay.observations, reserved.observations)
+  const distinctDenied = authorizeAndMergeHostCapabilityPreToolObservation({
+    binding, current: reserved.observations, observation: second
+  })
+  assert.equal(distinctDenied.decision, 'denied')
+  assert.equal(distinctDenied.blocker, 'host_capability_spreadsheet_create_already_reserved')
+
+  const post = sanitizeHostCapabilityPostToolUse(postPayload(
+    'create-1',
+    'spreadsheet_create',
+    { path: 'reports/book.xlsx' },
+    { structured_content: { ok: true, path: 'reports/book.xlsx' } }
+  ))!
+  const completed = mergeHostCapabilityPostToolObservation({
+    binding, current: reserved.observations, observation: post
+  })
+  const completedReplay = authorizeAndMergeHostCapabilityPreToolObservation({
+    binding, current: completed, observation: first
+  })
+  assert.equal(completedReplay.decision, 'denied')
+  assert.equal(completedReplay.blocker, 'host_tool_reservation_replay_completed')
+  const afterCompletionDenied = authorizeAndMergeHostCapabilityPreToolObservation({
+    binding, current: completed, observation: second
+  })
+  assert.equal(afterCompletionDenied.blocker, 'host_capability_spreadsheet_create_already_reserved')
+})
+
 test('atomic spreadsheet update reservations require a completed same-workbook inspect and allow one update', async () => {
   const request = requestHostCapabilities('Update the spreadsheet with the latest results.')
   const runtime = await inspectHostCapabilityRuntime({
     root: process.cwd(),
     request,
+    projectTrusted: true,
     dependencies: hostCapabilityDependencies(['spreadsheet_inspect', 'spreadsheet_update'])
   })
   const binding = createHostCapabilityHookRuntimeBinding({

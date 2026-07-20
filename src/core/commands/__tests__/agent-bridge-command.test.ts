@@ -115,7 +115,7 @@ test('agent-bridge production inventory reports actual project MCP capability st
       public_error: null,
       log_ref: null
     })
-  } as any);
+  } as any, true);
 
   assert.equal(available.ok, true);
   assert.equal(available.health_status, 'healthy');
@@ -141,7 +141,28 @@ test('agent-bridge production inventory reports actual project MCP capability st
       blockers: [],
       warnings: []
     })
-  } as any);
+  } as any, true);
   assert.equal(absent.ok, true);
   assert.ok(absent.capabilities.every((entry) => entry.state === 'not_requested'));
+});
+
+test('agent-bridge inventory stays bounded and does not read project config without operator trust', async () => {
+  let calls = 0;
+  const runtime = await inspectAgentBridgeHostCapabilities('/fixture/project', {
+    inventory: async () => {
+      calls += 1;
+      throw new Error('untrusted inventory must not run');
+    },
+    health: async () => {
+      calls += 1;
+      throw new Error('untrusted health must not run');
+    }
+  } as any);
+
+  assert.equal(calls, 0);
+  assert.equal(runtime.ok, true);
+  assert.equal(runtime.health_status, 'untrusted');
+  assert.equal(runtime.server_present, false);
+  assert.deepEqual(runtime.blockers, []);
+  assert.ok(runtime.capabilities.every((entry) => entry.state === 'not_requested'));
 });
