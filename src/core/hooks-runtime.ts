@@ -197,6 +197,7 @@ async function attachAuthoritativeSksSkillContext(root: string, state: any, payl
   if (result?.decision === 'block' || result?.sksTaskProfile === 'passthrough') return result;
   if (looksLikeCodexGitAction(payload) || looksLikeCodexUiSettingsEvent(payload)) return result;
   const prompt = stripVisibleDecisionAnswerBlocks(extractUserPrompt(payload));
+  if (!dollarCommand(prompt) && routeIsGitOnly(routePrompt(prompt))) return result;
   const skillNames = result?.attached_parent_mission_id
     ? await standaloneParentManagedSkillNames(root, result.attached_parent_mission_id, state)
     : selectedSksSkillNamesForTurn(state, prompt, result);
