@@ -817,6 +817,39 @@ test('global setup quarantines a user-adopted legacy project skill before stale 
   assert.ok(result.skill_install.project_residue_reconcile.quarantined_user_collisions.includes('sks-naruto'))
 })
 
+test('project setup quarantines markerless user prose that resembles historical generated skill text', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-skill-markerless-generated-prose-'))
+  const home = path.join(root, 'home')
+  const skill = path.join(root, '.agents', 'skills', 'sks-naruto', 'SKILL.md')
+  const userText = [
+    '---',
+    'name: sks-naruto',
+    'description: user-authored workflow notes',
+    '---',
+    '',
+    'Sneakoscope generated is discussed here as ordinary user-authored prose.',
+    'Codex App pipeline activation: this sentence is not an ownership marker.',
+    'Keep this content.',
+    ''
+  ].join('\n')
+  await fs.mkdir(path.dirname(skill), { recursive: true })
+  await fs.writeFile(skill, userText)
+
+  const result: any = await initProject(root, {
+    installScope: 'global',
+    localOnly: true,
+    home,
+    codexHome: path.join(home, '.codex')
+  })
+
+  await assert.rejects(fs.access(skill))
+  const quarantined = await findFile(path.join(root, '.sneakoscope', 'quarantine'), 'SKILL.md')
+  assert.ok(quarantined)
+  assert.equal(await fs.readFile(String(quarantined), 'utf8'), userText)
+  assert.ok(result.skill_install.project_residue_reconcile.quarantined_user_collisions.includes('sks-naruto'))
+  assert.equal(result.skill_install.project_residue_reconcile.removed.includes('.agents/skills/sks-naruto'), false)
+})
+
 test('global setup quarantines a user-authored current official skill before installing the managed copy', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-current-skill-user-collision-'))
   const home = path.join(root, 'home')
@@ -839,6 +872,40 @@ test('global setup quarantines a user-authored current official skill before ins
   assert.ok(quarantined)
   assert.equal(await fs.readFile(String(quarantined), 'utf8'), userText)
   assert.ok(result.skill_install.quarantined_user_collisions.includes('sks-answer'))
+})
+
+test('global setup quarantines markerless non-core user prose before installing the managed copy', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-current-non-core-skill-user-collision-'))
+  const home = path.join(root, 'home')
+  const skill = path.join(home, '.agents', 'skills', 'sks-release-review', 'SKILL.md')
+  const userText = [
+    '---',
+    'name: sks-release-review',
+    'description: my user-authored release helper',
+    '---',
+    '',
+    'Sneakoscope generated is discussed here as ordinary user-authored prose.',
+    'Codex App pipeline activation: this sentence is not an ownership marker.',
+    'Keep this content.',
+    ''
+  ].join('\n')
+  await fs.mkdir(path.dirname(skill), { recursive: true })
+  await fs.writeFile(skill, userText)
+
+  const result: any = await initProject(root, {
+    installScope: 'global',
+    localOnly: true,
+    home,
+    codexHome: path.join(home, '.codex')
+  })
+
+  const installed = await fs.readFile(skill, 'utf8')
+  assert.match(installed, /BEGIN SKS MANAGED SKILL/)
+  assert.notEqual(installed, userText)
+  const quarantined = await findFile(path.join(home, '.sneakoscope', 'quarantine'), 'SKILL.md')
+  assert.ok(quarantined)
+  assert.equal(await fs.readFile(String(quarantined), 'utf8'), userText)
+  assert.ok(result.skill_install.quarantined_user_collisions.includes('sks-release-review'))
 })
 
 test('project cleanup treats an official directory name as a collision even when SKILL.md declares another name', async () => {

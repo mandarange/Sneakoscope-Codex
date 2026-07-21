@@ -1,7 +1,7 @@
 {
   "schema": "sks.code-pack.v1",
-  "generated_at": "2026-07-20T18:30:11.272Z",
-  "git_head_sha": "05034878103bf64b6fc989062466f00c68bff2a3",
+  "generated_at": "2026-07-20T19:59:57.167Z",
+  "git_head_sha": "be4d23019fdc1bc140415720a32b7ec3105319f8",
   "source_file_count": 3583,
   "index_digest": "39ae760e40e8ed5f1c72384adfbaf9db1051b8ac0a8583156a2c137bd1cecf21",
   "entries": [
@@ -310,7 +310,7 @@
     },
     {
       "id": "code:core-hooks-runtime",
-      "text": "core-hooks-runtime is a core module at src/core/hooks-runtime (17 files, 5099 loc, medium risk). Key exports: async function codePackFreshnessNote(root: string, opts: { budgetMs?: number } = {}): Promise<string | null>; async function claimHookInvocation(root: string, name: unknown, payload: any = {}); async function loadHookPayload(); function normalizeHookResult(name: any, result: any = {}); function codexHookEventName(name: any), and 38 more. It has no detected cross-module dependencies.",
+      "text": "core-hooks-runtime is a core module at src/core/hooks-runtime (17 files, 5185 loc, medium risk). Key exports: async function codePackFreshnessNote(root: string, opts: { budgetMs?: number } = {}): Promise<string | null>; async function claimHookInvocation(root: string, name: unknown, payload: any = {}); async function loadHookPayload(); function normalizeHookResult(name: any, result: any = {}); function codexHookEventName(name: any), and 38 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/hooks-runtime"

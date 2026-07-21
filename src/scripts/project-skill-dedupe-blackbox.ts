@@ -6,6 +6,8 @@ import { dedupeProjectSkills } from '../core/codex-native/project-skill-dedupe.j
 import { syncCodexSksSkills, withSkillSyncLock } from '../core/codex-app/codex-skill-sync.js';
 import { buildSkillRegistryLedger } from '../core/codex-native/skill-registry-ledger.js';
 
+const removeFixture = fs.rm.bind(fs);
+
 const root = await makeTempRoot('sks-skill-dedupe-blackbox-');
 const home = await makeTempRoot('sks-skill-dedupe-home-');
 process.env.HOME = home;
@@ -17,7 +19,7 @@ const scenarioA = await dedupeProjectSkills({ root, fix: true, yes: true });
 await writeUserSkill(root, '.agents/skills', 'user-loop', 'fixture-loop');
 await writeManagedFixture(root, '.codex/skills', 'managed-loop');
 const scenarioB = await dedupeProjectSkills({ root, fix: true, yes: true });
-await fs.rm(path.join(home, '.agents', 'skills', 'managed-loop'), { recursive: true, force: true });
+await guardedRm(path.join(home, '.agents', 'skills', 'managed-loop'), path.join(home, '.agents', 'skills'));
 await writeUserSkill(root, '.agents/skills', 'user-loop-a', 'Fixture Loop');
 await writeUserSkill(root, '.codex/skills', 'user-loop-b', 'fixture_loop');
 const scenarioC = await dedupeProjectSkills({ root, fix: true, yes: false });
@@ -51,4 +53,14 @@ async function writeManagedFixture(root: string, relRoot: string, dirName: strin
     '<!-- BEGIN SKS MANAGED SKILL v-test name=fixture-loop -->',
     ''
   ].join('\n'));
+}
+
+async function guardedRm(target: string, allowedRoot: string): Promise<void> {
+  const root = path.resolve(allowedRoot);
+  const resolved = path.resolve(target);
+  const relative = path.relative(root, resolved);
+  if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error('refusing_to_remove_unscoped_skill_fixture');
+  }
+  await removeFixture(resolved, { recursive: true, force: true });
 }

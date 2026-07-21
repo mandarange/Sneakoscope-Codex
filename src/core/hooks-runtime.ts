@@ -6,8 +6,7 @@ import {
   missionDir,
   sessionStateKey,
   setCurrent,
-  stateFileForSession,
-  validateExternallyReservedMissionId
+  stateFileForSession
 } from './mission.js';
 import { checkDbOperation, dbBlockReason, handleMadSksUserConfirmation } from './db-safety.js';
 import { maybeRecordMadSksSqlPlaneToolResultFromToolUse } from './mad-sks/sql-plane/result-lifecycle.js';
@@ -17,7 +16,7 @@ import { classifyMadSksShellCommand } from './mad-sks/write-guard.js';
 import { activeRouteContext, evaluateStop, prepareRoute, promptPipelineContext as routePipelineContext, recordContext7Evidence, recordSubagentEvidence, routePrompt } from './pipeline.js';
 import { localizedFinalizationReason } from './language-preference.js';
 import { classifyToolError } from './evaluation.js';
-import { allowlistedManagedRouteSkillNames, dollarCommand, INVALID_EXPLICIT_MANAGED_SKILL_NAME, managedSkillNamesForPrompt, routeRequiresSubagents, stripVisibleDecisionAnswerBlocks } from './routes.js';
+import { dollarCommand, managedSkillNamesForPrompt, stripVisibleDecisionAnswerBlocks } from './routes.js';
 import { coreEngineeringDirectiveReferenceText } from './lean-engineering-policy.js';
 import { scanAgentTextForRecursion } from './agents/agent-recursion-guard.js';
 import { evaluateLoopContinuation } from './loops/loop-continuation-enforcer.js';
@@ -42,9 +41,7 @@ import { classifyTaskProfile } from './runtime/task-profile.js';
 import { resolveSubagentThreadBudget } from './subagents/thread-budget.js';
 import { readOfficialSubagentConfig } from './subagents/official-subagent-config.js';
 import { withFileLock } from './locks/file-lock.js';
-import { inspectConfinedPath } from './managed-path-safety.js';
-import { buildWaveParentGuidance, renderWaveParentGuidance } from './subagents/wave-parent-guidance.js';
-import { managedOfficialSubagentRoleByName } from './managed-assets/managed-assets-manifest.js';
+import { buildBoundWaveParentGuidance, renderWaveParentGuidance } from './subagents/wave-parent-guidance.js';
 import {
   renderAuthoritativeSksSkillContext,
   resolveAuthoritativeSksSkillSources
@@ -103,6 +100,24 @@ import {
   quarantineMissingToolOutput,
   readToolOutputQuarantine
 } from './hooks-runtime/tool-output-quarantine.js';
+import {
+  activeAuthoritativeSksSkillRefresh,
+  activeGoalOverlayContext,
+  attachAuthoritativeSksSkillContext,
+  authoritativeSksSkillAdmission,
+  hookActiveSkillContextRefresh,
+  isBlockingClarificationAwaiting,
+  looksLikeClarificationCancel,
+  routeBypassesActiveContext,
+  routeIsGitOnly,
+  selectedSksSkillNamesForActiveState,
+  shouldPrepareFreshRouteOnActivePrompt,
+  standaloneParentManagedSkillNames
+} from './hooks-runtime/hook-context.js';
+import {
+  sealedSubagentRoutingContext,
+  subagentRouteContext
+} from './hooks-runtime/subagent-context.js';
 export { loadHookPayload, normalizeHookResult };
 export { refreshOfficialSubagentCompletionArtifacts };
 
@@ -193,156 +208,6 @@ export async function evaluateHookPayload(name: any, payload: any = {}, opts: an
   return withNarutoDecision({ continue: true });
 }
 
-async function attachAuthoritativeSksSkillContext(root: string, state: any, payload: any, result: any) {
-  if (result?.decision === 'block' || result?.sksTaskProfile === 'passthrough') return result;
-  if (looksLikeCodexGitAction(payload) || looksLikeCodexUiSettingsEvent(payload)) return result;
-  const prompt = stripVisibleDecisionAnswerBlocks(extractUserPrompt(payload));
-  if (!dollarCommand(prompt) && routeIsGitOnly(routePrompt(prompt))) return result;
-  const skillNames = result?.attached_parent_mission_id
-    ? await standaloneParentManagedSkillNames(root, result.attached_parent_mission_id, state)
-    : selectedSksSkillNamesForTurn(state, prompt, result);
-  if (!skillNames.length) return result;
-  const admission = await authoritativeSksSkillAdmission(root, skillNames);
-  if (admission.blocked) return { ...result, ...admission.blocked };
-  const resolution = admission.resolution;
-  if (!resolution) return result;
-  const skillContext = renderAuthoritativeSksSkillContext(resolution);
-  if (!skillContext) return result;
-  return {
-    ...result,
-    additionalContext: [result?.additionalContext, skillContext].filter(Boolean).join('\n\n')
-  };
-}
-
-const STANDALONE_PARENT_BASE_SKILLS = [
-  'sks-naruto',
-  'sks-pipeline-runner',
-  'sks-prompt-pipeline',
-  'sks-honest-mode'
-];
-
-async function standaloneParentManagedSkillNames(root: string, missionId: any, state: any = {}): Promise<string[]> {
-  const boundedMissionId = String(missionId || '').trim();
-  if (!boundedMissionId) return [...STANDALONE_PARENT_BASE_SKILLS];
-  const validatedMissionId = validateExternallyReservedMissionId(boundedMissionId);
-  if (!validatedMissionId.ok) {
-    return [...STANDALONE_PARENT_BASE_SKILLS, INVALID_EXPLICIT_MANAGED_SKILL_NAME];
-  }
-  const canonicalMissionId = validatedMissionId.id;
-  const stateSkills = String(state?.mission_id || '') === canonicalMissionId
-    ? allowlistedManagedRouteSkillNames(state?.required_skills)
-    : [];
-  const routeContext = await readStandaloneParentRouteContext(root, canonicalMissionId);
-  const contextSkills = allowlistedManagedRouteSkillNames(routeContext?.required_skills);
-  return Array.from(new Set([
-    ...stateSkills,
-    ...contextSkills,
-    ...STANDALONE_PARENT_BASE_SKILLS
-  ]));
-}
-
-async function readStandaloneParentRouteContext(root: string, missionId: string): Promise<any | null> {
-  const file = path.join(missionDir(root, missionId), 'route-context.json');
-  try {
-    const inspection = await inspectConfinedPath(path.resolve(root), path.resolve(file));
-    if (!inspection.exists || inspection.leafSymlink || !inspection.stat?.isFile()) return null;
-    return await readJson(file, null).catch(() => null);
-  } catch {
-    return null;
-  }
-}
-
-async function authoritativeSksSkillAdmission(root: string, skillNames: readonly unknown[]) {
-  const resolution = await resolveAuthoritativeSksSkillSources({ root, skillNames }).catch(() => null);
-  if (!resolution) {
-    return {
-      resolution: null,
-      blocked: {
-        decision: 'block',
-        reason: 'SKS managed skill resolution failed. Repair the global SKS installation, then retry.',
-        systemMessage: 'SKS: managed skill availability check blocked this turn.'
-      }
-    };
-  }
-  if (resolution.unresolved.length || resolution.blockers.length) {
-    const details = [
-      resolution.unresolved.length ? `unavailable=${resolution.unresolved.join(',')}` : '',
-      resolution.blockers.length ? `rejected=${resolution.blockers.join(',')}` : ''
-    ].filter(Boolean).join('; ');
-    return {
-      resolution,
-      blocked: {
-        decision: 'block',
-        reason: `SKS managed skill availability check failed (${details}). Repair the global SKS installation, then retry.`,
-        systemMessage: 'SKS: managed skill availability check blocked this turn.'
-      }
-    };
-  }
-  return { resolution, blocked: null };
-}
-
-function selectedSksSkillNamesForTurn(state: any, prompt: string, result: any): string[] {
-  if (result?.attached_parent_mission_id) {
-    return [...STANDALONE_PARENT_BASE_SKILLS];
-  }
-  const active = state?.mission_id && state?.route_closed !== true
-    && (looksLikeActiveContinuationPrompt(prompt) || isBlockingClarificationAwaiting(state));
-  if (active) {
-    const activeSkills = selectedSksSkillNamesForActiveState(state);
-    if (activeSkills.length) return activeSkills;
-  }
-  const selectedRoute = routePrompt(prompt);
-  const selectedSkills = managedSkillNamesForPrompt(selectedRoute, prompt);
-  if (selectedSkills.length) return selectedSkills;
-  return result?.sksTaskProfile === 'answer' ? ['answer', 'honest-mode'] : [];
-}
-
-function selectedSksSkillNamesForActiveState(state: any): string[] {
-  const persisted = Array.isArray(state?.required_skills) ? state.required_skills : [];
-  if (persisted.length) return persisted.map(String);
-  const activeRoute = routePrompt(String(state?.route_command || state?.route || state?.mode || ''));
-  return activeRoute?.requiredSkills?.length ? activeRoute.requiredSkills.map(String) : [];
-}
-
-function activeSksSkillNames(state: any): string[] {
-  if (!state?.mission_id || state?.route_closed === true) return [];
-  return selectedSksSkillNamesForActiveState(state);
-}
-
-async function activeAuthoritativeSksSkillRefresh(root: string, state: any) {
-  const skillNames = activeSksSkillNames(state);
-  if (!skillNames.length) return { context: '', blocked: null };
-  const admission = await authoritativeSksSkillAdmission(root, skillNames);
-  if (admission.blocked) return { context: '', blocked: admission.blocked };
-  return {
-    context: admission.resolution ? renderAuthoritativeSksSkillContext(admission.resolution) : '',
-    blocked: null
-  };
-}
-
-async function hookActiveSkillContextRefresh(
-  root: string,
-  state: any,
-  name: 'session-start' | 'pre-compact' | 'post-compact'
-) {
-  if (name !== 'session-start') {
-    if (!activeSksSkillNames(state).length) return { continue: true };
-    return {
-      continue: true,
-      systemMessage: 'SKS will refresh active managed-skill paths from the current installation on compact resume and reverify them before the next tool call.'
-    };
-  }
-  const refresh = await activeAuthoritativeSksSkillRefresh(root, state);
-  if (refresh.blocked) {
-    return {
-      continue: true,
-      systemMessage: 'SKS managed skill refresh could not verify the current installation. Do not use a stale skill location; the next active tool call will be denied until the installation is repaired.'
-    };
-  }
-  if (!refresh.context) return { continue: true };
-  return { continue: true, additionalContext: refresh.context, silent: true };
-}
-
 async function hookSubagentStart(root: any, state: any, payload: any = {}, sessionKey: any = null) {
   const artifactDir = officialSubagentArtifactDir(root, state, sessionKey);
   const sessionArtifactDir = officialSubagentArtifactDir(root, {}, sessionKey);
@@ -400,61 +265,6 @@ async function hookSubagentStart(root: any, state: any, payload: any = {}, sessi
       : '';
   const additionalContext = [coreEngineeringDirectiveReferenceText(), resourceGuard, routingContext, active, skillContext].filter(Boolean).join('\n\n');
   return { continue: true, additionalContext, ...(skillBlockers.length ? { silent: true } : {}) };
-}
-
-async function sealedSubagentRoutingContext(artifactDir: string, payload: any = {}) {
-  const plan: any = await readJson(path.join(artifactDir, 'subagent-plan.json'), null).catch(() => null);
-  if (!plan || plan.workflow !== 'official_codex_subagent') return '';
-  const agentName = extractSubagentAgentName(payload);
-  const agents = plan.agents && typeof plan.agents === 'object' ? plan.agents : {};
-  const planned = agentName && agents[agentName] ? agents[agentName] : null;
-  const role = agentName ? managedOfficialSubagentRoleByName(agentName) : null;
-  const model = String(planned?.routed_model || planned?.model || role?.model || '').trim();
-  const effort = String(planned?.routed_model_reasoning_effort || planned?.model_reasoning_effort || role?.model_reasoning_effort || '').trim();
-  if (!agentName && !model) return '';
-  return [
-    'SKS sealed child routing:',
-    agentName ? `- custom agent: ${agentName}` : null,
-    model ? `- model: ${model}` : null,
-    effort ? `- model_reasoning_effort: ${effort}` : null,
-    '- keep this sealed profile; do not retarget model/effort or spawn nested agents'
-  ].filter(Boolean).join('\n');
-}
-
-function extractSubagentAgentName(payload: any = {}) {
-  const candidates = [
-    payload.agent_type,
-    payload.agentType,
-    payload.subagent_type,
-    payload.subagentType,
-    payload.agent_name,
-    payload.agentName,
-    payload.agent,
-    payload.role,
-    payload.payload?.agent_type,
-    payload.payload?.agentType,
-    payload.payload?.subagent_type,
-    payload.data?.agent_type,
-    payload.input?.agent_type
-  ];
-  for (const value of candidates) {
-    const name = String(value || '').trim();
-    if (name) return name;
-  }
-  return '';
-}
-
-function subagentRouteContext(state: any = {}) {
-  if (!state?.route && !state?.mode) return '';
-  const route = state.route_command || state.route || state.mode;
-  const mission = state.mission_id ? ` for mission ${state.mission_id}` : '';
-  const artifacts = state.mission_id
-    ? ` Read only the route artifacts relevant to your assigned slice under .sneakoscope/missions/${state.mission_id}/.`
-    : '';
-  const databaseBoundary = String(state.mode || state.route || '').toUpperCase() === 'DB'
-    ? ' Keep database inspection read-only unless the parent supplied a separately sealed mutation contract.'
-    : '';
-  return `You are a child thread on ${route}${mission}. Execute only the slice assigned by the parent.${artifacts} Do not spawn or delegate other agents, wait for sibling threads, integrate sibling results, close the parent route, or author the sks.subagent-parent-summary.v1 parent result. Return a concise slice result to the parent.${databaseBoundary}`;
 }
 
 async function hookSubagentStop(root: any, state: any, payload: any = {}, sessionKey: any = null) {
@@ -658,48 +468,6 @@ async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: a
   };
 }
 
-function routeBypassesActiveContext(route: any = null) {
-  return ['DFix', 'Answer', 'Commit', 'CommitAndPush', 'Wiki', 'ComputerUse'].includes(String(route?.id || ''));
-}
-
-function routeIsGitOnly(route: any = null) {
-  return ['Commit', 'CommitAndPush'].includes(String(route?.id || ''));
-}
-
-function shouldPrepareFreshRouteOnActivePrompt(prompt: any, route: any = null, opts: any = {}) {
-  if (!route || opts.command || opts.bypassActiveRoute || opts.goalOverlay) return false;
-  if (looksLikeActiveContinuationPrompt(prompt)) return false;
-  return routeRequiresSubagents(route, prompt);
-}
-
-function isClarificationAwaiting(state: any = {}) {
-  const phase = String(state.phase || '');
-  const stopGate = String(state.stop_gate || '');
-  const gateAwaiting = phase.includes('CLARIFICATION_AWAITING_ANSWERS') || stopGate === 'clarification-gate';
-  if (!gateAwaiting) return false;
-  if (!state?.mission_id) return false;
-  if (state.ambiguity_gate_required !== true || state.ambiguity_gate_passed === true) return false;
-  return Boolean(state.clarification_required || state.implementation_allowed === false);
-}
-
-function isBlockingClarificationAwaiting(state: any = {}) {
-  return isClarificationAwaiting(state);
-}
-
-function looksLikeClarificationCancel(prompt: any = '') {
-  return /^(cancel|reset|restart|new mission|새로|취소|중단|리셋|다시 시작)\b/i.test(String(prompt || '').trim());
-}
-
-function activeGoalOverlayContext(state: any = {}, route: any = null) {
-  if (state.mode !== 'GOAL' || !state.mission_id) return '';
-  if (!route || route.id === 'Goal' || route.id === 'DFix' || route.id === 'Answer') return '';
-  return [
-    `Legacy SKS Goal state ${state.mission_id} is non-authoritative and must not be updated.`,
-    `Do not let it hijack this new ${route.command || '$SKS'} prompt. The newly prepared route mission and gate are authoritative for this turn.`,
-    'Codex native Goal is the only persisted Goal owner; use native controls only when the user explicitly returns to Goal.'
-  ].join('\n');
-}
-
 async function hookPreTool(root: any, state: any, payload: any, noQuestion: any, sessionKey: any = null) {
   const skillAvailabilityBlock = await subagentSkillAvailabilityPreToolBlockReason(
     root,
@@ -770,9 +538,10 @@ async function parentWaveGuidanceContext(root: any, state: any = {}, sessionKey:
   if (agentWorkerHookContext(state, {})) return '';
   const artifactDir = officialSubagentArtifactDir(root, state, sessionKey);
   const plan: any = await readJson(path.join(artifactDir, 'subagent-plan.json'), null).catch(() => null);
-  if (!plan || plan.workflow !== 'official_codex_subagent') return '';
-  const lifecycle = plan.wave_lifecycle || null;
-  const guidance = lifecycle?.parent_guidance || buildWaveParentGuidance(lifecycle);
+  const guidance = buildBoundWaveParentGuidance(plan, {
+    missionId: state?.mission_id,
+    workflowRunId: state?.official_subagent_run_id
+  });
   if (!guidance?.required) return '';
   return renderWaveParentGuidance(guidance);
 }

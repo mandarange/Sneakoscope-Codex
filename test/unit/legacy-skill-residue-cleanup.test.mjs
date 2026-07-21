@@ -80,6 +80,46 @@ test('removed SKS skill cleanup covers global, project, and codex mirrors while 
   }
 });
 
+test('removed skill cleanup quarantines markerless user prose that resembles historical generated content', async () => {
+  const fixture = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-markerless-removed-skill-'));
+  const home = path.join(fixture, 'home');
+  const root = path.join(fixture, 'project');
+  const projectDir = path.join(root, '.agents', 'skills', 'research');
+  const globalDir = path.join(home, '.codex', 'skills', 'research-discovery');
+  const projectBytes = markerlessHistoricalSkillBytes(
+    'research',
+    'Sneakoscope generated is discussed here as user-authored prose.'
+  );
+  const globalBytes = markerlessHistoricalSkillBytes(
+    'research-discovery',
+    'Codex App pipeline activation: this sentence is user-authored documentation.'
+  );
+  try {
+    await fs.mkdir(projectDir, { recursive: true });
+    await fs.mkdir(globalDir, { recursive: true });
+    await fs.writeFile(path.join(projectDir, 'SKILL.md'), projectBytes);
+    await fs.writeFile(path.join(globalDir, 'SKILL.md'), globalBytes);
+
+    const report = await cleanupRemovedSksSkillResidue({ root, home, fix: true });
+
+    assert.equal(report.ok, true, JSON.stringify(report.errors));
+    assert.equal(report.removed.length, 0);
+    assert.equal(report.quarantined_user_collisions.length, 2);
+    await assertMissing(projectDir);
+    await assertMissing(globalDir);
+    const quarantined = [
+      ...await findFiles(path.join(root, '.sneakoscope', 'quarantine', 'skills'), 'SKILL.md'),
+      ...await findFiles(path.join(home, '.sneakoscope', 'quarantine', 'skills'), 'SKILL.md')
+    ];
+    assert.equal(quarantined.length, 2);
+    const preserved = await Promise.all(quarantined.map((file) => fs.readFile(file)));
+    assert.ok(preserved.some((bytes) => bytes.equals(projectBytes)));
+    assert.ok(preserved.some((bytes) => bytes.equals(globalBytes)));
+  } finally {
+    await fs.rm(fixture, { recursive: true, force: true });
+  }
+});
+
 test('removed skill cleanup canonicalizes managed variants across nested mirrors', async () => {
   const fixture = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-removed-skill-variants-'));
   const home = path.join(fixture, 'home');
@@ -469,6 +509,48 @@ test('global reconcile quarantines generated plugin and codex-mirror residue wit
   }
 });
 
+test('global reconcile quarantines markerless plugin and codex-mirror prose instead of deleting it', async () => {
+  const fixture = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-markerless-generated-residue-'));
+  const home = path.join(fixture, 'home');
+  const skillsRoot = path.join(home, '.agents', 'skills');
+  const pluginDir = path.join(skillsRoot, 'browser-use');
+  const codexMirrorDir = path.join(home, '.codex', 'skills', 'sks-answer');
+  const pluginBytes = markerlessHistoricalSkillBytes(
+    'browser-use',
+    'Sneakoscope generated is discussed here as ordinary user-authored prose.'
+  );
+  const mirrorBytes = markerlessHistoricalSkillBytes(
+    'sks-answer',
+    'Codex App pipeline activation: this sentence is ordinary user-authored prose.'
+  );
+  try {
+    await fs.mkdir(pluginDir, { recursive: true });
+    await fs.mkdir(codexMirrorDir, { recursive: true });
+    await fs.writeFile(path.join(pluginDir, 'SKILL.md'), pluginBytes);
+    await fs.writeFile(path.join(codexMirrorDir, 'SKILL.md'), mirrorBytes);
+
+    const report = await reconcileSkills({ targetDir: skillsRoot, scope: 'global', fix: true });
+
+    assert.equal(report.ok, true, report.warnings.join('\n'));
+    assert.equal(report.removed_stale_generated_skills.includes('.agents/skills/browser-use'), false);
+    assert.equal(report.removed_agent_skill_aliases.includes('sks-answer'), false);
+    assert.ok(report.quarantined_user_collisions.includes('browser-use'));
+    assert.ok(report.quarantined_user_collisions.includes('sks-answer'));
+    await assertMissing(pluginDir);
+    await assertMissing(codexMirrorDir);
+    const quarantined = await findFiles(
+      path.join(home, '.sneakoscope', 'quarantine', 'skills'),
+      'SKILL.md'
+    );
+    assert.equal(quarantined.length, 2);
+    const preserved = await Promise.all(quarantined.map((file) => fs.readFile(file)));
+    assert.ok(preserved.some((bytes) => bytes.equals(pluginBytes)));
+    assert.ok(preserved.some((bytes) => bytes.equals(mirrorBytes)));
+  } finally {
+    await fs.rm(fixture, { recursive: true, force: true });
+  }
+});
+
 test('global reconcile quarantines user-owned reserved skill manifests before replacing them', async () => {
   const fixture = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-reserved-manifest-collision-'));
   const home = path.join(fixture, 'home');
@@ -702,6 +784,10 @@ async function writeManagedSkill(dir, name) {
 async function writeUserSkill(dir, name, body) {
   await fs.mkdir(dir, { recursive: true });
   await fs.writeFile(path.join(dir, 'SKILL.md'), `---\nname: ${name}\ndescription: User-authored skill\n---\n\n${body}\n`, 'utf8');
+}
+
+function markerlessHistoricalSkillBytes(name, body) {
+  return Buffer.from(`---\nname: ${name}\ndescription: User-authored skill notes\n---\n\n${body}\nKeep this content byte-for-byte.\n`);
 }
 
 async function readSkill(dir) {

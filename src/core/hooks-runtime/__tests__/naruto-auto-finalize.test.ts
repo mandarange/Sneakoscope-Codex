@@ -18,6 +18,7 @@ import {
   type SubagentCountPolicy
 } from '../../subagents/wave-lifecycle.js'
 import { buildNarutoProofProjection } from '../../subagents/naruto-proof-projection.js'
+import { installGlobalSkills } from '../../init/skills.js'
 import {
   HOST_CAPABILITY_HOOK_RUNTIME_FILENAME,
   createHostCapabilityHookRuntimeBinding,
@@ -712,7 +713,17 @@ test('a dead Naruto finalization lock is reclaimed promptly', { timeout: 8_000 }
 
 test('Naruto Stop binds observed host receipts into the parent summary and completion proof', async () => {
   const fixture = await createNarutoFixture()
+  const oldHome = process.env.HOME
   try {
+    const home = path.join(fixture.root, 'home')
+    await fsp.mkdir(home, { recursive: true })
+    const install = await installGlobalSkills(home)
+    assert.equal(install.ok, true, JSON.stringify(install))
+    process.env.HOME = home
+    const hostState = {
+      ...fixture.state,
+      required_skills: ['naruto', 'pipeline-runner', 'prompt-pipeline', 'honest-mode']
+    }
     const planFile = path.join(fixture.dir, 'subagent-plan.json')
     const plan = await readJson(planFile)
     plan.goal = 'Create and deliver an Excel workbook.'
@@ -772,14 +783,15 @@ test('Naruto Stop binds observed host receipts into the parent summary and compl
         tool_use_id: 'host-inspect-use'
       }
     ]) {
-      await evaluateHookPayload('pre-tool', {
+      const preTool: any = await evaluateHookPayload('pre-tool', {
         ...payload,
         session_id: fixture.sessionKey
-      }, { root: fixture.root, state: fixture.state })
+      }, { root: fixture.root, state: hostState })
+      assert.equal(preTool.decision, undefined, preTool.reason)
       await evaluateHookPayload('post-tool', {
         ...payload,
         session_id: fixture.sessionKey
-      }, { root: fixture.root, state: fixture.state })
+      }, { root: fixture.root, state: hostState })
     }
 
     await refreshOfficialSubagentCompletionArtifacts(
@@ -805,6 +817,8 @@ test('Naruto Stop binds observed host receipts into the parent summary and compl
     assert.deepEqual(proof.result.artifacts, [artifact])
     assert.deepEqual(proof.result.capabilities_used, evidence.host_capability_evidence.capabilities_used)
   } finally {
+    if (oldHome === undefined) delete process.env.HOME
+    else process.env.HOME = oldHome
     await fixture.cleanup()
   }
 })

@@ -1,0 +1,58 @@
+import path from 'node:path';
+import { readJson } from '../fsx.js';
+import { managedOfficialSubagentRoleByName } from '../managed-assets/managed-assets-manifest.js';
+
+export async function sealedSubagentRoutingContext(artifactDir: string, payload: any = {}) {
+  const plan: any = await readJson(path.join(artifactDir, 'subagent-plan.json'), null).catch(() => null);
+  if (!plan || plan.workflow !== 'official_codex_subagent') return '';
+  const agentName = extractSubagentAgentName(payload);
+  const agents = plan.agents && typeof plan.agents === 'object' ? plan.agents : {};
+  const planned = agentName && agents[agentName] ? agents[agentName] : null;
+  const role = agentName ? managedOfficialSubagentRoleByName(agentName) : null;
+  const model = String(planned?.routed_model || planned?.model || role?.model || '').trim();
+  const effort = String(planned?.routed_model_reasoning_effort || planned?.model_reasoning_effort || role?.model_reasoning_effort || '').trim();
+  if (!agentName && !model) return '';
+  return [
+    'SKS sealed child routing:',
+    agentName ? `- custom agent: ${agentName}` : null,
+    model ? `- model: ${model}` : null,
+    effort ? `- model_reasoning_effort: ${effort}` : null,
+    '- keep this sealed profile; do not retarget model/effort or spawn nested agents'
+  ].filter(Boolean).join('\n');
+}
+
+function extractSubagentAgentName(payload: any = {}) {
+  const candidates = [
+    payload.agent_type,
+    payload.agentType,
+    payload.subagent_type,
+    payload.subagentType,
+    payload.agent_name,
+    payload.agentName,
+    payload.agent,
+    payload.role,
+    payload.payload?.agent_type,
+    payload.payload?.agentType,
+    payload.payload?.subagent_type,
+    payload.data?.agent_type,
+    payload.input?.agent_type
+  ];
+  for (const value of candidates) {
+    const name = String(value || '').trim();
+    if (name) return name;
+  }
+  return '';
+}
+
+export function subagentRouteContext(state: any = {}) {
+  if (!state?.route && !state?.mode) return '';
+  const route = state.route_command || state.route || state.mode;
+  const mission = state.mission_id ? ` for mission ${state.mission_id}` : '';
+  const artifacts = state.mission_id
+    ? ` Read only the route artifacts relevant to your assigned slice under .sneakoscope/missions/${state.mission_id}/.`
+    : '';
+  const databaseBoundary = String(state.mode || state.route || '').toUpperCase() === 'DB'
+    ? ' Keep database inspection read-only unless the parent supplied a separately sealed mutation contract.'
+    : '';
+  return `You are a child thread on ${route}${mission}. Execute only the slice assigned by the parent.${artifacts} Do not spawn or delegate other agents, wait for sibling threads, integrate sibling results, close the parent route, or author the sks.subagent-parent-summary.v1 parent result. Return a concise slice result to the parent.${databaseBoundary}`;
+}

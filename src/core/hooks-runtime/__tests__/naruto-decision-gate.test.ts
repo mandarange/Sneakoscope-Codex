@@ -20,6 +20,23 @@ import {
   decideHookNaruto,
   hookNarutoDecisionLogPath
 } from '../naruto-decision-gate.js';
+import { installGlobalSkills } from '../../init/skills.js';
+
+const priorFixtureHome = process.env.HOME;
+const priorFixtureCodexHome = process.env.CODEX_HOME;
+const priorFixtureGlobalRoot = process.env.SKS_GLOBAL_ROOT;
+const fixtureSkillHome = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-naruto-decision-skill-home-'));
+process.env.HOME = fixtureSkillHome;
+process.env.CODEX_HOME = path.join(fixtureSkillHome, '.codex');
+process.env.SKS_GLOBAL_ROOT = path.join(fixtureSkillHome, '.sneakoscope-global');
+const fixtureSkillInstall = await installGlobalSkills(fixtureSkillHome);
+assert.equal(fixtureSkillInstall.ok, true);
+test.after(async () => {
+  restoreEnv('HOME', priorFixtureHome);
+  restoreEnv('CODEX_HOME', priorFixtureCodexHome);
+  restoreEnv('SKS_GLOBAL_ROOT', priorFixtureGlobalRoot);
+  await fsp.rm(fixtureSkillHome, { recursive: true, force: true });
+});
 
 const HOOK_NAMES = [
   'pre-tool',
@@ -1294,4 +1311,9 @@ async function createHostHookFixture(input: {
     2
   )}\n`);
   return { root, dir, state, sessionId };
+}
+
+function restoreEnv(name: string, value: string | undefined): void {
+  if (value === undefined) delete process.env[name];
+  else process.env[name] = value;
 }

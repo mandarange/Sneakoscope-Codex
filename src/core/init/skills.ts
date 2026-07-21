@@ -168,7 +168,7 @@ async function installOfficialSkills(root: any) {
     const skillContent = markManagedSkill(name, currentSurfaceSkillText(enrichSkillContent(legacyName, content), name));
     const existing = await readConfinedOfficialSkillText(root, dir, name);
     if (existing.quarantined) quarantinedUserCollisions.push(name);
-    if (typeof existing.text === 'string' && !isSksManagedOrGeneratedOfficialSkill(existing.text, name)) {
+    if (typeof existing.text === 'string' && !isSksManagedOfficialSkill(existing.text)) {
       await quarantineSkillDir(root, dir, name, 'global-official-name-user-collision');
       quarantinedUserCollisions.push(name);
     }
@@ -466,7 +466,7 @@ async function reconcileRemovedSkillTargets(
       const displayPath = displayRemovedSkillPath(target, dir);
       let managed = false;
       try {
-        managed = await isManagedRemovedSkillPath(ownerRoot, dir, name);
+        managed = await isManagedRemovedSkillPath(ownerRoot, dir);
       } catch (error: unknown) {
         errors.push(`${displayPath}:${publicPathError(error, dir)}`);
         remaining.push(displayPath);
@@ -523,14 +523,14 @@ function displayRemovedSkillPath(target: RemovedSkillCleanupTarget, dir: string)
   return target.scope.startsWith('global') ? `~/${rel}` : rel;
 }
 
-async function isManagedRemovedSkillPath(ownerRoot: string, dir: string, name: string): Promise<boolean> {
+async function isManagedRemovedSkillPath(ownerRoot: string, dir: string): Promise<boolean> {
   const dirInspection = await inspectConfinedPath(ownerRoot, dir);
   if (!dirInspection.exists || dirInspection.leafSymlink || !dirInspection.stat?.isDirectory()) return false;
   const skillPath = path.join(dir, 'SKILL.md');
   const skillInspection = await inspectConfinedPath(ownerRoot, skillPath);
   if (!skillInspection.exists || skillInspection.leafSymlink || !skillInspection.stat?.isFile()) return false;
   const text = await fsp.readFile(skillPath, 'utf8');
-  return isGeneratedRemovedSksSkill(text, name)
+  return MANAGED_SKILL_MARKER_RE.test(text)
     && await managedSkillDirectoryContainsOnlyOwnedFiles(ownerRoot, dir);
 }
 
@@ -728,14 +728,6 @@ function nodeErrorCode(error: unknown): string {
   return error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
 }
 
-function isGeneratedRemovedSksSkill(text: string | null, name: string) {
-  if (typeof text !== 'string') return false;
-  if (MANAGED_SKILL_MARKER_RE.test(text)) return true;
-  const declared = /^name:\s*(.+)\s*$/m.exec(text)?.[1]?.trim() || '';
-  if (canonicalSkillNameFromValue(declared) !== canonicalSkillNameFromValue(name)) return false;
-  return isGeneratedSksAgentSkill(text, declared) || isGeneratedSksLegacySkill(text, declared);
-}
-
 export async function reconcileSkills(opts: {
   targetDir: string;
   scope: 'global' | 'project';
@@ -874,18 +866,8 @@ function currentSurfaceSkillPaths(values: readonly string[]): string[] {
   }))).sort();
 }
 
-function looksGeneratedOfficialSkill(text: string, expectedNames: readonly string[]) {
-  const source = String(text || '');
-  const declared = /^name:\s*(.+)\s*$/m.exec(source)?.[1]?.trim() || '';
-  const declaredCanonical = canonicalSkillNameFromValue(declared);
-  const expected = new Set(expectedNames.map(canonicalSkillNameFromValue).filter(Boolean));
-  if (!declaredCanonical || !expected.has(declaredCanonical)) return false;
-  return isGeneratedSksAgentSkill(source, declared) || isGeneratedSksLegacySkill(source, declared);
-}
-
-function isSksManagedOrGeneratedOfficialSkill(text: string, expectedName: string) {
-  return MANAGED_SKILL_MARKER_RE.test(String(text || ''))
-    || looksGeneratedOfficialSkill(text, [expectedName]);
+function isSksManagedOfficialSkill(text: string) {
+  return MANAGED_SKILL_MARKER_RE.test(String(text || ''));
 }
 
 async function reconcileProjectSkillEntries(
@@ -906,10 +888,11 @@ async function reconcileProjectSkillEntries(
       officialNames.has(name) || aliasNames.has(name) || removedNames.has(name)
     );
     const official = candidateNames.some(isOfficialName);
-    const declaredOfficial = Boolean(declaredCanonical && isOfficialName(declaredCanonical));
     const forge = FORGE_SKILL_MARKER_RE.test(entry.text);
-    const managed = MANAGED_SKILL_MARKER_RE.test(entry.text)
-      || (declaredOfficial && looksGeneratedOfficialSkill(entry.text, [declaredCanonical]));
+    // Project-local skills can contain historical SKS wording as ordinary user prose.
+    // Only an explicit ownership marker is strong enough evidence to delete the directory;
+    // markerless official-name collisions are quarantined below so user content is preserved.
+    const managed = MANAGED_SKILL_MARKER_RE.test(entry.text);
     if (forge) {
       report.preserved_forge.push(entry.name);
       continue;
@@ -1172,7 +1155,7 @@ async function removeStaleGeneratedSkillsFromManifest(
     const dir = path.join(root, '.agents', 'skills', skillName);
     if (!(await exists(dir))) continue;
     const text = await readText(path.join(dir, 'SKILL.md'), null);
-    if (!isSksManagedOrGeneratedOfficialSkill(String(text || ''), skillName)) continue;
+    if (!isSksManagedOfficialSkill(String(text || ''))) continue;
     if (!(await managedSkillDirectoryContainsOnlyOwnedFiles(root, dir))) {
       await quarantineSkillDir(root, dir, skillName, 'stale-generated-skill-user-content-collision');
       quarantined.push(skillName);
@@ -1401,6 +1384,10 @@ async function cleanupGeneratedSkillResidue(
   if (!skillInspection.exists || skillInspection.leafSymlink || !skillInspection.stat?.isFile()) return 'preserved';
   const text = await fsp.readFile(skillPath, 'utf8');
   if (!isOwnedText(text)) return 'preserved';
+  if (!MANAGED_SKILL_MARKER_RE.test(text)) {
+    await quarantineSkillDir(root, dir, name, quarantineReason);
+    return 'quarantined';
+  }
   if (!(await managedSkillDirectoryContainsOnlyOwnedFiles(root, dir))) {
     await quarantineSkillDir(root, dir, name, quarantineReason);
     return 'quarantined';

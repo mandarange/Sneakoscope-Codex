@@ -1,9 +1,14 @@
 import fsp from 'node:fs/promises';
+import { constants as fsConstants } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { nowIso, readJson, sha256, writeJsonAtomic } from '../fsx.js';
+import { nowIso, sha256, writeJsonAtomic } from '../fsx.js';
 import type { SksSkillSourceResolution } from '../codex-native/sks-skill-paths.js';
-import { ensureConfinedDirectory, inspectConfinedPath } from '../managed-path-safety.js';
+import {
+  ensureConfinedDirectory,
+  inspectConfinedPath,
+  removeManagedPathVerified
+} from '../managed-path-safety.js';
 
 export const SUBAGENT_SKILL_AVAILABILITY_BLOCKER_FILENAME = 'subagent-skill-availability-blocker.json';
 export const SUBAGENT_SKILL_AVAILABILITY_BLOCKER_SCHEMA = 'sks.subagent-skill-availability-blocker.v1';
@@ -11,7 +16,9 @@ export const SUBAGENT_SKILL_AVAILABILITY_BLOCKER_SCHEMA = 'sks.subagent-skill-av
 const GUARD_DIR = 'subagent-skill-availability';
 const EMERGENCY_DENIAL_DIR = 'subagent-skill-availability-emergency-denials';
 const MAX_EMERGENCY_DENIALS = 64;
-const MAX_EMERGENCY_DENIAL_BYTES = 64 * 1024;
+const MAX_LIFECYCLE_GUARD_ENTRIES = 64;
+const MAX_LIFECYCLE_GUARD_BYTES = 64 * 1024;
+const MAX_SUBAGENT_PLAN_BYTES = 256 * 1024;
 const ADMISSION_SCHEMA = 'sks.subagent-skill-availability-admission.v1';
 const SUBAGENT_ADMISSION_BLOCKER_RE = /^(?:authoritative_sks_skill_resolution_failed|authoritative_sks_skill_candidate_rejected|authoritative_sks_skill_unavailable:sks(?:-[a-z0-9]+)*|subagent_skill_availability_(?:artifact_dir_unsafe|blocker_artifact_write_failed|guard_persistence_failed))$/;
 
@@ -43,6 +50,11 @@ interface GuardRoot {
   root: string;
   boundary: string;
 }
+
+type BoundedJsonResult =
+  | { status: 'missing' }
+  | { status: 'invalid'; childEvidence: boolean }
+  | { status: 'value'; value: any };
 
 class SubagentSkillAvailabilityGuardError extends Error {
   constructor(readonly childEvidence: boolean) {
@@ -261,15 +273,16 @@ export async function subagentSkillAvailabilityRunBlockers(
   }
   blockers.push(...await emergencyRunBlockers(root, artifactDir, missionId, workflowRunId));
   const file = path.join(artifactDir, SUBAGENT_SKILL_AVAILABILITY_BLOCKER_FILENAME);
-  const stat = await fsp.lstat(file).catch(() => null);
-  if (!stat) return [...new Set(blockers)];
-  if (stat.isSymbolicLink() || !stat.isFile()) {
+  const blockerRead = await readBoundedConfinedJson(
+    path.resolve(root),
+    file,
+    MAX_LIFECYCLE_GUARD_BYTES
+  );
+  if (blockerRead.status === 'missing') return [...new Set(blockers)];
+  if (blockerRead.status !== 'value' || !validBlocker(blockerRead.value)) {
     return [...new Set([...blockers, 'subagent_skill_availability_blocker_artifact_invalid'])];
   }
-  const blocker: any = await readJson(file, null).catch(() => null);
-  if (!validBlocker(blocker)) {
-    return [...new Set([...blockers, 'subagent_skill_availability_blocker_artifact_invalid'])];
-  }
+  const blocker = blockerRead.value;
   if (!missionId || blocker.mission_id !== missionId) {
     return [...new Set([...blockers, 'subagent_skill_availability_blocker_artifact_invalid'])];
   }
@@ -326,13 +339,12 @@ function validAdmission(value: any): value is SubagentSkillAvailabilityAdmission
 }
 
 async function readConfinedJson(boundary: string, file: string): Promise<any | null> {
-  try {
-    const inspected = await inspectConfinedPath(path.resolve(boundary), path.resolve(file));
-    if (!inspected.exists || inspected.leafSymlink || !inspected.stat?.isFile()) return null;
-    return await readJson(file, null).catch(() => null);
-  } catch {
-    return null;
-  }
+  const result = await readBoundedConfinedJson(
+    path.resolve(boundary),
+    path.resolve(file),
+    MAX_SUBAGENT_PLAN_BYTES
+  );
+  return result.status === 'value' ? result.value : null;
 }
 
 async function admissionGuardRoots(root: string, artifactDir?: string | null): Promise<GuardRoot[]> {
@@ -395,19 +407,11 @@ async function readAdmissionPair(
 }
 
 async function readAdmission(file: string, boundary: string): Promise<SubagentSkillAvailabilityAdmission | null> {
-  let inspected;
-  try {
-    inspected = await inspectConfinedPath(boundary, file);
-  } catch {
-    throw invalidGuard(false);
-  }
-  if (!inspected.exists) return null;
-  if (inspected.leafSymlink || !inspected.stat?.isFile()) {
-    throw invalidGuard(true);
-  }
-  const admission: any = await readJson(file, null).catch(() => null);
-  if (!validAdmission(admission)) throw invalidGuard(true);
-  return admission;
+  const result = await readBoundedConfinedJson(boundary, file, MAX_LIFECYCLE_GUARD_BYTES);
+  if (result.status === 'missing') return null;
+  if (result.status === 'invalid') throw invalidGuard(result.childEvidence);
+  if (!validAdmission(result.value)) throw invalidGuard(true);
+  return result.value;
 }
 
 async function blockedRunAdmissions(
@@ -425,12 +429,8 @@ async function blockedRunAdmissions(
   if (inspected.leafSymlink || !inspected.stat?.isDirectory()) {
     return ['subagent_skill_availability_guard_invalid'];
   }
-  let names: string[];
-  try {
-    names = await fsp.readdir(guardRoot.root);
-  } catch {
-    return ['subagent_skill_availability_guard_invalid'];
-  }
+  const names = await boundedDirectoryNames(guardRoot.root);
+  if (names === null) return ['subagent_skill_availability_guard_invalid'];
   const blockers: string[] = [];
   for (const name of names.filter((item) => /^thread-[a-f0-9]{64}\.json$/.test(item)).sort()) {
     let admission: SubagentSkillAvailabilityAdmission | null;
@@ -482,6 +482,9 @@ function admissionFingerprint(admission: SubagentSkillAvailabilityAdmission): st
 
 async function safeWriteJson(file: string, boundary: string, value: unknown): Promise<boolean> {
   try {
+    if (Buffer.byteLength(`${JSON.stringify(value, null, 2)}\n`, 'utf8') > MAX_LIFECYCLE_GUARD_BYTES) {
+      return false;
+    }
     await ensureConfinedDirectory(boundary, path.dirname(file));
     const before = await inspectConfinedPath(boundary, file);
     if (before.exists && (before.leafSymlink || !before.stat?.isFile())) return false;
@@ -498,7 +501,7 @@ async function safeRemoveGuard(file: string, boundary: string): Promise<void> {
     const inspected = await inspectConfinedPath(boundary, file);
     if (!inspected.exists) return;
     if (inspected.leafSymlink || !inspected.stat?.isFile()) return;
-    await fsp.rm(file, { force: true });
+    await removeManagedPathVerified(boundary, file);
   } catch {
     return;
   }
@@ -520,10 +523,11 @@ async function clearMatchingBlockerArtifact(
     const inspected = await inspectConfinedPath(root, file);
     if (!inspected.exists) return emergencyCleared;
     if (inspected.leafSymlink || !inspected.stat?.isFile()) return false;
-    const blocker: any = await readJson(file, null).catch(() => null);
-    if (!validBlocker(blocker)) return false;
+    const blockerRead = await readBoundedConfinedJson(root, file, MAX_LIFECYCLE_GUARD_BYTES);
+    if (blockerRead.status !== 'value' || !validBlocker(blockerRead.value)) return false;
+    const blocker = blockerRead.value;
     if (blocker.thread_id_hash !== threadHash) return emergencyCleared;
-    await fsp.rm(file, { force: true });
+    await removeManagedPathVerified(root, file);
     return emergencyCleared && !(await inspectConfinedPath(root, file)).exists;
   } catch {
     return false;
@@ -546,17 +550,19 @@ async function matchingArtifactBlockers(
   const emergency = await matchingEmergencyDenial(root, artifactDir, sessionHash, turnHash);
   if (emergency) return emergency;
   const file = path.join(path.resolve(artifactDir), SUBAGENT_SKILL_AVAILABILITY_BLOCKER_FILENAME);
-  try {
-    const inspected = await inspectConfinedPath(path.resolve(root), file);
-    if (!inspected.exists || inspected.leafSymlink || !inspected.stat?.isFile()) return null;
-    const blocker: any = await readJson(file, null).catch(() => null);
-    if (!validBlocker(blocker)) return null;
-    return blocker.session_scope_hash === sessionHash && blocker.turn_id_hash === turnHash
-      ? blocker.blockers
-      : null;
-  } catch {
-    return null;
+  const result = await readBoundedConfinedJson(
+    path.resolve(root),
+    file,
+    MAX_LIFECYCLE_GUARD_BYTES
+  );
+  if (result.status === 'missing') return null;
+  if (result.status !== 'value' || !validBlocker(result.value)) {
+    return ['subagent_skill_availability_guard_invalid'];
   }
+  const blocker = result.value;
+  return blocker.session_scope_hash === sessionHash && blocker.turn_id_hash === turnHash
+    ? blocker.blockers
+    : null;
 }
 
 function emergencyDenialDir(artifactDir: string): string {
@@ -592,17 +598,18 @@ async function matchingEmergencyDenial(
 ): Promise<string[] | null> {
   const file = emergencyDenialPath(path.resolve(artifactDir), sessionHash, turnHash);
   try {
-    const inspected = await inspectConfinedPath(path.resolve(root), file);
-    if (!inspected.exists) return null;
-    if (inspected.leafSymlink || !inspected.stat?.isFile() || inspected.stat.size > MAX_EMERGENCY_DENIAL_BYTES) {
+    const result = await readBoundedConfinedJson(
+      path.resolve(root),
+      file,
+      MAX_LIFECYCLE_GUARD_BYTES
+    );
+    if (result.status === 'missing') return null;
+    if (result.status !== 'value' || !validBlocker(result.value)
+      || result.value.session_scope_hash !== sessionHash
+      || result.value.turn_id_hash !== turnHash) {
       return ['subagent_skill_availability_guard_invalid'];
     }
-    const blocker: any = await readJson(file, null).catch(() => null);
-    if (!validBlocker(blocker)
-      || blocker.session_scope_hash !== sessionHash
-      || blocker.turn_id_hash !== turnHash) {
-      return ['subagent_skill_availability_guard_invalid'];
-    }
+    const blocker = result.value;
     return blocker.blockers;
   } catch {
     return null;
@@ -641,11 +648,11 @@ async function clearMatchingEmergencyDenials(
     if (!blocker || blocker.thread_id_hash !== threadHash) continue;
     try {
       const entry = await inspectConfinedPath(root, file);
-      if (entry.leafSymlink || !entry.stat?.isFile() || entry.stat.size > MAX_EMERGENCY_DENIAL_BYTES) {
+      if (entry.leafSymlink || !entry.stat?.isFile() || entry.stat.size > MAX_LIFECYCLE_GUARD_BYTES) {
         ok = false;
         continue;
       }
-      await fsp.rm(file, { force: true });
+      await removeManagedPathVerified(root, file);
       if ((await inspectConfinedPath(root, file)).exists) ok = false;
     } catch {
       ok = false;
@@ -664,7 +671,7 @@ async function pruneEmergencyDenials(root: string, artifactDir: string): Promise
   let ok = records.every((entry) => Boolean(entry.blocker));
   for (const entry of ordered.slice(MAX_EMERGENCY_DENIALS)) {
     try {
-      await fsp.rm(entry.file, { force: true });
+      await removeManagedPathVerified(root, entry.file);
       if ((await inspectConfinedPath(root, entry.file)).exists) ok = false;
     } catch {
       ok = false;
@@ -695,28 +702,66 @@ async function readEmergencyDenialsWithFiles(
   }
   if (!inspected.exists) return [];
   if (inspected.leafSymlink || !inspected.stat?.isDirectory()) return null;
-  let names: string[];
-  try {
-    names = await fsp.readdir(dir);
-  } catch {
-    return null;
-  }
+  const names = await boundedDirectoryNames(dir);
+  if (names === null) return null;
   const records: Array<{ file: string; blocker: SubagentSkillAvailabilityBlocker | null }> = [];
   for (const name of names.filter((item) => /^deny-[a-f0-9]{64}\.json$/.test(item)).sort()) {
     const file = path.join(dir, name);
-    try {
-      const entry = await inspectConfinedPath(root, file);
-      if (entry.leafSymlink || !entry.stat?.isFile() || entry.stat.size > MAX_EMERGENCY_DENIAL_BYTES) {
-        records.push({ file, blocker: null });
-        continue;
-      }
-      const blocker: any = await readJson(file, null).catch(() => null);
-      records.push({ file, blocker: validBlocker(blocker) ? blocker : null });
-    } catch {
-      records.push({ file, blocker: null });
-    }
+    const result = await readBoundedConfinedJson(root, file, MAX_LIFECYCLE_GUARD_BYTES);
+    records.push({
+      file,
+      blocker: result.status === 'value' && validBlocker(result.value) ? result.value : null
+    });
   }
   return records;
+}
+
+async function boundedDirectoryNames(directory: string): Promise<string[] | null> {
+  let handle;
+  try {
+    handle = await fsp.opendir(directory);
+    const names: string[] = [];
+    for await (const entry of handle) {
+      names.push(entry.name);
+      if (names.length > MAX_LIFECYCLE_GUARD_ENTRIES) return null;
+    }
+    return names.sort((left, right) => left.localeCompare(right));
+  } catch {
+    return null;
+  } finally {
+    await handle?.close().catch(() => undefined);
+  }
+}
+
+async function readBoundedConfinedJson(
+  boundary: string,
+  file: string,
+  maxBytes: number
+): Promise<BoundedJsonResult> {
+  const absoluteBoundary = path.resolve(boundary);
+  const absoluteFile = path.resolve(file);
+  let childEvidence = false;
+  try {
+    const inspected = await inspectConfinedPath(absoluteBoundary, absoluteFile);
+    if (!inspected.exists) return { status: 'missing' };
+    childEvidence = true;
+    if (inspected.leafSymlink || !inspected.stat?.isFile() || inspected.stat.size > maxBytes) {
+      return { status: 'invalid', childEvidence };
+    }
+    const handle = await fsp.open(absoluteFile, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
+    try {
+      const stat = await handle.stat();
+      if (!stat.isFile() || stat.size > maxBytes) return { status: 'invalid', childEvidence };
+      const buffer = Buffer.alloc(maxBytes + 1);
+      const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+      if (bytesRead > maxBytes || bytesRead !== stat.size) return { status: 'invalid', childEvidence };
+      return { status: 'value', value: JSON.parse(buffer.subarray(0, bytesRead).toString('utf8')) };
+    } finally {
+      await handle.close().catch(() => undefined);
+    }
+  } catch {
+    return { status: 'invalid', childEvidence };
+  }
 }
 
 function preToolBlockReason(blockers: readonly string[]): string {

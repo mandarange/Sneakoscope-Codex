@@ -1,7 +1,6 @@
 import path from 'node:path';
 import fsp from 'node:fs/promises';
-import os from 'node:os';
-import { ensureDir, readJson, readText, writeJsonAtomic, writeTextAtomic, mergeManagedBlock, nowIso, PACKAGE_VERSION, exists, sameFilesystemPath } from './fsx.js';
+import { ensureDir, readJson, readText, writeJsonAtomic, writeTextAtomic, mergeManagedBlock, nowIso, PACKAGE_VERSION, exists } from './fsx.js';
 import { DEFAULT_RETENTION_POLICY } from './retention.js';
 import { DEFAULT_DB_SAFETY_POLICY } from './db-safety.js';
 import { isHarnessSourceProject, writeHarnessGuardPolicy } from './harness-guard.js';
@@ -16,7 +15,8 @@ import { codexCommandHookCurrentHash } from './codex-hooks/codex-hook-hash.js';
 import { buildSksCoreSkillManifest, isCoreSkillName, legacyCoreSkillNames } from './codex-native/core-skill-manifest.js';
 import { syncCoreSkillsIntegrity } from './codex-native/core-skill-integrity.js';
 import { AUTHORITATIVE_SKS_SKILL_ROOT_REFERENCE } from './codex-native/sks-skill-paths.js';
-import { currentGeneratedFileInventory, installCodexAgents, installGlobalSkills, installProjectSkills, installSkills, pruneStaleGeneratedFiles, REMOVED_SKS_SKILL_NAMES } from './init/skills.js';
+import { currentGeneratedFileInventory, installCodexAgents, pruneStaleGeneratedFiles, REMOVED_SKS_SKILL_NAMES } from './init/skills.js';
+import { reconcileManagedSkillInstallation } from './init/managed-skill-install.js';
 import {
   backupInvalidToml,
   inspectOfficialSubagentToml,
@@ -318,7 +318,6 @@ export function agentsBlockText() {
 export async function initProject(root: any, opts: any = {}) {
   const created: any[] = [];
   const installScope = normalizeInstallScope(opts.installScope || 'global');
-  const globalSkillHome = path.resolve(opts.home || process.env.HOME || os.homedir());
   const localOnly = Boolean(opts.localOnly);
   const sourceProject = await isHarnessSourceProject(root).catch(() => false);
   const requestedHookCommandPrefix = opts.hookCommandPrefix || sksCommandPrefix(installScope, { globalCommand: opts.globalCommand });
@@ -1066,39 +1065,8 @@ function upsertTomlTable(text: any, table: any, block: any) {
     created.push('.codex/config.toml hook trust state');
   }
 
-  await ensureDir(globalSkillHome);
-  const skillInstall = await installGlobalSkills(globalSkillHome);
-  const globalSkillTarget = path.resolve(globalSkillHome, '.agents', 'skills');
-  const projectSkillTarget = path.resolve(root, '.agents', 'skills');
-  const projectSkillCleanup = await sameFilesystemPath(projectSkillTarget, globalSkillTarget)
-    ? null
-    : await installProjectSkills(root);
-  if (projectSkillCleanup) {
-    const merged = (left: unknown, right: unknown) => [...new Set([
-      ...(Array.isArray(left) ? left.map(String) : []),
-      ...(Array.isArray(right) ? right.map(String) : [])
-    ])];
-    skillInstall.ok = skillInstall.ok && projectSkillCleanup.ok;
-    skillInstall.warnings = merged(skillInstall.warnings, projectSkillCleanup.warnings);
-    skillInstall.removed = merged(skillInstall.removed, projectSkillCleanup.removed);
-    skillInstall.quarantined_user_collisions = merged(
-      skillInstall.quarantined_user_collisions,
-      projectSkillCleanup.quarantined_user_collisions
-    );
-    skillInstall.removed_stale_generated_skills = merged(
-      skillInstall.removed_stale_generated_skills,
-      projectSkillCleanup.removed_stale_generated_skills
-    );
-    (skillInstall as any).project_residue_reconcile = projectSkillCleanup;
-    created.push('.agents/skills official residue reconciled');
-  }
-  created.push(`${AUTHORITATIVE_SKS_SKILL_ROOT_REFERENCE}/sks-*`);
-  const removedStaleGeneratedSkills = (skillInstall as any).removed_stale_generated_skills || (skillInstall as any).removed || [];
-  const removedAgentSkillAliases = (skillInstall as any).removed_agent_skill_aliases || [];
-  const removedCodexSkillMirrors = (skillInstall as any).removed_codex_skill_mirrors || [];
-  if (removedStaleGeneratedSkills.length) created.push(`stale generated skills removed (${removedStaleGeneratedSkills.length})`);
-  if (removedAgentSkillAliases.length) created.push(`deprecated generated skill aliases removed (${removedAgentSkillAliases.length})`);
-  if (removedCodexSkillMirrors.length) created.push(`.codex/skills generated mirrors removed (${removedCodexSkillMirrors.length})`);
+  const { skillInstall, created: skillInstallCreated } = await reconcileManagedSkillInstallation(root, opts.home);
+  created.push(...skillInstallCreated);
   const agentInstall = await installCodexAgents(root);
   created.push(`.codex/agents official subagent catalog (${agentInstall.installed_agents?.length || 0})`);
   if (agentInstall.retired_role_cleanup?.removed_count) created.push(`retired SKS-owned agent role files removed (${agentInstall.retired_role_cleanup.removed_count})`);
