@@ -182,7 +182,7 @@ test('removed skill cleanup scrubs HOME and SKS_GLOBAL_ROOT generated manifests 
         schema_version: 1,
         generated_by: 'sneakoscope',
         version: '6.2.0',
-        prune_policy: 'test',
+        prune_policy: 'remove_previous_sks_generated_paths_absent_from_current_manifest',
         skills: ['team', 'naruto', 'mad-db', 'answer'],
         files: [
           '.agents/skills/team/SKILL.md',
@@ -196,9 +196,9 @@ test('removed skill cleanup scrubs HOME and SKS_GLOBAL_ROOT generated manifests 
         package_version: '6.2.0',
         removed_skills: ['team', 'mad-db'],
         skills: [
-          { canonical_name: 'team', deprecated_aliases: [] },
-          { canonical_name: 'naruto', deprecated_aliases: ['mad-db'] },
-          { canonical_name: 'answer', deprecated_aliases: [] }
+          { canonical_name: 'team', type: 'official', content_sha256: 'team', hash_history: [], deprecated_aliases: [] },
+          { canonical_name: 'naruto', type: 'official', content_sha256: 'naruto', hash_history: [], deprecated_aliases: ['mad-db'] },
+          { canonical_name: 'answer', type: 'official', content_sha256: 'answer', hash_history: [], deprecated_aliases: [] }
         ]
       }, null, 2));
     }
@@ -269,7 +269,7 @@ test('global reconcile includes the configured SKS_GLOBAL_ROOT cleanup surface',
       schema_version: 1,
       generated_by: 'sneakoscope',
       version: '6.2.0',
-      prune_policy: 'test',
+      prune_policy: 'remove_previous_sks_generated_paths_absent_from_current_manifest',
       skills: ['team', 'naruto'],
       files: ['.agents/skills/team/SKILL.md', '.agents/skills/naruto/SKILL.md']
     }, null, 2));
@@ -315,6 +315,192 @@ test('reconcileSkills refuses an ancestor symlink and propagates cleanup failure
     assert.deepEqual(await fs.readFile(path.join(outsideAgents, 'skills', 'team', 'SKILL.md')), before);
     await assertMissing(path.join(outsideAgents, 'skills', 'naruto'));
     assert.equal(await fs.readlink(path.join(root, '.agents')), outsideAgents);
+  } finally {
+    await fs.rm(fixture, { recursive: true, force: true });
+  }
+});
+
+test('global reconcile quarantines a core-skill directory symlink without mutating its external target', async () => {
+  const fixture = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-core-skill-symlink-collision-'));
+  const home = path.join(fixture, 'home');
+  const outsideSkill = path.join(fixture, 'outside', 'sks-naruto');
+  const outsideFile = path.join(outsideSkill, 'SKILL.md');
+  try {
+    await fs.mkdir(outsideSkill, { recursive: true });
+    const externalText = [
+      '---',
+      'name: sks-naruto',
+      'description: external managed-looking fixture',
+      '---',
+      '',
+      '<!-- BEGIN SKS IMMUTABLE CORE SKILL -->',
+      'external content must stay byte-identical',
+      ''
+    ].join('\n');
+    await fs.writeFile(outsideFile, externalText);
+    const skillsRoot = path.join(home, '.agents', 'skills');
+    await fs.mkdir(skillsRoot, { recursive: true });
+    await fs.symlink(outsideSkill, path.join(skillsRoot, 'sks-naruto'));
+
+    const report = await reconcileSkills({ targetDir: skillsRoot, scope: 'global', fix: true });
+
+    assert.equal(report.ok, true, report.warnings.join('\n'));
+    assert.ok(report.quarantined_user_collisions.includes('sks-naruto'));
+    assert.equal(await fs.readFile(outsideFile, 'utf8'), externalText);
+    const installed = await fs.lstat(path.join(skillsRoot, 'sks-naruto'));
+    assert.equal(installed.isDirectory(), true);
+    assert.equal(installed.isSymbolicLink(), false);
+    assert.match(await fs.readFile(path.join(skillsRoot, 'sks-naruto', 'SKILL.md'), 'utf8'), /BEGIN SKS IMMUTABLE CORE SKILL/);
+  } finally {
+    await fs.rm(fixture, { recursive: true, force: true });
+  }
+});
+
+test('global reconcile quarantines an occupied official-name directory with no SKILL.md before installing metadata', async () => {
+  const fixture = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-official-missing-skill-collision-'));
+  const home = path.join(fixture, 'home');
+  const skillDir = path.join(home, '.agents', 'skills', 'sks-answer');
+  const userMetadata = 'user-owned: keep-me\n';
+  const userNotes = 'private user notes must survive\n';
+  try {
+    await fs.mkdir(path.join(skillDir, 'agents'), { recursive: true });
+    await fs.writeFile(path.join(skillDir, 'agents', 'openai.yaml'), userMetadata);
+    await fs.writeFile(path.join(skillDir, 'USER-NOTES.md'), userNotes);
+
+    const report = await reconcileSkills({
+      targetDir: path.join(home, '.agents', 'skills'),
+      scope: 'global',
+      fix: true
+    });
+
+    assert.equal(report.ok, true, report.warnings.join('\n'));
+    assert.ok(report.quarantined_user_collisions.includes('sks-answer'));
+    assert.match(await fs.readFile(path.join(skillDir, 'SKILL.md'), 'utf8'), /BEGIN SKS MANAGED SKILL/);
+    assert.notEqual(await fs.readFile(path.join(skillDir, 'agents', 'openai.yaml'), 'utf8'), userMetadata);
+
+    const quarantinedMetadata = await findFiles(
+      path.join(home, '.sneakoscope', 'quarantine', 'skills'),
+      'openai.yaml'
+    );
+    const quarantinedNotes = await findFiles(
+      path.join(home, '.sneakoscope', 'quarantine', 'skills'),
+      'USER-NOTES.md'
+    );
+    assert.equal(quarantinedMetadata.length, 1);
+    assert.equal(quarantinedNotes.length, 1);
+    assert.equal(await fs.readFile(quarantinedMetadata[0], 'utf8'), userMetadata);
+    assert.equal(await fs.readFile(quarantinedNotes[0], 'utf8'), userNotes);
+  } finally {
+    await fs.rm(fixture, { recursive: true, force: true });
+  }
+});
+
+test('global reconcile quarantines stale generated skills that contain unexpected user files', async () => {
+  const fixture = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-stale-generated-user-content-'));
+  const home = path.join(fixture, 'home');
+  const skillsRoot = path.join(home, '.agents', 'skills');
+  const staleName = 'sks-retired-helper';
+  const safeStaleName = 'sks-retired-generated-only';
+  const staleDir = path.join(skillsRoot, staleName);
+  const safeStaleDir = path.join(skillsRoot, safeStaleName);
+  const userNotes = Buffer.from('user notes inside a formerly generated skill\n');
+  try {
+    await writeManagedSkill(staleDir, staleName);
+    await writeManagedSkill(safeStaleDir, safeStaleName);
+    await fs.writeFile(path.join(staleDir, 'USER-NOTES.md'), userNotes);
+    await fs.writeFile(path.join(skillsRoot, '.sks-generated.json'), JSON.stringify({
+      schema_version: 1,
+      generated_by: 'sneakoscope',
+      version: '6.2.0',
+      prune_policy: 'remove_previous_sks_generated_paths_absent_from_current_manifest',
+      skills: [staleName, safeStaleName],
+      files: [
+        `.agents/skills/${staleName}/SKILL.md`,
+        `.agents/skills/${staleName}/agents/openai.yaml`,
+        `.agents/skills/${safeStaleName}/SKILL.md`,
+        `.agents/skills/${safeStaleName}/agents/openai.yaml`
+      ]
+    }, null, 2));
+
+    const report = await reconcileSkills({ targetDir: skillsRoot, scope: 'global', fix: true });
+
+    assert.equal(report.ok, true, report.warnings.join('\n'));
+    assert.ok(report.quarantined_user_collisions.includes(staleName));
+    assert.equal(report.removed_stale_generated_skills.includes(`.agents/skills/${staleName}`), false);
+    assert.ok(report.removed_stale_generated_skills.includes(`.agents/skills/${safeStaleName}`));
+    await assertMissing(staleDir);
+    await assertMissing(safeStaleDir);
+    const quarantinedNotes = await findFiles(path.join(home, '.sneakoscope', 'quarantine', 'skills'), 'USER-NOTES.md');
+    assert.equal(quarantinedNotes.length, 1);
+    assert.deepEqual(await fs.readFile(quarantinedNotes[0]), userNotes);
+  } finally {
+    await fs.rm(fixture, { recursive: true, force: true });
+  }
+});
+
+test('global reconcile quarantines generated plugin and codex-mirror residue with unexpected user files', async () => {
+  const fixture = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-generated-residue-user-content-'));
+  const home = path.join(fixture, 'home');
+  const skillsRoot = path.join(home, '.agents', 'skills');
+  const pluginDir = path.join(skillsRoot, 'browser-use');
+  const codexMirrorDir = path.join(home, '.codex', 'skills', 'sks-answer');
+  const pluginNotes = Buffer.from('user notes in generated plugin collision\n');
+  const mirrorNotes = Buffer.from('user notes in generated codex mirror\n');
+  try {
+    await writeManagedSkill(pluginDir, 'browser-use');
+    await writeManagedSkill(codexMirrorDir, 'sks-answer');
+    await fs.writeFile(path.join(pluginDir, 'USER-NOTES.md'), pluginNotes);
+    await fs.writeFile(path.join(codexMirrorDir, 'USER-NOTES.md'), mirrorNotes);
+
+    const report = await reconcileSkills({ targetDir: skillsRoot, scope: 'global', fix: true });
+
+    assert.equal(report.ok, true, report.warnings.join('\n'));
+    assert.ok(report.quarantined_user_collisions.includes('browser-use'));
+    assert.ok(report.quarantined_user_collisions.includes('sks-answer'));
+    await assertMissing(pluginDir);
+    await assertMissing(codexMirrorDir);
+    const quarantinedNotes = await findFiles(path.join(home, '.sneakoscope', 'quarantine', 'skills'), 'USER-NOTES.md');
+    assert.equal(quarantinedNotes.length, 2);
+    const preserved = await Promise.all(quarantinedNotes.map((file) => fs.readFile(file)));
+    assert.ok(preserved.some((bytes) => bytes.equals(pluginNotes)));
+    assert.ok(preserved.some((bytes) => bytes.equals(mirrorNotes)));
+  } finally {
+    await fs.rm(fixture, { recursive: true, force: true });
+  }
+});
+
+test('global reconcile quarantines user-owned reserved skill manifests before replacing them', async () => {
+  const fixture = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-reserved-manifest-collision-'));
+  const home = path.join(fixture, 'home');
+  const skillsRoot = path.join(home, '.agents', 'skills');
+  const generatedBytes = Buffer.from('{"schema_version":1,"generated_by":"sneakoscope","prune_policy":"customer-policy","skills":["private-helper"],"files":[]}\n');
+  const packagedBytes = Buffer.from('{"schema":"sks.skills-manifest.v1","package_version":"customer","skills":[{"canonical_name":"private-helper"}],"notes":"preserve exactly"}\n');
+  try {
+    await fs.mkdir(skillsRoot, { recursive: true });
+    await fs.writeFile(path.join(skillsRoot, '.sks-generated.json'), generatedBytes);
+    await fs.writeFile(path.join(skillsRoot, 'skills-manifest.json'), packagedBytes);
+
+    const report = await reconcileSkills({ targetDir: skillsRoot, scope: 'global', fix: true });
+
+    assert.equal(report.ok, true, report.warnings.join('\n'));
+    assert.deepEqual(report.quarantined_manifest_collisions, ['.sks-generated.json', 'skills-manifest.json']);
+    const generated = JSON.parse(await fs.readFile(path.join(skillsRoot, '.sks-generated.json'), 'utf8'));
+    const packaged = JSON.parse(await fs.readFile(path.join(skillsRoot, 'skills-manifest.json'), 'utf8'));
+    assert.equal(generated.generated_by, 'sneakoscope');
+    assert.equal(packaged.schema, 'sks.skills-manifest.v1');
+
+    const quarantinedGenerated = await findFiles(
+      path.join(home, '.sneakoscope', 'quarantine', 'skills'),
+      '.sks-generated.json'
+    );
+    const quarantinedPackaged = await findFiles(
+      path.join(home, '.sneakoscope', 'quarantine', 'skills'),
+      'skills-manifest.json'
+    );
+    assert.equal(quarantinedGenerated.length, 1);
+    assert.equal(quarantinedPackaged.length, 1);
+    assert.deepEqual(await fs.readFile(quarantinedGenerated[0]), generatedBytes);
+    assert.deepEqual(await fs.readFile(quarantinedPackaged[0]), packagedBytes);
   } finally {
     await fs.rm(fixture, { recursive: true, force: true });
   }
@@ -372,10 +558,39 @@ test('project skill reconciliation deletes generated retired entries without tou
   }
 });
 
+test('project skill reconciliation quarantines managed-looking retired residue with USER-NOTES.md intact', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-project-skill-user-notes-'));
+  const skillDir = path.join(root, '.agents', 'skills', 'team');
+  const userNotes = Buffer.from('user-authored notes inside managed-looking residue\n');
+  try {
+    await writeManagedSkill(skillDir, 'team');
+    await fs.writeFile(path.join(skillDir, 'USER-NOTES.md'), userNotes);
+
+    const report = await reconcileSkills({
+      targetDir: path.join(root, '.agents', 'skills'),
+      scope: 'project',
+      fix: true
+    });
+
+    assert.equal(report.ok, true, report.warnings.join('\n'));
+    assert.equal(report.retired_residue?.removed_count, 0);
+    assert.equal(report.retired_residue?.quarantined_user_collision_count, 1);
+    await assertMissing(skillDir);
+    const quarantinedSkills = await findFiles(path.join(root, '.sneakoscope', 'quarantine', 'skills'), 'SKILL.md');
+    const quarantinedNotes = await findFiles(path.join(root, '.sneakoscope', 'quarantine', 'skills'), 'USER-NOTES.md');
+    assert.equal(quarantinedSkills.length, 1);
+    assert.equal(quarantinedNotes.length, 1);
+    assert.deepEqual(await fs.readFile(quarantinedNotes[0]), userNotes);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
 test('generated project guidance advertises Naruto and no retired compatibility surfaces', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-current-guidance-'));
+  const home = path.join(root, 'home');
   try {
-    await initProject(root, { installScope: 'project', localOnly: true });
+    await initProject(root, { installScope: 'project', localOnly: true, home });
     const agents = await fs.readFile(path.join(root, 'AGENTS.md'), 'utf8');
     const quickReference = await fs.readFile(path.join(root, '.codex', 'SNEAKOSCOPE.md'), 'utf8');
     assert.equal(agents.match(/Core Engineering Directive/g)?.length, 1);

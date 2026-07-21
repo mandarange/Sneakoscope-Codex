@@ -1,6 +1,7 @@
 import path from 'node:path';
 import fsp from 'node:fs/promises';
-import { ensureDir, readJson, readText, writeJsonAtomic, writeTextAtomic, mergeManagedBlock, nowIso, PACKAGE_VERSION, exists } from './fsx.js';
+import os from 'node:os';
+import { ensureDir, readJson, readText, writeJsonAtomic, writeTextAtomic, mergeManagedBlock, nowIso, PACKAGE_VERSION, exists, sameFilesystemPath } from './fsx.js';
 import { DEFAULT_RETENTION_POLICY } from './retention.js';
 import { DEFAULT_DB_SAFETY_POLICY } from './db-safety.js';
 import { isHarnessSourceProject, writeHarnessGuardPolicy } from './harness-guard.js';
@@ -14,6 +15,7 @@ import { CODEX_HOOK_EVENT_STATE_KEYS } from './codex-compat/codex-hook-events.js
 import { codexCommandHookCurrentHash } from './codex-hooks/codex-hook-hash.js';
 import { buildSksCoreSkillManifest, isCoreSkillName, legacyCoreSkillNames } from './codex-native/core-skill-manifest.js';
 import { syncCoreSkillsIntegrity } from './codex-native/core-skill-integrity.js';
+import { AUTHORITATIVE_SKS_SKILL_ROOT_REFERENCE } from './codex-native/sks-skill-paths.js';
 import { currentGeneratedFileInventory, installCodexAgents, installGlobalSkills, installProjectSkills, installSkills, pruneStaleGeneratedFiles, REMOVED_SKS_SKILL_NAMES } from './init/skills.js';
 import {
   backupInvalidToml,
@@ -305,7 +307,7 @@ const AGENTS_BLOCK = [
   '',
   '## Codex App',
   '',
-  'Use `.codex/SNEAKOSCOPE.md`, generated `.agents/skills`, `.codex/hooks.json`, and SKS dollar commands as the app control surface.',
+  `Use \`.codex/SNEAKOSCOPE.md\`, global \`${AUTHORITATIVE_SKS_SKILL_ROOT_REFERENCE}/sks-*\`, \`.codex/hooks.json\`, and SKS dollar commands as the app control surface. For managed SKS skills, UserPromptSubmit/SubagentStart-resolved current files override stale project-local, \`.codex/skills\`, plugin-cache, picker, pre-compaction, and prior-message paths; after a successful remap, read the current file silently without reporting a path mismatch.`,
   ''
 ].join('\n');
 
@@ -316,6 +318,7 @@ export function agentsBlockText() {
 export async function initProject(root: any, opts: any = {}) {
   const created: any[] = [];
   const installScope = normalizeInstallScope(opts.installScope || 'global');
+  const globalSkillHome = path.resolve(opts.home || process.env.HOME || os.homedir());
   const localOnly = Boolean(opts.localOnly);
   const sourceProject = await isHarnessSourceProject(root).catch(() => false);
   const requestedHookCommandPrefix = opts.hookCommandPrefix || sksCommandPrefix(installScope, { globalCommand: opts.globalCommand });
@@ -359,7 +362,8 @@ export async function initProject(root: any, opts: any = {}) {
     codex_app: {
       config: '.codex/config.toml',
       hooks: '.codex/hooks.json',
-      skills: '.agents/skills',
+      skills: AUTHORITATIVE_SKS_SKILL_ROOT_REFERENCE,
+      project_skills_policy: '.agents/skills is not the authoritative managed SKS install root',
       legacy_skills_dir_removed: '.codex/skills',
       agents: '.codex/agents',
       quick_reference: '.codex/SNEAKOSCOPE.md',
@@ -596,7 +600,8 @@ export async function initProject(root: any, opts: any = {}) {
         supported: true,
         config: '.codex/config.toml',
         hooks: '.codex/hooks.json',
-        skills: '.agents/skills',
+        skills: AUTHORITATIVE_SKS_SKILL_ROOT_REFERENCE,
+        project_skills_policy: '.agents/skills is not the authoritative managed SKS install root',
         legacy_skills_dir_removed: '.codex/skills',
         agents: '.codex/agents',
         quick_reference: '.codex/SNEAKOSCOPE.md',
@@ -1061,8 +1066,31 @@ function upsertTomlTable(text: any, table: any, block: any) {
     created.push('.codex/config.toml hook trust state');
   }
 
-  const skillInstall = installScope === 'project' ? await installProjectSkills(root) : await installGlobalSkills(root);
-  created.push(installScope === 'project' ? '.agents/skills official residue reconciled' : '.agents/skills/*');
+  await ensureDir(globalSkillHome);
+  const projectSkillCleanup = await sameFilesystemPath(root, globalSkillHome)
+    ? null
+    : await installProjectSkills(root);
+  const skillInstall = await installGlobalSkills(globalSkillHome);
+  if (projectSkillCleanup) {
+    const merged = (left: unknown, right: unknown) => [...new Set([
+      ...(Array.isArray(left) ? left.map(String) : []),
+      ...(Array.isArray(right) ? right.map(String) : [])
+    ])];
+    skillInstall.ok = skillInstall.ok && projectSkillCleanup.ok;
+    skillInstall.warnings = merged(skillInstall.warnings, projectSkillCleanup.warnings);
+    skillInstall.removed = merged(skillInstall.removed, projectSkillCleanup.removed);
+    skillInstall.quarantined_user_collisions = merged(
+      skillInstall.quarantined_user_collisions,
+      projectSkillCleanup.quarantined_user_collisions
+    );
+    skillInstall.removed_stale_generated_skills = merged(
+      skillInstall.removed_stale_generated_skills,
+      projectSkillCleanup.removed_stale_generated_skills
+    );
+    (skillInstall as any).project_residue_reconcile = projectSkillCleanup;
+    created.push('.agents/skills official residue reconciled');
+  }
+  created.push(`${AUTHORITATIVE_SKS_SKILL_ROOT_REFERENCE}/sks-*`);
   const removedStaleGeneratedSkills = (skillInstall as any).removed_stale_generated_skills || (skillInstall as any).removed || [];
   const removedAgentSkillAliases = (skillInstall as any).removed_agent_skill_aliases || [];
   const removedCodexSkillMirrors = (skillInstall as any).removed_codex_skill_mirrors || [];
@@ -1076,7 +1104,8 @@ function upsertTomlTable(text: any, table: any, block: any) {
   if (agentInstall.manual_blockers?.length) created.push(`official subagent agent config manual blockers (${agentInstall.manual_blockers.length})`);
   const configInventoryOwned = codexConfigInstall.ok && (configWasFresh || configPreviouslySksOwned);
   const generatedFiles = currentGeneratedFileInventory(skillInstall, agentInstall, {
-    includeCodexConfig: configInventoryOwned
+    includeCodexConfig: configInventoryOwned,
+    includeSkillFiles: false
   });
   const generatedCleanup = await pruneStaleGeneratedFiles(root, previousManifest, generatedFiles);
   if (generatedCleanup.pruned.length) created.push(`stale generated files pruned (${generatedCleanup.pruned.length})`);
@@ -1178,7 +1207,8 @@ export function codexAppQuickReference(scope: any, commandPrefix: any) {
     '# ㅅㅋㅅ',
     `Install scope: \`${scope}\``,
     `Command: \`${commandPrefix} <command>\``,
-    'Files: AGENTS.md, .codex/hooks.json, .codex/config.toml, .codex/SNEAKOSCOPE.md, .agents/skills, .codex/agents, .sneakoscope/missions.',
+    `Files: AGENTS.md, .codex/hooks.json, .codex/config.toml, .codex/SNEAKOSCOPE.md, ${AUTHORITATIVE_SKS_SKILL_ROOT_REFERENCE}/sks-* (authoritative managed SKS skills), .codex/agents, .sneakoscope/missions.`,
+    `Skill paths: UserPromptSubmit/SubagentStart-resolved files under ${AUTHORITATIVE_SKS_SKILL_ROOT_REFERENCE}/sks-*/SKILL.md override stale project-local, .codex/skills, plugin-cache, picker, pre-compaction, and prior-message links. Successful remaps stay silent; unresolved skills are never guessed.`,
     `Discover: ${commandPrefix} bootstrap; ${commandPrefix} deps check; ${commandPrefix} commands; ${commandPrefix} codex-app check; ${commandPrefix} codex-app remote-control --status; npm run zellij:capability; ${commandPrefix} dollar-commands; ${commandPrefix} pipeline status; ${commandPrefix} pipeline plan.`,
     coreEngineeringDirectiveReferenceText(),
     'dollar-commands:',

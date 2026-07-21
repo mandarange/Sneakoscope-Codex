@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Resolve selected managed SKS skills from the current global `~/.agents/skills/sks-*` install and inject those verified files into parent-turn and child-start hook context, so stale project/plugin/picker paths reconstructed after compaction no longer surface false path-mismatch warnings.
 
 ## [7.0.3] - 2026-07-19
 

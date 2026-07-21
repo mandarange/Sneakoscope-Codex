@@ -1,6 +1,14 @@
-import fs from 'node:fs/promises';
 import path from 'node:path';
-import { ensureDir, nowIso, writeJsonAtomic } from '../fsx.js';
+import { nowIso, writeJsonAtomic } from '../fsx.js';
+import {
+  ensureConfinedDirectory,
+  inspectConfinedPath,
+  isLexicallyConfined,
+  moveConfinedPath,
+  removeConfinedDirectoryIfEmpty,
+  removeManagedPathVerified,
+  uniqueConfinedPath
+} from '../managed-path-safety.js';
 import { buildSkillRegistryLedger, groupByCanonical, type SkillRegistryEntry } from './skill-registry-ledger.js';
 
 export interface ProjectSkillDedupeAction {
@@ -43,7 +51,7 @@ export async function dedupeProjectSkills(input: {
   const unresolvedUserDuplicates: string[] = [];
   for (const [canonical, group] of grouped.entries()) {
     if (group.length <= 1) continue;
-    group.sort(compareSkillPriority);
+    group.sort((a, b) => compareSkillPriority(root, a, b));
     const userEntries = group.filter((entry) => !entry.managed_by_sks);
     const managedEntries = group.filter((entry) => entry.managed_by_sks);
     if (userEntries.length > 0 && managedEntries.length > 0) {
@@ -84,7 +92,9 @@ export async function dedupeProjectSkills(input: {
   const duplicateNames = [...new Set(actions.filter((action) => action.action !== 'kept').map((action) => action.canonical_name))].sort();
   const afterLedger = await buildSkillRegistryLedger({ root, reportPath: null });
   const blockers = [
+    ...ledger.blockers.filter((blocker) => !blocker.startsWith('duplicate_active_skill_name:')),
     ...unresolvedUserDuplicates.map((name) => `user_duplicate_requires_confirmation:${name}`),
+    ...afterLedger.blockers.filter((blocker) => !blocker.startsWith('duplicate_active_skill_name:')),
     ...afterLedger.duplicate_active_canonical_names.map((name) => `duplicate_active_skill_name:${name}`)
   ];
   const report: ProjectSkillDedupeReport = {
@@ -100,7 +110,7 @@ export async function dedupeProjectSkills(input: {
     duplicate_active_canonical_names: afterLedger.duplicate_active_canonical_names,
     duplicate_canonical_names: duplicateNames,
     unresolved_user_duplicates: unresolvedUserDuplicates,
-    blockers
+    blockers: [...new Set(blockers)].sort()
   };
   const reportPath = input.reportPath === null
     ? null
@@ -109,7 +119,10 @@ export async function dedupeProjectSkills(input: {
   return report;
 }
 
-function compareSkillPriority(a: SkillRegistryEntry, b: SkillRegistryEntry): number {
+function compareSkillPriority(root: string, a: SkillRegistryEntry, b: SkillRegistryEntry): number {
+  const confinedA = skillEntryIsLexicallyConfined(root, a) ? 1 : 0;
+  const confinedB = skillEntryIsLexicallyConfined(root, b) ? 1 : 0;
+  if (confinedA !== confinedB) return confinedB - confinedA;
   const currentA = a.status === 'managed-current' ? 1 : 0;
   const currentB = b.status === 'managed-current' ? 1 : 0;
   return currentB - currentA || b.active_priority - a.active_priority || a.path.localeCompare(b.path);
@@ -136,14 +149,22 @@ async function maybeQuarantine(root: string, canonical: string, entry: SkillRegi
   return quarantineSkill(root, canonical, entry, reason);
 }
 
-async function quarantineSkill(root: string, canonical: string, entry: SkillRegistryEntry, reason: string): Promise<string> {
+async function quarantineSkill(root: string, canonical: string, entry: SkillRegistryEntry, reason: string): Promise<string | null> {
+  const boundary = path.resolve(root);
   const sourceDir = path.dirname(entry.path);
+  if (!skillEntryIsLexicallyConfined(boundary, entry)) return null;
+  const sourceInspection = await inspectConfinedPath(boundary, sourceDir);
+  if (!sourceInspection.exists) return null;
+  if (sourceInspection.leafSymlink || !sourceInspection.stat?.isDirectory()) {
+    throw new Error(`project_skill_source_not_safe_directory:${sourceDir}`);
+  }
   const stamp = `${Date.now()}-${process.pid}`;
-  const target = path.join(root, '.sneakoscope', 'quarantine', 'skills', canonical, stamp, path.basename(sourceDir));
-  await ensureDir(path.dirname(target));
-  await fs.cp(sourceDir, target, { recursive: true, force: false });
-  await fs.rm(sourceDir, { recursive: true, force: true });
-  await writeJsonAtomic(path.join(target, 'quarantine-record.json'), {
+  const base = path.join(boundary, '.sneakoscope', 'quarantine', 'skills', canonical, stamp);
+  const container = await uniqueConfinedPath(boundary, base);
+  const target = path.join(container, path.basename(sourceDir));
+  await ensureConfinedDirectory(boundary, container);
+  const recordPath = path.join(container, 'quarantine-record.json');
+  await writeJsonAtomic(recordPath, {
     schema: 'sks.skill-quarantine-record.v1',
     generated_at: nowIso(),
     source_path: sourceDir,
@@ -152,5 +173,16 @@ async function quarantineSkill(root: string, canonical: string, entry: SkillRegi
     reason,
     content_sha256: entry.content_sha256
   });
+  try {
+    await moveConfinedPath(boundary, sourceDir, target);
+  } catch (error: unknown) {
+    await removeManagedPathVerified(boundary, recordPath).catch(() => undefined);
+    await removeConfinedDirectoryIfEmpty(boundary, container).catch(() => undefined);
+    throw error;
+  }
   return target;
+}
+
+function skillEntryIsLexicallyConfined(root: string, entry: SkillRegistryEntry): boolean {
+  return isLexicallyConfined(root, path.dirname(entry.path));
 }

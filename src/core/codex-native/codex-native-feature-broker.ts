@@ -1,4 +1,5 @@
 import path from 'node:path'
+import os from 'node:os'
 import fs from 'node:fs/promises'
 import { findCodexBinary } from '../codex-adapter.js'
 import { codexAppIntegrationStatus } from '../codex-app.js'
@@ -9,7 +10,8 @@ import { detectCodex0139Capability } from '../codex-control/codex-0139-capabilit
 import { detectCodex0140Capability } from '../codex-control/codex-0140-capability.js'
 import { detectCodex0144Capability, type Codex0144FeatureKey } from '../codex-control/codex-0144-capability.js'
 import { buildCodexPluginInventory } from '../codex-plugins/codex-plugin-json.js'
-import { nowIso, runProcess, writeJsonAtomic } from '../fsx.js'
+import { nowIso, runProcess, sha256, writeJsonAtomic } from '../fsx.js'
+import { inspectConfinedPath } from '../managed-path-safety.js'
 import {
   MANAGED_OFFICIAL_SUBAGENT_ROLES,
   MANAGED_SKILLS,
@@ -17,9 +19,10 @@ import {
 } from '../managed-assets/managed-assets-manifest.js'
 import { buildMcpPluginServerCandidates } from '../mcp/mcp-plugin-inventory.js'
 import { codexNativeFeatureState, computeCodexNativeInvocationDefaults, type CodexNativeFeatureMatrix, type CodexNativeFeatureState } from './codex-native-feature-matrix.js'
+import { currentCodexSkillRoots, currentSksSkillName, resolveAuthoritativeSksSkillSources } from './sks-skill-paths.js'
 
 const REPORT_PATH = '.sneakoscope/reports/codex-native-feature-matrix.json'
-const REQUIRED_SKILL_NAMES = MANAGED_SKILLS.map((skill) => skill.id)
+const REQUIRED_SKILL_NAMES = MANAGED_SKILLS.map((skill) => currentSksSkillName(skill.id))
 const REQUIRED_AGENT_ROLES = MANAGED_OFFICIAL_SUBAGENT_ROLES.map((role) => role.id)
 const invocationMatrixCache = new Map<string, CodexNativeFeatureMatrix>()
 
@@ -231,22 +234,12 @@ export async function buildCodexNativeFeatureMatrix(input: {
 }
 
 async function inspectManagedSkillState(root: string): Promise<{ ok: boolean; apply: false; artifact_path: string; existing_count: number; managed_count: number; missing_required: string[]; blockers: string[]; warnings: string[] }> {
-  const skillRoots = [
-    path.join(root, '.agents', 'skills'),
-    ...(process.env.CODEX_HOME ? [path.join(process.env.CODEX_HOME, 'skills')] : [])
-  ]
-  let existingCount = 0
-  const managed = new Set<string>()
-  for (const dir of skillRoots) {
-    const rows = await fs.readdir(dir, { withFileTypes: true }).catch(() => [])
-    existingCount += rows.filter((row) => row.isDirectory()).length
-    for (const name of REQUIRED_SKILL_NAMES) {
-      if (managed.has(name)) continue
-      const text = await fs.readFile(path.join(dir, name, 'SKILL.md'), 'utf8').catch(() => '')
-      if (text.includes('BEGIN SKS MANAGED SKILL') || text.includes('BEGIN SKS IMMUTABLE CORE SKILL')) managed.add(name)
-    }
-  }
+  const home = path.resolve(process.env.HOME || os.homedir())
+  const authoritativeRoot = currentCodexSkillRoots({ root, home }).find((entry) => entry.scope === 'global')?.root
+  const resolution = await resolveAuthoritativeSksSkillSources({ root, home, skillNames: REQUIRED_SKILL_NAMES })
+  const managed = new Set(resolution.sources.map((source) => source.canonical_name))
   const missing = REQUIRED_SKILL_NAMES.filter((name) => !managed.has(name))
+  const existingCount = authoritativeRoot ? await countConfinedSkillDirectories(home, authoritativeRoot) : 0
   return {
     ok: missing.length === 0,
     apply: false,
@@ -254,7 +247,10 @@ async function inspectManagedSkillState(root: string): Promise<{ ok: boolean; ap
     existing_count: existingCount,
     managed_count: managed.size,
     missing_required: missing,
-    blockers: missing.length ? [`managed_skills_missing:${missing.join(',')}`] : [],
+    blockers: [
+      ...(missing.length ? [`managed_skills_missing:${missing.join(',')}`] : []),
+      ...resolution.blockers.map((blocker) => `managed_skill_${blocker}`)
+    ],
     warnings: existingCount > managed.size ? ['non_sks_skill_dirs_ignored'] : []
   }
 }
@@ -283,12 +279,16 @@ async function inspectManagedAgentRoleState(root: string): Promise<{ ok: boolean
 }
 
 async function readManagedAssetFingerprint(root: string): Promise<string[]> {
+  const home = path.resolve(process.env.HOME || os.homedir())
+  const authoritativeSkillRoots = currentCodexSkillRoots({ root, home })
+    .filter((entry) => entry.scope === 'global')
+    .map((entry) => entry.root)
   const dirs = [
-    path.join(root, '.agents', 'skills'),
     path.join(root, '.codex', 'agents'),
-    ...(process.env.CODEX_HOME ? [path.join(process.env.CODEX_HOME, 'skills'), path.join(process.env.CODEX_HOME, 'agents')] : [])
+    ...(process.env.CODEX_HOME ? [path.join(process.env.CODEX_HOME, 'agents')] : [])
   ]
   const rows: string[] = []
+  for (const dir of authoritativeSkillRoots) rows.push(...await readConfinedSkillRootFingerprint(home, dir))
   for (const dir of dirs) {
     const stat = await fs.stat(dir).catch(() => null)
     rows.push(`${dir}:${stat ? `${stat.mtimeMs}:${stat.size}` : 'missing'}`)
@@ -305,6 +305,46 @@ async function readManagedAssetFingerprint(root: string): Promise<string[]> {
     }
   }
   return rows
+}
+
+async function countConfinedSkillDirectories(home: string, skillsRoot: string): Promise<number> {
+  try {
+    const inspection = await inspectConfinedPath(home, skillsRoot)
+    if (!inspection.exists || inspection.leafSymlink || !inspection.stat?.isDirectory()) return 0
+    const rows = await fs.readdir(skillsRoot, { withFileTypes: true })
+    return rows.filter((row) => row.isDirectory()).length
+  } catch {
+    return 0
+  }
+}
+
+async function readConfinedSkillRootFingerprint(home: string, skillsRoot: string): Promise<string[]> {
+  try {
+    const inspection = await inspectConfinedPath(home, skillsRoot)
+    if (!inspection.exists) return [`${skillsRoot}:missing`]
+    if (inspection.leafSymlink || !inspection.stat?.isDirectory()) return [`${skillsRoot}:unsafe`]
+    const rows = [`${skillsRoot}:directory`]
+    const entries = await fs.readdir(skillsRoot, { withFileTypes: true })
+    for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      const file = path.join(skillsRoot, entry.name, 'SKILL.md')
+      try {
+        const child = await inspectConfinedPath(home, file)
+        if (!child.exists) {
+          rows.push(`${entry.name}:missing`)
+        } else if (child.leafSymlink || !child.stat?.isFile()) {
+          rows.push(`${entry.name}:unsafe`)
+        } else {
+          const text = await fs.readFile(file, 'utf8')
+          rows.push(`${entry.name}:file:${sha256(text)}`)
+        }
+      } catch {
+        rows.push(`${entry.name}:unsafe`)
+      }
+    }
+    return rows
+  } catch {
+    return [`${skillsRoot}:unsafe`]
+  }
 }
 
 export async function writeCodexNativeFeatureMatrix(root: string, matrix: CodexNativeFeatureMatrix, missionDir?: string | null): Promise<void> {

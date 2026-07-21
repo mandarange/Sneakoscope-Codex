@@ -92,6 +92,8 @@ function reflectionInstructionText(commandPrefix: any = 'sks') {
 }
 
 async function installOfficialSkills(root: any) {
+  const quarantinedUserCollisions: string[] = [];
+  const quarantinedManifestCollisions = await prepareReservedSkillManifestsForWrite(root);
   const imageUxReviewSkill = (name: any) => `---\nname: ${name}\ndescription: $Image-UX-Review/$UX-Review imagegen/gpt-image-2 annotated UI/UX review loop.\n---\n\nUse only for $Image-UX-Review, $UX-Review, $visual-review, or $ui-ux-review UI/UX review requests. ${imageUxReviewPipelinePolicyText()} Route start must check Codex App imagegen capability and run the SKS imagegen repair loop once; if $imagegen/gpt-image-2 is still unavailable, stop with codex_imagegen_unavailable instead of doing text-only review or direct API substitution. Core loop: capture or attach source UI screenshots, then invoke Codex App $imagegen with gpt-image-2 to create a new generated annotated review image from each source screenshot, then analyze the generated review image with vision/OCR into image-ux-issue-ledger.json, then apply only requested safe fixes and recheck changed screens. Text-only screenshot critique cannot satisfy full verification; missing generated annotated review images keep full image-ux-review-gate.json verification blocked, but may close verified_partial/reference-only when source screenshots plus hashes, docs evidence, source Image Voxel anchors, and Honest Mode evidence exist. For live web/browser/webapp capture use Codex Chrome Extension first and halt if it is not installed/enabled; use Codex Computer Use only for native Mac/non-web app screens. Required artifacts: image-ux-review-policy.json, image-ux-screen-inventory.json, image-ux-generated-review-ledger.json, image-ux-issue-ledger.json, image-ux-iteration-report.json, image-ux-review-gate.json. Finish with reflection and Honest Mode.\n`;
   const canonicalMadSksSqlPlanePolicy = madSksSqlPlanePolicyText()
     .replace(/^---[\s\S]*?---\s*/, '')
@@ -163,15 +165,22 @@ async function installOfficialSkills(root: any) {
     if (isCoreSkillName(name)) continue;
     const dir = path.join(root, '.agents', 'skills', name);
     const skillContent = markManagedSkill(name, currentSurfaceSkillText(enrichSkillContent(legacyName, content), name));
-    const existingText = await readConfinedOfficialSkillText(root, dir, name);
-    if (typeof existingText === 'string' && !isSksManagedOrGeneratedOfficialSkill(existingText)) {
+    const existing = await readConfinedOfficialSkillText(root, dir, name);
+    if (existing.quarantined) quarantinedUserCollisions.push(name);
+    if (typeof existing.text === 'string' && !isSksManagedOrGeneratedOfficialSkill(existing.text, name)) {
       await quarantineSkillDir(root, dir, name, 'global-official-name-user-collision');
+      quarantinedUserCollisions.push(name);
     }
     await ensureConfinedDirectory(root, dir);
     await writeTextAtomic(path.join(dir, 'SKILL.md'), `${skillContent.trim()}\n`);
     await writeSkillMetadata(root, dir, name);
   }
   const coreManifest = buildSksCoreSkillManifest();
+  for (const skill of coreManifest.skills) {
+    const dir = path.join(root, '.agents', 'skills', skill.canonical_name);
+    const existing = await readConfinedOfficialSkillText(root, dir, skill.canonical_name);
+    if (existing.quarantined) quarantinedUserCollisions.push(skill.canonical_name);
+  }
   const coreByName = new Map(coreManifest.skills.map((skill) => [skill.canonical_name, skill.content_sha256]));
   const coreIntegrity = await syncCoreSkillsIntegrity({
     root,
@@ -186,9 +195,15 @@ async function installOfficialSkills(root: any) {
     await writeSkillMetadata(root, path.join(root, '.agents', 'skills', name), name);
   }
   const skillNames = [...nonCoreSkillNames, ...managedCoreSkillNames];
-  const removedStaleGeneratedSkills = await removeStaleGeneratedSkillsFromManifest(root, skillNames);
+  const staleGeneratedSkills = await removeStaleGeneratedSkillsFromManifest(root, skillNames);
+  quarantinedUserCollisions.push(...staleGeneratedSkills.quarantined);
   const removedPluginSkillCollisions = await removeGeneratedPluginSkillCollisions(root);
+  quarantinedUserCollisions.push(...removedPluginSkillCollisions.quarantined);
   await writeGeneratedSkillManifest(root, skillNames);
+  const removedAgentSkillAliases = await removeGeneratedAgentSkillAliases(root, skillNames);
+  quarantinedUserCollisions.push(...removedAgentSkillAliases.quarantined);
+  const removedCodexSkillMirrors = await removeGeneratedCodexSkillMirrors(root, skillNames);
+  quarantinedUserCollisions.push(...removedCodexSkillMirrors.quarantined);
   return {
     installed_skills: skillNames,
     generated_files: generatedSkillFiles(skillNames),
@@ -200,18 +215,24 @@ async function installOfficialSkills(root: any) {
       user_collision_count: coreIntegrity.user_collision_count,
       report: '.sneakoscope/reports/core-skill-integrity.json'
     },
-    removed_stale_generated_skills: [...removedStaleGeneratedSkills, ...removedPluginSkillCollisions].sort(),
-    removed_agent_skill_aliases: await removeGeneratedAgentSkillAliases(root, skillNames),
-    removed_codex_skill_mirrors: await removeGeneratedCodexSkillMirrors(root, skillNames)
+    removed_stale_generated_skills: [...staleGeneratedSkills.removed, ...removedPluginSkillCollisions.removed].sort(),
+    removed_agent_skill_aliases: removedAgentSkillAliases.removed,
+    removed_codex_skill_mirrors: removedCodexSkillMirrors.removed,
+    quarantined_user_collisions: [...new Set(quarantinedUserCollisions)].sort(),
+    quarantined_manifest_collisions: [...new Set(quarantinedManifestCollisions)].sort()
   };
 }
 
-async function readConfinedOfficialSkillText(root: string, dir: string, name: string): Promise<string | null> {
+async function readConfinedOfficialSkillText(
+  root: string,
+  dir: string,
+  name: string
+): Promise<{ text: string | null; quarantined: boolean }> {
   const dirInspection = await inspectConfinedPath(root, dir);
-  if (!dirInspection.exists) return null;
+  if (!dirInspection.exists) return { text: null, quarantined: false };
   if (dirInspection.leafSymlink || !dirInspection.stat?.isDirectory()) {
     await quarantineSkillDir(root, dir, name, 'global-official-path-collision');
-    return null;
+    return { text: null, quarantined: true };
   }
   const expected = [
     { target: path.join(dir, 'SKILL.md'), kind: 'file' },
@@ -224,12 +245,22 @@ async function readConfinedOfficialSkillText(root: string, dir: string, name: st
     const wrongType = row.kind === 'file' ? !inspected.stat?.isFile() : !inspected.stat?.isDirectory();
     if (inspected.leafSymlink || wrongType) {
       await quarantineSkillDir(root, dir, name, 'global-official-nested-path-collision');
-      return null;
+      return { text: null, quarantined: true };
     }
   }
   const skillPath = path.join(dir, 'SKILL.md');
   const skillInspection = await inspectConfinedPath(root, skillPath);
-  return skillInspection.exists ? fsp.readFile(skillPath, 'utf8') : null;
+  if (!skillInspection.exists) {
+    const entries = await fsp.readdir(dir);
+    if (entries.length > 0) {
+      await quarantineSkillDir(root, dir, name, 'global-official-missing-skill-user-collision');
+      return { text: null, quarantined: true };
+    }
+  }
+  return {
+    text: skillInspection.exists ? await fsp.readFile(skillPath, 'utf8') : null,
+    quarantined: false
+  };
 }
 
 function currentSksInstalledSkillName(value: unknown): string {
@@ -260,6 +291,7 @@ export interface SkillReconcileReport {
   preserved_forge: string[];
   preserved_user: string[];
   quarantined_user_collisions: string[];
+  quarantined_manifest_collisions?: string[];
   warnings: string[];
   installed_skills?: string[];
   generated_files?: string[];
@@ -497,7 +529,8 @@ async function isManagedRemovedSkillPath(ownerRoot: string, dir: string, name: s
   const skillInspection = await inspectConfinedPath(ownerRoot, skillPath);
   if (!skillInspection.exists || skillInspection.leafSymlink || !skillInspection.stat?.isFile()) return false;
   const text = await fsp.readFile(skillPath, 'utf8');
-  return isGeneratedRemovedSksSkill(text, name);
+  return isGeneratedRemovedSksSkill(text, name)
+    && await managedSkillDirectoryContainsOnlyOwnedFiles(ownerRoot, dir);
 }
 
 async function confinedPathStillExists(
@@ -636,7 +669,7 @@ function scrubRemovedSkillManifest(fileName: string, parsed: any): {
     return { valid: false, changed: false, hasRetiredResidue, next: parsed };
   }
   if (fileName === SKS_SKILL_MANIFEST_FILE) {
-    if (parsed.generated_by !== 'sneakoscope' || !Array.isArray(parsed.skills) || !Array.isArray(parsed.files)) {
+    if (!isSksOwnedReservedSkillManifest(fileName, parsed)) {
       return { valid: false, changed: false, hasRetiredResidue, next: parsed };
     }
     const next = {
@@ -651,7 +684,7 @@ function scrubRemovedSkillManifest(fileName: string, parsed: any): {
       next
     };
   }
-  if (parsed.schema !== PACKAGED_SKILLS_MANIFEST_SCHEMA || !Array.isArray(parsed.skills)) {
+  if (!isSksOwnedReservedSkillManifest(fileName, parsed)) {
     return { valid: false, changed: false, hasRetiredResidue, next: parsed };
   }
   const next = normalizeSkillsManifest(parsed);
@@ -777,13 +810,13 @@ export async function reconcileSkills(opts: {
     report.warnings.push(`skill_target_prepare_failed:${publicPathError(error, targetDir)}`);
     return report;
   }
-  const existing = await listSkillDirs(targetDir);
+  const existing = await listSkillDirs(targetDir, { includeUnsafeEntries: opts.scope === 'project' });
 
   if (opts.scope === 'project') {
     await reconcileProjectSkillEntries(root, targetDir, existing, officialNames, aliasNames, removedNames, report, opts.fix);
     const legacyCodexSkillsDir = path.join(root, '.codex', 'skills');
     if (path.resolve(legacyCodexSkillsDir) !== targetDir) {
-      const legacyEntries = await listSkillDirs(legacyCodexSkillsDir);
+      const legacyEntries = await listSkillDirs(legacyCodexSkillsDir, { includeUnsafeEntries: true });
       if (legacyEntries.length) await reconcileProjectSkillEntries(root, legacyCodexSkillsDir, legacyEntries, officialNames, aliasNames, removedNames, report, opts.fix);
       await removeDirIfEmpty(legacyCodexSkillsDir);
     }
@@ -822,6 +855,8 @@ export async function reconcileSkills(opts: {
   report.installed_skills = install?.installed_skills || [...report.installed];
   report.generated_files = install?.generated_files || generatedSkillFiles(report.installed_skills);
   report.core_skill_integrity = install?.core_skill_integrity || { ok: true, installed_count: 0, restored_count: 0, user_collision_count: 0 };
+  report.quarantined_user_collisions.push(...(install?.quarantined_user_collisions || []));
+  report.quarantined_manifest_collisions = [...new Set<string>(install?.quarantined_manifest_collisions || [])].sort();
   report.removed_stale_generated_skills = currentSurfaceSkillPaths(install?.removed_stale_generated_skills || report.removed);
   report.removed_agent_skill_aliases = currentSurfaceSkillPaths(install?.removed_agent_skill_aliases || []);
   report.removed_codex_skill_mirrors = currentSurfaceSkillPaths(install?.removed_codex_skill_mirrors || []);
@@ -838,12 +873,18 @@ function currentSurfaceSkillPaths(values: readonly string[]): string[] {
   }))).sort();
 }
 
-function looksGeneratedOfficialSkill(text: string) {
-  return /Sneakoscope|SKS|Codex App pipeline activation|Dollar-command route|Context tracking|Honest Mode|Route:/i.test(String(text || ''));
+function looksGeneratedOfficialSkill(text: string, expectedNames: readonly string[]) {
+  const source = String(text || '');
+  const declared = /^name:\s*(.+)\s*$/m.exec(source)?.[1]?.trim() || '';
+  const declaredCanonical = canonicalSkillNameFromValue(declared);
+  const expected = new Set(expectedNames.map(canonicalSkillNameFromValue).filter(Boolean));
+  if (!declaredCanonical || !expected.has(declaredCanonical)) return false;
+  return isGeneratedSksAgentSkill(source, declared) || isGeneratedSksLegacySkill(source, declared);
 }
 
-function isSksManagedOrGeneratedOfficialSkill(text: string) {
-  return MANAGED_SKILL_MARKER_RE.test(String(text || '')) || looksGeneratedOfficialSkill(text);
+function isSksManagedOrGeneratedOfficialSkill(text: string, expectedName: string) {
+  return MANAGED_SKILL_MARKER_RE.test(String(text || ''))
+    || looksGeneratedOfficialSkill(text, [expectedName]);
 }
 
 async function reconcileProjectSkillEntries(
@@ -857,22 +898,36 @@ async function reconcileProjectSkillEntries(
   fix: boolean
 ) {
   for (const entry of entries) {
-    const official = officialNames.has(entry.canonical) || aliasNames.has(entry.canonical) || removedNames.has(entry.canonical);
+    const directoryCanonical = canonicalSkillNameFromValue(entry.directoryCanonical || entry.name);
+    const declaredCanonical = canonicalSkillNameFromValue(entry.declaredCanonical || entry.canonical);
+    const candidateNames = [...new Set([directoryCanonical, declaredCanonical].filter(Boolean))];
+    const isOfficialName = (name: string) => (
+      officialNames.has(name) || aliasNames.has(name) || removedNames.has(name)
+    );
+    const official = candidateNames.some(isOfficialName);
+    const declaredOfficial = Boolean(declaredCanonical && isOfficialName(declaredCanonical));
     const forge = FORGE_SKILL_MARKER_RE.test(entry.text);
-    const managed = MANAGED_SKILL_MARKER_RE.test(entry.text) || official;
+    const managed = MANAGED_SKILL_MARKER_RE.test(entry.text)
+      || (declaredOfficial && looksGeneratedOfficialSkill(entry.text, [declaredCanonical]));
     if (forge) {
       report.preserved_forge.push(entry.name);
       continue;
     }
-    if (official && !MANAGED_SKILL_MARKER_RE.test(entry.text) && !looksGeneratedOfficialSkill(entry.text)) {
+    if (official && !managed) {
       if (fix) await quarantineSkillDir(root, entry.dir, entry.name, 'project-official-name-user-collision');
       report.quarantined_user_collisions.push(entry.name);
       report.warnings.push(`official_name_user_collision_quarantined:${entry.name}`);
       continue;
     }
     if (managed) {
-      if (fix) await removeManagedPathVerified(root, entry.dir);
-      report.removed.push(path.relative(root, entry.dir).split(path.sep).join('/'));
+      if (await managedSkillDirectoryContainsOnlyOwnedFiles(root, entry.dir)) {
+        if (fix) await removeManagedPathVerified(root, entry.dir);
+        report.removed.push(path.relative(root, entry.dir).split(path.sep).join('/'));
+      } else {
+        if (fix) await quarantineSkillDir(root, entry.dir, entry.name, 'project-managed-skill-user-content-collision');
+        report.quarantined_user_collisions.push(entry.name);
+        report.warnings.push(`managed_skill_user_content_quarantined:${entry.name}`);
+      }
       continue;
     }
     report.preserved_user.push(entry.name);
@@ -955,6 +1010,7 @@ export async function generatePackagedSkillsManifest(): Promise<any> {
 
 export async function writePackagedSkillManifest(targetDir: string, manifest: any): Promise<string> {
   const file = path.join(targetDir, 'skills-manifest.json');
+  await prepareReservedSkillManifestForWrite(rootFromSkillsDir(targetDir), file, 'skills-manifest.json');
   await writeJsonAtomic(file, manifest);
   return file;
 }
@@ -979,7 +1035,7 @@ function buildFallbackSkillsManifest() {
   };
 }
 
-async function listSkillDirs(targetDir: string) {
+async function listSkillDirs(targetDir: string, opts: { includeUnsafeEntries?: boolean } = {}) {
   const boundary = rootFromSkillsDir(targetDir);
   let rootInspection;
   try {
@@ -995,19 +1051,53 @@ async function listSkillDirs(targetDir: string) {
   const rows = await fsp.readdir(targetDir, { withFileTypes: true });
   const out: any[] = [];
   for (const row of rows) {
-    if (row.isSymbolicLink() || !row.isDirectory()) continue;
     const dir = path.join(targetDir, row.name);
+    const directoryCanonical = canonicalSkillNameFromValue(row.name);
+    if (row.isSymbolicLink() || !row.isDirectory()) {
+      if (opts.includeUnsafeEntries) {
+        out.push({
+          name: row.name,
+          dir,
+          skillMdPath: null,
+          text: '',
+          canonical: directoryCanonical,
+          declaredCanonical: '',
+          directoryCanonical,
+          hash: '',
+          unsafeEntry: row.isSymbolicLink() ? 'symlink' : 'non-directory'
+        });
+      }
+      continue;
+    }
     const skillMdPath = path.join(dir, 'SKILL.md');
     const inspected = await inspectConfinedPath(boundary, skillMdPath);
-    if (!inspected.exists || inspected.leafSymlink || !inspected.stat?.isFile()) continue;
+    if (!inspected.exists || inspected.leafSymlink || !inspected.stat?.isFile()) {
+      if (opts.includeUnsafeEntries) {
+        out.push({
+          name: row.name,
+          dir,
+          skillMdPath,
+          text: '',
+          canonical: directoryCanonical,
+          declaredCanonical: '',
+          directoryCanonical,
+          hash: '',
+          unsafeEntry: inspected.leafSymlink ? 'skill-file-symlink' : 'missing-or-non-file-skill'
+        });
+      }
+      continue;
+    }
     const text = await fsp.readFile(skillMdPath, 'utf8');
     const displayName = /^name:\s*(.+)\s*$/m.exec(text)?.[1] || row.name;
+    const declaredCanonical = canonicalSkillNameFromValue(displayName);
     out.push({
       name: row.name,
       dir,
       skillMdPath,
       text,
-      canonical: canonicalSkillNameFromValue(displayName),
+      canonical: declaredCanonical,
+      declaredCanonical,
+      directoryCanonical,
       hash: sha256(text)
     });
   }
@@ -1053,6 +1143,7 @@ function generatedSkillManifestPath(root: any) {
 
 async function writeGeneratedSkillManifest(root: any, skillNames: any) {
   const manifestPath = generatedSkillManifestPath(root);
+  await prepareReservedSkillManifestForWrite(root, manifestPath, SKS_SKILL_MANIFEST_FILE);
   await writeJsonAtomic(manifestPath, {
     schema_version: 1,
     generated_by: 'sneakoscope',
@@ -1063,12 +1154,16 @@ async function writeGeneratedSkillManifest(root: any, skillNames: any) {
   });
 }
 
-async function removeStaleGeneratedSkillsFromManifest(root: any, skillNames: any) {
+async function removeStaleGeneratedSkillsFromManifest(
+  root: string,
+  skillNames: readonly string[]
+): Promise<{ removed: string[]; quarantined: string[] }> {
   const previous = await readJson(generatedSkillManifestPath(root), null);
   const previousSkills = Array.isArray(previous?.skills) ? previous.skills : [];
-  if (!previousSkills.length) return [];
+  if (!previousSkills.length) return { removed: [], quarantined: [] };
   const current = new Set(skillNames);
-  const removed: any[] = [];
+  const removed: string[] = [];
+  const quarantined: string[] = [];
   for (const name of previousSkills) {
     const skillName = String(name || '').trim();
     if (!skillName || current.has(skillName) || !/^[a-z0-9-]+$/.test(skillName)) continue;
@@ -1076,24 +1171,112 @@ async function removeStaleGeneratedSkillsFromManifest(root: any, skillNames: any
     const dir = path.join(root, '.agents', 'skills', skillName);
     if (!(await exists(dir))) continue;
     const text = await readText(path.join(dir, 'SKILL.md'), null);
-    if (!isSksManagedOrGeneratedOfficialSkill(String(text || ''))) continue;
-    await fsp.rm(dir, { recursive: true, force: true });
+    if (!isSksManagedOrGeneratedOfficialSkill(String(text || ''), skillName)) continue;
+    if (!(await managedSkillDirectoryContainsOnlyOwnedFiles(root, dir))) {
+      await quarantineSkillDir(root, dir, skillName, 'stale-generated-skill-user-content-collision');
+      quarantined.push(skillName);
+      continue;
+    }
+    await removeManagedPathVerified(root, dir);
     removed.push(path.relative(root, dir));
   }
-  return removed.sort();
+  return { removed: removed.sort(), quarantined: quarantined.sort() };
 }
 
-async function removeGeneratedPluginSkillCollisions(root: any) {
-  const removed: any[] = [];
+async function managedSkillDirectoryContainsOnlyOwnedFiles(root: string, dir: string): Promise<boolean> {
+  const dirInspection = await inspectConfinedPath(root, dir);
+  if (!dirInspection.exists || dirInspection.leafSymlink || !dirInspection.stat?.isDirectory()) return false;
+  const rootEntries = await fsp.readdir(dir, { withFileTypes: true });
+  if (rootEntries.some((entry) => !['SKILL.md', 'agents'].includes(entry.name))) return false;
+  const skillEntry = rootEntries.find((entry) => entry.name === 'SKILL.md');
+  const agentsEntry = rootEntries.find((entry) => entry.name === 'agents');
+  if (!skillEntry?.isFile()) return false;
+  if (!agentsEntry) return true;
+  if (!agentsEntry.isDirectory()) return false;
+  const agentsDir = path.join(dir, 'agents');
+  const agentsInspection = await inspectConfinedPath(root, agentsDir);
+  if (!agentsInspection.exists || agentsInspection.leafSymlink || !agentsInspection.stat?.isDirectory()) return false;
+  const agentEntries = await fsp.readdir(agentsDir, { withFileTypes: true });
+  return agentEntries.length === 0 || (
+    agentEntries.length === 1
+    && agentEntries[0]?.name === 'openai.yaml'
+    && agentEntries[0].isFile()
+  );
+}
+
+async function prepareReservedSkillManifestsForWrite(root: string): Promise<string[]> {
+  const skillRoot = path.join(root, '.agents', 'skills');
+  const quarantined: string[] = [];
+  for (const fileName of [SKS_SKILL_MANIFEST_FILE, 'skills-manifest.json']) {
+    if (await prepareReservedSkillManifestForWrite(root, path.join(skillRoot, fileName), fileName)) {
+      quarantined.push(fileName);
+    }
+  }
+  return quarantined;
+}
+
+async function prepareReservedSkillManifestForWrite(
+  root: string,
+  manifestPath: string,
+  fileName: string
+): Promise<boolean> {
+  const inspection = await inspectConfinedPath(root, manifestPath);
+  if (!inspection.exists) return false;
+  if (!inspection.leafSymlink && inspection.stat?.isFile()) {
+    try {
+      const parsed = JSON.parse(await fsp.readFile(manifestPath, 'utf8'));
+      if (isSksOwnedReservedSkillManifest(fileName, parsed)) return false;
+    } catch {
+      // Invalid JSON at a reserved path is user-owned until proven otherwise.
+    }
+  }
+  await quarantineSkillDir(root, manifestPath, fileName, 'reserved-skill-manifest-user-collision');
+  return true;
+}
+
+function isSksOwnedReservedSkillManifest(fileName: string, parsed: any): boolean {
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
+  if (fileName === SKS_SKILL_MANIFEST_FILE) {
+    return parsed.schema_version === 1
+      && parsed.generated_by === 'sneakoscope'
+      && parsed.prune_policy === GENERATED_PRUNE_POLICY
+      && Array.isArray(parsed.skills)
+      && Array.isArray(parsed.files);
+  }
+  return fileName === 'skills-manifest.json'
+    && parsed.schema === PACKAGED_SKILLS_MANIFEST_SCHEMA
+    && typeof parsed.package_version === 'string'
+    && Array.isArray(parsed.skills)
+    && parsed.skills.every((skill: any) => (
+      skill
+      && typeof skill === 'object'
+      && !Array.isArray(skill)
+      && typeof skill.canonical_name === 'string'
+      && ['core', 'official'].includes(skill.type)
+      && typeof skill.content_sha256 === 'string'
+      && Array.isArray(skill.hash_history)
+      && Array.isArray(skill.deprecated_aliases)
+    ));
+}
+
+type GeneratedSkillResidueCleanup = { removed: string[]; quarantined: string[] };
+
+async function removeGeneratedPluginSkillCollisions(root: string): Promise<GeneratedSkillResidueCleanup> {
+  const removed: string[] = [];
+  const quarantined: string[] = [];
   for (const name of RESERVED_CODEX_PLUGIN_SKILL_NAMES) {
     const dir = path.join(root, '.agents', 'skills', name);
-    const skillPath = path.join(dir, 'SKILL.md');
-    const text = await readText(skillPath, null);
-    if (!isGeneratedSksPluginCollisionSkill(text, name)) continue;
-    await fsp.rm(dir, { recursive: true, force: true });
-    removed.push(path.relative(root, dir));
+    const action = await cleanupGeneratedSkillResidue(
+      root,
+      dir,
+      name,
+      (text) => isGeneratedSksPluginCollisionSkill(text, name),
+      'generated-plugin-skill-user-content-collision'
+    );
+    if (action === 'removed') removed.push(path.relative(root, dir));
+    if (action === 'quarantined') quarantined.push(name);
   }
-  return removed.sort();
+  return { removed: removed.sort(), quarantined: quarantined.sort() };
 }
 
 function isGeneratedSksPluginCollisionSkill(text: any, name: any) {
@@ -1143,10 +1326,11 @@ async function writeSkillMetadata(root: string, dir: string, name: any) {
   await writeTextAtomic(path.join(dir, 'agents', 'openai.yaml'), `name: ${name}\nmodel_reasoning_effort: ${effort}\nrouting: temporary\nreturn_to_default_after_route: true\n`);
 }
 
-async function removeGeneratedCodexSkillMirrors(root: any, skillNames: any) {
+async function removeGeneratedCodexSkillMirrors(root: string, skillNames: readonly string[]): Promise<GeneratedSkillResidueCleanup> {
   const legacyRoot = path.join(root, '.codex', 'skills');
-  if (!(await exists(legacyRoot))) return [];
-  const removed: any[] = [];
+  if (!(await exists(legacyRoot))) return { removed: [], quarantined: [] };
+  const removed: string[] = [];
+  const quarantined: string[] = [];
   const names = Array.from(new Set([
     ...skillNames,
     ...DOLLAR_COMMANDS.map((c: any) => c.command.slice(1)),
@@ -1158,18 +1342,22 @@ async function removeGeneratedCodexSkillMirrors(root: any, skillNames: any) {
   ]));
   for (const name of names) {
     const dir = path.join(legacyRoot, name);
-    const skillPath = path.join(dir, 'SKILL.md');
-    const text = await readText(skillPath, null);
-    if (!isGeneratedSksLegacySkill(text, name)) continue;
-    await fsp.rm(dir, { recursive: true, force: true });
-    removed.push(path.relative(root, dir));
+    const action = await cleanupGeneratedSkillResidue(
+      root,
+      dir,
+      String(name),
+      (text) => isGeneratedSksLegacySkill(text, name),
+      'generated-codex-skill-user-content-collision'
+    );
+    if (action === 'removed') removed.push(path.relative(root, dir));
+    if (action === 'quarantined') quarantined.push(String(name));
   }
   await removeDirIfEmpty(legacyRoot);
   await removeDirIfEmpty(path.join(root, '.agents'));
-  return removed;
+  return { removed: removed.sort(), quarantined: quarantined.sort() };
 }
 
-async function removeGeneratedAgentSkillAliases(root: any, skillNames: any) {
+async function removeGeneratedAgentSkillAliases(root: string, skillNames: readonly string[]): Promise<GeneratedSkillResidueCleanup> {
   const current = new Set(skillNames);
   const obsolete = [
     ...SKS_SKILL_NAMES_TO_CLEAN_UP,
@@ -1180,17 +1368,44 @@ async function removeGeneratedAgentSkillAliases(root: any, skillNames: any) {
     'ralph-supervisor',
     'ralph-resolver'
   ];
-  const removed: any[] = [];
+  const removed: string[] = [];
+  const quarantined: string[] = [];
   for (const name of obsolete) {
     if (current.has(name)) continue;
     const dir = path.join(root, '.agents', 'skills', name);
-    const skillPath = path.join(dir, 'SKILL.md');
-    const text = await readText(skillPath, null);
-    if (!isGeneratedSksAgentSkill(text, name)) continue;
-    await fsp.rm(dir, { recursive: true, force: true });
-    removed.push(path.relative(root, dir));
+    const action = await cleanupGeneratedSkillResidue(
+      root,
+      dir,
+      name,
+      (text) => isGeneratedSksAgentSkill(text, name),
+      'generated-agent-skill-user-content-collision'
+    );
+    if (action === 'removed') removed.push(path.relative(root, dir));
+    if (action === 'quarantined') quarantined.push(name);
   }
-  return removed;
+  return { removed: removed.sort(), quarantined: quarantined.sort() };
+}
+
+async function cleanupGeneratedSkillResidue(
+  root: string,
+  dir: string,
+  name: string,
+  isOwnedText: (text: string) => boolean,
+  quarantineReason: string
+): Promise<'removed' | 'quarantined' | 'preserved'> {
+  const dirInspection = await inspectConfinedPath(root, dir);
+  if (!dirInspection.exists || dirInspection.leafSymlink || !dirInspection.stat?.isDirectory()) return 'preserved';
+  const skillPath = path.join(dir, 'SKILL.md');
+  const skillInspection = await inspectConfinedPath(root, skillPath);
+  if (!skillInspection.exists || skillInspection.leafSymlink || !skillInspection.stat?.isFile()) return 'preserved';
+  const text = await fsp.readFile(skillPath, 'utf8');
+  if (!isOwnedText(text)) return 'preserved';
+  if (!(await managedSkillDirectoryContainsOnlyOwnedFiles(root, dir))) {
+    await quarantineSkillDir(root, dir, name, quarantineReason);
+    return 'quarantined';
+  }
+  await removeManagedPathVerified(root, dir);
+  return 'removed';
 }
 
 function isGeneratedSksAgentSkill(text: any, name: any) {
@@ -1234,8 +1449,10 @@ export function currentGeneratedFileInventory(skillInstall: any = {}, agentInsta
     '.sneakoscope/harness-guard.json',
     '.sneakoscope/db-safety.json',
     '.sneakoscope/policy.json',
-    '.agents/skills/.sks-generated.json',
-    ...(Array.isArray(skillInstall.generated_files) ? skillInstall.generated_files : []),
+    ...(opts.includeSkillFiles === false ? [] : [
+      '.agents/skills/.sks-generated.json',
+      ...(Array.isArray(skillInstall.generated_files) ? skillInstall.generated_files : [])
+    ]),
     ...(Array.isArray(agentInstall.generated_files) ? agentInstall.generated_files : [])
   ])).sort();
 }
@@ -1264,9 +1481,12 @@ function normalizeGeneratedRelPath(value: any) {
 }
 
 function isPrunableGeneratedPath(rel: any) {
-  if (rel.startsWith('.agents/skills/')) return true;
+  // Skill migration is ownership-aware and handled by reconcileSkills(). A
+  // prior generated-files manifest is not authority to delete content that a
+  // user may have since replaced or adopted.
+  if (rel.startsWith('.agents/skills/')) return false;
   if (rel.startsWith('.codex/agents/')) return false;
-  if (rel.startsWith('.codex/skills/')) return true;
+  if (rel.startsWith('.codex/skills/')) return false;
   return new Set([
     '.codex/SNEAKOSCOPE.md',
     '.codex/hooks.json',

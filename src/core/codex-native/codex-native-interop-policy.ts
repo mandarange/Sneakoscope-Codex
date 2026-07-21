@@ -3,6 +3,7 @@ import os from 'node:os';
 import fs from 'node:fs/promises';
 import { nowIso, writeJsonAtomic } from '../fsx.js';
 import { buildCodexPluginInventory } from '../codex-plugins/codex-plugin-json.js';
+import { currentCodexSkillRoots } from './sks-skill-paths.js';
 
 interface CodexNativeInventory {
   plugins?: Array<{ id?: unknown; name?: unknown }>;
@@ -40,7 +41,7 @@ export async function buildCodexNativeInteropPolicy(input: {
   const root = path.resolve(input.root);
   const inventory = normalizeInventory(input.inventory || await buildCodexPluginInventory().catch((err: unknown) => ({ plugins: [], blockers: [messageOf(err)] })));
   const codexHome = input.codexHome || process.env.CODEX_HOME || path.join(os.homedir(), '.codex');
-  const skillNames = await discoverSkillNames([path.join(root, '.agents', 'skills'), path.join(codexHome, 'skills')]);
+  const skillNames = await discoverSkillNames(currentCodexSkillRoots({ root, codexHome }).map((entry) => entry.root));
   const pluginIds = (inventory.plugins || []).map((plugin) => `${plugin.id || ''} ${plugin.name || ''}`.toLowerCase()).filter(Boolean);
   const preservedSkillNames = RESERVED_EXTERNAL_ROUTE_SKILLS.filter((name) => skillNames.includes(name));
   const report: CodexNativeInteropPolicy = {

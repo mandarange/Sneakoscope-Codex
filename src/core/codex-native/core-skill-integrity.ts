@@ -1,6 +1,12 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { ensureDir, nowIso, readText, sha256, writeJsonAtomic, writeTextAtomic } from '../fsx.js';
+import { ensureDir, nowIso, sha256, writeJsonAtomic, writeTextAtomic } from '../fsx.js';
+import {
+  ensureConfinedDirectory,
+  inspectConfinedPath,
+  isLexicallyConfined,
+  publicPathError
+} from '../managed-path-safety.js';
 import { CORE_SKILL_TEMPLATE_VERSION, buildSksCoreSkillManifest, currentCoreSkillName, isSksManagedCoreSkillContent, renderCoreSkillTemplate } from './core-skill-manifest.js';
 import { canonicalSkillName } from './skill-name-canonicalizer.js';
 
@@ -49,7 +55,8 @@ export async function syncCoreSkillsIntegrity(input: {
   reportPath?: string | null;
 }): Promise<CoreSkillIntegrityReport> {
   const root = path.resolve(input.root);
-  const skillsRoot = input.skillsRoot || path.join(root, '.agents', 'skills');
+  const skillsRoot = path.resolve(input.skillsRoot || path.join(root, '.agents', 'skills'));
+  const skillsBoundary = coreSkillsBoundary(root, skillsRoot);
   const apply = input.apply === true;
   const manifest = buildSksCoreSkillManifest();
   const rows: CoreSkillIntegrityRow[] = [];
@@ -61,15 +68,18 @@ export async function syncCoreSkillsIntegrity(input: {
     const skillDir = path.join(skillsRoot, skill.canonical_name);
     const file = path.join(skillDir, 'SKILL.md');
     const desired = renderCoreSkillTemplate(skill.canonical_name);
-    const current = await readText(file, null);
+    const safeCurrent = await readConfinedCoreSkill(skillsBoundary, skillDir, file);
+    const current = safeCurrent.text;
     const beforeSha = typeof current === 'string' ? sha256(current) : null;
     let action: CoreSkillSyncAction = 'already-current';
     let backupPath: string | null = null;
-    let blocker: string | null = null;
-    if (current === null) {
+    let blocker: string | null = safeCurrent.blocker;
+    if (blocker) {
+      action = 'blocked';
+    } else if (current === null) {
       action = 'install-missing-managed-copy';
       if (apply) {
-        await ensureDir(skillDir);
+        await ensureConfinedDirectory(skillsBoundary, skillDir);
         await writeTextAtomic(file, desired);
         installed.push(file);
       }
@@ -81,6 +91,7 @@ export async function syncCoreSkillsIntegrity(input: {
         backupPath = path.join(root, '.sneakoscope', 'backups', 'core-skills', skill.canonical_name, `${Date.now()}-${process.pid}.SKILL.md.bak`);
         await ensureDir(path.dirname(backupPath));
         await fs.writeFile(backupPath, current, 'utf8');
+        await ensureConfinedDirectory(skillsBoundary, skillDir);
         await writeTextAtomic(file, desired);
         restored.push(file);
       }
@@ -89,7 +100,14 @@ export async function syncCoreSkillsIntegrity(input: {
       blocker = `user_authored_core_skill_collision:${skill.canonical_name}`;
       skippedUserAuthored.push(file);
     }
-    const after = await readText(file, null);
+    const afterInspection = blocker && action === 'blocked'
+      ? { text: null as string | null, blocker }
+      : await readConfinedCoreSkill(skillsBoundary, skillDir, file);
+    if (!blocker && afterInspection.blocker) {
+      action = 'blocked';
+      blocker = afterInspection.blocker;
+    }
+    const after = afterInspection.text;
     const afterSha = typeof after === 'string' ? sha256(after) : null;
     rows.push({
       canonical_name: skill.canonical_name,
@@ -130,4 +148,34 @@ export async function syncCoreSkillsIntegrity(input: {
 
 export function coreSkillPath(skillsRoot: string, name: string): string {
   return path.join(skillsRoot, currentCoreSkillName(canonicalSkillName(name)), 'SKILL.md');
+}
+
+function coreSkillsBoundary(root: string, skillsRoot: string): string {
+  if (isLexicallyConfined(root, skillsRoot)) return root;
+  const parent = path.dirname(skillsRoot);
+  return ['.agents', '.codex'].includes(path.basename(parent)) ? path.dirname(parent) : parent;
+}
+
+async function readConfinedCoreSkill(
+  boundary: string,
+  skillDir: string,
+  file: string
+): Promise<{ text: string | null; blocker: string | null }> {
+  try {
+    const dirInspection = await inspectConfinedPath(boundary, skillDir);
+    if (dirInspection.exists && (dirInspection.leafSymlink || !dirInspection.stat?.isDirectory())) {
+      return { text: null, blocker: `core_skill_path_unsafe:${path.basename(skillDir)}:skill_directory_not_safe` };
+    }
+    const fileInspection = await inspectConfinedPath(boundary, file);
+    if (!fileInspection.exists) return { text: null, blocker: null };
+    if (fileInspection.leafSymlink || !fileInspection.stat?.isFile()) {
+      return { text: null, blocker: `core_skill_path_unsafe:${path.basename(skillDir)}:skill_file_not_safe` };
+    }
+    return { text: await fs.readFile(file, 'utf8'), blocker: null };
+  } catch (error: unknown) {
+    return {
+      text: null,
+      blocker: `core_skill_path_unsafe:${path.basename(skillDir)}:${publicPathError(error, file)}`
+    };
+  }
 }

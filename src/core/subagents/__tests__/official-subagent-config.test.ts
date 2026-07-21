@@ -681,7 +681,8 @@ test('generated Naruto skill describes the official workflow and retired aliases
   })
 
   const agentsRules = await fs.readFile(path.join(root, 'AGENTS.md'), 'utf8')
-  const naruto = await fs.readFile(path.join(root, '.agents', 'skills', 'sks-naruto', 'SKILL.md'), 'utf8')
+  const naruto = await fs.readFile(path.join(home, '.agents', 'skills', 'sks-naruto', 'SKILL.md'), 'utf8')
+  await assert.rejects(fs.access(path.join(root, '.agents', 'skills', 'sks-naruto', 'SKILL.md')))
   assert.match(naruto, /Codex official subagent workflow/)
   assert.match(naruto, /--agents N/)
   assert.match(naruto, /later root-owned waves/)
@@ -703,7 +704,7 @@ test('generated Naruto skill describes the official workflow and retired aliases
   assert.doesNotMatch(agentsRules, /native agent intake agents|fresh executor team/)
   assert.doesNotMatch(agentsRules, /\$Team|sks team|\$MAD-DB|sks mad-db/)
   for (const name of ['team', 'mad-db', 'swarm', 'shadow-clone', 'kage-bunshin']) {
-    await assert.rejects(fs.access(path.join(root, '.agents', 'skills', name, 'SKILL.md')))
+    await assert.rejects(fs.access(path.join(home, '.agents', 'skills', name, 'SKILL.md')))
   }
 })
 
@@ -718,6 +719,107 @@ test('stale generated prune never deletes legacy or user Codex agent files', asy
   }, [])
   assert.deepEqual(result.pruned, [])
   assert.equal(await fs.readFile(legacy, 'utf8'), 'name = "legacy"\n')
+})
+
+test('global setup quarantines a user-adopted legacy project skill before stale manifest pruning', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-skill-manifest-user-adopted-'))
+  const home = path.join(root, 'home')
+  const skill = path.join(root, '.agents', 'skills', 'sks-naruto', 'SKILL.md')
+  const userText = '---\nname: sks-naruto\ndescription: user-authored replacement\n---\n\nUser content.\n'
+  await fs.mkdir(path.dirname(skill), { recursive: true })
+  await fs.mkdir(path.join(root, '.sneakoscope'), { recursive: true })
+  await fs.writeFile(skill, userText)
+  await fs.writeFile(path.join(root, '.sneakoscope', 'manifest.json'), JSON.stringify({
+    generated_files: { files: ['.agents/skills/sks-naruto/SKILL.md'] }
+  }))
+
+  const result: any = await initProject(root, {
+    installScope: 'global',
+    localOnly: true,
+    home,
+    codexHome: path.join(home, '.codex')
+  })
+
+  await assert.rejects(fs.access(skill))
+  const quarantined = await findFile(path.join(root, '.sneakoscope', 'quarantine'), 'SKILL.md')
+  assert.ok(quarantined)
+  assert.equal(await fs.readFile(String(quarantined), 'utf8'), userText)
+  assert.equal(result.generated_cleanup.pruned.includes('.agents/skills/sks-naruto/SKILL.md'), false)
+  assert.ok(result.skill_install.project_residue_reconcile.quarantined_user_collisions.includes('sks-naruto'))
+})
+
+test('global setup quarantines a user-authored current official skill before installing the managed copy', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-current-skill-user-collision-'))
+  const home = path.join(root, 'home')
+  const skill = path.join(home, '.agents', 'skills', 'sks-answer', 'SKILL.md')
+  const userText = '---\nname: sks-answer\ndescription: my user-authored SKS answer helper\n---\n\nKeep this content.\n'
+  await fs.mkdir(path.dirname(skill), { recursive: true })
+  await fs.writeFile(skill, userText)
+
+  const result: any = await initProject(root, {
+    installScope: 'global',
+    localOnly: true,
+    home,
+    codexHome: path.join(home, '.codex')
+  })
+
+  const installed = await fs.readFile(skill, 'utf8')
+  assert.match(installed, /BEGIN SKS MANAGED SKILL/)
+  assert.notEqual(installed, userText)
+  const quarantined = await findFile(path.join(home, '.sneakoscope', 'quarantine'), 'SKILL.md')
+  assert.ok(quarantined)
+  assert.equal(await fs.readFile(String(quarantined), 'utf8'), userText)
+  assert.ok(result.skill_install.quarantined_user_collisions.includes('sks-answer'))
+})
+
+test('project cleanup treats an official directory name as a collision even when SKILL.md declares another name', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-skill-dir-name-collision-'))
+  const home = path.join(root, 'home')
+  const skill = path.join(root, '.agents', 'skills', 'sks-naruto', 'SKILL.md')
+  const userText = '---\nname: custom-helper\ndescription: user-authored helper\n---\n\nCodex App pipeline activation: custom user instructions.\n'
+  await fs.mkdir(path.dirname(skill), { recursive: true })
+  await fs.writeFile(skill, userText)
+
+  const result: any = await initProject(root, {
+    installScope: 'global',
+    localOnly: true,
+    home,
+    codexHome: path.join(home, '.codex')
+  })
+
+  await assert.rejects(fs.access(skill))
+  const quarantined = await findFile(path.join(root, '.sneakoscope', 'quarantine'), 'SKILL.md')
+  assert.ok(quarantined)
+  assert.equal(await fs.readFile(String(quarantined), 'utf8'), userText)
+  assert.ok(result.skill_install.project_residue_reconcile.quarantined_user_collisions.includes('sks-naruto'))
+})
+
+test('project cleanup quarantines an official-name skill symlink without following or deleting its target', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-skill-symlink-collision-'))
+  const home = path.join(root, 'home')
+  const target = path.join(root, 'user-skill-target')
+  const targetSkill = path.join(target, 'SKILL.md')
+  const link = path.join(root, '.agents', 'skills', 'sks-naruto')
+  const userText = '---\nname: custom-helper\ndescription: symlink target owned by user\n---\n\nKeep this content.\n'
+  await fs.mkdir(target, { recursive: true })
+  await fs.writeFile(targetSkill, userText)
+  await fs.mkdir(path.dirname(link), { recursive: true })
+  await fs.symlink(target, link, 'dir')
+
+  const result: any = await initProject(root, {
+    installScope: 'global',
+    localOnly: true,
+    home,
+    codexHome: path.join(home, '.codex')
+  })
+
+  await assert.rejects(fs.lstat(link))
+  assert.equal(await fs.readFile(targetSkill, 'utf8'), userText)
+  const recordFile = await findFile(path.join(root, '.sneakoscope', 'quarantine'), 'quarantine-record.json')
+  assert.ok(recordFile)
+  const record = JSON.parse(await fs.readFile(String(recordFile), 'utf8'))
+  assert.equal((await fs.lstat(record.quarantine_path)).isSymbolicLink(), true)
+  assert.ok(result.skill_install.project_residue_reconcile.quarantined_user_collisions.includes('sks-naruto'))
 })
 
 async function findFile(root: string, name: string): Promise<string | null> {

@@ -27,6 +27,7 @@ import { claimHookInvocation } from './hooks-runtime/hook-invocation-dedupe.js';
 import { armLightTurnStopBypass, clearLightTurnStopBypass, consumeLightTurnStopBypass, hasMatchingLightTurnStopBypass } from './hooks-runtime/light-turn.js';
 import { evaluateHookNarutoDecisionGate, looksLikeActiveContinuationPrompt } from './hooks-runtime/naruto-decision-gate.js';
 import {
+  ensureOfficialSubagentArtifactDirConfined,
   officialSubagentArtifactDir,
   recordAndRefreshSubagentEvidence,
   refreshOfficialSubagentCompletionArtifacts
@@ -42,6 +43,17 @@ import { readOfficialSubagentConfig } from './subagents/official-subagent-config
 import { withFileLock } from './locks/file-lock.js';
 import { buildWaveParentGuidance, renderWaveParentGuidance } from './subagents/wave-parent-guidance.js';
 import { managedOfficialSubagentRoleByName } from './managed-assets/managed-assets-manifest.js';
+import {
+  renderAuthoritativeSksSkillContext,
+  resolveAuthoritativeSksSkillSources
+} from './codex-native/sks-skill-paths.js';
+import {
+  authoritativeSksSkillResolutionBlockers,
+  clearSubagentSkillAvailabilityGuards,
+  persistSubagentSkillAvailabilityBlocker,
+  renderSubagentSkillAvailabilityHandoff,
+  subagentSkillAvailabilityPreToolBlockReason
+} from './hooks-runtime/subagent-skill-availability.js';
 import {
   HOST_CAPABILITY_HOOK_EVIDENCE_FILENAME,
   HOST_CAPABILITY_HOOK_OBSERVATIONS_FILENAME,
@@ -164,7 +176,8 @@ export async function evaluateHookPayload(name: any, payload: any = {}, opts: an
   });
   const withNarutoDecision = (result: any) => ({ ...result, sksNarutoDecision });
   if (name === 'user-prompt-submit') {
-    return withNarutoDecision(await hookUserPrompt(root, state, payload, noQuestion, sessionKey));
+    const result = await hookUserPrompt(root, state, payload, noQuestion, sessionKey);
+    return withNarutoDecision(await attachAuthoritativeSksSkillContext(root, state, payload, result));
   }
   if (name === 'pre-tool') return withNarutoDecision(await hookPreTool(root, state, payload, noQuestion, sessionKey));
   if (name === 'post-tool') return withNarutoDecision(await hookPostTool(root, state, payload, noQuestion, sessionKey));
@@ -175,13 +188,91 @@ export async function evaluateHookPayload(name: any, payload: any = {}, opts: an
   return withNarutoDecision({ continue: true });
 }
 
+async function attachAuthoritativeSksSkillContext(root: string, state: any, payload: any, result: any) {
+  if (result?.decision === 'block' || result?.sksTaskProfile === 'passthrough') return result;
+  if (looksLikeCodexGitAction(payload) || looksLikeCodexUiSettingsEvent(payload)) return result;
+  const prompt = stripVisibleDecisionAnswerBlocks(extractUserPrompt(payload));
+  if (routeIsGitOnly(routePrompt(prompt))) return result;
+  const skillNames = selectedSksSkillNamesForTurn(state, prompt, result);
+  if (!skillNames.length) return result;
+  const admission = await authoritativeSksSkillAdmission(root, skillNames);
+  if (admission.blocked) return { ...result, ...admission.blocked };
+  const resolution = admission.resolution;
+  if (!resolution) return result;
+  const skillContext = renderAuthoritativeSksSkillContext(resolution);
+  if (!skillContext) return result;
+  return {
+    ...result,
+    additionalContext: [result?.additionalContext, skillContext].filter(Boolean).join('\n\n')
+  };
+}
+
+async function authoritativeSksSkillAdmission(root: string, skillNames: readonly unknown[]) {
+  const resolution = await resolveAuthoritativeSksSkillSources({ root, skillNames }).catch(() => null);
+  if (!resolution) {
+    return {
+      resolution: null,
+      blocked: {
+        decision: 'block',
+        reason: 'SKS managed skill resolution failed. Repair the global SKS installation, then retry.',
+        systemMessage: 'SKS: managed skill availability check blocked this turn.'
+      }
+    };
+  }
+  if (resolution.unresolved.length || resolution.blockers.length) {
+    const details = [
+      resolution.unresolved.length ? `unavailable=${resolution.unresolved.join(',')}` : '',
+      resolution.blockers.length ? `rejected=${resolution.blockers.join(',')}` : ''
+    ].filter(Boolean).join('; ');
+    return {
+      resolution,
+      blocked: {
+        decision: 'block',
+        reason: `SKS managed skill availability check failed (${details}). Repair the global SKS installation, then retry.`,
+        systemMessage: 'SKS: managed skill availability check blocked this turn.'
+      }
+    };
+  }
+  return { resolution, blocked: null };
+}
+
+function selectedSksSkillNamesForTurn(state: any, prompt: string, result: any): string[] {
+  if (result?.attached_parent_mission_id) {
+    return ['naruto', 'pipeline-runner', 'prompt-pipeline', 'honest-mode'];
+  }
+  const active = state?.mission_id && state?.route_closed !== true
+    && (looksLikeActiveContinuationPrompt(prompt) || isBlockingClarificationAwaiting(state));
+  if (active) {
+    const activeSkills = selectedSksSkillNamesForActiveState(state);
+    if (activeSkills.length) return activeSkills;
+  }
+  const selectedRoute = routePrompt(prompt);
+  if (selectedRoute?.requiredSkills?.length) return selectedRoute.requiredSkills.map(String);
+  return result?.sksTaskProfile === 'answer' ? ['answer', 'honest-mode'] : [];
+}
+
+function selectedSksSkillNamesForActiveState(state: any): string[] {
+  const persisted = Array.isArray(state?.required_skills) ? state.required_skills : [];
+  if (persisted.length) return persisted.map(String);
+  const activeRoute = routePrompt(String(state?.route_command || state?.route || state?.mode || ''));
+  return activeRoute?.requiredSkills?.length ? activeRoute.requiredSkills.map(String) : [];
+}
+
 async function hookSubagentStart(root: any, state: any, payload: any = {}, sessionKey: any = null) {
   const artifactDir = officialSubagentArtifactDir(root, state, sessionKey);
-  await recordAndRefreshSubagentEvidence(root, state, payload, 'SubagentStart', sessionKey).catch(() => null);
+  const artifactDirBlockers: string[] = [];
+  const artifactDirSafe = await ensureOfficialSubagentArtifactDirConfined(root, artifactDir)
+    .then(() => true)
+    .catch(() => false);
+  if (!artifactDirSafe) artifactDirBlockers.push('subagent_skill_availability_artifact_dir_unsafe');
+  // Codex can reuse an official child thread id for a later generation even
+  // when the prior child never emitted SubagentStop. Clear any prior
+  // generation's guard before evaluating and persisting this start's result.
+  await clearSubagentSkillAvailabilityGuards(root, payload, artifactDir).catch(() => null);
   const config = await readOfficialSubagentConfig(root);
   const budget = resolveSubagentThreadBudget({ configuredMaxThreads: config.maxThreads });
   const active = subagentRouteContext(state);
-  const routingContext = await sealedSubagentRoutingContext(artifactDir, payload);
+  const routingContext = artifactDirSafe ? await sealedSubagentRoutingContext(artifactDir, payload) : '';
   const resourceGuard = [
     `SKS subagent policy: Codex [agents].max_threads is ${budget.maxThreads}.`,
     'Use max_depth=1. Subagents must not spawn subagents.',
@@ -189,8 +280,39 @@ async function hookSubagentStart(root: any, state: any, payload: any = {}, sessi
     'Parallel writes require disjoint paths; serialize overlapping paths.',
     'Finish only your assigned slice, return a concise result, then stop so the root parent can close this thread.'
   ].join(' ');
-  const additionalContext = [coreEngineeringDirectiveReferenceText(), resourceGuard, routingContext, active].filter(Boolean).join('\n\n');
-  return { continue: true, additionalContext };
+  const skillNames = selectedSksSkillNamesForActiveState(state);
+  const resolution = skillNames.length
+    ? await resolveAuthoritativeSksSkillSources({ root, skillNames }).catch(() => null)
+    : null;
+  const skillBlockers = [
+    ...artifactDirBlockers,
+    ...(skillNames.length ? authoritativeSksSkillResolutionBlockers(resolution) : [])
+  ];
+  try {
+    await persistSubagentSkillAvailabilityBlocker({
+      root,
+      artifactDir,
+      state,
+      payload,
+      blockers: skillBlockers
+    });
+  } catch (error: unknown) {
+    const blocker = error instanceof Error
+      && error.message === 'subagent_skill_availability_blocker_artifact_write_failed'
+      ? 'subagent_skill_availability_blocker_artifact_write_failed'
+      : 'subagent_skill_availability_guard_persistence_failed';
+    skillBlockers.push(blocker);
+  }
+  if (artifactDirSafe) {
+    await recordAndRefreshSubagentEvidence(root, state, payload, 'SubagentStart', sessionKey).catch(() => null);
+  }
+  const skillContext = skillBlockers.length
+    ? renderSubagentSkillAvailabilityHandoff(skillBlockers)
+    : resolution
+      ? renderAuthoritativeSksSkillContext(resolution)
+      : '';
+  const additionalContext = [coreEngineeringDirectiveReferenceText(), resourceGuard, routingContext, active, skillContext].filter(Boolean).join('\n\n');
+  return { continue: true, additionalContext, ...(skillBlockers.length ? { silent: true } : {}) };
 }
 
 async function sealedSubagentRoutingContext(artifactDir: string, payload: any = {}) {
@@ -250,6 +372,11 @@ function subagentRouteContext(state: any = {}) {
 
 async function hookSubagentStop(root: any, state: any, payload: any = {}, sessionKey: any = null) {
   await recordAndRefreshSubagentEvidence(root, state, payload, 'SubagentStop', sessionKey).catch(() => null);
+  await clearSubagentSkillAvailabilityGuards(
+    root,
+    payload,
+    officialSubagentArtifactDir(root, state, sessionKey)
+  ).catch(() => null);
   // SubagentStop is evidence collection only. It must never reuse the parent
   // Stop hook's route gate or block a child thread from returning its result.
   return { continue: true, silent: true };
@@ -286,6 +413,13 @@ async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: a
   }
   const parentLaunchMissionId = activeNarutoParentLaunchMissionId();
   if (parentLaunchMissionId) {
+    const skillAdmission = await authoritativeSksSkillAdmission(root, [
+      'naruto',
+      'pipeline-runner',
+      'prompt-pipeline',
+      'honest-mode'
+    ]);
+    if (skillAdmission.blocked) return skillAdmission.blocked;
     const parentHostCapability = await claimStandaloneParentHostCapabilityRuntime({
       root,
       missionId: parentLaunchMissionId,
@@ -355,6 +489,8 @@ async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: a
       return { continue: true, silent: true, sksTaskProfile: taskProfile };
     }
     if (!explicitCommand && !clarificationPending && !madConfirmationPrompt && !activeContinuation && lightRoute?.id === 'Answer') {
+      const skillAdmission = await authoritativeSksSkillAdmission(root, lightRoute.requiredSkills || ['answer', 'honest-mode']);
+      if (skillAdmission.blocked) return skillAdmission.blocked;
       const turnId = hookTurnId(payload);
       if (turnId) {
         await armLightTurnStopBypass(root, {
@@ -384,7 +520,6 @@ async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: a
       };
     }
 
-    await maybeReconcileProjectSkillsPreflight(root).catch(() => null);
     const updateContext = '';
     const command = dollarCommand(prompt);
     const route = routePrompt(prompt);
@@ -395,6 +530,9 @@ async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: a
         systemMessage: `SKS: ${route.command} git action bypassed pipeline route gates.`
       };
     }
+    const skillAdmission = await authoritativeSksSkillAdmission(root, route?.requiredSkills || []);
+    if (skillAdmission.blocked) return skillAdmission.blocked;
+    await maybeReconcileProjectSkillsPreflight(root).catch(() => null);
     const bypassActiveRoute = routeBypassesActiveContext(route);
     const goalOverlay = activeGoalOverlayContext(state, route);
     const prepareFreshRoute = shouldPrepareFreshRouteOnActivePrompt(prompt, route, {
@@ -479,6 +617,19 @@ function activeGoalOverlayContext(state: any = {}, route: any = null) {
 }
 
 async function hookPreTool(root: any, state: any, payload: any, noQuestion: any, sessionKey: any = null) {
+  const skillAvailabilityBlock = await subagentSkillAvailabilityPreToolBlockReason(
+    root,
+    payload,
+    officialSubagentArtifactDir(root, state, sessionKey)
+  ).catch((error: unknown) => {
+    const code = error instanceof Error && error.message === 'subagent_skill_availability_guard_invalid'
+      ? 'subagent_skill_availability_guard_invalid'
+      : 'subagent_skill_availability_guard_check_failed';
+    return `SKS blocked this child tool call because managed skill availability failed (${code}). Return the blocker to the root parent without using tools.`;
+  });
+  if (skillAvailabilityBlock) {
+    return { decision: 'block', permissionDecision: 'deny', reason: skillAvailabilityBlock };
+  }
   if (needsMutationSafetyCheck(payload)) {
     const madSksImmutableDecision = await checkMadSksImmutableModification(root, state, payload);
     if (madSksImmutableDecision.action === 'block') {

@@ -71,6 +71,15 @@ export function buildDoctorReadinessMatrix(input: any = {}) {
   const agentRoleConfig = input.agent_role_config || {}
   if (agentRoleConfig.ok === false) blockers.add('agent_role_config_repair_failed')
   if (Array.isArray(agentRoleConfig.missing) && agentRoleConfig.missing.length && agentRoleConfig.apply !== true) warnings.add('agent_role_config_missing_repair_available')
+  const skills = input.skills || null
+  for (const scope of ['global', 'project']) {
+    const report = skills?.[scope]
+    if (!report || report.skipped === true) continue
+    if (report.ok === false || report.core_skill_integrity?.ok === false) {
+      blockers.add(`${scope}_skills_reconcile_failed`)
+      for (const warning of normalizeList(report.warnings)) warnings.add(`${scope}_skills:${warning}`)
+    }
+  }
   const repairReadiness = buildRepairReadiness(input)
   for (const blocker of repairReadiness.blockers) blockers.add(blocker)
   for (const warning of repairReadiness.warnings) warnings.add(warning)
@@ -155,6 +164,7 @@ export function buildDoctorReadinessMatrix(input: any = {}) {
       blockers: normalizeList(localModel.blockers)
     },
     agent_role_config: agentRoleConfig,
+    skills,
     ready: coreReady,
     primary_blocker: [...blockers][0] || null,
     blockers: [...blockers],

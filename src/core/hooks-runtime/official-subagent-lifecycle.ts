@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { appendJsonl, nowIso, readJson, sha256, writeJsonAtomic } from '../fsx.js';
 import { missionDir, updateCurrentIfMissionAndRun } from '../mission.js';
+import { ensureConfinedDirectory } from '../managed-path-safety.js';
 import { NARUTO_PARENT_EFFORT, NARUTO_PARENT_MODEL } from '../subagents/model-policy.js';
 import { officialSubagentRolePlan } from '../subagents/agent-catalog.js';
 import {
@@ -42,6 +43,7 @@ import {
 } from '../agent-bridge/host-capability-runtime.js';
 import { observedParentModelMismatch } from './payload-signals.js';
 import { finalizeNarutoTerminalProof } from './naruto-terminal-finalization.js';
+import { subagentSkillAvailabilityRunBlockers } from './subagent-skill-availability.js';
 
 export async function recordAndRefreshSubagentEvidence(
   root: string,
@@ -51,6 +53,7 @@ export async function recordAndRefreshSubagentEvidence(
   sessionKey: any = null
 ) {
   const artifactDir = officialSubagentArtifactDir(root, state, sessionKey);
+  await ensureOfficialSubagentArtifactDirConfined(root, artifactDir);
   return withOfficialSubagentLifecycleLock(artifactDir, async () => {
     if (await officialSubagentPreparationInProgress(artifactDir)) return null;
     const plan: any = await readJson(path.join(artifactDir, 'subagent-plan.json'), {});
@@ -124,6 +127,12 @@ export async function recordAndRefreshSubagentEvidence(
     const requestedSubagents = countTarget.requestedSubagents
       || Number(state?.requested_subagents || existing?.requested_subagents || 0);
     if (!Number.isFinite(requestedSubagents) || requestedSubagents < 1) return event;
+    const skillAvailabilityBlockers = await subagentSkillAvailabilityRunBlockers(
+      root,
+      artifactDir,
+      String(plan?.mission_id || state?.mission_id || '').trim(),
+      workflowRunId
+    );
     const evidence = await writeSubagentEvidence(artifactDir, {
       requestedSubagents,
       countPolicy: countTarget.countPolicy,
@@ -133,12 +142,13 @@ export async function recordAndRefreshSubagentEvidence(
       workflowStatus: 'running',
       preparationOnly: false,
       runId: workflowRunId || null,
-      additionalBlockers: Array.isArray(plan?.config_blockers)
-        ? [
-            ...plan.config_blockers.map((item: any) => `official_subagent_config:${String(item)}`),
-            ...subagentCountContractBlockers(refreshedPlan, lifecycle?.cumulative_started || 0)
-          ]
-        : subagentCountContractBlockers(refreshedPlan, lifecycle?.cumulative_started || 0)
+      additionalBlockers: [
+        ...(Array.isArray(plan?.config_blockers)
+          ? plan.config_blockers.map((item: any) => `official_subagent_config:${String(item)}`)
+          : []),
+        ...subagentCountContractBlockers(refreshedPlan, lifecycle?.cumulative_started || 0),
+        ...skillAvailabilityBlockers
+      ]
     });
     return event;
   });
@@ -147,6 +157,10 @@ export async function recordAndRefreshSubagentEvidence(
 export function officialSubagentArtifactDir(root: any, state: any = {}, sessionKey: any = null) {
   if (state?.mission_id) return missionDir(root, state.mission_id);
   return path.join(root, '.sneakoscope', 'state', 'subagents', sha256(String(sessionKey || 'default')).slice(0, 32));
+}
+
+export async function ensureOfficialSubagentArtifactDirConfined(root: string, artifactDir: string): Promise<void> {
+  await ensureConfinedDirectory(path.resolve(root), path.resolve(artifactDir));
 }
 
 export async function refreshOfficialSubagentCompletionArtifacts(
@@ -158,6 +172,7 @@ export async function refreshOfficialSubagentCompletionArtifacts(
   const id = state?.mission_id;
   if (!id) return null;
   const dir = missionDir(root, id);
+  await ensureOfficialSubagentArtifactDirConfined(root, dir);
   const snapshot: any = await withOfficialSubagentLifecycleLock(
     dir,
     () => refreshOfficialSubagentCompletionArtifactsLocked(root, state, parentSummary, sessionKey, dir)
@@ -199,6 +214,12 @@ async function refreshOfficialSubagentCompletionArtifactsLocked(root: any, state
   const refreshedPlan = lifecycle ? { ...plan, wave_lifecycle: lifecycle } : plan;
   const countTarget = effectiveSubagentTarget(refreshedPlan, lifecycle?.cumulative_started || 0);
   const requestedSubagents = countTarget.requestedSubagents || Number(state.requested_subagents || 0);
+  const skillAvailabilityBlockers = await subagentSkillAvailabilityRunBlockers(
+    root,
+    dir,
+    String(id || '').trim(),
+    workflowRunId
+  );
   const hostCapabilityCompletion = await rebuildHostCapabilityEvidenceForFinalization({
     dir,
     state,
@@ -230,7 +251,8 @@ async function refreshOfficialSubagentCompletionArtifactsLocked(root: any, state
         ? plan.config_blockers.map((item: any) => `official_subagent_config:${String(item)}`)
         : []),
       ...subagentCountContractBlockers(refreshedPlan, lifecycle?.cumulative_started || 0),
-      ...hostCapabilityCompletion.blockers
+      ...hostCapabilityCompletion.blockers,
+      ...skillAvailabilityBlockers
     ],
     ...(hostCapabilityCompletion.evidence
       ? { hostCapabilityEvidence: hostCapabilityCompletion.evidence }

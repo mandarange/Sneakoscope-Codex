@@ -1,7 +1,8 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import { nowIso, readText, sha256, writeJsonAtomic } from '../fsx.js';
+import { canonicalFilesystemPath, nowIso, readText, sha256, writeJsonAtomic } from '../fsx.js';
+import { inspectConfinedPath, isLexicallyConfined, publicPathError } from '../managed-path-safety.js';
 import { buildSksCoreSkillManifest, isSksManagedCoreSkillContent } from './core-skill-manifest.js';
 import { canonicalSkillName, skillDisplayNameFromMarkdown } from './skill-name-canonicalizer.js';
 import { loadSkillsManifest } from '../init/skills.js';
@@ -40,13 +41,16 @@ export async function buildSkillRegistryLedger(input: {
 }): Promise<SkillRegistryLedger> {
   const root = path.resolve(input.root);
   const codexHome = process.env.CODEX_HOME || path.join(os.homedir(), '.codex');
-  const scanRoots = [
-    { root: path.join(root, '.agents', 'skills'), scope: 'project' as const, priority: 100 },
-    { root: path.join(root, '.codex', 'skills'), scope: 'project' as const, priority: 80 },
-    { root: path.join(os.homedir(), '.agents', 'skills'), scope: 'global' as const, priority: 60 },
-    { root: path.join(codexHome, 'skills'), scope: 'codex-home' as const, priority: 60 },
+  const home = os.homedir();
+  const codexHomeBoundary = isLexicallyConfined(home, codexHome) ? home : path.dirname(path.resolve(codexHome));
+  const scanRootResolution = await dedupeSkillRegistryScanRoots([
+    { root: path.join(root, '.agents', 'skills'), boundary: root, scope: 'project' as const, priority: 100 },
+    { root: path.join(root, '.codex', 'skills'), boundary: root, scope: 'project' as const, priority: 80 },
+    { root: path.join(home, '.agents', 'skills'), boundary: home, scope: 'global' as const, priority: 60 },
+    { root: path.join(codexHome, 'skills'), boundary: codexHomeBoundary, scope: 'codex-home' as const, priority: 60 },
     ...(input.extraRoots || [])
-  ];
+  ]);
+  const scanRoots = scanRootResolution.roots;
   const manifest = await loadSkillsManifest().catch(() => null);
   const officialNames = new Set<string>((manifest?.skills || []).map((skill: any) => canonicalSkillName(skill.canonical_name)));
   const aliasNames = new Set<string>((manifest?.skills || []).flatMap((skill: any) => (skill.deprecated_aliases || []).map((name: any) => canonicalSkillName(name))));
@@ -60,6 +64,10 @@ export async function buildSkillRegistryLedger(input: {
     for (const row of rows) {
       if (!row.isDirectory()) continue;
       const skillPath = path.join(scanRoot.root, row.name, 'SKILL.md');
+      if (scanRoot.boundary) {
+        const inspection = await inspectConfinedPath(scanRoot.boundary, skillPath).catch(() => null);
+        if (!inspection?.exists || inspection.leafSymlink || !inspection.stat?.isFile()) continue;
+      }
       const text = await readText(skillPath, null);
       if (typeof text !== 'string') continue;
       const displayName = skillDisplayNameFromMarkdown(text, row.name);
@@ -99,11 +107,14 @@ export async function buildSkillRegistryLedger(input: {
   const activeGrouped = groupByCanonical(activeEntries);
   const duplicateActiveNames = [...activeGrouped.entries()].filter(([, group]) => group.length > 1).map(([name]) => name).sort();
   const activeUnique = duplicateActiveNames.length === 0;
-  const blockers = duplicateActiveNames.map((name) => `duplicate_active_skill_name:${name}`);
+  const blockers = [
+    ...scanRootResolution.blockers,
+    ...duplicateActiveNames.map((name) => `duplicate_active_skill_name:${name}`)
+  ];
   const ledger: SkillRegistryLedger = {
     schema: 'sks.skill-registry-ledger.v1',
     generated_at: nowIso(),
-    ok: activeUnique,
+    ok: activeUnique && blockers.length === 0,
     root,
     entries,
     active_unique_by_canonical_name: activeUnique,
@@ -117,6 +128,52 @@ export async function buildSkillRegistryLedger(input: {
     : input.reportPath || path.join(root, '.sneakoscope', 'reports', 'skill-registry-ledger.json');
   if (reportPath) await writeJsonAtomic(reportPath, ledger).catch(() => undefined);
   return ledger;
+}
+
+async function dedupeSkillRegistryScanRoots(
+  candidates: Array<{ root: string; boundary?: string; scope: SkillRegistryEntry['scope']; priority: number }>
+) {
+  const byPath = new Map<string, { root: string; boundary?: string; scope: SkillRegistryEntry['scope']; priority: number }>();
+  const blockers: string[] = [];
+  for (const candidate of candidates) {
+    const normalized = {
+      ...candidate,
+      root: path.resolve(candidate.root),
+      ...(candidate.boundary ? { boundary: path.resolve(candidate.boundary) } : {})
+    };
+    if (normalized.boundary) {
+      try {
+        await fs.lstat(normalized.root);
+      } catch (error: unknown) {
+        if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') continue;
+        blockers.push(`unsafe_skill_scan_root:${publicPathError(error, normalized.root)}`);
+        continue;
+      }
+      try {
+        const inspection = await inspectConfinedPath(normalized.boundary, normalized.root);
+        if (!inspection.exists) continue;
+        if (inspection.leafSymlink || !inspection.stat?.isDirectory()) {
+          blockers.push(`unsafe_skill_scan_root:${normalized.root}`);
+          continue;
+        }
+      } catch (error: unknown) {
+        blockers.push(`unsafe_skill_scan_root:${publicPathError(error, normalized.root)}`);
+        continue;
+      }
+    }
+    const identity = await canonicalFilesystemPath(candidate.root);
+    const current = byPath.get(identity);
+    if (!current || skillScanScopeRank(normalized.scope) > skillScanScopeRank(current.scope)) {
+      byPath.set(identity, normalized);
+    }
+  }
+  return { roots: [...byPath.values()], blockers: [...new Set(blockers)].sort() };
+}
+
+function skillScanScopeRank(scope: SkillRegistryEntry['scope']): number {
+  if (scope === 'global' || scope === 'codex-home') return 3;
+  if (scope === 'project') return 2;
+  return 1;
 }
 
 function compareRegistryPriority(a: SkillRegistryEntry, b: SkillRegistryEntry, official: boolean): number {

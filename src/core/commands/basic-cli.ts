@@ -313,23 +313,20 @@ export async function setupCommand(args: any = []) {
     const { ensureRelatedCliTools } = await import('../../cli/install-helpers.js');
     cliTools = await ensureRelatedCliTools(args);
   });
-  const blockers = [
-    ...(res.codex_config_install?.manual_blockers || []),
-    ...(res.agent_install?.manual_blockers || [])
-  ];
-  const warnings = res.codex_config_install?.warnings || [];
+  const readiness = initProjectInstallReadiness(res);
   const result = {
     schema: 'sks.setup.v1',
-    ok: blockers.length === 0 && res.codex_config_install?.ok !== false && res.agent_install?.ok !== false,
-    status: blockers.length ? 'manual_blocked' : 'completed',
+    ok: readiness.ok,
+    status: readiness.status,
     root,
     install_scope: installScope,
     command_prefix: sksCommandPrefix(installScope, { globalCommand: 'sks' }),
     created: res.created || [],
     local_only: flag(args, '--local-only'),
     cli_tools: cliTools,
-    blockers,
-    warnings
+    skill_install: res.skill_install,
+    blockers: readiness.blockers,
+    warnings: readiness.warnings
   };
   if (!result.ok) process.exitCode = 1;
   if (flag(args, '--json')) {
@@ -341,8 +338,8 @@ export async function setupCommand(args: any = []) {
   console.log(`Codex CLI: ${cliTools.codex.status}${cliTools.codex.version ? ` ${cliTools.codex.version}` : ''}`);
   console.log(`Zellij: ${cliTools.zellij.ok ? 'ok' : cliTools.zellij.repair.status}${cliTools.zellij.version ? ` ${cliTools.zellij.version}` : ''}`);
   for (const file of result.created) console.log(`- ${file}`);
-  for (const warning of warnings) console.log(`Warning: ${warning}`);
-  for (const blocker of blockers) console.error(`Blocker: ${blocker}`);
+  for (const warning of readiness.warnings) console.log(`Warning: ${warning}`);
+  for (const blocker of readiness.blockers) console.error(`Blocker: ${blocker}`);
   return result;
 }
 
@@ -359,19 +356,71 @@ export async function initCommand(args: any = []) {
 export async function fixPathCommand(args: any = []) {
   const root = await projectRoot();
   const installScope = installScopeFromArgs(args);
+  let res: any = null;
   await withSecretPreservationGuard(root, 'fix-path-command', async () => {
-    await initProject(root, { installScope, localOnly: flag(args, '--local-only'), globalCommand: 'sks', force: true });
+    res = await initProject(root, { installScope, localOnly: flag(args, '--local-only'), globalCommand: 'sks', force: true });
   });
+  const readiness = initProjectInstallReadiness(res);
   const result = {
     schema: 'sks.fix-path.v1',
-    ok: true,
+    ok: readiness.ok,
+    status: readiness.status,
     root,
     install_scope: installScope,
     hook_command_prefix: sksCommandPrefix(installScope, { globalCommand: 'sks' }),
-    hooks: path.join(root, '.codex', 'hooks.json')
+    hooks: path.join(root, '.codex', 'hooks.json'),
+    skill_install: res?.skill_install,
+    blockers: readiness.blockers,
+    warnings: readiness.warnings
   };
-  if (flag(args, '--json')) return printJson(result);
-  console.log(`SKS hook path refreshed: ${path.relative(root, result.hooks)}`);
+  if (!result.ok) process.exitCode = 1;
+  if (flag(args, '--json')) {
+    printJson(result);
+    return result;
+  }
+  console.log(`${result.ok ? 'SKS hook path refreshed' : 'SKS hook path refresh blocked'}: ${path.relative(root, result.hooks)}`);
+  for (const warning of readiness.warnings) console.log(`Warning: ${warning}`);
+  for (const blocker of readiness.blockers) console.error(`Blocker: ${blocker}`);
+  return result;
+}
+
+function initProjectInstallReadiness(res: any) {
+  const manualBlockers = [
+    ...(res?.codex_config_install?.manual_blockers || []),
+    ...(res?.agent_install?.manual_blockers || [])
+  ].map(String);
+  const skillWarnings = Array.isArray(res?.skill_install?.warnings)
+    ? res.skill_install.warnings.map(String)
+    : [];
+  const skillBlockers = res?.skill_install?.ok === false
+    ? ['authoritative_sks_skill_install_failed', ...skillWarnings.map((warning: string) => `skill_install:${warning}`)]
+    : [];
+  const installBlockers = [
+    ...(res?.codex_config_install?.ok === false && !res?.codex_config_install?.manual_blockers?.length
+      ? ['codex_config_install_failed']
+      : []),
+    ...(res?.agent_install?.ok === false && !res?.agent_install?.manual_blockers?.length
+      ? ['official_subagent_agent_install_failed']
+      : [])
+  ];
+  const blockers = [...new Set([...manualBlockers, ...skillBlockers, ...installBlockers])];
+  const warnings = [...new Set([
+    ...(res?.codex_config_install?.warnings || []).map(String),
+    ...(res?.agent_install?.warnings || []).map(String),
+    ...skillWarnings
+  ])];
+  const ok = blockers.length === 0
+    && res?.skill_install?.ok !== false
+    && res?.codex_config_install?.ok !== false
+    && res?.agent_install?.ok !== false;
+  const status = manualBlockers.length
+    ? 'manual_blocked'
+    : skillBlockers.length
+      ? 'skill_blocked'
+      : installBlockers.length
+        ? 'install_blocked'
+        : 'completed';
+  return { ok, status, blockers, warnings };
 }
 
 export async function depsCommand(sub: any = 'check', args: any = []) {

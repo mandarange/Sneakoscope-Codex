@@ -3,9 +3,17 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { evaluateHookPayload } from '../core/hooks-runtime.js'
+import { installGlobalSkills } from '../core/init/skills.js'
 import { loadStateForSession, listSessionStates, stateFile } from '../core/mission.js'
 
 const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-concurrent-session-'))
+const fixtureHome = path.join(root, '.fixture-home')
+process.env.HOME = fixtureHome
+process.env.CODEX_HOME = path.join(fixtureHome, '.codex')
+process.env.SKS_GLOBAL_ROOT = path.join(fixtureHome, '.sneakoscope-global')
+await fs.mkdir(fixtureHome, { recursive: true })
+const skillInstall = await installGlobalSkills(fixtureHome)
+if (!skillInstall.ok) throw new Error('concurrent_session_skill_install_failed')
 await fs.mkdir(path.join(root, '.sneakoscope', 'state'), { recursive: true })
 
 const aPrompt = await evaluateHookPayload('user-prompt-submit', {

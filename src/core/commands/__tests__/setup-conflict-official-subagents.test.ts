@@ -4,7 +4,7 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { dispatch } from '../../../cli/router.js'
-import { setupCommand } from '../basic-cli.js'
+import { fixPathCommand, setupCommand } from '../basic-cli.js'
 import { run as doctorRun } from '../../../commands/doctor.js'
 import { MANAGED_OFFICIAL_SUBAGENT_ROLES } from '../../managed-assets/managed-assets-manifest.js'
 
@@ -162,6 +162,60 @@ test('setup preserves invalid inherited global TOML and returns a manual blocker
     assert.ok(backup)
     assert.equal(await fs.readFile(path.join(path.dirname(globalConfigPath), String(backup)), 'utf8'), invalidGlobal)
     await assert.rejects(fs.access(projectConfigPath))
+  })
+})
+
+test('setup reports a failed authoritative global skill install instead of completed', async () => {
+  await withTempProject('sks-setup-global-skill-blocked-', async (root) => {
+    const home = String(process.env.HOME)
+    await fs.mkdir(home, { recursive: true })
+    await fs.writeFile(path.join(home, '.agents'), 'user-owned non-directory collision\n')
+
+    const result: any = await setupCommand([
+      '--local-only',
+      '--install-scope', 'project',
+      '--skip-cli-tools',
+      '--json'
+    ])
+
+    assert.equal(result.ok, false)
+    assert.equal(result.status, 'skill_blocked')
+    assert.equal(result.skill_install.ok, false)
+    assert.ok(result.blockers.includes('authoritative_sks_skill_install_failed'))
+    assert.ok(result.blockers.some((item: string) => item.startsWith('skill_install:')))
+  })
+})
+
+test('fix-path reports a failed authoritative global skill install instead of success', async () => {
+  await withTempProject('sks-fix-path-global-skill-blocked-', async () => {
+    const home = String(process.env.HOME)
+    await fs.mkdir(home, { recursive: true })
+    await fs.writeFile(path.join(home, '.agents'), 'user-owned non-directory collision\n')
+
+    const result: any = await fixPathCommand([
+      '--local-only',
+      '--install-scope', 'project',
+      '--json'
+    ])
+
+    assert.equal(result.ok, false)
+    assert.equal(result.status, 'skill_blocked')
+    assert.equal(result.skill_install.ok, false)
+    assert.ok(result.blockers.includes('authoritative_sks_skill_install_failed'))
+    assert.ok(result.blockers.some((item: string) => item.startsWith('skill_install:')))
+    assert.equal(process.exitCode, 1)
+  })
+})
+
+test('doctor --fix run from HOME does not remove the authoritative global skill install', async () => {
+  await withTempProject('sks-doctor-home-skill-root-', async (root) => {
+    process.env.HOME = root
+    process.env.CODEX_HOME = path.join(root, '.codex')
+
+    await doctorRun('doctor', ['--fix', '--yes', '--local-only', '--machine-only', '--profile', 'fix', '--json'])
+
+    const naruto = await fs.readFile(path.join(root, '.agents', 'skills', 'sks-naruto', 'SKILL.md'), 'utf8')
+    assert.match(naruto, /BEGIN SKS IMMUTABLE CORE SKILL/)
   })
 })
 

@@ -106,6 +106,19 @@ export async function exists(p: string): Promise<boolean> {
   }
 }
 
+export async function canonicalFilesystemPath(p: string): Promise<string> {
+  const resolved = path.resolve(p);
+  return fsp.realpath(resolved).catch(() => resolved);
+}
+
+export async function sameFilesystemPath(left: string, right: string): Promise<boolean> {
+  const [leftCanonical, rightCanonical] = await Promise.all([
+    canonicalFilesystemPath(left),
+    canonicalFilesystemPath(right)
+  ]);
+  return leftCanonical === rightCanonical;
+}
+
 export async function ensureDir(p: string): Promise<void> {
   await fsp.mkdir(p, { recursive: true });
 }

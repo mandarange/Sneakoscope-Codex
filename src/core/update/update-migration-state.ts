@@ -1,7 +1,7 @@
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { ensureDir, exists, globalSksRoot, nowIso, packageRoot, PACKAGE_VERSION, projectRoot, readJson, readText, runProcess, sha256, which, writeJsonAtomic, writeReceiptRotated, writeTextAtomic } from '../fsx.js';
+import { ensureDir, exists, globalSksRoot, nowIso, packageRoot, PACKAGE_VERSION, projectRoot, readJson, readText, runProcess, sameFilesystemPath, sha256, which, writeJsonAtomic, writeReceiptRotated, writeTextAtomic } from '../fsx.js';
 import { MANAGED_ASSET_VERSION } from '../managed-assets/managed-assets-manifest.js';
 import { enforceRetention } from '../retention.js';
 import { COMMANDS } from '../../cli/command-registry.js';
@@ -482,10 +482,23 @@ async function runSessionStateSplitStage(root: string): Promise<Omit<UpdateMigra
 
 async function runSkillsReconcileStage(root: string): Promise<Omit<UpdateMigrationStageRun, 'schema' | 'id' | 'min_from_version' | 'from_version'>> {
   const home = path.resolve(process.env.HOME || os.homedir());
-  const global = await reconcileSkills({ targetDir: path.join(home, '.agents', 'skills'), scope: 'global', fix: true })
+  const globalTarget = path.resolve(home, '.agents', 'skills');
+  const projectTarget = path.resolve(root, '.agents', 'skills');
+  const sameSkillRoot = await sameFilesystemPath(root, home);
+  const global = await reconcileSkills({ targetDir: globalTarget, scope: 'global', fix: true })
     .catch((err: any) => ({ ok: false, error: err?.message || String(err) }));
-  const project = await reconcileSkills({ targetDir: path.join(root, '.agents', 'skills'), scope: 'project', fix: true })
-    .catch((err: any) => ({ ok: false, error: err?.message || String(err) }));
+  const project = sameSkillRoot
+    ? {
+        schema: 'sks.skill-reconcile.v1',
+        ok: true,
+        scope: 'project',
+        target_dir: projectTarget,
+        fix: true,
+        skipped: true,
+        reason: 'same_as_authoritative_global_skill_root'
+      }
+    : await reconcileSkills({ targetDir: projectTarget, scope: 'project', fix: true })
+      .catch((err: any) => ({ ok: false, error: err?.message || String(err) }));
   const globalRemaining = Number((global as any).retired_residue?.remaining_count || 0);
   const projectRemaining = Number((project as any).retired_residue?.remaining_count || 0);
   const blockers = [
@@ -497,7 +510,10 @@ async function runSkillsReconcileStage(root: string): Promise<Omit<UpdateMigrati
   return {
     ok: blockers.length === 0,
     status: blockers.length ? 'failed' : 'ok',
-    actions: ['reconciled_global_skills', 'reconciled_project_skills'],
+    actions: [
+      'reconciled_global_skills',
+      sameSkillRoot ? 'skipped_project_skills_same_as_global' : 'reconciled_project_skills'
+    ],
     blockers,
     warnings: [],
     detail: {

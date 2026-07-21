@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { appendJsonlBounded, nowIso, sha256 } from '../fsx.js';
+import { ensureConfinedDirectory } from '../managed-path-safety.js';
 import { codexHookEventName, type CodexHookEventName } from '../codex-compat/codex-hook-events.js';
 import {
   narutoDecisionForRoute,
@@ -66,8 +67,10 @@ export async function evaluateHookNarutoDecisionGate(input: HookNarutoDecisionIn
   };
   let recorded = true;
   try {
+    const logPath = hookNarutoDecisionLogPath(input.root);
+    await ensureConfinedDirectory(path.resolve(input.root), path.dirname(logPath));
     await appendJsonlBounded(
-      hookNarutoDecisionLogPath(input.root),
+      logPath,
       row,
       HOOK_NARUTO_DECISION_LOG_MAX_BYTES
     );

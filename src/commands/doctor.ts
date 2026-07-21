@@ -1,6 +1,6 @@
 import os from 'node:os';
 import path from 'node:path';
-import { projectRoot, exists, formatBytes, nowIso, writeJsonAtomic } from '../core/fsx.js';
+import { projectRoot, exists, formatBytes, nowIso, sameFilesystemPath, writeJsonAtomic } from '../core/fsx.js';
 import { flag } from '../cli/args.js';
 import { printJson } from '../cli/output.js';
 import { ui as cliUi } from '../cli/cli-theme.js';
@@ -145,6 +145,7 @@ export async function executeDoctorGlobalOnlyFix(args: any[] = [], root: string,
 
   const recoveryReady = codexLbRecoveryStatusReady(providerStatus, true);
   const globalSkillsReady = !(globalSkills as any)?.error
+    && (globalSkills as any)?.ok !== false
     && (globalSkills as any)?.core_skill_integrity?.ok !== false;
   const globalFastModeReady = (globalFastMode as any)?.status !== 'failed'
     && (globalFastMode as any)?.ok !== false;
@@ -444,18 +445,34 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     };
   }
   const skillsReconcile = doctorFix
-    ? {
-        global: await (await import('../core/init/skills.js')).reconcileSkills({
-          targetDir: path.join(process.env.HOME || os.homedir(), '.agents', 'skills'),
+    ? await (async () => {
+        const { reconcileSkills } = await import('../core/init/skills.js');
+        const home = path.resolve(process.env.HOME || os.homedir());
+        const globalTarget = path.resolve(home, '.agents', 'skills');
+        const projectTarget = path.resolve(root, '.agents', 'skills');
+        const sameSkillRoot = await sameFilesystemPath(root, home);
+        const global = await reconcileSkills({
+          targetDir: globalTarget,
           scope: 'global',
           fix: true
-        }).catch((err: any) => ({ ok: false, error: err?.message || String(err) })),
-        project: await (await import('../core/init/skills.js')).reconcileSkills({
-          targetDir: path.join(root, '.agents', 'skills'),
-          scope: 'project',
-          fix: true
-        }).catch((err: any) => ({ ok: false, error: err?.message || String(err) }))
-      }
+        }).catch((err: any) => ({ ok: false, error: err?.message || String(err) }));
+        const project = sameSkillRoot
+          ? {
+              schema: 'sks.skill-reconcile.v1',
+              ok: true,
+              scope: 'project',
+              target_dir: projectTarget,
+              fix: true,
+              skipped: true,
+              reason: 'same_as_authoritative_global_skill_root'
+            }
+          : await reconcileSkills({
+              targetDir: projectTarget,
+              scope: 'project',
+              fix: true
+            }).catch((err: any) => ({ ok: false, error: err?.message || String(err) }));
+        return { global, project };
+      })()
     : { skipped: true, reason: 'doctor_without_fix' };
   const commandAliasCleanup = await runDoctorCommandAliasCleanup({
     root,
@@ -1202,6 +1219,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     doctor_dirty_plan: doctorDirtyPlan,
     doctor_fix_postcheck: doctorFixPostcheck,
     doctor_native_capability: doctorNativeCapabilityRepair,
+    skills: skillsReconcile,
     local_model: localModel,
     agent_role_config: agentRoleConfigRepair,
     repair: configRepair,
