@@ -16,7 +16,8 @@ import { reconcileRetiredAgentRoleResidue } from '../../agents/agent-role-config
 import { pruneStaleGeneratedFiles } from '../../init/skills.js'
 import { repairCodexStartupConfig } from '../../doctor/codex-startup-config-repair.js'
 import { repairAgentConfigFileReferences } from '../../codex/agent-config-file-repair.js'
-import { PACKAGE_VERSION } from '../../fsx.js'
+import { buildSksCoreSkillManifest, renderCoreSkillTemplate } from '../../codex-native/core-skill-manifest.js'
+import { PACKAGE_VERSION, sha256 } from '../../fsx.js'
 import {
   installOfficialSubagentAgentConfigs,
   mergeOfficialSubagentConfig,
@@ -872,6 +873,56 @@ test('global setup quarantines a user-authored current official skill before ins
   assert.ok(quarantined)
   assert.equal(await fs.readFile(String(quarantined), 'utf8'), userText)
   assert.ok(result.skill_install.quarantined_user_collisions.includes('sks-answer'))
+})
+
+test('global setup quarantines markerless core user bytes before installing the packaged managed core', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-current-core-skill-user-collision-'))
+  const home = path.join(root, 'home')
+  const skill = path.join(home, '.agents', 'skills', 'sks-naruto', 'SKILL.md')
+  const userBytes = Buffer.from([
+    '---',
+    'name: sks-naruto',
+    'description: my markerless user-authored Naruto workflow',
+    '---',
+    '',
+    'Preserve these exact user bytes.\r',
+    ''
+  ].join('\n'), 'utf8')
+  await fs.mkdir(path.dirname(skill), { recursive: true })
+  await fs.writeFile(skill, userBytes)
+
+  const result: any = await initProject(root, {
+    installScope: 'global',
+    localOnly: true,
+    home,
+    codexHome: path.join(home, '.codex')
+  })
+
+  const expectedText = renderCoreSkillTemplate('sks-naruto')
+  const expected = buildSksCoreSkillManifest('1970-01-01T00:00:00.000Z').skills.find((row) => (
+    row.canonical_name === 'sks-naruto'
+  ))
+  assert.ok(expected)
+  const installedBytes = await fs.readFile(skill)
+  assert.deepEqual(installedBytes, Buffer.from(expectedText, 'utf8'))
+  assert.equal(sha256(installedBytes), expected.content_sha256)
+
+  const quarantined = await findFile(path.join(home, '.sneakoscope', 'quarantine'), 'SKILL.md')
+  assert.ok(quarantined)
+  assert.deepEqual(await fs.readFile(String(quarantined)), userBytes)
+  assert.ok(result.skill_install.quarantined_user_collisions.includes('sks-naruto'))
+  assert.equal(result.skill_install.ok, true)
+  assert.equal(result.skill_install.core_skill_integrity.ok, true)
+
+  const integrity = JSON.parse(await fs.readFile(
+    path.join(home, '.sneakoscope', 'reports', 'core-skill-integrity.json'),
+    'utf8'
+  ))
+  const narutoRow = integrity.rows.find((row: any) => row.canonical_name === 'sks-naruto')
+  assert.equal(integrity.ok, true)
+  assert.ok(narutoRow)
+  assert.equal(narutoRow.after_sha256, expected.content_sha256)
+  assert.equal(narutoRow.blocker, null)
 })
 
 test('global setup quarantines markerless non-core user prose before installing the managed copy', async () => {

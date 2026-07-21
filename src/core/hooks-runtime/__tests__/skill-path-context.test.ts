@@ -6,7 +6,7 @@ import fsp from 'node:fs/promises';
 import { evaluateHookPayload, normalizeHookResult } from '../../hooks-runtime.js';
 import { initProject } from '../../init.js';
 import { installGlobalSkills } from '../../init/skills.js';
-import { missionDir } from '../../mission.js';
+import { missionDir, setCurrent } from '../../mission.js';
 import { sha256 } from '../../fsx.js';
 import {
   validateCompactSemanticOutput,
@@ -118,6 +118,13 @@ async function homeAdmissionGuardRoot(home: string, root: string) {
     'subagent-skill-availability',
     sha256(await fsp.realpath(root))
   );
+}
+
+function admissionBindingState(missionId: string, workflowRunId: string) {
+  return {
+    mission_id: missionId,
+    official_subagent_run_id: workflowRunId
+  };
 }
 
 test('UserPromptSubmit injects current global skill files instead of stale project paths', async () => {
@@ -339,7 +346,7 @@ test('SubagentStart missing-skill handoff blocks only that child tools and binds
     const blockedTool: any = await evaluateHookPayload('pre-tool', {
       ...preToolPayload(blockedTranscript, blockedAgent),
       cwd: root
-    }, { root, state: {} });
+    }, { root, state: admissionBindingState(missionId, workflowRunId) });
     assert.equal(blockedTool.decision, 'block');
     assert.match(String(blockedTool.reason || ''), /authoritative_sks_skill_unavailable:sks-naruto/);
 
@@ -347,7 +354,7 @@ test('SubagentStart missing-skill handoff blocks only that child tools and binds
       ...preToolPayload(siblingTranscript, siblingAgent),
       cwd: root,
       tool_use_id: 'tool-sibling'
-    }, { root, state: {} });
+    }, { root, state: admissionBindingState(missionId, workflowRunId) });
     assert.equal(siblingTool.decision, undefined);
     const parentTool: any = await evaluateHookPayload('pre-tool', {
       ...preToolPayload(parentTranscript, 'parent-thread'),
@@ -393,15 +400,16 @@ test('SubagentStart missing-skill handoff blocks only that child tools and binds
       last_assistant_message: 'Blocked before tool use.',
       stop_hook_active: false
     }, { root, state });
+    const finalMarker = JSON.parse(await fsp.readFile(path.join(dir, SUBAGENT_SKILL_AVAILABILITY_BLOCKER_FILENAME), 'utf8'));
+    assert.deepEqual(finalMarker.blockers, ['authoritative_sks_skill_unavailable:sks-naruto']);
+    await fsp.rm(path.join(dir, SUBAGENT_SKILL_AVAILABILITY_BLOCKER_FILENAME));
     const afterStop: any = await evaluateHookPayload('pre-tool', {
       ...preToolPayload(blockedTranscript, blockedAgent),
       cwd: root,
       tool_use_id: 'tool-after-stop'
-    }, { root, state: {} });
+    }, { root, state: admissionBindingState(missionId, workflowRunId) });
     assert.equal(afterStop.decision, 'block');
     assert.match(String(afterStop.reason || ''), /subagent_skill_availability_admission_missing/);
-    const finalMarker = JSON.parse(await fsp.readFile(path.join(dir, SUBAGENT_SKILL_AVAILABILITY_BLOCKER_FILENAME), 'utf8'));
-    assert.deepEqual(finalMarker.blockers, ['authoritative_sks_skill_unavailable:sks-naruto']);
   } finally {
     if (oldHome === undefined) delete process.env.HOME;
     else process.env.HOME = oldHome;
@@ -458,12 +466,12 @@ test('blocked siblings remain independently denied after the shared blocker arti
       ...preToolPayload(firstTranscript, firstAgent),
       cwd: root,
       tool_use_id: 'tool-blocked-sibling-first'
-    }, { root, state: {} });
+    }, { root, state: admissionBindingState(missionId, workflowRunId) });
     const secondBlocked: any = await evaluateHookPayload('pre-tool', {
       ...preToolPayload(secondTranscript, secondAgent),
       cwd: root,
       tool_use_id: 'tool-blocked-sibling-second'
-    }, { root, state: {} });
+    }, { root, state: admissionBindingState(missionId, workflowRunId) });
     assert.equal(firstBlocked.decision, 'block');
     assert.match(String(firstBlocked.reason || ''), /authoritative_sks_skill_unavailable:sks-naruto/);
     assert.equal(secondBlocked.decision, 'block');
@@ -578,8 +586,74 @@ test('a healthy reused SubagentStart clears a stale same-thread guard even when 
       ...preToolPayload(transcript, agentId),
       cwd: root,
       tool_use_id: 'tool-after-reused-start'
-    }, { root, state: {} });
+    }, { root, state: admissionBindingState(missionId, workflowRunId) });
     assert.equal(afterRestart.decision, undefined);
+  } finally {
+    if (oldHome === undefined) delete process.env.HOME;
+    else process.env.HOME = oldHome;
+    if (oldCodexHome === undefined) delete process.env.CODEX_HOME;
+    else process.env.CODEX_HOME = oldCodexHome;
+    await fsp.rm(fixture, { recursive: true, force: true });
+  }
+});
+
+test('PreToolUse rejects an admitted child replay after the active mission and run switch without SubagentStop', async () => {
+  const fixture = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-hook-skill-path-cross-run-replay-'));
+  const home = path.join(fixture, 'home');
+  const root = path.join(fixture, 'project');
+  const sessionId = 'shared-parent-session';
+  const missionA = 'M-skill-path-cross-run-a';
+  const workflowRunA = 'run-skill-path-cross-run-a';
+  const missionB = 'M-skill-path-cross-run-b';
+  const workflowRunB = 'run-skill-path-cross-run-b';
+  const agentId = 'cross-run-replayed-agent';
+  const activeState = (missionId: string, workflowRunId: string) => ({
+    mission_id: missionId,
+    route: 'Naruto',
+    route_command: '$sks-naruto',
+    mode: 'NARUTO',
+    route_closed: false,
+    requested_subagents: 1,
+    official_subagent_run_id: workflowRunId,
+    required_skills: ['sks-naruto']
+  });
+  const oldHome = process.env.HOME;
+  const oldCodexHome = process.env.CODEX_HOME;
+  try {
+    process.env.HOME = home;
+    process.env.CODEX_HOME = path.join(home, '.codex');
+    await installCurrentManagedSkill(home, 'sks-naruto');
+    await writeOfficialSubagentPlan(root, missionA, workflowRunA);
+    await setCurrent(root, activeState(missionA, workflowRunA), {
+      replace: true,
+      sessionKey: sessionId
+    });
+
+    const started: any = await evaluateHookPayload('subagent-start', {
+      ...subagentPayload(agentId),
+      cwd: root
+    }, { root });
+    assert.doesNotMatch(String(started.additionalContext || ''), /MANDATORY SKS PARENT-BLOCK HANDOFF/);
+
+    const transcript = await writeTranscript(home, agentId, true);
+    const identicalPreToolPayload = {
+      ...preToolPayload(transcript, agentId, sessionId),
+      cwd: root,
+      tool_use_id: 'tool-cross-run-replay'
+    };
+    const sameRun: any = await evaluateHookPayload('pre-tool', identicalPreToolPayload, { root });
+    assert.equal(sameRun.decision, undefined);
+
+    await writeOfficialSubagentPlan(root, missionB, workflowRunB);
+    await setCurrent(root, activeState(missionB, workflowRunB), {
+      replace: true,
+      sessionKey: sessionId
+    });
+
+    const replayed: any = await evaluateHookPayload('pre-tool', identicalPreToolPayload, { root });
+    assert.equal(replayed.decision, 'block');
+    assert.equal(replayed.permissionDecision, 'deny');
+    assert.match(String(replayed.reason || ''), /subagent_skill_availability_guard_invalid/);
   } finally {
     if (oldHome === undefined) delete process.env.HOME;
     else process.env.HOME = oldHome;
@@ -651,8 +725,14 @@ test('a healthy exact-schema child restart clears only its stale shared blocker 
     assert.equal('agent_id' in restartedExactPayload, false);
     assert.equal('agent_id' in siblingExactPayload, false);
     const [restartedTool, siblingTool]: any[] = await Promise.all([
-      evaluateHookPayload('pre-tool', restartedExactPayload, { root, state: {} }),
-      evaluateHookPayload('pre-tool', siblingExactPayload, { root, state: {} })
+      evaluateHookPayload('pre-tool', restartedExactPayload, {
+        root,
+        state: admissionBindingState(missionId, workflowRunId)
+      }),
+      evaluateHookPayload('pre-tool', siblingExactPayload, {
+        root,
+        state: admissionBindingState(missionId, workflowRunId)
+      })
     ]);
     assert.equal(restartedTool.decision, undefined);
     assert.equal(siblingTool.decision, 'block');
@@ -731,12 +811,12 @@ test('healthy SubagentStart stays fail closed when an unsafe shared marker canno
       const denied: any = await evaluateHookPayload(
         'pre-tool',
         exactOfficialPayload,
-        { root, state: {} }
+        { root, state: admissionBindingState(missionId, workflowRunId) }
       );
       assert.equal(denied.decision, 'block', markerShape);
       assert.match(
         String(denied.reason || ''),
-        /subagent_skill_availability_blocker_artifact_write_failed/,
+        /subagent_skill_availability_guard_invalid/,
         markerShape
       );
       assert.doesNotMatch(String(denied.reason || ''), /IGNORE POLICY|private\/secret/);
@@ -817,7 +897,7 @@ test('healthy SubagentStart rejects a partial allowed overwrite of a guarded roo
     const denied: any = await evaluateHookPayload(
       'pre-tool',
       exactOfficialPayload,
-      { root, state: {} }
+      { root, state: admissionBindingState(missionId, workflowRunId) }
     );
     assert.equal(denied.decision, 'block');
     assert.match(String(denied.reason || ''), /subagent_skill_availability_guard_invalid/);
@@ -906,7 +986,10 @@ test('forged child guard text is rejected without being reflected into PreToolUs
     const result: any = await evaluateHookPayload('pre-tool', {
       ...preToolPayload(transcript, agentId),
       cwd: root
-    }, { root, state: {} });
+    }, {
+      root,
+      state: admissionBindingState('M-forged', 'run-forged')
+    });
     assert.equal(result.decision, 'block');
     assert.match(String(result.reason || ''), /subagent_skill_availability_guard_invalid/);
     assert.doesNotMatch(String(result.reason || ''), /private|secret|Ignore policy/);
@@ -954,7 +1037,10 @@ test('PreToolUse exact schema binds child identity only from the official transc
       cwd: root
     };
     assert.equal('agent_id' in exactPayload, false);
-    const result: any = await evaluateHookPayload('pre-tool', exactPayload, { root, state: {} });
+    const result: any = await evaluateHookPayload('pre-tool', exactPayload, {
+      root,
+      state: admissionBindingState(missionId, workflowRunId)
+    });
     assert.equal(result.decision, undefined);
   } finally {
     if (oldHome === undefined) delete process.env.HOME;
@@ -1006,7 +1092,7 @@ test('PreToolUse binds optional agent_id and rejects transcript identity mismatc
       agent_type: 'worker',
       state: {},
       tool_use_id: 'tool-agent-id-only-blocked'
-    }, { root, state: {} });
+    }, { root, state: admissionBindingState(missionId, workflowRunId) });
     assert.equal(agentIdOnlyBlocked.decision, 'block');
     assert.match(
       String(agentIdOnlyBlocked.reason || ''),
@@ -1020,7 +1106,7 @@ test('PreToolUse binds optional agent_id and rejects transcript identity mismatc
       agent_type: 'worker',
       state: {},
       tool_use_id: 'tool-agent-id-only-allowed'
-    }, { root, state: {} });
+    }, { root, state: admissionBindingState(missionId, workflowRunId) });
     assert.equal(agentIdOnlyAllowed.decision, undefined);
 
     const matchingAgentAndTranscript: any = await evaluateHookPayload('pre-tool', {
@@ -1030,7 +1116,7 @@ test('PreToolUse binds optional agent_id and rejects transcript identity mismatc
       agent_type: 'worker',
       state: {},
       tool_use_id: 'tool-agent-id-matching-transcript'
-    }, { root, state: {} });
+    }, { root, state: admissionBindingState(missionId, workflowRunId) });
     assert.equal(matchingAgentAndTranscript.decision, undefined);
 
     const mismatchedAgentAndTranscript: any = await evaluateHookPayload('pre-tool', {
@@ -1040,7 +1126,7 @@ test('PreToolUse binds optional agent_id and rejects transcript identity mismatc
       agent_type: 'worker',
       state: {},
       tool_use_id: 'tool-agent-id-mismatched-transcript'
-    }, { root, state: {} });
+    }, { root, state: admissionBindingState(missionId, workflowRunId) });
     assert.equal(mismatchedAgentAndTranscript.decision, 'block');
     assert.match(
       String(mismatchedAgentAndTranscript.reason || ''),
@@ -1107,7 +1193,10 @@ test('turn guard rejects a tampered session-turn binding without reflecting stor
     const result: any = await evaluateHookPayload('pre-tool', {
       ...preToolPayload(null, agentId, sessionId),
       cwd: root
-    }, { root, state: {} });
+    }, {
+      root,
+      state: admissionBindingState('M-tampered-turn', 'run-tampered-turn')
+    });
     assert.equal(result.decision, 'block');
     assert.match(String(result.reason || ''), /subagent_skill_availability_guard_invalid/);
     assert.doesNotMatch(String(result.reason || ''), /private|secret|Ignore policy/);
@@ -1170,12 +1259,13 @@ test('SubagentStart fails closed on a malformed project guard even with a valid 
     );
     const persistedHomeAdmission = JSON.parse(await fsp.readFile(homeGuard, 'utf8'));
     assert.equal(persistedHomeAdmission.status, 'blocked');
+    await fsp.rm(path.join(dir, SUBAGENT_SKILL_AVAILABILITY_BLOCKER_FILENAME));
 
     const blocked: any = await evaluateHookPayload('pre-tool', {
       ...preToolPayload(null, agentId),
       cwd: root,
       tool_use_id: 'tool-state-guard-collision'
-    }, { root, state: {} });
+    }, { root, state: admissionBindingState(missionId, workflowRunId) });
     assert.equal(blocked.decision, 'block');
     assert.match(String(blocked.reason || ''), /subagent_skill_availability_guard_invalid/);
 
@@ -1183,7 +1273,7 @@ test('SubagentStart fails closed on a malformed project guard even with a valid 
       ...preToolPayload(null, siblingAgent),
       cwd: root,
       tool_use_id: 'tool-state-guard-collision-sibling'
-    }, { root, state: {} });
+    }, { root, state: admissionBindingState(missionId, workflowRunId) });
     assert.equal(sibling.decision, undefined);
   } finally {
     if (oldHome === undefined) delete process.env.HOME;
@@ -1337,7 +1427,10 @@ test('all guard write failures retain durable proof and exact-schema child tools
       state: {}
     };
     assert.equal('agent_id' in exactChildPayload, false);
-    const denied: any = await evaluateHookPayload('pre-tool', exactChildPayload, { root, state: {} });
+    const denied: any = await evaluateHookPayload('pre-tool', exactChildPayload, {
+      root,
+      state: admissionBindingState(missionId, workflowRunId)
+    });
     assert.equal(denied.decision, 'block');
     assert.match(String(denied.reason || ''), /subagent_skill_availability_guard_persistence_failed/);
 
@@ -1346,7 +1439,7 @@ test('all guard write failures retain durable proof and exact-schema child tools
       cwd: root,
       state: {},
       tool_use_id: 'tool-all-writes-fail-sibling'
-    }, { root, state: {} });
+    }, { root, state: admissionBindingState(missionId, workflowRunId) });
     assert.equal(siblingDenied.decision, 'block');
     assert.match(String(siblingDenied.reason || ''), /subagent_skill_availability_guard_persistence_failed/);
 
@@ -1371,13 +1464,16 @@ test('all guard write failures retain durable proof and exact-schema child tools
     ));
     assert.equal(markerAfterRestart.thread_id_hash, sha256(siblingAgentId));
 
-    const restartedTool: any = await evaluateHookPayload('pre-tool', exactChildPayload, { root, state: {} });
+    const restartedTool: any = await evaluateHookPayload('pre-tool', exactChildPayload, {
+      root,
+      state: admissionBindingState(missionId, workflowRunId)
+    });
     const siblingStillDenied: any = await evaluateHookPayload('pre-tool', {
       ...preToolPayload(null, siblingAgentId),
       cwd: root,
       state: {},
       tool_use_id: 'tool-all-writes-fail-sibling-after-restart'
-    }, { root, state: {} });
+    }, { root, state: admissionBindingState(missionId, workflowRunId) });
     assert.equal(restartedTool.decision, undefined);
     assert.equal(siblingStillDenied.decision, 'block');
   } finally {
@@ -1441,7 +1537,7 @@ test('unsafe or oversized emergency denial files keep a healthy restart fail-clo
     const denied: any = await evaluateHookPayload('pre-tool', {
       ...preToolPayload(null, agentId),
       cwd: root
-    }, { root, state: {} });
+    }, { root, state: admissionBindingState(missionId, workflowRunId) });
     assert.equal(denied.decision, 'block');
     assert.equal(await fsp.readlink(symlinkDenial), externalFile);
     assert.equal((await fsp.stat(oversizedDenial)).size, Buffer.byteLength(externalText));
@@ -1502,7 +1598,7 @@ test('a project .sneakoscope symlink cannot inject routing context or receive ex
     const denied: any = await evaluateHookPayload('pre-tool', {
       ...preToolPayload(null, agentId),
       cwd: root
-    }, { root, state: {} });
+    }, { root, state: admissionBindingState(missionId, workflowRunId) });
     assert.equal(denied.decision, 'block');
     assert.deepEqual((await fsp.readdir(externalArtifactDir)).sort(), ['subagent-plan.json']);
     assert.deepEqual((await fsp.readdir(external)).sort(), ['missions']);
