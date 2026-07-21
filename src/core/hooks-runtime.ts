@@ -472,7 +472,11 @@ async function hookPreTool(root: any, state: any, payload: any, noQuestion: any,
   const skillAvailabilityBlock = await subagentSkillAvailabilityPreToolBlockReason(
     root,
     payload,
-    officialSubagentArtifactDir(root, state, sessionKey)
+    officialSubagentArtifactDir(root, state, sessionKey),
+    {
+      missionId: state?.mission_id,
+      workflowRunId: state?.official_subagent_run_id
+    }
   ).catch((error: unknown) => {
     const code = error instanceof Error && error.message === 'subagent_skill_availability_guard_invalid'
       ? 'subagent_skill_availability_guard_invalid'

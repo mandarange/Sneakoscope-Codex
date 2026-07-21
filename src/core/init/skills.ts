@@ -181,6 +181,10 @@ async function installOfficialSkills(root: any) {
     const dir = path.join(root, '.agents', 'skills', skill.canonical_name);
     const existing = await readConfinedOfficialSkillText(root, dir, skill.canonical_name);
     if (existing.quarantined) quarantinedUserCollisions.push(skill.canonical_name);
+    if (typeof existing.text === 'string' && !isSksManagedOfficialSkill(existing.text)) {
+      await quarantineSkillDir(root, dir, skill.canonical_name, 'global-official-core-name-user-collision');
+      quarantinedUserCollisions.push(skill.canonical_name);
+    }
   }
   const coreByName = new Map(coreManifest.skills.map((skill) => [skill.canonical_name, skill.content_sha256]));
   const coreIntegrity = await syncCoreSkillsIntegrity({

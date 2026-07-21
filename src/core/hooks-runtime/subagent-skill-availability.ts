@@ -51,6 +51,17 @@ interface GuardRoot {
   boundary: string;
 }
 
+export interface SubagentSkillAvailabilityActiveBinding {
+  missionId: unknown;
+  workflowRunId: unknown;
+}
+
+interface MatchingArtifactEvidence {
+  blockers: string[];
+  missionId: string | null;
+  workflowRunId: string | null;
+}
+
 type BoundedJsonResult =
   | { status: 'missing' }
   | { status: 'invalid'; childEvidence: boolean }
@@ -185,7 +196,8 @@ export async function persistSubagentSkillAvailabilityBlocker(input: {
 export async function subagentSkillAvailabilityPreToolBlockReason(
   root: string,
   payload: any,
-  artifactDir?: string | null
+  artifactDir: string | null | undefined,
+  activeBinding: SubagentSkillAvailabilityActiveBinding
 ): Promise<string | null> {
   const rawPayloadThreadId = payload?.agent_id;
   const payloadThreadId = boundedAgentThreadId(rawPayloadThreadId);
@@ -201,6 +213,11 @@ export async function subagentSkillAvailabilityPreToolBlockReason(
   }
   const threadId = payloadThreadId || transcriptThreadId;
   const threadHash = threadId ? sha256(threadId) : null;
+  const activeMissionId = String(activeBinding?.missionId || '').trim() || null;
+  const activeWorkflowRunId = String(activeBinding?.workflowRunId || '').trim() || null;
+  if (threadId && (!activeMissionId || !activeWorkflowRunId)) {
+    return preToolBlockReason(['subagent_skill_availability_guard_invalid']);
+  }
   const sessionScope = String(payload?.session_id || '').trim();
   const turnId = String(payload?.turn_id || '').trim();
   if (!sessionScope || !turnId) {
@@ -208,7 +225,7 @@ export async function subagentSkillAvailabilityPreToolBlockReason(
   }
   const sessionHash = sha256(sessionScope);
   const turnHash = sha256(turnId);
-  const artifactBlockers = artifactDir
+  const artifactEvidence = artifactDir
     ? await matchingArtifactBlockers(root, artifactDir, sessionHash, turnHash)
     : null;
   const admissions: SubagentSkillAvailabilityAdmission[] = [];
@@ -224,11 +241,27 @@ export async function subagentSkillAvailabilityPreToolBlockReason(
   const invalidChildEvidence = errors.some((error) => (
     error instanceof SubagentSkillAvailabilityGuardError && error.childEvidence
   ));
-  if (artifactBlockers) return preToolBlockReason(artifactBlockers);
+  if (artifactEvidence) {
+    if (!activeMissionId
+      || !activeWorkflowRunId
+      || artifactEvidence.missionId !== activeMissionId
+      || artifactEvidence.workflowRunId !== activeWorkflowRunId) {
+      return preToolBlockReason(['subagent_skill_availability_guard_invalid']);
+    }
+    return preToolBlockReason(artifactEvidence.blockers);
+  }
   if (errors.length && (threadId || admissions.length || invalidChildEvidence)) throw errors[0];
   if (errors.length) return null;
   if (!admissions.length) {
     return threadId ? preToolBlockReason(['subagent_skill_availability_admission_missing']) : null;
+  }
+  if (!activeMissionId
+    || !activeWorkflowRunId
+    || admissions.some((admission) => (
+      admission.mission_id !== activeMissionId
+      || admission.workflow_run_id !== activeWorkflowRunId
+    ))) {
+    return preToolBlockReason(['subagent_skill_availability_guard_invalid']);
   }
   const fingerprints = new Set(admissions.map(admissionFingerprint));
   if (fingerprints.size !== 1) return preToolBlockReason(['subagent_skill_availability_guard_invalid']);
@@ -546,7 +579,7 @@ async function matchingArtifactBlockers(
   artifactDir: string,
   sessionHash: string,
   turnHash: string
-): Promise<string[] | null> {
+): Promise<MatchingArtifactEvidence | null> {
   const emergency = await matchingEmergencyDenial(root, artifactDir, sessionHash, turnHash);
   if (emergency) return emergency;
   const file = path.join(path.resolve(artifactDir), SUBAGENT_SKILL_AVAILABILITY_BLOCKER_FILENAME);
@@ -557,11 +590,19 @@ async function matchingArtifactBlockers(
   );
   if (result.status === 'missing') return null;
   if (result.status !== 'value' || !validBlocker(result.value)) {
-    return ['subagent_skill_availability_guard_invalid'];
+    return {
+      blockers: ['subagent_skill_availability_guard_invalid'],
+      missionId: null,
+      workflowRunId: null
+    };
   }
   const blocker = result.value;
   return blocker.session_scope_hash === sessionHash && blocker.turn_id_hash === turnHash
-    ? blocker.blockers
+    ? {
+        blockers: blocker.blockers,
+        missionId: blocker.mission_id,
+        workflowRunId: blocker.workflow_run_id
+      }
     : null;
 }
 
@@ -595,7 +636,7 @@ async function matchingEmergencyDenial(
   artifactDir: string,
   sessionHash: string,
   turnHash: string
-): Promise<string[] | null> {
+): Promise<MatchingArtifactEvidence | null> {
   const file = emergencyDenialPath(path.resolve(artifactDir), sessionHash, turnHash);
   try {
     const result = await readBoundedConfinedJson(
@@ -607,10 +648,17 @@ async function matchingEmergencyDenial(
     if (result.status !== 'value' || !validBlocker(result.value)
       || result.value.session_scope_hash !== sessionHash
       || result.value.turn_id_hash !== turnHash) {
-      return ['subagent_skill_availability_guard_invalid'];
+      return {
+        blockers: ['subagent_skill_availability_guard_invalid'],
+        missionId: null,
+        workflowRunId: null
+      };
     }
-    const blocker = result.value;
-    return blocker.blockers;
+    return {
+      blockers: result.value.blockers,
+      missionId: result.value.mission_id,
+      workflowRunId: result.value.workflow_run_id
+    };
   } catch {
     return null;
   }
