@@ -103,6 +103,7 @@ SKS hook outputs must use Codex camelCase fields such as `hookSpecificOutput`, `
 
 - PreToolUse deny uses `hookSpecificOutput.permissionDecision:"deny"` with non-empty `permissionDecisionReason`.
 - PreToolUse simple allow is `{ "continue": true }`; `permissionDecision:"allow"` is allowed only with `updatedInput`.
+- PreToolUse may attach a non-empty string `hookSpecificOutput.additionalContext` to refresh verified managed-skill context immediately before a tool call. The legacy top-level `additionalContext` shape remains rejected.
 - PreToolUse `permissionDecision:"ask"`, `continue:false`, `stopReason`, and `suppressOutput:true` are fatal.
 - PermissionRequest uses only `hookSpecificOutput.decision.behavior`; deny requires a non-empty `message`.
 - PermissionRequest `updatedInput`, `updatedPermissions`, `interrupt:true`, `continue:false`, `stopReason`, and `suppressOutput:true` are fatal.
@@ -112,7 +113,6 @@ SKS hook outputs must use Codex camelCase fields such as `hookSpecificOutput`, `
 
 SKS strict-subset examples:
 
-- PreToolUse `additionalContext` is schema-compatible but `sks_zero_warning_disallowed`.
 - PermissionRequest allow `message` is schema-compatible but `sks_zero_warning_disallowed`.
 - Optional `systemMessage` in routes that should not emit user-visible output is policy-sensitive and must be justified before use.
 

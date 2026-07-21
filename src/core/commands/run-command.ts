@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { exists, projectRoot, runProcess, writeJsonAtomic, type RunProcessResult } from '../fsx.js';
 import { createMission, missionDir, setCurrent } from '../mission.js';
 import { createAndWriteWorkOrderLedgerForPrompt, closeWorkOrderLedgerForRouteResult } from '../work-order-ledger.js';
@@ -546,8 +547,7 @@ async function runSks(
   commandArgs: readonly string[],
   { parentMissionId = null }: { parentMissionId?: string | null } = {}
 ): Promise<RunProcessResult> {
-  const packedBin = new URL('../../bin/sks.js', import.meta.url).pathname;
-  const sourceBin = new URL('../../../bin/sks.js', import.meta.url).pathname;
+  const { packedBin, sourceBin } = runSksEntrypointCandidates();
   const entrypoint = (await exists(packedBin)) ? packedBin : sourceBin;
   return runProcess(process.execPath, [entrypoint, ...commandArgs], {
     cwd: root,
@@ -560,6 +560,16 @@ async function runSks(
       ...(parentMissionId ? { SKS_RUN_PARENT_MISSION_ID: parentMissionId } : {})
     },
   });
+}
+
+export function runSksEntrypointCandidates(moduleUrl: string | URL = import.meta.url): {
+  packedBin: string;
+  sourceBin: string;
+} {
+  return {
+    packedBin: fileURLToPath(new URL('../../bin/sks.js', moduleUrl)),
+    sourceBin: fileURLToPath(new URL('../../../bin/sks.js', moduleUrl)),
+  };
 }
 
 function routeExecutionResult(

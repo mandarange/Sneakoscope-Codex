@@ -65,13 +65,21 @@ export async function detectCodexHookOutputWarnings(eventLike: unknown, output: 
 
 function unknownTopLevelKeyIssues(output: unknown): CodexHookIssue[] {
   if (!output || typeof output !== 'object' || Array.isArray(output)) return [];
-  const allowed = new Set(['continue', 'decision', 'reason', 'hookSpecificOutput']);
+  const allowed = new Set([
+    'continue',
+    'decision',
+    'reason',
+    'hookSpecificOutput',
+    'stopReason',
+    'suppressOutput',
+    'systemMessage'
+  ]);
   return Object.keys(output)
     .filter((key) => !allowed.has(key))
     .map((key) => makeCodexHookIssue(
-      'policy_disallowed',
-      `unknown_field_${key}`,
-      `Unknown top-level hook field is not accepted by the SKS zero-warning contract: ${key}.`,
+      'schema_violation',
+      'unknown_field',
+      `Unknown top-level hook field is not accepted by the Codex hook output schema: ${key}.`,
       { path: `$.${key}`, upstream_supported: false, sks_disallowed: true }
     ));
 }

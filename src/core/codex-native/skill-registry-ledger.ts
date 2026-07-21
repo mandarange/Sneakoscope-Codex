@@ -1,11 +1,12 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import { canonicalFilesystemPath, nowIso, readText, sha256, writeJsonAtomic } from '../fsx.js';
+import { canonicalFilesystemPath, nowIso, readText, sha256 } from '../fsx.js';
 import { inspectConfinedPath, isLexicallyConfined } from '../managed-path-safety.js';
 import { buildSksCoreSkillManifest, isSksManagedCoreSkillContent } from './core-skill-manifest.js';
 import { canonicalSkillName, skillDisplayNameFromMarkdown } from './skill-name-canonicalizer.js';
 import { loadSkillsManifest } from '../init/skills.js';
+import { writeRootConfinedJsonReport } from './confined-report-writer.js';
 
 export interface SkillRegistryEntry {
   schema: 'sks.skill-registry-entry.v1';
@@ -54,10 +55,29 @@ export async function buildSkillRegistryLedger(input: {
   const manifest = await loadSkillsManifest().catch(() => null);
   const officialNames = new Set<string>((manifest?.skills || []).map((skill: any) => canonicalSkillName(skill.canonical_name)));
   const aliasNames = new Set<string>((manifest?.skills || []).flatMap((skill: any) => (skill.deprecated_aliases || []).map((name: any) => canonicalSkillName(name))));
-  const manifestByName = new Map([
-    ...buildSksCoreSkillManifest().skills.map((skill) => [skill.canonical_name, skill.content_sha256] as const),
-    ...(manifest?.skills || []).map((skill: any) => [canonicalSkillName(skill.canonical_name), String(skill.content_sha256 || '')] as const)
-  ]);
+  const manifestByName = new Map<string, string>();
+  const managedDigestsByName = new Map<string, Set<string>>();
+  const addManagedDigest = (name: unknown, digest: unknown) => {
+    const canonical = canonicalSkillName(String(name || ''));
+    const boundedDigest = String(digest || '').toLowerCase();
+    if (!canonical || !/^[a-f0-9]{64}$/.test(boundedDigest)) return;
+    const digests = managedDigestsByName.get(canonical) || new Set<string>();
+    digests.add(boundedDigest);
+    managedDigestsByName.set(canonical, digests);
+  };
+  for (const skill of buildSksCoreSkillManifest().skills) {
+    manifestByName.set(skill.canonical_name, skill.content_sha256);
+    addManagedDigest(skill.canonical_name, skill.content_sha256);
+  }
+  for (const skill of manifest?.skills || []) {
+    const canonical = canonicalSkillName(skill?.canonical_name);
+    const currentDigest = String(skill?.content_sha256 || '').toLowerCase();
+    if (canonical && /^[a-f0-9]{64}$/.test(currentDigest)) manifestByName.set(canonical, currentDigest);
+    for (const name of [canonical, ...(skill?.deprecated_aliases || []).map((alias: unknown) => canonicalSkillName(String(alias || '')))]) {
+      addManagedDigest(name, currentDigest);
+      for (const digest of skill?.hash_history || []) addManagedDigest(name, digest);
+    }
+  }
   const entries: SkillRegistryEntry[] = [];
   for (const scanRoot of scanRoots) {
     const rows = await fs.readdir(scanRoot.root, { withFileTypes: true }).catch(() => []);
@@ -74,7 +94,8 @@ export async function buildSkillRegistryLedger(input: {
       const canonical = canonicalSkillName(displayName || row.name);
       const hash = sha256(text);
       const officialName = officialNames.has(canonical) || aliasNames.has(canonical);
-      const managed = isSksManagedCoreSkillContent(text) || text.includes('BEGIN SKS MANAGED SKILL') || officialName;
+      const managed = isRecognizedSksManagedSkillContent(text)
+        || Boolean(officialName && managedDigestsByName.get(canonical)?.has(hash));
       const expected = manifestByName.get(canonical);
       const status: SkillRegistryEntry['status'] = managed
         ? expected && expected === hash ? 'managed-current' : 'managed-drift'
@@ -126,8 +147,19 @@ export async function buildSkillRegistryLedger(input: {
   const reportPath = input.reportPath === null
     ? null
     : input.reportPath || path.join(root, '.sneakoscope', 'reports', 'skill-registry-ledger.json');
-  if (reportPath) await writeJsonAtomic(reportPath, ledger).catch(() => undefined);
+  if (reportPath) {
+    const written = await writeRootConfinedJsonReport({ root, reportPath, value: ledger });
+    if (!written) {
+      ledger.ok = false;
+      ledger.blockers = [...new Set([...ledger.blockers, 'skill_registry_report_path_unsafe'])].sort();
+    }
+  }
   return ledger;
+}
+
+const SKS_MANAGED_SKILL_MARKER_RE = /BEGIN SKS (?:IMMUTABLE CORE|MANAGED) SKILL/;
+function isRecognizedSksManagedSkillContent(text: string): boolean {
+  return isSksManagedCoreSkillContent(text) || SKS_MANAGED_SKILL_MARKER_RE.test(text);
 }
 
 async function dedupeSkillRegistryScanRoots(

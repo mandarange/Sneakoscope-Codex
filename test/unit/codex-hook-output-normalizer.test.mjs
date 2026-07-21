@@ -10,6 +10,14 @@ test('normalizer emits camelCase PreToolUse decisions', () => {
 
   const allow = normalizeCodexHookOutput('pre-tool', { permissionDecision: 'allow' });
   assert.deepEqual(allow, { continue: true });
+  const context = normalizeCodexHookOutput('pre-tool', { additionalContext: 'current skill path' });
+  assert.deepEqual(context, {
+    continue: true,
+    hookSpecificOutput: {
+      hookEventName: 'PreToolUse',
+      additionalContext: 'current skill path'
+    }
+  });
   const rewrite = normalizeCodexHookOutput('pre-tool', { permissionDecision: 'allow', updatedInput: { command: 'npm test' } });
   assert.equal(rewrite.hookSpecificOutput.permissionDecision, 'allow');
   assert.deepEqual(rewrite.hookSpecificOutput.updatedInput, { command: 'npm test' });

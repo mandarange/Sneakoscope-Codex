@@ -129,7 +129,9 @@ function validatePreToolUse(output: any, issues: CodexHookIssue[]) {
 
   const specific = asRecord(output.hookSpecificOutput);
   if (!specific) return;
-  if (specific.additionalContext !== undefined) pushStrictSubset(issues, 'pretooluse_additional_context', 'PreToolUse additionalContext is schema-compatible but disallowed by the SKS zero-warning strict subset.', '$.hookSpecificOutput.additionalContext');
+  if (specific.additionalContext !== undefined && typeof specific.additionalContext !== 'string') {
+    pushIssue(issues, 'schema_violation', 'pretooluse_additional_context_type', 'PreToolUse additionalContext must be a string.', '$.hookSpecificOutput.additionalContext', { upstream_supported: false });
+  }
   const decision = specific.permissionDecision;
   const hasUpdatedInput = Object.prototype.hasOwnProperty.call(specific, 'updatedInput');
   const hasReason = Object.prototype.hasOwnProperty.call(specific, 'permissionDecisionReason');

@@ -1,6 +1,7 @@
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
+import { fileURLToPath } from 'node:url';
 import type { Dirent } from 'node:fs';
 import { ensureDir, exists, nowIso, PACKAGE_VERSION, readJson, readText, sha256, withScratchDir, writeJsonAtomic, writeTextAtomic } from '../fsx.js';
 import { buildSksCoreSkillManifest, isCoreSkillName, legacyCoreSkillNames } from '../codex-native/core-skill-manifest.js';
@@ -1117,7 +1118,7 @@ function canonicalSkillNameFromValue(value: any) {
 }
 
 function packageRootDir() {
-  return path.resolve(path.dirname(new URL(import.meta.url).pathname), '..', '..', '..');
+  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 }
 
 async function pruneProjectGeneratedManifest(targetDir: string) {

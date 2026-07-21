@@ -708,6 +708,75 @@ test('generated Naruto skill describes the official workflow and retired aliases
   }
 })
 
+test('project setup never writes through a project .agents symlink to an external skill root', async () => {
+  const fixture = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-project-skill-root-external-alias-'))
+  const root = path.join(fixture, 'project')
+  const home = path.join(fixture, 'home')
+  const outsideAgents = path.join(fixture, 'outside-agents')
+  const marker = path.join(outsideAgents, 'user-owned.txt')
+  await fs.mkdir(root, { recursive: true })
+  await fs.mkdir(outsideAgents, { recursive: true })
+  await fs.writeFile(marker, 'preserve me\n')
+  await fs.symlink(outsideAgents, path.join(root, '.agents'), 'dir')
+  const before = await fs.readdir(outsideAgents)
+
+  const result: any = await initProject(root, {
+    installScope: 'global',
+    localOnly: true,
+    home,
+    codexHome: path.join(home, '.codex')
+  })
+
+  assert.deepEqual(await fs.readdir(outsideAgents), before)
+  assert.equal(await fs.readFile(marker, 'utf8'), 'preserve me\n')
+  await assert.rejects(fs.access(path.join(outsideAgents, 'skills')))
+  assert.equal((await fs.lstat(path.join(root, '.agents'))).isSymbolicLink(), true)
+  assert.equal(result.skill_install.ok, false)
+  assert.ok(result.skill_install.project_residue_reconcile.warnings.some((warning: string) => (
+    warning.startsWith('retired_skill_cleanup_failed:')
+      || warning.startsWith('skill_target_prepare_failed:')
+  )))
+})
+
+test('project setup accepts exact .agents and skills aliases to the authoritative global skill root without cleanup', async () => {
+  for (const aliasKind of ['agents', 'skills'] as const) {
+    const fixture = await fs.mkdtemp(path.join(os.tmpdir(), `sks-project-skill-root-${aliasKind}-alias-`))
+    const root = path.join(fixture, 'project')
+    const home = path.join(fixture, 'home')
+    const globalAgents = path.join(home, '.agents')
+    const globalSkills = path.join(globalAgents, 'skills')
+    await fs.mkdir(root, { recursive: true })
+    await fs.mkdir(globalSkills, { recursive: true })
+    if (aliasKind === 'agents') {
+      await fs.symlink(globalAgents, path.join(root, '.agents'), 'dir')
+    } else {
+      await fs.mkdir(path.join(root, '.agents'), { recursive: true })
+      await fs.symlink(globalSkills, path.join(root, '.agents', 'skills'), 'dir')
+    }
+
+    const result: any = await initProject(root, {
+      installScope: 'global',
+      localOnly: true,
+      home,
+      codexHome: path.join(home, '.codex')
+    })
+
+    assert.equal(result.skill_install.ok, true, aliasKind)
+    assert.equal(result.skill_install.project_residue_reconcile, undefined, aliasKind)
+    assert.equal(result.created.includes('.agents/skills official residue reconciled'), false, aliasKind)
+    assert.equal(
+      await fs.realpath(path.join(root, '.agents', 'skills')),
+      await fs.realpath(globalSkills),
+      aliasKind
+    )
+    assert.match(
+      await fs.readFile(path.join(globalSkills, 'sks-naruto', 'SKILL.md'), 'utf8'),
+      /Codex official subagent workflow/,
+      aliasKind
+    )
+  }
+})
+
 test('stale generated prune never deletes legacy or user Codex agent files', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-official-agent-prune-'))
   const legacy = path.join(root, '.codex', 'agents', 'analysis-scout.toml')

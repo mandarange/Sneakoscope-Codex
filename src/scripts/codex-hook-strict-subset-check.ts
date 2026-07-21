@@ -10,12 +10,6 @@ const cases = [
     category: 'upstream_semantic_unsupported'
   },
   {
-    name: 'pretooluse_additional_context',
-    event: 'PreToolUse',
-    output: { continue: true, hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: 'allowed by schema, banned by SKS' } },
-    category: 'sks_zero_warning_disallowed'
-  },
-  {
     name: 'snake_case',
     event: 'PreToolUse',
     output: { continue: true, permission_decision: 'deny' },

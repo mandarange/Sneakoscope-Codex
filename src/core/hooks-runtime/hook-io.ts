@@ -55,7 +55,7 @@ export function normalizeHookResult(name: any, result: any = {}) {
     if (out.decision === 'block' || out.permissionDecision === 'deny' || out.decision === 'deny') {
       return buildPreToolUseDeny(reason, { systemMessage });
     }
-    return buildPreToolUseContinue({ systemMessage });
+    return buildPreToolUseContinue({ additionalContext: out.additionalContext, systemMessage });
   }
 
   if (eventName === 'PermissionRequest') {

@@ -25,7 +25,7 @@ import { prepareMadSksSqlPlaneMission } from '../mad-sks/sql-plane/coordinator.j
 import { MAD_SKS_SQL_PLANE_CAPABILITY_FILE, madSksSqlPlaneRelativePath } from '../mad-sks/sql-plane/paths.js';
 import { OFFICIAL_SUBAGENT_EXECUTION_STAGE_ID } from '../agents/agent-schema.js';
 import { normalizeOfficialSubagentPolicy, officialSubagentPipelineStage } from '../agents/agent-plan.js';
-import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_IMAGEGEN_REQUIRED_POLICY, CODEX_WEB_VERIFICATION_POLICY, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, chatCaptureIntakeText, context7RequirementText, dollarCommand, evidenceMentionsForbiddenBrowserAutomation, hasFromChatImgSignal, hasMadSksSignal, imageUxReviewPipelinePolicyText, pptPipelineAllowlistPolicyText, reflectionRequiredForRoute, reasoningInstruction, routeNeedsContext7, routePrompt, routeReasoning, routeRequiresSubagents, stripDollarCommand, stripMadSksSignal, stripVisibleDecisionAnswerBlocks, subagentExecutionPolicyText, stackCurrentDocsPolicyText, triwikiContextTracking } from '../routes.js';
+import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_IMAGEGEN_REQUIRED_POLICY, CODEX_WEB_VERIFICATION_POLICY, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, chatCaptureIntakeText, context7RequirementText, dollarCommand, evidenceMentionsForbiddenBrowserAutomation, explicitManagedSkillNames, hasFromChatImgSignal, hasMadSksSignal, imageUxReviewPipelinePolicyText, managedSkillNamesForPrompt, pptPipelineAllowlistPolicyText, reflectionRequiredForRoute, reasoningInstruction, routeNeedsContext7, routePrompt, routeReasoning, routeRequiresSubagents, stripDollarCommand, stripMadSksSignal, stripVisibleDecisionAnswerBlocks, subagentExecutionPolicyText, stackCurrentDocsPolicyText, triwikiContextTracking } from '../routes.js';
 import { coreEngineeringDirectiveReferenceText } from '../lean-engineering-policy.js';
 import { classifyTaskProfile, gateProfileForTask, type GateProfile, type TaskProfile } from '../runtime/task-profile.js';
 import { chooseVerificationBudget, type VerificationBudget } from '../runtime/verification-budget.js';
@@ -640,7 +640,12 @@ export function goalNativeOnlyContext(prompt: any, route: any = routePrompt(prom
 
 export async function prepareRoute(root: any, prompt: any, state: any = {}, opts: any = {}): Promise<any> {
   const cleanPrompt = stripVisibleDecisionAnswerBlocks(prompt);
-  const route = routePrompt(cleanPrompt);
+  const selectedRoute = routePrompt(cleanPrompt);
+  const explicitlyInvokedSkills = explicitManagedSkillNames(cleanPrompt);
+  const route = selectedRoute ? {
+    ...selectedRoute,
+    requiredSkills: managedSkillNamesForPrompt(selectedRoute, cleanPrompt)
+  } : null;
   const codexThreadId = String(process.env.CODEX_THREAD_ID || '').trim();
   const sessionKey = opts.sessionKey || codexThreadId || state?._session_key || null;
   const madSksAuthorization = hasMadSksSignal(cleanPrompt);
@@ -666,7 +671,7 @@ export async function prepareRoute(root: any, prompt: any, state: any = {}, opts
   if (route.id === 'MadSKS') return finish(await prepareMadSksSqlPlane(root, route, task, required, { sessionKey }));
   if (QUESTION_GATE_ROUTES.has(route.id)) return finish(await prepareClarificationGate(root, route, task, required, { madSksAuthorization, sessionKey }));
   if (route.id === 'Naruto' && subagentsRequired) return finish(await prepareNaruto(root, route, task, required, { madSksAuthorization, sessionKey, parentModel: opts.parentModel || null }));
-  if (route.id === 'Naruto') return finish(await prepareLightRoute(root, parentOwnedProfileRoute(route), task, required, { sessionKey }));
+  if (route.id === 'Naruto') return finish(await prepareLightRoute(root, parentOwnedProfileRoute(route, explicitlyInvokedSkills), task, required, { sessionKey }));
   if (route.id === 'Research') return finish(await prepareResearch(root, route, task, required, { sessionKey }));
   if (route.id === 'AutoResearch') return finish(await prepareAutoResearch(root, route, task, required, { sessionKey }));
   if (route.id === 'DB') return finish(await prepareDb(root, route, task, required, { sessionKey }));
@@ -678,7 +683,7 @@ export async function prepareRoute(root: any, prompt: any, state: any = {}, opts
   });
 }
 
-function parentOwnedProfileRoute(route: any) {
+function parentOwnedProfileRoute(route: any, explicitlyInvokedSkills: readonly string[] = []) {
   return {
     ...route,
     id: 'SKS',
@@ -686,7 +691,12 @@ function parentOwnedProfileRoute(route: any) {
     mode: 'SKS',
     route: 'profiled parent-owned execution',
     description: 'Parent-owned bounded execution selected by the task profile; no subagent workflow is required.',
-    requiredSkills: ['sks-pipeline-runner', 'sks-prompt-pipeline', 'sks-honest-mode'],
+    requiredSkills: Array.from(new Set([
+      'sks-pipeline-runner',
+      'sks-prompt-pipeline',
+      'sks-honest-mode',
+      ...explicitlyInvokedSkills
+    ])),
     lifecycle: ['task_profile', 'ownership', 'focused_implementation', 'listed_verification', 'honest_summary'],
     stopGate: 'honest_mode',
     coverage_required: false,

@@ -1,13 +1,12 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { ensureDir, nowIso, sha256, writeJsonAtomic, writeTextAtomic } from '../fsx.js';
+import { nowIso, sha256, writeJsonAtomic, writeTextAtomic } from '../fsx.js';
 import {
   ensureConfinedDirectory,
   inspectConfinedPath,
-  isLexicallyConfined,
-  publicPathError
+  isLexicallyConfined
 } from '../managed-path-safety.js';
-import { CORE_SKILL_TEMPLATE_VERSION, buildSksCoreSkillManifest, currentCoreSkillName, isSksManagedCoreSkillContent, renderCoreSkillTemplate } from './core-skill-manifest.js';
+import { CORE_SKILL_TEMPLATE_VERSION, buildSksCoreSkillManifest, currentCoreSkillName, isCoreSkillName, isSksManagedCoreSkillContent, renderCoreSkillTemplate } from './core-skill-manifest.js';
 import { canonicalSkillName } from './skill-name-canonicalizer.js';
 
 export type CoreSkillSyncAction =
@@ -64,11 +63,24 @@ export async function syncCoreSkillsIntegrity(input: {
   const restored: string[] = [];
   const skippedUserAuthored: string[] = [];
   const blockers: string[] = [];
+  const reportPath = input.reportPath === null
+    ? null
+    : path.resolve(input.reportPath || path.join(root, '.sneakoscope', 'reports', 'core-skill-integrity.json'));
+  const backupRoot = path.join(root, '.sneakoscope', 'backups', 'core-skills');
+  const reportPathBlocker = reportPath
+    ? await inspectCoreSkillArtifactTarget(root, reportPath, 'report', 'file')
+    : null;
+  const backupPathBlocker = apply
+    ? await inspectCoreSkillArtifactTarget(root, backupRoot, 'backup', 'directory')
+    : null;
+  const artifactPathBlockers = [reportPathBlocker, backupPathBlocker].filter((value): value is string => Boolean(value));
+  blockers.push(...artifactPathBlockers);
+  const mutationAllowed = apply && artifactPathBlockers.length === 0;
   for (const skill of manifest.skills) {
     const skillDir = path.join(skillsRoot, skill.canonical_name);
     const file = path.join(skillDir, 'SKILL.md');
     const desired = renderCoreSkillTemplate(skill.canonical_name);
-    const safeCurrent = await readConfinedCoreSkill(skillsBoundary, skillDir, file);
+    const safeCurrent = await readConfinedCoreSkill(skillsBoundary, skill.canonical_name, skillDir, file);
     const current = safeCurrent.text;
     const beforeSha = typeof current === 'string' ? sha256(current) : null;
     let action: CoreSkillSyncAction = 'already-current';
@@ -78,7 +90,7 @@ export async function syncCoreSkillsIntegrity(input: {
       action = 'blocked';
     } else if (current === null) {
       action = 'install-missing-managed-copy';
-      if (apply) {
+      if (mutationAllowed) {
         await ensureConfinedDirectory(skillsBoundary, skillDir);
         await writeTextAtomic(file, desired);
         installed.push(file);
@@ -87,13 +99,18 @@ export async function syncCoreSkillsIntegrity(input: {
       action = 'already-current';
     } else if (isSksManagedCoreSkillContent(current)) {
       action = 'restore-corrupted-managed-copy';
-      if (apply) {
-        backupPath = path.join(root, '.sneakoscope', 'backups', 'core-skills', skill.canonical_name, `${Date.now()}-${process.pid}.SKILL.md.bak`);
-        await ensureDir(path.dirname(backupPath));
-        await fs.writeFile(backupPath, current, 'utf8');
-        await ensureConfinedDirectory(skillsBoundary, skillDir);
-        await writeTextAtomic(file, desired);
-        restored.push(file);
+      if (mutationAllowed) {
+        const candidateBackupPath = path.join(backupRoot, skill.canonical_name, `${Date.now()}-${process.pid}.SKILL.md.bak`);
+        const backupWriteBlocker = await writeConfinedCoreSkillArtifact(root, candidateBackupPath, current, 'backup');
+        if (backupWriteBlocker) {
+          action = 'blocked';
+          blocker = backupWriteBlocker;
+        } else {
+          backupPath = candidateBackupPath;
+          await ensureConfinedDirectory(skillsBoundary, skillDir);
+          await writeTextAtomic(file, desired);
+          restored.push(file);
+        }
       }
     } else {
       action = 'skip-user-authored';
@@ -102,7 +119,7 @@ export async function syncCoreSkillsIntegrity(input: {
     }
     const afterInspection = blocker && action === 'blocked'
       ? { text: null as string | null, blocker }
-      : await readConfinedCoreSkill(skillsBoundary, skillDir, file);
+      : await readConfinedCoreSkill(skillsBoundary, skill.canonical_name, skillDir, file);
     if (!blocker && afterInspection.blocker) {
       action = 'blocked';
       blocker = afterInspection.blocker;
@@ -139,10 +156,13 @@ export async function syncCoreSkillsIntegrity(input: {
     skipped_user_authored: skippedUserAuthored,
     blockers
   };
-  const reportPath = input.reportPath === null
-    ? null
-    : input.reportPath || path.join(root, '.sneakoscope', 'reports', 'core-skill-integrity.json');
-  if (reportPath) await writeJsonAtomic(reportPath, report).catch(() => undefined);
+  if (reportPath && !reportPathBlocker) {
+    const reportWriteBlocker = await writeConfinedCoreSkillReport(root, reportPath, report);
+    if (reportWriteBlocker) {
+      blockers.push(reportWriteBlocker);
+      report.ok = false;
+    }
+  }
   return report;
 }
 
@@ -158,24 +178,141 @@ function coreSkillsBoundary(root: string, skillsRoot: string): string {
 
 async function readConfinedCoreSkill(
   boundary: string,
+  skillName: string,
   skillDir: string,
   file: string
 ): Promise<{ text: string | null; blocker: string | null }> {
   try {
     const dirInspection = await inspectConfinedPath(boundary, skillDir);
     if (dirInspection.exists && (dirInspection.leafSymlink || !dirInspection.stat?.isDirectory())) {
-      return { text: null, blocker: `core_skill_path_unsafe:${path.basename(skillDir)}:skill_directory_not_safe` };
+      return { text: null, blocker: coreSkillPathBlocker(skillName, 'skill_directory_not_safe') };
     }
     const fileInspection = await inspectConfinedPath(boundary, file);
     if (!fileInspection.exists) return { text: null, blocker: null };
     if (fileInspection.leafSymlink || !fileInspection.stat?.isFile()) {
-      return { text: null, blocker: `core_skill_path_unsafe:${path.basename(skillDir)}:skill_file_not_safe` };
+      return { text: null, blocker: coreSkillPathBlocker(skillName, 'skill_file_not_safe') };
     }
     return { text: await fs.readFile(file, 'utf8'), blocker: null };
   } catch (error: unknown) {
     return {
       text: null,
-      blocker: `core_skill_path_unsafe:${path.basename(skillDir)}:${publicPathError(error, file)}`
+      blocker: coreSkillPathBlocker(skillName, coreSkillPathFailureReason(error))
     };
   }
+}
+
+type CoreSkillPathFailureReason =
+  | 'skill_directory_not_safe'
+  | 'skill_file_not_safe'
+  | 'boundary_missing'
+  | 'boundary_symlink'
+  | 'boundary_not_directory'
+  | 'escape_refused'
+  | 'ancestor_symlink'
+  | 'ancestor_not_directory'
+  | 'inspection_failed';
+
+type CoreSkillArtifactScope = 'report' | 'backup';
+type CoreSkillArtifactFailureReason =
+  | 'boundary_missing'
+  | 'boundary_symlink'
+  | 'boundary_not_directory'
+  | 'escape_refused'
+  | 'ancestor_symlink'
+  | 'ancestor_not_directory'
+  | 'leaf_symlink'
+  | 'not_directory'
+  | 'not_file'
+  | 'inspection_failed'
+  | 'write_failed';
+
+function coreSkillPathBlocker(skillName: string, reason: CoreSkillPathFailureReason): string {
+  const canonical = canonicalSkillName(skillName);
+  const safeSkillName = isCoreSkillName(canonical) ? canonical : 'unknown';
+  return `core_skill_path_unsafe:${safeSkillName}:${reason}`;
+}
+
+function coreSkillPathFailureReason(error: unknown): CoreSkillPathFailureReason {
+  const code = error && typeof error === 'object' && 'code' in error ? error.code : null;
+  if (code === 'managed_path_boundary_missing') return 'boundary_missing';
+  if (code === 'managed_path_boundary_symlink_refused') return 'boundary_symlink';
+  if (code === 'managed_path_boundary_not_directory') return 'boundary_not_directory';
+  if (code === 'managed_path_escape_refused') return 'escape_refused';
+  if (code === 'managed_path_ancestor_symlink_refused') return 'ancestor_symlink';
+  if (code === 'managed_path_ancestor_not_directory') return 'ancestor_not_directory';
+  return 'inspection_failed';
+}
+
+async function inspectCoreSkillArtifactTarget(
+  root: string,
+  target: string,
+  scope: CoreSkillArtifactScope,
+  expected: 'directory' | 'file'
+): Promise<string | null> {
+  if (!isLexicallyConfined(root, target)) return coreSkillArtifactBlocker(scope, 'escape_refused');
+  try {
+    const inspection = await inspectConfinedPath(root, target);
+    if (!inspection.exists) return null;
+    if (inspection.leafSymlink) return coreSkillArtifactBlocker(scope, 'leaf_symlink');
+    if (expected === 'directory' && !inspection.stat?.isDirectory()) {
+      return coreSkillArtifactBlocker(scope, 'not_directory');
+    }
+    if (expected === 'file' && !inspection.stat?.isFile()) {
+      return coreSkillArtifactBlocker(scope, 'not_file');
+    }
+    return null;
+  } catch (error: unknown) {
+    return coreSkillArtifactBlocker(scope, coreSkillArtifactFailureReason(error));
+  }
+}
+
+async function writeConfinedCoreSkillArtifact(
+  root: string,
+  target: string,
+  text: string,
+  scope: CoreSkillArtifactScope
+): Promise<string | null> {
+  try {
+    await ensureConfinedDirectory(root, path.dirname(target));
+    const blocker = await inspectCoreSkillArtifactTarget(root, target, scope, 'file');
+    if (blocker) return blocker;
+    await writeTextAtomic(target, text);
+    return null;
+  } catch {
+    return coreSkillArtifactBlocker(scope, 'write_failed');
+  }
+}
+
+async function writeConfinedCoreSkillReport(
+  root: string,
+  target: string,
+  report: CoreSkillIntegrityReport
+): Promise<string | null> {
+  try {
+    await ensureConfinedDirectory(root, path.dirname(target));
+    const blocker = await inspectCoreSkillArtifactTarget(root, target, 'report', 'file');
+    if (blocker) return blocker;
+    await writeJsonAtomic(target, report);
+    return null;
+  } catch {
+    return coreSkillArtifactBlocker('report', 'write_failed');
+  }
+}
+
+function coreSkillArtifactBlocker(
+  scope: CoreSkillArtifactScope,
+  reason: CoreSkillArtifactFailureReason
+): string {
+  return `core_skill_artifact_path_unsafe:${scope}:${reason}`;
+}
+
+function coreSkillArtifactFailureReason(error: unknown): CoreSkillArtifactFailureReason {
+  const code = error && typeof error === 'object' && 'code' in error ? error.code : null;
+  if (code === 'managed_path_boundary_missing') return 'boundary_missing';
+  if (code === 'managed_path_boundary_symlink_refused') return 'boundary_symlink';
+  if (code === 'managed_path_boundary_not_directory') return 'boundary_not_directory';
+  if (code === 'managed_path_escape_refused') return 'escape_refused';
+  if (code === 'managed_path_ancestor_symlink_refused') return 'ancestor_symlink';
+  if (code === 'managed_path_ancestor_not_directory') return 'ancestor_not_directory';
+  return 'inspection_failed';
 }

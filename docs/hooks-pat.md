@@ -57,7 +57,7 @@ Output uses camelCase Codex fields. Examples:
 
 Snake_case output keys, legacy top-level `permissionDecision`, PermissionRequest reserved fields, unsupported config fields, PreToolUse `permissionDecision:"ask"`, PreToolUse `allow` without `updatedInput`, Stop `continue:false`, Stop `stopReason`, and Stop blocks without a reason are release-blocking warning patterns. `sks hooks warning-check --json` reports them by `schema_violation`, `upstream_semantic_unsupported`, `sks_zero_warning_disallowed`, `legacy_shape`, and `policy_disallowed`.
 
-Strict-subset examples include PreToolUse `additionalContext` and PermissionRequest allow `message`: upstream schema may allow them, but SKS rejects them to preserve a zero-warning release surface. This strict subset is intentional release policy, not an upstream schema limitation.
+PreToolUse accepts a non-empty string `hookSpecificOutput.additionalContext` when SKS must refresh verified managed-skill context immediately before tool execution. Top-level `additionalContext` and non-string values remain release-blocking legacy/schema violations. PermissionRequest allow `message` remains intentionally rejected by the SKS strict subset to preserve a zero-warning release surface.
 
 PreToolUse simple allow is:
 

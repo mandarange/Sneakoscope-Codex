@@ -11,8 +11,9 @@ export const SUBAGENT_SKILL_AVAILABILITY_BLOCKER_SCHEMA = 'sks.subagent-skill-av
 const GUARD_DIR = 'subagent-skill-availability';
 const EMERGENCY_DENIAL_DIR = 'subagent-skill-availability-emergency-denials';
 const MAX_EMERGENCY_DENIALS = 64;
+const MAX_EMERGENCY_DENIAL_BYTES = 64 * 1024;
 const ADMISSION_SCHEMA = 'sks.subagent-skill-availability-admission.v1';
-const SUBAGENT_ADMISSION_BLOCKER_RE = /^(?:authoritative_sks_skill_resolution_failed|authoritative_sks_skill_candidate_rejected|authoritative_sks_skill_unavailable:sks(?:-[a-z0-9]+)*|subagent_skill_availability_(?:artifact_dir_unsafe|guard_persistence_failed))$/;
+const SUBAGENT_ADMISSION_BLOCKER_RE = /^(?:authoritative_sks_skill_resolution_failed|authoritative_sks_skill_candidate_rejected|authoritative_sks_skill_unavailable:sks(?:-[a-z0-9]+)*|subagent_skill_availability_(?:artifact_dir_unsafe|blocker_artifact_write_failed|guard_persistence_failed))$/;
 
 interface SubagentSkillAvailabilityBlocker {
   schema: typeof SUBAGENT_SKILL_AVAILABILITY_BLOCKER_SCHEMA;
@@ -100,7 +101,20 @@ export async function persistSubagentSkillAvailabilityBlocker(input: {
     recorded_at: nowIso()
   };
   const roots = await admissionGuardRoots(input.root, input.artifactDir);
-  const rootWrites = await Promise.all(roots.map((guardRoot) => writeAdmissionPair(guardRoot, admission)));
+  // A healthy restart must not publish an allowed admission until all stale
+  // denial evidence for this exact child has been cleared. Persist a bounded
+  // fail-closed admission first so cleanup failure cannot leave an earlier
+  // allowed guard usable by an exact-schema PreToolUse payload.
+  const guardedAdmission: SubagentSkillAvailabilityAdmission = blockers.length
+    ? admission
+    : {
+        ...admission,
+        status: 'blocked',
+        blockers: ['subagent_skill_availability_blocker_artifact_write_failed']
+      };
+  const rootWrites = await Promise.all(
+    roots.map((guardRoot) => writeAdmissionPair(guardRoot, guardedAdmission))
+  );
   const guardPersistenceFailed = !rootWrites.some(Boolean);
   const evidenceBlockers = guardPersistenceFailed
     ? [...new Set([...blockers, 'subagent_skill_availability_guard_persistence_failed'])]
@@ -142,6 +156,17 @@ export async function persistSubagentSkillAvailabilityBlocker(input: {
   }
   if (guardPersistenceFailed) throw new Error('subagent_skill_availability_guard_persistence_failed');
   if (!evidenceWrite) throw new Error('subagent_skill_availability_blocker_artifact_write_failed');
+  if (!blockers.length) {
+    const allowedWrites = await Promise.all(
+      roots.map((guardRoot) => writeAdmissionPair(guardRoot, admission))
+    );
+    const guardedRootCommitFailed = rootWrites.some((guardedWrite, index) => (
+      guardedWrite && !allowedWrites[index]
+    ));
+    if (!allowedWrites.some(Boolean) || guardedRootCommitFailed) {
+      throw new Error('subagent_skill_availability_guard_persistence_failed');
+    }
+  }
   return admission;
 }
 
@@ -150,8 +175,19 @@ export async function subagentSkillAvailabilityPreToolBlockReason(
   payload: any,
   artifactDir?: string | null
 ): Promise<string | null> {
-  const transcriptThreadId = await officialSubagentThreadIdFromTranscript(payload?.transcript_path);
-  const threadId = transcriptThreadId;
+  const rawPayloadThreadId = payload?.agent_id;
+  const payloadThreadId = boundedAgentThreadId(rawPayloadThreadId);
+  const payloadThreadIdClaimed = typeof rawPayloadThreadId === 'string'
+    ? Boolean(rawPayloadThreadId.trim())
+    : rawPayloadThreadId !== undefined && rawPayloadThreadId !== null;
+  if (payloadThreadIdClaimed && !payloadThreadId) throw invalidGuard(true);
+  const rawTranscriptThreadId = await officialSubagentThreadIdFromTranscript(payload?.transcript_path);
+  const transcriptThreadId = boundedAgentThreadId(rawTranscriptThreadId);
+  if (rawTranscriptThreadId && !transcriptThreadId) throw invalidGuard(true);
+  if (payloadThreadId && transcriptThreadId && payloadThreadId !== transcriptThreadId) {
+    throw invalidGuard(true);
+  }
+  const threadId = payloadThreadId || transcriptThreadId;
   const threadHash = threadId ? sha256(threadId) : null;
   const sessionScope = String(payload?.session_id || '').trim();
   const turnId = String(payload?.turn_id || '').trim();
@@ -485,7 +521,8 @@ async function clearMatchingBlockerArtifact(
     if (!inspected.exists) return emergencyCleared;
     if (inspected.leafSymlink || !inspected.stat?.isFile()) return false;
     const blocker: any = await readJson(file, null).catch(() => null);
-    if (!validBlocker(blocker) || blocker.thread_id_hash !== threadHash) return emergencyCleared;
+    if (!validBlocker(blocker)) return false;
+    if (blocker.thread_id_hash !== threadHash) return emergencyCleared;
     await fsp.rm(file, { force: true });
     return emergencyCleared && !(await inspectConfinedPath(root, file)).exists;
   } catch {
@@ -557,7 +594,7 @@ async function matchingEmergencyDenial(
   try {
     const inspected = await inspectConfinedPath(path.resolve(root), file);
     if (!inspected.exists) return null;
-    if (inspected.leafSymlink || !inspected.stat?.isFile()) {
+    if (inspected.leafSymlink || !inspected.stat?.isFile() || inspected.stat.size > MAX_EMERGENCY_DENIAL_BYTES) {
       return ['subagent_skill_availability_guard_invalid'];
     }
     const blocker: any = await readJson(file, null).catch(() => null);
@@ -597,29 +634,14 @@ async function clearMatchingEmergencyDenials(
   artifactDir: string,
   threadHash: string
 ): Promise<boolean> {
-  const dir = emergencyDenialDir(artifactDir);
-  let inspected;
-  try {
-    inspected = await inspectConfinedPath(root, dir);
-  } catch {
-    return false;
-  }
-  if (!inspected.exists) return true;
-  if (inspected.leafSymlink || !inspected.stat?.isDirectory()) return false;
-  let names: string[];
-  try {
-    names = await fsp.readdir(dir);
-  } catch {
-    return false;
-  }
-  let ok = true;
-  for (const name of names.filter((item) => /^deny-[a-f0-9]{64}\.json$/.test(item))) {
-    const file = path.join(dir, name);
-    const blocker: any = await readJson(file, null).catch(() => null);
-    if (!validBlocker(blocker) || blocker.thread_id_hash !== threadHash) continue;
+  const records = await readEmergencyDenialsWithFiles(root, artifactDir);
+  if (records === null) return false;
+  let ok = records.every((entry) => Boolean(entry.blocker));
+  for (const { file, blocker } of records) {
+    if (!blocker || blocker.thread_id_hash !== threadHash) continue;
     try {
       const entry = await inspectConfinedPath(root, file);
-      if (entry.leafSymlink || !entry.stat?.isFile()) {
+      if (entry.leafSymlink || !entry.stat?.isFile() || entry.stat.size > MAX_EMERGENCY_DENIAL_BYTES) {
         ok = false;
         continue;
       }
@@ -684,7 +706,7 @@ async function readEmergencyDenialsWithFiles(
     const file = path.join(dir, name);
     try {
       const entry = await inspectConfinedPath(root, file);
-      if (entry.leafSymlink || !entry.stat?.isFile()) {
+      if (entry.leafSymlink || !entry.stat?.isFile() || entry.stat.size > MAX_EMERGENCY_DENIAL_BYTES) {
         records.push({ file, blocker: null });
         continue;
       }
@@ -699,6 +721,15 @@ async function readEmergencyDenialsWithFiles(
 
 function preToolBlockReason(blockers: readonly string[]): string {
   return `SKS blocked this child tool call because managed skill availability failed (${blockers.join(', ')}). Return the blocker to the root parent without using tools.`;
+}
+
+function boundedAgentThreadId(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const candidate = value.trim();
+  if (!candidate
+    || Buffer.byteLength(candidate, 'utf8') > 512
+    || /[\u0000-\u001f\u007f]/.test(candidate)) return null;
+  return candidate;
 }
 
 async function officialSubagentThreadIdFromTranscript(value: unknown): Promise<string | null> {

@@ -10,6 +10,7 @@ import {
   uniqueConfinedPath
 } from '../managed-path-safety.js';
 import { buildSkillRegistryLedger, groupByCanonical, type SkillRegistryEntry } from './skill-registry-ledger.js';
+import { writeRootConfinedJsonReport } from './confined-report-writer.js';
 
 export interface ProjectSkillDedupeAction {
   canonical_name: string;
@@ -45,7 +46,7 @@ export async function dedupeProjectSkills(input: {
   const root = path.resolve(input.root);
   const fix = input.fix === true;
   const yes = input.yes === true;
-  const ledger = await buildSkillRegistryLedger({ root });
+  const ledger = await buildSkillRegistryLedger({ root, reportPath: null });
   const grouped = groupByCanonical(ledger.entries);
   const actions: ProjectSkillDedupeAction[] = [];
   const unresolvedUserDuplicates: string[] = [];
@@ -115,7 +116,13 @@ export async function dedupeProjectSkills(input: {
   const reportPath = input.reportPath === null
     ? null
     : input.reportPath || path.join(root, '.sneakoscope', 'reports', 'project-skill-dedupe.json');
-  if (reportPath) await writeJsonAtomic(reportPath, report).catch(() => undefined);
+  if (reportPath) {
+    const written = await writeRootConfinedJsonReport({ root, reportPath, value: report });
+    if (!written) {
+      report.ok = false;
+      report.blockers = [...new Set([...report.blockers, 'project_skill_dedupe_report_path_unsafe'])].sort();
+    }
+  }
   return report;
 }
 
@@ -152,7 +159,7 @@ async function maybeQuarantine(root: string, canonical: string, entry: SkillRegi
 async function quarantineSkill(root: string, canonical: string, entry: SkillRegistryEntry, reason: string): Promise<string | null> {
   const boundary = path.resolve(root);
   const sourceDir = path.dirname(entry.path);
-  if (!skillEntryIsLexicallyConfined(boundary, entry)) return null;
+  if (!skillEntryIsProjectOwned(boundary, entry)) return null;
   const sourceInspection = await inspectConfinedPath(boundary, sourceDir);
   if (!sourceInspection.exists) return null;
   if (sourceInspection.leafSymlink || !sourceInspection.stat?.isDirectory()) {
@@ -185,4 +192,13 @@ async function quarantineSkill(root: string, canonical: string, entry: SkillRegi
 
 function skillEntryIsLexicallyConfined(root: string, entry: SkillRegistryEntry): boolean {
   return isLexicallyConfined(root, path.dirname(entry.path));
+}
+
+function skillEntryIsProjectOwned(root: string, entry: SkillRegistryEntry): boolean {
+  if (entry.scope !== 'project') return false;
+  const sourceDir = path.dirname(entry.path);
+  return [
+    path.join(root, '.agents', 'skills'),
+    path.join(root, '.codex', 'skills')
+  ].some((scanRoot) => isLexicallyConfined(scanRoot, sourceDir));
 }

@@ -1,5 +1,6 @@
 import { performance } from 'node:perf_hooks';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { PACKAGE_VERSION, projectRoot } from '../core/fsx.js';
 import { flag } from '../cli/args.js';
 import { printJson } from '../cli/output.js';
@@ -63,7 +64,7 @@ export async function run(_command: any, args: any = []) {
 }
 
 export function runColdStart({ root = process.cwd(), iterations = DEFAULT_COLD_START_ITERATIONS, tier = 'source-local' }: any = {}) {
-  const script = new URL('../bin/sks.js', import.meta.url).pathname;
+  const script = coldStartCliEntrypoint();
   const measuredIterations = resolveColdStartIterations(iterations);
   const budgets = ((COLD_START_TIERS as Record<string, Record<string, number>>)[tier] || COLD_START_TIERS['source-local']) as Record<string, number>;
   const commands = COLD_START_COMMANDS.map((spec: any) => measureCommand(root, script, { ...spec, budget_p95_ms: budgets[spec.cmd] }, measuredIterations));
@@ -77,6 +78,10 @@ export function runColdStart({ root = process.cwd(), iterations = DEFAULT_COLD_S
     commands,
     ok: commands.every((row: any) => row.ok)
   };
+}
+
+export function coldStartCliEntrypoint(moduleUrl: string | URL = import.meta.url): string {
+  return fileURLToPath(new URL('../bin/sks.js', moduleUrl));
 }
 
 export function resolveColdStartIterations(value: any = DEFAULT_COLD_START_ITERATIONS) {

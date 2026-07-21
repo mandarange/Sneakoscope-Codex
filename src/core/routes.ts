@@ -1,11 +1,12 @@
 import { leanEngineeringCompactText, leanEngineeringLongText } from './lean-engineering-policy.js';
 export { leanEngineeringCompactText, leanEngineeringLongText };
-import { ALLOWED_REASONING_EFFORTS, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, REFLECTION_SKILL_NAME, USAGE_TOPICS } from './routes/constants.js';
+import { ALLOWED_REASONING_EFFORTS, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, RECOMMENDED_SKILLS, REFLECTION_SKILL_NAME, USAGE_TOPICS } from './routes/constants.js';
 import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_IMAGEGEN_REQUIRED_POLICY, CODEX_WEB_VERIFICATION_POLICY, RESERVED_CODEX_PLUGIN_SKILL_NAMES } from './routes/evidence.js';
 import { getdesignReferencePolicyText, imageUxReviewPipelinePolicyText } from './routes/design-policy.js';
 import { PPT_PIPELINE_SKILL_ALLOWLIST, pptPipelineAllowlistPolicyText } from './routes/ppt-policy.js';
 import { normalizeDollarSkillName, prefixKnownSksDollarReferences, sksPrefixedDollarCommand, sksPrefixedSkillName, unprefixedSksSkillName } from './routes/dollar-prefix.js';
 import { classifyTaskProfile, looksLikeDatabaseWorkRequest, type TaskProfile } from './runtime/task-profile.js';
+import { legacyCoreSkillNames } from './codex-native/core-skill-manifest.js';
 
 export * from './routes/constants.js';
 export * from './routes/design-policy.js';
@@ -309,7 +310,7 @@ export const ROUTES = [
     mode: 'RELEASE_REVIEW',
     route: 'official subagent release review',
     description: 'Run release-readiness collaboration through official Codex subagents with explicit thread budget, disjoint ownership, parent integration, scoped verification, and cleanup evidence.',
-    requiredSkills: ['naruto', 'pipeline-runner', REFLECTION_SKILL_NAME, 'honest-mode'],
+    requiredSkills: ['release-review', 'naruto', 'pipeline-runner', REFLECTION_SKILL_NAME, 'honest-mode'],
     lifecycle: ['subagent_plan', 'release_fixture_matrix', 'risk_scoped_review', 'parent_integration', 'session_cleanup', 'honest_mode'],
     context7Policy: 'optional',
     reasoningPolicy: 'high',
@@ -399,7 +400,7 @@ export const ROUTES = [
     mode: 'COMMIT',
     route: 'simple git commit',
     description: 'Summarize current git changes, stage them, and create one commit without the full SKS pipeline.',
-    requiredSkills: ['honest-mode'],
+    requiredSkills: ['commit', 'honest-mode'],
     lifecycle: ['git_status_summary', 'git_add_all', 'git_commit', 'short_result'],
     context7Policy: 'not_required',
     reasoningPolicy: 'low',
@@ -414,7 +415,7 @@ export const ROUTES = [
     mode: 'COMMIT_AND_PUSH',
     route: 'simple git commit and push',
     description: 'Summarize current git changes, stage them, create one commit, then run git push without the full SKS pipeline.',
-    requiredSkills: ['honest-mode'],
+    requiredSkills: ['commit-and-push', 'honest-mode'],
     lifecycle: ['git_status_summary', 'git_add_all', 'git_commit', 'git_push', 'short_result'],
     context7Policy: 'not_required',
     reasoningPolicy: 'low',
@@ -578,6 +579,40 @@ export const LEGACY_DOLLAR_COMMAND_NAMES = Array.from(new Set(ROUTES
   .flatMap((route: any) => [route.command, ...(route.dollarAliases || [])])));
 export const LEGACY_DOLLAR_SKILL_NAMES = Array.from(new Set(ROUTES.flatMap((route: any) => legacyRouteAppSkillNames(route))));
 export const DOLLAR_SKILL_NAMES = Array.from(new Set(ROUTES.flatMap((route: any) => routeAppSkillNames(route))));
+const PACKAGED_MANAGED_SUPPORT_SKILL_NAMES = [
+  'sks-autoresearch-loop',
+  'sks-context7-docs',
+  'sks-db-safety-guard',
+  'sks-design-artifact-expert',
+  'sks-design-system-builder',
+  'sks-design-ui-editor',
+  'sks-from-chat-img',
+  'sks-getdesign-reference',
+  'sks-gx-visual-generate',
+  'sks-gx-visual-read',
+  'sks-gx-visual-validate',
+  'sks-honest-mode',
+  'sks-hproof-claim-ledger',
+  'sks-hproof-evidence-bind',
+  'sks-imagegen',
+  'sks-imagegen-source-scout',
+  'sks-performance-evaluator',
+  'sks-pipeline-runner',
+  'sks-prompt-pipeline',
+  'sks-reasoning-router',
+  'sks-reflection',
+  'sks-research-discovery',
+  'sks-solution-scout',
+  'sks-turbo-context-pack'
+];
+export const MANAGED_ROUTE_SKILL_NAMES = Array.from(new Set([
+  ...DOLLAR_SKILL_NAMES,
+  ...RECOMMENDED_SKILLS,
+  ...PACKAGED_MANAGED_SUPPORT_SKILL_NAMES,
+  ...legacyCoreSkillNames().map((name) => sksPrefixedSkillName(name)),
+  ...ROUTES.flatMap((route: any) => Array.isArray(route.requiredSkills) ? route.requiredSkills : [])
+]));
+export const INVALID_EXPLICIT_MANAGED_SKILL_NAME = 'sks-invalid-explicit-managed-skill';
 const LEGACY_DOLLAR_REFERENCE_NAMES = Array.from(new Set([
   ...LEGACY_DOLLAR_SKILL_NAMES,
   ...LEGACY_DOLLAR_COMMAND_NAMES.map((command: any) => normalizeDollarSkillName(command)),
@@ -598,6 +633,8 @@ export const DOLLAR_COMMANDS = ROUTES.filter((route: any) => route.hidden !== tr
 export const DOLLAR_COMMAND_ALIASES = ROUTES.flatMap((route: any) => [
   ...routeAppSkillNames(route).map((alias: any) => ({ canonical: sksPrefixedDollarCommand(route.command), app_skill: `$${alias}` }))
 ]);
+
+const MANAGED_ROUTE_SKILL_NAME_SET = new Set(MANAGED_ROUTE_SKILL_NAMES);
 
 const ROUTE_BY_ID = new Map<string, any>();
 const ROUTE_BY_DOLLAR_COMMAND = new Map<string, any>();
@@ -742,6 +779,50 @@ export function dollarCommand(prompt: any) {
   if (leading?.[1]) return leading[1].toUpperCase();
   const embedded = embeddedDollarCommandMatch(prompt);
   return embedded ? embedded.command.toUpperCase() : null;
+}
+
+export function explicitManagedSkillNames(prompt: any = ''): string[] {
+  const text = String(prompt || '');
+  const matches: Array<{ index: number; name: string }> = [];
+  for (const match of text.matchAll(/\[\$([A-Za-z][A-Za-z0-9_-]*)\]\([^)]+\)/g)) {
+    matches.push({ index: match.index ?? 0, name: match[1] || '' });
+  }
+  for (const match of text.matchAll(/(^|[\s([{<])\$([A-Za-z][A-Za-z0-9_-]*)(?=\s|:|$|[.,!?;)\]}])/g)) {
+    matches.push({ index: (match.index ?? 0) + (match[1] || '').length, name: match[2] || '' });
+  }
+  const selected: string[] = [];
+  for (const match of matches.sort((a, b) => a.index - b.index)) {
+    const rawName = normalizeDollarSkillName(match.name);
+    const skillName = sksPrefixedSkillName(match.name);
+    if (!skillName || skillName.length > 100) continue;
+    if (routeByDollarCommand(match.name)) {
+      if (!MANAGED_ROUTE_SKILL_NAME_SET.has(skillName) || selected.includes(skillName)) continue;
+      selected.push(skillName);
+      continue;
+    }
+    if (!rawName.startsWith('sks-')) continue;
+    const boundedSkillName = MANAGED_ROUTE_SKILL_NAME_SET.has(skillName)
+      ? skillName
+      : INVALID_EXPLICIT_MANAGED_SKILL_NAME;
+    if (selected.includes(boundedSkillName)) continue;
+    selected.push(boundedSkillName);
+  }
+  return selected;
+}
+
+export function managedSkillNamesForPrompt(route: any, prompt: any = ''): string[] {
+  return Array.from(new Set([
+    ...(Array.isArray(route?.requiredSkills) ? route.requiredSkills.map(String) : []),
+    ...explicitManagedSkillNames(prompt)
+  ]));
+}
+
+export function allowlistedManagedRouteSkillNames(value: any): string[] {
+  if (!Array.isArray(value)) return [];
+  return Array.from(new Set(value
+    .slice(0, MANAGED_ROUTE_SKILL_NAMES.length + 1)
+    .filter((name: any) => typeof name === 'string'
+      && (MANAGED_ROUTE_SKILL_NAME_SET.has(name) || name === INVALID_EXPLICIT_MANAGED_SKILL_NAME))));
 }
 
 export function hasMadSksSignal(prompt: any = '') {

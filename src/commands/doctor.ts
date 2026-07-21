@@ -450,12 +450,12 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
         const home = path.resolve(process.env.HOME || os.homedir());
         const globalTarget = path.resolve(home, '.agents', 'skills');
         const projectTarget = path.resolve(root, '.agents', 'skills');
-        const sameSkillRoot = await sameFilesystemPath(root, home);
         const global = await reconcileSkills({
           targetDir: globalTarget,
           scope: 'global',
           fix: true
         }).catch((err: any) => ({ ok: false, error: err?.message || String(err) }));
+        const sameSkillRoot = await sameFilesystemPath(projectTarget, globalTarget);
         const project = sameSkillRoot
           ? {
               schema: 'sks.skill-reconcile.v1',

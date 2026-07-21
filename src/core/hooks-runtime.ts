@@ -6,7 +6,8 @@ import {
   missionDir,
   sessionStateKey,
   setCurrent,
-  stateFileForSession
+  stateFileForSession,
+  validateExternallyReservedMissionId
 } from './mission.js';
 import { checkDbOperation, dbBlockReason, handleMadSksUserConfirmation } from './db-safety.js';
 import { maybeRecordMadSksSqlPlaneToolResultFromToolUse } from './mad-sks/sql-plane/result-lifecycle.js';
@@ -16,7 +17,7 @@ import { classifyMadSksShellCommand } from './mad-sks/write-guard.js';
 import { activeRouteContext, evaluateStop, prepareRoute, promptPipelineContext as routePipelineContext, recordContext7Evidence, recordSubagentEvidence, routePrompt } from './pipeline.js';
 import { localizedFinalizationReason } from './language-preference.js';
 import { classifyToolError } from './evaluation.js';
-import { dollarCommand, routeRequiresSubagents, stripVisibleDecisionAnswerBlocks } from './routes.js';
+import { allowlistedManagedRouteSkillNames, dollarCommand, INVALID_EXPLICIT_MANAGED_SKILL_NAME, managedSkillNamesForPrompt, routeRequiresSubagents, stripVisibleDecisionAnswerBlocks } from './routes.js';
 import { coreEngineeringDirectiveReferenceText } from './lean-engineering-policy.js';
 import { scanAgentTextForRecursion } from './agents/agent-recursion-guard.js';
 import { evaluateLoopContinuation } from './loops/loop-continuation-enforcer.js';
@@ -41,6 +42,7 @@ import { classifyTaskProfile } from './runtime/task-profile.js';
 import { resolveSubagentThreadBudget } from './subagents/thread-budget.js';
 import { readOfficialSubagentConfig } from './subagents/official-subagent-config.js';
 import { withFileLock } from './locks/file-lock.js';
+import { inspectConfinedPath } from './managed-path-safety.js';
 import { buildWaveParentGuidance, renderWaveParentGuidance } from './subagents/wave-parent-guidance.js';
 import { managedOfficialSubagentRoleByName } from './managed-assets/managed-assets-manifest.js';
 import {
@@ -179,6 +181,9 @@ export async function evaluateHookPayload(name: any, payload: any = {}, opts: an
     const result = await hookUserPrompt(root, state, payload, noQuestion, sessionKey);
     return withNarutoDecision(await attachAuthoritativeSksSkillContext(root, state, payload, result));
   }
+  if (name === 'session-start' || name === 'pre-compact' || name === 'post-compact') {
+    return withNarutoDecision(await hookActiveSkillContextRefresh(root, state, name));
+  }
   if (name === 'pre-tool') return withNarutoDecision(await hookPreTool(root, state, payload, noQuestion, sessionKey));
   if (name === 'post-tool') return withNarutoDecision(await hookPostTool(root, state, payload, noQuestion, sessionKey));
   if (name === 'permission-request') return withNarutoDecision(await hookPermission(root, state, payload, noQuestion, sessionKey));
@@ -192,8 +197,9 @@ async function attachAuthoritativeSksSkillContext(root: string, state: any, payl
   if (result?.decision === 'block' || result?.sksTaskProfile === 'passthrough') return result;
   if (looksLikeCodexGitAction(payload) || looksLikeCodexUiSettingsEvent(payload)) return result;
   const prompt = stripVisibleDecisionAnswerBlocks(extractUserPrompt(payload));
-  if (routeIsGitOnly(routePrompt(prompt))) return result;
-  const skillNames = selectedSksSkillNamesForTurn(state, prompt, result);
+  const skillNames = result?.attached_parent_mission_id
+    ? await standaloneParentManagedSkillNames(root, result.attached_parent_mission_id, state)
+    : selectedSksSkillNamesForTurn(state, prompt, result);
   if (!skillNames.length) return result;
   const admission = await authoritativeSksSkillAdmission(root, skillNames);
   if (admission.blocked) return { ...result, ...admission.blocked };
@@ -205,6 +211,44 @@ async function attachAuthoritativeSksSkillContext(root: string, state: any, payl
     ...result,
     additionalContext: [result?.additionalContext, skillContext].filter(Boolean).join('\n\n')
   };
+}
+
+const STANDALONE_PARENT_BASE_SKILLS = [
+  'sks-naruto',
+  'sks-pipeline-runner',
+  'sks-prompt-pipeline',
+  'sks-honest-mode'
+];
+
+async function standaloneParentManagedSkillNames(root: string, missionId: any, state: any = {}): Promise<string[]> {
+  const boundedMissionId = String(missionId || '').trim();
+  if (!boundedMissionId) return [...STANDALONE_PARENT_BASE_SKILLS];
+  const validatedMissionId = validateExternallyReservedMissionId(boundedMissionId);
+  if (!validatedMissionId.ok) {
+    return [...STANDALONE_PARENT_BASE_SKILLS, INVALID_EXPLICIT_MANAGED_SKILL_NAME];
+  }
+  const canonicalMissionId = validatedMissionId.id;
+  const stateSkills = String(state?.mission_id || '') === canonicalMissionId
+    ? allowlistedManagedRouteSkillNames(state?.required_skills)
+    : [];
+  const routeContext = await readStandaloneParentRouteContext(root, canonicalMissionId);
+  const contextSkills = allowlistedManagedRouteSkillNames(routeContext?.required_skills);
+  return Array.from(new Set([
+    ...stateSkills,
+    ...contextSkills,
+    ...STANDALONE_PARENT_BASE_SKILLS
+  ]));
+}
+
+async function readStandaloneParentRouteContext(root: string, missionId: string): Promise<any | null> {
+  const file = path.join(missionDir(root, missionId), 'route-context.json');
+  try {
+    const inspection = await inspectConfinedPath(path.resolve(root), path.resolve(file));
+    if (!inspection.exists || inspection.leafSymlink || !inspection.stat?.isFile()) return null;
+    return await readJson(file, null).catch(() => null);
+  } catch {
+    return null;
+  }
 }
 
 async function authoritativeSksSkillAdmission(root: string, skillNames: readonly unknown[]) {
@@ -238,7 +282,7 @@ async function authoritativeSksSkillAdmission(root: string, skillNames: readonly
 
 function selectedSksSkillNamesForTurn(state: any, prompt: string, result: any): string[] {
   if (result?.attached_parent_mission_id) {
-    return ['naruto', 'pipeline-runner', 'prompt-pipeline', 'honest-mode'];
+    return [...STANDALONE_PARENT_BASE_SKILLS];
   }
   const active = state?.mission_id && state?.route_closed !== true
     && (looksLikeActiveContinuationPrompt(prompt) || isBlockingClarificationAwaiting(state));
@@ -247,7 +291,8 @@ function selectedSksSkillNamesForTurn(state: any, prompt: string, result: any): 
     if (activeSkills.length) return activeSkills;
   }
   const selectedRoute = routePrompt(prompt);
-  if (selectedRoute?.requiredSkills?.length) return selectedRoute.requiredSkills.map(String);
+  const selectedSkills = managedSkillNamesForPrompt(selectedRoute, prompt);
+  if (selectedSkills.length) return selectedSkills;
   return result?.sksTaskProfile === 'answer' ? ['answer', 'honest-mode'] : [];
 }
 
@@ -256,6 +301,45 @@ function selectedSksSkillNamesForActiveState(state: any): string[] {
   if (persisted.length) return persisted.map(String);
   const activeRoute = routePrompt(String(state?.route_command || state?.route || state?.mode || ''));
   return activeRoute?.requiredSkills?.length ? activeRoute.requiredSkills.map(String) : [];
+}
+
+function activeSksSkillNames(state: any): string[] {
+  if (!state?.mission_id || state?.route_closed === true) return [];
+  return selectedSksSkillNamesForActiveState(state);
+}
+
+async function activeAuthoritativeSksSkillRefresh(root: string, state: any) {
+  const skillNames = activeSksSkillNames(state);
+  if (!skillNames.length) return { context: '', blocked: null };
+  const admission = await authoritativeSksSkillAdmission(root, skillNames);
+  if (admission.blocked) return { context: '', blocked: admission.blocked };
+  return {
+    context: admission.resolution ? renderAuthoritativeSksSkillContext(admission.resolution) : '',
+    blocked: null
+  };
+}
+
+async function hookActiveSkillContextRefresh(
+  root: string,
+  state: any,
+  name: 'session-start' | 'pre-compact' | 'post-compact'
+) {
+  if (name !== 'session-start') {
+    if (!activeSksSkillNames(state).length) return { continue: true };
+    return {
+      continue: true,
+      systemMessage: 'SKS will refresh active managed-skill paths from the current installation on compact resume and reverify them before the next tool call.'
+    };
+  }
+  const refresh = await activeAuthoritativeSksSkillRefresh(root, state);
+  if (refresh.blocked) {
+    return {
+      continue: true,
+      systemMessage: 'SKS managed skill refresh could not verify the current installation. Do not use a stale skill location; the next active tool call will be denied until the installation is repaired.'
+    };
+  }
+  if (!refresh.context) return { continue: true };
+  return { continue: true, additionalContext: refresh.context, silent: true };
 }
 
 async function hookSubagentStart(root: any, state: any, payload: any = {}, sessionKey: any = null) {
@@ -415,12 +499,8 @@ async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: a
   }
   const parentLaunchMissionId = activeNarutoParentLaunchMissionId();
   if (parentLaunchMissionId) {
-    const skillAdmission = await authoritativeSksSkillAdmission(root, [
-      'naruto',
-      'pipeline-runner',
-      'prompt-pipeline',
-      'honest-mode'
-    ]);
+    const parentSkillNames = await standaloneParentManagedSkillNames(root, parentLaunchMissionId, state);
+    const skillAdmission = await authoritativeSksSkillAdmission(root, parentSkillNames);
     if (skillAdmission.blocked) return skillAdmission.blocked;
     const parentHostCapability = await claimStandaloneParentHostCapabilityRuntime({
       root,
@@ -442,6 +522,7 @@ async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: a
       route: 'Naruto',
       route_command: '$Naruto',
       route_closed: false,
+      required_skills: parentSkillNames,
       subagents_required: true,
       native_sessions_required: false,
       official_subagent_run_id: parentHostCapability.workflowRunId || state?.official_subagent_run_id || null,
@@ -532,7 +613,7 @@ async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: a
         systemMessage: `SKS: ${route.command} git action bypassed pipeline route gates.`
       };
     }
-    const skillAdmission = await authoritativeSksSkillAdmission(root, route?.requiredSkills || []);
+    const skillAdmission = await authoritativeSksSkillAdmission(root, managedSkillNamesForPrompt(route, prompt));
     if (skillAdmission.blocked) return skillAdmission.blocked;
     await maybeReconcileProjectSkillsPreflight(root).catch(() => null);
     const bypassActiveRoute = routeBypassesActiveContext(route);
@@ -632,6 +713,15 @@ async function hookPreTool(root: any, state: any, payload: any, noQuestion: any,
   if (skillAvailabilityBlock) {
     return { decision: 'block', permissionDecision: 'deny', reason: skillAvailabilityBlock };
   }
+  const skillRefresh = await activeAuthoritativeSksSkillRefresh(root, state);
+  if (skillRefresh.blocked) {
+    return {
+      decision: 'block',
+      permissionDecision: 'deny',
+      reason: skillRefresh.blocked.reason,
+      systemMessage: skillRefresh.blocked.systemMessage
+    };
+  }
   if (needsMutationSafetyCheck(payload)) {
     const madSksImmutableDecision = await checkMadSksImmutableModification(root, state, payload);
     if (madSksImmutableDecision.action === 'block') {
@@ -656,11 +746,14 @@ async function hookPreTool(root: any, state: any, payload: any, noQuestion: any,
   const hostCapabilityDecision = await enforceHostCapabilityPreTool(root, state, payload, sessionKey);
   if (hostCapabilityDecision && hostCapabilityDecision.continue !== true) return hostCapabilityDecision;
   const waveGuidance = await parentWaveGuidanceContext(root, state, sessionKey).catch(() => '');
-  if (waveGuidance) {
+  const additionalContext = [skillRefresh.context, waveGuidance].filter(Boolean).join('\n\n');
+  if (additionalContext) {
     return {
       continue: true,
-      additionalContext: waveGuidance,
-      systemMessage: visibleHookMessage('pre-tool', 'SKS Naruto wave lifecycle requires root-parent follow-up.')
+      additionalContext,
+      ...(waveGuidance
+        ? { systemMessage: visibleHookMessage('pre-tool', 'SKS Naruto wave lifecycle requires root-parent follow-up.') }
+        : { silent: true })
     };
   }
   return { continue: true };

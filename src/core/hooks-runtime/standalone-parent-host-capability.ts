@@ -11,7 +11,8 @@ import {
 } from '../agent-bridge/host-capability-runtime.js';
 import { readJson, writeJsonAtomic } from '../fsx.js';
 import { withFileLock } from '../locks/file-lock.js';
-import { missionDir } from '../mission.js';
+import { ensureConfinedDirectory, inspectConfinedPath } from '../managed-path-safety.js';
+import { missionDir, validateExternallyReservedMissionId } from '../mission.js';
 
 export function activeNarutoParentLaunchMissionId(): string {
   return process.env.SKS_NARUTO_PARENT_LAUNCH === '1'
@@ -41,7 +42,21 @@ export async function claimStandaloneParentHostCapabilityRuntime(input: {
   binding: HostCapabilityHookRuntimeBinding | null;
   blocker: string;
 }> {
-  const dir = missionDir(input.root, input.missionId);
+  const validatedMissionId = validateExternallyReservedMissionId(input.missionId);
+  if (!validatedMissionId.ok) {
+    return { workflowRunId: '', binding: null, blocker: 'host_capability_parent_mission_invalid' };
+  }
+  const missionId = validatedMissionId.id;
+  const dir = missionDir(input.root, missionId);
+  try {
+    const inspection = await inspectConfinedPath(input.root, dir);
+    if (!inspection.exists || inspection.leafSymlink || !inspection.stat?.isDirectory()) {
+      return { workflowRunId: '', binding: null, blocker: 'host_capability_parent_artifact_dir_unsafe' };
+    }
+    await ensureConfinedDirectory(input.root, dir);
+  } catch {
+    return { workflowRunId: '', binding: null, blocker: 'host_capability_parent_artifact_dir_unsafe' };
+  }
   const plan: any = await readJson(path.join(dir, 'subagent-plan.json'), null).catch(() => null);
   const plannedRunId = String(plan?.workflow_run_id || '').trim();
   const launchRunId = activeNarutoParentWorkflowRunId();
@@ -69,7 +84,7 @@ export async function claimStandaloneParentHostCapabilityRuntime(input: {
       const rawBinding = await readJson(path.join(dir, HOST_CAPABILITY_HOOK_RUNTIME_FILENAME), null).catch(() => null);
       if (rawBinding) {
         const resolved = resolveHostCapabilityHookRuntimeBinding(rawBinding, {
-          missionId: input.missionId,
+          missionId,
           workflowRunId,
           sessionScope: input.sessionScope,
           request
@@ -81,7 +96,7 @@ export async function claimStandaloneParentHostCapabilityRuntime(input: {
         null
       ).catch(() => null);
       const resolvedPending = resolveHostCapabilityHookPendingRuntime(rawPending, {
-        missionId: input.missionId,
+        missionId,
         workflowRunId,
         launchNonce,
         request
@@ -90,7 +105,7 @@ export async function claimStandaloneParentHostCapabilityRuntime(input: {
         return { workflowRunId, binding: null, blocker: resolvedPending.blocker };
       }
       const binding = createHostCapabilityHookRuntimeBinding({
-        missionId: input.missionId,
+        missionId,
         workflowRunId,
         sessionScope: input.sessionScope,
         runtime: resolvedPending.pending.runtime

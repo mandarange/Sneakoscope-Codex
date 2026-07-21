@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { TRUST_VALIDATE_BENCH_COMMAND, benchRoot, runCoreBench, runLeanPolicyBench } from '../bench.js';
 import { runProcess } from '../fsx.js';
 import { flag, readFlagValue } from './command-utils.js';
@@ -42,7 +43,7 @@ async function commandBench(schema: any, commandArgs: any, args: any = []) {
   }
   const root = await benchRoot();
   const start = Date.now();
-  const result = await runProcess(process.execPath, [new URL('../../bin/sks.js', import.meta.url).pathname, ...commandArgs], {
+  const result = await runProcess(process.execPath, [benchCliEntrypoint(), ...commandArgs], {
     cwd: root,
     timeoutMs: 120_000,
     maxOutputBytes: 512 * 1024,
@@ -53,4 +54,8 @@ async function commandBench(schema: any, commandArgs: any, args: any = []) {
   console.log(`${schema}: ${report.status}`);
   if (!report.ok) process.exitCode = 1;
   return report;
+}
+
+export function benchCliEntrypoint(moduleUrl: string | URL = import.meta.url): string {
+  return fileURLToPath(new URL('../../bin/sks.js', moduleUrl));
 }

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import os from 'node:os';
 import path from 'node:path';
 import fsp from 'node:fs/promises';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   authoritativeSksSkillContext,
   currentCodexSkillRoots,
@@ -80,6 +81,51 @@ test('authoritative resolver rejects managed-looking stale or tampered content b
     assert.deepEqual(tampered.sources, []);
     assert.deepEqual(tampered.unresolved, ['sks-answer']);
     assert.deepEqual(tampered.blockers, ['content_digest_mismatch:sks-answer:global']);
+  } finally {
+    await fsp.rm(fixture, { recursive: true, force: true });
+  }
+});
+
+test('packaged install under a path with spaces preserves non-core managed skill digests', async () => {
+  const currentPackageRoot = path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    '..',
+    '..',
+    '..',
+    '..'
+  );
+  const fixture = await fsp.mkdtemp(path.join(currentPackageRoot, '.sks-skill-path-space-'));
+  const installedPackageRoot = path.join(fixture, 'installed package with spaces');
+  const home = path.join(fixture, 'home');
+  const root = path.join(fixture, 'project');
+  try {
+    await fsp.cp(path.join(currentPackageRoot, 'dist'), path.join(installedPackageRoot, 'dist'), { recursive: true });
+    const installedSkillsModule: any = await import(pathToFileURL(
+      path.join(installedPackageRoot, 'dist', 'core', 'init', 'skills.js')
+    ).href);
+    const installedResolverModule: any = await import(pathToFileURL(
+      path.join(installedPackageRoot, 'dist', 'core', 'codex-native', 'sks-skill-paths.js')
+    ).href);
+
+    const manifest = await installedSkillsModule.loadSkillsManifest();
+    const releaseReview = manifest.skills.find((skill: any) => skill.canonical_name === 'sks-release-review');
+    assert.equal(releaseReview?.type, 'official');
+    assert.match(String(releaseReview?.content_sha256 || ''), /^[a-f0-9]{64}$/);
+
+    await fsp.mkdir(home, { recursive: true });
+    const install = await installedSkillsModule.installGlobalSkills(home);
+    assert.equal(install.ok, true, JSON.stringify(install));
+    const installedSkill = path.join(home, '.agents', 'skills', 'sks-release-review', 'SKILL.md');
+    await fsp.access(installedSkill);
+
+    const resolution = await installedResolverModule.resolveAuthoritativeSksSkillSources({
+      root,
+      home,
+      skillNames: ['release-review']
+    });
+    assert.deepEqual(resolution.blockers, []);
+    assert.deepEqual(resolution.unresolved, []);
+    assert.deepEqual(resolution.sources.map((source: any) => source.path), [installedSkill]);
   } finally {
     await fsp.rm(fixture, { recursive: true, force: true });
   }

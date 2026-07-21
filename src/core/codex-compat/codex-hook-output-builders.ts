@@ -2,8 +2,16 @@ import { type CodexHookEventName } from './codex-schema-snapshot.js';
 
 export type CodexHookOutput = Record<string, unknown>;
 
-export function buildPreToolUseContinue(options: { systemMessage?: string } = {}): CodexHookOutput {
-  return withOptionalSystemMessage({ continue: true }, options.systemMessage);
+export function buildPreToolUseContinue(options: { additionalContext?: string; systemMessage?: string } = {}): CodexHookOutput {
+  const output: CodexHookOutput = { continue: true };
+  const additionalContext = optionalText(options.additionalContext);
+  if (additionalContext) {
+    output.hookSpecificOutput = {
+      hookEventName: 'PreToolUse',
+      additionalContext
+    };
+  }
+  return withOptionalSystemMessage(output, options.systemMessage);
 }
 
 export function buildPreToolUseDeny(reason: unknown, options: { systemMessage?: string } = {}): CodexHookOutput {

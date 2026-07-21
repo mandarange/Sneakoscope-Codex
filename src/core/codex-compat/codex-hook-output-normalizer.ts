@@ -40,7 +40,7 @@ export function normalizeCodexHookOutput(name: unknown, result: any = {}) {
       return buildPreToolUseDeny(reason, { systemMessage });
     }
     if (decision === 'allow' && out.updatedInput !== undefined) return buildPreToolUseAllowRewrite(out.updatedInput, { systemMessage });
-    return buildPreToolUseContinue({ systemMessage });
+    return buildPreToolUseContinue({ additionalContext: out.additionalContext, systemMessage });
   }
 
   if (eventName === 'PermissionRequest') {

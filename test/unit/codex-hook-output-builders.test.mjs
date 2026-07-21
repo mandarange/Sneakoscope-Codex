@@ -23,6 +23,7 @@ import { validateCodexHookSemanticOutput } from '../../dist/core/codex-compat/co
 
 const cases = [
   ['PreToolUse', buildPreToolUseContinue()],
+  ['PreToolUse', buildPreToolUseContinue({ additionalContext: 'context' })],
   ['PreToolUse', buildPreToolUseDeny('blocked')],
   ['PreToolUse', buildPreToolUseAllowRewrite({ command: 'npm test' })],
   ['PermissionRequest', buildPermissionRequestAllow()],

@@ -307,7 +307,7 @@ const AGENTS_BLOCK = [
   '',
   '## Codex App',
   '',
-  `Use \`.codex/SNEAKOSCOPE.md\`, global \`${AUTHORITATIVE_SKS_SKILL_ROOT_REFERENCE}/sks-*\`, \`.codex/hooks.json\`, and SKS dollar commands as the app control surface. For managed SKS skills, UserPromptSubmit/SubagentStart-resolved current files override stale project-local, \`.codex/skills\`, plugin-cache, picker, pre-compaction, and prior-message paths; after a successful remap, read the current file silently without reporting a path mismatch.`,
+  `Use \`.codex/SNEAKOSCOPE.md\`, global \`${AUTHORITATIVE_SKS_SKILL_ROOT_REFERENCE}/sks-*\`, \`.codex/hooks.json\`, and SKS dollar commands as the app control surface. Managed SKS skill files are re-resolved by UserPromptSubmit, compact-resume SessionStart, active PreToolUse, and SubagentStart; current files override stale project-local, \`.codex/skills\`, plugin-cache, picker, pre-compaction, and prior-message paths. After a successful remap, read the current file silently without reporting a path mismatch.`,
   ''
 ].join('\n');
 
@@ -335,7 +335,7 @@ export async function initProject(root: any, opts: any = {}) {
     if (repair.removed.length) created.push(`repaired generated SKS files (${repair.removed.length})`);
   }
   const dirs = [
-    '.sneakoscope/state', '.sneakoscope/missions', '.sneakoscope/db', '.sneakoscope/bus', '.sneakoscope/hproof', '.sneakoscope/db', '.sneakoscope/wiki', '.sneakoscope/skills', '.sneakoscope/memory/q0_raw', '.sneakoscope/memory/q1_evidence', '.sneakoscope/memory/q2_facts', '.sneakoscope/memory/q3_tags', '.sneakoscope/memory/q4_bits', '.sneakoscope/gx/cartridges', '.sneakoscope/model/fingerprints', '.sneakoscope/genome/candidates', '.sneakoscope/trajectories/raw', '.sneakoscope/locks', '.sneakoscope/tmp', '.sneakoscope/arenas', '.sneakoscope/reports', '.codex', '.codex/agents', '.agents/skills'
+    '.sneakoscope/state', '.sneakoscope/missions', '.sneakoscope/db', '.sneakoscope/bus', '.sneakoscope/hproof', '.sneakoscope/db', '.sneakoscope/wiki', '.sneakoscope/skills', '.sneakoscope/memory/q0_raw', '.sneakoscope/memory/q1_evidence', '.sneakoscope/memory/q2_facts', '.sneakoscope/memory/q3_tags', '.sneakoscope/memory/q4_bits', '.sneakoscope/gx/cartridges', '.sneakoscope/model/fingerprints', '.sneakoscope/genome/candidates', '.sneakoscope/trajectories/raw', '.sneakoscope/locks', '.sneakoscope/tmp', '.sneakoscope/arenas', '.sneakoscope/reports', '.codex', '.codex/agents'
   ];
   for (const d of dirs) await ensureDir(path.join(root, d));
   const sharedIgnoreWanted = !localOnly && await shouldWriteSharedGitIgnore(root, installScope);
@@ -1067,10 +1067,12 @@ function upsertTomlTable(text: any, table: any, block: any) {
   }
 
   await ensureDir(globalSkillHome);
-  const projectSkillCleanup = await sameFilesystemPath(root, globalSkillHome)
+  const skillInstall = await installGlobalSkills(globalSkillHome);
+  const globalSkillTarget = path.resolve(globalSkillHome, '.agents', 'skills');
+  const projectSkillTarget = path.resolve(root, '.agents', 'skills');
+  const projectSkillCleanup = await sameFilesystemPath(projectSkillTarget, globalSkillTarget)
     ? null
     : await installProjectSkills(root);
-  const skillInstall = await installGlobalSkills(globalSkillHome);
   if (projectSkillCleanup) {
     const merged = (left: unknown, right: unknown) => [...new Set([
       ...(Array.isArray(left) ? left.map(String) : []),
@@ -1208,7 +1210,7 @@ export function codexAppQuickReference(scope: any, commandPrefix: any) {
     `Install scope: \`${scope}\``,
     `Command: \`${commandPrefix} <command>\``,
     `Files: AGENTS.md, .codex/hooks.json, .codex/config.toml, .codex/SNEAKOSCOPE.md, ${AUTHORITATIVE_SKS_SKILL_ROOT_REFERENCE}/sks-* (authoritative managed SKS skills), .codex/agents, .sneakoscope/missions.`,
-    `Skill paths: UserPromptSubmit/SubagentStart-resolved files under ${AUTHORITATIVE_SKS_SKILL_ROOT_REFERENCE}/sks-*/SKILL.md override stale project-local, .codex/skills, plugin-cache, picker, pre-compaction, and prior-message links. Successful remaps stay silent; unresolved skills are never guessed.`,
+    `Skill paths: UserPromptSubmit, compact-resume SessionStart, active PreToolUse, and SubagentStart re-resolve files under ${AUTHORITATIVE_SKS_SKILL_ROOT_REFERENCE}/sks-*/SKILL.md. Current files override stale project-local, .codex/skills, plugin-cache, picker, pre-compaction, and prior-message links. Successful remaps stay silent; unresolved skills are never guessed.`,
     `Discover: ${commandPrefix} bootstrap; ${commandPrefix} deps check; ${commandPrefix} commands; ${commandPrefix} codex-app check; ${commandPrefix} codex-app remote-control --status; npm run zellij:capability; ${commandPrefix} dollar-commands; ${commandPrefix} pipeline status; ${commandPrefix} pipeline plan.`,
     coreEngineeringDirectiveReferenceText(),
     'dollar-commands:',
