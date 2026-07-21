@@ -214,7 +214,17 @@ function printHandledCommandBlock(result: any) {
 
 export function safeReadOnlySubcommand(command: CommandNameLite, args: readonly string[]) {
   const sub = String(args[0] || '').toLowerCase();
+  const nested = String(args[1] || '').toLowerCase();
   if (command === 'naruto' && ['status', 'subagents', 'proof'].includes(sub)) {
+    return !args.some((arg) => ['--fix', '--yes', '-y', '--write', '--apply', '--execute', '--force', '--real'].includes(String(arg)));
+  }
+  // SKS Center probes use nested read paths (`mcp config list|test|backups`,
+  // `remote readiness`). Treat those as migration-safe so a blocked project
+  // receipt cannot blank Overview / MCP / Remote pages.
+  if (command === 'mcp' && sub === 'config' && ['list', 'test', 'backups', 'show'].includes(nested)) {
+    return !args.some((arg) => ['--fix', '--yes', '-y', '--write', '--apply', '--execute', '--force', '--real'].includes(String(arg)));
+  }
+  if (command === 'remote' && ['readiness', 'status', 'show'].includes(sub)) {
     return !args.some((arg) => ['--fix', '--yes', '-y', '--write', '--apply', '--execute', '--force', '--real'].includes(String(arg)));
   }
   if (!['status', 'show', 'list', 'observe', 'watch', 'doctor', 'help'].includes(sub)) return false;

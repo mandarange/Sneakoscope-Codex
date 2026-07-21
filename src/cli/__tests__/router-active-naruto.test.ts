@@ -17,6 +17,17 @@ test('active Naruto permits only its read-only observation subcommands', () => {
   assert.equal(safeReadOnlySubcommand('naruto', ['--max-threads=12', 'proof', 'latest']), false)
 })
 
+test('SKS Center nested read probes skip migration-blocking classification', () => {
+  assert.equal(safeReadOnlySubcommand('mcp', ['config', 'list', '--scope', 'effective', '--json']), true)
+  assert.equal(safeReadOnlySubcommand('mcp', ['config', 'test', 'context7', '--json']), true)
+  assert.equal(safeReadOnlySubcommand('mcp', ['config', 'backups', '--scope', 'global', '--json']), true)
+  assert.equal(safeReadOnlySubcommand('mcp', ['config', 'add', '--stdin-json', '--json']), false)
+  assert.equal(safeReadOnlySubcommand('mcp', ['config', 'edit', 'x', '--fix', '--json']), false)
+  assert.equal(safeReadOnlySubcommand('remote', ['readiness', '--json']), true)
+  assert.equal(safeReadOnlySubcommand('remote', ['status', '--json']), true)
+  assert.equal(safeReadOnlySubcommand('remote', ['run', '--fix']), false)
+})
+
 test('active Naruto admits only an explicit same-mission run continuation', () => {
   const state = {
     mission_id: 'M-active',

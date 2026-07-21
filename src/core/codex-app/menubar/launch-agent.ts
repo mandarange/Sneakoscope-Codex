@@ -103,6 +103,7 @@ export async function inspectLaunchdService(env: NodeJS.ProcessEnv = process.env
 
 export async function restartLaunchAgent(paths: ReturnType<typeof sksMenuBarPaths>, env: NodeJS.ProcessEnv) {
   const launchctl = env.SKS_MENUBAR_LAUNCHCTL || await which('launchctl').catch(() => null) || '/bin/launchctl';
+  const open = env.SKS_MENUBAR_OPEN || await which('open').catch(() => null) || '/usr/bin/open';
   const service = launchServiceName();
   const result = await runProcess(launchctl, ['kickstart', '-k', service], {
     timeoutMs: timeoutFromEnv(env, 'SKS_MENUBAR_KICKSTART_TIMEOUT_MS', 5_000),
@@ -118,11 +119,52 @@ export async function restartLaunchAgent(paths: ReturnType<typeof sksMenuBarPath
       print_code: probe.code,
       verified_running_after_timeout: result.timedOut && probe.running,
       terminal_uncertain: terminalUncertain,
+      recovered_via_bootstrap: false,
       error: probe.running ? null : probe.error || (result.timedOut ? 'launchctl_kickstart_timed_out' : 'launchctl_kickstart_not_running'),
       paths
     };
   }
-  return { ok: false, code: result.code, timed_out: false, print_code: null, verified_running_after_timeout: false, terminal_uncertain: false, error: String(result.stderr || result.stdout).trim(), paths };
+  // Diagnostics "Restart Menu Bar" and `sks menubar restart` used to kickstart only.
+  // When the LaunchAgent plist exists but is not loaded into the GUI domain
+  // (common after bootout, logout, or a failed prior install), kickstart fails
+  // with "Could not find service …" and Control Center becomes unreachable.
+  // Re-bootstrap the existing agent instead of forcing a full rebuild.
+  const kickstartError = String(result.stderr || result.stdout).trim();
+  if (await exists(paths.launch_agent_path) && await exists(paths.executable_path) && isUnloadableLaunchdKickstartError(kickstartError)) {
+    const launch = await launchMenuBar({ launchctl, open, paths, env });
+    return {
+      ok: launch.ok,
+      code: launch.kickstart_code ?? launch.bootstrap_code ?? result.code,
+      timed_out: Boolean(launch.kickstart_timed_out || launch.bootstrap_timed_out),
+      print_code: launch.print_code ?? null,
+      verified_running_after_timeout: Boolean(launch.verified_running_after_timeout),
+      terminal_uncertain: Boolean(launch.terminal_uncertain),
+      recovered_via_bootstrap: true,
+      error: launch.error ?? (launch.ok ? null : kickstartError),
+      paths
+    };
+  }
+  return {
+    ok: false,
+    code: result.code,
+    timed_out: false,
+    print_code: null,
+    verified_running_after_timeout: false,
+    terminal_uncertain: false,
+    recovered_via_bootstrap: false,
+    error: kickstartError,
+    paths
+  };
+}
+
+export function isUnloadableLaunchdKickstartError(text: string): boolean {
+  const normalized = String(text || '').toLowerCase();
+  return normalized.includes('could not find service')
+    || normalized.includes('could not kickstart service')
+    || /\bbad request\b/.test(normalized)
+    || normalized.includes('operation not permitted')
+    || normalized.includes('no such process')
+    || normalized.includes('input/output error');
 }
 
 export async function removeLaunchAgent(paths: ReturnType<typeof sksMenuBarPaths>, env: NodeJS.ProcessEnv): Promise<{ actions: string[]; warnings: string[]; blockers: string[] }> {

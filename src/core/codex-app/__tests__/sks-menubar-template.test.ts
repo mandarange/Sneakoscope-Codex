@@ -77,6 +77,14 @@ test('status template resources are distinct valid 18x18 PDFs', () => {
   assert.equal(new Set(digests).size, names.length, 'every status glyph PDF must have a distinct SHA-256');
 });
 
+test('status template keeps Control Center reachable on cold start before Codex launches', () => {
+  const status = fs.readFileSync(path.join(resolvePackagedMenuBarSourceRoot(), 'Sources', 'StatusItemController.swift'), 'utf8');
+  assert.match(status, /Keep the status item visible on cold start/);
+  assert.match(status, /statusItem\.isVisible = true/);
+  assert.doesNotMatch(status, /statusItem\.isVisible = NSWorkspace\.shared\.runningApplications\.contains/);
+  assert.match(status, /else \{ self\?\.statusItem\.isVisible = false \}/);
+});
+
 test('runtime materialization injects paths, version, and optional Codex bundle id without unresolved tokens', () => {
   const withCodex = source('com.openai.codex');
   const withoutCodex = source(null);

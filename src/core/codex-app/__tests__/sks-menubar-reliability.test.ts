@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { sha256 } from '../../fsx.js';
+import { sha256, runProcess } from '../../fsx.js';
 import { aggregateFileHashes } from '../menubar/build-stamp.js';
 import { NATIVE_RESOURCE_FILES } from '../menubar/constants.js';
 import { recoverMenuBarGenerationTransaction, rollbackGenerationPairs } from '../menubar/generation-transaction.js';
 import { shouldAutoRollbackMenuBarLaunch } from '../menubar/installer.js';
-import { launchMenuBar, restartLaunchAgent } from '../menubar/launch-agent.js';
+import { launchAgentSource, launchMenuBar, restartLaunchAgent, isUnloadableLaunchdKickstartError } from '../menubar/launch-agent.js';
 import { sksMenuBarPaths } from '../menubar/paths.js';
 import { normalizeLegacyMenuBarBuildStamp, rollbackSksMenuBar } from '../menubar/rollback.js';
 import type { SksMenuBarBuildStamp } from '../menubar/types.js';
@@ -29,6 +29,37 @@ test('launchctl kickstart timeout is accepted only after launchctl print verifie
   assert.equal(restart.timed_out, true);
   assert.equal(restart.verified_running_after_timeout, true);
   assert.equal(restart.terminal_uncertain, false);
+  assert.equal(restart.recovered_via_bootstrap, false);
+});
+
+test('menubar restart re-bootstraps when launchd no longer has the service loaded', async (t) => {
+  if (process.platform !== 'darwin') return t.skip('launchd reliability contract is macOS-only');
+  const fixture = await createFixture('missing-service-recover');
+  t.after(fixture.cleanup);
+  await fs.writeFile(fixture.paths.launch_agent_path, launchAgentSource(fixture.paths.executable_path, fixture.paths.install_dir));
+  await fs.mkdir(path.dirname(fixture.paths.executable_path), { recursive: true });
+  await fs.writeFile(fixture.paths.executable_path, '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+  const first = await runProcess(fixture.launchctl, ['kickstart', '-k', 'gui/501/com.sneakoscope.sks-menubar'], {
+    timeoutMs: 2_000,
+    maxOutputBytes: 8 * 1024
+  }).catch((error: unknown) => ({ code: 1, stdout: '', stderr: String(error) }));
+  assert.equal(first.code, 113, `direct kickstart should miss the service: ${JSON.stringify(first)}`);
+  const restart = await restartLaunchAgent(fixture.paths, {
+    ...fixture.env,
+    SKS_MENUBAR_OPEN: fixture.open,
+    SKS_MENUBAR_KICKSTART_TIMEOUT_MS: '2000'
+  });
+  assert.equal(restart.recovered_via_bootstrap, true, JSON.stringify(restart, null, 2));
+  assert.equal(restart.ok, true, JSON.stringify(restart, null, 2));
+  assert.equal(restart.terminal_uncertain, false);
+  assert.equal(restart.error, null);
+});
+
+test('unloadable kickstart errors are classified without treating arbitrary failures as missing services', () => {
+  assert.equal(isUnloadableLaunchdKickstartError('Could not find service "com.sneakoscope.sks-menubar" in domain for user gui: 501'), true);
+  assert.equal(isUnloadableLaunchdKickstartError('Could not kickstart service "com.sneakoscope.sks-menubar": 1: Operation not permitted'), true);
+  assert.equal(isUnloadableLaunchdKickstartError('Bad request.'), true);
+  assert.equal(isUnloadableLaunchdKickstartError('launchctl print failed: permission denied by policy'), false);
 });
 
 test('launchctl kickstart timeout remains terminal uncertain when print cannot confirm state', async (t) => {
@@ -315,7 +346,7 @@ test('6.2 v1 rollback metadata is normalized only after every legacy hash and si
   assert.ok(rejected.blockers.includes('legacy_source_hash_mismatch'));
 });
 
-async function createFixture(mode: 'success' | 'success-spawn-stuck' | 'success-print-unknown' | 'timeout-running' | 'timeout-unknown' | 'timeout-spawn-running' | 'timeout-spawn-stuck' | 'bootstrap-timeout-running' | 'bootstrap-timeout-unknown') {
+async function createFixture(mode: 'success' | 'success-spawn-stuck' | 'success-print-unknown' | 'timeout-running' | 'timeout-unknown' | 'timeout-spawn-running' | 'timeout-spawn-stuck' | 'bootstrap-timeout-running' | 'bootstrap-timeout-unknown' | 'missing-service-recover') {
   const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-menubar-reliability-'));
   const home = path.join(temp, 'home');
   const root = path.join(temp, 'root');
@@ -324,22 +355,37 @@ async function createFixture(mode: 'success' | 'success-spawn-stuck' | 'success-
   await fs.mkdir(paths.install_dir, { recursive: true });
   const launchctl = path.join(temp, 'fake-launchctl');
   const printCountPath = path.join(temp, 'print-count');
+  const bootstrappedPath = path.join(temp, 'bootstrapped');
   await fs.writeFile(launchctl, `#!${process.execPath}
 const fs = require('node:fs');
 const mode = ${JSON.stringify(mode)};
 const printCountPath = ${JSON.stringify(printCountPath)};
+const bootstrappedPath = ${JSON.stringify(bootstrappedPath)};
 const command = process.argv[2] || '';
 if (command === 'bootstrap' && mode.startsWith('bootstrap-timeout-')) {
   process.on('SIGTERM', () => process.exit(124));
   setInterval(() => {}, 1000);
+} else if (command === 'bootstrap' && mode === 'missing-service-recover') {
+  fs.writeFileSync(bootstrappedPath, '1');
+  process.exit(0);
+} else if (command === 'kickstart' && mode === 'missing-service-recover') {
+  if (!fs.existsSync(bootstrappedPath)) {
+    process.stderr.write('Could not find service "com.sneakoscope.sks-menubar" in domain for user gui: 501\\n');
+    process.exit(113);
+  }
+  process.exit(0);
 } else if (command === 'kickstart' && mode.startsWith('timeout-')) {
   process.on('SIGTERM', () => process.exit(124));
   setInterval(() => {}, 1000);
 } else if (command === 'print') {
   const printCount = Number(fs.existsSync(printCountPath) ? fs.readFileSync(printCountPath, 'utf8') : '0') + 1;
   fs.writeFileSync(printCountPath, String(printCount));
-  if (mode === 'success' || mode === 'timeout-running' || mode === 'bootstrap-timeout-running' || (mode === 'timeout-spawn-running' && printCount >= 3)) {
+  if (mode === 'success' || mode === 'timeout-running' || mode === 'bootstrap-timeout-running' || (mode === 'missing-service-recover' && fs.existsSync(bootstrappedPath)) || (mode === 'timeout-spawn-running' && printCount >= 3)) {
     process.stdout.write('active count = 1\\nstate = running\\npid = 4242\\n');
+    process.exit(0);
+  }
+  if (mode === 'missing-service-recover') {
+    process.stdout.write('active count = 0\\nstate = spawn scheduled\\n');
     process.exit(0);
   }
   if (mode === 'timeout-spawn-running' || mode === 'timeout-spawn-stuck' || mode === 'success-spawn-stuck') {
@@ -364,6 +410,7 @@ process.exit(0);
     ...process.env,
     HOME: home,
     SKS_MENUBAR_LAUNCHCTL: launchctl,
+    SKS_MENUBAR_OPEN: open,
     SKS_MENUBAR_CODESIGN: codesign,
     SKS_MENUBAR_BOOTSTRAP_TIMEOUT_MS: mode.startsWith('bootstrap-timeout-') ? '250' : '2000',
     SKS_MENUBAR_KICKSTART_TIMEOUT_MS: mode.startsWith('success') ? '3000' : '250',

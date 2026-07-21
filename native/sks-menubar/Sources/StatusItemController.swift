@@ -273,7 +273,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     private func configureCodexLifecycle() {
         guard let bundle = AppRuntime.codexBundleId else { return }
-        statusItem.isVisible = NSWorkspace.shared.runningApplications.contains { $0.bundleIdentifier == bundle }
+        // Keep the status item visible on cold start even when Codex is not
+        // running. Accessory apps have no Dock icon, so hiding before the first
+        // Codex session made Control Center unreachable after install/restart.
+        statusItem.isVisible = true
         let center = NSWorkspace.shared.notificationCenter
         center.addObserver(forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main) { [weak self] note in
             guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication, app.bundleIdentifier == bundle else { return }

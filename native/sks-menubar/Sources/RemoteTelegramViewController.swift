@@ -96,6 +96,10 @@ final class RemoteTelegramViewController: NSViewController, ControlCenterPage {
 
     private func json(_ text: String) -> [String: Any]? {
         guard let data = text.data(using: .utf8) else { return nil }
-        return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] { return object }
+        guard let start = text.range(of: "{", options: [.backwards])?.lowerBound else { return nil }
+        let slice = String(text[start...])
+        guard let sliced = slice.data(using: .utf8) else { return nil }
+        return try? JSONSerialization.jsonObject(with: sliced) as? [String: Any]
     }
 }

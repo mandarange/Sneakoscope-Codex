@@ -140,7 +140,7 @@ final class MCPServersViewController: NSViewController, NSTableViewDataSource, N
 
     @objc private func refresh() {
         let scope = selectedScope(); status.stringValue = "Loading \(scope) MCP configuration…"
-        processClient.run(["mcp", "config", "list", "--scope", scope] + scopeContext(scope, mutation: false) + ["--json"]) { [weak self] result in
+        processClient.run(["mcp", "config", "list", "--scope", scope] + scopeContext(scope, mutation: false) + ["--json"], timeout: NativeView.statusTimeout) { [weak self] result in
             guard let self = self else { return }
             guard let json = self.json(result.output), let servers = json["servers"] as? [[String: Any]] else {
                 self.rows = []; self.table.reloadData(); self.status.stringValue = "MCP inventory unavailable. No configuration was changed."
@@ -293,7 +293,7 @@ final class MCPServersViewController: NSViewController, NSTableViewDataSource, N
     private func mutate(_ args: [String], stdin: String? = nil) {
         guard !mutating, let operation = operations.begin(kind: "mcp-config", mutationGroup: "mcp", summary: "MCP configuration change") else { status.stringValue = "An update or MCP mutation is already running."; return }
         mutating = true; updateButtons(); _ = operations.update(operation, state: .running, stage: "apply", progress: nil, summary: "Applying scoped MCP change")
-        processClient.run(args, stdin: stdin) { [weak self] result in
+        processClient.run(args, stdin: stdin, timeout: NativeView.mutationTimeout) { [weak self] result in
             guard let self = self else { return }
             self.mutating = false
             _ = self.operations.update(operation, state: result.code == 0 ? .succeeded : .failed, stage: "complete", progress: 1, summary: result.code == 0 ? "MCP change complete" : "MCP change failed")
@@ -310,7 +310,14 @@ final class MCPServersViewController: NSViewController, NSTableViewDataSource, N
     private func writableScopeForBackup() -> String? { let scope = selectedScope(); return scope == "global" || scope == "project" ? scope : nil }
     private func scopeContext(_ scope: String, mutation: Bool) -> [String] { scope == "project" ? projectContext(mutation: mutation) : [] }
     private func projectContext(mutation: Bool) -> [String] { var args = ["--project-root", AppRuntime.projectRoot, "--trusted-project"]; if mutation { args.append("--confirm-project") }; return args }
-    private func json(_ text: String) -> [String: Any]? { guard let data = text.data(using: .utf8) else { return nil }; return try? JSONSerialization.jsonObject(with: data) as? [String: Any] }
+    private func json(_ text: String) -> [String: Any]? {
+        guard let data = text.data(using: .utf8) else { return nil }
+        if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] { return object }
+        guard let start = text.range(of: "{", options: [.backwards])?.lowerBound else { return nil }
+        let slice = String(text[start...])
+        guard let sliced = slice.data(using: .utf8) else { return nil }
+        return try? JSONSerialization.jsonObject(with: sliced) as? [String: Any]
+    }
     private func jsonText(_ payload: [String: Any]) -> String? { guard let data = try? JSONSerialization.data(withJSONObject: payload) else { return nil }; return String(data: data, encoding: .utf8).map { $0 + "\n" } }
     private func actionButton(_ title: String, _ action: Selector) -> NSButton { NativeView.button(title, target: self, action: action) }
     private func updateButtons() {

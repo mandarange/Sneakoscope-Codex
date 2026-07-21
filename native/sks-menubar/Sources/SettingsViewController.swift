@@ -2,7 +2,7 @@ import Cocoa
 
 final class SettingsViewController: NSViewController, ControlCenterPage {
     private let notifications: NotificationCoordinator
-    private let quitWithCodex = NSButton(checkboxWithTitle: "Quit SKS Menu when Codex quits (otherwise hide)", target: nil, action: nil)
+    private let quitWithCodex = NSButton(checkboxWithTitle: "Quit SKS Menu when Codex quits (otherwise keep icon, hide only after a Codex session ends)", target: nil, action: nil)
     private let status = NativeView.detail("Settings use the native app configuration file.")
     init(notifications: NotificationCoordinator) { self.notifications = notifications; super.init(nibName: nil, bundle: nil) }
     required init?(coder: NSCoder) { nil }
@@ -59,7 +59,7 @@ final class SettingsViewController: NSViewController, ControlCenterPage {
             try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: target.path)
             status.stringValue = quitWithCodex.state == .on
                 ? "Saved. SKS Menu will quit when Codex quits."
-                : "Saved. SKS Menu will hide when Codex quits."
+                : "Saved. SKS Menu stays available on cold start; after a Codex session ends it hides until Codex returns."
         } catch {
             try? FileManager.default.removeItem(at: temporary)
             status.stringValue = "Settings could not be saved. Confirm \(directory.path) is writable."
