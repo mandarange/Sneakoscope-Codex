@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { canonicalFilesystemPath, nowIso, readText, sha256, writeJsonAtomic } from '../fsx.js';
-import { inspectConfinedPath, isLexicallyConfined, publicPathError } from '../managed-path-safety.js';
+import { inspectConfinedPath, isLexicallyConfined } from '../managed-path-safety.js';
 import { buildSksCoreSkillManifest, isSksManagedCoreSkillContent } from './core-skill-manifest.js';
 import { canonicalSkillName, skillDisplayNameFromMarkdown } from './skill-name-canonicalizer.js';
 import { loadSkillsManifest } from '../init/skills.js';
@@ -146,18 +146,22 @@ async function dedupeSkillRegistryScanRoots(
         await fs.lstat(normalized.root);
       } catch (error: unknown) {
         if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') continue;
-        blockers.push(`unsafe_skill_scan_root:${publicPathError(error, normalized.root)}`);
+        blockers.push(unsafeSkillScanRootBlocker(normalized.scope, 'lstat_failed'));
         continue;
       }
       try {
         const inspection = await inspectConfinedPath(normalized.boundary, normalized.root);
         if (!inspection.exists) continue;
-        if (inspection.leafSymlink || !inspection.stat?.isDirectory()) {
-          blockers.push(`unsafe_skill_scan_root:${normalized.root}`);
+        if (inspection.leafSymlink) {
+          blockers.push(unsafeSkillScanRootBlocker(normalized.scope, 'leaf_symlink'));
+          continue;
+        }
+        if (!inspection.stat?.isDirectory()) {
+          blockers.push(unsafeSkillScanRootBlocker(normalized.scope, 'not_directory'));
           continue;
         }
       } catch (error: unknown) {
-        blockers.push(`unsafe_skill_scan_root:${publicPathError(error, normalized.root)}`);
+        blockers.push(unsafeSkillScanRootBlocker(normalized.scope, skillScanRootInspectionFailureReason(error)));
         continue;
       }
     }
@@ -168,6 +172,41 @@ async function dedupeSkillRegistryScanRoots(
     }
   }
   return { roots: [...byPath.values()], blockers: [...new Set(blockers)].sort() };
+}
+
+type SkillScanRootFailureReason =
+  | 'lstat_failed'
+  | 'leaf_symlink'
+  | 'not_directory'
+  | 'boundary_missing'
+  | 'boundary_symlink'
+  | 'boundary_not_directory'
+  | 'escape_refused'
+  | 'ancestor_symlink'
+  | 'ancestor_not_directory'
+  | 'inspection_failed';
+
+function unsafeSkillScanRootBlocker(
+  scope: SkillRegistryEntry['scope'],
+  reason: SkillScanRootFailureReason
+): string {
+  return `unsafe_skill_scan_root:${skillScanRootScopeCode(scope)}:${reason}`;
+}
+
+function skillScanRootScopeCode(scope: SkillRegistryEntry['scope']): SkillRegistryEntry['scope'] | 'unknown' {
+  if (scope === 'project' || scope === 'global' || scope === 'codex-home' || scope === 'user') return scope;
+  return 'unknown';
+}
+
+function skillScanRootInspectionFailureReason(error: unknown): SkillScanRootFailureReason {
+  const code = error && typeof error === 'object' && 'code' in error ? error.code : null;
+  if (code === 'managed_path_boundary_missing') return 'boundary_missing';
+  if (code === 'managed_path_boundary_symlink_refused') return 'boundary_symlink';
+  if (code === 'managed_path_boundary_not_directory') return 'boundary_not_directory';
+  if (code === 'managed_path_escape_refused') return 'escape_refused';
+  if (code === 'managed_path_ancestor_symlink_refused') return 'ancestor_symlink';
+  if (code === 'managed_path_ancestor_not_directory') return 'ancestor_not_directory';
+  return 'inspection_failed';
 }
 
 function skillScanScopeRank(scope: SkillRegistryEntry['scope']): number {

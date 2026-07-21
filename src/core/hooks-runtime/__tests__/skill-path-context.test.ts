@@ -1027,6 +1027,15 @@ test('all guard write failures retain durable proof and exact-schema child tools
     assert.equal(marker.thread_id_hash, sha256(siblingAgentId));
     const emergencyDir = path.join(dir, 'subagent-skill-availability-emergency-denials');
     assert.equal((await fsp.readdir(emergencyDir)).length, 2);
+    const sessionEmergencyDir = path.join(
+      root,
+      '.sneakoscope',
+      'state',
+      'subagents',
+      sha256('shared-parent-session').slice(0, 32),
+      'subagent-skill-availability-emergency-denials'
+    );
+    assert.equal((await fsp.readdir(sessionEmergencyDir)).length, 2);
     const evidence = JSON.parse(await fsp.readFile(path.join(dir, 'subagent-evidence.json'), 'utf8'));
     assert.ok(evidence.blockers.includes('subagent_skill_availability_guard_persistence_failed'));
 
@@ -1037,26 +1046,29 @@ test('all guard write failures retain durable proof and exact-schema child tools
     ]);
     const exactChildPayload = {
       ...preToolPayload(null, agentId),
-      cwd: root
+      cwd: root,
+      state: {}
     };
     assert.equal('agent_id' in exactChildPayload, false);
-    const denied: any = await evaluateHookPayload('pre-tool', exactChildPayload, { root, state });
+    const denied: any = await evaluateHookPayload('pre-tool', exactChildPayload, { root, state: {} });
     assert.equal(denied.decision, 'block');
     assert.match(String(denied.reason || ''), /subagent_skill_availability_guard_persistence_failed/);
 
     const siblingDenied: any = await evaluateHookPayload('pre-tool', {
       ...preToolPayload(null, siblingAgentId),
       cwd: root,
+      state: {},
       tool_use_id: 'tool-all-writes-fail-sibling'
-    }, { root, state });
+    }, { root, state: {} });
     assert.equal(siblingDenied.decision, 'block');
     assert.match(String(siblingDenied.reason || ''), /subagent_skill_availability_guard_persistence_failed/);
 
     const unrelatedParent: any = await evaluateHookPayload('pre-tool', {
-      ...preToolPayload(null, 'unrelated-parent'),
+      ...preToolPayload(null, 'unrelated-parent', 'unrelated-parent-session'),
       cwd: root,
+      state: {},
       tool_use_id: 'tool-unrelated-parent'
-    }, { root, state });
+    }, { root, state: {} });
     assert.equal(unrelatedParent.decision, undefined);
 
     const restarted: any = await evaluateHookPayload('subagent-start', {
@@ -1065,18 +1077,20 @@ test('all guard write failures retain durable proof and exact-schema child tools
     }, { root, state });
     assert.doesNotMatch(String(restarted.additionalContext || ''), /MANDATORY SKS PARENT-BLOCK HANDOFF/);
     assert.equal((await fsp.readdir(emergencyDir)).length, 1);
+    assert.equal((await fsp.readdir(sessionEmergencyDir)).length, 1);
     const markerAfterRestart = JSON.parse(await fsp.readFile(
       path.join(dir, SUBAGENT_SKILL_AVAILABILITY_BLOCKER_FILENAME),
       'utf8'
     ));
     assert.equal(markerAfterRestart.thread_id_hash, sha256(siblingAgentId));
 
-    const restartedTool: any = await evaluateHookPayload('pre-tool', exactChildPayload, { root, state });
+    const restartedTool: any = await evaluateHookPayload('pre-tool', exactChildPayload, { root, state: {} });
     const siblingStillDenied: any = await evaluateHookPayload('pre-tool', {
       ...preToolPayload(null, siblingAgentId),
       cwd: root,
+      state: {},
       tool_use_id: 'tool-all-writes-fail-sibling-after-restart'
-    }, { root, state });
+    }, { root, state: {} });
     assert.equal(restartedTool.decision, undefined);
     assert.equal(siblingStillDenied.decision, 'block');
   } finally {

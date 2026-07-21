@@ -75,6 +75,7 @@ export function renderSubagentSkillAvailabilityHandoff(blockers: readonly string
 export async function persistSubagentSkillAvailabilityBlocker(input: {
   root: string;
   artifactDir: string;
+  sessionArtifactDir?: string | null;
   state: any;
   payload: any;
   blockers: readonly string[];
@@ -117,22 +118,26 @@ export async function persistSubagentSkillAvailabilityBlocker(input: {
       blockers: evidenceBlockers,
       recorded_at: admission.recorded_at
     };
-    const [sharedWrite, emergencyWrite] = await Promise.all([
+    const emergencyArtifactDirs = guardPersistenceFailed
+      ? uniqueArtifactDirs(input.artifactDir, input.sessionArtifactDir)
+      : [];
+    const [sharedWrite, emergencyWrites] = await Promise.all([
       safeWriteJson(
         path.join(input.artifactDir, SUBAGENT_SKILL_AVAILABILITY_BLOCKER_FILENAME),
         path.resolve(input.root),
         blocker
       ),
-      guardPersistenceFailed
-        ? persistEmergencyDenial(path.resolve(input.root), path.resolve(input.artifactDir), blocker)
-        : true
+      Promise.all(emergencyArtifactDirs.map((artifactDir) => (
+        persistEmergencyDenial(path.resolve(input.root), artifactDir, blocker)
+      )))
     ]);
-    evidenceWrite = sharedWrite && emergencyWrite;
+    evidenceWrite = sharedWrite && emergencyWrites.every(Boolean);
   } else {
     evidenceWrite = await clearMatchingBlockerArtifact(
       path.resolve(input.root),
       path.resolve(input.artifactDir),
-      admission.thread_id_hash
+      admission.thread_id_hash,
+      input.sessionArtifactDir
     );
   }
   if (guardPersistenceFailed) throw new Error('subagent_skill_availability_guard_persistence_failed');
@@ -466,11 +471,16 @@ async function safeRemoveGuard(file: string, boundary: string): Promise<void> {
 async function clearMatchingBlockerArtifact(
   root: string,
   artifactDir: string,
-  threadHash: string
+  threadHash: string,
+  sessionArtifactDir?: string | null
 ): Promise<boolean> {
   const file = path.join(artifactDir, SUBAGENT_SKILL_AVAILABILITY_BLOCKER_FILENAME);
   try {
-    const emergencyCleared = await clearMatchingEmergencyDenials(root, artifactDir, threadHash);
+    const emergencyCleared = (await Promise.all(
+      uniqueArtifactDirs(artifactDir, sessionArtifactDir).map((candidate) => (
+        clearMatchingEmergencyDenials(root, candidate, threadHash)
+      ))
+    )).every(Boolean);
     const inspected = await inspectConfinedPath(root, file);
     if (!inspected.exists) return emergencyCleared;
     if (inspected.leafSymlink || !inspected.stat?.isFile()) return false;
@@ -481,6 +491,13 @@ async function clearMatchingBlockerArtifact(
   } catch {
     return false;
   }
+}
+
+function uniqueArtifactDirs(...values: Array<string | null | undefined>): string[] {
+  return [...new Set(values
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+    .map((value) => path.resolve(value)))];
 }
 
 async function matchingArtifactBlockers(

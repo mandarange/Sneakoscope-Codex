@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { dedupeProjectSkills } from '../project-skill-dedupe.js';
+import { buildSkillRegistryLedger } from '../skill-registry-ledger.js';
 
 test('project skill dedupe scans HOME-equals-project only once and preserves the authoritative skill', async () => {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-project-skill-dedupe-same-root-'));
@@ -75,6 +76,41 @@ test('project skill dedupe refuses a project .agents ancestor symlink without to
     assert.equal(await fsp.readFile(outsideSkill, 'utf8'), externalText);
     assert.equal(await fsp.readlink(path.join(root, '.agents')), outsideAgents);
     await assert.rejects(fsp.access(path.join(root, '.sneakoscope', 'quarantine', 'skills')));
+  } finally {
+    if (oldHome === undefined) delete process.env.HOME;
+    else process.env.HOME = oldHome;
+    if (oldCodexHome === undefined) delete process.env.CODEX_HOME;
+    else process.env.CODEX_HOME = oldCodexHome;
+    await fsp.rm(fixture, { recursive: true, force: true });
+  }
+});
+
+test('skill registry blockers never expose an adversarial CODEX_HOME path through a symlink rejection', async () => {
+  const fixture = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-skill-registry-sanitized-blocker-'));
+  const root = path.join(fixture, 'project');
+  const home = path.join(fixture, 'home');
+  const secretMarker = 'ATTACKER_SECRET_MARKER';
+  const codexHome = path.join(home, `unsafe-${secretMarker}\nforged-blocker`);
+  const outsideSkills = path.join(fixture, 'outside-skills');
+  const oldHome = process.env.HOME;
+  const oldCodexHome = process.env.CODEX_HOME;
+  try {
+    process.env.HOME = home;
+    process.env.CODEX_HOME = codexHome;
+    await fsp.mkdir(root, { recursive: true });
+    await fsp.mkdir(codexHome, { recursive: true });
+    await fsp.mkdir(outsideSkills, { recursive: true });
+    await fsp.symlink(outsideSkills, path.join(codexHome, 'skills'));
+
+    const ledger = await buildSkillRegistryLedger({ root, reportPath: null });
+    const dedupe = await dedupeProjectSkills({ root, reportPath: null });
+
+    for (const blockers of [ledger.blockers, dedupe.blockers]) {
+      assert.deepEqual(blockers, ['unsafe_skill_scan_root:codex-home:leaf_symlink']);
+      assert.equal(blockers.some((blocker) => blocker.includes(codexHome)), false);
+      assert.equal(blockers.some((blocker) => blocker.includes(secretMarker)), false);
+      assert.equal(blockers.some((blocker) => /[\r\n/\\]/.test(blocker)), false);
+    }
   } finally {
     if (oldHome === undefined) delete process.env.HOME;
     else process.env.HOME = oldHome;

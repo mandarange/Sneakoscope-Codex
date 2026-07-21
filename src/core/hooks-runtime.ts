@@ -260,6 +260,7 @@ function selectedSksSkillNamesForActiveState(state: any): string[] {
 
 async function hookSubagentStart(root: any, state: any, payload: any = {}, sessionKey: any = null) {
   const artifactDir = officialSubagentArtifactDir(root, state, sessionKey);
+  const sessionArtifactDir = officialSubagentArtifactDir(root, {}, sessionKey);
   const artifactDirBlockers: string[] = [];
   const artifactDirSafe = await ensureOfficialSubagentArtifactDirConfined(root, artifactDir)
     .then(() => true)
@@ -292,6 +293,7 @@ async function hookSubagentStart(root: any, state: any, payload: any = {}, sessi
     await persistSubagentSkillAvailabilityBlocker({
       root,
       artifactDir,
+      sessionArtifactDir,
       state,
       payload,
       blockers: skillBlockers
