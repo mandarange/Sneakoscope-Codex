@@ -1,8 +1,8 @@
 {
   "schema": "sks.code-pack.v1",
-  "generated_at": "2026-07-21T07:02:34.608Z",
-  "git_head_sha": "9d97097571bc6365ce532d747e313b053f16e734",
-  "source_file_count": 3594,
+  "generated_at": "2026-07-21T08:00:03.426Z",
+  "git_head_sha": "c82d6a8c7690bc989f08d30523e2efdcb2f01dd6",
+  "source_file_count": 3598,
   "index_digest": "39ae760e40e8ed5f1c72384adfbaf9db1051b8ac0a8583156a2c137bd1cecf21",
   "entries": [
     {
@@ -310,7 +310,7 @@
     },
     {
       "id": "code:core-hooks-runtime",
-      "text": "core-hooks-runtime is a core module at src/core/hooks-runtime (20 files, 8273 loc, medium risk). Key exports: async function codePackFreshnessNote(root: string, opts: { budgetMs?: number } = {}): Promise<string | null>; async function claimHookInvocation(root: string, name: unknown, payload: any = {}); async function loadHookPayload(); function normalizeHookResult(name: any, result: any = {}); function codexHookEventName(name: any), and 43 more. It has no detected cross-module dependencies.",
+      "text": "core-hooks-runtime is a core module at src/core/hooks-runtime (23 files, 8773 loc, medium risk). Key exports: async function codePackFreshnessNote(root: string, opts: { budgetMs?: number } = {}): Promise<string | null>; async function attachAuthoritativeSksSkillContext(; async function standaloneParentManagedSkillNames(; async function authoritativeSksSkillAdmission(root: string, skillNames: readonly unknown[]); async function claimHookInvocation(root: string, name: unknown, payload: any = {}), and 48 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/hooks-runtime"
@@ -318,7 +318,7 @@
       ],
       "trust_score": 0.7,
       "freshness": "unknown",
-      "token_cost": 124
+      "token_cost": 140
     },
     {
       "id": "code:core-image",
@@ -358,7 +358,7 @@
     },
     {
       "id": "code:core-init",
-      "text": "core-init is a core module at src/core/init (1 file, 1528 loc, low risk). Key exports: const REMOVED_SKS_SKILL_NAMES = [; const LEGACY_UNPREFIXED_SKS_SKILL_NAMES = Array.from(new Set([. It has no detected cross-module dependencies.",
+      "text": "core-init is a core module at src/core/init (2 files, 1576 loc, low risk). Key exports: type ManagedSkillInstallReport = SkillReconcileReport &; async function reconcileManagedSkillInstallation(root: string, home?: string): Promise<; const REMOVED_SKS_SKILL_NAMES = [; const LEGACY_UNPREFIXED_SKS_SKILL_NAMES = Array.from(new Set([. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/init"
@@ -366,7 +366,7 @@
       ],
       "trust_score": 0.8,
       "freshness": "unknown",
-      "token_cost": 58
+      "token_cost": 95
     },
     {
       "id": "code:core-install",
@@ -879,18 +879,18 @@
       "token_cost": 112
     },
     {
-      "id": "code:core-strategy",
-      "text": "core-strategy is a core module at src/core/strategy (3 files, 653 loc, low risk). Key exports: const ADHD_ORCHESTRATING_GATE_SCHEMA = 'sks.adhd-orchestrating-gate.v1'; const DOPAMINE_ORCHESTRATION_PLAN_SCHEMA = 'sks.dopamine-orchestration-plan.v1'; const PROGRESS_REWARD_LEDGER_SCHEMA = 'sks.progress-reward-ledger.v1'; const MICRO_WIN_TASK_BOARD_SCHEMA = 'sks.micro-win-task-board.v1'; interface MicroWinTask, and 14 more. It has no detected cross-module dependencies.",
+      "id": "code:core-subagents",
+      "text": "core-subagents is a core module at src/core/subagents (26 files, 13120 loc, medium risk). Key exports: const DEFAULT_AUTOMATIC_SUBAGENT_COUNT = 2; const PARALLEL_AUTOMATIC_SUBAGENT_COUNT = 4; const LARGE_SCALE_AUTOMATIC_SUBAGENT_COUNT = 6; const MAX_AUTOMATIC_SUBAGENT_COUNT = 10; const MAX_AUTOMATIC_REVIEWER_COUNT = 2, and 114 more. It has no detected cross-module dependencies.",
       "citations": [
         {
-          "path": "src/core/strategy"
+          "path": "src/core/subagents"
         }
       ],
-      "trust_score": 0.8,
+      "trust_score": 0.7,
       "freshness": "unknown",
-      "token_cost": 118
+      "token_cost": 95
     }
   ],
   "token_budget": 8000,
-  "total_token_cost": 7960
+  "total_token_cost": 7990
 }

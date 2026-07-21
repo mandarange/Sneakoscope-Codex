@@ -5,6 +5,7 @@
 ### Fixed
 
 - Resolve selected managed SKS skills from the current global `~/.agents/skills/sks-*` install and inject those verified files into parent-turn and child-start hook context, so stale project/plugin/picker paths reconstructed after compaction no longer surface false path-mismatch warnings.
+- Bind child PreTool managed-skill admission to the active mission and workflow run, and quarantine markerless user content at global core-skill names before restoring the packaged digest-bound copy, preventing stale child replay and permanent recovery blocks while preserving the original bytes.
 
 ## [7.0.3] - 2026-07-19
 
