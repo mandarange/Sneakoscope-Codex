@@ -18,7 +18,7 @@ Proof-first orchestration for Codex CLI, ChatGPT Desktop, AI coding agents, mult
 Sneakoscope Codex (`sks`) is an open-source trust layer for Codex CLI and ChatGPT Desktop. It coordinates bounded AI coding agents, records machine-verifiable evidence, preserves project memory, and blocks release claims that are not supported by current tests or artifacts. Search visibility outcomes are measured separately; SKS does not promise rankings or traffic.
 <!-- END SKS SEARCH VISIBILITY MARKETING -->
 
-Current release: **SKS 7.0.3**, with the package compatibility baseline pinned to **Codex CLI 0.144.5**. It fixes codex-lb readiness, preserves provider/auth/model state across `sks update`, restores explicit Chat/Pro OAuth recovery, and adds a guarded Codex CLI updater that discovers newer stable operator releases independently. Prerelease `0.145.0-alpha` artifacts remain excluded from the pinned release contract. See [CHANGELOG.md](CHANGELOG.md).
+Current release: **SKS 7.0.4**, with the package compatibility baseline pinned to **Codex CLI 0.144.5**. It resolves managed SKS skills from the authoritative global install, preserves a runnable Naruto child slot when `max_threads=2`, and keeps current-version Menu Bar repair transactional so stamped generations remain verifiable. Prerelease `0.145.0-alpha` artifacts remain excluded from the pinned release contract. See [CHANGELOG.md](CHANGELOG.md).
 
 ## What 7.0.0 Ships
 

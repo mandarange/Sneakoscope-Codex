@@ -2,12 +2,15 @@
 
 ## [Unreleased]
 
+## [7.0.4] - 2026-07-21
+
 ### Fixed
 
 - Resolve selected managed SKS skills from the current global `~/.agents/skills/sks-*` install and inject those verified files into parent-turn and child-start hook context, so stale project/plugin/picker paths reconstructed after compaction no longer surface false path-mismatch warnings.
 - Bind child PreTool managed-skill admission to the active mission and workflow run, and quarantine markerless user content at global core-skill names before restoring the packaged digest-bound copy, preventing stale child replay and permanent recovery blocks while preserving the original bytes.
 - Require each healthy child admission to commit through a mission-independent project or HOME guard before tools are allowed, and read official child transcripts with no-follow, post-open file checks so mission-local persistence and symlink replacement cannot authorize a child.
 - Preserve at least one executable child slot under small `max_threads` caps by elastically reducing reviewer reservation after active and parent capacity are accounted for; `max_threads=2` no longer starts a Naruto mission with zero runnable child slots.
+- Preserve stamped Menu Bar generations during update migration and defer entry-point retargeting to the transactional rebuild, preventing current-version repair from invalidating the action-script hash before installation.
 
 ## [7.0.3] - 2026-07-19
 

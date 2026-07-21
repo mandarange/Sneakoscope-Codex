@@ -349,6 +349,7 @@ async function syncSourcePackageVersion(root: any, version: any) {
     {
       rel: 'README.md',
       replace: (text: string) => text
+        .replace(/\*\*SKS \d+\.\d+\.\d+\*\*/, `**SKS ${version}**`)
         .replace(/SKS \*\*\d+\.\d+\.\d+\*\*/, `SKS **${version}**`)
         .replace(/^## Naruto In \d+\.\d+\.\d+$/m, `## Naruto In ${version}`)
     },
@@ -371,12 +372,23 @@ async function syncSourcePackageVersion(root: any, version: any) {
         .replace(/not represented as current \d+\.\d+\.\d+ completion proof\./g, `not represented as current ${version} completion proof.`)
         .replace(/^For \d+\.\d+\.\d+, a selected codex-lb/m, `For ${version}, a selected codex-lb`)
         .replace(/^The \d+\.\d+\.\d+ SKS menu bar/m, `The ${version} SKS menu bar`)
+        .replace(/the 6\.2\.0 to \d+\.\d+\.\d+ upgrade smoke/g, `the 6.2.0 to ${version} upgrade smoke`)
+        .replace(/under the \d+\.\d+\.\d+ release evidence root/g, `under the ${version} release evidence root`)
+        .replace(/^Do not cut \d+\.\d+\.\d+ while/m, `Do not cut ${version} while`)
+        .replace(/must agree on \d+\.\d+\.\d+\./g, `must agree on ${version}.`)
+        .replace(/It must not claim that \d+\.\d+\.\d+ is/g, `It must not claim that ${version} is`)
+        .replace(/npm view sneakoscope@\d+\.\d+\.\d+/g, `npm view sneakoscope@${version}`)
+        .replace(/install `sneakoscope@\d+\.\d+\.\d+`/g, `install \`sneakoscope@${version}\``)
+        .replace(/(registry version to be)(\s+)\d+\.\d+\.\d+,/g, `$1$2${version},`)
+        .replace(/`latest` to resolve to \d+\.\d+\.\d+,/g, `\`latest\` to resolve to ${version},`)
+        .replace(/never replace \d+\.\d+\.\d+\./g, `never replace ${version}.`)
     },
     {
       rel: 'docs/release-proof-truth.md',
       replace: (text: string) => text
         .replace(/^SKS \d+\.\d+\.\d+ release proof truth/m, `SKS ${version} release proof truth`)
         .replace(/^SKS \d+\.\d+\.\d+ must not claim/m, `SKS ${version} must not claim`)
+        .replace(/; \d+\.\d+\.\d+ proof must additionally show/g, `; ${version} proof must additionally show`)
         .replace(/cannot serve as \d+\.\d+\.\d+ evidence\./m, `cannot serve as ${version} evidence.`)
     },
     {
@@ -391,11 +403,26 @@ async function syncSourcePackageVersion(root: any, version: any) {
     },
     {
       rel: 'docs/codex-cli-compat.md',
-      replace: (text: string) => text.replace(/^SKS \d+\.\d+\.\d+ targets/m, `SKS ${version} targets`)
+      replace: (text: string) => text
+        .replace(/^SKS \d+\.\d+\.\d+ targets/m, `SKS ${version} targets`)
+        .replace(/not release-authorizing for SKS \d+\.\d+\.\d+\./m, `not release-authorizing for SKS ${version}.`)
     },
     {
       rel: 'docs/codex-app.md',
-      replace: (text: string) => text.replace(/^SKS \d+\.\d+\.\d+ targets/m, `SKS ${version} targets`)
+      replace: (text: string) => text
+        .replace(/^SKS \d+\.\d+\.\d+ targets/m, `SKS ${version} targets`)
+        .replace(/^SKS \d+\.\d+\.\d+ also reports/m, `SKS ${version} also reports`)
+    },
+    {
+      rel: 'docs/PERFORMANCE.md',
+      replace: (text: string) => text
+        .replace(/^Sneakoscope Codex \d+\.\d+\.\d+ is designed/m, `Sneakoscope Codex ${version} is designed`)
+        .replace(/(\b[Tt]he )\d+\.\d+\.\d+ package pins/m, `$1${version} package pins`)
+        .replace(/(\b[Tt]he final )\d+\.\d+\.\d+ host-capability/m, `$1${version} host-capability`)
+    },
+    {
+      rel: 'docs/AGENT-BRIDGE.md',
+      replace: (text: string) => text.replace(/"package_version": "\d+\.\d+\.\d+"/m, `"package_version": "${version}"`)
     }
   ];
   for (const { rel, replace } of replacements) {
@@ -423,8 +450,17 @@ async function syncChangelogVersionSection(root: any, version: any) {
     text = text.replace(/^#\s+Changelog\s*$/m, (title: any) => `${title}\n\n## [Unreleased]`);
   }
 
-  const managedSection = `\n## [${version}] - ${date}\n\n### Fixed\n\n- Keep release metadata aligned after an explicit SKS version bump advances the package version.\n`;
-  const next = text.replace(/^##\s+\[Unreleased\]\s*$/m, (heading: any) => `${heading}\n${managedSection}`);
+  const unreleasedRe = /^##\s+\[Unreleased\]\s*$/m;
+  const unreleased = unreleasedRe.exec(text);
+  if (!unreleased) return { files: [], relative_files: [] };
+  const bodyStart = unreleased.index + unreleased[0].length;
+  const remainder = text.slice(bodyStart);
+  const nextReleaseOffset = remainder.search(/\n##\s+\[[^\]]+\]/);
+  const unreleasedBody = nextReleaseOffset >= 0 ? remainder.slice(0, nextReleaseOffset) : remainder;
+  const managedSection = unreleasedBody.trim()
+    ? `\n\n## [${version}] - ${date}`
+    : `\n\n## [${version}] - ${date}\n\n### Fixed\n\n- Keep release metadata aligned after an explicit SKS version bump advances the package version.\n`;
+  const next = `${text.slice(0, bodyStart)}${managedSection}${text.slice(bodyStart)}`;
   if (next === text) return { files: [], relative_files: [] };
   await writeTextAtomic(file, next);
   return { files: [file], relative_files: [path.relative(root, file)] };

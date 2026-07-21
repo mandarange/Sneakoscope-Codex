@@ -11,8 +11,8 @@ test('version bump updates every current release and Codex document surface', as
   const files: Record<string, string> = {
     'package.json': '{"name":"fixture","version":"1.2.3"}\n',
     'package-lock.json': '{"name":"fixture","version":"1.2.3","packages":{"":{"version":"1.2.3"}}}\n',
-    'CHANGELOG.md': '# Changelog\n\n## [Unreleased]\n',
-    'README.md': 'Current release: SKS **1.2.3**.\n\n## Naruto In 1.2.3\n',
+    'CHANGELOG.md': '# Changelog\n\n## [Unreleased]\n\n### Fixed\n\n- Existing release fix.\n',
+    'README.md': 'Current release: **SKS 1.2.3**.\n\n## Naruto In 1.2.3\n',
     'docs/release-readiness.md': [
       '# SKS 1.2.0 Release Readiness',
       '',
@@ -29,10 +29,20 @@ test('version bump updates every current release and Codex document surface', as
       'They are not represented as current 1.2.3 completion proof.',
       'For 1.2.3, a selected codex-lb must pass recovery.',
       'The 1.2.3 SKS menu bar exposes status.',
+      'the 6.2.0 to 1.2.3 upgrade smoke is current.',
+      'Store proof under the 1.2.3 release evidence root.',
+      'Do not cut 1.2.3 while a required gate is red.',
+      'README and release evidence must agree on 1.2.3.',
+      'It must not claim that 1.2.3 is published.',
+      'npm view sneakoscope@1.2.3 version',
+      'Then install `sneakoscope@1.2.3` into a fresh prefix.',
+      'Completion requires the registry version to be',
+      '1.2.3, `latest` to resolve to 1.2.3, integrity to match.',
+      'A defect requires a higher version; never replace 1.2.3.',
       '# Historical native runtime removal happened in 1.2.3.'
     ].join('\n') + '\n',
     'docs/release-proof-truth.md': [
-      'SKS 1.2.3 release proof truth is current.',
+      'SKS 1.2.3 release proof truth is current; 1.2.3 proof must additionally show current checks.',
       'SKS 1.2.3 must not claim publication.',
       'Legacy aliases cannot serve as 1.2.3 evidence.'
     ].join('\n') + '\n',
@@ -42,8 +52,10 @@ test('version bump updates every current release and Codex document surface', as
       'official-docs-compat-1.2.3.md'
     ].join('\n') + '\n',
     'docs/codex-0.139-compat.md': 'SKS 1.2.3 keeps the historical Codex notes.\n',
-    'docs/codex-cli-compat.md': 'SKS 1.2.3 targets the current Codex CLI.\n',
-    'docs/codex-app.md': 'SKS 1.2.3 targets the current Codex App.\n'
+    'docs/codex-cli-compat.md': 'SKS 1.2.3 targets the current Codex CLI and is not release-authorizing for SKS 1.2.3.\n',
+    'docs/codex-app.md': 'SKS 1.2.3 targets the current Codex App.\nSKS 1.2.3 also reports the active auth class.\n',
+    'docs/PERFORMANCE.md': 'Sneakoscope Codex 1.2.3 is designed for bounded runtime.\nThe 1.2.3 package pins dependencies.\nThe final 1.2.3 host-capability runtime stays bounded.\n',
+    'docs/AGENT-BRIDGE.md': '{"package_version": "1.2.3"}\n'
   }
 
   try {
@@ -68,7 +80,7 @@ test('version bump updates every current release and Codex document surface', as
     assert.equal(result.version, '1.2.4')
 
     const expected: Record<string, RegExp[]> = {
-      'README.md': [/SKS \*\*1\.2\.4\*\*/, /## Naruto In 1\.2\.4/],
+      'README.md': [/\*\*SKS 1\.2\.4\*\*/, /## Naruto In 1\.2\.4/],
       'docs/release-readiness.md': [
         /^# SKS 1\.2\.4 Release Readiness$/m,
         /`sneakoscope`\n1\.2\.4\. The current package version on this branch is 1\.2\.4\./,
@@ -82,13 +94,25 @@ test('version bump updates every current release and Codex document surface', as
         /do not satisfy the 1\.2\.4 official-subagent gate\. Current 1\.2\.4 proof/,
         /not represented as current 1\.2\.4 completion proof/,
         /For 1\.2\.4, a selected codex-lb/,
-        /The 1\.2\.4 SKS menu bar/
+        /The 1\.2\.4 SKS menu bar/,
+        /the 6\.2\.0 to 1\.2\.4 upgrade smoke/,
+        /under the 1\.2\.4 release evidence root/,
+        /Do not cut 1\.2\.4 while/,
+        /must agree on 1\.2\.4\./,
+        /It must not claim that 1\.2\.4 is/,
+        /npm view sneakoscope@1\.2\.4/,
+        /install `sneakoscope@1\.2\.4`/,
+        /registry version to be\s+1\.2\.4,/,
+        /`latest` to resolve to 1\.2\.4,/,
+        /never replace 1\.2\.4\./
       ],
-      'docs/release-proof-truth.md': [/^SKS 1\.2\.4 release proof truth/m, /^SKS 1\.2\.4 must not claim/m, /1\.2\.4 evidence/],
+      'docs/release-proof-truth.md': [/^SKS 1\.2\.4 release proof truth/m, /1\.2\.4 proof must additionally show/, /^SKS 1\.2\.4 must not claim/m, /1\.2\.4 evidence/],
       'docs/official-docs-compat.md': [/^SKS 1\.2\.4 keeps release-gated behavior/m, /official-docs-compat-1\.2\.4\.json/, /official-docs-compat-1\.2\.4\.md/],
       'docs/codex-0.139-compat.md': [/^SKS 1\.2\.4 keeps the historical/m],
-      'docs/codex-cli-compat.md': [/^SKS 1\.2\.4 targets/m],
-      'docs/codex-app.md': [/^SKS 1\.2\.4 targets/m]
+      'docs/codex-cli-compat.md': [/^SKS 1\.2\.4 targets/m, /not release-authorizing for SKS 1\.2\.4/],
+      'docs/codex-app.md': [/^SKS 1\.2\.4 targets/m, /^SKS 1\.2\.4 also reports/m],
+      'docs/PERFORMANCE.md': [/^Sneakoscope Codex 1\.2\.4 is designed/m, /the 1\.2\.4 package pins/i, /the final 1\.2\.4 host-capability/i],
+      'docs/AGENT-BRIDGE.md': [/"package_version": "1\.2\.4"/]
     }
     for (const [rel, patterns] of Object.entries(expected)) {
       const text = await fsp.readFile(path.join(root, rel), 'utf8')
@@ -96,6 +120,10 @@ test('version bump updates every current release and Codex document surface', as
       if (rel === 'docs/release-readiness.md') assert.match(text, /Historical native runtime removal happened in 1\.2\.3/)
       assert.ok(result.synced_files.includes(rel), `${rel} should be reported as synchronized`)
     }
+    const changelog = await fsp.readFile(path.join(root, 'CHANGELOG.md'), 'utf8')
+    assert.match(changelog, /## \[1\.2\.4\]/)
+    assert.match(changelog, /- Existing release fix\./)
+    assert.equal((changelog.match(/^### Fixed$/gm) || []).length, 1)
   } finally {
     await fsp.rm(root, { recursive: true, force: true })
   }
