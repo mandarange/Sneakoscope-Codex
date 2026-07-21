@@ -528,18 +528,30 @@ async function runSkillsReconcileStage(root: string): Promise<Omit<UpdateMigrati
 }
 
 async function runMenubarRetargetStage(root: string): Promise<Omit<UpdateMigrationStageRun, 'schema' | 'id' | 'min_from_version' | 'from_version'>> {
-  const actionScript = path.join(os.homedir(), '.codex', 'sks-menubar', 'sks-menubar-action.sh');
+  const installDir = path.join(os.homedir(), '.codex', 'sks-menubar');
+  const actionScript = path.join(installDir, 'sks-menubar-action.sh');
+  const buildStamp = path.join(installDir, 'build-stamp.json');
   const text = await readText(actionScript, null);
   if (typeof text !== 'string') return { ok: true, status: 'ok', actions: ['menubar_action_script_absent'], blockers: [], warnings: [] };
   const desired = path.join(packageRoot(), 'dist', 'bin', 'sks.js');
   const line = `SKS_ENTRY='${desired.replace(/'/g, `'\\''`)}'`;
   const actions: string[] = [];
+  const stampedGeneration = await exists(buildStamp);
   const next = /^\s*SKS_ENTRY\s*=.*$/m.test(text)
     ? text.replace(/^\s*SKS_ENTRY\s*=.*$/m, line)
     : `${line}\n${text}`;
   if (next !== text) {
-    await writeTextAtomic(actionScript, next);
-    actions.push('retargeted_menubar_action_script');
+    if (stampedGeneration) {
+      // A stamped Menu Bar generation binds the action script hash to the app,
+      // resources, LaunchAgent, and rollback candidate. Rewriting only the
+      // script here would make the current generation unverifiable before the
+      // transactional installer can replace it. Preserve the generation and
+      // let the installer retarget all bound artifacts atomically.
+      actions.push('deferred_menubar_retarget_to_transactional_rebuild');
+    } else {
+      await writeTextAtomic(actionScript, next);
+      actions.push('retargeted_legacy_menubar_action_script');
+    }
   }
   const stat = await fsp.stat(actionScript).catch(() => null);
   if (!stat || (stat.mode & 0o111) === 0) {
@@ -552,7 +564,11 @@ async function runMenubarRetargetStage(root: string): Promise<Omit<UpdateMigrati
     actions: actions.length ? actions : ['menubar_action_script_current'],
     blockers: [],
     warnings: [],
-    detail: { action_script: actionScript }
+    detail: {
+      action_script: actionScript,
+      build_stamp_present: stampedGeneration,
+      retarget_deferred: stampedGeneration && next !== text
+    }
   };
 }
 

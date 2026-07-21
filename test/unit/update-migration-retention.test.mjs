@@ -122,6 +122,53 @@ test('project update migration repairs legacy menubar and fast-mode config', asy
   }
 });
 
+test('project update migration preserves stamped menubar generation for transactional rebuild', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-update-stamped-menubar-unit-'));
+  const home = path.join(root, 'home');
+  const project = path.join(root, 'project');
+  const previousHome = process.env.HOME;
+  const previousGlobalRoot = process.env.SKS_GLOBAL_ROOT;
+  process.env.HOME = home;
+  process.env.SKS_GLOBAL_ROOT = path.join(home, '.sneakoscope-global');
+  try {
+    const { writeProjectUpdateMigrationReceipt } = await import('../../dist/core/update/update-migration-state.js');
+    const installDir = path.join(home, '.codex', 'sks-menubar');
+    const actionScript = path.join(installDir, 'sks-menubar-action.sh');
+    const original = [
+      '#!/usr/bin/env sh',
+      'SKS_ENTRY="/old/sneakoscope/dist/bin/sks.js"',
+      'exec "$SKS_ENTRY" "$@"',
+      ''
+    ].join('\n');
+    await writeText(actionScript, original);
+    await fs.chmod(actionScript, 0o755);
+    await writeJson(path.join(installDir, 'build-stamp.json'), {
+      schema: 'sks.sks-menubar-build-stamp.v2',
+      package_version: '7.0.2'
+    });
+    await fs.mkdir(path.join(project, '.sneakoscope'), { recursive: true });
+
+    const receipt = await writeProjectUpdateMigrationReceipt({
+      root: project,
+      source: 'unit-stamped-menubar-repair',
+      fromVersion: '7.0.2',
+      blockers: [],
+      warnings: []
+    });
+
+    const stage = (receipt.migration_stages || []).find((row) => row.id === 'menubar-retarget');
+    assert.equal(stage?.ok, true);
+    assert.ok((stage?.action_count || 0) > 0);
+    assert.equal(await fs.readFile(actionScript, 'utf8'), original);
+  } finally {
+    if (previousHome === undefined) delete process.env.HOME;
+    else process.env.HOME = previousHome;
+    if (previousGlobalRoot === undefined) delete process.env.SKS_GLOBAL_ROOT;
+    else process.env.SKS_GLOBAL_ROOT = previousGlobalRoot;
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
 test('project update migration removes obsolete runtime and managed skill residue idempotently', async () => {
   const fixture = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-update-obsolete-residue-'));
   const home = path.join(fixture, 'home');
