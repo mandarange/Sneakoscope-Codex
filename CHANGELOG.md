@@ -6,6 +6,9 @@
 
 ### Fixed
 
+- Recover an unloaded Menu Bar LaunchAgent during `sks menubar restart` / Diagnostics restart by re-bootstrapping the existing plist instead of failing on kickstart-only "service not found".
+- Keep the SKS Menu Bar status item visible on cold start before Codex launches so Control Center stays reachable for accessory apps with no Dock icon.
+- Classify nested read-only `mcp config list|test|backups|show` and `remote readiness|status|show` paths as migration-safe, and harden Control Center JSON parsing when child output mixes gate banners with payloads.
 - Resolve selected managed SKS skills from the current global `~/.agents/skills/sks-*` install and inject those verified files into parent-turn and child-start hook context, so stale project/plugin/picker paths reconstructed after compaction no longer surface false path-mismatch warnings.
 - Bind child PreTool managed-skill admission to the active mission and workflow run, and quarantine markerless user content at global core-skill names before restoring the packaged digest-bound copy, preventing stale child replay and permanent recovery blocks while preserving the original bytes.
 - Require each healthy child admission to commit through a mission-independent project or HOME guard before tools are allowed, and read official child transcripts with no-follow, post-open file checks so mission-local persistence and symlink replacement cannot authorize a child.
