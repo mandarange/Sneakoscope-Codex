@@ -1,10 +1,9 @@
-# $sks-naruto — Codex Official Subagent Workflow
+# $sks-naruto — Naruto Parallel System
 
-`$sks-naruto` and `sks naruto run` are the single current SKS execution surface for
-Codex official subagent work. `$sks-work` is the intentional plan-execution alias;
-it resolves the newest SKS plan and continues through the same Naruto evidence
-contract. Retired route names and command spellings are unrecognized instead
-of warning, redirecting, or activating a compatibility runtime.
+`$sks-naruto` and `sks naruto run` are the single SKS product surface for parallel
+child work. Codex official subagents are the sealed transport underneath;
+`$sks-work` is the intentional plan-execution alias. Retired route names, native
+agent swarms, and custom process schedulers are not alternate Naruto runtimes.
 
 ## Usage
 
@@ -17,11 +16,13 @@ sks naruto subagents latest --json
 sks naruto proof latest --json
 ```
 
-Automatic fan-out starts at two children for bounded non-trivial work, four for
+Automatic fan-out starts at two Naruto children for bounded non-trivial work, four for
 explicitly parallel work, and six for large-scale work. After decomposition the
 parent may resize the automatic plan up to ten children, but only when every
-additional slice is independent, useful, and verifiable. `max_threads = 12` is
-a hard cap rather than a target. Before each wave Naruto computes:
+additional slice is independent, useful, and verifiable. `max_threads = 12` is a
+hard **frame budget** (cap), never a spawn target. The GPT-5.6 four-profile matrix
+(Luna / Terra / Sol High / Sol Max) is a **routing LOD**, not an agent-count cap.
+Before each wave Naruto computes:
 
 ```text
 C_t = min(
@@ -29,7 +30,7 @@ C_t = min(
   disjoint ownership,
   verifier capacity,
   tool concurrency,
-  available thread slots after parent/reviewer reservations,
+  available thread slots after parent/(demand-driven) reviewer reservations,
   workers with positive marginal usefulness
 )
 ```
@@ -40,6 +41,11 @@ An explicit `--agents N` remains authoritative, but every slice must still be
 independent and defensible. The parser accepts `--agents N` or `--agents=N` and
 the corresponding `--max-threads` forms. Empty tasks, malformed or conflicting
 values, and removed options fail before an agent workflow starts.
+
+Children produce candidates; the Naruto parent owns integration (command-buffer /
+deferred-apply). Overlapping write scopes are never scheduled concurrently
+(false-sharing analog). Waves settle before merge when files conflict; later
+root-owned waves may start only after capacity returns.
 
 Database, spreadsheet, document-render, and other project-host capability requests
 remain fail-closed unless the operator supplies `--trusted-project` after reviewing the checkout.

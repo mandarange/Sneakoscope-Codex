@@ -1,4 +1,8 @@
 import type { NarutoWorkGraph } from '../naruto/naruto-work-item.js'
+import {
+  DEFAULT_NARUTO_MAX_THREADS,
+  HARD_NARUTO_MAX_THREADS
+} from '../subagents/thread-budget.js'
 
 export {
   DEFAULT_NARUTO_MAX_THREADS,
@@ -16,7 +20,13 @@ export const DEFAULT_AGENT_COUNT = 5
 export const AGENT_COUNT = DEFAULT_AGENT_COUNT
 export const OFFICIAL_SUBAGENT_EXECUTION_STAGE_ID = 'official_subagent_execution'
 export const MAX_AGENT_COUNT = 20
-export const DEFAULT_AGENT_CONCURRENCY = 4
+/**
+ * Default concurrent Naruto child budget. Must track DEFAULT_NARUTO_MAX_THREADS —
+ * never the GPT-5.6 four-profile matrix count (profiles ≠ agents).
+ */
+export const DEFAULT_AGENT_CONCURRENCY = DEFAULT_NARUTO_MAX_THREADS
+/** Hard concurrency ceiling shared with the Naruto capacity ledger. */
+export const HARD_AGENT_CONCURRENCY = HARD_NARUTO_MAX_THREADS
 export const AGENT_BACKENDS = ['fake', 'process', 'codex-sdk', 'zellij', 'ollama', 'local-llm'] as const
 
 export type AgentBackend = typeof AGENT_BACKENDS[number]

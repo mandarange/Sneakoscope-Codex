@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { appendJsonl, appendJsonlMany, nowIso, writeJsonAtomic } from '../fsx.js'
-import { DEFAULT_AGENT_CONCURRENCY, MAX_AGENT_COUNT } from './agent-schema.js'
+import { DEFAULT_AGENT_CONCURRENCY, HARD_AGENT_CONCURRENCY, MAX_AGENT_COUNT } from './agent-schema.js'
 import {
   appendAgentWorkQueueEvent,
   completeWorkItem,
@@ -440,10 +440,15 @@ export async function runAgentScheduler(input: {
 }
 
 export function normalizeTargetActiveSlots(value: unknown, maxActiveSlots: number = MAX_AGENT_COUNT) {
-  const configuredCap = Number.isFinite(Number(maxActiveSlots)) && Number(maxActiveSlots) >= 1 ? Math.floor(Number(maxActiveSlots)) : MAX_AGENT_COUNT
-  const cap = Math.max(1, Math.min(configuredCap, DEFAULT_AGENT_CONCURRENCY))
-  const parsed = Number(value ?? DEFAULT_AGENT_CONCURRENCY)
-  if (!Number.isFinite(parsed) || parsed < 1) return cap
+  // maxActiveSlots is the real frame-budget ceiling. Do not re-cap at the
+  // GPT-5.6 profile count or a legacy desktop "4" — that collapsed Naruto
+  // parallelism to four creatable agents regardless of max_threads.
+  const configuredCap = Number.isFinite(Number(maxActiveSlots)) && Number(maxActiveSlots) >= 1
+    ? Math.floor(Number(maxActiveSlots))
+    : MAX_AGENT_COUNT
+  const cap = Math.max(1, Math.min(configuredCap, HARD_AGENT_CONCURRENCY))
+  const parsed = Number(value ?? Math.min(DEFAULT_AGENT_CONCURRENCY, cap))
+  if (!Number.isFinite(parsed) || parsed < 1) return Math.min(DEFAULT_AGENT_CONCURRENCY, cap)
   return Math.min(cap, Math.floor(parsed))
 }
 

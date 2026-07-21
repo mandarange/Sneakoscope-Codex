@@ -225,11 +225,12 @@ async function hookSubagentStart(root: any, state: any, payload: any = {}, sessi
   const active = subagentRouteContext(state);
   const routingContext = artifactDirSafe ? await sealedSubagentRoutingContext(artifactDir, payload) : '';
   const resourceGuard = [
-    `SKS subagent policy: Codex [agents].max_threads is ${budget.maxThreads}.`,
-    'Use max_depth=1. Subagents must not spawn subagents.',
+    `SKS Naruto policy: max_threads frame budget is ${budget.maxThreads} (cap, not a spawn target).`,
+    'GPT-5.6 four profiles are routing lanes, not an agent-count cap.',
+    'Use max_depth=1. Naruto children must not spawn children.',
     'Do not duplicate an already assigned slice.',
     'Parallel writes require disjoint paths; serialize overlapping paths.',
-    'Finish only your assigned slice, return a concise result, then stop so the root parent can close this thread.'
+    'Finish only your assigned slice, return a concise result, then stop so the Naruto parent can close this thread.'
   ].join(' ');
   const skillNames = selectedSksSkillNamesForActiveState(state);
   const resolution = skillNames.length
@@ -1072,8 +1073,13 @@ function shouldLoopBackAfterHonestMode(state: any = {}) {
   if (state.implementation_allowed === false) return false;
   const route = String(state.route || state.mode || '').toLowerCase();
   if (['answer', 'dfix', 'wiki'].includes(route)) return false;
+  // Bound honest-mode loopbacks so the same unresolved gap cannot spin forever.
+  const attempts = Number(state.honest_loop_attempt_count || 0);
+  if (Number.isFinite(attempts) && attempts >= MAX_HONEST_LOOPBACK_ATTEMPTS) return false;
   return Boolean(state.ambiguity_gate_passed || state.clarification_passed || /CONTRACT_SEALED|HONEST_LOOPBACK/i.test(String(state.phase || '')));
 }
+
+const MAX_HONEST_LOOPBACK_ATTEMPTS = 2;
 
 async function recordHonestModeLoopback(root: any, state: any = {}, lastMessage: any = '', sessionKey: any = null) {
   const id = state.mission_id;
@@ -1081,6 +1087,7 @@ async function recordHonestModeLoopback(root: any, state: any = {}, lastMessage:
   const previousPhase = state.phase || null;
   const mode = String(state.mode || state.route || 'SKS').toUpperCase();
   const phase = `${mode}_HONEST_LOOPBACK_AFTER_CLARIFICATION`;
+  const attempt = Number(state.honest_loop_attempt_count || 0) + 1;
   const artifact = {
     schema_version: 1,
     mission_id: id,
@@ -1088,16 +1095,21 @@ async function recordHonestModeLoopback(root: any, state: any = {}, lastMessage:
     phase,
     created_at: nowIso(),
     reason: 'honest_mode_unresolved_gap',
+    attempt,
+    max_attempts: MAX_HONEST_LOOPBACK_ATTEMPTS,
     issue_lines: honestModeGapLines(lastMessage),
-    next_action: 'continue_from_sealed_contract_without_reasking'
+    next_action: attempt >= MAX_HONEST_LOOPBACK_ATTEMPTS
+      ? 'stop_with_terminal_blocker_or_record_hard_blocker'
+      : 'continue_from_sealed_contract_without_reasking'
   };
   const file = path.join(dir, 'honest-loopback.json');
   await writeJsonAtomic(file, artifact);
-  await appendJsonl(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'pipeline.honest_mode.loopback', previous_phase: previousPhase, phase, issues: artifact.issue_lines });
+  await appendJsonl(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'pipeline.honest_mode.loopback', previous_phase: previousPhase, phase, attempt, issues: artifact.issue_lines });
   await setCurrent(root, {
     phase,
     honest_loop_required: true,
     honest_loop_detected_at: artifact.created_at,
+    honest_loop_attempt_count: attempt,
     implementation_allowed: true,
     clarification_required: false,
     questions_allowed: false,

@@ -1,8 +1,9 @@
 import path from 'node:path'
 import { nowIso, sha256, writeJsonAtomic } from '../fsx.js'
-import type { AgentRole, AgentTaskSlice } from './agent-schema.js'
+import { HARD_AGENT_CONCURRENCY, type AgentRole, type AgentTaskSlice } from './agent-schema.js'
 
 export const AGENT_TASK_GRAPH_SCHEMA = 'sks.agent-task-graph.v1'
+const DEFAULT_ACTIVE_SLOTS = 4
 
 export interface AgentTaskGraphWorkItem {
   work_item_id: string
@@ -62,7 +63,8 @@ export function buildAgentTaskGraph(input: {
   microWins?: AgentTaskGraphMicroWin[]
 }): AgentTaskGraph {
   const routeType = normalizeRouteType(input.routeType || '$Naruto')
-  const targetActiveSlots = Math.max(1, Math.min(4, Math.floor(Number(input.targetActiveSlots || 4))))
+  const requestedSlots = Math.floor(Number(input.targetActiveSlots || DEFAULT_ACTIVE_SLOTS))
+  const targetActiveSlots = Math.max(1, Math.min(HARD_AGENT_CONCURRENCY, Number.isFinite(requestedSlots) ? requestedSlots : DEFAULT_ACTIVE_SLOTS))
   const minimumWorkItems = Math.max(1, Math.floor(Number(input.minimumWorkItems || targetActiveSlots)))
   const desiredWorkItems = Math.max(minimumWorkItems, Math.floor(Number(input.desiredWorkItems || minimumWorkItems)))
   const domainTemplates = routeTemplates(routeType)

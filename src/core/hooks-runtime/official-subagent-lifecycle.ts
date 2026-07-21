@@ -300,8 +300,9 @@ async function refreshOfficialSubagentCompletionArtifactsLocked(root: any, state
   const blockers = [...new Set([
     ...evidence.blockers,
     ...(Array.isArray(previousGate.config_blockers) ? previousGate.config_blockers.map(String) : []),
-    ...(Array.isArray(plan.config_blockers) ? plan.config_blockers.map((item: any) => `official_subagent_config:${String(item)}`) : []),
-    ...(parentModelMismatch ? [`parent_model_mismatch:${String(parentModel || 'unknown')}`] : [])
+    ...(Array.isArray(plan.config_blockers) ? plan.config_blockers.map((item: any) => `official_subagent_config:${String(item)}`) : [])
+    // parent_model_mismatch is advisory LOD evidence on parent.observed_model_match —
+    // never a hard blocker (App sessions cannot rewrite the parent model string).
   ])];
   const ssotValidation = validateSsotGuardArtifact(await readJson(path.join(dir, SSOT_GUARD_ARTIFACT), null).catch(() => null));
   blockers.push(...ssotValidation.issues.map((issue) => `${SSOT_GUARD_ARTIFACT}:${issue}`));

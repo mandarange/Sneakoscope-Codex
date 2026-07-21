@@ -430,7 +430,12 @@ async function complianceBlock(root: any, state: any = {}, reason: any = '', det
 async function markReflectionInvalidatedForGateFailure(root: any, state: any = {}, detail: any = {}) {
   const gate = String(detail.gate || state.stop_gate || '');
   if (!reflectionRequiredForState(state)) return;
-  if (!gate || /^(reflection|context7-evidence|official-subagent-evidence|native-session-evidence|no-question|clarification)$/i.test(gate)) return;
+  // Do not invalidate reflection for Naruto/runtime evidence gates — that
+  // creates verify→rewrite-reflection→re-verify loops on the same structural miss.
+  if (!gate) return;
+  if (/^(reflection|context7-evidence|official-subagent-evidence|native-session-evidence|no-question|clarification)$/i.test(gate)) return;
+  if (/(^|[\\/])?(naruto-gate|stop-gate|work-order-ledger|completion-proof|compliance-loop-guard)(\.json)?$/i.test(gate)) return;
+  if (/^work-order-ledger$/i.test(gate) || /^completion-proof$/i.test(gate)) return;
   await setCurrent(root, {
     mission_id: state.mission_id,
     reflection_invalidation_required: true,
@@ -520,7 +525,9 @@ function missingRequiredGateFields(file: any, state: any, gate: any = {}) {
   if (file === 'naruto-gate.json' || mode === 'NARUTO') {
     const required = ['subagent_plan_ready', 'official_subagent_evidence', 'parent_summary_present', 'ssot_guard', 'session_cleanup'];
     if (gate.workflow !== 'official_codex_subagent') required.push('workflow');
-    if (gate.parent_model_match === false) required.push('parent_model_match');
+    // parent_model_match is advisory LOD routing evidence — never a hard
+    // stop field. Treating false as required:true made Codex App sessions
+    // (uncontrollable parent model string) loop forever on an unfixable miss.
     if (Array.isArray(gate.config_blockers) && gate.config_blockers.length) required.push(...gate.config_blockers.map((item: any) => `config:${String(item)}`));
     if (fromChatImgCoverageRequired(state, gate)) required.push('from_chat_img_request_coverage');
     return required.filter((key: any) => key.includes(':') || gate[key] !== true);
@@ -738,7 +745,7 @@ async function missingNarutoArtifacts(root: any, state: any = {}, gate: any = {}
   if (Number(plan?.max_threads || 0) < 1) missing.push('subagent-plan.json:max_threads');
   if (Number(plan?.max_depth || 0) !== 1) missing.push('subagent-plan.json:max_depth');
   if (!String(plan?.delegation_prompt || '').trim()) missing.push('subagent-plan.json:delegation_prompt');
-  if (plan?.parent_model_match === false) missing.push('subagent-plan.json:parent_model_match');
+  // parent_model_match on the plan is advisory (routing LOD), not a hard stop condition.
   missing.push(...subagentCountContractBlockers(plan, Number(recomputedEvidence?.started_threads || 0)).map((item) => `subagent-plan.json:${item}`));
   if (evidenceFile?.schema !== 'sks.subagent-evidence.v1') missing.push('subagent-evidence.json:schema');
   if (evidenceFile?.workflow !== 'official_codex_subagent') missing.push('subagent-evidence.json:workflow');
@@ -760,7 +767,7 @@ async function missingNarutoArtifacts(root: any, state: any = {}, gate: any = {}
   if (summary?.ok !== true || summary?.status !== 'completed') missing.push('naruto-summary.json:completed');
   if (summary?.parent_summary_present !== true || !String(summary?.parent_summary || '').trim()) missing.push('naruto-summary.json:parent_summary');
   if (!String(summary?.verification?.budget || '').trim()) missing.push('naruto-summary.json:verification.budget');
-  if (summary?.parent?.observed_model_match === false) missing.push('naruto-summary.json:parent.observed_model_match');
+  // observed_model_match is advisory LOD evidence; do not hard-stop on mismatch.
   if (fromChatImgCoverageRequired(state, normalizedGate) && normalizedGate.from_chat_img_request_coverage === true) {
     missing.push(...await missingFromChatImgCoverageArtifacts(root, state));
   }

@@ -28,10 +28,32 @@ test('Naruto official-subagent fanout stays bounded and preserves max_depth=1', 
   const budget = resolveSubagentThreadBudget({ requested: 100, configuredMaxThreads: 4 });
   assert.equal(budget.requestedSubagents, HARD_NARUTO_MAX_THREADS);
   assert.equal(budget.maxThreads, 4);
-  assert.equal(budget.firstWave, 2);
-  assert.equal(budget.waveCount, 16);
-  assert.equal(budget.capacity.available_thread_slots, 2);
+  assert.equal(budget.firstWave, 3);
+  assert.equal(budget.waveCount, 11);
+  assert.equal(budget.capacity.available_thread_slots, 3);
   assert.equal(budget.maxDepth, 1);
+});
+
+test('governor no longer hard-caps safe workers at four when frame budget allows more', () => {
+  const governed = decideNarutoConcurrency({
+    requestedWorkers: 8,
+    totalWorkItems: 16,
+    backend: 'codex-sdk',
+    parallelismMode: 'extreme',
+    maxThreads: 12,
+    hardware: {
+      cores: 16,
+      loadAverage: [1, 1, 1],
+      freeMemoryBytes: 24 * 1024 ** 3,
+      totalMemoryBytes: 32 * 1024 ** 3,
+      fileDescriptorLimit: 8192,
+      processCount: 100,
+      remoteApiRateLimitBudget: 16,
+      localLlmMaxParallelRequests: 8
+    }
+  });
+  assert.ok(governed.safe_active_workers > 4);
+  assert.ok(governed.safe_active_workers <= 12);
 });
 
 test('live load and low free memory collapse Naruto to a single active worker', () => {

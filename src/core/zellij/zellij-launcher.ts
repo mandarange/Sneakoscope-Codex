@@ -9,13 +9,21 @@ import {
   type CodexLbToolOutputRecoveryProbe
 } from '../codex-lb/codex-lb-tool-output-recovery.js'
 import { checkZellijCapability, type ZellijCapabilityReport } from './zellij-capability.js'
-import { formatZellijCommand, resolveZellijProcessEnvMeta, runZellij, type ZellijCommandResult } from './zellij-command.js'
+import {
+  estimateZellijSocketPathLength,
+  formatZellijCommand,
+  resolveZellijProcessEnvMeta,
+  runZellij,
+  ZELLIJ_UNIX_SOCKET_PATH_LIMIT,
+  type ZellijCommandResult
+} from './zellij-command.js'
 import { writeZellijLayout, type ZellijLayoutInput } from './zellij-layout-builder.js'
 import { writeZellijClipboardConfig } from './zellij-clipboard-config.js'
 import { writeZellijPaneProof, type ZellijPaneProofOptions } from './zellij-pane-proof.js'
 
 export const ZELLIJ_SESSION_SCHEMA = 'sks.zellij-session.v1'
 export const ZELLIJ_SESSION_NAME_MAX = 64
+export const ZELLIJ_SESSION_NAME_MIN = 8
 
 export interface ZellijLaunchOptions {
   root?: string
@@ -88,16 +96,22 @@ export async function launchZellijLayout(opts: ZellijLaunchOptions = {}) {
       })
     : codexLbToolOutputRecoveryNotChecked(false)
   // Reset a stale same-named session before recreating it so the launch starts
-  // main-only. `attach --create-background` is idempotent and otherwise reuses an
-  // existing session, causing each run to pile another right-split SLOTS column
-  // onto leftover panes from prior missions. Skipped on dry-run, when zellij is
+  // main-only. `kill-session` only stops live sessions and leaves EXITED
+  // resurrectable zombies (`attach to resurrect`); `delete-session --force`
+  // kills when live and removes EXITED entries so create-background cannot
+  // resurrect a month-old layout. Skipped on dry-run, when zellij is
   // unavailable, or when the user opts out with SKS_ZELLIJ_KEEP_SESSION=1.
   const resetSession = opts.freshSession === true
     && willCreateSession
     && codexLaunchRecovery.ok
     && process.env.SKS_ZELLIJ_KEEP_SESSION !== '1'
   const sessionReset = resetSession
-    ? await runZellij(['kill-session', sessionName], { cwd: opts.cwd || root, env: launchProcessEnv, timeoutMs: 200, optional: true })
+    ? await runZellij(['delete-session', '--force', sessionName], {
+      cwd: opts.cwd || root,
+      env: launchProcessEnv,
+      timeoutMs: 2_000,
+      optional: true
+    })
     : null
   const launch: any = !willCreateSession || !codexLaunchRecovery.ok
     ? null
@@ -116,8 +130,11 @@ export async function launchZellijLayout(opts: ZellijLaunchOptions = {}) {
   }
   if (layout.main_pane_kind === 'codex_interactive') paneProofOpts.expectedMainCommandIncludes = 'codex'
   const strictPaneProof = opts.requireZellij === true || opts.dryRun === true || process.env.SKS_ZELLIJ_STRICT_PANE_PROOF === '1'
+  // Optional MAD launches already proved session creation via create_background.
+  // Skip the extra list-panes probe unless strict/required so launch stays off the
+  // Zellij CLI retry path that official-subagent Naruto must not inherit.
   const shouldWritePaneProof = codexLaunchRecovery.ok
-    && (strictPaneProof || willCreateSession)
+    && (strictPaneProof || (willCreateSession && opts.requireZellij === true))
   const paneProof = shouldWritePaneProof
     ? await writeZellijPaneProof(root, paneProofOpts).catch((err: any) => ({
         ok: false,
@@ -126,9 +143,14 @@ export async function launchZellijLayout(opts: ZellijLaunchOptions = {}) {
       }))
     : {
         ok: true,
-        status: 'skipped_optional_unavailable',
+        status: willCreateSession ? 'skipped_optional_post_launch' : 'skipped_optional_unavailable',
+        capability_status: capability.status,
         blockers: [],
-        warnings: ['zellij_pane_proof_skipped_optional_unavailable']
+        warnings: [
+          willCreateSession
+            ? 'zellij_pane_proof_skipped_optional_post_launch'
+            : 'zellij_pane_proof_skipped_optional_unavailable'
+        ]
       }
   if (launch?.create_background) {
     launch.create_background = normalizeExistingZellijSession(sessionName, launch.create_background)
@@ -277,13 +299,30 @@ export function attachZellijSessionInteractive(
   }
 }
 
-export function sanitizeZellijSessionName(value: unknown): string {
+export function sanitizeZellijSessionName(value: unknown, opts: { socketDir?: string | null } = {}): string {
   const cleaned = String(value || 'sks-session').replace(/[^A-Za-z0-9_.:-]+/g, '-').replace(/^-+|-+$/g, '')
   if (!cleaned) return 'sks-session'
-  if (cleaned.length <= ZELLIJ_SESSION_NAME_MAX) return cleaned
+  const socketDir = opts.socketDir === undefined
+    ? resolveZellijProcessEnvMeta().zellij_socket_dir
+    : opts.socketDir
+  let maxChars = ZELLIJ_SESSION_NAME_MAX
+  if (socketDir) {
+    const used = estimateZellijSocketPathLength(socketDir, '')
+    const budget = ZELLIJ_UNIX_SOCKET_PATH_LIMIT - used
+    maxChars = Math.max(ZELLIJ_SESSION_NAME_MIN, Math.min(ZELLIJ_SESSION_NAME_MAX, budget))
+  }
+  if (cleaned.length <= maxChars) return cleaned
   const suffix = sha256(cleaned).slice(0, 8)
-  const prefix = cleaned.slice(0, ZELLIJ_SESSION_NAME_MAX - suffix.length - 1).replace(/[-_.:]+$/g, '')
-  return `${prefix}-${suffix}`.slice(0, ZELLIJ_SESSION_NAME_MAX)
+  const prefix = cleaned.slice(0, Math.max(1, maxChars - suffix.length - 1)).replace(/[-_.:]+$/g, '')
+  return `${prefix}-${suffix}`.slice(0, maxChars)
+}
+
+/** Stable per-cwd MAD session name that stays inside the Unix socket path budget. */
+export function madZellijSessionNameForCwd(cwd: string = process.cwd()): string {
+  const resolved = path.resolve(cwd)
+  const base = path.basename(resolved) || 'project'
+  const digest = sha256(resolved).slice(0, 10)
+  return sanitizeZellijSessionName(`sks-mad-${base}-${digest}`)
 }
 
 function readOption(args: readonly unknown[], name: string, fallback: string | null): string | null {

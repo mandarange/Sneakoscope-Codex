@@ -21,7 +21,7 @@ assertGate(implicitCount.requestedSubagents === 2, 'implicit Naruto must default
 assertGate(counts[0]?.requestedSubagents === 4, 'requested 4 must remain 4', counts)
 assertGate(counts[1]?.requestedSubagents === 8, 'requested 8 must remain 8', counts)
 assertGate(counts[2]?.requestedSubagents === 12, 'requested 12 must remain 12', counts)
-assertGate(counts[3]?.requestedSubagents === 20 && counts[3]?.firstWave === 10 && counts[3]?.waveCount === 2, 'requested 20/maxThreads 12 must reserve parent/reviewer capacity and plan two waves', counts)
+assertGate(counts[3]?.requestedSubagents === 20 && counts[3]?.firstWave === 11 && counts[3]?.waveCount === 2, 'requested 20/maxThreads 12 must reserve parent capacity and plan two waves', counts)
 assertGate(counts[4]?.requestedSubagents === 32, 'requested 100 must use the official hard safety cap 32', counts)
 
 const prompt = buildOfficialSubagentPrompt({

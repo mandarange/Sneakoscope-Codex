@@ -1,4 +1,4 @@
-import { DEFAULT_AGENT_CONCURRENCY, DEFAULT_AGENT_COUNT, MAX_AGENT_COUNT, agentSessionId } from './agent-schema.js'
+import { DEFAULT_AGENT_CONCURRENCY, DEFAULT_AGENT_COUNT, HARD_AGENT_CONCURRENCY, MAX_AGENT_COUNT, agentSessionId } from './agent-schema.js'
 import type { AgentRosterEntry } from './agent-schema.js'
 import { defaultAgentPersonas, validatePersonaUniqueness } from './agent-persona.js'
 import { buildAgentEffortPolicy, decideAgentEffort, decideOfficialSubagentModel } from './agent-effort-policy.js'
@@ -18,11 +18,14 @@ export function normalizeAgentCount(value: unknown, fallback = DEFAULT_AGENT_COU
 }
 
 export function normalizeAgentConcurrency(value: unknown, agents: number, maxAgentCount: number = MAX_AGENT_COUNT): number {
-  const desktopSafeCap = Math.max(1, Math.min(agents, maxAgentCount, DEFAULT_AGENT_CONCURRENCY))
-  const parsed = Number(value ?? desktopSafeCap)
-  if (!Number.isFinite(parsed) || parsed < 1) return desktopSafeCap
+  // Concurrency tracks Naruto frame budget (agents / maxAgentCount / hard ceiling).
+  // DEFAULT_AGENT_CONCURRENCY is a default, not a second hard creation cap of 4.
+  const frameCap = Math.max(1, Math.min(agents, maxAgentCount, HARD_AGENT_CONCURRENCY))
+  const fallback = Math.max(1, Math.min(frameCap, DEFAULT_AGENT_CONCURRENCY, agents))
+  const parsed = Number(value ?? fallback)
+  if (!Number.isFinite(parsed) || parsed < 1) return fallback
   if (parsed > maxAgentCount) throw new Error('Agent concurrency ' + parsed + ' exceeds max ' + maxAgentCount)
-  return Math.min(Math.floor(parsed), desktopSafeCap)
+  return Math.min(Math.floor(parsed), frameCap)
 }
 
 export function buildAgentRoster(opts: {

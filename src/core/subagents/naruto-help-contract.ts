@@ -19,7 +19,7 @@ export function buildNarutoHelpResult() {
     ok: true,
     action: 'help',
     workflow: 'official_codex_subagent',
-    description: '$sks-naruto is the canonical SKS execution route for the Codex official subagent workflow; $sks-work is its intended execution alias.',
+    description: '$sks-naruto is the canonical SKS Naruto parallel system; Codex official subagents are the sealed transport. $sks-work is the intended execution alias.',
     usage: [
       'sks naruto run "<task>" [--agents N] [--max-threads N] [--trusted-project] [--json]',
       'sks naruto status [latest|M-...] [--json]',
@@ -33,6 +33,7 @@ export function buildNarutoHelpResult() {
     automatic_reviewer_ceiling: MAX_AUTOMATIC_REVIEWER_COUNT,
     critical_multi_domain_reviewer_ceiling: MAX_CRITICAL_AUTOMATIC_REVIEWER_COUNT,
     max_threads_is_cap_not_target: true,
+    four_profiles_are_not_agent_cap: true,
     max_depth: 1,
     triwiki_context: 'bounded_attention_use_first_with_on_demand_hydration',
     model_routing_policy: {

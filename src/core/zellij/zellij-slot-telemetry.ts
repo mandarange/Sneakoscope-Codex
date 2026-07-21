@@ -5,6 +5,11 @@ import { withFileLock } from '../locks/file-lock.js'
 
 export const ZELLIJ_SLOT_TELEMETRY_EVENT_SCHEMA = 'sks.zellij-slot-telemetry-event.v1'
 export const ZELLIJ_SLOT_TELEMETRY_SNAPSHOT_SCHEMA = 'sks.zellij-slot-telemetry-snapshot.v1'
+// Official-subagent Naruto writes telemetry on every SubagentStart/Stop while MAD
+// Zellij slot panes may hold the same locks on refresh. Keep these caps short so a
+// busy UI observer cannot stall the official workflow for tens of seconds.
+export const ZELLIJ_SLOT_TELEMETRY_LOCK_TIMEOUT_MS = 2_000
+export const ZELLIJ_SLOT_TELEMETRY_LOCK_STALE_MS = 15_000
 const telemetrySnapshotCache = new Map<string, ZellijSlotTelemetrySnapshot>()
 const telemetrySnapshotWriteCounts = new Map<string, number>()
 const telemetrySnapshotFlushCounts = new Map<string, number>()
@@ -126,8 +131,8 @@ export async function appendZellijSlotTelemetry(root: string, event: ZellijSlotT
   await ensureDir(path.dirname(file))
   await withFileLock({
     lockPath: `${file}.append.lock`,
-    timeoutMs: 30_000,
-    staleMs: 2 * 60 * 1000
+    timeoutMs: ZELLIJ_SLOT_TELEMETRY_LOCK_TIMEOUT_MS,
+    staleMs: ZELLIJ_SLOT_TELEMETRY_LOCK_STALE_MS
   }, async () => appendJsonlBounded(file, normalized))
   const previous = await readZellijSlotTelemetrySnapshotNoRebuild(root, missionId)
   if (previous) {
@@ -440,8 +445,8 @@ async function writeTelemetrySnapshotFast(file: string, snapshot: ZellijSlotTele
   await ensureDir(path.dirname(file))
   await withFileLock({
     lockPath: `${file}.lock`,
-    timeoutMs: 30000,
-    staleMs: 2 * 60 * 1000
+    timeoutMs: ZELLIJ_SLOT_TELEMETRY_LOCK_TIMEOUT_MS,
+    staleMs: ZELLIJ_SLOT_TELEMETRY_LOCK_STALE_MS
   }, async () => {
     const flushCount = Number(telemetrySnapshotFlushCounts.get(file) || 0) + 1
     telemetrySnapshotFlushCounts.set(file, flushCount)

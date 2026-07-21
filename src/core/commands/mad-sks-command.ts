@@ -5,7 +5,7 @@ import { initProject } from '../init.js';
 import { createMission, findLatestMission, missionDir, setCurrent, stateFile } from '../mission.js';
 import { buildMadHighLaunchProfileNoWrite, madHighProfileName } from '../auto-review.js';
 import { permissionGateSummary } from '../permission-gates.js';
-import { attachZellijSessionInteractive, launchMadZellijUi, sanitizeZellijSessionName } from '../zellij/zellij-launcher.js';
+import { attachZellijSessionInteractive, launchMadZellijUi, madZellijSessionNameForCwd, sanitizeZellijSessionName } from '../zellij/zellij-launcher.js';
 import { createMadSksAuthorizationManifest, validateMadSksAuthorizationManifest } from '../mad-sks/authorization-manifest.js';
 import { createMadSksAuditLedger, madSksAuditAction, writeMadSksAuditLedger } from '../mad-sks/audit-ledger.js';
 import { compareProtectedCoreSnapshots, evaluateMadSksWrite, resolveProtectedCore, snapshotProtectedCore } from '../mad-sks/immutable-harness-guard.js';
@@ -307,11 +307,11 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
       ? launchPreflight.codex_lb_tool_output_recovery.tool_output_recovery
       : undefined;
   const launchOpts = codexLbImmediateLaunchOpts(cleanArgs, launchLb, { codexArgs: launchProfile.launch_args, conciseBlockers: true, madSksEnv, launchEnv: madSksEnv, recoveryAllowUnverified: allowUnverifiedToolOutputRecovery });
-  // Only the auto-derived stable `sks-mad-<cwd>` name accumulates panes across
+  // Only the auto-derived stable `sks-mad-<cwd-hash>` name accumulates panes across
   // runs; when the user names a session explicitly (or codex-lb already minted a
   // fresh unique session) respect it and skip the reset.
   const autoDerivedMadSession = !explicitWorkspace && !launchOpts.session;
-  const workspace = explicitWorkspace || launchOpts.session || `sks-mad-${sanitizeZellijSessionName(process.cwd())}`;
+  const workspace = explicitWorkspace || launchOpts.session || madZellijSessionNameForCwd(process.cwd());
   const launch: any = headlessZellij
     ? await writeMadHeadlessZellijFallback(madLaunch, workspace)
     : await launchMadZellijUi([...cleanArgs, '--workspace', workspace], {

@@ -64,8 +64,11 @@ test('verification budgets follow task risk instead of decorative gate count', (
   assert.equal(chooseVerificationBudget({ taskProfile: 'high-risk', changedFiles: ['src/release.ts'] }), 'confidence')
 })
 
-test('official terminology has one canonical public vocabulary', () => {
-  assert.equal(SUBAGENT_TERMS.workflow, 'subagent workflow')
-  assert.equal(SUBAGENT_TERMS.thread, 'agent thread')
+test('official terminology uses Naruto as the product parallel vocabulary', () => {
+  assert.equal(SUBAGENT_TERMS.system, 'Naruto')
+  assert.equal(SUBAGENT_TERMS.workflow, 'Naruto parallel workflow')
+  assert.equal(SUBAGENT_TERMS.thread, 'Naruto child thread')
+  assert.equal(SUBAGENT_TERMS.transport, 'official Codex subagent')
   assert.ok(DEPRECATED_AGENT_TERMS.includes('shadow clone'))
+  assert.ok(DEPRECATED_AGENT_TERMS.includes('native agent'))
 })

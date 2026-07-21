@@ -600,7 +600,7 @@ test('SubagentStart uses configured official max_threads and SubagentStop is evi
       requested_subagents: 1
     }));
     const started: any = await evaluateHookPayload('subagent-start', officialSubagentHookPayload('SubagentStart', 'agent-a1'), { root, state });
-    assert.match(started.additionalContext, /max_threads is 9/i);
+    assert.match(started.additionalContext, /max_threads frame budget is 9/i);
     assert.doesNotMatch(started.additionalContext, /at most 4/i);
     assert.match(started.additionalContext, /execute only the slice assigned by the parent/i);
     assert.doesNotMatch(started.additionalContext, /wait for all requested agent threads/i);
@@ -666,7 +666,7 @@ test('Naruto hooks accumulate later root waves under one workflow run and clear 
     const state: any = await loadStateForSession(root, session);
     const dir = missionDir(root, state.mission_id);
     const initialPlan = JSON.parse(await fsp.readFile(path.join(dir, 'subagent-plan.json'), 'utf8'));
-    assert.equal(initialPlan.first_wave, 2);
+    assert.equal(initialPlan.first_wave, 3);
     assert.equal(initialPlan.wave_count, 2);
 
     for (const threadId of ['wave-1-a', 'wave-1-b']) {
@@ -929,7 +929,7 @@ test('generic official evidence preserves config blockers and never marks invali
   }
 });
 
-test('known non-Sol App parent is recorded as a blocker instead of claimed enforcement', async () => {
+test('known non-Sol App parent is recorded as advisory mismatch without hard-blocking the gate', async () => {
   const root = await tempRoot('sks-official-parent-mismatch-');
   const session = 'mismatch-parent';
   try {
@@ -940,7 +940,7 @@ test('known non-Sol App parent is recorded as a blocker instead of claimed enfor
     const state: any = await loadStateForSession(root, session);
     const gate = JSON.parse(await fsp.readFile(path.join(missionDir(root, state.mission_id), 'naruto-gate.json'), 'utf8'));
     assert.equal(gate.parent_model_match, false);
-    assert.ok(gate.blockers.includes('parent_model_mismatch:gpt-5.6-luna'));
+    assert.equal(gate.blockers.includes('parent_model_mismatch:gpt-5.6-luna'), false);
   } finally {
     await fsp.rm(root, { recursive: true, force: true });
   }

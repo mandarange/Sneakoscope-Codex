@@ -31,12 +31,12 @@ export async function writeZellijPaneProof(root: string, opts: ZellijPaneProofOp
   let paneRun: ZellijCommandResult | null = null
   let rawRows: any[] = []
   const probeAttempts: Array<{ attempt: number; ok: boolean; pane_count: number; duration_ms: number; output_truncated: boolean }> = []
-  const maxProbeAttempts = opts.phase === 'post_launch' && opts.require === true ? 8 : 1
+  const maxProbeAttempts = opts.phase === 'post_launch' && opts.require === true ? 3 : 1
   if (capability.status === 'ok') {
     for (let attempt = 1; attempt <= maxProbeAttempts; attempt += 1) {
       paneRun = await runZellij(command, {
         cwd: root,
-        timeoutMs: 5000,
+        timeoutMs: 2_500,
         maxOutputBytes: 1024 * 1024,
         optional: opts.require !== true
       })
@@ -49,7 +49,7 @@ export async function writeZellijPaneProof(root: string, opts: ZellijPaneProofOp
         output_truncated: paneRun.output_truncated
       })
       if (rawRows.length > 0 || !paneRun.ok || attempt === maxProbeAttempts) break
-      await delay(Math.min(400, 75 * attempt))
+      await delay(Math.min(150, 50 * attempt))
     }
   }
   const paneRows = normalizeZellijPaneRows(rawRows)

@@ -89,6 +89,18 @@ export async function runFakeZellij(args: readonly string[] = [], opts: {
       pane.exited = true
       result = ok('')
     }
+  } else if (args[0] === 'kill-session' || args[0] === 'delete-session') {
+    const force = args.includes('--force')
+    const name = String(args.find((arg, index) => index > 0 && !String(arg).startsWith('-')) || '')
+    if (!name) result = fail('missing session name')
+    else if (!sessions.has(name) && !force && args[0] === 'kill-session') result = fail(`No session named "${name}" found.`)
+    else {
+      sessions.delete(name)
+      result = ok('')
+    }
+  } else if (args[0] === 'list-sessions') {
+    const lines = [...sessions.keys()].map((name) => `${name} [Created 0s ago]`)
+    result = ok(lines.length ? `${lines.join('\n')}\n` : '')
   } else {
     result = ok('')
   }

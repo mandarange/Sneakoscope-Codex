@@ -1,8 +1,14 @@
 export const DEFAULT_NARUTO_MAX_THREADS = 12
 export const HARD_NARUTO_MAX_THREADS = 32
 export const DEFAULT_NARUTO_REQUESTED_SUBAGENTS = 2
+/** Parent always keeps one frame-budget slot for integration — never treat this as spawn target. */
 export const DEFAULT_NARUTO_PARENT_THREAD_RESERVATION = 1
-export const DEFAULT_NARUTO_REVIEWER_THREAD_RESERVATION = 1
+/**
+ * Reviewer slots are demand-driven. Default 0 so idle reviewer reservation cannot
+ * collapse useful Naruto child parallelism (the old default of 1 made max_threads=6
+ * look like a hard 4-child creation cap).
+ */
+export const DEFAULT_NARUTO_REVIEWER_THREAD_RESERVATION = 0
 
 export type SubagentCapacityFactor =
   | 'ready_dag_width'
@@ -53,6 +59,12 @@ export interface SubagentThreadBudgetInput {
   marginalUsefulThroughputPositive?: boolean | undefined
 }
 
+/**
+ * Naruto capacity ledger (one spawn path).
+ * - `configuredMaxThreads` / max_threads = hard frame budget (cap), never a spawn target
+ * - `requested` / agents = work-width target derived from ready DAG / operator intent
+ * - Reservations shrink elastically so at least one child slot remains runnable
+ */
 export function resolveSubagentThreadBudget(input: SubagentThreadBudgetInput = {}): SubagentThreadBudget {
   const requested = clamp(
     input.requested ?? input.independentSliceCount ?? DEFAULT_NARUTO_REQUESTED_SUBAGENTS,
@@ -73,6 +85,7 @@ export function resolveSubagentThreadBudget(input: SubagentThreadBudgetInput = {
     HARD_NARUTO_MAX_THREADS
   )
   const activeThreads = clampNonNegative(input.activeThreadCount ?? 0, HARD_NARUTO_MAX_THREADS)
+  // Keep ≥1 executable child slot under small caps (elastic reservation).
   const reservationCapacity = Math.max(0, configured - activeThreads - 1)
   const parentThreads = Math.min(requestedParentThreads, reservationCapacity)
   const reviewerThreads = Math.min(requestedReviewerThreads, reservationCapacity - parentThreads)

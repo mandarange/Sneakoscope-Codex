@@ -152,6 +152,12 @@ async function prepareOfficialSubagentMissionLocked(input: OfficialSubagentPrepa
     requested: selectedFanoutPolicy.requested_subagents,
     configuredMaxThreads: input.maxThreads ?? officialConfig.maxThreads,
     ...(input.capacity || {}),
+    // Demand-driven: reserve reviewer frame slots only for reviewer-only /
+    // critical multi-domain fanout — not because a role catalog mentions expert.
+    reviewerReservedThreads: selectedFanoutPolicy.selection_reason.includes('reviewer')
+      || selectedFanoutPolicy.critical_multi_domain
+      ? Math.max(1, Number(selectedFanoutPolicy.automatic_reviewer_ceiling || 1))
+      : 0,
     ...(slices.length > 0
       ? {
           independentSliceCount: slices.length,
@@ -516,8 +522,9 @@ async function writeOfficialSubagentPreparationStage(stageDir: string, input: an
   if (input.mode === 'naruto') {
     const blockers = uniqueStrings([
       ...evidence.blockers,
-      ...input.configBlockers,
-      ...(input.parentModelMatch === false ? [`parent_model_mismatch:${input.observedParentModel}`] : [])
+      ...input.configBlockers
+      // parent_model_match stays on the summary/gate as advisory LOD evidence;
+      // do not hard-block preparation or finalization on App parent model strings.
     ])
     await writeJsonAtomic(path.join(stageDir, NARUTO_SUMMARY_FILENAME), buildNarutoSummary({
       missionId: input.missionId,

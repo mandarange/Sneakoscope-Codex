@@ -549,19 +549,19 @@ async function narutoProof(parsed: NarutoArgs) {
 function narutoHelp(parsed: NarutoArgs) {
   const result = buildNarutoHelpResult()
   return emit(parsed, result, () => {
-    cliUi.ok('official subagent workflow help available')
-    console.log('$sks-naruto — Codex official subagent workflow')
+    cliUi.ok('Naruto parallel workflow help available')
+    console.log('$sks-naruto — Naruto parallel system (Codex official subagent transport)')
     for (const line of result.usage) console.log(`  ${line}`)
     console.log(`Parent: ${result.parent.model} / ${result.parent.model_reasoning_effort}`)
     const worker = result.agents.worker
     const expert = result.agents.expert
     if (worker) console.log(`Worker: ${worker.model} / ${worker.model_reasoning_effort}`)
     if (expert) console.log(`Expert: ${expert.model} / ${expert.model_reasoning_effort}`)
-    console.log(`Starting children: ${result.default_requested_subagents}; automatic capacity may scale useful independent work up to ${result.automatic_subagent_ceiling}`)
-    console.log('Concurrency: max_threads is a cap, not a target; every wave is bounded by DAG, ownership, verifier/tool, reservation, and marginal-usefulness limits')
-    console.log(`Nesting: max_depth=${result.max_depth}; subagents must not spawn subagents`)
+    console.log(`Starting Naruto children: ${result.default_requested_subagents}; automatic capacity may scale useful independent work up to ${result.automatic_subagent_ceiling}`)
+    console.log('Concurrency: max_threads is a frame budget (cap), not a target; GPT-5.6 four profiles are routing lanes, not an agent-count cap')
+    console.log(`Nesting: max_depth=${result.max_depth}; Naruto children must not spawn children`)
     console.log('Context: bounded TriWiki attention.use_first anchors with on-demand source hydration')
-    console.log('Evidence: SubagentStop is lifecycle-only; completion requires subagent-parent-summary.json with one structured outcome per thread.')
+    console.log('Evidence: SubagentStop is lifecycle-only; completion requires subagent-parent-summary.json with one structured outcome per Naruto child thread.')
   })
 }
 
@@ -842,9 +842,9 @@ function emit(parsed: Pick<NarutoArgs, 'json'>, result: any, human: () => void, 
 
 function renderRunResult(result: any) {
   console.log(`$sks-naruto ${result.status}: ${result.mission_id}`)
-  console.log(`Official subagents: requested ${result.requested_subagents}, target ${result.target_subagents ?? result.requested_subagents}, policy ${result.count_policy || 'exact'}, max threads ${result.max_threads}`)
+  console.log(`Naruto children: requested ${result.requested_subagents}, target ${result.target_subagents ?? result.requested_subagents}, policy ${result.count_policy || 'exact'}, max threads ${result.max_threads}`)
   console.log(`Started/completed/failed: ${result.started_subagents}/${result.completed_subagents}/${result.failed_subagents}`)
-  if (result.status === 'delegation_context_ready') console.log('Continue in the current Codex parent and wait for every requested subagent before summarizing.')
+  if (result.status === 'delegation_context_ready') console.log('Continue in the current Naruto parent and wait for every requested child before summarizing.')
   if (Array.isArray(result.blockers) && result.blockers.length) console.log(`Blockers: ${result.blockers.join(', ')}`)
 }
 
