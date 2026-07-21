@@ -77,14 +77,19 @@ const releaseGateIds = new Set(
     .filter((entry: any) => Array.isArray(entry.preset) && entry.preset.includes('release'))
     .map((entry: any) => entry.id)
 );
-for (const id of ['naruto:canonical-stop-gate', 'test:official-subagent-policy']) {
-  assertGate(releaseGateIds.has(id), `release manifest missing official subagent gate: ${id}`);
-}
+const incrementalGateIds = new Set(
+  releaseManifest.gates
+    .filter((entry: any) => Array.isArray(entry.preset) && entry.preset.includes('incremental'))
+    .map((entry: any) => entry.id)
+);
+assertGate(releaseGateIds.has('naruto:canonical-stop-gate'), 'release manifest missing official subagent gate: naruto:canonical-stop-gate');
+assertGate(incrementalGateIds.has('test:official-subagent-policy'), 'incremental manifest missing official subagent gate: test:official-subagent-policy');
 
 emitGate(gate, {
   workflow: 'official_codex_subagent',
   required_source_count: requiredFiles.length,
-  required_release_gate_count: 2,
+  required_release_gate_count: 1,
+  required_incremental_gate_count: 1,
   parent_owned_integration: true,
   max_depth: 1
 });

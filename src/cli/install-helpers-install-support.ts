@@ -30,9 +30,9 @@ import {
 import {
   GLM_CODEX_CONFIG_PROFILE_ID,
   GLM_CODEX_CONFIG_PROVIDER_ID,
-  GLM_CODEX_CONFIG_REASONING_PROFILES
-} from '../core/providers/glm/glm-52-profile.js';
-import { GLM_52_OPENROUTER_MODEL } from '../core/providers/glm/glm-52-settings.js';
+  GLM_CODEX_CONFIG_REASONING_PROFILES,
+  GLM_52_OPENROUTER_MODEL
+} from '../core/codex-app/openrouter-provider.js';
 import {
   buildCodexLbSetupPlan,
   codexLbPersistenceSummary,

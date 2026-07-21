@@ -4,6 +4,15 @@
 
 ## [7.0.4] - 2026-07-21
 
+### Removed
+
+- Remove the GLM MAD CLI surface: `sks --mad --glm`, the `sks glm` command, and the dedicated `src/core/providers/glm/` runtime tree. Ordinary `sks --mad` is unchanged.
+
+### Changed
+
+- Slim `release:check:full` for publish: drop outer `sks doctor --fix` (not stamp-required), keep one `build:clean`, one canonical `npm test` (writes the publish stamp's canonical test proof), the release-preset DAG, `release-real-check --skip-release-check`, dist freshness, and stamp write. Demote the seven remaining release-preset `test:*` suites to `incremental` so full no longer re-runs the same unit suites after `npm test`; affected/fast/confidence still select them when those surfaces change.
+- Activate OpenRouter for Codex Desktop from SKS Center (Providers) or `sks codex-app use-openrouter --model <id>`; `openrouter-status` reports key/provider/selection readiness without selecting a model on key save alone.
+
 ### Fixed
 
 - Recover an unloaded Menu Bar LaunchAgent during `sks menubar restart` / Diagnostics restart by re-bootstrapping the existing plist instead of failing on kickstart-only "service not found".

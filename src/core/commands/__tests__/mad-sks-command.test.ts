@@ -3,24 +3,33 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import os from 'node:os';
 import fsp from 'node:fs/promises';
-import { findGlmOnlyMadFlagBlockers, findUnsupportedMadArgumentErrors, madHighCommand, stripMadLaunchOnlyArgs } from '../mad-sks-command.js';
+import { findGlmOnlyMadFlagBlockers, findRetiredGlmMadFlagBlockers, findUnsupportedMadArgumentErrors, madHighCommand, stripMadLaunchOnlyArgs } from '../mad-sks-command.js';
 
-test('non-GLM MAD fails closed for GLM-only flags instead of silently stripping them', () => {
-  assert.deepEqual(findGlmOnlyMadFlagBlockers(['--mad', '--bench'], false), ['glm_flag_requires_--glm:--bench']);
-  assert.deepEqual(findGlmOnlyMadFlagBlockers(['--mad', '--trace', '--exact-provider', 'foo'], false), [
-    'glm_flag_requires_--glm:--trace',
-    'glm_flag_requires_--glm:--exact-provider'
+test('retired GLM MAD flags are blocked instead of launched', () => {
+  assert.deepEqual(findRetiredGlmMadFlagBlockers(['--mad', '--bench']), ['retired_glm_mad_flag:--bench']);
+  assert.deepEqual(findRetiredGlmMadFlagBlockers(['--mad', '--trace', '--exact-provider', 'foo']), [
+    'retired_glm_mad_flag:--trace',
+    'retired_glm_mad_flag:--exact-provider'
   ]);
-  assert.deepEqual(findGlmOnlyMadFlagBlockers(['--mad', '--glm', '--trace'], true), []);
+  assert.deepEqual(findGlmOnlyMadFlagBlockers(['--mad', '--glm', '--trace']), [
+    'retired_glm_mad_flag:--glm',
+    'retired_glm_mad_flag:--trace'
+  ]);
 });
 
-test('launch sanitizer strips GLM-only flags only for GLM launches', () => {
-  assert.deepEqual(stripMadLaunchOnlyArgs(['--mad', '--deep', '--exact-provider', 'foo'], { includeGlmFlags: false }), ['--deep', '--exact-provider', 'foo']);
-  assert.deepEqual(stripMadLaunchOnlyArgs(['--mad', '--deep', '--exact-provider', 'foo'], { includeGlmFlags: true }), []);
+test('launch sanitizer strips MAD launch flags; retired GLM flags stay for blockers', () => {
+  assert.deepEqual(stripMadLaunchOnlyArgs(['--mad', '--deep', '--exact-provider', 'foo']), ['--deep', '--exact-provider', 'foo']);
+  assert.deepEqual(findRetiredGlmMadFlagBlockers(['--deep', '--exact-provider']), [
+    'retired_glm_mad_flag:--deep',
+    'retired_glm_mad_flag:--exact-provider'
+  ]);
 });
 
 test('removed MAD namespaces and runtime flags are unsupported instead of redirected', async () => {
   assert.deepEqual(findUnsupportedMadArgumentErrors([
+    '--naruto',
+    '--agent',
+    '--clones',
     '--mad-db',
     '--mad-native-swarm',
     '--mad-swarm',
@@ -31,6 +40,9 @@ test('removed MAD namespaces and runtime flags are unsupported instead of redire
     '--tmux-smoke',
     '--require-tmux-smoke'
   ]), [
+    'unsupported_argument:--naruto',
+    'unsupported_argument:--agent',
+    'unsupported_argument:--clones',
     'unsupported_argument:--mad-db',
     'unsupported_argument:--mad-native-swarm',
     'unsupported_argument:--mad-swarm',

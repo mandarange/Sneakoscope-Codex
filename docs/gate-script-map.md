@@ -118,14 +118,16 @@ Generated from `release-gates.v2.json`; release gate IDs and commands are the ma
 | `skill:name-canonicalizer` | `release` | `node ./dist/scripts/skill-name-canonicalizer-check.js` | direct |
 | `sksd:daemon` | `release` | `node ./dist/scripts/sksd-daemon-check.js` | direct |
 | `super-search:provider-interface` | `release` | `node ./dist/scripts/super-search-provider-interface-check.js` | direct |
-| `test:code-index-agent-bridge-regression` | `release` | `node --test --test-concurrency=1 dist/core/triwiki/__tests__/*.test.js dist/core/naruto/__tests__/*.test.js dist/core/agent-bridge/__tests__/*.test.js` | direct |
-| `test:commands-regression` | `release` | `node --test --test-concurrency=1 dist/core/commands/__tests__/*.test.js dist/cli/__tests__/*.test.js` | direct |
-| `test:core-root-regression` | `release` | `node --test --test-concurrency=1 dist/core/__tests__/*.test.js` | direct |
-| `test:dfix-ppt-gate` | `release` | `node --test --test-concurrency=1 dist/core/dfix/__tests__/*.test.js dist/core/ppt/__tests__/*.test.js` | direct |
-| `test:mad-sks-regression` | `release` | `node --test --test-concurrency=1 dist/core/mad-sks/__tests__/*.test.js` | direct |
-| `test:menubar-doctor` | `release` | `node --test --test-concurrency=1 dist/core/codex-app/__tests__/*.test.js dist/core/doctor/__tests__/*.test.js` | direct |
-| `test:proof-stop-gate` | `release` | `node --test --test-concurrency=1 dist/core/proof/__tests__/*.test.js dist/core/stop-gate/__tests__/*.test.js` | direct |
-| `test:triwiki-voxel-integrity` | `release` | `node --test --test-concurrency=1 dist/core/__tests__/triwiki-voxel-integrity.test.js` | direct |
+| `test:code-index-agent-bridge-regression` | `incremental` | `node --test --test-concurrency=1 dist/core/triwiki/__tests__/*.test.js dist/core/naruto/__tests__/*.test.js dist/core/agent-bridge/__tests__/*.test.js` | direct |
+| `test:codex-runtime-recovery` | `incremental` | `node ./dist/scripts/codex-control-tool-output-continuity-audit-check.js && node --test --test-concurrency=1 dist/core/codex-control/__tests__/*.test.js dist/core/codex-lb/__tests__/*.test.js dist/core/codex/__tests__/*.test.js dist/core/hooks-runtime/__tests__/official-light-turn-hooks.test.js` | direct |
+| `test:commands-regression` | `incremental` | `node --test --test-concurrency=1 dist/core/commands/__tests__/*.test.js dist/cli/__tests__/*.test.js` | direct |
+| `test:core-root-regression` | `incremental` | `node --test --test-concurrency=1 dist/core/__tests__/*.test.js` | direct |
+| `test:dfix-ppt-gate` | `incremental` | `node --test --test-concurrency=1 dist/core/dfix/__tests__/*.test.js dist/core/ppt/__tests__/*.test.js` | direct |
+| `test:mad-sks-regression` | `incremental` | `node --test --test-concurrency=1 dist/core/mad-sks/__tests__/*.test.js` | direct |
+| `test:menubar-doctor` | `incremental` | `node --test --test-concurrency=1 dist/core/codex-app/__tests__/*.test.js dist/core/doctor/__tests__/*.test.js` | direct |
+| `test:official-subagent-policy` | `incremental` | `node --test --test-concurrency=1 dist/core/subagents/__tests__/official-subagent-config.test.js dist/core/subagents/__tests__/model-policy.test.js dist/core/subagents/__tests__/task-profile.test.js dist/core/subagents/__tests__/thread-budget-and-plan.test.js dist/core/subagents/__tests__/agent-catalog-fanout.test.js dist/core/subagents/__tests__/official-subagent-prompt.test.js dist/core/__tests__/naruto-route-reasoning.test.js dist/core/commands/__tests__/naruto-command-glm-block.test.js dist/cli/__tests__/router-active-naruto.test.js dist/core/release/__tests__/release-gate-affected-selector.test.js` | direct |
+| `test:proof-stop-gate` | `incremental` | `node --test --test-concurrency=1 dist/core/proof/__tests__/*.test.js dist/core/stop-gate/__tests__/*.test.js` | direct |
+| `test:triwiki-voxel-integrity` | `incremental` | `node --test --test-concurrency=1 dist/core/__tests__/triwiki-voxel-integrity.test.js` | direct |
 | `triwiki:cache-key` | `release` | `node ./dist/scripts/triwiki-cache-key-check.js` | direct |
 | `triwiki:proof-comprehensive` | `release` | `node ./dist/scripts/triwiki-proof-card-check.js && node ./dist/scripts/triwiki-proof-bank-check.js && node ./dist/scripts/triwiki-proof-bank-blackbox.js` | direct |
 | `trust:check` | `release` | `node ./dist/scripts/trust-fixture-check.js` | direct |

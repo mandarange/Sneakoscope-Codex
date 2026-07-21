@@ -12,12 +12,19 @@ final class ProvidersViewController: NSViewController, ControlCenterPage {
         }
     }
 
-    private let processClient: ProcessClient
-    private let operations: OperationCoordinator
-    private let providerStatus = NativeView.detail("Provider status unchecked.")
+    let processClient: ProcessClient
+    let operations: OperationCoordinator
+    let providerStatus = NativeView.detail("Provider status unchecked.")
+    let openRouterStatus = NativeView.detail("OpenRouter: checking…")
+    let openRouterModelField: NSTextField = {
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24))
+        field.placeholderString = "z-ai/glm-5.2"
+        field.stringValue = "z-ai/glm-5.2"
+        return field
+    }()
     private let fastStatus = NativeView.detail("Fast Mode: checking current desktop setting…")
     private var actionButtons: [NSButton] = []
-    private var busy = false
+    var busy = false
 
     init(processClient: ProcessClient, operations: OperationCoordinator) {
         self.processClient = processClient
@@ -32,24 +39,34 @@ final class ProvidersViewController: NSViewController, ControlCenterPage {
         let testConnection = NativeView.button("Test Connection", target: self, action: #selector(testConnection))
         let useOAuth = NativeView.button("Restore Chat / Pro (OAuth)", target: self, action: #selector(useOAuth))
         let useLb = NativeView.button("Use codex-lb", target: self, action: #selector(useCodexLb))
+        let saveOpenRouter = NativeView.button("Save OpenRouter key…", target: self, action: #selector(saveOpenRouterKey))
+        let useOpenRouter = NativeView.button("Use OpenRouter", target: self, action: #selector(useOpenRouter))
         let fastOn = NativeView.button("Fast Mode On", target: self, action: #selector(fastOn))
         let fastOff = NativeView.button("Fast Mode Off", target: self, action: #selector(fastOff))
-        actionButtons = [setDomain, replace, testConnection, useOAuth, useLb, fastOn, fastOff]
+        actionButtons = [setDomain, replace, testConnection, useOAuth, useLb, saveOpenRouter, useOpenRouter, fastOn, fastOff]
         let credentials = NSStackView(views: [setDomain, replace, testConnection])
         credentials.orientation = .horizontal; credentials.spacing = 8
         let buttons = NSStackView(views: [useOAuth, useLb, fastOn, fastOff])
         buttons.orientation = .horizontal; buttons.spacing = 8
+        let openRouterModelLabel = NSTextField(labelWithString: "OpenRouter model")
+        let openRouterModelRow = NSStackView(views: [openRouterModelLabel, openRouterModelField])
+        openRouterModelRow.orientation = .horizontal; openRouterModelRow.spacing = 8
+        let openRouterButtons = NSStackView(views: [saveOpenRouter, useOpenRouter])
+        openRouterButtons.orientation = .horizontal; openRouterButtons.spacing = 8
         view = NativeView.stack([
             NativeView.title("Providers"),
-            NativeView.detail("Saving stores credentials only. Use codex-lb activates them with a routing guard so sk-clb keys cannot reach api.openai.com. Keys travel through stdin and stay out of logs."),
-            credentials, providerStatus, fastStatus, buttons
+            NativeView.detail("Saving stores credentials only. Use codex-lb or Use OpenRouter activates the selected provider. OpenRouter accepts any model id (for example z-ai/glm-5.2). Keys travel through stdin and stay out of logs."),
+            credentials, providerStatus, buttons,
+            NativeView.detail("OpenRouter"),
+            openRouterStatus, openRouterModelRow, openRouterButtons,
+            fastStatus
         ])
         refresh()
     }
 
     func refreshOnAppear() { refresh() }
 
-    private func setBusy(_ value: Bool) {
+    func setBusy(_ value: Bool) {
         busy = value
         for button in actionButtons { button.isEnabled = !value }
     }
@@ -84,7 +101,7 @@ final class ProvidersViewController: NSViewController, ControlCenterPage {
         }
     }
 
-    private func refresh() {
+    func refresh() {
         processClient.run(["codex-lb", "status", "--json"], timeout: NativeView.statusTimeout) { [weak self] result in
             guard let self = self else { return }
             guard result.code == 0, let json = self.json(result.output) else {
@@ -93,6 +110,7 @@ final class ProvidersViewController: NSViewController, ControlCenterPage {
             }
             if !self.busy { self.providerStatus.stringValue = self.describeProviderStatus(json) }
         }
+        refreshOpenRouterStatus()
         refreshFastStatus()
     }
 
@@ -255,7 +273,7 @@ final class ProvidersViewController: NSViewController, ControlCenterPage {
         }
     }
 
-    private func json(_ output: String) -> [String: Any]? {
+    func json(_ output: String) -> [String: Any]? {
         guard let data = output.data(using: .utf8) else { return nil }
         return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
     }
@@ -280,38 +298,51 @@ final class ProvidersViewController: NSViewController, ControlCenterPage {
     }
 
     private func promptForKey(window: NSWindow, args: [String], kind: String, title: String) {
-        AlertFactory.textSheet(
+        promptForSecretKey(
             window: window,
-            title: "Codex LB API Key",
-            message: "Paste your Codex LB API key (usually starts with sk-clb-). It is shown here so you can verify the paste, then sent through stdin and never logged.",
-            secure: false,
-            placeholder: "sk-clb-…"
-        ) { [weak self] key in
+            sheetTitle: "Codex LB API Key",
+            sheetMessage: "Paste your Codex LB API key (usually starts with sk-clb-). It is shown here so you can verify the paste, then sent through stdin and never logged.",
+            placeholder: "sk-clb-…",
+            args: args,
+            kind: kind,
+            title: title,
+            statusLabel: providerStatus,
+            successSummary: "Codex LB API key saved",
+            failSummary: "Codex LB API key save failed"
+        )
+    }
+
+    func promptForSecretKey(
+        window: NSWindow,
+        sheetTitle: String,
+        sheetMessage: String,
+        placeholder: String,
+        args: [String],
+        kind: String,
+        title: String,
+        statusLabel: NSTextField,
+        successSummary: String,
+        failSummary: String
+    ) {
+        AlertFactory.textSheet(window: window, title: sheetTitle, message: sheetMessage, secure: false, placeholder: placeholder) { [weak self] key in
             guard let self = self, let key = key else { return }
             guard !self.busy else {
-                self.providerStatus.stringValue = "Another provider action is already running."
+                statusLabel.stringValue = "Another provider action is already running."
                 return
             }
             guard let snapshot = self.operations.begin(kind: kind, mutationGroup: "codex-config", summary: title) else {
-                self.providerStatus.stringValue = "Another guarded mutation is already running. Wait or open Diagnostics."
+                statusLabel.stringValue = "Another guarded mutation is already running. Wait or open Diagnostics."
                 return
             }
             self.setBusy(true)
-            self.providerStatus.stringValue = "Saving Codex LB API key…"
+            statusLabel.stringValue = "\(title)…"
             _ = self.operations.update(snapshot, state: .running, stage: "running", progress: nil, summary: title)
             self.processClient.run(args, stdin: key + "\n", timeout: NativeView.mutationTimeout) { [weak self] result in
                 guard let self = self else { return }
                 self.setBusy(false)
-                _ = self.operations.update(
-                    snapshot,
-                    state: result.code == 0 ? .succeeded : .failed,
-                    stage: "complete",
-                    progress: 1,
-                    summary: result.code == 0 ? "Codex LB API key saved" : "Codex LB API key save failed"
-                )
-                if result.code != 0 {
-                    self.providerStatus.stringValue = "Codex LB API key save failed · \(NativeView.redactPreview(result.output))"
-                }
+                let ok = result.code == 0
+                _ = self.operations.update(snapshot, state: ok ? .succeeded : .failed, stage: "complete", progress: 1, summary: ok ? successSummary : failSummary)
+                if !ok { statusLabel.stringValue = "\(failSummary) · \(NativeView.redactPreview(result.output))" }
                 self.refresh()
             }
         }
@@ -408,9 +439,11 @@ final class ProvidersViewController: NSViewController, ControlCenterPage {
                     summary: outcome.ok ? "codex-lb active after restart" : "codex-lb activation needs action"
                 )
                 self.providerStatus.stringValue = outcome.message
+                self.refreshOpenRouterStatus()
             }
         }
     }
+
     @objc private func fastOn() { run(["fast-mode", "on", "--json"], title: "Fast Mode On", kind: "fast-mode-on", group: "codex-config", timeout: NativeView.statusTimeout) { [weak self] in self?.refreshFastStatus() } }
     @objc private func fastOff() { run(["fast-mode", "off", "--json"], title: "Fast Mode Off", kind: "fast-mode-off", group: "codex-config", timeout: NativeView.statusTimeout) { [weak self] in self?.refreshFastStatus() } }
 }

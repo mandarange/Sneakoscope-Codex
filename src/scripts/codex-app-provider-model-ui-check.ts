@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { codexProviderModelUiStatus, formatCodexAppStatus } from '../core/codex-app.js';
 import { GLM_CODEX_CONFIG_PROVIDER_ID, GLM_CODEX_CONFIG_REASONING_PROFILES } from '../core/codex-app/glm-model-profile.js';
-import { GLM_52_OPENROUTER_MODEL } from '../core/providers/glm/glm-52-settings.js';
+import { GLM_52_OPENROUTER_MODEL } from '../core/codex-app/openrouter-provider.js';
 
 const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-codex-app-provider-ui-'));
 const home = path.join(tmp, 'home');

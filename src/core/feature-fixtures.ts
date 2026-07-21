@@ -232,7 +232,6 @@ const STATIC_CONTRACT_FEATURES = new Set([
   'cli-zellij-monitor-pane',
   'cli-zellij-viewport-pane',
   'cli-zellij-slot-column-anchor',
-  'cli-glm',
   'cli-stop-gate',
   'cli-route',
   'cli-loop',

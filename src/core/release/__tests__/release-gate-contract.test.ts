@@ -6,9 +6,16 @@ import { RELEASE_GATE_CONTRACT_IDS, releaseGateContractSnapshot } from '../relea
 import { selectReleaseGateClosure, selectReleaseGatePreset } from '../release-gate-dag.js'
 
 const INCREMENTAL_ONLY_GATE_IDS = [
+  'test:code-index-agent-bridge-regression',
+  'test:codex-runtime-recovery',
   'test:commands-regression',
   'test:core-root-regression',
-  'test:menubar-doctor'
+  'test:dfix-ppt-gate',
+  'test:mad-sks-regression',
+  'test:menubar-doctor',
+  'test:official-subagent-policy',
+  'test:proof-stop-gate',
+  'test:triwiki-voxel-integrity'
 ]
 
 test('release manifest matches the independent full gate contract exactly', () => {

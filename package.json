@@ -134,7 +134,7 @@
     "release:real-check": "node ./dist/scripts/release-real-check.js",
     "release:check:fast": "npm run release:ensure-build --silent && node ./dist/scripts/release-gate-dag-runner.js --preset fast --changed-since auto --sla 5m",
     "release:check:confidence": "npm run release:ensure-build --silent && node ./dist/scripts/release-gate-dag-runner.js --preset confidence --changed-since auto --sla 5m",
-    "release:check:full": "node ./dist/bin/sks.js doctor --fix --yes --json --report-file .sneakoscope/reports/release-check-full-doctor.json >/dev/null && npm run build:clean --silent && npm test --silent && node ./dist/scripts/release-gate-dag-runner.js --preset release --full && node ./dist/scripts/release-real-check.js --skip-release-check && npm run release:dist-freshness --silent && node ./dist/scripts/release-check-stamp.js write --preset release --full",
+    "release:check:full": "npm run build:clean --silent && npm test --silent && node ./dist/scripts/release-gate-dag-runner.js --preset release --full && node ./dist/scripts/release-real-check.js --skip-release-check && npm run release:dist-freshness --silent && node ./dist/scripts/release-check-stamp.js write --preset release --full",
     "publish:packlist-performance": "node ./dist/scripts/packlist-performance-check.js",
     "gates:run": "node ./dist/scripts/release-gate-dag-runner.js",
     "policy:gate-audit": "node ./dist/scripts/gate-policy-audit-check.js",

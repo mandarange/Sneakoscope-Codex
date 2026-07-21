@@ -1,6 +1,6 @@
 import type { AgentPersona } from './agent-schema.js'
 import { codexModelEffortCapability, type CodexModelEffortCapability } from '../codex-control/codex-model-capabilities.js'
-import { GLM_52_OPENROUTER_MODEL, type Glm52ReasoningEffort } from '../providers/glm/glm-52-settings.js'
+import { GLM_52_OPENROUTER_MODEL, type Glm52ReasoningEffort } from '../codex-app/openrouter-provider.js'
 import { isNarutoGpt56Model } from '../provider/model-router.js'
 import { decideSubagentModel } from '../subagents/model-policy.js'
 

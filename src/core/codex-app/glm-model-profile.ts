@@ -5,7 +5,11 @@ export {
   GLM_CODEX_CONFIG_PROVIDER_ID,
   GLM_CODEX_CONFIG_REASONING_PROFILES,
   GLM_CODEX_SELECTABLE_REASONING_EFFORTS,
+  OPENROUTER_DEFAULT_MODEL,
+  OPENROUTER_PROVIDER_ID,
   buildGlmCodexAppModelProfile,
+  normalizeOpenRouterModelId,
   type GlmCodexConfigReasoningProfile,
+  type OpenRouterReasoningEffort,
   type SksCodexAppModelProfile
-} from '../providers/glm/glm-52-profile.js';
+} from './openrouter-provider.js';

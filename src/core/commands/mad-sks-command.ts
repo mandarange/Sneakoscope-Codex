@@ -23,13 +23,6 @@ import { writeCodex0139CapabilityArtifacts } from '../codex-control/codex-0139-c
 import { resolveCodexNativeInvocationPlan } from '../codex-native/codex-native-invocation-router.js';
 import { repairZellijForSks } from '../zellij/zellij-self-heal.js';
 import { SKS_ZELLIJ_HOST_MISSION_ENV } from '../zellij/zellij-official-subagent-telemetry.js';
-import {
-  buildMadGlmLaunchArtifact,
-  buildMadGlmLaunchProfileNoWrite,
-  resolveMadGlmLaunchKey,
-  writeMadGlmCodexWrapper
-} from '../providers/glm/glm-mad-launch.js';
-import { GLM_MAD_MODE } from '../providers/glm/glm-52-settings.js';
 import { assertNonGlmMadRoute } from '../routes/model-mode-router.js';
 import { evaluateGate } from '../stop-gate/gate-evaluator.js';
 import {
@@ -39,6 +32,9 @@ import {
 
 const MAD_SKS_DEFAULT_TTL_MS = 10 * 60 * 1000;
 const UNSUPPORTED_MAD_ARGUMENT_NAMES = new Set([
+  '--naruto',
+  '--agent',
+  '--clones',
   '--mad-db',
   '--mad-native-swarm',
   '--mad-swarm',
@@ -97,28 +93,27 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
   if (subcommand) return madSksSubcommand(subcommand, args.filter((arg: any) => String(arg) !== subcommand));
 
   const rawArgs = (args || []).map((arg: any) => String(arg));
-  const glmMadLaunch = isMadGlmLaunch(rawArgs, deps);
-  if (!glmMadLaunch) assertNonGlmMadRoute(rawArgs.includes('--mad') ? rawArgs : ['--mad', ...rawArgs]);
-  const glmOnlyFlagBlockers = findGlmOnlyMadFlagBlockers(rawArgs, glmMadLaunch);
-  if (glmOnlyFlagBlockers.length) {
+  const retiredGlmFlagBlockers = findRetiredGlmMadFlagBlockers(rawArgs);
+  if (retiredGlmFlagBlockers.length) {
     const result = {
       ok: false,
       status: 'blocked',
-      blockers: glmOnlyFlagBlockers,
-      hint: 'GLM profile and diagnostics flags require sks --mad --glm.'
+      blockers: retiredGlmFlagBlockers,
+      hint: 'GLM MAD CLI was removed. Use SKS Center Providers or sks codex-app use-openrouter --model <id>.'
     };
     if (rawArgs.includes('--json')) console.log(JSON.stringify(result, null, 2));
     else {
-      console.error('SKS MAD launch blocked: GLM-only flags require --glm.');
-      for (const blocker of glmOnlyFlagBlockers) console.error(`- ${blocker}`);
+      console.error('SKS MAD launch blocked: retired GLM MAD flags are no longer supported.');
+      for (const blocker of retiredGlmFlagBlockers) console.error(`- ${blocker}`);
     }
     process.exitCode = 1;
     return result;
   }
-  const cleanArgs = stripMadLaunchOnlyArgs(args, { includeGlmFlags: glmMadLaunch });
+  assertNonGlmMadRoute(rawArgs.includes('--mad') ? rawArgs : ['--mad', ...rawArgs]);
+  const cleanArgs = stripMadLaunchOnlyArgs(args);
   const dryRun = rawArgs.includes('--dry-run');
   if (rawArgs.includes('--json') && !dryRun) {
-    const profile = glmMadLaunch ? buildMadGlmLaunchProfileNoWrite(rawArgs) : buildMadHighLaunchProfileNoWrite();
+    const profile = buildMadHighLaunchProfileNoWrite();
     return console.log(JSON.stringify(profile, null, 2));
   }
   const update = { status: 'notice_only', non_blocking: true };
@@ -169,7 +164,7 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
     ? { status: 'skipped', command: 'sks doctor --fix --yes' }
     : deps.maybePromptZellijUpdateForLaunch
       ? await deps.maybePromptZellijUpdateForLaunch(args, {
-          label: glmMadLaunch ? 'GLM MAD launch' : 'MAD launch',
+          label: 'MAD launch',
           root: launchRoot,
           selfHealOnMissing: true,
           autoApprove: rawArgs.includes('--yes') || rawArgs.includes('-y'),
@@ -207,10 +202,8 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
     process.exitCode = 1;
     return;
   }
-  const lb = glmMadLaunch
-    ? { status: 'skipped_glm_openrouter', ok: false, reason: 'glm_mad_uses_openrouter_directly' }
-    : { status: 'deferred_until_provider_route', ok: true, reason: 'codex_lb_setup_prompt_deferred_until_provider_route' };
-  if (!glmMadLaunch && lb.status === 'missing_api_key') {
+  const lb = { status: 'deferred_until_provider_route', ok: true, reason: 'codex_lb_setup_prompt_deferred_until_provider_route' };
+  if (lb.status === 'missing_api_key') {
     process.exitCode = 1;
     return;
   }
@@ -231,7 +224,7 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
     profile: profile.profile_name,
     sandbox: 'danger-full-access',
     serviceTier: 'fast',
-    skipCodexLbToolOutputRecovery: glmMadLaunch,
+    skipCodexLbToolOutputRecovery: false,
     allowUnverifiedToolOutputRecovery,
     ...((zellijUpdate as any).deferred === true && (zellijUpdate as any).capability
       ? { zellijCapability: (zellijUpdate as any).capability }
@@ -271,11 +264,6 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
   const madLaunch = await activateMadZellijPermissionState(process.cwd(), args);
   const launchLifecycleTasks: Promise<unknown>[] = [...(madLaunch.lifecycle_tasks || [])];
   try {
-  const glmRuntime: any = glmMadLaunch ? await prepareMadGlmLaunchRuntime(madLaunch, { ...deps, glmArgs: deps?.glmArgs || rawArgs }) : null;
-  if (glmMadLaunch && !glmRuntime?.ok) {
-    process.exitCode = 1;
-    return glmRuntime;
-  }
   const updateNotice = {
     schema: 'sks.update-notice.v1',
     checked_at: nowIso(),
@@ -294,8 +282,7 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
   }).then((notice: any) => appendJsonlBounded(path.join(madLaunch.dir, 'events.jsonl'), { ts: nowIso(), type: 'mad_sks.update_notice_refreshed_background', non_blocking: true, update_available: notice.update_available === true, source: notice.source })).catch((err: any) => appendJsonlBounded(path.join(madLaunch.dir, 'events.jsonl'), { ts: nowIso(), type: 'mad_sks.update_notice_background_failed', error: err?.message || String(err) }));
   launchLifecycleTasks.push(updateNoticePromise);
   await appendJsonlBounded(path.join(madLaunch.dir, 'events.jsonl'), { ts: nowIso(), type: 'mad_sks.update_notice_checked', non_blocking: true, update_available: updateNotice.update_available === true, source: updateNotice.source });
-  console.log(`SKS MAD ready: ${glmRuntime?.profile?.profile_name || madHighProfileName()} | gate ${madLaunch.mission_id}`);
-  if (glmRuntime?.profile) console.log(`GLM MAD launch active: ${glmRuntime.profile.model} via OpenRouter; GPT fallback blocked.`);
+  console.log(`SKS MAD ready: ${madHighProfileName()} | gate ${madLaunch.mission_id}`);
   if (updateNotice.update_available === true) console.log(`SKS update notice: ${updateNotice.latest_version} available (non-blocking).`);
   console.log('Scoped high-power maintenance authority active; add explicit --allow-* flags for packages, services, network, browser/Computer Use, generated assets, file permissions, or system/admin scopes. SQL-plane execution is available through MAD-SKS sql-plane and still requires control-plane denial, read-back proof, and read-only restoration.');
   const launchLb = lb.status === 'present' ? { ...lb, status: 'configured' } : lb;
@@ -312,24 +299,14 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
     SKS_ZELLIJ_REFRESH_MS: String(zellijRefreshMsSetting),
   };
   const explicitWorkspace = readOption(cleanArgs, '--workspace', readOption(cleanArgs, '--session', null));
-  const launchProfile = glmRuntime?.profile || profile;
+  const launchProfile = profile;
   const verifiedCodexLbToolOutputRecovery = launchPreflight.codex_lb_tool_output_recovery?.selected === true
     && launchPreflight.codex_lb_tool_output_recovery?.tool_output_recovery?.ok === true
     && launchPreflight.codex_lb_tool_output_recovery?.tool_output_recovery?.verified === true
     && launchPreflight.codex_lb_tool_output_recovery?.tool_output_recovery?.supports_interrupted_tool_output_recovery === true
       ? launchPreflight.codex_lb_tool_output_recovery.tool_output_recovery
       : undefined;
-  const launchOpts = glmRuntime
-    ? buildGlmMadLaunchOpts(cleanArgs, {
-        codexArgs: launchProfile.launch_args,
-        conciseBlockers: true,
-        madSksEnv,
-        launchEnv: madSksEnv,
-        recoveryAllowUnverified: allowUnverifiedToolOutputRecovery,
-        codexBin: glmRuntime.wrapper.wrapper_path,
-        explicitWorkspace
-      })
-    : codexLbImmediateLaunchOpts(cleanArgs, launchLb, { codexArgs: launchProfile.launch_args, conciseBlockers: true, madSksEnv, launchEnv: madSksEnv, recoveryAllowUnverified: allowUnverifiedToolOutputRecovery });
+  const launchOpts = codexLbImmediateLaunchOpts(cleanArgs, launchLb, { codexArgs: launchProfile.launch_args, conciseBlockers: true, madSksEnv, launchEnv: madSksEnv, recoveryAllowUnverified: allowUnverifiedToolOutputRecovery });
   // Only the auto-derived stable `sks-mad-<cwd>` name accumulates panes across
   // runs; when the user names a session explicitly (or codex-lb already minted a
   // fresh unique session) respect it and skip the reset.
@@ -377,7 +354,7 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
   });
   if ((zellijUpdate as any).deferred === true && deps.maybePromptZellijUpdateForLaunch) {
     const zellijUpdateNoticePromise = deps.maybePromptZellijUpdateForLaunch([...args, '--no-question'], {
-      label: glmMadLaunch ? 'GLM MAD launch' : 'MAD launch',
+      label: 'MAD launch',
       root: launchRoot,
       missionDir: madLaunch.dir,
       selfHealOnMissing: false,
@@ -425,100 +402,6 @@ export async function settleMadLaunchLifecycle(tasks: Promise<unknown>[], dir: s
     fulfilled_count: settled.filter((row) => row.status === 'fulfilled').length,
     rejected_count: settled.filter((row) => row.status === 'rejected').length
   }).catch(() => undefined);
-}
-
-function isMadGlmLaunch(args: any[] = [], deps: any = {}) {
-  const list = (args || []).map((arg: any) => String(arg));
-  return list.includes('--glm') || deps?.glmReadiness?.mode === GLM_MAD_MODE;
-}
-
-async function prepareMadGlmLaunchRuntime(madLaunch: any, deps: any = {}): Promise<any> {
-  const keyResolution = await resolveMadGlmLaunchKey(process.env);
-  const profile = buildMadGlmLaunchProfileNoWrite(deps?.glmArgs || []);
-  if (profile.blockers.length) {
-    const blocked = {
-      schema: 'sks.glm-mad-launch.v1',
-      ok: false,
-      status: 'blocked',
-      mission_id: madLaunch.mission_id,
-      provider: profile.provider,
-      model: profile.model,
-      glm_profile: profile.glm_profile,
-      glm_mode: profile.glm_mode,
-      model_reasoning_effort: profile.model_reasoning_effort,
-      gpt_fallback_allowed: false,
-      blockers: profile.blockers,
-      warnings: []
-    };
-    await writeJsonAtomic(path.join(madLaunch.dir, 'mad-glm-launch.json'), blocked);
-    await appendJsonlBounded(path.join(madLaunch.dir, 'events.jsonl'), {
-      ts: nowIso(),
-      type: 'mad_sks.glm_launch_blocked',
-      blockers: profile.blockers
-    });
-    console.error(`SKS GLM MAD launch blocked: ${profile.blockers.join(', ')}`);
-    return blocked;
-  }
-  if (!keyResolution.key) {
-    const blocked = {
-      schema: 'sks.glm-mad-launch.v1',
-      ok: false,
-      status: 'blocked',
-      mission_id: madLaunch.mission_id,
-      provider: profile.provider,
-      model: profile.model,
-      glm_profile: profile.glm_profile,
-      glm_mode: profile.glm_mode,
-      model_reasoning_effort: profile.model_reasoning_effort,
-      gpt_fallback_allowed: false,
-      blockers: keyResolution.blockers,
-      warnings: keyResolution.warnings
-    };
-    await writeJsonAtomic(path.join(madLaunch.dir, 'mad-glm-launch.json'), blocked);
-    await appendJsonlBounded(path.join(madLaunch.dir, 'events.jsonl'), {
-      ts: nowIso(),
-      type: 'mad_sks.glm_launch_blocked',
-      blockers: keyResolution.blockers
-    });
-    console.error('SKS GLM MAD launch blocked: OpenRouter API key is missing.');
-    console.error('Run: sks --mad --glm --repair');
-    return blocked;
-  }
-
-  const wrapper = await writeMadGlmCodexWrapper({
-    missionDir: madLaunch.dir,
-    realCodexBin: process.env.SKS_CODEX_BIN || null
-  });
-  const report = {
-    ...buildMadGlmLaunchArtifact({
-      missionId: madLaunch.mission_id,
-      keyResolution,
-      wrapper,
-      profile
-    }),
-    readiness_status: deps?.glmReadiness?.status || null
-  };
-  await writeJsonAtomic(path.join(madLaunch.dir, 'mad-glm-launch.json'), report);
-  await appendJsonlBounded(path.join(madLaunch.dir, 'events.jsonl'), {
-    ts: nowIso(),
-    type: 'mad_sks.glm_launch_profile_ready',
-    provider: profile.provider,
-    model: profile.model,
-    glm_profile: profile.glm_profile,
-    glm_mode: profile.glm_mode,
-    model_reasoning_effort: profile.model_reasoning_effort,
-    key_source: keyResolution.source || null,
-    gpt_fallback_allowed: false
-  });
-  return { ok: true, profile, wrapper, report };
-}
-
-function buildGlmMadLaunchOpts(cleanArgs: any[] = [], opts: any = {}) {
-  if (opts.explicitWorkspace) return opts;
-  const root = readOption(cleanArgs, '--root', process.cwd());
-  const session = sanitizeZellijSessionName(`sks-glm-${Date.now().toString(36)}-${path.basename(root) || 'project'}`);
-  console.log(`Using fresh GLM Zellij session: ${session}`);
-  return { ...opts, session, glmMadLaunch: true };
 }
 
 function missionDirLike(root: string, missionId: string) {
@@ -585,7 +468,7 @@ async function activateMadZellijPermissionState(cwd: any = process.cwd(), args: 
   const root = await sksRoot();
   if (!(await exists(path.join(root, '.sneakoscope')))) await initProject(root, {});
   const rawArgs = (args || []).map((arg: any) => String(arg));
-  const activatedBy = rawArgs.includes('--glm') ? 'sks --mad --glm' : 'sks --mad';
+  const activatedBy = 'sks --mad';
   const flags = parseMadSksFlags(['--mad-sks', ...args].filter(Boolean));
   const permission = buildMadSksPermissionModel({ targetRoot: cwd, userIntent: `${activatedBy} Zellij scoped high-power maintenance session`, flags });
   const allowedScopes = new Set(permission.allowed_scopes || []);
@@ -743,44 +626,45 @@ function baseMadLaunchOnlyFlags() {
   ]);
 }
 
-function glmMadLaunchOnlyFlags() {
+function retiredGlmMadFlags() {
   return new Set([
+    '--glm',
     '--deep',
     '--xhigh',
     '--strict',
     '--trace',
     '--ttft',
-    '--exact-provider'
+    '--exact-provider',
+    '--bench'
   ]);
 }
 
-function madLaunchOnlyFlags(includeGlmFlags = false) {
-  const flags = baseMadLaunchOnlyFlags();
-  if (includeGlmFlags) {
-    for (const flag of glmMadLaunchOnlyFlags()) flags.add(flag);
-  }
-  return flags;
+function madLaunchOnlyFlags() {
+  return baseMadLaunchOnlyFlags();
 }
 
-function madLaunchValueFlags(includeGlmFlags = false) {
-  const flags = new Set([
+function madLaunchValueFlags() {
+  return new Set([
     '--zellij-visible-panes',
     '--zellij-viewports',
     '--zellij-refresh-ms',
 	    '--ack'
   ]);
-  if (includeGlmFlags) flags.add('--exact-provider');
-  return flags;
 }
 
-export function findGlmOnlyMadFlagBlockers(args: readonly string[] = [], glmMadLaunch = false): readonly string[] {
-  if (glmMadLaunch) return [];
+export function findRetiredGlmMadFlagBlockers(args: readonly string[] = []): readonly string[] {
   const blockers: string[] = [];
-  const glmOnly = new Set([...glmMadLaunchOnlyFlags(), '--bench']);
+  const retired = retiredGlmMadFlags();
   for (const arg of args) {
-    if (glmOnly.has(String(arg))) blockers.push(`glm_flag_requires_--glm:${arg}`);
+    const name = String(arg).includes('=') ? String(arg).slice(0, String(arg).indexOf('=')) : String(arg);
+    if (retired.has(name)) blockers.push(`retired_glm_mad_flag:${name}`);
   }
   return blockers;
+}
+
+/** @deprecated Prefer findRetiredGlmMadFlagBlockers */
+export function findGlmOnlyMadFlagBlockers(args: readonly string[] = [], _glmMadLaunch = false): readonly string[] {
+  return findRetiredGlmMadFlagBlockers(args);
 }
 
 export function findUnsupportedMadArgumentErrors(args: readonly unknown[] = []): readonly string[] {
@@ -793,9 +677,9 @@ export function findUnsupportedMadArgumentErrors(args: readonly unknown[] = []):
   return [...new Set(errors)];
 }
 
-export function stripMadLaunchOnlyArgs(args: any[] = [], opts: { readonly includeGlmFlags?: boolean } = {}) {
-  const flags = madLaunchOnlyFlags(Boolean(opts.includeGlmFlags));
-  const valueFlags = madLaunchValueFlags(Boolean(opts.includeGlmFlags));
+export function stripMadLaunchOnlyArgs(args: any[] = [], _opts: { readonly includeGlmFlags?: boolean } = {}) {
+  const flags = madLaunchOnlyFlags();
+  const valueFlags = madLaunchValueFlags();
   const out: string[] = [];
   for (let i = 0; i < args.length; i += 1) {
     const arg = String(args[i]);

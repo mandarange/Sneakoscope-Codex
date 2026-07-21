@@ -68,7 +68,6 @@ Generated from `sks commands --json`, `src/cli/command-registry.ts COMMANDS`, `s
 | `cli-zellij-slot-column-anchor` | core-cli | beta | sks zellij-slot-column-anchor | static:pass | static_contract | none recorded |
 | `cli-zellij` | core-cli | beta | sks zellij status\|repair [--json] \| sks --mad | execute:pass | runtime_verified | none recorded |
 | `cli-mad-sks` | core-cli | beta | sks mad-sks plan\|run\|apply\|sql\|apply-migration\|status\|close\|rollback-apply ... \| sks --mad [--high] | static:pass | static_contract | none recorded |
-| `cli-glm` | core-cli | beta | sks glm | static:pass | static_contract | none recorded |
 | `cli-auto-review` | core-cli | beta | sks auto-review status\|enable\|start [--high] \| sks --Auto-review --high | execute:pass | runtime_verified | none recorded |
 | `cli-dollar-commands` | core-cli | stable | sks dollar-commands [--json] | execute:pass | runtime_verified | none recorded |
 | `cli-fast-mode` | core-cli | stable | sks fast-mode on\|off\|status\|clear [--project] [--json] | execute:pass | runtime_verified | none recorded |

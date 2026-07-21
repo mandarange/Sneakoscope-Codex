@@ -4,7 +4,7 @@ import {
   COMMAND_NAME_SET,
   type CommandNameLite,
 } from './command-manifest-lite.js';
-import { detectGlobalMode, glmWithoutMadResult } from './global-mode-router.js';
+import { findRetiredGlobalExecutionArgumentErrors } from './global-mode-router.js';
 
 export interface NormalizedCommand {
   command: CommandNameLite | null;
@@ -66,15 +66,20 @@ export async function dispatch(args?: readonly string[]): Promise<unknown> {
 }
 
 async function dispatchInner(argv: readonly string[]): Promise<unknown> {
-  const globalMode = detectGlobalMode(argv);
-  if (globalMode?.kind === 'mad-glm') {
-    const mod = await import('../core/commands/glm-command.js');
-    return mod.glmCommand(globalMode.args);
-  }
-  if (globalMode?.kind === 'glm-without-mad') {
-    const result = glmWithoutMadResult();
-    console.error(`GLM mode requires MAD: ${result.hint}`);
+  const retiredGlm = findRetiredGlobalExecutionArgumentErrors(argv).filter((item) => item.includes('--glm'));
+  if (retiredGlm.length && argv.some((arg) => arg === '--glm' || String(arg).startsWith('--glm='))) {
+    const hint = 'GLM MAD CLI was removed. Use SKS Center Providers or: sks codex-app use-openrouter --model <id>';
+    console.error(hint);
     process.exitCode = 1;
+    const result = {
+      ok: false,
+      status: 'blocked',
+      mode: 'glm',
+      reason: 'glm_mad_removed',
+      hint,
+      blockers: retiredGlm
+    };
+    if (argv.includes('--json')) console.log(JSON.stringify(result, null, 2));
     return result;
   }
   const { command, rawCommand, args: rest } = normalizeCommand(argv);

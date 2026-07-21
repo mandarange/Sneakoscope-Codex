@@ -10,7 +10,7 @@ import {
 } from './glm-model-profile.js';
 import { validateGlmCodexAppModelProfile } from './glm-profile-schema.js';
 import { resolveOpenRouterApiKey } from '../providers/openrouter/openrouter-secret-store.js';
-import { GLM_52_OPENROUTER_MODEL } from '../providers/glm/glm-52-settings.js';
+import { GLM_52_OPENROUTER_MODEL } from './openrouter-provider.js';
 
 type CodexAppGlmConfigWrite = Awaited<ReturnType<typeof ensureGlobalCodexAppGlmProfile>>;
 

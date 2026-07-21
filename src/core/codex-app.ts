@@ -6,8 +6,7 @@ import { EMPTY_CODEX_INFO, getCodexInfo } from './codex-adapter.js';
 import { CODEX_CHROME_EXTENSION_DOC_URL, DEFAULT_CODEX_APP_PLUGINS as DEFAULT_CODEX_APP_PLUGIN_TUPLES, RESERVED_CODEX_PLUGIN_SKILL_NAMES } from './routes.js';
 import { PRODUCT_DESIGN_PLUGIN, normalizeProductDesignPluginEvidence } from './product-design-plugin.js';
 import { PRODUCT_DESIGN_AUTO_INSTALL_ENV, ensureProductDesignPluginInstalled, productDesignAutoInstallRequested } from './product-design-app-server.js';
-import { GLM_CODEX_CONFIG_PROVIDER_ID, GLM_CODEX_CONFIG_REASONING_PROFILES } from './codex-app/glm-model-profile.js';
-import { GLM_52_OPENROUTER_MODEL } from './providers/glm/glm-52-settings.js';
+import { GLM_CODEX_CONFIG_PROVIDER_ID, GLM_CODEX_CONFIG_REASONING_PROFILES, GLM_52_OPENROUTER_MODEL } from './codex-app/openrouter-provider.js';
 import { resolveOpenRouterApiKey } from './providers/openrouter/openrouter-secret-store.js';
 import { codexLbEnvPath, loadCodexLbEnv, parseShellEnvValue, readCodexLbModelCatalog } from './codex-lb/codex-lb-env.js';
 import {

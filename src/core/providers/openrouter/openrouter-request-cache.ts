@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { SksLruCache } from '../../perf/lru-cache.js';
-import type { OpenRouterChatCompletionRequest } from '../openrouter/openrouter-types.js';
+import type { OpenRouterChatCompletionRequest } from './openrouter-types.js';
 
 export interface EncodedRequestCacheEntry {
   readonly key: string;
@@ -12,7 +12,7 @@ export interface EncodedRequestCacheEntry {
   readonly skippedReason?: string;
 }
 
-export interface GlmRequestCacheKeyParts {
+export interface OpenRouterRequestCacheKeyParts {
   readonly model: string;
   readonly profile: string;
   readonly stable_prefix_digest: string;
@@ -23,34 +23,40 @@ export interface GlmRequestCacheKeyParts {
   readonly session_id: string | null;
 }
 
-export interface EncodeGlmRequestWithCacheInput {
+/** @deprecated Prefer OpenRouterRequestCacheKeyParts */
+export type GlmRequestCacheKeyParts = OpenRouterRequestCacheKeyParts;
+
+export interface EncodeOpenRouterRequestWithCacheInput {
   readonly request: OpenRouterChatCompletionRequest;
-  readonly cacheKeyParts?: GlmRequestCacheKeyParts;
+  readonly cacheKeyParts?: OpenRouterRequestCacheKeyParts;
   readonly stringify?: (request: OpenRouterChatCompletionRequest) => string;
 }
 
-export function createGlmEncodedRequestCache(maxEntries = 128) {
+/** @deprecated Prefer EncodeOpenRouterRequestWithCacheInput */
+export type EncodeGlmRequestWithCacheInput = EncodeOpenRouterRequestWithCacheInput;
+
+export function createOpenRouterEncodedRequestCache(maxEntries = 128) {
   return new SksLruCache<EncodedRequestCacheEntry>(maxEntries);
 }
 
-export function encodeGlmRequestWithCache(
-  input: OpenRouterChatCompletionRequest | EncodeGlmRequestWithCacheInput,
+/** @deprecated Prefer createOpenRouterEncodedRequestCache */
+export const createGlmEncodedRequestCache = createOpenRouterEncodedRequestCache;
+
+export function encodeOpenRouterRequestWithCache(
+  input: OpenRouterChatCompletionRequest | EncodeOpenRouterRequestWithCacheInput,
   cache = defaultEncodedRequestCache
 ): { readonly body: string; readonly entry: EncodedRequestCacheEntry; readonly cacheHit: boolean } {
   const request = 'request' in input ? input.request : input;
   const stringify = 'request' in input && input.stringify ? input.stringify : JSON.stringify;
   const key = 'request' in input && input.cacheKeyParts ? digestRequestCacheKeyParts(input.cacheKeyParts) : digestRequestForCache(request);
   const hit = cache.get(key);
-  // Fix 18.2: On cache hit, return stored body without JSON.stringify
   if (hit) {
     if (hit.bodyStored) {
       return { body: hit.body, entry: hit, cacheHit: true };
     }
-    // Even for non-stored bodies, skip re-stringifying by computing from request
     const body = stringify(request);
     return { body, entry: hit, cacheHit: true };
   }
-  // Cache miss: stringify once
   const body = stringify(request);
   if (containsSecretLikeContent(body)) {
     const entry: EncodedRequestCacheEntry = {
@@ -76,7 +82,10 @@ export function encodeGlmRequestWithCache(
   return { body, entry, cacheHit: false };
 }
 
-export function digestRequestCacheKeyParts(parts: GlmRequestCacheKeyParts): string {
+/** @deprecated Prefer encodeOpenRouterRequestWithCache */
+export const encodeGlmRequestWithCache = encodeOpenRouterRequestWithCache;
+
+export function digestRequestCacheKeyParts(parts: OpenRouterRequestCacheKeyParts): string {
   return crypto.createHash('sha256').update(stableStringify(parts)).digest('hex');
 }
 
@@ -109,4 +118,4 @@ function stableStringify(value: unknown): string {
   return `{${Object.keys(object).sort().map((key) => `${JSON.stringify(key)}:${stableStringify(object[key])}`).join(',')}}`;
 }
 
-const defaultEncodedRequestCache = createGlmEncodedRequestCache();
+const defaultEncodedRequestCache = createOpenRouterEncodedRequestCache();

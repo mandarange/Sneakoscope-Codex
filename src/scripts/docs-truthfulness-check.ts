@@ -65,7 +65,7 @@ const currentDollarSurfaceFiles = [
   'README.md',
   'AGENTS.md',
   '.codex/SNEAKOSCOPE.md',
-  'docs/GLM_MAD_MODE.md',
+  'docs/codex-app.md',
   'docs/STOP_GATE_CONTRACT.md',
   'docs/codex-app.md',
   'docs/completion-proof.md',

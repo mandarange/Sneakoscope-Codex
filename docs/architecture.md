@@ -46,15 +46,13 @@ Hard thresholds are read from the budget SSOT:
 
 The pipeline runtime compatibility surface stays split: `src/core/pipeline-internals/runtime-core.ts` remains under the 1200-line pipeline gate, while stop/gate evaluation lives in `src/core/pipeline-internals/runtime-gates.ts`.
 
-## 4.0.3 GLM Provider Split
+## OpenRouter Desktop Provider
 
-GLM MAD mode is intentionally split by side-effect boundary:
+OpenRouter for Codex Desktop is centered on key save + explicit model activation (not a separate GLM MAD CLI):
 
-- `src/cli/global-mode-router.ts` detects top-level `--mad --glm` before normal command dispatch.
-- `src/core/providers/glm/glm-52-request.ts` builds pure OpenRouter request payloads.
-- `src/core/providers/glm/glm-52-response-guard.ts` rejects missing, GPT/OpenAI, or unknown actual model ids before mutation.
 - `src/core/providers/openrouter/openrouter-secret-store.ts` owns the user-scoped OpenRouter key lifecycle outside project files.
 - `src/core/providers/openrouter/openrouter-client.ts` is the only OpenRouter network adapter.
-- `src/core/codex-app/glm-profile-installer.ts` writes GLM model profile metadata plus Codex Desktop provider/profile config and avoids duplicate Codex App/MCP declarations.
+- `src/core/codex-app/openrouter-activate.ts` selects `model_provider = "openrouter"` and the chosen model via `sks codex-app use-openrouter --model` (and SKS Center Providers).
+- `src/core/codex-app/glm-profile-installer.ts` still writes Desktop provider/profile config used by that activation path.
 
-This keeps provider policy testable without routing around the existing SKS proof-first pipeline.
+The former GLM MAD CLI (`sks --mad --glm`, `sks glm`) and `src/core/providers/glm/` runtime were removed; ordinary `sks --mad` is unchanged.

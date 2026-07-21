@@ -4,10 +4,10 @@ import {
   GLM_CODEX_CONFIG_PROVIDER_ID,
   GLM_CODEX_CONFIG_REASONING_PROFILES,
   GLM_CODEX_SELECTABLE_REASONING_EFFORTS,
+  GLM_52_OPENROUTER_MODEL,
   buildGlmCodexAppModelProfile,
   type SksCodexAppModelProfile
-} from './glm-model-profile.js';
-import { GLM_52_OPENROUTER_MODEL, GLM_MAD_MODE } from '../providers/glm/glm-52-settings.js';
+} from './openrouter-provider.js';
 
 export function validateGlmCodexAppModelProfile(value: unknown): {
   readonly ok: boolean;
@@ -28,8 +28,8 @@ export function validateGlmCodexAppModelProfile(value: unknown): {
     profile.codexConfigProfile === GLM_CODEX_CONFIG_PROFILE_ID ? null : 'glm_codex_app_profile_invalid_codex_config_profile',
     hasExpectedReasoningEfforts(profile.supportedReasoningEfforts) ? null : 'glm_codex_app_profile_invalid_reasoning_efforts',
     hasExpectedReasoningProfiles(profile.reasoningProfiles) ? null : 'glm_codex_app_profile_invalid_reasoning_profiles',
-    profile.mode === GLM_MAD_MODE ? null : 'glm_codex_app_profile_invalid_mode',
-    profile.strictModelLock === true ? null : 'glm_codex_app_profile_not_strict',
+    profile.mode === 'openrouter-desktop' ? null : 'glm_codex_app_profile_invalid_mode',
+    profile.strictModelLock === false ? null : 'glm_codex_app_profile_unexpected_strict_lock',
     profile.gptFallbackAllowed === false ? null : 'glm_codex_app_profile_allows_gpt_fallback',
     profile.defaultProfile === 'speed' ? null : 'glm_codex_app_profile_default_not_speed',
     profile.defaultSettings?.tool_choice === 'none' ? null : 'glm_codex_app_profile_default_tools_not_omitted',

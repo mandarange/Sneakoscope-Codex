@@ -6,7 +6,7 @@ import {
   type OpenRouterIssue
 } from './openrouter-types.js';
 import { normalizeOpenRouterError } from './openrouter-error.js';
-import { encodeGlmRequestWithCache, type GlmRequestCacheKeyParts } from '../glm/glm-request-cache.js';
+import { encodeOpenRouterRequestWithCache, type OpenRouterRequestCacheKeyParts } from './openrouter-request-cache.js';
 
 export interface OpenRouterStreamEvent {
   readonly type: 'chunk' | 'done' | 'error';
@@ -48,14 +48,14 @@ export async function sendOpenRouterChatCompletionStream(input: {
   readonly timeoutMs?: number;
   readonly idleTimeoutMs?: number;
   readonly fetchImpl?: typeof fetch;
-  readonly cacheKeyParts?: GlmRequestCacheKeyParts;
+  readonly cacheKeyParts?: OpenRouterRequestCacheKeyParts;
 }): Promise<SksResult<OpenRouterStreamResult, OpenRouterIssue>> {
   const started = Date.now();
   const controller = input.timeoutMs ? new AbortController() : null;
   const timeout = controller ? setTimeout(() => controller.abort(), Math.max(1, input.timeoutMs || 0)) : null;
   try {
     const request = { ...input.request, stream: true };
-    const encoded = encodeGlmRequestWithCache(input.cacheKeyParts ? { request, cacheKeyParts: input.cacheKeyParts } : request);
+    const encoded = encodeOpenRouterRequestWithCache(input.cacheKeyParts ? { request, cacheKeyParts: input.cacheKeyParts } : request);
     const signal = input.signal || controller?.signal;
     const response = await (input.fetchImpl || fetch)(OPENROUTER_CHAT_COMPLETIONS_URL, {
       method: 'POST',

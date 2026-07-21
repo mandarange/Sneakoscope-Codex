@@ -37,7 +37,7 @@ test('SKS Menu Bar uses the required split native source and resource inventory'
     'main.swift', 'AppDelegate.swift', 'StatusItemController.swift',
     'ControlCenterWindowController.swift', 'SidebarItem.swift',
     'OverviewViewController.swift', 'UpdatesViewController.swift',
-    'MCPServersViewController.swift', 'ProvidersViewController.swift',
+    'MCPServersViewController.swift', 'ProvidersViewController.swift', 'ProvidersOpenRouter.swift',
     'RemoteTelegramViewController.swift', 'DiagnosticsViewController.swift',
     'SettingsViewController.swift', 'OperationCoordinator.swift',
     'ProcessClient.swift', 'NotificationCoordinator.swift', 'AlertFactory.swift',
@@ -344,6 +344,24 @@ test('Providers keeps codex-lb activation and connection health feedback coheren
   assert.match(providers, /\["restart_performed"\]\s+as\?\s+Bool\s*==\s*true/);
   assert.match(providers, /restart_not_performed/);
   assert.match(providers, /No OAuth switch was assumed/);
+});
+
+test('Providers exposes OpenRouter save key, freeform model id, and Use OpenRouter', () => {
+  const root = resolvePackagedMenuBarSourceRoot();
+  const providers = [
+    fs.readFileSync(path.join(root, 'Sources', 'ProvidersViewController.swift'), 'utf8'),
+    fs.readFileSync(path.join(root, 'Sources', 'ProvidersOpenRouter.swift'), 'utf8')
+  ].join('\n');
+  assert.match(providers, /Save OpenRouter key…/);
+  assert.match(providers, /Use OpenRouter/);
+  assert.match(providers, /placeholderString = "z-ai\/glm-5\.2"/);
+  assert.match(providers, /\["codex-app", "set-openrouter-key", "--api-key-stdin", "--json"\]/);
+  assert.match(providers, /\["codex-app", "use-openrouter", "--model", model, "--restart-app", "--json"\]/);
+  assert.match(providers, /\["codex-app", "openrouter-status", "--json"\]/);
+  assert.match(providers, /describeOpenRouterStatus/);
+  assert.match(providers, /OpenRouter: key missing/);
+  assert.match(providers, /operations\.begin\(kind: "openrouter-use"/);
+  assert.match(providers, /kind: "openrouter-set-key"/);
 });
 
 test('Menu Bar exposes truthful accessible Fast state with direct on and off actions', () => {

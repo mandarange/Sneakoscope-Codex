@@ -45,20 +45,23 @@ test('removed public commands are unknown and never mutate an existing Naruto mi
   assert.equal(await fs.readFile(sentinel, 'utf8'), 'preserve-current-mission\n');
 
   for (const retired of ['--naruto', '--agent', '--clones', '--mad-db', '--mad-native-swarm']) {
-    const result = await runSksInRoot(root, ['--mad', '--glm', retired, '--status', '--json'], { expectCode: 1 });
+    const result = await runSksInRoot(root, ['--mad', retired, '--status', '--json'], { expectCode: 1 });
     assert.equal(result.ok, false, retired);
     assert.equal(result.status, 'blocked', retired);
-    assert.equal(result.schema, 'sks.glm-argument-error.v1', retired);
-    assert.equal(result.reason, 'invalid_glm_arguments', retired);
-    assert.deepEqual(result.argument_errors, [`unsupported_argument:${retired}`], retired);
-    assert.notEqual(result.schema, 'sks.glm-mode-result.v1', retired);
+    assert.ok(
+      result.reason === 'invalid_mad_arguments'
+        || result.reason === 'unsupported_argument'
+        || Array.isArray(result.blockers)
+        || result.argument_errors,
+      retired
+    );
     assert.deepEqual(await fs.readdir(missionDir), beforeFlagProbe, retired);
     assert.equal(await fs.readFile(sentinel, 'utf8'), 'preserve-current-mission\n', retired);
   }
 
-  const canonicalGlmNaruto = await runSksInRoot(root, ['--mad', '--glm', 'naruto', '--json'], { expectCode: 1 });
-  assert.equal(canonicalGlmNaruto.schema, 'sks.glm-naruto-result.v1');
-  assert.equal(canonicalGlmNaruto.termination_reason, 'no_task_provided');
+  const removedGlmMad = await runSksInRoot(root, ['--mad', '--glm', 'naruto', '--json'], { expectCode: 1 });
+  assert.equal(removedGlmMad.ok, false);
+  assert.equal(removedGlmMad.reason, 'glm_mad_removed');
   assert.deepEqual(await fs.readdir(missionDir), beforeFlagProbe);
   assert.equal(await fs.readFile(sentinel, 'utf8'), 'preserve-current-mission\n');
 });

@@ -836,24 +836,6 @@
       "reason": "Probe memoization report writer persists only scoped probe summary reports under .sneakoscope/reports."
     },
     {
-      "file": "src/core/providers/glm/bench/glm-bench-fixture.ts",
-      "symbol": "cleanupFixture",
-      "token": "fsp.rm",
-      "reason": "GLM benchmark fixture creates or removes only isolated benchmark fixture directories."
-    },
-    {
-      "file": "src/core/providers/glm/bench/glm-bench-fixture.ts",
-      "symbol": "createGlmBenchFixture",
-      "token": "fsp.writeFile",
-      "reason": "GLM benchmark fixture creates or removes only isolated benchmark fixture directories."
-    },
-    {
-      "file": "src/core/providers/glm/glm-mad-launch.ts",
-      "symbol": "writeMadGlmCodexWrapper",
-      "token": "chmod",
-      "reason": "GLM MAD launch marks only the mission-local Codex wrapper executable after writing it under the scoped mission artifact directory."
-    },
-    {
       "file": "src/core/providers/openrouter/openrouter-secret-store.ts",
       "symbol": "ensureSecretDir",
       "token": "chmod",

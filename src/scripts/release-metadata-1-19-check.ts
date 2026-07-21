@@ -68,7 +68,6 @@ const requiredReleaseGates = [
   'naruto:ssot-gate-aliases',
   'naruto:ssot-pipeline-default',
   'naruto:canonical-stop-gate',
-  'test:official-subagent-policy',
   'codex:app-handoff-comprehensive',
   'qa-loop:comprehensive-verification',
   'loop-integration-finalizer-check',

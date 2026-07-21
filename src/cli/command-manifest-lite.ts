@@ -60,7 +60,6 @@ export const COMMAND_MANIFEST_LITE = [
   { name: 'zellij-slot-column-anchor', summary: 'Render the compact SLOTS anchor pane for first-slot-down Zellij stacks', maturity: 'beta' },
   { name: 'zellij', summary: 'Inspect Zellij runtime status and explain repair (no auto-install)', maturity: 'beta', skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'mad-sks', summary: 'MAD-SKS scoped permission modifier + SQL-plane execution', maturity: 'beta', mutatesRouteState: true },
-  { name: 'glm', summary: 'Run GLM 5.2 MAD mode through OpenRouter', maturity: 'beta' },
   { name: 'auto-review', summary: 'Manage auto-review profile', maturity: 'beta' },
   { name: 'dollar-commands', summary: 'List Codex App dollar commands', maturity: 'stable', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'fast-mode', summary: 'Toggle SKS Fast mode default for dollar-command routes', maturity: 'stable', skipMigrationGate: true },

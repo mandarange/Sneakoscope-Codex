@@ -64,7 +64,7 @@ export function createProviderHealthTracker(providerSlug = 'openrouter', model =
 }
 
 export async function writeProviderHealth(root: string, health: ProviderHealthRecord): Promise<string> {
-  const out = path.join(root, '.sneakoscope', 'glm-naruto', 'provider-health.json');
+  const out = path.join(root, '.sneakoscope', 'openrouter', 'provider-health.json');
   await writeJsonAtomic(out, health);
   return out;
 }

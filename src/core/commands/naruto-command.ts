@@ -787,7 +787,7 @@ function blockGlmOverride(json: boolean) {
     status: 'blocked',
     reason: 'naruto_gpt_5_6_family_only_glm_override_forbidden',
     blockers: ['naruto_gpt_5_6_family_only_glm_override_forbidden'],
-    hint: 'Use normal sks naruto for the official Codex subagent workflow. The separate GLM workflow uses sks --mad --glm naruto.'
+    hint: 'Use normal sks naruto for the official Codex subagent workflow. OpenRouter models are selected in SKS Center Providers via Use OpenRouter.'
   }
   process.exitCode = 1
   if (json) console.log(JSON.stringify(result, null, 2))

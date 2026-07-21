@@ -7,14 +7,14 @@ import {
 } from './openrouter-types.js';
 import { invalidOpenRouterResponseIssue, normalizeOpenRouterError } from './openrouter-error.js';
 import { redactOpenRouterString } from '../../security/redact-secrets.js';
-import { encodeGlmRequestWithCache } from '../glm/glm-request-cache.js';
+import { encodeOpenRouterRequestWithCache } from './openrouter-request-cache.js';
 
 export async function sendOpenRouterChatCompletion(
   input: OpenRouterSendInput
 ): Promise<SksResult<OpenRouterChatCompletionResponse, OpenRouterIssue>> {
   try {
     const doFetch = input.fetchImpl || fetch;
-    const encoded = encodeGlmRequestWithCache(input.cacheKeyParts ? { request: input.request, cacheKeyParts: input.cacheKeyParts } : input.request);
+    const encoded = encodeOpenRouterRequestWithCache(input.cacheKeyParts ? { request: input.request, cacheKeyParts: input.cacheKeyParts } : input.request);
     const controller = input.timeoutMs ? new AbortController() : null;
     const timeout = controller
       ? setTimeout(() => controller.abort(), Math.max(1, input.timeoutMs || 0))

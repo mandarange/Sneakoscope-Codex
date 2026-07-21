@@ -21,6 +21,7 @@ export const NATIVE_SOURCE_FILES = [
   'UpdatesViewController.swift',
   'MCPServersViewController.swift',
   'ProvidersViewController.swift',
+  'ProvidersOpenRouter.swift',
   'RemoteTelegramViewController.swift',
   'DiagnosticsViewController.swift',
   'SettingsViewController.swift',

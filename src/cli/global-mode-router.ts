@@ -1,7 +1,3 @@
-export type GlobalMode =
-  | { readonly kind: 'mad-glm'; readonly args: string[] }
-  | { readonly kind: 'glm-without-mad'; readonly args: string[] };
-
 const RESERVED_COMMANDS = new Set(['help', '--help', '-h', 'version', '--version', '-v']);
 const RETIRED_NARUTO_OPTION = ['--', 'naruto'].join('');
 const RETIRED_AGENT_OPTION = ['--', 'agent'].join('');
@@ -22,17 +18,15 @@ const RETIRED_GLOBAL_EXECUTION_OPTION_NAMES = new Set([
   '--mad-swarm-backend',
   '--mad-swarm-prompt',
   '--tmux-smoke',
-  '--require-tmux-smoke'
+  '--require-tmux-smoke',
+  '--glm'
 ]);
 
-export function detectGlobalMode(args: readonly string[] = []): GlobalMode | null {
-  if (!args.length || RESERVED_COMMANDS.has(String(args[0]))) return null;
-  const hasMad = args.includes('--mad');
-  const hasGlm = args.includes('--glm');
-  if (hasMad && hasGlm) return { kind: 'mad-glm', args: stripGlobalModeFlags(args) };
-  if (hasGlm && !hasMad && String(args[0]).startsWith('-')) {
-    return { kind: 'glm-without-mad', args: stripGlobalModeFlags(args) };
-  }
+/** @deprecated Global GLM MAD mode was removed; detectGlobalMode always returns null. */
+export type GlobalMode = never;
+
+export function detectGlobalMode(args: readonly string[] = []): null {
+  void args;
   return null;
 }
 
@@ -55,16 +49,17 @@ export interface GlobalModeBlockedResult {
   readonly ok: false;
   readonly status: 'blocked';
   readonly mode: 'glm';
-  readonly reason: 'glm_requires_mad';
-  readonly hint: 'use sks --mad --glm';
+  readonly reason: 'glm_mad_removed';
+  readonly hint: 'use SKS Center Providers or sks codex-app use-openrouter --model <id>';
 }
 
+/** @deprecated GLM MAD CLI was removed. */
 export function glmWithoutMadResult(): GlobalModeBlockedResult {
   return {
     ok: false,
     status: 'blocked',
     mode: 'glm',
-    reason: 'glm_requires_mad',
-    hint: 'use sks --mad --glm'
+    reason: 'glm_mad_removed',
+    hint: 'use SKS Center Providers or sks codex-app use-openrouter --model <id>'
   };
 }
