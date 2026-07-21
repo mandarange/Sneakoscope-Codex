@@ -1,7 +1,7 @@
 {
   "schema": "sks.code-pack.v1",
-  "generated_at": "2026-07-21T08:53:00.786Z",
-  "git_head_sha": "779d27a522dfde86523e2bd2c57602262d6ad565",
+  "generated_at": "2026-07-21T09:36:28.408Z",
+  "git_head_sha": "de197af1f104f54530c934bad3b045a411d90876",
   "source_file_count": 3598,
   "index_digest": "39ae760e40e8ed5f1c72384adfbaf9db1051b8ac0a8583156a2c137bd1cecf21",
   "entries": [
@@ -31,7 +31,7 @@
     },
     {
       "id": "code:commands",
-      "text": "commands is a command module at src/commands (73 files, 4287 loc, high risk). Key exports: async function run() { return aliasesCommand(); }; async function run(_command: any, args: any = []); async function run(_command: any, args: any = []); async function run(_command: any, args: any = []); async function run(_command: any, args: any = []), and 75 more. It has no detected cross-module dependencies.",
+      "text": "commands is a command module at src/commands (73 files, 4259 loc, high risk). Key exports: async function run() { return aliasesCommand(); }; async function run(_command: any, args: any = []); async function run(_command: any, args: any = []); async function run(_command: any, args: any = []); async function run(_command: any, args: any = []), and 75 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/commands"
@@ -310,7 +310,7 @@
     },
     {
       "id": "code:core-hooks-runtime",
-      "text": "core-hooks-runtime is a core module at src/core/hooks-runtime (23 files, 8917 loc, medium risk). Key exports: async function codePackFreshnessNote(root: string, opts: { budgetMs?: number } = {}): Promise<string | null>; async function attachAuthoritativeSksSkillContext(; async function standaloneParentManagedSkillNames(; async function authoritativeSksSkillAdmission(root: string, skillNames: readonly unknown[]); async function claimHookInvocation(root: string, name: unknown, payload: any = {}), and 49 more. It has no detected cross-module dependencies.",
+      "text": "core-hooks-runtime is a core module at src/core/hooks-runtime (23 files, 6944 loc, medium risk). Key exports: async function codePackFreshnessNote(root: string, opts: { budgetMs?: number } = {}): Promise<string | null>; async function attachAuthoritativeSksSkillContext(; async function standaloneParentManagedSkillNames(; async function authoritativeSksSkillAdmission(root: string, skillNames: readonly unknown[]); async function claimHookInvocation(root: string, name: unknown, payload: any = {}), and 47 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/hooks-runtime"
@@ -880,7 +880,7 @@
     },
     {
       "id": "code:core-subagents",
-      "text": "core-subagents is a core module at src/core/subagents (26 files, 13171 loc, medium risk). Key exports: const DEFAULT_AUTOMATIC_SUBAGENT_COUNT = 2; const PARALLEL_AUTOMATIC_SUBAGENT_COUNT = 4; const LARGE_SCALE_AUTOMATIC_SUBAGENT_COUNT = 6; const MAX_AUTOMATIC_SUBAGENT_COUNT = 10; const MAX_AUTOMATIC_REVIEWER_COUNT = 2, and 114 more. It has no detected cross-module dependencies.",
+      "text": "core-subagents is a core module at src/core/subagents (26 files, 13192 loc, medium risk). Key exports: const DEFAULT_AUTOMATIC_SUBAGENT_COUNT = 2; const PARALLEL_AUTOMATIC_SUBAGENT_COUNT = 4; const LARGE_SCALE_AUTOMATIC_SUBAGENT_COUNT = 6; const MAX_AUTOMATIC_SUBAGENT_COUNT = 10; const MAX_AUTOMATIC_REVIEWER_COUNT = 2, and 114 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/subagents"

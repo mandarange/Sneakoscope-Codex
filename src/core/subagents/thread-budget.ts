@@ -64,15 +64,18 @@ export function resolveSubagentThreadBudget(input: SubagentThreadBudgetInput = {
     1,
     HARD_NARUTO_MAX_THREADS
   )
-  const parentThreads = clampNonNegative(
+  const requestedParentThreads = clampNonNegative(
     input.parentReservedThreads ?? DEFAULT_NARUTO_PARENT_THREAD_RESERVATION,
     HARD_NARUTO_MAX_THREADS
   )
-  const reviewerThreads = clampNonNegative(
+  const requestedReviewerThreads = clampNonNegative(
     input.reviewerReservedThreads ?? DEFAULT_NARUTO_REVIEWER_THREAD_RESERVATION,
     HARD_NARUTO_MAX_THREADS
   )
   const activeThreads = clampNonNegative(input.activeThreadCount ?? 0, HARD_NARUTO_MAX_THREADS)
+  const reservationCapacity = Math.max(0, configured - activeThreads - 1)
+  const parentThreads = Math.min(requestedParentThreads, reservationCapacity)
+  const reviewerThreads = Math.min(requestedReviewerThreads, reservationCapacity - parentThreads)
   const availableThreadSlots = Math.max(0, configured - parentThreads - reviewerThreads - activeThreads)
   const marginalUsefulThroughputPositive = input.marginalUsefulThroughputPositive !== false
   const bounds: Record<SubagentCapacityFactor, number> = {

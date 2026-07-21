@@ -1,6 +1,6 @@
 import os from 'node:os';
 import path from 'node:path';
-import { projectRoot, exists, formatBytes, nowIso, sameFilesystemPath, writeJsonAtomic } from '../core/fsx.js';
+import { projectRoot, exists, formatBytes, nowIso, writeJsonAtomic } from '../core/fsx.js';
 import { flag } from '../cli/args.js';
 import { printJson } from '../cli/output.js';
 import { ui as cliUi } from '../cli/cli-theme.js';
@@ -23,6 +23,7 @@ import { writeMcpPluginInventoryArtifacts } from '../core/mcp/mcp-plugin-invento
 import { buildCodexAppHarnessMatrix } from '../core/codex-app/codex-app-harness-matrix.js';
 import { buildCodexNativeFeatureMatrix } from '../core/codex-native/codex-native-feature-broker.js';
 import { withSecretPreservationGuard } from '../core/config/config-migration-journal.js';
+import { reconcileDoctorSkills } from '../core/doctor/doctor-skill-reconcile.js';
 import { isUpdateMigrationReceiptCurrent, projectUpdateMigrationReceiptPath, writeProjectUpdateMigrationReceipt } from '../core/update/update-migration-state.js';
 import { inspectSksMenuBarStatus, installSksMenuBar } from '../core/codex-app/sks-menubar.js';
 import { sweepSksTempDirs } from '../core/retention.js';
@@ -444,36 +445,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
         : await (await import('../cli/install-helpers.js')).ensureGlobalCodexFastModeDuringInstall().catch((err: any) => ({ status: 'failed', error: err?.message || String(err) }))
     };
   }
-  const skillsReconcile = doctorFix
-    ? await (async () => {
-        const { reconcileSkills } = await import('../core/init/skills.js');
-        const home = path.resolve(process.env.HOME || os.homedir());
-        const globalTarget = path.resolve(home, '.agents', 'skills');
-        const projectTarget = path.resolve(root, '.agents', 'skills');
-        const global = await reconcileSkills({
-          targetDir: globalTarget,
-          scope: 'global',
-          fix: true
-        }).catch((err: any) => ({ ok: false, error: err?.message || String(err) }));
-        const sameSkillRoot = await sameFilesystemPath(projectTarget, globalTarget);
-        const project = sameSkillRoot
-          ? {
-              schema: 'sks.skill-reconcile.v1',
-              ok: true,
-              scope: 'project',
-              target_dir: projectTarget,
-              fix: true,
-              skipped: true,
-              reason: 'same_as_authoritative_global_skill_root'
-            }
-          : await reconcileSkills({
-              targetDir: projectTarget,
-              scope: 'project',
-              fix: true
-            }).catch((err: any) => ({ ok: false, error: err?.message || String(err) }));
-        return { global, project };
-      })()
-    : { skipped: true, reason: 'doctor_without_fix' };
+  const skillsReconcile = await reconcileDoctorSkills(root, doctorFix);
   const commandAliasCleanup = await runDoctorCommandAliasCleanup({
     root,
     fix: doctorFix

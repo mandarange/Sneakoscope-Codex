@@ -1,0 +1,360 @@
+import { constants as fsConstants } from 'node:fs';
+import fsp from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { sha256, writeJsonAtomic } from '../fsx.js';
+import {
+  ensureConfinedDirectory,
+  inspectConfinedPath,
+  removeManagedPathVerified
+} from '../managed-path-safety.js';
+import {
+  ADMISSION_SCHEMA,
+  GUARD_DIR,
+  MAX_LIFECYCLE_GUARD_BYTES,
+  MAX_LIFECYCLE_GUARD_ENTRIES,
+  MAX_SUBAGENT_PLAN_BYTES,
+  SUBAGENT_ADMISSION_BLOCKER_RE,
+  SubagentSkillAvailabilityGuardError,
+  type BoundedJsonResult,
+  type GuardRoot,
+  type SubagentSkillAvailabilityAdmission
+} from './subagent-skill-availability-contract.js';
+
+function rootGuardDir(root: string): string {
+  return path.join(root, '.sneakoscope', 'guards', GUARD_DIR);
+}
+
+function artifactGuardDir(artifactDir: string): string {
+  return path.join(artifactDir, GUARD_DIR);
+}
+
+function homeGuardDir(home: string, canonicalRoot: string): string {
+  return path.join(home, '.sneakoscope', 'guards', GUARD_DIR, sha256(canonicalRoot));
+}
+
+export function threadGuardPath(guardRoot: string, threadHash: string): string {
+  return path.join(guardRoot, `thread-${threadHash}.json`);
+}
+
+export function turnGuardPath(guardRoot: string, sessionHash: string, turnHash: string): string {
+  return path.join(guardRoot, `turn-${sha256(`${sessionHash}:${turnHash}`)}.json`);
+}
+
+function validAdmission(value: any): value is SubagentSkillAvailabilityAdmission {
+  const blockers = Array.isArray(value?.blockers) ? value.blockers : null;
+  return value?.schema === ADMISSION_SCHEMA
+    && ['allowed', 'blocked'].includes(String(value?.status || ''))
+    && (value?.mission_id === null || typeof value?.mission_id === 'string')
+    && (value?.workflow_run_id === null || typeof value?.workflow_run_id === 'string')
+    && /^[a-f0-9]{64}$/.test(String(value?.thread_id_hash || ''))
+    && /^[a-f0-9]{64}$/.test(String(value?.session_scope_hash || ''))
+    && /^[a-f0-9]{64}$/.test(String(value?.turn_id_hash || ''))
+    && blockers !== null
+    && (value.status === 'allowed'
+      ? blockers.length === 0
+      : blockers.length > 0 && blockers.every((item: unknown) => (
+        SUBAGENT_ADMISSION_BLOCKER_RE.test(String(item || ''))
+      )));
+}
+
+export async function readConfinedJson(boundary: string, file: string): Promise<any | null> {
+  const result = await readBoundedConfinedJson(
+    path.resolve(boundary),
+    path.resolve(file),
+    MAX_SUBAGENT_PLAN_BYTES
+  );
+  return result.status === 'value' ? result.value : null;
+}
+
+export async function admissionGuardRoots(
+  root: string,
+  artifactDir?: string | null
+): Promise<GuardRoot[]> {
+  const projectRoot = path.resolve(root);
+  const canonicalRoot = await fsp.realpath(projectRoot);
+  const home = path.resolve(process.env.HOME || os.homedir());
+  const roots: GuardRoot[] = [
+    { root: rootGuardDir(projectRoot), boundary: projectRoot, missionIndependent: true },
+    ...(artifactDir ? [{
+      root: artifactGuardDir(path.resolve(artifactDir)),
+      boundary: projectRoot,
+      missionIndependent: false
+    }] : []),
+    { root: homeGuardDir(home, canonicalRoot), boundary: home, missionIndependent: true }
+  ];
+  const unique = new Map<string, GuardRoot>();
+  for (const entry of roots) {
+    const previous = unique.get(entry.root);
+    if (!previous || (!previous.missionIndependent && entry.missionIndependent)) {
+      unique.set(entry.root, entry);
+    }
+  }
+  return [...unique.values()];
+}
+
+export async function writeAdmissionPair(
+  root: GuardRoot,
+  admission: SubagentSkillAvailabilityAdmission
+): Promise<boolean> {
+  const [threadWrite, turnWrite] = await Promise.all([
+    safeWriteJson(threadGuardPath(root.root, admission.thread_id_hash), root.boundary, admission),
+    safeWriteJson(
+      turnGuardPath(root.root, admission.session_scope_hash, admission.turn_id_hash),
+      root.boundary,
+      admission
+    )
+  ]);
+  return threadWrite && turnWrite;
+}
+
+export async function readAdmissionPair(
+  root: GuardRoot,
+  expectedThreadHash: string | null,
+  expectedSessionHash: string,
+  expectedTurnHash: string
+): Promise<SubagentSkillAvailabilityAdmission | null> {
+  const turnFile = turnGuardPath(root.root, expectedSessionHash, expectedTurnHash);
+  const turnAdmission = await readAdmission(turnFile, root.boundary);
+  if (expectedThreadHash) {
+    const threadFile = threadGuardPath(root.root, expectedThreadHash);
+    const threadAdmission = await readAdmission(threadFile, root.boundary);
+    if (!turnAdmission && !threadAdmission) return null;
+    if (!turnAdmission || !threadAdmission) throw invalidGuard(true);
+    validateAdmissionBinding(turnAdmission, expectedThreadHash, expectedSessionHash, expectedTurnHash);
+    validateAdmissionBinding(threadAdmission, expectedThreadHash, expectedSessionHash, expectedTurnHash);
+    if (admissionFingerprint(turnAdmission) !== admissionFingerprint(threadAdmission)) {
+      throw invalidGuard(true);
+    }
+    return turnAdmission;
+  }
+  if (!turnAdmission) return null;
+  validateAdmissionBinding(turnAdmission, turnAdmission.thread_id_hash, expectedSessionHash, expectedTurnHash);
+  let threadAdmission: SubagentSkillAvailabilityAdmission | null;
+  try {
+    threadAdmission = await readAdmission(
+      threadGuardPath(root.root, turnAdmission.thread_id_hash),
+      root.boundary
+    );
+  } catch {
+    throw invalidGuard(true);
+  }
+  if (!threadAdmission || admissionFingerprint(turnAdmission) !== admissionFingerprint(threadAdmission)) {
+    throw invalidGuard(true);
+  }
+  return turnAdmission;
+}
+
+async function readAdmission(
+  file: string,
+  boundary: string
+): Promise<SubagentSkillAvailabilityAdmission | null> {
+  const result = await readBoundedConfinedJson(boundary, file, MAX_LIFECYCLE_GUARD_BYTES);
+  if (result.status === 'missing') return null;
+  if (result.status === 'invalid') throw invalidGuard(result.childEvidence);
+  if (!validAdmission(result.value)) throw invalidGuard(true);
+  return result.value;
+}
+
+export async function blockedRunAdmissions(
+  guardRoot: GuardRoot,
+  missionId: string,
+  workflowRunId: string
+): Promise<string[]> {
+  let inspected;
+  try {
+    inspected = await inspectConfinedPath(guardRoot.boundary, guardRoot.root);
+  } catch {
+    return ['subagent_skill_availability_guard_invalid'];
+  }
+  if (!inspected.exists) return [];
+  if (inspected.leafSymlink || !inspected.stat?.isDirectory()) {
+    return ['subagent_skill_availability_guard_invalid'];
+  }
+  const names = await boundedDirectoryNames(guardRoot.root);
+  if (names === null) return ['subagent_skill_availability_guard_invalid'];
+  const blockers: string[] = [];
+  for (const name of names.filter((item) => /^thread-[a-f0-9]{64}\.json$/.test(item)).sort()) {
+    let admission: SubagentSkillAvailabilityAdmission | null;
+    try {
+      admission = await readAdmission(path.join(guardRoot.root, name), guardRoot.boundary);
+    } catch {
+      blockers.push('subagent_skill_availability_guard_invalid');
+      continue;
+    }
+    if (!admission
+      || admission.mission_id !== missionId
+      || admission.workflow_run_id !== workflowRunId
+      || admission.status !== 'blocked') continue;
+    blockers.push(...admission.blockers);
+  }
+  return blockers;
+}
+
+function validateAdmissionBinding(
+  admission: SubagentSkillAvailabilityAdmission,
+  expectedThreadHash: string,
+  expectedSessionHash: string,
+  expectedTurnHash: string
+) {
+  if (admission.thread_id_hash !== expectedThreadHash
+    || admission.session_scope_hash !== expectedSessionHash
+    || admission.turn_id_hash !== expectedTurnHash) {
+    throw invalidGuard(true);
+  }
+}
+
+export function invalidGuard(childEvidence: boolean): SubagentSkillAvailabilityGuardError {
+  return new SubagentSkillAvailabilityGuardError(childEvidence);
+}
+
+export function admissionFingerprint(admission: SubagentSkillAvailabilityAdmission): string {
+  return sha256(JSON.stringify([
+    admission.schema,
+    admission.status,
+    admission.mission_id,
+    admission.workflow_run_id,
+    admission.thread_id_hash,
+    admission.session_scope_hash,
+    admission.turn_id_hash,
+    admission.blockers,
+    admission.recorded_at
+  ]));
+}
+
+export async function safeWriteJson(file: string, boundary: string, value: unknown): Promise<boolean> {
+  try {
+    if (Buffer.byteLength(`${JSON.stringify(value, null, 2)}\n`, 'utf8') > MAX_LIFECYCLE_GUARD_BYTES) {
+      return false;
+    }
+    await ensureConfinedDirectory(boundary, path.dirname(file));
+    const before = await inspectConfinedPath(boundary, file);
+    if (before.exists && (before.leafSymlink || !before.stat?.isFile())) return false;
+    await writeJsonAtomic(file, value);
+    const after = await inspectConfinedPath(boundary, file);
+    return after.exists && !after.leafSymlink && Boolean(after.stat?.isFile());
+  } catch {
+    return false;
+  }
+}
+
+export async function safeRemoveGuard(file: string, boundary: string): Promise<void> {
+  try {
+    const inspected = await inspectConfinedPath(boundary, file);
+    if (!inspected.exists) return;
+    if (inspected.leafSymlink || !inspected.stat?.isFile()) return;
+    await removeManagedPathVerified(boundary, file);
+  } catch {
+    return;
+  }
+}
+
+export async function boundedDirectoryNames(directory: string): Promise<string[] | null> {
+  let handle;
+  try {
+    handle = await fsp.opendir(directory);
+    const names: string[] = [];
+    for await (const entry of handle) {
+      names.push(entry.name);
+      if (names.length > MAX_LIFECYCLE_GUARD_ENTRIES) return null;
+    }
+    return names.sort((left, right) => left.localeCompare(right));
+  } catch {
+    return null;
+  } finally {
+    await handle?.close().catch(() => undefined);
+  }
+}
+
+export async function readBoundedConfinedJson(
+  boundary: string,
+  file: string,
+  maxBytes: number
+): Promise<BoundedJsonResult> {
+  const absoluteBoundary = path.resolve(boundary);
+  const absoluteFile = path.resolve(file);
+  let childEvidence = false;
+  try {
+    const inspected = await inspectConfinedPath(absoluteBoundary, absoluteFile);
+    if (!inspected.exists) return { status: 'missing' };
+    childEvidence = true;
+    if (inspected.leafSymlink || !inspected.stat?.isFile() || inspected.stat.size > maxBytes) {
+      return { status: 'invalid', childEvidence };
+    }
+    const handle = await fsp.open(absoluteFile, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
+    try {
+      const stat = await handle.stat();
+      if (!stat.isFile() || stat.size > maxBytes) return { status: 'invalid', childEvidence };
+      const buffer = Buffer.alloc(maxBytes + 1);
+      const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+      if (bytesRead > maxBytes || bytesRead !== stat.size) {
+        return { status: 'invalid', childEvidence };
+      }
+      return { status: 'value', value: JSON.parse(buffer.subarray(0, bytesRead).toString('utf8')) };
+    } finally {
+      await handle.close().catch(() => undefined);
+    }
+  } catch {
+    return { status: 'invalid', childEvidence };
+  }
+}
+
+export function preToolBlockReason(blockers: readonly string[]): string {
+  return `SKS blocked this child tool call because managed skill availability failed (${blockers.join(', ')}). Return the blocker to the root parent without using tools.`;
+}
+
+export function boundedAgentThreadId(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const candidate = value.trim();
+  if (!candidate
+    || Buffer.byteLength(candidate, 'utf8') > 512
+    || /[\u0000-\u001f\u007f]/.test(candidate)) return null;
+  return candidate;
+}
+
+export async function officialSubagentThreadIdFromTranscript(value: unknown): Promise<string | null> {
+  const file = String(value || '').trim();
+  if (!file) return null;
+  const sessionsRoot = path.resolve(
+    process.env.CODEX_HOME
+      ? path.join(process.env.CODEX_HOME, 'sessions')
+      : path.join(process.env.HOME || os.homedir(), '.codex', 'sessions')
+  );
+  const [sessionsReal, fileReal] = await Promise.all([
+    fsp.realpath(sessionsRoot).catch(() => null),
+    fsp.realpath(file).catch(() => null)
+  ]);
+  if (!sessionsReal || !fileReal || !pathIsInside(sessionsReal, fileReal)) return null;
+  const stat = await fsp.lstat(file).catch(() => null);
+  if (!stat || stat.isSymbolicLink() || !stat.isFile()) return null;
+  const handle = await fsp.open(file, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW).catch(() => null);
+  if (!handle) return null;
+  try {
+    const statAfterOpen = await handle.stat();
+    if (!statAfterOpen.isFile() || statAfterOpen.size > 1024 * 1024) return null;
+    const buffer = Buffer.alloc(1024 * 1024);
+    const read = await handle.read(buffer, 0, buffer.length, 0);
+    if (read.bytesRead < 1) return null;
+    const text = buffer.subarray(0, read.bytesRead).toString('utf8');
+    const line = text.split(/\r?\n/, 1)[0]?.trim();
+    if (!line) return null;
+    const row = JSON.parse(line);
+    const source = row?.payload?.source?.subagent;
+    const threadSpawn = source?.thread_spawn;
+    if (row?.type !== 'session_meta' || !source || typeof source !== 'object'
+      || !threadSpawn || typeof threadSpawn !== 'object') return null;
+    return String(row?.payload?.id || row?.payload?.session_id || '').trim() || null;
+  } catch {
+    return null;
+  } finally {
+    await handle.close().catch(() => undefined);
+  }
+}
+
+function pathIsInside(root: string, candidate: string): boolean {
+  const relative = path.relative(root, candidate);
+  return Boolean(relative)
+    && relative !== '..'
+    && !relative.startsWith(`..${path.sep}`)
+    && !path.isAbsolute(relative);
+}

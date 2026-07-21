@@ -35,6 +35,24 @@ test('max_threads is a cap rather than a target and leaves protected root/review
   assert.ok(budget.capacity.limiting_factors.includes('available_thread_slots'))
 })
 
+test('small thread caps keep one executable child slot by making reservations elastic', () => {
+  const budget = resolveSubagentThreadBudget({
+    requested: 2,
+    configuredMaxThreads: 2,
+    parentReservedThreads: 1,
+    reviewerReservedThreads: 1
+  })
+  assert.equal(budget.firstWave, 1)
+  assert.equal(budget.waveCount, 2)
+  assert.equal(budget.capacity.available_thread_slots, 1)
+  assert.deepEqual(budget.capacity.reservations, {
+    parent_threads: 1,
+    reviewer_threads: 0,
+    active_threads: 0
+  })
+  assert.equal(budget.capacity.exhausted, false)
+})
+
 test('explicit twenty subagents remain twenty with capacity-governed waves', () => {
   const budget = resolveSubagentThreadBudget({ requested: 20, configuredMaxThreads: 12 })
   assert.equal(budget.requestedSubagents, 20)
