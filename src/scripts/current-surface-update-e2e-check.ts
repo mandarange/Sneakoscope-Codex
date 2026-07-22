@@ -290,6 +290,7 @@ async function seedUpgradeFixture(home: string, project: string): Promise<void> 
     '- Database work uses `$MAD-DB`.',
     '- Clone work uses `$ShadowClone` or `$Kagebunshin`.',
     '- Persisted work uses `$Ralph`.',
+    '- Do not use `sks --naruto`, `sks --clones`, `sks --glm`, or `sks zellij dashboard`.',
     '<!-- END Sneakoscope Codex GX MANAGED BLOCK -->',
     ''
   ].join('\n'));

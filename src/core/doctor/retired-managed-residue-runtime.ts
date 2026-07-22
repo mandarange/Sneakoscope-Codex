@@ -26,7 +26,10 @@ const RETIRED_REPORT_FILES = [
   'native-cli-worker-runtime-proof.json',
   'mad-sks-native-swarm.json',
   'mad-sks-native-swarm.stdout.log',
-  'mad-sks-native-swarm.stderr.log'
+  'mad-sks-native-swarm.stderr.log',
+  'zellij-dashboard-pane.json',
+  'zellij-dashboard-watch.json',
+  'agent-codex-dashboard.json'
 ] as const;
 
 export async function reconcileRetiredGitPolicyMode(

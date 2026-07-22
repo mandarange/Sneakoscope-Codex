@@ -374,19 +374,30 @@ const UPDATE_MIGRATION_STAGES: UpdateMigrationStageDefinition[] = [
 ];
 
 async function runCurrentPublicSurfaceReconcileStage(root: string): Promise<Omit<UpdateMigrationStageRun, 'schema' | 'id' | 'min_from_version' | 'from_version'>> {
-  const [{ runDoctorCommandAliasCleanup }, { reconcileRetiredAgentRoleResidue }] = await Promise.all([
+  const [{ runDoctorCommandAliasCleanup }, { reconcileRetiredAgentRoleResidue }, { migrateSksProfilesToPerFile }] = await Promise.all([
     import('../doctor/command-alias-cleanup.js'),
-    import('../agents/agent-role-config.js')
+    import('../agents/agent-role-config.js'),
+    import('../auto-review.js')
   ]);
   const home = path.resolve(process.env.HOME || os.homedir());
   const globalRuntimeRoot = path.resolve(process.env.SKS_GLOBAL_ROOT || path.join(home, '.sneakoscope-global'));
-  const [publicSurface, retiredRoles] = await Promise.all([
-    runDoctorCommandAliasCleanup({ root, home, globalRuntimeRoot, fix: true }),
-    reconcileRetiredAgentRoleResidue({ root, home, globalRuntimeRoot, fix: true })
-  ]);
+  // Serialize config writers: public-surface guidance and profile migration both touch ~/.codex/config.toml.
+  const publicSurface = await runDoctorCommandAliasCleanup({ root, home, globalRuntimeRoot, fix: true });
+  const retiredRoles = await reconcileRetiredAgentRoleResidue({ root, home, globalRuntimeRoot, fix: true });
+  const profileMigration = await migrateSksProfilesToPerFile({ env: process.env }).catch((err: any) => ({
+    error: err?.message || String(err),
+    retired_profile_table_count: 0,
+    retired_profile_file_removed_count: 0
+  }));
+  const remainingCount = Number(publicSurface.cleanup?.remaining_count || 0)
+    + Number(publicSurface.cleanup?.managed_runtime?.remaining_managed_artifact_count || 0)
+    + Number(publicSurface.cleanup?.project_guidance?.remaining_count || 0)
+    + retiredRoles.remaining_count;
   const blockers = [
     ...(publicSurface.ok === true ? [] : ['public_surface_reconcile_failed']),
-    ...(retiredRoles.ok === true ? [] : ['retired_agent_role_reconcile_failed'])
+    ...(retiredRoles.ok === true ? [] : ['retired_agent_role_reconcile_failed']),
+    ...((profileMigration as any).error ? [`retired_profile_migration_failed:${(profileMigration as any).error}`] : []),
+    ...(remainingCount > 0 ? [`public_surface_remaining:${remainingCount}`] : [])
   ];
   return {
     ok: blockers.length === 0,
@@ -403,10 +414,9 @@ async function runCurrentPublicSurfaceReconcileStage(root: string): Promise<Omit
       quarantined_guidance_collision_count: Number(publicSurface.cleanup?.project_guidance?.preserved_user_file_count || 0),
       removed_retired_role_count: retiredRoles.removed_count,
       quarantined_retired_role_collision_count: retiredRoles.quarantined_user_collision_count,
-      remaining_count: Number(publicSurface.cleanup?.remaining_count || 0)
-        + Number(publicSurface.cleanup?.managed_runtime?.remaining_managed_artifact_count || 0)
-        + Number(publicSurface.cleanup?.project_guidance?.remaining_count || 0)
-        + retiredRoles.remaining_count
+      retired_profile_table_count: Number((profileMigration as any).retired_profile_table_count || 0),
+      retired_profile_file_removed_count: Number((profileMigration as any).retired_profile_file_removed_count || 0),
+      remaining_count: remainingCount
     }
   };
 }
@@ -573,25 +583,36 @@ async function runMenubarRetargetStage(root: string): Promise<Omit<UpdateMigrati
 }
 
 async function runConfigFastModeNormalizeStage(): Promise<Omit<UpdateMigrationStageRun, 'schema' | 'id' | 'min_from_version' | 'from_version'>> {
+  const { reconcileRetiredSksConfigText } = await import('../auto-review.js');
   const configPath = path.join(os.homedir(), '.codex', 'config.toml');
   const text = await readText(configPath, null);
   if (typeof text !== 'string') return { ok: true, status: 'ok', actions: ['codex_config_absent'], blockers: [], warnings: [] };
   const normalized = normalizeLegacyFastModeConfigForUpdate(text);
-  if (normalized.text === ensureTrailingNewline(text)) {
+  const retired = reconcileRetiredSksConfigText(normalized.text);
+  const nextText = ensureTrailingNewline(retired.text);
+  const actions = [
+    ...normalized.actions,
+    ...(retired.detected_count > 0 ? ['stripped_retired_sks_config_profiles_and_policies'] : [])
+  ];
+  if (nextText === ensureTrailingNewline(text)) {
     return {
       ok: true,
       status: 'ok',
-      actions: ['fastmode_config_current'],
+      actions: actions.length ? actions : ['fastmode_config_current'],
       blockers: [],
       warnings: [],
-      detail: { config_path: configPath, default_profile: normalized.defaultProfile }
+      detail: {
+        config_path: configPath,
+        default_profile: normalized.defaultProfile,
+        retired_config_detected_count: retired.detected_count
+      }
     };
   }
   let guardResult: any = null;
   guardResult = await writeCodexConfigGuarded({
     configPath,
     before: text,
-    mutate: () => normalized.text,
+    mutate: () => nextText,
     cause: 'project-update-fastmode-normalize',
     backupTag: 'project-update-fastmode-normalize',
     preserveFastUiKeys: true
@@ -603,16 +624,26 @@ async function runConfigFastModeNormalizeStage(): Promise<Omit<UpdateMigrationSt
       actions: ['normalize_fastmode_config_blocked'],
       blockers: [`codex_config_guard:${guardResult.status}`],
       warnings: [],
-      detail: { config_path: configPath, default_profile: normalized.defaultProfile, guard: guardResult }
+      detail: {
+        config_path: configPath,
+        default_profile: normalized.defaultProfile,
+        retired_config_detected_count: retired.detected_count,
+        guard: guardResult
+      }
     };
   }
   return {
     ok: true,
     status: 'ok',
-    actions: normalized.actions.length ? normalized.actions : ['fastmode_config_current'],
+    actions: actions.length ? actions : ['fastmode_config_current'],
     blockers: [],
     warnings: [],
-    detail: { config_path: configPath, default_profile: normalized.defaultProfile, guard: guardResult }
+    detail: {
+      config_path: configPath,
+      default_profile: normalized.defaultProfile,
+      retired_config_detected_count: retired.detected_count,
+      guard: guardResult
+    }
   };
 }
 

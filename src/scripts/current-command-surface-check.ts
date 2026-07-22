@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import { assertGate, emitGate, importDist, readText, root } from './sks-1-18-gate-lib.js';
 
-const removed = ['team', 'mad-db', 'tmux', 'xai', 'swarm', 'agent', 'ralph', 'ui'];
+const removed = ['team', 'mad-db', 'tmux', 'xai', 'swarm', 'agent', 'ralph', 'ui', 'glm'];
 const removedDollar = ['$Agent', '$Team', '$MAD-DB', '$Swarm', '$ShadowClone', '$Kagebunshin', '$Ralph'];
 const removedHandlers = [
   'src/commands/team.ts',

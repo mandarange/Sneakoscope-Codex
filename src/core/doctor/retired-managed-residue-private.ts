@@ -10,7 +10,7 @@ import {
 } from '../managed-path-safety.js';
 
 /** Cleanup-only inventory. These names are never registered, listed, or redirected. */
-export const REMOVED_PUBLIC_COMMANDS = ['team', 'mad-db', 'tmux', 'xai', 'swarm', 'agent', 'ralph', 'ui'] as const;
+export const REMOVED_PUBLIC_COMMANDS = ['team', 'mad-db', 'tmux', 'xai', 'swarm', 'agent', 'ralph', 'ui', 'glm'] as const;
 
 const RETIRED_COMMAND_TOMBSTONES = new Set<string>(REMOVED_PUBLIC_COMMANDS);
 const RETIRED_MISSION_MODES = new Set<string>([
@@ -48,8 +48,9 @@ export function isRetiredPublicValue(value: unknown): boolean {
   for (const name of RETIRED_MISSION_MODES) {
     if (command === name || command.startsWith(`${name} `)) return true;
     if (new RegExp(`^sks\\s+${escapeRegExp(name)}(?:\\s|$)`).test(command)) return true;
-    if (name === 'agent' && /^sks\s+--agent(?:[=\s]|$)/.test(command)) return true;
   }
+  if (/^sks\s+--(?:agent|naruto|clones|zellij-dashboard|glm)(?:[=\s]|$)/.test(command)) return true;
+  if (/^sks\s+zellij\s+dashboard(?:\s|$)/.test(command)) return true;
   return false;
 }
 
