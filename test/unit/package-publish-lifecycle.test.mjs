@@ -40,13 +40,13 @@ test('publish lifecycle supports official npm publish with prepack post-build ve
   assert.match(scripts['release:ensure-build'], /release-dist-freshness-check\.js/);
   assert.match(scripts['release:ensure-build'], /dist\/scripts\/release-dist-freshness-check\.js/);
   assert.match(scripts['release:check:full'], /--preset release --full/);
-  assert.match(scripts['release:check:full'], /--report-file \.sneakoscope\/reports\/release-check-full-doctor\.json/);
+  assert.doesNotMatch(scripts['release:check:full'], /doctor --fix/);
+  assert.doesNotMatch(scripts['release:check:full'], /release-check-full-doctor\.json/);
   assert.doesNotMatch(scripts['release:check:full'], /\/tmp\//);
   assert.match(scripts['release:check:full'], /release-check-stamp\.js write/);
   assert.match(scripts['release:check:full'], /release-real-check\.js --skip-release-check/);
   assert.equal(count(scripts['release:check:full'], 'build:clean'), 1);
   assert.equal(count(scripts['release:check:full'], 'npm test --silent'), 1);
-  assert.ok(scripts['release:check:full'].indexOf('doctor --fix') < scripts['release:check:full'].indexOf('build:clean'));
   assert.ok(scripts['release:check:full'].indexOf('build:clean') < scripts['release:check:full'].indexOf('npm test --silent'));
   assert.match(scripts['release:check:full'], /release-real-check\.js --skip-release-check && npm run release:dist-freshness --silent && node \.\/dist\/scripts\/release-check-stamp\.js write/);
   assert.match(scripts.prepublishOnly, /prepublish-release-check-or-fast\.js/);

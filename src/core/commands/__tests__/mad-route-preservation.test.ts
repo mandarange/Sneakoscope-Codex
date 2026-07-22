@@ -15,8 +15,13 @@ test('sks --mad stays GPT/MAD and GLM-free without OpenRouter key', () => {
   }
 });
 
-test('GLM-only MAD flags are blocked unless --glm is present', () => {
-  assert.deepEqual(findGlmOnlyMadFlagBlockers(['--mad', '--bench'], false), ['glm_flag_requires_--glm:--bench']);
-  assert.deepEqual(findGlmOnlyMadFlagBlockers(['--mad', '--glm', '--bench'], true), []);
-  assert.equal(resolveSksModelMode(['--mad', '--glm', '--bench']).mode, 'glm-direct');
+test('retired GLM MAD flags are blocked even when --glm is present', () => {
+  assert.deepEqual(findGlmOnlyMadFlagBlockers(['--mad', '--bench'], false), ['retired_glm_mad_flag:--bench']);
+  assert.deepEqual(findGlmOnlyMadFlagBlockers(['--mad', '--glm', '--bench'], true), [
+    'retired_glm_mad_flag:--glm',
+    'retired_glm_mad_flag:--bench'
+  ]);
+  const resolved = resolveSksModelMode(['--mad', '--glm', '--bench']);
+  assert.equal(resolved.mode, 'unknown');
+  assert.equal(resolved.reason, 'glm_mad_removed');
 });

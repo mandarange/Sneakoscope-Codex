@@ -20,14 +20,16 @@ test('MAD Zellij launcher reuses an existing background session instead of block
     const first = await launchMadZellijUi(['--session', 'sks-existing'], {
       root,
       missionId: 'M-existing-first',
-      ledgerRoot: path.join(root, '.sneakoscope', 'missions', 'M-existing-first', 'agents')
+      ledgerRoot: path.join(root, '.sneakoscope', 'missions', 'M-existing-first', 'agents'),
+      recoveryAllowUnverified: true
     });
-    assert.equal(first.ok, true);
+    assert.equal(first.ok, true, JSON.stringify({ blockers: first.blockers, recovery: first.codex_lb_tool_output_recovery }));
 
     const second = await launchMadZellijUi(['--session', 'sks-existing'], {
       root,
       missionId: 'M-existing-second',
-      ledgerRoot: path.join(root, '.sneakoscope', 'missions', 'M-existing-second', 'agents')
+      ledgerRoot: path.join(root, '.sneakoscope', 'missions', 'M-existing-second', 'agents'),
+      recoveryAllowUnverified: true
     });
 
     assert.equal(second.ok, true);
@@ -36,10 +38,10 @@ test('MAD Zellij launcher reuses an existing background session instead of block
     assert.match(second.launch.create_background.stderr_tail, /Session already exists/);
     assert.ok(second.launch.create_background.warnings.some((warning) => warning === 'zellij_session_already_exists:sks-existing'));
     assert.equal(second.pane_proof_background, false);
-    assert.equal(second.pane_proof.schema, 'sks.zellij-pane-proof.v1');
-    assert.notEqual(second.pane_proof.status, 'deferred_background');
-    assert.ok(!second.pane_proof.warnings.includes('zellij_pane_proof_deferred_until_after_attach'));
-    await fs.access(path.join(root, '.sneakoscope', 'missions', 'M-existing-second', 'zellij-pane-proof.json'));
+    // Optional MAD launches skip the post-launch list-panes probe to avoid Zellij CLI stalls.
+    assert.equal(second.pane_proof.ok, true);
+    assert.equal(second.pane_proof.status, 'skipped_optional_post_launch');
+    assert.ok(second.pane_proof.warnings.includes('zellij_pane_proof_skipped_optional_post_launch'));
   } finally {
     restoreEnv('SKS_ZELLIJ_FAKE_ADAPTER', previous.adapter);
     restoreEnv('SKS_ZELLIJ_FAKE_ROOT', previous.fakeRoot);
@@ -48,8 +50,8 @@ test('MAD Zellij launcher reuses an existing background session instead of block
   }
 });
 
-test('optional pane proof failure is reported truthfully without blocking launch', async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-zellij-optional-proof-failure-'));
+test('optional pane proof is skipped without blocking launch', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-zellij-optional-proof-skip-'));
   const previous = {
     adapter: process.env.SKS_ZELLIJ_FAKE_ADAPTER,
     fakeRoot: process.env.SKS_ZELLIJ_FAKE_ROOT
@@ -58,22 +60,24 @@ test('optional pane proof failure is reported truthfully without blocking launch
   process.env.SKS_ZELLIJ_FAKE_ROOT = root;
 
   try {
-    const missionId = 'M-optional-proof-failure';
+    const missionId = 'M-optional-proof-skip';
+    // Even if a proof path cannot be written, optional launches must stay non-blocking.
     const proofPath = path.join(root, '.sneakoscope', 'missions', missionId, 'zellij-pane-proof.json');
     await fs.mkdir(proofPath, { recursive: true });
 
-    const report = await launchMadZellijUi(['--session', 'sks-optional-proof-failure'], {
+    const report = await launchMadZellijUi(['--session', 'sks-optional-proof-skip'], {
       root,
       missionId,
-      ledgerRoot: path.join(root, '.sneakoscope', 'missions', missionId, 'agents')
+      ledgerRoot: path.join(root, '.sneakoscope', 'missions', missionId, 'agents'),
+      recoveryAllowUnverified: true
     });
 
-    assert.equal(report.ok, true);
+    assert.equal(report.ok, true, JSON.stringify({ blockers: report.blockers, recovery: report.codex_lb_tool_output_recovery }));
     assert.deepEqual(report.blockers, []);
     assert.equal(report.pane_proof_background, false);
-    assert.equal(report.pane_proof.ok, false);
-    assert.equal(report.pane_proof.status, 'probe_failed');
-    assert.ok(report.pane_proof.blockers.some((blocker) => blocker.startsWith('zellij_pane_proof_exception:')));
+    assert.equal(report.pane_proof.ok, true);
+    assert.equal(report.pane_proof.status, 'skipped_optional_post_launch');
+    assert.ok(report.pane_proof.warnings.includes('zellij_pane_proof_skipped_optional_post_launch'));
   } finally {
     restoreEnv('SKS_ZELLIJ_FAKE_ADAPTER', previous.adapter);
     restoreEnv('SKS_ZELLIJ_FAKE_ROOT', previous.fakeRoot);

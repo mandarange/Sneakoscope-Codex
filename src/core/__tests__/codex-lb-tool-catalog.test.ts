@@ -202,15 +202,17 @@ test('coalesces concurrent cold-cache fetches for the same identity', async () =
   }
 })
 
-test('emitted minimum catalog parses in the project-local Codex CLI 0.144.5', async () => {
+test('emitted minimum catalog parses in the project-local Codex CLI preferred channel', async () => {
+  const preferred = JSON.parse(await fs.readFile(path.join(packageRoot(), 'package.json'), 'utf8')).dependencies?.['@openai/codex-sdk']
+  assert.match(String(preferred || ''), /^\d+\.\d+\.\d+$/, 'preferred Codex SDK pin must be a semver')
   const codexPackageRoot = path.join(packageRoot(), 'node_modules', '@openai', 'codex')
   const codexPackage = JSON.parse(await fs.readFile(path.join(codexPackageRoot, 'package.json'), 'utf8'))
-  assert.equal(codexPackage.version, '0.144.5', 'project-local @openai/codex must stay pinned to the parser contract')
+  assert.equal(codexPackage.version, preferred, 'project-local @openai/codex must track the preferred Codex channel')
   const codexEntrypoint = path.join(codexPackageRoot, 'bin', 'codex.js')
   await fs.access(codexEntrypoint)
   const version = await runProcess(process.execPath, [codexEntrypoint, '--version'], { timeoutMs: CODEX_PARSER_PROBE_TIMEOUT_MS, maxOutputBytes: 4_096 })
   assert.equal(version.code, 0, version.stderr || version.stdout)
-  assert.match(version.stdout, /\b0\.144\.5\b/)
+  assert.match(version.stdout, new RegExp(`\\b${String(preferred).replace(/\./g, '\\.')}\\b`))
 
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-codex-lb-tool-catalog-parser-'))
   try {
