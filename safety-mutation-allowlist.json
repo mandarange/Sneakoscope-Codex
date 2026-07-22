@@ -692,6 +692,24 @@
       "reason": "Cleanup/removal path is route-owned, generated, or temporary artifact; exact callsite is audited."
     },
     {
+      "file": "src/core/harness-conflicts.ts",
+      "symbol": "cleanupOneHardConflict",
+      "token": "fsp.rm",
+      "reason": "Other-harness hooks.json cleanup deletes only the conflict path after a quarantine copy under .sneakoscope/quarantine/other-harness."
+    },
+    {
+      "file": "src/core/harness-conflicts.ts",
+      "symbol": "quarantineMove",
+      "token": "rename",
+      "reason": "Other-harness marker cleanup moves the conflict path into a scoped .sneakoscope quarantine destination for the active run."
+    },
+    {
+      "file": "src/core/harness-conflicts.ts",
+      "symbol": "quarantineMove",
+      "token": "fsp.rm",
+      "reason": "Other-harness marker cleanup removes the original conflict path only after a successful quarantine copy when rename cannot cross filesystems."
+    },
+    {
       "file": "src/core/hooks-runtime/hook-invocation-dedupe.ts",
       "symbol": "createMarker",
       "token": "fsp.rm",

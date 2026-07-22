@@ -54,7 +54,7 @@ Generated from `sks commands --json`, `src/cli/command-registry.ts COMMANDS`, `s
 | `cli-rollback` | core-cli | beta | sks rollback list\|apply <id> [--json] | execute:pass | runtime_verified | none recorded |
 | `cli-postinstall` | install | stable | sks postinstall | static:pass | static_contract | none recorded |
 | `cli-codex` | integration | beta | sks codex compatibility\|version\|update-status [--refresh]\|update\|doctor\|schema\|0.144 [--json] | execute:pass | runtime_verified | none recorded |
-| `cli-codex-app` | integration | beta | sks codex-app [check\|glm-profile install\|set-openrouter-key --api-key-stdin\|product-design\|chrome-extension\|pat status\|remote-control] | real_optional:pass | integration_optional | mobile/event payload details remain unknown |
+| `cli-codex-app` | integration | beta | sks codex-app [check\|set-openrouter-key --api-key-stdin\|use-openrouter --model <id>\|product-design\|chrome-extension\|pat status\|remote-control] | real_optional:pass | integration_optional | mobile/event payload details remain unknown |
 | `cli-codex-native` | integration | beta | sks codex-native status\|feature-broker\|invocation-plan\|init-deep [--json] | execute:pass | runtime_verified | none recorded |
 | `cli-codex-lb` | integration | beta | sks codex-lb status\|health\|metrics\|doctor\|circuit\|repair\|setup ... | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
 | `cli-menubar` | core-cli | beta | sks menubar | static:pass | static_contract | none recorded |

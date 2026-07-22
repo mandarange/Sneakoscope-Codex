@@ -2,11 +2,12 @@ import path from 'node:path';
 import os from 'node:os';
 import { ensureDir, readText } from '../core/fsx.js';
 import {
-  GLM_CODEX_CONFIG_PROFILE_ID,
   GLM_CODEX_CONFIG_PROVIDER_ID,
-  GLM_CODEX_CONFIG_REASONING_PROFILES,
-  GLM_52_OPENROUTER_MODEL
+  GLM_52_OPENROUTER_MODEL,
+  OPENROUTER_DEFAULT_PROFILE_ID,
+  RETIRED_GLM_DESKTOP_CONFIG_PROFILE_IDS
 } from '../core/codex-app/openrouter-provider.js';
+import { reconcileRetiredSksConfigText } from '../core/auto-review.js';
 import type { CodexLbPersistenceMode } from '../core/codex-lb/codex-lb-setup.js';
 import {
   removeTopLevelTomlKeyIfValue,
@@ -88,6 +89,7 @@ export function removeCodexLbSharedOpenAiRouting(text: any = '', baseUrl: any = 
   };
 }
 
+/** Ensure OpenRouter provider exists and strip retired GLM Desktop profile tables. */
 export function upsertCodexAppGlmConfig(text: any = '') {
   let next = String(text || '');
   const providerBlock = [
@@ -99,17 +101,7 @@ export function upsertCodexAppGlmConfig(text: any = '') {
     'requires_openai_auth = false'
   ].join('\n');
   next = upsertTomlTable(next, `model_providers.${GLM_CODEX_CONFIG_PROVIDER_ID}`, providerBlock);
-  for (const profile of GLM_CODEX_CONFIG_REASONING_PROFILES) {
-    const profileBlock = [
-      `[profiles.${profile.id}]`,
-      `model_provider = "${GLM_CODEX_CONFIG_PROVIDER_ID}"`,
-      `model = "${GLM_52_OPENROUTER_MODEL}"`,
-      `model_reasoning_effort = "${profile.reasoning_effort}"`,
-      'service_tier = "default"',
-      'approval_policy = "on-request"'
-    ].join('\n');
-    next = upsertTomlTable(next, `profiles.${profile.id}`, profileBlock);
-  }
+  next = reconcileRetiredSksConfigText(next).text;
   return `${next.trim()}\n`;
 }
 
@@ -123,14 +115,15 @@ export async function ensureGlobalCodexAppGlmProfile(opts: any = {}) {
     await ensureDir(path.dirname(configPath));
     const current = await readText(configPath, '');
     const next = upsertCodexAppGlmConfig(current);
-    const safeWrite = await safeWriteCodexConfigToml(configPath, current, next, 'glm-profile');
+    const safeWrite = await safeWriteCodexConfigToml(configPath, current, next, 'openrouter-provider');
     return {
       ...safeWrite,
       status: safeWrite.status === 'written' ? 'updated' : safeWrite.status,
       provider: GLM_CODEX_CONFIG_PROVIDER_ID,
       model: GLM_52_OPENROUTER_MODEL,
-      codex_config_profile: GLM_CODEX_CONFIG_PROFILE_ID,
-      reasoning_profiles: GLM_CODEX_CONFIG_REASONING_PROFILES.map((profile) => profile.id)
+      codex_config_profile: OPENROUTER_DEFAULT_PROFILE_ID,
+      reasoning_profiles: [] as string[],
+      retired_glm_profiles: [...RETIRED_GLM_DESKTOP_CONFIG_PROFILE_IDS]
     };
   } catch (err: any) {
     return {
@@ -140,8 +133,9 @@ export async function ensureGlobalCodexAppGlmProfile(opts: any = {}) {
       error: err.message,
       provider: GLM_CODEX_CONFIG_PROVIDER_ID,
       model: GLM_52_OPENROUTER_MODEL,
-      codex_config_profile: GLM_CODEX_CONFIG_PROFILE_ID,
-      reasoning_profiles: GLM_CODEX_CONFIG_REASONING_PROFILES.map((profile) => profile.id)
+      codex_config_profile: OPENROUTER_DEFAULT_PROFILE_ID,
+      reasoning_profiles: [] as string[],
+      retired_glm_profiles: [...RETIRED_GLM_DESKTOP_CONFIG_PROFILE_IDS]
     };
   }
 }

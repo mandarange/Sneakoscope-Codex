@@ -2,11 +2,24 @@
 
 ## [Unreleased]
 
+
+## [7.0.5] - 2026-07-22
+
+### Removed
+
+- Retire Codex Desktop GLM picker profiles (`sks-glm-52-*`) and `sks codex-app glm-profile` install writes; OpenRouter activation is provider + top-level model via `sks codex-app use-openrouter` / `set-openrouter-key` only.
+
+### Added
+
+- On `sks update` / `sks doctor --fix`, rewrite legacy commands inside managed and customer `SKILL.md` bodies to the current public surface, and remove live `omx`/`dcodex` skill directories from the picker (backup under quarantine).
+
 ### Changed
 
 - Keep SKS version-agnostic across Codex CLI hosts: package tracks preferred latest `rust-v0.145.0` / `0.145.0`, soft floor stays `0.133.0`, and feature routes (Naruto MA v2, thread-list search, MCP timeouts, GPT-5.6 Terra/Luna/Sol) capability-gate with update CTAs instead of a hard “only 0.145” product lock.
 - Induce Codex CLI updates from SKS Menu Bar and Center: status menu **Update Codex CLI Now**, Overview/Diagnostics/Updates CTAs, and clearer prefer-latest copy wired to `sks codex update`.
 - Align Naruto with Codex stable opt-in multi-agent V2 when available: enable `[features.multi_agent_v2]`, migrate `[agents]` to `max_concurrent_threads_per_session` plus default subagent model/reasoning, strip removed `job_max_runtime_seconds`, and fail closed with update guidance when MA v2 is missing (no legacy process-runtime revival).
+- Treat OMX/DCodex cleanup as live-surface removal (with quarantine backup), not leave-in-place preservation, during update/setup/doctor `--fix`.
+- Raise the shared unpacked package budget to `11.20 MiB` for the skill legacy-surface rewrite surface while keeping the packed cap at `2510 KiB`.
 
 ## [7.0.4] - 2026-07-21
 

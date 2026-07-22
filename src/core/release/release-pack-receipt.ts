@@ -306,6 +306,7 @@ const RETIRED_PACKAGED_FILE_PATTERNS = [
 const RETIRED_SURFACE_ALLOWLIST: Array<{ path: RegExp; kinds: Set<string> }> = [
   { path: /^dist\/core\/doctor\/retired-auto-review-config\.js$/, kinds: new Set(['retired_cli_command', 'retired_dollar_command', 'retired_ralph_identity', 'retired_team_profile']) },
   { path: /^dist\/core\/doctor\/(?:command-alias-cleanup|current-project-guidance)\.js$/, kinds: new Set(['retired_ralph_identity']) },
+  { path: /^dist\/core\/doctor\/skill-legacy-surface\.js$/, kinds: new Set(RETIRED_SURFACE_PATTERNS.map((pattern) => pattern.kind)) },
   { path: /^dist\/core\/doctor\/retired-managed-projection-residue\.js$/, kinds: new Set(['retired_team_runtime_identity']) },
   { path: /^dist\/core\/doctor\/retired-managed-residue(?:-artifact-helpers|-artifacts|-missions|-private|-runtime|-state)?\.js$/, kinds: new Set(['retired_cli_command', 'retired_dollar_command', 'retired_ralph_identity', 'retired_team_current_wording', 'retired_team_profile', 'retired_team_runtime_identity', 'retired_team_workdir']) },
   { path: /^dist\/core\/init\/skills\.js$/, kinds: new Set(['retired_ralph_identity']) },

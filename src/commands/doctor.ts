@@ -59,7 +59,7 @@ export async function run(_command: any, args: any = [], deps: any = {}) {
           return blocked;
         }
         console.error(formatHarnessConflictReport(cleanup.after || conflictScan, { includePrompt: false }));
-        console.error('Automatic OMX/DCodex quarantine did not clear every conflict. Inspect quarantine under .sneakoscope/quarantine/other-harness/.');
+        console.error('Automatic OMX/DCodex removal did not clear every conflict. Live markers must be removed; inspect backup under .sneakoscope/quarantine/other-harness/.');
         return blocked;
       }
     }

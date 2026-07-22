@@ -14,7 +14,7 @@ entry, Pro model access, or Fast picker. The repair is provenance-scoped: it
 does not delete unmarked user settings, provider definitions, provider URLs,
 credential references, `service_tier = "fast"`, or `[features].fast_mode`.
 
-SKS 7.0.4 also reports the active nonsecret auth class. When codex-lb API-key
+SKS 7.0.5 also reports the active nonsecret auth class. When codex-lb API-key
 auth is active and a ChatGPT OAuth backup is available, Center labels the
 Chat/Pro surface as inactive and exposes **Restore Chat / Pro (OAuth)**. The
 switch is explicit because the two modes share Codex's active auth slot;
@@ -33,7 +33,7 @@ Useful checks:
 ```bash
 sks codex-app check
 sks codex-app set-openrouter-key --api-key-stdin
-sks codex-app glm-profile install
+sks codex-app use-openrouter --model z-ai/glm-5.2
 sks codex-lb status
 sks codex-lb use-oauth --restart-app
 sks codex-lb use-codex-lb --restart-app
@@ -52,7 +52,7 @@ Web/browser/webapp verification uses the official Codex Chrome Extension path fi
 
 The generated `sks-fast-high` profile intentionally omits `sandbox_mode`. Codex App and IDE permission settings own the sandbox choice, including Full Access vs workspace-write, while SKS supplies the model, Fast service tier, approval, and reasoning defaults. High-power MAD launches continue to use the explicit `sks-mad-high` profile and `danger-full-access` launch arguments after the user opens the MAD-SKS permission gate.
 
-`sks codex-app check` prints Provider UI, GLM Model, and codex-lb Key rows. GLM setup uses `sks codex-app set-openrouter-key --api-key-stdin` plus `sks codex-app glm-profile install`; codex-lb key setup uses `sks codex-lb setup --host <domain> --api-key-stdin --yes` or `sks codex-lb set-key --api-key-stdin`. These checks report only redacted presence/source states, never raw keys.
+`sks codex-app check` prints Provider UI, OpenRouter/GLM Model, and codex-lb Key rows. OpenRouter setup uses `sks codex-app set-openrouter-key --api-key-stdin` plus `sks codex-app use-openrouter --model <id>`; legacy Desktop GLM picker profiles (`sks-glm-52-*`) are stripped on update/doctor. codex-lb key setup uses `sks codex-lb setup --host <domain> --api-key-stdin --yes` or `sks codex-lb set-key --api-key-stdin`. These checks report only redacted presence/source states, never raw keys.
 
 Imagegen/gpt-image-2 remains a Codex App capability first. UX-Review/PPT require generated gpt-image-2 callout evidence before verified visual claims. `npm run imagegen:capability` checks that the official Codex App `$imagegen` surface is visible, but full visual verification still needs an actual generated output file with hash/dimensions/provider metadata. Direct OpenAI API, Responses image-generation, codex-lb, or `CODEX_LB_API_KEY` fallback paths are non-Codex API fallbacks and do not satisfy Codex App imagegen evidence unless a separate API task is explicitly requested. When the official app, Chrome Extension, or OS blocks required capabilities, SKS records the external block and marks live verification unverified instead of substituting browser automation or prose-only critique.
 

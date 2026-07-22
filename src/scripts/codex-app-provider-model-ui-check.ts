@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { codexProviderModelUiStatus, formatCodexAppStatus } from '../core/codex-app.js';
-import { GLM_CODEX_CONFIG_PROVIDER_ID, GLM_CODEX_CONFIG_REASONING_PROFILES } from '../core/codex-app/glm-model-profile.js';
+import { GLM_CODEX_CONFIG_PROVIDER_ID } from '../core/codex-app/glm-model-profile.js';
 import { GLM_52_OPENROUTER_MODEL } from '../core/codex-app/openrouter-provider.js';
 
 const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-codex-app-provider-ui-'));
@@ -66,7 +66,8 @@ const ok = missing.ok === true
   && ready.ok === true
   && ready.glm.exposed === true
   && ready.glm.model === GLM_52_OPENROUTER_MODEL
-  && ready.glm.profiles_present.length === GLM_CODEX_CONFIG_REASONING_PROFILES.length
+  && ready.glm.profiles_present.length === 0
+  && ready.glm.blockers.every((blocker: string) => !blocker.startsWith('retired_glm_desktop_profile_present:'))
   && ready.codex_lb.provider_present === true
   && ready.codex_lb.key_present === true
   && ready.codex_lb.model_catalog_ok === true
@@ -102,15 +103,6 @@ function readyConfig() {
     'env_key = "OPENROUTER_API_KEY"',
     'requires_openai_auth = false',
     '',
-    ...GLM_CODEX_CONFIG_REASONING_PROFILES.flatMap((profile) => [
-      `[profiles.${profile.id}]`,
-      `model_provider = "${GLM_CODEX_CONFIG_PROVIDER_ID}"`,
-      `model = "${GLM_52_OPENROUTER_MODEL}"`,
-      `model_reasoning_effort = "${profile.reasoning_effort}"`,
-      'service_tier = "default"',
-      'approval_policy = "on-request"',
-      ''
-    ]),
     '[model_providers.codex-lb]',
     'name = "openai"',
     'base_url = "https://lb.example.test/backend-api/codex"',

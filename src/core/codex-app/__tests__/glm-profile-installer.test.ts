@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { doctorCodexAppGlmProfile, installCodexAppGlmProfile } from '../glm-profile-installer.js';
 
-test('GLM profile installer writes Codex Desktop OpenRouter provider and reasoning profiles', async (t) => {
+test('GLM profile installer ensures OpenRouter provider and strips retired Desktop profiles', async (t) => {
   const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-glm-codex-app-'));
   t.after(async () => {
     await fs.rm(temp, { recursive: true, force: true });
@@ -13,6 +13,23 @@ test('GLM profile installer writes Codex Desktop OpenRouter provider and reasoni
   const root = path.join(temp, 'repo');
   const home = path.join(temp, 'home');
   const configPath = path.join(home, '.codex', 'config.toml');
+  await fs.mkdir(path.dirname(configPath), { recursive: true });
+  await fs.writeFile(configPath, [
+    '[profiles.sks-glm-52-mad]',
+    'model_provider = "openrouter"',
+    'model = "z-ai/glm-5.2"',
+    'model_reasoning_effort = "none"',
+    'service_tier = "default"',
+    'approval_policy = "on-request"',
+    '',
+    '[profiles.sks-glm-52-high]',
+    'model_provider = "openrouter"',
+    'model = "z-ai/glm-5.2"',
+    'model_reasoning_effort = "high"',
+    'service_tier = "default"',
+    'approval_policy = "on-request"',
+    ''
+  ].join('\n'), 'utf8');
   const env = {
     HOME: home,
     SKS_HOME: path.join(temp, 'sks-home'),
@@ -27,17 +44,16 @@ test('GLM profile installer writes Codex Desktop OpenRouter provider and reasoni
     apply: true
   });
   assert.equal(install.ok, true);
-  assert.equal(install.status, 'installed');
-  assert.equal(install.codex_config_profile, 'sks-glm-52-mad');
+  assert.equal(install.status, 'removed');
+  assert.equal(install.codex_config_profile, 'sks-openrouter-default');
   assert.equal(install.config_status.ok, true);
+  assert.deepEqual(install.config_status.retired_profiles_remaining, []);
 
   const config = await fs.readFile(configPath, 'utf8');
   assert.match(config, /\[model_providers\.openrouter\]/);
   assert.match(config, /^wire_api = "responses"$/m);
   assert.match(config, /^env_key = "OPENROUTER_API_KEY"$/m);
-  assert.match(config, /\[profiles\.sks-glm-52-mad\][\s\S]*model = "z-ai\/glm-5\.2"[\s\S]*model_reasoning_effort = "none"/);
-  assert.match(config, /\[profiles\.sks-glm-52-high\][\s\S]*model_reasoning_effort = "high"/);
-  assert.match(config, /\[profiles\.sks-glm-52-xhigh\][\s\S]*model_reasoning_effort = "xhigh"/);
+  assert.doesNotMatch(config, /\[profiles\.sks-glm-52-/);
 
   const doctor = await doctorCodexAppGlmProfile({ root, home, configPath, env });
   assert.equal(doctor.ok, true);

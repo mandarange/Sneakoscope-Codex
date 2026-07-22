@@ -1,16 +1,14 @@
 import path from 'node:path';
 import { codexLbConfigPath, ensureGlobalCodexAppGlmProfile } from '../../cli/install-helpers.js';
-import { readJson, readText, writeJsonAtomic, nowIso } from '../fsx.js';
+import { readText, writeJsonAtomic, nowIso, rmrf } from '../fsx.js';
 import {
-  GLM_CODEX_CONFIG_PROFILE_ID,
-  GLM_CODEX_CONFIG_PROVIDER_ID,
-  GLM_CODEX_CONFIG_REASONING_PROFILES,
+  OPENROUTER_DEFAULT_PROFILE_ID,
+  OPENROUTER_PROVIDER_ID,
+  RETIRED_GLM_DESKTOP_CONFIG_PROFILE_IDS,
   buildGlmCodexAppModelProfile,
   type SksCodexAppModelProfile
-} from './glm-model-profile.js';
-import { validateGlmCodexAppModelProfile } from './glm-profile-schema.js';
+} from './openrouter-provider.js';
 import { resolveOpenRouterApiKey } from '../providers/openrouter/openrouter-secret-store.js';
-import { GLM_52_OPENROUTER_MODEL } from './openrouter-provider.js';
 
 type CodexAppGlmConfigWrite = Awaited<ReturnType<typeof ensureGlobalCodexAppGlmProfile>>;
 
@@ -21,6 +19,7 @@ interface CodexAppGlmConfigStatus {
   readonly provider_present: boolean;
   readonly profiles_present: readonly string[];
   readonly profiles_missing: readonly string[];
+  readonly retired_profiles_remaining: readonly string[];
   readonly blockers: readonly string[];
 }
 
@@ -28,7 +27,7 @@ export interface GlmProfileInstallResult {
   readonly schema: 'sks.codex-app-glm-profile-result.v1';
   readonly generated_at: string;
   readonly ok: boolean;
-  readonly status: 'installed' | 'valid' | 'blocked';
+  readonly status: 'installed' | 'valid' | 'blocked' | 'removed';
   readonly profile: SksCodexAppModelProfile;
   readonly profile_path: string;
   readonly report_path: string;
@@ -42,6 +41,10 @@ export interface GlmProfileInstallResult {
   readonly warnings: readonly string[];
 }
 
+/**
+ * Ensure OpenRouter provider is present and remove retired GLM Desktop profile tables.
+ * Does not write Desktop picker profile metadata — use `sks codex-app use-openrouter`.
+ */
 export async function installCodexAppGlmProfile(input: {
   readonly root: string;
   readonly apply?: boolean;
@@ -58,37 +61,44 @@ export async function installCodexAppGlmProfile(input: {
   const configWrite = input.apply === false
     ? null
     : await ensureGlobalCodexAppGlmProfile({ home, configPath: input.configPath });
+  if (input.apply !== false) {
+    await rmrf(profilePath).catch(() => undefined);
+    await rmrf(reportPath).catch(() => undefined);
+  }
   const configStatus = input.apply === false
     ? await previewCodexAppGlmConfigStatus({ home, configPath: input.configPath })
-    : await inspectCodexAppGlmConfig({ home, configPath: input.configPath });
+    : await inspectCodexAppOpenRouterConfig({ home, configPath: input.configPath });
   const configWriteBlockers = configWrite?.ok === false
     ? [`glm_codex_app_config_${configWrite.status || 'failed'}`]
     : [];
   const blockers = input.apply === false ? [] : [...configWriteBlockers, ...configStatus.blockers];
   const warnings = [
     ...key.warnings,
-    ...(key.key ? [] : ['openrouter_key_missing_until_sks_--mad_--glm_--repair']),
-    ...(input.apply === false ? ['codex_desktop_glm_config_not_written_apply_false'] : [])
+    ...(key.key ? [] : ['openrouter_key_missing_until_sks_codex_app_set_openrouter_key']),
+    ...(input.apply === false ? ['codex_desktop_openrouter_config_not_written_apply_false'] : []),
+    'glm_desktop_profiles_retired_use_openrouter'
   ];
-  if (input.apply !== false) await writeJsonAtomic(profilePath, profile);
   const result: GlmProfileInstallResult = {
     schema: 'sks.codex-app-glm-profile-result.v1',
     generated_at: nowIso(),
     ok: blockers.length === 0,
-    status: blockers.length === 0 ? input.apply === false ? 'valid' : 'installed' : 'blocked',
+    status: blockers.length === 0
+      ? input.apply === false
+        ? 'valid'
+        : 'removed'
+      : 'blocked',
     profile,
     profile_path: '.sneakoscope/codex-app/glm-model-profile.json',
     report_path: '.sneakoscope/reports/codex-app-glm-profile.json',
     config_path: configStatus.config_path,
-    codex_config_profile: GLM_CODEX_CONFIG_PROFILE_ID,
-    codex_reasoning_profiles: GLM_CODEX_CONFIG_REASONING_PROFILES.map((item) => item.id),
+    codex_config_profile: OPENROUTER_DEFAULT_PROFILE_ID,
+    codex_reasoning_profiles: [],
     config_write: configWrite,
     config_status: configStatus,
     openrouter_key_source: key.source,
     blockers,
     warnings
   };
-  await writeJsonAtomic(reportPath, result).catch(() => undefined);
   return result;
 }
 
@@ -101,16 +111,19 @@ export async function doctorCodexAppGlmProfile(input: {
   const root = path.resolve(input.root);
   const profilePath = path.join(root, '.sneakoscope', 'codex-app', 'glm-model-profile.json');
   const reportPath = path.join(root, '.sneakoscope', 'reports', 'codex-app-glm-profile.json');
-  const existing = await readJson(profilePath, null);
-  const validation = validateGlmCodexAppModelProfile(existing);
   const key = await resolveOpenRouterApiKey({ env: input.env || process.env });
-  const profile = validation.profile || buildGlmCodexAppModelProfile();
+  const profile = buildGlmCodexAppModelProfile();
   const home = input.home || input.env?.HOME;
-  const configStatus = await inspectCodexAppGlmConfig({ home, configPath: input.configPath });
-  const blockers = [...validation.blockers, ...configStatus.blockers];
+  const configStatus = await inspectCodexAppOpenRouterConfig({ home, configPath: input.configPath });
+  const leftoverMeta = await readText(profilePath, '').catch(() => '');
+  const blockers = [
+    ...configStatus.blockers,
+    ...(leftoverMeta.trim() ? ['retired_glm_model_profile_metadata_present'] : [])
+  ];
   const warnings = [
     ...key.warnings,
-    ...(key.key ? [] : ['openrouter_key_missing_until_sks_--mad_--glm_--repair'])
+    ...(key.key ? [] : ['openrouter_key_missing_until_sks_codex_app_set_openrouter_key']),
+    'glm_desktop_profiles_retired_use_openrouter'
   ];
   const result: GlmProfileInstallResult = {
     schema: 'sks.codex-app-glm-profile-result.v1',
@@ -121,8 +134,8 @@ export async function doctorCodexAppGlmProfile(input: {
     profile_path: '.sneakoscope/codex-app/glm-model-profile.json',
     report_path: '.sneakoscope/reports/codex-app-glm-profile.json',
     config_path: configStatus.config_path,
-    codex_config_profile: GLM_CODEX_CONFIG_PROFILE_ID,
-    codex_reasoning_profiles: GLM_CODEX_CONFIG_REASONING_PROFILES.map((item) => item.id),
+    codex_config_profile: OPENROUTER_DEFAULT_PROFILE_ID,
+    codex_reasoning_profiles: [],
     config_write: null,
     config_status: configStatus,
     openrouter_key_source: key.source,
@@ -142,14 +155,15 @@ async function previewCodexAppGlmConfigStatus(input: { readonly home?: string | 
     provider_present: false,
     profiles_present: [],
     profiles_missing: [],
+    retired_profiles_remaining: [],
     blockers: []
   };
 }
 
-async function inspectCodexAppGlmConfig(input: { readonly home?: string | undefined; readonly configPath?: string | undefined }): Promise<CodexAppGlmConfigStatus> {
+async function inspectCodexAppOpenRouterConfig(input: { readonly home?: string | undefined; readonly configPath?: string | undefined }): Promise<CodexAppGlmConfigStatus> {
   const configPath = input.configPath || codexLbConfigPath(input.home);
   const text = await readText(configPath, '').catch(() => '');
-  const providerBody = tomlTableBody(text, `model_providers.${GLM_CODEX_CONFIG_PROVIDER_ID}`);
+  const providerBody = tomlTableBody(text, `model_providers.${OPENROUTER_PROVIDER_ID}`);
   const providerPresent = Boolean(providerBody);
   const blockers: string[] = [];
   if (!providerPresent) {
@@ -159,27 +173,21 @@ async function inspectCodexAppGlmConfig(input: { readonly home?: string | undefi
     if (!hasTomlString(providerBody, 'wire_api', 'responses')) blockers.push('glm_codex_app_config_invalid_openrouter_wire_api');
     if (!hasTomlString(providerBody, 'env_key', 'OPENROUTER_API_KEY')) blockers.push('glm_codex_app_config_invalid_openrouter_env_key');
   }
-  const profilesPresent: string[] = [];
-  const profilesMissing: string[] = [];
-  for (const profile of GLM_CODEX_CONFIG_REASONING_PROFILES) {
-    const body = tomlTableBody(text, `profiles.${profile.id}`);
-    if (!body) {
-      profilesMissing.push(profile.id);
-      blockers.push(`glm_codex_app_config_missing_profile:${profile.id}`);
-      continue;
+  const retiredRemaining: string[] = [];
+  for (const profileId of RETIRED_GLM_DESKTOP_CONFIG_PROFILE_IDS) {
+    if (tomlTableBody(text, `profiles.${profileId}`)) {
+      retiredRemaining.push(profileId);
+      blockers.push(`retired_glm_desktop_profile_present:${profileId}`);
     }
-    profilesPresent.push(profile.id);
-    if (!hasTomlString(body, 'model_provider', GLM_CODEX_CONFIG_PROVIDER_ID)) blockers.push(`glm_codex_app_config_invalid_profile_provider:${profile.id}`);
-    if (!hasTomlString(body, 'model', GLM_52_OPENROUTER_MODEL)) blockers.push(`glm_codex_app_config_invalid_profile_model:${profile.id}`);
-    if (!hasTomlString(body, 'model_reasoning_effort', profile.reasoning_effort)) blockers.push(`glm_codex_app_config_invalid_profile_reasoning:${profile.id}`);
   }
   return {
     schema: 'sks.codex-app-glm-config-status.v1',
     ok: blockers.length === 0,
     config_path: configPath,
     provider_present: providerPresent,
-    profiles_present: profilesPresent,
-    profiles_missing: profilesMissing,
+    profiles_present: [],
+    profiles_missing: [],
+    retired_profiles_remaining: retiredRemaining,
     blockers
   };
 }
@@ -204,5 +212,5 @@ function hasTomlString(text: string, key: string, value: string): boolean {
 }
 
 function escapeRegExp(value: string): string {
-  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

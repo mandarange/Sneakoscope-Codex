@@ -53,6 +53,6 @@ OpenRouter for Codex Desktop is centered on key save + explicit model activation
 - `src/core/providers/openrouter/openrouter-secret-store.ts` owns the user-scoped OpenRouter key lifecycle outside project files.
 - `src/core/providers/openrouter/openrouter-client.ts` is the only OpenRouter network adapter.
 - `src/core/codex-app/openrouter-activate.ts` selects `model_provider = "openrouter"` and the chosen model via `sks codex-app use-openrouter --model` (and SKS Center Providers).
-- `src/core/codex-app/glm-profile-installer.ts` still writes Desktop provider/profile config used by that activation path.
+- `src/core/codex-app/glm-profile-installer.ts` strips retired Desktop GLM picker profiles and ensures the OpenRouter provider table used by `use-openrouter`.
 
 The former GLM MAD CLI (`sks --mad --glm`, `sks glm`) and `src/core/providers/glm/` runtime were removed; ordinary `sks --mad` is unchanged.

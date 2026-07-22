@@ -301,7 +301,7 @@ export async function setupCommand(args: any = []) {
         return blocked;
       }
       console.error(formatHarnessConflictReport(otherHarnessCleanup.after || conflictScan, { includePrompt: false }));
-      console.error('Automatic OMX/DCodex quarantine did not clear every conflict. Inspect quarantine under .sneakoscope/quarantine/other-harness/.');
+      console.error('Automatic OMX/DCodex removal did not clear every conflict. Live markers must be removed; inspect backup under .sneakoscope/quarantine/other-harness/.');
       return blocked;
     }
   }

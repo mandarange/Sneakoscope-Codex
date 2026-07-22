@@ -1,94 +1,15 @@
-# Codex Compatibility Baselines
+# Codex 0.139 Compatibility Reference
 
-This file is a release-evidence ledger for historical Codex compatibility
-baselines. It intentionally keeps the `docs/codex-0.139-compat.md` path because
-the SKS release metadata gate treats that path as a versioned release document.
+SKS 7.0.5 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while the active release-authorizing Codex surface is `rust-v0.145.0`.
 
-It is not the current Codex product manual, and it does not claim that Codex
-0.139 is the current, recommended, or bundled Codex runtime. Current Codex
-behavior should be checked against the official Codex Manual and the installed
-Codex CLI/App runtime. The 0.139 notes below remain only as legacy fallback
-baseline evidence for older SKS gates and release-history continuity.
+This file is a **legacy compatibility reference**, not the current Codex product manual. It documents the Codex 0.139 capability detection that still ships in SKS, the runtime adaptations that tolerate 0.138/0.139 differences, and the explicit non-goals. Current Codex behavior should be checked against the official Codex Manual and the installed Codex CLI/App runtime; nothing here claims that Codex 0.139 is the current, recommended, or bundled Codex runtime.
 
-## Current Release Note
+## Current Codex Baseline
 
-SKS 7.0.4 keeps the historical Codex 0.139 notes only as compatibility evidence while binding the active release manifest, exact SDK/CLI dependency graph, and regenerated App Server schema proof to the stable `rust-v0.145.0` release. Normal sessions retain catalog passthrough; Naruto uses an official subagent workflow with a Sol Max parent and fixed Luna Max mechanical, Sol High implementation, Sol Max judgment, and Terra Medium long-context/tool-execution profiles. Official `SubagentStart`/`SubagentStop` events and the parent summary replace native process counts as completion evidence.
-
-SKS 5.10.0 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while adding local dominance performance evidence for cold starts, hook latency, fs/import hot paths, doctor/update read-only fast paths, Super-Search local HTTP smoke, Naruto E2E tiers, retention performance smoke, release runner efficiency, and lifecycle-disabled `npm publish --ignore-scripts` readiness.
-
-SKS 5.9.0 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while adding quantum release evidence for installed package smoke, hook latency, CLI performance budgets, Super-Search offline/live contracts, production parallel smoke, and competitor scorecard readiness.
-
-SKS 5.8.0 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while aligning release metadata with the current package version, hardening intent routing and parallel-write proof evidence, consolidating source intelligence under Super-Search, and preserving lifecycle-disabled `npm publish --ignore-scripts` readiness evidence.
-
-## Historical Release Ledger
-
-SKS 5.1.1 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while tightening dollar-command proof truth, mock fixture labeling, and release gate output contracts for the current package metadata.
-
-SKS 4.8.6 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while aligning parallel-gate honesty, release manifest consolidation, and lifecycle-disabled publish readiness evidence with the package metadata used by that release.
-
-SKS 4.8.4 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while repairing the macOS SKS menu bar action surface: Terminal commands preserve Swift interpolation instead of running `(escaped)`, and codex-lb domain/API-key setup is visible from the status menu.
-
-SKS 4.8.3 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while hardening the macOS SKS menu bar companion lifecycle: the LaunchAgent no longer unconditionally respawns through `KeepAlive`, keeps login/startup launch through `RunAtLoad`, and marks the user-facing status item as `ProcessType=Interactive`.
-
-SKS 4.8.2 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while seeding the macOS SKS menu bar companion's preferred Control Center position so the `SKS` label stays visible ahead of crowded notch-adjacent status items, preserving explicit visibility with a stable autosave name, and preventing temp/hermetic fixtures from launching duplicate GUI status item processes.
-
-SKS 4.8.0 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while hardening codex-lb App auth and Fast Mode truth: codex-lb provider config follows the current `name = "openai"` / `requires_openai_auth = true` contract, `sks codex-lb fast-check` separates requested priority from actual priority evidence, and native macOS SKS menu insertion remains blocked unless Codex exposes an official menu extension API.
-
-SKS 4.7.0 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while adding the active Codex worker model and Desktop GLM setup surface: GPT workers can dynamically select `gpt-5.4-mini` or `gpt-5.5` effort tiers, GLM workers stay locked to `z-ai/glm-5.2`, Fast Mode and managed agent TOML repair use valid writable Codex config syntax, and `sks doctor --fix` dedupes managed TOML without clobbering external MCP settings.
-
-SKS 4.6.5 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while hardening default `sks doctor --fix` output for optional Codex Doctor bridge skips; default doctor repair can report `codex doctor: unavailable` without crashing, and full Codex compatibility diagnostics remain available through full/required doctor modes.
-
-SKS 4.6.4 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while hardening mission retention for closed/terminal agent sessions, project-scoped update cleanup, and `npm publish --ignore-scripts` readiness without changing the active Codex compatibility baseline.
-
-SKS 4.6.3 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while preserving the SuperSearch source-intelligence command rename, unified `seo-geo-optimizer` search-visibility route, Lean Engineering Policy evidence, database write-hook and transport diagnostics hardening, and global npm update detection hardening without restoring retired split search routes.
-
-SKS 4.4.0 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while moving source intelligence to SuperSearch: provider-independent planning/proof, provider-specific search parity gaps, and `npm publish --ignore-scripts` readiness are release-gated without restoring a retired provider runtime.
-
-SKS 4.2.1 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while aligning the publish path with `npm publish --ignore-scripts`: the release wrapper now runs the full prepublish gate explicitly before invoking npm with lifecycle scripts disabled.
-
-SKS 4.2.0 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while stabilizing the database workflow used by that release: capability binding, mission-local Supabase write profiles, read-only restoration proof, and exact lifecycle correlation were release-gated without changing the Codex 0.139 compatibility baseline.
-
-SKS 4.1.1 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while tightening the active `rust-v0.142.0` Doctor/update readiness path: optional Computer Use and Chrome/web review stay route-gated, migration receipts use schema v2 with installation epoch evidence, migration Doctor runs on the fast profile, and release metadata remains publish-ready.
-
-SKS 4.1.0 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while moving the active release-authorizing Codex surface to `rust-v0.142.0`: semantic Codex Doctor readiness, post-repair authoritative checks, managed asset manifest parity, update migration lifecycle, and publish-time release metadata gates.
-
-SKS 4.0.15 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while moving the active release-authorizing Codex surface to `rust-v0.142.0`: exact SDK/CLI pinning, shared runtime binary identity, app-server-v2 schema evidence, isolated SDK child environment policy, and package contract repair.
-
-SKS 4.0.14 keeps the Codex 0.139 compatibility baseline while sealing GLM Naruto parallelism: real parallel-stage execution metrics, bounded parallel queues for candidate gate, worktree, and verifier phases, requirement coverage tracking to prevent parallel workers from missing task details, preserved `sks --mad` GPT/Codex/MAD route isolation from GLM/OpenRouter mode, and benchmark/proof metadata regression fixes from 4.0.13.
-
-SKS 4.0.12 keeps the Codex 0.139 compatibility baseline while sealing the GLM Naruto runtime: extracted-diff worktrees, bounded adaptive scheduling, true direct-vs-Naruto benchmarking, targeted apply checks, dirty-tree guards, and final seal stop-gate evidence.
-
-SKS 4.0.8 keeps the Codex 0.139 compatibility baseline while making the GLM 5.2 MAD path bounded by default: bare `sks --mad --glm` exits with readiness/status, task forms use the direct GLM-only speed path, high/xhigh reasoning is opt-in, patch mutation stays behind deterministic gates, and loop termination artifacts record timeout/no-progress/repeated-output outcomes.
-
-SKS 4.0.5 keeps the Codex 0.139 compatibility baseline while tuning only the GLM 5.2 MAD path: `sks --mad --glm` defaults to an xhigh speed profile with compact GLM context, disabled default tools, GLM-local caches, bench/trace artifacts, and no GPT fallback. Non-GLM Codex/MAD behavior is unchanged.
-
-SKS 4.0.4 keeps the Codex 0.139 compatibility baseline while fixing the GLM 5.2 MAD launch bridge: `sks --mad --glm` now proceeds from readiness into the MAD Zellij launcher with OpenRouter `z-ai/glm-5.2`, records `mad-glm-launch.json`, avoids raw key leakage in layout artifacts, and disables GPT fallback worker panes by default.
-
-SKS 4.0.3 keeps the Codex 0.139 compatibility baseline while adding the GLM 5.2 MAD publish surface: OpenRouter-only `z-ai/glm-5.2` routing, no GPT/OpenAI fallback, Codex App GLM profile metadata, Codex `rust-v0.141.0` compatibility evidence, and release metadata alignment for publication.
-
-SKS 4.0.2 keeps the Codex 0.139 compatibility baseline while completing the TriWiki Turbo production path: build-once proof reuse, TriWiki-first release DAG selection, proof-bank/cache-v2 bridging, resource-aware gate packs, semantic doctor dirty repair, sksd warming, legacy purge gates, and 4.0.2 all-feature regression coverage.
-
-SKS 4.0.1 keeps the Codex 0.139 compatibility baseline while completing TriWiki Turbo runtime wiring: TriWiki-first release selection, proof-bank invalidation material, real gate pack shared fixtures, executable scheduler metrics, semantic doctor dirty repair, optional sksd cache warming, and actual SLA certificates.
-
-SKS 4.0.0 keeps the Codex 0.139 compatibility baseline while moving release verification to TriWiki proof bank reuse, affected-scope release-equivalent graphs, gate packs, five-minute SLA certificates, doctor dirty repair planning, and explicit legacy fallback removal.
-
-SKS 3.1.16 keeps the Codex 0.139 compatibility baseline while aligning the post-3.1.15 release metadata, built output, and npm unpublished-version gate for the next patch publication.
-
-SKS 3.1.13 keeps the Codex 0.139 compatibility baseline while hardening Codex 0.140 feature-state certainty, real usage parsing, goal attachment roundtrip proof, doctor transaction evidence, MCP repair reports, native capability proof, and secret line rollback. See [Codex 0.140 Integration](codex-0140-integration.md) for the 0.140 probe and release wiring surface.
-
-SKS 3.1.12 keeps the Codex 0.139 compatibility baseline while adding Codex 0.140 capability/integration detection gates, closing the MAD Zellij stack reconciliation gate, and closing the `doctor --fix` `node_repl` parent/child MCP repair gap.
-
-SKS 3.1.11 keeps the Codex 0.139 compatibility baseline while closing the MAD Zellij stacked-pane minimum, Context7 MCP remote repair, and stale Codex startup config repair gates.
-
-SKS 3.1.10 keeps the Codex 0.139 compatibility baseline while closing the release-ready hardening gates for wiring parity, native capability postchecks, duplicate skill proof, and secret rollback.
-
-SKS 3.1.8 keeps the Codex 0.139 compatibility baseline while closing core skill immutability, native capability repair, duplicate skill dedupe, and Supabase/secret preservation release gates.
-
-SKS 3.1.7 keeps the Codex 0.139 compatibility baseline and hardens Codex Native runtime proof around real route blackboxes, bounded reference caching, read-only feature brokerage, explicit managed-asset repair transactions, and generated-artifact neutrality checks.
-
-SKS 3.1.6 keeps the Codex 0.139 compatibility baseline while productionizing the Codex App harness around typed evidence. Hook approval, `agent_type`, Codex Native reference source analysis, rich skill/agent content, and execution-profile routing now use typed probes or source-backed reports instead of environment-only assumptions.
-
-SKS 3.1.4 is Codex 0.139-aware: it bundles @openai/codex-sdk 0.138.0 at this release boundary, and it detects Codex 0.139 features from the external Codex CLI when that CLI is installed and supports them. The minimum supported baseline stays `rust-v0.136.0`; 0.139 features are detected, recorded, and used opportunistically rather than assumed for every environment. The release gates include hermetic fixtures plus actual real-probe artifacts; `codex:0139-real-probes:require-real` fails when high-value 0.139 probes are skipped or failed. See [Codex 0.139 Real Probes](codex-0.139-real-probes.md).
+- SKS bundles @openai/codex-sdk 0.145.0 (the version pinned in `package.json`); the exact pin is re-read by the `docs:codex-0139-wording` release gate so this document cannot drift stale.
+- Codex 0.139 features come from the external Codex CLI when that CLI is installed and supports them; SKS is Codex 0.139-aware capability detection, not a claim that every environment bundles or always supports Codex 0.139 features.
+- The minimum supported Codex baseline stays `rust-v0.136.0`; 0.139 features are detected, recorded, and used opportunistically rather than assumed for every environment.
+- The release gates include hermetic fixtures and optional real probes; `codex:0139-real-probes:require-real` fails when high-value 0.139 probes are skipped or failed. See [Codex 0.139 Real Probes](codex-0.139-real-probes.md).
 
 ## Legacy 0.139 Capability Detection
 
@@ -104,7 +25,7 @@ SKS 3.1.4 is Codex 0.139-aware: it bundles @openai/codex-sdk 0.138.0 at this rel
 | `supports_sandbox_profile_alias` | `-P` sandbox permissions profile alias (#27054). |
 | `supports_interrupt_agent_rename` | Multi-agent v2 renamed `close_agent` to `interrupt_agent` (#26994). |
 
-Probe mode (`SKS_CODEX_0139_PROBE=1`) additionally exercises `codex plugin marketplace list --json` (checking the new `source` field shape) and the `-P` alias in `codex --help`. `SKS_CODEX_0139_FAKE=1` with `SKS_CODEX_VERSION_FAKE` drives hermetic gate fixtures. SKS is Codex-0.139-aware capability detection, not a claim that every installed environment bundles or always supports Codex 0.139 features.
+Probe mode (`SKS_CODEX_0139_PROBE=1`) additionally exercises `codex plugin marketplace list --json` (checking the new `source` field shape) and the `-P` alias in `codex --help`. `SKS_CODEX_0139_FAKE=1` with `SKS_CODEX_VERSION_FAKE` drives hermetic gate fixtures.
 
 ## Legacy Runtime Adaptations
 
@@ -115,3 +36,5 @@ Probe mode (`SKS_CODEX_0139_PROBE=1`) additionally exercises `codex plugin marke
 ## Legacy Non-Goals
 
 Sandbox proxy-network enforcement (#27035), approval-decision preservation (#24981), TUI fixes, and symbol-archive release chores need no SKS-side changes; they are upstream behavior SKS simply benefits from. The Codex baseline policy (`CODEX_REQUIRED_BASELINE_TAG = rust-v0.136.0`) is unchanged.
+
+Per-release changes that previously accumulated here now live in `CHANGELOG.md` under their respective version headers; this document is intentionally limited to the stable 0.139 compatibility reference.

@@ -32,9 +32,9 @@ export async function scanHarnessConflicts(root: any, opts: any = {}) {
 }
 
 /**
- * Quarantine then remove OMX/DCodex harness markers so SKS update/setup/doctor can proceed.
- * Known marker trees and harness-owned config/hook/package traces are backed up under
- * `.sneakoscope/quarantine/other-harness/<runId>/` (project or global) before removal.
+ * Remove OMX/DCodex harness markers from the live Codex surface so SKS update/setup/doctor can proceed.
+ * Markers are moved out of the active tree (not left in place). A backup copy is kept under
+ * `.sneakoscope/quarantine/other-harness/<runId>/` (project or global) before live removal.
  */
 export async function cleanupOtherHarnessConflicts(root: any, opts: any = {}) {
   const projectRoot = path.resolve(root || process.cwd());

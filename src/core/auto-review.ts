@@ -7,6 +7,7 @@ import {
   RETIRED_AUTO_REVIEW_POLICY_TEXTS,
   RETIRED_SKS_CONFIG_PROFILE_NAMES
 } from './doctor/retired-auto-review-config.js';
+import { retiredGlmDesktopProfileBody } from './codex-app/openrouter-provider.js';
 
 export { RETIRED_SKS_CONFIG_PROFILE_NAMES } from './doctor/retired-auto-review-config.js';
 
@@ -506,6 +507,12 @@ function managedRetiredProfileBodies(): Set<string> {
       'approval_policy = "on-request"',
       'sandbox_mode = "workspace-write"',
       'model_reasoning_effort = "medium"'
-    ].join('\n')
+    ].join('\n'),
+    retiredGlmDesktopProfileBody('none'),
+    retiredGlmDesktopProfileBody('minimal'),
+    retiredGlmDesktopProfileBody('low'),
+    retiredGlmDesktopProfileBody('medium'),
+    retiredGlmDesktopProfileBody('high'),
+    retiredGlmDesktopProfileBody('xhigh')
   ].map(normalizeGeneratedProfileText));
 }

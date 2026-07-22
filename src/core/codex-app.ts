@@ -6,7 +6,7 @@ import { EMPTY_CODEX_INFO, getCodexInfo } from './codex-adapter.js';
 import { CODEX_CHROME_EXTENSION_DOC_URL, DEFAULT_CODEX_APP_PLUGINS as DEFAULT_CODEX_APP_PLUGIN_TUPLES, RESERVED_CODEX_PLUGIN_SKILL_NAMES } from './routes.js';
 import { PRODUCT_DESIGN_PLUGIN, normalizeProductDesignPluginEvidence } from './product-design-plugin.js';
 import { PRODUCT_DESIGN_AUTO_INSTALL_ENV, ensureProductDesignPluginInstalled, productDesignAutoInstallRequested } from './product-design-app-server.js';
-import { GLM_CODEX_CONFIG_PROVIDER_ID, GLM_CODEX_CONFIG_REASONING_PROFILES, GLM_52_OPENROUTER_MODEL } from './codex-app/openrouter-provider.js';
+import { GLM_CODEX_CONFIG_PROVIDER_ID, GLM_52_OPENROUTER_MODEL, RETIRED_GLM_DESKTOP_CONFIG_PROFILE_IDS } from './codex-app/openrouter-provider.js';
 import { resolveOpenRouterApiKey } from './providers/openrouter/openrouter-secret-store.js';
 import { codexLbEnvPath, loadCodexLbEnv, parseShellEnvValue, readCodexLbModelCatalog } from './codex-lb/codex-lb-env.js';
 import {
@@ -531,12 +531,12 @@ export function codexAppGuidance({ appInstalled, codex, mcpList, featureList, re
     lines.push('Run: sks doctor --fix');
   }
   if (providerModelUi?.glm?.exposed && providerModelUi.glm.openrouter_key_present) {
-    lines.push(`GLM model selector profile is exposed: ${providerModelUi.glm.model} via profiles ${providerModelUi.glm.profiles_present.join(', ')}.`);
+    lines.push(`OpenRouter provider is ready: ${providerModelUi.glm.model} (activate with ${providerModelUi.glm.install_command}).`);
   } else if (providerModelUi?.glm?.exposed) {
-    lines.push(`GLM model selector profile is exposed for ${providerModelUi.glm.model}, but the OpenRouter key is missing.`);
+    lines.push(`OpenRouter provider is present for ${providerModelUi.glm.model}, but the OpenRouter key is missing.`);
     lines.push(`Run: ${providerModelUi.glm.key_command}; restart Codex App if the model picker was already open.`);
   } else if (providerModelUi?.glm) {
-    lines.push(`GLM model selector profile is not exposed yet: ${providerModelUi.glm.blockers.join(', ') || 'profile setup required'}.`);
+    lines.push(`OpenRouter provider is not ready yet: ${providerModelUi.glm.blockers.join(', ') || 'provider setup required'}.`);
     lines.push(`Run: ${providerModelUi.glm.key_command}; then ${providerModelUi.glm.install_command}; restart Codex App if the model picker was already open.`);
   }
   if (providerModelUi?.codex_lb?.key_entry_visible && providerModelUi.codex_lb.key_present && providerModelUi.codex_lb.provider_present && providerModelUi.codex_lb.provider_contract_ok && providerModelUi.codex_lb.base_url_present) {
@@ -909,17 +909,11 @@ export async function codexProviderModelUiStatus(opts: any = {}) {
   const profilesPresent: string[] = [];
   const profilesMissing: string[] = [];
   const glmProfileBlockers: string[] = [];
-  for (const profile of GLM_CODEX_CONFIG_REASONING_PROFILES) {
-    const body = tomlTableAny(configText, [`profiles.${profile.id}`, `profiles."${profile.id}"`]);
-    if (!body) {
-      profilesMissing.push(profile.id);
-      glmProfileBlockers.push(`glm_profile_missing:${profile.id}`);
-      continue;
-    }
-    profilesPresent.push(profile.id);
-    if (!hasTomlString(body, 'model_provider', GLM_CODEX_CONFIG_PROVIDER_ID)) glmProfileBlockers.push(`glm_profile_provider_invalid:${profile.id}`);
-    if (!hasTomlString(body, 'model', GLM_52_OPENROUTER_MODEL)) glmProfileBlockers.push(`glm_profile_model_invalid:${profile.id}`);
-    if (!hasTomlString(body, 'model_reasoning_effort', profile.reasoning_effort)) glmProfileBlockers.push(`glm_profile_reasoning_invalid:${profile.id}`);
+  for (const profileId of RETIRED_GLM_DESKTOP_CONFIG_PROFILE_IDS) {
+    const body = tomlTableAny(configText, [`profiles.${profileId}`, `profiles."${profileId}"`]);
+    if (!body) continue;
+    profilesPresent.push(profileId);
+    glmProfileBlockers.push(`retired_glm_desktop_profile_present:${profileId}`);
   }
   const codexLbProvider = tomlTableAny(configText, ['model_providers.codex-lb', 'model_providers."codex-lb"']);
   const codexLbProviderPresent = Boolean(codexLbProvider);
@@ -988,7 +982,7 @@ export async function codexProviderModelUiStatus(opts: any = {}) {
     ? glmBlockers
     : [...glmBlockers, ...codexLbBlockers];
   const keyCommand = 'sks codex-app set-openrouter-key --api-key-stdin';
-  const installCommand = 'sks codex-app glm-profile install';
+  const installCommand = 'sks codex-app use-openrouter --model z-ai/glm-5.2';
   const setupCommand = 'sks codex-lb setup --host <domain> --api-key-stdin --yes';
   const setKeyCommand = 'sks codex-lb set-key --api-key-stdin';
   return {
@@ -1012,7 +1006,7 @@ export async function codexProviderModelUiStatus(opts: any = {}) {
       codex_lb_env: codexLbEnvFilePath
     },
     glm: {
-      exposed: glmProviderPresent && profilesMissing.length === 0 && glmProfileBlockers.length === 0,
+      exposed: glmProviderPresent && glmProfileBlockers.length === 0,
       provider_present: glmProviderPresent,
       provider: GLM_CODEX_CONFIG_PROVIDER_ID,
       model: GLM_52_OPENROUTER_MODEL,
@@ -1023,7 +1017,7 @@ export async function codexProviderModelUiStatus(opts: any = {}) {
       openrouter_key_preview: openRouterKey.key_preview || null,
       key_command: keyCommand,
       install_command: installCommand,
-      doctor_command: 'sks codex-app glm-profile doctor',
+      doctor_command: 'sks codex-app openrouter-status',
       blockers: glmBlockers
     },
     codex_lb: {
@@ -1136,9 +1130,9 @@ function glmModelUiSummary(status: any = {}) {
   if (!status) return 'not checked';
   if (status.exposed) {
     const key = status.openrouter_key_present ? `key ${status.openrouter_key_source || 'present'}` : 'key missing';
-    return `ok ${status.model} (${status.profiles_present?.length || 0} profiles, ${key})`;
+    return `ok ${status.model} (${key})`;
   }
-  return `setup ${(status.blockers || []).join(', ') || 'profile missing'}; run ${status.key_command || 'sks codex-app set-openrouter-key --api-key-stdin'}`;
+  return `setup ${(status.blockers || []).join(', ') || 'provider missing'}; run ${status.key_command || 'sks codex-app set-openrouter-key --api-key-stdin'}`;
 }
 
 function codexLbKeyUiSummary(status: any = {}) {

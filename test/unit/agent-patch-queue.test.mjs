@@ -138,6 +138,11 @@ test('runProcess timeout terminates its POSIX descendant process group', { skip:
   assert.equal(result.timedOut, true);
   assert.equal(result.code, 124);
   descendantPid = Number(await fs.readFile(pidFile, 'utf8'));
+  // Under full-suite load, SIGKILL/group reap can lag a few hundred ms after timeout.
+  const deadline = Date.now() + 3000;
+  while (processAlive(descendantPid) && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
   assert.equal(processAlive(descendantPid), false);
 });
 

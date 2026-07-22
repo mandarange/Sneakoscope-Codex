@@ -1,9 +1,8 @@
 import {
-  GLM_CODEX_APP_PROFILE_ID,
-  GLM_CODEX_CONFIG_PROFILE_ID,
-  GLM_CODEX_CONFIG_PROVIDER_ID,
-  GLM_CODEX_CONFIG_REASONING_PROFILES,
+  OPENROUTER_DEFAULT_PROFILE_ID,
+  OPENROUTER_PROVIDER_ID,
   GLM_CODEX_SELECTABLE_REASONING_EFFORTS,
+  GLM_CODEX_CONFIG_REASONING_PROFILES,
   GLM_52_OPENROUTER_MODEL,
   buildGlmCodexAppModelProfile,
   type SksCodexAppModelProfile
@@ -21,11 +20,11 @@ export function validateGlmCodexAppModelProfile(value: unknown): {
   const expected = buildGlmCodexAppModelProfile();
   const blockers = [
     profile.schema === expected.schema ? null : 'glm_codex_app_profile_invalid_schema',
-    profile.id === GLM_CODEX_APP_PROFILE_ID ? null : 'glm_codex_app_profile_invalid_id',
+    profile.id === OPENROUTER_DEFAULT_PROFILE_ID ? null : 'glm_codex_app_profile_invalid_id',
     profile.provider === 'openrouter' ? null : 'glm_codex_app_profile_invalid_provider',
     profile.model === GLM_52_OPENROUTER_MODEL ? null : 'glm_codex_app_profile_invalid_model',
-    profile.codexConfigProvider === GLM_CODEX_CONFIG_PROVIDER_ID ? null : 'glm_codex_app_profile_invalid_codex_config_provider',
-    profile.codexConfigProfile === GLM_CODEX_CONFIG_PROFILE_ID ? null : 'glm_codex_app_profile_invalid_codex_config_profile',
+    profile.codexConfigProvider === OPENROUTER_PROVIDER_ID ? null : 'glm_codex_app_profile_invalid_codex_config_provider',
+    profile.codexConfigProfile === OPENROUTER_DEFAULT_PROFILE_ID ? null : 'glm_codex_app_profile_invalid_codex_config_profile',
     hasExpectedReasoningEfforts(profile.supportedReasoningEfforts) ? null : 'glm_codex_app_profile_invalid_reasoning_efforts',
     hasExpectedReasoningProfiles(profile.reasoningProfiles) ? null : 'glm_codex_app_profile_invalid_reasoning_profiles',
     profile.mode === 'openrouter-desktop' ? null : 'glm_codex_app_profile_invalid_mode',
@@ -54,12 +53,6 @@ function hasExpectedReasoningProfiles(value: unknown): boolean {
   if (!Array.isArray(value)) {
     return false;
   }
-  return GLM_CODEX_CONFIG_REASONING_PROFILES.every((expected) =>
-    value.some((item) =>
-      item &&
-      typeof item === 'object' &&
-      (item as { id?: unknown }).id === expected.id &&
-      (item as { reasoning_effort?: unknown }).reasoning_effort === expected.reasoning_effort
-    )
-  );
+  // Desktop reasoning profile tables are retired; metadata must stay empty.
+  return value.length === 0 && GLM_CODEX_CONFIG_REASONING_PROFILES.length === 0;
 }

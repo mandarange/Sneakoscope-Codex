@@ -84,6 +84,7 @@ test('useOpenRouter installs provider, selects OpenRouter model, and openRouterS
   assert.match(config, new RegExp(`model_provider\\s*=\\s*"${OPENROUTER_PROVIDER_ID}"`));
   assert.match(config, new RegExp(`model\\s*=\\s*"${OPENROUTER_DEFAULT_MODEL.replace('/', '\\/')}"`));
   assert.match(config, /\[model_providers\.openrouter\]/);
+  assert.doesNotMatch(config, /\[profiles\.sks-glm-52-/);
 
   const status = await openRouterStatus({ home, configPath, env });
   assert.equal(status.ok, true);

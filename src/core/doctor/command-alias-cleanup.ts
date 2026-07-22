@@ -8,6 +8,11 @@ import { COMMANDS, LEGACY_COMMAND_ALIASES, commandNames } from '../../cli/comman
 import { REMOVED_PUBLIC_COMMANDS } from './retired-managed-residue-private.js';
 import { reconcileRetiredManagedResidue, RETIRED_MANAGED_RESIDUE_SCHEMA, type RetiredManagedResidueReport } from './retired-managed-residue.js';
 import { CURRENT_PROJECT_GUIDANCE_SCHEMA, reconcileCurrentProjectGuidance, type CurrentProjectGuidanceReport } from './current-project-guidance.js';
+import {
+  reconcileSkillLegacySurface,
+  SKILL_LEGACY_SURFACE_SCHEMA,
+  type SkillLegacySurfaceReport
+} from './skill-legacy-surface.js';
 
 export const COMMAND_ALIAS_CLEANUP_SCHEMA = 'sks.command-alias-cleanup.v1';
 
@@ -33,6 +38,12 @@ export async function runDoctorCommandAliasCleanup(opts: DoctorCommandAliasClean
     globalRuntimeRoot,
     fix: opts.fix === true
   });
+  const skillLegacySurface = await reconcileSkillLegacySurface({
+    root: opts.root,
+    home,
+    globalRuntimeRoot,
+    fix: opts.fix === true
+  });
   const [managedResidue, projectGuidance] = await Promise.all([
     reconcileManagedRuntimeScopes({
       projectRoot: opts.root,
@@ -47,7 +58,7 @@ export async function runDoctorCommandAliasCleanup(opts: DoctorCommandAliasClean
       fix: opts.fix === true
     })
   ]);
-  const report = commandAliasCleanupReport(opts, skillResidue, managedResidue, projectGuidance);
+  const report = commandAliasCleanupReport(opts, skillResidue, managedResidue, projectGuidance, skillLegacySurface);
   if (opts.fix) await writeJsonAtomic(report.report_path, report);
   return report;
 }
@@ -119,7 +130,8 @@ export function commandAliasCleanupReport(
   opts: DoctorCommandAliasCleanupOptions,
   skillResidue: RemovedSksSkillResidueReport = emptySkillResidue(Boolean(opts.fix)),
   managedResidue: RetiredManagedResidueReport = emptyManagedResidue(Boolean(opts.fix)),
-  projectGuidance: CurrentProjectGuidanceReport = emptyProjectGuidance(Boolean(opts.fix))
+  projectGuidance: CurrentProjectGuidanceReport = emptyProjectGuidance(Boolean(opts.fix)),
+  skillLegacySurface: SkillLegacySurfaceReport = emptySkillLegacySurface(Boolean(opts.fix))
 ) {
   const root = opts.root;
   const legacyAliases = Object.entries(LEGACY_COMMAND_ALIASES).map(([alias, canonical]) => ({ alias, canonical }));
@@ -140,6 +152,8 @@ export function commandAliasCleanupReport(
     ...(missingCanonicalTargets.length ? [`current_alias_targets_missing:${missingCanonicalTargets.length}`] : []),
     ...(skillResidue.remaining.length ? [`retired_managed_skill_residue_remaining:${skillResidue.remaining.length}`] : []),
     ...(skillResidue.errors.length ? [`retired_managed_skill_cleanup_failed:${skillResidue.errors.length}`] : []),
+    ...(skillLegacySurface.remaining_count ? [`skill_legacy_surface_remaining:${skillLegacySurface.remaining_count}`] : []),
+    ...(skillLegacySurface.error_count ? [`skill_legacy_surface_rewrite_failed:${skillLegacySurface.error_count}`] : []),
     ...(managedResidue.remaining_managed_artifact_count ? [`retired_managed_runtime_residue_remaining:${managedResidue.remaining_managed_artifact_count}`] : []),
     ...(managedResidue.error_count ? [`retired_managed_runtime_cleanup_failed:${managedResidue.error_count}`] : []),
     ...(projectGuidance.remaining_count ? [`current_project_guidance_residue_remaining:${projectGuidance.remaining_count}`] : []),
@@ -162,30 +176,32 @@ export function commandAliasCleanupReport(
       retired_catalog_entry_count: catalogRemovedCommands.length,
       retired_redirect_entry_count: redirectingRemovedCommands.length,
       missing_current_alias_target_count: missingCanonicalTargets.length,
-      retired_managed_skill_residue_count: skillResidue.detected.length
+      retired_managed_skill_residue_count: skillResidue.detected.length,
+      skill_legacy_surface_scanned_count: skillLegacySurface.scanned_count
     },
     cleanup: {
       schema: skillResidue.schema,
-      ok: skillResidue.ok,
+      ok: skillResidue.ok && skillLegacySurface.ok,
       fix: skillResidue.fix,
       detected_count: skillResidue.detected.length,
       removed_count: skillResidue.removed.length,
       preserved_user_collision_count: skillResidue.quarantined_user_collisions.length,
-      remaining_count: skillResidue.remaining.length,
-      error_count: skillResidue.errors.length,
+      remaining_count: skillResidue.remaining.length + skillLegacySurface.remaining_count,
+      error_count: skillResidue.errors.length + skillLegacySurface.error_count,
       managed_runtime: managedResidue,
-      project_guidance: projectGuidance
+      project_guidance: projectGuidance,
+      skill_legacy_surface: skillLegacySurface
     },
     actions: ok
       ? [{
           action: opts.fix ? 'doctor_fix_reconciled_current_public_surface' : 'verify_current_public_surface',
           ok: true,
-          detail: `Current commands are the only public surface; reconciled ${projectGuidance.reconciled_count} managed guidance files, removed ${skillResidue.removed.length + managedResidue.removed_managed_artifact_count} SKS-managed retired items, and preserved ${skillResidue.quarantined_user_collisions.length + managedResidue.preserved_user_file_count + projectGuidance.preserved_user_file_count} user-authored collisions.`
+          detail: `Current commands are the only public surface; rewritten ${skillLegacySurface.rewritten_count} skill bodies, removed ${skillLegacySurface.removed_other_harness_skill_count} OMX/DCodex skill dirs plus ${skillResidue.removed.length + managedResidue.removed_managed_artifact_count} SKS-managed retired items, reconciled ${projectGuidance.reconciled_count} guidance files, and quarantined ${skillResidue.quarantined_user_collisions.length} user-authored retired-name collisions.`
         }]
       : [{
           action: 'current_public_surface_reconciliation_required',
           ok: false,
-          detail: 'Reconcile retired SKS-managed public-surface residue while preserving user-authored collisions through quarantine.'
+          detail: 'Rewrite legacy commands inside skills, remove OMX/DCodex from the live surface, and reconcile retired SKS-managed residue.'
         }],
     blockers
   };
@@ -227,6 +243,24 @@ function emptySkillResidue(fix: boolean): RemovedSksSkillResidueReport {
     detected: [],
     removed: [],
     quarantined_user_collisions: [],
+    remaining: [],
+    errors: []
+  };
+}
+
+function emptySkillLegacySurface(fix: boolean): SkillLegacySurfaceReport {
+  return {
+    schema: SKILL_LEGACY_SURFACE_SCHEMA,
+    ok: true,
+    fix,
+    scanned_count: 0,
+    rewritten_count: 0,
+    removed_other_harness_skill_count: 0,
+    remaining_count: 0,
+    preserved_clean_count: 0,
+    error_count: 0,
+    rewritten: [],
+    removed_other_harness_skills: [],
     remaining: [],
     errors: []
   };

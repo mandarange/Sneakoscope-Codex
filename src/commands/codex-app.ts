@@ -32,7 +32,9 @@ export async function run(_command: any, args: any = []) {
   if (action === 'glm-profile') {
     const subcommand = args[1] || 'doctor';
     const root = await sksRoot();
-    const result = subcommand === 'install' || subcommand === 'repair'
+    // Legacy Desktop GLM profile surface is retired; install/repair only strips
+    // leftover profiles and ensures the OpenRouter provider table.
+    const result = subcommand === 'install' || subcommand === 'repair' || subcommand === 'remove'
       ? await installCodexAppGlmProfile({ root, apply: true })
       : await doctorCodexAppGlmProfile({ root });
     return printCodexAppResult(args, result);
@@ -131,7 +133,8 @@ export async function run(_command: any, args: any = []) {
     if (!status.ok) process.exitCode = 1;
     return;
   }
-  console.error('Usage: sks codex-app check|status|harness-matrix|skill-sync|agent-role-sync|init-deep|hook-lifecycle|execution-profile|glm-profile [install|doctor]|set-openrouter-key [--api-key-stdin]|use-openrouter --model <id>|openrouter-status|product-design [--check-only]|ensure-product-design|chrome-extension|pat status|remote-control [--json]');
+  console.error('Usage: sks codex-app check|status|harness-matrix|skill-sync|agent-role-sync|init-deep|hook-lifecycle|execution-profile|set-openrouter-key [--api-key-stdin]|use-openrouter --model <id>|openrouter-status|product-design [--check-only]|ensure-product-design|chrome-extension|pat status|remote-control [--json]');
+  console.error('Note: glm-profile is retired (strips leftover Desktop GLM profiles); use set-openrouter-key / use-openrouter.');
   process.exitCode = 1;
 }
 

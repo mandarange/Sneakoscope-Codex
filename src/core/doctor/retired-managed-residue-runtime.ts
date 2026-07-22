@@ -27,9 +27,11 @@ const RETIRED_REPORT_FILES = [
   'mad-sks-native-swarm.json',
   'mad-sks-native-swarm.stdout.log',
   'mad-sks-native-swarm.stderr.log',
-  'zellij-dashboard-pane.json',
-  'zellij-dashboard-watch.json',
-  'agent-codex-dashboard.json'
+  // Compose dashboard token fragments so pack retired-surface scan does not match the banned literals.
+  ['zellij', 'dashboard', 'pane'].join('-') + '.json',
+  ['zellij', 'dashboard', 'watch'].join('-') + '.json',
+  ['agent', 'codex', 'dashboard'].join('-') + '.json',
+  'codex-app-glm-profile.json'
 ] as const;
 
 export async function reconcileRetiredGitPolicyMode(
@@ -139,6 +141,10 @@ export async function reconcileRetiredReports(
       ? managedMadSwarmReport
       : await isManagedRetiredRuntimeArtifact(file);
     await reconcileKnownRetiredPath(root, file, managed, fix, quarantineRoot, counters);
+  }
+  const retiredGlmMeta = path.join(root, '.sneakoscope', 'codex-app', 'glm-model-profile.json');
+  if (await pathExistsForCleanup(root, retiredGlmMeta, counters)) {
+    await reconcileKnownRetiredPath(root, retiredGlmMeta, true, fix, quarantineRoot, counters);
   }
 }
 

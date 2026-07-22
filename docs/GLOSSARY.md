@@ -14,7 +14,7 @@ The user-scoped secret location at `${SKS_HOME:-~/.sneakoscope}/secrets/openrout
 
 ## Codex App OpenRouter Profile
 
-Legacy Desktop profile metadata still written for picker compatibility (`sks/glm-5.2-mad`, `sks-glm-52-*` reasoning profiles). Activation is OpenRouter-centered; the retired GLM MAD CLI (`sks --mad --glm`, `sks glm`) is removed and does not change ordinary `sks --mad`.
+Retired. Legacy Desktop picker tables (`sks-glm-52-*`) are stripped on migrate/doctor/update. OpenRouter activation is provider + top-level `model` only via `sks codex-app use-openrouter`. The retired GLM MAD CLI (`sks --mad --glm`, `sks glm`) remains removed and does not change ordinary `sks --mad`.
 
 ## Codex 0.141 Delegation
 

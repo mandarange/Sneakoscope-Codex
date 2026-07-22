@@ -277,10 +277,11 @@ function glmWorkerEffort(input: { effort: string; risky: boolean; simple: boolea
 }
 
 function glmProfileForReasoning(effort: Glm52ReasoningEffort): string {
-  if (effort === 'xhigh') return 'sks-glm-52-xhigh'
-  if (effort === 'high') return 'sks-glm-52-high'
-  if (effort === 'medium') return 'sks-glm-52-medium'
-  if (effort === 'low') return 'sks-glm-52-low'
-  if (effort === 'none') return 'sks-glm-52-mad'
-  return 'sks-glm-52-minimal'
+  // Metadata label only — Desktop GLM profile tables are retired.
+  if (effort === 'xhigh') return 'sks-openrouter-xhigh'
+  if (effort === 'high') return 'sks-openrouter-high'
+  if (effort === 'medium') return 'sks-openrouter-medium'
+  if (effort === 'low') return 'sks-openrouter-low'
+  if (effort === 'none') return 'sks-openrouter-default'
+  return 'sks-openrouter-minimal'
 }
