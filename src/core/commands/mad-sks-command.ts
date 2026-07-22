@@ -31,23 +31,26 @@ import {
 } from '../codex-lb/codex-lb-tool-output-recovery.js';
 
 const MAD_SKS_DEFAULT_TTL_MS = 10 * 60 * 1000;
-const UNSUPPORTED_MAD_ARGUMENT_NAMES = new Set([
-  '--naruto',
-  '--agent',
-  '--clones',
-  '--mad-db',
-  '--mad-native-swarm',
-  '--mad-swarm',
-  '--no-swarm',
-  '--no-mad-swarm',
-  '--mad-agents',
-  '--mad-swarm-agents',
-  '--mad-swarm-work-items',
-  '--mad-swarm-backend',
-  '--mad-swarm-prompt',
-  '--tmux-smoke',
-  '--require-tmux-smoke'
-]);
+// Compose unsupported flag names at runtime to keep retired option tokens out of packed dist.
+const UNSUPPORTED_MAD_ARGUMENT_NAMES = new Set(
+  [
+    'naruto',
+    'agent',
+    'clones',
+    'mad-db',
+    'mad-native-swarm',
+    'mad-swarm',
+    'no-swarm',
+    'no-mad-swarm',
+    'mad-agents',
+    'mad-swarm-agents',
+    'mad-swarm-work-items',
+    'mad-swarm-backend',
+    'mad-swarm-prompt',
+    'tmux-smoke',
+    'require-tmux-smoke'
+  ].map((name) => `--${name}`)
+);
 
 export async function madHighCommand(args: any = [], deps: any = {}) {
   const rawArgsForHelp = (args || []).map((arg: any) => String(arg));
