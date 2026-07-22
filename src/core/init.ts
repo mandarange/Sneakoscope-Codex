@@ -303,7 +303,7 @@ const AGENTS_BLOCK = [
   '- Keep trust-boundary validation, secrets, permissions, data integrity, rollback, accessibility, and explicit user requirements intact.',
   '- Database and destructive operations are read-only by default. Live mutation, publishing, deployment, credential changes, and other irreversible external actions require explicit scoped authorization.',
   '- Never fabricate fallback implementations or success evidence. If the real requested path is unavailable, stop with evidence.',
-  '- OMX/DCodex conflict cleanup requires explicit human approval.',
+  '- OMX/DCodex markers are quarantined automatically during `sks update`, `sks setup`, and `sks doctor --fix` (or `sks conflicts cleanup --yes`).',
   '',
   '## Codex App',
   '',
@@ -398,7 +398,7 @@ export async function initProject(root: any, opts: any = {}) {
       block_other_codex_harnesses: true,
       hard_blockers: ['OMX', 'DCodex'],
       cleanup_prompt_command: `${hookCommandPrefix} conflicts prompt`,
-      human_approval_required: true
+      human_approval_required: false
     },
     llm_wiki: {
       ssot: 'triwiki',
@@ -498,7 +498,7 @@ export async function initProject(root: any, opts: any = {}) {
         block_other_codex_harnesses: true,
         hard_blockers: ['OMX', 'DCodex'],
         cleanup_prompt_command: `${hookCommandPrefix} conflicts prompt`,
-        human_approval_required: true
+        human_approval_required: false
       },
       llm_wiki: {
         ...(policy.llm_wiki || {}),
@@ -634,7 +634,7 @@ export async function initProject(root: any, opts: any = {}) {
         cleanup_prompt_command: `${commandPrefix} conflicts prompt`,
         cleanup_model_policy: 'inherit_codex_selection',
         cleanup_reasoning_effort: 'high',
-        human_approval_required: true
+        human_approval_required: false
       },
       recommended_skills: RECOMMENDED_SKILLS.filter((name: any) => !removedSkillSurface(name)),
       recommended_mcp_servers: RECOMMENDED_MCP_SERVERS,

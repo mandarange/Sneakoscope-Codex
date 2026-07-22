@@ -279,26 +279,31 @@ function applyUpdateCommandExitCode(result: any): void {
 export async function setupCommand(args: any = []) {
   if (flag(args, '--help') || flag(args, '-h')) return usageCommand(['setup']);
   const root = await projectRoot();
-  const { formatHarnessConflictReport, scanHarnessConflicts } = await import('../harness-conflicts.js');
+  const { cleanupOtherHarnessConflicts, formatHarnessConflictReport, scanHarnessConflicts } = await import('../harness-conflicts.js');
   const conflictScan = await scanHarnessConflicts(root);
+  let otherHarnessCleanup: any = null;
   if (conflictScan.hard_block) {
-    const blocked = {
-      schema: 'sks.setup.v1',
-      ok: false,
-      status: 'blocked_harness_conflict',
-      root,
-      blockers: conflictScan.hard.map((item: any) => `${item.name || 'harness'}:${item.path}`),
-      conflicts: conflictScan.conflicts,
-      cleanup_prompt_command: 'sks conflicts prompt'
-    };
-    process.exitCode = 1;
-    if (flag(args, '--json')) {
-      printJson(blocked);
+    otherHarnessCleanup = await cleanupOtherHarnessConflicts(root);
+    if (!otherHarnessCleanup.ok) {
+      const blocked = {
+        schema: 'sks.setup.v1',
+        ok: false,
+        status: 'blocked_harness_conflict',
+        root,
+        blockers: (otherHarnessCleanup.remaining || conflictScan.hard).map((item: any) => `${item.name || 'harness'}:${item.path}`),
+        conflicts: otherHarnessCleanup.after?.conflicts || conflictScan.conflicts,
+        other_harness_cleanup: otherHarnessCleanup,
+        cleanup_prompt_command: 'sks conflicts cleanup --yes'
+      };
+      process.exitCode = 1;
+      if (flag(args, '--json')) {
+        printJson(blocked);
+        return blocked;
+      }
+      console.error(formatHarnessConflictReport(otherHarnessCleanup.after || conflictScan, { includePrompt: false }));
+      console.error('Automatic OMX/DCodex quarantine did not clear every conflict. Inspect quarantine under .sneakoscope/quarantine/other-harness/.');
       return blocked;
     }
-    console.error(formatHarnessConflictReport(conflictScan, { includePrompt: false }));
-    console.error('Run `sks conflicts prompt` and obtain explicit human approval before cleanup.');
-    return blocked;
   }
   const installScope = installScopeFromArgs(args);
   let res: any = null;
@@ -325,6 +330,7 @@ export async function setupCommand(args: any = []) {
     local_only: flag(args, '--local-only'),
     cli_tools: cliTools,
     skill_install: res.skill_install,
+    other_harness_cleanup: otherHarnessCleanup,
     blockers: readiness.blockers,
     warnings: readiness.warnings
   };

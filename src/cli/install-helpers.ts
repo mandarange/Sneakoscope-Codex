@@ -286,7 +286,7 @@ async function reportPostinstallCodexLbAuth(snapshot: any = null) {
 async function postinstallHarnessConflictNotice(conflictScan: any) {
   console.log('\nSneakoscope Codex package installed, but SKS setup is blocked.');
   console.log(formatHarnessConflictReport(conflictScan, { includePrompt: false }));
-  console.log('\nWhat this means: npm can finish installing the package, but `sks setup` and `sks doctor --fix` will refuse to activate SKS until the conflicting harness is removed with human approval.');
+  console.log('\nWhat this means: npm can finish installing the package. Conflicting OMX/DCodex markers are quarantined automatically by `sks setup`, `sks doctor --fix`, `sks update`, or `sks conflicts cleanup --yes`.');
   console.log('No files were removed by postinstall.');
   console.log('Cleanup requires a human-approved Codex App session. Keep the model selected in Codex and use high reasoning effort.');
   if (shouldAskPostinstallQuestion()) {

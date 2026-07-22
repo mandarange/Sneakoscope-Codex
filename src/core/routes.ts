@@ -707,7 +707,7 @@ export const COMMAND_CATALOG = [
   { name: 'recallpulse', usage: 'sks recallpulse run|status|eval|governance|checklist <mission-id|latest>', description: 'Run report-only RecallPulse active recall, durable status, proof capsule, evidence envelope, and governance checks.' },
   { name: 'pipeline', usage: 'sks pipeline status|resume|plan|answer ...', description: 'Inspect the active skill-first route, materialized execution plan, ambiguity gates, and completion gates.' },
   { name: 'guard', usage: 'sks guard check [--json]', description: 'Check SKS harness self-protection lock, fingerprints, and source-repo exception state.' },
-  { name: 'conflicts', usage: 'sks conflicts check|prompt [--json]', description: 'Detect other Codex harnesses such as OMX/DCodex and print the GPT-5.6 high cleanup prompt.' },
+  { name: 'conflicts', usage: 'sks conflicts check|prompt|cleanup --yes [--json]', description: 'Detect other Codex harnesses such as OMX/DCodex, print a cleanup prompt, or quarantine them automatically.' },
   { name: 'versioning', usage: 'sks versioning status|bump|disable [--json]', description: 'Manage explicit project version syncs; SKS does not install Git pre-commit hooks.' },
   { name: 'features', usage: 'sks features list|check|inventory [--json] [--write-docs]', description: 'Build and validate the feature registry that maps CLI commands, hidden handlers, dollar routes, app skill aliases, and skills.' },
   { name: 'all-features', usage: 'sks all-features selftest --mock [--json]', description: 'Run the mock all-features contract selftest for feature registry, proof, Voxel TriWiki, and failure-contract coverage.' },

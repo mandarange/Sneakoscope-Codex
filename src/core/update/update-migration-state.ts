@@ -337,6 +337,11 @@ type UpdateMigrationStageDefinition = {
 
 const UPDATE_MIGRATION_STAGES: UpdateMigrationStageDefinition[] = [
   {
+    id: 'other-harness-cleanup',
+    min_from_version: '0.0.0',
+    run: runOtherHarnessCleanupStage
+  },
+  {
     id: 'current-public-surface-reconcile',
     min_from_version: '0.0.0',
     run: runCurrentPublicSurfaceReconcileStage
@@ -372,6 +377,30 @@ const UPDATE_MIGRATION_STAGES: UpdateMigrationStageDefinition[] = [
     run: runReceiptRotationStage
   }
 ];
+
+async function runOtherHarnessCleanupStage(root: string): Promise<Omit<UpdateMigrationStageRun, 'schema' | 'id' | 'min_from_version' | 'from_version'>> {
+  const { cleanupOtherHarnessConflicts } = await import('../harness-conflicts.js');
+  const cleanup = await cleanupOtherHarnessConflicts(root);
+  const blockers = cleanup.ok
+    ? []
+    : [
+        ...(cleanup.errors || []).map((row: any) => `other_harness_cleanup_error:${row.path}`),
+        ...((cleanup.remaining || []).map((row: any) => `other_harness_remaining:${row.path}`))
+      ];
+  return {
+    ok: blockers.length === 0,
+    status: blockers.length ? 'failed' : (cleanup.cleaned.length ? 'ok' : 'ok'),
+    actions: cleanup.cleaned.length ? ['quarantined_other_harness_conflicts'] : ['other_harness_surface_clean'],
+    blockers,
+    warnings: [],
+    detail: {
+      cleaned_count: cleanup.cleaned.length,
+      remaining_count: (cleanup.remaining || []).length,
+      error_count: (cleanup.errors || []).length,
+      run_id: cleanup.run_id
+    }
+  };
+}
 
 async function runCurrentPublicSurfaceReconcileStage(root: string): Promise<Omit<UpdateMigrationStageRun, 'schema' | 'id' | 'min_from_version' | 'from_version'>> {
   const [{ runDoctorCommandAliasCleanup }, { reconcileRetiredAgentRoleResidue }, { migrateSksProfilesToPerFile }] = await Promise.all([

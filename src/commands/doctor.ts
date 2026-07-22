@@ -36,27 +36,32 @@ export async function run(_command: any, args: any = [], deps: any = {}) {
   const doctorFix = flag(args, '--fix');
   const globalOnly = doctorFix && flag(args, '--global-only');
   if (doctorFix) {
+    const { cleanupOtherHarnessConflicts } = await import('../core/harness-conflicts.js');
     const conflictScan = await scanHarnessConflicts(root);
     if (conflictScan.hard_block) {
-      const blocked = {
-        schema: 'sks.doctor-status.v3',
-        ok: false,
-        status: 'blocked_harness_conflict',
-        diagnostic_depth: 'fix',
-        root,
-        blockers: conflictScan.hard.map((item: any) => `${item.name || 'harness'}:${item.path}`),
-        conflicts: conflictScan.conflicts,
-        cleanup_prompt_command: 'sks conflicts prompt',
-        no_fix_writes_performed: true
-      };
-      process.exitCode = 1;
-      if (flag(args, '--json')) {
-        printJson(blocked);
+      const cleanup = await cleanupOtherHarnessConflicts(root);
+      if (!cleanup.ok) {
+        const blocked = {
+          schema: 'sks.doctor-status.v3',
+          ok: false,
+          status: 'blocked_harness_conflict',
+          diagnostic_depth: 'fix',
+          root,
+          blockers: (cleanup.remaining || conflictScan.hard).map((item: any) => `${item.name || 'harness'}:${item.path}`),
+          conflicts: cleanup.after?.conflicts || conflictScan.conflicts,
+          other_harness_cleanup: cleanup,
+          cleanup_prompt_command: 'sks conflicts cleanup --yes',
+          no_fix_writes_performed: cleanup.cleaned.length === 0
+        };
+        process.exitCode = 1;
+        if (flag(args, '--json')) {
+          printJson(blocked);
+          return blocked;
+        }
+        console.error(formatHarnessConflictReport(cleanup.after || conflictScan, { includePrompt: false }));
+        console.error('Automatic OMX/DCodex quarantine did not clear every conflict. Inspect quarantine under .sneakoscope/quarantine/other-harness/.');
         return blocked;
       }
-      console.error(formatHarnessConflictReport(conflictScan, { includePrompt: false }));
-      console.error('Run `sks conflicts prompt` and obtain explicit human approval before cleanup.');
-      return blocked;
     }
   }
   const doctorProfile = doctorProfileFromArgs(args, doctorFix);

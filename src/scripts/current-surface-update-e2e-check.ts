@@ -10,6 +10,7 @@ import { runSksUpdateNow } from '../core/update-check.js';
 import { ensureCurrentMigrationBeforeCommand, projectUpdateMigrationReceiptPath, runPackageLocalDoctor } from '../core/update/update-migration-state.js';
 
 const REQUIRED_MIGRATION_STAGES = [
+  'other-harness-cleanup',
   'current-public-surface-reconcile',
   'session-state-split',
   'skills-reconcile',
