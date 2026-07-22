@@ -117,7 +117,9 @@ export async function inspectCodexLbToolOutputRecoveryForLaunch(opts: any = {}) 
     || codexLbToolOutputRecoveryOverrideAcknowledged({ env: opts.env || process.env })
   const status = await codexLbStatus({
     ...opts,
-    ...(opts.home ? { home: opts.home } : {}),
+    // Prefer an explicit fixture home (codexHome) so launch preflight tests do not
+    // inherit the operator machine's selected codex-lb provider.
+    ...(opts.home || opts.codexHome ? { home: opts.home || opts.codexHome } : {}),
     ...(opts.codexLbConfigPath ? { configPath: opts.codexLbConfigPath } : {}),
     ...(opts.codexLbEnvPath ? { envPath: opts.codexLbEnvPath } : {}),
     ...(typeof opts.codexLbToolOutputRecoveryFetch === 'function'

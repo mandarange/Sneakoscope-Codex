@@ -415,10 +415,23 @@ async function readEnvFile(file: string) {
 }
 
 function pickEnv(env: NodeJS.ProcessEnv) {
-  return {
-    apiKey: String(env.CODEX_LB_API_KEY || '').trim(),
-    baseUrl: String(env.CODEX_LB_BASE_URL || '').trim()
-  };
+  const apiKey = String(env.CODEX_LB_API_KEY || '').trim();
+  let baseUrl = String(env.CODEX_LB_BASE_URL || '').trim();
+  // Fixture hosts like *.example.test are often left in developer/agent shells.
+  // Prefer durable env-file / metadata URLs unless the operator explicitly allows them.
+  if (baseUrl && isReservedCodexLbTestHost(baseUrl) && env.SKS_ALLOW_CODEX_LB_TEST_HOST !== '1') {
+    baseUrl = '';
+  }
+  return { apiKey, baseUrl };
+}
+
+function isReservedCodexLbTestHost(baseUrl: string): boolean {
+  try {
+    const hostname = new URL(normalizeCodexLbBaseUrl(baseUrl) || baseUrl).hostname.toLowerCase();
+    return hostname === 'example.test' || hostname.endsWith('.example.test');
+  } catch {
+    return false;
+  }
 }
 
 export function parseShellEnvValue(text: unknown = '', key: unknown = ''): string {
