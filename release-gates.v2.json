@@ -3984,7 +3984,7 @@
           "release-gates.v2.json",
           "src/core/codex-control/**",
           "src/core/codex-compat/**",
-          "schemas/codex/app-server-0.144/**",
+          "schemas/codex/app-server-0.145/**",
           "src/scripts/codex-0144-app-server-v2-check.ts"
         ]
       },
@@ -4053,7 +4053,7 @@
           "src/core/codex-compat/**",
           "src/core/codex-runtime/**",
           "config/codex-releases/**",
-          "schemas/codex/app-server-0.144/**"
+          "schemas/codex/app-server-0.145/**"
         ]
       },
       "isolation": {

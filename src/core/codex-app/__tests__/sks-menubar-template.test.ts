@@ -147,8 +147,22 @@ test('Overview renders every release work-order health field from bounded local 
   assert.match(overview, /if forceUpdateRefresh \{ updateArguments\.append\("--refresh"\) \}/);
   assert.match(overview, /DispatchQueue\.main\.asyncAfter\(deadline: \.now\(\) \+ 5\)/);
   assert.match(overview, /if age > 24 \* 60 \* 60 \{ return "None in the last 24 hours" \}/);
+  assert.match(overview, /codexUpdateInducement/);
+  assert.match(overview, /Action: update Codex CLI/);
+  assert.match(overview, /NativeView\.button\("Update Codex CLI"/);
+  assert.match(overview, /\["codex", "update", "--json"\]/);
   assert.ok(overview.includes('stale \\(operation.state.rawValue) record · review operation log'));
   assert.match(swift, /func latestSnapshot\(\) -> OperationSnapshot\?/);
+});
+
+test('Diagnostics induces Codex CLI updates with a guarded action', () => {
+  const diagnostics = fs.readFileSync(path.join(resolvePackagedMenuBarSourceRoot(), 'Sources', 'DiagnosticsViewController.swift'), 'utf8');
+  assert.match(diagnostics, /NativeView\.button\("Update Codex CLI"/);
+  assert.match(diagnostics, /\["codex", "update", "--json"\]/);
+  assert.match(diagnostics, /prefer the latest channel/);
+  assert.match(diagnostics, /operations\.begin\(kind: "codex-cli-update", mutationGroup: "update"/);
+  assert.match(diagnostics, /sks\.codex-cli-update-result\.v1/);
+  assert.match(diagnostics, /Codex CLI update available/);
 });
 
 test('Overview summary distinguishes Menu Bar build, installed SKS, cached status, and unavailable probes', (t) => {
@@ -170,9 +184,13 @@ struct ProcessResult { let code: Int32; let output: String; let truncated: Bool 
 final class ProcessClient {
     func run(_ arguments: [String], stdin: String? = nil, environment: [String: String] = [:], timeout: TimeInterval? = nil, completion: @escaping (ProcessResult) -> Void) {}
 }
-enum OperationState: String { case succeeded }
+enum OperationState: String { case succeeded, failed, running }
 struct OperationSnapshot { let kind: String; let state: OperationState; let publicSummary: String; let updatedAt: String }
-final class OperationCoordinator { func latestSnapshot() -> OperationSnapshot? { nil } }
+final class OperationCoordinator {
+    func latestSnapshot() -> OperationSnapshot? { nil }
+    func begin(kind: String, mutationGroup: String?, summary: String) -> OperationSnapshot? { nil }
+    func update(_ snapshot: OperationSnapshot, state: OperationState, stage: String?, progress: Double?, summary: String, retryable: Bool = true) -> OperationSnapshot { snapshot }
+}
 
 @main
 struct OverviewHarness {
@@ -181,7 +199,7 @@ struct OverviewHarness {
             "schema": "sks.update-status.v3",
             "source": "cache",
             "sks": ["current": "1.10.0", "latest": "99.99.99", "update_available": true],
-            "codex_cli": ["current": "0.144.4", "latest": "0.144.4", "update_available": false],
+            "codex_cli": ["current": "0.144.4", "latest": "0.145.0", "update_available": true],
             "menubar": [
                 "expected_version": "6.2.0", "installed_version": NSNull(),
                 "signature_ok": true, "resources_ok": true, "rebuild_required": true
@@ -196,6 +214,8 @@ struct OverviewHarness {
             menuBarBuild: "6.2.0", codexRunning: true, operationSummary: "None recorded"
         )
         precondition(rendered.contains("SKS install: 1.10.0 → 99.99.99 available"))
+        precondition(rendered.contains("Codex CLI: 0.144.4 → 0.145.0 available"))
+        precondition(rendered.contains("Action: update Codex CLI (0.144.4 → 0.145.0)"))
         precondition(rendered.contains("Menu Bar: running build 6.2.0 · expected 6.2.0 · rebuild required"))
         precondition(!rendered.contains("installed unknown"))
         precondition(rendered.contains("Updates: 2 pending · cache snapshot · notice: fixture cache"))
@@ -236,8 +256,10 @@ test('status item is concise and applies the documented integrity-to-healthy pri
   const swift = source();
   for (const item of [
     'Open SKS Control Center…', 'Pending approvals (0)',
-    'Check for Updates', 'View Last Operation', 'Quit SKS Menu'
+    'Check for Updates', 'Update Codex CLI Now', 'Open Updates…', 'View Last Operation', 'Quit SKS Menu'
   ]) assert.match(swift, new RegExp(item.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.match(swift, /\["codex", "update", "--json"\]/);
+  assert.match(swift, /openControlCenter\(\.updates\)/);
   assert.doesNotMatch(swift, /Open Dashboard|openDashboard|127\.0\.0\.1:4477/);
   assert.match(swift, /enum SKSStatusIcon \{\s*case healthy, working, attention, updateAvailable, warning\s*\}/);
   const priority = [

@@ -18,9 +18,10 @@ The canonical policy is:
 - automatic requested children: 2 for bounded non-trivial work, 4 for explicit parallel work, and 6 for large-scale work; after decomposition the plan may expand to 10 only when ready DAG width, disjoint ownership, verifier/tool capacity, reserved thread slots, and positive marginal usefulness all permit it
 - reviewer-only fan-out: at most 2 for ordinary work and 3 for critical multi-domain review
 - explicit `--agents N` remains authoritative when the operator supplies it
-- default `agents.max_threads`: 12 for fresh SKS-owned project config
-- `agents.max_threads` is a hard cap, not a utilization target; one parent slot and one focused-review slot are reserved by default
-- `agents.max_depth`: 1
+- default `agents.max_concurrent_threads_per_session`: 12 for fresh SKS-owned project config when Codex multi-agent V2 is available
+- `features.multi_agent_v2.max_concurrent_threads_per_session`: 13 (root + 12 children)
+- concurrency is a hard cap, not a utilization target; one parent slot and one focused-review slot are reserved by default
+- `agents.max_depth`: 1 (V1-only; ignored by MA v2, still fail-closed in SKS)
 - hard SKS request safety cap: 32, with larger requested work planned in waves
 
 Completion requires matched thread evidence from official `SubagentStart` and

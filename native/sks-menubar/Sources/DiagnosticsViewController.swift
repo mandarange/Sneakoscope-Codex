@@ -4,6 +4,7 @@ final class DiagnosticsViewController: NSViewController, ControlCenterPage {
     private let processClient: ProcessClient
     private let operations: OperationCoordinator
     private let status = NativeView.detail("Diagnostics are idle.")
+    private let codexGuidance = NativeView.detail("Codex CLI: prefer the latest channel. Use Updates → Update Codex CLI when status reports an update.")
     private var busy = false
 
     init(processClient: ProcessClient, operations: OperationCoordinator) {
@@ -16,14 +17,15 @@ final class DiagnosticsViewController: NSViewController, ControlCenterPage {
     override func loadView() {
         let buttons = NSStackView(views: [
             NativeView.button("Run Doctor", target: self, action: #selector(doctor)),
+            NativeView.button("Update Codex CLI", target: self, action: #selector(updateCodexCLI)),
             NativeView.button("Open Last Log", target: self, action: #selector(openLog)),
             NativeView.button("Restart Menu Bar", target: self, action: #selector(restart))
         ])
         buttons.orientation = .horizontal; buttons.spacing = 8
         view = NativeView.stack([
             NativeView.title("Diagnostics"),
-            NativeView.detail("Diagnostic output is bounded, redacted, and written with owner-only permissions. Use this page when another Center action reports a blocker."),
-            status, buttons
+            NativeView.detail("Diagnostic output is bounded, redacted, and written with owner-only permissions. Use this page when another Center action reports a blocker. Feature routes that need newer Codex fail with an update CTA instead of locking all of SKS."),
+            status, codexGuidance, buttons
         ])
         refreshOnAppear()
     }
@@ -37,6 +39,22 @@ final class DiagnosticsViewController: NSViewController, ControlCenterPage {
         } else {
             status.stringValue = "Diagnostics are idle. No operation log exists yet."
         }
+        refreshCodexGuidance()
+    }
+
+    private func refreshCodexGuidance() {
+        let update = readJson(path: FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".sneakoscope-global/cache/update-status.json").path)
+        let codex = update?["codex_cli"] as? [String: Any]
+        if codex?["update_available"] as? Bool == true {
+            let current = codex?["current"] as? String ?? "installed"
+            let latest = codex?["latest"] as? String ?? "preferred latest"
+            codexGuidance.stringValue = "Codex CLI update available: \(current) → \(latest). Prefer latest via Update Codex CLI, or run sks codex update."
+        } else if let current = codex?["current"] as? String {
+            codexGuidance.stringValue = "Codex CLI \(current) looks current in the shared snapshot. Prefer latest continuously; Naruto and other capability routes still probe features before use."
+        } else {
+            codexGuidance.stringValue = "Codex CLI: prefer the latest channel. Use Updates → Update Codex CLI when status reports an update, or run sks codex update."
+        }
     }
 
     @objc private func doctor() {
@@ -47,6 +65,7 @@ final class DiagnosticsViewController: NSViewController, ControlCenterPage {
             self.busy = false
             if result.code == 0 {
                 self.status.stringValue = "Doctor completed with no blocking issue."
+                self.refreshCodexGuidance()
                 return
             }
             if let json = self.json(result.output) {
@@ -54,14 +73,49 @@ final class DiagnosticsViewController: NSViewController, ControlCenterPage {
                 let blockers = (json["blockers"] as? [String])?.count ?? (json["issues"] as? [Any])?.count
                 if let blockers = blockers {
                     self.status.stringValue = "Doctor reported \(blockers) issue\(blockers == 1 ? "" : "s"). Open Last Log for redacted detail."
+                    self.refreshCodexGuidance()
                     return
                 }
                 if ok == false {
                     self.status.stringValue = "Doctor reported a blocker. Open Last Log for redacted detail."
+                    self.refreshCodexGuidance()
                     return
                 }
             }
             self.status.stringValue = "Doctor reported a blocker · \(NativeView.redactPreview(result.output))"
+            self.refreshCodexGuidance()
+        }
+    }
+
+    @objc private func updateCodexCLI() {
+        guard let operation = operations.begin(kind: "codex-cli-update", mutationGroup: "update", summary: "Update Codex CLI") else {
+            status.stringValue = "Another update or MCP mutation is already running."
+            return
+        }
+        busy = true
+        status.stringValue = "Updating Codex CLI…"
+        _ = operations.update(operation, state: .running, stage: "running", progress: nil, summary: status.stringValue)
+        processClient.run(["codex", "update", "--json"], timeout: nil) { [weak self] result in
+            guard let self = self else { return }
+            self.busy = false
+            let payload = self.json(result.output)
+            let ok = result.code == 0
+                && !result.truncated
+                && payload?["schema"] as? String == "sks.codex-cli-update-result.v1"
+                && payload?["ok"] as? Bool == true
+            _ = self.operations.update(
+                operation,
+                state: ok ? .succeeded : .failed,
+                stage: "complete",
+                progress: 1,
+                summary: ok ? "Codex CLI update completed" : "Codex CLI update failed"
+            )
+            if ok {
+                self.status.stringValue = "Codex CLI update completed. Shared update status will refresh on the next Overview/Updates load."
+            } else {
+                self.status.stringValue = "Codex CLI update needs attention. Open Updates for structured guidance, or run sks codex update."
+            }
+            self.refreshCodexGuidance()
         }
     }
 
@@ -88,6 +142,11 @@ final class DiagnosticsViewController: NSViewController, ControlCenterPage {
 
     private func json(_ text: String) -> [String: Any]? {
         guard let data = text.data(using: .utf8) else { return nil }
+        return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    }
+
+    private func readJson(path: String) -> [String: Any]? {
+        guard let data = FileManager.default.contents(atPath: path) else { return nil }
         return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
     }
 }

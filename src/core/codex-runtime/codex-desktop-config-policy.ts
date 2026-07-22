@@ -84,9 +84,11 @@ function normalizeCodexFastModeUiConfigOnce(text: any = '', opts: any = {}) {
   ]) {
     next = upsertTomlTableKeyIfAbsent(next, 'features', featureLine);
   }
-  // Global postinstall must not impose a project concurrency policy. Existing
-  // user [agents] values are preserved verbatim; project setup owns defaults.
-  next = removeTomlTable(next, 'features.multi_agent_v2');
+  // Global postinstall enables stable opt-in MA v2 without imposing project
+  // concurrency numbers. Project setup owns max_concurrent_threads_per_session.
+  if (!hasTomlTable(next, 'features.multi_agent_v2') && !hasTomlTableKey(next, 'features', 'multi_agent_v2')) {
+    next = upsertTomlTable(next, 'features.multi_agent_v2', '[features.multi_agent_v2]\nenabled = true\nexpose_spawn_agent_model_overrides = true');
+  }
   if (process.env.SKS_MANAGE_CODEX_APP_PLUGINS === '1') {
     for (const [name, marketplace] of DEFAULT_CODEX_APP_PLUGINS as any) {
       const table = `plugins."${name}@${marketplace}"`;

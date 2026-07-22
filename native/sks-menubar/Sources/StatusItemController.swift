@@ -25,6 +25,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private var fastRefreshInFlight = false
     private var fastRefreshPending = false
     private var lastUpdateNotificationFingerprint: String?
+    private var updateCodexItem: NSMenuItem?
 
     init(processClient: ProcessClient, operations: OperationCoordinator, notifications: NotificationCoordinator, openControlCenter: @escaping (SidebarItem) -> Void) {
         self.processClient = processClient
@@ -64,6 +65,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         menu.addItem(fastOff)
         menu.addItem(NSMenuItem.separator())
         menu.addItem(item("Check for Updates", #selector(checkUpdates)))
+        let updateCodex = item("Update Codex CLI Now", #selector(updateCodexCLI))
+        updateCodex.setAccessibilityHelp("Update the operator Codex CLI to the preferred latest channel.")
+        updateCodexItem = updateCodex
+        menu.addItem(updateCodex)
+        menu.addItem(item("Open Updates…", #selector(openUpdates)))
         menu.addItem(item("View Last Operation", #selector(viewLastOperation)))
         menu.addItem(NSMenuItem.separator())
         menu.addItem(item("Quit SKS Menu", #selector(quit)))
@@ -98,12 +104,20 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             .appendingPathComponent(".sneakoscope-global/cache/update-status.json").path)
         let sksUpdate = ((update?["sks"] as? [String: Any])?["update_available"] as? Bool) == true
         let codexUpdate = ((update?["codex_cli"] as? [String: Any])?["update_available"] as? Bool) == true
+        let codexCurrent = (update?["codex_cli"] as? [String: Any])?["current"] as? String
+        let codexLatest = (update?["codex_cli"] as? [String: Any])?["latest"] as? String
         let menuBar = update?["menubar"] as? [String: Any]
         let signatureBroken = menuBar?["signature_ok"] as? Bool == false
         let resourcesBroken = menuBar?["resources_ok"] as? Bool == false
         let integrityBroken = signatureBroken || resourcesBroken || !FileManager.default.fileExists(atPath: AppRuntime.buildStampPath)
         let pendingCount = operations.latestSnapshot()?.state == .waitingForConfirmation ? 1 : 0
         pendingLine.title = "Pending approvals (\(pendingCount))"
+        updateCodexItem?.isEnabled = !operationRunning
+        if codexUpdate, let current = codexCurrent, let latest = codexLatest, current != latest {
+            updateCodexItem?.title = "Update Codex CLI Now (\(current) → \(latest))"
+        } else {
+            updateCodexItem?.title = "Update Codex CLI Now"
+        }
         let icon: SKSStatusIcon
         let summary: String
         if integrityBroken { icon = .warning; summary = "Needs attention — Menu Bar integrity" }
@@ -112,7 +126,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             icon = .attention
             summary = notificationAuthorizationDenied ? "Notifications require attention" : pendingCount > 0 ? "Input or approval required" : "Input or approval required"
         }
-        else if sksUpdate || codexUpdate { icon = .updateAvailable; summary = "Update available" }
+        else if sksUpdate || codexUpdate {
+            icon = .updateAvailable
+            summary = codexUpdate && !sksUpdate ? "Codex CLI update available" : "Update available"
+        }
         else if operationRunning { icon = .working; summary = "Working" }
         else { icon = .healthy; summary = "Healthy" }
         apply(icon, summary: summary)
@@ -308,7 +325,13 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     }
 
     @objc private func openCenter() { openControlCenter(.overview) }
+    @objc private func openUpdates() { openControlCenter(.updates) }
     @objc private func checkUpdates() { run(["update", "status", "--refresh", "--json"], kind: "update-status", mutationGroup: nil, summary: "Check for updates") }
+    @objc private func updateCodexCLI() {
+        run(["codex", "update", "--json"], kind: "codex-cli-update", mutationGroup: "update", summary: "Update Codex CLI") { [weak self] in
+            self?.run(["update", "status", "--refresh", "--json"], kind: "update-status", mutationGroup: nil, summary: "Refresh update status after Codex CLI update")
+        }
+    }
     @objc private func fastOn() {
         fastLine.title = "Fast: Turning On…"
         fastOnItem?.isEnabled = false

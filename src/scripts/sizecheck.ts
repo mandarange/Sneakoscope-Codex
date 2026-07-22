@@ -17,8 +17,8 @@ const limits = {
 const trackedFileSizeAllowlist = new Set([
   'docs/sks-local-llm-mode/exports/sks-local-llm-mode-deck.pdf',
   'release-gates.v2.json',
-  'schemas/codex/app-server-0.144/codex_app_server_protocol.schemas.json',
-  'schemas/codex/app-server-0.144/codex_app_server_protocol.v2.schemas.json'
+  'schemas/codex/app-server-0.145/codex_app_server_protocol.schemas.json',
+  'schemas/codex/app-server-0.145/codex_app_server_protocol.v2.schemas.json'
 ]);
 
 const npmBin = process.platform === 'win32' ? 'npm.cmd' : 'npm';

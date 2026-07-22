@@ -10,23 +10,51 @@ import {
   managedOfficialSubagentRoleOwnsText,
   type ManagedOfficialSubagentRole
 } from '../managed-assets/managed-assets-manifest.js'
+import {
+  DEFAULT_SUBAGENT_EFFORT,
+  DEFAULT_SUBAGENT_MODEL
+} from './model-policy.js'
 
+/** Spawned child-thread hard cap (excludes the root/parent thread). */
 export const DEFAULT_OFFICIAL_SUBAGENT_MAX_THREADS = 12
+/** V1-only nesting limit. Ignored by multi-agent V2; kept at 1 for fail-closed depth. */
 export const DEFAULT_OFFICIAL_SUBAGENT_MAX_DEPTH = 1
+/** @deprecated Removed from Codex 0.145 AgentsToml. Retained only for SKS-internal callers. */
 export const DEFAULT_OFFICIAL_SUBAGENT_JOB_MAX_RUNTIME_SECONDS = 1200
 export const DEFAULT_OFFICIAL_SUBAGENT_INTERRUPT_MESSAGE = true
+export const DEFAULT_OFFICIAL_SUBAGENT_ENABLED = true
+export const DEFAULT_OFFICIAL_SUBAGENT_MODEL = DEFAULT_SUBAGENT_MODEL
+export const DEFAULT_OFFICIAL_SUBAGENT_REASONING_EFFORT = DEFAULT_SUBAGENT_EFFORT
+/** MA v2 total concurrency = spawned children + root thread. */
+export const DEFAULT_MULTI_AGENT_V2_MAX_CONCURRENT_THREADS_PER_SESSION =
+  DEFAULT_OFFICIAL_SUBAGENT_MAX_THREADS + 1
 export const LEGACY_SKS_MAX_THREAD_VALUES = Object.freeze([4, 5, 6])
+export const AGENTS_MAX_CONCURRENT_THREADS_KEY = 'max_concurrent_threads_per_session'
+export const LEGACY_AGENTS_MAX_THREADS_KEY = 'max_threads'
+export const LEGACY_AGENTS_JOB_MAX_RUNTIME_KEY = 'job_max_runtime_seconds'
 
 export interface OfficialSubagentConfig {
+  enabled: boolean
   maxThreads: number
   maxDepth: number
-  jobMaxRuntimeSeconds: number
+  /** Always null for Codex 0.145+; retained for postcheck compatibility. */
+  jobMaxRuntimeSeconds: number | null
   interruptMessage: boolean
+  defaultSubagentModel: string
+  defaultSubagentReasoningEffort: string
+  multiAgentV2: {
+    enabled: boolean
+    maxConcurrentThreadsPerSession: number
+    exposeSpawnAgentModelOverrides: boolean
+  }
   sources: {
+    enabled: 'project' | 'global' | 'default'
     maxThreads: 'project' | 'global' | 'default'
     maxDepth: 'project' | 'global' | 'default'
-    jobMaxRuntimeSeconds: 'project' | 'global' | 'default'
     interruptMessage: 'project' | 'global' | 'default'
+    defaultSubagentModel: 'project' | 'global' | 'default'
+    defaultSubagentReasoningEffort: 'project' | 'global' | 'default'
+    multiAgentV2: 'project' | 'global' | 'default'
   }
   projectConfigPath: string
   globalConfigPath: string | null
@@ -63,10 +91,9 @@ export interface OfficialSubagentAgentInstallResult {
 }
 
 /**
- * Merge the project-scoped Codex [agents] defaults without overriding explicit
- * project or inherited global values. Legacy 4/5/6 values migrate only when a
- * caller supplies concrete SKS ownership evidence (for example the generated
- * file inventory from the previous project manifest).
+ * Merge project-scoped Codex multi-agent V2 defaults without overriding explicit
+ * project or inherited global values. Migrates legacy `agents.max_threads` and
+ * strips removed `job_max_runtime_seconds` only when SKS ownership is proven.
  */
 export function mergeOfficialSubagentConfig(
   text: string = '',
@@ -77,26 +104,32 @@ export function mergeOfficialSubagentConfig(
 
   const inherited = parsedToml(opts.inheritedText || '')
   const inheritedAgents = objectValue(inherited?.agents)
+  const inheritedFeatures = objectValue(inherited?.features)
   let next = source.trimEnd()
   if (!next.trim()) next = '# SKS-MANAGED-CODEX-CONFIG'
-  if (opts.sksOwned === true) next = removeExactLegacyManagedAgentBlocks(next)
-  const targetMaxThreads = positiveInteger(opts.defaultMaxThreads) || DEFAULT_OFFICIAL_SUBAGENT_MAX_THREADS
-  const currentMaxThreads = readTomlTableInteger(next, 'agents', 'max_threads')
-
-  if (!hasTomlTableKey(next, 'agents', 'max_threads')) {
-    if (!hasOwn(inheritedAgents, 'max_threads')) {
-      next = upsertTomlTableKey(next, 'agents', `max_threads = ${targetMaxThreads}`)
-    }
-  } else if (opts.sksOwned === true && LEGACY_SKS_MAX_THREAD_VALUES.includes(currentMaxThreads || 0)) {
-    next = upsertTomlTableKey(next, 'agents', `max_threads = ${targetMaxThreads}`)
+  if (opts.sksOwned === true) {
+    next = removeExactLegacyManagedAgentBlocks(next)
+    next = stripLegacyUnsupportedAgentKeys(next)
   }
 
-  next = upsertDefaultUnlessInherited(next, inheritedAgents, 'max_depth', `max_depth = ${DEFAULT_OFFICIAL_SUBAGENT_MAX_DEPTH}`)
+  const targetMaxThreads = positiveInteger(opts.defaultMaxThreads) || DEFAULT_OFFICIAL_SUBAGENT_MAX_THREADS
+  next = migrateLegacyMaxThreads(next, {
+    sksOwned: opts.sksOwned === true,
+    targetMaxThreads,
+    inheritedAgents
+  })
+
   next = upsertDefaultUnlessInherited(
     next,
     inheritedAgents,
-    'job_max_runtime_seconds',
-    `job_max_runtime_seconds = ${DEFAULT_OFFICIAL_SUBAGENT_JOB_MAX_RUNTIME_SECONDS}`
+    'enabled',
+    `enabled = ${DEFAULT_OFFICIAL_SUBAGENT_ENABLED}`
+  )
+  next = upsertDefaultUnlessInherited(
+    next,
+    inheritedAgents,
+    'max_depth',
+    `max_depth = ${DEFAULT_OFFICIAL_SUBAGENT_MAX_DEPTH}`
   )
   next = upsertDefaultUnlessInherited(
     next,
@@ -104,9 +137,112 @@ export function mergeOfficialSubagentConfig(
     'interrupt_message',
     `interrupt_message = ${DEFAULT_OFFICIAL_SUBAGENT_INTERRUPT_MESSAGE}`
   )
+  next = upsertDefaultUnlessInherited(
+    next,
+    inheritedAgents,
+    'default_subagent_model',
+    `default_subagent_model = "${DEFAULT_OFFICIAL_SUBAGENT_MODEL}"`
+  )
+  next = upsertDefaultUnlessInherited(
+    next,
+    inheritedAgents,
+    'default_subagent_reasoning_effort',
+    `default_subagent_reasoning_effort = "${DEFAULT_OFFICIAL_SUBAGENT_REASONING_EFFORT}"`
+  )
+
+  next = mergeOfficialMultiAgentV2FeatureConfig(next, {
+    sksOwned: opts.sksOwned === true,
+    inheritedFeatures,
+    maxThreads: readAgentsMaxThreads(next) || targetMaxThreads
+  })
 
   const merged = ensureTrailingNewline(next)
   return inspectToml(merged).ok ? merged : source
+}
+
+export function mergeOfficialMultiAgentV2FeatureConfig(
+  text: string = '',
+  opts: {
+    sksOwned?: boolean
+    inheritedFeatures?: Record<string, unknown>
+    maxThreads?: number
+  } = {}
+): string {
+  const source = String(text || '')
+  if (!inspectToml(source).ok) return source
+  const inheritedFeatures = objectValue(opts.inheritedFeatures)
+  const inheritedMaV2 = featureTomlObject(inheritedFeatures.multi_agent_v2)
+  let next = source.trimEnd()
+  if (!next.trim()) next = '# SKS-MANAGED-CODEX-CONFIG'
+
+  // Prefer the table form so concurrency and spawn model overrides can be set.
+  // Boolean `features.multi_agent_v2 = true` alone cannot carry those knobs.
+  if (hasTomlTableKey(next, 'features', 'multi_agent_v2')) {
+    next = removeTomlTableKey(next, 'features', 'multi_agent_v2')
+  }
+
+  const maxThreads = positiveInteger(opts.maxThreads) || DEFAULT_OFFICIAL_SUBAGENT_MAX_THREADS
+  const targetTotal = Math.max(1, maxThreads + 1)
+
+  if (!hasTomlTable(next, 'features.multi_agent_v2')) {
+    if (inheritedMaV2) return ensureTrailingNewline(next)
+    next = upsertTomlTable(
+      next,
+      'features.multi_agent_v2',
+      [
+        '[features.multi_agent_v2]',
+        'enabled = true',
+        `max_concurrent_threads_per_session = ${targetTotal}`,
+        'expose_spawn_agent_model_overrides = true'
+      ].join('\n')
+    )
+    return ensureTrailingNewline(next)
+  }
+
+  if (opts.sksOwned === true) {
+    next = upsertTomlTableKey(next, 'features.multi_agent_v2', 'enabled = true')
+    if (!hasTomlTableKey(next, 'features.multi_agent_v2', 'max_concurrent_threads_per_session')) {
+      next = upsertTomlTableKey(
+        next,
+        'features.multi_agent_v2',
+        `max_concurrent_threads_per_session = ${targetTotal}`
+      )
+    }
+    if (!hasTomlTableKey(next, 'features.multi_agent_v2', 'expose_spawn_agent_model_overrides')) {
+      next = upsertTomlTableKey(
+        next,
+        'features.multi_agent_v2',
+        'expose_spawn_agent_model_overrides = true'
+      )
+    }
+  } else {
+    const inherited = inheritedMaV2 || {}
+    if (!hasTomlTableKey(next, 'features.multi_agent_v2', 'enabled') && !hasOwn(inherited, 'enabled')) {
+      next = upsertTomlTableKey(next, 'features.multi_agent_v2', 'enabled = true')
+    }
+    if (
+      !hasTomlTableKey(next, 'features.multi_agent_v2', 'max_concurrent_threads_per_session')
+      && !hasOwn(inherited, 'max_concurrent_threads_per_session')
+    ) {
+      next = upsertTomlTableKey(
+        next,
+        'features.multi_agent_v2',
+        `max_concurrent_threads_per_session = ${targetTotal}`
+      )
+    }
+    if (
+      !hasTomlTableKey(next, 'features.multi_agent_v2', 'expose_spawn_agent_model_overrides')
+      && !hasOwn(inherited, 'expose_spawn_agent_model_overrides')
+    ) {
+      next = upsertTomlTableKey(
+        next,
+        'features.multi_agent_v2',
+        'expose_spawn_agent_model_overrides = true'
+      )
+    }
+  }
+
+  return ensureTrailingNewline(next)
 }
 
 export async function readOfficialSubagentConfig(
@@ -124,9 +260,15 @@ export async function readOfficialSubagentConfig(
   const globalLayer = configLayer(globalText, 'global')
   const blockers = [...projectLayer.blockers, ...globalLayer.blockers]
 
+  const enabled = resolveLayeredValue(
+    projectLayer.agents.enabled,
+    globalLayer.agents.enabled,
+    DEFAULT_OFFICIAL_SUBAGENT_ENABLED,
+    booleanValue
+  )
   const maxThreads = resolveLayeredValue(
-    projectLayer.agents.max_threads,
-    globalLayer.agents.max_threads,
+    readAgentsMaxThreadsFromRecord(projectLayer.agents),
+    readAgentsMaxThreadsFromRecord(globalLayer.agents),
     DEFAULT_OFFICIAL_SUBAGENT_MAX_THREADS,
     positiveInteger
   )
@@ -136,35 +278,54 @@ export async function readOfficialSubagentConfig(
     DEFAULT_OFFICIAL_SUBAGENT_MAX_DEPTH,
     positiveInteger
   )
-  const jobMaxRuntimeSeconds = resolveLayeredValue(
-    projectLayer.agents.job_max_runtime_seconds,
-    globalLayer.agents.job_max_runtime_seconds,
-    DEFAULT_OFFICIAL_SUBAGENT_JOB_MAX_RUNTIME_SECONDS,
-    positiveInteger
-  )
   const interruptMessage = resolveLayeredValue(
     projectLayer.agents.interrupt_message,
     globalLayer.agents.interrupt_message,
     DEFAULT_OFFICIAL_SUBAGENT_INTERRUPT_MESSAGE,
     booleanValue
   )
-  // Official Naruto admits only depth=1. Coerce higher values so they cannot
-  // contradict the launcher hard-enforcement or look "supported".
+  const defaultSubagentModel = resolveLayeredValue(
+    projectLayer.agents.default_subagent_model,
+    globalLayer.agents.default_subagent_model,
+    DEFAULT_OFFICIAL_SUBAGENT_MODEL,
+    nonEmptyString
+  )
+  const defaultSubagentReasoningEffort = resolveLayeredValue(
+    projectLayer.agents.default_subagent_reasoning_effort,
+    globalLayer.agents.default_subagent_reasoning_effort,
+    DEFAULT_OFFICIAL_SUBAGENT_REASONING_EFFORT,
+    nonEmptyString
+  )
+  const multiAgentV2 = resolveMultiAgentV2Layer(
+    projectLayer.features.multi_agent_v2,
+    globalLayer.features.multi_agent_v2,
+    maxThreads.value
+  )
+
   const depthCoerced = maxDepth.value > 1
-  const warnings = depthCoerced
-    ? [`official_subagent_max_depth_coerced_to_one:${maxDepth.value}:${maxDepth.source}`]
-    : []
+  const warnings = [
+    ...(depthCoerced ? [`official_subagent_max_depth_coerced_to_one:${maxDepth.value}:${maxDepth.source}`] : []),
+    ...(projectLayer.legacyWarnings),
+    ...(globalLayer.legacyWarnings)
+  ]
 
   return {
+    enabled: enabled.value,
     maxThreads: maxThreads.value,
     maxDepth: depthCoerced ? DEFAULT_OFFICIAL_SUBAGENT_MAX_DEPTH : maxDepth.value,
-    jobMaxRuntimeSeconds: jobMaxRuntimeSeconds.value,
+    jobMaxRuntimeSeconds: null,
     interruptMessage: interruptMessage.value,
+    defaultSubagentModel: defaultSubagentModel.value,
+    defaultSubagentReasoningEffort: defaultSubagentReasoningEffort.value,
+    multiAgentV2: multiAgentV2.value,
     sources: {
+      enabled: enabled.source,
       maxThreads: maxThreads.source,
       maxDepth: depthCoerced ? 'default' : maxDepth.source,
-      jobMaxRuntimeSeconds: jobMaxRuntimeSeconds.source,
-      interruptMessage: interruptMessage.source
+      interruptMessage: interruptMessage.source,
+      defaultSubagentModel: defaultSubagentModel.source,
+      defaultSubagentReasoningEffort: defaultSubagentReasoningEffort.source,
+      multiAgentV2: multiAgentV2.source
     },
     projectConfigPath,
     globalConfigPath,
@@ -183,9 +344,13 @@ export function officialSubagentConfigWarnings(text: string = '', inheritedText:
     DEFAULT_OFFICIAL_SUBAGENT_MAX_DEPTH,
     positiveInteger
   )
-  return maxDepth.value > 1
-    ? [`official_subagent_max_depth_coerced_to_one:${maxDepth.value}:${maxDepth.source}`]
-    : []
+  return [
+    ...(maxDepth.value > 1
+      ? [`official_subagent_max_depth_coerced_to_one:${maxDepth.value}:${maxDepth.source}`]
+      : []),
+    ...project.legacyWarnings,
+    ...inherited.legacyWarnings
+  ]
 }
 
 export async function readInheritedOfficialSubagentConfigText(
@@ -347,7 +512,7 @@ export function officialSubagentConfigOwnershipProof(input: {
   }
   if (hasExactManagedConfigMarker(text)) reasons.push('managed_marker_or_hash')
   if (migrationReceiptProvesManagedMaxThreads(input.migrationReceipt)) {
-    reasons.push('migration_receipt:agents.max_threads')
+    reasons.push('migration_receipt:agents.max_concurrent_threads_per_session')
   }
   const legacyBlockCount = exactLegacyManagedAgentBlockCount(text)
   if (legacyBlockCount >= 3) reasons.push(`exact_legacy_managed_blocks:${legacyBlockCount}`)
@@ -377,12 +542,66 @@ function configLayer(text: string, label: 'project' | 'global') {
   if (!validation.ok) {
     return {
       agents: {} as Record<string, unknown>,
-      blockers: [`${label}_official_subagent_config_toml_parse_failed`]
+      features: {} as Record<string, unknown>,
+      blockers: [`${label}_official_subagent_config_toml_parse_failed`],
+      legacyWarnings: [] as string[]
     }
   }
+  const agents = objectValue(parsedToml(text)?.agents)
+  const features = objectValue(parsedToml(text)?.features)
+  const legacyWarnings: string[] = []
+  if (hasOwn(agents, LEGACY_AGENTS_MAX_THREADS_KEY) && !hasOwn(agents, AGENTS_MAX_CONCURRENT_THREADS_KEY)) {
+    legacyWarnings.push(`${label}_legacy_agents_max_threads_present`)
+  }
+  if (hasOwn(agents, LEGACY_AGENTS_JOB_MAX_RUNTIME_KEY)) {
+    legacyWarnings.push(`${label}_legacy_agents_job_max_runtime_seconds_ignored`)
+  }
   return {
-    agents: objectValue(parsedToml(text)?.agents),
-    blockers: [] as string[]
+    agents,
+    features,
+    blockers: [] as string[],
+    legacyWarnings
+  }
+}
+
+function resolveMultiAgentV2Layer(
+  projectValue: unknown,
+  globalValue: unknown,
+  maxThreads: number
+): {
+  value: OfficialSubagentConfig['multiAgentV2']
+  source: 'project' | 'global' | 'default'
+} {
+  const fallback = {
+    enabled: true,
+    maxConcurrentThreadsPerSession: Math.max(1, maxThreads + 1),
+    exposeSpawnAgentModelOverrides: true
+  }
+  const project = normalizeMultiAgentV2(projectValue, fallback)
+  if (project) return { value: project, source: 'project' }
+  const global = normalizeMultiAgentV2(globalValue, fallback)
+  if (global) return { value: global, source: 'global' }
+  return { value: fallback, source: 'default' }
+}
+
+function normalizeMultiAgentV2(
+  value: unknown,
+  fallback: OfficialSubagentConfig['multiAgentV2']
+): OfficialSubagentConfig['multiAgentV2'] | null {
+  if (value === true) {
+    return { ...fallback, enabled: true }
+  }
+  if (value === false) {
+    return { ...fallback, enabled: false }
+  }
+  const row = objectValue(value)
+  if (!Object.keys(row).length) return null
+  return {
+    enabled: booleanValue(row.enabled) ?? true,
+    maxConcurrentThreadsPerSession:
+      positiveInteger(row.max_concurrent_threads_per_session) || fallback.maxConcurrentThreadsPerSession,
+    exposeSpawnAgentModelOverrides:
+      booleanValue(row.expose_spawn_agent_model_overrides) ?? fallback.exposeSpawnAgentModelOverrides
   }
 }
 
@@ -407,6 +626,11 @@ function booleanValue(value: unknown): boolean | null {
   return typeof value === 'boolean' ? value : null
 }
 
+function nonEmptyString(value: unknown): string | null {
+  const text = typeof value === 'string' ? value.trim() : ''
+  return text ? text : null
+}
+
 function inspectToml(text: string): { ok: boolean; error: string | null } {
   try {
     parse(String(text || ''))
@@ -426,6 +650,12 @@ function parsedToml(text: string): Record<string, unknown> | null {
 
 function objectValue(value: unknown): Record<string, any> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : {}
+}
+
+function featureTomlObject(value: unknown): Record<string, unknown> | null {
+  if (typeof value === 'boolean') return { enabled: value }
+  const row = objectValue(value)
+  return Object.keys(row).length ? row : null
 }
 
 function hasExactManagedConfigMarker(text: string): boolean {
@@ -475,7 +705,10 @@ function migrationStageProvesManagedMaxThreads(value: unknown): boolean {
       continue
     }
     if (typeof current === 'string') {
-      if (/\bagents\.max_threads\b/i.test(current) && /\b(?:set|write|wrote|written|upsert|update|updated|migrat(?:e|ed|ion)|manage(?:d)?|apply|applied|repair|repaired)\b/i.test(current)) return true
+      if (
+        /\bagents\.(?:max_threads|max_concurrent_threads_per_session)\b/i.test(current)
+        && /\b(?:set|write|wrote|written|upsert|update|updated|migrat(?:e|ed|ion)|manage(?:d)?|apply|applied|repair|repaired)\b/i.test(current)
+      ) return true
       continue
     }
     if (typeof current !== 'object') continue
@@ -483,11 +716,18 @@ function migrationStageProvesManagedMaxThreads(value: unknown): boolean {
     if (row.ok === false || /(?:fail|block|error|cancel|timeout)/i.test(String(row.status || ''))) continue
     for (const key of ['managed_keys', 'written_keys', 'migrated_keys', 'config_keys', 'keys_written']) {
       const entries = row[key]
-      if (Array.isArray(entries) && entries.some((entry) => String(entry || '').trim() === 'agents.max_threads')) return true
+      if (
+        Array.isArray(entries)
+        && entries.some((entry) => {
+          const text = String(entry || '').trim()
+          return text === 'agents.max_threads' || text === 'agents.max_concurrent_threads_per_session'
+        })
+      ) return true
     }
-    if (String(row.key || row.config_key || '').trim() === 'agents.max_threads') return true
-    for (const key of ['actions', 'detail', 'changes', 'writes', 'result', 'summary']) {
-      if (row[key] !== undefined) queue.push(row[key])
+    const key = String(row.key || row.config_key || '').trim()
+    if (key === 'agents.max_threads' || key === 'agents.max_concurrent_threads_per_session') return true
+    for (const keyName of ['actions', 'detail', 'changes', 'writes', 'result', 'summary']) {
+      if (row[keyName] !== undefined) queue.push(row[keyName])
     }
   }
   return false
@@ -506,6 +746,61 @@ function removeExactLegacyManagedAgentBlocks(text: string): string {
     next = removeTomlTable(next, `agents.${spec.name}`)
   }
   return next
+}
+
+function stripLegacyUnsupportedAgentKeys(text: string): string {
+  let next = String(text || '')
+  next = removeTomlTableKey(next, 'agents', LEGACY_AGENTS_JOB_MAX_RUNTIME_KEY)
+  return next
+}
+
+function migrateLegacyMaxThreads(
+  text: string,
+  opts: {
+    sksOwned: boolean
+    targetMaxThreads: number
+    inheritedAgents: Record<string, unknown>
+  }
+): string {
+  let next = String(text || '')
+  const currentCanonical = readTomlTableInteger(next, 'agents', AGENTS_MAX_CONCURRENT_THREADS_KEY)
+  const currentLegacy = readTomlTableInteger(next, 'agents', LEGACY_AGENTS_MAX_THREADS_KEY)
+  const inheritedCanonical = positiveInteger(opts.inheritedAgents[AGENTS_MAX_CONCURRENT_THREADS_KEY])
+  const inheritedLegacy = positiveInteger(opts.inheritedAgents[LEGACY_AGENTS_MAX_THREADS_KEY])
+
+  if (currentCanonical !== null) {
+    if (opts.sksOwned && LEGACY_SKS_MAX_THREAD_VALUES.includes(currentCanonical)) {
+      next = upsertTomlTableKey(next, 'agents', `${AGENTS_MAX_CONCURRENT_THREADS_KEY} = ${opts.targetMaxThreads}`)
+    }
+    if (hasTomlTableKey(next, 'agents', LEGACY_AGENTS_MAX_THREADS_KEY) && opts.sksOwned) {
+      next = removeTomlTableKey(next, 'agents', LEGACY_AGENTS_MAX_THREADS_KEY)
+    }
+    return next
+  }
+
+  if (currentLegacy !== null) {
+    const migrated = opts.sksOwned && LEGACY_SKS_MAX_THREAD_VALUES.includes(currentLegacy)
+      ? opts.targetMaxThreads
+      : currentLegacy
+    next = upsertTomlTableKey(next, 'agents', `${AGENTS_MAX_CONCURRENT_THREADS_KEY} = ${migrated}`)
+    if (opts.sksOwned) next = removeTomlTableKey(next, 'agents', LEGACY_AGENTS_MAX_THREADS_KEY)
+    return next
+  }
+
+  if (inheritedCanonical !== null || inheritedLegacy !== null) return next
+  return upsertTomlTableKey(next, 'agents', `${AGENTS_MAX_CONCURRENT_THREADS_KEY} = ${opts.targetMaxThreads}`)
+}
+
+function readAgentsMaxThreads(text: string): number | null {
+  return readTomlTableInteger(text, 'agents', AGENTS_MAX_CONCURRENT_THREADS_KEY)
+    ?? readTomlTableInteger(text, 'agents', LEGACY_AGENTS_MAX_THREADS_KEY)
+}
+
+function readAgentsMaxThreadsFromRecord(agents: Record<string, unknown>): unknown {
+  if (positiveInteger(agents[AGENTS_MAX_CONCURRENT_THREADS_KEY]) !== null) {
+    return agents[AGENTS_MAX_CONCURRENT_THREADS_KEY]
+  }
+  return agents[LEGACY_AGENTS_MAX_THREADS_KEY]
 }
 
 function exactLegacyManagedAgentRow(
@@ -539,6 +834,25 @@ function removeTomlTable(text: string, table: string): string {
   return lines.join('\n').replace(/\n{3,}/g, '\n\n').trimEnd()
 }
 
+function removeTomlTableKey(text: string, table: string, key: string): string {
+  const lines = String(text || '').trimEnd().split('\n')
+  if (lines.length === 1 && lines[0] === '') return ''
+  const start = lines.findIndex((line) => isTomlTableHeader(line, table))
+  if (start === -1) return String(text || '')
+  let end = lines.length
+  for (let index = start + 1; index < lines.length; index += 1) {
+    if (/^\s*\[.+\]\s*(?:#.*)?$/.test(lines[index] || '')) {
+      end = index
+      break
+    }
+  }
+  const pattern = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`)
+  return lines
+    .filter((line, index) => index <= start || index >= end || !pattern.test(line || ''))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+}
+
 function hasOwn(value: Record<string, unknown>, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(value, key)
 }
@@ -563,6 +877,10 @@ function readTomlTableInteger(text: string, table: string, key: string): number 
 
 function hasTomlTableKey(text: string, table: string, key: string): boolean {
   return tomlTableKeyLine(text, table, key) !== null
+}
+
+function hasTomlTable(text: string, table: string): boolean {
+  return String(text || '').split('\n').some((line) => isTomlTableHeader(line, table))
 }
 
 function tomlTableKeyLine(text: string, table: string, key: string): string | null {
@@ -608,6 +926,25 @@ function upsertTomlTableKey(text: string, table: string, line: string): string {
     }
   }
   lines.splice(end, 0, line)
+  return lines.join('\n').replace(/\n{3,}/g, '\n\n')
+}
+
+function upsertTomlTable(text: string, table: string, block: string): string {
+  let lines = String(text || '').trimEnd().split('\n')
+  if (lines.length === 1 && lines[0] === '') lines = []
+  const start = lines.findIndex((entry) => isTomlTableHeader(entry, table))
+  const blockLines = String(block || '').trim().split('\n')
+  if (start === -1) {
+    return [...lines, ...(lines.length ? [''] : []), ...blockLines].join('\n').replace(/\n{3,}/g, '\n\n')
+  }
+  let end = lines.length
+  for (let index = start + 1; index < lines.length; index += 1) {
+    if (/^\s*\[.+\]\s*(?:#.*)?$/.test(lines[index] || '')) {
+      end = index
+      break
+    }
+  }
+  lines.splice(start, end - start, ...blockLines)
   return lines.join('\n').replace(/\n{3,}/g, '\n\n')
 }
 

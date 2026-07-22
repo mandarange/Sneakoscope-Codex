@@ -37,7 +37,7 @@ final class UpdatesViewController: NSViewController, ControlCenterPage {
         buttons.orientation = .horizontal; buttons.spacing = 8
         view = NativeView.stack([
             NativeView.title("Updates"),
-            NativeView.detail("SKS, Codex CLI, and Menu Bar status share one local snapshot. Network refresh only runs on demand or after expiry."),
+            NativeView.detail("SKS, Codex CLI, and Menu Bar status share one local snapshot. Prefer the latest Codex CLI; SKS stays version-agnostic and capability-gates features. Network refresh only runs on demand or after expiry."),
             status, codexUpdateStatus, stageStatus, remediation, buttons,
             NativeView.detail("Rollback guidance and the previous Menu Bar app remain available if final verification fails. The update receipt records the exact recovery command and stage state.")
         ])

@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Keep SKS version-agnostic across Codex CLI hosts: package tracks preferred latest `rust-v0.145.0` / `0.145.0`, soft floor stays `0.133.0`, and feature routes (Naruto MA v2, thread-list search, MCP timeouts, GPT-5.6 Terra/Luna/Sol) capability-gate with update CTAs instead of a hard “only 0.145” product lock.
+- Induce Codex CLI updates from SKS Menu Bar and Center: status menu **Update Codex CLI Now**, Overview/Diagnostics/Updates CTAs, and clearer prefer-latest copy wired to `sks codex update`.
+- Align Naruto with Codex stable opt-in multi-agent V2 when available: enable `[features.multi_agent_v2]`, migrate `[agents]` to `max_concurrent_threads_per_session` plus default subagent model/reasoning, strip removed `job_max_runtime_seconds`, and fail closed with update guidance when MA v2 is missing (no legacy process-runtime revival).
+
 ## [7.0.4] - 2026-07-21
 
 ### Removed

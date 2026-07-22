@@ -1,10 +1,16 @@
 import { CURRENT_CODEX_RELEASE_MANIFEST } from './codex-release-manifest.js';
 
 export const CODEX_COMPAT_SCHEMA = 'sks.codex-compat.v2';
+/** Preferred / recommended latest channel (package-tracked), not an exclusive lock. */
 export const CODEX_REQUIRED_BASELINE_TAG = CURRENT_CODEX_RELEASE_MANIFEST.targetTag;
-export const CODEX_REQUIRED_VERSION = CURRENT_CODEX_RELEASE_MANIFEST.requiredCliVersion;
+export const CODEX_REQUIRED_VERSION = CURRENT_CODEX_RELEASE_MANIFEST.preferredCliVersion
+  || CURRENT_CODEX_RELEASE_MANIFEST.requiredCliVersion;
+export const CODEX_PREFERRED_VERSION = CODEX_REQUIRED_VERSION;
+export const CODEX_MINIMUM_SUPPORTED_VERSION = CURRENT_CODEX_RELEASE_MANIFEST.minimumSupportedVersion;
 export const CODEX_HOOK_SCHEMA_BASELINE_TAG = CURRENT_CODEX_RELEASE_MANIFEST.targetTag;
 export const CODEX_HOOK_SCHEMA_VERSION = CURRENT_CODEX_RELEASE_MANIFEST.targetTag;
+
+const UPDATE_CTA = 'prefer latest Codex CLI via `sks codex update` or Menu Bar / SKS Center → Update Codex CLI Now';
 
 export function compareSemverLike(a: unknown, b: unknown): number {
   const pa = parseVersionParts(a);
@@ -24,31 +30,115 @@ export function parseCodexVersionText(text: unknown): string | null {
 }
 
 export function requiredCodexVersionFromBaseline(value: unknown): string {
-  return parseCodexVersionText(value) || CODEX_REQUIRED_VERSION;
+  return parseCodexVersionText(value) || CODEX_PREFERRED_VERSION;
 }
 
-export function codexVersionPolicy(detected: { available?: boolean; version?: string | null; source?: string | null } = {}, opts: { requiredBaseline?: string | null; explicitRequire?: boolean } = {}) {
-  const requiredBaseline = opts.requiredBaseline || CODEX_REQUIRED_BASELINE_TAG;
-  const requiredVersion = requiredCodexVersionFromBaseline(requiredBaseline);
+export type CodexVersionPolicyStatus =
+  | 'ok'
+  | 'integration_optional'
+  | 'below_preferred_baseline'
+  | 'blocked_below_minimum_supported'
+  | 'blocked_below_required_baseline'
+  | 'blocked_missing_required_codex';
+
+/**
+ * Version-agnostic policy: prefer the package-tracked latest channel, keep a soft
+ * minimum for general integration, and hard-block only when explicitRequire is set
+ * or the host is below the soft floor.
+ */
+export function codexVersionPolicy(
+  detected: { available?: boolean; version?: string | null; source?: string | null } = {},
+  opts: {
+    requiredBaseline?: string | null;
+    explicitRequire?: boolean;
+    minimumSupported?: string | null;
+  } = {}
+) {
+  const preferredBaseline = opts.requiredBaseline || CODEX_REQUIRED_BASELINE_TAG;
+  const preferredVersion = requiredCodexVersionFromBaseline(preferredBaseline);
+  const minimumSupported = parseCodexVersionText(opts.minimumSupported)
+    || CODEX_MINIMUM_SUPPORTED_VERSION;
+
   if (!detected.available || !detected.version) {
     return {
       ok: opts.explicitRequire === true ? false : true,
-      status: opts.explicitRequire === true ? 'blocked_missing_required_codex' : 'integration_optional',
-      required_baseline: requiredBaseline,
-      required_version: requiredVersion,
-      warnings: [`codex binary not detected; release checks use ${requiredBaseline} compatibility policy and vendored ${CODEX_HOOK_SCHEMA_BASELINE_TAG} hook snapshots`]
+      status: (opts.explicitRequire === true
+        ? 'blocked_missing_required_codex'
+        : 'integration_optional') as CodexVersionPolicyStatus,
+      preferred_baseline: preferredBaseline,
+      preferred_version: preferredVersion,
+      required_baseline: preferredBaseline,
+      required_version: preferredVersion,
+      minimum_supported_version: minimumSupported,
+      update_available_hint: true,
+      warnings: [
+        `codex binary not detected; release checks use preferred ${preferredBaseline} channel and vendored ${CODEX_HOOK_SCHEMA_BASELINE_TAG} hook snapshots`,
+        UPDATE_CTA
+      ]
     };
   }
-  if (compareSemverLike(detected.version, requiredVersion) >= 0) {
-    return { ok: true, status: 'ok', required_baseline: requiredBaseline, required_version: requiredVersion, warnings: [] as string[] };
+
+  if (compareSemverLike(detected.version, preferredVersion) >= 0) {
+    return {
+      ok: true,
+      status: 'ok' as CodexVersionPolicyStatus,
+      preferred_baseline: preferredBaseline,
+      preferred_version: preferredVersion,
+      required_baseline: preferredBaseline,
+      required_version: preferredVersion,
+      minimum_supported_version: minimumSupported,
+      update_available_hint: false,
+      warnings: [] as string[]
+    };
   }
+
+  if (opts.explicitRequire === true) {
+    return {
+      ok: false,
+      status: 'blocked_below_required_baseline' as CodexVersionPolicyStatus,
+      preferred_baseline: preferredBaseline,
+      preferred_version: preferredVersion,
+      required_baseline: preferredBaseline,
+      required_version: preferredVersion,
+      minimum_supported_version: minimumSupported,
+      update_available_hint: true,
+      warnings: [
+        `detected Codex ${detected.version} from ${detected.source || 'unknown'}; explicit require needs ${preferredBaseline} or newer`,
+        UPDATE_CTA
+      ]
+    };
+  }
+
+  if (compareSemverLike(detected.version, minimumSupported) < 0) {
+    return {
+      ok: false,
+      status: 'blocked_below_minimum_supported' as CodexVersionPolicyStatus,
+      preferred_baseline: preferredBaseline,
+      preferred_version: preferredVersion,
+      required_baseline: preferredBaseline,
+      required_version: preferredVersion,
+      minimum_supported_version: minimumSupported,
+      update_available_hint: true,
+      warnings: [
+        `detected Codex ${detected.version} from ${detected.source || 'unknown'}; below soft minimum ${minimumSupported}`,
+        UPDATE_CTA
+      ]
+    };
+  }
+
+  // Soft prefer-latest: SKS keeps working; feature routes gate themselves.
   return {
-    ok: false,
-    status: 'blocked_below_required_baseline',
-    required_baseline: requiredBaseline,
-    required_version: requiredVersion,
+    ok: true,
+    status: 'below_preferred_baseline' as CodexVersionPolicyStatus,
+    preferred_baseline: preferredBaseline,
+    preferred_version: preferredVersion,
+    required_baseline: preferredBaseline,
+    required_version: preferredVersion,
+    minimum_supported_version: minimumSupported,
+    update_available_hint: true,
     warnings: [
-      `detected Codex ${detected.version} from ${detected.source || 'unknown'}; upgrade to ${requiredBaseline} or newer`
+      `detected Codex ${detected.version} from ${detected.source || 'unknown'}; preferred channel is ${preferredBaseline} (${preferredVersion})`,
+      UPDATE_CTA
     ]
   };
 }

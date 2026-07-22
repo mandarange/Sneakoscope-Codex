@@ -33,6 +33,8 @@ assertGate(naruto.includes('prepareOfficialSubagentMission'), 'Naruto must prepa
 assertGate(naruto.includes('persistOrReuseTrustworthySubagentParentSummary'), 'Naruto must persist a trustworthy parent integration summary');
 assertGate(runner.includes("workflow: 'official_codex_subagent'"), 'official workflow identity must be persisted');
 assertGate(runner.includes("'agents.max_depth=1'"), 'official subagent depth must remain parent-owned and non-recursive');
+assertGate(runner.includes('features.multi_agent_v2='), 'official Naruto path must enable stable multi-agent V2');
+assertGate(runner.includes('agents.max_concurrent_threads_per_session='), 'official Naruto path must use 0.145 concurrency key');
 assertGate(runner.includes('requested_subagents') && runner.includes('max_threads'), 'official workflow must record requested and effective thread budgets');
 for (const artifact of [
   'subagent-plan.json',

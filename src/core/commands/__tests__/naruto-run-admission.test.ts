@@ -458,6 +458,7 @@ test('protected child PID prevents stale recovery after the parent owner dies', 
       if (recovered.kind === 'executed') assert.equal(recovered.value, 'recovered-after-child-exit')
     } finally {
       child.kill('SIGKILL')
+      await onceClose(child, 2_000).catch(() => undefined)
     }
   })
 })
@@ -477,23 +478,42 @@ test('admission lease persists a protected child PID in the existing lock owner 
       assert.deepEqual((persisted as { protected_pids?: number[] }).protected_pids, [child.pid])
     } finally {
       child.kill('SIGKILL')
+      await onceClose(child, 2_000).catch(() => undefined)
     }
   })
 })
 
-test('macOS black-box: an ordinary spawned child survives parent SIGKILL', { skip: process.platform !== 'darwin' }, async () => {
+test('macOS black-box: an ordinary spawned child survives parent SIGKILL', {
+  skip: process.platform !== 'darwin',
+  timeout: 5_000
+}, async () => {
+  // Use writeSync(1) so the pid is not stuck in stdio block-buffering when
+  // stdout is a pipe/unix-socket under the test runner. console.log has left
+  // admission workers waiting forever on firstPid in full-suite runs.
   const parentCode = [
     'const { spawn } = require("node:child_process")',
-    'const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: ["ignore", "pipe", "pipe"] })',
-    'console.log(child.pid)',
+    'const fs = require("node:fs")',
+    'const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore", detached: true })',
+    'child.unref()',
+    'fs.writeSync(1, String(child.pid) + "\\n")',
     'setInterval(() => {}, 1000)'
   ].join(';')
   const parent = spawn(process.execPath, ['-e', parentCode], { stdio: ['ignore', 'pipe', 'pipe'] })
-  const childPid = await firstPid(parent)
-  parent.kill('SIGKILL')
-  await delay(250)
-  assert.equal(pidAlive(childPid), true)
-  process.kill(childPid, 'SIGKILL')
+  let childPid = 0
+  try {
+    childPid = await firstPid(parent, 2_000)
+    parent.kill('SIGKILL')
+    await onceClose(parent, 2_000)
+    await delay(250)
+    assert.equal(pidAlive(childPid), true)
+  } finally {
+    if (parent.exitCode === null && parent.signalCode === null) {
+      try { parent.kill('SIGKILL') } catch {}
+    }
+    if (childPid > 0 && pidAlive(childPid)) {
+      try { process.kill(childPid, 'SIGKILL') } catch {}
+    }
+  }
 })
 
 test('crashes before preparation and after plan, parent summary, or gate recover once in the same mission', { timeout: 20_000 }, async () => {
@@ -505,9 +525,8 @@ test('crashes before preparation and after plan, parent summary, or gate recover
       const ready = path.join(dir, `crash-ready-${checkpoint}`)
       const child = spawnCrashCheckpointOwner({ moduleUrl, dir, missionId, ready, checkpoint })
       await waitFor(async () => await exists(ready), 5_000)
-      const closed = new Promise<void>((resolve) => child.once('close', () => resolve()))
       child.kill('SIGKILL')
-      await closed
+      await onceClose(child, 2_000)
       await delay(80)
 
       let recoveries = 0
@@ -777,16 +796,50 @@ async function killProtectedAdmissionChildren(dir: string): Promise<void> {
   }
 }
 
-async function firstPid(child: ReturnType<typeof spawn>): Promise<number> {
+async function firstPid(child: ReturnType<typeof spawn>, timeoutMs = 2_000): Promise<number> {
+  const stdoutStream = child.stdout
+  if (!stdoutStream) {
+    throw new Error('parent fixture stdout is not a readable pipe')
+  }
   return new Promise((resolve, reject) => {
     let stdout = ''
-    child.stdout?.on('data', (chunk) => {
+    let settled = false
+    const timer = setTimeout(() => {
+      finish(() => reject(new Error(`parent fixture pid timeout after ${timeoutMs}ms: ${JSON.stringify(stdout)}`)))
+    }, timeoutMs)
+    const onData = (chunk: Buffer | string) => {
       stdout += String(chunk)
-      const pid = Number(stdout.trim())
-      if (Number.isSafeInteger(pid) && pid > 0) resolve(pid)
+      const match = stdout.match(/\b(\d+)\b/)
+      const pid = match ? Number(match[1]) : NaN
+      if (Number.isSafeInteger(pid) && pid > 0) finish(() => resolve(pid))
+    }
+    const onError = (error: Error) => finish(() => reject(error))
+    const onClose = (code: number | null) => {
+      finish(() => reject(new Error(`parent fixture closed before child pid (${code}): ${JSON.stringify(stdout)}`)))
+    }
+    const finish = (fn: () => void) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      stdoutStream.off('data', onData)
+      child.off('error', onError)
+      child.off('close', onClose)
+      fn()
+    }
+    stdoutStream.on('data', onData)
+    child.once('error', onError)
+    child.once('close', onClose)
+  })
+}
+
+async function onceClose(child: ReturnType<typeof spawn>, timeoutMs: number): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`child close timeout after ${timeoutMs}ms`)), timeoutMs)
+    child.once('close', () => {
+      clearTimeout(timer)
+      resolve()
     })
-    child.once('error', reject)
-    child.once('close', (code) => reject(new Error(`parent fixture closed before child pid (${code})`)))
   })
 }
 

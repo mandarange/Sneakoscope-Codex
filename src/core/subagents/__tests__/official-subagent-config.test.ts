@@ -40,9 +40,30 @@ test('standalone parent args launch one Sol Max Codex parent with the official t
   assert.deepEqual(args.slice(0, 6), ['exec', '--json', '-m', 'gpt-5.6-sol', '-c', 'model_reasoning_effort="max"'])
   assert.ok(args.includes('model_provider="openai"'))
   assert.ok(args.includes('forced_login_method="chatgpt"'))
-  assert.ok(args.includes('agents.max_threads=12'))
+  assert.ok(args.includes('agents.max_concurrent_threads_per_session=12'))
   assert.ok(args.includes('agents.max_depth=1'))
+  assert.ok(args.includes('agents.enabled=true'))
+  assert.ok(args.some((arg) => typeof arg === 'string' && arg.includes('features.multi_agent_v2=') && arg.includes('enabled=true')))
+  assert.ok(args.includes('agents.default_subagent_model="gpt-5.6-sol"'))
+  assert.ok(args.includes('agents.default_subagent_reasoning_effort="high"'))
   assert.equal(args.filter((arg) => arg === 'exec').length, 1)
+})
+
+test('Naruto capability branching prefers multi_agent_v2 probes and update CTAs', async () => {
+  const { assertNarutoMultiAgentV2Capability, buildCodexCapabilityMatrix } = await import('../../codex-compat/codex-capability-matrix.js')
+  const available = buildCodexCapabilityMatrix({
+    version: '0.145.0',
+    helpText: 'multi_agent_v2 max_concurrent_threads_per_session'
+  })
+  assert.equal(assertNarutoMultiAgentV2Capability(available).ok, true)
+  const missing = buildCodexCapabilityMatrix({
+    version: '0.140.0',
+    helpText: 'legacy collab only'
+  })
+  const blocked = assertNarutoMultiAgentV2Capability(missing)
+  assert.equal(blocked.ok, false)
+  assert.ok(blocked.blockers.includes('update_codex_cli'))
+  assert.ok(blocked.guidance.some((line) => /Menu Bar|sks codex update/i.test(line)))
 })
 
 test('Codex thread environment selects the in-app path unless standalone is explicit', () => {
@@ -145,33 +166,45 @@ test('fresh project config receives the official Codex subagent defaults', () =>
   const text = mergeOfficialSubagentConfig('')
   const parsed = parse(text) as Record<string, any>
 
-  assert.equal(parsed.agents.max_threads, 12)
+  assert.equal(parsed.agents.max_concurrent_threads_per_session, 12)
   assert.equal(parsed.agents.max_depth, 1)
-  assert.equal(parsed.agents.job_max_runtime_seconds, 1200)
+  assert.equal(parsed.agents.enabled, true)
   assert.equal(parsed.agents.interrupt_message, true)
+  assert.equal(parsed.agents.default_subagent_model, 'gpt-5.6-sol')
+  assert.equal(parsed.agents.default_subagent_reasoning_effort, 'high')
+  assert.equal(Object.hasOwn(parsed.agents, 'job_max_runtime_seconds'), false)
+  assert.equal(Object.hasOwn(parsed.agents, 'max_threads'), false)
   assert.equal(Object.hasOwn(parsed.agents, 'warn_on_max_threads'), false)
+  assert.equal(parsed.features.multi_agent_v2.enabled, true)
+  assert.equal(parsed.features.multi_agent_v2.max_concurrent_threads_per_session, 13)
+  assert.equal(parsed.features.multi_agent_v2.expose_spawn_agent_model_overrides, true)
 })
 
-test('project and inherited user max_threads values are preserved', () => {
+test('project and inherited user concurrency values are preserved', () => {
   for (const value of [3, 20]) {
-    const project = mergeOfficialSubagentConfig(`[agents]\nmax_threads = ${value}\n`)
-    assert.equal((parse(project) as Record<string, any>).agents.max_threads, value)
+    const project = mergeOfficialSubagentConfig(`[agents]\nmax_concurrent_threads_per_session = ${value}\n`)
+    assert.equal((parse(project) as Record<string, any>).agents.max_concurrent_threads_per_session, value)
 
     const inherited = mergeOfficialSubagentConfig('', {
-      inheritedText: `[agents]\nmax_threads = ${value}\n`
+      inheritedText: `[agents]\nmax_concurrent_threads_per_session = ${value}\n`
     })
-    assert.doesNotMatch(inherited, /^max_threads\s*=/m)
-    assert.equal((parse(inherited) as Record<string, any>).agents.max_threads, undefined)
+    const parsed = parse(inherited) as Record<string, any>
+    assert.equal(parsed.agents.max_concurrent_threads_per_session, undefined)
+    assert.equal(Object.hasOwn(parsed.agents, 'max_concurrent_threads_per_session'), false)
   }
 })
 
 test('legacy 4/5/historical 6 migrate only with proven SKS ownership', () => {
   for (const value of [4, 5, 6]) {
     const userOwned = mergeOfficialSubagentConfig(`[agents]\nmax_threads = ${value}\n`)
-    assert.equal((parse(userOwned) as Record<string, any>).agents.max_threads, value)
+    const userParsed = parse(userOwned) as Record<string, any>
+    assert.equal(userParsed.agents.max_concurrent_threads_per_session, value)
+    assert.equal(Object.hasOwn(userParsed.agents, 'max_threads'), true)
 
     const sksOwned = mergeOfficialSubagentConfig(`[agents]\nmax_threads = ${value}\n`, { sksOwned: true })
-    assert.equal((parse(sksOwned) as Record<string, any>).agents.max_threads, 12)
+    const ownedParsed = parse(sksOwned) as Record<string, any>
+    assert.equal(ownedParsed.agents.max_concurrent_threads_per_session, 12)
+    assert.equal(Object.hasOwn(ownedParsed.agents, 'max_threads'), false)
   }
 })
 
@@ -215,7 +248,7 @@ test('owned config migration removes only exact legacy agent child tables', () =
 
   const merged = mergeOfficialSubagentConfig(source, { sksOwned: true })
   const agents = (parse(merged) as Record<string, any>).agents
-  assert.equal(agents.max_threads, 12)
+  assert.equal(agents.max_concurrent_threads_per_session, 12)
   assert.equal(agents.analysis_scout.description, 'operator modified scout')
   for (const name of ['native_agent', 'team_consensus', 'implementation_worker', 'db_safety_reviewer', 'qa_reviewer']) {
     assert.equal(Object.hasOwn(agents, name), false, name)
@@ -255,7 +288,7 @@ test('SKS config ownership accepts only explicit inventory marker receipt or exa
     migrationReceipt: currentReceipt
   })
   assert.equal(receipt.owned, true)
-  assert.ok(receipt.reasons.includes('migration_receipt:agents.max_threads'))
+  assert.ok(receipt.reasons.includes('migration_receipt:agents.max_concurrent_threads_per_session'))
 
   for (const migrationReceipt of [
     { ...currentReceipt, status: 'blocked', blockers: ['migration_failed'] },
@@ -302,7 +335,7 @@ test('agents parent table is inserted safely before an existing custom child tab
   const merged = mergeOfficialSubagentConfig('[agents.custom]\ndescription = "user role"\n')
   const parsed = parse(merged) as Record<string, any>
 
-  assert.equal(parsed.agents.max_threads, 12)
+  assert.equal(parsed.agents.max_concurrent_threads_per_session, 12)
   assert.equal(parsed.agents.custom.description, 'user role')
   assert.ok(merged.indexOf('[agents]') < merged.indexOf('[agents.custom]'))
 })
@@ -312,9 +345,9 @@ test('official config merge supports an agents header with an inline comment', (
   const merged = mergeOfficialSubagentConfig(source, { sksOwned: true })
   const parsed = parse(merged) as Record<string, any>
 
-  assert.equal(parsed.agents.max_threads, 12)
+  assert.equal(parsed.agents.max_concurrent_threads_per_session, 12)
   assert.equal(parsed.agents.max_depth, 1)
-  assert.equal(parsed.agents.job_max_runtime_seconds, 1200)
+  assert.equal(Object.hasOwn(parsed.agents, 'job_max_runtime_seconds'), false)
   assert.equal(parsed.agents.interrupt_message, true)
   assert.match(merged, /\[agents\] # operator note/)
 })
@@ -559,7 +592,7 @@ test('official config reader resolves project over global and preserves inherite
   assert.equal(config.sources.maxDepth, 'project')
   assert.equal(config.interruptMessage, false)
   assert.equal(config.sources.interruptMessage, 'global')
-  assert.deepEqual(config.warnings, [])
+  assert.deepEqual(config.warnings, ['global_legacy_agents_max_threads_present'])
 })
 
 test('max_depth above one is coerced to one and reported as a warning', async () => {
@@ -575,7 +608,10 @@ test('max_depth above one is coerced to one and reported as a warning', async ()
   const config = await readOfficialSubagentConfig(root, { codexHome })
   assert.equal(config.maxDepth, 1)
   assert.equal(config.sources.maxDepth, 'default')
-  assert.deepEqual(config.warnings, ['official_subagent_max_depth_coerced_to_one:4:project'])
+  assert.deepEqual(config.warnings, [
+    'official_subagent_max_depth_coerced_to_one:4:project',
+    'project_legacy_agents_max_threads_present'
+  ])
 })
 
 test('project setup migrates marker-proven legacy max_threads without requiring a current manifest', async () => {
@@ -592,7 +628,7 @@ test('project setup migrates marker-proven legacy max_threads without requiring 
     codexHome: path.join(home, '.codex')
   })
   const parsed = parse(await fs.readFile(configPath, 'utf8')) as Record<string, any>
-  assert.equal(parsed.agents.max_threads, 12)
+  assert.equal(parsed.agents.max_concurrent_threads_per_session, 12)
   assert.equal(result.codex_config_install.ownership_proof.owned, true)
   assert.ok(result.codex_config_install.ownership_proof.reasons.includes('managed_marker_or_hash'))
 })
@@ -608,9 +644,9 @@ test('doctor repair migrates an SKS-owned legacy thread value and preserves max_
   const result = await repairCodexStartupConfig({ root, apply: true, home, codexHome })
   const parsed = parse(await fs.readFile(configPath, 'utf8')) as Record<string, any>
   assert.equal(result.ok, true)
-  assert.equal(parsed.agents.max_threads, 12)
+  assert.equal(parsed.agents.max_concurrent_threads_per_session, 12)
   assert.equal(parsed.agents.max_depth, 4)
-  assert.equal(parsed.agents.job_max_runtime_seconds, 1200)
+  assert.equal(Object.hasOwn(parsed.agents, 'job_max_runtime_seconds'), false)
   assert.equal(parsed.agents.interrupt_message, true)
   assert.ok(result.config_file_repair.warnings.includes('official_subagent_max_depth_coerced_to_one:4:project'))
   assert.deepEqual(

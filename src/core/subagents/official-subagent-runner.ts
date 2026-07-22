@@ -4,10 +4,13 @@ import path from 'node:path'
 import { randomId, runProcess, writeJsonAtomic, type RunProcessResult } from '../fsx.js'
 import { missionDir } from '../mission.js'
 import {
+  DEFAULT_SUBAGENT_EFFORT,
+  DEFAULT_SUBAGENT_MODEL,
   NARUTO_PARENT_EFFORT,
   NARUTO_PARENT_MODEL
 } from './model-policy.js'
 import { inspectCodexLbCliLaunchRecovery } from '../codex-control/codex-lb-launch-recovery.js'
+import { probeNarutoCodexCapability } from '../codex-compat/codex-capability-matrix.js'
 import { resolveOfficialCodexPackageRuntime } from '../codex-runtime/resolve-codex-runtime.js'
 import { withFileLock } from '../locks/file-lock.js'
 import {
@@ -116,6 +119,8 @@ export function buildOfficialSubagentCodexArgs(input: {
   projectConfigArgs?: readonly string[]
   hostCapabilityConfigArgs?: readonly string[]
 }): string[] {
+  const maxThreads = Math.max(1, Math.floor(input.maxThreads))
+  const maV2Total = maxThreads + 1
   return [
     'exec',
     '--json',
@@ -124,8 +129,14 @@ export function buildOfficialSubagentCodexArgs(input: {
     '-c', `model_reasoning_effort="${NARUTO_PARENT_EFFORT}"`,
     '-c', 'model_provider="openai"',
     '-c', 'forced_login_method="chatgpt"',
-    '-c', `agents.max_threads=${Math.max(1, Math.floor(input.maxThreads))}`,
+    // Codex 0.145+ stable opt-in multi-agent V2 (authoritative over V1 collab).
+    '-c', `features.multi_agent_v2={enabled=true,max_concurrent_threads_per_session=${maV2Total},expose_spawn_agent_model_overrides=true}`,
+    '-c', 'agents.enabled=true',
+    '-c', `agents.max_concurrent_threads_per_session=${maxThreads}`,
     '-c', 'agents.max_depth=1',
+    '-c', `agents.default_subagent_model="${DEFAULT_SUBAGENT_MODEL}"`,
+    '-c', `agents.default_subagent_reasoning_effort="${DEFAULT_SUBAGENT_EFFORT}"`,
+    '-c', 'agents.interrupt_message=true',
     ...(input.projectConfigArgs || []),
     ...(input.hostCapabilityConfigArgs || []),
     '--output-last-message', input.parentSummaryFile,
@@ -406,6 +417,7 @@ export async function runOfficialSubagentWorkflow(input: OfficialSubagentWorkflo
     : inheritedSecretValues
 
   let codexCommand: string
+  let codexVersion: string | null = null
   if (input.runProcessImpl) {
     codexCommand = input.codexBin || 'codex'
   } else {
@@ -441,6 +453,34 @@ export async function runOfficialSubagentWorkflow(input: OfficialSubagentWorkflo
       }
     }
     codexCommand = runtime.identity.realpath
+    codexVersion = runtime.identity.version || null
+  }
+
+  // Naruto requires Codex multi-agent V2 when available; older hosts fail with
+  // an update CTA instead of silently reviving a legacy process runtime.
+  if (!input.runProcessImpl) {
+    const capability = await probeNarutoCodexCapability({
+      codexBin: codexCommand,
+      version: codexVersion,
+      env: childEnv
+    })
+    if (!capability.naruto.ok) {
+      return {
+        ...base,
+        ok: false,
+        status: 'codex_capability_blocked',
+        prepared: false,
+        codex_exit_code: null,
+        parent_summary: null,
+        parent_summary_file: null,
+        host_capability_runtime: hostCapabilityRuntime,
+        host_capability_evidence: hostCapabilityCollector.finish(),
+        capability_matrix: capability.matrix,
+        blockers: [...capability.naruto.blockers],
+        operator_actions: capability.naruto.guidance,
+        completion_evidence: false
+      }
+    }
   }
 
   let globalHostCapabilityConfigured = false

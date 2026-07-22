@@ -684,7 +684,8 @@ function mergeManagedCodexConfigToml(existingContent: any = '', opts: any = {}) 
   }
   next = removeWholeTomlTable(next, 'user.fast_mode');
   next = removeWholeTomlTable(next, 'profiles.sks-fast-high');
-  next = removeWholeTomlTable(next, 'features.multi_agent_v2');
+  // Codex 0.145 stabilized opt-in multi-agent V2. Project merge owns the
+  // `[features.multi_agent_v2]` table (enabled + concurrency + model overrides).
   next = mergeOfficialSubagentConfig(next, {
     sksOwned: opts.sksOwned === true,
     inheritedText: opts.inheritedText || ''

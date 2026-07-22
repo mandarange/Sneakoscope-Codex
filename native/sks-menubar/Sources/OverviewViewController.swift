@@ -89,6 +89,9 @@ enum OverviewSummary {
             let menu = update["menubar"] as? [String: Any]
             lines.append("SKS install: \(versionSummary(sks))")
             lines.append("Codex CLI: \(versionSummary(codex)) · Codex app: \(codexAppState)")
+            if let inducement = codexUpdateInducement(codex) {
+                lines.append(inducement)
+            }
 
             var menuParts = ["running build \(menuBarBuild)"]
             if let expected = menu?["expected_version"] as? String { menuParts.append("expected \(expected)") }
@@ -185,6 +188,13 @@ enum OverviewSummary {
         return "\(current) · latest \(latest)"
     }
 
+    private static func codexUpdateInducement(_ value: [String: Any]?) -> String? {
+        guard value?["update_available"] as? Bool == true else { return nil }
+        let current = nonEmpty(value?["current"] as? String) ?? "installed"
+        let latest = nonEmpty(value?["latest"] as? String) ?? "preferred latest"
+        return "Action: update Codex CLI (\(current) → \(latest)) from Updates, or choose Update Codex CLI Now in the menu bar."
+    }
+
     private static func verificationState(_ value: Any?) -> String {
         guard let value = value as? Bool else { return "unknown" }
         return value ? "verified" : "needs attention"
@@ -227,6 +237,7 @@ final class OverviewViewController: NSViewController, ControlCenterPage {
     private var generation = 0
     private var doctorButton: NSButton!
     private var refreshButton: NSButton!
+    private var updateCodexButton: NSButton!
 
     init(processClient: ProcessClient, operations: OperationCoordinator) {
         self.processClient = processClient
@@ -238,12 +249,14 @@ final class OverviewViewController: NSViewController, ControlCenterPage {
     override func loadView() {
         doctorButton = NativeView.button("Run Doctor", target: self, action: #selector(doctor))
         refreshButton = NativeView.button("Refresh", target: self, action: #selector(refreshStatus))
-        let buttons = NSStackView(views: [doctorButton, refreshButton])
+        updateCodexButton = NativeView.button("Update Codex CLI", target: self, action: #selector(updateCodexCLI))
+        updateCodexButton.setAccessibilityHelp("Update the operator Codex CLI to the preferred latest channel.")
+        let buttons = NSStackView(views: [doctorButton, refreshButton, updateCodexButton])
         buttons.orientation = .horizontal
         buttons.spacing = 8
         view = NativeView.stack([
             NativeView.title("Overview"),
-            NativeView.detail("Menu Bar build \(AppRuntime.packageVersion) · Local health for SKS, Codex CLI, MCP, Remote, and operations."),
+            NativeView.detail("Menu Bar build \(AppRuntime.packageVersion) · Local health for SKS, Codex CLI, MCP, Remote, and operations. Prefer the latest Codex CLI; SKS stays version-agnostic and capability-gates features."),
             status,
             notificationInbox,
             buttons
@@ -263,6 +276,39 @@ final class OverviewViewController: NSViewController, ControlCenterPage {
 
     @objc private func refreshStatus() {
         loadStatus(forceUpdateRefresh: true)
+    }
+
+    @objc private func updateCodexCLI() {
+        guard let operation = operations.begin(kind: "codex-cli-update", mutationGroup: "update", summary: "Update Codex CLI") else {
+            status.stringValue = "Another update or MCP mutation is already running. Open Updates to review it."
+            return
+        }
+        updateCodexButton?.isEnabled = false
+        doctorButton?.isEnabled = false
+        refreshButton?.isEnabled = false
+        status.stringValue = "Updating Codex CLI to the preferred latest…"
+        _ = operations.update(operation, state: .running, stage: "running", progress: nil, summary: status.stringValue)
+        processClient.run(["codex", "update", "--json"], timeout: nil) { [weak self] result in
+            guard let self = self else { return }
+            let ok = result.code == 0
+                && !result.truncated
+                && (self.json(result.output)?["ok"] as? Bool == true)
+                && (self.json(result.output)?["schema"] as? String == "sks.codex-cli-update-result.v1")
+            _ = self.operations.update(
+                operation,
+                state: ok ? .succeeded : .failed,
+                stage: "complete",
+                progress: 1,
+                summary: ok ? "Codex CLI update completed" : "Codex CLI update failed"
+            )
+            self.updateCodexButton?.isEnabled = true
+            self.doctorButton?.isEnabled = true
+            self.refreshButton?.isEnabled = true
+            self.status.stringValue = ok
+                ? "Codex CLI update completed. Refreshing shared update status…"
+                : "Codex CLI update needs attention. Open Updates or Diagnostics for structured guidance."
+            self.loadStatus(forceUpdateRefresh: true)
+        }
     }
 
     private func loadStatus(forceUpdateRefresh: Bool) {

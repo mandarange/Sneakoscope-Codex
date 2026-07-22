@@ -45,10 +45,15 @@ export async function postcheckCodexStartupConfig(input: {
     relative_config_files: [],
     unsupported_managed_role_fields: false,
     official_subagent_config: {
+      enabled: officialConfig.enabled,
       max_threads: officialConfig.maxThreads,
+      max_concurrent_threads_per_session: officialConfig.maxThreads,
       max_depth: officialConfig.maxDepth,
       job_max_runtime_seconds: officialConfig.jobMaxRuntimeSeconds,
       interrupt_message: officialConfig.interruptMessage,
+      default_subagent_model: officialConfig.defaultSubagentModel,
+      default_subagent_reasoning_effort: officialConfig.defaultSubagentReasoningEffort,
+      multi_agent_v2: officialConfig.multiAgentV2,
       sources: officialConfig.sources,
       warnings: officialConfig.warnings
     },

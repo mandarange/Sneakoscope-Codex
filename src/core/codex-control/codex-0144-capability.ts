@@ -181,7 +181,7 @@ async function schemaProbeForMode(root: string, codexBin: string, requireReal: b
 }
 
 async function shippedSchemaProbe(): Promise<{ ok: boolean; text: string; sha256: string | null; mode: 'shipped-manifest-cache' }> {
-  const schemaRoot = path.join(packageRoot(), 'schemas', 'codex', 'app-server-0.144');
+  const schemaRoot = path.join(packageRoot(), 'schemas', 'codex', 'app-server-0.145');
   const files = await listFiles(schemaRoot).catch(() => []);
   if (!files.length) return { ok: false, text: 'shipped schema cache missing', sha256: null, mode: 'shipped-manifest-cache' };
   const rows = await Promise.all(files.map(async (file) => {

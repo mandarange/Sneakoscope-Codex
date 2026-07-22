@@ -99,7 +99,9 @@ async function probeHelp(codexBin: string | null | undefined, env: NodeJS.Proces
   const run = await runProcess(bin, ['--help'], { env, timeoutMs: 5000, maxOutputBytes: 128 * 1024 }).catch(() => null)
   const text = `${run?.stdout || ''}${run?.stderr || ''}`
   if (!run || run.code !== 0 || !text) return unknownProbe(['codex_help_unavailable'])
-  const legacyV2 = /\bmulti_agent_v2\b/.test(text)
+  // Codex 0.145+ stabilizes opt-in multi-agent V2; spawn_agent/agent_type remain
+  // the native role surface under that backend.
+  const multiAgentV2 = /\bmulti_agent_v2\b/.test(text)
   const supported = /\bagent_type\b/.test(text) && /\bspawn_agent\b/.test(text)
   return {
     schema: 'sks.codex-agent-type-probe.v1',
@@ -109,11 +111,13 @@ async function probeHelp(codexBin: string | null | undefined, env: NodeJS.Proces
     source: supported ? 'codex-help' : 'unknown',
     spawn_tool_name: supported ? 'spawn_agent' : 'unknown',
     schema_path: supported ? 'codex --help' : null,
-    evidence: supported ? ['help_mentions_agent_type', 'help_mentions_spawn_agent'] : legacyV2 ? ['legacy_multi_agent_v2_ignored'] : [],
+    evidence: [
+      ...(supported ? ['help_mentions_agent_type', 'help_mentions_spawn_agent'] : []),
+      ...(multiAgentV2 ? ['help_mentions_multi_agent_v2'] : [])
+    ],
     blockers: [],
     warnings: [
-      ...(supported ? [] : ['agent_type_not_found_in_help']),
-      ...(legacyV2 ? ['legacy_multi_agent_v2_ignored_use_spawn_agent_subagents'] : [])
+      ...(supported ? [] : ['agent_type_not_found_in_help'])
     ]
   }
 }
@@ -160,43 +164,58 @@ function probeSchema(value: unknown, source: CodexAgentTypeProbe['source'], sche
     spawn_tool_name: found.tool,
     schema_path: found.path || schemaPath,
     evidence: found.supported
-      ? [`agent_type:${found.path || 'found'}`]
-      : found.legacy_path
-        ? ['legacy_multi_agent_v2_ignored']
-        : ['agent_type_absent'],
+      ? [`agent_type:${found.path || 'found'}`, ...(found.multi_agent_v2_path ? [`multi_agent_v2:${found.multi_agent_v2_path}`] : [])]
+      : ['agent_type_absent'],
     blockers: [],
     warnings: [
-      ...(found.supported ? [] : ['agent_type_not_supported_message_role_fallback']),
-      ...(found.legacy_path ? [`legacy_multi_agent_v2_ignored:${found.legacy_path}`] : [])
+      ...(found.supported ? [] : ['agent_type_not_supported_message_role_fallback'])
     ]
   }
 }
 
-function findAgentType(value: unknown, trail: string[] = []): { supported: boolean; tool: 'spawn_agent' | 'unknown'; path: string | null; legacy_path?: string | null } {
+function findAgentType(
+  value: unknown,
+  trail: string[] = []
+): {
+  supported: boolean
+  tool: 'spawn_agent' | 'unknown'
+  path: string | null
+  multi_agent_v2_path?: string | null
+} {
   if (Array.isArray(value)) {
-    let legacyPath: string | null = null
+    let multiAgentPath: string | null = null
     for (let index = 0; index < value.length; index += 1) {
       const found = findAgentType(value[index], [...trail, String(index)])
       if (found.supported) return found
-      if (!legacyPath && found.legacy_path) legacyPath = found.legacy_path
+      if (!multiAgentPath && found.multi_agent_v2_path) multiAgentPath = found.multi_agent_v2_path
     }
-    return { supported: false, tool: 'unknown', path: null, legacy_path: legacyPath }
+    return { supported: false, tool: 'unknown', path: null, multi_agent_v2_path: multiAgentPath }
   }
   if (!isRecord(value)) return { supported: false, tool: 'unknown', path: null }
   const name = String(value.name || value.tool || value.id || '')
-  const legacyV2 = name.includes('multi_agent_v2')
+  const multiAgentV2 = name.includes('multi_agent_v2')
   const tool = name.includes('spawn_agent') ? 'spawn_agent' : 'unknown'
   if ('agent_type' in value || isRecord(value.properties) && 'agent_type' in value.properties) {
-    if (legacyV2) return { supported: false, tool: 'unknown', path: null, legacy_path: [...trail, 'agent_type'].join('.') }
-    return { supported: true, tool: tool === 'unknown' ? 'spawn_agent' : tool, path: [...trail, 'agent_type'].join('.') }
+    return {
+      supported: true,
+      tool: tool === 'unknown' ? 'spawn_agent' : tool,
+      path: [...trail, 'agent_type'].join('.'),
+      multi_agent_v2_path: multiAgentV2 ? trail.join('.') || 'multi_agent_v2' : null
+    }
   }
-  let legacyPath: string | null = legacyV2 ? trail.join('.') || 'multi_agent_v2' : null
+  let multiAgentPath: string | null = multiAgentV2 ? trail.join('.') || 'multi_agent_v2' : null
   for (const [key, entry] of Object.entries(value)) {
     const found = findAgentType(entry, [...trail, key])
-    if (found.supported) return { ...found, tool: found.tool === 'unknown' && tool !== 'unknown' ? tool : found.tool }
-    if (!legacyPath && found.legacy_path) legacyPath = found.legacy_path
+    if (found.supported) {
+      return {
+        ...found,
+        tool: found.tool === 'unknown' && tool !== 'unknown' ? tool : found.tool,
+        multi_agent_v2_path: found.multi_agent_v2_path || multiAgentPath
+      }
+    }
+    if (!multiAgentPath && found.multi_agent_v2_path) multiAgentPath = found.multi_agent_v2_path
   }
-  return { supported: false, tool, path: null, legacy_path: legacyPath }
+  return { supported: false, tool, path: null, multi_agent_v2_path: multiAgentPath }
 }
 
 function unknownProbe(blockers: string[]): CodexAgentTypeProbe {

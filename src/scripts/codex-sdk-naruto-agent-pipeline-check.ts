@@ -10,6 +10,8 @@ const routes = readText('src/core/routes/dollar-manifest-lite.ts');
 assertGate(naruto.includes('runOfficialSubagentWorkflow'), 'Naruto must use the official Codex subagent workflow');
 assertGate(preparation.includes("workflow: 'official_codex_subagent'"), 'Naruto preparation must persist the official subagent workflow contract');
 assertGate(runner.includes("'agents.max_depth=1'"), 'official subagent delegation must remain single-depth');
+assertGate(runner.includes('features.multi_agent_v2='), 'Naruto must opt into stable Codex multi-agent V2');
+assertGate(runner.includes('agents.max_concurrent_threads_per_session='), 'Naruto must use Codex 0.145 agents concurrency key');
 assertGate(preparation.includes('requestedSubagentsExplicit'), 'explicit subagent count intent must be preserved during preparation');
 assertGate(preparation.includes('SUBAGENT_PLAN_FILENAME'), 'official workflow must persist its parent-owned subagent plan');
 assertGate(routes.includes("{ command: '$Naruto'") && routes.includes("{ command: '$Work'"), 'dollar manifest must expose the canonical workflow and intended alias');

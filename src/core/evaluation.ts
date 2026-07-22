@@ -80,9 +80,13 @@ export const PERMISSION_PROFILES = Object.freeze({
 });
 
 export const DEFAULT_MULTIAGENT_V2 = Object.freeze({
+  enabled: true,
   max_threads: DEFAULT_OFFICIAL_SUBAGENT_MAX_THREADS,
+  max_concurrent_threads_per_session: DEFAULT_OFFICIAL_SUBAGENT_MAX_THREADS,
   max_depth: DEFAULT_OFFICIAL_SUBAGENT_MAX_DEPTH,
+  /** Removed from Codex 0.145 AgentsToml; retained as SKS-internal wait budget metadata only. */
   job_max_runtime_seconds: DEFAULT_OFFICIAL_SUBAGENT_JOB_MAX_RUNTIME_SECONDS,
+  expose_spawn_agent_model_overrides: true,
   wait_control: 'bounded_wait_then_structured_summary',
   subagent_output: 'structured_summary_only'
 });

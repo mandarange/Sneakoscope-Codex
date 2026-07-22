@@ -73,15 +73,33 @@ unavailable.
 
 ## Agent Configuration
 
-Fresh SKS-owned project configuration uses:
+Naruto requires Codex multi-agent V2 (`features.multi_agent_v2`) when available.
+Hosts that lack MA v2 fail closed with explicit “update Codex CLI” guidance
+(`sks codex update` / Menu Bar → Update Codex CLI Now); SKS does not revive a
+legacy process runtime. The package preferred channel is `0.145.0+`, but
+capability probes win over a hard version lock. Fresh SKS-owned project
+configuration uses:
 
 ```toml
+[features.multi_agent_v2]
+enabled = true
+max_concurrent_threads_per_session = 13
+expose_spawn_agent_model_overrides = true
+
 [agents]
-max_threads = 12
+enabled = true
+max_concurrent_threads_per_session = 12
 max_depth = 1
-job_max_runtime_seconds = 1200
 interrupt_message = true
+default_subagent_model = "gpt-5.6-sol"
+default_subagent_reasoning_effort = "high"
 ```
+
+`max_concurrent_threads_per_session` under `[agents]` is the spawned-child hard
+cap. The MA v2 feature total includes the root thread (`12 + 1 = 13`).
+`max_depth = 1` remains fail-closed for any V1 fallback; V2 ignores nesting depth
+and SKS still forbids nested delegation. Legacy `agents.max_threads` and
+`job_max_runtime_seconds` are migrated or stripped on SKS-owned configs.
 
 Explicit user configuration is preserved. SKS installs a project-scoped
 catalog of narrow official roles and injects only the few roles relevant to the
