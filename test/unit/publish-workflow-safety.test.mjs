@@ -42,6 +42,7 @@ test('npm workflow stages one immutable tarball after Linux and macOS proof', ()
   assert.match(workflow, /^  macos-menubar-proof:/m);
   assert.match(workflow, /^  pack-and-compare:/m);
   assert.match(workflow, /^  stage-publish:/m);
+  assert.match(macosJob, /needs: \[linux-release-proof\]/);
   assert.match(workflow, /needs: \[linux-release-proof, macos-menubar-proof\]/);
   assert.match(workflow, /needs: \[pack-and-compare\]/);
   for (const artifact of [
@@ -86,7 +87,14 @@ test('workflow proves Node 20, 22, and 24 and runs exact-tarball smoke plus secr
   assert.match(workflow, /release-pack-receipt\.js create/);
   assert.match(workflow, /release-pack-receipt\.js inspect --tarball "\$TARBALL"/);
   assert.match(workflow, /installed-package-smoke-check\.js --tarball "\$TARBALL" --receipt "\$LOCAL_RECEIPT"/);
-  assert.match(workflow, /macos-menubar-proof\.js --install-report/);
+  assert.match(macosJob, /release-upgrade-smoke\.js --target-tarball "\$TARBALL" --target-receipt "\$LOCAL_RECEIPT"/);
+  assert.match(macosJob, /upgrade-6\.2-to-\$\{VERSION\}\.json/);
+  assert.match(macosJob, /macos-menubar-proof\.js[\s\S]*--install-report[\s\S]*--upgrade-report "\$UPGRADE_PROOF"/);
+  assert.match(packJob, /release-main-push-guard\.js/);
+  for (const flag of ['--require-release-stamp', '--require-pack-proof', '--require-macos-proof', '--require-clean-tree']) {
+    assert.match(packJob, new RegExp(flag));
+  }
+  assert.match(packJob, /--expected-origin-main "\$EXPECTED_SHA"/);
   for (const block of [linuxJob, macosJob, packJob]) {
     assert.match(block, /REQUESTED_VERSION: \$\{\{ inputs\.version \}\}/);
     assert.match(block, /EXPECTED_SHA: \$\{\{ github\.sha \}\}/);
@@ -96,6 +104,23 @@ test('workflow proves Node 20, 22, and 24 and runs exact-tarball smoke plus secr
   assert.match(stageJob, /pkg\.version !== process\.env\.VERSION/);
   assert.match(stageJob, /comparison\.local_sha256 !== receipt\.sha256/);
   assert.match(stageJob, /smoke\.tarball_sha256 !== receipt\.sha256/);
+  assert.match(stageJob, /upgrade\.schema !== 'sks\.release-upgrade-smoke\.v2'/);
+  assert.match(stageJob, /upgrade\.platform !== 'darwin'/);
+  assert.match(stageJob, /upgrade\.source_tree\?\.head !== process\.env\.SOURCE_SHA/);
+  assert.match(stageJob, /upgrade\.target\?\.tarball_sha256 !== receipt\.sha256/);
+  assert.match(stageJob, /upgrade\.target\?\.receipt_sha256 !== receiptSha256/);
+  assert.match(stageJob, /upgrade\.target\?\.tarball_sha512_integrity !== receipt\.sha512_integrity/);
+  assert.match(stageJob, /upgrade\.target\?\.npm_pack_proof\?\.proof_id !== receipt\.npm_pack_proof\?\.proof_id/);
+  assert.match(stageJob, /upgrade\.commands\.map\(command => command\?\.stage\)/);
+  assert.match(stageJob, /isolation\.removed_after_success !== true/);
+  assert.match(stageJob, /launchctl_unexpected_calls\.length !== 0/);
+  assert.match(stageJob, /macos\.schema !== 'sks\.macos-menubar-proof\.v2'/);
+  assert.match(stageJob, /macos\.upgrade_report_sha256 !== upgradeSha256/);
+  assert.match(stageJob, /macos\.upgrade_report\?\.target_receipt_sha256 !== receiptSha256/);
+  assert.match(stageJob, /guard\.schema !== 'sks\.release-main-push-guard\.v1'/);
+  assert.match(stageJob, /guard\.upgrade_proof\?\.sha256 !== upgradeSha256/);
+  assert.match(stageJob, /main-push-guard\.json/);
+  assert.match(stageJob, /upgrade-6\.2-to-\$\{process\.env\.VERSION\}\.json/);
   assert.match(stageJob, /closure\.rejected_count !== closure\.command_probe_count \+ closure\.dollar_command_probe_count \+ closure\.argument_probe_count \+ closure\.subcommand_probe_count/);
   for (const [field, count] of Object.entries(closureProbeCounts)) {
     assert.match(stageJob, new RegExp(`closure\\.${field} !== ${count}`));

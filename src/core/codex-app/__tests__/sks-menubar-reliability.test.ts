@@ -7,7 +7,7 @@ import { sha256, runProcess } from '../../fsx.js';
 import { aggregateFileHashes } from '../menubar/build-stamp.js';
 import { NATIVE_RESOURCE_FILES } from '../menubar/constants.js';
 import { recoverMenuBarGenerationTransaction, rollbackGenerationPairs } from '../menubar/generation-transaction.js';
-import { shouldAutoRollbackMenuBarLaunch } from '../menubar/installer.js';
+import { shouldAutoRollbackMenuBarLaunch, sksMenuBarRestartDeferred } from '../menubar/installer.js';
 import { launchAgentSource, launchMenuBar, restartLaunchAgent, isUnloadableLaunchdKickstartError } from '../menubar/launch-agent.js';
 import { sksMenuBarPaths } from '../menubar/paths.js';
 import { normalizeLegacyMenuBarBuildStamp, rollbackSksMenuBar } from '../menubar/rollback.js';
@@ -135,6 +135,13 @@ test('installer does not compound terminal launch uncertainty with an automatic 
     upToDate: false,
     rollbackCandidateExists: true
   }), true);
+});
+
+test('update-owned Doctor and postinstall work defer Menu Bar restart until the parent operation completes', () => {
+  assert.equal(sksMenuBarRestartDeferred({ SKS_UPDATE_DEFER_MENUBAR_RESTART: '1' }), true);
+  assert.equal(sksMenuBarRestartDeferred({ SKS_SKIP_SKS_MENUBAR_LAUNCH: '1' }), true);
+  assert.equal(sksMenuBarRestartDeferred({ SKS_UPDATE_DEFER_MENUBAR_RESTART: '0' }), false);
+  assert.equal(sksMenuBarRestartDeferred({}), false);
 });
 
 test('launchctl bootstrap timeout succeeds only when launchctl print confirms the service is running', async (t) => {

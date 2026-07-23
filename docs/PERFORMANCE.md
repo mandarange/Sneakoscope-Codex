@@ -1,6 +1,6 @@
 # Sneakoscope Codex performance and leak policy
 
-Sneakoscope Codex 7.1.0 is designed to keep runtime, package size, RAM, and storage bounded.
+Sneakoscope Codex 7.1.1 is designed to keep runtime, package size, RAM, and storage bounded.
 
 ## Speed
 
@@ -52,10 +52,10 @@ Each anchor stores id, RGBA key, `[domain, layer, phase, concentration]`, source
 
 ## Package size
 
-- Runtime dependencies remain explicit in `package.json`; the 7.1.0 package pins `@openai/codex-sdk` exactly to 0.145.0 and npm resolves its exact `@openai/codex` 0.145.0 dependency without vendoring that CLI package inside the SKS tarball. `SKS_CODEX_BIN` may select a separately installed compatible CLI.
+- Runtime dependencies remain explicit in `package.json`; the 7.1.1 package pins `@openai/codex-sdk` exactly to 0.145.0 and npm resolves its exact `@openai/codex` 0.145.0 dependency without vendoring that CLI package inside the SKS tarball. `SKS_CODEX_BIN` may select a separately installed compatible CLI.
 - Optional Rust source is in `crates/sks-core/` and is included in the npm package as source only. Build artifacts under `target/` stay excluded.
 - GX rendering uses only built-in Node.js APIs and ships as source in the npm package.
-- `npm run sizecheck` enforces package limits during `release:check`, `npm publish --dry-run`, and authorized publish: `<=2510 KiB` packed, `<=11,250,000 bytes` unpacked (about `10.73 MiB`), `<=2100` package files, and `<=384 KiB` per tracked file by default.
+- `npm run sizecheck` enforces package limits during `release:check`, `npm publish --dry-run`, and authorized publish: `<=2510 KiB` packed, `<=11,425,000 bytes` unpacked (about `10.90 MiB`), `<=2100` package files, and `<=384 KiB` per tracked file by default. The 7.1.1 proof-validation build measures `2,537,409` packed bytes and `11,403,003` unpacked bytes across `1,601` files, leaving about `22 KB` of unpacked headroom.
 - The packed package cap is 2510 KiB from the shared release size-budget SSOT, matching sizecheck, publish dry-run performance, and packlist gates while keeping the TypeScript-built `dist` runtime bounded. The build removes non-runtime comments from emitted JavaScript, and the exact packed byte count remains bound to the generated release receipt; further changes still require measured justification.
 
 ## Memory leaks

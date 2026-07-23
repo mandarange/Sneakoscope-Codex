@@ -3272,6 +3272,12 @@
       "reason": "Unpacked-byte measurement removes only its mkdtemp tar extraction root in finally."
     },
     {
+      "file": "src/core/remote/session-binding.ts",
+      "symbol": "RemoteCodexSessionBindingStore",
+      "token": "chmod",
+      "reason": "The binding store reapplies mode 0600 only to the exact project-scoped Codex session binding file it atomically wrote."
+    },
+    {
       "file": "src/core/telegram/owner-lock.ts",
       "symbol": "TelegramOwnerLock",
       "token": "rename",
@@ -3288,6 +3294,12 @@
       "symbol": "TelegramOwnerLock",
       "token": "fsp.writeFile",
       "reason": "Telegram heartbeat overwrites only the configured owner lock after verifying the same owner nonce."
+    },
+    {
+      "file": "src/core/telegram/service.ts",
+      "symbol": "removeTelegramHubService",
+      "token": "unlink",
+      "reason": "Telegram service removal unlinks only the exact com.sneakoscope.telegram-hub LaunchAgent plist resolved for the selected user HOME."
     },
     {
       "file": "src/core/update/temporary-install-smoke.ts",

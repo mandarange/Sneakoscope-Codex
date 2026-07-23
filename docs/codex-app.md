@@ -14,7 +14,7 @@ entry, Pro model access, or Fast picker. The repair is provenance-scoped: it
 does not delete unmarked user settings, provider definitions, provider URLs,
 credential references, `service_tier = "fast"`, or `[features].fast_mode`.
 
-SKS 7.1.0 also reports the active nonsecret auth class. When codex-lb API-key
+SKS 7.1.1 also reports the active nonsecret auth class. When codex-lb API-key
 auth is active and a ChatGPT OAuth backup is available, Center labels the
 Chat/Pro surface as inactive and exposes **Restore Chat / Pro (OAuth)**. The
 switch is explicit because the two modes share Codex's active auth slot;
@@ -54,7 +54,39 @@ The generated `sks-fast-high` profile intentionally omits `sandbox_mode`. Codex 
 
 `sks codex-app check` prints Provider UI, OpenRouter/GLM Model, and codex-lb Key rows. OpenRouter setup uses `sks codex-app set-openrouter-key --api-key-stdin`, `sks codex-app openrouter-models --json`, `sks codex-app openrouter-test --model <id> --json`, and `sks codex-app use-openrouter --model <id>`; the stored 0600 key is supplied to Codex Desktop by command-backed authentication and is never written into TOML. Legacy Desktop GLM picker profiles (`sks-glm-52-*`) are stripped on update/doctor. codex-lb key setup uses `sks codex-lb setup --host <domain> --api-key-stdin --yes` or `sks codex-lb set-key --api-key-stdin`. These checks report only redacted presence/source states, never raw keys.
 
-The Providers page also manages official subagent role preferences with `sks codex-app role-models`, `set-role-model --role <name> --model <id> --reasoning <effort>`, and `reset-role-model --role <name>`. Preferences are stored owner-only and apply to new official custom-agent starts; custom `agent_type` or model/reasoning overrides use bounded `fork_turns="none"` context delivery.
+## Multi-Provider Router (experimental)
+
+SKS can configure Codex Desktop to use one external, loopback-only, Responses-compatible router and its advertised `provider/model` catalog slugs. The default endpoint is `http://127.0.0.1:10100/v1`; only loopback `http` or `https` URLs ending in `/v1` are accepted. The router itself must already be running and own its upstream-provider credentials. SKS neither implements that proxy nor writes, imports, or reports router credentials.
+
+The integration writes only the user-level Codex configuration at `$CODEX_HOME/config.toml` (normally `~/.codex/config.toml`), not a project `.codex/config.toml`. It selects the `sks-router` custom provider, `wire_api = "responses"`, `requires_openai_auth = false`, a catalog file (by default `$CODEX_HOME/opencodex-catalog.json`), and the chosen main model. The provider contract intentionally has no `env_key`, bearer-token field, HTTP-header credential field, or provider `auth` table.
+
+At the referenced commit, OpenCodex uses port `10100` by default and atomically writes that exact owner-only catalog path, so no separate SKS catalog-sync command is needed. For role-specific mixed-provider routing, make OpenCodex stamp its routed entries for the compatible multi-agent surface before refreshing SKS:
+
+```bash
+ocx start
+ocx v2 mode v1
+ocx status
+```
+
+If OpenCodex falls back to a different free port, enter the live port shown by `ocx status` in the Providers page or pass it with `--base-url`. Other routers remain supported, but they must export their own complete Codex `ModelInfo` catalog and expose the matching model ids from `GET /v1/models`.
+
+Use the guarded sequence below. A router test checks that the requested slug is both in the local configured catalog and returned by the live `GET /v1/models` endpoint before activation writes configuration.
+
+```bash
+sks codex-app router-status --json
+sks codex-app router-test --model anthropic/claude-sonnet --json
+sks codex-app use-router --model anthropic/claude-sonnet --json
+```
+
+`use-router` restarts Codex Desktop by default. Its success result means the guarded configuration write and requested restart completed; it deliberately reports `runtime_verified = false`. `router-status` is also a disk/configuration readback, not proof that App Server adopted the provider. A real App Server `model/list`, bounded Responses turn, and routed official-subagent round trip remain the runtime proof. If restart is blocked, reopen Codex Desktop manually and then run the relevant live checks. Existing unmarked user `model_catalog_json` selections are protected: configuration stops with a catalog-conflict result unless `--replace-catalog` is passed. Use that flag only when intentionally replacing the user's catalog.
+
+The catalog must be an owner-only regular JSON file with a top-level `models` array containing current Codex `ModelInfo` rows; SKS no longer synthesizes missing reasoning metadata or accepts alternate loose container shapes. Each usable routed role entry must advertise `multi_agent_version = "v1"`. OpenCodex's `ocx v2 mode v1` command applies that field during catalog resync. This follows the OpenCodex compatibility limitation at the referenced commit: cross-provider native multi-agent v2 can lose the delegated task body, so SKS does not offer v2 entries as role overrides.
+
+This is deliberately narrower than the OpenCodex reference at commit `9e68ed67303580ecf0bcde0a56b71b874304fc54`. That project supplies a local multi-provider proxy and documents routing Codex through its built-in OpenAI loopback setting (`openai_base_url`). SKS currently chooses an unauthenticated custom-provider table instead, so that router credentials stay outside Codex config and SKS. It is compatible with a router that exposes the required loopback Responses API and catalog, but it does not install, start, configure, authenticate, supervise, or roll back the external router. To roll back the Desktop selection, restore the prior user config backup or choose another provider/model; stop the external router separately only if the router's own operator intends that change.
+
+The Providers page also manages official subagent role preferences with `sks codex-app role-models`, `set-role-model --role <name> [--provider <id>] --model <catalog-slug> --reasoning <effort>`, and `reset-role-model --role <name>`. Preferences are owner-only and apply to new official custom-agent starts. Routed preferences require `model_provider = "sks-router"`, an exact v1-compatible model advertised by the selected catalog, and one of that model's advertised reasoning efforts; `--provider` is optional but, when supplied, must match the catalog entry. Non-routed OpenAI preferences are limited to SKS's managed role profiles so a typo cannot be persisted as a plausible model.
+
+`spawn_agent` accepts model and reasoning-effort overrides but has no provider argument. For a routed preference, the parent passes the exact catalog slug as `model`; the logical provider is encoded by the active router/catalog. Custom `agent_type` selection or a model/reasoning override must use `fork_turns="none"` (or a positive bounded turn count) with the complete slice contract in the message. Do not combine those overrides with an omitted/default or explicit `fork_turns="all"` full-history fork.
 
 Imagegen/gpt-image-2 remains a Codex App capability first. UX-Review/PPT require generated gpt-image-2 callout evidence before verified visual claims. `npm run imagegen:capability` checks that the official Codex App `$imagegen` surface is visible, but full visual verification still needs an actual generated output file with hash/dimensions/provider metadata. Direct OpenAI API, Responses image-generation, codex-lb, or `CODEX_LB_API_KEY` fallback paths are non-Codex API fallbacks and do not satisfy Codex App imagegen evidence unless a separate API task is explicitly requested. When the official app, Chrome Extension, or OS blocks required capabilities, SKS records the external block and marks live verification unverified instead of substituting browser automation or prose-only critique.
 

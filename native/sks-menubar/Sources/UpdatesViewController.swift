@@ -1,7 +1,10 @@
 import Cocoa
 
 final class UpdatesViewController: NSViewController, ControlCenterPage {
-    private static let controlCenterUpdateEnvironment = ["SKS_UPDATE_DEFER_MENUBAR_RESTART": "1"]
+    private static let controlCenterUpdateEnvironment = [
+        "SKS_UPDATE_DEFER_MENUBAR_RESTART": "1",
+        "SKS_SKIP_SKS_MENUBAR_LAUNCH": "1"
+    ]
     private let processClient: ProcessClient
     private let operations: OperationCoordinator
     private let notifications: NotificationCoordinator

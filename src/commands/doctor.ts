@@ -25,11 +25,19 @@ import { buildCodexNativeFeatureMatrix } from '../core/codex-native/codex-native
 import { withSecretPreservationGuard } from '../core/config/config-migration-journal.js';
 import { reconcileDoctorSkills } from '../core/doctor/doctor-skill-reconcile.js';
 import { isUpdateMigrationReceiptCurrent, projectUpdateMigrationReceiptPath, writeProjectUpdateMigrationReceipt } from '../core/update/update-migration-state.js';
-import { inspectSksMenuBarStatus, installSksMenuBar } from '../core/codex-app/sks-menubar.js';
+import { inspectSksMenuBarStatus, installSksMenuBar, sksMenuBarRestartDeferred } from '../core/codex-app/sks-menubar.js';
 import { sweepSksTempDirs } from '../core/retention.js';
 import { detectImagegenCapability } from '../core/imagegen/imagegen-capability.js';
 import { CURRENT_CODEX_RELEASE_MANIFEST } from '../core/codex-compat/codex-release-manifest.js';
 import { formatHarnessConflictReport, scanHarnessConflicts } from '../core/harness-conflicts.js';
+import {
+  doctorArgWarnings,
+  doctorMenuBarInstallPolicy,
+  doctorPhaseIdsForProfile,
+  doctorProfileFromArgs
+} from './doctor-profile.js';
+
+export { doctorArgWarnings, doctorMenuBarInstallPolicy, doctorProfileFromArgs } from './doctor-profile.js';
 
 export async function run(_command: any, args: any = [], deps: any = {}) {
   const root = await projectRoot();
@@ -91,6 +99,9 @@ export async function executeDoctorGlobalOnlyFix(args: any[] = [], root: string,
     || (await import('../cli/install-helpers.js')).ensureStoredOpenRouterProviderDuringInstall;
   const installMenuBarImpl = deps.installSksMenuBarImpl || installSksMenuBar;
   const codexLbStatusImpl = deps.codexLbStatusImpl || codexLbStatus;
+  const doctorEnv = deps.env || (deps.home
+    ? { ...process.env, HOME: home }
+    : process.env);
 
   const providerStatus = await codexLbStatusImpl({
     probeToolOutputRecovery: true,
@@ -132,9 +143,11 @@ export async function executeDoctorGlobalOnlyFix(args: any[] = [], root: string,
     status: 'failed',
     error: err?.message || String(err)
   }));
-  const openRouterEnv = deps.env || (deps.home
-    ? { ...process.env, HOME: home, SKS_HOME: path.join(home, '.sneakoscope') }
-    : { ...process.env, HOME: home });
+  const openRouterEnv = {
+    ...doctorEnv,
+    HOME: home,
+    SKS_HOME: path.join(home, '.sneakoscope')
+  };
   const openRouterProvider = await ensureStoredOpenRouterProviderImpl({ home, env: openRouterEnv }).catch((err: any) => ({
     schema: 'sks.openrouter-provider-upgrade-repair.v1',
     ok: false,
@@ -146,7 +159,8 @@ export async function executeDoctorGlobalOnlyFix(args: any[] = [], root: string,
     home,
     root: home,
     apply: true,
-    launch: true,
+    launch: !sksMenuBarRestartDeferred(doctorEnv),
+    env: doctorEnv,
     quiet: flag(args, '--json') || flag(args, '--machine-only')
   }).catch((err: any) => ({
     schema: 'sks.codex-app-sks-menubar.v1',
@@ -674,15 +688,18 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
         blockers: [err?.message || String(err)]
       }))
     : codexAppUiPlan;
+  const menuBarPolicy = doctorMenuBarInstallPolicy(args, doctorFix, process.env);
+  const menuBarLaunchRequested = menuBarPolicy.launch;
   const sksMenuBar = await installSksMenuBar({
     root,
-    apply: doctorFix,
-    launch: doctorFix,
+    apply: menuBarPolicy.apply,
+    launch: menuBarLaunchRequested,
+    env: process.env,
     quiet: machineOnly || flag(args, '--json')
   }).catch((err: any) => ({
     schema: 'sks.codex-app-sks-menubar.v1',
     ok: false,
-    apply: doctorFix,
+    apply: menuBarPolicy.apply,
     status: 'blocked',
     platform: process.platform,
     app_path: null,
@@ -693,7 +710,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     report_path: `${root}/.sneakoscope/reports/sks-menubar.json`,
     menu_items: [],
     actions: [],
-    launch: { requested: doctorFix, method: 'none', ok: false, error: err?.message || String(err) },
+    launch: { requested: menuBarLaunchRequested, method: 'none', ok: false, error: err?.message || String(err) },
     tcc_automation_status: 'unknown',
     next_actions: [
       'Run: sks menubar status',
@@ -1671,63 +1688,6 @@ function fallbackCodexNativeFeatureMatrix(codex: any, blockers: string[] = [], w
     blockers,
     warnings
   };
-}
-
-type DoctorProfile = 'fast' | 'fix' | 'migration' | 'full' | 'capabilities';
-
-export function doctorProfileFromArgs(args: any[] = [], doctorFix = false): DoctorProfile {
-  const explicit = readOption(args, '--profile', null);
-  if (explicit === 'migration' || explicit === 'full' || explicit === 'capabilities' || explicit === 'fast' || explicit === 'fix') return explicit;
-  if (flag(args, '--full')) return 'full';
-  if (flag(args, '--capabilities')) return 'capabilities';
-  return doctorFix ? 'fix' : 'fast';
-}
-
-export function doctorArgWarnings(args: any[] = []): string[] {
-  const warnings: string[] = [];
-  const explicit = readOption(args, '--profile', null);
-  if (explicit && !['migration', 'full', 'capabilities', 'fast', 'fix'].includes(String(explicit))) {
-    warnings.push(`unknown_profile:${explicit}; supported profiles: migration, full, capabilities, fast, fix`);
-  }
-  for (const flag of unknownDoctorFlags(args)) warnings.push(`unknown_flag:${flag}`);
-  return warnings;
-}
-
-function unknownDoctorFlags(args: any[] = []): string[] {
-  const knownBoolean = new Set([
-    '--fix', '--yes', '-y', '--machine-only', '--actual-codex', '--require-actual-codex',
-    '--full', '--capabilities', '--repair-codex-app-ui', '--repair-zellij', '--install-homebrew',
-    '--repair-native-capabilities', '--repair-codex-native', '--local-only', '--global-only', '--project', '--global',
-    '--dry-run', '--json'
-  ]);
-  const knownValue = new Set(['--profile', '--report-file', '--codex-bin', '--install-scope']);
-  const unknown: string[] = [];
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = String(args[index] || '');
-    if (!arg.startsWith('-')) continue;
-    if (knownValue.has(arg)) {
-      index += 1;
-      continue;
-    }
-    if (knownBoolean.has(arg)) continue;
-    unknown.push(arg);
-  }
-  return unknown;
-}
-
-function doctorPhaseIdsForProfile(profile: DoctorProfile): string[] {
-  const required = [
-    'codex_startup_repair',
-    'startup_config_repair',
-    'context7_repair',
-    'context7_mcp_repair',
-    'hook_trust_repair',
-    'command_alias_cleanup'
-  ];
-  if (profile === 'migration') return required;
-  const optional = ['supabase_mcp_repair', 'native_capability_repair', 'sks_menubar'];
-  if (profile === 'full' || profile === 'capabilities') return ['setup', ...required, ...optional];
-  return [...required, ...optional];
 }
 
 async function writeJsonReportFile(file: string, value: unknown): Promise<void> {

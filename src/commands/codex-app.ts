@@ -17,6 +17,12 @@ import { promptForOpenRouterKeyHidden, writeStoredOpenRouterKey } from '../core/
 import { compactOpenRouterModelsResult, listOpenRouterModels, testOpenRouterConnection } from '../core/providers/openrouter/openrouter-account.js';
 import { restartCodexApp } from '../core/codex-app/codex-app-restart.js';
 import {
+  MULTI_PROVIDER_ROUTER_DEFAULT_BASE_URL,
+  multiProviderRouterStatus,
+  testMultiProviderRouter,
+  useMultiProviderRouter
+} from '../core/codex-app/multi-provider-router.js';
+import {
   resetRoleModelPreference,
   roleModelPreferencesStatus,
   setRoleModelPreference
@@ -95,12 +101,38 @@ export async function run(_command: any, args: any = []) {
     const result = await testOpenRouterConnection({ model: readOption(args, '--model', '') });
     return printCodexAppResult(args, result);
   }
+  if (action === 'router-status' || action === 'multi-provider-status' || action === 'opencodex-status') {
+    const result = await multiProviderRouterStatus({
+      baseUrl: readOption(args, '--base-url', ''),
+      catalogPath: readOption(args, '--catalog', '')
+    });
+    return printCodexAppResult(args, result);
+  }
+  if (action === 'router-test' || action === 'multi-provider-test' || action === 'opencodex-test') {
+    const result = await testMultiProviderRouter({
+      baseUrl: readOption(args, '--base-url', MULTI_PROVIDER_ROUTER_DEFAULT_BASE_URL),
+      catalogPath: readOption(args, '--catalog', ''),
+      model: readOption(args, '--model', '')
+    });
+    return printCodexAppResult(args, result);
+  }
+  if (action === 'use-router' || action === 'use-multi-provider' || action === 'use-opencodex') {
+    const result = await useMultiProviderRouter({
+      model: readOption(args, '--model', ''),
+      baseUrl: readOption(args, '--base-url', MULTI_PROVIDER_ROUTER_DEFAULT_BASE_URL),
+      catalogPath: readOption(args, '--catalog', ''),
+      replaceCatalog: flag(args, '--replace-catalog'),
+      restartApp: flag(args, '--restart-app') || flag(args, '--restart') || !flag(args, '--no-restart-app')
+    });
+    return printCodexAppResult(args, result);
+  }
   if (action === 'role-models') {
     return printCodexAppResult(args, await roleModelPreferencesStatus());
   }
   if (action === 'set-role-model') {
     const result = await setRoleModelPreference({
       role: readOption(args, '--role', ''),
+      provider: readOption(args, '--provider', ''),
       model: readOption(args, '--model', ''),
       reasoning: readOption(args, '--reasoning', '')
     });
@@ -163,7 +195,7 @@ export async function run(_command: any, args: any = []) {
     if (!status.ok) process.exitCode = 1;
     return;
   }
-  console.error('Usage: sks codex-app check|status|harness-matrix|skill-sync|agent-role-sync|init-deep|hook-lifecycle|execution-profile|set-openrouter-key [--api-key-stdin]|use-openrouter --model <id>|openrouter-status|openrouter-models [--ids-only]|openrouter-test [--model <id>]|role-models|set-role-model --role <name> --model <id> --reasoning <effort>|reset-role-model --role <name>|product-design [--check-only]|ensure-product-design|chrome-extension|pat status|remote-control [--json]');
+  console.error('Usage: sks codex-app check|status|harness-matrix|skill-sync|agent-role-sync|init-deep|hook-lifecycle|execution-profile|set-openrouter-key [--api-key-stdin]|use-openrouter --model <id>|openrouter-status|openrouter-models [--ids-only]|openrouter-test [--model <id>]|router-status [--base-url <loopback-url>] [--catalog <path>]|router-test --model <provider/model> [--base-url <loopback-url>] [--catalog <path>]|use-router --model <provider/model> [--base-url <loopback-url>] [--catalog <path>] [--replace-catalog]|role-models|set-role-model --role <name> [--provider <id>] --model <catalog-slug> --reasoning <effort>|reset-role-model --role <name>|product-design [--check-only]|ensure-product-design|chrome-extension|pat status|remote-control [--json]');
   console.error('Note: glm-profile is retired (strips leftover Desktop GLM profiles); use set-openrouter-key / use-openrouter.');
   process.exitCode = 1;
 }

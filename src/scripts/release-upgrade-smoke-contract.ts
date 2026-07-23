@@ -1,6 +1,6 @@
 import type { ReleasePackReceipt } from '../core/release/release-pack-receipt.js'
 
-export const RELEASE_UPGRADE_SMOKE_SCHEMA = 'sks.release-upgrade-smoke.v1' as const
+export const RELEASE_UPGRADE_SMOKE_SCHEMA = 'sks.release-upgrade-smoke.v2' as const
 export const RELEASE_UPGRADE_BASELINE_VERSION = '6.2.0'
 export const RELEASE_UPGRADE_BASELINE_LABEL = '6.2'
 export const RELEASE_UPGRADE_BASELINE_SHA256 = 'dd0bfc022348c11dc737055845708f6272beaf2a8f9c16d068acf3c8c612f9bc'
@@ -159,10 +159,19 @@ export interface ReleaseUpgradeSmokeReport {
   }
   target: {
     receipt_path: string | null
+    receipt_sha256: string | null
     tarball_path: string | null
     tarball_sha256: string | null
+    tarball_sha512_integrity: string | null
     sealed_tarball_path: string | null
+    package_version: string | null
+    source_commit: string | null
     receipt_source_commit: string | null
+    npm_pack_proof: {
+      proof_id: string | null
+      info_sha256: string | null
+      file_list_sha256: string | null
+    }
     binding_ok: boolean
   }
   baseline: {
@@ -183,6 +192,10 @@ export interface ReleaseUpgradeSmokeReport {
     npm_cache: string | null
     npm_prefix: string | null
     npm_userconfig: string | null
+    workspace: string | null
+    baseline_pack_dir: string | null
+    command_reports_dir: string | null
+    sealed_inputs_dir: string | null
     host_home_reused: boolean
     host_codex_home_reused: boolean
     host_npm_prefix_reused: boolean
@@ -217,6 +230,7 @@ export interface ReleaseUpgradeSmokeReport {
 export interface PreparedTarget {
   receipt: ReleasePackReceipt
   receiptPath: string
+  receiptSha256: string
   tarball: string
   sha256: string
 }

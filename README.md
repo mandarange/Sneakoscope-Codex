@@ -22,7 +22,7 @@ Proof-first orchestration for Codex CLI, ChatGPT Desktop, AI coding agents, mult
 Sneakoscope Codex (`sks`) is an open-source trust layer for Codex CLI and ChatGPT Desktop. It coordinates bounded AI coding agents, records machine-verifiable evidence, preserves project memory, and blocks release claims that are not supported by current tests or artifacts. Search visibility outcomes are measured separately; SKS does not promise rankings or traffic.
 <!-- END SKS SEARCH VISIBILITY MARKETING -->
 
-Current release: **SKS 7.1.0**, with the package preferred Codex channel at **CLI 0.145.0**. SKS stays version-agnostic: older hosts keep working where capabilities allow, while Menu Bar / Center induce updates to the preferred latest. It resolves managed SKS skills from the authoritative global install, preserves a runnable Naruto child slot when `max_threads=2`, and keeps current-version Menu Bar repair transactional so stamped generations remain verifiable. Naruto uses stable opt-in multi-agent V2 when the host exposes it. See [CHANGELOG.md](CHANGELOG.md).
+Current release: **SKS 7.1.1**, with the package preferred Codex channel at **CLI 0.145.0**. SKS stays version-agnostic: older hosts keep working where capabilities allow, while Menu Bar / Center induce updates to the preferred latest. It resolves managed SKS skills from the authoritative global install, preserves a runnable Naruto child slot when `max_threads=2`, and keeps current-version Menu Bar repair transactional so stamped generations remain verifiable. Naruto uses stable opt-in multi-agent V2 when the host exposes it. See [CHANGELOG.md](CHANGELOG.md).
 
 ## What 7.0.0 Ships
 
@@ -53,6 +53,12 @@ sks doctor --fix
 The SKS menu bar shows the installed Codex CLI version and latest known version. An `⬆` marker appears when an update is available; **Update Codex CLI Now** uses native `codex update` when the selected CLI advertises it, otherwise it verifies the installation provenance and invokes the matching official standalone-installer, npm-global, or Homebrew-cask update method. If the method cannot be verified, it fails closed instead of guessing. Control Center updates keep the active UI alive until the operation receipt is durable, then relaunch the companion out of process. This is an explicit global tool mutation. **Run sks doctor --fix** performs the global-only menu repair flow without treating the user's home directory as a project.
 
 **Manage MCP Servers…** opens a native macOS manager for the global `~/.codex/config.toml`. It can add remote URL or local stdio servers, enable/disable existing entries, remove entries after confirmation, and refresh the current state. Mutations are lock-protected, backed up, TOML-validated, and written with mode `0600`; configured environment values and command arguments are never rendered in the list. Changes apply to new Codex sessions. The same plumbing is available through the canonical `sks mcp config list|get|add|edit|duplicate|enable|disable|remove|test|login|logout|backups|restore` surface for diagnostics and automation.
+
+### Telegram remote coding on this Mac
+
+Open **SKS Center → Remote & Telegram**, create a private bot with BotFather, send `/start` to that bot from the Telegram account you want to pair, then choose **Connect Bot & Register Coding Session…** and paste the token. SKS verifies the bot, stores the token only in macOS Keychain, pairs only that private chat/user, and registers one dedicated session bound to the current project. Choose **Start Hub**, then send ordinary text to the bot. On the first real message, the Hub creates the Codex thread and starts its first turn in the same App Server connection so the thread is durably resumable; later messages resume that exact thread and return the final response to Telegram.
+
+The Hub runs as a user LaunchAgent and uses `caffeinate -i` while the logged-in Mac is available. The Mac still needs to remain powered on, logged in, awake, and network-connected; closing the lid or logging out can stop access. Telegram input has no arbitrary shell path, runs with approvals disabled and network access disabled inside the Codex workspace sandbox, and cannot target an unpaired chat or another project.
 
 ## The Front Door
 

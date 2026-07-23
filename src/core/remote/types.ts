@@ -8,6 +8,7 @@ export const REMOTE_OWNER_PROOF_SCHEMA = 'sks.remote-owner-proof.v1' as const;
 export const REMOTE_R2_APPROVAL_SCHEMA = 'sks.remote-r2-approval.v1' as const;
 export const REMOTE_EVENT_SCHEMA = 'sks.remote-event.v1' as const;
 export const REMOTE_SESSION_INDEX_SCHEMA = 'sks.remote-session-index.v1' as const;
+export const REMOTE_CODEX_SESSION_BINDINGS_SCHEMA = 'sks.remote-codex-session-bindings.v1' as const;
 
 export type RemoteRisk = 'R0' | 'R1' | 'R2';
 export type RemoteCommandKind = 'input' | 'verify' | 'cancel' | 'read';
@@ -16,8 +17,8 @@ export type RemoteWorkerRequestType = 'hello' | 'list_sessions' | 'read_snapshot
 export interface RemoteMachineV1 {
   readonly id: string;
   readonly display_name: string;
-  readonly transport: 'ssh-stdio';
-  readonly ssh_alias: string;
+  readonly transport: 'local' | 'ssh-stdio';
+  readonly ssh_alias?: string | null;
   readonly allowed_roots: readonly string[];
   readonly enabled: boolean;
 }
@@ -48,6 +49,23 @@ export interface RemoteSessionIndexValidation {
   readonly ok: boolean;
   readonly issues: readonly string[];
   readonly index: RemoteSessionIndexV1 | null;
+}
+
+export interface RemoteCodexSessionBindingV1 {
+  readonly session_id: string;
+  readonly machine_id: string;
+  readonly project_id: string;
+  readonly project_root: string;
+  readonly codex_thread_id: string | null;
+  readonly created_at: string;
+  readonly updated_at: string;
+  readonly last_turn_id?: string | null;
+  readonly last_turn_status?: 'completed' | 'failed' | 'interrupted' | null;
+}
+
+export interface RemoteCodexSessionBindingsV1 {
+  readonly schema: typeof REMOTE_CODEX_SESSION_BINDINGS_SCHEMA;
+  readonly bindings: readonly RemoteCodexSessionBindingV1[];
 }
 
 export interface RemoteReadinessV1 {
@@ -117,6 +135,7 @@ export type WorkerRequestV1 =
   | { readonly schema: typeof REMOTE_WORKER_REQUEST_SCHEMA; readonly id: string; readonly type: 'command'; readonly envelope: RemoteCommandEnvelopeV1 };
 
 export type RemoteDeliveryState = 'not_dispatched' | 'unknown' | 'acknowledged';
+export type RemoteSideEffectApplied = boolean | 'unknown';
 
 export interface RemoteWorkerErrorV1 {
   readonly code: string;
@@ -145,7 +164,7 @@ export interface RemoteCommandReceiptV1 {
   readonly session_id: string | null;
   readonly kind: RemoteCommandKind;
   readonly status: 'completed' | 'failed';
-  readonly side_effect_applied: boolean;
+  readonly side_effect_applied: RemoteSideEffectApplied;
   readonly completed_at: string;
   readonly result?: unknown;
   readonly error?: RemoteWorkerErrorV1;

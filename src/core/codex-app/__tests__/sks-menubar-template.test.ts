@@ -38,6 +38,7 @@ test('SKS Menu Bar uses the required split native source and resource inventory'
     'ControlCenterWindowController.swift', 'SidebarItem.swift',
     'OverviewViewController.swift', 'UpdatesViewController.swift',
     'MCPServersViewController.swift', 'ProvidersViewController.swift', 'ProvidersOpenRouter.swift',
+    'ProvidersMultiProvider.swift',
     'RemoteTelegramViewController.swift', 'DiagnosticsViewController.swift',
     'SettingsViewController.swift', 'OperationCoordinator.swift',
     'ProcessClient.swift', 'NotificationCoordinator.swift', 'AlertFactory.swift',
@@ -51,6 +52,12 @@ test('SKS Menu Bar uses the required split native source and resource inventory'
   for (const name of NATIVE_SOURCE_FILES) assert.ok(fs.statSync(path.join(root, 'Sources', name)).size > 0, name);
   for (const name of NATIVE_RESOURCE_FILES) assert.ok(fs.statSync(path.join(root, 'Resources', name)).size > 0, name);
   assert.match(fs.readFileSync(path.join(root, 'Resources', 'AppIcon.icns')).subarray(0, 4).toString('ascii'), /icns/);
+  const materialized = source();
+  assert.match(materialized, /\/\/ MARK: - ProvidersMultiProvider\.swift/);
+  assert.match(materialized, /final class MultiProviderRouterControls/);
+  assert.match(materialized, /OpenCodex setup: run ocx start, then ocx v2 mode v1/);
+  assert.match(materialized, /replace 10100 with the live port reported by ocx status/);
+  assert.match(materialized, /model\.contains\("\/"\) \? model : "\\\(provider\):\\\(model\)"/);
 });
 
 test('status template resources are distinct valid 18x18 PDFs', () => {
@@ -478,15 +485,27 @@ test('UserNotifications declares all categories/actions, redacts public bodies, 
   assert.doesNotMatch(swift, /display notification|osascript/);
 });
 
-test('Remote and Telegram page uses the dedicated readiness contracts', () => {
+test('Remote and Telegram page configures a dedicated local Codex session and LaunchAgent without exposing the bot token', () => {
   const swift = source();
   const remote = fs.readFileSync(path.join(resolvePackagedMenuBarSourceRoot(), 'Sources', 'RemoteTelegramViewController.swift'), 'utf8');
+  const processClient = fs.readFileSync(path.join(resolvePackagedMenuBarSourceRoot(), 'Sources', 'ProcessClient.swift'), 'utf8');
   assert.match(swift, /\["remote", "readiness", "--project-root", AppRuntime\.projectRoot, "--json"\]/);
   assert.match(swift, /\["telegram", "status", "--project-root", AppRuntime\.projectRoot, "--json"\]/);
-  assert.match(swift, /Official Remote compatibility:/);
-  assert.match(remote, /remoteFailed/);
-  assert.match(remote, /unavailable — probe failed/);
+  assert.match(remote, /Connect Bot & Register Coding Session/);
+  assert.match(remote, /\["telegram", "setup", "--bot-token-stdin", "--project-root", AppRuntime\.projectRoot, "--json"\]/);
+  assert.doesNotMatch(remote, /"--new-session"/);
+  assert.match(remote, /\["telegram", "hub", "start", "--project-root", AppRuntime\.projectRoot, "--json"\]/);
+  assert.match(remote, /\["telegram", "hub", "stop", "--project-root", AppRuntime\.projectRoot, "--json"\]/);
+  assert.match(remote, /\["telegram", "hub", "restart", "--project-root", AppRuntime\.projectRoot, "--json"\]/);
+  assert.match(remote, /secure: true/);
+  assert.match(remote, /operations\.begin\(kind: kind, mutationGroup: "telegram"/);
+  assert.match(remote, /registered_session_count/);
+  assert.match(remote, /ordinary text in the paired private chat/);
+  assert.match(remote, /first message creates and persists the Codex thread/);
+  assert.match(processClient, /arguments\.contains\("--bot-token-stdin"\)/);
+  assert.match(swift, /RemoteTelegramViewController\(processClient: processClient, operations: operations\)/);
   assert.match(remote, /ControlCenterPage/);
+  assert.doesNotMatch(remote, /ssh_alias|arbitrary remote shell.*enabled/i);
   assert.doesNotMatch(swift, /Mini App:|mini_app/);
   assert.doesNotMatch(swift, /\["codex-app", "status", "--json"\]/);
 });

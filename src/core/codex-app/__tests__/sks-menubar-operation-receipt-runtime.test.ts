@@ -176,6 +176,7 @@ test('native reliability source binds menu-open expiry, status keys, and receipt
   assert.match(processClient, /else \{[\s\S]*process\.standardInput = FileHandle\.nullDevice/);
   assert.match(processClient, /DispatchQueue\.global\(qos: \.utility\)\.asyncAfter\(deadline: \.now\(\) \+ timeout/);
   assert.match(updates, /SKS_UPDATE_DEFER_MENUBAR_RESTART/);
+  assert.match(updates, /SKS_SKIP_SKS_MENUBAR_LAUNCH/);
   assert.match(updates, /processClient\.run\(args, environment: environment(?:, timeout: timeout)?\)/);
   assert.match(updates, /receipt\.stages\.contains \{ \$0\.id == "menubar_rebuild" && \$0\.status == "installed_launch_skipped" \}/);
   assert.match(updates, /operations\.synchronize\(operation, with: receipt, processCompleted: true\)[\s\S]*self\.notifications\.send\([\s\S]*self\.restartMenuBarAfterUpdateCompletion\(\)/);

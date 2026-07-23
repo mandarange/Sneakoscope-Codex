@@ -56,6 +56,14 @@
       "policy": "shrink-only",
       "baseline_lines": 1715,
       "expires_version": "6.4.0"
+    },
+    {
+      "schema": "sks.architecture-waiver.v1",
+      "file": "src/core/subagents/__tests__/official-subagent-runner.test.ts",
+      "reason": "pre-existing oversized integration test is being reduced through focused fixture extraction",
+      "policy": "shrink-only",
+      "baseline_lines": 2092,
+      "expires_version": "7.2.0"
     }
   ]
 }

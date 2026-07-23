@@ -27,6 +27,11 @@ import { inspectSignature } from './signature.js';
 import { defaultNextActions, inspectSksMenuBarStatus, isMenuBarInstallPathUnderTempDir } from './status.js';
 import type { NativeSourceInput, SecretLaunchEnvCleanupResult, SksMenuBarBuildStamp, SksMenuBarGenerationTransactionOutcome, SksMenuBarInstallOptions, SksMenuBarInstallResult, SksMenuBarLegacyBuildStampV1, SksMenuBarRollbackResult, SksMenuBarTargetCheck } from './types.js';
 
+export function sksMenuBarRestartDeferred(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.SKS_UPDATE_DEFER_MENUBAR_RESTART === '1'
+    || env.SKS_SKIP_SKS_MENUBAR_LAUNCH === '1';
+}
+
 export async function installSksMenuBar(opts: SksMenuBarInstallOptions = {}): Promise<SksMenuBarInstallResult> {
   const apply = opts.apply === true;
   const env = opts.env || process.env;
@@ -269,7 +274,13 @@ export async function installSksMenuBar(opts: SksMenuBarInstallOptions = {}): Pr
       transaction = committed;
     }
   }
-  const launchWanted = opts.launch !== false && env.SKS_SKIP_SKS_MENUBAR_LAUNCH !== '1';
+  const restartDeferred = sksMenuBarRestartDeferred(env);
+  const launchWanted = opts.launch !== false
+    && env.SKS_SKIP_SKS_MENUBAR_LAUNCH !== '1'
+    && !restartDeferred;
+  if (restartDeferred && opts.launch !== false && env.SKS_SKIP_SKS_MENUBAR_LAUNCH !== '1') {
+    warnings.push('launch_deferred_until_parent_operation_completes');
+  }
   const launchAllowed = path.resolve(paths.home) === realUserHome() && !isMenuBarInstallPathUnderTempDir(paths.executable_path, env);
   if (launchWanted && path.resolve(paths.home) !== realUserHome()) warnings.push('launch_skipped_non_user_home');
   if (launchWanted && isMenuBarInstallPathUnderTempDir(paths.executable_path, env)) warnings.push('launch_skipped_temp_install');

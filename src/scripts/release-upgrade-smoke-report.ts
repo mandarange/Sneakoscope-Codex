@@ -35,10 +35,19 @@ export function emptyReleaseUpgradeSmokeReport(
     },
     target: {
       receipt_path: options.targetReceipt ? path.resolve(root, options.targetReceipt) : null,
+      receipt_sha256: null,
       tarball_path: options.targetTarball ? path.resolve(root, options.targetTarball) : null,
       tarball_sha256: null,
+      tarball_sha512_integrity: null,
       sealed_tarball_path: null,
+      package_version: null,
+      source_commit: null,
       receipt_source_commit: null,
+      npm_pack_proof: {
+        proof_id: null,
+        info_sha256: null,
+        file_list_sha256: null
+      },
       binding_ok: false
     },
     baseline: {
@@ -54,7 +63,8 @@ export function emptyReleaseUpgradeSmokeReport(
     },
     isolation: {
       sandbox: null, home: null, codex_home: null, npm_cache: null, npm_prefix: null,
-      npm_userconfig: null, host_home_reused: false, host_codex_home_reused: false,
+      npm_userconfig: null, workspace: null, baseline_pack_dir: null, command_reports_dir: null,
+      sealed_inputs_dir: null, host_home_reused: false, host_codex_home_reused: false,
       host_npm_prefix_reused: false, retained: false, removed_after_success: false,
       cleanup_status: 'not_created', cleanup_error: null
     },
@@ -126,6 +136,10 @@ export function setReleaseUpgradeIsolationReport(
   report.isolation.npm_cache = isolation.npmCache
   report.isolation.npm_prefix = isolation.npmPrefix
   report.isolation.npm_userconfig = isolation.npmUserConfig
+  report.isolation.workspace = isolation.workspace
+  report.isolation.baseline_pack_dir = isolation.baselinePackDir
+  report.isolation.command_reports_dir = isolation.commandReportsDir
+  report.isolation.sealed_inputs_dir = isolation.sealedInputsDir
   report.isolation.host_home_reused = samePath(isolation.home, process.env.HOME)
   report.isolation.host_codex_home_reused = samePath(isolation.codexHome, process.env.CODEX_HOME)
   report.isolation.host_npm_prefix_reused = samePath(

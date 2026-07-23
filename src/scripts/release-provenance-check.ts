@@ -22,7 +22,9 @@ const latestChangelog = latestVersionedChangelogSection(readText('CHANGELOG.md')
 const tag = tagStatus(version, currentCommit);
 const candidate = candidateVersion();
 const originMain = originMainVersion();
-const npm = npmVersion();
+const npm = publish
+  ? npmVersion()
+  : { version: null, status: 'not_checked_in_dev_review' };
 const warnings = [];
 const blockers = [];
 

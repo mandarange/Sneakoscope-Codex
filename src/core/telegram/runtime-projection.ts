@@ -67,7 +67,12 @@ export function snapshotSummary(snapshot: Record<string, unknown>): string {
 }
 
 export function successSummary(action: RemoteActionV1, data: Record<string, unknown> | null): string {
-  if (action.kind === 'input') return 'Follow-up input was accepted by the exact active Codex turn.';
+  if (action.kind === 'input') {
+    const response = typeof data?.final_response === 'string' ? data.final_response.trim() : '';
+    return response
+      ? publicSafeText(response)
+      : 'Codex completed the Telegram turn, but no public final response was available.';
+  }
   if (action.kind === 'cancel') return 'Cancellation completed with owner-proof and one-time approval receipts.';
   if (action.kind === 'verify') return `Verification snapshot: ${snapshotSummary(data ?? {})}`;
   return snapshotSummary(data ?? {});

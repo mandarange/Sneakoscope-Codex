@@ -45,6 +45,7 @@ final class ProvidersViewController: NSViewController, ControlCenterPage {
         return field
     }()
     let openRouterModelPopup = NSPopUpButton()
+    let multiProvider = MultiProviderRouterControls()
     let roleStatus = NativeView.detail("Role model settings are loading…")
     let globalSpinner = NativeView.spinner(label: "Provider operation in progress")
     let fastStatus = NativeView.detail("Fast Mode: checking current desktop setting…")
@@ -92,7 +93,7 @@ final class ProvidersViewController: NSViewController, ControlCenterPage {
         view = NativeView.page([
             titleRow,
             NativeView.detail("Save credentials, verify connectivity, then explicitly activate a provider. Secrets are sent through stdin and redacted from logs."),
-            makeOpenRouterCard(), codexLb, makeRoleModelsCard(), fast
+            makeOpenRouterCard(), makeMultiProviderRouterCard(), codexLb, makeRoleModelsCard(), fast
         ])
         refresh()
     }
@@ -106,6 +107,7 @@ final class ProvidersViewController: NSViewController, ControlCenterPage {
         openRouterModelPopup.isEnabled = !value && !openRouterModels.isEmpty
         openRouterRefreshButton?.isEnabled = !value && !catalogRefreshInFlight
         roleRefreshButton?.isEnabled = !value && !roleRefreshInFlight
+        setMultiProviderRouterBusy(value)
         updateRoleControlAvailability()
         if value { globalSpinner.startAnimation(nil) }
         else { globalSpinner.stopAnimation(nil) }
@@ -151,6 +153,7 @@ final class ProvidersViewController: NSViewController, ControlCenterPage {
             if !self.busy { self.providerStatus.stringValue = self.describeProviderStatus(json) }
         }
         refreshOpenRouterStatus()
+        refreshMultiProviderRouterStatus()
         if openRouterModels.isEmpty { refreshOpenRouterModels() }
         refreshRoleModels()
         refreshFastStatus()

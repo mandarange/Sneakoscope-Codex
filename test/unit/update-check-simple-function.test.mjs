@@ -94,6 +94,11 @@ if (args[0] === 'view' && args[1] === 'sneakoscope' && args[2] === 'version') {
   process.exit(0);
 }
 if (args[0] === 'install' && args[1] === '--global' && args[2] === 'sneakoscope@${packageVersion}') {
+  fs.appendFileSync(process.env.SKS_FAKE_NPM_LOG, JSON.stringify({
+    event: 'install-env',
+    defer: process.env.SKS_UPDATE_DEFER_MENUBAR_RESTART || null,
+    skipLaunch: process.env.SKS_SKIP_SKS_MENUBAR_LAUNCH || null
+  }) + '\\n');
   console.log('globally installed');
   process.exit(0);
 }
@@ -123,9 +128,10 @@ process.exit(1);
   assert.equal(result.status, 'updated');
   assert.deepEqual(result.npm_args, ['install', '--global', `sneakoscope@${packageVersion}`, '--registry', 'https://registry.npmjs.org/']);
   const calls = (await fs.readFile(log, 'utf8')).trim().split(/\r?\n/).map((line) => JSON.parse(line));
-  assert.ok(calls.some((call) => call.args[0] === 'root' && call.args[1] === '--global'));
-  assert.ok(calls.some((call) => call.args[0] === 'install' && call.args[1] === '--global'));
-  assert.ok(!calls.some((call) => call.args[0] === 'install' && call.args[1] !== '--global'));
+  assert.ok(calls.some((call) => call.args?.[0] === 'root' && call.args[1] === '--global'));
+  assert.ok(calls.some((call) => call.args?.[0] === 'install' && call.args[1] === '--global'));
+  assert.ok(!calls.some((call) => call.args?.[0] === 'install' && call.args[1] !== '--global'));
+  assert.ok(calls.some((call) => call.event === 'install-env' && call.defer === '1' && call.skipLaunch === '1'));
   const ledger = await fs.readFile(path.join(tmp, '.sneakoscope', 'reports', 'mutation-ledger.jsonl'), 'utf8');
   assert.match(ledger, /"kind":"package_install"/);
 });

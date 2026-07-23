@@ -2,12 +2,29 @@
 
 ## [Unreleased]
 
+## [7.1.1] - 2026-07-23
+
+### Added
+
+- Add a guided **Remote & Telegram** setup in SKS Center that verifies a private bot, detects the paired `/start` chat, stores the token only in macOS Keychain, registers a dedicated project session, and manages the Telegram Hub through a user LaunchAgent.
+- Add same-Mac Telegram coding through a local typed worker: the first ordinary private-chat message creates and persists the dedicated Codex thread in the same App Server connection, later messages resume it, and every turn runs workspace-scoped with network disabled before returning the final Codex response without enabling arbitrary remote shell.
+- Add a loopback-only multi-provider router setup and catalog-backed per-role model selection for compatible `provider/model` slugs while keeping upstream credentials outside SKS.
+
 ### Changed
 
 - Require `compatibility` and `host_capabilities` on every `sks.agent-manifest.v1` validation; incomplete schema+tools-only manifests fail closed.
 - Allow bounded host-capability repetition: datasource read-only queries up to 4 per mission (schema-bound) and spreadsheet updates up to 3 (inspect after each mutation).
 - Make `sks mcp config` skip the update/migration gate so local Codex MCP config works without `SUPABASE_ACCESS_TOKEN`.
 - Stop automatic OMX/DCodex quarantine from `sks setup`, `sks doctor --fix`, and `sks update`; only `sks conflicts cleanup --yes` mutates, and it preserves unrelated MCP blocks such as `acas-tools`.
+- Bind the macOS release proof to the exact 6.2.0 upgrade report and require the upgrade authorization path to prove isolated HOME/CODEX_HOME/npm prefix use, exact lifecycle commands, safe `launchctl` behavior, successful sandbox cleanup, and pack receipt/tarball identities.
+- Treat the upgrade smoke entrypoint as an explicit checkout-only GitHub Actions harness; the runtime-script closure fails closed if any installed product runtime also references it.
+- Raise the unpacked package ceiling to `11,425,000` bytes after the 7.1.1 proof-validation build measured `11,403,003` unpacked bytes across `1,601` files, while retaining the `2510 KiB` packed ceiling.
+
+### Fixed
+
+- Prevent `sks update` and its old/new migration Doctor subprocesses from restarting the SKS Menu Bar before the parent update finishes: restart-deferral state now reaches npm lifecycle children, migration-profile Doctor skips Menu Bar mutation, and the Control Center owns the final post-receipt relaunch.
+- Make Telegram status expose token, pairing, registered-session, and LaunchAgent readiness instead of presenting a configured file as a working remote-coding connection.
+- Avoid storing a non-resumable empty Codex thread during Telegram setup. Codex 0.145.0 materializes a rollout only after the first turn, so SKS now creates the thread lazily with the first real Telegram message and repairs old empty-thread bindings only when no prior turn history exists.
 
 ## [7.1.0] - 2026-07-22
 

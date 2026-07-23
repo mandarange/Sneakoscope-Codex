@@ -11,6 +11,11 @@ export interface RuntimeScriptPackClosureAnalysis {
   candidates: string[];
   roots: string[];
   root_reasons: Array<{ path: string; sources: string[] }>;
+  checkout_only_roots: string[];
+  checkout_only_root_reasons: Array<{ path: string; sources: string[] }>;
+  checkout_only_closure: string[];
+  checkout_only_excluded: string[];
+  checkout_only_policies: Array<{ path: string; sources: string[]; reason: string }>;
   closure: string[];
   excluded: string[];
   declared: string[];
@@ -36,6 +41,8 @@ export function analyzeRuntimeScriptPackClosure(root: string): RuntimeScriptPack
   const rootReasons = new Map<string, Set<string>>();
   const missingReferences = new Map<string, { source: string; reference: string }>();
   const dynamicWarnings = new Map<string, { source: string; excerpt: string }>();
+  const checkoutOnlyPolicies: Array<{ path: string; sources: string[]; reason: string }> = [];
+  const checkoutOnlyPolicyIssues: string[] = [];
 
   const collectRoots = (source: string, text: string, context = source, strictExplicit = false) => {
     const scan = scanScriptReferences(text, runtimeContext(context), candidateSet, strictExplicit);
@@ -56,6 +63,7 @@ export function analyzeRuntimeScriptPackClosure(root: string): RuntimeScriptPack
     const manifest = readJson(requiredManifestPath) as {
       scripts?: Array<{ path?: unknown }>;
       dynamic_reference_policies?: Array<{ source?: unknown; reason?: unknown }>;
+      checkout_only_scripts?: Array<{ path?: unknown; sources?: unknown; reason?: unknown }>;
     };
     for (const entry of Array.isArray(manifest.scripts) ? manifest.scripts : []) {
       const reference = normalizeScriptPath(String(entry?.path || ''));
@@ -68,6 +76,25 @@ export function analyzeRuntimeScriptPackClosure(root: string): RuntimeScriptPack
       .map((entry) => ({ source: runtimeContext(String(entry?.source || '')), reason: String(entry?.reason || '').trim() }))
       .filter((entry) => entry.source && entry.reason)
       .sort((a, b) => a.source.localeCompare(b.source));
+    for (const entry of Array.isArray(manifest.checkout_only_scripts) ? manifest.checkout_only_scripts : []) {
+      const scriptPath = normalizeScriptPath(String(entry?.path || ''));
+      const reason = String(entry?.reason || '').trim();
+      const sources = Array.isArray(entry?.sources)
+        ? [...new Set(entry.sources.map((source) => String(source || '').trim().replace(/\\/g, '/')).filter(Boolean))].sort()
+        : [];
+      if (!scriptPath) checkoutOnlyPolicyIssues.push(`checkout_only_script_path_invalid:${String(entry?.path || '')}`);
+      else if (!candidateSet.has(scriptPath)) checkoutOnlyPolicyIssues.push(`checkout_only_script_missing:${scriptPath}`);
+      if (!reason) checkoutOnlyPolicyIssues.push(`checkout_only_script_reason_missing:${scriptPath || 'invalid'}`);
+      if (!sources.length) checkoutOnlyPolicyIssues.push(`checkout_only_script_sources_missing:${scriptPath || 'invalid'}`);
+      for (const source of sources) {
+        if (!/^\.github\/workflows\/[A-Za-z0-9._/-]+\.ya?ml$/.test(source)) {
+          checkoutOnlyPolicyIssues.push(`checkout_only_script_source_invalid:${scriptPath || 'invalid'}:${source}`);
+        }
+      }
+      if (scriptPath && candidateSet.has(scriptPath) && reason && sources.length) {
+        checkoutOnlyPolicies.push({ path: scriptPath, sources, reason });
+      }
+    }
   }
 
   for (const relative of runtimeReferenceSources(absoluteRoot)) {
@@ -83,10 +110,39 @@ export function analyzeRuntimeScriptPackClosure(root: string): RuntimeScriptPack
     recordDynamic(dynamicWarnings, candidate, scan.dynamic);
   }
 
-  const closure = transitiveClosure(roots, edges);
+  const packageRoots = new Set(roots);
+  const checkoutOnlyRoots = new Set<string>();
+  for (const policy of checkoutOnlyPolicies) {
+    const observed = [...(rootReasons.get(policy.path) || [])].sort();
+    const missingSources = policy.sources.filter((source) => !observed.includes(source));
+    const unexpectedSources = observed.filter((source) => !policy.sources.includes(source));
+    if (!observed.length) checkoutOnlyPolicyIssues.push(`checkout_only_script_policy_stale:${policy.path}`);
+    for (const source of missingSources) {
+      checkoutOnlyPolicyIssues.push(`checkout_only_script_source_not_observed:${policy.path}:${source}`);
+    }
+    for (const source of unexpectedSources) {
+      checkoutOnlyPolicyIssues.push(`checkout_only_script_unapproved_root_source:${policy.path}:${source}`);
+    }
+    if (observed.length && missingSources.length === 0 && unexpectedSources.length === 0) {
+      packageRoots.delete(policy.path);
+      checkoutOnlyRoots.add(policy.path);
+    }
+  }
+
+  const closure = transitiveClosure(packageRoots, edges);
+  const checkoutOnlyClosure = transitiveClosure(checkoutOnlyRoots, edges);
   const declaredResult = declaredRuntimeScriptAllowlist(pkg.files);
   const declaredSet = new Set(declaredResult.declared);
   const closureSet = new Set(closure);
+  const checkoutOnlyClosureSet = new Set(checkoutOnlyClosure);
+  for (const [source, dependencies] of edges) {
+    if (!closureSet.has(source) || checkoutOnlyClosureSet.has(source)) continue;
+    for (const dependency of dependencies) {
+      if (checkoutOnlyClosureSet.has(dependency)) {
+        checkoutOnlyPolicyIssues.push(`checkout_only_script_product_dependency:${dependency}:${source}`);
+      }
+    }
+  }
   const missingFromAllowlist = closure.filter((file) => !declaredSet.has(file));
   const staleAllowlistEntries = declaredResult.declared.filter((file) => !closureSet.has(file));
   const excluded = candidates.filter((file) => !closureSet.has(file));
@@ -97,10 +153,19 @@ export function analyzeRuntimeScriptPackClosure(root: string): RuntimeScriptPack
   return {
     schema: 'sks.runtime-script-pack-closure.v1',
     candidates,
-    roots: [...roots].sort(),
+    roots: [...packageRoots].sort(),
     root_reasons: [...rootReasons.entries()]
+      .filter(([scriptPath]) => packageRoots.has(scriptPath))
       .map(([scriptPath, sources]) => ({ path: scriptPath, sources: [...sources].sort() }))
       .sort((a, b) => a.path.localeCompare(b.path)),
+    checkout_only_roots: [...checkoutOnlyRoots].sort(),
+    checkout_only_root_reasons: [...rootReasons.entries()]
+      .filter(([scriptPath]) => checkoutOnlyRoots.has(scriptPath))
+      .map(([scriptPath, sources]) => ({ path: scriptPath, sources: [...sources].sort() }))
+      .sort((a, b) => a.path.localeCompare(b.path)),
+    checkout_only_closure: checkoutOnlyClosure,
+    checkout_only_excluded: checkoutOnlyClosure.filter((file) => !closureSet.has(file)),
+    checkout_only_policies: checkoutOnlyPolicies.sort((a, b) => a.path.localeCompare(b.path)),
     closure,
     excluded,
     declared: declaredResult.declared,
@@ -111,7 +176,7 @@ export function analyzeRuntimeScriptPackClosure(root: string): RuntimeScriptPack
     dynamic_reference_policies: dynamicReferencePolicies,
     uncovered_dynamic_references: dynamicReferenceWarnings.filter((entry) => !dynamicPolicySources.has(entry.source)),
     stale_dynamic_reference_policies: dynamicReferencePolicies.filter((entry) => !observedDynamicSources.has(entry.source)),
-    declaration_issues: declaredResult.issues,
+    declaration_issues: [...new Set([...declaredResult.issues, ...checkoutOnlyPolicyIssues])].sort(),
     closure_sha256: digestLines(closure)
   };
 }

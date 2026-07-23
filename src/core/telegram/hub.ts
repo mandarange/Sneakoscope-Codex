@@ -108,11 +108,13 @@ export class TelegramHubRouter {
     const command = text.startsWith('/') ? text.split(/\s+/, 1)[0]?.toLowerCase() ?? '' : '';
     const policy = staticUiAction ?? COMMAND_POLICY[command];
 
-    if (actor.topicId === null) {
+    const route = actor.topicId === null
+      ? await this.onlyRouteForPrivateChat(actor.chatId)
+      : await this.options.topics.findByTopic(actor.chatId, actor.topicId);
+    if (actor.topicId === null && !route) {
       await this.audit(update, actor.chatId, null, null, command || 'free_text', 'rejected', 'session_picker_required');
       return { ...result(false, 'session_picker_required'), session_picker: true };
     }
-    const route = await this.options.topics.findByTopic(actor.chatId, actor.topicId);
     if (!route) return this.reject(update, actor, command || 'free_text', 'wrong_topic');
 
     if (policy) {
@@ -144,6 +146,11 @@ export class TelegramHubRouter {
     return chatType === 'private'
       && this.options.config.paired_chat_ids.includes(chatId)
       && this.options.config.paired_user_ids.includes(userId);
+  }
+
+  private async onlyRouteForPrivateChat(chatId: string) {
+    const routes = (await this.options.topics.list()).filter((route) => route.chat_id === chatId);
+    return routes.length === 1 && routes[0]?.message_thread_id === 0 ? routes[0] : null;
   }
 
   private async reject(update: TelegramUpdate, actor: UpdateActor, command: string, reason: string): Promise<TelegramHubRouteResult> {

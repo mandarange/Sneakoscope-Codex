@@ -427,6 +427,14 @@ export const UPDATE_STAGE_ORDER = [
   'snapshot_refresh'
 ] as const;
 
+export function updateNestedProcessEnvironment(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  return {
+    ...env,
+    SKS_UPDATE_DEFER_MENUBAR_RESTART: '1',
+    SKS_SKIP_SKS_MENUBAR_LAUNCH: '1'
+  };
+}
+
 export async function runSksUpdateReview(options: SksUpdateNowOptions = {}): Promise<SksUpdateReviewResult> {
   const packageName = options.packageName || 'sneakoscope';
   const registry = options.registry || DEFAULT_REGISTRY;
@@ -511,6 +519,7 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
   const packageName = options.packageName || 'sneakoscope';
   const registry = options.registry || DEFAULT_REGISTRY;
   const env = options.env || process.env;
+  const nestedProcessEnv = updateNestedProcessEnvironment(env);
   const npmBin = options.npmBin === undefined ? await which('npm') : options.npmBin;
   const cwd = env.HOME || os.homedir();
   const check = await runSksUpdateCheck({
@@ -734,7 +743,7 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
       root: projectReceiptRoot,
       args: ['doctor', '--fix', '--yes', '--profile', 'migration', '--machine-only', '--report-file', path.join(projectReceiptRoot, '.sneakoscope', 'update', 'old-version-doctor.json')],
       env: {
-        ...env,
+        ...nestedProcessEnv,
         ...(env.SKS_TEST_OLD_DOCTOR_FAIL === '1' ? { SKS_TEST_DOCTOR_FAIL: '1' } : {})
       },
       timeoutMs: oldDoctorTimeoutMs,
@@ -754,7 +763,7 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
     packageName,
     version: installVersion,
     registry,
-    env,
+    env: nestedProcessEnv,
     ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
     ...(options.maxOutputBytes === undefined ? {} : { maxOutputBytes: options.maxOutputBytes })
   });
@@ -806,7 +815,7 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
     command: npmBin,
     args: npmArgs,
     cwd,
-    env,
+    env: nestedProcessEnv,
     timeoutMs: options.timeoutMs ?? 10 * 60 * 1000,
     maxOutputBytes: options.maxOutputBytes ?? 128 * 1024
   };
@@ -853,7 +862,7 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
         root: projectReceiptRoot,
         entrypoint: newBinary,
         args: ['doctor', '--fix', '--yes', '--profile', 'migration', '--machine-only', '--report-file', path.join(projectReceiptRoot, '.sneakoscope', 'update', 'new-version-doctor.json')],
-        env,
+        env: nestedProcessEnv,
         timeoutMs: updateDoctorTimeoutMs(env),
         maxOutputBytes: 32 * 1024
       }), 60_000);
@@ -876,7 +885,7 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
         doctor: newVersionDoctor,
         updateStages: stages,
         fromVersion: check.current,
-        env
+        env: nestedProcessEnv
       });
       projectReceipt = receiptResult.receipt;
       migrationCurrent = isUpdateMigrationReceiptCurrent(projectReceipt, installVersion);

@@ -1,7 +1,7 @@
-# SKS 7.1.0 Release Readiness
+# SKS 7.1.1 Release Readiness
 
 This document is the current fail-closed release contract for `sneakoscope`
-7.1.0. The current package version on this branch is 7.1.0. It is a readiness
+7.1.1. The current package version on this branch is 7.1.1. It is a readiness
 checklist, not evidence that the version has already been published.
 
 ## Completion Boundary
@@ -54,6 +54,9 @@ path.
   rollback instructions;
 - both the previous binary and newly installed package-local binary run
   migration-profile `doctor --fix`;
+- every nested Doctor, npm lifecycle, and postinstall process inherits Menu Bar
+  restart deferral while the update parent owns completion;
+- migration-profile Doctor cannot apply or launch the Menu Bar phase;
 - the new binary is resolved and verified before success is reported;
 - an interrupted update leaves a precise receipt and recovery path;
 - the menu companion is rebuilt from the newly installed package.
@@ -87,12 +90,25 @@ path.
 - the official Remote transport remains host-owned. SKS does not implement,
   proxy, or reverse engineer that transport; readiness checks never present an
   SKS SSH session id as an official Remote session id;
-- the separate SKS SSH stdio worker is an allowlisted, typed, proof-aware fleet
-  control channel for bounded input, verify, read, and owner-proof cancel. It is
+- the separate SKS SSH stdio worker remains proof-aware fleet control through
+  an allowlisted, typed channel for bounded input, verify, read, and
+  owner-proof cancel. It is
   not a replacement for official high-fidelity Remote coding;
-- Telegram is proof-aware fleet control, uses durable aliases and idempotency
-  records, redacts secrets, and gates state-changing actions behind the current
-  command contract;
+- same-Mac Telegram coding uses an explicit local machine target and dedicated
+  Codex session binding rather than self-SSH or a guessed GUI session;
+- Telegram setup verifies the bot, pairs one private chat/user, stores only a
+  Keychain reference in config, and never prints or persists the token in
+  project files, process arguments, logs, or receipts;
+- the user LaunchAgent exposes verified start, stop, restart, and status
+  lifecycle, while the first ordinary private-chat message creates the thread
+  and starts its first turn in one App Server connection before persisting the
+  binding; later text resumes that exact idle thread, waits for completion, and
+  returns the final public response;
+- a missing rollout may recreate a binding only when no prior turn was ever
+  recorded; persisted Telegram history fails closed rather than being silently
+  replaced;
+- Telegram keeps durable aliases and idempotency records, rejects unpaired
+  chats and project-scope drift, and never exposes arbitrary remote shell;
 - Zellij is observability only and cannot satisfy completion proof.
 
 ### Database Safety
@@ -148,21 +164,28 @@ from a clean worktree and refreshes the pack after source changes.
 Inspect the exact packed file list and tarball, not only the source checkout.
 
 - no source-only runtime import is required by the installed package;
-- every referenced runtime script is present in the tarball;
+- every installed-product runtime script reference is present in the tarball;
+- checkout-only release harnesses are excluded only through an exact
+  `runtime-required-scripts.json` policy bound to the referencing GitHub
+  workflow; any product-runtime reference makes that exclusion invalid;
 - installed help and command manifests contain only current commands;
 - generated project guidance contains only current dollar routes;
 - an isolated prefix install can run version, help, doctor, Naruto status, MCP
   status, update status, and Menu Bar diagnostics;
-- the 6.2.0 to 7.1.0 upgrade smoke uses an isolated HOME and proves managed
-  cleanup, user-file preservation, new-binary re-exec, and rollback receipts;
+- the 6.2.0 to 7.1.1 upgrade smoke uses an isolated HOME and proves managed
+  cleanup, user-file preservation, new-binary re-exec, rollback receipts,
+  exact lifecycle command inventory, no timeout, no host HOME/prefix reuse,
+  no unexpected `launchctl` call, and successful sandbox removal;
+- the macOS proof embeds and rehashes the exact upgrade report, including its
+  source commit, pack-receipt hash, tarball SHA-256/SHA-512, and target version;
 - Linux package smoke and macOS native/Menu Bar smoke both pass.
 
 Record the tarball path, size, SHA-256, integrity, file inventory, installed
-smoke report, and platform-gate reports under the 7.1.0 release evidence root.
+smoke report, and platform-gate reports under the 7.1.1 release evidence root.
 
 ## Version Cut
 
-Do not cut 7.1.0 while feature integration or a required gate is red.
+Do not cut 7.1.1 while feature integration or a required gate is red.
 
 ```bash
 sks versioning bump patch --json
@@ -171,7 +194,7 @@ npm run release:version-truth --silent
 ```
 
 Package metadata, lockfile, runtime constants, Rust metadata, managed assets,
-README, changelog, built output, and release evidence must agree on 7.1.0.
+README, changelog, built output, and release evidence must agree on 7.1.1.
 Sneakoscope does not install or rely on a Git pre-commit version hook.
 
 ## Trusted Staged Publishing
@@ -181,6 +204,15 @@ Trusted Publishing with the allowed action restricted to `npm stage publish`.
 No long-lived npm write token is used. The workflow pins Node 24 and npm
 to an exact version at or above 11.15.0, runs the full release and platform
 dependencies, then stages the reviewed package.
+
+The macOS proof job downloads the exact Linux-built tarball and receipt, runs
+the isolated 6.2.0-to-current upgrade lifecycle against those bytes, and
+seals the upgrade receipt hash and target identity into
+`sks.macos-menubar-proof.v2`. The comparison job then runs the source-bound
+main-push guard and includes both receipts in the immutable handoff; the OIDC
+stage job revalidates their version, commit, receipt digest, tarball
+SHA-256/SHA-512, isolation, lifecycle command/state inventory, paths, and
+hashes before registry mutation.
 
 Official npm requirements and workflow references:
 
@@ -220,7 +252,7 @@ A maintainer then performs the separate human approval step with 2FA:
 npm stage approve <stage-id>
 ```
 
-Automation must stop before this approval. It must not claim that 7.1.0 is
+Automation must stop before this approval. It must not claim that 7.1.1 is
 published while only a stage exists.
 
 Because the trusted publisher is bound to the configured workflow on the
@@ -233,13 +265,13 @@ not restaged until the cause and version-uniqueness state are understood.
 After maintainer approval, verify the live registry independently:
 
 ```bash
-npm view sneakoscope@7.1.0 version dist.integrity dist.tarball --json
+npm view sneakoscope@7.1.1 version dist.integrity dist.tarball --json
 npm view sneakoscope dist-tags --json
 ```
 
-Then install `sneakoscope@7.1.0` into a fresh isolated prefix and rerun the
+Then install `sneakoscope@7.1.1` into a fresh isolated prefix and rerun the
 installed-package smoke. Completion requires the registry version to be
-7.1.0, `latest` to resolve to 7.1.0, integrity to match, and the fresh install
+7.1.1, `latest` to resolve to 7.1.1, integrity to match, and the fresh install
 to pass.
 
 ## Fail-Closed Rules

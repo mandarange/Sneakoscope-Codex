@@ -71,27 +71,125 @@ export function writeCompleteReleaseProofs(root: string, head: string, baseline 
     pack_proof_id: npmProof.proof_id, pack_info_sha256: npmProof.info_digest, pack_file_list_sha256: npmProof.file_list_digest,
     actual_file_count: info.entryCount, actual_tarball_bytes: info.size
   }))
-  fs.writeFileSync(path.join(proofDir, 'pack-receipt.json'), JSON.stringify({
+  const packReceiptPath = path.join(proofDir, 'pack-receipt.json')
+  const packReceipt = {
     ...inspected,
     npm_pack_proof: { proof_id: npmProof.proof_id, info_sha256: npmProof.info_digest, file_list_sha256: npmProof.file_list_digest }
-  }))
-  fs.writeFileSync(path.join(proofDir, 'upgrade-6.2-to-6.3.0.json'), JSON.stringify({
-    schema: 'sks.release-upgrade-smoke.v1', ok: true, platform: 'darwin', baseline_version: '6.2.0', target_version: '6.3.0', blockers: [],
+  }
+  fs.writeFileSync(packReceiptPath, JSON.stringify(packReceipt))
+  const upgradeSandbox = path.join(root, '.fixture-upgrade-sandbox')
+  const upgradeIsolation = {
+    sandbox: upgradeSandbox,
+    home: path.join(upgradeSandbox, 'home'),
+    codex_home: path.join(upgradeSandbox, 'codex-home'),
+    npm_cache: path.join(upgradeSandbox, 'npm-cache'),
+    npm_prefix: path.join(upgradeSandbox, 'npm-prefix'),
+    npm_userconfig: path.join(upgradeSandbox, 'npmrc'),
+    workspace: path.join(upgradeSandbox, 'workspace'),
+    baseline_pack_dir: path.join(upgradeSandbox, 'baseline-pack'),
+    command_reports_dir: path.join(upgradeSandbox, 'command-reports'),
+    sealed_inputs_dir: path.join(upgradeSandbox, 'sealed-inputs'),
+    host_home_reused: false,
+    host_codex_home_reused: false,
+    host_npm_prefix_reused: false,
+    retained: false,
+    removed_after_success: true,
+    cleanup_status: 'removed',
+    cleanup_error: null
+  }
+  const baselineSealedTarball = path.join(upgradeIsolation.sealed_inputs_dir, 'baseline-6.2.0-fixture.tgz')
+  const targetSealedTarball = path.join(upgradeIsolation.sealed_inputs_dir, 'target-6.3.0-fixture.tgz')
+  const sksBinary = path.join(upgradeIsolation.npm_prefix, 'bin', 'sks')
+  const packageRoot = path.join(upgradeIsolation.npm_prefix, 'lib', 'node_modules', 'sneakoscope')
+  const upgradeCommands = [
+    upgradeCommand(upgradeIsolation, 'baseline_fetch', ['npm', 'pack', 'sneakoscope@6.2.0', '--ignore-scripts', '--json', '--pack-destination', upgradeIsolation.baseline_pack_dir]),
+    upgradeCommand(upgradeIsolation, 'baseline_install', ['npm', 'install', '--global', '--prefix', upgradeIsolation.npm_prefix, '--no-audit', '--no-fund', '--loglevel=error', baselineSealedTarball]),
+    upgradeCommand(upgradeIsolation, 'baseline_version', [sksBinary, '--version']),
+    upgradeCommand(upgradeIsolation, 'baseline_bootstrap', [sksBinary, 'bootstrap', '--json']),
+    upgradeDoctorCommand(upgradeIsolation, 'baseline_doctor', sksBinary, '6.2.0', 'pinned_6_2_stdout_only'),
+    upgradeCommand(upgradeIsolation, 'baseline_menubar_install', [sksBinary, 'menubar', 'install', '--no-launch', '--json', '--home', upgradeIsolation.home, '--root', packageRoot]),
+    upgradeCommand(upgradeIsolation, 'baseline_menubar_status', [sksBinary, 'menubar', 'status', '--json', '--home', upgradeIsolation.home, '--root', packageRoot], 1),
+    upgradeCommand(upgradeIsolation, 'target_install', ['npm', 'install', '--global', '--prefix', upgradeIsolation.npm_prefix, '--no-audit', '--no-fund', '--loglevel=error', targetSealedTarball]),
+    upgradeCommand(upgradeIsolation, 'target_version', [sksBinary, '--version']),
+    upgradeDoctorCommand(upgradeIsolation, 'target_doctor', sksBinary, '6.3.0', 'strict_report_file'),
+    upgradeCommand(upgradeIsolation, 'target_menubar_install', [sksBinary, 'menubar', 'install', '--no-launch', '--json', '--home', upgradeIsolation.home, '--root', packageRoot]),
+    upgradeCommand(upgradeIsolation, 'target_menubar_status', [sksBinary, 'menubar', 'status', '--json', '--home', upgradeIsolation.home, '--root', packageRoot], 1),
+    upgradeCommand(upgradeIsolation, 'target_menubar_rollback', [sksBinary, 'menubar', 'rollback', '--no-launch', '--json', '--home', upgradeIsolation.home, '--root', packageRoot]),
+    upgradeCommand(upgradeIsolation, 'target_menubar_reinstall_install', [sksBinary, 'menubar', 'install', '--no-launch', '--json', '--home', upgradeIsolation.home, '--root', packageRoot]),
+    upgradeCommand(upgradeIsolation, 'target_menubar_reinstall_status', [sksBinary, 'menubar', 'status', '--json', '--home', upgradeIsolation.home, '--root', packageRoot], 1),
+    upgradeCommand(upgradeIsolation, 'package_rollback_install', ['npm', 'install', '--global', '--prefix', upgradeIsolation.npm_prefix, '--no-audit', '--no-fund', '--loglevel=error', baselineSealedTarball]),
+    upgradeCommand(upgradeIsolation, 'package_rollback_version', [sksBinary, '--version']),
+    upgradeDoctorCommand(upgradeIsolation, 'package_rollback_doctor', sksBinary, '6.2.0', 'pinned_6_2_stdout_only')
+  ]
+  const upgradePath = path.join(proofDir, 'upgrade-6.2-to-6.3.0.json')
+  fs.writeFileSync(upgradePath, JSON.stringify({
+    schema: 'sks.release-upgrade-smoke.v2', ok: true,
+    started_at: new Date().toISOString(), generated_at: new Date().toISOString(),
+    platform: 'darwin', baseline_version: '6.2.0', target_version: '6.3.0', root, blockers: [],
     baseline: {
+      source: 'registry',
+      spec: 'sneakoscope@6.2.0',
       pinned_sha256: 'dd0bfc022348c11dc737055845708f6272beaf2a8f9c16d068acf3c8c612f9bc',
-      tarball_sha256: 'dd0bfc022348c11dc737055845708f6272beaf2a8f9c16d068acf3c8c612f9bc'
+      tarball_path: path.join(upgradeIsolation.baseline_pack_dir, 'sneakoscope-6.2.0.tgz'),
+      tarball_sha256: 'dd0bfc022348c11dc737055845708f6272beaf2a8f9c16d068acf3c8c612f9bc',
+      sealed_tarball_path: baselineSealedTarball,
+      sha512_integrity: 'sha512-Zml4dHVyZS1iYXNlbGluZQ==',
+      registry_shasum: 'a'.repeat(40),
+      inspection_warnings: []
     },
     source_tree: { ok: true, head, dirty_entries: [], blockers: [] },
     target: {
-      binding_ok: true, receipt_source_commit: head, tarball_sha256: inspected.sha256,
-      receipt_path: path.join(proofDir, 'pack-receipt.json'), tarball_path: path.resolve(root, inspected.tarball_path)
+      binding_ok: true,
+      receipt_source_commit: head,
+      source_commit: head,
+      package_version: '6.3.0',
+      receipt_sha256: sha(fs.readFileSync(packReceiptPath)),
+      tarball_sha256: inspected.sha256,
+      tarball_sha512_integrity: inspected.sha512_integrity,
+      receipt_path: path.relative(root, packReceiptPath).split(path.sep).join('/'),
+      tarball_path: inspected.tarball_path,
+      sealed_tarball_path: targetSealedTarball,
+      npm_pack_proof: {
+        proof_id: npmProof.proof_id,
+        info_sha256: npmProof.info_digest,
+        file_list_sha256: npmProof.file_list_digest
+      }
     },
+    isolation: upgradeIsolation,
+    menubar_launch_policy: {
+      applicable: true,
+      launch_skipped: true,
+      proof_scope: 'bundle_install_status_rollback_only',
+      separate_real_launch_proof_required: true
+    },
+    install_safety_policy: {
+      host_process_mutation_allowed: false,
+      host_session_mutation_allowed: false,
+      postinstall_network_allowed: false,
+      postinstall_skip_env: ['SKS_DISABLE_NETWORK'],
+      launchctl_stub_path: path.join(upgradeSandbox, 'bin', 'launchctl'),
+      launchctl_stub_sha256: 'e'.repeat(64),
+      launchctl_log_path: path.join(upgradeSandbox, 'launchctl-calls.log'),
+      launchctl_calls: [],
+      launchctl_unexpected_calls: [],
+      real_launchctl_allowed: false
+    },
+    commands: upgradeCommands,
     states: Object.fromEntries([
       'baseline_package', 'baseline_menubar', 'target_package', 'target_menubar', 'menubar_rollback',
       'target_menubar_reinstall', 'package_rollback'
     ].map((key) => {
       const expected = key.startsWith('target_') ? '6.3.0' : '6.2.0'
-      return [key, { status: 'passed', expected_version: expected, observed_version: expected, blockers: [] }]
+      const stages = ({
+        baseline_package: ['baseline_install', 'baseline_version', 'baseline_bootstrap', 'baseline_doctor'],
+        baseline_menubar: ['baseline_menubar_install', 'baseline_menubar_status'],
+        target_package: ['target_install', 'target_version', 'target_doctor'],
+        target_menubar: ['target_menubar_install', 'target_menubar_status'],
+        menubar_rollback: ['target_menubar_rollback'],
+        target_menubar_reinstall: ['target_menubar_reinstall_install', 'target_menubar_reinstall_status'],
+        package_rollback: ['package_rollback_install', 'package_rollback_version', 'package_rollback_doctor']
+      } as Record<string, string[]>)[key] || []
+      return [key, { status: 'passed', expected_version: expected, observed_version: expected, command_stages: stages, blockers: [] }]
     }))
   }))
 
@@ -110,6 +208,17 @@ export function writeCompleteReleaseProofs(root: string, head: string, baseline 
     schema: MACOS_MENUBAR_PROOF_SCHEMA, ok: true, version: '6.3.0', source_commit: head, runner_os: 'macOS',
     swift_version: 'Swift 6', xcode_version: 'Xcode 17', app_path: '/tmp/SKS.app',
     install_report_path: path.relative(root, installReportPath), install_report_sha256: sha(fs.readFileSync(installReportPath)),
+    upgrade_report_path: path.relative(root, upgradePath), upgrade_report_sha256: sha(fs.readFileSync(upgradePath)),
+    upgrade_report: {
+      schema: 'sks.release-upgrade-smoke.v2',
+      baseline_version: '6.2.0',
+      target_version: '6.3.0',
+      source_commit: head,
+      target_tarball_sha256: inspected.sha256,
+      target_receipt_sha256: sha(fs.readFileSync(packReceiptPath)),
+      target_tarball_sha512_integrity: inspected.sha512_integrity,
+      target_package_version: '6.3.0'
+    },
     install_report: {
       schema: installReport.schema, checks: installChecks, failed_checks: [],
       resources_sha256: installReport.resources_sha256, source_sha256: installReport.source_sha256,
@@ -128,4 +237,89 @@ export function writeCompleteReleaseProofs(root: string, head: string, baseline 
 
 function sha(value: crypto.BinaryLike): string {
   return crypto.createHash('sha256').update(value).digest('hex')
+}
+
+function upgradeCommand(
+  isolation: {
+    workspace: string
+    home: string
+    codex_home: string
+    npm_cache: string
+    npm_prefix: string
+  },
+  stage: string,
+  argv: string[],
+  exitCode = 0
+): any {
+  return {
+    stage,
+    argv,
+    cwd: isolation.workspace,
+    isolated_home: isolation.home,
+    isolated_codex_home: isolation.codex_home,
+    isolated_npm_cache: isolation.npm_cache,
+    isolated_npm_prefix: isolation.npm_prefix,
+    exit_code: exitCode,
+    timed_out: false,
+    duration_ms: 1,
+    stdout_sha256: sha(Buffer.alloc(0)),
+    stderr_sha256: sha(Buffer.alloc(0)),
+    stdout_tail: '',
+    stderr_tail: '',
+    json_schema: null,
+    json_ok: null,
+    report_file: null
+  }
+}
+
+function upgradeDoctorCommand(
+  isolation: {
+    workspace: string
+    home: string
+    codex_home: string
+    npm_cache: string
+    npm_prefix: string
+    command_reports_dir: string
+  },
+  stage: string,
+  sksBinary: string,
+  expectedVersion: string,
+  validationMode: 'strict_report_file' | 'pinned_6_2_stdout_only'
+) {
+  const reportFile = path.join(isolation.command_reports_dir, `${stage}.json`)
+  const command = upgradeCommand(isolation, stage, [sksBinary, 'doctor', '--json', '--report-file', reportFile])
+  command.json_schema = 'sks.doctor-status.v3'
+  command.json_ok = true
+  command.report_file = validationMode === 'strict_report_file' ? {
+    validation_mode: validationMode,
+    path: reportFile,
+    real_path: reportFile,
+    inside_sandbox: true,
+    regular_file: true,
+    symlink_refused: false,
+    sha256: '1'.repeat(64),
+    json_sha256: '2'.repeat(64),
+    stdout_json_sha256: '2'.repeat(64),
+    matches_stdout: true,
+    schema: 'sks.doctor-status.v3',
+    ok: true,
+    root: isolation.workspace,
+    expected_package_version: expectedVersion
+  } : {
+    validation_mode: validationMode,
+    path: reportFile,
+    real_path: null,
+    inside_sandbox: false,
+    regular_file: false,
+    symlink_refused: false,
+    sha256: null,
+    json_sha256: null,
+    stdout_json_sha256: '2'.repeat(64),
+    matches_stdout: false,
+    schema: null,
+    ok: null,
+    root: null,
+    expected_package_version: expectedVersion
+  }
+  return command
 }

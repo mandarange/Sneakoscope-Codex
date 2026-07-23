@@ -7,7 +7,7 @@ import path from 'node:path';
 import { COMMANDS } from '../../dist/cli/command-registry.js';
 import { COMMAND_MANIFEST_BY_NAME } from '../../dist/cli/command-manifest-lite.js';
 import { ensureCurrentMigrationBeforeCommand } from '../../dist/core/update/update-migration-state.js';
-import { doctorArgWarnings, doctorProfileFromArgs } from '../../dist/commands/doctor.js';
+import { doctorArgWarnings, doctorMenuBarInstallPolicy, doctorProfileFromArgs } from '../../dist/commands/doctor.js';
 
 test('doctor remains executable when migration gate would otherwise block normal commands', async () => {
   assert.equal(COMMANDS.doctor.skipMigrationGate, true);
@@ -71,6 +71,25 @@ test('doctor consumes migration gate machine flags and validates profile values'
   assert.deepEqual(doctorArgWarnings(['--fix', '--yes', '--machine-only', '--report-file', 'out.json', '--profile', 'migration']), []);
   assert.ok(doctorArgWarnings(['--profile', 'bogus']).some((warning) => warning.startsWith('unknown_profile:bogus')));
   assert.ok(doctorArgWarnings(['--not-a-real-flag']).includes('unknown_flag:--not-a-real-flag'));
+});
+
+test('migration Doctor never applies or launches the Menu Bar before the update parent reaches its final stage', () => {
+  assert.deepEqual(
+    doctorMenuBarInstallPolicy(['--fix', '--profile', 'migration'], true, {}),
+    { profile: 'migration', phase_enabled: false, apply: false, launch: false }
+  );
+  assert.deepEqual(
+    doctorMenuBarInstallPolicy(['--fix', '--profile', 'fix'], true, {}),
+    { profile: 'fix', phase_enabled: true, apply: true, launch: true }
+  );
+  assert.equal(
+    doctorMenuBarInstallPolicy(
+      ['--fix', '--profile', 'fix'],
+      true,
+      { SKS_UPDATE_DEFER_MENUBAR_RESTART: '1' }
+    ).launch,
+    false
+  );
 });
 
 test('doctor --fix reports a real migration receipt result instead of hard-coded current state', () => {

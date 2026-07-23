@@ -175,6 +175,33 @@ test('production poller sends a routed Telegram command to the remote worker and
   await fx.runtime.close();
 });
 
+test('a single private-chat session accepts ordinary text without a topic and returns Codex final output', async () => {
+  const fx = await fixture({
+    handler: async (request) => request.type === 'command'
+      ? ok(request, {
+          accepted: true,
+          thread_id: 'thread-1',
+          turn_id: 'turn-1',
+          final_response: 'The requested coding change is complete and the focused tests passed.'
+        }, receipt(request, {
+          accepted: true,
+          final_response: 'The requested coding change is complete and the focused tests passed.'
+        }))
+      : ok(request, {})
+  });
+  await addRoute(fx.topics, 0);
+  const routed = await fx.runtime.processUpdate(messageUpdate(1, undefined, 'Please fix the failing parser test.'));
+  assert.equal(routed.ok, true);
+  const command = fx.worker.requests.find((request): request is Extract<WorkerRequestV1, { type: 'command' }> => request.type === 'command');
+  assert.equal(command?.envelope.kind, 'input');
+  assert.equal(command?.envelope.session_id, 'S1');
+  const final = fx.api.calls.find((call) => call.method === 'sendRichMessage');
+  assert.match(
+    String((final?.payload.rich_message as { markdown?: string } | undefined)?.markdown),
+    /requested coding change is complete/
+  );
+});
+
 test('callback acknowledgement precedes owner-proof cancel dispatch and the ActionBroker resolves once', async () => {
   const order: string[] = [];
   const fx = await fixture({
@@ -282,6 +309,31 @@ test('session sync falls back to flat private chat when forum topics are unavail
   assert.ok(result.warnings.includes('private_topics_unavailable_flat_fallback:mac:repo'));
   assert.equal((await fx.topics.findBySession('mac', 'repo', 'S1'))?.message_thread_id, 0);
   assert.ok(fx.api.calls.some((call) => call.method === 'sendRichMessage' && call.payload.message_thread_id === undefined));
+});
+
+test('session sync exposes only the dedicated Telegram thread when legacy SKS sessions also exist', async () => {
+  const fx = await fixture({
+    forumUnavailable: true,
+    handler: async (request) => {
+      if (request.type === 'list_sessions') {
+        return ok(request, {
+          sessions: [
+            { session_id: 'telegram-session', dedicated_telegram_thread: true },
+            { session_id: 'legacy-mission', route: 'Naruto', phase: 'IMPLEMENT' }
+          ]
+        });
+      }
+      if (request.type === 'read_snapshot') {
+        return ok(request, snapshot({ session_id: request.session_id }));
+      }
+      return ok(request, {});
+    }
+  });
+
+  const result = await fx.runtime.initialize();
+
+  assert.equal(result.sessions, 1);
+  assert.deepEqual((await fx.topics.list()).map((route) => route.session_id), ['telegram-session']);
 });
 
 function ok(request: WorkerRequestV1, data: unknown, commandReceipt?: RemoteCommandReceiptV1): WorkerResponseV1 {

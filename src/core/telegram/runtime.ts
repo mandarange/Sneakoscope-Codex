@@ -2,6 +2,7 @@ import {
   REMOTE_COMMAND_SCHEMA,
   REMOTE_R2_APPROVAL_SCHEMA,
   REMOTE_WORKER_REQUEST_SCHEMA,
+  RemoteLocalWorkerClient,
   RemoteSshClientError,
   RemoteSshWorkerClient,
   findRemoteMachine,
@@ -131,9 +132,12 @@ export class TelegramHubRuntime implements TelegramUpdateProcessor {
           warnings.push(`target_unavailable:${target.machine_id}:${target.project_id}`);
           continue;
         }
-        const rows = Array.isArray(asRecord(listed.data)?.sessions) ? asRecord(listed.data)?.sessions as unknown[] : [];
-        for (const raw of rows) {
-          const session = asRecord(raw);
+        const rawRows = Array.isArray(asRecord(listed.data)?.sessions)
+          ? asRecord(listed.data)?.sessions as unknown[]
+          : [];
+        const rows = rawRows.map(asRecord).filter((row): row is Record<string, unknown> => Boolean(row));
+        const dedicatedRows = rows.filter((row) => row.dedicated_telegram_thread === true);
+        for (const session of dedicatedRows.length ? dedicatedRows : rows) {
           const sessionId = boundedIdentifier(session?.session_id);
           if (!sessionId) continue;
           const snapshotResponse = await client.request({
@@ -379,11 +383,18 @@ export class TelegramHubRuntime implements TelegramUpdateProcessor {
     const key = `${target.machine_id}:${target.project_id}`;
     const existing = this.clients.get(key);
     if (existing) return existing;
-    const created = this.options.clientFactory?.(target) ?? new RemoteSshWorkerClient({
-      machine: findRemoteMachine(this.options.machineRegistry, target.machine_id),
-      projectRoot: target.project_root,
-      projectId: target.project_id
-    });
+    const machine = findRemoteMachine(this.options.machineRegistry, target.machine_id);
+    const created = this.options.clientFactory?.(target) ?? (machine.transport === 'local'
+      ? new RemoteLocalWorkerClient({
+          machine,
+          projectRoot: target.project_root,
+          projectId: target.project_id
+        })
+      : new RemoteSshWorkerClient({
+          machine,
+          projectRoot: target.project_root,
+          projectId: target.project_id
+        }));
     this.clients.set(key, created);
     return created;
   }

@@ -51,7 +51,7 @@ export const COMMAND_MANIFEST_LITE = [
   { name: 'codex-lb', summary: 'Inspect codex-lb status and circuit health', maturity: 'beta' },
   { name: 'menubar', summary: 'Inspect/install/restart/uninstall SKS menu bar', maturity: 'beta', skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'remote', summary: 'Inspect official Remote readiness and run the proof-aware SSH stdio worker', maturity: 'beta' },
-  { name: 'telegram', summary: 'Inspect and run the private proof-aware Telegram Hub', maturity: 'beta' },
+  { name: 'telegram', summary: 'Pair and run the private local Codex Telegram Hub', maturity: 'beta' },
   { name: 'hooks', summary: 'Explain and inspect Codex hooks', maturity: 'beta', skipMigrationGate: true },
   { name: 'zellij-lane', summary: 'Render a Zellij lane frame for SKS sessions', maturity: 'beta' },
   { name: 'zellij-slot-pane', summary: 'Render a compact Zellij worker slot pane', maturity: 'beta' },

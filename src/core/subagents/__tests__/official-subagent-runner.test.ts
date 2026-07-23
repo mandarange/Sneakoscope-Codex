@@ -27,6 +27,10 @@ import {
   type HostCapabilityExecutionEvidence,
   requestHostCapabilities
 } from '../../agent-bridge/host-capability-runtime.js'
+import {
+  assertStandaloneChildEnvironment,
+  standaloneParentHostEnv
+} from './official-subagent-env-fixture.js'
 
 class UnavailableMcpCli implements CodexMcpCliPort {
   async list() {
@@ -1613,37 +1617,19 @@ test('standalone parent replaces the real child environment and redacts inherite
     maxThreads: 1,
     appSession: false,
     missionId: 'M-real-env-isolation',
+    workflowRunId: 'run-real-env-isolation',
     codexBin: fakeCodex,
     runProcessImpl: async (_command, args, options) => runProcess(fakeCodex, args, options),
     env: {
       HOME: home,
       CODEX_HOME: codexHome,
       PATH: process.env.PATH,
-      OPENAI_API_KEY: inheritedAuthSecret,
-      SHORT_TOKEN: 'ok',
-      HTTPS_PROXY: 'https://user:proxy-secret@proxy.example.test',
-      CODEX_THREAD_ID: 'outer-app-thread',
-      CODEX_LB_API_KEY: 'blocked-lb-secret',
-      UNRELATED_RUNTIME_VALUE: 'must-not-reach-child'
+      ...standaloneParentHostEnv(root, inheritedAuthSecret)
     }
   })
 
   const actualChildEnv = JSON.parse(await fsp.readFile(envReceipt, 'utf8'))
-  assert.equal(actualChildEnv.HOME, home)
-  assert.equal(actualChildEnv.CODEX_HOME, codexHome)
-  assert.equal(actualChildEnv.OPENAI_API_KEY, undefined)
-  assert.equal(actualChildEnv.HTTPS_PROXY, undefined)
-  assert.equal(actualChildEnv.SKS_NARUTO_PARENT_MISSION_ID, 'M-real-env-isolation')
-  assert.equal(actualChildEnv.CODEX_THREAD_ID, undefined)
-  assert.equal(actualChildEnv.CODEX_LB_API_KEY, undefined)
-  assert.equal(actualChildEnv.UNRELATED_RUNTIME_VALUE, undefined)
-  assert.equal(actualChildEnv.HOST_INHERITED_SECRET, undefined)
-  assert.doesNotMatch(result.process.stdout_tail, new RegExp(inheritedAuthSecret + '|' + blockedSecret))
-  assert.doesNotMatch(result.process.stderr_tail, new RegExp(inheritedAuthSecret + '|' + blockedSecret))
-  assert.doesNotMatch(result.parent_summary, new RegExp(inheritedAuthSecret + '|' + blockedSecret))
-  assert.equal(result.process.stdout_tail, '')
-  assert.match(result.process.stderr_tail, /stderr auth=<redacted> blocked=<redacted> short=ok/)
-  assert.equal(result.parent_summary, 'summary auth=<redacted> blocked=<redacted> short=ok')
+  assertStandaloneChildEnvironment({ actual: actualChildEnv, result, home, codexHome, inheritedAuthSecret, blockedSecret })
 })
 
 test('production standalone launch rejects arbitrary executable overrides outside the explicit process seam', async () => {

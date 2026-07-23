@@ -30,6 +30,10 @@ import { decideOfficialSubagentModel } from '../agents/agent-effort-policy.js'
 import { readBoundedTriwikiAttention } from './triwiki-attention.js'
 import { readRoleModelPreferences } from './role-model-preferences.js'
 import {
+  inferProviderFromModel,
+  readConfiguredCodexModelRoutingContext
+} from '../codex-app/codex-model-catalog.js'
+import {
   SUBAGENT_EVIDENCE_FILENAME,
   SUBAGENT_EVENT_LOG_FILENAME,
   SUBAGENT_PARENT_SUMMARY_FILENAME,
@@ -132,6 +136,26 @@ async function prepareOfficialSubagentMissionLocked(input: OfficialSubagentPrepa
     goal
   )
   const roleModelPreferences = await readRoleModelPreferences({ env: input.env || process.env })
+  const roleModelRouting = await readConfiguredCodexModelRoutingContext({ env: input.env || process.env })
+  const roleModelCatalog = roleModelRouting.catalog
+  const roleModelCatalogBlockers = Object.entries(roleModelPreferences.store.roles).flatMap(([name, preference]) => {
+    const routed = preference.provider !== 'openai' || preference.model.includes('/')
+    if (!routed) return []
+    if (roleModelRouting.selected_provider !== 'sks-router') {
+      return [`role_model_router_not_selected:${name}`]
+    }
+    const catalogEntry = roleModelCatalog.models.find((entry) => entry.model === preference.model)
+    if (!roleModelCatalog.ok || !catalogEntry) {
+      return [`role_model_preference_not_in_active_catalog:${name}:${preference.model}`]
+    }
+    if (!catalogEntry.reasoning_efforts.includes(preference.reasoning_effort)) {
+      return [`role_model_preference_reasoning_not_in_active_catalog:${name}:${preference.model}:${preference.reasoning_effort}`]
+    }
+    if (catalogEntry.multi_agent_version !== 'v1') {
+      return [`role_model_preference_multi_agent_v1_required:${name}:${preference.model}`]
+    }
+    return []
+  })
   const operatorRequested = input.requestedSubagentsExplicit ?? input.requestedSubagents !== undefined
   const routeContract = mode === 'generic' && !operatorRequested
     ? routeOwnedSubagentContract(input.route)
@@ -215,6 +239,7 @@ async function prepareOfficialSubagentMissionLocked(input: OfficialSubagentPrepa
       ...config,
       // Catalog TOML remains the spawn-type contract; dynamic decision records why
       // this role maps onto the sealed four-profile matrix for this goal.
+      routed_provider: preference?.provider || inferProviderFromModel(decision.model),
       routed_model: preference?.model || decision.model,
       routed_model_reasoning_effort: preference?.reasoning_effort || decision.model_reasoning_effort,
       routed_model_policy: preference ? 'user_role_model_preference' : decision.model_selection_reason,
@@ -228,6 +253,7 @@ async function prepareOfficialSubagentMissionLocked(input: OfficialSubagentPrepa
   const configBlockers = [
     ...officialConfig.blockers,
     ...roleModelPreferences.blockers,
+    ...roleModelCatalogBlockers,
     ...ssotGuardValidation.issues.map((issue) => `ssot_guard:${issue}`),
     ...sliceSafety.blockers.map((blocker) => `subagent_slice:${blocker}`),
     ...(budget.capacity.exhausted ? ['subagent_capacity_exhausted'] : [])
@@ -279,7 +305,19 @@ async function prepareOfficialSubagentMissionLocked(input: OfficialSubagentPrepa
       schema: roleModelPreferences.store.schema,
       path: roleModelPreferences.path,
       overrides: roleModelPreferences.store.roles,
-      blockers: roleModelPreferences.blockers
+      routing: {
+        selected_provider: roleModelRouting.selected_provider,
+        selected_model: roleModelRouting.selected_model,
+        runtime_verified: false
+      },
+      catalog: {
+        configured: roleModelCatalog.configured,
+        ok: roleModelCatalog.ok,
+        path: roleModelCatalog.path,
+        model_count: roleModelCatalog.model_count,
+        blockers: roleModelCatalog.blockers
+      },
+      blockers: [...roleModelPreferences.blockers, ...roleModelCatalogBlockers]
     },
     verification_budget: verification,
     verification_checks: [],

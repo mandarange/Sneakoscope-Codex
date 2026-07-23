@@ -76,11 +76,20 @@ export async function runReleaseUpgradeSmoke(
   report.blockers.push(...target.blockers)
   if (target.value) {
     report.target = {
-      receipt_path: target.value.receiptPath,
-      tarball_path: target.value.tarball,
+      receipt_path: repositoryRelativePath(root, target.value.receiptPath),
+      receipt_sha256: target.value.receiptSha256,
+      tarball_path: repositoryRelativePath(root, target.value.tarball),
       tarball_sha256: target.value.sha256,
+      tarball_sha512_integrity: target.value.receipt.sha512_integrity,
       sealed_tarball_path: null,
+      package_version: target.value.receipt.package_version,
+      source_commit: target.value.receipt.source_commit,
       receipt_source_commit: target.value.receipt.source_commit,
+      npm_pack_proof: {
+        proof_id: target.value.receipt.npm_pack_proof?.proof_id || null,
+        info_sha256: target.value.receipt.npm_pack_proof?.info_sha256 || null,
+        file_list_sha256: target.value.receipt.npm_pack_proof?.file_list_sha256 || null
+      },
       binding_ok: true
     }
   }
@@ -182,4 +191,8 @@ export async function runReleaseUpgradeSmoke(
     writeReleaseJson(reportFile, report)
   }
   return report
+}
+
+function repositoryRelativePath(root: string, file: string): string {
+  return path.relative(root, file).split(path.sep).join('/')
 }

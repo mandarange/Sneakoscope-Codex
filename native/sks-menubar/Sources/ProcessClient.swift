@@ -131,7 +131,7 @@ final class ProcessClient {
     }
 
     private func sensitiveStdinValues(arguments: [String], stdin: String?) -> [String] {
-        guard arguments.contains("--api-key-stdin"), let stdin = stdin else { return [] }
+        guard (arguments.contains("--api-key-stdin") || arguments.contains("--bot-token-stdin")), let stdin = stdin else { return [] }
         let normalized = stdin.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalized.isEmpty else { return [] }
         return normalized == stdin ? [normalized] : [normalized, stdin]

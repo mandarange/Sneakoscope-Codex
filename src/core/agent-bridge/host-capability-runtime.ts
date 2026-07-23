@@ -966,34 +966,50 @@ function validateCapabilityWorkflow(
     blockers.push('host_capability_schema_call_missing');
   }
   if (descriptor.id === 'host.datasource.query.readonly.v1') {
-    const schemaCall = allCalls.find((call) => call.tool === 'datasource_schema_context' && call.status === 'passed') || null;
+    const schemaCalls = allCalls.filter((call) => (
+      call.tool === 'datasource_schema_context' && call.status === 'passed'
+    ));
     const queryCalls = passed('datasource_query_readonly');
-    const schemaIndex = schemaCall?.index ?? -1;
     if (queryCalls.length === 0) blockers.push('host_capability_readonly_query_call_missing');
     if (runtime.task_workflows.includes('datasource_query')
       && (queryCalls.length < 1 || queryCalls.length > MAX_DATASOURCE_QUERY_RESERVATIONS)) {
       blockers.push('host_capability_readonly_query_count_invalid');
     }
-    if (runtime.task_workflows.includes('datasource_query')
-      && (schemaIndex < 0 || queryCalls.some((call) => call.index <= schemaIndex))) {
-      blockers.push('host_capability_datasource_sequence_invalid');
-    }
-    const schemaReceipt = schemaCall?.semantic_receipt?.kind === 'datasource_schema'
-      ? schemaCall.semantic_receipt
-      : null;
-    const queryReceipts = queryCalls
-      .map((call) => call.semantic_receipt?.kind === 'datasource_query' ? call.semantic_receipt : null);
-    if (queryCalls.length > 0 && queryReceipts.some((receipt) => !receipt)) {
-      blockers.push('host_capability_readonly_query_receipt_invalid');
-    }
-    if (schemaCall && !schemaReceipt) blockers.push('host_capability_schema_receipt_invalid');
-    if (schemaReceipt && queryReceipts.some((receipt) => receipt
-      && schemaReceipt.schema_snapshot_sha256 !== receipt.schema_snapshot_sha256)) {
-      blockers.push('host_capability_readonly_query_schema_mismatch');
-    }
-    if (schemaReceipt && queryReceipts.some((receipt) => receipt
-      && schemaReceipt.datasource_sha256 !== receipt.datasource_sha256)) {
-      blockers.push('host_capability_readonly_query_datasource_mismatch');
+    for (const queryCall of queryCalls) {
+      const precedingSchemaCalls = schemaCalls.filter((call) => call.index < queryCall.index);
+      const sequenceInvalid = runtime.task_workflows.includes('datasource_query')
+        && precedingSchemaCalls.length === 0;
+      if (sequenceInvalid) blockers.push('host_capability_datasource_sequence_invalid');
+      const precedingSchemaReceipts = precedingSchemaCalls
+        .map((call) => call.semantic_receipt?.kind === 'datasource_schema' ? call.semantic_receipt : null);
+      const validSchemaReceipts = precedingSchemaReceipts.filter(Boolean) as Extract<
+        HostToolSemanticReceipt,
+        { kind: 'datasource_schema' }
+      >[];
+      const queryReceipt = queryCall.semantic_receipt?.kind === 'datasource_query'
+        ? queryCall.semantic_receipt
+        : null;
+      if (!queryReceipt) blockers.push('host_capability_readonly_query_receipt_invalid');
+      if (precedingSchemaCalls.length > 0 && validSchemaReceipts.length === 0) {
+        blockers.push('host_capability_schema_receipt_invalid');
+      }
+      if (!queryReceipt || sequenceInvalid || validSchemaReceipts.length === 0) continue;
+      const matchingSchemaCall = [...precedingSchemaCalls]
+        .sort((left, right) => right.index - left.index)
+        .find((call) => (
+          call.semantic_receipt?.kind === 'datasource_schema'
+          && call.semantic_receipt.datasource_sha256 === queryReceipt.datasource_sha256
+          && call.semantic_receipt.schema_snapshot_sha256 === queryReceipt.schema_snapshot_sha256
+        ));
+      if (matchingSchemaCall) continue;
+      const matchingDatasourceReceipts = validSchemaReceipts.filter((receipt) => (
+        receipt.datasource_sha256 === queryReceipt.datasource_sha256
+      ));
+      if (matchingDatasourceReceipts.length === 0) {
+        blockers.push('host_capability_readonly_query_datasource_mismatch');
+      } else {
+        blockers.push('host_capability_readonly_query_schema_mismatch');
+      }
     }
   }
   if (descriptor.id === 'host.spreadsheet.workbook.v1') {

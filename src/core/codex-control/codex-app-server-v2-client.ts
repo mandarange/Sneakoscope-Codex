@@ -158,8 +158,31 @@ export class CodexAppServerV2Client {
   }
 
   async waitForTurnCompletion(threadId: string, turnId?: string | null, timeoutMs = this.timeoutMs): Promise<JsonObject> {
-    const expected = turnId ? ['turn/completed', 'thread/closed', 'thread/status/changed'] : ['turn/completed', 'thread/closed'];
-    return await this.waitForNotification(expected, timeoutMs);
+    const buffered = this.notifications.find((event) => isTurnCompletionEvent(event, threadId, turnId));
+    if (buffered) return buffered;
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        dispose();
+        reject(new Error(`Timed out waiting for app-server turn completion: ${threadId}:${turnId ?? '*'}`));
+      }, timeoutMs);
+      timer.unref?.();
+      const dispose = this.onEvent((event) => {
+        const method = String(event.method || '');
+        const params = event.params && typeof event.params === 'object'
+          ? event.params as JsonObject
+          : {};
+        if (method === 'thread/closed' && String(params.threadId || '') === threadId) {
+          clearTimeout(timer);
+          dispose();
+          reject(new Error(`Codex thread closed before turn completion: ${threadId}`));
+          return;
+        }
+        if (!isTurnCompletionEvent(event, threadId, turnId)) return;
+        clearTimeout(timer);
+        dispose();
+        resolve(event);
+      });
+    });
   }
 
   start(): void {
@@ -361,4 +384,16 @@ function normalizeThreadListParams(params: CodexAppServerThreadListParams): Json
 function jsonRpcErrorMessage(method: string, error: unknown): string {
   if (error && typeof error === 'object' && 'message' in error) return `${method}: ${String(error.message)}`;
   return `${method}: ${JSON.stringify(error)}`;
+}
+
+function isTurnCompletionEvent(event: JsonObject, threadId: string, turnId?: string | null): boolean {
+  if (String(event.method || '') !== 'turn/completed') return false;
+  const params = event.params && typeof event.params === 'object'
+    ? event.params as JsonObject
+    : {};
+  const completedTurn = params.turn && typeof params.turn === 'object'
+    ? params.turn as JsonObject
+    : {};
+  return String(params.threadId || '') === threadId
+    && (!turnId || String(completedTurn.id || params.turnId || '') === turnId);
 }

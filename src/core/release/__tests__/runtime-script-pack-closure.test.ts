@@ -27,8 +27,14 @@ test('runtime script closure follows manifest, package, static, dynamic, helper,
   await write(root, 'runtime-required-scripts.json', JSON.stringify({
     schema: 'sks.runtime-required-scripts.v1',
     scripts: [{ path: 'dist/scripts/manual.js', reason: 'fixture' }],
+    checkout_only_scripts: [{
+      path: 'dist/scripts/checkout-only.js',
+      sources: ['.github/workflows/release.yml'],
+      reason: 'fixture workflow harness'
+    }],
     dynamic_reference_policies: [{ source: 'dist/scripts/package-root.js', reason: 'fixture computed path is manually rooted' }]
   }));
+  await write(root, '.github/workflows/release.yml', 'run: node ./dist/scripts/checkout-only.js\n');
   await write(root, 'dist/core/launcher.js', "export const script = 'dist/scripts/non-script-root.js';\n");
   await write(root, 'dist/scripts/package-root.js', [
     "import './static.js';",
@@ -39,6 +45,8 @@ test('runtime script closure follows manifest, package, static, dynamic, helper,
     "import './lib/helper.js';",
     ''
   ].join('\n'));
+  await write(root, 'dist/scripts/checkout-only.js', "import './checkout-helper.js';\n");
+  await write(root, 'dist/scripts/checkout-helper.js', 'export {};\n');
   for (const file of ['static.js', 'dynamic.js', 'child.js', 'joined.js', 'manual.js', 'manifest-root.js', 'non-script-root.js']) {
     await write(root, `dist/scripts/${file}`, 'export {};\n');
   }
@@ -52,6 +60,12 @@ test('runtime script closure follows manifest, package, static, dynamic, helper,
   assert.equal(analysis.dynamic_reference_warnings.length, 1);
   assert.deepEqual(analysis.uncovered_dynamic_references, []);
   assert.deepEqual(analysis.stale_dynamic_reference_policies, []);
+  assert.deepEqual(analysis.checkout_only_roots, ['dist/scripts/checkout-only.js']);
+  assert.deepEqual(analysis.checkout_only_closure, [
+    'dist/scripts/checkout-helper.js',
+    'dist/scripts/checkout-only.js'
+  ]);
+  assert.deepEqual(analysis.checkout_only_excluded, analysis.checkout_only_closure);
   assert.deepEqual(analysis.closure, [
     'dist/scripts/child.js',
     'dist/scripts/dynamic.js',
@@ -63,6 +77,70 @@ test('runtime script closure follows manifest, package, static, dynamic, helper,
     'dist/scripts/package-root.js',
     'dist/scripts/static.js'
   ]);
+});
+
+test('checkout-only policy fails closed when a product runtime also references the script', async (t) => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-runtime-checkout-policy-'));
+  t.after(() => fsp.rm(root, { recursive: true, force: true }));
+  await write(root, 'package.json', JSON.stringify({
+    scripts: {},
+    files: ['dist', '!dist/scripts/**']
+  }));
+  await write(root, 'release-gates.v2.json', JSON.stringify({ schema: 'sks.release-gates.v2', gates: [] }));
+  await write(root, 'infra-harness-gates.json', JSON.stringify({ schema: 'sks.infra-harness-gates.v1', gates: [] }));
+  await write(root, 'runtime-required-scripts.json', JSON.stringify({
+    schema: 'sks.runtime-required-scripts.v1',
+    scripts: [],
+    checkout_only_scripts: [{
+      path: 'dist/scripts/checkout-only.js',
+      sources: ['.github/workflows/release.yml'],
+      reason: 'fixture workflow harness'
+    }]
+  }));
+  await write(root, '.github/workflows/release.yml', 'run: node ./dist/scripts/checkout-only.js\n');
+  await write(root, 'dist/core/product-runtime.js', "export const script = 'dist/scripts/checkout-only.js';\n");
+  await write(root, 'dist/scripts/checkout-only.js', 'export {};\n');
+
+  const analysis = analyzeRuntimeScriptPackClosure(root);
+  assert.ok(analysis.declaration_issues.includes(
+    'checkout_only_script_unapproved_root_source:dist/scripts/checkout-only.js:dist/core/product-runtime.js'
+  ));
+  assert.deepEqual(analysis.checkout_only_roots, []);
+  assert.ok(analysis.missing_from_allowlist.includes('dist/scripts/checkout-only.js'));
+});
+
+test('checkout-only policy fails closed when an allowlisted package script imports it', async (t) => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-runtime-checkout-transitive-'));
+  t.after(() => fsp.rm(root, { recursive: true, force: true }));
+  await write(root, 'package.json', JSON.stringify({
+    scripts: { check: 'node ./dist/scripts/product-root.js' },
+    files: [
+      'dist',
+      '!dist/scripts/**',
+      'dist/scripts/{checkout-only.js,product-root.js}'
+    ]
+  }));
+  await write(root, 'release-gates.v2.json', JSON.stringify({ schema: 'sks.release-gates.v2', gates: [] }));
+  await write(root, 'infra-harness-gates.json', JSON.stringify({ schema: 'sks.infra-harness-gates.v1', gates: [] }));
+  await write(root, 'runtime-required-scripts.json', JSON.stringify({
+    schema: 'sks.runtime-required-scripts.v1',
+    scripts: [],
+    checkout_only_scripts: [{
+      path: 'dist/scripts/checkout-only.js',
+      sources: ['.github/workflows/release.yml'],
+      reason: 'fixture workflow harness'
+    }]
+  }));
+  await write(root, '.github/workflows/release.yml', 'run: node ./dist/scripts/checkout-only.js\n');
+  await write(root, 'dist/scripts/product-root.js', "import './checkout-only.js';\n");
+  await write(root, 'dist/scripts/checkout-only.js', 'export {};\n');
+
+  const analysis = analyzeRuntimeScriptPackClosure(root);
+  assert.deepEqual(analysis.missing_from_allowlist, []);
+  assert.deepEqual(analysis.stale_allowlist_entries, []);
+  assert.ok(analysis.declaration_issues.includes(
+    'checkout_only_script_product_dependency:dist/scripts/checkout-only.js:dist/scripts/product-root.js'
+  ));
 });
 
 test('runtime script allowlist reports missing and stale entries and renders bounded brace chunks', () => {

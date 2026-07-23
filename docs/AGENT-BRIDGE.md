@@ -164,7 +164,7 @@ or binary fallback.
     "manifest_schema": "sks.agent-manifest.v1",
     "proof_schema": "sks.naruto-subagent-workflow.v1",
     "host_capability_schema": "sks.host-capabilities.v1",
-    "package_version": "7.1.0"
+    "package_version": "7.1.1"
   },
   "host_capabilities": {
     "schema": "sks.host-capabilities.v1",
@@ -249,6 +249,11 @@ When SKS launches a standalone Codex parent for Naruto, only these additional ho
 through the fixed child-env allowlist (exact names, no wildcards):
 
 - `SKS_AGENT_MODE`
+- `ACAS_CUSTOMER_ID`
+- `SKS_NARUTO_PARENT_EDGE_ID`
+- `SKS_NARUTO_PARENT_LEASE_OWNER`
+- `SKS_NARUTO_PARENT_LEASE_GENERATION`
+- `SKS_NARUTO_PARENT_MISSION_GENERATION`
 - `ACAS_AGENT_SLUG`
 - `ACAS_AGENT_WORKSPACE`
 - `ALFREDO_AGENT_SOULS_FILE`
@@ -256,7 +261,14 @@ through the fixed child-env allowlist (exact names, no wildcards):
 - `ACAS_HTML_TO_PDF_ENGINE`
 - `ACAS_HTML_TO_PDF_ALLOW_CHROME_CLI_FALLBACK`
 
-Connection tokens, Center URLs, provider API keys, Slack tokens, and proxy variables are never
+The customer, edge, lease, and mission-generation values are non-secret identity/fence inputs.
+The lease owner is child-only identity: its raw value is never persisted in mission proofs or
+workflow results. SKS separately generates the owning mission ID, workflow run ID, and one-time
+host-capability nonce for the launch; the nonce remains confined to the child environment while
+mission artifacts persist only its SHA-256 binding.
+
+Connection tokens, Center URLs, Supabase access tokens, provider API keys, Slack `*TOKEN`
+variables, `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY`, and env-file path overrides are never
 copied into the child environment.
 
 ## Security notes

@@ -93,7 +93,13 @@ export function inspectMainPushReceipt(input: {
   if (guard?.upgrade_proof?.ok !== true || guard?.upgrade_proof?.path !== upgrade.path
     || guard?.upgrade_proof?.sha256 !== upgrade.sha256) blockers.push('pre_push_guard_upgrade_proof_mismatch')
   const macos = readMacosMenubarProof(input.root, input.version)
-  const macosValidation = validateMacosMenubarProofArtifacts(input.root, macos, { version: input.version, sourceCommit: head })
+  const macosValidation = validateMacosMenubarProofArtifacts(input.root, macos, {
+    version: input.version,
+    sourceCommit: head,
+    upgradeReportPath: upgrade.path,
+    upgradeReportSha256: upgrade.sha256,
+    targetTarballSha256: pack?.sha256
+  })
   if (!macosValidation.ok) blockers.push(...macosValidation.blockers)
   return {
     schema: MAIN_PUSH_RECEIPT_SCHEMA,
@@ -110,6 +116,7 @@ export function inspectMainPushReceipt(input: {
     method: input.method,
     release_stamp: releaseStamp,
     pack_proof: packProof,
+    upgrade_proof: upgrade,
     macos_proof: macosProof,
     release_closure: closure,
     blockers: [...new Set(blockers)]

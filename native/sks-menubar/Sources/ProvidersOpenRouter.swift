@@ -84,7 +84,7 @@ extension ProvidersViewController {
         views.append(refresh)
         return NativeView.card(
             title: "Models by Work Type",
-            subtitle: "Overrides apply only to the selected agent role. Reset removes the override and restores the effective project/global default.",
+            subtitle: "Overrides apply only to the selected agent role; Reset restores its effective default. With the Multi-Provider Router selected, v1-compatible catalog slugs such as provider/model let different roles use different upstream providers.",
             views: views
         )
     }
@@ -333,14 +333,21 @@ extension ProvidersViewController {
                 let effective = (payload["effective"] as? [String: Any]) ?? payload
                 let configuredModel = (configured?["model"] as? String) ?? (payload["configured_model"] as? String)
                 let configuredReasoning = self.reasoningValue(configured) ?? (payload["configured_reasoning"] as? String)
+                let configuredProvider = (configured?["provider"] as? String) ?? (payload["configured_provider"] as? String)
                 let effectiveModel = (effective["model"] as? String) ?? (payload["effective_model"] as? String) ?? "unavailable"
+                let effectiveProvider = (effective["provider"] as? String)
+                    ?? (payload["effective_provider"] as? String)
+                    ?? "unknown"
                 let effectiveReasoning = self.reasoningValue(effective)
                     ?? (payload["effective_reasoning_effort"] as? String)
                     ?? (payload["effective_reasoning"] as? String)
                     ?? "unavailable"
                 self.selectRoleProfile(model: configuredModel ?? effectiveModel, reasoning: configuredReasoning ?? effectiveReasoning, controls: controls)
-                let current = configuredModel.map { "\($0) / \(configuredReasoning ?? "default")" } ?? "default (no override)"
-                controls.current.stringValue = "Current: \(current) · Effective: \(effectiveModel) / \(effectiveReasoning)"
+                let current = configuredModel.map {
+                    "\(self.roleModelDisplay(provider: configuredProvider ?? effectiveProvider, model: $0)) / \(configuredReasoning ?? "default")"
+                } ?? "default (no override)"
+                let effectiveDisplay = self.roleModelDisplay(provider: effectiveProvider, model: effectiveModel)
+                controls.current.stringValue = "Current: \(current) · Effective: \(effectiveDisplay) / \(effectiveReasoning)"
                 loaded += 1
             }
             self.roleProfilesLoaded = !self.supportedRoleProfiles.isEmpty
@@ -386,6 +393,10 @@ extension ProvidersViewController {
 
     private func reasoningValue(_ json: [String: Any]?) -> String? {
         (json?["reasoning"] as? String) ?? (json?["reasoning_effort"] as? String) ?? (json?["model_reasoning_effort"] as? String)
+    }
+
+    private func roleModelDisplay(provider: String, model: String) -> String {
+        model.contains("/") ? model : "\(provider):\(model)"
     }
 
     private func selectRoleProfile(model: String, reasoning: String, controls: RoleModelControls) {

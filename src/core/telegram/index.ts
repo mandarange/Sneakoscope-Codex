@@ -6,3 +6,5 @@ export * from './bot-api.js';
 export * from './messages.js';
 export * from './hub.js';
 export * from './runtime.js';
+export * from './setup.js';
+export * from './service.js';

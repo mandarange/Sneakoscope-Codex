@@ -12,19 +12,19 @@ import {
   setRoleModelPreference
 } from '../role-model-preferences.js';
 
-test('role model preferences are owner-only, managed-role scoped, and reject provider model ids', async (t) => {
+test('role model preferences are owner-only, managed-role scoped, and validate profile syntax', async (t) => {
   const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-role-models-'));
   t.after(async () => fs.rm(temp, { recursive: true, force: true }));
   const env = { HOME: path.join(temp, 'home'), SKS_HOME: path.join(temp, 'sks-home') } as NodeJS.ProcessEnv;
 
-  const invalidProvider: any = await setRoleModelPreference({
+  const invalidProfile: any = await setRoleModelPreference({
     role: 'ui_implementer',
-    model: 'openrouter/vendor/model',
-    reasoning: 'high',
+    model: 'gpt-5.6 sol',
+    reasoning: 'very high',
     env
   });
-  assert.equal(invalidProvider.ok, false);
-  assert.ok(invalidProvider.blockers.includes('role_model_profile_unsupported'));
+  assert.equal(invalidProfile.ok, false);
+  assert.ok(invalidProfile.blockers.includes('role_model_profile_invalid'));
 
   const invalidRole: any = await setRoleModelPreference({
     role: 'made_up_role',
@@ -35,6 +35,15 @@ test('role model preferences are owner-only, managed-role scoped, and reject pro
   assert.equal(invalidRole.ok, false);
   assert.ok(invalidRole.blockers.includes('role_model_role_invalid'));
 
+  const unmanagedProfile: any = await setRoleModelPreference({
+    role: 'ui_implementer',
+    model: 'gpt-5.6-sol-typo',
+    reasoning: 'high',
+    env
+  });
+  assert.equal(unmanagedProfile.ok, false);
+  assert.ok(unmanagedProfile.blockers.includes('role_model_profile_not_managed'));
+
   const set: any = await setRoleModelPreference({
     role: 'ui-implementer',
     model: 'gpt-5.6-sol',
@@ -44,20 +53,219 @@ test('role model preferences are owner-only, managed-role scoped, and reject pro
   });
   assert.equal(set.ok, true);
   assert.equal(set.role, 'ui_implementer');
+  assert.equal(set.provider, 'openai');
   const filePath = roleModelPreferencesPath(env);
   assert.equal((await fs.stat(filePath)).mode & 0o777, 0o600);
   assert.equal((await fs.stat(path.dirname(filePath))).mode & 0o777, 0o700);
 
   const status = await roleModelPreferencesStatus({ env });
   const ui = status.roles.find((row) => row.role === 'ui_implementer');
+  assert.equal(ui?.effective_provider, 'openai');
   assert.equal(ui?.effective_model, 'gpt-5.6-sol');
   assert.equal(ui?.effective_reasoning_effort, 'max');
+  assert.equal(ui?.override?.provider, 'openai');
   assert.equal(ui?.override?.reasoning_effort, 'max');
 
   const reset = await resetRoleModelPreference({ role: 'ui_implementer', env });
   assert.equal(reset.ok, true);
   const read = await readRoleModelPreferences({ env });
   assert.equal(read.store.roles.ui_implementer, undefined);
+});
+
+test('v1 role model preference stores remain readable and migrate on the next write', async (t) => {
+  const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-role-models-v1-'));
+  t.after(async () => fs.rm(temp, { recursive: true, force: true }));
+  const env = { HOME: path.join(temp, 'home'), SKS_HOME: path.join(temp, 'sks-home') } as NodeJS.ProcessEnv;
+  const filePath = roleModelPreferencesPath(env);
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.writeFile(filePath, `${JSON.stringify({
+    schema: 'sks.role-model-preferences.v1',
+    version: 1,
+    updated_at: '2026-07-20T00:00:00.000Z',
+    roles: {
+      ui_implementer: {
+        model: 'gpt-5.6-sol',
+        reasoning_effort: 'high',
+        updated_at: '2026-07-20T00:00:00.000Z'
+      }
+    }
+  }, null, 2)}\n`);
+
+  const read = await readRoleModelPreferences({ env });
+  assert.deepEqual(read.blockers, []);
+  assert.equal(read.store.schema, 'sks.role-model-preferences.v2');
+  assert.equal(read.store.version, 2);
+  assert.deepEqual(read.store.roles.ui_implementer, {
+    provider: 'openai',
+    model: 'gpt-5.6-sol',
+    reasoning_effort: 'high',
+    updated_at: '2026-07-20T00:00:00.000Z'
+  });
+
+  const updated: any = await setRoleModelPreference({
+    role: 'ui_implementer',
+    model: 'gpt-5.6-sol',
+    reasoning: 'max',
+    env,
+    now: () => '2026-07-23T00:00:00.000Z'
+  });
+  assert.equal(updated.ok, true);
+  const persisted = JSON.parse(await fs.readFile(filePath, 'utf8'));
+  assert.equal(persisted.schema, 'sks.role-model-preferences.v2');
+  assert.equal(persisted.version, 2);
+  assert.equal(persisted.roles.ui_implementer.provider, 'openai');
+  assert.equal(persisted.roles.ui_implementer.reasoning_effort, 'max');
+});
+
+test('catalog-backed provider slugs accept advertised reasoning efforts and reject mismatches', async (t) => {
+  const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-role-models-catalog-'));
+  t.after(async () => fs.rm(temp, { recursive: true, force: true }));
+  const home = path.join(temp, 'home');
+  const codexHome = path.join(home, '.codex');
+  const configPath = path.join(codexHome, 'config.toml');
+  const catalogPath = path.join(codexHome, 'opencodex-catalog.json');
+  const env = {
+    HOME: home,
+    CODEX_HOME: codexHome,
+    SKS_HOME: path.join(temp, 'sks-home')
+  } as NodeJS.ProcessEnv;
+  await fs.mkdir(codexHome, { recursive: true });
+  await fs.writeFile(catalogPath, `${JSON.stringify({
+    models: [catalogModel('anthropic/claude-sonnet', 'Claude Sonnet', ['medium', 'high'], {
+      provider: 'Anthropic',
+      supported_reasoning_levels: [
+        { effort: 'medium', description: 'medium' },
+        { effort: 'high', description: 'high' }
+      ],
+      default_reasoning_level: 'high'
+    })]
+  })}\n`, { mode: 0o600 });
+  await fs.writeFile(configPath, [
+    'model_provider = "sks-router"',
+    'model = "anthropic/claude-sonnet"',
+    `model_catalog_json = ${JSON.stringify(catalogPath)}`,
+    ''
+  ].join('\n'));
+
+  const accepted: any = await setRoleModelPreference({
+    role: 'ui_implementer',
+    provider: 'ANTHROPIC',
+    model: 'anthropic/claude-sonnet',
+    reasoning: 'HIGH',
+    env,
+    home,
+    configPath
+  });
+  assert.equal(accepted.ok, true, JSON.stringify(accepted));
+  assert.equal(accepted.provider, 'anthropic');
+  assert.equal(accepted.model, 'anthropic/claude-sonnet');
+  assert.equal(accepted.reasoning_effort, 'high');
+  assert.equal(accepted.catalog_verified, true);
+  assert.equal(accepted.selected_model_provider, 'sks-router');
+  assert.equal(accepted.multi_agent_version, 'v1');
+  assert.equal(accepted.runtime_verified, false);
+
+  const status = await roleModelPreferencesStatus({ env, home, configPath });
+  assert.deepEqual(
+    status.supported_profiles
+      .filter((profile) => profile.model === 'anthropic/claude-sonnet')
+      .map((profile) => [profile.provider, profile.reasoning_effort, profile.source]),
+    [
+      ['anthropic', 'medium', 'codex-model-catalog'],
+      ['anthropic', 'high', 'codex-model-catalog']
+    ]
+  );
+  const ui = status.roles.find((row) => row.role === 'ui_implementer');
+  assert.equal(ui?.effective_provider, 'anthropic');
+  assert.equal(ui?.effective_model, 'anthropic/claude-sonnet');
+  assert.equal(ui?.effective_reasoning_effort, 'high');
+
+  const providerMismatch: any = await setRoleModelPreference({
+    role: 'ui_implementer',
+    provider: 'google',
+    model: 'anthropic/claude-sonnet',
+    reasoning: 'high',
+    env,
+    home,
+    configPath
+  });
+  assert.equal(providerMismatch.ok, false);
+  assert.ok(providerMismatch.blockers.includes('role_model_provider_mismatch'));
+
+  const missingSlug: any = await setRoleModelPreference({
+    role: 'ui_implementer',
+    model: 'google/gemini-pro',
+    reasoning: 'high',
+    env,
+    home,
+    configPath
+  });
+  assert.equal(missingSlug.ok, false);
+  assert.ok(missingSlug.blockers.includes('role_model_not_in_active_catalog'));
+
+  const unsupportedReasoning: any = await setRoleModelPreference({
+    role: 'ui_implementer',
+    provider: 'anthropic',
+    model: 'anthropic/claude-sonnet',
+    reasoning: 'low',
+    env,
+    home,
+    configPath
+  });
+  assert.equal(unsupportedReasoning.ok, false);
+  assert.ok(unsupportedReasoning.blockers.includes('role_model_reasoning_not_in_catalog'));
+
+  const invalidProvider: any = await setRoleModelPreference({
+    role: 'ui_implementer',
+    provider: 'anthropic/router',
+    model: 'anthropic/claude-sonnet',
+    reasoning: 'high',
+    env,
+    home,
+    configPath
+  });
+  assert.equal(invalidProvider.ok, false);
+  assert.ok(invalidProvider.blockers.includes('role_model_provider_invalid'));
+
+  await fs.writeFile(configPath, [
+    'model_provider = "openai"',
+    `model_catalog_json = ${JSON.stringify(catalogPath)}`,
+    ''
+  ].join('\n'));
+  const routerNotSelected: any = await setRoleModelPreference({
+    role: 'ui_implementer',
+    provider: 'anthropic',
+    model: 'anthropic/claude-sonnet',
+    reasoning: 'high',
+    env,
+    home,
+    configPath
+  });
+  assert.equal(routerNotSelected.ok, false);
+  assert.ok(routerNotSelected.blockers.includes('role_model_router_not_selected'));
+
+  await fs.writeFile(catalogPath, `${JSON.stringify({
+    models: [catalogModel('anthropic/claude-sonnet', 'Claude Sonnet', ['high'], {
+      provider: 'anthropic',
+      multi_agent_version: 'v2'
+    })]
+  })}\n`, { mode: 0o600 });
+  await fs.writeFile(configPath, [
+    'model_provider = "sks-router"',
+    `model_catalog_json = ${JSON.stringify(catalogPath)}`,
+    ''
+  ].join('\n'));
+  const v2Blocked: any = await setRoleModelPreference({
+    role: 'ui_implementer',
+    provider: 'anthropic',
+    model: 'anthropic/claude-sonnet',
+    reasoning: 'high',
+    env,
+    home,
+    configPath
+  });
+  assert.equal(v2Blocked.ok, false);
+  assert.ok(v2Blocked.blockers.includes('role_model_multi_agent_v1_required'));
 });
 
 test('official subagent preparation applies role overrides to routed plan and explicit spawn contract', async (t) => {
@@ -92,13 +300,15 @@ test('official subagent preparation applies role overrides to routed plan and ex
     }]
   });
   const routed = prepared.plan.agents.ui_implementer;
+  assert.equal(routed.routed_provider, 'openai');
   assert.equal(routed.routed_model, 'gpt-5.6-sol');
   assert.equal(routed.routed_model_reasoning_effort, 'max');
   assert.equal(routed.routed_model_policy, 'user_role_model_preference');
   assert.equal(routed.routing_dynamic, false);
   assert.equal(prepared.plan.role_model_preferences.overrides.ui_implementer.reasoning_effort, 'max');
-  assert.match(prepared.delegationPrompt, /effective model preference: gpt-5\.6-sol\/max \(user override\)/);
-  assert.match(prepared.delegationPrompt, /pass model="gpt-5\.6-sol" and reasoning_effort="max" when spawning this role/);
+  assert.match(prepared.delegationPrompt, /effective model preference: openai:gpt-5\.6-sol\/max \(user override\)/);
+  assert.match(prepared.delegationPrompt, /pass the exact catalog slug model="gpt-5\.6-sol" and reasoning_effort="max" when spawning this role/);
+  assert.match(prepared.delegationPrompt, /logical provider="openai" is encoded by the active router\/catalog/);
   assert.match(prepared.delegationPrompt, /pass fork_turns="none" and carry this complete bounded slice contract in message/);
 });
 
@@ -123,3 +333,30 @@ test('unconfigured roles preserve installed custom-agent defaults without spawn 
     assert.match(value, /pass fork_turns="none" and carry this complete bounded slice contract in message/);
   });
 });
+
+function catalogModel(
+  slug: string,
+  displayName: string,
+  efforts: string[],
+  extra: Record<string, unknown> = {}
+) {
+  return {
+    slug,
+    display_name: displayName,
+    description: `${displayName} routed model`,
+    default_reasoning_level: efforts[0] || null,
+    supported_reasoning_levels: efforts.map((effort) => ({ effort, description: effort })),
+    shell_type: 'shell_command',
+    visibility: 'list',
+    supported_in_api: true,
+    priority: 1,
+    base_instructions: 'Follow the active SKS role contract.',
+    supports_reasoning_summaries: true,
+    support_verbosity: true,
+    truncation_policy: { mode: 'tokens', limit: 10_000 },
+    supports_parallel_tool_calls: true,
+    experimental_supported_tools: [],
+    multi_agent_version: 'v1',
+    ...extra
+  };
+}

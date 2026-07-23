@@ -13,6 +13,7 @@ import {
   HOST_CAPABILITY_HOOK_OBSERVATIONS_FILENAME,
   HOST_CAPABILITY_HOOK_RUNTIME_FILENAME,
   createHostCapabilityHookRuntimeBinding,
+  createHostCapabilityEventCollector,
   inspectHostCapabilityRuntime,
   requestHostCapabilities
 } from '../../agent-bridge/host-capability-runtime.js';
@@ -466,6 +467,163 @@ test('host capability hooks enforce the exact allowlist and persist only bounded
   }
 });
 
+test('host capability hooks normalize canonical Agent-shaped artifact results', async () => {
+  const htmlScratch = {
+    path: 'reports/agent-brief.html',
+    kind: 'html',
+    media_type: 'text/html',
+    sha256: `sha256:${'a'.repeat(64)}`,
+    bytes: 512,
+    role: 'scratch'
+  };
+  const pdfDeliverable = {
+    path: 'reports/agent-brief.pdf',
+    kind: 'pdf',
+    media_type: 'application/pdf',
+    sha256: `sha256:${'b'.repeat(64)}`,
+    bytes: 2048,
+    role: 'deliverable'
+  };
+  const cases: Array<{
+    label: string;
+    goal: string;
+    toolNames: string[];
+    expectedPaths: string[];
+    calls: Array<{ tool: string; id: string; input: Record<string, unknown>; response: unknown }>;
+  }> = [
+    {
+      label: 'agent-write-artifact',
+      goal: 'Write a file in the workspace.',
+      toolNames: ['write_file'],
+      expectedPaths: ['reports/agent-note.txt'],
+      calls: [{
+        tool: 'write_file',
+        id: 'agent-write-file',
+        input: { path: 'reports/agent-note.txt', content: 'agent artifact fixture' },
+        response: agentHostToolResponse({
+          artifact: {
+            path: 'reports/agent-note.txt',
+            kind: 'text',
+            media_type: 'text/plain',
+            sha256: `sha256:${'c'.repeat(64)}`,
+            bytes: 22,
+            role: 'deliverable'
+          }
+        })
+      }]
+    },
+    {
+      label: 'agent-web-capture-artifact',
+      goal: 'Capture a URL page screenshot.',
+      toolNames: ['capture_url_screenshot'],
+      expectedPaths: ['captures/agent-page.png'],
+      calls: [{
+        tool: 'capture_url_screenshot',
+        id: 'agent-capture-url',
+        input: { url: 'https://example.test', path: 'captures/agent-page.png' },
+        response: agentHostToolResponse({
+          artifact: {
+            path: 'captures/agent-page.png',
+            kind: 'png',
+            media_type: 'image/png',
+            sha256: `sha256:${'d'.repeat(64)}`,
+            bytes: 4096,
+            role: 'deliverable'
+          }
+        })
+      }]
+    },
+    {
+      label: 'agent-pdf-artifacts',
+      goal: 'Create and deliver a PDF document.',
+      toolNames: ['write_file', 'html_to_pdf'],
+      expectedPaths: [htmlScratch.path, pdfDeliverable.path],
+      calls: [
+        {
+          tool: 'write_file',
+          id: 'agent-pdf-source',
+          input: { path: htmlScratch.path, content: '<html><body>Brief</body></html>' },
+          response: agentHostToolResponse({ ok: true, path: htmlScratch.path })
+        },
+        {
+          tool: 'html_to_pdf',
+          id: 'agent-html-to-pdf',
+          input: { source_path: htmlScratch.path, output_path: pdfDeliverable.path },
+          response: agentHostToolResponse({ artifacts: [pdfDeliverable, htmlScratch] })
+        }
+      ]
+    },
+    {
+      label: 'agent-spreadsheet-artifact',
+      goal: 'Create and deliver an Excel workbook.',
+      toolNames: ['spreadsheet_create', 'spreadsheet_inspect', 'spreadsheet_update'],
+      expectedPaths: ['reports/agent-workbook.xlsx'],
+      calls: [
+        {
+          tool: 'spreadsheet_create',
+          id: 'agent-spreadsheet-create',
+          input: { path: 'reports/agent-workbook.xlsx' },
+          response: agentHostToolResponse({
+            artifact: {
+              path: 'reports/agent-workbook.xlsx',
+              kind: 'xlsx',
+              media_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+              sha256: `sha256:${'e'.repeat(64)}`,
+              bytes: 8192,
+              role: 'deliverable'
+            }
+          })
+        },
+        {
+          tool: 'spreadsheet_inspect',
+          id: 'agent-spreadsheet-inspect',
+          input: { path: 'reports/agent-workbook.xlsx' },
+          response: agentHostToolResponse({
+            ok: true,
+            path: 'reports/agent-workbook.xlsx',
+            sheet_names: ['Summary'],
+            row_counts: { Summary: 1 },
+            formulas: [],
+            error_cells: []
+          })
+        }
+      ]
+    }
+  ];
+
+  for (const fixtureCase of cases) {
+    const fixture = await createHostHookFixture({
+      label: fixtureCase.label,
+      goal: fixtureCase.goal,
+      toolNames: fixtureCase.toolNames
+    });
+    try {
+      for (const call of fixtureCase.calls) await recordPassedHostHookCall(fixture, call);
+      const observations = JSON.parse(await fsp.readFile(
+        path.join(fixture.dir, HOST_CAPABILITY_HOOK_OBSERVATIONS_FILENAME),
+        'utf8'
+      ));
+      const evidence = JSON.parse(await fsp.readFile(
+        path.join(fixture.dir, HOST_CAPABILITY_HOOK_EVIDENCE_FILENAME),
+        'utf8'
+      ));
+      assert.equal(evidence.ok, true, fixtureCase.label);
+      assert.deepEqual(
+        evidence.artifacts.map((artifact: any) => artifact.path),
+        [...fixtureCase.expectedPaths].sort(),
+        fixtureCase.label
+      );
+      assert.equal(
+        observations.tool_calls.flatMap((call: any) => call.artifacts).length,
+        fixtureCase.expectedPaths.length,
+        fixtureCase.label
+      );
+    } finally {
+      await fsp.rm(fixture.root, { recursive: true, force: true });
+    }
+  }
+});
+
 test('host capability hooks reject a valid runtime whose canonical request scope was replaced', async () => {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-hook-host-scope-tamper-'));
   const missionId = 'M-20260719-host-scope-tamper';
@@ -613,6 +771,207 @@ test('host capability hooks allow one completed schema-to-readonly-query sequenc
     ]);
     assert.equal(evidence.ok, true);
     assert.deepEqual(evidence.blockers, []);
+  } finally {
+    await fsp.rm(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test('host capability final evidence pairs each query with its nearest matching datasource schema', async () => {
+  const fixture = await createHostHookFixture({
+    label: 'db-multi-datasource',
+    goal: 'Get active customer records from the database.',
+    toolNames: ['datasource_schema_context', 'datasource_query_readonly']
+  });
+  const calls = [
+    {
+      tool: 'datasource_schema_context',
+      id: 'schema-customers',
+      input: { datasource: 'mysql:customers' },
+      response: {
+        structured_content: {
+          datasource: 'mysql:customers',
+          schema_snapshot_id: 'schema-customers-v1'
+        }
+      }
+    },
+    {
+      tool: 'datasource_query_readonly',
+      id: 'query-customers',
+      input: {
+        datasource: 'mysql:customers',
+        schema_snapshot_id: 'schema-customers-v1',
+        query: 'SELECT customer_id FROM customers WHERE active = ?',
+        bindings: [true]
+      },
+      response: {
+        structured_content: {
+          datasource: 'mysql:customers',
+          schema_snapshot_id: 'schema-customers-v1',
+          query_sha256: `sha256:${sha256('SELECT customer_id FROM customers WHERE active = ?')}`,
+          row_count: 2,
+          column_count: 1,
+          truncated: false,
+          status: 'passed'
+        }
+      }
+    },
+    {
+      tool: 'datasource_schema_context',
+      id: 'schema-orders',
+      input: { datasource: 'postgres:orders' },
+      response: {
+        structured_content: {
+          datasource: 'postgres:orders',
+          schema_snapshot_id: 'schema-orders-v3'
+        }
+      }
+    },
+    {
+      tool: 'datasource_query_readonly',
+      id: 'query-orders',
+      input: {
+        datasource: 'postgres:orders',
+        schema_snapshot_id: 'schema-orders-v3',
+        query: 'SELECT order_id FROM orders WHERE status = ?',
+        bindings: ['open']
+      },
+      response: {
+        structured_content: {
+          datasource: 'postgres:orders',
+          schema_snapshot_id: 'schema-orders-v3',
+          query_sha256: `sha256:${sha256('SELECT order_id FROM orders WHERE status = ?')}`,
+          row_count: 3,
+          column_count: 1,
+          truncated: false,
+          status: 'passed'
+        }
+      }
+    }
+  ];
+  try {
+    for (const call of calls) await recordPassedHostHookCall(fixture, call);
+    const evidence = JSON.parse(await fsp.readFile(
+      path.join(fixture.dir, HOST_CAPABILITY_HOOK_EVIDENCE_FILENAME),
+      'utf8'
+    ));
+    assert.equal(evidence.ok, true);
+    assert.deepEqual(evidence.blockers, []);
+    assert.equal(
+      evidence.capabilities_used.find((receipt: any) => (
+        receipt.id === 'host.datasource.query.readonly.v1'
+      ))?.status,
+      'passed'
+    );
+  } finally {
+    await fsp.rm(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test('host capability final evidence rejects a datasource query bound to another schema snapshot', async () => {
+  const runtime = await inspectHostCapabilityRuntime({
+    root: process.cwd(),
+    request: requestHostCapabilities('Get active customer records from the database.'),
+    projectTrusted: true,
+    dependencies: hostCapabilityDependencies(['datasource_schema_context', 'datasource_query_readonly'])
+  });
+  const query = 'SELECT order_id FROM orders WHERE status = ?';
+  const collector = createHostCapabilityEventCollector(runtime);
+  for (const event of [
+    completedDatasourceHostToolEvent({
+      tool: 'datasource_schema_context',
+      arguments: { datasource: 'mysql:customers' },
+      response: {
+        datasource: 'mysql:customers',
+        schema_snapshot_id: 'schema-a-v1'
+      }
+    }),
+    completedDatasourceHostToolEvent({
+      tool: 'datasource_schema_context',
+      arguments: { datasource: 'postgres:orders' },
+      response: {
+        datasource: 'postgres:orders',
+        schema_snapshot_id: 'schema-b-v1'
+      }
+    }),
+    completedDatasourceHostToolEvent({
+      tool: 'datasource_query_readonly',
+      arguments: {
+        datasource: 'postgres:orders',
+        schema_snapshot_id: 'schema-a-v1',
+        query,
+        bindings: ['open']
+      },
+      response: {
+        datasource: 'postgres:orders',
+        schema_snapshot_id: 'schema-a-v1',
+        query_sha256: `sha256:${sha256(query)}`,
+        row_count: 1,
+        column_count: 1,
+        truncated: false,
+        status: 'passed'
+      }
+    })
+  ]) {
+    collector.push(`${event}\n`);
+  }
+  const evidence = collector.finish();
+  assert.equal(evidence.ok, false);
+  assert.ok(evidence.blockers.includes('host_capability_readonly_query_schema_mismatch'));
+  assert.equal(evidence.blockers.includes('host_capability_readonly_query_datasource_mismatch'), false);
+});
+
+test('host capability hooks still reject a fifth readonly query reservation', async () => {
+  const fixture = await createHostHookFixture({
+    label: 'db-query-limit',
+    goal: 'Get active customer records from the database.',
+    toolNames: ['datasource_schema_context', 'datasource_query_readonly']
+  });
+  const query = 'SELECT customer_id FROM customers WHERE active = ?';
+  const schemaSnapshotId = 'schema-customers-limit-v1';
+  const queryInput = {
+    datasource: 'mysql:customers',
+    schema_snapshot_id: schemaSnapshotId,
+    query,
+    bindings: [true]
+  };
+  try {
+    await recordPassedHostHookCall(fixture, {
+      tool: 'datasource_schema_context',
+      id: 'schema-query-limit',
+      input: { datasource: 'mysql:customers' },
+      response: {
+        structured_content: {
+          datasource: 'mysql:customers',
+          schema_snapshot_id: schemaSnapshotId
+        }
+      }
+    });
+    for (let index = 1; index <= 4; index += 1) {
+      await recordPassedHostHookCall(fixture, {
+        tool: 'datasource_query_readonly',
+        id: `query-limit-${index}`,
+        input: queryInput,
+        response: {
+          structured_content: {
+            datasource: 'mysql:customers',
+            schema_snapshot_id: schemaSnapshotId,
+            query_sha256: `sha256:${sha256(query)}`,
+            row_count: 1,
+            column_count: 1,
+            truncated: false,
+            status: 'passed'
+          }
+        }
+      });
+    }
+    const fifthQuery: any = await evaluateHookPayload('pre-tool', {
+      session_id: fixture.sessionId,
+      tool_name: 'mcp__acas-tools__datasource_query_readonly',
+      tool_input: queryInput,
+      tool_use_id: 'query-limit-5'
+    }, { root: fixture.root, state: fixture.state });
+    assert.equal(fifthQuery.decision, 'block');
+    assert.match(fifthQuery.reason, /host_capability_readonly_query_limit_exceeded/);
   } finally {
     await fsp.rm(fixture.root, { recursive: true, force: true });
   }
@@ -1339,6 +1698,60 @@ async function createHostHookFixture(input: {
     2
   )}\n`);
   return { root, dir, state, sessionId };
+}
+
+async function recordPassedHostHookCall(
+  fixture: Awaited<ReturnType<typeof createHostHookFixture>>,
+  call: {
+    tool: string;
+    id: string;
+    input: Record<string, unknown>;
+    response: unknown;
+  }
+): Promise<void> {
+  const preTool: any = await evaluateHookPayload('pre-tool', {
+    session_id: fixture.sessionId,
+    tool_name: `mcp__acas-tools__${call.tool}`,
+    tool_input: call.input,
+    tool_use_id: call.id
+  }, { root: fixture.root, state: fixture.state });
+  assert.equal(preTool.decision, undefined, call.id);
+  await evaluateHookPayload('post-tool', {
+    session_id: fixture.sessionId,
+    tool_name: `mcp__acas-tools__${call.tool}`,
+    tool_input: call.input,
+    tool_response: call.response,
+    tool_use_id: call.id
+  }, { root: fixture.root, state: fixture.state });
+}
+
+function agentHostToolResponse(structuredContent: Record<string, unknown>): Record<string, unknown> {
+  return {
+    content: [{
+      type: 'text',
+      text: JSON.stringify(structuredContent)
+    }],
+    structuredContent,
+    isError: false
+  };
+}
+
+function completedDatasourceHostToolEvent(input: {
+  tool: 'datasource_schema_context' | 'datasource_query_readonly';
+  arguments: Record<string, unknown>;
+  response: Record<string, unknown>;
+}): string {
+  return JSON.stringify({
+    type: 'item.completed',
+    item: {
+      type: 'mcp_tool_call',
+      server: 'acas-tools',
+      tool: input.tool,
+      status: 'completed',
+      arguments: input.arguments,
+      result: { structured_content: input.response }
+    }
+  });
 }
 
 function restoreEnv(name: string, value: string | undefined): void {

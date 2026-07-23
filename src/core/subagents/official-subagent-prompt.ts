@@ -86,8 +86,8 @@ export function buildOfficialSubagentPrompt(input: {
       `   title: ${slice.title}`,
       `   task: ${slice.description}`,
       `   model policy: ${role ? `${role.model_policy} (${role.model}/${role.model_reasoning_effort})` : 'resolve from installed custom agent'}`,
-      `   effective model preference: ${preference ? `${preference.model}/${preference.reasoning_effort} (user override)` : 'managed default/dynamic routing'}`,
-      `   spawn contract: ${preference ? `pass model=${JSON.stringify(preference.model)} and reasoning_effort=${JSON.stringify(preference.reasoning_effort)} when spawning this role` : 'omit model/reasoning overrides and preserve the installed custom-agent default'}`,
+      `   effective model preference: ${preference ? `${preference.provider}:${preference.model}/${preference.reasoning_effort} (user override)` : 'managed default/dynamic routing'}`,
+      `   spawn contract: ${preference ? `pass the exact catalog slug model=${JSON.stringify(preference.model)} and reasoning_effort=${JSON.stringify(preference.reasoning_effort)} when spawning this role; logical provider=${JSON.stringify(preference.provider)} is encoded by the active router/catalog and is not a spawn_agent argument` : 'omit model/reasoning overrides and preserve the installed custom-agent default'}`,
       '   context contract: pass fork_turns="none" and carry this complete bounded slice contract in message because agent_type is selected',
       `   mode: ${mode}`,
       `   paths: ${paths.join(', ') || 'assigned by parent'}`
@@ -118,6 +118,7 @@ Subagent rules:
 - use only Codex official subagent threads; do not launch shell workers, a custom scheduler, a worker pool, or model fanout
 - select the narrowest matching project custom agent by its description; the custom agent name is the spawn type
 - custom \`agent_type\` selection and spawn-time \`model\`/\`reasoning_effort\` overrides must use \`fork_turns="none"\` or a positive bounded turn count, with the complete bounded slice contract in \`message\`
+- \`spawn_agent\` has no per-child provider argument; cross-provider preferences must use exact model slugs advertised by the active Codex backend/catalog (for example a single multi-provider router exposing \`provider/model\`)
 - never combine \`fork_turns="all"\` or the omitted/default full-history mode with \`agent_type\`, \`model\`, or \`reasoning_effort\`; Codex rejects that start before SubagentStart
 - a full-history fork is allowed only when \`agent_type\`, \`model\`, and \`reasoning_effort\` are all omitted
 - use \`worker\` with gpt-5.6-luna and max reasoning only for tiny, short-context, mechanical work with no exploration or judgment
@@ -221,6 +222,7 @@ Final parent output:
 function renderRoleModelPreferenceMetadata(preferences: Readonly<Record<string, RoleModelPreference>> | undefined): string {
   const rows = Object.entries(preferences || {}).map(([role, preference]) => ({
     role,
+    provider: preference.provider,
     model: preference.model,
     reasoning_effort: preference.reasoning_effort,
     source: 'user-scoped-owner-only'

@@ -26,6 +26,15 @@
       "reason": "release jobs bind, inspect, and compare the immutable local and staged tarballs"
     }
   ],
+  "checkout_only_scripts": [
+    {
+      "path": "dist/scripts/release-upgrade-smoke.js",
+      "sources": [
+        ".github/workflows/publish-npm.yml"
+      ],
+      "reason": "the clean checked-out macOS release job builds and runs this CI harness against the exact candidate tarball; installed customers never dispatch it"
+    }
+  ],
   "dynamic_reference_policies": [
     {
       "source": "dist/core/build/build-once-runner.js",

@@ -9,6 +9,12 @@ export interface TelegramConfigValidation {
   config: TelegramHubConfigV1 | null;
 }
 
+export interface TelegramPrivatePairingValidation {
+  ok: boolean;
+  missing: boolean;
+  issues: Array<'paired_chat_ids' | 'paired_user_ids'>;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -26,8 +32,7 @@ export function validateTelegramConfig(value: unknown): TelegramConfigValidation
   } else if (secret.type === 'external_file') {
     if (!nonEmpty(secret.path) || !path.isAbsolute(String(secret.path))) issues.push('external_secret_path_must_be_absolute');
   }
-  if (!stringIdArray(value.paired_chat_ids)) issues.push('paired_chat_ids');
-  if (!stringIdArray(value.paired_user_ids)) issues.push('paired_user_ids');
+  issues.push(...validateTelegramPrivatePairing(value).issues);
   if (typeof value.long_poll_timeout_sec === 'number' && (value.long_poll_timeout_sec < 1 || value.long_poll_timeout_sec > 50)) issues.push('long_poll_timeout_sec');
   if (typeof value.owner_stale_ms === 'number' && value.owner_stale_ms < 5_000) issues.push('owner_stale_ms');
   if ('mini_app' in value) issues.push('mini_app_excluded_from_6_3_package');
@@ -57,29 +62,52 @@ export async function resolveTelegramBotToken(
       'find-generic-password', '-w', '-s', ref.service, '-a', ref.account
     ], { timeoutMs: 5_000, maxOutputBytes: 8 * 1024 });
     if (result.code !== 0 || result.timedOut) throw new Error('telegram_keychain_lookup_failed');
-    return validateTokenValue(result.stdout.trim());
+    return validateTelegramBotToken(result.stdout.trim());
   }
   if (!ref.path || !path.isAbsolute(ref.path)) throw new Error('telegram_external_secret_path_invalid');
   const stat = await fsp.lstat(ref.path);
   if (stat.isSymbolicLink()) throw new Error('telegram_external_secret_symlink_forbidden');
   if (!stat.isFile()) throw new Error('telegram_external_secret_not_file');
   if ((stat.mode & 0o077) !== 0) throw new Error('telegram_external_secret_permissions_must_be_0600');
-  return validateTokenValue((await fsp.readFile(ref.path, 'utf8')).trim());
+  return validateTelegramBotToken((await fsp.readFile(ref.path, 'utf8')).trim());
 }
 
 export function telegramTokenFingerprint(token: string): string {
   return `sha256:${sha256(token)}`;
 }
 
-function validateTokenValue(token: string): string {
+export function validateTelegramBotToken(token: string): string {
   if (!/^\d{5,}:[A-Za-z0-9_-]{20,}$/.test(token)) throw new Error('telegram_bot_token_format_invalid');
   return token;
+}
+
+export function isPositiveTelegramId(value: unknown): value is string {
+  return typeof value === 'string' && /^[1-9]\d*$/.test(value);
+}
+
+export function validateTelegramPrivatePairing(value: unknown): TelegramPrivatePairingValidation {
+  if (!isRecord(value)) {
+    return {
+      ok: false,
+      missing: true,
+      issues: ['paired_chat_ids', 'paired_user_ids']
+    };
+  }
+  const issues: TelegramPrivatePairingValidation['issues'] = [];
+  if (!positiveStringIdArray(value.paired_chat_ids)) issues.push('paired_chat_ids');
+  if (!positiveStringIdArray(value.paired_user_ids)) issues.push('paired_user_ids');
+  const missing = pairingFieldMissing(value, 'paired_chat_ids') || pairingFieldMissing(value, 'paired_user_ids');
+  return { ok: issues.length === 0, missing, issues };
 }
 
 function nonEmpty(value: unknown): boolean {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
-function stringIdArray(value: unknown): boolean {
-  return Array.isArray(value) && value.length > 0 && value.every((entry) => /^-?\d+$/.test(String(entry)));
+function positiveStringIdArray(value: unknown): boolean {
+  return Array.isArray(value) && value.length > 0 && value.every(isPositiveTelegramId);
+}
+
+function pairingFieldMissing(value: Record<string, unknown>, field: 'paired_chat_ids' | 'paired_user_ids'): boolean {
+  return !(field in value) || (Array.isArray(value[field]) && value[field].length === 0);
 }

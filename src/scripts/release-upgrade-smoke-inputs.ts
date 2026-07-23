@@ -22,7 +22,6 @@ import {
   isSubpath,
   normalizeSha256,
   parseJson,
-  readJsonObject,
   readRegularFile,
   unique
 } from './release-upgrade-smoke-utils.js'
@@ -37,8 +36,15 @@ export function prepareReleaseUpgradeTarget(
   }
   const receiptPath = path.resolve(root, options.targetReceipt)
   const tarball = path.resolve(root, options.targetTarball)
-  const receipt = readJsonObject(receiptPath) as ReleasePackReceipt | null
   const blockers: string[] = []
+  const receiptFile = readRegularFile(receiptPath, 'target_receipt')
+  blockers.push(...receiptFile.blockers)
+  const parsedReceipt = receiptFile.bytes ? parseJson(receiptFile.bytes.toString('utf8')) : null
+  const receipt = parsedReceipt && typeof parsedReceipt === 'object' && !Array.isArray(parsedReceipt)
+    ? parsedReceipt as ReleasePackReceipt
+    : null
+  if (receiptFile.bytes && !receipt) blockers.push('target_receipt_json_invalid')
+  const receiptSha256 = receiptFile.bytes ? hashBytes(receiptFile.bytes) : ''
   const validation = validateReleasePackReceipt(receipt, 'local', { requireNpmPackProof: true })
   blockers.push(...validation.blockers.map((blocker) => `target_receipt:${blocker}`))
   if (receipt?.package_name !== 'sneakoscope') blockers.push('target_receipt_package_name_mismatch')
@@ -66,7 +72,7 @@ export function prepareReleaseUpgradeTarget(
     if (!binding.ok) blockers.push(...binding.blockers.map((blocker) => `target_repository_binding:${blocker}`))
   }
   return {
-    value: blockers.length || !receipt ? null : { receipt, receiptPath, tarball, sha256 },
+    value: blockers.length || !receipt ? null : { receipt, receiptPath, receiptSha256, tarball, sha256 },
     blockers: unique(blockers)
   }
 }

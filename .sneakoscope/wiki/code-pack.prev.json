@@ -1,8 +1,8 @@
 {
   "schema": "sks.code-pack.v1",
-  "generated_at": "2026-07-22T15:32:17.191Z",
-  "git_head_sha": "a7e0d525db995414ad1367f8106350d3d7f792da",
-  "source_file_count": 2876,
+  "generated_at": "2026-07-23T03:56:49.606Z",
+  "git_head_sha": "43dc5c2e1c09b79f33ed538aa4352490e848c1a8",
+  "source_file_count": 2881,
   "index_digest": "39ae760e40e8ed5f1c72384adfbaf9db1051b8ac0a8583156a2c137bd1cecf21",
   "entries": [
     {
@@ -310,7 +310,7 @@
     },
     {
       "id": "code:core-hooks-runtime",
-      "text": "core-hooks-runtime is a core module at src/core/hooks-runtime (31 files, 9815 loc, medium risk). Key exports: ; async function writeManagedSkill(root: string, name: string); async function installCurrentManagedSkill(home: string, name: string); async function writeTranscript(home: string, threadId: string, officialSubagent: boolean); function subagentPayload(agentId: string, transcriptPath: string | null = null), and 84 more. It has no detected cross-module dependencies.",
+      "text": "core-hooks-runtime is a core module at src/core/hooks-runtime (32 files, 9888 loc, medium risk). Key exports: ; async function writeManagedSkill(root: string, name: string); async function installCurrentManagedSkill(home: string, name: string); async function writeTranscript(home: string, threadId: string, officialSubagent: boolean); function subagentPayload(agentId: string, transcriptPath: string | null = null), and 84 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/hooks-runtime"
@@ -631,7 +631,7 @@
     },
     {
       "id": "code:core-providers",
-      "text": "core-providers is a core module at src/core/providers (10 files, 905 loc, low risk). Key exports: async function sendOpenRouterChatCompletion(; function parseOpenRouterResponse(; type OpenRouterErrorCode =; function normalizeOpenRouterError(status: number, body: string, env: NodeJS.ProcessEnv = process.env): OpenRouterIssue; function invalidOpenRouterResponseIssue(message: string, body?: string, env: NodeJS.ProcessEnv = process.env): OpenRouterIssue, and 39 more. It has no detected cross-module dependencies.",
+      "text": "core-providers is a core module at src/core/providers (12 files, 1425 loc, low risk). Key exports: const OPENROUTER_KEY_URL = 'https://openrouter.ai/api/v1/key' as const;; const OPENROUTER_MODELS_URL = 'https://openrouter.ai/api/v1/models' as const;; const OPENROUTER_MODEL_ROW_LIMIT = 1_000 as const;; const OPENROUTER_MODEL_IDS_MAX_OUTPUT_BYTES = 48 * 1024;; interface OpenRouterNormalizedModel, and 48 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/providers"
@@ -639,7 +639,7 @@
       ],
       "trust_score": 0.8,
       "freshness": "unknown",
-      "token_cost": 129
+      "token_cost": 114
     },
     {
       "id": "code:core-python-tools",
@@ -889,8 +889,20 @@
       "trust_score": 0.8,
       "freshness": "unknown",
       "token_cost": 118
+    },
+    {
+      "id": "code:scripts-fixtures",
+      "text": "scripts-fixtures is a module at src/scripts/fixtures (1 file, 59 loc, low risk). It has no detected top-level exports. It has no detected cross-module dependencies.",
+      "citations": [
+        {
+          "path": "src/scripts/fixtures"
+        }
+      ],
+      "trust_score": 0.6,
+      "freshness": "unknown",
+      "token_cost": 41
     }
   ],
   "token_budget": 8000,
-  "total_token_cost": 7970
+  "total_token_cost": 7996
 }

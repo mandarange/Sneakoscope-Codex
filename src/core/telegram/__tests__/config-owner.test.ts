@@ -3,7 +3,12 @@ import assert from 'node:assert/strict';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { resolveTelegramBotToken, telegramTokenFingerprint, validateTelegramConfig } from '../config.js';
+import {
+  resolveTelegramBotToken,
+  telegramTokenFingerprint,
+  validateTelegramConfig,
+  validateTelegramPrivatePairing
+} from '../config.js';
 import { TelegramOwnerConflictError, TelegramOwnerLock } from '../owner-lock.js';
 
 async function tempRoot(): Promise<string> {
@@ -33,6 +38,23 @@ test('Mini App configuration is excluded from the 6.3 package', () => {
   });
   assert.equal(validation.ok, false);
   assert.ok(validation.issues.includes('mini_app_excluded_from_6_3_package'));
+});
+
+test('persisted pairing accepts only positive private chat and user IDs', () => {
+  const groupPairing = validateTelegramConfig({
+    schema: 'sks.telegram-config.v1',
+    bot_token_ref: { type: 'external_file', path: '/tmp/telegram-token' },
+    paired_chat_ids: ['-1001234567890'],
+    paired_user_ids: ['456']
+  });
+  assert.equal(groupPairing.ok, false);
+  assert.ok(groupPairing.issues.includes('paired_chat_ids'));
+
+  const privatePairing = validateTelegramPrivatePairing({
+    paired_chat_ids: ['123'],
+    paired_user_ids: ['456']
+  });
+  assert.deepEqual(privatePairing, { ok: true, missing: false, issues: [] });
 });
 
 test('owner-only external secret resolves without persisting the raw token', async () => {

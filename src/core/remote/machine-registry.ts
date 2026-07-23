@@ -41,15 +41,20 @@ export function validateRemoteMachineRegistry(value: unknown): RemoteMachineRegi
     const id = stringValue(machine.id);
     const displayName = stringValue(machine.display_name);
     const sshAlias = stringValue(machine.ssh_alias);
+    const transport = machine.transport;
     const enabled = machine.enabled;
     if (!MACHINE_ID_RE.test(id)) issues.push(`${prefix}:invalid_id`);
     if (ids.has(id)) issues.push(`${prefix}:duplicate_id`);
     if (id) ids.add(id);
     if (!displayName || displayName.length > 120) issues.push(`${prefix}:invalid_display_name`);
-    if (machine.transport !== 'ssh-stdio') issues.push(`${prefix}:unsupported_transport`);
-    if (!validateSshAlias(sshAlias)) issues.push(`${prefix}:invalid_ssh_alias`);
-    if (aliases.has(sshAlias)) issues.push(`${prefix}:duplicate_ssh_alias`);
-    if (sshAlias) aliases.add(sshAlias);
+    if (transport !== 'local' && transport !== 'ssh-stdio') issues.push(`${prefix}:unsupported_transport`);
+    if (transport === 'ssh-stdio') {
+      if (!validateSshAlias(sshAlias)) issues.push(`${prefix}:invalid_ssh_alias`);
+      if (aliases.has(sshAlias)) issues.push(`${prefix}:duplicate_ssh_alias`);
+      if (sshAlias) aliases.add(sshAlias);
+    } else if (sshAlias) {
+      issues.push(`${prefix}:local_ssh_alias_forbidden`);
+    }
     if (typeof enabled !== 'boolean') issues.push(`${prefix}:enabled_boolean_required`);
     const roots = Array.isArray(machine.allowed_roots) ? machine.allowed_roots.map(stringValue) : [];
     if (!Array.isArray(machine.allowed_roots) || roots.length === 0) issues.push(`${prefix}:allowed_roots_required`);
@@ -62,12 +67,13 @@ export function validateRemoteMachineRegistry(value: unknown): RemoteMachineRegi
       if (uniqueRoots.has(normalized)) issues.push(`${prefix}:root_${rootIndex}:duplicate_root`);
       uniqueRoots.add(normalized);
     });
-    if (MACHINE_ID_RE.test(id) && displayName && validateSshAlias(sshAlias) && machine.transport === 'ssh-stdio' && typeof enabled === 'boolean') {
+    const transportValid = transport === 'local' || (transport === 'ssh-stdio' && validateSshAlias(sshAlias));
+    if (MACHINE_ID_RE.test(id) && displayName && transportValid && typeof enabled === 'boolean') {
       machines.push({
         id,
         display_name: displayName,
-        transport: 'ssh-stdio',
-        ssh_alias: sshAlias,
+        transport,
+        ...(transport === 'ssh-stdio' ? { ssh_alias: sshAlias } : {}),
         allowed_roots: roots,
         enabled
       });

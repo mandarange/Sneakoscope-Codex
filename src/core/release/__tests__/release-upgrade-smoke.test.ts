@@ -69,7 +69,7 @@ test('release upgrade smoke fails closed before commands when the target receipt
     assert.equal(report.target.binding_ok, false)
     assert.ok(report.blockers.some((blocker) => blocker.startsWith('target_receipt:')))
     const receipt = path.join(root, '.sneakoscope', 'reports', 'release', '6.3.0', 'upgrade-6.2-to-6.3.0.json')
-    assert.equal(JSON.parse(await fs.readFile(receipt, 'utf8')).schema, 'sks.release-upgrade-smoke.v1')
+    assert.equal(JSON.parse(await fs.readFile(receipt, 'utf8')).schema, 'sks.release-upgrade-smoke.v2')
 
     await fs.writeFile(path.join(root, 'package.json'), JSON.stringify({ name: 'sneakoscope', version: '6.2.0' }))
     const preCut = await runReleaseUpgradeSmoke(root, {

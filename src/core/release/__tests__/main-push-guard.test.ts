@@ -68,6 +68,32 @@ test('main push guard requires clean, source-bound release proofs', () => {
     )).sha256
     fs.writeFileSync(upgradeProof, JSON.stringify(upgrade))
 
+    const assertUpgradeBlocked = (mutate: (value: any) => void, expected: string) => {
+      const original = JSON.parse(fs.readFileSync(upgradeProof, 'utf8'))
+      const changed = structuredClone(original)
+      mutate(changed)
+      fs.writeFileSync(upgradeProof, JSON.stringify(changed))
+      const result = inspectMainPushGuard({
+        root,
+        expectedVersion: '6.3.0',
+        expectedOriginMain: baseline,
+        expectedOriginIdentity,
+        requireReleaseStamp: true,
+        requirePackProof: true,
+        requireMacosProof: true,
+        requireCleanTree: true,
+        expectedWorkOrderSha256: closure.workOrderSha256
+      })
+      assert.equal(result.ok, false)
+      assert.equal(result.blockers.includes(`upgrade_proof:${expected}`), true, result.blockers.join(','))
+      fs.writeFileSync(upgradeProof, JSON.stringify(original))
+    }
+    assertUpgradeBlocked((value) => { value.isolation.host_home_reused = true }, 'host_isolation_reused')
+    assertUpgradeBlocked((value) => { value.isolation.retained = true }, 'sandbox_cleanup_incomplete')
+    assertUpgradeBlocked((value) => { value.commands.pop() }, 'command_inventory_incomplete')
+    assertUpgradeBlocked((value) => { value.commands[1].timed_out = true }, 'command_receipt_invalid:baseline_install')
+    assertUpgradeBlocked((value) => { value.target.receipt_sha256 = '0'.repeat(64) }, 'target_receipt_sha256_mismatch')
+
     const wrongMission = inspectMainPushGuard({
       root,
       expectedVersion: '6.3.0',

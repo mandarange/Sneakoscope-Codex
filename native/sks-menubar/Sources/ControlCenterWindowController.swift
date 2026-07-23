@@ -16,7 +16,7 @@ final class ControlCenterWindowController: NSWindowController, NSTableViewDataSo
             .updates: UpdatesViewController(processClient: processClient, operations: operations, notifications: notifications),
             .mcpServers: MCPServersViewController(processClient: processClient, operations: operations, notifications: notifications),
             .providers: ProvidersViewController(processClient: processClient, operations: operations),
-            .remoteTelegram: RemoteTelegramViewController(processClient: processClient),
+            .remoteTelegram: RemoteTelegramViewController(processClient: processClient, operations: operations),
             .diagnostics: DiagnosticsViewController(processClient: processClient, operations: operations),
             .settings: SettingsViewController(notifications: notifications)
         ]

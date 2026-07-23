@@ -67,6 +67,36 @@ test('global-only doctor repairs a stored-key OpenRouter provider and reports th
   }
 });
 
+test('global-only Doctor Fix does not restart the Menu Bar while an update parent owns completion', async () => {
+  const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-global-doctor-deferred-menubar-'));
+  let menuOptions: any = null;
+  const env = {
+    ...process.env,
+    HOME: home,
+    SKS_UPDATE_DEFER_MENUBAR_RESTART: '1'
+  };
+  try {
+    const result: any = await executeDoctorGlobalOnlyFix(['--fix', '--global-only', '--json'], home, {
+      home,
+      env,
+      reconcileSkillsImpl: async () => ({ schema: 'sks.skill-reconcile.v1', scope: 'global', core_skill_integrity: { ok: true } }),
+      ensureGlobalCodexFastModeDuringInstallImpl: async () => ({ status: 'current', ok: true }),
+      ensureStoredOpenRouterProviderDuringInstallImpl: async () => ({ schema: 'sks.openrouter-provider-upgrade-repair.v1', ok: true, status: 'skipped', blockers: [], warnings: [] }),
+      installSksMenuBarImpl: async (options: any) => {
+        menuOptions = options;
+        return { schema: 'sks.codex-app-sks-menubar.v1', ok: true, status: 'installed_launch_skipped', blockers: [], warnings: [] };
+      },
+      codexLbStatusImpl: async () => ({ selected: false, provider_ready: true, tool_output_recovery: { ok: true, status: 'not_selected', blockers: [], operator_actions: [] } })
+    });
+
+    assert.equal(result.ok, true, JSON.stringify(result.blockers));
+    assert.equal(menuOptions?.launch, false);
+    assert.equal(menuOptions?.env?.SKS_UPDATE_DEFER_MENUBAR_RESTART, '1');
+  } finally {
+    await fsp.rm(home, { recursive: true, force: true });
+  }
+});
+
 test('global-only doctor removes managed global legacy guidance without touching the project', async () => {
   const fixture = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-global-doctor-legacy-'));
   const home = path.join(fixture, 'home');

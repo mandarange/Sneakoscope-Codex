@@ -229,13 +229,25 @@ async function backupCodexConfig(configPath: string, text: string, tag: string) 
   }
 }
 
-export async function safeWriteCodexConfigToml(configPath: string, current: string, next: string, tag = 'codex-lb', opts: { preserveFastUiKeys?: boolean } = {}) {
+export async function safeWriteCodexConfigToml(
+  configPath: string,
+  current: string,
+  next: string,
+  tag = 'codex-lb',
+  opts: {
+    preserveFastUiKeys?: boolean
+    verifyUnchangedBeforeWrite?: boolean
+    expectedBeforeExists?: boolean
+  } = {}
+) {
   return writeCodexConfigGuarded({
     configPath,
     before: String(current || ''),
     cause: tag,
     removeTopLevelModeLocks: true,
     ...(opts.preserveFastUiKeys === undefined ? {} : { preserveFastUiKeys: opts.preserveFastUiKeys }),
+    ...(opts.verifyUnchangedBeforeWrite === undefined ? {} : { verifyUnchangedBeforeWrite: opts.verifyUnchangedBeforeWrite }),
+    ...(opts.expectedBeforeExists === undefined ? {} : { expectedBeforeExists: opts.expectedBeforeExists }),
     mutate: () => String(next || '')
   });
 }

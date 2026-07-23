@@ -102,7 +102,7 @@ export class TelegramMessageProjector {
   }
 
   async sendFinal(input: { route: TelegramTopicRouteV1; text: string; replyMarkup?: Record<string, unknown> }): Promise<{ method: string; message_id: number }> {
-    const text = publicSafeText(input.text);
+    const text = telegramMessageText(input.text);
     let method = this.capabilities.rich_message ? 'sendRichMessage' : 'sendMessage';
     let result: { message_id: number };
     try {
@@ -125,7 +125,7 @@ export class TelegramMessageProjector {
   async sendFlat(input: { chatId: string; text: string; replyMarkup?: Record<string, unknown> }): Promise<number> {
     const result = await this.api.call<{ message_id: number }>('sendMessage', {
       chat_id: input.chatId,
-      text: publicSafeText(input.text),
+      text: telegramMessageText(input.text),
       protect_content: this.options.protectContent !== false,
       disable_notification: this.options.silent === true,
       ...(input.replyMarkup ? { reply_markup: input.replyMarkup } : {})
@@ -339,6 +339,12 @@ export function publicSafeText(value: string): string {
     .replace(/<tg-thinking>[\s\S]*?<\/tg-thinking>/gi, '[public phase]')
     .replace(/\u0000/g, '')
     .slice(0, 16_000);
+}
+
+function telegramMessageText(value: string): string {
+  const text = publicSafeText(value);
+  if (text.length <= 4_000) return text;
+  return `${text.slice(0, 3_920).trimEnd()}\n\n[Response truncated for Telegram. Ask Codex to continue with the remaining details.]`;
 }
 
 async function sleep(ms: number): Promise<void> {
