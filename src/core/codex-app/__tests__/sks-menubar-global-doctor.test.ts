@@ -44,6 +44,29 @@ test('menu global-only doctor preserves global skills and never runs project rec
   }
 });
 
+test('global-only doctor repairs a stored-key OpenRouter provider and reports the result', async () => {
+  const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-global-doctor-openrouter-'));
+  let repairHome: string | null = null;
+  try {
+    const result: any = await executeDoctorGlobalOnlyFix(['--fix', '--global-only', '--json'], home, {
+      home,
+      reconcileSkillsImpl: async () => ({ schema: 'sks.skill-reconcile.v1', scope: 'global', core_skill_integrity: { ok: true } }),
+      ensureGlobalCodexFastModeDuringInstallImpl: async () => ({ status: 'current', ok: true }),
+      ensureStoredOpenRouterProviderDuringInstallImpl: async (options: any) => {
+        repairHome = options.home;
+        return { schema: 'sks.openrouter-provider-upgrade-repair.v1', ok: true, status: 'updated', key_present: true, blockers: [], warnings: [] };
+      },
+      installSksMenuBarImpl: async () => ({ schema: 'sks.codex-app-sks-menubar.v1', ok: true, status: 'installed_launch_skipped', blockers: [], warnings: [] }),
+      codexLbStatusImpl: async () => ({ selected: false, provider_ready: true, tool_output_recovery: { ok: true, status: 'not_selected', blockers: [], operator_actions: [] } })
+    });
+    assert.equal(result.ok, true, JSON.stringify(result.blockers));
+    assert.equal(repairHome, home);
+    assert.equal(result.openrouter_provider.status, 'updated');
+  } finally {
+    await fsp.rm(home, { recursive: true, force: true });
+  }
+});
+
 test('global-only doctor removes managed global legacy guidance without touching the project', async () => {
   const fixture = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-global-doctor-legacy-'));
   const home = path.join(fixture, 'home');

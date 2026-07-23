@@ -1,14 +1,19 @@
 import path from 'node:path';
 import os from 'node:os';
 import { ensureDir, readText, nowIso } from '../fsx.js';
-import { resolveOpenRouterApiKey } from '../providers/openrouter/openrouter-secret-store.js';
+import { openRouterSecretPaths, resolveOpenRouterApiKey } from '../providers/openrouter/openrouter-secret-store.js';
 import {
+  OPENROUTER_AUTH_COMMAND,
+  OPENROUTER_AUTH_REFRESH_INTERVAL_MS,
+  OPENROUTER_AUTH_TIMEOUT_MS,
+  openRouterAuthCommandArgs,
   OPENROUTER_DEFAULT_MODEL,
   OPENROUTER_PROVIDER_ID,
   normalizeOpenRouterModelId
 } from './openrouter-provider.js';
 import { installCodexAppGlmProfile } from './glm-profile-installer.js';
 import { restartCodexApp } from './codex-app-restart.js';
+import type { CodexAppRestartResult } from './codex-app-restart.js';
 import {
   codexLbConfigPath,
   ensureGlobalCodexAppGlmProfile,
@@ -31,6 +36,10 @@ export interface OpenRouterStatus {
   readonly key_present: boolean;
   readonly key_source: string | null;
   readonly provider_present: boolean;
+  readonly provider_env_key_present: boolean;
+  readonly provider_auth_present: boolean;
+  readonly provider_auth_conflict: boolean;
+  readonly provider_auth_valid: boolean;
   readonly selected: boolean;
   readonly model: string | null;
   readonly model_source: 'config' | 'default' | null;
@@ -48,19 +57,39 @@ export async function openRouterStatus(input: {
   const home = input.home || process.env.HOME || os.homedir();
   const configPath = input.configPath || codexLbConfigPath(home);
   const config = await readText(configPath, '');
-  const key = await resolveOpenRouterApiKey({ env: input.env || process.env });
+  const env = { ...(input.env || process.env), HOME: home };
+  const key = await resolveOpenRouterApiKey({ env });
+  const authArgs = openRouterAuthCommandArgs(openRouterSecretPaths(env).keyPath);
   const providerPresent = new RegExp(`\\[model_providers\\.${OPENROUTER_PROVIDER_ID}\\]`).test(config);
+  const providerBody = tomlTableBody(config, `model_providers.${OPENROUTER_PROVIDER_ID}`);
+  const providerEnvKeyPresent = hasTomlKey(providerBody, 'env_key');
+  const authBody = tomlTableBody(config, `model_providers.${OPENROUTER_PROVIDER_ID}.auth`);
+  const providerAuthPresent = Boolean(authBody);
+  const providerAuthConflict = providerEnvKeyPresent && providerAuthPresent;
+  const providerAuthValid = providerAuthPresent
+    && !providerAuthConflict
+    && hasTomlString(authBody, 'command', OPENROUTER_AUTH_COMMAND)
+    && hasTomlStringArray(authBody, 'args', authArgs)
+    && hasTomlInteger(authBody, 'timeout_ms', OPENROUTER_AUTH_TIMEOUT_MS)
+    && hasTomlInteger(authBody, 'refresh_interval_ms', OPENROUTER_AUTH_REFRESH_INTERVAL_MS);
   const selected = topLevelTomlString(config, 'model_provider') === OPENROUTER_PROVIDER_ID;
   const model = topLevelTomlString(config, 'model');
   const blockers: string[] = [];
   if (!key.key) blockers.push('openrouter_key_missing');
   if (!providerPresent) blockers.push('openrouter_provider_missing');
+  if (providerAuthConflict) blockers.push('openrouter_provider_auth_env_key_conflict');
+  else if (!providerAuthPresent) blockers.push('openrouter_provider_auth_missing');
+  else if (!providerAuthValid) blockers.push('openrouter_provider_auth_invalid');
   return {
     schema: 'sks.codex-app-openrouter-status.v1',
     ok: blockers.length === 0 && (selected ? Boolean(model) : true),
     key_present: Boolean(key.key),
     key_source: key.source || null,
     provider_present: providerPresent,
+    provider_env_key_present: providerEnvKeyPresent,
+    provider_auth_present: providerAuthPresent,
+    provider_auth_conflict: providerAuthConflict,
+    provider_auth_valid: providerAuthValid,
     selected,
     model: model || (selected ? OPENROUTER_DEFAULT_MODEL : null),
     model_source: model ? 'config' : selected ? 'default' : null,
@@ -77,6 +106,7 @@ export async function useOpenRouter(input: {
   readonly home?: string;
   readonly env?: NodeJS.ProcessEnv;
   readonly configPath?: string;
+  readonly restartImpl?: (input: { enabled: boolean }) => Promise<CodexAppRestartResult>;
 }): Promise<Record<string, unknown>> {
   const model = normalizeOpenRouterModelId(input.model || OPENROUTER_DEFAULT_MODEL);
   if (!model) {
@@ -94,7 +124,7 @@ export async function useOpenRouter(input: {
 
   const home = input.home || process.env.HOME || os.homedir();
   const configPath = input.configPath || codexLbConfigPath(home);
-  const env = input.env || process.env;
+  const env = { ...(input.env || process.env), HOME: home };
   await ensureDir(path.dirname(configPath));
 
   const key = await resolveOpenRouterApiKey({ env });
@@ -160,35 +190,48 @@ export async function useOpenRouter(input: {
     };
   }
 
-  const restart = await restartCodexApp({ enabled: Boolean(input.restartApp) });
+  const restart = await (input.restartImpl || restartCodexApp)({ enabled: Boolean(input.restartApp) });
   const status = await openRouterStatus({ home, configPath, env });
-  const ok = Boolean(status.selected && status.key_present && status.provider_present && status.model === model && restart.ok);
+  const configApplied = Boolean(
+    status.selected
+    && status.key_present
+    && status.provider_present
+    && status.provider_auth_valid
+    && status.model === model
+  );
   return {
     schema: 'sks.codex-app-use-openrouter.v1',
     generated_at: nowIso(),
-    ok,
-    status: ok ? 'active' : 'activation_incomplete',
+    ok: configApplied,
+    status: configApplied ? (restart.ok ? 'active' : 'active_restart_blocked') : 'activation_incomplete',
     mode: 'openrouter',
     model,
     profile,
     unselect,
     write,
     restart_app: restart,
+    config_applied: configApplied,
+    restart_ok: restart.ok,
     openrouter: status,
     readiness: {
       selected: status.selected,
       key_present: status.key_present,
       provider_present: status.provider_present,
+      provider_auth_present: status.provider_auth_present,
+      provider_auth_valid: status.provider_auth_valid,
       model: status.model,
-      ok
+      config_applied: configApplied,
+      restart_ok: restart.ok,
+      ok: configApplied
     },
     blockers: [
       ...(status.selected ? [] : ['openrouter_not_selected']),
       ...(status.model === model ? [] : ['openrouter_model_not_applied']),
-      ...(restart.ok ? [] : (restart.blockers || ['openrouter_restart_blocked']))
+      ...(status.provider_auth_valid ? [] : ['openrouter_provider_auth_not_applied'])
     ],
     warnings: [
       ...(unselect?.ok === false ? [`codex_lb_unselect:${unselect.provider_error || unselect.status}`] : []),
+      ...(restart.ok ? [] : (restart.blockers || ['openrouter_restart_blocked']).map((blocker) => `restart:${blocker}`)),
       ...(profile.warnings || [])
     ]
   };
@@ -196,4 +239,39 @@ export async function useOpenRouter(input: {
 
 export async function ensureOpenRouterProviderInstalled(opts: any = {}) {
   return ensureGlobalCodexAppGlmProfile(opts);
+}
+
+function tomlTableBody(text: string, table: string): string {
+  const header = `[${table}]`;
+  const lines = String(text || '').split('\n');
+  const start = lines.findIndex((line) => line.trim() === header);
+  if (start === -1) return '';
+  const body: string[] = [];
+  for (let index = start + 1; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (/^\s*\[[^\]]+\]\s*$/.test(line || '')) break;
+    body.push(line || '');
+  }
+  return body.join('\n');
+}
+
+function hasTomlString(text: string, key: string, value: string): boolean {
+  return new RegExp(`^\\s*${escapeRegExp(key)}\\s*=\\s*"${escapeRegExp(value)}"\\s*(?:#.*)?$`, 'm').test(text);
+}
+
+function hasTomlKey(text: string, key: string): boolean {
+  return new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`, 'm').test(text);
+}
+
+function hasTomlStringArray(text: string, key: string, values: readonly string[]): boolean {
+  const expected = values.map((value) => JSON.stringify(value)).join(', ');
+  return new RegExp(`^\\s*${escapeRegExp(key)}\\s*=\\s*\\[${escapeRegExp(expected)}\\]\\s*(?:#.*)?$`, 'm').test(text);
+}
+
+function hasTomlInteger(text: string, key: string, value: number): boolean {
+  return new RegExp(`^\\s*${escapeRegExp(key)}\\s*=\\s*${value}\\s*(?:#.*)?$`, 'm').test(text);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

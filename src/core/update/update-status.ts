@@ -111,9 +111,10 @@ export async function resolveSksUpdateStatus(options: ResolveUpdateStatusOptions
       }
       return await authoritativeSupersedingResult(state, work, env, snapshot);
     } catch (error) {
-      const fallback = cached
-        || (error instanceof UpdateStatusRefreshError ? error.fallbackSnapshot : null)
-        || options.fallbackSnapshot();
+      const refreshFallback = error instanceof UpdateStatusRefreshError ? error.fallbackSnapshot : null;
+      const fallback = cached && refreshFallback
+        ? mergeRefreshFailureSnapshot(cached, refreshFallback)
+        : cached || refreshFallback || options.fallbackSnapshot();
       const failedAt = now();
       const source = cached ? 'stale' : 'error';
       const failed = cached
@@ -282,6 +283,34 @@ function normalizeLiveSnapshot(snapshot: SksUpdateStatusV3, now: Date, ttl: numb
   };
   normalized.update_count = countUpdates(normalized);
   return normalized;
+}
+
+function mergeRefreshFailureSnapshot(cached: SksUpdateStatusV3, observed: SksUpdateStatusV3): SksUpdateStatusV3 {
+  const sksLatest = observed.sks.latest || cached.sks.latest;
+  const codexLatest = observed.codex_cli.latest || cached.codex_cli.latest;
+  const merged: SksUpdateStatusV3 = {
+    ...observed,
+    sks: {
+      ...observed.sks,
+      latest: sksLatest,
+      update_available: isSemVerUpdateAvailable(sksLatest, observed.sks.current),
+      package_source: observed.sks.package_source || cached.sks.package_source
+    },
+    codex_cli: {
+      ...observed.codex_cli,
+      latest: codexLatest,
+      update_available: isSemVerUpdateAvailable(codexLatest, observed.codex_cli.current),
+      update_method: observed.codex_cli.update_method || cached.codex_cli.update_method
+    },
+    warnings: unique([
+      ...cached.warnings,
+      ...observed.warnings,
+      'update_status_refresh_observation_merged'
+    ]),
+    update_count: 0
+  };
+  merged.update_count = countUpdates(merged);
+  return merged;
 }
 
 function withResponseSource(

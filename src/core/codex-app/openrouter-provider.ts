@@ -4,6 +4,14 @@ export const OPENROUTER_PROVIDER_ID = 'openrouter' as const;
 export const OPENROUTER_DEFAULT_MODEL = 'z-ai/glm-5.2' as const;
 export const OPENROUTER_DEFAULT_PROFILE_ID = 'sks-openrouter-default' as const;
 export const OPENROUTER_DEFAULT_PROFILE_LABEL = 'OpenRouter (SKS)' as const;
+export const OPENROUTER_AUTH_COMMAND = '/bin/sh' as const;
+export const OPENROUTER_AUTH_SCRIPT = 'if [ -r "$1" ]; then exec /bin/cat "$1"; elif [ -n "${OPENROUTER_API_KEY:-}" ]; then exec /usr/bin/printf "%s\\n" "$OPENROUTER_API_KEY"; elif [ -n "${SKS_OPENROUTER_API_KEY:-}" ]; then exec /usr/bin/printf "%s\\n" "$SKS_OPENROUTER_API_KEY"; else exit 1; fi' as const;
+export const OPENROUTER_AUTH_TIMEOUT_MS = 5_000 as const;
+export const OPENROUTER_AUTH_REFRESH_INTERVAL_MS = 300_000 as const;
+
+export function openRouterAuthCommandArgs(keyPath: string): readonly string[] {
+  return ['-c', OPENROUTER_AUTH_SCRIPT, 'sks-openrouter-auth', keyPath] as const;
+}
 
 /** @deprecated Prefer OPENROUTER_DEFAULT_MODEL */
 export const GLM_52_OPENROUTER_MODEL = OPENROUTER_DEFAULT_MODEL;

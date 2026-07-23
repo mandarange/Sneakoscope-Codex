@@ -99,6 +99,87 @@ test('a healthy reused SubagentStart clears a stale same-thread guard even when 
   }
 });
 
+test('a stopped official child reissues admission on its first resumed PreToolUse without another SubagentStart', async () => {
+  const fixture = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-hook-skill-path-resumed-child-'));
+  const home = path.join(fixture, 'home');
+  const root = path.join(fixture, 'project');
+  const missionId = 'M-skill-path-resumed-child';
+  const workflowRunId = 'run-skill-path-resumed-child';
+  const agentId = 'resumed-child-agent';
+  const state = {
+    mission_id: missionId,
+    route: 'Naruto',
+    route_command: '$sks-naruto',
+    mode: 'NARUTO',
+    route_closed: false,
+    requested_subagents: 1,
+    official_subagent_run_id: workflowRunId,
+    required_skills: ['sks-naruto']
+  };
+  const oldHome = process.env.HOME;
+  const oldCodexHome = process.env.CODEX_HOME;
+  try {
+    process.env.HOME = home;
+    process.env.CODEX_HOME = path.join(home, '.codex');
+    await installCurrentManagedSkill(home, 'sks-naruto');
+    const dir = await writeOfficialSubagentPlan(root, missionId, workflowRunId);
+    await evaluateHookPayload('subagent-start', {
+      ...subagentPayload(agentId),
+      cwd: root
+    }, { root, state });
+    const transcript = await writeTranscript(home, agentId, true);
+    await fsp.appendFile(transcript, `${'x'.repeat((1024 * 1024) + 1)}\n`);
+    await evaluateHookPayload('subagent-stop', {
+      ...subagentPayload(agentId, transcript),
+      cwd: root,
+      hook_event_name: 'SubagentStop',
+      last_assistant_message: 'Initial review turn completed.',
+      stop_hook_active: false
+    }, { root, state });
+
+    const resumedTurnId = 'turn-resumed-child-generation';
+    const resumed: any = await evaluateHookPayload('pre-tool', {
+      ...preToolPayload(null, agentId),
+      cwd: root,
+      agent_id: agentId,
+      tool_use_id: 'tool-resumed-child-first',
+      turn_id: resumedTurnId
+    }, { root, state });
+    assert.equal(resumed.decision, undefined);
+    const admission = JSON.parse(await fsp.readFile(path.join(
+      dir,
+      'subagent-skill-availability',
+      `thread-${sha256(agentId)}.json`
+    ), 'utf8'));
+    assert.equal(admission.status, 'allowed');
+    assert.equal(admission.mission_id, missionId);
+    assert.equal(admission.workflow_run_id, workflowRunId);
+    assert.equal(admission.turn_id_hash, sha256(resumedTurnId));
+    const events = (await fsp.readFile(path.join(dir, 'subagent-events.jsonl'), 'utf8'))
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+    assert.equal(events.filter((event) => event.event_name === 'SubagentStart').length, 1);
+
+    const unassignedThread = 'unassigned-official-child';
+    const unassignedTranscript = await writeTranscript(home, unassignedThread, true);
+    const unassigned: any = await evaluateHookPayload('pre-tool', {
+      ...preToolPayload(unassignedTranscript, unassignedThread),
+      cwd: root,
+      tool_use_id: 'tool-unassigned-resume',
+      turn_id: 'turn-unassigned-resume'
+    }, { root, state });
+    assert.equal(unassigned.decision, 'block');
+    assert.match(String(unassigned.reason || ''), /subagent_skill_availability_admission_missing/);
+  } finally {
+    if (oldHome === undefined) delete process.env.HOME;
+    else process.env.HOME = oldHome;
+    if (oldCodexHome === undefined) delete process.env.CODEX_HOME;
+    else process.env.CODEX_HOME = oldCodexHome;
+    await fsp.rm(fixture, { recursive: true, force: true });
+  }
+});
+
 test('PreToolUse rejects an admitted child replay after the active mission and run switch without SubagentStop', async () => {
   const fixture = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-hook-skill-path-cross-run-replay-'));
   const home = path.join(fixture, 'home');
@@ -420,4 +501,3 @@ test('healthy SubagentStart rejects a partial allowed overwrite of a guarded roo
     await fsp.rm(fixture, { recursive: true, force: true });
   }
 });
-

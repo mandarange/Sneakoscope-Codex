@@ -82,6 +82,7 @@ import {
   codexLbSharedOpenAiRoutingState,
   detectCodexLbSetupDrift,
   ensureGlobalCodexAppGlmProfile,
+  ensureStoredOpenRouterProviderDuringInstall,
   parseCodexLbEnvBaseUrl,
   parseCodexSharedLoginApiKey,
   removeCodexLbSharedOpenAiRouting,
@@ -151,6 +152,11 @@ export async function postinstall({ bootstrap, args = [] }: any) {
   else if (fastModeRepair.status === 'skipped_unsafe_rewrite') console.log(`Codex App Fast mode: skipped (managed rewrite would not parse; ${fastModeRepair.config_path} left untouched).`);
   else if (fastModeRepair.status === 'skipped') console.log(`Codex App Fast mode: skipped (${fastModeRepair.reason}).`);
   else if (fastModeRepair.status === 'failed') console.log(`Codex App Fast mode: auto repair failed. Run \`sks setup\`. ${fastModeRepair.error || ''}`.trim());
+  const openRouterProviderRepair = await ensureStoredOpenRouterProviderDuringInstall();
+  if (openRouterProviderRepair.status === 'updated') console.log('OpenRouter provider: repaired for the stored key (credentials and active model were preserved).');
+  else if (openRouterProviderRepair.status === 'present') console.log('OpenRouter provider: stored-key configuration already compatible.');
+  else if (openRouterProviderRepair.status === 'skipped') console.log('OpenRouter provider: no stored key; no provider configuration was added.');
+  else if (openRouterProviderRepair.status === 'failed') console.log('OpenRouter provider: stored key was preserved, but provider repair failed. Run `sks doctor --fix`.');
   const imagegenRepair = await ensureCodexImagegenDuringInstall();
   if (imagegenRepair.status === 'ready') console.log('Codex App Image Gen: ready ($imagegen/gpt-image-2 detected).');
   else if (imagegenRepair.status === 'recovered') console.log('Codex App Image Gen: recovered and re-detected. Start a new Codex/Work task; restart the desktop app only if the new task still lacks $imagegen.');
@@ -286,7 +292,7 @@ async function reportPostinstallCodexLbAuth(snapshot: any = null) {
 async function postinstallHarnessConflictNotice(conflictScan: any) {
   console.log('\nSneakoscope Codex package installed, but SKS setup is blocked.');
   console.log(formatHarnessConflictReport(conflictScan, { includePrompt: false }));
-  console.log('\nWhat this means: npm can finish installing the package. Conflicting OMX/DCodex markers are quarantined automatically by `sks setup`, `sks doctor --fix`, `sks update`, or `sks conflicts cleanup --yes`.');
+  console.log('\nWhat this means: npm can finish installing the package. Conflicting OMX/DCodex markers must be removed explicitly with `sks conflicts cleanup --yes` before `sks setup`, `sks doctor --fix`, or `sks update` can proceed.');
   console.log('No files were removed by postinstall.');
   console.log('Cleanup requires a human-approved Codex App session. Keep the model selected in Codex and use high reasoning effort.');
   if (shouldAskPostinstallQuestion()) {
@@ -2080,6 +2086,7 @@ export {
 } from './install-helpers-codex-lb-shared.js';
 export {
   ensureGlobalCodexAppGlmProfile,
+  ensureStoredOpenRouterProviderDuringInstall,
   upsertCodexAppGlmConfig,
   upsertCodexLbConfig
 } from './install-helpers-codex-lb-config.js';

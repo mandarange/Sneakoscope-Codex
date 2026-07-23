@@ -1,5 +1,22 @@
 import Cocoa
 
+final class RoleModelControls {
+    let role: String
+    let model = NSPopUpButton()
+    let reasoning = NSPopUpButton()
+    let current = NativeView.detail("Current: loading…")
+    let save: NSButton
+    let reset: NSButton
+
+    init(role: String, target: AnyObject) {
+        self.role = role
+        save = NativeView.button("Save", target: target, action: #selector(ProvidersViewController.saveRoleModel(_:)))
+        reset = NativeView.button("Reset", target: target, action: #selector(ProvidersViewController.resetRoleModel(_:)))
+        save.identifier = NSUserInterfaceItemIdentifier(role)
+        reset.identifier = NSUserInterfaceItemIdentifier(role)
+    }
+}
+
 final class ProvidersViewController: NSViewController, ControlCenterPage {
     private struct CodexLbReadiness {
         let selected: Bool
@@ -15,15 +32,31 @@ final class ProvidersViewController: NSViewController, ControlCenterPage {
     let processClient: ProcessClient
     let operations: OperationCoordinator
     let providerStatus = NativeView.detail("Provider status unchecked.")
-    let openRouterStatus = NativeView.detail("OpenRouter: checking…")
+    let openRouterCredentialStatus = NativeView.detail("Credential: checking…")
+    let openRouterActiveStatus = NativeView.detail("Active provider: checking…")
+    let openRouterCatalogStatus = NativeView.detail("Model catalog has not loaded yet.")
+    let openRouterStatus = NativeView.detail("No OpenRouter action has run yet.")
     let openRouterModelField: NSTextField = {
         let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24))
         field.placeholderString = "z-ai/glm-5.2"
         field.stringValue = "z-ai/glm-5.2"
+        field.setAccessibilityLabel("Manual OpenRouter model id")
+        field.setAccessibilityPlaceholderValue("provider/model")
         return field
     }()
-    private let fastStatus = NativeView.detail("Fast Mode: checking current desktop setting…")
-    private var actionButtons: [NSButton] = []
+    let openRouterModelPopup = NSPopUpButton()
+    let roleStatus = NativeView.detail("Role model settings are loading…")
+    let globalSpinner = NativeView.spinner(label: "Provider operation in progress")
+    let fastStatus = NativeView.detail("Fast Mode: checking current desktop setting…")
+    var roleRows: [String: RoleModelControls] = [:]
+    var actionButtons: [NSButton] = []
+    var openRouterModels: [String] = []
+    var supportedRoleProfiles: [(model: String, reasoning: String)] = []
+    var roleProfilesLoaded = false
+    weak var openRouterRefreshButton: NSButton?
+    weak var roleRefreshButton: NSButton?
+    var catalogRefreshInFlight = false
+    var roleRefreshInFlight = false
     var busy = false
 
     init(processClient: ProcessClient, operations: OperationCoordinator) {
@@ -39,27 +72,27 @@ final class ProvidersViewController: NSViewController, ControlCenterPage {
         let testConnection = NativeView.button("Test Connection", target: self, action: #selector(testConnection))
         let useOAuth = NativeView.button("Restore Chat / Pro (OAuth)", target: self, action: #selector(useOAuth))
         let useLb = NativeView.button("Use codex-lb", target: self, action: #selector(useCodexLb))
-        let saveOpenRouter = NativeView.button("Save OpenRouter key…", target: self, action: #selector(saveOpenRouterKey))
-        let useOpenRouter = NativeView.button("Use OpenRouter", target: self, action: #selector(useOpenRouter))
         let fastOn = NativeView.button("Fast Mode On", target: self, action: #selector(fastOn))
         let fastOff = NativeView.button("Fast Mode Off", target: self, action: #selector(fastOff))
-        actionButtons = [setDomain, replace, testConnection, useOAuth, useLb, saveOpenRouter, useOpenRouter, fastOn, fastOff]
-        let credentials = NSStackView(views: [setDomain, replace, testConnection])
-        credentials.orientation = .horizontal; credentials.spacing = 8
-        let buttons = NSStackView(views: [useOAuth, useLb, fastOn, fastOff])
-        buttons.orientation = .horizontal; buttons.spacing = 8
-        let openRouterModelLabel = NSTextField(labelWithString: "OpenRouter model")
-        let openRouterModelRow = NSStackView(views: [openRouterModelLabel, openRouterModelField])
-        openRouterModelRow.orientation = .horizontal; openRouterModelRow.spacing = 8
-        let openRouterButtons = NSStackView(views: [saveOpenRouter, useOpenRouter])
-        openRouterButtons.orientation = .horizontal; openRouterButtons.spacing = 8
-        view = NativeView.stack([
-            NativeView.title("Providers"),
-            NativeView.detail("Saving stores credentials only. Use codex-lb or Use OpenRouter activates the selected provider. OpenRouter accepts any model id (for example z-ai/glm-5.2). Keys travel through stdin and stay out of logs."),
-            credentials, providerStatus, buttons,
-            NativeView.detail("OpenRouter"),
-            openRouterStatus, openRouterModelRow, openRouterButtons,
-            fastStatus
+        useLb.setAccessibilityLabel("Activate codex-lb and restart Codex App")
+        useOAuth.setAccessibilityLabel("Restore ChatGPT OAuth and restart Codex App")
+        actionButtons = [setDomain, replace, testConnection, useOAuth, useLb, fastOn, fastOff]
+
+        let titleRow = NativeView.row([NativeView.title("Providers & Models"), globalSpinner])
+        let codexLb = NativeView.card(
+            title: "codex-lb",
+            subtitle: "Credentials and activation are separate. Test the saved endpoint before making codex-lb the active Codex provider.",
+            views: [providerStatus, NativeView.row([setDomain, replace, testConnection]), NativeView.row([useLb, useOAuth])]
+        )
+        let fast = NativeView.card(
+            title: "Fast Mode",
+            subtitle: "Controls the desktop service tier independently from the provider and model selection.",
+            views: [fastStatus, NativeView.row([fastOn, fastOff])]
+        )
+        view = NativeView.page([
+            titleRow,
+            NativeView.detail("Save credentials, verify connectivity, then explicitly activate a provider. Secrets are sent through stdin and redacted from logs."),
+            makeOpenRouterCard(), codexLb, makeRoleModelsCard(), fast
         ])
         refresh()
     }
@@ -69,6 +102,13 @@ final class ProvidersViewController: NSViewController, ControlCenterPage {
     func setBusy(_ value: Bool) {
         busy = value
         for button in actionButtons { button.isEnabled = !value }
+        openRouterModelField.isEnabled = !value
+        openRouterModelPopup.isEnabled = !value && !openRouterModels.isEmpty
+        openRouterRefreshButton?.isEnabled = !value && !catalogRefreshInFlight
+        roleRefreshButton?.isEnabled = !value && !roleRefreshInFlight
+        updateRoleControlAvailability()
+        if value { globalSpinner.startAnimation(nil) }
+        else { globalSpinner.stopAnimation(nil) }
     }
 
     private func run(_ args: [String], title: String, kind: String, group: String?, timeout: TimeInterval = NativeView.mutationTimeout, completion: (() -> Void)? = nil) {
@@ -111,6 +151,8 @@ final class ProvidersViewController: NSViewController, ControlCenterPage {
             if !self.busy { self.providerStatus.stringValue = self.describeProviderStatus(json) }
         }
         refreshOpenRouterStatus()
+        if openRouterModels.isEmpty { refreshOpenRouterModels() }
+        refreshRoleModels()
         refreshFastStatus()
     }
 
@@ -342,7 +384,7 @@ final class ProvidersViewController: NSViewController, ControlCenterPage {
                 self.setBusy(false)
                 let ok = result.code == 0
                 _ = self.operations.update(snapshot, state: ok ? .succeeded : .failed, stage: "complete", progress: 1, summary: ok ? successSummary : failSummary)
-                if !ok { statusLabel.stringValue = "\(failSummary) · \(NativeView.redactPreview(result.output))" }
+                statusLabel.stringValue = ok ? "\(successSummary). Next: test or activate explicitly." : "\(failSummary) · \(NativeView.redactPreview(result.output))"
                 self.refresh()
             }
         }

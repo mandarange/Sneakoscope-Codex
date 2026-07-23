@@ -3030,7 +3030,7 @@
     },
     {
       "id": "test:menubar-doctor",
-      "command": "node --test --test-concurrency=1 dist/core/codex-app/__tests__/*.test.js dist/core/doctor/__tests__/*.test.js",
+      "command": "node --test --test-concurrency=1 dist/core/codex-app/__tests__/*.test.js dist/core/providers/openrouter/__tests__/openrouter-account.test.js dist/core/doctor/__tests__/*.test.js",
       "deps": [],
       "resource": [
         "cpu-heavy",
@@ -3045,8 +3045,11 @@
           "release-gates.v2.json",
           "src/commands/doctor.ts",
           "src/cli/install-helpers.ts",
-          "src/core/codex-app/**",
-          "src/core/doctor/**",
+        "src/core/codex-app/**",
+        "src/core/providers/openrouter/openrouter-account.ts",
+        "src/core/providers/openrouter/openrouter-error.ts",
+        "src/core/providers/openrouter/__tests__/openrouter-account.test.ts",
+        "src/core/doctor/**",
           "src/core/init.ts",
           "src/core/init/**",
           "src/core/subagents/official-subagent-config.ts"
@@ -3064,7 +3067,7 @@
     },
     {
       "id": "test:official-subagent-policy",
-      "command": "node --test --test-concurrency=1 dist/core/subagents/__tests__/official-subagent-config.test.js dist/core/subagents/__tests__/model-policy.test.js dist/core/subagents/__tests__/task-profile.test.js dist/core/subagents/__tests__/thread-budget-and-plan.test.js dist/core/subagents/__tests__/agent-catalog-fanout.test.js dist/core/subagents/__tests__/official-subagent-prompt.test.js dist/core/__tests__/naruto-route-reasoning.test.js dist/core/commands/__tests__/naruto-command-glm-block.test.js dist/cli/__tests__/router-active-naruto.test.js dist/core/release/__tests__/release-gate-affected-selector.test.js",
+      "command": "node --test --test-concurrency=1 dist/core/subagents/__tests__/official-subagent-config.test.js dist/core/subagents/__tests__/model-policy.test.js dist/core/subagents/__tests__/task-profile.test.js dist/core/subagents/__tests__/thread-budget-and-plan.test.js dist/core/subagents/__tests__/agent-catalog-fanout.test.js dist/core/subagents/__tests__/official-subagent-prompt.test.js dist/core/subagents/__tests__/role-model-preferences.test.js dist/core/__tests__/naruto-route-reasoning.test.js dist/core/commands/__tests__/naruto-command-glm-block.test.js dist/cli/__tests__/router-active-naruto.test.js dist/core/release/__tests__/release-gate-affected-selector.test.js",
       "deps": [],
       "resource": [
         "cpu-light",
@@ -3082,14 +3085,16 @@
           "src/core/subagents/thread-budget.ts",
           "src/core/subagents/agent-catalog.ts",
           "src/core/subagents/official-subagent-prompt.ts",
-          "src/core/subagents/official-subagent-preparation.ts",
-          "src/core/subagents/naruto-help-contract.ts",
+        "src/core/subagents/official-subagent-preparation.ts",
+        "src/core/subagents/role-model-preferences.ts",
+        "src/core/subagents/naruto-help-contract.ts",
           "src/core/subagents/__tests__/official-subagent-config.test.ts",
           "src/core/subagents/__tests__/model-policy.test.ts",
           "src/core/subagents/__tests__/task-profile.test.ts",
           "src/core/subagents/__tests__/thread-budget-and-plan.test.ts",
           "src/core/subagents/__tests__/agent-catalog-fanout.test.ts",
-          "src/core/subagents/__tests__/official-subagent-prompt.test.ts",
+        "src/core/subagents/__tests__/official-subagent-prompt.test.ts",
+        "src/core/subagents/__tests__/role-model-preferences.test.ts",
           "src/core/runtime/task-profile.ts",
           "src/core/routes.ts",
           "src/core/routes/**",
@@ -3117,7 +3122,7 @@
     },
     {
       "id": "test:codex-runtime-recovery",
-      "command": "node ./dist/scripts/codex-control-tool-output-continuity-audit-check.js && node --test --test-concurrency=1 dist/core/codex-control/__tests__/*.test.js dist/core/codex-lb/__tests__/*.test.js dist/core/codex/__tests__/*.test.js dist/core/hooks-runtime/__tests__/official-light-turn-hooks.test.js",
+      "command": "node ./dist/scripts/codex-control-tool-output-continuity-audit-check.js && node --test --test-concurrency=1 dist/core/codex-control/__tests__/*.test.js dist/core/codex-lb/__tests__/*.test.js dist/core/codex/__tests__/*.test.js dist/core/hooks-runtime/__tests__/official-light-turn-hooks.test.js dist/core/hooks-runtime/__tests__/subagent-context-transfer.test.js",
       "deps": [],
       "resource": [
         "cpu-light",

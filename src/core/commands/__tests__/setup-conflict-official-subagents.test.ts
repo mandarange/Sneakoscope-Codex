@@ -6,6 +6,7 @@ import path from 'node:path'
 import { dispatch } from '../../../cli/router.js'
 import { fixPathCommand, setupCommand } from '../basic-cli.js'
 import { run as doctorRun } from '../../../commands/doctor.js'
+import { cleanupOtherHarnessConflicts } from '../../harness-conflicts.js'
 import { MANAGED_OFFICIAL_SUBAGENT_ROLES } from '../../managed-assets/managed-assets-manifest.js'
 
 async function withTempProject(prefix: string, fn: (root: string) => Promise<void>) {
@@ -38,19 +39,37 @@ async function withTempProject(prefix: string, fn: (root: string) => Promise<voi
   }
 }
 
-test('setup quarantines OMX before creating SKS files', async () => {
+test('setup blocks OMX conflict without project writes', async () => {
   await withTempProject('sks-setup-conflict-', async (root) => {
     await fs.mkdir(path.join(root, '.omx'))
+    const result: any = await setupCommand(['--local-only', '--skip-cli-tools', '--json'])
+    assert.equal(result.ok, false)
+    assert.equal(result.status, 'blocked_harness_conflict')
+    assert.equal(result.cleanup_prompt_command, 'sks conflicts cleanup --yes')
+    assert.equal(result.other_harness_cleanup, undefined)
+    await fs.access(path.join(root, '.omx'))
+    await assert.rejects(fs.access(path.join(root, '.sneakoscope')))
+  })
+})
+
+test('setup proceeds after explicit conflicts cleanup', async () => {
+  await withTempProject('sks-setup-conflict-cleanup-', async (root) => {
+    await fs.mkdir(path.join(root, '.omx'))
+    const blocked: any = await setupCommand(['--local-only', '--skip-cli-tools', '--json'])
+    assert.equal(blocked.status, 'blocked_harness_conflict')
+
+    const cleanup = await cleanupOtherHarnessConflicts(root, { home: process.env.HOME })
+    assert.equal(cleanup.ok, true)
+
     const result: any = await setupCommand(['--local-only', '--skip-cli-tools', '--json'])
     assert.equal(result.ok, true)
     assert.notEqual(result.status, 'blocked_harness_conflict')
     await assert.rejects(fs.access(path.join(root, '.omx')))
     await fs.access(path.join(root, '.sneakoscope'))
-    assert.ok(result.other_harness_cleanup?.cleaned?.length >= 1)
   })
 })
 
-test('setup dispatch quarantines OMX before first-command migration write', async () => {
+test('setup dispatch blocks OMX before first-command migration write', async () => {
   await withTempProject('sks-setup-dispatch-conflict-', async (root) => {
     const oldGlobalRoot = process.env.SKS_GLOBAL_ROOT
     const oldRequireReceipt = process.env.SKS_REQUIRE_UPDATE_MIGRATION_RECEIPT
@@ -63,10 +82,10 @@ test('setup dispatch quarantines OMX before first-command migration write', asyn
       await fs.mkdir(path.join(root, '.omx'))
 
       const result: any = await dispatch(['setup', '--local-only', '--skip-cli-tools', '--json'])
-      assert.equal(result.ok, true)
-      assert.notEqual(result.status, 'blocked_harness_conflict')
-      await assert.rejects(fs.access(path.join(root, '.omx')))
-      await fs.access(path.join(root, '.sneakoscope'))
+      assert.equal(result.ok, false)
+      assert.equal(result.status, 'blocked_harness_conflict')
+      await fs.access(path.join(root, '.omx'))
+      await assert.rejects(fs.access(path.join(root, '.sneakoscope')))
     } finally {
       restoreEnv('SKS_GLOBAL_ROOT', oldGlobalRoot)
       restoreEnv('SKS_REQUIRE_UPDATE_MIGRATION_RECEIPT', oldRequireReceipt)
@@ -75,15 +94,18 @@ test('setup dispatch quarantines OMX before first-command migration write', asyn
   })
 })
 
-test('doctor --fix quarantines DCodex before repair writes', async () => {
+test('doctor --fix blocks DCodex conflict without repair writes', async () => {
   await withTempProject('sks-doctor-conflict-', async (root) => {
     await fs.mkdir(path.join(root, '.dcodex'))
-    await doctorRun('doctor', ['--fix', '--json'])
-    await assert.rejects(fs.access(path.join(root, '.dcodex')))
+    const result: any = await doctorRun('doctor', ['--fix', '--json'])
+    assert.equal(result.ok, false)
+    assert.equal(result.status, 'blocked_harness_conflict')
+    assert.equal(result.no_fix_writes_performed, true)
+    await fs.access(path.join(root, '.dcodex'))
   })
 })
 
-test('setup strips OMX markers from the active custom CODEX_HOME before writes', async () => {
+test('setup blocks OMX markers in the active custom CODEX_HOME without writes', async () => {
   await withTempProject('sks-setup-custom-codex-home-conflict-', async (root) => {
     const customCodexHome = path.join(root, 'custom-codex-home')
     process.env.CODEX_HOME = customCodexHome
@@ -91,25 +113,27 @@ test('setup strips OMX markers from the active custom CODEX_HOME before writes',
     await fs.writeFile(path.join(customCodexHome, 'config.toml'), '[harness]\nname = "omx"\nmodel = "keep-me"\n')
 
     const result: any = await setupCommand(['--local-only', '--skip-cli-tools', '--json'])
-    assert.equal(result.ok, true)
-    assert.notEqual(result.status, 'blocked_harness_conflict')
+    assert.equal(result.ok, false)
+    assert.equal(result.status, 'blocked_harness_conflict')
     const config = await fs.readFile(path.join(customCodexHome, 'config.toml'), 'utf8')
-    assert.doesNotMatch(config, /omx/i)
+    assert.match(config, /omx/i)
     assert.match(config, /keep-me/)
-    await fs.access(path.join(root, '.sneakoscope'))
+    await assert.rejects(fs.access(path.join(root, '.sneakoscope')))
   })
 })
 
-test('doctor --fix strips DCodex markers from the active custom CODEX_HOME before writes', async () => {
+test('doctor --fix blocks DCodex markers in the active custom CODEX_HOME without writes', async () => {
   await withTempProject('sks-doctor-custom-codex-home-conflict-', async (root) => {
     const customCodexHome = path.join(root, 'custom-codex-home')
     process.env.CODEX_HOME = customCodexHome
     await fs.mkdir(customCodexHome, { recursive: true })
     await fs.writeFile(path.join(customCodexHome, 'config.toml'), '[harness]\nname = "dcodex"\nmodel = "keep-me"\n')
 
-    await doctorRun('doctor', ['--fix', '--json'])
+    const result: any = await doctorRun('doctor', ['--fix', '--json'])
+    assert.equal(result.ok, false)
+    assert.equal(result.status, 'blocked_harness_conflict')
     const config = await fs.readFile(path.join(customCodexHome, 'config.toml'), 'utf8')
-    assert.doesNotMatch(config, /dcodex/i)
+    assert.match(config, /dcodex/i)
     assert.match(config, /keep-me/)
   })
 })

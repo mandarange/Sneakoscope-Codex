@@ -5,6 +5,10 @@ protocol ControlCenterPage: AnyObject {
     func refreshOnAppear()
 }
 
+final class TopAlignedStackView: NSStackView {
+    override var isFlipped: Bool { true }
+}
+
 enum NativeView {
     static let statusTimeout: TimeInterval = 8
     static let mutationTimeout: TimeInterval = 90
@@ -22,6 +26,12 @@ enum NativeView {
         return field
     }
 
+    static func sectionTitle(_ value: String) -> NSTextField {
+        let field = NSTextField(labelWithString: value)
+        field.font = NSFont.systemFont(ofSize: 14, weight: .semibold)
+        return field
+    }
+
     static func button(_ title: String, target: AnyObject, action: Selector) -> NSButton {
         let button = NSButton(title: title, target: target, action: action)
         button.bezelStyle = .rounded
@@ -30,12 +40,65 @@ enum NativeView {
     }
 
     static func stack(_ views: [NSView]) -> NSStackView {
-        let stack = NSStackView(views: views)
+        let stack = TopAlignedStackView(views: views)
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 12
         stack.edgeInsets = NSEdgeInsets(top: 22, left: 24, bottom: 22, right: 24)
         return stack
+    }
+
+    static func page(_ views: [NSView]) -> NSStackView {
+        let stack = stack(views)
+        stack.alignment = .width
+        return stack
+    }
+
+    static func row(_ views: [NSView], spacing: CGFloat = 8) -> NSStackView {
+        let row = NSStackView(views: views)
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = spacing
+        return row
+    }
+
+    static func card(title: String, subtitle: String, views: [NSView]) -> NSBox {
+        let box = NSBox()
+        box.boxType = .custom
+        box.titlePosition = .noTitle
+        box.cornerRadius = 10
+        box.borderWidth = 1
+        box.borderColor = .separatorColor
+        box.fillColor = .controlBackgroundColor
+
+        let heading = sectionTitle(title)
+        let help = detail(subtitle)
+        let content = NSStackView(views: [heading, help] + views)
+        content.orientation = .vertical
+        content.alignment = .width
+        content.spacing = 10
+        content.edgeInsets = NSEdgeInsets(top: 16, left: 16, bottom: 16, right: 16)
+        content.translatesAutoresizingMaskIntoConstraints = false
+        box.contentView?.addSubview(content)
+        if let host = box.contentView {
+            NSLayoutConstraint.activate([
+                content.leadingAnchor.constraint(equalTo: host.leadingAnchor),
+                content.trailingAnchor.constraint(equalTo: host.trailingAnchor),
+                content.topAnchor.constraint(equalTo: host.topAnchor),
+                content.bottomAnchor.constraint(equalTo: host.bottomAnchor)
+            ])
+        }
+        box.setAccessibilityLabel(title)
+        return box
+    }
+
+    static func spinner(label: String) -> NSProgressIndicator {
+        let indicator = NSProgressIndicator()
+        indicator.style = .spinning
+        indicator.controlSize = .small
+        indicator.isDisplayedWhenStopped = false
+        indicator.setAccessibilityLabel(label)
+        return indicator
     }
 
     static func scrollable(_ document: NSView) -> NSScrollView {
@@ -185,7 +248,7 @@ enum OverviewSummary {
         guard let latest = nonEmpty(value?["latest"] as? String) else { return current }
         if value?["update_available"] as? Bool == true, latest != current { return "\(current) → \(latest) available" }
         if latest == current { return "\(current) (current)" }
-        return "\(current) · latest \(latest)"
+        return "\(current) · registry last seen \(latest)"
     }
 
     private static func codexUpdateInducement(_ value: [String: Any]?) -> String? {
@@ -325,8 +388,17 @@ final class OverviewViewController: NSViewController, ControlCenterPage {
         if forceUpdateRefresh { updateArguments.append("--refresh") }
         updateArguments.append("--json")
         processClient.run(updateArguments, timeout: NativeView.statusTimeout) { [weak self] result in
-            update = result.code == 0 ? self?.json(result.output) : nil
-            group.leave()
+            guard let self = self else { group.leave(); return }
+            let initial = self.json(result.output)
+            guard !forceUpdateRefresh, self.updateSnapshotNeedsRefresh(initial) else {
+                update = initial
+                group.leave()
+                return
+            }
+            self.processClient.run(["update", "status", "--refresh", "--json"], timeout: NativeView.statusTimeout) { [weak self] refreshed in
+                update = self?.json(refreshed.output) ?? initial
+                group.leave()
+            }
         }
         group.enter()
         processClient.run([
@@ -381,6 +453,15 @@ final class OverviewViewController: NSViewController, ControlCenterPage {
             codexRunning: codexRunning,
             operationSummary: operationSummary
         )
+    }
+
+    private func updateSnapshotNeedsRefresh(_ update: [String: Any]?) -> Bool {
+        guard let update = update,
+              let sks = update["sks"] as? [String: Any],
+              let menu = update["menubar"] as? [String: Any] else { return true }
+        let installed = sks["current"] as? String
+        let expected = menu["expected_version"] as? String
+        return installed != AppRuntime.packageVersion || expected != AppRuntime.packageVersion
     }
 
     private func recentOperationSummary(_ operation: OperationSnapshot?) -> String {

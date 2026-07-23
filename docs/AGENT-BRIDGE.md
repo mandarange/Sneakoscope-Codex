@@ -146,7 +146,9 @@ host_capability_schema = sks.host-capabilities.v1
 
 Within a schema major, SKS preserves required keys, field types, and enum
 meanings; additive optional fields and new capabilities are allowed. A breaking
-change requires a new version of the affected schema. `compatibility.package_version`
+change requires a new version of the affected schema. For `sks.agent-manifest.v1`,
+`compatibility` and `host_capabilities` are required blocks; validators fail closed
+when either is missing. `compatibility.package_version`
 reports the running package version for diagnostics only: hosts must not use it
 for exact-version checks, semver ranges, admission, branching, support lists,
 or binary fallback.

@@ -3,12 +3,16 @@ import { codexLbConfigPath, ensureGlobalCodexAppGlmProfile } from '../../cli/ins
 import { readText, writeJsonAtomic, nowIso, rmrf } from '../fsx.js';
 import {
   OPENROUTER_DEFAULT_PROFILE_ID,
+  OPENROUTER_AUTH_COMMAND,
+  OPENROUTER_AUTH_REFRESH_INTERVAL_MS,
+  OPENROUTER_AUTH_TIMEOUT_MS,
+  openRouterAuthCommandArgs,
   OPENROUTER_PROVIDER_ID,
   RETIRED_GLM_DESKTOP_CONFIG_PROFILE_IDS,
   buildGlmCodexAppModelProfile,
   type SksCodexAppModelProfile
 } from './openrouter-provider.js';
-import { resolveOpenRouterApiKey } from '../providers/openrouter/openrouter-secret-store.js';
+import { openRouterSecretPaths, resolveOpenRouterApiKey } from '../providers/openrouter/openrouter-secret-store.js';
 
 type CodexAppGlmConfigWrite = Awaited<ReturnType<typeof ensureGlobalCodexAppGlmProfile>>;
 
@@ -17,6 +21,7 @@ interface CodexAppGlmConfigStatus {
   readonly ok: boolean;
   readonly config_path: string;
   readonly provider_present: boolean;
+  readonly provider_auth_present: boolean;
   readonly profiles_present: readonly string[];
   readonly profiles_missing: readonly string[];
   readonly retired_profiles_remaining: readonly string[];
@@ -60,14 +65,14 @@ export async function installCodexAppGlmProfile(input: {
   const home = input.home || input.env?.HOME;
   const configWrite = input.apply === false
     ? null
-    : await ensureGlobalCodexAppGlmProfile({ home, configPath: input.configPath });
+    : await ensureGlobalCodexAppGlmProfile({ home, configPath: input.configPath, env: input.env });
   if (input.apply !== false) {
     await rmrf(profilePath).catch(() => undefined);
     await rmrf(reportPath).catch(() => undefined);
   }
   const configStatus = input.apply === false
-    ? await previewCodexAppGlmConfigStatus({ home, configPath: input.configPath })
-    : await inspectCodexAppOpenRouterConfig({ home, configPath: input.configPath });
+    ? await previewCodexAppGlmConfigStatus({ home, configPath: input.configPath, ...(input.env ? { env: input.env } : {}) })
+    : await inspectCodexAppOpenRouterConfig({ home, configPath: input.configPath, ...(input.env ? { env: input.env } : {}) });
   const configWriteBlockers = configWrite?.ok === false
     ? [`glm_codex_app_config_${configWrite.status || 'failed'}`]
     : [];
@@ -114,7 +119,7 @@ export async function doctorCodexAppGlmProfile(input: {
   const key = await resolveOpenRouterApiKey({ env: input.env || process.env });
   const profile = buildGlmCodexAppModelProfile();
   const home = input.home || input.env?.HOME;
-  const configStatus = await inspectCodexAppOpenRouterConfig({ home, configPath: input.configPath });
+  const configStatus = await inspectCodexAppOpenRouterConfig({ home, configPath: input.configPath, ...(input.env ? { env: input.env } : {}) });
   const leftoverMeta = await readText(profilePath, '').catch(() => '');
   const blockers = [
     ...configStatus.blockers,
@@ -146,13 +151,14 @@ export async function doctorCodexAppGlmProfile(input: {
   return result;
 }
 
-async function previewCodexAppGlmConfigStatus(input: { readonly home?: string | undefined; readonly configPath?: string | undefined }): Promise<CodexAppGlmConfigStatus> {
+async function previewCodexAppGlmConfigStatus(input: { readonly home?: string | undefined; readonly configPath?: string | undefined; readonly env?: NodeJS.ProcessEnv }): Promise<CodexAppGlmConfigStatus> {
   const configPath = input.configPath || codexLbConfigPath(input.home);
   return {
     schema: 'sks.codex-app-glm-config-status.v1',
     ok: true,
     config_path: configPath,
     provider_present: false,
+    provider_auth_present: false,
     profiles_present: [],
     profiles_missing: [],
     retired_profiles_remaining: [],
@@ -160,18 +166,31 @@ async function previewCodexAppGlmConfigStatus(input: { readonly home?: string | 
   };
 }
 
-async function inspectCodexAppOpenRouterConfig(input: { readonly home?: string | undefined; readonly configPath?: string | undefined }): Promise<CodexAppGlmConfigStatus> {
+async function inspectCodexAppOpenRouterConfig(input: { readonly home?: string | undefined; readonly configPath?: string | undefined; readonly env?: NodeJS.ProcessEnv }): Promise<CodexAppGlmConfigStatus> {
   const configPath = input.configPath || codexLbConfigPath(input.home);
   const text = await readText(configPath, '').catch(() => '');
   const providerBody = tomlTableBody(text, `model_providers.${OPENROUTER_PROVIDER_ID}`);
   const providerPresent = Boolean(providerBody);
+  const authBody = tomlTableBody(text, `model_providers.${OPENROUTER_PROVIDER_ID}.auth`);
+  const providerAuthPresent = Boolean(authBody);
+  const providerEnvKeyPresent = hasTomlKey(providerBody, 'env_key');
+  const authEnv = { ...(input.env || process.env), ...(input.home ? { HOME: input.home } : {}) };
+  const authArgs = openRouterAuthCommandArgs(openRouterSecretPaths(authEnv).keyPath);
   const blockers: string[] = [];
   if (!providerPresent) {
     blockers.push('glm_codex_app_config_missing_openrouter_provider');
   } else {
     if (!hasTomlString(providerBody, 'base_url', 'https://openrouter.ai/api/v1')) blockers.push('glm_codex_app_config_invalid_openrouter_base_url');
     if (!hasTomlString(providerBody, 'wire_api', 'responses')) blockers.push('glm_codex_app_config_invalid_openrouter_wire_api');
-    if (!hasTomlString(providerBody, 'env_key', 'OPENROUTER_API_KEY')) blockers.push('glm_codex_app_config_invalid_openrouter_env_key');
+    if (providerEnvKeyPresent) blockers.push('glm_codex_app_config_openrouter_auth_env_key_conflict');
+  }
+  if (!providerAuthPresent) {
+    blockers.push('glm_codex_app_config_missing_openrouter_auth');
+  } else {
+    if (!hasTomlString(authBody, 'command', OPENROUTER_AUTH_COMMAND)) blockers.push('glm_codex_app_config_invalid_openrouter_auth_command');
+    if (!hasTomlStringArray(authBody, 'args', authArgs)) blockers.push('glm_codex_app_config_invalid_openrouter_auth_args');
+    if (!hasTomlInteger(authBody, 'timeout_ms', OPENROUTER_AUTH_TIMEOUT_MS)) blockers.push('glm_codex_app_config_invalid_openrouter_auth_timeout');
+    if (!hasTomlInteger(authBody, 'refresh_interval_ms', OPENROUTER_AUTH_REFRESH_INTERVAL_MS)) blockers.push('glm_codex_app_config_invalid_openrouter_auth_refresh');
   }
   const retiredRemaining: string[] = [];
   for (const profileId of RETIRED_GLM_DESKTOP_CONFIG_PROFILE_IDS) {
@@ -185,6 +204,7 @@ async function inspectCodexAppOpenRouterConfig(input: { readonly home?: string |
     ok: blockers.length === 0,
     config_path: configPath,
     provider_present: providerPresent,
+    provider_auth_present: providerAuthPresent,
     profiles_present: [],
     profiles_missing: [],
     retired_profiles_remaining: retiredRemaining,
@@ -209,6 +229,19 @@ function tomlTableBody(text: string, table: string): string {
 function hasTomlString(text: string, key: string, value: string): boolean {
   const pattern = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=\\s*"${escapeRegExp(value)}"\\s*(?:#.*)?$`, 'm');
   return pattern.test(text);
+}
+
+function hasTomlKey(text: string, key: string): boolean {
+  return new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`, 'm').test(text);
+}
+
+function hasTomlStringArray(text: string, key: string, values: readonly string[]): boolean {
+  const expected = values.map((value) => JSON.stringify(value)).join(', ');
+  return new RegExp(`^\\s*${escapeRegExp(key)}\\s*=\\s*\\[${escapeRegExp(expected)}\\]\\s*(?:#.*)?$`, 'm').test(text);
+}
+
+function hasTomlInteger(text: string, key: string, value: number): boolean {
+  return new RegExp(`^\\s*${escapeRegExp(key)}\\s*=\\s*${value}\\s*(?:#.*)?$`, 'm').test(text);
 }
 
 function escapeRegExp(value: string): string {

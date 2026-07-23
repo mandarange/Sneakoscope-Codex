@@ -49,7 +49,9 @@ import {
 import {
   authoritativeSksSkillResolutionBlockers,
   clearSubagentSkillAvailabilityGuards,
+  isSubagentSkillAvailabilityAdmissionMissingReason,
   persistSubagentSkillAvailabilityBlocker,
+  recoverResumedOfficialSubagentSkillAvailabilityAdmission,
   renderSubagentSkillAvailabilityHandoff,
   subagentSkillAvailabilityPreToolBlockReason
 } from './hooks-runtime/subagent-skill-availability.js';
@@ -104,6 +106,7 @@ import {
   activeAuthoritativeSksSkillRefresh,
   activeGoalOverlayContext,
   attachAuthoritativeSksSkillContext,
+  attachOfficialSubagentSpawnCompatibilityContext,
   authoritativeSksSkillAdmission,
   hookActiveSkillContextRefresh,
   isBlockingClarificationAwaiting,
@@ -120,7 +123,6 @@ import {
 } from './hooks-runtime/subagent-context.js';
 export { loadHookPayload, normalizeHookResult };
 export { refreshOfficialSubagentCompletionArtifacts };
-
 async function loadState(root: any, payload: any = {}) {
   const sessionKey = conversationId(payload);
   if (!explicitConversationId(payload)) return loadStateForSession(root, sessionKey);
@@ -128,18 +130,15 @@ async function loadState(root: any, payload: any = {}) {
   const sessionState = await readJson(stateFileForSession(root, sessionKey), null).catch(() => null);
   return sessionState ? { ...sessionState, _session_key: sessionState._session_key || hashed } : {};
 }
-
 function isNoQuestionRunning(state: any) {
   return (state.mode === 'RESEARCH' && state.phase === 'RESEARCH_RUNNING_NO_QUESTIONS')
     || (state.mode === 'QALOOP' && state.phase === 'QALOOP_RUNNING_NO_QUESTIONS');
 }
-
 export async function hookMain(name: any): Promise<JsonData> {
   const payload = await loadHookPayload();
   const root = await projectRoot(payload.cwd || process.cwd());
   return evaluateHookPayloadOnce(name, payload, { root });
 }
-
 export async function evaluateHookPayloadOnce(name: any, payload: any = {}, opts: any = {}): Promise<JsonData> {
   const root = opts.root || await projectRoot(payload.cwd || process.cwd());
   if (name === 'user-prompt-submit' && hookPayloadIsLightTurnCandidate(payload)) {
@@ -149,7 +148,6 @@ export async function evaluateHookPayloadOnce(name: any, payload: any = {}, opts
   if (claim.duplicate) return { continue: true, suppressedDuplicate: true };
   return evaluateHookPayload(name, payload, { root });
 }
-
 function hookPayloadIsLightTurnCandidate(payload: any = {}) {
   const prompt = stripVisibleDecisionAnswerBlocks(extractUserPrompt(payload));
   if (dollarCommand(prompt)) return false;
@@ -157,7 +155,6 @@ function hookPayloadIsLightTurnCandidate(payload: any = {}) {
   if (profile === 'passthrough') return true;
   return routePrompt(prompt)?.id === 'Answer';
 }
-
 export async function evaluateHookPayload(name: any, payload: any = {}, opts: any = {}): Promise<JsonData> {
   const root = opts.root || await projectRoot(payload.cwd || process.cwd());
   const sessionKey = conversationId(payload);
@@ -194,7 +191,8 @@ export async function evaluateHookPayload(name: any, payload: any = {}, opts: an
   const withNarutoDecision = (result: any) => ({ ...result, sksNarutoDecision });
   if (name === 'user-prompt-submit') {
     const result = await hookUserPrompt(root, state, payload, noQuestion, sessionKey);
-    return withNarutoDecision(await attachAuthoritativeSksSkillContext(root, state, payload, result));
+    const withSkillContext = await attachAuthoritativeSksSkillContext(root, state, payload, result);
+    return withNarutoDecision(attachOfficialSubagentSpawnCompatibilityContext(state, payload, withSkillContext));
   }
   if (name === 'session-start' || name === 'pre-compact' || name === 'post-compact') {
     return withNarutoDecision(await hookActiveSkillContextRefresh(root, state, name));
@@ -207,7 +205,6 @@ export async function evaluateHookPayload(name: any, payload: any = {}, opts: an
   if (name === 'subagent-stop') return withNarutoDecision(await hookSubagentStop(root, state, payload, sessionKey));
   return withNarutoDecision({ continue: true });
 }
-
 async function hookSubagentStart(root: any, state: any, payload: any = {}, sessionKey: any = null) {
   const artifactDir = officialSubagentArtifactDir(root, state, sessionKey);
   const sessionArtifactDir = officialSubagentArtifactDir(root, {}, sessionKey);
@@ -267,7 +264,6 @@ async function hookSubagentStart(root: any, state: any, payload: any = {}, sessi
   const additionalContext = [coreEngineeringDirectiveReferenceText(), resourceGuard, routingContext, active, skillContext].filter(Boolean).join('\n\n');
   return { continue: true, additionalContext, ...(skillBlockers.length ? { silent: true } : {}) };
 }
-
 async function hookSubagentStop(root: any, state: any, payload: any = {}, sessionKey: any = null) {
   await recordAndRefreshSubagentEvidence(root, state, payload, 'SubagentStop', sessionKey).catch(() => null);
   await clearSubagentSkillAvailabilityGuards(
@@ -279,7 +275,6 @@ async function hookSubagentStop(root: any, state: any, payload: any = {}, sessio
   // Stop hook's route gate or block a child thread from returning its result.
   return { continue: true, silent: true };
 }
-
 async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: any, sessionKey: any = null) {
   // A receipt is scoped to exactly one submitted turn. Every later prompt,
   // including Codex App git/settings events, invalidates it before returning.
@@ -414,7 +409,6 @@ async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: a
         systemMessage: visibleHookMessage('user-prompt-submit', activeContext)
       };
     }
-
     const updateContext = '';
     const command = dollarCommand(prompt);
     const route = routePrompt(prompt);
@@ -468,22 +462,35 @@ async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: a
     reason: 'SKS no-question/no-interruption mode is active. User prompt has been queued until the run completes.'
   };
 }
-
 async function hookPreTool(root: any, state: any, payload: any, noQuestion: any, sessionKey: any = null) {
-  const skillAvailabilityBlock = await subagentSkillAvailabilityPreToolBlockReason(
+  const artifactDir = officialSubagentArtifactDir(root, state, sessionKey);
+  const activeBinding = {
+    missionId: state?.mission_id,
+    workflowRunId: state?.official_subagent_run_id
+  };
+  const evaluateSkillAvailabilityBlock = () => subagentSkillAvailabilityPreToolBlockReason(
     root,
     payload,
-    officialSubagentArtifactDir(root, state, sessionKey),
-    {
-      missionId: state?.mission_id,
-      workflowRunId: state?.official_subagent_run_id
-    }
+    artifactDir,
+    activeBinding
   ).catch((error: unknown) => {
     const code = error instanceof Error && error.message === 'subagent_skill_availability_guard_invalid'
       ? 'subagent_skill_availability_guard_invalid'
       : 'subagent_skill_availability_guard_check_failed';
     return `SKS blocked this child tool call because managed skill availability failed (${code}). Return the blocker to the root parent without using tools.`;
   });
+  let skillAvailabilityBlock = await evaluateSkillAvailabilityBlock();
+  if (isSubagentSkillAvailabilityAdmissionMissingReason(skillAvailabilityBlock)) {
+    const recovered = await recoverResumedOfficialSubagentSkillAvailabilityAdmission({
+      root,
+      payload,
+      artifactDir,
+      sessionArtifactDir: officialSubagentArtifactDir(root, {}, sessionKey),
+      activeBinding,
+      skillNames: selectedSksSkillNamesForActiveState(state)
+    }).catch(() => false);
+    if (recovered) skillAvailabilityBlock = await evaluateSkillAvailabilityBlock();
+  }
   if (skillAvailabilityBlock) {
     return { decision: 'block', permissionDecision: 'deny', reason: skillAvailabilityBlock };
   }

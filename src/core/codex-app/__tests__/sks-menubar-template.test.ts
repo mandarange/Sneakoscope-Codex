@@ -239,6 +239,22 @@ struct OverviewHarness {
         precondition(partial.contains("Updates: unavailable"))
         precondition(partial.contains("MCP: unavailable"))
         precondition(partial.contains("Telegram Hub: unavailable · Remote fleet: unavailable"))
+
+        let aheadOfRegistry: [String: Any] = [
+            "schema": "sks.update-status.v3",
+            "source": "stale",
+            "sks": ["current": "7.1.0", "latest": "7.0.5", "update_available": false],
+            "codex_cli": ["current": "0.145.0", "latest": "0.145.0", "update_available": false],
+            "menubar": ["expected_version": "7.1.0", "rebuild_required": false],
+            "update_count": 0,
+            "warnings": [],
+            "public_error": NSNull()
+        ]
+        let aheadRendered = OverviewSummary.render(
+            update: aheadOfRegistry, mcp: nil, telegram: nil,
+            menuBarBuild: "7.1.0", codexRunning: true, operationSummary: "None recorded"
+        )
+        precondition(aheadRendered.contains("SKS install: 7.1.0 · registry last seen 7.0.5"))
     }
 }
 `);
@@ -271,12 +287,26 @@ test('status item is concise and applies the documented integrity-to-healthy pri
   assert.ok(priority.every((index) => index >= 0));
   assert.deepEqual(priority, [...priority].sort((a, b) => a - b));
   assert.match(swift, /hydrateFromLatestOperation/);
+  assert.match(swift, /case \.healthy, \.working: pair = \("SKSStatusTemplate", "textformat"\)/);
+  assert.match(swift, /case \.updateAvailable: pair = \("SKSStatusUpdateTemplate", "arrow\.down\.circle"\)/);
+  assert.doesNotMatch(swift, /checkmark\.circle|ellipsis\.circle/);
+  assert.ok(swift.includes('setAccessibilityLabel("SKS status — \\(summary)")'));
   assert.match(swift, /setAccessibilityValue\(summary\)/);
+  assert.ok(swift.includes('toolTip = "SKS Control Center — \\(summary)"'));
   assert.match(swift, /Pending approvals \(\\\(pendingCount\)\)/);
   assert.match(swift, /NSImage\(systemSymbolName: symbol, accessibilityDescription: "SKS status"\)/);
   assert.match(swift, /Bundle\.main\.image\(forResource: resource\)/);
   assert.match(swift, /SKSStatusWarningTemplate/);
   assert.doesNotMatch(swift, /SKS [↑⚠⬆⋯]/);
+});
+
+test('Control Center scroll documents start at the top and stale local versions self-refresh', () => {
+  const overview = fs.readFileSync(path.join(resolvePackagedMenuBarSourceRoot(), 'Sources', 'OverviewViewController.swift'), 'utf8');
+  assert.match(overview, /final class TopAlignedStackView: NSStackView/);
+  assert.match(overview, /override var isFlipped: Bool \{ true \}/);
+  assert.match(overview, /let stack = TopAlignedStackView\(views: views\)/);
+  assert.match(overview, /updateSnapshotNeedsRefresh\(initial\)/);
+  assert.match(overview, /\["update", "status", "--refresh", "--json"\]/);
 });
 
 test('app identity, alert identity, and Info.plist icon contract are explicit', () => {
@@ -380,10 +410,22 @@ test('Providers exposes OpenRouter save key, freeform model id, and Use OpenRout
   assert.match(providers, /\["codex-app", "set-openrouter-key", "--api-key-stdin", "--json"\]/);
   assert.match(providers, /\["codex-app", "use-openrouter", "--model", model, "--restart-app", "--json"\]/);
   assert.match(providers, /\["codex-app", "openrouter-status", "--json"\]/);
+  assert.match(providers, /\["codex-app", "openrouter-models", "--ids-only", "--json"\]/);
   assert.match(providers, /describeOpenRouterStatus/);
   assert.match(providers, /OpenRouter: key missing/);
+  assert.match(providers, /activationJson\?\["config_applied"\]/);
+  assert.match(providers, /activationJson\?\["restart_ok"\]/);
+  assert.match(providers, /Configuration saved · main model/);
   assert.match(providers, /operations\.begin\(kind: "openrouter-use"/);
   assert.match(providers, /kind: "openrouter-set-key"/);
+  const statusRefresh = providers.slice(
+    providers.indexOf('func refreshOpenRouterStatus()'),
+    providers.indexOf('func describeOpenRouterStatus')
+  );
+  assert.match(statusRefresh, /guard let json = self\.json\(result\.output\)/);
+  assert.doesNotMatch(statusRefresh, /guard result\.code == 0/);
+  assert.match(statusRefresh, /if selected, activeModel != "unset"/);
+  assert.ok(providers.includes('key stored · activation model \\(selectedOpenRouterModel())'));
 });
 
 test('Menu Bar exposes truthful accessible Fast state with direct on and off actions', () => {

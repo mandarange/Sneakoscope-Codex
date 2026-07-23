@@ -8,6 +8,26 @@ import {
   scanHarnessConflicts
 } from '../harness-conflicts.js';
 
+const CONFIG_FIXTURE = [
+  'model = "keep-me"',
+  'provider = "openai"',
+  '# user comment to preserve',
+  '',
+  '[mcp_servers."acas-tools"]',
+  'command = "node"',
+  'args = ["acas-tools.js"]',
+  'env_vars = ["FOO"]',
+  'enabled = true',
+  'required = false',
+  'startup_timeout_sec = 10',
+  'tool_timeout_sec = 120',
+  '',
+  '[harness]',
+  'name = "omx"',
+  'note = "dcodex leftover"',
+  ''
+].join('\n');
+
 test('cleanupOtherHarnessConflicts quarantines OMX/DCodex markers and strips config deps', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-other-harness-'));
   const home = path.join(root, 'home');
@@ -16,14 +36,7 @@ test('cleanupOtherHarnessConflicts quarantines OMX/DCodex markers and strips con
     await fs.mkdir(path.join(root, '.dcodex'), { recursive: true });
     await fs.mkdir(path.join(root, '.codex'), { recursive: true });
     await fs.mkdir(home, { recursive: true });
-    await fs.writeFile(path.join(root, '.codex', 'config.toml'), [
-      'model = "keep-me"',
-      '',
-      '[harness]',
-      'name = "omx"',
-      'note = "dcodex leftover"',
-      ''
-    ].join('\n'));
+    await fs.writeFile(path.join(root, '.codex', 'config.toml'), CONFIG_FIXTURE);
     await fs.writeFile(path.join(root, 'package.json'), JSON.stringify({
       name: 'fixture',
       private: true,
@@ -45,6 +58,16 @@ test('cleanupOtherHarnessConflicts quarantines OMX/DCodex markers and strips con
     await assert.rejects(fs.access(path.join(root, '.dcodex')));
     const config = await fs.readFile(path.join(root, '.codex', 'config.toml'), 'utf8');
     assert.match(config, /keep-me/);
+    assert.match(config, /provider = "openai"/);
+    assert.match(config, /# user comment to preserve/);
+    assert.match(config, /\[mcp_servers\."acas-tools"\]/);
+    assert.match(config, /command = "node"/);
+    assert.match(config, /args = \["acas-tools\.js"\]/);
+    assert.match(config, /env_vars = \["FOO"\]/);
+    assert.match(config, /enabled = true/);
+    assert.match(config, /required = false/);
+    assert.match(config, /startup_timeout_sec = 10/);
+    assert.match(config, /tool_timeout_sec = 120/);
     assert.doesNotMatch(config, /omx|dcodex/i);
     const pkg = JSON.parse(await fs.readFile(path.join(root, 'package.json'), 'utf8'));
     assert.equal(pkg.dependencies.leftpad, '1.0.0');
@@ -53,6 +76,17 @@ test('cleanupOtherHarnessConflicts quarantines OMX/DCodex markers and strips con
 
     const after = await scanHarnessConflicts(root, { home });
     assert.equal(after.hard_block, false);
+
+    const quarantineRoot = path.join(root, '.sneakoscope', 'quarantine', 'other-harness', cleanup.run_id);
+    await fs.access(quarantineRoot);
+    const quarantineEntries = await fs.readdir(quarantineRoot, { recursive: true });
+    assert.ok(quarantineEntries.length >= 1, 'expected quarantine backup entries');
+
+    const second = await cleanupOtherHarnessConflicts(root, { home });
+    assert.equal(second.ok, true);
+    assert.equal(second.cleaned.length, 0);
+    const afterSecond = await scanHarnessConflicts(root, { home });
+    assert.equal(afterSecond.hard_block, false);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }

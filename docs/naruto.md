@@ -171,21 +171,23 @@ For database work, SKS owns the schema-first query plan and SQL generation, but
 the host owns credentials, connector policy, and read-only execution. A
 SQL-generation-only task first calls `datasource_schema_context`, then uses only
 reported tables and columns and may complete without executing SQL. Actual data
-retrieval first obtains that schema context, creates one bounded parameterized
-`SELECT`/CTE query, calls `datasource_query_readonly`, and retains its receipt.
+retrieval first obtains that schema context, then may run up to four bounded
+parameterized `SELECT`/CTE queries via `datasource_query_readonly` against the
+same schema snapshot, retaining a receipt for each query.
 
 For spreadsheets, creation follows `spreadsheet_create` →
-`spreadsheet_inspect` → optional one minimal `spreadsheet_update` →
-`spreadsheet_inspect`; editing follows `spreadsheet_inspect` → one minimal
-`spreadsheet_update` → `spreadsheet_inspect`. Document delivery follows
+`spreadsheet_inspect` → up to three minimal `spreadsheet_update` steps each
+followed by `spreadsheet_inspect`; editing follows an initial
+`spreadsheet_inspect` → one to three `spreadsheet_update` steps each followed by
+`spreadsheet_inspect`. Document delivery follows
 editable source → render → artifact receipt. Slack delivery is ACAS-runtime
 owned and is never a model tool. These are host-MCP contracts only: SKS adds no
 SKS DB, Excel, Slack, or Center dependency or service.
 
 The standalone runtime narrows the MCP allowlist to the tools required by the
 sealed task. Spreadsheet receipts must bind every create/inspect/update call to
-one workspace resource, permit at most one update, and include an inspection
-after the final mutation. Document proof requires an observed editable-source
+one workspace resource, permit at most three updates, and include an inspection
+after each mutation including the final one. Document proof requires an observed editable-source
 write before render plus an artifact receipt emitted by the render call.
 
 ## Completion Evidence

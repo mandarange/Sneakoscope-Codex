@@ -236,7 +236,7 @@ const COMMAND_DEFINITIONS = {
     activeRoutePolicy: 'always'
   }),
   'update-check': readOnly(entry('stable', 'Show the shared SKS, Codex CLI, and Menu Bar update status', 'dist/core/commands/basic-cli.js', basicArgs('updateCheckCommand'))),
-  mcp: entry('beta', 'Manage scoped Codex MCP configuration', 'dist/core/commands/mcp-config-command.js', argsCommand(() => import('../core/commands/mcp-config-command.js'), 'mcpConfigCommand', 'dist/core/commands/mcp-config-command.js')),
+  mcp: skipMigrationGate(entry('beta', 'Manage scoped Codex MCP configuration', 'dist/core/commands/mcp-config-command.js', argsCommand(() => import('../core/commands/mcp-config-command.js'), 'mcpConfigCommand', 'dist/core/commands/mcp-config-command.js'))),
   wizard: entry('stable', 'Open setup wizard help', 'dist/core/commands/basic-cli.js', basicNoArgs('quickstartCommand')),
   usage: readOnly(entry('stable', 'Show focused usage topic', 'dist/core/commands/basic-cli.js', basicArgs('usageCommand'))),
   quickstart: entry('stable', 'Show quickstart flow', 'dist/core/commands/basic-cli.js', basicNoArgs('quickstartCommand')),

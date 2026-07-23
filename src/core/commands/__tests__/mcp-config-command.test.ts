@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { COMMANDS } from '../../../cli/command-registry.js';
+import { ensureCurrentMigrationBeforeCommand } from '../../update/update-migration-state.js';
 import { executeMcpConfigCommand, isMcpCommandSuccess, parseMcpStdinJson } from '../mcp-config-command.js';
 
 async function fixture(t: test.TestContext) {
@@ -107,4 +109,21 @@ test('MCP health command exit semantics treat actionable non-error states as suc
   for (const status of ['startup_failed', 'timeout', 'protocol_error', 'unknown']) {
     assert.equal(isMcpCommandSuccess({ schema: 'sks.mcp-health.v1', status }), false);
   }
+});
+
+test('mcp command bypasses migration gate for local config operations', async () => {
+  assert.equal(COMMANDS.mcp.skipMigrationGate, true);
+  const result = await ensureCurrentMigrationBeforeCommand({
+    command: 'mcp',
+    args: ['config', 'get', '--scope', 'global', 'docs'],
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      SKS_REQUIRE_UPDATE_MIGRATION_RECEIPT: '1',
+      SKS_UPDATE_MIGRATION_GATE_DISABLED: '0'
+    }
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.status, 'skipped');
+  assert.ok(result.warnings.some((warning) => warning === 'skip_migration_gate_command:mcp'));
 });

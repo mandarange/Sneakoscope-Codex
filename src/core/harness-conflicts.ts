@@ -1,7 +1,8 @@
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
-import { exists, readJson, readText, writeJsonAtomic, writeTextAtomic } from './fsx.js';
+import { writeCodexConfigGuarded } from './codex/codex-config-guard.js';
+import { exists, readJson, readText, writeJsonAtomic } from './fsx.js';
 
 export const OTHER_HARNESS_NAMES = ['OMX', 'DCodex'];
 
@@ -32,9 +33,10 @@ export async function scanHarnessConflicts(root: any, opts: any = {}) {
 }
 
 /**
- * Remove OMX/DCodex harness markers from the live Codex surface so SKS update/setup/doctor can proceed.
+ * Remove OMX/DCodex harness markers from the live Codex surface.
  * Markers are moved out of the active tree (not left in place). A backup copy is kept under
  * `.sneakoscope/quarantine/other-harness/<runId>/` (project or global) before live removal.
+ * Only invoked by `sks conflicts cleanup --yes`.
  */
 export async function cleanupOtherHarnessConflicts(root: any, opts: any = {}) {
   const projectRoot = path.resolve(root || process.cwd());
@@ -110,7 +112,7 @@ async function cleanupOneHardConflict(input: {
 
   if (basename === 'config.toml') {
     const quarantine = await quarantineCopy(target, quarantineRoot, input.projectRoot, input.home);
-    await stripOtherHarnessConfigMarkers(target);
+    await stripOtherHarnessConfigMarkers(target, input.projectRoot);
     return { path: target, action: 'stripped_other_harness_config_markers', quarantine };
   }
 
@@ -188,7 +190,7 @@ async function stripOtherHarnessPackages(packageJsonPath: string): Promise<void>
   if (changed) await writeJsonAtomic(packageJsonPath, pkg);
 }
 
-async function stripOtherHarnessConfigMarkers(configPath: string): Promise<void> {
+async function stripOtherHarnessConfigMarkers(configPath: string, projectRoot: string): Promise<void> {
   const before = await readText(configPath, '');
   const lines = String(before || '').split('\n');
   const next: string[] = [];
@@ -206,7 +208,19 @@ async function stripOtherHarnessConfigMarkers(configPath: string): Promise<void>
     next.push(line);
   }
   const text = `${next.join('\n').replace(/\n{3,}/g, '\n\n').trimEnd()}\n`;
-  await writeTextAtomic(configPath, text, { mode: 0o600 });
+  const write = await writeCodexConfigGuarded({
+    root: projectRoot,
+    configPath,
+    before,
+    cause: 'other-harness-cleanup',
+    backupTag: 'other-harness-cleanup',
+    ownershipVerified: true,
+    verifyUnchangedBeforeWrite: true,
+    expectedBeforeExists: true,
+    preserveTextFormatting: true,
+    mutate: () => text
+  });
+  if (!write.ok) throw new Error(`other_harness_config_write_${write.status}`);
 }
 
 async function scanProjectHarnessConflicts(root: any) {
@@ -216,7 +230,7 @@ async function scanProjectHarnessConflicts(root: any) {
     { rel: '.dcodex', name: 'DCodex' }
   ]) {
     const abs = path.join(root, marker.rel);
-    if (await exists(abs)) out.push(blockingConflict('project', abs, `${marker.name} project harness marker exists`, `${marker.name} will be quarantined automatically during SKS update/setup/doctor --fix.`));
+    if (await exists(abs)) out.push(blockingConflict('project', abs, `${marker.name} project harness marker exists`, `${marker.name} must be quarantined via \`sks conflicts cleanup --yes\` before SKS setup/update/doctor --fix.`));
   }
 
   const hooksPath = path.join(root, '.codex', 'hooks.json');
@@ -224,9 +238,9 @@ async function scanProjectHarnessConflicts(root: any) {
   if (typeof hooksText === 'string') {
     const lower = hooksText.toLowerCase();
     if (/\bomx\b|\.omx|omx[-_ ]?harness/.test(lower)) {
-      out.push(blockingConflict('project', hooksPath, 'OMX Codex hook detected', 'OMX hooks will be quarantined automatically; SKS will reinstall managed hooks.'));
+      out.push(blockingConflict('project', hooksPath, 'OMX Codex hook detected', 'OMX hooks must be quarantined via `sks conflicts cleanup --yes`; SKS will reinstall managed hooks after cleanup.'));
     } else if (/\bdcodex\b|\.dcodex|dcodex[-_ ]?harness/.test(lower)) {
-      out.push(blockingConflict('project', hooksPath, 'DCodex hook detected', 'DCodex hooks will be quarantined automatically; SKS will reinstall managed hooks.'));
+      out.push(blockingConflict('project', hooksPath, 'DCodex hook detected', 'DCodex hooks must be quarantined via `sks conflicts cleanup --yes`; SKS will reinstall managed hooks after cleanup.'));
     } else if (hasForeignCodexHooks(hooksText)) {
       out.push({
         id: 'foreign_codex_hooks',
@@ -244,7 +258,7 @@ async function scanProjectHarnessConflicts(root: any) {
 
   const configText = await readText(path.join(root, '.codex', 'config.toml'), null);
   if (typeof configText === 'string' && /\bomx\b|\.omx|\bdcodex\b|\.dcodex/i.test(configText)) {
-    out.push(blockingConflict('project', path.join(root, '.codex', 'config.toml'), 'Other harness marker detected in Codex config', 'Conflicting harness markers will be stripped from Codex config automatically.'));
+    out.push(blockingConflict('project', path.join(root, '.codex', 'config.toml'), 'Other harness marker detected in Codex config', 'Conflicting harness markers must be stripped via `sks conflicts cleanup --yes`.'));
   }
 
   const pkg = await readJson(path.join(root, 'package.json'), null);
@@ -252,7 +266,7 @@ async function scanProjectHarnessConflicts(root: any) {
     const deps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}), ...(pkg.optionalDependencies || {}) };
     for (const name of Object.keys(deps)) {
       if (isOtherHarnessPackage(name)) {
-        out.push(blockingConflict('project', path.join(root, 'package.json'), `Other Codex harness package dependency detected: ${name}`, 'Conflicting package dependencies will be removed from package.json automatically.'));
+        out.push(blockingConflict('project', path.join(root, 'package.json'), `Other Codex harness package dependency detected: ${name}`, 'Conflicting package dependencies must be removed via `sks conflicts cleanup --yes`.'));
       }
     }
   }
@@ -274,7 +288,7 @@ async function scanGlobalHarnessConflicts(home: any, codexHomes: string[]) {
     const abs = path.join(home, rel);
     if (await exists(abs)) {
       const name = rel.toLowerCase().includes('omx') ? 'OMX' : 'DCodex';
-      out.push(blockingConflict('global', abs, `${name} global harness marker exists`, `${name} global markers will be quarantined automatically during SKS update/setup/doctor --fix.`));
+      out.push(blockingConflict('global', abs, `${name} global harness marker exists`, `${name} global markers must be quarantined via \`sks conflicts cleanup --yes\` before SKS setup/update/doctor --fix.`));
     }
   }
 
@@ -282,7 +296,7 @@ async function scanGlobalHarnessConflicts(home: any, codexHomes: string[]) {
     const globalCodex = path.join(codexHome, 'config.toml');
     const configText = await readText(globalCodex, null);
     if (typeof configText === 'string' && /\bomx\b|\.omx|\bdcodex\b|\.dcodex/i.test(configText)) {
-      out.push(blockingConflict('global', globalCodex, 'Other harness marker detected in global Codex config', 'Conflicting harness markers will be stripped from global Codex config automatically.'));
+      out.push(blockingConflict('global', globalCodex, 'Other harness marker detected in global Codex config', 'Conflicting harness markers must be stripped via `sks conflicts cleanup --yes`.'));
     }
   }
   return out;
@@ -334,7 +348,7 @@ function isOtherHarnessPackage(name: any) {
 export function formatHarnessConflictReport(scan: any, opts: any = {}) {
   if (!scan?.conflicts?.length) return 'No conflicting Codex harness detected.';
   const lines: any[] = [];
-  lines.push('Conflicting Codex harness detected. SKS will quarantine OMX/DCodex markers during update, setup, or doctor --fix.');
+  lines.push('Conflicting Codex harness detected. Run `sks conflicts cleanup --yes` to quarantine OMX/DCodex markers before setup, update, or doctor --fix.');
   for (const item of scan.conflicts) {
     lines.push(`- [${item.severity}] ${item.scope}: ${item.path}`);
     lines.push(`  reason: ${item.reason}`);
@@ -355,7 +369,7 @@ export function llmHarnessCleanupPrompt(scan: any) {
 Goal: completely remove the conflicting Codex harnesses before installing Sneakoscope Codex.
 
 Rules:
-- Prefer \`sks conflicts cleanup --yes\` or \`sks doctor --fix\` / \`sks update\`, which quarantine OMX/DCodex markers automatically.
+- Prefer \`sks conflicts cleanup --yes\`, which quarantines OMX/DCodex markers with backup under \`.sneakoscope/quarantine/other-harness/\`.
 - Remove only the conflicting harness artifacts listed below and any directly connected global/repo-level install traces you verify.
 - Do not delete application source files, user project code, unrelated .codex settings, secrets, git history, or package manager caches unless they are verified harness-owned artifacts.
 - Prefer moving questionable files to a timestamped backup folder before permanent deletion.

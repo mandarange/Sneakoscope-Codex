@@ -52,7 +52,8 @@ test('GLM profile installer ensures OpenRouter provider and strips retired Deskt
   const config = await fs.readFile(configPath, 'utf8');
   assert.match(config, /\[model_providers\.openrouter\]/);
   assert.match(config, /^wire_api = "responses"$/m);
-  assert.match(config, /^env_key = "OPENROUTER_API_KEY"$/m);
+  assert.doesNotMatch(config, /^\s*env_key\s*=/m);
+  assert.match(config, /\[model_providers\.openrouter\.auth\]/);
   assert.doesNotMatch(config, /\[profiles\.sks-glm-52-/);
 
   const doctor = await doctorCodexAppGlmProfile({ root, home, configPath, env });

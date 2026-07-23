@@ -6,6 +6,10 @@
 
 Proof-first orchestration for Codex CLI, ChatGPT Desktop, AI coding agents, multi-agent workflows, release verification, and the macOS menu bar.
 
+<p align="center">
+  <img src="docs/assets/sks-logo.svg" alt="Sneakoscope Codex logo" width="160" height="160" />
+</p>
+
 [![npm version](https://img.shields.io/npm/v/sneakoscope?color=cb3837&logo=npm)](https://www.npmjs.com/package/sneakoscope)
 [![node](https://img.shields.io/badge/node-%3E%3D20.11-339933?logo=node.js&logoColor=white)](#requirements)
 [![license](https://img.shields.io/badge/license-MIT-blue)](#license)

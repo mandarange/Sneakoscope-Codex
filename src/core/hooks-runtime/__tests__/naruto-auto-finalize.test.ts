@@ -19,6 +19,7 @@ import {
 } from '../../subagents/wave-lifecycle.js'
 import { buildNarutoProofProjection } from '../../subagents/naruto-proof-projection.js'
 import { installGlobalSkills } from '../../init/skills.js'
+import { checkStopGate } from '../../stop-gate/stop-gate-check.js'
 import {
   HOST_CAPABILITY_HOOK_RUNTIME_FILENAME,
   createHostCapabilityHookRuntimeBinding,
@@ -59,6 +60,99 @@ test('valid current-run Naruto proof is full, byte-stable, and invalidates refle
     const retriedState: any = await loadStateForSession(fixture.root, fixture.sessionKey)
     assert.equal(retriedState.reflection_invalidated_at, firstState.reflection_invalidated_at)
     assert.equal(retriedState.reflection_invalidated_for_workflow_run_id, fixture.runId)
+  } finally {
+    await fixture.cleanup()
+  }
+})
+
+test('newer same-run terminal proof resolves a stale official-subagent compliance hard blocker', async () => {
+  const fixture = await createNarutoFixture()
+  try {
+    await writeJson(path.join(fixture.dir, 'hard-blocker.json'), {
+      schema: 'sks.hard-blocker.v1',
+      passed: false,
+      status: 'hard_blocked',
+      created_at: '2026-07-19T02:00:00.000Z',
+      reason: 'compliance_loop_guard_tripped',
+      route: '$Naruto',
+      gate: 'official-subagent-evidence',
+      evidence: ['official evidence was incomplete before the parent resumed']
+    })
+    await writeJson(path.join(fixture.dir, 'compliance-loop-guard.json'), {
+      schema_version: 1,
+      updated_at: '2026-07-19T02:00:00.000Z',
+      mission_id: fixture.missionId,
+      route: '$Naruto',
+      gate: 'official-subagent-evidence',
+      repeat_count: 3,
+      limit: 3,
+      tripped: true,
+      missing: ['parent_summary_missing']
+    })
+
+    await fixture.refresh()
+
+    await assert.rejects(fsp.access(path.join(fixture.dir, 'hard-blocker.json')))
+    await assert.rejects(fsp.access(path.join(fixture.dir, 'compliance-loop-guard.json')))
+    const resolvedFile = path.join(fixture.dir, 'hard-blocker.resolved.json')
+    const resolvedBytes = await fsp.readFile(resolvedFile, 'utf8')
+    const resolved = JSON.parse(resolvedBytes)
+    assert.equal(resolved.status, 'resolved')
+    assert.equal(resolved.passed, true)
+    assert.equal(resolved.workflow_run_id, fixture.runId)
+    assert.equal(resolved.original_hard_blocker.gate, 'official-subagent-evidence')
+    assert.match(resolved.hard_blocker_sha256, /^sha256:[a-f0-9]{64}$/)
+    assert.match(resolved.compliance_loop_guard_sha256, /^sha256:[a-f0-9]{64}$/)
+    assert.equal((await checkStopGate({
+      root: fixture.root,
+      route: 'Naruto',
+      missionId: fixture.missionId,
+      allowLatestFallback: false
+    })).action, 'allow_stop')
+
+    await fixture.refresh()
+    assert.equal(await fsp.readFile(resolvedFile, 'utf8'), resolvedBytes)
+  } finally {
+    await fixture.cleanup()
+  }
+})
+
+test('terminal Naruto proof preserves unrelated hard blockers', async () => {
+  const fixture = await createNarutoFixture()
+  try {
+    await writeJson(path.join(fixture.dir, 'hard-blocker.json'), {
+      schema: 'sks.hard-blocker.v1',
+      passed: false,
+      status: 'hard_blocked',
+      created_at: '2026-07-19T02:00:00.000Z',
+      reason: 'managed_config_requires_human_remedy',
+      route: '$Naruto',
+      gate: 'managed-config',
+      evidence: ['manual repair is still required']
+    })
+    await writeJson(path.join(fixture.dir, 'compliance-loop-guard.json'), {
+      schema_version: 1,
+      updated_at: '2026-07-19T02:00:00.000Z',
+      mission_id: fixture.missionId,
+      route: '$Naruto',
+      gate: 'managed-config',
+      repeat_count: 3,
+      limit: 3,
+      tripped: true,
+      missing: ['manual_repair']
+    })
+
+    await fixture.refresh()
+
+    assert.equal((await readJson(path.join(fixture.dir, 'hard-blocker.json'))).reason, 'managed_config_requires_human_remedy')
+    await fsp.access(path.join(fixture.dir, 'compliance-loop-guard.json'))
+    await assert.rejects(fsp.access(path.join(fixture.dir, 'hard-blocker.resolved.json')))
+    assert.equal((await checkStopGate({
+      root: fixture.root,
+      route: 'Naruto',
+      missionId: fixture.missionId,
+      allowLatestFallback: false
+    })).action, 'hard_blocked')
   } finally {
     await fixture.cleanup()
   }

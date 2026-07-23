@@ -43,15 +43,29 @@ export function validateCodexConfigRoundTrip(text: string = ''): CodexConfigRoun
   if (parsed.profiles !== undefined) legacyKeys.push('profiles')
   if (parsed.notice?.fast_default_opt_out !== undefined) legacyKeys.push('notice.fast_default_opt_out')
 
+  const blockers = modelProviderAuthConflicts(parsed)
+
   return {
-    ok: true,
+    ok: blockers.length === 0,
     parsed,
-    blockers: [],
+    blockers,
     service_tier: typeof parsed.service_tier === 'string' ? parsed.service_tier : null,
     model: typeof parsed.model === 'string' ? parsed.model : null,
     model_reasoning_effort: typeof parsed.model_reasoning_effort === 'string' ? parsed.model_reasoning_effort : null,
     legacy_keys: legacyKeys
   }
+}
+
+function modelProviderAuthConflicts(parsed: Record<string, any>): string[] {
+  const providers = parsed.model_providers
+  if (!providers || typeof providers !== 'object' || Array.isArray(providers)) return []
+  return Object.entries(providers).flatMap(([id, value]) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return []
+    const provider = value as Record<string, unknown>
+    return provider.env_key !== undefined && provider.auth !== undefined
+      ? [`model_provider_auth_env_key_conflict:${id}`]
+      : []
+  })
 }
 
 export async function cleanupCodexConfigBackups(configPath: string, opts: { keepPerTag?: number; maxAgeMs?: number } = {}) {

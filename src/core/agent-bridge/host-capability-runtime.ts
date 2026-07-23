@@ -43,6 +43,8 @@ const MAX_RECEIPT_JSON_STRING_BYTES = 64 * 1024;
 const MAX_ARTIFACT_RECEIPTS = 64;
 const MAX_ARTIFACT_PATH_CHARS = 512;
 const MAX_SEMANTIC_RECEIPT_ITEMS = 10_000;
+const MAX_DATASOURCE_QUERY_RESERVATIONS = 4;
+const MAX_SPREADSHEET_UPDATE_RESERVATIONS = 3;
 const SHA256_RECEIPT_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const XLSX_MEDIA_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const EXPLICIT_DENIAL_PATTERN = /(?:^|[_.:-])(?:slack|center|tenant|lease|connector|outbox|message|upload|send|post)(?:$|[_.:-])/i;
@@ -453,8 +455,11 @@ function authorizePreToolReservation(
   if (observation.decision === 'denied') return denyPreToolReservation(observation, observation.blocker);
 
   if (observation.tool === 'datasource_query_readonly') {
-    if (hasReservedOrObservedToolCall(current, observation.tool)) {
+    if (hasPendingToolReservation(current, observation.tool)) {
       return denyPreToolReservation(observation, 'host_capability_readonly_query_already_reserved');
+    }
+    if (countNonDeniedToolReservations(current, observation.tool) >= MAX_DATASOURCE_QUERY_RESERVATIONS) {
+      return denyPreToolReservation(observation, 'host_capability_readonly_query_limit_exceeded');
     }
     const schemaReceipts = completedPassedToolCalls(current, 'datasource_schema_context')
       .map((call) => call.semantic_receipt?.kind === 'datasource_schema' ? call.semantic_receipt : null)
@@ -482,10 +487,13 @@ function authorizePreToolReservation(
   }
 
   if (observation.tool === 'spreadsheet_update') {
-    if (hasReservedOrObservedToolCall(current, observation.tool)) {
+    if (hasPendingToolReservation(current, observation.tool)) {
       return denyPreToolReservation(observation, 'host_capability_spreadsheet_update_already_reserved');
     }
-    let completedCreateSequence: number | null = null;
+    if (countNonDeniedToolReservations(current, observation.tool) >= MAX_SPREADSHEET_UPDATE_RESERVATIONS) {
+      return denyPreToolReservation(observation, 'host_capability_spreadsheet_update_limit_exceeded');
+    }
+    let lastMutationSequence: number | null = null;
     if (runtime.task_workflows.includes('spreadsheet_create')) {
       const completedCreates = completedPassedToolCalls(current, 'spreadsheet_create');
       if (completedCreates.length === 0) {
@@ -497,7 +505,17 @@ function authorizePreToolReservation(
       if (matchingCreates.length === 0) {
         return denyPreToolReservation(observation, 'host_capability_spreadsheet_update_resource_mismatch');
       }
-      completedCreateSequence = Math.max(...matchingCreates.map((call) => call.sequence));
+      lastMutationSequence = Math.max(...matchingCreates.map((call) => call.sequence));
+    }
+    const completedUpdates = completedPassedToolCalls(current, 'spreadsheet_update');
+    const matchingUpdates = observation.resource_key
+      ? completedUpdates.filter((call) => call.resource_key === observation.resource_key)
+      : completedUpdates;
+    if (matchingUpdates.length > 0) {
+      const lastUpdateSequence = Math.max(...matchingUpdates.map((call) => call.sequence));
+      lastMutationSequence = lastMutationSequence === null
+        ? lastUpdateSequence
+        : Math.max(lastMutationSequence, lastUpdateSequence);
     }
     const completedInspections = completedPassedToolCalls(current, 'spreadsheet_inspect');
     if (completedInspections.length === 0) {
@@ -509,8 +527,8 @@ function authorizePreToolReservation(
     if (matchingInspections.length === 0) {
       return denyPreToolReservation(observation, 'host_capability_spreadsheet_update_resource_mismatch');
     }
-    if (completedCreateSequence !== null
-      && !matchingInspections.some((call) => call.sequence > completedCreateSequence)) {
+    if (lastMutationSequence !== null
+      && !matchingInspections.some((call) => call.sequence > lastMutationSequence)) {
       return denyPreToolReservation(observation, 'host_capability_spreadsheet_update_inspection_not_completed');
     }
   }
@@ -524,10 +542,26 @@ function authorizePreToolReservation(
 }
 
 function hasReservedOrObservedToolCall(observations: HostCapabilityHookObservations, tool: string): boolean {
-  return observations.tool_calls.some((row) => row.tool === tool)
-    || observations.pre_tool_uses.some((row) => (
-      row.tool === tool && row.reservation_status !== 'denied'
-    ));
+  return countNonDeniedToolReservations(observations, tool) > 0;
+}
+
+function hasPendingToolReservation(observations: HostCapabilityHookObservations, tool: string): boolean {
+  return observations.pre_tool_uses.some((row) => (
+    row.tool === tool && row.reservation_status === 'pending'
+  ));
+}
+
+function countNonDeniedToolReservations(observations: HostCapabilityHookObservations, tool: string): number {
+  const reservedIds = new Set(
+    observations.pre_tool_uses
+      .filter((row) => row.tool === tool && row.reservation_status !== 'denied')
+      .map((row) => row.tool_use_id_sha256)
+  );
+  for (const row of observations.tool_calls) {
+    if (row.tool !== tool) continue;
+    reservedIds.add(row.tool_use_id_sha256);
+  }
+  return reservedIds.size;
 }
 
 function preToolReservationIdentityMatches(
@@ -934,14 +968,14 @@ function validateCapabilityWorkflow(
   if (descriptor.id === 'host.datasource.query.readonly.v1') {
     const schemaCall = allCalls.find((call) => call.tool === 'datasource_schema_context' && call.status === 'passed') || null;
     const queryCalls = passed('datasource_query_readonly');
-    const queryCall = queryCalls[0] || null;
     const schemaIndex = schemaCall?.index ?? -1;
-    const queryIndex = queryCall?.index ?? -1;
-    if (queryIndex < 0) blockers.push('host_capability_readonly_query_call_missing');
-    if (runtime.task_workflows.includes('datasource_query') && queryCalls.length !== 1) {
+    if (queryCalls.length === 0) blockers.push('host_capability_readonly_query_call_missing');
+    if (runtime.task_workflows.includes('datasource_query')
+      && (queryCalls.length < 1 || queryCalls.length > MAX_DATASOURCE_QUERY_RESERVATIONS)) {
       blockers.push('host_capability_readonly_query_count_invalid');
     }
-    if (runtime.task_workflows.includes('datasource_query') && (schemaIndex < 0 || queryIndex <= schemaIndex)) {
+    if (runtime.task_workflows.includes('datasource_query')
+      && (schemaIndex < 0 || queryCalls.some((call) => call.index <= schemaIndex))) {
       blockers.push('host_capability_datasource_sequence_invalid');
     }
     const schemaReceipt = schemaCall?.semantic_receipt?.kind === 'datasource_schema'
@@ -969,29 +1003,53 @@ function validateCapabilityWorkflow(
     const create = creates[0]?.index ?? -1;
     const updateIndexes = updates.map((call) => call.index);
     const inspectionIndexes = inspections.map((call) => call.index);
+    const hasInspectBetween = (afterIndex: number, beforeIndex: number) => (
+      inspectionIndexes.some((index) => index > afterIndex && index < beforeIndex)
+    );
+    const hasInspectAfter = (afterIndex: number) => (
+      inspectionIndexes.some((index) => index > afterIndex)
+    );
     if (runtime.task_workflows.includes('spreadsheet_create')) {
       if (creates.length !== 1) blockers.push('host_capability_spreadsheet_create_sequence_invalid');
-      if (updates.length > 1) blockers.push('host_capability_spreadsheet_create_update_count_invalid');
-      const update = updateIndexes[0] ?? -1;
-      const inspectedAfterCreate = inspectionIndexes.some((index) => index > create && (update < 0 || index < update));
-      const inspectedAfterMutation = update >= 0
-        ? inspectionIndexes.some((index) => index > update)
-        : inspectionIndexes.some((index) => index > create);
-      if (create < 0
-        || !inspectedAfterCreate
-        || !inspectedAfterMutation
-        || (update >= 0 && update <= create)) {
-        blockers.push('host_capability_spreadsheet_create_sequence_invalid');
+      if (updates.length > MAX_SPREADSHEET_UPDATE_RESERVATIONS) {
+        blockers.push('host_capability_spreadsheet_create_update_count_invalid');
       }
+      let createSequenceInvalid = create < 0;
+      if (updateIndexes.length === 0) {
+        if (!hasInspectAfter(create)) createSequenceInvalid = true;
+      } else {
+        if (!hasInspectBetween(create, updateIndexes[0]!)) createSequenceInvalid = true;
+        for (let index = 0; index < updateIndexes.length; index += 1) {
+          const updateIndex = updateIndexes[index]!;
+          if (updateIndex <= create) createSequenceInvalid = true;
+          const nextBound = updateIndexes[index + 1] ?? Number.POSITIVE_INFINITY;
+          if (nextBound === Number.POSITIVE_INFINITY
+            ? !hasInspectAfter(updateIndex)
+            : !hasInspectBetween(updateIndex, nextBound)) {
+            createSequenceInvalid = true;
+          }
+        }
+      }
+      if (createSequenceInvalid) blockers.push('host_capability_spreadsheet_create_sequence_invalid');
     }
     if (runtime.task_workflows.includes('spreadsheet_edit')) {
-      const update = updateIndexes[0] ?? -1;
-      if (updates.length !== 1) blockers.push('host_capability_spreadsheet_edit_update_count_invalid');
-      if (update < 0
-        || !inspectionIndexes.some((index) => index < update)
-        || !inspectionIndexes.some((index) => index > update)) {
-        blockers.push('host_capability_spreadsheet_edit_sequence_invalid');
+      if (updates.length < 1 || updates.length > MAX_SPREADSHEET_UPDATE_RESERVATIONS) {
+        blockers.push('host_capability_spreadsheet_edit_update_count_invalid');
       }
+      let editSequenceInvalid = updateIndexes.length === 0;
+      if (updateIndexes.length > 0) {
+        if (!inspectionIndexes.some((index) => index < updateIndexes[0]!)) editSequenceInvalid = true;
+        for (let index = 0; index < updateIndexes.length; index += 1) {
+          const updateIndex = updateIndexes[index]!;
+          const nextBound = updateIndexes[index + 1] ?? Number.POSITIVE_INFINITY;
+          if (nextBound === Number.POSITIVE_INFINITY
+            ? !hasInspectAfter(updateIndex)
+            : !hasInspectBetween(updateIndex, nextBound)) {
+            editSequenceInvalid = true;
+          }
+        }
+      }
+      if (editSequenceInvalid) blockers.push('host_capability_spreadsheet_edit_sequence_invalid');
     }
     if (runtime.task_workflows.includes('spreadsheet_create') || runtime.task_workflows.includes('spreadsheet_edit')) {
       if (inspections.some((call) => call.semantic_receipt?.kind !== 'spreadsheet_inspection')) {

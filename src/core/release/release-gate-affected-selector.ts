@@ -89,7 +89,10 @@ function gateSelectionReason(gate: ReleaseGateNode, changedFiles: string[], pres
   }
   if (changedFiles.some((file) => file.startsWith('src/core/research/'))) return gate.id.startsWith('research:') ? 'research_source_changed' : null
   if (changedFiles.some((file) => file.startsWith('src/core/zellij/') || file.startsWith('src/commands/zellij'))) return gate.id.startsWith('zellij:') || gate.id.startsWith('agent:zellij') || gate.id.startsWith('naruto:zellij') ? 'zellij_source_changed' : null
-  if (changedFiles.some((file) => file.includes('/db') || file.includes('mad-sks/sql-plane') || file.includes('mcp'))) return /db|mcp|mad-sks/.test(gate.id) ? 'db_mcp_or_mad_sks_sql_plane_changed' : null
+  if (
+    changedFiles.some((file) => file.includes('/db') || file.includes('mad-sks/sql-plane') || file.includes('mcp'))
+    && /db|mcp|mad-sks/.test(gate.id)
+  ) return 'db_mcp_or_mad_sks_sql_plane_changed'
   const inputs = (gate.cache?.inputs || []).filter((pattern) => !isBroadAffectedInput(pattern))
   if (inputs.some((pattern) => changedFiles.some((file) => matchesGlobish(file, pattern)))) return 'cache_input_changed'
   return null

@@ -702,11 +702,10 @@ test('host capability hooks deny query-before-schema and concurrent or repeated 
     const repeatedQuery: any = await evaluateHookPayload('pre-tool', {
       session_id: fixture.sessionId,
       tool_name: 'mcp__acas-tools__datasource_query_readonly',
-      tool_input: queryInput,
+      tool_input: { ...queryInput, query: `${query} OFFSET 1` },
       tool_use_id: 'query-after-completion'
     }, { root: fixture.root, state: fixture.state });
-    assert.equal(repeatedQuery.decision, 'block');
-    assert.match(repeatedQuery.reason, /host_capability_readonly_query_already_reserved/);
+    assert.equal(repeatedQuery.decision, undefined);
   } finally {
     await fsp.rm(fixture.root, { recursive: true, force: true });
   }
@@ -808,14 +807,44 @@ test('host capability hooks deny spreadsheet updates without a completed same-wo
       },
       tool_use_id: 'ordered-update'
     }, { root: fixture.root, state: fixture.state });
-    const repeatedUpdate: any = await evaluateHookPayload('pre-tool', {
+    const repeatedUpdateWithoutInspect: any = await evaluateHookPayload('pre-tool', {
       session_id: fixture.sessionId,
       tool_name: 'mcp__acas-tools__spreadsheet_update',
       tool_input: { path: workbookPath, patch: { sheet: 'Summary', range: 'B4' } },
       tool_use_id: 'update-after-completion'
     }, { root: fixture.root, state: fixture.state });
-    assert.equal(repeatedUpdate.decision, 'block');
-    assert.match(repeatedUpdate.reason, /host_capability_spreadsheet_update_already_reserved/);
+    assert.equal(repeatedUpdateWithoutInspect.decision, 'block');
+    assert.match(repeatedUpdateWithoutInspect.reason, /host_capability_spreadsheet_update_inspection_not_completed/);
+
+    await evaluateHookPayload('pre-tool', {
+      session_id: fixture.sessionId,
+      tool_name: 'mcp__acas-tools__spreadsheet_inspect',
+      tool_input: { path: workbookPath },
+      tool_use_id: 'inspect-after-update'
+    }, { root: fixture.root, state: fixture.state });
+    await evaluateHookPayload('post-tool', {
+      session_id: fixture.sessionId,
+      tool_name: 'mcp__acas-tools__spreadsheet_inspect',
+      tool_input: { path: workbookPath },
+      tool_response: {
+        structured_content: {
+          ok: true,
+          path: workbookPath,
+          sheet_names: ['Summary'],
+          row_counts: { Summary: 4 },
+          formulas: [],
+          error_cells: []
+        }
+      },
+      tool_use_id: 'inspect-after-update'
+    }, { root: fixture.root, state: fixture.state });
+    const repeatedUpdateAfterInspect: any = await evaluateHookPayload('pre-tool', {
+      session_id: fixture.sessionId,
+      tool_name: 'mcp__acas-tools__spreadsheet_update',
+      tool_input: { path: workbookPath, patch: { sheet: 'Summary', range: 'B4' } },
+      tool_use_id: 'update-after-inspect'
+    }, { root: fixture.root, state: fixture.state });
+    assert.equal(repeatedUpdateAfterInspect.decision, undefined);
   } finally {
     await fsp.rm(fixture.root, { recursive: true, force: true });
   }
@@ -1178,7 +1207,6 @@ test('host capability PostToolUse fails closed for missing or malformed datasour
     assert.ok(evidence.blockers.includes('host_capability_readonly_query_receipt_invalid'));
     assert.ok(evidence.blockers.includes('host_tool_response_malformed:datasource_query_readonly'));
     assert.ok(evidence.blockers.includes('host_capability_readonly_query_datasource_mismatch'));
-    assert.ok(evidence.blockers.includes('host_capability_readonly_query_count_invalid'));
     assert.equal(evidenceText.includes('must-not-persist'), false);
     assert.equal(evidenceText.includes('mysql:finance'), false);
     assert.equal(evidenceText.includes('mysql:hr'), false);

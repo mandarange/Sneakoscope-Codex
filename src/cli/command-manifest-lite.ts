@@ -31,7 +31,7 @@ export const COMMAND_MANIFEST_LITE = [
   { name: 'update', summary: 'Inspect, review, apply, or roll back the global SKS update', maturity: 'stable' },
   { name: 'uninstall', summary: 'Uninstall SKS global skills, hooks, config, menu bar, and optional project residue', maturity: 'stable', allowedDuringActiveRoute: true },
   { name: 'update-check', summary: 'Show the shared SKS, Codex CLI, and Menu Bar update status', maturity: 'stable', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
-  { name: 'mcp', summary: 'Manage scoped Codex MCP configuration', maturity: 'beta' },
+  { name: 'mcp', summary: 'Manage scoped Codex MCP configuration', maturity: 'beta', skipMigrationGate: true },
   { name: 'wizard', summary: 'Open setup wizard help', maturity: 'stable' },
   { name: 'usage', summary: 'Show focused usage topic', maturity: 'stable', readonly: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'quickstart', summary: 'Show quickstart flow', maturity: 'stable' },

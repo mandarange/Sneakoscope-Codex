@@ -2,13 +2,31 @@
 
 ## [Unreleased]
 
+### Changed
 
+- Require `compatibility` and `host_capabilities` on every `sks.agent-manifest.v1` validation; incomplete schema+tools-only manifests fail closed.
+- Allow bounded host-capability repetition: datasource read-only queries up to 4 per mission (schema-bound) and spreadsheet updates up to 3 (inspect after each mutation).
+- Make `sks mcp config` skip the update/migration gate so local Codex MCP config works without `SUPABASE_ACCESS_TOKEN`.
+- Stop automatic OMX/DCodex quarantine from `sks setup`, `sks doctor --fix`, and `sks update`; only `sks conflicts cleanup --yes` mutates, and it preserves unrelated MCP blocks such as `acas-tools`.
 
 ## [7.1.0] - 2026-07-22
 
+### Added
+
+- Add a card-based **Providers & Models** Control Center with a live OpenRouter catalog, explicit saved-key authentication state, connection testing, editable model IDs, and post-activation main-model verification.
+- Add owner-only per-role model preferences for `ui_implementer`, `native_app_specialist`, `implementation_specialist`, and `test_engineer`, with Save/Reset controls and official spawn-time model/reasoning routing.
+
+### Changed
+
+- Show a readable `SKS` menu-bar glyph for healthy and working states; reserve the update glyph for a real available update while preserving warning and attention priority.
+- Raise the unpacked package ceiling to `11,250,000` bytes for the native provider cards and role-model controls while retaining the `2510 KiB` packed ceiling.
+
 ### Fixed
 
-- Keep release metadata aligned after an explicit SKS version bump advances the package version.
+- Make the stored OpenRouter key usable by Codex Desktop through command-backed authentication without writing the raw key into TOML, and distinguish configuration success from app-restart success.
+- Make OpenRouter Test Connection authenticate against the live key endpoint and prove the requested model exists; a public catalog response no longer falsely reports the saved key as authenticated.
+- Prevent official custom-agent starts from combining `agent_type` or model/reasoning overrides with the rejected full-history fork mode; generated Naruto prompts and hook context now require bounded `fork_turns="none"` delivery.
+- Keep release metadata aligned after the explicit SKS 7.1.0 version bump.
 
 ## [7.0.5] - 2026-07-22
 

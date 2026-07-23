@@ -4,9 +4,14 @@ import { ensureDir, readText } from '../core/fsx.js';
 import {
   GLM_CODEX_CONFIG_PROVIDER_ID,
   GLM_52_OPENROUTER_MODEL,
+  OPENROUTER_AUTH_COMMAND,
+  OPENROUTER_AUTH_REFRESH_INTERVAL_MS,
+  OPENROUTER_AUTH_TIMEOUT_MS,
+  openRouterAuthCommandArgs,
   OPENROUTER_DEFAULT_PROFILE_ID,
   RETIRED_GLM_DESKTOP_CONFIG_PROFILE_IDS
 } from '../core/codex-app/openrouter-provider.js';
+import { openRouterSecretPaths, resolveOpenRouterApiKey } from '../core/providers/openrouter/openrouter-secret-store.js';
 import { reconcileRetiredSksConfigText } from '../core/auto-review.js';
 import type { CodexLbPersistenceMode } from '../core/codex-lb/codex-lb-setup.js';
 import {
@@ -90,31 +95,45 @@ export function removeCodexLbSharedOpenAiRouting(text: any = '', baseUrl: any = 
 }
 
 /** Ensure OpenRouter provider exists and strip retired GLM Desktop profile tables. */
-export function upsertCodexAppGlmConfig(text: any = '') {
+export function upsertCodexAppGlmConfig(text: any = '', input: { home?: string; env?: NodeJS.ProcessEnv } = {}) {
   let next = String(text || '');
+  const authEnv = { ...(input.env || process.env), ...(input.home ? { HOME: input.home } : {}) };
+  const authArgs = openRouterAuthCommandArgs(openRouterSecretPaths(authEnv).keyPath);
   const providerBlock = [
     `[model_providers.${GLM_CODEX_CONFIG_PROVIDER_ID}]`,
     'name = "OpenRouter"',
     'base_url = "https://openrouter.ai/api/v1"',
     'wire_api = "responses"',
-    'env_key = "OPENROUTER_API_KEY"',
     'requires_openai_auth = false'
   ].join('\n');
   next = upsertTomlTable(next, `model_providers.${GLM_CODEX_CONFIG_PROVIDER_ID}`, providerBlock);
+  const authBlock = [
+    `[model_providers.${GLM_CODEX_CONFIG_PROVIDER_ID}.auth]`,
+    `command = ${JSON.stringify(OPENROUTER_AUTH_COMMAND)}`,
+    `args = [${authArgs.map((value) => JSON.stringify(value)).join(', ')}]`,
+    `timeout_ms = ${OPENROUTER_AUTH_TIMEOUT_MS}`,
+    `refresh_interval_ms = ${OPENROUTER_AUTH_REFRESH_INTERVAL_MS}`
+  ].join('\n');
+  next = upsertTomlTable(next, `model_providers.${GLM_CODEX_CONFIG_PROVIDER_ID}.auth`, authBlock);
+  next = next.replace(
+    new RegExp(`\\n+\\[model_providers\\.${GLM_CODEX_CONFIG_PROVIDER_ID}\\.auth\\]`),
+    `\n\n[model_providers.${GLM_CODEX_CONFIG_PROVIDER_ID}.auth]`
+  );
   next = reconcileRetiredSksConfigText(next).text;
   return `${next.trim()}\n`;
 }
 
 export async function ensureGlobalCodexAppGlmProfile(opts: any = {}) {
-  if (process.env.SKS_SKIP_CODEX_GLM_PROFILE_REPAIR === '1' && opts.force !== true) {
+  const env = opts.env || process.env;
+  if (env.SKS_SKIP_CODEX_GLM_PROFILE_REPAIR === '1' && opts.force !== true) {
     return { ok: true, status: 'skipped', reason: 'SKS_SKIP_CODEX_GLM_PROFILE_REPAIR=1' };
   }
-  const home = opts.home || process.env.HOME || os.homedir();
+  const home = opts.home || env.HOME || os.homedir();
   const configPath = opts.configPath || codexLbConfigPath(home);
   try {
     await ensureDir(path.dirname(configPath));
     const current = await readText(configPath, '');
-    const next = upsertCodexAppGlmConfig(current);
+    const next = upsertCodexAppGlmConfig(current, { home, env: opts.env });
     const safeWrite = await safeWriteCodexConfigToml(configPath, current, next, 'openrouter-provider');
     return {
       ...safeWrite,
@@ -138,6 +157,43 @@ export async function ensureGlobalCodexAppGlmProfile(opts: any = {}) {
       retired_glm_profiles: [...RETIRED_GLM_DESKTOP_CONFIG_PROFILE_IDS]
     };
   }
+}
+
+export async function ensureStoredOpenRouterProviderDuringInstall(opts: any = {}) {
+  const home = opts.home || opts.env?.HOME || process.env.HOME || os.homedir();
+  const env = { ...(opts.env || process.env), HOME: home } as NodeJS.ProcessEnv;
+  const key = await resolveOpenRouterApiKey({ env });
+  if (!key.key) {
+    return {
+      schema: 'sks.openrouter-provider-upgrade-repair.v1',
+      ok: true,
+      status: 'skipped',
+      reason: 'openrouter_key_missing',
+      key_present: false,
+      key_source: null,
+      blockers: [],
+      warnings: key.warnings
+    };
+  }
+  const repair = await ensureGlobalCodexAppGlmProfile({
+    ...opts,
+    home,
+    env
+  });
+  const ok = repair?.ok !== false;
+  return {
+    schema: 'sks.openrouter-provider-upgrade-repair.v1',
+    ok,
+    status: ok ? repair?.status || 'present' : 'failed',
+    reason: ok ? 'stored_openrouter_key_provider_reconciled' : 'stored_openrouter_key_provider_repair_failed',
+    key_present: true,
+    key_source: key.source,
+    config_path: repair?.config_path || opts.configPath || codexLbConfigPath(home),
+    provider: GLM_CODEX_CONFIG_PROVIDER_ID,
+    blockers: ok ? [] : ['openrouter_provider_repair_failed'],
+    warnings: key.warnings,
+    repair
+  };
 }
 
 export function detectCodexLbSetupDrift(state: any = {}): string[] {

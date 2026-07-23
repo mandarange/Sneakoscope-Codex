@@ -39,7 +39,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         notificationAuthorizationDenied = notifications.authorizationDenied
         statusItem.autosaveName = "com.sneakoscope.sks-menubar"
         statusItem.button?.toolTip = "SKS Control Center"
-        statusItem.button?.setAccessibilityLabel("SKS status")
+        statusItem.button?.setAccessibilityLabel("SKS status — Starting")
         let menu = NSMenu()
         menu.delegate = self
         let version = NSMenuItem(title: "SKS \(AppRuntime.packageVersion)", action: nil, keyEquivalent: "")
@@ -238,15 +238,14 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private func apply(_ state: SKSStatusIcon, summary: String) {
         let pair: (String, String)
         switch state {
-        case .healthy: pair = ("SKSStatusTemplate", "checkmark.circle")
-        case .working: pair = ("SKSStatusTemplate", "ellipsis.circle")
+        case .healthy, .working: pair = ("SKSStatusTemplate", "textformat")
         case .attention: pair = ("SKSStatusAttentionTemplate", "exclamationmark.circle")
         case .updateAvailable: pair = ("SKSStatusUpdateTemplate", "arrow.down.circle")
         case .warning: pair = ("SKSStatusWarningTemplate", "exclamationmark.triangle")
         }
         statusItem.button?.image = AppIdentity.statusImage(resource: pair.0, symbol: pair.1)
         statusItem.button?.imagePosition = .imageOnly
-        statusItem.button?.setAccessibilityLabel("SKS status")
+        statusItem.button?.setAccessibilityLabel("SKS status — \(summary)")
         statusItem.button?.setAccessibilityValue(summary)
         statusItem.button?.toolTip = "SKS Control Center — \(summary)"
     }

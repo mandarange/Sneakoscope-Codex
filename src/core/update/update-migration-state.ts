@@ -379,25 +379,33 @@ const UPDATE_MIGRATION_STAGES: UpdateMigrationStageDefinition[] = [
 ];
 
 async function runOtherHarnessCleanupStage(root: string): Promise<Omit<UpdateMigrationStageRun, 'schema' | 'id' | 'min_from_version' | 'from_version'>> {
-  const { cleanupOtherHarnessConflicts } = await import('../harness-conflicts.js');
-  const cleanup = await cleanupOtherHarnessConflicts(root);
-  const blockers = cleanup.ok
-    ? []
-    : [
-        ...(cleanup.errors || []).map((row: any) => `other_harness_cleanup_error:${row.path}`),
-        ...((cleanup.remaining || []).map((row: any) => `other_harness_remaining:${row.path}`))
-      ];
+  const { scanHarnessConflicts } = await import('../harness-conflicts.js');
+  const scan = await scanHarnessConflicts(root);
+  if (scan.hard_block) {
+    return {
+      ok: false,
+      status: 'failed',
+      actions: ['other_harness_conflict_detected'],
+      blockers: scan.hard.map((row: any) => `other_harness_conflict:${row.path}`),
+      warnings: [],
+      detail: {
+        cleaned_count: 0,
+        remaining_count: scan.hard.length,
+        error_count: 0,
+        cleanup_prompt_command: 'sks conflicts cleanup --yes'
+      }
+    };
+  }
   return {
-    ok: blockers.length === 0,
-    status: blockers.length ? 'failed' : (cleanup.cleaned.length ? 'ok' : 'ok'),
-    actions: cleanup.cleaned.length ? ['quarantined_other_harness_conflicts'] : ['other_harness_surface_clean'],
-    blockers,
+    ok: true,
+    status: 'ok',
+    actions: ['other_harness_conflict_check_clean'],
+    blockers: [],
     warnings: [],
     detail: {
-      cleaned_count: cleanup.cleaned.length,
-      remaining_count: (cleanup.remaining || []).length,
-      error_count: (cleanup.errors || []).length,
-      run_id: cleanup.run_id
+      cleaned_count: 0,
+      remaining_count: 0,
+      error_count: 0
     }
   };
 }

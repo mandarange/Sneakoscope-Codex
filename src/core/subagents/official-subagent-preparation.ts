@@ -28,6 +28,7 @@ import {
 import { createSubagentWaveLifecycle } from './wave-lifecycle.js'
 import { decideOfficialSubagentModel } from '../agents/agent-effort-policy.js'
 import { readBoundedTriwikiAttention } from './triwiki-attention.js'
+import { readRoleModelPreferences } from './role-model-preferences.js'
 import {
   SUBAGENT_EVIDENCE_FILENAME,
   SUBAGENT_EVENT_LOG_FILENAME,
@@ -79,6 +80,7 @@ export interface OfficialSubagentPreparationInput {
   mode?: 'generic' | 'naruto'
   readOnly?: boolean
   observedParentModel?: string | null
+  env?: NodeJS.ProcessEnv
   preparationOnly?: boolean
   statePatch?: (prepared: {
     plan: Record<string, any>
@@ -129,6 +131,7 @@ async function prepareOfficialSubagentMissionLocked(input: OfficialSubagentPrepa
     triwikiAttentionLimit(taskProfile),
     goal
   )
+  const roleModelPreferences = await readRoleModelPreferences({ env: input.env || process.env })
   const operatorRequested = input.requestedSubagentsExplicit ?? input.requestedSubagents !== undefined
   const routeContract = mode === 'generic' && !operatorRequested
     ? routeOwnedSubagentContract(input.route)
@@ -191,7 +194,8 @@ async function prepareOfficialSubagentMissionLocked(input: OfficialSubagentPrepa
     waveCount: budget.waveCount,
     capacity: budget.capacity,
     triwikiAttention,
-    recommendedAgents: suggestedAgents
+    recommendedAgents: suggestedAgents,
+    roleModelPreferences: roleModelPreferences.store.roles
   })
   const selectedAgentPlan = officialSubagentOnDemandRolePlan(suggestedAgents)
   const agentRouting = Object.fromEntries(Object.entries(selectedAgentPlan).map(([name, config]) => {
@@ -206,14 +210,16 @@ async function prepareOfficialSubagentMissionLocked(input: OfficialSubagentPrepa
       agentId: name,
       readonly: config.sandbox_mode === 'read-only'
     })
+    const preference = roleModelPreferences.store.roles[name]
     return [name, {
       ...config,
       // Catalog TOML remains the spawn-type contract; dynamic decision records why
       // this role maps onto the sealed four-profile matrix for this goal.
-      routed_model: decision.model,
-      routed_model_reasoning_effort: decision.model_reasoning_effort,
-      routed_model_policy: decision.model_selection_reason,
-      routing_dynamic: true
+      routed_model: preference?.model || decision.model,
+      routed_model_reasoning_effort: preference?.reasoning_effort || decision.model_reasoning_effort,
+      routed_model_policy: preference ? 'user_role_model_preference' : decision.model_selection_reason,
+      routing_dynamic: !preference,
+      role_model_preference_source: preference ? 'user-scoped-owner-only' : 'managed-default'
     }]
   }))
   const agentCatalog = onDemandAgentCatalogMetadata(selectedAgentPlan)
@@ -221,6 +227,7 @@ async function prepareOfficialSubagentMissionLocked(input: OfficialSubagentPrepa
   const ssotGuardValidation = validateSsotGuardArtifact(ssotGuard)
   const configBlockers = [
     ...officialConfig.blockers,
+    ...roleModelPreferences.blockers,
     ...ssotGuardValidation.issues.map((issue) => `ssot_guard:${issue}`),
     ...sliceSafety.blockers.map((blocker) => `subagent_slice:${blocker}`),
     ...(budget.capacity.exhausted ? ['subagent_capacity_exhausted'] : [])
@@ -268,6 +275,12 @@ async function prepareOfficialSubagentMissionLocked(input: OfficialSubagentPrepa
     },
     agent_catalog: agentCatalog,
     agents: agentRouting,
+    role_model_preferences: {
+      schema: roleModelPreferences.store.schema,
+      path: roleModelPreferences.path,
+      overrides: roleModelPreferences.store.roles,
+      blockers: roleModelPreferences.blockers
+    },
     verification_budget: verification,
     verification_checks: [],
     verification: { budget: verification },

@@ -21,6 +21,10 @@ import {
   type SubagentSkillAvailabilityAdmission
 } from './subagent-skill-availability-contract.js';
 
+const MAX_OFFICIAL_TRANSCRIPT_FIRST_LINE_BYTES = 64 * 1024;
+const MAX_OFFICIAL_TRANSCRIPT_DISCOVERY_ENTRIES = 4_096;
+const MAX_OFFICIAL_TRANSCRIPT_DISCOVERY_DEPTH = 4;
+
 function rootGuardDir(root: string): string {
   return path.join(root, '.sneakoscope', 'guards', GUARD_DIR);
 }
@@ -331,12 +335,16 @@ export async function officialSubagentThreadIdFromTranscript(value: unknown): Pr
   if (!handle) return null;
   try {
     const statAfterOpen = await handle.stat();
-    if (!statAfterOpen.isFile() || statAfterOpen.size > 1024 * 1024) return null;
-    const buffer = Buffer.alloc(1024 * 1024);
+    if (!statAfterOpen.isFile() || statAfterOpen.size < 1) return null;
+    const buffer = Buffer.alloc(MAX_OFFICIAL_TRANSCRIPT_FIRST_LINE_BYTES + 1);
     const read = await handle.read(buffer, 0, buffer.length, 0);
     if (read.bytesRead < 1) return null;
-    const text = buffer.subarray(0, read.bytesRead).toString('utf8');
-    const line = text.split(/\r?\n/, 1)[0]?.trim();
+    const bytes = buffer.subarray(0, read.bytesRead);
+    const newline = bytes.indexOf(0x0a);
+    if (newline < 0 && statAfterOpen.size > read.bytesRead) return null;
+    const firstLine = newline >= 0 ? bytes.subarray(0, newline) : bytes;
+    if (firstLine.byteLength > MAX_OFFICIAL_TRANSCRIPT_FIRST_LINE_BYTES) return null;
+    const line = firstLine.toString('utf8').replace(/\r$/, '').trim();
     if (!line) return null;
     const row = JSON.parse(line);
     const source = row?.payload?.source?.subagent;
@@ -349,6 +357,53 @@ export async function officialSubagentThreadIdFromTranscript(value: unknown): Pr
   } finally {
     await handle.close().catch(() => undefined);
   }
+}
+
+export async function officialSubagentThreadIdFromSessions(
+  claimedThreadId: unknown
+): Promise<string | null> {
+  const threadId = boundedAgentThreadId(claimedThreadId);
+  if (!threadId) return null;
+  const sessionsRoot = path.resolve(
+    process.env.CODEX_HOME
+      ? path.join(process.env.CODEX_HOME, 'sessions')
+      : path.join(process.env.HOME || os.homedir(), '.codex', 'sessions')
+  );
+  const sessionsReal = await fsp.realpath(sessionsRoot).catch(() => null);
+  if (!sessionsReal) return null;
+  const suffix = `-${threadId}.jsonl`;
+  let inspectedEntries = 0;
+  const matches: string[] = [];
+
+  const visit = async (directory: string, depth: number): Promise<boolean> => {
+    let handle;
+    try {
+      handle = await fsp.opendir(directory);
+      for await (const entry of handle) {
+        inspectedEntries += 1;
+        if (inspectedEntries > MAX_OFFICIAL_TRANSCRIPT_DISCOVERY_ENTRIES) return false;
+        const candidate = path.join(directory, entry.name);
+        if (entry.isDirectory()) {
+          if (depth >= MAX_OFFICIAL_TRANSCRIPT_DISCOVERY_DEPTH) continue;
+          if (!await visit(candidate, depth + 1)) return false;
+          continue;
+        }
+        if (!entry.isFile() || !entry.name.endsWith(suffix)) continue;
+        const resolvedThreadId = await officialSubagentThreadIdFromTranscript(candidate);
+        if (resolvedThreadId !== threadId) continue;
+        matches.push(candidate);
+        if (matches.length > 1) return false;
+      }
+      return true;
+    } catch {
+      return false;
+    } finally {
+      await handle?.close().catch(() => undefined);
+    }
+  };
+
+  if (!await visit(sessionsReal, 0) || matches.length !== 1) return null;
+  return threadId;
 }
 
 function pathIsInside(root: string, candidate: string): boolean {

@@ -9,6 +9,7 @@ import {
   officialSubagentRoleCatalog,
   selectOfficialSubagentRole
 } from './agent-catalog.js'
+import type { RoleModelPreference } from './role-model-preferences.js'
 
 export interface OfficialSubagentSlice {
   id: string
@@ -33,6 +34,7 @@ export function buildOfficialSubagentPrompt(input: {
   capacity?: SubagentCapacityController
   triwikiAttention?: BoundedTriwikiAttention
   recommendedAgents?: readonly string[]
+  roleModelPreferences?: Readonly<Record<string, RoleModelPreference>>
 }): string {
   const maxThreads = clampThreads(input.maxThreads)
   const requestedSubagents = normalizeRequestedSubagents(input.requestedSubagents, input.slices.length)
@@ -77,12 +79,16 @@ export function buildOfficialSubagentPrompt(input: {
     const mode = slice.readOnly ? 'read-only' : 'use the parent permission mode'
     const paths = (slice.paths || []).map((entry) => String(entry).trim()).filter(Boolean)
     const role = officialSubagentOnDemandRoleCatalog([agentName])[0]
+    const preference = input.roleModelPreferences?.[agentName]
 
     return [
       `${index + 1}. [${slice.id}] use custom agent \`${agentName}\``,
       `   title: ${slice.title}`,
       `   task: ${slice.description}`,
       `   model policy: ${role ? `${role.model_policy} (${role.model}/${role.model_reasoning_effort})` : 'resolve from installed custom agent'}`,
+      `   effective model preference: ${preference ? `${preference.model}/${preference.reasoning_effort} (user override)` : 'managed default/dynamic routing'}`,
+      `   spawn contract: ${preference ? `pass model=${JSON.stringify(preference.model)} and reasoning_effort=${JSON.stringify(preference.reasoning_effort)} when spawning this role` : 'omit model/reasoning overrides and preserve the installed custom-agent default'}`,
+      '   context contract: pass fork_turns="none" and carry this complete bounded slice contract in message because agent_type is selected',
       `   mode: ${mode}`,
       `   paths: ${paths.join(', ') || 'assigned by parent'}`
     ].join('\n')
@@ -111,6 +117,9 @@ Host capability policy:
 Subagent rules:
 - use only Codex official subagent threads; do not launch shell workers, a custom scheduler, a worker pool, or model fanout
 - select the narrowest matching project custom agent by its description; the custom agent name is the spawn type
+- custom \`agent_type\` selection and spawn-time \`model\`/\`reasoning_effort\` overrides must use \`fork_turns="none"\` or a positive bounded turn count, with the complete bounded slice contract in \`message\`
+- never combine \`fork_turns="all"\` or the omitted/default full-history mode with \`agent_type\`, \`model\`, or \`reasoning_effort\`; Codex rejects that start before SubagentStart
+- a full-history fork is allowed only when \`agent_type\`, \`model\`, and \`reasoning_effort\` are all omitted
 - use \`worker\` with gpt-5.6-luna and max reasoning only for tiny, short-context, mechanical work with no exploration or judgment
 - use gpt-5.6-sol with high reasoning for ordinary UI, logic, backend, and native implementation
 - use gpt-5.6-sol with max reasoning only for focused unresolved, high-risk, final-review, architecture, security, database, research, release, or other explicit judgment slices
@@ -154,6 +163,9 @@ ${renderSliceSafety(sliceSafety, parentDecompositionRequired)}
 Central TriWiki context:
 ${triwiki}
 
+Role model preference metadata:
+${renderRoleModelPreferenceMetadata(input.roleModelPreferences)}
+
 Project custom agent catalog:
 ${catalog}
 
@@ -168,6 +180,7 @@ Final parent output:
 - use this exact schema so SKS can correlate every stopped agent thread with a trustworthy parent outcome:
 {
   "schema": "sks.subagent-parent-summary.v1",
+  "run_id": "workflow_run_id from subagent-plan.json",
   "status": "completed|blocked|failed",
   "summary": "Completion Summary: concise integrated result. Honest Mode: goal/evidence/checks/gaps assessment.",
   "thread_outcomes": [
@@ -198,10 +211,21 @@ Final parent output:
   "blockers": []
 }
 - include one thread_outcomes row for every requested subagent; a SubagentStop event alone never proves success
+- copy workflow_run_id from subagent-plan.json into run_id so delayed or stale summaries cannot bind to another run
 - if changed_files is non-empty, include at least one passed named check or a specifically justified not_applicable verification row
 - use empty artifacts/capabilities_used arrays when no host capability was used; SKS overwrites these fields with observed Codex JSONL evidence before persistence
 - keep completion summary and Honest Mode wording inside the JSON fields; do not add prose outside the object
 `.trim()
+}
+
+function renderRoleModelPreferenceMetadata(preferences: Readonly<Record<string, RoleModelPreference>> | undefined): string {
+  const rows = Object.entries(preferences || {}).map(([role, preference]) => ({
+    role,
+    model: preference.model,
+    reasoning_effort: preference.reasoning_effort,
+    source: 'user-scoped-owner-only'
+  }))
+  return rows.length ? JSON.stringify(rows) : '[]'
 }
 
 export interface OfficialSubagentSliceSafety {

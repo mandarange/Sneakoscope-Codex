@@ -306,10 +306,17 @@ test('SubagentStart missing-skill handoff blocks only that child tools and binds
     const afterStop: any = await evaluateHookPayload('pre-tool', {
       ...preToolPayload(blockedTranscript, blockedAgent),
       cwd: root,
-      tool_use_id: 'tool-after-stop'
-    }, { root, state: admissionBindingState(missionId, workflowRunId) });
-    assert.equal(afterStop.decision, 'block');
-    assert.match(String(afterStop.reason || ''), /subagent_skill_availability_admission_missing/);
+      tool_use_id: 'tool-after-stop',
+      turn_id: 'turn-resumed-blocked-agent'
+    }, { root, state });
+    assert.equal(afterStop.decision, undefined);
+    const resumedAdmission = JSON.parse(await fsp.readFile(path.join(
+      dir,
+      'subagent-skill-availability',
+      `thread-${sha256(blockedAgent)}.json`
+    ), 'utf8'));
+    assert.equal(resumedAdmission.status, 'allowed');
+    assert.equal(resumedAdmission.turn_id_hash, sha256('turn-resumed-blocked-agent'));
   } finally {
     if (oldHome === undefined) delete process.env.HOME;
     else process.env.HOME = oldHome;

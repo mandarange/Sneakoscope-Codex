@@ -83,7 +83,7 @@ test('manifest validation permits a well-formed additive v1 host capability', ()
   assert.equal(validation.ok, true, validation.issues.join(', '));
 });
 
-test('manifest validation preserves the prior v1 shape when additive capability fields are absent', () => {
+test('manifest validation rejects incomplete v1 manifests missing compatibility and host_capabilities', () => {
   const current = buildAgentManifest();
   const priorV1 = {
     schema: current.schema,
@@ -91,7 +91,43 @@ test('manifest validation preserves the prior v1 shape when additive capability 
     tools: current.tools
   };
   const validation = validateAgentManifest(priorV1);
-  assert.equal(validation.ok, true, validation.issues.join(', '));
+  assert.equal(validation.ok, false, validation.issues.join(', '));
+  assert.ok(validation.issues.includes('compatibility'));
+  assert.ok(validation.issues.includes('host_capabilities'));
+});
+
+test('manifest validation rejects missing compatibility block', () => {
+  const manifest: any = buildAgentManifest();
+  delete manifest.compatibility;
+  const validation = validateAgentManifest(manifest);
+  assert.equal(validation.ok, false, validation.issues.join(', '));
+  assert.ok(validation.issues.includes('compatibility'));
+});
+
+test('manifest validation rejects missing host_capabilities block', () => {
+  const manifest: any = buildAgentManifest();
+  delete manifest.host_capabilities;
+  const validation = validateAgentManifest(manifest);
+  assert.equal(validation.ok, false, validation.issues.join(', '));
+  assert.ok(validation.issues.includes('host_capabilities'));
+});
+
+test('manifest validation rejects stale host capability digest', () => {
+  const manifest: any = buildAgentManifest();
+  manifest.host_capabilities.capability_digest = 'sha256:0000000000000000000000000000000000000000000000000000000000000000';
+  const validation = validateAgentManifest(manifest);
+  assert.equal(validation.ok, false, validation.issues.join(', '));
+  assert.ok(validation.issues.includes('host_capabilities:capability_digest'));
+});
+
+test('manifest validation rejects duplicate host capability ids', () => {
+  const manifest: any = buildAgentManifest();
+  const duplicate = manifest.host_capabilities.capabilities.find((capability: any) => capability.id === 'host.web.capture.v1');
+  manifest.host_capabilities.capabilities.push({ ...duplicate });
+  manifest.host_capabilities.capability_digest = hostCapabilityDigest(manifest.host_capabilities.capabilities);
+  const validation = validateAgentManifest(manifest);
+  assert.equal(validation.ok, false, validation.issues.join(', '));
+  assert.ok(validation.issues.includes('host_capabilities:duplicate:host.web.capture.v1'));
 });
 
 test('host capability descriptors expose the project MCP Office/Data tool names without executing them', () => {

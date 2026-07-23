@@ -14,7 +14,13 @@ import { doctorCodexAppGlmProfile, installCodexAppGlmProfile } from '../core/cod
 import { openRouterStatus, useOpenRouter } from '../core/codex-app/openrouter-activate.js';
 import { OPENROUTER_DEFAULT_MODEL } from '../core/codex-app/openrouter-provider.js';
 import { promptForOpenRouterKeyHidden, writeStoredOpenRouterKey } from '../core/providers/openrouter/openrouter-secret-store.js';
+import { compactOpenRouterModelsResult, listOpenRouterModels, testOpenRouterConnection } from '../core/providers/openrouter/openrouter-account.js';
 import { restartCodexApp } from '../core/codex-app/codex-app-restart.js';
+import {
+  resetRoleModelPreference,
+  roleModelPreferencesStatus,
+  setRoleModelPreference
+} from '../core/subagents/role-model-preferences.js';
 
 export async function run(_command: any, args: any = []) {
   const action = args[0] || 'check';
@@ -80,6 +86,30 @@ export async function run(_command: any, args: any = []) {
     const result = await openRouterStatus({});
     return printCodexAppResult(args, result);
   }
+  if (action === 'openrouter-models') {
+    const models = await listOpenRouterModels({});
+    const result = flag(args, '--ids-only') ? compactOpenRouterModelsResult(models) : models;
+    return printCodexAppResult(args, result);
+  }
+  if (action === 'openrouter-test') {
+    const result = await testOpenRouterConnection({ model: readOption(args, '--model', '') });
+    return printCodexAppResult(args, result);
+  }
+  if (action === 'role-models') {
+    return printCodexAppResult(args, await roleModelPreferencesStatus());
+  }
+  if (action === 'set-role-model') {
+    const result = await setRoleModelPreference({
+      role: readOption(args, '--role', ''),
+      model: readOption(args, '--model', ''),
+      reasoning: readOption(args, '--reasoning', '')
+    });
+    return printCodexAppResult(args, result);
+  }
+  if (action === 'reset-role-model') {
+    const result = await resetRoleModelPreference({ role: readOption(args, '--role', '') });
+    return printCodexAppResult(args, result);
+  }
   if (action === 'product-design' || action === 'design-product' || action === 'ensure-product-design') {
     const checkOnly = flag(args, '--check-only') || flag(args, '--no-install');
     const status = await codexProductDesignPluginStatus({
@@ -133,7 +163,7 @@ export async function run(_command: any, args: any = []) {
     if (!status.ok) process.exitCode = 1;
     return;
   }
-  console.error('Usage: sks codex-app check|status|harness-matrix|skill-sync|agent-role-sync|init-deep|hook-lifecycle|execution-profile|set-openrouter-key [--api-key-stdin]|use-openrouter --model <id>|openrouter-status|product-design [--check-only]|ensure-product-design|chrome-extension|pat status|remote-control [--json]');
+  console.error('Usage: sks codex-app check|status|harness-matrix|skill-sync|agent-role-sync|init-deep|hook-lifecycle|execution-profile|set-openrouter-key [--api-key-stdin]|use-openrouter --model <id>|openrouter-status|openrouter-models [--ids-only]|openrouter-test [--model <id>]|role-models|set-role-model --role <name> --model <id> --reasoning <effort>|reset-role-model --role <name>|product-design [--check-only]|ensure-product-design|chrome-extension|pat status|remote-control [--json]');
   console.error('Note: glm-profile is retired (strips leftover Desktop GLM profiles); use set-openrouter-key / use-openrouter.');
   process.exitCode = 1;
 }

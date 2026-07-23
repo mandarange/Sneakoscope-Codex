@@ -287,6 +287,7 @@ const AGENTS_BLOCK = [
   '- General code-changing work uses the `$Naruto` Codex official subagent workflow; Answer and genuinely tiny DFix work stay lightweight.',
   '- The parent owns decomposition, integration, verification, and the final answer. Delegate only independent slices with disjoint write scopes, reuse capacity across root-owned waves, and never nest subagents.',
   '- Route model by the slice: Luna Max for tiny mechanical work, Sol High for implementation, Terra Medium for read-heavy context or direct tool operation, and Sol Max only for focused judgment, risk, or final review.',
+  '- Codex 0.145 spawn compatibility: a full-history fork (`fork_turns="all"`, including the omitted/default mode) inherits the parent agent type, model, and reasoning effort. When selecting a custom `agent_type` or overriding `model`/`reasoning_effort`, use `fork_turns="none"` or a positive bounded turn count and carry the complete bounded slice contract in `message`; use full history only with those overrides omitted.',
   '- Route-specific skills own route-specific details. Do not inject unrelated Design, PPT, image, browser, research, DB, or release policy into ordinary work.',
   '- Do not stop at a plan when implementation was requested. Finish and verify, or report a concrete hard blocker.',
   '',
@@ -303,7 +304,7 @@ const AGENTS_BLOCK = [
   '- Keep trust-boundary validation, secrets, permissions, data integrity, rollback, accessibility, and explicit user requirements intact.',
   '- Database and destructive operations are read-only by default. Live mutation, publishing, deployment, credential changes, and other irreversible external actions require explicit scoped authorization.',
   '- Never fabricate fallback implementations or success evidence. If the real requested path is unavailable, stop with evidence.',
-  '- Conflicting third-party Codex harness markers are removed from the live surface during `sks update`, `sks setup`, and `sks doctor --fix` (or `sks conflicts cleanup --yes`); a backup is kept under `.sneakoscope/quarantine/other-harness/`.',
+  '- Conflicting third-party Codex harness markers are removed from the live surface only via `sks conflicts cleanup --yes`; a backup is kept under `.sneakoscope/quarantine/other-harness/`.',
   '',
   '## Codex App',
   '',
@@ -1172,7 +1173,6 @@ async function resolveGitDir(root: any) {
   }
   return dotGit;
 }
-
 export function codexAppQuickReference(scope: any, commandPrefix: any) {
   return [
     '# ㅅㅋㅅ',
@@ -1186,6 +1186,7 @@ export function codexAppQuickReference(scope: any, commandPrefix: any) {
     ...currentDollarCommands().map((c: any) => `- \`${sksPrefixedDollarCommand(c.command)}\`: ${c.route}`),
     `Picker skills: ${currentDollarCommandAliases().map((x: any) => x.app_skill).join(', ')}.`,
     'Routing: Answer is read-only, DFix is tiny and lightweight, and general code-changing work uses Naruto with official Codex subagent threads and parent-owned integration.',
+    'Subagent context: Codex 0.145 full-history forks (`fork_turns="all"`, including the default) inherit agent type/model/reasoning. Custom `agent_type` or model/reasoning overrides must use `fork_turns="none"` or a positive bounded turn count, with the complete bounded slice contract in `message`.',
     'Goal: Codex native /goal is the only persisted goal owner; no SKS Goal mission, bridge, compatibility loop, or fallback state is allowed.',
     `Context: use bounded TriWiki recall, refresh after material changes, validate before handoff/final, and use Context7 or official vendor docs when external contracts or versions matter.`,
     `Full routes write reflection.md, record only real lessons to ${REFLECTION_MEMORY_PATH}, then finish with a completion summary and Honest Mode.`,
@@ -1194,7 +1195,6 @@ export function codexAppQuickReference(scope: any, commandPrefix: any) {
     'Publishing, deployment, live database mutation, destructive actions, and other irreversible external effects require explicit scoped authorization.'
   ].join('\n') + '\n';
 }
-
 function escapeRegExp(value: any) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

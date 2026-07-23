@@ -36,32 +36,27 @@ export async function run(_command: any, args: any = [], deps: any = {}) {
   const doctorFix = flag(args, '--fix');
   const globalOnly = doctorFix && flag(args, '--global-only');
   if (doctorFix) {
-    const { cleanupOtherHarnessConflicts } = await import('../core/harness-conflicts.js');
     const conflictScan = await scanHarnessConflicts(root);
     if (conflictScan.hard_block) {
-      const cleanup = await cleanupOtherHarnessConflicts(root);
-      if (!cleanup.ok) {
-        const blocked = {
-          schema: 'sks.doctor-status.v3',
-          ok: false,
-          status: 'blocked_harness_conflict',
-          diagnostic_depth: 'fix',
-          root,
-          blockers: (cleanup.remaining || conflictScan.hard).map((item: any) => `${item.name || 'harness'}:${item.path}`),
-          conflicts: cleanup.after?.conflicts || conflictScan.conflicts,
-          other_harness_cleanup: cleanup,
-          cleanup_prompt_command: 'sks conflicts cleanup --yes',
-          no_fix_writes_performed: cleanup.cleaned.length === 0
-        };
-        process.exitCode = 1;
-        if (flag(args, '--json')) {
-          printJson(blocked);
-          return blocked;
-        }
-        console.error(formatHarnessConflictReport(cleanup.after || conflictScan, { includePrompt: false }));
-        console.error('Automatic OMX/DCodex removal did not clear every conflict. Live markers must be removed; inspect backup under .sneakoscope/quarantine/other-harness/.');
+      const blocked = {
+        schema: 'sks.doctor-status.v3',
+        ok: false,
+        status: 'blocked_harness_conflict',
+        diagnostic_depth: 'fix',
+        root,
+        blockers: conflictScan.hard.map((item: any) => `${item.name || 'harness'}:${item.path}`),
+        conflicts: conflictScan.conflicts,
+        cleanup_prompt_command: 'sks conflicts cleanup --yes',
+        no_fix_writes_performed: true
+      };
+      process.exitCode = 1;
+      if (flag(args, '--json')) {
+        printJson(blocked);
         return blocked;
       }
+      console.error(formatHarnessConflictReport(conflictScan, { includePrompt: false }));
+      console.error('Run `sks conflicts cleanup --yes` to quarantine OMX/DCodex markers before doctor --fix.');
+      return blocked;
     }
   }
   const doctorProfile = doctorProfileFromArgs(args, doctorFix);
@@ -92,6 +87,8 @@ export async function executeDoctorGlobalOnlyFix(args: any[] = [], root: string,
     || (await import('../core/doctor/command-alias-cleanup.js')).runDoctorCommandAliasCleanup;
   const ensureGlobalFastModeImpl = deps.ensureGlobalCodexFastModeDuringInstallImpl
     || (await import('../cli/install-helpers.js')).ensureGlobalCodexFastModeDuringInstall;
+  const ensureStoredOpenRouterProviderImpl = deps.ensureStoredOpenRouterProviderDuringInstallImpl
+    || (await import('../cli/install-helpers.js')).ensureStoredOpenRouterProviderDuringInstall;
   const installMenuBarImpl = deps.installSksMenuBarImpl || installSksMenuBar;
   const codexLbStatusImpl = deps.codexLbStatusImpl || codexLbStatus;
 
@@ -135,6 +132,16 @@ export async function executeDoctorGlobalOnlyFix(args: any[] = [], root: string,
     status: 'failed',
     error: err?.message || String(err)
   }));
+  const openRouterEnv = deps.env || (deps.home
+    ? { ...process.env, HOME: home, SKS_HOME: path.join(home, '.sneakoscope') }
+    : { ...process.env, HOME: home });
+  const openRouterProvider = await ensureStoredOpenRouterProviderImpl({ home, env: openRouterEnv }).catch((err: any) => ({
+    schema: 'sks.openrouter-provider-upgrade-repair.v1',
+    ok: false,
+    status: 'failed',
+    blockers: ['openrouter_provider_repair_failed'],
+    error: err?.message || String(err)
+  }));
   const menuBar = await installMenuBarImpl({
     home,
     root: home,
@@ -156,10 +163,12 @@ export async function executeDoctorGlobalOnlyFix(args: any[] = [], root: string,
   const globalFastModeReady = (globalFastMode as any)?.status !== 'failed'
     && (globalFastMode as any)?.ok !== false;
   const menuBarReady = (menuBar as any)?.ok !== false;
+  const openRouterProviderReady = (openRouterProvider as any)?.ok !== false;
   const blockers = [...new Set([
     ...(!globalSkillsReady ? [`global_skills_reconcile_failed:${(globalSkills as any)?.error || 'core_skill_integrity'}`] : []),
     ...((currentSurface as any)?.ok !== true ? ((currentSurface as any)?.blockers || ['global_current_surface_reconcile_failed']) : []),
     ...(!globalFastModeReady ? [`global_fast_mode_repair_failed:${(globalFastMode as any)?.error || (globalFastMode as any)?.status || 'unknown'}`] : []),
+    ...(!openRouterProviderReady ? ((openRouterProvider as any)?.blockers || ['openrouter_provider_repair_failed']) : []),
     ...(!menuBarReady ? ((menuBar as any)?.blockers || ['sks_menubar_repair_failed']) : []),
     ...(!recoveryReady ? ((providerStatus as any)?.tool_output_recovery?.blockers || ['codex_lb_tool_output_recovery_unverified']) : [])
   ].map(String).filter(Boolean))];
@@ -188,6 +197,7 @@ export async function executeDoctorGlobalOnlyFix(args: any[] = [], root: string,
     skills: { global: globalSkills, project: { skipped: true, reason: 'global_only_doctor' } },
     current_public_surface: currentSurface,
     codex_app_fast_mode: globalFastMode,
+    openrouter_provider: openRouterProvider,
     sks_menubar: menuBar,
     codex_lb: {
       provider_status: providerStatus,
@@ -197,6 +207,7 @@ export async function executeDoctorGlobalOnlyFix(args: any[] = [], root: string,
     blockers,
     next_actions: [
       ...(recoveryReady ? [] : ((providerStatus as any)?.tool_output_recovery?.operator_actions || [])),
+      ...(!openRouterProviderReady ? ['Run `sks codex-app set-openrouter-key` to repair the stored-key provider configuration without switching models.'] : []),
       'Run `sks doctor --fix --json` from a specific project directory when project-scoped repair is required.'
     ]
   };
@@ -430,10 +441,20 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
   const doctorDirtyPlan = doctorFix ? (await import('../core/doctor/doctor-dirty-planner.js')).planDoctorDirtyRepair(root, doctorPhaseIds) : null;
   let setupRepair = null;
   let sksUpdate: any = null;
+  let openRouterProviderRepair: any = { ok: true, status: 'skipped', reason: 'doctor_without_fix' };
   let migrationPreFix: Record<string, string | null> | null = null;
   if (doctorFix) {
     migrationPreFix = await captureCodexConfigSnapshot();
     const installScope = installScopeFromArgs(args);
+    openRouterProviderRepair = flag(args, '--local-only')
+      ? { ok: true, status: 'skipped', reason: 'local-only repair' }
+      : await (await import('../cli/install-helpers.js')).ensureStoredOpenRouterProviderDuringInstall().catch((err: any) => ({
+          schema: 'sks.openrouter-provider-upgrade-repair.v1',
+          ok: false,
+          status: 'failed',
+          blockers: ['openrouter_provider_repair_failed'],
+          error: err?.message || String(err)
+        }));
     setupRepair = {
       schema: 'sks.doctor-setup-phase.v2',
       ok: true,
@@ -447,7 +468,8 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
         : { status: 'skipped', reason: 'project or local-only repair' },
       codex_app_fast_mode: flag(args, '--local-only')
         ? { status: 'skipped', reason: 'local-only repair' }
-        : await (await import('../cli/install-helpers.js')).ensureGlobalCodexFastModeDuringInstall().catch((err: any) => ({ status: 'failed', error: err?.message || String(err) }))
+        : await (await import('../cli/install-helpers.js')).ensureGlobalCodexFastModeDuringInstall().catch((err: any) => ({ status: 'failed', error: err?.message || String(err) })),
+      openrouter_provider: openRouterProviderRepair
     };
   }
   const skillsReconcile = await reconcileDoctorSkills(root, doctorFix);
@@ -1216,7 +1238,12 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     ]
   });
   if (doctorFix) {
-    const readinessBlockers = Array.isArray((ready as any).blockers) ? (ready as any).blockers.map(String).filter(Boolean) : [];
+    const readinessBlockers = [
+      ...(Array.isArray((ready as any).blockers) ? (ready as any).blockers.map(String).filter(Boolean) : []),
+      ...((openRouterProviderRepair as any)?.ok === false
+        ? (((openRouterProviderRepair as any)?.blockers || ['openrouter_provider_repair_failed']).map(String))
+        : [])
+    ];
     const migrationWarnings = [
       ...((doctorNativeCapabilityRepair as any)?.optional_warnings || []),
       ...((doctorFixPostcheck as any)?.optional_warnings || [])
@@ -1262,6 +1289,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     && (commandAliasCleanup as any).ok !== false
     && (codexStartupRepair as any).ok !== false
     && (agentRoleConfigRepair as any).ok !== false
+    && (openRouterProviderRepair as any).ok !== false
     && ((officialSubagentConfig as any).blockers || []).length === 0
     && codexLbRecoveryReady;
   const result = {
@@ -1281,6 +1309,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     rust,
     codex_app: codexApp,
     codex_app_ui: codexAppUi,
+    openrouter_provider: openRouterProviderRepair,
     sks_menubar: sksMenuBar,
     provider_context: providerContext,
     codex_lb: codexLb,
@@ -1341,7 +1370,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     sneakoscope: { ok: await exists(`${root}/.sneakoscope`) },
     package: { bytes: pkgBytes, human: formatBytes(pkgBytes) },
     skills: skillsReconcile,
-    repair: { sks_update: sksUpdate, setup: setupRepair, codex_config: configRepair, migration_journal: migrationJournal, global_sks_installs: globalSksInstallCleanup, agent_role_config: agentRoleConfigRepair, zellij: zellijRepair, context7: context7Repair, codex_startup: codexStartupRepair, startup_config: startupConfigRepair, context7_mcp: context7McpRepair, supabase_mcp: supabaseMcpRepair, mcp_transport_collision: mcpTransportCollisionRepair, imagegen: imagegenRepair, computer_use: computerUseRepair, browser_use: browserUseRepair, hook_trust: hookTrustRepair, sks_menubar: sksMenuBar, doctor_transaction: doctorFixTransaction, doctor_dirty_plan: doctorDirtyPlan, doctor_postcheck: doctorFixPostcheck, codex_native: codexNativeRepair, doctor_native_capability: doctorNativeCapabilityRepair, command_aliases: commandAliasCleanup, skills: skillsReconcile, sks_temp_sweep: sksTempSweep }
+    repair: { sks_update: sksUpdate, setup: setupRepair, openrouter_provider: openRouterProviderRepair, codex_config: configRepair, migration_journal: migrationJournal, global_sks_installs: globalSksInstallCleanup, agent_role_config: agentRoleConfigRepair, zellij: zellijRepair, context7: context7Repair, codex_startup: codexStartupRepair, startup_config: startupConfigRepair, context7_mcp: context7McpRepair, supabase_mcp: supabaseMcpRepair, mcp_transport_collision: mcpTransportCollisionRepair, imagegen: imagegenRepair, computer_use: computerUseRepair, browser_use: browserUseRepair, hook_trust: hookTrustRepair, sks_menubar: sksMenuBar, doctor_transaction: doctorFixTransaction, doctor_dirty_plan: doctorDirtyPlan, doctor_postcheck: doctorFixPostcheck, codex_native: codexNativeRepair, doctor_native_capability: doctorNativeCapabilityRepair, command_aliases: commandAliasCleanup, skills: skillsReconcile, sks_temp_sweep: sksTempSweep }
   };
   if (reportFile) await writeJsonReportFile(reportFile, result);
   if (machineOnly && !flag(args, '--json')) {

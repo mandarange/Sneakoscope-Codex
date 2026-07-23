@@ -48,6 +48,24 @@ test('hooks diagnostics and repair remain available when migration state is stal
   assert.equal(result.status, 'skipped');
 });
 
+test('mcp config remains available when migration state is stale', async () => {
+  assert.equal(COMMANDS.mcp.skipMigrationGate, true);
+  assert.equal(COMMAND_MANIFEST_BY_NAME.mcp.skipMigrationGate, true);
+  const result = await ensureCurrentMigrationBeforeCommand({
+    command: 'mcp',
+    args: ['config', 'list', '--scope', 'global'],
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      SKS_REQUIRE_UPDATE_MIGRATION_RECEIPT: '1',
+      SKS_UPDATE_MIGRATION_GATE_DISABLED: '0'
+    }
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.status, 'skipped');
+  assert.ok(result.warnings.some((warning) => warning === 'skip_migration_gate_command:mcp'));
+});
+
 test('doctor consumes migration gate machine flags and validates profile values', () => {
   assert.equal(doctorProfileFromArgs(['--profile', 'migration'], true), 'migration');
   assert.deepEqual(doctorArgWarnings(['--fix', '--yes', '--machine-only', '--report-file', 'out.json', '--profile', 'migration']), []);

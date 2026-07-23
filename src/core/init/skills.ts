@@ -102,7 +102,7 @@ async function installOfficialSkills(root: any) {
   const skills = {
     'dfix': `---\nname: dfix\ndescription: Direct Fix mode for $DFix or $dfix requests and inferred tiny copy/config/docs/labels/spacing/translation/simple mechanical edits.\n---\n\nUse for tiny copy/config/docs/labels/spacing/translation/simple mechanical edits. List exact micro-edits, inspect only needed files, apply only those edits, and run cheap verification. Keep broad implementation routed to Naruto; for UI/UX micro-edits read \`design.md\` when present and use imagegen for image/logo/raster assets. Bypass broad SKS routing, mission state, TriWiki/TriFix/reflection/state recording, Goal, Research, eval, redesign, and repeated full-route Honest Mode loops. Start the final answer with \`DFix 완료 요약:\` and include one \`DFix 솔직모드:\` line covering verified, not verified, and remaining issues. ${CODEX_IMAGEGEN_REQUIRED_POLICY}\n`,
     'answer': `---\nname: answer\ndescription: Answer-only research route for ordinary questions that should not start implementation.\n---\n\nUse for explanations, comparisons, status, facts, source-backed research, or docs guidance. Use repo/TriWiki first for project-local facts; hydrate low-trust claims from source. Browse or use Context7 for current external package/API/framework/MCP docs. End with a concise answer summary plus Honest Mode; do not create missions, subagents, or file edits.\n`,
-    'sks': `---\nname: sks\ndescription: General Sneakoscope Codex command route for $SKS or $sks usage, setup, status, and workflow help.\n---\n\nUse local SKS commands: bootstrap, deps, commands, quickstart, codex-app, context7, guard, conflicts, reasoning, wiki, pipeline status, pipeline plan, skill-dream. Promote code-changing work to Naruto unless Answer/DFix/Help/Wiki/safety route fits. Surface route/guard/scope, use TriWiki, do not edit installed harness files outside this engine repo, and clear conflicting third-party Codex harness markers via \`sks update\`, \`sks doctor --fix\`, or \`sks conflicts cleanup --yes\`. ${skillDreamPolicyText()}\n`,
+    'sks': `---\nname: sks\ndescription: General Sneakoscope Codex command route for $SKS or $sks usage, setup, status, and workflow help.\n---\n\nUse local SKS commands: bootstrap, deps, commands, quickstart, codex-app, context7, guard, conflicts, reasoning, wiki, pipeline status, pipeline plan, skill-dream. Promote code-changing work to Naruto unless Answer/DFix/Help/Wiki/safety route fits. Surface route/guard/scope, use TriWiki, do not edit installed harness files outside this engine repo, and clear conflicting third-party Codex harness markers via \`sks conflicts cleanup --yes\`. ${skillDreamPolicyText()}\n`,
     'plan': `---\nname: plan\ndescription: Plan scaffold only - writes a fixed-template .sneakoscope/plans/<slug>.md, never touches code. Not project-specific decision-complete planning. 예: $Plan "결제 모듈 리팩터"\n---\n\nUse when the user invokes $Plan or asks for a plan-only frontdoor. Produce a concrete plan artifact under .sneakoscope/plans/<slug>.md with goal, scope, files to inspect, implementation steps, acceptance checks, and rollback notes. Do not edit product/source files, generated harness files, package metadata, or docs beyond the plan artifact. Keep implementation_allowed=false and hand off execution to $Work only after the user or route explicitly moves from planning to work. Finish with what is planned, what remains unimplemented, and Honest Mode.\n`,
     'work': `---\nname: work\ndescription: Execute the latest plan with evidence-gated completion. 예: $Work\n---\n\nUse when the user invokes $Work or asks to execute the latest SKS plan. Resolve the newest .sneakoscope/plans/*.md, route execution through Naruto evidence gates, keep leases and verification artifacts current, and do not claim completion without machine evidence or explicit blocker evidence. If no plan exists, block with a clear next action: run $Plan first or provide a task.\n`,
     'review': `---\nname: review\ndescription: Parallel diff review with machine-evidence first findings. 예: $Review 또는 sks review --staged\n---\n\nUse when the user asks for $Review or sks review. Review the selected diff read-only unless --fix is explicitly supplied. Machine evidence such as TypeScript, lint, tests, conflict markers, or secret scans outranks LLM findings and must be tagged evidence: machine; judgment-only findings must be tagged evidence: llm. --fix may attempt at most one machine-evidence fix pass and must re-run verification once. Do not mutate code for LLM-only opinions.\n`,
@@ -952,13 +952,26 @@ async function quarantineSkillDir(root: string, sourceDir: string, name: string,
 export async function loadSkillsManifest(): Promise<any> {
   const candidates = [
     path.join(packageRootDir(), 'dist', 'config', 'skills-manifest.json'),
-    path.join(packageRootDir(), 'config', 'skills-manifest.json')
+    path.join(packageRootDir(), 'config', 'skills-manifest.json'),
+    // When the package tree is a partial workspace build (tsc without build-dist),
+    // doctor/reconcile still writes the same packaged digests next to installed skills.
+    path.join(path.resolve(process.env.HOME || os.homedir()), '.agents', 'skills', 'skills-manifest.json')
   ];
   for (const file of candidates) {
     const data = await readJson(file, null);
-    if (data?.schema === PACKAGED_SKILLS_MANIFEST_SCHEMA && Array.isArray(data.skills)) return normalizeSkillsManifest(data);
+    if (data?.schema !== PACKAGED_SKILLS_MANIFEST_SCHEMA || !Array.isArray(data.skills)) continue;
+    const normalized = normalizeSkillsManifest(data);
+    if (!skillsManifestHasContentDigests(normalized)) continue;
+    return normalized;
   }
   return buildFallbackSkillsManifest();
+}
+
+function skillsManifestHasContentDigests(manifest: any): boolean {
+  return (manifest?.skills || []).some((skill: any) => (
+    typeof skill?.content_sha256 === 'string'
+    && /^[a-f0-9]{64}$/i.test(skill.content_sha256)
+  ));
 }
 
 function normalizeSkillsManifest(manifest: any) {

@@ -9,6 +9,7 @@ import {
   readUpdateStatusCache,
   resetUpdateStatusCoordinatorForTests,
   resolveSksUpdateStatus,
+  UpdateStatusRefreshError,
   type SksUpdateStatusV3
 } from '../update/update-status.js';
 
@@ -84,6 +85,55 @@ test('offline refresh preserves last-known versions and emits a redacted stale s
     assert.doesNotMatch(stale.public_error || '', /supersecret/);
     assert.match(stale.public_error || '', /\[redacted\]/);
     assert.ok(stale.warnings.includes('update_status_stale'));
+  } finally {
+    resetUpdateStatusCoordinatorForTests();
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('offline refresh keeps fresh local observations while reusing only last-known remote versions', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-update-status-local-refresh-'));
+  const env = isolatedEnv(root);
+  const cachedAt = new Date('2026-07-14T01:30:00.000Z');
+  const refreshedAt = new Date('2026-07-14T02:00:00.000Z');
+  try {
+    resetUpdateStatusCoordinatorForTests();
+    await resolveSksUpdateStatus({
+      env,
+      refresh: true,
+      now: () => cachedAt,
+      jitterMs: 0,
+      fallbackSnapshot: () => emptyUpdateStatus('7.0.5', cachedAt),
+      fetchLive: async () => snapshot('7.0.5', '7.2.0', cachedAt)
+    });
+
+    const observed = snapshot('7.1.0', '7.1.0', refreshedAt);
+    observed.sks.latest = null;
+    observed.codex_cli.current = '0.145.0';
+    observed.codex_cli.latest = null;
+    observed.menubar.expected_version = '7.1.0';
+    observed.menubar.installed_version = '7.1.0';
+    const stale = await resolveSksUpdateStatus({
+      env,
+      refresh: true,
+      now: () => refreshedAt,
+      jitterMs: 0,
+      fallbackSnapshot: () => emptyUpdateStatus('7.1.0', refreshedAt),
+      fetchLive: async () => {
+        throw new UpdateStatusRefreshError('npm view failed', observed);
+      }
+    });
+
+    assert.equal(stale.source, 'stale');
+    assert.equal(stale.sks.current, '7.1.0');
+    assert.equal(stale.sks.latest, '7.2.0');
+    assert.equal(stale.sks.update_available, true);
+    assert.equal(stale.codex_cli.current, '0.145.0');
+    assert.equal(stale.codex_cli.latest, '0.144.0');
+    assert.equal(stale.codex_cli.update_available, false);
+    assert.equal(stale.menubar.installed_version, '7.1.0');
+    assert.ok(stale.warnings.includes('update_status_refresh_observation_merged'));
+    assert.equal((await readUpdateStatusCache(env))?.sks.current, '7.1.0');
   } finally {
     resetUpdateStatusCoordinatorForTests();
     await fs.rm(root, { recursive: true, force: true });

@@ -91,7 +91,7 @@ const appIconPath = path.join(resourcesDir, 'AppIcon.icns');
 const iconLoadSmoke = await imageLoadSmoke(appIconPath);
 const signature = await strictCodesign(appPath);
 const previousSignature = await strictCodesign(previousAppPath);
-const swiftCompile = result.actions.some((action) => /^compiled 17 Swift sources$/.test(action));
+const swiftCompile = result.actions.includes(`compiled ${NATIVE_SOURCE_FILES.length} Swift sources`);
 const swiftParse = await swiftParseSmoke(sourcesDir);
 const actionScriptExecutable = await isExecutable(required(result.action_script_path, 'final action script path'));
 const launchAgent = await fs.readFile(required(result.launch_agent_path, 'launch agent path'), 'utf8');

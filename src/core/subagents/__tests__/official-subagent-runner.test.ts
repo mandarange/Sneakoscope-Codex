@@ -850,13 +850,25 @@ test('host capability requests select the minimum task tools and recognize workb
     ['Test the PDF and export it.', 'host.document.render.v1'],
     ['Update the spreadsheet with the latest test results.', 'host.spreadsheet.workbook.v1'],
     ['Inspect reports/q3.xlsx and update it with integration test results.', 'host.spreadsheet.workbook.v1'],
-    ['최신 테스트 결과로 스프레드시트를 업데이트해줘.', 'host.spreadsheet.workbook.v1']
+    ['최신 테스트 결과로 스프레드시트를 업데이트해줘.', 'host.spreadsheet.workbook.v1'],
+    ['매출 DB에서 월별 합계와 상위 주문 20건을 조회해줘', 'host.datasource.query.readonly.v1'],
+    ['스키마를 보고 실행하지 말고 SQL만 작성해줘', 'host.datasource.schema.v1'],
+    ['이 데이터를 새 엑셀 보고서로 만들고 서식을 다듬어줘', 'host.spreadsheet.workbook.v1'],
+    ['기존 xlsx의 수식 오류를 고치고 다시 검사해줘', 'host.spreadsheet.workbook.v1'],
+    ['이 HTML을 PDF로 렌더링해줘', 'host.document.render.v1'],
+    ['이 페이지를 캡처해줘', 'host.web.capture.v1']
   ] as const) {
     assert.ok(requestHostCapabilities(prompt).capability_ids.includes(capability), prompt)
   }
+  assert.deepEqual(requestHostCapabilities('스키마를 보고 실행하지 말고 SQL만 작성해줘').workflows, ['datasource_sql_generation'])
+  assert.ok(requestHostCapabilities('매출 DB에서 월별 합계와 상위 주문 20건을 조회해줘').workflows.includes('datasource_query'))
+  assert.ok(requestHostCapabilities('이 데이터를 새 엑셀 보고서로 만들고 서식을 다듬어줘').workflows.includes('spreadsheet_create'))
+  assert.ok(requestHostCapabilities('기존 xlsx의 수식 오류를 고치고 다시 검사해줘').workflows.includes('spreadsheet_edit'))
+  assert.ok(requestHostCapabilities('이 HTML을 PDF로 렌더링해줘').workflows.includes('document_render'))
+  assert.ok(requestHostCapabilities('이 페이지를 캡처해줘').workflows.includes('web_capture'))
 })
 
-test('spreadsheet evidence requires one bounded mutation, a final inspect, and one resource identity', async () => {
+test('spreadsheet evidence allows up to three bounded mutations with inspect after each', async () => {
   const workbookPath = 'reports/q3.xlsx'
   const createArtifact = {
     path: workbookPath,
@@ -896,8 +908,24 @@ test('spreadsheet evidence requires one bounded mutation, a final inspect, and o
     completedHostToolEvent({ tool: 'spreadsheet_inspect', path: workbookPath })
   ]) repeatedUpdate.push(`${event}\n`)
   const repeatedUpdateEvidence = repeatedUpdate.finish()
-  assert.equal(repeatedUpdateEvidence.ok, false)
-  assert.ok(repeatedUpdateEvidence.blockers.includes('host_capability_spreadsheet_create_update_count_invalid'))
+  assert.equal(repeatedUpdateEvidence.ok, true, repeatedUpdateEvidence.blockers.join(', '))
+
+  const tooManyUpdates = createHostCapabilityEventCollector(runtime)
+  for (const event of [
+    completedHostToolEvent({ tool: 'spreadsheet_create', path: workbookPath, artifact: createArtifact }),
+    completedHostToolEvent({ tool: 'spreadsheet_inspect', path: workbookPath }),
+    completedHostToolEvent({ tool: 'spreadsheet_update', path: workbookPath, artifact: updateArtifact }),
+    completedHostToolEvent({ tool: 'spreadsheet_inspect', path: workbookPath }),
+    completedHostToolEvent({ tool: 'spreadsheet_update', path: workbookPath, artifact: { ...updateArtifact, sha256: `sha256:${'c'.repeat(64)}` } }),
+    completedHostToolEvent({ tool: 'spreadsheet_inspect', path: workbookPath }),
+    completedHostToolEvent({ tool: 'spreadsheet_update', path: workbookPath, artifact: { ...updateArtifact, sha256: `sha256:${'d'.repeat(64)}` } }),
+    completedHostToolEvent({ tool: 'spreadsheet_inspect', path: workbookPath }),
+    completedHostToolEvent({ tool: 'spreadsheet_update', path: workbookPath, artifact: { ...updateArtifact, sha256: `sha256:${'e'.repeat(64)}` } }),
+    completedHostToolEvent({ tool: 'spreadsheet_inspect', path: workbookPath })
+  ]) tooManyUpdates.push(`${event}\n`)
+  const tooManyUpdatesEvidence = tooManyUpdates.finish()
+  assert.equal(tooManyUpdatesEvidence.ok, false)
+  assert.ok(tooManyUpdatesEvidence.blockers.includes('host_capability_spreadsheet_create_update_count_invalid'))
 
   const resourceMismatch = createHostCapabilityEventCollector(runtime)
   for (const event of [
@@ -1184,10 +1212,10 @@ test('atomic reservations deny query races until one completed schema call and r
   const secondQuery = sanitizeHostCapabilityPreToolUse(runtime, prePayload('query-3', 'datasource_query_readonly', {
     datasource: 'main', schema_snapshot_id: 'snapshot', query: 'select 2'
   }))!
-  const deniedSecond = authorizeAndMergeHostCapabilityPreToolObservation({
+  const deniedSecondWhilePending = authorizeAndMergeHostCapabilityPreToolObservation({
     binding, current: queryReserved.observations, observation: secondQuery
   })
-  assert.equal(deniedSecond.blocker, 'host_capability_readonly_query_already_reserved')
+  assert.equal(deniedSecondWhilePending.blocker, 'host_capability_readonly_query_already_reserved')
 
   const queryPost = sanitizeHostCapabilityPostToolUse(postPayload(
     'query-1',
@@ -1218,6 +1246,31 @@ test('atomic reservations deny query races until one completed schema call and r
   })
   assert.ok(duplicatePost.blockers.includes('host_tool_call_post_replay:datasource_query_readonly'))
 
+  const secondQueryAllowed = authorizeAndMergeHostCapabilityPreToolObservation({
+    binding, current: afterQuery, observation: secondQuery
+  })
+  assert.equal(secondQueryAllowed.decision, 'allowed')
+  assert.equal(secondQueryAllowed.observation.reservation_status, 'pending')
+  const secondQueryPost = sanitizeHostCapabilityPostToolUse(postPayload(
+    'query-3',
+    'datasource_query_readonly',
+    { datasource: 'main', schema_snapshot_id: 'snapshot', query: 'select 2' },
+    {
+      structured_content: {
+        datasource: 'main',
+        schema_snapshot_id: 'snapshot',
+        query_sha256: `sha256:${sha256('select 2')}`,
+        row_count: 1,
+        column_count: 1,
+        truncated: false,
+        status: 'passed'
+      }
+    }
+  ))!
+  const afterSecondQuery = mergeHostCapabilityPostToolObservation({
+    binding, current: secondQueryAllowed.observations, observation: secondQueryPost
+  })
+
   const failedSchema = sanitizeHostCapabilityPreToolUse(runtime, prePayload('schema-failed', 'datasource_schema_context', {
     datasource: 'main'
   }))!
@@ -1242,10 +1295,47 @@ test('atomic reservations deny query races until one completed schema call and r
     ...afterQuery,
     pre_tool_uses: afterQuery.pre_tool_uses.filter((row) => row.tool !== 'datasource_query_readonly')
   }
-  const deniedAfterEviction = authorizeAndMergeHostCapabilityPreToolObservation({
+  const allowedAfterEviction = authorizeAndMergeHostCapabilityPreToolObservation({
     binding, current: afterBoundedPreObservationEviction, observation: secondQuery
   })
-  assert.equal(deniedAfterEviction.blocker, 'host_capability_readonly_query_already_reserved')
+  assert.equal(allowedAfterEviction.decision, 'allowed')
+
+  let afterQueries = afterSecondQuery
+  for (const index of [3, 4]) {
+    const nextQuery = sanitizeHostCapabilityPreToolUse(runtime, prePayload(`query-extra-${index}`, 'datasource_query_readonly', {
+      datasource: 'main', schema_snapshot_id: 'snapshot', query: `select ${index}`
+    }))!
+    const reserved = authorizeAndMergeHostCapabilityPreToolObservation({
+      binding, current: afterQueries, observation: nextQuery
+    })
+    assert.equal(reserved.decision, 'allowed', `query ${index}`)
+    const post = sanitizeHostCapabilityPostToolUse(postPayload(
+      `query-extra-${index}`,
+      'datasource_query_readonly',
+      { datasource: 'main', schema_snapshot_id: 'snapshot', query: `select ${index}` },
+      {
+        structured_content: {
+          datasource: 'main',
+          schema_snapshot_id: 'snapshot',
+          query_sha256: `sha256:${sha256(`select ${index}`)}`,
+          row_count: 1,
+          column_count: 1,
+          truncated: false,
+          status: 'passed'
+        }
+      }
+    ))!
+    afterQueries = mergeHostCapabilityPostToolObservation({
+      binding, current: reserved.observations, observation: post
+    })
+  }
+  const fifthQuery = sanitizeHostCapabilityPreToolUse(runtime, prePayload('query-extra-5', 'datasource_query_readonly', {
+    datasource: 'main', schema_snapshot_id: 'snapshot', query: 'select 5'
+  }))!
+  const deniedFifth = authorizeAndMergeHostCapabilityPreToolObservation({
+    binding, current: afterQueries, observation: fifthQuery
+  })
+  assert.equal(deniedFifth.blocker, 'host_capability_readonly_query_limit_exceeded')
 })
 
 test('atomic spreadsheet create reservations allow one pending ID and deny distinct or terminal replays', async () => {
@@ -1298,7 +1388,7 @@ test('atomic spreadsheet create reservations allow one pending ID and deny disti
   assert.equal(afterCompletionDenied.blocker, 'host_capability_spreadsheet_create_already_reserved')
 })
 
-test('atomic spreadsheet update reservations require a completed same-workbook inspect and allow one update', async () => {
+test('atomic spreadsheet update reservations require inspect between up to three mutations', async () => {
   const request = requestHostCapabilities('Update the spreadsheet with the latest results.')
   const runtime = await inspectHostCapabilityRuntime({
     root: process.cwd(),
@@ -1366,6 +1456,124 @@ test('atomic spreadsheet update reservations require a completed same-workbook i
     completed.pre_tool_uses.find((row) => row.tool_use_id_sha256 === update.tool_use_id_sha256)?.reservation_status,
     'completed'
   )
+  const deniedSecondWithoutInspect = authorizeAndMergeHostCapabilityPreToolObservation({
+    binding, current: completed, observation: secondUpdate
+  })
+  assert.equal(deniedSecondWithoutInspect.blocker, 'host_capability_spreadsheet_update_inspection_not_completed')
+
+  const inspect2 = sanitizeHostCapabilityPreToolUse(runtime, prePayload('inspect-2', 'spreadsheet_inspect', {
+    path: 'reports/book.xlsx'
+  }))!
+  const inspect2Reserved = authorizeAndMergeHostCapabilityPreToolObservation({
+    binding, current: completed, observation: inspect2
+  })
+  const afterInspect2 = mergeHostCapabilityPostToolObservation({
+    binding,
+    current: inspect2Reserved.observations,
+    observation: sanitizeHostCapabilityPostToolUse(postPayload(
+      'inspect-2',
+      'spreadsheet_inspect',
+      { path: 'reports/book.xlsx' },
+      {
+        structured_content: {
+          ok: true,
+          path: 'reports/book.xlsx',
+          sheet_names: ['Summary'],
+          row_counts: { Summary: 1 },
+          formulas: [],
+          error_cells: []
+        }
+      }
+    ))!
+  })
+  const secondAllowed = authorizeAndMergeHostCapabilityPreToolObservation({
+    binding, current: afterInspect2, observation: secondUpdate
+  })
+  assert.equal(secondAllowed.decision, 'allowed')
+  const secondCompleted = mergeHostCapabilityPostToolObservation({
+    binding,
+    current: secondAllowed.observations,
+    observation: sanitizeHostCapabilityPostToolUse(postPayload(
+      'update-2',
+      'spreadsheet_update',
+      { path: 'reports/book.xlsx' },
+      { structured_content: { ok: true, path: 'reports/book.xlsx' } }
+    ))!
+  })
+  const inspect3 = sanitizeHostCapabilityPreToolUse(runtime, prePayload('inspect-3', 'spreadsheet_inspect', {
+    path: 'reports/book.xlsx'
+  }))!
+  const inspect3Reserved = authorizeAndMergeHostCapabilityPreToolObservation({
+    binding, current: secondCompleted, observation: inspect3
+  })
+  const afterInspect3 = mergeHostCapabilityPostToolObservation({
+    binding,
+    current: inspect3Reserved.observations,
+    observation: sanitizeHostCapabilityPostToolUse(postPayload(
+      'inspect-3',
+      'spreadsheet_inspect',
+      { path: 'reports/book.xlsx' },
+      {
+        structured_content: {
+          ok: true,
+          path: 'reports/book.xlsx',
+          sheet_names: ['Summary'],
+          row_counts: { Summary: 1 },
+          formulas: [],
+          error_cells: []
+        }
+      }
+    ))!
+  })
+  const thirdUpdate = sanitizeHostCapabilityPreToolUse(runtime, prePayload('update-3', 'spreadsheet_update', {
+    path: 'reports/book.xlsx'
+  }))!
+  const thirdAllowed = authorizeAndMergeHostCapabilityPreToolObservation({
+    binding, current: afterInspect3, observation: thirdUpdate
+  })
+  assert.equal(thirdAllowed.decision, 'allowed')
+  const thirdCompleted = mergeHostCapabilityPostToolObservation({
+    binding,
+    current: thirdAllowed.observations,
+    observation: sanitizeHostCapabilityPostToolUse(postPayload(
+      'update-3',
+      'spreadsheet_update',
+      { path: 'reports/book.xlsx' },
+      { structured_content: { ok: true, path: 'reports/book.xlsx' } }
+    ))!
+  })
+  const inspect4 = sanitizeHostCapabilityPreToolUse(runtime, prePayload('inspect-4', 'spreadsheet_inspect', {
+    path: 'reports/book.xlsx'
+  }))!
+  const inspect4Reserved = authorizeAndMergeHostCapabilityPreToolObservation({
+    binding, current: thirdCompleted, observation: inspect4
+  })
+  const afterInspect4 = mergeHostCapabilityPostToolObservation({
+    binding,
+    current: inspect4Reserved.observations,
+    observation: sanitizeHostCapabilityPostToolUse(postPayload(
+      'inspect-4',
+      'spreadsheet_inspect',
+      { path: 'reports/book.xlsx' },
+      {
+        structured_content: {
+          ok: true,
+          path: 'reports/book.xlsx',
+          sheet_names: ['Summary'],
+          row_counts: { Summary: 1 },
+          formulas: [],
+          error_cells: []
+        }
+      }
+    ))!
+  })
+  const fourthUpdate = sanitizeHostCapabilityPreToolUse(runtime, prePayload('update-4', 'spreadsheet_update', {
+    path: 'reports/book.xlsx'
+  }))!
+  const deniedFourth = authorizeAndMergeHostCapabilityPreToolObservation({
+    binding, current: afterInspect4, observation: fourthUpdate
+  })
+  assert.equal(deniedFourth.blocker, 'host_capability_spreadsheet_update_limit_exceeded')
 })
 
 test('standalone parent replaces the real child environment and redacts inherited secret values from output', { timeout: 20_000 }, async (t) => {

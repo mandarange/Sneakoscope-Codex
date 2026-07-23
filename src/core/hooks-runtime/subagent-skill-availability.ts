@@ -1,8 +1,12 @@
 import path from 'node:path';
 import { nowIso, sha256 } from '../fsx.js';
-import type { SksSkillSourceResolution } from '../codex-native/sks-skill-paths.js';
+import {
+  resolveAuthoritativeSksSkillSources,
+  type SksSkillSourceResolution
+} from '../codex-native/sks-skill-paths.js';
 import {
   ADMISSION_SCHEMA,
+  MAX_LIFECYCLE_GUARD_ENTRIES,
   MAX_LIFECYCLE_GUARD_BYTES,
   SUBAGENT_SKILL_AVAILABILITY_BLOCKER_FILENAME,
   SUBAGENT_SKILL_AVAILABILITY_BLOCKER_SCHEMA,
@@ -18,6 +22,7 @@ import {
   blockedRunAdmissions,
   boundedAgentThreadId,
   invalidGuard,
+  officialSubagentThreadIdFromSessions,
   officialSubagentThreadIdFromTranscript,
   preToolBlockReason,
   readAdmissionPair,
@@ -235,6 +240,73 @@ export async function subagentSkillAvailabilityPreToolBlockReason(
   return admission.status === 'blocked' ? preToolBlockReason(admission.blockers) : null;
 }
 
+export function isSubagentSkillAvailabilityAdmissionMissingReason(reason: string | null): boolean {
+  return reason === preToolBlockReason(['subagent_skill_availability_admission_missing']);
+}
+
+export async function recoverResumedOfficialSubagentSkillAvailabilityAdmission(input: {
+  root: string;
+  payload: any;
+  artifactDir: string;
+  sessionArtifactDir?: string | null;
+  activeBinding: SubagentSkillAvailabilityActiveBinding;
+  skillNames: readonly unknown[];
+}): Promise<boolean> {
+  const rawPayloadThreadId = input.payload?.agent_id;
+  const payloadThreadId = boundedAgentThreadId(rawPayloadThreadId);
+  const payloadThreadIdClaimed = typeof rawPayloadThreadId === 'string'
+    ? Boolean(rawPayloadThreadId.trim())
+    : rawPayloadThreadId !== undefined && rawPayloadThreadId !== null;
+  if (payloadThreadIdClaimed && !payloadThreadId) return false;
+  const transcriptPath = String(input.payload?.transcript_path || '').trim();
+  const rawTranscriptThreadId = transcriptPath
+    ? await officialSubagentThreadIdFromTranscript(transcriptPath)
+    : payloadThreadId
+      ? await officialSubagentThreadIdFromSessions(payloadThreadId)
+      : null;
+  const transcriptThreadId = boundedAgentThreadId(rawTranscriptThreadId);
+  if (!transcriptThreadId
+    || (payloadThreadId && payloadThreadId !== transcriptThreadId)) return false;
+  const sessionScope = String(input.payload?.session_id || '').trim();
+  const turnId = String(input.payload?.turn_id || '').trim();
+  const activeMissionId = String(input.activeBinding?.missionId || '').trim();
+  const activeWorkflowRunId = String(input.activeBinding?.workflowRunId || '').trim();
+  if (!sessionScope || !turnId || !activeMissionId || !activeWorkflowRunId) return false;
+  const plan: any = await readConfinedJson(
+    input.root,
+    path.join(input.artifactDir, 'subagent-plan.json')
+  );
+  if (!resumedOfficialThreadBelongsToActiveRun(
+    plan,
+    activeMissionId,
+    activeWorkflowRunId,
+    transcriptThreadId
+  )) return false;
+  const skillNames = [...new Set(input.skillNames
+    .map((name) => String(name || '').trim())
+    .filter(Boolean))];
+  if (!skillNames.length) return false;
+  const resolution = await resolveAuthoritativeSksSkillSources({
+    root: input.root,
+    skillNames
+  }).catch(() => null);
+  if (authoritativeSksSkillResolutionBlockers(resolution).length) return false;
+  await persistSubagentSkillAvailabilityBlocker({
+    root: input.root,
+    artifactDir: input.artifactDir,
+    ...(input.sessionArtifactDir !== undefined
+      ? { sessionArtifactDir: input.sessionArtifactDir }
+      : {}),
+    state: {
+      mission_id: activeMissionId,
+      official_subagent_run_id: activeWorkflowRunId
+    },
+    payload: { ...input.payload, agent_id: transcriptThreadId },
+    blockers: []
+  });
+  return true;
+}
+
 export async function clearSubagentSkillAvailabilityGuards(
   root: string,
   payload: any,
@@ -287,4 +359,46 @@ export async function subagentSkillAvailabilityRunBlockers(
   }
   if (!workflowRunId || blocker.workflow_run_id !== workflowRunId) return [...new Set(blockers)];
   return [...new Set([...blockers, ...blocker.blockers])];
+}
+
+function resumedOfficialThreadBelongsToActiveRun(
+  plan: any,
+  missionId: string,
+  workflowRunId: string,
+  threadId: string
+): boolean {
+  if (plan?.schema !== 'sks.subagent-plan.v1'
+    || plan?.workflow !== 'official_codex_subagent'
+    || String(plan?.mission_id || '').trim() !== missionId
+    || String(plan?.workflow_run_id || '').trim() !== workflowRunId) return false;
+  const lifecycle = plan?.wave_lifecycle;
+  if (lifecycle?.schema !== 'sks.subagent-wave-lifecycle.v1'
+    || lifecycle?.owner !== 'root_parent'
+    || String(lifecycle?.workflow_run_id || '').trim() !== workflowRunId
+    || !Array.isArray(lifecycle?.waves)
+    || lifecycle.waves.length < 1
+    || lifecycle.waves.length > MAX_LIFECYCLE_GUARD_ENTRIES) return false;
+  const assigned = new Set<string>();
+  const settled = new Set<string>();
+  for (const wave of lifecycle.waves) {
+    if (!wave || typeof wave !== 'object' || Array.isArray(wave)
+      || !Array.isArray(wave.thread_ids)
+      || !Array.isArray(wave.settled_thread_ids)) return false;
+    const waveAssigned = new Set<string>();
+    for (const rawThreadId of wave.thread_ids) {
+      const boundedThreadId = boundedAgentThreadId(rawThreadId);
+      if (!boundedThreadId || boundedThreadId !== rawThreadId || assigned.has(boundedThreadId)) return false;
+      waveAssigned.add(boundedThreadId);
+      assigned.add(boundedThreadId);
+      if (assigned.size > MAX_LIFECYCLE_GUARD_ENTRIES) return false;
+    }
+    for (const rawThreadId of wave.settled_thread_ids) {
+      const boundedThreadId = boundedAgentThreadId(rawThreadId);
+      if (!boundedThreadId || boundedThreadId !== rawThreadId
+        || !waveAssigned.has(boundedThreadId)
+        || settled.has(boundedThreadId)) return false;
+      settled.add(boundedThreadId);
+    }
+  }
+  return assigned.has(threadId) && settled.has(threadId);
 }

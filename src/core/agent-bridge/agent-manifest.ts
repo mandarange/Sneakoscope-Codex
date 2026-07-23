@@ -253,7 +253,9 @@ export function validateAgentManifest(manifest: unknown): AgentManifestValidatio
   const contractValidation = validateCommandContractRegistry();
 
   if (candidate?.schema !== 'sks.agent-manifest.v1') issues.push('schema');
-  if (candidate?.compatibility !== undefined) {
+  if (!candidate?.compatibility || typeof candidate.compatibility !== 'object' || Array.isArray(candidate.compatibility)) {
+    issues.push('compatibility');
+  } else {
     const compatibility = candidate.compatibility as Partial<AgentBridgeCompatibility>;
     if (compatibility?.bridge_contract !== 'sks.agent-bridge.v1') issues.push('compatibility:bridge_contract');
     if (compatibility?.manifest_schema !== 'sks.agent-manifest.v1') issues.push('compatibility:manifest_schema');
@@ -264,7 +266,9 @@ export function validateAgentManifest(manifest: unknown): AgentManifestValidatio
     if (typeof compatibility?.package_version !== 'string' || !compatibility.package_version) issues.push('compatibility:package_version');
   }
 
-  if (candidate?.host_capabilities !== undefined) {
+  if (!candidate?.host_capabilities || typeof candidate.host_capabilities !== 'object' || Array.isArray(candidate.host_capabilities)) {
+    issues.push('host_capabilities');
+  } else {
     const hostCapabilities = candidate.host_capabilities as Partial<HostCapabilitiesManifest>;
     const capabilities = Array.isArray(hostCapabilities?.capabilities) ? hostCapabilities.capabilities : [];
     if (hostCapabilities?.schema !== 'sks.host-capabilities.v1') issues.push('host_capabilities:schema');

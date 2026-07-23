@@ -46,6 +46,35 @@ test('auto changed-since includes committed work ahead of the tracked upstream',
   }
 })
 
+test('an MCP change does not suppress unrelated gates selected by another changed file', () => {
+  const mcpGate: any = {
+    id: 'test:mcp-config',
+    command: 'node mcp-test.js',
+    deps: [],
+    preset: ['release'],
+    cache: { enabled: true, inputs: ['src/core/commands/**'] }
+  }
+  const roleGate: any = {
+    id: 'test:role-models',
+    command: 'node role-test.js',
+    deps: [],
+    preset: ['release'],
+    cache: { enabled: true, inputs: ['src/core/subagents/**'] }
+  }
+  const gates = [mcpGate, roleGate]
+  const selected = selectAffectedReleaseGates(process.cwd(), { gates } as any, gates, {
+    changedFiles: [
+      'src/core/commands/__tests__/mcp-config-command.test.ts',
+      'src/core/subagents/role-model-preferences.ts'
+    ],
+    preset: 'affected'
+  })
+
+  assert.deepEqual(selected.selection.selected_gate_ids, ['test:mcp-config', 'test:role-models'])
+  assert.equal(selected.selection.reasons['test:mcp-config'], 'db_mcp_or_mad_sks_sql_plane_changed')
+  assert.equal(selected.selection.reasons['test:role-models'], 'cache_input_changed')
+})
+
 function git(cwd: string, args: string[]) {
   const result = spawnSync('git', args, { cwd, encoding: 'utf8' })
   assert.equal(result.status, 0, `${args.join(' ')}\n${result.stdout || ''}${result.stderr || ''}`)
