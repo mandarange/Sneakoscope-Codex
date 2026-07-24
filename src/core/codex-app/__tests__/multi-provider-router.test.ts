@@ -173,7 +173,7 @@ test('router activation writes a user-level provider and catalog without storing
     'approval_policy = "on-request"',
     '',
     '[features]',
-    'multi_agent = true',
+    'hooks = true',
     ''
   ].join('\n'));
 

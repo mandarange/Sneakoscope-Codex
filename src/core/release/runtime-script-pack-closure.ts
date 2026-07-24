@@ -8,9 +8,14 @@ const TEXT_EXTENSIONS = new Set(['.cjs', '.js', '.json', '.mjs', '.sh', '.swift'
 
 export interface RuntimeScriptPackClosureAnalysis {
   schema: 'sks.runtime-script-pack-closure.v1';
+  root_mode: 'legacy_discovery' | 'manifest_ssot';
   candidates: string[];
   roots: string[];
   root_reasons: Array<{ path: string; sources: string[] }>;
+  required_script_categories: Array<{ path: string; category: string; reason: string }>;
+  reference_source_policies: Array<{ source: string; classification: string; reason: string }>;
+  classified_reference_roots: Array<{ path: string; source: string; classification: string; reason: string }>;
+  unclassified_reference_roots: Array<{ path: string; source: string }>;
   checkout_only_roots: string[];
   checkout_only_root_reasons: Array<{ path: string; sources: string[] }>;
   checkout_only_closure: string[];
@@ -43,6 +48,10 @@ export function analyzeRuntimeScriptPackClosure(root: string): RuntimeScriptPack
   const dynamicWarnings = new Map<string, { source: string; excerpt: string }>();
   const checkoutOnlyPolicies: Array<{ path: string; sources: string[]; reason: string }> = [];
   const checkoutOnlyPolicyIssues: string[] = [];
+  const manifestRoots = new Set<string>();
+  const requiredScriptCategories: Array<{ path: string; category: string; reason: string }> = [];
+  const referenceSourcePolicies: Array<{ source: string; classification: string; reason: string }> = [];
+  let rootMode: RuntimeScriptPackClosureAnalysis['root_mode'] = 'legacy_discovery';
 
   const collectRoots = (source: string, text: string, context = source, strictExplicit = false) => {
     const scan = scanScriptReferences(text, runtimeContext(context), candidateSet, strictExplicit);
@@ -61,16 +70,50 @@ export function analyzeRuntimeScriptPackClosure(root: string): RuntimeScriptPack
   let dynamicReferencePolicies: Array<{ source: string; reason: string }> = [];
   if (fs.existsSync(requiredManifestPath)) {
     const manifest = readJson(requiredManifestPath) as {
-      scripts?: Array<{ path?: unknown }>;
+      root_mode?: unknown;
+      scripts?: Array<{ path?: unknown; category?: unknown; reason?: unknown }>;
+      reference_source_policies?: Array<{ source?: unknown; classification?: unknown; reason?: unknown }>;
       dynamic_reference_policies?: Array<{ source?: unknown; reason?: unknown }>;
       checkout_only_scripts?: Array<{ path?: unknown; sources?: unknown; reason?: unknown }>;
     };
+    if (manifest.root_mode === 'manifest_ssot') rootMode = 'manifest_ssot';
+    else if (manifest.root_mode !== undefined) checkoutOnlyPolicyIssues.push(`runtime_script_root_mode_invalid:${String(manifest.root_mode)}`);
     for (const entry of Array.isArray(manifest.scripts) ? manifest.scripts : []) {
       const reference = normalizeScriptPath(String(entry?.path || ''));
-      if (reference && candidateSet.has(reference)) addRoot(roots, rootReasons, reference, 'runtime-required-scripts.json');
+      const reason = String(entry?.reason || '').trim();
+      const category = String(entry?.category || '').trim();
+      if (reference && candidateSet.has(reference)) {
+        manifestRoots.add(reference);
+        addRoot(roots, rootReasons, reference, 'runtime-required-scripts.json');
+      }
       else if (reference) missingReferences.set(`runtime-required-scripts.json\0${reference}`, {
         source: 'runtime-required-scripts.json', reference
       });
+      if (!reference) checkoutOnlyPolicyIssues.push(`runtime_required_script_path_invalid:${String(entry?.path || '')}`);
+      if (!reason) checkoutOnlyPolicyIssues.push(`runtime_required_script_reason_missing:${reference || 'invalid'}`);
+      if (rootMode === 'manifest_ssot' && ![
+        'installed_runtime',
+        'installed_repair',
+        'installed_package_verification'
+      ].includes(category)) {
+        checkoutOnlyPolicyIssues.push(`runtime_required_script_category_invalid:${reference || 'invalid'}:${category || 'missing'}`);
+      }
+      if (reference && reason && (rootMode !== 'manifest_ssot' || category)) {
+        requiredScriptCategories.push({ path: reference, category: category || 'legacy_unspecified', reason });
+      }
+    }
+    for (const entry of Array.isArray(manifest.reference_source_policies) ? manifest.reference_source_policies : []) {
+      const source = String(entry?.source || '').trim().replace(/\\/g, '/');
+      const classification = String(entry?.classification || '').trim();
+      const reason = String(entry?.reason || '').trim();
+      if (!source || source.includes('..')) checkoutOnlyPolicyIssues.push(`runtime_reference_source_policy_invalid:${source || 'missing'}`);
+      if (!['installed_runtime', 'checkout_ci', 'test_fixture'].includes(classification)) {
+        checkoutOnlyPolicyIssues.push(`runtime_reference_source_classification_invalid:${source || 'missing'}:${classification || 'missing'}`);
+      }
+      if (!reason) checkoutOnlyPolicyIssues.push(`runtime_reference_source_reason_missing:${source || 'missing'}`);
+      if (source && !source.includes('..') && ['installed_runtime', 'checkout_ci', 'test_fixture'].includes(classification) && reason) {
+        referenceSourcePolicies.push({ source, classification, reason });
+      }
     }
     dynamicReferencePolicies = (Array.isArray(manifest.dynamic_reference_policies) ? manifest.dynamic_reference_policies : [])
       .map((entry) => ({ source: runtimeContext(String(entry?.source || '')), reason: String(entry?.reason || '').trim() }))
@@ -110,7 +153,33 @@ export function analyzeRuntimeScriptPackClosure(root: string): RuntimeScriptPack
     recordDynamic(dynamicWarnings, candidate, scan.dynamic);
   }
 
-  const packageRoots = new Set(roots);
+  const classifiedReferenceRoots: Array<{ path: string; source: string; classification: string; reason: string }> = [];
+  const unclassifiedReferenceRoots: Array<{ path: string; source: string }> = [];
+  const installedPolicyRoots = new Set<string>();
+  if (rootMode === 'manifest_ssot') {
+    for (const [scriptPath, sources] of rootReasons) {
+      if (manifestRoots.has(scriptPath)) continue;
+      for (const source of sources) {
+        const policy = referenceSourcePolicies.find((entry) => sourcePolicyMatches(entry.source, source));
+        if (policy) {
+          if (policy.classification === 'installed_runtime') installedPolicyRoots.add(scriptPath);
+          classifiedReferenceRoots.push({
+            path: scriptPath,
+            source,
+            classification: policy.classification,
+            reason: policy.reason
+          });
+        } else {
+          unclassifiedReferenceRoots.push({ path: scriptPath, source });
+          checkoutOnlyPolicyIssues.push(`runtime_reference_source_unclassified:${scriptPath}:${source}`);
+        }
+      }
+    }
+  }
+
+  const packageRoots = rootMode === 'manifest_ssot'
+    ? new Set([...manifestRoots, ...installedPolicyRoots])
+    : new Set(roots);
   const checkoutOnlyRoots = new Set<string>();
   for (const policy of checkoutOnlyPolicies) {
     const observed = [...(rootReasons.get(policy.path) || [])].sort();
@@ -152,12 +221,17 @@ export function analyzeRuntimeScriptPackClosure(root: string): RuntimeScriptPack
 
   return {
     schema: 'sks.runtime-script-pack-closure.v1',
+    root_mode: rootMode,
     candidates,
     roots: [...packageRoots].sort(),
     root_reasons: [...rootReasons.entries()]
       .filter(([scriptPath]) => packageRoots.has(scriptPath))
       .map(([scriptPath, sources]) => ({ path: scriptPath, sources: [...sources].sort() }))
       .sort((a, b) => a.path.localeCompare(b.path)),
+    required_script_categories: requiredScriptCategories.sort((a, b) => a.path.localeCompare(b.path)),
+    reference_source_policies: referenceSourcePolicies.sort((a, b) => a.source.localeCompare(b.source)),
+    classified_reference_roots: classifiedReferenceRoots.sort(comparePolicyFinding),
+    unclassified_reference_roots: unclassifiedReferenceRoots.sort(comparePolicyFinding),
     checkout_only_roots: [...checkoutOnlyRoots].sort(),
     checkout_only_root_reasons: [...rootReasons.entries()]
       .filter(([scriptPath]) => checkoutOnlyRoots.has(scriptPath))
@@ -431,6 +505,22 @@ function addRoot(target: Set<string>, reasons: Map<string, Set<string>>, scriptP
   const current = reasons.get(scriptPath) || new Set<string>();
   current.add(source);
   reasons.set(scriptPath, current);
+}
+
+function sourcePolicyMatches(pattern: string, source: string): boolean {
+  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+  const expression = escaped
+    .replace(/\*\*/g, '\0')
+    .replace(/\*/g, '[^/]*')
+    .replace(/\0/g, '.*');
+  return new RegExp(`^${expression}$`).test(source);
+}
+
+function comparePolicyFinding(
+  a: { path: string; source: string },
+  b: { path: string; source: string }
+): number {
+  return `${a.path}\0${a.source}`.localeCompare(`${b.path}\0${b.source}`);
 }
 
 function compareFinding(a: { source: string; reference?: string; excerpt?: string }, b: { source: string; reference?: string; excerpt?: string }): number {

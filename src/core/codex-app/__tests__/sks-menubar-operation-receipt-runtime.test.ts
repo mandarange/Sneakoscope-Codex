@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 
-test('compiled OperationCoordinator reads and maps the real 14-stage update receipt contract', async (t) => {
+test('compiled OperationCoordinator reads and maps the real 15-stage update receipt contract', async (t) => {
   if (process.platform !== 'darwin') return t.skip('Swift runtime receipt harness is macOS-only');
   const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-update-receipt-runtime-'));
   t.after(() => fs.rm(temp, { recursive: true, force: true }));
@@ -65,7 +65,8 @@ struct Harness {
         let directory = CommandLine.arguments[1]
         let receiptPath = CommandLine.arguments[2]
         let coordinator = OperationCoordinator(directory: directory)
-        precondition(OperationCoordinator.updateStageOrder.count == 14)
+        precondition(OperationCoordinator.updateStageOrder.count == 15)
+        precondition(OperationCoordinator.updateStageOrder.contains("project_receipt"))
         guard let receipt = coordinator.latestUpdateReceipt() else { fatalError("missing receipt") }
         precondition(receipt.schema == "sks.update-operation.v1")
         precondition(receipt.currentStage == "global_install")
@@ -77,7 +78,7 @@ struct Harness {
         let synchronized = coordinator.synchronize(local, with: receipt, processCompleted: true)
         precondition(synchronized.state == .terminalUncertain)
         precondition(synchronized.stage == "global_install")
-        precondition(abs((synchronized.progress ?? 0) - (2.0 / 14.0)) < 0.0001)
+        precondition(abs((synchronized.progress ?? 0) - (2.0 / Double(OperationCoordinator.updateStageOrder.count))) < 0.0001)
         precondition(coordinator.latestSnapshot()?.state == .terminalUncertain)
         precondition(coordinator.begin(kind: "retry", mutationGroup: "update", summary: "Retry") != nil)
         precondition(OperationCoordinator.authoritativeState(for: fixtureReceipt(state: "queued"), processCompleted: true) == .terminalUncertain)

@@ -4,7 +4,8 @@ import { nowIso } from '../fsx.js';
 import {
   codexHomePath,
   defaultOpenCodexCatalogPath,
-  normalizeCodexModelId
+  normalizeCodexModelId,
+  sksOpenRouterCatalogPath
 } from './codex-model-catalog.js';
 
 const MULTI_PROVIDER_ROUTER_MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
@@ -100,6 +101,7 @@ export function isSksManagedCatalogPath(filePath: string | null, input: {
   const codexHome = codexHomePath({ home, env });
   return [
     defaultOpenCodexCatalogPath({ home, env }),
+    sksOpenRouterCatalogPath({ home, env }),
     path.join(codexHome, 'sks-codex-lb-tool-catalog.json')
   ].some((candidate) => path.resolve(candidate) === path.resolve(filePath));
 }

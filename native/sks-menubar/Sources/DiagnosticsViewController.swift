@@ -15,17 +15,29 @@ final class DiagnosticsViewController: NSViewController, ControlCenterPage {
     required init?(coder: NSCoder) { nil }
 
     override func loadView() {
-        let buttons = NSStackView(views: [
-            NativeView.button("Run Doctor", target: self, action: #selector(doctor)),
-            NativeView.button("Update Codex CLI", target: self, action: #selector(updateCodexCLI)),
-            NativeView.button("Open Last Log", target: self, action: #selector(openLog)),
-            NativeView.button("Restart Menu Bar", target: self, action: #selector(restart))
-        ])
-        buttons.orientation = .horizontal; buttons.spacing = 8
-        view = NativeView.stack([
-            NativeView.title("Diagnostics"),
-            NativeView.detail("Diagnostic output is bounded, redacted, and written with owner-only permissions. Use this page when another Center action reports a blocker. Feature routes that need newer Codex fail with an update CTA instead of locking all of SKS."),
-            status, codexGuidance, buttons
+        let healthCard = NativeView.card(
+            title: "Health checks",
+            subtitle: "Doctor verifies and repairs the local SKS, Codex, and provider configuration.",
+            views: [status, NativeView.row([
+                ControlKit.primaryButton("Run Doctor", target: self, action: #selector(doctor)),
+                NativeView.button("Open Last Log", target: self, action: #selector(openLog))
+            ])]
+        )
+        let codexCard = NativeView.card(
+            title: "Codex CLI",
+            subtitle: "SKS stays version-agnostic; features capability-gate on the installed Codex.",
+            views: [codexGuidance, NativeView.row([
+                NativeView.button("Update Codex CLI", target: self, action: #selector(updateCodexCLI))
+            ])]
+        )
+        let menuBarCard = NativeView.card(
+            title: "Menu Bar app",
+            subtitle: "Restart the Control Center process itself when it looks stale.",
+            views: [NativeView.row([NativeView.button("Restart Menu Bar", target: self, action: #selector(restart))])]
+        )
+        view = NativeView.page([
+            ControlKit.header("Diagnostics", "Diagnostic output is bounded, redacted, and written with owner-only permissions. Use this page when another Center action reports a blocker. Feature routes that need newer Codex fail with an update CTA instead of locking all of SKS."),
+            healthCard, codexCard, menuBarCard
         ])
         refreshOnAppear()
     }

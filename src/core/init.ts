@@ -86,7 +86,6 @@ const GENERATED_PRUNE_POLICY = 'remove_previous_sks_generated_paths_absent_from_
 
 export const REQUIRED_GENERATED_CODEX_APP_FEATURE_FLAGS = [
   'hooks',
-  'multi_agent',
   'fast_mode',
   'apps'
 ];
@@ -663,11 +662,11 @@ function installPolicy(scope: any, commandPrefix: any) {
 // fast_mode_ui, codex_git_commit, computer_use, browser_use, browser_use_external,
 // image_generation, in_app_browser, guardian_approval, tool_suggest, plugins) are
 // stripped below instead.
-const MANAGED_CODEX_FEATURE_FLAGS = ['hooks', 'multi_agent', 'fast_mode', 'apps'];
+const MANAGED_CODEX_FEATURE_FLAGS = ['hooks', 'fast_mode', 'apps'];
 const REMOVED_CODEX_FEATURE_FLAGS = [
   'remote_control', 'fast_mode_ui', 'codex_git_commit', 'computer_use', 'browser_use',
   'browser_use_external', 'image_generation', 'in_app_browser', 'guardian_approval',
-  'tool_suggest', 'plugins', 'codex_hooks'
+  'tool_suggest', 'plugins', 'codex_hooks', 'multi_agent'
 ];
 
 function mergeManagedCodexConfigToml(existingContent: any = '', opts: any = {}) {

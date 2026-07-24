@@ -11,6 +11,14 @@ final class ControlCenterWindowController: NSWindowController, NSTableViewDataSo
     init(processClient: ProcessClient, operations: OperationCoordinator, notifications: NotificationCoordinator) {
         let overview = OverviewViewController(processClient: processClient, operations: operations)
         overviewController = overview
+        defer {
+            // Overview quick navigation: section names only, so the standalone
+            // Overview compile harness never needs the SidebarItem type.
+            overview.openSection = { [weak self] name in
+                guard let item = SidebarItem.allCases.first(where: { $0.rawValue == name }) else { return }
+                self?.show(section: item)
+            }
+        }
         controllers = [
             .overview: overview,
             .updates: UpdatesViewController(processClient: processClient, operations: operations, notifications: notifications),
@@ -86,9 +94,21 @@ final class ControlCenterWindowController: NSWindowController, NSTableViewDataSo
     func numberOfRows(in tableView: NSTableView) -> Int { SidebarItem.allCases.count }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        let field = NSTextField(labelWithString: SidebarItem.allCases[row].rawValue)
+        let item = SidebarItem.allCases[row]
+        let field = NSTextField(labelWithString: item.rawValue)
         field.font = NSFont.systemFont(ofSize: 13, weight: .medium)
-        return field
+        let icon = NSImageView()
+        icon.image = NSImage(systemSymbolName: item.symbolName, accessibilityDescription: nil)
+        icon.contentTintColor = .secondaryLabelColor
+        icon.setAccessibilityHidden(true)
+        icon.widthAnchor.constraint(equalToConstant: 18).isActive = true
+        let cell = NSStackView(views: [icon, field])
+        cell.orientation = .horizontal
+        cell.alignment = .centerY
+        cell.spacing = 7
+        cell.edgeInsets = NSEdgeInsets(top: 0, left: 6, bottom: 0, right: 0)
+        cell.setAccessibilityLabel(item.rawValue)
+        return cell
     }
 
     func tableViewSelectionDidChange(_ notification: Notification) {

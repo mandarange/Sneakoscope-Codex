@@ -68,6 +68,25 @@ test('native agent model policy preserves an arbitrary future Codex model identi
   assert.equal(decision.reason, 'explicit_model_preserved');
 });
 
+test('legacy GLM mode flags do not replace the user-selected OpenRouter model', () => {
+  const previous = process.env.SKS_GLM_MODE;
+  process.env.SKS_GLM_MODE = '1';
+  try {
+    const decision = decideAgentWorkerModel({
+      mainModel: 'anthropic/claude-sonnet-4.5',
+      effort: 'high',
+      prompt: 'review provider routing',
+      role: 'reviewer'
+    });
+    assert.equal(decision.model, 'anthropic/claude-sonnet-4.5');
+    assert.equal(decision.model_reasoning_effort, 'high');
+    assert.equal(decision.reason, 'explicit_model_preserved');
+  } finally {
+    if (previous === undefined) delete process.env.SKS_GLM_MODE;
+    else process.env.SKS_GLM_MODE = previous;
+  }
+});
+
 test('native agent model policy keeps GLM mode on GLM 5.2 with GLM efforts', () => {
   const simple = decideAgentWorkerModel({
     mainModel: 'z-ai/glm-5.2',

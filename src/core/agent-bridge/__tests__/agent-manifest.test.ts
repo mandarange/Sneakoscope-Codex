@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { COMMAND_MANIFEST_BY_NAME, commandManifestNames } from '../../../cli/command-manifest-lite.js';
 import { COMMANDS } from '../../../cli/command-registry.js';
 import { PACKAGE_VERSION } from '../../fsx.js';
+import { commandContract } from '../../safety/command-contract/index.js';
 import {
   HOST_CAPABILITY_DESCRIPTORS,
   buildAgentManifest,
@@ -215,6 +217,37 @@ test('generated manifest exactly matches the command registry in sorted order', 
   assert.deepEqual(validation.missing_names, []);
   assert.deepEqual(validation.unexpected_names, []);
   assert.deepEqual(validation.duplicate_names, []);
+});
+
+test('lightweight command metadata stays contract-compatible with the runtime registry', () => {
+  const manifest = buildAgentManifest();
+  const byName = new Map(manifest.tools.map((tool) => [tool.name, tool]));
+  assert.deepEqual(commandManifestNames(), Object.keys(COMMANDS).sort());
+  for (const name of commandManifestNames()) {
+    const lite = COMMAND_MANIFEST_BY_NAME[name];
+    const runtime = COMMANDS[name];
+    const contract = commandContract(name);
+    const tool = byName.get(name);
+    assert.ok(contract, `missing runtime contract for ${name}`);
+    assert.ok(tool, `missing agent manifest tool for ${name}`);
+    assert.equal(runtime.summary, lite.summary, `summary drift for ${name}`);
+    assert.equal(runtime.maturity, lite.maturity, `maturity drift for ${name}`);
+    assert.equal(runtime.risk, lite.risk, `risk drift for ${name}`);
+    assert.equal(runtime.latency, lite.latency, `latency drift for ${name}`);
+    assert.equal(runtime.supportsJson, lite.supportsJson, `JSON support drift for ${name}`);
+    assert.equal(runtime.remoteAllowed, lite.remoteAllowed, `Remote policy drift for ${name}`);
+    assert.equal(runtime.telegramAllowed, lite.telegramAllowed, `Telegram policy drift for ${name}`);
+    assert.equal(runtime.inputProfile, lite.inputProfile, `input profile drift for ${name}`);
+    assert.deepEqual(runtime.requiredCapabilities, lite.requiredCapabilities, `capability drift for ${name}`);
+    assert.equal(tool?.description, contract?.description, `manifest description drift for ${name}`);
+    assert.equal(tool?.risk, contract?.risk, `manifest risk drift for ${name}`);
+    assert.equal(tool?.latency_class, contract?.latency, `manifest latency drift for ${name}`);
+    assert.equal(tool?.json_output_supported, contract?.supports_json, `manifest JSON drift for ${name}`);
+    assert.equal(tool?.remote_allowed, contract?.remote_allowed, `manifest Remote drift for ${name}`);
+    assert.equal(tool?.telegram_allowed, contract?.telegram_allowed, `manifest Telegram drift for ${name}`);
+    assert.deepEqual(tool?.input_schema, contract?.input_schema, `manifest input schema drift for ${name}`);
+    assert.deepEqual(tool?.required_capabilities, contract?.required_capabilities, `manifest capability drift for ${name}`);
+  }
 });
 
 test('Naruto manifest metadata and actions match the parser help contract', () => {

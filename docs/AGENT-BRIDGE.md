@@ -164,7 +164,7 @@ or binary fallback.
     "manifest_schema": "sks.agent-manifest.v1",
     "proof_schema": "sks.naruto-subagent-workflow.v1",
     "host_capability_schema": "sks.host-capabilities.v1",
-    "package_version": "7.1.1"
+    "package_version": "7.1.3"
   },
   "host_capabilities": {
     "schema": "sks.host-capabilities.v1",

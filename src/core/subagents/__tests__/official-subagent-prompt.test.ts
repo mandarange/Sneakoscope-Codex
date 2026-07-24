@@ -73,6 +73,24 @@ test('preparation prompt preserves requested count without inventing write slice
   assert.match(prompt, /parent decomposition required before any subagent is spawned/)
 })
 
+test('parent-required prompt preserves the active main model for slices created later', () => {
+  const prompt = buildOfficialSubagentPrompt({
+    goal: 'Parent must decompose provider work',
+    maxThreads: 4,
+    requestedSubagents: 2,
+    decompositionStatus: 'parent_required',
+    slices: [],
+    activeMainModel: {
+      provider: 'openrouter',
+      model: 'moonshotai/kimi-k3'
+    }
+  })
+
+  assert.match(prompt, /model routing precedence applies to every child, including slices created after parent decomposition/)
+  assert.match(prompt, /for every role without a user override, including slices created after parent decomposition, pass model="moonshotai\/kimi-k3"/)
+  assert.match(prompt, /do not substitute a managed GPT model for the active main model openrouter:moonshotai\/kimi-k3/)
+})
+
 test('official prompt carries deterministic host capability workflows', () => {
   const prompt = buildOfficialSubagentPrompt({
     goal: 'Prepare SQL, retrieve data, and deliver spreadsheet and PDF artifacts',
@@ -81,16 +99,22 @@ test('official prompt carries deterministic host capability workflows', () => {
     decompositionStatus: 'parent_required',
     slices: []
   })
+  const hostPolicy = prompt.slice(
+    prompt.indexOf('Host capability policy:'),
+    prompt.indexOf('\n\nSubagent rules:')
+  )
 
-  assert.match(prompt, /only when it is actually available in the project MCP inventory/)
-  assert.match(prompt, /SQL-generation-only requests: call `datasource_schema_context` first.*may complete without `datasource_query_readonly`/)
-  assert.match(prompt, /actual data retrieval: call `datasource_schema_context`, generate one bounded parameterized SELECT\/CTE, call `datasource_query_readonly`, and retain its receipt/)
-  assert.match(prompt, /spreadsheet create: `spreadsheet_create` -> `spreadsheet_inspect` -> optional one minimal `spreadsheet_update` -> `spreadsheet_inspect`/)
-  assert.match(prompt, /spreadsheet edit: `spreadsheet_inspect` -> one minimal `spreadsheet_update` -> `spreadsheet_inspect`/)
-  assert.match(prompt, /document delivery: editable source -> render -> artifact receipt/)
-  assert.match(prompt, /requested host capability is missing or unhealthy, return blocked proof/)
-  assert.match(prompt, /Slack delivery belongs to the ACAS runtime and is never a model tool/)
-  assert.match(prompt, /do not infer availability from config text or duplicate host tool schemas/)
+  assert.ok(Buffer.byteLength(hostPolicy, 'utf8') <= Math.floor(1037 * 0.75))
+  assert.match(hostPolicy, /confirm requested tools in the project MCP inventory/)
+  assert.match(hostPolicy, /if unavailable or unhealthy, return blocked proof and never fabricate a fallback/)
+  assert.match(hostPolicy, /DB: schema first/)
+  assert.match(hostPolicy, /retrieval defaults to one bounded query and allows at most four total/)
+  assert.match(hostPolicy, /Every query needs a prior schema receipt for the same datasource and matching snapshot/)
+  assert.match(hostPolicy, /spreadsheet: prefer the smallest create\/edit mutation; allow at most three updates/)
+  assert.match(hostPolicy, /inspect after create and every update/)
+  assert.match(hostPolicy, /require the final mutation artifact receipt/)
+  assert.match(hostPolicy, /document: editable source -> render -> deliverable receipt/)
+  assert.match(hostPolicy, /Slack delivery is ACAS-runtime-only, never a model tool/)
   assert.match(prompt, /"artifacts": \[/)
   assert.match(prompt, /"capabilities_used": \[/)
   assert.match(prompt, /"status": "passed\|failed"/)

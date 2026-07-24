@@ -29,10 +29,11 @@ const prevEnv = process.env.SKS_MANAGE_CODEX_APP_PLUGINS;
 delete process.env.SKS_MANAGE_CODEX_APP_PLUGINS;
 
 // 1) A current feature the user disabled in the App must stay disabled (no override).
+// Bare features.multi_agent is stripped; MA v2 uses [features.multi_agent_v2].
 {
   const user = '[features]\nhooks = false\nmulti_agent = false\n';
   const out = normalize(user);
-  const ok = featureValue(out, 'hooks') === 'false' && featureValue(out, 'multi_agent') === 'false';
+  const ok = featureValue(out, 'hooks') === 'false' && featureValue(out, 'multi_agent') === undefined;
   results.push({ case: 'preserves_disabled_features', ok, hooks: featureValue(out, 'hooks') });
 }
 
@@ -71,7 +72,8 @@ delete process.env.SKS_MANAGE_CODEX_APP_PLUGINS;
   const out = normalize('');
   const ok = /\[features\]/.test(out)
     && featureValue(out, 'hooks') === 'true'
-    && featureValue(out, 'multi_agent') === 'true'
+    && featureValue(out, 'multi_agent') === undefined
+    && /\[features\.multi_agent_v2\]/.test(out)
     && featureValue(out, 'fast_mode') === 'true'
     && featureValue(out, 'computer_use') === 'true'
     && featureValue(out, 'browser_use') === 'true'

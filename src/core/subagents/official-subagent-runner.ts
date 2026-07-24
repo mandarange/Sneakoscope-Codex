@@ -2,7 +2,6 @@ import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { randomId, runProcess, writeJsonAtomic, type RunProcessResult } from '../fsx.js'
-import { missionDir } from '../mission.js'
 import {
   DEFAULT_SUBAGENT_EFFORT,
   DEFAULT_SUBAGENT_MODEL,
@@ -26,6 +25,10 @@ import {
 } from '../agent-bridge/host-capability-runtime.js'
 
 export const OFFICIAL_SUBAGENT_WORKFLOW_SCHEMA = 'sks.subagent-workflow.v1'
+
+function officialSubagentMissionDir(root: string, missionId: string): string {
+  return path.join(root, '.sneakoscope', 'missions', missionId)
+}
 
 const OFFICIAL_SUBAGENT_CHILD_ENV_ALLOWLIST = Object.freeze([
   'HOME',
@@ -409,7 +412,7 @@ export async function runOfficialSubagentWorkflow(input: OfficialSubagentWorkflo
       }
     }
     hostCapabilityLaunchNonce = randomId(32)
-    hostCapabilityPendingDir = missionDir(canonicalRoot, input.missionId)
+    hostCapabilityPendingDir = officialSubagentMissionDir(canonicalRoot, input.missionId)
   }
   const childEnv = buildOfficialSubagentChildEnv({
     ...(input.env ? { env: input.env } : {}),

@@ -34,15 +34,17 @@ final class UpdatesViewController: NSViewController, ControlCenterPage {
         checkButton = NativeView.button("Check Now", target: self, action: #selector(checkNow))
         codexUpdateButton = NativeView.button("Update Codex CLI", target: self, action: #selector(updateCodexCLI))
         codexUpdateButton.setAccessibilityHelp("Update the operator Codex CLI using its verified installation method.")
-        reviewButton = NativeView.button("Review and Update", target: self, action: #selector(reviewAndUpdate))
+        reviewButton = ControlKit.primaryButton("Review and Update", target: self, action: #selector(reviewAndUpdate))
+        reviewButton.setAccessibilityHelp("Review the staged update first, then confirm before anything is installed.")
         codexUpdateStatus.setAccessibilityLabel("Codex CLI update result")
         let buttons = NSStackView(views: [checkButton, codexUpdateButton, reviewButton, progress])
         buttons.orientation = .horizontal; buttons.spacing = 8
-        view = NativeView.stack([
-            NativeView.title("Updates"),
-            NativeView.detail("SKS, Codex CLI, and Menu Bar status share one local snapshot. Prefer the latest Codex CLI; SKS stays version-agnostic and capability-gates features. Network refresh only runs on demand or after expiry."),
-            status, codexUpdateStatus, stageStatus, remediation, buttons,
-            NativeView.detail("Rollback guidance and the previous Menu Bar app remain available if final verification fails. The update receipt records the exact recovery command and stage state.")
+        view = NativeView.page([
+            ControlKit.header("Updates", "SKS, Codex CLI, and Menu Bar status share one local snapshot. Prefer the latest Codex CLI; SKS stays version-agnostic and capability-gates features. Network refresh only runs on demand or after expiry."),
+            buttons,
+            NativeView.card(title: "Status", subtitle: "Versions from the shared local snapshot.", views: [status, codexUpdateStatus]),
+            NativeView.card(title: "Progress", subtitle: "Authoritative stage checklist from the update receipt.", views: [stageStatus]),
+            NativeView.card(title: "Recovery", subtitle: "Rollback guidance and the previous Menu Bar app remain available if final verification fails. The update receipt records the exact recovery command and stage state.", views: [remediation])
         ])
         loadCached()
     }
@@ -298,7 +300,7 @@ final class UpdatesViewController: NSViewController, ControlCenterPage {
         let menu = json["menubar"] as? [String: Any]
         let generatedAt = json["generated_at"] as? String ?? "unknown"
         let expiresAt = json["expires_at"] as? String ?? "unknown"
-        let expired = ISO8601DateFormatter().date(from: expiresAt).map { $0 <= Date() } ?? true
+        let expired = SKSTimestamp.date(from: expiresAt).map { $0 <= Date() } ?? true
         status.stringValue = [
             "SKS \(sks?["current"] as? String ?? "unknown") → \(sks?["latest"] as? String ?? "unknown") · Codex CLI \(codex?["current"] as? String ?? "unknown") → \(codex?["latest"] as? String ?? "unknown")",
             "Menu Bar expected \(menu?["expected_version"] as? String ?? AppRuntime.packageVersion) · installed \(menu?["installed_version"] as? String ?? "unknown") · rebuild \(menu?["rebuild_required"] as? Bool == true ? "required" : "not required")",
@@ -337,8 +339,7 @@ final class UpdatesViewController: NSViewController, ControlCenterPage {
 
     private func receipt(_ receipt: UpdateOperationReceiptSnapshot, belongsTo operation: OperationSnapshot) -> Bool {
         guard receipt.kind == "update" || receipt.kind == "rollback" else { return false }
-        let parser = ISO8601DateFormatter()
-        guard let receiptDate = parser.date(from: receipt.startedAt), let operationDate = parser.date(from: operation.startedAt) else { return receipt.startedAt >= operation.startedAt }
+        guard let receiptDate = SKSTimestamp.date(from: receipt.startedAt), let operationDate = SKSTimestamp.date(from: operation.startedAt) else { return receipt.startedAt >= operation.startedAt }
         return receiptDate >= operationDate.addingTimeInterval(-1)
     }
 
@@ -365,11 +366,11 @@ final class UpdatesViewController: NSViewController, ControlCenterPage {
             if id == current { return "● \(id) — running" }
             return "○ \(id)"
         }
-        return "Update stages (14):\n" + rows.joined(separator: "\n")
+        return "Update stages (\(OperationCoordinator.updateStageOrder.count)):\n" + rows.joined(separator: "\n")
     }
 
     private func formatTimestamp(_ value: String) -> String {
-        guard let date = ISO8601DateFormatter().date(from: value) else { return value }
+        guard let date = SKSTimestamp.date(from: value) else { return value }
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         formatter.timeStyle = .medium

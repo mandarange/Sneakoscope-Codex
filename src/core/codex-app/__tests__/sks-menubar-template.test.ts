@@ -35,10 +35,10 @@ test('SKS Menu Bar uses the required split native source and resource inventory'
   const root = resolvePackagedMenuBarSourceRoot();
   assert.deepEqual([...NATIVE_SOURCE_FILES], [
     'main.swift', 'AppDelegate.swift', 'StatusItemController.swift',
-    'ControlCenterWindowController.swift', 'SidebarItem.swift',
+    'ControlCenterWindowController.swift', 'SidebarItem.swift', 'ControlKit.swift',
     'OverviewViewController.swift', 'UpdatesViewController.swift',
     'MCPServersViewController.swift', 'ProvidersViewController.swift', 'ProvidersOpenRouter.swift',
-    'ProvidersMultiProvider.swift',
+    'ProvidersRoleModels.swift', 'ProvidersMultiProvider.swift',
     'RemoteTelegramViewController.swift', 'DiagnosticsViewController.swift',
     'SettingsViewController.swift', 'OperationCoordinator.swift',
     'ProcessClient.swift', 'NotificationCoordinator.swift', 'AlertFactory.swift',
@@ -55,7 +55,7 @@ test('SKS Menu Bar uses the required split native source and resource inventory'
   const materialized = source();
   assert.match(materialized, /\/\/ MARK: - ProvidersMultiProvider\.swift/);
   assert.match(materialized, /final class MultiProviderRouterControls/);
-  assert.match(materialized, /OpenCodex setup: run ocx start, then ocx v2 mode v1/);
+  assert.match(materialized, /OpenCodex setup: run ocx start, then ensure the catalog stamps multi_agent_version = \\"v2\\"/);
   assert.match(materialized, /replace 10100 with the live port reported by ocx status/);
   assert.match(materialized, /model\.contains\("\/"\) \? model : "\\\(provider\):\\\(model\)"/);
 });
@@ -198,6 +198,7 @@ final class OperationCoordinator {
     func begin(kind: String, mutationGroup: String?, summary: String) -> OperationSnapshot? { nil }
     func update(_ snapshot: OperationSnapshot, state: OperationState, stage: String?, progress: Double?, summary: String, retryable: Bool = true) -> OperationSnapshot { snapshot }
 }
+enum SKSTimestamp { static func date(from value: String) -> Date? { ISO8601DateFormatter().date(from: value) } }
 
 @main
 struct OverviewHarness {

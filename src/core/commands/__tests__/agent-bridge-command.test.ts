@@ -2,10 +2,29 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildAgentManifest } from '../../agent-bridge/agent-manifest.js';
 import {
+  agentBridgeCommand,
   buildAgentBridgeSetupMetadata,
   inspectAgentBridgeHostCapabilities,
+  renderAgentBridgeBlockedLines,
   runAgentBridgeContractSmokes
 } from '../agent-bridge-command.js';
+
+test('agent-bridge local JSON flag keeps the unknown-subcommand contract byte-compatible', async () => {
+  const previousLog = console.log;
+  const output: string[] = [];
+  console.log = (...args: unknown[]) => output.push(args.map(String).join(' '));
+  try {
+    const result = await agentBridgeCommand('unknown', ['--json']);
+    assert.equal(output.join('\n'), JSON.stringify(result, null, 2));
+    assert.deepEqual(result, {
+      ok: false,
+      error: 'unknown_subcommand:unknown',
+      supported: ['setup']
+    });
+  } finally {
+    console.log = previousLog;
+  }
+});
 
 test('agent-bridge setup metadata includes compatibility and both manifest/capability digests', () => {
   const manifest = buildAgentManifest();
@@ -165,4 +184,23 @@ test('agent-bridge inventory stays bounded and does not read project config with
   assert.equal(runtime.server_present, false);
   assert.deepEqual(runtime.blockers, []);
   assert.ok(runtime.capabilities.every((entry) => entry.state === 'not_requested'));
+});
+
+test('agent-bridge blocked output prioritizes one actionable reason and redacts unsafe detail', () => {
+  const lines = renderAgentBridgeBlockedLines([
+    'host_artifact_parent_receipts_mismatch',
+    'Error: raw MCP response token=secret /Users/operator/project',
+    'host_capability_unhealthy:host.spreadsheet.workbook.v1',
+    'host_tool_call_not_allowed:spreadsheet_update'
+  ]);
+  const output = lines.join('\n');
+
+  assert.deepEqual(lines.slice(0, 4), [
+    '상태: 차단',
+    '이유: 현재 에이전트에 엑셀 수정 도구가 허용되지 않았습니다.',
+    '조치: ACAS 에이전트 도구 권한에서 spreadsheet_update를 허용한 뒤 같은 요청을 다시 실행하세요.',
+    '코드: host_tool_call_not_allowed:spreadsheet_update'
+  ]);
+  assert.match(lines[4] || '', /^details: /);
+  assert.doesNotMatch(output, /raw MCP|token=|\/Users\/|secret/);
 });

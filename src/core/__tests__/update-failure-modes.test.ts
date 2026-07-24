@@ -52,6 +52,26 @@ test('dry-run uses documented progress ids and never marks side effects as start
   }
 });
 
+test('already-current update covers every documented stage so the Control Center checklist can complete', async () => {
+  const fixture = await updateFailureFixture('success');
+  try {
+    const options: any = { ...fixture.options };
+    delete options.version;
+    options.env = { ...fixture.options.env, SKS_NPM_VIEW_SNEAKOSCOPE_VERSION: '6.2.0' };
+    const result = await runSksUpdateNow(options);
+    assert.equal(result.status, 'current', result.error || result.status);
+    const ids = result.stages.map((stage) => stage.id);
+    assert.deepEqual([...new Set(ids)].sort(), [...UPDATE_STAGE_ORDER].sort());
+    // The Swift Control Center rejects receipts carrying more stages than the
+    // declared order, so the receipt must never exceed it.
+    const operation = JSON.parse(await fs.readFile(result.operation_receipt_path!, 'utf8'));
+    assert.ok(operation.stages.length <= UPDATE_STAGE_ORDER.length, `receipt stages ${operation.stages.length} > ${UPDATE_STAGE_ORDER.length}`);
+    assert.ok(result.stages.every((stage) => stage.ok), JSON.stringify(result.stages.filter((stage) => !stage.ok)));
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
 test('rollback rejects malformed versions before attempting package mutation', async () => {
   const result = await runSksUpdateRollback({
     version: 'not-a-semver',

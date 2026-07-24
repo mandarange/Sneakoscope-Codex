@@ -36,10 +36,12 @@ final class MultiProviderRouterControls {
     weak var refreshButton: NSButton?
     var models: [String] = []
     var refreshInFlight = false
+    var modelSelectionPending = false
 }
 
 extension ProvidersViewController {
     func makeMultiProviderRouterCard() -> NSBox {
+        multiProvider.model.delegate = self
         multiProvider.modelPopup.addItem(withTitle: "Choose from catalog…")
         multiProvider.modelPopup.target = self
         multiProvider.modelPopup.action = #selector(selectMultiProviderModel(_:))
@@ -71,13 +73,13 @@ extension ProvidersViewController {
         )
         security.setAccessibilityLabel("Multi-provider router security")
         let setup = NativeView.detail(
-            "OpenCodex setup: run ocx start, then ocx v2 mode v1. If OpenCodex chose a fallback port, replace 10100 with the live port reported by ocx status."
+            "OpenCodex setup: run ocx start, then ensure the catalog stamps multi_agent_version = \"v2\" on routed models. If OpenCodex chose a fallback port, replace 10100 with the live port reported by ocx status."
         )
         setup.setAccessibilityLabel("OpenCodex multi-provider setup guidance")
 
         return NativeView.card(
             title: "Multi-Provider Router",
-            subtitle: "Connects Codex to one local Responses router, such as OpenCodex. Multi-agent v1-compatible provider/model catalog slugs can then be assigned to different agent roles.",
+            subtitle: "Connects Codex to one local Responses router, such as OpenCodex. Multi-agent v2 catalog slugs (multi_agent_version = \"v2\") can then be assigned to different agent roles.",
             views: [
                 security,
                 setup,
@@ -131,20 +133,21 @@ extension ProvidersViewController {
             self.multiProvider.modelPopup.removeAllItems()
             self.multiProvider.modelPopup.addItem(withTitle: models.isEmpty ? "Catalog has no models" : "Choose from \(models.count) models…")
             if !models.isEmpty { self.multiProvider.modelPopup.addItems(withTitles: models) }
-            self.multiProvider.modelPopup.selectItem(at: 0)
             if let activeModel = json["active_model"] as? String,
                !activeModel.isEmpty,
+               !self.multiProvider.modelSelectionPending,
                self.multiProvider.model.stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 self.multiProvider.model.stringValue = activeModel
             }
+            self.synchronizeMultiProviderPopupSelection()
             let selected = json["selected"] as? Bool == true
+            self.routerSelectedNow = selected
+            self.routerActiveModel = (json["active_model"] as? String) ?? ""
+            self.renderActiveProviderSummary()
             let providerReady = json["provider_contract_ok"] as? Bool == true
             let catalog = json["catalog"] as? [String: Any]
             let catalogReady = catalog?["ok"] as? Bool == true
             let activeModel = json["active_model"] as? String ?? "unset"
-            if activeModel != "unset", let index = models.firstIndex(of: activeModel) {
-                self.multiProvider.modelPopup.selectItem(at: index + 1)
-            }
             let modelCount = json["model_count"] as? Int ?? models.count
             let truncated = json["models_truncated"] as? Bool == true
             let modelSummary = truncated
@@ -169,6 +172,7 @@ extension ProvidersViewController {
 
     @objc private func selectMultiProviderModel(_ sender: NSPopUpButton) {
         guard sender.indexOfSelectedItem > 0, let model = sender.titleOfSelectedItem else { return }
+        multiProvider.modelSelectionPending = true
         multiProvider.model.stringValue = model
         multiProvider.status.stringValue = "Selected \(model). Check the router before activation."
         multiProvider.status.textColor = .secondaryLabelColor
@@ -183,7 +187,7 @@ extension ProvidersViewController {
         }
         guard !busy else { multiProvider.status.stringValue = "Another provider action is already running."; return }
         guard let snapshot = operations.begin(kind: "multi-provider-router-test", mutationGroup: nil, summary: "Check multi-provider router") else {
-            multiProvider.status.stringValue = "Another guarded operation is already running. Wait or open Diagnostics."
+            multiProvider.status.stringValue = "Another guarded mutation is already running. Wait or open Diagnostics."
             return
         }
         setBusy(true)
@@ -216,6 +220,19 @@ extension ProvidersViewController {
             return
         }
         guard !busy else { multiProvider.status.stringValue = "Another provider action is already running."; return }
+        guard let window = view.window else { return }
+        AlertFactory.confirmSheet(
+            window: window,
+            title: "Configure Router Model?",
+            message: "\(values.model) becomes the routed Codex main model and Codex App restarts.",
+            destructive: false
+        ) { [weak self] approved in
+            guard let self = self, approved else { return }
+            self.performUseMultiProviderRouter(values: values)
+        }
+    }
+
+    private func performUseMultiProviderRouter(values: (baseURL: String, catalogPath: String, model: String)) {
         guard let snapshot = operations.begin(kind: "multi-provider-router-use", mutationGroup: "codex-config", summary: "Configure multi-provider router") else {
             multiProvider.status.stringValue = "Another guarded mutation is already running. Wait or open Diagnostics."
             return
@@ -248,8 +265,20 @@ extension ProvidersViewController {
                 self.multiProvider.status.stringValue = "Router configuration failed · \(self.multiProviderPublicDetail(json, fallback: result.output))"
                 self.multiProvider.status.textColor = .systemOrange
             }
+            if applied {
+                self.multiProvider.modelSelectionPending = false
+            }
             self.refreshMultiProviderRouterStatus()
             self.refreshRoleModels()
+        }
+    }
+
+    func synchronizeMultiProviderPopupSelection() {
+        let current = multiProvider.model.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let index = multiProvider.models.firstIndex(of: current) {
+            multiProvider.modelPopup.selectItem(at: index + 1)
+        } else {
+            multiProvider.modelPopup.selectItem(at: 0)
         }
     }
 

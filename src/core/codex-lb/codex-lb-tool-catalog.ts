@@ -22,17 +22,23 @@ const REQUIRED_CODEX_0144_MODEL_FIELDS: Record<string, readonly string[]> = {
   supported_in_api: ['boolean'],
   priority: ['number'],
   base_instructions: ['string'],
-  supports_reasoning_summaries: ['boolean'],
   support_verbosity: ['boolean'],
   truncation_policy: ['object'],
   supports_parallel_tool_calls: ['boolean'],
   experimental_supported_tools: ['array']
 }
 
+// Codex CLI 0.145 renamed supports_reasoning_summaries to
+// supports_reasoning_summary_parameter (serde default true). A served row may
+// carry either name; at least one must be present with a boolean value.
+const REASONING_SUMMARY_FIELD_NAMES = ['supports_reasoning_summaries', 'supports_reasoning_summary_parameter'] as const
+
 // Exact union observed in Codex CLI 0.144.5's native cache and codex-lb catalog.
 // Unknown response fields are deliberately not persisted into a Codex-owned file.
 const CODEX_0144_MODEL_FIELD_TYPES: Record<string, readonly string[]> = {
   ...REQUIRED_CODEX_0144_MODEL_FIELDS,
+  supports_reasoning_summaries: ['boolean'],
+  supports_reasoning_summary_parameter: ['boolean'],
   description: ['string'],
   default_reasoning_level: ['string'],
   additional_speed_tiers: ['array'],
@@ -382,6 +388,9 @@ function validateCodex0144Model(row: Record<string, unknown>, index: number) {
       continue
     }
     if (!allowedTypes.includes(valueType(row[field]))) issues.push(`codex_lb_model_catalog_field_type_invalid:${index}:${field}`)
+  }
+  if (!REASONING_SUMMARY_FIELD_NAMES.some((field) => Object.prototype.hasOwnProperty.call(row, field))) {
+    issues.push(`codex_lb_model_catalog_required_field_missing:${index}:supports_reasoning_summaries`)
   }
   for (const [field, value] of Object.entries(row)) {
     if (!(CODEX_0144_MODEL_FIELD_TYPES[field] || []).includes(valueType(value))) issues.push(`codex_lb_model_catalog_field_type_invalid:${index}:${field}`)

@@ -12,6 +12,9 @@ const MAX_PACKED = Number(process.env.SKS_MAX_PACK_BYTES || DEFAULT_MAX_PACK_BYT
 const MAX_UNPACKED = Number(process.env.SKS_MAX_UNPACKED_BYTES || DEFAULT_MAX_UNPACKED_BYTES);
 
 const analysis = analyzeRuntimeScriptPackClosure(root);
+assertGate(analysis.root_mode === 'manifest_ssot', 'runtime_script_manifest_ssot_disabled', {
+  root_mode: analysis.root_mode
+});
 assertGate(analysis.declaration_issues.length === 0, 'runtime_script_allowlist_declaration_invalid', {
   issues: analysis.declaration_issues
 });
@@ -29,6 +32,9 @@ assertGate(analysis.missing_from_allowlist.length === 0, 'runtime_script_allowli
 });
 assertGate(analysis.stale_allowlist_entries.length === 0, 'runtime_script_allowlist_stale_entries', {
   stale: analysis.stale_allowlist_entries
+});
+assertGate(analysis.unclassified_reference_roots.length === 0, 'runtime_script_reference_source_unclassified', {
+  unclassified: analysis.unclassified_reference_roots
 });
 
 const npmCache = process.env.SKS_RELEASE_NPM_CACHE || path.join(os.tmpdir(), 'sneakoscope-npm-cache');

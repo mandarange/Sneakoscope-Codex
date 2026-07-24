@@ -62,6 +62,8 @@ function normalizeCodexFastModeUiConfigOnce(text: any = '', opts: any = {}) {
   for (const legacyFlag of ['codex_hooks', 'remote_control', 'fast_mode_ui', 'codex_git_commit']) {
     next = removeTomlTableKey(next, 'features', legacyFlag, 'true');
   }
+  // Bare features.multi_agent is pre-V2; MA v2 lives in [features.multi_agent_v2].
+  next = removeTomlTableKey(next, 'features', 'multi_agent');
   if (opts.forceFastMode === true) {
     next = upsertTopLevelTomlString(next, 'service_tier', 'fast');
   } else if (opts.forceFastModeOff === true) {
@@ -70,7 +72,6 @@ function normalizeCodexFastModeUiConfigOnce(text: any = '', opts: any = {}) {
   next = upsertTopLevelTomlBooleanIfAbsent(next, 'suppress_unstable_features_warning', true);
   for (const featureLine of [
     'hooks = true',
-    'multi_agent = true',
     'fast_mode = true',
     'apps = true',
     'computer_use = true',

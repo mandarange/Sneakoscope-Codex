@@ -48,6 +48,28 @@ const selectedCodexLb = await codexProviderModelUiStatus({
   env: { HOME: home } as any,
   codexLbModelCatalog: readyCatalog
 });
+const sourceRoot = path.join(process.cwd(), 'native', 'sks-menubar', 'Sources');
+const providerViewSource = await fs.readFile(path.join(sourceRoot, 'ProvidersViewController.swift'), 'utf8');
+const openRouterSource = await fs.readFile(path.join(sourceRoot, 'ProvidersOpenRouter.swift'), 'utf8');
+const roleModelsSource = await fs.readFile(path.join(sourceRoot, 'ProvidersRoleModels.swift'), 'utf8');
+const multiProviderSource = await fs.readFile(path.join(sourceRoot, 'ProvidersMultiProvider.swift'), 'utf8');
+const openRouterStatusRefresh = openRouterSource.slice(
+  openRouterSource.indexOf('func refreshOpenRouterStatus()'),
+  openRouterSource.indexOf('func describeOpenRouterStatus')
+);
+const nativeSourceContract = !/field\.stringValue = "z-ai\/glm-5\.2"/.test(providerViewSource)
+  && /var openRouterModelSelectionPending = false/.test(providerViewSource)
+  && /!self\.openRouterModelSelectionPending,\s*current\.isEmpty/.test(openRouterStatusRefresh)
+  && !/current == "z-ai\/glm-5\.2"/.test(openRouterStatusRefresh)
+  && /openRouterModelSelectionPending = true[\s\S]{0,160}openRouterModelField\.stringValue = model/.test(openRouterSource)
+  && /if !controls\.model\.itemTitles\.contains\(model\) \{[\s\S]{0,120}controls\.model\.addItem\(withTitle: model\)/.test(roleModelsSource)
+  && /!efforts\.contains\(preferred\)[\s\S]{0,100}efforts\.append\(preferred\)/.test(roleModelsSource)
+  && /effectiveSource == "selected-main-model" \? effectiveModel : \(defaultModel \?\? effectiveModel\)/.test(roleModelsSource)
+  && /effectiveSource == "selected-main-model" \? effectiveReasoning : \(defaultReasoning \?\? effectiveReasoning\)/.test(roleModelsSource)
+  && /effectiveSource == "selected-main-model" \? " · inherits active main model"/.test(roleModelsSource)
+  && /var modelSelectionPending = false/.test(multiProviderSource)
+  && /!self\.multiProvider\.modelSelectionPending,[\s\S]{0,420}self\.synchronizeMultiProviderPopupSelection\(\)/.test(multiProviderSource)
+  && !/models\.firstIndex\(of: activeModel\)/.test(multiProviderSource);
 
 const ok = missing.ok === true
   && missing.status === 'ready'
@@ -82,6 +104,7 @@ const ok = missing.ok === true
   && selectedCodexLb.selected_provider_blockers.length === 0
   && selectedCodexLb.blockers.length === 0
   && selectedCodexLb.optional_provider_blockers.includes('glm_openrouter_provider_missing')
+  && nativeSourceContract
   && !JSON.stringify({ missing, ready, selectedCodexLb, missingText, readyText }).includes('sk-codex-lb-fixture');
 
 emit({
@@ -90,6 +113,7 @@ emit({
   missing,
   ready,
   selected_codex_lb: selectedCodexLb,
+  native_source_contract: nativeSourceContract,
   secret_safe: !JSON.stringify({ missing, ready, selectedCodexLb, missingText, readyText }).includes('sk-codex-lb-fixture'),
   blockers: ok ? [] : ['codex_app_provider_model_ui_check_failed']
 });

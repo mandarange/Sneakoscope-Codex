@@ -1,11 +1,13 @@
-import { COMMANDS, type CommandEntry, type CommandName } from '../../cli/command-registry.js';
-import { nowIso, PACKAGE_VERSION, sha256 } from '../fsx.js';
 import {
-  NARUTO_ACTIONS,
-  commandContract,
-  validateCommandContractRegistry,
-  type CommandRisk
-} from '../safety/command-contract/index.js';
+  COMMAND_MANIFEST_BY_NAME,
+  COMMAND_MANIFEST_LITE,
+  commandInputSchema,
+  commandManifestNames,
+  type CommandManifestLiteEntry,
+  type CommandNameLite
+} from '../../cli/command-manifest-lite.js';
+import { nowIso, PACKAGE_VERSION, sha256 } from '../fsx.js';
+import { NARUTO_ACTIONS, type CommandRisk } from '../safety/command-contract/types.js';
 
 export type LatencyClass = 'fast' | 'normal' | 'long';
 
@@ -17,7 +19,7 @@ export interface AgentManifestEntry {
   json_output_supported: boolean;
   latency_class: LatencyClass;
   example_invocation: string;
-  maturity: CommandEntry['maturity'];
+  maturity: CommandManifestLiteEntry['maturity'];
   contract_schema: 'sks.command-contract.v2';
   risk: CommandRisk;
   remote_allowed: boolean;
@@ -206,30 +208,30 @@ function exampleInvocation(name: string, jsonSupported: boolean): string {
   return jsonSupported ? `sks ${name} --json` : `sks ${name}`;
 }
 
-function buildEntry(name: CommandName, command: CommandEntry): AgentManifestEntry {
-  const contract = commandContract(name);
-  if (!contract) throw new Error(`Missing command contract for ${name}`);
+function buildEntry(name: CommandNameLite, command: CommandManifestLiteEntry): AgentManifestEntry {
+  const remoteAllowed = command.risk === 'R3' ? false : command.remoteAllowed;
   return {
     name,
     description: command.summary,
-    read_only: contract.read_only,
-    requires_explicit_opt_in: contract.risk === 'R2' || contract.risk === 'R3',
-    json_output_supported: contract.supports_json,
-    latency_class: contract.latency,
-    example_invocation: exampleInvocation(name, contract.supports_json),
+    read_only: command.risk === 'R0',
+    requires_explicit_opt_in: command.risk === 'R2' || command.risk === 'R3',
+    json_output_supported: command.supportsJson,
+    latency_class: command.latency,
+    example_invocation: exampleInvocation(name, command.supportsJson),
     maturity: command.maturity,
-    contract_schema: contract.schema,
-    risk: contract.risk,
-    remote_allowed: contract.remote_allowed,
-    telegram_allowed: contract.telegram_allowed,
-    input_schema: contract.input_schema,
-    required_capabilities: [...contract.required_capabilities]
+    contract_schema: 'sks.command-contract.v2',
+    risk: command.risk,
+    remote_allowed: remoteAllowed,
+    telegram_allowed: remoteAllowed && command.telegramAllowed,
+    input_schema: commandInputSchema(command.inputProfile),
+    required_capabilities: [...command.requiredCapabilities]
   };
 }
 
 export function buildAgentManifest(): CurrentAgentManifest {
-  const names = (Object.keys(COMMANDS) as CommandName[]).sort();
-  const tools = names.map((name) => buildEntry(name, COMMANDS[name]));
+  const tools = [...COMMAND_MANIFEST_LITE]
+    .sort((left, right) => compareCodePoint(left.name, right.name))
+    .map((command) => buildEntry(command.name, command));
   return {
     schema: 'sks.agent-manifest.v1',
     generated_at: nowIso(),
@@ -241,16 +243,15 @@ export function buildAgentManifest(): CurrentAgentManifest {
 
 export function validateAgentManifest(manifest: unknown): AgentManifestValidation {
   const candidate = manifest as Partial<AgentManifest> | null;
-  const expectedNames = Object.keys(COMMANDS).sort();
+  const expectedNames = commandManifestNames();
   const tools = Array.isArray(candidate?.tools) ? candidate.tools : [];
   const observedNames = tools.map((tool: any) => String(tool?.name || '')).filter(Boolean);
   const observedSet = new Set(observedNames);
   const duplicateNames = [...new Set(observedNames.filter((name, index) => observedNames.indexOf(name) !== index))].sort();
   const missingNames = expectedNames.filter((name) => !observedSet.has(name));
-  const unexpectedNames = [...observedSet].filter((name) => !(name in COMMANDS)).sort();
+  const unexpectedNames = [...observedSet].filter((name) => !Object.hasOwn(COMMAND_MANIFEST_BY_NAME, name)).sort();
   const sortedNames = [...observedNames].sort();
   const issues: string[] = [];
-  const contractValidation = validateCommandContractRegistry();
 
   if (candidate?.schema !== 'sks.agent-manifest.v1') issues.push('schema');
   if (!candidate?.compatibility || typeof candidate.compatibility !== 'object' || Array.isArray(candidate.compatibility)) {
@@ -317,7 +318,6 @@ export function validateAgentManifest(manifest: unknown): AgentManifestValidatio
       if (!observedCapabilityIds.has(expected.id)) issues.push(`host_capabilities:missing:${expected.id}`);
     }
   }
-  if (!contractValidation.ok) issues.push(...contractValidation.issues.map((entry) => `command_contract:${entry}`));
   if (!Array.isArray(candidate?.tools)) issues.push('tools');
   if (duplicateNames.length) issues.push(...duplicateNames.map((name) => `duplicate_tool:${name}`));
   if (missingNames.length) issues.push(...missingNames.map((name) => `missing_registry_tool:${name}`));
@@ -340,12 +340,12 @@ export function validateAgentManifest(manifest: unknown): AgentManifestValidatio
   }
 
   const naruto = tools.find((tool: any) => tool?.name === 'naruto') as any;
-  const expectedNaruto = commandContract('naruto');
+  const expectedNaruto = buildEntry('naruto', COMMAND_MANIFEST_BY_NAME.naruto);
   const narutoActions = naruto?.input_schema?.properties?.action?.enum;
   if (JSON.stringify(narutoActions) !== JSON.stringify(NARUTO_ACTIONS)) issues.push('naruto_action_contract_mismatch');
   if (naruto?.risk !== expectedNaruto?.risk || naruto?.risk !== 'R2') issues.push('contract_risk_mismatch:naruto');
-  if (naruto?.latency_class !== expectedNaruto?.latency || naruto?.latency_class !== 'long') issues.push('contract_latency_mismatch:naruto');
-  if (naruto?.json_output_supported !== expectedNaruto?.supports_json || naruto?.json_output_supported !== true) issues.push('contract_json_mismatch:naruto');
+  if (naruto?.latency_class !== expectedNaruto?.latency_class || naruto?.latency_class !== 'long') issues.push('contract_latency_mismatch:naruto');
+  if (naruto?.json_output_supported !== expectedNaruto?.json_output_supported || naruto?.json_output_supported !== true) issues.push('contract_json_mismatch:naruto');
   if (naruto?.remote_allowed !== expectedNaruto?.remote_allowed || naruto?.remote_allowed !== false) issues.push('contract_remote_mismatch:naruto');
   if (naruto?.telegram_allowed !== expectedNaruto?.telegram_allowed || naruto?.telegram_allowed !== false) issues.push('contract_telegram_mismatch:naruto');
   if (naruto?.requires_explicit_opt_in !== true) issues.push('contract_opt_in_mismatch:naruto');

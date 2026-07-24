@@ -105,14 +105,18 @@ final class MCPServersViewController: NSViewController, NSTableViewDataSource, N
         scopePopup.target = self; scopePopup.action = #selector(scopeChanged); scopePopup.setAccessibilityLabel("MCP inventory scope")
         let scopeRow = NSStackView(views: [NSTextField(labelWithString: "View:"), scopePopup])
         scopeRow.orientation = .horizontal; scopeRow.spacing = 8
-        let primary = NSStackView(views: [addButton, editButton, duplicateButton, toggleButton, removeButton])
-        primary.orientation = .horizontal; primary.spacing = 8
+        // Destructive Remove sits apart from routine edit actions; connection
+        // and maintenance actions live on their own labeled row.
+        let primary = ControlKit.actionRow([addButton, editButton, duplicateButton, toggleButton], trailing: [removeButton])
+        let manageLabel = NSTextField(labelWithString: "Manage"); manageLabel.textColor = .secondaryLabelColor
+        let connectLabel = NSTextField(labelWithString: "Connection"); connectLabel.textColor = .secondaryLabelColor
+        for label in [manageLabel, connectLabel] { label.font = NSFont.systemFont(ofSize: 11, weight: .medium) }
         let secondary = NSStackView(views: [testButton, oauthButton, legacySecretButton, backupsButton, refreshButton])
         secondary.orientation = .horizontal; secondary.spacing = 8
         view = NativeView.stack([
             NativeView.title("MCP Servers"),
             NativeView.detail("Inspect global, trusted-project, or effective configuration. Effective and plugin entries are read-only until an exact writable scope is selected. New authentication uses OAuth or environment-variable names only."),
-            scopeRow, scroll, status, primary, secondary
+            scopeRow, scroll, status, manageLabel, primary, connectLabel, secondary
         ])
         updateButtons(); refresh()
     }

@@ -21,10 +21,37 @@ interface FastPathBudget {
   fastPath: string
   files: string[]
   forbidden: Array<{ id: string; pattern: RegExp }>
+  forbiddenModules?: Array<{ id: string; pattern: RegExp }>
+  traverseStaticImports?: boolean
   sourceSlice?: (file: string, text: string) => string
 }
 
+const NARUTO_AGENT_BRIDGE_FORBIDDEN_MODULES = [
+  forbidden('command-registry', /src\/cli\/command-registry\.ts$/),
+  forbidden('route-table', /src\/core\/routes\.ts$/),
+  forbidden('telegram', /src\/core\/(?:commands\/telegram-command\.ts|telegram(?:\/|\.ts$))/),
+  forbidden('remote', /src\/core\/(?:commands\/remote-command\.ts|remote(?:\/|\.ts$))/),
+  forbidden('menubar', /(?:^|\/)(?:menubar|sks-menubar)(?:\/|[-.])/),
+  forbidden('provider-ui', /(?:openrouter|provider-card|provider-model-ui|multi-provider)/i),
+  forbidden('image-research-route', /src\/core\/(?:wiki-image|image-ux-review|research|search-visibility)(?:\/|\.ts$)/),
+  forbidden('release-publish', /src\/core\/release\/(?:main-push|macos-menubar|npm-stage|publish|release-publish)/)
+]
+
 const IMPORT_BUDGETS: FastPathBudget[] = [
+  {
+    fastPath: 'naruto official runner',
+    files: ['src/core/subagents/official-subagent-runner.ts'],
+    traverseStaticImports: true,
+    forbidden: [],
+    forbiddenModules: NARUTO_AGENT_BRIDGE_FORBIDDEN_MODULES
+  },
+  {
+    fastPath: 'agent-bridge manifest',
+    files: ['src/core/agent-bridge/agent-manifest.ts'],
+    traverseStaticImports: true,
+    forbidden: [],
+    forbiddenModules: NARUTO_AGENT_BRIDGE_FORBIDDEN_MODULES
+  },
   {
     fastPath: '--version',
     files: ['src/bin/sks.ts'],
@@ -85,10 +112,23 @@ export async function checkImportGraphBudget(root: string): Promise<ImportGraphB
   const checked = new Set<string>()
   const violations: ImportBudgetViolation[] = []
   for (const budget of IMPORT_BUDGETS) {
-    for (const file of budget.files) {
+    const files = budget.traverseStaticImports
+      ? await staticImportClosure(root, budget.files)
+      : budget.files
+    for (const file of files) {
       checked.add(file)
       const text = await fsp.readFile(path.join(root, file), 'utf8').catch(() => '')
       const checkText = budget.sourceSlice ? budget.sourceSlice(file, text) : text
+      for (const rule of budget.forbiddenModules || []) {
+        const match = file.match(rule.pattern)
+        if (!match) continue
+        violations.push({
+          fast_path: budget.fastPath,
+          file,
+          forbidden: rule.id,
+          matched: match[0].slice(0, 160)
+        })
+      }
       for (const rule of budget.forbidden) {
         const match = checkText.match(rule.pattern)
         if (!match) continue
@@ -114,6 +154,55 @@ export async function writeImportGraphBudgetReport(root: string): Promise<Import
   const report = await checkImportGraphBudget(root)
   await writeJsonAtomic(path.join(root, '.sneakoscope', 'reports', 'import-graph-budget.json'), report)
   return report
+}
+
+async function staticImportClosure(root: string, entryFiles: readonly string[]): Promise<string[]> {
+  const visited = new Set<string>()
+  const queue = [...entryFiles]
+  while (queue.length) {
+    const file = queue.shift() as string
+    if (visited.has(file)) continue
+    visited.add(file)
+    const text = await fsp.readFile(path.join(root, file), 'utf8').catch(() => '')
+    for (const specifier of staticModuleSpecifiers(text)) {
+      const resolved = await resolveSourceModule(root, file, specifier)
+      if (resolved && !visited.has(resolved)) queue.push(resolved)
+    }
+    queue.sort()
+  }
+  return [...visited].sort()
+}
+
+function staticModuleSpecifiers(text: string): string[] {
+  const specifiers = new Set<string>()
+  const pattern = /(?:^|\n)\s*(?:import|export)\s+(?!type\b)(?:[^;'"]{0,2000}?\sfrom\s+)?['"]([^'"]+)['"]/g
+  for (const match of text.matchAll(pattern)) {
+    if (match[1]?.startsWith('.')) specifiers.add(match[1])
+  }
+  return [...specifiers].sort()
+}
+
+async function resolveSourceModule(root: string, importer: string, specifier: string): Promise<string | null> {
+  const importerDir = path.dirname(path.join(root, importer))
+  const raw = path.resolve(importerDir, specifier)
+  const candidates = new Set<string>([raw])
+  if (/\.[cm]?js$/.test(raw)) {
+    candidates.add(raw.replace(/\.js$/, '.ts'))
+    candidates.add(raw.replace(/\.mjs$/, '.mts'))
+    candidates.add(raw.replace(/\.cjs$/, '.cts'))
+  } else if (!path.extname(raw)) {
+    candidates.add(`${raw}.ts`)
+    candidates.add(`${raw}.mts`)
+    candidates.add(`${raw}.cts`)
+    candidates.add(path.join(raw, 'index.ts'))
+  }
+  for (const candidate of candidates) {
+    const stat = await fsp.stat(candidate).catch(() => null)
+    if (!stat?.isFile()) continue
+    const relative = path.relative(root, candidate).split(path.sep).join('/')
+    if (!relative.startsWith('../') && !path.isAbsolute(relative)) return relative
+  }
+  return null
 }
 
 function forbidden(id: string, pattern: RegExp): { id: string; pattern: RegExp } {

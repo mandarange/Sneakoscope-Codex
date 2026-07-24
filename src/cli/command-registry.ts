@@ -1,3 +1,9 @@
+import {
+  COMMAND_MANIFEST_BY_NAME,
+  commandManifestNames,
+  type CommandNameLite
+} from './command-manifest-lite.js';
+
 export type CommandRun = (command: string, args: string[]) => Promise<unknown> | unknown;
 export type ArgsRun = (args: string[]) => Promise<unknown> | unknown;
 export type SubcommandRun = (subcommand: string, args: string[]) => Promise<unknown> | unknown;
@@ -210,6 +216,31 @@ function applyCommandContractOverrides<const T extends Record<string, CommandEnt
   return commands;
 }
 
+function applyCommandManifestContract<const T extends Record<string, CommandEntry>>(commands: T): T {
+  const definitionNames = Object.keys(commands).sort();
+  const manifestNames = commandManifestNames();
+  if (JSON.stringify(definitionNames) !== JSON.stringify(manifestNames)) {
+    throw new Error(`Command manifest/registry mismatch: registry=${definitionNames.join(',')} manifest=${manifestNames.join(',')}`);
+  }
+  for (const name of manifestNames as CommandNameLite[]) {
+    const command = commands[name];
+    const manifest = COMMAND_MANIFEST_BY_NAME[name];
+    if (!command || !manifest) throw new Error(`Missing command manifest metadata for ${name}`);
+    Object.assign(command, {
+      maturity: manifest.maturity,
+      summary: manifest.summary,
+      risk: manifest.risk,
+      latency: manifest.latency,
+      supportsJson: manifest.supportsJson,
+      remoteAllowed: manifest.remoteAllowed,
+      telegramAllowed: manifest.telegramAllowed,
+      inputProfile: manifest.inputProfile,
+      requiredCapabilities: [...manifest.requiredCapabilities]
+    });
+  }
+  return commands;
+}
+
 const COMMAND_DEFINITIONS = {
   help: readOnly(entry('stable', 'Show SKS help', 'dist/commands/help.js', directCommand(() => import('../commands/help.js'), 'dist/commands/help.js'))),
   version: readOnly(entry('stable', 'Show SKS version', 'dist/commands/version.js', directCommand(() => import('../commands/version.js'), 'dist/commands/version.js'))),
@@ -298,7 +329,7 @@ const COMMAND_DEFINITIONS = {
   aliases: entry('stable', 'Show command aliases', 'dist/core/commands/basic-cli.js', basicNoArgs('aliasesCommand')),
   selftest: entry('stable', 'Run local mock selftest', 'dist/core/commands/basic-cli.js', basicArgs('selftestCommand')),
   goal: entry('beta', 'Print stateless Codex native Goal controls', 'dist/core/commands/goal-command.js', subcommand(() => import('../core/commands/goal-command.js'), 'goalCommand', 'dist/core/commands/goal-command.js')),
-  'seo-geo-optimizer': entry('beta', 'Run unified SEO/GEO optimizer audit/plan/apply/verify on the search-visibility kernel', 'dist/core/commands/seo-command.js', argsCommand(() => import('../core/commands/seo-command.js'), 'seoGeoOptimizerCommand', 'dist/core/commands/seo-command.js')),
+  'seo-geo-optimizer': entry('beta', 'Run unified SEO/GEO optimizer audit/plan/apply/verify plus research/strategy (--include-marketing) on the search-visibility kernel', 'dist/core/commands/seo-command.js', argsCommand(() => import('../core/commands/seo-command.js'), 'seoGeoOptimizerCommand', 'dist/core/commands/seo-command.js')),
   hook: skipMigrationGate(entry('beta', 'Codex hook entrypoint', 'dist/commands/hook.js', directCommand(() => import('../commands/hook.js'), 'dist/commands/hook.js'))),
   profile: entry('labs', 'Inspect/set profile', 'dist/commands/profile.js', directCommand(() => import('../commands/profile.js'), 'dist/commands/profile.js')),
   hproof: entry('beta', 'Evaluate H-Proof gate', 'dist/commands/hproof.js', directCommand(() => import('../commands/hproof.js'), 'dist/commands/hproof.js')),
@@ -329,7 +360,7 @@ const COMMAND_DEFINITIONS = {
   'agent-bridge': readOnly(entry('beta', 'Publish the agent-bridge manifest and print host registration snippets for external agent systems', 'dist/core/commands/agent-bridge-command.js', subcommand(() => import('../core/commands/agent-bridge-command.js'), 'agentBridgeCommand', 'dist/core/commands/agent-bridge-command.js', 'setup')))
 } satisfies Record<string, CommandEntry>;
 
-export const COMMANDS = applyCommandContractOverrides(COMMAND_DEFINITIONS, {
+const COMMANDS_WITH_LEGACY_CONTRACT_OVERRIDES = applyCommandContractOverrides(COMMAND_DEFINITIONS, {
   autoresearch: { latency: 'long' },
   bench: { latency: 'long' },
   check: { risk: 'R1', latency: 'long' },
@@ -401,6 +432,8 @@ export const COMMANDS = applyCommandContractOverrides(COMMAND_DEFINITIONS, {
     requiredCapabilities: ['proof.artifacts']
   }
 });
+
+export const COMMANDS = applyCommandManifestContract(COMMANDS_WITH_LEGACY_CONTRACT_OVERRIDES);
 
 export const TYPED_COMMANDS = COMMANDS;
 

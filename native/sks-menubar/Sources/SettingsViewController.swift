@@ -2,7 +2,7 @@ import Cocoa
 
 final class SettingsViewController: NSViewController, ControlCenterPage {
     private let notifications: NotificationCoordinator
-    private let quitWithCodex = NSButton(checkboxWithTitle: "Quit SKS Menu when Codex quits (otherwise keep icon, hide only after a Codex session ends)", target: nil, action: nil)
+    private let quitWithCodex = NSButton(checkboxWithTitle: "Quit SKS Menu when Codex quits", target: nil, action: nil)
     private let status = NativeView.detail("Settings use the native app configuration file.")
     init(notifications: NotificationCoordinator) { self.notifications = notifications; super.init(nibName: nil, bundle: nil) }
     required init?(coder: NSCoder) { nil }
@@ -12,10 +12,19 @@ final class SettingsViewController: NSViewController, ControlCenterPage {
         quitWithCodex.state = readConfig()["quit_with_codex"] as? Bool == true ? .on : .off
         quitWithCodex.setAccessibilityLabel("Quit SKS Menu when Codex quits")
         let authorize = NativeView.button("Enable Notifications", target: self, action: #selector(enableNotifications))
-        view = NativeView.stack([
-            NativeView.title("Settings"),
-            NativeView.detail("These options stay on this Mac. Notification permission and Codex lifecycle behavior never leave the machine."),
-            quitWithCodex, authorize, status
+        let lifecycleCard = NativeView.card(
+            title: "Codex lifecycle",
+            subtitle: "Off keeps the menu icon available on cold start and hides it only after a Codex session ends.",
+            views: [quitWithCodex]
+        )
+        let notificationsCard = NativeView.card(
+            title: "Notifications",
+            subtitle: "Operation results always stay available in Control Center, even when notifications are denied.",
+            views: [NativeView.row([authorize]), status]
+        )
+        view = NativeView.page([
+            ControlKit.header("Settings", "These options stay on this Mac. Notification permission and Codex lifecycle behavior never leave the machine."),
+            lifecycleCard, notificationsCard
         ])
         refreshOnAppear()
     }

@@ -162,7 +162,7 @@ test('catalog-backed provider slugs accept advertised reasoning efforts and reje
   assert.equal(accepted.reasoning_effort, 'high');
   assert.equal(accepted.catalog_verified, true);
   assert.equal(accepted.selected_model_provider, 'sks-router');
-  assert.equal(accepted.multi_agent_version, 'v1');
+  assert.equal(accepted.multi_agent_version, 'v2');
   assert.equal(accepted.runtime_verified, false);
 
   const status = await roleModelPreferencesStatus({ env, home, configPath });
@@ -247,7 +247,7 @@ test('catalog-backed provider slugs accept advertised reasoning efforts and reje
   await fs.writeFile(catalogPath, `${JSON.stringify({
     models: [catalogModel('anthropic/claude-sonnet', 'Claude Sonnet', ['high'], {
       provider: 'anthropic',
-      multi_agent_version: 'v2'
+      multi_agent_version: 'v1'
     })]
   })}\n`, { mode: 0o600 });
   await fs.writeFile(configPath, [
@@ -255,7 +255,7 @@ test('catalog-backed provider slugs accept advertised reasoning efforts and reje
     `model_catalog_json = ${JSON.stringify(catalogPath)}`,
     ''
   ].join('\n'));
-  const v2Blocked: any = await setRoleModelPreference({
+  const v1Blocked: any = await setRoleModelPreference({
     role: 'ui_implementer',
     provider: 'anthropic',
     model: 'anthropic/claude-sonnet',
@@ -264,8 +264,8 @@ test('catalog-backed provider slugs accept advertised reasoning efforts and reje
     home,
     configPath
   });
-  assert.equal(v2Blocked.ok, false);
-  assert.ok(v2Blocked.blockers.includes('role_model_multi_agent_v1_required'));
+  assert.equal(v1Blocked.ok, false);
+  assert.ok(v1Blocked.blockers.includes('role_model_multi_agent_v2_required'));
 });
 
 test('official subagent preparation applies role overrides to routed plan and explicit spawn contract', async (t) => {
@@ -312,6 +312,83 @@ test('official subagent preparation applies role overrides to routed plan and ex
   assert.match(prepared.delegationPrompt, /pass fork_turns="none" and carry this complete bounded slice contract in message/);
 });
 
+test('app-session roles inherit the selected main model unless a role override exists', async (t) => {
+  const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-role-model-main-inheritance-'));
+  t.after(async () => fs.rm(temp, { recursive: true, force: true }));
+  const root = path.join(temp, 'repo');
+  const dir = path.join(root, '.sneakoscope', 'missions', 'M-main-model');
+  const home = path.join(temp, 'home');
+  const codexHome = path.join(home, '.codex');
+  const configPath = path.join(codexHome, 'config.toml');
+  const env = {
+    HOME: home,
+    CODEX_HOME: codexHome,
+    SKS_HOME: path.join(temp, 'sks-home')
+  } as NodeJS.ProcessEnv;
+  await fs.mkdir(dir, { recursive: true });
+  await fs.mkdir(codexHome, { recursive: true });
+  await fs.writeFile(configPath, [
+    'model_provider = "openrouter"',
+    'model = "moonshotai/kimi-k3"',
+    ''
+  ].join('\n'));
+
+  const status = await roleModelPreferencesStatus({ env, home, configPath });
+  const ui = status.roles.find((row) => row.role === 'ui_implementer');
+  assert.equal(status.routing.active_main_model_inherited, true);
+  assert.equal(ui?.override, null);
+  assert.equal(ui?.effective_provider, 'openrouter');
+  assert.equal(ui?.effective_model, 'moonshotai/kimi-k3');
+  assert.equal(ui?.effective_reasoning_effort, 'high');
+  assert.equal(ui?.effective_source, 'selected-main-model');
+
+  const prepared = await prepareOfficialSubagentMission({
+    root,
+    dir,
+    missionId: 'M-main-model',
+    goal: 'Implement the provider UI',
+    route: '$Naruto',
+    mode: 'naruto',
+    sessionScope: 'codex-app-thread',
+    env,
+    slices: [{
+      id: 'ui',
+      title: 'Provider UI',
+      description: 'Implement provider UI',
+      kind: 'worker',
+      agent: 'ui_implementer',
+      paths: ['native/provider-ui']
+    }]
+  });
+  const routed = prepared.plan.agents.ui_implementer;
+  assert.equal(routed.routed_provider, 'openrouter');
+  assert.equal(routed.routed_model, 'moonshotai/kimi-k3');
+  assert.equal(routed.routed_model_reasoning_effort, 'high');
+  assert.equal(routed.routed_model_policy, 'active_main_model');
+  assert.equal(routed.role_model_preference_source, 'active-main-model');
+  assert.equal(prepared.plan.role_model_preferences.routing.active_main_model_inherited, true);
+  assert.match(prepared.delegationPrompt, /keep the current app-selected main model openrouter:moonshotai\/kimi-k3/);
+  assert.match(prepared.delegationPrompt, /effective model preference: openrouter:moonshotai\/kimi-k3\/high \(active main model\)/);
+  assert.match(prepared.delegationPrompt, /pass the exact active main model="moonshotai\/kimi-k3" and reasoning_effort="high"/);
+
+  const parentRequiredDir = path.join(root, '.sneakoscope', 'missions', 'M-main-model-parent-required');
+  await fs.mkdir(parentRequiredDir, { recursive: true });
+  const parentRequired = await prepareOfficialSubagentMission({
+    root,
+    dir: parentRequiredDir,
+    missionId: 'M-main-model-parent-required',
+    goal: 'Implement the provider UI',
+    route: '$Naruto',
+    mode: 'naruto',
+    sessionScope: 'codex-app-thread',
+    env,
+    slices: []
+  });
+  assert.equal(parentRequired.plan.decomposition_status, 'parent_required');
+  assert.match(parentRequired.delegationPrompt, /for every role without a user override, including slices created after parent decomposition, pass model="moonshotai\/kimi-k3"/);
+  assert.match(parentRequired.delegationPrompt, /do not substitute a managed GPT model for the active main model openrouter:moonshotai\/kimi-k3/);
+});
+
 test('unconfigured roles preserve installed custom-agent defaults without spawn overrides', () => {
   const prompt = (async () => {
     const { buildOfficialSubagentPrompt } = await import('../official-subagent-prompt.js');
@@ -356,7 +433,7 @@ function catalogModel(
     truncation_policy: { mode: 'tokens', limit: 10_000 },
     supports_parallel_tool_calls: true,
     experimental_supported_tools: [],
-    multi_agent_version: 'v1',
+    multi_agent_version: 'v2',
     ...extra
   };
 }

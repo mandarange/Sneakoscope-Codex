@@ -59,6 +59,14 @@ export function defaultOpenCodexCatalogPath(input: {
   return path.join(codexHomePath(input), 'opencodex-catalog.json');
 }
 
+/** SKS-managed ModelInfo catalog for OpenRouter Desktop activation. */
+export function sksOpenRouterCatalogPath(input: {
+  readonly home?: string;
+  readonly env?: NodeJS.ProcessEnv;
+} = {}): string {
+  return path.join(codexHomePath(input), 'sks-openrouter-catalog.json');
+}
+
 export async function readConfiguredCodexModelCatalog(input: {
   readonly home?: string;
   readonly env?: NodeJS.ProcessEnv;
@@ -249,6 +257,12 @@ function normalizeCatalogModel(value: unknown, index: number): {
   };
 }
 
+/** Row-level ModelInfo validation blockers; empty means the row is acceptable. */
+export function catalogModelRowBlockers(value: unknown, index = 0): string[] {
+  if (!isRecord(value)) return [`codex_model_catalog_row_invalid:${index}:object`];
+  return validateCatalogModelInfo(value, index);
+}
+
 function validateCatalogModelInfo(value: Record<string, any>, index: number): string[] {
   const blockers: string[] = [];
   const required: ReadonlyArray<readonly [string, 'string' | 'number' | 'boolean' | 'array' | 'object']> = [
@@ -260,7 +274,6 @@ function validateCatalogModelInfo(value: Record<string, any>, index: number): st
     ['supported_in_api', 'boolean'],
     ['priority', 'number'],
     ['base_instructions', 'string'],
-    ['supports_reasoning_summaries', 'boolean'],
     ['support_verbosity', 'boolean'],
     ['truncation_policy', 'object'],
     ['supports_parallel_tool_calls', 'boolean'],
@@ -271,6 +284,20 @@ function validateCatalogModelInfo(value: Record<string, any>, index: number): st
       blockers.push(`codex_model_catalog_required_field_missing:${index}:${field}`);
     } else if (valueType(value[field]) !== expected) {
       blockers.push(`codex_model_catalog_field_type_invalid:${index}:${field}`);
+    }
+  }
+  // Codex CLI 0.145 renamed supports_reasoning_summaries to
+  // supports_reasoning_summary_parameter (serde default true). Accept either
+  // spelling so newer provider/router catalogs are not rejected.
+  const reasoningSummaryFields = ['supports_reasoning_summaries', 'supports_reasoning_summary_parameter']
+    .filter((field) => Object.prototype.hasOwnProperty.call(value, field));
+  if (!reasoningSummaryFields.length) {
+    blockers.push(`codex_model_catalog_required_field_missing:${index}:supports_reasoning_summaries`);
+  } else {
+    for (const field of reasoningSummaryFields) {
+      if (valueType(value[field]) !== 'boolean') {
+        blockers.push(`codex_model_catalog_field_type_invalid:${index}:${field}`);
+      }
     }
   }
 

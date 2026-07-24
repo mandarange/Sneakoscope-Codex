@@ -855,21 +855,21 @@ test('host capability requests select the minimum task tools and recognize workb
     ['Update the spreadsheet with the latest test results.', 'host.spreadsheet.workbook.v1'],
     ['Inspect reports/q3.xlsx and update it with integration test results.', 'host.spreadsheet.workbook.v1'],
     ['최신 테스트 결과로 스프레드시트를 업데이트해줘.', 'host.spreadsheet.workbook.v1'],
-    ['매출 DB에서 월별 합계와 상위 주문 20건을 조회해줘', 'host.datasource.query.readonly.v1'],
-    ['스키마를 보고 실행하지 말고 SQL만 작성해줘', 'host.datasource.schema.v1'],
-    ['이 데이터를 새 엑셀 보고서로 만들고 서식을 다듬어줘', 'host.spreadsheet.workbook.v1'],
-    ['기존 xlsx의 수식 오류를 고치고 다시 검사해줘', 'host.spreadsheet.workbook.v1'],
-    ['이 HTML을 PDF로 렌더링해줘', 'host.document.render.v1'],
-    ['이 페이지를 캡처해줘', 'host.web.capture.v1']
+    ['매출 DB에서 월별 합계를 뽑아줘', 'host.datasource.query.readonly.v1'],
+    ['실행하지 말고 SQL만 작성해줘', 'host.datasource.schema.v1'],
+    ['이 데이터를 엑셀로 정리해줘', 'host.spreadsheet.workbook.v1'],
+    ['기존 엑셀 수식 오류를 고쳐줘', 'host.spreadsheet.workbook.v1'],
+    ['이 문서를 PDF 파일로 저장해줘', 'host.document.render.v1'],
+    ['이 URL 페이지를 캡처해줘', 'host.web.capture.v1']
   ] as const) {
     assert.ok(requestHostCapabilities(prompt).capability_ids.includes(capability), prompt)
   }
-  assert.deepEqual(requestHostCapabilities('스키마를 보고 실행하지 말고 SQL만 작성해줘').workflows, ['datasource_sql_generation'])
-  assert.ok(requestHostCapabilities('매출 DB에서 월별 합계와 상위 주문 20건을 조회해줘').workflows.includes('datasource_query'))
-  assert.ok(requestHostCapabilities('이 데이터를 새 엑셀 보고서로 만들고 서식을 다듬어줘').workflows.includes('spreadsheet_create'))
-  assert.ok(requestHostCapabilities('기존 xlsx의 수식 오류를 고치고 다시 검사해줘').workflows.includes('spreadsheet_edit'))
-  assert.ok(requestHostCapabilities('이 HTML을 PDF로 렌더링해줘').workflows.includes('document_render'))
-  assert.ok(requestHostCapabilities('이 페이지를 캡처해줘').workflows.includes('web_capture'))
+  assert.deepEqual(requestHostCapabilities('실행하지 말고 SQL만 작성해줘').workflows, ['datasource_sql_generation'])
+  assert.ok(requestHostCapabilities('매출 DB에서 월별 합계를 뽑아줘').workflows.includes('datasource_query'))
+  assert.ok(requestHostCapabilities('이 데이터를 엑셀로 정리해줘').workflows.includes('spreadsheet_create'))
+  assert.ok(requestHostCapabilities('기존 엑셀 수식 오류를 고쳐줘').workflows.includes('spreadsheet_edit'))
+  assert.ok(requestHostCapabilities('이 문서를 PDF 파일로 저장해줘').workflows.includes('document_render'))
+  assert.ok(requestHostCapabilities('이 URL 페이지를 캡처해줘').workflows.includes('web_capture'))
 })
 
 test('spreadsheet evidence allows up to three bounded mutations with inspect after each', async () => {

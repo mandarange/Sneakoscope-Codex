@@ -112,6 +112,12 @@ export async function roleModelPreferencesStatus(input: {
   });
   const catalog = routing.catalog;
   const routerSelected = routing.selected_provider === 'sks-router';
+  const activeMainModel = routing.selected_provider && routing.selected_model
+    ? {
+        provider: routing.selected_provider,
+        model: routing.selected_model
+      }
+    : null;
   const preferenceBlockers = Object.entries(read.store.roles).flatMap(([role, preference]) => {
     const routed = preference.provider !== 'openai' || preference.model.includes('/');
     if (!routed) {
@@ -125,12 +131,12 @@ export async function roleModelPreferencesStatus(input: {
     if (!entry.reasoning_efforts.includes(preference.reasoning_effort)) {
       return [`role_model_preference_reasoning_not_in_active_catalog:${role}`];
     }
-    return entry.multi_agent_version === 'v1'
+    return entry.multi_agent_version === 'v2'
       ? []
-      : [`role_model_preference_multi_agent_v1_required:${role}`];
+      : [`role_model_preference_multi_agent_v2_required:${role}`];
   });
   const catalogProfiles = (routerSelected ? catalog.models : [])
-    .filter((entry) => entry.multi_agent_version === 'v1')
+    .filter((entry) => entry.multi_agent_version === 'v2')
     .flatMap((entry) => (
     entry.reasoning_efforts.map((reasoning) => ({
       provider: entry.provider,
@@ -146,6 +152,9 @@ export async function roleModelPreferencesStatus(input: {
   const supportedProfiles = allProfiles.slice(0, ROLE_MODEL_PROFILE_PRESENTATION_LIMIT);
   const roles = MANAGED_OFFICIAL_SUBAGENT_ROLES.map((role) => {
     const override = read.store.roles[role.codex_name] || null;
+    const effectiveProvider = override?.provider || activeMainModel?.provider || inferProviderFromModel(role.model);
+    const effectiveModel = override?.model || activeMainModel?.model || role.model;
+    const effectiveReasoning = override?.reasoning_effort || role.model_reasoning_effort;
     return {
       role: role.codex_name,
       description: role.description,
@@ -153,9 +162,14 @@ export async function roleModelPreferencesStatus(input: {
       default_model: role.model,
       default_reasoning_effort: role.model_reasoning_effort,
       override,
-      effective_provider: override?.provider || inferProviderFromModel(role.model),
-      effective_model: override?.model || role.model,
-      effective_reasoning_effort: override?.reasoning_effort || role.model_reasoning_effort
+      effective_provider: effectiveProvider,
+      effective_model: effectiveModel,
+      effective_reasoning_effort: effectiveReasoning,
+      effective_source: override
+        ? 'role-override'
+        : activeMainModel
+          ? 'selected-main-model'
+          : 'managed-default'
     };
   });
   return {
@@ -169,6 +183,7 @@ export async function roleModelPreferencesStatus(input: {
     routing: {
       selected_provider: routing.selected_provider,
       selected_model: routing.selected_model,
+      active_main_model_inherited: Boolean(activeMainModel),
       router_selected: routerSelected,
       runtime_verified: false
     },
@@ -250,8 +265,8 @@ export async function setRoleModelPreference(input: {
   if (catalogEntry && !catalogEntry.reasoning_efforts.includes(reasoning)) {
     return mutationBlocked('role_model_reasoning_not_in_catalog');
   }
-  if (routedModel && catalogEntry?.multi_agent_version !== 'v1') {
-    return mutationBlocked('role_model_multi_agent_v1_required');
+  if (routedModel && catalogEntry?.multi_agent_version !== 'v2') {
+    return mutationBlocked('role_model_multi_agent_v2_required');
   }
 
   const read = await readRoleModelPreferences(input);

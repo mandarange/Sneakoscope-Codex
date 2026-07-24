@@ -264,9 +264,6 @@ function isGlmWorkerMode(mainModel: string): boolean {
   return model === GLM_52_OPENROUTER_MODEL
     || model === 'glm-5.2'
     || model === 'glm5.2'
-    || process.env.SKS_GLM_MODE === '1'
-    || process.env.SKS_GLM_WRAPPER_ACTIVE === '1'
-    || process.env.SKS_GLM_MAD_ACTIVE === '1'
 }
 
 function glmWorkerEffort(input: { effort: string; risky: boolean; simple: boolean }): Glm52ReasoningEffort {

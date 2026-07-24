@@ -12,7 +12,6 @@ import { resolveCodexAppExecutionProfile } from '../core/codex-app/codex-app-exe
 import { repairCodexNativeManagedAssets } from '../core/codex-native/codex-native-repair-transaction.js';
 import { doctorCodexAppGlmProfile, installCodexAppGlmProfile } from '../core/codex-app/glm-profile-installer.js';
 import { openRouterStatus, useOpenRouter } from '../core/codex-app/openrouter-activate.js';
-import { OPENROUTER_DEFAULT_MODEL } from '../core/codex-app/openrouter-provider.js';
 import { promptForOpenRouterKeyHidden, writeStoredOpenRouterKey } from '../core/providers/openrouter/openrouter-secret-store.js';
 import { compactOpenRouterModelsResult, listOpenRouterModels, testOpenRouterConnection } from '../core/providers/openrouter/openrouter-account.js';
 import { restartCodexApp } from '../core/codex-app/codex-app-restart.js';
@@ -80,7 +79,7 @@ export async function run(_command: any, args: any = []) {
   }
   if (action === 'use-openrouter' || action === 'use-or') {
     const root = await sksRoot();
-    const model = readOption(args, '--model', OPENROUTER_DEFAULT_MODEL);
+    const model = readOption(args, '--model', '');
     const result = await useOpenRouter({
       root,
       model,

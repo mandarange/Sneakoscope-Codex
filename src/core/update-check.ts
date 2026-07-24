@@ -419,6 +419,7 @@ export const UPDATE_STAGE_ORDER = [
   'version_probe',
   'new_version_doctor',
   'hook_trust_repair',
+  'project_receipt',
   'global_skills_reconcile',
   'native_capability_setup',
   'menubar_rebuild',
@@ -668,6 +669,12 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
     recordRegistryStage();
     stage('temporary_install_smoke', true, 'skipped_current', { current: check.current });
     stage('global_install', true, 'skipped_current', { current: check.current });
+    // Record the install-only stages as explicit skips so the receipt covers the
+    // full UPDATE_STAGE_ORDER checklist even when no new package is installed.
+    stage('resolve_new_binary', true, 'skipped_current', { current: check.current });
+    stage('version_probe', true, 'skipped_current', { current: check.current });
+    stage('new_version_doctor', true, 'skipped_current', { current: check.current });
+    stage('hook_trust_repair', true, 'skipped_current', { current: check.current });
     const receipt = await writeProjectUpdateMigrationReceipt({
       root: projectReceiptRoot,
       source: 'update-now-current',
@@ -678,6 +685,7 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
     const migrationCurrent = isUpdateMigrationReceiptCurrent(receipt);
     stage('project_receipt', migrationCurrent, migrationCurrent ? 'current' : 'failed', { root: projectReceiptRoot });
     await runUpdateGlobalSkillsReconcile(stage, { quiet: machineOutput, env });
+    stage('native_capability_setup', true, 'skipped_current', { reason: 'package_already_current' });
     const sksMenuBar = migrationCurrent
       ? await installUpdateSksMenuBar({ root: projectReceiptRoot, env, stage, quiet: machineOutput })
       : null;

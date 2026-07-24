@@ -61,6 +61,7 @@ import {
   createHostCapabilityHookRuntimeBinding,
   resolveHostCapabilityHookRuntimeBinding
 } from '../agent-bridge/host-capability-runtime.js'
+import { renderHostCapabilityBlockedLines } from '../agent-bridge/host-capability-policy.js'
 
 export { buildNarutoGateResult } from '../subagents/official-subagent-preparation.js'
 
@@ -96,8 +97,9 @@ export async function narutoCommand(commandOrArgs: string | string[] = 'naruto',
 
   const parsed = parseNarutoArgs(args)
   if (parsed.argumentErrors.length) {
-    return emit(parsed, argumentBlock(parsed.argumentErrors), () => {
-      console.error(`$sks-naruto argument error: ${parsed.argumentErrors.join(', ')}`)
+    const result = argumentBlock(parsed.argumentErrors)
+    return emit(parsed, result, () => {
+      for (const line of renderNarutoBlockedLines(result.blockers)) console.error(line)
     }, true)
   }
   if (!parsed.json) cliUi.banner(parsed.action === 'run' ? 'naruto subagents' : `naruto ${parsed.action}`)
@@ -541,8 +543,11 @@ async function narutoProof(parsed: NarutoArgs) {
   if (!resolved) return missingMission(parsed, 'proof')
   const result = await buildNarutoProofProjection({ artifactDir: resolved.dir, missionId: resolved.id })
   return emit(parsed, result, () => {
+    if (result.status !== 'completed' && result.blockers?.length) {
+      for (const line of renderNarutoBlockedLines(result.blockers)) console.log(line)
+      return
+    }
     console.log(`Naruto proof ${resolved.id}: ${result.status}`)
-    if (result.blockers?.length) console.log(`Blockers: ${result.blockers.join(', ')}`)
   })
 }
 
@@ -791,7 +796,7 @@ function blockGlmOverride(json: boolean) {
   }
   process.exitCode = 1
   if (json) console.log(JSON.stringify(result, null, 2))
-  else console.error(`$sks-naruto blocked: ${result.reason}. ${result.hint}`)
+  else for (const line of renderNarutoBlockedLines(result.blockers)) console.error(line)
   return result
 }
 
@@ -816,21 +821,27 @@ function missingMission(parsed: NarutoArgs, action: string) {
 }
 
 function missingRunMission(parsed: NarutoArgs) {
-  return emit(parsed, {
+  const result = {
     schema: NARUTO_RESULT_SCHEMA,
     ok: false,
     status: 'blocked',
     blockers: [`naruto_mission_not_found:${parsed.missionId}`]
-  }, () => console.error(`Naruto mission not found: ${parsed.missionId}`), true)
+  }
+  return emit(parsed, result, () => {
+    for (const line of renderNarutoBlockedLines(result.blockers)) console.error(line)
+  }, true)
 }
 
 function blockedRunMission(parsed: NarutoArgs, blockers: string[]) {
-  return emit(parsed, {
+  const result = {
     schema: NARUTO_RESULT_SCHEMA,
     ok: false,
     status: 'blocked',
     blockers
-  }, () => console.error(`Naruto mission blocked: ${blockers.join(', ')}`), true)
+  }
+  return emit(parsed, result, () => {
+    for (const line of renderNarutoBlockedLines(result.blockers)) console.error(line)
+  }, true)
 }
 
 function emit(parsed: Pick<NarutoArgs, 'json'>, result: any, human: () => void, failed = false) {
@@ -841,17 +852,31 @@ function emit(parsed: Pick<NarutoArgs, 'json'>, result: any, human: () => void, 
 }
 
 function renderRunResult(result: any) {
+  if (['blocked', 'incomplete'].includes(result.status) && Array.isArray(result.blockers) && result.blockers.length) {
+    for (const line of renderNarutoBlockedLines(result.blockers)) console.log(line)
+    return
+  }
   console.log(`$sks-naruto ${result.status}: ${result.mission_id}`)
   console.log(`Naruto children: requested ${result.requested_subagents}, target ${result.target_subagents ?? result.requested_subagents}, policy ${result.count_policy || 'exact'}, max threads ${result.max_threads}`)
   console.log(`Started/completed/failed: ${result.started_subagents}/${result.completed_subagents}/${result.failed_subagents}`)
   if (result.status === 'delegation_context_ready') console.log('Continue in the current Naruto parent and wait for every requested child before summarizing.')
-  if (Array.isArray(result.blockers) && result.blockers.length) console.log(`Blockers: ${result.blockers.join(', ')}`)
 }
 
 function renderStatusResult(result: any) {
+  if (['blocked', 'incomplete'].includes(result.status) && Array.isArray(result.blockers) && result.blockers.length) {
+    for (const line of renderNarutoBlockedLines(result.blockers)) console.log(line)
+    return
+  }
   console.log(`Naruto ${result.action || 'status'}: ${result.mission_id}`)
   console.log(`Requested/target/policy: ${result.requested_subagents ?? 0}/${result.target_subagents ?? result.requested_subagents ?? 0}/${result.count_policy || 'exact'}`)
   console.log(`Started/completed/failed: ${result.started_subagents || 0}/${result.completed_subagents || 0}/${result.failed_subagents || 0}`)
+}
+
+export function renderNarutoBlockedLines(blockers: readonly unknown[]): string[] {
+  return renderHostCapabilityBlockedLines(blockers, {
+    reason: 'Naruto 실행이 완료 조건을 충족하지 못했습니다.',
+    action: '세부 코드를 확인해 가장 먼저 표시된 원인을 해결한 뒤 다시 실행하세요.'
+  })
 }
 
 function uniqueStrings(values: unknown[]): string[] {

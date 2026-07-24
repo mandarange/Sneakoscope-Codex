@@ -1,23 +1,6 @@
 import Cocoa
 
-final class RoleModelControls {
-    let role: String
-    let model = NSPopUpButton()
-    let reasoning = NSPopUpButton()
-    let current = NativeView.detail("Current: loading…")
-    let save: NSButton
-    let reset: NSButton
-
-    init(role: String, target: AnyObject) {
-        self.role = role
-        save = NativeView.button("Save", target: target, action: #selector(ProvidersViewController.saveRoleModel(_:)))
-        reset = NativeView.button("Reset", target: target, action: #selector(ProvidersViewController.resetRoleModel(_:)))
-        save.identifier = NSUserInterfaceItemIdentifier(role)
-        reset.identifier = NSUserInterfaceItemIdentifier(role)
-    }
-}
-
-final class ProvidersViewController: NSViewController, ControlCenterPage {
+final class ProvidersViewController: NSViewController, ControlCenterPage, NSTextFieldDelegate {
     private struct CodexLbReadiness {
         let selected: Bool
         let providerReady: Bool
@@ -39,7 +22,6 @@ final class ProvidersViewController: NSViewController, ControlCenterPage {
     let openRouterModelField: NSTextField = {
         let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24))
         field.placeholderString = "z-ai/glm-5.2"
-        field.stringValue = "z-ai/glm-5.2"
         field.setAccessibilityLabel("Manual OpenRouter model id")
         field.setAccessibilityPlaceholderValue("provider/model")
         return field
@@ -49,6 +31,12 @@ final class ProvidersViewController: NSViewController, ControlCenterPage {
     let roleStatus = NativeView.detail("Role model settings are loading…")
     let globalSpinner = NativeView.spinner(label: "Provider operation in progress")
     let fastStatus = NativeView.detail("Fast Mode: checking current desktop setting…")
+    let activeProviderBadge = ControlKit.badge("Checking the active Codex provider…", tone: .busy)
+    var codexLbSelectedNow = false
+    var openRouterSelectedNow = false
+    var openRouterActiveModel = ""
+    var routerSelectedNow = false
+    var routerActiveModel = ""
     var roleRows: [String: RoleModelControls] = [:]
     var actionButtons: [NSButton] = []
     var openRouterModels: [String] = []
@@ -58,6 +46,8 @@ final class ProvidersViewController: NSViewController, ControlCenterPage {
     weak var roleRefreshButton: NSButton?
     var catalogRefreshInFlight = false
     var roleRefreshInFlight = false
+    var openRouterModelSelectionPending = false
+    var openRouterActionRan = false
     var busy = false
 
     init(processClient: ProcessClient, operations: OperationCoordinator) {
@@ -79,7 +69,6 @@ final class ProvidersViewController: NSViewController, ControlCenterPage {
         useOAuth.setAccessibilityLabel("Restore ChatGPT OAuth and restart Codex App")
         actionButtons = [setDomain, replace, testConnection, useOAuth, useLb, fastOn, fastOff]
 
-        let titleRow = NativeView.row([NativeView.title("Providers & Models"), globalSpinner])
         let codexLb = NativeView.card(
             title: "codex-lb",
             subtitle: "Credentials and activation are separate. Test the saved endpoint before making codex-lb the active Codex provider.",
@@ -91,8 +80,9 @@ final class ProvidersViewController: NSViewController, ControlCenterPage {
             views: [fastStatus, NativeView.row([fastOn, fastOff])]
         )
         view = NativeView.page([
-            titleRow,
+            NativeView.row([NativeView.title("Providers & Models"), globalSpinner]),
             NativeView.detail("Save credentials, verify connectivity, then explicitly activate a provider. Secrets are sent through stdin and redacted from logs."),
+            makeActiveProviderCard(),
             makeOpenRouterCard(), makeMultiProviderRouterCard(), codexLb, makeRoleModelsCard(), fast
         ])
         refresh()
@@ -150,6 +140,8 @@ final class ProvidersViewController: NSViewController, ControlCenterPage {
                 if !self.busy { self.providerStatus.stringValue = "Provider status unavailable. Retry or open Diagnostics." }
                 return
             }
+            self.codexLbSelectedNow = self.codexLbReadiness(self.codexLbPayload(json)).selected
+            self.renderActiveProviderSummary()
             if !self.busy { self.providerStatus.stringValue = self.describeProviderStatus(json) }
         }
         refreshOpenRouterStatus()
@@ -427,26 +419,30 @@ final class ProvidersViewController: NSViewController, ControlCenterPage {
             providerStatus.stringValue = "Another provider action is already running."
             return
         }
-        guard let snapshot = operations.begin(kind: "codex-lb-use-oauth", mutationGroup: "codex-config", summary: "Restore Chat / Pro") else {
-            providerStatus.stringValue = "Another guarded mutation is already running. Wait or open Diagnostics."
-            return
-        }
-        setBusy(true)
-        providerStatus.stringValue = "Restoring Chat / Pro with ChatGPT OAuth and restarting Codex App…"
-        _ = operations.update(snapshot, state: .running, stage: "switching", progress: nil, summary: "Restore Chat / Pro")
-        processClient.run(["codex-lb", "use-oauth", "--restart-app", "--json"], timeout: NativeView.mutationTimeout) { [weak self] result in
-            guard let self = self else { return }
-            self.setBusy(false)
-            let outcome = self.describeOAuthResult(self.json(result.output), processCode: result.code)
-            _ = self.operations.update(
-                snapshot,
-                state: outcome.ok ? .succeeded : .failed,
-                stage: "complete",
-                progress: 1,
-                summary: outcome.ok ? "Chat / Pro restored after restart" : "Chat / Pro restore needs action"
-            )
-            self.providerStatus.stringValue = outcome.message
-            self.refreshFastStatus()
+        guard let window = view.window else { return }
+        AlertFactory.confirmSheet(window: window, title: "Restore Chat / Pro?", message: "Codex App restarts with ChatGPT OAuth. Saved codex-lb credentials stay available for later reuse.", destructive: false) { [weak self] approved in
+            guard let self = self, approved else { return }
+            guard let snapshot = self.operations.begin(kind: "codex-lb-use-oauth", mutationGroup: "codex-config", summary: "Restore Chat / Pro") else {
+                self.providerStatus.stringValue = "Another guarded mutation is already running. Wait or open Diagnostics."
+                return
+            }
+            self.setBusy(true)
+            self.providerStatus.stringValue = "Restoring Chat / Pro with ChatGPT OAuth and restarting Codex App…"
+            _ = self.operations.update(snapshot, state: .running, stage: "switching", progress: nil, summary: "Restore Chat / Pro")
+            self.processClient.run(["codex-lb", "use-oauth", "--restart-app", "--json"], timeout: NativeView.mutationTimeout) { [weak self] result in
+                guard let self = self else { return }
+                self.setBusy(false)
+                let outcome = self.describeOAuthResult(self.json(result.output), processCode: result.code)
+                _ = self.operations.update(
+                    snapshot,
+                    state: outcome.ok ? .succeeded : .failed,
+                    stage: "complete",
+                    progress: 1,
+                    summary: outcome.ok ? "Chat / Pro restored after restart" : "Chat / Pro restore needs action"
+                )
+                self.providerStatus.stringValue = outcome.message
+                self.refreshFastStatus()
+            }
         }
     }
     @objc private func useCodexLb() {
@@ -454,37 +450,41 @@ final class ProvidersViewController: NSViewController, ControlCenterPage {
             providerStatus.stringValue = "Another provider action is already running."
             return
         }
-        guard let snapshot = operations.begin(kind: "codex-lb-use-lb", mutationGroup: "codex-config", summary: "Use codex-lb") else {
-            providerStatus.stringValue = "Another guarded mutation is already running. Wait or open Diagnostics."
-            return
-        }
-        setBusy(true)
-        providerStatus.stringValue = "Activating codex-lb and restarting Codex App…"
-        _ = operations.update(snapshot, state: .running, stage: "activating", progress: nil, summary: "Use codex-lb")
-        processClient.run(["codex-lb", "use-codex-lb", "--restart-app", "--json"], timeout: NativeView.mutationTimeout) { [weak self] activationResult in
-            guard let self = self else { return }
-            let activationJson = self.json(activationResult.output)
-            _ = self.operations.update(snapshot, state: .running, stage: "verifying", progress: nil, summary: "Verify codex-lb after restart")
-            self.providerStatus.stringValue = "Verifying codex-lb readiness after restart…"
-            self.processClient.run(["codex-lb", "status", "--json"], timeout: NativeView.statusTimeout) { [weak self] statusResult in
+        guard let window = view.window else { return }
+        AlertFactory.confirmSheet(window: window, title: "Use codex-lb?", message: "codex-lb becomes the active Codex provider and Codex App restarts.", destructive: false) { [weak self] approved in
+            guard let self = self, approved else { return }
+            guard let snapshot = self.operations.begin(kind: "codex-lb-use-lb", mutationGroup: "codex-config", summary: "Use codex-lb") else {
+                self.providerStatus.stringValue = "Another guarded mutation is already running. Wait or open Diagnostics."
+                return
+            }
+            self.setBusy(true)
+            self.providerStatus.stringValue = "Activating codex-lb and restarting Codex App…"
+            _ = self.operations.update(snapshot, state: .running, stage: "activating", progress: nil, summary: "Use codex-lb")
+            self.processClient.run(["codex-lb", "use-codex-lb", "--restart-app", "--json"], timeout: NativeView.mutationTimeout) { [weak self] activationResult in
                 guard let self = self else { return }
-                self.setBusy(false)
-                let statusJson = self.json(statusResult.output)
-                let outcome = self.describeActivationResult(
-                    activationJson,
-                    status: statusJson,
-                    activationCode: activationResult.code,
-                    statusCode: statusResult.code
-                )
-                _ = self.operations.update(
-                    snapshot,
-                    state: outcome.ok ? .succeeded : .failed,
-                    stage: "complete",
-                    progress: 1,
-                    summary: outcome.ok ? "codex-lb active after restart" : "codex-lb activation needs action"
-                )
-                self.providerStatus.stringValue = outcome.message
-                self.refreshOpenRouterStatus()
+                let activationJson = self.json(activationResult.output)
+                _ = self.operations.update(snapshot, state: .running, stage: "verifying", progress: nil, summary: "Verify codex-lb after restart")
+                self.providerStatus.stringValue = "Verifying codex-lb readiness after restart…"
+                self.processClient.run(["codex-lb", "status", "--json"], timeout: NativeView.statusTimeout) { [weak self] statusResult in
+                    guard let self = self else { return }
+                    self.setBusy(false)
+                    let statusJson = self.json(statusResult.output)
+                    let outcome = self.describeActivationResult(
+                        activationJson,
+                        status: statusJson,
+                        activationCode: activationResult.code,
+                        statusCode: statusResult.code
+                    )
+                    _ = self.operations.update(
+                        snapshot,
+                        state: outcome.ok ? .succeeded : .failed,
+                        stage: "complete",
+                        progress: 1,
+                        summary: outcome.ok ? "codex-lb active after restart" : "codex-lb activation needs action"
+                    )
+                    self.providerStatus.stringValue = outcome.message
+                    self.refreshOpenRouterStatus()
+                }
             }
         }
     }

@@ -506,7 +506,18 @@ async function ensureCodexLbToolCatalogSelection(input: {
   // load GPT-5.6/tool metadata the moment model_provider becomes codex-lb.
   const canBindCatalog = selected || opts.allowUnselectedCatalogWrite === true;
   const existingCatalogPath = topLevelTomlString(current, 'model_catalog_json');
-  if (canBindCatalog && existingCatalogPath && path.resolve(existingCatalogPath) !== path.resolve(catalogPath)) {
+  const { isSksManagedCatalogPath, resolveCatalogPath } = await import('../core/codex-app/multi-provider-router-support.js');
+  const existingCatalogResolved = existingCatalogPath
+    ? resolveCatalogPath(existingCatalogPath, { home: input.home, configPath: input.configPath })
+    : null;
+  // A foreign SKS-managed binding (e.g. the OpenRouter activation catalog) is
+  // only replaceable when this run actually selects codex-lb; otherwise a
+  // credentials-only setup/repair would strand the third-party activation
+  // without its per-model feature catalog.
+  const existingCatalogReplaceable = !existingCatalogResolved
+    || (isSksManagedCatalogPath(existingCatalogResolved, { home: input.home })
+      && (selected || opts.willSelectProvider === true));
+  if (canBindCatalog && existingCatalogResolved && existingCatalogResolved !== path.resolve(catalogPath) && !existingCatalogReplaceable) {
     return {
       schema: 'sks.codex-lb-tool-catalog-selection.v1',
       ok: false,
@@ -644,7 +655,7 @@ export async function configureCodexLb(opts: any = {}): Promise<ConfigureCodexLb
   }
   process.env.CODEX_LB_BASE_URL = baseUrl;
   process.env.CODEX_LB_API_KEY = apiKey;
-  let toolCatalog = await ensureCodexLbToolCatalogSelection({ home, configPath, baseUrl, apiKey }, { ...opts, allowUnselectedCatalogWrite: true });
+  let toolCatalog = await ensureCodexLbToolCatalogSelection({ home, configPath, baseUrl, apiKey }, { ...opts, allowUnselectedCatalogWrite: true, willSelectProvider: useDefaultProvider === true });
   if (toolCatalog.config_changed || toolCatalog.status === 'repaired' || toolCatalog.status === 'cached_compatible') {
     appliedActions.push({ type: 'write_model_tool_catalog', target: toolCatalog.path, ok: toolCatalog.ok === true, status: toolCatalog.status });
   }
@@ -1052,9 +1063,17 @@ export async function repairCodexLbAuth(opts: any = {}): Promise<CodexLbAuthInst
       status = await codexLbStatus({ ...opts, probeToolOutputRecovery: true });
     }
   }
-  if (status.env_key_configured && status.base_url && (!status.provider_contract_ok || !status.selected || legacyAuthMigrated || hasTopLevelCodexModeLock(currentConfig) || (opts.forceCodexLbApiKeyAuth === true && !status.ok))) {
+  // An explicit third-party selection (openrouter, sks-router) is user-chosen
+  // state. Background repair may fix the codex-lb provider table but must not
+  // reselect codex-lb unless the user explicitly asked (use-codex-lb / forced).
+  const repairCurrentProvider = topLevelTomlString(currentConfig, 'model_provider');
+  const repairPreserveThirdParty = Boolean(repairCurrentProvider)
+    && repairCurrentProvider !== 'codex-lb'
+    && opts.forceCodexLbApiKeyAuth !== true
+    && opts.authMode !== 'codex-lb';
+  if (status.env_key_configured && status.base_url && (!status.provider_contract_ok || (!status.selected && !repairPreserveThirdParty) || legacyAuthMigrated || hasTopLevelCodexModeLock(currentConfig) || (opts.forceCodexLbApiKeyAuth === true && !status.ok))) {
     await ensureDir(path.dirname(status.config_path));
-    let next = upsertCodexLbConfig(currentConfig, status.base_url);
+    let next = upsertCodexLbConfig(currentConfig, status.base_url, !repairPreserveThirdParty);
     next = normalizeCodexFastModeUiConfig(next, {
       forceFastMode: opts.forceFastMode === true || opts.forceCodexLbApiKeyAuth === true
     });
@@ -1564,7 +1583,10 @@ export async function unselectCodexLbProvider(opts: any = {}) {
   const managedSharedOpenAiRouting = sharedOpenAiRouting.status === 'matched' && sharedOpenAiRouting.managed;
   if (!hasTopLevelCodexLbSelected(current) && !managedCatalogSelected && !managedSharedOpenAiRouting) return { ok: true, status: 'not_selected', config_path: configPath };
   try {
-    let next = removeTopLevelTomlString(current, 'model_provider');
+    // Only remove a codex-lb selection. A third-party selection (openrouter,
+    // sks-router) is user-chosen state that a codex-lb unselect/oauth-restore
+    // must never clobber while cleaning up managed codex-lb pins.
+    let next = removeTopLevelTomlKeyIfValue(current, 'model_provider', 'codex-lb');
     next = removeTopLevelTomlKeyIfValue(next, 'model_catalog_json', managedCatalogPath);
     const routingRemoval = removeCodexLbSharedOpenAiRouting(next, providerBaseUrl);
     next = routingRemoval.text;

@@ -6,6 +6,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { DEFAULT_MAX_PACK_BYTES, DEFAULT_MAX_UNPACKED_BYTES } from '../core/release/package-size-budget.js';
 import { npmPackAtomicTempPaths, writeNpmPackProof } from '../core/release/npm-pack-proof.js';
+import { analyzeRuntimeScriptPackClosure } from '../core/release/runtime-script-pack-closure.js';
 import { assertGate, emitGate, root } from './sks-1-18-gate-lib.js';
 
 const MAX_FILES = Number(process.env.SKS_MAX_PACK_FILES || 2100);
@@ -63,12 +64,19 @@ assertGate(atomicTempFiles.length === 0, 'npm_pack_atomic_temp_files_present', {
 const files = info.files.map((f) => f.path);
 const packProof = writeNpmPackProof(root, info, packMs);
 const runtimeManifest = JSON.parse(fs.readFileSync(path.join(root, 'runtime-required-scripts.json'), 'utf8'));
+const runtimeScriptClosure = analyzeRuntimeScriptPackClosure(root);
 const customerPayloadForbidden = [
   'dist/core/agents/agent-cleanup-executor.js',
   'dist/core/release/npm-stage-tarball-verifier.js',
   'dist/core/release/npm-stage-tarball-verifier-support.js'
 ];
 assertGate(runtimeManifest.schema === 'sks.runtime-required-scripts.v1' && Array.isArray(runtimeManifest.scripts), 'runtime required scripts manifest invalid', runtimeManifest);
+assertGate(runtimeScriptClosure.root_mode === 'manifest_ssot', 'runtime script manifest SSOT disabled', {
+  root_mode: runtimeScriptClosure.root_mode
+});
+assertGate(runtimeScriptClosure.declaration_issues.length === 0, 'runtime script closure declaration invalid', {
+  issues: runtimeScriptClosure.declaration_issues
+});
 
 assertGate(info.entryCount <= MAX_FILES, 'packlist_file_count_over_limit', { entryCount: info.entryCount, max_files: MAX_FILES });
 assertGate(info.unpackedSize <= MAX_UNPACKED, 'packlist_unpacked_over_limit', { unpackedSize: info.unpackedSize, max_unpacked: MAX_UNPACKED });
@@ -78,6 +86,13 @@ assertGate(files.includes('dist/bin/sks.js'), 'packlist_missing_runtime_entry', 
 for (const entry of runtimeManifest.scripts) {
   assertGate(files.includes(entry.path), 'packlist_missing_runtime_required_script', { missing: entry.path, reason: entry.reason });
 }
+const packedScripts = files
+  .filter((file) => file.startsWith('dist/scripts/') && file.endsWith('.js'))
+  .sort();
+assertGate(JSON.stringify(packedScripts) === JSON.stringify(runtimeScriptClosure.closure), 'packlist_runtime_script_closure_mismatch', {
+  missing: runtimeScriptClosure.closure.filter((file) => !packedScripts.includes(file)),
+  unexpected: packedScripts.filter((file) => !runtimeScriptClosure.closure.includes(file))
+});
 assertGate(files.includes('package.json'), 'packlist_missing_runtime_entry', { missing: 'package.json' });
 assertGate(files.includes('README.md'), 'packlist_missing_runtime_entry', { missing: 'README.md' });
 assertGate(files.includes('LICENSE'), 'packlist_missing_runtime_entry', { missing: 'LICENSE' });
@@ -119,6 +134,7 @@ const report = {
   pack_file_list_sha256: packProof.file_list_digest,
   runtime_required_scripts: runtimeManifest.scripts.map((entry) => entry.path),
   runtime_required_missing: runtimeManifest.scripts.filter((entry) => !files.includes(entry.path)).map((entry) => entry.path),
+  runtime_script_closure: runtimeScriptClosure.closure,
   customer_payload_forbidden: customerPayloadForbidden,
   max_files: MAX_FILES,
   max_packed: MAX_PACKED,

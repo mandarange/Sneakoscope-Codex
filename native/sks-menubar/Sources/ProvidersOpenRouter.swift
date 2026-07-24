@@ -1,7 +1,32 @@
 import Cocoa
 
 extension ProvidersViewController {
+    func makeActiveProviderCard() -> NSBox {
+        NativeView.card(
+            title: "Active Provider",
+            subtitle: "The provider Codex Desktop is using right now. Activation buttons below switch it explicitly.",
+            views: [activeProviderBadge]
+        )
+    }
+
+    /// One-line truth for "what is Codex using right now", fed by the three
+    /// independent status probes as their responses arrive.
+    func renderActiveProviderSummary() {
+        if openRouterSelectedNow {
+            let model = openRouterActiveModel.isEmpty || openRouterActiveModel == "unset" ? "model unset" : openRouterActiveModel
+            ControlKit.setBadge(activeProviderBadge, text: "OpenRouter · \(model)", tone: .ok)
+        } else if routerSelectedNow {
+            let model = routerActiveModel.isEmpty ? "model unset" : routerActiveModel
+            ControlKit.setBadge(activeProviderBadge, text: "Multi-Provider Router · \(model)", tone: .ok)
+        } else if codexLbSelectedNow {
+            ControlKit.setBadge(activeProviderBadge, text: "codex-lb (GPT-5.6 via load balancer)", tone: .ok)
+        } else {
+            ControlKit.setBadge(activeProviderBadge, text: "ChatGPT OAuth · built-in OpenAI models", tone: .neutral)
+        }
+    }
+
     func makeOpenRouterCard() -> NSBox {
+        openRouterModelField.delegate = self
         openRouterModelPopup.addItem(withTitle: "Choose from catalog…")
         openRouterModelPopup.target = self
         openRouterModelPopup.action = #selector(selectOpenRouterModel(_:))
@@ -12,8 +37,9 @@ extension ProvidersViewController {
         let refreshModels = NativeView.button("Refresh Models", target: self, action: #selector(refreshOpenRouterModelsAction(_:)))
         openRouterRefreshButton = refreshModels
         let saveKey = NativeView.button("Save OpenRouter key…", target: self, action: #selector(saveOpenRouterKey))
-        let test = NativeView.button("Test Connection", target: self, action: #selector(testOpenRouterConnection))
-        let activate = NativeView.button("Activate Selected Model", target: self, action: #selector(useOpenRouter))
+        let test = NativeView.button("Test Model", target: self, action: #selector(testOpenRouterConnection))
+        test.setAccessibilityLabel("Test the selected OpenRouter model")
+        let activate = ControlKit.primaryButton("Activate Selected Model", target: self, action: #selector(useOpenRouter))
         activate.setAccessibilityLabel("Activate selected OpenRouter model and restart Codex App")
         actionButtons += [refreshModels, saveKey, test, activate]
 
@@ -36,59 +62,6 @@ extension ProvidersViewController {
         )
     }
 
-    func makeRoleModelsCard() -> NSBox {
-        let definitions = [
-            ("ui_implementer", "UI implementation"),
-            ("native_app_specialist", "Native app"),
-            ("implementation_specialist", "Implementation"),
-            ("test_engineer", "Testing")
-        ]
-        var views: [NSView] = [roleStatus]
-        for (role, title) in definitions {
-            let controls = RoleModelControls(role: role, target: self)
-            controls.model.addItem(withTitle: "Loading profiles…")
-            controls.model.setAccessibilityLabel("\(title) model")
-            controls.model.widthAnchor.constraint(greaterThanOrEqualToConstant: 210).isActive = true
-            controls.model.identifier = NSUserInterfaceItemIdentifier(role)
-            controls.model.target = self
-            controls.model.action = #selector(roleModelSelectionChanged(_:))
-            controls.reasoning.addItem(withTitle: "Loading…")
-            controls.reasoning.setAccessibilityLabel("\(title) reasoning effort")
-            controls.current.setAccessibilityLabel("\(title) current and effective model")
-            controls.save.setAccessibilityLabel("Save \(title) model override")
-            controls.reset.setAccessibilityLabel("Reset \(title) model override")
-            controls.model.isEnabled = false
-            controls.reasoning.isEnabled = false
-            controls.save.isEnabled = false
-            controls.reset.isEnabled = false
-            roleRows[role] = controls
-            actionButtons += [controls.save, controls.reset]
-
-            let heading = NativeView.sectionTitle(title)
-            let roleId = NativeView.detail(role)
-            let modelLabel = NSTextField(labelWithString: "Model")
-            let reasoningLabel = NSTextField(labelWithString: "Reasoning")
-            views.append(NativeView.row([heading, roleId]))
-            views.append(controls.current)
-            views.append(NativeView.row([modelLabel, controls.model, reasoningLabel, controls.reasoning]))
-            views.append(NativeView.row([controls.save, controls.reset]))
-            if role != definitions.last?.0 {
-                let separator = NSBox()
-                separator.boxType = .separator
-                views.append(separator)
-            }
-        }
-        let refresh = NativeView.button("Refresh Role Settings", target: self, action: #selector(refreshRoleModelsAction(_:)))
-        roleRefreshButton = refresh
-        actionButtons.append(refresh)
-        views.append(refresh)
-        return NativeView.card(
-            title: "Models by Work Type",
-            subtitle: "Overrides apply only to the selected agent role; Reset restores its effective default. With the Multi-Provider Router selected, v1-compatible catalog slugs such as provider/model let different roles use different upstream providers.",
-            views: views
-        )
-    }
-
     func refreshOpenRouterStatus() {
         processClient.run(["codex-app", "openrouter-status", "--json"], timeout: NativeView.statusTimeout) { [weak self] result in
             guard let self = self else { return }
@@ -104,16 +77,20 @@ extension ProvidersViewController {
             let selected = json["selected"] as? Bool == true
             let activeModel = json["model"] as? String ?? "unset"
             let current = self.openRouterModelField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            if selected, activeModel != "unset", current.isEmpty || current == "z-ai/glm-5.2" {
+            if selected, activeModel != "unset", !self.openRouterModelSelectionPending, current.isEmpty {
                 self.openRouterModelField.stringValue = activeModel
             }
+            self.synchronizeOpenRouterPopupSelection()
+            self.openRouterSelectedNow = selected
+            self.openRouterActiveModel = activeModel
+            self.renderActiveProviderSummary()
             self.openRouterCredentialStatus.stringValue = keyPresent
                 ? "Credential: saved securely\(providerPresent ? " · provider block ready" : " · provider setup needs repair")"
                 : "Credential: missing · save a key before testing or activation"
             self.openRouterActiveStatus.stringValue = selected
                 ? "Active provider: OpenRouter · main model \(activeModel)"
                 : "Active provider: not OpenRouter · saved credentials remain available"
-            if self.openRouterStatus.stringValue == "No OpenRouter action has run yet." {
+            if !self.openRouterActionRan {
                 let summary = self.describeOpenRouterStatus(json)
                 self.openRouterStatus.stringValue = result.code == 0
                     ? summary
@@ -135,9 +112,7 @@ extension ProvidersViewController {
         return "OpenRouter: key stored · activation model \(selectedOpenRouterModel()) · not selected. Next: test, then activate the selected model."
     }
 
-    @objc func refreshOpenRouterModelsAction(_ sender: NSButton) {
-        refreshOpenRouterModels()
-    }
+    @objc func refreshOpenRouterModelsAction(_ sender: NSButton) { refreshOpenRouterModels() }
 
     func refreshOpenRouterModels() {
         guard !catalogRefreshInFlight else { return }
@@ -165,7 +140,7 @@ extension ProvidersViewController {
             self.openRouterModelPopup.removeAllItems()
             self.openRouterModelPopup.addItem(withTitle: "Choose from \(models.count) models…")
             self.openRouterModelPopup.addItems(withTitles: models)
-            self.openRouterModelPopup.selectItem(at: 0)
+            self.synchronizeOpenRouterPopupSelection()
             self.openRouterModelPopup.isEnabled = !self.busy
             let authenticated = json["authenticated"] as? Bool == true
             self.openRouterCatalogStatus.stringValue = authenticated
@@ -189,12 +164,39 @@ extension ProvidersViewController {
 
     @objc private func selectOpenRouterModel(_ sender: NSPopUpButton) {
         guard sender.indexOfSelectedItem > 0, let model = sender.titleOfSelectedItem else { return }
+        openRouterModelSelectionPending = true
+        openRouterActionRan = true
         openRouterModelField.stringValue = model
         openRouterStatus.stringValue = "Selected \(model) from the catalog. Next: test the connection; activation remains unchanged."
     }
 
+    func controlTextDidChange(_ notification: Notification) {
+        guard let field = notification.object as? NSTextField else { return }
+        if field === openRouterModelField {
+            openRouterModelSelectionPending = true
+            openRouterActionRan = true
+            synchronizeOpenRouterPopupSelection()
+            openRouterStatus.stringValue = "Manual model selection changed. Next: test the connection; activation remains unchanged."
+        } else if field === multiProvider.model {
+            multiProvider.modelSelectionPending = true
+            synchronizeMultiProviderPopupSelection()
+            multiProvider.status.stringValue = "Manual routed model selection changed. Check the router before activation."
+            multiProvider.status.textColor = .secondaryLabelColor
+        }
+    }
+
+    private func synchronizeOpenRouterPopupSelection() {
+        let current = selectedOpenRouterModel()
+        if let index = openRouterModels.firstIndex(of: current) {
+            openRouterModelPopup.selectItem(at: index + 1)
+        } else {
+            openRouterModelPopup.selectItem(at: 0)
+        }
+    }
+
     @objc func saveOpenRouterKey() {
         guard let window = view.window else { return }
+        openRouterActionRan = true
         promptForSecretKey(
             window: window,
             sheetTitle: "OpenRouter API Key",
@@ -211,6 +213,7 @@ extension ProvidersViewController {
 
     @objc private func testOpenRouterConnection() {
         let model = selectedOpenRouterModel()
+        openRouterActionRan = true
         guard !model.isEmpty else {
             openRouterStatus.stringValue = "Connection test blocked · model id is empty. Next: choose or enter a model."
             return
@@ -240,11 +243,25 @@ extension ProvidersViewController {
 
     @objc func useOpenRouter() {
         let model = selectedOpenRouterModel()
+        openRouterActionRan = true
         guard !model.isEmpty else {
             openRouterStatus.stringValue = "Enter an OpenRouter model id, then click Activate Selected Model."
             return
         }
         guard !busy else { openRouterStatus.stringValue = "Another provider action is already running."; return }
+        guard let window = view.window else { return }
+        AlertFactory.confirmSheet(
+            window: window,
+            title: "Activate OpenRouter?",
+            message: "\(model) becomes the Codex main model and Codex App restarts.",
+            destructive: false
+        ) { [weak self] approved in
+            guard let self = self, approved else { return }
+            self.performUseOpenRouter(model: model)
+        }
+    }
+
+    private func performUseOpenRouter(model: String) {
         guard let snapshot = operations.begin(kind: "openrouter-use", mutationGroup: "codex-config", summary: "Use OpenRouter") else {
             openRouterStatus.stringValue = "Another guarded mutation is already running. Wait or open Diagnostics."
             return
@@ -266,6 +283,9 @@ extension ProvidersViewController {
                     && activationJson?["config_applied"] as? Bool == true
                     && selected
                     && activeModel == model
+                if configApplied {
+                    self.openRouterModelSelectionPending = false
+                }
                 let restartOK = activationJson?["restart_ok"] as? Bool == true
                 let complete = configApplied && restartOK
                 _ = self.operations.update(snapshot, state: complete ? .succeeded : .failed, stage: "complete", progress: 1, summary: complete ? "OpenRouter main model active" : configApplied ? "OpenRouter saved; restart required" : "OpenRouter activation needs action")
@@ -285,7 +305,7 @@ extension ProvidersViewController {
         openRouterModelField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private func structuredPublicDetail(_ json: [String: Any]?, fallback: String) -> String {
+    func structuredPublicDetail(_ json: [String: Any]?, fallback: String) -> String {
         if let blockers = json?["blockers"] as? [String], !blockers.isEmpty {
             let error = publicError(json).map { " · \($0)" } ?? ""
             return "Reason: \(blockers.joined(separator: ", ").replacingOccurrences(of: "_", with: " "))\(error). Next: \((json?["hint"] as? String) ?? "review the key, model id, and network, then retry")."
@@ -295,7 +315,7 @@ extension ProvidersViewController {
         return "Next: \(NativeView.redactPreview(fallback))"
     }
 
-    private func publicError(_ json: [String: Any]?) -> String? {
+    func publicError(_ json: [String: Any]?) -> String? {
         if let value = json?["error"] as? String { return value }
         guard let value = json?["error"] as? [String: Any] else { return nil }
         let code = value["code"] as? String
@@ -303,163 +323,4 @@ extension ProvidersViewController {
         return [code, message].compactMap { $0 }.joined(separator: ": ")
     }
 
-    @objc func refreshRoleModelsAction(_ sender: NSButton) {
-        refreshRoleModels()
-    }
-
-    func refreshRoleModels() {
-        guard !roleRefreshInFlight else { return }
-        roleRefreshInFlight = true
-        roleRefreshButton?.isEnabled = false
-        roleStatus.stringValue = "Loading role model settings…"
-        processClient.run(["codex-app", "role-models", "--json"], timeout: NativeView.statusTimeout) { [weak self] result in
-            guard let self = self else { return }
-            self.roleRefreshInFlight = false
-            self.roleRefreshButton?.isEnabled = !self.busy
-            guard result.code == 0, let json = self.json(result.output) else {
-                self.roleProfilesLoaded = false
-                self.updateRoleControlAvailability()
-                self.roleStatus.stringValue = "Role settings unavailable · existing configuration was not changed."
-                return
-            }
-            self.configureSupportedRoleProfiles(json)
-            var loaded = 0
-            for (role, controls) in self.roleRows {
-                guard let payload = self.rolePayload(json, role: role) else {
-                    controls.current.stringValue = "Current: unavailable · Effective: unavailable"
-                    continue
-                }
-                let configured = (payload["configured"] as? [String: Any]) ?? (payload["override"] as? [String: Any])
-                let effective = (payload["effective"] as? [String: Any]) ?? payload
-                let configuredModel = (configured?["model"] as? String) ?? (payload["configured_model"] as? String)
-                let configuredReasoning = self.reasoningValue(configured) ?? (payload["configured_reasoning"] as? String)
-                let configuredProvider = (configured?["provider"] as? String) ?? (payload["configured_provider"] as? String)
-                let effectiveModel = (effective["model"] as? String) ?? (payload["effective_model"] as? String) ?? "unavailable"
-                let effectiveProvider = (effective["provider"] as? String)
-                    ?? (payload["effective_provider"] as? String)
-                    ?? "unknown"
-                let effectiveReasoning = self.reasoningValue(effective)
-                    ?? (payload["effective_reasoning_effort"] as? String)
-                    ?? (payload["effective_reasoning"] as? String)
-                    ?? "unavailable"
-                self.selectRoleProfile(model: configuredModel ?? effectiveModel, reasoning: configuredReasoning ?? effectiveReasoning, controls: controls)
-                let current = configuredModel.map {
-                    "\(self.roleModelDisplay(provider: configuredProvider ?? effectiveProvider, model: $0)) / \(configuredReasoning ?? "default")"
-                } ?? "default (no override)"
-                let effectiveDisplay = self.roleModelDisplay(provider: effectiveProvider, model: effectiveModel)
-                controls.current.stringValue = "Current: \(current) · Effective: \(effectiveDisplay) / \(effectiveReasoning)"
-                loaded += 1
-            }
-            self.roleProfilesLoaded = !self.supportedRoleProfiles.isEmpty
-            self.updateRoleControlAvailability()
-            self.roleStatus.stringValue = "Loaded \(loaded) of \(self.roleRows.count) role settings. Save creates an override; Reset removes it."
-        }
-    }
-
-    func updateRoleControlAvailability() {
-        let enabled = !busy && roleProfilesLoaded
-        for controls in roleRows.values {
-            controls.model.isEnabled = enabled
-            controls.reasoning.isEnabled = enabled
-            controls.save.isEnabled = enabled
-            controls.reset.isEnabled = enabled
-        }
-    }
-
-    private func configureSupportedRoleProfiles(_ json: [String: Any]) {
-        let rows = json["supported_profiles"] as? [[String: Any]] ?? []
-        supportedRoleProfiles = rows.compactMap { row in
-            guard let model = row["model"] as? String,
-                  let reasoning = row["reasoning_effort"] as? String,
-                  !model.isEmpty, !reasoning.isEmpty else { return nil }
-            return (model, reasoning)
-        }
-        let models = Array(Set(supportedRoleProfiles.map(\.model))).sorted()
-        for controls in roleRows.values {
-            controls.model.removeAllItems()
-            controls.model.addItems(withTitles: models)
-            controls.reasoning.removeAllItems()
-        }
-    }
-
-    private func rolePayload(_ json: [String: Any], role: String) -> [String: Any]? {
-        if let roles = json["roles"] as? [String: Any], let payload = roles[role] as? [String: Any] { return payload }
-        if let payload = json[role] as? [String: Any] { return payload }
-        if let roles = json["roles"] as? [[String: Any]] {
-            return roles.first { ($0["role"] as? String) == role || ($0["id"] as? String) == role }
-        }
-        return nil
-    }
-
-    private func reasoningValue(_ json: [String: Any]?) -> String? {
-        (json?["reasoning"] as? String) ?? (json?["reasoning_effort"] as? String) ?? (json?["model_reasoning_effort"] as? String)
-    }
-
-    private func roleModelDisplay(provider: String, model: String) -> String {
-        model.contains("/") ? model : "\(provider):\(model)"
-    }
-
-    private func selectRoleProfile(model: String, reasoning: String, controls: RoleModelControls) {
-        let selectedModel = controls.model.itemTitles.contains(model) ? model : (controls.model.itemTitles.first ?? "")
-        controls.model.selectItem(withTitle: selectedModel)
-        updateReasoningChoices(controls, preferred: reasoning)
-    }
-
-    @objc private func roleModelSelectionChanged(_ sender: NSPopUpButton) {
-        guard let role = sender.identifier?.rawValue, let controls = roleRows[role] else { return }
-        updateReasoningChoices(controls, preferred: nil)
-    }
-
-    private func updateReasoningChoices(_ controls: RoleModelControls, preferred: String?) {
-        let model = controls.model.titleOfSelectedItem ?? ""
-        let efforts = supportedRoleProfiles.filter { $0.model == model }.map(\.reasoning)
-        controls.reasoning.removeAllItems()
-        controls.reasoning.addItems(withTitles: efforts)
-        if let preferred = preferred, efforts.contains(preferred) { controls.reasoning.selectItem(withTitle: preferred) }
-    }
-
-    @objc func saveRoleModel(_ sender: NSButton) {
-        guard let role = sender.identifier?.rawValue, let controls = roleRows[role] else { return }
-        let model = controls.model.titleOfSelectedItem ?? ""
-        let reasoning = controls.reasoning.titleOfSelectedItem ?? "medium"
-        guard !model.isEmpty else { roleStatus.stringValue = "Save blocked for \(role) · enter a model id."; return }
-        runRoleMutation(
-            ["codex-app", "set-role-model", "--role", role, "--model", model, "--reasoning", reasoning, "--json"],
-            role: role,
-            kind: "role-model-set",
-            running: "Saving \(role) override…",
-            success: "Saved \(role) · \(model) / \(reasoning). Next: new tasks for this role use the effective override."
-        )
-    }
-
-    @objc func resetRoleModel(_ sender: NSButton) {
-        guard let role = sender.identifier?.rawValue else { return }
-        runRoleMutation(
-            ["codex-app", "reset-role-model", "--role", role, "--json"],
-            role: role,
-            kind: "role-model-reset",
-            running: "Resetting \(role) override…",
-            success: "Reset \(role). Next: new tasks use the effective default shown below."
-        )
-    }
-
-    private func runRoleMutation(_ args: [String], role: String, kind: String, running: String, success: String) {
-        guard !busy else { roleStatus.stringValue = "Another provider action is already running."; return }
-        guard let snapshot = operations.begin(kind: kind, mutationGroup: "codex-config", summary: running) else {
-            roleStatus.stringValue = "Another guarded mutation is already running. Wait or open Diagnostics."
-            return
-        }
-        setBusy(true)
-        roleStatus.stringValue = running
-        _ = operations.update(snapshot, state: .running, stage: "saving", progress: nil, summary: running)
-        processClient.run(args, timeout: NativeView.mutationTimeout) { [weak self] result in
-            guard let self = self else { return }
-            self.setBusy(false)
-            let json = self.json(result.output)
-            let ok = result.code == 0 && json?["ok"] as? Bool == true
-            _ = self.operations.update(snapshot, state: ok ? .succeeded : .failed, stage: "complete", progress: 1, summary: ok ? "Role model setting saved" : "Role model setting needs action")
-            self.roleStatus.stringValue = ok ? success : "\(role) change failed · \(self.structuredPublicDetail(json, fallback: result.output))"
-            self.refreshRoleModels()
-        }
-    }
 }

@@ -12,7 +12,9 @@ import {
   type HostCapabilityRuntime,
   type HostCapabilityRuntimeDependencies
 } from '../agent-bridge/host-capability-runtime.js';
-import { flag } from './command-utils.js';
+import { renderHostCapabilityBlockedLines } from '../agent-bridge/host-capability-policy.js';
+
+const flag = (args: readonly string[] = [], name: string): boolean => args.includes(name);
 
 interface NonInteractiveSmoke {
   ok: boolean;
@@ -132,7 +134,7 @@ export async function agentBridgeCommand(subcommand: string, args: readonly stri
   if (sub !== 'setup') {
     const result = { ok: false, error: `unknown_subcommand:${sub}`, supported: ['setup'] };
     if (flag(args as any, '--json')) console.log(JSON.stringify(result, null, 2));
-    else console.log(`Unknown agent-bridge subcommand "${sub}". Supported: setup`);
+    else for (const line of renderAgentBridgeBlockedLines([result.error])) console.error(line);
     return result;
   }
 
@@ -153,7 +155,7 @@ export async function agentBridgeCommand(subcommand: string, args: readonly stri
     };
     process.exitCode = 1;
     if (flag(args as any, '--json')) console.log(JSON.stringify(result, null, 2));
-    else console.error(`Agent bridge manifest validation failed: ${manifestValidation.issues.join(', ')}`);
+    else for (const line of renderAgentBridgeBlockedLines([result.status, ...manifestValidation.issues])) console.error(line);
     return result;
   }
   await ensureDir(path.dirname(manifestPath));
@@ -183,6 +185,10 @@ export async function agentBridgeCommand(subcommand: string, args: readonly stri
   if (flag(args as any, '--json')) {
     console.log(JSON.stringify(result, null, 2));
   } else {
+    if (!result.ok) {
+      for (const line of renderAgentBridgeBlockedLines(agentBridgeBlockers(result))) console.error(line);
+      return result;
+    }
     console.log(`Agent bridge manifest written: ${manifestPath} (${manifest.tools.length} tools)`);
     console.log('Register with a generic MCP host:');
     console.log(`  ${JSON.stringify(registrationSnippets().generic_mcp_host)}`);
@@ -193,4 +199,19 @@ export async function agentBridgeCommand(subcommand: string, args: readonly stri
     console.log(`Host capability inventory: ${hostCapabilityInventory.health_status} (${hostCapabilityInventory.capabilities.filter((entry) => entry.state === 'available').length}/${hostCapabilityInventory.capabilities.length} available)`);
   }
   return result;
+}
+
+export function renderAgentBridgeBlockedLines(blockers: readonly unknown[]): string[] {
+  return renderHostCapabilityBlockedLines(blockers, {
+    reason: 'Agent Bridge 설정이 완료 조건을 충족하지 못했습니다.',
+    action: '세부 코드를 확인해 가장 먼저 표시된 원인을 해결한 뒤 다시 실행하세요.'
+  });
+}
+
+function agentBridgeBlockers(result: any): unknown[] {
+  return [
+    ...(!result.non_interactive_smoke?.ok ? ['agent_bridge_status_smoke_failed', ...(result.non_interactive_smoke?.issues || [])] : []),
+    ...(!result.naruto_help_smoke?.ok ? ['agent_bridge_naruto_help_smoke_failed', ...(result.naruto_help_smoke?.issues || [])] : []),
+    ...(result.host_capability_inventory?.blockers || [])
+  ];
 }

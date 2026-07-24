@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { checkImportGraphBudget } from '../core/perf/import-graph-budget.js';
 
 const root = process.cwd();
 const dir = path.join(root, 'src', 'core', 'commands');
@@ -23,6 +24,10 @@ for (const file of fs.readdirSync(dir).filter((name) => name.endsWith('-command.
   }
   if (imports > 60) failures.push(`${file}: import count ${imports} > 60 hard ceiling`);
   if (changed && imports > 35) failures.push(`${file}: changed command module import count ${imports} > 35`);
+}
+const importBudget = await checkImportGraphBudget(root);
+for (const violation of importBudget.violations) {
+  failures.push(`${violation.fast_path}: ${violation.file} imports forbidden ${violation.forbidden} module (${violation.matched})`);
 }
 if (failures.length) {
   console.error('Command module budget check failed:');

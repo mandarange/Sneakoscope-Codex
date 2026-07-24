@@ -59,6 +59,11 @@ export interface HostCapabilityRuntimeDependencies {
   healthOptions?: McpHealthOptions;
 }
 
+export interface HostCapabilityBlockedFallback {
+  reason: string;
+  action: string;
+}
+
 export function requestHostCapabilities(goal: unknown): HostCapabilityRequest {
   const text = intentText(String(goal || '').normalize('NFKC'));
   const capabilityIds = new Set<string>();
@@ -74,11 +79,13 @@ export function requestHostCapabilities(goal: unknown): HostCapabilityRequest {
   ]);
   const spreadsheetCreate = blankWorkbook || matches(text, [
     /\b(?:create|generate|produce|deliver|make|build|prepare|convert|export)\b.{0,48}\b(?:xlsx|excel|spreadsheet|workbook)\b/i, /\b(?:xlsx|excel|spreadsheet|workbook)\b.{0,48}\b(?:create|generate|produce|deliver|make|build|prepare|convert|export)\b/i,
-    /(?:엑셀|스프레드시트|xlsx).{0,32}(?:생성|작성|만들|납품)/i, /(?:생성|작성|만들|납품).{0,32}(?:엑셀|스프레드시트|xlsx)/i
+    /(?:엑셀|스프레드시트|xlsx).{0,32}(?:생성|작성|만들|납품)/i, /(?:생성|작성|만들|납품).{0,32}(?:엑셀|스프레드시트|xlsx)/i,
+    /(?:엑셀로 정리|엑셀 파일로 저장|엑셀로 내보내|스프레드시트 보고서|xlsx로 변환|표를 엑셀로)/i
   ]);
   const spreadsheetMutation = matches(text, [
     /\b(?:edit|update|modify|populate|fill|append|import)\b.{0,56}\b(?:xlsx|excel|spreadsheet|workbook)\b/i, /\b(?:xlsx|excel|spreadsheet|workbook)\b.{0,56}\b(?:edit|update|modify|populate|fill|append|import)\b/i,
-    /(?:엑셀|스프레드시트|xlsx).{0,36}(?:수정|편집|업데이트|입력|채우|반영|추가)/i, /(?:수정|편집|업데이트|입력|채우|반영|추가).{0,36}(?:엑셀|스프레드시트|xlsx)/i
+    /(?:엑셀|스프레드시트|xlsx).{0,36}(?:수정|편집|업데이트|입력|채우|반영|추가)/i, /(?:수정|편집|업데이트|입력|채우|반영|추가).{0,36}(?:엑셀|스프레드시트|xlsx)/i,
+    /기존 엑셀 수식 오류를 고쳐/i
   ]);
   const spreadsheetInspection = matches(text, [
     /\binspect\b.{0,56}\b(?:xlsx|excel|spreadsheet|workbook)\b/i, /\b(?:xlsx|excel|spreadsheet|workbook)\b.{0,56}\binspect\b/i,
@@ -90,7 +97,8 @@ export function requestHostCapabilities(goal: unknown): HostCapabilityRequest {
   const queryPatterns = [
     /\b(?:query|retrieve|fetch|load|analy[sz]e|show|list)\b.{0,56}\b(?:database|datasource|data|rows?|records?|results?)\b/i, /\b(?:database|datasource|data|rows?|records?|results?)\b.{0,56}\b(?:query|retrieve|fetch|load|analy[sz]e|show|list)\b/i,
     /\b(?:get|read)\b.{0,56}\b(?:data|rows?|records?|results?)\b.{0,48}\b(?:from|in)\s+(?:the\s+)?(?:database|datasource|db)\b/i, /\bpull\b.{0,64}\b(?:from|out\s+of)\s+(?:the\s+)?(?:database|datasource|db)\b/i,
-    /\b(?:from|in)\s+(?:the\s+)?(?:database|datasource|db)\b.{0,56}\b(?:get|read|pull)\b.{0,48}\b(?:data|rows?|records?|results?)\b/i, /(?:db|데이터베이스|데이터소스|데이터).{0,36}(?:조회|가져오|검색|분석|질의)/i, /(?:조회|가져오|검색|분석|질의).{0,36}(?:db|데이터베이스|데이터소스|데이터)/i
+    /\b(?:from|in)\s+(?:the\s+)?(?:database|datasource|db)\b.{0,56}\b(?:get|read|pull)\b.{0,48}\b(?:data|rows?|records?|results?)\b/i, /(?:db|데이터베이스|데이터소스|데이터).{0,36}(?:조회|가져오|검색|분석|질의)/i, /(?:조회|가져오|검색|분석|질의).{0,36}(?:db|데이터베이스|데이터소스|데이터)/i,
+    /(?:DB에서 뽑아|데이터베이스 집계|월별 합계|통계 내줘|현황 조회|상위\s*(?:N|\d+)\s*건)/i
   ];
   const sqlGeneration = matches(text, sqlPatterns);
   const clauses = text.split(/\n+/).map((clause) => clause.trim()).filter(Boolean);
@@ -98,7 +106,7 @@ export function requestHostCapabilities(goal: unknown): HostCapabilityRequest {
     const nearby = [clauses[index - 1], clause, clauses[index + 1]].filter((value): value is string => Boolean(value));
     return !(matches(clause, sqlPatterns) && nearby.some((value) => matches(value, executionExclusions))) && matches(clause, queryPatterns);
   });
-  const documentRender = matches(text, [/\b(?:render|generate|create|export|deliver)\b.{0,48}\b(?:pdf|png|document screenshot)\b/i, /\b(?:pdf|png|document screenshot)\b.{0,48}\b(?:render|generate|create|export|deliver)\b/i, /(?:pdf|png|문서).{0,32}(?:렌더|생성|작성|내보내|납품)/i, /(?:렌더|생성|작성|내보내|납품).{0,32}(?:pdf|png|문서)/i]);
+  const documentRender = matches(text, [/\b(?:render|generate|create|export|deliver)\b.{0,48}\b(?:pdf|png|document screenshot)\b/i, /\b(?:pdf|png|document screenshot)\b.{0,48}\b(?:render|generate|create|export|deliver)\b/i, /(?:pdf|png|문서).{0,32}(?:렌더|생성|작성|내보내|납품)/i, /(?:렌더|생성|작성|내보내|납품).{0,32}(?:pdf|png|문서)/i, /(?:PDF 파일로 저장|문서를 PDF로|화면을 PNG로|페이지 이미지로)/i]);
   const webCapture = matches(text, [/\b(?:capture|take|create)\b.{0,40}\b(?:url|web|page)\b.{0,24}\bscreenshot\b/i, /\b(?:url|web|page)\b.{0,40}\bscreenshot\b/i, /(?:url|웹|페이지).{0,32}(?:스크린샷|캡처)/i]);
   const workspace = (action: string, korean: string) => matches(text, [new RegExp(`\\bworkspace\\b.{0,48}\\b(?:${action})\\b`, 'i'), new RegExp(`\\b(?:${action})\\b.{0,48}\\bworkspace\\b`, 'i'), new RegExp(`워크스페이스.{0,36}(?:${korean})`, 'i'), new RegExp(`(?:${korean}).{0,36}워크스페이스`, 'i')]);
   const workspaceRead = workspace('read|open|inspect', '읽|열|검사|점검');
@@ -113,7 +121,7 @@ export function requestHostCapabilities(goal: unknown): HostCapabilityRequest {
   if (spreadsheetCreate) { request('host.spreadsheet.workbook.v1', ['spreadsheet_create', 'spreadsheet_inspect', 'spreadsheet_update']); workflows.add('spreadsheet_create'); }
   if (spreadsheetEdit) { request('host.spreadsheet.workbook.v1', ['spreadsheet_inspect', 'spreadsheet_update']); workflows.add('spreadsheet_edit'); }
   if (documentRender) {
-    const tools = [...(/\bpdf\b/i.test(text) ? ['html_to_pdf'] : []), ...(/\b(?:png|document screenshot)\b/i.test(text) || /(?:png|문서 스크린샷)/i.test(text) ? ['html_to_screenshot'] : [])];
+    const tools = [...(/\bpdf\b/i.test(text) ? ['html_to_pdf'] : []), ...(/\b(?:png|document screenshot)\b/i.test(text) || /(?:png|문서 스크린샷|화면을 PNG로|페이지 이미지로)/i.test(text) ? ['html_to_screenshot'] : [])];
     request('host.workspace.files.v1', ['write_file']); request('host.document.render.v1', tools.length ? tools : ['html_to_pdf', 'html_to_screenshot']); workflows.add('workspace_files'); workflows.add('document_render');
   }
   if (webCapture) { request('host.web.capture.v1', ['capture_url_screenshot']); workflows.add('web_capture'); }
@@ -216,6 +224,70 @@ function codeMaintenance(text: string): boolean {
 
 function directExecution(text: string): boolean {
   return matches(text, [/\b(?:create|generate|make|build|prepare|render)\s+(?:an?\s+|the\s+)?(?:xlsx|excel workbook|excel report|spreadsheet(?: file| report)?|workbook(?: file)?|pdf(?: file| document| report)?|png(?: file| image)?)\b(?!\s+(?:parser|reader|writer|module|tests?|specs?|fixtures?|code|implementation)\b)/i, /\b(?:populate|fill)\b.{0,24}\b(?:new|blank|empty)\b.{0,24}\b(?:xlsx|excel(?: workbook)?|spreadsheet|workbook)\b/i, /\b(?:deliver|export|save|produce)\b.{0,32}\b(?:xlsx|excel|spreadsheet|workbook|pdf|png|artifact|deliverable)\b/i, /\b(?:edit|update|modify|populate|fill|append|import|inspect)\s+(?:the\s+|an?\s+)?(?:existing\s+)?(?:xlsx|excel(?: workbook)?|spreadsheet|workbook)\b(?!\s+(?:parser|reader|writer|module|tests?|specs?|fixtures?|code|implementation)\b)/i, /\b(?:edit|update|modify|populate|fill|append|import)\b.{0,48}\b[A-Za-z0-9._/-]+\.xlsx\b/i, /\b(?:inspect|open)\b.{0,64}\b[A-Za-z0-9._/-]+\.xlsx\b.{0,48}\b(?:and\s+)?(?:edit|update|modify|populate|fill|append|import)\s+(?:it|the\s+(?:file|workbook|spreadsheet))\b/i, /\b(?:run|execute)\b.{0,32}\b(?:read[- ]only\s+)?(?:query|select|cte)\b(?!\s+(?:(?:unit|integration|regression)\s+)?tests?\b)/i, /\b(?:query|retrieve|fetch|load)\b.{0,40}\b(?:database|datasource|rows?|records?|results?|(?:customer|sales|database)?\s*data)\b/i, /\b(?:get|read)\b.{0,56}\b(?:data|rows?|records?|results?)\b.{0,48}\b(?:from|in)\s+(?:the\s+)?(?:database|datasource|db)\b/i, /\bpull\b.{0,64}\b(?:from|out\s+of)\s+(?:the\s+)?(?:database|datasource|db)\b/i, /\b(?:from|in)\s+(?:the\s+)?(?:database|datasource|db)\b.{0,56}\b(?:get|read|pull)\b.{0,48}\b(?:data|rows?|records?|results?)\b/i, /\banaly[sz]e\b.{0,40}\b(?:database\s+data|datasource\s+data|rows?|records?|query\s+results?|customer\s+data|sales\s+data)\b/i, /\b(?:test|inspect|review)\b.{0,32}\b(?:pdf|png)\b.{0,24}\band\s+(?:export|deliver|save|render)\s+(?:it|the\s+(?:file|document|image))\b/i, /(?:엑셀|스프레드시트|xlsx)(?!\s*(?:파서|리더|라이터|모듈|코드|테스트|스펙|픽스처)).{0,20}(?:업데이트|수정|편집|입력|채우|반영)/i, /(?:업데이트|수정|편집|입력|채우|반영).{0,20}(?:엑셀|스프레드시트|xlsx)/i, /(?:엑셀|스프레드시트|xlsx|pdf|png).{0,24}(?:파일|문서|보고서|산출물).{0,24}(?:생성|작성|만들|렌더|내보내|납품|저장)/i, /(?:생성|작성|만들|렌더|내보내|납품|저장).{0,24}(?:엑셀|스프레드시트|xlsx|pdf|png)(?:\s*(?:파일|문서|보고서|산출물))?/i, /(?:실행|조회|가져오).{0,24}(?:읽기\s*전용\s*)?(?:쿼리|질의|행|레코드|결과)/i]);
+}
+
+export function renderHostCapabilityBlockedLines(
+  blockers: readonly unknown[],
+  fallback: HostCapabilityBlockedFallback
+): string[] {
+  const codes = uniqueStrings(blockers
+    .map((value) => String(value || '').trim().split(/\r?\n/, 1)[0] || '')
+    .map((value) => value.match(/^[a-z][a-z0-9.-]*(?:_[a-z0-9.-]+)+(?::[a-z0-9_.-]+)*/i)?.[0] || '')
+    .map((value) => value.slice(0, 180))
+    .filter(Boolean));
+  const prioritized = [...codes].sort((left, right) => blockerPriority(left) - blockerPriority(right));
+  const primary = prioritized[0] || 'host_capability_blocked';
+  const guidance = blockerGuidance(primary, fallback);
+  return [
+    '상태: 차단',
+    `이유: ${guidance.reason}`,
+    `조치: ${guidance.action}`,
+    `코드: ${primary}`,
+    ...(prioritized.length > 1 ? [`details: ${prioritized.slice(1).join(', ')}`] : [])
+  ];
+}
+
+function blockerPriority(code: string): number {
+  if (/^(?:host_capability_project_trust_missing|host_tool_call_not_allowed|host_capability_missing)/.test(code)) return 0;
+  if (/^(?:host_capability_unhealthy|host_capability_project_mcp_inventory_unhealthy)|mcp.*(?:inventory|health)/.test(code)) return 1;
+  if (/(?:datasource|readonly_query).*(?:mismatch|schema)|spreadsheet.*(?:sequence|inspection_not_completed|resource_mismatch|update_count_invalid)/.test(code)) return 2;
+  if (/artifact.*missing|error_cell|(?:proof|receipt).*mismatch|parent_receipts_mismatch/.test(code)) return 3;
+  return 4;
+}
+
+function blockerGuidance(code: string, fallback: HostCapabilityBlockedFallback): HostCapabilityBlockedFallback {
+  if (code.startsWith('host_tool_call_not_allowed')) {
+    const tool = code.split(':')[1] || '요청한 도구';
+    return {
+      reason: `현재 에이전트에 ${tool === 'spreadsheet_update' ? '엑셀 수정' : '요청한'} 도구가 허용되지 않았습니다.`,
+      action: `ACAS 에이전트 도구 권한에서 ${tool}를 허용한 뒤 같은 요청을 다시 실행하세요.`
+    };
+  }
+  if (code.startsWith('host_capability_project_trust_missing')) return {
+    reason: '프로젝트 신뢰가 확인되지 않아 호스트 도구를 사용할 수 없습니다.',
+    action: '프로젝트를 신뢰한 뒤 --trusted-project로 같은 요청을 다시 실행하세요.'
+  };
+  if (code.startsWith('host_capability_missing')) return {
+    reason: '요청한 호스트 기능이 현재 ACAS 도구 목록에 없습니다.',
+    action: 'ACAS 에이전트 도구 권한과 acas-tools 구성을 확인한 뒤 다시 실행하세요.'
+  };
+  if (blockerPriority(code) === 1) return {
+    reason: 'acas-tools MCP 연결 또는 상태 확인에 실패했습니다.',
+    action: '프로젝트 MCP inventory와 acas-tools health를 복구한 뒤 다시 실행하세요.'
+  };
+  if (/(?:datasource|readonly_query).*(?:mismatch|schema)/.test(code)) return {
+    reason: '데이터 조회가 선행 스키마 정보와 일치하지 않습니다.',
+    action: '같은 datasource의 schema context를 다시 받고 matching snapshot으로 조회하세요.'
+  };
+  if (/spreadsheet.*(?:sequence|inspection_not_completed|resource_mismatch|update_count_invalid)/.test(code)) return {
+    reason: '엑셀 작업 순서 또는 대상 파일이 검사 결과와 일치하지 않습니다.',
+    action: '같은 파일을 create/update 뒤 inspect하고 허용된 mutation 상한 안에서 다시 실행하세요.'
+  };
+  if (blockerPriority(code) === 3) return {
+    reason: '최종 산출물 또는 proof receipt 검증이 완료되지 않았습니다.',
+    action: '산출물을 다시 생성·검사하고 최종 mutation 또는 render receipt를 제출하세요.'
+  };
+  return fallback;
 }
 
 function matches(text: string, patterns: readonly RegExp[]): boolean { return patterns.some((pattern) => pattern.test(text)); }

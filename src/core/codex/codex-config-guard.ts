@@ -33,7 +33,23 @@ export interface WriteCodexConfigGuardedResult {
 }
 
 // fast_mode_ui was removed from the [features] schema in the 2026-07 renewal.
-const FAST_FEATURE_KEYS = ['fast_mode']
+// Every SKS-managed Desktop feature flag is preserved across guarded mutations
+// so a provider switch or repair can never silently drop feature UI enablement.
+// Legacy flags (codex_hooks, remote_control, fast_mode_ui, codex_git_commit)
+// stay out of this list so normalization can still strip them.
+const FAST_FEATURE_KEYS = [
+  'fast_mode',
+  'hooks',
+  'apps',
+  'computer_use',
+  'browser_use',
+  'browser_use_external',
+  'image_generation',
+  'in_app_browser',
+  'guardian_approval',
+  'tool_suggest',
+  'plugins'
+]
 
 export async function writeCodexConfigGuarded(input: WriteCodexConfigGuardedInput): Promise<WriteCodexConfigGuardedResult> {
   const configPath = path.resolve(input.configPath)

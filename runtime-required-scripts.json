@@ -1,44 +1,149 @@
 {
   "schema": "sks.runtime-required-scripts.v1",
+  "root_mode": "manifest_ssot",
   "scripts": [
     {
       "path": "dist/scripts/codex-config-load-probe.js",
-      "reason": "doctor/install runtime probes Codex config load behavior after package install"
+      "category": "installed_repair",
+      "reason": "installed doctor and repair paths probe whether Codex can load the managed project config"
     },
     {
-      "path": "dist/scripts/release-file-ownership-check.js",
-      "reason": "release integration verifies worker ownership before accepting a workstream commit"
-    },
-    {
-      "path": "dist/scripts/release-macos-menubar-proof.js",
-      "reason": "macOS release proof validates the native Menu Bar build and install receipts"
-    },
-    {
-      "path": "dist/scripts/release-main-push-guard.js",
-      "reason": "release director verifies the immutable pre-push authorization boundary"
-    },
-    {
-      "path": "dist/scripts/release-main-push-receipt.js",
-      "reason": "release director records and verifies the exact main push result"
+      "path": "dist/scripts/lib/ensure-dist-fresh.js",
+      "category": "installed_repair",
+      "reason": "postinstall and update self-verification dynamically restore the installed package build stamp"
     },
     {
       "path": "dist/scripts/release-pack-receipt.js",
-      "reason": "release jobs bind, inspect, and compare the immutable local and staged tarballs"
+      "category": "installed_package_verification",
+      "reason": "packaged release verification creates, inspects, and compares immutable tarball receipts"
     }
   ],
-  "checkout_only_scripts": [
+  "reference_source_policies": [
     {
-      "path": "dist/scripts/release-upgrade-smoke.js",
-      "sources": [
-        ".github/workflows/publish-npm.yml"
-      ],
-      "reason": "the clean checked-out macOS release job builds and runs this CI harness against the exact candidate tarball; installed customers never dispatch it"
+      "source": "package.json#scripts",
+      "classification": "checkout_ci",
+      "reason": "npm development and release scripts execute from a source checkout and are not installed runtime entrypoints"
+    },
+    {
+      "source": "release-gates.v2.json",
+      "classification": "installed_runtime",
+      "reason": "public check, gates, and release commands dispatch the packaged release gate DAG"
+    },
+    {
+      "source": "infra-harness-gates.json",
+      "classification": "checkout_ci",
+      "reason": "infrastructure harness gates are checkout-only verification"
+    },
+    {
+      "source": ".github/workflows/**",
+      "classification": "checkout_ci",
+      "reason": "GitHub Actions runs against the release checkout and staged tarball, not from an installed customer package"
+    },
+    {
+      "source": "src/core/build/build-once-runner.ts",
+      "classification": "checkout_ci",
+      "reason": "the build-once runner validates source-checkout build scripts"
+    },
+    {
+      "source": "dist/core/build/build-once-runner.js",
+      "classification": "checkout_ci",
+      "reason": "the built build-once runner remains a checkout release helper"
+    },
+    {
+      "source": "src/core/commands/check-command.ts",
+      "classification": "installed_runtime",
+      "reason": "the public check command directly dispatches proof-bank and release scripts"
+    },
+    {
+      "source": "dist/core/commands/check-command.js",
+      "classification": "installed_runtime",
+      "reason": "the built public check command directly dispatches proof-bank and release scripts"
+    },
+    {
+      "source": "src/core/commands/gates-command.ts",
+      "classification": "installed_runtime",
+      "reason": "the public gates command dispatches the packaged release DAG"
+    },
+    {
+      "source": "dist/core/commands/gates-command.js",
+      "classification": "installed_runtime",
+      "reason": "the built public gates command dispatches the packaged release DAG"
+    },
+    {
+      "source": "src/core/commands/release-command.ts",
+      "classification": "installed_runtime",
+      "reason": "the public release command directly dispatches the packaged release DAG"
+    },
+    {
+      "source": "dist/core/commands/release-command.js",
+      "classification": "installed_runtime",
+      "reason": "the built public release command directly dispatches the packaged release DAG"
+    },
+    {
+      "source": "src/core/dfix/verification-selector.ts",
+      "classification": "installed_runtime",
+      "reason": "the public DFix route selects these verification scripts when DFix source changes"
+    },
+    {
+      "source": "dist/core/dfix/verification-selector.js",
+      "classification": "installed_runtime",
+      "reason": "the built public DFix route selects these verification scripts when DFix source changes"
+    },
+    {
+      "source": "src/core/doctor/codex-0139-doctor.ts",
+      "classification": "installed_runtime",
+      "reason": "installed Doctor exposes the strict real-probe command and must not point at a missing script"
+    },
+    {
+      "source": "dist/core/doctor/codex-0139-doctor.js",
+      "classification": "installed_runtime",
+      "reason": "built installed Doctor exposes the strict real-probe command"
+    },
+    {
+      "source": "src/core/feature-fixtures.ts",
+      "classification": "test_fixture",
+      "reason": "feature fixture commands are repository selftest fixtures"
+    },
+    {
+      "source": "dist/core/feature-fixtures.js",
+      "classification": "test_fixture",
+      "reason": "built feature fixture commands are repository selftest fixtures"
+    },
+    {
+      "source": "src/core/loops/loop-worker-runtime.ts",
+      "classification": "installed_runtime",
+      "reason": "the public loop runtime launches the worker child as its execution entrypoint"
+    },
+    {
+      "source": "dist/core/loops/loop-worker-runtime.js",
+      "classification": "installed_runtime",
+      "reason": "the built public loop runtime launches the worker child as its execution entrypoint"
+    },
+    {
+      "source": "src/core/release/gate-timing.ts",
+      "classification": "installed_runtime",
+      "reason": "installed performance diagnostics execute the packaged release gate DAG"
+    },
+    {
+      "source": "dist/core/release/gate-timing.js",
+      "classification": "installed_runtime",
+      "reason": "built installed performance diagnostics execute the packaged release gate DAG"
+    },
+    {
+      "source": "src/core/release/release-stamp-proof.ts",
+      "classification": "installed_runtime",
+      "reason": "installed release verification exposes the release check-stamp entrypoint"
+    },
+    {
+      "source": "dist/core/release/release-stamp-proof.js",
+      "classification": "installed_runtime",
+      "reason": "built installed release verification exposes the release check-stamp entrypoint"
     }
   ],
   "dynamic_reference_policies": [
     {
       "source": "dist/core/build/build-once-runner.js",
-      "reason": "derives script paths only from package.json scripts, which are closure roots"
+      "reason": "derives script paths only from package.json scripts, which are explicitly classified as checkout-only"
     },
     {
       "source": "dist/core/release/runtime-script-pack-closure.js",
@@ -46,11 +151,11 @@
     },
     {
       "source": "dist/scripts/release-gate-script-parity-check.js",
-      "reason": "derives script paths only from release-gates.v2.json commands, which are closure roots"
+      "reason": "derives checkout-only script paths from release-gates.v2.json"
     },
     {
       "source": "dist/scripts/release-real-check.js",
-      "reason": "nodeScript call sites are literal-scanned and the release task contract is independently validated"
+      "reason": "release task dispatch is checkout-only and literal call sites are independently scanned"
     }
   ]
 }

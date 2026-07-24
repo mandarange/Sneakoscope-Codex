@@ -38,17 +38,22 @@ final class RemoteTelegramViewController: NSViewController, ControlCenterPage {
         let hubCard = NativeView.card(
             title: "2. Keep remote coding available",
             subtitle: "The LaunchAgent keeps the Hub running and prevents idle system sleep while this Mac user is logged in. Closing the lid or logging out can still stop access. It uses a local in-process worker on this Mac; SSH remains available only for explicitly configured remote machines.",
-            views: [hubStatus, NativeView.row([startButton, stopButton, restartButton, checkButton])]
+            views: [hubStatus, NativeView.row([startButton, stopButton, restartButton])]
         )
         let usageCard = NativeView.card(
             title: "3. Code from Telegram",
             subtitle: "Send ordinary text in the paired private chat. The first message creates and persists the Codex thread with its first turn; later messages resume that exact thread, wait for completion, and return Codex’s final answer. /status, /diff, /proof, and /verify remain available. Arbitrary remote shell and unpaired chats stay blocked.",
+            views: []
+        )
+        let readinessCard = NativeView.card(
+            title: "Project readiness",
+            subtitle: "Codex app, CLI, and Git state for this project — checked together with every status refresh.",
             views: [readinessStatus]
         )
         view = NativeView.page([
-            NativeView.title("Remote & Telegram"),
-            NativeView.detail("Telegram remote coding is isolated to this project, uses workspace-write with network disabled, and never exposes the bot token in config, arguments, or logs."),
-            setupCard, hubCard, usageCard
+            ControlKit.header("Remote & Telegram", "Telegram remote coding is isolated to this project, uses workspace-write with network disabled, and never exposes the bot token in config, arguments, or logs."),
+            NativeView.row([checkButton]),
+            setupCard, hubCard, usageCard, readinessCard
         ])
         updateButtons()
         check()
@@ -151,9 +156,13 @@ final class RemoteTelegramViewController: NSViewController, ControlCenterPage {
             )
             self.setBusy(false)
             if !ok {
-                self.hubStatus.stringValue = kind == "telegram-setup"
-                    ? "Setup failed. Confirm you sent /start to this bot, then retry. The token was not written to logs."
-                    : "\(summary) failed · \(NativeView.redactPreview(result.output))"
+                // Route setup failures to the setup card so the guidance sits
+                // next to the Connect button instead of the Hub status line.
+                if kind == "telegram-setup" {
+                    self.setupStatus.stringValue = "Setup failed. Confirm you sent /start to this bot, then retry. The token was not written to logs."
+                } else {
+                    self.hubStatus.stringValue = "\(summary) failed · \(NativeView.redactPreview(result.output))"
+                }
             }
             self.check()
         }

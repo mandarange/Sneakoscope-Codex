@@ -138,6 +138,12 @@ async function prepareOfficialSubagentMissionLocked(input: OfficialSubagentPrepa
   const roleModelPreferences = await readRoleModelPreferences({ env: input.env || process.env })
   const roleModelRouting = await readConfiguredCodexModelRoutingContext({ env: input.env || process.env })
   const roleModelCatalog = roleModelRouting.catalog
+  const activeMainModel = input.sessionScope && roleModelRouting.selected_provider && roleModelRouting.selected_model
+    ? {
+        provider: roleModelRouting.selected_provider,
+        model: roleModelRouting.selected_model
+      }
+    : null
   const roleModelCatalogBlockers = Object.entries(roleModelPreferences.store.roles).flatMap(([name, preference]) => {
     const routed = preference.provider !== 'openai' || preference.model.includes('/')
     if (!routed) return []
@@ -151,8 +157,8 @@ async function prepareOfficialSubagentMissionLocked(input: OfficialSubagentPrepa
     if (!catalogEntry.reasoning_efforts.includes(preference.reasoning_effort)) {
       return [`role_model_preference_reasoning_not_in_active_catalog:${name}:${preference.model}:${preference.reasoning_effort}`]
     }
-    if (catalogEntry.multi_agent_version !== 'v1') {
-      return [`role_model_preference_multi_agent_v1_required:${name}:${preference.model}`]
+    if (catalogEntry.multi_agent_version !== 'v2') {
+      return [`role_model_preference_multi_agent_v2_required:${name}:${preference.model}`]
     }
     return []
   })
@@ -219,7 +225,8 @@ async function prepareOfficialSubagentMissionLocked(input: OfficialSubagentPrepa
     capacity: budget.capacity,
     triwikiAttention,
     recommendedAgents: suggestedAgents,
-    roleModelPreferences: roleModelPreferences.store.roles
+    roleModelPreferences: roleModelPreferences.store.roles,
+    activeMainModel
   })
   const selectedAgentPlan = officialSubagentOnDemandRolePlan(suggestedAgents)
   const agentRouting = Object.fromEntries(Object.entries(selectedAgentPlan).map(([name, config]) => {
@@ -235,16 +242,27 @@ async function prepareOfficialSubagentMissionLocked(input: OfficialSubagentPrepa
       readonly: config.sandbox_mode === 'read-only'
     })
     const preference = roleModelPreferences.store.roles[name]
+    const routedProvider = preference?.provider || activeMainModel?.provider || inferProviderFromModel(decision.model)
+    const routedModel = preference?.model || activeMainModel?.model || decision.model
+    const routedReasoning = preference?.reasoning_effort || decision.model_reasoning_effort
     return [name, {
       ...config,
       // Catalog TOML remains the spawn-type contract; dynamic decision records why
       // this role maps onto the sealed four-profile matrix for this goal.
-      routed_provider: preference?.provider || inferProviderFromModel(decision.model),
-      routed_model: preference?.model || decision.model,
-      routed_model_reasoning_effort: preference?.reasoning_effort || decision.model_reasoning_effort,
-      routed_model_policy: preference ? 'user_role_model_preference' : decision.model_selection_reason,
-      routing_dynamic: !preference,
-      role_model_preference_source: preference ? 'user-scoped-owner-only' : 'managed-default'
+      routed_provider: routedProvider,
+      routed_model: routedModel,
+      routed_model_reasoning_effort: routedReasoning,
+      routed_model_policy: preference
+        ? 'user_role_model_preference'
+        : activeMainModel
+          ? 'active_main_model'
+          : decision.model_selection_reason,
+      routing_dynamic: !preference && !activeMainModel,
+      role_model_preference_source: preference
+        ? 'user-scoped-owner-only'
+        : activeMainModel
+          ? 'active-main-model'
+          : 'managed-default'
     }]
   }))
   const agentCatalog = onDemandAgentCatalogMetadata(selectedAgentPlan)
@@ -308,6 +326,7 @@ async function prepareOfficialSubagentMissionLocked(input: OfficialSubagentPrepa
       routing: {
         selected_provider: roleModelRouting.selected_provider,
         selected_model: roleModelRouting.selected_model,
+        active_main_model_inherited: Boolean(activeMainModel),
         runtime_verified: false
       },
       catalog: {

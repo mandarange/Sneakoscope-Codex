@@ -2,6 +2,29 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Restructure the SKS Center UI for usability: sidebar gets SF Symbol icons with Providers promoted next to Overview; a shared ControlKit component set (status badges, primary actions, page headers, grouped action rows) backs every page; Providers adds an at-a-glance **Active Provider** card fed by the codex-lb/OpenRouter/router probes, renames the ambiguous OpenRouter "Test Connection" to "Test Model", and asks for confirmation before any activation that restarts Codex App; Updates regroups into Status/Progress/Recovery cards with "Review and Update" as the default action; Diagnostics and Settings gain grouped cards; Remote & Telegram moves project readiness into its own card, promotes Refresh Status to the page level, and routes setup failures to the setup card; MCP separates destructive Remove from routine manage actions. The role-model editor moved to `ProvidersRoleModels.swift` to stay inside per-file line budgets.
+
+### Fixed
+
+- Keep every Codex Desktop feature enabled when SKS activates a third-party provider. `sks codex-app use-openrouter` now writes an SKS-managed ModelInfo catalog (`~/.codex/sks-openrouter-catalog.json`) with full per-model feature metadata (visibility, reasoning levels, `multi_agent_version = "v2"`, the Codex fallback base instructions) and binds `model_catalog_json` unless a user catalog is configured; both `use-openrouter` and `use-router` re-run the `[features]` normalization so `[features.multi_agent_v2]` (upstream default off) and the Desktop feature flags are ensured on every provider switch, not just install. Doctor/install repair the OpenRouter catalog automatically when OpenRouter is the selected provider.
+- Repair Control Center **Review and Update**: the Swift `updateStageOrder` was missing the emitted `project_receipt` stage, so every successful 15-stage update receipt was rejected (`stages.count > 14`), reporting "receipt unavailable / terminal uncertain", leaving checklist items unchecked, and skipping the post-update Menu Bar relaunch. TS `UPDATE_STAGE_ORDER` and the Swift order now both declare 15 stages, the checklist header derives its count, and the already-current path records explicit `skipped_current` stages so the checklist can fully complete.
+- Parse SKS CLI timestamps with fractional seconds in the Menu Bar (update expiry, receipt matching, operation summaries); the default `ISO8601DateFormatter` options rejected `Date.toISOString()` values, which made update snapshots read as always expired and receipt-to-operation matching unreliable.
+- Preserve all SKS-managed `[features]` flags (not only `fast_mode`) across guarded Codex config writes, and accept the Codex 0.145 `supports_reasoning_summary_parameter` rename alongside `supports_reasoning_summaries` in catalog validation.
+- Stop `codex-lb` unselect/OAuth-restore from clobbering a third-party `model_provider` selection (`openrouter`, `sks-router`); only a `codex-lb` selection is removed while managed pins are cleaned up, and `use-router` now clears leftover managed codex-lb routing pins during activation.
+- Report the real `selected_provider` (including `openrouter`/`sks-router`) in `sks codex-app check` provider-model UI status with OpenRouter catalog binding diagnostics, and warn when a routed model's catalog row does not advertise `multi_agent_version = "v2"`.
+- Harden the OpenRouter catalog pipeline after adversarial review: background codex-lb repair no longer reselects codex-lb (or steals the catalog binding) over an explicit third-party selection unless the switch was user-requested; `openrouter-status` reads only true top-level TOML keys so `[profiles.*]` values can no longer fake selection or binding; catalog writes drop (instead of re-persist) invalid carried rows; rows declare `context_window`/`max_context_window` so context tracking and ~90% auto-compaction keep working; and a dangling `sks-openrouter-catalog.json` binding left behind after a provider switch is diagnosed (`openrouter_model_catalog_json_dangling`) and auto-unbound by doctor so the built-in OpenAI catalog returns.
+
+## [7.1.3] - 2026-07-24
+
+### Changed
+
+- Keep only Codex multi-agent V2: strip bare `features.multi_agent`, require catalog `multi_agent_version = "v2"` for routed role overrides, and drop OpenCodex `ocx v2 mode v1` / v1-compatible guidance.
+- Reduce Naruto and Agent Bridge hot-path imports and shrink the installed runtime-script package surface while preserving Doctor, update, rollback, self-heal, conflict cleanup, and packaged verification paths.
+- Align host-capability delegation with the real datasource and spreadsheet limits, expand the required Korean spreadsheet/database/document intents, and simplify human blocker guidance without changing JSON or proof contracts.
+- Keep provider/model routing and the native Providers UI aligned with Codex multi-agent V2 catalogs and explicit role overrides.
+
 ## [7.1.1] - 2026-07-23
 
 ### Added

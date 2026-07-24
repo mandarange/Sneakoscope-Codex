@@ -2,10 +2,12 @@ import os from 'node:os';
 import { exists, nowIso, readText } from '../fsx.js';
 import {
   ensureTrailingNewline,
+  normalizeCodexFastModeUiConfig,
   safeWriteCodexConfigToml,
   upsertTopLevelTomlString,
   upsertTomlTable
 } from '../codex-runtime/codex-desktop-config-policy.js';
+import { unselectCodexLbProvider } from '../../cli/install-helpers.js';
 import { restartCodexApp, type CodexAppRestartResult } from './codex-app-restart.js';
 import {
   codexUserConfigPath,
@@ -173,7 +175,15 @@ export async function multiProviderRouterStatus(input: {
     runtime_verified: false,
     config_path: configPath,
     blockers,
-    warnings: catalog.warnings
+    warnings: uniqueStrings([
+      ...catalog.warnings,
+      ...(selected
+        && activeModel
+        && activeModelPresent
+        && catalog.models.find((entry) => entry.model === activeModel)?.multi_agent_version !== 'v2'
+        ? ['multi_provider_router_active_model_multi_agent_v2_missing']
+        : [])
+    ])
   };
 }
 
@@ -312,6 +322,15 @@ export async function useMultiProviderRouter(input: {
     };
   }
 
+  // Clear any managed codex-lb selection and its shared-OpenAI routing pin so a
+  // later `codex-lb use-oauth` cannot misread leftover managed state and clobber
+  // the router selection.
+  const unselect = await unselectCodexLbProvider({
+    home,
+    configPath,
+    allowActiveSharedAuthTransition: true
+  }).catch((err: any) => ({ ok: false, status: 'failed', provider_error: err?.message || String(err) }));
+
   const configExistedBefore = await exists(configPath);
   const current = await readText(configPath, '');
   const providerBody = tomlTableBody(current, `model_providers.${MULTI_PROVIDER_ROUTER_ID}`);
@@ -360,6 +379,9 @@ export async function useMultiProviderRouter(input: {
   next = upsertTopLevelTomlString(next, 'model_catalog_json', catalogPath);
   next = upsertTopLevelTomlString(next, 'model_provider', MULTI_PROVIDER_ROUTER_ID);
   next = upsertTopLevelTomlString(next, 'model', model);
+  // Desktop gates its global feature UI on the [features] table; ensure it on
+  // every provider switch, not just install/codex-lb setup.
+  next = normalizeCodexFastModeUiConfig(next);
   next = ensureTrailingNewline(next);
   const write = await safeWriteCodexConfigToml(configPath, current, next, 'multi-provider-router-use', {
     verifyUnchangedBeforeWrite: true,
@@ -404,6 +426,7 @@ export async function useMultiProviderRouter(input: {
     config_path: configPath,
     probe,
     write,
+    unselect,
     restart_app: restart,
     restart_ok: restart.ok && restart.skipped !== true,
     restart_completed: restartCompleted,
@@ -417,6 +440,12 @@ export async function useMultiProviderRouter(input: {
     ]),
     warnings: uniqueStrings([
       ...catalog.warnings,
+      ...((unselect as any)?.ok === false
+        ? [`codex_lb_unselect:${(unselect as any).provider_error || (unselect as any).status}`]
+        : []),
+      ...(catalog.models.find((entry) => entry.model === model)?.multi_agent_version === 'v2'
+        ? []
+        : ['multi_provider_router_model_multi_agent_v2_missing']),
       'multi_provider_router_runtime_not_verified'
     ])
   };

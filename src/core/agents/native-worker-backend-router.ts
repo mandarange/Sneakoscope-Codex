@@ -13,6 +13,7 @@ import { leanEngineeringCompactText, leanPolicyReference } from '../lean-enginee
 import { readCodexLbModelCatalog, readLbHealth } from '../codex-lb/codex-lb-env.js'
 import { categoryForWorkerRole, isNarutoGpt56Model, modelRouteReason, routeModel, type ModelChoice, type TaskCategory } from '../provider/model-router.js'
 import { codexTimeoutClassForRoute } from '../codex-control/codex-reliability-shield.js'
+import { readConfiguredCodexModelRoutingContext } from '../codex-app/codex-model-catalog.js'
 
 export const NATIVE_WORKER_BACKEND_ROUTER_SCHEMA = 'sks.native-worker-backend-router.v1'
 
@@ -303,8 +304,26 @@ export async function resolveWorkerModelRouting(input: {
   const riskText = [taskKindText, input.slice?.risk, input.slice?.risk_focus, input.slice?.acceptance, input.slice?.parent_prompt, input.slice?.description, input.intake?.prompt].map((value) => String(value || '')).join(' ')
   const category = categoryForWorkerRole(String(input.agent?.role || 'executor'), taskKindText)
   const env = deps.env || process.env
+  const configuredRouting = !Object.prototype.hasOwnProperty.call(deps, 'env') || env.CODEX_HOME || env.HOME
+    ? await readConfiguredCodexModelRoutingContext({ env }).catch(() => null)
+    : null
+  const sealedPlanModel = ['user_role_model_preference', 'active_main_model'].includes(
+    String(input.agent?.routed_model_policy || '')
+  )
+    ? String(input.agent?.routed_model || '').trim()
+    : ''
+  const configuredMainModel = String(
+    input.intake?.main_model
+    || input.intake?.selected_model
+    || input.intake?.provider_model
+    || configuredRouting?.selected_model
+    || ''
+  ).trim()
+  const managedAgentModel = String(input.agent?.model || '').trim()
+  const inheritedModel = sealedPlanModel || configuredMainModel || managedAgentModel
+  const providerModelSelected = Boolean(sealedPlanModel || configuredMainModel)
   const lbHealth = Object.prototype.hasOwnProperty.call(deps, 'lbHealth') ? deps.lbHealth : await readLbHealth().catch(() => null)
-  const lbCatalog = narutoOnly
+  const lbCatalog = narutoOnly && !providerModelSelected
     ? Object.prototype.hasOwnProperty.call(deps, 'lbCatalog')
       ? deps.lbCatalog
       : input.intake?.naruto_model_catalog || await readCodexLbModelCatalog().catch(() => null)
@@ -317,10 +336,21 @@ export async function resolveWorkerModelRouting(input: {
   const explicitNarutoModelInvalid = narutoOnly && Boolean(explicitModel) && !isNarutoGpt56Model(explicitModel)
   const explicitNarutoReasoningInvalid = narutoOnly && Boolean(explicitReasoningRaw) && !explicitReasoning
   const explicitNarutoTierInvalid = narutoOnly && Boolean(explicitTierRaw) && !explicitTier
-  const routed = explicitModel && !narutoOnly
+  const inheritedReasoning = normalizeModelReasoning(
+    sealedPlanModel
+      ? input.agent?.routed_model_reasoning_effort
+      : input.agent?.model_reasoning_effort
+  )
+  const routed = providerModelSelected
+    ? {
+        model: inheritedModel,
+        reasoning: explicitReasoning || inheritedReasoning || 'medium',
+        serviceTier: explicitTier || input.fastModePolicy.service_tier || 'fast'
+      } satisfies ModelChoice
+    : explicitModel && !narutoOnly
     ? {
         model: explicitModel,
-        reasoning: explicitReasoning || normalizeModelReasoning(input.agent?.model_reasoning_effort) || 'medium',
+        reasoning: explicitReasoning || inheritedReasoning || 'medium',
         serviceTier: explicitTier || input.fastModePolicy.service_tier || 'fast'
       } satisfies ModelChoice
     : await routeModel(category, {
@@ -332,26 +362,26 @@ export async function resolveWorkerModelRouting(input: {
           availableModels: lbCatalog?.models || [],
           availableModelEfforts: lbCatalog?.model_efforts || {},
           ...(explicitModel ? { model: explicitModel } : {})
-        } : { model: input.agent?.model || null })
+        } : { model: inheritedModel || null })
       })
   const blockers = [
-    ...(narutoOnly && !lbCatalog?.ok ? (lbCatalog?.blockers || ['codex_lb_model_catalog_unavailable']) : []),
+    ...(narutoOnly && !providerModelSelected && !lbCatalog?.ok ? (lbCatalog?.blockers || ['codex_lb_model_catalog_unavailable']) : []),
     ...(explicitNarutoModelInvalid ? ['naruto_worker_model_outside_gpt_5_6_family'] : []),
     ...(explicitNarutoReasoningInvalid ? ['naruto_reasoning_override_invalid'] : []),
     ...(explicitNarutoTierInvalid ? ['naruto_service_tier_override_invalid'] : []),
     ...(narutoOnly && explicitReasoning && explicitReasoning !== routed.reasoning ? ['naruto_reasoning_override_conflicts_with_policy'] : []),
     ...(narutoOnly && explicitTier && explicitTier !== 'fast' ? ['naruto_service_tier_override_conflicts_with_policy'] : []),
-    ...(narutoOnly && !routed.model ? ['naruto_required_gpt_5_6_model_unavailable'] : [])
+    ...(narutoOnly && !routed.model ? ['naruto_worker_model_unavailable'] : [])
   ]
   return {
     category,
     choice: routed,
-    explicit: Boolean(explicitModel),
+    explicit: Boolean(explicitModel || providerModelSelected),
     lb_health: lbHealth,
     lb_catalog: lbCatalog,
     blockers: [...new Set(blockers)],
     reason: modelRouteReason(category, routed, {
-      explicit: Boolean(explicitModel),
+      explicit: Boolean(explicitModel || providerModelSelected),
       quotaLow: lbHealth?.quota_low === true,
       degraded: lbHealth?.degraded_models || []
     })

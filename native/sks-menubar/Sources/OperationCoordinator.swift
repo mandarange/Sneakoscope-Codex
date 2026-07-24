@@ -1,5 +1,21 @@
 import Foundation
 
+// SKS CLI timestamps come from JavaScript Date.toISOString() and carry
+// fractional seconds ("2026-07-24T00:00:00.000Z"), which the default
+// ISO8601DateFormatter options cannot parse. Try fractional first, then plain.
+enum SKSTimestamp {
+    private static let fractional: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+    private static let plain = ISO8601DateFormatter()
+
+    static func date(from value: String) -> Date? {
+        fractional.date(from: value) ?? plain.date(from: value)
+    }
+}
+
 enum OperationState: String, Codable {
     case queued, running, waitingForConfirmation, succeeded, failed, cancelled, terminalUncertain
 }
@@ -68,7 +84,7 @@ final class OperationCoordinator {
     static let updateStageOrder = [
         "preflight", "download_or_registry_check", "temporary_install_smoke", "global_install",
         "resolve_new_binary", "version_probe", "new_version_doctor", "hook_trust_repair",
-        "global_skills_reconcile", "native_capability_setup", "menubar_rebuild",
+        "project_receipt", "global_skills_reconcile", "native_capability_setup", "menubar_rebuild",
         "menubar_signature_verify", "final_self_verification", "snapshot_refresh"
     ]
     private let directory: URL

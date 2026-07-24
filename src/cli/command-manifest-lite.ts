@@ -1,4 +1,20 @@
+import { NARUTO_ACTIONS } from '../core/safety/command-contract/types.js';
+
 export type CommandMaturity = 'stable' | 'beta' | 'labs';
+export type CommandRiskLite = 'R0' | 'R1' | 'R2' | 'R3';
+export type CommandLatencyLite = 'fast' | 'normal' | 'long';
+export type CommandInputProfileLite =
+  | 'none'
+  | 'json-only'
+  | 'naruto'
+  | 'paths'
+  | 'pipeline-status'
+  | 'stats'
+  | 'stop-gate'
+  | 'proof'
+  | 'trust'
+  | 'gates'
+  | 'validate-artifacts';
 
 export interface CommandManifestLiteEntry {
   name: string;
@@ -11,9 +27,22 @@ export interface CommandManifestLiteEntry {
   mutatesRouteState?: boolean;
   deprecated?: boolean;
   hidden?: boolean;
+  risk: CommandRiskLite;
+  latency: CommandLatencyLite;
+  supportsJson: boolean;
+  remoteAllowed: boolean;
+  telegramAllowed: boolean;
+  inputProfile: CommandInputProfileLite;
+  requiredCapabilities: readonly string[];
 }
 
-export const COMMAND_MANIFEST_LITE = [
+type CommandManifestLiteSourceEntry = Omit<CommandManifestLiteEntry,
+  'risk' | 'latency' | 'supportsJson' | 'remoteAllowed' | 'telegramAllowed' | 'inputProfile' | 'requiredCapabilities'>;
+
+export type CommandContractMetadataLite = Pick<CommandManifestLiteEntry,
+  'risk' | 'latency' | 'supportsJson' | 'remoteAllowed' | 'telegramAllowed' | 'inputProfile' | 'requiredCapabilities'>;
+
+const COMMAND_MANIFEST_LITE_BASE = [
   { name: 'help', summary: 'Show SKS help', maturity: 'stable', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'version', summary: 'Show SKS version', maturity: 'stable', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'commands', summary: 'List SKS commands', maturity: 'stable', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
@@ -88,7 +117,7 @@ export const COMMAND_MANIFEST_LITE = [
   { name: 'aliases', summary: 'Show command aliases', maturity: 'stable' },
   { name: 'selftest', summary: 'Run local mock selftest', maturity: 'stable' },
   { name: 'goal', summary: 'Print stateless Codex native Goal controls', maturity: 'beta' },
-  { name: 'seo-geo-optimizer', summary: 'Run unified SEO/GEO optimizer audit/research/strategy/plan/apply/verify with optional --include-marketing on the search-visibility kernel', maturity: 'beta' },
+  { name: 'seo-geo-optimizer', summary: 'Run unified SEO/GEO optimizer audit/plan/apply/verify plus research/strategy (--include-marketing) on the search-visibility kernel', maturity: 'beta' },
   { name: 'hook', summary: 'Codex hook entrypoint', maturity: 'beta', skipMigrationGate: true },
   { name: 'profile', summary: 'Inspect/set profile', maturity: 'labs' },
   { name: 'hproof', summary: 'Evaluate H-Proof gate', maturity: 'beta' },
@@ -111,11 +140,183 @@ export const COMMAND_MANIFEST_LITE = [
   { name: 'all-features', summary: 'Run all-features selftest', maturity: 'beta' },
   { name: 'perf', summary: 'Run performance checks', maturity: 'beta' },
   { name: 'bench', summary: 'Run core trust-kernel benchmark budgets', maturity: 'beta' },
-  { name: 'mcp-server', summary: 'Run a stdio MCP server exposing SKS commands as tools for any MCP-capable agent host', maturity: 'beta', skipMigrationGate: true, allowedDuringActiveRoute: true },
+  { name: 'mcp-server', summary: 'Run a stdio MCP server exposing SKS commands as tools for MCP-capable agent hosts', maturity: 'beta', skipMigrationGate: true, allowedDuringActiveRoute: true },
   { name: 'agent-bridge', summary: 'Publish the agent-bridge manifest and print host registration snippets for external agent systems', maturity: 'beta', readonly: true, diagnostic: true }
-] as const satisfies readonly CommandManifestLiteEntry[];
+] as const satisfies readonly CommandManifestLiteSourceEntry[];
 
-export type CommandNameLite = typeof COMMAND_MANIFEST_LITE[number]['name'];
+export type CommandNameLite = typeof COMMAND_MANIFEST_LITE_BASE[number]['name'];
+
+const SAFE_COMMAND_CONTRACT_LITE: CommandContractMetadataLite = {
+  risk: 'R2',
+  latency: 'normal',
+  supportsJson: false,
+  remoteAllowed: false,
+  telegramAllowed: false,
+  inputProfile: 'none',
+  requiredCapabilities: []
+};
+
+const COMMAND_CONTRACT_OVERRIDES_LITE = {
+  autoresearch: { latency: 'long' },
+  bench: { latency: 'long' },
+  check: { risk: 'R1', latency: 'long' },
+  'commit-and-push': { risk: 'R3' },
+  'computer-use': { latency: 'long' },
+  dfix: { latency: 'long' },
+  'dollar-commands': { risk: 'R2', latency: 'normal' },
+  eval: { latency: 'long' },
+  gates: {
+    risk: 'R1', latency: 'long', supportsJson: true, remoteAllowed: true, telegramAllowed: true,
+    inputProfile: 'gates', requiredCapabilities: ['project.git', 'proof.gates']
+  },
+  harness: { latency: 'long' },
+  'image-ux-review': { latency: 'long' },
+  loop: { latency: 'long' },
+  'mad-sks': { risk: 'R3', latency: 'long' },
+  mcp: { risk: 'R2', latency: 'long', supportsJson: true, inputProfile: 'json-only' },
+  naruto: {
+    risk: 'R2', latency: 'long', supportsJson: true, remoteAllowed: false, telegramAllowed: false,
+    inputProfile: 'naruto'
+  },
+  paths: {
+    supportsJson: true, remoteAllowed: true, inputProfile: 'paths',
+    requiredCapabilities: ['project.fs.read']
+  },
+  perf: { latency: 'long' },
+  pipeline: {
+    risk: 'R2', latency: 'normal', supportsJson: true, remoteAllowed: true, inputProfile: 'pipeline-status',
+    requiredCapabilities: ['proof.pipeline']
+  },
+  postinstall: { latency: 'long' },
+  ppt: { latency: 'long' },
+  proof: {
+    risk: 'R0', latency: 'fast', supportsJson: true, remoteAllowed: true, telegramAllowed: true,
+    inputProfile: 'proof', requiredCapabilities: ['proof.read']
+  },
+  'qa-loop': { latency: 'long' },
+  recallpulse: { latency: 'long' },
+  release: { risk: 'R1', latency: 'long' },
+  remote: { risk: 'R2', latency: 'long', supportsJson: true, remoteAllowed: false, telegramAllowed: false, inputProfile: 'json-only' },
+  research: { latency: 'long' },
+  review: { risk: 'R1' },
+  run: { latency: 'long' },
+  stats: {
+    supportsJson: true, remoteAllowed: true, inputProfile: 'stats',
+    requiredCapabilities: ['project.fs.read']
+  },
+  status: {
+    supportsJson: true, remoteAllowed: true, telegramAllowed: true, inputProfile: 'json-only',
+    requiredCapabilities: ['proof.read']
+  },
+  'stop-gate': {
+    supportsJson: true, remoteAllowed: true, telegramAllowed: true, inputProfile: 'stop-gate',
+    requiredCapabilities: ['proof.stop-gate']
+  },
+  task: { risk: 'R1', latency: 'long' },
+  telegram: { risk: 'R2', latency: 'long', supportsJson: true, remoteAllowed: false, telegramAllowed: false, inputProfile: 'json-only' },
+  trust: {
+    risk: 'R0', latency: 'fast', supportsJson: true, remoteAllowed: true, telegramAllowed: true,
+    inputProfile: 'trust', requiredCapabilities: ['proof.trust']
+  },
+  uninstall: { risk: 'R3', latency: 'long' },
+  update: { latency: 'long' },
+  'update-check': {
+    supportsJson: true, remoteAllowed: true, inputProfile: 'json-only',
+    requiredCapabilities: ['network.npm.read']
+  },
+  'validate-artifacts': {
+    risk: 'R1', supportsJson: true, remoteAllowed: true, inputProfile: 'validate-artifacts',
+    requiredCapabilities: ['proof.artifacts']
+  }
+} as const satisfies Partial<Record<CommandNameLite, Partial<CommandContractMetadataLite>>>;
+
+export const COMMAND_MANIFEST_LITE = COMMAND_MANIFEST_LITE_BASE.map((entry) => ({
+  ...SAFE_COMMAND_CONTRACT_LITE,
+  ...('readonly' in entry && entry.readonly === true ? { risk: 'R0' as const, latency: 'fast' as const } : {}),
+  ...entry,
+  ...(COMMAND_CONTRACT_OVERRIDES_LITE[entry.name as keyof typeof COMMAND_CONTRACT_OVERRIDES_LITE] || {})
+})) as readonly (CommandManifestLiteEntry & { name: CommandNameLite })[];
+
+export function commandInputSchema(profile: CommandInputProfileLite): Record<string, unknown> {
+  if (profile === 'json-only') return objectSchema({ json: { type: 'boolean' } });
+  if (profile === 'naruto') {
+    return objectSchema({
+      action: { type: 'string', enum: [...NARUTO_ACTIONS] },
+      task: boundedString(1, 32_768),
+      prompt: boundedString(1, 32_768),
+      mission: boundedString(1, 160),
+      agents: { type: 'integer', minimum: 1 },
+      max_threads: { type: 'integer', minimum: 1 },
+      readonly: { type: 'boolean' },
+      trusted_project: { type: 'boolean' },
+      json: { type: 'boolean' }
+    });
+  }
+  if (profile === 'paths') {
+    return objectSchema({
+      action: { type: 'string', enum: ['managed', 'git-policy'] },
+      json: { type: 'boolean' }
+    });
+  }
+  if (profile === 'pipeline-status') {
+    return objectSchema({
+      action: { type: 'string', enum: ['status'] },
+      json: { type: 'boolean' }
+    });
+  }
+  if (profile === 'stats') return objectSchema({ full: { type: 'boolean' }, json: { type: 'boolean' } });
+  if (profile === 'stop-gate') {
+    return objectSchema({
+      route: boundedString(1, 80),
+      mission: boundedString(1, 160),
+      gate: boundedString(1, 1024),
+      json: { type: 'boolean' }
+    });
+  }
+  if (profile === 'proof') {
+    return objectSchema({
+      action: { type: 'string', enum: ['show', 'latest', 'validate', 'route'] },
+      mission: boundedString(1, 160),
+      completion: { type: 'boolean' },
+      json: { type: 'boolean' }
+    });
+  }
+  if (profile === 'trust') {
+    return objectSchema({
+      action: { type: 'string', enum: ['report', 'status', 'explain'] },
+      mission: boundedString(1, 160),
+      json: { type: 'boolean' }
+    });
+  }
+  if (profile === 'gates') {
+    return objectSchema({
+      target: boundedString(1, 120),
+      mode: { type: 'string', enum: ['preset', 'gate'] },
+      full: { type: 'boolean' },
+      json: { type: 'boolean' }
+    });
+  }
+  if (profile === 'validate-artifacts') {
+    return objectSchema({
+      mission: boundedString(1, 160),
+      required: {
+        type: 'array',
+        items: boundedString(1, 80),
+        maxItems: 32
+      },
+      json: { type: 'boolean' }
+    });
+  }
+  return objectSchema({});
+}
+
+function objectSchema(properties: Record<string, unknown>): Record<string, unknown> {
+  return { type: 'object', properties, additionalProperties: false };
+}
+
+function boundedString(minLength: number, maxLength: number): Record<string, unknown> {
+  return { type: 'string', minLength, maxLength };
+}
 
 export const LEGACY_COMMAND_ALIASES_LITE = {
 } as const satisfies Record<string, CommandNameLite>;

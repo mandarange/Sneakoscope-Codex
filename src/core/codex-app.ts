@@ -7,6 +7,7 @@ import { CODEX_CHROME_EXTENSION_DOC_URL, DEFAULT_CODEX_APP_PLUGINS as DEFAULT_CO
 import { PRODUCT_DESIGN_PLUGIN, normalizeProductDesignPluginEvidence } from './product-design-plugin.js';
 import { PRODUCT_DESIGN_AUTO_INSTALL_ENV, ensureProductDesignPluginInstalled, productDesignAutoInstallRequested } from './product-design-app-server.js';
 import { GLM_CODEX_CONFIG_PROVIDER_ID, GLM_52_OPENROUTER_MODEL, RETIRED_GLM_DESKTOP_CONFIG_PROFILE_IDS } from './codex-app/openrouter-provider.js';
+import { sksOpenRouterCatalogPath } from './codex-app/codex-model-catalog.js';
 import { resolveOpenRouterApiKey } from './providers/openrouter/openrouter-secret-store.js';
 import { codexLbEnvPath, loadCodexLbEnv, parseShellEnvValue, readCodexLbModelCatalog } from './codex-lb/codex-lb-env.js';
 import {
@@ -924,6 +925,8 @@ export async function codexProviderModelUiStatus(opts: any = {}) {
     && hasTomlBoolean(codexLbProvider, 'supports_websockets', true)
     && hasTomlBoolean(codexLbProvider, 'requires_openai_auth', true);
   const codexLbSelectedDefault = /(?:^|\n)\s*model_provider\s*=\s*"codex-lb"\s*(?:#.*)?(?=\n|$)/.test(topLevelToml(globalConfig));
+  const selectedProviderValue = topLevelToml(globalConfig)
+    .match(/(?:^|\n)\s*model_provider\s*=\s*"([^"]+)"\s*(?:#.*)?(?=\n|$)/)?.[1] || null;
   const managedCatalogPath = codexLbToolCatalogPath(path.join(home || '', '.codex'));
   const configuredCatalogPath = topLevelToml(globalConfig).match(/(?:^|\n)\s*model_catalog_json\s*=\s*"([^"]+)"\s*(?:#.*)?(?=\n|$)/)?.[1] || '';
   const managedCatalogConfigured = Boolean(configuredCatalogPath)
@@ -977,10 +980,32 @@ export async function codexProviderModelUiStatus(opts: any = {}) {
       ? ['codex_lb_gpt_5_6_catalog_unverified']
       : [])
   ];
-  const selectedProviderBlockers = codexLbSelectedDefault ? codexLbBlockers : [];
+  const openRouterSelectedDefault = selectedProviderValue === GLM_CODEX_CONFIG_PROVIDER_ID;
+  const openRouterManagedCatalogPath = sksOpenRouterCatalogPath({ home });
+  const openRouterCatalogBound = Boolean(configuredCatalogPath)
+    && path.resolve(configuredCatalogPath) === path.resolve(openRouterManagedCatalogPath);
+  // A bound OpenRouter catalog REPLACES the bundled catalog; if it survives a
+  // provider switch it hides every OpenAI model until it is unbound.
+  const openRouterCatalogDangling = openRouterCatalogBound && !openRouterSelectedDefault;
+  const openRouterSelectedBlockers = openRouterSelectedDefault
+    ? [
+        ...glmBlockers,
+        ...(openRouterCatalogBound ? [] : ['openrouter_model_catalog_json_unselected'])
+      ]
+    : [];
+  const selectedProviderBlockers = [
+    ...(codexLbSelectedDefault
+      ? codexLbBlockers
+      : openRouterSelectedDefault
+        ? openRouterSelectedBlockers
+        : []),
+    ...(openRouterCatalogDangling ? ['openrouter_model_catalog_json_dangling'] : [])
+  ];
   const optionalProviderBlockers = codexLbSelectedDefault
     ? glmBlockers
-    : [...glmBlockers, ...codexLbBlockers];
+    : openRouterSelectedDefault
+      ? codexLbBlockers
+      : [...glmBlockers, ...codexLbBlockers];
   const keyCommand = 'sks codex-app set-openrouter-key --api-key-stdin';
   const installCommand = 'sks codex-app use-openrouter --model z-ai/glm-5.2';
   const setupCommand = 'sks codex-lb setup --host <domain> --api-key-stdin --yes';
@@ -992,7 +1017,7 @@ export async function codexProviderModelUiStatus(opts: any = {}) {
     // visible below without making an unrelated provider selection fail.
     ok: selectedProviderBlockers.length === 0,
     selected_provider_ok: selectedProviderBlockers.length === 0,
-    selected_provider: codexLbSelectedDefault ? 'codex-lb' : 'oauth',
+    selected_provider: codexLbSelectedDefault ? 'codex-lb' : (selectedProviderValue || 'oauth'),
     selected_provider_blockers: selectedProviderBlockers,
     optional_provider_blockers: optionalProviderBlockers,
     checked: true,
@@ -1015,6 +1040,9 @@ export async function codexProviderModelUiStatus(opts: any = {}) {
       openrouter_key_present: Boolean(openRouterKey.key),
       openrouter_key_source: openRouterKey.source || null,
       openrouter_key_preview: openRouterKey.key_preview || null,
+      openrouter_selected: openRouterSelectedDefault,
+      model_catalog_json_configured: openRouterCatalogBound,
+      model_catalog_json_path: openRouterManagedCatalogPath,
       key_command: keyCommand,
       install_command: installCommand,
       doctor_command: 'sks codex-app openrouter-status',

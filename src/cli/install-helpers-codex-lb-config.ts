@@ -180,7 +180,14 @@ export async function ensureStoredOpenRouterProviderDuringInstall(opts: any = {}
     home,
     env
   });
-  const ok = repair?.ok !== false;
+  const configPath = repair?.config_path || opts.configPath || codexLbConfigPath(home);
+  // When OpenRouter is the active Desktop provider, also repair the SKS-managed
+  // ModelInfo catalog so per-model feature UI (reasoning picker, multi-agent v2,
+  // list visibility) stays enabled for the third-party model after updates.
+  const { ensureOpenRouterModelCatalog } = await import('../core/codex-app/openrouter-model-catalog.js');
+  const catalogRepair = await ensureOpenRouterModelCatalog({ configPath, home, env })
+    .catch((err: any) => ({ ok: false, status: 'failed', error: err?.message || String(err) }));
+  const ok = repair?.ok !== false && (catalogRepair as any)?.ok !== false;
   return {
     schema: 'sks.openrouter-provider-upgrade-repair.v1',
     ok,
@@ -188,11 +195,12 @@ export async function ensureStoredOpenRouterProviderDuringInstall(opts: any = {}
     reason: ok ? 'stored_openrouter_key_provider_reconciled' : 'stored_openrouter_key_provider_repair_failed',
     key_present: true,
     key_source: key.source,
-    config_path: repair?.config_path || opts.configPath || codexLbConfigPath(home),
+    config_path: configPath,
     provider: GLM_CODEX_CONFIG_PROVIDER_ID,
     blockers: ok ? [] : ['openrouter_provider_repair_failed'],
     warnings: key.warnings,
-    repair
+    repair,
+    model_catalog_repair: catalogRepair
   };
 }
 

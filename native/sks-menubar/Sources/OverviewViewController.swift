@@ -56,21 +56,15 @@ enum NativeView {
 
     static func row(_ views: [NSView], spacing: CGFloat = 8) -> NSStackView {
         let row = NSStackView(views: views)
-        row.orientation = .horizontal
-        row.alignment = .centerY
-        row.spacing = spacing
+        row.orientation = .horizontal; row.alignment = .centerY; row.spacing = spacing
         return row
     }
 
     static func card(title: String, subtitle: String, views: [NSView]) -> NSBox {
         let box = NSBox()
-        box.boxType = .custom
-        box.titlePosition = .noTitle
-        box.cornerRadius = 10
-        box.borderWidth = 1
-        box.borderColor = .separatorColor
-        box.fillColor = .controlBackgroundColor
-
+        box.boxType = .custom; box.titlePosition = .noTitle
+        box.cornerRadius = 10; box.borderWidth = 1
+        box.borderColor = .separatorColor; box.fillColor = .controlBackgroundColor
         let heading = sectionTitle(title)
         let help = detail(subtitle)
         let content = NSStackView(views: [heading, help] + views)
@@ -122,9 +116,7 @@ enum NativeView {
     }
 
     static func redactPreview(_ output: String, limit: Int = 160) -> String {
-        let compact = output
-            .replacingOccurrences(of: "\n", with: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let compact = output.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !compact.isEmpty else { return "No public detail was returned." }
         if compact.count <= limit { return compact }
         return String(compact.prefix(limit)) + "…"
@@ -301,6 +293,8 @@ final class OverviewViewController: NSViewController, ControlCenterPage {
     private var doctorButton: NSButton!
     private var refreshButton: NSButton!
     private var updateCodexButton: NSButton!
+    /// Section navigation by sidebar title, wired by ControlCenterWindowController.
+    var openSection: ((String) -> Void)?
 
     init(processClient: ProcessClient, operations: OperationCoordinator) {
         self.processClient = processClient
@@ -317,15 +311,28 @@ final class OverviewViewController: NSViewController, ControlCenterPage {
         let buttons = NSStackView(views: [doctorButton, refreshButton, updateCodexButton])
         buttons.orientation = .horizontal
         buttons.spacing = 8
+        let shortcuts = NSStackView(views: [
+            NativeView.button("Providers…", target: self, action: #selector(openProviders)),
+            NativeView.button("Updates…", target: self, action: #selector(openUpdates)),
+            NativeView.button("Diagnostics…", target: self, action: #selector(openDiagnostics))
+        ])
+        shortcuts.orientation = .horizontal
+        shortcuts.spacing = 8
+        shortcuts.setAccessibilityLabel("Open Control Center sections")
         view = NativeView.stack([
             NativeView.title("Overview"),
             NativeView.detail("Menu Bar build \(AppRuntime.packageVersion) · Local health for SKS, Codex CLI, MCP, Remote, and operations. Prefer the latest Codex CLI; SKS stays version-agnostic and capability-gates features."),
             status,
             notificationInbox,
-            buttons
+            buttons,
+            shortcuts
         ])
         loadStatus(forceUpdateRefresh: false)
     }
+
+    @objc private func openProviders() { openSection?("Providers") }
+    @objc private func openUpdates() { openSection?("Updates") }
+    @objc private func openDiagnostics() { openSection?("Diagnostics") }
 
     func refreshOnAppear() {
         loadStatus(forceUpdateRefresh: false)
@@ -466,7 +473,7 @@ final class OverviewViewController: NSViewController, ControlCenterPage {
 
     private func recentOperationSummary(_ operation: OperationSnapshot?) -> String {
         guard let operation = operation else { return "None recorded" }
-        guard let updatedAt = ISO8601DateFormatter().date(from: operation.updatedAt) else {
+        guard let updatedAt = SKSTimestamp.date(from: operation.updatedAt) else {
             return "\(operation.kind) · \(operation.state.rawValue) · \(operation.publicSummary)"
         }
         let age = Date().timeIntervalSince(updatedAt)

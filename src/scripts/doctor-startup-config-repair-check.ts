@@ -14,7 +14,7 @@ const parsed = parse(text);
 const agents = (parsed as any).agents || {};
 const files = (await fs.readdir(path.join(root, '.codex', 'agents'))).sort();
 assertGate(report.ok === true, 'startup config repair must install the official project config and agent files', report);
-assertGate((agents.max_concurrent_threads_per_session === 12 || agents.max_threads === 12) && agents.max_depth === 1 && agents.interrupt_message === true && agents.enabled === true, 'startup config repair must write official [agents] defaults', agents);
+assertGate(agents.max_concurrent_threads_per_session === 12 && agents.max_threads === undefined && agents.max_depth === 1 && agents.interrupt_message === true && agents.enabled === true, 'startup config repair must write official [agents] defaults', agents);
 assertGate(files.length === 2 && files[0] === 'expert.toml' && files[1] === 'worker.toml', 'startup config repair must create only worker/expert TOMLs', files);
 assertGate(text.includes('[agents.analysis_scout]') && text.includes('config_file = ".codex/agents/missing.toml"') && text.includes('message_role_prefix = "legacy"'), 'legacy agent config must be preserved without synthesizing its TOML', text);
 emitGate('doctor:startup-config-repair');

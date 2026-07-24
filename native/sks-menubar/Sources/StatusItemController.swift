@@ -124,7 +124,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         else if operationFailed { icon = .warning; summary = "Needs attention — last operation failed" }
         else if actionRequired || notificationAuthorizationDenied || pendingCount > 0 {
             icon = .attention
-            summary = notificationAuthorizationDenied ? "Notifications require attention" : pendingCount > 0 ? "Input or approval required" : "Input or approval required"
+            summary = pendingCount > 0 ? "Input or approval required" : notificationAuthorizationDenied ? "Notifications require attention" : "Input or approval required"
         }
         else if sksUpdate || codexUpdate {
             icon = .updateAvailable
@@ -231,7 +231,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         if update["source"] as? String == "disabled" { return false }
         guard update["schema"] as? String == "sks.update-status.v3",
               let expiresAt = update["expires_at"] as? String,
-              let expiry = ISO8601DateFormatter().date(from: expiresAt) else { return true }
+              let expiry = SKSTimestamp.date(from: expiresAt) else { return true }
         return expiry <= now
     }
 
