@@ -163,12 +163,6 @@ async function runImageUxReview(root: string, command: string, args: any[] = [])
   }
   if (!generatedImage && shouldGenerateCallouts) {
     const outputDir = path.join(dir, 'generated-callouts');
-    // Auto-discover the Codex App GUI $imagegen output from ~/.codex/generated_images.
-    // --strict-generated-since limits discovery to images created at/after this run
-    // started (use when an old GUI image could be mistaken for this run's output);
-    // otherwise a max-age window guards against stale reuse.
-    const missionStartMs = Date.parse(mission.created_at || '') || undefined;
-    const maxAgeOverride = readOption(args, '--generated-image-max-age-min', null);
     const result = await generateImagegenCalloutReview({
       mission_id: id,
       source_screen_id: 'screen-1',
@@ -180,10 +174,7 @@ async function runImageUxReview(root: string, command: string, args: any[] = [])
       requested_fidelity: 'original',
       privacy: 'local-only'
     }, {
-      codexApp: {
-        generatedImageSinceMs: flag(args, '--strict-generated-since') ? missionStartMs : null,
-        generatedImageMaxAgeMs: maxAgeOverride ? Number(maxAgeOverride) * 60 * 1000 : 30 * 60 * 1000
-      }
+      openai: { responsesModel: readOption(args, '--responses-model', null) }
     });
     // Preserve provider diagnostics even when generation fails and no image can
     // be attached. Route artifact rebuilding must not replace the real request

@@ -15,6 +15,12 @@ it preserves the selected mainline model and sets the image tool's own `model`
 field. The existing selected Desktop Bridge owns provider credentials and routing.
 Direct API calls still require an explicitly authorized API path.
 
+For a managed Desktop Bridge, pass its configured public mainline model with
+`sks ux-review run --image <path> --responses-model <public-model>`, or set
+`SKS_IMAGEGEN_RESPONSES_MODEL` for CLI/UX/PPT calls. This chooses the existing
+provider route; it does not replace the image tool's Sunburst model. SKS rejects
+missing or unconfigured routes instead of guessing another provider or identity.
+
 Quality supports `low`, `medium`, `high`, `xhigh`, `max`, and `auto`. Custom sizes
 must use multiples of 16, an aspect ratio from 1:3 to 3:1, edges at most 3840,
 and 655,360 to 8,294,400 pixels. Transparent output requires PNG or WebP. SKS
