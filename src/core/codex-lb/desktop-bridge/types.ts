@@ -122,6 +122,7 @@ export interface DesktopBridgeConfig {
   allowedOrigins: readonly string[];
   connectTimeoutMs: number;
   idleTimeoutMs: number;
+  /** Encoded and decoded HTTP bodies, and Responses WebSocket messages. Defaults to 128 MiB. */
   maxRequestBodyBytes?: number;
   requestTimeoutMs?: number;
   maxConcurrentRequests?: number;
@@ -262,5 +263,20 @@ export class DesktopBridgeError extends Error {
     super(code, options);
     this.name = 'DesktopBridgeError';
     this.code = code;
+  }
+}
+
+// Responses include image data and accumulated tool output. The old 16 MiB
+// transport cap rejected valid turns before the provider could process them.
+// Keep a finite bound shared by HTTP decoding and WebSocket queues.
+export const DEFAULT_DESKTOP_BRIDGE_MAX_REQUEST_BODY_BYTES = 128 * 1024 * 1024;
+
+export class DesktopBridgeRequestBodyTooLargeError extends DesktopBridgeError {
+  constructor(
+    readonly maximumBytes: number,
+    readonly stage: 'encoded' | 'decoded',
+    readonly observedBytes?: number,
+  ) {
+    super('bridge_request_body_too_large');
   }
 }

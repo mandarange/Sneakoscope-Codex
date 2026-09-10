@@ -29,7 +29,7 @@ import type {
   DesktopBridgeStartOptions,
   PreparedDesktopBridgeConfig,
 } from './types.js';
-import { DesktopBridgeError } from './types.js';
+import { DesktopBridgeError, DesktopBridgeRequestBodyTooLargeError } from './types.js';
 import { PACKAGE_VERSION } from '../../version.js';
 import {
   DESKTOP_BRIDGE_CLIENT_PATH_PREFIX,
@@ -102,6 +102,7 @@ function handleDiagnosticWebSocket(req: IncomingMessage, socket: Duplex, head: B
 }
 
 function rejectionStatus(code: string): number {
+  if (code === 'bridge_request_body_too_large') return 413;
   if (code === 'bridge_path_not_allowed') return 404;
   if (code === 'bridge_request_capacity_exhausted') return 503;
   if (code === 'bridge_session_pin_persist_failed' || code.startsWith('bridge_upstream_')) return 502;
@@ -110,6 +111,7 @@ function rejectionStatus(code: string): number {
 }
 
 function rejectionStatusText(status: number): string {
+  if (status === 413) return 'Payload Too Large';
   if (status === 404) return 'Not Found';
   if (status === 403) return 'Forbidden';
   if (status === 502) return 'Bad Gateway';
@@ -127,6 +129,11 @@ function writeBridgeRejection(res: ServerResponse, error: unknown, req?: Incomin
     method: req?.method,
     url: req?.url,
     status: rejectionStatus(rejectedCode),
+    ...(error instanceof DesktopBridgeRequestBodyTooLargeError ? {
+      max_request_body_bytes: error.maximumBytes,
+      request_body_bytes: error.observedBytes,
+      request_body_stage: error.stage,
+    } : {}),
   });
   if (res.headersSent) {
     res.destroy(error instanceof Error ? error : undefined);

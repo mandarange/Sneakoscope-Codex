@@ -84,6 +84,12 @@ test('R44/security: provider-source and combined catalog generations remain dist
   assert.notEqual(prepared.providers['codex-lb'].source_catalog_generation, prepared.routePolicy.catalog_generation);
 });
 
+test('request body limit overrides must remain finite positive byte counts', async () => {
+  for (const limit of [0, NaN, Infinity, 1.5]) {
+    await assert.rejects(prepareDesktopBridgeConfig({ ...config(), maxRequestBodyBytes: limit }), /bridge_request_body_limit_invalid/);
+  }
+});
+
 function withCodexLbBaseUrl(input: DesktopBridgeConfig, baseUrl: string): DesktopBridgeConfig {
   return {
     ...input,

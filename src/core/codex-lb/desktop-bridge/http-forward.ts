@@ -8,7 +8,7 @@ import { buildOfficialPassthroughHeaders, buildProviderUpstreamHeaders, rewriteR
 import { createDesktopBridgeRejectionLogger } from './rejection-log.js';
 import { ensureDesktopBridgeRemoteTarget, isUnreachableUpstreamError, refreshDesktopBridgeRemoteTarget, resolveAndBindDesktopBridgeRouteContext, resolveCodexSessionIdentity, resolveDesktopBridgeTarget, safeBridgeErrorCode, singleBridgeHeader } from './security.js';
 import { desktopBridgeListenOrigin } from './state.js';
-import { DesktopBridgeError, type DesktopBridgeResolvedCredential, type DesktopBridgeRouteContext, type PreparedDesktopBridgeConfig } from './types.js';
+import { DEFAULT_DESKTOP_BRIDGE_MAX_REQUEST_BODY_BYTES, DesktopBridgeError, DesktopBridgeRequestBodyTooLargeError, type DesktopBridgeResolvedCredential, type DesktopBridgeRouteContext, type PreparedDesktopBridgeConfig } from './types.js';
 
 const MAX_UPSTREAM_ERROR_BODY_BYTES = 1024 * 1024;
 
@@ -35,7 +35,10 @@ function decodeBridgeRequestBody(body: Buffer, encoding: string, maximum: number
         return zlib.gunzipSync(body, options);
       case 'deflate':
         try { return zlib.inflateSync(body, options); }
-        catch { return zlib.inflateRawSync(body, options); }
+        catch (error) {
+          if ((error as NodeJS.ErrnoException).code === 'ERR_BUFFER_TOO_LARGE') throw error;
+          return zlib.inflateRawSync(body, options);
+        }
       case 'br':
         return zlib.brotliDecompressSync(body, options);
       case 'zstd': {
@@ -48,6 +51,9 @@ function decodeBridgeRequestBody(body: Buffer, encoding: string, maximum: number
     }
   } catch (error) {
     if (error instanceof DesktopBridgeError) throw error;
+    if ((error as NodeJS.ErrnoException).code === 'ERR_BUFFER_TOO_LARGE') {
+      throw new DesktopBridgeRequestBodyTooLargeError(maximum, 'decoded');
+    }
     throw new DesktopBridgeError('bridge_responses_body_invalid_json');
   }
 }
@@ -59,11 +65,12 @@ function bodyCarriesModel(rawUrl: string | undefined): boolean {
 
 async function readBoundedBody(req: IncomingMessage, maximum: number): Promise<Buffer> {
   const declared = Number(req.headers['content-length'] || 0);
-  if (Number.isFinite(declared) && declared > maximum) throw new DesktopBridgeError('bridge_request_body_too_large');
+  if (Number.isFinite(declared) && declared > maximum) throw new DesktopBridgeRequestBodyTooLargeError(maximum, 'encoded', declared);
   const chunks: Buffer[] = []; let total = 0;
-  for await (const raw of req) {
+  // Leave the socket alive on overflow so the server can send its 413 response.
+  for await (const raw of req.iterator({ destroyOnReturn: false })) {
     const chunk = Buffer.isBuffer(raw) ? raw : Buffer.from(raw); total += chunk.length;
-    if (total > maximum) throw new DesktopBridgeError('bridge_request_body_too_large');
+    if (total > maximum) throw new DesktopBridgeRequestBodyTooLargeError(maximum, 'encoded', total);
     chunks.push(chunk);
   }
   return Buffer.concat(chunks);
@@ -87,7 +94,7 @@ export async function prepareDesktopBridgeRequest(req: IncomingMessage, config: 
   let payload: Record<string, unknown> | null = null;
   let contentEncodingStripped = false;
   if (bodyCarriesModel(req.url)) {
-    const maximum = config.maxRequestBodyBytes ?? 16 * 1024 * 1024;
+    const maximum = config.maxRequestBodyBytes ?? DEFAULT_DESKTOP_BRIDGE_MAX_REQUEST_BODY_BYTES;
     body = await readBoundedBody(req, maximum);
     const encoding = String(req.headers['content-encoding'] || '').trim().toLowerCase();
     let decoded = body;

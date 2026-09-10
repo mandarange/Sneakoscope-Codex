@@ -6,6 +6,7 @@ import net, { type AddressInfo, type Socket } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import zlib from 'node:zlib';
 import type { ProviderSessionPin } from '../../bridge-contracts.js';
 import {
   DESKTOP_BRIDGE_ALLOWED_PATH_PREFIXES,
@@ -32,6 +33,70 @@ const CODEX_LB_SECRET = 'lb-key-blackbox-secret';
 const CLIENT_CAPABILITY = Buffer.alloc(32, 0x43).toString('base64url');
 const CLIENT_CAPABILITY_SHA256 = createHash('sha256').update(CLIENT_CAPABILITY).digest('hex');
 const WRONG_CLIENT_CAPABILITY = Buffer.alloc(32, 0x44).toString('base64url');
+
+test('large Responses requests survive HTTP routing and compressed decoding without losing input', { timeout: 30_000 }, async (t) => {
+  const input = 'image-and-tool-history:'.repeat(800_000);
+  const model = `codex-lb:${PUBLIC_MODEL}`;
+  const body = Buffer.from(JSON.stringify({ model, input }));
+  const zstdCompress = (zlib as unknown as { zstdCompressSync?: (value: Buffer) => Buffer }).zstdCompressSync;
+  assert.ok(body.length > 16 * 1024 * 1024);
+  let calls = 0;
+  const upstream = http.createServer(async (req, res) => {
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) chunks.push(chunk);
+    const received = JSON.parse(Buffer.concat(chunks).toString());
+    assert.deepEqual(received, { model: PUBLIC_MODEL, input });
+    assert.equal(req.headers['content-encoding'], undefined);
+    assert.equal(req.headers.authorization, undefined);
+    assert.equal(req.headers['x-codex-lb-api-key'], CODEX_LB_SECRET);
+    calls += 1;
+    res.end('{"ok":true}');
+  });
+  const upstreamPort = await listen(upstream);
+  const config = bridgeConfig(await selectAvailableDesktopBridgePort('127.0.0.1'), upstreamPort, 'x-codex-lb-api-key');
+  config.routePolicy.model_routes[model] = { provider_id: 'codex-lb', upstream_model: PUBLIC_MODEL };
+  const bridge = await startDesktopBridge(config, { writeState: false });
+  t.after(async () => { await bridge.stop(); await close(upstream); });
+  for (const encoding of ['identity', 'gzip', 'zstd']) {
+    if (encoding === 'zstd' && !zstdCompress) continue;
+    const encoded = encoding === 'gzip' ? zlib.gzipSync(body) : encoding === 'zstd' ? zstdCompress!(body) : body;
+    const response = await request({ port: config.listenPort, path: '/backend-api/codex/responses', method: 'POST',
+      headers: { 'content-type': 'application/json', 'content-length': encoded.length, ...(encoding === 'identity' ? {} : { 'content-encoding': encoding }), authorization: 'Bearer client-secret' }, chunks: [encoded] });
+    assert.equal(response.status, 200, response.body.toString());
+  }
+  assert.equal(calls, zstdCompress ? 3 : 2);
+});
+
+test('HTTP request limits return 413 for declared, chunked and decoded overflow before routing', { timeout: 10_000 }, async (t) => {
+  let calls = 0;
+  let credentials = 0;
+  const upstream = http.createServer((req, res) => { calls += 1; req.resume(); res.end('{}'); });
+  const upstreamPort = await listen(upstream);
+  const config = bridgeConfig(await selectAvailableDesktopBridgePort('127.0.0.1'), upstreamPort, 'x-codex-lb-api-key');
+  const body = Buffer.from(JSON.stringify({ model: PUBLIC_MODEL, input: 'a'.repeat(1_000) }));
+  config.maxRequestBodyBytes = body.length;
+  const resolve = config.resolveProviderCredential;
+  config.resolveProviderCredential = async (...args) => { credentials += 1; return resolve(...args); };
+  const bridge = await startDesktopBridge(config, { writeState: false });
+  t.after(async () => { await bridge.stop(); await close(upstream); });
+  const post = (data: Buffer, headers: http.OutgoingHttpHeaders = {}) => request({ port: config.listenPort,
+    path: '/backend-api/codex/responses', method: 'POST', headers, chunks: [data] });
+  const oversized = Buffer.concat([body, Buffer.from(' ')]);
+  for (const [data, headers] of [
+    [oversized, { 'content-length': oversized.length }],
+    [oversized, { 'transfer-encoding': 'chunked' }],
+    [zlib.gzipSync(oversized), { 'content-encoding': 'gzip' }],
+    [zlib.deflateSync(oversized), { 'content-encoding': 'deflate' }],
+  ] as const) {
+    const response = await post(data, headers);
+    assert.equal(response.status, 413, response.body.toString());
+    assert.equal(JSON.parse(response.body.toString()).error.code, 'bridge_request_body_too_large');
+  }
+  assert.equal(calls, 0); assert.equal(credentials, 0);
+  assert.equal((await post(Buffer.from('corrupt'), { 'content-encoding': 'gzip' })).status, 400);
+  assert.equal((await post(body, { 'content-length': body.length })).status, 200, 'exact limit remains accepted after rejected requests');
+  assert.equal(calls, 1); assert.equal(credentials, 1);
+});
 
 function codexSessionHeaders(threadId: string): Record<string, string> {
   return {

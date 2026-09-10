@@ -7,7 +7,7 @@ import { BRIDGE_OFFICIAL_ROUTE_ID } from '../bridge-contracts.js';
 import { buildOfficialPassthroughWebSocketHeaders, buildProviderWebSocketHeaders } from './header-policy.js';
 import { createDesktopBridgeRejectionLogger } from './rejection-log.js';
 import { assertDesktopBridgeRouteContext, ensureDesktopBridgeRemoteTarget, isUnreachableUpstreamError, refreshDesktopBridgeRemoteTarget, resolveAndBindDesktopBridgeRouteContext, resolveCodexSessionIdentity, resolveDesktopBridgeTarget, safeBridgeErrorCode } from './security.js';
-import { DesktopBridgeError, type DesktopBridgeRouteContext, type PreparedDesktopBridgeConfig } from './types.js';
+import { DEFAULT_DESKTOP_BRIDGE_MAX_REQUEST_BODY_BYTES, DesktopBridgeError, type DesktopBridgeRouteContext, type PreparedDesktopBridgeConfig } from './types.js';
 
 const MAX_PENDING_MESSAGES = 256;
 const CLOSE_GRACE_MS = 1_000;
@@ -36,7 +36,7 @@ interface PendingMessage { data: Buffer; binary: boolean; create: Record<string,
 export function forwardResponsesWebSocket(req: IncomingMessage, socket: Duplex, head: Buffer, config: PreparedDesktopBridgeConfig): void {
   // Authentication, origin and path validation are performed by the server before dispatch.
   const upgradeIdentity = resolveCodexSessionIdentity(req.headers);
-  const maxBytes = config.maxRequestBodyBytes ?? 16 * 1024 * 1024;
+  const maxBytes = config.maxRequestBodyBytes ?? DEFAULT_DESKTOP_BRIDGE_MAX_REQUEST_BODY_BYTES;
   const server = new WebSocketServer({ noServer: true, clientTracking: false, perMessageDeflate: false, maxPayload: maxBytes });
   // This server owns no listening handle.
   try {

@@ -686,6 +686,10 @@ export function validateDesktopBridgeConfig(config: DesktopBridgeConfig): void {
   if (!config.allowedPathPrefixes.length) throw new DesktopBridgeError('bridge_path_allowlist_empty');
   if (!Number.isFinite(config.connectTimeoutMs) || config.connectTimeoutMs < 100 || config.connectTimeoutMs > 120_000) throw new DesktopBridgeError('bridge_connect_timeout_invalid');
   if (!Number.isFinite(config.idleTimeoutMs) || config.idleTimeoutMs < 1_000 || config.idleTimeoutMs > 86_400_000) throw new DesktopBridgeError('bridge_idle_timeout_invalid');
+  if (config.maxRequestBodyBytes !== undefined
+    && (!Number.isSafeInteger(config.maxRequestBodyBytes) || config.maxRequestBodyBytes < 1)) {
+    throw new DesktopBridgeError('bridge_request_body_limit_invalid');
+  }
   if (config.requestTimeoutMs !== undefined
     && (!Number.isFinite(config.requestTimeoutMs) || config.requestTimeoutMs < 1_000 || config.requestTimeoutMs > 120_000)) {
     throw new DesktopBridgeError('bridge_request_timeout_invalid');

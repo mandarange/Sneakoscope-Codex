@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [10.1.5] - 2026-09-10
+
+### Fixed
+
+- Raise the shared Desktop Bridge Responses body limit from 16 MiB to 128 MiB
+  for HTTP and WebSocket traffic so large image and tool histories can reach
+  their selected provider. Preserve request contents, routing, credential
+  isolation, decoded-size limits, and bounded WebSocket queues.
+- Return HTTP 413 for oversized bodies, including compressed decoded overflow
+  and chunked uploads. Keep the socket open long enough to deliver that response
+  and distinguish size rejection from malformed compressed JSON. Log only the
+  byte limit, observed wire size when available, and encoded/decoded stage.
+
 ## [10.1.4] - 2026-09-08
 
 ### Changed

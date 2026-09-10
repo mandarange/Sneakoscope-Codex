@@ -1,6 +1,13 @@
-# Release Proof Truth — 10.1.4
+# Release Proof Truth — 10.1.5
 
-## Current candidate: 10.1.4
+## Current candidate: 10.1.5
+
+10.1.5 requires fresh verification of the final source, build, and package.
+No 10.1.5 publication or installed-runtime proof is claimed here. The operator
+performs `npm login` and `npm publish` after preparation. Historical records
+below retain their original versions and evidence scope.
+
+## Historical 10.1.4 candidate
 
 10.1.4 changes managed child routing to GPT-6 Astra with low, medium, high,
 and max effort by task. The final candidate requires fresh routing checks,

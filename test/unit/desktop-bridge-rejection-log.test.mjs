@@ -11,6 +11,19 @@ function collector(now = () => 1_000) {
   return { lines, log, parsed: () => lines.map((line) => JSON.parse(line)) };
 }
 
+test('body limit diagnostics contain only validated byte counts and stages', () => {
+  const { log, parsed } = collector();
+  log({ code: 'bridge_request_body_too_large', transport: 'http', max_request_body_bytes: 1024, request_body_bytes: 1025, request_body_stage: 'encoded', body: 'secret' });
+  assert.equal(parsed()[0].max_request_body_bytes, 1024);
+  assert.equal(parsed()[0].request_body_bytes, 1025);
+  assert.equal(parsed()[0].request_body_stage, 'encoded');
+  assert.equal(parsed()[0].body, undefined);
+  log({ code: 'bridge_request_body_too_large', transport: 'http', max_request_body_bytes: Infinity, request_body_bytes: 'secret', request_body_stage: 'secret' });
+  assert.equal(parsed()[1].max_request_body_bytes, undefined);
+  assert.equal(parsed()[1].request_body_bytes, undefined);
+  assert.equal(parsed()[1].request_body_stage, undefined);
+});
+
 test('a rejected request is recorded at all', () => {
   // The bridge emitted exactly one line in its lifetime — `started` — so a
   // bridge refusing every request looked identical in the logs to a healthy one.

@@ -84,6 +84,15 @@ async function exchange(ws: WebSocket, value: unknown): Promise<string> {
   return String((await result)[0]);
 }
 
+test('Responses WebSocket preserves a create larger than the former 16 MiB limit', { timeout: 15_000 }, async (t) => {
+  const f = await fixture(t, (value) => { value.connectTimeoutMs = 2_000; });
+  const ws = await f.client();
+  const create = { type: 'response.create', model: `codex-lb:${MODEL}`, input: 'x'.repeat(17 * 1024 * 1024) };
+  assert.deepEqual(JSON.parse(await exchange(ws, create)), { ...create, model: MODEL });
+  assert.equal(f.lb.messages.length, 1);
+  assert.equal(f.official.messages.length, 0);
+});
+
 test('model-less first upgrade waits for fragmented create; priority and Astra event bytes survive', { timeout: 6_000 }, async (t) => {
   const f = await fixture(t); const ws = await f.client({ 'thread-id': 'thread-astra', 'x-api-key': 'client-key' });
   assert.equal(f.lb.headers.length, 0); assert.equal(f.official.headers.length, 0);

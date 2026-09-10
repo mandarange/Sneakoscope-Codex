@@ -1,6 +1,19 @@
-# SKS 10.1.4 Release Readiness
+# SKS 10.1.5 Release Readiness
 
 ## Current candidate
+
+10.1.5 is the next patch candidate. Fresh verification must cover the final
+10.1.5 source and package; earlier release records do not verify this candidate.
+The operator performs `npm login` and `npm publish` after preparation.
+
+This patch raises the shared HTTP/Responses WebSocket request limit to 128 MiB
+from 16 MiB. Encoded and decoded HTTP bodies remain bounded. Oversized HTTP
+requests receive 413, including chunked uploads and decompression overflow;
+rejection logs contain size metadata without request contents. Provider limits
+still apply. The previous failures were recorded on the installed 10.1.4 bridge;
+the release tests exercise the candidate through local HTTP/WebSocket upstreams.
+
+## Previous candidate: 10.1.4
 
 10.1.4 enforces GPT-6 Astra for all managed child agents. Effort follows the
 assigned work: low for tiny mechanical tasks, medium for reads, exploration,

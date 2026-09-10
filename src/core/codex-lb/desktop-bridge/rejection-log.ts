@@ -39,6 +39,9 @@ export interface DesktopBridgeRejectionEvent {
   /** The public model the request was routed for — the one fact a user report
    * with only a cf-ray id cannot supply. Catalog-published, never a secret. */
   readonly public_model?: string | undefined;
+  readonly max_request_body_bytes?: number | undefined;
+  readonly request_body_bytes?: number | undefined;
+  readonly request_body_stage?: 'encoded' | 'decoded' | undefined;
 }
 
 /** Catalog-published identifiers: bounded, control-characters stripped, nothing else. */
@@ -142,6 +145,9 @@ export function createDesktopBridgeRejectionLogger(options: {
       ...(Number.isInteger(event.status) ? { status: event.status } : {}),
       ...(providerId ? { provider_id: providerId } : {}),
       ...(publicModel ? { public_model: publicModel } : {}),
+      ...(Number.isSafeInteger(event.max_request_body_bytes) && event.max_request_body_bytes! > 0 ? { max_request_body_bytes: event.max_request_body_bytes } : {}),
+      ...(Number.isSafeInteger(event.request_body_bytes) && event.request_body_bytes! >= 0 ? { request_body_bytes: event.request_body_bytes } : {}),
+      ...(event.request_body_stage === 'encoded' || event.request_body_stage === 'decoded' ? { request_body_stage: event.request_body_stage } : {}),
     });
   };
 }
