@@ -19,7 +19,7 @@
       "image_id": "screen-home-before",
       "bbox": [120, 240, 360, 80],
       "label": "CTA contrast issue",
-      "source": "gpt-image-2-annotated-review"
+      "source": "imagegen-annotated-review"
     }
   ],
   "relations": []

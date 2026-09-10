@@ -1,3 +1,4 @@
+import { IMAGEGEN_MODEL } from '../imagegen/imagegen-model-policy.js';
 import { normalizeDollarSkillName, prefixKnownSksDollarReferences, sksPrefixedDollarCommand } from './dollar-prefix.js';
 
 export interface DollarCommandLiteEntry {
@@ -28,7 +29,7 @@ const DOLLAR_COMMANDS_LITE_BASE = [
   { command: '$Release-Review', route: 'official subagent release review', description: 'Run release-readiness collaboration through Codex official subagent threads with explicit review lanes, bounded thread budgets, structured parent outcomes, evidence, and cleanup artifacts.' },
   { command: '$QA-LOOP', route: 'QA loop', description: 'Dogfood UI/API as human proxy with safety gates, Codex Chrome Extension-first web UI evidence, safe fixes, rechecks, Honest Mode.' },
   { command: '$PPT', route: 'HTML/PDF presentation pipeline', description: 'Create restrained, information-first HTML/PDF presentation artifacts after delivery context, audience profile, STP, decision context, pain-point, research, design-system, and verification questions are sealed.' },
-  { command: '$Image-UX-Review', route: 'image-generation UI/UX review loop', description: 'Review UI/UX through the imagegen/gpt-image-2 visual critique loop: source screenshots become generated annotated review images, those images become issue ledgers, then fixes are rechecked.' },
+  { command: '$Image-UX-Review', route: 'image-generation UI/UX review loop', description: ("Review UI/UX through the imagegen/" + IMAGEGEN_MODEL + " visual critique loop: source screenshots become generated annotated review images, those images become issue ledgers, then fixes are rechecked.") },
   { command: '$Computer-Use', route: 'native Computer Use fast lane', description: COMPUTER_USE_DESCRIPTION },
   { command: '$CU', route: 'native Computer Use fast lane', description: COMPUTER_USE_DESCRIPTION },
   { command: '$Goal', route: 'Codex native /goal control', description: 'Use Codex native Goal directly with detailed completion criteria; SKS creates no Goal mission, artifact, loop, or fallback state.' },

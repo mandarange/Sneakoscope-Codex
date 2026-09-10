@@ -7,7 +7,7 @@ import {
   DEFAULT_IMAGEGEN_FETCH_TIMEOUT_MS,
   buildCalloutPrompt,
   createCodexAppImagegenAdapter,
-  generateGptImage2CalloutReview,
+  generateImagegenCalloutReview,
   imagegenCapabilityBlocker
 } from '../../dist/core/image-ux-review/imagegen-adapter.js';
 
@@ -16,23 +16,23 @@ const ONE_PX_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8
 test('image generation preserves the app-native path and documented timeout', async () => {
   assert.equal(DEFAULT_IMAGEGEN_FETCH_TIMEOUT_MS, 180000);
   const adapter = createCodexAppImagegenAdapter();
-  assert.equal(adapter.model, 'gpt-image-2');
+  assert.equal(adapter.model, 'gpt-image-2', 'native engine identity must not be relabeled');
   assert.equal(adapter.available, false);
   const result = await adapter.generateCalloutReview({});
   assert.equal(result.blocker, 'imagegen_capability_missing');
-  assert.equal(imagegenCapabilityBlocker().model, 'gpt-image-2');
+  assert.equal(imagegenCapabilityBlocker().model, 'gpt-image-2.5-sunburst');
   assert.match(buildCalloutPrompt('screen-1'), /Text-only response is invalid/);
 });
 
-test('Codex App imagegen reports missing generated output separately from missing capability', async () => {
+test('Codex App imagegen refuses to claim an engine that the host cannot select', async () => {
   const { root, imagePath } = await tempImageRoot('sks-codex-imagegen-output-missing-');
-  const result = await withoutImagegenOutputEnv(() => generateGptImage2CalloutReview(
+  const result = await withoutImagegenOutputEnv(() => generateImagegenCalloutReview(
     imagegenRequest(imagePath, path.join(root, 'out')),
     { capability: { codexAppAvailable: true, env: { HOME: root }, desktopBridgeStatus: null } }
   ));
   assert.equal(result.ok, false);
   assert.equal(result.provider, 'codex_app_imagegen');
-  assert.equal(result.blocker, 'codex_app_imagegen_output_missing');
+  assert.equal(result.blocker, 'imagegen_model_unavailable');
 });
 
 test('managed ImageGen fails closed without an explicit current-route model', async () => {
@@ -42,11 +42,11 @@ test('managed ImageGen fails closed without an explicit current-route model', as
   const previousFetch = globalThis.fetch;
   globalThis.fetch = async () => { calls += 1; throw new Error('unexpected fetch'); };
   try {
-    const result = await withoutImagegenOutputEnv(() => generateGptImage2CalloutReview(
+    const result = await withoutImagegenOutputEnv(() => generateImagegenCalloutReview(
       imagegenRequest(imagePath, outputDir),
       bridgeOptions(root, null)
     ));
-    const response = JSON.parse(await fs.readFile(path.join(outputDir, 'image-ux-gpt-image-2-response.json'), 'utf8'));
+    const response = JSON.parse(await fs.readFile(path.join(outputDir, 'image-ux-imagegen-response.json'), 'utf8'));
     assert.equal(result.ok, false);
     assert.equal(result.blocker, 'desktop_bridge_imagegen_model_missing');
     assert.equal(calls, 0);
@@ -70,11 +70,11 @@ test('managed ImageGen sends only the explicit public model to verified Desktop 
     return imageResponse('bridge-image-1');
   };
   try {
-    const result = await withoutImagegenOutputEnv(() => generateGptImage2CalloutReview(
+    const result = await withoutImagegenOutputEnv(() => generateImagegenCalloutReview(
       imagegenRequest(imagePath, outputDir),
       bridgeOptions(root)
     ));
-    const response = JSON.parse(await fs.readFile(path.join(outputDir, 'image-ux-gpt-image-2-response.json'), 'utf8'));
+    const response = JSON.parse(await fs.readFile(path.join(outputDir, 'image-ux-imagegen-response.json'), 'utf8'));
     assert.equal(result.ok, true);
     assert.equal(result.provider, 'desktop_bridge_responses_image_generation');
     assert.equal(calls.length, 1);
@@ -83,6 +83,7 @@ test('managed ImageGen sends only the explicit public model to verified Desktop 
     assert.equal(calls[0].headers.authorization, undefined);
     assert.equal(calls[0].headers['X-Codex-LB-API-Key'], undefined);
     assert.equal(calls[0].body.model, 'public-image-model');
+    assert.equal(calls[0].body.tools[0].model, 'gpt-image-2.5-sunburst');
     assert.equal(response.evidence_class, 'mock_fixture');
     assert.equal(response.output_source, null);
     assert.equal(response.desktop_bridge_route_provider, 'codex-lb');
@@ -103,7 +104,7 @@ test('ambient provider secrets never override a managed Desktop Bridge route', a
     const result = await withoutImagegenOutputEnv(async () => {
       process.env.OPENAI_API_KEY = 'ambient-openai-secret';
       process.env.CODEX_LB_API_KEY = 'ambient-provider-secret';
-      return generateGptImage2CalloutReview(
+      return generateImagegenCalloutReview(
         imagegenRequest(imagePath, path.join(root, 'out')),
         bridgeOptions(root)
       );
@@ -131,11 +132,11 @@ test('partial-only Desktop Bridge SSE output is never generated or live evidence
     { type: 'response.completed', response: { id: 'partial-response', status: 'completed', output: [] } }
   ]), { status: 200, headers: { 'content-type': 'text/event-stream' } });
   try {
-    const result = await withoutImagegenOutputEnv(() => generateGptImage2CalloutReview(
+    const result = await withoutImagegenOutputEnv(() => generateImagegenCalloutReview(
       imagegenRequest(imagePath, outputDir),
       bridgeOptions(root)
     ));
-    const response = JSON.parse(await fs.readFile(path.join(outputDir, 'image-ux-gpt-image-2-response.json'), 'utf8'));
+    const response = JSON.parse(await fs.readFile(path.join(outputDir, 'image-ux-imagegen-response.json'), 'utf8'));
     assert.equal(result.ok, false);
     assert.equal(result.blocker, 'missing_b64_image_output');
     assert.notEqual(response.evidence_class, 'codex_lb_provider_imagegen');
@@ -145,11 +146,13 @@ test('partial-only Desktop Bridge SSE output is never generated or live evidence
   }
 });
 
-test('explicit non-managed OpenAI fallback still retries rate limits', async () => {
+test('explicit non-managed OpenAI requests pin Sunburst and max quality across retries', async () => {
   const { root, imagePath } = await tempImageRoot('sks-imagegen-openai-retry-');
   let calls = 0;
   const previousFetch = globalThis.fetch;
-  globalThis.fetch = async () => {
+  globalThis.fetch = async (_url, init) => {
+    assert.equal(init.body.get('model'), 'gpt-image-2.5-sunburst');
+    assert.equal(init.body.get('quality'), 'max');
     calls += 1;
     if (calls <= 2) {
       return new Response(JSON.stringify({ error: { type: 'rate_limit_exceeded', message: 'slow down' } }), {
@@ -163,11 +166,11 @@ test('explicit non-managed OpenAI fallback still retries rate limits', async () 
     });
   };
   try {
-    const result = await withoutImagegenOutputEnv(() => generateGptImage2CalloutReview(
+    const result = await withoutImagegenOutputEnv(() => generateImagegenCalloutReview(
       imagegenRequest(imagePath, path.join(root, 'out')),
       {
         capability: { codexBin: path.join(root, 'missing-codex'), env: { HOME: root }, desktopBridgeStatus: null },
-        openai: { apiKey: 'explicit-openai-key', retrySleep: async () => {} },
+        openai: { apiKey: 'explicit-openai-key', quality: 'max', retrySleep: async () => {} },
         allowApiFallback: true
       }
     ));
@@ -184,7 +187,7 @@ test('OPENAI_API_KEY alone never auto-enables the non-managed fallback', async (
   const previousFetch = globalThis.fetch;
   globalThis.fetch = async () => { throw new Error('unexpected OpenAI fallback fetch'); };
   try {
-    const result = await withoutImagegenOutputEnv(() => generateGptImage2CalloutReview(
+    const result = await withoutImagegenOutputEnv(() => generateImagegenCalloutReview(
       imagegenRequest(imagePath, path.join(root, 'out')),
       {
         capability: { codexBin: path.join(root, 'missing-codex'), env: { HOME: root }, desktopBridgeStatus: null },

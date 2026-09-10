@@ -135,7 +135,7 @@ test('specialist selection covers implementation, judgment, long-context, and Co
     ['Analyze several large files and extensive logs as long context', 'long_context_analyst', true],
     ['Use Computer Use to inspect macOS System Settings', 'computer_use_operator', true],
     ['Use Chrome browser on localhost to capture webapp evidence', 'browser_use_operator', true],
-    ['Generate a visual asset with gpt-image-2 imagegen', 'image_generation_operator', false]
+    ['Generate a visual asset with gpt-image-2.5-sunburst imagegen', 'image_generation_operator', false]
   ] as const
 
   for (const [description, expected, readOnly] of cases) {

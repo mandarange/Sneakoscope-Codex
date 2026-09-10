@@ -45,7 +45,6 @@ export function runSks(args, options = {}) {
     env: {
       ...process.env,
       SKS_TEST_REAL_IMAGEGEN: '0',
-      SKS_REAL_IMAGEGEN: '0',
       SKS_REQUIRE_REAL_COMPUTER_USE: '0',
       ...(options.env || {}),
     },

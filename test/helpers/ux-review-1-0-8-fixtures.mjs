@@ -34,7 +34,7 @@ export function realGeneratedReviewImage(overrides = {}) {
     id: 'generated-review-real',
     path: 'generated-review-real.png',
     source_screen_id: 'screen-1',
-    provider_model: 'gpt-image-2',
+    provider_model: 'gpt-image-2.5-sunburst',
     provider_surface: 'Codex App $imagegen',
     evidence_class: 'codex_app_imagegen',
     output_source: 'manual_attach',
@@ -46,7 +46,7 @@ export function realGeneratedReviewImage(overrides = {}) {
     sha256: PNG_1X1_SHA256,
     real_generated: true,
     mock: false,
-    source: 'real_gpt_image_2_callout',
+    source: 'real_imagegen_callout',
     callout_extraction_status: 'succeeded',
     callouts: [
       {

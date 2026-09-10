@@ -39,7 +39,7 @@ test('active ready codex-lb Desktop Bridge route satisfies imagegen provider pre
   });
 
   assert.equal(result.ok, true);
-  assert.equal(result.core_ready, false);
+  assert.equal(result.core_ready, true);
   assert.equal(result.codex_lb.selected, true);
   assert.equal(result.codex_lb.available, true);
   assert.equal(result.codex_lb.routing_active, true);

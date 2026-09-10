@@ -21,7 +21,7 @@ export function buildRecapturePlan(fixLoop: any = {}, opts: any = {}) {
     recaptured_screenshot_sha256: opts.recapturedSha256 || null,
     recaptured_screenshot_dimensions: opts.recapturedDimensions || null,
     before_after_relation_required: recaptureRequired,
-    gpt_image_2_re_review_required: recaptureRequired,
+    imagegen_re_review_required: recaptureRequired,
     output_schema_recheck_required: recaptureRequired,
     attach_after_command: 'sks ux-review attach-after --image <path> --json',
     after_screenshot: opts.userScreenshot ? {

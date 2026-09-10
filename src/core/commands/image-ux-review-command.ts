@@ -1,3 +1,4 @@
+import { IMAGEGEN_MODEL, CODEX_BUILTIN_IMAGEGEN_MODEL } from '../imagegen/imagegen-model-policy.js';
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { registerPathImageReference, upsertImageReferenceRegistry } from '../image/reference-evidence/reference-registry.js';
@@ -10,10 +11,9 @@ import {
   IMAGE_UX_REVIEW_FIX_TASK_PLAN_ARTIFACT,
   IMAGE_UX_REVIEW_CALLOUT_EXTRACTION_REPORT_ARTIFACT,
   IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT,
-  IMAGE_UX_REVIEW_GPT_IMAGE_2_RESPONSE_ARTIFACT,
+  IMAGE_UX_REVIEW_IMAGEGEN_RESPONSE_ARTIFACT,
   IMAGE_UX_REVIEW_GATE_ARTIFACT,
   IMAGE_UX_REVIEW_HONEST_MODE_ARTIFACT,
-  IMAGE_UX_REVIEW_GPT_IMAGE_2_REQUEST_ARTIFACT,
   IMAGE_UX_REVIEW_IMAGEGEN_REQUEST_ARTIFACT,
   IMAGE_UX_REVIEW_ITERATION_REPORT_ARTIFACT,
   IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT,
@@ -26,7 +26,7 @@ import {
   writeImageUxReviewRouteArtifacts
 } from '../image-ux-review.js';
 import { maybeFinalizeRoute } from '../proof/auto-finalize.js';
-import { buildCalloutPrompt, generatedImageMetadata, generateGptImage2CalloutReview } from '../image-ux-review/imagegen-adapter.js';
+import { buildCalloutPrompt, generatedImageMetadata, generateImagegenCalloutReview } from '../image-ux-review/imagegen-adapter.js';
 import { extractRealCallouts } from '../image-ux-review/real-callout-extractor.js';
 import { addImageRelation, ingestImage } from '../wiki-image/image-voxel-ledger.js';
 import { sha256File, imageDimensions } from '../wiki-image/image-hash.js';
@@ -47,8 +47,7 @@ const IMAGE_UX_REVIEW_ARTIFACT_PATHS: Record<string, string | Record<string, any
   policy: stableImageUxArtifact(IMAGE_UX_REVIEW_POLICY_ARTIFACT),
   inventory: stableImageUxArtifact(IMAGE_UX_REVIEW_SCREEN_INVENTORY_ARTIFACT),
   imagegen_request: stableImageUxArtifact(IMAGE_UX_REVIEW_IMAGEGEN_REQUEST_ARTIFACT),
-  gpt_image_2_request: stableImageUxArtifact(IMAGE_UX_REVIEW_GPT_IMAGE_2_REQUEST_ARTIFACT),
-  imagegen_response: stableImageUxArtifact(IMAGE_UX_REVIEW_GPT_IMAGE_2_RESPONSE_ARTIFACT),
+  imagegen_response: stableImageUxArtifact(IMAGE_UX_REVIEW_IMAGEGEN_RESPONSE_ARTIFACT),
   generated_review_ledger: stableImageUxArtifact(IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT),
   issue_ledger: stableImageUxArtifact(IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT),
   callout_extraction_report: stableImageUxArtifact(IMAGE_UX_REVIEW_CALLOUT_EXTRACTION_REPORT_ARTIFACT),
@@ -131,7 +130,7 @@ async function runImageUxReview(root: string, command: string, args: any[] = [])
       };
       process.exitCode = 1;
       if (flag(args, '--json')) return printJson(result);
-      console.error('UX Review blocked: no selected Codex imagegen/gpt-image-2 provider is ready.');
+      console.error(("UX Review blocked: no selected Codex imagegen/" + IMAGEGEN_MODEL + " provider is ready."));
       for (const action of imagegenRequired.blocker?.next_actions || []) console.error(`- ${action}`);
       return result;
     }
@@ -170,7 +169,7 @@ async function runImageUxReview(root: string, command: string, args: any[] = [])
     // otherwise a max-age window guards against stale reuse.
     const missionStartMs = Date.parse(mission.created_at || '') || undefined;
     const maxAgeOverride = readOption(args, '--generated-image-max-age-min', null);
-    const result = await generateGptImage2CalloutReview({
+    const result = await generateImagegenCalloutReview({
       mission_id: id,
       source_screen_id: 'screen-1',
       source_image_path: path.resolve(root, sourceRel || imagePath),
@@ -189,8 +188,8 @@ async function runImageUxReview(root: string, command: string, args: any[] = [])
     // Preserve provider diagnostics even when generation fails and no image can
     // be attached. Route artifact rebuilding must not replace the real request
     // or response with a generic missing-image placeholder.
-    if (result.request_artifact) await fsp.copyFile(result.request_artifact, path.join(dir, IMAGE_UX_REVIEW_GPT_IMAGE_2_REQUEST_ARTIFACT));
-    if (result.response_artifact) await fsp.copyFile(result.response_artifact, path.join(dir, IMAGE_UX_REVIEW_GPT_IMAGE_2_RESPONSE_ARTIFACT));
+    if (result.request_artifact) await fsp.copyFile(result.request_artifact, path.join(dir, IMAGE_UX_REVIEW_IMAGEGEN_REQUEST_ARTIFACT));
+    if (result.response_artifact) await fsp.copyFile(result.response_artifact, path.join(dir, IMAGE_UX_REVIEW_IMAGEGEN_RESPONSE_ARTIFACT));
     if (result.generated_image_path) {
       const response = await readImagegenResponse(dir);
       const evidenceClass = String(response?.evidence_class || '');
@@ -683,6 +682,7 @@ async function attachGeneratedReviewImage(root: string, dir: string, contract: a
     id: opts.mock ? 'generated-review-fixture-1' : undefined,
     source_screen_id: sourceScreen.id || 'screen-1',
     provider_surface: opts.providerSurface || 'Codex App $imagegen',
+    provider_model: response?.model || (opts.mock ? IMAGEGEN_MODEL : CODEX_BUILTIN_IMAGEGEN_MODEL),
     evidence_class: evidenceClass,
     output_source: outputSource,
     output_sha256: outputSha256 || undefined,
@@ -691,19 +691,19 @@ async function attachGeneratedReviewImage(root: string, dir: string, contract: a
     mock: opts.mock === true
   });
   if (response) {
-    await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_GPT_IMAGE_2_RESPONSE_ARTIFACT), {
+    await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_IMAGEGEN_RESPONSE_ARTIFACT), {
       ...response,
       generated_review_image_id: metadata.id,
       output_sha256: response.output_sha256 || response.output_image_sha256 || metadata.sha256,
       output_image_sha256: response.output_image_sha256 || response.output_sha256 || metadata.sha256
     });
   } else if (opts.realGenerated === true) {
-    await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_GPT_IMAGE_2_RESPONSE_ARTIFACT), {
-      schema: 'sks.image-ux-gpt-image-2-response.v1',
+    await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_IMAGEGEN_RESPONSE_ARTIFACT), {
+      schema: 'sks.image-ux-imagegen-response.v1',
       created_at: nowIso(),
       provider: 'codex_app_imagegen',
       evidence_class: 'codex_app_imagegen',
-      model: 'gpt-image-2',
+      model: metadata.provider_model,
       ok: true,
       status: 'generated',
       output_image_path: path.resolve(root, metadata.path),
@@ -721,12 +721,12 @@ async function attachGeneratedReviewImage(root: string, dir: string, contract: a
     schema_version: 2,
     created_at: nowIso(),
     status: 'generated',
-    provider: { model: 'gpt-image-2', preferred_surface: 'Codex App $imagegen' },
+    provider: { model: metadata.provider_model, preferred_surface: 'Codex App $imagegen' },
     generated_review_images: [{
       ...metadata,
       source_screen_id: 'screen-1',
       status: 'generated',
-      imagegen_response_artifact: opts.responseArtifact || (response || opts.realGenerated === true ? IMAGE_UX_REVIEW_GPT_IMAGE_2_RESPONSE_ARTIFACT : null),
+      imagegen_response_artifact: opts.responseArtifact || (response || opts.realGenerated === true ? IMAGE_UX_REVIEW_IMAGEGEN_RESPONSE_ARTIFACT : null),
       image_voxel_relation: 'generated_callout_review_of',
       callout_extraction_status: opts.mock ? 'succeeded' : 'pending',
       callouts: opts.mock ? [{
@@ -739,7 +739,7 @@ async function attachGeneratedReviewImage(root: string, dir: string, contract: a
         detail: 'Mock fixture callout for schema validation.',
         fix_action: 'Apply targeted UI adjustment, then recapture and re-review.',
         status: opts.mock ? 'mock' : 'open',
-        source: opts.mock ? 'mock_fixture' : 'real_gpt_image_2_callout',
+        source: opts.mock ? 'mock_fixture' : 'real_imagegen_callout',
         confidence: opts.mock ? 0.5 : 0.82,
         extraction_provider: 'mock_fixture',
         extraction_schema: 'sks.image-ux-issue-ledger.v3',
@@ -764,7 +764,7 @@ async function attachGeneratedReviewImage(root: string, dir: string, contract: a
 }
 
 async function readImagegenResponse(dir: string) {
-  return readJson(path.join(dir, IMAGE_UX_REVIEW_GPT_IMAGE_2_RESPONSE_ARTIFACT), null).catch(() => null);
+  return readJson(path.join(dir, IMAGE_UX_REVIEW_IMAGEGEN_RESPONSE_ARTIFACT), null).catch(() => null);
 }
 
 async function enforceImageUxRuntimeGate(dir: string, gate: any = {}, opts: any = {}) {
@@ -772,7 +772,7 @@ async function enforceImageUxRuntimeGate(dir: string, gate: any = {}, opts: any 
   const generatedLedger = await readJson(path.join(dir, IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT), null);
   const issueLedger = await readJson(path.join(dir, IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT), null);
   const extractionReport = await readJson(path.join(dir, IMAGE_UX_REVIEW_CALLOUT_EXTRACTION_REPORT_ARTIFACT), null);
-  const response = await readJson(path.join(dir, IMAGE_UX_REVIEW_GPT_IMAGE_2_RESPONSE_ARTIFACT), null);
+  const response = await readJson(path.join(dir, IMAGE_UX_REVIEW_IMAGEGEN_RESPONSE_ARTIFACT), null);
   const blockers = new Set<string>(Array.isArray(gate?.blockers) ? gate.blockers.map(String) : []);
   const sourceScreens = Array.isArray(inventory?.source_screens) ? inventory.source_screens : [];
   if (!opts.mock) {
@@ -792,7 +792,7 @@ async function enforceImageUxRuntimeGate(dir: string, gate: any = {}, opts: any 
   const bindingBlockers = validateGeneratedImageEvidenceBinding(response, generatedLedger, extractionReport, issueLedger);
   for (const blocker of bindingBlockers) blockers.add(blocker);
   const nextBlockers = [...blockers];
-  const codexGenerated = responseEvidence.ok === true && gate?.gpt_image_2_callout_generated === true;
+  const codexGenerated = responseEvidence.ok === true && gate?.imagegen_callout_generated === true;
   const sourceScreenshotMinResolutionPassed = sourceScreens.length > 0
     && sourceScreens.every((screen: any) => Number(screen?.width || 0) >= 64 && Number(screen?.height || 0) >= 64);
   const issueLedgerRealExtraction = issues.length > 0
@@ -811,7 +811,7 @@ async function enforceImageUxRuntimeGate(dir: string, gate: any = {}, opts: any 
     verified_level: passed ? gate?.verified_level || 'verified' : reviewReportCompleted ? 'verified_partial' : 'blocked',
     review_report_completed: reviewReportCompleted,
     completion_scope: reviewReportCompleted ? 'capture_imagegen_ocr_and_ux_report' : gate?.completion_scope || null,
-    gpt_image_2_callout_generated: codexGenerated,
+    imagegen_callout_generated: codexGenerated,
     generated_image_evidence: responseEvidence.ok === true,
     imagegen_response_evidence: responseEvidence,
     source_screenshot_min_resolution_passed: sourceScreenshotMinResolutionPassed,
@@ -825,7 +825,7 @@ async function validateImagegenResponseEvidence(response: any = null, dir: strin
   if (!response || typeof response !== 'object') {
     return { ok: false, blockers: ['imagegen_response_artifact_missing'] };
   }
-  if (response.schema !== 'sks.image-ux-gpt-image-2-response.v1') blockers.push('imagegen_response_schema_invalid');
+  if (response.schema !== 'sks.image-ux-imagegen-response.v1') blockers.push('imagegen_response_schema_invalid');
   if (response.ok !== true || response.status !== 'generated') blockers.push(response.blocker || 'imagegen_response_not_generated');
   if (response.image_output_partial_frame === true || response.payload_summary?.image_output_partial_frame === true) {
     blockers.push('imagegen_response_partial_image_output');
@@ -975,7 +975,7 @@ export async function stageImageReference(root: string, dir: string, imagePath: 
 
 function promptForRun(command: string, args: any[]) {
   const source = readOption(args, '--image', null) || readOption(args, '--screenshot', null) || readOption(args, '--mission', null) || 'latest Codex Chrome Extension or native Computer Use screenshot';
-  return `$${routeForCommand(command).replace(/^\$/, '')} ${source} with gpt-image-2 callouts${flag(args, '--fix') ? ', then fix the issues' : ''}`;
+  return `$${routeForCommand(command).replace(/^\$/, '')} ${source} with ${IMAGEGEN_MODEL} callouts${flag(args, '--fix') ? ', then fix the issues' : ''}`;
 }
 
 function sourceImageFromContract(contract: any): string | null {

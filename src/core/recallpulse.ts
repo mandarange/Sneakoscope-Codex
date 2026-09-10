@@ -1,3 +1,4 @@
+import { IMAGEGEN_MODEL } from './imagegen/imagegen-model-policy.js';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { appendJsonlBounded, exists, nowIso, readJson, readText, sha256, writeJsonAtomic, writeTextAtomic } from './fsx.js';
@@ -869,7 +870,7 @@ function preservedRoutePersonality(routeId: any = '', routeName: any = '') {
     Naruto: 'Naruto keeps the bounded official subagent workflow with parent-owned integration and risk-scoped review',
     QALoop: 'QA-LOOP keeps dogfood, checklist, remediation, and reverification identity',
     PPT: 'PPT keeps restrained information-first HTML/PDF delivery identity',
-    ImageUXReview: 'Image UX Review keeps gpt-image-2 annotated raster review identity',
+    ImageUXReview: ("Image UX Review keeps " + IMAGEGEN_MODEL + " annotated raster review identity"),
     ComputerUse: 'Computer Use keeps maximum-speed native Mac/non-web visual lane identity',
     Goal: 'Goal uses Codex native /goal only and creates no SKS-owned persistence, artifact, loop, or fallback state',
     Research: 'Research keeps Super Search evidence, three independent Astra Max review dimensions, bounded revision, paper, and falsification identity',

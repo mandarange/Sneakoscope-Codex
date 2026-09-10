@@ -3,7 +3,7 @@
 import { emitGate, requireContains } from './real-execution-check-lib.js';
 
 requireContains('ppt:real-imagegen-wiring', 'src/core/ppt-review/slide-imagegen-review.ts', [
-  'generateGptImage2CalloutReview',
+  'generateImagegenCalloutReview',
   'PPT_SLIDE_IMAGEGEN_REQUEST_ARTIFACT',
   'PPT_SLIDE_IMAGEGEN_RESPONSE_ARTIFACT',
   'buildSlideImagegenEvidence',
@@ -18,4 +18,4 @@ requireContains('ppt:real-imagegen-wiring', 'src/core/ppt-review/index.ts', [
   'imagegen_evidence'
 ]);
 
-emitGate('ppt:real-imagegen-wiring', { adapter: 'shared UX generateGptImage2CalloutReview' });
+emitGate('ppt:real-imagegen-wiring', { adapter: 'shared UX generateImagegenCalloutReview' });

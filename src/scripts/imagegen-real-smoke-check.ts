@@ -5,7 +5,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { osTempPngFixtureArg } from './lib/valid-png-fixture.js';
 
-const enabled = process.env.SKS_TEST_REAL_IMAGEGEN === '1' || process.env.SKS_REAL_IMAGEGEN === '1';
+const enabled = process.env.SKS_TEST_REAL_IMAGEGEN === '1';
 const reportDir = path.join(process.cwd(), '.sneakoscope', 'reports');
 const out = path.join(reportDir, 'real-imagegen-smoke.json');
 fs.mkdirSync(reportDir, { recursive: true });
@@ -45,8 +45,8 @@ function imagegenRequestEvidence(missionId) {
   if (!missionId) return { request_artifact: null, response_artifact: null, request: null, response: null };
   const missionRoot = path.join(process.cwd(), '.sneakoscope', 'missions', missionId);
   const requestCandidates = [
-    path.join(missionRoot, 'generated-callouts', 'image-ux-gpt-image-2-request.json'),
-    path.join(missionRoot, 'image-ux-gpt-image-2-request.json')
+    path.join(missionRoot, 'generated-callouts', 'image-ux-imagegen-request.json'),
+    path.join(missionRoot, 'image-ux-imagegen-request.json')
   ];
   const requestArtifact = requestCandidates.find((candidate) => fs.existsSync(candidate)) || null;
   const responseArtifact = requestArtifact
@@ -81,7 +81,6 @@ if (!enabled) {
     ok: true,
     status: 'skipped',
     reason: 'Set SKS_TEST_REAL_IMAGEGEN=1 with OPENAI_API_KEY or Codex App imagegen output to run live smoke.',
-    compatibility_env_alias: 'SKS_REAL_IMAGEGEN=1',
     release_gate: 'release:real-check_only',
     request_validator_checked: false,
     input_fidelity_present: false,
@@ -137,7 +136,7 @@ if (run.status === 0 && !generatedOutput.real_generated_output_verified) {
 if (report.input_fidelity_present) {
   report.ok = false;
   report.status = 'blocked';
-  report.blocker = 'input_fidelity_must_not_be_sent_for_gpt_image_2';
+  report.blocker = 'input_fidelity_must_not_be_sent_for_imagegen';
 }
 writeReport(report);
 console.log(JSON.stringify(report, null, 2));

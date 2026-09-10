@@ -57,7 +57,7 @@ export function buildQaContractV2(
       ui_required: uiRequired,
       api_required: apiRequired,
       visual_required: uiRequired,
-      gpt_image_2_review_required: gptImage2RequiredFromAnswers(answers, prompt)
+      imagegen_review_required: imagegenRequiredFromAnswers(answers, prompt)
     },
     auth: {
       required: stringValue(answers.LOGIN_REQUIRED) === 'yes' || authMode !== 'not_required',
@@ -223,11 +223,11 @@ function apiRequiredFromAnswers(answers: Record<string, unknown>): boolean {
   return ['api_e2e_only', 'ui_and_api_e2e', 'all_available'].includes(scope);
 }
 
-function gptImage2RequiredFromAnswers(answers: Record<string, unknown>, prompt: string): boolean {
-  const explicit = stringValue(answers.QA_VISUAL_REVIEW_IMAGEGEN_REQUIRED || answers.GPT_IMAGE_2_ANNOTATED_REVIEW_REQUIRED);
-  if (/^(yes|true|required|yes_gpt_image_2_annotated_review)$/i.test(explicit)) return true;
+function imagegenRequiredFromAnswers(answers: Record<string, unknown>, prompt: string): boolean {
+  const explicit = stringValue(answers.QA_VISUAL_REVIEW_IMAGEGEN_REQUIRED);
+  if (/^(yes|true|required|yes_imagegen_annotated_review)$/i.test(explicit)) return true;
   if (/^(no|false|not_required|none)$/i.test(explicit)) return false;
-  return /(gpt-image-2|gpt\s*image\s*2|imagegen|\$imagegen|annotated\s+review|callout|주석\s*이미지|콜아웃)/i.test(prompt);
+  return /(gpt-image(?:-\d+(?:\.\d+)?)?|gpt\s*image|imagegen|\$imagegen|annotated\s+review|callout|주석\s*이미지|콜아웃)/i.test(prompt);
 }
 
 function replayFingerprint(contract: QaContractV2, steps: readonly QaJourneyStep[]): string {

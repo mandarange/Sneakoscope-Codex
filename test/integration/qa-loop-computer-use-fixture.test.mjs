@@ -42,7 +42,7 @@ test('QA-LOOP fixture requires Codex Chrome Extension evidence for web UI verifi
     evidence: ['codex_chrome_extension fixture screen ledger']
   }, null, 2));
   const gate = await evaluateQaGate(dir);
-  assert.equal(gate.passed, true);
+  assert.equal(gate.passed, false, 'self-declared fixture fields are not live interaction proof');
   await writeImageVoxelLedger(root, emptyImageVoxelLedger({
     mission_id: missionId,
     images: [{ id: 'qa-screen-after', path: 'fake-after-screen.png', sha256: 'fixture', width: 1440, height: 900, source: 'codex-chrome-extension' }]
@@ -84,7 +84,7 @@ test('QA-LOOP fixture requires Codex Chrome Extension evidence for web UI verifi
     claims: [{ id: 'qa-chrome-fixture', status: 'fixture', text: 'QA fixture passed with Codex Chrome Extension evidence source.' }]
   });
   const proofGate = await validateRouteCompletionProof(root, { missionId, route: '$QA-LOOP' });
-  assert.equal(proofGate.ok, true);
+  assert.equal(proofGate.ok, false);
 });
 
 test('QA-LOOP gate rejects Computer Use as web UI evidence even when Chrome Extension fields are also set', async () => {

@@ -1,3 +1,4 @@
+import { IMAGEGEN_MODEL } from '../imagegen/imagegen-model-policy.js';
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { appendJsonl, exists, nowIso, readJson, readText, sha256, writeJsonAtomic } from '../fsx.js';
@@ -745,7 +746,7 @@ function missingRequiredGateFields(file: any, state: any, gate: any = {}) {
   if (file === 'qa-gate.json' || mode === 'QALOOP') {
     const required = ['clarification_contract_sealed', 'qa_report_written', 'qa_ledger_complete', 'checklist_completed', 'safety_reviewed', 'deployed_destructive_tests_blocked', 'credentials_not_persisted', 'honest_mode_complete'];
     if (gate.ui_e2e_required === true) required.push('chrome_extension_preflight_passed', 'ui_chrome_extension_evidence', 'ui_chrome_extension_screenshot_captured');
-    if (gate.gpt_image_2_annotated_review_required === true) required.push('gpt_image_2_annotated_review_generated');
+    if (gate.imagegen_annotated_review_required === true) required.push('imagegen_annotated_review_generated');
     return required.filter((key: any) => gate[key] !== true);
   }
   if (file === 'ppt-gate.json' || mode === 'PPT') {
@@ -823,7 +824,7 @@ async function missingImageUxReviewArtifacts(root: any, state: any = {}, gate: a
     : [
         [IMAGE_UX_REVIEW_POLICY_ARTIFACT, gate.policy_created === true || gate.real_source_screenshot_present === true],
         [IMAGE_UX_REVIEW_SCREEN_INVENTORY_ARTIFACT, gate.screen_inventory_created === true || gate.real_source_screenshot_present === true],
-        [IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT, gate.imagegen_review_images_generated === true || gate.gpt_image_2_callout_generated === true || gate.generated_image_ingested === true],
+        [IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT, gate.imagegen_review_images_generated === true || gate.imagegen_callout_generated === true || gate.generated_image_ingested === true],
         [IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT, gate.issue_ledger_created === true || gate.callout_extraction_schema_valid === true],
         [IMAGE_UX_REVIEW_ITERATION_REPORT_ARTIFACT, gate.bounded_iteration_complete === true || gate.fix_loop_executed_or_not_needed === true || gate.changed_screens_rechecked === true],
         [IMAGE_UX_REVIEW_HONEST_MODE_ARTIFACT, gate.honest_mode_complete === true]
@@ -832,18 +833,18 @@ async function missingImageUxReviewArtifacts(root: any, state: any = {}, gate: a
     if ((field === true || gate[field] === true) && !(await exists(path.join(dir, artifact)))) missing.push(artifact);
   }
   const generated = await readJson(path.join(dir, IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT), null);
-  if (gate.imagegen_review_images_generated === true || gate.gpt_image_2_callout_generated === true || gate.generated_image_ingested === true) {
+  if (gate.imagegen_review_images_generated === true || gate.imagegen_callout_generated === true || gate.generated_image_ingested === true) {
     if (!generated) missing.push(IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT);
     else {
       if (generated.passed !== true) missing.push(`${IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT}:passed`);
       if (!Array.isArray(generated.generated_review_images) || generated.generated_review_images.length === 0) missing.push(`${IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT}:generated_review_images`);
-      if (String(generated.provider?.model || '') !== 'gpt-image-2') missing.push(`${IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT}:gpt-image-2`);
+      if (String(generated.provider?.model || '') !== IMAGEGEN_MODEL) missing.push(`${IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT}:${IMAGEGEN_MODEL}`);
     }
   }
   if (referenceOnly) {
     if (!generated) missing.push(IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT);
     else {
-      if (String(generated.provider?.model || '') !== 'gpt-image-2') missing.push(`${IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT}:gpt-image-2`);
+      if (String(generated.provider?.model || '') !== IMAGEGEN_MODEL) missing.push(`${IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT}:${IMAGEGEN_MODEL}`);
       if (Number(generated.real_generated_count || 0) !== 0) missing.push(`${IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT}:real_generated_count`);
       if (!Array.isArray(generated.blockers) || !generated.blockers.includes('missing_generated_annotated_review_images')) missing.push(`${IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT}:missing_generated_blocker`);
     }

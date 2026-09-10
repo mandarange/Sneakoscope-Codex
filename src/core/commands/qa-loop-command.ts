@@ -5,7 +5,7 @@ import { getCodexInfo, runCodexExec } from '../codex-adapter.js';
 import { createMission, loadMission, setCurrent, stateFile } from '../mission.js';
 import { writeQuestions } from '../questions.js';
 import { sealContract } from '../decision-contract.js';
-import { buildQaLoopQuestionSchema, buildQaLoopPrompt, ensureQaLoopVisualEvidenceContract, evaluateQaGate, qaGptImage2AnnotatedReviewRequired, qaStatus, qaUiRequired, writeMockQaResult, writeQaLoopArtifacts, writeQaNativeAgentLedger } from '../qa-loop.js';
+import { buildQaLoopQuestionSchema, buildQaLoopPrompt, ensureQaLoopVisualEvidenceContract, evaluateQaGate, qaImagegenAnnotatedReviewRequired, qaStatus, qaUiRequired, writeMockQaResult, writeQaLoopArtifacts, writeQaNativeAgentLedger } from '../qa-loop.js';
 import { containsUserQuestion, noQuestionContinuationReason } from '../no-question-guard.js';
 import { ROUTES, routePrompt, stripVisibleDecisionAnswerBlocks } from '../routes.js';
 import { codexChromeExtensionStatus } from '../codex-app.js';
@@ -198,7 +198,7 @@ async function qaLoopRun(args: any) {
   const uiRequired = qaUiRequired(contract.answers || {});
   const surfaceSelection = await readJson(path.join(dir, QA_SURFACE_SELECTION_ARTIFACT), null);
   const selectedSurface = surfaceSelection?.selected_surface || null;
-  const gptImage2ReviewRequired = qaGptImage2AnnotatedReviewRequired(contract, mission.prompt);
+  const imagegenReviewRequired = qaImagegenAnnotatedReviewRequired(contract, mission.prompt);
   const capabilityArtifact = await writeCodexCurrentAppCapabilityArtifacts(root, { missionId: id }).catch((err: any) => ({ error: err?.message || String(err), report: null }));
   const usageArtifact = await writeCodexAccountUsageArtifacts(root, { missionId: id }).catch((err: any) => ({ error: err?.message || String(err), snapshot: null }));
   const budgetPolicy = buildQaLoopBudgetPolicy({ usage: (usageArtifact as any)?.snapshot || null, provider: 'codex-sdk' });
@@ -309,12 +309,12 @@ async function qaLoopRun(args: any) {
         ui_chrome_extension_screenshot_captured: false,
         ui_chrome_extension_screenshot_artifact: null,
         ui_chrome_extension_screenshot_sha256: null,
-        gpt_image_2_annotated_review_required: gptImage2ReviewRequired,
-        gpt_image_2_annotated_review_generated: false,
-        gpt_image_2_annotated_review_artifact: null,
-        gpt_image_2_annotated_review_sha256: null,
-        gpt_image_2_annotated_review_model: gptImage2ReviewRequired ? null : 'not_required',
-        gpt_image_2_annotated_review_provider: gptImage2ReviewRequired ? null : 'not_required',
+        imagegen_annotated_review_required: imagegenReviewRequired,
+        imagegen_annotated_review_generated: false,
+        imagegen_annotated_review_artifact: null,
+        imagegen_annotated_review_sha256: null,
+        imagegen_annotated_review_model: imagegenReviewRequired ? null : 'not_required',
+        imagegen_annotated_review_provider: imagegenReviewRequired ? null : 'not_required',
         blocker: 'codex_chrome_extension_setup_required',
         blockers: Array.from(new Set([...(qaGate.blockers || []), 'codex_chrome_extension_setup_required', ...(chrome.blockers || [])])),
         evidence: [...(qaGate.evidence || []), 'Codex Chrome Extension preflight failed before web QA execution.'],

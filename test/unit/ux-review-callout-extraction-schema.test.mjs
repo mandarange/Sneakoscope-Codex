@@ -10,6 +10,6 @@ test('callout extraction creates schema-valid issue rows from generated images',
   });
   assert.equal(ledger.validation.ok, true);
   assert.equal(ledger.extracted_from_generated_callout, true);
-  assert.equal(ledger.issues[0].source, 'real_gpt_image_2_callout');
+  assert.equal(ledger.issues[0].source, 'real_imagegen_callout');
   assert.equal(ledger.issues[0].extracted_from_generated_image, true);
 });

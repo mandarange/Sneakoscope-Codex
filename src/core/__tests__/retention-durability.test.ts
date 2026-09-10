@@ -12,7 +12,7 @@ test('durable mission compaction preserves Image UX and presentation evidence by
     await writeJson(path.join(mission, 'mission.json'), { id: 'M-visual-old', created_at: '2020-01-01T00:00:00.000Z' });
     await writeJson(path.join(mission, 'completion-proof.json'), { status: 'verified', blockers: [] });
     await writeJson(path.join(mission, 'reviews', 'image-ux', 'image-ux-review-gate.json'), { passed: true, blockers: [] });
-    await writeJson(path.join(mission, 'reviews', 'image-ux', 'policy.json'), { provider: 'gpt-image-2' });
+    await writeJson(path.join(mission, 'reviews', 'image-ux', 'policy.json'), { provider: 'gpt-image-2.5-sunburst' });
     await writeJson(path.join(mission, 'reviews', 'image-ux', 'response.json'), { output: 'annotated.png' });
     const source = path.join(mission, 'reviews', 'image-ux', 'assets', 'source.png');
     const annotated = path.join(mission, 'reviews', 'image-ux', 'assets', 'annotated.png');

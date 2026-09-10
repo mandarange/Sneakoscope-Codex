@@ -1,3 +1,4 @@
+import { IMAGEGEN_MODEL, CODEX_BUILTIN_IMAGEGEN_MODEL, CODEX_BUILTIN_IMAGEGEN_MODEL_SELECTABLE } from './imagegen-model-policy.js';
 import { desktopBridgeStatusV3 } from '../codex-lb/desktop-controller-v3.js';
 import { nowIso, runProcess, which } from '../fsx.js';
 import { redactSecrets, redactString } from '../secret-redaction.js';
@@ -13,7 +14,7 @@ export async function detectImagegenCapability(opts: any = {}) {
   const authReadiness = await evaluateImagegenAuthReadiness({
     codexHome: opts.codexHome,
     env,
-    codexAppBuiltInAvailable,
+    codexAppBuiltInAvailable: codexAppBuiltInAvailable && String(CODEX_BUILTIN_IMAGEGEN_MODEL) === IMAGEGEN_MODEL,
     authJsonText: opts.authJsonText
   }).catch(() => null);
   const apiFallbackAvailable = openaiApiKeyPresent;
@@ -25,35 +26,42 @@ export async function detectImagegenCapability(opts: any = {}) {
     || env.SKS_SELFTEST_MOCK === '1'
     || env.SKS_MOCK === '1'
   );
-  const realGenerationAvailable = codexAppBuiltInAvailable;
-  const routeGenerationAvailable = codexAppBuiltInAvailable || fakeAdapterAcceptedForRoute;
-  const coreReady = codexAppBuiltInAvailable;
-  const coreBlockers = coreReady ? [] : ['codex_app_builtin_imagegen_capability_missing'];
+  const builtInModelSupported = String(CODEX_BUILTIN_IMAGEGEN_MODEL) === IMAGEGEN_MODEL;
+  const builtInCurrentModelAvailable = codexAppBuiltInAvailable && builtInModelSupported;
+  const selectedBridgeAvailable = codexLb.available && codexLb.selected;
+  const realGenerationAvailable = builtInCurrentModelAvailable || selectedBridgeAvailable;
+  const routeGenerationAvailable = realGenerationAvailable || fakeAdapterAcceptedForRoute;
+  const coreReady = realGenerationAvailable;
+  const coreBlockers = coreReady ? [] : [codexAppBuiltInAvailable ? 'imagegen_model_unavailable' : 'codex_app_builtin_imagegen_capability_missing'];
   const routeGenerationBlockers = routeGenerationAvailable ? [] : ['imagegen_capability_missing'];
   return {
     schema: 'sks.imagegen-capability.v1',
     ok: true,
     created_at: nowIso(),
-    model: 'gpt-image-2',
+    model: IMAGEGEN_MODEL,
     core_feature: true,
     core_ready: coreReady,
     real_generation_available: realGenerationAvailable,
-    codex_app_builtin_output_required: true,
+    codex_app_builtin_output_required: false,
+    current_imagegen_model_required: true,
     real_output_verified_by_capability_check: false,
     capability_detection_is_not_output_proof: true,
-    preferred_surface: 'Codex App $imagegen',
-    fallback_surface: 'Explicit OpenAI Images API gpt-image-2 fallback (non-Codex evidence)',
+    preferred_surface: 'Selected provider with explicit image_generation.model',
+    fallback_surface: ("Explicit OpenAI Images API " + IMAGEGEN_MODEL + " fallback (non-Codex evidence)"),
     api_fallback_satisfies_codex_app_evidence: false,
     full_verification_requires_real_generation: true,
     codex_app: {
       ...codexApp,
       official_surface: '$imagegen',
+      model: CODEX_BUILTIN_IMAGEGEN_MODEL,
+      requested_model_supported: builtInModelSupported,
+      model_selectable: CODEX_BUILTIN_IMAGEGEN_MODEL_SELECTABLE,
       generated_output_required_for_full_verification: true
     },
     codex_lb: {
       ...codexLb,
       satisfies_codex_app_builtin_evidence: false,
-      accepted_for_core_readiness: false
+      accepted_for_core_readiness: selectedBridgeAvailable
     },
     openai_images_api: {
       available: apiFallbackAvailable,
@@ -80,14 +88,13 @@ export async function detectImagegenCapability(opts: any = {}) {
       source: 'mock_like_fixture',
       real_generation_claim_allowed: false
     },
-    supports_reference_image: codexAppBuiltInAvailable || fakeAdapterAcceptedForRoute,
-    gpt_image_2_input_fidelity_automatic: true,
+    supports_reference_image: routeGenerationAvailable,
     input_fidelity_must_be_omitted: true,
     supported_workflows: {
-      ux_review_callouts: codexAppBuiltInAvailable || fakeAdapterAcceptedForRoute,
-      ppt_slide_callouts: codexAppBuiltInAvailable || fakeAdapterAcceptedForRoute,
+      ux_review_callouts: routeGenerationAvailable,
+      ppt_slide_callouts: routeGenerationAvailable,
       structured_extraction_required_after_generation: true,
-      full_verification_requires_codex_app_output: true
+      full_verification_requires_current_model_output: true
     },
     auth_readiness: authReadiness,
     core_blockers: coreBlockers,

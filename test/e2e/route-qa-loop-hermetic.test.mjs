@@ -36,32 +36,32 @@ test('QA Loop mock does not pass live web UI evidence gate', async () => {
   assert.equal(json.gate.gate.ui_evidence_source, 'mock_codex_chrome_extension_fixture_not_live');
 });
 
-test('QA Loop blocks requested visual review without Chrome screenshot and gpt-image-2 annotated image artifacts', async () => {
+test('QA Loop blocks requested visual review without Chrome screenshot and gpt-image-2.5-sunburst annotated image artifacts', async () => {
   const root = await createHermeticProjectRoot({ fixtureName: 'qa-loop-visual-evidence' });
-  const prepared = await runSksInRoot(root, ['qa-loop', 'prepare', 'fixture UI QA with Chrome Extension screenshot and gpt-image-2 annotated review image', '--json']);
+  const prepared = await runSksInRoot(root, ['qa-loop', 'prepare', 'fixture UI QA with Chrome Extension screenshot and gpt-image-2.5-sunburst annotated review image', '--json']);
   const missionDir = path.join(root, '.sneakoscope', 'missions', prepared.mission_id);
   const gate = JSON.parse(await fs.readFile(path.join(missionDir, 'qa-gate.json'), 'utf8'));
   const visual = JSON.parse(await fs.readFile(path.join(missionDir, 'qa-loop', 'visual-evidence.json'), 'utf8'));
   assert.equal(gate.ui_chrome_extension_screenshot_required, true);
-  assert.equal(gate.gpt_image_2_annotated_review_required, true);
+  assert.equal(gate.imagegen_annotated_review_required, true);
   assert.equal(visual.chrome_extension_screenshot.required, true);
-  assert.equal(visual.gpt_image_2_annotated_review.required, true);
+  assert.equal(visual.imagegen_annotated_review.required, true);
 
   const json = await runSksInRoot(root, ['qa-loop', 'run', prepared.mission_id, '--mock', '--json']);
   assert.equal(json.ok, false);
   assert.ok(json.gate.reasons.includes('ui_chrome_extension_screenshot_missing'));
   assert.ok(json.gate.reasons.includes('ui_chrome_extension_screenshot_artifact_missing'));
-  assert.ok(json.gate.reasons.includes('gpt_image_2_annotated_review_image_missing'));
-  assert.ok(json.gate.reasons.includes('gpt_image_2_annotated_review_artifact_missing'));
+  assert.ok(json.gate.reasons.includes('imagegen_annotated_review_image_missing'));
+  assert.ok(json.gate.reasons.includes('imagegen_annotated_review_artifact_missing'));
 });
 
-test('QA Loop visual evidence gate accepts real Chrome screenshot and Codex App gpt-image-2 review files', async () => {
+test('QA Loop visual evidence gate accepts real Chrome screenshot and Codex App gpt-image-2.5-sunburst review files', async () => {
   const root = await createHermeticProjectRoot({ fixtureName: 'qa-loop-visual-evidence-pass' });
-  const prepared = await runSksInRoot(root, ['qa-loop', 'prepare', 'fixture UI QA with Chrome Extension screenshot and gpt-image-2 annotated review image', '--json']);
+  const prepared = await runSksInRoot(root, ['qa-loop', 'prepare', 'fixture UI QA with Chrome Extension screenshot and gpt-image-2.5-sunburst annotated review image', '--json']);
   const missionDir = path.join(root, '.sneakoscope', 'missions', prepared.mission_id);
   const sourceImage = path.join(root, 'test', 'fixtures', 'images', 'one-by-one.png');
   const screenshot = path.join(missionDir, 'qa-loop', 'chrome-extension-screenshot.png');
-  const review = path.join(missionDir, 'qa-loop', 'gpt-image-2-annotated-review.png');
+  const review = path.join(missionDir, 'qa-loop', 'imagegen-annotated-review.png');
   await fs.copyFile(sourceImage, screenshot);
   await fs.copyFile(sourceImage, review);
   const screenshotSha = await sha256File(screenshot);
@@ -84,13 +84,13 @@ test('QA Loop visual evidence gate accepts real Chrome screenshot and Codex App 
     ui_chrome_extension_screenshot_captured: true,
     ui_chrome_extension_screenshot_artifact: 'qa-loop/chrome-extension-screenshot.png',
     ui_chrome_extension_screenshot_sha256: screenshotSha,
-    gpt_image_2_annotated_review_required: true,
-    gpt_image_2_annotated_review_generated: true,
-    gpt_image_2_annotated_review_artifact: 'qa-loop/gpt-image-2-annotated-review.png',
-    gpt_image_2_annotated_review_sha256: reviewSha,
-    gpt_image_2_annotated_review_model: 'gpt-image-2',
-    gpt_image_2_annotated_review_provider: 'Codex App $imagegen',
-    gpt_image_2_source_screenshot_artifact: 'qa-loop/chrome-extension-screenshot.png',
+    imagegen_annotated_review_required: true,
+    imagegen_annotated_review_generated: true,
+    imagegen_annotated_review_artifact: 'qa-loop/imagegen-annotated-review.png',
+    imagegen_annotated_review_sha256: reviewSha,
+    imagegen_annotated_review_model: 'gpt-image-2.5-sunburst',
+    imagegen_annotated_review_provider: 'Codex App $imagegen',
+    imagegen_source_screenshot_artifact: 'qa-loop/chrome-extension-screenshot.png',
     corrective_loop_enabled: true,
     safe_remediation_required: true,
     unresolved_findings: 0,
@@ -110,13 +110,13 @@ test('QA Loop visual evidence gate accepts real Chrome screenshot and Codex App 
       width: 1,
       height: 1
     },
-    gpt_image_2_annotated_review: {
+    imagegen_annotated_review: {
       required: true,
       status: 'generated',
-      model: 'gpt-image-2',
+      model: 'gpt-image-2.5-sunburst',
       provider: 'Codex App $imagegen',
       source_screenshot_artifact: 'qa-loop/chrome-extension-screenshot.png',
-      artifact_path: 'qa-loop/gpt-image-2-annotated-review.png',
+      artifact_path: 'qa-loop/imagegen-annotated-review.png',
       sha256: reviewSha,
       width: 1,
       height: 1

@@ -17,7 +17,7 @@ await fs.writeFile(png, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcS
 const oldCwd = process.cwd()
 process.chdir(subdir)
 try {
-  const result = await mod.generateGptImage2CalloutReview({
+  const result = await mod.generateImagegenCalloutReview({
     mission_id: 'M-subdir',
     source_screen_id: 'screen-1',
     source_image_path: png,

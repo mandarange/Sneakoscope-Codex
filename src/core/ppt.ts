@@ -1,3 +1,4 @@
+import { IMAGEGEN_MODEL, IMAGEGEN_MODEL_DOC_URL } from './imagegen/imagegen-model-policy.js';
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { nowIso, readJson, sha256, writeJsonAtomic, writeTextAtomic } from './fsx.js';
@@ -68,11 +69,11 @@ function hasExternalFactCue(text: any = '') {
 }
 
 function hasVisualReviewCue(text: any = '') {
-  return /(gpt-image-2|imagegen|image review|visual review|i2i|toss|토스|시니어\s*디자이너|디자인\s*리뷰|시각\s*리뷰|이미지\s*리뷰|슬라이드별\s*리뷰)/i.test(String(text || ''));
+  return /(gpt-image(?:-\d+(?:\.\d+)?)?|imagegen|image review|visual review|i2i|toss|토스|시니어\s*디자이너|디자인\s*리뷰|시각\s*리뷰|이미지\s*리뷰|슬라이드별\s*리뷰)/i.test(String(text || ''));
 }
 
 function hasImageAssetCue(text: any = '') {
-  return /(image asset|visual asset|generated image|hero image|illustration|photo|photorealistic|mockup|product shot|background image|gpt-image-2|imagegen|이미지\s*리소스|이미지\s*자산|이미지\s*생성|사진|일러스트|히어로\s*이미지|비주얼\s*자산|배경\s*이미지|목업|제품\s*컷)/i.test(String(text || ''));
+  return /(image asset|visual asset|generated image|hero image|illustration|photo|photorealistic|mockup|product shot|background image|gpt-image(?:-\d+(?:\.\d+)?)?|imagegen|이미지\s*리소스|이미지\s*자산|이미지\s*생성|사진|일러스트|히어로\s*이미지|비주얼\s*자산|배경\s*이미지|목업|제품\s*컷)/i.test(String(text || ''));
 }
 
 function safeFileSlug(value: any = '') {
@@ -375,7 +376,7 @@ export function planPptImageAssets(contract: any = {}, storyboard: any = buildPp
       role: index === 0 ? 'hero_visual' : 'supporting_visual',
       status: 'planned',
       prompt,
-      model: 'gpt-image-2',
+      model: IMAGEGEN_MODEL,
       size: cleanText(contract.answers?.PRESENTATION_IMAGE_SIZE, '1536x1024'),
       quality: cleanText(contract.answers?.PRESENTATION_IMAGE_QUALITY, 'medium'),
       output_format: 'png',
@@ -384,10 +385,10 @@ export function planPptImageAssets(contract: any = {}, storyboard: any = buildPp
       imagegen_invocation: {
         required_skill: 'imagegen',
         command: '$imagegen',
-        surface: 'codex_app_builtin_image_generation',
+        surface: 'selected_model_capable_image_provider',
         evidence_source: CODEX_IMAGEGEN_EVIDENCE_SOURCE,
-        model: 'gpt-image-2',
-        tool_mode: 'built_in_image_gen',
+        model: IMAGEGEN_MODEL,
+        tool_mode: 'explicit_image_generation_model',
         prompt,
         save_policy: `After generation, move or copy the selected output into ${relPath} and record output_path.`
       }
@@ -423,6 +424,7 @@ async function existingGeneratedImageAssets(dir: any, existing: any = {}) {
 
 function pptImageAssetEvidenceBlockers(asset: any = {}, evidence: any = {}) {
   const blockers: string[] = [];
+  if (asset.model !== IMAGEGEN_MODEL) blockers.push('ppt_image_asset_model_not_current');
   const evidenceClass = String(asset.evidence_class || '');
   const outputSource = String(asset.output_source || '');
   const outputSha = String(asset.output_sha256 || '');
@@ -474,7 +476,7 @@ export async function buildPptImageAssetLedger(dir: any, contract: any = {}, sto
   if (pending.length > 0 && required && imagegenDisabled) {
     blockers.push('imagegen_disabled_by_SKS_PPT_IMAGEGEN');
   } else if (pending.length > 0 && required) {
-    blockers.push('missing_codex_app_imagegen_gpt_image_2_asset_evidence');
+    blockers.push('missing_codex_app_imagegen_asset_evidence');
   }
   if (required) blockers.push(...evidenceBlockers);
   const assets = [
@@ -491,19 +493,19 @@ export async function buildPptImageAssetLedger(dir: any, contract: any = {}, sto
     created_at: nowIso(),
     contract_hash: contract.sealed_hash || null,
     required,
-    policy: 'Required PPT image resources must be generated with gpt-image-2 through the selected Codex provider and recorded as real output files; unrelated API fallback, partial preview frames, fabricated files, and placeholder ledgers do not satisfy this gate.',
+    policy: ("Required PPT image resources must be generated with " + IMAGEGEN_MODEL + " through the selected Codex provider and recorded as real output files; unrelated API fallback, partial preview frames, fabricated files, and placeholder ledgers do not satisfy this gate."),
     codex_app_imagegen_doc: CODEX_APP_IMAGE_GENERATION_DOC_URL,
     imagegen_execution: {
       required_skill: 'imagegen',
       command: '$imagegen',
       surface: 'codex_app_builtin_image_generation',
       evidence_source: CODEX_IMAGEGEN_EVIDENCE_SOURCE,
-      model: 'gpt-image-2',
+      model: IMAGEGEN_MODEL,
       tool_mode: 'built_in_image_gen',
       output_requirement: 'Generated raster files must be copied into the mission assets/ directory and referenced by output_path.'
     },
     provider: {
-      model: 'gpt-image-2',
+      model: IMAGEGEN_MODEL,
       surface: 'codex_app_$imagegen',
       output: 'codex_app_generated_raster_file',
       imagegen_disabled: imagegenDisabled
@@ -524,9 +526,9 @@ export async function buildPptImageAssetLedger(dir: any, contract: any = {}, sto
     passed,
     notes: [
       required
-        ? 'The sealed PPT contract requires generated image assets; missing completed gpt-image-2 output from the selected Codex provider blocks the PPT gate.'
+        ? ("The sealed PPT contract requires generated image assets; missing completed " + IMAGEGEN_MODEL + " output from the selected Codex provider blocks the PPT gate.")
         : 'No generated image asset requirement was detected; assets remain optional and are not generated to avoid unrequested API cost.',
-      'Generate each blocked asset with gpt-image-2 through Codex App $imagegen or the selected codex-lb provider, place the completed raster under assets/, then rerun the PPT build so existing generated files are verified.'
+      ("Generate each blocked asset with " + IMAGEGEN_MODEL + " through Codex App $imagegen or the selected codex-lb provider, place the completed raster under assets/, then rerun the PPT build so existing generated files are verified.")
     ]
   };
 }
@@ -558,18 +560,18 @@ export function buildPptReviewPolicy(contract: any = {}, storyboard: any = build
       P3: 'record as accepted residual unless cheap and local'
     },
     visual_review: {
-      model: 'gpt-image-2',
+      model: IMAGEGEN_MODEL,
       required_skill: 'imagegen',
       command: '$imagegen',
       surface: 'codex_app_builtin_image_generation',
       evidence_source: CODEX_IMAGEGEN_EVIDENCE_SOURCE,
       persona: '대한민국 TOSS UI/UX 시니어 총괄 디자이너',
       codex_app_imagegen_doc: CODEX_APP_IMAGE_GENERATION_DOC_URL,
-      model_doc: 'https://developers.openai.com/api/docs/models/gpt-image-2',
+      model_doc: IMAGEGEN_MODEL_DOC_URL,
       mode: explicitlyRequired ? 'required_by_contract' : 'codex_app_when_available',
       required_for_gate: explicitlyRequired,
       evidence_artifact: PPT_REVIEW_LEDGER_ARTIFACT,
-      loop_shape: 'Export each slide/page image, run image-to-image visual critique through Codex App imagegen/gpt-image-2 when available, analyze the returned review image with LLM vision, convert findings into issue rows, patch HTML, and rerun only failed/changed/high-risk slides.'
+      loop_shape: ("Export each slide/page image, run image-to-image visual critique through the selected model-capable image provider: " + IMAGEGEN_MODEL + " when available, analyze the returned review image with LLM vision, convert findings into issue rows, patch HTML, and rerun only failed/changed/high-risk slides.")
     },
     deterministic_review: {
       always_run: true,
@@ -606,7 +608,7 @@ export function buildPptReviewLedger({ contract = {}, storyboard, styleTokens, f
   }
   if (imageAssetLedger?.passed !== true) {
     issues.push(reviewIssue({
-      id: 'gpt-image-2-assets-missing',
+      id: 'imagegen-assets-missing',
       severity: imageAssetLedger?.required ? 'P1' : 'P3',
       title: 'Generated image assets not complete',
       detail: imageAssetLedger?.required
@@ -614,7 +616,7 @@ export function buildPptReviewLedger({ contract = {}, storyboard, styleTokens, f
         : 'Optional generated image assets were planned but not generated.',
       source: 'ppt_image_asset_ledger',
       action: imageAssetLedger?.required
-        ? 'Generate the required assets with gpt-image-2 through the selected Codex provider, place the completed raster files under assets/, then rerun sks ppt build.'
+        ? ("Generate the required assets with " + IMAGEGEN_MODEL + " through the selected Codex provider, place the completed raster files under assets/, then rerun sks ppt build.")
         : 'Generate only if the sealed PPT contract needs image resources.'
     }));
   }
@@ -653,10 +655,10 @@ export function buildPptReviewLedger({ contract = {}, storyboard, styleTokens, f
     issues.push(reviewIssue({
       id: 'codex-app-imagegen-review-missing',
       severity: 'P1',
-      title: 'Required gpt-image-2 visual review evidence missing',
-      detail: 'The sealed PPT contract explicitly requested image/gpt-image-2 visual critique, but no completed selected-provider imagegen review evidence was supplied.',
+      title: ("Required " + IMAGEGEN_MODEL + " visual review evidence missing"),
+      detail: ("The sealed PPT contract explicitly requested image/" + IMAGEGEN_MODEL + " visual critique, but no completed selected-provider imagegen review evidence was supplied."),
       source: 'codex_app_imagegen_gate',
-      action: 'Invoke gpt-image-2 through Codex App $imagegen or the selected codex-lb provider, run the bounded slide review loop, and record evidence paths before final output.'
+      action: ("Invoke " + IMAGEGEN_MODEL + " through Codex App $imagegen or the selected codex-lb provider, run the bounded slide review loop, and record evidence paths before final output.")
     }));
   }
   const blocking = issues.filter((issue: any) => ['P0', 'P1'].includes(issue.severity));
@@ -688,7 +690,7 @@ export function buildPptReviewLedger({ contract = {}, storyboard, styleTokens, f
     },
     passed: blocking.length === 0 && overallScore >= 0.88,
     notes: [
-      'This ledger is an executable deterministic QA pass, not a fake gpt-image-2 result.',
+      ("This ledger is an executable deterministic QA pass, not a fake " + IMAGEGEN_MODEL + " result."),
       'When image review is required, missing completed selected-provider imagegen evidence blocks the gate instead of being simulated.'
     ]
   };
@@ -1064,7 +1066,7 @@ export function defaultPptGate(contract: any = {}) {
       'Do not pass this gate until the HTML/PDF artifact work is actually complete or the PDF export is explicitly deferred with evidence.',
       'Audience strategy must stay linked to STP, target pain points, proof, and three or more aha moments.',
       'Fact ledger must keep user input separate from verified web evidence and block unsupported critical external claims.',
-      'Image asset ledger must require completed gpt-image-2 output from the selected Codex provider for required resources, or block with evidence instead of faking files.',
+      ("Image asset ledger must require completed " + IMAGEGEN_MODEL + " output from the selected Codex provider for required resources, or block with evidence instead of faking files."),
       'Review loop must be bounded by score thresholds, P0/P1 issue count, max passes, and explicit imagegen evidence requirements when requested.',
       'Preserve the editable HTML source under source-html/ and remove PPT-only temporary build files before completion.',
       'Record independent PPT build phases in ppt-parallel-report.json so research/design/render work can stay parallel-friendly.'

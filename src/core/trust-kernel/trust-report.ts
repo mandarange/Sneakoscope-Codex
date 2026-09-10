@@ -140,7 +140,7 @@ export function buildTrustReport({ proof = {}, evidenceIndex = {}, contract = {}
     mad_sks: madSks.summary,
     source_intelligence: sourceIntelligence.summary,
     wrongness: wrongness.summary,
-    blockers: issues.filter((issue: any) => /missing|blocked|stale|secret|not_passed|cannot_verify|text_only|mock_gpt_image_2_fixture/i.test(issue))
+    blockers: issues.filter((issue: any) => /missing|blocked|stale|secret|not_passed|cannot_verify|text_only|mock_imagegen_fixture/i.test(issue))
   };
 }
 
@@ -197,11 +197,11 @@ function imageUxReviewTrust(proof: any = {}) {
   if (!evidence) return { issues: [], summary: { required: false, status: 'not_required' } };
   const issues: string[] = [];
   const referenceOnly = evidence.reference_only === true && evidence.status === 'verified_partial';
-  if (Number(evidence.generated_images_total || 0) > 0 && Number(evidence.generated_gpt_image_2_callout_images_count || 0) === 0) {
-    issues.push('mock_gpt_image_2_fixture_cannot_be_real_verified');
+  if (Number(evidence.generated_images_total || 0) > 0 && Number(evidence.generated_imagegen_callout_images_count || 0) === 0) {
+    issues.push('mock_imagegen_fixture_cannot_be_real_verified');
   }
   if ((evidence.blockers || []).includes('ux_review_text_only_fallback')) issues.push('text_only_ux_review_cannot_be_verified');
-  if (!referenceOnly && (evidence.blockers || []).includes('missing_generated_annotated_review_images')) issues.push('gpt_image_2_callout_image_missing');
+  if (!referenceOnly && (evidence.blockers || []).includes('missing_generated_annotated_review_images')) issues.push('imagegen_callout_image_missing');
   if (evidence.callout_extraction_schema_status !== 'valid') issues.push('ux_review_extraction_schema_invalid');
   if (evidence.recapture_re_review_status === 'blocked') issues.push('ux_review_recapture_re_review_missing');
   if ((evidence.blockers || []).includes('callout_extraction_pending')) issues.push('ux_review_callout_extraction_pending');
@@ -213,7 +213,7 @@ function imageUxReviewTrust(proof: any = {}) {
       status: evidence.status || 'not_verified',
       reference_only: referenceOnly,
       source_screenshots_count: evidence.source_screenshots_count || 0,
-      generated_gpt_image_2_callout_images_count: evidence.generated_gpt_image_2_callout_images_count || 0,
+      generated_imagegen_callout_images_count: evidence.generated_imagegen_callout_images_count || 0,
       generated_images_total: evidence.generated_images_total || 0,
       callout_extraction_schema_status: evidence.callout_extraction_schema_status || 'unknown',
       open_p0_p1_count: evidence.open_p0_p1_count || 0,
@@ -231,7 +231,7 @@ function pptReviewTrust(proof: any = {}) {
   const issues: string[] = [];
   const blockers = evidence.blockers || [];
   if (evidence.slide_export_status !== 'exported') issues.push('ppt_slide_export_missing');
-  if (Number(evidence.generated_slide_callout_images_count || 0) === 0) issues.push('ppt_gpt_image_2_callout_image_missing');
+  if (Number(evidence.generated_slide_callout_images_count || 0) === 0) issues.push('ppt_imagegen_callout_image_missing');
   if (evidence.slide_issue_extraction_status !== 'valid') issues.push('ppt_slide_issue_extraction_pending');
   if (evidence.patch_requested === true && evidence.recheck_status !== 'complete') issues.push('ppt_patch_without_reexport_rereview');
   if (blockers.includes('ppt_text_only_review_fallback')) issues.push('ppt_text_only_review_cannot_be_verified');

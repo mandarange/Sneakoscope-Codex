@@ -6,7 +6,7 @@ Core commands:
 
 ```sh
 sks wiki image-ingest screen.png --source codex-computer-use --json
-sks wiki anchor-add --image-id screen-home-before --bbox 120,240,360,80 --label "CTA contrast issue" --source gpt-image-2 --evidence image-ux-generated-review-ledger.json --json
+sks wiki anchor-add --image-id screen-home-before --bbox 120,240,360,80 --label "CTA contrast issue" --source gpt-image-2.5-sunburst --evidence image-ux-generated-review-ledger.json --json
 sks wiki relation-add --type before_after --before screen-home-before --after screen-home-after --anchors ux-callout-001 --json
 sks wiki image-link-proof latest --json
 ```
@@ -17,4 +17,4 @@ Validation fails when anchors point at missing images, bbox values exceed image 
 
 In SKS 1.0.8, UX-Review writes source/generated/fixed image relations such as `generated_callout_review_of`, `issue_detected_in`, `fix_attempt_for_issue`, `after_screenshot_of`, `re_review_of`, and `wrong_callout`. Validators reject unresolved image refs, duplicate relations, stale source screenshots, and bbox coordinates outside image dimensions.
 
-Mock fixtures are allowed for release selftests only when they are marked as mock or `verified_partial`. Real visual completion still requires real screenshots or generated gpt-image-2 callout evidence, valid image hashes, anchors inside image bounds, and before/after relations for fix claims.
+Mock fixtures are allowed for release selftests only when they are marked as mock or `verified_partial`. Real visual completion still requires real screenshots or generated gpt-image-2.5-sunburst callout evidence, valid image hashes, anchors inside image bounds, and before/after relations for fix claims.

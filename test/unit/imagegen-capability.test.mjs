@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { detectImagegenCapability } from '../../dist/core/imagegen/imagegen-capability.js';
 
-test('imagegen capability records gpt-image-2 fidelity policy', async () => {
+test('imagegen capability records gpt-image-2.5-sunburst fidelity policy', async () => {
   const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-imagegen-fake-only-'));
   const capability = await detectImagegenCapability({
     fake: true,
@@ -14,14 +14,14 @@ test('imagegen capability records gpt-image-2 fidelity policy', async () => {
     configText: ''
   });
   assert.equal(capability.ok, true);
-  assert.equal(capability.model, 'gpt-image-2');
+  assert.equal(capability.model, 'gpt-image-2.5-sunburst');
   assert.equal(capability.input_fidelity_must_be_omitted, true);
-  assert.equal(capability.gpt_image_2_input_fidelity_automatic, true);
+  assert.equal(capability.imagegen_input_fidelity_automatic, undefined);
   assert.equal(capability.fake_adapter.available, true);
   assert.equal(capability.fake_adapter.accepted_for_route_readiness, false);
   assert.equal(capability.core_feature, true);
   assert.equal(capability.core_ready, false);
-  assert.equal(capability.codex_app_builtin_output_required, true);
+  assert.equal(capability.current_imagegen_model_required, true);
   assert.equal(capability.capability_detection_is_not_output_proof, true);
   assert.deepEqual(capability.core_blockers, ['codex_app_builtin_imagegen_capability_missing']);
   assert.deepEqual(capability.route_generation_blockers, ['imagegen_capability_missing']);
@@ -38,18 +38,20 @@ remote_control                      stable             false
   // runner its cold start can exceed 1s. This fixture tests feature parsing,
   // so use the production probe budget instead of turning scheduler load into
   // a false missing-capability result.
-  const capability = await withoutCodexImagegenEnv(() => detectImagegenCapability({ codexBin, timeoutMs: 5000 }));
+  const capability = await withoutCodexImagegenEnv(() => detectImagegenCapability({ codexBin, timeoutMs: 5000, desktopBridgeStatus: null }));
   assert.equal(capability.codex_app.available, true);
   assert.equal(capability.codex_app.official_surface, '$imagegen');
   assert.equal(capability.codex_app.generated_output_required_for_full_verification, true);
-  assert.equal(capability.core_ready, true);
-  assert.equal(capability.real_generation_available, true);
+  assert.equal(capability.core_ready, false);
+  assert.equal(capability.codex_app.requested_model_supported, false);
+  assert.equal(capability.codex_app.model, 'gpt-image-2');
+  assert.equal(capability.real_generation_available, false);
   assert.equal(capability.real_output_verified_by_capability_check, false);
   assert.equal(capability.openai_images_api.official_codex_app_substitute, false);
   assert.equal(capability.api_fallback_satisfies_codex_app_evidence, false);
   assert.equal(capability.codex_app.detector, 'codex_features_list');
   assert.match(String(capability.codex_app.raw), /image_generation\s+stable\s+true/);
-  assert.equal(capability.supported_workflows.ux_review_callouts, true);
+  assert.equal(capability.supported_workflows.ux_review_callouts, false);
 });
 
 test('imagegen capability plain feature reader respects disabled value', async () => {
@@ -109,10 +111,10 @@ test('verified Desktop Bridge provider capability does not substitute for Codex 
   assert.equal(capability.codex_lb.capability_evidence.state, 'verified');
   assert.equal(capability.openai_images_api.available, false);
   assert.equal(capability.openai_images_api.codex_lb_proxy.accepted_for_core_readiness, false);
-  assert.equal(capability.core_ready, false);
-  assert.deepEqual(capability.core_blockers, ['codex_app_builtin_imagegen_capability_missing']);
-  assert.deepEqual(capability.route_generation_blockers, ['imagegen_capability_missing']);
-  assert.deepEqual(capability.blockers, ['codex_app_builtin_imagegen_capability_missing', 'imagegen_capability_missing']);
+  assert.equal(capability.core_ready, true);
+  assert.deepEqual(capability.core_blockers, []);
+  assert.deepEqual(capability.route_generation_blockers, []);
+  assert.deepEqual(capability.blockers, []);
 });
 
 test('imagegen capability records explicit OpenAI API fallback without satisfying core Codex App readiness', async () => {
@@ -179,7 +181,7 @@ function desktopBridgeImagegenStatus() {
         default_provider_id: 'codex-lb',
         fallback: 'none',
         model_routes: {
-          'gpt-image-2': { provider_id: 'codex-lb', upstream_model: 'gpt-image-2' }
+          'gpt-image-2.5-sunburst': { provider_id: 'codex-lb', upstream_model: 'gpt-image-2.5-sunburst' }
         }
       }
     }

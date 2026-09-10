@@ -1,3 +1,4 @@
+import { IMAGEGEN_MODEL, CODEX_BUILTIN_IMAGEGEN_MODEL } from './imagegen/imagegen-model-policy.js';
 import path from 'node:path';
 import os from 'node:os';
 import fsp from 'node:fs/promises';
@@ -475,7 +476,7 @@ function codexNativeSksMenuStatus() {
 export function codexAppGuidance({ appInstalled, codex, mcpList, featureList, requiredFeatureFlags = {}, requiredFeatureFlagsOk = true, defaultPlugins = { ok: true, missing_enabled: [] }, productDesignPlugin = null, pluginSkillShadows = { ok: true, blocking: [] }, fastModeConfig = { ok: true, blockers: [] }, providerModelUi = null, nativeSksMenu = null, gitActions = { ok: true, blockers: [] }, imageGenerationReady, inAppBrowserReady, browserUseFeatureReady, computerUseReady, browserUseReady, browserToolReady, computerUseMcpListed, browserUseMcpListed, chromeExtension, remoteControl }: any) {
   const lines: any[] = [];
   if (!appInstalled) {
-    lines.push('Install and open Codex App for first-party MCP/plugin tools. Base Codex CLI flows remain available, but Codex Computer Use and imagegen/gpt-image-2 evidence will be unavailable until Codex App is ready.');
+    lines.push(("Install and open Codex App for first-party MCP/plugin tools. Base Codex CLI flows remain available, but Codex Computer Use requires the App; imagegen/" + IMAGEGEN_MODEL + " evidence will be unavailable until Codex App is ready."));
     lines.push(`Docs: ${CODEX_APP_DOCS_URL}`);
   }
   if (!codex?.bin) lines.push('Install Codex CLI too: npm i -g @openai/codex, or set SKS_CODEX_BIN.');
@@ -555,9 +556,9 @@ export function codexAppGuidance({ appInstalled, codex, mcpList, featureList, re
     lines.push('Codex Chrome Extension is ready; SKS web/browser/webapp QA and UX review should use it before any other web surface.');
   }
   if (imageGenerationReady) {
-    lines.push('Image generation is enabled; required raster assets and generated image-review evidence must invoke $imagegen/gpt-image-2 and record real output.');
+    lines.push(("The built-in image tool is enabled. Current-model image work requires a provider that explicitly selects " + IMAGEGEN_MODEL + " and record real output."));
   } else if (appInstalled || codex?.bin) {
-    lines.push('Codex image_generation was not visible from `codex features list`. Required imagegen/gpt-image-2 evidence must stay blocked or unverified until $imagegen is available in Codex App.');
+    lines.push(("Codex image_generation was not visible from `codex features list`. Required imagegen/" + IMAGEGEN_MODEL + " evidence must stay blocked or unverified until $imagegen is available in Codex App."));
     lines.push('Run: sks doctor --fix to attempt Codex CLI/App image_generation repair, then rerun the blocked visual route.');
   }
   if (computerUseReady && !computerUseMcpListed) {
@@ -570,7 +571,7 @@ export function codexAppGuidance({ appInstalled, codex, mcpList, featureList, re
   if (browserUseReady && !browserUseMcpListed) {
     lines.push('Browser Use plugin files are installed, but `codex mcp list` does not list a browser-use MCP server. Treat Browser Use as plugin-scoped, not as SKS browser verification evidence.');
   }
-  if (!lines.length) lines.push('Codex App, Codex CLI, Chrome Extension, native Computer Use, Browser tooling, and image generation checks look ready. Web UI E2E uses the Chrome Extension path; native non-web visual evidence uses Computer Use; generated image evidence still requires $imagegen/gpt-image-2 output.');
+  if (!lines.length) lines.push(("Codex App, Codex CLI, Chrome Extension, native Computer Use, Browser tooling, and built-in image feature checks look configured. Web UI E2E uses the Chrome Extension path; native non-web visual evidence uses Computer Use; generated image evidence still requires $imagegen/" + IMAGEGEN_MODEL + " output."));
   return lines;
 }
 
@@ -592,7 +593,7 @@ export function formatCodexAppStatus(status: any, { includeRaw = false }: any = 
     `Chrome Ext: ${status.chrome_extension?.ok ? 'ok' : `setup ${(status.chrome_extension?.blockers || []).join(', ') || 'required'}`}`,
     `Computer Use:${status.mcp.has_computer_use ? status.mcp.computer_use_source === 'plugin_cache' ? ' installed (verify @Computer in thread)' : ' ok' : ' missing'}`,
     `Browser:     ${status.features?.browser_tool_ready ? `ok (${status.features.browser_tool_source})` : status.mcp.has_browser_use ? status.mcp.browser_use_source === 'plugin_cache' ? 'installed (plugin scoped)' : 'ok' : 'missing'}`,
-    `Image Gen:   ${status.features?.image_generation ? 'ok ($imagegen/gpt-image-2)' : status.features?.checked ? 'missing' : 'not checked'}`,
+    `Image Gen:   ${status.features?.image_generation ? (`enabled (${CODEX_BUILTIN_IMAGEGEN_MODEL}; ${IMAGEGEN_MODEL} provider unverified)`) : status.features?.checked ? 'missing' : 'not checked'}`,
     `Ready:       ${status.ok ? 'yes' : 'no'}`,
     '',
     ...status.guidance.map((line: any) => `- ${line}`)

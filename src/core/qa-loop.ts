@@ -1,3 +1,4 @@
+import { IMAGEGEN_MODEL } from './imagegen/imagegen-model-policy.js';
 import path from 'node:path';
 import { exists, nowIso, readJson, readText, writeJsonAtomic, writeTextAtomic, PACKAGE_VERSION } from './fsx.js';
 import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_CHROME_EXTENSION_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_IMAGEGEN_REQUIRED_POLICY, CODEX_IN_APP_BROWSER_EVIDENCE_SOURCE, CODEX_WEB_VERIFICATION_EVIDENCE_SOURCE, CODEX_WEB_VERIFICATION_POLICY, type QaInteractionSurface, evidenceMentionsForbiddenBrowserAutomation, evidenceMentionsForbiddenWebComputerUseEvidence } from './routes.js';
@@ -14,7 +15,7 @@ export const QA_LOOP_VISUAL_EVIDENCE_ARTIFACT = 'qa-loop/visual-evidence.json';
 const QA_REPORT_SUFFIX = 'qa-report.md';
 const UI_SURFACE_ROUTER_ACK = 'use_codex_surface_router_browser_chrome_computer_no_synthetic_evidence';
 const LEGACY_UI_CHROME_EXTENSION_FIRST_ACK = 'use_codex_chrome_extension_first_no_computer_use_for_web_ui_or_mark_unverified';
-const GPT_IMAGE_2_ANNOTATED_REVIEW_REQUIRED_ACK = 'yes_gpt_image_2_annotated_review';
+const IMAGEGEN_ANNOTATED_REVIEW_REQUIRED_ACK = 'yes_imagegen_annotated_review';
 const IMAGE_FILE_RE = /\.(png|jpe?g|webp|gif)$/i;
 
 export const QA_NATIVE_AGENT_PERSONAS = Object.freeze([
@@ -122,8 +123,8 @@ function lowerPrompt(prompt: any = '') {
   return promptText(prompt).toLowerCase();
 }
 
-function qaPromptWantsGptImage2AnnotatedReview(prompt: any = '') {
-  return /(gpt-image-2|gpt\s*image\s*2|imagegen|\$imagegen|annotated\s+review|annotated\s+image|callout|generated\s+review\s+image|이미지\s*리뷰|생성\s*이미지|주석\s*이미지|콜아웃)/i.test(promptText(prompt));
+function qaPromptWantsImagegenAnnotatedReview(prompt: any = '') {
+  return /(gpt-image(?:-\d+(?:\.\d+)?)?|gpt\s*image|imagegen|\$imagegen|annotated\s+review|annotated\s+image|callout|generated\s+review\s+image|이미지\s*리뷰|생성\s*이미지|주석\s*이미지|콜아웃)/i.test(promptText(prompt));
 }
 
 function firstUrl(prompt: any = '') {
@@ -170,14 +171,14 @@ export function inferQaLoopAnswers(prompt: any = '') {
   const local = environment === 'local_dev_server';
   const login = loginPolicyFromPrompt(text);
   const scope = qaScopeFromPrompt(text);
-  const wantsGptImage2Review = isUiScope(scope) && qaPromptWantsGptImage2AnnotatedReview(text);
+  const wantsImagegenReview = isUiScope(scope) && qaPromptWantsImagegenAnnotatedReview(text);
   const acceptance = [
     '앱 첫 화면 또는 지정된 대상이 정상 로드된다.',
     '주요 내비게이션과 핵심 화면 진입에서 콘솔/화면상 치명 오류가 없다.',
     '검증하지 못한 UI/API 범위는 통과로 주장하지 않고 QA 리포트에 남긴다.'
   ];
   if (isUiScope(scope)) acceptance.push('UI E2E 통과 증거는 surface router가 고른 @Browser/@Chrome/@Computer 실제 action·observation ledger와 필요한 screenshot/hash를 기록해야 한다.');
-  if (wantsGptImage2Review) acceptance.push('gpt-image-2 annotated review image가 필요한 경우 실제 Codex App $imagegen/gpt-image-2 출력 파일 path, sha256, model, provider를 기록해야 한다.');
+  if (wantsImagegenReview) acceptance.push(("" + IMAGEGEN_MODEL + " annotated review image가 필요한 경우 실제 Selected image provider: " + IMAGEGEN_MODEL + " 출력 파일 path, sha256, model, provider를 기록해야 한다."));
   return {
     GOAL_PRECISE: text ? `현재 요청 범위에서 QA-LOOP를 안전하게 실행한다: ${text}` : '현재 로컬 개발 환경에서 핵심 사용자 흐름을 안전하게 QA한다.',
     QA_SCOPE: scope,
@@ -191,7 +192,7 @@ export function inferQaLoopAnswers(prompt: any = '') {
     ...login,
     CREDENTIAL_STORAGE_ACK: 'never_store_credentials_in_artifacts_or_wiki',
     UI_CHROME_EXTENSION_ACK: UI_SURFACE_ROUTER_ACK,
-    QA_VISUAL_REVIEW_IMAGEGEN_REQUIRED: wantsGptImage2Review ? GPT_IMAGE_2_ANNOTATED_REVIEW_REQUIRED_ACK : 'not_required',
+    QA_VISUAL_REVIEW_IMAGEGEN_REQUIRED: wantsImagegenReview ? IMAGEGEN_ANNOTATED_REVIEW_REQUIRED_ACK : 'not_required',
     SUBAGENT_MODE_ALLOWED: 'no_parent_only',
     MAX_QA_CYCLES: String(DEFAULT_QA_MAX_CYCLES),
     ACCEPTANCE_CRITERIA: acceptance,
@@ -319,20 +320,20 @@ export function qaApiRequired(a: any = {}) {
   return a.QA_SCOPE === 'all_available' ? hasApiTarget(a) : isApiScope(a.QA_SCOPE);
 }
 
-export function qaGptImage2AnnotatedReviewRequired(contractOrAnswers: any = {}, prompt: any = '') {
+export function qaImagegenAnnotatedReviewRequired(contractOrAnswers: any = {}, prompt: any = '') {
   const answers = contractOrAnswers?.answers || contractOrAnswers || {};
   if (!qaUiRequired(answers)) return false;
-  const explicit = String(answers.QA_VISUAL_REVIEW_IMAGEGEN_REQUIRED || answers.GPT_IMAGE_2_ANNOTATED_REVIEW_REQUIRED || '').trim();
-  if (/^(yes|true|required|yes_gpt_image_2_annotated_review)$/i.test(explicit)) return true;
+  const explicit = String(answers.QA_VISUAL_REVIEW_IMAGEGEN_REQUIRED || '').trim();
+  if (/^(yes|true|required|yes_imagegen_annotated_review)$/i.test(explicit)) return true;
   if (/^(no|false|not_required|none)$/i.test(explicit)) return false;
-  return qaPromptWantsGptImage2AnnotatedReview(`${prompt || ''}\n${answers.GOAL_PRECISE || ''}\n${JSON.stringify(answers.ACCEPTANCE_CRITERIA || [])}`);
+  return qaPromptWantsImagegenAnnotatedReview(`${prompt || ''}\n${answers.GOAL_PRECISE || ''}\n${JSON.stringify(answers.ACCEPTANCE_CRITERIA || [])}`);
 }
 
 export function defaultQaGate(contract: any = {}, opts: any = {}) {
   const a = contract.answers || {};
   const uiRequired = qaUiRequired(a);
   const apiRequired = qaApiRequired(a);
-  const gptImage2ReviewRequired = qaGptImage2AnnotatedReviewRequired(contract, contract.prompt);
+  const imagegenReviewRequired = qaImagegenAnnotatedReviewRequired(contract, contract.prompt);
   const reportFile = opts.reportFile || qaReportFilename();
   const corrective = a.QA_CORRECTIVE_POLICY !== 'report_only_no_code_changes';
   const selectedSurface = opts.qaRuntime?.surface?.selected_surface || null;
@@ -364,12 +365,12 @@ export function defaultQaGate(contract: any = {}, opts: any = {}) {
     ui_chrome_extension_screenshot_captured: !uiRequired,
     ui_chrome_extension_screenshot_artifact: null,
     ui_chrome_extension_screenshot_sha256: null,
-    gpt_image_2_annotated_review_required: gptImage2ReviewRequired,
-    gpt_image_2_annotated_review_generated: !gptImage2ReviewRequired,
-    gpt_image_2_annotated_review_artifact: null,
-    gpt_image_2_annotated_review_sha256: null,
-    gpt_image_2_annotated_review_model: gptImage2ReviewRequired ? null : 'not_required',
-    gpt_image_2_annotated_review_provider: gptImage2ReviewRequired ? null : 'not_required',
+    imagegen_annotated_review_required: imagegenReviewRequired,
+    imagegen_annotated_review_generated: !imagegenReviewRequired,
+    imagegen_annotated_review_artifact: null,
+    imagegen_annotated_review_sha256: null,
+    imagegen_annotated_review_model: imagegenReviewRequired ? null : 'not_required',
+    imagegen_annotated_review_provider: imagegenReviewRequired ? null : 'not_required',
     qa_visual_evidence_artifact: QA_LOOP_VISUAL_EVIDENCE_ARTIFACT,
     desktop_app_handoff_required: false,
     desktop_app_handoff_status: 'not_requested',
@@ -433,7 +434,7 @@ export async function writeQaLoopArtifacts(dir: any, mission: any, contract: any
       journey_graph_artifact: 'qa-loop/qa-journey-graph.json',
       gate_artifact: QA_GATE_V2_ARTIFACT
     } : null,
-    safety: { mutation_policy: a.QA_MUTATION_POLICY, deployed_destructive_tests_allowed: 'never', credentials: 'temp_only_never_saved', ui_evidence: 'codex_surface_router_live_action_required_for_ui_e2e', visual_review: 'gpt_image_2_annotated_review_required_when_contract_requests_it' },
+    safety: { mutation_policy: a.QA_MUTATION_POLICY, deployed_destructive_tests_allowed: 'never', credentials: 'temp_only_never_saved', ui_evidence: 'codex_surface_router_live_action_required_for_ui_e2e', visual_review: 'imagegen_annotated_review_required_when_contract_requests_it' },
     checklist
   });
   await writeJsonAtomic(path.join(dir, QA_LOOP_VISUAL_EVIDENCE_ARTIFACT), buildQaLoopVisualEvidenceArtifact(mission, contract));
@@ -457,12 +458,12 @@ export async function ensureQaLoopVisualEvidenceContract(dir: any, mission: any 
     'ui_chrome_extension_screenshot_captured',
     'ui_chrome_extension_screenshot_artifact',
     'ui_chrome_extension_screenshot_sha256',
-    'gpt_image_2_annotated_review_required',
-    'gpt_image_2_annotated_review_generated',
-    'gpt_image_2_annotated_review_artifact',
-    'gpt_image_2_annotated_review_sha256',
-    'gpt_image_2_annotated_review_model',
-    'gpt_image_2_annotated_review_provider',
+    'imagegen_annotated_review_required',
+    'imagegen_annotated_review_generated',
+    'imagegen_annotated_review_artifact',
+    'imagegen_annotated_review_sha256',
+    'imagegen_annotated_review_model',
+    'imagegen_annotated_review_provider',
     'qa_visual_evidence_artifact'
   ];
   const next = { ...gate };
@@ -516,7 +517,7 @@ export async function evaluateQaGate(dir: any) {
     if (evidenceMentionsForbiddenBrowserAutomation({ evidence: gate.evidence, notes: gate.notes, ui_evidence_source: gate.ui_evidence_source })) reasons.push('forbidden_browser_automation_evidence');
     if (selectedSurface !== 'codex_computer_use' && evidenceMentionsForbiddenWebComputerUseEvidence({ evidence: gate.evidence, ui_evidence_source: gate.ui_evidence_source })) reasons.push('computer_use_web_evidence_forbidden');
     reasons.push(...await missingQaLoopVisualEvidence(dir, gate));
-  } else if (gate.gpt_image_2_annotated_review_required === true) {
+  } else if (gate.imagegen_annotated_review_required === true) {
     reasons.push(...await missingQaLoopVisualEvidence(dir, gate));
   }
   if (gate.desktop_app_handoff_required === true) {
@@ -629,7 +630,7 @@ ${JSON.stringify(contract, null, 2)}
 ${imageContractText}${appHandoffText}${executionProfileText}
 VISUAL EVIDENCE CONTRACT:
 - For UI QA, do not mark live UI evidence true unless qa-loop/qa-surface-selection.json selected the correct @Browser/@Chrome/@Computer surface and action/observation ledgers record real user-like actions.
-- If decision-contract.json answers set QA_VISUAL_REVIEW_IMAGEGEN_REQUIRED=${GPT_IMAGE_2_ANNOTATED_REVIEW_REQUIRED_ACK}, use Codex App $imagegen/gpt-image-2 (${CODEX_APP_IMAGE_GENERATION_DOC_URL}) to produce a real generated annotated review image from the selected-surface source screenshot. Record its path, sha256, model=gpt-image-2, provider=Codex App $imagegen, and source_screenshot_artifact in ${QA_LOOP_VISUAL_EVIDENCE_ARTIFACT} and qa-gate.json.
+- If decision-contract.json answers set QA_VISUAL_REVIEW_IMAGEGEN_REQUIRED=${IMAGEGEN_ANNOTATED_REVIEW_REQUIRED_ACK}, use the selected image provider with ${IMAGEGEN_MODEL} (${CODEX_APP_IMAGE_GENERATION_DOC_URL}) to produce a real generated annotated review image from the selected-surface source screenshot. Record its path, sha256, model=${IMAGEGEN_MODEL}, provider=the actual selected provider, and source_screenshot_artifact in ${QA_LOOP_VISUAL_EVIDENCE_ARTIFACT} and qa-gate.json.
 - Do not substitute prose-only critique, Playwright/Selenium/Puppeteer screenshots, static screenshots, plugin cache, placeholder images, fake fixtures, or direct API fallback as full UI visual evidence.
 Previous tail:
 ${String(previous || '').slice(-2500)}
@@ -690,13 +691,13 @@ function qaChecklist(a: any) {
 export function buildQaLoopVisualEvidenceArtifact(mission: any = {}, contract: any = {}) {
   const answers = contract.answers || {};
   const uiRequired = qaUiRequired(answers);
-  const gptImage2ReviewRequired = qaGptImage2AnnotatedReviewRequired(contract, contract.prompt || mission.prompt);
+  const imagegenReviewRequired = qaImagegenAnnotatedReviewRequired(contract, contract.prompt || mission.prompt);
   return {
     schema: 'sks.qa-loop-visual-evidence.v1',
     generated_at: nowIso(),
     mission_id: mission.id || contract.mission_id || null,
     contract_hash: contract.sealed_hash || null,
-    required: uiRequired || gptImage2ReviewRequired,
+    required: uiRequired || imagegenReviewRequired,
     chrome_extension_screenshot: {
       required: uiRequired,
       status: uiRequired ? 'pending' : 'not_required',
@@ -707,17 +708,17 @@ export function buildQaLoopVisualEvidenceArtifact(mission: any = {}, contract: a
       height: null,
       privacy: 'local-only'
     },
-    gpt_image_2_annotated_review: {
-      required: gptImage2ReviewRequired,
-      status: gptImage2ReviewRequired ? 'pending' : 'not_required',
-      model: gptImage2ReviewRequired ? 'gpt-image-2' : 'not_required',
-      provider: gptImage2ReviewRequired ? 'Codex App $imagegen' : 'not_required',
+    imagegen_annotated_review: {
+      required: imagegenReviewRequired,
+      status: imagegenReviewRequired ? 'pending' : 'not_required',
+      model: imagegenReviewRequired ? IMAGEGEN_MODEL : 'not_required',
+      provider: imagegenReviewRequired ? 'Codex App $imagegen' : 'not_required',
       source_screenshot_artifact: null,
       artifact_path: null,
       sha256: null,
       width: null,
       height: null,
-      required_output: gptImage2ReviewRequired ? 'generated_annotated_review_image_with_numbered_callouts_severity_labels_and_visual_marks' : 'not_required',
+      required_output: imagegenReviewRequired ? 'generated_annotated_review_image_with_numbered_callouts_severity_labels_and_visual_marks' : 'not_required',
       docs_url: CODEX_APP_IMAGE_GENERATION_DOC_URL,
       privacy: 'local-only'
     },
@@ -764,43 +765,42 @@ async function missingQaLoopVisualEvidence(dir: any, gate: any = {}) {
     if (screenshotSource !== expectedSource) reasons.push(`ui_chrome_extension_screenshot_source_not_${expectedSource}`);
   }
 
-  const review = visual?.gpt_image_2_annotated_review || {};
-  const gptImage2ReviewRequired = gate.gpt_image_2_annotated_review_required === true || review.required === true;
-  if (gptImage2ReviewRequired) {
-    if (gate.gpt_image_2_annotated_review_generated !== true && !positiveVisualStatus(review.status, ['generated', 'attached', 'verified'])) reasons.push('gpt_image_2_annotated_review_image_missing');
+  const review = visual?.imagegen_annotated_review || {};
+  const imagegenReviewRequired = gate.imagegen_annotated_review_required === true || review.required === true;
+  if (imagegenReviewRequired) {
+    if (gate.imagegen_annotated_review_generated !== true && !positiveVisualStatus(review.status, ['generated', 'attached', 'verified'])) reasons.push('imagegen_annotated_review_image_missing');
     const reviewPath = firstNonEmpty(
-      gate.gpt_image_2_annotated_review_artifact,
       gate.imagegen_annotated_review_artifact,
-      gate.gpt_image_2_annotated_review?.path,
-      gate.gpt_image_2_annotated_review_image?.path,
+      gate.imagegen_annotated_review?.path,
+      gate.imagegen_annotated_review_image?.path,
       review.artifact_path,
       review.path
     );
     const reviewSha = firstNonEmpty(
-      gate.gpt_image_2_annotated_review_sha256,
-      gate.gpt_image_2_annotated_review?.sha256,
-      gate.gpt_image_2_annotated_review_image?.sha256,
+      gate.imagegen_annotated_review_sha256,
+      gate.imagegen_annotated_review?.sha256,
+      gate.imagegen_annotated_review_image?.sha256,
       review.sha256
     );
     const reviewDims = {
-      width: firstNonEmpty(gate.gpt_image_2_annotated_review_width, gate.gpt_image_2_annotated_review?.width, gate.gpt_image_2_annotated_review_image?.width, review.width),
-      height: firstNonEmpty(gate.gpt_image_2_annotated_review_height, gate.gpt_image_2_annotated_review?.height, gate.gpt_image_2_annotated_review_image?.height, review.height)
+      width: firstNonEmpty(gate.imagegen_annotated_review_width, gate.imagegen_annotated_review?.width, gate.imagegen_annotated_review_image?.width, review.width),
+      height: firstNonEmpty(gate.imagegen_annotated_review_height, gate.imagegen_annotated_review?.height, gate.imagegen_annotated_review_image?.height, review.height)
     };
-    if (!reviewPath) reasons.push('gpt_image_2_annotated_review_artifact_missing');
-    else reasons.push(...await imageEvidenceFileReasons(dir, reviewPath, reviewSha, 'gpt_image_2_annotated_review', reviewDims));
-    const model = firstNonEmpty(gate.gpt_image_2_annotated_review_model, gate.gpt_image_2_annotated_review?.model, gate.gpt_image_2_annotated_review_image?.model, review.model, review.provider?.model);
-    if (model !== 'gpt-image-2') reasons.push('gpt_image_2_annotated_review_model_missing');
-    const provider = firstNonEmpty(gate.gpt_image_2_annotated_review_provider, gate.gpt_image_2_annotated_review?.provider, gate.gpt_image_2_annotated_review_image?.provider, review.provider, review.provider_surface);
-    if (!provider || !/codex\s+app|\$imagegen|codex_app_imagegen/i.test(String(provider))) reasons.push('gpt_image_2_annotated_review_provider_not_codex_app_imagegen');
-    if (/mock|fake|fixture|placeholder|text[-_ ]?only|direct\s+api|openai_images_api|responses_image_generation/i.test(String(provider))) reasons.push('gpt_image_2_annotated_review_provider_forbidden');
+    if (!reviewPath) reasons.push('imagegen_annotated_review_artifact_missing');
+    else reasons.push(...await imageEvidenceFileReasons(dir, reviewPath, reviewSha, 'imagegen_annotated_review', reviewDims));
+    const model = firstNonEmpty(gate.imagegen_annotated_review_model, gate.imagegen_annotated_review?.model, gate.imagegen_annotated_review_image?.model, review.model, review.provider?.model);
+    if (model !== IMAGEGEN_MODEL) reasons.push('imagegen_annotated_review_model_missing');
+    const provider = firstNonEmpty(gate.imagegen_annotated_review_provider, gate.imagegen_annotated_review?.provider, gate.imagegen_annotated_review_image?.provider, review.provider, review.provider_surface);
+    if (!provider || !/codex\s+app|\$imagegen|codex_app_imagegen/i.test(String(provider))) reasons.push('imagegen_annotated_review_provider_not_codex_app_imagegen');
+    if (/mock|fake|fixture|placeholder|text[-_ ]?only|direct\s+api|openai_images_api|responses_image_generation/i.test(String(provider))) reasons.push('imagegen_annotated_review_provider_forbidden');
     const sourceScreenshot = firstNonEmpty(
-      gate.gpt_image_2_source_screenshot_artifact,
-      gate.gpt_image_2_annotated_review?.source_screenshot_artifact,
-      gate.gpt_image_2_annotated_review_image?.source_screenshot_artifact,
+      gate.imagegen_source_screenshot_artifact,
+      gate.imagegen_annotated_review?.source_screenshot_artifact,
+      gate.imagegen_annotated_review_image?.source_screenshot_artifact,
       review.source_screenshot_artifact,
       gate.ui_chrome_extension_screenshot_artifact
     );
-    if (!sourceScreenshot) reasons.push('gpt_image_2_source_screenshot_artifact_missing');
+    if (!sourceScreenshot) reasons.push('imagegen_source_screenshot_artifact_missing');
   }
   return [...new Set(reasons)];
 }

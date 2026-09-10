@@ -18,7 +18,7 @@ test('PPT fixture links generated visual evidence to image voxel proof anchors',
     imageId: 'ppt-slide-review',
     bbox: [80, 90, 320, 140],
     label: 'Slide hierarchy callout',
-    source: 'gpt-image-2-annotated-review',
+    source: 'imagegen-annotated-review',
     route: '$PPT',
     evidencePath: 'ppt-review-ledger.json'
   });
@@ -33,5 +33,6 @@ test('PPT fixture links generated visual evidence to image voxel proof anchors',
     claims: [{ id: 'ppt-image-anchor-fixture', status: 'fixture', text: 'PPT fixture proof has image voxel anchor evidence.' }]
   });
   const proofGate = await validateRouteCompletionProof(root, { missionId, route: '$PPT' });
-  assert.equal(proofGate.ok, true);
+  assert.equal(proofGate.ok, false, 'fixture-only anchors cannot prove real generation');
+  assert.ok(proofGate.issues.length > 0);
 });

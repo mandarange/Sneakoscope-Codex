@@ -1,9 +1,10 @@
+import { IMAGEGEN_MODEL } from '../imagegen/imagegen-model-policy.js';
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { nowIso, readJson } from '../fsx.js';
 import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_IMAGEGEN_REQUIRED_POLICY } from '../routes.js';
 import { sha256File, imageDimensions } from '../wiki-image/image-hash.js';
-import { generateGptImage2CalloutReview } from '../image-ux-review/imagegen-adapter.js';
+import { generateImagegenCalloutReview } from '../image-ux-review/imagegen-adapter.js';
 import { imagegenEvidenceClassBlockers, isFullImagegenEvidenceClass, isFullImagegenOutputSource } from '../imagegen/imagegen-evidence.js';
 
 export const PPT_SLIDE_CALLOUT_LEDGER_ARTIFACT = 'ppt-slide-callout-ledger.json';
@@ -33,8 +34,8 @@ export async function generateSlideCalloutReviews({ root, dir, slideExportLedger
     source_slide_image_id: `ppt-source-${slide.slide_id}`,
     source_slide_image_path: slide.image_path,
     prompt: buildSlideCalloutPrompt(slide, { deckContext }),
-    model: 'gpt-image-2',
-    preferred_surface: 'Codex App $imagegen',
+    model: IMAGEGEN_MODEL,
+    preferred_surface: 'Selected provider with explicit image_generation.model',
     required_output: 'generated_annotated_slide_review_image_with_numbered_callouts_severity_labels_flow_arrows_and_corrected_mini_comp',
     codex_app_imagegen_doc: CODEX_APP_IMAGE_GENERATION_DOC_URL
   }));
@@ -84,7 +85,7 @@ export async function generateSlideCalloutReviews({ root, dir, slideExportLedger
     });
   } else if (slides.length > 0) {
     for (const slide of slides) {
-      const generated = await generateGptImage2CalloutReview({
+      const generated = await generateImagegenCalloutReview({
         mission_id: null,
         source_screen_id: slide.slide_id || `slide-${slide.slide_index}`,
         source_image_path: path.resolve(root, slide.image_path),
@@ -106,13 +107,14 @@ export async function generateSlideCalloutReviews({ root, dir, slideExportLedger
         ...await generatedSlideMetadata(root, generated.generated_image_path, slide, {
           mock: fakeGenerated,
           realGenerated: codexGenerated,
-          providerSurface: generated.provider || 'gpt-image-2',
+          providerSurface: generated.provider || IMAGEGEN_MODEL,
+          providerModel: response?.model || null,
           evidenceClass,
           outputSource: response?.output_source || null,
           outputSha256: response?.output_sha256 || response?.output_image_sha256 || null
         }),
         status: 'generated',
-        source: fakeGenerated ? 'mock_fixture' : codexGenerated ? 'real_gpt_image_2_callout' : 'non_codex_api_fallback',
+        source: fakeGenerated ? 'mock_fixture' : codexGenerated ? 'real_imagegen_callout' : 'non_codex_api_fallback',
         callout_extraction_status: fakeGenerated ? 'succeeded' : 'pending',
         callouts: fakeGenerated ? [{
           callout_id: 'fake-slide-callout-1',
@@ -139,8 +141,8 @@ export async function generateSlideCalloutReviews({ root, dir, slideExportLedger
     schema_version: 1,
     created_at: nowIso(),
     provider: {
-      model: 'gpt-image-2',
-      preferred_surface: 'Codex App $imagegen',
+      model: IMAGEGEN_MODEL,
+      preferred_surface: 'Selected provider with explicit image_generation.model',
       codex_app_imagegen_doc: CODEX_APP_IMAGE_GENERATION_DOC_URL,
       required_policy: CODEX_IMAGEGEN_REQUIRED_POLICY
     },
@@ -158,7 +160,7 @@ export async function generateSlideCalloutReviews({ root, dir, slideExportLedger
     passed: slides.length > 0 && generatedReviewImages.length === slides.length && blockers.length === 0 && generatedReviewImages.every((image: any) => image.callout_extraction_status === 'succeeded'),
     verified_level: mock ? 'mock_only' : generatedReviewImages.length ? 'verified_partial' : 'blocked',
     next_action: blockers.includes('imagegen_capability_missing')
-      ? 'Generate slide callout review images with Codex App $imagegen/gpt-image-2, then attach them or rerun extraction.'
+      ? ("Generate slide callout review images with the selected model-capable provider: " + IMAGEGEN_MODEL + ", then attach them or rerun extraction.")
       : null
   };
 }
@@ -187,6 +189,7 @@ export function buildSlideImagegenEvidence(calloutLedger: any = {}) {
   const requiredCount = Number(calloutLedger.required_count || images.length || 0);
   const blockers: string[] = [];
   for (const image of images) {
+    if (image.provider_model !== IMAGEGEN_MODEL) blockers.push('ppt_slide_imagegen_model_not_current');
     const evidenceClass = String(image.evidence_class || '');
     const outputSource = String(image.output_source || '');
     const outputSha = String(image.output_sha256 || '');
@@ -245,6 +248,7 @@ async function generatedSlideMetadata(root: string, relPath: string, slide: any,
     height: dims.height,
     format: dims.format,
     provider_surface: opts.mock ? 'mock_fixture' : (opts.providerSurface || 'Codex App $imagegen'),
+    provider_model: opts.mock ? IMAGEGEN_MODEL : opts.providerModel || null,
     real_generated: opts.realGenerated === true
       && isFullImagegenEvidenceClass(opts.evidenceClass || (opts.mock ? 'mock_fixture' : 'codex_app_imagegen')),
     mock: opts.mock === true,

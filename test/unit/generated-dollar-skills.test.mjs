@@ -29,7 +29,7 @@ test('generated Codex App skills cover every dollar route skill name', async () 
   }
 });
 
-test('generated imagegen skills preserve ChatGPT Images 2.0 evidence policy', async () => {
+test('generated imagegen skills preserve current GPT Image model selection policy', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-imagegen-skills-'));
   const result = await installSkills(root);
   const installed = new Set(result.installed_skills);
@@ -38,17 +38,17 @@ test('generated imagegen skills preserve ChatGPT Images 2.0 evidence policy', as
   assert.ok(installed.has('sks-imagegen-source-scout'));
 
   const imagegen = await fs.readFile(path.join(root, '.agents', 'skills', 'sks-imagegen', 'SKILL.md'), 'utf8');
-  assert.match(imagegen, /ChatGPT Images 2\.0 \/ GPT Image 2\.0 with gpt-image-2/);
-  assert.match(imagegen, /Capability detection is not output proof/);
-  assert.match(imagegen, /Direct OpenAI API fallback is non-Codex evidence/);
-  assert.match(imagegen, /Official OpenAI\/Codex docs are authoritative/);
-  assert.match(imagegen, /\$imagegen\b/, 'the official Codex App $imagegen command must remain visible');
+  assert.match(imagegen, /GPT Image 2\.5 Sunburst \(gpt-image-2\.5-sunburst\)/);
+  assert.match(imagegen, /capability checks are not generated-image evidence/);
+  assert.match(imagegen, /do not silently switch billing or identity/);
+  assert.match(imagegen, /latest officially documented GPT Image model/);
+  assert.match(imagegen, /image_generation\.model=gpt-image-2\.5-sunburst/);
 
   const scout = await fs.readFile(path.join(root, '.agents', 'skills', 'sks-imagegen-source-scout', 'SKILL.md'), 'utf8');
-  assert.match(scout, /Source order: official OpenAI announcement/);
-  assert.match(scout, /X\/social\/community search/);
-  assert.match(scout, /prompt-quality heuristics only/);
-  assert.match(scout, /Do not generate images itself/);
+  assert.match(scout, /Read https:\/\/developers.openai.com\/api\/docs\/models/);
+  assert.match(scout, /public X\/social\/community reports/);
+  assert.match(scout, /prompt-quality and workflow-sentiment hints/);
+  assert.match(scout, /Do not generate images in this skill/);
 });
 
 test('generated QA and Computer Use skills use Chrome Extension first for web verification', async () => {
@@ -88,7 +88,7 @@ test('generated Naruto skill keeps official threads lightweight and TriWiki-boun
   await installSkills(root);
 
   const naruto = await fs.readFile(path.join(root, '.agents', 'skills', 'sks-naruto', 'SKILL.md'), 'utf8');
-  assert.match(naruto, /Automatic targets begin at 4\/6\/8\/16 by task size: bounded, explicit parallel, large-scale, then mass mechanical or exploration fan-out on the Luna\/Astra Medium lanes/i);
+  assert.match(naruto, /Automatic targets begin at 4\/6\/8\/16 by task size: bounded, explicit parallel, large-scale, then mass mechanical or exploration fan-out on the Astra Low\/Astra Medium lanes/i);
   assert.match(naruto, /both lanes may expand to the SKS-owned 256-child ceiling/i);
   assert.match(naruto, /max_threads defaults to a 256-child frame budget cap, never a target/i);
   assert.match(naruto, /measured lower Codex host cap or explicit provider\/API budget remains authoritative/i);

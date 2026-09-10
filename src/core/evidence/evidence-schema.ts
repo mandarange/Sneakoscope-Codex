@@ -21,7 +21,7 @@ export const EVIDENCE_KINDS = Object.freeze([
   'trust_report',
   'route_gate',
   'ux_review_source_screenshot',
-  'ux_review_gpt_image_2_callout',
+  'ux_review_imagegen_callout',
   'ux_review_callout_extraction',
   'ux_review_patch_result',
   'ux_review_recheck',

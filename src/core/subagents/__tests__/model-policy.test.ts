@@ -59,7 +59,7 @@ test('model decision routes mechanical, implementation, context/tool, and judgme
   for (const description of [
     'Run browser-only QA in Chrome',
     'Use Computer Use to inspect the native app',
-    'Generate an image with gpt-image-2',
+    'Generate an image with gpt-image-2.5-sunburst',
     'Extract a repository-wide long-context inventory',
     'Maintain and consolidate the long-term memory for this repository',
     'Rapid large-scale first-draft code processing across many files',

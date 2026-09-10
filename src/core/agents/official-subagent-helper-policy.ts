@@ -1,3 +1,4 @@
+import { IMAGEGEN_MODEL } from '../imagegen/imagegen-model-policy.js';
 import path from 'node:path'
 import { nowIso, readJson, readText, writeJsonAtomic } from '../fsx.js'
 
@@ -44,7 +45,7 @@ export async function writeOfficialSubagentHelperPolicy(root: string, input: { n
     built_in_agents_allowed: builtInAgentsAllowed,
     codex_app_capabilities_allowed: codexAppCapabilitiesAllowed,
     codex_builtin_imagegen_helper_allowed: true,
-    preferred_image_generation_surface: 'Codex App $imagegen/gpt-image-2',
+    preferred_image_generation_surface: ("Selected image provider: " + IMAGEGEN_MODEL + ""),
     codex_app_builtin_evidence_class: 'codex_app_builtin',
     api_fallback_evidence_class: 'api_fallback',
     provider_surface_evidence_required: true,

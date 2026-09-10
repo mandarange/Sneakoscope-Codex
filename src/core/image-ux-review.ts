@@ -1,3 +1,4 @@
+import { IMAGEGEN_MODEL_DOC_URL, IMAGEGEN_MODEL } from './imagegen/imagegen-model-policy.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -28,16 +29,15 @@ export const IMAGE_UX_REVIEW_RECAPTURE_ARTIFACT = 'image-ux-recapture-plan.json'
 export const IMAGE_UX_REVIEW_HONEST_MODE_ARTIFACT = 'final-honest-mode-report.json';
 export const IMAGE_UX_REVIEW_ITERATION_REPORT_ARTIFACT = 'image-ux-iteration-report.json';
 export const IMAGE_UX_REVIEW_IMAGEGEN_REQUEST_ARTIFACT = 'image-ux-imagegen-request.json';
-export const IMAGE_UX_REVIEW_GPT_IMAGE_2_REQUEST_ARTIFACT = 'image-ux-gpt-image-2-request.json';
-export const IMAGE_UX_REVIEW_GPT_IMAGE_2_RESPONSE_ARTIFACT = 'image-ux-gpt-image-2-response.json';
+export const IMAGE_UX_REVIEW_IMAGEGEN_RESPONSE_ARTIFACT = 'image-ux-imagegen-response.json';
 export const IMAGE_UX_REVIEW_API_DOC_URL = 'https://developers.openai.com/api/docs/guides/image-generation';
-export const GPT_IMAGE_2_MODEL_DOC_URL = 'https://developers.openai.com/api/docs/models/gpt-image-2';
+export { IMAGEGEN_MODEL_DOC_URL } from './imagegen/imagegen-model-policy.js';
 export const STRUCTURED_OUTPUTS_DOC_URL = 'https://developers.openai.com/api/docs/guides/structured-outputs';
 
 export const IMAGE_UX_REVIEW_REQUIRED_GATE_FIELDS = Object.freeze([
   'real_source_screenshot_present',
   'computer_use_or_user_screenshot_source',
-  'gpt_image_2_callout_generated',
+  'imagegen_callout_generated',
   'generated_image_ingested',
   'callout_extraction_schema_valid',
   'issue_ledger_from_generated_callout',
@@ -135,7 +135,7 @@ export function buildImageUxReviewPolicy(contract: any = {}) {
     schema_version: 2,
     created_at: nowIso(),
     contract_hash: contract.sealed_hash || null,
-    policy: 'real_gpt_image_2_callout_fix_loop',
+    policy: 'real_imagegen_callout_fix_loop',
     score_threshold: 0.88,
     minimum_delta_to_continue: 0.03,
     max_full_surface_passes: 2,
@@ -154,17 +154,17 @@ export function buildImageUxReviewPolicy(contract: any = {}) {
       accepted_sources: ['codex_chrome_extension_screenshot', 'codex_native_computer_use_screenshot', 'user_provided_screenshot', 'exported_static_artifact_image'],
       web_capture_doc: CODEX_CHROME_EXTENSION_DOC_URL,
       web_verification_policy: CODEX_WEB_VERIFICATION_POLICY,
-      privacy: 'Chrome Extension screenshots, native Computer Use screenshots, and gpt-image-2 outputs are local-only by default; shared TriWiki publishes metadata only unless explicitly opted in.'
+      privacy: ("Chrome Extension screenshots, native Computer Use screenshots, and " + IMAGEGEN_MODEL + " outputs are local-only by default; shared TriWiki publishes metadata only unless explicitly opted in.")
     },
     image_generation_review: {
       required_for_gate: 'full_verification',
-      missing_generated_image_closeout: 'A route may close as verified_partial/reference_only when source screenshots are captured but gpt-image-2 output is unavailable; it must not claim annotated-image review, callout extraction, or full UX verification.',
-      model: 'gpt-image-2',
+      missing_generated_image_closeout: ("A route may close as verified_partial/reference_only when source screenshots are captured but " + IMAGEGEN_MODEL + " output is unavailable; it must not claim annotated-image review, callout extraction, or full UX verification."),
+      model: IMAGEGEN_MODEL,
       preferred_surface: 'Codex App built-in image generation via $imagegen',
       codex_app_imagegen_doc: CODEX_APP_IMAGE_GENERATION_DOC_URL,
       api_image_generation_doc: IMAGE_UX_REVIEW_API_DOC_URL,
-      gpt_image_2_model_doc: GPT_IMAGE_2_MODEL_DOC_URL,
-      image_input_fidelity_note: 'high_fidelity_automatic',
+      imagegen_model_doc: IMAGEGEN_MODEL_DOC_URL,
+      image_input_fidelity_note: 'reference_image_input',
       unsupported_parameters_omitted: ['input_fidelity'],
       required_policy: CODEX_IMAGEGEN_REQUIRED_POLICY,
       output_artifact: IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT,
@@ -207,8 +207,8 @@ export function buildImageUxReviewPolicy(contract: any = {}) {
     },
     evidence_artifacts: [
       IMAGE_UX_REVIEW_SCREEN_INVENTORY_ARTIFACT,
-      IMAGE_UX_REVIEW_GPT_IMAGE_2_REQUEST_ARTIFACT,
-      IMAGE_UX_REVIEW_GPT_IMAGE_2_RESPONSE_ARTIFACT,
+      IMAGE_UX_REVIEW_IMAGEGEN_REQUEST_ARTIFACT,
+      IMAGE_UX_REVIEW_IMAGEGEN_RESPONSE_ARTIFACT,
       IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT,
       IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT,
       IMAGE_UX_REVIEW_CALLOUT_EXTRACTION_REPORT_ARTIFACT,
@@ -336,11 +336,11 @@ export function buildImageUxGeneratedReviewLedger(contract: any = {}, inventory:
     created_at: nowIso(),
     contract_hash: contract.sealed_hash || null,
     provider: {
-      model: 'gpt-image-2',
-      preferred_surface: 'Codex App $imagegen',
+      model: IMAGEGEN_MODEL,
+      preferred_surface: 'Selected provider with explicit image_generation.model',
       codex_app_imagegen_doc: CODEX_APP_IMAGE_GENERATION_DOC_URL,
       api_image_generation_doc: IMAGE_UX_REVIEW_API_DOC_URL,
-      gpt_image_2_model_doc: GPT_IMAGE_2_MODEL_DOC_URL
+      imagegen_model_doc: IMAGEGEN_MODEL_DOC_URL
     },
     required: true,
     required_for_full_verification: true,
@@ -353,8 +353,8 @@ export function buildImageUxGeneratedReviewLedger(contract: any = {}, inventory:
       prompt: buildCalloutPrompt(screen.id, { target: inventory.target }),
       status: normalizedImages.some((image: any) => generatedImageCoversScreen(image, screen.id)) ? 'generated_or_attached' : 'pending_imagegen',
       required_output: 'annotated_review_image_with_numbered_callouts_severity_labels_markers_arrows_and_mini_comp',
-      requested_fidelity: 'high_fidelity_automatic',
-      image_input_fidelity_note: 'gpt-image-2 processes image inputs at high fidelity automatically; SKS omits unsupported input_fidelity.',
+      requested_fidelity: 'reference_image_input',
+      image_input_fidelity_note: ("" + IMAGEGEN_MODEL + " uses reference images; SKS sends only parameters supported by the current request contract."),
       privacy: 'local-only'
     })),
     generated_count: normalizedImages.length,
@@ -479,7 +479,7 @@ export function buildImageUxIterationReport(
     passes: [
       {
         pass: 1,
-        type: generatedReviewLedger.passed ? 'real_gpt_image_2_callout_extraction' : 'waiting_for_gpt_image_2_callout_image',
+        type: generatedReviewLedger.passed ? 'real_imagegen_callout_extraction' : 'waiting_for_imagegen_callout_image',
         generated_review_images: generatedReviewLedger.generated_count || 0,
         real_generated_review_images: generatedReviewLedger.real_generated_count || 0,
         blocking_issue_count: issueLedger.blocking_issue_count || 0,
@@ -572,7 +572,7 @@ export function defaultImageUxReviewGate(contract: any = {}, parts: any = {}) {
     real_source_screenshot_present: realSourceScreenshotPresent,
     computer_use_or_user_screenshot_source: officialOrUserScreenshotSource,
     official_or_user_screenshot_source: officialOrUserScreenshotSource,
-    gpt_image_2_callout_generated: generatedReviewLedger.passed === true && realGeneratedCount > 0,
+    imagegen_callout_generated: generatedReviewLedger.passed === true && realGeneratedCount > 0,
     generated_image_ingested: realGeneratedCount > 0,
     callout_extraction_schema_valid: calloutExtractionSchemaValid,
     issue_ledger_from_generated_callout: issueLedger.extracted_from_generated_callout === true && realGeneratedCount > 0,
@@ -587,8 +587,8 @@ export function defaultImageUxReviewGate(contract: any = {}, parts: any = {}) {
     required_artifacts: [
       IMAGE_UX_REVIEW_POLICY_ARTIFACT,
       IMAGE_UX_REVIEW_SCREEN_INVENTORY_ARTIFACT,
-      IMAGE_UX_REVIEW_GPT_IMAGE_2_REQUEST_ARTIFACT,
-      IMAGE_UX_REVIEW_GPT_IMAGE_2_RESPONSE_ARTIFACT,
+      IMAGE_UX_REVIEW_IMAGEGEN_REQUEST_ARTIFACT,
+      IMAGE_UX_REVIEW_IMAGEGEN_RESPONSE_ARTIFACT,
       IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT,
       IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT,
       IMAGE_UX_REVIEW_CALLOUT_EXTRACTION_REPORT_ARTIFACT,
@@ -604,7 +604,7 @@ export function defaultImageUxReviewGate(contract: any = {}, parts: any = {}) {
       reason: referenceCloseoutPassed ? 'generated_review_image_unavailable_source_screenshot_captured' : null,
       cap: 'verified_partial',
       cannot_claim: [
-        'gpt_image_2_callout_generated',
+        'imagegen_callout_generated',
         'generated_image_ingested',
         'issue_ledger_from_generated_callout',
         'full_ux_review_passed'
@@ -620,7 +620,7 @@ export function defaultImageUxReviewGate(contract: any = {}, parts: any = {}) {
     },
     notes: [
       'Do not pass this gate from direct text-only screenshot critique.',
-      'Full verification passes only after source screenshots have real generated gpt-image-2 annotated review images and those generated images are extracted into issue rows.',
+      ("Full verification passes only after source screenshots have real generated " + IMAGEGEN_MODEL + " annotated review images and those generated images are extracted into issue rows."),
       'If generated annotated images are unavailable, a source-screenshot-only reference closeout may pass only as verified_partial and must preserve the missing generated-image facts.'
     ]
   };
@@ -655,8 +655,8 @@ export async function writeImageUxReviewRouteArtifacts(dir: any, contract: any =
   const existingGenerated = await readExistingJson(dir, IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT);
   const existingIssues = await readExistingJson(dir, IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT);
   const extractionReport = await readExistingJson(dir, IMAGE_UX_REVIEW_CALLOUT_EXTRACTION_REPORT_ARTIFACT);
-  const existingImagegenRequest = await readExistingJson(dir, IMAGE_UX_REVIEW_GPT_IMAGE_2_REQUEST_ARTIFACT);
-  const existingImagegenResponse = await readExistingJson(dir, IMAGE_UX_REVIEW_GPT_IMAGE_2_RESPONSE_ARTIFACT);
+  const existingImagegenRequest = await readExistingJson(dir, IMAGE_UX_REVIEW_IMAGEGEN_REQUEST_ARTIFACT);
+  const existingImagegenResponse = await readExistingJson(dir, IMAGE_UX_REVIEW_IMAGEGEN_RESPONSE_ARTIFACT);
   const existingRecapture = await readExistingJson(dir, IMAGE_UX_REVIEW_RECAPTURE_ARTIFACT);
   const generatedReviewLedger = buildImageUxGeneratedReviewLedger(contract, inventory, existingGenerated, { root });
   const sourceReferenceEvidence = await ensureImageUxSourceReferenceEvidence(root, dir, inventory);
@@ -705,8 +705,7 @@ export async function writeImageUxReviewRouteArtifacts(dir: any, contract: any =
   await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_POLICY_ARTIFACT), policy);
   await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_SCREEN_INVENTORY_ARTIFACT), inventory);
   await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_IMAGEGEN_REQUEST_ARTIFACT), imagegenRequest);
-  await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_GPT_IMAGE_2_REQUEST_ARTIFACT), imagegenRequest);
-  await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_GPT_IMAGE_2_RESPONSE_ARTIFACT), imagegenResponse);
+  await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_IMAGEGEN_RESPONSE_ARTIFACT), imagegenResponse);
   await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT), generatedReviewLedger);
   await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT), issueLedger);
   if (extractionReport) await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_CALLOUT_EXTRACTION_REPORT_ARTIFACT), extractionReport);
@@ -719,7 +718,6 @@ export async function writeImageUxReviewRouteArtifacts(dir: any, contract: any =
     policy,
     inventory,
     imagegen_request: imagegenRequest,
-    gpt_image_2_request: imagegenRequest,
     imagegen_response: imagegenResponse,
     generated_review_ledger: generatedReviewLedger,
     issue_ledger: issueLedger,
@@ -752,7 +750,7 @@ export function imageUxReviewProofEvidence(gate: any = {}, artifacts: any = {}) 
     reference_only: referenceOnly,
     reference_closeout_status: referenceOnly ? 'source_screenshot_only_real_generated_image_unavailable' : null,
     source_screenshots_count: artifacts.inventory?.source_screens?.length || 0,
-    generated_gpt_image_2_callout_images_count: generated.real_generated_count || 0,
+    generated_imagegen_callout_images_count: generated.real_generated_count || 0,
     generated_images_total: generated.generated_count || 0,
     non_real_generated_images_total: generated.non_real_generated_count || 0,
     callout_extraction_schema_status: issueLedger.validation?.ok ? 'valid' : 'blocked',
@@ -768,7 +766,7 @@ export function imageUxReviewProofEvidence(gate: any = {}, artifacts: any = {}) 
     computer_use_evidence_mode: artifacts.inventory?.source_screens?.some((screen: any) => screen.capture_source === 'codex_native_computer_use_screenshot' || screen.capture_source === 'codex_computer_use_screenshot') ? 'native_computer_use_source_screenshot' : artifacts.inventory?.source_screens?.some((screen: any) => screen.capture_source === 'codex_chrome_extension_screenshot') ? 'chrome_extension_source_screenshot' : 'user_or_static_screenshot',
     claims: {
       ux_review_source_screenshot_verified: artifacts.inventory?.passed === true,
-      ux_review_gpt_image_2_callouts_generated: (generated.real_generated_count || 0) > 0,
+      ux_review_imagegen_callouts_generated: (generated.real_generated_count || 0) > 0,
       ux_review_issues_extracted_from_callout_image: referenceOnly ? false : issueLedger.extracted_from_generated_callout === true,
       ux_review_p0_p1_fixed_or_blocked: (issueLedger.blocking_issue_count || 0) === 0 || (gate.blockers || []).length > 0,
       ux_review_changed_screens_rechecked: artifacts.recapture_plan?.changed_screens_rechecked_or_not_applicable === true,
@@ -867,7 +865,7 @@ async function ensureImageUxGeneratedRelationEvidence(
     try {
       const ingested = await ingestImage(root, image.path, {
         missionId,
-        source: 'image-ux-review:gpt-image-2-generated-callout',
+        source: 'image-ux-review:imagegen-generated-callout',
         id: generatedImageId
       });
       if (!ingested.ok) {
@@ -888,7 +886,7 @@ async function ensureImageUxGeneratedRelationEvidence(
           generatedImageId,
           anchors: anchorIds.filter((anchorId: any) => String(anchorId).startsWith(`${sourceImageId}-`)),
           status: 'verified_partial',
-          verification: 'gpt-image-2-generated-callout-bound-to-source'
+          verification: 'imagegen-generated-callout-bound-to-source'
         });
         if (relation.ok) relationIds.push(`${sourceImageId}->${generatedImageId}`);
         else issues.push(...(relation.validation?.issues || [`generated_image_relation_failed:${image.id}:${sourceScreen.id}`]));
@@ -933,7 +931,7 @@ async function ensureImageUxHonestModeEvidence(dir: string, parts: any = {}, opt
           evidence: ['image-voxel-ledger.json', 'visual-anchors.json', IMAGE_UX_REVIEW_SCREEN_INVENTORY_ARTIFACT]
         }] : []),
         ...(generatedMissing ? [{
-          claim: 'No real generated gpt-image-2 annotated review image is recorded; fake/mock generated images are not counted as full UX evidence.',
+          claim: ("No real generated " + IMAGEGEN_MODEL + " annotated review image is recorded; fake/mock generated images are not counted as full UX evidence."),
           evidence: [IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT]
         }] : []),
         ...(issues.validation?.ok === true ? [{
@@ -942,13 +940,13 @@ async function ensureImageUxHonestModeEvidence(dir: string, parts: any = {}, opt
         }] : [])
       ],
       unverified: [
-        ...(generatedMissing ? ['No real generated gpt-image-2 annotated review image exists, so annotated-image callouts and full UX verification remain unverified.'] : []),
+        ...(generatedMissing ? [("No real generated " + IMAGEGEN_MODEL + " annotated review image exists, so annotated-image callouts and full UX verification remain unverified.")] : []),
         ...(issues.extracted_from_generated_callout !== true ? ['No issue row was extracted from a generated annotated callout image.'] : [])
       ],
       blocked: [
         ...(generatedMissing ? [{
           item: 'full_image_ux_review_verification',
-          reason: 'real_generated_gpt_image_2_annotated_review_image_unavailable'
+          reason: 'real_generated_imagegen_annotated_review_image_unavailable'
         }] : [])
       ],
       risks: [
@@ -1011,9 +1009,9 @@ export async function buildImageUxCalloutExtractionReport(root: string, extracti
 
 function buildImagegenRequestArtifact(contract: any, inventory: any) {
   return {
-    schema: 'sks.image-ux-gpt-image-2-request.v1',
+    schema: 'sks.image-ux-imagegen-request.v1',
     created_at: nowIso(),
-    model: 'gpt-image-2',
+    model: IMAGEGEN_MODEL,
     surface: 'Codex App $imagegen',
     endpoint: 'Codex App $imagegen or OpenAI /v1/images/edits fallback',
     api_docs: IMAGE_UX_REVIEW_API_DOC_URL,
@@ -1022,8 +1020,8 @@ function buildImagegenRequestArtifact(contract: any, inventory: any) {
       source_screen_id: screen.id,
       source_image_path: screen.source,
       source_sha256: screen.sha256 || null,
-      requested_fidelity: 'high_fidelity_automatic',
-      image_input_fidelity_note: 'gpt-image-2 high-fidelity image input is automatic; do not send input_fidelity.',
+      requested_fidelity: 'reference_image_input',
+      image_input_fidelity_note: ("" + IMAGEGEN_MODEL + " use the documented reference-image request without legacy input_fidelity."),
       output_dir: 'mission',
       prompt: buildCalloutPrompt(screen.id, { target: inventory.target || contract.prompt })
     })),
@@ -1034,11 +1032,11 @@ function buildImagegenRequestArtifact(contract: any, inventory: any) {
 function buildImagegenResponseArtifact(generatedReviewLedger: any = {}) {
   const image = (generatedReviewLedger.generated_review_images || [])[0] || null;
   return {
-    schema: 'sks.image-ux-gpt-image-2-response.v1',
+    schema: 'sks.image-ux-imagegen-response.v1',
     created_at: nowIso(),
     provider: image?.provider_surface || generatedReviewLedger.provider?.preferred_surface || 'none',
     evidence_class: image?.evidence_class || (image?.mock ? 'mock_fixture' : image?.real_generated ? 'codex_app_imagegen' : null),
-    model: 'gpt-image-2',
+    model: IMAGEGEN_MODEL,
     ok: generatedReviewLedger.passed === true,
     status: generatedReviewLedger.passed === true ? 'generated' : 'blocked_or_pending',
     output_image_path: image?.path || null,
@@ -1060,8 +1058,8 @@ function generatedReviewImageMissingBlocker() {
     status: 'blocked',
     blocker: 'generated_review_image_missing',
     surface: 'Codex App $imagegen',
-    model: 'gpt-image-2',
-    guidance: 'Attach a real generated gpt-image-2 annotated review image path with sha256 and dimensions. Without that artifact SKS may close only as verified_partial reference evidence.'
+    model: IMAGEGEN_MODEL,
+    guidance: ("Attach a real generated " + IMAGEGEN_MODEL + " annotated review image path with sha256 and dimensions. Without that artifact SKS may close only as verified_partial reference evidence.")
   };
 }
 
@@ -1089,10 +1087,10 @@ function normalizeGeneratedReviewImage(image: any = {}, screen: any = {}, opts: 
     sha256,
     width,
     height,
-    provider_model: image.provider_model || image.model || 'gpt-image-2',
+    provider_model: image.provider_model || image.model || null,
     provider_surface: image.provider_surface || 'Codex App $imagegen',
-    requested_fidelity: image.requested_fidelity || 'high_fidelity_automatic',
-    image_input_fidelity_note: image.image_input_fidelity_note || 'gpt-image-2 high-fidelity image input is automatic',
+    requested_fidelity: image.requested_fidelity || 'reference_image_input',
+    image_input_fidelity_note: image.image_input_fidelity_note || ("" + IMAGEGEN_MODEL + " reference-image input"),
     privacy: image.privacy || 'local-only',
     real_generated: realGenerated,
     claimed_real_generated: image.real_generated === true,
@@ -1128,6 +1126,7 @@ function generatedImageEvidenceBlockers(image: any = {}, evidence: any = {}) {
   if (image.real_generated !== true || image.mock === true || image.source === 'mock_fixture') return [];
   const blockers: string[] = [];
   const evidenceClass = String(image.evidence_class || '');
+  if ((image.provider_model || image.model) !== IMAGEGEN_MODEL) blockers.push('generated_review_image_model_not_current');
   const outputSource = String(image.output_source || '');
   const outputSha = String(image.output_sha256 || image.output_image_sha256 || '');
   blockers.push(...imagegenEvidenceClassBlockers('generated_review_image', evidenceClass));

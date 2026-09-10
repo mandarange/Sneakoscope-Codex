@@ -13,7 +13,7 @@ test('UX issue ledger v3 carries extraction, bbox, status, and source fields', a
   assert.equal(row.generated_review_image_id, 'generated-review-real');
   assert.deepEqual(row.bbox, [0, 0, 1, 1]);
   assert.equal(row.status, 'fixed');
-  assert.equal(row.source, 'real_gpt_image_2_callout');
+  assert.equal(row.source, 'real_imagegen_callout');
   assert.equal(row.extraction_provider, 'codex_exec_resume_output_schema');
   assert.equal(row.extraction_schema, 'sks.image-ux-issue-ledger.v3');
   assert.equal(row.generated_image_sha256, PNG_1X1_SHA256);

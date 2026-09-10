@@ -1,7 +1,7 @@
+import { IMAGEGEN_MODEL, CODEX_BUILTIN_IMAGEGEN_MODEL } from './imagegen-model-policy.js';
 import os from 'node:os'
 import path from 'node:path'
 import { readText } from '../fsx.js'
-import { codexAppGeneratedImagesDir } from '../image-ux-review/codex-app-generated-image-discovery.js'
 
 // Auth-aware imagegen readiness. The codex-lb / ChatGPT-OAuth path drives the
 // LLM (text) fine, but "the LLM works, therefore images must work" still does
@@ -18,10 +18,9 @@ export interface ImagegenAuthReadiness {
   auth_mode: ImagegenAuthMode
   openai_api_key_present: boolean
   codex_app_builtin_available: boolean
-  codex_app_generated_images_dir: string
   /** Single `sks` command produces an image with no manual GUI step. */
   headless_auto_available: boolean
-  /** Ordered, currently-usable ways to produce a real gpt-image-2 image. */
+  /** Ordered, currently-usable authentication paths for image requests. */
   available_paths: string[]
   primary_blocker: string | null
   next_actions: string[]
@@ -62,29 +61,24 @@ export async function evaluateImagegenAuthReadiness(opts: {
   if (opts.authJsonText !== undefined) authModeOpts.authJsonText = opts.authJsonText
   const { auth_mode, openai_api_key_present } = await detectImagegenAuthMode(authModeOpts)
   const codexAppBuiltInAvailable = opts.codexAppBuiltInAvailable === true
-  const genDir = codexAppGeneratedImagesDir(opts.codexHome !== undefined ? { codexHome: opts.codexHome, env } : { env })
 
   // Fully-headless generation can happen through a direct OpenAI key or through
   // Codex built-in image_generation when the Codex feature surface exposes it.
   // Capability is not output proof; real smoke still must verify a file.
-  const headlessAutoAvailable = openai_api_key_present || codexAppBuiltInAvailable
+  const builtInModelSupported = codexAppBuiltInAvailable && String(CODEX_BUILTIN_IMAGEGEN_MODEL) === IMAGEGEN_MODEL
+  const headlessAutoAvailable = openai_api_key_present || builtInModelSupported
 
   const availablePaths: string[] = []
   if (openai_api_key_present) availablePaths.push('openai_api_key_headless')
-  if (codexAppBuiltInAvailable) {
+  if (builtInModelSupported) {
     availablePaths.push('codex_exec_builtin_image_generation')
-    availablePaths.push('codex_app_gui_generated_images_autodiscovery')
   }
 
   const nextActions: string[] = []
   let primaryBlocker: string | null = null
   if (!availablePaths.length) {
-    primaryBlocker = 'imagegen_no_usable_path'
-    nextActions.push('Enable Codex built-in image_generation or generate the image in the Codex App ($imagegen/gpt-image-2); SKS auto-discovers the newest output from ' + genDir + '.')
-    nextActions.push('Or set OPENAI_API_KEY to enable fully-headless single-command gpt-image-2 generation.')
-  } else if (!headlessAutoAvailable) {
-    primaryBlocker = 'imagegen_headless_auto_unavailable'
-    nextActions.push('Use Codex App $imagegen/gpt-image-2 and rerun the SKS route, or set OPENAI_API_KEY for direct API image generation.')
+    primaryBlocker = codexAppBuiltInAvailable ? 'imagegen_model_unavailable' : 'imagegen_no_usable_path'
+    nextActions.push(`Use the selected ready provider with explicit image_generation.model=${IMAGEGEN_MODEL}, or authorize an Images API request with OPENAI_API_KEY. The built-in host engine cannot be changed through prompt text.`)
   }
 
   return {
@@ -92,7 +86,6 @@ export async function evaluateImagegenAuthReadiness(opts: {
     auth_mode,
     openai_api_key_present,
     codex_app_builtin_available: codexAppBuiltInAvailable,
-    codex_app_generated_images_dir: genDir,
     headless_auto_available: headlessAutoAvailable,
     available_paths: availablePaths,
     primary_blocker: primaryBlocker,

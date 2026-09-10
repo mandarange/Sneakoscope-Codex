@@ -49,7 +49,7 @@ export async function evaluateGate(root: string, missionId: string, gateFile: st
   }
   if (gateFile === 'image-ux-review-gate.json' || /image-ux-review-gate\.json$/.test(gatePath)) {
     const needsFullImagegenEvidence = (gate as any).full_review_passed === true
-      || (gate as any).gpt_image_2_callout_generated === true
+      || (gate as any).imagegen_callout_generated === true
       || ((gate as any).passed === true && (gate as any).reference_only !== true);
     if (needsFullImagegenEvidence) {
       reasons.push(...await imagegenResponseGateReasons(root, path.dirname(gatePath)));
@@ -70,9 +70,9 @@ export async function evaluateGate(root: string, missionId: string, gateFile: st
 
 async function imagegenResponseGateReasons(root: string, missionDir: string) {
   const reasons: string[] = [];
-  const response = await readJson(path.join(missionDir, 'image-ux-gpt-image-2-response.json'), null) as any;
+  const response = await readJson(path.join(missionDir, 'image-ux-imagegen-response.json'), null) as any;
   if (!response || typeof response !== 'object') return ['imagegen_response_artifact_missing'];
-  if (response.schema !== 'sks.image-ux-gpt-image-2-response.v1') reasons.push('imagegen_response_schema_invalid');
+  if (response.schema !== 'sks.image-ux-imagegen-response.v1') reasons.push('imagegen_response_schema_invalid');
   if (response.ok !== true || response.status !== 'generated') reasons.push(response.blocker || 'imagegen_response_not_generated');
   const evidenceClass = String(response.evidence_class || '');
   reasons.push(...imagegenEvidenceClassBlockers('imagegen_response', evidenceClass));

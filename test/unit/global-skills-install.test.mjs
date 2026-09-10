@@ -18,12 +18,12 @@ test('global Codex App skill install includes commit dollar routes', async () =>
   }
 
   const imagegen = await fs.readFile(path.join(home, '.agents', 'skills', 'sks-imagegen', 'SKILL.md'), 'utf8');
-  assert.match(imagegen, /ChatGPT Images 2\.0 \/ GPT Image 2\.0 with gpt-image-2/);
-  assert.match(imagegen, /Capability detection is not output proof/);
-  assert.match(imagegen, /non-Codex evidence/);
+  assert.match(imagegen, /GPT Image 2\.5 Sunburst \(gpt-image-2\.5-sunburst\)/);
+  assert.match(imagegen, /capability checks are not generated-image evidence/);
+  assert.match(imagegen, /preserving the user.s mainline model\/provider/);
 
   const scout = await fs.readFile(path.join(home, '.agents', 'skills', 'sks-imagegen-source-scout', 'SKILL.md'), 'utf8');
-  assert.match(scout, /official OpenAI announcement/);
-  assert.match(scout, /X\/social\/community search/);
-  assert.match(scout, /prompt-quality heuristics only/);
+  assert.match(scout, /official model catalog|latest GPT Image model/);
+  assert.match(scout, /public X\/social\/community reports/);
+  assert.match(scout, /prompt-quality and workflow-sentiment hints/);
 });

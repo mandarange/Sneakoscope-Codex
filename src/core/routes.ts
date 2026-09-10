@@ -1,3 +1,4 @@
+import { IMAGEGEN_MODEL } from './imagegen/imagegen-model-policy.js';
 import { leanEngineeringCompactText, leanEngineeringLongText } from './lean-engineering-policy.js';
 export { leanEngineeringCompactText, leanEngineeringLongText };
 import { ALLOWED_REASONING_EFFORTS, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, RECOMMENDED_SKILLS, REFLECTION_SKILL_NAME, USAGE_TOPICS } from './routes/constants.js';
@@ -334,15 +335,15 @@ export const ROUTES = [
     command: '$Image-UX-Review',
     mode: 'IMAGE_UX_REVIEW',
     route: 'image-generation UI/UX review loop',
-    description: 'Review UI/UX through the imagegen/gpt-image-2 visual critique loop: source screenshots become generated annotated review images, those images become issue ledgers, then fixes are rechecked.',
+    description: ("Review UI/UX through the imagegen/" + IMAGEGEN_MODEL + " visual critique loop: source screenshots become generated annotated review images, those images become issue ledgers, then fixes are rechecked."),
     requiredSkills: ['image-ux-review', 'imagegen', 'cu', 'pipeline-runner', REFLECTION_SKILL_NAME, 'honest-mode'],
     hiddenDollarAliases: ['$UX-Review', '$Visual-Review', '$UI-UX-Review'],
-    lifecycle: ['target_and_capture_inventory', 'source_screenshots', 'gpt_image_2_annotated_review_image', 'generated_image_text_extraction', 'issue_ledger', 'optional_safe_fixes', 'changed_screen_recheck', 'post_route_reflection', 'honest_mode'],
+    lifecycle: ['target_and_capture_inventory', 'source_screenshots', 'imagegen_annotated_review_image', 'generated_image_text_extraction', 'issue_ledger', 'optional_safe_fixes', 'changed_screen_recheck', 'post_route_reflection', 'honest_mode'],
     context7Policy: 'if_external_docs',
     reasoningPolicy: 'high',
     stopGate: 'image-ux-review-gate.json',
     cliEntrypoint: 'sks ux-review run --image <path> --fix --json | sks ux-review callouts --image <path> --json | sks ux-review extract-issues --generated-image <path> --json | sks ux-review fix|recapture|recheck|status latest --json',
-    examples: ['$Image-UX-Review localhost 화면을 이미지 생성 리뷰 루프로 검수해줘', '$UX-Review 이 스크린샷을 gpt-image-2 콜아웃 리뷰로 분석하고 고쳐줘']
+    examples: ['$Image-UX-Review localhost 화면을 이미지 생성 리뷰 루프로 검수해줘', ("$UX-Review 이 스크린샷을 " + IMAGEGEN_MODEL + " 콜아웃 리뷰로 분석하고 고쳐줘")]
   },
   {
     id: 'ComputerUse',
@@ -707,7 +708,7 @@ export const COMMAND_CATALOG = [
   { name: 'dfix', usage: 'sks dfix', description: 'Explain $sks-dfix ultralight direct-fix mode.' },
   { name: 'qa-loop', usage: 'sks qa-loop prepare|answer|run|status ...', description: 'Dogfood UI/API as human proxy with safety gates, safe fixes, rechecks, Codex Chrome Extension-first web UI evidence, report.' },
   { name: 'ppt', usage: 'sks ppt build|status <mission-id|latest> [--json]', description: 'Build or inspect $sks-ppt HTML/PDF artifacts from a sealed presentation decision contract.' },
-  { name: 'image-ux-review', usage: 'sks ux-review run --image <path> --fix --json | sks image-ux-review status <mission-id|latest> [--json]', description: 'Run or inspect $sks-image-ux-review gpt-image-2/imagegen annotated UI/UX review artifacts, issue ledgers, safe fix loops, recapture, and proof gates.' },
+  { name: 'image-ux-review', usage: 'sks ux-review run --image <path> --fix --json | sks image-ux-review status <mission-id|latest> [--json]', description: ("Run or inspect $sks-image-ux-review " + IMAGEGEN_MODEL + "/imagegen annotated UI/UX review artifacts, issue ledgers, safe fix loops, recapture, and proof gates.") },
   { name: 'computer-use', usage: 'sks computer-use import|status|smoke|require ... [--json]', description: 'Record native Mac/non-web Computer Use visual evidence while keeping web verification on the Chrome Extension path.' },
   { name: 'context7', usage: 'sks context7 check|setup|tools|resolve|docs|evidence ...', description: 'Check, configure, and call the local Context7 MCP requirement.' },
   { name: 'super-search', usage: 'sks super-search doctor|run|x|fetch|status|inspect|sources|claims|cache|bench', description: 'Run Super-Search provider-independent source intelligence.' },
@@ -909,7 +910,7 @@ export function looksLikeImageUxReviewRequest(prompt: any = '') {
   const text = String(prompt || '');
   const reviewCue = /(ui\/?ux|ux|ui|screen|screenshot|visual|interface|화면|스크린|캡처|비주얼|인터페이스|사용성|유아이|유엑스)/i.test(text)
     && /(review|critique|audit|inspect|analy[sz]e|검수|리뷰|분석|평가|진단)/i.test(text);
-  const imagegenCue = /(gpt-image-2|imagegen|\$imagegen|image\s*generation|generated\s*review|annotated\s*review|callout|이미지\s*생성|생성\s*이미지|콜아웃|주석\s*이미지)/i.test(text);
+  const imagegenCue = /(gpt-image(?:-\d+(?:\.\d+)?)?|imagegen|\$imagegen|image\s*generation|generated\s*review|annotated\s*review|callout|이미지\s*생성|생성\s*이미지|콜아웃|주석\s*이미지)/i.test(text);
   const commandCue = /\$?(?:image-ux-review|ux-review|visual-review|ui-ux-review)\b/i.test(text);
   return commandCue || (reviewCue && imagegenCue);
 }

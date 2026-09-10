@@ -438,7 +438,7 @@ Projection: [PRODUCT-CONTRACT.md](PRODUCT-CONTRACT.md).
 - **모순·모호:** 외부 도구·수동 위조 이미지를 제품 증거로 쓸지.
 - **증거:** imagegen skills; R6 consume-only.
 - **Q→결정:** (a) Codex 공식 imagegen만? → **(a).**
-- **확정 계약:** 생성 이미지·주석 등 시각 제품 증거는 Codex 공식 imagegen(`gpt-image-2` 등 호스트가 제공하는 경로)만 인정한다. 플레이스홀더·수동 위조·대체 파일은 제품 증거가 아니다. (R6 consume-only와 동일 계열.)
+- **확정 계약:** 생성 이미지·주석 등 시각 제품 증거는 현재 모델 정책과 일치하는 선택된 공급자의 실제 이미지 출력만 인정한다. 내장 호스트의 모델 선택 가능 여부는 별도로 검증한다. 플레이스홀더·수동 위조·대체 파일은 제품 증거가 아니다. (R6 consume-only와 동일 계열.)
 - **후속:** 증거 규칙 문서/스킬 정렬 → `needs-code` (NC-27).
 - **상태:** `decided`
 

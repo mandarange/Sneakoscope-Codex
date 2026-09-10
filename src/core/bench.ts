@@ -71,7 +71,7 @@ export const TRUST_VALIDATE_BENCH_COMMAND = 'sks trust validate bench-fixture --
 export const CORE_BENCH_WARMUP_ITERATIONS = 1;
 export const UX_REVIEW_STAGED_LATENCY_BUDGETS = Object.freeze({
   source_screenshot_ingest: 500,
-  gpt_image_2_generation: 120_000,
+  imagegen_generation: 120_000,
   callout_extraction: 120_000,
   fix_task_planning: 500,
   recapture_re_review: 120_000,

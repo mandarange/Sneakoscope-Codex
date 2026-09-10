@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // @ts-nocheck
+import { IMAGEGEN_MODEL_DOC_URL, IMAGEGEN_MODEL, CODEX_BUILTIN_IMAGEGEN_MODEL } from '../core/imagegen/imagegen-model-policy.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -24,7 +25,7 @@ const sources = {
   computer_use: 'https://learn.chatgpt.com/docs/computer-use',
   codex_app_image_generation: 'https://learn.chatgpt.com/docs/image-generation',
   image_generation_api: 'https://developers.openai.com/api/docs/guides/image-generation',
-  gpt_image_2_model: 'https://developers.openai.com/api/docs/models/gpt-image-2',
+  imagegen_model: IMAGEGEN_MODEL_DOC_URL,
   structured_outputs: 'https://developers.openai.com/api/docs/guides/structured-outputs'
 };
 
@@ -36,9 +37,9 @@ const sourceValidations = [
   sourceRow('browser', sources.browser, bodies.browser, ['built-in browser', 'Chrome extension', 'Computer Use']),
   sourceRow('chrome_extension', sources.chrome_extension, bodies.chrome_extension, ['Chrome extension', 'signed-in', 'Connected']),
   sourceRow('computer_use', sources.computer_use, bodies.computer_use, ['Computer Use', 'Install the Computer Use plugin', 'Screen Recording']),
-  sourceRow('codex_app_image_generation', sources.codex_app_image_generation, bodies.codex_app_image_generation, ['Image generation', 'gpt-image-2']),
-  sourceRow('image_generation_api', sources.image_generation_api, bodies.image_generation_api, ['Image generation', 'gpt-image-2', 'GPT Image']),
-  sourceRow('gpt_image_2_model', sources.gpt_image_2_model, bodies.gpt_image_2_model, ['gpt-image-2', 'Image generation']),
+  sourceRow('codex_app_image_generation', sources.codex_app_image_generation, bodies.codex_app_image_generation, ['Image generation', CODEX_BUILTIN_IMAGEGEN_MODEL]),
+  sourceRow('image_generation_api', sources.image_generation_api, bodies.image_generation_api, ['Image generation', IMAGEGEN_MODEL, 'GPT Image']),
+  sourceRow('imagegen_model', sources.imagegen_model, bodies.imagegen_model, [IMAGEGEN_MODEL, 'Image generation']),
   sourceRow('structured_outputs', sources.structured_outputs, bodies.structured_outputs, ['Structured Outputs', 'json_schema', 'strict'])
 ];
 
@@ -80,14 +81,14 @@ const checks = [
     'CODEX_QA_SURFACE_ROUTING_POLICY'
   ]),
   fileRow('codex_app_imagegen_evidence_policy', 'Codex App image generation', 'src/core/imagegen/imagegen-capability.ts', [
-    'Codex App $imagegen',
-    'codex_app_builtin_output_required',
+    'current_imagegen_model_required',
+    'requested_model_supported',
     'capability_detection_is_not_output_proof'
   ]),
-  fileRow('gpt_image_2_generation_edit', 'OpenAI Image Generation', 'src/core/image-ux-review/imagegen-adapter.ts', [
-    'gpt-image-2',
+  fileRow('imagegen_generation_edit', 'OpenAI Image Generation', 'src/core/image-ux-review/imagegen-adapter.ts', [
+    'model: IMAGEGEN_MODEL',
     '/v1/images/edits',
-    'high_fidelity_automatic'
+    'reference_image_input'
   ]),
   fileRow('structured_outputs_strict_schema', 'OpenAI Structured Outputs', 'src/core/structured-output-adapter.ts', [
     'json_schema',
@@ -123,7 +124,7 @@ const report = {
     provider_catalog: 'Normal Codex sessions preserve the full host catalog; Naruto model constraints are scoped and live-catalog verified.',
     fast_mode: 'Codex Desktop Fast uses service_tier=fast and remains visible when codex-lb is selected.',
     native_capabilities: 'Browser, Chrome, Computer Use, and image generation are installed or repaired through their native Codex App plugin surfaces and then re-probed.',
-    codex_app_imagegen_evidence: 'Full visual evidence requires real Codex App $imagegen output with gpt-image-2; API output is labeled non-Codex evidence.',
+    codex_app_imagegen_evidence: ("Full visual evidence requires completed output from the selected provider using " + IMAGEGEN_MODEL + "; API output is labeled non-Codex evidence."),
     structured_outputs: 'Strict JSON schema output uses additionalProperties:false where the current schema contract requires it.'
   },
   sources,

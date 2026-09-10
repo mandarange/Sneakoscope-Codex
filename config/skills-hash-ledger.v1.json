@@ -111,6 +111,7 @@
     {
       "canonical_name": "sks-design-artifact-expert",
       "trusted_sha256": [
+        "6db9a7088e5f8d21dec9c8eed00abe665e1e89f19dcbb6d8472d77e4551cb556",
         "a09daba0a2e479a68ed81ec6fba8d70e54c8398ed86f3d1879f874b98480b97c",
         "4a28d166eaf0bc4477b566b056034f972a7034165e36d8186daa9947bf92e3cf"
       ]
@@ -118,6 +119,7 @@
     {
       "canonical_name": "sks-design-system-builder",
       "trusted_sha256": [
+        "47654c9f74317abbd0a5a75f89cd2d563708e8234e8887cc7ab39bf49030abaa",
         "0a41e6ace960abaaf6abf5e7b1e53fd39f414e1e00b59fa725f2db9e3eb05b58",
         "c4f0007cad5774510bdc55e2815ce0911c220afa8d5dd4efc327ba1231c8f3da"
       ]
@@ -125,6 +127,7 @@
     {
       "canonical_name": "sks-design-ui-editor",
       "trusted_sha256": [
+        "6c24e950a12dec52c625964069c7c21a0220a58e0f69f977d802f44fdb03a940",
         "83a806cc93a3c5342e0dccfc6a45983382d5bf74d1226c4e3288228db22b737a",
         "1b65f0028a6dcb2f7eeab0b0df411a75546bc3aefa8a76067e1818da000c2249"
       ]
@@ -243,12 +246,14 @@
     {
       "canonical_name": "sks-image-ux-review",
       "trusted_sha256": [
+        "54d4169dc7f362ac9fe2d090bd2612e41d30acbc3e883d6bd382929bdfb9459e",
         "9293346873b5fb25a9d93b630064a2c8ceede2bfdfa4c6ffe7fbb7f64da6595c"
       ]
     },
     {
       "canonical_name": "sks-imagegen",
       "trusted_sha256": [
+        "478e3d8f805eed55c3f3e6c2069142482a7dbd8fa5d9a59f03b136e0e1cb77d0",
         "a7f466ba1829a757f38432fbe8c3a672e22e91948537dafe8f8ce09561d2256e",
         "7a1f9372b03975886233a623031f41e06fd782b1e7a3409517bb428d9c6b76dd"
       ]
@@ -256,6 +261,7 @@
     {
       "canonical_name": "sks-imagegen-source-scout",
       "trusted_sha256": [
+        "95faf4358f1c6567ca6894bfb577629f14a23d623716be70325c0ff9a893d42e",
         "95e71d4431a4c1f6911f0f76eaa1c2b475c52fd22d35c0a6c241e21e090507ad",
         "d648b571c674ed3be862bc0e8b2110f88c2bee54292bb009df0b0b2dbd6d400b"
       ]
@@ -316,6 +322,7 @@
     {
       "canonical_name": "sks-ppt",
       "trusted_sha256": [
+        "c9a0d90e12560dd3f04959869051370e6baf46eda6eb63f708ea1661c5c9d041",
         "1d4de05afd42ee5739c0ed925af9e0ac4785fc746e659c60d3d908d465e6386c",
         "02e8a0758ec6d056ce9851a5a4505b1d32e302e730be3eb169a41392a5d6b2e2",
         "329fc6ee24bb04478b18fb6ccd3691cd7cbb50e1b77ca7b6136383d00b3b0bb4"

@@ -1,8 +1,9 @@
+import { IMAGEGEN_MODEL, IMAGEGEN_QUALITIES, isImagegenSize } from './imagegen-model-policy.js';
 import path from 'node:path';
 import { exists, nowIso, sha256, writeJsonAtomic } from '../fsx.js';
 import { sha256File } from '../wiki-image/image-hash.js';
 
-export interface GptImage2RequestValidationInput {
+export interface ImagegenRequestValidationInput {
   provider: string;
   endpoint: string;
   model: string;
@@ -13,23 +14,22 @@ export interface GptImage2RequestValidationInput {
   privacy?: string;
 }
 
-const ALLOWED_SIZES = new Set(['auto', '1024x1024', '1024x1536', '1536x1024']);
-
-export async function validateGptImage2Request(input: GptImage2RequestValidationInput) {
+export async function validateImagegenRequest(input: ImagegenRequestValidationInput) {
   const blockers: string[] = [];
   const source = path.resolve(input.source_image_path || '');
   const params = input.params || {};
-  if (input.model !== 'gpt-image-2') blockers.push('model_must_be_gpt_image_2');
+  if (input.model !== IMAGEGEN_MODEL) blockers.push('imagegen_model_not_current');
   if (!String(input.prompt || '').trim()) blockers.push('prompt_required');
   if (!await exists(source)) blockers.push('source_image_missing');
-  if ('input_fidelity' in params || 'inputFidelity' in params) blockers.push('input_fidelity_must_be_omitted_for_gpt_image_2');
-  if (params.background === 'transparent') blockers.push('transparent_background_not_supported_for_this_callout_route');
-  if (params.size != null && !ALLOWED_SIZES.has(String(params.size))) blockers.push('unsupported_image_size');
+  if ('input_fidelity' in params || 'inputFidelity' in params) blockers.push('input_fidelity_must_be_omitted_for_imagegen');
+  if (params.background === 'transparent' && !['png', 'webp'].includes(String(params.output_format || 'png'))) blockers.push('transparent_background_requires_png_or_webp');
+  if (params.size != null && !isImagegenSize(params.size)) blockers.push('unsupported_image_size');
+  if (params.quality != null && !(IMAGEGEN_QUALITIES as readonly unknown[]).includes(params.quality)) blockers.push('unsupported_image_quality');
   if (input.privacy !== 'local-only') blockers.push('privacy_must_be_local_only');
   const sourceSha = blockers.includes('source_image_missing') ? null : await sha256File(source).catch(() => null);
   const promptHash = sha256(String(input.prompt || ''));
   return {
-    schema: 'sks.gpt-image-2-request-validation.v1',
+    schema: 'sks.imagegen-request-validation.v1',
     ok: blockers.length === 0,
     created_at: nowIso(),
     provider: input.provider,
@@ -46,14 +46,13 @@ export async function validateGptImage2Request(input: GptImage2RequestValidation
       transparent_background_requested: params.background === 'transparent'
     },
     unsupported_parameters_omitted: ['input_fidelity'],
-    gpt_image_2_input_fidelity_automatic: true,
     privacy: input.privacy || null,
     blockers
   };
 }
 
-export async function writeGptImage2RequestValidationArtifact(input: GptImage2RequestValidationInput, artifactPath: string) {
-  const validation = await validateGptImage2Request(input);
+export async function writeImagegenRequestValidationArtifact(input: ImagegenRequestValidationInput, artifactPath: string) {
+  const validation = await validateImagegenRequest(input);
   await writeJsonAtomic(artifactPath, validation);
   return validation;
 }

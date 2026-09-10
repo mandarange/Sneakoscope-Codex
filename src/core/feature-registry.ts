@@ -1,3 +1,4 @@
+import { IMAGEGEN_MODEL } from './imagegen/imagegen-model-policy.js';
 import fs from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
@@ -780,7 +781,7 @@ function imagegenWiringFeatures() {
       aliases: ['$Image-UX-Review', '$UX-Review'],
       category: 'visual-memory',
       maturity: 'beta',
-      intent: 'Image UX route start gate, shared gpt-image-2 adapter, callout extraction, and Codex App evidence validation wiring.',
+      intent: ("Image UX route start gate, shared " + IMAGEGEN_MODEL + " adapter, callout extraction, and Codex App evidence validation wiring."),
       voxel_triwiki_integration: 'image/source/bbox voxel required',
       completion_proof_integration: 'image-ux-review-gate and Completion Proof must separate real Codex image evidence from mock/API fallback evidence',
       known_gaps: ['live Codex App image generation remains environment-dependent'],
@@ -798,7 +799,7 @@ function imagegenWiringFeatures() {
       aliases: ['$PPT'],
       category: 'visual-memory',
       maturity: 'beta',
-      intent: 'PPT slide callout review path reuses the shared gpt-image-2 adapter and records imagegen_evidence in PPT gates.',
+      intent: ("PPT slide callout review path reuses the shared " + IMAGEGEN_MODEL + " adapter and records imagegen_evidence in PPT gates."),
       voxel_triwiki_integration: 'image/source/bbox voxel required',
       completion_proof_integration: 'ppt-imagegen-review-gate and ppt-gate must include Codex App imagegen evidence classes and hashes',
       known_gaps: ['live deck export and live Codex App image generation remain environment-dependent'],

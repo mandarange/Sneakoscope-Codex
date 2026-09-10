@@ -1,3 +1,4 @@
+import { IMAGEGEN_MODEL } from '../imagegen/imagegen-model-policy.js';
 import path from 'node:path';
 import { CODEX_APP_IMAGE_GENERATION_DOC_URL } from '../routes.js';
 import { detectImagegenCapability } from '../imagegen/imagegen-capability.js';
@@ -99,7 +100,7 @@ export async function repairCodexImagegen(input: {
     });
   }
 
-  if (codexBin && before?.core_ready !== true && apply) {
+  if (codexBin && before?.core_ready !== true && apply && !before?.blockers?.includes('imagegen_model_unavailable')) {
     const enable = await runProcess(codexBin, ['features', 'enable', 'image_generation'], {
       timeoutMs: input.timeoutMs || 10000,
       maxOutputBytes: 32 * 1024
@@ -120,7 +121,7 @@ export async function repairCodexImagegen(input: {
       ok: before?.core_ready === true,
       attempted: false,
       command: codexBin ? `${codexBin} features enable image_generation` : 'codex features enable image_generation',
-      blocker: before?.core_ready === true ? null : apply ? 'codex_cli_missing' : 'doctor_fix_not_requested'
+      blocker: before?.core_ready === true ? null : before?.blockers?.includes('imagegen_model_unavailable') ? 'imagegen_model_unavailable' : apply ? 'codex_cli_missing' : 'doctor_fix_not_requested'
     });
   }
 
@@ -165,7 +166,7 @@ export async function repairCodexImagegen(input: {
   const requiresNewTask = !recovered;
   const refreshActions = requiresNewTask ? [
     'Start a new Codex/Work task so the repaired $imagegen tool is attached to a fresh task manifest.',
-    'Invoke Codex App $imagegen with gpt-image-2 and bind the selected raster output path to the route evidence.',
+    ("Use the selected model-capable image provider with " + IMAGEGEN_MODEL + " and bind the selected raster output path to the route evidence."),
     'If $imagegen is missing in the new task, restart the ChatGPT/Codex desktop app and rerun `sks doctor --fix --repair-native-capabilities --yes`.'
   ] : [];
   const blockers = recovered ? [] : [

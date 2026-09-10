@@ -4,6 +4,15 @@
 
 ## [10.1.5] - 2026-09-10
 
+### Changed
+
+- Use one officially verified GPT Image model policy, currently GPT Image 2.5
+  Sunburst, across generation, editing, UX, and PPT. Explicitly set the image
+  tool model in Responses requests and support the current size/quality contract.
+- Remove model-specific request/response artifacts, the old validator, duplicate
+  request writes, and the retired live-smoke environment alias. Do not infer an
+  engine from a prompt or relabel Codex built-in image outputs as the current API model.
+
 ### Fixed
 
 - Raise the shared Desktop Bridge Responses body limit from 16 MiB to 128 MiB

@@ -1,3 +1,4 @@
+import { IMAGEGEN_MODEL } from '../imagegen/imagegen-model-policy.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { ensureDir, nowIso, writeJsonAtomic } from '../fsx.js';
@@ -150,16 +151,16 @@ async function stateForCapability(
       repair_actions: verified
         ? ['postcheck-imagegen-path-contract']
         : builtInConfigured
-          ? ['Invoke Codex App $imagegen with gpt-image-2 in a fresh task and record the selected raster output path before retrying the image route.']
-          : ['Sign in to Codex App, enable the built-in $imagegen / gpt-image-2 surface, then verify it with a real generated raster output before retrying the image route.'],
+          ? [("Use the selected model-capable image provider with " + IMAGEGEN_MODEL + " in a fresh task and record the selected raster output path before retrying the image route.")]
+          : [("Select a provider supporting " + IMAGEGEN_MODEL + " surface, then verify it with a real generated raster output before retrying the image route.")],
       after: null,
       artifact_path: path.join(reports, 'native-capability-repair-matrix.json'),
       core_blockers: [],
       route_blockers: verified ? {} : { 'route-image': [routeBlocker] },
       manual_actions: verified ? [] : [
         builtInConfigured
-          ? 'Generate one real raster with Codex App $imagegen / gpt-image-2 and bind its output path to the route evidence.'
-          : 'Sign in to Codex App and enable/use the built-in $imagegen / gpt-image-2 surface before image routes.'
+          ? ("Generate one real raster with the selected model-capable provider: " + IMAGEGEN_MODEL + " and bind its output path to the route evidence.")
+          : ("Select a provider supporting " + IMAGEGEN_MODEL + " surface before image routes.")
       ],
       blockers: [],
       warnings: verified ? [] : [

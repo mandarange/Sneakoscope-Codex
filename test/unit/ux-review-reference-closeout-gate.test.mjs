@@ -51,7 +51,7 @@ test('runtime gate accepts Image UX reference-only partial closeout without gene
 
   assert.equal(status.ok, true);
   assert.deepEqual(status.blockers, []);
-  assert.equal(gate.gpt_image_2_callout_generated, false);
+  assert.equal(gate.imagegen_callout_generated, false);
   assert.equal(gate.generated_image_ingested, false);
   assert.equal(gate.issue_ledger_from_generated_callout, false);
 });
@@ -109,7 +109,7 @@ test('completion proof accepts Image UX reference-only partial closeout with act
     blockers: [],
     failure_analysis: {
       status: 'complete',
-      root_cause: 'The fixture intentionally has no generated gpt-image-2 annotated review output.',
+      root_cause: 'The fixture intentionally has no generated gpt-image-2.5-sunburst annotated review output.',
       corrective_action: 'Cap the result at reference-only verified_partial and retain the missing generated-image fact.',
       evidence: ['image-ux-screen-inventory.json']
     },
@@ -140,7 +140,7 @@ test('trust report accepts Image UX reference-only partial closeout with active 
           status: 'verified_partial',
           reference_only: true,
           source_screenshots_count: 1,
-          generated_gpt_image_2_callout_images_count: 0,
+          generated_imagegen_callout_images_count: 0,
           generated_images_total: 0,
           callout_extraction_schema_status: 'valid',
           recapture_re_review_status: 'complete_or_not_applicable',

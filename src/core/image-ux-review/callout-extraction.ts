@@ -55,7 +55,7 @@ export function buildIssueLedgerFromGeneratedCallouts(generatedReviewLedger: any
 
 export function normalizeIssueRow(issue: any = {}, image: any = {}, index = 0) {
   const severity = SEVERITIES.has(String(issue.severity)) ? String(issue.severity) : 'P2';
-  const source = issue.source || image.source || (image.mock ? 'mock_fixture' : 'real_gpt_image_2_callout');
+  const source = issue.source || image.source || (image.mock ? 'mock_fixture' : 'real_imagegen_callout');
   const status = ISSUE_STATUSES.has(String(issue.status)) ? String(issue.status) : 'open';
   const bbox = Array.isArray(issue.bbox) ? issue.bbox : Array.isArray(issue.region) ? issue.region : [0, 0, 1, 1];
   const sourceScreenId = issue.source_screen_id || issue.screen_id || image.source_screen_id || 'screen-1';

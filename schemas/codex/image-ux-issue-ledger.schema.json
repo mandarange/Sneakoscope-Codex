@@ -88,7 +88,7 @@
         "candidate_files": { "type": "array", "items": { "type": "string" } },
         "status": { "enum": ["open", "fixed", "accepted_not_applicable", "blocked", "needs_human", "suggestion_only", "remains_open"] },
         "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
-        "source": { "enum": ["real_gpt_image_2_callout", "mock_fixture"] },
+        "source": { "enum": ["real_imagegen_callout", "mock_fixture"] },
         "extracted_from_generated_image": { "type": "boolean" },
         "extraction_provider": { "type": "string", "minLength": 1 },
         "extraction_schema": { "type": "string", "minLength": 1 },

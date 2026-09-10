@@ -9,7 +9,7 @@ export function parseGeneratedReviewCallouts(ledger: any = {}) {
     image_id: item.image_id || item.imageId || ledger.image_id || null,
     bbox: item.bbox || item.box || null,
     label: item.label || item.title || item.issue || `Callout ${index + 1}`,
-    source: item.source || ledger.source || 'gpt-image-2-annotated-review',
+    source: item.source || ledger.source || 'imagegen-annotated-review',
     evidence_path: item.evidence_path || ledger.path || null,
     trust_score: item.trust_score ?? 0.82
   }));

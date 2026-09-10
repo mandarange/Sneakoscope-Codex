@@ -6,7 +6,7 @@ requireContains('ux-review:run-wires-imagegen', 'src/core/commands/image-ux-revi
   'const shouldGenerateCallouts = !generatedImage',
   'requireCodexImagegen',
   'buildCalloutPrompt',
-  'generateGptImage2CalloutReview',
+  'generateImagegenCalloutReview',
   'evidence_class',
   'output_sha256',
   // The evidence taxonomy lives in imagegen-evidence.ts; the route must consult
@@ -31,4 +31,4 @@ requireContains('ux-review:run-wires-imagegen', 'src/core/imagegen/imagegen-evid
   'FULL_IMAGEGEN_EVIDENCE_CLASSES'
 ]);
 
-emitGate('ux-review:run-wires-imagegen', { command_path: 'sks ux-review run', imagegen_adapter: 'generateGptImage2CalloutReview' });
+emitGate('ux-review:run-wires-imagegen', { command_path: 'sks ux-review run', imagegen_adapter: 'generateImagegenCalloutReview' });

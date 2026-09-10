@@ -156,7 +156,7 @@ async function extractOneGeneratedSlide(root: string, schemaPath: string, jsonSc
   const rows = Array.isArray(parsed.issues) ? parsed.issues : [];
   return {
     ok: rows.length > 0,
-    issues: rows.map((row: any, index: number) => normalizePptIssue(row, image, index, sessionId ? 'real_gpt_image_2_callout' : 'structured_outputs_callout_extraction')),
+    issues: rows.map((row: any, index: number) => normalizePptIssue(row, image, index, sessionId ? 'real_imagegen_callout' : 'structured_outputs_callout_extraction')),
     provider: sessionId ? 'codex_exec_resume_output_schema' : 'structured_outputs_callout_extraction',
     blocker: rows.length ? null : structuredOutputBlocker('ppt_slide_issue_extraction_missing', 'Generated slide review image yielded no visible callouts.')
   };
@@ -194,7 +194,7 @@ function bboxOutOfBounds(issue: any = {}, image: any = {}) {
   return [];
 }
 
-function normalizePptIssue(issue: any = {}, image: any = {}, index = 0, source = 'real_gpt_image_2_callout') {
+function normalizePptIssue(issue: any = {}, image: any = {}, index = 0, source = 'real_imagegen_callout') {
   const slideIndex = Number(issue.slide_index || image.slide_index || 1);
   return {
     id: issue.id || `ppt-slide-${slideIndex}-issue-${index + 1}`,

@@ -9,7 +9,7 @@ test('recapture policy requires changed screen recheck after patch evidence', ()
   assert.ok(blocked.blockers.includes('manual_recapture_required'));
   const covered = buildRecapturePlan({ recapture_required: true, changed_files: ['src/ui.tsx'] }, { userScreenshot: 'after.png' });
   assert.equal(covered.passed, true);
-  assert.equal(covered.gpt_image_2_re_review_required, true);
+  assert.equal(covered.imagegen_re_review_required, true);
 });
 
 test('web UX recapture does not use Computer Use unless the target is explicitly native', () => {

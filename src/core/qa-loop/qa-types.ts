@@ -54,7 +54,7 @@ export interface QaContractV2 {
     readonly ui_required: boolean;
     readonly api_required: boolean;
     readonly visual_required: boolean;
-    readonly gpt_image_2_review_required: boolean;
+    readonly imagegen_review_required: boolean;
   };
   readonly auth: {
     readonly required: boolean;

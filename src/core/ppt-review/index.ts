@@ -189,7 +189,7 @@ async function createPptImageVoxelRelations(root: string, missionId: string, exp
   const generated = calloutLedger.generated_slide_callout_images?.[0];
   if (!source?.path || !generated?.path) return false;
   await ingestImage(root, source.path, { missionId, source: mock ? 'ppt_mock_slide_export' : 'ppt_slide_export', id: `${missionId}-ppt-slide-${source.slide_index}` });
-  await ingestImage(root, generated.path, { missionId, source: mock ? 'ppt_mock_gpt_image_2_callout' : 'ppt_gpt_image_2_callout', id: `${missionId}-ppt-generated-${source.slide_index}` });
+  await ingestImage(root, generated.path, { missionId, source: mock ? 'ppt_mock_imagegen_callout' : 'ppt_imagegen_callout', id: `${missionId}-ppt-generated-${source.slide_index}` });
   const relationTypes = [
     'ppt_generated_slide_callout_review_of',
     'slide_callout_review_of',

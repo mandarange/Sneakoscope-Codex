@@ -140,10 +140,10 @@ const FIXTURES = Object.freeze({
   'skill-honest-mode': fixture('execute_and_validate_artifacts', 'sks proof smoke --json', ['completion-proof.json', 'trust-report.json'], 'pass'),
   'skill-imagegen': fixture('execute_and_validate_artifacts', 'sks image-ux-review fixture --mock --json', ['image-ux-generated-review-ledger.json', 'image-voxel-ledger.json'], 'pass'),
   'ux-review:run-wires-imagegen': fixture('execute_and_validate_artifacts', 'npm run ux-review:run-wires-imagegen --silent', [{ path: 'image-ux-review-gate.json', schema: 'sks.image-ux-review-gate.v2', optional: true }], 'pass', {
-    validates_source_contracts: ['requireCodexImagegen', 'generateGptImage2CalloutReview', 'evidence_class', 'output_sha256']
+    validates_source_contracts: ['requireCodexImagegen', 'generateImagegenCalloutReview', 'evidence_class', 'output_sha256']
   }),
   'ppt:real-imagegen-wiring': fixture('execute_and_validate_artifacts', 'npm run ppt:real-imagegen-wiring --silent', [{ path: 'ppt-imagegen-review-gate.json', schema: 'sks.ppt-imagegen-review-gate.v1', optional: true }], 'pass', {
-    validates_source_contracts: ['generateGptImage2CalloutReview', 'buildSlideImagegenEvidence', 'imagegen_evidence']
+    validates_source_contracts: ['generateImagegenCalloutReview', 'buildSlideImagegenEvidence', 'imagegen_evidence']
   }),
   'skill-gx-visual-validate': fixture('execute_and_validate_artifacts', 'sks gx validate fixture --mock --json', ['gx-validation.json'], 'pass'),
   'skill-context7-docs': fixture('real_optional', 'sks context7 check --json', [], 'pass'),

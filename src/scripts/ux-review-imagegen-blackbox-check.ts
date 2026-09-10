@@ -18,8 +18,8 @@ const run = spawnSync(process.execPath, [sksBin, 'ux-review', 'run', '--image', 
 });
 const parsed = parseJson(run.stdout);
 const missionDir = parsed?.mission_id ? path.join(runRoot, '.sneakoscope', 'missions', parsed.mission_id) : null;
-const request = missionDir ? readJson(path.join(missionDir, 'image-ux-gpt-image-2-request.json')) : null;
-const response = missionDir ? readJson(path.join(missionDir, 'image-ux-gpt-image-2-response.json')) : null;
+const request = missionDir ? readJson(path.join(missionDir, 'image-ux-imagegen-request.json')) : null;
+const response = missionDir ? readJson(path.join(missionDir, 'image-ux-imagegen-response.json')) : null;
 const issues = missionDir ? readJson(path.join(missionDir, 'image-ux-issue-ledger.json')) : null;
 const generated = missionDir ? readJson(path.join(missionDir, 'image-ux-generated-review-ledger.json')) : null;
 const extraction = missionDir ? readJson(path.join(missionDir, 'image-ux-callout-extraction-report.json')) : null;
@@ -59,7 +59,7 @@ const ok = Boolean(parsed?.mission_id)
   && uxReport?.recommendations?.length === issues.issues.length
   && ['mock_only', 'verified_partial'].includes(proof?.status)
   && proof?.evidence?.image_ux_review?.reference_only === true
-  && proof?.evidence?.image_ux_review?.generated_gpt_image_2_callout_images_count === 0;
+  && proof?.evidence?.image_ux_review?.generated_imagegen_callout_images_count === 0;
 console.log(JSON.stringify({
   schema: 'sks.ux-review-imagegen-blackbox-check.v1',
   ok,

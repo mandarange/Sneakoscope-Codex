@@ -6,7 +6,7 @@ Required scripts:
 
 - `npm run ppt:imagegen-review-fixture`
 - `npm run imagegen:capability`
-- `npm run imagegen:gpt-image-2-request-validator`
+- `npm run imagegen:imagegen-request-validator`
 - `npm run ppt:real-export-adapter`
 - `npm run ppt:real-imagegen-wiring`
 - `npm run ppt:reexport-rereview`

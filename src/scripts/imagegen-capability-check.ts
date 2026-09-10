@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // @ts-nocheck
+import { IMAGEGEN_MODEL } from '../core/imagegen/imagegen-model-policy.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { detectImagegenCapability } from '../core/imagegen/imagegen-capability.js';
@@ -14,15 +15,13 @@ fs.writeFileSync(stableOut, `${JSON.stringify(report, null, 2)}\n`);
 const ok = report.ok
   && report.core_feature === true
   && report.core_ready === true
-  && report.codex_app?.available === true
-  && report.codex_app_builtin_output_required === true
+  && report.current_imagegen_model_required === true
   && report.capability_detection_is_not_output_proof === true
   && report.real_generation_available === true
-  && report.model === 'gpt-image-2'
+  && report.model === IMAGEGEN_MODEL
   && report.openai_images_api?.official_codex_app_substitute === false
   && report.api_fallback_satisfies_codex_app_evidence === false
   && report.input_fidelity_must_be_omitted === true
-  && report.gpt_image_2_input_fidelity_automatic === true
   && Array.isArray(report.core_blockers)
   && report.core_blockers.length === 0;
 console.log(JSON.stringify({ ...report, ok, path: out, stable_path: stableOut }, null, 2));

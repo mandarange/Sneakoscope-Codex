@@ -1,3 +1,4 @@
+import { IMAGEGEN_MODEL } from '../core/imagegen/imagegen-model-policy.js';
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { stdin as input, stdout as output } from 'node:process';
@@ -64,7 +65,7 @@ export async function postinstall({ bootstrap }: any) {
     console.log('Configure providers explicitly with `sks bridge provider configure codex-lb ...` or `sks bridge provider configure openrouter ...`.');
 
     const imagegenRepair = await ensureCodexImagegenDuringInstall();
-    if (imagegenRepair.status === 'ready') console.log('Codex App Image Gen: ready ($imagegen/gpt-image-2 detected).');
+    if (imagegenRepair.status === 'ready') console.log(("Image generation provider capability ready (requested model: " + IMAGEGEN_MODEL + "; output not verified)."));
     else if (imagegenRepair.status === 'recovered') console.log('Codex App Image Gen: recovered and re-detected. Start a new Codex/Work task; restart the desktop app only if the new task still lacks $imagegen.');
     else if (imagegenRepair.status === 'blocked') console.log(`Codex App Image Gen: blocked; run \`${doctorFixCommand}\`. ${(imagegenRepair.blockers || []).join(', ')}`.trim());
     else if (imagegenRepair.status === 'skipped') console.log(`Codex App Image Gen: skipped (${imagegenRepair.reason}).`);

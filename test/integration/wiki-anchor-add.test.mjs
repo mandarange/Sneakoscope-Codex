@@ -14,7 +14,7 @@ test('wiki anchor-add and relation-add APIs validate visual anchors', async () =
       { id: 'after', path: 'after.png', sha256: 'fixture', width: 100, height: 80 }
     ]
   }));
-  const anchor = await addVisualAnchor(root, { imageId: 'before', bbox: [10, 10, 20, 20], label: 'CTA', source: 'gpt-image-2-annotated-review', route: '$Image-UX-Review' });
+  const anchor = await addVisualAnchor(root, { imageId: 'before', bbox: [10, 10, 20, 20], label: 'CTA', source: 'imagegen-annotated-review', route: '$Image-UX-Review' });
   assert.equal(anchor.ok, true);
   const relation = await addImageRelation(root, { beforeImageId: 'before', afterImageId: 'after', anchors: [anchor.anchor.id], route: '$Image-UX-Review' });
   assert.equal(relation.ok, true);

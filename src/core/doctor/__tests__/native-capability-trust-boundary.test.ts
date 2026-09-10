@@ -129,7 +129,7 @@ test('ImageGen capability preflight starts the route but cannot satisfy final ou
   assert.equal(finalGate.passed, false);
   assert.equal(finalGate.status, 'blocked');
   assert.equal(finalGate.full_review_passed, false);
-  assert.equal(finalGate.gpt_image_2_callout_generated, false);
+  assert.equal(finalGate.imagegen_callout_generated, false);
   assert.equal(finalGate.generated_image_ingested, false);
   assert.ok(finalGate.blockers.includes('generated_review_image_missing'));
 });

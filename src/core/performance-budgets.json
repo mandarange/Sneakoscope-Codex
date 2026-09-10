@@ -91,7 +91,7 @@
   },
   "ux_review_staged_latency_ms": {
     "source_screenshot_ingest": 500,
-    "gpt_image_2_generation": 120000,
+    "imagegen_generation": 120000,
     "callout_extraction": 120000,
     "fix_task_planning": 500,
     "recapture_re_review": 120000,

@@ -1,3 +1,4 @@
+import { IMAGEGEN_MODEL } from './imagegen-model-policy.js';
 import { detectImagegenCapability } from './imagegen-capability.js';
 import { repairCodexImagegen } from '../doctor/imagegen-repair.js';
 
@@ -28,6 +29,7 @@ export async function requireCodexImagegen(root: string, opts: {
   }));
   const capabilityReadyBeforeRepair = imagegenPreflightReady(capability);
   const repair = opts.autoRepair === true && !capabilityReadyBeforeRepair
+    && !(capability as any).blockers?.includes('imagegen_model_unavailable')
     ? await repairCodexImagegen({
         root,
         apply: opts.applyRepair === true,
@@ -43,7 +45,7 @@ export async function requireCodexImagegen(root: string, opts: {
     ? (repair as any).after || capability
     : capability;
   const capabilityReady = imagegenPreflightReady(finalCapability) || (repair as any)?.capability_ready === true;
-  const preflightProvider = (finalCapability as any).core_ready === true
+  const preflightProvider = (finalCapability as any).codex_app?.requested_model_supported === true
     ? 'codex_app_builtin'
     : codexLbImagegenReady(finalCapability) ? 'codex_lb' : null;
   const currentTaskToolManifestVerified = (repair as any)?.current_task_tool_manifest_verified === true;
@@ -95,7 +97,7 @@ export async function requireCodexImagegen(root: string, opts: {
           'Verify configuration with: codex features list'
         ]),
         'Start a fresh Codex/Work task so $imagegen is present in its tool manifest.',
-        'Invoke $imagegen with gpt-image-2 and bind the selected raster output path to route evidence.'
+        `Use a provider that explicitly supports ${IMAGEGEN_MODEL}; enabling the built-in tool cannot change its engine.`
       ]
     },
     blockers

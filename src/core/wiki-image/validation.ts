@@ -38,7 +38,7 @@ export function validateImageVoxelLedger(ledger: any = {}, opts: any = {}) {
   const relationKeys = new Set();
   const allowedUxRelationTypes = new Set([
     'source_screenshot',
-    'gpt_image_2_callout_of',
+    'imagegen_callout_of',
     'generated_callout_review_of',
     'callout_issue_bbox',
     'patch_attempt_for_issue',
@@ -76,7 +76,7 @@ export function validateImageVoxelLedger(ledger: any = {}, opts: any = {}) {
     if (String(relation.type || '').includes('callout') || String(relation.type || '').includes('issue') || String(relation.type || '').includes('screenshot')) {
       if (!allowedUxRelationTypes.has(relation.type)) issues.push(`relation_type:${relation.type || 'unknown'}`);
     }
-    if ((relation.type === 'gpt_image_2_callout_of' || relation.type === 'generated_callout_review_of') && (!relation.source_image_id || !relation.generated_image_id)) issues.push(`relation_source_generated:${relation.type}`);
+    if ((relation.type === 'imagegen_callout_of' || relation.type === 'generated_callout_review_of') && (!relation.source_image_id || !relation.generated_image_id)) issues.push(`relation_source_generated:${relation.type}`);
     if (relation.type === 'after_screenshot_of' && (!relation.before_image_id || !relation.after_image_id)) issues.push('relation_after_screenshot_pair');
     if ((relation.type === 'callout_issue_bbox' || relation.type === 'patch_attempt_for_issue') && !relation.issue_id) issues.push(`relation_issue:${relation.type}`);
     if (relation.bbox) {

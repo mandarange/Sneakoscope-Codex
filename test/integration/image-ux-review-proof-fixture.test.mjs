@@ -18,7 +18,7 @@ test('Image UX Review fixture requires generated review image anchors in proof g
     imageId: 'image-ux-generated-review',
     bbox: [120, 240, 360, 80],
     label: 'CTA contrast issue',
-    source: 'gpt-image-2-annotated-review',
+    source: 'imagegen-annotated-review',
     route: '$Image-UX-Review',
     evidencePath: 'image-ux-generated-review-ledger.json'
   });
@@ -33,5 +33,6 @@ test('Image UX Review fixture requires generated review image anchors in proof g
     claims: [{ id: 'image-ux-anchor-fixture', status: 'fixture', text: 'Image UX fixture proof has generated review anchor evidence.' }]
   });
   const proofGate = await validateRouteCompletionProof(root, { missionId, route: '$Image-UX-Review' });
-  assert.equal(proofGate.ok, true);
+  assert.equal(proofGate.ok, false, 'fixture-only anchors cannot prove real generation');
+  assert.ok(proofGate.issues.length > 0);
 });

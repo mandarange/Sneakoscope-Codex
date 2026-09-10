@@ -72,7 +72,7 @@ test('UX-Review gate v2 allows reference-only partial closeout when generated im
   assert.equal(gate.verified_level, 'verified_partial');
   assert.equal(gate.full_review_passed, false);
   assert.equal(gate.reference_only, true);
-  assert.equal(gate.gpt_image_2_callout_generated, false);
+  assert.equal(gate.imagegen_callout_generated, false);
   assert.equal(gate.generated_image_ingested, false);
   assert.equal(gate.issue_ledger_from_generated_callout, false);
   assert.deepEqual(gate.blockers, []);

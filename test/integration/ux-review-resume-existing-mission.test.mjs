@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import { imageUxReviewCommand } from '../../dist/core/commands/image-ux-review-command.js';
 import { createMission } from '../../dist/core/mission.js';
 import { PNG_1X1 } from '../helpers/ux-review-1-0-8-fixtures.mjs';
@@ -29,6 +30,13 @@ test('attaching a generated image resumes extraction and persists the source-to-
       TARGET_SURFACE: 'fixture'
     }
   }, null, 2));
+  await fs.writeFile(path.join(created.dir, 'image-ux-imagegen-response.json'), JSON.stringify({
+    schema: 'sks.image-ux-imagegen-response.v1', ok: true, status: 'generated',
+    provider: 'desktop_bridge_responses_image_generation', model: 'gpt-image-2.5-sunburst',
+    evidence_class: 'codex_lb_provider_imagegen', output_source: 'codex_lb_provider_responses',
+    output_image_path: generatedImage, output_sha256: createHash('sha256').update(png).digest('hex'),
+    output_id: 'fixture-current-model-output'
+  }));
 
   const previousCwd = process.cwd();
   const previousExtractor = process.env.SKS_TEST_FAKE_EXTRACTOR;
@@ -54,7 +62,7 @@ test('attaching a generated image resumes extraction and persists the source-to-
     else process.env.SKS_TEST_FAKE_EXTRACTOR = previousExtractor;
   }
 
-  const response = JSON.parse(await fs.readFile(path.join(created.dir, 'image-ux-gpt-image-2-response.json'), 'utf8'));
+  const response = JSON.parse(await fs.readFile(path.join(created.dir, 'image-ux-imagegen-response.json'), 'utf8'));
   const issues = JSON.parse(await fs.readFile(path.join(created.dir, 'image-ux-issue-ledger.json'), 'utf8'));
   const ledger = JSON.parse(await fs.readFile(path.join(created.dir, 'image-voxel-ledger.json'), 'utf8'));
   assert.ok(response.generated_review_image_id);

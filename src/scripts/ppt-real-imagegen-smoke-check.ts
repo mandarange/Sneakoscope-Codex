@@ -3,7 +3,7 @@
 import { spawnSync } from 'node:child_process';
 import { osTempPngFixtureArg } from './lib/valid-png-fixture.js';
 
-const enabled = process.env.SKS_TEST_REAL_IMAGEGEN === '1' || process.env.SKS_REAL_IMAGEGEN === '1';
+const enabled = process.env.SKS_TEST_REAL_IMAGEGEN === '1';
 const hasKey = Boolean(process.env.OPENAI_API_KEY || process.env.SKS_CODEX_APP_IMAGEGEN === '1');
 if (!enabled || !hasKey) {
   const result = {

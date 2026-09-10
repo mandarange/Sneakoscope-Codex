@@ -1,3 +1,4 @@
+import { IMAGEGEN_MODEL } from '../imagegen/imagegen-model-policy.js';
 import path from 'node:path'
 import { nowIso, writeJsonAtomic } from '../fsx.js'
 import { manualProofRoutesBlockReadiness } from '../verification-profile.js'
@@ -353,7 +354,7 @@ function nextActionForRouteBlocker(scope: string, blocker: string) {
   // command whose output carries this line — is a loop with no exit. The
   // capability section already prints the real step; say it here too.
   if (scope === 'route-image' && /real_output_unverified|not_verified|unverified/.test(blocker)) {
-    return `Image route needs manual readiness (${blocker}): invoke Codex App \`$imagegen\` with gpt-image-2 in a fresh task and record the selected raster output path. No \`sks doctor\` run can satisfy this on its own.`
+    return `Image route needs manual readiness (${blocker}): use the selected model-capable image provider with ${IMAGEGEN_MODEL} in a fresh task and record the selected raster output path. No \`sks doctor\` run can satisfy this on its own.`
   }
   if (scope === 'route-image') return `Repair image route capability (${blocker}): run \`sks doctor --fix --full --yes\`, then verify Codex App/image auth.`
   if (scope === 'route-computer-use') return `Computer Use route needs manual readiness (${blocker}); verify OS/App permissions before using that route.`
