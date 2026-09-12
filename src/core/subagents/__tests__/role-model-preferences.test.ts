@@ -12,7 +12,7 @@ import {
   setRoleModelPreference
 } from '../role-model-preferences.js';
 
-test('role model preferences are owner-only, managed-role scoped, and validate profile syntax', async (t) => {
+test('role model preferences validate scope and syntax and preserve explicit Astra High over the Low implementation default', async (t) => {
   const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-role-models-'));
   t.after(async () => fs.rm(temp, { recursive: true, force: true }));
   const env = { HOME: path.join(temp, 'home'), SKS_HOME: path.join(temp, 'sks-home') } as NodeJS.ProcessEnv;
@@ -47,7 +47,7 @@ test('role model preferences are owner-only, managed-role scoped, and validate p
   const set: any = await setRoleModelPreference({
     role: 'ui-implementer',
     model: 'gpt-6-astra',
-    reasoning: 'max',
+    reasoning: 'high',
     env,
     now: () => '2026-07-22T00:00:00.000Z'
   });
@@ -62,14 +62,18 @@ test('role model preferences are owner-only, managed-role scoped, and validate p
   const ui = status.roles.find((row) => row.role === 'ui_implementer');
   assert.equal(ui?.effective_provider, 'openai');
   assert.equal(ui?.effective_model, 'gpt-6-astra');
-  assert.equal(ui?.effective_reasoning_effort, 'max');
+  assert.equal(ui?.default_reasoning_effort, 'low');
+  assert.equal(ui?.effective_reasoning_effort, 'high');
   assert.equal(ui?.override?.provider, 'openai');
-  assert.equal(ui?.override?.reasoning_effort, 'max');
+  assert.equal(ui?.override?.reasoning_effort, 'high');
+  assert.equal((await readRoleModelPreferences({ env })).store.roles.ui_implementer?.reasoning_effort, 'high');
 
   const reset = await resetRoleModelPreference({ role: 'ui_implementer', env });
   assert.equal(reset.ok, true);
   const read = await readRoleModelPreferences({ env });
   assert.equal(read.store.roles.ui_implementer, undefined);
+  const resetStatus = await roleModelPreferencesStatus({ env });
+  assert.equal(resetStatus.roles.find((row) => row.role === 'ui_implementer')?.effective_reasoning_effort, 'low');
 });
 
 test('v1 role model preference stores remain readable and migrate on the next write', async (t) => {
@@ -98,7 +102,7 @@ test('v1 role model preference stores remain readable and migrate on the next wr
   assert.deepEqual(read.store.roles.ui_implementer, {
     provider: 'openai',
     model: 'gpt-6-astra',
-    reasoning_effort: 'high',
+    reasoning_effort: 'low',
     updated_at: '2026-07-20T00:00:00.000Z'
   });
 
@@ -147,7 +151,7 @@ for (const version of [1, 2]) {
     assert.ok(read.store.roles.ui_implementer);
     assert.ok(read.store.roles.expert);
     assert.ok(read.store.roles.explorer);
-    assert.deepEqual([read.store.roles.ui_implementer.model, read.store.roles.ui_implementer.reasoning_effort], ['gpt-6-astra', 'high']);
+    assert.deepEqual([read.store.roles.ui_implementer.model, read.store.roles.ui_implementer.reasoning_effort], ['gpt-6-astra', 'low']);
     assert.deepEqual([read.store.roles.expert.provider, read.store.roles.expert.model, read.store.roles.expert.reasoning_effort], ['openai', 'gpt-6-astra', 'max']);
     assert.deepEqual([read.store.roles.explorer.model, read.store.roles.explorer.reasoning_effort], ['gpt-6-astra', 'medium']);
     const migratedEfforts = { worker: 'low', debugger: 'max', docs_maintainer: 'medium', security_reviewer: 'max', research_reviewer: 'max' };
@@ -254,11 +258,11 @@ test('official subagent preparation normalizes legacy role overrides in the plan
   assert.equal(await fs.readFile(preferencePath, 'utf8'), legacySource);
   assert.equal(routed.routed_provider, 'openai');
   assert.equal(routed.routed_model, 'gpt-6-astra');
-  assert.equal(routed.routed_model_reasoning_effort, 'high');
+  assert.equal(routed.routed_model_reasoning_effort, 'low');
   assert.equal(routed.routed_model_policy, 'user_role_model_preference');
   assert.equal(routed.routing_dynamic, false);
-  assert.equal(prepared.plan.role_model_preferences.overrides.ui_implementer.reasoning_effort, 'high');
-  assert.match(prepared.delegationPrompt, /pass model="gpt-6-astra" and reasoning_effort="high" from the sealed role policy/);
+  assert.equal(prepared.plan.role_model_preferences.overrides.ui_implementer.reasoning_effort, 'low');
+  assert.match(prepared.delegationPrompt, /pass model="gpt-6-astra" and reasoning_effort="low" from the sealed role policy/);
   assert.match(prepared.delegationPrompt, /every child uses the exact model slug gpt-6-astra/);
   assert.match(prepared.delegationPrompt, /must use `fork_turns="none"` or a positive bounded turn count, with the complete bounded slice contract in `message`/);
 });
@@ -290,7 +294,7 @@ test('app-session third-party parent stays selected while all children use Astra
   assert.equal(ui?.override, null);
   assert.equal(ui?.effective_provider, 'openai');
   assert.equal(ui?.effective_model, 'gpt-6-astra');
-  assert.equal(ui?.effective_reasoning_effort, 'high');
+  assert.equal(ui?.effective_reasoning_effort, 'low');
   assert.equal(ui?.effective_source, 'managed-default');
 
   const prepared = await prepareOfficialSubagentMission({
@@ -314,12 +318,12 @@ test('app-session third-party parent stays selected while all children use Astra
   const routed = prepared.plan.agents.ui_implementer;
   assert.equal(routed.routed_provider, 'openai');
   assert.equal(routed.routed_model, 'gpt-6-astra');
-  assert.equal(routed.routed_model_reasoning_effort, 'high');
+  assert.equal(routed.routed_model_reasoning_effort, 'low');
   assert.equal(routed.routed_model_policy, 'sol_high_implementation');
   assert.equal(routed.role_model_preference_source, 'managed-default');
   assert.equal(prepared.plan.role_model_preferences.routing.active_main_model_inherited, false);
   assert.match(prepared.delegationPrompt, /keep the current app-selected main model openrouter:moonshotai\/kimi-k3/);
-  assert.match(prepared.delegationPrompt, /pass model="gpt-6-astra" and reasoning_effort="high" from the sealed role policy/);
+  assert.match(prepared.delegationPrompt, /pass model="gpt-6-astra" and reasoning_effort="low" from the sealed role policy/);
 
   const parentRequiredDir = path.join(root, '.sneakoscope', 'missions', 'M-main-model-parent-required');
   await fs.mkdir(parentRequiredDir, { recursive: true });
@@ -430,7 +434,7 @@ test('unconfigured roles spawn with sealed role model policy instead of omitting
     });
   })();
   return prompt.then((value) => {
-    assert.match(value, /pass model="gpt-6-astra" and reasoning_effort="high" from the sealed role policy/);
+    assert.match(value, /pass model="gpt-6-astra" and reasoning_effort="low" from the sealed role policy/);
     assert.match(value, /every child uses the exact model slug gpt-6-astra/);
     assert.match(value, /must use `fork_turns="none"` or a positive bounded turn count, with the complete bounded slice contract in `message`/);
   });

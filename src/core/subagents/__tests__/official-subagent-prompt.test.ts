@@ -32,8 +32,8 @@ test('official prompt seals model, ownership, wait, and no-nesting rules', () =>
 
   assert.match(prompt, /gpt-6-astra with max reasoning/)
   assert.match(prompt, /worker.*gpt-6-astra.*low reasoning.*tiny short-context mechanical/)
-  assert.match(prompt, /gpt-6-astra with high reasoning for ordinary UI, logic, backend, and native implementation/)
-  assert.match(prompt, /gpt-6-astra with max reasoning only for focused unresolved, high-risk, final-review, architecture, security/)
+  assert.match(prompt, /gpt-6-astra with low reasoning for ordinary UI, logic, backend, and native implementation with established instructions/)
+  assert.match(prompt, /gpt-6-astra with max reasoning for planning, analysis, review, focused unresolved, high-risk, architecture, security/)
   assert.match(prompt, /gpt-6-astra with medium reasoning for long context\/memory, large docs\/repository reads or exploration, large-scale first-draft code processing/)
   assert.match(prompt, /preserve each sealed role model and effort instead of applying the parent profile to every child/)
   assert.match(prompt, /explicit task class and phase win over incidental keywords/)
@@ -74,7 +74,7 @@ test('official prompt teaches capacity-derived automatic fan-out and the hard ce
 
   assert.match(prompt, /automatic fan-out is capacity-derived up to 256/)
   assert.match(prompt, /historical 4\/6\/8\/16 task-class values are fallback hints, not clamps/)
-  assert.match(prompt, /in mass fan-out, use worker\/Astra Low for tiny mechanical shards and explorer\/Astra Medium for broad exploration; use Astra High for implementation and Astra Max for judgment/)
+  assert.match(prompt, /in mass fan-out, use worker\/Astra Low for tiny mechanical shards and explorer\/Astra Medium for broad exploration; use Astra Low for instructed implementation and Astra Max for judgment/)
   assert.match(prompt, /bounded only by the 256 hard safety ceiling; C_t bounds each wave, not the reusable multi-wave total/)
 })
 
@@ -178,7 +178,8 @@ test('non-Astra active main keeps sealed Astra child profiles', () => {
     ]
   })
 
-  assert.match(prompt, /use sealed Astra Low\/Astra Medium\/Astra High\/Astra Max role profiles/)
+  assert.match(prompt, /use sealed Astra Low\/Astra Medium\/Astra Max role defaults across four task-class profiles/)
+  assert.match(prompt, /explicit Astra effort preferences, including High, may override role defaults/)
   assert.match(prompt, /parent selection and saved non-Astra preferences never override the child model/)
   assert.match(prompt, /pass model="gpt-6-astra" and reasoning_effort="medium" from the sealed role policy/)
   assert.match(prompt, /pass model="gpt-6-astra" and reasoning_effort="low" from the sealed role policy/)

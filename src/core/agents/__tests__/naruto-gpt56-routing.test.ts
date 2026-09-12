@@ -14,7 +14,7 @@ const modelEfforts = {
 test('Naruto Astra-only policy maps all four sealed profiles', () => {
   const available = { availableModels: models, availableModelEfforts: modelEfforts };
   assert.deepEqual(routeNarutoGpt56Model({ ...available, taskText: 'implementation code_modification' }), {
-    model: 'gpt-6-astra', reasoning: 'high', serviceTier: 'fast'
+    model: 'gpt-6-astra', reasoning: 'low', serviceTier: 'fast'
   });
   assert.deepEqual(routeNarutoGpt56Model({ ...available, taskText: 'exact one-line single-file rename' }), {
     model: 'gpt-6-astra', reasoning: 'low', serviceTier: 'fast'
@@ -36,7 +36,7 @@ test('Naruto Astra-only policy maps all four sealed profiles', () => {
   });
 });
 
-test('native worker routing propagates simple EN/KO Astra Low, Medium, High, and Max choices', async () => {
+test('native worker routing propagates EN/KO Astra Low implementation, Medium context, and Max judgment choices', async () => {
   const catalog = { ok: true, models, model_efforts: modelEfforts, blockers: [] };
   const cases = [
     ['Simple coding change: update one constant', 'gpt-6-astra', 'low'],
@@ -44,7 +44,7 @@ test('native worker routing propagates simple EN/KO Astra Low, Medium, High, and
     ['간단한 셋업으로 한 줄만 추가해줘', 'gpt-6-astra', 'low'],
     ['Rapid large-scale first-draft code processing across many files', 'gpt-6-astra', 'medium'],
     ['장기 메모리를 정리하고 통합해줘', 'gpt-6-astra', 'medium'],
-    ['Implement the ordinary parser logic', 'gpt-6-astra', 'high'],
+    ['Implement the ordinary parser logic', 'gpt-6-astra', 'low'],
     ['Debug the release security failure', 'gpt-6-astra', 'max']
   ] as const;
   for (const [description, model, effort] of cases) {
@@ -138,7 +138,7 @@ test('Naruto rejects the process backend and conflicting effort/tier overrides',
   }, {
     lbCatalog: { ok: true, models, model_efforts: modelEfforts, blockers: [] },
     lbHealth: { ok: true, degraded_models: [] },
-    env: { SKS_WORKER_REASONING: 'low', SKS_WORKER_SERVICE_TIER: 'standard' }
+    env: { SKS_WORKER_REASONING: 'high', SKS_WORKER_SERVICE_TIER: 'standard' }
   });
   assert.ok(routing.blockers.includes('naruto_reasoning_override_conflicts_with_policy'));
   assert.ok(routing.blockers.includes('naruto_service_tier_override_conflicts_with_policy'));

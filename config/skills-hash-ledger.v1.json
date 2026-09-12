@@ -288,6 +288,7 @@
     {
       "canonical_name": "sks-naruto",
       "trusted_sha256": [
+        "b981bea4183376c6c0204941ad6c2e78782e2cdea4f8d25cc85630c609faaf95",
         "5df9c9678eb68fd79ceb998ae7a52dd54dc92336ad5169e8a01acca89f76bd60",
         "a1219f6dbad9c8c185953125ef0b8dccf081aa01efb8e8acaa543c6214ac049c",
         "d0d5968e78ac25e1d3e588735de1ddbcf149cfb3165edebca5dec1ed7c7a5c46",

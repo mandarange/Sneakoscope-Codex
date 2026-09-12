@@ -32,7 +32,7 @@ export function decideAgentEffort(input: { persona?: Partial<AgentPersona>; prom
 }
 
 // Official Codex subagents use one of four fixed profiles: Astra Low for tiny
-// mechanical work, Astra High for ordinary implementation, Astra Max for
+// mechanical work, Astra Low for instructed implementation, Astra Max for
 // judgment, and Astra Medium for long-context or Codex-tool execution.
 export function decideOfficialSubagentModel(input: { persona?: Partial<AgentPersona>; prompt?: string; agentId?: string; readonly?: boolean } = {}): AgentEffortDecision {
   const persona = input.persona || {}
@@ -43,7 +43,7 @@ export function decideOfficialSubagentModel(input: { persona?: Partial<AgentPers
   const managedRole = managedOfficialSubagentRoleByName(agentId)
     || managedOfficialSubagentRoleByName(String(persona.naruto_role || ''))
     || managedOfficialSubagentRoleByName(role)
-  // Installed custom-agent roles already seal Astra Low/Astra High/Max/Medium.
+  // Installed custom-agent roles already seal Astra Low/Max/Medium defaults.
   // Prefer that catalog contract over re-scoring the parent goal text, which
   // otherwise collapses almost every child onto Astra Max.
   if (managedRole) {
@@ -76,7 +76,7 @@ export function decideOfficialSubagentModel(input: { persona?: Partial<AgentPers
         'requested model/effort profile unavailable blocks instead of silently falling back'
       ],
       downshift_triggers: [
-        'ordinary UI, logic, backend, or native implementation selects Astra High',
+        'instructed UI, logic, backend, or native implementation selects Astra Low',
         'long-context, Browser/Chrome, Computer Use, image-generation, or large search selects Astra Medium',
         'tiny short-context mechanical search/typing/rename work selects Astra Low'
       ]
@@ -130,7 +130,7 @@ export function decideOfficialSubagentModel(input: { persona?: Partial<AgentPers
       'requested model/effort profile unavailable blocks instead of silently falling back'
     ],
     downshift_triggers: [
-      'ordinary UI, logic, backend, or native implementation selects Astra High',
+      'instructed UI, logic, backend, or native implementation selects Astra Low',
       'long-context, Browser/Chrome, Computer Use, or image-generation execution selects Astra Medium',
       'tiny short-context mechanical work selects Astra Low'
     ]
@@ -166,7 +166,7 @@ export function buildAgentEffortPolicy(roster: any = {}) {
     agent_count: roster.agent_count || decisions.length,
     concurrency: roster.concurrency || decisions.length,
     decisions,
-    rule: 'All child agents use GPT-6 Astra: Low for tiny short-context mechanical work, Medium for reads and tool execution, High for ordinary implementation, and Max for focused judgment. The parent keeps its user-selected model.'
+    rule: 'All child agents use GPT-6 Astra: Low for tiny short-context mechanical work and instructed implementation, Medium for reads and tool execution, and Max for focused judgment. The parent keeps its user-selected model, reasoning effort, and service tier; explicit Astra effort preferences may override role defaults.'
   }
 }
 

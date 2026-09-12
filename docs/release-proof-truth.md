@@ -1,6 +1,16 @@
-# Release Proof Truth — 10.1.5
+# Release Proof Truth — 10.1.6
 
-## Current candidate: 10.1.5
+## Current candidate: 10.1.6
+
+10.1.6 defaults instructed coding roles to Astra Low. Planning, analysis,
+debugging, and review retain their judgment profiles, while context and tool
+roles retain Astra Medium. Verification must cover effective runtime routing,
+generated role configuration, explicit effort preferences, and version truth.
+The final clean candidate still requires its own canonical test proof, full
+release DAG, required real checks, pack receipt, and release stamp. Publication
+and installed-runtime behavior are not claimed by this source preparation.
+
+## Historical 10.1.5 candidate
 
 10.1.5 requires fresh verification of the final source, build, and package.
 No 10.1.5 publication or installed-runtime proof is claimed here. The operator

@@ -36,14 +36,21 @@ export interface RoleModelPreferenceStore {
   readonly roles: Readonly<Record<string, RoleModelPreference>>;
 }
 
-export const SUPPORTED_ROLE_MODEL_PROFILES = Object.freeze(
-  Object.values(SUBAGENT_MODEL_POLICIES).map((profile) => Object.freeze({
+export const SUPPORTED_ROLE_MODEL_PROFILES = Object.freeze([
+  ...Object.values(SUBAGENT_MODEL_POLICIES).map((profile) => Object.freeze({
     provider: 'openai' as const,
     model: profile.model,
     reasoning_effort: profile.modelReasoningEffort,
     source: 'managed-default' as const
-  }))
-);
+  })),
+  // High remains an explicit preference even though no role defaults to it.
+  Object.freeze({
+    provider: 'openai' as const,
+    model: ASTRA_SUBAGENT_MODEL,
+    reasoning_effort: 'high',
+    source: 'explicit-override' as const
+  })
+]);
 
 export function roleModelPreferencesPath(env: NodeJS.ProcessEnv = process.env): string {
   const sksHome = path.resolve(env.SKS_HOME || path.join(env.HOME || os.homedir(), '.sneakoscope'));

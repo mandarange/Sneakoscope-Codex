@@ -283,10 +283,11 @@ Projection: [PRODUCT-CONTRACT.md](PRODUCT-CONTRACT.md).
 - **증거:** `README.md` model routing; AGENTS routing notes.
 - **Q→결정:** (c) Luna Max를 혼동 없는 디테일 타이핑 작업용으로 추가? → **채택.**
 - **확정 계약:** Naruto 슬라이스 라우팅 제품 계약은 다음과 같다.
-  - **Luna Max:** 혼동 여지가 없는, 진짜 디테일한 타이핑 수준(기계적·범위가 극히 좁고 판단이 거의 불필요한) 작업
+  - **Astra Low (기계 작업):** 혼동 여지가 없는, 진짜 디테일한 타이핑 수준(기계적·범위가 극히 좁고 판단이 거의 불필요한) 작업
   - **Astra Medium:** read-heavy 탐색·컨텍스트
-  - **Astra High:** 일반 구현
-  - **Astra Max:** 고위험·집중 판단·최종 리뷰만
+  - **Astra Low (구현):** 지시가 정해진 일반 코딩 실행. 기존 `sol_high_implementation` 프로필 ID는 호환성을 위해 유지
+  - **Astra Max:** 기획·분석·리뷰·고위험·집중 판단
+  - 네 작업 클래스는 유지하며 기본 effort는 Low/Medium/Max를 사용한다. 명시적 High 선택과 부모 모델·effort·서비스 티어 설정은 보존한다.
 - **후속:** README/스킬/라우터 문구 정렬 → `needs-code` (NC-12).
 - **상태:** `decided`
 

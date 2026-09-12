@@ -11,7 +11,7 @@ const DEFAULTS = {
   defaultParentModel: 'gpt-6-astra',
   defaultParentEffort: 'max',
   defaultSubagentModel: 'gpt-6-astra',
-  defaultSubagentEffort: 'high'
+  defaultSubagentEffort: 'low'
 }
 
 function policy(args: string[] = [], env: NodeJS.ProcessEnv = {}) {

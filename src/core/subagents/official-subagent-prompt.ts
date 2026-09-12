@@ -147,12 +147,12 @@ Subagent rules:
 ${spawnModelRouting}
 ${Object.keys(effortPreferences).length ? `- explicit Astra effort preferences override role defaults, including later slices: ${JSON.stringify(effortPreferences)}` : ''}
 - use \`worker\` with gpt-6-astra and low reasoning for tiny short-context mechanical work such as simple search, typing, rename, copy, label, or one-line edits with no exploration or judgment
-- use gpt-6-astra with high reasoning for ordinary UI, logic, backend, and native implementation
-- use gpt-6-astra with max reasoning only for focused unresolved, high-risk, final-review, architecture, security, database, research, release, or other explicit judgment slices
+- use gpt-6-astra with low reasoning for ordinary UI, logic, backend, and native implementation with established instructions
+- use gpt-6-astra with max reasoning for planning, analysis, review, focused unresolved, high-risk, architecture, security, database, research, release, or other explicit judgment slices
 - use gpt-6-astra with medium reasoning for long context/memory, large docs/repository reads or exploration, large-scale first-draft code processing, and direct Computer Use, Browser/Chrome, or image generation
-- explicit task class and phase win over incidental keywords: Astra Medium gathers/explores/searches broadly, Astra Low handles tiny mechanical edits, Astra High implements, and Astra Max performs the focused judgment pass
-- in mass fan-out, use worker/Astra Low for tiny mechanical shards and explorer/Astra Medium for broad exploration; use Astra High for implementation and Astra Max for judgment
-- never assign Astra Low to long-context, broad exploration, review, debugging, planning, or tool-heavy work; preserve each sealed role model and effort instead of applying the parent profile to every child
+- explicit task class and phase win over incidental keywords: Astra Medium explores, Astra Low executes mechanical and instructed coding tasks, and Astra Max judges
+- in mass fan-out, use worker/Astra Low for tiny mechanical shards and explorer/Astra Medium for broad exploration; use Astra Low for instructed implementation and Astra Max for judgment
+- keep context, exploration, review, debugging, planning, and direct tool operation on their assigned defaults; preserve each sealed role model and effort instead of applying the parent profile to every child
 
 Plan and capacity:
 - automatic fan-out is capacity-derived up to ${MAX_AUTOMATIC_SUBAGENT_COUNT}: after decomposition, use every safe useful child slot supported by the ready DAG, disjoint ownership, verifier/tool capacity, and actual host limits; the historical 4/6/8/16 task-class values are fallback hints, not clamps
@@ -263,7 +263,7 @@ function normalizedActiveMainModel(value: ActiveMainModelRouting | null | undefi
 function renderSpawnModelRouting(): string {
   return [
     '- model routing applies to every child, including slices created after parent decomposition: gpt-6-astra only, with the selected role effort',
-    '- use sealed Astra Low/Astra Medium/Astra High/Astra Max role profiles; parent selection and saved non-Astra preferences never override the child model; explicit Astra effort preferences may override role defaults',
+    '- use sealed Astra Low/Astra Medium/Astra Max role defaults across four task-class profiles; parent selection and saved non-Astra preferences never override the child model; explicit Astra effort preferences, including High, may override role defaults',
     '- preserve the user-selected parent model, reasoning effort, and service tier'
   ].join('\n')
 }

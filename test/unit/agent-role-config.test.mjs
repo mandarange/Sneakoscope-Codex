@@ -21,6 +21,9 @@ test('installed Codex agent catalog exposes only current official roles', async 
     assert.equal(parsed.model, role.model);
     assert.equal(parsed.model, 'gpt-6-astra');
     assert.equal(parsed.model_reasoning_effort, role.model_reasoning_effort);
+    if (['implementation_specialist', 'ui_implementer', 'native_app_specialist'].includes(role.codex_name)) {
+      assert.equal(parsed.model_reasoning_effort, 'low', role.codex_name);
+    }
     assert.equal(Object.hasOwn(parsed, 'model_policy'), false);
     assert.equal(Object.hasOwn(parsed, 'sandbox_mode'), role.sandbox === 'read-only');
     assert.equal(parsed.sandbox_mode, role.sandbox);
@@ -32,7 +35,9 @@ test('official custom agent catalog has unique identities and broad specialist c
   const manifest = await import('../../dist/core/managed-assets/managed-assets-manifest.js');
   const roles = manifest.MANAGED_OFFICIAL_SUBAGENT_ROLES;
   const expectedSpecialists = new Map([
-    ['native_app_specialist', { policy: 'sol_high_implementation', model: 'gpt-6-astra', effort: 'high', sandbox: undefined }],
+    ['implementation_specialist', { policy: 'sol_high_implementation', model: 'gpt-6-astra', effort: 'low', sandbox: undefined }],
+    ['ui_implementer', { policy: 'sol_high_implementation', model: 'gpt-6-astra', effort: 'low', sandbox: undefined }],
+    ['native_app_specialist', { policy: 'sol_high_implementation', model: 'gpt-6-astra', effort: 'low', sandbox: undefined }],
     ['toolchain_specialist', { policy: 'sol_max_judgment', model: 'gpt-6-astra', effort: 'max', sandbox: undefined }],
     ['protocol_reviewer', { policy: 'sol_max_judgment', model: 'gpt-6-astra', effort: 'max', sandbox: 'read-only' }],
     ['runtime_reliability_reviewer', { policy: 'sol_max_judgment', model: 'gpt-6-astra', effort: 'max', sandbox: 'read-only' }],
@@ -149,7 +154,7 @@ test('persisted legacy and routed role models resolve to Astra without mutating 
   assert.deepEqual(read.blockers, []);
   assert.ok(Object.values(read.store.roles).every((role) => role.model === 'gpt-6-astra' && role.provider === 'openai'));
   assert.deepEqual(Object.fromEntries(Object.entries(read.store.roles).map(([name, role]) => [name, role.reasoning_effort])), {
-    worker: 'low', implementation_specialist: 'high', explorer: 'medium', expert: 'max', debugger: 'high'
+    worker: 'low', implementation_specialist: 'low', explorer: 'medium', expert: 'max', debugger: 'high'
   });
   assert.equal(await fs.readFile(filePath, 'utf8'), original);
 });
@@ -196,19 +201,28 @@ test('official child defaults override stale local and inherited models while le
   assert.equal(await fs.readFile(projectConfigPath, 'utf8'), original);
 });
 
-test('managed installed worker models refresh to Astra low', async () => {
+test('managed installed worker and implementation roles refresh to Astra Low', async (t) => {
   const manifest = await import('../../dist/core/managed-assets/managed-assets-manifest.js');
   const config = await import('../../dist/core/subagents/official-subagent-config.js');
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-astra-refresh-'));
-  const worker = manifest.MANAGED_OFFICIAL_SUBAGENT_ROLES.find((role) => role.codex_name === 'worker');
-  const filePath = path.join(root, '.codex', 'agents', worker.filename);
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  const old = manifest.managedOfficialSubagentRoleContent({ ...worker, model: 'gpt-5.6-luna', model_reasoning_effort: 'max' });
-  await fs.writeFile(filePath, old);
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const roles = manifest.MANAGED_OFFICIAL_SUBAGENT_ROLES.filter((role) =>
+    ['worker', 'implementation_specialist', 'ui_implementer', 'native_app_specialist'].includes(role.codex_name));
+  await fs.mkdir(path.join(root, '.codex', 'agents'), { recursive: true });
+  for (const role of roles) {
+    const old = manifest.managedOfficialSubagentRoleContent({
+      ...role,
+      model: role.codex_name === 'worker' ? 'gpt-5.6-luna' : 'gpt-6-astra',
+      model_reasoning_effort: role.codex_name === 'worker' ? 'max' : 'high'
+    });
+    await fs.writeFile(path.join(root, '.codex', 'agents', role.filename), old);
+  }
   const result = await config.installOfficialSubagentAgentConfigs(root, { apply: true });
   assert.equal(result.ok, true);
-  assert.ok(result.updated.includes(`.codex/agents/${worker.filename}`));
-  const current = parse(await fs.readFile(filePath, 'utf8'));
-  assert.equal(current.model, 'gpt-6-astra');
-  assert.equal(current.model_reasoning_effort, 'low');
+  for (const role of roles) {
+    assert.ok(result.updated.includes(`.codex/agents/${role.filename}`), role.codex_name);
+    const current = parse(await fs.readFile(path.join(root, '.codex', 'agents', role.filename), 'utf8'));
+    assert.equal(current.model, 'gpt-6-astra', role.codex_name);
+    assert.equal(current.model_reasoning_effort, 'low', role.codex_name);
+  }
 });

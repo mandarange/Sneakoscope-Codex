@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [10.1.6] - 2026-09-12
+
+### Changed
+
+- Default instructed backend, core, UI, and native implementation to GPT-6
+  Astra Low. Keep planning, analysis, debugging, and review on their judgment
+  profiles, and reads, exploration, and direct tool operation on Astra Medium.
+- Align managed role files, runtime routing, generated skills, and delegation
+  guidance. Preserve parent settings, explicit Astra effort preferences, and
+  serialized policy identifiers used by existing installations.
+
 ## [10.1.5] - 2026-09-10
 
 ### Changed

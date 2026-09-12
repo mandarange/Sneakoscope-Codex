@@ -18,7 +18,9 @@ test('native and official agents share task-weighted Astra effort profiles', () 
   const cases = [
     ['worker', 'exact one-line single-file mechanical rename', 'low'],
     ['browser_use_operator', 'collect Chrome browser evidence', 'medium'],
-    ['implementation_specialist', 'implement parser logic', 'high'],
+    ['implementation_specialist', 'implement parser logic', 'low'],
+    ['ui_implementer', 'implement the modal interaction', 'low'],
+    ['native_app_specialist', 'implement the macOS AppKit menu bar', 'low'],
     ['security_reviewer', 'review the security boundary', 'max']
   ];
   for (const [role, prompt, effort] of cases) {
@@ -49,8 +51,8 @@ test('parent and provider model inputs never replace the child Astra model', () 
   for (const mainModel of ['future-codex-model', 'gpt-5.6-sol', 'gpt-5.6-luna', 'gpt-5.6-terra', 'z-ai/glm-5.2', 'anthropic/claude-sonnet-4.5']) {
     const decision = decideAgentWorkerModel({ mainModel, effort: 'high', prompt: 'implement parser logic', role: 'implementation_specialist' });
     assert.equal(decision.model, 'gpt-6-astra', mainModel);
-    assert.equal(decision.model_reasoning_effort, 'high', mainModel);
-    assert.equal(decision.model_tier, 'gpt-6-astra-high', mainModel);
+    assert.equal(decision.model_reasoning_effort, 'low', mainModel);
+    assert.equal(decision.model_tier, 'gpt-6-astra-low', mainModel);
   }
 });
 
@@ -62,7 +64,7 @@ test('environment model selections cannot escape the child Astra policy and rema
     for (const [prompt, effort] of [
       ['exact one-line single-file mechanical rename', 'low'],
       ['Read the documentation and scan the repository', 'medium'],
-      ['Implement the parser logic', 'high'],
+      ['Implement the parser logic', 'low'],
       ['Review database migration safety', 'max']
     ]) {
       const decision = decideAgentWorkerModel({ prompt });

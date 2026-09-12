@@ -33,10 +33,11 @@ time. A Codex multi-agent V2 host may count the root separately and therefore re
 active limiter and must be reported instead of being presented as SKS-selected 256
 concurrency. Remaining requested work reuses returned capacity in later waves.
 
-Astra Low handles tiny mechanical shards, Astra Medium handles broad search and
-exploration shards, and Astra High and Max handle implementation and judgment. The
-four-profile matrix (Astra Low / Astra Medium / Astra High / Astra Max) is a **routing LOD**, not an
-agent-count cap.
+Astra Low handles tiny mechanical shards and instructed ordinary coding execution,
+Astra Medium handles broad search and exploration shards, and Astra Max handles
+planning, analysis, review, and other judgment. The four task-class profiles
+(mechanical / implementation / context-tools / judgment) use three default effort
+levels (Low / Medium / Max) and are a **routing LOD**, not an agent-count cap.
 
 `SKS_NARUTO_REMOTE_API_PARALLEL_BUDGET` declares the provider/API
 parallel-request budget used by the governor. It can lower or align SKS with a measured
@@ -86,10 +87,15 @@ correlation and never grants project trust, so App host-capability requests requ
 | Lane | Model / effort | Assigned role |
 | --- | --- | --- |
 | Root orchestrator | GPT-6 Astra Max (standalone default) | DAG decomposition, contract finalization, integration, and final judgment |
-| Judgment lane | Astra Max | Architecture, debugging, security, database, release, and ambiguous work |
-| Implementation lane | Astra High | Ordinary UI, backend, logic, core, and native implementation |
+| Judgment lane | Astra Max | Planning, analysis, review, architecture, debugging, security, database, release, and ambiguous work |
+| Implementation lane | Astra Low | Instructed ordinary UI, backend, logic, core, and native coding execution |
 | Context/tool lane | Astra Medium | Large documents, logs, long-term memory, repository exploration, rapid large-scale first-draft code processing, plus Browser, Computer Use, and image execution |
 | Mechanical lane | Astra Low | Tiny, short-context work with clear completion conditions and strong automatic verification |
+
+Active parent model, effort, and service-tier selections are preserved. Explicit
+Astra effort preferences, including High, remain supported. The four serialized
+profile IDs remain stable for compatibility; `sol_high_implementation` now selects
+Low by default despite its legacy name.
 
 Mixed work is split when practical. If a slice cannot safely separate execution
 from judgment, Astra Max owns it. SKS never silently substitutes another model or

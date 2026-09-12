@@ -1,10 +1,18 @@
-# SKS 10.1.5 Release Readiness
+# SKS 10.1.6 Release Readiness
 
 ## Current candidate
 
-10.1.5 is the next patch candidate. Fresh verification must cover the final
-10.1.5 source and package; earlier release records do not verify this candidate.
+10.1.6 is the next patch candidate. Fresh verification must cover the final
+10.1.6 source and package; earlier release records do not verify this candidate.
 The operator performs `npm login` and `npm publish` after preparation.
+
+This patch defaults instructed backend, core, UI, and native coding to Astra
+Low. Planning, analysis, debugging, and review retain their judgment profiles;
+reads, exploration, and direct tool operation retain Astra Medium. Parent
+settings and explicit Astra effort preferences remain supported. Runtime
+routing, generated role configuration, and managed instructions must agree.
+
+## Previous candidate: 10.1.5
 
 This patch raises the shared HTTP/Responses WebSocket request limit to 128 MiB
 from 16 MiB. Encoded and decoded HTTP bodies remain bounded. Oversized HTTP

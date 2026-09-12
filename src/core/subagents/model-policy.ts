@@ -10,7 +10,7 @@ export const SOL_SUBAGENT_MODEL = ASTRA_SUBAGENT_MODEL
 
 export const LUNA_SUBAGENT_EFFORT = 'low'
 export const TERRA_SUBAGENT_EFFORT = 'medium'
-export const DEFAULT_SUBAGENT_EFFORT = 'high'
+export const DEFAULT_SUBAGENT_EFFORT = 'low'
 export const SOL_MAX_SUBAGENT_EFFORT = 'max'
 
 // Compatibility exports retained for research and older callers. New code
@@ -51,6 +51,7 @@ export const SUBAGENT_MODEL_POLICIES: Readonly<Record<SubagentModelPolicyId, Sub
     model: LUNA_SUBAGENT_MODEL,
     modelReasoningEffort: LUNA_SUBAGENT_EFFORT
   }),
+  // Serialized compatibility alias; instructed implementation now uses Astra Low.
   sol_high_implementation: Object.freeze({
     policy: 'sol_high_implementation',
     kind: 'worker',
@@ -345,7 +346,7 @@ export function decideSubagentModel(input: {
   // Explicit phase/task classification is authoritative unless it conflicts
   // with an even stronger explicit requirement or a clear complexity guard.
   // A caller cannot force multi-file, feature, logic, long-context, or
-  // judgment work into Astra Low merely by labeling it mechanical.
+  // judgment work into the mechanical profile merely by labeling it mechanical.
   if (input.taskClass === 'judgment' || input.requiresJudgment === true) return decision('sol_max_judgment')
   if (input.taskClass === 'context_tools' || explicitContextOrTools) return decision('terra_max_context_tools')
   if (input.taskClass === 'implementation') return decision('sol_high_implementation')
@@ -364,7 +365,7 @@ export function decideSubagentModel(input: {
 
   // Large first-draft processing uses Astra Medium even when the
   // prompt contains implementation verbs. Keep this narrow so normal feature
-  // implementation remains on Astra High.
+  // implementation remains on Astra Low.
   if (LARGE_FIRST_DRAFT_TASK_RE.test(text)) return decision('terra_max_context_tools')
 
   const simpleMechanical = input.simpleMechanical === true
@@ -384,8 +385,8 @@ export function decideSubagentModel(input: {
   const judgment = JUDGMENT_TASK_RE.test(text)
   if (judgment) return decision('sol_max_judgment')
 
-  // Ambiguous work defaults to the trust-first lane. Astra High is reserved for
-  // clearly identified implementation, not for underspecified judgment.
+  // Ambiguous work defaults to the trust-first lane. The implementation profile
+  // is reserved for clearly identified coding, not underspecified judgment.
   return decision('sol_max_judgment')
 }
 

@@ -15,7 +15,7 @@ const implementation = await fs.promises.readFile(path.join(root, '.codex', 'age
 const browser = await fs.promises.readFile(path.join(root, '.codex', 'agents', 'browser-use-operator.toml'), 'utf8')
 assertGate(expert.includes('model = "gpt-6-astra"') && expert.includes('model_reasoning_effort = "max"'), 'expert role must use Astra Max')
 assertGate(worker.includes('model = "gpt-6-astra"') && worker.includes('model_reasoning_effort = "low"'), 'worker role must use Astra Low')
-assertGate(implementation.includes('model = "gpt-6-astra"') && implementation.includes('model_reasoning_effort = "high"'), 'implementation role must use Astra High')
+assertGate(implementation.includes('model = "gpt-6-astra"') && implementation.includes('model_reasoning_effort = "low"'), 'implementation role must use Astra Low')
 assertGate(browser.includes('model = "gpt-6-astra"') && browser.includes('model_reasoning_effort = "medium"'), 'browser role must use Astra Medium')
 assertGate(expert.includes('Do not spawn another subagent.') && worker.includes('Do not redesign the task, expand scope, or spawn another subagent.'), 'official roles must prohibit nested delegation')
 assertGate(MANAGED_OFFICIAL_SUBAGENT_ROLES.length === 25, 'official role catalog must contain all 25 roles')

@@ -21,7 +21,7 @@ test('official parent and four child profiles expose the sealed model/effort mat
   assert.equal(NARUTO_PARENT_MODEL, 'gpt-6-astra')
   assert.equal(NARUTO_PARENT_EFFORT, 'max')
   assert.equal(DEFAULT_SUBAGENT_MODEL, 'gpt-6-astra')
-  assert.equal(DEFAULT_SUBAGENT_EFFORT, 'high')
+  assert.equal(DEFAULT_SUBAGENT_EFFORT, 'low')
   assert.equal(THINKING_SUBAGENT_MODEL, 'gpt-6-astra')
   assert.equal(SUBAGENT_EFFORT, 'max')
   assert.equal(LUNA_SUBAGENT_MODEL, 'gpt-6-astra')
@@ -53,7 +53,7 @@ test('model decision routes mechanical, implementation, context/tool, and judgme
     const decision = decideSubagentModel({ description })
     assert.equal(decision.policy, 'sol_high_implementation', description)
     assert.equal(decision.model, 'gpt-6-astra', description)
-    assert.equal(decision.modelReasoningEffort, 'high', description)
+    assert.equal(decision.modelReasoningEffort, 'low', description)
   }
 
   for (const description of [
@@ -148,7 +148,7 @@ test('mass-lane keywords never pull judgment or clear implementation off the Ast
     const decision = decideSubagentModel({ description })
     assert.equal(decision.policy, 'sol_high_implementation', description)
     assert.equal(decision.model, 'gpt-6-astra', description)
-    assert.equal(decision.modelReasoningEffort, 'high', description)
+    assert.equal(decision.modelReasoningEffort, 'low', description)
   }
 })
 
@@ -187,7 +187,7 @@ test('clear docs exploration and implementation intent outrank incidental judgme
   })
   assert.equal(boundedImplementation.policy, 'sol_high_implementation')
   assert.equal(boundedImplementation.model, 'gpt-6-astra')
-  assert.equal(boundedImplementation.modelReasoningEffort, 'high')
+  assert.equal(boundedImplementation.modelReasoningEffort, 'low')
 
   const finalHighRiskJudgment = decideSubagentModel({
     description: 'Perform the final high-risk security judgment before release'
@@ -277,7 +277,7 @@ test('official effort policy applies the sealed four-profile routing matrix', ()
   })
 
   assert.deepEqual([mechanical.model, mechanical.model_reasoning_effort], ['gpt-6-astra', 'low'])
-  assert.deepEqual([implementation.model, implementation.model_reasoning_effort], ['gpt-6-astra', 'high'])
+  assert.deepEqual([implementation.model, implementation.model_reasoning_effort], ['gpt-6-astra', 'low'])
   assert.deepEqual([context.model, context.model_reasoning_effort], ['gpt-6-astra', 'medium'])
   assert.deepEqual([review.model, review.model_reasoning_effort], ['gpt-6-astra', 'max'])
 })
@@ -293,7 +293,7 @@ test('Naruto automatic routing uses the exact selected profile and fails closed'
     model: 'gpt-6-astra', reasoning: 'low', serviceTier: 'fast'
   })
   assert.deepEqual(routeNarutoGpt56Model({ ...catalog, taskText: 'implement parser logic' }), {
-    model: 'gpt-6-astra', reasoning: 'high', serviceTier: 'fast'
+    model: 'gpt-6-astra', reasoning: 'low', serviceTier: 'fast'
   })
   assert.deepEqual(routeNarutoGpt56Model({ ...catalog, taskText: 'browser QA in Chrome' }), {
     model: 'gpt-6-astra', reasoning: 'medium', serviceTier: 'fast'
@@ -308,7 +308,7 @@ test('Naruto automatic routing uses the exact selected profile and fails closed'
   }).model, '')
 })
 
-test('explicit Astra selects low, medium, high, or max from the task profile', () => {
+test('explicit Astra selects low, medium, or max from the task profile', () => {
   const catalog = {
     availableModels: ['gpt-6-astra'],
     availableModelEfforts: {
@@ -322,7 +322,7 @@ test('explicit Astra selects low, medium, high, or max from the task profile', (
     model: 'gpt-6-astra', reasoning: 'medium', serviceTier: 'fast'
   })
   assert.deepEqual(routeNarutoGpt56Model({ ...catalog, taskText: 'implement parser', explicitModel: 'gpt-6-astra' }), {
-    model: 'gpt-6-astra', reasoning: 'high', serviceTier: 'fast'
+    model: 'gpt-6-astra', reasoning: 'low', serviceTier: 'fast'
   })
   assert.deepEqual(routeNarutoGpt56Model({ ...catalog, taskText: 'security review', explicitModel: 'gpt-6-astra' }), {
     model: 'gpt-6-astra', reasoning: 'max', serviceTier: 'fast'

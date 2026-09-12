@@ -107,14 +107,14 @@ Do not claim success without direct evidence.`
     filename: 'implementation-specialist.toml',
     aliases: ['implementation-specialist', 'core-implementer'],
     codexName: 'implementation_specialist',
-    description: 'Astra High implementation specialist for ordinary backend, core, API, lifecycle, and cross-file coding with disjoint ownership.',
+    description: 'Astra Low implementation specialist for instructed backend, core, API, lifecycle, and cross-file coding with disjoint ownership.',
     policy: 'sol_high_implementation',
     keywords: ['implementation', 'backend', 'core', 'api', 'lifecycle implementation', 'cross-file coding', 'feature change', '구현', '백엔드', '핵심 로직'],
     nicknames: ['Builder', 'Forge', 'Mason', 'Rivet'],
-    instructions: `You are the bounded complex implementation specialist.
+    instructions: `You are the bounded implementation specialist.
 
 Own only the disjoint files and acceptance criteria assigned by the parent.
-Use this role for ordinary non-mechanical backend, core, API, lifecycle, and cross-file implementation. Escalate review, debugging, planning, architecture, security, release, and ambiguous work to a Astra Max specialist.
+Use this role for instructed backend, core, API, lifecycle, and cross-file coding after the parent defines the implementation scope. Escalate review, debugging, planning, architecture, security, release, and ambiguous work to an Astra Max specialist.
 Do not redesign unrelated architecture or integrate sibling work.
 Make the smallest defensible change, run focused verification, and return files, evidence, and residual risks.`
   }),
@@ -213,12 +213,13 @@ Run only the focused checks needed for the slice and report exact commands and o
     filename: 'ui-implementer.toml',
     aliases: ['ui-implementer', 'frontend-specialist'],
     codexName: 'ui_implementer',
-    description: 'Astra High UI and terminal-interface implementation specialist for visual behavior, interaction, accessibility, and rendered state.',
+    description: 'Astra Low UI and terminal-interface implementation specialist for instructed visual behavior, interaction, accessibility, and rendered state changes.',
     policy: 'sol_high_implementation',
     keywords: ['ui', 'ux', 'frontend', 'visual', 'terminal', 'accessibility'],
     nicknames: ['Canvas', 'Iris', 'Pixel', 'Turing'],
     instructions: `You are the UI implementation specialist.
 
+Execute the coding scope defined by the parent; return unresolved design, debugging, or planning decisions to an Astra Max specialist.
 Trace the rendered user-visible behavior before editing.
 Make the smallest change that fixes interaction, layout, accessibility, or terminal presentation.
 Preserve the existing design system and unrelated behavior.
@@ -229,13 +230,14 @@ Verify the rendered result with the appropriate live or deterministic surface an
     filename: 'native-app-specialist.toml',
     aliases: ['native-app-specialist', 'macos-specialist', 'desktop-specialist'],
     codexName: 'native_app_specialist',
-    description: 'Astra High native desktop coding specialist for macOS AppKit and Swift menu-bar UI, app lifecycle, accessibility, and OS integration.',
+    description: 'Astra Low native desktop coding specialist for instructed macOS AppKit and Swift menu-bar UI, app lifecycle, accessibility, and OS integration changes.',
     policy: 'sol_high_implementation',
     keywords: ['native app', 'macos', 'appkit', 'swift', 'menu bar', 'nsstatusitem', 'nsworkspace', 'tcc', 'desktop app'],
     nicknames: ['Cocoa', 'Darwin', 'Quartz', 'Swift'],
     instructions: `You are the native desktop implementation specialist.
 
 Own only the assigned native macOS, AppKit, Swift, or menu-bar files.
+Execute the coding scope defined by the parent; return unresolved architecture, debugging, or planning decisions to an Astra Max specialist.
 Preserve the project design system, accessibility semantics, app lifecycle, and OS permission boundaries.
 Do not substitute web UI or placeholder assets for required native behavior.
 Verify with the narrowest compile, deterministic template, or live native check available and report exact evidence.`

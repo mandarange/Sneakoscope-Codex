@@ -39,6 +39,7 @@ export function renderNarutoUsage(): string {
     '  --no-forced-login-method Do not inject a forced login method.',
     '  --json                   Emit machine-readable output.',
     '',
+    'Default efforts: Low for instructed ordinary coding and tiny mechanical work, Medium for context/tools, Max for planning/analysis/review judgment; explicit High remains supported.',
     'Automatic fan-out starts at 4/6/8, or 16 for eligible mass mechanical or exploration work on the Astra Low/Medium lanes.',
     'After decomposition, either lane may expand to 256 independent useful children.',
     'A measured lower Codex host or explicit provider/API limit remains authoritative.'
@@ -75,7 +76,7 @@ export function buildNarutoHelpResult() {
     model_routing_policy: {
       luna_max: 'tiny_short_context_mechanical_and_mass_shards',
       // Legacy policy keys remain stable for persisted consumers; the active profiles use Astra.
-      sol_high: 'astra_high_ordinary_ui_logic_backend_and_native_implementation',
+      sol_high: 'astra_low_instructed_ordinary_ui_logic_backend_and_native_implementation',
       sol_max: 'astra_max_review_debug_planning_architecture_security_database_research_release_and_judgment',
       terra_max: 'astra_medium_broad_search_exploration_long_context_long_term_memory_large_first_draft_computer_use_browser_chrome_and_image_generation_execution',
       mixed_slice_rule: 'split_execution_from_judgment_when_possible_otherwise_astra_max_wins'
