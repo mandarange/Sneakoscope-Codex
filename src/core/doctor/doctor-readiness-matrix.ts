@@ -87,16 +87,29 @@ export function buildDoctorReadinessMatrix(input: any = {}) {
   for (const warning of normalizeList(codexAppHarness?.warnings)) warnings.add(warning)
   if (codexAppHarness?.ok === false) for (const blocker of normalizeList(codexAppHarness.blockers)) warnings.add(`codex_app_harness:${blocker}`)
   const desktopBridge = desktopBridgeReadinessView(input.desktop_bridge_status || input.desktop_bridge || null)
+  const requireDesktopBridgeReadiness = input.require_desktop_bridge_readiness !== false
   if (desktopBridge?.management?.managed === true && desktopBridge?.readiness?.ready !== true) {
     const bridgeBlockers = normalizeList(desktopBridge?.readiness?.blockers)
-    for (const blocker of bridgeBlockers) blockers.add(blocker)
-    // `degraded` = serving, catalog ready, no transport diagnostic bound to the
-    // current process yet (every restart starts here). That is "unverified",
-    // not "broken": a warning. Only a blocked bridge, or one that names
-    // blockers, fails readiness.
-    if (!bridgeBlockers.length) {
-      if (desktopBridge?.readiness?.state === 'degraded') warnings.add('desktop_bridge_readiness_degraded:transport_unverified_for_current_process')
-      else blockers.add('desktop_bridge_not_ready')
+    // Migration Doctor owns config/schema convergence only. A stale live
+    // catalog must not block the first receipt after a version bump: the
+    // unpublished package cannot already be the running Desktop Bridge.
+    if (!requireDesktopBridgeReadiness) {
+      for (const blocker of bridgeBlockers) warnings.add(`migration_optional_blocker:${blocker}`)
+      if (!bridgeBlockers.length) {
+        warnings.add(desktopBridge?.readiness?.state === 'degraded'
+          ? 'desktop_bridge_readiness_degraded:transport_unverified_for_current_process'
+          : 'migration_optional_blocker:desktop_bridge_not_ready')
+      }
+    } else {
+      for (const blocker of bridgeBlockers) blockers.add(blocker)
+      // `degraded` = serving, catalog ready, no transport diagnostic bound to the
+      // current process yet (every restart starts here). That is "unverified",
+      // not "broken": a warning. Only a blocked bridge, or one that names
+      // blockers, fails readiness.
+      if (!bridgeBlockers.length) {
+        if (desktopBridge?.readiness?.state === 'degraded') warnings.add('desktop_bridge_readiness_degraded:transport_unverified_for_current_process')
+        else blockers.add('desktop_bridge_not_ready')
+      }
     }
   }
   if (desktopBridge?.management?.managed === true && desktopBridge?.service?.running !== true) {

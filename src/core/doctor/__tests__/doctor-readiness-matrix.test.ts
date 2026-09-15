@@ -113,6 +113,34 @@ test('ordinary Doctor keeps legacy global hook cleanup blockers optional', () =>
   assert.ok(matrix.warnings.includes(`optional:legacy_global_hooks:${blocker}`));
 });
 
+test('migration profile demotes live catalog staleness so a version bump can write a receipt', () => {
+  const input = readyInput({
+    desktop_bridge_status: {
+      management: { managed: true },
+      service: { running: true },
+      readiness: {
+        ready: false,
+        state: 'blocked',
+        blockers: ['codex_lb_catalog_stale', 'openrouter_catalog_stale']
+      }
+    }
+  });
+  const required = buildDoctorReadinessMatrix(input);
+  assert.equal(required.ready, false);
+  assert.ok(required.blockers.includes('codex_lb_catalog_stale'));
+  assert.ok(required.blockers.includes('openrouter_catalog_stale'));
+
+  const migration = buildDoctorReadinessMatrix({
+    ...input,
+    require_desktop_bridge_readiness: false
+  });
+  assert.equal(migration.ready, true);
+  assert.equal(migration.blockers.includes('codex_lb_catalog_stale'), false);
+  assert.equal(migration.blockers.includes('openrouter_catalog_stale'), false);
+  assert.ok(migration.warnings.includes('migration_optional_blocker:codex_lb_catalog_stale'));
+  assert.ok(migration.warnings.includes('migration_optional_blocker:openrouter_catalog_stale'));
+});
+
 test('managed Desktop Bridge fails readiness when its active route is blocked', () => {
   const matrix = buildDoctorReadinessMatrix(readyInput({
     desktop_bridge_status: {

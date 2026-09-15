@@ -12,6 +12,12 @@
   hooks point at TriWiki only when a claim needs project memory, and they keep
   authorized work going until verification or a hard blocker.
 
+### Fixed
+
+- Keep a stale live Desktop Bridge catalog from blocking the migration receipt
+  after a version bump. Migration Doctor still records the follow-up; ordinary
+  Doctor profiles still require a ready bridge.
+
 ## [10.1.6] - 2026-09-12
 
 ### Changed

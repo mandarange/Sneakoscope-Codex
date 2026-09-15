@@ -1498,6 +1498,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean, deps:
     codex_plugin_app_template_policy: pluginPolicy,
     codex_app_harness_matrix: codexAppHarnessMatrix,
     require_codex_cli_config_load: requireActualCodexProbe,
+    require_desktop_bridge_readiness: doctorProfileRequiresDesktopBridgeReadiness(doctorProfile),
     operator_actions: [
       ...(codexConfig.operator_actions || []),
       ...(configRepair?.operator_actions || []),
@@ -1523,6 +1524,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean, deps:
       ...((commandAliasCleanup as any)?.warnings || []),
       ...((doctorNativeCapabilityRepair as any)?.optional_warnings || []),
       ...((doctorFixPostcheck as any)?.optional_warnings || []),
+      ...((ready as any).warnings || []).filter((warning: unknown) => String(warning).startsWith('migration_optional_blocker:')),
       ...(preservedUserOwnedConfig
         ? [
             'migration_doctor_preserved_user_owned_project_config',
@@ -1643,6 +1645,10 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean, deps:
       ...oauthCallbackOperatorActions,
       ...((desktopBridge as any).ok === false ? (desktopBridge as any).recovery_actions || [] : []),
       ...repairOperatorActions,
+      ...(!doctorProfileRequiresDesktopBridgeReadiness(doctorProfile)
+        && ((ready as any).warnings || []).some((warning: unknown) => String(warning).startsWith('migration_optional_blocker:'))
+        ? ['Desktop Bridge still reports blockers: run `sks doctor --fix` to repair the bridge catalog.']
+        : []),
       ...(resultOk ? [] : ['Each blocker above names a report under .sneakoscope/reports/; re-run `sks doctor --full --json` after resolving them.'])
     ].map(String).filter(Boolean))],
     node: { ok: Number(process.versions.node.split('.')[0]) >= 20, version: process.version },
