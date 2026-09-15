@@ -1,12 +1,19 @@
-# SKS 10.1.6 Release Readiness
+# SKS 10.2.0 Release Readiness
 
 ## Current candidate
 
-10.1.6 is the next patch candidate. Fresh verification must cover the final
-10.1.6 source and package; earlier release records do not verify this candidate.
+10.2.0 is the next minor candidate. Fresh verification must cover the final
+10.2.0 source and package; earlier release records do not verify this candidate.
 The operator performs `npm login` and `npm publish` after preparation.
 
-This patch defaults instructed backend, core, UI, and native coding to Astra
+This release rewrites the installed SKS user environment for GPT-6 Astra:
+complete WHEN-scoped skill descriptions, contextual AGENTS.md and TriWiki
+recall, and narrower skill triggers. Parent settings and explicit Astra effort
+preferences remain supported.
+
+## Previous candidate: 10.1.6
+
+10.1.6 defaults instructed backend, core, UI, and native coding to Astra
 Low. Planning, analysis, debugging, and review retain their judgment profiles;
 reads, exploration, and direct tool operation retain Astra Medium. Parent
 settings and explicit Astra effort preferences remain supported. Runtime

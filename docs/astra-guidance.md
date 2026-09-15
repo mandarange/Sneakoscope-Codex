@@ -1,6 +1,8 @@
 # Astra guidance in SKS
 
-Reviewed against [OpenAI's GPT-6 Astra guidance](https://developers.openai.com/api/docs/guides/latest-model) on 2026-09-06.
+Reviewed against [OpenAI's GPT-6 Astra guidance](https://developers.openai.com/api/docs/guides/latest-model) on 2026-09-06 and [Rethinking skills and prompts for GPT-6 Astra](https://developers.openai.com/blog/rethinking-skills-and-prompts-for-gpt-6-astra) on 2026-09-11.
+
+Installed skills, `AGENTS.md`, and hook prompts keep discovery descriptions short and WHEN-scoped, point at docs only when that work needs them, and finish the requested outcome instead of stopping after a first implementation.
 
 SKS applies the prompting recommendations at its existing instruction boundaries:
 

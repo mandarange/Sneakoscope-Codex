@@ -19,6 +19,8 @@ test('Astra guidance respects project verification profile and bounded delegatio
     resetVerificationProfileCache();
     const essential = promptPipelineContext('implement a parser correction', route, root);
     assert.match(essential, /Honor authorization already given/);
+    assert.match(essential, /when a claim needs project memory/);
+    assert.doesNotMatch(essential, /before each stage|read the bounded current context pack/);
     assert.match(essential, /Subagent policy: not required/);
     assert.doesNotMatch(essential, /Naruto route: prepare subagent-plan|Post-route reflection:|then run SKS Honest Mode/);
     assert.match(dfixQuickContext('Translate to English', { id: 'DFix' }, root), /Return the requested content directly/);

@@ -265,6 +265,10 @@ export async function auditSkillSurfaceModernization(
         invalidSkills.add(skill.name);
         issues.push(`skill_frontmatter_description_too_long:${skill.name}:${charCount(description)}`);
       }
+      if (description.endsWith('…')) {
+        invalidSkills.add(skill.name);
+        issues.push(`skill_frontmatter_description_truncated:${skill.name}`);
+      }
     }
     const skillActiveReferenceCount = countActiveOpenaiSkillsReferences(skill.text);
     if (skillActiveReferenceCount > 0) {

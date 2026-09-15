@@ -49,6 +49,7 @@ const CORE_SKILL_DEFINITIONS: Array<{
   display_name: string;
   route: LegacySksCoreSkillRoute;
   purpose: string;
+  discovery: string;
   when: string;
   workflow?: string;
   safety?: string;
@@ -62,6 +63,7 @@ const CORE_SKILL_DEFINITIONS: Array<{
     display_name: 'naruto',
     route: '$Naruto',
     purpose: 'run a Codex official subagent workflow with official agent threads while parent integration remains owner.',
+    discovery: 'Run $sks-naruto for explicit parallel official subagents.',
     when: 'Use when the user explicitly invokes $Naruto or the selected route requires bounded parallel delegation.',
     workflow: 'Run sks naruto run "<task>" [--agents N] [--max-threads N] [--json] with Codex official subagent threads only. The parent owns decomposition, per-wave capacity, later root-owned waves, integration, and final verification. Automatic targets begin at 4/6/8/16 by task size: bounded, explicit parallel, large-scale, then mass mechanical or exploration fan-out on the Astra Low/Astra Medium lanes. After decomposition both lanes may expand to the SKS-owned 256-child ceiling when independent useful slices and real host capacity remain positive; max_threads defaults to a 256-child frame budget cap, never a target. A measured lower Codex host cap or explicit provider/API budget remains authoritative, and multi-wave scheduling reuses returned capacity. Use gpt-6-astra for every child, preserving parent settings and ignoring child-model overrides. Route tiny mechanical and mass shards to Astra Low, broad search and exploration shards to Astra Medium, instructed ordinary coding execution to Astra Low, and planning, analysis, review, or other judgment to Astra Max. Keep the four task-class profiles and compatibility IDs; explicit Astra effort preferences, including High, remain supported; max_depth=1 blocks nested delegation. Wait for every planned thread before final. In an active Codex App Naruto mission, commit the strict parent evidence with sks naruto parent-summary --mission <id> --stdin, then return localized Markdown without exposing the JSON.',
     safety: 'Preserve user-authored content, inherit the parent permission mode, do not spawn nested subagents, do not inject the full pack or the full TriWiki context into every child, and do not fall back to another model, process runtime, custom scheduler, or worker pool. The historical Naruto process runtime is removed; stop with explicit blocker evidence when the official path is unavailable.',
@@ -75,6 +77,7 @@ const CORE_SKILL_DEFINITIONS: Array<{
     display_name: 'qa-loop',
     route: '$QA-LOOP',
     purpose: 'dogfood UI/API behavior with safety gates, Codex Chrome Extension-first web UI evidence, and QA reports.',
+    discovery: 'Run $sks-qa-loop for UI/API dogfood with QA ledgers.',
     when: 'Use when route completion needs human-proxy verification, rechecks, and QA ledgers.',
     workflow: 'Infer the QA scope, dogfood real UI/API flows, and for web/browser/webapp UI evidence use the Codex Chrome Extension readiness gate first. If the extension is missing or disabled, rapidly halt and ask the user to set it up before resuming. Computer Use is reserved for native Mac/non-web surfaces and must not satisfy web UI evidence.',
     evidence: 'qa-ledger.json, dated QA report, qa-gate.json, and post-fix verification.',
@@ -86,7 +89,8 @@ const CORE_SKILL_DEFINITIONS: Array<{
     display_name: 'research',
     route: '$Research',
     purpose: 'run evidence-bound discovery, source ledgers, and synthesis cycles.',
-    when: 'Use for discovery, evaluation, external-source claims, or frontier-style research.',
+    discovery: 'Run $sks-research for evidence-bound discovery, not code edits.',
+    when: 'Use when the user invokes $Research or asks for evidence-bound discovery, hypotheses, or falsification.',
     workflow: 'Frame the research criteria and map assumptions before retrieval. Run layered Super Search first and accept only source rows correlated to verified proof, source-ledger, and hydrated-content artifacts. Then run three independent official research_reviewer threads covering evidence integrity, method validity, and falsification or replication. Each reviewer must return source ids, falsifiers, and cheap probes. Critical, major, or required revisions trigger a mission-local research_synthesizer revision and a fresh bounded review cycle; minor concerns remain advisory. agent-ledger.json and debate-ledger.json are compatibility projections only; do not launch a removed legacy scheduler or a custom debate pool.',
     safety: 'Preserve user-authored content, keep research route state bounded, and do not edit repository source. Do not overclaim novelty, breakthrough, publication acceptance, or experimental support beyond recorded evidence.',
     evidence: 'research plan, source ledger, cycle record, synthesis, and final review.',
@@ -98,6 +102,7 @@ const CORE_SKILL_DEFINITIONS: Array<{
     display_name: 'dfix',
     route: '$DFix',
     purpose: 'perform tiny direct fixes with cheap verification.',
+    discovery: 'Apply $sks-dfix only to tiny copy, config, or mechanical edits.',
     when: 'Use only for narrow copy/config/docs/labels/spacing/translation/mechanical edits.',
     evidence: 'focused diff and DFix Honest check.',
     fallback: 'Escalate broad implementation to a full execution route.'
@@ -108,6 +113,7 @@ const CORE_SKILL_DEFINITIONS: Array<{
     display_name: 'image-ux-review',
     route: '$Image-UX-Review',
     purpose: 'run one screenshot-to-generated-annotation-to-UX-report pipeline without duplicate picker skills.',
+    discovery: 'Run $sks-image-ux-review for screenshot-to-UX annotation.',
     when: 'Use for $Image-UX-Review, $UX-Review, $Visual-Review, or $UI-UX-Review requests; all aliases resolve to this one canonical skill.',
     workflow: ("Capture or attach the real source screenshot first; web/browser/webapp capture must pass the Codex Chrome Extension readiness gate first, while Computer Use is reserved for native Mac/non-web surfaces. Send the source image as the I2I reference to the selected Codex imagegen provider with " + IMAGEGEN_MODEL + " and a senior Toss UI/UX designer prompt that visibly adds numbered P0/P1/P2/P3 callouts, hierarchy, contrast, alignment, density, affordance, eye-flow arrows, and a corrected mini-comp. Then analyze the generated annotated image pixels with vision/OCR, not the source screenshot, and write the issue ledger, extraction report, and UX/UI change report with the generated image path and sha256."),
     safety: 'Do not substitute text-only critique, a source-screenshot-only report, placeholders, partial image frames, mock evidence, or an unrelated API provider for the selected real imagegen path. Apply fixes only when requested and recheck changed screens.',
@@ -121,6 +127,7 @@ const CORE_SKILL_DEFINITIONS: Array<{
     display_name: 'computer-use',
     route: '$Computer-Use',
     purpose: 'operate native macOS desktop apps through Codex Computer Use.',
+    discovery: 'Use $sks-computer-use only for native Mac/non-web surfaces.',
     when: 'Use only for native Mac/non-web app or OS-setting surfaces.',
     evidence: 'native desktop interaction evidence where live Computer Use is available.',
     fallback: 'Do not use Computer Use as browser/web evidence; mark unavailable surfaces unverified.'
@@ -131,6 +138,7 @@ const CORE_SKILL_DEFINITIONS: Array<{
     display_name: 'init-deep',
     route: '$Init-Deep',
     purpose: 'refresh project-local memory, directory rules, and loop memory hints.',
+    discovery: 'Run $sks-init-deep to refresh local memory and directory rules.',
     when: 'Use when deeper local context or directory-specific recall is required.',
     evidence: '.sneakoscope/context/AGENTS.generated.md and managed memory artifacts.',
     fallback: 'Preserve user content and skip directories that cannot be safely updated.'
@@ -141,6 +149,7 @@ const CORE_SKILL_DEFINITIONS: Array<{
     display_name: 'search-visibility-core',
     route: '$SEO-GEO-OPTIMIZER',
     purpose: 'provide the shared search-visibility kernel for SEO and GEO audit, plan, explicit apply, verify, rollback, and Completion Proof without ranking, traffic, indexing, rich-result, answer inclusion, or AI citation guarantees.',
+    discovery: 'Shared SEO/GEO kernel for $sks-seo-geo-optimizer evidence.',
     when: 'Use when $SEO-GEO-OPTIMIZER or sks seo-geo-optimizer needs typed mode-specific evidence, gates, artifacts, or safe mutation planning for websites, docs, packages, README/npm/GitHub surfaces, or storefront SEO architecture.',
     workflow: 'Read the touched search-visibility flow before planning: SEO constants/source-of-truth, metadata builders, route topology, sitemap/robots, llms.txt, structured-data builders, target route files, internal-link sources, and SEO tests. Inventory canonical URLs, alternates/hreflang, crawlable localized sitemap rows, JSON-LD, crawler hints, claim evidence, and verification commands before compiling mutation-plan.json.',
     safety: 'Treat SEO/GEO as an architecture compiler, not scattered page copy. Prefer existing project helpers and constants; never duplicate public route strings across files. JSON-LD must describe visible or source-of-truth facts only. Do not invent prices, reviews, ratings, availability, shipping terms, rankings, traffic, rich-result eligibility, indexing, or AI-answer outcomes.',
@@ -154,6 +163,7 @@ const CORE_SKILL_DEFINITIONS: Array<{
     display_name: 'seo-geo-optimizer',
     route: '$SEO-GEO-OPTIMIZER',
     purpose: 'run the unified SEO/GEO optimizer route for Search Engine Optimization and Generative Engine Optimization, not geolocation or GeoIP, with no ranking, traffic, indexing, rich-result, answer inclusion, or AI citation guarantee.',
+    discovery: 'Run $sks-seo-geo-optimizer for SEO or GEO visibility work.',
     when: 'Use the single CLI entrypoint: sks seo-geo-optimizer doctor|audit|plan|apply|verify|status|rollback|fixture --mode seo|geo for SEO and GEO visibility work. Legacy seo-geo wording, SEO, GEO, search visibility, AI visibility, sitemap, canonical, JSON-LD, llms.txt, metadata, keyword/intent, or crawler-policy requests should converge here.',
     workflow: 'Follow the architecture-first playbook: identify target intent and market, locate the central SEO source of truth, update/reuse canonical helpers before page code, build metadata through project helpers, emit independently crawlable localized sitemap rows plus alternates when applicable, add factual JSON-LD only from visible/source data, add internal crawl links, update AI/GEO documentation surfaces such as llms.txt when strategic, add focused tests/guards, then verify. For CELIMAX-style storefronts, prefer STOREFRONT_PATH, buildSeoMetadata, buildSeoPath, buildSeoUrl, app/sitemap.ts, proxy.ts, public/llms.txt, and market-specific tests when those files exist.',
     safety: 'Separate implemented, verified, and unverified claims. Competitor/retailer intent pages must be factual, helpful, and non-deceptive; block keyword stuffing, doorway pages, hidden AI-only text, fake ratings/reviews/prices/availability/shipping, competitor defamation, and unsupported "official retailer", "cheapest", "best", "exclusive", first-page, traffic, Search Console, or AI-citation claims.',
@@ -167,6 +177,7 @@ const CORE_SKILL_DEFINITIONS: Array<{
     display_name: 'cleanup',
     route: '$Cleanup',
     purpose: 'blank the active SKS TriWiki so no prior memory, wrongness, generated graph, pack, cache, report, or AGENTS projection can influence the next code index.',
+    discovery: 'Run $sks-cleanup to blank active TriWiki after plan review.',
     when: 'Use only when the user asks for TriWiki cleanup/reset/blanking or invokes $Cleanup; this is an explicit R3 local mutation.',
     workflow: 'Run sks cleanup plan first. After the operator reviews the inventory, run sks cleanup run --apply. The command locks TriWiki state, re-hashes the planned bytes, moves active TriWiki surfaces through a temporary same-filesystem swap, removes managed AGENTS.md projections, verifies the blank state, then permanently deletes the swap. No prior generation or quarantine is retained. Use sks cleanup proof to verify the blank state. It never consolidates old prose into new active memory.',
     safety: 'Preserve repository source, ordinary docs, missions, evidence, and release proof history. Refuse symlink targets, plan/apply byte drift, and implicit apply. Roll back before the deletion commit; after deletion begins, report any incomplete deletion honestly. Never run doctor --fix as a substitute.',
@@ -180,6 +191,7 @@ const CORE_SKILL_DEFINITIONS: Array<{
     display_name: 'align',
     route: '$Align',
     purpose: 'create or replace TriWiki with an exhaustive repository code-navigation index so an LLM can find the purpose, file, symbol, exact coordinate, and supported directed relationships of current code quickly.',
+    discovery: 'Run $sks-align to rebuild TriWiki from current repository code.',
     when: 'Use when the user invokes $Align or asks to reread the current codebase and rebuild or repair TriWiki strictly from current code. Cleanup is optional and independent.',
     workflow: 'Run sks align run directly against either an absent or existing TriWiki. Align ignores all prior TriWiki state as index input, walks every accepted current source file without incremental or fragment cache reuse, derives purpose only from source comments/docstrings, records exact file and symbol coordinates plus extractor-supported source relations, rechecks the full source inventory digest, validates graph/meta/manifest/code-pack/context-pack in temporary staging, transactionally replaces the active generation, then deletes the temporary prior-state handle. context-graph.json is the exhaustive authority; context-pack.json and managed AGENTS.md blocks are bounded fast-lookup projections. Keep align-ledger.json and align-gate.json truthful, then finish reflection and Honest Mode.',
     safety: 'Never read prior TriWiki memory, wrongness, mission prompts, ordinary docs, external docs, proof cards, or LLM inference as index input. Refuse caps, extraction-limit violations, unreadable/oversized/binary supported-source files, symlink escapes, source drift during the scan, partial staging, non-code extractors, or incomplete file coverage. Do not retain a previous generation.',
@@ -211,6 +223,7 @@ function currentCoreSkillDefinition(skill: typeof CORE_SKILL_DEFINITIONS[number]
     canonical_name: currentCoreSkillName(skill.canonical_name),
     display_name: currentCoreSkillName(skill.display_name),
     route: sksPrefixedDollarCommand(skill.route) as SksCoreSkillRoute,
+    discovery: rewrite(skill.discovery) as string,
     when: rewrite(skill.when) as string,
     workflow: rewrite(skill.workflow),
     safety: rewrite(skill.safety),
@@ -236,9 +249,10 @@ export function renderCoreSkillTemplate(name: string): string {
   if (!legacy) throw new Error(`Unknown SKS core skill: ${name}`);
   const skill = currentCoreSkillDefinition(legacy);
   const directive = coreEngineeringDirectiveReference();
-  const description = compactSkillDiscoveryDescription(
-    `${skill.purpose.charAt(0).toUpperCase()}${skill.purpose.slice(1)}`
-  );
+  const description = compactSkillDiscoveryDescription(skill.discovery);
+  if (description.endsWith('…')) {
+    throw new Error(`core_skill_discovery_truncated:${skill.canonical_name}`);
+  }
   const activation = skill.when.replace(/^Use\s+(?:only\s+)?(?:(?:when|for)\s+)?/i, '');
   return [
     '---',

@@ -101,6 +101,7 @@ test('every installed SKS skill has current metadata and fits the initial-list b
         Array.from(description).length <= SKILL_DISCOVERY_DESCRIPTION_MAX_CHARS,
         `frontmatter description too long:${name}:${Array.from(description).length}`
       );
+      assert.doesNotMatch(description, /…$/, `truncated discovery description:${name}`);
       initialSkillListChars += Array.from(name).length;
       initialSkillListChars += Array.from(description).length;
       initialSkillListChars += Array.from(`.agents/skills/${name}/SKILL.md`).length;

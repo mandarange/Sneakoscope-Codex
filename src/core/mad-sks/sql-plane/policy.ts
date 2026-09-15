@@ -165,7 +165,7 @@ Still deny Supabase account/project/billing/credential control-plane actions, cr
 export function dbSafetyGuardSkillText(): string {
   return `---
 name: db-safety-guard
-description: Enforce Sneakoscope Codex database safety before using SQL, Supabase MCP, Postgres, Prisma, Drizzle, Knex, or migration commands.
+description: Enforce DB safety for a migration or live-data access plan.
 ---
 
 Rules:

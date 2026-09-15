@@ -583,7 +583,7 @@ export function promptPipelineContext(prompt: any, route: any = null, root = pro
     'Codex native /goal is the only persisted goal owner. Goal persistence must not replace or skip the selected route gates.',
     `When a mission exists, read ${REQUEST_INTAKE_ARTIFACT} as a structured projection of the current request. Preserve the literal request and current code as authority; never let generic intake heuristics replace an explicit requirement.`,
     subagentExecutionPolicyText(route, cleanPrompt),
-    'TriWiki: read the bounded current context pack before each stage, hydrate risky or stale claims from source, refresh after material changes, and validate before handoff or final.',
+    'TriWiki: use the current context pack when a claim needs project memory. Hydrate stale or risky claims from source, refresh after material changes, and validate before handoff or final.',
     required ? stackCurrentDocsPolicyText() : '',
     context7RequirementText(required),
     'Do not stop at a plan when implementation was requested; continue until the route gate passes or a hard blocker is honestly recorded.',
@@ -1559,7 +1559,7 @@ Pipeline plan: .sneakoscope/missions/${id}/${PIPELINE_PLAN_ARTIFACT}
 Required skills: ${route.requiredSkills.join(', ')}
 Stop gate: ${route.stopGate}
 Official subagents: ${routeRequiresSubagents(route, visibleTask) ? 'required for this explicit Naruto/parallel task; use independent disjoint slices, official agent threads, matched SubagentStart/SubagentStop events, and a parent integration summary.' : 'not required by this task profile; keep the work parent-owned unless a concrete independent decomposition emerges.'}
-TriWiki: use only a coordinate+voxel-overlay context pack before each route phase, hydrate low-trust claims during the phase, refresh after new findings or artifact changes, and validate before handoffs/final claims. Coordinate-only packs are invalid and must be refreshed before pipeline decisions.
+TriWiki: use a coordinate+voxel-overlay context pack when a claim needs project memory; hydrate low-trust claims from source; refresh after new findings or artifact changes; validate before handoffs/final claims. Coordinate-only packs are invalid and must be refreshed before pipeline decisions.
 Final closeout: every pipeline final answer must summarize what was done, what changed for the user/repo, what was verified, and any remaining gaps.
 ${stopFinalizationRitualsEnforced(root) && route.stopGate !== 'none' && reflectionRequiredForRoute(route) ? `Reflection: ${reflectionInstructionText()}` : 'Reflection: not required for this route.'}
 Reasoning hint: ${routeReasoning(route, visibleTask).effort}; preserve the user-selected model, effort, and service tier.

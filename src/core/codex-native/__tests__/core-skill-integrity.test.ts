@@ -42,6 +42,7 @@ test('core skills use the focused v2 progressive-disclosure template', () => {
     assert.ok(
       description.length > 20 && Array.from(description).length <= SKILL_DISCOVERY_DESCRIPTION_MAX_CHARS
     );
+    assert.doesNotMatch(description, /…$/);
     assert.doesNotMatch(description, /Immutable SKS core Codex App route bridge/);
     assert.match(body, /\nPurpose: /);
     assert.match(body, /\nUse when: /);

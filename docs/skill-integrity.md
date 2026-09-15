@@ -18,7 +18,7 @@ SKS keeps the built-in route skills content-addressed and immutable. The core sk
 
 Every generated skill may also include `agents/openai.yaml`. SKS emits a minimal profile from the current Codex schema:
 
-- Frontmatter discovery descriptions are deterministically bounded to 64 characters; the release gate accounts for skill name, description, and relative `SKILL.md` path against the 8,000-character initial-list budget, leaving headroom for host formatting and absolute path prefixes.
+- Frontmatter discovery descriptions are complete WHEN-scoped sentences of at most 64 characters, with no ellipsis truncation. The release gate accounts for skill name, description, and relative `SKILL.md` path against the 8,000-character initial-list budget, leaving headroom for host formatting and absolute path prefixes.
 - `interface.display_name` and `interface.short_description` are required.
 - `interface.default_prompt` names the installed skill exactly as `Use $<skill-name>.`.
 - `policy.allow_implicit_invocation` is `false` only for the explicit-only high-impact set and `true` for other generated SKS skills.

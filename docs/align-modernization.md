@@ -37,7 +37,7 @@ The current Codex App-owned loop does **not** migrate wholesale to the Agents SD
 
 ## Skill and plugin contract
 
-Generated `SKILL.md` files use progressive disclosure and deterministic discovery descriptions of at most 64 characters. The release gate budgets skill names, descriptions, and relative paths together against Codex's 8,000-character initial list, leaving headroom for host formatting and absolute path prefixes. Generated `agents/openai.yaml` files use the current minimal `interface` plus `policy.allow_implicit_invocation` profile; current optional icon/dependency fields remain valid, while unsupported historical routing keys are rejected. High-impact actions that require direct user intent disable implicit invocation.
+Generated `SKILL.md` files use progressive disclosure and complete WHEN-scoped discovery descriptions of at most 64 characters, with no ellipsis truncation. The release gate budgets skill names, descriptions, and relative paths together against Codex's 8,000-character initial list, leaving headroom for host formatting and absolute path prefixes. Generated `agents/openai.yaml` files use the current minimal `interface` plus `policy.allow_implicit_invocation` profile; current optional icon/dependency fields remain valid, while unsupported historical routing keys are rejected. High-impact actions that require direct user intent disable implicit invocation.
 
 Plugins are the installable distribution unit and require `.codex-plugin/plugin.json`. SKS does not invent plugin packaging for skills that remain project- or user-local generated assets.
 

@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [10.2.0] - 2026-09-15
+
+### Changed
+
+- Optimize the installed SKS user environment for GPT-6 Astra. Skill picker
+  descriptions are complete WHEN-scoped sentences inside the 64-character
+  budget, with no ellipsis truncation. AGENTS.md, SNEAKOSCOPE.md, and route
+  hooks point at TriWiki only when a claim needs project memory, and they keep
+  authorized work going until verification or a hard blocker.
+
 ## [10.1.6] - 2026-09-12
 
 ### Changed

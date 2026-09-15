@@ -1,6 +1,17 @@
-# Release Proof Truth — 10.1.6
+# Release Proof Truth — 10.2.0
 
-## Current candidate: 10.1.6
+## Current candidate: 10.2.0
+
+10.2.0 optimizes the installed SKS user environment for GPT-6 Astra: complete
+WHEN-scoped skill descriptions, contextual AGENTS.md and TriWiki recall, and
+narrower skill triggers. Verification must cover generated skill discovery
+text, AGENTS.md/hook wording, skill-surface budget, version truth, and the
+usual release stamp. The final clean candidate still requires its own
+canonical test proof, full release DAG, required real checks, pack receipt,
+and release stamp. Publication and installed-runtime behavior are not claimed
+by this source preparation.
+
+## Historical 10.1.6 candidate
 
 10.1.6 defaults instructed coding roles to Astra Low. Planning, analysis,
 debugging, and review retain their judgment profiles, while context and tool
