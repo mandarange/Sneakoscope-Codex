@@ -7731,6 +7731,186 @@
       "callsite_sha256": "a8552dabfa1d646a11e532401d9b39de93d3f22cd7ae89cedec44f3bd1a7425e",
       "occurrence": 1,
       "reason": "The updater removes only its caller-selected, stable doctor report file before spawning that doctor, so a prior success cannot authorize the current run; removal is non-recursive and does not follow symlinks."
+    },
+    {
+      "file": "src/core/local-decision/cli-evaluate.ts",
+      "symbol": "runBenchmark",
+      "token": "fsp.writeFile",
+      "scope_contract_sha256": "39b519fadfdd8064e10d825d14d1aa68b0a6d9ea0d14276cc8a15de24b0d2d4d",
+      "callsite_sha256": "afdf0a667eba80f7c1aa27df7ddafd2736a3f2289cf607133e76e46db1351e92",
+      "occurrence": 1,
+      "reason": "The explicit benchmark command truncates only its own rows file inside the operator-supplied --output directory before appending measured rows."
+    },
+    {
+      "file": "src/core/local-decision/cli-lifecycle.ts",
+      "symbol": "runStop",
+      "token": "process.kill",
+      "scope_contract_sha256": "5ff78aac4db257e54bee60cae34075d2f74f3672809a26aa0b108fda9a319db0",
+      "callsite_sha256": "c94ebcc2cb6245873a613f2c2472763b8f9b3f98d8826d5aeb2d7b77dd35500b",
+      "occurrence": 1,
+      "reason": "The explicit stop command signals only the broker pid recorded in SKS-owned service metadata, after a graceful shutdown request and after ps confirms the pid runs the local-decision service entrypoint on this runtime root."
+    },
+    {
+      "file": "src/core/local-decision/config.ts",
+      "symbol": "writeLocalDecisionConfig",
+      "token": "chmod",
+      "scope_contract_sha256": "b60d6d761ab0d6b8074073ef142891967bdba2f273e6f24dde50a78c63ba9596",
+      "callsite_sha256": "f95608681a102826a72e10a7a0938aa4e7d4f3886524a5b7008921016c55b8c0",
+      "occurrence": 1,
+      "reason": "Tightens the SKS-owned local-decision runtime root to owner-only after writing the mode configuration inside it."
+    },
+    {
+      "file": "src/core/local-decision/install.ts",
+      "symbol": "installLocalDecisionModel",
+      "token": "fsp.rm",
+      "scope_contract_sha256": "ce8a2ae068ca53c2885e83bbc00863632418dcd041d8aa849d88e26ab3fc6e45",
+      "callsite_sha256": "7f95713c70c4317d79959b0a097d0bc186386b8dff6b0d7e5bafe8796f662321",
+      "occurrence": 1,
+      "reason": "Recreates only the SKS-owned virtualenv under the runtime root when the dependency lock digest changed; a running service is refused earlier."
+    },
+    {
+      "file": "src/core/local-decision/install.ts",
+      "symbol": "installLocalDecisionModel",
+      "token": "fsp.writeFile",
+      "scope_contract_sha256": "ce8a2ae068ca53c2885e83bbc00863632418dcd041d8aa849d88e26ab3fc6e45",
+      "callsite_sha256": "f7462d77e3848c8a7863508cda7af90e7062d3f5ec8c617defa9cf46a66522d2",
+      "occurrence": 1,
+      "reason": "Records the dependency lock digest marker inside the SKS-owned virtualenv with owner-only mode."
+    },
+    {
+      "file": "src/core/local-decision/install.ts",
+      "symbol": "installLocalDecisionModel",
+      "token": "fsp.rm",
+      "scope_contract_sha256": "ce8a2ae068ca53c2885e83bbc00863632418dcd041d8aa849d88e26ab3fc6e45",
+      "callsite_sha256": "9320fea43cc9b37bedffb02e9f7b99de2a8aa874366eac917db4ac8151e6f723",
+      "occurrence": 1,
+      "reason": "Replaces only the worker package directory inside the SKS-owned virtualenv purelib, verified to be inside the venv path."
+    },
+    {
+      "file": "src/core/local-decision/install.ts",
+      "symbol": "installLocalDecisionModel",
+      "token": "fsp.writeFile",
+      "scope_contract_sha256": "ce8a2ae068ca53c2885e83bbc00863632418dcd041d8aa849d88e26ab3fc6e45",
+      "callsite_sha256": "d9c993860449f9bf026bdc07771fc116ece91b83767022cc4b0ccb44fe9de6d8",
+      "occurrence": 1,
+      "reason": "Copies the packaged worker .py files into the SKS-owned virtualenv purelib with owner-only mode after verification."
+    },
+    {
+      "file": "src/core/local-decision/install.ts",
+      "symbol": "installLocalDecisionModel",
+      "token": "rename",
+      "scope_contract_sha256": "ce8a2ae068ca53c2885e83bbc00863632418dcd041d8aa849d88e26ab3fc6e45",
+      "callsite_sha256": "9abcc772dd9563a3b3b97b10880d952b90f13a83669543c501fcc692b99b70ad",
+      "occurrence": 1,
+      "reason": "Promotes a digest-verified staged snapshot atomically under the SKS-owned snapshots directory into a distinct name so an existing snapshot a running worker may hold is never overwritten."
+    },
+    {
+      "file": "src/core/local-decision/install.ts",
+      "symbol": "installLocalDecisionModel",
+      "token": "fsp.rm",
+      "scope_contract_sha256": "ce8a2ae068ca53c2885e83bbc00863632418dcd041d8aa849d88e26ab3fc6e45",
+      "callsite_sha256": "42caa533acdc1c09a0ec5e042932e6579788c3f351586a6665c1948400affa0f",
+      "occurrence": 1,
+      "reason": "Discards this install's own staged snapshot when an identical verified snapshot already exists under the SKS-owned snapshots directory."
+    },
+    {
+      "file": "src/core/local-decision/install.ts",
+      "symbol": "installLocalDecisionModel",
+      "token": "rename",
+      "scope_contract_sha256": "ce8a2ae068ca53c2885e83bbc00863632418dcd041d8aa849d88e26ab3fc6e45",
+      "callsite_sha256": "44e54c42ac6cad120d278a4dd95a4fd3cd4430c9a1913d4c5553d433eaedbdd2",
+      "occurrence": 1,
+      "reason": "Atomic promotion of the digest-verified staged snapshot into the SKS-owned snapshots directory; the receipt is replaced only after this rename succeeds."
+    },
+    {
+      "file": "src/core/local-decision/install.ts",
+      "symbol": "installLocalDecisionModel",
+      "token": "fsp.rm",
+      "scope_contract_sha256": "ce8a2ae068ca53c2885e83bbc00863632418dcd041d8aa849d88e26ab3fc6e45",
+      "callsite_sha256": "bc09b4bf0425f04e5179a368903367f7f1aef8d23dee876e6a7bbd19eb44c47b",
+      "occurrence": 1,
+      "reason": "Removes only this install's own staging directory under the SKS-owned runtime root in the finally block."
+    },
+    {
+      "file": "src/core/local-decision/install.ts",
+      "symbol": "uninstallLocalDecision",
+      "token": "fsp.rm",
+      "scope_contract_sha256": "3f3b32344b5fdc4e82b4fad04d6d20cff718a0fe9f09544440a233f1b95640ad",
+      "callsite_sha256": "a94e5a8de7ec023b86f566df0f4595b69a7e30d4cc99e3d48fd9cf8cf3a59558",
+      "occurrence": 1,
+      "reason": "Removes only receipt inventory entries and SKS-owned bookkeeping verified to be inside the local-decision runtime root; entries outside it are reported and retained."
+    },
+    {
+      "file": "src/core/local-decision/paths.ts",
+      "symbol": "ensurePrivateDir",
+      "token": "chmod",
+      "scope_contract_sha256": "589044f364af4f305d9af57fc2ac98e5bba407502d299adf0bd1345f538e2a37",
+      "callsite_sha256": "eed7317b01b5b474017bcd3ba23ac710de30113b79d849e9897e0b82208adda1",
+      "occurrence": 1,
+      "reason": "Tightens an SKS-owned private local-decision directory to owner-only after verifying it is a real directory owned by the current user."
+    },
+    {
+      "file": "src/core/local-decision/paths.ts",
+      "symbol": "removeSocketFileIfStale",
+      "token": "fsp.rm",
+      "scope_contract_sha256": "ec8fc7d0249cce7d1cc067798c209772ab8ca75e1f46d2a63cbe25077e2ba3fb",
+      "callsite_sha256": "38ac46196b080ee29b065a64f3f7cd70d51adb6ec9207c68ee65022d4ade8526",
+      "occurrence": 1,
+      "reason": "Removes only a stale SKS-owned Unix socket path before the broker listens; a directory at that path is refused instead of removed."
+    },
+    {
+      "file": "src/core/local-decision/service-support.ts",
+      "symbol": "appendDecisionLedger",
+      "token": "rename",
+      "scope_contract_sha256": "afcd8f7844846e6928f4b14722fb852c61a14b588f11f1b4a4c9ec94e429d9c0",
+      "callsite_sha256": "8251beb827f260fa12ae8fc024fab7a0e025dfee215952f4a5c56f25a222b435",
+      "occurrence": 1,
+      "reason": "Rotates only the SKS-owned decisions ledger to its .1 sibling under the runtime logs directory when it reaches the byte limit."
+    },
+    {
+      "file": "src/core/local-decision/service-support.ts",
+      "symbol": "pruneDecisionLedger",
+      "token": "fsp.rm",
+      "scope_contract_sha256": "ec88993209afb37f84c69f92d49a25597d059b2f9cf68fea08d277c03fc9bdbd",
+      "callsite_sha256": "144cfdd7f16635b8ba734494859ac756b95d4efb9d19735136995b42110bdd75",
+      "occurrence": 1,
+      "reason": "Removes only the SKS-owned decisions ledger files under the runtime logs directory once they pass the retention age."
+    },
+    {
+      "file": "src/core/local-decision/service.ts",
+      "symbol": "close.callback@396",
+      "token": "fsp.rm",
+      "scope_contract_sha256": "453f969ca77967480ed7ffa2520a919513c6b7744bcda95469fa32ac8bce31cc",
+      "callsite_sha256": "9b159c88e17ad23f2a76f40ca7e51ff28d913d324f06794bd225ccff6972cd65",
+      "occurrence": 1,
+      "reason": "Broker shutdown removes only its own socket file at the path it created under the private per-user socket directory."
+    },
+    {
+      "file": "src/core/local-decision/service.ts",
+      "symbol": "close.callback@396",
+      "token": "fsp.rm",
+      "scope_contract_sha256": "453f969ca77967480ed7ffa2520a919513c6b7744bcda95469fa32ac8bce31cc",
+      "callsite_sha256": "7449e9c4f0a3543541d8177f91c9c2607ed6bc94ebd5d37ab82fde89f558a78a",
+      "occurrence": 1,
+      "reason": "Broker shutdown removes only its own private metadata file, and only when the recorded pid is this process."
+    },
+    {
+      "file": "src/core/local-decision/service.ts",
+      "symbol": "startLocalDecisionService",
+      "token": "chmod",
+      "scope_contract_sha256": "3c5de099b9371541b9aca3c5d947be2c73afbe64c0ab039d96266f8218c48d42",
+      "callsite_sha256": "588b304209b997950a96e69bad5588944fb610bfcf37e53d88b1eba883498f2b",
+      "occurrence": 1,
+      "reason": "Hardens the broker's freshly created Unix socket to owner-only immediately after listen."
+    },
+    {
+      "file": "src/core/local-decision/service.ts",
+      "symbol": "startLocalDecisionService",
+      "token": "fsp.rm",
+      "scope_contract_sha256": "3c5de099b9371541b9aca3c5d947be2c73afbe64c0ab039d96266f8218c48d42",
+      "callsite_sha256": "8699f56bbae19246729c4a0f1738558d68ec65ca0200db53e2aa98ebbcb7ffd9",
+      "occurrence": 1,
+      "reason": "Removes the private metadata file this start just wrote when the socket listen fails, so no stale record claims a running service."
     }
   ]
 }
