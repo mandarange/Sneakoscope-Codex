@@ -756,7 +756,8 @@ export const COMMAND_CATALOG = [
   { name: 'gc', usage: 'sks gc [--dry-run] [--json]', description: 'Compact oversized logs and prune stale runtime artifacts.' },
   { name: 'stats', usage: 'sks stats [--full] [--json]', description: 'Show package and .sneakoscope storage size.' },
   { name: 'mcp-server', usage: 'sks mcp-server [--expose-exec] [--probe]', description: 'Run a modern stateless stdio MCP server exposing SKS read-only commands as tools for any MCP-capable agent host; --expose-exec also exposes non-read-only commands; --probe round-trips server/discover and tools/list, then exits.' },
-  { name: 'agent-bridge', usage: 'sks agent-bridge setup [--trusted-project] [--json] | async --prompt "task" [--tools status,stats] [--json]', description: 'Publish the agent-bridge manifest or run selected read-only SKS tools with native Astra Async tool calling through the registered Codex-LB bridge.' }
+  { name: 'agent-bridge', usage: 'sks agent-bridge setup [--trusted-project] [--json] | async --prompt "task" [--tools status,stats] [--json]', description: 'Publish the agent-bridge manifest or run selected read-only SKS tools with native Astra Async tool calling through the registered Codex-LB bridge.' },
+  { name: 'decision', usage: 'sks decision status|inspect|install|start|mode|stop|evaluate|benchmark|uninstall [--json]', description: 'Manage the optional Apple Silicon local decision provider (off by default): explicit model inspect/install/start, shadow or advisory mode for non-authoritative Naruto planning advice, explicit recovery triage, engine benchmark, and owned-inventory uninstall.' }
 ];
 
 export function routeById(id: any): any {

@@ -1,15 +1,28 @@
-# Release Proof Truth — 10.2.0
+# Release Proof Truth — 10.3.0
 
-## Current candidate: 10.2.0
+## Current candidate: 10.3.0
 
-10.2.0 optimizes the installed SKS user environment for GPT-6 Astra: complete
+10.3.0 adds the optional local decision provider, its Control Center page, and
+the interactive-global-install Menu Bar build. Verification must cover the
+decision schema/policy/broker/install/integration suites, the Python CPU-only
+suites, the packed tarball contents (worker package present, weights and
+virtualenvs absent), the native source inventory and Menu Bar install check,
+the postinstall inertness contract, version truth, and the usual release stamp.
+A real-model verification on one Apple Silicon Mac (float32 activations,
+sequential and batched paths agreeing to 1.9e-5) is recorded under
+`.sneakoscope/reports/local-decision-verification-20260917/` and is not
+packaged; it proves the engine runs, not any workflow speed or token saving.
+The final clean candidate still requires its own canonical test proof, full
+release DAG, required real checks, pack receipt, and release stamp. Publication
+and installed-runtime behavior are not claimed by this source preparation.
+
+## Historical 10.2.0 candidate
+
+10.2.0 optimized the installed SKS user environment for GPT-6 Astra: complete
 WHEN-scoped skill descriptions, contextual AGENTS.md and TriWiki recall, and
-narrower skill triggers. Verification must cover generated skill discovery
+narrower skill triggers. Its verification covered generated skill discovery
 text, AGENTS.md/hook wording, skill-surface budget, version truth, and the
-usual release stamp. The final clean candidate still requires its own
-canonical test proof, full release DAG, required real checks, pack receipt,
-and release stamp. Publication and installed-runtime behavior are not claimed
-by this source preparation.
+usual release stamp.
 
 ## Historical 10.1.6 candidate
 
@@ -214,9 +227,9 @@ Exact-commit proof can exist only after the candidate is committed and all
 source-bound gates are regenerated from that clean commit.
 
 All release artifacts bound to 9.2.7 or an earlier commit are historical. They
-must not be renamed, copied, or treated as 10.1.3 evidence.
+must not be renamed, copied, or treated as 10.3.0 evidence.
 
-New 10.1.3 claims:
+New 10.3.0 claims:
 
 | Claim | Current support | Boundary |
 | --- | --- | --- |
@@ -289,8 +302,8 @@ New 10.1.3 claims:
 | `sks update` quarantines other-harness conflicts | passed-hermetic | `other-harness-cleanup` now calls `cleanupOtherHarnessConflicts` instead of failing closed; from-home update e2e still runs every migration stage |
 | Host extra skill dirs lose only SKS-owned retired residue | passed-hermetic | `~/.cursor/skills` and `~/.claude/skills` remove managed retired names only; user-authored collisions stay in place |
 | A stale or cwd-sticky official workflow cannot capture a later prompt | passed-hermetic | unnamed hooks use `loadOwnedRouteState`; idle > 2h is inactive even with leftover open threads; same-session follow-ups still bind while the run is fresh |
-| All checked version authorities report 10.1.3 | passed-hermetic | `release:version-truth` 15 surfaces at 10.1.3 after incremental build |
-| The reported 10.1.3 package is ready to publish | not proved | requires a clean exact-commit build, `npm run release:check:full` stamp, pack receipt, provenance, and the release commit fast-forward pushed to origin main (the prepublish reproducibility preflight refuses `head_not_origin_main`) |
+| All checked version authorities report 10.3.0 | passed-hermetic | `release:version-truth` 15 surfaces at 10.3.0 after incremental build |
+| The reported 10.3.0 package is ready to publish | not proved | requires a clean exact-commit build, `npm run release:check:full` stamp, pack receipt, provenance, and the release commit fast-forward pushed to origin main (the prepublish reproducibility preflight refuses `head_not_origin_main`) |
 
 ## 9.1.0 assertion (historical)
 

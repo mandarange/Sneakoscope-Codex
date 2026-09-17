@@ -16,7 +16,7 @@
 Sneakoscope Codex (`sks`) is an open-source trust layer for Codex CLI and ChatGPT Desktop. It coordinates bounded AI coding agents, records machine-verifiable evidence, preserves project memory, and blocks release claims that are not supported by current tests or artifacts. Search visibility outcomes are measured separately; SKS does not promise rankings or traffic.
 <!-- END SKS SEARCH VISIBILITY MARKETING -->
 
-Current package: **SKS 10.2.0**. Install the latest stable release from npm.
+Current package: **SKS 10.3.0**. Install the latest stable release from npm.
 
 [Quick start](#install-in-one-command) · [Commands](#everyday-commands) · [SKS Center](#sks-center-macos) · [Documentation](#documentation) · [Changelog](CHANGELOG.md)
 
@@ -92,6 +92,11 @@ in your terminal.
 ## SKS Center (macOS)
 
 Open **SKS Control Center** from the SKS menu bar.
+The Menu Bar app (with the Control Center) is built from source on macOS when you run
+`npm i -g sneakoscope` interactively in a terminal, and by `sks install`, `sks doctor --fix`,
+`sks update`, or `sks menubar install`. Dependency, CI, and piped installs never touch your
+home directory; set `SKS_POSTINSTALL_MENUBAR=1` to force the build in a script, or
+`SKS_POSTINSTALL_NO_MENUBAR=1` to skip it.
 
 | Page | Use it to |
 | --- | --- |

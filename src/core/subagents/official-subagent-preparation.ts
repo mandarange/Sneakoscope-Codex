@@ -57,6 +57,7 @@ import {
 } from '../agent-bridge/host-capability-runtime.js'
 import { uniqueStrings } from '../text/strings.js'
 import { officialSubagentEvidenceReady } from './terminal-subagent-state.js'
+import { withLocalDecisionAdvice } from '../local-decision/integration.js'
 
 export const NARUTO_RESULT_SCHEMA = 'sks.naruto-subagent-workflow.v1'
 export const SUBAGENT_PLAN_FILENAME = 'subagent-plan.json'
@@ -110,7 +111,18 @@ export interface OfficialSubagentPreparationInput {
 }
 
 export async function prepareOfficialSubagentMission(input: OfficialSubagentPreparationInput) {
-  return withOfficialSubagentLifecycleLock(input.dir, () => prepareOfficialSubagentMissionLocked(input))
+  const prepared = await withOfficialSubagentLifecycleLock(input.dir, () => prepareOfficialSubagentMissionLocked(input))
+  // Optional local decision advice (off by default). It runs only here, after
+  // the lifecycle lock is released and the baseline plan is promoted; it reads
+  // the result and may append a bounded non-authoritative context to the
+  // delegation prompt in advisory mode. It never changes the plan artifact.
+  return withLocalDecisionAdvice(prepared, {
+    root: input.root,
+    dir: input.dir,
+    missionId: input.missionId,
+    goal: String(input.goal || '').trim(),
+    route: input.route
+  })
 }
 
 async function prepareOfficialSubagentMissionLocked(input: OfficialSubagentPreparationInput) {

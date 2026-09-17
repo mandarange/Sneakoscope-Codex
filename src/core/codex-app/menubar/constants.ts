@@ -34,6 +34,8 @@ export const NATIVE_SOURCE_FILES = [
   'RemoteCodingViewController.swift',
   'DiagnosticsViewController.swift',
   'SettingsViewController.swift',
+  'LocalDecisionModels.swift',
+  'LocalDecisionViewController.swift',
   'OperationModels.swift',
   'ProviderRouteExplanation.swift',
   'OperationCoordinator.swift',

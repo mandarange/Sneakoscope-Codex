@@ -11,6 +11,7 @@ import {
 import { reconcileCodexAppUpgradeProcesses } from '../core/codex-app.js';
 import { runPostinstallGlobalDoctorAndMarkPending } from '../core/update/update-migration-state.js';
 import { isProjectSetupCandidate } from './install-tool-helpers.js';
+import { describePostinstallMenuBar, ensureSksMenuBarDuringPostinstall } from './install-helpers-menubar.js';
 import {
   ensureCodexImagegenDuringInstall,
   ensureGlobalCodexSkillsDuringInstall,
@@ -25,8 +26,18 @@ export async function postinstall({ bootstrap }: any) {
   const installRoot = path.resolve(process.env.INIT_CWD || process.cwd());
   console.log('\nSKS installed.');
   await restoreInstalledPackageBuildStamp();
+  // The Menu Bar + Control Center is the one HOME-level piece a human doing an
+  // interactive global install expects to arrive with the CLI. Its policy is
+  // separate from the broad bootstrap opt-in and stays inert for dependency,
+  // CI, and piped installs (see install-helpers-menubar.ts).
+  const menuBar = await ensureSksMenuBarDuringPostinstall(process.env);
+  if (menuBar.status !== 'skipped') console.log(describePostinstallMenuBar(menuBar));
   if (!postinstallExternalMutationsAllowed(process.env)) {
-    console.log('Automatic bootstrap was not run; npm install leaves project, HOME, Codex, and global SKS state unchanged by default.');
+    const menuBarTouchedHome = menuBar.status === 'installed' || menuBar.status === 'up_to_date';
+    console.log(menuBarTouchedHome
+      ? 'Automatic bootstrap was not run; apart from the SKS Menu Bar app above, npm install leaves project, HOME, Codex, and global SKS state unchanged.'
+      : 'Automatic bootstrap was not run; npm install leaves project, HOME, Codex, and global SKS state unchanged by default.');
+    if (menuBar.status === 'skipped') console.log(describePostinstallMenuBar(menuBar));
     console.log('Next: run `sks bootstrap` when you are ready to initialize SKS.');
     console.log('Dependency diagnostics remain explicit: sks deps check');
     console.log('Explicit lifecycle opt-in: SKS_POSTINSTALL_BOOTSTRAP=1 npm i -g sneakoscope');

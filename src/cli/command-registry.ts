@@ -374,11 +374,19 @@ const COMMAND_DEFINITIONS = {
     allowedDuringActiveRoute: true,
     activeRoutePolicy: 'always'
   }),
-  'agent-bridge': readOnly(entry('beta', 'Register SKS tools or run read-only tools with native Astra async calling', 'dist/core/commands/agent-bridge-command.js', subcommand(() => import('../core/commands/agent-bridge-command.js'), 'agentBridgeCommand', 'dist/core/commands/agent-bridge-command.js', 'setup')))
+  'agent-bridge': readOnly(entry('beta', 'Register SKS tools or run read-only tools with native Astra async calling', 'dist/core/commands/agent-bridge-command.js', subcommand(() => import('../core/commands/agent-bridge-command.js'), 'agentBridgeCommand', 'dist/core/commands/agent-bridge-command.js', 'setup'))),
+  decision: {
+    ...skipMigrationGate(entry('labs', 'Manage the optional local decision provider: inspect, install, start, mode, evaluate, stop, uninstall', 'dist/commands/local-decision.js', directCommand(() => import('../commands/local-decision.js'), 'dist/commands/local-decision.js'), {
+      allowedDuringActiveRoute: true,
+      activeRoutePolicy: 'always'
+    })),
+    packageRequiredFiles: ['dist/commands/local-decision.js', 'dist/core/local-decision/service-entrypoint.js']
+  }
 } satisfies Record<string, CommandEntry>;
 
 const COMMANDS_WITH_LEGACY_CONTRACT_OVERRIDES = applyCommandContractOverrides(COMMAND_DEFINITIONS, {
   align: { latency: 'long', supportsJson: true, inputProfile: 'json-only' },
+  decision: { risk: 'R2', latency: 'long', supportsJson: true, remoteAllowed: false, inputProfile: 'json-only' },
   cleanup: { risk: 'R3', latency: 'long', supportsJson: true, remoteAllowed: false, inputProfile: 'json-only' },
   autoresearch: { latency: 'long' },
   bench: { latency: 'long' },

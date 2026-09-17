@@ -97,6 +97,7 @@ const FIXTURES = Object.freeze({
   'cli-bench': fixture('execute_and_validate_artifacts', 'sks bench core --tier npx-one-shot --json --iterations 1', ['.sneakoscope/reports/performance/core-bench.json'], 'pass'),
   'cli-code-structure': fixture('execute', 'sks code-structure scan --json', [], 'pass', { timeout_ms: 180000 }),
   'cli-rust': fixture('execute', 'sks rust smoke --json', [], 'pass'),
+  'cli-decision': fixture('execute', 'sks decision status --json', [], 'pass'),
   'cli-skill-dream': fixture('execute', 'sks skill-dream status --json', [], 'pass'),
   'cli-gc': fixture('execute', 'sks gc --dry-run --json', [], 'pass'),
   'cli-cleanup': fixture('execute', 'sks cleanup plan --json', [], 'pass', {

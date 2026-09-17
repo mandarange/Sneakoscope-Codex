@@ -29,6 +29,7 @@ final class ControlCenterWindowController: NSWindowController, NSTableViewDataSo
             .mcpServers: MCPServersViewController(processClient: processClient, operations: operations, notifications: notifications),
             .providers: ProvidersViewController(processClient: processClient, operations: operations),
             .remoteCoding: RemoteCodingViewController(),
+            .localDecision: LocalDecisionViewController(processClient: processClient, operations: operations),
             .diagnostics: DiagnosticsViewController(processClient: processClient, operations: operations),
             .settings: SettingsViewController(processClient: processClient, operations: operations, notifications: notifications)
         ]
