@@ -324,6 +324,7 @@
     {
       "canonical_name": "sks-naruto",
       "trusted_sha256": [
+        "65e19a5d16f486b13541048c239e828f8039bfc6e38bafd7949d9c936fe4b5b2",
         "da43debf97f0b4a1583d8202a7306aca97ac97865accf9bca8f41d75c84a1cb9",
         "b981bea4183376c6c0204941ad6c2e78782e2cdea4f8d25cc85630c609faaf95",
         "5df9c9678eb68fd79ceb998ae7a52dd54dc92336ad5169e8a01acca89f76bd60",
@@ -372,6 +373,7 @@
     {
       "canonical_name": "sks-prompt-pipeline",
       "trusted_sha256": [
+        "93fd938dccd65d9b4d1dd140b60e1baedc627e7fcc54f9afd95eb2e44efd1143",
         "033bb114ec1fac3f8c312f698b1861ed4c2ce6f65c06f4f1a872c4b101b74b92",
         "e7c8ef56d38fdc4879c983f7d6706f26fc1cf0a60c508836bd628e815700bcc3",
         "480c8afffafa9d52c483a963b4b8fafdffc0a47cd6d2efd3fb6d7924c11832c5",
@@ -388,6 +390,7 @@
     {
       "canonical_name": "sks-reasoning-router",
       "trusted_sha256": [
+        "41e14e8d5b93d743096664869ee68c41c86e911b0bbc165bdcd10e4a45faa4b6",
         "03d68436e568b3cee2bffc6ca58819019ca406f7b648ef4704e3465c7c83c114",
         "647f730520a1c7dc89c2642f5b8502624c65a861ae41aecf1fb137db40fd0611",
         "da0ddb58adc68ddeebdb9c45bf111c26eaa64d3e9dffe1dd39d7f30b943b8b88",
