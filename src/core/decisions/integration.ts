@@ -198,6 +198,44 @@ async function decideOfficialSubagentPreparationInner(
   return result;
 }
 
+/** One Decisions call for the live turn. Jev off or a missing key does not call OpenRouter. */
+export async function consultJevTurnModel(input: {
+  root: string;
+  prompt: string;
+  env?: NodeJS.ProcessEnv;
+}): Promise<{ called: boolean; model: string | null; reason: string }> {
+  const overrides = activeOverrides();
+  const env = input.env || process.env;
+  const config = overrides?.config ?? await readDecisionConfig(env);
+  if (!jevEnabled(config)) return { called: false, model: null, reason: 'off' };
+  const resolved = await resolveOpenRouterApiKey({ env });
+  if (!resolved.key) return { called: false, model: null, reason: 'missing_key' };
+  const prompt = String(input.prompt || '').trim();
+  if (!prompt) return { called: false, model: null, reason: 'empty_prompt' };
+  const bundle = buildDecisionBundle({
+    projectId: sha256(input.root).slice(0, 32),
+    workflowRunId: 'turn',
+    workflowRevision: 'turn',
+    sourceDigest: 'turn',
+    graphDigest: null,
+    goal: prompt,
+    routingCandidates: [{ id: 'turn', summary: prompt.slice(0, 240) }]
+  });
+  const transport = await requestOpenRouterDecision(bundle, {
+    env,
+    deadlineMs: DESIGN_DEFAULTS.deadlineMs,
+    ...(overrides?.fetchImpl ? { fetchImpl: overrides.fetchImpl } : {})
+  });
+  if (!transport.ok) return { called: true, model: null, reason: transport.reason };
+  const compiled = compileDecision(bundle, transport.response);
+  if (compiled.kind !== 'apply') return { called: true, model: null, reason: compiled.reason };
+  const selected = assembleRoutingSelection(compiled.effects.flatMap((effect) => (
+    effect.kind === 'select_routing' ? [{ roleId: effect.roleId, model: effect.model }] : []
+  )));
+  const model = selected?.models.turn || null;
+  return { called: true, model, reason: model ? 'applied' : 'keep_baseline' };
+}
+
 export function effectAlreadyConsumed(identity: string): boolean {
   return appliedEffects.has(identity);
 }

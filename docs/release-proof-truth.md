@@ -1,6 +1,6 @@
 # Release Proof Truth
 
-## Unreleased candidate
+## 10.3.1 candidate
 
 The working tree ships Jev through OpenRouter Decisions. Verification must cover
 the typed compiler, injected transport, preparation consumers, and packed

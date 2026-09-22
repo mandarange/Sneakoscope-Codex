@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [10.3.1] - 2026-09-22
+
+### Fixed
+
+- Jev mode calls OpenRouter Decisions on every Codex user prompt, including
+  turns that do not start a Naruto fan-out. A confident answer seals the model
+  for that turn.
+- Enabling Codex LB selects `model_provider = "codex-lb"` so the Codex app
+  sends model traffic to the gateway. Disabling it returns the managed OpenAI
+  binding.
+
 ## [10.3.0] - 2026-09-22
 
 ### Added

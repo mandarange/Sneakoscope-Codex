@@ -31,6 +31,7 @@ import { codePackFreshnessNote } from './hooks-runtime/code-pack-freshness-prefl
 import { claimHookInvocation } from './hooks-runtime/hook-invocation-dedupe.js';
 import { armLightTurnStopBypass, clearLightTurnStopBypass, consumeLightTurnStopBypass, hasMatchingLightTurnStopBypass } from './hooks-runtime/light-turn.js';
 import { evaluateHookNarutoDecisionGate, looksLikeActiveContinuationPrompt } from './hooks-runtime/naruto-decision-gate.js';
+import { consultJevTurnModel } from './decisions/integration.js';
 import {
   ensureOfficialSubagentArtifactDirConfined,
   inspectActiveOfficialSubagentWorkflow,
@@ -213,7 +214,8 @@ export async function evaluateHookPayload(name: any, payload: any = {}, opts: an
   const withNarutoDecision = (result: any) => ({ ...result, sksNarutoDecision });
   if (name === 'user-prompt-submit') {
     const result = await hookUserPrompt(root, state, payload, noQuestion, sessionKey);
-    const withSkillContext = await attachAuthoritativeSksSkillContext(root, state, payload, result);
+    const withJev = await attachJevTurnRouting(root, payload, result);
+    const withSkillContext = await attachAuthoritativeSksSkillContext(root, state, payload, withJev);
     return withNarutoDecision(attachOfficialSubagentSpawnCompatibilityContext(state, payload, withSkillContext));
   }
   if (name === 'session-start' || name === 'pre-compact' || name === 'post-compact') {
@@ -333,6 +335,25 @@ async function hookSubagentStart(root: any, state: any, payload: any = {}, sessi
   const additionalContext = [coreEngineeringDirectiveReferenceText(), resourceGuard, routingContext, active, skillContext].filter(Boolean).join('\n\n');
   return { continue: true, additionalContext, ...(skillBlockers.length ? { silent: true } : {}) };
 }
+async function attachJevTurnRouting(root: string, payload: any, result: any) {
+  if (!result || result.decision === 'block') return result;
+  const prompt = stripVisibleDecisionAnswerBlocks(extractUserPrompt(payload));
+  if (!String(prompt || '').trim()) return result;
+  const decision = await consultJevTurnModel({ root, prompt }).catch(() => null);
+  if (!decision?.called) return result;
+  const line = decision.model
+    ? `Jev sealed this turn to ${decision.model}. Use that sealed model and do not reclassify it.`
+    : '';
+  if (!line) return { ...result, jev_turn: decision };
+  const additionalContext = [result.additionalContext, line].filter(Boolean).join('\n\n');
+  return {
+    ...result,
+    additionalContext,
+    jev_turn: decision,
+    ...(result.systemMessage ? { systemMessage: visibleHookMessage('user-prompt-submit', additionalContext) } : {})
+  };
+}
+
 async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: any, sessionKey: any = null) {
   // A receipt is scoped to exactly one submitted turn. Every later prompt,
   // including Codex App git/settings events, invalidates it before returning.

@@ -14,6 +14,14 @@ export const DESKTOP_BRIDGE_MANAGED_MARKER = '# sks-desktop-bridge-managed';
 export const DESKTOP_BRIDGE_MANAGED_BASE_URL_MARKER = '# sks-desktop-bridge-managed-base-url';
 export const DESKTOP_BRIDGE_MANAGED_MODEL_CATALOG_MARKER = '# sks-desktop-bridge-managed-model-catalog';
 
+/** Point the Codex client at Codex LB, or back at the managed OpenAI/bridge binding. */
+export function bindCodexClientProvider(text: string, provider: 'codex-lb' | 'openai'): string {
+  const selected = topLevelTomlString(text, 'model_provider');
+  if (selected && selected !== 'openai' && selected !== 'codex-lb') return text;
+  if (selected === provider) return text;
+  return upsertTopLevelTomlString(String(text || ''), 'model_provider', provider);
+}
+
 /** Write the only current managed Codex routing binding. */
 export function upsertDesktopBridgeManagedConfig(
   text: string,
@@ -31,8 +39,9 @@ export function upsertDesktopBridgeManagedConfig(
   const orphanCleanup = removeDesktopBridgeOrphanManagedMarkers(String(text || ''));
   let next = orphanCleanup.text;
   const selectedProvider = topLevelTomlString(next, 'model_provider');
+  const managedProvider = selectedProvider === 'codex-lb' || selectedProvider === 'openai';
   if (selectedProvider && (
-    selectedProvider !== 'openai'
+    !managedProvider
     || !topLevelHasLine(next, DESKTOP_BRIDGE_MANAGED_MARKER)
   )) {
     throw new Error('historical_user_owned_config_conflict:model_provider');
@@ -50,8 +59,9 @@ export function upsertDesktopBridgeManagedConfig(
     throw new Error('historical_user_owned_config_conflict:model_catalog_json');
   }
 
+  const keepCodexLb = selectedProvider === 'codex-lb';
   next = removeManagedBridgeTopLevelBindings(next);
-  next = upsertTopLevelTomlString(next, 'model_provider', 'openai');
+  next = upsertTopLevelTomlString(next, 'model_provider', keepCodexLb ? 'codex-lb' : 'openai');
   next = addTopLevelMarkerBeforeKey(next, 'model_provider', DESKTOP_BRIDGE_MANAGED_MARKER);
   next = upsertTopLevelTomlString(next, 'openai_base_url', bridgeBaseUrl);
   next = addTopLevelMarkerBeforeKey(next, 'openai_base_url', DESKTOP_BRIDGE_MANAGED_BASE_URL_MARKER);
@@ -67,7 +77,7 @@ export function removeDesktopBridgeManagedConfig(text: string): string {
   const baseUrl = topLevelTomlString(next, 'openai_base_url');
   const catalog = topLevelTomlString(next, 'model_catalog_json');
   const owned = [
-    [DESKTOP_BRIDGE_MANAGED_MARKER, 'model_provider', selectedProvider === 'openai'],
+    [DESKTOP_BRIDGE_MANAGED_MARKER, 'model_provider', selectedProvider === 'openai' || selectedProvider === 'codex-lb'],
     [DESKTOP_BRIDGE_MANAGED_BASE_URL_MARKER, 'openai_base_url', Boolean(baseUrl)],
     [DESKTOP_BRIDGE_MANAGED_MODEL_CATALOG_MARKER, 'model_catalog_json', Boolean(catalog)]
   ] as const;
@@ -97,7 +107,7 @@ export function removeDesktopBridgeOrphanManagedMarkers(
   const source = String(text || '');
   const selectedProvider = topLevelTomlString(source, 'model_provider');
   const markerTargets = [
-    [DESKTOP_BRIDGE_MANAGED_MARKER, selectedProvider === 'openai'],
+    [DESKTOP_BRIDGE_MANAGED_MARKER, selectedProvider === 'openai' || selectedProvider === 'codex-lb'],
     [DESKTOP_BRIDGE_MANAGED_BASE_URL_MARKER, Boolean(topLevelTomlString(source, 'openai_base_url'))],
     [DESKTOP_BRIDGE_MANAGED_MODEL_CATALOG_MARKER, Boolean(topLevelTomlString(source, 'model_catalog_json'))]
   ] as const;

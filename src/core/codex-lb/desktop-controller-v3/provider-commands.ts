@@ -1,3 +1,6 @@
+import { bindCodexClientProvider } from '../../../cli/install-helpers-codex-lb-config.js';
+import { safeWriteCodexConfigToml } from '../../codex-runtime/codex-desktop-config-policy.js';
+import { readText } from '../../fsx.js';
 import { testOpenRouterConnection } from '../../providers/openrouter/openrouter-account.js';
 import { openRouterSecretPaths } from '../../providers/openrouter/openrouter-secret-store.js';
 import type { BridgeProviderId, DesktopBridgeCommandResult } from '../bridge-contracts.js';
@@ -156,6 +159,11 @@ export async function setProviderState(
         failClosedRestart: true
       });
     }
+  }
+  if (providerId === 'codex-lb') {
+    const current = await readText(paths.configPath, '');
+    const next = bindCodexClientProvider(current, enabled ? 'codex-lb' : 'openai');
+    if (next !== current) await safeWriteCodexConfigToml(paths.configPath, current, next, 'codex-lb-client-provider');
   }
   const status = await desktopBridgeStatusV3(options);
   return commandResult(operation, true, status, { provider_id: providerId, enabled }, [], options);
