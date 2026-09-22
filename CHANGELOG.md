@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [10.3.2] - 2026-09-22
+
+### Changed
+
+- Naruto child spawns ask Jev for the sealed model at spawn time. A confident
+  answer rewrites that child's model and effort. An already open parent thread
+  is not rerouted on later tool calls. A stored role-model preference stays in
+  place.
+- Ordinary Naruto work is parent orchestration: the parent decomposes, spawns,
+  and integrates, and does not implement the slice itself. The same Decisions
+  request can omit a recommended role that the task does not need.
+
 ## [10.3.1] - 2026-09-22
 
 ### Fixed

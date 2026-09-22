@@ -53,7 +53,7 @@ const HOOK_NAMES = [
   'stop'
 ] as const;
 
-test('Naruto decision gate bypasses trivial work and keeps bounded execution parent-owned', () => {
+test('Naruto decision gate bypasses trivial work and orchestrates bounded implementation', () => {
   const greeting = decideHookNaruto({ name: 'user-prompt-submit', payload: { prompt: '안녕하세요' }, state: {} });
   assert.equal(greeting.required, false);
   assert.equal(greeting.mode, 'none');
@@ -67,12 +67,12 @@ test('Naruto decision gate bypasses trivial work and keeps bounded execution par
   assert.equal(tiny.task_profile, 'tiny-change');
 
   const bounded = decideHookNaruto({ name: 'user-prompt-submit', payload: { prompt: '로그인 파서 버그 수정해줘' }, state: {} });
-  assert.equal(bounded.required, false);
-  assert.equal(bounded.mode, 'none');
-  assert.equal(bounded.action, 'bypass');
+  assert.equal(bounded.required, true);
+  assert.equal(bounded.mode, 'generic_naruto');
+  assert.equal(bounded.action, 'prepare_naruto');
   assert.equal(bounded.route_id, 'Naruto');
   assert.equal(bounded.task_profile, 'bounded-work');
-  assert.equal(bounded.reason, 'task_profile_bounded_work_parent_owned');
+  assert.equal(bounded.reason, 'naruto_parent_orchestrates');
 
   const routeOwned = decideHookNaruto({ name: 'user-prompt-submit', payload: { prompt: '$QA-LOOP --agents 5 API를 병렬 검수해줘' }, state: {} });
   assert.equal(routeOwned.required, false);

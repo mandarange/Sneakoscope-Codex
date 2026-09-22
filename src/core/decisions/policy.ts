@@ -11,6 +11,7 @@ import {
   NEEDS_EVIDENCE_CHOICE,
   POLICY_REVISION,
   ROUTING_RISK_NOUL_MIN,
+  ROUTING_ROLE_OMIT_NOUL_MAX,
   UNKNOWN_USAGE,
   sealedRoutingModel,
   type Answer,
@@ -167,6 +168,14 @@ function compileRouting(
     const compiled = compileRoleRouting(bundle, answers, roleId);
     if (compiled.kind === 'effect') effects.push(compiled.effect);
     else if (!reason) reason = compiled.reason;
+  }
+  for (const [questionId, binding] of Object.entries(bundle.questionBindings)) {
+    if (binding.kind !== 'routing_needed') continue;
+    const answer = answers[questionId];
+    if (!answer || answer.type !== 'noul') continue;
+    if (answer.noul <= ROUTING_ROLE_OMIT_NOUL_MAX) {
+      effects.push({ kind: 'omit_role', roleId: binding.roleId });
+    }
   }
   return { effects, reason };
 }

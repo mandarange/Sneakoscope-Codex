@@ -47,7 +47,7 @@ test('Jev off does not call OpenRouter for a turn', async () => {
       env: { OPENROUTER_API_KEY: 'sk-or-test-turnroutingaaaaaaaa', HOME: process.env.HOME, PATH: process.env.PATH }
     });
     assert.equal(fetched, 0);
-    assert.deepEqual(result, { called: false, model: null, reason: 'off' });
+    assert.deepEqual(result, { called: false, model: null, effort: null, reason: 'off' });
   } finally {
     setDecisionTestOverrides(null);
   }
@@ -85,6 +85,7 @@ test('an enabled Jev turn calls Decisions and keeps a confident sealed model', a
     assert.equal(fetched, 1);
     assert.equal(result.called, true);
     assert.equal(result.model, 'gpt-5.6-luna');
+    assert.equal(result.effort, 'low');
     assert.equal(result.reason, 'applied');
   } finally {
     setDecisionTestOverrides(null);

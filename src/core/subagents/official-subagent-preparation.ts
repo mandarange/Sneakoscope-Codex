@@ -643,6 +643,11 @@ function applyOfficialSubagentDecision(
       }
     : { ...derived.fanoutPolicy }
   if (selectedRouting) fanoutPolicy = { ...fanoutPolicy, jev_selected_routing: selectedRouting.id }
+  const omitted = new Set(decided.omittedRoutingRoles || [])
+  if (omitted.size) fanoutPolicy = { ...fanoutPolicy, jev_omitted_roles: [...omitted] }
+  const recommendedAgents = omitted.size > 0 && derived.suggestedAgents.some((name) => !omitted.has(name))
+    ? derived.suggestedAgents.filter((name) => !omitted.has(name))
+    : derived.suggestedAgents
   const routingPreferences = selectedRouting
     ? Object.fromEntries(Object.entries(selectedRouting.efforts)
       .filter(([name]) => !derived.roleModelPreferences.store.roles[name])
@@ -665,7 +670,7 @@ function applyOfficialSubagentDecision(
     waveCount: budget.waveCount,
     capacity: budget.capacity,
     triwikiAttention: attention,
-    recommendedAgents: derived.suggestedAgents,
+    recommendedAgents,
     roleModelPreferences: {
       ...derived.roleModelPreferences.store.roles,
       ...routingPreferences
@@ -701,6 +706,7 @@ function applyOfficialSubagentDecision(
     }),
     triwiki_attention: attention,
     agents,
+    suggested_agents: recommendedAgents,
     fanout_policy: fanoutPolicy,
     capacity_controller: budget.capacity,
     jev_decision: decided.receipt,

@@ -1,6 +1,6 @@
 # SKS Release Readiness
 
-## 10.3.1 candidate
+## 10.3.2 candidate
 
 The working tree ships optional Jev decisions through OpenRouter. `sks decision`
 modes are `off` and `jev` only. Verification must cover the Jev contract,

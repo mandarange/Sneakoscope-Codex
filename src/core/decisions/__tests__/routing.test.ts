@@ -57,8 +57,9 @@ test('one Decisions request asks model, difficulty, and risk for each role', () 
   assert.equal(bundle.request.questions.route_worker?.type, 'choice');
   assert.equal(bundle.request.questions.difficulty_worker?.type, 'score');
   assert.equal(bundle.request.questions.risk_worker?.type, 'noul');
+  assert.equal(bundle.request.questions.needed_worker?.type, 'noul');
   assert.equal(bundle.request.questions.route_explorer?.type, 'choice');
-  assert.equal(Object.keys(bundle.request.questions).length, 6);
+  assert.equal(Object.keys(bundle.request.questions).length, 8);
   const criteria = bundle.request.questions.route_worker;
   assert.equal(criteria?.type, 'choice');
   if (criteria?.type === 'choice') {

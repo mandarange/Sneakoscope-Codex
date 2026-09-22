@@ -70,6 +70,7 @@ export type DecisionEffect =
   | { kind: 'select_plan'; planId: string }
   | { kind: 'select_optional_context'; keepIds: readonly string[] }
   | { kind: 'select_routing'; roleId: string; model: string }
+  | { kind: 'omit_role'; roleId: string }
   | { kind: 'dispatch_recovery'; actionId: string };
 
 export type BaselineReason =
@@ -192,6 +193,8 @@ export const ROUTING_DIFFICULTY_RUBRIC = Object.freeze([
 ] as const);
 
 export const ROUTING_RISK_NOUL_MIN = 0.70;
+/** Below this, the role is not needed for the task and should not be spawned. */
+export const ROUTING_ROLE_OMIT_NOUL_MAX = 0.35;
 
 export function sealedRoutingModel(model: string): { id: string; effort: SealedRoutingEffort } | null {
   const match = SEALED_ROUTING_MODELS.find((row) => row.id === model);
@@ -211,6 +214,7 @@ export type QuestionBinding =
   | { kind: 'routing'; roleId: string }
   | { kind: 'routing_difficulty'; roleId: string }
   | { kind: 'routing_risk'; roleId: string }
+  | { kind: 'routing_needed'; roleId: string }
   | { kind: 'context_keep'; candidateId: string }
   | { kind: 'context_relevance'; candidateId: string; levelCount: number }
   | { kind: 'recovery' };

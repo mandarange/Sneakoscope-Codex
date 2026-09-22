@@ -14,6 +14,7 @@ import {
   DESIGN_DEFAULTS,
   POLICY_REVISION,
   UNKNOWN_USAGE,
+  sealedRoutingModel,
   type BaselineReason,
   type CompiledDecision,
   type ContextCandidate,
@@ -22,7 +23,8 @@ import {
   type DecisionReceipt,
   type PlanCandidate,
   type RecoveryCandidate,
-  type RoutingCandidate
+  type RoutingCandidate,
+  type SealedRoutingEffort
 } from './types.js';
 
 export interface DecisionTestOverrides {
@@ -74,6 +76,7 @@ export interface OfficialSubagentDecisionResult {
   selectedPlan: PlanCandidate | null;
   selectedRouting: RoutingCandidate | null;
   selectedContextIds: readonly string[] | null;
+  omittedRoutingRoles: readonly string[];
   llmRejudgeCalls: 0;
   bundle: DecisionBundle | null;
 }
@@ -170,6 +173,7 @@ async function decideOfficialSubagentPreparationInner(
         selectedPlan: null,
         selectedRouting: null,
         selectedContextIds: null,
+        omittedRoutingRoles: [] as string[],
         consumptionEvidence: null
       };
   const receipt = buildDecisionReceipt({
@@ -191,6 +195,7 @@ async function decideOfficialSubagentPreparationInner(
     selectedPlan: applied.selectedPlan,
     selectedRouting: applied.selectedRouting,
     selectedContextIds: applied.selectedContextIds,
+    omittedRoutingRoles: applied.omittedRoutingRoles,
     llmRejudgeCalls: 0,
     bundle
   };
@@ -202,38 +207,42 @@ async function decideOfficialSubagentPreparationInner(
 export async function consultJevTurnModel(input: {
   root: string;
   prompt: string;
+  roleId?: string;
   env?: NodeJS.ProcessEnv;
-}): Promise<{ called: boolean; model: string | null; reason: string }> {
+}): Promise<{ called: boolean; model: string | null; effort: SealedRoutingEffort | null; reason: string }> {
   const overrides = activeOverrides();
   const env = input.env || process.env;
   const config = overrides?.config ?? await readDecisionConfig(env);
-  if (!jevEnabled(config)) return { called: false, model: null, reason: 'off' };
+  const none = (reason: string) => ({ called: false, model: null, effort: null, reason });
+  if (!jevEnabled(config)) return none('off');
   const resolved = await resolveOpenRouterApiKey({ env });
-  if (!resolved.key) return { called: false, model: null, reason: 'missing_key' };
+  if (!resolved.key) return none('missing_key');
   const prompt = String(input.prompt || '').trim();
-  if (!prompt) return { called: false, model: null, reason: 'empty_prompt' };
+  if (!prompt) return none('empty_prompt');
+  const roleId = input.roleId === 'spawn' ? 'spawn' : 'turn';
   const bundle = buildDecisionBundle({
     projectId: sha256(input.root).slice(0, 32),
-    workflowRunId: 'turn',
-    workflowRevision: 'turn',
-    sourceDigest: 'turn',
+    workflowRunId: roleId,
+    workflowRevision: roleId,
+    sourceDigest: roleId,
     graphDigest: null,
     goal: prompt,
-    routingCandidates: [{ id: 'turn', summary: prompt.slice(0, 240) }]
+    routingCandidates: [{ id: roleId, summary: prompt.slice(0, 240) }]
   });
   const transport = await requestOpenRouterDecision(bundle, {
     env,
     deadlineMs: DESIGN_DEFAULTS.deadlineMs,
     ...(overrides?.fetchImpl ? { fetchImpl: overrides.fetchImpl } : {})
   });
-  if (!transport.ok) return { called: true, model: null, reason: transport.reason };
+  if (!transport.ok) return { called: true, model: null, effort: null, reason: transport.reason };
   const compiled = compileDecision(bundle, transport.response);
-  if (compiled.kind !== 'apply') return { called: true, model: null, reason: compiled.reason };
+  if (compiled.kind !== 'apply') return { called: true, model: null, effort: null, reason: compiled.reason };
   const selected = assembleRoutingSelection(compiled.effects.flatMap((effect) => (
     effect.kind === 'select_routing' ? [{ roleId: effect.roleId, model: effect.model }] : []
   )));
-  const model = selected?.models.turn || null;
-  return { called: true, model, reason: model ? 'applied' : 'keep_baseline' };
+  const model = selected?.models[roleId] || null;
+  const sealed = model ? sealedRoutingModel(model) : null;
+  return { called: true, model: sealed?.id || null, effort: sealed?.effort || null, reason: sealed ? 'applied' : 'keep_baseline' };
 }
 
 export function effectAlreadyConsumed(identity: string): boolean {
@@ -275,6 +284,7 @@ function applyEffects(
   let selectedContextIds: readonly string[] | null = null;
   const evidence: string[] = [];
   const routingEffects: { roleId: string; model: string }[] = [];
+  const omittedRoutingRoles: string[] = [];
   for (const effect of compiled.effects) {
     if (effect.kind === 'select_optional_context') {
       nextAttention = applyOptionalContextSelection(attention, contextCandidates, effect.keepIds);
@@ -288,6 +298,10 @@ function applyEffects(
     if (effect.kind === 'select_routing') {
       routingEffects.push({ roleId: effect.roleId, model: effect.model });
     }
+    if (effect.kind === 'omit_role') {
+      omittedRoutingRoles.push(effect.roleId);
+      evidence.push(`omit:${effect.roleId}`);
+    }
   }
   const selectedRouting = assembleRoutingSelection(routingEffects);
   if (selectedRouting) {
@@ -298,6 +312,7 @@ function applyEffects(
     selectedPlan,
     selectedRouting,
     selectedContextIds,
+    omittedRoutingRoles,
     consumptionEvidence: evidence.length ? evidence.join('|') : null
   };
 }
@@ -377,6 +392,7 @@ function keep(
     selectedPlan: null,
     selectedRouting: null,
     selectedContextIds: null,
+    omittedRoutingRoles: [],
     llmRejudgeCalls: 0,
     bundle: null
   };

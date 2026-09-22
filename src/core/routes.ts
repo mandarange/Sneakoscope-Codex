@@ -1230,6 +1230,9 @@ export function narutoDecisionForRoute(
     return narutoRouteDecision('none', routeId, profile, `task_profile_${profile}_bypass`, true);
   }
   if (profile === 'bounded-work') {
+    if (routeId === 'Naruto') {
+      return narutoRouteDecision('generic_naruto', routeId, profile, 'naruto_parent_orchestrates', false);
+    }
     return narutoRouteDecision('none', routeId, profile, 'task_profile_bounded_work_parent_owned', false);
   }
   if (profile === 'parallel-read' || profile === 'parallel-write' || profile === 'high-risk') {

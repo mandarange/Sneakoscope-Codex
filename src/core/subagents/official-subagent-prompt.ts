@@ -106,6 +106,8 @@ export function buildOfficialSubagentPrompt(input: {
   const spawnModelRouting = renderSpawnModelRouting(narutoChildren)
   const childModelRules = narutoChildren
     ? [
+        '- the parent orchestrates only: decompose the goal, assign disjoint slices, spawn children, and integrate their results',
+        '- do not implement the assigned slice work in the parent thread',
         '- use the model and reasoning_effort named in each slice spawn contract',
         '- sealed child models are gpt-5.6-luna, gpt-5.6-sol, gpt-5.6-terra, and gpt-6-astra',
         '- keep a stored user role-model preference for that role'

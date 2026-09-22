@@ -49,6 +49,7 @@ import {
 import { classifyTaskProfile } from './runtime/task-profile.js';
 import { resolveSubagentThreadBudget } from './subagents/thread-budget.js';
 import { readOfficialSubagentConfig } from './subagents/official-subagent-config.js';
+import { jevSpawnModelRewrite } from './hooks-runtime/jev-spawn-routing.js';
 import { subagentSpawnPolicyBlockReason } from './hooks-runtime/subagent-spawn-policy.js';
 import { withFileLock } from './locks/file-lock.js';
 import {
@@ -702,7 +703,11 @@ async function consumeActiveOfficialWorkflowQueue(
   }
 }
 async function hookPreTool(root: any, state: any, payload: any, noQuestion: any, sessionKey: any = null) {
-  const spawnPolicyBlock = subagentSpawnPolicyBlockReason(payload);
+  const jevSpawnInput = await jevSpawnModelRewrite(root, state, payload).catch(() => null);
+  const spawnPayload = jevSpawnInput
+    ? { ...payload, tool_input: jevSpawnInput, toolInput: jevSpawnInput }
+    : payload;
+  const spawnPolicyBlock = subagentSpawnPolicyBlockReason(spawnPayload);
   if (spawnPolicyBlock) return { decision: 'block', permissionDecision: 'deny', reason: spawnPolicyBlock };
   const artifactDir = officialSubagentArtifactDir(root, state, sessionKey);
   const activeBinding = officialSubagentSkillGuardBinding(state, { allowClosedOfficialChild: true });
@@ -774,15 +779,20 @@ async function hookPreTool(root: any, state: any, payload: any, noQuestion: any,
   const waveGuidance = await parentWaveGuidanceContext(root, state, sessionKey).catch(() => '');
   const additionalContext = [skillRefresh.context, waveGuidance].filter(Boolean).join('\n\n');
   if (additionalContext) {
-    return {
+    return withJevSpawnRewrite({
       continue: true,
       additionalContext,
       ...(waveGuidance
         ? { systemMessage: visibleHookMessage('pre-tool', 'SKS Naruto wave lifecycle requires root-parent follow-up.') }
         : { silent: true })
-    };
+    }, jevSpawnInput);
   }
-  return { continue: true };
+  return withJevSpawnRewrite({ continue: true }, jevSpawnInput);
+}
+
+function withJevSpawnRewrite(result: any, updatedInput: Record<string, unknown> | null) {
+  if (!updatedInput || result?.decision === 'block' || result?.permissionDecision === 'deny') return result;
+  return { ...result, permissionDecision: 'allow', updatedInput };
 }
 
 async function parentWaveGuidanceContext(root: any, state: any = {}, sessionKey: any = null) {

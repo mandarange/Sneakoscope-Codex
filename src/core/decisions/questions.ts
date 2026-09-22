@@ -281,6 +281,21 @@ function appendRoutingSpeculation(
       }
     };
     bindings[riskId] = { kind: 'routing_risk', roleId: role.id };
+    if (questionRoom(questions, recoverySlot) < 1) break;
+    const neededId = `needed_${role.id}`;
+    const neededInstructions = redactDecisionText(
+      `Does state.task require routing.roles.${role.id} as its own child agent? Omit the role when another listed role already covers the work.`
+    );
+    assertIndependentQuestion(neededInstructions);
+    questions[neededId] = {
+      type: 'noul',
+      instructions: neededInstructions,
+      criteria: {
+        true: 'This role must be spawned to finish the task.',
+        false: 'This role is unnecessary. The parent should not spawn it.'
+      }
+    };
+    bindings[neededId] = { kind: 'routing_needed', roleId: role.id };
   }
 }
 
