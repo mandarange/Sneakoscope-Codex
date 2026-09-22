@@ -128,9 +128,9 @@ test('runtime materialization injects paths, version, and optional Codex bundle 
   assert.match(withCodex, /case \.degraded:\s*break/);
 });
 
-test('Control Center is a non-modal seven-section AppKit sidebar with native accessibility', () => {
+test('Control Center is a non-modal eight-section AppKit sidebar with native accessibility', () => {
   const swift = source();
-  for (const section of ['Overview', 'Updates', 'MCP Servers', 'Providers', 'Remote Coding', 'Diagnostics', 'Settings']) {
+  for (const section of ['Overview', 'Updates', 'MCP Servers', 'Providers', 'Remote Coding', 'Decisions', 'Diagnostics', 'Settings']) {
     assert.match(swift, new RegExp(`= "${section.replace(/[&]/g, '\\&')}"`));
   }
   assert.match(swift, /styleMask: \[\.titled, \.closable, \.miniaturizable, \.resizable\]/);
@@ -771,6 +771,34 @@ test('Remote Coding page recommends Paseo without owning its runtime boundary', 
   assert.doesNotMatch(swift, /TelegramRuntimeFactory|telegramService|TELEGRAM_BOT_TOKEN/);
   assert.doesNotMatch(secureEnvelope, /sks\.telegram|\("telegram", "setup"\)/);
   assert.equal(fs.existsSync(path.join(resolvePackagedMenuBarSourceRoot(), 'Sources', 'RemoteCodingSettingsControls.swift')), false);
+});
+
+test('Control Center Decisions page can enable and disable Jev through the same CLI', () => {
+  const root = path.join(resolvePackagedMenuBarSourceRoot(), 'Sources');
+  const models = fs.readFileSync(path.join(root, 'LocalDecisionModels.swift'), 'utf8');
+  const view = fs.readFileSync(path.join(root, 'LocalDecisionViewController.swift'), 'utf8');
+  const overview = fs.readFileSync(path.join(root, 'OverviewViewController.swift'), 'utf8');
+  const sidebar = fs.readFileSync(path.join(root, 'SidebarItem.swift'), 'utf8');
+  const center = fs.readFileSync(path.join(root, 'ControlCenterWindowController.swift'), 'utf8');
+  assert.match(sidebar, /case localDecision = "Decisions"/);
+  assert.match(overview, /NativeView\.button\("Decisions…"/);
+  assert.match(overview, /openSection\?\("Decisions"\)/);
+  assert.match(overview, /operation\.kind\.localizedCaseInsensitiveContains\("decision"\)/);
+  assert.match(center, /\.localDecision: LocalDecisionViewController/);
+  assert.match(center, /controllers\[\.localDecision\] as\? LocalDecisionViewController/);
+  assert.match(models, /static var enable: \[String\]/);
+  assert.match(models, /"--consent-cloud"/);
+  assert.match(models, /sks\.jev-decision-enable\.v1/);
+  assert.match(models, /sks\.jev-decision-disable\.v1/);
+  assert.match(view, /processClient\.run\(LocalDecisionCommand\.status/);
+  assert.match(view, /processClient\.run\(LocalDecisionCommand\.enable/);
+  assert.match(view, /processClient\.run\(LocalDecisionCommand\.disable/);
+  assert.match(view, /openSection\?\("Providers"\)/);
+  assert.match(view, /enableButton\.isEnabled = mode != "jev" \|\| mode == nil/);
+  assert.match(view, /disableButton\.isEnabled = mode == "jev" \|\| mode == nil/);
+  assert.doesNotMatch(view, /credentialPresent/);
+  assert.doesNotMatch(view, /\["local-decision"|decision", "install"|decision", "start"|decision", "stop"|decision", "uninstall"/);
+  assert.doesNotMatch(`${models}\n${view}`, /Qwen|MLX|local_feature_retired|sks\.local-decision/);
 });
 
 test('MCP Control Center exposes scoped CRUD, health, OAuth, backups, policy editing, and redacted review without raw secret entry', () => {

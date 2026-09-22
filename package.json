@@ -66,10 +66,6 @@
     "crates/sks-core/Cargo.toml",
     "crates/sks-core/src",
     "docs/demo.tape",
-    "python/local_decision/pyproject.toml",
-    "python/local_decision/requirements.lock",
-    "python/local_decision/README.md",
-    "python/local_decision/sks_local_decision/*.py",
     "README.md",
     "LICENSE"
   ],

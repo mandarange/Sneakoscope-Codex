@@ -1,9 +1,17 @@
-# Release Proof Truth — 10.3.0
+# Release Proof Truth
 
-## Current candidate: 10.3.0
+## Unreleased candidate
 
-10.3.0 adds the optional local decision provider, its Control Center page, and
-the interactive-global-install Menu Bar build. Verification must cover the
+The working tree ships Jev through OpenRouter Decisions. Verification must cover
+the typed compiler, injected transport, preparation consumers, and packed
+tarball absence of a local-model worker. A synthetic fixture is not a live
+probe. A live 200 is connectivity only. Performance numbers are unavailable
+until an authorized workload run reports provider tokens and cost.
+
+## Historical 10.3.0 candidate
+
+10.3.0 added the optional local decision provider, its Control Center page, and
+the interactive-global-install Menu Bar build. Verification covered the
 decision schema/policy/broker/install/integration suites, the Python CPU-only
 suites, the packed tarball contents (worker package present, weights and
 virtualenvs absent), the native source inventory and Menu Bar install check,
@@ -11,10 +19,7 @@ the postinstall inertness contract, version truth, and the usual release stamp.
 A real-model verification on one Apple Silicon Mac (float32 activations,
 sequential and batched paths agreeing to 1.9e-5) is recorded under
 `.sneakoscope/reports/local-decision-verification-20260917/` and is not
-packaged; it proves the engine runs, not any workflow speed or token saving.
-The final clean candidate still requires its own canonical test proof, full
-release DAG, required real checks, pack receipt, and release stamp. Publication
-and installed-runtime behavior are not claimed by this source preparation.
+packaged; it proves the engine ran, not any workflow speed or token saving.
 
 ## Historical 10.2.0 candidate
 

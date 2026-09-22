@@ -54,6 +54,10 @@ export interface BoundedTriwikiAttentionAnchor {
   freshness: ContextGraphFreshness
   token_cost: number
   provenance: BoundedTriwikiAttentionProvenance[]
+  /** Exact source excerpt materialized by SKS, never an LLM summary. */
+  excerpt?: string
+  source_path?: string
+  optional?: boolean
 }
 
 export interface BoundedTriwikiAttention {

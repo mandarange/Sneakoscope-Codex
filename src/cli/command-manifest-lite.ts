@@ -138,7 +138,7 @@ const COMMAND_MANIFEST_LITE_BASE = [
   { name: 'bench', summary: 'Run core trust-kernel benchmark budgets', maturity: 'beta' },
   { name: 'mcp-server', summary: 'Run a stdio MCP server exposing SKS commands as tools for MCP-capable agent hosts', maturity: 'beta', skipMigrationGate: true, allowedDuringActiveRoute: true },
   { name: 'agent-bridge', summary: 'Register SKS tools or run read-only tools with native Astra async calling', maturity: 'beta', readonly: true, diagnostic: true },
-  { name: 'decision', summary: 'Manage the optional local decision provider: inspect, install, start, mode, evaluate, stop, uninstall', maturity: 'labs', skipMigrationGate: true, allowedDuringActiveRoute: true }
+  { name: 'decision', summary: 'Manage optional Jev decisions through OpenRouter: status, enable, disable, probe, evaluate', maturity: 'labs', skipMigrationGate: true, allowedDuringActiveRoute: true }
 ] as const satisfies readonly CommandManifestLiteSourceEntry[];
 
 export type CommandNameLite = typeof COMMAND_MANIFEST_LITE_BASE[number]['name'];

@@ -1,3 +1,4 @@
+import '../../__tests__/helpers/isolated-test-home.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import http from 'node:http'
@@ -2154,7 +2155,6 @@ test('standalone official subagent blocks retired direct provider selection befo
     await fsp.rm(root, { recursive: true, force: true })
   }
 })
-
 
 test('workflow metadata preserves an explicit parent model and effort', async () => {
   const result = await runOfficialSubagentWorkflow({

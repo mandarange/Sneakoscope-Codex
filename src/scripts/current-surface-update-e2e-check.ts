@@ -11,6 +11,7 @@ import { ensureCurrentMigrationBeforeCommand, projectUpdateMigrationReceiptPath,
 
 const REQUIRED_MIGRATION_STAGES = [
   'other-harness-cleanup',
+  'retired-local-decision',
   'current-public-surface-reconcile',
   'session-state-split',
   'skills-reconcile',

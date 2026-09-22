@@ -2,92 +2,122 @@
 import XCTest
 
 final class LocalDecisionModelsTests: XCTestCase {
-    private func statusPayload(installed: Bool, running: Bool, ready: Bool, mode: String = "off", supported: Bool = true, nextStep: String) -> [String: Any] {
-        var payload: [String: Any] = [
-            "schema": "sks.local-decision-status.v1", "ok": true, "mode": mode,
-            "platform": ["supported": supported, "reason": (supported ? NSNull() : "unsupported_arch:x64") as Any],
-            "installed": installed,
-            "service": ["running": running, "ready": ready],
-            "recommended": ["modelId": "mlx-community/Qwen2.5-1.5B-Instruct-4bit", "appliedAutomatically": false],
+    private func statusPayload(mode: String = "off", consent: Bool = false, present: Bool = false, nextStep: String) -> [String: Any] {
+        [
+            "schema": "sks.jev-decision-status.v1",
+            "ok": true,
+            "mode": mode,
+            "provider": "openrouter",
+            "model": "typesafe/jev-1.13",
+            "consentCloud": consent,
+            "credential": ["present": present, "source": present ? "env" : NSNull()],
+            "recovery": ["supported": false, "reason": "unsupported_no_sks_handler"],
             "nextStep": nextStep
         ]
-        if installed {
-            payload["install"] = ["modelId": "mlx-community/Qwen2.5-1.5B-Instruct-4bit", "modelRevision": "8b403126fc14f14cfc99bb4cfa72ecbc129ea677", "quantization": "4bit-g64"]
-            payload["readiness"] = ["realModelVerified": true, "receiptMatches": true]
-        }
-        return payload
     }
 
-    func testStatusDecodesTheFreshInstallStepAndGuidance() {
-        let status = LocalDecisionStatus.decode(from: statusPayload(installed: false, running: false, ready: false, nextStep: "install"))
+    func testCenterCommandsMatchThePinnedCLIContract() {
+        XCTAssertEqual(LocalDecisionCommand.status, ["decision", "status", "--json"])
+        XCTAssertEqual(LocalDecisionCommand.enable, [
+            "decision", "enable",
+            "--provider", "openrouter",
+            "--model", "typesafe/jev-1.13",
+            "--consent-cloud",
+            "--json"
+        ])
+        XCTAssertEqual(LocalDecisionCommand.disable, ["decision", "disable", "--json"])
+        XCTAssertTrue(LocalDecisionCommand.mutationSucceeded(
+            ["schema": LocalDecisionCommand.enableSchema, "ok": true],
+            schema: LocalDecisionCommand.enableSchema
+        ))
+        XCTAssertFalse(LocalDecisionCommand.mutationSucceeded(
+            ["schema": LocalDecisionCommand.enableSchema, "ok": false],
+            schema: LocalDecisionCommand.enableSchema
+        ))
+        XCTAssertFalse(LocalDecisionCommand.mutationSucceeded(
+            ["schema": LocalDecisionCommand.statusSchema, "ok": true],
+            schema: LocalDecisionCommand.enableSchema
+        ))
+    }
+
+    func testStatusDecodesOffWithoutAKeyAndStillAllowsEnable() {
+        let status = LocalDecisionStatus.decode(from: statusPayload(nextStep: "missing_key"))
         XCTAssertNotNil(status)
-        XCTAssertEqual(status?.nextStep, .install)
-        XCTAssertEqual(status?.badgeText, "Not installed")
-        XCTAssertEqual(status?.recommendedModelId, "mlx-community/Qwen2.5-1.5B-Instruct-4bit")
-        XCTAssertTrue(status?.guidance.hasPrefix("Step 1") == true)
-        XCTAssertEqual(status?.modelLabel, "No model installed.")
+        XCTAssertEqual(status?.nextStep, .missingKey)
+        XCTAssertEqual(status?.badgeText, "Off · deterministic baseline")
+        XCTAssertEqual(status?.modeTitle, "Off")
+        XCTAssertTrue(status?.canEnable == true)
+        XCTAssertTrue(status?.canDisable == false)
+        XCTAssertTrue(status?.guidance.contains("OpenRouter key") == true)
+        XCTAssertTrue(status?.guidance.contains("turn the mode on") == true)
+        XCTAssertTrue(status?.enableConsentMessage.contains("No OpenRouter key") == true)
+        XCTAssertTrue(status?.modelLabel.contains("typesafe/jev-1.13") == true)
     }
 
-    func testStatusReflectsReadyServiceAndVerifiedModel() {
-        let status = LocalDecisionStatus.decode(from: statusPayload(installed: true, running: true, ready: true, mode: "advisory", nextStep: "ready"))
-        XCTAssertEqual(status?.badgeText, "Ready · mode Advisory")
-        XCTAssertEqual(status?.modeTitle, "Advisory")
-        XCTAssertTrue(status?.realModelVerified == true)
-        XCTAssertTrue(status?.modelLabel.contains("8b403126fc14") == true)
-        XCTAssertTrue(status?.modelLabel.contains("verified on this Mac: yes") == true)
+    func testStatusReflectsEnabledJev() {
+        let status = LocalDecisionStatus.decode(from: statusPayload(mode: "jev", consent: true, present: true, nextStep: "ready"))
+        XCTAssertEqual(status?.badgeText, "Ready · Jev via OpenRouter")
+        XCTAssertEqual(status?.modeTitle, "Jev")
+        XCTAssertTrue(status?.badgeReady == true)
+        XCTAssertTrue(status?.canEnable == false)
+        XCTAssertTrue(status?.canDisable == true)
+        XCTAssertTrue(status?.guidance.contains("Jev is on") == true)
+        XCTAssertTrue(status?.guidance.contains("official preparation") == true)
     }
 
-    func testUnsupportedPlatformNeverOffersInstall() {
-        let status = LocalDecisionStatus.decode(from: statusPayload(installed: false, running: false, ready: false, supported: false, nextStep: "unsupported"))
-        XCTAssertEqual(status?.nextStep, .unsupported)
-        XCTAssertEqual(status?.badgeText, "Not available on this Mac")
-        XCTAssertEqual(status?.platformReason, "unsupported_arch:x64")
+    func testEnabledJevWithoutAKeyIsNotReady() {
+        let status = LocalDecisionStatus.decode(from: statusPayload(mode: "jev", consent: true, present: false, nextStep: "missing_key"))
+        XCTAssertEqual(status?.badgeText, "Jev on · add OpenRouter key")
+        XCTAssertTrue(status?.badgeReady == false)
+        XCTAssertTrue(status?.canDisable == true)
     }
 
     func testStatusRejectsWrongSchemaOrFailure() {
-        var payload = statusPayload(installed: false, running: false, ready: false, nextStep: "install")
-        payload["schema"] = "sks.other.v1"
+        var payload = statusPayload(nextStep: "enable")
+        payload["schema"] = "sks.other-status.v1"
         XCTAssertNil(LocalDecisionStatus.decode(from: payload))
-        payload = statusPayload(installed: false, running: false, ready: false, nextStep: "install")
+        payload = statusPayload(nextStep: "enable")
         payload["ok"] = false
         XCTAssertNil(LocalDecisionStatus.decode(from: payload))
     }
 
-    func testInstallPlanRequiresACompatibleWeightsRepositoryWithACommitRevision() {
-        let compatible: [String: Any] = [
-            "schema": "sks.local-decision-inspect.v1", "compatible": true, "kind": "weights",
-            "modelId": "mlx-community/Qwen2.5-1.5B-Instruct-4bit",
-            "resolvedRevision": "8b403126fc14f14cfc99bb4cfa72ecbc129ea677",
-            "license": "apache-2.0", "downloadBytes": 880170545,
-            "config": ["quantization": "4bit-g64"]
-        ]
-        let preview = LocalDecisionInstallPlan.preview(from: compatible)
-        XCTAssertNotNil(preview)
-        XCTAssertEqual(LocalDecisionInstallPlan.installArguments(preview!), [
-            "decision", "install", "--model", "mlx-community/Qwen2.5-1.5B-Instruct-4bit",
-            "--revision", "8b403126fc14f14cfc99bb4cfa72ecbc129ea677", "--accept-license", "--yes", "--json"
-        ])
-        XCTAssertEqual(LocalDecisionInstallPlan.formatBytes(880170545), "0.88 GB")
-
-        var branch = compatible
-        branch["resolvedRevision"] = "main"
-        XCTAssertNil(LocalDecisionInstallPlan.preview(from: branch))
-
-        let engineSource: [String: Any] = [
-            "schema": "sks.local-decision-inspect.v1", "compatible": false, "kind": "engine_source",
-            "modelId": "harshatheg/Qwen-2.5-1B-RLCD", "resolvedRevision": "2af86848be75847ccb3553b0941cc51d6ef7e4e9",
-            "blockers": ["no_weights_in_repository"], "cardMentionedRepos": ["mlx-community/Qwen2.5-1.5B-Instruct-4bit"]
-        ]
-        XCTAssertNil(LocalDecisionInstallPlan.preview(from: engineSource))
-        let summary = LocalDecisionInstallPlan.blockerSummary(from: engineSource)
-        XCTAssertTrue(summary.contains("engine_source"))
-        XCTAssertTrue(summary.contains("no_weights_in_repository"))
-        XCTAssertTrue(summary.contains("mlx-community/Qwen2.5-1.5B-Instruct-4bit"))
+    func testJSONPrefersTheFirstJevObjectOverANestedBrace() {
+        let inner = #"{"ok":true,"schema":"sks.other.v1"}"#
+        let status = """
+        banner before json { not-json
+        {
+          "schema": "sks.jev-decision-status.v1",
+          "ok": true,
+          "mode": "off",
+          "provider": "openrouter",
+          "model": "typesafe/jev-1.13",
+          "consentCloud": false,
+          "credential": { "present": false, "source": null },
+          "nextStep": "enable"
+        }
+        trailing { "ok": true, "schema": "sks.noise.v1" }
+        """
+        let payload = LocalDecisionJSON.object(from: status)
+        XCTAssertEqual(payload?["schema"] as? String, "sks.jev-decision-status.v1")
+        XCTAssertNotNil(LocalDecisionStatus.decode(from: payload ?? [:]))
+        XCTAssertEqual(LocalDecisionJSON.object(from: inner)?["schema"] as? String, "sks.other.v1")
+        XCTAssertEqual(
+            LocalDecisionJSON.statusFailureReason(code: 2, output: "error: unknown command\nUsage: sks <command>"),
+            "This SKS build does not include `decision`. Update SKS, then reopen Decisions."
+        )
+        XCTAssertEqual(
+            LocalDecisionJSON.statusFailureReason(
+                code: 1,
+                output: #"{"ok":false,"reason":"unknown_command"}"#
+            ),
+            "Status unavailable · update SKS, then reopen this page."
+        )
     }
 
-    func testSidebarExposesTheLocalDecisionSectionOnce() {
+    func testSidebarExposesTheDecisionsSectionOnce() {
         XCTAssertEqual(SidebarItem.allCases.filter { $0 == .localDecision }.count, 1)
-        XCTAssertEqual(SidebarItem.localDecision.displayTitle, "Local Decision")
+        XCTAssertEqual(SidebarItem.localDecision.displayTitle, "Decisions")
+        XCTAssertEqual(SidebarItem.localDecision.rawValue, "Decisions")
         XCTAssertEqual(SidebarItem.localDecision.symbolName, "cpu")
     }
 }

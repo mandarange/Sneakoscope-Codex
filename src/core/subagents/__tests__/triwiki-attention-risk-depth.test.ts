@@ -30,6 +30,7 @@
  *   reach it; and a low-risk node earns nothing from the doubled risk-relevance
  *   bonus. Depth is left as the only thing that can explain its appearance.
  */
+import '../../__tests__/helpers/isolated-test-home.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'

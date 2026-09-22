@@ -1,19 +1,24 @@
-# SKS 10.3.0 Release Readiness
+# SKS Release Readiness
 
-## Current candidate
+## Unreleased candidate
 
-10.3.0 is the next minor candidate. Fresh verification must cover the final
-10.3.0 source and package; earlier release records do not verify this candidate.
-The operator performs `npm login` and `npm publish` after preparation.
+The working tree ships optional Jev decisions through OpenRouter. `sks decision`
+modes are `off` and `jev` only. Verification must cover the Jev contract,
+transport, policy, preparation consumers, packed tarball (no local-model worker),
+and Control Center Decisions page. A live `probe` is connectivity evidence only
+and is not a performance claim.
 
-This release adds the optional local decision provider (`sks decision`, off by
-default): an Apple Silicon MLX worker behind a private Unix socket that gives
+## Previous candidate: 10.3.0
+
+10.3.0 added the optional local decision provider (`sks decision`, off by
+default): an Apple Silicon MLX worker behind a private Unix socket that gave
 bounded, non-authoritative planning advice to Naruto preparations and explicit
-recovery triage. It never changes counts, models, effort, gates, evidence or
-provider settings, and it has no cloud fallback. The Control Center gains a
+recovery triage. It never changed counts, models, effort, gates, evidence or
+provider settings, and it had no cloud fallback. The Control Center gained a
 Local Decision page, and an interactive global `npm i -g sneakoscope` on macOS
 now builds and starts the Menu Bar app; dependency, CI and piped installs stay
-inert. The worker package ships in the tarball; weights and virtualenvs do not.
+inert. The worker package shipped in that tarball; weights and virtualenvs did
+not.
 
 ## Previous candidate: 10.2.0
 

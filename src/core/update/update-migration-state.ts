@@ -14,6 +14,7 @@ import { runCurrentPublicSurfaceReconcileStage } from './update-migration-state/
 import { runDesktopBridgeCatalogRepairStage } from './update-migration-state/desktop-bridge-catalog-repair-stage.js';
 import { runDesktopBridgeRestageStage } from './update-migration-state/desktop-bridge-restage.js';
 import { runSessionStateSplitStage } from './update-migration-state/session-state-split.js';
+import { runRetiredLocalDecisionStage } from './update-migration-state/retired-local-decision.js';
 import {
   runHookTrustRefreshStage,
   runOtherHarnessCleanupStage
@@ -376,6 +377,11 @@ const UPDATE_MIGRATION_STAGES: UpdateMigrationStageDefinition[] = [
     id: 'other-harness-cleanup',
     min_from_version: '0.0.0',
     run: runOtherHarnessCleanupStage
+  },
+  {
+    id: 'retired-local-decision',
+    min_from_version: '0.0.0',
+    run: () => runRetiredLocalDecisionStage()
   },
   {
     id: 'skills-reconcile',

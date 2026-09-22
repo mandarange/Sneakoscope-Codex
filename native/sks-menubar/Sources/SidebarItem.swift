@@ -8,7 +8,7 @@ enum SidebarItem: String, CaseIterable {
     case remoteCoding = "Remote Coding"
     case updates = "Updates"
     case mcpServers = "MCP Servers"
-    case localDecision = "Local Decision"
+    case localDecision = "Decisions"
     case diagnostics = "Diagnostics"
     case settings = "Settings"
 

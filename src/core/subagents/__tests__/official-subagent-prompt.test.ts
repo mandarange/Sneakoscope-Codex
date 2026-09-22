@@ -63,6 +63,26 @@ test('official prompt seals model, ownership, wait, and no-nesting rules', () =>
   )
 })
 
+test('selected decision contract tells the parent to execute compiled IDs without a second judge', () => {
+  const prompt = buildOfficialSubagentPrompt({
+    goal: 'Review two disjoint slices',
+    maxThreads: 4,
+    requestedSubagents: 1,
+    slices: [
+      { id: 'S1', title: 'Pagination', description: 'Review boundary behavior', kind: 'expert', paths: ['src/a.ts'], readOnly: true },
+      { id: 'S2', title: 'Serializer', description: 'Review escaping behavior', kind: 'expert', paths: ['src/b.ts'], readOnly: true }
+    ],
+    decisionContract: {
+      planId: 'grouped',
+      keepContextIds: ['E1'],
+      executeSelectedIds: true
+    }
+  })
+  assert.match(prompt, /execute the selected plan grouped/)
+  assert.match(prompt, /retained optional context IDs: E1/)
+  assert.doesNotMatch(prompt, /LOCAL_DECISION_ADVICE|confirmWithLLM|Jev suggests/)
+})
+
 test('official prompt teaches capacity-derived automatic fan-out and the hard ceiling', () => {
   const prompt = buildOfficialSubagentPrompt({
     goal: 'Parent must decompose a repository-wide bulk search',

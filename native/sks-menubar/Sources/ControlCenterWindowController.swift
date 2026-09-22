@@ -16,12 +16,14 @@ final class ControlCenterWindowController: NSWindowController, NSTableViewDataSo
         let overview = OverviewViewController(processClient: processClient, operations: operations)
         overviewController = overview
         defer {
-            // Overview quick navigation: section names only, so the standalone
-            // Overview compile harness never needs the SidebarItem type.
-            overview.openSection = { [weak self] name in
+            // Overview / Decisions quick navigation: section names only, so the
+            // standalone Overview compile harness never needs the SidebarItem type.
+            let open: (String) -> Void = { [weak self] name in
                 guard let item = SidebarItem.allCases.first(where: { $0.rawValue == name }) else { return }
                 self?.show(section: item)
             }
+            overview.openSection = open
+            (controllers[.localDecision] as? LocalDecisionViewController)?.openSection = open
         }
         controllers = [
             .overview: overview,

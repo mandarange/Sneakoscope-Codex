@@ -38,6 +38,7 @@ final class OverviewViewController: NSViewController, ControlCenterPage {
         let shortcuts = NativeView.row([
             NativeView.button("Remote Coding…", target: self, action: #selector(openRemoteCoding)),
             connectionsShortcut(),
+            NativeView.button("Decisions…", target: self, action: #selector(openDecisions)),
             NativeView.button("Updates…", target: self, action: #selector(openUpdates)),
             NativeView.button("Diagnostics…", target: self, action: #selector(openDiagnostics))
         ])
@@ -73,6 +74,7 @@ final class OverviewViewController: NSViewController, ControlCenterPage {
 
     @objc private func openRemoteCoding() { openSection?("Remote Coding") }
     @objc private func openProviders() { openSection?("Providers") }
+    @objc private func openDecisions() { openSection?("Decisions") }
     @objc private func openUpdates() { openSection?("Updates") }
     @objc private func openDiagnostics() { openSection?("Diagnostics") }
 
@@ -89,6 +91,8 @@ final class OverviewViewController: NSViewController, ControlCenterPage {
             || operation.kind.localizedCaseInsensitiveContains("openrouter")
             || operation.kind.localizedCaseInsensitiveContains("codex-lb") {
             section = "Providers"
+        } else if operation.kind.localizedCaseInsensitiveContains("decision") {
+            section = "Decisions"
         } else if operation.kind.localizedCaseInsensitiveContains("update") {
             section = "Updates"
         } else {

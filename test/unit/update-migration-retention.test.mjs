@@ -165,6 +165,7 @@ test('project update migration repairs legacy menubar and fast-mode config', asy
 
     const stages = new Map((receipt.migration_stages || []).map((stage) => [stage.id, stage]));
     assert.equal(stages.get('menubar-retarget')?.ok, true);
+    assert.equal(stages.get('retired-local-decision')?.ok, true);
     assert.equal(stages.get('config-fastmode-normalize')?.ok, true);
     assert.equal(Object.hasOwn(receipt, 'legacy_migration_stages'), false);
     for (const stage of receipt.migration_stages || []) {

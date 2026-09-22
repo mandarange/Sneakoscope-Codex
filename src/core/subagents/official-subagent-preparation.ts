@@ -44,7 +44,6 @@ import {
 } from './subagent-evidence.js'
 import { sksPrefixedDollarCommand, unprefixedSksSkillName } from '../routes/dollar-prefix.js'
 import {
-  withFileLock,
   tryWithFileLock,
   type FileLockLease
 } from '../locks/file-lock.js'
@@ -57,24 +56,23 @@ import {
 } from '../agent-bridge/host-capability-runtime.js'
 import { uniqueStrings } from '../text/strings.js'
 import { officialSubagentEvidenceReady } from './terminal-subagent-state.js'
-import { withLocalDecisionAdvice } from '../local-decision/integration.js'
+import {
+  OFFICIAL_SUBAGENT_LIFECYCLE_LOCK,
+  withOfficialSubagentLifecycleLock
+} from './official-subagent-lock.js'
+import { decideOfficialSubagentPreparation } from '../decisions/integration.js'
+import { graphFileDigest, sourceSnapshotDigest } from '../decisions/state.js'
+import type { PlanCandidate } from '../decisions/types.js'
+
+export { OFFICIAL_SUBAGENT_LIFECYCLE_LOCK, withOfficialSubagentLifecycleLock }
 
 export const NARUTO_RESULT_SCHEMA = 'sks.naruto-subagent-workflow.v1'
 export const SUBAGENT_PLAN_FILENAME = 'subagent-plan.json'
 export const NARUTO_SUMMARY_FILENAME = 'naruto-summary.json'
 export const NARUTO_GATE_FILENAME = 'naruto-gate.json'
-export const OFFICIAL_SUBAGENT_LIFECYCLE_LOCK = '.subagent-evidence.lock'
 export const OFFICIAL_SUBAGENT_PREPARATION_TRANSACTION = '.official-subagent-preparation-transaction.json'
 export const SUBAGENT_LIFECYCLE_CAPTURE_FAILURE_DIR = 'subagent-lifecycle-capture-failures'
 const OFFICIAL_SUBAGENT_PREPARATION_STAGE_PREFIX = '.official-subagent-preparation-stage-'
-
-export function withOfficialSubagentLifecycleLock<T>(dir: string, fn: () => Promise<T>): Promise<T> {
-  return withFileLock({
-    lockPath: path.join(dir, OFFICIAL_SUBAGENT_LIFECYCLE_LOCK),
-    timeoutMs: 5_000,
-    staleMs: 60_000
-  }, fn)
-}
 
 export interface OfficialSubagentPreparationInput {
   root: string
@@ -111,28 +109,87 @@ export interface OfficialSubagentPreparationInput {
 }
 
 export async function prepareOfficialSubagentMission(input: OfficialSubagentPreparationInput) {
-  const prepared = await withOfficialSubagentLifecycleLock(input.dir, () => prepareOfficialSubagentMissionLocked(input))
-  // Optional local decision advice (off by default). It runs only here, after
-  // the lifecycle lock is released and the baseline plan is promoted; it reads
-  // the result and may append a bounded non-authoritative context to the
-  // delegation prompt in advisory mode. It never changes the plan artifact.
-  return withLocalDecisionAdvice(prepared, {
+  const opened = await withOfficialSubagentLifecycleLock(input.dir, () => openOfficialSubagentPreparation(input))
+  if (opened.kind === 'recovered') return opened.result
+  const derived = await deriveOfficialSubagentPreparation(input, opened.snapshot)
+  const decided = await decideOfficialSubagentPreparation({
     root: input.root,
     dir: input.dir,
     missionId: input.missionId,
     goal: String(input.goal || '').trim(),
-    route: input.route
+    workflowRunId: derived.workflowRunId,
+    workflowRevision: opened.snapshot.workflowRevision,
+    slices: derived.slices,
+    requestedSource: derived.requestedSource,
+    requestedSubagents: derived.budget.requestedSubagents,
+    attention: derived.triwikiAttention,
+    changedPaths: derived.sliceWriteScopes,
+    env: input.env || process.env
   })
+  const rebuilt = applyOfficialSubagentDecision(derived, decided)
+  return withOfficialSubagentLifecycleLock(input.dir, () => commitOfficialSubagentPreparation(input, opened.snapshot, rebuilt))
 }
 
-async function prepareOfficialSubagentMissionLocked(input: OfficialSubagentPreparationInput) {
+async function openOfficialSubagentPreparation(input: OfficialSubagentPreparationInput) {
   const recovered = await recoverOfficialSubagentPreparationTransaction(input)
-  if (recovered) return recovered
+  if (recovered) return { kind: 'recovered' as const, result: recovered }
   const previousPlan = await readJson<Record<string, any> | null>(
     path.join(input.dir, SUBAGENT_PLAN_FILENAME),
     null
   ).catch(() => null)
-  const expectedWorkflowRunId = String(previousPlan?.workflow_run_id || '').trim()
+  const sourceDigest = await sourceSnapshotDigest(input.root)
+  const graphDigest = await graphFileDigest(input.root)
+  return {
+    kind: 'snapshot' as const,
+    snapshot: {
+      previousWorkflowRunId: String(previousPlan?.workflow_run_id || '').trim(),
+      sourceDigest,
+      graphDigest,
+      workflowRevision: `${sourceDigest}:${graphDigest || 'no-graph'}`
+    }
+  }
+}
+
+async function commitOfficialSubagentPreparation(
+  input: OfficialSubagentPreparationInput,
+  snapshot: { previousWorkflowRunId: string; sourceDigest: string; graphDigest: string | null; workflowRevision: string },
+  derived: DerivedOfficialSubagentPreparation
+) {
+  const recovered = await recoverOfficialSubagentPreparationTransaction(input)
+  if (recovered) return recovered
+  const currentPlan = await readJson<Record<string, any> | null>(
+    path.join(input.dir, SUBAGENT_PLAN_FILENAME),
+    null
+  ).catch(() => null)
+  const currentRunId = String(currentPlan?.workflow_run_id || '').trim()
+  const currentSource = await sourceSnapshotDigest(input.root)
+  const currentGraph = await graphFileDigest(input.root)
+  if (
+    (currentRunId && currentRunId !== snapshot.previousWorkflowRunId)
+    || currentSource !== snapshot.sourceDigest
+    || currentGraph !== snapshot.graphDigest
+  ) {
+    if (currentPlan && String(currentPlan.goal || '') === String(input.goal || '').trim()
+      && String(currentPlan.route || '') === String(input.route || '')) {
+      return {
+        ...derived.preparedResultBase,
+        plan: currentPlan,
+        evidence: await readJson<Record<string, any> | null>(
+          path.join(input.dir, SUBAGENT_EVIDENCE_FILENAME),
+          null
+        ).catch(() => null)
+      }
+    }
+    throw new Error('official_subagent_preparation_stale_snapshot')
+  }
+  return promoteOfficialSubagentDerived(input, derived, snapshot.previousWorkflowRunId)
+}
+
+async function deriveOfficialSubagentPreparation(
+  input: OfficialSubagentPreparationInput,
+  snapshot: { previousWorkflowRunId: string; sourceDigest: string; graphDigest: string | null; workflowRevision: string }
+) {
+  const expectedWorkflowRunId = snapshot.previousWorkflowRunId
   const goal = String(input.goal || '').trim()
   const mode = input.mode === 'naruto' ? 'naruto' : 'generic'
   const taskProfile = classifyTaskProfile(goal)
@@ -440,7 +497,6 @@ async function prepareOfficialSubagentMissionLocked(input: OfficialSubagentPrepa
     verification: { budget: verification },
     created_at: nowIso()
   }
-  const statePatch = input.statePatch?.({ plan, budget, workflowRunId }) || null
   const preparedResultBase = {
     plan,
     budget,
@@ -456,19 +512,227 @@ async function prepareOfficialSubagentMissionLocked(input: OfficialSubagentPrepa
     observedParentModel,
     parentModelMatch
   }
+  return {
+    preparedResultBase,
+    slices,
+    requestedSource,
+    sliceWriteScopes,
+    sliceSafety,
+    suggestedAgents,
+    roleModelPreferences,
+    roleModelRouting,
+    activeMainModel,
+    officialConfig,
+    selectedFanoutPolicy,
+    configuredMaxThreads,
+    externalCodexHostCap,
+    externalCodexHostCapVerification,
+    taskProfile,
+    mode,
+    goal,
+    delegationGoal,
+    observedParentModel,
+    parentModelMatch,
+    workflowRunId,
+    expectedWorkflowRunId,
+    ssotGuard,
+    verification,
+    budget,
+    fanoutPolicy,
+    agentRouting,
+    agentCatalog,
+    routeContract,
+    operatorRequested,
+    requestedSubagents,
+    triwikiAttention,
+    configBlockers,
+    plan,
+    sessionScope: input.sessionScope || null
+  } satisfies DerivedOfficialSubagentPreparation
+}
+
+interface DerivedOfficialSubagentPreparation {
+  preparedResultBase: {
+    plan: Record<string, any>
+    budget: ReturnType<typeof resolveSubagentThreadBudget>
+    verification: ReturnType<typeof chooseVerificationBudget>
+    taskProfile: string
+    delegationPrompt: string
+    workflowRunId: string
+    officialConfig: Awaited<ReturnType<typeof readOfficialSubagentConfig>>
+    triwikiAttention: Awaited<ReturnType<typeof readBoundedTriwikiAttention>>
+    suggestedAgents: string[]
+    fanoutPolicy: Record<string, any>
+    configBlockers: string[]
+    observedParentModel: string | null
+    parentModelMatch: boolean | null
+  }
+  slices: OfficialSubagentSlice[]
+  requestedSource: 'operator' | 'route_contract' | 'automatic'
+  sliceWriteScopes: string[]
+  sliceSafety: ReturnType<typeof validateOfficialSubagentSlices>
+  suggestedAgents: string[]
+  roleModelPreferences: Awaited<ReturnType<typeof readRoleModelPreferences>>
+  roleModelRouting: Awaited<ReturnType<typeof readConfiguredCodexModelRoutingContext>>
+  activeMainModel: { provider: string; model: string } | null
+  officialConfig: Awaited<ReturnType<typeof readOfficialSubagentConfig>>
+  selectedFanoutPolicy: ReturnType<typeof officialSubagentFanoutPolicy>
+  configuredMaxThreads: number
+  externalCodexHostCap: number | undefined
+  externalCodexHostCapVerification: string
+  taskProfile: string
+  mode: 'generic' | 'naruto'
+  goal: string
+  delegationGoal: string
+  observedParentModel: string | null
+  parentModelMatch: boolean | null
+  workflowRunId: string
+  expectedWorkflowRunId: string
+  ssotGuard: ReturnType<typeof buildSsotGuard>
+  verification: ReturnType<typeof chooseVerificationBudget>
+  budget: ReturnType<typeof resolveSubagentThreadBudget>
+  fanoutPolicy: Record<string, any>
+  agentRouting: Record<string, any>
+  agentCatalog: ReturnType<typeof onDemandAgentCatalogMetadata>
+  routeContract: { count: number; reason: string } | null
+  operatorRequested: boolean
+  requestedSubagents: number | undefined
+  triwikiAttention: Awaited<ReturnType<typeof readBoundedTriwikiAttention>>
+  configBlockers: string[]
+  plan: Record<string, any>
+  sessionScope: string | null
+}
+
+function applyOfficialSubagentDecision(
+  derived: DerivedOfficialSubagentPreparation,
+  decided: Awaited<ReturnType<typeof decideOfficialSubagentPreparation>>
+): DerivedOfficialSubagentPreparation {
+  const attention = decided.attention
+  const selectedPlan = derived.requestedSource === 'automatic' ? decided.selectedPlan : null
+  const budget = selectedPlan
+    ? rebuildBudget(derived, selectedPlan)
+    : derived.budget
+  const fanoutPolicy = selectedPlan
+    ? {
+        ...derived.fanoutPolicy,
+        requested_subagents: budget.requestedSubagents,
+        jev_selected_plan: selectedPlan.id
+      }
+    : derived.fanoutPolicy
+  const delegationPrompt = buildOfficialSubagentPrompt({
+    goal: derived.delegationGoal,
+    slices: derived.slices,
+    requestedSubagents: budget.requestedSubagents,
+    requestedSubagentsExplicit: derived.requestedSource === 'operator',
+    requestedSubagentsSource: derived.requestedSource,
+    maxThreads: budget.maxThreads,
+    decompositionStatus: derived.plan.decomposition_status,
+    firstWave: budget.firstWave,
+    waveCount: budget.waveCount,
+    capacity: budget.capacity,
+    triwikiAttention: attention,
+    recommendedAgents: derived.suggestedAgents,
+    roleModelPreferences: derived.roleModelPreferences.store.roles,
+    activeMainModel: derived.activeMainModel,
+    parentOutputMode: derived.mode === 'naruto' && derived.sessionScope ? 'app_naruto_stdin' : 'raw_json',
+    missionId: derived.plan.mission_id,
+    workflowRunId: derived.workflowRunId,
+    decisionContract: decided.compiled.kind === 'apply'
+      ? {
+          planId: selectedPlan?.id ?? null,
+          keepContextIds: decided.selectedContextIds,
+          executeSelectedIds: true
+        }
+      : null
+  })
+  const plan = {
+    ...derived.plan,
+    delegation_prompt: delegationPrompt,
+    requested_subagents: budget.requestedSubagents,
+    first_wave: budget.firstWave,
+    wave_count: budget.waveCount,
+    wave_lifecycle: createSubagentWaveLifecycle({
+      workflowRunId: derived.workflowRunId,
+      targetSubagents: budget.requestedSubagents,
+      countPolicy: derived.requestedSource === 'automatic' ? 'dynamic_automatic' : 'exact',
+      waveCapacity: budget.firstWave
+    }),
+    triwiki_attention: attention,
+    fanout_policy: fanoutPolicy,
+    capacity_controller: budget.capacity,
+    jev_decision: decided.receipt,
+    native_host_dispatch: 'unverified'
+  }
+  return {
+    ...derived,
+    budget,
+    fanoutPolicy,
+    triwikiAttention: attention,
+    plan,
+    preparedResultBase: {
+      ...derived.preparedResultBase,
+      plan,
+      budget,
+      delegationPrompt,
+      triwikiAttention: attention,
+      fanoutPolicy
+    }
+  }
+}
+
+function rebuildBudget(
+  derived: DerivedOfficialSubagentPreparation,
+  selectedPlan: PlanCandidate
+) {
+  const requested = selectedPlan.workerCount
+  const waveGovernor = decideNarutoConcurrency({
+    requestedWorkers: Math.min(requested, derived.configuredMaxThreads),
+    totalWorkItems: requested,
+    backend: 'official-subagent',
+    parallelismMode: 'extreme',
+    maxThreads: derived.configuredMaxThreads,
+    ...(derived.externalCodexHostCap === undefined ? {} : { externalCodexHostCap: derived.externalCodexHostCap })
+  })
+  return resolveSubagentThreadBudget({
+    requested,
+    configuredMaxThreads: derived.configuredMaxThreads,
+    ...(derived.externalCodexHostCap === undefined ? {} : { externalCodexHostCap: derived.externalCodexHostCap }),
+    marginalUsefulWorkers: waveGovernor.safe_active_workers,
+    reviewerReservedThreads: String(derived.fanoutPolicy.selection_reason || '').includes('reviewer')
+      || derived.fanoutPolicy.critical_multi_domain === true
+      ? Math.max(1, Number(derived.fanoutPolicy.automatic_reviewer_ceiling || 1))
+      : 0,
+    ...(derived.slices.length > 0
+      ? {
+          independentSliceCount: derived.slices.length,
+          readyDagWidth: derived.slices.length,
+          disjointOwnershipCount: derived.sliceSafety.safe ? derived.slices.length : 0
+        }
+      : {})
+  })
+}
+
+async function promoteOfficialSubagentDerived(
+  input: OfficialSubagentPreparationInput,
+  derived: DerivedOfficialSubagentPreparation,
+  expectedWorkflowRunId: string
+) {
+  const { plan, budget, verification, workflowRunId, officialConfig, triwikiAttention, suggestedAgents, fanoutPolicy, configBlockers, observedParentModel, parentModelMatch, taskProfile, delegationPrompt } = derived.preparedResultBase
+  const statePatch = input.statePatch?.({ plan, budget, workflowRunId }) || null
+  const preparedResultBase = derived.preparedResultBase
   const transactionFile = path.join(input.dir, OFFICIAL_SUBAGENT_PREPARATION_TRANSACTION)
   const stageName = `${OFFICIAL_SUBAGENT_PREPARATION_STAGE_PREFIX}${safePreparationStageId(workflowRunId)}`
   const stageDir = path.join(input.dir, stageName)
-  const artifactInventory = officialSubagentPreparationArtifactInventory(mode)
-  const tombstoneInventory = officialSubagentPreparationTombstoneInventory(mode)
+  const artifactInventory = officialSubagentPreparationArtifactInventory(derived.mode)
+  const tombstoneInventory = officialSubagentPreparationTombstoneInventory(derived.mode)
   let transaction = {
     schema: 'sks.official-subagent-preparation-transaction.v2',
     status: 'staging',
     mission_id: input.missionId,
     session_scope: input.sessionScope || null,
     route: input.route,
-    mode,
-    goal,
+    mode: derived.mode,
+    goal: derived.goal,
     previous_workflow_run_id: expectedWorkflowRunId || null,
     target_workflow_run_id: workflowRunId,
     stage_dir: stageName,
@@ -485,9 +749,9 @@ async function prepareOfficialSubagentMissionLocked(input: OfficialSubagentPrepa
   await fsp.rm(stageDir, { recursive: true, force: true })
   await fsp.mkdir(stageDir, { recursive: true })
   const evidence = await writeOfficialSubagentPreparationStage(stageDir, {
-    mode,
+    mode: derived.mode,
     plan,
-    ssotGuard,
+    ssotGuard: derived.ssotGuard,
     budget,
     workflowRunId,
     preparationOnly: input.preparationOnly !== false,
@@ -533,10 +797,14 @@ async function prepareOfficialSubagentMissionLocked(input: OfficialSubagentPrepa
     await promote()
   }
   await cleanupOfficialSubagentPreparationTransaction(transactionFile, stageDir)
-
   return {
     ...preparedResultBase,
     evidence,
+    officialConfig,
+    triwikiAttention,
+    fanoutPolicy,
+    taskProfile,
+    delegationPrompt
   }
 }
 

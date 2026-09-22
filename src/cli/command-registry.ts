@@ -376,11 +376,11 @@ const COMMAND_DEFINITIONS = {
   }),
   'agent-bridge': readOnly(entry('beta', 'Register SKS tools or run read-only tools with native Astra async calling', 'dist/core/commands/agent-bridge-command.js', subcommand(() => import('../core/commands/agent-bridge-command.js'), 'agentBridgeCommand', 'dist/core/commands/agent-bridge-command.js', 'setup'))),
   decision: {
-    ...skipMigrationGate(entry('labs', 'Manage the optional local decision provider: inspect, install, start, mode, evaluate, stop, uninstall', 'dist/commands/local-decision.js', directCommand(() => import('../commands/local-decision.js'), 'dist/commands/local-decision.js'), {
+    ...skipMigrationGate(entry('labs', 'Manage optional Jev decisions through OpenRouter: status, enable, disable, probe, evaluate', 'dist/commands/decision.js', directCommand(() => import('../commands/decision.js'), 'dist/commands/decision.js'), {
       allowedDuringActiveRoute: true,
       activeRoutePolicy: 'always'
     })),
-    packageRequiredFiles: ['dist/commands/local-decision.js', 'dist/core/local-decision/service-entrypoint.js']
+    packageRequiredFiles: ['dist/commands/decision.js']
   }
 } satisfies Record<string, CommandEntry>;
 

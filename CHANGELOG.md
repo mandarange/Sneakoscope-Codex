@@ -2,37 +2,26 @@
 
 ## [Unreleased]
 
-
-## [10.3.0] - 2026-09-18
+## [10.3.0] - 2026-09-22
 
 ### Added
 
-- Optional local decision provider (`sks decision`, labs, off by default). An
-  Apple Silicon MLX worker answers fixed multiple-choice planning and recovery
-  questions by scoring candidate logits; trusted code maps the answer onto a
-  small enum and validates every field. Modes are `off`, `shadow` (record only)
-  and `advisory` (a bounded non-authoritative context appended to eligible
-  Naruto preparations after the lifecycle lock is released). Counts, models,
-  effort, gates, evidence and provider settings are never changed, and there is
-  no cloud fallback. Explicit `inspect`, `install` (hash-pinned Python 3.12
-  environment plus a pinned, digest-verified weights snapshot), `start`, `stop`,
-  `evaluate`, `benchmark` and inventory-only `uninstall` commands; a private
-  Unix-socket broker with queue, timeout, circuit and hard-deadline rules.
-- Control Center "Local Decision" page: inspect, license-confirmed install,
-  start/stop, mode selection and uninstall through the same commands.
-- `python/local_decision` worker package and `requirements.lock` ship in the
-  npm package; model weights, virtualenvs and caches never do.
+- Optional Jev decisions through OpenRouter (`sks decision`, labs, off by default).
+  Modes are `off` and `jev`. A valid answer is compiled into an existing SKS plan
+  or optional-context selection. There is no advisory text and no second LLM
+  judge. Recovery remains unsupported. The Control Center Decisions page can
+  enable and disable Jev, opens Connections for the shared OpenRouter credential,
+  and is reachable from Overview.
+- Interactive global `npm i -g sneakoscope` on macOS builds and starts the SKS
+  Menu Bar with the Control Center. Dependency, CI and piped installs stay
+  inert; `SKS_POSTINSTALL_MENUBAR=1` forces the build, `SKS_POSTINSTALL_NO_MENUBAR=1`
+  skips it.
 
 ### Changed
 
-- Interactive global `npm i -g sneakoscope` on macOS now builds and starts the
-  SKS Menu Bar with the Control Center. Dependency, CI and piped installs stay
-  inert; `SKS_POSTINSTALL_MENUBAR=1` forces the build, `SKS_POSTINSTALL_NO_MENUBAR=1`
-  skips it.
-- `sks decision status --json` reports the recommended weights repository and
-  the next setup step; the requested engine repository
-  `harshatheg/Qwen-2.5-1B-RLCD` is reported as engine source without weights and
-  is never substituted.
+- `sks update` removes the managed `~/.sneakoscope/local-decision` runtime and
+  its private socket directory, then rebuilds the Menu Bar so the installed
+  Decisions page matches the package.
 
 ## [10.2.0] - 2026-09-15
 

@@ -47,6 +47,11 @@ export function buildOfficialSubagentPrompt(input: {
   parentOutputMode?: OfficialSubagentParentOutputMode
   missionId?: string
   workflowRunId?: string
+  decisionContract?: {
+    planId?: string | null
+    keepContextIds?: readonly string[] | null
+    executeSelectedIds?: boolean
+  } | null
 }): string {
   const maxThreads = clampThreads(input.maxThreads)
   const requestedSubagents = normalizeRequestedSubagents(input.requestedSubagents, input.slices.length)
@@ -68,6 +73,7 @@ export function buildOfficialSubagentPrompt(input: {
       ? `${requestedSubagents} (route-owned exact orchestration contract)`
       : `${requestedSubagents} (dynamic automatic target; keep the final decomposed plan and evidence count exact)`
   const triwiki = renderBoundedTriwikiAttention(input.triwikiAttention)
+  const decisionContract = renderDecisionContract(input.decisionContract)
   const resolvedSlices = input.slices.map((slice) => ({
     slice,
     agentName: slice.agent || selectOfficialSubagentRole({
@@ -188,6 +194,7 @@ ${renderSliceSafety(sliceSafety, parentDecompositionRequired)}
 
 Central TriWiki context:
 ${triwiki}
+${decisionContract}
 
 Project custom agent catalog:
 ${catalog}
@@ -344,13 +351,34 @@ function renderBoundedTriwikiAttention(value: BoundedTriwikiAttention | undefine
     id: anchor.id,
     claim_hash: anchor.claim_hash,
     source_hash: anchor.source_hash,
-    hydrate_hint: anchor.hydrate_hint
+    hydrate_hint: anchor.hydrate_hint,
+    ...(anchor.source_path ? { source_path: anchor.source_path } : {}),
+    ...(anchor.excerpt ? { excerpt: anchor.excerpt } : {})
   }))
+  const hasExcerpt = value.anchors.some((anchor) => Boolean(anchor.excerpt))
   return [
     `- consume these ${anchors.length} attention.use_first anchors before broad discovery`,
     '- hydrate a referenced source only when its anchor is relevant to the assigned slice or a risky decision',
     '- do not inject the full context pack or make each subagent repeat repository-wide context discovery',
+    ...(hasExcerpt
+      ? ['- keep exact source text and provenance; do not summarize selected excerpts with another model']
+      : []),
     `- bounded anchors: ${JSON.stringify(anchors)}`
+  ].join('\n')
+}
+
+function renderDecisionContract(value: {
+  planId?: string | null
+  keepContextIds?: readonly string[] | null
+  executeSelectedIds?: boolean
+} | null | undefined): string {
+  if (!value || value.executeSelectedIds !== true) return ''
+  return [
+    'Selected decision contract:',
+    `- execute the selected plan${value.planId ? ` ${value.planId}` : ''} and retained optional context IDs; do not choose them again`,
+    value.keepContextIds?.length
+      ? `- retained optional context IDs: ${value.keepContextIds.join(', ')}`
+      : '- pinned and retained context already unioned by code'
   ].join('\n')
 }
 
