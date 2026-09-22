@@ -10,7 +10,9 @@ import {
   KEEP_BASELINE_CHOICE,
   NEEDS_EVIDENCE_CHOICE,
   POLICY_REVISION,
+  ROUTING_RISK_NOUL_MIN,
   UNKNOWN_USAGE,
+  sealedRoutingModel,
   type Answer,
   type BaselineReason,
   type CompiledDecision,
@@ -20,6 +22,7 @@ import {
   type DecisionsWireResponse,
   type DecisionsWireUsage,
   type Question,
+  type QuestionBinding,
   type UsageReceipt
 } from './types.js';
 
@@ -38,6 +41,10 @@ export function compileDecision(bundle: DecisionBundle, response: DecisionsWireR
     if (compiled.kind === 'effect') effects.push(compiled.effect);
     else if (!fallbackReason) fallbackReason = compiled.reason;
   }
+
+  const routing = compileRouting(bundle, decoded.response.answers);
+  for (const effect of routing.effects) effects.push(effect);
+  if (routing.reason && !fallbackReason) fallbackReason = routing.reason;
 
   const contextEffect = compileContext(bundle, decoded.response.answers);
   if (contextEffect.kind === 'effect') effects.push(contextEffect.effect);
@@ -148,6 +155,76 @@ function compilePlan(
   const uncertainty = requiredChoiceUncertainty(answer, planChoiceIds(bundle));
   if (!uncertainty.ok) return { kind: 'baseline', reason: uncertainty.reason };
   return { kind: 'effect', effect: { kind: 'select_plan', planId: candidate.id } };
+}
+
+function compileRouting(
+  bundle: DecisionBundle,
+  answers: Record<string, Answer>
+): { effects: DecisionEffect[]; reason: BaselineReason | null } {
+  const effects: DecisionEffect[] = [];
+  let reason: BaselineReason | null = null;
+  for (const roleId of routingRoleIds(bundle)) {
+    const compiled = compileRoleRouting(bundle, answers, roleId);
+    if (compiled.kind === 'effect') effects.push(compiled.effect);
+    else if (!reason) reason = compiled.reason;
+  }
+  return { effects, reason };
+}
+
+function compileRoleRouting(
+  bundle: DecisionBundle,
+  answers: Record<string, Answer>,
+  roleId: string
+): { kind: 'effect'; effect: DecisionEffect } | { kind: 'baseline'; reason: BaselineReason } {
+  const choiceId = questionIdFor(bundle, 'routing', roleId);
+  const answer = choiceId ? answers[choiceId] : undefined;
+  if (!answer) return { kind: 'baseline', reason: 'missing_answer' };
+  if (answer.type !== 'choice') return { kind: 'baseline', reason: 'invalid_response' };
+  if (answer.choice === KEEP_BASELINE_CHOICE) return { kind: 'baseline', reason: 'keep_baseline_selected' };
+  const selected = sealedRoutingModel(answer.choice);
+  if (!selected) return { kind: 'baseline', reason: 'invalid_response' };
+  const choiceQuestion = choiceId ? bundle.request.questions[choiceId] : undefined;
+  const labels = choiceQuestion?.type === 'choice' ? Object.keys(choiceQuestion.criteria) : [];
+  const uncertainty = requiredChoiceUncertainty(answer, labels);
+  if (!uncertainty.ok) return { kind: 'baseline', reason: uncertainty.reason };
+  const model = escalateRole(bundle, answers, roleId) ? 'gpt-6-astra' : selected.id;
+  return { kind: 'effect', effect: { kind: 'select_routing', roleId, model } };
+}
+
+function escalateRole(
+  bundle: DecisionBundle,
+  answers: Record<string, Answer>,
+  roleId: string
+): boolean {
+  const difficultyId = questionIdFor(bundle, 'routing_difficulty', roleId);
+  const difficulty = difficultyId ? answers[difficultyId] : undefined;
+  const difficultyQuestion = difficultyId ? bundle.request.questions[difficultyId] : undefined;
+  if (difficulty?.type === 'score' && difficultyQuestion?.type === 'score') {
+    const top = difficultyQuestion.criteria.length - 1;
+    if (difficulty.score >= top) return true;
+  }
+  const riskId = questionIdFor(bundle, 'routing_risk', roleId);
+  const risk = riskId ? answers[riskId] : undefined;
+  return risk?.type === 'noul' && risk.noul >= ROUTING_RISK_NOUL_MIN;
+}
+
+function routingRoleIds(bundle: DecisionBundle): string[] {
+  const ids: string[] = [];
+  for (const binding of Object.values(bundle.questionBindings)) {
+    if (binding.kind === 'routing' && !ids.includes(binding.roleId)) ids.push(binding.roleId);
+  }
+  return ids;
+}
+
+function questionIdFor(
+  bundle: DecisionBundle,
+  kind: Extract<QuestionBinding, { roleId: string }>['kind'],
+  roleId: string
+): string | null {
+  const found = Object.entries(bundle.questionBindings).find(([, binding]) => (
+    binding.kind === kind && 'roleId' in binding && binding.roleId === roleId
+  ));
+  return found ? found[0] : null;
 }
 
 function compileContext(

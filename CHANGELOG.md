@@ -6,7 +6,12 @@
 
 ### Added
 
-- Optional Jev decisions through OpenRouter (`sks decision`, labs, off by default).
+- When Jev is on, one Decisions request routes each dynamic Naruto role.
+  Jev chooses among Luna, Sol, Terra, and Astra, and the same call scores
+  difficulty and detects high-stakes work. A confident fast choice uses the
+  sealed effort for that model. Judgment-level difficulty or high risk stays
+  on Astra. Jev off keeps the Astra baseline. User role preferences stay
+  authoritative.
   Modes are `off` and `jev`. A valid answer is compiled into an existing SKS plan
   or optional-context selection. There is no advisory text and no second LLM
   judge. Recovery remains unsupported. The Control Center Decisions page can

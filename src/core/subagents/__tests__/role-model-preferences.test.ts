@@ -264,7 +264,7 @@ test('official subagent preparation normalizes legacy role overrides in the plan
   assert.equal(routed.routing_dynamic, false);
   assert.equal(prepared.plan.role_model_preferences.overrides.ui_implementer.reasoning_effort, 'low');
   assert.match(prepared.delegationPrompt, /pass model="gpt-6-astra" and reasoning_effort="low" from the sealed role policy/);
-  assert.match(prepared.delegationPrompt, /every child uses the exact model slug gpt-6-astra/);
+  assert.match(prepared.delegationPrompt, /sealed model named in the spawn contract/);
   assert.match(prepared.delegationPrompt, /must use `fork_turns="none"` or a positive bounded turn count, with the complete bounded slice contract in `message`/);
 });
 
@@ -340,7 +340,7 @@ test('app-session third-party parent stays selected while all children use Astra
     slices: []
   });
   assert.equal(parentRequired.plan.decomposition_status, 'parent_required');
-  assert.match(parentRequired.delegationPrompt, /every child uses the exact model slug gpt-6-astra/);
+  assert.match(parentRequired.delegationPrompt, /sealed model named in the spawn contract/);
   assert.match(parentRequired.delegationPrompt, /keep the current app-selected main model openrouter:moonshotai\/kimi-k3/);
 });
 
@@ -412,7 +412,7 @@ test(`${mainModel} app-session main keeps sealed Astra child role profiles`, asy
   assert.equal(prepared.plan.agents.worker.routed_model_reasoning_effort, 'low');
   assert.equal(prepared.plan.agents.worker.routed_model_policy, 'luna_max_mechanical');
   assert.equal(prepared.plan.role_model_preferences.routing.active_main_model_inherited, false);
-  assert.match(prepared.delegationPrompt, /every child uses the exact model slug gpt-6-astra/);
+  assert.match(prepared.delegationPrompt, /sealed model named in the spawn contract/);
   assert.equal(prepared.delegationPrompt.includes(`pass the exact active main model="${mainModel}"`), false);
 });
 

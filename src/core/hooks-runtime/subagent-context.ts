@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { readJson } from '../fsx.js';
 import { managedOfficialSubagentRoleByName } from '../managed-assets/managed-assets-manifest.js';
-import { ASTRA_SUBAGENT_MODEL } from '../subagents/model-policy.js';
+import { ASTRA_SUBAGENT_MODEL, NARUTO_LUNA_MODEL, NARUTO_SOL_MODEL, NARUTO_TERRA_MODEL } from '../subagents/model-policy.js';
 
 export async function sealedSubagentRoutingContext(artifactDir: string, payload: any = {}) {
   const plan: any = await readJson(path.join(artifactDir, 'subagent-plan.json'), null).catch(() => null);
@@ -11,11 +11,13 @@ export async function sealedSubagentRoutingContext(artifactDir: string, payload:
   const planned = agentName && agents[agentName] ? agents[agentName] : null;
   const role = agentName ? managedOfficialSubagentRoleByName(agentName) : null;
   if (!agentName) return '';
-  const model = ASTRA_SUBAGENT_MODEL;
-  const plannedModel = String(planned?.routed_model || planned?.model || '').trim();
-  const effort = String((plannedModel === ASTRA_SUBAGENT_MODEL
+  const narutoPlan = plan.mode === 'naruto' || plan.route === '$Naruto'
+  const plannedModel = String(planned?.routed_model || planned?.model || '').trim()
+  const sealedModels = new Set([ASTRA_SUBAGENT_MODEL, NARUTO_LUNA_MODEL, NARUTO_SOL_MODEL, NARUTO_TERRA_MODEL])
+  const model = narutoPlan && sealedModels.has(plannedModel) ? plannedModel : ASTRA_SUBAGENT_MODEL
+  const effort = String((model === plannedModel
     ? planned?.routed_model_reasoning_effort || planned?.model_reasoning_effort
-    : null) || role?.model_reasoning_effort || 'medium').trim();
+    : null) || role?.model_reasoning_effort || 'medium').trim()
   return [
     'SKS sealed child routing:',
     agentName ? `- custom agent: ${agentName}` : null,

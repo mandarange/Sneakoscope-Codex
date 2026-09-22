@@ -364,3 +364,87 @@ test('duplicate consumption identity does not dispatch recovery twice', async ()
   assert.equal(first.llmRejudgeCalls, 0);
   assert.equal(first.compiled.kind, 'keep_baseline');
 });
+
+test('Jev mode fans out one request and applies sealed models with risk escalation', async (t) => {
+  process.env.SKS_JEV_DECISION_TEST_OVERRIDES = '1';
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-jev-route-'));
+  const dir = path.join(root, '.sneakoscope', 'missions', 'm-route');
+  await fsp.mkdir(dir, { recursive: true });
+  t.after(async () => {
+    setDecisionTestOverrides(null);
+    await fsp.rm(root, { recursive: true, force: true });
+  });
+  let questionIds: string[] = [];
+  setDecisionTestOverrides({
+    config: enabledConfig(),
+    fetchImpl: async (_url, init) => {
+      const body = JSON.parse(String(init?.body || '')) as {
+        questions: Record<string, { type: string; criteria?: Record<string, string> | string[] }>;
+      };
+      questionIds = Object.keys(body.questions);
+      const answers: Record<string, unknown> = {};
+      for (const [id, question] of Object.entries(body.questions)) {
+        if (question.type === 'choice' && id.startsWith('route_') && question.criteria && !Array.isArray(question.criteria)) {
+          const role = id.slice('route_'.length);
+          const choice = role === 'explorer' ? 'gpt-5.6-terra'
+            : role === 'security_reviewer' ? 'gpt-5.6-luna'
+            : 'gpt-5.6-sol';
+          answers[id] = sealedChoice(choice, Object.keys(question.criteria));
+        } else if (question.type === 'score' && id.startsWith('difficulty_')) {
+          answers[id] = { type: 'score', score: 0, confidence: 0.9 };
+        } else if (question.type === 'noul' && id.startsWith('risk_')) {
+          const role = id.slice('risk_'.length);
+          answers[id] = { type: 'noul', noul: role === 'security_reviewer' ? 0.91 : 0.04 };
+        } else if (id === 'plan' && question.type === 'choice' && question.criteria && !Array.isArray(question.criteria)) {
+          const keys = Object.keys(question.criteria);
+          answers.plan = sealedChoice(keys.includes('grouped') ? 'grouped' : keys[0] || 'keep_baseline', keys);
+        }
+      }
+      return new Response(JSON.stringify({
+        model: 'typesafe/jev-1.13',
+        answers,
+        usage: { input_tokens: 80, output_tokens: 12 }
+      }), { status: 200 });
+    }
+  });
+  const prepared = await prepareOfficialSubagentMission({
+    root,
+    dir,
+    missionId: 'm-route',
+    goal: 'Search callers, rename one label, and review the auth change.',
+    route: '$Naruto',
+    mode: 'naruto',
+    env: {
+      HOME: path.join(root, 'home'),
+      PATH: process.env.PATH || '',
+      OPENROUTER_API_KEY: 'sk-or-test-jevroutesaaaaaaaa'
+    },
+    slices: [
+      { id: 'search', title: 'Search', description: 'Search callers', kind: 'worker', agent: 'explorer', paths: ['src'], readOnly: true },
+      { id: 'rename', title: 'Rename', description: 'Rename one label', kind: 'worker', agent: 'worker', paths: ['src/a.ts'] },
+      { id: 'auth', title: 'Auth', description: 'Review the auth change', kind: 'expert', agent: 'security_reviewer', paths: ['src/auth.ts'], readOnly: true }
+    ]
+  });
+  assert.ok(questionIds.includes('route_explorer'));
+  assert.ok(questionIds.includes('difficulty_worker'));
+  assert.ok(questionIds.includes('risk_security_reviewer'));
+  assert.equal(prepared.plan.agents.explorer.routed_model, 'gpt-5.6-terra');
+  assert.equal(prepared.plan.agents.explorer.routed_model_reasoning_effort, 'medium');
+  assert.equal(prepared.plan.agents.worker.routed_model, 'gpt-5.6-sol');
+  assert.equal(prepared.plan.agents.worker.routed_model_reasoning_effort, 'low');
+  assert.equal(prepared.plan.agents.security_reviewer.routed_model, 'gpt-6-astra');
+  assert.equal(prepared.plan.agents.security_reviewer.routed_model_reasoning_effort, 'max');
+  assert.equal(prepared.plan.agents.explorer.routed_model_policy, 'jev_sealed_routing');
+  assert.match(prepared.delegationPrompt, /Jev sealed models:/);
+});
+
+function sealedChoice(choice: string, keys: string[]) {
+  const others = keys.filter((key) => key !== choice);
+  const share = others.length ? (1 - 0.9) / others.length : 0;
+  return {
+    type: 'choice',
+    choice,
+    confidence: 0.91,
+    probabilities: Object.fromEntries(keys.map((key) => [key, key === choice ? 0.9 : share]))
+  };
+}

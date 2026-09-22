@@ -77,6 +77,13 @@ connectivity evidence, not SKS task accuracy or a privacy audit.
 
 - Optional retrieved excerpts that are already fresh, reproducible, and not
   pinned to the mission write scope.
+- When Jev is on, Naruto dynamic roles are routed in that same Decisions
+  request. Each role gets a Choice among `gpt-5.6-luna` (low), `gpt-5.6-sol`
+  (low), `gpt-5.6-terra` (medium), and `gpt-6-astra` (max), plus a difficulty
+  Score and a high-stakes Noul. Code promotes a choice only at probability
+  0.85 and confidence 0.70. The top difficulty level, or a risk Noul at or
+  above 0.70, keeps that role on Astra. Jev off leaves every child on
+  `gpt-6-astra`. User role preferences stay authoritative.
 - An automatic plan variant that already covers every required slice, before
   coherent plan/budget/prompt promotion.
 

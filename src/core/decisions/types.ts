@@ -69,6 +69,7 @@ export interface UsageReceipt {
 export type DecisionEffect =
   | { kind: 'select_plan'; planId: string }
   | { kind: 'select_optional_context'; keepIds: readonly string[] }
+  | { kind: 'select_routing'; roleId: string; model: string }
   | { kind: 'dispatch_recovery'; actionId: string };
 
 export type BaselineReason =
@@ -146,6 +147,57 @@ export interface ContextCandidate {
   reproducible: boolean;
 }
 
+export type SealedRoutingEffort = 'low' | 'medium' | 'max';
+
+export interface RoutingRoleCandidate {
+  id: string;
+  summary: string;
+}
+
+export interface RoutingCandidate {
+  id: 'jev_role_fanout';
+  summary: string;
+  efforts: Readonly<Record<string, SealedRoutingEffort>>;
+  models: Readonly<Record<string, string>>;
+}
+
+export const SEALED_ROUTING_MODELS = Object.freeze([
+  Object.freeze({
+    id: 'gpt-5.6-luna',
+    effort: 'low' as const,
+    summary: 'Fastest sealed model. Mechanical edits, renames, formatting, and other one-step changes.'
+  }),
+  Object.freeze({
+    id: 'gpt-5.6-sol',
+    effort: 'low' as const,
+    summary: 'Fast sealed model. Simple coding whose result is already specified.'
+  }),
+  Object.freeze({
+    id: 'gpt-5.6-terra',
+    effort: 'medium' as const,
+    summary: 'Context and tools. Search, multi-file reading, and broad exploration.'
+  }),
+  Object.freeze({
+    id: 'gpt-6-astra',
+    effort: 'max' as const,
+    summary: 'Escalate. Judgment, architecture, ambiguity, security, or high-stakes work.'
+  })
+]);
+
+export const ROUTING_DIFFICULTY_RUBRIC = Object.freeze([
+  'Mechanical one-step work: rename, format, copy, or a single exact edit.',
+  'Simple coding whose result is already specified.',
+  'Broad context, search, or tool use across more than one file.',
+  'Judgment, architecture, ambiguity, security, or other high-stakes work.'
+] as const);
+
+export const ROUTING_RISK_NOUL_MIN = 0.70;
+
+export function sealedRoutingModel(model: string): { id: string; effort: SealedRoutingEffort } | null {
+  const match = SEALED_ROUTING_MODELS.find((row) => row.id === model);
+  return match ? { id: match.id, effort: match.effort } : null;
+}
+
 export interface RecoveryCandidate {
   id: string;
   summary: string;
@@ -156,6 +208,9 @@ export interface RecoveryCandidate {
 
 export type QuestionBinding =
   | { kind: 'plan' }
+  | { kind: 'routing'; roleId: string }
+  | { kind: 'routing_difficulty'; roleId: string }
+  | { kind: 'routing_risk'; roleId: string }
   | { kind: 'context_keep'; candidateId: string }
   | { kind: 'context_relevance'; candidateId: string; levelCount: number }
   | { kind: 'recovery' };
@@ -166,6 +221,7 @@ export interface DecisionBundle {
   planCandidates: readonly PlanCandidate[];
   contextCandidates: readonly ContextCandidate[];
   recoveryCandidates: readonly RecoveryCandidate[];
+  routingCandidates: readonly RoutingRoleCandidate[];
   baselinePlanId: string | null;
   /** Static code-generated mapping; never inferred by another model. */
   questionBindings: Readonly<Record<string, QuestionBinding>>;
@@ -187,7 +243,7 @@ export const DESIGN_DEFAULTS = Object.freeze({
   circuitOpenMs: 30000
 });
 
-export const POLICY_REVISION = 'sks.jev-policy.v1';
+export const POLICY_REVISION = 'sks.jev-policy.v2';
 export const QUESTION_REVISION = 'sks.jev-questions.v1';
 export const RECEIPT_SCHEMA = 'sks.jev-decision.v1' as const;
 

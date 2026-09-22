@@ -11,7 +11,10 @@ import {
   type PlanCandidate,
   type Question,
   type QuestionBinding,
-  type RecoveryCandidate
+  type RecoveryCandidate,
+  type RoutingRoleCandidate,
+  ROUTING_DIFFICULTY_RUBRIC,
+  SEALED_ROUTING_MODELS
 } from './types.js';
 import { buildDecisionBinding, redactDecisionText } from './state.js';
 
@@ -59,6 +62,7 @@ export function buildDecisionBundle(input: {
   planCandidates?: readonly PlanCandidate[];
   contextCandidates?: readonly ContextCandidate[];
   recoveryCandidates?: readonly RecoveryCandidate[];
+  routingCandidates?: readonly RoutingRoleCandidate[];
   baselinePlanId?: string | null;
   requiredSliceIds?: readonly string[];
   requiredVerificationIds?: readonly string[];
@@ -67,8 +71,10 @@ export function buildDecisionBundle(input: {
   const planCandidates = [...(input.planCandidates || [])];
   const contextCandidates = [...(input.contextCandidates || [])];
   const recoveryCandidates = [...(input.recoveryCandidates || [])];
+  const routingCandidates = [...(input.routingCandidates || [])];
   const questions: Record<string, Question> = {};
   const questionBindings: Record<string, QuestionBinding> = {};
+  const recoverySlot = recoveryCandidates.length > 0 ? 1 : 0;
 
   if (planCandidates.length > 1) {
     const instructions = redactDecisionText(
@@ -86,7 +92,10 @@ export function buildDecisionBundle(input: {
     questionBindings.plan = { kind: 'plan' };
   }
 
+  const routedRoles = appendRoutingChoices(routingCandidates, questions, questionBindings, recoverySlot);
+
   for (const candidate of contextCandidates.filter((row) => !row.pinned && row.excerpt)) {
+    if (Object.keys(questions).length + 2 > DESIGN_DEFAULTS.maxQuestions - recoverySlot) break;
     const keepId = `keep_${candidate.id}`;
     const keepInstructions = redactDecisionText(
       `Is the original excerpt at context.${candidate.id} (source ${candidate.sourcePath}) needed for any requirement of the stated task? Use the excerpt content; do not infer relevance from the ID.`
@@ -119,7 +128,9 @@ export function buildDecisionBundle(input: {
     };
   }
 
-  if (recoveryCandidates.length > 0) {
+  appendRoutingSpeculation(routedRoles, questions, questionBindings, recoverySlot);
+
+  if (recoveryCandidates.length > 0 && Object.keys(questions).length < DESIGN_DEFAULTS.maxQuestions) {
     const instructions = redactDecisionText(
       `Choose one already authorized recovery handler for the observed diagnostic. ${input.recoveryDiagnostic || ''} Select ${KEEP_BASELINE_CHOICE} to keep the current handler path, or ${NEEDS_EVIDENCE_CHOICE} when more evidence is required. Do not invent a command or path.`
     );
@@ -164,6 +175,15 @@ export function buildDecisionBundle(input: {
     recovery: {
       diagnostic: redactDecisionText(input.recoveryDiagnostic || '', 800),
       handlers: recoveryCandidates
+    },
+    routing: {
+      models: Object.fromEntries(SEALED_ROUTING_MODELS.map((row) => [row.id, {
+        effort: row.effort,
+        summary: row.summary
+      }])),
+      roles: Object.fromEntries(routedRoles.map((role) => [role.id, {
+        summary: redactDecisionText(role.summary, 240)
+      }]))
     }
   } as unknown as Entry;
 
@@ -181,7 +201,7 @@ export function buildDecisionBundle(input: {
       workflowRevision: input.workflowRevision,
       sourceDigest: input.sourceDigest,
       graphDigest: input.graphDigest,
-      candidates: { planCandidates, contextCandidates, recoveryCandidates },
+      candidates: { planCandidates, contextCandidates, recoveryCandidates, routingCandidates: routedRoles },
       questions,
       requestedModel: DESIGN_DEFAULTS.model
     }),
@@ -189,9 +209,79 @@ export function buildDecisionBundle(input: {
     planCandidates,
     contextCandidates,
     recoveryCandidates,
+    routingCandidates: routedRoles,
     baselinePlanId: input.baselinePlanId ?? planCandidates[0]?.id ?? null,
     questionBindings
   };
+}
+
+function questionRoom(questions: Record<string, Question>, recoverySlot: number): number {
+  return DESIGN_DEFAULTS.maxQuestions - recoverySlot - Object.keys(questions).length;
+}
+
+function appendRoutingChoices(
+  roles: readonly RoutingRoleCandidate[],
+  questions: Record<string, Question>,
+  bindings: Record<string, QuestionBinding>,
+  recoverySlot: number
+): RoutingRoleCandidate[] {
+  const included: RoutingRoleCandidate[] = [];
+  for (const role of roles) {
+    if (questionRoom(questions, recoverySlot) < 1) break;
+    const id = `route_${role.id}`;
+    const instructions = redactDecisionText(
+      `Choose the sealed model for routing.roles.${role.id} using state.task and that role summary. Prefer the fastest sealed model that can do the work. Use gpt-6-astra for judgment, ambiguity, or high-stakes work. Select ${KEEP_BASELINE_CHOICE} when the work is not distinguished. Do not invent a model.`
+    );
+    assertIndependentQuestion(instructions);
+    questions[id] = {
+      type: 'choice',
+      instructions,
+      criteria: {
+        ...Object.fromEntries(SEALED_ROUTING_MODELS.map((row) => [row.id, row.summary])),
+        [KEEP_BASELINE_CHOICE]: 'The role work is not distinguished enough to leave the baseline model.'
+      }
+    };
+    bindings[id] = { kind: 'routing', roleId: role.id };
+    included.push(role);
+  }
+  return included;
+}
+
+function appendRoutingSpeculation(
+  roles: readonly RoutingRoleCandidate[],
+  questions: Record<string, Question>,
+  bindings: Record<string, QuestionBinding>,
+  recoverySlot: number
+): void {
+  for (const role of roles) {
+    if (questionRoom(questions, recoverySlot) < 1) break;
+    const difficultyId = `difficulty_${role.id}`;
+    const difficultyInstructions = redactDecisionText(
+      `Rate the difficulty of routing.roles.${role.id} for state.task. Use only that role summary and the task.`
+    );
+    assertIndependentQuestion(difficultyInstructions);
+    questions[difficultyId] = {
+      type: 'score',
+      instructions: difficultyInstructions,
+      criteria: [...ROUTING_DIFFICULTY_RUBRIC]
+    };
+    bindings[difficultyId] = { kind: 'routing_difficulty', roleId: role.id };
+    if (questionRoom(questions, recoverySlot) < 1) break;
+    const riskId = `risk_${role.id}`;
+    const riskInstructions = redactDecisionText(
+      `Does routing.roles.${role.id} need gpt-6-astra because the work is high-stakes, ambiguous, or unsafe on a faster sealed model?`
+    );
+    assertIndependentQuestion(riskInstructions);
+    questions[riskId] = {
+      type: 'noul',
+      instructions: riskInstructions,
+      criteria: {
+        true: 'The work needs the most capable sealed model.',
+        false: 'A faster sealed model can do this work.'
+      }
+    };
+    bindings[riskId] = { kind: 'routing_risk', roleId: role.id };
+  }
 }
 
 export { QUESTION_REVISION };

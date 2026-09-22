@@ -1,5 +1,8 @@
 import {
   ASTRA_SUBAGENT_MODEL,
+  NARUTO_LUNA_MODEL,
+  NARUTO_SOL_MODEL,
+  NARUTO_TERRA_MODEL,
   decideSubagentModel,
   subagentModelProfile,
   type SubagentModelPolicyId
@@ -33,7 +36,7 @@ const CATEGORY_POLICY: Record<TaskCategory, Omit<ModelChoice, 'model'>> = {
   strategy: { reasoning: 'max', serviceTier: 'fast' }
 };
 
-export const NARUTO_MODELS = [ASTRA_SUBAGENT_MODEL] as const;
+export const NARUTO_MODELS = [NARUTO_LUNA_MODEL, NARUTO_SOL_MODEL, NARUTO_TERRA_MODEL, ASTRA_SUBAGENT_MODEL] as const;
 // Keep the exported type and helper names compatible with existing callers.
 export type NarutoGpt56Model = typeof NARUTO_MODELS[number];
 
@@ -93,7 +96,7 @@ export function routeNarutoGpt56Model(input: {
       || category === 'ultrabrain'
       || explicitHighRisk
   });
-  const preferred: NarutoGpt56Model = explicit || automatic.model;
+  const preferred: NarutoGpt56Model = explicit || ASTRA_SUBAGENT_MODEL;
   const available = input.availableModels == null
     ? [...NARUTO_MODELS]
     : input.availableModels.map(normalizeNarutoGpt56Model).filter((model): model is NarutoGpt56Model => Boolean(model));

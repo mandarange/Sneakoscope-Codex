@@ -61,6 +61,7 @@ import {
   withOfficialSubagentLifecycleLock
 } from './official-subagent-lock.js'
 import { decideOfficialSubagentPreparation } from '../decisions/integration.js'
+import { applySealedRouting, type RoutingRoleInput } from '../decisions/routing.js'
 import { graphFileDigest, sourceSnapshotDigest } from '../decisions/state.js'
 import type { PlanCandidate } from '../decisions/types.js'
 
@@ -124,6 +125,10 @@ export async function prepareOfficialSubagentMission(input: OfficialSubagentPrep
     requestedSubagents: derived.budget.requestedSubagents,
     attention: derived.triwikiAttention,
     changedPaths: derived.sliceWriteScopes,
+    massParallel: derived.fanoutPolicy.mass_parallel === true,
+    routingRoles: derived.mode === 'naruto'
+      ? routingRolesFromAgents(derived.agentRouting, derived.slices.map((slice) => slice.agent || ''))
+      : [],
     env: input.env || process.env
   })
   const rebuilt = applyOfficialSubagentDecision(derived, decided)
@@ -383,17 +388,13 @@ async function deriveOfficialSubagentPreparation(
       readonly: config.sandbox_mode === 'read-only'
     })
     const preference = roleModelPreferences.store.roles[name]
-    const routedProvider = 'openai'
-    const routedModel = ASTRA_SUBAGENT_MODEL
     const routedReasoning = preference?.reasoning_effort
       || config.model_reasoning_effort
       || decision.model_reasoning_effort
     return [name, {
       ...config,
-      // Catalog TOML remains the spawn-type contract; dynamic decision records why
-      // this role maps onto the sealed four-profile matrix for this goal.
-      routed_provider: routedProvider,
-      routed_model: routedModel,
+      routed_provider: 'openai',
+      routed_model: preference?.model || ASTRA_SUBAGENT_MODEL,
       routed_model_reasoning_effort: routedReasoning,
       routed_model_policy: preference
         ? 'user_role_model_preference'
@@ -603,22 +604,55 @@ interface DerivedOfficialSubagentPreparation {
   sessionScope: string | null
 }
 
+function routingRolesFromAgents(
+  agentRouting: Record<string, any>,
+  preferredNames: readonly string[] = []
+): RoutingRoleInput[] {
+  const preferred = new Set(preferredNames.filter(Boolean));
+  const entries = Object.entries(agentRouting);
+  const ordered = [
+    ...entries.filter(([name]) => preferred.has(name)),
+    ...entries.filter(([name]) => !preferred.has(name))
+  ];
+  return ordered.flatMap(([name, row]) => {
+    if (row?.routing_dynamic !== true || row.routed_model_policy === 'user_role_model_preference') return []
+    return [{
+      name,
+      dynamic: true,
+      summary: String(row.description || name)
+    }]
+  })
+}
+
 function applyOfficialSubagentDecision(
   derived: DerivedOfficialSubagentPreparation,
   decided: Awaited<ReturnType<typeof decideOfficialSubagentPreparation>>
 ): DerivedOfficialSubagentPreparation {
   const attention = decided.attention
   const selectedPlan = derived.requestedSource === 'automatic' ? decided.selectedPlan : null
+  const selectedRouting = derived.requestedSource === 'automatic' ? decided.selectedRouting : null
+  const agents = applySealedRouting(derived.plan.agents, selectedRouting)
   const budget = selectedPlan
     ? rebuildBudget(derived, selectedPlan)
     : derived.budget
-  const fanoutPolicy = selectedPlan
+  let fanoutPolicy = selectedPlan
     ? {
         ...derived.fanoutPolicy,
         requested_subagents: budget.requestedSubagents,
         jev_selected_plan: selectedPlan.id
       }
-    : derived.fanoutPolicy
+    : { ...derived.fanoutPolicy }
+  if (selectedRouting) fanoutPolicy = { ...fanoutPolicy, jev_selected_routing: selectedRouting.id }
+  const routingPreferences = selectedRouting
+    ? Object.fromEntries(Object.entries(selectedRouting.efforts)
+      .filter(([name]) => !derived.roleModelPreferences.store.roles[name])
+      .map(([name, effort]) => [name, {
+        provider: 'openai',
+        model: selectedRouting.models[name] || 'gpt-6-astra',
+        reasoning_effort: effort,
+        updated_at: derived.plan.workflow_run_id
+      }]))
+    : {}
   const delegationPrompt = buildOfficialSubagentPrompt({
     goal: derived.delegationGoal,
     slices: derived.slices,
@@ -632,7 +666,12 @@ function applyOfficialSubagentDecision(
     capacity: budget.capacity,
     triwikiAttention: attention,
     recommendedAgents: derived.suggestedAgents,
-    roleModelPreferences: derived.roleModelPreferences.store.roles,
+    roleModelPreferences: {
+      ...derived.roleModelPreferences.store.roles,
+      ...routingPreferences
+    },
+    routedAgents: agents,
+    narutoChildRouting: derived.mode === 'naruto',
     activeMainModel: derived.activeMainModel,
     parentOutputMode: derived.mode === 'naruto' && derived.sessionScope ? 'app_naruto_stdin' : 'raw_json',
     missionId: derived.plan.mission_id,
@@ -641,6 +680,9 @@ function applyOfficialSubagentDecision(
       ? {
           planId: selectedPlan?.id ?? null,
           keepContextIds: decided.selectedContextIds,
+          routingLane: selectedRouting
+            ? Object.entries(selectedRouting.models).map(([name, model]) => `${name}=${model}`).join(', ')
+            : null,
           executeSelectedIds: true
         }
       : null
@@ -658,6 +700,7 @@ function applyOfficialSubagentDecision(
       waveCapacity: budget.firstWave
     }),
     triwiki_attention: attention,
+    agents,
     fanout_policy: fanoutPolicy,
     capacity_controller: budget.capacity,
     jev_decision: decided.receipt,

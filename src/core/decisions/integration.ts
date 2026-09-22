@@ -7,10 +7,12 @@ import { requestOpenRouterDecision, type DecisionFetch } from './openrouter.js';
 import { compileDecision } from './policy.js';
 import { buildDecisionBundle, validatePlanCoverage } from './questions.js';
 import { applyRecoveryEffect, listProductionRecoveryCandidates } from './recovery.js';
+import { assembleRoutingSelection, buildRoutingCandidates, type RoutingRoleInput } from './routing.js';
 import { buildDecisionReceipt } from './receipt.js';
 import { applyOptionalContextSelection, graphFileDigest, hydrateContextCandidates, sourceSnapshotDigest } from './state.js';
 import {
   DESIGN_DEFAULTS,
+  POLICY_REVISION,
   UNKNOWN_USAGE,
   type BaselineReason,
   type CompiledDecision,
@@ -19,7 +21,8 @@ import {
   type DecisionConfig,
   type DecisionReceipt,
   type PlanCandidate,
-  type RecoveryCandidate
+  type RecoveryCandidate,
+  type RoutingCandidate
 } from './types.js';
 
 export interface DecisionTestOverrides {
@@ -54,6 +57,8 @@ export interface OfficialSubagentDecisionInput {
   slices: readonly OfficialSubagentSlice[];
   requestedSource: 'operator' | 'route_contract' | 'automatic';
   requestedSubagents: number;
+  massParallel?: boolean;
+  routingRoles?: readonly RoutingRoleInput[];
   attention: BoundedTriwikiAttention;
   changedPaths?: readonly string[];
   env?: NodeJS.ProcessEnv;
@@ -67,6 +72,7 @@ export interface OfficialSubagentDecisionResult {
   receipt: DecisionReceipt;
   attention: BoundedTriwikiAttention;
   selectedPlan: PlanCandidate | null;
+  selectedRouting: RoutingCandidate | null;
   selectedContextIds: readonly string[] | null;
   llmRejudgeCalls: 0;
   bundle: DecisionBundle | null;
@@ -109,12 +115,15 @@ async function decideOfficialSubagentPreparationInner(
   const planCandidates = config.capabilities.plan.ready && input.requestedSource === 'automatic'
     ? buildAutomaticPlanCandidates(input)
     : [];
+  const routingCandidates = input.requestedSource === 'automatic'
+    ? buildRoutingCandidates({ roles: input.routingRoles || [] })
+    : [];
   const recoveryCandidates = config.capabilities.recovery.ready
     ? [...listProductionRecoveryCandidates()]
     : [];
 
   const optionalContext = contextCandidates.filter((row) => !row.pinned && row.excerpt);
-  const eligible = planCandidates.length > 1 || optionalContext.length > 0 || recoveryCandidates.length > 0;
+  const eligible = planCandidates.length > 1 || routingCandidates.length > 0 || optionalContext.length > 0 || recoveryCandidates.length > 0;
   if (!eligible) {
     const compiled = keep(input, 'no_alternative', started);
     overrides?.observe?.({ mode: config.mode, eligible: false, compiled: compiled.compiled, receipt: compiled.receipt });
@@ -133,6 +142,7 @@ async function decideOfficialSubagentPreparationInner(
     planCandidates,
     contextCandidates,
     recoveryCandidates,
+    routingCandidates,
     baselinePlanId: planCandidates[0]?.id ?? null,
     requiredSliceIds: planCandidates[0]?.sliceIds ?? input.slices.map((slice) => slice.id),
     requiredVerificationIds: ['review_coverage']
@@ -153,12 +163,15 @@ async function decideOfficialSubagentPreparationInner(
         reason: transport.reason,
         usage: transport.usage
       };
-  const applied = compiled.kind === 'apply' ? applyEffects(input.attention, contextCandidates, planCandidates, compiled) : {
-    attention: input.attention,
-    selectedPlan: null,
-    selectedContextIds: null,
-    consumptionEvidence: null
-  };
+  const applied = compiled.kind === 'apply'
+    ? applyEffects(input.attention, contextCandidates, planCandidates, compiled)
+    : {
+        attention: input.attention,
+        selectedPlan: null,
+        selectedRouting: null,
+        selectedContextIds: null,
+        consumptionEvidence: null
+      };
   const receipt = buildDecisionReceipt({
     binding: bundle.binding,
     compiled,
@@ -176,6 +189,7 @@ async function decideOfficialSubagentPreparationInner(
     receipt,
     attention: applied.attention,
     selectedPlan: applied.selectedPlan,
+    selectedRouting: applied.selectedRouting,
     selectedContextIds: applied.selectedContextIds,
     llmRejudgeCalls: 0,
     bundle
@@ -222,6 +236,7 @@ function applyEffects(
   let selectedPlan: PlanCandidate | null = null;
   let selectedContextIds: readonly string[] | null = null;
   const evidence: string[] = [];
+  const routingEffects: { roleId: string; model: string }[] = [];
   for (const effect of compiled.effects) {
     if (effect.kind === 'select_optional_context') {
       nextAttention = applyOptionalContextSelection(attention, contextCandidates, effect.keepIds);
@@ -232,10 +247,18 @@ function applyEffects(
       selectedPlan = planCandidates.find((row) => row.id === effect.planId) || null;
       if (selectedPlan) evidence.push(`plan:${selectedPlan.id}`);
     }
+    if (effect.kind === 'select_routing') {
+      routingEffects.push({ roleId: effect.roleId, model: effect.model });
+    }
+  }
+  const selectedRouting = assembleRoutingSelection(routingEffects);
+  if (selectedRouting) {
+    evidence.push(...Object.entries(selectedRouting.models).map(([roleId, model]) => `routing:${roleId}=${model}`));
   }
   return {
     attention: nextAttention,
     selectedPlan,
+    selectedRouting,
     selectedContextIds,
     consumptionEvidence: evidence.length ? evidence.join('|') : null
   };
@@ -297,7 +320,7 @@ function keep(
       graphDigest: input.attention?.snapshot_hash ?? null,
       candidateDigest: 'none',
       questionDigest: 'none',
-      policyRevision: 'sks.jev-policy.v1',
+      policyRevision: POLICY_REVISION,
       requestedModel: DESIGN_DEFAULTS.model
     },
     reason,
@@ -314,6 +337,7 @@ function keep(
     }),
     attention: input.attention,
     selectedPlan: null,
+    selectedRouting: null,
     selectedContextIds: null,
     llmRejudgeCalls: 0,
     bundle: null

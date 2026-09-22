@@ -2,6 +2,9 @@ export const NARUTO_PARENT_MODEL = 'gpt-6-astra'
 export const NARUTO_PARENT_EFFORT = 'max'
 
 export const ASTRA_SUBAGENT_MODEL = 'gpt-6-astra'
+export const NARUTO_LUNA_MODEL = 'gpt-5.6-luna'
+export const NARUTO_SOL_MODEL = 'gpt-5.6-sol'
+export const NARUTO_TERRA_MODEL = 'gpt-5.6-terra'
 // Legacy names and serialized policy IDs remain compatibility aliases.
 // All child profiles use Astra; only their reasoning effort differs.
 export const LUNA_SUBAGENT_MODEL = ASTRA_SUBAGENT_MODEL
@@ -312,6 +315,23 @@ const DOCUMENT_EXPLORATION_RE = /\b(?:read|scan|explore|compare|summarize|review
 
 export function subagentModelProfile(policy: SubagentModelPolicyId): SubagentModelProfile {
   return SUBAGENT_MODEL_POLICIES[policy]
+}
+
+/** Naruto children: lighter sealed models for simple work, Astra for judgment. */
+export function narutoChildAssignment(policy: SubagentModelPolicyId): {
+  model: string;
+  effort: SubagentModelReasoningEffort;
+} {
+  switch (policy) {
+    case 'luna_max_mechanical':
+      return { model: NARUTO_LUNA_MODEL, effort: 'low' }
+    case 'sol_high_implementation':
+      return { model: NARUTO_SOL_MODEL, effort: 'low' }
+    case 'terra_max_context_tools':
+      return { model: NARUTO_TERRA_MODEL, effort: 'medium' }
+    case 'sol_max_judgment':
+      return { model: ASTRA_SUBAGENT_MODEL, effort: 'max' }
+  }
 }
 
 export function decideSubagentModel(input: {

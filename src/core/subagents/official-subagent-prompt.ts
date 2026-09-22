@@ -43,6 +43,8 @@ export function buildOfficialSubagentPrompt(input: {
   triwikiAttention?: BoundedTriwikiAttention
   recommendedAgents?: readonly string[]
   roleModelPreferences?: Readonly<Record<string, RoleModelPreference>>
+  routedAgents?: Readonly<Record<string, { routed_model?: string; routed_model_reasoning_effort?: string }>>
+  narutoChildRouting?: boolean
   activeMainModel?: ActiveMainModelRouting | null
   parentOutputMode?: OfficialSubagentParentOutputMode
   missionId?: string
@@ -50,6 +52,7 @@ export function buildOfficialSubagentPrompt(input: {
   decisionContract?: {
     planId?: string | null
     keepContextIds?: readonly string[] | null
+    routingLane?: string | null
     executeSelectedIds?: boolean
   } | null
 }): string {
@@ -99,7 +102,23 @@ export function buildOfficialSubagentPrompt(input: {
       && ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'].includes(row.reasoning_effort)
       && officialSubagentOnDemandRoleCatalog([name]).some((role) => role.name === name))
     .map(([name, row]) => [name, row.reasoning_effort]))
-  const spawnModelRouting = renderSpawnModelRouting()
+  const narutoChildren = input.narutoChildRouting === true
+  const spawnModelRouting = renderSpawnModelRouting(narutoChildren)
+  const childModelRules = narutoChildren
+    ? [
+        '- use the model and reasoning_effort named in each slice spawn contract',
+        '- sealed child models are gpt-5.6-luna, gpt-5.6-sol, gpt-5.6-terra, and gpt-6-astra',
+        '- keep a stored user role-model preference for that role'
+      ].join('\n')
+    : [
+        '- use `worker` with gpt-6-astra and low reasoning for tiny short-context mechanical work such as simple search, typing, rename, copy, label, or one-line edits with no exploration or judgment',
+        '- use gpt-6-astra with low reasoning for ordinary UI, logic, backend, and native implementation with established instructions',
+        '- use gpt-6-astra with max reasoning for planning, analysis, review, focused unresolved, high-risk, architecture, security, database, research, release, or other explicit judgment slices',
+        '- use gpt-6-astra with medium reasoning for long context/memory, large docs/repository reads or exploration, large-scale first-draft code processing, and direct Computer Use, Browser/Chrome, or image generation',
+        '- explicit task class and phase win over incidental keywords: Astra Medium explores, Astra Low executes mechanical and instructed coding tasks, and Astra Max judges',
+        '- in mass fan-out, use worker/Astra Low for tiny mechanical shards and explorer/Astra Medium for broad exploration; use Astra Low for instructed implementation and Astra Max for judgment',
+        '- keep context, exploration, review, debugging, planning, and direct tool operation on their assigned defaults; preserve each sealed role model and effort instead of applying the parent profile to every child'
+      ].join('\n')
   const parentOutputMode = input.parentOutputMode === 'app_naruto_stdin'
     ? 'app_naruto_stdin'
     : 'raw_json'
@@ -107,9 +126,14 @@ export function buildOfficialSubagentPrompt(input: {
     const mode = slice.readOnly ? 'read-only' : 'use the parent permission mode'
     const paths = (slice.paths || []).map((entry) => String(entry).trim()).filter(Boolean)
     const role = officialSubagentOnDemandRoleCatalog([agentName])[0]
-    const sealedReasoning = effortPreferences[agentName] || role?.model_reasoning_effort || 'medium'
+    const routed = input.routedAgents?.[agentName]
+    const sealedReasoning = routed?.routed_model_reasoning_effort
+      || effortPreferences[agentName]
+      || role?.model_reasoning_effort
+      || 'medium'
+    const sealedModel = routed?.routed_model || role?.model
     const spawnContract = role
-      ? `pass model=${JSON.stringify(role.model)} and reasoning_effort=${JSON.stringify(sealedReasoning)} from the sealed role policy`
+      ? `pass model=${JSON.stringify(sealedModel)} and reasoning_effort=${JSON.stringify(sealedReasoning)} from the sealed role policy`
       : 'stop before spawning: resolve an installed sealed Astra role and its effort first'
 
     return [
@@ -147,18 +171,12 @@ Subagent rules:
 - use only Codex official subagent threads; do not launch shell workers, a custom scheduler, a worker pool, or model fanout
 - select the narrowest matching project custom agent by its description; the custom agent name is the spawn type
 - custom \`agent_type\` selection and spawn-time \`model\`/\`reasoning_effort\` overrides must use \`fork_turns="none"\` or a positive bounded turn count, with the complete bounded slice contract in \`message\`; context contract: pass fork_turns="none" for listed slices
-- \`spawn_agent\` has no provider argument; every child uses the exact model slug gpt-6-astra
+- \`spawn_agent\` has no provider argument; ${narutoChildren ? 'Naruto children use the sealed model named in the spawn contract (gpt-5.6-luna, gpt-5.6-sol, gpt-5.6-terra, or gpt-6-astra)' : 'every child uses the exact model slug gpt-6-astra'}
 - never combine \`fork_turns="all"\` or the omitted/default full-history mode with \`agent_type\`, \`model\`, or \`reasoning_effort\`; Codex rejects that start before SubagentStart
 - never use a full-history fork for SKS children
 ${spawnModelRouting}
 ${Object.keys(effortPreferences).length ? `- explicit Astra effort preferences override role defaults, including later slices: ${JSON.stringify(effortPreferences)}` : ''}
-- use \`worker\` with gpt-6-astra and low reasoning for tiny short-context mechanical work such as simple search, typing, rename, copy, label, or one-line edits with no exploration or judgment
-- use gpt-6-astra with low reasoning for ordinary UI, logic, backend, and native implementation with established instructions
-- use gpt-6-astra with max reasoning for planning, analysis, review, focused unresolved, high-risk, architecture, security, database, research, release, or other explicit judgment slices
-- use gpt-6-astra with medium reasoning for long context/memory, large docs/repository reads or exploration, large-scale first-draft code processing, and direct Computer Use, Browser/Chrome, or image generation
-- explicit task class and phase win over incidental keywords: Astra Medium explores, Astra Low executes mechanical and instructed coding tasks, and Astra Max judges
-- in mass fan-out, use worker/Astra Low for tiny mechanical shards and explorer/Astra Medium for broad exploration; use Astra Low for instructed implementation and Astra Max for judgment
-- keep context, exploration, review, debugging, planning, and direct tool operation on their assigned defaults; preserve each sealed role model and effort instead of applying the parent profile to every child
+${childModelRules}
 
 Plan and capacity:
 - automatic fan-out is capacity-derived up to ${MAX_AUTOMATIC_SUBAGENT_COUNT}: after decomposition, use every safe useful child slot supported by the ready DAG, disjoint ownership, verifier/tool capacity, and actual host limits; the historical 4/6/8/16 task-class values are fallback hints, not clamps
@@ -267,7 +285,15 @@ function normalizedActiveMainModel(value: ActiveMainModelRouting | null | undefi
   return provider && model ? { provider, model } : null
 }
 
-function renderSpawnModelRouting(): string {
+function renderSpawnModelRouting(narutoChildRouting: boolean): string {
+  if (narutoChildRouting) {
+    return [
+      '- Naruto child models come from the spawn contract, including slices created after parent decomposition',
+      '- when Jev mode selected a role, that contract names gpt-5.6-luna at low, gpt-5.6-sol at low, gpt-5.6-terra at medium, or gpt-6-astra at max',
+      '- explicit user role-model preferences stay authoritative',
+      '- preserve the user-selected parent model, reasoning effort, and service tier'
+    ].join('\n')
+  }
   return [
     '- model routing applies to every child, including slices created after parent decomposition: gpt-6-astra only, with the selected role effort',
     '- use sealed Astra Low/Astra Medium/Astra Max role defaults across four task-class profiles; parent selection and saved non-Astra preferences never override the child model; explicit Astra effort preferences, including High, may override role defaults',
@@ -370,16 +396,18 @@ function renderBoundedTriwikiAttention(value: BoundedTriwikiAttention | undefine
 function renderDecisionContract(value: {
   planId?: string | null
   keepContextIds?: readonly string[] | null
+  routingLane?: string | null
   executeSelectedIds?: boolean
 } | null | undefined): string {
   if (!value || value.executeSelectedIds !== true) return ''
   return [
     'Selected decision contract:',
     `- execute the selected plan${value.planId ? ` ${value.planId}` : ''} and retained optional context IDs; do not choose them again`,
+    value.routingLane ? `- Jev sealed models: ${value.routingLane}` : '',
     value.keepContextIds?.length
       ? `- retained optional context IDs: ${value.keepContextIds.join(', ')}`
       : '- pinned and retained context already unioned by code'
-  ].join('\n')
+  ].filter(Boolean).join('\n')
 }
 
 function renderAgentCatalog(requested: readonly string[]): string {

@@ -8,13 +8,16 @@ import { normalizeHookResult } from '../hook-io.js';
 import { subagentSpawnPolicyBlockReason } from '../subagent-spawn-policy.js';
 import { sealedSubagentRoutingContext } from '../subagent-context.js';
 
-test('child spawns require Astra and a bounded context contract', () => {
+test('child spawns accept the sealed Naruto models and reject anything else', () => {
   const input = { model: 'gpt-6-astra', reasoning_effort: 'high', fork_turns: 'none', message: 'Implement the assigned parser change.' };
   const payload = { tool_name: 'collaboration.spawn_agent', tool_input: input };
   assert.equal(subagentSpawnPolicyBlockReason(payload), null);
+  for (const model of ['gpt-5.6-luna', 'gpt-5.6-sol', 'gpt-5.6-terra']) {
+    assert.equal(subagentSpawnPolicyBlockReason({ ...payload, tool_input: { ...input, model } }), null);
+  }
   assert.equal(subagentSpawnPolicyBlockReason({ ...payload, tool_input: { ...input, fork_turns: '3' } }), null);
-  for (const model of [undefined, 'gpt-5.6-sol', 'gpt-5.6-luna', 'anthropic/claude-sonnet-4.5']) {
-    assert.match(subagentSpawnPolicyBlockReason({ ...payload, tool_input: { ...input, model } })!, /must use gpt-6-astra/);
+  for (const model of [undefined, 'anthropic/claude-sonnet-4.5']) {
+    assert.match(subagentSpawnPolicyBlockReason({ ...payload, tool_input: { ...input, model } })!, /sealed model/);
   }
   for (const fork_turns of [undefined, 'all']) {
     assert.match(subagentSpawnPolicyBlockReason({ ...payload, tool_input: { ...input, fork_turns } })!, /full-history\/default forks/);
@@ -22,19 +25,19 @@ test('child spawns require Astra and a bounded context contract', () => {
   assert.equal(subagentSpawnPolicyBlockReason({ tool_name: 'exec_command', tool_input: { cmd: 'echo spawn_agent' } }), null);
 });
 
-test('actual PreToolUse dispatch denies a non-Astra spawn on every repeated invocation', async () => {
+test('actual PreToolUse dispatch denies an unsealed spawn on every repeated invocation', async () => {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-astra-spawn-'));
   try {
     const payload = {
       session_id: 'astra-parent', turn_id: 'turn-1', tool_use_id: 'spawn-1',
-      tool_name: 'spawn_agent', tool_input: { model: 'gpt-5.6-sol', fork_turns: 'none', message: 'Implement the parser.' }
+      tool_name: 'spawn_agent', tool_input: { model: 'anthropic/claude-sonnet-4.5', fork_turns: 'none', message: 'Implement the parser.' }
     };
     for (let i = 0; i < 2; i++) {
       const result = await evaluateHookPayloadOnce('pre-tool', payload, { root });
       const wire: any = normalizeHookResult('pre-tool', result);
       assert.equal(wire.hookSpecificOutput.permissionDecision, 'deny');
       assert.equal(Object.hasOwn(wire, 'continue'), false);
-      assert.match(wire.hookSpecificOutput.permissionDecisionReason, /must use gpt-6-astra/);
+      assert.match(wire.hookSpecificOutput.permissionDecisionReason, /sealed model/);
     }
   } finally {
     await fsp.rm(root, { recursive: true, force: true });

@@ -262,6 +262,11 @@ export async function resolveWorkerModelRouting(input: {
     && input.agent?.routed_model === ASTRA_SUBAGENT_MODEL
     ? normalizeModelReasoning(input.agent?.routed_model_reasoning_effort)
     : null
+  const jevModel = !explicitModel && input.agent?.routed_model_policy === 'jev_sealed_routing'
+    ? String(input.agent.routed_model || '').trim()
+    : ''
+  const jevEffort = jevModel ? normalizeModelReasoning(input.agent?.routed_model_reasoning_effort) : null
+  const selectedModel = explicitModel || jevModel
   const taskPolicy = decideSubagentModel({ title: taskKindText, description: riskText, role: input.agent?.role })
   const routed = narutoOnly
     ? await routeModel(category, {
@@ -269,10 +274,10 @@ export async function resolveWorkerModelRouting(input: {
         narutoOnly: true,
         taskText: taskKindText,
         riskText,
-        reasoningEffort: savedAstraEffort,
+        reasoningEffort: jevEffort || savedAstraEffort,
         availableModels: lbCatalog?.models || [],
         availableModelEfforts: lbCatalog?.model_efforts || {},
-        ...(explicitModel ? { model: explicitModel } : {})
+        ...(selectedModel ? { model: selectedModel } : {})
       })
     : {
         model: ASTRA_SUBAGENT_MODEL,
