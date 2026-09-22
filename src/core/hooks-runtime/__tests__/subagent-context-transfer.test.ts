@@ -63,10 +63,10 @@ test('SubagentStart context stays in hookSpecificOutput and remains schema-valid
 
 test('generated Codex guidance persists the full-history fork constraint', () => {
   for (const text of [agentsBlockText(), codexAppQuickReference('global', 'sks')]) {
-    assert.match(text, /Codex 0\.145/);
     assert.match(text, /fork_turns="all"/);
     assert.match(text, /fork_turns="none"/);
     assert.match(text, /positive bounded turn count/);
     assert.match(text, /complete bounded slice contract/);
+    assert.match(text, /Jev mode/);
   }
 });

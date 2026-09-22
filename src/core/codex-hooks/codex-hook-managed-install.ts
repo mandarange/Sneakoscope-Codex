@@ -1,5 +1,7 @@
+import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
-import { ensureDir, nowIso, readText, writeTextAtomic } from '../fsx.js';
+import { ensureDir, nowIso, packageRoot, readText, writeTextAtomic } from '../fsx.js';
 import { CODEX_HOOK_EVENTS, type CodexHookEventName } from '../codex-compat/codex-hook-events.js';
 import { postToolEvidenceEnabled } from '../verification-profile.js';
 import { buildCodexCommandHookToml, matcherApplies } from './codex-hook-config-writer.js';
@@ -31,7 +33,7 @@ export async function installManagedCodexHooks(root: string, opts: CodexManagedH
   const requirementsPath = path.resolve(root, opts.requirementsPath || path.join('.codex', 'requirements.toml'));
   const scriptPath = path.join(managedDir, 'sks-managed-hook.sh');
   const tomlPath = path.join(managedDir, 'sks-managed-hooks.toml');
-  const binCommand = opts.binCommand || 'sks hook';
+  const binCommand = opts.binCommand || await defaultManagedHookCommand();
   // The essential profile installs no PostToolUse hook: it only ever wrote
   // proof evidence nothing in that profile reads, at one cold process per call.
   const installedEvents = CODEX_HOOK_EVENTS.filter((event) => event !== 'PostToolUse' || postToolEvidenceEnabled(root));
@@ -89,6 +91,38 @@ export async function installManagedCodexHooks(root: string, opts: CodexManagedH
   };
 }
 
+export async function defaultManagedHookCommand(): Promise<string> {
+  const entrypoint = path.join(packageRoot(), 'dist', 'bin', 'sks.js');
+  if (!(await isRegularFile(entrypoint))) return 'sks hook';
+  return `${shellQuote(process.execPath)} ${shellQuote(entrypoint)} hook`;
+}
+
+export async function retargetLiveManagedHookScript(env: NodeJS.ProcessEnv = process.env): Promise<{
+  ok: boolean;
+  status: 'rewritten' | 'absent';
+  script: string;
+  command: string | null;
+}> {
+  const home = env.HOME || os.homedir();
+  const codexHome = path.resolve(env.CODEX_HOME || path.join(home, '.codex'));
+  const requirementsPath = path.join(codexHome, 'requirements.toml');
+  const requirements = await readText(requirementsPath, '');
+  const configuredDir = managedDirFromRequirements(String(requirements || ''), requirementsPath);
+  const managedDir = configuredDir || path.join(codexHome, 'managed-hooks');
+  const resolvedDir = path.resolve(managedDir);
+  const script = path.join(resolvedDir, 'sks-managed-hook.sh');
+  if (!pathIsInside(codexHome, script)) {
+    return { ok: false, status: 'absent', script, command: null };
+  }
+  if (!(await isRegularFile(script))) {
+    return { ok: true, status: 'absent', script, command: null };
+  }
+  const command = await defaultManagedHookCommand();
+  await writeTextAtomic(script, managedHookScript(command));
+  await chmodExecutable(script);
+  return { ok: true, status: 'rewritten', script, command };
+}
+
 function managedHookScript(binCommand: string) {
   return [
     '#!/usr/bin/env sh',
@@ -97,6 +131,32 @@ function managedHookScript(binCommand: string) {
     'shift || true',
     `exec ${binCommand} "$subcommand" "$@"`
   ].join('\n') + '\n';
+}
+
+function shellQuote(value: string): string {
+  if (/[\0\r\n]/.test(value)) throw new Error('hook_command_path_invalid');
+  return `'${value.replaceAll("'", `'\\''`)}'`;
+}
+
+function managedDirFromRequirements(text: string, requirementsPath: string): string | null {
+  const match = text.match(/^\s*managed_dir\s*=\s*(.+)\s*$/m);
+  if (!match?.[1]) return null;
+  const raw = match[1].trim().replace(/^['"]|['"]$/g, '');
+  if (!raw || raw.includes('\0')) return null;
+  return path.resolve(path.dirname(requirementsPath), raw);
+}
+
+function pathIsInside(root: string, target: string): boolean {
+  const relative = path.relative(path.resolve(root), path.resolve(target));
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+async function isRegularFile(file: string): Promise<boolean> {
+  try {
+    return (await fs.stat(file)).isFile();
+  } catch {
+    return false;
+  }
 }
 
 function mergeRequirementsToml(existing: string, opts: { managedDir: string; windowsManagedDir: string | null }) {

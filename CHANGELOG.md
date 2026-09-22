@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [10.3.3] - 2026-09-22
+
+### Fixed
+
+- `sks update` rewrites the managed Codex guidance and Naruto skill so
+  implementation stays parent orchestration and Jev seals each new child
+  spawn. The live managed hook execs the installed SKS entrypoint instead of
+  a PATH lookup.
+
 ## [10.3.2] - 2026-09-22
 
 ### Changed
