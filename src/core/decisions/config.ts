@@ -92,6 +92,17 @@ export function jevEnabled(config: DecisionConfig): boolean {
   return config.mode === 'jev' && config.consentCloud === true;
 }
 
+/**
+ * Jev mode uses every decision SKS can apply: context selection and plan
+ * selection follow the mode itself, not stored flags that an older enable path
+ * may have left off. Recovery stays off until SKS has a real handler.
+ */
+export function jevCapabilityActive(config: DecisionConfig, capability: 'context' | 'plan' | 'recovery'): boolean {
+  if (!jevEnabled(config)) return false;
+  if (capability === 'recovery') return config.capabilities.recovery.ready;
+  return true;
+}
+
 function normalizeConfig(raw: unknown): DecisionConfig {
   const fallback = defaultDecisionConfig();
   if (!isRecord(raw) || raw.schema !== DECISION_CONFIG_SCHEMA) return fallback;

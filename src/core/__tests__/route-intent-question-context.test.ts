@@ -24,11 +24,12 @@ test('question-shaped prompts route by intent instead of question mark shape', (
   }
 });
 
-test('greetings and bounded work stay parent-owned while explicit parallel work requires subagents', () => {
+test('greetings, answers, and read-only audits stay parent-owned while implementation requires subagents', () => {
   assert.equal(routePrompt('hi'), null);
   assert.equal(routePrompt('이 함수 설명해줘')?.id, 'Answer');
   const bounded = routePrompt('로그인 버그 수정해줘');
-  assert.equal(routeRequiresSubagents(bounded, '로그인 버그 수정해줘'), false);
+  assert.equal(bounded?.id, 'Naruto');
+  assert.equal(routeRequiresSubagents(bounded, '로그인 버그 수정해줘'), true);
   const parallel = routePrompt('여러 패키지를 병렬 검토해줘');
   assert.equal(parallel?.id, 'Naruto');
   assert.equal(routeRequiresSubagents(parallel, '여러 패키지를 병렬 검토해줘'), true);
@@ -47,7 +48,16 @@ test('greetings and bounded work stay parent-owned while explicit parallel work 
   assert.equal(ordinaryWork?.id, 'Naruto');
   assert.equal(ordinaryWork?.task_profile, 'bounded-work');
   assert.equal(ordinaryWork?.explicit_invocation, false);
-  assert.equal(routeRequiresSubagents(ordinaryWork, 'work on the parser'), false);
+  assert.equal(routeRequiresSubagents(ordinaryWork, 'work on the parser'), true);
+  // Implementation phrased without a listed change verb is still work, not an answer.
+  for (const prompt of ['set up eslint for this repo', 'Port this module to TypeScript', 'please handle the null case in parseUser', '검색 기능 붙여줘', '로그인 페이지 디자인 바꿔']) {
+    const route = routePrompt(prompt);
+    assert.equal(route?.id, 'Naruto', prompt);
+    assert.equal(routeRequiresSubagents(route, prompt), true, prompt);
+  }
+  for (const prompt of ['왜 로그인이 안돼?', 'What is a parser?', 'how do I convert this file to UTF-8?']) {
+    assert.equal(routeRequiresSubagents(routePrompt(prompt), prompt), false, prompt);
+  }
 });
 
 test('removed dollar-command aliases do not redirect into current execution routes', () => {

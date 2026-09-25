@@ -1,26 +1,32 @@
+import { latestModelForTier, type ModelTier } from './model-tiers.js'
+
+// Standalone `sks naruto run` launches its own parent; the parent default is
+// the latest deep-tier model. An in-app parent always keeps the user's model.
 export const NARUTO_PARENT_MODEL = 'gpt-6-astra'
 export const NARUTO_PARENT_EFFORT = 'max'
+export function narutoParentModel(): string {
+  return latestModelForTier('deep')
+}
 
+// The literal Astra model id, for effort-capability tables and legacy records.
+// Children are not pinned to it: every child model resolves from a tier.
 export const ASTRA_SUBAGENT_MODEL = 'gpt-6-astra'
-export const NARUTO_LUNA_MODEL = 'gpt-5.6-luna'
-export const NARUTO_SOL_MODEL = 'gpt-5.6-sol'
-export const NARUTO_TERRA_MODEL = 'gpt-5.6-terra'
-// Legacy names and serialized policy IDs remain compatibility aliases.
-// All child profiles use Astra; only their reasoning effort differs.
-export const LUNA_SUBAGENT_MODEL = ASTRA_SUBAGENT_MODEL
-export const TERRA_SUBAGENT_MODEL = ASTRA_SUBAGENT_MODEL
-export const SOL_SUBAGENT_MODEL = ASTRA_SUBAGENT_MODEL
 
 export const LUNA_SUBAGENT_EFFORT = 'low'
 export const TERRA_SUBAGENT_EFFORT = 'medium'
 export const DEFAULT_SUBAGENT_EFFORT = 'low'
 export const SOL_MAX_SUBAGENT_EFFORT = 'max'
-
-// Compatibility exports retained for research and older callers. New code
-// should select a policy profile instead of combining model/effort constants.
-export const DEFAULT_SUBAGENT_MODEL = SOL_SUBAGENT_MODEL
-export const THINKING_SUBAGENT_MODEL = SOL_SUBAGENT_MODEL
 export const SUBAGENT_EFFORT = SOL_MAX_SUBAGENT_EFFORT
+
+/** Latest model for judgment-heavy work (research synthesis, review). */
+export function thinkingSubagentModel(): string {
+  return latestModelForTier('deep')
+}
+
+/** Default child model when a spawn names none: the latest deep-tier model. */
+export function defaultSubagentModel(): string {
+  return latestModelForTier('deep')
+}
 
 export type SubagentModelPolicyId =
   | 'luna_max_mechanical'
@@ -33,12 +39,13 @@ export type SubagentContextMode = 'short' | 'long'
 export type SubagentToolSurface = 'none' | 'computer_use' | 'browser' | 'image_generation'
 export type SubagentScopeSize = 'tiny' | 'bounded' | 'large'
 export type SubagentKind = 'worker' | 'expert'
-export type SubagentModel = typeof ASTRA_SUBAGENT_MODEL
+export type SubagentModel = string
 export type SubagentModelReasoningEffort = 'low' | 'medium' | 'high' | 'max'
 
 export interface SubagentModelProfile {
   policy: SubagentModelPolicyId
   kind: SubagentKind
+  tier: ModelTier
   model: SubagentModel
   modelReasoningEffort: SubagentModelReasoningEffort
 }
@@ -47,32 +54,32 @@ export interface SubagentModelDecision extends SubagentModelProfile {
   reason: SubagentModelPolicyId
 }
 
-export const SUBAGENT_MODEL_POLICIES: Readonly<Record<SubagentModelPolicyId, SubagentModelProfile>> = Object.freeze({
-  luna_max_mechanical: Object.freeze({
-    policy: 'luna_max_mechanical',
-    kind: 'worker',
-    model: LUNA_SUBAGENT_MODEL,
-    modelReasoningEffort: LUNA_SUBAGENT_EFFORT
-  }),
-  // Serialized compatibility alias; instructed implementation now uses Astra Low.
-  sol_high_implementation: Object.freeze({
-    policy: 'sol_high_implementation',
-    kind: 'worker',
-    model: SOL_SUBAGENT_MODEL,
-    modelReasoningEffort: DEFAULT_SUBAGENT_EFFORT
-  }),
-  sol_max_judgment: Object.freeze({
-    policy: 'sol_max_judgment',
-    kind: 'expert',
-    model: SOL_SUBAGENT_MODEL,
-    modelReasoningEffort: SOL_MAX_SUBAGENT_EFFORT
-  }),
-  terra_max_context_tools: Object.freeze({
-    policy: 'terra_max_context_tools',
-    kind: 'worker',
-    model: TERRA_SUBAGENT_MODEL,
-    modelReasoningEffort: TERRA_SUBAGENT_EFFORT
+/**
+ * Serialized policy ids stay stable; each maps to a tier, and `model` is
+ * resolved on read to the newest model Codex lists for that tier.
+ */
+function tierProfile(
+  policy: SubagentModelPolicyId,
+  kind: SubagentKind,
+  tier: ModelTier,
+  modelReasoningEffort: SubagentModelReasoningEffort
+): SubagentModelProfile {
+  return Object.freeze({
+    policy,
+    kind,
+    tier,
+    get model() {
+      return latestModelForTier(tier)
+    },
+    modelReasoningEffort
   })
+}
+
+export const SUBAGENT_MODEL_POLICIES: Readonly<Record<SubagentModelPolicyId, SubagentModelProfile>> = Object.freeze({
+  luna_max_mechanical: tierProfile('luna_max_mechanical', 'worker', 'fast', LUNA_SUBAGENT_EFFORT),
+  sol_high_implementation: tierProfile('sol_high_implementation', 'worker', 'balanced', DEFAULT_SUBAGENT_EFFORT),
+  sol_max_judgment: tierProfile('sol_max_judgment', 'expert', 'deep', SOL_MAX_SUBAGENT_EFFORT),
+  terra_max_context_tools: tierProfile('terra_max_context_tools', 'worker', 'context', TERRA_SUBAGENT_EFFORT)
 })
 
 const JUDGMENT_TASK_RE = new RegExp([
@@ -313,26 +320,12 @@ const IMPLEMENTATION_TASK_RE = new RegExp([
 const CLEAR_IMPLEMENTATION_ACTION_RE = /(?:^|[.!?]\s*|\bphase\s*:\s*)\s*(?:implement|build|create|add|modify|fix|code|refactor)\b|(?:^|[.!?]\s*)\s*(?:구현|개발|추가|수정|고쳐|코딩|리팩터)/i
 const DOCUMENT_EXPLORATION_RE = /\b(?:read|scan|explore|compare|summarize|review)\b[^\n]{0,64}\b(?:docs?|documentation|manual|notes?|references?)\b|(?:문서|매뉴얼|노트|자료)[^\n]{0,32}(?:읽|탐색|조사|비교|정리|검토)/i
 
+/** A concrete profile: the tier's latest model is resolved at this call. */
 export function subagentModelProfile(policy: SubagentModelPolicyId): SubagentModelProfile {
-  return SUBAGENT_MODEL_POLICIES[policy]
+  const profile = SUBAGENT_MODEL_POLICIES[policy]
+  return { policy: profile.policy, kind: profile.kind, tier: profile.tier, model: profile.model, modelReasoningEffort: profile.modelReasoningEffort }
 }
 
-/** Naruto children: lighter sealed models for simple work, Astra for judgment. */
-export function narutoChildAssignment(policy: SubagentModelPolicyId): {
-  model: string;
-  effort: SubagentModelReasoningEffort;
-} {
-  switch (policy) {
-    case 'luna_max_mechanical':
-      return { model: NARUTO_LUNA_MODEL, effort: 'low' }
-    case 'sol_high_implementation':
-      return { model: NARUTO_SOL_MODEL, effort: 'low' }
-    case 'terra_max_context_tools':
-      return { model: NARUTO_TERRA_MODEL, effort: 'medium' }
-    case 'sol_max_judgment':
-      return { model: ASTRA_SUBAGENT_MODEL, effort: 'max' }
-  }
-}
 
 export function decideSubagentModel(input: {
   title?: string | undefined

@@ -44,8 +44,21 @@ const DATABASE_CONTROL_SURFACE_META_RE =
 const PARALLEL_CUE_RE =
   /\b(parallel|subagents?|one agent per|fan out|independent slices?|naruto)\b|병렬|하위\s*에이전트|서브\s*에이전트|나루토|분담/i
 
-const CHANGE_RE =
+/**
+ * Implementation verbs shared by the task-profile classifier and the prompt
+ * router. Two separate lists drifted: the router sent "make the header sticky"
+ * to Naruto while this classifier called it an answer, so the orchestration
+ * gate never armed and the parent implemented alone.
+ */
+export const IMPLEMENTATION_VERB_RE =
+  /\b(?:make|set\s+up|port|convert|wire(?:\s+up)?|hook\s+up|handle|integrate|connect|enable|disable|configure|upgrade|bump|replace|move|split|merge|extend|scaffold|introduce)\b|바꿔|바꾸|개발|붙여|연동|연결해|옮겨|설정해|세팅|셋업|넣어|합쳐|분리해|교체|도입|처리해|올려\s*(?:줘|주세요)|짜\s*(?:줘|주세요)/i
+
+const BASE_CHANGE_RE =
   /\b(fix|implement|implementation|change|edit|add|remove|delete|drop|modify|refactor|simplify|optimi[sz]e|improve|build|create|write|update|rename|rewrite|patch|apply|execute|repair|resolve|solve|publish|release|deploy|migrate)\b|\bwork\s+on\b|고쳐|고치|수정|변경|추가|삭제|제거|최적화|개선|단순화|정리|구현|리팩터|작성|생성|만들어|업데이트|적용|실행|해결|이름\s*변경|배포|출시|마이그레이션/i
+
+function hasChangeVerb(text: string): boolean {
+  return BASE_CHANGE_RE.test(text) || IMPLEMENTATION_VERB_RE.test(text)
+}
 
 const BOUNDED_READ_WORK_RE =
   /\b(audit|review|inspect|analy[sz]e|diagnose|trace|map|verify|test|check|investigate|evaluate)\b|감사|검토|점검|분석|진단|추적|매핑|검증|테스트|조사|평가/i
@@ -70,16 +83,16 @@ export function classifyTaskProfile(prompt: unknown): TaskProfile {
   if (!text || GREETING_RE.test(text)) return 'passthrough'
   if (looksLikeExplanationQuestion(text)) return 'answer'
   const databaseWork = looksLikeDatabaseWorkRequest(text)
-  const highRiskMutation = databaseWork || (CHANGE_RE.test(text) && NON_DATABASE_HIGH_RISK_RE.test(text))
+  const highRiskMutation = databaseWork || (hasChangeVerb(text) && NON_DATABASE_HIGH_RISK_RE.test(text))
   // Keep explicitly small edits small even when their subject happens to be a
   // high-risk noun (for example an auth label in README), but never let a
   // generic "one-line" cue downgrade a real database/security mutation.
   if (looksLikeTinyChange(text) && (!highRiskMutation || NON_RUNTIME_TINY_SURFACE_RE.test(text))) return 'tiny-change'
   if (highRiskMutation) return 'high-risk'
-  if (PARALLEL_CUE_RE.test(text) && CHANGE_RE.test(text)) return 'parallel-write'
+  if (PARALLEL_CUE_RE.test(text) && hasChangeVerb(text)) return 'parallel-write'
   if (PARALLEL_CUE_RE.test(text)) return 'parallel-read'
   if (DATABASE_CONTROL_SURFACE_META_RE.test(text) && DATABASE_WORK_RE.test(text)) return 'bounded-work'
-  if (CHANGE_RE.test(text)) return 'bounded-work'
+  if (hasChangeVerb(text)) return 'bounded-work'
   if (BOUNDED_READ_WORK_RE.test(text)) return 'bounded-work'
   return 'answer'
 }
@@ -149,7 +162,7 @@ function matchIndexes(text: string, pattern: RegExp): number[] {
 }
 
 function looksLikeTinyChange(text: string): boolean {
-  return CHANGE_RE.test(text) && TINY_CHANGE_RE.test(text)
+  return hasChangeVerb(text) && TINY_CHANGE_RE.test(text)
 }
 
 function looksLikeExplanationQuestion(text: string): boolean {

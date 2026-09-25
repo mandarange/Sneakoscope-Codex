@@ -17,48 +17,18 @@ The default `runSks()` helper now creates a temp root, writes a minimal `package
 ## Rule
 
 Route tests must inspect the temp root `.sneakoscope/missions/<id>` path. They must not read source checkout latest mission state or rely on `process.cwd()` `.sneakoscope` artifacts.
-## 0.9.20 Trust Kernel E2E Additions
 
-Hermetic route tests now include checks that real route commands write:
+## Where they run
 
-- `completion-proof.json`
-- `route-completion-contract.json`
-- `evidence-index.json`
-- `trust-report.json`
+The `git-collaboration:e2e` release gate runs the E2E tests in `test/e2e`, and
+the architecture-map gates run `test/architecture-map`. Everything else runs in
+the canonical suite (`npm test`): compiled `src/**/__tests__` tests plus
+`test/unit` and `test/regression`. A test file that none of these runs is
+deleted rather than kept as unexecuted coverage.
 
-Representative tests:
+## Desktop Bridge evidence
 
-- `test/integration/route-finalization-audit.test.mjs`
-- `test/integration/trust-report-route.test.mjs`
-- `test/integration/evidence-index-route.test.mjs`
-- `test/integration/sks-run-happy-path.test.mjs`
-- `test/integration/sks-run-visual-path.test.mjs`
-
-## Desktop Bridge architecture sandbox
-
-The provider architecture has a separate hermetic runner:
-
-```bash
-npm run build:incremental --silent
-node --test test/e2e/architecture-hardening/hermetic-sandbox.test.mjs
-```
-
-[`run.mjs`](../scripts/architecture-hardening-sandbox/run.mjs) starts a worker
-with fresh temp `HOME`, `CODEX_HOME`, and `SKS_HOME`. The child receives no
-ambient provider credentials. Loopback fixtures represent Codex-LB,
-OpenRouter, ChatGPT OAuth identity, and the combined catalog. The matrix covers
-one bridge runtime with both provider profiles, explicit route-index
-resolution with no fallback, credential withdrawal, session-pin affinity and
-tamper rejection, four-stage success and partial failure, catalog
-offline/restart recovery, write confinement, and secret-safe output.
-
-All generated paths are enumerated relative to the sandbox root, and the
-runner asserts that every write is inside it. It never reads or cleans the real
-user home, Codex configuration, or Keychain. Set
-`SKS_ARCHITECTURE_KEEP_SANDBOX=1` only when a retained local evidence directory
-is useful; the default removes the temp root.
-
-Live evidence is separate:
+Live Desktop Bridge evidence runs separately:
 
 ```bash
 npm run desktop-bridge:real-evidence

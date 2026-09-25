@@ -20,6 +20,7 @@ import {
   runOtherHarnessCleanupStage
 } from './update-migration-state/simple-stages.js';
 import { compareSemVer } from './semver.js';
+import { repairManagedPermissions } from './managed-permission-repair.js';
 
 export const UPDATE_MIGRATION_SCHEMA = 'sks.project-migration-receipt.v2' as const;
 export const INSTALLATION_EPOCH_SCHEMA = 'sks.installation-epoch.v1' as const;
@@ -235,8 +236,16 @@ export async function writeProjectUpdateMigrationReceipt(input: {
 }): Promise<UpdateMigrationReceipt> {
   const receiptPath = projectUpdateMigrationReceiptPath(input.root);
   const epoch = await ensureInstallationEpoch(input.source);
+  const fromVersion = input.fromVersion || null;
+  // Permissions first: retention and every stage below delete managed paths.
+  const permissionStage = await runManagedPermissionRepairStage(input.root, fromVersion);
   const retentionCleanup = await runUpdateRetentionCleanup(input.root, input.source);
-  const migrationStageRuns = await runUpdateMigrationStages(input.root, { fromVersion: input.fromVersion || null });
+  const stageRuns = await retryStagesAfterPermissionRepair(
+    input.root,
+    fromVersion,
+    await runUpdateMigrationStages(input.root, { fromVersion })
+  );
+  const migrationStageRuns = [permissionStage, ...stageRuns];
   const migrationStages = migrationStageRuns.map(summarizeMigrationStage);
   const stageBlockers = migrationStageRuns.flatMap((stage) => stage.blockers.map((blocker) => `${stage.id}:${blocker}`));
   const stageWarnings = migrationStageRuns.flatMap((stage) => stage.warnings.map((warning) => `${stage.id}:${warning}`));
@@ -283,7 +292,81 @@ export async function writeProjectUpdateMigrationReceipt(input: {
     warnings: optionalWarnings
   };
   await writeReceiptRotated(receiptPath, receipt, { keep: 5 });
+  // `sudo sks update` creates root-owned files; hand them back to the user.
+  if (process.getuid?.() === 0) {
+    await repairManagedPermissions({ root: input.root, env: process.env, explicit: true, reportPath: null }).catch(() => null);
+  }
   return receipt;
+}
+
+export const MANAGED_PERMISSION_REPAIR_STAGE_ID = 'managed-permission-repair';
+
+/**
+ * `sks update` and a user-run doctor are explicit; the first-command migration
+ * gate (SKS_UPDATE_MIGRATION_GATE_DISABLED without the update marker) is not,
+ * so it does not repeat an administrator prompt the user just declined.
+ */
+function migrationRunIsExplicit(env: NodeJS.ProcessEnv): boolean {
+  return env.SKS_UPDATE_DEFER_MENUBAR_RESTART === '1' || env.SKS_UPDATE_MIGRATION_GATE_DISABLED !== '1';
+}
+
+async function runManagedPermissionRepairStage(root: string, fromVersion: string | null): Promise<UpdateMigrationStageRun> {
+  const base = {
+    schema: 'sks.update-migration-stage.v2' as const,
+    id: MANAGED_PERMISSION_REPAIR_STAGE_ID,
+    min_from_version: '0.0.0',
+    from_version: fromVersion
+  };
+  try {
+    const report = await repairManagedPermissions({ root, env: process.env, explicit: migrationRunIsExplicit(process.env) });
+    const elevation = report.elevation;
+    return {
+      ...base,
+      // Unresolved paths stay warnings. A stage that must delete one still
+      // reports its own blocker, so a path nothing touches never gates commands.
+      ok: true,
+      status: 'ok',
+      actions: [
+        ...(report.user_fixed ? [`fixed_user_permissions:${report.user_fixed}`] : []),
+        ...(elevation.needed ? [`elevation:${elevation.channel}:${elevation.ok === true ? 'granted' : elevation.declined ? 'declined' : 'not_granted'}`] : [])
+      ],
+      blockers: [],
+      warnings: report.warnings,
+      detail: {
+        issues_found: report.issues_found,
+        user_fixed: report.user_fixed,
+        elevation,
+        remaining: report.remaining,
+        operator_actions: report.operator_actions
+      }
+    };
+  } catch (err: any) {
+    return { ...base, ok: true, status: 'ok', actions: [], blockers: [], warnings: [`managed_permission_repair_failed:${err?.message || String(err)}`] };
+  }
+}
+
+/**
+ * A stage can still hit a permission error the first pass could not see (a
+ * path created mid-run, or a prompt that only now succeeds). When a stage
+ * failed and a second repair changes something, rerun only the failed stages.
+ */
+async function retryStagesAfterPermissionRepair(
+  root: string,
+  fromVersion: string | null,
+  runs: UpdateMigrationStageRun[]
+): Promise<UpdateMigrationStageRun[]> {
+  const failed = runs.filter((run) => !run.ok);
+  if (!failed.length) return runs;
+  const report = await repairManagedPermissions({
+    root,
+    env: process.env,
+    explicit: migrationRunIsExplicit(process.env),
+    reportPath: path.join(root, '.sneakoscope', 'reports', 'managed-permission-repair-retry.json')
+  }).catch(() => null);
+  if (!report || (report.user_fixed === 0 && report.elevation.ok !== true)) return runs;
+  const rerun = await runUpdateMigrationStages(root, { fromVersion, only: new Set(failed.map((run) => run.id)) });
+  const byId = new Map(rerun.map((run) => [run.id, { ...run, warnings: [...run.warnings, 'rerun_after_permission_repair'] }]));
+  return runs.map((run) => byId.get(run.id) || run);
 }
 
 function summarizeMigrationStage(stage: UpdateMigrationStageRun): UpdateMigrationStageSummary {
@@ -434,10 +517,14 @@ const UPDATE_MIGRATION_STAGES: UpdateMigrationStageDefinition[] = [
   }
 ];
 
-export async function runUpdateMigrationStages(root: string, opts: { fromVersion?: string | null } = {}): Promise<UpdateMigrationStageRun[]> {
+export async function runUpdateMigrationStages(
+  root: string,
+  opts: { fromVersion?: string | null; only?: ReadonlySet<string> } = {}
+): Promise<UpdateMigrationStageRun[]> {
   const fromVersion = opts.fromVersion || null;
   const runs: UpdateMigrationStageRun[] = [];
   for (const stage of UPDATE_MIGRATION_STAGES) {
+    if (opts.only && !opts.only.has(stage.id)) continue;
     if (!legacyStageApplies(fromVersion, stage.min_from_version)) {
       runs.push({
         schema: 'sks.update-migration-stage.v2',

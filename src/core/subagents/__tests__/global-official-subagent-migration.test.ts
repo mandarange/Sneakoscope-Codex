@@ -18,14 +18,14 @@ function previousManagedRole(role: ManagedOfficialSubagentRole): string {
   const previousModel = role.model_policy === 'luna_max_mechanical' ? 'gpt-5.6-luna'
     : role.model_policy === 'terra_max_context_tools' ? 'gpt-5.6-terra' : 'gpt-5.6-sol'
   const body = managedOfficialSubagentRoleBody(role)
-    .replace('model = "gpt-6-astra"', `model = "${previousModel}"`)
+    .replace(`model = "${role.model}"`, `model = "${previousModel}"`)
     .replace(/model_reasoning_effort = "(?:low|medium)"/, 'model_reasoning_effort = "max"')
   return managedOfficialSubagentRoleContent(role)
     .replace(managedOfficialSubagentRoleBody(role), body)
     .replace(/sks_managed_body_sha256 = "[a-f0-9]+"/, `sks_managed_body_sha256 = "${sha256(body)}"`)
 }
 
-test('global refresh migrates every previous managed model to Astra with role effort and is idempotent', async (t) => {
+test('global refresh migrates every previous managed model to its tier model with role effort and is idempotent', async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-global-role-migration-'))
   t.after(() => fs.rm(root, { recursive: true, force: true }))
   const codexHome = path.join(root, 'custom-codex-home')
@@ -62,7 +62,7 @@ test('global refresh does not create absent roles or overwrite provider edits an
   const agentsDir = path.join(codexHome, 'agents')
   await fs.mkdir(agentsDir, { recursive: true })
   const explorer = MANAGED_OFFICIAL_SUBAGENT_ROLES.find((role) => role.codex_name === 'explorer')!
-  const userText = previousManagedRole(explorer).replace('model = "gpt-5.6-terra"', 'model = "custom/provider-model"')
+  const userText = previousManagedRole(explorer).replace(/model = "gpt-5\.6-[a-z]+"/, 'model = "custom/provider-model"')
   await fs.writeFile(path.join(agentsDir, explorer.filename), userText)
   const target = path.join(root, 'user-worker.toml')
   await fs.writeFile(target, 'name = "user_worker"\n')

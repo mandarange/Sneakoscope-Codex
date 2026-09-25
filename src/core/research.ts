@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { ASTRA_SUBAGENT_MODEL, SUBAGENT_EFFORT } from './subagents/model-policy.js';
+import { thinkingSubagentModel, SUBAGENT_EFFORT } from './subagents/model-policy.js';
 import { appendJsonlBounded, nowIso, readJson, readText, writeJsonAtomic, writeTextAtomic, exists } from './fsx.js';
 import { OUTCOME_RUBRIC } from './proof-field.js';
 import { RESEARCH_REVIEWER_CONTRACT } from './recallpulse.js';
@@ -116,7 +116,7 @@ export function researchNativeAgentPlan(prompt: any = '', opts: any = {}) {
     role: persona.role,
     mandate: persona.mandate,
     custom_agent: RESEARCH_REVIEWER_CUSTOM_AGENT,
-    model: ASTRA_SUBAGENT_MODEL,
+    model: thinkingSubagentModel(),
     reasoning_effort: SUBAGENT_EFFORT,
     read_only: true
   }));
@@ -219,10 +219,10 @@ export function createResearchPlan(prompt: any, opts: any = {}) {
       policy: 'Assign distinct evidence, method, and falsification review dimensions.',
       effort_policy: {
         custom_agent: RESEARCH_REVIEWER_CUSTOM_AGENT,
-        required_model: ASTRA_SUBAGENT_MODEL,
+        required_model: thinkingSubagentModel(),
         required_effort: SUBAGENT_EFFORT,
         applies_to: 'every_official_adversarial_reviewer',
-        rule: 'Every adversarial reviewer uses the verified research_reviewer custom agent configuration with GPT-6 Astra Max. Long-context and source-tool acquisition uses Astra Medium; synthesis, falsification, and review use Astra Max.'
+        rule: 'Every adversarial reviewer uses the verified research_reviewer custom agent configuration on the latest deep-tier model at max effort. Long-context and source-tool acquisition uses the context tier; synthesis, falsification, and review use the deep tier.'
       },
       debate_policy: {
         mode: 'independent_adversarial_reviews_with_bounded_revision',
@@ -497,7 +497,7 @@ export function defaultAgentLedger(plan: any = null) {
       mandate: agent.mandate,
       model_policy: {
         custom_agent: RESEARCH_REVIEWER_CUSTOM_AGENT,
-        model: ASTRA_SUBAGENT_MODEL,
+        model: thinkingSubagentModel(),
         reasoning_effort: SUBAGENT_EFFORT,
         enforcement_source: RESEARCH_REVIEWER_CONFIG_ARTIFACT
       },

@@ -25,7 +25,7 @@ import { escapeRegExp } from '../text/regex.js';
 export const CURRENT_PROJECT_GUIDANCE_SCHEMA = 'sks.current-project-guidance.v1' as const;
 
 const AGENTS_MARKER = 'BEGIN Sneakoscope Codex GX MANAGED BLOCK';
-const RETIRED_COMMAND_NAMES = ['team', 'mad-db', 'tmux', 'xai', 'swarm', 'agent', 'ralph', 'db', 'ui', 'glm'] as const;
+const RETIRED_COMMAND_NAMES = ['team', 'mad-db', 'tmux', 'xai', 'swarm', 'agent', 'ralph', 'loop', 'db', 'ui', 'glm'] as const;
 const RETIRED_DOLLAR_COMMAND_NAMES = ['Agent', 'Team', 'MAD-DB', 'Swarm', 'ShadowClone', 'Kagebunshin', 'Ralph'] as const;
 const LEGACY_UNPREFIXED_DOLLAR_COMMAND_NAMES = Array.from(new Set([
   ...RETIRED_DOLLAR_COMMAND_NAMES,
@@ -136,6 +136,52 @@ export async function reconcileCurrentProjectGuidance(opts: {
     error_count: counters.errors,
     warnings: counters.warnings
   };
+}
+
+/**
+ * Refresh only SKS-owned prompt guidance in one project: the AGENTS.md managed
+ * block and a managed `.codex/SNEAKOSCOPE.md`. User files are never moved or
+ * rewritten here. The hook preflight uses this so a project that only ever
+ * runs through Codex hooks stops feeding a stale managed block to the model
+ * after `sks update`.
+ */
+export async function reconcileManagedProjectPromptGuidance(root: string): Promise<{ refreshed: string[]; errors: number }> {
+  const projectRoot = path.resolve(root);
+  const refreshed: string[] = [];
+  let errors = 0;
+  const agentsFile = path.join(projectRoot, 'AGENTS.md');
+  const agentsStat = await fsp.lstat(agentsFile).catch(() => null);
+  if (agentsStat?.isFile() && !agentsStat.isSymbolicLink()) {
+    const before = await readText(agentsFile, '');
+    if (before.includes(AGENTS_MARKER) && managedAgentsBlockNeedsReconcile(before)) {
+      try {
+        await mergeManagedBlock(agentsFile, 'Sneakoscope Codex GX MANAGED BLOCK', agentsBlockText());
+        refreshed.push('AGENTS.md');
+      } catch {
+        errors += 1;
+      }
+    }
+  }
+  const quickFile = path.join(projectRoot, '.codex', 'SNEAKOSCOPE.md');
+  const quickStat = await fsp.lstat(quickFile).catch(() => null);
+  if (quickStat?.isFile() && !quickStat.isSymbolicLink()) {
+    const before = await readText(quickFile, '');
+    if (isManagedQuickReference(before)) {
+      const expected = codexAppQuickReference(
+        quickReferenceInstallScope(before, 'project'),
+        quickReferenceCommandPrefix(before, 'project')
+      );
+      if (before !== expected) {
+        try {
+          await writeTextAtomic(quickFile, expected);
+          refreshed.push('.codex/SNEAKOSCOPE.md');
+        } catch {
+          errors += 1;
+        }
+      }
+    }
+  }
+  return { refreshed, errors };
 }
 
 async function reconcileGuidanceScope(

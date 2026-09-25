@@ -1,7 +1,0 @@
-{
-  "schema": "sks.route-fixture-input.v1",
-  "route": "$AutoResearch",
-  "mission_id": "M-fixture-autoresearch",
-  "mode": "mock",
-  "visual_claim": false
-}

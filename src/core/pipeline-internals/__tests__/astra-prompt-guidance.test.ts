@@ -21,8 +21,18 @@ test('Astra guidance respects project verification profile and bounded delegatio
     assert.match(essential, /Honor authorization already given/);
     assert.match(essential, /when a claim needs project memory/);
     assert.doesNotMatch(essential, /before each stage|read the bounded current context pack/);
-    assert.match(essential, /Subagent policy: not required/);
-    assert.doesNotMatch(essential, /Naruto route: prepare subagent-plan|Post-route reflection:|then run SKS Honest Mode/);
+    // Implementation on the Naruto route is parent orchestration, and the model
+    // text must not override Jev seals or stored role preferences.
+    assert.match(essential, /Codex subagent workflow: required\. The parent orchestrates only/);
+    assert.match(essential, /Every child runs the newest model of the tier its work needs/);
+    assert.match(essential, /When Jev mode is on, Jev picks each spawn's tier and SKS seals it/);
+    assert.doesNotMatch(essential, /gpt-5\.6-|every child uses gpt-6-astra/);
+    assert.match(essential, /A stored user role-model preference wins in both modes/);
+    assert.doesNotMatch(essential, /regardless of parent model or saved role preferences|explicit Naruto or parallel task/);
+    assert.match(essential, /Naruto route: prepare subagent-plan/);
+    assert.doesNotMatch(essential, /Post-route reflection:|then run SKS Honest Mode/);
+    const audit = promptPipelineContext('audit all packages', { id: 'SKS', command: '$SKS', route: 'general', task_profile: 'bounded-work' }, root);
+    assert.match(audit, /Subagent policy: not required/);
     assert.match(dfixQuickContext('Translate to English', { id: 'DFix' }, root), /Return the requested content directly/);
     assert.doesNotMatch(dfixQuickContext('Translate to English', { id: 'DFix' }, root), /DFix 완료 요약/);
 

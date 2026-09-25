@@ -8,6 +8,7 @@ import { fixPathCommand, setupCommand } from '../basic-cli.js'
 import { run as doctorRun } from '../../../commands/doctor.js'
 import { cleanupOtherHarnessConflicts } from '../../harness-conflicts.js'
 import { MANAGED_OFFICIAL_SUBAGENT_ROLES } from '../../managed-assets/managed-assets-manifest.js'
+import { runOtherHarnessCleanupStage } from '../../update/update-migration-state/simple-stages.js'
 
 async function withTempProject(prefix: string, fn: (root: string) => Promise<void>) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), prefix))
@@ -102,6 +103,22 @@ test('doctor --fix blocks DCodex conflict without repair writes', async () => {
     assert.equal(result.status, 'blocked_harness_conflict')
     assert.equal(result.no_fix_writes_performed, true)
     await fs.access(path.join(root, '.dcodex'))
+  })
+})
+
+// `sks update` runs doctor with the migration profile, which no longer stops at
+// the conflict scan; this stage is what then clears the conflict.
+test('the update migration stage quarantines a DCodex conflict that doctor --fix only reports', async () => {
+  await withTempProject('sks-update-conflict-', async (root) => {
+    await fs.mkdir(path.join(root, '.dcodex'))
+    await fs.writeFile(path.join(root, '.dcodex', 'marker'), 'x')
+    const stage = await runOtherHarnessCleanupStage(root)
+    assert.equal(stage.ok, true, JSON.stringify(stage.blockers))
+    assert.deepEqual(stage.actions, ['other_harness_conflicts_quarantined'])
+    assert.equal(stage.detail?.remaining_count, 0)
+    await assert.rejects(fs.access(path.join(root, '.dcodex')))
+    const clean = await runOtherHarnessCleanupStage(root)
+    assert.deepEqual(clean.actions, ['other_harness_conflict_check_clean'])
   })
 })
 

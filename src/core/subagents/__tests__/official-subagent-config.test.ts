@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { latestModelForTier, latestTierModelSet } from '../model-tiers.js'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -34,20 +35,20 @@ import {
 } from '../official-subagent-runner.js'
 import { CURRENT_CODEX_RUNTIME_CONTRACT } from '../../codex-compat/codex-runtime-contract.js'
 
-test('standalone parent args launch one Astra Max Codex parent with the official thread budget', () => {
+test('standalone parent args launch one latest deep-tier Codex parent with the official thread budget', () => {
   const args = buildOfficialSubagentCodexArgs({
     prompt: 'delegate and wait',
     maxThreads: 12,
     parentSummaryFile: '/tmp/parent-summary.txt'
   })
-  assert.deepEqual(args.slice(0, 6), ['exec', '--json', '-m', 'gpt-6-astra', '-c', 'model_reasoning_effort="max"'])
+  assert.deepEqual(args.slice(0, 6), ['exec', '--json', '-m', latestModelForTier('deep'), '-c', 'model_reasoning_effort="max"'])
   assert.ok(args.includes('model_provider="openai"'))
   assert.ok(args.includes('forced_login_method="chatgpt"'))
   assert.ok(args.includes('agents.max_concurrent_threads_per_session=12'))
   assert.ok(args.includes('agents.max_depth=1'))
   assert.ok(args.includes('agents.enabled=true'))
   assert.ok(args.some((arg) => typeof arg === 'string' && arg.includes('features.multi_agent_v2=') && arg.includes('enabled=true')))
-  assert.ok(args.includes('agents.default_subagent_model="gpt-6-astra"'))
+  assert.ok(args.includes(`agents.default_subagent_model="${latestModelForTier('deep')}"`))
   assert.ok(args.includes('agents.default_subagent_reasoning_effort="low"'))
   assert.equal(args.filter((arg) => arg === 'exec').length, 1)
 })
@@ -173,7 +174,7 @@ test('fresh project config receives the official Codex subagent defaults', () =>
   assert.equal(parsed.agents.max_depth, 1)
   assert.equal(parsed.agents.enabled, true)
   assert.equal(parsed.agents.interrupt_message, true)
-  assert.equal(parsed.agents.default_subagent_model, 'gpt-6-astra')
+  assert.equal(parsed.agents.default_subagent_model, latestModelForTier('deep'))
   assert.equal(parsed.agents.default_subagent_reasoning_effort, 'low')
   assert.equal(Object.hasOwn(parsed.agents, 'job_max_runtime_seconds'), false)
   assert.equal(Object.hasOwn(parsed.agents, 'max_threads'), false)
@@ -183,7 +184,7 @@ test('fresh project config receives the official Codex subagent defaults', () =>
   assert.equal(parsed.features.multi_agent_v2.expose_spawn_agent_model_overrides, true)
 })
 
-test('child model normalization preserves selected parent and explicit child effort across config layers', async (t) => {
+test('child default normalization keeps current tier models and moves older ones to the latest deep tier', async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-official-astra-config-'))
   t.after(() => fs.rm(root, { recursive: true, force: true }))
   const codexHome = path.join(root, 'home', '.codex')
@@ -196,25 +197,34 @@ test('child model normalization preserves selected parent and explicit child eff
   await fs.writeFile(projectConfigPath, project)
   await fs.writeFile(globalConfigPath, global)
   const local = await readOfficialSubagentConfig(root, { codexHome })
-  assert.equal(local.defaultSubagentModel, 'gpt-6-astra')
+  const deep = latestModelForTier('deep')
+  assert.equal(local.defaultSubagentModel, deep)
   assert.equal(local.defaultSubagentReasoningEffort, 'low')
   assert.equal(local.sources.defaultSubagentModel, 'default')
-  assert.ok(local.warnings.includes('official_subagent_model_coerced_to_astra:gpt-5.6-luna:project'))
+  assert.ok(local.warnings.includes('official_subagent_model_coerced_to_latest:gpt-5.6-luna:project'))
   assert.equal(await fs.readFile(projectConfigPath, 'utf8'), project)
   assert.equal(await fs.readFile(globalConfigPath, 'utf8'), global)
   const merged = parse(mergeOfficialSubagentConfig(project, { inheritedText: global })) as Record<string, any>
   assert.equal(merged.model, 'gpt-5.6-sol')
   assert.equal(merged.model_reasoning_effort, 'max')
-  assert.equal(merged.agents.default_subagent_model, 'gpt-6-astra')
+  assert.equal(merged.agents.default_subagent_model, deep)
   assert.equal(merged.agents.default_subagent_reasoning_effort, 'low')
   await fs.writeFile(projectConfigPath, 'model = "gpt-5.6-sol"\n')
   const inherited = await readOfficialSubagentConfig(root, { codexHome })
-  assert.equal(inherited.defaultSubagentModel, 'gpt-6-astra')
+  assert.equal(inherited.defaultSubagentModel, deep)
   assert.equal(inherited.defaultSubagentReasoningEffort, 'medium')
-  assert.ok(inherited.warnings.includes('official_subagent_model_coerced_to_astra:gpt-5.6-terra:global'))
+  assert.ok(inherited.warnings.includes('official_subagent_model_coerced_to_latest:gpt-5.6-terra:global'))
   const inheritedMerge = parse(mergeOfficialSubagentConfig('', { inheritedText: global })) as Record<string, any>
-  assert.equal(inheritedMerge.agents.default_subagent_model, 'gpt-6-astra')
+  assert.equal(inheritedMerge.agents.default_subagent_model, deep)
   assert.equal(await fs.readFile(globalConfigPath, 'utf8'), global)
+  // A current tier model is the user's choice and is kept as written.
+  const fast = latestModelForTier('fast')
+  await fs.writeFile(projectConfigPath, `[agents]\ndefault_subagent_model = "${fast}"\n`)
+  const current = await readOfficialSubagentConfig(root, { codexHome })
+  assert.equal(current.defaultSubagentModel, fast)
+  assert.equal(current.warnings.some((warning) => warning.startsWith('official_subagent_model_coerced_to_latest:')), false)
+  const currentMerge = parse(mergeOfficialSubagentConfig(`[agents]\ndefault_subagent_model = "${fast}"\n`)) as Record<string, any>
+  assert.equal(currentMerge.agents.default_subagent_model, fast)
 })
 
 test('project and inherited user concurrency values are preserved', () => {
@@ -607,7 +617,8 @@ test('fresh agent install materializes the complete project-scoped custom agent 
     const parsed = parse(text) as Record<string, any>
     assert.equal(parsed.name, role.codex_name)
     assert.equal(parsed.model, role.model)
-    assert.equal(parsed.model, 'gpt-6-astra')
+    // Each role carries the newest model of its own tier, not one pinned model.
+    assert.ok(latestTierModelSet().has(parsed.model), `${role.codex_name}:${parsed.model}`)
     assert.equal(parsed.model_reasoning_effort, role.model_reasoning_effort)
     assert.equal(Object.hasOwn(parsed, 'sandbox_mode'), role.sandbox === 'read-only')
     assert.equal(parsed.sandbox_mode, role.sandbox)
@@ -930,20 +941,24 @@ test('generated Naruto skill describes the official workflow and retired aliases
   assert.match(naruto, /later root-owned waves/)
   assert.match(naruto, /max_threads defaults to a 256-child frame budget cap, never a target/)
   assert.match(naruto, /max_depth=1 blocks nested delegation/)
-  assert.match(naruto, /Route tiny mechanical and mass shards to Astra Low, broad search and exploration shards to Astra Medium, instructed ordinary coding execution to Astra Low, and planning, analysis, review, or other judgment to Astra Max/)
+  assert.match(naruto, /delegate implementation to child subagents/)
+  assert.match(naruto, /The parent orchestrates only/)
+  assert.match(naruto, /PreToolUse gate denies parent-thread source edits until the first child thread starts and while children are still running/)
+  assert.match(naruto, /Every child runs the newest model of the tier its work needs \(fast, balanced, context, or deep\); no model family is pinned/)
+  assert.match(naruto, /When Jev mode is on, Jev picks the tier for each new spawn and SKS seals it/)
+  assert.doesNotMatch(naruto, /gpt-5\.6-|off mode keeps gpt-6-astra/)
+  assert.doesNotMatch(naruto, /explicit parallel official subagents|continue parent-owned/)
   assert.match(naruto, /sks\.core-engineering-directive\.v1/)
   assert.match(naruto, /subagent-plan\.json/)
   assert.match(naruto, /subagent-parent-summary\.json/)
   assert.doesNotMatch(naruto, /GPT-5\.6 Sol Max|Browser\/Chrome/)
   assert.doesNotMatch(naruto, /verification-summary\.json|five-artifact/)
   assert.doesNotMatch(naruto, /native shadow-clone|up to 100|--backend codex-exec|--clones N/)
-  assert.match(agentsRules, /Use `\$sks-naruto` for explicitly requested parallel work or concrete independent slices/)
+  assert.match(agentsRules, /Implementation routes to Naruto \(`\$sks-naruto`, alias `\$sks-work`; standalone `sks naruto run`\), which is parent orchestration only/)
   assert.match(agentsRules, /reuse capacity across root-owned waves/)
-  assert.match(agentsRules, /Astra Low for tiny mechanical work/)
-  assert.match(agentsRules, /Astra Low for tiny mechanical work and instructed ordinary coding execution/)
-  assert.match(agentsRules, /Astra Medium for read-heavy context/)
-  assert.match(agentsRules, /Astra Max for planning, analysis, review, risk, or other focused judgment/)
-  assert.match(agentsRules, /Explicit Astra effort preferences, including High, remain supported/)
+  assert.match(agentsRules, /When Jev mode is on, Jev picks the tier for each new Naruto child spawn and SKS seals it/)
+  assert.match(agentsRules, /Preserve the user-selected parent model, reasoning effort, and service tier/)
+  assert.doesNotMatch(agentsRules, /General work stays parent-owned|explicitly requested parallel work|must explicitly set model="gpt-6-astra"/)
   assert.doesNotMatch(agentsRules, /native agent intake agents|fresh executor team/)
   assert.doesNotMatch(agentsRules, /\$Team|sks team|\$MAD-DB|sks mad-db/)
   for (const name of ['team', 'mad-db', 'swarm', 'shadow-clone', 'kage-bunshin']) {

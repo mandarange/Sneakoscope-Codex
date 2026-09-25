@@ -55,18 +55,17 @@ provider, model, and generation affinity. Invalid or tampered pins fail closed.
 
 ## Verification
 
-Run the focused contracts and the Desktop Bridge hermetic matrix:
+Run the focused contracts:
 
 ```bash
 npm run typecheck --silent
 npm run build:incremental --silent
 node --test dist/core/architecture-hardening/__tests__/integration.test.js
-node --test test/e2e/architecture-hardening/hermetic-sandbox.test.mjs
 node dist/scripts/desktop-bridge-unification-check.js
 ```
 
-The hermetic matrix proves contract behavior with isolated homes and sentinel
-credentials; it is not live provider evidence. `npm run
+These contracts run with isolated homes and sentinel credentials; they are not
+live provider evidence. `npm run
 desktop-bridge:real-evidence` reports whether explicitly supplied real inputs
 were exercised, but its receipt is non-release-authorizing. macOS launchd,
 Codex Desktop restart, real OAuth identity, real providers, WebSocket exchange,

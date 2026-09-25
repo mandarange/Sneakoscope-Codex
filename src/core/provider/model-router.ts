@@ -1,12 +1,9 @@
 import {
-  ASTRA_SUBAGENT_MODEL,
-  NARUTO_LUNA_MODEL,
-  NARUTO_SOL_MODEL,
-  NARUTO_TERRA_MODEL,
   decideSubagentModel,
   subagentModelProfile,
   type SubagentModelPolicyId
 } from '../subagents/model-policy.js';
+import { latestTierModelSet } from '../subagents/model-tiers.js';
 
 export type TaskCategory = 'quick' | 'standard' | 'agentic' | 'ultrabrain' | 'verify' | 'review' | 'e2e' | 'refactor' | 'strategy';
 export type ModelReasoning = 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra';
@@ -36,9 +33,12 @@ const CATEGORY_POLICY: Record<TaskCategory, Omit<ModelChoice, 'model'>> = {
   strategy: { reasoning: 'max', serviceTier: 'fast' }
 };
 
-export const NARUTO_MODELS = [NARUTO_LUNA_MODEL, NARUTO_SOL_MODEL, NARUTO_TERRA_MODEL, ASTRA_SUBAGENT_MODEL] as const;
+/** Child models SKS routes to: the latest model of each tier, never a pinned family. */
+export function narutoModels(): string[] {
+  return [...latestTierModelSet()];
+}
 // Keep the exported type and helper names compatible with existing callers.
-export type NarutoGpt56Model = typeof NARUTO_MODELS[number];
+export type NarutoGpt56Model = string;
 
 const E2E_WORK_RE = /(e2e|end[-\s]?to[-\s]?end|test_execution|browser|chrome|computer[-\s]?use|computer\s+use|cross[-\s]?app|playwright|selenium|puppeteer|브라우저|컴퓨터\s*유즈)/i;
 
@@ -96,9 +96,10 @@ export function routeNarutoGpt56Model(input: {
       || category === 'ultrabrain'
       || explicitHighRisk
   });
-  const preferred: NarutoGpt56Model = explicit || ASTRA_SUBAGENT_MODEL;
+  // No explicit model: the task's tier picks the latest fast or accurate model.
+  const preferred: NarutoGpt56Model = explicit || automatic.model;
   const available = input.availableModels == null
-    ? [...NARUTO_MODELS]
+    ? narutoModels()
     : input.availableModels.map(normalizeNarutoGpt56Model).filter((model): model is NarutoGpt56Model => Boolean(model));
   const degraded = new Set((input.degradedModels || []).map((model) => String(model).toLowerCase()));
   const usable = available.filter((model) => !degraded.has(model));
@@ -116,10 +117,10 @@ export function isNarutoGpt56Model(value: unknown): value is NarutoGpt56Model {
 
 export function normalizeNarutoGpt56Model(value: unknown): NarutoGpt56Model | null {
   const model = String(value || '').trim().toLowerCase();
-  return (NARUTO_MODELS as readonly string[]).includes(model) ? model as NarutoGpt56Model : null;
+  return narutoModels().includes(model) ? model : null;
 }
 
-/** Compatibility helper: child models are always Astra, independent of the parent. */
+/** Compatibility helper: child models come from tiers, independent of the parent. */
 export function childInheritsActiveMainModel(_value: unknown): boolean {
   return false;
 }

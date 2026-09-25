@@ -1,8 +1,11 @@
+import '../../__tests__/helpers/isolated-test-home.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { buildNarutoGateResult, narutoCommand, parseNarutoArgs } from '../naruto-command.js'
 import { buildNarutoHelpResult } from '../../subagents/naruto-help-contract.js'
 import { HARD_NARUTO_MAX_THREADS } from '../../subagents/thread-budget.js'
+import { BUILTIN_LATEST_TIER_MODELS as T } from '../../subagents/model-tiers.js'
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 test('normal Naruto blocks command-local GLM before any provider delegation', async () => {
   const previousExitCode = process.exitCode
@@ -183,9 +186,14 @@ test('human Naruto help renders model mapping nesting and durable parent evidenc
   try {
     await narutoCommand(['help'])
     const text = output.join('\n')
-    assert.match(text, /Parent: gpt-5\.6-sol \/ max/)
-    assert.match(text, /Worker: gpt-5\.6-luna \/ max/)
-    assert.match(text, /Expert: gpt-5\.6-sol \/ max/)
+    // Standalone defaults (Jev off) and the Jev spawn seal are both stated.
+    // Standalone defaults resolve to the latest tier models; nothing is pinned.
+    assert.match(text, new RegExp(`Parent: ${escapeRegExp(T.deep)} / max`))
+    assert.match(text, new RegExp(`Worker: ${escapeRegExp(T.fast)} / low`))
+    assert.match(text, new RegExp(`Expert: ${escapeRegExp(T.deep)} / max`))
+    assert.match(text, /Jev mode on: Jev picks each Codex App child spawn's tier and SKS seals its newest model/)
+    assert.doesNotMatch(text, /gpt-5\.6-|only gpt-6-astra/)
+    assert.match(text, /The parent orchestrates only/)
     assert.match(text, /max_depth=1/)
     assert.match(text, /subagent-parent-summary\.json/)
   } finally {

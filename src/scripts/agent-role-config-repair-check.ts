@@ -7,6 +7,8 @@ import { parse } from 'smol-toml'
 import { assertGate, emitGate, importDist } from './gate-lib.js'
 
 const mod = await importDist('core/agents/agent-role-config.js')
+// The worker role carries the newest fast-tier model, never a pinned id.
+const fastModel = (await importDist('core/subagents/model-tiers.js')).latestModelForTier('fast')
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-role-repair-'))
 fs.mkdirSync(path.join(root, '.sneakoscope', 'reports'), { recursive: true })
 const plan = await mod.repairAgentRoleConfigs({ root, apply: false, codexHome: path.join(root, 'codex-home') })
@@ -37,7 +39,7 @@ const report = {
   repair_ok: repair.ok === true,
   official_agents_created: fs.existsSync(workerFile) && fs.existsSync(expertFile),
   managed_body_hash_present: createdText.includes('# SKS-MANAGED-OFFICIAL-SUBAGENT') && /sks_managed_body_sha256 = "[a-f0-9]{64}"/.test(createdText),
-  generated_toml_parses: createdParsed.name === 'worker' && createdParsed.model === 'gpt-6-astra' && createdParsed.model_reasoning_effort === 'low',
+  generated_toml_parses: createdParsed.name === 'worker' && createdParsed.model === fastModel && createdParsed.model_reasoning_effort === 'low',
   generated_toml_uses_supported_keys: !Object.hasOwn(createdParsed, 'permission_profile') && !Object.hasOwn(createdParsed, 'legacy_sandbox_projection'),
   generated_inherits_parent_sandbox: !Object.hasOwn(createdParsed, 'sandbox_mode'),
   retired_managed_removed: stalePlan.retired_role_cleanup.detected_count === 1 && staleRepair.retired_role_cleanup.removed_count === 1 && retiredManagedRemoved,
@@ -46,5 +48,5 @@ const report = {
   artifact_written: fs.existsSync(path.join(root, '.sneakoscope', 'reports', 'agent-role-config-repair.json'))
 }
 const ok = report.plan_ok && report.repair_ok && report.official_agents_created && report.managed_body_hash_present && report.generated_toml_parses && report.generated_toml_uses_supported_keys && report.generated_inherits_parent_sandbox && report.retired_managed_removed && report.global_user_collision_quarantined && report.warnings_suppressed && report.artifact_written
-assertGate(ok, 'role repair must create official Astra configs, remove retired managed roles, and preserve user collisions in quarantine', report)
+assertGate(ok, 'role repair must create official tier configs, remove retired managed roles, and preserve user collisions in quarantine', report)
 emitGate('agent:role-config-repair', report)

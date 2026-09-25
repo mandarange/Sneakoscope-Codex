@@ -1,12 +1,44 @@
 # SKS Release Readiness
 
-## 10.3.3 candidate
+## 10.3.4 candidate
 
-The working tree ships optional Jev decisions through OpenRouter. `sks decision`
-modes are `off` and `jev` only. Verification must cover the Jev contract,
-transport, policy, preparation consumers, packed tarball (no local-model worker),
-and Control Center Decisions page. A live `probe` is connectivity evidence only
-and is not a performance claim.
+Children are no longer pinned to a model family: each child runs the newest
+model Codex lists for its tier (fast, balanced, context, deep), and Jev mode
+routes every decision SKS can apply. Verification must also cover the tier
+resolver against real and missing models caches, the absence of `gpt-5.6-*`
+seals and Astra-only rules from every injected and installed text, and the
+Jev-mode delegation prompt.
+
+The working tree makes a Naruto parent orchestrate instead of implementing and
+makes `sks update` remove setup that fought that behavior. The PreToolUse hook
+denies root-parent source edits before the first child starts and while
+children are running, recognizes children by `agent_id`, and records every
+denial and release in `parent-orchestration-gate.json`. Jev is consulted at
+tool-call time for gated edits. Verification must cover the gate on real
+Codex payload shapes, the shared implementation-verb routing, the Jev
+delegation question and compiler, the spawn fallback seal, the update cleanup
+stages (retired Local LLM files, hooks.json prune, other-harness quarantine,
+missing SKS home), the hook-only guidance refresh, and the managed skill
+digests. `sks decision` modes remain `off` and `jev`; a live `probe` is
+connectivity evidence only.
+
+`sks update` now repairs permissions before it cleans up. The
+`managed-permission-repair` migration stage fixes read-only folders and user
+flags on SKS-managed paths the user owns, and asks for administrator
+permission only for root-owned or system-flagged ones, through the macOS
+administrator dialog, cached `sudo`, or a terminal `sudo` prompt. An npm
+`EACCES` on the global install retries once after the same repair.
+Verification must cover the owned fix, confinement of the elevation script to
+managed paths, the decline cooldown, and that tests and CI never elevate. Test
+files that no runner executed were removed; the canonical suite, the
+`git-collaboration:e2e` gate, and the architecture-map gates run every
+remaining test.
+
+## Previous candidate: 10.3.3
+
+10.3.3 shipped optional Jev decisions through OpenRouter (`sks decision` modes
+`off` and `jev`) with per-turn and per-spawn sealing, and `sks update`
+rewrote the managed guidance so implementation stayed parent orchestration.
 
 ## Previous candidate: 10.3.0
 

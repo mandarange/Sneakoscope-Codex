@@ -52,7 +52,9 @@ test('update hook refresh retargets the Codex managed hook the app actually runs
 test('installed guidance tells Naruto parents to orchestrate and lets Jev seal the child', () => {
   const text = agentsBlockText();
   assert.match(text, /parent orchestration only/);
-  assert.match(text, /sealed by Jev/);
-  assert.match(text, /gpt-5\.6-luna low/);
+  assert.match(text, /newest model of the tier its work needs \(fast, balanced, context, or deep\); no model family is pinned/);
+  assert.match(text, /Jev picks the tier for each new Naruto child spawn and SKS seals it/);
+  // Installed guidance never pins a model family.
+  assert.doesNotMatch(text, /gpt-5\.6-|gpt-6-astra only|Off mode keeps gpt-6-astra/);
   assert.equal(text.includes('model="gpt-6-astra"'), false);
 });

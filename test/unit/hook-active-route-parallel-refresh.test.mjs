@@ -61,7 +61,8 @@ test('substantive prompt during an active Naruto state prepares a fresh parallel
 
     const context = String(result.additionalContext || '');
     assert.match(context, /\$Naruto route prepared|Route: \$Naruto/);
-    assert.match(context, /Codex subagent workflow: required for this explicit Naruto or parallel task/);
+    assert.match(context, /Codex subagent workflow: required\. The parent orchestrates only/);
+    assert.match(context, /SKS parent orchestration gate is armed for this turn/);
     assert.doesNotMatch(context, /Active Naruto mission M-active/);
 
     const missions = await missionEntries(root);

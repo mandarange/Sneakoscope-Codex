@@ -5,6 +5,13 @@ import os from 'node:os'
 import { parse } from 'smol-toml'
 import { syncCodexAgentRoles } from '../core/codex-app/codex-agent-role-sync.js'
 import { MANAGED_OFFICIAL_SUBAGENT_ROLES } from '../core/managed-assets/managed-assets-manifest.js'
+import { latestModelForTier } from '../core/subagents/model-tiers.js'
+
+// Role models follow tiers: each role file carries the newest model of its tier.
+const fast = latestModelForTier('fast')
+const balanced = latestModelForTier('balanced')
+const context = latestModelForTier('context')
+const deep = latestModelForTier('deep')
 
 const root = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'sks-agent-role-content-'))
 const codexHome = path.join(root, 'codex-home')
@@ -13,16 +20,16 @@ const expert = await fs.promises.readFile(path.join(root, '.codex', 'agents', 'e
 const worker = await fs.promises.readFile(path.join(root, '.codex', 'agents', 'worker.toml'), 'utf8')
 const implementation = await fs.promises.readFile(path.join(root, '.codex', 'agents', 'implementation-specialist.toml'), 'utf8')
 const browser = await fs.promises.readFile(path.join(root, '.codex', 'agents', 'browser-use-operator.toml'), 'utf8')
-assertGate(expert.includes('model = "gpt-6-astra"') && expert.includes('model_reasoning_effort = "max"'), 'expert role must use Astra Max')
-assertGate(worker.includes('model = "gpt-6-astra"') && worker.includes('model_reasoning_effort = "low"'), 'worker role must use Astra Low')
-assertGate(implementation.includes('model = "gpt-6-astra"') && implementation.includes('model_reasoning_effort = "low"'), 'implementation role must use Astra Low')
-assertGate(browser.includes('model = "gpt-6-astra"') && browser.includes('model_reasoning_effort = "medium"'), 'browser role must use Astra Medium')
+assertGate(expert.includes(`model = "${deep}"`) && expert.includes('model_reasoning_effort = "max"'), 'expert role must use the deep tier at max')
+assertGate(worker.includes(`model = "${fast}"`) && worker.includes('model_reasoning_effort = "low"'), 'worker role must use the fast tier at low')
+assertGate(implementation.includes(`model = "${balanced}"`) && implementation.includes('model_reasoning_effort = "low"'), 'implementation role must use the balanced tier at low')
+assertGate(browser.includes(`model = "${context}"`) && browser.includes('model_reasoning_effort = "medium"'), 'browser role must use the context tier at medium')
 assertGate(expert.includes('Do not spawn another subagent.') && worker.includes('Do not redesign the task, expand scope, or spawn another subagent.'), 'official roles must prohibit nested delegation')
 assertGate(MANAGED_OFFICIAL_SUBAGENT_ROLES.length === 25, 'official role catalog must contain all 25 roles')
 for (const role of MANAGED_OFFICIAL_SUBAGENT_ROLES) {
   const text = await fs.promises.readFile(path.join(root, '.codex', 'agents', role.filename), 'utf8')
   const doc = parse(text) as Record<string, unknown>
-  assertGate(doc.model === 'gpt-6-astra', `official role managed model mismatch:${role.codex_name}`)
+  assertGate([fast, balanced, context, deep].includes(String(doc.model)), `official role managed model is not a current tier model:${role.codex_name}`)
   assertGate(doc.name === role.codex_name && doc.model === role.model && doc.model_reasoning_effort === role.model_reasoning_effort, `official role policy mismatch:${role.codex_name}`)
   assertGate(Object.hasOwn(doc, 'sandbox_mode') === (role.sandbox === 'read-only'), `official role sandbox inheritance mismatch:${role.codex_name}`)
   assertGate(doc.sandbox_mode === role.sandbox, `official role sandbox value mismatch:${role.codex_name}`)

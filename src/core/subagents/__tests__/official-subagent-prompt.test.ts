@@ -1,5 +1,7 @@
+import '../../__tests__/helpers/isolated-test-home.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { BUILTIN_LATEST_TIER_MODELS as T } from '../model-tiers.js'
 import {
   buildOfficialSubagentPrompt,
   validateOfficialSubagentSlices
@@ -30,13 +32,13 @@ test('official prompt seals model, ownership, wait, and no-nesting rules', () =>
     ]
   })
 
-  assert.match(prompt, /gpt-6-astra with max reasoning/)
-  assert.match(prompt, /worker.*gpt-6-astra.*low reasoning.*tiny short-context mechanical/)
-  assert.match(prompt, /gpt-6-astra with low reasoning for ordinary UI, logic, backend, and native implementation with established instructions/)
-  assert.match(prompt, /gpt-6-astra with max reasoning for planning, analysis, review, focused unresolved, high-risk, architecture, security/)
-  assert.match(prompt, /gpt-6-astra with medium reasoning for long context\/memory, large docs\/repository reads or exploration, large-scale first-draft code processing/)
-  assert.match(prompt, /preserve each sealed role model and effort instead of applying the parent profile to every child/)
+  // Children follow tiers (the newest model of each), never one pinned model.
+  assert.match(prompt, /tiers: fast for tiny mechanical shards \(search, rename, copy, label, one-line edits\), balanced for instructed UI, logic, backend, and native implementation, context for long reads, exploration, large first drafts, Computer Use, browser, or image work, deep for planning, review, debugging, architecture, security/)
+  assert.match(prompt, /never apply the parent profile to every child/)
   assert.match(prompt, /explicit task class and phase win over incidental keywords/)
+  assert.match(prompt, /model routing applies to every child, including slices created after parent decomposition: the newest model of the role tier/)
+  assert.match(prompt, /parent model policy: keep the user-selected parent model/)
+  assert.doesNotMatch(prompt, /gpt-5\.6-|gpt-6-astra only|Astra Low|Astra Medium|Astra Max/)
   assert.match(prompt, /requested subagents: 2/)
   assert.match(prompt, /max concurrently open child agent threads: 12/)
   assert.match(prompt, /hard child-slot cap, never a utilization target; the root is outside this count/)
@@ -51,8 +53,8 @@ test('official prompt seals model, ownership, wait, and no-nesting rules', () =>
   assert.match(prompt, /copy workflow_run_id from subagent-plan\.json into run_id/)
   assert.match(prompt, /\[A\].*`worker`/)
   assert.match(prompt, /\[B\].*`architecture_reviewer`/)
-  assert.match(prompt, /model policy: luna_max_mechanical \(gpt-6-astra\/low\)/)
-  assert.match(prompt, /model policy: sol_max_judgment \(gpt-6-astra\/max\)/)
+  assert.ok(prompt.includes(`model policy: luna_max_mechanical (${T.fast}/low)`))
+  assert.ok(prompt.includes(`model policy: sol_max_judgment (${T.deep}/max)`))
   assert.match(prompt, /mode: read-only/)
   assert.match(prompt, /metadata mode: on-demand \(2\/25 roles included; full catalog is not injected\)/)
   assert.equal(prompt.match(/Core Engineering Directive/g)?.length, 1)
@@ -94,7 +96,8 @@ test('official prompt teaches capacity-derived automatic fan-out and the hard ce
 
   assert.match(prompt, /automatic fan-out is capacity-derived up to 256/)
   assert.match(prompt, /historical 4\/6\/8\/16 task-class values are fallback hints, not clamps/)
-  assert.match(prompt, /in mass fan-out, use worker\/Astra Low for tiny mechanical shards and explorer\/Astra Medium for broad exploration; use Astra Low for instructed implementation and Astra Max for judgment/)
+  assert.match(prompt, /fast for tiny mechanical shards/)
+  assert.match(prompt, /context for long reads, exploration/)
   assert.match(prompt, /bounded only by the 256 hard safety ceiling; C_t bounds each wave, not the reusable multi-wave total/)
 })
 
@@ -147,7 +150,7 @@ test('preparation prompt preserves requested count without inventing write slice
   assert.match(prompt, /parent decomposition required before any subagent is spawned/)
 })
 
-test('parent-required prompt preserves third-party parent selection and seals Astra children', () => {
+test('parent-required prompt preserves third-party parent selection and routes children by tier', () => {
   const prompt = buildOfficialSubagentPrompt({
     goal: 'Parent must decompose provider work',
     maxThreads: 4,
@@ -162,12 +165,13 @@ test('parent-required prompt preserves third-party parent selection and seals As
 
   assert.match(prompt, /model routing applies to every child, including slices created after parent decomposition/)
   assert.match(prompt, /parent model policy: keep the current app-selected main model openrouter:moonshotai\/kimi-k3/)
-  assert.match(prompt, /gpt-6-astra only, with the selected role effort/)
+  assert.match(prompt, /the newest model of the role tier/)
+  assert.match(prompt, /parent selection never overrides the child model/)
   assert.doesNotMatch(prompt, /pass model="moonshotai\/kimi-k3"|active-main-model-fallback/)
   assert.match(prompt, /never use a full-history fork for SKS children/)
 })
 
-test('non-Astra active main keeps sealed Astra child profiles', () => {
+test('the selected parent model never changes the child tier models', () => {
   const prompt = buildOfficialSubagentPrompt({
     goal: 'Search the repository and apply a tiny rename',
     maxThreads: 4,
@@ -198,15 +202,13 @@ test('non-Astra active main keeps sealed Astra child profiles', () => {
     ]
   })
 
-  assert.match(prompt, /use sealed Astra Low\/Astra Medium\/Astra Max role defaults across four task-class profiles/)
-  assert.match(prompt, /explicit Astra effort preferences, including High, may override role defaults/)
-  assert.match(prompt, /parent selection and saved non-Astra preferences never override the child model/)
-  assert.match(prompt, /pass model="gpt-6-astra" and reasoning_effort="medium" from the sealed role policy/)
-  assert.match(prompt, /pass model="gpt-6-astra" and reasoning_effort="low" from the sealed role policy/)
+  assert.match(prompt, /parent selection never overrides the child model; stored user role preferences stay authoritative/)
+  assert.ok(prompt.includes(`pass model="${T.context}" and reasoning_effort="medium" from the sealed role policy`))
+  assert.ok(prompt.includes(`pass model="${T.fast}" and reasoning_effort="low" from the sealed role policy`))
   assert.doesNotMatch(prompt, /pass the exact active main model="gpt-5\.6-sol"/)
 })
 
-test('saved child preferences cannot override the sealed model or role effort', () => {
+test('a saved preference for a model that is not a current tier model is ignored', () => {
   const prompt = buildOfficialSubagentPrompt({
     goal: 'Apply the exact rename',
     maxThreads: 1,
@@ -215,7 +217,7 @@ test('saved child preferences cannot override the sealed model or role effort', 
       worker: { provider: 'openrouter', model: 'moonshotai/kimi-k3', reasoning_effort: 'max', updated_at: '2026-09-08T00:00:00.000Z' }
     }
   })
-  assert.match(prompt, /pass model="gpt-6-astra" and reasoning_effort="low" from the sealed role policy/)
+  assert.ok(prompt.includes(`pass model="${T.fast}" and reasoning_effort="low" from the sealed role policy`))
   assert.doesNotMatch(prompt, /moonshotai|user-scoped-owner-only|Role model preference metadata/)
 })
 
@@ -446,12 +448,30 @@ test('slice validator rejects duplicate work, overlapping writes, and unassigned
 })
 
 
-test('Astra effort preferences match the plan without changing the child model', () => {
+test('a stored preference on a current tier model sets that role model and effort', () => {
   const prompt = buildOfficialSubagentPrompt({
     goal: 'Implement UI', maxThreads: 1,
     slices: [{ id: 'ui', title: 'UI', description: 'Implement UI', kind: 'worker', agent: 'ui_implementer', paths: ['src/ui.ts'] }],
-    roleModelPreferences: { ui_implementer: { provider: 'openai', model: 'gpt-6-astra', reasoning_effort: 'max', updated_at: '2026-09-08T00:00:00.000Z' } }
+    roleModelPreferences: { ui_implementer: { provider: 'openai', model: T.deep, reasoning_effort: 'max', updated_at: '2026-09-08T00:00:00.000Z' } }
   })
-  assert.match(prompt, /pass model="gpt-6-astra" and reasoning_effort="max"/)
-  assert.match(prompt, /explicit Astra effort preferences override role defaults, including later slices: {"ui_implementer":"max"}/)
+  assert.ok(prompt.includes(`pass model="${T.deep}" and reasoning_effort="max"`))
+  assert.match(prompt, /stored role effort preferences override role defaults, including later slices: {"ui_implementer":"max"}/)
+})
+
+test('Jev mode hands the parent no tier rules to weigh', () => {
+  const input = {
+    goal: 'Implement two disjoint slices',
+    maxThreads: 4,
+    slices: [
+      { id: 'A', title: 'Parser', description: 'Implement the parser', kind: 'worker' as const, agent: 'implementation_specialist', paths: ['src/a.ts'] },
+      { id: 'B', title: 'Review', description: 'Review integration risk', kind: 'expert' as const, paths: ['src/b.ts'], readOnly: true }
+    ]
+  }
+  const jev = buildOfficialSubagentPrompt({ ...input, jevRouting: true })
+  const plain = buildOfficialSubagentPrompt(input)
+  assert.match(jev, /Jev mode: Jev picks each child tier \(fast, balanced, context, or deep\)/)
+  assert.match(jev, /spend no time choosing models or efforts/)
+  assert.doesNotMatch(jev, /- tiers: fast for tiny mechanical shards/)
+  assert.match(plain, /- tiers: fast for tiny mechanical shards/)
+  assert.ok(Buffer.byteLength(jev, 'utf8') < Buffer.byteLength(plain, 'utf8'))
 })

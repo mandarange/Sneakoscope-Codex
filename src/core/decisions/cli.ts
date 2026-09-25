@@ -3,7 +3,7 @@ import path from 'node:path';
 import { printJson } from '../../cli/output.js';
 import { nowIso, writeJsonAtomic } from '../fsx.js';
 import { resolveOpenRouterApiKey } from '../providers/openrouter/openrouter-secret-store.js';
-import { jevEnabled, readDecisionConfig, writeDecisionConfig } from './config.js';
+import { jevEnabled, readDecisionConfig, writeDecisionConfig, jevCapabilityActive } from './config.js';
 import { buildEvaluationReport, type EvaluationTaskRow } from './evaluation.js';
 import { OPENROUTER_DECISIONS_ENDPOINT, OPENROUTER_DECISIONS_MODEL, requestOpenRouterDecision } from './openrouter.js';
 import { buildDecisionBundle } from './questions.js';
@@ -153,7 +153,15 @@ export async function statusReport(env: NodeJS.ProcessEnv) {
       source: resolved.source,
       preview: resolved.key_preview
     },
-    capabilities: config.capabilities,
+    // What Jev actually decides in this mode (derived), not stored flags.
+    capabilities: {
+      context: { ...config.capabilities.context, ready: jevCapabilityActive(config, 'context') },
+      plan: { ...config.capabilities.plan, ready: jevCapabilityActive(config, 'plan') },
+      recovery: config.capabilities.recovery
+    },
+    decision_points: jevEnabled(config)
+      ? ['turn_tier', 'spawn_tier', 'role_tiers', 'role_omission', 'plan', 'context', 'parent_edit_delegation']
+      : [],
     recovery: RECOVERY_CAPABILITY,
     nextStep,
     notes: [

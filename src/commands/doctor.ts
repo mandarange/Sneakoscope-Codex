@@ -181,7 +181,12 @@ export async function run(_command: any, args: any = [], deps: any = {}) {
   // home there, and running project phases against it would misclassify the
   // user's home folder as an app project.
   const globalOnly = doctorGlobalOnlySelection({ args, doctorFix, root, home: homeDir }).global_only;
-  if (doctorFix) {
+  const doctorProfile = doctorProfileFromArgs(args, doctorFix);
+  // `sks update` runs doctor with the migration profile, whose
+  // other-harness-cleanup stage quarantines OMX/DCodex markers (a reversible
+  // move). Blocking here first meant that stage could never run and every
+  // update with a conflicting harness failed instead of cleaning it.
+  if (doctorFix && doctorProfile !== 'migration') {
     const conflictScan = await scanHarnessConflicts(root);
     if (conflictScan.hard_block) {
       const blocked = {
@@ -205,7 +210,6 @@ export async function run(_command: any, args: any = [], deps: any = {}) {
       return blocked;
     }
   }
-  const doctorProfile = doctorProfileFromArgs(args, doctorFix);
   if (!flag(args, '--json')) {
     cliUi.banner('doctor');
     cliUi.step(doctorFix ? 'repairing and validating' : 'validating');

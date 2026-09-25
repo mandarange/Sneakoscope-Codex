@@ -44,7 +44,13 @@ export const REMOVED_SKS_SKILL_NAMES = [
   'ralph-resolver',
   // NC-38: SKS-owned persisted loop retired; Codex native Goal owns goals/loops.
   'loop',
-  'sks-loop'
+  'sks-loop',
+  // Local LLM routing was removed (9fadd4e2); its managed skills were never
+  // listed here, so installs that lost the generation manifest kept them.
+  'with-local-llm-on',
+  'with-local-llm-off',
+  'sks-with-local-llm-on',
+  'sks-with-local-llm-off'
 ] as const;
 
 export const LEGACY_SKS_SUPPORT_SKILL_NAMES = [

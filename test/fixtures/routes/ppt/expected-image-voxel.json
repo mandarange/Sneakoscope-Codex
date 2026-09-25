@@ -1,6 +1,0 @@
-{
-  "schema": "sks.image-voxel-ledger.v1",
-  "route": "$PPT",
-  "require_anchors": true,
-  "require_relations": false
-}

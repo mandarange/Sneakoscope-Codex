@@ -9,14 +9,15 @@ import { recalculateResearchClaimEvidenceMatrix } from '../research-claim-synthe
 import { validateClaimEvidenceMatrix } from '../claim-evidence-matrix.js'
 import { normalizeResearchSynthesisOutput, validateResearchSynthesisOutput } from '../research-synthesis-writer.js'
 import { createResearchPlan, defaultAgentLedger } from '../../research.js'
+import { latestModelForTier } from '../../subagents/model-tiers.js'
 
-test('Research source acquisition uses Astra Medium and reviewer plans retain Astra Max', () => {
-  assert.deepEqual(RESEARCH_SOURCE_ACQUISITION_MODEL_POLICY, {
-    model: 'gpt-6-astra',
+test('Research source acquisition uses the context tier and reviewer plans use the deep tier', () => {
+  assert.deepEqual({ ...RESEARCH_SOURCE_ACQUISITION_MODEL_POLICY, model: RESEARCH_SOURCE_ACQUISITION_MODEL_POLICY.model }, {
+    model: latestModelForTier('context'),
     model_reasoning_effort: 'medium'
   })
   const plan = createResearchPlan('Check research model routing')
-  assert.equal(plan.research_council.effort_policy.required_model, 'gpt-6-astra')
+  assert.equal(plan.research_council.effort_policy.required_model, latestModelForTier('deep'))
   assert.equal(plan.research_council.effort_policy.required_effort, 'max')
   const reviewers = [
     ...plan.agent_sessions,
@@ -24,7 +25,7 @@ test('Research source acquisition uses Astra Medium and reviewer plans retain As
     ...defaultAgentLedger(plan).agents.map((agent: any) => agent.model_policy)
   ]
   for (const reviewer of reviewers) {
-    assert.equal(reviewer.model, 'gpt-6-astra')
+    assert.equal(reviewer.model, latestModelForTier('deep'))
     assert.equal(reviewer.reasoning_effort, 'max')
   }
 })

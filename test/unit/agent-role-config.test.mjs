@@ -1,5 +1,16 @@
+import '../../dist/core/__tests__/helpers/isolated-test-home.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { BUILTIN_LATEST_TIER_MODELS as T } from '../../dist/core/subagents/model-tiers.js';
+
+// Isolated HOME: no Codex models cache, so tiers resolve to the built-in latest family.
+const CURRENT = new Set([T.fast, T.balanced, T.context, T.deep]);
+const POLICY_MODEL = {
+  luna_max_mechanical: T.fast,
+  sol_high_implementation: T.balanced,
+  terra_max_context_tools: T.context,
+  sol_max_judgment: T.deep
+};
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -19,7 +30,7 @@ test('installed Codex agent catalog exposes only current official roles', async 
     const parsed = parse(text);
     assert.equal(parsed.name, role.codex_name);
     assert.equal(parsed.model, role.model);
-    assert.equal(parsed.model, 'gpt-6-astra');
+    assert.equal(parsed.model, POLICY_MODEL[role.model_policy], role.codex_name);
     assert.equal(parsed.model_reasoning_effort, role.model_reasoning_effort);
     if (['implementation_specialist', 'ui_implementer', 'native_app_specialist'].includes(role.codex_name)) {
       assert.equal(parsed.model_reasoning_effort, 'low', role.codex_name);
@@ -35,17 +46,17 @@ test('official custom agent catalog has unique identities and broad specialist c
   const manifest = await import('../../dist/core/managed-assets/managed-assets-manifest.js');
   const roles = manifest.MANAGED_OFFICIAL_SUBAGENT_ROLES;
   const expectedSpecialists = new Map([
-    ['implementation_specialist', { policy: 'sol_high_implementation', model: 'gpt-6-astra', effort: 'low', sandbox: undefined }],
-    ['ui_implementer', { policy: 'sol_high_implementation', model: 'gpt-6-astra', effort: 'low', sandbox: undefined }],
-    ['native_app_specialist', { policy: 'sol_high_implementation', model: 'gpt-6-astra', effort: 'low', sandbox: undefined }],
-    ['toolchain_specialist', { policy: 'sol_max_judgment', model: 'gpt-6-astra', effort: 'max', sandbox: undefined }],
-    ['protocol_reviewer', { policy: 'sol_max_judgment', model: 'gpt-6-astra', effort: 'max', sandbox: 'read-only' }],
-    ['runtime_reliability_reviewer', { policy: 'sol_max_judgment', model: 'gpt-6-astra', effort: 'max', sandbox: 'read-only' }],
-    ['triwiki_evidence_reviewer', { policy: 'sol_max_judgment', model: 'gpt-6-astra', effort: 'max', sandbox: 'read-only' }],
-    ['long_context_analyst', { policy: 'terra_max_context_tools', model: 'gpt-6-astra', effort: 'medium', sandbox: 'read-only' }],
-    ['computer_use_operator', { policy: 'terra_max_context_tools', model: 'gpt-6-astra', effort: 'medium', sandbox: 'read-only' }],
-    ['browser_use_operator', { policy: 'terra_max_context_tools', model: 'gpt-6-astra', effort: 'medium', sandbox: 'read-only' }],
-    ['image_generation_operator', { policy: 'terra_max_context_tools', model: 'gpt-6-astra', effort: 'medium', sandbox: undefined }]
+    ['implementation_specialist', { policy: 'sol_high_implementation', model: POLICY_MODEL.sol_high_implementation, effort: 'low', sandbox: undefined }],
+    ['ui_implementer', { policy: 'sol_high_implementation', model: POLICY_MODEL.sol_high_implementation, effort: 'low', sandbox: undefined }],
+    ['native_app_specialist', { policy: 'sol_high_implementation', model: POLICY_MODEL.sol_high_implementation, effort: 'low', sandbox: undefined }],
+    ['toolchain_specialist', { policy: 'sol_max_judgment', model: POLICY_MODEL.sol_max_judgment, effort: 'max', sandbox: undefined }],
+    ['protocol_reviewer', { policy: 'sol_max_judgment', model: POLICY_MODEL.sol_max_judgment, effort: 'max', sandbox: 'read-only' }],
+    ['runtime_reliability_reviewer', { policy: 'sol_max_judgment', model: POLICY_MODEL.sol_max_judgment, effort: 'max', sandbox: 'read-only' }],
+    ['triwiki_evidence_reviewer', { policy: 'sol_max_judgment', model: POLICY_MODEL.sol_max_judgment, effort: 'max', sandbox: 'read-only' }],
+    ['long_context_analyst', { policy: 'terra_max_context_tools', model: POLICY_MODEL.terra_max_context_tools, effort: 'medium', sandbox: 'read-only' }],
+    ['computer_use_operator', { policy: 'terra_max_context_tools', model: POLICY_MODEL.terra_max_context_tools, effort: 'medium', sandbox: 'read-only' }],
+    ['browser_use_operator', { policy: 'terra_max_context_tools', model: POLICY_MODEL.terra_max_context_tools, effort: 'medium', sandbox: 'read-only' }],
+    ['image_generation_operator', { policy: 'terra_max_context_tools', model: POLICY_MODEL.terra_max_context_tools, effort: 'medium', sandbox: undefined }]
   ]);
 
   assert.equal(roles.length, 25);
@@ -135,7 +146,7 @@ async function findFile(root, name) {
   return null;
 }
 
-test('persisted legacy and routed role models resolve to Astra without mutating the stored preferences', async () => {
+test('persisted older-family role models resolve to their tier models without mutating the stored preferences', async () => {
   const preferences = await import('../../dist/core/subagents/role-model-preferences.js');
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-astra-preferences-'));
   const filePath = path.join(root, 'role-models.json');
@@ -152,14 +163,17 @@ test('persisted legacy and routed role models resolve to Astra without mutating 
   await fs.writeFile(filePath, original);
   const read = await preferences.readRoleModelPreferences({ filePath });
   assert.deepEqual(read.blockers, []);
-  assert.ok(Object.values(read.store.roles).every((role) => role.model === 'gpt-6-astra' && role.provider === 'openai'));
+  assert.deepEqual(Object.fromEntries(Object.entries(read.store.roles).map(([name, role]) => [name, role.model])), {
+    worker: T.fast, implementation_specialist: T.balanced, explorer: T.context, expert: T.deep, debugger: T.deep
+  });
+  assert.ok(Object.values(read.store.roles).every((role) => role.provider === 'openai'));
   assert.deepEqual(Object.fromEntries(Object.entries(read.store.roles).map(([name, role]) => [name, role.reasoning_effort])), {
     worker: 'low', implementation_specialist: 'low', explorer: 'medium', expert: 'max', debugger: 'high'
   });
   assert.equal(await fs.readFile(filePath, 'utf8'), original);
 });
 
-test('role choices offer only Astra and preserve a non-Astra parent selection', async () => {
+test('role choices offer the current tier models and preserve the parent selection', async () => {
   const preferences = await import('../../dist/core/subagents/role-model-preferences.js');
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-astra-status-'));
   const configPath = path.join(root, 'config.toml');
@@ -169,13 +183,15 @@ test('role choices offer only Astra and preserve a non-Astra parent selection', 
   const status = await preferences.roleModelPreferencesStatus({ filePath, configPath });
   assert.equal(status.routing.selected_model, 'gpt-5.6-sol');
   assert.equal(status.routing.active_main_model_inherited, false);
-  assert.ok(status.roles.every((role) => role.effective_model === 'gpt-6-astra'));
-  assert.deepEqual(status.supported_profiles.map((profile) => profile.reasoning_effort).sort(), ['high', 'low', 'max', 'medium']);
-  assert.ok(status.supported_profiles.every((profile) => profile.model === 'gpt-6-astra'));
+  assert.ok(status.roles.every((role) => CURRENT.has(role.effective_model)));
+  assert.ok(status.supported_profiles.every((profile) => CURRENT.has(profile.model)));
+  for (const model of CURRENT) {
+    assert.deepEqual(status.supported_profiles.filter((profile) => profile.model === model).map((profile) => profile.reasoning_effort).sort(), ['high', 'low', 'max', 'medium']);
+  }
   const rejected = await preferences.setRoleModelPreference({ filePath, configPath, role: 'worker', model: 'gpt-5.6-luna', reasoning: 'max' });
-  assert.deepEqual(rejected.blockers, ['role_model_astra_required']);
+  assert.deepEqual(rejected.blockers, ['role_model_current_model_required']);
   await assert.rejects(fs.access(filePath));
-  const saved = await preferences.setRoleModelPreference({ filePath, configPath, role: 'worker', model: 'gpt-6-astra', reasoning: 'low' });
+  const saved = await preferences.setRoleModelPreference({ filePath, configPath, role: 'worker', model: T.fast, reasoning: 'low' });
   assert.equal(saved.ok, true);
   assert.equal((await preferences.readRoleModelPreferences({ filePath })).store.roles.worker.reasoning_effort, 'low');
   assert.equal(await fs.readFile(configPath, 'utf8'), parentConfig);
@@ -190,18 +206,18 @@ test('official child defaults override stale local and inherited models while le
   const merged = parse(config.mergeOfficialSubagentConfig(original));
   assert.equal(merged.model, 'gpt-5.6-sol');
   assert.equal(merged.model_reasoning_effort, 'max');
-  assert.equal(merged.agents.default_subagent_model, 'gpt-6-astra');
+  assert.equal(merged.agents.default_subagent_model, T.deep);
   assert.equal(merged.agents.default_subagent_reasoning_effort, 'medium');
-  assert.equal(parse(config.mergeOfficialSubagentConfig(parent, { inheritedText: '[agents]\ndefault_subagent_model = "gpt-5.6-terra"\n' })).agents.default_subagent_model, 'gpt-6-astra');
+  assert.equal(parse(config.mergeOfficialSubagentConfig(parent, { inheritedText: '[agents]\ndefault_subagent_model = "gpt-5.6-terra"\n' })).agents.default_subagent_model, T.deep);
   await fs.writeFile(projectConfigPath, original);
   const read = await config.readOfficialSubagentConfig(root, { projectConfigPath, codexHome: path.join(root, 'codex-home') });
-  assert.equal(read.defaultSubagentModel, 'gpt-6-astra');
+  assert.equal(read.defaultSubagentModel, T.deep);
   assert.equal(read.defaultSubagentReasoningEffort, 'medium');
-  assert.ok(read.warnings.some((warning) => warning.startsWith('official_subagent_model_coerced_to_astra:')));
+  assert.ok(read.warnings.some((warning) => warning.startsWith('official_subagent_model_coerced_to_latest:')));
   assert.equal(await fs.readFile(projectConfigPath, 'utf8'), original);
 });
 
-test('managed installed worker and implementation roles refresh to Astra Low', async (t) => {
+test('managed installed worker and implementation roles refresh to their tier models at low', async (t) => {
   const manifest = await import('../../dist/core/managed-assets/managed-assets-manifest.js');
   const config = await import('../../dist/core/subagents/official-subagent-config.js');
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-astra-refresh-'));
@@ -212,7 +228,7 @@ test('managed installed worker and implementation roles refresh to Astra Low', a
   for (const role of roles) {
     const old = manifest.managedOfficialSubagentRoleContent({
       ...role,
-      model: role.codex_name === 'worker' ? 'gpt-5.6-luna' : 'gpt-6-astra',
+      model: role.codex_name === 'worker' ? 'gpt-5.6-luna' : 'gpt-5.6-sol',
       model_reasoning_effort: role.codex_name === 'worker' ? 'max' : 'high'
     });
     await fs.writeFile(path.join(root, '.codex', 'agents', role.filename), old);
@@ -222,7 +238,7 @@ test('managed installed worker and implementation roles refresh to Astra Low', a
   for (const role of roles) {
     assert.ok(result.updated.includes(`.codex/agents/${role.filename}`), role.codex_name);
     const current = parse(await fs.readFile(path.join(root, '.codex', 'agents', role.filename), 'utf8'));
-    assert.equal(current.model, 'gpt-6-astra', role.codex_name);
+    assert.equal(current.model, POLICY_MODEL[role.model_policy], role.codex_name);
     assert.equal(current.model_reasoning_effort, 'low', role.codex_name);
   }
 });

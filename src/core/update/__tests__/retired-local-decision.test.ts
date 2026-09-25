@@ -105,3 +105,30 @@ test('a recorded local-decision worker is stopped', async (t) => {
   assert.equal(child.exitCode, null);
   assert.equal(child.signalCode, 'SIGTERM');
 });
+
+test('a home without an SKS state directory has nothing to retire and does not block update', async (t) => {
+  const { env, socketDir } = await fixture(t);
+  await fsp.mkdir(env.HOME!, { recursive: true });
+  const result = await removeRetiredLocalDecisionRuntime({ HOME: env.HOME, PATH: env.PATH }, { socketDir });
+  assert.equal(result.ok, true, result.blockers.join(','));
+  assert.deepEqual(result.blockers, []);
+  assert.equal(result.detail.removed_runtime, false);
+});
+
+test('the retired Local LLM config is removed only when it carries its own schema', async (t) => {
+  const { env, socketDir } = await fixture(t);
+  await fsp.mkdir(env.SKS_HOME!, { recursive: true });
+  const file = path.join(env.SKS_HOME!, 'local-model.json');
+  await fsp.writeFile(file, JSON.stringify({ schema: 'sks.local-model-config.v2', provider: 'ollama', status: 'disabled' }));
+  const removed = await removeRetiredLocalDecisionRuntime(env, { socketDir });
+  assert.equal(removed.ok, true, removed.blockers.join(','));
+  assert.equal(removed.detail.removed_local_model_config, true);
+  await assert.rejects(fsp.access(file));
+
+  await fsp.writeFile(file, JSON.stringify({ schema: 'someone-elses.config.v1' }));
+  const preserved = await removeRetiredLocalDecisionRuntime(env, { socketDir });
+  assert.equal(preserved.ok, true);
+  assert.equal(preserved.detail.removed_local_model_config, false);
+  assert.ok(preserved.warnings.includes('retired_local_model_config_preserved_unrecognized'));
+  assert.equal(JSON.parse(await fsp.readFile(file, 'utf8')).schema, 'someone-elses.config.v1');
+});

@@ -13,7 +13,7 @@ import {
   readConfiguredCodexModelRoutingContext
 } from '../codex-app/codex-model-catalog.js';
 import { isRecord } from '../json/records.js';
-import { ASTRA_SUBAGENT_MODEL, SUBAGENT_MODEL_POLICIES } from './model-policy.js';
+import { codexListedEfforts, latestModelForTier, latestTierModelSet, modelTierForModel } from './model-tiers.js';
 
 export const ROLE_MODEL_PREFERENCES_SCHEMA = 'sks.role-model-preferences.v2' as const;
 const LEGACY_ROLE_MODEL_PREFERENCES_SCHEMA = 'sks.role-model-preferences.v1';
@@ -36,21 +36,30 @@ export interface RoleModelPreferenceStore {
   readonly roles: Readonly<Record<string, RoleModelPreference>>;
 }
 
-export const SUPPORTED_ROLE_MODEL_PROFILES = Object.freeze([
-  ...Object.values(SUBAGENT_MODEL_POLICIES).map((profile) => Object.freeze({
-    provider: 'openai' as const,
-    model: profile.model,
-    reasoning_effort: profile.modelReasoningEffort,
-    source: 'managed-default' as const
-  })),
-  // High remains an explicit preference even though no role defaults to it.
-  Object.freeze({
-    provider: 'openai' as const,
-    model: ASTRA_SUBAGENT_MODEL,
-    reasoning_effort: 'high',
-    source: 'explicit-override' as const
-  })
-]);
+const ROLE_PREFERENCE_EFFORTS = ['low', 'medium', 'high', 'max'] as const;
+
+/**
+ * Role preferences may name any current model (the latest model of any tier)
+ * at any effort Codex lists for it. Nothing is pinned to one model family.
+ */
+export function supportedRoleModelProfiles(): Array<{ provider: 'openai'; model: string; reasoning_effort: string; source: 'managed-default' | 'explicit-override' }> {
+  const defaults = new Set(MANAGED_OFFICIAL_SUBAGENT_ROLES.map((role) => `${role.model}\0${role.model_reasoning_effort}`));
+  return [...latestTierModelSet()].flatMap((model) => (codexListedEfforts(model) || ROLE_PREFERENCE_EFFORTS)
+    .filter((effort) => (ROLE_PREFERENCE_EFFORTS as readonly string[]).includes(effort))
+    .map((effort) => ({
+      provider: 'openai' as const,
+      model,
+      reasoning_effort: effort,
+      source: defaults.has(`${model}\0${effort}`) ? 'managed-default' as const : 'explicit-override' as const
+    })));
+}
+
+/** A stored model from an older family moves to the latest model of its tier. */
+function currentRoleModel(model: string, fallback: string): string {
+  if (latestTierModelSet().has(model)) return model;
+  const tier = modelTierForModel(model);
+  return tier ? latestModelForTier(tier) : fallback;
+}
 
 export function roleModelPreferencesPath(env: NodeJS.ProcessEnv = process.env): string {
   const sksHome = path.resolve(env.SKS_HOME || path.join(env.HOME || os.homedir(), '.sneakoscope'));
@@ -85,12 +94,15 @@ export async function readRoleModelPreferences(input: {
         blockers.push(`role_model_preference_invalid_profile:${role.codex_name}`);
         continue;
       }
-      // Persisted model choices cannot override the managed child model policy.
-      // Reads migrate effective values only and leave the stored document intact.
-      const keepEffort = provider === 'openai' && isSupportedRoleModelProfile(model, reasoning);
+      // A stored choice is honored on the latest model of its tier. Reads
+      // migrate effective values only and leave the stored document intact.
+      const effectiveModel = provider === 'openai' ? currentRoleModel(model, role.model) : role.model;
+      // An effort stored for an older family was bound to that model's limits;
+      // only a choice already on a current model keeps its effort.
+      const keepEffort = effectiveModel === model && isSupportedRoleModelProfile(effectiveModel, reasoning);
       roles[role.codex_name] = {
         provider: 'openai',
-        model: ASTRA_SUBAGENT_MODEL,
+        model: effectiveModel,
         reasoning_effort: keepEffort ? reasoning : role.model_reasoning_effort,
         updated_at: String(rawPreference.updated_at || parsed.updated_at || '')
       };
@@ -132,13 +144,13 @@ export async function roleModelPreferencesStatus(input: {
       : [`role_model_preference_not_managed:${role}`]
   ));
   const allProfiles = dedupeProfiles([
-    ...SUPPORTED_ROLE_MODEL_PROFILES
+    ...supportedRoleModelProfiles()
   ]);
   const supportedProfiles = allProfiles.slice(0, ROLE_MODEL_PROFILE_PRESENTATION_LIMIT);
   const roles = MANAGED_OFFICIAL_SUBAGENT_ROLES.map((role) => {
     const override = read.store.roles[role.codex_name] || null;
     const effectiveProvider = 'openai';
-    const effectiveModel = ASTRA_SUBAGENT_MODEL;
+    const effectiveModel = override?.model || role.model;
     const effectiveReasoning = override?.reasoning_effort || role.model_reasoning_effort;
     return {
       role: role.codex_name,
@@ -217,7 +229,7 @@ export async function setRoleModelPreference(input: {
   const model = normalizeCodexModelId(input.model);
   const reasoning = normalizeCodexReasoningEffort(input.reasoning);
   if (!model || !reasoning) return mutationBlocked('role_model_profile_invalid');
-  if (model !== ASTRA_SUBAGENT_MODEL) return mutationBlocked('role_model_astra_required');
+  if (!latestTierModelSet().has(model)) return mutationBlocked('role_model_current_model_required');
 
   const env = input.env || process.env;
   const routing = await readConfiguredCodexModelRoutingContext({
@@ -308,7 +320,7 @@ export function isSupportedRoleModelProfile(
 ): boolean {
   const normalizedModel = normalizeCodexModelId(model);
   const normalizedReasoning = normalizeCodexReasoningEffort(reasoning);
-  return SUPPORTED_ROLE_MODEL_PROFILES.some((profile) => (
+  return supportedRoleModelProfiles().some((profile) => (
     profile.model === normalizedModel
     && profile.reasoning_effort === normalizedReasoning
   ));

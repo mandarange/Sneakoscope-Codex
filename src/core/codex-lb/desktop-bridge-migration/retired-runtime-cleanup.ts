@@ -15,10 +15,14 @@ const SETTINGS_V1_KEYS = new Set([
   'idle_timeout_ms', 'catalog_version', 'registered_child_models',
   'session_pins', 'require_session_pin',
 ]);
+// Every key a v2 settings file could carry, including ones added after the
+// provider-branded label was retired: an unknown key used to abort the whole
+// retired-runtime cleanup.
 const SETTINGS_V2_KEYS = new Set([
   'schema', 'listen_host', 'listen_port', 'provider_registry', 'route_policy',
   'provider_session_pins', 'client_capability_sha256', 'allowed_origins',
   'connect_timeout_ms', 'idle_timeout_ms', 'official_passthrough',
+  'auth_priority_enabled',
 ]);
 const TRANSFERABLE_V1_KEYS = [
   'listen_host', 'listen_port', 'allowed_origins', 'connect_timeout_ms', 'idle_timeout_ms',

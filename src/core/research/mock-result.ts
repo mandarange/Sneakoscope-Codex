@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { ASTRA_SUBAGENT_MODEL, SUBAGENT_EFFORT } from '../subagents/model-policy.js';
+import { thinkingSubagentModel, SUBAGENT_EFFORT } from '../subagents/model-policy.js';
 import { nowIso, writeJsonAtomic, writeTextAtomic } from '../fsx.js';
 import { CLAIM_EVIDENCE_MATRIX_ARTIFACT, buildClaimEvidenceMatrixFromLedgers, writeClaimEvidenceMatrix } from './claim-evidence-matrix.js';
 import { DEFAULT_RESEARCH_QUALITY_CONTRACT, writeResearchQualityContract } from './research-quality-contract.js';
@@ -175,7 +175,7 @@ export async function writeMockResearchResult(dir: any, plan: any) {
       mandate: agent.mandate,
       model_policy: {
         custom_agent: RESEARCH_REVIEWER_CUSTOM_AGENT,
-        model: ASTRA_SUBAGENT_MODEL,
+        model: thinkingSubagentModel(),
         reasoning_effort: SUBAGENT_EFFORT,
         enforcement_source: 'mock_fixture'
       },

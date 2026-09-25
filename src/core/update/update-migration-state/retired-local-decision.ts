@@ -6,6 +6,9 @@ import { inspectConfinedPath, ManagedPathSafetyError } from '../../managed-path-
 
 const RUNTIME_DIRNAME = 'local-decision';
 const MAX_MARKER_BYTES = 256 * 1024;
+/** Config written by the removed Local LLM worker (ollama-worker-config.ts). */
+const RETIRED_LOCAL_MODEL_CONFIG = 'local-model.json';
+const RETIRED_LOCAL_MODEL_SCHEMAS = new Set(['sks.local-model-config.v1', 'sks.local-model-config.v2']);
 
 export interface RetiredLocalDecisionCleanup {
   ok: boolean;
@@ -17,6 +20,7 @@ export interface RetiredLocalDecisionCleanup {
     removed_runtime: boolean;
     removed_socket_dir: boolean;
     stopped_worker: boolean;
+    removed_local_model_config: boolean;
   };
 }
 
@@ -54,12 +58,17 @@ export async function removeRetiredLocalDecisionRuntime(
     runtime_root: runtimeRoot,
     removed_runtime: false,
     removed_socket_dir: false,
-    stopped_worker: false
+    stopped_worker: false,
+    removed_local_model_config: false
   };
   if (sksHome === path.parse(sksHome).root) {
     blockers.push('retired_local_decision_home_root_refused');
     return { ok: false, actions, blockers, warnings, detail };
   }
+  // A home that never had an SKS state directory has nothing to retire. The
+  // confined-path check refuses a missing boundary, which used to fail every
+  // update on a fresh or global-only install.
+  const sksHomeExists = await fsp.lstat(sksHome).then(() => true, () => false);
 
   const stopped = await stopRecordedWorker(runtimeRoot).catch(() => 'unreadable' as const);
   if (stopped === 'stopped') {
@@ -69,7 +78,7 @@ export async function removeRetiredLocalDecisionRuntime(
     warnings.push('retired_local_decision_worker_pid_not_owned');
   }
 
-  const removedDefault = await removeConfinedTree(sksHome, runtimeRoot);
+  const removedDefault = sksHomeExists ? await removeConfinedTree(sksHome, runtimeRoot) : 'absent';
   if (removedDefault === 'removed') {
     detail.removed_runtime = true;
     actions.push('removed_retired_local_decision_runtime');
@@ -77,6 +86,14 @@ export async function removeRetiredLocalDecisionRuntime(
     actions.push('retired_local_decision_runtime_absent');
   } else {
     blockers.push(`retired_local_decision_runtime_${removedDefault}`);
+  }
+
+  const localModel = sksHomeExists ? await removeRetiredLocalModelConfig(sksHome) : 'absent';
+  if (localModel === 'removed') {
+    detail.removed_local_model_config = true;
+    actions.push('removed_retired_local_model_config');
+  } else if (localModel === 'preserved') {
+    warnings.push('retired_local_model_config_preserved_unrecognized');
   }
 
   const explicit = explicitRuntimeRoot(env, runtimeRoot);
@@ -114,6 +131,25 @@ async function removeMarkedExplicitRoot(target: string): Promise<'removed' | 'ab
   if (marked === 'absent') return 'absent';
   if (marked !== 'marked') return 'preserved';
   return removeConfinedTree(parent, target);
+}
+
+/**
+ * Remove `~/.sneakoscope/local-model.json` only when it is a regular file that
+ * still carries a Local LLM config schema; anything else is left in place.
+ */
+async function removeRetiredLocalModelConfig(sksHome: string): Promise<'removed' | 'absent' | 'preserved'> {
+  const file = path.join(sksHome, RETIRED_LOCAL_MODEL_CONFIG);
+  const stat = await fsp.lstat(file).catch(() => null);
+  if (!stat) return 'absent';
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.size > MAX_MARKER_BYTES) return 'preserved';
+  try {
+    const parsed = JSON.parse(await fsp.readFile(file, 'utf8')) as { schema?: unknown };
+    if (!RETIRED_LOCAL_MODEL_SCHEMAS.has(String(parsed?.schema || ''))) return 'preserved';
+  } catch {
+    return 'preserved';
+  }
+  await fsp.rm(file, { force: false });
+  return 'removed';
 }
 
 async function isRetiredRuntimeMarker(root: string): Promise<'marked' | 'absent' | 'unmarked'> {

@@ -1,5 +1,0 @@
-{
-  "status": "first_request_failed",
-  "http_status": 401,
-  "error": "auth rejected"
-}

@@ -291,7 +291,10 @@ async function agentRoleContent(id: string): Promise<void> {
     const codexHome = path.join(tmp, 'codex-home')
     const report = await mod.syncCodexAgentRoles({ root: tmp, codexHome, apply: true })
     const role = fs.readFileSync(path.join(tmp, '.codex', 'agents', 'worker.toml'), 'utf8')
-    assertGate(role.includes('model = "gpt-6-astra"') && role.includes('Work only on the exact slice assigned by the parent agent.'), 'official worker role content incomplete', { role, report })
+    // The worker role carries the newest fast-tier model, never a pinned id.
+    const tiers = await importDist('core/subagents/model-tiers.js')
+    const fastModel = String(tiers.latestModelForTier('fast'))
+    assertGate(role.includes(`model = "${fastModel}"`) && role.includes('Work only on the exact slice assigned by the parent agent.'), 'official worker role content incomplete', { role, report, fastModel })
     assertGate(!fs.existsSync(path.join(codexHome, 'agents')), 'agent role content gate must not create global directive roles', report)
   } finally {
     restoreEnv(previous)

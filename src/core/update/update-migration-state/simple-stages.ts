@@ -1,5 +1,9 @@
+import path from 'node:path';
 import { retargetLiveManagedHookScript } from '../../codex-hooks/codex-hook-managed-install.js';
 import { codexHookTrustDoctor } from '../../codex-hooks/codex-hook-trust-doctor.js';
+import { codexHomePath } from '../../codex-app/codex-model-catalog.js';
+import { readText, writeTextAtomic } from '../../fsx.js';
+import { managedHookEventNames, pruneRetiredSksHookEvents } from '../../init.js';
 import type { UpdateMigrationStageRun } from '../update-migration-state.js';
 
 type StageOutcome = Omit<UpdateMigrationStageRun, 'schema' | 'id' | 'min_from_version' | 'from_version'>;
@@ -42,7 +46,31 @@ export async function runOtherHarnessCleanupStage(root: string): Promise<StageOu
   };
 }
 
+/**
+ * Remove SKS hook entries for events the current profile no longer installs
+ * from the project and user hooks.json. Runs before the trust refresh so the
+ * refreshed trust hashes describe the pruned files.
+ */
+async function pruneRetiredSksHookFiles(root: string): Promise<string[]> {
+  const installed = managedHookEventNames(root);
+  const files = [...new Set([
+    path.join(root, '.codex', 'hooks.json'),
+    path.join(codexHomePath(), 'hooks.json')
+  ])];
+  const actions: string[] = [];
+  for (const file of files) {
+    const before = await readText(file, '');
+    if (!before.trim()) continue;
+    const pruned = pruneRetiredSksHookEvents(before, installed);
+    if (!pruned.removed.length) continue;
+    await writeTextAtomic(file, pruned.text);
+    actions.push(`pruned_retired_sks_hook_events:${pruned.removed.join('+')}`);
+  }
+  return actions;
+}
+
 export async function runHookTrustRefreshStage(root: string): Promise<StageOutcome> {
+  const pruneActions = await pruneRetiredSksHookFiles(root).catch(() => [] as string[]);
   const result = await codexHookTrustDoctor(root, { fix: true, managed: true, actual: true });
   const liveHook = await retargetLiveManagedHookScript(process.env).catch((err: unknown) => ({
     ok: false,
@@ -58,7 +86,7 @@ export async function runHookTrustRefreshStage(root: string): Promise<StageOutco
   return {
     ok: blockers.length === 0,
     status: blockers.length ? 'failed' : 'ok',
-    actions: ['refreshed_hook_trust', ...(liveHook.status === 'rewritten' ? ['retargeted_live_managed_hook'] : [])],
+    actions: [...pruneActions, 'refreshed_hook_trust', ...(liveHook.status === 'rewritten' ? ['retargeted_live_managed_hook'] : [])],
     blockers,
     warnings: (result as any).warnings || [],
     detail: {

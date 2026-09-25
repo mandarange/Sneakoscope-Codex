@@ -2,14 +2,18 @@ import path from 'node:path'
 import { readJson, sha256 } from '../fsx.js'
 import { runCodexTask } from '../codex-control/codex-task-runner.js'
 import { runSuperSearch, type SuperSearchSourceFunction, type SuperSearchSourceRecord } from '../super-search/index.js'
-import { TERRA_SUBAGENT_EFFORT, TERRA_SUBAGENT_MODEL } from '../subagents/model-policy.js'
+import { TERRA_SUBAGENT_EFFORT } from '../subagents/model-policy.js'
+import { latestModelForTier } from '../subagents/model-tiers.js'
 import {
   type ResearchSourceLayer,
   type ResearchSourceShardOutput
 } from './research-source-shards.js'
 
 export const RESEARCH_SOURCE_ACQUISITION_MODEL_POLICY = Object.freeze({
-  model: TERRA_SUBAGENT_MODEL,
+  /** Source acquisition is context work: the latest context-tier model. */
+  get model() {
+    return latestModelForTier('context')
+  },
   model_reasoning_effort: TERRA_SUBAGENT_EFFORT
 })
 

@@ -1,39 +1,38 @@
+import '../../__tests__/helpers/isolated-test-home.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { BUILTIN_LATEST_TIER_MODELS as T } from '../../subagents/model-tiers.js';
 import { routeNarutoGpt56Model } from '../../provider/model-router.js';
 import { narutoWorkerBackendBlocker, resolveWorkerModelRouting } from '../native-worker-backend-router.js';
 import type { CodexTaskInput } from '../../codex-control/codex-control-plane.js';
 import { buildCodexExecutionPolicy, buildCodexSdkConfig } from '../../codex-control/codex-sdk-config-policy.js';
 import { normalizeCodexModelEffortCatalogPayload } from '../../codex-lb/codex-lb-env.js';
 
-const models = ['gpt-5.6-luna', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-6-astra'];
-const modelEfforts = {
-  'gpt-5.6-luna': ['low', 'medium', 'high', 'max'],
-  'gpt-5.6-sol': ['low', 'medium', 'high', 'max'],
-  'gpt-5.6-terra': ['low', 'medium', 'high', 'max'],
-  'gpt-6-astra': ['low', 'medium', 'high', 'xhigh', 'max', 'ultra']
-};
+// No Codex models cache in the isolated HOME: tiers resolve to the built-in latest family.
+const models = [...new Set([...Object.values(T), 'gpt-5.6-luna', 'gpt-5.6-terra'])];
+const modelEfforts = Object.fromEntries(models.map((model) => [model, ['low', 'medium', 'high', 'xhigh', 'max', 'ultra']]));
 
-test('Naruto automatic routing stays on Astra until a sealed model is selected', () => {
+test('Naruto automatic routing picks the newest model of each task tier', () => {
   const available = { availableModels: models, availableModelEfforts: modelEfforts };
-  assert.equal(routeNarutoGpt56Model({ ...available, taskText: 'exact one-line single-file rename' }).model, 'gpt-6-astra');
-  assert.equal(routeNarutoGpt56Model({ ...available, taskText: 'implementation code_modification' }).model, 'gpt-6-astra');
-  assert.equal(routeNarutoGpt56Model({ ...available, taskText: 'test_execution browser' }).model, 'gpt-6-astra');
+  assert.equal(routeNarutoGpt56Model({ ...available, taskText: 'exact one-line single-file rename' }).model, T.fast);
+  assert.equal(routeNarutoGpt56Model({ ...available, taskText: 'implementation code_modification' }).model, T.balanced);
+  assert.equal(routeNarutoGpt56Model({ ...available, taskText: 'test_execution browser' }).model, T.context);
   assert.deepEqual(routeNarutoGpt56Model({
     ...available,
     taskText: 'Debug the release security failure',
-    explicitModel: 'gpt-5.6-luna',
+    explicitModel: T.fast,
     reasoningEffort: 'low'
-  }), { model: 'gpt-5.6-luna', reasoning: 'low', serviceTier: 'fast' });
-  assert.deepEqual(routeNarutoGpt56Model({
+  }), { model: T.fast, reasoning: 'low', serviceTier: 'fast' });
+  // An old pinned family is not a current tier model, so it is refused.
+  assert.equal(routeNarutoGpt56Model({
     ...available,
     taskText: 'exact one-line single-file rename',
     explicitModel: 'gpt-5.6-terra',
     reasoningEffort: 'medium'
-  }), { model: 'gpt-5.6-terra', reasoning: 'medium', serviceTier: 'fast' });
+  }).model, '');
 });
 
-test('native worker routing keeps Astra until Jev has selected a sealed model', async () => {
+test('native worker routing uses the task tier until Jev has selected a model', async () => {
   const catalog = { ok: true, models, model_efforts: modelEfforts, blockers: [] };
   const baseline = await resolveWorkerModelRouting({
     agent: { id: 'naruto_dynamic', role: 'executor' },
@@ -41,13 +40,13 @@ test('native worker routing keeps Astra until Jev has selected a sealed model', 
     intake: { route: '$Naruto' },
     fastModePolicy: { fast_mode: true, service_tier: 'fast' }
   }, { lbCatalog: catalog, lbHealth: { ok: true, degraded_models: [] }, env: {} });
-  assert.equal(baseline.blockers.length, 0);
-  assert.equal(baseline.choice.model, 'gpt-6-astra');
+  assert.deepEqual(baseline.blockers, []);
+  assert.equal(baseline.choice.model, T.fast);
   const selected = await resolveWorkerModelRouting({
     agent: {
       id: 'naruto_dynamic',
       role: 'executor',
-      routed_model: 'gpt-5.6-sol',
+      routed_model: T.balanced,
       routed_model_reasoning_effort: 'low',
       routed_model_policy: 'jev_sealed_routing'
     },
@@ -56,20 +55,20 @@ test('native worker routing keeps Astra until Jev has selected a sealed model', 
     fastModePolicy: { fast_mode: true, service_tier: 'fast' }
   }, { lbCatalog: catalog, lbHealth: { ok: true, degraded_models: [] }, env: {} });
   assert.equal(selected.blockers.length, 0);
-  assert.equal(selected.choice.model, 'gpt-5.6-sol');
+  assert.equal(selected.choice.model, T.balanced);
   assert.equal(selected.choice.reasoning, 'low');
 });
 
 test('Naruto fails closed when the selected sealed model or effort is unavailable', () => {
   assert.equal(routeNarutoGpt56Model({
     taskText: 'exact one-line single-file rename',
-    availableModels: ['gpt-5.6-luna'],
+    availableModels: [T.deep],
     availableModelEfforts: modelEfforts
   }).model, '');
   assert.equal(routeNarutoGpt56Model({
     taskText: 'refactor strategy',
     availableModels: models,
-    availableModelEfforts: { ...modelEfforts, 'gpt-6-astra': ['xhigh'] }
+    availableModelEfforts: { ...modelEfforts, [T.deep]: ['xhigh'] }
   }).model, '');
 });
 
@@ -82,7 +81,7 @@ test('native Naruto worker routing passes the exact selected model and effort in
     fastModePolicy: { fast_mode: true, service_tier: 'fast' }
   }, { lbCatalog: catalog, lbHealth: { ok: true, degraded_models: [] }, env: {} });
   assert.equal(routing.blockers.length, 0);
-  assert.equal(routing.choice.model, 'gpt-6-astra');
+  assert.equal(routing.choice.model, T.deep);
   assert.equal(routing.choice.reasoning, 'max');
   const task: CodexTaskInput = {
     route: '$Naruto',
@@ -101,7 +100,7 @@ test('native Naruto worker routing passes the exact selected model and effort in
     serviceTier: routing.choice.serviceTier
   };
   const config = buildCodexSdkConfig(task);
-  assert.equal(config.model, 'gpt-6-astra');
+  assert.equal(config.model, T.deep);
   assert.equal(config.model_reasoning_effort, 'max');
   assert.equal(buildCodexExecutionPolicy(task).sandbox, 'read-only');
   assert.equal(buildCodexExecutionPolicy({
@@ -111,8 +110,8 @@ test('native Naruto worker routing passes the exact selected model and effort in
   }).sandbox, 'workspace-write');
 });
 
-test('internal Naruto worker routing blocks models outside the sealed child set', async () => {
-  for (const model of ['gpt-5.4', 'z-ai/glm-5.2', 'anthropic/claude-sonnet-4.5']) {
+test('internal Naruto worker routing blocks models that are not current tier models', async () => {
+  for (const model of ['gpt-5.4', 'gpt-5.6-luna', 'z-ai/glm-5.2', 'anthropic/claude-sonnet-4.5']) {
     const routing = await resolveWorkerModelRouting({
       agent: { id: 'naruto_1', role: 'implementer', naruto_role: 'implementer' },
       slice: { id: 'W1', kind: 'implementation', title: 'Implement feature' },
@@ -123,12 +122,12 @@ test('internal Naruto worker routing blocks models outside the sealed child set'
       lbHealth: { ok: true, degraded_models: [] },
       env: { SKS_WORKER_MODEL: model }
     });
-    assert.ok(routing.blockers.includes('naruto_worker_model_outside_gpt_5_6_family'), model);
+    assert.ok(routing.blockers.includes('naruto_worker_model_not_current'), model);
   }
 });
 
 test('Naruto rejects the process backend and conflicting effort/tier overrides', async () => {
-  assert.equal(narutoWorkerBackendBlocker('process'), 'naruto_gpt_5_6_family_only_process_backend_forbidden');
+  assert.equal(narutoWorkerBackendBlocker('process'), 'naruto_process_backend_forbidden');
   assert.equal(narutoWorkerBackendBlocker('codex-sdk'), null);
   const routing = await resolveWorkerModelRouting({
     agent: { id: 'naruto_1', role: 'implementer', naruto_role: 'implementer' },

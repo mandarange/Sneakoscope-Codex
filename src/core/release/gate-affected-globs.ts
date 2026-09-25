@@ -47,7 +47,6 @@ export function affectedGlobsFor(id: string): string[] {
         'src/core/routes/design-policy.ts',
         'src/scripts/installed-package-smoke-check.ts',
         'src/scripts/postinstall-safe-side-effects-check.ts',
-        'test/blackbox/postinstall-safe-side-effects-packed.test.mjs',
         'test/unit/postinstall-command.test.mjs',
         'test/unit/publish-workflow-safety.test.mjs'
       ]

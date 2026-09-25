@@ -12,8 +12,9 @@ import {
 } from '../managed-assets/managed-assets-manifest.js'
 import {
   DEFAULT_SUBAGENT_EFFORT,
-  DEFAULT_SUBAGENT_MODEL
+  defaultSubagentModel as latestDefaultSubagentModel
 } from './model-policy.js'
+import { latestTierModelSet } from './model-tiers.js'
 import { HARD_NARUTO_MAX_THREADS } from './thread-budget.js'
 import { escapeRegExp } from '../text/regex.js'
 
@@ -25,7 +26,10 @@ export const DEFAULT_OFFICIAL_SUBAGENT_MAX_DEPTH = 1
 export const DEFAULT_OFFICIAL_SUBAGENT_JOB_MAX_RUNTIME_SECONDS = 1200
 export const DEFAULT_OFFICIAL_SUBAGENT_INTERRUPT_MESSAGE = true
 export const DEFAULT_OFFICIAL_SUBAGENT_ENABLED = true
-export const DEFAULT_OFFICIAL_SUBAGENT_MODEL = DEFAULT_SUBAGENT_MODEL
+/** The child default written to config: the latest deep-tier model, never a pinned id. */
+export function defaultOfficialSubagentModel(): string {
+  return latestDefaultSubagentModel()
+}
 export const DEFAULT_OFFICIAL_SUBAGENT_REASONING_EFFORT = DEFAULT_SUBAGENT_EFFORT
 /** MA v2 total concurrency = spawned children + root thread. */
 export const DEFAULT_MULTI_AGENT_V2_MAX_CONCURRENT_THREADS_PER_SESSION =
@@ -170,12 +174,14 @@ export function mergeOfficialSubagentConfigResult(
     'interrupt_message',
     `interrupt_message = ${DEFAULT_OFFICIAL_SUBAGENT_INTERRUPT_MESSAGE}`
   )
-  // The child model is fixed independently of the user's parent model and
-  // obsolete project/global child defaults. Effort remains separately selected.
+  // The child default follows the latest models, independent of the user's
+  // parent model. A current tier model already there is kept; an older one is
+  // moved to the latest deep-tier model. Effort remains separately selected.
+  const existingDefault = /^\s*default_subagent_model\s*=\s*"([^"]*)"/m.exec(next)?.[1] || ''
   next = upsertTomlTableKey(
     next,
     'agents',
-    `default_subagent_model = "${DEFAULT_OFFICIAL_SUBAGENT_MODEL}"`
+    `default_subagent_model = "${latestTierModelSet().has(existingDefault) ? existingDefault : defaultOfficialSubagentModel()}"`
   )
   next = upsertDefaultUnlessInherited(
     next,
@@ -361,7 +367,7 @@ export async function readOfficialSubagentConfig(
   const defaultSubagentModel = resolveLayeredValue(
     projectLayer.agents.default_subagent_model,
     globalLayer.agents.default_subagent_model,
-    DEFAULT_OFFICIAL_SUBAGENT_MODEL,
+    defaultOfficialSubagentModel(),
     nonEmptyString
   )
   const defaultSubagentReasoningEffort = resolveLayeredValue(
@@ -383,10 +389,10 @@ export async function readOfficialSubagentConfig(
     )
   }
 
-  const modelCoerced = defaultSubagentModel.value !== DEFAULT_OFFICIAL_SUBAGENT_MODEL
+  const modelCoerced = !latestTierModelSet().has(String(defaultSubagentModel.value))
   const depthCoerced = maxDepth.value > 1
   const warnings = [
-    ...(modelCoerced ? [`official_subagent_model_coerced_to_astra:${defaultSubagentModel.value}:${defaultSubagentModel.source}`] : []),
+    ...(modelCoerced ? [`official_subagent_model_coerced_to_latest:${defaultSubagentModel.value}:${defaultSubagentModel.source}`] : []),
     ...(depthCoerced ? [`official_subagent_max_depth_coerced_to_one:${maxDepth.value}:${maxDepth.source}`] : []),
     ...capacityNormalizationWarnings(maxThreads, multiAgentV2),
     ...(projectLayer.legacyWarnings),
@@ -399,7 +405,7 @@ export async function readOfficialSubagentConfig(
     maxDepth: depthCoerced ? DEFAULT_OFFICIAL_SUBAGENT_MAX_DEPTH : maxDepth.value,
     jobMaxRuntimeSeconds: null,
     interruptMessage: interruptMessage.value,
-    defaultSubagentModel: DEFAULT_OFFICIAL_SUBAGENT_MODEL,
+    defaultSubagentModel: modelCoerced ? defaultOfficialSubagentModel() : String(defaultSubagentModel.value),
     defaultSubagentReasoningEffort: defaultSubagentReasoningEffort.value,
     multiAgentV2: effectiveMultiAgentV2,
     sources: {

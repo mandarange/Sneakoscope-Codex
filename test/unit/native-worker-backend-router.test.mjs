@@ -1,12 +1,18 @@
+import '../../dist/core/__tests__/helpers/isolated-test-home.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { BUILTIN_LATEST_TIER_MODELS as T } from '../../dist/core/subagents/model-tiers.js';
+
+// Isolated HOME: no Codex models cache, so tiers resolve to the built-in latest family.
+const CURRENT = [...new Set([T.fast, T.balanced, T.context, T.deep])];
+const allTierCatalog = () => ({ ok: true, models: CURRENT, model_efforts: Object.fromEntries(CURRENT.map((model) => [model, ['low', 'medium', 'high', 'max']])), blockers: [] });
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { runNativeCliWorker } from '../../dist/core/agents/native-cli-worker.js';
 import { resolveWorkerModelRouting } from '../../dist/core/agents/native-worker-backend-router.js';
 
-test('Naruto worker uses Astra independently of the selected OpenRouter parent', async () => {
+test('Naruto worker uses its task tier model independently of the selected OpenRouter parent', async () => {
   const codexHome = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-router-openrouter-home-'));
   await fs.writeFile(path.join(codexHome, 'config.toml'), [
     'model_provider = "openrouter"',
@@ -24,14 +30,16 @@ test('Naruto worker uses Astra independently of the selected OpenRouter parent',
     slice: { id: 'task-openrouter', role: 'implementation', description: 'implement provider routing' },
     intake: { route: '$Naruto' },
     fastModePolicy: { fast_mode: true, service_tier: 'fast' }
-  }, { lbCatalog: { ok: true, models: ['gpt-6-astra'], model_efforts: { 'gpt-6-astra': ['low', 'medium', 'high', 'max'] }, blockers: [] }, lbHealth: { ok: true }, env: { CODEX_HOME: codexHome } });
+  }, { lbCatalog: allTierCatalog(), lbHealth: { ok: true }, env: { CODEX_HOME: codexHome } });
 
   assert.deepEqual(routing.blockers, []);
-  assert.equal(routing.choice.model, 'gpt-6-astra');
-  assert.equal(routing.choice.reasoning, 'high');
+  // Instructed implementation runs on the balanced tier at low; a stale
+  // `high` on the old agent row does not carry over.
+  assert.equal(routing.choice.model, T.balanced);
+  assert.equal(routing.choice.reasoning, 'low');
 });
 
-test('stale owner role-model preference cannot replace the Astra child model', async () => {
+test('a stored preference for a model outside the current tiers cannot replace the child model', async () => {
   const routing = await resolveWorkerModelRouting({
     agent: {
       id: 'agent-role-override',
@@ -46,14 +54,14 @@ test('stale owner role-model preference cannot replace the Astra child model', a
     slice: { id: 'task-role-override', role: 'review', description: 'review protocol compatibility' },
     intake: { route: '$Naruto', main_model: 'anthropic/claude-sonnet-4.5' },
     fastModePolicy: { fast_mode: true, service_tier: 'fast' }
-  }, { lbCatalog: { ok: true, models: ['gpt-6-astra'], model_efforts: { 'gpt-6-astra': ['low', 'medium', 'high', 'max'] }, blockers: [] }, lbHealth: { ok: true }, env: {} });
+  }, { lbCatalog: allTierCatalog(), lbHealth: { ok: true }, env: {} });
 
   assert.deepEqual(routing.blockers, []);
-  assert.equal(routing.choice.model, 'gpt-6-astra');
+  assert.equal(routing.choice.model, T.deep);
   assert.equal(routing.choice.reasoning, 'max');
 });
 
-test('native worker ignores a non-Astra parent model sealed into an old plan', async () => {
+test('native worker ignores a parent model sealed into an old plan', async () => {
   const codexHome = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-router-sealed-main-home-'));
   await fs.writeFile(path.join(codexHome, 'config.toml'), [
     'model_provider = "openai"',
@@ -74,32 +82,32 @@ test('native worker ignores a non-Astra parent model sealed into an old plan', a
     slice: { id: 'task-sealed-main', role: 'implementation', description: 'implement provider routing' },
     intake: { route: '$Naruto' },
     fastModePolicy: { fast_mode: true, service_tier: 'fast' }
-  }, { lbCatalog: { ok: true, models: ['gpt-6-astra'], model_efforts: { 'gpt-6-astra': ['low', 'medium', 'high', 'max'] }, blockers: [] }, lbHealth: { ok: true }, env: { CODEX_HOME: codexHome } });
+  }, { lbCatalog: allTierCatalog(), lbHealth: { ok: true }, env: { CODEX_HOME: codexHome } });
 
   assert.deepEqual(routing.blockers, []);
-  assert.equal(routing.choice.model, 'gpt-6-astra');
-  assert.equal(routing.choice.reasoning, 'high');
+  assert.equal(routing.choice.model, T.balanced);
+  assert.equal(routing.choice.reasoning, 'low');
 });
 
-test('native worker preserves a saved Astra effort and validates it against the catalog', async () => {
+test('native worker preserves a saved current-model preference and validates it against the catalog', async () => {
   const input = {
     agent: {
       id: 'ui_implementer', role: 'ui_implementer',
-      routed_model: 'gpt-6-astra', routed_model_reasoning_effort: 'max',
+      routed_model: T.deep, routed_model_reasoning_effort: 'max',
       routed_model_policy: 'user_role_model_preference'
     },
     slice: { id: 'ui', role: 'implementation', description: 'Implement the toolbar' },
     intake: { route: '$Naruto' },
     fastModePolicy: { fast_mode: true, service_tier: 'fast' }
   };
-  const catalog = { ok: true, models: ['gpt-6-astra'], model_efforts: { 'gpt-6-astra': ['max'] }, blockers: [] };
+  const catalog = { ok: true, models: [T.deep], model_efforts: { [T.deep]: ['max'] }, blockers: [] };
   const deps = { env: {}, lbHealth: { ok: true }, lbCatalog: catalog };
   const routing = await resolveWorkerModelRouting(input, deps);
   assert.deepEqual(routing.blockers, []);
-  assert.equal(routing.choice.model, 'gpt-6-astra');
+  assert.equal(routing.choice.model, T.deep);
   assert.equal(routing.choice.reasoning, 'max');
   const unavailable = await resolveWorkerModelRouting(input, {
-    ...deps, lbCatalog: { ...catalog, model_efforts: { 'gpt-6-astra': ['high'] } }
+    ...deps, lbCatalog: { ...catalog, model_efforts: { [T.deep]: ['high'] } }
   });
   assert.equal(unavailable.choice.model, '');
   assert.ok(unavailable.blockers.includes('naruto_worker_model_unavailable'));

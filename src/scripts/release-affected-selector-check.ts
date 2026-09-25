@@ -94,8 +94,7 @@ for (const changedFile of [
   'src/core/routes.ts',
   'src/core/subagents/naruto-help-contract.ts',
   'src/core/commands/naruto-command.ts',
-  'src/bin/fast-inline.ts',
-  'test/blackbox/official-subagent-workflow-packed.test.mjs'
+  'src/bin/fast-inline.ts'
 ]) {
   const selectedForPolicy = selectorMod.selectAffectedReleaseGates(root, manifest, gates, {
     changedFiles: [changedFile],

@@ -6,7 +6,7 @@ import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_ONLY_POLICY, COD
 import { getdesignReferencePolicyText, imageUxReviewPipelinePolicyText } from './routes/design-policy.js';
 import { PPT_PIPELINE_SKILL_ALLOWLIST, pptPipelineAllowlistPolicyText } from './routes/ppt-policy.js';
 import { normalizeDollarSkillName, prefixKnownSksDollarReferences, sksPrefixedDollarCommand, sksPrefixedSkillName, unprefixedSksSkillName } from './routes/dollar-prefix.js';
-import { classifyTaskProfile, isTaskProfile, looksLikeDatabaseWorkRequest, type TaskProfile } from './runtime/task-profile.js';
+import { classifyTaskProfile, IMPLEMENTATION_VERB_RE, isTaskProfile, looksLikeDatabaseWorkRequest, type TaskProfile } from './runtime/task-profile.js';
 import { legacyCoreSkillNames } from './codex-native/core-skill-manifest.js';
 
 export * from './routes/constants.js';
@@ -155,10 +155,6 @@ export function outcomeRubricPolicyText() {
   return 'Outcome rubric: apply the Core Engineering Directive, then use Proof Field, route-gate, reflection, and Honest Mode evidence to judge goal fit, touched surface, verification, and escalation.';
 }
 
-export function speedLanePolicyText() {
-  return 'Proof Field speed lane policy: after the intended write scope is known, run or mentally apply `sks proof-field scan --intent "<goal>" --changed <files>`. Fast lanes keep the parent-owned minimal patch, listed verification, TriWiki validate, and Honest Mode; DB, security, visual-forensic, unknown surface, broad changes, failed verification, or unsupported claims fail closed to the normal Naruto/Honest path.';
-}
-
 export function hasFromChatImgSignal(prompt: any = '') {
   return /(?:^|\s)\$?(?:sks-)?from-chat-img(?:\s|:|$)/i.test(String(prompt || ''));
 }
@@ -276,7 +272,7 @@ export const ROUTES = [
     command: '$Naruto',
     mode: 'NARUTO',
     route: 'Codex official subagent workflow',
-    description: '$Naruto runs explicit parallel work through Codex official subagents. The selected parent owns decomposition, integration, and scoped verification; standalone launches default to GPT-6 Astra. Delegate independent slices with disjoint writes, preserve the Astra-only child role profiles, honor explicit counts and measured host limits, and reuse returned capacity.',
+    description: '$Naruto runs implementation work through Codex official subagents. The parent orchestrates: it owns decomposition, integration, and scoped verification, spawns a child per disjoint slice, and does not implement slices itself; standalone launches default to the latest deep-tier model. Each child runs the newest model of the tier its work needs; Jev mode picks the tier on spawn, and a stored role preference wins. Honor explicit counts and measured host limits, and reuse returned capacity.',
     requiredSkills: ['naruto', 'pipeline-runner', 'prompt-pipeline', 'honest-mode'],
     dollarAliases: ['$Work'],
     appSkillAliases: ['work', 'from-chat-img'],
@@ -749,7 +745,7 @@ export const COMMAND_CATALOG = [
   { name: 'wiki', usage: 'sks wiki coords|pack|refresh|publish|rebuild-index|validate|validate-shared|wrongness ...', description: 'Build, refresh, publish shared shards, rebuild ignored indexes, validate, and attach wrongness-memory context to RGBA/trig LLM Wiki packs with attention.use_first and attention.hydrate_first for compact recall plus source hydration.' },
   { name: 'memory', usage: 'sks memory build [--json] | sks memory gc [--dry-run]', description: 'Project TriWiki context-pack memory into managed AGENTS.md blocks or run bounded memory cleanup.' },
   { name: 'hproof', usage: 'sks hproof check [mission-id|latest]', description: 'Evaluate the H-Proof done gate for a mission.' },
-  { name: 'naruto', usage: 'sks naruto run \"task\" [--agents N] [--max-threads N] [--trusted-project] [--json] | sks naruto status|subagents|proof [latest|M-...] [--json] | sks naruto parent-summary --mission M-... --stdin [--json]', description: 'Run or inspect the Codex official subagent workflow with an Astra standalone parent default and Astra Low mechanical and instructed implementation, Astra Max judgment, and Astra Medium long-context/tool profiles, max_depth=1, and structured parent-thread completion evidence.' },
+  { name: 'naruto', usage: 'sks naruto run \"task\" [--agents N] [--max-threads N] [--trusted-project] [--json] | sks naruto status|subagents|proof [latest|M-...] [--json] | sks naruto parent-summary --mission M-... --stdin [--json]', description: 'Run or inspect the Codex official subagent workflow: an orchestrating parent (latest deep-tier standalone default), children on the newest model of their tier (Jev picks the tier on spawn when Jev mode is on), max_depth=1, and structured parent-thread completion evidence.' },
   { name: 'reasoning', usage: 'sks reasoning ["prompt"] [--json]', description: 'Show SKS temporary reasoning-effort routing: medium for simple tasks, high for logic, xhigh for research.' },
   { name: 'gx', usage: 'sks gx init|render|validate|drift|snapshot [name]', description: 'Create and verify deterministic SVG/HTML visual context cartridges.' },
   { name: 'profile', usage: 'sks profile show|set <model>', description: 'Inspect or set the current SKS model profile metadata.' },
@@ -1226,6 +1222,12 @@ export function narutoDecisionForRoute(
   if (NARUTO_GATE_SPECIALIZED_PARALLEL_ROUTE_IDS.has(routeId)) {
     return narutoRouteDecision('generic_naruto', routeId, profile, `specialized_route_default_parallel:${routeId}`, false);
   }
+  // The router already judged this prompt to be work (it chose Naruto) even
+  // though the verb-based profile found no change verb. Letting that fall to
+  // the answer bypass left the parent implementing alone with no gate armed.
+  if (routeId === 'Naruto' && profile === 'answer') {
+    return narutoRouteDecision('generic_naruto', routeId, profile, 'naruto_route_work_without_change_verb', false);
+  }
   if (profile === 'passthrough' || profile === 'answer' || profile === 'tiny-change') {
     return narutoRouteDecision('none', routeId, profile, `task_profile_${profile}_bypass`, true);
   }
@@ -1288,7 +1290,8 @@ export function reflectionRequiredForRoute(route: any) {
 export function looksLikeCodeChangingWork(prompt: any = '') {
   const text = String(prompt || '');
   return /\b(implement|build|make|add|edit|modify|change|fix|refactor|simplify|optimi[sz]e|improve|rewrite|migrate|create|delete|remove|rename|update|patch)\b/i.test(text)
-    || /(코드|구현|개발|수정|변경|추가|삭제|제거|최적화|개선|단순화|정리|해결|고쳐|바꿔|리팩터|마이그레이션)/i.test(text);
+    || /(코드|구현|개발|수정|변경|추가|삭제|제거|최적화|개선|단순화|정리|해결|고쳐|바꿔|리팩터|마이그레이션)/i.test(text)
+    || IMPLEMENTATION_VERB_RE.test(text);
 }
 
 export type PromptExecutionEffect = 'read' | 'write' | 'auth' | 'security' | 'delete' | 'deploy' | 'dependency';
@@ -1330,9 +1333,8 @@ export function subagentExecutionPolicyText(route: any, prompt: any = '') {
     return 'Subagent policy: not required for this task profile. Keep the work parent-owned unless a later, concrete decomposition reveals independent slices.';
   }
   return [
-    'Codex subagent workflow: required for this explicit Naruto or parallel task.',
-    'The parent agent owns decomposition, integration, scoped verification, and the final answer. Preserve its selected settings; every child uses gpt-6-astra with the sealed role effort, regardless of parent model or saved role preferences.',
-    'Delegate only genuinely independent slices. Use Astra Low for tiny short-context mechanical work and instructed ordinary implementation, Astra Max for review/debug/planning/analysis/architecture/integration/risk judgment, and Astra Medium for long-context or Computer Use, Browser/Chrome, and image-generation execution. Explicit Astra effort preferences, including High, remain supported.',
+    'Codex subagent workflow: required. The parent orchestrates only: it decomposes the task into disjoint slices, spawns a child for each slice, waits, integrates, verifies, and writes the final answer. It does not implement slice work itself; the PreToolUse gate denies parent source edits before the first child starts and while children are running.',
+    'The parent keeps its user-selected model, effort, and service tier. Every child runs the newest model of the tier its work needs: fast for mechanical work, balanced for instructed implementation, context for long-context, browser, Computer Use, and image work, and deep for planning, review, debugging, and risk judgment. When Jev mode is on, Jev picks each spawn\'s tier and SKS seals it; do not pick child models yourself. A stored user role-model preference wins in both modes.',
     'Parallel writes require disjoint paths; serialize overlapping paths, prohibit nested delegation, avoid duplicate work, wait for all requested agent threads, and close completed threads after collecting results.',
     'Completion evidence comes from official SubagentStart/SubagentStop events plus the parent integration summary, not process counts or PID evidence.'
   ].join(' ');

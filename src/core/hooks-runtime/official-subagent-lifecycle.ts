@@ -3,7 +3,7 @@ import path from 'node:path';
 import { appendJsonl, nowIso, readJson, sha256, writeJsonAtomic } from '../fsx.js';
 import { missionDir, updateCurrentIfMissionAndRun } from '../mission.js';
 import { ensureConfinedDirectory } from '../managed-path-safety.js';
-import { NARUTO_PARENT_EFFORT, NARUTO_PARENT_MODEL } from '../subagents/model-policy.js';
+import { NARUTO_PARENT_EFFORT, narutoParentModel } from '../subagents/model-policy.js';
 import { officialSubagentRolePlan } from '../subagents/agent-catalog.js';
 import {
   bindTrustworthySubagentParentSummaryToRun,
@@ -389,7 +389,7 @@ async function refreshOfficialSubagentCompletionArtifactsLocked(root: any, state
   }
   const previousGate = existingGate || {};
   const parentModel = plan.observed_parent_model || state.observed_parent_model || null;
-  const parentModelMismatch = previousGate.parent_model_match === false || observedParentModelMismatch(parentModel, NARUTO_PARENT_MODEL);
+  const parentModelMismatch = previousGate.parent_model_match === false || observedParentModelMismatch(parentModel, narutoParentModel());
   const blockers = [...new Set([
     ...evidence.blockers,
     ...(Array.isArray(previousGate.config_blockers) ? previousGate.config_blockers.map(String) : []),
@@ -412,7 +412,7 @@ async function refreshOfficialSubagentCompletionArtifactsLocked(root: any, state
     route: '$Naruto',
     status: passed ? 'completed' : evidence.status,
     parent: {
-      model: NARUTO_PARENT_MODEL,
+      model: narutoParentModel(),
       model_reasoning_effort: NARUTO_PARENT_EFFORT,
       observed_model: parentModel,
       observed_model_match: parentModel ? !parentModelMismatch : null

@@ -11,10 +11,10 @@ import {
 } from './official-subagent-prompt.js'
 import { readOfficialSubagentConfig } from './official-subagent-config.js'
 import {
-  ASTRA_SUBAGENT_MODEL,
   NARUTO_PARENT_EFFORT,
-  NARUTO_PARENT_MODEL
+  narutoParentModel
 } from './model-policy.js'
+import { latestModelForTier } from './model-tiers.js'
 import {
   MAX_ON_DEMAND_SUBAGENT_ROLE_COUNT,
   officialSubagentFanoutPolicy,
@@ -394,7 +394,7 @@ async function deriveOfficialSubagentPreparation(
     return [name, {
       ...config,
       routed_provider: 'openai',
-      routed_model: preference?.model || ASTRA_SUBAGENT_MODEL,
+      routed_model: preference?.model || config.model || decision.model,
       routed_model_reasoning_effort: routedReasoning,
       routed_model_policy: preference
         ? 'user_role_model_preference'
@@ -465,11 +465,11 @@ async function deriveOfficialSubagentPreparation(
     },
     slice_safety: sliceSafety,
     slices,
-    parent_model_policy: NARUTO_PARENT_MODEL,
+    parent_model_policy: narutoParentModel(),
     observed_parent_model: observedParentModel,
     parent_model_match: parentModelMatch,
     parent: {
-      model: NARUTO_PARENT_MODEL,
+      model: narutoParentModel(),
       model_reasoning_effort: NARUTO_PARENT_EFFORT
     },
     agent_catalog: agentCatalog,
@@ -653,7 +653,7 @@ function applyOfficialSubagentDecision(
       .filter(([name]) => !derived.roleModelPreferences.store.roles[name])
       .map(([name, effort]) => [name, {
         provider: 'openai',
-        model: selectedRouting.models[name] || 'gpt-6-astra',
+        model: selectedRouting.models[name] || latestModelForTier('deep'),
         reasoning_effort: effort,
         updated_at: derived.plan.workflow_run_id
       }]))
@@ -677,6 +677,9 @@ function applyOfficialSubagentDecision(
     },
     routedAgents: agents,
     narutoChildRouting: derived.mode === 'naruto',
+    // Jev on (and keyed): Jev seals every spawn, so the parent gets no tier rules.
+    jevRouting: decided.compiled.kind === 'apply'
+      || !['off', 'missing_key'].includes(String((decided.compiled as { reason?: string }).reason || '')),
     activeMainModel: derived.activeMainModel,
     parentOutputMode: derived.mode === 'naruto' && derived.sessionScope ? 'app_naruto_stdin' : 'raw_json',
     missionId: derived.plan.mission_id,
@@ -684,6 +687,7 @@ function applyOfficialSubagentDecision(
     decisionContract: decided.compiled.kind === 'apply'
       ? {
           planId: selectedPlan?.id ?? null,
+          workerCount: selectedPlan?.workerCount ?? null,
           keepContextIds: decided.selectedContextIds,
           routingLane: selectedRouting
             ? Object.entries(selectedRouting.models).map(([name, model]) => `${name}=${model}`).join(', ')
@@ -1153,7 +1157,7 @@ export function buildNarutoSummary(input: any) {
     workflow_run_id: input.workflowRunId || input.evidence?.run_id || null,
     mission_id: input.missionId,
     parent: {
-      model: NARUTO_PARENT_MODEL,
+      model: narutoParentModel(),
       model_reasoning_effort: NARUTO_PARENT_EFFORT,
       observed_model: input.observedParentModel || null,
       observed_model_match: input.parentModelMatch ?? null
@@ -1238,7 +1242,7 @@ export function buildNarutoGateResult(input: any) {
     workflow: 'official_codex_subagent',
     workflow_run_id: input.workflowRunId || input.evidence?.run_id || null,
     mission_id: input.missionId,
-    parent_model_policy: NARUTO_PARENT_MODEL,
+    parent_model_policy: narutoParentModel(),
     observed_parent_model: input.observedParentModel || null,
     parent_model_match: input.parentModelMatch ?? null,
     status: passed ? 'passed' : 'blocked',
@@ -1284,7 +1288,7 @@ export function buildNarutoGateResult(input: any) {
 }
 
 function observedParentModelMatchesPolicy(model: string) {
-  return model.trim().toLowerCase() === NARUTO_PARENT_MODEL
+  return model.trim().toLowerCase() === narutoParentModel()
 }
 
 export const NARUTO_MISSION_RUN_LOCK = '.naruto-run.lock'

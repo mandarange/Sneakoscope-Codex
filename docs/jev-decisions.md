@@ -78,14 +78,38 @@ connectivity evidence, not SKS task accuracy or a privacy audit.
 - Optional retrieved excerpts that are already fresh, reproducible, and not
   pinned to the mission write scope.
 - When Jev is on, Naruto dynamic roles are routed in that same Decisions
-  request. Each role gets a Choice among `gpt-5.6-luna` (low), `gpt-5.6-sol`
-  (low), `gpt-5.6-terra` (medium), and `gpt-6-astra` (max), plus a difficulty
-  Score and a high-stakes Noul. Code promotes a choice only at probability
-  0.85 and confidence 0.70. The top difficulty level, or a risk Noul at or
-  above 0.70, keeps that role on Astra. Jev off leaves every child on
-  `gpt-6-astra`. User role preferences stay authoritative.
+  request. Each role gets a Choice among model tiers, never model names:
+  `fast` (low), `balanced` (low), `context` (medium), and `deep` (max), plus a
+  difficulty Score and a high-stakes Noul. Code promotes a choice only at
+  probability 0.85 and confidence 0.70. The top difficulty level, or a risk
+  Noul at or above 0.70, escalates that role to `deep`. Each tier resolves to
+  the newest model the Codex models cache lists for it (today `gpt-6-luna`,
+  `gpt-6-sol`, `gpt-6-sol`, `gpt-6-astra`), so Jev keeps routing to the latest
+  models. Jev off gives each role its own tier. User role preferences on a
+  current model stay authoritative.
 - An automatic plan variant that already covers every required slice, before
   coherent plan/budget/prompt promotion.
+- Each Codex user prompt: one Choice rates the turn. On a turn the Naruto gate
+  marks as parent orchestration (a new mission or a continuation), the answer
+  is the default child seal. On other turns it is only a reasoning hint. The
+  parent model, effort, and service tier always stay as the user set them.
+- Each Naruto `spawn_agent` call: Jev picks the tier at spawn time and SKS
+  seals that tier's newest model and effort. When Jev was called but could not
+  decide and the parent passed no current model, the child gets its role's own
+  tier (deep for an unknown role, with `fork_turns="none"` when absent) instead
+  of bouncing off the spawn policy.
+- In Jev mode the context and plan decisions always run (derived from the
+  mode, not stored flags), a Jev-fixed automatic child count is stated to the
+  parent, and the delegation prompt drops its tier rules: the parent reads one
+  line saying Jev decides models and efforts, so it spends no time on them.
+- A gated parent tool call before the first spawn (see the parent
+  orchestration gate in `naruto.md`): one `delegation` Choice between
+  `delegate_child`, `parent_owned`, and `keep_baseline`. `parent_owned` means
+  orchestration scaffolding that no slice owns (a shared interface stub,
+  workspace or build wiring, or a plan file); any feature, fix, or test change
+  is slice work however small. Only a confident `parent_owned` (probability
+  0.85, confidence 0.70) releases that edit; everything else keeps the
+  deterministic spawn-first baseline.
 
 ## What Jev may not do
 

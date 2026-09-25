@@ -1,4 +1,4 @@
-import { ASTRA_SUBAGENT_MODEL, NARUTO_PARENT_MODEL, NARUTO_PARENT_EFFORT } from './model-policy.js'
+import { latestTierModelSet } from './model-tiers.js'
 import { HARD_NARUTO_MAX_THREADS, type SubagentCapacityController } from './thread-budget.js'
 import type { BoundedTriwikiAttention } from './triwiki-attention.js'
 import { coreEngineeringDirectiveReferenceText } from '../lean-engineering-policy.js'
@@ -45,12 +45,15 @@ export function buildOfficialSubagentPrompt(input: {
   roleModelPreferences?: Readonly<Record<string, RoleModelPreference>>
   routedAgents?: Readonly<Record<string, { routed_model?: string; routed_model_reasoning_effort?: string }>>
   narutoChildRouting?: boolean
+  /** Jev mode is on: Jev picks every child tier, so the parent reads no model rules. */
+  jevRouting?: boolean
   activeMainModel?: ActiveMainModelRouting | null
   parentOutputMode?: OfficialSubagentParentOutputMode
   missionId?: string
   workflowRunId?: string
   decisionContract?: {
     planId?: string | null
+    workerCount?: number | null
     keepContextIds?: readonly string[] | null
     routingLane?: string | null
     executeSelectedIds?: boolean
@@ -97,30 +100,33 @@ export function buildOfficialSubagentPrompt(input: {
     ...(input.recommendedAgents || [])
   ])
   const activeMainModel = normalizedActiveMainModel(input.activeMainModel)
-  const effortPreferences = Object.fromEntries(Object.entries(input.roleModelPreferences || {})
-    .filter(([name, row]) => row.model === ASTRA_SUBAGENT_MODEL
+  // A stored role preference on a current tier model wins for that role.
+  const currentModels = latestTierModelSet()
+  const rolePreferences = Object.fromEntries(Object.entries(input.roleModelPreferences || {})
+    .filter(([name, row]) => currentModels.has(row.model)
       && ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'].includes(row.reasoning_effort)
-      && officialSubagentOnDemandRoleCatalog([name]).some((role) => role.name === name))
-    .map(([name, row]) => [name, row.reasoning_effort]))
+      && officialSubagentOnDemandRoleCatalog([name]).some((role) => role.name === name)))
+  const effortPreferences = Object.fromEntries(Object.entries(rolePreferences).map(([name, row]) => [name, row.reasoning_effort]))
   const narutoChildren = input.narutoChildRouting === true
-  const spawnModelRouting = renderSpawnModelRouting(narutoChildren)
+  const jevRouting = input.jevRouting === true
+  const spawnModelRouting = renderSpawnModelRouting(narutoChildren, jevRouting)
+  // Every child runs the newest model of the tier its work needs. With Jev on
+  // the parent gets no tier rules to weigh: Jev decides each spawn.
+  const tierRules = jevRouting
+    ? []
+    : [
+        '- tiers: fast for tiny mechanical shards (search, rename, copy, label, one-line edits), balanced for instructed UI, logic, backend, and native implementation, context for long reads, exploration, large first drafts, Computer Use, browser, or image work, deep for planning, review, debugging, architecture, security, database, research, release, or other judgment',
+        '- explicit task class and phase win over incidental keywords; a mixed slice takes the deeper tier; never apply the parent profile to every child'
+      ]
   const childModelRules = narutoChildren
     ? [
         '- the parent orchestrates only: decompose the goal, assign disjoint slices, spawn children, and integrate their results',
         '- do not implement the assigned slice work in the parent thread',
-        '- use the model and reasoning_effort named in each slice spawn contract',
-        '- sealed child models are gpt-5.6-luna, gpt-5.6-sol, gpt-5.6-terra, and gpt-6-astra',
+        '- use the model and reasoning_effort named in each slice spawn contract; each is the newest model of its tier',
+        ...tierRules,
         '- keep a stored user role-model preference for that role'
       ].join('\n')
-    : [
-        '- use `worker` with gpt-6-astra and low reasoning for tiny short-context mechanical work such as simple search, typing, rename, copy, label, or one-line edits with no exploration or judgment',
-        '- use gpt-6-astra with low reasoning for ordinary UI, logic, backend, and native implementation with established instructions',
-        '- use gpt-6-astra with max reasoning for planning, analysis, review, focused unresolved, high-risk, architecture, security, database, research, release, or other explicit judgment slices',
-        '- use gpt-6-astra with medium reasoning for long context/memory, large docs/repository reads or exploration, large-scale first-draft code processing, and direct Computer Use, Browser/Chrome, or image generation',
-        '- explicit task class and phase win over incidental keywords: Astra Medium explores, Astra Low executes mechanical and instructed coding tasks, and Astra Max judges',
-        '- in mass fan-out, use worker/Astra Low for tiny mechanical shards and explorer/Astra Medium for broad exploration; use Astra Low for instructed implementation and Astra Max for judgment',
-        '- keep context, exploration, review, debugging, planning, and direct tool operation on their assigned defaults; preserve each sealed role model and effort instead of applying the parent profile to every child'
-      ].join('\n')
+    : tierRules.join('\n')
   const parentOutputMode = input.parentOutputMode === 'app_naruto_stdin'
     ? 'app_naruto_stdin'
     : 'raw_json'
@@ -133,10 +139,10 @@ export function buildOfficialSubagentPrompt(input: {
       || effortPreferences[agentName]
       || role?.model_reasoning_effort
       || 'medium'
-    const sealedModel = routed?.routed_model || role?.model
+    const sealedModel = routed?.routed_model || rolePreferences[agentName]?.model || role?.model
     const spawnContract = role
       ? `pass model=${JSON.stringify(sealedModel)} and reasoning_effort=${JSON.stringify(sealedReasoning)} from the sealed role policy`
-      : 'stop before spawning: resolve an installed sealed Astra role and its effort first'
+      : 'stop before spawning: resolve an installed sealed role and its tier first'
 
     return [
       `${index + 1}. [${slice.id}] use custom agent \`${agentName}\``,
@@ -169,15 +175,15 @@ Host capability policy:
 - Slack delivery is ACAS-runtime-only, never a model tool
 
 Subagent rules:
-- parent model policy: ${activeMainModel ? `keep the current app-selected main model ${activeMainModel.provider}:${activeMainModel.model}` : `${NARUTO_PARENT_MODEL} with ${NARUTO_PARENT_EFFORT} reasoning`}
+- parent model policy: ${activeMainModel ? `keep the current app-selected main model ${activeMainModel.provider}:${activeMainModel.model}` : 'keep the user-selected parent model'}
 - use only Codex official subagent threads; do not launch shell workers, a custom scheduler, a worker pool, or model fanout
 - select the narrowest matching project custom agent by its description; the custom agent name is the spawn type
 - custom \`agent_type\` selection and spawn-time \`model\`/\`reasoning_effort\` overrides must use \`fork_turns="none"\` or a positive bounded turn count, with the complete bounded slice contract in \`message\`; context contract: pass fork_turns="none" for listed slices
-- \`spawn_agent\` has no provider argument; ${narutoChildren ? 'Naruto children use the sealed model named in the spawn contract (gpt-5.6-luna, gpt-5.6-sol, gpt-5.6-terra, or gpt-6-astra)' : 'every child uses the exact model slug gpt-6-astra'}
+- \`spawn_agent\` has no provider argument; ${narutoChildren ? 'Naruto children use the tier model named in the spawn contract' : 'children use the sealed model slug'}
 - never combine \`fork_turns="all"\` or the omitted/default full-history mode with \`agent_type\`, \`model\`, or \`reasoning_effort\`; Codex rejects that start before SubagentStart
 - never use a full-history fork for SKS children
 ${spawnModelRouting}
-${Object.keys(effortPreferences).length ? `- explicit Astra effort preferences override role defaults, including later slices: ${JSON.stringify(effortPreferences)}` : ''}
+${Object.keys(effortPreferences).length ? `- stored role effort preferences override role defaults, including later slices: ${JSON.stringify(effortPreferences)}` : ''}
 ${childModelRules}
 
 Plan and capacity:
@@ -287,18 +293,17 @@ function normalizedActiveMainModel(value: ActiveMainModelRouting | null | undefi
   return provider && model ? { provider, model } : null
 }
 
-function renderSpawnModelRouting(narutoChildRouting: boolean): string {
-  if (narutoChildRouting) {
-    return [
-      '- Naruto child models come from the spawn contract, including slices created after parent decomposition',
-      '- when Jev mode selected a role, that contract names gpt-5.6-luna at low, gpt-5.6-sol at low, gpt-5.6-terra at medium, or gpt-6-astra at max',
-      '- explicit user role-model preferences stay authoritative',
-      '- preserve the user-selected parent model, reasoning effort, and service tier'
-    ].join('\n')
-  }
+function renderSpawnModelRouting(narutoChildRouting: boolean, jevRouting: boolean): string {
+  const lines = jevRouting
+    ? [
+        '- Jev mode: Jev picks each child tier (fast, balanced, context, or deep) and the SKS PreToolUse hook seals that tier\'s newest model on every spawn_agent call; pass the contract model unchanged and spend no time choosing models or efforts'
+      ]
+    : [
+        `- model routing applies to every child, including slices created after parent decomposition: the newest model of the role tier${narutoChildRouting ? ' named in the spawn contract' : ''}`
+      ]
   return [
-    '- model routing applies to every child, including slices created after parent decomposition: gpt-6-astra only, with the selected role effort',
-    '- use sealed Astra Low/Astra Medium/Astra Max role defaults across four task-class profiles; parent selection and saved non-Astra preferences never override the child model; explicit Astra effort preferences, including High, may override role defaults',
+    ...lines,
+    '- parent selection never overrides the child model; stored user role preferences stay authoritative',
     '- preserve the user-selected parent model, reasoning effort, and service tier'
   ].join('\n')
 }
@@ -397,6 +402,7 @@ function renderBoundedTriwikiAttention(value: BoundedTriwikiAttention | undefine
 
 function renderDecisionContract(value: {
   planId?: string | null
+  workerCount?: number | null
   keepContextIds?: readonly string[] | null
   routingLane?: string | null
   executeSelectedIds?: boolean
@@ -405,6 +411,7 @@ function renderDecisionContract(value: {
   return [
     'Selected decision contract:',
     `- execute the selected plan${value.planId ? ` ${value.planId}` : ''} and retained optional context IDs; do not choose them again`,
+    value.workerCount ? `- Jev fixed the automatic child target at ${value.workerCount}; do not recompute it (real host capacity still caps each wave)` : '',
     value.routingLane ? `- Jev sealed models: ${value.routingLane}` : '',
     value.keepContextIds?.length
       ? `- retained optional context IDs: ${value.keepContextIds.join(', ')}`

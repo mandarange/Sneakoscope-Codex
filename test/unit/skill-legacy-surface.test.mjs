@@ -39,6 +39,18 @@ test('rewriteSkillLegacySurface maps retired dollar and CLI surfaces to current 
   assert.equal(skillLegacySurfaceNeedsRewrite(result.text), false);
 });
 
+test('retired ralph and loop commands rewrite to Naruto, never to another retired command', () => {
+  const input = 'Run sks ralph status, then sks loop run until done.';
+  assert.equal(skillLegacySurfaceNeedsRewrite(input), true);
+  assert.equal(containsRetiredPublicSurface('Resume with sks loop run.'), true);
+  const result = rewriteSkillLegacySurface(input);
+  assert.equal(result.text, 'Run sks naruto status, then sks naruto run until done.');
+  assert.equal(containsRetiredPublicSurface(result.text), false);
+  assert.equal(skillLegacySurfaceNeedsRewrite(result.text), false);
+  // Tokens that only start with the retired name stay untouched.
+  assert.equal(containsRetiredPublicSurface('sks loopback probe and sks ralph2 status'), false);
+});
+
 test('official Codex App $imagegen references are current and never rewritten', () => {
   const input = 'Use $imagegen for the official Codex App image generation tool.';
   assert.equal(skillLegacySurfaceNeedsRewrite(input), false);

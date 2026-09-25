@@ -2,7 +2,7 @@ import path from 'node:path'
 import { readJson } from '../fsx.js'
 import { uniqueValues as unique } from '../text/strings.js'
 import { runCodexTask } from '../codex-control/codex-task-runner.js'
-import { THINKING_SUBAGENT_MODEL, SUBAGENT_EFFORT } from '../subagents/model-policy.js'
+import { thinkingSubagentModel, SUBAGENT_EFFORT } from '../subagents/model-policy.js'
 import {
   normalizeClaimEvidenceMatrix,
   validateClaimEvidenceMatrix,
@@ -46,7 +46,7 @@ export async function synthesizeResearchClaimEvidenceMatrix(input: {
       hardTimeoutMs: input.timeoutMs,
       ...(input.deadlineMs === undefined ? {} : { deadlineEpochMs: input.deadlineMs })
     },
-    model: THINKING_SUBAGENT_MODEL,
+    model: thinkingSubagentModel(),
     reasoningEffort: SUBAGENT_EFFORT,
     modelReasoningEffort: SUBAGENT_EFFORT,
     serviceTier: 'fast'
@@ -200,7 +200,7 @@ function buildResearchClaimSynthesisPrompt(input: { plan: any; sourceLedger: any
   const contract = input.plan?.quality_contract || {}
   return [
     'Build a semantic claim-evidence matrix for this Research mission.',
-    `This is a judgment-heavy task: use ${THINKING_SUBAGENT_MODEL} with ${SUBAGENT_EFFORT} reasoning.`,
+    `This is a judgment-heavy task: use ${thinkingSubagentModel()} with ${SUBAGENT_EFFORT} reasoning.`,
     'Return exactly one JSON object matching sks.claim-evidence-matrix.v1.',
     'Never reuse or merge discovery claim IDs merely because their strings match.',
     'Group sources only when their hydrated notes/content actually support the same written claim.',

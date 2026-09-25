@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { consultJevTurnModel, setDecisionTestOverrides } from '../integration.js';
 import { defaultDecisionConfig } from '../config.js';
-import { SEALED_ROUTING_MODELS } from '../types.js';
+import '../../__tests__/helpers/isolated-test-home.js';
+import { ROUTING_TIERS } from '../types.js';
+import { BUILTIN_LATEST_TIER_MODELS, resetLatestModelTierCache } from '../../subagents/model-tiers.js';
 
 process.env.SKS_JEV_DECISION_TEST_OVERRIDES = '1';
 
@@ -47,13 +49,14 @@ test('Jev off does not call OpenRouter for a turn', async () => {
       env: { OPENROUTER_API_KEY: 'sk-or-test-turnroutingaaaaaaaa', HOME: process.env.HOME, PATH: process.env.PATH }
     });
     assert.equal(fetched, 0);
-    assert.deepEqual(result, { called: false, model: null, effort: null, reason: 'off' });
+    assert.deepEqual(result, { called: false, model: null, effort: null, tier: null, reason: 'off' });
   } finally {
     setDecisionTestOverrides(null);
   }
 });
 
-test('an enabled Jev turn calls Decisions and keeps a confident sealed model', async () => {
+test('an enabled Jev turn picks a tier and resolves it to the newest model of that tier', async () => {
+  resetLatestModelTierCache();
   let fetched = 0;
   setDecisionTestOverrides({
     config: enabledConfig(),
@@ -64,11 +67,11 @@ test('an enabled Jev turn calls Decisions and keeps a confident sealed model', a
       };
       assert.equal(body.questions.route_turn?.type, 'choice');
       const keys = Object.keys(body.questions.route_turn?.criteria || {});
-      for (const model of SEALED_ROUTING_MODELS) assert.equal(typeof body.questions.route_turn?.criteria?.[model.id], 'string');
+      for (const tier of ROUTING_TIERS) assert.equal(typeof body.questions.route_turn?.criteria?.[tier.id], 'string');
       return new Response(JSON.stringify({
         model: 'typesafe/jev-1.13',
         answers: {
-          route_turn: choice('gpt-5.6-luna', keys),
+          route_turn: choice('fast', keys),
           difficulty_turn: { type: 'score', score: 0, confidence: 0.9 },
           risk_turn: { type: 'noul', noul: 0.04 }
         },
@@ -84,7 +87,8 @@ test('an enabled Jev turn calls Decisions and keeps a confident sealed model', a
     });
     assert.equal(fetched, 1);
     assert.equal(result.called, true);
-    assert.equal(result.model, 'gpt-5.6-luna');
+    assert.equal(result.tier, 'fast');
+    assert.equal(result.model, BUILTIN_LATEST_TIER_MODELS.fast);
     assert.equal(result.effort, 'low');
     assert.equal(result.reason, 'applied');
   } finally {

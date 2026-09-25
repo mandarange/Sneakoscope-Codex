@@ -1,7 +1,8 @@
 import path from 'node:path';
 import { readJson } from '../fsx.js';
 import { managedOfficialSubagentRoleByName } from '../managed-assets/managed-assets-manifest.js';
-import { ASTRA_SUBAGENT_MODEL, NARUTO_LUNA_MODEL, NARUTO_SOL_MODEL, NARUTO_TERRA_MODEL } from '../subagents/model-policy.js';
+import { latestModelForTier, latestTierModelSet } from '../subagents/model-tiers.js';
+import { jevEnabled, readDecisionConfig } from '../decisions/config.js';
 
 export async function sealedSubagentRoutingContext(artifactDir: string, payload: any = {}) {
   const plan: any = await readJson(path.join(artifactDir, 'subagent-plan.json'), null).catch(() => null);
@@ -12,9 +13,20 @@ export async function sealedSubagentRoutingContext(artifactDir: string, payload:
   const role = agentName ? managedOfficialSubagentRoleByName(agentName) : null;
   if (!agentName) return '';
   const narutoPlan = plan.mode === 'naruto' || plan.route === '$Naruto'
+  // With Jev on, the PreToolUse hook re-seals model and effort on the spawn
+  // call itself, so the planned role model is no longer the child's model.
+  const jevSealed = await readDecisionConfig().then(jevEnabled).catch(() => false)
+  if (jevSealed) {
+    return [
+      'SKS sealed child routing:',
+      `- custom agent: ${agentName}`,
+      '- model and model_reasoning_effort: sealed on the spawn call by Jev routing',
+      '- keep this sealed profile; do not retarget model/effort or spawn nested agents'
+    ].join('\n');
+  }
   const plannedModel = String(planned?.routed_model || planned?.model || '').trim()
-  const sealedModels = new Set([ASTRA_SUBAGENT_MODEL, NARUTO_LUNA_MODEL, NARUTO_SOL_MODEL, NARUTO_TERRA_MODEL])
-  const model = narutoPlan && sealedModels.has(plannedModel) ? plannedModel : ASTRA_SUBAGENT_MODEL
+  const sealedModels = latestTierModelSet()
+  const model = narutoPlan && sealedModels.has(plannedModel) ? plannedModel : (role?.model || latestModelForTier('deep'))
   const effort = String((model === plannedModel
     ? planned?.routed_model_reasoning_effort || planned?.model_reasoning_effort
     : null) || role?.model_reasoning_effort || 'medium').trim()

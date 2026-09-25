@@ -1,5 +1,6 @@
 import {
   CONTEXT_RELEVANCE_RUBRIC,
+  DELEGATION_CHOICES,
   DESIGN_DEFAULTS,
   KEEP_BASELINE_CHOICE,
   NEEDS_EVIDENCE_CHOICE,
@@ -7,6 +8,7 @@ import {
   type ContextCandidate,
   type DecisionBundle,
   type DecisionsWireRequest,
+  type DelegationCandidate,
   type Entry,
   type PlanCandidate,
   type Question,
@@ -14,7 +16,7 @@ import {
   type RecoveryCandidate,
   type RoutingRoleCandidate,
   ROUTING_DIFFICULTY_RUBRIC,
-  SEALED_ROUTING_MODELS
+  ROUTING_TIERS
 } from './types.js';
 import { buildDecisionBinding, redactDecisionText } from './state.js';
 
@@ -63,6 +65,7 @@ export function buildDecisionBundle(input: {
   contextCandidates?: readonly ContextCandidate[];
   recoveryCandidates?: readonly RecoveryCandidate[];
   routingCandidates?: readonly RoutingRoleCandidate[];
+  delegationCandidate?: DelegationCandidate | null;
   baselinePlanId?: string | null;
   requiredSliceIds?: readonly string[];
   requiredVerificationIds?: readonly string[];
@@ -72,6 +75,7 @@ export function buildDecisionBundle(input: {
   const contextCandidates = [...(input.contextCandidates || [])];
   const recoveryCandidates = [...(input.recoveryCandidates || [])];
   const routingCandidates = [...(input.routingCandidates || [])];
+  const delegationCandidate = input.delegationCandidate || null;
   const questions: Record<string, Question> = {};
   const questionBindings: Record<string, QuestionBinding> = {};
   const recoverySlot = recoveryCandidates.length > 0 ? 1 : 0;
@@ -93,6 +97,7 @@ export function buildDecisionBundle(input: {
   }
 
   const routedRoles = appendRoutingChoices(routingCandidates, questions, questionBindings, recoverySlot);
+  appendDelegationChoice(delegationCandidate, questions, questionBindings, recoverySlot);
 
   for (const candidate of contextCandidates.filter((row) => !row.pinned && row.excerpt)) {
     if (Object.keys(questions).length + 2 > DESIGN_DEFAULTS.maxQuestions - recoverySlot) break;
@@ -176,8 +181,16 @@ export function buildDecisionBundle(input: {
       diagnostic: redactDecisionText(input.recoveryDiagnostic || '', 800),
       handlers: recoveryCandidates
     },
+    delegation: delegationCandidate
+      ? {
+          tool: redactDecisionText(delegationCandidate.toolName, 120),
+          targets: delegationCandidate.targets.slice(0, 16).map((target) => redactDecisionText(target, 240)),
+          mission_goal: redactDecisionText(delegationCandidate.missionGoal, 800),
+          children_started: 0
+        }
+      : null,
     routing: {
-      models: Object.fromEntries(SEALED_ROUTING_MODELS.map((row) => [row.id, {
+      tiers: Object.fromEntries(ROUTING_TIERS.map((row) => [row.id, {
         effort: row.effort,
         summary: row.summary
       }])),
@@ -201,7 +214,7 @@ export function buildDecisionBundle(input: {
       workflowRevision: input.workflowRevision,
       sourceDigest: input.sourceDigest,
       graphDigest: input.graphDigest,
-      candidates: { planCandidates, contextCandidates, recoveryCandidates, routingCandidates: routedRoles },
+      candidates: { planCandidates, contextCandidates, recoveryCandidates, routingCandidates: routedRoles, delegationCandidate },
       questions,
       requestedModel: DESIGN_DEFAULTS.model
     }),
@@ -210,6 +223,7 @@ export function buildDecisionBundle(input: {
     contextCandidates,
     recoveryCandidates,
     routingCandidates: routedRoles,
+    delegationCandidate,
     baselinePlanId: input.baselinePlanId ?? planCandidates[0]?.id ?? null,
     questionBindings
   };
@@ -230,15 +244,15 @@ function appendRoutingChoices(
     if (questionRoom(questions, recoverySlot) < 1) break;
     const id = `route_${role.id}`;
     const instructions = redactDecisionText(
-      `Choose the sealed model for routing.roles.${role.id} using state.task and that role summary. Prefer the fastest sealed model that can do the work. Use gpt-6-astra for judgment, ambiguity, or high-stakes work. Select ${KEEP_BASELINE_CHOICE} when the work is not distinguished. Do not invent a model.`
+      `Choose the model tier for routing.roles.${role.id} using state.task and that role summary. Each tier is the newest model for that speed and accuracy. Prefer the fastest tier that can do the work correctly. Use deep for judgment, ambiguity, or high-stakes work. Select ${KEEP_BASELINE_CHOICE} when the work is not distinguished. Do not invent a tier.`
     );
     assertIndependentQuestion(instructions);
     questions[id] = {
       type: 'choice',
       instructions,
       criteria: {
-        ...Object.fromEntries(SEALED_ROUTING_MODELS.map((row) => [row.id, row.summary])),
-        [KEEP_BASELINE_CHOICE]: 'The role work is not distinguished enough to leave the baseline model.'
+        ...Object.fromEntries(ROUTING_TIERS.map((row) => [row.id, row.summary])),
+        [KEEP_BASELINE_CHOICE]: 'The role work is not distinguished enough to leave the baseline tier.'
       }
     };
     bindings[id] = { kind: 'routing', roleId: role.id };
@@ -246,6 +260,38 @@ function appendRoutingChoices(
   }
   return included;
 }
+
+/**
+ * One choice per gated parent tool call. The deterministic baseline is
+ * `delegate_child` (the hook denies the edit until a child spawns); only a
+ * confident `parent_owned` answer lets the edit through.
+ */
+function appendDelegationChoice(
+  candidate: DelegationCandidate | null,
+  questions: Record<string, Question>,
+  bindings: Record<string, QuestionBinding>,
+  recoverySlot: number
+): void {
+  if (!candidate || questionRoom(questions, recoverySlot) < 1) return;
+  const instructions = redactDecisionText(
+    `state.delegation describes a tool call the Naruto parent thread wants to make before any child thread exists. Using state.task, state.delegation.tool, and state.delegation.targets, choose whether that edit is slice implementation that a child must own, or orchestration scaffolding that no slice owns and that children depend on (a shared interface or type stub, workspace or build wiring, or a plan file). Any change to feature, fix, or test code is slice work, however small. Select ${KEEP_BASELINE_CHOICE} when the evidence does not distinguish them.`
+  );
+  assertIndependentQuestion(instructions);
+  questions.delegation = {
+    type: 'choice',
+    instructions,
+    criteria: {
+      ...Object.fromEntries(DELEGATION_CHOICES.map((choice) => [choice, DELEGATION_CHOICE_SUMMARIES[choice]])),
+      [KEEP_BASELINE_CHOICE]: 'The evidence does not distinguish orchestration scaffolding from slice work.'
+    }
+  };
+  bindings.delegation = { kind: 'delegation' };
+}
+
+const DELEGATION_CHOICE_SUMMARIES: Readonly<Record<(typeof DELEGATION_CHOICES)[number], string>> = Object.freeze({
+  delegate_child: 'The edit implements assigned slice work. The parent must spawn a child for it first.',
+  parent_owned: 'The edit is orchestration scaffolding that no slice owns and that children depend on.'
+});
 
 function appendRoutingSpeculation(
   roles: readonly RoutingRoleCandidate[],
@@ -269,15 +315,15 @@ function appendRoutingSpeculation(
     if (questionRoom(questions, recoverySlot) < 1) break;
     const riskId = `risk_${role.id}`;
     const riskInstructions = redactDecisionText(
-      `Does routing.roles.${role.id} need gpt-6-astra because the work is high-stakes, ambiguous, or unsafe on a faster sealed model?`
+      `Does routing.roles.${role.id} need the deep tier because the work is high-stakes, ambiguous, or unsafe on a faster tier?`
     );
     assertIndependentQuestion(riskInstructions);
     questions[riskId] = {
       type: 'noul',
       instructions: riskInstructions,
       criteria: {
-        true: 'The work needs the most capable sealed model.',
-        false: 'A faster sealed model can do this work.'
+        true: 'The work needs the most capable latest model.',
+        false: 'A faster latest model can do this work.'
       }
     };
     bindings[riskId] = { kind: 'routing_risk', roleId: role.id };

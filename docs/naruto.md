@@ -21,7 +21,7 @@ printf '%s' '<sks.subagent-parent-summary.v1 JSON>' \
 
 Automatic fan-out starts at four Naruto children for bounded non-trivial work, six for
 explicitly parallel work, eight for large-scale work, and sixteen for mass mechanical or exploration
-fan-out on the Astra Low/Medium lanes. After decomposition the parent may resize either lane
+fan-out on the fast and context tiers. After decomposition the parent may resize either lane
 up to 256 children, but only when every additional slice is independent, useful, and
 verifiable. Explicit `--agents N` and
 `--max-threads N` values from 1 through 256 are authoritative and are not reduced to
@@ -33,11 +33,11 @@ time. A Codex multi-agent V2 host may count the root separately and therefore re
 active limiter and must be reported instead of being presented as SKS-selected 256
 concurrency. Remaining requested work reuses returned capacity in later waves.
 
-Astra Low handles tiny mechanical shards and instructed ordinary coding execution,
-Astra Medium handles broad search and exploration shards, and Astra Max handles
-planning, analysis, review, and other judgment. The four task-class profiles
-(mechanical / implementation / context-tools / judgment) use three default effort
-levels (Low / Medium / Max) and are a **routing LOD**, not an agent-count cap.
+The fast tier handles tiny mechanical shards, the balanced tier handles
+instructed ordinary coding execution, the context tier handles broad search and
+exploration shards, and the deep tier handles planning, analysis, review, and
+other judgment. The four task-class profiles (mechanical / implementation /
+context-tools / judgment) are a **routing LOD**, not an agent-count cap.
 
 `SKS_NARUTO_REMOTE_API_PARALLEL_BUDGET` declares the provider/API
 parallel-request budget used by the governor. It can lower or align SKS with a measured
@@ -84,21 +84,26 @@ correlation and never grants project trust, so App host-capability requests requ
 
 ## Model Policy
 
-| Lane | Model / effort | Assigned role |
-| --- | --- | --- |
-| Root orchestrator | GPT-6 Astra Max (standalone default) | DAG decomposition, contract finalization, integration, and final judgment |
-| Judgment lane | Astra Max | Planning, analysis, review, architecture, debugging, security, database, release, and ambiguous work |
-| Implementation lane | Astra Low | Instructed ordinary UI, backend, logic, core, and native coding execution |
-| Context/tool lane | Astra Medium | Large documents, logs, long-term memory, repository exploration, rapid large-scale first-draft code processing, plus Browser, Computer Use, and image execution |
-| Mechanical lane | Astra Low | Tiny, short-context work with clear completion conditions and strong automatic verification |
+No model family is pinned. Each tier resolves to the newest model the Codex
+models cache (`$CODEX_HOME/models_cache.json`) lists for that family, preferring
+the highest version; without a cache SKS uses the built-in latest family. When
+Codex lists a newer family, every tier moves to it without an SKS release.
 
-Active parent model, effort, and service-tier selections are preserved. Explicit
-Astra effort preferences, including High, remain supported. The four serialized
-profile IDs remain stable for compatibility; `sol_high_implementation` now selects
-Low by default despite its legacy name.
+| Tier | Effort | Today | Assigned role |
+| --- | --- | --- | --- |
+| deep | max | `gpt-6-astra` | Standalone root default, planning, analysis, review, architecture, debugging, security, database, release, and ambiguous work |
+| balanced | low | `gpt-6-sol` | Instructed ordinary UI, backend, logic, core, and native coding execution |
+| context | medium | `gpt-6-sol` (`terra` when its family is newest) | Large documents, logs, long-term memory, repository exploration, rapid large-scale first-draft code processing, plus Browser, Computer Use, and image execution |
+| fast | low | `gpt-6-luna` | Tiny, short-context work with clear completion conditions and strong automatic verification |
+
+Active parent model, effort, and service-tier selections are preserved. A
+stored role preference on a current model wins for that role; a preference on
+an older family moves to the latest model of the same tier. The four serialized
+profile IDs remain stable for compatibility. With Jev mode on, Jev picks the
+tier for each spawn and SKS seals that tier's newest model.
 
 Mixed work is split when practical. If a slice cannot safely separate execution
-from judgment, Astra Max owns it. SKS never silently substitutes another model or
+from judgment, the deep tier owns it. SKS never silently substitutes another model or
 recreates a custom process scheduler when the selected official path is
 unavailable.
 
@@ -122,7 +127,7 @@ enabled = true
 max_concurrent_threads_per_session = 256
 max_depth = 1
 interrupt_message = true
-default_subagent_model = "gpt-6-astra"
+default_subagent_model = "gpt-6-astra"   # the latest deep-tier model
 default_subagent_reasoning_effort = "high"
 ```
 
@@ -173,6 +178,33 @@ completion summary, verification, remaining gaps, and Honest Mode. A
 non-terminal submission may be corrected by a later valid submission for the
 same active run. Once the complete terminal bundle is sealed, identical replay
 is idempotent and conflicting content is rejected.
+
+## Parent Orchestration Gate
+
+Prompt text alone did not keep the parent from implementing the first slice
+itself, so the `PreToolUse` hook enforces it. A source edit from the root
+parent thread is denied in two situations: before the mission's first child
+thread starts, and while any child of the current run is still running (a
+`SubagentStart` without its `SubagentStop`). Source edits are `apply_patch`
+(Codex sends the patch text as `tool_input.command`), file write and edit
+tools, and shell commands with write intent such as `sed -i`, redirects,
+`git commit`, or package installs. The denial names the mission and tells the
+parent to spawn children first, or to wait for the running children and then
+integrate.
+
+Read-only tools, verification commands, MCP host tools, and writes whose every
+target lives under `.sneakoscope/` are never gated. A child thread is never
+gated: Codex hook payloads carry no thread id, a child keeps the parent's
+`session_id`, and only the `agent_id` / `agent_type` fields mark it.
+
+The ledger `.sneakoscope/missions/<id>/parent-orchestration-gate.json` records
+spawns, denials, Jev's last answer, and releases. Each phase releases after two
+denials, with one visible warning and a recorded escape, so a host without a
+working spawn tool or `SubagentStop` event cannot deadlock. The wait counter
+belongs to one set of running children, so a later wave gets its own denials.
+When Jev mode is on, each gated call before the first spawn asks one
+`delegation` Choice; a confident `parent_owned` answer releases that one edit
+as orchestration scaffolding (see `jev-decisions.md`).
 
 ## Same-Mission Admission
 

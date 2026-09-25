@@ -9,9 +9,9 @@ import {
 } from './naruto-host-credentials.js'
 import {
   DEFAULT_SUBAGENT_EFFORT,
-  DEFAULT_SUBAGENT_MODEL,
+  defaultSubagentModel,
   NARUTO_PARENT_EFFORT,
-  NARUTO_PARENT_MODEL
+  narutoParentModel
 } from './model-policy.js'
 import { HARD_NARUTO_MAX_THREADS } from './thread-budget.js'
 
@@ -140,9 +140,9 @@ export function parseNarutoArgs(args: string[]): NarutoArgs {
     credentialPolicy: resolveNarutoCredentialPolicy({
       args: action === 'run' ? optionArgs : [],
       env: action === 'run' ? process.env : {},
-      defaultParentModel: NARUTO_PARENT_MODEL,
+      defaultParentModel: narutoParentModel(),
       defaultParentEffort: NARUTO_PARENT_EFFORT,
-      defaultSubagentModel: DEFAULT_SUBAGENT_MODEL,
+      defaultSubagentModel: defaultSubagentModel(),
       defaultSubagentEffort: DEFAULT_SUBAGENT_EFFORT
     })
   }

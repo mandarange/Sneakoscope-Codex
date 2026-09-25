@@ -4,9 +4,9 @@ import path from 'node:path'
 import { randomId, runProcess, writeJsonAtomic, type RunProcessResult } from '../fsx.js'
 import {
   DEFAULT_SUBAGENT_EFFORT,
-  DEFAULT_SUBAGENT_MODEL,
+  defaultSubagentModel,
   NARUTO_PARENT_EFFORT,
-  NARUTO_PARENT_MODEL
+  narutoParentModel
 } from './model-policy.js'
 import { nextAgentGenerationEnv } from '../agents/agent-recursion-guard.js'
 import {
@@ -159,9 +159,9 @@ export function defaultNarutoCredentialPolicy(): NarutoCredentialPolicy {
   return resolveNarutoCredentialPolicy({
     args: [],
     env: {},
-    defaultParentModel: NARUTO_PARENT_MODEL,
+    defaultParentModel: narutoParentModel(),
     defaultParentEffort: NARUTO_PARENT_EFFORT,
-    defaultSubagentModel: DEFAULT_SUBAGENT_MODEL,
+    defaultSubagentModel: defaultSubagentModel(),
     defaultSubagentEffort: DEFAULT_SUBAGENT_EFFORT
   })
 }

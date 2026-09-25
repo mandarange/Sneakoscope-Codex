@@ -1249,18 +1249,21 @@ test('known non-Sol App parent is recorded as advisory mismatch without hard-blo
   }
 });
 
-test('automatic bounded work stays parent-owned without a duplicate Naruto workflow', async () => {
+test('automatic bounded implementation work is Naruto parent orchestration with one official workflow', async () => {
   const root = await tempRoot('sks-bounded-naruto-');
   const session = 'bounded-naruto';
   try {
     await prepareRoute(root, '로그인 버그 수정해줘', {}, { sessionKey: session });
     const state: any = await loadStateForSession(root, session);
-    assert.equal(state.route, 'SKS');
-    assert.equal(state.subagents_required, false);
+    // Since 10.3.2 an ordinary implementation request routes to Naruto and the
+    // parent orchestrates; 10.3.4 enforces spawn-before-edit in PreToolUse.
+    assert.equal(state.route, 'Naruto');
+    assert.equal(state.subagents_required, true);
+    assert.equal(state.session_scope, session);
+    assert.ok(String(state.official_subagent_run_id || '').trim());
     const dir = missionDir(root, state.mission_id);
     await fsp.access(path.join(dir, 'pipeline-plan.json'));
-    await assert.rejects(fsp.access(path.join(dir, 'subagent-plan.json')));
-    await assert.rejects(fsp.access(path.join(dir, 'naruto-gate.json')));
+    await fsp.access(path.join(dir, 'subagent-plan.json'));
   } finally {
     await fsp.rm(root, { recursive: true, force: true });
   }

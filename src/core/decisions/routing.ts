@@ -1,7 +1,9 @@
+import { effortForTier, latestTierModelSet, resolveLatestModelTiers } from '../subagents/model-tiers.js';
 import {
-  sealedRoutingModel,
+  routingTier,
   type RoutingCandidate,
   type RoutingRoleCandidate,
+  type RoutingTierId,
   type SealedRoutingEffort
 } from './types.js';
 
@@ -40,15 +42,15 @@ export function applySealedRouting(
 ): Record<string, any> {
   if (!selected || !agents) return { ...(agents || {}) };
   const next: Record<string, any> = { ...agents };
+  const current = latestTierModelSet();
   for (const [name, effort] of Object.entries(selected.efforts)) {
     const model = selected.models[name];
-    const sealed = model ? sealedRoutingModel(model) : null;
-    if (!sealed || sealed.effort !== effort) continue;
+    if (!model || !current.has(model)) continue;
     const row = next[name];
     if (!row || row.routing_dynamic !== true || row.routed_model_policy === 'user_role_model_preference') continue;
     next[name] = {
       ...row,
-      routed_model: sealed.id,
+      routed_model: model,
       routed_model_reasoning_effort: effort,
       routed_model_policy: 'jev_sealed_routing',
       jev_routing_lane: selected.id
@@ -57,22 +59,30 @@ export function applySealedRouting(
   return next;
 }
 
+/**
+ * Turn Jev's per-role tiers into concrete models: each tier resolves to the
+ * newest model Codex lists for it at the tier's effort.
+ */
 export function assembleRoutingSelection(
-  effects: readonly { roleId: string; model: string }[]
+  effects: readonly { roleId: string; tier: RoutingTierId }[]
 ): RoutingCandidate | null {
+  const resolved = resolveLatestModelTiers();
   const models: Record<string, string> = {};
   const efforts: Record<string, SealedRoutingEffort> = {};
+  const tiers: Record<string, RoutingTierId> = {};
   for (const effect of effects) {
-    const sealed = sealedRoutingModel(effect.model);
-    if (!sealed || !ROLE_ID.test(effect.roleId)) continue;
-    models[effect.roleId] = sealed.id;
-    efforts[effect.roleId] = sealed.effort;
+    const tier = routingTier(effect.tier);
+    if (!tier || !ROLE_ID.test(effect.roleId)) continue;
+    models[effect.roleId] = resolved.models[tier.id];
+    efforts[effect.roleId] = effortForTier(tier.id, resolved);
+    tiers[effect.roleId] = tier.id;
   }
   if (Object.keys(models).length === 0) return null;
   return {
     id: 'jev_role_fanout',
-    summary: 'Jev chose a sealed model for each dynamic Naruto role.',
+    summary: 'Jev chose a tier for each dynamic Naruto role; each tier is its newest model.',
     models,
-    efforts
+    efforts,
+    tiers
   };
 }

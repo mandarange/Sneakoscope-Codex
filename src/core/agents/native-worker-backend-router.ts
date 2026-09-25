@@ -10,7 +10,8 @@ import { leanEngineeringCompactText, leanPolicyReference } from '../lean-enginee
 import { readCodexLbModelCatalog, readLbHealth } from '../codex-lb/codex-lb-env.js'
 import { categoryForWorkerRole, isNarutoGpt56Model, modelRouteReason, routeModel, type ModelChoice, type TaskCategory } from '../provider/model-router.js'
 import { codexTimeoutClassForRoute } from '../codex-control/codex-reliability-shield.js'
-import { ASTRA_SUBAGENT_MODEL, decideSubagentModel } from '../subagents/model-policy.js'
+import { decideSubagentModel } from '../subagents/model-policy.js'
+import { latestTierModelSet } from '../subagents/model-tiers.js'
 
 export const NATIVE_WORKER_BACKEND_ROUTER_SCHEMA = 'sks.native-worker-backend-router.v1'
 
@@ -258,15 +259,21 @@ export async function resolveWorkerModelRouting(input: {
   const explicitNarutoModelInvalid = narutoOnly && Boolean(explicitModel) && !isNarutoGpt56Model(explicitModel)
   const explicitNarutoReasoningInvalid = narutoOnly && Boolean(explicitReasoningRaw) && !explicitReasoning
   const explicitNarutoTierInvalid = narutoOnly && Boolean(explicitTierRaw) && !explicitTier
-  const savedAstraEffort = input.agent?.routed_model_policy === 'user_role_model_preference'
-    && input.agent?.routed_model === ASTRA_SUBAGENT_MODEL
+  const currentModels = latestTierModelSet()
+  const savedPreferenceModel = input.agent?.routed_model_policy === 'user_role_model_preference'
+    && currentModels.has(String(input.agent?.routed_model || ''))
+    ? String(input.agent?.routed_model)
+    : ''
+  const savedAstraEffort = savedPreferenceModel
     ? normalizeModelReasoning(input.agent?.routed_model_reasoning_effort)
     : null
   const jevModel = !explicitModel && input.agent?.routed_model_policy === 'jev_sealed_routing'
     ? String(input.agent.routed_model || '').trim()
     : ''
   const jevEffort = jevModel ? normalizeModelReasoning(input.agent?.routed_model_reasoning_effort) : null
-  const selectedModel = explicitModel || jevModel
+  // A stored role preference on a current tier model is the user's choice for
+  // that role; it wins over the task tier but not over an explicit override.
+  const selectedModel = explicitModel || jevModel || savedPreferenceModel
   const taskPolicy = decideSubagentModel({ title: taskKindText, description: riskText, role: input.agent?.role })
   const routed = narutoOnly
     ? await routeModel(category, {
@@ -280,14 +287,16 @@ export async function resolveWorkerModelRouting(input: {
         ...(selectedModel ? { model: selectedModel } : {})
       })
     : {
-        model: ASTRA_SUBAGENT_MODEL,
+        // The task's tier picks the newest fast or accurate model; a stored
+        // role preference or an explicit current model wins.
+        model: (explicitModel && currentModels.has(explicitModel) ? explicitModel : '') || savedPreferenceModel || taskPolicy.model,
         reasoning: explicitReasoning || savedAstraEffort || taskPolicy.modelReasoningEffort,
         serviceTier: explicitTier || input.fastModePolicy.service_tier || 'fast'
       } satisfies ModelChoice
   const blockers = [
     ...(narutoOnly && !lbCatalog?.ok ? (lbCatalog?.blockers || ['codex_lb_model_catalog_unavailable']) : []),
-    ...(explicitNarutoModelInvalid ? ['naruto_worker_model_outside_gpt_5_6_family'] : []),
-    ...(!narutoOnly && explicitModel && explicitModel !== ASTRA_SUBAGENT_MODEL ? ['subagent_model_must_be_astra'] : []),
+    ...(explicitNarutoModelInvalid ? ['naruto_worker_model_not_current'] : []),
+    ...(!narutoOnly && explicitModel && !currentModels.has(explicitModel) ? ['subagent_model_must_be_current'] : []),
     ...(explicitNarutoReasoningInvalid ? ['naruto_reasoning_override_invalid'] : []),
     ...(explicitNarutoTierInvalid ? ['naruto_service_tier_override_invalid'] : []),
     ...(narutoOnly && explicitReasoning && explicitReasoning !== routed.reasoning ? ['naruto_reasoning_override_conflicts_with_policy'] : []),
@@ -325,7 +334,7 @@ function isNarutoWorkerRequest(input: { agent?: any; intake?: any }): boolean {
 
 export function narutoWorkerBackendBlocker(backend: string | null, narutoRequest = true): string | null {
   if (!narutoRequest) return null
-  if (backend === 'process') return 'naruto_gpt_5_6_family_only_process_backend_forbidden'
+  if (backend === 'process') return 'naruto_process_backend_forbidden'
   return null
 }
 

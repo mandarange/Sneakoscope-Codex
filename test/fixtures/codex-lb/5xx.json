@@ -1,5 +1,0 @@
-{
-  "status": "second_request_failed",
-  "http_status": 500,
-  "error": "upstream server error"
-}

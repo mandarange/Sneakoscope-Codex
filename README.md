@@ -16,7 +16,7 @@
 Sneakoscope Codex (`sks`) is an open-source trust layer for Codex CLI and ChatGPT Desktop. It coordinates bounded AI coding agents, records machine-verifiable evidence, preserves project memory, and blocks release claims that are not supported by current tests or artifacts. Search visibility outcomes are measured separately; SKS does not promise rankings or traffic.
 <!-- END SKS SEARCH VISIBILITY MARKETING -->
 
-Current package: **SKS 10.3.3**. Install the latest stable release from npm.
+Current package: **SKS 10.3.4**. Install the latest stable release from npm.
 
 [Quick start](#install-in-one-command) · [Commands](#everyday-commands) · [SKS Center](#sks-center-macos) · [Documentation](#documentation) · [Changelog](CHANGELOG.md)
 
@@ -39,7 +39,7 @@ sks bootstrap --yes
 
 | Capability | What you get |
 | --- | --- |
-| Focused execution | Small tasks stay lightweight; independent work can use official Codex subagents with parent-owned integration. |
+| Focused execution | Answers and tiny edits stay lightweight; implementation work runs through official Codex subagents while the parent orchestrates and integrates. |
 | Project context | TriWiki indexes repository code and supplies bounded context that can be checked against source. |
 | Verification | Tests, diagnostics, and release evidence support completion claims. Security and data-integrity checks stay in place. |
 | Native controls | SKS Center brings connections, updates, MCP servers, and diagnostics together on macOS. |
@@ -138,16 +138,26 @@ configuration, transport checks, and recovery commands.
 
 ## Naruto workflow
 
-SKS enforces GPT-6 Astra for every managed child and varies effort by task.
-The parent owns decomposition, integration,
-and final verification; children receive bounded tasks and do not spawn children.
+The parent orchestrates: it decomposes the task, spawns a child for each
+disjoint slice, waits, and owns integration and final verification. It does not
+implement slices itself. The SKS PreToolUse hook denies parent source edits
+until the first child starts and while children are still running. Children
+receive bounded tasks and do not spawn children.
 
-| Work | Managed model | Effort |
-| --- | --- | --- |
-| Tiny mechanical tasks | GPT-6 Astra | low |
-| Exploration, large-context reads, and direct tool operation | GPT-6 Astra | medium |
-| Implementation | GPT-6 Astra | high |
-| Review, debugging, and focused judgment | GPT-6 Astra | max |
+No model family is pinned. Every child runs the newest model of the tier its
+work needs, read from the Codex models cache, so a new model family is used as
+soon as Codex lists it:
+
+| Work | Tier | Effort | Today |
+| --- | --- | --- | --- |
+| Tiny mechanical tasks | fast | low | `gpt-6-luna` |
+| Instructed implementation | balanced | low | `gpt-6-sol` |
+| Exploration, large-context reads, and direct tool operation | context | medium | `gpt-6-sol` |
+| Planning, review, debugging, and focused judgment | deep | max | `gpt-6-astra` |
+
+With Jev mode on, Jev picks the tier for every spawn, every gated parent edit,
+the plan, and the context, so the parent spends no time on those choices. A
+stored role-model preference on a current model wins in both modes.
 
 An active Codex task keeps the user's selected main model, effort, and service
 tier. Codex native `/goal` remains the persisted goal owner. Parallelism depends

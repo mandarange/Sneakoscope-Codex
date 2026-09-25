@@ -2,7 +2,7 @@ import path from 'node:path'
 import { nowIso, readJson } from '../fsx.js'
 import { uniqueValues as unique } from '../text/strings.js'
 import { runCodexTask } from '../codex-control/codex-task-runner.js'
-import { THINKING_SUBAGENT_MODEL, SUBAGENT_EFFORT } from '../subagents/model-policy.js'
+import { thinkingSubagentModel, SUBAGENT_EFFORT } from '../subagents/model-policy.js'
 
 export async function runResearchFalsification(input: {
   root: string
@@ -42,7 +42,7 @@ export async function runResearchFalsification(input: {
       hardTimeoutMs: input.timeoutMs,
       ...(input.deadlineMs === undefined ? {} : { deadlineEpochMs: input.deadlineMs })
     },
-    model: THINKING_SUBAGENT_MODEL,
+    model: thinkingSubagentModel(),
     reasoningEffort: SUBAGENT_EFFORT,
     modelReasoningEffort: SUBAGENT_EFFORT,
     serviceTier: 'fast'
@@ -111,7 +111,7 @@ export function normalizeResearchFalsification(value: any, claimMatrix: any, sou
 function buildResearchFalsificationPrompt(input: { plan: any; claimMatrix: any; sourceLedger: any }) {
   return [
     'Attempt to falsify the key claims in this Research mission before manuscript synthesis.',
-    `This is a judgment-heavy task: use ${THINKING_SUBAGENT_MODEL} with ${SUBAGENT_EFFORT} reasoning.`,
+    `This is a judgment-heavy task: use ${thinkingSubagentModel()} with ${SUBAGENT_EFFORT} reasoning.`,
     'Return exactly one JSON object matching sks.falsification-ledger.v1.',
     'Do not mark a claim as surviving by default. Compare the written claim with actual source notes/content and counterevidence.',
     'Use only known claim IDs and source IDs. A generic attack with no source-linked reasoning is invalid.',

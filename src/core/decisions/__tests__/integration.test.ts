@@ -10,6 +10,7 @@ import { decideOfficialSubagentPreparation, setDecisionTestOverrides } from '../
 import { runDecisionCommand } from '../cli.js';
 import { defaultDecisionConfig } from '../config.js';
 import { SYNTHETIC_RESPONSE } from './fixtures.js';
+import { BUILTIN_LATEST_TIER_MODELS as T } from '../../subagents/model-tiers.js';
 import type { BoundedTriwikiAttention } from '../../subagents/triwiki-attention.js';
 
 process.env.SKS_JEV_DECISION_TEST_OVERRIDES = '1';
@@ -386,9 +387,9 @@ test('Jev mode fans out one request and applies sealed models with risk escalati
       for (const [id, question] of Object.entries(body.questions)) {
         if (question.type === 'choice' && id.startsWith('route_') && question.criteria && !Array.isArray(question.criteria)) {
           const role = id.slice('route_'.length);
-          const choice = role === 'explorer' ? 'gpt-5.6-terra'
-            : role === 'security_reviewer' ? 'gpt-5.6-luna'
-            : 'gpt-5.6-sol';
+          const choice = role === 'explorer' ? 'context'
+            : role === 'security_reviewer' ? 'fast'
+            : 'balanced';
           answers[id] = sealedChoice(choice, Object.keys(question.criteria));
         } else if (question.type === 'score' && id.startsWith('difficulty_')) {
           answers[id] = { type: 'score', score: 0, confidence: 0.9 };
@@ -428,12 +429,17 @@ test('Jev mode fans out one request and applies sealed models with risk escalati
   assert.ok(questionIds.includes('route_explorer'));
   assert.ok(questionIds.includes('difficulty_worker'));
   assert.ok(questionIds.includes('risk_security_reviewer'));
-  assert.equal(prepared.plan.agents.explorer.routed_model, 'gpt-5.6-terra');
+  // Jev chose tiers; each resolves to the newest model of that tier, and the
+  // risk answer escalates the security reviewer to the deep tier.
+  assert.equal(prepared.plan.agents.explorer.routed_model, T.context);
   assert.equal(prepared.plan.agents.explorer.routed_model_reasoning_effort, 'medium');
-  assert.equal(prepared.plan.agents.worker.routed_model, 'gpt-5.6-sol');
+  assert.equal(prepared.plan.agents.worker.routed_model, T.balanced);
   assert.equal(prepared.plan.agents.worker.routed_model_reasoning_effort, 'low');
-  assert.equal(prepared.plan.agents.security_reviewer.routed_model, 'gpt-6-astra');
+  assert.equal(prepared.plan.agents.security_reviewer.routed_model, T.deep);
   assert.equal(prepared.plan.agents.security_reviewer.routed_model_reasoning_effort, 'max');
+  // Jev routes the children, so the parent reads no tier rules to weigh.
+  assert.match(prepared.delegationPrompt, /Jev mode: Jev picks each child tier/);
+  assert.doesNotMatch(prepared.delegationPrompt, /- tiers: fast for tiny mechanical shards/);
   assert.equal(prepared.plan.agents.explorer.routed_model_policy, 'jev_sealed_routing');
   assert.match(prepared.delegationPrompt, /Jev sealed models:/);
 });

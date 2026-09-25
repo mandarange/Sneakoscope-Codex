@@ -8,7 +8,9 @@ test('official subagent policy is explicit and task-profile aware', () => {
   assert.equal(routeRequiresOfficialSubagents('$Naruto', { task: 'implement feature' }), true);
   assert.equal(routeRequiresOfficialSubagents('$Research', { task: 'investigate mechanism' }), false);
   assert.equal(routeRequiresOfficialSubagents('$DFix', { task: 'tiny copy edit' }), false);
-  assert.equal(routeRequiresOfficialSubagents(routePrompt('work on the parser'), { task: 'work on the parser' }), false);
+  // Ordinary implementation is Naruto parent orchestration (10.3.2+).
+  assert.equal(routeRequiresOfficialSubagents(routePrompt('work on the parser'), { task: 'work on the parser' }), true);
+  assert.equal(routeRequiresOfficialSubagents(routePrompt('What is a parser?'), { task: 'What is a parser?' }), false);
   assert.equal(routeRequiresOfficialSubagents(routePrompt('$Work'), { task: '$Work' }), true);
   const policy = normalizeOfficialSubagentPolicy('$Naruto', 'implement feature', {});
   assert.equal(policy.stage_id, OFFICIAL_SUBAGENT_EXECUTION_STAGE_ID);

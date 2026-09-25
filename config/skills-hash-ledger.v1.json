@@ -4,6 +4,7 @@
     {
       "canonical_name": "sks",
       "trusted_sha256": [
+        "8aa34586ba331f0447668c2ce863fe6c9ec4f881828ebed26ca5ecc754d66840",
         "d0288d27c8bc1c89decb258c6805ed4286cd0d65371ef0eec453be233b39a2a1",
         "905fc5472d36f0780b56f0e09404f42ea20293b1a4615d2050b7db3043231dbd",
         "6d90142f3617a8ae92d9af8cb2fc18ab58a7d0070868504e1fe89e0effc305a5",
@@ -324,6 +325,7 @@
     {
       "canonical_name": "sks-naruto",
       "trusted_sha256": [
+        "b2eb207b2773ab1995ee6e113ba6f3b64de43389e76aef4a0f06d4845ff86223",
         "65e19a5d16f486b13541048c239e828f8039bfc6e38bafd7949d9c936fe4b5b2",
         "da43debf97f0b4a1583d8202a7306aca97ac97865accf9bca8f41d75c84a1cb9",
         "b981bea4183376c6c0204941ad6c2e78782e2cdea4f8d25cc85630c609faaf95",
@@ -331,7 +333,6 @@
         "a1219f6dbad9c8c185953125ef0b8dccf081aa01efb8e8acaa543c6214ac049c",
         "d0d5968e78ac25e1d3e588735de1ddbcf149cfb3165edebca5dec1ed7c7a5c46",
         "34222c72e4e1ead3584907f4d905444b7de820283ee7348018f110d5e6b04461",
-        "f8e808622e222b4ad7dcb2907e5f06a890db83139ae443ec6c8c33781dfa3e37",
         "49b5e3dcc1b537b49c2cf09e5b875cb16acb05c622b22798e265e64dacd8ac90"
       ]
     },
@@ -346,6 +347,7 @@
     {
       "canonical_name": "sks-pipeline-runner",
       "trusted_sha256": [
+        "6f38d3387e4ab020291afe7f74713b135543e52707f5bfbffa6b3584542f45a5",
         "7749638f1e8393f3beb1f7b0c37195dd0463abdb6fd7da5d31b3d816ee91fa37",
         "fd06dfb27be41e5ffec3e3ec8c5362289f5919cf2afa9da5ab6b97e7baa4a0ac",
         "66e105773b8e042eec5d5679b97b7cb305cad8d45671034907fbfa728fc4d68a",
@@ -373,6 +375,7 @@
     {
       "canonical_name": "sks-prompt-pipeline",
       "trusted_sha256": [
+        "f82a103e7962e416961add515d7b3e65df89848dec1fbb9319bd49d7f1dac982",
         "93fd938dccd65d9b4d1dd140b60e1baedc627e7fcc54f9afd95eb2e44efd1143",
         "033bb114ec1fac3f8c312f698b1861ed4c2ce6f65c06f4f1a872c4b101b74b92",
         "e7c8ef56d38fdc4879c983f7d6706f26fc1cf0a60c508836bd628e815700bcc3",

@@ -1,4 +1,7 @@
 import { consultJevTurnModel } from '../decisions/integration.js';
+import { managedOfficialSubagentRoleByName } from '../managed-assets/managed-assets-manifest.js';
+import { subagentModelProfile } from '../subagents/model-policy.js';
+import { effortForTier, latestModelForTier, latestTierModelSet } from '../subagents/model-tiers.js';
 import { readRoleModelPreferences } from '../subagents/role-model-preferences.js';
 
 const SPAWN_TOOLS = new Set(['spawn_agent', 'collaboration.spawn_agent', 'functions.spawn_agent']);
@@ -25,7 +28,27 @@ function spawnTask(input: Record<string, unknown>): string {
     .slice(0, 1200);
 }
 
-/** Naruto child spawn: Jev picks the sealed model. An open parent thread is not rerouted. */
+/**
+ * The latest model and effort for a role when Jev cannot seal the spawn: the
+ * role's own tier (fast for mechanical roles, deep for judgment roles), or the
+ * deep tier for an unknown role.
+ */
+export function roleTierFallback(agentType: string): { model: string; effort: string } {
+  const role = agentType ? managedOfficialSubagentRoleByName(agentType) : null;
+  if (role?.model_policy) {
+    const profile = subagentModelProfile(role.model_policy);
+    return { model: profile.model, effort: effortForTier(profile.tier) };
+  }
+  return { model: latestModelForTier('deep'), effort: effortForTier('deep') };
+}
+
+/**
+ * Naruto child spawn: Jev picks the tier and SKS seals the newest model of
+ * that tier. An open parent thread is not rerouted. When Jev was called but
+ * could not seal the spawn, a child that carries no current model gets its
+ * role's tier instead of bouncing off the spawn policy, so the parent keeps
+ * delegating instead of retrying alone.
+ */
 export async function jevSpawnModelRewrite(
   root: string,
   state: any,
@@ -42,11 +65,18 @@ export async function jevSpawnModelRewrite(
   const task = spawnTask(input);
   if (!task) return null;
   const decision = await consultJevTurnModel({ root, prompt: task, roleId: 'spawn' }).catch(() => null);
-  if (!decision?.model || !decision.effort) return null;
+  if (!decision?.called) return null;
+  const forkTurns = input.fork_turns === undefined ? { fork_turns: 'none' } : {};
+  if (!decision.model || !decision.effort) {
+    if (latestTierModelSet().has(String(input.model || ''))) return null;
+    const fallback = roleTierFallback(agent);
+    return { ...input, model: fallback.model, reasoning_effort: fallback.effort, ...forkTurns };
+  }
   if (input.model === decision.model && input.reasoning_effort === decision.effort) return null;
   return {
     ...input,
     model: decision.model,
-    reasoning_effort: decision.effort
+    reasoning_effort: decision.effort,
+    ...forkTurns
   };
 }

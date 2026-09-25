@@ -43,6 +43,7 @@ import {
   type UpdateRollbackAuthorization
 } from './update/update-operation.js';
 import { runTemporaryInstallSmoke, type TemporaryInstallSmokeResult } from './update/temporary-install-smoke.js';
+import { npmGlobalInstallTargets, repairManagedPermissions } from './update/managed-permission-repair.js';
 import { updateStageFailureDiagnostics } from './update/update-stage-diagnostics.js';
 import {
   executableOnInjectedPath,
@@ -640,6 +641,11 @@ async function runSksUpdateNowInternal(
   const stages: SksUpdateNowStage[] = [];
   let temporaryInstallSmoke: TemporaryInstallSmokeResult | null = null;
   await options.beforeOperationLock?.();
+  // Hand SKS-managed files (including the update lock folder) back to the user
+  // before anything deletes them. Only this process can own a terminal, so it
+  // is the one place a sudo prompt works; the migration child repeats the
+  // repair with the macOS administrator dialog.
+  await repairManagedPermissions({ root: projectReceiptRoot, env, explicit: true, interactive: true }).catch(() => null);
   const operationLock = await acquireUpdateOperationLock(env);
   if (!operationLock.ok) {
     stages.push({
@@ -1121,22 +1127,50 @@ async function runSksUpdateNowInternal(
     command,
     target_version: installVersion
   });
-  const install = alreadyCurrent
+  const runGlobalInstall = () => updateHeartbeat(machineOutput, `npm install -g ${packageName}`, guardedPackageInstall(
+    guardContextForRoute(mutationLedgerRoot, installContract, command || `npm global install ${packageName}`),
+    `${packageName}@${installVersion}`,
+    installOptions
+  ), 60_000).catch((err: unknown) => ({
+    code: 1,
+    stdout: '',
+    stderr: err instanceof Error ? err.message : String(err),
+    timedOut: false
+  }));
+  let install = alreadyCurrent
     ? { code: 0, stdout: '', stderr: '', timedOut: false }
     : env.SKS_UPDATE_FAKE_INSTALL === '1'
     ? { code: 0, stdout: 'fake install ok', stderr: '', timedOut: false }
-    : await updateHeartbeat(machineOutput, `npm install -g ${packageName}`, guardedPackageInstall(
-      guardContextForRoute(mutationLedgerRoot, installContract, command || `npm global install ${packageName}`),
-      `${packageName}@${installVersion}`,
-      installOptions
-    ), 60_000).catch((err: unknown) => ({
-      code: 1,
-      stdout: '',
-      stderr: err instanceof Error ? err.message : String(err),
-      timedOut: false
-    }));
+    : await runGlobalInstall();
+  // A root-owned npm folder (an earlier `sudo npm i -g`) makes npm fail to
+  // replace the package. Give only the package folder and its two containers
+  // back to the user, then retry once. Never fall back to `sudo npm`, which
+  // would leave root-owned files and repeat the failure next update.
+  let installPermissionRepair: { channel: string; granted: boolean | null; retried: boolean } | null = null;
+  if (install.code !== 0 && !alreadyCurrent && globalRoot && /\b(EACCES|EPERM)\b/.test(`${install.stderr}\n${install.stdout}`)) {
+    const targets = await npmGlobalInstallTargets(globalRoot, packageName).catch(() => []);
+    const repair = targets.length
+      ? await repairManagedPermissions({
+          root: projectReceiptRoot,
+          env,
+          explicit: true,
+          interactive: true,
+          targets,
+          reason: 'SKS update needs administrator permission to let npm replace the installed SKS package.',
+          reportPath: null
+        }).catch(() => null)
+      : null;
+    const repaired = Boolean(repair && (repair.user_fixed > 0 || repair.elevation.ok === true));
+    installPermissionRepair = { channel: repair?.elevation.channel || 'unavailable', granted: repair?.elevation.ok ?? null, retried: repaired };
+    if (repaired) install = await runGlobalInstall();
+  }
   const installOk = install.code === 0;
-  stage('global_install', installOk, alreadyCurrent ? 'skipped_current' : installOk ? env.SKS_UPDATE_FAKE_INSTALL === '1' ? 'fake_installed' : 'installed' : 'failed', { command, code: install.code, timed_out: install.timedOut === true });
+  stage('global_install', installOk, alreadyCurrent ? 'skipped_current' : installOk ? env.SKS_UPDATE_FAKE_INSTALL === '1' ? 'fake_installed' : 'installed' : 'failed', {
+    command,
+    code: install.code,
+    timed_out: install.timedOut === true,
+    ...(installPermissionRepair ? { permission_repair: installPermissionRepair } : {})
+  });
   let newBinary: string | null = null;
   let newVersion: string | null = null;
   let installedCliResolution: InstalledCliResolution | null = null;

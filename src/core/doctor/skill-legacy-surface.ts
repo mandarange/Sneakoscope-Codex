@@ -39,7 +39,9 @@ const REWRITE_RULES: RewriteRule[] = [
   { id: 'cli-team', pattern: new RegExp(`${LEFT}sks\\s+team${RIGHT}`, 'gi'), replace: '$1sks naruto' },
   { id: 'cli-agent', pattern: new RegExp(`${LEFT}sks\\s+agent${RIGHT}`, 'gi'), replace: '$1sks naruto' },
   { id: 'cli-swarm', pattern: new RegExp(`${LEFT}sks\\s+swarm${RIGHT}`, 'gi'), replace: '$1sks naruto' },
-  { id: 'cli-ralph', pattern: new RegExp(`${LEFT}sks\\s+ralph${RIGHT}`, 'gi'), replace: '$1sks loop' },
+  // `sks loop` is retired too (NC-38), so neither may point at it.
+  { id: 'cli-ralph', pattern: new RegExp(`${LEFT}sks\\s+ralph${RIGHT}`, 'gi'), replace: '$1sks naruto' },
+  { id: 'cli-loop', pattern: new RegExp(`${LEFT}sks\\s+loop${RIGHT}`, 'gi'), replace: '$1sks naruto' },
   { id: 'cli-tmux', pattern: new RegExp(`${LEFT}sks\\s+tmux${RIGHT}`, 'gi'), replace: '$1sks --mad' },
   { id: 'cli-xai', pattern: new RegExp(`${LEFT}sks\\s+xai${RIGHT}`, 'gi'), replace: '$1sks bridge provider configure openrouter --api-key-stdin' },
   { id: 'cli-glm', pattern: new RegExp(`${LEFT}sks\\s+glm${RIGHT}`, 'gi'), replace: '$1sks bridge provider configure openrouter --api-key-stdin' },

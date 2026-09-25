@@ -2300,8 +2300,8 @@
       "file": "src/core/research/research-adversarial-review.ts",
       "symbol": "prepareResearchSubagentRun",
       "token": "fsp.rm",
-      "scope_contract_sha256": "a2e2e1153aa35c339dcccc7ad84475b8bfa8e8c887c517850a0d3137c89a2ae1",
-      "callsite_sha256": "23203bca6ed6e79f1bdabf5af16af60374e38d8cb4a04df49fabb0654064c9e4",
+      "scope_contract_sha256": "d19010a35c6aedbd1a0bffbbbf498712f0fdd2d9283ce787892a70ec2ae30712",
+      "callsite_sha256": "e18a5556caaefaed26b28885386bc5400ba868e5724d1af937d9f7309534794c",
       "occurrence": 1,
       "reason": "Research cycle preparation clears only prior official-subagent evidence files inside the selected mission directory."
     },
@@ -2309,8 +2309,8 @@
       "file": "src/core/research/research-adversarial-review.ts",
       "symbol": "prepareResearchSubagentRun",
       "token": "fsp.rm",
-      "scope_contract_sha256": "a2e2e1153aa35c339dcccc7ad84475b8bfa8e8c887c517850a0d3137c89a2ae1",
-      "callsite_sha256": "3834a2580d3e6558be7cda57d902cde9dff9709d43df2172d0701568e9dd51e7",
+      "scope_contract_sha256": "d19010a35c6aedbd1a0bffbbbf498712f0fdd2d9283ce787892a70ec2ae30712",
+      "callsite_sha256": "428244b0f15ba101751fabf8031ca19a5a4f2c37a3a23f42898fc5b6a7889e02",
       "occurrence": 1,
       "reason": "Research cycle preparation clears only prior official-subagent evidence files inside the selected mission directory."
     },
@@ -2318,8 +2318,8 @@
       "file": "src/core/research/research-adversarial-review.ts",
       "symbol": "prepareResearchSubagentRun",
       "token": "fsp.rm",
-      "scope_contract_sha256": "a2e2e1153aa35c339dcccc7ad84475b8bfa8e8c887c517850a0d3137c89a2ae1",
-      "callsite_sha256": "5941b22710d793a50d75f65b55ebaef8cc3c7642fd62b9ea21e593d5e985a56e",
+      "scope_contract_sha256": "d19010a35c6aedbd1a0bffbbbf498712f0fdd2d9283ce787892a70ec2ae30712",
+      "callsite_sha256": "fa105a4a2d5dff12b2eb02447cf0b9ba837a198ad63d6b425e91c7b1143941a8",
       "occurrence": 1,
       "reason": "Research cycle preparation clears only prior official-subagent evidence files inside the selected mission directory."
     },
@@ -3227,8 +3227,8 @@
       "file": "src/scripts/agent-role-config-repair-check.ts",
       "symbol": "module",
       "token": "writeFileSync",
-      "scope_contract_sha256": "f0217e6993076bf348547e004e5ca185ec5a32c85d6bda5ec14bbed127bc62ea",
-      "callsite_sha256": "9f17b2d59166c9e8eab8512b7e32678bbb654e6eed4036fb53a6322ae77f1cd4",
+      "scope_contract_sha256": "cd844520f58fd7aedb40e2c4e5fe7239a88d705bbc9161191afcc38e85fc6af9",
+      "callsite_sha256": "dea717a2338749260f48a0c0c1f928448d37937fd2d098383e7dff8fcd9b2eab",
       "occurrence": 1,
       "reason": "src/scripts/agent-role-config-repair-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
@@ -3236,8 +3236,8 @@
       "file": "src/scripts/agent-role-config-repair-check.ts",
       "symbol": "module",
       "token": "writeFileSync",
-      "scope_contract_sha256": "f0217e6993076bf348547e004e5ca185ec5a32c85d6bda5ec14bbed127bc62ea",
-      "callsite_sha256": "63403813173705c9d80200584846a6e1d2559694c65bf17e3e7c39c7deb9eac7",
+      "scope_contract_sha256": "cd844520f58fd7aedb40e2c4e5fe7239a88d705bbc9161191afcc38e85fc6af9",
+      "callsite_sha256": "88e393783554b54fdff5427c670c9447dcfaa3af38c0763f7c49d519dd10fb2b",
       "occurrence": 1,
       "reason": "src/scripts/agent-role-config-repair-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
@@ -4271,8 +4271,8 @@
       "file": "src/scripts/current-surface-update-e2e-check.ts",
       "symbol": "module",
       "token": "fsp.rm",
-      "scope_contract_sha256": "d8155cb696475bb83a07aa39d90ea3f5bd65f55eadbc7ac460efa6fa6d616ee7",
-      "callsite_sha256": "7c16c8578cdb64e00b6a8fabaf7c772a93439e1e7a0c2bf9ccd7cccf27e4c097",
+      "scope_contract_sha256": "b357b554e2f818f9b0ca901efcad59d15ef77be1d3a9264eafb1237cdb74ba82",
+      "callsite_sha256": "78cf3856b1cb16babb594423ff74ef904c0e5c7431ddf45af5a110abc08fc228",
       "occurrence": 1,
       "reason": "Current-surface E2E removes only its mkdtemp-owned upgrade fixture root in finally."
     },
@@ -4293,6 +4293,15 @@
       "callsite_sha256": "bb3803bb88d968b1fccf51ea9e138b3b10b3ca4f2cc3257669efd20e5dbfb1da",
       "occurrence": 1,
       "reason": "Update migration signals only a pid whose command line contains sks_local_decision and is recorded in that runtime's service.json."
+    },
+    {
+      "file": "src/core/update/update-migration-state/retired-local-decision.ts",
+      "symbol": "removeRetiredLocalModelConfig",
+      "token": "fsp.rm",
+      "scope_contract_sha256": "0f84d682025bf9c81e54cb8fc2196a32679f68e3565411bcf8eceeebcfa87f09",
+      "callsite_sha256": "8793ded8b58217138b9f16a8e2a2480ef068d6f5c536cdfa09e4bb5cfd7af074",
+      "occurrence": 1,
+      "reason": "Update removes only ~/.sneakoscope/local-model.json when it is a regular, bounded file carrying a retired Local LLM config schema; symlinks and unrecognized files are preserved."
     },
     {
       "file": "src/scripts/current-surface-update-e2e-check.ts",
@@ -5918,8 +5927,8 @@
       "file": "src/scripts/mutation-callsite-coverage-check.ts",
       "symbol": "module",
       "token": "writeFileSync",
-      "scope_contract_sha256": "546faab21fbcf576a3ea236692975ae28569b2c91678f656503e2bd303109a90",
-      "callsite_sha256": "b3414d623b4535d2d48f2e0a92f15e4626bfcf21ef439ba694ecab543bdf3204",
+      "scope_contract_sha256": "8075a0752e3875b52f90602f3dee0043c6a339127eb6f7cdb1c60087873640dd",
+      "callsite_sha256": "bbfe7cf0b602bef709e2efa051f66f4cf870475a96bc44e4cfcdd06eda02f870",
       "occurrence": 1,
       "reason": "src/scripts/mutation-callsite-coverage-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
@@ -7749,6 +7758,24 @@
       "callsite_sha256": "a8552dabfa1d646a11e532401d9b39de93d3f22cd7ae89cedec44f3bd1a7425e",
       "occurrence": 1,
       "reason": "The updater removes only its caller-selected, stable doctor report file before spawning that doctor, so a prior success cannot authorize the current run; removal is non-recursive and does not follow symlinks."
+    },
+    {
+      "file": "src/core/update/managed-permission-repair.ts",
+      "symbol": "fixOwnedIssues",
+      "token": "chmod",
+      "scope_contract_sha256": "9b63c4006f90fa33b5f6a6e6ba9f8fe39d7d89df7ab11da4c809525dc00f0f7c",
+      "callsite_sha256": "9beaedb8116670d14686e233e945a6d38bbb85dd29934741ed4363c33584c095",
+      "occurrence": 1,
+      "reason": "Update permission repair adds only the missing user rwx/rw bits to SKS-managed paths the current user already owns, so update cleanup can delete them; it never widens group or other bits."
+    },
+    {
+      "file": "src/core/update/managed-permission-repair.ts",
+      "symbol": "fixOwnedIssues",
+      "token": "chflags",
+      "scope_contract_sha256": "9b63c4006f90fa33b5f6a6e6ba9f8fe39d7d89df7ab11da4c809525dc00f0f7c",
+      "callsite_sha256": "ae7c6df70d8bdd8ed6f55eb6eaae9410bc21375ac8bcaf44de1c5f58b425d33c",
+      "occurrence": 1,
+      "reason": "Update permission repair clears only the user immutable and append-only flags (nouchg,nouappnd) on SKS-managed paths the current user owns, so update cleanup can delete them."
     }
   ]
 }

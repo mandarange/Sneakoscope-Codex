@@ -2203,8 +2203,7 @@
           "src/core/proof/**",
           "src/core/trust-kernel/**",
           "src/scripts/proof-root-cause-policy-check.ts",
-          "test/unit/route-completion-contract.test.mjs",
-          "test/integration/route-proof-adapters.test.mjs"
+          "test/unit/route-completion-contract.test.mjs"
         ]
       },
       "isolation": {
@@ -3240,7 +3239,6 @@
           "src/cli/__tests__/router-active-naruto.test.ts",
           "src/bin/fast-inline.ts",
           "src/bin/sks-dispatch.ts",
-          "test/blackbox/official-subagent-workflow-packed.test.mjs",
           "src/core/release/release-gate-affected-selector.ts",
           "src/core/release/__tests__/release-gate-affected-selector.test.ts"
         ]
@@ -4556,9 +4554,7 @@
           "src/scripts/all-feature-deep-completion-check.ts",
           "docs/feature-inventory.md",
           "test/unit/feature-registry.test.mjs",
-          "test/unit/all-feature-deep-completion.test.mjs",
-          "test/integration/all-feature-deep-completion.test.mjs",
-          "test/blackbox/all-feature-deep-completion-packed.test.mjs"
+          "test/unit/all-feature-deep-completion.test.mjs"
         ]
       },
       "isolation": {

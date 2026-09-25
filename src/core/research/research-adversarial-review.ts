@@ -28,7 +28,7 @@ import {
   readSubagentEvents,
   writeSubagentEvidence
 } from '../subagents/subagent-evidence.js'
-import { THINKING_SUBAGENT_MODEL, SUBAGENT_EFFORT } from '../subagents/model-policy.js'
+import { thinkingSubagentModel, SUBAGENT_EFFORT } from '../subagents/model-policy.js'
 import {
   RESEARCH_AGENT_COUNCIL,
   RESEARCH_REVIEWER_CONFIG_ARTIFACT,
@@ -369,7 +369,7 @@ export function buildResearchAdversarialPlan(plan: any, maxCycles = 3, maxThread
       persona: agent.persona,
       persona_boundary: agent.persona_boundary,
       custom_agent: RESEARCH_REVIEWER_CUSTOM_AGENT,
-      model_policy: `${THINKING_SUBAGENT_MODEL} ${SUBAGENT_EFFORT}`,
+      model_policy: `${thinkingSubagentModel()} ${SUBAGENT_EFFORT}`,
       model_policy_source: modelPolicyEvidence?.source || RESEARCH_REVIEWER_CONFIG_ARTIFACT,
       model_policy_sha256: modelPolicyEvidence?.sha256 || null
     })),
@@ -618,7 +618,7 @@ async function finalizeResearchAdversarialArtifacts(
     publication_acceptance_guaranteed: false,
     reviewer_model_policy: {
       custom_agent: RESEARCH_REVIEWER_CUSTOM_AGENT,
-      model: THINKING_SUBAGENT_MODEL,
+      model: thinkingSubagentModel(),
       reasoning_effort: SUBAGENT_EFFORT,
       enforcement_source: plan?.model_policy_evidence?.source || RESEARCH_REVIEWER_CONFIG_ARTIFACT,
       config_sha256: plan?.model_policy_evidence?.sha256 || null,
@@ -666,7 +666,7 @@ async function writeCompatibilityCouncilArtifacts(dir: string, plan: any, finalR
       mandate: agent.mandate,
       model_policy: {
         custom_agent: RESEARCH_REVIEWER_CUSTOM_AGENT,
-        model: THINKING_SUBAGENT_MODEL,
+        model: thinkingSubagentModel(),
         reasoning_effort: SUBAGENT_EFFORT,
         enforcement_source: gate?.reviewer_model_policy?.enforcement_source || RESEARCH_REVIEWER_CONFIG_ARTIFACT,
         config_sha256: gate?.reviewer_model_policy?.config_sha256 || null
@@ -1047,7 +1047,7 @@ async function prepareResearchSubagentRun(
     })),
     model_policy: {
       custom_agent: plan.phase === 'review' ? RESEARCH_REVIEWER_CUSTOM_AGENT : 'research_synthesizer',
-      model: THINKING_SUBAGENT_MODEL,
+      model: thinkingSubagentModel(),
       reasoning_effort: SUBAGENT_EFFORT,
       config: plan.phase === 'review' ? RESEARCH_REVIEWER_CONFIG_ARTIFACT : '.codex/agents/research-synthesizer.toml'
     }
@@ -1094,7 +1094,7 @@ async function verifyResearchReviewerRoleConfig(root: string) {
   const blockers = [
     ...(text.trim() ? [] : ['research_reviewer_agent_config_missing']),
     ...(name === RESEARCH_REVIEWER_CUSTOM_AGENT ? [] : [`research_reviewer_name_mismatch:${name || 'missing'}`]),
-    ...(model === THINKING_SUBAGENT_MODEL ? [] : [`research_reviewer_model_mismatch:${model || 'missing'}`]),
+    ...(model === thinkingSubagentModel() ? [] : [`research_reviewer_model_mismatch:${model || 'missing'}`]),
     ...(effort === SUBAGENT_EFFORT ? [] : [`research_reviewer_effort_mismatch:${effort || 'missing'}`]),
     ...(sandbox === 'read-only' ? [] : [`research_reviewer_sandbox_mismatch:${sandbox || 'missing'}`])
   ]
@@ -1117,7 +1117,7 @@ function mockResearchModelPolicyEvidence() {
     ok: true,
     source: 'mock_fixture:research_reviewer',
     name: RESEARCH_REVIEWER_CUSTOM_AGENT,
-    model: THINKING_SUBAGENT_MODEL,
+    model: thinkingSubagentModel(),
     reasoning_effort: SUBAGENT_EFFORT,
     sandbox_mode: 'read-only',
     sha256: null,

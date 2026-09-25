@@ -242,8 +242,9 @@ function risksForCall(call) {
       && /\b(?:install|i|add|uninstall|remove|publish)\b/.test(call.normalized_call)) {
       risks.push({ kind: 'package_install', token: 'runProcess(npm/brew)' });
     }
-    if (/^['"]xattr['"]$/.test(firstArgument.trim())) risks.push({ kind: 'xattr', token: 'xattr' });
-    if (/^['"]chflags['"]$/.test(firstArgument.trim())) risks.push({ kind: 'chflags', token: 'chflags' });
+    // An absolute path (safer against PATH hijacking) is the same mutation.
+    if (/^['"](?:\/usr\/bin\/)?xattr['"]$/.test(firstArgument.trim())) risks.push({ kind: 'xattr', token: 'xattr' });
+    if (/^['"](?:\/usr\/bin\/)?chflags['"]$/.test(firstArgument.trim())) risks.push({ kind: 'chflags', token: 'chflags' });
   }
   if (callee && ['spawn', 'spawnSync', 'child_process.spawn', 'child_process.spawnSync'].includes(callee)
     && /^['"]npm['"]$/.test(firstArgument.trim())

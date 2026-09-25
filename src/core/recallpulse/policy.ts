@@ -1,4 +1,4 @@
-import { ASTRA_SUBAGENT_MODEL, SUBAGENT_EFFORT } from '../subagents/model-policy.js';
+import { thinkingSubagentModel, SUBAGENT_EFFORT } from '../subagents/model-policy.js';
 
 export const RECALLPULSE_DECISION_ARTIFACT = 'recallpulse-decision.json';
 export const RECALLPULSE_HISTORY_ARTIFACT = 'recallpulse-history.jsonl';
@@ -204,7 +204,7 @@ export const RESEARCH_REVIEWER_CONTRACT = Object.freeze([
   ...agent,
   persona_boundary: 'Apply only the assigned review dimension and report evidence-bound findings.',
   custom_agent: 'research_reviewer',
-  model: ASTRA_SUBAGENT_MODEL,
+  model: thinkingSubagentModel(),
   reasoning_effort: SUBAGENT_EFFORT,
   service_tier: 'fast'
 })));

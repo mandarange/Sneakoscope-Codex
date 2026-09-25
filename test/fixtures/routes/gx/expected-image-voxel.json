@@ -1,6 +1,0 @@
-{
-  "schema": "sks.image-voxel-ledger.v1",
-  "route": "$GX",
-  "require_anchors": true,
-  "require_relations": true
-}

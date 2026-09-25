@@ -2,6 +2,89 @@
 
 ## [Unreleased]
 
+## [10.3.4] - 2026-09-25
+
+### Fixed
+
+- A Naruto parent no longer implements slice work itself. The PreToolUse hook
+  denies root-parent source edits (`apply_patch`, file writes, and write-intent
+  shell commands) before the mission's first child starts and while children
+  of the run are still running. `.sneakoscope` artifacts, read-only tools, and
+  verification commands stay open. Child threads are recognized by the
+  `agent_id` / `agent_type` fields Codex actually sends, since hook payloads
+  carry no thread id and children share the parent's `session_id`. Each phase
+  releases after two denials with one warning, recorded in
+  `parent-orchestration-gate.json`, so a host without a spawn tool cannot
+  deadlock.
+- Implementation requests no longer slip past orchestration. The task
+  classifier and the router now share one implementation-verb vocabulary, so
+  "make the header sticky", "set up eslint", or "결제 모듈 연동해줘" route to
+  Naruto instead of the read-only Answer route or a parent-only turn.
+- Prompt text that contradicted the contract is gone from every injected and
+  installed surface: "every child uses gpt-6-astra regardless of role
+  preferences", "use Naruto only for explicit parallel work", "execute general
+  code-changing work in the current task", a parent-model fallback of
+  gpt-6-astra max, and a child-start line that named a model Jev had already
+  replaced. The Jev turn line never tells the parent to switch models.
+- `sks update` no longer fails on a home without `~/.sneakoscope`, and the
+  retired provider-branded bridge cleanup accepts the later
+  `auth_priority_enabled` settings key.
+- `sks update` no longer skips cleanup because of file permissions. A new
+  first migration stage, `managed-permission-repair`, finds SKS-managed paths
+  the user cannot delete before retention and the other stages run. It fixes
+  read-only folders and user immutable flags on paths the user owns. For
+  root-owned or system-flagged paths it asks for administrator permission
+  through the macOS administrator dialog, cached `sudo`, or a terminal `sudo`
+  prompt, and changes only ownership, flags, and user permission bits. It
+  never deletes anything itself, and user skills and Codex sessions are never
+  touched. A stage that still fails is rerun once after a second repair. A
+  declined prompt leaves the exact `sudo` command in the receipt and is not
+  repeated for 12 hours outside an explicit update. When `npm install -g`
+  fails with `EACCES` or `EPERM`, update gives the SKS package folder and its
+  two npm folders back to the user and retries once instead of using
+  `sudo npm`. Tests and CI never elevate.
+
+### Changed
+
+- No child model is pinned anymore. SKS picks a tier for each child (fast,
+  balanced, context, or deep) and runs the newest model Codex lists for that
+  tier in its models cache, so children use `gpt-6-luna`, `gpt-6-sol`, and
+  `gpt-6-astra` today and move to a newer family without an SKS release. The
+  `gpt-5.6-*` seal list and the Astra-only child rules are gone from the Jev
+  question set, the spawn policy, role files, role preferences, the standalone
+  `sks naruto run` defaults, the config child default, and every injected or
+  installed prompt. Stored preferences on an older family move to the latest
+  model of the same tier.
+- Jev mode uses Jev for every decision SKS can apply: the turn tier, each
+  spawn's tier, per-role tiers and role omission, the plan, the context, and
+  gated parent edits. Context and plan decisions follow the mode instead of
+  stored flags, a Jev-fixed automatic child count is stated to the parent, and
+  the delegation prompt drops its tier rules so the parent spends no time
+  choosing models or efforts.
+- Jev decides at tool-call time. A gated parent edit before the first spawn
+  asks Jev whether it is orchestration scaffolding (`parent_owned`) or slice
+  work (`delegate_child`); only a confident `parent_owned` releases it, and any
+  feature, fix, or test change counts as slice work. A spawn that Jev could not
+  seal gets its role's own tier instead of bouncing off the spawn policy.
+- `sks update` removes more stale setup: the retired Local LLM skills and
+  `~/.sneakoscope/local-model.json`, SKS hook entries for events the profile
+  no longer installs in project and user `hooks.json`, and conflicting
+  OMX/DCodex markers (quarantined by the migration stage that the doctor
+  pre-check used to block). Retired `sks ralph` and `sks loop` references now
+  rewrite to `sks naruto`.
+- A project used only through Codex hooks refreshes its SKS-managed AGENTS.md
+  block and `.codex/SNEAKOSCOPE.md` once on the first hook after an update.
+  User-authored guidance is never touched.
+
+### Removed
+
+- Test files that no runner executed: `test/integration`, `test/blackbox`,
+  `test/types`, `test/wrongness`, `test/chaos`, the E2E tests outside the
+  `git-collaboration:e2e` gate, the unused `safety-check` runner, the
+  architecture sandbox scripts, and the fixtures only they used. The
+  canonical suite, the E2E gate, and the architecture-map gates still run
+  every remaining test.
+
 ## [10.3.3] - 2026-09-22
 
 ### Fixed

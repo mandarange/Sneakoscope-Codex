@@ -21,6 +21,7 @@ import {
   selectOfficialSubagentRole
 } from '../agent-catalog.js'
 import { prepareOfficialSubagentMission } from '../official-subagent-preparation.js'
+import { latestModelForTier } from '../model-tiers.js'
 
 test('automatic fanout keeps undecomposed task hints but exposes the 256 useful-slice ceiling', () => {
   const pinned = {
@@ -505,7 +506,7 @@ test('mission preparation keeps mass totals reusable across waves and serializes
     assert.equal(search.plan.fanout_policy.mass_parallel, true)
     assert.equal(search.plan.first_wave, 2)
     assert.equal(search.plan.concurrency_governor.safe_active_workers, 2)
-    assert.equal(search.plan.agents.explorer.routed_model, 'gpt-6-astra')
+    assert.equal(search.plan.agents.explorer.routed_model, latestModelForTier('context'))
     assert.equal(search.plan.agents.explorer.routed_model_reasoning_effort, 'medium')
 
     const typingDir = path.join(root, '.sneakoscope', 'missions', 'M-typing-lane')
@@ -519,7 +520,7 @@ test('mission preparation keeps mass totals reusable across waves and serializes
       mode: 'naruto'
     })
     assert.equal(typing.plan.suggested_agents[0], 'worker')
-    assert.equal(typing.plan.agents.worker.routed_model, 'gpt-6-astra')
+    assert.equal(typing.plan.agents.worker.routed_model, latestModelForTier('fast'))
     assert.equal(typing.plan.agents.worker.routed_model_reasoning_effort, 'low')
   } finally {
     await fs.rm(root, { recursive: true, force: true })

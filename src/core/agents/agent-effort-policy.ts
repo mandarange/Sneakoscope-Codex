@@ -1,7 +1,8 @@
 import type { AgentPersona } from './agent-schema.js'
 import { codexModelEffortCapability, type CodexModelEffortCapability } from '../codex-control/codex-model-capabilities.js'
 import { managedOfficialSubagentRoleByName } from '../managed-assets/managed-assets-manifest.js'
-import { ASTRA_SUBAGENT_MODEL, decideSubagentModel, subagentModelProfile } from '../subagents/model-policy.js'
+import { decideSubagentModel, subagentModelProfile } from '../subagents/model-policy.js'
+import { MODEL_TIERS, resolveLatestModelTiers } from '../subagents/model-tiers.js'
 
 export type AgentReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra'
 export type AgentModelReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra'
@@ -31,9 +32,10 @@ export function decideAgentEffort(input: { persona?: Partial<AgentPersona>; prom
   return decideOfficialSubagentModel(input)
 }
 
-// Official Codex subagents use one of four fixed profiles: Astra Low for tiny
-// mechanical work, Astra Low for instructed implementation, Astra Max for
-// judgment, and Astra Medium for long-context or Codex-tool execution.
+// Official Codex subagents use one of four tier profiles, each on the newest
+// model of its tier: fast for tiny mechanical work, balanced for instructed
+// implementation, deep for judgment, and context for long-context or
+// Codex-tool execution.
 export function decideOfficialSubagentModel(input: { persona?: Partial<AgentPersona>; prompt?: string; agentId?: string; readonly?: boolean } = {}): AgentEffortDecision {
   const persona = input.persona || {}
   const prompt = String(input.prompt || '')
@@ -43,9 +45,9 @@ export function decideOfficialSubagentModel(input: { persona?: Partial<AgentPers
   const managedRole = managedOfficialSubagentRoleByName(agentId)
     || managedOfficialSubagentRoleByName(String(persona.naruto_role || ''))
     || managedOfficialSubagentRoleByName(role)
-  // Installed custom-agent roles already seal Astra Low/Max/Medium defaults.
-  // Prefer that catalog contract over re-scoring the parent goal text, which
-  // otherwise collapses almost every child onto Astra Max.
+  // Installed custom-agent roles already seal their tier defaults. Prefer that
+  // catalog contract over re-scoring the parent goal text, which otherwise
+  // collapses almost every child onto the deep tier.
   if (managedRole) {
     const profile = subagentModelProfile(managedRole.model_policy)
     const effort: AgentReasoningEffort = profile.modelReasoningEffort
@@ -71,14 +73,14 @@ export function decideOfficialSubagentModel(input: { persona?: Partial<AgentPers
       reason: `managed_role:${managedRole.codex_name}:${profile.policy}`,
       dynamic: true,
       escalation_triggers: [
-        'focused review, debugging, planning, integration, security, database, research, release, or unresolved ambiguity selects Astra Max',
+        'focused review, debugging, planning, integration, security, database, research, release, or unresolved ambiguity selects the deep tier',
         'incidental judgment vocabulary does not override a clearly classified implementation or context/tools slice',
         'requested model/effort profile unavailable blocks instead of silently falling back'
       ],
       downshift_triggers: [
-        'instructed UI, logic, backend, or native implementation selects Astra Low',
-        'long-context, Browser/Chrome, Computer Use, image-generation, or large search selects Astra Medium',
-        'tiny short-context mechanical search/typing/rename work selects Astra Low'
+        'instructed UI, logic, backend, or native implementation selects the balanced tier',
+        'long-context, Browser/Chrome, Computer Use, image-generation, or large search selects the context tier',
+        'tiny short-context mechanical search/typing/rename work selects the balanced tier'
       ]
     }
   }
@@ -125,14 +127,14 @@ export function decideOfficialSubagentModel(input: { persona?: Partial<AgentPers
     reason: routed.reason,
     dynamic: true,
     escalation_triggers: [
-      'focused review, debugging, planning, integration, security, database, research, release, or unresolved ambiguity selects Astra Max',
+      'focused review, debugging, planning, integration, security, database, research, release, or unresolved ambiguity selects the deep tier',
       'incidental judgment vocabulary does not override a clearly classified implementation or context/tools slice',
       'requested model/effort profile unavailable blocks instead of silently falling back'
     ],
     downshift_triggers: [
-      'instructed UI, logic, backend, or native implementation selects Astra Low',
-      'long-context, Browser/Chrome, Computer Use, or image-generation execution selects Astra Medium',
-      'tiny short-context mechanical work selects Astra Low'
+      'instructed UI, logic, backend, or native implementation selects the balanced tier',
+      'long-context, Browser/Chrome, Computer Use, or image-generation execution selects the context tier',
+      'tiny short-context mechanical work selects the balanced tier'
     ]
   }
 }
@@ -152,21 +154,22 @@ export function buildAgentEffortPolicy(roster: any = {}) {
     reason: agent.reasoning_reason,
     dynamic: true
   })) : []
+  const latest = resolveLatestModelTiers()
   return {
     schema: 'sks.agent-effort-policy.v1',
     policy_version: 1,
     dynamic: true,
     service_tier: 'fast',
     model_catalog_policy: 'official_subagent_four_profile_matrix',
-    model_constraint: [ASTRA_SUBAGENT_MODEL],
-    model_tiers: ['low', 'medium', 'high', 'max'].map((effort) => `${ASTRA_SUBAGENT_MODEL}-${effort}`),
+    model_constraint: [...new Set(MODEL_TIERS.map((tier) => latest.models[tier]))],
+    model_tiers: MODEL_TIERS.map((tier) => `${tier}:${latest.models[tier]}-${latest.efforts[tier]}`),
     allowed_efforts: ['low', 'medium', 'high', 'max'],
-    model_effort_capability: codexModelEffortCapability({ model: ASTRA_SUBAGENT_MODEL }),
+    model_effort_capability: codexModelEffortCapability({ model: latest.models.deep }),
     max_agents: roster.max_agents || 20,
     agent_count: roster.agent_count || decisions.length,
     concurrency: roster.concurrency || decisions.length,
     decisions,
-    rule: 'All child agents use GPT-6 Astra: Low for tiny short-context mechanical work and instructed implementation, Medium for reads and tool execution, and Max for focused judgment. The parent keeps its user-selected model, reasoning effort, and service tier; explicit Astra effort preferences may override role defaults.'
+    rule: 'Every child uses the newest model of the tier its work needs: fast for tiny mechanical work, balanced for instructed implementation, context for reads and tool execution, and deep for focused judgment. With Jev mode on, Jev picks the tier for each spawn. The parent keeps its user-selected model, reasoning effort, and service tier; stored role preferences may override role defaults.'
   }
 }
 

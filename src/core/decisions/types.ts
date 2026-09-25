@@ -69,9 +69,10 @@ export interface UsageReceipt {
 export type DecisionEffect =
   | { kind: 'select_plan'; planId: string }
   | { kind: 'select_optional_context'; keepIds: readonly string[] }
-  | { kind: 'select_routing'; roleId: string; model: string }
+  | { kind: 'select_routing'; roleId: string; tier: RoutingTierId }
   | { kind: 'omit_role'; roleId: string }
-  | { kind: 'dispatch_recovery'; actionId: string };
+  | { kind: 'dispatch_recovery'; actionId: string }
+  | { kind: 'select_delegation'; choice: DelegationChoice };
 
 export type BaselineReason =
   | 'off'
@@ -148,7 +149,7 @@ export interface ContextCandidate {
   reproducible: boolean;
 }
 
-export type SealedRoutingEffort = 'low' | 'medium' | 'max';
+export type SealedRoutingEffort = 'low' | 'medium' | 'high' | 'max';
 
 export interface RoutingRoleCandidate {
   id: string;
@@ -160,30 +161,29 @@ export interface RoutingCandidate {
   summary: string;
   efforts: Readonly<Record<string, SealedRoutingEffort>>;
   models: Readonly<Record<string, string>>;
+  tiers: Readonly<Record<string, RoutingTierId>>;
 }
 
-export const SEALED_ROUTING_MODELS = Object.freeze([
-  Object.freeze({
-    id: 'gpt-5.6-luna',
-    effort: 'low' as const,
-    summary: 'Fastest sealed model. Mechanical edits, renames, formatting, and other one-step changes.'
-  }),
-  Object.freeze({
-    id: 'gpt-5.6-sol',
-    effort: 'low' as const,
-    summary: 'Fast sealed model. Simple coding whose result is already specified.'
-  }),
-  Object.freeze({
-    id: 'gpt-5.6-terra',
-    effort: 'medium' as const,
-    summary: 'Context and tools. Search, multi-file reading, and broad exploration.'
-  }),
-  Object.freeze({
-    id: 'gpt-6-astra',
-    effort: 'max' as const,
-    summary: 'Escalate. Judgment, architecture, ambiguity, security, or high-stakes work.'
-  })
+/**
+ * Jev chooses a model tier, never a model name. Each tier resolves to the
+ * newest model Codex lists for it (see subagents/model-tiers.ts), so Jev keeps
+ * routing to the latest fast or accurate model without a policy change.
+ * Order is fastest first; the last tier is the escalation tier.
+ */
+export const ROUTING_TIERS = Object.freeze([
+  Object.freeze({ id: 'fast' as const, effort: 'low' as const, summary: 'Fastest latest model. Mechanical edits, renames, formatting, and other one-step changes.' }),
+  Object.freeze({ id: 'balanced' as const, effort: 'low' as const, summary: 'Fast latest model. Simple coding whose result is already specified.' }),
+  Object.freeze({ id: 'context' as const, effort: 'medium' as const, summary: 'Latest model for context and tools. Search, multi-file reading, and broad exploration.' }),
+  Object.freeze({ id: 'deep' as const, effort: 'max' as const, summary: 'Escalate to the most capable latest model. Judgment, architecture, ambiguity, security, or high-stakes work.' })
 ]);
+
+export type RoutingTierId = (typeof ROUTING_TIERS)[number]['id'];
+export const ESCALATION_ROUTING_TIER: RoutingTierId = 'deep';
+
+export function routingTier(value: unknown): { id: RoutingTierId; effort: SealedRoutingEffort } | null {
+  const match = ROUTING_TIERS.find((row) => row.id === value);
+  return match ? { id: match.id, effort: match.effort } : null;
+}
 
 export const ROUTING_DIFFICULTY_RUBRIC = Object.freeze([
   'Mechanical one-step work: rename, format, copy, or a single exact edit.',
@@ -196,9 +196,19 @@ export const ROUTING_RISK_NOUL_MIN = 0.70;
 /** Below this, the role is not needed for the task and should not be spawned. */
 export const ROUTING_ROLE_OMIT_NOUL_MAX = 0.35;
 
-export function sealedRoutingModel(model: string): { id: string; effort: SealedRoutingEffort } | null {
-  const match = SEALED_ROUTING_MODELS.find((row) => row.id === model);
-  return match ? { id: match.id, effort: match.effort } : null;
+/**
+ * A Naruto parent tool call that would edit source before any child exists.
+ * `delegate_child` keeps the deterministic gate (spawn first); `parent_owned`
+ * lets this one orchestration-scope edit through without a child.
+ */
+export type DelegationChoice = 'delegate_child' | 'parent_owned';
+
+export const DELEGATION_CHOICES: readonly DelegationChoice[] = Object.freeze(['delegate_child', 'parent_owned']);
+
+export interface DelegationCandidate {
+  toolName: string;
+  targets: readonly string[];
+  missionGoal: string;
 }
 
 export interface RecoveryCandidate {
@@ -217,7 +227,8 @@ export type QuestionBinding =
   | { kind: 'routing_needed'; roleId: string }
   | { kind: 'context_keep'; candidateId: string }
   | { kind: 'context_relevance'; candidateId: string; levelCount: number }
-  | { kind: 'recovery' };
+  | { kind: 'recovery' }
+  | { kind: 'delegation' };
 
 export interface DecisionBundle {
   binding: DecisionBinding;
@@ -226,6 +237,7 @@ export interface DecisionBundle {
   contextCandidates: readonly ContextCandidate[];
   recoveryCandidates: readonly RecoveryCandidate[];
   routingCandidates: readonly RoutingRoleCandidate[];
+  delegationCandidate: DelegationCandidate | null;
   baselinePlanId: string | null;
   /** Static code-generated mapping; never inferred by another model. */
   questionBindings: Readonly<Record<string, QuestionBinding>>;

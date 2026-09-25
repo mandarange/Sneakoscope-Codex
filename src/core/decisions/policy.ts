@@ -7,13 +7,15 @@ import {
   CHOICE_MIN_PROBABILITY,
   CONTEXT_DROP_NOUL_MAX,
   DISTRIBUTION_SUM_TOLERANCE,
+  DELEGATION_CHOICES,
   KEEP_BASELINE_CHOICE,
   NEEDS_EVIDENCE_CHOICE,
   POLICY_REVISION,
   ROUTING_RISK_NOUL_MIN,
   ROUTING_ROLE_OMIT_NOUL_MAX,
   UNKNOWN_USAGE,
-  sealedRoutingModel,
+  ESCALATION_ROUTING_TIER,
+  routingTier,
   type Answer,
   type BaselineReason,
   type CompiledDecision,
@@ -54,6 +56,13 @@ export function compileDecision(bundle: DecisionBundle, response: DecisionsWireR
   const recoveryBinding = Object.entries(bundle.questionBindings).find(([, binding]) => binding.kind === 'recovery');
   if (recoveryBinding) {
     const compiled = compileRecovery(bundle, decoded.response.answers[recoveryBinding[0]]);
+    if (compiled.kind === 'effect') effects.push(compiled.effect);
+    else if (!fallbackReason) fallbackReason = compiled.reason;
+  }
+
+  const delegationBinding = Object.entries(bundle.questionBindings).find(([, binding]) => binding.kind === 'delegation');
+  if (delegationBinding) {
+    const compiled = compileDelegation(decoded.response.answers[delegationBinding[0]]);
     if (compiled.kind === 'effect') effects.push(compiled.effect);
     else if (!fallbackReason) fallbackReason = compiled.reason;
   }
@@ -190,14 +199,14 @@ function compileRoleRouting(
   if (!answer) return { kind: 'baseline', reason: 'missing_answer' };
   if (answer.type !== 'choice') return { kind: 'baseline', reason: 'invalid_response' };
   if (answer.choice === KEEP_BASELINE_CHOICE) return { kind: 'baseline', reason: 'keep_baseline_selected' };
-  const selected = sealedRoutingModel(answer.choice);
+  const selected = routingTier(answer.choice);
   if (!selected) return { kind: 'baseline', reason: 'invalid_response' };
   const choiceQuestion = choiceId ? bundle.request.questions[choiceId] : undefined;
   const labels = choiceQuestion?.type === 'choice' ? Object.keys(choiceQuestion.criteria) : [];
   const uncertainty = requiredChoiceUncertainty(answer, labels);
   if (!uncertainty.ok) return { kind: 'baseline', reason: uncertainty.reason };
-  const model = escalateRole(bundle, answers, roleId) ? 'gpt-6-astra' : selected.id;
-  return { kind: 'effect', effect: { kind: 'select_routing', roleId, model } };
+  const tier = escalateRole(bundle, answers, roleId) ? ESCALATION_ROUTING_TIER : selected.id;
+  return { kind: 'effect', effect: { kind: 'select_routing', roleId, tier } };
 }
 
 function escalateRole(
@@ -287,6 +296,19 @@ function compileRecovery(
   const uncertainty = requiredChoiceUncertainty(answer, labels);
   if (!uncertainty.ok) return { kind: 'baseline', reason: uncertainty.reason };
   return { kind: 'effect', effect: { kind: 'dispatch_recovery', actionId: candidate.id } };
+}
+
+function compileDelegation(
+  answer: Answer | undefined
+): { kind: 'effect'; effect: DecisionEffect } | { kind: 'baseline'; reason: BaselineReason } {
+  if (!answer) return { kind: 'baseline', reason: 'missing_answer' };
+  if (answer.type !== 'choice') return { kind: 'baseline', reason: 'invalid_response' };
+  if (answer.choice === KEEP_BASELINE_CHOICE) return { kind: 'baseline', reason: 'keep_baseline_selected' };
+  const choice = DELEGATION_CHOICES.find((row) => row === answer.choice);
+  if (!choice) return { kind: 'baseline', reason: 'invalid_response' };
+  const uncertainty = requiredChoiceUncertainty(answer, [...DELEGATION_CHOICES, KEEP_BASELINE_CHOICE]);
+  if (!uncertainty.ok) return { kind: 'baseline', reason: uncertainty.reason };
+  return { kind: 'effect', effect: { kind: 'select_delegation', choice } };
 }
 
 function canDropOptional(candidate: ContextCandidate, noul: number): boolean {

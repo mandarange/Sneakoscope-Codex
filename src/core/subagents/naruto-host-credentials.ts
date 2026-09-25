@@ -17,10 +17,8 @@
  * names the provider block; the key stays wherever the host put it.
  */
 
-import {
-  ASTRA_SUBAGENT_MODEL,
-  LUNA_SUBAGENT_MODEL
-} from './model-policy.js';
+import { defaultSubagentModel } from './model-policy.js';
+import { codexListedEfforts, latestTierModelSet } from './model-tiers.js';
 
 export const NARUTO_AUTH_MODES = ['managed', 'host'] as const;
 
@@ -155,7 +153,7 @@ export function resolveNarutoCredentialPolicy(input: NarutoCredentialPolicyInput
   const models: Array<{ key: keyof NarutoCredentialPolicy; flag: string; envKey: string; fallback: string; effort: boolean }> = [
     { key: 'parentModel', flag: '--parent-model', envKey: 'SKS_NARUTO_PARENT_MODEL', fallback: input.defaultParentModel, effort: false },
     { key: 'parentEffort', flag: '--parent-effort', envKey: 'SKS_NARUTO_PARENT_EFFORT', fallback: input.defaultParentEffort, effort: true },
-    { key: 'subagentModel', flag: '--subagent-model', envKey: 'SKS_NARUTO_SUBAGENT_MODEL', fallback: ASTRA_SUBAGENT_MODEL, effort: false },
+    { key: 'subagentModel', flag: '--subagent-model', envKey: 'SKS_NARUTO_SUBAGENT_MODEL', fallback: defaultSubagentModel(), effort: false },
     { key: 'subagentEffort', flag: '--subagent-effort', envKey: 'SKS_NARUTO_SUBAGENT_EFFORT', fallback: input.defaultSubagentEffort, effort: true }
   ];
   const resolvedModels: Record<string, string> = {};
@@ -178,9 +176,11 @@ export function resolveNarutoCredentialPolicy(input: NarutoCredentialPolicyInput
     resolvedModels[entry.key] = raw.value;
     sources[entry.key] = raw.source;
   }
-  if (resolvedModels.subagentModel !== ASTRA_SUBAGENT_MODEL) {
-    blockers.push('naruto_subagent_model_must_be_astra');
-    resolvedModels.subagentModel = ASTRA_SUBAGENT_MODEL;
+  // Children use a current model: the latest model of any tier, the same set
+  // the spawn policy and Jev routing use. The default is the latest deep tier.
+  if (!latestTierModelSet().has(String(resolvedModels.subagentModel))) {
+    blockers.push('naruto_subagent_model_must_be_current');
+    resolvedModels.subagentModel = defaultSubagentModel();
   }
   validateGpt56EffortPair('parent', String(resolvedModels.parentModel), String(resolvedModels.parentEffort), blockers);
   validateGpt56EffortPair('subagent', String(resolvedModels.subagentModel), String(resolvedModels.subagentEffort), blockers);
@@ -226,21 +226,16 @@ export function resolveNarutoCredentialPolicy(input: NarutoCredentialPolicyInput
   };
 }
 
+/** An explicit effort must be one Codex lists for that model; unknown models are not second-guessed. */
 function validateGpt56EffortPair(
   scope: 'parent' | 'subagent',
   model: string,
   effort: string,
   blockers: string[]
 ): void {
-  const allowed = model === ASTRA_SUBAGENT_MODEL
-    ? ['low', 'medium', 'high', 'xhigh', 'max', 'ultra']
-    : model === LUNA_SUBAGENT_MODEL || model === 'gpt-5.6-terra'
-      ? ['max']
-      : model === 'gpt-5.6-sol'
-        ? scope === 'parent' ? ['max'] : ['high', 'max']
-        : null;
+  const allowed = codexListedEfforts(model);
   if (allowed && !allowed.includes(effort)) {
-    blockers.push(`naruto_${scope}_gpt56_effort_policy_mismatch:${model}:${effort}:allowed_${allowed.join('_or_')}`);
+    blockers.push(`naruto_${scope}_effort_unsupported:${model}:${effort}:allowed_${allowed.join('_or_')}`);
   }
 }
 

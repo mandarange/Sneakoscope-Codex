@@ -88,7 +88,9 @@ test('generated Naruto skill keeps official threads lightweight and TriWiki-boun
   await installSkills(root);
 
   const naruto = await fs.readFile(path.join(root, '.agents', 'skills', 'sks-naruto', 'SKILL.md'), 'utf8');
-  assert.match(naruto, /Automatic targets begin at 4\/6\/8\/16 by task size: bounded, explicit parallel, large-scale, then mass mechanical or exploration fan-out on the Astra Low\/Astra Medium lanes/i);
+  assert.match(naruto, /Automatic targets begin at 4\/6\/8\/16 by task size: bounded, explicit parallel, large-scale, then mass mechanical or exploration fan-out\./i);
+  assert.match(naruto, /When Jev mode is on, Jev picks the tier for each new spawn and SKS seals it/i);
+  assert.doesNotMatch(naruto, /gpt-5\.6-/i);
   assert.match(naruto, /both lanes may expand to the SKS-owned 256-child ceiling/i);
   assert.match(naruto, /max_threads defaults to a 256-child frame budget cap, never a target/i);
   assert.match(naruto, /measured lower Codex host cap or explicit provider\/API budget remains authoritative/i);

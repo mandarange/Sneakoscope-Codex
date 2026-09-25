@@ -1,11 +1,26 @@
+import { ISOLATED_TEST_CODEX_HOME } from '../../__tests__/helpers/isolated-test-home.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import path from 'node:path'
+import { resetLatestModelTierCache } from '../model-tiers.js'
 import {
   narutoCredentialConfigArgs,
   narutoCredentialPolicyReceipt,
   resolveNarutoCredentialPolicy
 } from '../naruto-host-credentials.js'
 import { buildOfficialSubagentChildEnv, buildOfficialSubagentCodexArgs } from '../official-subagent-runner.js'
+
+// A fixed Codex models cache: the gpt-6 family is current; efforts per model
+// are what Codex lists, which is all SKS validates against.
+const levels = (...efforts: string[]) => efforts.map((effort) => ({ effort }))
+fs.writeFileSync(path.join(ISOLATED_TEST_CODEX_HOME, 'models_cache.json'), JSON.stringify({ models: [
+  { slug: 'gpt-6-astra', supported_reasoning_levels: levels('low', 'medium', 'high', 'xhigh', 'max', 'ultra') },
+  { slug: 'gpt-6-sol', supported_reasoning_levels: levels('low', 'medium', 'high', 'xhigh', 'max', 'ultra') },
+  { slug: 'gpt-6-luna', supported_reasoning_levels: levels('low', 'medium', 'max') },
+  { slug: 'gpt-5.6-terra', supported_reasoning_levels: levels('low', 'medium') }
+] }))
+resetLatestModelTierCache()
 
 const DEFAULTS = {
   defaultParentModel: 'gpt-6-astra',
@@ -80,9 +95,9 @@ test('--no-forced-login-method releases the login without switching provider', (
   assert.deepEqual(narutoCredentialConfigArgs(resolved), ['-c', 'model_provider="openai"'])
 })
 
-test('Astra child effort overrides reach the codex arguments independently of the parent', () => {
+test('child model and effort overrides reach the codex arguments independently of the parent', () => {
   const resolved = policy([
-    '--parent-model', 'gpt-5.6-terra', '--parent-effort', 'max',
+    '--parent-model', 'gpt-5.6-terra', '--parent-effort', 'medium',
     '--subagent-model', 'gpt-6-astra', '--subagent-effort', 'low'
   ])
   assert.equal(resolved.parentModel, 'gpt-5.6-terra')
@@ -95,10 +110,15 @@ test('Astra child effort overrides reach the codex arguments independently of th
   assert.ok(args.includes('agents.default_subagent_reasoning_effort="low"'))
 })
 
-test('child model flags and environment reject non-Astra without changing parent selection', () => {
+test('child model flags accept any current tier model and move older or foreign models to the latest deep tier', () => {
+  for (const model of ['gpt-6-luna', 'gpt-6-sol', 'gpt-6-astra']) {
+    const resolved = policy(['--subagent-model', model, '--subagent-effort', 'low'])
+    assert.deepEqual(resolved.blockers, [], model)
+    assert.equal(resolved.subagentModel, model)
+  }
   for (const model of ['gpt-5.6-luna', 'gpt-5.6-sol', 'anthropic/claude-sonnet-4.5']) {
     for (const resolved of [policy(['--subagent-model', model]), policy([], { SKS_NARUTO_SUBAGENT_MODEL: model })]) {
-      assert.ok(resolved.blockers.some((blocker) => blocker === 'naruto_subagent_model_must_be_astra' || blocker.startsWith('naruto_subagentModel_invalid:')))
+      assert.ok(resolved.blockers.some((blocker) => blocker === 'naruto_subagent_model_must_be_current' || blocker.startsWith('naruto_subagentModel_invalid:')), model)
       assert.equal(resolved.subagentModel, 'gpt-6-astra')
     }
   }
@@ -107,15 +127,14 @@ test('child model flags and environment reject non-Astra without changing parent
   }
 })
 
-test('legacy explicit parent overrides retain their prior effort validation', () => {
-  assert.ok(policy([
-    '--parent-model', 'gpt-5.6-terra',
-    '--parent-effort', 'medium'
-  ]).blockers.includes('naruto_parent_gpt56_effort_policy_mismatch:gpt-5.6-terra:medium:allowed_max'))
-  assert.ok(policy([
-    '--parent-model', 'gpt-5.6-sol',
-    '--parent-effort', 'high'
-  ]).blockers.includes('naruto_parent_gpt56_effort_policy_mismatch:gpt-5.6-sol:high:allowed_max'))
+test('explicit efforts must be ones Codex lists for that model; nothing else is pinned', () => {
+  assert.ok(policy(['--subagent-model', 'gpt-6-luna', '--subagent-effort', 'high']).blockers
+    .includes('naruto_subagent_effort_unsupported:gpt-6-luna:high:allowed_low_or_medium_or_max'))
+  assert.ok(policy(['--parent-model', 'gpt-5.6-terra', '--parent-effort', 'max']).blockers
+    .includes('naruto_parent_effort_unsupported:gpt-5.6-terra:max:allowed_low_or_medium'))
+  assert.deepEqual(policy(['--parent-model', 'gpt-5.6-terra', '--parent-effort', 'medium']).blockers, [])
+  // A model the catalog does not list is not second-guessed.
+  assert.deepEqual(policy(['--parent-model', 'future-model', '--parent-effort', 'high']).blockers, [])
 })
 
 test('a host-mode run carries no chatgpt login into the codex arguments', () => {

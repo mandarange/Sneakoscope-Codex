@@ -207,7 +207,7 @@ export async function evaluateRecallPulseFixtures(root: any, opts: any = {}) {
       fixture('repeated-stop-hook-blocker', true, 'Duplicate suppression keys collapse repeated blocker text into one durable status row.'),
       fixture('hook-only-status-visibility', true, 'mission-status-ledger.json preserves recoverable user-visible status.'),
       fixture('research-persona-missing', true, 'Research validation blocks missing agent display_name/persona/persona_boundary.'),
-      fixture('research-model-policy-not-sol-max', true, 'Research validation blocks reviewer rows that are not bound to the research_reviewer GPT-6 Astra Max policy.'),
+      fixture('research-model-policy-not-sol-max', true, 'Research validation blocks reviewer rows that are not bound to the research_reviewer latest deep-tier max policy.'),
       fixture('research-review-evidence-missing', true, 'Research validation blocks reviewer outcomes without source evidence, falsifiers, or probes.'),
       fixture('research-impersonation', true, 'Research validation blocks persona-boundary violations.'),
       fixture('oversized-l1', true, 'L1 token and item limits reject oversized active recall.'),
@@ -378,7 +378,7 @@ export async function buildRecallPulseGovernanceReport(root: any, opts: any = {}
       ],
       migration_paths: {
         existing_missions: 'Run sks recallpulse run <mission-id> and sks recallpulse governance <mission-id> to add report-only artifacts.',
-        existing_research_artifacts: 'Research gates require agent display_name/persona/persona_boundary fields and the research_reviewer GPT-6 Astra Max binding; old ledgers must be migrated before claiming pass.',
+        existing_research_artifacts: 'Research gates require agent display_name/persona/persona_boundary fields and the research_reviewer latest deep-tier max binding; old ledgers must be migrated before claiming pass.',
         generated_skills: 'Do not edit generated installed skills directly; rerun init/bootstrap from engine source when generated text needs refreshing.'
       },
       release_gate: 'RecallPulse remains report-only unless packcheck, selftest, sizecheck, registry metadata check, TriWiki validate, and RecallPulse fixture eval pass.'
@@ -873,7 +873,7 @@ function preservedRoutePersonality(routeId: any = '', routeName: any = '') {
     ImageUXReview: ("Image UX Review keeps " + IMAGEGEN_MODEL + " annotated raster review identity"),
     ComputerUse: 'Computer Use keeps maximum-speed native Mac/non-web visual lane identity',
     Goal: 'Goal uses Codex native /goal only and creates no SKS-owned persistence, artifact, loop, or fallback state',
-    Research: 'Research keeps Super Search evidence, three independent Astra Max review dimensions, bounded revision, paper, and falsification identity',
+    Research: 'Research keeps Super Search evidence, three independent deep-tier review dimensions, bounded revision, paper, and falsification identity',
     AutoResearch: 'AutoResearch keeps iterative experiment loop identity',
     DB: 'DB keeps conservative read-first destructive-operation safety identity',
     MadSKS: 'MAD-SKS keeps explicit scoped high-risk authorization identity',

@@ -50,6 +50,12 @@ import { classifyTaskProfile } from './runtime/task-profile.js';
 import { resolveSubagentThreadBudget } from './subagents/thread-budget.js';
 import { readOfficialSubagentConfig } from './subagents/official-subagent-config.js';
 import { jevSpawnModelRewrite } from './hooks-runtime/jev-spawn-routing.js';
+import { maybeReconcileManagedGuidancePreflight } from './hooks-runtime/managed-guidance-preflight.js';
+import {
+  evaluateParentOrchestrationGate,
+  isSpawnToolPayload,
+  recordParentOrchestrationSpawn
+} from './hooks-runtime/parent-orchestration-gate.js';
 import { subagentSpawnPolicyBlockReason } from './hooks-runtime/subagent-spawn-policy.js';
 import { withFileLock } from './locks/file-lock.js';
 import {
@@ -213,9 +219,17 @@ export async function evaluateHookPayload(name: any, payload: any = {}, opts: an
     parentLaunchMissionId: activeNarutoParentLaunchMissionId()
   });
   const withNarutoDecision = (result: any) => ({ ...result, sksNarutoDecision });
+  if (name === 'user-prompt-submit' || name === 'session-start') {
+    await maybeReconcileManagedGuidancePreflight(root).catch(() => null);
+  }
   if (name === 'user-prompt-submit') {
     const result = await hookUserPrompt(root, state, payload, noQuestion, sessionKey);
-    const withJev = await attachJevTurnRouting(root, payload, result);
+    // A fresh Naruto preparation and a continuation of an open Naruto mission
+    // are both parent-orchestration turns.
+    const orchestrationRequired = sksNarutoDecision.required === true
+      && (sksNarutoDecision.action === 'prepare_naruto' || sksNarutoDecision.action === 'observe_required');
+    const withOrchestration = attachParentOrchestrationDirective(result, orchestrationRequired);
+    const withJev = await attachJevTurnRouting(root, payload, withOrchestration, orchestrationRequired);
     const withSkillContext = await attachAuthoritativeSksSkillContext(root, state, payload, withJev);
     return withNarutoDecision(attachOfficialSubagentSpawnCompatibilityContext(state, payload, withSkillContext));
   }
@@ -266,7 +280,7 @@ async function hookSubagentStart(root: any, state: any, payload: any = {}, sessi
     : '';
   const resourceGuard = skillGuardBinding ? [
     `SKS Naruto policy: max_threads frame budget is ${budget.maxThreads} (cap, not a spawn target).`,
-    'All children use gpt-6-astra; low/medium/high/max are effort lanes, not an agent-count cap.',
+    'Keep the model and reasoning effort your spawn call sealed; do not retarget them.',
     'Use max_depth=1. Naruto children must not spawn children.',
     'Do not duplicate an already assigned slice.',
     'Parallel writes require disjoint paths; serialize overlapping paths.',
@@ -304,6 +318,9 @@ async function hookSubagentStart(root: any, state: any, payload: any = {}, sessi
     }
   }
   if (skillGuardBinding && artifactDirSafe) {
+    // A host that never ran the parent's spawn through PreToolUse still lifts
+    // the pre-spawn gate here; a spawn already counted is not counted twice.
+    await recordParentOrchestrationSpawn(root, state, { atLeastOne: true }).catch(() => null);
     try {
       await recordAndRefreshSubagentEvidence(root, state, payload, 'SubagentStart', sessionKey);
     } catch {
@@ -336,14 +353,42 @@ async function hookSubagentStart(root: any, state: any, payload: any = {}, sessi
   const additionalContext = [coreEngineeringDirectiveReferenceText(), resourceGuard, routingContext, active, skillContext].filter(Boolean).join('\n\n');
   return { continue: true, additionalContext, ...(skillBlockers.length ? { silent: true } : {}) };
 }
-async function attachJevTurnRouting(root: string, payload: any, result: any) {
+/**
+ * The Naruto gate decided this prompt is parent orchestration. Say so where
+ * the parent reads it, and say that the PreToolUse hook enforces it: prompt
+ * text alone left the parent implementing the first slice itself.
+ */
+function attachParentOrchestrationDirective(result: any, orchestrationRequired: boolean) {
+  if (!orchestrationRequired || !result || result.decision === 'block') return result;
+  const line = [
+    'SKS parent orchestration gate is armed for this turn.',
+    'The parent thread orchestrates only: decompose the task into disjoint slices, spawn each child with spawn_agent',
+    '(sealed model and reasoning_effort, fork_turns="none", complete slice contract in message), wait, then integrate and verify.',
+    'The PreToolUse hook denies parent-thread source edits until the first child thread starts and while children are still running; .sneakoscope artifacts stay parent-writable.'
+  ].join(' ');
+  const additionalContext = [result.additionalContext, line].filter(Boolean).join('\n\n');
+  return {
+    ...result,
+    additionalContext,
+    parent_orchestration_gate: 'armed',
+    ...(result.systemMessage ? { systemMessage: visibleHookMessage('user-prompt-submit', additionalContext) } : {})
+  };
+}
+
+async function attachJevTurnRouting(root: string, payload: any, result: any, orchestrationRequired = false) {
   if (!result || result.decision === 'block') return result;
   const prompt = stripVisibleDecisionAnswerBlocks(extractUserPrompt(payload));
   if (!String(prompt || '').trim()) return result;
   const decision = await consultJevTurnModel({ root, prompt }).catch(() => null);
   if (!decision?.called) return result;
+  // The parent thread always keeps the user-selected model and effort, and a
+  // model cannot switch its own model mid-turn. On an orchestration turn the
+  // answer is the default child seal (Jev re-seals every spawn); elsewhere it
+  // is only a reasoning hint.
   const line = decision.model
-    ? `Jev sealed this turn to ${decision.model}. Use that sealed model and do not reclassify it.`
+    ? orchestrationRequired
+      ? `Jev rated this task as ${decision.model} (${decision.effort}). Use that as the default child seal; Jev re-seals every spawn_agent call and the parent model stays as the user set it.`
+      : `Jev rated this turn as ${decision.effort}-effort work (${decision.model} tier). Treat it as this turn's reasoning hint; the parent model, effort, and service tier stay as the user set them.`
     : '';
   if (!line) return { ...result, jev_turn: decision };
   const additionalContext = [result.additionalContext, line].filter(Boolean).join('\n\n');
@@ -774,17 +819,28 @@ async function hookPreTool(root: any, state: any, payload: any, noQuestion: any,
   const agentRecursionDecision = agentWorkerHookRecursionDecision(state, payload, command);
   if (agentRecursionDecision) return agentRecursionDecision;
   if (noQuestion && looksInteractiveCommand(command)) return { decision: 'block', reason: interactiveCommandReason(command) };
+  const orchestration = await evaluateParentOrchestrationGate({ root, state, payload, sessionKey })
+    .catch(() => null);
+  if (orchestration?.action === 'block') {
+    return { decision: 'block', permissionDecision: 'deny', reason: orchestration.message };
+  }
   const hostCapabilityDecision = await enforceHostCapabilityPreTool(root, state, payload, sessionKey);
   if (hostCapabilityDecision && hostCapabilityDecision.continue !== true) return hostCapabilityDecision;
+  // Every guard above accepted this spawn_agent call: from here on the
+  // mission has a child, and the parent may integrate once it settles.
+  if (isSpawnToolPayload(spawnPayload)) await recordParentOrchestrationSpawn(root, state).catch(() => null);
   const waveGuidance = await parentWaveGuidanceContext(root, state, sessionKey).catch(() => '');
-  const additionalContext = [skillRefresh.context, waveGuidance].filter(Boolean).join('\n\n');
+  const escapeNote = orchestration?.action === 'escape' ? orchestration.message || '' : '';
+  const additionalContext = [skillRefresh.context, waveGuidance, escapeNote].filter(Boolean).join('\n\n');
   if (additionalContext) {
     return withJevSpawnRewrite({
       continue: true,
       additionalContext,
-      ...(waveGuidance
-        ? { systemMessage: visibleHookMessage('pre-tool', 'SKS Naruto wave lifecycle requires root-parent follow-up.') }
-        : { silent: true })
+      ...(escapeNote
+        ? { systemMessage: visibleHookMessage('pre-tool', escapeNote), parent_orchestration_gate: 'escaped' }
+        : waveGuidance
+          ? { systemMessage: visibleHookMessage('pre-tool', 'SKS Naruto wave lifecycle requires root-parent follow-up.') }
+          : { silent: true })
     }, jevSpawnInput);
   }
   return withJevSpawnRewrite({ continue: true }, jevSpawnInput);

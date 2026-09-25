@@ -283,6 +283,44 @@ export function mergeManagedHooksJson(existingContent: any, commandPrefix: any, 
   return `${JSON.stringify({ ...root, hooks: nextHooks }, null, 2)}\n`;
 }
 
+/**
+ * Drop SKS-managed hook entries under events the current profile no longer
+ * installs (PostToolUse in the essential profile), without rewriting any other
+ * entry: user hooks and current SKS commands stay byte-for-byte. `sks update`
+ * uses this where `mergeManagedHooksJson` would need the original install
+ * prefix it cannot know.
+ */
+export function pruneRetiredSksHookEvents(
+  existingContent: string,
+  installedEvents: readonly string[]
+): { text: string; removed: string[] } {
+  let root: any;
+  try {
+    root = existingContent?.trim() ? JSON.parse(existingContent) : null;
+  } catch {
+    return { text: existingContent, removed: [] };
+  }
+  if (!root || typeof root !== 'object' || Array.isArray(root)) return { text: existingContent, removed: [] };
+  const hooks = root.hooks && typeof root.hooks === 'object' && !Array.isArray(root.hooks) ? root.hooks : null;
+  if (!hooks) return { text: existingContent, removed: [] };
+  const installed = new Set(installedEvents);
+  const removed: string[] = [];
+  const nextHooks: Record<string, any> = {};
+  for (const [eventName, entries] of Object.entries(hooks)) {
+    if (installed.has(eventName) || !Array.isArray(entries)) {
+      nextHooks[eventName] = entries;
+      continue;
+    }
+    // stripSksManagedHookEntry returns the same object when nothing was SKS-owned.
+    const mapped = entries.map((entry: any) => stripSksManagedHookEntry(entry));
+    if (mapped.some((entry: any, index: number) => entry !== entries[index])) removed.push(eventName);
+    const preserved = mapped.filter(Boolean);
+    if (preserved.length) nextHooks[eventName] = preserved;
+  }
+  if (!removed.length) return { text: existingContent, removed };
+  return { text: `${JSON.stringify({ ...root, hooks: nextHooks }, null, 2)}\n`, removed };
+}
+
 function stripSksManagedHookEntry(entry: any) {
   if (!entry || typeof entry !== 'object' || Array.isArray(entry) || !Array.isArray(entry.hooks)) return entry;
   const next = entry.hooks.filter((hook: any) => !isSksManagedHook(hook));
@@ -309,9 +347,9 @@ const AGENTS_BLOCK = [
   '## Execution',
   '',
   '- Codex native `/goal` is the only persisted goal owner. Goal objectives must state the outcome, scope, constraints, verification, done-when conditions, stop conditions, and non-goals.',
-  '- Answer, Help, Goal, and tiny DFix stay parent-owned. Naruto implementation is parent orchestration only: decompose, assign disjoint slices, spawn, integrate, and verify. Do not implement those slices in the parent thread.',
+  '- Answer, Help, Goal, and tiny DFix stay parent-owned. Implementation routes to Naruto (`$sks-naruto`, alias `$sks-work`; standalone `sks naruto run`), which is parent orchestration only: decompose, assign disjoint slices, spawn, integrate, and verify. Do not implement those slices in the parent thread. The SKS PreToolUse hook denies parent-thread source edits until the first child thread starts and while children are still running; .sneakoscope artifacts stay parent-writable, and Jev may release a confirmed orchestration-scaffolding edit.',
   '- The parent owns decomposition, integration, verification, and the final answer. Delegate implementation slices with disjoint write scopes, reuse capacity across root-owned waves, and never nest subagents.',
-  '- When Jev mode is on, each new Naruto child spawn is sealed by Jev to gpt-5.6-luna low, gpt-5.6-sol low, gpt-5.6-terra medium, or gpt-6-astra max. A user role preference stays authoritative. Off mode keeps gpt-6-astra. Do not pick a child model yourself while Jev mode is on.',
+  '- Every child runs the newest model of the tier its work needs (fast, balanced, context, or deep); no model family is pinned. When Jev mode is on, Jev picks the tier for each new Naruto child spawn and SKS seals it. A user role preference stays authoritative. Do not pick a child model yourself.',
   '- Preserve the user-selected parent model, reasoning effort, and service tier. Parent settings stay on the parent thread. A role preference wins over the Jev seal for that role.',
   '- SKS child spawns must pass the sealed model and reasoning effort with `fork_turns="none"` or a positive bounded turn count; carry the complete bounded slice contract in `message`. Never use full-history inheritance for children. Full-history forks (`fork_turns="all"`, including the omitted default) inherit the parent agent type, model, and reasoning effort and must not be combined with `agent_type`, `model`, or `reasoning_effort`.',
   '- Route-specific skills own route-specific details. Do not inject unrelated Design, PPT, image, browser, research, DB, or release policy into ordinary work.',
@@ -1183,8 +1221,8 @@ export function codexAppQuickReference(scope: any, commandPrefix: any) {
     coreEngineeringDirectiveReferenceText(),
     'dollar-commands:',
     ...currentDollarCommands().map((c: any) => `- \`${sksPrefixedDollarCommand(c.command)}\`: ${c.route}`),
-    'Routing: Answer is read-only, DFix handles tiny edits, and Naruto implementation is parent orchestration with child slices. Answer and tiny DFix stay on the parent.',
-    'Subagent context: pass the sealed model and reasoning effort with `fork_turns="none"` or a positive bounded turn count. Jev mode seals that model at each new spawn; off mode uses gpt-6-astra. Pass the complete bounded slice contract in `message`. Never use `fork_turns="all"` together with a custom model.',
+    'Routing: Answer is read-only, DFix handles tiny edits, and Naruto implementation is parent orchestration with child slices enforced by the PreToolUse gate (spawn before any source edit, and no parent edits beside running children). Answer and tiny DFix stay on the parent.',
+    'Subagent context: pass the sealed model and reasoning effort with `fork_turns="none"` or a positive bounded turn count. Each child uses the newest model of its tier; Jev mode picks that tier at each new spawn. Pass the complete bounded slice contract in `message`. Never use `fork_turns="all"` together with a custom model.',
     'Goal: Codex native /goal is the only persisted goal owner; no SKS Goal mission, bridge, compatibility loop, or fallback state is allowed.',
     'Context: use bounded TriWiki recall when a claim needs project memory; refresh after material changes; validate before handoff/final; use Context7 or official vendor docs when external contracts or versions matter.',
     'Completion: report the result, actual verification, and remaining gaps once. Reflection and Honest Mode are optional unless explicitly requested or required by the strict profile.',

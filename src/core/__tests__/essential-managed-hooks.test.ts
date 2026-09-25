@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { managedHookEventNames, mergeManagedHooksJson } from '../init.js';
+import { managedHookEventNames, mergeManagedHooksJson, pruneRetiredSksHookEvents } from '../init.js';
 import { resetVerificationProfileCache } from '../verification-profile.js';
 
 async function withProfile<T>(profile: 'essential' | 'strict', run: () => T | Promise<T>): Promise<T> {
@@ -49,4 +49,32 @@ test('merging into a legacy hooks.json removes the SKS PostToolUse entry but kee
 
   const strictMerged = JSON.parse(await withProfile('strict', () => mergeManagedHooksJson(sksOnly, 'sks')));
   assert.equal(strictMerged.hooks.PostToolUse.some((entry: any) => entry.hooks.some((hook: any) => hook.command === 'sks hook post-tool')), true);
+});
+
+test('update prune drops only SKS entries under events the profile no longer installs', async () => {
+  const legacy = JSON.stringify({
+    custom: { keep: true },
+    hooks: {
+      PostToolUse: [
+        { matcher: '*', hooks: [{ type: 'command', command: '/opt/sks/bin/sks.js hook post-tool', statusMessage: 'SKS recording tool evidence' }] },
+        { matcher: 'Read', hooks: [{ type: 'command', command: 'my-own-audit-tool --log' }] },
+      ],
+      PreToolUse: [{ matcher: '*', hooks: [{ type: 'command', command: '/opt/sks/bin/sks.js hook pre-tool' }] }],
+    },
+  });
+  const installed = await withProfile('essential', () => managedHookEventNames());
+  const pruned = pruneRetiredSksHookEvents(legacy, installed);
+  assert.deepEqual(pruned.removed, ['PostToolUse']);
+  const next = JSON.parse(pruned.text);
+  assert.deepEqual(next.custom, { keep: true });
+  assert.deepEqual(next.hooks.PostToolUse, [{ matcher: 'Read', hooks: [{ type: 'command', command: 'my-own-audit-tool --log' }] }]);
+  // Installed events keep their exact SKS command; the prune never rewrites prefixes.
+  assert.equal(next.hooks.PreToolUse[0].hooks[0].command, '/opt/sks/bin/sks.js hook pre-tool');
+
+  const current = pruneRetiredSksHookEvents(pruned.text, installed);
+  assert.deepEqual(current.removed, []);
+  assert.equal(current.text, pruned.text);
+  const strictInstalled = await withProfile('strict', () => managedHookEventNames());
+  assert.deepEqual(pruneRetiredSksHookEvents(legacy, strictInstalled).removed, []);
+  assert.deepEqual(pruneRetiredSksHookEvents('not json', installed), { text: 'not json', removed: [] });
 });

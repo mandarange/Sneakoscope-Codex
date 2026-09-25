@@ -1,12 +1,37 @@
 # Release Proof Truth
 
-## 10.3.3 candidate
+## 10.3.4 candidate
 
-The working tree ships Jev through OpenRouter Decisions. Verification must cover
-the typed compiler, injected transport, preparation consumers, and packed
-tarball absence of a local-model worker. A synthetic fixture is not a live
-probe. A live 200 is connectivity only. Performance numbers are unavailable
-until an authorized workload run reports provider tokens and cost.
+Model routing proof is the tier resolver suite (newest version wins, hidden
+rows ignored, missing families fall back to the newest cached model, no cache
+uses the built-in family) and the routing, spawn, preference, and prompt tests
+that assert tier models instead of pinned ids. Which model a live child ran is
+visible only in that mission's `subagent-events.jsonl`.
+
+The working tree adds the parent orchestration gate, Jev tool-call delegation,
+and broader `sks update` cleanup. Proof is the hook and decisions unit suites,
+a replay of a real-shaped Codex hook sequence through `evaluateHookPayload`
+(deny before spawn, allow after spawn, deny beside a running child, allow the
+child, allow integration after `SubagentStop`), the update cleanup stage
+tests, and the packaged skill digests. A synthetic fixture is not a live
+probe; whether a live Codex parent spawns before it edits is observable only in
+that mission's `parent-orchestration-gate.json`, and no live session is
+claimed here.
+
+Permission repair proof is the `managed-permission-repair` suite: owned
+read-only folders and a `uchg` file become deletable, a user skill stays
+untouched, elevation for foreign-owned paths is confined to SKS paths with
+shell-quoted paths, the first-command gate does not repeat a declined prompt,
+and tests never elevate. A read-only scan of the real managed paths on one Mac
+found no issues. The administrator dialog was not run with a password; its
+AppleScript and shell quoting was checked through `osascript` without
+privileges.
+
+## Historical 10.3.3 candidate
+
+10.3.3 shipped Jev through OpenRouter Decisions. Verification covered the
+typed compiler, injected transport, preparation consumers, and packed tarball
+absence of a local-model worker. A live 200 was connectivity only.
 
 ## Historical 10.3.0 candidate
 
