@@ -1,4 +1,4 @@
-import { IMAGEGEN_MODEL, CODEX_BUILTIN_IMAGEGEN_MODEL } from './imagegen-model-policy.js';
+import { CODEX_BUILTIN_IMAGEGEN_MODEL } from './imagegen-model-policy.js';
 import os from 'node:os'
 import path from 'node:path'
 import { readText } from '../fsx.js'
@@ -53,6 +53,10 @@ export async function evaluateImagegenAuthReadiness(opts: {
   codexHome?: string
   env?: NodeJS.ProcessEnv
   codexAppBuiltInAvailable?: boolean
+  /** The bridge route of the user's Codex model can carry the hosted image tool. */
+  codexBridgeRouteAvailable?: boolean
+  /** Custom image model mode is on with a model and an OpenRouter key. */
+  customModelReady?: boolean
   authJsonText?: string
 } = {}): Promise<ImagegenAuthReadiness> {
   const env = opts.env || process.env
@@ -62,23 +66,20 @@ export async function evaluateImagegenAuthReadiness(opts: {
   const { auth_mode, openai_api_key_present } = await detectImagegenAuthMode(authModeOpts)
   const codexAppBuiltInAvailable = opts.codexAppBuiltInAvailable === true
 
-  // Fully-headless generation can happen through a direct OpenAI key or through
-  // Codex built-in image_generation when the Codex feature surface exposes it.
+  // SKS never pins an image model, so any of these paths can make an image.
   // Capability is not output proof; real smoke still must verify a file.
-  const builtInModelSupported = codexAppBuiltInAvailable && String(CODEX_BUILTIN_IMAGEGEN_MODEL) === IMAGEGEN_MODEL
-  const headlessAutoAvailable = openai_api_key_present || builtInModelSupported
-
   const availablePaths: string[] = []
+  if (opts.customModelReady === true) availablePaths.push('sks_custom_openrouter_image_model')
+  if (opts.codexBridgeRouteAvailable === true) availablePaths.push('codex_bridge_route_image_generation')
+  if (codexAppBuiltInAvailable) availablePaths.push('codex_exec_builtin_image_generation')
   if (openai_api_key_present) availablePaths.push('openai_api_key_headless')
-  if (builtInModelSupported) {
-    availablePaths.push('codex_exec_builtin_image_generation')
-  }
+  const headlessAutoAvailable = availablePaths.length > 0
 
   const nextActions: string[] = []
   let primaryBlocker: string | null = null
   if (!availablePaths.length) {
-    primaryBlocker = codexAppBuiltInAvailable ? 'imagegen_model_unavailable' : 'imagegen_no_usable_path'
-    nextActions.push(`Use the selected ready provider with explicit image_generation.model=${IMAGEGEN_MODEL}, or authorize an Images API request with OPENAI_API_KEY. The built-in host engine cannot be changed through prompt text.`)
+    primaryBlocker = 'imagegen_no_usable_path'
+    nextActions.push(`Turn on a custom OpenRouter image model in SKS Control Center, or make the bridge route of your Codex model ready (\`sks bridge status --json\`). Codex's built-in image tool (${CODEX_BUILTIN_IMAGEGEN_MODEL} today) also works inside a Codex turn.`)
   }
 
   return {

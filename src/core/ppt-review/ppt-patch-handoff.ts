@@ -1,4 +1,3 @@
-import { IMAGEGEN_MODEL } from '../imagegen/imagegen-model-policy.js';
 import path from 'node:path';
 import { nowIso, readJson, writeJsonAtomic } from '../fsx.js';
 import { PPT_FIX_TASK_PLAN_ARTIFACT } from './ppt-fix-task-planner.js';
@@ -52,7 +51,7 @@ function buildDeckEditPrompt(plan: any = {}) {
     'Apply bounded presentation deck edits for the PPT Imagegen Review findings.',
     `Deck path: ${plan.deck_path || '<manual deck required>'}.`,
     `Target slide indexes: ${tasks.map((task: any) => task.slide_index).join(', ') || '<none>'}.`,
-    ("Use the source slide images, generated " + IMAGEGEN_MODEL + " callout evidence, and issue ledgers as the only visual evidence."),
+    'Use the source slide images, generated callout evidence, and issue ledgers as the only visual evidence.',
     'Forbidden operations: destructive file changes, DB writes, invented business/product claims, and broad redesigns outside referenced slides.',
     'Return JSON with changed_slides, changed_files, deck_modified, no_op_reason, requires_human_review, and re_export_required.'
   ].join('\n');

@@ -25,23 +25,47 @@
 
 export const CODEX_APP_IMAGEGEN_EVIDENCE_CLASS = 'codex_app_imagegen';
 export const CODEX_LB_PROVIDER_IMAGEGEN_EVIDENCE_CLASS = 'codex_lb_provider_imagegen';
+/**
+ * Custom mode off: `sks imagegen` sent Codex's hosted `image_generation` tool
+ * through the Desktop Bridge on the route of the user's own Codex model.
+ */
+export const CODEX_BRIDGE_ROUTE_IMAGEGEN_EVIDENCE_CLASS = 'codex_bridge_route_imagegen';
+/** Custom mode on: the OpenRouter image model the user chose in Control Center. */
+export const SKS_CUSTOM_IMAGEGEN_EVIDENCE_CLASS = 'sks_custom_imagegen';
 export const NON_CODEX_API_FALLBACK_EVIDENCE_CLASS = 'non_codex_api_fallback';
 export const MOCK_FIXTURE_EVIDENCE_CLASS = 'mock_fixture';
 
-/** Classes that count as a real image from the user's configured Codex provider. */
+/** Classes that count as a real image from a path the user selected. */
 export const FULL_IMAGEGEN_EVIDENCE_CLASSES: readonly string[] = Object.freeze([
   CODEX_APP_IMAGEGEN_EVIDENCE_CLASS,
-  CODEX_LB_PROVIDER_IMAGEGEN_EVIDENCE_CLASS
+  CODEX_LB_PROVIDER_IMAGEGEN_EVIDENCE_CLASS,
+  CODEX_BRIDGE_ROUTE_IMAGEGEN_EVIDENCE_CLASS,
+  SKS_CUSTOM_IMAGEGEN_EVIDENCE_CLASS
 ]);
 
 export const CODEX_LB_PROVIDER_OUTPUT_SOURCE = 'codex_lb_provider_responses';
+export const CODEX_BRIDGE_ROUTE_OUTPUT_SOURCE = 'codex_bridge_route_responses';
+export const SKS_CUSTOM_IMAGEGEN_OUTPUT_SOURCE = 'sks_custom_imagegen_output';
 
 /** How a full-evidence image may have reached the mission. */
 export const FULL_IMAGEGEN_OUTPUT_SOURCES: readonly string[] = Object.freeze([
   'manual_attach',
   'auto_discovered_generated_images',
-  CODEX_LB_PROVIDER_OUTPUT_SOURCE
+  CODEX_LB_PROVIDER_OUTPUT_SOURCE,
+  CODEX_BRIDGE_ROUTE_OUTPUT_SOURCE,
+  SKS_CUSTOM_IMAGEGEN_OUTPUT_SOURCE
 ]);
+
+/**
+ * A generated image must record the model that made it. SKS no longer pins an
+ * image model: Codex picks its own (recorded as `codex-default` or the engine
+ * Codex names), and custom mode records the OpenRouter id. Placeholders never
+ * count.
+ */
+export function isRecordedImagegenModel(value: unknown): boolean {
+  const model = String(value || '').trim();
+  return Boolean(model) && !/^(?:not[_-]?required|unknown|none|null|pending|mock|fake|placeholder)$/i.test(model);
+}
 
 export function isFullImagegenEvidenceClass(value: unknown): boolean {
   return FULL_IMAGEGEN_EVIDENCE_CLASSES.includes(String(value || ''));

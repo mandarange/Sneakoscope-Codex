@@ -1,4 +1,4 @@
-import { IMAGEGEN_MODEL } from './imagegen/imagegen-model-policy.js';
+import { isRecordedImagegenModel } from './imagegen/imagegen-evidence.js';
 import path from 'node:path';
 import { exists, nowIso, readJson, readText, writeJsonAtomic, writeTextAtomic, PACKAGE_VERSION } from './fsx.js';
 import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_CHROME_EXTENSION_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_IMAGEGEN_REQUIRED_POLICY, CODEX_IN_APP_BROWSER_EVIDENCE_SOURCE, CODEX_WEB_VERIFICATION_EVIDENCE_SOURCE, CODEX_WEB_VERIFICATION_POLICY, type QaInteractionSurface, evidenceMentionsForbiddenBrowserAutomation, evidenceMentionsForbiddenWebComputerUseEvidence } from './routes.js';
@@ -178,7 +178,7 @@ export function inferQaLoopAnswers(prompt: any = '') {
     '검증하지 못한 UI/API 범위는 통과로 주장하지 않고 QA 리포트에 남긴다.'
   ];
   if (isUiScope(scope)) acceptance.push('UI E2E 통과 증거는 surface router가 고른 @Browser/@Chrome/@Computer 실제 action·observation ledger와 필요한 screenshot/hash를 기록해야 한다.');
-  if (wantsImagegenReview) acceptance.push(("" + IMAGEGEN_MODEL + " annotated review image가 필요한 경우 실제 Selected image provider: " + IMAGEGEN_MODEL + " 출력 파일 path, sha256, model, provider를 기록해야 한다."));
+  if (wantsImagegenReview) acceptance.push('Annotated review image가 필요한 경우 활성 SKS 이미지 모드(sks imagegen generate)의 실제 출력 파일 path, sha256, model, provider를 기록해야 한다.');
   return {
     GOAL_PRECISE: text ? `현재 요청 범위에서 QA-LOOP를 안전하게 실행한다: ${text}` : '현재 로컬 개발 환경에서 핵심 사용자 흐름을 안전하게 QA한다.',
     QA_SCOPE: scope,
@@ -630,7 +630,7 @@ ${JSON.stringify(contract, null, 2)}
 ${imageContractText}${appHandoffText}${executionProfileText}
 VISUAL EVIDENCE CONTRACT:
 - For UI QA, do not mark live UI evidence true unless qa-loop/qa-surface-selection.json selected the correct @Browser/@Chrome/@Computer surface and action/observation ledgers record real user-like actions.
-- If decision-contract.json answers set QA_VISUAL_REVIEW_IMAGEGEN_REQUIRED=${IMAGEGEN_ANNOTATED_REVIEW_REQUIRED_ACK}, use the selected image provider with ${IMAGEGEN_MODEL} (${CODEX_APP_IMAGE_GENERATION_DOC_URL}) to produce a real generated annotated review image from the selected-surface source screenshot. Record its path, sha256, model=${IMAGEGEN_MODEL}, provider=the actual selected provider, and source_screenshot_artifact in ${QA_LOOP_VISUAL_EVIDENCE_ARTIFACT} and qa-gate.json.
+- If decision-contract.json answers set QA_VISUAL_REVIEW_IMAGEGEN_REQUIRED=${IMAGEGEN_ANNOTATED_REVIEW_REQUIRED_ACK}, use \`sks imagegen generate\` with the screenshot as --reference (the active SKS image mode; ${CODEX_APP_IMAGE_GENERATION_DOC_URL}) to produce a real generated annotated review image from the selected-surface source screenshot. Record its path, sha256, model=the model the tool reported, provider=the actual provider, and source_screenshot_artifact in ${QA_LOOP_VISUAL_EVIDENCE_ARTIFACT} and qa-gate.json.
 - Do not substitute prose-only critique, Playwright/Selenium/Puppeteer screenshots, static screenshots, plugin cache, placeholder images, fake fixtures, or direct API fallback as full UI visual evidence.
 Previous tail:
 ${String(previous || '').slice(-2500)}
@@ -711,8 +711,8 @@ export function buildQaLoopVisualEvidenceArtifact(mission: any = {}, contract: a
     imagegen_annotated_review: {
       required: imagegenReviewRequired,
       status: imagegenReviewRequired ? 'pending' : 'not_required',
-      model: imagegenReviewRequired ? IMAGEGEN_MODEL : 'not_required',
-      provider: imagegenReviewRequired ? 'Codex App $imagegen' : 'not_required',
+      model: imagegenReviewRequired ? 'active-sks-image-mode' : 'not_required',
+      provider: imagegenReviewRequired ? 'active SKS image mode (sks imagegen generate, or Codex App $imagegen in Codex default mode)' : 'not_required',
       source_screenshot_artifact: null,
       artifact_path: null,
       sha256: null,
@@ -789,9 +789,10 @@ async function missingQaLoopVisualEvidence(dir: any, gate: any = {}) {
     if (!reviewPath) reasons.push('imagegen_annotated_review_artifact_missing');
     else reasons.push(...await imageEvidenceFileReasons(dir, reviewPath, reviewSha, 'imagegen_annotated_review', reviewDims));
     const model = firstNonEmpty(gate.imagegen_annotated_review_model, gate.imagegen_annotated_review?.model, gate.imagegen_annotated_review_image?.model, review.model, review.provider?.model);
-    if (model !== IMAGEGEN_MODEL) reasons.push('imagegen_annotated_review_model_missing');
+    // The model the tool reported, not the plan's placeholder.
+    if (!isRecordedImagegenModel(model) || model === 'active-sks-image-mode') reasons.push('imagegen_annotated_review_model_missing');
     const provider = firstNonEmpty(gate.imagegen_annotated_review_provider, gate.imagegen_annotated_review?.provider, gate.imagegen_annotated_review_image?.provider, review.provider, review.provider_surface);
-    if (!provider || !/codex\s+app|\$imagegen|codex_app_imagegen/i.test(String(provider))) reasons.push('imagegen_annotated_review_provider_not_codex_app_imagegen');
+    if (!provider || !/codex\s+app|\$imagegen|codex_app_imagegen|sks[\s_-]?imagegen|codex-bridge-route|openrouter/i.test(String(provider))) reasons.push('imagegen_annotated_review_provider_not_active_image_mode');
     if (/mock|fake|fixture|placeholder|text[-_ ]?only|direct\s+api|openai_images_api|responses_image_generation/i.test(String(provider))) reasons.push('imagegen_annotated_review_provider_forbidden');
     const sourceScreenshot = firstNonEmpty(
       gate.imagegen_source_screenshot_artifact,

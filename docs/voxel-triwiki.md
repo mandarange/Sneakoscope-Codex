@@ -16,7 +16,7 @@ SKS `0.9.13` promotes image evidence into route-gated Image Voxel TriWiki anchor
 sks wiki image-ingest <path> --source codex-computer-use --json
 sks wiki image-validate [ledger.json] --json
 sks wiki image-summary --json
-sks wiki anchor-add --image-id screen-home-before --bbox 120,240,360,80 --label "CTA contrast issue" --source gpt-image-2.5-sunburst --evidence image-ux-generated-review-ledger.json --json
+sks wiki anchor-add --image-id screen-home-before --bbox 120,240,360,80 --label "CTA contrast issue" --source sks-imagegen --evidence image-ux-generated-review-ledger.json --json
 sks wiki relation-add --type before_after --before screen-home-before --after screen-home-after --anchors ux-callout-001 --json
 sks wiki image-link-proof latest --json
 ```

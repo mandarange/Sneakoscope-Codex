@@ -24,6 +24,7 @@ final class ControlCenterWindowController: NSWindowController, NSTableViewDataSo
             }
             overview.openSection = open
             (controllers[.localDecision] as? LocalDecisionViewController)?.openSection = open
+            (controllers[.imageGeneration] as? ImageGenerationViewController)?.openSection = open
         }
         controllers = [
             .overview: overview,
@@ -32,6 +33,7 @@ final class ControlCenterWindowController: NSWindowController, NSTableViewDataSo
             .providers: ProvidersViewController(processClient: processClient, operations: operations),
             .remoteCoding: RemoteCodingViewController(),
             .localDecision: LocalDecisionViewController(processClient: processClient, operations: operations),
+            .imageGeneration: ImageGenerationViewController(processClient: processClient, operations: operations),
             .diagnostics: DiagnosticsViewController(processClient: processClient, operations: operations),
             .settings: SettingsViewController(processClient: processClient, operations: operations, notifications: notifications)
         ]

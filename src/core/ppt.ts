@@ -1,4 +1,6 @@
-import { IMAGEGEN_MODEL, IMAGEGEN_MODEL_DOC_URL } from './imagegen/imagegen-model-policy.js';
+import { IMAGEGEN_MODEL_DOC_URL } from './imagegen/imagegen-model-policy.js';
+import { activeImagegenSelection, defaultImagegenConfig, imagegenSelection, type ImagegenSelection } from './imagegen/imagegen-config.js';
+import { readImagegenSidecar } from './imagegen/imagegen-generate.js';
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { nowIso, readJson, sha256, writeJsonAtomic, writeTextAtomic } from './fsx.js';
@@ -12,7 +14,7 @@ export { PPT_DESIGN_REFERENCE_PROFILES, buildPptStyleTokens, selectPptDesignRefe
 import { buildPptHtml } from './ppt/html.js';
 export { buildPptHtml } from './ppt/html.js';
 import { imageDimensions, sha256File } from './wiki-image/image-hash.js';
-import { imagegenEvidenceClassBlockers, isFullImagegenOutputSource } from './imagegen/imagegen-evidence.js';
+import { imagegenEvidenceClassBlockers, isFullImagegenOutputSource, isRecordedImagegenModel } from './imagegen/imagegen-evidence.js';
 
 export const PPT_REQUIRED_GATE_FIELDS = Object.freeze([
   'clarification_contract_sealed',
@@ -354,7 +356,7 @@ function buildImageAssetPrompt({ contract = {}, page = {}, request = '', styleTo
   ].join(' ');
 }
 
-export function planPptImageAssets(contract: any = {}, storyboard: any = buildPptStoryboard(contract), styleTokens: any = buildPptStyleTokens(contract)) {
+export function planPptImageAssets(contract: any = {}, storyboard: any = buildPptStoryboard(contract), styleTokens: any = buildPptStyleTokens(contract), selection: ImagegenSelection = imagegenSelection(defaultImagegenConfig())) {
   const required = imageAssetRequired(contract);
   const requests = imageAssetRequests(contract);
   if (!required && requests.length === 0) return [];
@@ -376,7 +378,8 @@ export function planPptImageAssets(contract: any = {}, storyboard: any = buildPp
       role: index === 0 ? 'hero_visual' : 'supporting_visual',
       status: 'planned',
       prompt,
-      model: IMAGEGEN_MODEL,
+      model: selection.model,
+      imagegen_mode: selection.mode,
       size: cleanText(contract.answers?.PRESENTATION_IMAGE_SIZE, '1536x1024'),
       quality: cleanText(contract.answers?.PRESENTATION_IMAGE_QUALITY, 'medium'),
       output_format: 'png',
@@ -384,13 +387,13 @@ export function planPptImageAssets(contract: any = {}, storyboard: any = buildPp
       html_src: `../${relPath}`,
       imagegen_invocation: {
         required_skill: 'imagegen',
-        command: '$imagegen',
-        surface: 'selected_model_capable_image_provider',
+        command: `sks imagegen generate --prompt <prompt> --out ${relPath}`,
+        surface: selection.mode === 'openrouter' ? 'sks_imagegen_openrouter_bridge' : 'codex_image_generation',
         evidence_source: CODEX_IMAGEGEN_EVIDENCE_SOURCE,
-        model: IMAGEGEN_MODEL,
-        tool_mode: 'explicit_image_generation_model',
+        model: selection.model,
+        tool_mode: selection.mode === 'openrouter' ? 'sks_custom_image_model' : 'codex_default_image_generation',
         prompt,
-        save_policy: `After generation, move or copy the selected output into ${relPath} and record output_path.`
+        save_policy: `Run the command so the image and its .sks-imagegen.json evidence land at ${relPath}, then record output_path. In Codex default mode the built-in image tool also works; copy its output into ${relPath}.`
       }
     };
   });
@@ -399,12 +402,22 @@ export function planPptImageAssets(contract: any = {}, storyboard: any = buildPp
 async function existingGeneratedImageAssets(dir: any, existing: any = {}) {
   const assets = Array.isArray(existing?.assets) ? existing.assets : [];
   const checked: any[] = [];
-  for (const asset of assets) {
-    if (asset.status !== 'generated' || !asset.output_path) continue;
-    const target = path.join(dir, asset.output_path);
+  for (const rawAsset of assets) {
+    if (rawAsset.status !== 'generated' || !rawAsset.output_path) continue;
+    const target = path.join(dir, rawAsset.output_path);
     try {
       const stat = await fsp.stat(target);
       const sha = await sha256File(target);
+      // `sks imagegen generate` evidence fills what the ledger row left out.
+      const sidecar = await readImagegenSidecar(target);
+      const asset = sidecar ? {
+        ...rawAsset,
+        model: isRecordedImagegenModel(rawAsset.model) && rawAsset.model !== 'codex-default' ? rawAsset.model : sidecar.model,
+        imagegen_mode: rawAsset.imagegen_mode || sidecar.mode,
+        evidence_class: rawAsset.evidence_class || sidecar.evidence_class,
+        output_source: rawAsset.output_source || sidecar.output_source,
+        output_sha256: rawAsset.output_sha256 || sidecar.sha256
+      } : rawAsset;
       const dims = await imageDimensions(target).catch(() => null);
       const evidenceBlockers = pptImageAssetEvidenceBlockers(asset, { sha });
       checked.push({
@@ -424,7 +437,7 @@ async function existingGeneratedImageAssets(dir: any, existing: any = {}) {
 
 function pptImageAssetEvidenceBlockers(asset: any = {}, evidence: any = {}) {
   const blockers: string[] = [];
-  if (asset.model !== IMAGEGEN_MODEL) blockers.push('ppt_image_asset_model_not_current');
+  if (!isRecordedImagegenModel(asset.model)) blockers.push('ppt_image_asset_model_missing');
   const evidenceClass = String(asset.evidence_class || '');
   const outputSource = String(asset.output_source || '');
   const outputSha = String(asset.output_sha256 || '');
@@ -465,7 +478,8 @@ function buildPptImagegenEvidence(imageAssetLedger: any = {}) {
 
 export async function buildPptImageAssetLedger(dir: any, contract: any = {}, storyboard: any = buildPptStoryboard(contract), styleTokens: any = buildPptStyleTokens(contract), existing: any = null) {
   const required = imageAssetRequired(contract);
-  const plannedAssets = planPptImageAssets(contract, storyboard, styleTokens);
+  const selection = await activeImagegenSelection();
+  const plannedAssets = planPptImageAssets(contract, storyboard, styleTokens, selection);
   const reused = await existingGeneratedImageAssets(dir, existing || {});
   const reusedIds = new Set(reused.map((asset: any) => asset.id));
   const pending = plannedAssets.filter((asset: any) => !reusedIds.has(asset.id));
@@ -493,21 +507,23 @@ export async function buildPptImageAssetLedger(dir: any, contract: any = {}, sto
     created_at: nowIso(),
     contract_hash: contract.sealed_hash || null,
     required,
-    policy: ("Required PPT image resources must be generated with " + IMAGEGEN_MODEL + " through the selected Codex provider and recorded as real output files; unrelated API fallback, partial preview frames, fabricated files, and placeholder ledgers do not satisfy this gate."),
+    policy: `Required PPT image resources must be generated through the active SKS image mode (${selection.label}) and recorded as real output files; unrelated API fallback, partial preview frames, fabricated files, and placeholder ledgers do not satisfy this gate.`,
     codex_app_imagegen_doc: CODEX_APP_IMAGE_GENERATION_DOC_URL,
     imagegen_execution: {
       required_skill: 'imagegen',
-      command: '$imagegen',
-      surface: 'codex_app_builtin_image_generation',
+      command: 'sks imagegen generate --prompt <prompt> --out assets/<asset>.png',
+      surface: selection.mode === 'openrouter' ? 'sks_imagegen_openrouter_bridge' : 'codex_image_generation',
       evidence_source: CODEX_IMAGEGEN_EVIDENCE_SOURCE,
-      model: IMAGEGEN_MODEL,
-      tool_mode: 'built_in_image_gen',
+      model: selection.model,
+      imagegen_mode: selection.mode,
+      tool_mode: selection.mode === 'openrouter' ? 'sks_custom_image_model' : 'codex_default_image_generation',
       output_requirement: 'Generated raster files must be copied into the mission assets/ directory and referenced by output_path.'
     },
     provider: {
-      model: IMAGEGEN_MODEL,
-      surface: 'codex_app_$imagegen',
-      output: 'codex_app_generated_raster_file',
+      model: selection.model,
+      imagegen_mode: selection.mode,
+      surface: selection.mode === 'openrouter' ? 'sks_imagegen_openrouter_bridge' : 'codex_image_generation',
+      output: 'generated_raster_file',
       imagegen_disabled: imagegenDisabled
     },
     planned_count: plannedAssets.length,
@@ -526,9 +542,9 @@ export async function buildPptImageAssetLedger(dir: any, contract: any = {}, sto
     passed,
     notes: [
       required
-        ? ("The sealed PPT contract requires generated image assets; missing completed " + IMAGEGEN_MODEL + " output from the selected Codex provider blocks the PPT gate.")
+        ? `The sealed PPT contract requires generated image assets; missing completed output from the active SKS image mode (${selection.label}) blocks the PPT gate.`
         : 'No generated image asset requirement was detected; assets remain optional and are not generated to avoid unrequested API cost.',
-      ("Generate each blocked asset with " + IMAGEGEN_MODEL + " through Codex App $imagegen or the selected codex-lb provider, place the completed raster under assets/, then rerun the PPT build so existing generated files are verified.")
+      'Generate each blocked asset with `sks imagegen generate --prompt <prompt> --out assets/<asset>.png` (it follows the active SKS image mode and writes evidence next to the image), then rerun the PPT build so existing generated files are verified.'
     ]
   };
 }
@@ -560,10 +576,10 @@ export function buildPptReviewPolicy(contract: any = {}, storyboard: any = build
       P3: 'record as accepted residual unless cheap and local'
     },
     visual_review: {
-      model: IMAGEGEN_MODEL,
+      model: 'active-sks-image-mode',
       required_skill: 'imagegen',
-      command: '$imagegen',
-      surface: 'codex_app_builtin_image_generation',
+      command: 'sks imagegen generate --prompt <review prompt> --reference <slide image> --out <review image>',
+      surface: 'active_sks_image_mode',
       evidence_source: CODEX_IMAGEGEN_EVIDENCE_SOURCE,
       persona: '대한민국 TOSS UI/UX 시니어 총괄 디자이너',
       codex_app_imagegen_doc: CODEX_APP_IMAGE_GENERATION_DOC_URL,
@@ -571,7 +587,7 @@ export function buildPptReviewPolicy(contract: any = {}, storyboard: any = build
       mode: explicitlyRequired ? 'required_by_contract' : 'codex_app_when_available',
       required_for_gate: explicitlyRequired,
       evidence_artifact: PPT_REVIEW_LEDGER_ARTIFACT,
-      loop_shape: ("Export each slide/page image, run image-to-image visual critique through the selected model-capable image provider: " + IMAGEGEN_MODEL + " when available, analyze the returned review image with LLM vision, convert findings into issue rows, patch HTML, and rerun only failed/changed/high-risk slides.")
+      loop_shape: ("Export each slide/page image, run image-to-image visual critique through the active SKS image mode (sks imagegen generate with the slide image as --reference), analyze the returned review image with LLM vision, convert findings into issue rows, patch HTML, and rerun only failed/changed/high-risk slides.")
     },
     deterministic_review: {
       always_run: true,
@@ -616,7 +632,7 @@ export function buildPptReviewLedger({ contract = {}, storyboard, styleTokens, f
         : 'Optional generated image assets were planned but not generated.',
       source: 'ppt_image_asset_ledger',
       action: imageAssetLedger?.required
-        ? ("Generate the required assets with " + IMAGEGEN_MODEL + " through the selected Codex provider, place the completed raster files under assets/, then rerun sks ppt build.")
+        ? 'Generate the required assets with `sks imagegen generate --prompt <prompt> --out assets/<asset>.png`, which follows the active SKS image mode, then rerun sks ppt build.'
         : 'Generate only if the sealed PPT contract needs image resources.'
     }));
   }
@@ -655,10 +671,10 @@ export function buildPptReviewLedger({ contract = {}, storyboard, styleTokens, f
     issues.push(reviewIssue({
       id: 'codex-app-imagegen-review-missing',
       severity: 'P1',
-      title: ("Required " + IMAGEGEN_MODEL + " visual review evidence missing"),
-      detail: ("The sealed PPT contract explicitly requested image/" + IMAGEGEN_MODEL + " visual critique, but no completed selected-provider imagegen review evidence was supplied."),
+      title: 'Required image visual review evidence missing',
+      detail: 'The sealed PPT contract explicitly requested an image visual critique, but no completed imagegen review evidence from the active SKS image mode was supplied.',
       source: 'codex_app_imagegen_gate',
-      action: ("Invoke " + IMAGEGEN_MODEL + " through Codex App $imagegen or the selected codex-lb provider, run the bounded slide review loop, and record evidence paths before final output.")
+      action: 'Run `sks imagegen generate` with each slide image as --reference (it follows the active SKS image mode), run the bounded slide review loop, and record evidence paths before final output.'
     }));
   }
   const blocking = issues.filter((issue: any) => ['P0', 'P1'].includes(issue.severity));
@@ -690,7 +706,7 @@ export function buildPptReviewLedger({ contract = {}, storyboard, styleTokens, f
     },
     passed: blocking.length === 0 && overallScore >= 0.88,
     notes: [
-      ("This ledger is an executable deterministic QA pass, not a fake " + IMAGEGEN_MODEL + " result."),
+      'This ledger is an executable deterministic QA pass, not a fake image generation result.',
       'When image review is required, missing completed selected-provider imagegen evidence blocks the gate instead of being simulated.'
     ]
   };
@@ -1066,7 +1082,7 @@ export function defaultPptGate(contract: any = {}) {
       'Do not pass this gate until the HTML/PDF artifact work is actually complete or the PDF export is explicitly deferred with evidence.',
       'Audience strategy must stay linked to STP, target pain points, proof, and three or more aha moments.',
       'Fact ledger must keep user input separate from verified web evidence and block unsupported critical external claims.',
-      ("Image asset ledger must require completed " + IMAGEGEN_MODEL + " output from the selected Codex provider for required resources, or block with evidence instead of faking files."),
+      'Image asset ledger must require completed output from the active SKS image mode for required resources, or block with evidence instead of faking files.',
       'Review loop must be bounded by score thresholds, P0/P1 issue count, max passes, and explicit imagegen evidence requirements when requested.',
       'Preserve the editable HTML source under source-html/ and remove PPT-only temporary build files before completion.',
       'Record independent PPT build phases in ppt-parallel-report.json so research/design/render work can stay parallel-friendly.'

@@ -1,4 +1,4 @@
-import { IMAGEGEN_MODEL } from '../imagegen/imagegen-model-policy.js';
+import { isRecordedImagegenModel } from '../imagegen/imagegen-evidence.js';
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { appendJsonl, exists, nowIso, readJson, readText, sha256, writeJsonAtomic } from '../fsx.js';
@@ -838,13 +838,13 @@ async function missingImageUxReviewArtifacts(root: any, state: any = {}, gate: a
     else {
       if (generated.passed !== true) missing.push(`${IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT}:passed`);
       if (!Array.isArray(generated.generated_review_images) || generated.generated_review_images.length === 0) missing.push(`${IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT}:generated_review_images`);
-      if (String(generated.provider?.model || '') !== IMAGEGEN_MODEL) missing.push(`${IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT}:${IMAGEGEN_MODEL}`);
+      if (!isRecordedImagegenModel(generated.provider?.model)) missing.push(`${IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT}:provider_model`);
     }
   }
   if (referenceOnly) {
     if (!generated) missing.push(IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT);
     else {
-      if (String(generated.provider?.model || '') !== IMAGEGEN_MODEL) missing.push(`${IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT}:${IMAGEGEN_MODEL}`);
+      if (!isRecordedImagegenModel(generated.provider?.model)) missing.push(`${IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT}:provider_model`);
       if (Number(generated.real_generated_count || 0) !== 0) missing.push(`${IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT}:real_generated_count`);
       if (!Array.isArray(generated.blockers) || !generated.blockers.includes('missing_generated_annotated_review_images')) missing.push(`${IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT}:missing_generated_blocker`);
     }

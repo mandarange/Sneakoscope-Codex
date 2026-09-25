@@ -93,6 +93,23 @@ connectivity evidence, not SKS task accuracy or a privacy audit.
   marks as parent orchestration (a new mission or a continuation), the answer
   is the default child seal. On other turns it is only a reasoning hint. The
   parent model, effort, and service tier always stay as the user set them.
+- The same request picks the SKS pipeline for the prompt (answer, implement,
+  tiny fix, research, experiment, web search, QA loop, presentation, UX review,
+  database, computer use, SEO), with the keyword router's guess as a fact and a
+  `keep_baseline` escape. A confident pick replaces the keyword route for that
+  prompt only, scoped to the hook call. An explicit `$sks-*` command is never
+  re-routed and does not ask for a route. When the custom image model mode is
+  on, the request also asks whether the turn makes an image, so the custom-mode
+  instruction appears only on image turns.
+- `sks imagegen generate`: the aspect ratio and quality the caller left open
+  (skipping the ratio when a reference image fixes it). See
+  [Image generation](image-generation.md).
+- Each unsealed Naruto worker (no plan-time seal, preference, or override):
+  Jev rates its task at routing time. A pick the codex-lb catalog does not
+  serve is ignored and the task tier stays; it never blocks the worker.
+- QA-LOOP effort: after a failed fix attempt, an `escalate` or `hold` Choice
+  replaces the two-failure rule, so a failure that needs deeper reasoning
+  raises the effort at once and a flaky or environmental one does not.
 - Each Naruto `spawn_agent` call: Jev picks the tier at spawn time and SKS
   seals that tier's newest model and effort. When Jev was called but could not
   decide and the parent passed no current model, the child gets its role's own

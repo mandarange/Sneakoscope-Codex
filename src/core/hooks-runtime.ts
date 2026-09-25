@@ -18,7 +18,8 @@ import { activeRouteContext, evaluateStop, prepareRoute, promptPipelineContext a
 import { localizedFinalizationReason } from './language-preference.js';
 import { managedSkillDigestBlocksEnforced, postToolEvidenceEnabled, stopFinalizationRitualsEnforced } from './verification-profile.js';
 import { classifyToolError } from './evaluation.js';
-import { dollarCommand, managedSkillNamesForPrompt, stripVisibleDecisionAnswerBlocks } from './routes.js';
+import { dollarCommand, managedSkillNamesForPrompt, stripVisibleDecisionAnswerBlocks, withJevRouteOverride } from './routes.js';
+import { customImageModeLine, planJevTurn, type JevTurnPlan } from './hooks-runtime/jev-turn-plan.js';
 import { coreEngineeringDirectiveReferenceText } from './lean-engineering-policy.js';
 import {
   agentWorkerHookContext,
@@ -186,6 +187,15 @@ function hookPayloadIsLightTurnCandidate(payload: any = {}) {
   return routePrompt(prompt)?.id === 'Answer';
 }
 export async function evaluateHookPayload(name: any, payload: any = {}, opts: any = {}): Promise<JsonData> {
+  if (name !== 'user-prompt-submit') return evaluateHookPayloadWithPlan(name, payload, opts, null);
+  const root = opts.root || await projectRoot(payload.cwd || process.cwd());
+  // Jev plans the prompt before anything routes it, so the Naruto gate, the
+  // prompt handler, and skill admission all see one route decision.
+  const jevPlan = await planJevTurn(root, extractUserPrompt(payload)).catch(() => null);
+  return withJevRouteOverride(jevPlan?.routeOverride || null, () => evaluateHookPayloadWithPlan(name, payload, { ...opts, root }, jevPlan));
+}
+
+async function evaluateHookPayloadWithPlan(name: any, payload: any, opts: any, jevPlan: JevTurnPlan | null): Promise<JsonData> {
   const root = opts.root || await projectRoot(payload.cwd || process.cwd());
   const sessionKey = conversationId(payload);
   const greetingFastPath = name === 'user-prompt-submit'
@@ -229,8 +239,9 @@ export async function evaluateHookPayload(name: any, payload: any = {}, opts: an
     const orchestrationRequired = sksNarutoDecision.required === true
       && (sksNarutoDecision.action === 'prepare_naruto' || sksNarutoDecision.action === 'observe_required');
     const withOrchestration = attachParentOrchestrationDirective(result, orchestrationRequired);
-    const withJev = await attachJevTurnRouting(root, payload, withOrchestration, orchestrationRequired);
-    const withSkillContext = await attachAuthoritativeSksSkillContext(root, state, payload, withJev);
+    const withJev = await attachJevTurnRouting(root, payload, withOrchestration, orchestrationRequired, jevPlan);
+    const withImageMode = attachContextLine(withJev, customImageModeLine(jevPlan, extractUserPrompt(payload), jevPlan?.routeId || jevPlan?.baselineRouteId || null));
+    const withSkillContext = await attachAuthoritativeSksSkillContext(root, state, payload, withImageMode);
     return withNarutoDecision(attachOfficialSubagentSpawnCompatibilityContext(state, payload, withSkillContext));
   }
   if (name === 'session-start' || name === 'pre-compact' || name === 'post-compact') {
@@ -375,12 +386,28 @@ function attachParentOrchestrationDirective(result: any, orchestrationRequired: 
   };
 }
 
-async function attachJevTurnRouting(root: string, payload: any, result: any, orchestrationRequired = false) {
+function attachContextLine(result: any, line: string) {
+  if (!line || !result || result.decision === 'block' || result.silent === true) return result;
+  const additionalContext = [result.additionalContext, line].filter(Boolean).join('\n\n');
+  return {
+    ...result,
+    additionalContext,
+    ...(result.systemMessage ? { systemMessage: visibleHookMessage('user-prompt-submit', additionalContext) } : {})
+  };
+}
+
+async function attachJevTurnRouting(root: string, payload: any, result: any, orchestrationRequired = false, plan: JevTurnPlan | null = null) {
   if (!result || result.decision === 'block') return result;
   const prompt = stripVisibleDecisionAnswerBlocks(extractUserPrompt(payload));
   if (!String(prompt || '').trim()) return result;
-  const decision = await consultJevTurnModel({ root, prompt }).catch(() => null);
+  // The prompt plan already asked Jev for the tier; never ask twice.
+  const decision = plan
+    ? { called: plan.decision.called, model: plan.decision.tier?.model || null, effort: plan.decision.tier?.effort || null, tier: plan.decision.tier?.tier || null, reason: plan.decision.reason }
+    : await consultJevTurnModel({ root, prompt }).catch(() => null);
   if (!decision?.called) return result;
+  if (plan?.routeOverride) {
+    result = attachContextLine(result, `Jev routed this prompt to the ${plan.routeOverride.routeId} pipeline (the keyword router guessed ${plan.baselineRouteId || 'none'}).`);
+  }
   // The parent thread always keeps the user-selected model and effort, and a
   // model cannot switch its own model mid-turn. On an orchestration turn the
   // answer is the default child seal (Jev re-seals every spawn); elsewhere it

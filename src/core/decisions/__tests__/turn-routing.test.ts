@@ -5,6 +5,8 @@ import { defaultDecisionConfig } from '../config.js';
 import '../../__tests__/helpers/isolated-test-home.js';
 import { ROUTING_TIERS } from '../types.js';
 import { BUILTIN_LATEST_TIER_MODELS, resetLatestModelTierCache } from '../../subagents/model-tiers.js';
+import { customImageModeLine, planJevTurn } from '../../hooks-runtime/jev-turn-plan.js';
+import { routePrompt, withJevRouteOverride } from '../../routes.js';
 
 process.env.SKS_JEV_DECISION_TEST_OVERRIDES = '1';
 
@@ -94,4 +96,80 @@ test('an enabled Jev turn picks a tier and resolves it to the newest model of th
   } finally {
     setDecisionTestOverrides(null);
   }
+});
+
+/** Answer every question in the request; `picks` sets the choice of named questions. */
+function answerAll(body: { questions: Record<string, { type: string; criteria?: Record<string, string> }> }, picks: Record<string, { choice: string; confidence?: number }>) {
+  const answers: Record<string, unknown> = {};
+  for (const [id, question] of Object.entries(body.questions)) {
+    if (question.type === 'noul') answers[id] = { type: 'noul', noul: 0.04 };
+    else if (question.type === 'score') answers[id] = { type: 'score', score: 0, confidence: 0.9 };
+    else {
+      const keys = Object.keys(question.criteria || {});
+      const pick = picks[id] || { choice: id === 'route_turn' ? 'fast' : 'keep_baseline' };
+      answers[id] = { ...choice(pick.choice, keys), ...(pick.confidence === undefined ? {} : { confidence: pick.confidence }) };
+    }
+  }
+  return new Response(JSON.stringify({ model: 'typesafe/jev-1.13', answers, usage: { input_tokens: 30, output_tokens: 6 } }), { status: 200 });
+}
+
+const turnEnv = () => ({ OPENROUTER_API_KEY: 'sk-or-test-turnroutingaaaaaaaa', HOME: process.env.HOME, PATH: process.env.PATH });
+
+test('a confident Jev turn picks the pipeline, and routePrompt follows it inside the hook scope', async () => {
+  const prompt = 'Why does the login page flash white on load? Please make it stop.';
+  const seen: string[] = [];
+  setDecisionTestOverrides({
+    config: enabledConfig(),
+    fetchImpl: async (_url, init) => {
+      const body = JSON.parse(String(init?.body || ''));
+      seen.push(...Object.keys(body.questions));
+      return answerAll(body, { option_route: { choice: 'implement' } });
+    }
+  });
+  try {
+    const plan = await planJevTurn(process.cwd(), prompt, turnEnv());
+    assert.ok(seen.includes('option_route'), seen.join(','));
+    assert.equal(plan?.routeId, 'Naruto');
+    const routed = await withJevRouteOverride(plan?.routeOverride || null, async () => routePrompt(prompt)?.id);
+    assert.equal(routed, 'Naruto');
+    assert.equal(routePrompt(prompt)?.id || null, plan?.baselineRouteId ?? null, 'outside the hook scope the keyword router answers');
+  } finally {
+    setDecisionTestOverrides(null);
+  }
+});
+
+test('an explicit $command is never re-routed, and an unconfident answer keeps the keyword route', async () => {
+  const seen: string[] = [];
+  setDecisionTestOverrides({
+    config: enabledConfig(),
+    fetchImpl: async (_url, init) => {
+      const body = JSON.parse(String(init?.body || ''));
+      seen.push(...Object.keys(body.questions));
+      return answerAll(body, { option_route: { choice: 'research', confidence: 0.5 } });
+    }
+  });
+  try {
+    const explicit = await planJevTurn(process.cwd(), '$DFix fix the typo in README', turnEnv());
+    assert.equal(seen.includes('option_route'), false, 'explicit commands never ask Jev for a route');
+    assert.equal(explicit?.routeOverride, null);
+    assert.equal(await withJevRouteOverride({ text: '$DFix fix the typo in README', routeId: 'Naruto' }, async () => routePrompt('$DFix fix the typo in README')?.id), 'DFix');
+    // A different prompt: Jev answers are cached per request, so reusing the first test's prompt would replay its answer.
+    const unsure = await planJevTurn(process.cwd(), 'Why does the settings page jump to the top after saving? Please make it stop.', turnEnv());
+    assert.equal(unsure?.routeId, null);
+    assert.equal(unsure?.routeOverride, null);
+  } finally {
+    setDecisionTestOverrides(null);
+  }
+});
+
+test('the custom image mode line appears only on image turns', () => {
+  const plan = (imageNeeded: boolean | null, customImageModel: string | null = 'google/gemini-3.1-flash-image') => ({
+    decision: { called: false, choices: {}, tier: null, reason: 'off' }, baselineRouteId: null, routeId: null, routeOverride: null, customImageModel, imageNeeded
+  });
+  assert.match(customImageModeLine(plan(null), '서비스 로고 이미지 만들어줘', null), /sks imagegen generate/);
+  assert.match(customImageModeLine(plan(null), 'Make the quarterly deck', 'PPT'), /google\/gemini-3\.1-flash-image/);
+  assert.equal(customImageModeLine(plan(false), '서비스 로고 이미지 만들어줘', null), '', 'a confident Jev no wins over keywords');
+  assert.match(customImageModeLine(plan(true), 'Refactor the settings page', null), /Do not use the built-in image tool/);
+  assert.equal(customImageModeLine(plan(null, null), '서비스 로고 이미지 만들어줘', null), '', 'custom mode off adds nothing');
+  assert.equal(customImageModeLine(null, '서비스 로고 이미지 만들어줘', null), '');
 });

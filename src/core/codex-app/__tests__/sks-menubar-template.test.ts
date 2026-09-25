@@ -47,6 +47,7 @@ test('SKS Menu Bar uses the required split native source and resource inventory'
     'RemoteCodingViewController.swift',
     'DiagnosticsViewController.swift',
     'SettingsViewController.swift', 'LocalDecisionModels.swift', 'LocalDecisionViewController.swift',
+    'ImageGenerationModels.swift', 'ImageGenerationViewController.swift',
     'OperationModels.swift', 'ProviderRouteExplanation.swift', 'OperationCoordinator.swift',
     'ProcessClient.swift', 'ProcessExecutionState.swift', 'ProcessIdentityGuard.swift',
     'SecureProcessEnvelope.swift', 'SKSKeychainStore.swift',

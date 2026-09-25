@@ -59,6 +59,25 @@ test('native worker routing uses the task tier until Jev has selected a model', 
   assert.equal(selected.choice.reasoning, 'low');
 });
 
+test('a live Jev pick routes an unsealed worker only when codex-lb serves that model', async () => {
+  const catalog = { ok: true, models, model_efforts: modelEfforts, blockers: [] };
+  const input = {
+    agent: { id: 'naruto_dynamic', role: 'executor' },
+    slice: { id: 'W-live', kind: 'task', title: 'exact one-line single-file rename', description: 'exact one-line single-file rename' },
+    intake: { route: '$Naruto' },
+    fastModePolicy: { fast_mode: true, service_tier: 'fast' as const }
+  };
+  const consultJev = (async () => ({ called: true, model: T.deep, effort: 'high', tier: 'deep', reason: 'applied' })) as any;
+  const served = await resolveWorkerModelRouting(input, { lbCatalog: catalog, lbHealth: { ok: true, degraded_models: [] }, env: {}, consultJev });
+  assert.deepEqual(served.blockers, []);
+  assert.equal(served.choice.model, T.deep);
+  assert.equal(served.choice.reasoning, 'high');
+  const narrow = { ...catalog, models: models.filter((model) => model !== T.deep) };
+  const unserved = await resolveWorkerModelRouting(input, { lbCatalog: narrow, lbHealth: { ok: true, degraded_models: [] }, env: {}, consultJev });
+  assert.deepEqual(unserved.blockers, []);
+  assert.equal(unserved.choice.model, T.fast, 'an unserved Jev pick falls back to the task tier, never a blocker');
+});
+
 test('Naruto fails closed when the selected sealed model or effort is unavailable', () => {
   assert.equal(routeNarutoGpt56Model({
     taskText: 'exact one-line single-file rename',

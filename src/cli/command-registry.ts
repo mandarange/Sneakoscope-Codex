@@ -381,12 +381,22 @@ const COMMAND_DEFINITIONS = {
       activeRoutePolicy: 'always'
     })),
     packageRequiredFiles: ['dist/commands/decision.js']
+  },
+  imagegen: {
+    // Routes (PPT, UX review, QA) call `sks imagegen generate` mid-run, so it
+    // must stay allowed during an active route.
+    ...skipMigrationGate(entry('beta', 'Generate images with the active SKS image mode (Codex default or a custom OpenRouter model): status, models, enable, disable, generate', 'dist/commands/imagegen.js', directCommand(() => import('../commands/imagegen.js'), 'dist/commands/imagegen.js'), {
+      allowedDuringActiveRoute: true,
+      activeRoutePolicy: 'always'
+    })),
+    packageRequiredFiles: ['dist/commands/imagegen.js']
   }
 } satisfies Record<string, CommandEntry>;
 
 const COMMANDS_WITH_LEGACY_CONTRACT_OVERRIDES = applyCommandContractOverrides(COMMAND_DEFINITIONS, {
   align: { latency: 'long', supportsJson: true, inputProfile: 'json-only' },
   decision: { risk: 'R2', latency: 'long', supportsJson: true, remoteAllowed: false, inputProfile: 'json-only' },
+  imagegen: { risk: 'R2', latency: 'long', supportsJson: true, remoteAllowed: false, inputProfile: 'json-only' },
   cleanup: { risk: 'R3', latency: 'long', supportsJson: true, remoteAllowed: false, inputProfile: 'json-only' },
   autoresearch: { latency: 'long' },
   bench: { latency: 'long' },

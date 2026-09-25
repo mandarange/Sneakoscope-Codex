@@ -1,4 +1,3 @@
-import { IMAGEGEN_MODEL } from '../imagegen/imagegen-model-policy.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { ensureDir, nowIso, writeJsonAtomic } from '../fsx.js';
@@ -151,16 +150,16 @@ async function stateForCapability(
       repair_actions: verified
         ? ['postcheck-imagegen-path-contract']
         : builtInConfigured
-          ? [("Use the selected model-capable image provider with " + IMAGEGEN_MODEL + " in a fresh task and record the selected raster output path before retrying the image route.")]
-          : [("Select a provider supporting " + IMAGEGEN_MODEL + " surface, then verify it with a real generated raster output before retrying the image route.")],
+          ? ['Run `sks imagegen generate --prompt <text> --out <file>` (it follows the active SKS image mode) and record the raster output path before retrying the image route.']
+          : ['Check `sks imagegen status --json`, then verify the active image mode with one real generated raster before retrying the image route.'],
       after: null,
       artifact_path: path.join(reports, 'native-capability-repair-matrix.json'),
       core_blockers: [],
       route_blockers: verified ? {} : { 'route-image': [routeBlocker] },
       manual_actions: verified ? [] : [
         builtInConfigured
-          ? ("Generate one real raster with the selected model-capable provider: " + IMAGEGEN_MODEL + " and bind its output path to the route evidence.")
-          : ("Select a provider supporting " + IMAGEGEN_MODEL + " surface before image routes.")
+          ? 'Generate one real raster with `sks imagegen generate` and bind its output path to the route evidence.'
+          : 'Check `sks imagegen status --json` before image routes.'
       ],
       blockers: [],
       warnings: verified ? [] : [

@@ -2,6 +2,62 @@
 
 ## [Unreleased]
 
+
+## [10.3.5] - 2026-09-25
+
+### Added
+
+- Image generation has two modes, set on the new Image Generation page of
+  SKS Control Center or with `sks imagegen enable --model <id>` and
+  `sks imagegen disable`. With the custom image model off (the default), SKS
+  uses Codex's own image generation: the built-in tool inside a Codex turn,
+  and outside a turn the hosted image tool on the bridge route of your Codex
+  model. With it on, every SKS image goes through the Desktop Bridge to the
+  OpenRouter image model you chose; the bridge holds the key. SKS no longer
+  pins an image model and records the model each output came from.
+- `sks imagegen status|models|enable|disable|generate`. `generate` writes
+  the image plus a `<image>.sks-imagegen.json` evidence sidecar that UX-Review,
+  PPT, and slide gates verify against the image bytes. The model list comes
+  from OpenRouter's Image API, 55 models today instead of the 9 the general
+  catalog returned, and each request is fitted to the aspect ratios,
+  qualities, formats, and reference-image limit the model reports.
+- UX-Review callouts, PPT assets, slide reviews, QA-LOOP, the hooks, and the
+  skills follow the active image mode.
+- Jev mode decides more: the pipeline for each prompt (an explicit `$sks-*`
+  command always wins), whether a turn makes an image, the aspect ratio and
+  quality of `sks imagegen generate`, the model tier of each unsealed Naruto
+  worker, and when QA-LOOP raises its effort. Unconfident answers keep the
+  deterministic behavior.
+
+### Fixed
+
+- Image generation failed whenever the host could not select the pinned
+  `gpt-image-2.5-sunburst` model, which included Codex's own image tool. The
+  pin and its `imagegen_model_unavailable` blocker are gone. Doctor and the
+  preflight now accept Codex's built-in tool as configured, and still require a
+  real output before an image claim passes.
+- An image the provider returns as JPEG is no longer saved under a `.png`
+  name; SKS asks for the named format and otherwise uses the real extension.
+
+- `sks update` now brings every SKS project up to date, not only the folder
+  it ran in. SKS runs from one global install, but Codex reads hooks, agent
+  roles, and AGENTS.md from each project, so a project used only through
+  Codex kept what an older version wrote there, such as `gpt-5.5` agent
+  roles. The update now queues every known SKS project for one detached
+  runner that migrates them after the update releases its lock. Known
+  projects are the folders SKS has run in plus the Codex-trusted folders
+  that carry an SKS marker; temporary folders are excluded. Each project
+  goes through the same lock, receipt check, and migration doctor as
+  `sks <command>`, and results land in
+  `~/.sneakoscope-global/reports/project-migration-fanout.json`.
+- The first Codex hook in a project after an update also queues that
+  project's full migration, and a project marked only by
+  `.codex/SNEAKOSCOPE.md` now counts as an SKS project there. Tests and CI
+  never start the runner; `SKS_BACKGROUND_PROJECT_MIGRATION=0` turns it off.
+- A project opened through a symlink, or through macOS `/var` instead of
+  `/private/var`, no longer reports a fresh migration receipt as stale. The
+  migration gate now compares canonical paths.
+
 ## [10.3.4] - 2026-09-25
 
 ### Fixed

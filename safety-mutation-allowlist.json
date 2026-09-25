@@ -1274,8 +1274,8 @@
       "file": "src/core/doctor/imagegen-repair.ts",
       "symbol": "repairCodexImagegen",
       "token": "runProcess(npm/brew)",
-      "scope_contract_sha256": "f7e24bc1dc7d2cd30d92ba7ac7bc47eceaadfc9ea741bd1170c0c55453073f95",
-      "callsite_sha256": "ab80515e6e9cdee5796905d43fc444b2120f38b64353c6811e821d6ce3050d26",
+      "scope_contract_sha256": "2baeca6d8f95c10a2a3b395acfe02e1c67a871d2ede187795b0f62c174bd5b23",
+      "callsite_sha256": "2ba1c2e7817ec7987f1be808b5bbc9402e44edd5be3184ab194907d540c88cb6",
       "occurrence": 1,
       "reason": "Imagegen repair runs package installation only from the explicit doctor repair path for Codex imagegen recovery."
     },
@@ -1625,17 +1625,8 @@
       "file": "src/core/image-ux-review/imagegen-adapter.ts",
       "symbol": "createOpenAIImagesApiAdapter.generateCalloutReview",
       "token": "fsp.writeFile",
-      "scope_contract_sha256": "d9c7f83a71931bb624b9a5b871a9c833d291f1043ed63544e8ab0868f622c814",
-      "callsite_sha256": "f5a4a8d05ab058365fb5f19840be2cb085a6a752bb879e332d1484f0d4abd951",
-      "occurrence": 1,
-      "reason": "The image review adapter writes a decoded generated image only to its caller-provided output directory using an SKS-generated filename."
-    },
-    {
-      "file": "src/core/image-ux-review/imagegen-adapter.ts",
-      "symbol": "createOpenAIImagesApiAdapter.generateCalloutReview",
-      "token": "fsp.writeFile",
-      "scope_contract_sha256": "d9c7f83a71931bb624b9a5b871a9c833d291f1043ed63544e8ab0868f622c814",
-      "callsite_sha256": "42bc20e3f7aa38ab4029c5cdfa5d27ef941b1c1b3ddd2ee959c8901015d355b7",
+      "scope_contract_sha256": "7c0dbc8a513db8c5a71be9f097114a59e07b583d3430d8d7a0147f9e8564fa3f",
+      "callsite_sha256": "f1adfacff1466716fe755dbf8bc913790be4422f3f2b0aef87f6eeb32a7cad0b",
       "occurrence": 1,
       "reason": "The image review adapter writes a decoded generated image only to its caller-provided output directory using an SKS-generated filename."
     },
@@ -5378,8 +5369,8 @@
       "file": "src/scripts/imagegen-capability-check.ts",
       "symbol": "module",
       "token": "writeFileSync",
-      "scope_contract_sha256": "a98e71ab0d070b60875da49641d5e9d25643d87a49d6415083e55a8eda10a812",
-      "callsite_sha256": "b7a12b2d289765573f9c303e8b1de1ec6c43cb70e8578c23b585146a1c999ec0",
+      "scope_contract_sha256": "77fdf7e81eafae3ad640c26659d0e72278a578ae4cbd3f4cf661cca3c59bc80f",
+      "callsite_sha256": "8a34234e2b8e45f53c04b10835b36e27f3f1b09a89df35b72c8b9c8e7ab2269d",
       "occurrence": 1,
       "reason": "src/scripts/imagegen-capability-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
@@ -5387,8 +5378,8 @@
       "file": "src/scripts/imagegen-capability-check.ts",
       "symbol": "module",
       "token": "writeFileSync",
-      "scope_contract_sha256": "a98e71ab0d070b60875da49641d5e9d25643d87a49d6415083e55a8eda10a812",
-      "callsite_sha256": "5ba52a1ea4b879f5613630f39454413e21a927921166d663aa2c0fdc5c5ab46d",
+      "scope_contract_sha256": "77fdf7e81eafae3ad640c26659d0e72278a578ae4cbd3f4cf661cca3c59bc80f",
+      "callsite_sha256": "ab9c35e22464338e1751bfea18404c84791772c77f770f32fe389ba9b45f06f4",
       "occurrence": 1,
       "reason": "src/scripts/imagegen-capability-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
@@ -5990,8 +5981,8 @@
       "file": "src/scripts/official-docs-compat-report.ts",
       "symbol": "module",
       "token": "writeFileSync",
-      "scope_contract_sha256": "9061632cddda46ccb3e102cc86e1874735c29dd43d110d98b94314cc1e349d48",
-      "callsite_sha256": "74c85cc6bf8cf97cb9afce7508fce33816cead51ad7b7932e630cbdbdb949415",
+      "scope_contract_sha256": "c562b6d8f4a1655f34148c91444fcab15e5e6180e3064c5734d02828d8a15c7c",
+      "callsite_sha256": "b0f4973805592bd5e23427b0d0bbed947d3ed1cdc97c88a9f58a745ff37216ad",
       "occurrence": 1,
       "reason": "Official-docs compatibility report writes only its project-local JSON and Markdown report artifacts."
     },
@@ -5999,8 +5990,8 @@
       "file": "src/scripts/official-docs-compat-report.ts",
       "symbol": "module",
       "token": "writeFileSync",
-      "scope_contract_sha256": "9061632cddda46ccb3e102cc86e1874735c29dd43d110d98b94314cc1e349d48",
-      "callsite_sha256": "6bc11ed82b6108a3fdf6e8df131fbddefd203fe87282ff15086a3df49c91574a",
+      "scope_contract_sha256": "c562b6d8f4a1655f34148c91444fcab15e5e6180e3064c5734d02828d8a15c7c",
+      "callsite_sha256": "3e6b62a98b5e9ea472750d3f229c77371c1653ed8e22baf5417bfb2c3a3e74f9",
       "occurrence": 1,
       "reason": "Official-docs compatibility report writes only its project-local JSON and Markdown report artifacts."
     },
@@ -7776,6 +7767,24 @@
       "callsite_sha256": "ae7c6df70d8bdd8ed6f55eb6eaae9410bc21375ac8bcaf44de1c5f58b425d33c",
       "occurrence": 1,
       "reason": "Update permission repair clears only the user immutable and append-only flags (nouchg,nouappnd) on SKS-managed paths the current user owns, so update cleanup can delete them."
+    },
+    {
+      "file": "src/core/imagegen/imagegen-generate.ts",
+      "symbol": "writeOutputs",
+      "token": "fsp.writeFile",
+      "scope_contract_sha256": "93a8d4f18f7d370e306b41787c2bb370631f81669b141951745b7969d5ad7a02",
+      "callsite_sha256": "a04941bf3a7108432dcba17af7b003a1bb0f1462bc49b2e941da3ca748fd5adf",
+      "occurrence": 1,
+      "reason": "Writes the generated image bytes to the output path the caller named (sks imagegen generate --out, or the UX-Review and PPT output directories); the directory is created first, the bytes come from the active image mode response, and a mismatched extension is replaced rather than mislabeling the format."
+    },
+    {
+      "file": "src/core/imagegen/imagegen-generate.ts",
+      "symbol": "writeSidecars",
+      "token": "fsp.writeFile",
+      "scope_contract_sha256": "bb40260f37f3f0bca2110cb0b420c644d8c157aafc4246e3554d853fe9f7777e",
+      "callsite_sha256": "f0376d12411fe68cf29c3fbf11774dcd0110b351587a2191f54241021ac0c5a9",
+      "occurrence": 1,
+      "reason": "Writes the <image>.sks-imagegen.json evidence sidecar next to an image this run just wrote; it records mode, model, route and the image SHA-256 and holds no secret."
     }
   ]
 }

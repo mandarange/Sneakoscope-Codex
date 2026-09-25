@@ -160,7 +160,7 @@ export async function statusReport(env: NodeJS.ProcessEnv) {
       recovery: config.capabilities.recovery
     },
     decision_points: jevEnabled(config)
-      ? ['turn_tier', 'spawn_tier', 'role_tiers', 'role_omission', 'plan', 'context', 'parent_edit_delegation']
+      ? ['turn_route', 'turn_tier', 'spawn_tier', 'worker_tier', 'role_tiers', 'role_omission', 'plan', 'context', 'parent_edit_delegation', 'image_need', 'image_parameters', 'qa_effort_escalation']
       : [],
     recovery: RECOVERY_CAPABILITY,
     nextStep,

@@ -18,17 +18,32 @@ test('detects ChatGPT OAuth auth mode from auth.json', async () => {
   assert.equal(r.openai_api_key_present, false);
 });
 
-test('OAuth-only built-in availability does not prove support for the current image model', async () => {
+test('Codex built-in image tool under ChatGPT OAuth is a usable path; SKS pins no engine', async () => {
   const r = await evaluateImagegenAuthReadiness({
     env: { HOME: '/tmp/none' },
     authJsonText: OAUTH_AUTH_JSON,
     codexAppBuiltInAvailable: true
   });
   assert.equal(r.auth_mode, 'chatgpt_oauth');
-  assert.equal(r.headless_auto_available, false);
-  assert.equal(r.primary_blocker, 'imagegen_model_unavailable');
-  assert.deepEqual(r.available_paths, []);
-  assert.match(r.next_actions.join(' '), /image_generation.model=gpt-image-2\.5-sunburst/);
+  assert.deepEqual(r.available_paths, ['codex_exec_builtin_image_generation']);
+  assert.equal(r.primary_blocker, null);
+  assert.deepEqual(r.next_actions, []);
+});
+
+test('the custom image model and the Codex bridge route come before the built-in tool and the API key', async () => {
+  const r = await evaluateImagegenAuthReadiness({
+    env: { HOME: '/tmp/none', OPENAI_API_KEY: 'sk-test' },
+    authJsonText: OAUTH_AUTH_JSON,
+    codexAppBuiltInAvailable: true,
+    codexBridgeRouteAvailable: true,
+    customModelReady: true
+  });
+  assert.deepEqual(r.available_paths, [
+    'sks_custom_openrouter_image_model',
+    'codex_bridge_route_image_generation',
+    'codex_exec_builtin_image_generation',
+    'openai_api_key_headless'
+  ]);
 });
 
 test('OpenAI key present: headless auto available', async () => {

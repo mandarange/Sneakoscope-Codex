@@ -147,7 +147,7 @@ export function buildOfficialSubagentPrompt(input: {
     return [
       `${index + 1}. [${slice.id}] use custom agent \`${agentName}\``,
       `   ${slice.title}: ${slice.description}`,
-      `   model policy: ${role ? `${role.model_policy} (${role.model}/${sealedReasoning})` : 'resolve from installed custom agent'}`,
+      `   model: ${role ? `${role.model}/${sealedReasoning}` : 'resolve from installed custom agent'}`,
       `   spawn contract: ${spawnContract}`,
       `   mode: ${mode}; paths: ${paths.join(', ') || 'assigned by parent'}`
     ].join('\n')
@@ -187,7 +187,7 @@ ${Object.keys(effortPreferences).length ? `- stored role effort preferences over
 ${childModelRules}
 
 Plan and capacity:
-- automatic fan-out is capacity-derived up to ${MAX_AUTOMATIC_SUBAGENT_COUNT}: after decomposition, use every safe useful child slot supported by the ready DAG, disjoint ownership, verifier/tool capacity, and actual host limits; the historical 4/6/8/16 task-class values are fallback hints, not clamps
+- automatic fan-out is capacity-derived up to ${MAX_AUTOMATIC_SUBAGENT_COUNT}: after decomposition, use every safe useful child slot supported by the ready DAG, disjoint ownership, verifier/tool capacity, and actual host limits; initial targets are 4/6/8 (16 for mass fast/context work) and may grow after decomposition
 - automatic reviewer-only fan-out is capped at ${MAX_AUTOMATIC_REVIEWER_COUNT} for ordinary work and ${MAX_CRITICAL_AUTOMATIC_REVIEWER_COUNT} for critical multi-domain review
 - requested subagents: ${requestedPolicy}
 - max concurrently open child agent threads: ${maxThreads} (hard child-slot cap, never a utilization target; the root is outside this count)
@@ -427,7 +427,7 @@ function renderAgentCatalog(requested: readonly string[]): string {
     `- metadata mode: on-demand (${selected.length}/${officialSubagentRoleCatalog().length} roles included; full catalog is not injected)`,
     ...selected.map((role) => {
       const marker = preferred.has(role.name) ? ' [suggested for this goal]' : ''
-      return `- \`${role.name}\`${marker}: ${role.model_policy}, ${role.model}/${role.model_reasoning_effort}, ${role.sandbox_mode}; ${role.description}`
+      return `- \`${role.name}\`${marker}: ${role.model}/${role.model_reasoning_effort}, ${role.sandbox_mode}; ${role.description}`
     })
   ].join('\n')
 }

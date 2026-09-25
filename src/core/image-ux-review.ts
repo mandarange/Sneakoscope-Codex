@@ -1,4 +1,5 @@
-import { IMAGEGEN_MODEL_DOC_URL, IMAGEGEN_MODEL } from './imagegen/imagegen-model-policy.js';
+import { IMAGEGEN_MODEL_DOC_URL } from './imagegen/imagegen-model-policy.js';
+import { CODEX_DEFAULT_IMAGEGEN_LABEL } from './imagegen/imagegen-config.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -15,7 +16,7 @@ import { runImageUxFixLoop } from './image-ux-review/fix-loop.js';
 import { buildRecapturePlan } from './image-ux-review/recapture.js';
 import { addImageRelation, addVisualAnchor, ingestImage } from './wiki-image/image-voxel-ledger.js';
 import { validateFinalHonestModeReport } from './artifact-schemas.js';
-import { imagegenEvidenceClassBlockers, isFullImagegenOutputSource } from './imagegen/imagegen-evidence.js';
+import { imagegenEvidenceClassBlockers, isFullImagegenOutputSource, isRecordedImagegenModel } from './imagegen/imagegen-evidence.js';
 
 export const IMAGE_UX_REVIEW_GATE_ARTIFACT = 'image-ux-review-gate.json';
 export const IMAGE_UX_REVIEW_POLICY_ARTIFACT = 'image-ux-review-policy.json';
@@ -154,12 +155,12 @@ export function buildImageUxReviewPolicy(contract: any = {}) {
       accepted_sources: ['codex_chrome_extension_screenshot', 'codex_native_computer_use_screenshot', 'user_provided_screenshot', 'exported_static_artifact_image'],
       web_capture_doc: CODEX_CHROME_EXTENSION_DOC_URL,
       web_verification_policy: CODEX_WEB_VERIFICATION_POLICY,
-      privacy: ("Chrome Extension screenshots, native Computer Use screenshots, and " + IMAGEGEN_MODEL + " outputs are local-only by default; shared TriWiki publishes metadata only unless explicitly opted in.")
+      privacy: ("Chrome Extension screenshots, native Computer Use screenshots, and generated image outputs are local-only by default; shared TriWiki publishes metadata only unless explicitly opted in.")
     },
     image_generation_review: {
       required_for_gate: 'full_verification',
-      missing_generated_image_closeout: ("A route may close as verified_partial/reference_only when source screenshots are captured but " + IMAGEGEN_MODEL + " output is unavailable; it must not claim annotated-image review, callout extraction, or full UX verification."),
-      model: IMAGEGEN_MODEL,
+      missing_generated_image_closeout: ("A route may close as verified_partial/reference_only when source screenshots are captured but generated image output is unavailable; it must not claim annotated-image review, callout extraction, or full UX verification."),
+      model: 'active-sks-image-mode',
       preferred_surface: 'Codex App built-in image generation via $imagegen',
       codex_app_imagegen_doc: CODEX_APP_IMAGE_GENERATION_DOC_URL,
       api_image_generation_doc: IMAGE_UX_REVIEW_API_DOC_URL,
@@ -299,6 +300,12 @@ export async function hydrateImageUxScreenInventory(root: string, inventory: any
   };
 }
 
+function generatedLedgerModel(images: any[] = [], opts: any = {}): string {
+  const real = images.find((image: any) => image?.real_generated === true && isRecordedImagegenModel(image?.provider_model || image?.model));
+  if (real) return String(real.provider_model || real.model);
+  return isRecordedImagegenModel(opts.imagegenModel) ? String(opts.imagegenModel) : CODEX_DEFAULT_IMAGEGEN_LABEL;
+}
+
 export function buildImageUxGeneratedReviewLedger(contract: any = {}, inventory: any = buildImageUxScreenInventory(contract), existing: any = null, opts: any = {}) {
   const existingImages = Array.isArray(existing?.generated_review_images) ? existing.generated_review_images : [];
   const sourceScreens = inventory.source_screens || [];
@@ -336,8 +343,9 @@ export function buildImageUxGeneratedReviewLedger(contract: any = {}, inventory:
     created_at: nowIso(),
     contract_hash: contract.sealed_hash || null,
     provider: {
-      model: IMAGEGEN_MODEL,
-      preferred_surface: 'Selected provider with explicit image_generation.model',
+      model: generatedLedgerModel(normalizedImages, opts),
+      imagegen_mode: opts.imagegenMode === 'openrouter' ? 'openrouter' : 'codex',
+      preferred_surface: 'Active SKS image mode (sks imagegen generate)',
       codex_app_imagegen_doc: CODEX_APP_IMAGE_GENERATION_DOC_URL,
       api_image_generation_doc: IMAGE_UX_REVIEW_API_DOC_URL,
       imagegen_model_doc: IMAGEGEN_MODEL_DOC_URL
@@ -354,7 +362,7 @@ export function buildImageUxGeneratedReviewLedger(contract: any = {}, inventory:
       status: normalizedImages.some((image: any) => generatedImageCoversScreen(image, screen.id)) ? 'generated_or_attached' : 'pending_imagegen',
       required_output: 'annotated_review_image_with_numbered_callouts_severity_labels_markers_arrows_and_mini_comp',
       requested_fidelity: 'reference_image_input',
-      image_input_fidelity_note: ("" + IMAGEGEN_MODEL + " uses reference images; SKS sends only parameters supported by the current request contract."),
+      image_input_fidelity_note: 'Image generation uses the screenshot as a reference image; SKS sends only parameters supported by the current request contract.',
       privacy: 'local-only'
     })),
     generated_count: normalizedImages.length,
@@ -620,7 +628,7 @@ export function defaultImageUxReviewGate(contract: any = {}, parts: any = {}) {
     },
     notes: [
       'Do not pass this gate from direct text-only screenshot critique.',
-      ("Full verification passes only after source screenshots have real generated " + IMAGEGEN_MODEL + " annotated review images and those generated images are extracted into issue rows."),
+      ("Full verification passes only after source screenshots have real generated annotated review images and those generated images are extracted into issue rows."),
       'If generated annotated images are unavailable, a source-screenshot-only reference closeout may pass only as verified_partial and must preserve the missing generated-image facts.'
     ]
   };
@@ -931,7 +939,7 @@ async function ensureImageUxHonestModeEvidence(dir: string, parts: any = {}, opt
           evidence: ['image-voxel-ledger.json', 'visual-anchors.json', IMAGE_UX_REVIEW_SCREEN_INVENTORY_ARTIFACT]
         }] : []),
         ...(generatedMissing ? [{
-          claim: ("No real generated " + IMAGEGEN_MODEL + " annotated review image is recorded; fake/mock generated images are not counted as full UX evidence."),
+          claim: ("No real generated annotated review image is recorded; fake/mock generated images are not counted as full UX evidence."),
           evidence: [IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT]
         }] : []),
         ...(issues.validation?.ok === true ? [{
@@ -940,7 +948,7 @@ async function ensureImageUxHonestModeEvidence(dir: string, parts: any = {}, opt
         }] : [])
       ],
       unverified: [
-        ...(generatedMissing ? [("No real generated " + IMAGEGEN_MODEL + " annotated review image exists, so annotated-image callouts and full UX verification remain unverified.")] : []),
+        ...(generatedMissing ? [("No real generated annotated review image exists, so annotated-image callouts and full UX verification remain unverified.")] : []),
         ...(issues.extracted_from_generated_callout !== true ? ['No issue row was extracted from a generated annotated callout image.'] : [])
       ],
       blocked: [
@@ -1011,7 +1019,7 @@ function buildImagegenRequestArtifact(contract: any, inventory: any) {
   return {
     schema: 'sks.image-ux-imagegen-request.v1',
     created_at: nowIso(),
-    model: IMAGEGEN_MODEL,
+    model: 'active-sks-image-mode',
     surface: 'Codex App $imagegen',
     endpoint: 'Codex App $imagegen or OpenAI /v1/images/edits fallback',
     api_docs: IMAGE_UX_REVIEW_API_DOC_URL,
@@ -1021,7 +1029,7 @@ function buildImagegenRequestArtifact(contract: any, inventory: any) {
       source_image_path: screen.source,
       source_sha256: screen.sha256 || null,
       requested_fidelity: 'reference_image_input',
-      image_input_fidelity_note: ("" + IMAGEGEN_MODEL + " use the documented reference-image request without legacy input_fidelity."),
+      image_input_fidelity_note: 'Image generation uses the documented reference-image request without legacy input_fidelity.',
       output_dir: 'mission',
       prompt: buildCalloutPrompt(screen.id, { target: inventory.target || contract.prompt })
     })),
@@ -1036,7 +1044,7 @@ function buildImagegenResponseArtifact(generatedReviewLedger: any = {}) {
     created_at: nowIso(),
     provider: image?.provider_surface || generatedReviewLedger.provider?.preferred_surface || 'none',
     evidence_class: image?.evidence_class || (image?.mock ? 'mock_fixture' : image?.real_generated ? 'codex_app_imagegen' : null),
-    model: IMAGEGEN_MODEL,
+    model: image?.provider_model || generatedReviewLedger.provider?.model || null,
     ok: generatedReviewLedger.passed === true,
     status: generatedReviewLedger.passed === true ? 'generated' : 'blocked_or_pending',
     output_image_path: image?.path || null,
@@ -1057,9 +1065,9 @@ function generatedReviewImageMissingBlocker() {
     schema: 'sks.image-ux-generated-review-image-blocker.v1',
     status: 'blocked',
     blocker: 'generated_review_image_missing',
-    surface: 'Codex App $imagegen',
-    model: IMAGEGEN_MODEL,
-    guidance: ("Attach a real generated " + IMAGEGEN_MODEL + " annotated review image path with sha256 and dimensions. Without that artifact SKS may close only as verified_partial reference evidence.")
+    surface: 'Active SKS image mode (sks imagegen generate)',
+    model: 'active-sks-image-mode',
+    guidance: 'Generate one with `sks imagegen generate --reference <screenshot> --out <file>` or attach a real generated annotated review image path with sha256 and dimensions. Without that artifact SKS may close only as verified_partial reference evidence.'
   };
 }
 
@@ -1090,7 +1098,7 @@ function normalizeGeneratedReviewImage(image: any = {}, screen: any = {}, opts: 
     provider_model: image.provider_model || image.model || null,
     provider_surface: image.provider_surface || 'Codex App $imagegen',
     requested_fidelity: image.requested_fidelity || 'reference_image_input',
-    image_input_fidelity_note: image.image_input_fidelity_note || ("" + IMAGEGEN_MODEL + " reference-image input"),
+    image_input_fidelity_note: image.image_input_fidelity_note || 'reference-image input',
     privacy: image.privacy || 'local-only',
     real_generated: realGenerated,
     claimed_real_generated: image.real_generated === true,
@@ -1126,7 +1134,7 @@ function generatedImageEvidenceBlockers(image: any = {}, evidence: any = {}) {
   if (image.real_generated !== true || image.mock === true || image.source === 'mock_fixture') return [];
   const blockers: string[] = [];
   const evidenceClass = String(image.evidence_class || '');
-  if ((image.provider_model || image.model) !== IMAGEGEN_MODEL) blockers.push('generated_review_image_model_not_current');
+  if (!isRecordedImagegenModel(image.provider_model || image.model)) blockers.push('generated_review_image_model_missing');
   const outputSource = String(image.output_source || '');
   const outputSha = String(image.output_sha256 || image.output_image_sha256 || '');
   blockers.push(...imagegenEvidenceClassBlockers('generated_review_image', evidenceClass));

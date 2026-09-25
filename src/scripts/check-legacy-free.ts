@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 // @ts-nocheck
-import { IMAGEGEN_MODEL } from '../core/imagegen/imagegen-model-policy.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
@@ -17,7 +16,7 @@ const retiredDirectProviderRecoveryModules = [
 const retiredLegacyOnlyFiles = [
   ['codex', '-lb-tool-catalog.ts'].join(''),
   ['codex', '-lb-catalog-passthrough-check.ts'].join(''),
-  [("" + IMAGEGEN_MODEL + "-real-file-smoke.ts")].join('')
+  'gpt-image-2.5-sunburst-real-file-smoke.ts'
 ];
 const retiredRuntimeNames = retiredLegacyOnlyFiles.map((name) => name.replace(/\.ts$/, '.js'));
 const retiredNativeCommandForms = [

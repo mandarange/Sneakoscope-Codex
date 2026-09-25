@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // @ts-nocheck
-import { IMAGEGEN_MODEL_DOC_URL, IMAGEGEN_MODEL, CODEX_BUILTIN_IMAGEGEN_MODEL } from '../core/imagegen/imagegen-model-policy.js';
+import { IMAGEGEN_MODEL_DOC_URL, CODEX_BUILTIN_IMAGEGEN_MODEL } from '../core/imagegen/imagegen-model-policy.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -38,8 +38,8 @@ const sourceValidations = [
   sourceRow('chrome_extension', sources.chrome_extension, bodies.chrome_extension, ['Chrome extension', 'signed-in', 'Connected']),
   sourceRow('computer_use', sources.computer_use, bodies.computer_use, ['Computer Use', 'Install the Computer Use plugin', 'Screen Recording']),
   sourceRow('codex_app_image_generation', sources.codex_app_image_generation, bodies.codex_app_image_generation, ['Image generation', CODEX_BUILTIN_IMAGEGEN_MODEL]),
-  sourceRow('image_generation_api', sources.image_generation_api, bodies.image_generation_api, ['Image generation', IMAGEGEN_MODEL, 'GPT Image']),
-  sourceRow('imagegen_model', sources.imagegen_model, bodies.imagegen_model, [IMAGEGEN_MODEL, 'Image generation']),
+  sourceRow('image_generation_api', sources.image_generation_api, bodies.image_generation_api, ['Image generation', 'GPT Image']),
+  sourceRow('imagegen_model', sources.imagegen_model, bodies.imagegen_model, ['Image generation']),
   sourceRow('structured_outputs', sources.structured_outputs, bodies.structured_outputs, ['Structured Outputs', 'json_schema', 'strict'])
 ];
 
@@ -81,12 +81,17 @@ const checks = [
     'CODEX_QA_SURFACE_ROUTING_POLICY'
   ]),
   fileRow('codex_app_imagegen_evidence_policy', 'Codex App image generation', 'src/core/imagegen/imagegen-capability.ts', [
-    'current_imagegen_model_required',
-    'requested_model_supported',
+    'image_model_pinned: false',
+    'sks_surface_generation_available',
     'capability_detection_is_not_output_proof'
   ]),
+  fileRow('sks_custom_imagegen_openrouter', 'OpenRouter image generation', 'src/core/imagegen/openrouter-images.ts', [
+    'modalities',
+    'image_config',
+    'output_modalities'
+  ]),
   fileRow('imagegen_generation_edit', 'OpenAI Image Generation', 'src/core/image-ux-review/imagegen-adapter.ts', [
-    'model: IMAGEGEN_MODEL',
+    'generateSksImage',
     '/v1/images/edits',
     'reference_image_input'
   ]),
@@ -124,7 +129,7 @@ const report = {
     provider_catalog: 'Normal Codex sessions preserve the full host catalog; Naruto model constraints are scoped and live-catalog verified.',
     fast_mode: 'Codex Desktop Fast uses service_tier=fast and remains visible when codex-lb is selected.',
     native_capabilities: 'Browser, Chrome, Computer Use, and image generation are installed or repaired through their native Codex App plugin surfaces and then re-probed.',
-    codex_app_imagegen_evidence: ("Full visual evidence requires completed output from the selected provider using " + IMAGEGEN_MODEL + "; API output is labeled non-Codex evidence."),
+    codex_app_imagegen_evidence: 'Full visual evidence requires completed output from the active SKS image mode; API output is labeled non-Codex evidence.',
     structured_outputs: 'Strict JSON schema output uses additionalProperties:false where the current schema contract requires it.'
   },
   sources,

@@ -42,6 +42,27 @@
       "reason": "pre-existing oversized integration test is being reduced through focused fixture extraction",
       "policy": "shrink-only",
       "baseline_lines": 2187
+    },
+    {
+      "schema": "sks.architecture-waiver.v1",
+      "file": "src/core/commands/image-ux-review-command.ts",
+      "reason": "command split debt: run, callout generation, and ledger attachment still share one command module",
+      "policy": "shrink-only",
+      "baseline_lines": 988
+    },
+    {
+      "schema": "sks.architecture-waiver.v1",
+      "file": "src/core/pipeline-internals/runtime-core.ts",
+      "reason": "pipeline runtime split debt: route runtime assembly and gate wiring are not yet separated",
+      "policy": "shrink-only",
+      "baseline_lines": 1847
+    },
+    {
+      "schema": "sks.architecture-waiver.v1",
+      "file": "src/core/update/update-migration-state.ts",
+      "reason": "update migration split debt: receipts, stage orchestration, and doctor-owned migration checks share one module",
+      "policy": "shrink-only",
+      "baseline_lines": 1837
     }
   ]
 }

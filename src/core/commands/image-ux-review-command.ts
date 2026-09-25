@@ -1,4 +1,4 @@
-import { IMAGEGEN_MODEL, CODEX_BUILTIN_IMAGEGEN_MODEL } from '../imagegen/imagegen-model-policy.js';
+import { CODEX_DEFAULT_IMAGEGEN_LABEL } from '../imagegen/imagegen-config.js';
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { registerPathImageReference, upsertImageReferenceRegistry } from '../image/reference-evidence/reference-registry.js';
@@ -130,7 +130,7 @@ async function runImageUxReview(root: string, command: string, args: any[] = [])
       };
       process.exitCode = 1;
       if (flag(args, '--json')) return printJson(result);
-      console.error(("UX Review blocked: no selected Codex imagegen/" + IMAGEGEN_MODEL + " provider is ready."));
+      console.error('UX Review blocked: the active SKS image mode could not generate an image (see `sks imagegen status --json`).');
       for (const action of imagegenRequired.blocker?.next_actions || []) console.error(`- ${action}`);
       return result;
     }
@@ -163,6 +163,8 @@ async function runImageUxReview(root: string, command: string, args: any[] = [])
   }
   if (!generatedImage && shouldGenerateCallouts) {
     const outputDir = path.join(dir, 'generated-callouts');
+    // Codex default image mode: the bridge route model that carries the image tool.
+    const responsesModel = readOption(args, '--responses-model', null);
     const result = await generateImagegenCalloutReview({
       mission_id: id,
       source_screen_id: 'screen-1',
@@ -173,9 +175,7 @@ async function runImageUxReview(root: string, command: string, args: any[] = [])
       }),
       requested_fidelity: 'original',
       privacy: 'local-only'
-    }, {
-      openai: { responsesModel: readOption(args, '--responses-model', null) }
-    });
+    }, responsesModel ? { env: { ...process.env, SKS_IMAGEGEN_RESPONSES_MODEL: responsesModel } } : {});
     // Preserve provider diagnostics even when generation fails and no image can
     // be attached. Route artifact rebuilding must not replace the real request
     // or response with a generic missing-image placeholder.
@@ -673,7 +673,7 @@ async function attachGeneratedReviewImage(root: string, dir: string, contract: a
     id: opts.mock ? 'generated-review-fixture-1' : undefined,
     source_screen_id: sourceScreen.id || 'screen-1',
     provider_surface: opts.providerSurface || 'Codex App $imagegen',
-    provider_model: response?.model || (opts.mock ? IMAGEGEN_MODEL : CODEX_BUILTIN_IMAGEGEN_MODEL),
+    provider_model: response?.model || (opts.mock ? 'mock-imagegen' : CODEX_DEFAULT_IMAGEGEN_LABEL),
     evidence_class: evidenceClass,
     output_source: outputSource,
     output_sha256: outputSha256 || undefined,
@@ -966,7 +966,7 @@ export async function stageImageReference(root: string, dir: string, imagePath: 
 
 function promptForRun(command: string, args: any[]) {
   const source = readOption(args, '--image', null) || readOption(args, '--screenshot', null) || readOption(args, '--mission', null) || 'latest Codex Chrome Extension or native Computer Use screenshot';
-  return `$${routeForCommand(command).replace(/^\$/, '')} ${source} with ${IMAGEGEN_MODEL} callouts${flag(args, '--fix') ? ', then fix the issues' : ''}`;
+  return `$${routeForCommand(command).replace(/^\$/, '')} ${source} with generated image callouts${flag(args, '--fix') ? ', then fix the issues' : ''}`;
 }
 
 function sourceImageFromContract(contract: any): string | null {

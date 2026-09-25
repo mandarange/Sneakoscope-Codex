@@ -1,17 +1,26 @@
-/** Current official recommendation. Keep model selection separate from artifact schemas. */
-export const IMAGEGEN_MODEL = 'gpt-image-2.5-sunburst' as const;
-export const IMAGEGEN_MODEL_NAME = 'GPT Image 2.5 Sunburst';
-export const IMAGEGEN_MODEL_DOC_URL = `https://developers.openai.com/api/docs/models/${IMAGEGEN_MODEL}`;
+/**
+ * SKS image generation policy. SKS no longer pins an image model:
+ * - custom mode off (default): Codex's own image generation, whose engine
+ *   Codex chooses (the built-in tool exposes no model selector);
+ * - custom mode on: the OpenRouter image model chosen in SKS Control Center,
+ *   reached through the SKS Desktop Bridge by `sks imagegen generate`.
+ * The mode lives in `~/.sneakoscope/imagegen/config.json` (see
+ * imagegen-config.ts); this file holds only mode-independent text and limits.
+ */
+
 export const IMAGEGEN_GUIDE_URL = 'https://developers.openai.com/api/docs/guides/image-generation';
 export const IMAGEGEN_MODEL_CATALOG_URL = 'https://developers.openai.com/api/docs/models';
-export const IMAGEGEN_MODEL_VERIFIED_AT = '2026-09-10';
+/** Kept for artifact fields that link the image-generation reference. */
+export const IMAGEGEN_MODEL_DOC_URL = IMAGEGEN_GUIDE_URL;
 
-// The host tool exposes no model selector. Its documented engine must never
-// be relabeled as the requested API model merely because a prompt names it.
+/**
+ * The engine Codex documents for its built-in image tool today. Informational
+ * only: SKS never requires it, and a newer Codex engine is equally valid.
+ */
 export const CODEX_BUILTIN_IMAGEGEN_MODEL = 'gpt-image-2' as const;
 export const CODEX_BUILTIN_IMAGEGEN_MODEL_SELECTABLE = false;
 
-export const IMAGEGEN_MODEL_POLICY = `Use the latest officially documented GPT Image model for every SKS image generation/editing, UX callout, and PPT asset/review request. The current recommendation is ${IMAGEGEN_MODEL_NAME} (${IMAGEGEN_MODEL}), verified ${IMAGEGEN_MODEL_VERIFIED_AT}: ${IMAGEGEN_MODEL_DOC_URL}. Check ${IMAGEGEN_MODEL_CATALOG_URL} and ${IMAGEGEN_GUIDE_URL} before image work when newer model information is requested or available; update this shared policy and verify its request contract before adopting a successor. Do not use dated snapshots, deprecated chatgpt-image-latest, or an older-model fallback. In the Image API set model=${IMAGEGEN_MODEL}; in Responses set image_generation.model=${IMAGEGEN_MODEL} while preserving the user's mainline model/provider. A prompt naming a model does not switch the Codex built-in image engine. If the host cannot select or prove the required model, use the user's already-selected ready bridge/API path or report imagegen_model_unavailable. Never label an older or unknown output as ${IMAGEGEN_MODEL}.`;
+export const IMAGEGEN_MODEL_POLICY = 'SKS image generation follows the image mode in SKS Control Center (`sks imagegen status --json`). Custom image model off, the default: use Codex\'s own image generation, meaning the built-in image tool inside a Codex turn or `sks imagegen generate` outside one; Codex chooses its current image model and SKS never pins one. Custom image model on: make every image with `sks imagegen generate --prompt <text> --out <file>` (add `--reference <file>` to edit an image); it goes through the SKS Desktop Bridge to the OpenRouter image model chosen in Control Center, so do not use the built-in image tool then. Record the model the tool reports with each output and never relabel an output as another model. Report imagegen_capability_missing only after the active mode\'s path fails.';
 
 export const IMAGEGEN_QUALITIES = ['low', 'medium', 'high', 'xhigh', 'max', 'auto'] as const;
 

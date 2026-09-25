@@ -67,6 +67,13 @@ export function compileDecision(bundle: DecisionBundle, response: DecisionsWireR
     else if (!fallbackReason) fallbackReason = compiled.reason;
   }
 
+  for (const [wireId, binding] of Object.entries(bundle.questionBindings)) {
+    if (binding.kind !== 'option') continue;
+    const compiled = compileOption(bundle, wireId, binding.questionId, decoded.response.answers[wireId]);
+    if (compiled.kind === 'effect') effects.push(compiled.effect);
+    else if (!fallbackReason) fallbackReason = compiled.reason;
+  }
+
   if (effects.length === 0) {
     return {
       kind: 'keep_baseline',
@@ -309,6 +316,24 @@ function compileDelegation(
   const uncertainty = requiredChoiceUncertainty(answer, [...DELEGATION_CHOICES, KEEP_BASELINE_CHOICE]);
   if (!uncertainty.ok) return { kind: 'baseline', reason: uncertainty.reason };
   return { kind: 'effect', effect: { kind: 'select_delegation', choice } };
+}
+
+function compileOption(
+  bundle: DecisionBundle,
+  wireId: string,
+  questionId: string,
+  answer: Answer | undefined
+): { kind: 'effect'; effect: DecisionEffect } | { kind: 'baseline'; reason: BaselineReason } {
+  if (!answer) return { kind: 'baseline', reason: 'missing_answer' };
+  if (answer.type !== 'choice') return { kind: 'baseline', reason: 'invalid_response' };
+  if (answer.choice === KEEP_BASELINE_CHOICE) return { kind: 'baseline', reason: 'keep_baseline_selected' };
+  if (answer.choice === NEEDS_EVIDENCE_CHOICE) return { kind: 'baseline', reason: 'needs_evidence' };
+  const question = bundle.request.questions[wireId];
+  const labels = question?.type === 'choice' ? Object.keys(question.criteria) : [];
+  if (!labels.includes(answer.choice)) return { kind: 'baseline', reason: 'invalid_response' };
+  const uncertainty = requiredChoiceUncertainty(answer, labels);
+  if (!uncertainty.ok) return { kind: 'baseline', reason: uncertainty.reason };
+  return { kind: 'effect', effect: { kind: 'select_option', questionId, option: answer.choice } };
 }
 
 function canDropOptional(candidate: ContextCandidate, noul: number): boolean {

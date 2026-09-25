@@ -23,7 +23,7 @@ Bounded 1.0.8 claims:
 
 - The Codex hook schema snapshot is `latest` for SKS 1.14.1; the runtime matrix targets `rust-v0.133.0` capability detection and preserves the zero-warning strict subset.
 - Codex 0.133 plugin discovery and marketplace config are P1 warning-only unless a route explicitly depends on those surfaces.
-- Real UX-Review verification requires a real generated gpt-image-2.5-sunburst annotated callout image and post-fix recapture/re-review evidence for changed screens. Fixture, mock, and unavailable/unlinked imagegen loops are `verified_partial`; unavailable/unlinked imagegen may close as `verified_partial/reference-only` only with source screenshots plus hashes, docs evidence, source Image Voxel anchors, and Honest Mode evidence.
+- Real UX-Review verification requires a real generated annotated callout image with a recorded image model and post-fix recapture/re-review evidence for changed screens. Fixture, mock, and unavailable/unlinked imagegen loops are `verified_partial`; unavailable/unlinked imagegen may close as `verified_partial/reference-only` only with source screenshots plus hashes, docs evidence, source Image Voxel anchors, and Honest Mode evidence.
 - If Codex App imagegen or Computer Use is unavailable, SKS records a structured blocker such as `imagegen_capability_missing` or `live_capture_blocked`; it does not fabricate screenshots, generated callouts, or fixed-screen evidence.
 - Naruto now uses Codex official subagents as execution lanes. Matched official
   `SubagentStart`/`SubagentStop` events prove thread lifecycle, but a stop is not
@@ -31,10 +31,10 @@ Bounded 1.0.8 claims:
   containing an explicit outcome for that thread. Ambiguous, prose-only, or
   failed parent results fail closed; native process counts are legacy-runtime
   evidence only. Codex App capabilities such as `$imagegen`
-  / `gpt-image-2.5-sunburst` retain their own route-specific evidence requirements.
+  and the SKS image mode retain their own route-specific evidence requirements.
   API image fallback remains `api_fallback` evidence and does not satisfy
   Codex App `$imagegen` output proof unless a route explicitly accepts it.
-- The Codex built-in image tool cannot select Sunburst. See [Image generation](image-generation.md) for current-model provider selection.
+- The Codex built-in image tool has no model selector; SKS records outputs as `codex-default`. See [Image generation](image-generation.md) for the image modes.
 - Codex Python SDK auth and richer TurnResult integration are P1 warning-only review items; no live SDK accuracy or performance claim is made.
 
 P1 future enhancements:

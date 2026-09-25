@@ -1,4 +1,3 @@
-import { IMAGEGEN_MODEL } from '../imagegen/imagegen-model-policy.js';
 import { sha256 } from '../fsx.js'
 import { PACKAGE_VERSION } from '../version.js'
 import {
@@ -282,7 +281,7 @@ Honor the parent permission scope, avoid destructive external actions, do not ed
     codexName: 'image_generation_operator',
     description: 'Context-tier image-generation operator for scoped imagegen and GPT Image execution after the parent seals the visual requirements.',
     policy: 'terra_max_context_tools',
-    keywords: ['image generation', 'imagegen', 'gpt image', IMAGEGEN_MODEL, 'generate image', 'edit image', 'visual asset'],
+    keywords: ['image generation', 'imagegen', 'gpt image', 'sks imagegen', 'generate image', 'edit image', 'visual asset'],
     nicknames: ['Aperture', 'Frame', 'Palette', 'Render'],
     instructions: `You are the scoped image-generation operator.
 

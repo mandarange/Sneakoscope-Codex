@@ -1,4 +1,3 @@
-import { IMAGEGEN_MODEL } from '../imagegen/imagegen-model-policy.js';
 import path from 'node:path';
 import { exists, projectRoot, readJson, writeJsonAtomic } from '../fsx.js';
 import { createMission, findLatestMission, loadMission } from '../mission.js';
@@ -72,7 +71,7 @@ export async function pptCommand(command: any, args: any = []) {
         };
         process.exitCode = 1;
         if (flag(args, '--json')) return printJson(result);
-        console.error(("PPT build blocked: no selected Codex imagegen/" + IMAGEGEN_MODEL + " provider is ready."));
+        console.error('PPT build blocked: the active SKS image mode could not generate an image (see `sks imagegen status --json`).');
         for (const action of imagegenRequired.blocker?.next_actions || []) console.error(`- ${action}`);
         return result;
       }
@@ -177,7 +176,7 @@ async function pptImagegenReview(root: string, command: any, action: string, arg
       };
       process.exitCode = 1;
       if (flag(args, '--json')) return printJson(result);
-      console.error(("PPT imagegen review blocked: no selected Codex imagegen/" + IMAGEGEN_MODEL + " provider is ready."));
+      console.error('PPT imagegen review blocked: the active SKS image mode could not generate an image (see `sks imagegen status --json`).');
       for (const action of imagegenRequired.blocker?.next_actions || []) console.error(`- ${action}`);
       return result;
     }
@@ -275,7 +274,7 @@ function nextActionForPptGate(gate: any = {}) {
   const blockers = gate?.blockers || [];
   if (blockers.includes('deck_required')) return 'Run `sks ppt review --deck <pptx> --json`, or use --mock only for fixture evidence.';
   if (blockers.includes('slide_export_unavailable')) return 'Attach exported slide images with --manual-slide-images, then rerun the PPT review.';
-  if (blockers.includes('ppt_imagegen_callouts_missing')) return ("Generate slide callout review images with the selected model-capable provider: " + IMAGEGEN_MODEL + " and rerun extraction.");
+  if (blockers.includes('ppt_imagegen_callouts_missing')) return 'Generate slide callout review images with `sks imagegen generate --reference <slide image>` and rerun extraction.';
   if (blockers.includes('ppt_slide_issue_extraction_missing')) return 'Run `sks ppt extract-issues --generated-slide <path> --session <id> --json`, or configure Structured Outputs fallback.';
   if (blockers.includes('ppt_slide_recheck_missing')) return 'Attach a fixed deck or fixed slide image, then rerun `sks ppt recheck latest --json`.';
   return blockers.length ? 'Resolve listed blockers and rerun `sks ppt proof latest --json`.' : 'No blockers recorded.';

@@ -20,6 +20,7 @@ import {
   type DecisionBundle,
   type DelegationChoice,
   type DecisionConfig,
+  type OptionQuestion,
   type DecisionReceipt,
   type PlanCandidate,
   type RecoveryCandidate,
@@ -307,6 +308,78 @@ export async function consultJevToolDelegation(input: {
   const effect = compiled.effects.find((row) => row.kind === 'select_delegation');
   if (!effect || effect.kind !== 'select_delegation') return { called: true, choice: null, reason: 'keep_baseline' };
   return { called: true, choice: effect.choice, reason: 'applied' };
+}
+
+export interface JevOptionsDecision {
+  called: boolean;
+  /** question id -> option Jev picked with confidence; absent = keep the caller's baseline. */
+  choices: Record<string, string>;
+  /** The model tier for the goal, when `tierRoleId` asked for it in the same call. */
+  tier: { model: string; effort: SealedRoutingEffort; tier: RoutingTierId } | null;
+  reason: string;
+}
+
+/**
+ * The general Jev entry point: any SKS pipeline, gate, or hook hands Jev a few
+ * fixed-option questions (and optionally the model-tier question) and gets
+ * every confident answer back from one Decisions call. Jev off, a missing
+ * key, a transport failure, or an unconfident answer all leave `choices`
+ * without that question, and the caller keeps its deterministic baseline.
+ */
+export async function consultJevOptions(input: {
+  root: string;
+  workflowId: string;
+  goal: string;
+  questions: readonly OptionQuestion[];
+  facts?: Record<string, unknown>;
+  tierRoleId?: 'turn' | 'spawn' | null;
+  env?: NodeJS.ProcessEnv;
+  deadlineMs?: number;
+}): Promise<JevOptionsDecision> {
+  const overrides = activeOverrides();
+  const env = input.env || process.env;
+  const config = overrides?.config ?? await readDecisionConfig(env);
+  const none = (reason: string, called = false): JevOptionsDecision => ({ called, choices: {}, tier: null, reason });
+  if (!jevEnabled(config)) return none('off');
+  const goal = String(input.goal || '').trim();
+  if (!goal || (!input.questions.length && !input.tierRoleId)) return none('empty_candidate');
+  const resolved = await resolveOpenRouterApiKey({ env });
+  if (!resolved.key) return none('missing_key');
+  const bundle = buildDecisionBundle({
+    projectId: sha256(input.root).slice(0, 32),
+    workflowRunId: input.workflowId,
+    workflowRevision: input.workflowId,
+    sourceDigest: sha256(JSON.stringify([input.workflowId, goal.slice(0, 400)])).slice(0, 32),
+    graphDigest: null,
+    goal,
+    ...(input.facts ? { facts: input.facts } : {}),
+    optionQuestions: input.questions,
+    ...(input.tierRoleId ? { routingCandidates: [{ id: input.tierRoleId, summary: goal.slice(0, 240) }] } : {})
+  });
+  const transport = await requestOpenRouterDecision(bundle, {
+    env,
+    deadlineMs: input.deadlineMs ?? DESIGN_DEFAULTS.deadlineMs,
+    ...(overrides?.fetchImpl ? { fetchImpl: overrides.fetchImpl } : {})
+  });
+  if (!transport.ok) return none(transport.reason, true);
+  const compiled = compileDecision(bundle, transport.response);
+  if (compiled.kind !== 'apply') return none(compiled.reason, true);
+  const choices: Record<string, string> = {};
+  for (const effect of compiled.effects) {
+    if (effect.kind === 'select_option') choices[effect.questionId] = effect.option;
+  }
+  let tier: JevOptionsDecision['tier'] = null;
+  if (input.tierRoleId) {
+    const selected = assembleRoutingSelection(compiled.effects.flatMap((effect) => (
+      effect.kind === 'select_routing' ? [{ roleId: effect.roleId, tier: effect.tier }] : []
+    )));
+    const roleId = input.tierRoleId;
+    const model = selected?.models[roleId];
+    const effort = selected?.efforts[roleId];
+    const tierId = selected?.tiers[roleId];
+    if (model && effort && tierId) tier = { model, effort, tier: tierId };
+  }
+  return { called: true, choices, tier, reason: 'applied' };
 }
 
 export function effectAlreadyConsumed(identity: string): boolean {

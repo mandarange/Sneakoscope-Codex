@@ -87,11 +87,9 @@ test('explicit all-repairable fixture stays isolated from production evidence', 
   assert.equal(postcheck.optional_manual_required.includes('chrome_web_review'), false);
 });
 
-// Since f2b40a90 the built-in Codex image tool cannot select the current GPT
-// Image model, so only a selected model-capable provider makes ImageGen ready.
-// With the built-in tool alone, doctor must neither claim readiness nor
-// fabricate a recovery.
-test('ImageGen doctor never fabricates route recovery when only the built-in tool exists', async () => {
+// Codex default image mode: Codex's own image tool is a valid path (SKS pins
+// no image model), but enabling it is configuration, never a verified output.
+test('ImageGen doctor enables the built-in tool as configuration and never fabricates a recovery', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-imagegen-config-only-repair-'));
   const stateFile = path.join(root, 'imagegen-enabled');
   const codexBin = await writeFakeCodex(root, stateFile);
@@ -102,31 +100,32 @@ test('ImageGen doctor never fabricates route recovery when only the built-in too
     reportPath: null,
     timeoutMs: 5000
   }));
-  assert.equal(report.capability_ready, false);
-  assert.ok(report.blockers.includes('imagegen_model_unavailable'), JSON.stringify(report.blockers));
+  assert.equal(report.steps.find((step: any) => step.id === 'image_generation_feature_enable')?.ok, true);
+  assert.equal(report.capability_ready, true);
+  assert.equal(report.evidence_level, 'configuration');
+  assert.ok(report.blockers.includes('codex_imagegen_real_output_unverified'), JSON.stringify(report.blockers));
   assert.equal(report.route_ready, false);
   assert.equal(report.real_generation_verified, false);
   assert.equal(report.recovered, false);
   assert.equal(report.ok, false);
   assert.equal(report.communication_test.ok, false);
   assert.equal(report.communication_test.real_generation_round_trip_performed, false);
-  assert.ok(report.manual_actions.some((action: string) => action.includes('selected raster output path')));
+  assert.ok(report.manual_actions.some((action: string) => action.includes('sks imagegen generate')));
 });
 
-test('ImageGen preflight with only the built-in tool blocks and never satisfies final output proof', async () => {
+test('ImageGen preflight accepts the built-in tool but never satisfies final output proof', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-imagegen-route-trust-'));
   const result = await withEnv({ SKS_CODEX_APP_IMAGEGEN_AVAILABLE: '1', CODEX_LB_API_KEY: undefined }, () => requireCodexImagegen(root));
-  assert.equal(result.capability_ready, false);
-  assert.equal(result.preflight_ready, false);
+  assert.equal(result.capability_ready, true);
+  assert.equal(result.preflight_ready, true);
+  assert.equal(result.preflight_provider, 'codex_app_builtin');
   assert.equal(result.preflight_only, true);
   assert.equal(result.preflight_does_not_satisfy_generated_output_proof, true);
   assert.equal(result.route_ready, false);
   assert.equal(result.current_task_tool_manifest_verified, false);
   assert.equal(result.generated_output_verified, false);
-  assert.equal(result.ok, false);
-  assert.equal(result.blocker?.blocker, 'codex_imagegen_unavailable');
-  assert.ok(result.blockers.includes('imagegen_model_unavailable'), JSON.stringify(result.blockers));
-  assert.ok(result.completion_blockers.includes('imagegen_model_unavailable'));
+  assert.equal(result.blocker, null);
+  assert.deepEqual(result.completion_blockers, ['codex_imagegen_current_task_tool_manifest_unverified', 'codex_imagegen_real_output_unverified']);
 
   const finalGate = defaultImageUxReviewGate({
     sealed_hash: 'capability-preflight-is-not-output-proof',

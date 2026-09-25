@@ -1,4 +1,3 @@
-import { IMAGEGEN_MODEL } from '../imagegen/imagegen-model-policy.js';
 // Deliberately minimal dependency surface (just fsx.js + the lightweight
 // codex-compat output builders) — hooks-runtime.ts re-exports these, but
 // the daemon-accelerated hook dispatch (sksd-hook-dispatch.ts) imports
@@ -119,7 +118,7 @@ export function visibleHookMessage(name: any, text: any = '') {
     if (body.includes('$Research route prepared')) return 'SKS: Research route, xhigh Eureka agent council, source/debate ledgers, paper output, and falsification gate injected.';
     if (body.includes('$AutoResearch route prepared')) return 'SKS: AutoResearch experiment loop and evidence gate injected.';
     if (body.includes('$PPT route prepared')) return 'SKS: PPT route and delivery-context gate injected.';
-    if (body.includes('$Image-UX-Review route prepared') || body.includes('$UX-Review route prepared')) return ("SKS: Image UX Review route and " + IMAGEGEN_MODEL + " evidence gate injected.");
+    if (body.includes('$Image-UX-Review route prepared') || body.includes('$UX-Review route prepared')) return 'SKS: Image UX Review route and image evidence gate injected.';
     if (body.includes('$DB route prepared')) return 'SKS: DB safety review route injected.';
     if (body.includes('$GX route prepared')) return 'SKS: GX visual context route injected.';
     if (body.includes('$QA-LOOP route prepared')) return 'SKS: QA-LOOP route and safety checklist injected.';

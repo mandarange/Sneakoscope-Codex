@@ -241,6 +241,10 @@ export function updateOperationLatestPath(env: NodeJS.ProcessEnv = process.env):
   return path.join(updateGlobalRoot(env), 'operations', 'update-latest.json');
 }
 
+export function updateOperationLockPath(env: NodeJS.ProcessEnv = process.env): string {
+  return path.join(updateGlobalRoot(env), 'operations', 'update.lock');
+}
+
 export async function acquireUpdateOperationLock(
   env: NodeJS.ProcessEnv = process.env
 ): Promise<UpdateOperationLock> {

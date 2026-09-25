@@ -32,14 +32,24 @@ export function buildQaLoopBudgetPolicy(input: { usage?: CodexAccountUsageSnapsh
   }
 }
 
+/**
+ * Baseline: raise the effort after two failed fix attempts. In Jev mode a
+ * confident Jev answer replaces the count: `escalate` raises it after the
+ * first failure that needs deeper reasoning, `hold` keeps it for mechanical,
+ * flaky, or environmental failures.
+ */
 export function selectQaLoopEscalatedEffort(input: {
   failureCount?: number
   currentEffort?: string
   capability?: CodexModelEffortCapability
+  jevChoice?: 'escalate' | 'hold' | null
 } = {}) {
   const capability = input.capability || codexModelEffortCapability()
   const current = input.currentEffort || capability.default_effort
   const failureCount = Number(input.failureCount || 0)
+  const baseline = failureCount >= 2
+  const escalate = failureCount >= 1 && input.jevChoice ? input.jevChoice === 'escalate' : baseline
+  const next = escalate ? nextAdvertisedEffort(current, capability) : current
   return {
     schema: 'sks.qa-loop-effort-escalation.v1',
     model: capability.model,
@@ -47,7 +57,8 @@ export function selectQaLoopEscalatedEffort(input: {
     order_source: capability.order_source,
     failure_count: failureCount,
     current_effort: current,
-    next_effort: failureCount >= 2 ? nextAdvertisedEffort(current, capability) : current,
-    escalated: failureCount >= 2 && nextAdvertisedEffort(current, capability) !== current
+    next_effort: next,
+    escalated: escalate && next !== current,
+    decided_by: failureCount >= 1 && input.jevChoice ? 'jev' : 'failure_count'
   }
 }

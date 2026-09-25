@@ -27,6 +27,7 @@ import { pluginAppTemplatePolicy } from '../codex-plugins/codex-plugin-json.js';
 import { confirmQaLoopAppHandoff } from '../qa-loop/qa-loop-app-handoff-confirmation.js';
 import { emitStreamEvent } from '../agent-bridge/agent-mode.js';
 import fsp from 'node:fs/promises';
+import { consultJevOptions } from '../decisions/integration.js';
 import {
   completeExecutionControl,
   preflightExecutionControl,
@@ -204,10 +205,35 @@ async function qaLoopRun(args: any) {
   const budgetPolicy = buildQaLoopBudgetPolicy({ usage: (usageArtifact as any)?.snapshot || null, provider: 'codex-sdk' });
   await writeJsonAtomic(path.join(dir, 'qa-loop', 'qa-loop-budget-policy.json'), budgetPolicy);
   const effortCapabilityArtifact = await writeCodexModelEffortCapabilityArtifact(root, { missionId: id }).catch((err: any) => ({ error: err?.message || String(err), capability: null }));
+  const qaFailureCount = Number(qaGate.safe_fix_attempts || qaGate.failure_count || 0);
+  const qaCurrentEffort = String(profile || 'high').replace(/^sks-(?:logic|agent)-/, '').replace(/-fast$/, '') || 'high';
+  // Jev mode: Jev reads the failures and decides whether to raise effort now.
+  const jevEscalation = qaFailureCount >= 1
+    ? await consultJevOptions({
+        root,
+        workflowId: 'qa-loop-effort',
+        goal: String(mission.prompt || 'QA loop'),
+        questions: [{
+          id: 'effort_escalation',
+          instructions: 'The QA loop in state.task failed its last fix attempts (state.options.effort_escalation). Should the next attempt use a higher reasoning effort?',
+          options: {
+            escalate: 'The failures need deeper reasoning or design judgment; raise the effort now.',
+            hold: 'The failures are mechanical, flaky, or environmental; keep the current effort.'
+          },
+          state: {
+            failure_count: qaFailureCount,
+            current_effort: qaCurrentEffort,
+            last_failures: String(qaGate.last_failure_summary || qaGate.blockers || '').slice(0, 600)
+          }
+        }]
+      }).catch(() => null)
+    : null;
+  const jevEscalationChoice = jevEscalation?.choices.effort_escalation;
   const effortEscalation = selectQaLoopEscalatedEffort({
-    failureCount: Number(qaGate.safe_fix_attempts || qaGate.failure_count || 0),
-    currentEffort: String(profile || 'high').replace(/^sks-(?:logic|agent)-/, '').replace(/-fast$/, '') || 'high',
-    capability: (effortCapabilityArtifact as any)?.capability || undefined
+    failureCount: qaFailureCount,
+    currentEffort: qaCurrentEffort,
+    capability: (effortCapabilityArtifact as any)?.capability || undefined,
+    jevChoice: jevEscalationChoice === 'escalate' || jevEscalationChoice === 'hold' ? jevEscalationChoice : null
   });
   await writeJsonAtomic(path.join(dir, 'qa-loop', 'qa-loop-effort-escalation.json'), effortEscalation);
   const discoveredImages = await discoverImageArtifactsInDir(dir).catch(() => []);

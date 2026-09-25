@@ -81,6 +81,6 @@ trip, or a deep feature artifact. Those are release evidence items and remain
 The exact SDK dependency in `package.json` selects the tested Codex graph, and
 the resolved runtime generates the current App Server v2 contract before SKS interprets Desktop state. Browser
 evidence depends on the Codex Chrome Extension, and image generation targets
-`gpt-image-2.5-sunburst` through the managed Desktop Bridge route. Those identifiers are
+the active SKS image mode (Codex default, or the custom OpenRouter model) through the Desktop Bridge. Those identifiers are
 compatibility inputs only: their presence in source or configuration is not
 live Desktop, browser, or image evidence.

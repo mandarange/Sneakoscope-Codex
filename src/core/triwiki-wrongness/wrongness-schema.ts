@@ -1,4 +1,3 @@
-import { IMAGEGEN_MODEL } from '../imagegen/imagegen-model-policy.js';
 import { nowIso, randomId, sha256 } from '../fsx.js';
 import { moduleIdsForPath } from '../triwiki/triwiki-module-card.js';
 import { asRecordOrEmpty as asRecord } from '../json/records.js';
@@ -425,11 +424,11 @@ function defaultAvoidanceRule(kind: WrongnessKind, claimText: string): string {
   if (kind === 'computer_use_policy_misclassification') return 'Treat Computer Use as a Codex App/macOS capability, independent from MAD-SKS and generic safety policy.';
   if (kind === 'computer_use_live_smoke_mismatch') return 'Do not claim live Computer Use evidence without an opt-in live smoke or explicit evidence artifact.';
   if (kind === 'computer_use_external_block_overclaimed') return 'Do not upgrade external_capability_blocked Computer Use status into high-confidence visual verification.';
-  if (kind === 'ux_review_text_only_fallback') return ("Do not pass UX-Review with prose-only screenshot critique; require a generated " + IMAGEGEN_MODEL + " callout image.");
-  if (kind === 'ux_generated_image_not_real') return ("Do not treat attached, placeholder, or mock images as real " + IMAGEGEN_MODEL + " outputs without provider evidence and hashes.");
+  if (kind === 'ux_review_text_only_fallback') return ("Do not pass UX-Review with prose-only screenshot critique; require a generated callout image from the active SKS image mode.");
+  if (kind === 'ux_generated_image_not_real') return ("Do not treat attached, placeholder, or mock images as real generated outputs without provider evidence and hashes.");
   if (kind === 'ux_fake_generic_callout_detected') return 'Do not auto-create generic callouts from generated image metadata; only schema extraction from pixels may create issue rows.';
   if (kind === 'ux_callout_ocr_uncertain') return 'Downgrade uncertain OCR/callout extraction to verified_partial and require human or re-review confirmation.';
-  if (kind === 'imagegen_callout_generation_failed') return ("Do not create verified UX evidence when " + IMAGEGEN_MODEL + " callout image generation failed or is unavailable.");
+  if (kind === 'imagegen_callout_generation_failed') return 'Do not create verified UX evidence when callout image generation failed or is unavailable.';
   if (kind === 'callout_extraction_schema_failed') return 'Do not start or trust a UX fix loop until generated callouts are extracted into the schema-bound issue ledger.';
   if (kind === 'callout_bbox_out_of_bounds') return 'Revalidate generated callout bounding boxes against image dimensions before mapping issues to fixes.';
   if (kind === 'ux_patch_applied_without_recheck') return 'Do not mark patched UX issues fixed until changed screens are recaptured and re-reviewed.';

@@ -72,7 +72,26 @@ export type DecisionEffect =
   | { kind: 'select_routing'; roleId: string; tier: RoutingTierId }
   | { kind: 'omit_role'; roleId: string }
   | { kind: 'dispatch_recovery'; actionId: string }
-  | { kind: 'select_delegation'; choice: DelegationChoice };
+  | { kind: 'select_delegation'; choice: DelegationChoice }
+  | { kind: 'select_option'; questionId: string; option: string };
+
+/**
+ * A fixed-option decision SKS can hand to Jev anywhere (route, image size,
+ * effort escalation, ...). SKS names every option; Jev only picks one, and an
+ * unconfident answer keeps the caller's deterministic baseline.
+ */
+export interface OptionQuestion {
+  /** Lowercase id, unique within one call: `[a-z0-9_]{1,40}`. */
+  id: string;
+  instructions: string;
+  /** option id -> what choosing it means. Ids: `[a-z0-9_.:-]{1,40}`. */
+  options: Readonly<Record<string, string>>;
+  /** Facts only this question needs, placed at `state.options.<id>`. */
+  state?: Readonly<Record<string, unknown>>;
+}
+
+export const OPTION_QUESTION_ID = /^[a-z0-9_]{1,40}$/;
+export const OPTION_CHOICE_ID = /^[a-z0-9_.:-]{1,40}$/;
 
 export type BaselineReason =
   | 'off'
@@ -228,7 +247,8 @@ export type QuestionBinding =
   | { kind: 'context_keep'; candidateId: string }
   | { kind: 'context_relevance'; candidateId: string; levelCount: number }
   | { kind: 'recovery' }
-  | { kind: 'delegation' };
+  | { kind: 'delegation' }
+  | { kind: 'option'; questionId: string };
 
 export interface DecisionBundle {
   binding: DecisionBinding;
@@ -238,6 +258,7 @@ export interface DecisionBundle {
   recoveryCandidates: readonly RecoveryCandidate[];
   routingCandidates: readonly RoutingRoleCandidate[];
   delegationCandidate: DelegationCandidate | null;
+  optionQuestions: readonly OptionQuestion[];
   baselinePlanId: string | null;
   /** Static code-generated mapping; never inferred by another model. */
   questionBindings: Readonly<Record<string, QuestionBinding>>;

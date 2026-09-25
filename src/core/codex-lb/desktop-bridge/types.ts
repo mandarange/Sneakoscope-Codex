@@ -15,6 +15,8 @@ export const DESKTOP_BRIDGE_DIAGNOSTIC_HEALTH_PATH = '/__sks/diagnostics/health'
 export const DESKTOP_BRIDGE_DIAGNOSTIC_PATH = '/__sks/diagnostics/websocket' as const;
 export const DESKTOP_BRIDGE_DIAGNOSTIC_PROTOCOL = 'sks.desktop-bridge.probe.v2' as const;
 export const DESKTOP_BRIDGE_CLIENT_PATH_PREFIX = '/__sks/client' as const;
+/** SKS custom image model mode: the bridge calls the chosen OpenRouter image model. */
+export const DESKTOP_BRIDGE_IMAGEGEN_PATH = '/__sks/imagegen/generations' as const;
 
 export const DESKTOP_BRIDGE_ALLOWED_PATH_PREFIXES = [
   '/backend-api/codex/',

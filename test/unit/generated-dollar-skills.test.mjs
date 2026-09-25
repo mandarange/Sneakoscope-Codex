@@ -29,7 +29,7 @@ test('generated Codex App skills cover every dollar route skill name', async () 
   }
 });
 
-test('generated imagegen skills preserve current GPT Image model selection policy', async () => {
+test('generated imagegen skills follow the active image mode and pin no model', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-imagegen-skills-'));
   const result = await installSkills(root);
   const installed = new Set(result.installed_skills);
@@ -38,14 +38,18 @@ test('generated imagegen skills preserve current GPT Image model selection polic
   assert.ok(installed.has('sks-imagegen-source-scout'));
 
   const imagegen = await fs.readFile(path.join(root, '.agents', 'skills', 'sks-imagegen', 'SKILL.md'), 'utf8');
-  assert.match(imagegen, /GPT Image 2\.5 Sunburst \(gpt-image-2\.5-sunburst\)/);
+  assert.match(imagegen, /sks imagegen status --json/);
+  assert.match(imagegen, /sks imagegen generate --prompt <text> --out <file>/);
+  assert.match(imagegen, /SKS never pins one/);
+  assert.match(imagegen, /\.sks-imagegen\.json/);
   assert.match(imagegen, /capability checks are not generated-image evidence/);
   assert.match(imagegen, /do not silently switch billing or identity/);
-  assert.match(imagegen, /latest officially documented GPT Image model/);
-  assert.match(imagegen, /image_generation\.model=gpt-image-2\.5-sunburst/);
+  assert.doesNotMatch(imagegen, /gpt-image|sunburst/i, 'packaged skill text names no image model');
 
   const scout = await fs.readFile(path.join(root, '.agents', 'skills', 'sks-imagegen-source-scout', 'SKILL.md'), 'utf8');
-  assert.match(scout, /Read https:\/\/developers.openai.com\/api\/docs\/models/);
+  assert.match(scout, /sks imagegen models --refresh --json/);
+  assert.match(scout, /reference-image limit/);
+  assert.doesNotMatch(scout, /gpt-image|sunburst/i);
   assert.match(scout, /public X\/social\/community reports/);
   assert.match(scout, /prompt-quality and workflow-sentiment hints/);
   assert.match(scout, /Do not generate images in this skill/);
@@ -95,7 +99,7 @@ test('generated Naruto skill keeps official threads lightweight and TriWiki-boun
   assert.match(naruto, /max_threads defaults to a 256-child frame budget cap, never a target/i);
   assert.match(naruto, /measured lower Codex host cap or explicit provider\/API budget remains authoritative/i);
   assert.match(naruto, /later root-owned waves/i);
-  assert.match(naruto, /historical Naruto process runtime is removed/i);
+  assert.match(naruto, /Official Codex subagent threads are the only worker runtime/);
   assert.match(naruto, /custom scheduler, or worker pool/i);
   assert.match(naruto, /do not inject the full pack/);
 });

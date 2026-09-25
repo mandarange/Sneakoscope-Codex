@@ -1,6 +1,32 @@
 # Release Proof Truth
 
-## 10.3.4 candidate
+## 10.3.5 candidate
+
+Project fan-out proof is the registry suite and the hook preflight suite.
+The registry suite covers the registry and Codex-trusted folders merged;
+unmarked, temporary, and `.sneakoscope`-internal folders excluded; a Korean,
+quoted path read from the Codex config; one registry write per day; and no
+runner under tests. The hook suite covers a `.codex/SNEAKOSCOPE.md`-only
+project being refreshed and queued. One sandbox run of the real runner on a
+copy of a project an older SKS had written turned six `gpt-5.5` roles into
+the 25 current tier roles and made the receipt current; a second run
+returned `current`. No live fan-out across real projects is claimed here; it
+runs after 10.3.5 is installed and reports to `project-migration-fanout.json`.
+
+Image mode proof is the imagegen unit suites (generation, bridge endpoint,
+OpenRouter catalog parsing and request fitting, capability, UX-Review adapter,
+PPT and slide evidence), the Jev turn-routing suite, and the Control Center
+source typecheck with the new page. Live on the maintainer's Mac on
+2026-09-25: OpenRouter's Image API listed 55 image models;
+`black-forest-labs/flux.2-klein-4b` generated a 1024x1024 PNG and then edited
+it with that PNG as the reference (direct path; $0.014, $0.015, and $0.014 for
+a format recheck); the Codex default route generated a PNG through the running
+10.3.4 bridge on the codex-lb `gpt-6-astra` route in 58 s. The bridge image
+endpoint has no live proof until a bridge running 10.3.5 serves it.
+
+## Historical 10.3.4 candidate
+
+Published 2026-09-25 as `sneakoscope@10.3.4` from commit d7ef89dd.
 
 Model routing proof is the tier resolver suite (newest version wins, hidden
 rows ignored, missing families fall back to the newest cached model, no cache
@@ -257,12 +283,17 @@ Exact-commit proof can exist only after the candidate is committed and all
 source-bound gates are regenerated from that clean commit.
 
 All release artifacts bound to 9.2.7 or an earlier commit are historical. They
-must not be renamed, copied, or treated as 10.3.0 evidence.
+must not be renamed, copied, or treated as 10.3.5 evidence.
 
-New 10.3.0 claims:
+New 10.3.5 claims:
 
 | Claim | Current support | Boundary |
 | --- | --- | --- |
+| Image generation follows the image mode and pins no model | passed-hermetic | capability, auth-readiness, PPT, and slide suites: Codex default accepts the built-in tool or the Codex bridge route, custom mode decides alone, evidence needs a recorded model, not a pinned one |
+| The custom OpenRouter path makes and edits real images | verified-on-machine | 2026-09-25, direct path, `black-forest-labs/flux.2-klein-4b`: generate, then edit with the output as reference; sidecar SHA-256 matched |
+| The Codex default route makes a real image outside a turn | verified-on-machine | 2026-09-25, the running 10.3.4 bridge, codex-lb `gpt-6-astra` route, hosted image tool with no image model set, 58 s |
+| The bridge serves `/__sks/imagegen/generations` | not proved | handler suite only; requires a bridge running 10.3.5 |
+| Jev picks each prompt's pipeline and never re-routes an explicit command | passed-hermetic | turn-routing suite: confident pick followed inside the hook scope, explicit `$sks-*` prompts send no route question, unconfident answers keep the keyword route |
 | The essential profile is the product default and strict is the harness default | passed-hermetic | `resolveVerificationProfile`: env `SKS_VERIFICATION_PROFILE` → project `.sneakoscope/verification-profile.json` → global `verification-profile.json` → `strict` under `NODE_TEST_CONTEXT`/`SKS_TEST_ISOLATION` → `essential`; garbage env falls through; summary names the source |
 | A finished turn finishes | passed-hermetic | Stop hook under `essential` returns `continue` with `essential_profile_stop_accepted` for a plain completion message; the same message under `strict` is still blocked for Honest Mode wording; loop continuation and no-question autonomy are untouched |
 | Skill digest drift and interrupted tool output never stop work in essential | passed-hermetic | prompt-time, post-hoc, and per-tool-call admission blocks are gated on `managedSkillDigestBlocksEnforced`; the quarantine prompt returns `continue` with the recovery advice as context; strict still refuses |
@@ -332,8 +363,8 @@ New 10.3.0 claims:
 | `sks update` quarantines other-harness conflicts | passed-hermetic | `other-harness-cleanup` now calls `cleanupOtherHarnessConflicts` instead of failing closed; from-home update e2e still runs every migration stage |
 | Host extra skill dirs lose only SKS-owned retired residue | passed-hermetic | `~/.cursor/skills` and `~/.claude/skills` remove managed retired names only; user-authored collisions stay in place |
 | A stale or cwd-sticky official workflow cannot capture a later prompt | passed-hermetic | unnamed hooks use `loadOwnedRouteState`; idle > 2h is inactive even with leftover open threads; same-session follow-ups still bind while the run is fresh |
-| All checked version authorities report 10.3.0 | passed-hermetic | `release:version-truth` 15 surfaces at 10.3.0 after incremental build |
-| The reported 10.3.0 package is ready to publish | not proved | requires a clean exact-commit build, `npm run release:check:full` stamp, pack receipt, provenance, and the release commit fast-forward pushed to origin main (the prepublish reproducibility preflight refuses `head_not_origin_main`) |
+| All checked version authorities report 10.3.5 | passed-hermetic | `release:version-truth` 15 surfaces at 10.3.5 after incremental build |
+| The reported 10.3.5 package is ready to publish | not proved | requires a clean exact-commit build, `npm run release:check:full` stamp, pack receipt, provenance, and the release commit fast-forward pushed to origin main (the prepublish reproducibility preflight refuses `head_not_origin_main`) |
 
 ## 9.1.0 assertion (historical)
 

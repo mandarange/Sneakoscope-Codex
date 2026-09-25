@@ -36,6 +36,8 @@ export const NATIVE_SOURCE_FILES = [
   'SettingsViewController.swift',
   'LocalDecisionModels.swift',
   'LocalDecisionViewController.swift',
+  'ImageGenerationModels.swift',
+  'ImageGenerationViewController.swift',
   'OperationModels.swift',
   'ProviderRouteExplanation.swift',
   'OperationCoordinator.swift',

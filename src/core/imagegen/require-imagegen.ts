@@ -1,4 +1,3 @@
-import { IMAGEGEN_MODEL } from './imagegen-model-policy.js';
 import { detectImagegenCapability } from './imagegen-capability.js';
 import { repairCodexImagegen } from '../doctor/imagegen-repair.js';
 
@@ -29,7 +28,6 @@ export async function requireCodexImagegen(root: string, opts: {
   }));
   const capabilityReadyBeforeRepair = imagegenPreflightReady(capability);
   const repair = opts.autoRepair === true && !capabilityReadyBeforeRepair
-    && !(capability as any).blockers?.includes('imagegen_model_unavailable')
     ? await repairCodexImagegen({
         root,
         apply: opts.applyRepair === true,
@@ -45,9 +43,7 @@ export async function requireCodexImagegen(root: string, opts: {
     ? (repair as any).after || capability
     : capability;
   const capabilityReady = imagegenPreflightReady(finalCapability) || (repair as any)?.capability_ready === true;
-  const preflightProvider = (finalCapability as any).codex_app?.requested_model_supported === true
-    ? 'codex_app_builtin'
-    : codexLbImagegenReady(finalCapability) ? 'codex_lb' : null;
+  const preflightProvider = imagegenPreflightProvider(finalCapability);
   const currentTaskToolManifestVerified = (repair as any)?.current_task_tool_manifest_verified === true;
   const generatedOutputVerified = (finalCapability as any).real_output_verified_by_capability_check === true
     || (repair as any)?.real_generation_verified === true;
@@ -97,7 +93,7 @@ export async function requireCodexImagegen(root: string, opts: {
           'Verify configuration with: codex features list'
         ]),
         'Start a fresh Codex/Work task so $imagegen is present in its tool manifest.',
-        `Use a provider that explicitly supports ${IMAGEGEN_MODEL}; enabling the built-in tool cannot change its engine.`
+        'Or turn on a custom OpenRouter image model in SKS Control Center; `sks imagegen status --json` shows the active image mode.'
       ]
     },
     blockers
@@ -105,7 +101,16 @@ export async function requireCodexImagegen(root: string, opts: {
 }
 
 function imagegenPreflightReady(capability: any): boolean {
-  return capability?.core_ready === true || codexLbImagegenReady(capability);
+  return imagegenPreflightProvider(capability) !== null;
+}
+
+/** The path that makes an image in the active SKS image mode; custom mode decides alone. */
+function imagegenPreflightProvider(capability: any): string | null {
+  if (capability?.mode === 'openrouter') return capability?.custom_model?.ready === true ? 'sks_custom_openrouter' : null;
+  if (capability?.codex_bridge_route?.available === true) return 'codex_bridge_route';
+  if (capability?.codex_app?.available === true) return 'codex_app_builtin';
+  if (codexLbImagegenReady(capability)) return 'codex_lb';
+  return capability?.core_ready === true ? 'codex_default' : null;
 }
 
 function codexLbImagegenReady(capability: any): boolean {

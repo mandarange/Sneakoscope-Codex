@@ -5,53 +5,41 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { validateImagegenRequest } from '../../dist/core/imagegen/imagegen-request-validator.js';
 
-test('gpt-image-2.5-sunburst validator accepts clean local image request and rejects input_fidelity', async () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-image-validator-test-'));
-  const source = path.join(root, 'source.png');
-  fs.copyFileSync(path.join(process.cwd(), 'test', 'fixtures', 'images', 'one-by-one.png'), source);
-  const good = await validateImagegenRequest({
-    provider: 'fake_imagegen_adapter',
-    endpoint: 'local hermetic fixture',
-    model: 'gpt-image-2.5-sunburst',
+function request(root, overrides = {}) {
+  return {
+    provider: 'sks_imagegen',
+    endpoint: 'sks imagegen generate',
+    model: 'google/gemini-3.1-flash-image',
     prompt: 'Annotate this UI screenshot.',
-    source_image_path: source,
+    source_image_path: path.resolve('test/fixtures/images/one-by-one.png'),
     output_dir: root,
     params: { size: 'auto' },
-    privacy: 'local-only'
-  });
-  const bad = await validateImagegenRequest({
-    provider: 'openai_images_api',
-    endpoint: '/v1/images/edits',
-    model: 'gpt-image-2.5-sunburst',
-    prompt: 'Annotate this UI screenshot.',
-    source_image_path: source,
-    output_dir: root,
-    params: { input_fidelity: 'high' },
-    privacy: 'local-only'
-  });
-  assert.equal(good.ok, true);
-  assert.equal(bad.ok, false);
-  assert.ok(bad.blockers.includes('input_fidelity_must_be_omitted_for_imagegen'));
+    privacy: 'local-only',
+    ...overrides
+  };
+}
+
+test('any recorded image model is accepted; a missing model and input_fidelity are not', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-image-validator-test-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  for (const model of ['google/gemini-3.1-flash-image', 'gpt-image-2', 'codex-default']) {
+    assert.equal((await validateImagegenRequest(request(root, { model }))).ok, true, model);
+  }
+  assert.ok((await validateImagegenRequest(request(root, { model: '' }))).blockers.includes('imagegen_model_missing'));
+  const fidelity = await validateImagegenRequest(request(root, { params: { input_fidelity: 'high' } }));
+  assert.ok(fidelity.blockers.includes('input_fidelity_must_be_omitted_for_imagegen'));
 });
 
-test('current GPT Image contract accepts custom dimensions, max quality and transparent PNG without downgrading', async (t) => {
+test('size, quality and transparency limits hold for every model', async (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-image-policy-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  const input = {
-    provider: 'openai_images_api', endpoint: '/v1/images/edits', model: 'gpt-image-2.5-sunburst',
-    prompt: 'Preserve this reference.', source_image_path: path.resolve('test/fixtures/images/one-by-one.png'),
-    output_dir: root, privacy: 'local-only',
-    params: { size: '1536x864', quality: 'max', background: 'transparent', output_format: 'png' }
-  };
-  assert.equal((await validateImagegenRequest(input)).ok, true);
-  for (const model of ['gpt-image-2', 'gpt-image-1.5', 'chatgpt-image-latest']) {
-    const result = await validateImagegenRequest({ ...input, model });
-    assert.ok(result.blockers.includes('imagegen_model_not_current'));
-  }
+  const params = { size: '1536x864', quality: 'max', background: 'transparent', output_format: 'png' };
+  assert.equal((await validateImagegenRequest(request(root, { params }))).ok, true);
   for (const size of ['1537x864', '4096x2048', '3840x3840', '512x512', '3072x768']) {
-    const result = await validateImagegenRequest({ ...input, params: { ...input.params, size } });
+    const result = await validateImagegenRequest(request(root, { params: { ...params, size } }));
     assert.ok(result.blockers.includes('unsupported_image_size'), size);
   }
-  const jpeg = await validateImagegenRequest({ ...input, params: { ...input.params, output_format: 'jpeg' } });
+  assert.ok((await validateImagegenRequest(request(root, { params: { ...params, quality: 'ultra' } }))).blockers.includes('unsupported_image_quality'));
+  const jpeg = await validateImagegenRequest(request(root, { params: { ...params, output_format: 'jpeg' } }));
   assert.ok(jpeg.blockers.includes('transparent_background_requires_png_or_webp'));
 });

@@ -35,8 +35,10 @@ import {
   DESKTOP_BRIDGE_CLIENT_PATH_PREFIX,
   DESKTOP_BRIDGE_DIAGNOSTIC_HEALTH_PATH,
   DESKTOP_BRIDGE_DIAGNOSTIC_PATH,
-  DESKTOP_BRIDGE_DIAGNOSTIC_PROTOCOL
+  DESKTOP_BRIDGE_DIAGNOSTIC_PROTOCOL,
+  DESKTOP_BRIDGE_IMAGEGEN_PATH
 } from './types.js';
+import { handleDesktopBridgeImagegen } from './imagegen-endpoint.js';
 import { forwardWebSocket, safeEndUpgradeSocket } from './websocket-forward.js';
 
 function authenticateDesktopBridgeClient(
@@ -289,6 +291,10 @@ export async function startPreparedDesktopBridge(
         assertAllowedOrigin(req.headers, input.allowedOrigins);
         if (authenticated.pathname === DESKTOP_BRIDGE_DIAGNOSTIC_HEALTH_PATH) {
           writeDiagnosticHealth(req, res, input);
+          return;
+        }
+        if (authenticated.pathname === DESKTOP_BRIDGE_IMAGEGEN_PATH) {
+          await handleDesktopBridgeImagegen(req, res);
           return;
         }
         assertAllowedPath(authenticated.pathname, input.allowedPathPrefixes);

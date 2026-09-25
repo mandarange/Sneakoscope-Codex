@@ -1,27 +1,22 @@
-import { IMAGEGEN_MODEL, CODEX_BUILTIN_IMAGEGEN_MODEL, IMAGEGEN_QUALITIES } from '../imagegen/imagegen-model-policy.js';
+import { CODEX_BUILTIN_IMAGEGEN_MODEL, IMAGEGEN_QUALITIES } from '../imagegen/imagegen-model-policy.js';
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { ensureDir, exists, nowIso, projectRoot, readJson, writeJsonAtomic } from '../fsx.js';
 import { sha256File, imageDimensions } from '../wiki-image/image-hash.js';
-import { detectImagegenCapability } from '../imagegen/imagegen-capability.js';
-import {
-  DESKTOP_BRIDGE_IMAGEGEN_RECOVERY_GUIDANCE,
-  resolveDesktopBridgeImagegenTarget,
-  type DesktopBridgeImagegenTarget
-} from '../imagegen/desktop-bridge-imagegen-target.js';
-import {
-  CODEX_LB_PROVIDER_IMAGEGEN_EVIDENCE_CLASS,
-  CODEX_LB_PROVIDER_OUTPUT_SOURCE,
-  MOCK_FIXTURE_EVIDENCE_CLASS,
-  NON_CODEX_API_FALLBACK_EVIDENCE_CLASS
-} from '../imagegen/imagegen-evidence.js';
+import { NON_CODEX_API_FALLBACK_EVIDENCE_CLASS } from '../imagegen/imagegen-evidence.js';
 import { validateImagegenRequest } from '../imagegen/imagegen-request-validator.js';
+import { CODEX_DEFAULT_IMAGEGEN_LABEL } from '../imagegen/imagegen-config.js';
+import { generateSksImage } from '../imagegen/imagegen-generate.js';
 import { parseResponsesSsePayload } from '../responses-stream.js';
 import { withResponsesRetry } from '../responses-retry-policy.js';
 import { writeImageArtifactPathContract } from '../image/image-artifact-path-contract.js';
 import { registerImageArtifact } from '../image/image-artifact-registry.js';
 
 const DEFAULT_OPENAI_IMAGE_EDITS_ENDPOINT = 'https://api.openai.com/v1/images/edits';
+/** Hermetic fixture label; never a real model. */
+const FAKE_IMAGEGEN_MODEL = 'mock-imagegen';
+/** The explicit OpenAI Images API fallback needs a concrete model: the engine Codex documents today. */
+const API_FALLBACK_IMAGEGEN_MODEL = String(process.env.SKS_IMAGEGEN_API_MODEL || CODEX_BUILTIN_IMAGEGEN_MODEL);
 export const DEFAULT_IMAGEGEN_FETCH_TIMEOUT_MS = 180000;
 const responseDeadlines = new WeakMap<Response, {
   controller: AbortController;
@@ -29,10 +24,9 @@ const responseDeadlines = new WeakMap<Response, {
   timeoutMs: number;
   timer: ReturnType<typeof setTimeout>;
 }>();
-const runtimeDesktopBridgeTargets = new WeakSet<object>();
 
 export interface ImageUxReviewImagegenAdapter {
-  surface: 'codex_app_imagegen' | 'openai_images_api' | 'fake_imagegen_adapter';
+  surface: 'openai_images_api' | 'fake_imagegen_adapter' | 'sks_imagegen';
   model: string;
   available: boolean;
   generateCalloutReview(input: ImageUxReviewImagegenRequest): Promise<ImageUxReviewImagegenResult>;
@@ -79,49 +73,10 @@ export function buildCalloutPrompt(sourceScreenId: string, context: any = {}) {
   ].filter(Boolean).join(' ');
 }
 
-export async function detectCodexAppImagegenCapability(opts: any = {}) {
-  const capability = await detectImagegenCapability(opts).catch(() => null);
-  const codexApp = capability?.codex_app || {
-    available: false,
-    detector: 'capability_detection_failed',
-    raw: null
-  };
-  const available = codexApp.available === true;
-  return {
-    schema: 'sks.codex-app-imagegen-capability.v1',
-    ok: true,
-    available,
-    status: available ? 'available' : 'integration_optional',
-    detector: codexApp.detector || 'codex_features_list',
-    raw: codexApp.raw || null
-  };
-}
-
-export function createCodexAppImagegenAdapter(opts: any = {}): ImageUxReviewImagegenAdapter {
-  return {
-    surface: 'codex_app_imagegen',
-    model: CODEX_BUILTIN_IMAGEGEN_MODEL,
-    available: false,
-    async generateCalloutReview(input: ImageUxReviewImagegenRequest) {
-      const blocker = opts.available === true ? 'imagegen_model_unavailable' : 'imagegen_capability_missing';
-      const responseArtifact = input?.output_dir ? path.join(input.output_dir, 'image-ux-imagegen-response.json') : null;
-      if (responseArtifact) await writeJsonAtomic(responseArtifact, {
-        schema: 'sks.image-ux-imagegen-response.v1', created_at: nowIso(),
-        provider: 'codex_app_imagegen', evidence_class: 'codex_app_imagegen',
-        model: CODEX_BUILTIN_IMAGEGEN_MODEL, requested_model: IMAGEGEN_MODEL,
-        ok: false, status: 'blocked', blocker, local_only: true,
-        setup_guidance: 'The built-in image tool exposes no model selector. Use the selected ready Desktop Bridge or an explicitly authorized Images API request. A prompt or attached file cannot prove a different engine.'
-      });
-      return { ok: false, status: 'blocked', generated_image_path: null, output_id: null,
-        blocker, provider: 'codex_app_imagegen', response_artifact: responseArtifact, latency_ms: null };
-    }
-  };
-}
-
 export function createFakeImagegenAdapter(opts: any = {}): ImageUxReviewImagegenAdapter {
   return {
     surface: 'fake_imagegen_adapter',
-    model: IMAGEGEN_MODEL,
+    model: FAKE_IMAGEGEN_MODEL,
     available: opts.available !== false,
     async generateCalloutReview(input: ImageUxReviewImagegenRequest) {
       const started = Date.now();
@@ -136,7 +91,7 @@ export function createFakeImagegenAdapter(opts: any = {}): ImageUxReviewImagegen
           fake_adapter: true,
           execution_class: 'mock_fixture',
           evidence_class: 'mock_fixture',
-          model: IMAGEGEN_MODEL,
+          model: FAKE_IMAGEGEN_MODEL,
           ok: false,
           status: 'blocked',
           blocker: 'fake_imagegen_requires_test_or_mock_context',
@@ -147,7 +102,7 @@ export function createFakeImagegenAdapter(opts: any = {}): ImageUxReviewImagegen
       const validation = await validateImagegenRequest({
         provider: 'fake_imagegen_adapter',
         endpoint: 'local hermetic fixture',
-        model: IMAGEGEN_MODEL,
+        model: FAKE_IMAGEGEN_MODEL,
         prompt: input.prompt,
         source_image_path: input.source_image_path,
         output_dir: input.output_dir,
@@ -159,7 +114,7 @@ export function createFakeImagegenAdapter(opts: any = {}): ImageUxReviewImagegen
         created_at: nowIso(),
         provider: 'fake_imagegen_adapter',
         endpoint: 'local hermetic fixture',
-        model: IMAGEGEN_MODEL,
+        model: FAKE_IMAGEGEN_MODEL,
         source_screen_id: input.source_screen_id,
         source_image_path: path.resolve(input.source_image_path),
         prompt: input.prompt,
@@ -178,7 +133,7 @@ export function createFakeImagegenAdapter(opts: any = {}): ImageUxReviewImagegen
           fake_adapter: true,
           execution_class: 'mock_fixture',
           evidence_class: 'mock_fixture',
-          model: IMAGEGEN_MODEL,
+          model: FAKE_IMAGEGEN_MODEL,
           ok: false,
           status: 'blocked',
           blocker: 'imagegen_request_validation_failed',
@@ -204,7 +159,7 @@ export function createFakeImagegenAdapter(opts: any = {}): ImageUxReviewImagegen
         fake_adapter: true,
         execution_class: 'mock_fixture',
         evidence_class: 'mock_fixture',
-        model: IMAGEGEN_MODEL,
+        model: FAKE_IMAGEGEN_MODEL,
         ok: true,
         status: 'generated',
         output_image_path: out,
@@ -227,11 +182,10 @@ export function createFakeImagegenAdapter(opts: any = {}): ImageUxReviewImagegen
 
 export function createOpenAIImagesApiAdapter(opts: any = {}): ImageUxReviewImagegenAdapter {
   const apiKey = opts.apiKey || process.env.OPENAI_API_KEY || null;
-  const desktopBridgeTarget = trustedDesktopBridgeTarget(opts.desktopBridgeTarget);
   return {
     surface: 'openai_images_api',
-    model: IMAGEGEN_MODEL,
-    available: Boolean(apiKey || desktopBridgeTarget?.selected || desktopBridgeTarget?.model),
+    model: API_FALLBACK_IMAGEGEN_MODEL,
+    available: Boolean(apiKey),
     async generateCalloutReview(input: ImageUxReviewImagegenRequest) {
       const started = Date.now();
       await ensureDir(input.output_dir);
@@ -239,23 +193,11 @@ export function createOpenAIImagesApiAdapter(opts: any = {}): ImageUxReviewImage
       const responseArtifact = path.join(input.output_dir, 'image-ux-imagegen-response.json');
       const sourcePath = path.resolve(input.source_image_path);
       const sourceSha = await sha256File(sourcePath);
-      const auth = await resolveImagesApiAuth({ ...opts, apiKey, desktopBridgeTarget });
-      const useResponsesImageTool = auth.auth_source === 'DESKTOP_BRIDGE_LOOPBACK' && Boolean(auth.responses_endpoint);
-      const effectiveEndpoint = useResponsesImageTool ? auth.responses_endpoint : auth.endpoint;
-      const responsesModel = String(auth.responses_model || '');
-      const desktopBridgeSelected = useResponsesImageTool && auth.desktop_bridge_selected === true;
-      const responsesEvidenceClass = desktopBridgeSelected
-        ? auth.live_evidence_allowed === true
-          ? CODEX_LB_PROVIDER_IMAGEGEN_EVIDENCE_CLASS
-          : MOCK_FIXTURE_EVIDENCE_CLASS
-        : NON_CODEX_API_FALLBACK_EVIDENCE_CLASS;
-      const responsesOutputSource = desktopBridgeSelected && auth.live_evidence_allowed === true
-        ? CODEX_LB_PROVIDER_OUTPUT_SOURCE
-        : null;
+      const auth = resolveImagesApiAuth({ ...opts, apiKey });
       const validation = await validateImagegenRequest({
         provider: 'openai_images_api',
-        endpoint: String(effectiveEndpoint || ''),
-        model: IMAGEGEN_MODEL,
+        endpoint: auth.endpoint,
+        model: API_FALLBACK_IMAGEGEN_MODEL,
         prompt: input.prompt,
         source_image_path: sourcePath,
         output_dir: input.output_dir,
@@ -265,12 +207,11 @@ export function createOpenAIImagesApiAdapter(opts: any = {}): ImageUxReviewImage
       await writeJsonAtomic(requestArtifact, {
         schema: 'sks.image-ux-imagegen-request.v1',
         created_at: nowIso(),
-        provider: useResponsesImageTool ? 'desktop_bridge_responses_image_generation' : 'openai_images_api',
-        endpoint: effectiveEndpoint,
+        provider: 'openai_images_api',
+        endpoint: auth.endpoint,
         auth_source: auth.auth_source,
-        auth_transport: auth.auth_transport,
-        model: IMAGEGEN_MODEL,
-        responses_model: useResponsesImageTool ? responsesModel : null,
+        auth_transport: 'authorization-bearer',
+        model: API_FALLBACK_IMAGEGEN_MODEL,
         source_screen_id: input.source_screen_id,
         source_image_path: sourcePath,
         source_screenshot_sha256: sourceSha,
@@ -285,8 +226,8 @@ export function createOpenAIImagesApiAdapter(opts: any = {}): ImageUxReviewImage
           schema: 'sks.image-ux-imagegen-response.v1',
           created_at: nowIso(),
           provider: 'openai_images_api',
-          evidence_class: 'non_codex_api_fallback',
-          model: IMAGEGEN_MODEL,
+          evidence_class: NON_CODEX_API_FALLBACK_EVIDENCE_CLASS,
+          model: API_FALLBACK_IMAGEGEN_MODEL,
           ok: false,
           status: 'blocked',
           blocker: 'imagegen_request_validation_failed',
@@ -295,127 +236,28 @@ export function createOpenAIImagesApiAdapter(opts: any = {}): ImageUxReviewImage
         });
         return { ok: false, status: 'blocked', generated_image_path: null, output_id: null, blocker: 'imagegen_request_validation_failed', provider: 'openai_images_api', request_artifact: requestArtifact, response_artifact: responseArtifact, latency_ms: Date.now() - started };
       }
-      if (auth.blocker || (!useResponsesImageTool && !auth.apiKey)) {
+      if (!auth.apiKey) {
         const blocked = {
           schema: 'sks.image-ux-imagegen-response.v1',
           created_at: nowIso(),
           provider: 'openai_images_api',
-          evidence_class: 'non_codex_api_fallback',
-          model: IMAGEGEN_MODEL,
+          evidence_class: NON_CODEX_API_FALLBACK_EVIDENCE_CLASS,
+          model: API_FALLBACK_IMAGEGEN_MODEL,
           ok: false,
           status: 'blocked',
-          blocker: auth.blocker,
-          setup_guidance: auth.auth_source === 'DESKTOP_BRIDGE_LOOPBACK'
-            ? auth.setup_guidance || DESKTOP_BRIDGE_IMAGEGEN_RECOVERY_GUIDANCE
-            : 'Set OPENAI_API_KEY only for an explicit non-Codex Images API fallback, or attach a real Codex App $imagegen output image for full SKS verification.',
+          blocker: 'openai_api_key_missing',
+          setup_guidance: 'Set OPENAI_API_KEY only for an explicit non-Codex Images API fallback. `sks imagegen generate` is the SKS image path.',
           local_only: true
         };
         await writeJsonAtomic(responseArtifact, blocked);
-        return { ok: false, status: 'blocked', generated_image_path: null, output_id: null, blocker: auth.blocker, provider: 'openai_images_api', request_artifact: requestArtifact, response_artifact: responseArtifact, latency_ms: Date.now() - started };
-      }
-      if (useResponsesImageTool && !responsesModel) {
-        const blocker = 'imagegen_responses_model_missing';
-        await writeJsonAtomic(responseArtifact, {
-          schema: 'sks.image-ux-imagegen-response.v1',
-          created_at: nowIso(),
-          provider: 'desktop_bridge_responses_image_generation',
-          evidence_class: 'non_codex_api_fallback',
-          model: IMAGEGEN_MODEL,
-          ok: false,
-          status: 'blocked',
-          blocker,
-          setup_guidance: DESKTOP_BRIDGE_IMAGEGEN_RECOVERY_GUIDANCE,
-          local_only: true
-        });
-        return { ok: false, status: 'blocked', generated_image_path: null, output_id: null, blocker, provider: 'desktop_bridge_responses_image_generation', request_artifact: requestArtifact, response_artifact: responseArtifact, latency_ms: Date.now() - started };
+        return { ok: false, status: 'blocked', generated_image_path: null, output_id: null, blocker: 'openai_api_key_missing', provider: 'openai_images_api', request_artifact: requestArtifact, response_artifact: responseArtifact, latency_ms: Date.now() - started };
       }
       try {
-        if (useResponsesImageTool) {
-          const imageDataUrl = `data:${mimeForPath(sourcePath)};base64,${await fsp.readFile(sourcePath, 'base64')}`;
-          const { result: attemptResult, attempts, retry_log } = await withResponsesRetry(async () => {
-            const response = await fetchWithTimeout(effectiveEndpoint, {
-              method: 'POST',
-              headers: {
-                'x-sks-model': responsesModel,
-                'content-type': 'application/json'
-              },
-              body: JSON.stringify({
-                model: responsesModel,
-                input: [{
-                  role: 'user',
-                  content: [
-                    { type: 'input_text', text: input.prompt },
-                    { type: 'input_image', image_url: imageDataUrl }
-                  ]
-                }],
-                tools: [{ type: 'image_generation', model: IMAGEGEN_MODEL, action: 'edit', size: 'auto', ...imagegenQualityParam(opts) }],
-                tool_choice: { type: 'image_generation' }
-              })
-            }, imagegenFetchTimeoutMs(opts));
-            const payload = await readResponsePayload(response, imagegenFetchTimeoutMs(opts));
-            // Retry on transient HTTP status OR an SSE/JSON server_error/rate_limit payload.
-            return { value: { response, payload }, status: response.ok ? null : response.status, code: payloadRetryCode(payload) };
-          }, imagegenRetryOptions(opts));
-          const { response, payload } = attemptResult;
-          if (!response.ok) {
-            await writeJsonAtomic(responseArtifact, redactedImagegenResponse(payload, false, Date.now() - started, 'desktop_bridge_responses_image_generation', { attempts, retry_log }));
-            return { ok: false, status: 'blocked', generated_image_path: null, output_id: null, blocker: imagegenErrorKind(payload), provider: 'desktop_bridge_responses_image_generation', request_artifact: requestArtifact, response_artifact: responseArtifact, latency_ms: Date.now() - started };
-          }
-          if (payload?.error) {
-            await writeJsonAtomic(responseArtifact, redactedImagegenResponse(payload, false, Date.now() - started, 'desktop_bridge_responses_image_generation'));
-            return { ok: false, status: 'blocked', generated_image_path: null, output_id: null, blocker: imagegenErrorKind(payload), provider: 'desktop_bridge_responses_image_generation', request_artifact: requestArtifact, response_artifact: responseArtifact, latency_ms: Date.now() - started };
-          }
-          const generated = findResponsesImageGenerationOutput(payload);
-          if (!generated?.b64) {
-            await writeJsonAtomic(responseArtifact, redactedImagegenResponse({ ...payload, blocker: 'missing_b64_image_output' }, false, Date.now() - started, 'desktop_bridge_responses_image_generation'));
-            return { ok: false, status: 'blocked', generated_image_path: null, output_id: generated?.id || null, blocker: 'missing_b64_image_output', provider: 'desktop_bridge_responses_image_generation', request_artifact: requestArtifact, response_artifact: responseArtifact, latency_ms: Date.now() - started };
-          }
-          const out = path.join(input.output_dir, `imagegen-callout-${Date.now()}.png`);
-          await fsp.writeFile(out, Buffer.from(String(generated.b64), 'base64'));
-          const meta = await generatedImageMetadata(process.cwd(), out, {
-            source_screen_id: input.source_screen_id,
-            provider_surface: 'desktop_bridge_responses_image_generation',
-            output_id: generated.id || payload?.id || null,
-            evidence_class: responsesEvidenceClass,
-            output_source: responsesOutputSource,
-            real_generated: auth.live_evidence_allowed === true,
-            mock: auth.live_evidence_allowed !== true
-          });
-          const imageContract = await writeGeneratedImagePathContract(input, out, 'desktop_bridge_responses_image_generation').catch(() => null);
-          await writeJsonAtomic(responseArtifact, {
-            schema: 'sks.image-ux-imagegen-response.v1',
-            created_at: nowIso(),
-            provider: 'desktop_bridge_responses_image_generation',
-            evidence_class: responsesEvidenceClass,
-            model: IMAGEGEN_MODEL,
-            responses_model: responsesModel,
-            responses_model_source: auth.responses_model_source || null,
-            auth_source: auth.auth_source,
-            desktop_bridge_selected: desktopBridgeSelected,
-            desktop_bridge_route_provider: auth.route_provider_id || null,
-            ok: true,
-            status: 'generated',
-            output_image_path: out,
-            output_image_sha256: meta.sha256,
-            output_sha256: meta.sha256,
-            output_id: meta.output_id,
-            output_source: responsesOutputSource,
-            image_output_recovered_from_stream: payload?.image_output_recovered_from_stream === true,
-            image_output_provenance: payload?.image_output_provenance || 'response.output',
-            image_output_partial_frame: false,
-            image_artifact_path_contract: imageContract?.artifact_path || null,
-            dimensions: { width: meta.width, height: meta.height, format: meta.format },
-            latency_ms: Date.now() - started,
-            token_cost_metadata: payload?.usage || null,
-            local_only: true
-          });
-          return { ok: true, status: 'generated', generated_image_path: out, output_id: meta.output_id, blocker: null, provider: 'desktop_bridge_responses_image_generation', request_artifact: requestArtifact, response_artifact: responseArtifact, image_artifact_path_contract: imageContract?.artifact_path || null, latency_ms: Date.now() - started };
-        }
         const sourceBytes = await fsp.readFile(sourcePath);
         const qualityParam = imagegenQualityParam(opts);
         const { result: attemptResult, attempts, retry_log } = await withResponsesRetry(async () => {
           const form = new FormData();
-          form.append('model', IMAGEGEN_MODEL);
+          form.append('model', API_FALLBACK_IMAGEGEN_MODEL);
           form.append('prompt', input.prompt);
           if (qualityParam.quality) form.append('quality', String(qualityParam.quality));
           form.append('image', new Blob([sourceBytes], { type: mimeForPath(sourcePath) }), path.basename(sourcePath));
@@ -429,7 +271,7 @@ export function createOpenAIImagesApiAdapter(opts: any = {}): ImageUxReviewImage
         }, imagegenRetryOptions(opts));
         const { response, payload } = attemptResult;
         if (!response.ok) {
-          await writeJsonAtomic(responseArtifact, redactedImagegenResponse(payload, false, Date.now() - started, 'openai_images_api', { attempts, retry_log }));
+          await writeJsonAtomic(responseArtifact, redactedImagegenResponse(payload, false, Date.now() - started, { attempts, retry_log }));
           return { ok: false, status: 'blocked', generated_image_path: null, output_id: null, blocker: imagegenErrorKind(payload), provider: 'openai_images_api', request_artifact: requestArtifact, response_artifact: responseArtifact, latency_ms: Date.now() - started };
         }
         const image = Array.isArray(payload?.data) ? payload.data[0] : null;
@@ -451,8 +293,8 @@ export function createOpenAIImagesApiAdapter(opts: any = {}): ImageUxReviewImage
           schema: 'sks.image-ux-imagegen-response.v1',
           created_at: nowIso(),
           provider: 'openai_images_api',
-          evidence_class: 'non_codex_api_fallback',
-          model: IMAGEGEN_MODEL,
+          evidence_class: NON_CODEX_API_FALLBACK_EVIDENCE_CLASS,
+          model: API_FALLBACK_IMAGEGEN_MODEL,
           auth_source: auth.auth_source,
           ok: true,
           status: 'generated',
@@ -468,11 +310,10 @@ export function createOpenAIImagesApiAdapter(opts: any = {}): ImageUxReviewImage
         });
         return { ok: true, status: 'generated', generated_image_path: out, output_id: meta.output_id, blocker: null, provider: 'openai_images_api', request_artifact: requestArtifact, response_artifact: responseArtifact, image_artifact_path_contract: imageContract?.artifact_path || null, latency_ms: Date.now() - started };
       } catch (err: unknown) {
-        const provider = useResponsesImageTool ? 'desktop_bridge_responses_image_generation' : 'openai_images_api';
         const payload = { error: { message: err instanceof Error ? err.message : String(err) } };
-        const response = redactedImagegenResponse(payload, false, Date.now() - started, provider);
+        const response = redactedImagegenResponse(payload, false, Date.now() - started);
         await writeJsonAtomic(responseArtifact, response);
-        return { ok: false, status: 'blocked', generated_image_path: null, output_id: null, blocker: imagegenErrorKind(payload), provider, request_artifact: requestArtifact, response_artifact: responseArtifact, latency_ms: Date.now() - started };
+        return { ok: false, status: 'blocked', generated_image_path: null, output_id: null, blocker: imagegenErrorKind(payload), provider: 'openai_images_api', request_artifact: requestArtifact, response_artifact: responseArtifact, latency_ms: Date.now() - started };
       }
     }
   };
@@ -513,48 +354,128 @@ async function resolveImageArtifactRoot(input: ImageUxReviewImagegenRequest): Pr
   return projectRoot(input.output_dir || process.cwd()).catch(() => cwdRoot);
 }
 
+/**
+ * The default adapter: `generateSksImage`, which follows the active SKS image
+ * mode (Codex default through the bridge route of the Codex model, or the
+ * custom OpenRouter model through the bridge). The screenshot goes in as the
+ * reference image. Request and response artifacts keep the shapes the UX and
+ * PPT gates already read.
+ */
+export function createSksImagegenAdapter(opts: any = {}): ImageUxReviewImagegenAdapter {
+  return {
+    surface: 'sks_imagegen',
+    model: 'active-sks-image-mode',
+    available: true,
+    async generateCalloutReview(input: ImageUxReviewImagegenRequest) {
+      const started = Date.now();
+      await ensureDir(input.output_dir);
+      const requestArtifact = path.join(input.output_dir, 'image-ux-imagegen-request.json');
+      const responseArtifact = path.join(input.output_dir, 'image-ux-imagegen-response.json');
+      const sourcePath = path.resolve(input.source_image_path);
+      const validation = await validateImagegenRequest({
+        provider: 'sks_imagegen',
+        endpoint: 'sks imagegen generate',
+        model: 'active-sks-image-mode',
+        prompt: input.prompt,
+        source_image_path: sourcePath,
+        output_dir: input.output_dir,
+        params: { size: 'auto' },
+        privacy: input.privacy
+      });
+      await writeJsonAtomic(requestArtifact, {
+        schema: 'sks.image-ux-imagegen-request.v1',
+        created_at: nowIso(),
+        provider: 'sks_imagegen',
+        source_screen_id: input.source_screen_id,
+        source_image_path: sourcePath,
+        source_screenshot_sha256: await sha256File(sourcePath).catch(() => null),
+        prompt: input.prompt,
+        validation,
+        image_input_fidelity_note: 'reference_image_input',
+        privacy: input.privacy
+      });
+      const blocked = async (provider: string, blocker: string, extra: Record<string, unknown> = {}) => {
+        await writeJsonAtomic(responseArtifact, {
+          schema: 'sks.image-ux-imagegen-response.v1',
+          created_at: nowIso(),
+          provider,
+          ok: false,
+          status: 'blocked',
+          blocker,
+          setup_guidance: 'Check `sks imagegen status --json`: Codex default mode needs the bridge route of your Codex model; custom mode needs an OpenRouter key and a chosen image model in SKS Control Center.',
+          local_only: true,
+          ...extra
+        });
+        return { ok: false, status: 'blocked' as const, generated_image_path: null, output_id: null, blocker, provider, request_artifact: requestArtifact, response_artifact: responseArtifact, latency_ms: Date.now() - started };
+      };
+      if (!validation.ok) return blocked('sks_imagegen', 'imagegen_request_validation_failed', { validation_blockers: validation.blockers });
+      const generated = await (opts.generateImpl || generateSksImage)({
+        prompt: input.prompt,
+        outPath: path.join(input.output_dir, `imagegen-callout-${Date.now()}.png`),
+        references: [sourcePath],
+        ...(opts.env ? { env: opts.env } : {})
+      });
+      const provider = `sks_imagegen_${generated.mode}`;
+      const output = generated.outputs[0];
+      if (!generated.ok || !output) {
+        return blocked(provider, generated.blockers[0] || 'imagegen_output_missing', {
+          imagegen_mode: generated.mode,
+          model: generated.model,
+          blockers: generated.blockers,
+          warnings: generated.warnings
+        });
+      }
+      const meta = await generatedImageMetadata(process.cwd(), output.path, {
+        source_screen_id: input.source_screen_id,
+        provider_surface: provider,
+        provider_model: generated.model,
+        evidence_class: generated.evidence_class,
+        output_source: generated.output_source,
+        real_generated: true
+      });
+      const imageContract = await writeGeneratedImagePathContract(input, output.path, provider).catch(() => null);
+      await writeJsonAtomic(responseArtifact, {
+        schema: 'sks.image-ux-imagegen-response.v1',
+        created_at: nowIso(),
+        provider,
+        evidence_class: generated.evidence_class,
+        model: generated.model,
+        imagegen_mode: generated.mode,
+        via: generated.via,
+        route_model: generated.route_model,
+        ok: true,
+        status: 'generated',
+        output_image_path: output.path,
+        output_image_sha256: meta.sha256,
+        output_sha256: meta.sha256,
+        output_id: null,
+        output_source: generated.output_source,
+        image_output_partial_frame: false,
+        image_artifact_path_contract: imageContract?.artifact_path || null,
+        dimensions: { width: meta.width, height: meta.height, format: meta.format },
+        latency_ms: Date.now() - started,
+        token_cost_metadata: generated.usage,
+        warnings: generated.warnings,
+        local_only: true
+      });
+      return { ok: true, status: 'generated', generated_image_path: output.path, output_id: null, blocker: null, provider, request_artifact: requestArtifact, response_artifact: responseArtifact, image_artifact_path_contract: imageContract?.artifact_path || null, latency_ms: Date.now() - started };
+    }
+  };
+}
+
 export async function generateImagegenCalloutReview(input: ImageUxReviewImagegenRequest, opts: any = {}) {
   if ((opts.fake === true || process.env.SKS_TEST_FAKE_IMAGEGEN === '1') && imagegenMockContext(opts)) {
     return createFakeImagegenAdapter({ ...(opts.fakeAdapter || {}), mockContext: true }).generateCalloutReview(input);
   }
-  const capability = await detectImagegenCapability(opts.capability || {}).catch(() => null);
-  const suppliedTarget = opts.desktopBridgeTarget
-    ? trustedDesktopBridgeTarget(opts.desktopBridgeTarget)
-    : null;
-  const desktopBridgeTarget = suppliedTarget || await resolveDesktopBridgeImagegenTarget(
-    desktopBridgeTargetInputs(opts.capability, opts.openai || opts)
-  ).catch(() => null);
-  if (!suppliedTarget && desktopBridgeTarget?.status_source === 'runtime') {
-    runtimeDesktopBridgeTargets.add(desktopBridgeTarget);
-  }
-  const managedBridgeRequested = Boolean(desktopBridgeTarget?.selected || desktopBridgeTarget?.model);
-  const allowApiFallback = (
-    opts.allowApiFallback === true
-    || process.env.SKS_IMAGEGEN_ALLOW_API_FALLBACK === '1'
-    || managedBridgeRequested
-  );
-  const openaiOptions = {
-    ...(opts.openai || {}),
-    desktopBridgeTarget
-  };
-  const codexAdapter = createCodexAppImagegenAdapter({
-    ...(opts.codexApp || {}),
-    available: opts.codexApp?.available === true || capability?.codex_app?.available === true
-  });
-  const codexResult = await codexAdapter.generateCalloutReview(input);
-  if (codexResult.ok || !allowApiFallback) return codexResult;
-  return createOpenAIImagesApiAdapter(openaiOptions).generateCalloutReview(input);
-}
-
-function desktopBridgeTargetInputs(source: any = {}, request: any = {}) {
-  const inputs: Record<string, unknown> = {
-    explicitModel: String(request.responsesModel || source?.env?.SKS_IMAGEGEN_RESPONSES_MODEL || '').trim() || null
-  };
-  if (source?.home) inputs.home = source.home;
-  if (source?.env) inputs.env = source.env;
-  if (source?.desktopBridgeStatus !== undefined) inputs.desktopBridgeStatus = source.desktopBridgeStatus;
-  if (source?.desktopBridgeStatusImpl) inputs.desktopBridgeStatusImpl = source.desktopBridgeStatusImpl;
-  return inputs;
+  const sksResult = await createSksImagegenAdapter({
+    ...(opts.env ? { env: opts.env } : {}),
+    ...(opts.generateImpl ? { generateImpl: opts.generateImpl } : {})
+  }).generateCalloutReview(input);
+  if (sksResult.ok) return sksResult;
+  // A non-Codex OpenAI Images API call stays an explicit, opt-in fallback.
+  const allowApiFallback = opts.allowApiFallback === true || process.env.SKS_IMAGEGEN_ALLOW_API_FALLBACK === '1';
+  if (!allowApiFallback) return sksResult;
+  return createOpenAIImagesApiAdapter(opts.openai || {}).generateCalloutReview(input);
 }
 
 function imagegenMockContext(opts: any = {}) {
@@ -571,94 +492,23 @@ export function imagegenCapabilityBlocker(surface = 'Codex App $imagegen') {
     status: 'blocked',
     blocker: 'imagegen_capability_missing',
     surface,
-    model: IMAGEGEN_MODEL,
-    guidance: ("Run the request with " + IMAGEGEN_MODEL + " through Codex App $imagegen, or provide an explicit model routed by the verified managed Desktop Bridge. Direct provider credentials remain non-Codex fallback evidence. SKS must not fabricate or substitute a text-only review.")
+    model: 'active-sks-image-mode',
+    guidance: 'Run `sks imagegen generate` (it follows the active SKS image mode: Codex default, or the custom OpenRouter model chosen in SKS Control Center). Direct provider credentials remain non-Codex fallback evidence. SKS must not fabricate or substitute a text-only review.'
   };
 }
 
-async function resolveImagesApiAuth(opts: any = {}) {
-  const target = trustedDesktopBridgeTarget(opts.desktopBridgeTarget);
-  // Managed routing is authoritative. Even a blocked bridge target must not be
-  // detoured to an ambient provider key.
-  if (target && (target.selected || target.model)) return desktopBridgeImagesApiAuth(target);
-
-  const openAiKey = String(opts.apiKey || process.env.OPENAI_API_KEY || '').trim();
-  if (openAiKey) {
-    return {
-      apiKey: openAiKey,
-      auth_source: 'OPENAI_API_KEY',
-      auth_transport: 'authorization-bearer',
-      responses_model: responsesImagegenModel(opts),
-      responses_model_source: responsesImagegenModel(opts) ? 'explicit' : null,
-      endpoint: imageEditsEndpoint(opts.baseUrl || 'https://api.openai.com/v1'),
-      responses_endpoint: responsesEndpoint(opts.baseUrl || 'https://api.openai.com/v1'),
-      blocker: null,
-      desktop_bridge_selected: false,
-      route_provider_id: null,
-      live_evidence_allowed: false,
-      setup_guidance: null
-    };
-  }
+function resolveImagesApiAuth(opts: any = {}) {
+  const apiKey = String(opts.apiKey || process.env.OPENAI_API_KEY || '').trim() || null;
   return {
-    apiKey: null,
-    auth_source: null,
-    auth_transport: 'authorization-bearer',
-    responses_model: responsesImagegenModel(opts),
-    responses_model_source: null,
-    endpoint: imageEditsEndpoint(opts.baseUrl || 'https://api.openai.com/v1'),
-    responses_endpoint: responsesEndpoint(opts.baseUrl || 'https://api.openai.com/v1'),
-    blocker: 'openai_api_key_missing',
-    desktop_bridge_selected: false,
-    route_provider_id: null,
-    live_evidence_allowed: false,
-    setup_guidance: null
-  };
-}
-
-function desktopBridgeImagesApiAuth(target: DesktopBridgeImagegenTarget) {
-  return {
-    apiKey: null,
-    auth_source: 'DESKTOP_BRIDGE_LOOPBACK',
-    auth_transport: 'loopback-route',
-    responses_model: target.model || '',
-    responses_model_source: target.model_source,
-    endpoint: null,
-    responses_endpoint: target.endpoint,
-    blocker: target.blocker,
-    desktop_bridge_selected: target.selected,
-    route_provider_id: target.provider_id,
-    live_evidence_allowed: target.live_evidence_allowed,
-    setup_guidance: target.setup_guidance
-  };
-}
-
-function trustedDesktopBridgeTarget(value: unknown): DesktopBridgeImagegenTarget | null {
-  if (!value || typeof value !== 'object') return null;
-  const target = value as DesktopBridgeImagegenTarget;
-  const runtimeTrusted = runtimeDesktopBridgeTargets.has(target);
-  if (runtimeTrusted
-    && target.status_source === 'runtime'
-    && target.bridge_verified === true
-    && target.live_evidence_allowed === true) return target;
-  return {
-    ...target,
-    status_source: 'injected_fixture',
-    live_evidence_allowed: false
+    apiKey,
+    auth_source: apiKey ? 'OPENAI_API_KEY' : null,
+    endpoint: imageEditsEndpoint(opts.baseUrl || 'https://api.openai.com/v1')
   };
 }
 
 function imageEditsEndpoint(baseUrl: any = '') {
   const base = String(baseUrl || DEFAULT_OPENAI_IMAGE_EDITS_ENDPOINT).trim().replace(/\/+$/, '');
   return /\/images\/edits$/i.test(base) ? base : `${base}/images/edits`;
-}
-
-function responsesEndpoint(baseUrl: any = '') {
-  const base = String(baseUrl || 'https://api.openai.com/v1').trim().replace(/\/+$/, '');
-  return /\/responses$/i.test(base) ? base : `${base}/responses`;
-}
-
-function responsesImagegenModel(opts: any = {}) {
-  return String(opts.responsesModel || process.env.SKS_IMAGEGEN_RESPONSES_MODEL || '').trim();
 }
 
 function imagegenFetchTimeoutMs(opts: any = {}) {
@@ -717,19 +567,6 @@ async function textWithTimeout(response: Response, timeoutMs: number) {
   }
 }
 
-
-function findResponsesImageGenerationOutput(payload: any): { b64: string | null, id: string | null } | null {
-  if (payload?.image_output_partial_frame === true) return null;
-  for (const output of Array.isArray(payload?.output) ? payload.output : []) {
-    if (String(output?.type || '') === 'image_generation_call') {
-      if (String(output?.status || '') === 'partial') continue;
-      const b64 = typeof output?.result === 'string' ? output.result : output?.result?.b64_json || output?.b64_json || null;
-      if (b64) return { b64: String(b64), id: output?.id || payload?.id || null };
-    }
-  }
-  return null;
-}
-
 export async function generatedImageMetadata(root: string, imagePath: string, opts: any = {}) {
   const absolute = path.resolve(root, imagePath);
   const dims = await imageDimensions(absolute);
@@ -741,7 +578,7 @@ export async function generatedImageMetadata(root: string, imagePath: string, op
     height: dims.height,
     format: dims.format,
     source_screen_id: opts.source_screen_id || null,
-    provider_model: opts.provider_model || (['openai_images_api', 'desktop_bridge_responses_image_generation', 'fake_imagegen_adapter'].includes(opts.provider_surface) ? IMAGEGEN_MODEL : CODEX_BUILTIN_IMAGEGEN_MODEL),
+    provider_model: opts.provider_model || (opts.provider_surface === 'fake_imagegen_adapter' ? FAKE_IMAGEGEN_MODEL : opts.provider_surface === 'openai_images_api' ? API_FALLBACK_IMAGEGEN_MODEL : CODEX_DEFAULT_IMAGEGEN_LABEL),
     provider_surface: opts.provider_surface || 'codex_app_imagegen',
     evidence_class: opts.evidence_class || (opts.mock ? 'mock_fixture' : 'codex_app_imagegen'),
     output_source: opts.output_source || (opts.mock ? 'mock_fixture' : 'manual_attach'),
@@ -765,13 +602,13 @@ function mimeForPath(file: string) {
   return 'image/png';
 }
 
-function redactedImagegenResponse(payload: any, ok: boolean, latencyMs: number, provider = 'openai_images_api', retry: { attempts?: number; retry_log?: any[] } = {}) {
+function redactedImagegenResponse(payload: any, ok: boolean, latencyMs: number, retry: { attempts?: number; retry_log?: any[] } = {}) {
   return {
     schema: 'sks.image-ux-imagegen-response.v1',
     created_at: nowIso(),
-    provider,
-    evidence_class: provider === 'codex_app_imagegen' ? 'codex_app_imagegen' : 'non_codex_api_fallback',
-    model: IMAGEGEN_MODEL,
+    provider: 'openai_images_api',
+    evidence_class: NON_CODEX_API_FALLBACK_EVIDENCE_CLASS,
+    model: API_FALLBACK_IMAGEGEN_MODEL,
     ok,
     status: ok ? 'generated' : 'blocked',
     blocker: ok ? null : imagegenErrorKind(payload),

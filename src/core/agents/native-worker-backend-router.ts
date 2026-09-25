@@ -12,6 +12,7 @@ import { categoryForWorkerRole, isNarutoGpt56Model, modelRouteReason, routeModel
 import { codexTimeoutClassForRoute } from '../codex-control/codex-reliability-shield.js'
 import { decideSubagentModel } from '../subagents/model-policy.js'
 import { latestTierModelSet } from '../subagents/model-tiers.js'
+import { consultJevTurnModel } from '../decisions/integration.js'
 
 export const NATIVE_WORKER_BACKEND_ROUTER_SCHEMA = 'sks.native-worker-backend-router.v1'
 
@@ -229,7 +230,7 @@ export async function resolveWorkerModelRouting(input: {
   slice: any
   intake: any
   fastModePolicy: { fast_mode: boolean; service_tier: 'fast' | 'standard' }
-}, deps: { lbHealth?: any; lbCatalog?: any; env?: NodeJS.ProcessEnv } = {}) {
+}, deps: { lbHealth?: any; lbCatalog?: any; env?: NodeJS.ProcessEnv; root?: string; consultJev?: typeof consultJevTurnModel | false } = {}) {
   const narutoOnly = Boolean(input.agent?.naruto_role) || /\$?naruto/i.test(String(input.intake?.route || ''))
   const taskKindText = [
     input.slice?.work_item_kind,
@@ -271,9 +272,20 @@ export async function resolveWorkerModelRouting(input: {
     ? String(input.agent.routed_model || '').trim()
     : ''
   const jevEffort = jevModel ? normalizeModelReasoning(input.agent?.routed_model_reasoning_effort) : null
+  // No plan-time seal, no preference, no override: Jev rates this worker's
+  // task now (Jev mode only), instead of the keyword category guess. A tier
+  // model the codex-lb catalog does not serve is ignored, never a blocker.
+  const consult = deps.consultJev === false ? null : deps.consultJev || consultJevTurnModel
+  const liveJev = consult && !explicitModel && !jevModel && !savedPreferenceModel
+    ? await consult({ root: deps.root || process.cwd(), prompt: `${taskKindText}\n${riskText}`.trim().slice(0, 1200), roleId: 'spawn', env }).catch(() => null)
+    : null
+  const liveJevServed = Boolean(liveJev?.model && currentModels.has(liveJev.model)
+    && (!narutoOnly || (Array.isArray(lbCatalog?.models) && lbCatalog.models.includes(liveJev.model))))
+  const liveJevModel = liveJevServed ? String(liveJev!.model) : ''
+  const liveJevEffort = liveJevModel ? normalizeModelReasoning(liveJev?.effort) : null
   // A stored role preference on a current tier model is the user's choice for
   // that role; it wins over the task tier but not over an explicit override.
-  const selectedModel = explicitModel || jevModel || savedPreferenceModel
+  const selectedModel = explicitModel || jevModel || savedPreferenceModel || liveJevModel
   const taskPolicy = decideSubagentModel({ title: taskKindText, description: riskText, role: input.agent?.role })
   const routed = narutoOnly
     ? await routeModel(category, {
@@ -281,7 +293,7 @@ export async function resolveWorkerModelRouting(input: {
         narutoOnly: true,
         taskText: taskKindText,
         riskText,
-        reasoningEffort: jevEffort || savedAstraEffort,
+        reasoningEffort: jevEffort || savedAstraEffort || liveJevEffort,
         availableModels: lbCatalog?.models || [],
         availableModelEfforts: lbCatalog?.model_efforts || {},
         ...(selectedModel ? { model: selectedModel } : {})
@@ -289,8 +301,8 @@ export async function resolveWorkerModelRouting(input: {
     : {
         // The task's tier picks the newest fast or accurate model; a stored
         // role preference or an explicit current model wins.
-        model: (explicitModel && currentModels.has(explicitModel) ? explicitModel : '') || savedPreferenceModel || taskPolicy.model,
-        reasoning: explicitReasoning || savedAstraEffort || taskPolicy.modelReasoningEffort,
+        model: (explicitModel && currentModels.has(explicitModel) ? explicitModel : '') || savedPreferenceModel || liveJevModel || taskPolicy.model,
+        reasoning: explicitReasoning || savedAstraEffort || liveJevEffort || taskPolicy.modelReasoningEffort,
         serviceTier: explicitTier || input.fastModePolicy.service_tier || 'fast'
       } satisfies ModelChoice
   const blockers = [

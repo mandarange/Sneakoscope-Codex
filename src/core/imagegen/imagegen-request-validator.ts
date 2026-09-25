@@ -1,4 +1,4 @@
-import { IMAGEGEN_MODEL, IMAGEGEN_QUALITIES, isImagegenSize } from './imagegen-model-policy.js';
+import { IMAGEGEN_QUALITIES, isImagegenSize } from './imagegen-model-policy.js';
 import path from 'node:path';
 import { exists, nowIso, sha256, writeJsonAtomic } from '../fsx.js';
 import { sha256File } from '../wiki-image/image-hash.js';
@@ -18,7 +18,7 @@ export async function validateImagegenRequest(input: ImagegenRequestValidationIn
   const blockers: string[] = [];
   const source = path.resolve(input.source_image_path || '');
   const params = input.params || {};
-  if (input.model !== IMAGEGEN_MODEL) blockers.push('imagegen_model_not_current');
+  if (!String(input.model || '').trim()) blockers.push('imagegen_model_missing');
   if (!String(input.prompt || '').trim()) blockers.push('prompt_required');
   if (!await exists(source)) blockers.push('source_image_missing');
   if ('input_fidelity' in params || 'inputFidelity' in params) blockers.push('input_fidelity_must_be_omitted_for_imagegen');

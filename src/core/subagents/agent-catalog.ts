@@ -1,4 +1,3 @@
-import { IMAGEGEN_MODEL } from '../imagegen/imagegen-model-policy.js';
 import {
   MANAGED_OFFICIAL_SUBAGENT_ROLES,
   managedOfficialSubagentRoleByName,
@@ -401,7 +400,7 @@ const ROLE_LANGUAGE_HINTS: Record<string, string[]> = {
   long_context_analyst: ['롱 컨텍스트', '긴 컨텍스트', '장문', '대규모 파일', '여러 문서', '긴 로그', '컨텍스트 압축'],
   computer_use_operator: ['컴퓨터 유즈', '데스크톱 조작', '맥os 점검', '시스템 설정', '네이티브 앱 점검'],
   browser_use_operator: ['브라우저 유즈', '브라우저', '크롬', '웹사이트', '웹앱', '로컬호스트', '플레이라이트'],
-  image_generation_operator: ['이미지 생성', '이미지젠', 'gpt image', IMAGEGEN_MODEL, '비주얼 에셋']
+  image_generation_operator: ['이미지 생성', '이미지젠', 'gpt image', 'sks imagegen', '비주얼 에셋']
 }
 
 const ROLE_PRIORITY_PATTERNS: Readonly<Record<string, RegExp>> = {

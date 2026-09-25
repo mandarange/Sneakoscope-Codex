@@ -1,6 +1,6 @@
 # Official Docs Compatibility
 
-SKS keeps release-gated behavior tied to the **current stable** Codex dependency graph selected by `package.json`, a runtime-generated App Server v2 schema, official Codex multi-agent V2 / subagent configuration and hook lifecycle, Codex Desktop Browser/Chrome/Computer Use plugin surfaces, explicit image-model selection with `gpt-image-2.5-sunburst`, and OpenAI Structured Outputs.
+SKS keeps release-gated behavior tied to the **current stable** Codex dependency graph selected by `package.json`, a runtime-generated App Server v2 schema, official Codex multi-agent V2 / subagent configuration and hook lifecycle, Codex Desktop Browser/Chrome/Computer Use plugin surfaces, the SKS image mode (Codex default image generation, or a custom OpenRouter image model through the OpenRouter Image API), and OpenAI Structured Outputs.
 
 Product docs must not treat a fixed `0.x.y` string as permanent SSOT. The exact SDK pin is release input only; feature support is decided through the resolved runtime and capability probes.
 
@@ -20,7 +20,7 @@ The report records the current baselines used by release readiness:
 - Codex Computer Use guide: `https://learn.chatgpt.com/docs/computer-use`
 - Codex App image generation guide: `https://learn.chatgpt.com/docs/image-generation`
 - OpenAI Image Generation guide: `https://developers.openai.com/api/docs/guides/image-generation`
-- `gpt-image-2.5-sunburst` model guide: `https://developers.openai.com/api/docs/models/gpt-image-2.5-sunburst`
+- OpenRouter image generation guide: `https://openrouter.ai/docs/features/multimodal/image-generation`
 - OpenAI Structured Outputs guide: `https://developers.openai.com/api/docs/guides/structured-outputs`
 
 Release-gated rules:

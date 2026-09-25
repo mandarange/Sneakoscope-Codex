@@ -4,7 +4,7 @@ import { randomBytes } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
-import { ensureDir, exists, globalSksRoot, nowIso, packageRoot, PACKAGE_VERSION, projectRoot, readJson, readText, runProcess, sha256, which, writeJsonAtomic, writeReceiptRotated, writeTextAtomic } from '../fsx.js';
+import { ensureDir, exists, globalSksRoot, nowIso, packageRoot, PACKAGE_VERSION, projectRoot, readJson, readText, runProcess, sameFilesystemPathSync, sha256, which, writeJsonAtomic, writeReceiptRotated, writeTextAtomic } from '../fsx.js';
 import { MANAGED_ASSET_VERSION } from '../managed-assets/managed-assets-manifest.js';
 import { enforceRetention } from '../retention.js';
 import { COMMANDS } from '../../cli/command-registry.js';
@@ -21,6 +21,7 @@ import {
 } from './update-migration-state/simple-stages.js';
 import { compareSemVer } from './semver.js';
 import { repairManagedPermissions } from './managed-permission-repair.js';
+import { recordSksProject, runOtherProjectsMigrationStage, SKS_PROJECT_MARKERS } from './sks-project-registry.js';
 
 export const UPDATE_MIGRATION_SCHEMA = 'sks.project-migration-receipt.v2' as const;
 export const INSTALLATION_EPOCH_SCHEMA = 'sks.installation-epoch.v1' as const;
@@ -245,7 +246,9 @@ export async function writeProjectUpdateMigrationReceipt(input: {
     fromVersion,
     await runUpdateMigrationStages(input.root, { fromVersion })
   );
-  const migrationStageRuns = [permissionStage, ...stageRuns];
+  await recordSksProject(input.root).catch(() => false);
+  const fanoutStage = await runOtherProjectsMigrationStage(input.root, fromVersion);
+  const migrationStageRuns = [permissionStage, ...stageRuns, ...(fanoutStage ? [fanoutStage] : [])];
   const migrationStages = migrationStageRuns.map(summarizeMigrationStage);
   const stageBlockers = migrationStageRuns.flatMap((stage) => stage.blockers.map((blocker) => `${stage.id}:${blocker}`));
   const stageWarnings = migrationStageRuns.flatMap((stage) => stage.warnings.map((warning) => `${stage.id}:${warning}`));
@@ -924,12 +927,7 @@ function isUserOwnedProjectConfigBlocker(blocker: string): boolean {
 }
 
 async function hasSksProjectMigrationMarker(root: string): Promise<boolean> {
-  const markers = [
-    path.join(root, '.sneakoscope', 'manifest.json'),
-    path.join(root, '.sneakoscope', 'policy.json'),
-    path.join(root, '.codex', 'SNEAKOSCOPE.md')
-  ];
-  const present = await Promise.all(markers.map((marker) => exists(marker)));
+  const present = await Promise.all(SKS_PROJECT_MARKERS.map((marker) => exists(path.join(root, marker))));
   return present.some(Boolean);
 }
 
@@ -1755,7 +1753,9 @@ function isFreshDoctorOwnedMigrationReceipt(input: {
     || !['current', 'blocked'].includes(receipt.status)
     || receipt.sks_version !== PACKAGE_VERSION
     || receipt.source !== 'doctor-migration'
-    || path.resolve(receipt.root) !== path.resolve(input.root)
+    // The doctor records the canonical root; a project opened through a
+    // symlink (or macOS /var -> /private/var) is still the same project.
+    || !sameFilesystemPathSync(receipt.root, input.root)
     || receipt.installation_epoch_sha256 !== installationEpochSha256(input.epoch)
   ) return false;
   return !priorReceipt || sha256(JSON.stringify(receipt)) !== sha256(JSON.stringify(priorReceipt));

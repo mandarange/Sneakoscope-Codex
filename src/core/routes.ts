@@ -1,6 +1,7 @@
-import { IMAGEGEN_MODEL } from './imagegen/imagegen-model-policy.js';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { leanEngineeringCompactText, leanEngineeringLongText } from './lean-engineering-policy.js';
 export { leanEngineeringCompactText, leanEngineeringLongText };
+
 import { ALLOWED_REASONING_EFFORTS, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, RECOMMENDED_SKILLS, REFLECTION_SKILL_NAME, USAGE_TOPICS } from './routes/constants.js';
 import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_IMAGEGEN_REQUIRED_POLICY, CODEX_WEB_VERIFICATION_POLICY, RESERVED_CODEX_PLUGIN_SKILL_NAMES } from './routes/evidence.js';
 import { getdesignReferencePolicyText, imageUxReviewPipelinePolicyText } from './routes/design-policy.js';
@@ -14,6 +15,19 @@ export * from './routes/design-policy.js';
 export * from './routes/evidence.js';
 export * from './routes/ppt-policy.js';
 export * from './routes/dollar-prefix.js';
+
+/**
+ * Jev's confident route for the prompt one hook invocation is handling. It is
+ * scoped to that async context, so every `routePrompt` call inside the hook
+ * (Naruto gate, prompt handling, skill admission) sees the same route and
+ * nothing leaks into other prompts or processes. Explicit `$commands` always
+ * win over it.
+ */
+const jevRouteOverride = new AsyncLocalStorage<{ text: string; routeId: string }>();
+
+export function withJevRouteOverride<T>(override: { text: string; routeId: string } | null, run: () => Promise<T>): Promise<T> {
+  return override ? jevRouteOverride.run({ text: override.text.trim(), routeId: override.routeId }, run) : run();
+}
 
 export interface PromptIntentScores {
   answerOnly: number;
@@ -331,7 +345,7 @@ export const ROUTES = [
     command: '$Image-UX-Review',
     mode: 'IMAGE_UX_REVIEW',
     route: 'image-generation UI/UX review loop',
-    description: ("Review UI/UX through the imagegen/" + IMAGEGEN_MODEL + " visual critique loop: source screenshots become generated annotated review images, those images become issue ledgers, then fixes are rechecked."),
+    description: ("Review UI/UX through the imagegen visual critique loop: source screenshots become generated annotated review images, those images become issue ledgers, then fixes are rechecked."),
     requiredSkills: ['image-ux-review', 'imagegen', 'cu', 'pipeline-runner', REFLECTION_SKILL_NAME, 'honest-mode'],
     hiddenDollarAliases: ['$UX-Review', '$Visual-Review', '$UI-UX-Review'],
     lifecycle: ['target_and_capture_inventory', 'source_screenshots', 'imagegen_annotated_review_image', 'generated_image_text_extraction', 'issue_ledger', 'optional_safe_fixes', 'changed_screen_recheck', 'post_route_reflection', 'honest_mode'],
@@ -339,7 +353,7 @@ export const ROUTES = [
     reasoningPolicy: 'high',
     stopGate: 'image-ux-review-gate.json',
     cliEntrypoint: 'sks ux-review run --image <path> --fix --json | sks ux-review callouts --image <path> --json | sks ux-review extract-issues --generated-image <path> --json | sks ux-review fix|recapture|recheck|status latest --json',
-    examples: ['$Image-UX-Review localhost 화면을 이미지 생성 리뷰 루프로 검수해줘', ("$UX-Review 이 스크린샷을 " + IMAGEGEN_MODEL + " 콜아웃 리뷰로 분석하고 고쳐줘")]
+    examples: ['$Image-UX-Review localhost 화면을 이미지 생성 리뷰 루프로 검수해줘', '$UX-Review 이 스크린샷을 이미지 생성 콜아웃 리뷰로 분석하고 고쳐줘']
   },
   {
     id: 'ComputerUse',
@@ -704,7 +718,7 @@ export const COMMAND_CATALOG = [
   { name: 'dfix', usage: 'sks dfix', description: 'Explain $sks-dfix ultralight direct-fix mode.' },
   { name: 'qa-loop', usage: 'sks qa-loop prepare|answer|run|status ...', description: 'Dogfood UI/API as human proxy with safety gates, safe fixes, rechecks, Codex Chrome Extension-first web UI evidence, report.' },
   { name: 'ppt', usage: 'sks ppt build|status <mission-id|latest> [--json]', description: 'Build or inspect $sks-ppt HTML/PDF artifacts from a sealed presentation decision contract.' },
-  { name: 'image-ux-review', usage: 'sks ux-review run --image <path> --fix --json | sks image-ux-review status <mission-id|latest> [--json]', description: ("Run or inspect $sks-image-ux-review " + IMAGEGEN_MODEL + "/imagegen annotated UI/UX review artifacts, issue ledgers, safe fix loops, recapture, and proof gates.") },
+  { name: 'image-ux-review', usage: 'sks ux-review run --image <path> --fix --json | sks image-ux-review status <mission-id|latest> [--json]', description: ("Run or inspect $sks-image-ux-review imagegen annotated UI/UX review artifacts, issue ledgers, safe fix loops, recapture, and proof gates.") },
   { name: 'computer-use', usage: 'sks computer-use import|status|smoke|require ... [--json]', description: 'Record native Mac/non-web Computer Use visual evidence while keeping web verification on the Chrome Extension path.' },
   { name: 'context7', usage: 'sks context7 check|setup|tools|resolve|docs|evidence ...', description: 'Check, configure, and call the local Context7 MCP requirement.' },
   { name: 'super-search', usage: 'sks super-search doctor|run|x|fetch|status|inspect|sources|claims|cache|bench', description: 'Run Super-Search provider-independent source intelligence.' },
@@ -753,7 +767,8 @@ export const COMMAND_CATALOG = [
   { name: 'stats', usage: 'sks stats [--full] [--json]', description: 'Show package and .sneakoscope storage size.' },
   { name: 'mcp-server', usage: 'sks mcp-server [--expose-exec] [--probe]', description: 'Run a modern stateless stdio MCP server exposing SKS read-only commands as tools for any MCP-capable agent host; --expose-exec also exposes non-read-only commands; --probe round-trips server/discover and tools/list, then exits.' },
   { name: 'agent-bridge', usage: 'sks agent-bridge setup [--trusted-project] [--json] | async --prompt "task" [--tools status,stats] [--json]', description: 'Publish the agent-bridge manifest or run selected read-only SKS tools with native Astra Async tool calling through the registered Codex-LB bridge.' },
-  { name: 'decision', usage: 'sks decision status|enable|disable|probe|evaluate [--json]', description: 'Manage optional Jev decisions through the existing OpenRouter credential (off by default). Enable records cloud consent; a valid answer is compiled into SKS plan or context selection. There is no advisory mode and no local model runtime.' }
+  { name: 'decision', usage: 'sks decision status|enable|disable|probe|evaluate [--json]', description: 'Manage optional Jev decisions through the existing OpenRouter credential (off by default). Enable records cloud consent; a valid answer is compiled into SKS plan or context selection. There is no advisory mode and no local model runtime.' },
+  { name: 'imagegen', usage: 'sks imagegen status|models|enable --model <id>|disable|generate --prompt <text> --out <file> [--reference <file>] [--json]', description: 'Generate images with the active SKS image mode. Off (default): Codex image generation, no pinned model. On: the OpenRouter image model chosen in SKS Control Center, called through the SKS Desktop Bridge. With Jev on, Jev picks the aspect ratio and quality you leave open. Each image gets a .sks-imagegen.json evidence file.' }
 ];
 
 export function routeById(id: any): any {
@@ -954,6 +969,11 @@ export function routePrompt(prompt: any): any {
     const route = routeByDollarCommand(command);
     if (!route) return null;
     return select(route);
+  }
+  const override = jevRouteOverride.getStore();
+  if (override && override.text === String(text || '').trim()) {
+    const jevRoute = routeById(override.routeId);
+    if (jevRoute) return select(jevRoute);
   }
   if (hasFromChatImgSignal(text)) return select(routeById('Naruto'));
   const simpleGitRoute = simpleGitOnlyRouteId(text);

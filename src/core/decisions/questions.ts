@@ -4,7 +4,10 @@ import {
   DESIGN_DEFAULTS,
   KEEP_BASELINE_CHOICE,
   NEEDS_EVIDENCE_CHOICE,
+  OPTION_CHOICE_ID,
+  OPTION_QUESTION_ID,
   QUESTION_REVISION,
+  type OptionQuestion,
   type ContextCandidate,
   type DecisionBundle,
   type DecisionsWireRequest,
@@ -66,6 +69,7 @@ export function buildDecisionBundle(input: {
   recoveryCandidates?: readonly RecoveryCandidate[];
   routingCandidates?: readonly RoutingRoleCandidate[];
   delegationCandidate?: DelegationCandidate | null;
+  optionQuestions?: readonly OptionQuestion[];
   baselinePlanId?: string | null;
   requiredSliceIds?: readonly string[];
   requiredVerificationIds?: readonly string[];
@@ -76,6 +80,7 @@ export function buildDecisionBundle(input: {
   const recoveryCandidates = [...(input.recoveryCandidates || [])];
   const routingCandidates = [...(input.routingCandidates || [])];
   const delegationCandidate = input.delegationCandidate || null;
+  const optionQuestions = validOptionQuestions(input.optionQuestions || []);
   const questions: Record<string, Question> = {};
   const questionBindings: Record<string, QuestionBinding> = {};
   const recoverySlot = recoveryCandidates.length > 0 ? 1 : 0;
@@ -98,6 +103,7 @@ export function buildDecisionBundle(input: {
 
   const routedRoles = appendRoutingChoices(routingCandidates, questions, questionBindings, recoverySlot);
   appendDelegationChoice(delegationCandidate, questions, questionBindings, recoverySlot);
+  const askedOptions = appendOptionChoices(optionQuestions, questions, questionBindings, recoverySlot);
 
   for (const candidate of contextCandidates.filter((row) => !row.pinned && row.excerpt)) {
     if (Object.keys(questions).length + 2 > DESIGN_DEFAULTS.maxQuestions - recoverySlot) break;
@@ -197,7 +203,8 @@ export function buildDecisionBundle(input: {
       roles: Object.fromEntries(routedRoles.map((role) => [role.id, {
         summary: redactDecisionText(role.summary, 240)
       }]))
-    }
+    },
+    options: Object.fromEntries(askedOptions.map((question) => [question.id, question.state || {}]))
   } as unknown as Entry;
 
   const request: DecisionsWireRequest = {
@@ -214,7 +221,7 @@ export function buildDecisionBundle(input: {
       workflowRevision: input.workflowRevision,
       sourceDigest: input.sourceDigest,
       graphDigest: input.graphDigest,
-      candidates: { planCandidates, contextCandidates, recoveryCandidates, routingCandidates: routedRoles, delegationCandidate },
+      candidates: { planCandidates, contextCandidates, recoveryCandidates, routingCandidates: routedRoles, delegationCandidate, optionQuestions: askedOptions },
       questions,
       requestedModel: DESIGN_DEFAULTS.model
     }),
@@ -224,6 +231,7 @@ export function buildDecisionBundle(input: {
     recoveryCandidates,
     routingCandidates: routedRoles,
     delegationCandidate,
+    optionQuestions: askedOptions,
     baselinePlanId: input.baselinePlanId ?? planCandidates[0]?.id ?? null,
     questionBindings
   };
@@ -286,6 +294,53 @@ function appendDelegationChoice(
     }
   };
   bindings.delegation = { kind: 'delegation' };
+}
+
+/** Drop malformed questions instead of sending a request OpenRouter would reject. */
+function validOptionQuestions(rows: readonly OptionQuestion[]): OptionQuestion[] {
+  const seen = new Set<string>();
+  const out: OptionQuestion[] = [];
+  for (const row of rows) {
+    const ids = Object.keys(row?.options || {});
+    if (!OPTION_QUESTION_ID.test(String(row?.id || '')) || seen.has(row.id)) continue;
+    if (ids.length < 2 || ids.length > 16 || ids.some((id) => !OPTION_CHOICE_ID.test(id) || id === KEEP_BASELINE_CHOICE)) continue;
+    if (!String(row.instructions || '').trim()) continue;
+    seen.add(row.id);
+    out.push(row);
+  }
+  return out;
+}
+
+/**
+ * One choice per option question, always with a keep-baseline escape. The
+ * caller owns the baseline; SKS applies an option only when Jev is confident.
+ */
+function appendOptionChoices(
+  rows: readonly OptionQuestion[],
+  questions: Record<string, Question>,
+  bindings: Record<string, QuestionBinding>,
+  recoverySlot: number
+): OptionQuestion[] {
+  const asked: OptionQuestion[] = [];
+  for (const row of rows) {
+    if (questionRoom(questions, recoverySlot) < 1) break;
+    const id = `option_${row.id}`;
+    const instructions = redactDecisionText(
+      `${row.instructions} Use state.task and state.options.${row.id}. Select ${KEEP_BASELINE_CHOICE} when the evidence does not clearly favor one option. Do not invent an option.`
+    );
+    assertIndependentQuestion(instructions);
+    questions[id] = {
+      type: 'choice',
+      instructions,
+      criteria: {
+        ...Object.fromEntries(Object.entries(row.options).map(([option, summary]) => [option, redactDecisionText(summary, 240)])),
+        [KEEP_BASELINE_CHOICE]: 'The evidence does not clearly favor one option.'
+      }
+    };
+    bindings[id] = { kind: 'option', questionId: row.id };
+    asked.push(row);
+  }
+  return asked;
 }
 
 const DELEGATION_CHOICE_SUMMARIES: Readonly<Record<(typeof DELEGATION_CHOICES)[number], string>> = Object.freeze({

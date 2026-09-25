@@ -138,7 +138,8 @@ const COMMAND_MANIFEST_LITE_BASE = [
   { name: 'bench', summary: 'Run core trust-kernel benchmark budgets', maturity: 'beta' },
   { name: 'mcp-server', summary: 'Run a stdio MCP server exposing SKS commands as tools for MCP-capable agent hosts', maturity: 'beta', skipMigrationGate: true, allowedDuringActiveRoute: true },
   { name: 'agent-bridge', summary: 'Register SKS tools or run read-only tools with native Astra async calling', maturity: 'beta', readonly: true, diagnostic: true },
-  { name: 'decision', summary: 'Manage optional Jev decisions through OpenRouter: status, enable, disable, probe, evaluate', maturity: 'labs', skipMigrationGate: true, allowedDuringActiveRoute: true }
+  { name: 'decision', summary: 'Manage optional Jev decisions through OpenRouter: status, enable, disable, probe, evaluate', maturity: 'labs', skipMigrationGate: true, allowedDuringActiveRoute: true },
+  { name: 'imagegen', summary: 'Generate images with the active SKS image mode (Codex default or a custom OpenRouter model): status, models, enable, disable, generate', maturity: 'beta', skipMigrationGate: true, allowedDuringActiveRoute: true }
 ] as const satisfies readonly CommandManifestLiteSourceEntry[];
 
 export type CommandNameLite = typeof COMMAND_MANIFEST_LITE_BASE[number]['name'];
@@ -155,6 +156,7 @@ const SAFE_COMMAND_CONTRACT_LITE: CommandContractMetadataLite = {
 const COMMAND_CONTRACT_OVERRIDES_LITE = {
   align: { latency: 'long', supportsJson: true, inputProfile: 'json-only' },
   decision: { risk: 'R2', latency: 'long', supportsJson: true, remoteAllowed: false, inputProfile: 'json-only' },
+  imagegen: { risk: 'R2', latency: 'long', supportsJson: true, remoteAllowed: false, inputProfile: 'json-only' },
   cleanup: { risk: 'R3', latency: 'long', supportsJson: true, remoteAllowed: false, inputProfile: 'json-only' },
   autoresearch: { latency: 'long' },
   bench: { latency: 'long' },

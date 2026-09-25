@@ -1,11 +1,10 @@
-import { IMAGEGEN_MODEL } from '../imagegen/imagegen-model-policy.js';
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { nowIso, readJson } from '../fsx.js';
 import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_IMAGEGEN_REQUIRED_POLICY } from '../routes.js';
 import { sha256File, imageDimensions } from '../wiki-image/image-hash.js';
 import { generateImagegenCalloutReview } from '../image-ux-review/imagegen-adapter.js';
-import { imagegenEvidenceClassBlockers, isFullImagegenEvidenceClass, isFullImagegenOutputSource } from '../imagegen/imagegen-evidence.js';
+import { imagegenEvidenceClassBlockers, isFullImagegenEvidenceClass, isFullImagegenOutputSource, isRecordedImagegenModel } from '../imagegen/imagegen-evidence.js';
 
 export const PPT_SLIDE_CALLOUT_LEDGER_ARTIFACT = 'ppt-slide-callout-ledger.json';
 export const PPT_SLIDE_IMAGEGEN_REQUEST_ARTIFACT = 'ppt-slide-imagegen-request.json';
@@ -34,8 +33,8 @@ export async function generateSlideCalloutReviews({ root, dir, slideExportLedger
     source_slide_image_id: `ppt-source-${slide.slide_id}`,
     source_slide_image_path: slide.image_path,
     prompt: buildSlideCalloutPrompt(slide, { deckContext }),
-    model: IMAGEGEN_MODEL,
-    preferred_surface: 'Selected provider with explicit image_generation.model',
+    model: 'active-sks-image-mode',
+    preferred_surface: 'Active SKS image mode (sks imagegen generate)',
     required_output: 'generated_annotated_slide_review_image_with_numbered_callouts_severity_labels_flow_arrows_and_corrected_mini_comp',
     codex_app_imagegen_doc: CODEX_APP_IMAGE_GENERATION_DOC_URL
   }));
@@ -107,7 +106,7 @@ export async function generateSlideCalloutReviews({ root, dir, slideExportLedger
         ...await generatedSlideMetadata(root, generated.generated_image_path, slide, {
           mock: fakeGenerated,
           realGenerated: codexGenerated,
-          providerSurface: generated.provider || IMAGEGEN_MODEL,
+          providerSurface: generated.provider || 'sks imagegen',
           providerModel: response?.model || null,
           evidenceClass,
           outputSource: response?.output_source || null,
@@ -141,8 +140,8 @@ export async function generateSlideCalloutReviews({ root, dir, slideExportLedger
     schema_version: 1,
     created_at: nowIso(),
     provider: {
-      model: IMAGEGEN_MODEL,
-      preferred_surface: 'Selected provider with explicit image_generation.model',
+      model: normalizedImages.find((image: any) => image.real_generated === true && isRecordedImagegenModel(image.provider_model))?.provider_model || 'codex-default',
+      preferred_surface: 'Active SKS image mode (sks imagegen generate)',
       codex_app_imagegen_doc: CODEX_APP_IMAGE_GENERATION_DOC_URL,
       required_policy: CODEX_IMAGEGEN_REQUIRED_POLICY
     },
@@ -160,7 +159,7 @@ export async function generateSlideCalloutReviews({ root, dir, slideExportLedger
     passed: slides.length > 0 && generatedReviewImages.length === slides.length && blockers.length === 0 && generatedReviewImages.every((image: any) => image.callout_extraction_status === 'succeeded'),
     verified_level: mock ? 'mock_only' : generatedReviewImages.length ? 'verified_partial' : 'blocked',
     next_action: blockers.includes('imagegen_capability_missing')
-      ? ("Generate slide callout review images with the selected model-capable provider: " + IMAGEGEN_MODEL + ", then attach them or rerun extraction.")
+      ? 'Generate slide callout review images with `sks imagegen generate --reference <slide image>`, then attach them or rerun extraction.'
       : null
   };
 }
@@ -189,7 +188,7 @@ export function buildSlideImagegenEvidence(calloutLedger: any = {}) {
   const requiredCount = Number(calloutLedger.required_count || images.length || 0);
   const blockers: string[] = [];
   for (const image of images) {
-    if (image.provider_model !== IMAGEGEN_MODEL) blockers.push('ppt_slide_imagegen_model_not_current');
+    if (!isRecordedImagegenModel(image.provider_model)) blockers.push('ppt_slide_imagegen_model_missing');
     const evidenceClass = String(image.evidence_class || '');
     const outputSource = String(image.output_source || '');
     const outputSha = String(image.output_sha256 || '');
@@ -248,7 +247,7 @@ async function generatedSlideMetadata(root: string, relPath: string, slide: any,
     height: dims.height,
     format: dims.format,
     provider_surface: opts.mock ? 'mock_fixture' : (opts.providerSurface || 'Codex App $imagegen'),
-    provider_model: opts.mock ? IMAGEGEN_MODEL : opts.providerModel || null,
+    provider_model: opts.mock ? 'mock-imagegen' : opts.providerModel || null,
     real_generated: opts.realGenerated === true
       && isFullImagegenEvidenceClass(opts.evidenceClass || (opts.mock ? 'mock_fixture' : 'codex_app_imagegen')),
     mock: opts.mock === true,

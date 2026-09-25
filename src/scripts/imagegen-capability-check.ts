@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 // @ts-nocheck
-import { IMAGEGEN_MODEL } from '../core/imagegen/imagegen-model-policy.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { detectImagegenCapability } from '../core/imagegen/imagegen-capability.js';
@@ -15,10 +14,10 @@ fs.writeFileSync(stableOut, `${JSON.stringify(report, null, 2)}\n`);
 const ok = report.ok
   && report.core_feature === true
   && report.core_ready === true
-  && report.current_imagegen_model_required === true
+  && report.image_model_pinned === false
   && report.capability_detection_is_not_output_proof === true
   && report.real_generation_available === true
-  && report.model === IMAGEGEN_MODEL
+  && typeof report.model === 'string' && report.model.length > 0
   && report.openai_images_api?.official_codex_app_substitute === false
   && report.api_fallback_satisfies_codex_app_evidence === false
   && report.input_fidelity_must_be_omitted === true

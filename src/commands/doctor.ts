@@ -1,4 +1,3 @@
-import { IMAGEGEN_MODEL } from '../core/imagegen/imagegen-model-policy.js';
 import os from 'node:os';
 import path from 'node:path';
 import { projectRoot, exists, formatBytes, nowIso, readText, writeJsonAtomic } from '../core/fsx.js';
@@ -1291,7 +1290,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean, deps:
           blockers: ['codex_imagegen_current_task_tool_manifest_unverified', 'codex_imagegen_real_output_unverified'],
           manual_actions: [
             'Start a fresh Codex/Work task so $imagegen is present in its tool manifest.',
-            ("Invoke $imagegen with " + IMAGEGEN_MODEL + " and bind the selected raster output path to route evidence.")
+            'Run `sks imagegen generate` (it follows the active SKS image mode) and bind the raster output path to route evidence.'
           ],
           communication_test: {
             level: 'flag_level',

@@ -1,5 +1,8 @@
-import { IMAGEGEN_MODEL, CODEX_BUILTIN_IMAGEGEN_MODEL, CODEX_BUILTIN_IMAGEGEN_MODEL_SELECTABLE } from './imagegen-model-policy.js';
+import { CODEX_BUILTIN_IMAGEGEN_MODEL, CODEX_BUILTIN_IMAGEGEN_MODEL_SELECTABLE } from './imagegen-model-policy.js';
 import { desktopBridgeStatusV3 } from '../codex-lb/desktop-controller-v3.js';
+import { imagegenSelection, readImagegenConfig } from './imagegen-config.js';
+import { codexMainModel } from './imagegen-generate.js';
+import { resolveOpenRouterApiKey } from '../providers/openrouter/openrouter-secret-store.js';
 import { nowIso, runProcess, which } from '../fsx.js';
 import { redactSecrets, redactString } from '../secret-redaction.js';
 import { evaluateImagegenAuthReadiness } from './imagegen-auth-readiness.js';
@@ -9,12 +12,22 @@ export async function detectImagegenCapability(opts: any = {}) {
   const codexApp = await detectCodexAppImagegen(codexBin, opts);
   const env = opts.env || process.env;
   const openaiApiKeyPresent = Boolean(opts.apiKey || env.OPENAI_API_KEY);
-  const codexLb = await detectCodexLbImagegenAuth(opts, env);
+  const config = opts.imagegenConfig || await readImagegenConfig(env);
+  const selection = imagegenSelection(config);
+  const bridgeStatus = opts.desktopBridgeStatus !== undefined
+    ? opts.desktopBridgeStatus
+    : await (opts.desktopBridgeStatusImpl || desktopBridgeStatusV3)({ home: opts.home || env.HOME, env }).catch(() => null);
+  const statusOpts = { ...opts, desktopBridgeStatus: bridgeStatus };
+  const codexLb = await detectCodexLbImagegenAuth(statusOpts, env);
+  const codexBridgeRoute = await detectCodexBridgeRoute(statusOpts, env);
+  const customModel = await detectCustomImageModel(config, opts, env);
   const codexAppBuiltInAvailable = codexApp.available === true;
   const authReadiness = await evaluateImagegenAuthReadiness({
     codexHome: opts.codexHome,
     env,
-    codexAppBuiltInAvailable: codexAppBuiltInAvailable && String(CODEX_BUILTIN_IMAGEGEN_MODEL) === IMAGEGEN_MODEL,
+    codexAppBuiltInAvailable,
+    codexBridgeRouteAvailable: codexBridgeRoute.available,
+    customModelReady: customModel.ready,
     authJsonText: opts.authJsonText
   }).catch(() => null);
   const apiFallbackAvailable = openaiApiKeyPresent;
@@ -26,42 +39,56 @@ export async function detectImagegenCapability(opts: any = {}) {
     || env.SKS_SELFTEST_MOCK === '1'
     || env.SKS_MOCK === '1'
   );
-  const builtInModelSupported = String(CODEX_BUILTIN_IMAGEGEN_MODEL) === IMAGEGEN_MODEL;
-  const builtInCurrentModelAvailable = codexAppBuiltInAvailable && builtInModelSupported;
-  const selectedBridgeAvailable = codexLb.available && codexLb.selected;
-  const realGenerationAvailable = builtInCurrentModelAvailable || selectedBridgeAvailable;
+  // The active mode decides. Codex default: Codex's own tool inside a turn, or
+  // the bridge route of the Codex model for SKS surfaces. Custom: the chosen
+  // OpenRouter model with an OpenRouter key (bridge or direct).
+  const realGenerationAvailable = selection.mode === 'openrouter'
+    ? customModel.ready
+    : codexAppBuiltInAvailable || codexBridgeRoute.available;
+  const sksSurfaceGenerationAvailable = selection.mode === 'openrouter' ? customModel.ready : codexBridgeRoute.available;
   const routeGenerationAvailable = realGenerationAvailable || fakeAdapterAcceptedForRoute;
   const coreReady = realGenerationAvailable;
-  const coreBlockers = coreReady ? [] : [codexAppBuiltInAvailable ? 'imagegen_model_unavailable' : 'codex_app_builtin_imagegen_capability_missing'];
+  // Codex default mode is blocked only when both of its paths are: name both,
+  // so the fix for `sks imagegen generate` (the bridge route) is visible too.
+  const coreBlockers = coreReady
+    ? []
+    : selection.mode === 'openrouter'
+      ? [customModel.blocker || 'sks_custom_image_model_unavailable']
+      : ['codex_app_builtin_imagegen_capability_missing', codexBridgeRoute.blocker || 'codex_bridge_route_unavailable'];
   const routeGenerationBlockers = routeGenerationAvailable ? [] : ['imagegen_capability_missing'];
   return {
     schema: 'sks.imagegen-capability.v1',
     ok: true,
     created_at: nowIso(),
-    model: IMAGEGEN_MODEL,
+    mode: selection.mode,
+    model: selection.model,
+    model_label: selection.label,
     core_feature: true,
     core_ready: coreReady,
     real_generation_available: realGenerationAvailable,
+    sks_surface_generation_available: sksSurfaceGenerationAvailable,
     codex_app_builtin_output_required: false,
-    current_imagegen_model_required: true,
+    current_imagegen_model_required: false,
+    image_model_pinned: false,
     real_output_verified_by_capability_check: false,
     capability_detection_is_not_output_proof: true,
-    preferred_surface: 'Selected provider with explicit image_generation.model',
-    fallback_surface: ("Explicit OpenAI Images API " + IMAGEGEN_MODEL + " fallback (non-Codex evidence)"),
+    preferred_surface: selection.mode === 'openrouter' ? 'sks imagegen generate through the SKS Desktop Bridge (custom OpenRouter model)' : 'Codex image generation (built-in tool, or sks imagegen generate through the Codex model bridge route)',
+    fallback_surface: 'Explicit OpenAI Images API fallback (non-Codex evidence)',
     api_fallback_satisfies_codex_app_evidence: false,
     full_verification_requires_real_generation: true,
     codex_app: {
       ...codexApp,
       official_surface: '$imagegen',
       model: CODEX_BUILTIN_IMAGEGEN_MODEL,
-      requested_model_supported: builtInModelSupported,
       model_selectable: CODEX_BUILTIN_IMAGEGEN_MODEL_SELECTABLE,
       generated_output_required_for_full_verification: true
     },
+    codex_bridge_route: codexBridgeRoute,
+    custom_model: customModel,
     codex_lb: {
       ...codexLb,
       satisfies_codex_app_builtin_evidence: false,
-      accepted_for_core_readiness: selectedBridgeAvailable
+      accepted_for_core_readiness: codexLb.available && codexLb.selected
     },
     openai_images_api: {
       available: apiFallbackAvailable,
@@ -100,6 +127,57 @@ export async function detectImagegenCapability(opts: any = {}) {
     core_blockers: coreBlockers,
     route_generation_blockers: routeGenerationBlockers,
     blockers: [...coreBlockers, ...routeGenerationBlockers]
+  };
+}
+
+/**
+ * Codex default mode for SKS surfaces: the hosted `image_generation` tool on
+ * the bridge route of the user's Codex model. The bridge adds the provider
+ * credential for codex-lb and OpenRouter routes; the official ChatGPT route
+ * carries Codex's own login, which SKS does not read, so it cannot be used.
+ */
+async function detectCodexBridgeRoute(opts: any = {}, env: any = process.env) {
+  const status = opts.desktopBridgeStatus || null;
+  const mainModel = String(env.SKS_IMAGEGEN_RESPONSES_MODEL || '').trim() || await codexMainModel(env).catch(() => null);
+  const route = mainModel ? status?.routing?.policy?.model_routes?.[mainModel] || null : null;
+  const provider = route && route.provider_id !== 'openai' ? status?.providers?.[route.provider_id] || null : null;
+  const blocker = !status
+    ? 'desktop_bridge_status_unavailable'
+    : status.service?.running !== true
+      ? 'desktop_bridge_not_running'
+      : !mainModel
+        ? 'codex_main_model_missing'
+        : !route
+          ? 'catalog_model_route_missing'
+          : route.provider_id === 'openai'
+            ? 'codex_route_requires_codex_auth'
+            : provider?.enabled !== true
+              ? 'bridge_route_provider_disabled'
+              : provider.credential?.state !== 'ready'
+                ? provider.credential?.blockers?.[0] || 'bridge_route_provider_credential_unverified'
+                : null;
+  return {
+    available: blocker === null,
+    main_model: mainModel,
+    provider_id: route?.provider_id || null,
+    upstream_model: route?.upstream_model || null,
+    blocker
+  };
+}
+
+async function detectCustomImageModel(config: any, opts: any = {}, env: any = process.env) {
+  const configured = config?.mode === 'openrouter' && typeof config?.openrouter_model === 'string';
+  const key = opts.openrouterKeyPresent !== undefined
+    ? { key: opts.openrouterKeyPresent ? 'present' : null }
+    : await resolveOpenRouterApiKey({ env }).catch(() => ({ key: null }));
+  const keyPresent = Boolean(key.key);
+  const blocker = !configured ? 'sks_custom_image_model_off' : !keyPresent ? 'openrouter_key_missing' : null;
+  return {
+    enabled: config?.mode === 'openrouter',
+    model: config?.openrouter_model || null,
+    openrouter_key_present: keyPresent,
+    ready: configured && keyPresent,
+    blocker
   };
 }
 

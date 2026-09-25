@@ -10,14 +10,13 @@ export function buildResearchSynthesisPrompt(input: {
 }): string {
   return [
     'You are writing the final SKS Research synthesis.',
-    'Do not write a short summary.',
-    'Do not pad with repeated paragraphs.',
+    'Write a complete synthesis sized to the evidence; state each point once.',
     'Every key claim must cite source-ledger ids.',
     'In the Key Claims section, write every key claim id and its actual claim text in one local paragraph or table row, with at least one source id linked to that same claim in claim-evidence-matrix.json.',
     'A global References list does not satisfy claim coverage. Claim-local citations must appear beside the claim they support.',
     'Every recommendation must point to implementation-blueprint sections.',
     'Every limitation must point to falsification-ledger cases or source blockers.',
-    'Return JSON only matching sks.research-synthesis-output.v1.',
+    'Your output is validated against sks.research-synthesis-output.v1.',
     'Do not modify repository source.',
     'If evidence is insufficient, return blockers rather than confident prose.',
     '',

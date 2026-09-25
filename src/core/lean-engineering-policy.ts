@@ -125,7 +125,7 @@ export function coreEngineeringDirectiveText() {
 }
 
 export function coreEngineeringDirectiveReferenceText() {
-  return `Apply the Core Engineering Directive (${CORE_ENGINEERING_DIRECTIVE_ID}/${CORE_ENGINEERING_DIRECTIVE_HASH}) from AGENTS.md exactly; do not expand it with legacy global rules.`;
+  return `Apply the Core Engineering Directive (${CORE_ENGINEERING_DIRECTIVE_ID}/${CORE_ENGINEERING_DIRECTIVE_HASH}) from AGENTS.md exactly.`;
 }
 
 export function engineeringSanityPolicyText() {
@@ -143,7 +143,7 @@ export function concurrentToolGuidanceText() {
     '- Use programmatic tool calling for bounded read/transform batches with known schemas and compact evidence output. Discover deferred tools before starting the program. Keep approvals, adaptive decisions, and native artifact validation direct.',
     '- Async function/custom tools use direct calls, not programmatic callers; multi-agent API mode must not combine async tools with parallel tool calls. Hosted tools and ordinary Promise concurrency do not imply Responses async support.',
     '- Apply new user instructions through native steering while preserving completed work and pending tool results. Do not restart the task or resubmit accepted input just because a continuation is pending.',
-    '- Preserve cached request prefixes. Use configuration_update for effort changes only when the host exposes compatible Astra standard single-agent requests, without automatic compaction/truncation; otherwise preserve the selected settings.'
+    '- Preserve cached request prefixes. Change effort with configuration_update only when the host exposes it; otherwise keep the selected settings.'
   ].join('\n');
 }
 

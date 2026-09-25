@@ -52,6 +52,18 @@ test('a hook-only project refreshes a stale managed AGENTS block once and keeps 
   });
 });
 
+test('a project marked only by .codex/SNEAKOSCOPE.md is refreshed and queued for its full migration', async () => {
+  await withProject(async (root) => {
+    await fsp.mkdir(path.join(root, '.codex'), { recursive: true });
+    await fsp.writeFile(path.join(root, '.codex', 'SNEAKOSCOPE.md'), '# SKS\n');
+    await fsp.writeFile(path.join(root, 'AGENTS.md'), `${BEGIN}\n${STALE_BLOCK}\n${END}\n`);
+    const result = await maybeReconcileManagedGuidancePreflight(root);
+    assert.deepEqual(result?.refreshed, ['AGENTS.md']);
+    // The background runner never starts under node --test.
+    assert.equal(result?.migration, 'not_queued:disabled');
+  });
+});
+
 test('unmarked user guidance and non-SKS directories are never touched', async () => {
   await withProject(async (root) => {
     const agents = path.join(root, 'AGENTS.md');
