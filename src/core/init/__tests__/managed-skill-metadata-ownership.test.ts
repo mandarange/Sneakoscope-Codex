@@ -90,3 +90,35 @@ test('missing managed skill metadata is regenerated without quarantining the ski
     await fsp.rm(home, { recursive: true, force: true });
   }
 });
+
+test('an installed SKS reclaims skills a newer SKS left behind unless that newer SKS is the one on PATH', async () => {
+  const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-skill-reclaim-'));
+  const manifestPath = path.join(home, '.agents', 'skills', '.sks-generated.json');
+  const previousPath = process.env.PATH;
+  try {
+    assert.equal((await reconcileGlobalSkills(home)).ok, true);
+    const current = JSON.parse(await fsp.readFile(manifestPath, 'utf8'));
+    const leftBehind = async () => fsp.writeFile(manifestPath, JSON.stringify({ ...current, version: '99.0.0' }));
+
+    // A rollback, a dev checkout, or a half-finished update: nothing newer is active.
+    await leftBehind();
+    const reclaimed = await reconcileGlobalSkills(home);
+    assert.equal(reclaimed.ok, true, JSON.stringify(reclaimed.warnings));
+    assert.ok(reclaimed.warnings.includes('managed_skill_generation_reclaimed_from_99.0.0'));
+    assert.equal(JSON.parse(await fsp.readFile(manifestPath, 'utf8')).version, current.version);
+
+    // A newer SKS really is the active one: this runtime is the stale copy.
+    const newer = path.join(home, 'newer-sks');
+    await fsp.mkdir(path.join(newer, 'bin'), { recursive: true });
+    await fsp.writeFile(path.join(newer, 'package.json'), JSON.stringify({ name: 'sneakoscope', version: '99.0.0' }));
+    await fsp.writeFile(path.join(newer, 'bin', 'sks'), '#!/bin/sh\necho 99.0.0\n', { mode: 0o755 });
+    process.env.PATH = `${path.join(newer, 'bin')}${path.delimiter}${previousPath || ''}`;
+    await leftBehind();
+    const refused = await reconcileGlobalSkills(home);
+    assert.equal(refused.ok, false);
+    assert.ok(refused.warnings.some((warning) => warning.startsWith('managed_skill_generation_downgrade_refused:99.0.0:') && warning.endsWith(':path_99.0.0')));
+  } finally {
+    process.env.PATH = previousPath;
+    await fsp.rm(home, { recursive: true, force: true });
+  }
+});

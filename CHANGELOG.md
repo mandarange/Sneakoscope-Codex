@@ -3,6 +3,23 @@
 ## [Unreleased]
 
 
+## [10.3.6] - 2026-09-25
+
+### Fixed
+
+- `sks update` no longer fails in the minutes after a release is published.
+  npm lists a new version before it serves the package file, and an update in
+  that gap got a 404. The update now retries the download for up to six
+  minutes, with `--prefer-online` so a cached 404 is not replayed, and prints
+  that it is waiting. If npm still has not served the file, nothing is
+  installed, the current version keeps working, and the update says to run it
+  again in a few minutes. `SKS_UPDATE_PUBLISH_WAIT_MS` sets the wait.
+- `sks update` and `sks doctor --fix` no longer stay blocked when the global
+  skills were written by a newer SKS that is not the one on PATH, as after a
+  rollback, a dev checkout, or an update that stopped halfway. The installed
+  SKS now rewrites them to its own version. They are still left alone when a
+  newer SKS really is the `sks` on PATH.
+
 ## [10.3.5] - 2026-09-25
 
 ### Added

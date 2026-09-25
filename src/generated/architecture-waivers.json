@@ -63,6 +63,13 @@
       "reason": "update migration split debt: receipts, stage orchestration, and doctor-owned migration checks share one module",
       "policy": "shrink-only",
       "baseline_lines": 1837
+    },
+    {
+      "schema": "sks.architecture-waiver.v1",
+      "file": "src/core/update-check.ts",
+      "reason": "update split debt: the update stage pipeline, result assembly, and self-verification still share one module",
+      "policy": "shrink-only",
+      "baseline_lines": 2296
     }
   ]
 }

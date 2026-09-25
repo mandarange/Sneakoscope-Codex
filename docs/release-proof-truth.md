@@ -1,6 +1,18 @@
 # Release Proof Truth
 
-## 10.3.5 candidate
+## 10.3.6 candidate
+
+Update resilience proof is the temporary-install suite (a fake npm that serves
+two 404s and then the package succeeds with two waits and `--prefer-online`;
+a zero budget returns `not_yet_downloadable`) and the managed-skill ownership
+suite (a newer manifest is reclaimed with no newer `sks` on PATH and refused
+when one is). The failures they cover were observed live on 2026-09-25: npm
+served the 10.3.5 metadata about four minutes before its tarball, and an
+update in that window failed with E404.
+
+## Historical 10.3.5 candidate
+
+Published 2026-09-25 as `sneakoscope@10.3.5` from commit 4f5447bf.
 
 Project fan-out proof is the registry suite and the hook preflight suite.
 The registry suite covers the registry and Codex-trusted folders merged;
@@ -283,9 +295,9 @@ Exact-commit proof can exist only after the candidate is committed and all
 source-bound gates are regenerated from that clean commit.
 
 All release artifacts bound to 9.2.7 or an earlier commit are historical. They
-must not be renamed, copied, or treated as 10.3.5 evidence.
+must not be renamed, copied, or treated as 10.3.6 evidence.
 
-New 10.3.5 claims:
+New 10.3.6 claims:
 
 | Claim | Current support | Boundary |
 | --- | --- | --- |
@@ -363,8 +375,8 @@ New 10.3.5 claims:
 | `sks update` quarantines other-harness conflicts | passed-hermetic | `other-harness-cleanup` now calls `cleanupOtherHarnessConflicts` instead of failing closed; from-home update e2e still runs every migration stage |
 | Host extra skill dirs lose only SKS-owned retired residue | passed-hermetic | `~/.cursor/skills` and `~/.claude/skills` remove managed retired names only; user-authored collisions stay in place |
 | A stale or cwd-sticky official workflow cannot capture a later prompt | passed-hermetic | unnamed hooks use `loadOwnedRouteState`; idle > 2h is inactive even with leftover open threads; same-session follow-ups still bind while the run is fresh |
-| All checked version authorities report 10.3.5 | passed-hermetic | `release:version-truth` 15 surfaces at 10.3.5 after incremental build |
-| The reported 10.3.5 package is ready to publish | not proved | requires a clean exact-commit build, `npm run release:check:full` stamp, pack receipt, provenance, and the release commit fast-forward pushed to origin main (the prepublish reproducibility preflight refuses `head_not_origin_main`) |
+| All checked version authorities report 10.3.6 | passed-hermetic | `release:version-truth` 15 surfaces at 10.3.6 after incremental build |
+| The reported 10.3.6 package is ready to publish | not proved | requires a clean exact-commit build, `npm run release:check:full` stamp, pack receipt, provenance, and the release commit fast-forward pushed to origin main (the prepublish reproducibility preflight refuses `head_not_origin_main`) |
 
 ## 9.1.0 assertion (historical)
 

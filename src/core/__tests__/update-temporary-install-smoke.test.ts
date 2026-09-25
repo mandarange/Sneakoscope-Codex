@@ -56,6 +56,37 @@ test('temporary install smoke fails closed on a mismatched package manifest', as
   }
 });
 
+test('temporary install smoke waits out a just-published tarball, then gives up plainly', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-update-temp-propagation-'));
+  const npmBin = path.join(root, 'npm-fixture.mjs');
+  const pending = path.join(root, 'pending-404s');
+  try {
+    await writePrefixNpmFixture(npmBin);
+    const waits: number[] = [];
+    const run = (budgetMs: string) => runTemporaryInstallSmoke({
+      npmBin,
+      packageName: 'sneakoscope',
+      version: '6.3.0',
+      registry: 'https://registry.npmjs.org/',
+      env: { ...process.env, HOME: root, SKS_TEST_DOCTOR_OK: '1', SKS_FAKE_E404_FILE: pending, SKS_UPDATE_PUBLISH_WAIT_MS: budgetMs },
+      onPublishWait: (waited) => waits.push(waited),
+      sleep: async () => {}
+    });
+    await fs.writeFile(pending, '2');
+    const served = await run('600000');
+    assert.equal(served.ok, true, served.error || 'install should succeed once the tarball is served');
+    assert.equal(waits.length, 2);
+    assert.ok(served.npm_args.includes('--prefer-online'), 'a cached 404 must not be replayed');
+
+    await fs.writeFile(pending, '5');
+    const pendingResult = await run('0');
+    assert.equal(pendingResult.ok, false);
+    assert.equal(pendingResult.status, 'not_yet_downloadable');
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
 async function writePrefixNpmFixture(file: string): Promise<void> {
   await fs.writeFile(file, [
     `#!${process.execPath}`,
@@ -66,6 +97,8 @@ async function writePrefixNpmFixture(file: string): Promise<void> {
     "const prefix = args[2];",
     "const spec = args[3] || '';",
     "const target = spec.slice(spec.indexOf('@') + 1);",
+    "const pending = process.env.SKS_FAKE_E404_FILE;",
+    "if (pending) { const left = Number(fs.readFileSync(pending, 'utf8')); if (left > 0) { fs.writeFileSync(pending, String(left - 1)); console.error('npm error code E404\\nnpm error 404 Not Found - GET https://registry.npmjs.org/sneakoscope/-/sneakoscope-' + target + '.tgz - Not found'); process.exit(1); } }",
     "const manifestVersion = process.env.SKS_FAKE_TEMP_MANIFEST_VERSION || target;",
     "const packageRoot = path.join(prefix, 'node_modules', 'sneakoscope');",
     "const entrypoint = path.join(packageRoot, 'dist', 'bin', 'sks.js');",

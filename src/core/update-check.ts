@@ -1065,7 +1065,7 @@ async function runSksUpdateNowInternal(
       registry,
       env: nestedProcessEnv,
       ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
-      ...(options.maxOutputBytes === undefined ? {} : { maxOutputBytes: options.maxOutputBytes })
+      ...(options.maxOutputBytes === undefined ? {} : { maxOutputBytes: options.maxOutputBytes }), ...(machineOutput ? {} : { onPublishWait: (waited) => process.stderr.write(`  npm is still publishing ${packageName}@${installVersion}; waiting (${Math.round(waited / 1000)}s)...\n`) })
     });
     stage('temporary_install_smoke', temporaryInstallSmoke.ok, temporaryInstallSmoke.status, {
       install_code: temporaryInstallSmoke.install_code,
@@ -1088,7 +1088,7 @@ async function runSksUpdateNowInternal(
         projectRoot: projectReceiptRoot,
         registry,
         globalRoot,
-        status: 'failed',
+        status: temporaryInstallSmoke.status === 'not_yet_downloadable' ? 'unavailable' : 'failed',
         ok: false,
         installCode: null,
         oldVersionDoctor,

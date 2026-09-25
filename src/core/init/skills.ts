@@ -2,7 +2,7 @@ import path from 'node:path';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import type { Dirent } from 'node:fs';
-import { exists, nowIso, PACKAGE_VERSION, readJson, readText, sha256, withScratchDir, writeJsonAtomic, writeTextAtomic } from '../fsx.js';
+import { exists, nowIso, PACKAGE_VERSION, packageRoot, readJson, readText, sha256, which, withScratchDir, writeJsonAtomic, writeTextAtomic } from '../fsx.js';
 import { buildSksCoreSkillManifest, isCoreSkillName, legacyCoreSkillNames } from '../codex-native/core-skill-manifest.js';
 import { syncCoreSkillsIntegrity } from '../codex-native/core-skill-integrity.js';
 import {
@@ -848,13 +848,18 @@ async function reconcileSkillsUnlocked(opts: ReconcileSkillsOptions): Promise<Sk
     if (installedMarker?.generated_by === 'sneakoscope') {
       const installedVersion = String(installedMarker?.version || '').trim();
       const versionOrder = compareSemVer(installedVersion, PACKAGE_VERSION);
-      if (versionOrder === 1) {
+      // Newer skills only win while a newer SKS is actually the one on PATH.
+      // Left by a rollback, a dev checkout, or an update that stopped halfway,
+      // they would otherwise block `sks update` and `sks doctor --fix` forever.
+      const activeNewer = versionOrder === 1 ? await activeNewerSksOnPath(PACKAGE_VERSION) : null;
+      if (activeNewer) {
         report.ok = false;
         report.warnings.push(
-          `managed_skill_generation_downgrade_refused:${installedVersion}:runtime_${PACKAGE_VERSION}`
+          `managed_skill_generation_downgrade_refused:${installedVersion}:runtime_${PACKAGE_VERSION}:path_${activeNewer}`
         );
         return report;
       }
+      if (versionOrder === 1) report.warnings.push(`managed_skill_generation_reclaimed_from_${installedVersion}`);
       const installedBuildTime = Number(installedMarker?.runtime_build_source_time);
       const currentBuildTime = await runtimeBuildSourceTime();
       const installedGeneration = String(installedMarker?.skill_generation_sha256 || '');
@@ -865,7 +870,8 @@ async function reconcileSkillsUnlocked(opts: ReconcileSkillsOptions): Promise<Sk
         && Number.isFinite(installedBuildTime)
         && installedBuildTime > 0
         && currentBuildTime !== null
-        && installedBuildTime > currentBuildTime) {
+        && installedBuildTime > currentBuildTime
+        && await activeNewerSksOnPath(PACKAGE_VERSION, installedBuildTime)) {
         report.ok = false;
         report.warnings.push(
           `managed_skill_same_version_older_build_refused:${currentBuildTime}:installed_${installedBuildTime}`
@@ -1600,4 +1606,32 @@ async function removeEmptyGeneratedParents(root: any, rel: any) {
     dir = parent;
   }
   if (rel.startsWith('.codex/skills/')) await removeDirIfEmpty(path.join(root, '.codex', 'skills'));
+}
+
+/**
+ * The version of the `sks` on PATH when it is newer than this runtime (or,
+ * at the same version, built later than `sameVersionBuildTime`), else null.
+ * Only then is this runtime a stale copy that must not rewrite shared skills.
+ */
+async function activeNewerSksOnPath(runtimeVersion: string, sameVersionBuildTime: number | null = null): Promise<string | null> {
+  const bin = await which('sks').catch(() => null);
+  if (!bin) return null;
+  let dir = path.dirname(await fsp.realpath(bin).catch(() => bin));
+  for (let depth = 0; depth < 5; depth += 1) {
+    const manifest: any = await readJson(path.join(dir, 'package.json'), null).catch(() => null);
+    if (manifest?.name === 'sneakoscope' && typeof manifest.version === 'string') {
+      const order = compareSemVer(manifest.version, runtimeVersion);
+      if (order === 1) return manifest.version;
+      if (order === 0 && sameVersionBuildTime !== null && path.resolve(dir) !== path.resolve(packageRoot())) {
+        const stamp: any = await readJson(path.join(dir, 'dist', '.sks-build-stamp.json'), null).catch(() => null);
+        const built = Number(stamp?.built_at_source_time);
+        if (Number.isFinite(built) && built >= sameVersionBuildTime) return manifest.version;
+      }
+      return null;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
 }

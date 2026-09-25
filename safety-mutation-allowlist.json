@@ -2705,8 +2705,8 @@
       "file": "src/core/update/temporary-install-smoke.ts",
       "symbol": "runTemporaryInstallSmoke",
       "token": "fs.rm",
-      "scope_contract_sha256": "2b3e8925b328979277a6638a73fcbb0541a2f9fec5e80f04f85658d3bbb12985",
-      "callsite_sha256": "75c9a49ebd0384a66c792dfb0ec97d3af3f2fa5db31fb8d62fdd4bc8f6118d98",
+      "scope_contract_sha256": "8a55907a8abd42069d2042276d572d38147568ad0a3bfc3a9795a945d09f1feb",
+      "callsite_sha256": "eb1e8e2b724ef3f8c417fd946487b4d93f7e68e98c9b838c21456edd57a4cdf2",
       "occurrence": 1,
       "reason": "Temporary update smoke removes only its mkdtemp package-install root in finally."
     },
