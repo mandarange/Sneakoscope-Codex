@@ -21,6 +21,13 @@ import {
   setProviderState,
   validateProvider
 } from './desktop-controller-v3/provider-commands.js';
+import {
+  listSubagentModels,
+  openRouterOnlyStatusCommand,
+  setOpenRouterOnly,
+  setSubagentModels
+} from './desktop-controller-v3/openrouter-only-commands.js';
+import { openRouterOnlyStatus } from './desktop-controller-v3/openrouter-only-status.js';
 import { commandResult, safeCode } from './desktop-controller-v3/shared.js';
 import { desktopBridgeStatusV3 } from './desktop-controller-v3/status.js';
 import type {
@@ -44,6 +51,7 @@ export {
   desktopBridgeReportReadinessV3
 } from './desktop-controller-v3/diagnostics.js';
 export { runDesktopBridgeDeepProviderProbesV3 } from './desktop-controller-v3/live-probes.js';
+export { openRouterOnlyStatus, type OpenRouterOnlyStatus } from './desktop-controller-v3/openrouter-only-status.js';
 export { desktopBridgeCatalogStatusV3, desktopBridgeStatusV3 } from './desktop-controller-v3/status.js';
 export { verifyDesktopBridgeV3 } from './desktop-controller-v3/verification.js';
 
@@ -57,6 +65,8 @@ export async function executeDesktopBridgeCommandV3(
     return commandResult('auth-priority.status', true, status, { auth_priority: status.auth_priority }, [], options);
   }
   if (request.operation === 'verify') return verifyDesktopBridgeV3(request.level, options);
+  if (request.operation === 'openrouter-only.status') return openRouterOnlyStatusCommand(options);
+  if (request.operation === 'subagent-models.list') return listSubagentModels(options);
 
   try {
     const home = path.resolve(options.home || process.env.HOME || '.');
@@ -97,6 +107,12 @@ export async function executeDesktopBridgeCommandV3(
       }
       if (request.operation === 'route.set-default') return setDefaultProvider(request.provider_id, options);
       if (request.operation === 'auth-priority.set') return setAuthPriority(request.enabled, options);
+      if (request.operation === 'openrouter-only.set') {
+        return setOpenRouterOnly(request.enabled, request.no_restart === true, options);
+      }
+      if (request.operation === 'subagent-models.set') {
+        return setSubagentModels(request.subagent_models, request.no_restart === true, options);
+      }
       if (request.operation === 'route.official-models') return setOfficialModelsMode(request.mode, options);
       if (request.operation === 'route.explain') return explainRoute(request.model, options);
       if (request.operation === 'unmanage') return unmanageDesktopBridge(options);
@@ -109,10 +125,29 @@ export async function executeDesktopBridgeCommandV3(
       request.operation as DesktopBridgeCommandOperation,
       false,
       status,
-      request.operation === 'auth-priority.set' && status?.auth_priority
-        ? { auth_priority: status.auth_priority } : {},
+      await failureModeEcho(request.operation, status, options),
       [blocker],
       options
     ) as DesktopBridgeCommandResult;
   }
+}
+
+/**
+ * A failed mode switch still reports both modes, so a UI that re-reads the
+ * switches after either mutation never shows a stale one.
+ */
+async function failureModeEcho(
+  operation: DesktopBridgeControllerRequestV3['operation'],
+  status: DesktopBridgeStatusV3 | null,
+  options: DesktopBridgeControllerV3Options
+): Promise<Record<string, unknown>> {
+  const modeOperation = operation === 'auth-priority.set'
+    || operation.startsWith('openrouter-only.')
+    || operation.startsWith('subagent-models.');
+  if (!modeOperation) return {};
+  const openRouterOnly = await openRouterOnlyStatus(options).catch(() => null);
+  return {
+    ...(status?.auth_priority ? { auth_priority: status.auth_priority } : {}),
+    ...(openRouterOnly ? { openrouter_only: openRouterOnly } : {})
+  };
 }

@@ -78,7 +78,7 @@ extension ProvidersViewController: NSTableViewDataSource, NSTableViewDelegate {
         clear.setAccessibilityIdentifier("sks-provider-exposure-clear")
         let card = NativeView.card(
             title: "Models in Codex",
-            subtitle: "All Codex-LB models are included. Select OpenRouter models, apply, then relaunch Codex to update its picker.",
+            subtitle: "Select OpenRouter models, apply, then relaunch Codex to update its picker. Codex-LB models are included unless OpenRouter Only is on.",
             views: [exposureStatus, exposureSearchField, scroll, ControlKit.actionRow([exposureApplyButton, clear])]
         )
         card.setAccessibilityIdentifier("sks-provider-card-model-exposure")
@@ -97,9 +97,19 @@ extension ProvidersViewController: NSTableViewDataSource, NSTableViewDelegate {
             self.exposureRows = decoded.rows
             self.exposurePending = Set(decoded.rows.filter(\.selected).map(\.publicId))
             self.exposureMaxSelected = decoded.max
-            self.exposureStatus.stringValue = "Codex-LB: all models exposed · OpenRouter: \(decoded.selected) of \(decoded.available) selected (max \(decoded.max))."
+            self.exposureStatus.stringValue = self.exposureModeSummary + "OpenRouter: \(decoded.selected) of \(decoded.available) selected (max \(decoded.max))."
             self.exposureStatus.textColor = .secondaryLabelColor
             self.exposureTable.reloadData()
+        }
+    }
+
+    /// What the picker holds besides the OpenRouter selection depends on the
+    /// routing mode; while the mode is unknown, nothing is claimed.
+    var exposureModeSummary: String {
+        switch openRouterOnlyEnabled {
+        case true?: return "OpenRouter Only: Codex-LB models are hidden; subagent list models are always exposed · "
+        case false?: return "Codex-LB: all models exposed · "
+        case nil: return ""
         }
     }
 
@@ -142,8 +152,10 @@ extension ProvidersViewController: NSTableViewDataSource, NSTableViewDelegate {
             }
             let completed = result.code == 0 && truth?.completed == true
             let blocker = truth?.blockers.first.map(ProviderSecretRedactor.redact)
+            let extra = self.openRouterOnlyEnabled == true ? " plus the subagent list models; Codex-LB models stay hidden while OpenRouter Only is on"
+                : self.openRouterOnlyEnabled == false ? " plus every Codex-LB model" : ""
             let summary = completed
-                ? "Exposure applied · \(self.exposurePending.count) OpenRouter model(s) plus every Codex-LB model. Restart Codex to refresh its picker."
+                ? "Exposure applied · \(self.exposurePending.count) OpenRouter model(s)\(extra). Restart Codex to refresh its picker."
                 : blocker.map { "Exposure not applied · \($0)" } ?? "Exposure result schema invalid"
             _ = self.operations.update(snapshot, state: completed ? .succeeded : .failed, stage: "complete", progress: 1, summary: summary)
             self.exposureStatus.stringValue = summary

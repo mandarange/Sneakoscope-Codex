@@ -12,6 +12,7 @@ import { defaultDecisionConfig } from '../config.js';
 import { SYNTHETIC_RESPONSE } from './fixtures.js';
 import { BUILTIN_LATEST_TIER_MODELS as T } from '../../subagents/model-tiers.js';
 import type { BoundedTriwikiAttention } from '../../subagents/triwiki-attention.js';
+import { writeOpenRouterOnlyState } from '../../subagents/child-model-allowlist.js';
 
 process.env.SKS_JEV_DECISION_TEST_OVERRIDES = '1';
 
@@ -442,6 +443,165 @@ test('Jev mode fans out one request and applies sealed models with risk escalati
   assert.doesNotMatch(prepared.delegationPrompt, /- tiers: fast for tiny mechanical shards/);
   assert.equal(prepared.plan.agents.explorer.routed_model_policy, 'jev_sealed_routing');
   assert.match(prepared.delegationPrompt, /Jev sealed models:/);
+});
+
+const LIST_MODELS = [
+  { model: 'google/gemini-3.8-flash', criteria: 'Tiny mechanical edits and renames.', reasoning_effort: 'low' as const, default: false },
+  { model: 'z-ai/glm-5.3', criteria: 'Reviews, security, and judgment.', reasoning_effort: 'high' as const, default: true },
+  { model: 'deepseek/deepseek-v4.1-flash', criteria: 'Broad code search and long reads.', reasoning_effort: null, default: false }
+];
+
+async function listMission(t: test.TestContext, name: string) {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), `sks-jev-${name}-`));
+  const dir = path.join(root, '.sneakoscope', 'missions', `m-${name}`);
+  await fsp.mkdir(dir, { recursive: true });
+  t.after(async () => {
+    setDecisionTestOverrides(null);
+    await fsp.rm(root, { recursive: true, force: true });
+  });
+  const env = { HOME: path.join(root, 'home'), PATH: process.env.PATH || '', OPENROUTER_API_KEY: 'sk-or-test-listroutesaaaaaaaa' } as NodeJS.ProcessEnv;
+  await writeOpenRouterOnlyState({ enabled: true, subagent_models: LIST_MODELS }, { env });
+  // The mode's parent is the OpenRouter main model in the Codex config.
+  await fsp.writeFile(path.join(root, 'home', '.codex', 'config.toml'), 'model = "z-ai/glm-5.3"\n');
+  return { root, dir, env };
+}
+
+const LIST_SLICES = [
+  { id: 'search', title: 'Search', description: 'Search every caller of the parser', kind: 'worker' as const, agent: 'explorer', paths: ['src'], readOnly: true },
+  { id: 'rename', title: 'Rename', description: 'Rename one label', kind: 'worker' as const, agent: 'worker', paths: ['src/a.ts'] },
+  { id: 'auth', title: 'Auth', description: 'Review the auth change', kind: 'expert' as const, agent: 'security_reviewer', paths: ['src/auth.ts'], readOnly: true }
+];
+
+test('OpenRouter Only Mode: one Jev call picks each role a list model; no tier question is asked', async (t) => {
+  process.env.SKS_JEV_DECISION_TEST_OVERRIDES = '1';
+  const { root, dir, env } = await listMission(t, 'list-route');
+  const requests: string[][] = [];
+  const pick: Record<string, string> = { explorer: 'm3', worker: 'm1', security_reviewer: 'm2' };
+  setDecisionTestOverrides({
+    config: enabledConfig(),
+    fetchImpl: async (_url, init) => {
+      assert.equal(officialSubagentLifecycleLockHeld(), false);
+      const body = JSON.parse(String(init?.body || '')) as {
+        questions: Record<string, { type: string; criteria?: Record<string, string> | string[] }>;
+      };
+      requests.push(Object.keys(body.questions));
+      const answers: Record<string, unknown> = {};
+      for (const [id, question] of Object.entries(body.questions)) {
+        if (!id.startsWith('option_child_model_') || !question.criteria || Array.isArray(question.criteria)) continue;
+        answers[id] = sealedChoice(pick[id.slice('option_child_model_'.length)] || 'keep_baseline', Object.keys(question.criteria));
+      }
+      return new Response(JSON.stringify({ model: 'typesafe/jev-1.13', answers, usage: { input_tokens: 60, output_tokens: 9 } }), { status: 200 });
+    }
+  });
+  const prepared = await prepareOfficialSubagentMission({
+    root,
+    dir,
+    missionId: 'm-list-route',
+    goal: 'Search parser callers, rename one label, and review the auth change for the list.',
+    route: '$Naruto',
+    mode: 'naruto',
+    env,
+    slices: LIST_SLICES
+  });
+  const childModelRequests = requests.filter((ids) => ids.some((id) => id.startsWith('option_child_model_')));
+  assert.equal(childModelRequests.length, 1);
+  assert.ok(childModelRequests[0]!.length <= 8);
+  assert.equal(requests.flat().some((id) => id.startsWith('route_')), false);
+  const agents = prepared.plan.agents;
+  assert.equal(agents.explorer.routed_provider, 'openrouter');
+  assert.equal(agents.explorer.routed_model, 'deepseek/deepseek-v4.1-flash');
+  // No entry effort: the role effort stays when OpenRouter lists it.
+  assert.equal(agents.explorer.routed_model_reasoning_effort, 'medium');
+  assert.equal(agents.explorer.routed_model_policy, 'openrouter_only_jev');
+  assert.equal(agents.worker.routed_model, 'google/gemini-3.8-flash');
+  assert.equal(agents.worker.routed_model_reasoning_effort, 'low');
+  assert.equal(agents.security_reviewer.routed_model, 'z-ai/glm-5.3');
+  assert.equal(agents.security_reviewer.routed_model_reasoning_effort, 'high');
+  const evidence = prepared.plan.openrouter_only;
+  assert.equal(evidence.enabled, true);
+  assert.equal(evidence.default_subagent_model, 'z-ai/glm-5.3');
+  assert.deepEqual(evidence.roles.explorer, { model: 'deepseek/deepseek-v4.1-flash', source: 'jev', reason: 'applied', default_entry: false });
+  assert.deepEqual(evidence.routed_roles.slice(0, 3).sort(), ['explorer', 'security_reviewer', 'worker']);
+  assert.deepEqual([...evidence.jev_decided_roles].sort(), ['explorer', 'security_reviewer', 'worker']);
+  // The plan records the OpenRouter parent, not a tier model.
+  assert.equal(prepared.plan.parent_model_policy, 'z-ai/glm-5.3');
+  assert.deepEqual(prepared.plan.parent, { model: 'z-ai/glm-5.3', model_reasoning_effort: 'xhigh' });
+  assert.equal(evidence.main_model, 'z-ai/glm-5.3');
+  // Read-only slices spawn through the model-less read-only role; this project has not installed it yet.
+  assert.deepEqual(evidence.read_only_role, { name: 'read_only_list_child', installed: false });
+  assert.deepEqual(evidence.warnings, ['openrouter_only_read_only_role_missing']);
+  assert.ok(prepared.delegationPrompt.includes('pass agent_type="read_only_list_child"'));
+  assert.equal(prepared.plan.fanout_policy.jev_child_models.worker, 'google/gemini-3.8-flash');
+  assert.ok(prepared.delegationPrompt.includes('pass model="deepseek/deepseek-v4.1-flash" and reasoning_effort="medium" and fork_turns="none"'));
+  assert.match(prepared.delegationPrompt, /Jev mode: Jev picks each child's list model from these criteria/);
+  for (const tierModel of Object.values(T)) assert.ok(!prepared.delegationPrompt.includes(tierModel), tierModel);
+  for (const row of Object.values(agents) as Array<Record<string, any>>) {
+    assert.ok(LIST_MODELS.some((entry) => entry.model === row.routed_model), String(row.routed_model));
+  }
+});
+
+test('OpenRouter Only Mode with Jev off seals every role to the default entry without a network call', async (t) => {
+  process.env.SKS_JEV_DECISION_TEST_OVERRIDES = '1';
+  const { root, dir, env } = await listMission(t, 'list-off');
+  let fetched = 0;
+  setDecisionTestOverrides({
+    config: defaultDecisionConfig(),
+    fetchImpl: async () => {
+      fetched += 1;
+      return new Response('{}', { status: 500 });
+    }
+  });
+  const prepared = await prepareOfficialSubagentMission({
+    root,
+    dir,
+    missionId: 'm-list-off',
+    goal: 'Search parser callers and rename one label for the default list.',
+    route: '$Naruto',
+    mode: 'naruto',
+    env,
+    slices: LIST_SLICES
+  });
+  assert.equal(fetched, 0);
+  for (const [name, row] of Object.entries(prepared.plan.agents) as Array<[string, Record<string, any>]>) {
+    assert.equal(row.routed_model, 'z-ai/glm-5.3', name);
+    assert.equal(row.routed_model_policy, 'openrouter_only_default', name);
+    // Jev is off, so every role (inside the lane cap or past it) says so.
+    assert.equal(prepared.plan.openrouter_only.roles[name].reason, 'off', name);
+  }
+  assert.deepEqual(prepared.plan.openrouter_only.jev_decided_roles, []);
+  assert.equal(prepared.plan.fanout_policy.jev_child_models, undefined);
+  assert.match(prepared.delegationPrompt, /slices created after decomposition take the list model whose criteria fit, else the default/);
+  assert.deepEqual(prepared.configBlockers.filter((blocker: string) => blocker.startsWith('openrouter_only')), []);
+
+  // Generic parallel overlays take the same list routing as Naruto.
+  const generic = await prepareOfficialSubagentMission({
+    root,
+    dir,
+    missionId: 'm-list-off',
+    goal: 'Review the auth change in parallel for the default list.',
+    route: '$Research',
+    mode: 'generic',
+    env,
+    slices: [LIST_SLICES[2]!]
+  });
+  assert.equal(generic.plan.agents.security_reviewer.routed_model, 'z-ai/glm-5.3');
+  assert.equal(generic.plan.agents.security_reviewer.routed_provider, 'openrouter');
+  assert.equal(generic.plan.openrouter_only.roles.security_reviewer.model, 'z-ai/glm-5.3');
+  assert.ok(generic.delegationPrompt.includes('pass model="z-ai/glm-5.3" and reasoning_effort="high" and fork_turns="none"'));
+  for (const tierModel of Object.values(T)) assert.ok(!generic.delegationPrompt.includes(tierModel), tierModel);
+
+  await writeOpenRouterOnlyState({ subagent_models: [] }, { env });
+  const empty = await prepareOfficialSubagentMission({
+    root,
+    dir,
+    missionId: 'm-list-off',
+    goal: 'Rename one label with an empty list.',
+    route: '$Naruto',
+    mode: 'naruto',
+    env,
+    slices: [LIST_SLICES[1]!]
+  });
+  assert.ok(empty.configBlockers.includes('openrouter_only_subagent_list_empty'));
 });
 
 function sealedChoice(choice: string, keys: string[]) {

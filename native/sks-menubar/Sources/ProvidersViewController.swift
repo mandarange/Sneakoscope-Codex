@@ -23,6 +23,13 @@ final class ProvidersViewController: NSViewController, ControlCenterPage, NSText
     var authPriorityEnabled: Bool?
     var authPriorityBusy = false
     var authPriorityGeneration = 0
+    // OpenRouter Only shares the Default connection card; its logic lives in ProvidersOpenRouterOnly.swift.
+    let openRouterOnlyToggle = NSSwitch()
+    let openRouterOnlyStatus = NativeView.detail("Checking OpenRouter Only…")
+    let openRouterOnlyDetail = NativeView.detail("")
+    var openRouterOnlyEnabled: Bool?
+    var openRouterOnlyBusy = false
+    var openRouterOnlyGeneration = 0
     let providerStatus = NativeView.detail("Desktop Bridge status has not loaded.")
     let bridgeServiceStatus = NativeView.detail("Service: checking…")
     let bridgeHttpStatus = NativeView.detail("HTTP probe: not attempted")
@@ -116,64 +123,67 @@ final class ProvidersViewController: NSViewController, ControlCenterPage, NSText
         return NativeView.card(title: "Default connection", subtitle: "", views: [
             NativeView.row([authPriorityToggle, label]), authPriorityStatus,
             NativeView.detail("Use the saved Codex-LB connection first for eligible models. Explicit provider choices and session pins still apply.")
-        ])
+        ] + makeOpenRouterOnlyRows())
     }
 
-    func refreshAuthPriority(afterUnconfirmedMutation: Bool = false) {
-        guard !authPriorityBusy else { return }
+    func refreshAuthPriority(notice: String? = nil) {
+        guard !routingModeBusy else { return }
         authPriorityGeneration += 1
         let generation = authPriorityGeneration
         processClient.run(["bridge", "auth-priority", "status", "--json"], timeout: NativeView.statusTimeout) { [weak self] result in
-            guard let self = self, !self.authPriorityBusy, generation == self.authPriorityGeneration else { return }
+            guard let self = self, !self.routingModeBusy, generation == self.authPriorityGeneration else { return }
             guard !result.timedOut, !result.truncated,
                   let payload = self.json(result.output),
                   let priority = AuthPriorityState.decode(payload) else {
                 self.authPriorityEnabled = nil
-                self.authPriorityToggle.isEnabled = false
+                self.updateRoutingModeSwitches()
                 self.authPriorityToggle.isHidden = true
                 self.authPriorityStatus.stringValue = "Saved preference could not be confirmed. Reopen Connections to check again."
                 self.authPriorityStatus.textColor = .systemOrange
                 return
             }
             self.renderAuthPriority(priority)
-            if afterUnconfirmedMutation {
-                self.authPriorityStatus.stringValue += "\nSaved preference rechecked. The earlier operation did not finish normally."
+            if let notice = notice {
+                self.authPriorityStatus.stringValue += "\n" + notice
                 self.authPriorityStatus.textColor = .systemOrange
             }
         }
     }
 
-    private func renderAuthPriority(_ state: AuthPriorityState) {
+    func renderAuthPriority(_ state: AuthPriorityState) {
         authPriorityEnabled = state.enabled
         authPriorityToggle.isHidden = false
         authPriorityToggle.state = state.enabled ? .on : .off
-        authPriorityToggle.isEnabled = !busy && !authPriorityBusy
+        updateRoutingModeSwitches()
         authPriorityStatus.stringValue = state.message
         authPriorityStatus.textColor = state.state == "active" ? .systemGreen : state.state == "unavailable" ? .systemOrange : .secondaryLabelColor
     }
 
     @objc func toggleAuthPriority() {
-        guard !authPriorityBusy, let previous = authPriorityEnabled else { return }
+        guard !routingModeBusy, let previous = authPriorityEnabled else { return }
         let desired = authPriorityToggle.state == .on
         guard let operation = operations.begin(kind: "bridge-auth-priority", mutationGroup: "codex-config", summary: "Change Codex-LB preference") else {
             authPriorityToggle.state = previous ? .on : .off
             authPriorityStatus.stringValue = "Another configuration change is running. Try again when it finishes."
             return
         }
-        authPriorityGeneration += 1
         authPriorityBusy = true
-        authPriorityToggle.isEnabled = false
+        beginRoutingModeMutation()
         authPriorityStatus.stringValue = "Saving preference…"
         _ = operations.update(operation, state: .running, stage: "saving", progress: nil, summary: "Saving Codex-LB preference")
         processClient.run(["bridge", "auth-priority", desired ? "on" : "off", "--json"], timeout: NativeView.mutationTimeout) { [weak self] result in
             guard let self = self else { return }
             self.authPriorityBusy = false
             let payload = self.json(result.output)
+            let complete = !result.truncated && !result.timedOut
             let outcome = AuthPriorityMutationOutcome.resolve(
                 payload: payload, desired: desired,
-                commandSucceeded: result.code == 0 && payload?["ok"] as? Bool == true,
-                responseComplete: !result.truncated && !result.timedOut
+                commandSucceeded: result.code == 0 && payload?["ok"] as? Bool == true
+                    && OpenRouterOnlyReceipt.decode(payload).blockers.isEmpty,
+                responseComplete: complete
             )
+            self.renderOpenRouterOnly(from: payload, responseComplete: complete)
+            let issue = OpenRouterOnlyReceipt.decode(payload).primaryIssue.map(ProviderSecretRedactor.redact)
             let operationState: OperationState
             switch outcome {
             case .saved: operationState = .succeeded
@@ -184,17 +194,19 @@ final class ProvidersViewController: NSViewController, ControlCenterPage, NSText
             if let state = outcome.observedState {
                 self.renderAuthPriority(state)
                 if operationState != .succeeded {
-                    self.authPriorityStatus.stringValue = outcome.operationSummary + "\n" + state.message
+                    self.authPriorityStatus.stringValue = [outcome.operationSummary, issue].compactMap { $0 }.joined(separator: " · ") + "\n" + state.message
                     self.authPriorityStatus.textColor = .systemOrange
                 }
             } else {
                 self.authPriorityEnabled = nil
-                self.authPriorityToggle.isEnabled = false
+                self.updateRoutingModeSwitches()
                 self.authPriorityToggle.isHidden = true
                 self.authPriorityStatus.stringValue = "Operation result is uncertain. Checking the saved preference…"
                 self.authPriorityStatus.textColor = .systemOrange
-                self.refreshAuthPriority(afterUnconfirmedMutation: true)
             }
+            // Turning Codex-LB on turns OpenRouter Only off: re-read both modes.
+            let notice = outcome.observedState == nil ? "Saved preference rechecked. The earlier operation did not finish normally." : operationState == .succeeded ? nil : outcome.operationSummary
+            self.rereadRoutingModes(authPriorityNotice: notice, openRouterOnlyNotice: nil)
         }
     }
 
@@ -221,7 +233,7 @@ final class ProvidersViewController: NSViewController, ControlCenterPage, NSText
 
     func setBusy(_ value: Bool) {
         busy = value
-        authPriorityToggle.isEnabled = !value && !authPriorityBusy && authPriorityEnabled != nil
+        updateRoutingModeSwitches()
         for button in actionButtons where !providerButtons.values.flatMap({ $0 }).contains(where: { $0 === button }) { button.isEnabled = !value }
         value ? globalSpinner.startAnimation(nil) : globalSpinner.stopAnimation(nil)
     }
@@ -235,6 +247,12 @@ final class ProvidersViewController: NSViewController, ControlCenterPage, NSText
     func refresh() {
         refreshCredentialHealth()
         refreshAuthPriority()
+        refreshOpenRouterOnly()
+        refreshBridgeStatus()
+    }
+
+    /// Runtime, profiles, combined catalog and routes from one v3 status read.
+    func refreshBridgeStatus() {
         processClient.run(["bridge", "status", "--json"], timeout: NativeView.statusTimeout) { [weak self] result in
             guard let self = self, let json = self.json(result.output),
                   let status = try? DesktopBridgeStatusV3Truth.decode(from: json),

@@ -117,14 +117,14 @@ test('real Codex wire identity resolves to thread pin identity and rejects incon
   const headers = codexSessionHeaders(threadId);
   assert.deepEqual(resolveCodexSessionIdentity(headers, {
     client_metadata: { session_id: threadId, thread_id: threadId, turn_id: `${threadId}:turn` },
-  }), { thread_id: threadId, session_id: threadId });
+  }), { thread_id: threadId, session_id: threadId, parent_thread_id: null, subagent_kind: null, thread_source: 'user' });
   assert.throws(() => resolveCodexSessionIdentity({ ...headers, 'session-id': 'different-session' }),
     /bridge_codex_session_identity_conflict|bridge_codex_session_identity_mismatch/);
   assert.throws(() => resolveCodexSessionIdentity(headers, {
     client_metadata: { session_id: threadId, thread_id: 'different-thread' },
   }), /bridge_codex_session_identity_conflict/);
   assert.deepEqual(resolveCodexSessionIdentity({ 'x-sks-session-id': 'untrusted' }), {
-    thread_id: null, session_id: null,
+    thread_id: null, session_id: null, parent_thread_id: null, subagent_kind: null, thread_source: null,
   });
 });
 
@@ -148,6 +148,7 @@ test('a spawned subagent thread keeps its own pin identity inside the parent ses
   };
   assert.deepEqual(resolveCodexSessionIdentity(spawned), {
     thread_id: childThreadId, session_id: sessionId,
+    parent_thread_id: sessionId, subagent_kind: 'thread_spawn', thread_source: 'subagent',
   });
 
   // Distinct children of one session must resolve to distinct pin identities,
@@ -163,7 +164,7 @@ test('a spawned subagent thread keeps its own pin identity inside the parent ses
   // A WebSocket upgrade carries no turn metadata, so the bare header pair must
   // resolve too — that path had no way to tell a child from a root turn.
   assert.deepEqual(resolveCodexSessionIdentity({ 'thread-id': childThreadId, 'session-id': sessionId }), {
-    thread_id: childThreadId, session_id: sessionId,
+    thread_id: childThreadId, session_id: sessionId, parent_thread_id: null, subagent_kind: null, thread_source: null,
   });
 
   // The guard that still has value: one field contradicting itself across

@@ -406,7 +406,8 @@ final class ProcessClient {
             text = text.replacingOccurrences(of: sensitiveValue, with: "[redacted]")
         }
         let patterns = [
-            #"sk-(?:proj|or-v1|clb)?-?[A-Za-z0-9_-]{12,}"#,
+            // Anchored like the CLI (secret-redaction.ts): "risk-assessment" is not a key.
+            #"\bsk-(?:proj|or-v1|clb)?-?[A-Za-z0-9_-]{12,}"#,
             #"gh[pousr]_[A-Za-z0-9_]{20,}"#,
             #"github_pat_[A-Za-z0-9_]{20,}"#,
             #"eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}"#,

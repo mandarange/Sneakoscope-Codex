@@ -1,6 +1,22 @@
 # Release Proof Truth
 
-## 10.3.7 candidate
+## 10.3.8 candidate
+
+OpenRouter Only Mode proof is hermetic. The controller suites run the real
+controller against a temp HOME with injected launchd, Codex and fetch: the two
+modes turn each other off in one operation, turning the mode on is refused
+with nothing committed when no list model has a route, a failed sync keeps
+the old list, catalog and bridge, the main model is switched and restored,
+and a post-commit failure is a blocker that still restarts Codex. The bridge
+suites cover HTTP, Responses WebSocket and native WebSocket: non-OpenRouter
+routes and unlisted child models are refused with 409, model-less requests
+keep the official passthrough, and the mode-off config generation is
+unchanged. The hook suites check that no unlisted model passes the spawn gate
+across every Jev reply, requested model and parent state, and that mode-off
+spawn output is byte-identical. The Control Center harness decodes real CLI
+output with the real Swift sources. No live OpenRouter-only Codex turn was run.
+
+## Historical 10.3.7 candidate
 
 Update offer proof is the registry-availability suite (a 404 version document
 or tarball yields `pending`, a served tarball yields the version, an offline
@@ -306,9 +322,9 @@ Exact-commit proof can exist only after the candidate is committed and all
 source-bound gates are regenerated from that clean commit.
 
 All release artifacts bound to 9.2.7 or an earlier commit are historical. They
-must not be renamed, copied, or treated as 10.3.7 evidence.
+must not be renamed, copied, or treated as 10.3.8 evidence.
 
-New 10.3.7 claims:
+New 10.3.8 claims:
 
 | Claim | Current support | Boundary |
 | --- | --- | --- |
@@ -386,8 +402,8 @@ New 10.3.7 claims:
 | `sks update` quarantines other-harness conflicts | passed-hermetic | `other-harness-cleanup` now calls `cleanupOtherHarnessConflicts` instead of failing closed; from-home update e2e still runs every migration stage |
 | Host extra skill dirs lose only SKS-owned retired residue | passed-hermetic | `~/.cursor/skills` and `~/.claude/skills` remove managed retired names only; user-authored collisions stay in place |
 | A stale or cwd-sticky official workflow cannot capture a later prompt | passed-hermetic | unnamed hooks use `loadOwnedRouteState`; idle > 2h is inactive even with leftover open threads; same-session follow-ups still bind while the run is fresh |
-| All checked version authorities report 10.3.7 | passed-hermetic | `release:version-truth` 15 surfaces at 10.3.7 after incremental build |
-| The reported 10.3.7 package is ready to publish | not proved | requires a clean exact-commit build, `npm run release:check:full` stamp, pack receipt, provenance, and the release commit fast-forward pushed to origin main (the prepublish reproducibility preflight refuses `head_not_origin_main`) |
+| All checked version authorities report 10.3.8 | passed-hermetic | `release:version-truth` 15 surfaces at 10.3.8 after incremental build |
+| The reported 10.3.8 package is ready to publish | not proved | requires a clean exact-commit build, `npm run release:check:full` stamp, pack receipt, provenance, and the release commit fast-forward pushed to origin main (the prepublish reproducibility preflight refuses `head_not_origin_main`) |
 
 ## 9.1.0 assertion (historical)
 

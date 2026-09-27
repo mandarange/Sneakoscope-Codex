@@ -25,12 +25,14 @@ final class ControlCenterWindowController: NSWindowController, NSTableViewDataSo
             overview.openSection = open
             (controllers[.localDecision] as? LocalDecisionViewController)?.openSection = open
             (controllers[.imageGeneration] as? ImageGenerationViewController)?.openSection = open
+            (controllers[.subagentModels] as? SubagentModelsViewController)?.openSection = open
         }
         controllers = [
             .overview: overview,
             .updates: UpdatesViewController(processClient: processClient, operations: operations, notifications: notifications),
             .mcpServers: MCPServersViewController(processClient: processClient, operations: operations, notifications: notifications),
             .providers: ProvidersViewController(processClient: processClient, operations: operations),
+            .subagentModels: SubagentModelsViewController(processClient: processClient, operations: operations),
             .remoteCoding: RemoteCodingViewController(),
             .localDecision: LocalDecisionViewController(processClient: processClient, operations: operations),
             .imageGeneration: ImageGenerationViewController(processClient: processClient, operations: operations),

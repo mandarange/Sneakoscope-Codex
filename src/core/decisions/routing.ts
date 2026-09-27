@@ -1,4 +1,9 @@
-import { effortForTier, latestTierModelSet, resolveLatestModelTiers } from '../subagents/model-tiers.js';
+import { effortForTier, resolveLatestModelTiers } from '../subagents/model-tiers.js';
+import {
+  effectiveChildModelAllowlist,
+  isAllowedChildModel,
+  type ChildModelAllowlist
+} from '../subagents/child-model-allowlist.js';
 import {
   routingTier,
   type RoutingCandidate,
@@ -36,16 +41,22 @@ export function buildRoutingCandidates(input: {
   return out;
 }
 
+/**
+ * Seal Jev's tier choices onto the plan rows. Only a model a child may run
+ * right now is sealed: the current tier models, or, in OpenRouter Only Mode,
+ * the user's list (which no tier model is on, so tier routing seals nothing).
+ */
 export function applySealedRouting(
   agents: Record<string, any> | null | undefined,
-  selected: RoutingCandidate | null
+  selected: RoutingCandidate | null,
+  allowlist?: ChildModelAllowlist
 ): Record<string, any> {
   if (!selected || !agents) return { ...(agents || {}) };
   const next: Record<string, any> = { ...agents };
-  const current = latestTierModelSet();
+  const childModels = allowlist ?? effectiveChildModelAllowlist();
   for (const [name, effort] of Object.entries(selected.efforts)) {
     const model = selected.models[name];
-    if (!model || !current.has(model)) continue;
+    if (!model || !isAllowedChildModel(model, childModels)) continue;
     const row = next[name];
     if (!row || row.routing_dynamic !== true || row.routed_model_policy === 'user_role_model_preference') continue;
     next[name] = {

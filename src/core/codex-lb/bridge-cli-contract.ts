@@ -23,6 +23,8 @@ export const BRIDGE_CLI_BOOLEAN_OPTIONS = [
   '--require-ready',
   '--api-key-stdin',
   '--confirm',
+  '--no-restart',
+  '--stdin',
   DESKTOP_BRIDGE_SUPERVISED_FLAG
 ] as const;
 

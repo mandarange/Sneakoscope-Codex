@@ -17,8 +17,19 @@
  * names the provider block; the key stays wherever the host put it.
  */
 
+import fs from 'node:fs';
+import { codexUserConfigPath, readTopLevelTomlString } from '../codex-app/codex-model-catalog.js';
+import { isOpenRouterModelId } from '../imagegen/imagegen-config.js';
 import { defaultSubagentModel } from './model-policy.js';
 import { codexListedEfforts, latestTierModelSet } from './model-tiers.js';
+import {
+  SUBAGENT_MODEL_EFFORTS,
+  defaultSubagentEntry,
+  readOpenRouterOnlyStateSync,
+  subagentEntryForModel,
+  type OpenRouterOnlyLocation,
+  type OpenRouterOnlyState
+} from './child-model-allowlist.js';
 
 export const NARUTO_AUTH_MODES = ['managed', 'host'] as const;
 
@@ -39,6 +50,31 @@ export interface NarutoCredentialPolicyInput {
   readonly defaultParentEffort: string;
   readonly defaultSubagentModel: string;
   readonly defaultSubagentEffort: string;
+  /** OpenRouter Only Mode, when on; read from the Codex home when omitted. */
+  readonly openRouterOnly?: NarutoOpenRouterOnlyContext | null;
+}
+
+/** What a standalone run needs to know while OpenRouter Only Mode is on. */
+export interface NarutoOpenRouterOnlyContext {
+  readonly state: OpenRouterOnlyState;
+  /** Top-level `model` in the user's Codex config.toml: the parent model. */
+  readonly mainModel: string | null;
+}
+
+/** Top-level `model` in the Codex config.toml Codex itself reads (CODEX_HOME first), or null. */
+export function readCodexMainModel(location: OpenRouterOnlyLocation = {}): string | null {
+  try {
+    return readTopLevelTomlString(fs.readFileSync(codexUserConfigPath(location), 'utf8'), 'model')?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/** Null while the mode is off, so the tier policy below applies unchanged. */
+export function readNarutoOpenRouterOnlyContext(location: OpenRouterOnlyLocation = {}): NarutoOpenRouterOnlyContext | null {
+  const state = readOpenRouterOnlyStateSync(location);
+  if (!state.enabled) return null;
+  return { state, mainModel: readCodexMainModel(location) };
 }
 
 export interface NarutoCredentialPolicy {
@@ -59,10 +95,14 @@ export interface NarutoCredentialPolicy {
   readonly parentEffort: string;
   readonly subagentModel: string;
   readonly subagentEffort: string;
+  /** `openrouter_only`: parent and children run OpenRouter models from the user's config and list. */
+  readonly childModelMode: 'tiers' | 'openrouter_only';
   /** Where each decision came from, so a run receipt can explain itself. */
   readonly sources: Record<string, 'default' | 'flag' | 'env'>;
   readonly warnings: string[];
   readonly blockers: string[];
+  /** How to fix the blockers, when SKS has a more specific answer than the host-auth hint. */
+  readonly hint: string | null;
 }
 
 function readFlagValue(args: readonly string[], name: string): string | null {
@@ -150,12 +190,15 @@ export function resolveNarutoCredentialPolicy(input: NarutoCredentialPolicyInput
     warnings.push('naruto_forced_login_method_released_without_host_auth_mode');
   }
 
-  const models: Array<{ key: keyof NarutoCredentialPolicy; flag: string; envKey: string; fallback: string; effort: boolean }> = [
-    { key: 'parentModel', flag: '--parent-model', envKey: 'SKS_NARUTO_PARENT_MODEL', fallback: input.defaultParentModel, effort: false },
-    { key: 'parentEffort', flag: '--parent-effort', envKey: 'SKS_NARUTO_PARENT_EFFORT', fallback: input.defaultParentEffort, effort: true },
-    { key: 'subagentModel', flag: '--subagent-model', envKey: 'SKS_NARUTO_SUBAGENT_MODEL', fallback: defaultSubagentModel(), effort: false },
-    { key: 'subagentEffort', flag: '--subagent-effort', envKey: 'SKS_NARUTO_SUBAGENT_EFFORT', fallback: input.defaultSubagentEffort, effort: true }
-  ];
+  const openRouterOnly = input.openRouterOnly === undefined ? readNarutoOpenRouterOnlyContext() : input.openRouterOnly;
+  const models: ModelFlag[] = openRouterOnly
+    ? openRouterOnlyModelFlags(input, openRouterOnly)
+    : [
+        { key: 'parentModel', flag: '--parent-model', envKey: 'SKS_NARUTO_PARENT_MODEL', fallback: input.defaultParentModel, effort: false },
+        { key: 'parentEffort', flag: '--parent-effort', envKey: 'SKS_NARUTO_PARENT_EFFORT', fallback: input.defaultParentEffort, effort: true },
+        { key: 'subagentModel', flag: '--subagent-model', envKey: 'SKS_NARUTO_SUBAGENT_MODEL', fallback: defaultSubagentModel(), effort: false },
+        { key: 'subagentEffort', flag: '--subagent-effort', envKey: 'SKS_NARUTO_SUBAGENT_EFFORT', fallback: input.defaultSubagentEffort, effort: true }
+      ];
   const resolvedModels: Record<string, string> = {};
   for (const entry of models) {
     const raw = resolve(args, env, entry.flag, entry.envKey);
@@ -166,7 +209,7 @@ export function resolveNarutoCredentialPolicy(input: NarutoCredentialPolicyInput
     }
     const ok = entry.effort
       ? (NARUTO_EFFORT_TIERS as readonly string[]).includes(raw.value)
-      : validIdentifier(raw.value);
+      : validIdentifier(raw.value) || (openRouterOnly !== null && isOpenRouterModelId(raw.value));
     if (!ok) {
       blockers.push(`naruto_${String(entry.key)}_invalid:${raw.value.slice(0, 32)}`);
       resolvedModels[entry.key] = entry.fallback;
@@ -176,14 +219,18 @@ export function resolveNarutoCredentialPolicy(input: NarutoCredentialPolicyInput
     resolvedModels[entry.key] = raw.value;
     sources[entry.key] = raw.source;
   }
-  // Children use a current model: the latest model of any tier, the same set
-  // the spawn policy and Jev routing use. The default is the latest deep tier.
-  if (!latestTierModelSet().has(String(resolvedModels.subagentModel))) {
-    blockers.push('naruto_subagent_model_must_be_current');
-    resolvedModels.subagentModel = defaultSubagentModel();
+  if (openRouterOnly) {
+    validateOpenRouterOnlyModels(openRouterOnly, resolvedModels, sources, blockers);
+  } else {
+    // Children use a current model: the latest model of any tier, the same set
+    // the spawn policy and Jev routing use. The default is the latest deep tier.
+    if (!latestTierModelSet().has(String(resolvedModels.subagentModel))) {
+      blockers.push('naruto_subagent_model_must_be_current');
+      resolvedModels.subagentModel = defaultSubagentModel();
+    }
+    validateGpt56EffortPair('parent', String(resolvedModels.parentModel), String(resolvedModels.parentEffort), blockers);
+    validateGpt56EffortPair('subagent', String(resolvedModels.subagentModel), String(resolvedModels.subagentEffort), blockers);
   }
-  validateGpt56EffortPair('parent', String(resolvedModels.parentModel), String(resolvedModels.parentEffort), blockers);
-  validateGpt56EffortPair('subagent', String(resolvedModels.subagentModel), String(resolvedModels.subagentEffort), blockers);
 
   const envKeyRaw = resolve(args, env, '--provider-env-key', 'SKS_NARUTO_PROVIDER_ENV_KEY');
   let providerEnvKey: string | null = null;
@@ -220,10 +267,78 @@ export function resolveNarutoCredentialPolicy(input: NarutoCredentialPolicyInput
     parentEffort: String(resolvedModels.parentEffort),
     subagentModel: String(resolvedModels.subagentModel),
     subagentEffort: String(resolvedModels.subagentEffort),
+    childModelMode: openRouterOnly ? 'openrouter_only' : 'tiers',
     sources,
     warnings,
-    blockers
+    blockers,
+    hint: openRouterOnly && blockers.some((blocker) => OPENROUTER_ONLY_BLOCKER.test(blocker)) ? OPENROUTER_ONLY_HINT : null
   };
+}
+
+const OPENROUTER_ONLY_BLOCKER = /^naruto_(parent_model_not_openrouter|subagent_model_not_in_list|subagent_model_list_empty|parent_effort_unsupported_openrouter|subagent_effort_unsupported_openrouter)(:|$)/;
+const OPENROUTER_ONLY_HINT = 'OpenRouter Only Mode is on: the parent runs the OpenRouter main model in Codex config.toml and children run only models on the subagent list (Control Center > Subagent Models, or `sks bridge subagent-models list`); pass --parent-model=<vendor/model>, --subagent-model=<a listed model>, and efforts low|medium|high|xhigh';
+
+interface ModelFlag {
+  key: keyof NarutoCredentialPolicy;
+  flag: string;
+  envKey: string;
+  fallback: string;
+  effort: boolean;
+}
+
+/** OpenRouter rows list low..xhigh; the GPT-only `max`/`ultra` map to the deepest one. */
+const OPENROUTER_ONLY_PARENT_EFFORT = 'xhigh';
+
+function openRouterOnlyEffort(value: string | null | undefined, fallback: string): string {
+  return value && (SUBAGENT_MODEL_EFFORTS as readonly string[]).includes(value) ? value : fallback;
+}
+
+/**
+ * OpenRouter Only Mode defaults: the parent is the main model in config.toml
+ * (the Desktop Bridge routes it to OpenRouter) and the child default is the
+ * list's default entry at its effort. Flags may still name another list model.
+ */
+function openRouterOnlyModelFlags(input: NarutoCredentialPolicyInput, context: NarutoOpenRouterOnlyContext): ModelFlag[] {
+  const listDefault = defaultSubagentEntry(context.state);
+  return [
+    { key: 'parentModel', flag: '--parent-model', envKey: 'SKS_NARUTO_PARENT_MODEL', fallback: context.mainModel || '', effort: false },
+    { key: 'parentEffort', flag: '--parent-effort', envKey: 'SKS_NARUTO_PARENT_EFFORT', fallback: openRouterOnlyEffort(input.defaultParentEffort, OPENROUTER_ONLY_PARENT_EFFORT), effort: true },
+    { key: 'subagentModel', flag: '--subagent-model', envKey: 'SKS_NARUTO_SUBAGENT_MODEL', fallback: listDefault?.model || '', effort: false },
+    { key: 'subagentEffort', flag: '--subagent-effort', envKey: 'SKS_NARUTO_SUBAGENT_EFFORT', fallback: openRouterOnlyEffort(listDefault?.reasoning_effort ?? input.defaultSubagentEffort, 'medium'), effort: true }
+  ];
+}
+
+/**
+ * Nothing outside the mode's models may reach Codex: the parent must be an
+ * OpenRouter model and the child default must be on the user's list, each at
+ * an effort the OpenRouter catalog rows list.
+ */
+function validateOpenRouterOnlyModels(
+  context: NarutoOpenRouterOnlyContext,
+  resolved: Record<string, string>,
+  sources: Record<string, 'default' | 'flag' | 'env'>,
+  blockers: string[]
+): void {
+  const parent = String(resolved.parentModel || '');
+  const parentLabel = parent.slice(0, 64) || 'unset';
+  if (!isOpenRouterModelId(parent)) blockers.push(`naruto_parent_model_not_openrouter:${parentLabel}`);
+  const listDefault = defaultSubagentEntry(context.state);
+  if (!listDefault) {
+    blockers.push('naruto_subagent_model_list_empty');
+  } else {
+    const listed = subagentEntryForModel(context.state, resolved.subagentModel);
+    if (!listed) blockers.push(`naruto_subagent_model_not_in_list:${String(resolved.subagentModel || '').slice(0, 64)}`);
+    const entry = listed ?? listDefault;
+    resolved.subagentModel = entry.model;
+    // A chosen entry brings its own effort unless the run named one.
+    if (sources.subagentEffort === 'default' && entry.reasoning_effort) resolved.subagentEffort = entry.reasoning_effort;
+  }
+  for (const scope of ['parent', 'subagent'] as const) {
+    const effort = String(resolved[`${scope}Effort`] || '');
+    if (!(SUBAGENT_MODEL_EFFORTS as readonly string[]).includes(effort)) {
+      blockers.push(`naruto_${scope}_effort_unsupported_openrouter:${effort}:allowed_${SUBAGENT_MODEL_EFFORTS.join('_or_')}`);
+    }
+  }
 }
 
 /** An explicit effort must be one Codex lists for that model; unknown models are not second-guessed. */
@@ -262,6 +377,7 @@ export function narutoCredentialPolicyReceipt(policy: NarutoCredentialPolicy): R
     parent_effort: policy.parentEffort,
     subagent_model: policy.subagentModel,
     subagent_effort: policy.subagentEffort,
+    child_model_mode: policy.childModelMode,
     sources: policy.sources,
     warnings: policy.warnings,
     blockers: policy.blockers,

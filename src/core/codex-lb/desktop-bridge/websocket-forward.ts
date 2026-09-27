@@ -7,6 +7,7 @@ import { BRIDGE_OFFICIAL_ROUTE_ID } from '../bridge-contracts.js';
 import { buildOfficialPassthroughWebSocketHeaders, buildProviderWebSocketHeaders } from './header-policy.js';
 import { createDesktopBridgeRejectionLogger } from './rejection-log.js';
 import { rewriteLocationHeader } from './location-rewrite.js';
+import { OPENROUTER_ONLY_REFUSAL_CODES, openRouterOnlyEnabled } from './exclusive-provider-guard.js';
 import { desktopBridgeOfficialPassthroughEnabled, ensureDesktopBridgeRemoteTarget, isUnreachableUpstreamError, refreshDesktopBridgeRemoteTarget, resolveAndBindDesktopBridgeRouteContext, resolveCodexSessionIdentity, resolveDesktopBridgeTarget, safeBridgeErrorCode, singleBridgeHeader, canonicalSessionId } from './security.js';
 import { desktopBridgeListenOrigin } from './state.js';
 import { forwardResponsesWebSocket, isResponsesWebSocketRequest } from './responses-websocket.js';
@@ -76,6 +77,11 @@ function websocketPinnedModel(threadId: string | null, config: PreparedDesktopBr
   let canonical: string;
   try { canonical = canonicalSessionId(threadId); } catch { return null; }
   const pin = config.providerSessionPins.find((entry) => entry.thread_id === canonical);
+  // A native tunnel names no model of its own. In OpenRouter Only Mode a pin to
+  // another provider predates the mode, and inferring its model would turn a
+  // model-less tunnel into a refused model request; the tunnel then keeps the
+  // official passthrough every model-less request gets.
+  if (pin && openRouterOnlyEnabled(config) && pin.provider_id !== 'openrouter') return null;
   return pin?.public_model || null;
 }
 
@@ -100,7 +106,7 @@ export async function prepareDesktopBridgeWebSocketRequest(req: IncomingMessage,
     public_model: publicModel,
     session_id: sessionIdentity.thread_id,
     pathname: new URL(req.url || '/', 'http://bridge.invalid').pathname,
-    transport: 'websocket', headers: req.headers,
+    transport: 'websocket', headers: req.headers, identity: sessionIdentity,
   }, config);
   if (route.provider_id === BRIDGE_OFFICIAL_ROUTE_ID) return { route, provider: null, credential: null };
   const provider = config.providers[route.provider_id];
@@ -138,6 +144,7 @@ const PERMANENT_UPGRADE_REFUSALS = new Set([
   'bridge_websocket_route_unresolvable',
   'catalog_model_route_missing',
   'bridge_provider_route_unavailable',
+  ...OPENROUTER_ONLY_REFUSAL_CODES,
 ]);
 
 /**

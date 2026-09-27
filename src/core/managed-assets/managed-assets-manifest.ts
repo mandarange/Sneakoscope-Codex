@@ -621,11 +621,15 @@ export function managedOfficialSubagentRoleBody(role: ManagedOfficialSubagentRol
 }
 
 export function managedOfficialSubagentRoleContent(role: ManagedOfficialSubagentRole): string {
-  const body = managedOfficialSubagentRoleBody(role)
+  return managedOfficialSubagentFileContent(role.id, role.schema_version, managedOfficialSubagentRoleBody(role))
+}
+
+/** The marker header plus the hashed body every SKS-owned role file carries. */
+export function managedOfficialSubagentFileContent(id: string, schemaVersion: number, body: string): string {
   return [
     `# ${MANAGED_OFFICIAL_SUBAGENT_MARKER}`,
-    `# sks_managed_schema = ${role.schema_version}`,
-    `# sks_managed_id = "${role.id}"`,
+    `# sks_managed_schema = ${schemaVersion}`,
+    `# sks_managed_id = "${id}"`,
     `# sks_managed_body_sha256 = "${sha256(body)}"`,
     '',
     body
@@ -633,9 +637,14 @@ export function managedOfficialSubagentRoleContent(role: ManagedOfficialSubagent
 }
 
 export function managedOfficialSubagentRoleOwnsText(text: string, role: ManagedOfficialSubagentRole): boolean {
+  return managedOfficialSubagentFileOwnsText(text, role.id)
+}
+
+/** SKS owns the file when its marker, id, and body hash all still match. */
+export function managedOfficialSubagentFileOwnsText(text: string, id: string): boolean {
   const source = String(text || '')
   if (!source.includes(`# ${MANAGED_OFFICIAL_SUBAGENT_MARKER}`)) return false
-  if (!source.includes(`sks_managed_id = "${role.id}"`)) return false
+  if (!source.includes(`sks_managed_id = "${id}"`)) return false
   const lines = source.split('\n')
   const hashIndex = lines.findIndex((line) => /^#\s*sks_managed_body_sha256\s*=/.test(line.trim()))
   if (hashIndex === -1) return false

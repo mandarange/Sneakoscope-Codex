@@ -7,6 +7,7 @@ import {
   CODEX_CONTEXT_1M_SCHEMA,
   CODEX_CONTEXT_1M_TARGETS,
   codexContext1mCommand,
+  codexContextModelWindow,
   disableCodexContext1m,
   enableCodexContext1m,
   inspectCodexContext1m,
@@ -225,19 +226,53 @@ test('command honors SKS_SKIP_CODEX_APP_RESTART and --no-restart without probing
   }
 });
 
-test('enable warns when the active model is not the documented 1M model', async () => {
+// Codex's own metadata decides the window: min(1M, max_context_window).
+const MODELS_CACHE = {
+  fetched_at: '2026-09-27T00:00:00Z',
+  models: [
+    { slug: 'next-gen-model', visibility: 'list', context_window: 272000, max_context_window: 872000 },
+    { slug: 'fixed-window-model', visibility: 'list', context_window: 272000, max_context_window: 272000 },
+    { slug: 'uncapped-model', visibility: 'list', context_window: 128000 },
+    { slug: 'hidden-model', visibility: 'hide', context_window: 272000, max_context_window: 872000 }
+  ]
+};
+
+async function withModelHome(model: string, run: (opts: { env: NodeJS.ProcessEnv; home: string }) => Promise<void>) {
   const home = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-context-1m-model-'));
   try {
     const codexHome = path.join(home, '.codex');
     await fs.mkdir(codexHome, { recursive: true });
-    await fs.writeFile(path.join(codexHome, 'config.toml'), 'model = "gpt-5.6-luna"\n', 'utf8');
-    const result = await codexContext1mCommand(['on'], {
-      env: { HOME: home, SKS_SKIP_CODEX_APP_RESTART: '1' } as NodeJS.ProcessEnv,
-      home
-    });
-    assert.equal(result.ok, true);
-    assert.ok(result.warnings.includes('codex_context_active_model_not_gpt-5.6-sol:gpt-5.6-luna'));
+    await fs.writeFile(path.join(codexHome, 'config.toml'), `model = "${model}"\n`, 'utf8');
+    await fs.writeFile(path.join(codexHome, 'models_cache.json'), JSON.stringify(MODELS_CACHE), 'utf8');
+    await run({ env: { HOME: home, SKS_SKIP_CODEX_APP_RESTART: '1' } as NodeJS.ProcessEnv, home });
   } finally {
     await fs.rm(home, { recursive: true, force: true });
   }
+}
+
+test('any model whose Codex maximum exceeds its default gets the larger window, no model is pinned', async () => {
+  await withModelHome('next-gen-model', async (opts) => {
+    const result = await codexContext1mCommand(['on'], opts);
+    assert.equal(result.ok, true);
+    assert.deepEqual(result.model_window, { source: 'codex_models_cache', default_window: 272000, max_window: 872000, effective_window: 872000, extends: true });
+    assert.deepEqual(result.warnings, []);
+    assert.deepEqual(result.larger_window_models, ['next-gen-model']);
+  });
+});
+
+test('a fixed, uncapped, or unknown model window is reported instead of silently enlarged', async () => {
+  const cases: Array<[string, string]> = [
+    ['fixed-window-model', 'codex_context_model_window_fixed:fixed-window-model:272000'],
+    ['uncapped-model', 'codex_context_model_window_uncapped:uncapped-model'],
+    ['not-in-cache', 'codex_context_model_window_unknown:not-in-cache']
+  ];
+  for (const [model, warning] of cases) {
+    await withModelHome(model, async (opts) => {
+      const result = await codexContext1mCommand(['on'], opts);
+      assert.equal(result.ok, true);
+      assert.deepEqual(result.warnings, [warning]);
+    });
+  }
+  assert.equal(codexContextModelWindow([], null).source, 'unknown');
+  assert.equal(codexContextModelWindow([{ slug: 'm', listed: true, default_window: 272000, max_window: 2_000_000 }], 'm').effective_window, CODEX_CONTEXT_1M_TARGETS.model_context_window);
 });

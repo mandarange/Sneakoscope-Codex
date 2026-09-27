@@ -5,6 +5,7 @@ import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { destroyDesktopBridgeUpstreamAgents, forwardHttp, prepareDesktopBridgeRequest } from './http-forward.js';
 import { createDesktopBridgeRejectionLogger } from './rejection-log.js';
+import { OPENROUTER_ONLY_REFUSAL_CODES } from './exclusive-provider-guard.js';
 import {
   assertAllowedOrigin,
   assertAllowedPath,
@@ -104,6 +105,9 @@ function handleDiagnosticWebSocket(req: IncomingMessage, socket: Duplex, head: B
 }
 
 function rejectionStatus(code: string): number {
+  // OpenRouter Only Mode refusals are a conflict with the configured mode:
+  // the same request keeps failing until the mode or the subagent list changes.
+  if (OPENROUTER_ONLY_REFUSAL_CODES.has(code)) return 409;
   if (code === 'bridge_request_body_too_large') return 413;
   if (code === 'bridge_path_not_allowed') return 404;
   if (code === 'bridge_request_capacity_exhausted') return 503;
@@ -113,6 +117,7 @@ function rejectionStatus(code: string): number {
 }
 
 function rejectionStatusText(status: number): string {
+  if (status === 409) return 'Conflict';
   if (status === 413) return 'Payload Too Large';
   if (status === 404) return 'Not Found';
   if (status === 403) return 'Forbidden';

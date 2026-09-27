@@ -17,6 +17,7 @@ import { captureCodexAuthSnapshot } from './desktop-auth-invariant.js';
 import { applyOfficialModelPassthrough, bridgeRoutePolicyPath, writeBridgeRoutingPolicy } from './provider-route-policy.js';
 import { desktopBridgeRuntimeVersion, desktopBridgeRuntimeVersionStale } from './desktop-bridge/state.js';
 import { PACKAGE_VERSION } from '../version.js';
+import { canonicalChildModelId, readOpenRouterOnlyStateSync } from '../subagents/child-model-allowlist.js';
 import { BRIDGE_OFFICIAL_ROUTE_ID, type BridgeProviderId, type BridgeRoutingPolicy, type ProviderSessionPin } from './bridge-contracts.js';
 import {
   DESKTOP_BRIDGE_ALLOWED_PATH_PREFIXES, DESKTOP_BRIDGE_LAUNCHD_LABEL, desktopBridgeConfigGeneration,
@@ -25,7 +26,7 @@ import {
   selectAvailableDesktopBridgePort, startPreparedDesktopBridge, DESKTOP_BRIDGE_STATE_SCHEMA,
   DESKTOP_BRIDGE_OFFICIAL_UPSTREAM_BASE_URL,
   DesktopBridgeError, type DesktopBridgeConfig, type DesktopBridgeCredentialResolver, type DesktopBridgeHandle,
-  type DesktopBridgeProviderRegistrySnapshot, type DesktopBridgeProviderSnapshot, type DesktopBridgePublicState,
+  type DesktopBridgeOpenRouterOnlyConfig, type DesktopBridgeProviderRegistrySnapshot, type DesktopBridgeProviderSnapshot, type DesktopBridgePublicState,
   type DesktopBridgeRouteResolver, type DesktopBridgeSessionPinPersister, type DesktopBridgeStatus,
 } from './desktop-bridge/index.js';
 
@@ -265,6 +266,22 @@ async function runtimeCredentials(settings: DesktopBridgeServiceSettings, option
   return { registry, resolver, sources: Object.fromEntries([...adopted].map(([id, value]) => [id, value.source])), loaded };
 }
 
+/**
+ * OpenRouter Only Mode as this bridge process will enforce it, read once from
+ * `~/.codex/sks/sks-openrouter-only.json` under `home` (never CODEX_HOME, and
+ * never from the bridge settings, whose key set an older running bridge
+ * validates strictly). Null when the mode is off, so the runtime config carries
+ * no trace of it. A missing or damaged store reads as off, never as on.
+ */
+export function resolveDesktopBridgeOpenRouterOnly(input: { home: string; env?: NodeJS.ProcessEnv }): DesktopBridgeOpenRouterOnlyConfig | null {
+  const state = readOpenRouterOnlyStateSync({ home: input.home, ...(input.env ? { env: input.env } : {}) });
+  if (!state.enabled) return null;
+  const models = state.subagent_models
+    .map((entry) => canonicalChildModelId(entry.model))
+    .filter((model) => canonicalizeBridgeModelId(model) === model);
+  return { enabled: true, subagent_models: [...new Set(models)] };
+}
+
 function normalizeEndpointForBinding(value: string): string {
   try { return new URL(value).toString().replace(/\/+$/, ''); }
   catch { return String(value || '').trim().replace(/\/+$/, ''); }
@@ -292,7 +309,8 @@ export async function resolveDesktopBridgeRuntimeConfig(options: DesktopBridgeSe
       settings,
       pins,
     ));
-  const config: DesktopBridgeConfig = { providerRegistry: settings.provider_registry, routePolicy: settings.route_policy, providerSessionPins: settings.provider_session_pins, ...(options.resolveRequestRoute ? { resolveRequestRoute: options.resolveRequestRoute } : {}), persistProviderSessionPins, resolveProviderCredential: credentials.resolver, clientCapabilitySha256: settings.client_capability_sha256, listenHost: settings.listen_host, listenPort: settings.listen_port, allowedPathPrefixes: DESKTOP_BRIDGE_ALLOWED_PATH_PREFIXES, allowedOrigins: settings.allowed_origins, connectTimeoutMs: settings.connect_timeout_ms, idleTimeoutMs: settings.idle_timeout_ms, officialPassthrough: settings.official_passthrough.enabled ? { baseUrl: settings.official_passthrough.base_url } : null };
+  const openRouterOnly = resolveDesktopBridgeOpenRouterOnly({ home, ...(options.env ? { env: options.env } : {}) });
+  const config: DesktopBridgeConfig = { providerRegistry: settings.provider_registry, routePolicy: settings.route_policy, providerSessionPins: settings.provider_session_pins, ...(options.resolveRequestRoute ? { resolveRequestRoute: options.resolveRequestRoute } : {}), persistProviderSessionPins, resolveProviderCredential: credentials.resolver, clientCapabilitySha256: settings.client_capability_sha256, listenHost: settings.listen_host, listenPort: settings.listen_port, allowedPathPrefixes: DESKTOP_BRIDGE_ALLOWED_PATH_PREFIXES, allowedOrigins: settings.allowed_origins, connectTimeoutMs: settings.connect_timeout_ms, idleTimeoutMs: settings.idle_timeout_ms, officialPassthrough: settings.official_passthrough.enabled ? { baseUrl: settings.official_passthrough.base_url } : null, ...(openRouterOnly ? { openRouterOnly } : {}) };
   const primary = credentials.sources['codex-lb'] || credentials.sources.openrouter;
   if (!primary) throw new Error('desktop_bridge_provider_credentials_unavailable');
   return { config, settings, loaded_env: credentials.loaded, credential_source: primary, credential_sources: credentials.sources, paths };
@@ -574,7 +592,7 @@ export async function serveDesktopBridge(options: DesktopBridgeServiceOptions = 
         },
       },
     });
-    process.stdout.write(`${JSON.stringify({ schema: 'sks.desktop-bridge-log.v2', event: 'sks.desktop_bridge.started', at: new Date().toISOString(), sks_version: PACKAGE_VERSION, pid: handle.state.pid, process_generation: handle.state.schema === DESKTOP_BRIDGE_STATE_SCHEMA ? handle.state.process_generation : null, provider_registry_generation: runtime.config.providerRegistry?.generation, route_policy_generation: runtime.config.routePolicy?.policy_generation, ...(deferredUpstreams.length ? { deferred_upstreams: deferredUpstreams } : {}), secret_fields_redacted: true })}\n`);
+    process.stdout.write(`${JSON.stringify({ schema: 'sks.desktop-bridge-log.v2', event: 'sks.desktop_bridge.started', at: new Date().toISOString(), sks_version: PACKAGE_VERSION, pid: handle.state.pid, process_generation: handle.state.schema === DESKTOP_BRIDGE_STATE_SCHEMA ? handle.state.process_generation : null, provider_registry_generation: runtime.config.providerRegistry?.generation, route_policy_generation: runtime.config.routePolicy?.policy_generation, ...(deferredUpstreams.length ? { deferred_upstreams: deferredUpstreams } : {}), ...(runtime.config.openRouterOnly ? { openrouter_only: { enabled: true, subagent_model_count: runtime.config.openRouterOnly.subagent_models.length } } : {}), secret_fields_redacted: true })}\n`);
     await waitForShutdown(handle);
     return { schema: 'sks.desktop-bridge-serve.v1', ok: true, status: 'stopped', state: handle.state };
   }

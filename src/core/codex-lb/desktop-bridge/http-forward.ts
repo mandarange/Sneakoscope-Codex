@@ -6,6 +6,7 @@ import { pipeline } from 'node:stream/promises';
 import { BRIDGE_OFFICIAL_ROUTE_ID } from '../bridge-contracts.js';
 import { buildOfficialPassthroughHeaders, buildProviderUpstreamHeaders, rewriteResponseHeaders } from './header-policy.js';
 import { createDesktopBridgeRejectionLogger } from './rejection-log.js';
+import { OPENROUTER_ONLY_REFUSAL_CODES, openRouterOnlyEnabled } from './exclusive-provider-guard.js';
 import { ensureDesktopBridgeRemoteTarget, isUnreachableUpstreamError, refreshDesktopBridgeRemoteTarget, resolveAndBindDesktopBridgeRouteContext, resolveCodexSessionIdentity, resolveDesktopBridgeTarget, safeBridgeErrorCode, singleBridgeHeader } from './security.js';
 import { desktopBridgeListenOrigin } from './state.js';
 import { DEFAULT_DESKTOP_BRIDGE_MAX_REQUEST_BODY_BYTES, DesktopBridgeError, DesktopBridgeRequestBodyTooLargeError, type DesktopBridgeResolvedCredential, type DesktopBridgeRouteContext, type PreparedDesktopBridgeConfig } from './types.js';
@@ -58,9 +59,19 @@ function decodeBridgeRequestBody(body: Buffer, encoding: string, maximum: number
   }
 }
 
-function bodyCarriesModel(rawUrl: string | undefined): boolean {
-  const pathname = new URL(String(rawUrl || '/'), 'http://bridge.invalid').pathname;
-  return pathname === '/backend-api/codex/responses' || pathname === '/api/v1/responses' || pathname === '/v1/responses';
+const RESPONSES_PATHS = ['/backend-api/codex/responses', '/api/v1/responses', '/v1/responses'];
+
+/**
+ * Where the request body names the model: every Responses create, and — only
+ * in OpenRouter Only Mode — a POST to a Responses sub-endpoint such as
+ * `/responses/compact`, which must meet the same route check instead of riding
+ * the model-less official passthrough. Mode off keeps treating sub-endpoints as
+ * model-less, byte for byte.
+ */
+function modelBodyKind(req: IncomingMessage, pathname: string, config: PreparedDesktopBridgeConfig): 'responses' | 'sub-endpoint' | null {
+  if (RESPONSES_PATHS.includes(pathname)) return 'responses';
+  return openRouterOnlyEnabled(config) && req.method === 'POST'
+    && RESPONSES_PATHS.some((prefix) => pathname.startsWith(`${prefix}/`)) ? 'sub-endpoint' : null;
 }
 
 async function readBoundedBody(req: IncomingMessage, maximum: number): Promise<Buffer> {
@@ -93,7 +104,8 @@ export async function prepareDesktopBridgeRequest(req: IncomingMessage, config: 
   let body: Buffer | null = null;
   let payload: Record<string, unknown> | null = null;
   let contentEncodingStripped = false;
-  if (bodyCarriesModel(req.url)) {
+  const bodyKind = modelBodyKind(req, pathname, config);
+  if (bodyKind) {
     const maximum = config.maxRequestBodyBytes ?? DEFAULT_DESKTOP_BRIDGE_MAX_REQUEST_BODY_BYTES;
     body = await readBoundedBody(req, maximum);
     const encoding = String(req.headers['content-encoding'] || '').trim().toLowerCase();
@@ -102,11 +114,15 @@ export async function prepareDesktopBridgeRequest(req: IncomingMessage, config: 
       decoded = decodeBridgeRequestBody(body, encoding, maximum);
       contentEncodingStripped = true;
     }
-    try {
-      const parsed: unknown = JSON.parse(decoded.toString('utf8'));
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error();
-      payload = parsed as Record<string, unknown>;
-    } catch { throw new DesktopBridgeError('bridge_responses_body_invalid_json'); }
+    // A sub-endpoint POST may carry no body at all (a cancel); any body it
+    // does carry is read like a create's, so an unreadable one fails closed.
+    if (bodyKind === 'responses' || decoded.length > 0) {
+      try {
+        const parsed: unknown = JSON.parse(decoded.toString('utf8'));
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error();
+        payload = parsed as Record<string, unknown>;
+      } catch { throw new DesktopBridgeError('bridge_responses_body_invalid_json'); }
+    }
     if (contentEncodingStripped) body = decoded;
   }
   const headerModel = singleBridgeHeader(req.headers, 'x-sks-model');
@@ -114,9 +130,10 @@ export async function prepareDesktopBridgeRequest(req: IncomingMessage, config: 
   const sessionIdentity = resolveCodexSessionIdentity(req.headers, payload);
   const route = await resolveAndBindDesktopBridgeRouteContext({
     public_model: String(model || ''), session_id: sessionIdentity.thread_id,
-    pathname, transport: 'http', headers: req.headers,
+    pathname, transport: 'http', headers: req.headers, identity: sessionIdentity,
   }, config);
-  if (payload && payload.model !== route.upstream_model) {
+  // A sub-endpoint body without a model is forwarded untouched.
+  if (payload && (bodyKind === 'responses' || typeof payload.model === 'string') && payload.model !== route.upstream_model) {
     payload.model = route.upstream_model;
     body = Buffer.from(JSON.stringify(payload));
   }
@@ -159,7 +176,8 @@ function writeHttpBridgeError(res: ServerResponse, error: unknown, req?: Incomin
     ...(req?.url === undefined ? {} : { url: req.url }),
   });
   if (res.headersSent) { res.destroy(error instanceof Error ? error : undefined); return; }
-  res.writeHead(code.startsWith('catalog_') || code.startsWith('session_') || code.includes('route_') ? 409 : 502, {
+  res.writeHead(code.startsWith('catalog_') || code.startsWith('session_') || code.includes('route_')
+    || OPENROUTER_ONLY_REFUSAL_CODES.has(code) ? 409 : 502, {
     'content-type': 'application/json', 'cache-control': 'no-store', connection: 'close',
   });
   res.end(JSON.stringify({ error: { type: 'sks_bridge_error', code, message: code } }));

@@ -44,6 +44,8 @@ test('SKS Menu Bar uses the required split native source and resource inventory'
     'ProvidersOpenRouter.swift',
     'ProvidersModelExposure.swift',
     'ProvidersBridgeCatalog.swift',
+    'OpenRouterOnlyState.swift', 'ProvidersOpenRouterOnly.swift',
+    'SubagentModelsModels.swift', 'SubagentModelsViewController.swift',
     'RemoteCodingViewController.swift',
     'DiagnosticsViewController.swift',
     'SettingsViewController.swift', 'LocalDecisionModels.swift', 'LocalDecisionViewController.swift',
@@ -129,9 +131,14 @@ test('runtime materialization injects paths, version, and optional Codex bundle 
   assert.match(withCodex, /case \.degraded:\s*break/);
 });
 
-test('Control Center is a non-modal eight-section AppKit sidebar with native accessibility', () => {
+test('Control Center is a non-modal ten-section AppKit sidebar with native accessibility', () => {
   const swift = source();
-  for (const section of ['Overview', 'Updates', 'MCP Servers', 'Providers', 'Remote Coding', 'Decisions', 'Diagnostics', 'Settings']) {
+  const sidebar = fs.readFileSync(path.join(resolvePackagedMenuBarSourceRoot(), 'Sources', 'SidebarItem.swift'), 'utf8');
+  assert.deepEqual([...sidebar.matchAll(/^\s+case \w+ = "([^"]+)"$/gm)].map((match) => match[1]), [
+    'Overview', 'Providers', 'Subagent Models', 'Remote Coding', 'Updates', 'MCP Servers',
+    'Decisions', 'Image Generation', 'Diagnostics', 'Settings'
+  ]);
+  for (const section of ['Overview', 'Updates', 'MCP Servers', 'Providers', 'Subagent Models', 'Remote Coding', 'Decisions', 'Image Generation', 'Diagnostics', 'Settings']) {
     assert.match(swift, new RegExp(`= "${section.replace(/[&]/g, '\\&')}"`));
   }
   assert.match(swift, /styleMask: \[\.titled, \.closable, \.miniaturizable, \.resizable\]/);
@@ -527,6 +534,9 @@ test('Center prioritizes account controls and keeps technical detail in native d
   const sidebar = fs.readFileSync(path.join(root, 'SidebarItem.swift'), 'utf8');
   assert.match(providers, /let authPriorityToggle = NSSwitch\(\)/);
   assert.match(providers, /makeAuthPriorityCard\(\),\s*makeProviderCredentialsCard\(\)/);
+  // OpenRouter Only shares the Default connection card, after Prefer Codex-LB.
+  assert.match(providers, /title: "Default connection"[\s\S]*authPriorityToggle, label[\s\S]*\] \+ makeOpenRouterOnlyRows\(\)\)/);
+  assert.match(providers, /let openRouterOnlyToggle = NSSwitch\(\)/);
   assert.match(providers, /\["bridge", "auth-priority", "status", "--json"\]/);
   assert.match(providers, /\["bridge", "auth-priority", desired \? "on" : "off", "--json"\]/);
   assert.match(providers, /authPriorityToggle\.state = previous \? \.on : \.off/);
@@ -670,13 +680,38 @@ test('Providers exposes one Desktop Bridge with strict v3 scoped evidence and ex
   assert.match(openRouter, /ChatGPT OAuth remain(?:s)? unchanged/);
 });
 
-test('Providers manages OpenRouter as a coexisting bridge profile instead of a mode', () => {
+test('Providers manages OpenRouter as a coexisting bridge profile; OpenRouter Only is a separate routing mode', () => {
   const root = resolvePackagedMenuBarSourceRoot();
+  const controller = fs.readFileSync(path.join(root, 'Sources', 'ProvidersViewController.swift'), 'utf8');
+  const profile = fs.readFileSync(path.join(root, 'Sources', 'ProvidersOpenRouter.swift'), 'utf8');
+  const mode = fs.readFileSync(path.join(root, 'Sources', 'ProvidersOpenRouterOnly.swift'), 'utf8');
+  const modeState = fs.readFileSync(path.join(root, 'Sources', 'OpenRouterOnlyState.swift'), 'utf8');
   const providers = [
-    fs.readFileSync(path.join(root, 'Sources', 'ProvidersViewController.swift'), 'utf8'),
+    controller,
     fs.readFileSync(path.join(root, 'Sources', 'ProvidersReliability.swift'), 'utf8'),
-    fs.readFileSync(path.join(root, 'Sources', 'ProvidersOpenRouter.swift'), 'utf8')
+    profile
   ].join('\n');
+  // The profile (credential, validate, enable/disable) never changes routing modes.
+  assert.doesNotMatch(profile, /openrouter-only|OpenRouterOnly|routingMode/);
+  // The mode is a routing switch like Prefer Codex-LB: it never edits provider profiles.
+  assert.match(modeState, /\["bridge", "openrouter-only", "status", "--json"\]/);
+  assert.match(modeState, /\["bridge", "openrouter-only", enabled \? "on" : "off", "--json"\]/);
+  assert.match(mode, /processClient\.run\(OpenRouterOnlyCommand\.set\(enabled: desired\)/);
+  assert.match(mode, /operations\.begin\(kind: "bridge-openrouter-only", mutationGroup: "codex-config"/);
+  assert.match(mode, /openRouterOnlyToggle\.state = previous \? \.on : \.off/);
+  assert.doesNotMatch(`${mode}\n${modeState}`, /"bridge", "provider"|use-openrouter|Restore previous provider/);
+  // The two modes exclude each other: both lock while either runs, and either mutation re-reads both.
+  assert.match(mode, /var routingModeBusy: Bool \{ authPriorityBusy \|\| openRouterOnlyBusy \}/);
+  assert.match(mode, /authPriorityToggle\.isEnabled = !busy && !routingModeBusy/);
+  assert.match(mode, /openRouterOnlyToggle\.isEnabled = !busy && !routingModeBusy/);
+  assert.match(mode, /func rereadRoutingModes[\s\S]{0,200}refreshAuthPriority\(notice: authPriorityNotice\)\s*refreshOpenRouterOnly\(notice: openRouterOnlyNotice\)\s*refreshBridgeStatus\(\)\s*refreshModelExposure\(\)/);
+  assert.match(mode, /self\.rereadRoutingModes\(/);
+  // Each answer carries both modes, so the other switch never shows its pre-change state.
+  assert.match(mode, /self\.renderAuthPriority\(from: payload, responseComplete: complete\)/);
+  assert.match(controller, /self\.renderOpenRouterOnly\(from: payload, responseComplete: complete\)/);
+  assert.match(controller, /guard !routingModeBusy, let previous = authPriorityEnabled/);
+  assert.match(controller, /self\.rereadRoutingModes\(authPriorityNotice: notice, openRouterOnlyNotice: nil\)/);
+  assert.match(controller, /refreshAuthPriority\(\)\s*refreshOpenRouterOnly\(\)/);
   assert.match(providers, /#selector\(configureOpenRouterProfile\)/);
   assert.match(providers, /#selector\(validateOpenRouterProfile\)/);
   assert.match(providers, /#selector\(toggleOpenRouterProfile\)/);
@@ -800,6 +835,36 @@ test('Control Center Decisions page can enable and disable Jev through the same 
   assert.doesNotMatch(view, /credentialPresent/);
   assert.doesNotMatch(view, /\["local-decision"|decision", "install"|decision", "start"|decision", "stop"|decision", "uninstall"/);
   assert.doesNotMatch(`${models}\n${view}`, /Qwen|MLX|local_feature_retired|sks\.local-decision/);
+});
+
+test('Subagent Models page edits the OpenRouter Only list through stdin and only while the mode is on', () => {
+  const root = path.join(resolvePackagedMenuBarSourceRoot(), 'Sources');
+  const state = fs.readFileSync(path.join(root, 'OpenRouterOnlyState.swift'), 'utf8');
+  const models = fs.readFileSync(path.join(root, 'SubagentModelsModels.swift'), 'utf8');
+  const view = fs.readFileSync(path.join(root, 'SubagentModelsViewController.swift'), 'utf8');
+  const sidebar = fs.readFileSync(path.join(root, 'SidebarItem.swift'), 'utf8');
+  const center = fs.readFileSync(path.join(root, 'ControlCenterWindowController.swift'), 'utf8');
+  assert.match(sidebar, /case subagentModels = "Subagent Models"/);
+  assert.match(center, /\.subagentModels: SubagentModelsViewController\(processClient: processClient, operations: operations\)/);
+  assert.match(center, /controllers\[\.subagentModels\] as\? SubagentModelsViewController\)\?\.openSection = open/);
+  assert.match(state, /\["bridge", "subagent-models", "list", "--json"\]/);
+  assert.match(state, /\["bridge", "subagent-models", "set", "--stdin", "--json"\]/);
+  assert.match(state, /static let maxModels = 16/);
+  assert.match(state, /static let maxCriteriaCharacters = 240/);
+  assert.match(state, /static let efforts = \["low", "medium", "high", "xhigh"\]/);
+  assert.match(models, /static let effortTitles = \["Default", "low", "medium", "high", "xhigh"\]/);
+  assert.match(models, /withJSONObject: \["subagent_models": rows\]/);
+  assert.match(view, /processClient\.run\(OpenRouterOnlyCommand\.listSubagentModels, timeout: NativeView\.statusTimeout\)/);
+  assert.match(view, /processClient\.run\(OpenRouterOnlyCommand\.setSubagentModels, stdin: stdin, timeout: NativeView\.mutationTimeout\)/);
+  assert.match(view, /operations\.begin\(kind: "bridge-subagent-models", mutationGroup: "codex-config"/);
+  assert.match(view, /private var editable: Bool \{ snapshot\?\.mode\.enabled == true && !busy \}/);
+  assert.match(view, /applyButton\.isEnabled = editable && dirty/);
+  assert.match(view, /guard let self, requestGeneration == self\.generation, !self\.busy else \{ return \}/);
+  assert.match(view, /OpenRouterOnlyJSON\.unavailableReason\(code: result\.code, output: result\.output, payload: payload\)/);
+  assert.match(view, /openSection\?\("Providers"\)/);
+  assert.match(view, /SubagentModelDraft\.limitCriteria\(field\.stringValue\)/);
+  // Criteria are free text: they travel on stdin only, never as argv.
+  assert.doesNotMatch(`${state}\n${models}\n${view}`, /"--criteria"|"--model", entry|"--set"/);
 });
 
 test('MCP Control Center exposes scoped CRUD, health, OAuth, backups, policy editing, and redacted review without raw secret entry', () => {

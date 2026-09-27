@@ -24,6 +24,10 @@ export type DesktopBridgeControllerRequestV3 =
   | { operation: 'status' }
   | { operation: 'auth-priority.status' }
   | { operation: 'auth-priority.set'; enabled: boolean }
+  | { operation: 'openrouter-only.status' }
+  | { operation: 'openrouter-only.set'; enabled: boolean; no_restart?: boolean }
+  | { operation: 'subagent-models.list' }
+  | { operation: 'subagent-models.set'; subagent_models: readonly unknown[]; no_restart?: boolean }
   | { operation: 'ensure' }
   | { operation: 'repair' }
   | { operation: 'verify'; level: CapabilityRequestedLevel }
@@ -65,6 +69,9 @@ export interface DesktopBridgeControllerV3Options extends DesktopBridgeServiceOp
   safeWriteConfigImpl?: typeof import('../../codex-runtime/codex-desktop-config-policy.js').safeWriteCodexConfigToml;
   rollbackReceiptImpl?: typeof import('../migration-receipt.js').rollbackDesktopBridgeUnificationReceipt;
   deepProbeImpl?: (input: DesktopBridgeDeepProbeRequestV3) => Promise<DesktopBridgeDeepProbeEvidenceV3 | null>;
+  /** OpenRouter Only Mode seams: whether Codex Desktop runs, and how it is restarted. */
+  codexAppRunningImpl?: typeof import('../../codex-app/menubar/config.js').isCodexAppRunningByBundleId;
+  codexAppRestartImpl?: typeof import('../../codex-app/codex-app-restart.js').restartCodexApp;
 }
 
 export interface DesktopBridgeDeepProbeRequestV3 {
@@ -105,6 +112,7 @@ export type ControllerPaths = {
 
 export type ControllerCore = {
   authPriorityEnabled?: boolean;
+  openRouterOnlyEnabled?: boolean;
   paths: ControllerPaths;
   checkedAt: string;
   config: string;

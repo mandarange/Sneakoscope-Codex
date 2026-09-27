@@ -113,7 +113,7 @@ export async function narutoCommand(commandOrArgs: string | string[] = 'naruto',
       schema: 'sks.naruto-credential-policy.v1',
       ok: false,
       blockers: credentialPolicy.blockers,
-      hint: 'sks naruto run --auth-mode=host --model-provider=<config.toml provider block> --provider-env-key=<ENV NAME>'
+      hint: credentialPolicy.hint ?? 'sks naruto run --auth-mode=host --model-provider=<config.toml provider block> --provider-env-key=<ENV NAME>'
     }
     if (args.includes('--json')) console.log(JSON.stringify(blocked, null, 2))
     else {

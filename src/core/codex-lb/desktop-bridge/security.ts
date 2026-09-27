@@ -6,6 +6,7 @@ import {
   normalizeBridgeUpstreamModelId,
 } from '../route-index.js';
 import type {
+  CodexSessionIdentity,
   DesktopBridgeConfig,
   DesktopBridgeLookup,
   DesktopBridgeProviderRegistrySnapshot,
@@ -16,6 +17,12 @@ import type {
   PreparedDesktopBridgeProvider,
 } from './types.js';
 import { DESKTOP_BRIDGE_CLIENT_PATH_PREFIX, DesktopBridgeError } from './types.js';
+import {
+  OPENROUTER_ONLY_ROUTE_BLOCKED,
+  assertOpenRouterOnlyRoute,
+  openRouterOnlyRefusesPinnedProvider,
+  validateOpenRouterOnlyConfig,
+} from './exclusive-provider-guard.js';
 
 const MIN_HIGH_PORT = 49_152;
 const MAX_PORT = 65_535;
@@ -88,9 +95,43 @@ export function singleBridgeHeader(headers: NodeJS.Dict<string | string[]>, name
   return values[0] || null;
 }
 
-export interface CodexSessionIdentity {
-  thread_id: string | null;
-  session_id: string | null;
+const MAX_LINEAGE_CHARS = 256;
+
+/** A lineage value: a short single-line string, anything else reads as absent. */
+function lineageText(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const text = value.trim();
+  return text && text.length <= MAX_LINEAGE_CHARS && !/[\u0000-\u001f\u007f]/.test(text) ? text : null;
+}
+
+function firstLineage(values: readonly unknown[]): string | null {
+  for (const value of values) {
+    const text = lineageText(value);
+    if (text) return text;
+  }
+  return null;
+}
+
+/** First value of an optional header, without the duplicate refusal routing headers get. */
+function lenientHeader(headers: NodeJS.Dict<string | string[]>, name: string): string | null {
+  const value = headers[name];
+  return lineageText(Array.isArray(value) ? value[0] : value);
+}
+
+/**
+ * Turn metadata a Responses WebSocket create may carry inside `client_metadata`
+ * as a JSON string (a WebSocket message has no per-turn headers). Parsed only
+ * for lineage and never refuses: an unreadable blob is simply absent.
+ */
+function nestedTurnMetadata(clientMetadata: Record<string, unknown> | null): Record<string, unknown> | null {
+  const raw = clientMetadata?.['x-codex-turn-metadata'];
+  if (typeof raw !== 'string' || Buffer.byteLength(raw) > 16 * 1024) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null;
+  } catch {
+    return null;
+  }
 }
 
 function codexMetadataObject(value: unknown, source: 'header' | 'body'): Record<string, unknown> | null {
@@ -154,7 +195,24 @@ export function resolveCodexSessionIdentity(
   // thread, and giving each spawned thread its own pin is what lets subagents
   // run in parallel. Cross-source disagreement about the SAME field is still a
   // hard conflict (`oneCodexIdentity`), which is the check that has real value.
-  return { thread_id: threadId, session_id: sessionId };
+  //
+  // Lineage (who spawned this thread) comes from the same metadata, read
+  // leniently: it decides nothing unless OpenRouter Only Mode is on, so a
+  // missing or odd value must never refuse a request here. A WebSocket create
+  // has no per-turn headers, so Codex may also carry the header-named lineage
+  // keys inside `client_metadata`.
+  const nested = nestedTurnMetadata(clientMetadata);
+  const lineage = (key: string, header: string | null = null): unknown[] => [
+    turnMetadata?.[key], clientMetadata?.[key], nested?.[key],
+    ...(header ? [clientMetadata?.[header], lenientHeader(headers, header)] : []),
+  ];
+  return {
+    thread_id: threadId,
+    session_id: sessionId,
+    parent_thread_id: firstLineage(lineage('parent_thread_id', 'x-codex-parent-thread-id')),
+    subagent_kind: firstLineage(lineage('subagent_kind', 'x-openai-subagent')),
+    thread_source: firstLineage(lineage('thread_source')),
+  };
 }
 
 function comparableOrigin(value: string, referer: boolean): string {
@@ -280,6 +338,14 @@ export function resolveBridgeRequestRoute(
   };
 }
 
+/** The provider this request's thread is pinned to, if any. */
+function threadPinProvider(request: DesktopBridgeRouteRequest, config: PreparedDesktopBridgeConfig): string | null {
+  if (!request.session_id) return null;
+  let threadId: string;
+  try { threadId = canonicalSessionId(request.session_id); } catch { return null; }
+  return config.providerSessionPins.find((pin) => pin.thread_id === threadId)?.provider_id ?? null;
+}
+
 export function assertDesktopBridgeRouteContext(
   request: DesktopBridgeRouteRequest,
   config: PreparedDesktopBridgeConfig,
@@ -300,8 +366,16 @@ export function assertDesktopBridgeRouteContext(
       if (!live || live.provider_id === BRIDGE_OFFICIAL_ROUTE_ID) {
         route = officialRouteContext(model, policy, live?.upstream_model);
       } else throw error;
+    } else if (error instanceof DesktopBridgeError && error.code === 'session_pin_route_unavailable'
+      && openRouterOnlyRefusesPinnedProvider(request, threadPinProvider(request, config), config)) {
+      // The pinned route is gone because OpenRouter Only Mode dropped that
+      // provider from the catalog: name the mode, not a stale pin.
+      throw new DesktopBridgeError(OPENROUTER_ONLY_ROUTE_BLOCKED);
     } else throw error;
   }
+  // Decided on the resolved route and before any pin is written, so a refused
+  // request can never leave a thread bound to the provider it was refused for.
+  assertOpenRouterOnlyRoute(request, route, config);
   if (route.provider_id === BRIDGE_OFFICIAL_ROUTE_ID) {
     if (!desktopBridgeOfficialPassthroughEnabled(config)) throw new DesktopBridgeError('bridge_official_passthrough_unavailable');
     if (route.catalog_generation !== policy.catalog_generation || route.route_policy_generation !== policy.policy_generation) {
@@ -713,6 +787,7 @@ export function validateDesktopBridgeConfig(config: DesktopBridgeConfig): void {
   if (!/^[a-f0-9]{64}$/.test(config.clientCapabilitySha256)) throw new DesktopBridgeError('bridge_client_capability_invalid');
   if (typeof config.resolveProviderCredential !== 'function') throw new DesktopBridgeError('bridge_provider_credential_resolver_missing');
   if (config.officialPassthrough) validateRemoteUrl(config.officialPassthrough.baseUrl);
+  if (config.openRouterOnly !== undefined && config.openRouterOnly !== null) validateOpenRouterOnlyConfig(config.openRouterOnly);
   assertRegistryAndPolicy(config, config.providerRegistry);
   if (!Object.values(config.providerRegistry.providers).some((provider) => provider.enabled)) {
     throw new DesktopBridgeError('bridge_provider_registry_no_enabled_provider');

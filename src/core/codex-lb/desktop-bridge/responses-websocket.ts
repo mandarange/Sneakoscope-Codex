@@ -7,7 +7,7 @@ import { BRIDGE_OFFICIAL_ROUTE_ID } from '../bridge-contracts.js';
 import { buildOfficialPassthroughWebSocketHeaders, buildProviderWebSocketHeaders } from './header-policy.js';
 import { createDesktopBridgeRejectionLogger } from './rejection-log.js';
 import { assertDesktopBridgeRouteContext, ensureDesktopBridgeRemoteTarget, isUnreachableUpstreamError, refreshDesktopBridgeRemoteTarget, resolveAndBindDesktopBridgeRouteContext, resolveCodexSessionIdentity, resolveDesktopBridgeTarget, safeBridgeErrorCode } from './security.js';
-import { DEFAULT_DESKTOP_BRIDGE_MAX_REQUEST_BODY_BYTES, DesktopBridgeError, type DesktopBridgeRouteContext, type PreparedDesktopBridgeConfig } from './types.js';
+import { DEFAULT_DESKTOP_BRIDGE_MAX_REQUEST_BODY_BYTES, DesktopBridgeError, type CodexSessionIdentity, type DesktopBridgeRouteContext, type PreparedDesktopBridgeConfig } from './types.js';
 
 const MAX_PENDING_MESSAGES = 256;
 const CLOSE_GRACE_MS = 1_000;
@@ -31,6 +31,15 @@ function bytes(data: RawData): Buffer {
 }
 
 interface PendingMessage { data: Buffer; binary: boolean; create: Record<string, unknown> | null; originalBytes: number }
+
+function withLineage(identity: CodexSessionIdentity, next: CodexSessionIdentity): CodexSessionIdentity {
+  return {
+    ...identity,
+    parent_thread_id: identity.parent_thread_id ?? next.parent_thread_id,
+    subagent_kind: identity.subagent_kind ?? next.subagent_kind,
+    thread_source: next.thread_source === 'subagent' ? next.thread_source : identity.thread_source ?? next.thread_source,
+  };
+}
 
 /** Accept locally, then choose the upstream from the first Responses create event. */
 export function forwardResponsesWebSocket(req: IncomingMessage, socket: Duplex, head: Buffer, config: PreparedDesktopBridgeConfig): void {
@@ -99,7 +108,7 @@ export function forwardResponsesWebSocket(req: IncomingMessage, socket: Duplex, 
       destination.send(data, { binary }, (error) => { if (error) fail(error); });
     }
     function routeRequest(model: string) {
-      return { public_model: model, session_id: identity.thread_id, pathname: new URL(req.url || '/', 'http://bridge.invalid').pathname, transport: 'websocket' as const, headers: req.headers };
+      return { public_model: model, session_id: identity.thread_id, pathname: new URL(req.url || '/', 'http://bridge.invalid').pathname, transport: 'websocket' as const, headers: req.headers, identity };
     }
     function assertBinding(route: DesktopBridgeRouteContext): void {
       if (!bound) return;
@@ -119,7 +128,9 @@ export function forwardResponsesWebSocket(req: IncomingMessage, socket: Duplex, 
         || (nextIdentity.session_id && nextIdentity.session_id !== identity.session_id))) {
         throw new DesktopBridgeError('bridge_codex_session_identity_conflict');
       }
-      if (!bound) identity = nextIdentity;
+      // The pin identity is the first create's; lineage accumulates, so a
+      // socket once marked as a child thread is never routed as a root turn.
+      identity = bound ? withLineage(identity, nextIdentity) : nextIdentity;
       const request = routeRequest(model);
       // Do not persist a new session pin for a create we cannot forward on this socket.
       assertBinding(assertDesktopBridgeRouteContext(request, config));

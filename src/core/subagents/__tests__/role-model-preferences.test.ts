@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { prepareOfficialSubagentMission } from '../official-subagent-preparation.js';
 import { BUILTIN_LATEST_TIER_MODELS as T } from '../model-tiers.js';
+import { writeOpenRouterOnlyState } from '../child-model-allowlist.js';
 import {
   readRoleModelPreferences,
   resetRoleModelPreference,
@@ -434,6 +435,73 @@ test(`${mainModel} app-session main keeps the child tier models`, async (t) => {
 });
 
 }
+
+test('OpenRouter Only Mode ignores stored role preferences without deleting them', async (t) => {
+  const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-role-model-list-'));
+  t.after(async () => fs.rm(temp, { recursive: true, force: true }));
+  const root = path.join(temp, 'repo');
+  const dir = path.join(root, '.sneakoscope', 'missions', 'M-list');
+  const env = { HOME: path.join(temp, 'home'), SKS_HOME: path.join(temp, 'sks-home') } as NodeJS.ProcessEnv;
+  await fs.mkdir(dir, { recursive: true });
+  assert.equal((await setRoleModelPreference({ role: 'ui_implementer', model: T.deep, reasoning: 'high', env })).ok, true);
+  const stored = await fs.readFile(roleModelPreferencesPath(env), 'utf8');
+  await writeOpenRouterOnlyState({
+    enabled: true,
+    subagent_models: [
+      { model: 'google/gemini-3.8-flash', criteria: 'UI work', reasoning_effort: 'low', default: false },
+      { model: 'z-ai/glm-5.3', criteria: 'everything else', reasoning_effort: null, default: true }
+    ]
+  }, { env });
+
+  const read = await readRoleModelPreferences({ env });
+  assert.deepEqual(read.store.roles, {});
+  assert.deepEqual(read.ignored_for_openrouter_only, ['ui_implementer']);
+  const status = await roleModelPreferencesStatus({ env });
+  assert.equal(status.openrouter_only.enabled, true);
+  assert.equal(status.openrouter_only.preferences_ignored, true);
+  assert.deepEqual(status.openrouter_only.ignored_roles, ['ui_implementer']);
+  assert.equal(status.openrouter_only.default_subagent_model, 'z-ai/glm-5.3');
+  assert.ok(status.warnings.includes('role_model_preferences_ignored_openrouter_only'));
+  const ui = status.roles.find((row) => row.role === 'ui_implementer');
+  assert.equal(ui?.override?.model, T.deep);
+  assert.equal(ui?.effective_source, 'openrouter-only-list');
+  assert.equal(ui?.effective_model, 'z-ai/glm-5.3');
+  // Saving another role while ignored keeps the first one on disk.
+  const saved: any = await setRoleModelPreference({ role: 'worker', model: T.fast, reasoning: 'low', env });
+  assert.equal(saved.ok, true);
+  assert.ok(saved.warnings.includes('role_model_preferences_ignored_openrouter_only'));
+  const onDisk = JSON.parse(await fs.readFile(roleModelPreferencesPath(env), 'utf8'));
+  assert.deepEqual(Object.keys(onDisk.roles).sort(), ['ui_implementer', 'worker']);
+  assert.equal(onDisk.roles.ui_implementer.model, JSON.parse(stored).roles.ui_implementer.model);
+
+  const prepared = await prepareOfficialSubagentMission({
+    root,
+    dir,
+    missionId: 'M-list',
+    goal: 'Implement the provider settings screen layout',
+    route: '$Team',
+    env,
+    requestedSubagents: 1,
+    slices: [{ id: 'ui', title: 'Provider UI', description: 'Implement provider page UI', kind: 'worker', agent: 'ui_implementer', paths: ['native/provider-ui'] }]
+  });
+  const routed = prepared.plan.agents.ui_implementer;
+  assert.equal(routed.routed_provider, 'openrouter');
+  assert.equal(routed.routed_model, 'z-ai/glm-5.3');
+  assert.equal(routed.routed_model_policy, 'openrouter_only_default');
+  assert.equal(routed.openrouter_only_choice.source, 'default');
+  assert.deepEqual(prepared.plan.role_model_preferences.overrides, {});
+  assert.deepEqual(prepared.plan.role_model_preferences.ignored_for_openrouter_only.sort(), ['ui_implementer', 'worker']);
+  assert.equal(prepared.plan.openrouter_only.default_subagent_model, 'z-ai/glm-5.3');
+  // The entry sets no effort, so the role's own effort stays: OpenRouter lists `low`.
+  assert.equal(routed.routed_model_reasoning_effort, 'low');
+  assert.ok(prepared.delegationPrompt.includes('pass model="z-ai/glm-5.3" and reasoning_effort="low" and fork_turns="none"'));
+  assert.ok(!prepared.delegationPrompt.includes(T.deep));
+
+  // Mode off: the stored preference applies again.
+  await writeOpenRouterOnlyState({ enabled: false }, { env });
+  assert.equal((await readRoleModelPreferences({ env })).store.roles.ui_implementer?.model, T.deep);
+  assert.equal((await roleModelPreferencesStatus({ env })).openrouter_only.enabled, false);
+});
 
 test('unconfigured roles spawn with sealed role model policy instead of omitting overrides', () => {
   const prompt = (async () => {

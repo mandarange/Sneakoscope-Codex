@@ -14,6 +14,7 @@ import {
 } from '../codex-app/codex-model-catalog.js';
 import { isRecord } from '../json/records.js';
 import { codexListedEfforts, latestModelForTier, latestTierModelSet, modelTierForModel } from './model-tiers.js';
+import { defaultSubagentEntry, readOpenRouterOnlyStateSync } from './child-model-allowlist.js';
 
 export const ROLE_MODEL_PREFERENCES_SCHEMA = 'sks.role-model-preferences.v2' as const;
 const LEGACY_ROLE_MODEL_PREFERENCES_SCHEMA = 'sks.role-model-preferences.v1';
@@ -66,17 +67,52 @@ export function roleModelPreferencesPath(env: NodeJS.ProcessEnv = process.env): 
   return path.join(sksHome, 'preferences', 'role-models.json');
 }
 
+export interface RoleModelPreferencesRead {
+  store: RoleModelPreferenceStore;
+  path: string;
+  blockers: string[];
+  /**
+   * Roles whose stored preference is kept on disk but not applied: OpenRouter
+   * Only Mode routes every child to the user's list, so a GPT preference must
+   * never short-circuit that routing. Empty while the mode is off.
+   */
+  ignored_for_openrouter_only: string[];
+}
+
+/**
+ * The preferences routing applies. While OpenRouter Only Mode is on this is
+ * an empty role map; the stored file is left untouched and applies again once
+ * the mode is off.
+ */
 export async function readRoleModelPreferences(input: {
   readonly env?: NodeJS.ProcessEnv;
   readonly filePath?: string;
-} = {}): Promise<{ store: RoleModelPreferenceStore; path: string; blockers: string[] }> {
+  /** The caller's own read of the mode, so one plan never reads the store twice. */
+  readonly openRouterOnly?: boolean;
+} = {}): Promise<RoleModelPreferencesRead> {
+  const read = await readStoredRoleModelPreferences(input);
+  const openRouterOnly = input.openRouterOnly ?? readOpenRouterOnlyStateSync({ env: input.env || process.env }).enabled;
+  if (!openRouterOnly) return read;
+  // An unreadable store blocks nothing it no longer decides.
+  return {
+    ...read,
+    store: { ...read.store, roles: {} },
+    blockers: [],
+    ignored_for_openrouter_only: Object.keys(read.store.roles)
+  };
+}
+
+async function readStoredRoleModelPreferences(input: {
+  readonly env?: NodeJS.ProcessEnv;
+  readonly filePath?: string;
+}): Promise<RoleModelPreferencesRead> {
   const filePath = input.filePath || roleModelPreferencesPath(input.env || process.env);
   try {
     const parsed = JSON.parse(await fs.readFile(filePath, 'utf8')) as Record<string, any>;
     const legacy = parsed.schema === LEGACY_ROLE_MODEL_PREFERENCES_SCHEMA && parsed.version === 1;
     const current = parsed.schema === ROLE_MODEL_PREFERENCES_SCHEMA && parsed.version === 2;
     if ((!legacy && !current) || !isRecord(parsed.roles)) {
-      return { store: emptyStore(), path: filePath, blockers: ['role_model_preferences_invalid_schema'] };
+      return { store: emptyStore(), path: filePath, blockers: ['role_model_preferences_invalid_schema'], ignored_for_openrouter_only: [] };
     }
     const roles: Record<string, RoleModelPreference> = {};
     const blockers: string[] = [];
@@ -115,11 +151,12 @@ export async function readRoleModelPreferences(input: {
         roles
       },
       path: filePath,
-      blockers
+      blockers,
+      ignored_for_openrouter_only: []
     };
   } catch (err: unknown) {
-    if ((err as NodeJS.ErrnoException)?.code === 'ENOENT') return { store: emptyStore(), path: filePath, blockers: [] };
-    return { store: emptyStore(), path: filePath, blockers: ['role_model_preferences_unreadable'] };
+    if ((err as NodeJS.ErrnoException)?.code === 'ENOENT') return { store: emptyStore(), path: filePath, blockers: [], ignored_for_openrouter_only: [] };
+    return { store: emptyStore(), path: filePath, blockers: ['role_model_preferences_unreadable'], ignored_for_openrouter_only: [] };
   }
 }
 
@@ -130,7 +167,9 @@ export async function roleModelPreferencesStatus(input: {
   readonly configPath?: string;
 } = {}) {
   const env = input.env || process.env;
-  const read = await readRoleModelPreferences(input);
+  const read = await readStoredRoleModelPreferences(input);
+  const openRouterOnly = readOpenRouterOnlyStateSync({ env });
+  const listDefault = openRouterOnly.enabled ? defaultSubagentEntry(openRouterOnly) : null;
   const routing = await readConfiguredCodexModelRoutingContext({
     env,
     ...(input.home ? { home: input.home } : {}),
@@ -149,22 +188,35 @@ export async function roleModelPreferencesStatus(input: {
   const supportedProfiles = allProfiles.slice(0, ROLE_MODEL_PROFILE_PRESENTATION_LIMIT);
   const roles = MANAGED_OFFICIAL_SUBAGENT_ROLES.map((role) => {
     const override = read.store.roles[role.codex_name] || null;
-    const effectiveProvider = 'openai';
-    const effectiveModel = override?.model || role.model;
-    const effectiveReasoning = override?.reasoning_effort || role.model_reasoning_effort;
-    return {
+    const base = {
       role: role.codex_name,
       description: role.description,
       default_provider: inferProviderFromModel(role.model),
       default_model: role.model,
       default_reasoning_effort: role.model_reasoning_effort,
-      override,
-      effective_provider: effectiveProvider,
-      effective_model: effectiveModel,
-      effective_reasoning_effort: effectiveReasoning,
+      override
+    };
+    // OpenRouter Only Mode: the stored override is kept (shown above) but not
+    // applied; Jev or the list default picks each child's model at spawn time.
+    // '' means none: an empty list, or the model's own default effort.
+    if (openRouterOnly.enabled) {
+      return {
+        ...base,
+        effective_provider: 'openrouter',
+        effective_model: listDefault?.model ?? '',
+        effective_reasoning_effort: listDefault?.reasoning_effort ?? '',
+        effective_source: 'openrouter-only-list'
+      };
+    }
+    return {
+      ...base,
+      effective_provider: 'openai',
+      effective_model: override?.model || role.model,
+      effective_reasoning_effort: override?.reasoning_effort || role.model_reasoning_effort,
       effective_source: override ? 'role-override' : 'managed-default'
     };
   });
+  const ignoredRoles = openRouterOnly.enabled ? Object.keys(read.store.roles) : [];
   return {
     schema: 'sks.role-model-preferences-status.v2',
     ok: read.blockers.length === 0 && preferenceBlockers.length === 0,
@@ -190,6 +242,13 @@ export async function roleModelPreferencesStatus(input: {
       blockers: catalog.blockers
     },
     roles,
+    openrouter_only: {
+      enabled: openRouterOnly.enabled,
+      preferences_ignored: openRouterOnly.enabled,
+      ignored_roles: ignoredRoles,
+      default_subagent_model: listDefault?.model ?? null,
+      subagent_models: openRouterOnly.enabled ? openRouterOnly.subagent_models.map((entry) => entry.model) : []
+    },
     // Store-level blockers mean the preference file itself could not be used, so
     // every save/reset below fails closed; preference blockers are recoverable
     // states a save or reset can clear. Consumers (Center) must keep the
@@ -208,7 +267,8 @@ export async function roleModelPreferencesStatus(input: {
         : []),
       ...(allProfiles.length > supportedProfiles.length
         ? [`role_model_supported_profiles_truncated:${allProfiles.length}:${supportedProfiles.length}`]
-        : [])
+        : []),
+      ...(openRouterOnly.enabled ? ['role_model_preferences_ignored_openrouter_only'] : [])
     ]
   };
 }
@@ -247,7 +307,7 @@ export async function setRoleModelPreference(input: {
     return mutationBlocked('role_model_profile_not_managed');
   }
 
-  const read = await readRoleModelPreferences(input);
+  const read = await readStoredRoleModelPreferences(input);
   if (read.blockers.length) return mutationBlocked(...read.blockers);
   const timestamp = (input.now || (() => new Date().toISOString()))();
   const store: RoleModelPreferenceStore = {
@@ -280,7 +340,10 @@ export async function setRoleModelPreference(input: {
     runtime_verified: false,
     path: read.path,
     blockers: [],
-    warnings: catalog.warnings
+    warnings: [
+      ...catalog.warnings,
+      ...(readOpenRouterOnlyStateSync({ env }).enabled ? ['role_model_preferences_ignored_openrouter_only'] : [])
+    ]
   };
 }
 
@@ -292,7 +355,7 @@ export async function resetRoleModelPreference(input: {
 }) {
   const role = managedOfficialSubagentRoleByName(String(input.role || '').trim());
   if (!role) return mutationBlocked('role_model_role_invalid');
-  const read = await readRoleModelPreferences(input);
+  const read = await readStoredRoleModelPreferences(input);
   if (read.blockers.length) return mutationBlocked(...read.blockers);
   const roles = { ...read.store.roles };
   delete roles[role.codex_name];

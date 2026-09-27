@@ -69,12 +69,28 @@ export interface DesktopBridgeResolvedCredential {
   generation: string;
 }
 
+/**
+ * What Codex says about the thread a request belongs to. `thread_id` keys the
+ * route and the provider pin. The lineage fields say whether another thread
+ * spawned this one; they are read leniently, never refuse a request on their
+ * own, and only OpenRouter Only Mode consults them.
+ */
+export interface CodexSessionIdentity {
+  thread_id: string | null;
+  session_id: string | null;
+  parent_thread_id: string | null;
+  subagent_kind: string | null;
+  thread_source: string | null;
+}
+
 export interface DesktopBridgeRouteRequest {
   public_model: string;
   session_id: string | null;
   pathname: string;
   transport: 'http' | 'websocket';
   headers: Readonly<NodeJS.Dict<string | string[]>>;
+  /** The request's Codex identity and lineage; absent means "not known to be a child". */
+  identity?: CodexSessionIdentity | null;
 }
 
 export interface DesktopBridgeRouteContext {
@@ -101,6 +117,19 @@ export type DesktopBridgeSessionPinPersister = (
   providerSessionPins: readonly ProviderSessionPin[],
 ) => Promise<void>;
 
+/**
+ * OpenRouter Only Mode as the running bridge enforces it. The service reads
+ * `~/.codex/sks/sks-openrouter-only.json` (HOME-relative, never CODEX_HOME)
+ * once at start; the controller restarts the bridge whenever the mode or the
+ * subagent list changes, and the config generation covers the mode so a bridge
+ * still enforcing an old one reads as a configuration mismatch.
+ */
+export interface DesktopBridgeOpenRouterOnlyConfig {
+  enabled: boolean;
+  /** Canonical (lowercase) OpenRouter public ids a child request may name. */
+  subagent_models: readonly string[];
+}
+
 export interface DesktopBridgeConfig {
   providerRegistry: DesktopBridgeProviderRegistrySnapshot;
   routePolicy: BridgeRoutingPolicy;
@@ -114,6 +143,14 @@ export interface DesktopBridgeConfig {
    * Absent/null preserves the legacy fail-closed behavior.
    */
   officialPassthrough?: { baseUrl: string } | null;
+  /**
+   * OpenRouter Only Mode. Absent, null or `enabled: false` leaves routing
+   * exactly as it is without the mode. When enabled, every request that names
+   * a model must route to OpenRouter, and a request Codex marks as a spawned
+   * child must name a model from `subagent_models`. Model-less requests keep
+   * the official passthrough.
+   */
+  openRouterOnly?: DesktopBridgeOpenRouterOnlyConfig | null;
   resolveRequestRoute?: DesktopBridgeRouteResolver;
   persistProviderSessionPins?: DesktopBridgeSessionPinPersister;
   resolveProviderCredential: DesktopBridgeCredentialResolver;

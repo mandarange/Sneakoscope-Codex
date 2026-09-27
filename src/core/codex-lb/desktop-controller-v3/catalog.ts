@@ -61,7 +61,24 @@ import {
   unique
 } from './shared.js';
 import { desktopBridgeStatusV3 } from './status.js';
+import { openRouterOnlyExposure, readControllerOpenRouterOnlyState, withoutCodexLbCatalog } from './openrouter-only-catalog.js';
+import type { OpenRouterOnlyState } from '../../subagents/child-model-allowlist.js';
 import type { ControllerPaths, DesktopBridgeControllerV3Options } from './types.js';
+
+export interface CatalogSyncBehavior {
+  restartService?: boolean;
+  /**
+   * The OpenRouter Only state to build for instead of the stored one, so a mode
+   * or list change is synced before it is committed.
+   */
+  openRouterOnly?: OpenRouterOnlyState;
+  /**
+   * Commits that change once the new catalog is active and before the bridge
+   * restarts (the restarted bridge reads it at start). A commit that throws
+   * rolls the activation back, so the catalog and the commit land together.
+   */
+  onActivated?: () => Promise<unknown>;
+}
 
 export async function syncCatalog(options: DesktopBridgeControllerV3Options): Promise<DesktopBridgeCommandResult> {
   const result = await syncCatalogInternal(options);
@@ -81,7 +98,7 @@ export async function syncCatalog(options: DesktopBridgeControllerV3Options): Pr
 
 export async function syncCatalogInternal(
   options: DesktopBridgeControllerV3Options,
-  behavior: { restartService?: boolean } = {}
+  behavior: CatalogSyncBehavior = {}
 ): Promise<Record<string, unknown>> {
   const paths = controllerPaths(options);
   const historicalIntent = inspectHistoricalDesktopBridgeIntent(await readText(paths.configPath, ''));
@@ -98,7 +115,10 @@ export async function syncCatalogInternal(
     credentials: rawCredentials,
     storedRegistry
   });
-  const catalogs = await fetchProviderCatalogs(initialRegistry, rawCredentials, paths, options);
+  // OpenRouter Only Mode: codex-lb is neither fetched nor given rows or routes.
+  const openRouterOnly = behavior.openRouterOnly ?? readControllerOpenRouterOnlyState(paths);
+  const catalogRegistry = (value: BridgeProviderRegistry) => openRouterOnly.enabled ? withoutCodexLbCatalog(value) : value;
+  const catalogs = await fetchProviderCatalogs(catalogRegistry(initialRegistry), rawCredentials, paths, options);
   const credentials = await resolveValidatedCredentials(options, paths);
   const registry = await resolveBridgeProviderRegistry({ home: paths.home, credentials, storedRegistry });
   const selectionState = await readBridgeModelSelectionState(paths.home, nowIso(options));
@@ -107,7 +127,10 @@ export async function syncCatalogInternal(
   const selection = selectionState.stored
     ? selectionState.selection
     : seedSelectionFromConfiguredModel(selectionState.selection, await readText(paths.configPath, ''));
-  const build = buildCombinedBridgeCatalog(registry, { catalogs, created_at: nowIso(options), selection });
+  const exposure = openRouterOnly.enabled
+    ? openRouterOnlyExposure(selection, openRouterOnly, await readText(paths.configPath, ''))
+    : selection;
+  const build = buildCombinedBridgeCatalog(catalogRegistry(registry), { catalogs, created_at: nowIso(options), selection: exposure });
   if (!selectionState.stored) await writeBridgeModelSelection(paths.home, selection).catch(() => undefined);
   // The available list is what SKS Center offers for curation; persisting it on
   // every sync keeps the picker choices in step with what OpenRouter serves.
@@ -133,10 +156,15 @@ export async function syncCatalogInternal(
       && Object.values(build.route_index.routes).some((route) => route.provider_id === providerId));
   const previousDefault = priorPolicy.policy?.default_provider_id || null;
   const historicalDefault = historicalIntent.default_provider_id;
-  const defaultProvider = previousDefault && readyProviders.includes(previousDefault)
+  // OpenRouter Only Mode leaves codex-lb without routes on purpose; the
+  // operator's default provider is carried through so turning the mode off
+  // finds it again. Routing never reads the default.
+  const defaultProvider = openRouterOnly.enabled && priorPolicy.policy
     ? previousDefault
-    : historicalDefault && readyProviders.includes(historicalDefault) ? historicalDefault
-      : readyProviders.length === 1 ? readyProviders[0] || null : null;
+    : previousDefault && readyProviders.includes(previousDefault)
+      ? previousDefault
+      : historicalDefault && readyProviders.includes(historicalDefault) ? historicalDefault
+        : readyProviders.length === 1 ? readyProviders[0] || null : null;
   // The official-models mode is resolved from the operator's durable choice
   // (settings.official_passthrough.models), with 'auto' following the host
   // auth mode — so a catalog refresh can neither silently return a
@@ -226,6 +254,23 @@ export async function syncCatalogInternal(
       rollback,
       active_generation_preserved: rollback?.ok === true
     };
+  }
+  if (behavior.onActivated) {
+    try {
+      await behavior.onActivated();
+    } catch (error: unknown) {
+      const rollback = migration.receipt
+        ? await rollbackDesktopBridgeUnificationReceipt({ receipt: migration.receipt })
+        : null;
+      return {
+        ok: false,
+        build,
+        activation: activationResult(staging, false, [safeCode(error, 'combined_catalog_commit_failed')]),
+        migration,
+        rollback,
+        active_generation_preserved: rollback?.ok === true
+      };
+    }
   }
   const serviceBefore = await (options.serviceStatusImpl || desktopBridgeServiceStatus)({ ...options, home: paths.home });
   if (behavior.restartService !== false && (serviceBefore.installed || serviceBefore.running)) {

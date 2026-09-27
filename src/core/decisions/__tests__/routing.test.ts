@@ -6,6 +6,10 @@ import '../../__tests__/helpers/isolated-test-home.js';
 import { applySealedRouting, assembleRoutingSelection, buildRoutingCandidates, MAX_JEV_ROUTING_ROLES } from '../routing.js';
 import { ROUTING_TIERS, type DecisionsWireResponse } from '../types.js';
 import { BUILTIN_LATEST_TIER_MODELS, resetLatestModelTierCache } from '../../subagents/model-tiers.js';
+import { effectiveChildModelAllowlist, writeOpenRouterOnlyState } from '../../subagents/child-model-allowlist.js';
+import fsp from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 
 const USAGE = { input_tokens: 20, output_tokens: 4 };
 
@@ -199,4 +203,30 @@ test('sealed routing skips a user role preference', () => {
   assert.equal(agents.worker.routed_model_policy, 'jev_sealed_routing');
   assert.equal(agents.ui_implementer.routed_model, BUILTIN_LATEST_TIER_MODELS.deep);
   assert.equal(agents.ui_implementer.routed_model_policy, 'user_role_model_preference');
+});
+
+test('sealed routing seals no tier model while OpenRouter Only Mode is on', async (t) => {
+  resetLatestModelTierCache();
+  const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-routing-list-'));
+  t.after(async () => fsp.rm(home, { recursive: true, force: true }));
+  const location = { env: { HOME: home } as NodeJS.ProcessEnv };
+  const agents = {
+    worker: { routing_dynamic: true, routed_model: 'z-ai/glm-5.3', routed_model_policy: 'openrouter_only_default' }
+  };
+  const selected = {
+    id: 'jev_role_fanout' as const,
+    summary: 'selected',
+    models: { worker: BUILTIN_LATEST_TIER_MODELS.fast },
+    efforts: { worker: 'low' as const },
+    tiers: { worker: 'fast' as const }
+  };
+  assert.equal(applySealedRouting(agents, selected, effectiveChildModelAllowlist(location)).worker.routed_model, BUILTIN_LATEST_TIER_MODELS.fast);
+  await writeOpenRouterOnlyState({
+    enabled: true,
+    subagent_models: [{ model: 'z-ai/glm-5.3', criteria: '', reasoning_effort: null, default: true }]
+  }, location);
+  // The caller passes the allowlist it already read, so one plan reads the mode once.
+  const sealed = applySealedRouting(agents, selected, effectiveChildModelAllowlist(location));
+  assert.equal(sealed.worker.routed_model, 'z-ai/glm-5.3');
+  assert.equal(sealed.worker.routed_model_policy, 'openrouter_only_default');
 });

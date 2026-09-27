@@ -3,6 +3,7 @@ import path from 'node:path';
 import { printJson } from '../../cli/output.js';
 import { nowIso, writeJsonAtomic } from '../fsx.js';
 import { resolveOpenRouterApiKey } from '../providers/openrouter/openrouter-secret-store.js';
+import { effectiveChildModelAllowlist } from '../subagents/child-model-allowlist.js';
 import { jevEnabled, readDecisionConfig, writeDecisionConfig, jevCapabilityActive } from './config.js';
 import { buildEvaluationReport, type EvaluationTaskRow } from './evaluation.js';
 import { OPENROUTER_DECISIONS_ENDPOINT, OPENROUTER_DECISIONS_MODEL, requestOpenRouterDecision } from './openrouter.js';
@@ -106,7 +107,10 @@ export async function runDecisionCommand(args: readonly string[], env: NodeJS.Pr
         output(report, json, () => [
           `mode: ${report.mode}  consent: ${report.consentCloud}  credential: ${report.credential.present ? report.credential.source : 'missing'}`,
           `model: ${report.model}  endpoint: ${report.endpoint}`,
-          `capabilities: context=${report.capabilities.context.ready ? 'ready' : 'off'} plan=${report.capabilities.plan.ready ? 'ready' : 'off'} recovery=${report.capabilities.recovery.reason}`
+          `capabilities: context=${report.capabilities.context.ready ? 'ready' : 'off'} plan=${report.capabilities.plan.ready ? 'ready' : 'off'} recovery=${report.capabilities.recovery.reason}`,
+          ...(report.openrouter_only.enabled
+            ? [`openrouter-only: on · child models by ${report.openrouter_only.child_model_decision} · ${report.openrouter_only.subagent_model_count} listed`]
+            : [])
         ]);
         return 0;
       }
@@ -140,6 +144,14 @@ export async function statusReport(env: NodeJS.ProcessEnv) {
     : !jevEnabled(config)
       ? 'enable'
       : 'ready';
+  // OpenRouter Only Mode: Jev picks each child's model from the user's list
+  // (the child_model point) instead of a GPT tier for spawns, roles, and workers.
+  // Roles are never omitted then: list-mode plans send Jev no tier routing roles.
+  const childModels = effectiveChildModelAllowlist({ env });
+  const openRouterOnly = childModels.mode === 'openrouter_only';
+  const childTierPoints = new Set(['spawn_tier', 'worker_tier', 'role_tiers', 'role_omission']);
+  const decisionPoints = ['turn_route', 'turn_tier', 'spawn_tier', 'worker_tier', 'role_tiers', 'role_omission', 'plan', 'context', 'parent_edit_delegation', 'image_need', 'image_parameters', 'qa_effort_escalation']
+    .filter((point) => !openRouterOnly || !childTierPoints.has(point));
   return {
     schema: 'sks.jev-decision-status.v1',
     ok: true,
@@ -160,8 +172,16 @@ export async function statusReport(env: NodeJS.ProcessEnv) {
       recovery: config.capabilities.recovery
     },
     decision_points: jevEnabled(config)
-      ? ['turn_route', 'turn_tier', 'spawn_tier', 'worker_tier', 'role_tiers', 'role_omission', 'plan', 'context', 'parent_edit_delegation', 'image_need', 'image_parameters', 'qa_effort_escalation']
+      ? [...decisionPoints, ...(openRouterOnly ? ['child_model'] : [])]
       : [],
+    openrouter_only: {
+      enabled: openRouterOnly,
+      subagent_model_count: openRouterOnly ? childModels.models.length : 0,
+      default_subagent_model: childModels.default_model,
+      child_model_decision: !openRouterOnly
+        ? null
+        : jevEnabled(config) && resolved.key && childModels.models.length > 1 ? 'jev' : 'default_entry'
+    },
     recovery: RECOVERY_CAPABILITY,
     nextStep,
     notes: [

@@ -58,6 +58,10 @@ test('bridge command maps the complete non-secret CLI surface to one controller 
     [['auth-priority', 'status'], { operation: 'auth-priority.status' }],
     [['auth-priority', 'on'], { operation: 'auth-priority.set', enabled: true }],
     [['auth-priority', 'off'], { operation: 'auth-priority.set', enabled: false }],
+    [['openrouter-only', 'status'], { operation: 'openrouter-only.status' }],
+    [['openrouter-only', 'on'], { operation: 'openrouter-only.set', enabled: true, no_restart: false }],
+    [['openrouter-only', 'off', '--no-restart'], { operation: 'openrouter-only.set', enabled: false, no_restart: true }],
+    [['subagent-models', 'list'], { operation: 'subagent-models.list' }],
     [['ensure'], { operation: 'ensure' }],
     [['repair'], { operation: 'repair' }],
     [['provider', 'list'], { operation: 'provider.list' }],
@@ -155,6 +159,38 @@ test('secret argv, missing stdin mode, destructive actions without confirmation,
     assert.equal(result.exit_code, 1, args.join(' '));
     assert.deepEqual(result.output.blockers, [blocker], args.join(' '));
     assert.deepEqual(setup.requests, [], args.join(' '));
+  }
+});
+
+test('subagent-models set takes its rows (free-text criteria included) only from stdin JSON', async () => {
+  const rows = [{ model: 'vendor/model', criteria: '--looks like a flag, "quoted"', reasoning_effort: 'high', default: true }];
+  const setup = fixture();
+  setup.setStdin(JSON.stringify({ subagent_models: rows }));
+  const result = await executeBridgeCommand(['subagent-models', 'set', '--stdin', '--json'], setup);
+  assert.equal(result.exit_code, 0);
+  assert.deepEqual(setup.requests, [{ operation: 'subagent-models.set', subagent_models: rows, no_restart: false }]);
+  const quiet = fixture();
+  quiet.setStdin(JSON.stringify({ subagent_models: rows }));
+  assert.equal((await executeBridgeCommand(['subagent-models', 'set', '--stdin', '--no-restart', '--json'], quiet)).exit_code, 0);
+  assert.deepEqual(quiet.requests, [{ operation: 'subagent-models.set', subagent_models: rows, no_restart: true }]);
+
+  const cases: Array<[string[], string, string]> = [
+    [['subagent-models', 'set'], '{"subagent_models":[]}', 'bridge_subagent_models_stdin_required'],
+    [['subagent-models', 'set', '--stdin'], '', 'bridge_subagent_models_stdin_empty'],
+    [['subagent-models', 'set', '--stdin'], '{not json', 'bridge_subagent_models_stdin_invalid_json'],
+    [['subagent-models', 'set', '--stdin'], '[]', 'bridge_subagent_models_stdin_invalid'],
+    [['subagent-models', 'set', '--stdin'], `{"subagent_models":[],"pad":"${'x'.repeat(70 * 1024)}"}`, 'bridge_subagent_models_stdin_too_large'],
+    [['subagent-models', 'list', '--stdin'], '', 'bridge_command_option_not_allowed'],
+    [['openrouter-only', 'status', '--no-restart'], '', 'bridge_command_option_not_allowed'],
+    [['openrouter-only', 'toggle'], '', 'bridge_command_invalid']
+  ];
+  for (const [args, stdin, blocker] of cases) {
+    const failing = fixture();
+    failing.setStdin(stdin);
+    const output = await executeBridgeCommand([...args, '--json'], failing);
+    assert.equal(output.exit_code, 1, args.join(' '));
+    assert.deepEqual(output.output.blockers, [blocker], args.join(' '));
+    assert.deepEqual(failing.requests, [], args.join(' '));
   }
 });
 

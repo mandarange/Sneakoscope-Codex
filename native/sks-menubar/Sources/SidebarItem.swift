@@ -5,6 +5,7 @@ import Foundation
 enum SidebarItem: String, CaseIterable {
     case overview = "Overview"
     case providers = "Providers"
+    case subagentModels = "Subagent Models"
     case remoteCoding = "Remote Coding"
     case updates = "Updates"
     case mcpServers = "MCP Servers"
@@ -19,6 +20,7 @@ enum SidebarItem: String, CaseIterable {
         switch self {
         case .overview: return "gauge"
         case .providers: return "network"
+        case .subagentModels: return "person.2"
         case .updates: return "arrow.down.circle"
         case .mcpServers: return "server.rack"
         case .localDecision: return "cpu"

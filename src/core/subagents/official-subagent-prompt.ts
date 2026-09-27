@@ -11,6 +11,14 @@ import {
   selectOfficialSubagentRole
 } from './agent-catalog.js'
 import type { RoleModelPreference } from './role-model-preferences.js'
+import {
+  SUBAGENT_MODEL_EFFORTS,
+  allowlistedChildModel,
+  effectiveChildModelAllowlist,
+  type ChildModelAllowlist,
+  type SubagentModelEntry
+} from './child-model-allowlist.js'
+import { READ_ONLY_LIST_ROLE } from './read-only-list-role.js'
 
 export interface ActiveMainModelRouting {
   provider: string
@@ -43,8 +51,10 @@ export function buildOfficialSubagentPrompt(input: {
   triwikiAttention?: BoundedTriwikiAttention
   recommendedAgents?: readonly string[]
   roleModelPreferences?: Readonly<Record<string, RoleModelPreference>>
-  routedAgents?: Readonly<Record<string, { routed_model?: string; routed_model_reasoning_effort?: string }>>
+  routedAgents?: Readonly<Record<string, { routed_model?: string; routed_model_reasoning_effort?: string | null }>>
   narutoChildRouting?: boolean
+  /** Which models a child may run; read from the Codex home when omitted. */
+  childModels?: ChildModelAllowlist
   /** Jev mode is on: Jev picks every child tier, so the parent reads no model rules. */
   jevRouting?: boolean
   activeMainModel?: ActiveMainModelRouting | null
@@ -95,24 +105,30 @@ export function buildOfficialSubagentPrompt(input: {
     ...slice,
     agent: agentName
   })))
+  // OpenRouter Only Mode: children run only the user's list models; tier rules,
+  // role-file models, and stored role-model preferences do not apply.
+  const childModels = input.childModels ?? effectiveChildModelAllowlist()
+  const listOnly = childModels.mode === 'openrouter_only' ? childModels : null
   const catalog = renderAgentCatalog([
     ...resolvedSlices.map((row) => row.agentName),
     ...(input.recommendedAgents || [])
-  ])
+  ], { roleModels: !listOnly })
   const activeMainModel = normalizedActiveMainModel(input.activeMainModel)
   // A stored role preference on a current tier model wins for that role.
   const currentModels = latestTierModelSet()
-  const rolePreferences = Object.fromEntries(Object.entries(input.roleModelPreferences || {})
+  const rolePreferences = Object.fromEntries(Object.entries(listOnly ? {} : input.roleModelPreferences || {})
     .filter(([name, row]) => currentModels.has(row.model)
       && ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'].includes(row.reasoning_effort)
       && officialSubagentOnDemandRoleCatalog([name]).some((role) => role.name === name)))
   const effortPreferences = Object.fromEntries(Object.entries(rolePreferences).map(([name, row]) => [name, row.reasoning_effort]))
   const narutoChildren = input.narutoChildRouting === true
   const jevRouting = input.jevRouting === true
-  const spawnModelRouting = renderSpawnModelRouting(narutoChildren, jevRouting)
+  const spawnModelRouting = listOnly
+    ? renderListSpawnModelRouting(listOnly.entries, jevRouting)
+    : renderSpawnModelRouting(narutoChildren, jevRouting)
   // Every child runs the newest model of the tier its work needs. With Jev on
   // the parent gets no tier rules to weigh: Jev decides each spawn.
-  const tierRules = jevRouting
+  const tierRules = jevRouting || listOnly
     ? []
     : [
         '- tiers: fast for tiny mechanical shards (search, rename, copy, label, one-line edits), balanced for instructed UI, logic, backend, and native implementation, context for long reads, exploration, large first drafts, Computer Use, browser, or image work, deep for planning, review, debugging, architecture, security, database, research, release, or other judgment',
@@ -122,9 +138,13 @@ export function buildOfficialSubagentPrompt(input: {
     ? [
         '- the parent orchestrates only: decompose the goal, assign disjoint slices, spawn children, and integrate their results',
         '- do not implement the assigned slice work in the parent thread',
-        '- use the model and reasoning_effort named in each slice spawn contract; each is the newest model of its tier',
-        ...tierRules,
-        '- keep a stored user role-model preference for that role'
+        ...(listOnly
+          ? ['- use the model (and reasoning_effort, when named) in each slice spawn contract; each is on the user\'s OpenRouter subagent list']
+          : [
+              '- use the model and reasoning_effort named in each slice spawn contract; each is the newest model of its tier',
+              ...tierRules,
+              '- keep a stored user role-model preference for that role'
+            ])
       ].join('\n')
     : tierRules.join('\n')
   const parentOutputMode = input.parentOutputMode === 'app_naruto_stdin'
@@ -135,6 +155,24 @@ export function buildOfficialSubagentPrompt(input: {
     const paths = (slice.paths || []).map((entry) => String(entry).trim()).filter(Boolean)
     const role = officialSubagentOnDemandRoleCatalog([agentName])[0]
     const routed = input.routedAgents?.[agentName]
+    if (listOnly) {
+      // A read-only role keeps its sandbox through the model-less read-only role.
+      const readOnly = slice.readOnly === true || role?.sandbox_mode === 'read-only'
+      const listed = renderListSliceContract({
+        agentName,
+        brief: role?.description || slice.description,
+        readOnly,
+        routed,
+        allowlist: listOnly
+      })
+      return [
+        `${index + 1}. [${slice.id}] role \`${agentName}\` (brief in message; ${readOnly ? `agent_type \`${READ_ONLY_LIST_ROLE.codex_name}\`` : 'no agent_type'})`,
+        `   ${slice.title}: ${slice.description}`,
+        `   model: ${listed.model}`,
+        `   spawn contract: ${listed.contract}`,
+        `   mode: ${readOnly ? 'read-only' : mode}; paths: ${paths.join(', ') || 'assigned by parent'}`
+      ].join('\n')
+    }
     const sealedReasoning = routed?.routed_model_reasoning_effort
       || effortPreferences[agentName]
       || role?.model_reasoning_effort
@@ -177,9 +215,11 @@ Host capability policy:
 Subagent rules:
 - parent model policy: ${activeMainModel ? `keep the current app-selected main model ${activeMainModel.provider}:${activeMainModel.model}` : 'keep the user-selected parent model'}
 - use only Codex official subagent threads; do not launch shell workers, a custom scheduler, a worker pool, or model fanout
-- select the narrowest matching project custom agent by its description; the custom agent name is the spawn type
+- ${listOnly
+    ? `select the narrowest matching role from the catalog by its description and put its brief in \`message\`; do not pass a catalog role as \`agent_type\`: role files pin a tier model that Codex will not let a spawn override. Read-only slices pass \`agent_type="${READ_ONLY_LIST_ROLE.codex_name}"\` (read-only sandbox, no pinned model); if Codex reports that role unknown, never spawn the slice without it: report that the user must run \`sks doctor --fix\` in this project and start a new thread`
+    : 'select the narrowest matching project custom agent by its description; the custom agent name is the spawn type'}
 - custom \`agent_type\` selection and spawn-time \`model\`/\`reasoning_effort\` overrides must use \`fork_turns="none"\` or a positive bounded turn count, with the complete bounded slice contract in \`message\`; context contract: pass fork_turns="none" for listed slices
-- \`spawn_agent\` has no provider argument; ${narutoChildren ? 'Naruto children use the tier model named in the spawn contract' : 'children use the sealed model slug'}
+- \`spawn_agent\` has no provider argument; ${listOnly ? 'children use the OpenRouter list model named in the spawn contract' : narutoChildren ? 'Naruto children use the tier model named in the spawn contract' : 'children use the sealed model slug'}
 - never combine \`fork_turns="all"\` or the omitted/default full-history mode with \`agent_type\`, \`model\`, or \`reasoning_effort\`; Codex rejects that start before SubagentStart
 - never use a full-history fork for SKS children
 ${spawnModelRouting}
@@ -308,6 +348,62 @@ function renderSpawnModelRouting(narutoChildRouting: boolean, jevRouting: boolea
   ].join('\n')
 }
 
+/**
+ * OpenRouter Only Mode routing text: the parent sees the user's list with its
+ * criteria instead of tier rules, and learns that nothing else can spawn.
+ */
+function renderListSpawnModelRouting(entries: readonly SubagentModelEntry[], jevRouting: boolean): string {
+  const rows = entries.map((entry) => `  - \`${entry.model}\`${entry.default ? ' (default)' : ''}${entry.reasoning_effort ? ` [${entry.reasoning_effort}]` : ''}: ${entry.criteria || 'general work'}`)
+  return [
+    '- OpenRouter Only Mode: every child runs a model from the user\'s subagent list; any other model is denied by the SKS spawn hook and the Desktop Bridge',
+    rows.length
+      ? '- allowed child models and when to use each (the default when none fits):'
+      : '- the subagent list is empty: spawn nothing and report that a model must be added in Control Center > Subagent Models',
+    ...rows,
+    // Jev chooses only when there is a choice to make.
+    jevRouting && entries.length > 1
+      ? '- Jev mode: Jev picks each child\'s list model from these criteria and the SKS PreToolUse hook seals it on every spawn_agent call; pass the contract model unchanged and spend no time choosing models'
+      : '- slices created after decomposition take the list model whose criteria fit, else the default',
+    '- parent selection never overrides the child model; stored role-model preferences are ignored in this mode',
+    '- preserve the user-selected parent model, reasoning effort, and service tier'
+  ].join('\n')
+}
+
+function renderListSliceContract(input: {
+  agentName: string
+  brief: string
+  readOnly: boolean
+  routed: { routed_model?: string; routed_model_reasoning_effort?: string | null } | undefined
+  allowlist: Extract<ChildModelAllowlist, { mode: 'openrouter_only' }>
+}): { model: string; contract: string } {
+  // A row model off the list (a tier model) never passes through: the slice
+  // takes the default entry at that entry's effort.
+  const routedModel = allowlistedChildModel(input.routed?.routed_model, input.allowlist)
+  const model = routedModel || input.allowlist.default_model
+  if (!model) {
+    return {
+      model: 'none (the OpenRouter subagent list is empty)',
+      contract: 'stop before spawning: the user must add a model to the subagent list first'
+    }
+  }
+  const entry = input.allowlist.entries.find((row) => row.model === model)
+  const routedEffort = String(input.routed?.routed_model_reasoning_effort || '')
+  const effort = routedModel && (SUBAGENT_MODEL_EFFORTS as readonly string[]).includes(routedEffort)
+    ? routedEffort
+    : entry?.reasoning_effort ?? null
+  const brief = String(input.brief || '').replace(/\s+/g, ' ').trim().slice(0, 200)
+  return {
+    model: `${model} (${effort ? `effort ${effort}` : 'model default effort'}, OpenRouter list)`,
+    contract: [
+      input.readOnly
+        ? `pass agent_type=${JSON.stringify(READ_ONLY_LIST_ROLE.codex_name)} (keeps the read-only sandbox; the \`${input.agentName}\` role file pins a tier model)`
+        : `omit agent_type (the \`${input.agentName}\` role file pins a tier model)`,
+      `pass model=${JSON.stringify(model)}${effort ? ` and reasoning_effort=${JSON.stringify(effort)}` : ' with no reasoning_effort'} and fork_turns="none"`,
+      `open message with the role brief: ${brief}${input.readOnly ? ' Do not edit files.' : ''}`
+    ].join('; ')
+  }
+}
+
 export interface OfficialSubagentSliceSafety {
   safe: boolean
   blockers: string[]
@@ -419,7 +515,7 @@ function renderDecisionContract(value: {
   ].filter(Boolean).join('\n')
 }
 
-function renderAgentCatalog(requested: readonly string[]): string {
+function renderAgentCatalog(requested: readonly string[], options: { roleModels: boolean } = { roleModels: true }): string {
   const names = [...new Set(requested.map(String).map((name) => name.trim()).filter(Boolean))]
   const selected = officialSubagentOnDemandRoleCatalog(names.length ? names : ['expert'])
   const preferred = new Set(names)
@@ -427,7 +523,8 @@ function renderAgentCatalog(requested: readonly string[]): string {
     `- metadata mode: on-demand (${selected.length}/${officialSubagentRoleCatalog().length} roles included; full catalog is not injected)`,
     ...selected.map((role) => {
       const marker = preferred.has(role.name) ? ' [suggested for this goal]' : ''
-      return `- \`${role.name}\`${marker}: ${role.model}/${role.model_reasoning_effort}, ${role.sandbox_mode}; ${role.description}`
+      const model = options.roleModels ? `${role.model}/${role.model_reasoning_effort}, ` : ''
+      return `- \`${role.name}\`${marker}: ${model}${role.sandbox_mode}; ${role.description}`
     })
   ].join('\n')
 }

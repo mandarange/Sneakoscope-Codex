@@ -7,6 +7,7 @@ import { COMMANDS } from '../../../cli/command-registry.js';
 import { COMMAND_MANIFEST_BY_NAME } from '../../../cli/command-manifest-lite.js';
 import { COMMAND_CATALOG } from '../../routes.js';
 import { UsageError, parseDecisionArgs, runDecisionCommand, usage } from '../cli.js';
+import { writeOpenRouterOnlyState } from '../../subagents/child-model-allowlist.js';
 
 async function tempEnv(t: test.TestContext): Promise<NodeJS.ProcessEnv> {
   const base = await fsp.mkdtemp(path.join(process.env.TMPDIR || '/tmp', 'sks-jev-cli-'));
@@ -94,6 +95,38 @@ test('enable requires the pinned model and cloud consent; disable returns to bas
   const disabled = await capture(() => runDecisionCommand(['disable', '--json'], env));
   assert.equal(disabled.value, 0);
   assert.equal(JSON.parse(disabled.stdout).config.mode, 'off');
+});
+
+test('status reports OpenRouter Only Mode and swaps child tier points for the child_model point', async (t) => {
+  const env = await tempEnv(t);
+  const off = JSON.parse((await capture(() => runDecisionCommand(['status', '--json'], env))).stdout);
+  assert.deepEqual(off.openrouter_only, { enabled: false, subagent_model_count: 0, default_subagent_model: null, child_model_decision: null });
+  await capture(() => runDecisionCommand(['enable', '--provider', 'openrouter', '--model', 'typesafe/jev-1.13', '--consent-cloud', '--json'], env));
+  const tiers = JSON.parse((await capture(() => runDecisionCommand(['status', '--json'], env))).stdout);
+  assert.ok(tiers.decision_points.includes('spawn_tier'));
+  assert.ok(tiers.decision_points.includes('role_omission'));
+  // Mode off keeps the text status as it was: no OpenRouter Only line.
+  assert.doesNotMatch((await capture(() => runDecisionCommand(['status'], env))).stdout, /openrouter-only/);
+  assert.equal(tiers.decision_points.includes('child_model'), false);
+
+  await writeOpenRouterOnlyState({
+    enabled: true,
+    subagent_models: [
+      { model: 'google/gemini-3.8-flash', criteria: 'fast', reasoning_effort: null, default: false },
+      { model: 'z-ai/glm-5.3', criteria: 'deep', reasoning_effort: 'high', default: true }
+    ]
+  }, { env });
+  const listed = await capture(() => runDecisionCommand(['status', '--json'], env));
+  const report = JSON.parse(listed.stdout);
+  assert.ok(report.decision_points.includes('child_model'));
+  for (const point of ['spawn_tier', 'worker_tier', 'role_tiers', 'role_omission']) assert.equal(report.decision_points.includes(point), false, point);
+  assert.ok(report.decision_points.includes('turn_route'));
+  // No OpenRouter key: Jev cannot decide, so children take the default entry.
+  assert.deepEqual(report.openrouter_only, { enabled: true, subagent_model_count: 2, default_subagent_model: 'z-ai/glm-5.3', child_model_decision: 'default_entry' });
+  const keyed = JSON.parse((await capture(() => runDecisionCommand(['status', '--json'], { ...env, OPENROUTER_API_KEY: 'sk-or-test-statuslistaaaaaaaa' }))).stdout);
+  assert.equal(keyed.openrouter_only.child_model_decision, 'jev');
+  const text = await capture(() => runDecisionCommand(['status'], env));
+  assert.match(text.stdout, /openrouter-only: on · child models by default_entry · 2 listed/);
 });
 
 test('probe without a key is unavailable and evaluate writes a synthetic report', async (t) => {

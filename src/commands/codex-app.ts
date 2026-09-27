@@ -40,7 +40,9 @@ export async function run(_command: any, args: any = []) {
     }
     console.log(`Codex 1M Context: ${result.enabled ? 'enabled' : 'disabled'}`);
     console.log(`Config: ${result.config_path}`);
-    console.log(`Model: ${result.model || 'not set'} (documented for ${result.expected_model})`);
+    const window = result.model_window;
+    console.log(`Model: ${result.model || 'not set'}${window.effective_window ? ` · window ${window.effective_window} (default ${window.default_window ?? 'unknown'}, max ${window.max_window ?? 'uncapped'})` : ' · window unknown'}`);
+    if (result.larger_window_models.length) console.log(`Models with a larger window: ${result.larger_window_models.join(', ')}`);
     for (const [key, target] of Object.entries(result.target)) {
       const state = (result.keys as Record<string, { present: boolean; managed: boolean; value: number | null }>)[key];
       const detail = state?.present ? `${state.value ?? 'unparsed'}${state.managed ? ' (SKS-managed)' : ''}` : 'not set';

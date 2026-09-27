@@ -476,3 +476,78 @@ test('Jev mode hands the parent no tier rules to weigh', () => {
   assert.match(plain, /- tiers: fast for tiny mechanical shards/)
   assert.ok(Buffer.byteLength(jev, 'utf8') < Buffer.byteLength(plain, 'utf8'))
 })
+
+test('OpenRouter Only Mode lists the allowed models with criteria and seals each slice to a list model', () => {
+  const entries = [
+    { model: 'google/gemini-3.8-flash', criteria: 'Fast UI edits and renames.', reasoning_effort: 'low' as const, default: false },
+    { model: 'z-ai/glm-5.3', criteria: 'Deep refactors and debugging.', reasoning_effort: null, default: true }
+  ]
+  const childModels = {
+    mode: 'openrouter_only' as const,
+    models: entries.map((entry) => entry.model),
+    entries,
+    default_model: 'z-ai/glm-5.3'
+  }
+  const input = {
+    goal: 'Rename one label and review the parser',
+    maxThreads: 4,
+    narutoChildRouting: true,
+    slices: [
+      { id: 'A', title: 'Rename', description: 'Rename the save label', kind: 'worker' as const, agent: 'worker', paths: ['src/a.ts'] },
+      { id: 'B', title: 'Review', description: 'Review parser risk', kind: 'expert' as const, agent: 'architecture_reviewer', paths: ['src/b.ts'], readOnly: true }
+    ],
+    routedAgents: {
+      worker: { routed_model: 'Google/Gemini-3.8-Flash', routed_model_reasoning_effort: 'low' },
+      // A tier model on a row is never passed through: the slice falls back to
+      // the default entry at the entry's effort, not the row's.
+      architecture_reviewer: { routed_model: T.deep, routed_model_reasoning_effort: 'medium' }
+    },
+    roleModelPreferences: { worker: { provider: 'openai', model: T.deep, reasoning_effort: 'max', updated_at: '2026-09-27T00:00:00.000Z' } }
+  }
+  const prompt = buildOfficialSubagentPrompt({ ...input, childModels })
+  assert.match(prompt, /OpenRouter Only Mode: every child runs a model from the user's subagent list; any other model is denied by the SKS spawn hook and the Desktop Bridge/)
+  assert.ok(prompt.includes('  - `google/gemini-3.8-flash` [low]: Fast UI edits and renames.'))
+  assert.ok(prompt.includes('  - `z-ai/glm-5.3` (default): Deep refactors and debugging.'))
+  assert.ok(prompt.includes('pass model="google/gemini-3.8-flash" and reasoning_effort="low" and fork_turns="none"'))
+  assert.ok(prompt.includes('pass model="z-ai/glm-5.3" with no reasoning_effort and fork_turns="none"'))
+  // The model line names the id alone; the effort is a separate word, never `id/effort`.
+  assert.ok(prompt.includes('   model: google/gemini-3.8-flash (effort low, OpenRouter list)'))
+  assert.ok(prompt.includes('   model: z-ai/glm-5.3 (model default effort, OpenRouter list)'))
+  assert.doesNotMatch(prompt, /model: [^\n]*\/(low|medium|high|xhigh) \(OpenRouter list\)/)
+  // Role files pin a tier model Codex will not let a spawn override, so the role travels in message.
+  assert.match(prompt, /omit agent_type \(the `worker` role file pins a tier model\)/)
+  assert.match(prompt, /do not pass a catalog role as `agent_type`/)
+  // A read-only slice keeps its sandbox through the model-less read-only role, never by dropping agent_type.
+  assert.ok(prompt.includes('pass agent_type="read_only_list_child" (keeps the read-only sandbox; the `architecture_reviewer` role file pins a tier model)'))
+  assert.match(prompt, /\[B\] role `architecture_reviewer` \(brief in message; agent_type `read_only_list_child`\)/)
+  assert.match(prompt, /\[A\] role `worker` \(brief in message; no agent_type\)/)
+  assert.match(prompt, /if Codex reports that role unknown, never spawn the slice without it/)
+  assert.match(prompt, /Do not edit files\./)
+  // The role's own read-only sandbox counts even when the slice is not flagged read-only.
+  const explorer = buildOfficialSubagentPrompt({
+    ...input,
+    childModels,
+    slices: [{ id: 'C', title: 'Map', description: 'Map the parser entry points', kind: 'expert' as const, agent: 'explorer', paths: ['src/c.ts'] }]
+  })
+  assert.match(explorer, /\[C\] role `explorer` \(brief in message; agent_type `read_only_list_child`\)/)
+  assert.match(explorer, /   mode: read-only; paths: src\/c\.ts/)
+  assert.match(prompt, /slices created after decomposition take the list model whose criteria fit, else the default/)
+  assert.match(prompt, /stored role-model preferences are ignored in this mode/)
+  assert.doesNotMatch(prompt, /- tiers: fast for tiny mechanical shards/)
+  assert.doesNotMatch(prompt, /stored role effort preferences override/)
+  assert.doesNotMatch(prompt, /newest model of (its|the role) tier/)
+  for (const tierModel of Object.values(T)) assert.ok(!prompt.includes(tierModel), tierModel)
+
+  const jev = buildOfficialSubagentPrompt({ ...input, childModels, jevRouting: true })
+  assert.match(jev, /Jev mode: Jev picks each child's list model from these criteria/)
+  assert.doesNotMatch(jev, /Jev picks each child tier/)
+
+  const empty = buildOfficialSubagentPrompt({ ...input, childModels: { ...childModels, models: [], entries: [], default_model: null } })
+  assert.match(empty, /the subagent list is empty: spawn nothing/)
+  assert.match(empty, /stop before spawning: the user must add a model to the subagent list first/)
+
+  // With the mode off the same input keeps the tier contract byte for byte.
+  const tiers = buildOfficialSubagentPrompt(input)
+  assert.equal(buildOfficialSubagentPrompt({ ...input, childModels: { mode: 'tiers', models: Object.values(T), entries: [], default_model: null } }), tiers)
+  assert.match(tiers, /- tiers: fast for tiny mechanical shards/)
+})

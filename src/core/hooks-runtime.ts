@@ -50,7 +50,8 @@ import {
 import { classifyTaskProfile } from './runtime/task-profile.js';
 import { resolveSubagentThreadBudget } from './subagents/thread-budget.js';
 import { readOfficialSubagentConfig } from './subagents/official-subagent-config.js';
-import { jevSpawnModelRewrite } from './hooks-runtime/jev-spawn-routing.js';
+import { jevSpawnRouting, openRouterOnlyJevTurnLine } from './hooks-runtime/jev-spawn-routing.js';
+import { effectiveChildModelAllowlist } from './subagents/child-model-allowlist.js';
 import { maybeReconcileManagedGuidancePreflight } from './hooks-runtime/managed-guidance-preflight.js';
 import {
   evaluateParentOrchestrationGate,
@@ -411,12 +412,17 @@ async function attachJevTurnRouting(root: string, payload: any, result: any, orc
   // The parent thread always keeps the user-selected model and effort, and a
   // model cannot switch its own model mid-turn. On an orchestration turn the
   // answer is the default child seal (Jev re-seals every spawn); elsewhere it
-  // is only a reasoning hint.
-  const line = decision.model
+  // is only a reasoning hint. OpenRouter Only children never run a tier model:
+  // the line names the user's list instead.
+  const tierLine = decision.model
     ? orchestrationRequired
       ? `Jev rated this task as ${decision.model} (${decision.effort}). Use that as the default child seal; Jev re-seals every spawn_agent call and the parent model stays as the user set it.`
       : `Jev rated this turn as ${decision.effort}-effort work (${decision.model} tier). Treat it as this turn's reasoning hint; the parent model, effort, and service tier stay as the user set them.`
     : '';
+  const allowlist = effectiveChildModelAllowlist();
+  const line = allowlist.mode === 'openrouter_only'
+    ? openRouterOnlyJevTurnLine(allowlist, decision.effort, orchestrationRequired)
+    : tierLine;
   if (!line) return { ...result, jev_turn: decision };
   const additionalContext = [result.additionalContext, line].filter(Boolean).join('\n\n');
   return {
@@ -775,7 +781,11 @@ async function consumeActiveOfficialWorkflowQueue(
   }
 }
 async function hookPreTool(root: any, state: any, payload: any, noQuestion: any, sessionKey: any = null) {
-  const jevSpawnInput = await jevSpawnModelRewrite(root, state, payload).catch(() => null);
+  // Rewrite first, then deny on the rewritten input: in OpenRouter Only mode
+  // every spawn is routed to a list model, and a failed routing leaves the
+  // original input to the same deny.
+  const jevSpawn = await jevSpawnRouting(root, state, payload).catch(() => null);
+  const jevSpawnInput = jevSpawn?.input ?? null;
   const spawnPayload = jevSpawnInput
     ? { ...payload, tool_input: jevSpawnInput, toolInput: jevSpawnInput }
     : payload;
@@ -855,7 +865,9 @@ async function hookPreTool(root: any, state: any, payload: any, noQuestion: any,
   if (hostCapabilityDecision && hostCapabilityDecision.continue !== true) return hostCapabilityDecision;
   // Every guard above accepted this spawn_agent call: from here on the
   // mission has a child, and the parent may integrate once it settles.
-  if (isSpawnToolPayload(spawnPayload)) await recordParentOrchestrationSpawn(root, state).catch(() => null);
+  if (isSpawnToolPayload(spawnPayload)) {
+    await recordParentOrchestrationSpawn(root, state, jevSpawn?.route ? { spawnRoute: jevSpawn.route } : {}).catch(() => null);
+  }
   const waveGuidance = await parentWaveGuidanceContext(root, state, sessionKey).catch(() => '');
   const escapeNote = orchestration?.action === 'escape' ? orchestration.message || '' : '';
   const additionalContext = [skillRefresh.context, waveGuidance, escapeNote].filter(Boolean).join('\n\n');

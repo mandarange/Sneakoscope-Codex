@@ -56,7 +56,7 @@ final class SettingsViewController: NSViewController, ControlCenterPage {
         )
         let contextCard = NativeView.card(
             title: "Codex 1M Context",
-            subtitle: "Allow up to 1M tokens for GPT-5.6 Sol. New sessions use this setting; running Codex restarts. Requests over 272K input tokens use the long-context rate for the entire request.",
+            subtitle: "Let every Codex model use its largest context window, up to 1M tokens. New sessions use this setting; running Codex restarts. Requests over 272K input tokens use the long-context rate for the entire request.",
             views: [NativeView.row([contextToggleButton]), contextStatus]
         )
         let notificationsCard = NativeView.card(
@@ -173,12 +173,18 @@ final class SettingsViewController: NSViewController, ControlCenterPage {
             self.contextToggleButton.title = enabled ? "Disable 1M Context" : "Enable 1M Context"
             guard !preserveStatusText else { return }
             let model = json["model"] as? String
+            let window = json["model_window"] as? [String: Any]
+            let effective = window?["effective_window"] as? Int
             var text = enabled
-                ? "Enabled · window 1,000,000 · auto-compact 900,000 · applies to new sessions only."
+                ? "Enabled · applies to new sessions only."
                 : "Disabled · Codex uses its tuned default context window."
             var tone: NSColor = enabled ? .systemGreen : .secondaryLabelColor
-            if enabled, let model = model, model != "gpt-5.6-sol" {
-                text += " Active model is \(model); the 1M window is documented for gpt-5.6-sol."
+            if let model = model, let effective = effective {
+                let size = NumberFormatter.localizedString(from: NSNumber(value: effective), number: .decimal)
+                text += enabled ? " \(model) window \(size) tokens." : " \(model) can use up to \(size) tokens."
+            }
+            if enabled, let model = model, window?["extends"] as? Bool == false {
+                text += " \(model) has a fixed window, so this setting does not enlarge it."
                 tone = .systemOrange
             }
             self.contextStatus.stringValue = text

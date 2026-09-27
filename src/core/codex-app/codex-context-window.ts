@@ -1,9 +1,11 @@
+import path from 'node:path'
 import { exists, readText } from '../fsx.js'
 import { escapeRegExp } from '../text/regex.js'
 import { safeWriteCodexConfigToml } from '../codex-runtime/codex-desktop-config-policy.js'
-import { codexUserConfigPath, readTopLevelTomlString } from './codex-model-catalog.js'
+import { codexHomePath, codexUserConfigPath, readTopLevelTomlString } from './codex-model-catalog.js'
 import { isCodexAppRunningByBundleId } from './menubar/config.js'
 import { restartCodexApp } from './codex-app-restart.js'
+import { maybeRestartRunningCodexApp, type CodexAppRestartOutcome } from './codex-app-restart-policy.js'
 
 export const CODEX_CONTEXT_1M_SCHEMA = 'sks.codex-context-1m.v1'
 // Inline marker: keeping ownership and the pre-enable value on the key line
@@ -15,9 +17,10 @@ export const CODEX_CONTEXT_1M_TARGETS = {
   model_context_window: 1_000_000,
   model_auto_compact_token_limit: 900_000
 } as const
-// The 1M opt-in is documented by OpenAI for GPT-5.6 Sol only; the keys are
-// global and not model-aware, so a smaller-window model would overflow.
-export const CODEX_CONTEXT_1M_MODEL = 'gpt-5.6-sol'
+// The keys are global, but Codex caps them per model: the window becomes
+// min(model_context_window, the model's max_context_window) and auto-compact
+// stays at or below 90% of that window. Which models gain a larger window is
+// therefore read from Codex's own model metadata, never from a pinned name.
 
 export type CodexContext1mKey = keyof typeof CODEX_CONTEXT_1M_TARGETS
 const MANAGED_KEYS = Object.keys(CODEX_CONTEXT_1M_TARGETS) as CodexContext1mKey[]
@@ -91,6 +94,65 @@ export function inspectCodexContext1m(text: string): CodexContext1mInspection {
   return { enabled, model: readTopLevelTomlString(String(text || ''), 'model'), keys, warnings }
 }
 
+/** What the active model gets from Codex once the keys are on. */
+export interface CodexContextModelWindow {
+  source: 'codex_models_cache' | 'unknown'
+  default_window: number | null
+  max_window: number | null
+  effective_window: number | null
+  extends: boolean | null
+}
+
+interface CodexModelWindowRow {
+  slug: string
+  listed: boolean
+  default_window: number | null
+  max_window: number | null
+}
+
+function positiveInt(value: unknown): number | null {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : null
+}
+
+/** Context-window metadata per model from `$CODEX_HOME/models_cache.json`. */
+export async function readCodexModelWindows(input: { env?: NodeJS.ProcessEnv; home?: string } = {}): Promise<CodexModelWindowRow[]> {
+  const text = await readText(path.join(codexHomePath(input), 'models_cache.json'), '')
+  let parsed: unknown = null
+  try {
+    parsed = JSON.parse(String(text || 'null'))
+  } catch {
+    return []
+  }
+  const models = (parsed as { models?: unknown } | null)?.models
+  if (!Array.isArray(models)) return []
+  return models.flatMap((row): CodexModelWindowRow[] => {
+    if (!row || typeof row !== 'object') return []
+    const record = row as Record<string, unknown>
+    const slug = typeof record.slug === 'string' ? record.slug.trim() : ''
+    if (!slug) return []
+    return [{
+      slug,
+      listed: record.visibility !== 'hide',
+      default_window: positiveInt(record.context_window),
+      max_window: positiveInt(record.max_context_window)
+    }]
+  })
+}
+
+export function codexContextModelWindow(rows: readonly CodexModelWindowRow[], model: string | null): CodexContextModelWindow {
+  const row = model ? rows.find((candidate) => candidate.slug === model) : undefined
+  if (!row) return { source: 'unknown', default_window: null, max_window: null, effective_window: null, extends: null }
+  const target = CODEX_CONTEXT_1M_TARGETS.model_context_window
+  const effective = row.max_window === null ? target : Math.min(target, row.max_window)
+  return {
+    source: 'codex_models_cache',
+    default_window: row.default_window,
+    max_window: row.max_window,
+    effective_window: effective,
+    extends: row.default_window === null ? null : effective > row.default_window
+  }
+}
+
 export interface CodexContext1mMutation {
   next: string
   changed: boolean
@@ -160,14 +222,7 @@ export function normalizeCodexContext1mAction(value: unknown): CodexContext1mAct
   return 'status'
 }
 
-export interface CodexContext1mRestartOutcome {
-  attempted: boolean
-  running: boolean | null
-  status: string
-  reason: string | null
-  ok: boolean
-  blockers: string[]
-}
+export type CodexContext1mRestartOutcome = CodexAppRestartOutcome
 
 export interface CodexContext1mCommandOptions {
   env?: NodeJS.ProcessEnv
@@ -211,14 +266,18 @@ export async function codexContext1mCommand(args: string[] = [], opts: CodexCont
 
   const inspection = inspectCodexContext1m(afterText)
   warnings.push(...inspection.warnings)
+  const windowRows = await readCodexModelWindows({ env, ...(opts.home ? { home: opts.home } : {}) })
+  const modelWindow = codexContextModelWindow(windowRows, inspection.model)
   if (action === 'on' || inspection.enabled) {
     if (!inspection.model) warnings.push('codex_context_model_line_missing')
-    else if (inspection.model !== CODEX_CONTEXT_1M_MODEL) warnings.push(`codex_context_active_model_not_${CODEX_CONTEXT_1M_MODEL}:${inspection.model}`)
+    else if (modelWindow.source === 'unknown') warnings.push(`codex_context_model_window_unknown:${inspection.model}`)
+    else if (modelWindow.max_window === null) warnings.push(`codex_context_model_window_uncapped:${inspection.model}`)
+    else if (modelWindow.extends === false) warnings.push(`codex_context_model_window_fixed:${inspection.model}:${modelWindow.max_window}`)
   }
 
   let restart: CodexContext1mRestartOutcome | null = null
   if ((action === 'on' || action === 'off') && !blockers.length) {
-    restart = await maybeRestartCodexApp({
+    restart = await maybeRestartRunningCodexApp({
       env,
       changed,
       noRestart,
@@ -236,7 +295,11 @@ export async function codexContext1mCommand(args: string[] = [], opts: CodexCont
     enabled: inspection.enabled,
     config_path: configPath,
     model: inspection.model,
-    expected_model: CODEX_CONTEXT_1M_MODEL,
+    model_window: modelWindow,
+    // Listed models whose Codex maximum is above their default window.
+    larger_window_models: windowRows
+      .filter((row) => row.listed && row.max_window !== null && row.default_window !== null && row.max_window > row.default_window)
+      .map((row) => row.slug),
     target: { ...CODEX_CONTEXT_1M_TARGETS },
     keys: inspection.keys,
     previous: mutation && action === 'on' ? mutation.previous : null,
@@ -248,6 +311,7 @@ export async function codexContext1mCommand(args: string[] = [], opts: CodexCont
     warnings,
     notes: [
       'Only new Codex sessions pick up context-window changes; existing conversations keep their previous limits.',
+      'Codex caps the window at each model\'s maximum, so every model gets its largest supported window up to 1M.',
       'Requests with more than 272K input tokens are billed at the long-context rate (2x input / 1.5x output) for the entire request.'
     ],
     cli_commands: {
@@ -256,29 +320,4 @@ export async function codexContext1mCommand(args: string[] = [], opts: CodexCont
       off: 'sks codex-app context-1m off'
     }
   }
-}
-
-async function maybeRestartCodexApp(input: {
-  env: NodeJS.ProcessEnv
-  changed: boolean
-  noRestart: boolean
-  root?: string
-  isRunningImpl?: typeof isCodexAppRunningByBundleId
-  restartImpl?: typeof restartCodexApp
-}): Promise<CodexContext1mRestartOutcome> {
-  const skippedOutcome = (reason: string): CodexContext1mRestartOutcome => (
-    { attempted: false, running: null, status: 'skipped', reason, ok: true, blockers: [] }
-  )
-  if (input.noRestart) return skippedOutcome('no_restart_flag')
-  if (!input.changed) return skippedOutcome('config_unchanged')
-  if (input.env.SKS_SKIP_CODEX_APP_RESTART === '1') return skippedOutcome('SKS_SKIP_CODEX_APP_RESTART')
-  if (process.platform !== 'darwin') return skippedOutcome('not_macos')
-  const bundleId = String(input.env.SKS_CODEX_APP_BUNDLE_ID || 'com.openai.codex')
-  const running = await (input.isRunningImpl || isCodexAppRunningByBundleId)(bundleId, input.env)
-  if (!running) {
-    // SKS never launches Codex on its own; the new config applies on next launch.
-    return { attempted: false, running: false, status: 'skipped', reason: 'codex_not_running', ok: true, blockers: [] }
-  }
-  const result = await (input.restartImpl || restartCodexApp)({ env: input.env, ...(input.root ? { root: input.root } : {}) })
-  return { attempted: true, running: true, status: result.status, reason: null, ok: result.ok, blockers: result.blockers }
 }

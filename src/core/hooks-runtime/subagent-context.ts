@@ -1,8 +1,10 @@
 import path from 'node:path';
 import { readJson } from '../fsx.js';
 import { managedOfficialSubagentRoleByName } from '../managed-assets/managed-assets-manifest.js';
-import { latestModelForTier, latestTierModelSet } from '../subagents/model-tiers.js';
+import { latestModelForTier } from '../subagents/model-tiers.js';
+import { effectiveChildModelAllowlist } from '../subagents/child-model-allowlist.js';
 import { jevEnabled, readDecisionConfig } from '../decisions/config.js';
+import { renderChildModelList } from './subagent-spawn-policy.js';
 
 export async function sealedSubagentRoutingContext(artifactDir: string, payload: any = {}) {
   const plan: any = await readJson(path.join(artifactDir, 'subagent-plan.json'), null).catch(() => null);
@@ -12,6 +14,17 @@ export async function sealedSubagentRoutingContext(artifactDir: string, payload:
   const planned = agentName && agents[agentName] ? agents[agentName] : null;
   const role = agentName ? managedOfficialSubagentRoleByName(agentName) : null;
   if (!agentName) return '';
+  // OpenRouter Only: the PreToolUse hook sealed a list model on the spawn call
+  // itself; a plan or role tier model is never this child's model.
+  const allowlist = effectiveChildModelAllowlist();
+  if (allowlist.mode === 'openrouter_only') {
+    return [
+      'SKS sealed child routing:',
+      `- custom agent: ${agentName}`,
+      `- model and model_reasoning_effort: sealed on the spawn call from the OpenRouter Only subagent list (${renderChildModelList(allowlist) || 'empty'})`,
+      '- keep this sealed profile; do not retarget model/effort or spawn nested agents'
+    ].join('\n');
+  }
   const narutoPlan = plan.mode === 'naruto' || plan.route === '$Naruto'
   // With Jev on, the PreToolUse hook re-seals model and effort on the spawn
   // call itself, so the planned role model is no longer the child's model.
@@ -25,7 +38,7 @@ export async function sealedSubagentRoutingContext(artifactDir: string, payload:
     ].join('\n');
   }
   const plannedModel = String(planned?.routed_model || planned?.model || '').trim()
-  const sealedModels = latestTierModelSet()
+  const sealedModels = new Set(allowlist.models)
   const model = narutoPlan && sealedModels.has(plannedModel) ? plannedModel : (role?.model || latestModelForTier('deep'))
   const effort = String((model === plannedModel
     ? planned?.routed_model_reasoning_effort || planned?.model_reasoning_effort

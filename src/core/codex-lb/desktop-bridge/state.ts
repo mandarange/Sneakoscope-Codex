@@ -28,6 +28,13 @@ export function desktopBridgeConfigGeneration(config: DesktopBridgeConfig): stri
     client_capability_sha256: config.clientCapabilitySha256,
     allowed_paths: [...config.allowedPathPrefixes], allowed_origins: [...config.allowedOrigins].sort(),
     connect_timeout_ms: config.connectTimeoutMs, idle_timeout_ms: config.idleTimeoutMs,
+    // OpenRouter Only Mode is enforced from the config the process started
+    // with, so a bridge still enforcing an old mode or subagent list must read
+    // as a configuration mismatch. Hashed only when on: with the mode off the
+    // generation stays byte-identical to a bridge that predates it.
+    ...(config.openRouterOnly?.enabled === true
+      ? { openrouter_only: [...config.openRouterOnly.subagent_models].sort() }
+      : {}),
   }));
 }
 

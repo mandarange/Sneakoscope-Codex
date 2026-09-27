@@ -26,6 +26,7 @@ const cases = [
   ['PreToolUse', buildPreToolUseContinue({ additionalContext: 'context' })],
   ['PreToolUse', buildPreToolUseDeny('blocked')],
   ['PreToolUse', buildPreToolUseAllowRewrite({ command: 'npm test' })],
+  ['PreToolUse', buildPreToolUseAllowRewrite({ command: 'npm test' }, { additionalContext: 'context' })],
   ['PermissionRequest', buildPermissionRequestAllow()],
   ['PermissionRequest', buildPermissionRequestDeny('blocked')],
   ['PostToolUse', buildPostToolUseContinue({ additionalContext: 'context' })],
@@ -47,6 +48,13 @@ test('hook output builders emit schema-valid and semantic-valid canonical output
     assert.equal((await validateCodexHookOutput(event, output)).ok, true, event);
     assert.equal(validateCodexHookSemanticOutput(event, output).ok, true, event);
     assert.deepEqual(findSnakeCaseKeys(output), [], event);
+  }
+});
+
+test('PreToolUse allow rewrite carries additionalContext only when it is non-empty', () => {
+  assert.equal(buildPreToolUseAllowRewrite({ command: 'npm test' }, { additionalContext: 'context' }).hookSpecificOutput.additionalContext, 'context');
+  for (const additionalContext of [undefined, '', '   ']) {
+    assert.equal(Object.hasOwn(buildPreToolUseAllowRewrite({ command: 'npm test' }, { additionalContext }).hookSpecificOutput, 'additionalContext'), false);
   }
 });
 

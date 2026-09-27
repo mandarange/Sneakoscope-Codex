@@ -31,6 +31,13 @@
     },
     {
       "schema": "sks.architecture-waiver.v1",
+      "file": "src/core/commands/naruto-command.ts",
+      "reason": "command split debt: run, status and blocked-output rendering are not yet extracted",
+      "policy": "shrink-only",
+      "baseline_lines": 948
+    },
+    {
+      "schema": "sks.architecture-waiver.v1",
       "file": "src/core/agent-bridge/host-capability-runtime.ts",
       "reason": "host-capability runtime carries policy, observation parsing and receipt assembly in one module; pending split",
       "policy": "shrink-only",

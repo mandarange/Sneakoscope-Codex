@@ -1,5 +1,6 @@
 export * from './types.js';
 export * from './security.js';
+export * from './exclusive-provider-guard.js';
 export * from './header-policy.js';
 export * from './location-rewrite.js';
 export * from './state.js';

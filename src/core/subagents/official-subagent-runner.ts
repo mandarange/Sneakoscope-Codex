@@ -369,6 +369,10 @@ export async function runOfficialSubagentWorkflow(input: OfficialSubagentWorkflo
     max_depth: 1,
     parent_model: credentialPolicy.parentModel,
     parent_reasoning_effort: credentialPolicy.parentEffort,
+    // OpenRouter Only Mode: the run's child default is the user's list entry.
+    ...(credentialPolicy.childModelMode === 'openrouter_only'
+      ? { child_model_mode: 'openrouter_only', subagent_model: credentialPolicy.subagentModel }
+      : {}),
     session_scope: input.sessionKey || null,
     host_capability_request: hostCapabilityRequest
   }

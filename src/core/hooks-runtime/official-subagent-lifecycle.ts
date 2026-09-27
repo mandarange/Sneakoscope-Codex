@@ -389,7 +389,9 @@ async function refreshOfficialSubagentCompletionArtifactsLocked(root: any, state
   }
   const previousGate = existingGate || {};
   const parentModel = plan.observed_parent_model || state.observed_parent_model || null;
-  const parentModelMismatch = previousGate.parent_model_match === false || observedParentModelMismatch(parentModel, narutoParentModel());
+  // In OpenRouter Only Mode the plan records the configured main model as the parent policy.
+  const expectedParentModel = typeof plan.parent_model_policy === 'string' && plan.parent_model_policy ? plan.parent_model_policy : narutoParentModel();
+  const parentModelMismatch = previousGate.parent_model_match === false || observedParentModelMismatch(parentModel, expectedParentModel);
   const blockers = [...new Set([
     ...evidence.blockers,
     ...(Array.isArray(previousGate.config_blockers) ? previousGate.config_blockers.map(String) : []),
@@ -412,7 +414,7 @@ async function refreshOfficialSubagentCompletionArtifactsLocked(root: any, state
     route: '$Naruto',
     status: passed ? 'completed' : evidence.status,
     parent: {
-      model: narutoParentModel(),
+      model: expectedParentModel,
       model_reasoning_effort: NARUTO_PARENT_EFFORT,
       observed_model: parentModel,
       observed_model_match: parentModel ? !parentModelMismatch : null

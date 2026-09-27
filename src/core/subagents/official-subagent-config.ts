@@ -7,14 +7,19 @@ import { ensureConfinedDirectory, inspectConfinedPath } from '../managed-path-sa
 import {
   MANAGED_OFFICIAL_SUBAGENT_ROLES,
   managedOfficialSubagentRoleContent,
-  managedOfficialSubagentRoleOwnsText,
-  type ManagedOfficialSubagentRole
+  managedOfficialSubagentRoleOwnsText
 } from '../managed-assets/managed-assets-manifest.js'
 import {
   DEFAULT_SUBAGENT_EFFORT,
   defaultSubagentModel as latestDefaultSubagentModel
 } from './model-policy.js'
 import { latestTierModelSet } from './model-tiers.js'
+import {
+  allowlistedChildModel,
+  effectiveChildModelAllowlist,
+  type ChildModelAllowlist
+} from './child-model-allowlist.js'
+import { READ_ONLY_LIST_ROLE, readOnlyListRoleContent, readOnlyListRoleOwnsText } from './read-only-list-role.js'
 import { HARD_NARUTO_MAX_THREADS } from './thread-budget.js'
 import { escapeRegExp } from '../text/regex.js'
 
@@ -80,6 +85,8 @@ export interface OfficialSubagentConfigMergeOptions {
   sksOwned?: boolean
   inheritedText?: string
   defaultMaxThreads?: number
+  /** Which models a child may run; read from the Codex home when omitted. */
+  childModels?: ChildModelAllowlist
 }
 
 export interface OfficialSubagentConfigMergeResult {
@@ -177,12 +184,16 @@ export function mergeOfficialSubagentConfigResult(
   // The child default follows the latest models, independent of the user's
   // parent model. A current tier model already there is kept; an older one is
   // moved to the latest deep-tier model. Effort remains separately selected.
+  // In OpenRouter Only Mode the default is the list's default entry instead; an
+  // empty list leaves the line alone because no child can spawn until it has one.
+  const childModels = opts.childModels ?? effectiveChildModelAllowlist()
   const existingDefault = /^\s*default_subagent_model\s*=\s*"([^"]*)"/m.exec(next)?.[1] || ''
-  next = upsertTomlTableKey(
-    next,
-    'agents',
-    `default_subagent_model = "${latestTierModelSet().has(existingDefault) ? existingDefault : defaultOfficialSubagentModel()}"`
-  )
+  const childDefault = childModels.mode === 'openrouter_only'
+    ? childModels.default_model
+    : latestTierModelSet().has(existingDefault) ? existingDefault : defaultOfficialSubagentModel()
+  if (childDefault) {
+    next = upsertTomlTableKey(next, 'agents', `default_subagent_model = "${childDefault}"`)
+  }
   next = upsertDefaultUnlessInherited(
     next,
     inheritedAgents,
@@ -324,7 +335,7 @@ const LEGACY_MANAGED_V2_TOTAL_THREADS = Object.freeze([
 
 export async function readOfficialSubagentConfig(
   root: string,
-  opts: { home?: string; codexHome?: string; projectConfigPath?: string } = {}
+  opts: { home?: string; codexHome?: string; projectConfigPath?: string; childModels?: ChildModelAllowlist } = {}
 ): Promise<OfficialSubagentConfig> {
   const projectConfigPath = path.resolve(opts.projectConfigPath || path.join(root, '.codex', 'config.toml'))
   const home = opts.home || process.env.HOME || os.homedir()
@@ -364,10 +375,13 @@ export async function readOfficialSubagentConfig(
     DEFAULT_OFFICIAL_SUBAGENT_INTERRUPT_MESSAGE,
     booleanValue
   )
+  // The mode store lives under HOME (never CODEX_HOME), the same file the hooks and bridge read.
+  const childModels = opts.childModels ?? effectiveChildModelAllowlist({ home })
+  const listDefault = childModels.mode === 'openrouter_only' ? childModels.default_model : null
   const defaultSubagentModel = resolveLayeredValue(
     projectLayer.agents.default_subagent_model,
     globalLayer.agents.default_subagent_model,
-    defaultOfficialSubagentModel(),
+    listDefault ?? defaultOfficialSubagentModel(),
     nonEmptyString
   )
   const defaultSubagentReasoningEffort = resolveLayeredValue(
@@ -389,10 +403,16 @@ export async function readOfficialSubagentConfig(
     )
   }
 
-  const modelCoerced = !latestTierModelSet().has(String(defaultSubagentModel.value))
+  // OpenRouter Only Mode coerces to the list's default entry, never back to a
+  // tier model; with an empty list nothing is coerced (no child can spawn).
+  const childDefault = coercedChildDefault(String(defaultSubagentModel.value), childModels)
+  const modelCoerced = childDefault.coerced
   const depthCoerced = maxDepth.value > 1
   const warnings = [
-    ...(modelCoerced ? [`official_subagent_model_coerced_to_latest:${defaultSubagentModel.value}:${defaultSubagentModel.source}`] : []),
+    ...(modelCoerced
+      ? [`${childModels.mode === 'openrouter_only' ? 'official_subagent_model_coerced_to_list_default' : 'official_subagent_model_coerced_to_latest'}:${defaultSubagentModel.value}:${defaultSubagentModel.source}`]
+      : []),
+    ...(childModels.mode === 'openrouter_only' && !listDefault ? ['official_subagent_model_list_empty_openrouter_only'] : []),
     ...(depthCoerced ? [`official_subagent_max_depth_coerced_to_one:${maxDepth.value}:${maxDepth.source}`] : []),
     ...capacityNormalizationWarnings(maxThreads, multiAgentV2),
     ...(projectLayer.legacyWarnings),
@@ -405,7 +425,7 @@ export async function readOfficialSubagentConfig(
     maxDepth: depthCoerced ? DEFAULT_OFFICIAL_SUBAGENT_MAX_DEPTH : maxDepth.value,
     jobMaxRuntimeSeconds: null,
     interruptMessage: interruptMessage.value,
-    defaultSubagentModel: modelCoerced ? defaultOfficialSubagentModel() : String(defaultSubagentModel.value),
+    defaultSubagentModel: childDefault.model,
     defaultSubagentReasoningEffort: defaultSubagentReasoningEffort.value,
     multiAgentV2: effectiveMultiAgentV2,
     sources: {
@@ -422,6 +442,17 @@ export async function readOfficialSubagentConfig(
     blockers,
     warnings
   }
+}
+
+function coercedChildDefault(value: string, childModels: ChildModelAllowlist): { model: string; coerced: boolean } {
+  if (childModels.mode === 'openrouter_only') {
+    if (!childModels.default_model) return { model: value, coerced: false }
+    const listed = allowlistedChildModel(value, childModels)
+    return listed ? { model: listed, coerced: false } : { model: childModels.default_model, coerced: true }
+  }
+  return latestTierModelSet().has(value)
+    ? { model: value, coerced: false }
+    : { model: defaultOfficialSubagentModel(), coerced: true }
 }
 
 export function officialSubagentConfigWarnings(text: string = '', inheritedText: string = ''): string[] {
@@ -477,11 +508,49 @@ export function resolveInheritedOfficialSubagentConfigPath(
   return globalConfigPath === path.resolve(projectConfigPath) ? null : globalConfigPath
 }
 
+/**
+ * Install the managed project roles. While OpenRouter Only Mode is on this also
+ * installs the model-less read-only role list-mode spawns use; mode off leaves
+ * that file alone and reports exactly the managed catalog.
+ */
 export async function installOfficialSubagentAgentConfigs(
   root: string,
-  opts: { apply?: boolean } = {}
+  opts: { apply?: boolean; childModels?: ChildModelAllowlist } = {}
 ): Promise<OfficialSubagentAgentInstallResult> {
-  return installOfficialSubagentAgentConfigsAt(root, '.codex/agents', opts)
+  const childModels = opts.childModels ?? effectiveChildModelAllowlist()
+  return installOfficialSubagentAgentConfigsAt(root, '.codex/agents', {
+    ...(opts.apply === undefined ? {} : { apply: opts.apply }),
+    readOnlyListRole: childModels.mode === 'openrouter_only'
+  })
+}
+
+interface ManagedRoleFile {
+  filename: string
+  codexName: string
+  expected: string
+  owns: (text: string) => boolean
+  marker: string
+}
+
+function managedRoleFiles(readOnlyListRole: boolean): ManagedRoleFile[] {
+  return [
+    ...MANAGED_OFFICIAL_SUBAGENT_ROLES.map((role) => ({
+      filename: role.filename,
+      codexName: role.codex_name,
+      expected: managedOfficialSubagentRoleContent(role),
+      owns: (text: string) => managedOfficialSubagentRoleOwnsText(text, role),
+      marker: role.ownership_marker
+    })),
+    ...(readOnlyListRole
+      ? [{
+          filename: READ_ONLY_LIST_ROLE.filename,
+          codexName: READ_ONLY_LIST_ROLE.codex_name,
+          expected: readOnlyListRoleContent(),
+          owns: readOnlyListRoleOwnsText,
+          marker: READ_ONLY_LIST_ROLE.ownership_marker
+        }]
+      : [])
+  ]
 }
 
 /** Refresh only roles already present in the active global Codex home. */
@@ -499,9 +568,11 @@ export async function refreshGlobalOfficialSubagentAgentConfigs(
 async function installOfficialSubagentAgentConfigsAt(
   root: string,
   relativeDir: string,
-  opts: { apply?: boolean; existingOnly?: boolean }
+  opts: { apply?: boolean; existingOnly?: boolean; readOnlyListRole?: boolean }
 ): Promise<OfficialSubagentAgentInstallResult> {
   const apply = opts.apply !== false
+  const roleFiles = managedRoleFiles(opts.readOnlyListRole === true)
+  const installedAgents = roleFiles.map((role) => role.codexName)
   const agentsDir = path.join(path.resolve(root), relativeDir)
   const missing: string[] = []
   const existing: string[] = []
@@ -539,8 +610,8 @@ async function installOfficialSubagentAgentConfigsAt(
       schema: 'sks.official-subagent-agent-install.v1',
       ok: false,
       apply,
-      installed_agents: MANAGED_OFFICIAL_SUBAGENT_ROLES.map((role) => role.codex_name),
-      missing: MANAGED_OFFICIAL_SUBAGENT_ROLES.map((role) => role.filename),
+      installed_agents: installedAgents,
+      missing: roleFiles.map((role) => role.filename),
       existing,
       stale,
       created,
@@ -553,10 +624,10 @@ async function installOfficialSubagentAgentConfigsAt(
     }
   }
   if (apply && !opts.existingOnly) await ensureConfinedDirectory(root, agentsDir)
-  for (const role of MANAGED_OFFICIAL_SUBAGENT_ROLES) {
+  for (const role of roleFiles) {
     const absolute = path.join(agentsDir, role.filename)
     const relative = `${relativeDir}/${role.filename}`
-    const expected = managedOfficialSubagentRoleContent(role)
+    const expected = role.expected
     const inspected = await inspectConfinedPath(root, absolute).catch(() => null)
     if (!inspected) {
       preserved.push(relative)
@@ -599,7 +670,7 @@ async function installOfficialSubagentAgentConfigsAt(
       continue
     }
 
-    if (managedOfficialSubagentRoleOwnsText(current, role)) {
+    if (role.owns(current)) {
       stale.push(relative)
       if (apply) {
         await writeTextAtomic(absolute, expected)
@@ -610,7 +681,7 @@ async function installOfficialSubagentAgentConfigsAt(
     }
 
     preserved.push(relative)
-    manualBlockers.push(manualCollisionBlocker(relative, current, role))
+    manualBlockers.push(manualCollisionBlocker(relative, current, role.marker))
   }
 
   const remainingMissing = apply
@@ -620,7 +691,7 @@ async function installOfficialSubagentAgentConfigsAt(
     schema: 'sks.official-subagent-agent-install.v1',
     ok: manualBlockers.length === 0 && (apply ? remainingMissing.length === 0 : true),
     apply,
-    installed_agents: MANAGED_OFFICIAL_SUBAGENT_ROLES.map((role) => role.codex_name),
+    installed_agents: installedAgents,
     missing,
     existing,
     stale,
@@ -675,8 +746,8 @@ export async function backupInvalidToml(file: string, text: string, tag: string)
   return backupPath
 }
 
-function manualCollisionBlocker(relative: string, text: string, role: ManagedOfficialSubagentRole): string {
-  const markerPresent = String(text || '').includes(role.ownership_marker)
+function manualCollisionBlocker(relative: string, text: string, marker: string): string {
+  const markerPresent = String(text || '').includes(marker)
   return markerPresent
     ? `manual_modified_official_subagent_config:${relative}`
     : `manual_user_owned_official_subagent_collision:${relative}`

@@ -21,6 +21,13 @@ import { resolveBridgeRequestRoute } from '../request-route-resolver.js';
 import { applyOfficialModelPassthrough, buildBridgeRoutingPolicy, setBridgeRoutingDefault, writeBridgeRoutingPolicy } from '../provider-route-policy.js';
 import { syncCatalogInternal } from './catalog.js';
 import {
+  codexRestartBlockers,
+  releaseOpenRouterOnlyForAuthPriority,
+  releaseOpenRouterOnlyWithoutBridge,
+  restartCodexAfterOpenRouterOnlyOff
+} from './openrouter-only-commands.js';
+import { openRouterOnlyStatus } from './openrouter-only-status.js';
+import {
   commandResult,
   controllerPaths,
   nowIso,
@@ -172,6 +179,17 @@ export async function setAuthPriority(
   enabled: boolean,
   options: DesktopBridgeControllerV3Options
 ): Promise<DesktopBridgeCommandResult> {
+  // Codex-LB mode and OpenRouter Only Mode are mutually exclusive: turning
+  // Codex-LB on turns OpenRouter Only off first, in this same operation.
+  const released = enabled ? await releaseOpenRouterOnlyForAuthPriority(options) : null;
+  if (released && !released.ok) {
+    const status = await desktopBridgeStatusV3(options);
+    return commandResult('auth-priority.set', false, status, {
+      auth_priority: status.auth_priority,
+      openrouter_only: await openRouterOnlyStatus(options),
+      catalog_sync: released.catalog_sync
+    }, released.blockers, options);
+  }
   const core = await loadCore(options);
   const settingsPath = options.settingsPath || desktopBridgeServicePaths(core.paths.home).settings_path;
   const persisted = await readDesktopBridgeServiceSettings(settingsPath);
@@ -192,8 +210,13 @@ export async function setAuthPriority(
     // Saving a preference does not configure credentials or install a service.
     await writeDesktopBridgeServiceSettings(settingsPath, nextSettings);
   }
+  const codexRestart = released?.changed ? await restartCodexAfterOpenRouterOnlyOff(released, options) : null;
   const status = await desktopBridgeStatusV3(options);
-  return commandResult('auth-priority.set', true, status, { auth_priority: status.auth_priority }, [], options);
+  return commandResult('auth-priority.set', true, status, {
+    auth_priority: status.auth_priority,
+    openrouter_only: await openRouterOnlyStatus(options),
+    ...(released?.changed ? { openrouter_only_off: { ...released, codex_restart: codexRestart } } : {})
+  }, [...(released?.blockers || []), ...codexRestartBlockers(codexRestart)], options);
 }
 
 export async function explainRoute(
@@ -249,6 +272,7 @@ export async function unmanageDesktopBridge(
     );
   }
   const cleaned = await removePreservedServiceArtifacts(options, paths.home, 'unmanage');
+  const openRouterOnlyOff = await releaseOpenRouterOnlyWithoutBridge(options);
   const status = await desktopBridgeStatusV3(options);
   requireUnmanaged(status.management.managed, 'unmanage');
   return commandResult('unmanage', true, status, {
@@ -256,8 +280,9 @@ export async function unmanageDesktopBridge(
     credentials_deleted: false,
     service: cleaned,
     stopped_service: stopped,
-    config_backup_path: write.backup_path || null
-  }, [], options);
+    config_backup_path: write.backup_path || null,
+    ...(openRouterOnlyOff ? { openrouter_only_off: openRouterOnlyOff } : {})
+  }, openRouterOnlyOff?.blockers || [], options);
 }
 
 export async function rollbackDesktopBridge(
@@ -297,6 +322,7 @@ export async function rollbackDesktopBridge(
     );
   }
   const cleaned = await removePreservedServiceArtifacts(options, paths.home, 'rollback');
+  const openRouterOnlyOff = await releaseOpenRouterOnlyWithoutBridge(options);
   const observed = await desktopBridgeStatusV3(options);
   if (observed.management.managed) throw new Error('desktop_bridge_rollback_final_state_managed');
   const status = {
@@ -310,8 +336,8 @@ export async function rollbackDesktopBridge(
     'rollback',
     true,
     status,
-    { rollback, service: cleaned, stopped_service: stopped },
-    [],
+    { rollback, service: cleaned, stopped_service: stopped, ...(openRouterOnlyOff ? { openrouter_only_off: openRouterOnlyOff } : {}) },
+    openRouterOnlyOff?.blockers || [],
     options
   );
 }

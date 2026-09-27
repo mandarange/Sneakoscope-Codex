@@ -16,6 +16,10 @@ test('bridge is registered with JSON support and rich non-secret help', async ()
   assert.match(help, /provider configure codex-lb --host <host> --api-key-stdin/);
   assert.match(help, /verify --level shallow\|transport\|deep/);
   assert.match(help, /unmanage --confirm/);
+  assert.match(help, /openrouter-only status\|on\|off \[--no-restart\]/);
+  assert.match(help, /subagent-models list/);
+  assert.match(help, /subagent-models set --stdin/);
+  assert.doesNotMatch(help, /--criteria/, 'criteria travel only through stdin');
   assert.doesNotMatch(help, /--api-key <|desktop-native-bridge|cli-provider/);
 
   assert.equal('codex-lb' in COMMAND_MANIFEST_BY_NAME, false);

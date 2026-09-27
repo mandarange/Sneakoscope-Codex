@@ -64,6 +64,15 @@ import { decideOfficialSubagentPreparation } from '../decisions/integration.js'
 import { applySealedRouting, type RoutingRoleInput } from '../decisions/routing.js'
 import { graphFileDigest, sourceSnapshotDigest } from '../decisions/state.js'
 import type { PlanCandidate } from '../decisions/types.js'
+import {
+  applyListRoleModels,
+  chooseListRoleModels,
+  listBaselineAgentRouting,
+  readChildModelPlanContext,
+  type ChildModelPlanContext
+} from './child-model-plan.js'
+import { readOnlyListRoleInstalled } from './read-only-list-role.js'
+import { canonicalChildModelId } from './child-model-allowlist.js'
 
 export { OFFICIAL_SUBAGENT_LIFECYCLE_LOCK, withOfficialSubagentLifecycleLock }
 
@@ -113,6 +122,18 @@ export async function prepareOfficialSubagentMission(input: OfficialSubagentPrep
   const opened = await withOfficialSubagentLifecycleLock(input.dir, () => openOfficialSubagentPreparation(input))
   if (opened.kind === 'recovered') return opened.result
   const derived = await deriveOfficialSubagentPreparation(input, opened.snapshot)
+  // OpenRouter Only Mode: Jev picks each role's list model in its own call,
+  // made here with the plan call and, like it, outside the lifecycle lock.
+  const listChoices = derived.childModels.list
+    ? chooseListRoleModels({
+        root: input.root,
+        goal: derived.goal,
+        agents: derived.agentRouting,
+        slices: derived.slices,
+        list: derived.childModels.list,
+        env: input.env || process.env
+      })
+    : Promise.resolve(null)
   const decided = await decideOfficialSubagentPreparation({
     root: input.root,
     dir: input.dir,
@@ -126,12 +147,12 @@ export async function prepareOfficialSubagentMission(input: OfficialSubagentPrep
     attention: derived.triwikiAttention,
     changedPaths: derived.sliceWriteScopes,
     massParallel: derived.fanoutPolicy.mass_parallel === true,
-    routingRoles: derived.mode === 'naruto'
+    routingRoles: derived.mode === 'naruto' && !derived.childModels.list
       ? routingRolesFromAgents(derived.agentRouting, derived.slices.map((slice) => slice.agent || ''))
       : [],
     env: input.env || process.env
   })
-  const rebuilt = applyOfficialSubagentDecision(derived, decided)
+  const rebuilt = applyOfficialSubagentDecision(derived, decided, await listChoices)
   return withOfficialSubagentLifecycleLock(input.dir, () => commitOfficialSubagentPreparation(input, opened.snapshot, rebuilt))
 }
 
@@ -208,7 +229,9 @@ async function deriveOfficialSubagentPreparation(
     }),
     ...slices.map((slice) => slice.agent || '').filter(Boolean)
   ])
-  const officialConfig = await readOfficialSubagentConfig(input.root)
+  // One read of the OpenRouter Only store feeds every child-model decision below.
+  const childModels = readChildModelPlanContext({ env: input.env || process.env })
+  const officialConfig = await readOfficialSubagentConfig(input.root, { childModels: childModels.allowlist })
   // The mission's declared write scopes are the one thing here the goal sentence
   // does not say and the graph cannot infer. They are passed verbatim: a scope
   // naming a directory resolves to no file node and is dropped by the kernel as
@@ -244,7 +267,7 @@ async function deriveOfficialSubagentPreparation(
       ...(sliceWriteScopes.length === 0 ? {} : { changedPaths: sliceWriteScopes })
     }
   )
-  const roleModelPreferences = await readRoleModelPreferences({ env: input.env || process.env })
+  const roleModelPreferences = await readRoleModelPreferences({ env: input.env || process.env, openRouterOnly: childModels.list !== null })
   const roleModelRouting = await readConfiguredCodexModelRoutingContext({ env: input.env || process.env })
   const roleModelCatalog = roleModelRouting.catalog
   const activeMainModel = input.sessionScope && roleModelRouting.selected_provider && roleModelRouting.selected_model
@@ -351,7 +374,13 @@ async function deriveOfficialSubagentPreparation(
       : null
   }
   const observedParentModel = String(input.observedParentModel || '').trim() || null
-  const parentModelMatch = observedParentModel ? observedParentModelMatchesPolicy(observedParentModel) : null
+  // OpenRouter Only Mode: the parent is the OpenRouter main model in config.toml, not a tier model.
+  const parentModelPolicy = childModels.list ? childModels.list.mainModel : narutoParentModel()
+  const parentModelMatch = !observedParentModel
+    ? null
+    : childModels.list
+      ? canonicalChildModelId(observedParentModel) === canonicalChildModelId(parentModelPolicy)
+      : observedParentModelMatchesPolicy(observedParentModel)
   const delegationGoal = input.readOnly
     ? `${goal}\n\nConstraint: run every delegated slice in read-only mode. Do not edit files.`
     : goal
@@ -369,13 +398,14 @@ async function deriveOfficialSubagentPreparation(
     triwikiAttention,
     recommendedAgents: suggestedAgents,
     roleModelPreferences: roleModelPreferences.store.roles,
+    childModels: childModels.allowlist,
     activeMainModel,
     parentOutputMode: mode === 'naruto' && input.sessionScope ? 'app_naruto_stdin' : 'raw_json',
     missionId: input.missionId,
     workflowRunId
   })
   const selectedAgentPlan = officialSubagentOnDemandRolePlan(suggestedAgents)
-  const agentRouting = Object.fromEntries(Object.entries(selectedAgentPlan).map(([name, config]) => {
+  const tierAgentRouting = Object.fromEntries(Object.entries(selectedAgentPlan).map(([name, config]) => {
     const decision = decideOfficialSubagentModel({
       persona: {
         role: name as any,
@@ -405,6 +435,7 @@ async function deriveOfficialSubagentPreparation(
         : 'managed-default'
     }]
   }))
+  const agentRouting = childModels.list ? listBaselineAgentRouting(tierAgentRouting, childModels.list) : tierAgentRouting
   const agentCatalog = onDemandAgentCatalogMetadata(selectedAgentPlan)
   const ssotGuard = buildSsotGuard({ route: input.route, mode: mode === 'naruto' ? 'NARUTO' : 'OFFICIAL_SUBAGENT', task: goal })
   const ssotGuardValidation = validateSsotGuardArtifact(ssotGuard)
@@ -419,7 +450,8 @@ async function deriveOfficialSubagentPreparation(
       && slices.length < budget.requestedSubagents
       ? [`exact_subagent_decomposition_incomplete:requested=${budget.requestedSubagents}:ready_slices=${slices.length}`]
       : []),
-    ...(budget.capacity.exhausted ? ['subagent_capacity_exhausted'] : [])
+    ...(budget.capacity.exhausted ? ['subagent_capacity_exhausted'] : []),
+    ...(childModels.list && !childModels.list.allowlist.default_model ? ['openrouter_only_subagent_list_empty'] : [])
   ]
   const plan = {
     schema: 'sks.subagent-plan.v1',
@@ -465,12 +497,13 @@ async function deriveOfficialSubagentPreparation(
     },
     slice_safety: sliceSafety,
     slices,
-    parent_model_policy: narutoParentModel(),
+    parent_model_policy: parentModelPolicy,
     observed_parent_model: observedParentModel,
     parent_model_match: parentModelMatch,
     parent: {
-      model: narutoParentModel(),
-      model_reasoning_effort: NARUTO_PARENT_EFFORT
+      model: parentModelPolicy,
+      // OpenRouter rows list low..xhigh; the GPT-only `max` maps to the deepest one.
+      model_reasoning_effort: childModels.list ? 'xhigh' : NARUTO_PARENT_EFFORT
     },
     agent_catalog: agentCatalog,
     agents: agentRouting,
@@ -478,6 +511,7 @@ async function deriveOfficialSubagentPreparation(
       schema: roleModelPreferences.store.schema,
       path: roleModelPreferences.path,
       overrides: roleModelPreferences.store.roles,
+      ignored_for_openrouter_only: roleModelPreferences.ignored_for_openrouter_only,
       routing: {
         selected_provider: roleModelRouting.selected_provider,
         selected_model: roleModelRouting.selected_model,
@@ -548,6 +582,8 @@ async function deriveOfficialSubagentPreparation(
     triwikiAttention,
     configBlockers,
     plan,
+    childModels,
+    readOnlyListRoleInstalled: childModels.list ? readOnlyListRoleInstalled(input.root) : null,
     sessionScope: input.sessionScope || null
   } satisfies DerivedOfficialSubagentPreparation
 }
@@ -601,6 +637,9 @@ interface DerivedOfficialSubagentPreparation {
   triwikiAttention: Awaited<ReturnType<typeof readBoundedTriwikiAttention>>
   configBlockers: string[]
   plan: Record<string, any>
+  childModels: ChildModelPlanContext
+  /** OpenRouter Only Mode: whether the project has the model-less read-only role. */
+  readOnlyListRoleInstalled: boolean | null
   sessionScope: string | null
 }
 
@@ -626,12 +665,17 @@ function routingRolesFromAgents(
 
 function applyOfficialSubagentDecision(
   derived: DerivedOfficialSubagentPreparation,
-  decided: Awaited<ReturnType<typeof decideOfficialSubagentPreparation>>
+  decided: Awaited<ReturnType<typeof decideOfficialSubagentPreparation>>,
+  listChoices: Awaited<ReturnType<typeof chooseListRoleModels>> | null = null
 ): DerivedOfficialSubagentPreparation {
   const attention = decided.attention
   const selectedPlan = derived.requestedSource === 'automatic' ? decided.selectedPlan : null
   const selectedRouting = derived.requestedSource === 'automatic' ? decided.selectedRouting : null
-  const agents = applySealedRouting(derived.plan.agents, selectedRouting)
+  const sealedAgents = applySealedRouting(derived.plan.agents, selectedRouting, derived.childModels.allowlist)
+  const listed = derived.childModels.list
+    ? applyListRoleModels(sealedAgents, listChoices, derived.childModels.list, derived.readOnlyListRoleInstalled)
+    : null
+  const agents = listed ? listed.agents : sealedAgents
   const budget = selectedPlan
     ? rebuildBudget(derived, selectedPlan)
     : derived.budget
@@ -643,6 +687,7 @@ function applyOfficialSubagentDecision(
       }
     : { ...derived.fanoutPolicy }
   if (selectedRouting) fanoutPolicy = { ...fanoutPolicy, jev_selected_routing: selectedRouting.id }
+  if (listed && Object.keys(listed.jevModels).length) fanoutPolicy = { ...fanoutPolicy, jev_child_models: listed.jevModels }
   const omitted = new Set(decided.omittedRoutingRoles || [])
   if (omitted.size) fanoutPolicy = { ...fanoutPolicy, jev_omitted_roles: [...omitted] }
   const recommendedAgents = omitted.size > 0 && derived.suggestedAgents.some((name) => !omitted.has(name))
@@ -676,6 +721,7 @@ function applyOfficialSubagentDecision(
       ...routingPreferences
     },
     routedAgents: agents,
+    childModels: derived.childModels.allowlist,
     narutoChildRouting: derived.mode === 'naruto',
     // Jev on (and keyed): Jev seals every spawn, so the parent gets no tier rules.
     jevRouting: decided.compiled.kind === 'apply'
@@ -714,6 +760,7 @@ function applyOfficialSubagentDecision(
     fanout_policy: fanoutPolicy,
     capacity_controller: budget.capacity,
     jev_decision: decided.receipt,
+    ...(listed ? { openrouter_only: listed.evidence } : {}),
     native_host_dispatch: 'unverified'
   }
   return {

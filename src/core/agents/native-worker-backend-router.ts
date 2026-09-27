@@ -13,6 +13,16 @@ import { codexTimeoutClassForRoute } from '../codex-control/codex-reliability-sh
 import { decideSubagentModel } from '../subagents/model-policy.js'
 import { latestTierModelSet } from '../subagents/model-tiers.js'
 import { consultJevTurnModel } from '../decisions/integration.js'
+import { chooseChildModel, fallbackChildModel } from '../decisions/child-model-choice.js'
+import {
+  OPENROUTER_ONLY_SCHEMA,
+  allowlistedChildModel,
+  effectiveChildModelAllowlist,
+  isSubagentModelEffort,
+  type ChildModelAllowlist,
+  type OpenRouterOnlyState,
+  type SubagentModelEffort
+} from '../subagents/child-model-allowlist.js'
 
 export const NATIVE_WORKER_BACKEND_ROUTER_SCHEMA = 'sks.native-worker-backend-router.v1'
 
@@ -246,6 +256,10 @@ export async function resolveWorkerModelRouting(input: {
   const riskText = [taskKindText, input.slice?.risk, input.slice?.risk_focus, input.slice?.acceptance, input.slice?.parent_prompt, input.slice?.description, input.intake?.prompt].map((value) => String(value || '')).join(' ')
   const category = categoryForWorkerRole(String(input.agent?.role || 'executor'), taskKindText)
   const env = deps.env || process.env
+  const allowlist = effectiveChildModelAllowlist({ env })
+  if (allowlist.mode === 'openrouter_only') {
+    return resolveOpenRouterOnlyWorkerRouting(input, deps, { allowlist, category, env, taskKindText, riskText })
+  }
   const lbHealth = Object.prototype.hasOwnProperty.call(deps, 'lbHealth') ? deps.lbHealth : await readLbHealth().catch(() => null)
   const lbCatalog = narutoOnly
     ? Object.prototype.hasOwnProperty.call(deps, 'lbCatalog')
@@ -328,6 +342,72 @@ export async function resolveWorkerModelRouting(input: {
       degraded: lbHealth?.degraded_models || []
     })
   }
+}
+
+/**
+ * OpenRouter Only worker: only the user's subagent list is accepted or chosen,
+ * and codex-lb is not consulted. A plan-time list seal or an explicit listed
+ * override wins; otherwise Jev picks an entry from the list criteria, falling
+ * back to a listed requested model or the default entry.
+ */
+async function resolveOpenRouterOnlyWorkerRouting(input: {
+  agent: any
+  fastModePolicy: { fast_mode: boolean; service_tier: 'fast' | 'standard' }
+}, deps: { lbHealth?: any; root?: string; consultJev?: typeof consultJevTurnModel | false }, ctx: {
+  allowlist: Extract<ChildModelAllowlist, { mode: 'openrouter_only' }>
+  category: TaskCategory
+  env: NodeJS.ProcessEnv
+  taskKindText: string
+  riskText: string
+}) {
+  const { allowlist, category, env } = ctx
+  const state: OpenRouterOnlyState = { schema: OPENROUTER_ONLY_SCHEMA, enabled: true, subagent_models: allowlist.entries, restore: null, updated_at: null }
+  const explicitModel = String(env.SKS_WORKER_MODEL || env.SKS_AGENT_MODEL || '').trim()
+  const explicitReasoning = listReasoning(env.SKS_WORKER_REASONING || env.SKS_WORKER_MODEL_REASONING)
+  const explicitTier = normalizeServiceTier(String(env.SKS_WORKER_SERVICE_TIER || env.SKS_SERVICE_TIER || '').trim())
+  const planned = /^openrouter_only_/.test(String(input.agent?.routed_model_policy || ''))
+    ? allowlistedChildModel(input.agent?.routed_model, allowlist)
+    : null
+  const requested = String(input.agent?.routed_model || input.agent?.model || '').trim() || null
+  const explicitListed = explicitModel ? allowlistedChildModel(explicitModel, allowlist) : null
+  const task = `${ctx.taskKindText}\n${ctx.riskText}`.trim().slice(0, 1200)
+  const choice = explicitModel
+    ? (explicitListed ? fallbackChildModel(state, explicitListed, 'explicit') : null)
+    : planned
+      ? fallbackChildModel(state, planned, 'planned')
+      : deps.consultJev === false || !task
+        ? fallbackChildModel(state, requested, deps.consultJev === false ? 'jev_skipped' : 'empty_task')
+        : await chooseChildModel({ root: deps.root || process.cwd(), task, role: input.agent?.role || null, requestedModel: requested, state, env })
+          .catch(() => fallbackChildModel(state, requested, 'consult_failed'))
+  const taskPolicy = decideSubagentModel({ title: ctx.taskKindText, description: ctx.riskText, role: input.agent?.role })
+  const choiceModel = choice?.entry.model || ''
+  const routed: ModelChoice = {
+    model: choiceModel,
+    reasoning: explicitReasoning || choice?.entry.reasoning_effort || listReasoning(taskPolicy.modelReasoningEffort) || 'medium',
+    serviceTier: explicitTier || input.fastModePolicy.service_tier || 'fast'
+  }
+  const blockers = [
+    ...(!allowlist.entries.length ? ['openrouter_only_subagent_list_empty'] : []),
+    ...(explicitModel && !explicitListed ? ['openrouter_only_subagent_model_not_listed'] : []),
+    ...(!choiceModel ? ['naruto_worker_model_unavailable'] : [])
+  ]
+  const why = choice ? `${choice.source}${choice.reason === 'applied' ? '' : `:${choice.reason}`}` : 'blocked'
+  return {
+    category,
+    choice: routed,
+    explicit: Boolean(explicitModel),
+    lb_health: Object.prototype.hasOwnProperty.call(deps, 'lbHealth') ? deps.lbHealth : null,
+    lb_catalog: null,
+    blockers: [...new Set(blockers)],
+    reason: `${category}->${choiceModel || 'blocked'}@${routed.reasoning} (openrouter only list: ${why})`
+  }
+}
+
+/** An effort every list model accepts; max/ultra clamp to xhigh. */
+function listReasoning(value: unknown): SubagentModelEffort | null {
+  const text = String(value || '').trim().toLowerCase()
+  if (text === 'max' || text === 'ultra') return 'xhigh'
+  return isSubagentModelEffort(text) ? text : null
 }
 
 function normalizeModelReasoning(value: unknown): ModelChoice['reasoning'] | null {

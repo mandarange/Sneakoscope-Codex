@@ -7,9 +7,11 @@ import { resetLatestModelTierCache } from '../model-tiers.js'
 import {
   narutoCredentialConfigArgs,
   narutoCredentialPolicyReceipt,
+  readNarutoOpenRouterOnlyContext,
   resolveNarutoCredentialPolicy
 } from '../naruto-host-credentials.js'
-import { buildOfficialSubagentChildEnv, buildOfficialSubagentCodexArgs } from '../official-subagent-runner.js'
+import { normalizeOpenRouterOnlyState } from '../child-model-allowlist.js'
+import { buildOfficialSubagentChildEnv, buildOfficialSubagentCodexArgs, runOfficialSubagentWorkflow } from '../official-subagent-runner.js'
 
 // A fixed Codex models cache: the gpt-6 family is current; efforts per model
 // are what Codex lists, which is all SKS validates against.
@@ -177,6 +179,91 @@ test('naming a provider without host auth mode is a blocker, not a silent mixed 
 test('a provider env key that is absent from the environment blocks before Codex sees it', () => {
   const resolved = policy(['--auth-mode=host', '--provider-env-key=MISSING_KEY'], {})
   assert.ok(resolved.blockers.includes('naruto_provider_env_key_absent:MISSING_KEY'))
+})
+
+const LIST_STATE = normalizeOpenRouterOnlyState({
+  schema: 'sks.openrouter-only.v1',
+  enabled: true,
+  subagent_models: [
+    { model: 'google/gemini-3.8-flash:free', criteria: 'fast edits', reasoning_effort: 'low' },
+    { model: 'z-ai/glm-5.3', criteria: 'deep work', reasoning_effort: 'high', default: true }
+  ]
+})
+
+function listPolicy(args: string[] = [], env: NodeJS.ProcessEnv = {}, mainModel: string | null = 'anthropic/claude-sonnet-4.5') {
+  return resolveNarutoCredentialPolicy({ args, env, ...DEFAULTS, openRouterOnly: { state: LIST_STATE, mainModel } })
+}
+
+test('OpenRouter Only Mode runs the config main model as parent and the list default as child default', async () => {
+  const resolved = listPolicy()
+  assert.deepEqual(resolved.blockers, [])
+  assert.equal(resolved.childModelMode, 'openrouter_only')
+  assert.equal(resolved.parentModel, 'anthropic/claude-sonnet-4.5')
+  // GPT-only `max` becomes the deepest effort OpenRouter rows list.
+  assert.equal(resolved.parentEffort, 'xhigh')
+  assert.equal(resolved.subagentModel, 'z-ai/glm-5.3')
+  assert.equal(resolved.subagentEffort, 'high')
+  assert.equal(narutoCredentialPolicyReceipt(resolved).child_model_mode, 'openrouter_only')
+  const args = buildOfficialSubagentCodexArgs({
+    prompt: 'task', maxThreads: 2, parentSummaryFile: '/tmp/summary.txt', credentialPolicy: resolved
+  })
+  assert.deepEqual(args.slice(args.indexOf('-m'), args.indexOf('-m') + 2), ['-m', 'anthropic/claude-sonnet-4.5'])
+  assert.ok(args.includes('model_reasoning_effort="xhigh"'))
+  assert.ok(args.includes('agents.default_subagent_model="z-ai/glm-5.3"'))
+  assert.ok(args.includes('agents.default_subagent_reasoning_effort="high"'))
+  assert.equal(args.some((arg) => /gpt-/.test(arg)), false)
+  // The workflow result names the mode and the child default; a tier run carries neither field.
+  const run = await runOfficialSubagentWorkflow({ root: process.cwd(), goal: 'g', prompt: 'g', requestedSubagents: 1, maxThreads: 1, appSession: true, credentialPolicy: resolved })
+  assert.deepEqual([run.parent_model, run.child_model_mode, run.subagent_model], ['anthropic/claude-sonnet-4.5', 'openrouter_only', 'z-ai/glm-5.3'])
+  const tierRun = await runOfficialSubagentWorkflow({ root: process.cwd(), goal: 'g', prompt: 'g', requestedSubagents: 1, maxThreads: 1, appSession: true, credentialPolicy: policy() })
+  assert.equal(Object.hasOwn(tierRun, 'child_model_mode') || Object.hasOwn(tierRun, 'subagent_model'), false)
+})
+
+test('OpenRouter Only Mode accepts list models with a slash and blocks everything else with a clear code', () => {
+  const listed = listPolicy(['--subagent-model', 'Google/Gemini-3.8-Flash:free', '--subagent-effort', 'medium'])
+  assert.deepEqual(listed.blockers, [])
+  assert.equal(listed.subagentModel, 'google/gemini-3.8-flash:free')
+  assert.equal(listed.subagentEffort, 'medium')
+  assert.equal(listed.hint, null)
+  // A chosen entry brings its own effort when the run names none.
+  const chosen = listPolicy(['--subagent-model', 'google/gemini-3.8-flash:free'])
+  assert.deepEqual([chosen.subagentModel, chosen.subagentEffort, chosen.blockers], ['google/gemini-3.8-flash:free', 'low', []])
+  assert.equal(listPolicy([], { SKS_NARUTO_SUBAGENT_MODEL: 'z-ai/glm-5.3' }).subagentModel, 'z-ai/glm-5.3')
+
+  const offList = listPolicy(['--subagent-model', 'deepseek/deepseek-v4.1-flash'])
+  assert.ok(offList.blockers.includes('naruto_subagent_model_not_in_list:deepseek/deepseek-v4.1-flash'))
+  assert.equal(offList.subagentModel, 'z-ai/glm-5.3')
+  // The blocked-run hint points at the subagent list, not at host auth mode.
+  assert.match(String(offList.hint), /Subagent Models/)
+  assert.doesNotMatch(String(offList.hint), /--auth-mode=host/)
+  assert.equal(policy(['--auth-mode=bogus']).hint, null)
+  assert.ok(listPolicy(['--subagent-model', 'gpt-6-astra']).blockers.includes('naruto_subagent_model_not_in_list:gpt-6-astra'))
+  assert.ok(listPolicy(['--parent-model', 'gpt-6-astra']).blockers.includes('naruto_parent_model_not_openrouter:gpt-6-astra'))
+  assert.ok(listPolicy([], {}, 'gpt-6-sol').blockers.includes('naruto_parent_model_not_openrouter:gpt-6-sol'))
+  assert.ok(listPolicy([], {}, null).blockers.includes('naruto_parent_model_not_openrouter:unset'))
+  assert.ok(listPolicy(['--parent-effort', 'max']).blockers.includes('naruto_parent_effort_unsupported_openrouter:max:allowed_low_or_medium_or_high_or_xhigh'))
+  const empty = resolveNarutoCredentialPolicy({
+    ...DEFAULTS,
+    openRouterOnly: { state: normalizeOpenRouterOnlyState({ schema: 'sks.openrouter-only.v1', enabled: true, subagent_models: [] }), mainModel: 'z-ai/glm-5.3' }
+  })
+  assert.ok(empty.blockers.includes('naruto_subagent_model_list_empty'))
+  // A slash id stays invalid while the mode is off.
+  assert.ok(policy(['--subagent-model', 'z-ai/glm-5.3']).blockers.some((blocker) => blocker.startsWith('naruto_subagentModel_invalid:')))
+})
+
+test('the mode and the parent model are read from the Codex home', () => {
+  const home = fs.mkdtempSync(path.join(path.dirname(ISOLATED_TEST_CODEX_HOME), 'list-home-'))
+  const codexHome = path.join(home, '.codex')
+  fs.mkdirSync(path.join(codexHome, 'sks'), { recursive: true })
+  const location = { env: { HOME: home } as NodeJS.ProcessEnv }
+  assert.equal(readNarutoOpenRouterOnlyContext(location), null)
+  fs.writeFileSync(path.join(codexHome, 'sks', 'sks-openrouter-only.json'), JSON.stringify(LIST_STATE))
+  fs.writeFileSync(path.join(codexHome, 'config.toml'), 'model = "z-ai/glm-5.3"\nmodel_provider = "openai"\n\n[agents]\nmodel = "ignored"\n')
+  const context = readNarutoOpenRouterOnlyContext(location)
+  assert.equal(context?.mainModel, 'z-ai/glm-5.3')
+  assert.equal(context?.state.subagent_models.length, 2)
+  // The default policy (no injected context) reads the process Codex home, where the mode is off.
+  assert.equal(policy().childModelMode, 'tiers')
 })
 
 test('the receipt records the decision and never the credential', () => {

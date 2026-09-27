@@ -25,16 +25,21 @@ export function buildPreToolUseDeny(reason: unknown, options: { systemMessage?: 
   }, options.systemMessage);
 }
 
-export function buildPreToolUseAllowRewrite(updatedInput: unknown, options: { systemMessage?: string } = {}): CodexHookOutput {
+export function buildPreToolUseAllowRewrite(
+  updatedInput: unknown,
+  options: { additionalContext?: string; systemMessage?: string } = {}
+): CodexHookOutput {
   if (updatedInput === undefined || updatedInput === null) {
     throw new Error('PreToolUse allow rewrite requires updatedInput');
   }
+  const additionalContext = optionalText(options.additionalContext);
   return withOptionalSystemMessage({
     continue: true,
     hookSpecificOutput: {
       hookEventName: 'PreToolUse',
       permissionDecision: 'allow',
-      updatedInput
+      updatedInput,
+      ...(additionalContext ? { additionalContext } : {})
     }
   }, options.systemMessage);
 }

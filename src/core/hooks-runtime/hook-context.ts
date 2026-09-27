@@ -17,6 +17,8 @@ import {
 import { resolveManagedSkillSourcesForAdmission } from './managed-skill-admission.js';
 import { managedSkillDigestBlocksEnforced } from '../verification-profile.js';
 import { looksLikeActiveContinuationPrompt } from './naruto-decision-gate.js';
+import { effectiveChildModelAllowlist, type ChildModelAllowlist } from '../subagents/child-model-allowlist.js';
+import { renderChildModelCriteria, SUBAGENT_MODELS_SETTINGS_HINT } from './subagent-spawn-policy.js';
 import {
   extractUserPrompt,
   looksLikeCodexGitAction,
@@ -30,15 +32,28 @@ const STANDALONE_PARENT_BASE_SKILLS = [
   'sks-honest-mode'
 ];
 
-const OFFICIAL_SUBAGENT_SPAWN_COMPATIBILITY_CONTEXT = [
+const OFFICIAL_SUBAGENT_SPAWN_CONTRACT_HEAD = [
   'SKS official-subagent spawn contract:',
   '- Full-history forks (`fork_turns="all"`, including the omitted/default full-history mode) inherit the parent agent type, model, and reasoning effort.',
-  '- When selecting a custom `agent_type` or overriding `model`/`reasoning_effort`, set `fork_turns="none"` or a positive bounded turn count and put the complete bounded slice contract in `message`.',
+  '- When selecting a custom `agent_type` or overriding `model`/`reasoning_effort`, set `fork_turns="none"` or a positive bounded turn count and put the complete bounded slice contract in `message`.'
+];
+
+const OFFICIAL_SUBAGENT_SPAWN_COMPATIBILITY_CONTEXT = [
+  ...OFFICIAL_SUBAGENT_SPAWN_CONTRACT_HEAD,
   '- SKS children must pass the slice contract `model` (the newest model of the role tier), its `reasoning_effort`, and `fork_turns=\"none\"` or a positive bounded turn count. When Jev mode is on, the SKS PreToolUse hook seals Jev\'s tier on every spawn, so do not tune model or effort yourself. A stored user role-model preference wins.'
 ].join('\n');
 
-export function officialSubagentSpawnCompatibilityContext() {
-  return OFFICIAL_SUBAGENT_SPAWN_COMPATIBILITY_CONTEXT;
+function openRouterOnlyChildModelLine(allowlist: ChildModelAllowlist): string {
+  if (!allowlist.models.length) {
+    return `- SKS OpenRouter Only mode is on and the subagent model list is empty: every spawn_agent call is denied until the user adds models in ${SUBAGENT_MODELS_SETTINGS_HINT}.`;
+  }
+  return `- SKS OpenRouter Only mode is on: every child runs a model from the user's subagent list, and the SKS PreToolUse hook denies any other model. The list, with the user's rule for each model: ${renderChildModelCriteria(allowlist)}. The hook routes each spawn_agent call to a list model (Jev picks by these rules when Jev mode is on; otherwise a listed requested model, else the default), so pass \`fork_turns="none"\` or a positive bounded turn count and do not tune model or effort yourself.`;
+}
+
+/** The spawn contract for the effective child allowlist: tier models, or the OpenRouter Only list. */
+export function officialSubagentSpawnCompatibilityContext(allowlist: ChildModelAllowlist = effectiveChildModelAllowlist()) {
+  if (allowlist.mode !== 'openrouter_only') return OFFICIAL_SUBAGENT_SPAWN_COMPATIBILITY_CONTEXT;
+  return [...OFFICIAL_SUBAGENT_SPAWN_CONTRACT_HEAD, openRouterOnlyChildModelLine(allowlist)].join('\n');
 }
 
 export function attachOfficialSubagentSpawnCompatibilityContext(
@@ -52,10 +67,11 @@ export function attachOfficialSubagentSpawnCompatibilityContext(
   if (!dollarCommand(prompt) && routeIsGitOnly(routePrompt(prompt))) return result;
   if (!officialSubagentsRequiredForPromptOrState(state, prompt, result)) return result;
   const existing = String(result?.additionalContext || '');
-  if (existing.includes(OFFICIAL_SUBAGENT_SPAWN_COMPATIBILITY_CONTEXT)) return result;
+  const spawnContract = officialSubagentSpawnCompatibilityContext();
+  if (existing.includes(spawnContract)) return result;
   return {
     ...result,
-    additionalContext: [OFFICIAL_SUBAGENT_SPAWN_COMPATIBILITY_CONTEXT, existing].filter(Boolean).join('\n\n')
+    additionalContext: [spawnContract, existing].filter(Boolean).join('\n\n')
   };
 }
 
@@ -246,7 +262,7 @@ export async function hookActiveSkillContextRefresh(
     };
   }
   const spawnCompatibility = officialSubagentsRequiredForPromptOrState(state, '', {})
-    ? OFFICIAL_SUBAGENT_SPAWN_COMPATIBILITY_CONTEXT
+    ? officialSubagentSpawnCompatibilityContext()
     : '';
   const refresh = await activeAuthoritativeSksSkillRefresh(root, state, { includeContext: true });
   if (refresh.blocked) {

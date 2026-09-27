@@ -1,3 +1,4 @@
+import '../../__tests__/helpers/isolated-test-home.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { latestModelForTier, latestTierModelSet } from '../model-tiers.js'
@@ -27,6 +28,8 @@ import {
   readOfficialSubagentConfig
 } from '../official-subagent-config.js'
 import { resolveSubagentThreadBudget } from '../thread-budget.js'
+import { effectiveChildModelAllowlist, writeOpenRouterOnlyState } from '../child-model-allowlist.js'
+import { READ_ONLY_LIST_ROLE, readOnlyListRoleInstalled } from '../read-only-list-role.js'
 import {
   buildOfficialSubagentCodexArgs,
   buildOfficialSubagentChildEnv,
@@ -225,6 +228,102 @@ test('child default normalization keeps current tier models and moves older ones
   assert.equal(current.warnings.some((warning) => warning.startsWith('official_subagent_model_coerced_to_latest:')), false)
   const currentMerge = parse(mergeOfficialSubagentConfig(`[agents]\ndefault_subagent_model = "${fast}"\n`)) as Record<string, any>
   assert.equal(currentMerge.agents.default_subagent_model, fast)
+})
+
+test('OpenRouter Only Mode makes the list default the child default and never coerces back to a tier model', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-official-list-config-'))
+  t.after(() => fs.rm(root, { recursive: true, force: true }))
+  // The mode store resolves from HOME, never CODEX_HOME; both point into the temp root.
+  const home = path.join(root, 'home')
+  const codexHome = path.join(home, '.codex')
+  const projectConfigPath = path.join(root, '.codex', 'config.toml')
+  await fs.mkdir(path.dirname(projectConfigPath), { recursive: true })
+  await fs.mkdir(codexHome, { recursive: true })
+  const deep = latestModelForTier('deep')
+  const location = { home }
+  await writeOpenRouterOnlyState({
+    enabled: true,
+    subagent_models: [
+      { model: 'google/gemini-3.8-flash', criteria: 'fast edits', reasoning_effort: 'low', default: false },
+      { model: 'z-ai/glm-5.3', criteria: 'deep work', reasoning_effort: null, default: true }
+    ]
+  }, location)
+  const listModels = effectiveChildModelAllowlist(location)
+  assert.equal(listModels.mode, 'openrouter_only')
+  await fs.access(path.join(codexHome, 'sks', 'sks-openrouter-only.json'))
+
+  // Merge: the default entry replaces a tier model; the effort line is untouched.
+  const project = `[agents]\ndefault_subagent_model = "${deep}"\ndefault_subagent_reasoning_effort = "low"\n`
+  const merged = parse(mergeOfficialSubagentConfig(project, { childModels: listModels })) as Record<string, any>
+  assert.equal(merged.agents.default_subagent_model, 'z-ai/glm-5.3')
+  assert.equal(merged.agents.default_subagent_reasoning_effort, 'low')
+  // An empty list leaves the line as it is: no child can spawn until the list has a model.
+  const emptyList = { ...listModels, models: [], entries: [], default_model: null }
+  const emptyMerge = parse(mergeOfficialSubagentConfig(project, { childModels: emptyList })) as Record<string, any>
+  assert.equal(emptyMerge.agents.default_subagent_model, deep)
+
+  // Read: a tier model coerces to the list default, a list model is kept in list spelling.
+  await fs.writeFile(projectConfigPath, project)
+  const coerced = await readOfficialSubagentConfig(root, { home, codexHome })
+  assert.equal(coerced.defaultSubagentModel, 'z-ai/glm-5.3')
+  assert.ok(coerced.warnings.includes(`official_subagent_model_coerced_to_list_default:${deep}:project`))
+  assert.equal(coerced.warnings.some((warning) => warning.startsWith('official_subagent_model_coerced_to_latest:')), false)
+  await fs.writeFile(projectConfigPath, '[agents]\ndefault_subagent_model = "Google/Gemini-3.8-Flash"\n')
+  const listed = await readOfficialSubagentConfig(root, { home, codexHome })
+  assert.equal(listed.defaultSubagentModel, 'google/gemini-3.8-flash')
+  assert.equal(listed.sources.defaultSubagentModel, 'project')
+  assert.equal(listed.warnings.some((warning) => warning.startsWith('official_subagent_model_coerced')), false)
+  await fs.writeFile(projectConfigPath, 'model = "z-ai/glm-5.3"\n')
+  assert.equal((await readOfficialSubagentConfig(root, { home, codexHome })).defaultSubagentModel, 'z-ai/glm-5.3')
+
+  // Mode off again: the tier contract returns and a list model is coerced to the latest deep tier.
+  await writeOpenRouterOnlyState({ enabled: false }, location)
+  await fs.writeFile(projectConfigPath, '[agents]\ndefault_subagent_model = "z-ai/glm-5.3"\n')
+  const off = await readOfficialSubagentConfig(root, { home, codexHome })
+  assert.equal(off.defaultSubagentModel, deep)
+  assert.ok(off.warnings.includes('official_subagent_model_coerced_to_latest:z-ai/glm-5.3:project'))
+  const offMerge = parse(mergeOfficialSubagentConfig('[agents]\ndefault_subagent_model = "z-ai/glm-5.3"\n', {
+    childModels: effectiveChildModelAllowlist(location)
+  })) as Record<string, any>
+  assert.equal(offMerge.agents.default_subagent_model, deep)
+})
+
+test('OpenRouter Only Mode installs a model-less read-only role; mode off reports exactly the managed catalog', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-official-list-role-'))
+  t.after(() => fs.rm(root, { recursive: true, force: true }))
+  const entries = [{ model: 'z-ai/glm-5.3', criteria: '', reasoning_effort: null, default: true }]
+  const listModels = { mode: 'openrouter_only' as const, models: ['z-ai/glm-5.3'], entries, default_model: 'z-ai/glm-5.3' }
+  const tierModels = { mode: 'tiers' as const, models: [...latestTierModelSet()], entries: [] as [], default_model: null }
+  const rolePath = path.join(root, '.codex', 'agents', READ_ONLY_LIST_ROLE.filename)
+
+  const off = await installOfficialSubagentAgentConfigs(root, { apply: true, childModels: tierModels })
+  assert.deepEqual(off.installed_agents, MANAGED_OFFICIAL_SUBAGENT_ROLES.map((role) => role.codex_name))
+  assert.equal(readOnlyListRoleInstalled(root), false)
+
+  const on = await installOfficialSubagentAgentConfigs(root, { apply: true, childModels: listModels })
+  assert.ok(on.ok)
+  assert.deepEqual(on.created, [`.codex/agents/${READ_ONLY_LIST_ROLE.filename}`])
+  assert.ok(on.installed_agents.includes('read_only_list_child'))
+  const text = await fs.readFile(rolePath, 'utf8')
+  const parsed = parse(text) as Record<string, unknown>
+  // Codex pins a role's model against spawn overrides, so this role must set none.
+  assert.equal(parsed.sandbox_mode, 'read-only')
+  assert.equal(Object.hasOwn(parsed, 'model'), false)
+  assert.equal(Object.hasOwn(parsed, 'model_reasoning_effort'), false)
+  assert.equal(parsed.name, 'read_only_list_child')
+  assert.equal(readOnlyListRoleInstalled(root), true)
+
+  // A user edit is preserved and reported, never overwritten.
+  await fs.writeFile(rolePath, text.replace('sandbox_mode = "read-only"', 'sandbox_mode = "workspace-write"'))
+  const edited = await installOfficialSubagentAgentConfigs(root, { apply: true, childModels: listModels })
+  assert.ok(edited.manual_blockers.includes(`manual_modified_official_subagent_config:.codex/agents/${READ_ONLY_LIST_ROLE.filename}`))
+  assert.equal(readOnlyListRoleInstalled(root), false)
+
+  // Mode off leaves the file alone and keeps the report to the managed catalog.
+  const offAgain = await installOfficialSubagentAgentConfigs(root, { apply: true, childModels: tierModels })
+  assert.equal(offAgain.ok, true)
+  assert.equal([...offAgain.existing, ...offAgain.created, ...offAgain.preserved].some((file) => file.endsWith(READ_ONLY_LIST_ROLE.filename)), false)
+  assert.match(await fs.readFile(rolePath, 'utf8'), /workspace-write/)
 })
 
 test('project and inherited user concurrency values are preserved', () => {

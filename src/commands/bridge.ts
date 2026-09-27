@@ -26,11 +26,16 @@ import {
 
 const CONTROLLER_FACADE_EXPORT = 'executeDesktopBridgeCommand' as const;
 const MAX_STDIN_SECRET_BYTES = 64 * 1024;
+const MAX_STDIN_JSON_BYTES = 64 * 1024;
 
 export type BridgeCommandRequest =
   | { operation: 'status' }
   | { operation: 'auth-priority.status' }
   | { operation: 'auth-priority.set'; enabled: boolean }
+  | { operation: 'openrouter-only.status' }
+  | { operation: 'openrouter-only.set'; enabled: boolean; no_restart: boolean }
+  | { operation: 'subagent-models.list' }
+  | { operation: 'subagent-models.set'; subagent_models: unknown[]; no_restart: boolean }
   | { operation: 'serve'; settings_path: string }
   | { operation: 'ensure' }
   | { operation: 'repair' }
@@ -104,6 +109,9 @@ export function usage(command = 'bridge'): string {
     `Usage: sks ${command} status [--json]`,
     `       sks ${command} ensure|repair [--json]`,
     `       sks ${command} auth-priority status|on|off [--json]`,
+    `       sks ${command} openrouter-only status|on|off [--no-restart] [--json]`,
+    `       sks ${command} subagent-models list [--json]`,
+    `       sks ${command} subagent-models set --stdin [--no-restart] [--json]`,
     `       sks ${command} verify --level shallow|transport|deep [--strict|--require-ready] [--json]`,
     `       sks ${command} provider list [--json]`,
     `       sks ${command} provider configure codex-lb --host <host> --api-key-stdin [--json]`,
@@ -120,7 +128,9 @@ export function usage(command = 'bridge'): string {
     `       sks ${command} unmanage --confirm [--json]`,
     `       sks ${command} rollback <receipt-id> --confirm [--json]`,
     '',
-    'Provider secrets are accepted only through --api-key-stdin. Readiness changes the exit code only with --strict or --require-ready.'
+    'Provider secrets are accepted only through --api-key-stdin. Readiness changes the exit code only with --strict or --require-ready.',
+    'OpenRouter Only Mode and Codex-LB authentication priority are mutually exclusive; turning one on turns the other off.',
+    'subagent-models set reads {"subagent_models":[{"model","criteria","reasoning_effort","default"}]} (max 16) from stdin.'
   ].join('\n');
 }
 
@@ -222,6 +232,42 @@ async function parseInvocation(args: string[], io: BridgeCommandIo): Promise<Par
     return { ...base, request: action === 'status'
       ? { operation: 'auth-priority.status' }
       : { operation: 'auth-priority.set', enabled: action === 'on' }, label: 'Codex-LB authentication priority' };
+  }
+
+  if (area === 'openrouter-only' && target === undefined && (action === 'status' || action === 'on' || action === 'off')) {
+    if (action === 'status') {
+      allowOnly(parsed, ['--json'], []);
+      return { ...base, request: { operation: 'openrouter-only.status' }, label: 'OpenRouter Only Mode' };
+    }
+    allowOnly(parsed, ['--json', '--no-restart'], []);
+    return {
+      ...base,
+      request: { operation: 'openrouter-only.set', enabled: action === 'on', no_restart: parsed.flags.has('--no-restart') },
+      label: 'OpenRouter Only Mode'
+    };
+  }
+
+  if (area === 'subagent-models' && target === undefined) {
+    if (action === 'list') {
+      allowOnly(parsed, ['--json'], []);
+      return { ...base, request: { operation: 'subagent-models.list' }, label: 'Subagent model list' };
+    }
+    if (action === 'set') {
+      // Criteria are free text: they travel only through stdin, never argv.
+      allowOnly(parsed, ['--json', '--stdin', '--no-restart'], []);
+      if (!parsed.flags.has('--stdin')) {
+        throw new BridgeCliError('bridge_subagent_models_stdin_required', 'retry_with_stdin');
+      }
+      return {
+        ...base,
+        request: {
+          operation: 'subagent-models.set',
+          subagent_models: subagentModelsFromStdin(await io.readStdin()),
+          no_restart: parsed.flags.has('--no-restart')
+        },
+        label: 'Subagent model list update'
+      };
+    }
   }
 
   if (area === 'status' && action === undefined) {
@@ -423,6 +469,26 @@ function parseArgs(args: string[]): ParsedArgs {
     throw new BridgeCliError('bridge_command_unknown_option');
   }
   return { positionals, flags, values };
+}
+
+/** `{"subagent_models":[...]}`; the controller validates each row. */
+function subagentModelsFromStdin(text: string): unknown[] {
+  const raw = String(text || '').trim();
+  if (!raw) throw new BridgeCliError('bridge_subagent_models_stdin_empty', 'retry_with_stdin');
+  if (Buffer.byteLength(raw, 'utf8') > MAX_STDIN_JSON_BYTES) {
+    throw new BridgeCliError('bridge_subagent_models_stdin_too_large', 'retry_with_stdin');
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new BridgeCliError('bridge_subagent_models_stdin_invalid_json', 'retry_with_stdin');
+  }
+  const models = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+    ? (parsed as Record<string, unknown>).subagent_models
+    : undefined;
+  if (!Array.isArray(models)) throw new BridgeCliError('bridge_subagent_models_stdin_invalid', 'retry_with_stdin');
+  return models;
 }
 
 function rejectSecretArgv(args: string[]): void {

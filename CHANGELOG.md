@@ -3,6 +3,34 @@
 ## [Unreleased]
 
 
+## [10.3.8] - 2026-09-27
+
+### Added
+
+- OpenRouter Only Mode runs the Codex main thread and every subagent on
+  OpenRouter models. It and Prefer Codex-LB are mutually exclusive: turning
+  either on turns the other off in the same operation. SKS Control Center has
+  an **OpenRouter Only** switch next to **Prefer Codex-LB** and a new
+  **Subagent Models** page; the CLI is `sks bridge openrouter-only
+  status|on|off` and `sks bridge subagent-models list|set --stdin`.
+- Subagents may run only the models on the subagent list (up to 16), each with
+  criteria, a reasoning effort, and one default. With Jev mode on, Jev picks the
+  model for every spawn, in Naruto and any other parallel work, from those
+  criteria; otherwise a child keeps a listed model the parent asked for, or
+  gets the default. The SKS spawn hook denies any other model, and the Desktop
+  Bridge refuses non-OpenRouter model requests and unlisted subagent models
+  even without the hooks.
+
+### Fixed
+
+- The README published since 10.3.5 had a second copy of the page spliced into
+  the Naruto section, cutting a sentence in half. It is one page again.
+- The Codex 1M Context setting no longer says it works only for GPT-5.6 Sol.
+  Codex caps the window at each model's own maximum, so SKS now reads that
+  maximum from Codex's model list: every model with a larger maximum gets it
+  (872K for the current GPT-5.6 and GPT-6 models), and SKS Center warns only
+  when the active model's window is fixed, uncapped, or unknown.
+
 ## [10.3.7] - 2026-09-25
 
 ### Fixed

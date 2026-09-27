@@ -78,7 +78,24 @@ export interface ParentOrchestrationLedger {
   last_tool: string | null;
   last_targets: readonly string[];
   last_jev_reason: string | null;
+  /** OpenRouter Only: the list model the last accepted spawn got, and why (jev/requested/default). */
+  last_spawn_route?: ParentSpawnRoute;
   updated_at: string | null;
+}
+
+export interface ParentSpawnRoute {
+  mode: string;
+  model: string;
+  source: string;
+  reason: string;
+}
+
+function spawnRouteOf(raw: unknown): ParentSpawnRoute | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const row = raw as Record<string, unknown>;
+  const text = (value: unknown) => String(value ?? '').trim().slice(0, 200);
+  const route = { mode: text(row.mode), model: text(row.model), source: text(row.source), reason: text(row.reason) };
+  return route.mode && route.model && route.source ? route : null;
 }
 
 export type ParentOrchestrationDecision =
@@ -267,6 +284,7 @@ export async function readParentOrchestrationLedger(
   // A new workflow run inside the same mission starts its own count: the
   // previous run's children are not this run's children.
   if (workflowRunId && raw.workflow_run_id && String(raw.workflow_run_id) !== workflowRunId) return fresh;
+  const spawnRoute = spawnRouteOf(raw.last_spawn_route);
   return {
     ...fresh,
     workflow_run_id: workflowRunId || (typeof raw.workflow_run_id === 'string' ? raw.workflow_run_id : null),
@@ -281,6 +299,7 @@ export async function readParentOrchestrationLedger(
     last_tool: typeof raw.last_tool === 'string' ? raw.last_tool : null,
     last_targets: Array.isArray(raw.last_targets) ? raw.last_targets.map((row: unknown) => String(row)).slice(0, MAX_TARGETS) : [],
     last_jev_reason: typeof raw.last_jev_reason === 'string' ? raw.last_jev_reason : null,
+    ...(spawnRoute ? { last_spawn_route: spawnRoute } : {}),
     updated_at: typeof raw.updated_at === 'string' ? raw.updated_at : null
   };
 }
@@ -304,14 +323,23 @@ async function writeLedger(root: string, ledger: ParentOrchestrationLedger): Pro
 export async function recordParentOrchestrationSpawn(
   root: string,
   state: any = {},
-  opts: { atLeastOne?: boolean } = {}
+  opts: { atLeastOne?: boolean; spawnRoute?: ParentSpawnRoute } = {}
 ): Promise<ParentOrchestrationLedger | null> {
   const missionId = String(state?.mission_id || '').trim();
   if (!missionId || !narutoState(state)) return null;
   const workflowRunId = String(state?.official_subagent_run_id || '').trim() || null;
   const ledger = await readParentOrchestrationLedger(root, missionId, workflowRunId);
   if (opts.atLeastOne && ledger.spawns > 0) return ledger;
-  const next: ParentOrchestrationLedger = { ...ledger, spawns: ledger.spawns + 1, last_action: 'spawn' };
+  const spawnRoute = spawnRouteOf(opts.spawnRoute);
+  // The route describes this spawn only: a spawn without one (mode off) drops
+  // the previous spawn's route instead of carrying it forward.
+  const { last_spawn_route: _previousRoute, ...rest } = ledger;
+  const next: ParentOrchestrationLedger = {
+    ...rest,
+    spawns: ledger.spawns + 1,
+    last_action: 'spawn',
+    ...(spawnRoute ? { last_spawn_route: spawnRoute } : {})
+  };
   await writeLedger(root, next);
   return next;
 }

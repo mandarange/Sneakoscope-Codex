@@ -24,6 +24,7 @@ import {
 import { sha256Stable } from '../route-index.js';
 import { assertDesktopBridgeStatusV3 } from '../bridge-runtime-validation.js';
 import { desktopBridgeReportReadinessV3, readLastDiagnostic } from './diagnostics.js';
+import { readControllerOpenRouterOnlyState } from './openrouter-only-catalog.js';
 import {
   activeProviderIds,
   controllerPaths,
@@ -71,7 +72,12 @@ export async function loadCore(options: DesktopBridgeControllerV3Options): Promi
     ...(snapshot ? { providerRegistry: snapshot } : {}),
     ...(policy ? { routePolicy: policy } : {})
   });
-  const catalogSync = desktopBridgeCatalogStatusV3(activeCatalog, registry, policy, policyBlockers, checkedAt);
+  // OpenRouter Only Mode leaves codex-lb out of the catalog on purpose; that
+  // absence is the mode, not a failed codex-lb catalog.
+  const openRouterOnlyEnabled = readControllerOpenRouterOnlyState(paths).enabled;
+  const catalogSync = desktopBridgeCatalogStatusV3(
+    activeCatalog, registry, policy, policyBlockers, checkedAt, openRouterOnlyEnabled ? ['codex-lb'] : []
+  );
   const diagnostic = await readLastDiagnostic(
     paths.diagnosticPath,
     catalogSync.generation,
@@ -79,7 +85,7 @@ export async function loadCore(options: DesktopBridgeControllerV3Options): Promi
     service.state?.last_verified_probe_ids || []
   );
   const settings = await readDesktopBridgeServiceSettings(options.settingsPath || desktopBridgeServicePaths(paths.home).settings_path).catch(() => null);
-  return { authPriorityEnabled: settings?.auth_priority_enabled === true, paths, checkedAt, config, credentials, registry, activeCatalog, policy, policyBlockers, service, auth, catalogSync, diagnostic };
+  return { authPriorityEnabled: settings?.auth_priority_enabled === true, openRouterOnlyEnabled, paths, checkedAt, config, credentials, registry, activeCatalog, policy, policyBlockers, service, auth, catalogSync, diagnostic };
 }
 
 /**
@@ -252,8 +258,11 @@ export function desktopBridgeCatalogStatusV3(
   registry: BridgeProviderRegistry,
   policy: BridgeRoutingPolicy | null,
   policyBlockers: readonly string[],
-  checkedAt: string
+  checkedAt: string,
+  excludedProviders: readonly BridgeProviderId[] = []
 ): CombinedCatalogSyncStatus {
+  const catalogEnabled = (providerId: BridgeProviderId) =>
+    registry.profiles[providerId].enabled && !excludedProviders.includes(providerId);
   const providerRows = Object.fromEntries((['codex-lb', 'openrouter'] as const).map((providerId) => {
     const profile = registry.profiles[providerId];
     const models = active.ok ? active.catalog.models.filter((model) => model.provider_id === providerId) : [];
@@ -262,7 +271,7 @@ export function desktopBridgeCatalogStatusV3(
     const expired = Boolean(persisted?.expires_at && Date.parse(persisted.expires_at) <= Date.parse(checkedAt));
     const state: CatalogSyncState['state'] = !active.ok
       ? 'not_started'
-      : !profile.enabled ? 'not_started'
+      : !catalogEnabled(providerId) ? 'not_started'
         : expired ? 'stale'
           : indexed?.state === 'ready' && models.length > 0
             && persisted?.state === 'verified' && persisted.generation === indexed.catalog_generation
@@ -288,7 +297,7 @@ export function desktopBridgeCatalogStatusV3(
     };
     return [providerId, row];
   })) as Record<BridgeProviderId, CatalogSyncState>;
-  const enabled = (['codex-lb', 'openrouter'] as const).filter((id) => registry.profiles[id].enabled);
+  const enabled = (['codex-lb', 'openrouter'] as const).filter(catalogEnabled);
   const verified = enabled.filter((id) => providerRows[id].state === 'verified');
   const stale = enabled.filter((id) => providerRows[id].state === 'stale');
   const conflicts = active.ok ? active.route_index.conflicts.length : 0;
