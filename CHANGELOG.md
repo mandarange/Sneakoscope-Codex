@@ -3,6 +3,23 @@
 ## [Unreleased]
 
 
+## [10.3.7] - 2026-09-25
+
+### Fixed
+
+- `sks update` offers a version only once npm serves it. A version npm lists
+  but whose version document or tarball still returns 404 is reported as
+  pending, and `sks update` says this install is current instead of starting
+  an install that cannot finish. Offline or unclear answers never hide an
+  update. `SKS_UPDATE_TARBALL_PROBE=0` turns the check off.
+- `sks update` and `sks doctor --fix` no longer leave a project blocked on
+  old skill copies an earlier SKS wrote before it stamped managed markers.
+  They are recognized by structure, not by a list of names: the folder is a
+  name the SKS route registry resolves, the frontmatter names that folder, and
+  it holds only the files SKS writes for a skill. Such copies are moved to
+  `.sneakoscope/quarantine`, not deleted; a copy with any other file stays and
+  still asks the user.
+
 ## [10.3.6] - 2026-09-25
 
 ### Fixed

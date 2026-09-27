@@ -365,6 +365,7 @@ function emptySkillLegacySurface(fix: boolean): SkillLegacySurfaceReport {
     removed_other_harness_skill_count: 0,
     preserved_other_harness_skill_count: 0,
     preserved_user_skill_count: 0,
+    quarantined_sks_residue_count: 0,
     remaining_count: 0,
     preserved_clean_count: 0,
     error_count: 0,
@@ -372,6 +373,7 @@ function emptySkillLegacySurface(fix: boolean): SkillLegacySurfaceReport {
     removed_other_harness_skills: [],
     preserved_other_harness_skills: [],
     preserved_user_skills: [],
+    quarantined_sks_residue: [],
     remaining: [],
     errors: [],
     cleanup_prompt_command: 'sks conflicts cleanup --yes'

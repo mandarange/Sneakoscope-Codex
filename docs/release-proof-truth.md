@@ -1,6 +1,17 @@
 # Release Proof Truth
 
-## 10.3.6 candidate
+## 10.3.7 candidate
+
+Update offer proof is the registry-availability suite (a 404 version document
+or tarball yields `pending`, a served tarball yields the version, an offline
+registry and `SKS_UPDATE_TARBALL_PROBE=0` change nothing) plus one live probe
+against registry.npmjs.org (10.3.6 offered, a nonexistent 99.0.0 pending).
+Legacy skill proof is the skill-legacy-surface suite: route-registry names in
+the SKS layout are quarantined, a copy with an extra file remains for the
+user. On a copy of the project the 10.3.6 fan-out left blocked on 2026-09-25,
+doctor's cleanup quarantined all three residue folders with no blockers.
+
+## Historical 10.3.6 candidate
 
 Update resilience proof is the temporary-install suite (a fake npm that serves
 two 404s and then the package succeeds with two waits and `--prefer-online`;
@@ -295,9 +306,9 @@ Exact-commit proof can exist only after the candidate is committed and all
 source-bound gates are regenerated from that clean commit.
 
 All release artifacts bound to 9.2.7 or an earlier commit are historical. They
-must not be renamed, copied, or treated as 10.3.6 evidence.
+must not be renamed, copied, or treated as 10.3.7 evidence.
 
-New 10.3.6 claims:
+New 10.3.7 claims:
 
 | Claim | Current support | Boundary |
 | --- | --- | --- |
@@ -375,8 +386,8 @@ New 10.3.6 claims:
 | `sks update` quarantines other-harness conflicts | passed-hermetic | `other-harness-cleanup` now calls `cleanupOtherHarnessConflicts` instead of failing closed; from-home update e2e still runs every migration stage |
 | Host extra skill dirs lose only SKS-owned retired residue | passed-hermetic | `~/.cursor/skills` and `~/.claude/skills` remove managed retired names only; user-authored collisions stay in place |
 | A stale or cwd-sticky official workflow cannot capture a later prompt | passed-hermetic | unnamed hooks use `loadOwnedRouteState`; idle > 2h is inactive even with leftover open threads; same-session follow-ups still bind while the run is fresh |
-| All checked version authorities report 10.3.6 | passed-hermetic | `release:version-truth` 15 surfaces at 10.3.6 after incremental build |
-| The reported 10.3.6 package is ready to publish | not proved | requires a clean exact-commit build, `npm run release:check:full` stamp, pack receipt, provenance, and the release commit fast-forward pushed to origin main (the prepublish reproducibility preflight refuses `head_not_origin_main`) |
+| All checked version authorities report 10.3.7 | passed-hermetic | `release:version-truth` 15 surfaces at 10.3.7 after incremental build |
+| The reported 10.3.7 package is ready to publish | not proved | requires a clean exact-commit build, `npm run release:check:full` stamp, pack receipt, provenance, and the release commit fast-forward pushed to origin main (the prepublish reproducibility preflight refuses `head_not_origin_main`) |
 
 ## 9.1.0 assertion (historical)
 

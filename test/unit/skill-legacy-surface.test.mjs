@@ -123,6 +123,47 @@ test('doctor --fix preserves customer and OMX skills and blocks with explicit cl
   }
 });
 
+test('doctor --fix quarantines old SKS copies under SKS route names by structure, not by name lists', async () => {
+  const fixture = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-skill-residue-'));
+  const project = path.join(fixture, 'project');
+  const home = path.join(fixture, 'home');
+  const globalRuntimeRoot = path.join(fixture, 'global-runtime');
+  const skill = (name, body, extra = {}) => ({ name, body, extra });
+  try {
+    await fs.mkdir(path.join(home, '.agents', 'skills'), { recursive: true });
+    await fs.mkdir(path.join(globalRuntimeRoot, '.agents', 'skills'), { recursive: true });
+    const legacyBody = 'Use this for $Team work and run `sks agent run`.';
+    const rows = [
+      // Route-registry names in the SKS layout: old SKS copies.
+      skill('ux-review', legacyBody, { 'agents/openai.yaml': 'name: ux-review\n' }),
+      skill('visual-review', legacyBody),
+      // Same route name, but a file SKS never writes: the user extended it.
+      skill('ui-ux-review', legacyBody, { 'notes.md': 'mine\n' })
+    ];
+    for (const row of rows) {
+      const dir = path.join(project, '.agents', 'skills', row.name);
+      await fs.mkdir(dir, { recursive: true });
+      await fs.writeFile(path.join(dir, 'SKILL.md'), `---\nname: ${row.name}\ndescription: review loop\n---\n\n${row.body}\n`);
+      for (const [file, text] of Object.entries(row.extra)) {
+        await fs.mkdir(path.dirname(path.join(dir, file)), { recursive: true });
+        await fs.writeFile(path.join(dir, file), text);
+      }
+    }
+
+    const report = await runDoctorCommandAliasCleanup({ root: project, home, globalRuntimeRoot, fix: true });
+    const surface = report.cleanup.skill_legacy_surface;
+    assert.equal(surface.quarantined_sks_residue_count, 2, JSON.stringify(surface));
+    for (const name of ['ux-review', 'visual-review']) {
+      await assert.rejects(fs.access(path.join(project, '.agents', 'skills', name)), name);
+    }
+    assert.equal((await findFiles(path.join(project, '.sneakoscope', 'quarantine'), 'SKILL.md')).length, 2);
+    await fs.access(path.join(project, '.agents', 'skills', 'ui-ux-review', 'notes.md'));
+    assert.equal(surface.remaining_count, 1, 'the extended copy still needs the user');
+  } finally {
+    await fs.rm(fixture, { recursive: true, force: true });
+  }
+});
+
 async function findFiles(root, name) {
   const out = [];
   async function walk(dir) {

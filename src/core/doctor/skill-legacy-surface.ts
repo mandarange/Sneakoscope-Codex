@@ -1,13 +1,14 @@
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { LEGACY_DOLLAR_SKILL_NAMES } from '../routes.js';
+import { LEGACY_DOLLAR_SKILL_NAMES, routeByDollarCommand } from '../routes.js';
 import { legacyCoreSkillNames } from '../codex-native/core-skill-manifest.js';
 import { prefixKnownSksDollarReferences } from '../routes/dollar-prefix.js';
 import { inspectConfinedPath } from '../managed-path-safety.js';
 import { messageOf as errorMessage } from '../errors/message.js';
 import { collectNestedProjectRoots } from './current-project-guidance-nested.js';
 import { containsRetiredPublicSurface } from './current-project-guidance.js';
+import { quarantineUserPath } from './retired-managed-residue-private.js';
 
 export const SKILL_LEGACY_SURFACE_SCHEMA = 'sks.skill-legacy-surface.v1' as const;
 
@@ -137,6 +138,8 @@ export interface SkillLegacySurfaceReport {
   removed_other_harness_skill_count: number;
   preserved_other_harness_skill_count: number;
   preserved_user_skill_count: number;
+  /** Old SKS-generated copies under an SKS route name, moved to quarantine. */
+  quarantined_sks_residue_count: number;
   remaining_count: number;
   preserved_clean_count: number;
   error_count: number;
@@ -144,10 +147,39 @@ export interface SkillLegacySurfaceReport {
   removed_other_harness_skills: string[];
   preserved_other_harness_skills: string[];
   preserved_user_skills: string[];
+  quarantined_sks_residue: string[];
   remaining: string[];
   errors: string[];
   cleanup_prompt_command: 'sks conflicts cleanup --yes';
 }
+
+/**
+ * An old SKS-generated skill copy, recognized by structure rather than by
+ * any particular name or wording: its folder is a name the SKS route
+ * registry resolves, its frontmatter names that folder, and it holds only the
+ * files SKS writes for a skill. Copies older than SKS's managed markers match
+ * nothing else, so without this they stay on the picker forever.
+ */
+async function isSksRouteSkillResidue(dir: string, name: string, text: string): Promise<boolean> {
+  if (!routeByDollarCommand(name) && !PREFIX_LEGACY_NAMES.includes(name)) return false;
+  const frontmatterName = /^---\n[\s\S]*?^name:\s*(.+?)\s*$[\s\S]*?^---/m.exec(text)?.[1];
+  if (frontmatterName !== name) return false;
+  const files: string[] = [];
+  const walk = async (current: string, relative: string): Promise<boolean> => {
+    for (const entry of await fsp.readdir(current, { withFileTypes: true })) {
+      const rel = relative ? `${relative}/${entry.name}` : entry.name;
+      if (entry.isSymbolicLink()) return false;
+      if (entry.isDirectory()) {
+        if (!await walk(path.join(current, entry.name), rel)) return false;
+      } else files.push(rel);
+    }
+    return true;
+  };
+  if (!await walk(dir, '')) return false;
+  return files.every((file) => SKS_SKILL_LAYOUT_FILES.has(file));
+}
+
+const SKS_SKILL_LAYOUT_FILES = new Set(['SKILL.md', 'agents/openai.yaml']);
 
 export function rewriteSkillLegacySurface(input: unknown): SkillLegacyRewriteResult {
   let text = String(input || '');
@@ -219,6 +251,7 @@ export async function reconcileSkillLegacySurface(opts: {
   const removedOtherHarness: string[] = [];
   const preservedOtherHarness: string[] = [];
   const preservedUserSkills: string[] = [];
+  const quarantinedResidue: string[] = [];
   const remaining: string[] = [];
   const errors: string[] = [];
   let scanned = 0;
@@ -309,6 +342,20 @@ export async function reconcileSkillLegacySurface(opts: {
         remaining.push(display);
         continue;
       }
+      if (await isSksRouteSkillResidue(dir, row.name, before).catch(() => false)) {
+        if (!fix) {
+          remaining.push(display);
+          continue;
+        }
+        try {
+          await quarantineUserPath(ownerRoot, dir, path.join(ownerRoot, '.sneakoscope', 'quarantine', 'skill-legacy-surface'));
+          quarantinedResidue.push(display);
+        } catch (error: unknown) {
+          errors.push(`${display}:${errorMessage(error)}`);
+          remaining.push(display);
+        }
+        continue;
+      }
       // A skill body without an independently verified generation receipt may
       // be user-authored even when it contains historical SKS commands. Keep
       // it byte-for-byte and block with operator guidance instead of editing it.
@@ -326,6 +373,7 @@ export async function reconcileSkillLegacySurface(opts: {
     removed_other_harness_skill_count: removedOtherHarness.length,
     preserved_other_harness_skill_count: preservedOtherHarness.length,
     preserved_user_skill_count: preservedUserSkills.length,
+    quarantined_sks_residue_count: quarantinedResidue.length,
     remaining_count: remaining.length,
     preserved_clean_count: preservedClean,
     error_count: errors.length,
@@ -333,6 +381,7 @@ export async function reconcileSkillLegacySurface(opts: {
     removed_other_harness_skills: Array.from(new Set(removedOtherHarness)).sort(),
     preserved_other_harness_skills: Array.from(new Set(preservedOtherHarness)).sort(),
     preserved_user_skills: Array.from(new Set(preservedUserSkills)).sort(),
+    quarantined_sks_residue: Array.from(new Set(quarantinedResidue)).sort(),
     remaining: Array.from(new Set(remaining)).sort(),
     errors: Array.from(new Set(errors)).sort(),
     cleanup_prompt_command: 'sks conflicts cleanup --yes'

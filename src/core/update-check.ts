@@ -43,6 +43,7 @@ import {
   type UpdateRollbackAuthorization
 } from './update/update-operation.js';
 import { runTemporaryInstallSmoke, type TemporaryInstallSmokeResult } from './update/temporary-install-smoke.js';
+import { offeredUpdateVersion } from './update/registry-availability.js';
 import { npmGlobalInstallTargets, repairManagedPermissions } from './update/managed-permission-repair.js';
 import { updateStageFailureDiagnostics } from './update/update-stage-diagnostics.js';
 import {
@@ -104,6 +105,8 @@ export interface SksUpdateCheckResult {
   npm_global_current: string | null;
   version_candidates: SksVersionCandidate[];
   latest: string | null;
+  /** Newer version npm lists but does not serve yet; offered once it does. */
+  pending_latest?: string | null;
   update_available: boolean;
   status: 'current' | 'available' | 'unavailable';
   mode: 'function';
@@ -364,7 +367,7 @@ async function runSksUpdateCheckLive(options: SksUpdateCheckOptions = {}): Promi
   }
 
   const result = await latestPromise;
-  if (!result) {
+  if (!result || result.code !== 0) {
     return buildResult({
       packageName,
       current,
@@ -374,33 +377,15 @@ async function runSksUpdateCheckLive(options: SksUpdateCheckOptions = {}): Promi
       npmBin,
       projectRoot: options.projectRoot,
       commandRegistry: options.registry,
-      error: 'npm view failed'
+      error: result ? `${result.stderr || result.stdout || 'npm view failed'}`.trim() : 'npm view failed'
     });
   }
-  if (result.code !== 0) {
-    return buildResult({
-      packageName,
-      current,
-      effective,
-      latest: null,
-      registry,
-      npmBin,
-      projectRoot: options.projectRoot,
-      commandRegistry: options.registry,
-      error: `${result.stderr || result.stdout || 'npm view failed'}`.trim()
-    });
-  }
-  const latest = extractSemVer(String(result.stdout || '').trim().split(/\s+/).pop() || '');
-  return buildResult({
-    packageName,
-    current,
-    effective,
-    latest,
-    registry,
-    npmBin,
-    projectRoot: options.projectRoot,
-    commandRegistry: options.registry
-  });
+  // Offer a version only once npm serves it; until then this install is current.
+  const offered = await offeredUpdateVersion({ listed: extractSemVer(String(result.stdout || '').trim().split(/\s+/).pop() || ''), current, registry, packageName, env });
+  return {
+    ...buildResult({ packageName, current, effective, latest: offered.latest, registry, npmBin, projectRoot: options.projectRoot, commandRegistry: options.registry }),
+    pending_latest: offered.pending
+  };
 }
 
 function buildUpdateStatusSnapshot(input: {
