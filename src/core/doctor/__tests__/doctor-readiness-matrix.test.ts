@@ -63,54 +63,36 @@ test('failed Center postcheck blocks attempted repair even after installer succe
   assert.deepEqual(matrix.center_blockers, ['action_target_version_mismatch']);
 });
 
-test('migration-required legacy global hook cleanup blockers fail readiness', () => {
-  const blocker = 'global_hooks_json_invalid:Unexpected token';
+test('inactive SKS Codex hooks are reported without failing core readiness', () => {
   const matrix = buildDoctorReadinessMatrix(readyInput({
-    require_legacy_global_hook_cleanup: true,
-    doctor_native_capability: {
-      ok: false,
-      core_blockers: [],
-      optional_warnings: [],
-      product_design: {
-        ok: false,
-        blockers: ['product_design_not_ready']
-      },
-      legacy_global_hooks: {
-        ok: false,
-        blockers: [blocker],
-        warnings: []
-      }
-    }
-  }));
-
-  const phase = matrix.repair_readiness.phases.find((entry: any) => entry.id === 'legacy_global_hook_cleanup');
-  assert.equal(phase?.required_for_core_ready, true);
-  assert.equal(matrix.core_ready, false);
-  assert.equal(matrix.ready, false);
-  assert.deepEqual(matrix.blockers, [`legacy_global_hooks:${blocker}`]);
-});
-
-test('ordinary Doctor keeps legacy global hook cleanup blockers optional', () => {
-  const blocker = 'project_sks_hooks_missing_no_safe_global_cleanup';
-  const matrix = buildDoctorReadinessMatrix(readyInput({
-    require_legacy_global_hook_cleanup: false,
     doctor_native_capability: {
       ok: true,
       core_blockers: [],
-      optional_warnings: [`legacy_global_hooks:${blocker}`],
-      legacy_global_hooks: {
-        ok: false,
-        blockers: [blocker],
-        warnings: []
-      }
+      optional_warnings: ['sks_codex_hooks_inactive'],
+      sks_codex_hooks: { active: false, missing_events: ['UserPromptSubmit'], untrusted_events: ['Stop'] }
     }
   }));
 
-  const phase = matrix.repair_readiness.phases.find((entry: any) => entry.id === 'legacy_global_hook_cleanup');
+  const phase = matrix.repair_readiness.phases.find((entry: any) => entry.id === 'sks_codex_hooks');
+  assert.equal(phase?.ok, false);
   assert.equal(phase?.required_for_core_ready, false);
+  assert.deepEqual(phase?.warnings, ['sks_codex_hook_missing:UserPromptSubmit', 'sks_codex_hook_untrusted:Stop']);
   assert.equal(matrix.core_ready, true);
+  assert.ok(matrix.warnings.includes('optional:sks_codex_hooks_inactive'));
+});
+
+test('active SKS Codex hooks add a passing readiness row', () => {
+  const matrix = buildDoctorReadinessMatrix(readyInput({
+    doctor_native_capability: {
+      ok: true,
+      core_blockers: [],
+      optional_warnings: [],
+      sks_codex_hooks: { active: true, missing_events: [], untrusted_events: [] }
+    }
+  }));
+  const phase = matrix.repair_readiness.phases.find((entry: any) => entry.id === 'sks_codex_hooks');
+  assert.equal(phase?.ok, true);
   assert.equal(matrix.ready, true);
-  assert.ok(matrix.warnings.includes(`optional:legacy_global_hooks:${blocker}`));
 });
 
 test('migration profile demotes live catalog staleness so a version bump can write a receipt', () => {

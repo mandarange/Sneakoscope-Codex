@@ -26,7 +26,7 @@ export async function runSks(args: string[]): Promise<void> {
     // ~600 ms cold start per hook. On by default; SKS_HOOK_DAEMON=0 opts out,
     // and the test harness stays on the cold path so no detached daemon leaks.
     const { hookDaemonInline } = await import('../core/daemon/sksd-hook-dispatch.js');
-    await hookDaemonInline(args[1]);
+    await hookDaemonInline(args[1], args.slice(2));
   } else if (args.length === 3 && args[0] === 'naruto' && args[1] === 'help' && args[2] === '--json') {
     const { narutoHelpJsonFastInline } = await import('./fast-inline.js');
     await narutoHelpJsonFastInline();

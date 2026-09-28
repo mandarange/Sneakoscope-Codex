@@ -330,13 +330,24 @@ export async function setupCommand(args: any = []) {
   const installScope = installScopeFromArgs(args);
   let res: any = null;
   let cliTools: any = null;
+  let codexHooks: any = null;
   await withSecretPreservationGuard(root, 'setup-command', async () => {
+    // User-level hooks first (a global install turns SKS on for every Codex
+    // project), then setup writes project hooks only where still needed, then
+    // the pinned ones get trust in the user config.
+    const hookModule = await import('../codex-hooks/codex-project-hooks.js');
+    const activation = installScope === 'project'
+      ? null
+      : await hookModule.activateSksCodexHooks({ root }).catch((err: any) => ({ ok: false, active: false, blockers: [err?.message || String(err)], warnings: [] }));
     res = await initProject(root, {
       force: flag(args, '--force'),
       installScope,
       localOnly: flag(args, '--local-only'),
       globalCommand: 'sks'
     });
+    const project = await hookModule.reconcileProjectSksHooks(root, { globalActive: activation?.active === true })
+      .catch((err: any) => ({ ok: false, actions: [], warnings: [], blockers: [err?.message || String(err)] }));
+    codexHooks = { active: activation?.active === true, activation, project };
     const { ensureRelatedCliTools } = await import('../../cli/install-helpers.js');
     cliTools = await ensureRelatedCliTools(args);
   });
@@ -352,8 +363,12 @@ export async function setupCommand(args: any = []) {
     local_only: flag(args, '--local-only'),
     cli_tools: cliTools,
     skill_install: res.skill_install,
+    codex_hooks: codexHooks,
     blockers: readiness.blockers,
-    warnings: readiness.warnings
+    warnings: [
+      ...readiness.warnings,
+      ...[...(codexHooks?.activation?.blockers || []), ...(codexHooks?.project?.blockers || [])].map((blocker: string) => `codex_hooks:${blocker}`)
+    ]
   };
   if (!result.ok) process.exitCode = 1;
   if (flag(args, '--json')) {
@@ -363,8 +378,9 @@ export async function setupCommand(args: any = []) {
   console.log(`${result.ok ? 'Setup complete' : 'Setup blocked'}: ${root}`);
   console.log(`Install scope: ${installScope}`);
   console.log(`Codex CLI: ${cliTools.codex.status}${cliTools.codex.version ? ` ${cliTools.codex.version}` : ''}`);
+  console.log(`SKS Codex hooks: ${codexHooks?.active ? 'active for every Codex project' : installScope === 'project' ? 'this project only' : 'not active (run: sks doctor --fix)'}`);
   for (const file of result.created) console.log(`- ${file}`);
-  for (const warning of readiness.warnings) console.log(`Warning: ${warning}`);
+  for (const warning of result.warnings) console.log(`Warning: ${warning}`);
   for (const blocker of readiness.blockers) console.error(`Blocker: ${blocker}`);
   return result;
 }

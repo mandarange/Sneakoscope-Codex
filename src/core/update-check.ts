@@ -22,7 +22,7 @@ import {
   type SksMenuBarStatusResult
 } from './codex-app/menubar/index.js';
 import { inspectCodexCliUpdate, type CodexCliUpdateStatus } from './codex/codex-cli-update.js';
-import { readCodexHookActualState } from './codex-hooks/codex-hook-actual-discovery.js';
+import { readGlobalSksHookState } from './codex-hooks/codex-global-hooks.js';
 import { compareSemVer, extractSemVer, parseSemVer } from './update/semver.js';
 import {
   countUpdates,
@@ -2201,14 +2201,13 @@ async function runFinalUpdateVerification(input: {
     });
   }
 
-  const hookState = await readCodexHookActualState(input.projectReceiptRoot).catch(() => null);
-  const managedEntries = (hookState?.entries || []).filter((entry: any) => entry.managed === true);
-  const untrusted = managedEntries.filter((entry: any) => entry.trust_status !== 'Trusted' && entry.trust_status !== 'Managed');
+  // The user-level hooks run SKS in every Codex project; hook-trust-refresh installed and trusted them.
+  const hookState = await readGlobalSksHookState(input.env).catch(() => null);
   verification.push({
     id: 'hooks_trusted',
-    ok: Boolean(hookState && hookState.ok !== false && managedEntries.length > 0 && untrusted.length === 0),
-    detail: untrusted.length ? untrusted.map((entry: any) => entry.key).slice(0, 3).join(', ') : `managed ${managedEntries.length}`,
-    remediation: 'Run: sks codex trust-doctor --fix --managed --actual'
+    ok: hookState?.active === true,
+    detail: hookState ? `missing ${hookState.missing_events.join(',') || 'none'}; untrusted ${hookState.untrusted_events.join(',') || 'none'}` : 'unreadable',
+    remediation: 'Run: sks doctor --fix'
   });
 
   const home = input.env.HOME || os.homedir();

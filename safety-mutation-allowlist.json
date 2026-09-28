@@ -533,15 +533,6 @@
       "reason": "Python SDK timeout cleanup terminates only the owned runner process group after a bounded real-smoke/task timeout."
     },
     {
-      "file": "src/core/codex-hooks/codex-hook-managed-install.ts",
-      "symbol": "chmodExecutable.callback@115",
-      "token": "chmod",
-      "scope_contract_sha256": "80e5fc0f17fcfc89be43ffb6769557d1a074df5d4e2e748de281cadd142894af",
-      "callsite_sha256": "f799cd920f98f8fc8b3fb65435839a693d1d4a47218363e2414fe38f43329a37",
-      "occurrence": 1,
-      "reason": "Permission normalization for created auth, shim, socket, or release artifacts; exact callsite is audited."
-    },
-    {
       "file": "src/core/codex-lb/combined-catalog/storage.ts",
       "symbol": "restoreSnapshot",
       "token": "fs.rm",
@@ -1278,15 +1269,6 @@
       "callsite_sha256": "2ba1c2e7817ec7987f1be808b5bbc9402e44edd5be3184ab194907d540c88cb6",
       "occurrence": 1,
       "reason": "Imagegen repair runs package installation only from the explicit doctor repair path for Codex imagegen recovery."
-    },
-    {
-      "file": "src/core/doctor/legacy-global-hook-cleanup.ts",
-      "symbol": "pruneOldBackups",
-      "token": "fs.rm",
-      "scope_contract_sha256": "46235d45c07a24488eead025e631c4f1df0e8877fb2330cfd07a78bc3cafae0b",
-      "callsite_sha256": "5cc506becd63d4cda8a874c1bd1122c30dcca947fea353dfb5cb071ddbb7895d",
-      "occurrence": 1,
-      "reason": "Legacy hook cleanup removes only excess same-directory backup files matching the exact managed global-hook backup prefix."
     },
     {
       "file": "src/core/feature-fixture-runner.ts",
@@ -3537,33 +3519,6 @@
       "callsite_sha256": "fc2828501886bcecc7ec7feefc1309126a32c19d08a2eb84703cca17f7d9b650",
       "occurrence": 1,
       "reason": "Canonical test cleanup re-raises only a forwarded or observed child signal after the owned test child has closed."
-    },
-    {
-      "file": "src/scripts/canonical-test-runner.ts",
-      "symbol": "module",
-      "token": "codex config write",
-      "scope_contract_sha256": "5bc3a19ea35b211d31ad3f5d7b0d3d0f5a058b013fcf2743772ff0a8bb6e1e8e",
-      "callsite_sha256": "ce6832a324b11c1a902c67ca38614834fb0b0a2cc606c39845a4be86084f420e",
-      "occurrence": 1,
-      "reason": "Canonical test runner writes the sentinel Codex config only into its isolated scratch CODEX_HOME and fails on any unexpected tree change."
-    },
-    {
-      "file": "src/scripts/canonical-test-runner.ts",
-      "symbol": "module",
-      "token": "writeFileSync",
-      "scope_contract_sha256": "5bc3a19ea35b211d31ad3f5d7b0d3d0f5a058b013fcf2743772ff0a8bb6e1e8e",
-      "callsite_sha256": "5a0446360cfffaa07a98d1763ae970c20c42f41ee58494e009a37e2b2b676d2f",
-      "occurrence": 1,
-      "reason": "Canonical test runner seeds files only inside the isolated scratch HOME it created, keeping tests off the operator real home."
-    },
-    {
-      "file": "src/scripts/canonical-test-runner.ts",
-      "symbol": "module",
-      "token": "writeFileSync",
-      "scope_contract_sha256": "5bc3a19ea35b211d31ad3f5d7b0d3d0f5a058b013fcf2743772ff0a8bb6e1e8e",
-      "callsite_sha256": "1df62b13046dd92ce06cde9f03639e2ba07a6f6e0b959ab08e7df5b34802211a",
-      "occurrence": 1,
-      "reason": "Canonical test runner seeds files only inside the isolated scratch HOME it created, keeping tests off the operator real home."
     },
     {
       "file": "src/scripts/canonical-test-runner.ts",
@@ -7785,6 +7740,87 @@
       "callsite_sha256": "f0376d12411fe68cf29c3fbf11774dcd0110b351587a2191f54241021ac0c5a9",
       "occurrence": 1,
       "reason": "Writes the <image>.sks-imagegen.json evidence sidecar next to an image this run just wrote; it records mode, model, route and the image SHA-256 and holds no secret."
+    },
+    {
+      "file": "src/core/codex-hooks/codex-global-hooks.ts",
+      "symbol": "removeGlobalSksHookArtifacts",
+      "token": "fsp.rm",
+      "scope_contract_sha256": "8764bfe92e98f135c37fab1a2ef09cd61d1dcbf1ebef31435604f0931f8d1656",
+      "callsite_sha256": "7f2b3d0c86cfad4134996c493315589f9fd243c51280ab8729fad2e9b6e9b8ec",
+      "occurrence": 1,
+      "reason": "Uninstall removes the SKS-owned hook launcher it created under $CODEX_HOME/sks/bin."
+    },
+    {
+      "file": "src/core/codex-hooks/codex-global-hooks.ts",
+      "symbol": "removeGlobalSksHookArtifacts",
+      "token": "fsp.rm",
+      "scope_contract_sha256": "8764bfe92e98f135c37fab1a2ef09cd61d1dcbf1ebef31435604f0931f8d1656",
+      "callsite_sha256": "256379383d0f00850c7ce4d4c0677af58b9b727763ac4c6cb015d6575a638e21",
+      "occurrence": 1,
+      "reason": "Uninstall deletes $CODEX_HOME/AGENTS.md only when removing the SKS global rules block left it empty."
+    },
+    {
+      "file": "src/core/codex-hooks/codex-project-hooks.ts",
+      "symbol": "stripUnpinnedSksProjectHooks",
+      "token": "fsp.rm",
+      "scope_contract_sha256": "ee4a95eabe1a4f43b95611b76c8c95dc0533aa79d7ba9a51ee20ca81d26f6141",
+      "callsite_sha256": "4b353e02bba47850d3d2111976f3ec2b888488035376d909eee3abc77addc4b6",
+      "occurrence": 1,
+      "reason": "Deletes a project .codex/hooks.json only when every entry was an unpinned SKS hook now served by the user-level hooks and no other content remains."
+    },
+    {
+      "file": "src/core/codex-hooks/codex-global-hooks.ts",
+      "symbol": "installGlobalSksHooks",
+      "token": "chmod",
+      "scope_contract_sha256": "d224382ded654edd70ebc07be8c8a15afb45d1eaf3c1f6ecc2258883a392d187",
+      "callsite_sha256": "36ef1afc575342f8ab7f5993c96d9b6e35ec3db8ad5f51b50a38806b91fbac0f",
+      "occurrence": 1,
+      "reason": "Makes the SKS-owned hook launcher under $CODEX_HOME/sks/bin executable so Codex can run the user-level hook commands."
+    },
+    {
+      "file": "src/scripts/canonical-test-runner.ts",
+      "symbol": "module",
+      "token": "writeFileSync",
+      "scope_contract_sha256": "5adc3660e725ce3ef94318b8d282fc1cf5178169781e913d5a526c344adc048c",
+      "callsite_sha256": "fdbfd04b297667ecaaea49393b9606d9389815ce8403815a3948a4945c184a82",
+      "occurrence": 1,
+      "reason": "Canonical test runner seeds files only inside the isolated scratch HOME it created, keeping tests off the operator real home."
+    },
+    {
+      "file": "src/scripts/canonical-test-runner.ts",
+      "symbol": "module",
+      "token": "codex config write",
+      "scope_contract_sha256": "5adc3660e725ce3ef94318b8d282fc1cf5178169781e913d5a526c344adc048c",
+      "callsite_sha256": "0ce341e5eac667d98c996d129c651edf339a929a879a1ace014aa4b845db4f65",
+      "occurrence": 1,
+      "reason": "Canonical test runner writes the sentinel Codex config only into its isolated scratch CODEX_HOME and fails on any unexpected tree change."
+    },
+    {
+      "file": "src/scripts/canonical-test-runner.ts",
+      "symbol": "module",
+      "token": "writeFileSync",
+      "scope_contract_sha256": "5adc3660e725ce3ef94318b8d282fc1cf5178169781e913d5a526c344adc048c",
+      "callsite_sha256": "dacb450916711c0cb730f7e1617e3fdf48f5aa251c6a844abb6270437e6d6cb6",
+      "occurrence": 1,
+      "reason": "Canonical test runner seeds files only inside the isolated scratch HOME it created, keeping tests off the operator real home."
+    },
+    {
+      "file": "src/core/codex-hooks/codex-dead-managed-hooks.ts",
+      "symbol": "removeDeadSksManagedHooks",
+      "token": "fsp.rm",
+      "scope_contract_sha256": "e9d4441975f00ff14e3f0e18a0b3a99ba185ebe3e38ca2ab9215a3ac3c6beb0f",
+      "callsite_sha256": "b6710d1dd4634cdbb100a89ca5d2871813a0ee3181c3e1325e65c1fedd95cb5a",
+      "occurrence": 1,
+      "reason": "Removes requirements.toml only after stripping exactly the SKS-written managed_dir hook lines left it empty; user-authored keys are kept."
+    },
+    {
+      "file": "src/core/codex-hooks/codex-dead-managed-hooks.ts",
+      "symbol": "removeDeadSksManagedHooks",
+      "token": "fsp.rm",
+      "scope_contract_sha256": "e9d4441975f00ff14e3f0e18a0b3a99ba185ebe3e38ca2ab9215a3ac3c6beb0f",
+      "callsite_sha256": "00222ef7de36df88c2a86e438dc07c9fc799990ee1309b8c241ef90db62a4508",
+      "occurrence": 1,
+      "reason": "Removes only the two SKS-owned files sks-managed-hooks.toml and sks-managed-hook.sh from the SKS managed-hooks directory Codex never loaded."
     }
   ]
 }

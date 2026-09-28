@@ -37,4 +37,4 @@ Release-gated rules:
 - UX/PPT generated-review routes must produce request/response artifacts, generated image artifacts, and strict structured issue ledgers before verified claims can pass.
 - Structured extraction schemas use strict JSON schema behavior with `additionalProperties:false`.
 
-If official Codex hook hashes are unavailable from the installed Codex CLI, SKS marks official discovery as integration-optional and enforces the managed-hooks path instead of writing SKS-only `trusted_hash` values.
+SKS checks its hooks against Codex itself: `codex app-server` `hooks/list` reports each loaded hook with its current hash and trust. SKS installs its hooks in the user-level `~/.codex/hooks.json` and writes trust for its own handlers into the user `config.toml`; see [hooks](hooks-pat.md#where-sks-hooks-live).

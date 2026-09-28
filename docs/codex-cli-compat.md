@@ -88,7 +88,7 @@ SKS strict-subset examples:
 - PermissionRequest allow `message` is schema-compatible but `sks_zero_warning_disallowed`.
 - Optional `systemMessage` in routes that should not emit user-visible output is policy-sensitive and must be justified before use.
 
-`allow_managed_hooks_only = true` belongs in `requirements.toml`, not `config.toml`.
+`allow_managed_hooks_only = true` belongs in `requirements.toml`, not `config.toml`. Codex applies it only from system or managed requirements: a `requirements.toml` under `~/.codex` or a project is not read, so SKS keeps its hooks in the user-level `hooks.json`.
 
 ## Release Invariant
 

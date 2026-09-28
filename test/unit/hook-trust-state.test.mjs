@@ -1,20 +1,22 @@
 import assert from 'node:assert/strict';
-import os from 'node:os';
-import path from 'node:path';
 import { test } from 'node:test';
-import { mergeManagedHookTrustStateToml, mergeManagedHooksJson } from '../../dist/core/init.js';
+import { mergeManagedHooksJson } from '../../dist/core/init.js';
+import { sksHookHandlerRefs } from '../../dist/core/codex-hooks/sks-hook-entries.js';
 
-test('managed Codex hooks write trust state hashes for current hook syntax', () => {
-  const root = path.join(os.tmpdir(), 'sks-hook-trust-state');
+test('managed Codex hooks carry the current syntax and hash the way Codex keys them', () => {
   const hooks = JSON.parse(mergeManagedHooksJson('', 'sks'));
   assert.equal(hooks.hooks.UserPromptSubmit[0].hooks[0].statusMessage, 'SKS routing prompt and context');
-  const config = mergeManagedHookTrustStateToml('model = "gpt-5.6-terra"\n', root, 'sks');
-  assert.match(config, new RegExp(`\\[hooks\\.state\\."${escapeRegExp(path.join(root, '.codex', 'hooks.json'))}:user_prompt_submit:0:0"\\]`));
-  assert.match(config, /trusted_hash = "sha256:[a-f0-9]{64}"/);
-  assert.match(config, /pre_tool_use:0:0/);
-  assert.doesNotMatch(config, /codex_hooks/);
+  const refs = sksHookHandlerRefs(hooks, '/repo/.codex/hooks.json');
+  const prompt = refs.find((ref) => ref.event === 'UserPromptSubmit');
+  assert.equal(prompt?.key, '/repo/.codex/hooks.json:user_prompt_submit:0:0');
+  assert.match(prompt?.hash || '', /^sha256:[a-f0-9]{64}$/);
+  assert.ok(refs.some((ref) => ref.key.endsWith(':pre_tool_use:0:0')));
+  assert.equal(refs.every((ref) => ref.user_scope === false), true);
 });
 
-function escapeRegExp(value) {
-  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
+test('the user-level hooks carry the scope flag in every command', () => {
+  const hooks = JSON.parse(mergeManagedHooksJson('', "'/h/.codex/sks/bin/sks-hook'", null, { commandSuffix: ' --scope=user' }));
+  const refs = sksHookHandlerRefs(hooks, '/h/.codex/hooks.json');
+  assert.ok(refs.length > 0);
+  assert.equal(refs.every((ref) => ref.user_scope && ref.command.endsWith(' --scope=user')), true);
+});

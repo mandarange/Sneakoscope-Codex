@@ -16,7 +16,7 @@
 Sneakoscope Codex (`sks`) is an open-source trust layer for Codex CLI and ChatGPT Desktop. It coordinates bounded AI coding agents, records machine-verifiable evidence, preserves project memory, and blocks release claims that are not supported by current tests or artifacts. Search visibility outcomes are measured separately; SKS does not promise rankings or traffic.
 <!-- END SKS SEARCH VISIBILITY MARKETING -->
 
-Current package: **SKS 10.3.8**. Install the latest stable release from npm.
+Current package: **SKS 10.3.9**. Install the latest stable release from npm.
 
 [Quick start](#install-in-one-command) · [Commands](#everyday-commands) · [SKS Center](#sks-center-macos) · [Documentation](#documentation) · [Changelog](CHANGELOG.md)
 
@@ -29,7 +29,10 @@ npm exec --yes --package=sneakoscope@latest -- sneakoscope install --yes
 The installer resolves the latest release, installs it globally, runs setup and
 Doctor, and checks that `sks` on your PATH points to the installed version.
 
-To set up a project, run this from its root, then open it in Codex:
+SKS turns on in every project you open in Codex. Its hooks live in the
+user-level `~/.codex/hooks.json`, and `sks update` keeps them installed and
+trusted. To add a project's own SKS files (TriWiki context, ignore rules), run
+this from its root:
 
 ```sh
 sks bootstrap --yes
@@ -43,7 +46,7 @@ sks bootstrap --yes
 | Project context | TriWiki indexes repository code and supplies bounded context that can be checked against source. |
 | Verification | Tests, diagnostics, and release evidence support completion claims. Security and data-integrity checks stay in place. |
 | Native controls | SKS Center brings connections, updates, MCP servers, and diagnostics together on macOS. |
-| Consistent setup | `sks update` installs the latest release, runs Doctor, and reconciles SKS-managed files and legacy assets. |
+| Consistent setup | `sks update` installs the latest release, runs Doctor, turns SKS hooks on for every Codex project, and reconciles SKS-managed files and legacy assets. |
 
 The default `essential` profile avoids repetitive completion rituals. `strict`
 adds stronger completion requirements. See [Essential Trust](docs/essential-trust.md).

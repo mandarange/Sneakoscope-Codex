@@ -1,3 +1,4 @@
+import fsp from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { exists, readJson, readText } from '../fsx.js';
@@ -26,9 +27,12 @@ export type CodexHookTrustEntry = {
 };
 
 export async function readCodexHookTrustEntries(root: string, opts: { managed?: boolean } = {}): Promise<CodexHookTrustEntry[]> {
+  // Codex reads hook trust only from the user config.toml, for project hooks too.
+  const codexHome = path.resolve(process.env.CODEX_HOME || path.join(process.env.HOME || os.homedir(), '.codex'));
+  const userConfig = path.join(codexHome, 'config.toml');
   const candidates = [
-    { source_path: path.join(root, '.codex', 'hooks.json'), source_kind: 'project' as const, state_path: path.join(root, '.codex', 'config.toml') },
-    { source_path: path.join(os.homedir(), '.codex', 'hooks.json'), source_kind: 'user' as const, state_path: path.join(os.homedir(), '.codex', 'config.toml') }
+    { source_path: path.join(root, '.codex', 'hooks.json'), source_kind: 'project' as const, state_path: userConfig },
+    { source_path: path.join(codexHome, 'hooks.json'), source_kind: 'user' as const, state_path: userConfig }
   ];
   const entries: CodexHookTrustEntry[] = [];
   for (const candidate of candidates) {
@@ -36,7 +40,8 @@ export async function readCodexHookTrustEntries(root: string, opts: { managed?: 
     const hooks = await readJson(candidate.source_path, {});
     const stateText = await readText(candidate.state_path, '');
     const trustedHashes = parseTrustedHashes(String(stateText || ''));
-    entries.push(...entriesFromHooksFile(candidate.source_path, candidate.source_kind, hooks, trustedHashes, opts.managed === true));
+    const sourcePath = await fsp.realpath(candidate.source_path).catch(() => candidate.source_path);
+    entries.push(...entriesFromHooksFile(sourcePath, candidate.source_kind, hooks, trustedHashes, opts.managed === true));
   }
   return entries;
 }

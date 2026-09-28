@@ -273,19 +273,21 @@ function buildRepairReadiness(input: any = {}) {
     blockers: nativeCoreBlockers,
     warnings: doctorNativeCapability.optional_warnings
   } : null, false)
-  const requireLegacyGlobalHookCleanup = input.require_legacy_global_hook_cleanup === true
-  const legacyGlobalHooks = doctorNativeCapability?.legacy_global_hooks
-  if (legacyGlobalHooks || requireLegacyGlobalHookCleanup) {
-    const legacyGlobalHookBlockers = legacyGlobalHooks
-      ? normalizeList(legacyGlobalHooks.blockers).map((blocker) => `legacy_global_hooks:${blocker}`)
-      : ['legacy_global_hooks:cleanup_result_missing']
+  // The user-level SKS hooks are what make SKS run in every Codex project.
+  // `sks update` installs them; Doctor reports when they are not in place.
+  const sksCodexHooks = doctorNativeCapability?.sks_codex_hooks
+  if (sksCodexHooks) {
+    const active = sksCodexHooks.active === true
     phases.push({
-      id: 'legacy_global_hook_cleanup',
-      ok: legacyGlobalHooks?.ok === true && legacyGlobalHookBlockers.length === 0,
-      required_for_core_ready: requireLegacyGlobalHookCleanup,
+      id: 'sks_codex_hooks',
+      ok: active,
+      required_for_core_ready: false,
       manual_required: false,
-      blockers: legacyGlobalHookBlockers,
-      warnings: normalizeList(legacyGlobalHooks?.warnings)
+      blockers: active ? [] : ['sks_codex_hooks_inactive'],
+      warnings: [
+        ...normalizeList(sksCodexHooks.missing_events).map((event) => `sks_codex_hook_missing:${event}`),
+        ...normalizeList(sksCodexHooks.untrusted_events).map((event) => `sks_codex_hook_untrusted:${event}`)
+      ]
     })
   }
   if (input.doctor_fix_transaction) {

@@ -3,6 +3,42 @@
 ## [Unreleased]
 
 
+## [10.3.9] - 2026-09-28
+
+### Fixed
+
+- SKS now runs in every project you open in Codex, not only in projects set
+  up with `sks setup`. Codex loads hooks for every project only from the
+  user-level `~/.codex/hooks.json`, but SKS kept its hooks in project
+  `.codex/hooks.json` files and in a `~/.codex/requirements.toml`
+  `managed_dir` setup that Codex never reads. In any other project Jev,
+  prompt routing, and Naruto parent orchestration never ran, while `sks
+  doctor` reported the hooks as active. `sks update` now installs the SKS
+  hooks in `~/.codex/hooks.json` through a launcher it keeps pointed at the
+  installed SKS and adds the SKS rules to `~/.codex/AGENTS.md`. It drops the
+  dead setup's `allow_managed_hooks_only` line at once and its inert files on
+  the next update, after the 10.3.8 updater's own final check has read them.
+  `sks setup` and `sks doctor --fix` install the same hooks.
+- Hook trust written by SKS now matches what Codex checks. SKS hashed the hook
+  group one level too deep and wrote project-hook trust into the project
+  config, which Codex ignores. It now writes Codex's hash, keyed by the
+  canonical file path, into the user config, and checks the result with
+  Codex's own `hooks/list` before reporting the hooks active.
+- No event runs SKS twice. A project keeps its own SKS hooks only when they
+  run that project's own SKS build (the SKS source repository or a
+  project-local install); the user-level hook steps aside for those events.
+  Other SKS project hooks are removed once the user-level hooks are active.
+- In a project that was never set up, SKS keeps its `.sneakoscope/` state out
+  of git through `.git/info/exclude`, never the tracked `.gitignore`.
+
+### Changed
+
+- `sks hooks install` and `sks hooks repair` install the user-level hooks;
+  `sks hooks status` reports whether they are active. `sks hooks
+  official-parity` compares SKS's view with Codex's `hooks/list` answer.
+- SKS Doctor shows an `sks_codex_hooks` row when the user-level hooks are
+  missing or untrusted.
+
 ## [10.3.8] - 2026-09-27
 
 ### Added

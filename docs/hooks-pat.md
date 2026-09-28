@@ -13,7 +13,8 @@ sks hooks warning-check --json
 sks hooks replay-codex-fixtures --json
 sks hooks trust-doctor --actual --json
 sks hooks trust-state --actual --json
-sks hooks install --managed --json
+sks hooks status --json
+sks hooks install --json
 sks hooks official-parity --json
 sks codex-app pat status --json
 ```
@@ -22,7 +23,7 @@ sks codex-app pat status --json
 
 SKS 1.14.1 validates against the vendored OpenAI Codex `latest` hook snapshot from `openai/codex` HEAD. The snapshot has 10 events and 20 command schema files. `SubagentStart` and `SubagentStop` are release-blocking events, not compatibility warnings.
 
-1.14.1 also writes `codex-hook-parity-1.14.1.json`, uses `sks.codex-hook-official-parity.v2`, and records an official hash oracle result. When the official hash is unavailable, SKS enforces managed-only hook repair and keeps unmanaged trusted-hash writing disabled.
+`sks hooks official-parity --json` writes `codex-hook-parity.json` (`sks.codex-hook-official-parity.v3`): it compares SKS's view of the loaded hooks with Codex's own answer from `codex app-server` `hooks/list` (the same hooks, current hashes, and trust).
 
 This page is documentation-only evidence: it distinguishes probe/mock/live evidence, avoids universal Computer Use availability claims, and keeps PAT/secret handling private and redacted. For recovery, run `sks hooks warning-check --json`, `sks computer-use smoke --json`, or `sks bridge repair --json` depending on the failing surface. Provider secrets are configured only through the Desktop Bridge stdin-based profile flow; the removed `sks codex-lb` command is unknown.
 
@@ -30,9 +31,13 @@ Supported event names are `PreToolUse`, `PermissionRequest`, `PostToolUse`, `Pre
 
 Command hook config must use the upstream handler fields `command`, `commandWindows` or `command_windows`, `timeout`, `async`, and `statusMessage`. `allow_managed_hooks_only = true` is valid only in `requirements.toml`; SKS must not write it to `config.toml`.
 
-SKS writes command hooks only. It must not generate prompt hooks, agent hooks, async hooks, empty commands, invalid matchers, or same-layer `hooks.json` plus `config.toml` hook definitions. `sks hooks trust-doctor --actual --json` reports `current_hash`, `trusted_hash`, and `trust_status` as `Managed`, `Trusted`, `Modified`, or `Untrusted` from `hooks.json`, inline TOML, `requirements.toml`, and managed directories.
+SKS writes command hooks only. It must not generate prompt hooks, agent hooks, async hooks, empty commands, invalid matchers, or same-layer `hooks.json` plus `config.toml` hook definitions. `sks hooks trust-doctor --actual --json` reports `current_hash`, `trusted_hash`, and `trust_status` as `Trusted`, `Modified`, or `Untrusted` for the hooks Codex loads: the user-level `hooks.json` and inline `config.toml` hooks for every project, and a project's own only when that project is trusted.
 
-When Codex does not expose an official hook hash list, SKS does not write SKS-only `trusted_hash` values by default. The safe repair is `sks hooks install --managed --json`, which writes `allow_managed_hooks_only = true` in `.codex/requirements.toml` and records managed command hooks under `.codex/managed-hooks/`.
+## Where SKS hooks live
+
+SKS installs its hooks in the user-level `$CODEX_HOME/hooks.json` (`~/.codex/hooks.json`), the one hook source Codex loads for every project, trusted or not. Each handler runs the launcher `~/.codex/sks/bin/sks-hook` with `--scope=user`; `sks update` points the launcher at the installed SKS. Codex reads hook trust only from the user `config.toml`, keyed by the canonical hooks.json path and the hash Codex reports from `hooks/list`, so SKS writes trust there for its own handlers only and verifies the result through `codex app-server` `hooks/list`.
+
+A project keeps its own SKS hooks only when they run that project's own SKS build (the SKS source repository, a project-local install); for those events the user-level hook steps aside. `requirements.toml` under `$CODEX_HOME` or a project is not a hook source Codex loads, so SKS removes the `managed_dir` setup earlier versions wrote there. `sks update`, `sks setup`, and `sks doctor --fix` all converge on this layout; `sks hooks status --json` shows it.
 
 Output uses camelCase Codex fields. Examples:
 

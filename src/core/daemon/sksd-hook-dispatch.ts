@@ -17,19 +17,36 @@ import { callSksdHookDaemon, spawnSksdHookDaemonDetached } from './sksd-hook-dae
 // daemon-hit call has no reason to load. evaluateHookPayload (the heavy
 // one) is dynamically imported below, only on the fallback path.
 import { loadHookPayload, normalizeHookResult } from '../hooks-runtime/hook-io.js';
-import { projectRoot } from '../fsx.js';
+import { ensureSksStateGitExcluded, hookLayerDeferral, hookLayerFromArgs } from '../hooks-runtime/hook-layer.js';
+import { packageRoot, projectRoot } from '../fsx.js';
 
-export async function hookDaemonInline(name: string): Promise<void> {
+export async function hookDaemonInline(name: string, extraArgs: readonly string[] = []): Promise<void> {
   const payload = await loadHookPayload();
   const root = await projectRoot(payload.cwd || process.cwd());
-  const daemonResponse = await callSksdHookDaemon(root, name, payload);
-  let result: unknown;
-  if (daemonResponse) {
-    result = daemonResponse.result;
-  } else {
-    spawnSksdHookDaemonDetached(root);
-    const { evaluateHookPayloadOnce } = await import('../hooks-runtime.js');
-    result = await evaluateHookPayloadOnce(name, payload, { root });
+  const layer = hookLayerFromArgs(extraArgs);
+  const deferral = await hookLayerDeferral({ layer, hookName: name, root, runningPackageRoot: packageRoot() })
+    .catch(() => ({ defer: false, reason: 'deferral_check_failed' }));
+  if (deferral.defer) {
+    process.stdout.write(`${JSON.stringify(normalizeHookResult(name, { suppressedDuplicate: true }))}\n`);
+    return;
   }
+  let result: unknown;
+  try {
+    const daemonResponse = await callSksdHookDaemon(root, name, payload);
+    if (daemonResponse) {
+      result = daemonResponse.result;
+    } else {
+      spawnSksdHookDaemonDetached(root);
+      const { evaluateHookPayloadOnce } = await import('../hooks-runtime.js');
+      result = await evaluateHookPayloadOnce(name, payload, { root });
+    }
+  } catch (err: unknown) {
+    // The user-level hook runs in every project, so an SKS failure there must
+    // never break the Codex turn: report it and let the turn continue.
+    if (layer !== 'user') throw err;
+    process.stderr.write(`SKS hook ${name} failed: ${err instanceof Error ? err.message : String(err)}\n`);
+    result = { suppressedDuplicate: true };
+  }
+  await ensureSksStateGitExcluded(root).catch(() => null);
   process.stdout.write(`${JSON.stringify(normalizeHookResult(name, result))}\n`);
 }

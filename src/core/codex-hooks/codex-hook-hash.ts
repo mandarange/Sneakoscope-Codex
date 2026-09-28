@@ -15,14 +15,17 @@ export function codexHookStateKey(sourcePath: string, event: CodexHookEventName,
   return `${sourcePath}:${codexHookEventStateKey(event)}:${groupIndex}:${handlerIndex}`;
 }
 
+/**
+ * The `currentHash` Codex reports from `hooks/list` (checked against Codex
+ * 0.153.4, 0.157.1 and 0.158): the group's matcher and handlers sit beside
+ * `event_name` at the top level. A hash nested under `group` never matches,
+ * so every trusted_hash written that way read as untrusted.
+ */
 export function codexCommandHookCurrentHash(identity: CodexCommandHookIdentity): string {
-  const group: Record<string, unknown> = {};
-  if (identity.matcher != null && String(identity.matcher).trim()) group.matcher = String(identity.matcher);
-  group.hooks = [normalizedCommandHook(identity)];
-  return `sha256:${sha256(canonicalJson({
-    event_name: codexHookEventStateKey(identity.event),
-    group
-  }))}`;
+  const hashed: Record<string, unknown> = { event_name: codexHookEventStateKey(identity.event) };
+  if (identity.matcher != null && String(identity.matcher).trim()) hashed.matcher = String(identity.matcher);
+  hashed.hooks = [normalizedCommandHook(identity)];
+  return `sha256:${sha256(canonicalJson(hashed))}`;
 }
 
 export function normalizedCommandHook(identity: CodexCommandHookIdentity): Record<string, unknown> {

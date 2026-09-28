@@ -235,7 +235,10 @@ const childEnv: NodeJS.ProcessEnv = {
   HOME: isolatedHome,
   USERPROFILE: isolatedHome,
   SKS_TEST_FORBID_REAL_HOME: '1',
-  SKS_TEST_REAL_HOME: realHome
+  SKS_TEST_REAL_HOME: realHome,
+  // Tests that do not bring their own home share this one; SKS never writes
+  // user-level Codex state there (see globalHookWritesAllowed).
+  SKS_TEST_DEFAULT_HOME: isolatedHome
 };
 delete childEnv.NODE_OPTIONS;
 // An inherited CODEX_HOME (user shell export) would defeat the HOME redirect:

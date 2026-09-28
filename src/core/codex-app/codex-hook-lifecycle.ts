@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { nowIso, writeJsonAtomic } from '../fsx.js'
 import { readCodexHookActualState } from '../codex-hooks/codex-hook-actual-discovery.js'
-import { installManagedCodexHooks } from '../codex-hooks/codex-hook-managed-install.js'
+import { activateSksCodexHooks } from '../codex-hooks/codex-project-hooks.js'
 import { probeCodexHookApprovalState } from './codex-hook-approval-probe.js'
 import type { CodexHookApprovalProbe, CodexHookApprovalState } from './codex-app-types.js'
 import { messageOf } from '../errors/message.js'
@@ -33,7 +33,7 @@ interface CodexHookLifecycleReport {
 export async function buildCodexHookLifecycle(input: { root?: string; apply?: boolean } = {}): Promise<CodexHookLifecycleReport> {
   const root = path.resolve(input.root || process.cwd())
   const install = input.apply === true
-    ? await installManagedCodexHooks(root).catch((err: unknown) => ({ ok: false, blockers: [messageOf(err)] }))
+    ? await activateSksCodexHooks({ root }).catch((err: unknown) => ({ ok: false, blockers: [messageOf(err)] }))
     : null
   const actual = await readCodexHookActualState(root).catch((err: unknown) => ({ ok: false, entries: [], blockers: [messageOf(err)] }))
   const probe = await probeCodexHookApprovalState(root).catch((err: unknown) => ({

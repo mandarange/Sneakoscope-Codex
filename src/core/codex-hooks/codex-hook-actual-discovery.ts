@@ -4,7 +4,8 @@ import os from 'node:os';
 import { exists, readJson, readText } from '../fsx.js';
 import { CODEX_HOOK_EVENTS, codexHookEventName, type CodexHookEventName } from '../codex-compat/codex-hook-events.js';
 import { matcherApplies, validateCodexCommandHookConfig } from './codex-hook-config-writer.js';
-import { entriesFromHooksFile, parseTrustedHashes, type CodexHookTrustEntry } from './codex-hook-trust-state.js';
+import { entriesFromHooksFile, type CodexHookTrustEntry } from './codex-hook-trust-state.js';
+import { codexSourcePath, parseCodexTrustState } from './sks-hook-entries.js';
 
 export type CodexHookActualSourceKind = 'project' | 'user';
 export type CodexHookActualSourceFormat = 'hooks_json' | 'config_toml' | 'requirements_toml' | 'managed_dir_json' | 'managed_dir_toml';
@@ -50,18 +51,31 @@ type TomlGroup = {
 };
 
 export async function readCodexHookActualState(root: string): Promise<CodexHookActualState> {
+  // Mirrors what Codex loads (checked through 0.158 with app-server
+  // hooks/list): the user layer for every project, the project layer only
+  // for a trusted project, and hook trust only from the user config.toml.
+  // requirements.toml under $CODEX_HOME or a project is never a hook source,
+  // and its allow_managed_hooks_only has no effect there.
+  const codexHome = path.resolve(process.env.CODEX_HOME || path.join(process.env.HOME || os.homedir(), '.codex'));
+  const userConfigText = String(await readText(path.join(codexHome, 'config.toml'), '') || '');
+  const trust = parseCodexTrustState(userConfigText);
+  const projectRoot = path.resolve(root);
+  const projectTrusted = trust.trustedProjects.has(projectRoot)
+    || trust.trustedProjects.has(await fs.realpath(projectRoot).catch(() => projectRoot));
   const configs = [
     {
       source_kind: 'project' as const,
-      hooks_json: path.join(root, '.codex', 'hooks.json'),
-      config_toml: path.join(root, '.codex', 'config.toml'),
-      requirements_toml: path.join(root, '.codex', 'requirements.toml')
+      hooks_json: path.join(projectRoot, '.codex', 'hooks.json'),
+      config_toml: path.join(projectRoot, '.codex', 'config.toml'),
+      requirements_toml: path.join(projectRoot, '.codex', 'requirements.toml'),
+      loaded: projectTrusted
     },
     {
       source_kind: 'user' as const,
-      hooks_json: path.join(os.homedir(), '.codex', 'hooks.json'),
-      config_toml: path.join(os.homedir(), '.codex', 'config.toml'),
-      requirements_toml: path.join(os.homedir(), '.codex', 'requirements.toml')
+      hooks_json: path.join(codexHome, 'hooks.json'),
+      config_toml: path.join(codexHome, 'config.toml'),
+      requirements_toml: path.join(codexHome, 'requirements.toml'),
+      loaded: true
     }
   ];
   const sources: CodexHookActualSource[] = [];
@@ -69,70 +83,32 @@ export async function readCodexHookActualState(root: string): Promise<CodexHookA
   const unsupportedHandlers: CodexHookActualUnsupportedHandler[] = [];
   const invalidMatchers: CodexHookActualUnsupportedHandler[] = [];
   const dualRepresentation: Array<{ source_kind: CodexHookActualSourceKind; hooks_json: string; config_toml: string }> = [];
-  const managedDirs: string[] = [];
+  const notices: string[] = [];
 
   for (const cfg of configs) {
     const hooksJsonExists = await exists(cfg.hooks_json);
-    const configText = await readText(cfg.config_toml, '');
-    const requirementsText = await readText(cfg.requirements_toml, '');
-    const configHasInlineHooks = hasInlineHookTables(String(configText || ''));
-    const requirementsHasInlineHooks = hasInlineHookTables(String(requirementsText || ''));
-    const managedOnly = hasAllowManagedHooksOnly(String(requirementsText || ''));
-
-    sources.push({
-      path: cfg.hooks_json,
-      source_kind: cfg.source_kind,
-      source_format: 'hooks_json',
-      exists: hooksJsonExists,
-      inline_hooks: false,
-      managed: false
-    });
-    sources.push({
-      path: cfg.config_toml,
-      source_kind: cfg.source_kind,
-      source_format: 'config_toml',
-      exists: Boolean(String(configText || '').trim()),
-      inline_hooks: configHasInlineHooks,
-      managed: false
-    });
-    sources.push({
-      path: cfg.requirements_toml,
-      source_kind: cfg.source_kind,
-      source_format: 'requirements_toml',
-      exists: Boolean(String(requirementsText || '').trim()),
-      inline_hooks: requirementsHasInlineHooks,
-      managed: true
-    });
-
-    if (hooksJsonExists && !managedOnly) {
+    const configText = String(await readText(cfg.config_toml, '') || '');
+    const requirementsText = String(await readText(cfg.requirements_toml, '') || '');
+    const configHasInlineHooks = hasInlineHookTables(configText);
+    sources.push({ path: cfg.hooks_json, source_kind: cfg.source_kind, source_format: 'hooks_json', exists: hooksJsonExists, inline_hooks: false, managed: false });
+    sources.push({ path: cfg.config_toml, source_kind: cfg.source_kind, source_format: 'config_toml', exists: Boolean(configText.trim()), inline_hooks: configHasInlineHooks, managed: false });
+    sources.push({ path: cfg.requirements_toml, source_kind: cfg.source_kind, source_format: 'requirements_toml', exists: Boolean(requirementsText.trim()), inline_hooks: hasInlineHookTables(requirementsText), managed: false });
+    if (/^\s*(?:managed_dir|windows_managed_dir)\s*=|^\s*\[\[hooks\./m.test(requirementsText)) notices.push(`codex_ignores_requirements_toml_hooks:${cfg.requirements_toml}`);
+    if (!cfg.loaded) {
+      if (hooksJsonExists || configHasInlineHooks) notices.push(`project_hooks_not_loaded_untrusted_project:${projectRoot}`);
+      continue;
+    }
+    if (hooksJsonExists) {
       const hooks = await readJson(cfg.hooks_json, {});
-      const trustedHashes = parseTrustedHashes(String(configText || ''));
-      entries.push(...tagEntries(entriesFromHooksFile(cfg.hooks_json, cfg.source_kind, hooks, trustedHashes, false), 'hooks_json', false));
+      entries.push(...tagEntries(entriesFromHooksFile(await codexSourcePath(cfg.hooks_json), cfg.source_kind, hooks, trust.trustedHashes, false), 'hooks_json', false));
       unsupportedHandlers.push(...analyzeHooksJsonUnsupported(cfg.hooks_json, cfg.source_kind, hooks, 'hooks_json'));
     }
-
-    if (configHasInlineHooks && !managedOnly) {
-      const parsed = entriesFromInlineHooksToml(cfg.config_toml, cfg.source_kind, String(configText || ''), parseTrustedHashes(String(configText || '')), false, 'config_toml');
+    if (configHasInlineHooks) {
+      const parsed = entriesFromInlineHooksToml(await codexSourcePath(cfg.config_toml), cfg.source_kind, configText, trust.trustedHashes, false, 'config_toml');
       entries.push(...parsed.entries);
       unsupportedHandlers.push(...parsed.unsupported_handlers);
       invalidMatchers.push(...parsed.invalid_matchers);
       if (hooksJsonExists) dualRepresentation.push({ source_kind: cfg.source_kind, hooks_json: cfg.hooks_json, config_toml: cfg.config_toml });
-    }
-
-    if (requirementsHasInlineHooks) {
-      const parsed = entriesFromInlineHooksToml(cfg.requirements_toml, cfg.source_kind, String(requirementsText || ''), {}, true, 'requirements_toml');
-      entries.push(...parsed.entries);
-      unsupportedHandlers.push(...parsed.unsupported_handlers);
-      invalidMatchers.push(...parsed.invalid_matchers);
-    }
-
-    for (const managedDir of parseManagedDirs(String(requirementsText || ''), cfg.requirements_toml)) {
-      managedDirs.push(managedDir);
-      const managed = await readManagedDirEntries(managedDir, cfg.source_kind);
-      sources.push(...managed.sources);
-      entries.push(...managed.entries);
-      unsupportedHandlers.push(...managed.unsupported_handlers);
-      invalidMatchers.push(...managed.invalid_matchers);
     }
   }
 
@@ -157,12 +133,12 @@ export async function readCodexHookActualState(root: string): Promise<CodexHookA
     ok: hardBlockers.length === 0,
     root,
     sources,
-    managed_dirs: [...new Set(managedDirs)],
+    managed_dirs: [],
     entries,
     unsupported_handlers: unsupportedHandlers,
     invalid_matchers: invalidMatchers,
     dual_representation: dualRepresentation,
-    warnings: [...new Set([...hardBlockers, ...entries.flatMap((entry) => entry.warnings || [])])],
+    warnings: [...new Set([...hardBlockers, ...notices, ...entries.flatMap((entry) => entry.warnings || [])])],
     blockers: [...new Set(hardBlockers)]
   };
 }
@@ -182,55 +158,8 @@ export function entriesFromInlineHooksToml(
   return { entries, unsupported_handlers: unsupportedHandlers, invalid_matchers: invalidMatchers };
 }
 
-export function parseManagedDirs(tomlText: string, sourcePath: string): string[] {
-  const dirs: string[] = [];
-  const base = path.dirname(sourcePath);
-  for (const line of String(tomlText || '').split(/\r?\n/)) {
-    const match = line.match(/^\s*(managed_dir|windows_managed_dir)\s*=\s*(.+?)\s*$/);
-    if (!match?.[2]) continue;
-    const value = parseTomlValue(match[2]);
-    if (typeof value !== 'string' || !value.trim()) continue;
-    dirs.push(path.isAbsolute(value) ? value : path.resolve(base, value));
-  }
-  return dirs;
-}
-
 export function hasInlineHookTables(tomlText: string): boolean {
   return /^\s*\[\[hooks\.[A-Za-z]+(?:\.hooks)?\]\]\s*$/m.test(String(tomlText || ''));
-}
-
-export function hasAllowManagedHooksOnly(tomlText: string): boolean {
-  return /^\s*allow_managed_hooks_only\s*=\s*true\s*$/m.test(String(tomlText || ''));
-}
-
-async function readManagedDirEntries(managedDir: string, sourceKind: CodexHookActualSourceKind) {
-  const sources: CodexHookActualSource[] = [];
-  const entries: CodexHookTrustEntry[] = [];
-  const unsupportedHandlers: CodexHookActualUnsupportedHandler[] = [];
-  const invalidMatchers: CodexHookActualUnsupportedHandler[] = [];
-  if (!(await exists(managedDir))) {
-    sources.push({ path: managedDir, source_kind: sourceKind, source_format: 'managed_dir_toml', exists: false, inline_hooks: false, managed: true });
-    return { sources, entries, unsupported_handlers: unsupportedHandlers, invalid_matchers: invalidMatchers };
-  }
-  const names = await fs.readdir(managedDir).catch(() => []);
-  for (const name of names.sort()) {
-    if (!/\.(json|toml)$/i.test(name)) continue;
-    const file = path.join(managedDir, name);
-    if (/\.json$/i.test(name)) {
-      const hooks = await readJson(file, {});
-      entries.push(...tagEntries(entriesFromHooksFile(file, sourceKind, hooks, {}, true), 'managed_dir_json', true));
-      unsupportedHandlers.push(...analyzeHooksJsonUnsupported(file, sourceKind, hooks, 'managed_dir_json'));
-      sources.push({ path: file, source_kind: sourceKind, source_format: 'managed_dir_json', exists: true, inline_hooks: false, managed: true });
-    } else {
-      const text = await readText(file, '');
-      const parsed = entriesFromInlineHooksToml(file, sourceKind, String(text || ''), {}, true, 'managed_dir_toml');
-      entries.push(...parsed.entries);
-      unsupportedHandlers.push(...parsed.unsupported_handlers);
-      invalidMatchers.push(...parsed.invalid_matchers);
-      sources.push({ path: file, source_kind: sourceKind, source_format: 'managed_dir_toml', exists: true, inline_hooks: hasInlineHookTables(String(text || '')), managed: true });
-    }
-  }
-  return { sources, entries, unsupported_handlers: unsupportedHandlers, invalid_matchers: invalidMatchers };
 }
 
 function hooksObjectFromToml(tomlText: string, sourcePath: string, sourceKind: CodexHookActualSourceKind, sourceFormat: CodexHookActualSourceFormat) {

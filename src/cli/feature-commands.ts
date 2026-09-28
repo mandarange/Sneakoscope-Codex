@@ -11,8 +11,8 @@ import { codexSchemaSnapshotReport } from '../core/codex-compat/codex-schema-sna
 import { validateCodexFixtureOutputs } from '../core/codex-compat/codex-hook-schema.js';
 import { codexHookWarningCheck } from '../core/codex-compat/codex-hook-warning-detector.js';
 import { codexHookTrustDoctor } from '../core/codex-hooks/codex-hook-trust-doctor.js';
-import { writeTrustedHashStateForHooksFile } from '../core/codex-hooks/codex-hook-state-writer.js';
-import { installManagedCodexHooks } from '../core/codex-hooks/codex-hook-managed-install.js';
+import { activateSksCodexHooks } from '../core/codex-hooks/codex-project-hooks.js';
+import { globalHookPaths, readGlobalSksHookState } from '../core/codex-hooks/codex-global-hooks.js';
 import { writeCodexHookOfficialParityReport } from '../core/codex-hooks/codex-hook-official-parity.js';
 
 const flag = (args: any, name: any) => args.includes(name);
@@ -98,7 +98,7 @@ export async function hooksCommand(sub: any = 'explain', args: any = []) {
   if (action === 'status') {
     const report = await hooksStatusReport(root);
     if (flag(args, '--json')) return console.log(JSON.stringify(report, null, 2));
-    console.log(`Hooks: ${report.ok ? 'ok' : 'missing'}`);
+    console.log(`Hooks: ${report.ok ? 'active for every project' : 'not active (run: sks doctor --fix)'}`);
     for (const file of report.hooks_files) console.log(`- ${file.path}: ${file.exists ? 'present' : 'missing'}`);
     return;
   }
@@ -131,56 +131,25 @@ export async function hooksCommand(sub: any = 'explain', args: any = []) {
     if (!report.ok) process.exitCode = 1;
     return;
   }
-  if (action === 'repair') {
-    if (flag(args, '--trusted')) {
-      const parity = await writeCodexHookOfficialParityReport(root);
-      if (!parity.official_hash_available) {
-        const blocked = {
-          schema: 'sks.codex-hooks-repair.v1',
-          ok: false,
-          mode: 'trusted',
-          status: 'blocked',
-          blocker: 'official_hash_oracle_unavailable',
-          next_command: 'sks hooks repair --managed --json',
-          parity
-        };
-        if (flag(args, '--json')) return console.log(JSON.stringify(blocked, null, 2));
-        console.log('Hooks trusted repair blocked: official hash oracle unavailable. Run `sks hooks repair --managed --json`.');
-        process.exitCode = 1;
-        return;
-      }
-    }
-    const projectReport = await installManagedCodexHooks(root);
-    const userReport = await installManagedCodexHooks(root, {
-      requirementsPath: path.join(os.homedir(), '.codex', 'requirements.toml'),
-      managedDir: path.join(os.homedir(), '.codex', 'managed-hooks')
-    });
+  if (action === 'repair' || action === 'install') {
+    // User-level hooks.json is the one hook source Codex loads for every
+    // project; trust goes into the user config, the only place Codex reads it.
+    const activation = await activateSksCodexHooks({ root });
     const actual = await codexHookTrustDoctor(root, { actual: true });
     const result = {
-      schema: 'sks.codex-hooks-repair.v1',
-      ok: Boolean(projectReport.ok && userReport.ok && actual.ok),
-      mode: 'managed',
+      schema: action === 'repair' ? 'sks.codex-hooks-repair.v2' : 'sks.codex-hooks-install.v2',
+      ok: activation.ok && activation.active,
+      mode: 'user_level',
       root,
-      project_install: projectReport,
-      user_install: userReport,
+      activation,
       actual_trust: actual.trust,
-      managed_dirs: (actual as any).managed_dirs || [],
-      blockers: (actual as any).blockers || [],
-      next_command: 'sks hooks trust-doctor --actual --json',
-      actions: ['project_requirements_toml_managed_install', 'user_requirements_toml_managed_install']
+      blockers: activation.blockers,
+      warnings: activation.warnings,
+      next_command: 'sks hooks status --json'
     };
     if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
-    console.log(`Hooks managed repair: ${result.ok ? 'ok' : 'blocked'}`);
+    console.log(`SKS Codex hooks: ${result.ok ? 'active for every project' : 'blocked'}${result.blockers.length ? ` (${result.blockers.join(', ')})` : ''}`);
     if (!result.ok) process.exitCode = 1;
-    return;
-  }
-  if (action === 'install') {
-    const report = flag(args, '--managed')
-      ? await installManagedCodexHooks(root)
-      : await writeTrustedHashStateForHooksFile(root, undefined, undefined, { allowSksHashFallback: flag(args, '--trusted'), reason: 'Use --managed unless you intentionally accept SKS-only trusted_hash fallback with --trusted.' });
-    if (flag(args, '--json')) return console.log(JSON.stringify({ ...report, schema: flag(args, '--managed') ? 'sks.codex-hooks-managed-install.v1' : 'sks.codex-hook-install-command.v2', mode: flag(args, '--managed') ? 'managed' : flag(args, '--project') ? 'project' : 'trust-state-only', trusted: flag(args, '--trusted') }, null, 2));
-    console.log(flag(args, '--managed') ? `Hooks managed install: ${report.ok ? 'ok' : 'blocked'}` : `Hooks install trust state: ${report.ok ? 'ok' : 'blocked'}`);
-    if (!report.ok) process.exitCode = 1;
     return;
   }
   if (action === 'actual-parity' || action === 'official-parity' || (action === 'parity' && flag(args, '--official'))) {
@@ -247,8 +216,9 @@ export async function hooksCommand(sub: any = 'explain', args: any = []) {
 }
 
 async function hooksStatusReport(root: any) {
+  const global = await readGlobalSksHookState();
   const files = [
-    path.join(os.homedir(), '.codex', 'hooks.json'),
+    globalHookPaths().hooksPath,
     path.join(root, '.codex', 'hooks.json')
   ];
   const hooksFiles: any[] = [];
@@ -256,9 +226,10 @@ async function hooksStatusReport(root: any) {
     hooksFiles.push({ path: file, exists: await exists(file) });
   }
   return {
-    schema: 'sks.hooks-status.v1',
+    schema: 'sks.hooks-status.v2',
     hooks_files: hooksFiles,
-    ok: hooksFiles.some((file: any) => file.exists)
+    global,
+    ok: global.active
   };
 }
 

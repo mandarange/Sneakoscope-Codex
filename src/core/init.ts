@@ -10,10 +10,9 @@ import { disableVersionGitHook } from './version-manager.js';
 import { concurrentToolGuidanceText, coreEngineeringDirectiveReferenceText, coreEngineeringDirectiveText } from './lean-engineering-policy.js';
 import { DEFAULT_CODEX_APP_PLUGINS, DESIGN_SYSTEM_SSOT, DOLLAR_COMMANDS, DOLLAR_SKILL_NAMES, LEGACY_DOLLAR_SKILL_NAMES, PPT_CONDITIONAL_SKILL_ALLOWLIST, PPT_PIPELINE_MCP_ALLOWLIST, PPT_PIPELINE_SKILL_ALLOWLIST, RECOMMENDED_DESIGN_REFERENCES, RECOMMENDED_MCP_SERVERS, RECOMMENDED_SKILLS, context7ConfigToml, prefixKnownSksDollarReferences, sksPrefixedDollarCommand, triwikiContextTracking } from './routes.js';
 import { SKILL_DREAM_POLICY } from './skill-forge.js';
-import { CODEX_HOOK_EVENT_STATE_KEYS } from './codex-compat/codex-hook-events.js';
 import { MANAGED_CODEX_FEATURE_FLAGS, REMOVED_CODEX_FEATURE_FLAGS } from './codex/codex-feature-flags.js';
 import { writeCodexConfigGuarded } from './codex/codex-config-guard.js';
-import { codexCommandHookCurrentHash } from './codex-hooks/codex-hook-hash.js';
+import { isSksHookHandler } from './codex-hooks/sks-hook-entries.js';
 import { legacyCoreSkillNames } from './codex-native/core-skill-manifest.js';
 import { AUTHORITATIVE_SKS_SKILL_ROOT_REFERENCE } from './codex-native/sks-skill-paths.js';
 import { currentGeneratedFileInventory, installCodexAgents, pruneStaleGeneratedFiles, REMOVED_SKS_SKILL_NAMES } from './init/skills.js';
@@ -143,8 +142,17 @@ export function sksCommandPrefix(scope: any = 'global', opts: any = {}) {
     : (opts.globalCommand || 'sks');
 }
 
-function sksHookCommand(commandPrefix: any, hookName: any) {
-  return `${commandPrefix} hook ${hookName}`;
+/** The env that locates the user-level hooks for a setup run: redirected homes drop any inherited CODEX_HOME. */
+function hookEnvForInit(opts: any = {}): NodeJS.ProcessEnv {
+  if (!opts.home && !opts.codexHome) return process.env;
+  const env: NodeJS.ProcessEnv = { ...process.env, ...(opts.home ? { HOME: opts.home } : {}) };
+  if (opts.codexHome) env.CODEX_HOME = opts.codexHome;
+  else delete env.CODEX_HOME;
+  return env;
+}
+
+function sksHookCommand(commandPrefix: any, hookName: any, commandSuffix = '') {
+  return `${commandPrefix} hook ${hookName}${commandSuffix}`;
 }
 
 const MANAGED_HOOKS = {
@@ -172,7 +180,7 @@ export function managedHookEventNames(root?: string | null): string[] {
   return postToolEvidenceEnabled(root) ? all : all.filter((event) => !ESSENTIAL_PROFILE_OMITTED_HOOK_EVENTS.has(event));
 }
 
-function buildManagedHooks(commandPrefix: any, root?: string | null) {
+function buildManagedHooks(commandPrefix: any, root?: string | null, commandSuffix = '') {
   const hooks: Record<string, any> = {};
   const events = new Set(managedHookEventNames(root));
   for (const [eventName, entries] of Object.entries(MANAGED_HOOKS)) {
@@ -181,80 +189,14 @@ function buildManagedHooks(commandPrefix: any, root?: string | null) {
       ...('matcher' in entry ? { matcher: entry.matcher } : {}),
       hooks: entry.hooks.map(({ hookName, ...hook }: any) => ({
         ...hook,
-        command: sksHookCommand(commandPrefix, hookName)
+        command: sksHookCommand(commandPrefix, hookName, commandSuffix)
       }))
     }));
   }
   return { hooks };
 }
 
-const CODEX_HOOK_EVENT_KEYS: Record<string, string> = { ...CODEX_HOOK_EVENT_STATE_KEYS };
-
-export function buildManagedHookTrustStateToml(root: string, commandPrefix: string): string {
-  const source = path.join(root, '.codex', 'hooks.json');
-  const managed = buildManagedHooks(commandPrefix, root).hooks;
-  const blocks: string[] = [];
-  for (const [eventName, entries] of Object.entries(managed) as Array<[string, any[]]>) {
-    const eventKey = CODEX_HOOK_EVENT_KEYS[eventName] || eventName;
-    entries.forEach((entry, groupIndex) => {
-      (entry.hooks || []).forEach((hook: any, handlerIndex: number) => {
-        const key = `${source}:${eventKey}:${groupIndex}:${handlerIndex}`;
-        const table = `hooks.state."${tomlQuotedKey(key)}"`;
-        blocks.push(`[${table}]\ntrusted_hash = "${codexHookTrustedHash(eventName, entry, hook)}"`);
-      });
-    });
-  }
-  return `${blocks.join('\n\n')}\n`;
-}
-
-export function mergeManagedHookTrustStateToml(existingContent: string, root: string, commandPrefix: string): string {
-  let next = String(existingContent || '').trimEnd();
-  for (const block of buildManagedHookTrustStateToml(root, commandPrefix).trim().split(/\n\n+/)) {
-    const table = block.match(/^\[([^\]]+)\]/)?.[1];
-    if (table) next = upsertCodexTrustTomlTable(next, table, block);
-  }
-  return `${next.trim()}\n`;
-}
-
-export function codexHookTrustedHash(eventName: string, entry: any, hook: any): string {
-  return codexCommandHookCurrentHash({
-    event: eventName as any,
-    matcher: !['UserPromptSubmit', 'Stop', 'SessionStart', 'SubagentStart', 'SubagentStop', 'PreCompact', 'PostCompact'].includes(eventName) && entry?.matcher != null ? String(entry.matcher) : null,
-    command: String(hook.command || ''),
-    timeout: Number(hook.timeout || 600),
-    async: Boolean(hook.async),
-    statusMessage: String(hook.statusMessage || '')
-  });
-}
-
-function tomlQuotedKey(value: string): string {
-  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-}
-
-function upsertCodexTrustTomlTable(text: string, table: string, block: string): string {
-  let lines = String(text || '').trimEnd().split('\n');
-  if (lines.length === 1 && lines[0] === '') lines = [];
-  const header = `[${table}]`;
-  const start = lines.findIndex((line) => line.trim() === header);
-  const blockLines = String(block || '').trim().split('\n');
-  if (start === -1) return [...lines, ...(lines.length ? [''] : []), ...blockLines].join('\n').replace(/\n{3,}/g, '\n\n');
-  let end = lines.length;
-  for (let i = start + 1; i < lines.length; i += 1) {
-    if (/^\s*\[.+\]\s*$/.test(lines[i] || '')) {
-      end = i;
-      break;
-    }
-  }
-  // `end` is the NEXT header, so the blank separator before it sits inside the
-  // spliced span and was destroyed. splitCodexProjectConfigPolicy re-joins
-  // blocks with a blank line, so the two writers undid each other on every run:
-  // the config never converged and each doctor run leaked another backup pair.
-  while (end > start + 1 && !String(lines[end - 1] || '').trim()) end -= 1;
-  lines.splice(start, end - start, ...blockLines);
-  return lines.join('\n').replace(/\n{3,}/g, '\n\n');
-}
-
-export function mergeManagedHooksJson(existingContent: any, commandPrefix: any, projectRootDir?: string | null) {
+export function mergeManagedHooksJson(existingContent: any, commandPrefix: any, projectRootDir?: string | null, opts: { commandSuffix?: string } = {}) {
   let root: any = {};
   try {
     root = existingContent?.trim() ? JSON.parse(existingContent) : {};
@@ -262,7 +204,7 @@ export function mergeManagedHooksJson(existingContent: any, commandPrefix: any, 
   } catch {
     root = {};
   }
-  const managed: any = buildManagedHooks(commandPrefix, projectRootDir);
+  const managed: any = buildManagedHooks(commandPrefix, projectRootDir, opts.commandSuffix || '');
   const currentHooks = root.hooks && typeof root.hooks === 'object' && !Array.isArray(root.hooks) ? root.hooks : {};
   const nextHooks: Record<string, any> = { ...currentHooks };
   // Every event is re-derived from the current managed set: SKS entries under
@@ -330,9 +272,7 @@ function stripSksManagedHookEntry(entry: any) {
 }
 
 function isSksManagedHook(hook: any) {
-  if (!hook || typeof hook !== 'object' || Array.isArray(hook)) return false;
-  const command = String(hook.command || '');
-  return hook.type === 'command' && /\bhook\s+(?:session-start|user-prompt-submit|pre-tool|post-tool|permission-request|pre-compact|post-compact|subagent-start|subagent-stop|stop)\b/.test(command) && /\b(?:sks|sneakoscope|sks\.js)\b/.test(command);
+  return isSksHookHandler(hook);
 }
 const AGENTS_BLOCK = [
   '',
@@ -379,7 +319,7 @@ const AGENTS_BLOCK = [
   '',
   '## Codex App',
   '',
-  `Use \`.codex/SNEAKOSCOPE.md\`, global \`${AUTHORITATIVE_SKS_SKILL_ROOT_REFERENCE}/sks-*\`, \`.codex/hooks.json\`, and SKS dollar commands as the app control surface. Managed SKS skill files are re-resolved by UserPromptSubmit, compact-resume SessionStart, active PreToolUse, and SubagentStart; current files override stale project-local, \`.codex/skills\`, plugin-cache, picker, pre-compaction, and prior-message paths. After a successful remap, read the current file silently without reporting a path mismatch.`,
+  `Use \`.codex/SNEAKOSCOPE.md\`, global \`${AUTHORITATIVE_SKS_SKILL_ROOT_REFERENCE}/sks-*\`, the user-level \`~/.codex/hooks.json\` (SKS hooks for every Codex project), and SKS dollar commands as the app control surface. Managed SKS skill files are re-resolved by UserPromptSubmit, compact-resume SessionStart, active PreToolUse, and SubagentStart; current files override stale project-local, \`.codex/skills\`, plugin-cache, picker, pre-compaction, and prior-message paths. After a successful remap, read the current file silently without reporting a path mismatch.`,
   ''
 ].join('\n');
 
@@ -1093,15 +1033,23 @@ function upsertTomlTable(text: any, table: any, block: any) {
   await writeTextAtomic(path.join(root, '.codex', 'SNEAKOSCOPE.md'), codexAppQuickReference(installScope, hookCommandPrefix));
   created.push('.codex/SNEAKOSCOPE.md');
 
+  // A project keeps its own SKS hooks only when it pins its own SKS build or
+  // until the user-level hooks are active (sks update, doctor --fix); then the
+  // global hooks cover it. Codex reads hook trust only from the user config,
+  // so activateSksCodexHooks writes it there, never into this project config.
   const hooksPath = path.join(root, '.codex', 'hooks.json');
-  await writeTextAtomic(hooksPath, mergeManagedHooksJson(await readText(hooksPath, ''), hookCommandPrefix));
-  created.push(`.codex/hooks.json (${installScope})`);
-  if (codexConfigInstall.ok) {
-    await writeTextAtomic(
-      generatedCodexConfigPath,
-      mergeManagedHookTrustStateToml(await readText(generatedCodexConfigPath, ''), root, hookCommandPrefix)
-    );
-    created.push('.codex/config.toml hook trust state');
+  const pinnedProjectHooks = sourceProject || installScope === 'project';
+  const hookModules = pinnedProjectHooks ? null : {
+    global: await import('./codex-hooks/codex-global-hooks.js'),
+    project: await import('./codex-hooks/codex-project-hooks.js')
+  };
+  const globalHooks = hookModules ? await hookModules.global.readGlobalSksHookState(hookEnvForInit(opts)).catch(() => null) : null;
+  if (hookModules && globalHooks?.active) {
+    const stripped = await hookModules.project.stripUnpinnedSksProjectHooks(root);
+    if (stripped.removed) created.push('.codex/hooks.json SKS entries left to the user-level hooks');
+  } else {
+    await writeTextAtomic(hooksPath, mergeManagedHooksJson(await readText(hooksPath, ''), hookCommandPrefix));
+    created.push(`.codex/hooks.json (${installScope})`);
   }
 
   const { skillInstall, created: skillInstallCreated } = await reconcileManagedSkillInstallation(root, opts.home);
@@ -1215,7 +1163,7 @@ export function codexAppQuickReference(scope: any, commandPrefix: any) {
     '# ㅅㅋㅅ',
     `Install scope: \`${scope}\``,
     `Command: \`${commandPrefix} <command>\``,
-    `Files: AGENTS.md, .codex/hooks.json, .codex/config.toml, .codex/SNEAKOSCOPE.md, ${AUTHORITATIVE_SKS_SKILL_ROOT_REFERENCE}/sks-* (authoritative managed SKS skills), .codex/agents, .sneakoscope/missions.`,
+    `Files: AGENTS.md, ~/.codex/hooks.json (SKS hooks for every Codex project), .codex/config.toml, .codex/SNEAKOSCOPE.md, ${AUTHORITATIVE_SKS_SKILL_ROOT_REFERENCE}/sks-* (authoritative managed SKS skills), .codex/agents, .sneakoscope/missions.`,
     `Skill paths: UserPromptSubmit, compact-resume SessionStart, active PreToolUse, and SubagentStart re-resolve files under ${AUTHORITATIVE_SKS_SKILL_ROOT_REFERENCE}/sks-*/SKILL.md. Current files override stale project-local, .codex/skills, plugin-cache, picker, pre-compaction, and prior-message links. Successful remaps stay silent; unresolved skills are never guessed.`,
     `Discover: ${commandPrefix} bootstrap; ${commandPrefix} deps check; ${commandPrefix} commands; ${commandPrefix} codex-app check; ${commandPrefix} codex-app remote-control --status; ${commandPrefix} dollar-commands; ${commandPrefix} pipeline status; ${commandPrefix} pipeline plan.`,
     coreEngineeringDirectiveReferenceText(),

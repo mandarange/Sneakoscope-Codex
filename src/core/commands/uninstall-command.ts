@@ -7,6 +7,7 @@ import { ensureDir, exists, readJson, readText, runProcess, writeJsonAtomic } fr
 import { ui as cliUi } from '../../cli/cli-theme.js';
 import { uninstallSksMenuBar } from '../codex-app/menubar/index.js';
 import { writeCodexConfigGuarded } from '../codex/codex-config-guard.js';
+import { removeGlobalSksHookArtifacts } from '../codex-hooks/codex-global-hooks.js';
 import { sweepSksTempDirs } from '../retention.js';
 import { reconcileSkills } from '../init/skills.js';
 import { removeTriwikiAgentsMdBlocks } from '../triwiki/agents-md-projector.js';
@@ -65,9 +66,11 @@ export async function uninstallCommand(args: string[] = []) {
   if (!opts.keepConfig) {
     await step(report, 'codex-config', () => stripSksOwnedConfig(path.join(opts.home, '.codex', 'config.toml'), opts.root));
     await step(report, 'hooks-json', () => removeSksEntriesFromHooksJson(path.join(opts.home, '.codex', 'hooks.json')));
+    await step(report, 'sks-hook-launcher', async () => ({ ok: true, actions: await removeGlobalSksHookArtifacts(uninstallHookEnv(opts.home)) }));
   } else {
     report.skipped.push({ id: 'codex-config', reason: '--keep-config' });
     report.skipped.push({ id: 'hooks-json', reason: '--keep-config' });
+    report.skipped.push({ id: 'sks-hook-launcher', reason: '--keep-config' });
   }
   if (opts.purgeProjects) await step(report, 'project-artifacts', () => purgeProjectArtifacts(report, opts));
   else report.skipped.push({ id: 'project-artifacts', reason: 'requires --purge-projects' });
@@ -93,6 +96,7 @@ async function collectSksInventory(opts: any): Promise<UninstallInventoryItem[]>
     ['lazycodex-agents', path.join(home, '.codex', 'agents'), 'remove lazycodex-*.toml', 'default'],
     ['codex-config', path.join(home, '.codex', 'config.toml'), 'strip SKS-owned TOML', '--keep-config'],
     ['hooks-json', path.join(home, '.codex', 'hooks.json'), 'strip SKS-managed hooks', '--keep-config'],
+    ['sks-hook-launcher', path.join(home, '.codex', 'sks', 'bin', 'sks-hook'), 'remove launcher + global rules block', '--keep-config'],
     ['sks-home', path.join(home, '.sneakoscope'), 'remove', '--keep-data'],
     ['sks-global-home', path.join(home, '.sneakoscope-global'), 'remove', '--keep-data'],
     ['agents-md-memory-block', path.join(opts.root, 'AGENTS.md'), 'strip SKS Project Memory block', '--purge-projects'],
@@ -220,6 +224,12 @@ function removeTomlTables(text: string, patterns: RegExp[]) {
     if (!skipping) out.push(line);
   }
   return out.join('\n').replace(/\n{3,}/g, '\n\n');
+}
+
+function uninstallHookEnv(home: string): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env, HOME: home };
+  if (path.resolve(home) !== path.resolve(os.homedir())) delete env.CODEX_HOME;
+  return env;
 }
 
 async function removeSksEntriesFromHooksJson(hooksPath: string) {

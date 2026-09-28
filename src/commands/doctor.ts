@@ -658,7 +658,6 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean, deps:
   const requireActualCodexProbe = flag(args, '--require-actual-codex') || (deepDiagnostics && doctorFix);
   const shouldEvaluateCodexAppUiRepair = doctorFix || deepDiagnostics || flag(args, '--repair-codex-app-ui');
   const nativeCapabilityDiagnosticsRequested = deepDiagnostics || flag(args, '--repair-native-capabilities');
-  const requireLegacyGlobalHookCleanup = doctorFix && doctorProfile === 'migration';
   // Migration Doctor has one mutation owner: the project migration receipt.
   // Its structured stages reconcile skills and hook trust exactly once.
   const migrationReceiptOwnsReconcile = doctorFix && doctorProfile === 'migration';
@@ -739,8 +738,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean, deps:
     fix: nativeCapabilityDiagnosticsRequested && doctorFix,
     yes: flag(args, '--yes') || flag(args, '-y'),
     flags: args.map((arg: any) => String(arg)),
-    skipNativeCapabilities: !nativeCapabilityDiagnosticsRequested,
-    requireLegacyGlobalHookCleanup
+    skipNativeCapabilities: !nativeCapabilityDiagnosticsRequested
   }).catch((err: any) => ({
     schema: 'sks.doctor-native-capability-repair.v1',
     ok: false,
@@ -750,19 +748,13 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean, deps:
     core_skills: null,
     skill_dedupe: null,
     native_capabilities: null,
-    legacy_global_hooks: {
-      ok: false,
-      blockers: [`cleanup_failed_before_report:${err?.message || String(err)}`],
-      warnings: []
-    },
+    sks_codex_hooks: null,
     secret_preservation_guard: '.sneakoscope/reports/secret-preservation-guard.json',
     core_blockers: [err?.message || String(err)],
     route_blockers: {},
     optional_manual_required: [],
     optional_warnings: [],
-    required_blockers: requireLegacyGlobalHookCleanup
-      ? [`legacy_global_hooks:cleanup_failed_before_report:${err?.message || String(err)}`]
-      : [],
+    required_blockers: [],
     blockers: [err?.message || String(err)]
   }));
   const configProbeOpts = {
@@ -990,13 +982,11 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean, deps:
   const hookTrustRepair = doctorFix
     && !migrationReceiptOwnsReconcile
     && doctorPhaseIds.includes('hook_trust_repair')
-    ? await (await import('../core/codex-hooks/codex-hook-trust-doctor.js')).codexHookTrustDoctor(root, { fix: true, managed: true, actual: true }).catch((err: any) => ({
-        schema: 'sks.codex-hook-trust-doctor.v2',
+    ? await (await import('../core/codex-hooks/codex-project-hooks.js')).activateSksCodexHooks({ root }).catch((err: any) => ({
+        schema: 'sks.codex-hook-activation.v1',
         ok: false,
-        actual: true,
         blockers: [`hook_trust_repair_failed:${err?.message || String(err)}`],
-        warnings: [],
-        repair_actions: ['sks codex trust-doctor --fix --managed --actual']
+        warnings: []
       }))
     : null;
   const doctorFixTransaction = doctorFix
@@ -1103,7 +1093,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean, deps:
               warnings: (hookTrustRepair as any)?.warnings || [],
               rollback_evidence: migrationReceiptOwnsReconcile
                 ? 'project_migration_receipt_owns_hook_trust_refresh'
-                : (hookTrustRepair as any)?.fixed?.managed_hook_file || 'codex_hook_trust_repair_idempotent'
+                : (hookTrustRepair as any)?.global?.hooks_path || 'codex_hook_trust_repair_idempotent'
             })
           },
           {
@@ -1489,7 +1479,6 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean, deps:
     doctor_fix_postcheck: doctorFixPostcheck,
     command_aliases: migrationReceiptOwnsReconcile ? commandAliasCleanupBeforeReceipt : undefined,
     doctor_native_capability: doctorNativeCapabilityRepair,
-    require_legacy_global_hook_cleanup: requireLegacyGlobalHookCleanup,
     require_legacy_generation_convergence: doctorFix && !migrationReceiptOwnsReconcile,
     skills: skillsReconcile,
     agent_role_config: agentRoleConfigRepair,

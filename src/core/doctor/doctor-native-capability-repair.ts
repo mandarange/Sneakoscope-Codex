@@ -6,7 +6,7 @@ import { dedupeProjectSkills } from '../codex-native/project-skill-dedupe.js';
 import { repairNativeCapabilities } from '../codex-native/native-capability-repair.js';
 import { withSecretPreservationGuard } from '../config/config-migration-journal.js';
 import { ensureProductDesignPluginInstalled } from '../product-design-app-server.js';
-import { cleanupLegacyGlobalSksHooks } from './legacy-global-hook-cleanup.js';
+import { readGlobalSksHookState } from '../codex-hooks/codex-global-hooks.js';
 import { redactSecrets } from '../secret-redaction.js';
 import { messageOf } from '../errors/message.js';
 
@@ -21,7 +21,7 @@ export interface DoctorNativeCapabilityRepairReport {
   skill_dedupe: unknown;
   native_capabilities: unknown;
   product_design: unknown;
-  legacy_global_hooks: unknown;
+  sks_codex_hooks: unknown;
   probe_artifact_cleanup: unknown;
   secret_preservation_guard: string;
   core_blockers: string[];
@@ -39,7 +39,6 @@ export async function runDoctorNativeCapabilityRepair(input: {
   yes: boolean;
   flags?: string[];
   skipNativeCapabilities?: boolean;
-  requireLegacyGlobalHookCleanup?: boolean;
   home?: string;
 }): Promise<DoctorNativeCapabilityRepairReport> {
   const root = path.resolve(input.root);
@@ -61,13 +60,9 @@ export async function runDoctorNativeCapabilityRepair(input: {
           allowManualInstructions: true
         });
     const probeArtifactCleanup = await cleanupNativeCapabilityProbeArtifacts(root, { apply: fixRequested });
-    const legacyGlobalHooks = await cleanupLegacyGlobalSksHooks({
-      root,
-      ...(input.home ? { home: input.home } : {}),
-      // Global hook removal is a migration-owned mutation. Ordinary Doctor
-      // profiles may inspect and warn, but cannot mutate cross-project state.
-      apply: input.requireLegacyGlobalHookCleanup === true
-    });
+    // Read-only: whether the user-level SKS hooks every Codex project runs are in place.
+    const sksCodexHooks: any = await readGlobalSksHookState(hookStateEnv(input.home))
+      .catch((err: unknown) => ({ active: false, error: messageOf(err), missing_events: [], untrusted_events: [] }));
     const productDesignRaw: any = input.fix
       ? await ensureProductDesignPluginInstalled({
           cwd: root,
@@ -91,19 +86,14 @@ export async function runDoctorNativeCapabilityRepair(input: {
       ...((skillDedupe as { blockers?: string[] }).blockers || []),
       ...((nativeCapabilities as { core_blockers?: string[]; blockers?: string[] }).core_blockers || (nativeCapabilities as { blockers?: string[] }).blockers || [])
     ];
-    const legacyGlobalHookBlockers: string[] = ((legacyGlobalHooks as any).blockers || [])
-      .map((blocker: unknown) => `legacy_global_hooks:${String(blocker)}`);
-    const requiredBlockers: string[] = input.requireLegacyGlobalHookCleanup === true
-      ? legacyGlobalHookBlockers
-      : [];
-    const blockers = [...coreBlockers, ...requiredBlockers];
+    const requiredBlockers: string[] = [];
+    const blockers = [...coreBlockers];
     const routeBlockers = (nativeCapabilities as { route_blockers?: Record<string, string[]> }).route_blockers || {};
     const optionalManualRequired = (nativeCapabilities as { optional_manual_required?: string[] }).optional_manual_required || [];
     const optionalWarnings = [
       ...((nativeCapabilities as { warnings?: string[] }).warnings || []),
       ...optionalManualRequired.map((id) => `${id}_manual_required`),
-      ...(input.requireLegacyGlobalHookCleanup === true ? [] : legacyGlobalHookBlockers),
-      ...((legacyGlobalHooks as any).warnings || []),
+      ...(sksCodexHooks.active === true ? [] : ['sks_codex_hooks_inactive']),
       ...((productDesign as any).ok === false ? ((productDesign as any).blockers || ['product_design_not_ready']).map((blocker: string) => `product_design:${blocker}`) : [])
     ];
     let report: DoctorNativeCapabilityRepairReport = {
@@ -117,7 +107,7 @@ export async function runDoctorNativeCapabilityRepair(input: {
       skill_dedupe: skillDedupe,
       native_capabilities: nativeCapabilities,
       product_design: productDesign,
-      legacy_global_hooks: legacyGlobalHooks,
+      sks_codex_hooks: sksCodexHooks,
       probe_artifact_cleanup: probeArtifactCleanup,
       secret_preservation_guard: '.sneakoscope/reports/secret-preservation-guard.json',
       core_blockers: coreBlockers,
@@ -173,6 +163,13 @@ export async function cleanupNativeCapabilityProbeArtifacts(root: string, opts: 
     planned,
     preserved_non_probe_files: preserved
   };
+}
+
+function hookStateEnv(home?: string): NodeJS.ProcessEnv {
+  if (!home) return process.env;
+  const env: NodeJS.ProcessEnv = { ...process.env, HOME: home };
+  delete env.CODEX_HOME;
+  return env;
 }
 
 function skippedNativeCapabilityDiagnostics(root: string) {

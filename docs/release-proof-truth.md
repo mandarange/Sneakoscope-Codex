@@ -1,6 +1,24 @@
 # Release Proof Truth
 
-## 10.3.8 candidate
+## 10.3.9 candidate
+
+Hook activation proof runs against Codex itself. The global-hooks suite pins
+the trust hash to the values Codex 0.153.4, 0.157.1, and 0.158 report from
+`app-server` `hooks/list`, installs into a temp `CODEX_HOME`, and has the
+real bundled Codex load and trust every installed hook (keys use the
+canonical path Codex reports). The project-hooks and hook-layer suites cover
+stripping unpinned project hooks, keeping pinned ones with their trust in the
+user config, each layer stepping aside only for a trusted owner, and the
+`info/exclude` write including worktrees. A sandboxed `hook-trust-refresh`
+run on a home shaped like the affected Mac left Codex loading 9 trusted user
+hooks in a never-set-up project and the pinned hook in the source repo, and
+the hook CLI in that project routed an implementation prompt to Naruto and
+denied the parent's edit before the first child. A run from the source
+checkout, or from a test process that does not opt in with its own home,
+leaves the user-level hooks untouched: the canonical runner caught the first
+build writing its default home. No live Codex turn was run.
+
+## Historical 10.3.8 candidate
 
 OpenRouter Only Mode proof is hermetic. The controller suites run the real
 controller against a temp HOME with injected launchd, Codex and fetch: the two
@@ -322,9 +340,9 @@ Exact-commit proof can exist only after the candidate is committed and all
 source-bound gates are regenerated from that clean commit.
 
 All release artifacts bound to 9.2.7 or an earlier commit are historical. They
-must not be renamed, copied, or treated as 10.3.8 evidence.
+must not be renamed, copied, or treated as 10.3.9 evidence.
 
-New 10.3.8 claims:
+New 10.3.9 claims:
 
 | Claim | Current support | Boundary |
 | --- | --- | --- |
@@ -402,8 +420,8 @@ New 10.3.8 claims:
 | `sks update` quarantines other-harness conflicts | passed-hermetic | `other-harness-cleanup` now calls `cleanupOtherHarnessConflicts` instead of failing closed; from-home update e2e still runs every migration stage |
 | Host extra skill dirs lose only SKS-owned retired residue | passed-hermetic | `~/.cursor/skills` and `~/.claude/skills` remove managed retired names only; user-authored collisions stay in place |
 | A stale or cwd-sticky official workflow cannot capture a later prompt | passed-hermetic | unnamed hooks use `loadOwnedRouteState`; idle > 2h is inactive even with leftover open threads; same-session follow-ups still bind while the run is fresh |
-| All checked version authorities report 10.3.8 | passed-hermetic | `release:version-truth` 15 surfaces at 10.3.8 after incremental build |
-| The reported 10.3.8 package is ready to publish | not proved | requires a clean exact-commit build, `npm run release:check:full` stamp, pack receipt, provenance, and the release commit fast-forward pushed to origin main (the prepublish reproducibility preflight refuses `head_not_origin_main`) |
+| All checked version authorities report 10.3.9 | passed-hermetic | `release:version-truth` 15 surfaces at 10.3.9 after incremental build |
+| The reported 10.3.9 package is ready to publish | not proved | requires a clean exact-commit build, `npm run release:check:full` stamp, pack receipt, provenance, and the release commit fast-forward pushed to origin main (the prepublish reproducibility preflight refuses `head_not_origin_main`) |
 
 ## 9.1.0 assertion (historical)
 

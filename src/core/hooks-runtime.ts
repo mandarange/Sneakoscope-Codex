@@ -104,6 +104,7 @@ const MAX_ACTIVE_WORKFLOW_QUEUE_BYTES = MAX_ACTIVE_WORKFLOW_QUEUE_ENTRIES
 // by release readiness so ordinary Codex hook flow cannot grow a hidden update
 // prompt path.
 import { loadHookPayload, normalizeHookResult, visibleHookMessage } from './hooks-runtime/hook-io.js';
+import { ensureSksStateGitExcluded, hookLayerDeferral, type HookLayer } from './hooks-runtime/hook-layer.js';
 import {
   codexGitActionMetadataSignal,
   codexGitActionMetadataText,
@@ -1333,7 +1334,22 @@ async function hookStop(root: any, state: any, payload: any, noQuestion: any, se
   };
 }
 
-export async function emitHook(name: any) {
-  const result = await hookMain(name);
+export async function emitHook(name: any, opts: { layer?: HookLayer } = {}) {
+  const layer = opts.layer || 'project';
+  const payload = await loadHookPayload();
+  const root = await projectRoot(payload.cwd || process.cwd());
+  const deferral = await hookLayerDeferral({ layer, hookName: name, root, runningPackageRoot: packageRoot() })
+    .catch(() => ({ defer: false, reason: 'deferral_check_failed' }));
+  let result: any = { suppressedDuplicate: true };
+  if (!deferral.defer) {
+    try {
+      result = await evaluateHookPayloadOnce(name, payload, { root });
+    } catch (err: any) {
+      // The user-level hook runs in every project; an SKS failure there must not break the turn.
+      if (layer !== 'user') throw err;
+      process.stderr.write(`SKS hook ${name} failed: ${err?.message || String(err)}\n`);
+    }
+    await ensureSksStateGitExcluded(root).catch(() => null);
+  }
   process.stdout.write(`${JSON.stringify(normalizeHookResult(name, result))}\n`);
 }
