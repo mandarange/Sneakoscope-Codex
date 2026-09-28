@@ -7769,15 +7769,6 @@
       "reason": "Deletes a project .codex/hooks.json only when every entry was an unpinned SKS hook now served by the user-level hooks and no other content remains."
     },
     {
-      "file": "src/core/codex-hooks/codex-global-hooks.ts",
-      "symbol": "installGlobalSksHooks",
-      "token": "chmod",
-      "scope_contract_sha256": "d224382ded654edd70ebc07be8c8a15afb45d1eaf3c1f6ecc2258883a392d187",
-      "callsite_sha256": "36ef1afc575342f8ab7f5993c96d9b6e35ec3db8ad5f51b50a38806b91fbac0f",
-      "occurrence": 1,
-      "reason": "Makes the SKS-owned hook launcher under $CODEX_HOME/sks/bin executable so Codex can run the user-level hook commands."
-    },
-    {
       "file": "src/scripts/canonical-test-runner.ts",
       "symbol": "module",
       "token": "writeFileSync",
@@ -7821,6 +7812,15 @@
       "callsite_sha256": "00222ef7de36df88c2a86e438dc07c9fc799990ee1309b8c241ef90db62a4508",
       "occurrence": 1,
       "reason": "Removes only the two SKS-owned files sks-managed-hooks.toml and sks-managed-hook.sh from the SKS managed-hooks directory Codex never loaded."
+    },
+    {
+      "file": "src/core/codex-hooks/codex-global-hooks.ts",
+      "symbol": "installGlobalSksHooks",
+      "token": "chmod",
+      "scope_contract_sha256": "649f64f3dde2f29abb787ede6c501b92ff6fa3156a06a5cf17ebf56ef828487f",
+      "callsite_sha256": "e3d86fdc0a670986fddd6f242b9f478f939166e56df780a5eec74bed4356fe68",
+      "occurrence": 1,
+      "reason": "Makes the SKS-owned hook launcher under $CODEX_HOME/sks/bin executable so Codex can run the user-level hook commands."
     }
   ]
 }

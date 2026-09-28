@@ -15,7 +15,12 @@
  * 8.0.4 baseline, those 24 runtime files account for the package growth. The
  * measured package is 2,920,497 packed / 13,151,730 unpacked across 1,648
  * files; the ceilings below retain narrow regression headroom.
+ *
+ * 10.3.9 re-measure: user-level Codex hook activation (global hook install,
+ * project hook reconcile, Codex `hooks/list` client, hook layer) replaced the
+ * managed-hooks install Codex never loaded. The measured package is 2,940,348
+ * packed / 12,811,224 unpacked across 1,794 files.
  */
-export const DEFAULT_MAX_PACK_BYTES = 2870 * 1024
+export const DEFAULT_MAX_PACK_BYTES = 2880 * 1024
 /** ~12.59 MiB; narrow headroom above the measured installed runtime surface. */
 export const DEFAULT_MAX_UNPACKED_BYTES = 13_200_000

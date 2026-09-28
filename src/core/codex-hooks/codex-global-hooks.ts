@@ -134,14 +134,14 @@ export async function installGlobalSksHooks(input: {
   const blockers: string[] = [];
   const warnings: string[] = [];
   const events = managedHookEventNames(null);
-  // A test process writes only a home it brought. Outside tests a source
-  // checkout never manages the user-level hooks: its release checks and dev
-  // commands run migrations against the real home, and every project must
-  // keep running the installed SKS. SKS_GLOBAL_HOOKS_FROM_CHECKOUT=1 or an
-  // explicit target opts in.
-  const skipReason = isVerificationTestHarness(env)
-    ? globalHookWritesAllowed(env) ? null : 'global_hooks_skipped_in_test_harness'
-    : !input.target && env.SKS_GLOBAL_HOOKS_FROM_CHECKOUT !== '1' && await isSourceCheckout(path.resolve(packageRoot()))
+  // A test process writes only a home it brought. A source checkout never
+  // rewrites the real home's hooks: its dev commands and release checks run
+  // migrations there, and every project must keep running the installed SKS
+  // (SKS_GLOBAL_HOOKS_FROM_CHECKOUT=1 or an explicit target opts in). A
+  // sandbox with its own home installs from either.
+  const skipReason = !globalHookWritesAllowed(env)
+    ? 'global_hooks_skipped_in_test_harness'
+    : !input.target && env.SKS_GLOBAL_HOOKS_FROM_CHECKOUT !== '1' && protectedCodexHome(env) && await isSourceCheckout(path.resolve(packageRoot()))
       ? 'global_hooks_skipped_source_checkout'
       : null;
   const skipped = skipReason !== null;
@@ -363,10 +363,15 @@ function removeManagedBlock(text: string, marker: string): string {
  */
 export function globalHookWritesAllowed(env: NodeJS.ProcessEnv = process.env): boolean {
   if (!isVerificationTestHarness(env) || env.SKS_TEST_ALLOW_GLOBAL_HOOKS === '1') return true;
-  const defaults = [env.SKS_TEST_DEFAULT_HOME, env.SKS_TEST_REAL_HOME, accountHome()]
+  return !protectedCodexHome(env);
+}
+
+/** The real account's Codex home, or the canonical runner's shared default one. */
+function protectedCodexHome(env: NodeJS.ProcessEnv): boolean {
+  const homes = [env.SKS_TEST_DEFAULT_HOME, env.SKS_TEST_REAL_HOME, accountHome()]
     .filter((home): home is string => Boolean(home))
     .map((home) => path.resolve(home, '.codex'));
-  return !defaults.includes(codexHomeDir(env));
+  return homes.includes(codexHomeDir(env));
 }
 
 function accountHome(): string | null {

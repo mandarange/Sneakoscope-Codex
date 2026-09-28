@@ -118,6 +118,20 @@ test('install removes the requirements.toml managed-hook setup Codex never loade
   });
 });
 
+test('outside tests a source checkout leaves only the real home alone', async () => {
+  await withHome(async (env, codexHome) => {
+    const devRun: NodeJS.ProcessEnv = { ...env };
+    for (const key of ['NODE_TEST_CONTEXT', 'SKS_TEST_ISOLATION', 'SKS_TEST_ALLOW_GLOBAL_HOOKS', 'SKS_TEST_DEFAULT_HOME']) delete devRun[key];
+    const sandbox = await installGlobalSksHooks({ env: { ...devRun, SKS_TEST_REAL_HOME: '/nonexistent-real-home' }, verify: false });
+    assert.equal(sandbox.active, true, 'a sandbox with its own home installs from the checkout');
+    await fsp.rm(codexHome, { recursive: true, force: true });
+    await fsp.mkdir(codexHome, { recursive: true });
+    const real = await installGlobalSksHooks({ env: { ...devRun, SKS_TEST_REAL_HOME: env.HOME }, verify: false });
+    assert.ok(real.warnings.includes('global_hooks_skipped_source_checkout'));
+    assert.deepEqual(await fsp.readdir(codexHome), []);
+  });
+});
+
 test('an update from 10.3.8 keeps the inert managed hooks its own final check counts', async () => {
   await withHome(async (env, codexHome) => {
     const managedDir = path.join(codexHome, 'managed-hooks');

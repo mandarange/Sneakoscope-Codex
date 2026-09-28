@@ -13,10 +13,10 @@ user config, each layer stepping aside only for a trusted owner, and the
 run on a home shaped like the affected Mac left Codex loading 9 trusted user
 hooks in a never-set-up project and the pinned hook in the source repo, and
 the hook CLI in that project routed an implementation prompt to Naruto and
-denied the parent's edit before the first child. A run from the source
-checkout, or from a test process that does not opt in with its own home,
-leaves the user-level hooks untouched: the canonical runner caught the first
-build writing its default home. No live Codex turn was run.
+denied the parent's edit before the first child. A source checkout or a test
+process never rewrites the real home's hooks (or the canonical runner's shared
+home, which caught the first build writing it); a sandbox or test with its
+own home installs normally. No live Codex turn was run.
 
 ## Historical 10.3.8 candidate
 

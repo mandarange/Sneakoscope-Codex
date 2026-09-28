@@ -12,7 +12,7 @@ next update), and strips project SKS hooks that would run twice. Verification mu
 cover Codex's own `hooks/list` loading and trusting every installed hook,
 the pinned project hook keeping its event, user hooks never auto-trusted,
 a never-set-up project getting Naruto routing and the parent edit gate, and
-a source checkout or test process leaving the user-level hooks untouched.
+a source checkout or test process never rewriting the real home's hooks.
 
 ## Previous candidate: 10.3.8
 
