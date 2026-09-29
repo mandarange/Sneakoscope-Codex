@@ -34,39 +34,6 @@ interface ReleaseGateManifest {
   gates?: ReleaseGate[];
 }
 
-export const REQUIRED_3110_RELEASE_IDS = [
-  'core-skill:manifest',
-  'core-skill:immutable-sync',
-  'core-skill:no-drift',
-  'core-skill:integrity-blackbox',
-  'skill:name-canonicalizer',
-  'skill:registry-ledger',
-  'skill:dedupe',
-  'skill:sync-atomic',
-  'skill:dedupe-blackbox',
-  'native-capability:repair-matrix',
-  'native-capability:repair',
-  'native-capability:postcheck',
-  'native:image-generation-repair',
-  'native:computer-use-repair',
-  'native:chrome-web-review-repair',
-  'native:app-screenshot-repair',
-  'doctor:native-capability-repair',
-  'doctor:native-repair-output',
-  'doctor:native-capability-repair-blackbox',
-  'secret:preservation',
-  'config:managed-merge',
-  'secret:preservation-guard',
-  'secret:supabase-preservation-blackbox',
-  'update:preserves-supabase-keys',
-  'update:secret-preservation-guard',
-  'update:secret-migration-journal',
-  'safety:mutation-callsite-coverage',
-  'release:gate-script-parity',
-  'release:wiring-3110-blackbox',
-  'sks:3112-all-feature-regression'
-];
-
 if (isMain()) {
   main().catch((err: unknown) => {
     console.error(err instanceof Error ? err.stack || err.message : String(err));

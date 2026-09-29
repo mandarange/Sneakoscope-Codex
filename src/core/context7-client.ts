@@ -136,10 +136,6 @@ export function context7Text(result: any) {
     .join('\n');
 }
 
-export function isContext7DocsTool(name: any) {
-  return name === 'query-docs' || name === 'get-library-docs';
-}
-
 function pickDocsTool(toolNames: any) {
   if (toolNames.includes('query-docs')) return 'query-docs';
   if (toolNames.includes('get-library-docs')) return 'get-library-docs';

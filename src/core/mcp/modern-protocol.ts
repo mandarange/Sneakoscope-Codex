@@ -120,18 +120,6 @@ export function modernServerInfo(value: unknown): McpImplementationInfo | null {
   };
 }
 
-export function modernRequestVersion(params: unknown): string | null {
-  if (!isRecord(params) || !isRecord(params._meta)) return null;
-  const value = params._meta[MCP_PROTOCOL_VERSION_META_KEY];
-  return typeof value === 'string' ? value : null;
-}
-
-export function hasModernClientCapabilities(params: unknown): boolean {
-  return isRecord(params)
-    && isRecord(params._meta)
-    && isRecord(params._meta[MCP_CLIENT_CAPABILITIES_META_KEY]);
-}
-
 export function isRecognizedModernError(value: unknown): boolean {
   if (!isRecord(value) || !isRecord(value.error)) return false;
   return [-32020, -32021, -32022].includes(Number(value.error.code));

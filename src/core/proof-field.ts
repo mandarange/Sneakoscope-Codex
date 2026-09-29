@@ -160,34 +160,6 @@ export function validateProofFieldReport(report: any = {}) {
   return { ok: issues.length === 0, issues };
 }
 
-export async function proofFieldFixture() {
-  const report = await buildProofField(process.cwd(), {
-    intent: 'small CLI help surface update',
-    changedFiles: ['src/commands/help.js', 'src/core/routes.js']
-  });
-  return {
-    report,
-    validation: validateProofFieldReport(report),
-    checks: {
-      route_cone_selected: report.proof_cones.some((cone: any) => cone.id === 'route_surface'),
-      cli_cone_selected: report.proof_cones.some((cone: any) => cone.id === 'cli_runtime'),
-      catastrophic_guard_present: report.invariant_ledger.some((item: any) => item.id === 'db-catastrophic-guard'),
-      negative_release_work_recorded: report.negative_work_cache.some((item: any) => item.id === 'full_release_gate' && item.disposition === 'skip_with_evidence'),
-      outcome_rubric_present: report.outcome_rubric.length === OUTCOME_RUBRIC.length,
-      adversarial_lenses_present: report.outcome_rubric.every((item: any) => item.adversarial_lens) && report.simplicity_scorecard.criteria.every((item: any) => item.adversarial_lens),
-      route_economy_present: report.contract_clarity?.report_only === true && report.workflow_complexity?.report_only === true && report.naruto_trigger_matrix?.report_only === true && report.verification_stage_cache?.report_only === true,
-      decision_lattice_present: validateDecisionLatticeReport(report.decision_lattice).ok,
-      decision_lattice_report_only: report.decision_lattice?.report_only === true,
-      decision_lattice_selected_path: Boolean(report.decision_lattice?.selected_path?.id),
-      decision_lattice_frontier_present: Array.isArray(report.decision_lattice?.frontier?.expanded_order) && report.decision_lattice.frontier.expanded_order.length > 0,
-      decision_lattice_rejections_present: Array.isArray(report.decision_lattice?.rejected_alternatives),
-      decision_lattice_scoring_formula_present: Boolean(report.decision_lattice?.scoring_formula),
-      simplicity_score_usable: Number(report.simplicity_scorecard?.score) >= FAST_LANE_MIN_SCORE,
-      execution_fast_lane_selected: report.execution_lane?.lane === SPEED_LANE_POLICY.fast_lane
-    }
-  };
-}
-
 function normalizeDecisionLatticeReport(report: any = {}) {
   return {
     ...report,

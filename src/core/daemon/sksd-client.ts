@@ -1,4 +1,4 @@
-import { handleSksdRequest, sksdStart, sksdStatus, sksdStop, sksdWarm, type SksdState } from './sksd.js';
+import { sksdStart, sksdStatus, sksdStop, sksdWarm, type SksdState } from './sksd.js';
 import { writeSksdIpcMessage } from './sksd-ipc.js';
 
 export function runSksdClient(root: string, action: 'status' | 'warm' | 'stop' | 'start' = 'status'): SksdState {
@@ -9,4 +9,3 @@ export function runSksdClient(root: string, action: 'status' | 'warm' | 'stop' |
   return sksdStatus(root);
 }
 
-export { handleSksdRequest };

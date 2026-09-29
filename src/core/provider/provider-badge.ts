@@ -1,7 +1,5 @@
 import type { ProviderContext } from './provider-context.js'
 
-export const PROVIDER_BADGE_SCHEMA = 'sks.provider-badge.v1'
-
 export function providerBadgeText(context: Pick<ProviderContext, 'provider' | 'service_tier' | 'signals'>) {
   const bridgeProvider = context.signals.desktop_bridge_provider
   const providerText = context.provider === 'openai'
@@ -29,13 +27,3 @@ export function providerPaneLabel(context: Pick<ProviderContext, 'provider' | 's
   return `${tier} · ${provider}`
 }
 
-export function buildProviderBadge(context: ProviderContext) {
-  return {
-    schema: PROVIDER_BADGE_SCHEMA,
-    ok: !context.conflict,
-    text: providerBadgeText(context),
-    pane_label: providerPaneLabel(context),
-    provider_context: context,
-    blockers: context.conflict ? ['provider_conflict'] : []
-  }
-}

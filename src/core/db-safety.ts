@@ -33,35 +33,13 @@ export const DEFAULT_DB_SAFETY_POLICY = Object.freeze({
   ]
 });
 
-const MAD_SKS_GATE_FILE = 'mad-sks-gate.json';
 const MAD_SKS_TABLE_DELETE_CONFIRMATION_FILE = 'mad-sks-table-delete-confirmation.json';
 const MAD_SKS_TABLE_DELETE_TIMEOUT_MS = 30_000;
-
-export async function ensureDbSafetyPolicy(root: any) {
-  const p = path.join(root, '.sneakoscope', 'db-safety.json');
-  if (!(await exists(p))) await writeJsonAtomic(p, DEFAULT_DB_SAFETY_POLICY);
-  return p;
-}
 
 export async function loadDbSafetyPolicy(root: any) {
   const p = path.join(root, '.sneakoscope', 'db-safety.json');
   const data = await readJson(p, {});
   return { ...DEFAULT_DB_SAFETY_POLICY, ...(data || {}) };
-}
-
-export function safeSupabaseMcpConfig({ projectRef = '<project_ref>', readOnly = true, features = 'database,docs' }: any = {}) {
-  const qs = new URLSearchParams();
-  if (projectRef) qs.set('project_ref', projectRef);
-  if (readOnly) qs.set('read_only', 'true');
-  if (features) qs.set('features', features);
-  return {
-    mcpServers: {
-      supabase: {
-        type: 'http',
-        url: `https://mcp.supabase.com/mcp?${qs.toString()}`
-      }
-    }
-  };
 }
 
 function stripSqlComments(sql: any = '') {
@@ -303,15 +281,6 @@ function contractAllowsDbWrite(contract: any = {}) {
   return { mode, env, destructive, migrationApply };
 }
 
-function hasTableRemovalRisk(cls: any = {}) {
-  const reasons = new Set([
-    ...(cls.reasons || []),
-    ...(cls.sql?.reasons || []),
-    ...(cls.command?.reasons || [])
-  ]);
-  return ['drop_table', 'truncate'].some((reason: any) => reasons.has(reason));
-}
-
 export function evaluateDbSafety({ classification, policy = DEFAULT_DB_SAFETY_POLICY, contract = null, duringNoQuestion = false, madSks = null }: any = {}) {
   const cls = classification || { level: 'none', reasons: [] };
   const noQuestion = Boolean(duringNoQuestion);
@@ -547,11 +516,6 @@ export async function checkDbOperation(root: any, state: any, payload: any, { du
 
 export function madSksSqlPlaneLifecycleHookFromDecision(decision: any): MadSksSqlPlaneLifecycleHook | null {
   return lifecycleHookFromUnknown(decision)
-}
-
-export async function checkSqlFile(file: any) {
-  const sql = await readText(file);
-  return classifySql(sql);
 }
 
 export function dbBlockReason(decision: any) {

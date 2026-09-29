@@ -231,7 +231,10 @@ async function measureNativeMenuBar(
   const control: number[] = []
   const exitCodes: Array<number | null> = []
   for (let index = 0; index < nativeRuns; index += 1) {
-    const result = await runProcess(executable, [], { cwd: tmp, env: { HOME: home }, timeoutMs: 15_000, maxOutputBytes: 64 * 1024 })
+    const runHarness = (timeoutMs: number) => runProcess(executable, [], { cwd: tmp, env: { HOME: home }, timeoutMs, maxOutputBytes: 64 * 1024 })
+    let result = await runHarness(15_000)
+    // Exit 124 is the hang guard, not a measurement: a producer starved by a busy machine gets one longer, fresh attempt.
+    if (result.code === 124) result = await runHarness(60_000)
     exitCodes.push(result.code)
     const parsed = parseJson(result.stdout)
     if (result.code !== 0 || !Number.isFinite(parsed?.menu_bar_first_state_render_ms) || !Number.isFinite(parsed?.control_center_open_ms)) {

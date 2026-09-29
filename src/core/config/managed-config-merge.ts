@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { ensureDir, nowIso, sha256, writeJsonAtomic, writeTextAtomic } from '../fsx.js';
+import { ensureDir, nowIso, sha256, writeTextAtomic } from '../fsx.js';
 import { isProtectedSecretKey, PROTECTED_SECRET_KEYS } from './supabase-secret-preservation.js';
 
 export interface ManagedConfigMergeResult {

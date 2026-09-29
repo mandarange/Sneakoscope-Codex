@@ -8,4 +8,3 @@ export * from './protocol.js';
 export * from './session-snapshot.js';
 export * from './worker.js';
 export * from './ssh-worker-client.js';
-export * from './local-worker-client.js';

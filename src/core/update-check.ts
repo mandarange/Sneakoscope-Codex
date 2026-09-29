@@ -1,6 +1,5 @@
 import os from 'node:os';
 import path from 'node:path';
-import fs from 'node:fs/promises';
 import { canonicalFilesystemPath, PACKAGE_VERSION, packageRoot, readJson, runProcess, throttleLines, which } from './fsx.js';
 import { createRequestedScopeContract } from './safety/requested-scope-contract.js';
 import { guardedPackageInstall, guardContextForRoute } from './safety/mutation-guard.js';
@@ -1762,19 +1761,6 @@ async function detectNpmGlobalPackageVersion(
   return { version: null, error: String(result.stderr || result.stdout || rootResult.stderr || 'npm global package not found').trim() };
 }
 
-export function formatSksUpdateCheckText(result: SksUpdateCheckResult): string {
-  const lines = [
-    'Update Check',
-    `Current: ${result.current}`,
-    `Latest:  ${result.latest || 'unknown'}`,
-    `Update:  ${result.update_available ? 'available' : 'not needed'}`
-  ];
-  if (result.error) lines.push(`Error:   ${result.error}`);
-  if (result.command) lines.push(`Run:     ${result.command}`);
-  lines.push('Mode:    function-only');
-  return lines.join('\n');
-}
-
 export function formatSksUpdateStatusText(result: SksUpdateStatusV3): string {
   const value = (current: string | null, latest: string | null, updateAvailable: boolean) =>
     `${current || 'not installed'}${latest ? ` → ${latest}` : ''}${updateAvailable ? ' (update available)' : ''}`;
@@ -2145,11 +2131,6 @@ function parseVersionText(text: string): string | null {
   return extractSemVer(text);
 }
 
-function globalSksRootPath(env: NodeJS.ProcessEnv = process.env): string {
-  if (env.SKS_GLOBAL_ROOT) return path.resolve(env.SKS_GLOBAL_ROOT);
-  return path.join(env.HOME || os.homedir(), '.sneakoscope-global');
-}
-
 function updateDoctorTimeoutMs(env: NodeJS.ProcessEnv): number {
   const override = Number.parseInt(env.SKS_UPDATE_NEW_DOCTOR_TIMEOUT_MS || env.SKS_MIGRATION_DOCTOR_TIMEOUT_MS || '', 10);
   return Number.isFinite(override) && override > 0 ? Math.min(override, 600_000) : 180_000;
@@ -2206,7 +2187,7 @@ async function runFinalUpdateVerification(input: {
   verification.push({
     id: 'hooks_trusted',
     ok: hookState?.active === true,
-    detail: hookState ? `missing ${hookState.missing_events.join(',') || 'none'}; untrusted ${hookState.untrusted_events.join(',') || 'none'}` : 'unreadable',
+    detail: hookState ? `missing ${hookState.missing_events.join(',') || 'none'}; untrusted ${hookState.untrusted_events.join(',') || 'none'}; launcher ${hookState.launcher_reaches_sks ? 'reaches sks' : 'cannot reach sks'}` : 'unreadable',
     remediation: 'Run: sks doctor --fix'
   });
 

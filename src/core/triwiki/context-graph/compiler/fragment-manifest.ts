@@ -166,14 +166,6 @@ export function contextFragmentManifestHash(manifest: ContextFragmentManifest): 
   return sha256(serializeContextFragmentManifest(manifest));
 }
 
-export function fragmentManifestEntryIndex(
-  manifest: ContextFragmentManifest,
-): ReadonlyMap<string, FragmentManifestEntry> {
-  const index = new Map<string, FragmentManifestEntry>();
-  for (const entry of manifest.entries) index.set(sourceFragmentKey(entry.extractor, entry.sourcePath), entry);
-  return index;
-}
-
 /** The previous build's inventory, recovered from the entries rather than stored twice. */
 export function fragmentManifestSourceHashes(manifest: ContextFragmentManifest): ReadonlyMap<string, string> {
   const hashes = new Map<string, string>();
@@ -181,10 +173,3 @@ export function fragmentManifestSourceHashes(manifest: ContextFragmentManifest):
   return hashes;
 }
 
-export function fragmentManifestExtractorRevisions(
-  manifest: ContextFragmentManifest,
-): ReadonlyMap<string, string> {
-  const revisions = new Map<string, string>();
-  for (const entry of manifest.entries) revisions.set(entry.extractor, entry.extractorRevision);
-  return revisions;
-}

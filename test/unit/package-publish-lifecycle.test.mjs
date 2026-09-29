@@ -153,8 +153,7 @@ test('npm pack excludes native checkout-only QA surfaces while retaining require
   );
   for (const excludedPath of [
     'scripts/build-clean-atomic.mjs',
-    'dist/core/ops/upgrade-migration-fixtures.js',
-    'dist/core/proof/route-finalizer-fixtures.js'
+    'dist/core/ops/upgrade-migration-fixtures.js'
   ]) {
     assert.equal(packedPaths.includes(excludedPath), false, `published package must exclude ${excludedPath}`);
   }

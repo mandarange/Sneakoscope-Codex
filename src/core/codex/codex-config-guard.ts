@@ -656,22 +656,6 @@ async function readConfigCommitSnapshot(configPath: string): Promise<
   }
 }
 
-export function extractTomlTable(text: string, tableName: string): string | null {
-  const source = String(text || '')
-  const header = `[${tableName}]`
-  const lines = source.trimEnd().split(/\r?\n/)
-  const start = lines.findIndex((line) => line.trim() === header)
-  if (start === -1) return null
-  let end = lines.length
-  for (let i = start + 1; i < lines.length; i += 1) {
-    if (/^\s*\[.+\]\s*$/.test(lines[i] || '')) {
-      end = i
-      break
-    }
-  }
-  return lines.slice(start, end).join('\n')
-}
-
 export function codexConfigParseSmoke(text: string = '') {
   const str = String(text || '')
   const tripleTokens = (str.match(/"""|'''/g) || []).length
@@ -809,12 +793,6 @@ function topLevelTomlKeyLine(text: string, key: string) {
   return null
 }
 
-function topLevelTomlString(text: string, key: string) {
-  const line = topLevelTomlKeyLine(text, key)
-  const match = line?.match(/^\s*[^=]+\s*=\s*"([^"]*)"\s*(?:#.*)?$/)
-  return match?.[1] || null
-}
-
 function upsertTopLevelTomlLine(text: string, line: string) {
   const key = String(line).split('=')[0]?.trim() || ''
   const lines = String(text || '').trimEnd().split('\n')
@@ -876,24 +854,6 @@ function upsertTomlTableKey(text: string, table: string, line: string) {
     }
   }
   lines.splice(end, 0, line)
-  return lines.join('\n').replace(/\n{3,}/g, '\n\n')
-}
-
-function upsertTomlTable(text: string, table: string, block: string) {
-  let lines = String(text || '').trimEnd().split('\n')
-  if (lines.length === 1 && lines[0] === '') lines = []
-  const header = `[${table}]`
-  const start = lines.findIndex((x) => x.trim() === header)
-  const blockLines = String(block || '').trim().split('\n')
-  if (start === -1) return [...lines, ...(lines.length ? [''] : []), ...blockLines].join('\n').replace(/\n{3,}/g, '\n\n')
-  let end = lines.length
-  for (let i = start + 1; i < lines.length; i += 1) {
-    if (/^\s*\[.+\]\s*$/.test(lines[i] || '')) {
-      end = i
-      break
-    }
-  }
-  lines.splice(start, end - start, ...blockLines)
   return lines.join('\n').replace(/\n{3,}/g, '\n\n')
 }
 

@@ -28,22 +28,6 @@ export function inferLoopOwnerScope(input: {
   };
 }
 
-export function detectOwnerScopeCollisions(scopes: Array<{ loop_id: string; owner_scope: SksLoopOwnerScope }>): string[] {
-  const blockers: string[] = [];
-  for (let i = 0; i < scopes.length; i += 1) {
-    for (let j = i + 1; j < scopes.length; j += 1) {
-      const a = scopes[i];
-      const b = scopes[j];
-      if (!a || !b) continue;
-      const fileOverlap = intersection(a.owner_scope.files, b.owner_scope.files);
-      const scriptOverlap = intersection(a.owner_scope.package_scripts, b.owner_scope.package_scripts);
-      if (fileOverlap.length && (a.owner_scope.exclusive || b.owner_scope.exclusive)) blockers.push(`file_collision:${a.loop_id}:${b.loop_id}:${fileOverlap.join(',')}`);
-      if (scriptOverlap.length) blockers.push(`script_collision:${a.loop_id}:${b.loop_id}:${scriptOverlap.join(',')}`);
-    }
-  }
-  return blockers;
-}
-
 export function memoryHintMayExpandOwnerScope(): false {
   return false;
 }
@@ -56,7 +40,3 @@ function inferPackageScripts(domainId: string): string[] {
   return [];
 }
 
-function intersection(a: string[], b: string[]): string[] {
-  const rhs = new Set(b);
-  return a.filter((value) => rhs.has(value));
-}

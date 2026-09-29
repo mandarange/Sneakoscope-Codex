@@ -81,10 +81,6 @@ function clamp01(n: any) {
   return Math.max(0, Math.min(1, n));
 }
 
-function hasAny(re: any, text: any) {
-  return re.test(text);
-}
-
 function scoreComponent(name: any, clarity: any, weight: any, justification: any) {
   return {
     name,
@@ -215,7 +211,6 @@ function looksLikePresentationArtifactPrompt(lower: any) {
 export function inferAnswersForPrompt(prompt: any, explicitAnswers: any = {}) {
   const text = `${prompt || ''}\n${explicitAnswers.GOAL_PRECISE || ''}`;
   const lower = text.toLowerCase();
-  const ambiguity = buildAmbiguityAssessment(prompt, explicitAnswers);
   const inferred = {};
   const notes = {};
   const normalizedPrompt = String(prompt || '')
@@ -770,7 +765,6 @@ export function buildQuestionSchema(prompt: any) {
   }
   const inferred = inferAnswersForPrompt(prompt);
   const requestIntake = buildRequestIntake(prompt, inferred.answers);
-  const inferredSlots = new Set(Object.keys(inferred.answers));
   const askedSlots: any[] = [];
   return {
     schema_version: 2,

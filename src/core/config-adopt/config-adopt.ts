@@ -294,8 +294,6 @@ export async function runSksConfigAdopt(
   };
 }
 
-export const adoptSksCodexConfig = runSksConfigAdopt;
-
 export async function adoptProjectCodexConfig(input: {
   projectRoot: string;
   dryRun?: boolean;

@@ -59,7 +59,7 @@ try {
     verification: [],
     blockers: []
   }
-  const persistedParentSummary = await persistOrReuseTrustworthySubagentParentSummary(fixture, structuredParentSummary)
+  await persistOrReuseTrustworthySubagentParentSummary(fixture, structuredParentSummary)
   const persistedParentSummaryFile = JSON.parse(fs.readFileSync(path.join(fixture, SUBAGENT_PARENT_SUMMARY_FILENAME), 'utf8'))
   assertGate(persistedParentSummaryFile.schema === 'sks.subagent-parent-summary.v1' && persistedParentSummaryFile.thread_outcomes.length === 3, 'structured parent summary must persist under the canonical artifact name', persistedParentSummaryFile)
   const reusedParentSummary = await persistOrReuseTrustworthySubagentParentSummary(fixture, 'prose retry must not replace durable structured evidence')

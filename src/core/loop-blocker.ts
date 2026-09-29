@@ -1,4 +1,3 @@
-import { nowIso, writeJsonAtomic } from './fsx.js';
 
 export interface LoopBlockerEvent {
   reason: string;
@@ -23,27 +22,6 @@ export function detectRepeatedBlocker(events: readonly LoopBlockerEvent[] = [], 
     repeated,
     status: repeated.length ? 'blocked' : 'clear'
   };
-}
-
-export function usageLimitBlocker(detail: unknown = 'usage limit reached') {
-  return {
-    schema: 'sks.loop-blocker.v1',
-    reason: 'usage_limit',
-    detail: String(detail || 'usage limit reached'),
-    created_at: nowIso(),
-    stop_required: true
-  };
-}
-
-export async function writeLoopBlockerReport(file: string, events: readonly LoopBlockerEvent[] = [], threshold = 2) {
-  const detection = detectRepeatedBlocker(events, threshold);
-  const report = {
-    ...detection,
-    generated_at: nowIso(),
-    events: events.map((event) => ({ ...event, at: event.at || nowIso() }))
-  };
-  await writeJsonAtomic(file, report);
-  return report;
 }
 
 function blockerKey(event: LoopBlockerEvent): string {

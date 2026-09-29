@@ -38,10 +38,6 @@ export function removeMcpServerBlock(text: string, serverName: string): string {
   return `${text.slice(0, range.start).trimEnd()}${range.start > 0 ? '\n\n' : ''}${text.slice(range.end).replace(/^\n+/, '')}`;
 }
 
-export function redactedMcpText(text: string): string {
-  return String(text || '').replace(/(token|access_token|api_key|secret)\s*=\s*"[^"]*"/gi, '$1 = "<redacted>"');
-}
-
 export function tomlTableRange(text: string, table: string, includeChildren: boolean): { start: number; end: number } | null {
   const source = String(text || '');
   const escaped = table.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

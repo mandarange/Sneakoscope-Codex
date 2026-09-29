@@ -1,4 +1,4 @@
-// Opt-in fast path for `sks hook <event>` (SKS_HOOK_DAEMON=1 only — see
+// Default fast path for `sks hook <event>` (SKS_HOOK_DAEMON=0 opts out — see
 // sks-dispatch.ts). Tries the sksd hook daemon first; on any failure to
 // reach it, spawns the daemon in the background for next time and falls
 // back to running the exact same evaluateHookPayload()/normalizeHookResult()

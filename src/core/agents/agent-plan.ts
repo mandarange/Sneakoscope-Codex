@@ -13,7 +13,6 @@ const OFFICIAL_SUBAGENT_ROUTE_KEYS = new Set([
 ])
 
 const EXPLICIT_SUBAGENT_RE = /\$(Naruto|Work)\b/i
-const PARALLELIZABLE_RE = /\b(parallel|subagents?|fan out|one agent per|independent|disjoint|multiple files|all files)\b|병렬|하위\s*에이전트|서브\s*에이전트|독립|분리된|여러\s*파일|모든\s*파일|분담/i
 
 function routeKey(route: any): string {
   return String(route?.id || route?.command || route?.name || route || '').trim().toLowerCase()
@@ -117,10 +116,6 @@ function capacityOptions(options: Record<string, any>) {
     ['marginalUsefulWorkers', options.marginalUsefulWorkers],
     ['marginalUsefulThroughputPositive', options.marginalUsefulThroughputPositive]
   ].filter(([, value]) => value !== undefined))
-}
-
-export function explicitlyParallelizable(prompt: unknown): boolean {
-  return PARALLELIZABLE_RE.test(String(prompt || ''))
 }
 
 function taskProfile(value: unknown, task: string): TaskProfile {

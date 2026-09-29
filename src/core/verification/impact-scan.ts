@@ -64,11 +64,6 @@ export function extractChangedExportedSymbols(patchText: string, changedFiles: s
   return dedupeSymbols(symbols);
 }
 
-/** @deprecated Prefer SearchProvider; retained for tests that inspect tool selection. */
-export async function pickScanTool(): Promise<ImpactReport['tool']> {
-  return 'search-provider-js';
-}
-
 export async function findReferences(
   root: string,
   symbol: string,

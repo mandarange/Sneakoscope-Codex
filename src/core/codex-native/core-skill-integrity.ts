@@ -6,7 +6,7 @@ import {
   inspectConfinedPath,
   isLexicallyConfined
 } from '../managed-path-safety.js';
-import { CORE_SKILL_TEMPLATE_VERSION, buildSksCoreSkillManifest, currentCoreSkillName, isCoreSkillName, isSksManagedCoreSkillContent, renderCoreSkillTemplate } from './core-skill-manifest.js';
+import { CORE_SKILL_TEMPLATE_VERSION, buildSksCoreSkillManifest, isCoreSkillName, isSksManagedCoreSkillContent, renderCoreSkillTemplate } from './core-skill-manifest.js';
 import { canonicalSkillName } from './skill-name-canonicalizer.js';
 
 export type CoreSkillSyncAction =
@@ -164,10 +164,6 @@ export async function syncCoreSkillsIntegrity(input: {
     }
   }
   return report;
-}
-
-export function coreSkillPath(skillsRoot: string, name: string): string {
-  return path.join(skillsRoot, currentCoreSkillName(canonicalSkillName(name)), 'SKILL.md');
 }
 
 function coreSkillsBoundary(root: string, skillsRoot: string): string {

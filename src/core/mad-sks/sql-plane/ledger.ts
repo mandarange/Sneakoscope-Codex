@@ -23,28 +23,3 @@ export async function appendMadSksSqlPlaneLedgerEvent(root: string, missionId: s
   return row
 }
 
-export async function appendMadSksSqlPlaneOperationLifecycle(root: string, missionId: string, input: {
-  type: 'db_operation.started' | 'db_operation.allowed' | 'db_operation.succeeded' | 'db_operation.failed'
-  operationId: string
-  cycleId?: string | null
-  mcpServer?: string | null
-  toolName?: string | null
-  sqlHash?: string | null
-  destructive?: boolean
-  resultStatus?: 'pending_tool_result' | 'succeeded' | 'failed'
-  rowCount?: number | null
-  error?: string | null
-}) {
-  return appendMadSksSqlPlaneLedgerEvent(root, missionId, {
-    type: input.type,
-    operation_id: input.operationId,
-    cycle_id: input.cycleId || null,
-    mcp_server: input.mcpServer || null,
-    tool_name: input.toolName || null,
-    sql_hash: input.sqlHash || null,
-    destructive: input.destructive === true,
-    result_status: input.resultStatus || 'pending_tool_result',
-    row_count: input.rowCount ?? null,
-    error: input.error || null
-  })
-}

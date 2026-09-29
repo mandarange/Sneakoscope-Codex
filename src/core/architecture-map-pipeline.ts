@@ -22,17 +22,6 @@ import { readContextGraphSnapshot } from './triwiki/context-graph/store/snapshot
 export { ARCHITECTURE_MAP_REVIEW_ARTIFACT };
 
 export const ARCHITECTURE_MAP_BASELINE_STAGE = 'architecture_map_baseline';
-export const ARCHITECTURE_MAP_REVIEW_STAGE = 'architecture_map_review';
-
-const ARCHITECTURE_MAP_EXEMPT_ROUTES = new Set([
-  'Answer',
-  'DFix',
-  'Help',
-  'Wiki',
-  'Goal',
-  'GX',
-  'DB'
-]);
 
 export interface ArchitectureMapPlanBinding {
   readonly baseline_artifact: string;
@@ -41,13 +30,6 @@ export interface ArchitectureMapPlanBinding {
   readonly manifest_artifact: string;
   readonly required: true;
   readonly seeded_at: string;
-}
-
-export function routeNeedsArchitectureMap(route: { id?: string } | null | undefined): boolean {
-  const id = String(route?.id || '');
-  if (!id) return false;
-  if (ARCHITECTURE_MAP_EXEMPT_ROUTES.has(id)) return false;
-  return true;
 }
 
 export function createArchitectureMapPlanBinding(): ArchitectureMapPlanBinding {
@@ -67,13 +49,6 @@ export function planStagesArchitectureMap(plan: any): boolean {
       String(stage?.id || '') === ARCHITECTURE_MAP_BASELINE_STAGE
       && !['skipped', 'not_applicable'].includes(String(stage?.status || ''))
     );
-}
-
-export async function seedArchitectureMapPlanBinding(dir: string, plan: any): Promise<any> {
-  if (!planStagesArchitectureMap(plan)) return plan;
-  plan.architecture_map = createArchitectureMapPlanBinding();
-  await writeJsonAtomic(path.join(dir, 'pipeline-plan.json'), plan);
-  return plan;
 }
 
 export interface SeedArchitectureMapBaselineInput {

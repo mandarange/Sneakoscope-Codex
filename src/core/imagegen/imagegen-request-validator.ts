@@ -1,6 +1,6 @@
 import { IMAGEGEN_QUALITIES, isImagegenSize } from './imagegen-model-policy.js';
 import path from 'node:path';
-import { exists, nowIso, sha256, writeJsonAtomic } from '../fsx.js';
+import { exists, nowIso, sha256 } from '../fsx.js';
 import { sha256File } from '../wiki-image/image-hash.js';
 
 export interface ImagegenRequestValidationInput {
@@ -51,8 +51,3 @@ export async function validateImagegenRequest(input: ImagegenRequestValidationIn
   };
 }
 
-export async function writeImagegenRequestValidationArtifact(input: ImagegenRequestValidationInput, artifactPath: string) {
-  const validation = await validateImagegenRequest(input);
-  await writeJsonAtomic(artifactPath, validation);
-  return validation;
-}

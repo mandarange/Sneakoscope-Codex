@@ -143,22 +143,6 @@ export async function contextGraphFreshnessPreflight(
   };
 }
 
-/**
- * Bounded, non-blocking note for a prompt hook. Returns `null` when the graph is
- * fresh, when there is no graph to talk about yet, or when the budget runs out —
- * the structured preflight above is what a caller uses to decide whether it may
- * answer from the graph.
- */
-export async function contextGraphFreshnessNote(
-  root: string,
-  options: ContextGraphFreshnessPreflightOptions & { budgetMs?: number | undefined } = {}
-): Promise<string | null> {
-  const budgetMs = Math.max(1, options.budgetMs ?? 750);
-  const preflight = await raceWithTimeout(contextGraphFreshnessPreflight(root, options), budgetMs).catch(() => null);
-  if (!preflight) return null;
-  return contextGraphFreshnessNoteFor(preflight);
-}
-
 /** The user-facing line for a preflight result. Codes and the repair command only — no prose about versions. */
 export function contextGraphFreshnessNoteFor(preflight: ContextGraphFreshnessPreflight): string | null {
   if (preflight.status === 'fresh') return null;
@@ -196,15 +180,3 @@ function collectUnverifiedReasons(
   return out;
 }
 
-async function raceWithTimeout<T>(work: Promise<T>, ms: number): Promise<T | null> {
-  let timer: NodeJS.Timeout | null = null;
-  const timeout = new Promise<null>((resolve) => {
-    timer = setTimeout(() => resolve(null), ms);
-    if (timer.unref) timer.unref();
-  });
-  try {
-    return await Promise.race([work, timeout]);
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
-}

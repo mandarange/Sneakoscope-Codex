@@ -1,9 +1,9 @@
 import path from 'node:path';
 import { thinkingSubagentModel, SUBAGENT_EFFORT } from '../subagents/model-policy.js';
 import { nowIso, writeJsonAtomic, writeTextAtomic } from '../fsx.js';
-import { CLAIM_EVIDENCE_MATRIX_ARTIFACT, buildClaimEvidenceMatrixFromLedgers, writeClaimEvidenceMatrix } from './claim-evidence-matrix.js';
+import { buildClaimEvidenceMatrixFromLedgers, writeClaimEvidenceMatrix } from './claim-evidence-matrix.js';
 import { DEFAULT_RESEARCH_QUALITY_CONTRACT, writeResearchQualityContract } from './research-quality-contract.js';
-import { SOURCE_QUALITY_REPORT_ARTIFACT, writeSourceQualityReport } from './source-quality-report.js';
+import { writeSourceQualityReport } from './source-quality-report.js';
 import { defaultImplementationBlueprint, writeImplementationBlueprint } from './implementation-blueprint.js';
 import { IMPLEMENTATION_BLUEPRINT_MARKDOWN_ARTIFACT, renderImplementationBlueprintMarkdown } from './implementation-blueprint-markdown.js';
 import { defaultExperimentPlan, writeExperimentPlan } from './experiment-plan.js';

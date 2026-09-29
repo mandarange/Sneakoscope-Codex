@@ -1,6 +1,6 @@
 import os from 'node:os';
 import path from 'node:path';
-import { projectRoot, exists, formatBytes, nowIso, readText, writeJsonAtomic } from '../core/fsx.js';
+import { projectRoot, exists, formatBytes, nowIso, writeJsonAtomic } from '../core/fsx.js';
 import { flag } from '../cli/args.js';
 import { printJson } from '../cli/output.js';
 import { ui as cliUi } from '../cli/cli-theme.js';
@@ -28,7 +28,6 @@ import { isUpdateMigrationReceiptCurrent, projectUpdateMigrationReceiptPath, wri
 import { inspectSksMenuBarStatus, installSksMenuBar, sksMenuBarRestartDeferred } from '../core/codex-app/menubar/index.js';
 import { sweepSksTempDirs } from '../core/retention.js';
 import { detectImagegenCapability } from '../core/imagegen/imagegen-capability.js';
-import { CURRENT_CODEX_RUNTIME_CONTRACT } from '../core/codex-compat/codex-runtime-contract.js';
 import { formatHarnessConflictReport, scanHarnessConflicts } from '../core/harness-conflicts.js';
 import {
   doctorArgWarnings as baseDoctorArgWarnings,
@@ -42,12 +41,10 @@ import { renderDoctorConsoleReport } from './doctor-console.js';
 import {
   buildCodexAppUiDiagnosticFailure, buildRuntimeReadiness,
   captureCodexConfigSnapshot, deferredNativeRepair,
-  doctorDedupeStatus, doctorSkillStatus,
   fallbackCodexNativeFeatureMatrix, formatCodexDoctorConsoleStatus,
   installScopeFromArgs, isMigrationUserOwnedProjectConfigBlocker,
-  mergeObservedCodexStartupWarnings, nativeCapabilityStatus,
-  readOption, rebootstrapSksMenuBarLaunchdForDoctorFix,
-  sksMenuBarRunningVersionConsoleLines, uniqueNativeManualActions, writeFixMigrationJournal,
+  mergeObservedCodexStartupWarnings, readOption, rebootstrapSksMenuBarLaunchdForDoctorFix,
+  sksMenuBarRunningVersionConsoleLines, writeFixMigrationJournal,
   writeJsonReportFile
 } from './doctor-helpers.js';
 

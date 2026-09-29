@@ -45,13 +45,6 @@ export const GLOBAL_ARCHITECTURE_MAP_VIEW_IDS = Object.freeze([
 export type ArchitectureMapViewId = (typeof ARCHITECTURE_MAP_VIEW_IDS)[number];
 export type GlobalArchitectureMapViewId = (typeof GLOBAL_ARCHITECTURE_MAP_VIEW_IDS)[number];
 
-export type ArchitectureSourceKind =
-  | 'context_graph'
-  | 'topology_overlay'
-  | 'ssot_inventory'
-  | 'voxel_context'
-  | 'worktree_fingerprint';
-
 export type ArchitectureMapProfile =
   | 'global'
   | 'planning'
@@ -293,13 +286,6 @@ export interface ArchitectureCapsuleV1 {
   readonly byteLength: number;
   readonly profile: ArchitectureMapProfile;
   readonly contentHash: string;
-}
-
-export interface AppliedArchitectureException {
-  readonly findingId: string;
-  readonly exceptionId: string;
-  readonly owner: string;
-  readonly reason: string;
 }
 
 export interface ProjectionAccountingSummary {

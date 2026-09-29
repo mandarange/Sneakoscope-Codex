@@ -130,16 +130,6 @@
       "reason": "the built public DFix route selects these verification scripts when DFix source changes"
     },
     {
-      "source": "src/core/doctor/codex-current-core-probe-doctor.ts",
-      "classification": "installed_runtime",
-      "reason": "installed Doctor exposes the strict real-probe command and must not point at a missing script"
-    },
-    {
-      "source": "dist/core/doctor/codex-current-core-probe-doctor.js",
-      "classification": "installed_runtime",
-      "reason": "built installed Doctor exposes the strict real-probe command"
-    },
-    {
       "source": "src/core/feature-fixtures.ts",
       "classification": "test_fixture",
       "reason": "feature fixture commands are repository selftest fixtures"

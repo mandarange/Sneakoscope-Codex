@@ -26,8 +26,6 @@ export interface TournamentResult {
   candidates: TournamentCandidate[];
 }
 
-export type SpawnFn = (item: any) => Promise<TournamentCandidate>;
-export type JudgeFn = (input: { a: TournamentCandidate; b: TournamentCandidate; prompt: string }) => Promise<{ pick: 'a' | 'b'; reason_digest: string }>;
 
 export const APPROACHES = [
   '기존 코드 재사용을 극대화하는 최소 diff 접근',
@@ -35,33 +33,6 @@ export const APPROACHES = [
   '근본 원인을 한 단계 위에서 해결하는 구조적 접근',
   '테스트와 관찰 가능성을 먼저 고정하는 증거 중심 접근'
 ];
-
-export async function runSolutionTournament(input: { root: string; item: any; n?: number; spawnWorker: SpawnFn; judgeWorker: JudgeFn }): Promise<TournamentResult> {
-  const n = Math.min(Math.max(input.n ?? 3, 2), 4);
-  const candidates = await Promise.all(APPROACHES.slice(0, n).map((approach, index) =>
-    input.spawnWorker({ ...input.item, id: `${input.item.id}-cand${index + 1}`, approach_directive: approach, isolation: 'worktree' })
-      .then((candidate) => ({ ...candidate, id: candidate.id || `${input.item.id}-cand${index + 1}`, approach }))
-  ));
-  await Promise.all(candidates.map(async (candidate) => {
-    candidate.score = await scoreCandidate(input.root, candidate);
-  }));
-  const alive = candidates
-    .filter((candidate) => candidate.score?.machine_ok && candidate.score.impact_breaks === 0)
-    .sort((a, b) => rank(a.score!) - rank(b.score!));
-  if (alive.length === 0) return { schema: 'sks.solution-tournament.v1', winner: null, reason: 'all_candidates_failed_machine_checks', candidates };
-  if (alive.length === 1) return { schema: 'sks.solution-tournament.v1', winner: alive[0] || null, reason: 'single_survivor', candidates };
-  const verdict = await input.judgeWorker({
-    a: alive[0]!,
-    b: alive[1]!,
-    prompt: '두 패치 중 6개월 뒤 유지보수자가 고마워할 쪽을 골라라. 근거는 코드 사실만.'
-  });
-  return {
-    schema: 'sks.solution-tournament.v1',
-    winner: verdict.pick === 'b' ? alive[1]! : alive[0]!,
-    reason: `judge:${verdict.reason_digest}`,
-    candidates
-  };
-}
 
 export async function scoreCandidate(root: string, candidate: TournamentCandidate): Promise<CandidateScore> {
   const patchText = patchTextFromCandidate(candidate);

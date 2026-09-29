@@ -183,10 +183,6 @@ export function redactCapabilityEvidence(value: Record<string, unknown>): Record
   return redactRecord(value)
 }
 
-export function redactCapabilityText(value: string): string {
-  return redactString(value)
-}
-
 function parseProducer(
   value: unknown,
   blockers: string[],

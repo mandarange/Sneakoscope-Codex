@@ -29,6 +29,3 @@ export function adapterForDetection(_detection: DetectionResult): SearchVisibili
   return GENERIC_ADAPTER;
 }
 
-export function searchVisibilityAdapters(): SearchVisibilityAdapter[] {
-  return [GENERIC_ADAPTER];
-}

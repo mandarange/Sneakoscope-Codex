@@ -1,9 +1,3 @@
-import { wrongnessContextForRoute } from './wrongness-retrieval.js';
-
-export async function activeAvoidanceRules(root: string, opts: { missionId?: string | null; route?: string | null; limit?: number } = {}) {
-  const context = await wrongnessContextForRoute(root, opts);
-  return context.active_avoidance_rules || [];
-}
 
 export function renderAvoidanceRules(rules: unknown = []): string {
   const rows = Array.isArray(rules) ? rules : [];

@@ -35,7 +35,6 @@
  */
 import { contextGraphNodeId } from '../ids.js';
 import { isWorkspaceRelativePosixPath } from '../paths.js';
-import type { ContextGraphSeed } from '../query-types.js';
 import type { KernelProvidedSeed } from './kernel-types.js';
 
 /** One caller-verified path, paired with the node id it resolves to. */
@@ -80,12 +79,3 @@ export function changedPathKernelSeeds(changedPaths: readonly string[] | undefin
   }));
 }
 
-/** The v1 snapshot-engine form of the same seed set, so both engines are fed identically. */
-export function changedPathSnapshotSeeds(changedPaths: readonly string[] | undefined): readonly ContextGraphSeed[] {
-  return changedPathSeeds(changedPaths).map((seed) => ({
-    nodeId: seed.nodeId,
-    confidence: 'file_path' as const,
-    origin: 'provided' as const,
-    path: seed.path
-  }));
-}

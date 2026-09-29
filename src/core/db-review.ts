@@ -441,14 +441,6 @@ function validateApplicableSection(section: any, name: string, blockers: string[
   }
 }
 
-function validatePassedSection(section: any, name: string, blockers: string[], fields: string[]) {
-  if (String(section?.status || '') !== 'passed') blockers.push(`${name}:status`);
-  for (const field of fields) {
-    if (section?.[field] !== true) blockers.push(`${name}:${field}`);
-  }
-  if (!nonEmptyArray(section?.evidence)) blockers.push(`${name}:evidence`);
-}
-
 function validateReviewNote(section: any, name: string, blockers: string[], requireStrategy = false) {
   if (section?.reviewed !== true) blockers.push(`${name}:reviewed`);
   if (!nonEmpty(section?.summary)) blockers.push(`${name}:summary`);

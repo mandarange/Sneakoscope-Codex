@@ -481,7 +481,6 @@ function buildSemanticReview(input: any) {
       summary: `${input.fallbackSites.length} added fallback/compat/mock marker(s) need authority and proof`
     });
   }
-  const changedEntries = (input.entries || input.changedScope?.entries || []);
   if (input.changedScope?.net_lines > 300) {
     findings.push({
       tag: 'shrink',
@@ -652,11 +651,6 @@ function buildLeanChangeEvidence(input: any) {
     },
     semantic_review: input.semanticReview || { status: 'needs-review', findings: [] }
   };
-}
-
-async function countLines(file: any) {
-  const text = await fsp.readFile(file, 'utf8');
-  return text ? text.split(/\n/).length : 0;
 }
 
 function structureStatus(lines: any) {

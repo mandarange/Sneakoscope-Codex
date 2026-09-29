@@ -1,23 +1,3 @@
-/**
- * Seed acquisition for the graph-backed `context` search mode.
- *
- * `searchContext()` answers from the Context Graph. The only remaining job of
- * lexical matching is to decide *where in the graph to start*, and that job lives
- * here — this file is the single place in the context path where a text-shaped
- * match is produced at all. Three channels run against the already-loaded
- * in-memory index, so seeding costs no file I/O and no process spawn:
- *
- *   symbol -> a node-id or label hit; keeps the kind's real confidence
- *             (`exact_definition` for a symbol, `manifest` for a command/gate/route,
- *             `exact_reference` otherwise)
- *   path   -> an exact workspace-relative path, or a basename hit; always `file_path`
- *   text   -> a bounded substring sweep; always `text_candidate`
- *
- * A seed never leaves this file carrying more confidence than the evidence that
- * produced it. A text hit stays `text_candidate` from here all the way into the
- * answer, which is what keeps `search context` from reporting a guess as a fact.
- */
-import path from 'node:path';
 import type { ContextGraphIndex } from '../triwiki/context-graph/graph-index.js';
 import { compareContextGraphIds } from '../triwiki/context-graph/ids.js';
 import { isWorkspaceRelativePosixPath } from '../triwiki/context-graph/paths.js';
@@ -302,9 +282,3 @@ export function acquireContextGraphSeeds(input: AcquireContextGraphSeedsInput): 
   };
 }
 
-/** Workspace-relative POSIX form of an arbitrary path-ish string, or `null`. */
-export function workspaceRelativeSeedPath(value: string): string | null {
-  const candidate = String(value ?? '').trim().replace(/\\/g, '/').replace(/^\.\//, '');
-  if (!candidate || path.posix.isAbsolute(candidate)) return null;
-  return isWorkspaceRelativePosixPath(candidate) ? candidate : null;
-}

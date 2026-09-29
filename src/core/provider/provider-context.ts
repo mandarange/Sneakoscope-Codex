@@ -1,6 +1,6 @@
 import path from 'node:path'
 import type { BridgeProviderId, DesktopBridgeStatusV3 } from '../codex-lb/bridge-contracts.js'
-import { exists, nowIso, readJson, writeJsonAtomic } from '../fsx.js'
+import { exists, nowIso, readJson } from '../fsx.js'
 
 export const PROVIDER_CONTEXT_SCHEMA = 'sks.provider-context.v2'
 
@@ -117,13 +117,6 @@ export async function resolveProviderContext(input: {
       desktop_bridge_credential_state: credentialState
     }
   }
-}
-
-export async function writeProviderContextReport(root: string = process.cwd(), input: Parameters<typeof resolveProviderContext>[0] = {}) {
-  const report = await resolveProviderContext({ ...input, root })
-  const reportPath = path.join(path.resolve(root), '.sneakoscope', 'reports', 'provider-context.json')
-  await writeJsonAtomic(reportPath, report)
-  return { ...report, report_path: reportPath }
 }
 
 function selectedBridgeProvider(status: DesktopBridgeStatusV3 | null): BridgeProviderId | null {

@@ -1,4 +1,4 @@
-import { findRustAccelerator, rustInfo } from '../rust-accelerator.js';
+import { findRustAccelerator } from '../rust-accelerator.js';
 import { PACKAGE_VERSION, runProcess } from '../fsx.js';
 
 export { findRustAccelerator };
@@ -29,7 +29,3 @@ export async function rustSupportsSearchCommand(): Promise<boolean> {
   return help.code === 0 || /search files|search text|search batch/i.test(text);
 }
 
-export async function rustSearchInfoNote(): Promise<string> {
-  const info = await rustInfo();
-  return info.mode === 'rust_accelerated' ? 'rust_accelerated' : 'js_fallback';
-}

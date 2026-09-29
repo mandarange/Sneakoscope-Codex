@@ -31,11 +31,3 @@ export function classifyLoopRisk(node: Pick<SksLoopNode, 'loop_id' | 'owner_scop
   };
 }
 
-export function loopLevelAllowedUnattended(node: SksLoopNode): boolean {
-  return node.level === 'L3-unattended'
-    && (node.risk.level === 'low' || node.risk.level === 'medium')
-    && node.owner_scope.exclusive
-    && node.budget.max_changed_files <= 8
-    && node.gates.local.length > 0
-    && !node.risk.requires_human_handoff;
-}

@@ -4549,7 +4549,6 @@
           "src/core/routes.ts",
           "src/core/routes/dollar-manifest-lite.ts",
           "src/core/feature-registry.ts",
-          "src/core/features/feature-registry.ts",
           "src/core/feature-fixtures.ts",
           "src/scripts/all-feature-deep-completion-check.ts",
           "docs/feature-inventory.md",

@@ -8,7 +8,6 @@
  * scan.
  */
 import type { ContextGraphNode } from '../contracts.js';
-import { quantizeTrust } from './format.js';
 import {
   CONTEXT_INDEX_METADATA_KEY_AT,
   CONTEXT_INDEX_METADATA_NODE_AT,

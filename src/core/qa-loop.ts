@@ -247,31 +247,6 @@ export function buildQaLoopQuestionSchema(prompt: any) {
   };
 }
 
-export function qaLoopQuestionSlots() {
-  return [
-      { id: 'GOAL_PRECISE', question: 'Define the QA objective in one sentence.', required: true, type: 'string' },
-      { id: 'QA_SCOPE', question: 'Which QA surface should run?', required: true, type: 'enum', options: ['ui_e2e_only', 'api_e2e_only', 'ui_and_api_e2e', 'all_available'] },
-      { id: 'TARGET_ENVIRONMENT', question: 'Where should QA run?', required: true, type: 'enum', options: ['local_dev_server', 'preview_or_staging_domain', 'deployed_production_domain'] },
-      { id: 'TARGET_BASE_URL', question: 'What base URL should QA target?', required: true, type: 'string' },
-      { id: 'DEV_SERVER_COMMAND', question: 'If local dev is selected, what command starts the app? Use none if already running.', required: true, type: 'string' },
-      { id: 'API_BASE_URL', question: 'If API E2E is selected, what API base URL should be used? Use same_as_target when identical.', required: true, type: 'string' },
-      { id: 'QA_MUTATION_POLICY', question: 'May QA create or change seeded data?', required: true, type: 'enum', options: ['read_only_smoke_only', 'seeded_create_change_only', 'seeded_create_change_remove_local_only'] },
-      { id: 'DESTRUCTIVE_DEPLOYED_TESTS_ALLOWED', question: 'Can non-local QA run destructive removal scenarios?', required: true, type: 'enum', options: ['never'] },
-      { id: 'EXTERNAL_SIDE_EFFECT_POLICY', question: 'How should email, SMS, webhook, payment, and admin side effects be handled?', required: true, type: 'enum', options: ['block_all_external_side_effects', 'mock_or_sandbox_only'] },
-      { id: 'LOGIN_REQUIRED', question: 'Does UI/API QA require login?', required: true, type: 'enum', options: ['no', 'yes'] },
-      { id: 'TEMP_TEST_CREDENTIALS_READY', question: 'If login is required, are test-only credentials ready to provide ephemerally during the run?', required: true, type: 'enum', options: ['not_required', 'yes_temp_only', 'no_block_authenticated_tests'] },
-      { id: 'TEST_CREDENTIALS_RUNTIME_SOURCE', question: 'If login is required, how will test-only credentials be provided without saving the values?', required: true, type: 'enum', options: ['not_required', 'ephemeral_chat_only', 'environment_variables', 'secret_manager'] },
-      { id: 'CREDENTIAL_STORAGE_ACK', question: 'Acknowledge credential handling policy.', required: true, type: 'enum', options: ['never_store_credentials_in_artifacts_or_wiki'] },
-      { id: 'UI_CHROME_EXTENSION_ACK', question: 'Acknowledge UI E2E evidence policy: QA-LOOP routes local/public web to @Browser, signed-in web to @Chrome, native/cross-app GUI to @Computer, and never treats synthetic artifacts as real proof.', required: true, type: 'enum', options: [UI_SURFACE_ROUTER_ACK, LEGACY_UI_CHROME_EXTENSION_FIRST_ACK] },
-      { id: 'SUBAGENT_MODE_ALLOWED', question: 'May QA-LOOP use official subagents where useful?', required: true, type: 'enum', options: ['yes_parallel_where_safe', 'no_parent_only'] },
-      { id: 'MAX_QA_CYCLES', question: 'How many no-question QA cycles are allowed before pausing?', required: true, type: 'string' },
-      { id: 'ACCEPTANCE_CRITERIA', question: 'List the QA completion criteria.', required: true, type: 'array_or_string' },
-      { id: 'NON_GOALS', question: 'List anything QA-LOOP must not test.', required: true, type: 'array_or_string', allow_empty: true },
-      { id: 'RISK_BOUNDARY', question: 'List hard safety boundaries for data, auth, permissions, money, messages, and third-party systems.', required: true, type: 'array_or_string' },
-      { id: 'MID_RUN_UNKNOWN_POLICY', question: 'If ambiguity appears during no-question QA, choose the resolution order. This does not authorize unrequested fallback implementation code.', required: true, type: 'array', options: ['preserve_existing_behavior', 'smallest_reversible_change', 'defer_optional_scope', 'block_only_if_no_safe_path'] }
-    ];
-}
-
 export function validateQaLoopAnswers(schema: any, answers: any = {}) {
   if (schema?.route !== QA_LOOP_ROUTE) return [];
   const errors: any[] = [];

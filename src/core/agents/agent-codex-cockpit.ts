@@ -89,7 +89,6 @@ export async function buildAgentCodexCockpitState(
   const roster = await readJson<any>(path.join(root, 'agent-roster.json'), null)
   const leases = await readJson<any>(path.join(root, 'agent-leases.json'), null)
   const proof = await readJson<any>(path.join(root, 'agent-proof-evidence.json'), null)
-  const consensus = await readJson<any>(path.join(root, 'agent-consensus.json'), null)
   const cleanup = await readJson<any>(path.join(root, 'agent-cleanup.json'), null)
   const janitor = await readJson<any>(path.join(root, 'agent-janitor-report.json'), null)
   const namespace = await readJson<any>(path.join(missionDir, 'project-session-namespace.json'), null)

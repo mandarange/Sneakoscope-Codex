@@ -4,8 +4,6 @@ import os from 'node:os';
 import { writeCodexConfigGuarded } from './codex/codex-config-guard.js';
 import { exists, readJson, readText, writeJsonAtomic } from './fsx.js';
 
-export const OTHER_HARNESS_NAMES = ['OMX', 'DCodex'];
-
 export async function scanHarnessConflicts(root: any, opts: any = {}) {
   const projectRoot = path.resolve(root || process.cwd());
   const home = opts.home || process.env.HOME || '';

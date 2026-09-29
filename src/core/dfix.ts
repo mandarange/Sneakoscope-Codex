@@ -461,19 +461,6 @@ function buildDfixCodexPatchPrompt(diagnosis: any = {}, rootCause: any = {}, opt
   ].join('\n');
 }
 
-async function gitDiff(root: string) {
-  const result = await runProcess('git', ['diff', '--'], {
-    cwd: root,
-    timeoutMs: 10_000,
-    maxOutputBytes: 128 * 1024
-  }).catch((err: unknown) => ({ stdout: '', stderr: err instanceof Error ? err.message : String(err), code: 1 }));
-  return {
-    captured: result.code === 0,
-    stdout_tail: String(result.stdout || '').slice(-32_000),
-    stderr_tail: String(result.stderr || '').slice(-4000)
-  };
-}
-
 export async function finalizeDfix(root: string, missionId: string, artifacts: any, opts: any = {}) {
   return maybeFinalizeRoute(root, {
     missionId,

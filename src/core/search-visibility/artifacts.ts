@@ -49,7 +49,6 @@ export async function writeAuditArtifacts(
   findings: Finding[],
   geo: GeoArtifactsInput | null
 ): Promise<{ verification: VerificationResult; gate: SearchVisibilityGate; proof: JsonData }> {
-  const route = routeForMode(ctx.mode);
   await writeJsonAtomic(path.join(mission.artifactDir, 'adapter-detection.json'), withMeta(ctx, mission, {
     schema: 'sks.search-visibility.adapter-detection.v1',
     ...inventory.detected_adapter,

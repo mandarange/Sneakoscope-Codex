@@ -25,8 +25,3 @@ export function requireContains(gate, rel, needles) {
   assertGate(result.ok, `${gate} missing required wiring in ${rel}`, { missing: result.missing });
 }
 
-export function requirePackageScripts(gate, scripts) {
-  const pkg = json('package.json');
-  const missing = scripts.filter((script) => !pkg.scripts?.[script]);
-  assertGate(missing.length === 0, `${gate} package scripts missing`, { missing });
-}

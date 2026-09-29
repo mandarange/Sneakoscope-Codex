@@ -10,7 +10,6 @@ import {
   hostCapabilityRuntimeDigest,
   type HostCapabilityRequest,
   type HostCapabilityRuntime,
-  type HostCapabilityRuntimeEntry,
   type HostCapabilityWorkflow
 } from './host-capability-policy.js';
 import { isRecord } from '../json/records.js';
@@ -405,14 +404,6 @@ export function sanitizeHostCapabilityPostToolUse(payload: unknown): HostCapabil
     validation_blocker: semantic.blocker,
     artifacts
   };
-}
-
-export function mergeHostCapabilityPreToolObservation(input: {
-  binding: HostCapabilityHookRuntimeBinding;
-  current?: unknown;
-  observation: HostCapabilityPreToolObservation;
-}): HostCapabilityHookObservations {
-  return authorizeAndMergeHostCapabilityPreToolObservation(input).observations;
 }
 
 export function authorizeAndMergeHostCapabilityPreToolObservation(input: {

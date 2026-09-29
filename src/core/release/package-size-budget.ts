@@ -18,9 +18,10 @@
  *
  * 10.3.9 re-measure: user-level Codex hook activation (global hook install,
  * project hook reconcile, Codex `hooks/list` client, hook layer) replaced the
- * managed-hooks install Codex never loaded. The measured package is 2,940,348
- * packed / 12,811,224 unpacked across 1,794 files.
+ * managed-hooks install Codex never loaded, and the same release removed code
+ * nothing reached. The measured package is 2,887,352 packed / 12,573,513
+ * unpacked across 1,749 files, so the packed ceiling is back at 2870 KiB.
  */
-export const DEFAULT_MAX_PACK_BYTES = 2880 * 1024
+export const DEFAULT_MAX_PACK_BYTES = 2870 * 1024
 /** ~12.59 MiB; narrow headroom above the measured installed runtime surface. */
 export const DEFAULT_MAX_UNPACKED_BYTES = 13_200_000

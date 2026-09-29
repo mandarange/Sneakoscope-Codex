@@ -3,9 +3,8 @@ import { leanEngineeringCompactText, leanEngineeringLongText } from './lean-engi
 export { leanEngineeringCompactText, leanEngineeringLongText };
 
 import { ALLOWED_REASONING_EFFORTS, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, RECOMMENDED_SKILLS, REFLECTION_SKILL_NAME, USAGE_TOPICS } from './routes/constants.js';
-import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_IMAGEGEN_REQUIRED_POLICY, CODEX_WEB_VERIFICATION_POLICY, RESERVED_CODEX_PLUGIN_SKILL_NAMES } from './routes/evidence.js';
-import { getdesignReferencePolicyText, imageUxReviewPipelinePolicyText } from './routes/design-policy.js';
-import { PPT_PIPELINE_SKILL_ALLOWLIST, pptPipelineAllowlistPolicyText } from './routes/ppt-policy.js';
+import { CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_WEB_VERIFICATION_POLICY, RESERVED_CODEX_PLUGIN_SKILL_NAMES } from './routes/evidence.js';
+import { PPT_PIPELINE_SKILL_ALLOWLIST } from './routes/ppt-policy.js';
 import { normalizeDollarSkillName, prefixKnownSksDollarReferences, sksPrefixedDollarCommand, sksPrefixedSkillName, unprefixedSksSkillName } from './routes/dollar-prefix.js';
 import { classifyTaskProfile, IMPLEMENTATION_VERB_RE, isTaskProfile, looksLikeDatabaseWorkRequest, type TaskProfile } from './runtime/task-profile.js';
 import { legacyCoreSkillNames } from './codex-native/core-skill-manifest.js';
@@ -47,25 +46,6 @@ export interface NarutoRouteDecision {
   reason: string;
   trivial: boolean;
   default_parallel: boolean;
-}
-
-export function looksLikeProblemSolvingRequest(prompt: any = '') {
-  const text = String(prompt || '').trim();
-  if (!text) return false;
-  const problemCue = /(문제|오류|에러|버그|고장|깨짐|실패|안\s*(?:됨|돼|되|나옴|보임|돌아|먹)|작동\s*안|해결|고쳐|수정|복구|troubleshoot|not\s+working|broken|bug|error|failure|fails?|crash|fix|repair|resolve|solve)/i.test(text);
-  const actionCue = /(해줘|해달|해라|되게|찾아|검색|기반|수정|진행|apply|implement|fix|repair|resolve|solve|troubleshoot|patch|update|change)/i.test(text);
-  return problemCue && actionCue;
-}
-
-export function solutionScoutPolicyText(prompt: any = '') {
-  if (!looksLikeProblemSolvingRequest(prompt)) return '';
-  return [
-    'Solution Scout hook: this prompt looks like a problem-solving or repair request.',
-    'Before code edits, run a short web search for similar error reports, bug fixes, docs notes, or prior resolution patterns using the concrete symptom, stack, package, and error text from the repo.',
-    'Prefer primary sources and official docs for package/API behavior; use Context7 when the fix depends on a library, SDK, MCP, package manager, or generated documentation.',
-    'Summarize the relevant external patterns in 2-3 bullets, then design the local SKS fix from current code/tests plus those patterns. Do not copy a workaround blindly.',
-    'If web search is unavailable or the issue is fully local and trivial, state that the external-similarity search is unverified and continue from local evidence only.'
-  ].join('\n');
 }
 
 export function dollarSkillName(commandOrId: any) {
@@ -138,35 +118,8 @@ export function stackCurrentDocsPolicyText(commandPrefix: any = 'sks') {
   return `Stack current-docs policy: whenever project tech stack is added or a framework/package/runtime/platform version changes, fetch current docs with Context7 (resolve-library-id then query-docs) or official vendor web docs before coding, record the syntax/limits/security guidance as high-priority TriWiki claims in ${policy.memory_path}, run "${policy.refresh_command}", then "${policy.validate_command}". Treat these claims as higher priority than model-memory defaults. Examples include Supabase publishable/secret keys replacing legacy anon and service role guidance for hosted projects, Next.js 16 proxy.ts/proxy.js replacing the deprecated middleware file convention, avoiding stale webpack defaults when newer framework guidance says otherwise, and Vercel Function duration limits such as the 300s default under Fluid Compute.`;
 }
 
-export function triwikiContextTrackingText(commandPrefix: any = 'sks') {
-  const ctx = triwikiContextTracking(commandPrefix);
-  return `Context tracking SSOT: TriWiki. Use only the latest TriWiki pack shape when a claim needs project memory: ${ctx.required_schema}; coordinate-only legacy packs are invalid and must be refreshed before use. Use ${ctx.default_pack} for TriWiki recall, consume attention.use_first as the compact high-trust recall set, hydrate attention.hydrate_first from source before risky or lower-trust decisions, refresh with "${ctx.refresh_command}" or "${ctx.pack_command}" after new findings/artifact changes, prune stale/oversized wiki state with "${ctx.prune_command}" when retention matters, and validate with "${ctx.validate_command}" before each handoff or final claim. Selected text is only the visible slice; non-selected claims remain hydratable by id, hash, source path, and RGBA/trig coordinate. Follow high-trust claims unless newer source evidence contradicts them; low-trust claims should trigger source/evidence hydration before implementation or final claims. ${stackCurrentDocsPolicyText(commandPrefix)}`;
-}
-
-export function triwikiStagePolicyText(commandPrefix: any = 'sks') {
-  const ctx = triwikiContextTracking(commandPrefix);
-  return [
-    'TriWiki stage policy:',
-    `- When a claim needs project memory, read the relevant parts of ${ctx.default_pack} instead of relying on memory or a one-time initial summary; the pack must validate as ${ctx.required_schema}.`,
-    '- Consume `attention.use_first` for the fastest high-trust context path; hydrate `attention.hydrate_first` from source before making risky, user-visible, or final claims.',
-    `- If a TriWiki pack is coordinate-only or lacks voxel overlay metadata, run "${ctx.refresh_command}" or "${ctx.pack_command}" and do not use the legacy pack for pipeline decisions.`,
-    '- During the phase, when a decision touches a wiki claim, hydrate low-trust or stale claims from their source path/hash/RGBA anchor before relying on them.',
-    `- After new findings, changed artifacts, native agent results, debate conclusions, implementation changes, reviews, or blockers, run "${ctx.refresh_command}" or "${ctx.pack_command}" so later stages see the update.`,
-    `- When package manifests, framework versions, runtime targets, MCPs, SDKs, DB clients, or deployment platforms change, add current official docs or Context7 evidence to ${stackCurrentDocsPolicy(commandPrefix).memory_path}, refresh/validate TriWiki, and make those claims the coding baseline.`,
-    `- Before every handoff and before final output, run or require "${ctx.validate_command}" and re-check high-impact claims against current sources.`
-  ].join('\n');
-}
-
 export function chatCaptureIntakeText() {
   return `From-Chat-IMG intake: explicit signal only. Select forensic visual effort. Treat uploads as chat screenshot plus originals. For web/browser/webapp targets, use the Codex Chrome Extension path first; for native Mac/non-web app surfaces, use Codex Computer Use visual inspection when available. List requirements first in source order, match regions to attachments with confidence, and write ${FROM_CHAT_IMG_WORK_ORDER_ARTIFACT}, ${FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT}, ${FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT}, ${FROM_CHAT_IMG_COVERAGE_ARTIFACT}, ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT}, ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT}, and ${FROM_CHAT_IMG_QA_LOOP_ARTIFACT}. ${CODEX_WEB_VERIFICATION_POLICY} ${CODEX_COMPUTER_USE_ONLY_POLICY} Preserve each visible customer request as source-bound text, account for every screenshot image region and separate attachment, map each item to work-order actions, perform the customer-request work, then run a scoped QA-LOOP over that exact work-order range before Naruto completion. Update checklist checkboxes as work proceeds until all boxes are checked, unresolved_items is empty, scoped_qa_loop_completed=true, QA unresolved findings are zero, and schema validation passes. ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT} is temporary TriWiki-backed session context with expires_after_sessions=${FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS}, so it can be forgotten by retention after enough later sessions. Do not assume ordinary image prompts are chat captures.`;
-}
-
-export function noUnrequestedFallbackCodePolicyText() {
-  return leanEngineeringCompactText();
-}
-
-export function outcomeRubricPolicyText() {
-  return 'Outcome rubric: apply the Core Engineering Directive, then use Proof Field, route-gate, reflection, and Honest Mode evidence to judge goal fit, touched surface, verification, and escalation.';
 }
 
 export function hasFromChatImgSignal(prompt: any = '') {
@@ -1314,32 +1267,6 @@ export function looksLikeCodeChangingWork(prompt: any = '') {
     || IMPLEMENTATION_VERB_RE.test(text);
 }
 
-export type PromptExecutionEffect = 'read' | 'write' | 'auth' | 'security' | 'delete' | 'deploy' | 'dependency';
-
-/**
- * Classifies the requested effect, not risky nouns. A prompt explaining deploy
- * or authentication remains read-only until it asks to perform that action.
- */
-export function classifyPromptExecutionEffect(prompt: any = ''): PromptExecutionEffect {
-  const text = String(prompt || '').trim();
-  const action = /(해줘|해라|진행|실행|적용|바꿔|수정|설치|삭제|배포|인증|로그인)/i.test(text)
-    || /\b(configure|execute|apply|change|modify|install|delete|remove|deploy|publish|authenticate)\b|\blog\s*in\b|\bsign\s*in\b/i.test(text);
-  if (!action) return 'read';
-  if (/(삭제|제거|지워|delete|remove|uninstall|purge)/i.test(text)) return 'delete';
-  if (/(배포|출시|게시|deploy|publish|release)/i.test(text)) return 'deploy';
-  if (/(인증|로그인|로그아웃|재연결|authenticate|log\s*(?:in|out)|sign\s*(?:in|out)|reconnect)/i.test(text)) return 'auth';
-  if (/(보안|권한|서명|키\s*회전|security|permission|signing|rotate\s+key)/i.test(text)) return 'security';
-  if (/(설치|업그레이드|의존성|install|upgrade|dependenc)/i.test(text)) return 'dependency';
-  return 'write';
-}
-
-export function looksLikeExecutionWork(prompt: any = '') {
-  const text = String(prompt || '');
-  return looksLikeCodeChangingWork(text)
-    || /\b(test|verify|run|doctor|setup|install|lint|typecheck|selftest|release|publish|execute|deploy)\b/i.test(text)
-    || /(실행|검증|테스트|설치|배포|릴리즈|출시)/i.test(text);
-}
-
 export function subagentExecutionPolicyText(route: any, prompt: any = '') {
   const required = routeRequiresSubagents(route, prompt);
   if (route?.id === 'Goal') {
@@ -1413,23 +1340,6 @@ function reasoning(effort: any, reason: any) {
 export function context7RequirementText(required: any = true) {
   if (!required) return 'Context7 MCP is optional for this route unless external API/library documentation becomes relevant.';
   return 'Context7 MCP is required before completion: call resolve-library-id for the relevant package or API, then query-docs (or legacy get-library-docs), and let SKS record both PostToolUse events.';
-}
-
-export function formatDollarCommandsDetailed(indent: any = '') {
-  const width = Math.max(...DOLLAR_COMMANDS.map((c: any) => c.command.length));
-  return DOLLAR_COMMANDS.map((c: any) => `${indent}${c.command.padEnd(width)}  ${c.route}: ${c.description}`).join('\n');
-}
-
-export function formatDollarCommandsCompact(indent: any = '') {
-  const width = Math.max(...DOLLAR_COMMANDS.map((c: any) => c.command.length));
-  return DOLLAR_COMMANDS.map((c: any) => `${indent}${c.command.padEnd(width)}  ${c.route}`).join('\n');
-}
-
-export function dollarCommandNames() {
-  return Array.from(new Set([
-    ...DOLLAR_COMMANDS.map((c: any) => c.command),
-    ...DOLLAR_COMMAND_ALIASES.map((alias: any) => alias.app_skill)
-  ])).join(', ');
 }
 
 export function context7ConfigToml(transport: any = 'remote') {

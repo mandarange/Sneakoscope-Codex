@@ -1,4 +1,3 @@
-const RESERVED_COMMANDS = new Set(['help', '--help', '-h', 'version', '--version', '-v']);
 const RETIRED_NARUTO_OPTION = ['--', 'naruto'].join('');
 const RETIRED_AGENT_OPTION = ['--', 'agent'].join('');
 const RETIRED_CLONES_OPTION = ['--', 'clones'].join('');
@@ -21,9 +20,6 @@ const RETIRED_GLOBAL_EXECUTION_OPTION_NAMES = new Set([
   '--require-tmux-smoke',
   '--glm'
 ]);
-
-/** @deprecated Global GLM MAD mode was removed; detectGlobalMode always returns null. */
-export type GlobalMode = never;
 
 export function detectGlobalMode(args: readonly string[] = []): null {
   void args;

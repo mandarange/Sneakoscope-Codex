@@ -27,13 +27,6 @@ export function writeSksdIpcMessage(root: string, action: SksdIpcMessage['action
   return file;
 }
 
-export function writeSksdIpcResponse(root: string, request: SksdRequest, response: unknown): string {
-  const file = path.join(ipcDir(root), `response-${process.pid}-${Date.now()}.json`);
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, `${JSON.stringify({ schema: 'sks.sksd-ipc-response.v1', request, response, responded_at: new Date().toISOString() }, null, 2)}\n`);
-  return file;
-}
-
 function ipcDir(root: string): string {
   return path.join(root, '.sneakoscope', 'cache', 'sksd');
 }

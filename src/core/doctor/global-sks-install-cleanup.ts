@@ -1,6 +1,6 @@
 import fsp from 'node:fs/promises';
 import path from 'node:path';
-import { PACKAGE_VERSION, packageRoot, readJson, runProcess, which } from '../fsx.js';
+import { packageRoot, readJson, runProcess, which } from '../fsx.js';
 import { guardedPackageInstall, guardContextForRoute } from '../safety/mutation-guard.js';
 import { createRequestedScopeContract } from '../safety/requested-scope-contract.js';
 import { comparePackageVersions } from '../update-check.js';
@@ -363,17 +363,3 @@ function insidePath(value: string | null | undefined, root: string | null | unde
   return Boolean(rel && !rel.startsWith('..') && !path.isAbsolute(rel));
 }
 
-export function currentSourceCandidate(sourceRoot = packageRoot()): GlobalSksInstallCandidate {
-  return {
-    bin: path.join(sourceRoot, 'dist', 'bin', 'sks.js'),
-    real_bin: path.join(sourceRoot, 'dist', 'bin', 'sks.js'),
-    package_root: sourceRoot,
-    prefix: null,
-    version: PACKAGE_VERSION,
-    source: 'source-root',
-    source_repo_exempt: true,
-    keep: true,
-    remove: false,
-    reason: 'source_repo_exempt'
-  };
-}

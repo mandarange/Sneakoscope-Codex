@@ -85,14 +85,6 @@ export function loopGatePath(root: string, missionId: string, loopId: string, ga
   return path.join(loopNodeRoot(root, missionId, loopId), 'gates', `${sanitizeArtifactPart(gateId)}.json`);
 }
 
-export function loopPatchPath(root: string, missionId: string, loopId: string, name: string): string {
-  return path.join(loopNodeRoot(root, missionId, loopId), 'patches', `${sanitizeArtifactPart(name)}.json`);
-}
-
-export function loopHandoffPath(root: string, missionId: string, loopId: string): string {
-  return path.join(loopNodeRoot(root, missionId, loopId), 'handoff.md');
-}
-
 export function loopOwnerLedgerPath(root: string, missionId: string): string {
   return path.join(loopRoot(root, missionId), 'loop-owner-ledger.json');
 }

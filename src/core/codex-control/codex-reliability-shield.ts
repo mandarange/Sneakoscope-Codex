@@ -234,14 +234,6 @@ export function auditToolOutputContinuity(events: any[]) {
 }
 
 /**
- * @deprecated Use auditToolOutputContinuity. Retained for one-release source
- * compatibility; this helper only audits and never repairs protocol state.
- */
-export function auditToolCallSequence(events: any[]) {
-  return auditToolOutputContinuity(events)
-}
-
-/**
  * @deprecated This post-run helper cannot repair the Responses protocol. It now
  * preserves the event stream and reports missing outputs for fail-closed callers.
  */

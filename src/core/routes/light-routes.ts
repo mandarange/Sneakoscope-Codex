@@ -14,8 +14,6 @@ export const LIGHT_COMPLETION_ROUTES = [
   'quickstart'
 ] as const;
 
-export type LightCompletionRoute = (typeof LIGHT_COMPLETION_ROUTES)[number];
-
 export function normalizeRouteKey(route: unknown): string {
   return String(route || '')
     .replace(/^\$/, '')

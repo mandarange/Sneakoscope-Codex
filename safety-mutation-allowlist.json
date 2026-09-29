@@ -20,15 +20,6 @@
       "reason": "Installer reconciliation chmods only SKS-owned command shims selected for repair."
     },
     {
-      "file": "src/cli/install-helpers-install-support.ts",
-      "symbol": "selftestSksShimRepair",
-      "token": "chmod",
-      "scope_contract_sha256": "d59747646d0ec89f46c62e8f25f49093d6ce4d49f746680a0754296fc77f831b",
-      "callsite_sha256": "e9f1d46cc265f028083daa0eeb8c1dd980cba42b15bc0d6b59dac8ec5a931453",
-      "occurrence": 1,
-      "reason": "Shim repair selftest chmods only its fake npm binary inside the isolated selftest root."
-    },
-    {
       "file": "src/cli/install-helpers.ts",
       "symbol": "restoreInstalledPackageBuildStamp.callback@140",
       "token": "fsp.writeFile",
@@ -36,15 +27,6 @@
       "callsite_sha256": "b4a7b92ba7f24720fe270f63e8689438ec83cd743e3a39ba8d7b9c982009b620",
       "occurrence": 1,
       "reason": "Default postinstall restores only the package-local dist stamp after proving the target remains inside the installed package root."
-    },
-    {
-      "file": "src/commands/doctor-helpers.ts",
-      "symbol": "backupProjectConfigBeforeFix",
-      "token": "fsp.writeFile",
-      "scope_contract_sha256": "308ee084725870f761c5482827c37a6980b5f6ac50b0a246a5be3300484e493d",
-      "callsite_sha256": "fbc35abb8d128044f8d2b236f9cfce7ed0a704ff8ef3e5113b3823c27ced73e7",
-      "occurrence": 1,
-      "reason": "Runtime artifact writer has caller-scoped path and is externally audited for guard migration."
     },
     {
       "file": "src/commands/doctor-helpers.ts",
@@ -1172,15 +1154,6 @@
       "reason": "SKSD IPC writer persists only a scoped single-action JSON message file under the daemon IPC path."
     },
     {
-      "file": "src/core/daemon/sksd-ipc.ts",
-      "symbol": "writeSksdIpcResponse",
-      "token": "writeFileSync",
-      "scope_contract_sha256": "2aa1290f4b6577f0b68b70c066ff02b2e83df28fdd41d8d8c06009bc70c22b05",
-      "callsite_sha256": "357751a55f92e738bb77df89bb2bfc1d6ef51dff9e7acbb6fc97aab5c1fb14c1",
-      "occurrence": 1,
-      "reason": "SKSD IPC response writer persists only scoped daemon protocol response JSON under the project IPC path."
-    },
-    {
       "file": "src/core/daemon/sksd.ts",
       "symbol": "sksdStop",
       "token": "rmSync",
@@ -1206,15 +1179,6 @@
       "callsite_sha256": "7a062833541471117f898d5362a62331664543fb578bf9d4cc1482bc0b913401",
       "occurrence": 1,
       "reason": "SKSD warm command writes only the scoped daemon IPC warm request JSON for local service coordination."
-    },
-    {
-      "file": "src/core/daemon/sksd.ts",
-      "symbol": "writeProbeResponse",
-      "token": "writeFileSync",
-      "scope_contract_sha256": "66b4c9ecea7f7c756da6443f28744840aad2ef1bc0da828a906b453c4903d134",
-      "callsite_sha256": "1e26e87f31214ed5026c02b6ac02b84897ec7018cd5ef3b4a216a66fbe83668b",
-      "occurrence": 1,
-      "reason": "SKSD probe response writer persists only scoped daemon readiness probe JSON under the daemon response path."
     },
     {
       "file": "src/core/daemon/sksd.ts",
@@ -1348,15 +1312,6 @@
       "token": "fsp.rm",
       "scope_contract_sha256": "497b7020b1f1a02286501f31556ea6102bc48cfbd82e1e8c724521d3880c8d60",
       "callsite_sha256": "e08968a8fdadbc3b484617601ae10a7fc862fcb3abaef6f5ae4cb2e6f47f42f0",
-      "occurrence": 1,
-      "reason": "Scratch directory helper removes only the mkdtemp directory it created unless keep is requested."
-    },
-    {
-      "file": "src/core/fsx.ts",
-      "symbol": "withScratchDirSync",
-      "token": "rmSync",
-      "scope_contract_sha256": "d5e4d69c1428f62e789f71a6e9119f21ff56fe6641ec0d2a3bdd6dbe86eb9a59",
-      "callsite_sha256": "ec162b6bb3df7f7eca3b46589569c4443a8c18eeaa6772a7e959c8752e8afb25",
       "occurrence": 1,
       "reason": "Scratch directory helper removes only the mkdtemp directory it created unless keep is requested."
     },
@@ -1730,24 +1685,6 @@
       "reason": "Cleanup/removal path is route-owned, generated, or temporary artifact; exact callsite is audited."
     },
     {
-      "file": "src/core/mad-sks/sql-plane/recovery.ts",
-      "symbol": "quarantineStaleMadSksSqlPlaneRuntimeProfiles",
-      "token": "rename",
-      "scope_contract_sha256": "e05411a733670b4d0b18698f0725715fdcf6aa714c2dffbd2431f295ad4c6d1b",
-      "callsite_sha256": "e8482aed5a24612f4479c894c6cf2f5b563f6839226d389a7ebdcbb5e52c838a",
-      "occurrence": 1,
-      "reason": "MAD-SKS SQL-plane recovery quarantines only stale mission-local runtime Codex profile files before restoring read-only operation."
-    },
-    {
-      "file": "src/core/mad-sks/sql-plane/recovery.ts",
-      "symbol": "quarantineStaleMadSksSqlPlaneRuntimeProfiles.callback@18",
-      "token": "fs.rm",
-      "scope_contract_sha256": "2a4e11ea0982e541ebac7a4369cf763cdaca88a585ed0e396ee80af5825d6efb",
-      "callsite_sha256": "3f4df8acb52ba461c2bb9eed95f9ceed5915134d245a68243f5ad8d4a05e91fc",
-      "occurrence": 1,
-      "reason": "MAD-SKS SQL-plane recovery removes only stale mission-local runtime Codex profile files when quarantine rename fails."
-    },
-    {
       "file": "src/core/mad-sks/sql-plane/runtime-profile.ts",
       "symbol": "closeMadSksSqlPlaneRuntimeProfile",
       "token": "rename",
@@ -1818,24 +1755,6 @@
       "callsite_sha256": "e5cb49f1abe94ebd9a02581914b2d0081e856675c5fc4d58ec0e979eb460e4a0",
       "occurrence": 1,
       "reason": "MCP health-channel close terminates only the process group of the child it spawned."
-    },
-    {
-      "file": "src/core/naruto/naruto-active-pool.ts",
-      "symbol": "sendSignal",
-      "token": "process.kill",
-      "scope_contract_sha256": "3c8dcc4f505de8f6a12f64b6b395111a319f7fefc2bf2f40550a48b6f73d9c01",
-      "callsite_sha256": "8ee3d0ed23a48df035e101dbc8eb3522143d71caad0bc55fd9cfd26040667df8",
-      "occurrence": 1,
-      "reason": "Naruto active pool sends signals only to tracked worker process or process-group ids during cleanup."
-    },
-    {
-      "file": "src/core/naruto/naruto-active-pool.ts",
-      "symbol": "sendSignal",
-      "token": "process.kill",
-      "scope_contract_sha256": "3c8dcc4f505de8f6a12f64b6b395111a319f7fefc2bf2f40550a48b6f73d9c01",
-      "callsite_sha256": "af865ab480c4d508c3b6b4acea2783ffd4e58d9343c96c98cdb48537e5e38291",
-      "occurrence": 1,
-      "reason": "Naruto active pool sends signals only to tracked worker process or process-group ids during cleanup."
     },
     {
       "file": "src/core/naruto/naruto-write-e2e.ts",
@@ -1949,8 +1868,8 @@
       "file": "src/core/perf/release-latency-slo.ts",
       "symbol": "measureNativeMenuBar",
       "token": "fs.rm",
-      "scope_contract_sha256": "cba5822f8f8e36c238ae5a2e02adf2654a3d6690d0cd1a3e738f0cd565431b65",
-      "callsite_sha256": "9393ec52ae7d8aae28fe33bb2d03d503205f78d42833011afc323e56ac076068",
+      "scope_contract_sha256": "3fe16e97958cca5739f8810db26f164cbccde454c2bf8e3c24867c963ea6accf",
+      "callsite_sha256": "62b5e024b44942b22eabc2d6d629093ab139e6bc155d32521267cd404aac7c93",
       "occurrence": 1,
       "reason": "Menu Bar latency measurement resets only the run-local Menu Bar home inside its own build root before measuring."
     },
@@ -1958,8 +1877,8 @@
       "file": "src/core/perf/release-latency-slo.ts",
       "symbol": "measureNativeMenuBar",
       "token": "fs.writeFile",
-      "scope_contract_sha256": "cba5822f8f8e36c238ae5a2e02adf2654a3d6690d0cd1a3e738f0cd565431b65",
-      "callsite_sha256": "3d0cbad2730eac5e42d5f89fc2059014723fedd5b6c41dd05f422f2654587aa8",
+      "scope_contract_sha256": "3fe16e97958cca5739f8810db26f164cbccde454c2bf8e3c24867c963ea6accf",
+      "callsite_sha256": "6600b18f0261b72c9589cd8d4d4c6d9f91c62c8ad0b6a516b6ac31bd6851a013",
       "occurrence": 1,
       "reason": "Menu Bar latency measurement writes only cache, build-stamp, and Swift source fixtures inside its own build root."
     },
@@ -1967,8 +1886,8 @@
       "file": "src/core/perf/release-latency-slo.ts",
       "symbol": "measureNativeMenuBar",
       "token": "fs.writeFile",
-      "scope_contract_sha256": "cba5822f8f8e36c238ae5a2e02adf2654a3d6690d0cd1a3e738f0cd565431b65",
-      "callsite_sha256": "4d974ffe4d34a18eda2bacc963e5607e83f3668c04aa3d8e549ddfa1a0a8c945",
+      "scope_contract_sha256": "3fe16e97958cca5739f8810db26f164cbccde454c2bf8e3c24867c963ea6accf",
+      "callsite_sha256": "d3f7a44567ad9cedfdebe9fdaa14e557b4f5ab5484c5048635608c9616f9d83d",
       "occurrence": 1,
       "reason": "Menu Bar latency measurement writes only cache, build-stamp, and Swift source fixtures inside its own build root."
     },
@@ -1976,8 +1895,8 @@
       "file": "src/core/perf/release-latency-slo.ts",
       "symbol": "measureNativeMenuBar",
       "token": "fs.writeFile",
-      "scope_contract_sha256": "cba5822f8f8e36c238ae5a2e02adf2654a3d6690d0cd1a3e738f0cd565431b65",
-      "callsite_sha256": "682399b38d6ebe13837de12c9bba9e139b8e8933155b7bdb2cd835452e836477",
+      "scope_contract_sha256": "3fe16e97958cca5739f8810db26f164cbccde454c2bf8e3c24867c963ea6accf",
+      "callsite_sha256": "d6af0a833695c6f73073539aad1334db9689c3ce1698c86573c10623fd1398e7",
       "occurrence": 1,
       "reason": "Menu Bar latency measurement writes only cache, build-stamp, and Swift source fixtures inside its own build root."
     },
@@ -2070,24 +1989,6 @@
       "callsite_sha256": "93b37f5d45a405fa255d1814c2b9ce809627814614e48f9cf2ed5721bc6f3ef2",
       "occurrence": 1,
       "reason": "Probe memoization writer persists scoped probe-result cache JSON under the configured probe cache directory."
-    },
-    {
-      "file": "src/core/probes/probe-memoization.ts",
-      "symbol": "memoizeProbeAsync",
-      "token": "writeFileSync",
-      "scope_contract_sha256": "961f7249cc917087c6afe591b1bf42896c8327ffa099ad8b394424732f3d9444",
-      "callsite_sha256": "80aac5ee2dede0be80252b66e11757994ac53015bfadbcd52f07a8dfc4fcfd7f",
-      "occurrence": 1,
-      "reason": "Probe memoization writes only scoped probe cache JSON records under the configured SKS cache path."
-    },
-    {
-      "file": "src/core/probes/probe-memoization.ts",
-      "symbol": "writeProbeReport",
-      "token": "writeFileSync",
-      "scope_contract_sha256": "0a7adf2436715af37161ad18d32356ce4fd37ca62513ffa5ede7cdb167693996",
-      "callsite_sha256": "e14c930b7a66756f379bd855208ffa11456973a21c53e1e9c11b66044effc812",
-      "occurrence": 1,
-      "reason": "Probe memoization report writer persists only scoped probe summary reports under .sneakoscope/reports."
     },
     {
       "file": "src/core/providers/openrouter/openrouter-secret-store.ts",
@@ -2388,24 +2289,6 @@
     },
     {
       "file": "src/core/security/private-credential-file.ts",
-      "symbol": "createPrivateTextExclusive",
-      "token": "fsp.rm",
-      "scope_contract_sha256": "b38a79f2ca434d8f508fde3b96bdd53ece208965e3e4b0a86d9830d12934a884",
-      "callsite_sha256": "b4061f07589a516141767a3495c4c408ae1f51e53019a8835b8ebfc682782595",
-      "occurrence": 1,
-      "reason": "Exclusive credential claim cleanup removes only its randomized same-directory claim file inside the verified boundary."
-    },
-    {
-      "file": "src/core/security/private-credential-file.ts",
-      "symbol": "hardenPrivateCredentialFileMode",
-      "token": "chmod",
-      "scope_contract_sha256": "1e828a8b8d6102ffc19883e2610e8a32502a1a0c511fbfd443ed41ec78669394",
-      "callsite_sha256": "916458b13a6d6f52776fd489fb7714d56ed5f61dc5ee8d87abafde905012797d",
-      "occurrence": 1,
-      "reason": "Credential hardening applies 0600 through an O_NOFOLLOW handle after boundary, owner, file-type, and inode verification."
-    },
-    {
-      "file": "src/core/security/private-credential-file.ts",
       "symbol": "writePrivateTextAtomic",
       "token": "chmod",
       "scope_contract_sha256": "466724358edd0c60e10c84554a4599910d9acda03035bf1c0ce616a3caa12be5",
@@ -2558,15 +2441,6 @@
       "reason": "TriWiki gate impact map writer persists only scoped gate impact metadata under the TriWiki evidence path."
     },
     {
-      "file": "src/core/triwiki/triwiki-invalidation.ts",
-      "symbol": "invalidateTriWikiProofsForChange",
-      "token": "writeFileSync",
-      "scope_contract_sha256": "9cd644f5be3a6bea7d0f1d9775e814cf6a0345b3e92ffe18a08e1489447244ca",
-      "callsite_sha256": "77fad3dee93a3a32abb41c420ef9129f219441290ebd32389fdc926102ee03c4",
-      "occurrence": 1,
-      "reason": "TriWiki invalidation writes only scoped invalidation report JSON under the TriWiki report directory."
-    },
-    {
       "file": "src/core/triwiki/triwiki-proof-bank-index-store.ts",
       "symbol": "withTriWikiProofIndexLock",
       "token": "rmSync",
@@ -2673,15 +2547,6 @@
       "callsite_sha256": "ad43961e2c16b003163b9274931b020c6eac80484cf9d277dc6ac7abcdd958be",
       "occurrence": 1,
       "reason": "Proof-bank retention removes only superseded proof cards inside the single subject directory whose lock the caller holds."
-    },
-    {
-      "file": "src/core/triwiki/triwiki-sla-certificate.ts",
-      "symbol": "writeTriWikiSlaCertificate",
-      "token": "writeFileSync",
-      "scope_contract_sha256": "c8e3037e5de89fd5d066285d4c15d3c21f756972c54ea81584fe367912442cb2",
-      "callsite_sha256": "2a73ebf556b90e28faa1456c8c5a6f57d808920c3c67c7ec56c2e70050e93e44",
-      "occurrence": 1,
-      "reason": "TriWiki SLA certificate writer persists scoped release-equivalence certificate JSON under the configured certificate path."
     },
     {
       "file": "src/core/update/temporary-install-smoke.ts",
@@ -2914,15 +2779,6 @@
       "token": "fsp.rm",
       "scope_contract_sha256": "3d64111ffed9066bb72e418ef4cae9ff0f9c5c309d3ecb4d5d822ee43c4542e6",
       "callsite_sha256": "76e341bb2efa30be74e9c99d986914a205d374bddd64a35f9c02290bc4f1481c",
-      "occurrence": 1,
-      "reason": "Cleanup/removal path is route-owned, generated, or temporary artifact; exact callsite is audited."
-    },
-    {
-      "file": "src/core/version-manager.ts",
-      "symbol": "withVersionLock",
-      "token": "fsp.rm",
-      "scope_contract_sha256": "0dbcf9db48232d0fb48d1966435e2ddd5229c55ea9f0abe5505bef7102fa9300",
-      "callsite_sha256": "26e722119c2812ef622cd199019a25bffc1cb5e828a9f5c544693345b620403a",
       "occurrence": 1,
       "reason": "Cleanup/removal path is route-owned, generated, or temporary artifact; exact callsite is audited."
     },
@@ -5492,15 +5348,6 @@
       "reason": "src/scripts/lib/git-worktree-fixture.ts#makeGitFixture writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
     {
-      "file": "src/scripts/lib/git-worktree-fixture.ts",
-      "symbol": "makeNonGitFixture",
-      "token": "writeFileSync",
-      "scope_contract_sha256": "cf0fa9ea171f7b7d15e8807b055096dc3cae3da747297fbef7865408f8942eda",
-      "callsite_sha256": "30857a65cd8425be9bdf5bd06889d72664f874d823c3a1a859c558b1c444e89e",
-      "occurrence": 1,
-      "reason": "src/scripts/lib/git-worktree-fixture.ts#makeNonGitFixture writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
       "file": "src/scripts/lib/mad-sks-actual-executor-check-lib.ts",
       "symbol": "createAuthorization",
       "token": "writeFileSync",
@@ -5954,8 +5801,8 @@
       "file": "src/scripts/official-subagent-workflow-check.ts",
       "symbol": "module",
       "token": "rmSync",
-      "scope_contract_sha256": "5ffec6b875b02ae0016bd69cf40260d1d6c70c639fd6cac91b5d8c9c66155035",
-      "callsite_sha256": "a243bb955b39c243672c52576ef38a46b776c45ae6565f41707da6b1a1821140",
+      "scope_contract_sha256": "6f4498acc1934fee3ce1da80369a31c218892a44e2cc727372619dda55197e55",
+      "callsite_sha256": "6ce819009748b0da41dca998a3645b8bc9d03d06425c52166836242c3d0da106",
       "occurrence": 1,
       "reason": "The official-subagent workflow check removes only its temporary fixture repository in its finally block."
     },
@@ -5976,15 +5823,6 @@
       "callsite_sha256": "731449a20d0deda461b764ab48689cac0031f1c3f93ae4a9cf9b2a826eb55a6f",
       "occurrence": 1,
       "reason": "src/scripts/packlist-performance-check.ts#runNpmPack writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/patch-handoff-gate-lib.ts",
-      "symbol": "makeTempPatchProject",
-      "token": "writeFileSync",
-      "scope_contract_sha256": "5f3e5b7192f6834f584560b39f7177f346c0c575fee2d881f0643dce46d70706",
-      "callsite_sha256": "ae824e81208a03cdd6649761cee21e213cf7d6320dce7ddabef0a034000b23d7",
-      "occurrence": 1,
-      "reason": "src/scripts/patch-handoff-gate-lib.ts#makeTempPatchProject writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
     {
       "file": "src/scripts/patch-handoff-gate-lib.ts",
@@ -7526,33 +7364,6 @@
       "reason": "Preparation removes its own staging directory for the mission it is assembling; the path is created by this function and never user content."
     },
     {
-      "file": "src/core/triwiki/context-graph/benchmark/fixtures/crk2-workspace.ts",
-      "symbol": "materializeCrk2Workspace",
-      "token": "writeFileSync",
-      "scope_contract_sha256": "7cd51f818d4198c219786cd81c97096a6a7e4ecabb4e01c80302b34627f94cb5",
-      "callsite_sha256": "fc07ba791da85fccdd6e85c18502ed790cb892f968b8790201a19d3d60eb9c82",
-      "occurrence": 1,
-      "reason": "Benchmark fixture materializes hermetic workspace files under a mkdtemp root it created; nothing outside that root is reachable."
-    },
-    {
-      "file": "src/core/triwiki/context-graph/benchmark/fixtures/crk2-workspace.ts",
-      "symbol": "materializeCrk2Workspace.dispose",
-      "token": "rmSync",
-      "scope_contract_sha256": "9c6920b9d22f2ce43f6493db9c179051e21a769548a9387994dea646459dfdca",
-      "callsite_sha256": "79d2fc8fb122bea48dbdcd5029dab509100e5e298eb206a554f904320450928f",
-      "occurrence": 1,
-      "reason": "Benchmark fixture disposes the mkdtemp workspace root it created; the handle is the only owner of that path."
-    },
-    {
-      "file": "src/core/triwiki/context-graph/compiler/fragment-manifest-store.ts",
-      "symbol": "removeContextFragmentManifest",
-      "token": "fsp.rm",
-      "scope_contract_sha256": "f2e8729b392e8cc8b75c3a8ef2b6898247446133e6a848b7db1d99ace1a562eb",
-      "callsite_sha256": "3fc2f1e3d9bf779aced564f80637a67408c5cdb82b666a287ad6b83ecca6d9d5",
-      "occurrence": 1,
-      "reason": "Compiler removes its own fragment manifest under .sneakoscope/cache when invalidating the incremental store; path derived from the store contract."
-    },
-    {
       "file": "src/core/triwiki/context-graph/compiler/fragment-store.ts",
       "symbol": "pruneSourceFragmentStore",
       "token": "fsp.rm",
@@ -7817,8 +7628,8 @@
       "file": "src/core/codex-hooks/codex-global-hooks.ts",
       "symbol": "installGlobalSksHooks",
       "token": "chmod",
-      "scope_contract_sha256": "649f64f3dde2f29abb787ede6c501b92ff6fa3156a06a5cf17ebf56ef828487f",
-      "callsite_sha256": "e3d86fdc0a670986fddd6f242b9f478f939166e56df780a5eec74bed4356fe68",
+      "scope_contract_sha256": "16360c0288878083be1dbb7fca0bdeb0527884817a636e226c79a5737b783ca8",
+      "callsite_sha256": "177d0ec9b4a4ec0e30453157c90693d77c8f4cc7c331ce0dca25fc9b4b65edab",
       "occurrence": 1,
       "reason": "Makes the SKS-owned hook launcher under $CODEX_HOME/sks/bin executable so Codex can run the user-level hook commands."
     }

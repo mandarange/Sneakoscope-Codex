@@ -149,10 +149,6 @@ export async function runExtractor(root: string): Promise<ContextGraphFragment> 
   });
 }
 
-export function nodeById(fragment: ContextGraphFragment, predicate: (id: string) => boolean) {
-  return fragment.nodes.filter((node) => predicate(node.id));
-}
-
 export function edgesOfType(fragment: ContextGraphFragment, type: string) {
   return fragment.edges.filter((edge) => edge.type === type);
 }

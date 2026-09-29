@@ -1,7 +1,6 @@
 import { nowIso } from '../fsx.js';
 import { readCombinedWrongnessRecords, summarizeWrongnessRecords } from './wrongness-ledger.js';
 import { WRONGNESS_CONTEXT_SCHEMA, type WrongnessRecord } from './wrongness-schema.js';
-import { asRecordOrEmpty as asRecord } from '../json/records.js';
 
 export async function wrongnessContextForRoute(root: string, opts: {
   missionId?: string | null;
@@ -36,24 +35,6 @@ export async function wrongnessContextForRoute(root: string, opts: {
     active_avoidance_rules: selected.map((record) => record.avoidance_rule),
     retrieval_policy: 'negative_evidence_first_for_related_claims; do not let active wrongness upgrade trust without correction evidence'
   };
-}
-
-export function agentWrongnessReferences(context: unknown, roleId: string): string[] {
-  const contextRecord = asRecord(context);
-  const rows: unknown[] = Array.isArray(contextRecord.active_records) ? contextRecord.active_records : [];
-  const roleNeedle = roleId.toLowerCase();
-  return rows
-    .filter((row: unknown) => {
-      const record = asRecord(row);
-      const hay = `${record.kind || ''} ${record.claim || ''} ${record.avoidance_rule || ''}`.toLowerCase();
-      if (/db|safety/.test(roleNeedle)) return /db|hook|trust|policy/.test(hay);
-      if (/visual|voxel/.test(roleNeedle)) return /image|visual|bbox|anchor/.test(hay);
-      if (/verification|test/.test(roleNeedle)) return /test|evidence|schema|trust/.test(hay);
-      return true;
-    })
-    .map((row: unknown) => String(asRecord(row).id || ''))
-    .filter(Boolean)
-    .slice(0, 8);
 }
 
 function recordToContextRow(record: WrongnessRecord) {

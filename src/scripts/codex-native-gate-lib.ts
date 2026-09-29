@@ -9,60 +9,6 @@ import { spawnSync } from 'node:child_process'
 
 export const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 
-interface GateManifest {
-  gates: ReleaseGate[]
-}
-
-interface ReleaseGate {
-  id: string
-  command: string
-  deps: string[]
-  resource: string[]
-  side_effect: string
-  timeout_ms: number
-  cache: unknown
-  isolation: unknown
-  preset: string[]
-}
-
-interface PackageJsonShape {
-  version?: string
-  scripts?: Record<string, string>
-  keywords?: string[]
-}
-
-const REQUIRED_SCRIPT_IDS = [
-  'brand-neutrality:rename-map',
-  'brand-neutrality:zero-leakage',
-  'brand-neutrality:zero-leakage-blackbox',
-  'docs:brand-neutrality',
-  'codex-native:feature-broker',
-  'codex-native:harness-compat',
-  'codex-native:invocation-defaults',
-  'codex-native:invocation-router',
-  'codex-native:route-map',
-  'pipeline:codex-native-loop-routing',
-  'pipeline:codex-native-qa-routing',
-  'pipeline:codex-native-research-routing',
-  'pipeline:codex-native-image-routing',
-  'pipeline:codex-native-doctor-mad-routing',
-  'codex-native:pattern-analysis',
-  'codex-native:reference-evidence',
-  'codex-native:pattern-analysis-blackbox',
-  'codex-native:interop-policy',
-  'codex-native:skill-content',
-  'codex-native:agent-role-content',
-  'codex-native:hook-lifecycle-proof',
-  'init-deep:backup-retention',
-  'init-deep:memory-scope-safety',
-  'release-scripts:type-safe',
-  'lint:no-ts-nocheck-release-scripts',
-  'doctor:codex-native-readiness-ux',
-  'doctor:codex-native-repair-actions',
-  'codex-native:feature-broker-blackbox',
-  'pipeline:codex-native-e2e-blackbox'
-]
-
 export async function runCodexNativeGate(id: string): Promise<void> {
   if (id === 'brand-neutrality:rename-map') return brandRenameMap(id)
   if (id === 'brand-neutrality:zero-leakage') return brandZeroLeakage(id)
@@ -531,10 +477,6 @@ function readText(rel: string): string {
   return fs.readFileSync(path.join(root, rel), 'utf8')
 }
 
-function readJson<T>(rel: string): T {
-  return JSON.parse(readText(rel)) as T
-}
-
 function hash(text: string): string {
   return createHash('sha256').update(text).digest('hex')
 }
@@ -547,18 +489,6 @@ function assertGate(condition: unknown, message: string, detail: unknown = {}): 
 
 function emitGate(name: string, detail: Record<string, unknown> = {}): void {
   console.log(JSON.stringify({ schema: 'sks.release-gate.v1', ok: true, gate: name, ...detail }, null, 2))
-}
-
-export function packageJson(): PackageJsonShape {
-  return readJson<PackageJsonShape>('package.json')
-}
-
-export function gateManifest(): GateManifest {
-  return readJson<GateManifest>('release-gates.v2.json')
-}
-
-export function requiredReleaseScriptIds(): string[] {
-  return [...REQUIRED_SCRIPT_IDS]
 }
 
 export function checkCommand(command: string, args: string[]): { status: number | null; stdout: string; stderr: string } {

@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { canonicalJson } from '../../../json/canonical.js';
 import { sha256 } from '../../../fsx.js';
 import type { WorktreeFingerprint, WorktreePathFingerprint } from './contracts.js';
@@ -16,10 +15,6 @@ export function hashWithoutKeys(value: Record<string, unknown>, omit: readonly s
     copy[key] = value[key];
   }
   return hashCanonical(copy);
-}
-
-export function sealBaselinePayload(canonicalPayloadHash: string): string {
-  return sha256(`sks.architecture-baseline.v1\n${canonicalPayloadHash}`);
 }
 
 export function buildWorktreeFingerprint(input: {
@@ -49,10 +44,6 @@ export function buildWorktreeFingerprint(input: {
 
 export function emptyWorktreeFingerprint(rootId: string, head: string | null = null): WorktreeFingerprint {
   return buildWorktreeFingerprint({ rootId, head, paths: [] });
-}
-
-export function shortHash(value: string, length = 12): string {
-  return createHash('sha256').update(value).digest('hex').slice(0, length);
 }
 
 /** Diff two worktree path inventories into ChangedPathRecord-like rows. */

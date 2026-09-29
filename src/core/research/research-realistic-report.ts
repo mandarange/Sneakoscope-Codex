@@ -1,4 +1,3 @@
-import { REQUIRED_RESEARCH_REPORT_HEADINGS } from './research-report-quality.js'
 
 export interface RealisticResearchReportInput {
   plan: any
@@ -150,10 +149,6 @@ function prioritizeKeyClaims(claims: any[] | undefined, keyClaimIds: string[] | 
   const prioritized = normalizeIds(keyClaimIds).map((id) => byId.get(id)).filter(Boolean)
   const prioritizedIds = new Set(prioritized.map((claim: any) => String(claim?.id || '')))
   return [...prioritized, ...rows.filter((claim) => !prioritizedIds.has(String(claim?.id || '')))]
-}
-
-export function requiredResearchReportHeadings(): string[] {
-  return [...REQUIRED_RESEARCH_REPORT_HEADINGS]
 }
 
 function normalizeClaims(claims: any[] | undefined): any[] {

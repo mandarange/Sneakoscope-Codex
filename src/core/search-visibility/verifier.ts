@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { exists } from '../fsx.js';
-import { SEARCH_VISIBILITY_DIR, routeForMode } from './mission.js';
+import { routeForMode } from './mission.js';
 import type { HttpVerificationEvidence, ProjectContext, SearchVisibilityStatus, SiteInventory, VerificationResult } from './types.js';
 
 const COMMON_REQUIRED = [
@@ -172,7 +172,3 @@ function emptyHttpEvidence(requestedUrl: string | null, error: string | null, at
   };
 }
 
-export function expectedArtifactPath(missionId: string, artifact: string): string {
-  if (artifact.endsWith('-gate.json') || artifact === 'completion-proof.json') return `.sneakoscope/missions/${missionId}/${artifact}`;
-  return `.sneakoscope/missions/${missionId}/${SEARCH_VISIBILITY_DIR}/${artifact}`;
-}

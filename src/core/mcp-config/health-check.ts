@@ -14,7 +14,6 @@ import {
   isRecognizedModernError,
   modernHttpHeaders,
   modernMcpRequest,
-  modernServerInfo,
   requireModernCompleteResult
 } from '../mcp/modern-protocol.js';
 

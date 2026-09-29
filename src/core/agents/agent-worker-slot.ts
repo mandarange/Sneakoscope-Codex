@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { nowIso, readJson, writeJsonAtomic } from '../fsx.js'
+import { nowIso, writeJsonAtomic } from '../fsx.js'
 import type { AgentSessionGeneration } from './agent-session-generation.js'
 
 export const AGENT_WORKER_SLOT_SCHEMA = 'sks.agent-worker-slot.v1'
@@ -113,12 +113,3 @@ export async function writeAgentWorkerSlots(root: string, slots: AgentWorkerSlot
   return artifact
 }
 
-export async function readAgentWorkerSlots(root: string) {
-  return readJson<any>(path.join(root, 'agent-worker-slots.json'), {
-    schema: AGENT_WORKER_SLOTS_SCHEMA,
-    updated_at: nowIso(),
-    slot_count: 0,
-    slots: [],
-    all_slots_closed_after_drain: false
-  })
-}

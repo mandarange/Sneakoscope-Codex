@@ -1,20 +1,3 @@
-/**
- * The TriWiki proof index: a manifest the proof writes keep current so the proof
- * bank summary and the Context Graph evidence extractor stop walking the whole
- * proof directory on every call.
- *
- * The manifest lives at `.sneakoscope/triwiki/proof-bank/index.json` and matches
- * the shape the evidence extractor already reads. Two rules govern it:
- *
- *  1. Nothing on the read/summary/update path walks the proof directory. A
- *     missing or corrupt manifest yields an explicit `index_missing` /
- *     `index_corrupt` status naming `repairTriWikiProofIndex(root)`; it never
- *     degrades silently into a scan whose result would look like a healthy one.
- *  2. Health is never re-implemented here. `isReusableTriWikiProofCard` and
- *     `classifyTriWikiProofCardSchema` remain the only authorities, reached
- *     through the manifest's `result` / `schema_class` fidelity fields.
- */
-import fs from 'node:fs';
 import path from 'node:path';
 import type { TriWikiProofCard } from './triwiki-proof-card.js';
 import {
@@ -24,7 +7,6 @@ import {
   loadTriWikiProofIndexDocument,
   nodeTriWikiProofIndexFs,
   triWikiProofCardRelPath,
-  triWikiProofIndexPath,
   triWikiProofIndexRecordIsIndeterminate,
   triWikiProofIndexRecordIsReusable,
   withTriWikiProofIndexLock,
@@ -281,15 +263,6 @@ export function removeTriWikiProofIndexEntries(
       entry_count: merged.length
     };
   });
-}
-
-/** True when the manifest file exists on disk, without parsing or walking it. */
-export function triWikiProofIndexExists(root: string): boolean {
-  try {
-    return fs.statSync(triWikiProofIndexPath(root)).isFile();
-  } catch {
-    return false;
-  }
 }
 
 function absoluteFromRel(root: string, rel: string): string {

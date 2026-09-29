@@ -2,7 +2,6 @@ import type { QaInteractionSurface } from '../routes.js';
 
 export const QA_LOOP_CONTRACT_VERSION = 2;
 export const DEFAULT_QA_MAX_CYCLES = 5;
-export const QA_LOOP_V2_DIR = 'qa-loop';
 export const QA_CONTRACT_V2_ARTIFACT = 'qa-loop/qa-contract-v2.json';
 export const QA_SURFACE_SELECTION_ARTIFACT = 'qa-loop/qa-surface-selection.json';
 export const QA_JOURNEY_GRAPH_ARTIFACT = 'qa-loop/qa-journey-graph.json';
@@ -14,8 +13,6 @@ export const QA_FIX_LEDGER_ARTIFACT = 'qa-loop/fix-ledger.jsonl';
 export const QA_REPLAY_LEDGER_ARTIFACT = 'qa-loop/replay-ledger.jsonl';
 export const QA_RUNTIME_EVENT_LEDGER_ARTIFACT = 'qa-loop/runtime-events.jsonl';
 export const QA_GATE_V2_ARTIFACT = 'qa-loop/qa-gate-v2.json';
-export const QA_LIVE_SESSION_ARTIFACT = 'qa-loop/live-session.json';
-export const QA_DEV_SERVER_ARTIFACT = 'qa-loop/dev-server.json';
 export const QA_AUTH_DATA_POLICY_ARTIFACT = 'qa-loop/auth-data-sandbox-policy.json';
 
 export type QaTargetKind =
@@ -103,17 +100,6 @@ export interface QaSurfaceSelection {
   readonly visual_surface_required: boolean;
 }
 
-export interface QaCapabilityPreflight {
-  readonly schema: 'sks.qa-loop-capability-preflight.v2';
-  readonly checked_at: string;
-  readonly ok: boolean;
-  readonly selected_surface: QaInteractionSurface;
-  readonly status: QaRunStatus;
-  readonly blockers: readonly string[];
-  readonly unverified: readonly string[];
-  readonly details: unknown;
-}
-
 export interface QaJourneyStep {
   readonly id: string;
   readonly kind: 'open' | 'click' | 'type' | 'scroll' | 'wait' | 'assert' | 'navigate' | 'inspect' | 'fix' | 'replay';
@@ -134,16 +120,3 @@ export interface QaJourneyGraph {
   readonly same_flow_replay_required: boolean;
 }
 
-export interface QaLedgerRecord {
-  readonly schema: string;
-  readonly ts: string;
-  readonly mission_id: string | null;
-  readonly thread_id?: string | null;
-  readonly turn_id?: string | null;
-  readonly item_id?: string | null;
-  readonly journey_fingerprint?: string | null;
-  readonly surface?: QaInteractionSurface | null;
-  readonly kind?: string;
-  readonly status?: string;
-  readonly data?: unknown;
-}

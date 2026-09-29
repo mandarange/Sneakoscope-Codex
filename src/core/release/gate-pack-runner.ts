@@ -37,11 +37,6 @@ export interface GatePackExecuteInput {
   maxParallel?: number;
 }
 
-export function runGatePack(input: { root: string; packId: string; execute?: boolean; env?: NodeJS.ProcessEnv }): GatePackRunnerResult {
-  void input;
-  throw new Error('gate_pack_legacy_sync_runner_removed');
-}
-
 export async function executeGatePack(input: GatePackExecuteInput): Promise<GatePackRunnerResult> {
   const mode = input.mode || 'execute';
   const manifest = buildGatePackManifest(input.root);

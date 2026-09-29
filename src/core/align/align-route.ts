@@ -384,10 +384,6 @@ export async function refreshAlignGate(dir: string, missionId: string, rootInput
   return { plan, ledger, gate };
 }
 
-export async function readAlignGate(dir: string): Promise<AlignGate | null> {
-  return readJson<AlignGate | null>(path.join(dir, ALIGN_GATE_ARTIFACT), null);
-}
-
 export function alignNextActionText(missionId: string): string {
   return `Run sks align run ${missionId}; Align accepts an absent or existing TriWiki, rebuilds the code-only index from current repository bytes, replaces the active generation, and retains no previous generation.`;
 }

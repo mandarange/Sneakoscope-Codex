@@ -121,41 +121,6 @@ async function readBounded(
   return Buffer.concat(chunks, total);
 }
 
-export async function hardenPrivateCredentialFileMode(
-  boundary: string,
-  file: string,
-  label: string
-): Promise<void> {
-  if (!isLexicallyConfined(boundary, file)) throw new PrivateCredentialFileError('outside_boundary', file, label);
-  const inspected = await inspectConfinedPath(boundary, file);
-  if (!inspected.exists) throw new PrivateCredentialFileError('missing', file, label);
-  if (inspected.leafSymlink || !inspected.stat?.isFile()) {
-    throw new PrivateCredentialFileError('not_regular', file, label);
-  }
-  const expectedUid = typeof process.getuid === 'function' ? process.getuid() : null;
-  if (expectedUid !== null && inspected.stat.uid !== expectedUid) {
-    throw new PrivateCredentialFileError('owner_mismatch', file, label);
-  }
-  let handle: Awaited<ReturnType<typeof fsp.open>> | null = null;
-  try {
-    handle = await fsp.open(file, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
-    const before = await handle.stat();
-    if (!before.isFile()
-      || before.dev !== inspected.stat.dev
-      || before.ino !== inspected.stat.ino
-      || (expectedUid !== null && before.uid !== expectedUid)) {
-      throw new PrivateCredentialFileError('identity_mismatch', file, label);
-    }
-    await handle.chmod(0o600);
-    const after = await handle.stat();
-    if ((after.mode & 0o777) !== 0o600 || after.dev !== before.dev || after.ino !== before.ino) {
-      throw new PrivateCredentialFileError('identity_mismatch', file, label);
-    }
-  } finally {
-    await handle?.close().catch(() => undefined);
-  }
-}
-
 export async function writePrivateTextAtomic(
   boundary: string,
   file: string,
@@ -217,36 +182,3 @@ export async function writePrivateTextAtomic(
   }
 }
 
-export async function createPrivateTextExclusive(
-  boundary: string,
-  file: string,
-  text: string,
-  label: string,
-  opts: { beforePublish?: (tempPath: string) => void | Promise<void> } = {}
-): Promise<boolean> {
-  if (!isLexicallyConfined(boundary, file)) throw new PrivateCredentialFileError('outside_boundary', file, label);
-  assertTestHomeWriteAllowed(file);
-  await ensureConfinedDirectory(boundary, path.dirname(file));
-  const temp = path.join(
-    path.dirname(file),
-    `.${path.basename(file)}.${process.pid}.${randomBytes(8).toString('hex')}.claim`
-  );
-  let handle: Awaited<ReturnType<typeof fsp.open>> | null = null;
-  try {
-    handle = await fsp.open(temp, fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_NOFOLLOW, 0o600);
-    await handle.writeFile(text, 'utf8');
-    await handle.sync();
-    await handle.close();
-    handle = null;
-    await opts.beforePublish?.(temp);
-    await fsp.link(temp, file);
-    await readPrivateCredentialFile(boundary, file, label);
-    return true;
-  } catch (error: unknown) {
-    if ((error as NodeJS.ErrnoException | null)?.code === 'EEXIST') return false;
-    throw error;
-  } finally {
-    await handle?.close().catch(() => undefined);
-    await fsp.rm(temp, { force: true }).catch(() => undefined);
-  }
-}

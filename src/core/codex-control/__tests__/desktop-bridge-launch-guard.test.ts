@@ -11,7 +11,6 @@ import { runCodexExecResumeWithOutputSchema } from '../../codex-exec-output-sche
 import {
   DESKTOP_BRIDGE_DIRECT_PROVIDER_SELECTION_RETIRED,
   effectiveCodexWorkingRoot,
-  inspectDesktopBridgeCliLaunchGuard,
   inspectDesktopBridgeSdkLaunchGuard,
   stripRetiredDirectProviderEnv,
   withDesktopBridgeCliLaunchGuard

@@ -89,39 +89,6 @@ export function createMadSksExecutorContext(input: MadSksExecutorInput): MadSksE
   };
 }
 
-export function executorBlocker({
-  executor,
-  actionType,
-  context,
-  blockers,
-  blockedActions = []
-}: {
-  executor: string;
-  actionType: MadSksActionType;
-  context: MadSksExecutorContext;
-  blockers: string[];
-  blockedActions?: unknown[];
-}): MadSksExecutorResult {
-  return {
-    schema: MAD_SKS_EXECUTOR_RESULT_SCHEMA,
-    ok: false,
-    status: 'blocked',
-    executor,
-    action_type: actionType,
-    target_root: context.target_root,
-    changed_files: [],
-    audit_ledger_path: null,
-    rollback_plan_path: null,
-    proof_evidence_path: null,
-    verification: [],
-    blocked_actions: blockedActions,
-    blockers,
-    writes_performed: false,
-    local_only_artifact_policy: true,
-    generated_at: nowIso()
-  };
-}
-
 // Capture the protected-core snapshot BEFORE an executor performs any
 // mutation. writeExecutorEvidence() runs after the mutation is already done
 // (it needs the resulting changedFiles/hashes), so it cannot itself take an

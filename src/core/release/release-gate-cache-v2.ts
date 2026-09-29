@@ -132,10 +132,6 @@ export function hashDirectoryRecursive(dir: string): string[] {
   return out.sort()
 }
 
-export function readReleaseGateCacheHit(root: string, gate: ReleaseGateNode): boolean {
-  return Boolean(readReleaseGateCacheRecord(root, gate))
-}
-
 export function readReleaseGateCacheRecord(root: string, gate: ReleaseGateNode): ReleaseGateCacheV2Record | null {
   const key = releaseGateCacheKey(root, gate)
   const proof = readReusableTriWikiProofCard({ root, subjectId: gate.id, cacheKey: key })

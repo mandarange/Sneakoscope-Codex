@@ -4,7 +4,6 @@ import { BRIDGE_PROVIDER_IDS } from '../../codex-lb/bridge-contracts.js';
 import { canonicalizeBridgeModelId, normalizeBridgeUpstreamModelId } from '../../codex-lb/route-index.js';
 import { canonicalJson } from '../../json/canonical.js';
 
-export const ARCHITECTURE_HARDENING_CONTRACT_VERSION = 'sks.architecture-hardening.contracts.v2' as const;
 export const MAX_AUDIT_PROJECTION_DEPTH = 32;
 
 export type AuditJsonValue =
@@ -190,10 +189,6 @@ export function assertSafeAuditProjection(value: unknown): void {
 export function stableArchitectureHash(value: unknown): string {
   const projection = createSafeAuditProjection(value);
   return createHash('sha256').update(canonicalJson(projection)).digest('hex');
-}
-
-export function jsonRoundTrip<T extends AuditJsonValue>(value: T): T {
-  return JSON.parse(JSON.stringify(createSafeAuditProjection(value))) as T;
 }
 
 function projectAuditValue(value: unknown, depth: number, ancestors: WeakSet<object>): AuditJsonValue {

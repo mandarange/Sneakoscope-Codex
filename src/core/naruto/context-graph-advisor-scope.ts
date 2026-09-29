@@ -104,8 +104,6 @@ export interface NarutoContextGraphRecommendation {
   readonly provenance: ContextGraphProvenanceRef[];
 }
 
-export type WalkHit = ContextWalkHit;
-
 export interface SliceState {
   readonly scope: NarutoContextGraphScope;
   readonly closure: Map<string, ContextWalkHit>;

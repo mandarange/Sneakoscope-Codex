@@ -38,8 +38,6 @@ export function assertNotInDeployment(fnName: string): void {
   if (isDeploymentContext()) throw new SkillDeploymentViolationError(fnName)
 }
 
-export const readDeploymentSnapshot = loadDeployedSnapshot
-
 /**
  * Primary release/deployment promotion API. It writes the immutable deployed
  * snapshot and treats the side-effect ledger as part of the transaction: when
@@ -51,11 +49,6 @@ export async function promoteToDeployedWithLedger(root: string, accepted: CoreSk
 
 export async function promoteToDeployedLegacyForCompatibility(root: string, accepted: CoreSkillCard): Promise<{ ok: boolean; blockers: string[]; snapshot: CoreSkillCard | null; archived_path: string | null }> {
   return promoteToDeployedInternal(root, accepted, {}, false)
-}
-
-export async function promoteToDeployed(root: string, accepted: CoreSkillCard, opts: PromotionMutationOptions = {}): Promise<{ ok: boolean; blockers: string[]; snapshot: CoreSkillCard | null; archived_path: string | null }> {
-  if (opts.contract) return promoteToDeployedWithLedger(root, accepted, opts as PromotionMutationOptions & { contract: RequestedScopeContract })
-  return promoteToDeployedLegacyForCompatibility(root, accepted)
 }
 
 async function promoteToDeployedInternal(root: string, accepted: CoreSkillCard, opts: PromotionMutationOptions, ledgerRequired: boolean): Promise<{ ok: boolean; blockers: string[]; snapshot: CoreSkillCard | null; archived_path: string | null }> {

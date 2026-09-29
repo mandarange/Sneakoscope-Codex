@@ -6,7 +6,6 @@ import {
   NEEDS_EVIDENCE_CHOICE,
   OPTION_CHOICE_ID,
   OPTION_QUESTION_ID,
-  QUESTION_REVISION,
   type OptionQuestion,
   type ContextCandidate,
   type DecisionBundle,
@@ -400,4 +399,3 @@ function appendRoutingSpeculation(
   }
 }
 
-export { QUESTION_REVISION };

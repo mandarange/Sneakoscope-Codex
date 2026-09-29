@@ -5,9 +5,7 @@ import type {
   CapabilityProbeState as CapabilityProbeStateV3,
   CapabilityRequestedLevel,
   CapabilityScope,
-  CombinedCatalogSyncStatus,
-  DesktopCapabilityReportV3,
-  ScopeCapabilitySummary
+  CombinedCatalogSyncStatus
 } from './bridge-contracts.js'
 
 export type {
@@ -70,9 +68,3 @@ export interface CapabilityResultInputV3 extends CapabilityProbeContextV3 {
   evidence?: Record<string, unknown>
 }
 
-export type DesktopCapabilityScopeMap = Pick<
-  DesktopCapabilityReportV3,
-  'bridge' | 'native_identity' | 'providers' | 'combined_catalog'
->
-
-export type DesktopCapabilityScopeSummary = ScopeCapabilitySummary

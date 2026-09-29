@@ -9,7 +9,6 @@ import {
   loadStateForSession,
   loadMission,
   sessionStateKey,
-  setCurrent,
   updateCurrentIfMissionAndRun
 } from '../mission.js'
 import {
@@ -17,9 +16,6 @@ import {
   createAndWriteWorkOrderLedgerForPrompt
 } from '../work-order-ledger.js'
 import {
-  appendJsonl,
-  exists,
-  nowIso,
   readJson,
   sksRoot,
   writeJsonAtomic
@@ -52,7 +48,6 @@ import {
   NARUTO_RESULT_SCHEMA,
   NARUTO_SUMMARY_FILENAME,
   SUBAGENT_PLAN_FILENAME,
-  buildNarutoGateResult,
   buildNarutoSummary,
   officialSubagentPreparationInProgress,
   prepareOfficialSubagentMission,
@@ -432,7 +427,6 @@ async function narutoRunTransaction(
   })
   const {
     plan,
-    evidence: preparationEvidence,
     budget,
     verification,
     delegationPrompt,

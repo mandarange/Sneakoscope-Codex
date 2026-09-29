@@ -174,10 +174,6 @@ export function scanLatestVersionGuidance(
   return findings;
 }
 
-/** The wording every user-facing surface should use instead of a number. */
-export const LATEST_VERSION_GUIDANCE_TEXT =
-  'Use the official latest stable SKS and Codex CLI releases. Run `sks update-check` and read the capability report for the current state — feature support is decided by capability probes, not by a pinned version number.';
-
 export function latestVersionGuidanceReport(
   findings: LatestVersionGuidanceFinding[],
   scannedFiles: number,

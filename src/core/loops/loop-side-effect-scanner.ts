@@ -1,5 +1,5 @@
 import { readJson, writeJsonAtomic } from '../fsx.js';
-import { loopGatePath, loopMutationLedgerPath, loopSideEffectReportPath } from './loop-artifacts.js';
+import { loopGatePath, loopSideEffectReportPath } from './loop-artifacts.js';
 import type { LoopIntegrationMergeResult } from './loop-integration-merge.js';
 import { mutationLedgerFromLoopProofs, readLoopMutationLedger, type LoopMutationLedgerEvent } from './loop-mutation-ledger.js';
 import type { SksLoopProof } from './loop-schema.js';
@@ -114,6 +114,3 @@ function normalize(file: string): string {
   return String(file || '').replace(/\\/g, '/').replace(/^\.\/+/, '');
 }
 
-export function loopSideEffectLedgerPath(root: string, missionId: string): string {
-  return loopMutationLedgerPath(root, missionId);
-}

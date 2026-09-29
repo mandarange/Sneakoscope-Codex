@@ -2,6 +2,7 @@
 import '../../__tests__/helpers/isolated-test-home.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -13,6 +14,7 @@ import {
   readGlobalSksHookState,
   removeGlobalSksHookArtifacts,
   resolveGlobalHookTarget,
+  stableNodePath,
   type GlobalHookTarget
 } from '../codex-global-hooks.js';
 import { codexHooksListBinaryCandidates, listCodexHooks, type CodexHooksListResult } from '../codex-hooks-list.js';
@@ -70,6 +72,7 @@ test('install puts SKS in the user-level hooks behind a launcher, trusts only SK
     const script = await fsp.readFile(launcher, 'utf8');
     assert.match(script, /^node='\/opt\/node\/bin\/node'$/m);
     assert.match(script, /^entry='\/opt\/sks\/dist\/bin\/sks\.js'$/m);
+    assert.match(script, /command -v node/, 'a moved node is found on PATH');
     assert.match(script, /command -v sks/);
     assert.equal((await fsp.stat(launcher)).mode & 0o111, 0o111);
 
@@ -78,8 +81,11 @@ test('install puts SKS in the user-level hooks behind a launcher, trusts only SK
     assert.ok(agents.includes(`<!-- BEGIN ${GLOBAL_AGENTS_MARKER} -->`));
     assert.match(agents, /Sneakoscope Codex is active in every Codex project for this user\./);
 
-    const state = await readGlobalSksHookState(env);
-    assert.equal(state.active, true);
+    // This fixture's pinned SKS does not exist and PATH is empty: every event is installed and trusted, but nothing can run.
+    const state = await readGlobalSksHookState({ ...env, PATH: '' });
+    assert.deepEqual([state.missing_events, state.untrusted_events], [[], []]);
+    assert.equal(state.launcher_reaches_sks, false);
+    assert.equal(state.active, false);
     const second = await installGlobalSksHooks({ env, target: TARGET, verify: false });
     assert.deepEqual(second.actions, [], 'a second install changes nothing');
   });
@@ -258,4 +264,110 @@ test('installed guidance tells Naruto parents to orchestrate and lets Jev seal t
   // Installed guidance never pins a model family.
   assert.doesNotMatch(text, /gpt-5\.6-|gpt-6-astra only|Off mode keeps gpt-6-astra/);
   assert.equal(text.includes('model="gpt-6-astra"'), false);
+});
+
+test('the hook state is active only while the launcher can still reach an SKS', async () => {
+  await withHome(async (env, codexHome) => {
+    const entry = path.join(codexHome, 'sks.js');
+    await fsp.writeFile(entry, '');
+    await installGlobalSksHooks({ env, target: { node: process.execPath, entry, source: 'installed_package' }, verify: false });
+    const noPath: NodeJS.ProcessEnv = { ...env, PATH: '' };
+    assert.equal((await readGlobalSksHookState(noPath)).active, true);
+
+    await fsp.rm(entry);
+    const gone = await readGlobalSksHookState(noPath);
+    assert.equal(gone.launcher_reaches_sks, false, 'the pinned entry was removed');
+    assert.equal(gone.active, false);
+
+    const bin = path.join(codexHome, 'bin');
+    await fsp.mkdir(bin);
+    await fsp.writeFile(path.join(bin, 'sks'), '');
+    assert.equal((await readGlobalSksHookState({ ...env, PATH: bin })).active, true, '`sks` on PATH is still a way to run SKS');
+  });
+});
+
+test('the launcher runs the pinned SKS, falls back to node on PATH, and is silent when nothing is reachable', { skip: process.platform === 'win32' }, async () => {
+  await withHome(async (env, codexHome) => {
+    const entry = path.join(codexHome, 'fake-sks.js');
+    await fsp.writeFile(entry, 'process.stdout.write(JSON.stringify(process.argv.slice(2)))');
+    const launcher = path.join(codexHome, 'sks', 'bin', 'sks-hook');
+    const run = async (target: GlobalHookTarget, PATH: string) => {
+      await installGlobalSksHooks({ env, target, verify: false });
+      return spawnSync('/bin/sh', [launcher, 'hook', 'stop', '--scope=user'], { env: { PATH }, encoding: 'utf8' });
+    };
+    const pinned = await run({ node: process.execPath, entry, source: 'installed_package' }, '');
+    assert.deepEqual([pinned.status, pinned.stdout], [0, '["hook","stop","--scope=user"]']);
+
+    const moved = await run({ node: '/nonexistent/node', entry, source: 'installed_package' }, path.dirname(process.execPath));
+    assert.deepEqual([moved.status, moved.stdout], [0, '["hook","stop","--scope=user"]'], 'the pinned node moved: node on PATH runs the same entry');
+
+    const nothing = await run({ node: process.execPath, entry: path.join(codexHome, 'missing.js'), source: 'installed_package' }, '');
+    assert.deepEqual([nothing.status, nothing.stdout], [0, ''], 'no SKS reachable: the hook does nothing and does not fail the turn');
+  });
+});
+
+test('the pinned node is a stable alias of the running binary, not a versioned path an upgrade deletes', async () => {
+  const base = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-stable-node-'));
+  try {
+    const real = path.join(base, 'Cellar', '26.7.0', 'bin', 'node');
+    await fsp.mkdir(path.dirname(real), { recursive: true });
+    await fsp.writeFile(real, '', { mode: 0o755 });
+    const prefixBin = path.join(base, 'prefix', 'bin');
+    await fsp.mkdir(prefixBin, { recursive: true });
+    await fsp.symlink(real, path.join(prefixBin, 'node'));
+    const pkg = path.join(base, 'prefix', 'lib', 'node_modules', 'sneakoscope');
+    assert.equal(await stableNodePath(real, pkg), path.join(prefixBin, 'node'));
+    assert.equal(await stableNodePath(real, path.join(base, 'elsewhere')), real, 'no known alias: keep the running binary');
+    assert.equal(await stableNodePath('/nonexistent/node', pkg), '/nonexistent/node');
+  } finally {
+    await fsp.rm(base, { recursive: true, force: true });
+  }
+});
+
+test('one Codex verification serves every project of an update while hooks.json and trust are unchanged', { skip: process.platform === 'win32' }, async () => {
+  await withHome(async (env, codexHome) => {
+    const counter = path.join(codexHome, 'spawns');
+    const fakeCodex = path.join(codexHome, 'fake-codex');
+    await fsp.writeFile(counter, '');
+    await fsp.writeFile(fakeCodex, `#!${process.execPath}
+const fs = require('fs');
+fs.appendFileSync(${JSON.stringify(counter)}, 'x');
+const file = ${JSON.stringify(path.join(codexHome, 'hooks.json'))};
+let buffer = '';
+process.stdin.on('data', (chunk) => {
+  buffer += chunk;
+  let i;
+  while ((i = buffer.indexOf('\\n')) >= 0) {
+    const message = JSON.parse(buffer.slice(0, i));
+    buffer = buffer.slice(i + 1);
+    if (message.id === 1) process.stdout.write(JSON.stringify({ id: 1, result: {} }) + '\\n');
+    if (message.id === 2) {
+      const rows = [];
+      for (const [eventName, groups] of Object.entries(JSON.parse(fs.readFileSync(file, 'utf8')).hooks)) {
+        groups.forEach((group, g) => group.hooks.forEach((hook, h) => rows.push({ key: file + ':' + eventName + ':' + g + ':' + h, eventName, matcher: group.matcher ?? null, command: hook.command, sourcePath: file, source: 'user', enabled: true, isManaged: false, currentHash: 'sha256:x', trustStatus: 'trusted' })));
+      }
+      process.stdout.write(JSON.stringify({ id: 2, result: { data: [{ cwd: '/', hooks: rows, warnings: [], errors: [] }] } }) + '\\n');
+    }
+  }
+});
+`, { mode: 0o755 });
+    const verifying: NodeJS.ProcessEnv = { ...env, SKS_CODEX_BIN: fakeCodex };
+    const spawns = async () => (await fsp.readFile(counter, 'utf8')).length;
+
+    const first = await installGlobalSksHooks({ env: verifying, target: TARGET, verify: true });
+    assert.equal(first.verification?.checked, true);
+    assert.equal(first.active, true);
+    assert.equal(await spawns(), 1);
+
+    await installGlobalSksHooks({ env: verifying, target: TARGET, verify: true });
+    await installGlobalSksHooks({ env: verifying, target: TARGET, verify: true });
+    assert.equal(await spawns(), 1, 'the next projects of the same update reuse the answer');
+
+    const hooksFile = path.join(codexHome, 'hooks.json');
+    const hooks = JSON.parse(await fsp.readFile(hooksFile, 'utf8'));
+    hooks.hooks.Stop.push({ hooks: [{ type: 'command', command: 'say done' }] });
+    await fsp.writeFile(hooksFile, JSON.stringify(hooks));
+    await installGlobalSksHooks({ env: verifying, target: TARGET, verify: true });
+    assert.equal(await spawns(), 2, 'a changed hooks.json is verified again');
+  });
 });

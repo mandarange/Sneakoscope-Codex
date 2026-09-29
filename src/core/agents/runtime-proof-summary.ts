@@ -58,7 +58,6 @@ export async function buildRuntimeProofSummary(root: string, missionIdInput: str
   const scheduler = await readJson<any>(path.join(agentsDir, 'agent-scheduler-state.json'), null)
   const runtime = await readJson<any>(path.join(agentsDir, 'native-cli-worker-runtime.json'), null)
   const stopGate = await readJson<any>(path.join(dir, 'stop-gate.json'), null)
-  const governor = await readJson<any>(path.join(agentsDir, 'naruto-concurrency-governor.json'), null)
   const messagesAll = await readAgentMessageBus(root, missionId, { max: 500 })
   const recentMessages = await readAgentMessageBus(root, missionId, { max: opts.maxMessages || 8 })
   const loopSummary = summarizeLoopGraphProof(await readLoopGraphProof(root, missionId).catch(() => null))

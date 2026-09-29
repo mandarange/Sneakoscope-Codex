@@ -4,7 +4,6 @@ import path from 'node:path';
 import { ensureDir, exists, nowIso, readJson, writeJsonAtomic, writeTextAtomic } from '../fsx.js';
 import { withFileLock } from '../locks/file-lock.js';
 import { findLatestMission, missionsDir } from '../mission.js';
-import { codexSchemaPath, runCodexExecResumeWithOutputSchema } from '../codex-exec-output-schema.js';
 import {
   WRONGNESS_INDEX_SCHEMA,
   WRONGNESS_LEDGER_SCHEMA,
@@ -14,12 +13,10 @@ import {
   normalizeRootCauseKind,
   normalizeSeverity,
   normalizeWrongnessKind,
-  severityForRecord,
   validateWrongnessLedger,
   type WrongnessKind,
   type WrongnessLedger,
-  type WrongnessRecord,
-  type WrongnessSeverity
+  type WrongnessRecord
 } from './wrongness-schema.js';
 import { asRecordOrEmpty as asRecord } from '../json/records.js';
 
@@ -116,28 +113,6 @@ export async function addWrongnessRecord(root: string, input: unknown = {}, opts
     await writeWrongnessSummariesUnlocked(root, missionId);
     return { record, project, mission };
   });
-}
-
-export async function extractWrongnessWithOutputSchema(root: string, {
-  sessionId,
-  prompt,
-  outputFile = null
-}: { sessionId?: string | null; prompt?: string | null; outputFile?: string | null } = {}) {
-  if (!sessionId) {
-    return {
-      schema: 'sks.wrongness-output-schema-run.v1',
-      ok: false,
-      status: 'integration_optional',
-      blocker: 'codex_resume_session_required'
-    };
-  }
-  const schemaPath = await codexSchemaPath('wrongness-record');
-  return runCodexExecResumeWithOutputSchema({
-    sessionId,
-    prompt: prompt || 'Extract a single SKS Wrongness record as strict schema-bound JSON.',
-    outputSchemaPath: schemaPath,
-    outputFile
-  }, { cwd: root });
 }
 
 export async function resolveWrongnessRecord(root: string, id: string, reason = 'Resolved after corrective action', status: 'resolved' | 'false_alarm' = 'resolved'): Promise<{ updated: number; records: WrongnessRecord[] }> {
@@ -448,7 +423,7 @@ function assertCanonicalMissionId(missionId: string) {
 function safeWrongnessMissionDir(root: string, missionId: string) {
   assertCanonicalMissionId(missionId);
   const resolvedRoot = path.resolve(root);
-  const stateRoot = assertSafeSneakoscopeRoot(resolvedRoot);
+  assertSafeSneakoscopeRoot(resolvedRoot);
   const base = path.resolve(missionsDir(resolvedRoot));
   const candidate = path.resolve(base, missionId);
   const relative = path.relative(base, candidate);
@@ -615,18 +590,3 @@ function countBy(records: readonly WrongnessRecord[], key: (record: WrongnessRec
   return out;
 }
 
-export function highSeverityActive(records: readonly WrongnessRecord[]): WrongnessRecord[] {
-  return records.filter((record) => record.status === 'active' && ['high', 'critical'].includes(severityForRecord(record)));
-}
-
-export function mediumSeverityActive(records: readonly WrongnessRecord[]): WrongnessRecord[] {
-  return records.filter((record) => record.status === 'active' && severityForRecord(record) === 'medium');
-}
-
-export function normalizeAutomaticWrongnessKind(value: unknown): WrongnessKind {
-  return normalizeWrongnessKind(value);
-}
-
-export function normalizeAutomaticSeverity(value: unknown): WrongnessSeverity {
-  return normalizeSeverity(value);
-}

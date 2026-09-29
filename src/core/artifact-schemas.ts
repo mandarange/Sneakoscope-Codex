@@ -1,7 +1,6 @@
 import path from 'node:path';
 import { exists, nowIso, readJson, writeJsonAtomic } from './fsx.js';
 
-export const ARTIFACT_SCHEMA_VERSION = 1;
 export const EFFORTS = new Set(['none', 'low', 'medium', 'high', 'xhigh', 'forensic_vision', 'recovery']);
 export const WORK_ORDER_STATUSES = new Set(['pending', 'in_progress', 'implemented', 'verified', 'blocked']);
 

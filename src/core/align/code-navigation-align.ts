@@ -54,7 +54,6 @@ import {
   publishAlignContextIndex
 } from './align-context-index.js';
 import {
-  ALIGN_GATE_ARTIFACT,
   ALIGN_LEDGER_ARTIFACT,
   ALIGN_OUTPUT_ARTIFACTS,
   ALIGN_PLAN_ARTIFACT,

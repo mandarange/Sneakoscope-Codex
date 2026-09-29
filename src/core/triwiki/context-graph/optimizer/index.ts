@@ -24,7 +24,6 @@ export {
   CONTEXT_GRAPH_MIN_PROFILE_DEPTH,
   CONTEXT_GRAPH_MIN_UNIT_INTERVAL,
   contextGraphParameterKey,
-  contextGraphProfileEdgePointers,
   contextGraphTunableParameters,
   resolveContextGraphTunableParameter
 } from './parameter-space.js';
@@ -50,7 +49,6 @@ export {
   CONTEXT_GRAPH_DEFAULT_MAX_CANDIDATES,
   CONTEXT_GRAPH_DEFAULT_MULTIPLIERS,
   CONTEXT_GRAPH_DEFAULT_SWEEP_POINTERS,
-  contextGraphSweepablePointers,
   generateContextGraphCandidates,
   type ContextGraphCandidatePlan,
   type ContextGraphSweepPointer

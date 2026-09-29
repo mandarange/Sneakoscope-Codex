@@ -50,10 +50,6 @@ export function cacheSet(key: string, value: unknown, ttlMs = DEFAULT_TTL_MS): v
   CACHE.set(key, { expires: Date.now() + ttlMs, value });
 }
 
-export function cacheClear(): void {
-  CACHE.clear();
-}
-
 function gitHead(root: string): string {
   try {
     const r = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' });

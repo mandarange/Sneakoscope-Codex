@@ -22,7 +22,6 @@ import path from 'node:path';
  */
 export type VerificationProfile = 'essential' | 'strict';
 
-export const VERIFICATION_PROFILES: readonly VerificationProfile[] = ['essential', 'strict'];
 export const DEFAULT_VERIFICATION_PROFILE: VerificationProfile = 'essential';
 export const VERIFICATION_PROFILE_ENV = 'SKS_VERIFICATION_PROFILE';
 /** `{ "profile": "strict" }` under `<root>/.sneakoscope/` or the global root. */

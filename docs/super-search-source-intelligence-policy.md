@@ -16,5 +16,4 @@ Release gates:
 
 ```bash
 node ./dist/scripts/super-search-provider-interface-check.js
-node ./dist/scripts/source-intelligence-all-modes-check.js
 ```

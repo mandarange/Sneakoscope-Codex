@@ -87,22 +87,6 @@ export function validatePreToolUseSemanticOutput(output: any): CodexHookSemantic
   return validateCodexHookSemanticOutput('PreToolUse', output);
 }
 
-export function validatePermissionRequestSemanticOutput(output: any): CodexHookSemanticValidation {
-  return validateCodexHookSemanticOutput('PermissionRequest', output);
-}
-
-export function validatePostToolUseSemanticOutput(output: any): CodexHookSemanticValidation {
-  return validateCodexHookSemanticOutput('PostToolUse', output);
-}
-
-export function validateUserPromptSubmitSemanticOutput(output: any): CodexHookSemanticValidation {
-  return validateCodexHookSemanticOutput('UserPromptSubmit', output);
-}
-
-export function validateStopSemanticOutput(output: any): CodexHookSemanticValidation {
-  return validateCodexHookSemanticOutput('Stop', output);
-}
-
 export function validateCompactSemanticOutput(event: Extract<CodexHookEventName, 'PreCompact' | 'PostCompact'>, output: any): CodexHookSemanticValidation {
   return validateCodexHookSemanticOutput(event, output);
 }
@@ -113,10 +97,6 @@ export function validateSessionStartSemanticOutput(output: any): CodexHookSemant
 
 export function validateSubagentStartSemanticOutput(output: any): CodexHookSemanticValidation {
   return validateCodexHookSemanticOutput('SubagentStart', output);
-}
-
-export function validateSubagentStopSemanticOutput(output: any): CodexHookSemanticValidation {
-  return validateCodexHookSemanticOutput('SubagentStop', output);
 }
 
 function validatePreToolUse(output: any, issues: CodexHookIssue[]) {

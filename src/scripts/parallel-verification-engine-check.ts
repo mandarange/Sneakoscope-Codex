@@ -12,7 +12,6 @@ for (const rel of [
   'src/core/verification/verification-worker-pool.ts',
   'src/core/verification/verification-artifact-lock.ts',
   'src/core/verification/verification-result.ts',
-  'src/core/verification/verification-proof.ts',
   'src/scripts/release-parallel-check.ts'
 ]) {
   if (!fs.existsSync(path.join(root, rel))) issues.push(`missing:${rel}`);

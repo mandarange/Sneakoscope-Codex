@@ -52,10 +52,6 @@ export async function releaseLoopLease(root: string, missionId: string, loopId: 
   });
 }
 
-export async function detectLoopLeaseConflicts(root: string, missionId: string, node: SksLoopNode): Promise<string[]> {
-  return withLoopOwnerLedgerLock(root, missionId, () => detectLoopLeaseConflictsUnderLock(root, missionId, node));
-}
-
 async function detectLoopLeaseConflictsUnderLock(root: string, missionId: string, node: SksLoopNode): Promise<string[]> {
   const ledger = await readLoopOwnerLedger(root, missionId);
   const active = ledger.leases.filter((lease) => lease.status === 'active' && Date.parse(lease.expires_at) > Date.now());

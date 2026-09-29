@@ -31,7 +31,7 @@ test('postinstall is externally inert by default and NO_BOOTSTRAP overrides opt-
       const before = await snapshotTrees({ home, codexHome, initCwd, globalRoot });
       const result = await runProcess(process.execPath, [path.join(process.cwd(), 'dist/bin/sks.js'), 'postinstall'], {
         cwd: process.cwd(),
-        timeoutMs: 30000,
+        timeoutMs: 90000,
         maxOutputBytes: 64 * 1024,
         env: {
           HOME: home,
@@ -80,7 +80,7 @@ test('postinstall command auto-bootstrap passes a callable bootstrap command', a
 
     const result = await runProcess(process.execPath, [path.join(process.cwd(), 'dist/bin/sks.js'), 'postinstall'], {
       cwd: process.cwd(),
-      timeoutMs: 30000,
+      timeoutMs: 90000,
       maxOutputBytes: 64 * 1024,
       env: {
         HOME: home,

@@ -10,7 +10,6 @@ import {
   DELEGATION_CHOICES,
   KEEP_BASELINE_CHOICE,
   NEEDS_EVIDENCE_CHOICE,
-  POLICY_REVISION,
   ROUTING_RISK_NOUL_MIN,
   ROUTING_ROLE_OMIT_NOUL_MAX,
   UNKNOWN_USAGE,
@@ -476,4 +475,3 @@ function text(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-export const COMPILER_POLICY_REVISION = POLICY_REVISION;

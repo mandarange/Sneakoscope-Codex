@@ -2,7 +2,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { summarizeTriWikiProofBank } from '../triwiki/triwiki-proof-bank.js';
 import { runBuildOnce } from '../build/build-once-runner.js';
-import { writeSksdIpcResponse, type SksdRequest } from './sksd-ipc.js';
 
 export const SKSD_STATE_SCHEMA = 'sks.sksd-state.v1';
 
@@ -65,21 +64,6 @@ export function sksdStart(root: string): SksdState {
   };
   writeState(root, state);
   return state;
-}
-
-export function handleSksdRequest(root: string, request: SksdRequest): unknown {
-  let response: unknown;
-  if (request.type === 'status') response = sksdStatus(root);
-  else if (request.type === 'warm') response = sksdWarm(request.root);
-  else if (request.type === 'proof-bank-status') response = summarizeTriWikiProofBank(request.root);
-  else if (request.type === 'triwiki-index') response = { schema: 'sks.sksd-triwiki-index.v1', ok: fs.existsSync(path.join(request.root, '.sneakoscope', 'wiki', 'context-pack.json')), path: path.join(request.root, '.sneakoscope', 'wiki', 'context-pack.json') };
-  else if (request.type === 'build-once') response = runBuildOnce({ root: request.root, mode: request.mode });
-  else if (request.type === 'probe') response = writeProbeResponse(request.root, request.probe_id);
-  else response = sksdStop(root);
-  const responsePath = writeSksdIpcResponse(root, request, response);
-  const state = sksdStatus(root);
-  writeState(root, { ...state, protocol_ok: true, last_response_path: responsePath });
-  return response;
 }
 
 export function sksdStop(root: string): SksdState {
@@ -149,9 +133,3 @@ function maybeWarmBuildOnce(root: string): boolean {
   }
 }
 
-function writeProbeResponse(root: string, probeId: string): { schema: 'sks.sksd-probe-response.v1'; ok: boolean; path: string } {
-  const file = path.join(root, '.sneakoscope', 'cache', 'probes', `${probeId.replace(/[^a-zA-Z0-9._-]+/g, '_')}.json`);
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, `${JSON.stringify({ schema: 'sks.sksd-probe-response.v1', probe_id: probeId, ok: true, at: new Date().toISOString() }, null, 2)}\n`);
-  return { schema: 'sks.sksd-probe-response.v1', ok: true, path: file };
-}

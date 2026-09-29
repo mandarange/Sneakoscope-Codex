@@ -1,5 +1,5 @@
 import { createHash, randomInt, timingSafeEqual } from 'node:crypto';
-import http, { type Server, type ServerResponse } from 'node:http';
+import http, { type ServerResponse } from 'node:http';
 import net, { type Server as NetServer, type Socket } from 'node:net';
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';

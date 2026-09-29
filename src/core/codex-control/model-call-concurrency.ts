@@ -74,7 +74,6 @@ export async function withModelCallSlot<T>(input: {
 }
 
 export function defaultModelCallBudget(provider: string): number {
-  const text = String(provider || '')
   return envInt('SKS_REMOTE_API_PARALLEL_BUDGET', 3)
 }
 

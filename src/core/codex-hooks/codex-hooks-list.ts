@@ -95,6 +95,7 @@ function requestHooksList(bin: string, cwds: string[], env: NodeJS.ProcessEnv, t
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      child.stdin.end();
       child.kill();
       if (err) reject(err);
       else resolve(data || []);

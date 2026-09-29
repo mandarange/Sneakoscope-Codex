@@ -325,10 +325,6 @@ export function normalizeSeverity(value: unknown): WrongnessSeverity {
   return isOneOf(WRONGNESS_SEVERITIES, value) ? value : 'medium';
 }
 
-export function severityForRecord(record: unknown): WrongnessSeverity {
-  return normalizeSeverity(asRecord(record).severity ?? asRecord(asRecord(record).avoidance_rule).severity);
-}
-
 function normalizeStatus(value: unknown): WrongnessStatus {
   return isOneOf(WRONGNESS_STATUSES, value) ? value : 'active';
 }

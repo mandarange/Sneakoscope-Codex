@@ -43,11 +43,6 @@ export interface TriWikiProofIndexEntry {
   invalidation_reasons: string[];
 }
 
-export interface TriWikiProofIndexFile {
-  schema: typeof TRIWIKI_PROOF_INDEX_SCHEMA;
-  proofs: TriWikiProofIndexEntry[];
-}
-
 export interface ProofRecord {
   proofId: string;
   subjectType: string;

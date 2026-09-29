@@ -1,4 +1,3 @@
-import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { nowIso, readJson, writeJsonAtomic } from '../fsx.js';
 import { codexSchemaPath, runCodexExecResumeWithOutputSchema, structuredOutputBlocker } from '../codex-exec-output-schema.js';

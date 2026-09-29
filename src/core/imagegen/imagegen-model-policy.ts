@@ -9,7 +9,6 @@
  */
 
 export const IMAGEGEN_GUIDE_URL = 'https://developers.openai.com/api/docs/guides/image-generation';
-export const IMAGEGEN_MODEL_CATALOG_URL = 'https://developers.openai.com/api/docs/models';
 /** Kept for artifact fields that link the image-generation reference. */
 export const IMAGEGEN_MODEL_DOC_URL = IMAGEGEN_GUIDE_URL;
 

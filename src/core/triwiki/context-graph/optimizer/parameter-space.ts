@@ -12,10 +12,9 @@
  * a profile's edge set, and a positive value on an edge the profile does not
  * currently carry is how it adds one.
  */
-import { CONTEXT_GRAPH_EDGE_TYPES, isContextGraphEdgeType } from '../contracts.js';
+import { isContextGraphEdgeType } from '../contracts.js';
 import {
   CONTEXT_GRAPH_QUERY_PROFILES,
-  CONTEXT_GRAPH_QUERY_PROFILE_NAMES,
   CONTEXT_GRAPH_TRAVERSAL_CAPS,
   isContextGraphQueryProfileName
 } from '../profiles.js';
@@ -214,11 +213,3 @@ export function resolveContextGraphTunableParameter(
   return parameterFor('profiles', pointer, 0);
 }
 
-/** Every profile edge weight pointer, including the edges a profile does not carry today. */
-export function contextGraphProfileEdgePointers(): readonly string[] {
-  const out: string[] = [];
-  for (const name of CONTEXT_GRAPH_QUERY_PROFILE_NAMES) {
-    for (const edge of CONTEXT_GRAPH_EDGE_TYPES) out.push(`profiles.${name}.edgeWeights.${edge}`);
-  }
-  return out;
-}

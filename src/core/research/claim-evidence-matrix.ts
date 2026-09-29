@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { exists, nowIso, readJson, writeJsonAtomic } from '../fsx.js';
+import { exists, readJson, writeJsonAtomic } from '../fsx.js';
 
 export interface ClaimEvidenceMatrix {
   schema: 'sks.claim-evidence-matrix.v1'

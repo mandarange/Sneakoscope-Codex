@@ -98,16 +98,6 @@ export function incomingEdges(index: ContextGraphIndex, nodeId: string): Context
   return out;
 }
 
-export function nodesAtPath(index: ContextGraphIndex, relativePath: string): ContextGraphNode[] {
-  const ids = index.nodesByPath.get(relativePath) ?? [];
-  const out: ContextGraphNode[] = [];
-  for (const id of ids) {
-    const node = index.nodesById.get(id);
-    if (node) out.push(node);
-  }
-  return out;
-}
-
 /**
  * Tarjan strongly connected components over the whole snapshot. Components with
  * more than one node become `snapshot.cycles`; single-node components are not

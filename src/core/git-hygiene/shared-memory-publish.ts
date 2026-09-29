@@ -1,9 +1,9 @@
 import fsp from 'node:fs/promises';
 import path from 'node:path';
-import { ensureDir, exists, nowIso, readJson, sha256, writeJsonAtomic } from '../fsx.js';
+import { exists, nowIso, readJson, sha256, writeJsonAtomic } from '../fsx.js';
 import { readImageVoxelLedger } from '../wiki-image/image-voxel-ledger.js';
 import { readWrongnessLedger } from '../triwiki-wrongness/wrongness-ledger.js';
-import { createWrongnessRecord, type WrongnessRecord } from '../triwiki-wrongness/wrongness-schema.js';
+import { type WrongnessRecord } from '../triwiki-wrongness/wrongness-schema.js';
 import { listSharedFiles } from './git-status.js';
 import { ensureGitPolicy, ensureSharedMemoryDirs, readGitPolicy, type SksGitPolicy } from './git-policy.js';
 import { isMockPositiveSharedClaim, redactSharedRecord, sharedRecordHasSecret } from './shared-memory-security.js';
@@ -334,24 +334,6 @@ async function publishImageVoxels(root: string, policy: SksGitPolicy, opts: Shar
     written.push(relPath);
   }
   return { written, skipped, blockers };
-}
-
-export async function readSharedWrongnessRecords(root: string): Promise<WrongnessRecord[]> {
-  const dir = path.join(root, '.sneakoscope', 'wiki', 'wrongness');
-  const records: WrongnessRecord[] = [];
-  let entries: string[] = [];
-  try {
-    entries = await fsp.readdir(dir);
-  } catch {
-    return records;
-  }
-  for (const name of entries.filter((entry) => entry.endsWith('.json')).sort()) {
-    const row = await readJson<JsonRecord | null>(path.join(dir, name), null);
-    if (!row) continue;
-    if (row.schema === 'sks.triwiki-wrongness-record.v1' && row.wrongness) records.push(createWrongnessRecord(row.wrongness));
-    else records.push(createWrongnessRecord(row));
-  }
-  return records;
 }
 
 function prepareRecord<T>(record: T, opts: SharedPublishOptions): T {

@@ -2,7 +2,7 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import type { Dirent } from 'node:fs';
 import { rel, runProcess } from '../fsx.js';
-import { classifySksPath, defaultGitPolicy, readGitPolicy, type SksGitPolicy } from './git-policy.js';
+import { classifySksPath, readGitPolicy, type SksGitPolicy } from './git-policy.js';
 
 export interface GitStatusSummary {
   schema: 'sks.git-status.v1';
@@ -108,10 +108,6 @@ export async function fileSize(root: string, relPath: string): Promise<number> {
   }
 }
 
-export function gitStatusLinePath(line: string): string {
-  return line.length > 3 ? line.slice(3).trim() : line.trim();
-}
-
 export async function listSharedFiles(root: string): Promise<string[]> {
   const out: string[] = [];
   async function walk(dir: string): Promise<void> {
@@ -139,6 +135,3 @@ export async function listSharedFiles(root: string): Promise<string[]> {
   return out.sort();
 }
 
-export function defaultStatusPolicy(): SksGitPolicy {
-  return defaultGitPolicy();
-}

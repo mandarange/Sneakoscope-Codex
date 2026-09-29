@@ -281,7 +281,6 @@ export const DESIGN_DEFAULTS = Object.freeze({
 });
 
 export const POLICY_REVISION = 'sks.jev-policy.v2';
-export const QUESTION_REVISION = 'sks.jev-questions.v1';
 export const RECEIPT_SCHEMA = 'sks.jev-decision.v1' as const;
 
 export const CHOICE_MIN_PROBABILITY = 0.85;

@@ -197,7 +197,7 @@ function buildMicroWins(input: {
       verificationSignal: 'objective recorded in user-request-strategy.json'
     }))
   }
-  for (const [index, file] of input.writeTargets.entries()) {
+  for (const file of input.writeTargets) {
     tasks.push(task(tasks.length, {
       title: `Patch ${file}`,
       description: `Exclusive write lease for ${file}`,

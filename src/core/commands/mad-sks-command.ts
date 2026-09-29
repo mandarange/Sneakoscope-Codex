@@ -232,14 +232,9 @@ export async function settleMadLaunchLifecycle(tasks: Promise<unknown>[], dir: s
   }).catch(() => undefined);
 }
 
-function missionDirLike(root: string, missionId: string) {
-  return path.join(root, '.sneakoscope', 'missions', missionId);
-}
-
 async function activateMadPermissionState(cwd: any = process.cwd(), args: any[] = []) {
   const root = await sksRoot();
   if (!(await exists(path.join(root, '.sneakoscope')))) await initProject(root, {});
-  const rawArgs = (args || []).map((arg: any) => String(arg));
   const activatedBy = 'sks --mad';
   const flags = parseMadSksFlags(['--mad-sks', ...args].filter(Boolean));
   const permission = buildMadSksPermissionModel({ targetRoot: cwd, userIntent: `${activatedBy} native Codex scoped high-power maintenance session`, flags });
@@ -455,25 +450,6 @@ export function stripMadLaunchOnlyArgs(args: any[] = [], _opts: { readonly inclu
 function readOption(args: any, name: any, fallback: any) {
   const i = args.indexOf(name);
   return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
-}
-
-export async function madSksFixture(root: any) {
-  const { id, dir } = await createMission(root, { mode: 'mad-sks', prompt: '$MAD-SKS fixture permission gate' });
-  await writeCodexCurrentAppCapabilityArtifacts(root, { missionId: id }).catch(() => null);
-  await writeCodexCurrentCoreCapabilityArtifacts(root, { missionId: id }).catch(() => null);
-  const gate = {
-    schema_version: 1,
-    passed: false,
-    execution_class: 'mock_fixture',
-    mad_sks_permission_active: false,
-    permissions_deactivated: false,
-    catastrophic_safety_guard_active: true,
-    permission_profile: permissionGateSummary(),
-    fixture: true,
-    blockers: ['mad_sks_fixture_mode_cannot_claim_real']
-  };
-  await writeJsonAtomic(path.join(dir, 'mad-sks-gate.json'), gate);
-  return { mission_id: id, dir, gate };
 }
 
 const MAD_SKS_COMMAND_SURFACE = Object.freeze([

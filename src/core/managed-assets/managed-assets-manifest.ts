@@ -13,7 +13,6 @@ export const MANAGED_ASSET_VERSION = PACKAGE_VERSION
 export const MANAGED_ASSET_MARKER = 'SKS-MANAGED-ASSET'
 export const MANAGED_OFFICIAL_SUBAGENT_MARKER = 'SKS-MANAGED-OFFICIAL-SUBAGENT'
 
-export type ManagedAssetRisk = 'read-only' | 'managed-write' | 'user-confirmation' | 'manual'
 export type ManagedAgentSandbox = 'read-only' | 'workspace-write'
 
 export interface ManagedAgentRole {
@@ -50,12 +49,6 @@ export interface ManagedOfficialSubagentRole {
 export interface ManagedSkillAsset {
   id: string
   required_for: string[]
-}
-
-export interface ManagedHookAsset {
-  id: string
-  required_for: string[]
-  risk: ManagedAssetRisk
 }
 
 /** Internal cleanup tombstones for SKS-owned role files retired from the installed catalog. */
@@ -521,46 +514,10 @@ export const MANAGED_SKILLS: readonly ManagedSkillAsset[] = Object.freeze([
   'align'
 ].map((id) => ({ id, required_for: ['codex-native-runtime'] })))
 
-export const MANAGED_HOOKS: readonly ManagedHookAsset[] = Object.freeze([
-  { id: 'version-guard', required_for: ['managed-state-current'], risk: 'managed-write' },
-  { id: 'user-prompt-submit', required_for: ['route-intake'], risk: 'managed-write' },
-  { id: 'stop', required_for: ['route-finalization'], risk: 'managed-write' }
-])
-
-export const CONTEXT7_MANAGED_SERVER = Object.freeze({
-  id: 'context7',
-  required: true,
-  transport: 'remote',
-  url: 'https://mcp.context7.com/mcp',
-  local_fallback: {
-    transport: 'local',
-    command: 'npx',
-    args: ['-y', '@upstash/context7-mcp@latest']
-  },
-  purpose: 'Current library/API/framework documentation for route gates.'
-})
-
 export function managedAgentRoleByFile(filename: string): ManagedAgentRole | null {
   const base = filename.split(/[\\/]/).pop() || filename
   assertUniqueManagedAgentRoleFilenames()
   return RETIRED_MANAGED_AGENT_ROLE_TOMBSTONES.find((role) => role.filename === base) || null
-}
-
-export function managedAgentRoleByName(name: string): ManagedAgentRole | null {
-  const normalized = normalizeRoleName(name)
-  return RETIRED_MANAGED_AGENT_ROLE_TOMBSTONES.find((role) => [
-    role.id,
-    role.codex_name,
-    role.filename.replace(/\.toml$/i, ''),
-    ...role.aliases,
-    ...role.legacy_ids
-  ].map(normalizeRoleName).includes(normalized)) || null
-}
-
-export function managedOfficialSubagentRoleByFile(filename: string): ManagedOfficialSubagentRole | null {
-  const base = filename.split(/[\\/]/).pop() || filename
-  assertUniqueManagedAgentRoleFilenames()
-  return MANAGED_OFFICIAL_SUBAGENT_ROLES.find((role) => role.filename === base) || null
 }
 
 export function managedOfficialSubagentRoleByName(name: string): ManagedOfficialSubagentRole | null {

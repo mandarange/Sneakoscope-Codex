@@ -196,19 +196,6 @@ export function parseResponsesSsePayload(text: string) {
   };
 }
 
-/** The text a json_schema/text response produced, across envelope shapes. */
-export function responsesOutputText(payload: any): string {
-  const direct = typeof payload?.output_text === 'string' ? payload.output_text : '';
-  if (direct) return direct;
-  const parts: string[] = [];
-  for (const output of Array.isArray(payload?.output) ? payload.output : []) {
-    for (const content of Array.isArray(output?.content) ? output.content : []) {
-      if (typeof content?.text === 'string' && content.text) parts.push(content.text);
-    }
-  }
-  return parts.join('');
-}
-
 function recoveredOutput(items: readonly any[], streamedImage: StreamedImageOutput | null): any[] {
   const output = [...items];
   const hasImage = output.some((item) => String(item?.type || '') === 'image_generation_call' && b64Of(item?.result));

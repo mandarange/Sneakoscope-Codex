@@ -7,8 +7,6 @@ import { ROUTE_COMPLETION_CONTRACT_SCHEMA, normalizeTrustStatus, trustKernelMeta
 import { validateCompletionContract } from './completion-contract.js';
 import { asRecordOrEmpty as asRecord } from '../json/records.js';
 
-type JsonRecord = Record<string, unknown>;
-
 function asList(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
@@ -65,7 +63,6 @@ export function routeRequirements(route: unknown, proof: unknown = {}): RouteReq
 function evidencePathsForContract(missionId: string | null, proof: unknown, evidenceIndex: unknown, required: RouteRequirements) {
   const proofRecord = asRecord(proof);
   const proofEvidence = asRecord(proofRecord.evidence);
-  const agents = asRecord(proofEvidence.agents);
   const evidenceIndexRecord = asRecord(evidenceIndex);
   const base = missionId ? `.sneakoscope/missions/${missionId}` : null;
   return {
@@ -105,11 +102,3 @@ export interface RouteRequirements {
   root_cause_analysis?: boolean;
 }
 
-export interface RouteCompletionContract {
-  schema: typeof ROUTE_COMPLETION_CONTRACT_SCHEMA;
-  mission_id: string | null;
-  route: string | null;
-  required: RouteRequirements;
-  evidence: Record<string, unknown>;
-  status: import('./trust-kernel-schema.js').TrustStatus;
-}

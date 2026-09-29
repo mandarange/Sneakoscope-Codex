@@ -158,7 +158,3 @@ export function buildContextGraphSnapshot(draft: ContextGraphSnapshotDraft): Con
   };
 }
 
-/** Exact bytes the store writes; kept here so lint can diff a re-serialization against the file. */
-export function serializeContextGraphSnapshot(snapshot: ContextGraphSnapshot): string {
-  return `${JSON.stringify(snapshot, null, 2)}\n`;
-}

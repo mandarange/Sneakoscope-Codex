@@ -43,7 +43,7 @@ export {
   PROOF_INDEX_REL
 } from './shared.js';
 export { TRIWIKI_PROOF_INDEX_SCHEMA } from './proof-index.js';
-export type { TriWikiProofIndexEntry, TriWikiProofIndexFile } from './proof-index.js';
+export type { TriWikiProofIndexEntry } from './proof-index.js';
 
 const MIN_FAN_IN_FOR_VERIFICATION_WARNING = 3;
 

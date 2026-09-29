@@ -43,39 +43,11 @@ export function runSksJson(args, options = {}) {
   return { ...parsed, _process_status: result.status, _stderr_tail: String(result.stderr || '').slice(-600) };
 }
 
-export function runPptReview(action = 'review') {
-  const json = runHermeticRouteFixture('ppt', ['ppt', 'fixture', '--mock', '--json'], {
-    SKS_TEST_FAKE_IMAGEGEN: '1',
-    SKS_TEST_FAKE_EXTRACTOR: '1'
-  });
-  const proof = readMissionJson(json.mission_id, 'completion-proof.json');
-  const review = json.artifacts || json.imagegen_review || {};
-  json.proof_evidence = proof.evidence?.ppt_review || json.artifacts?.proof_evidence || {};
-  json.artifacts = {
-    ...review,
-    callouts: {
-      ...(review.slide_callout_ledger || {}),
-      no_text_fallback: review.slide_callout_ledger?.text_only_fallback_allowed === false || review.slide_callout_ledger?.generated_slide_callout_images_count > 0
-    },
-    slideIssues: review.slide_issue_ledger || {}
-  };
-  assertGate(Boolean(json.mission_id), 'ppt imagegen review fixture did not create a mission', json);
-  assertGate(json.proof_evidence?.generated_slide_callout_images_count > 0, 'ppt callout image evidence missing', json.proof_evidence);
-  assertGate(json.proof_evidence?.slide_issue_extraction_status === 'valid', 'ppt issue extraction missing', json.proof_evidence);
-  return json;
-}
-
 export function runDfixFixture() {
   const json = runHermeticRouteFixture('dfix', ['dfix', 'fixture', '--json']);
   json.gate = json.gate || json.artifacts?.gate;
   assertGate(json.ok === true, 'dfix fixture blocked', json);
   assertGate(json.gate?.passed === true, 'dfix gate did not pass', json.gate);
-  return json;
-}
-
-export function runUxFixture() {
-  const json = runSksJson(['image-ux-review', 'fixture', '--mock', '--json']);
-  assertGate(Boolean(json.mission_id), 'image UX review fixture did not create a mission', json);
   return json;
 }
 
@@ -88,11 +60,6 @@ export function readMissionJson(missionId, file) {
   const absolute = missionFile(missionId, file);
   assertGate(fs.existsSync(absolute), `mission artifact missing: ${file}`, { mission_id: missionId, absolute });
   return JSON.parse(fs.readFileSync(absolute, 'utf8'));
-}
-
-export function hasRelationType(missionId, type) {
-  const ledger = readMissionJson(missionId, 'image-voxel-ledger.json');
-  return (ledger.relations || []).some((relation) => relation.type === type);
 }
 
 function createHermeticRouteFixtureRoot(label) {

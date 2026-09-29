@@ -560,7 +560,6 @@ test('Providers configures independent bridge profiles through masked stdin with
     fs.readFileSync(path.join(root, 'Sources', 'ProvidersReliability.swift'), 'utf8'),
     fs.readFileSync(path.join(root, 'Sources', 'ProvidersOpenRouter.swift'), 'utf8')
   ].join('\n');
-  const providersSurface = providers;
   const processClient = fs.readFileSync(path.join(resolvePackagedMenuBarSourceRoot(), 'Sources', 'ProcessClient.swift'), 'utf8');
   const secureEnvelope = fs.readFileSync(path.join(resolvePackagedMenuBarSourceRoot(), 'Sources', 'SecureProcessEnvelope.swift'), 'utf8');
   const alertFactory = fs.readFileSync(path.join(resolvePackagedMenuBarSourceRoot(), 'Sources', 'AlertFactory.swift'), 'utf8');

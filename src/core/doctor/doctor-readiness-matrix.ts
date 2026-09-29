@@ -285,6 +285,7 @@ function buildRepairReadiness(input: any = {}) {
       manual_required: false,
       blockers: active ? [] : ['sks_codex_hooks_inactive'],
       warnings: [
+        ...(sksCodexHooks.launcher_reaches_sks === false ? ['sks_codex_hook_launcher_unreachable'] : []),
         ...normalizeList(sksCodexHooks.missing_events).map((event) => `sks_codex_hook_missing:${event}`),
         ...normalizeList(sksCodexHooks.untrusted_events).map((event) => `sks_codex_hook_untrusted:${event}`)
       ]

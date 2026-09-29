@@ -235,7 +235,6 @@ export {
   checkContext7,
   ensureCodexCliTool,
   ensureRelatedCliTools,
-  maybePromptCodexUpdateForLaunch,
   maybePromptSksUpdateForLaunch,
   shouldAutoApproveInstall
 } from './install-tool-helpers.js';
@@ -255,7 +254,6 @@ export {
   ensureGlobalCodexSkillsDuringInstall,
   ensureProjectContext7Config,
   ensureSksCommandDuringInstall,
-  globalCodexSkillsRoot,
-  selftestSksShimRepair
+  globalCodexSkillsRoot
 } from './install-helpers-install-support.js';
-export { codexLbConfigPath, codexLbEnvPath } from './install-helpers-codex-lb-shared.js';
+export { codexLbConfigPath } from './install-helpers-codex-lb-shared.js';

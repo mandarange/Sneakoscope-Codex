@@ -42,21 +42,3 @@ export function scriptContains(name, token) {
   return String(packageScripts()[name] || '').includes(token);
 }
 
-export function assertFiles(files) {
-  for (const file of files) assertGate(exists(file), `missing required file: ${file}`);
-}
-
-export const SOURCE_INTELLIGENCE_FILES = [
-  'src/core/source-intelligence/source-intelligence-policy.ts',
-  'src/core/source-intelligence/source-intelligence-runner.ts',
-  'src/core/source-intelligence/source-intelligence-proof.ts',
-  'src/core/super-search/types.ts',
-  'src/core/super-search/runtime.ts',
-  'src/core/codex/codex-web-search-adapter.ts'
-];
-
-export const AGENT_RUNTIME_FILES = [
-  'src/core/agents/scout-policy.ts',
-  'src/core/agents/agent-terminal-session.ts',
-  'src/core/codex/official-goal-mode.ts'
-];

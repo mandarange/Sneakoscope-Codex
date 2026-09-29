@@ -71,10 +71,6 @@ export function researchPaperArtifactName(prompt: any = '', createdAt: any = now
   return `${cleanResearchArtifactDate(createdAt)}-${researchTitleSlug(titleSource)}-research-paper.md`;
 }
 
-export function isDatedResearchPaperArtifact(name: any = '') {
-  return /^\d{4}-\d{2}-\d{2}-[^\s/\\]+-research-paper\.md$/u.test(String(name || ''));
-}
-
 export function researchPaperArtifactForPlan(plan: any = null) {
   const artifact = plan?.artifacts?.research_paper || plan?.paper_artifact;
   return artifact ? path.basename(String(artifact)) : RESEARCH_PAPER_ARTIFACT;
@@ -717,7 +713,6 @@ export async function validateCanonicalResearchAdversarialEvidence(dir: any) {
   }
 
   let rebuiltEvidence: any = null;
-  let persistedEvidence: any = null;
   let normalizedParent: ReturnType<typeof normalizeSubagentParentSummary> | null = null;
   if (mockOnly) {
     if (convergenceGate?.official_subagent_evidence_ok !== true) blockers.push('canonical_adversarial_mock_contract_evidence_not_ok');
@@ -728,7 +723,6 @@ export async function validateCanonicalResearchAdversarialEvidence(dir: any) {
       readSubagentEvents(dir)
     ]);
     normalizedParent = normalizeSubagentParentSummary(parentSummary);
-    persistedEvidence = evidence;
     const workflowRunId = String(finalReview?.workflow_run_id || convergenceGate?.workflow_run_id || '').trim();
     if (!workflowRunId) blockers.push('canonical_adversarial_workflow_run_id_missing');
     if (!normalizedParent.trustworthy || normalizedParent.status !== 'completed') blockers.push(...(normalizedParent.blockers.length ? normalizedParent.blockers.map((blocker) => `canonical_adversarial_parent:${blocker}`) : ['canonical_adversarial_parent_untrustworthy']));

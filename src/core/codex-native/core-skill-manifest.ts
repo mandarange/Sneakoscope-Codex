@@ -328,11 +328,6 @@ export function buildSksCoreSkillManifest(generatedAt: string = nowIso()): SksCo
   };
 }
 
-export function coreSkillTemplateByCanonicalName(name: string): SksCoreSkillTemplate | null {
-  const canonical = currentCoreSkillName(canonicalSkillName(name));
-  return buildSksCoreSkillManifest('1970-01-01T00:00:00.000Z').skills.find((skill) => skill.canonical_name === canonical) || null;
-}
-
 export function isSksManagedCoreSkillContent(text: string): boolean {
   const value = String(text || '');
   return value.includes(CORE_SKILL_MANAGED_BEGIN) && value.includes(CORE_SKILL_MANAGED_END);

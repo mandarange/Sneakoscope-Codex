@@ -1,7 +1,6 @@
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { ensureDir, exists, nowIso, readJson, readText, sha256, writeJsonAtomic, writeTextAtomic } from './fsx.js';
-import { ARTIFACT_FILES, validateSkillCandidate, validateSkillInjectionDecision } from './artifact-schemas.js';
 import { createSkillCard } from './evaluation.js';
 import {
   isSksGeneratedSkillAgentMetadata,
@@ -47,30 +46,6 @@ export function skillDreamPolicyText() {
   return 'Skill dreaming policy: record only cheap route/skill usage counters in `.sneakoscope/skills/dream-state.json`; do not evaluate every conversation. Run `sks skill-dream run` or the automatic due check only after the configured event count and cooldown, defaulting to one due check every 10 route events subject to cooldown. Reports are recommendation-only: keep/merge/prune/improve candidates may update future generated skill wording, but skill deletion or merge requires explicit user approval.';
 }
 
-export function createSkillCandidate(opts: any = {}) {
-  const successfulRuns = Number(opts.evidence?.successful_runs || opts.successful_runs || 0);
-  const failedRuns = Number(opts.evidence?.failed_runs || opts.failed_runs || 0);
-  const passRate = successfulRuns + failedRuns > 0 ? successfulRuns / (successfulRuns + failedRuns) : 0;
-  return {
-    schema_version: 1,
-    id: opts.id || `skill.${safeId(opts.route || 'general')}.${safeId(opts.name || 'candidate')}.v1`,
-    version: Number(opts.version || 1),
-    status: opts.status || 'candidate',
-    triggers: opts.triggers || [],
-    contraindications: opts.contraindications || [],
-    evidence: {
-      successful_runs: successfulRuns,
-      failed_runs: failedRuns,
-      last_verified_at: opts.evidence?.last_verified_at || opts.last_verified_at || null,
-      tests: opts.evidence?.tests || opts.tests || []
-    },
-    quality_score: Number(opts.quality_score ?? Math.min(1, passRate * 0.7 + Math.min(successfulRuns, 5) * 0.06)),
-    risk_score: Number(opts.risk_score ?? (failedRuns > 0 ? 0.4 : 0.2)),
-    injection_priority: Number(opts.injection_priority ?? 0.5),
-    files: opts.files || []
-  };
-}
-
 export function decideSkillInjection({ route = 'naruto', task_signature = '', skills = [], topK }: any = {}) {
   const k = Number(topK || (String(route).toLowerCase().includes('from-chat-img') ? 5 : 3));
   const ranked = skills
@@ -90,18 +65,6 @@ export function decideSkillInjection({ route = 'naruto', task_signature = '', sk
     injected: ranked.slice(0, k).map(({ id, version, status, quality_score, match_score, files }: any) => ({ id, version, status, quality_score, match_score, files })),
     decided_at: nowIso()
   };
-}
-
-export async function writeSkillCandidate(dir: any, opts: any = {}) {
-  const candidate = createSkillCandidate(opts);
-  await writeJsonAtomic(path.join(dir, ARTIFACT_FILES.skill_candidate), candidate);
-  return validateSkillCandidate(candidate);
-}
-
-export async function writeSkillInjectionDecision(dir: any, opts: any = {}) {
-  const decision = decideSkillInjection(opts);
-  await writeJsonAtomic(path.join(dir, ARTIFACT_FILES.skill_injection_decision), decision);
-  return validateSkillInjectionDecision(decision);
 }
 
 export function createSkillForgeReport(opts: any = {}) {
@@ -254,7 +217,6 @@ export function createSkillDreamReport(opts: any = {}) {
   const state = normalizeSkillDreamState(opts.state || {}, opts);
   const inventory = opts.inventory || { skills: [], summary: {} };
   const skillStats = state.skills || {};
-  const generated = inventory.skills.filter((skill: any) => skill.ownership !== 'unknown_or_user');
   const keep: any[] = [];
   const pruneCandidates: any[] = [];
   const improveCandidates: any[] = [];

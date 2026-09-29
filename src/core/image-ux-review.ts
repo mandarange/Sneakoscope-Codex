@@ -515,7 +515,6 @@ export function defaultImageUxReviewGate(contract: any = {}, parts: any = {}) {
   const recapturePlan = parts.recapturePlan || buildRecapturePlan(fixLoop);
   const iterationReport = parts.iterationReport || buildImageUxIterationReport(contract, policy, generatedReviewLedger, issueLedger, fixTaskPlan, fixLoop, recapturePlan);
   const realGeneratedCount = Number(generatedReviewLedger.real_generated_count || 0);
-  const realGeneratedImages = (generatedReviewLedger.generated_review_images || []).filter((image: any) => image.real_generated === true && image.mock !== true);
   const rawBlockers = [
     ...(inventory.blockers || []),
     ...(generatedReviewLedger.blockers || []),

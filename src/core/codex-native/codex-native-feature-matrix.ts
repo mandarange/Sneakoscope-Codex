@@ -127,10 +127,6 @@ export function computeCodexNativeInvocationDefaults(matrix: Pick<CodexNativeFea
   }
 }
 
-export function matrixFeatureOk(matrix: CodexNativeFeatureMatrix, key: keyof CodexNativeFeatureMatrix['features']): boolean {
-  return matrix.features[key].ok
-}
-
 export function uniq(values: string[]): string[] {
   return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))]
 }

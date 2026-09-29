@@ -1,6 +1,6 @@
 import fsp from 'node:fs/promises';
 import path from 'node:path';
-import { appendJsonl, nowIso, readJson, sha256, writeJsonAtomic } from '../fsx.js';
+import { nowIso, readJson, sha256, writeJsonAtomic } from '../fsx.js';
 import { missionDir, updateCurrentIfMissionAndRun } from '../mission.js';
 import { ensureConfinedDirectory } from '../managed-path-safety.js';
 import { NARUTO_PARENT_EFFORT, narutoParentModel } from '../subagents/model-policy.js';
@@ -237,7 +237,7 @@ export async function recordAndRefreshSubagentEvidence(
       artifactDir,
       workflowRunId
     );
-    const evidence = await writeSubagentEvidence(artifactDir, {
+    await writeSubagentEvidence(artifactDir, {
       requestedSubagents,
       countPolicy: countTarget.countPolicy,
       targetSubagents: countTarget.targetSubagents,

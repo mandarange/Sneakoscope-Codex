@@ -1,13 +1,13 @@
 import path from 'node:path';
 import { createMission, missionDir, setCurrent } from '../../mission.js';
 import { ensureDir, nowIso, readJson, readText, sha256, writeJsonAtomic } from '../../fsx.js';
-import { createMadSksSqlPlaneCapability, activateMadSksSqlPlaneCapability, closeMadSksSqlPlaneCycle, MAD_SKS_SQL_PLANE_ACK, markMadSksSqlPlaneTransportReady, readMadSksSqlPlaneCapability, type MadSksSqlPlaneCapabilityV2 } from './capability.js';
+import { createMadSksSqlPlaneCapability, activateMadSksSqlPlaneCapability, closeMadSksSqlPlaneCycle, MAD_SKS_SQL_PLANE_ACK, markMadSksSqlPlaneTransportReady, type MadSksSqlPlaneCapabilityV2 } from './capability.js';
 import { MadSksSqlPlaneMcpExecutor, type MadSksSqlPlaneToolInventory, type MadSksSqlPlaneToolResult } from './mcp-executor.js';
 import { createMadSksSqlPlaneRuntimeProfile, closeMadSksSqlPlaneRuntimeProfile, redactedRuntimeProfile, type MadSksSqlPlaneRuntimeProfile, type ReadOnlyRestorationProof } from './runtime-profile.js';
 import { reserveMadSksSqlPlaneOperation, transitionMadSksSqlPlaneOperation, type MadSksSqlPlaneOperationV2 } from './operation-store.js';
 import { readBackCheck, runReadBackChecks, type MadSksSqlPlaneReadBackProof } from './postconditions.js';
 import { madSksSqlPlaneOperationClassesFromClassification } from './policy.js';
-import { projectRootHash, resolveMadSksSqlPlaneTarget, type MadSksSqlPlaneTarget } from './target.js';
+import { resolveMadSksSqlPlaneTarget, type MadSksSqlPlaneTarget } from './target.js';
 import { classifySql } from '../../db-safety.js';
 import {
   MAD_SKS_SQL_PLANE_CAPABILITY_FILE,
@@ -222,7 +222,7 @@ export async function runMadSksSqlPlaneCycle(input: {
     const classification = classifySql(sql);
     const toolName = input.action === 'apply-migration' ? 'apply_migration' : 'execute_sql';
     const toolCallId = `cli-${input.action}-${sha256(`${prepared.mission_id}:${sql}:${Date.now()}`).slice(0, 16)}`;
-    const reservation = await reserveMadSksSqlPlaneOperation({
+    await reserveMadSksSqlPlaneOperation({
       root: input.root,
       missionId: prepared.mission_id,
       capability: prepared.capability,
@@ -409,30 +409,3 @@ function redactTarget(target: MadSksSqlPlaneTarget) {
   };
 }
 
-export async function madSksSqlPlaneRouteIdentityProof(root: string, missionId: string) {
-  const capability = await readMadSksSqlPlaneCapability(root, missionId);
-  const state = await readJson<any>(path.join(root, '.sneakoscope', 'state', 'current.json'), {});
-  const profile = await readJson<any>(path.join(madSksSqlPlaneRuntimeDir(root, missionId), 'runtime-profile-manifest.json'), null);
-  const sameMission = Boolean(capability && capability.mission_id === missionId && state?.mission_id === missionId);
-  const currentMadSks = state?.route === 'MadSKS' && state?.route_command === '$MAD-SKS';
-  return {
-    schema: 'sks.mad-sks-sql-plane-route-identity-proof.v1',
-    ok: sameMission && currentMadSks,
-    mission_id: missionId,
-    capability_mission_id: capability?.mission_id || null,
-    same_mission: sameMission,
-    route: state?.route || null,
-    route_command: state?.route_command || null,
-    current_route_accepted: currentMadSks,
-    cycle_id: capability?.cycle_id || null,
-    project_root_hash: await projectRootHash(root),
-    runtime_profile: profile,
-    blockers: [
-      ...(capability ? [] : ['capability_missing']),
-      ...(profile ? [] : ['runtime_profile_manifest_missing']),
-      ...(sameMission ? [] : ['mission_binding_mismatch']),
-      ...(currentMadSks ? [] : ['route_state_not_mad_sks']),
-      ...(currentMadSks ? [] : ['route_command_not_mad_sks'])
-    ]
-  };
-}

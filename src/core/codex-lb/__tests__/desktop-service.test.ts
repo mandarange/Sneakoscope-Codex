@@ -5,7 +5,6 @@ import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import {
-  DESKTOP_BRIDGE_SETTINGS_SCHEMA,
   defaultDesktopBridgeServiceSettings,
   desktopBridgeServicePaths,
   desktopBridgeServiceStatus,

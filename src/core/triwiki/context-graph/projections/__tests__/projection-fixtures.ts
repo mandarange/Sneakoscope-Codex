@@ -11,18 +11,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { sha256 } from '../../../../fsx.js';
 import {
-  CONTEXT_GRAPH_META_SCHEMA,
-  CONTEXT_GRAPH_SCHEMA_REVISION,
   type ContextGraphEdge,
   type ContextGraphEdgeType,
-  type ContextGraphMeta,
   type ContextGraphNode,
   type ContextGraphSnapshot
 } from '../../contracts.js';
 import { buildContextGraphSnapshot } from '../../compiler/serialize.js';
 import { buildContextGraphIndex, type ContextGraphIndex } from '../../graph-index.js';
 import { contextGraphEdgeId, contextGraphNodeId } from '../../ids.js';
-import { writeContextGraphSnapshot } from '../../store/snapshot-store.js';
 
 export const FIXTURE_OBSERVED_AT = '2026-02-02T00:00:00.000Z';
 export const HUB_FILE = 'src/core/hooks/runtime.ts';
@@ -196,45 +192,6 @@ export function createProjectionFixture(options: ProjectionFixtureOptions = {}):
     ]
   });
   return { root, snapshot, index: buildContextGraphIndex(snapshot), hubFileNodeId, moduleLabels };
-}
-
-export function fixtureMeta(snapshot: ContextGraphSnapshot, head: string | null = 'fixturehead0000'): ContextGraphMeta {
-  return {
-    schema: CONTEXT_GRAPH_META_SCHEMA,
-    schemaRevision: CONTEXT_GRAPH_SCHEMA_REVISION,
-    snapshotHash: snapshot.snapshotHash,
-    previousSnapshotHash: null,
-    generatedAt: FIXTURE_OBSERVED_AT,
-    cacheKey: `cache-${snapshot.snapshotHash.slice(0, 12)}`,
-    cacheKeyParts: {
-      workspaceIdentity: 'projection-fixture',
-      head,
-      gitState: 'clean',
-      trackedDirtyFingerprint: 'none',
-      untrackedFingerprint: 'none',
-      schemaRevision: CONTEXT_GRAPH_SCHEMA_REVISION,
-      tsconfigHash: 'none',
-      commandManifestHash: 'none',
-      gateManifestHash: 'none',
-      proofIndexHash: 'none',
-      wikiContextHash: 'none'
-    },
-    inputHashes: {},
-    nodeCount: snapshot.nodeCount,
-    edgeCount: snapshot.edgeCount,
-    lint: { ok: true, errors: 0, warnings: 0 },
-    skipped: [],
-    durationMs: 0
-  };
-}
-
-/** Materialize the stored graph so the workspace-level entry points can read it. */
-export async function writeFixtureGraph(fixture: ProjectionFixture, head: string | null = 'fixturehead0000'): Promise<void> {
-  await writeContextGraphSnapshot({
-    root: fixture.root,
-    snapshot: fixture.snapshot,
-    meta: fixtureMeta(fixture.snapshot, head)
-  });
 }
 
 export function removeProjectionFixture(root: string): void {

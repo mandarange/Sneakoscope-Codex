@@ -45,11 +45,6 @@ export const CODEX_CURRENT_FEATURE_FEATURE_KEYS: CodexCurrentFeatureFeatureKey[]
 export type CodexCurrentFeatureFeatureProbeResults = Record<CodexCurrentFeatureFeatureKey, CodexCurrentFeatureProbeStatus>;
 export type CodexCurrentFeatureFeatureProbeDetails = Record<CodexCurrentFeatureFeatureKey, CodexCurrentFeatureSingleProbe>;
 
-export async function probeCodexCurrentFeatureFeatures(codexBin: string | null, opts: { fake?: boolean; timeoutMs?: number } = {}): Promise<CodexCurrentFeatureFeatureProbeResults> {
-  const details = await probeCodexCurrentFeatureFeatureDetails(codexBin, opts);
-  return Object.fromEntries(CODEX_CURRENT_FEATURE_FEATURE_KEYS.map((key) => [key, details[key].status])) as CodexCurrentFeatureFeatureProbeResults;
-}
-
 export async function probeCodexCurrentFeatureFeatureDetails(codexBin: string | null, opts: { fake?: boolean; timeoutMs?: number } = {}): Promise<CodexCurrentFeatureFeatureProbeDetails> {
   if (opts.fake) {
     return Object.fromEntries(CODEX_CURRENT_FEATURE_FEATURE_KEYS.map((key) => {

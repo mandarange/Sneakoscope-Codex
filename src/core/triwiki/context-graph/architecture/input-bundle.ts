@@ -89,20 +89,3 @@ export function buildArchitectureInputBundle(
   return bundle;
 }
 
-export function architectureInputBundleHash(bundle: ArchitectureInputBundleV1): string {
-  return hashWithoutKeys(
-    {
-      schema: bundle.schema,
-      rootId: bundle.rootId,
-      graphHash: bundle.graphHash,
-      topologyHash: bundle.topologyHash,
-      ssotInventoryHash: bundle.ssotInventoryHash,
-      voxelContextHash: bundle.voxelContextHash,
-      worktree: bundle.worktree.fingerprintHash,
-      policyHash: bundle.policyHash,
-      analyzerVersion: bundle.analyzerVersion,
-      serializerVersion: bundle.serializerVersion
-    },
-    []
-  );
-}

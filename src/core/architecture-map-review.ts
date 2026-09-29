@@ -1,11 +1,4 @@
-/**
- * Mission orchestration for Architecture Map baseline / after-review artifacts.
- */
-import { sha256 } from './fsx.js';
 import {
-  ARCHITECTURE_BASELINE_SCHEMA,
-  ARCHITECTURE_MAP_MANIFEST_SCHEMA,
-  ARCHITECTURE_REVIEW_SCHEMA,
   type ArchitectureBaselineV1,
   type ArchitectureCapsuleV1,
   type ArchitectureDeltaV1,
@@ -23,8 +16,6 @@ import { loadArchitectureMapPolicy } from './triwiki/context-graph/architecture/
 import { buildArchitectureScope } from './triwiki/context-graph/architecture/slice.js';
 import {
   validateArchitectureBaseline,
-  validateArchitectureInputBundle,
-  validateArchitectureMapManifest,
   validateArchitectureReview
 } from './triwiki/context-graph/architecture/validation.js';
 import type { ContextGraphSnapshot } from './triwiki/context-graph/contracts.js';
@@ -39,9 +30,6 @@ export const ARCHITECTURE_MAP_REVIEW_ARTIFACT = 'architecture-map-review.json';
 export const ARCHITECTURE_CAPSULE_ARTIFACT = 'architecture-capsule.txt';
 export const ARCHITECTURE_MAP_MANIFEST_ARTIFACT = 'architecture-map-manifest.json';
 
-export const ARCHITECTURE_MAP_REVIEW_SCHEMA = ARCHITECTURE_REVIEW_SCHEMA;
-export const ARCHITECTURE_MAP_BASELINE_SCHEMA = ARCHITECTURE_BASELINE_SCHEMA;
-export const ARCHITECTURE_MAP_MANIFEST_SCHEMA_ID = ARCHITECTURE_MAP_MANIFEST_SCHEMA;
 
 export interface SealArchitectureMapBaselineInput {
   readonly missionId: string;
@@ -236,14 +224,6 @@ export function validateArchitectureMapReviewArtifact(value: unknown) {
   return validateArchitectureReview(value);
 }
 
-export function validateArchitectureMapManifestArtifact(value: unknown) {
-  return validateArchitectureMapManifest(value);
-}
-
-export function validateArchitectureMapInputBundleArtifact(value: unknown) {
-  return validateArchitectureInputBundle(value);
-}
-
 export function bindArchitectureMapBaseline(input: {
   baseline: ArchitectureBaselineV1;
   missionId: string;
@@ -265,14 +245,6 @@ export function bindArchitectureMapBaseline(input: {
       worktreeFingerprintHash: input.baseline.worktreeFingerprintHash
     }
   };
-}
-
-export function architectureMapReviewDigest(review: unknown): string {
-  return sha256(JSON.stringify(review ?? null));
-}
-
-export function architectureMapBaselineDigest(baseline: unknown): string {
-  return sha256(JSON.stringify(baseline ?? null));
 }
 
 /** Re-export for callers that only need the manifest builder. */

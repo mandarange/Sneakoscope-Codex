@@ -3,7 +3,6 @@ import path from 'node:path';
 import {
   addMcpServer,
   listMcpInventory,
-  MCP_INVENTORY_SCHEMA,
   MCP_MUTATION_SCHEMA,
   removeMcpServer,
   setMcpServerEnabled,
@@ -13,7 +12,6 @@ import {
 } from '../mcp-config/index.js';
 import { isRecord } from '../json/records.js';
 
-export const CODEX_MCP_LIST_SCHEMA = MCP_INVENTORY_SCHEMA;
 export const CODEX_MCP_MUTATION_SCHEMA = MCP_MUTATION_SCHEMA;
 
 export interface CodexMcpManagerOptions {
@@ -22,24 +20,6 @@ export interface CodexMcpManagerOptions {
   readonly root?: string;
   readonly codexPath?: string;
   readonly cli?: CodexMcpCliPort;
-}
-
-export interface CodexMcpAddInput {
-  readonly name: string;
-  readonly transport: 'stdio' | 'url' | 'streamable-http';
-  readonly command?: string;
-  readonly args?: string[];
-  readonly env_vars?: string[];
-  readonly env?: Record<string, string>;
-  readonly cwd?: string;
-  readonly url?: string;
-  readonly bearer_token_env_var?: string;
-  readonly startup_timeout_sec?: number;
-  readonly tool_timeout_sec?: number;
-  readonly enabled_tools?: string[];
-  readonly disabled_tools?: string[];
-  readonly default_tools_approval_mode?: 'auto' | 'prompt' | 'writes' | 'approve' | 'deny';
-  readonly required?: boolean;
 }
 
 export function codexMcpConfigPath(homeInput?: string): string {

@@ -1,4 +1,4 @@
-import { AGENT_RESULT_SCHEMA, AGENT_WORKER_PIPELINE } from './agent-schema.js'
+import { AGENT_RESULT_SCHEMA } from './agent-schema.js'
 import type { AgentRunnerResult } from './agent-schema.js'
 import { normalizeAgentPatchEnvelope, validateAgentPatchEnvelope } from './agent-patch-schema.js'
 import { scanAgentTextForRecursion } from './agent-recursion-guard.js'
@@ -117,25 +117,6 @@ function validWriteVerification(verification: AgentRunnerResult['verification'])
     : [];
   if (status === 'passed') return checks.length > 0;
   return status === 'not_applicable' && Boolean(String(verification?.reason || '').trim());
-}
-
-export function agentWorkerPipelineContract() {
-  return {
-    schema: 'sks.agent-worker-pipeline.v1',
-    pipeline_id: AGENT_WORKER_PIPELINE,
-    creates_mission: false,
-    route_classifier_allowed: false,
-    writes_global_current_json: false,
-    route_finalizer_allowed: false,
-    writes_only_agent_session_and_central_ledger: true,
-    patch_envelope_result_fields: {
-      result_field: 'patch_envelopes',
-      required_for_write_tasks: true,
-      envelope_schema: 'sks.agent-patch-envelope.v1',
-      metadata: ['agent_id', 'session_id', 'slot_id', 'generation_index', 'lease_id_or_lease_proof'],
-      optional_hints: ['rationale', 'verification_hint', 'rollback_hint', 'cochange_acknowledged_reason', 'regression_proof', 'repair_hypothesis']
-    }
-  }
 }
 
 function normalizePatchEnvelopes(value: any) {

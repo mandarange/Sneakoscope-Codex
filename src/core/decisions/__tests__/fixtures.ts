@@ -1,45 +1,9 @@
 import type {
   DecisionBundle,
-  DecisionsWireRequest,
   DecisionsWireResponse,
   PlanCandidate
 } from '../types.js';
 import { buildDecisionBundle } from '../questions.js';
-
-export const SYNTHETIC_NOTICE = 'Synthetic example; not a live response or benchmark result.';
-
-export const SYNTHETIC_CANARY_REQUEST: DecisionsWireRequest = {
-  model: 'typesafe/jev-1.13',
-  provider: { zdr: true, data_collection: 'deny', allow_fallbacks: false },
-  state: {
-    notice: 'Synthetic connectivity probe only. No repository or personal data.',
-    status: 'failed',
-    diagnostic: 'A synthetic test failed.'
-  },
-  questions: {
-    status: {
-      type: 'choice',
-      instructions: 'Which status is explicitly recorded in state.status?',
-      criteria: {
-        passed: 'The recorded status is passed.',
-        failed: 'The recorded status is failed.'
-      }
-    },
-    has_failure: {
-      type: 'noul',
-      instructions: 'Does state.diagnostic explicitly describe a failure?'
-    },
-    severity: {
-      type: 'score',
-      instructions: 'How directly does state.diagnostic state a failure?',
-      criteria: [
-        'No failure is stated.',
-        'A failure is implied but not explicit.',
-        'A failure is explicitly stated.'
-      ]
-    }
-  }
-};
 
 export const SYNTHETIC_RESPONSE: DecisionsWireResponse = {
   id: 'synthetic-not-a-live-response',

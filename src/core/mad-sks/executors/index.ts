@@ -30,10 +30,6 @@ const EXECUTORS = {
   'generated-asset': generatedAssetExecutor
 } as const;
 
-export function madSksExecutorIds() {
-  return [...new Set(Object.values(EXECUTORS).map((executor) => executor.id))];
-}
-
 export async function runMadSksExecutor(input: MadSksExecutorInput): Promise<MadSksExecutorResult> {
   const id = String(input.executor || 'file-write') as keyof typeof EXECUTORS;
   const executor = EXECUTORS[id] || fileWriteExecutor;

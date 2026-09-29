@@ -1,7 +1,7 @@
 import { CODEX_BUILTIN_IMAGEGEN_MODEL, IMAGEGEN_QUALITIES } from '../imagegen/imagegen-model-policy.js';
 import path from 'node:path';
 import fsp from 'node:fs/promises';
-import { ensureDir, exists, nowIso, projectRoot, readJson, writeJsonAtomic } from '../fsx.js';
+import { ensureDir, nowIso, projectRoot, writeJsonAtomic } from '../fsx.js';
 import { sha256File, imageDimensions } from '../wiki-image/image-hash.js';
 import { NON_CODEX_API_FALLBACK_EVIDENCE_CLASS } from '../imagegen/imagegen-evidence.js';
 import { validateImagegenRequest } from '../imagegen/imagegen-request-validator.js';

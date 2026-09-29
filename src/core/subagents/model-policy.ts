@@ -8,10 +8,6 @@ export function narutoParentModel(): string {
   return latestModelForTier('deep')
 }
 
-// The literal Astra model id, for effort-capability tables and legacy records.
-// Children are not pinned to it: every child model resolves from a tier.
-export const ASTRA_SUBAGENT_MODEL = 'gpt-6-astra'
-
 export const LUNA_SUBAGENT_EFFORT = 'low'
 export const TERRA_SUBAGENT_EFFORT = 'medium'
 export const DEFAULT_SUBAGENT_EFFORT = 'low'
@@ -417,10 +413,6 @@ const FOCUSED_JUDGMENT_TASK_RE = new RegExp([
   '디버깅|진단|근본\\s*원인',
   '아키텍처[^\\n]{0,24}(?:결정|리뷰|설계|계획)'
 ].join('|'), 'i')
-
-export function isReasoningSensitiveSubagentTask(input: Parameters<typeof decideSubagentModel>[0] = {}): boolean {
-  return decideSubagentModel(input).policy === 'sol_max_judgment'
-}
 
 function decision(policy: SubagentModelPolicyId): SubagentModelDecision {
   return {

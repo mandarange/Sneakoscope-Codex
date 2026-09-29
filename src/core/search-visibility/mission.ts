@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { createMission, findLatestMission, missionDir, setCurrent } from '../mission.js';
-import { ensureDir, projectRoot, readJson, writeJsonAtomic, type JsonData } from '../fsx.js';
+import { ensureDir, projectRoot, writeJsonAtomic } from '../fsx.js';
 import type { SearchVisibilityCliOptions, SearchVisibilityMode, SearchVisibilityRoute } from './types.js';
 
 export const SEARCH_VISIBILITY_DIR = 'search-visibility';
@@ -62,10 +62,6 @@ export async function resolveSearchVisibilityMission(rootInput: string, missionR
   const dir = missionDir(root, id);
   const artifactDir = path.join(dir, SEARCH_VISIBILITY_DIR);
   return { id, root, dir, artifactDir };
-}
-
-export async function readSearchVisibilityState(mission: SearchVisibilityMission): Promise<JsonData> {
-  return readJson(path.join(mission.artifactDir, 'intake.json'), {});
 }
 
 export function routeForMode(_mode: SearchVisibilityMode): SearchVisibilityRoute {

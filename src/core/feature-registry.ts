@@ -1,18 +1,16 @@
 import fs from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { COMMAND_MANIFEST_LITE } from '../cli/command-manifest-lite.js';
 import { COMMANDS } from '../cli/command-registry.js';
 import { COMMAND_CATALOG, DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS, LEGACY_DOLLAR_COMMAND_NAMES, LEGACY_DOLLAR_SKILL_NAMES, ROUTES, prefixKnownSksDollarReferences, routeByDollarCommand, sksPrefixedDollarCommand } from './routes.js';
 import { FEATURE_QUALITY_LEVELS, fixtureForFeature, fixtureSummary, validateFeatureFixtures } from './feature-fixtures.js';
 import { runFeatureFixture, writeFeatureFixtureReports } from './feature-fixture-runner.js';
-import { PACKAGE_VERSION, exists, nowIso, packageRoot, readJson, readText, runProcess, writeJsonAtomic, writeTextAtomic, type JsonData } from './fsx.js';
+import { PACKAGE_VERSION, exists, nowIso, packageRoot, readJson, readText, writeJsonAtomic, writeTextAtomic, type JsonData } from './fsx.js';
 import { uniqueStrings } from './text/strings.js';
 import { assessFeatureFixtureDeclaration } from './proof/runtime-evidence-policy.js';
 
 export const FEATURE_REGISTRY_SCHEMA = 'sks.feature-registry.v1';
-export const FEATURE_INVENTORY_SCHEMA = 'sks.feature-inventory.v1';
 export const ALL_FEATURES_SELFTEST_SCHEMA = 'sks.all-features-selftest.v1';
 export const ALL_FEATURE_COMPLETION_SCHEMA = 'sks.all-feature-completion.v1';
 
@@ -494,28 +492,6 @@ export function executeFeatureFixtures(features: any = [], opts: any = {}): Json
 function fixtureExecutionFailure(featureId: any, execution: any) {
   if (execution?.timed_out) return `${featureId}:command_timeout_${execution.timeout_ms || 'unknown'}`;
   return `${featureId}:command_exit_${execution?.status}`;
-}
-
-function executeSafeFixtureCommand(featureId: any, opts: any = {}) {
-  const args = (SAFE_EXECUTABLE_FIXTURE_ARGS as unknown as Record<string, any>)[featureId];
-  if (!args) return null;
-  const root = opts.root || packageRoot();
-  const entrypoint = path.join(packageRoot(), 'dist', 'bin', 'sks.js');
-  const result = spawnSync(process.execPath, [entrypoint, ...args], {
-    cwd: root,
-    encoding: 'utf8',
-    timeout: 15_000,
-    env: { ...process.env, CI: 'true', SKS_SKIP_NPM_FRESHNESS_CHECK: '1' }
-  });
-  return {
-    id: featureId,
-    args,
-    status: result.status,
-    signal: result.signal || null,
-    ok: result.status === 0,
-    stdout_bytes: Buffer.byteLength(result.stdout || ''),
-    stderr_bytes: Buffer.byteLength(result.stderr || '')
-  };
 }
 
 function expectedArtifactPath(artifact: any) {

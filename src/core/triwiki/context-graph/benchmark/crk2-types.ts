@@ -52,10 +52,6 @@ export const CRK2_QUERY_CATEGORIES = [
 
 export type Crk2QueryCategory = (typeof CRK2_QUERY_CATEGORIES)[number];
 
-export function isCrk2QueryCategory(value: unknown): value is Crk2QueryCategory {
-  return typeof value === 'string' && (CRK2_QUERY_CATEGORIES as readonly string[]).includes(value);
-}
-
 /**
  * Which hermetic workspace a case is asked against.
  *

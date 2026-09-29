@@ -95,7 +95,6 @@ import {
   sanitizeHostCapabilityPreToolUse,
   type HostCapabilityHookRuntimeBinding
 } from './agent-bridge/host-capability-runtime.js';
-const UPDATE_CHECK_HOOK_INVOCATION_POLICY = 'function-only:no-runSksUpdateCheck-call-in-hooks';
 const MAX_ACTIVE_WORKFLOW_QUEUE_ENTRIES = 256;
 const MAX_ACTIVE_WORKFLOW_PROMPT_BYTES = 32 * 1024;
 const MAX_ACTIVE_WORKFLOW_QUEUE_BYTES = MAX_ACTIVE_WORKFLOW_QUEUE_ENTRIES
@@ -153,7 +152,6 @@ import {
 export { loadHookPayload, normalizeHookResult };
 export { refreshOfficialSubagentCompletionArtifacts };
 export { honestModeGapLines, honestModeLoopbackBudgetExhausted } from './hooks-runtime/stop-finalization.js';
-export { selftestCodexCommitHooks } from './hooks-runtime/codex-commit-hooks-selftest.js';
 async function loadState(root: any, payload: any = {}) {
   const sessionKey = conversationId(payload);
   // cwd/default is only a warning identity. Treating it as a named session made
@@ -166,11 +164,6 @@ async function loadState(root: any, payload: any = {}) {
 function isNoQuestionRunning(state: any) {
   return (state.mode === 'RESEARCH' && state.phase === 'RESEARCH_RUNNING_NO_QUESTIONS')
     || (state.mode === 'QALOOP' && state.phase === 'QALOOP_RUNNING_NO_QUESTIONS');
-}
-export async function hookMain(name: any): Promise<JsonData> {
-  const payload = await loadHookPayload();
-  const root = await projectRoot(payload.cwd || process.cwd());
-  return evaluateHookPayloadOnce(name, payload, { root });
 }
 export async function evaluateHookPayloadOnce(name: any, payload: any = {}, opts: any = {}): Promise<JsonData> {
   const root = opts.root || await projectRoot(payload.cwd || process.cwd());
@@ -1082,30 +1075,6 @@ async function recordMadSksSqlPlanePostToolLifecycle(root: any, state: any = {},
     toolCallPayload: payload,
     toolResult: payload
   });
-}
-
-function extractRowCount(payload: any = {}) {
-  const candidates = [
-    payload.row_count,
-    payload.rowCount,
-    payload.tool_response?.row_count,
-    payload.tool_response?.rowCount,
-    payload.toolResponse?.rowCount,
-    payload.result?.row_count,
-    payload.result?.rowCount,
-    payload.result?.rows_affected,
-    payload.tool_response?.rows_affected
-  ];
-  for (const candidate of candidates) {
-    if (candidate === undefined || candidate === null || candidate === '') continue;
-    const parsed = Number(candidate);
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  return null;
-}
-
-function extractToolError(payload: any = {}) {
-  return String(payload.error || payload.message || payload.stderr || payload.tool_response?.stderr || payload.toolResponse?.stderr || payload.result?.stderr || payload.result?.error || 'tool_failed');
 }
 
 async function recordToolErrorTaxonomy(root: any, state: any = {}, payload: any = {}) {

@@ -1,18 +1,6 @@
 import { isRecord } from '../json/records.js';
 
 export { isRecord };
-export interface ProbeBlockers {
-  blockers: string[]
-  warnings?: string[]
-}
-
-export interface CodexAppFeatureHealth {
-  ok: boolean
-  status: 'ok' | 'degraded' | 'unknown' | 'missing' | 'blocked'
-  evidence: string[]
-  blockers: string[]
-  warnings: string[]
-}
 
 export type CodexHookApprovalState =
   | 'approved'
@@ -124,10 +112,6 @@ export interface CodexAppExecutionProfile {
   hook_approval_probe_artifact_path: string
   blockers: string[]
   warnings: string[]
-}
-
-export function stringList(value: unknown): string[] {
-  return Array.isArray(value) ? value.map((item) => String(item)).filter(Boolean) : []
 }
 
 export function isCodexAppHarnessMatrix(value: unknown): value is CodexAppHarnessMatrix {

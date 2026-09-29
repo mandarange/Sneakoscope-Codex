@@ -68,10 +68,6 @@ export function buildCodexSdkEnv(input: CodexTaskInput): { env: Record<string, s
   }
 }
 
-export function redactCodexSdkEnv(env: Record<string, string>) {
-  return Object.fromEntries(Object.entries(env).map(([key, value]) => [key, SECRET_RE.test(key) ? '<redacted>' : value]))
-}
-
 export async function prepareNativeCodexAuthBridge(
   env: Record<string, string>,
   opts: { required?: boolean } = {}

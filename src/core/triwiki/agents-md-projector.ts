@@ -164,10 +164,6 @@ async function rollbackProjectorWrites(
   return failures;
 }
 
-function removeManagedBlock(text: string): string {
-  return text.replace(new RegExp(`\\n?${escapeRe(TRIWIKI_AGENTS_BLOCK_BEGIN)}[\\s\\S]*?${escapeRe(TRIWIKI_AGENTS_BLOCK_END)}\\n?`, 'g'), '\n').replace(/\n{3,}/g, '\n\n');
-}
-
 function removeActiveTriwikiBlocks(text: string): string {
   let next = text;
   for (const [begin, end] of ACTIVE_TRIWIKI_BLOCKS) {

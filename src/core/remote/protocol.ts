@@ -23,17 +23,6 @@ export class RemoteProtocolError extends Error {
   }
 }
 
-export function parseWorkerRequestLine(line: string, now: number = Date.now()): WorkerRequestV1 {
-  if (Buffer.byteLength(line) > DEFAULT_REMOTE_MAX_LINE_BYTES) throw new RemoteProtocolError('request_line_too_large');
-  let value: unknown;
-  try {
-    value = JSON.parse(line);
-  } catch {
-    throw new RemoteProtocolError('request_json_invalid');
-  }
-  return validateWorkerRequest(value, now);
-}
-
 export function validateWorkerRequest(value: unknown, now: number = Date.now()): WorkerRequestV1 {
   const record = asRecord(value);
   if (!record || record.schema !== REMOTE_WORKER_REQUEST_SCHEMA) throw new RemoteProtocolError('request_schema_invalid');

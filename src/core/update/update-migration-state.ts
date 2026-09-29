@@ -4,7 +4,7 @@ import { randomBytes } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
-import { ensureDir, exists, globalSksRoot, nowIso, packageRoot, PACKAGE_VERSION, projectRoot, readJson, readText, runProcess, sameFilesystemPathSync, sha256, which, writeJsonAtomic, writeReceiptRotated, writeTextAtomic } from '../fsx.js';
+import { ensureDir, exists, globalSksRoot, nowIso, packageRoot, PACKAGE_VERSION, projectRoot, readJson, readText, runProcess, sameFilesystemPathSync, sha256, writeJsonAtomic, writeReceiptRotated, writeTextAtomic } from '../fsx.js';
 import { MANAGED_ASSET_VERSION } from '../managed-assets/managed-assets-manifest.js';
 import { enforceRetention } from '../retention.js';
 import { COMMANDS } from '../../cli/command-registry.js';
@@ -134,30 +134,8 @@ export function installationEpochPath(): string {
   return path.join(globalSksRoot(), 'update', 'installation-epoch.json');
 }
 
-export function pendingUpdateMigrationPath(): string {
-  return installationEpochPath();
-}
-
 export function projectUpdateMigrationReceiptPath(root: string): string {
   return path.join(root, '.sneakoscope', 'update', 'migration-receipt.json');
-}
-
-export async function readPendingUpdateMigration(): Promise<UpdateMigrationReceipt | null> {
-  const epoch = await readInstallationEpoch();
-  if (!epoch) return null;
-  return {
-    schema: UPDATE_MIGRATION_SCHEMA,
-    status: 'pending_project_receipt',
-    sks_version: epoch.sks_version,
-    root: globalSksRoot(),
-    source: epoch.source,
-    generated_at: epoch.installed_at,
-    pending_marker_path: installationEpochPath(),
-    installation_epoch_path: installationEpochPath(),
-    installation_epoch_sha256: installationEpochSha256(epoch),
-    blockers: [],
-    warnings: []
-  };
 }
 
 export async function readProjectUpdateMigrationReceipt(root: string): Promise<UpdateMigrationReceipt | null> {
@@ -214,11 +192,6 @@ export async function writePendingUpdateMigration(input: {
     warnings: input.warnings || []
   };
   return receipt;
-}
-
-export async function clearPendingUpdateMigration(): Promise<void> {
-  // v2 keeps a persistent installation epoch; project receipts are compared
-  // independently and one project must not consume global migration state.
 }
 
 export async function writeProjectUpdateMigrationReceipt(input: {

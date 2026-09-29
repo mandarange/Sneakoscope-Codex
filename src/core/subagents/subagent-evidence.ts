@@ -656,8 +656,6 @@ async function reuseMatchingPersistedParentSummary(file: string, activeRunId: st
   return previous.raw
 }
 
-export const normalizeSubagentEvidence = buildSubagentEvidence
-
 function normalizeEventName(value: unknown): SubagentEventName | null {
   const normalized = String(value || '').trim().toLowerCase().replace(/[^a-z]+/g, '')
   if (normalized === 'subagentstart') return 'SubagentStart'
@@ -1160,7 +1158,6 @@ function resolveRunScope(
   const requestedRunId = firstText(input.runId)
   const requestedRunEpoch = firstText(input.runEpoch)
   const eventRunIds = uniqueStrings(events.map((event) => event.run_id || ''))
-  const eventTurnIds = uniqueStrings(events.map((event) => event.turn_id || ''))
   const eventRunEpochs = uniqueStrings(events.map((event) => event.run_epoch || ''))
   const latestEventRunId = latestText(events, (event) => event.run_id)
   const latestEventTurnId = latestText(events, (event) => event.turn_id)

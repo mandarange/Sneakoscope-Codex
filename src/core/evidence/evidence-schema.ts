@@ -58,8 +58,6 @@ export type EvidenceSource = typeof EVIDENCE_SOURCES[number];
 export type EvidenceFreshness = typeof EVIDENCE_FRESHNESS[number];
 export type EvidenceTrust = typeof EVIDENCE_TRUST[number];
 
-type JsonRecord = Record<string, unknown>;
-
 function stringOrNull(value: unknown): string | null {
   return typeof value === 'string' ? value : null;
 }

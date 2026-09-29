@@ -2,7 +2,6 @@
  * Architecture Map view registry — WO §12 view IDs.
  */
 import type { ArchitectureMapViewId } from '../../architecture/contracts.js';
-import { ARCHITECTURE_MAP_VIEW_IDS } from '../../architecture/contracts.js';
 import type { MermaidViewSpec } from './contracts.js';
 
 const SPECS: readonly MermaidViewSpec[] = Object.freeze([
@@ -18,24 +17,9 @@ const SPECS: readonly MermaidViewSpec[] = Object.freeze([
   { viewId: 'ownership-workstream', title: 'Ownership workstream', direction: 'LR', filename: 'ownership-workstream.mmd' }
 ]);
 
-export function architectureMapViewSpecs(): readonly MermaidViewSpec[] {
-  return SPECS;
-}
-
 export function viewSpecFor(viewId: ArchitectureMapViewId): MermaidViewSpec {
   const spec = SPECS.find((entry) => entry.viewId === viewId);
   if (!spec) throw new Error(`unknown_architecture_map_view: ${viewId}`);
   return spec;
 }
 
-export function assertViewIdsMatchWo(): void {
-  const fromSpecs = SPECS.map((spec) => spec.viewId);
-  if (fromSpecs.length !== ARCHITECTURE_MAP_VIEW_IDS.length) {
-    throw new Error('architecture_map_view_id_count_mismatch');
-  }
-  for (let index = 0; index < ARCHITECTURE_MAP_VIEW_IDS.length; index += 1) {
-    if (fromSpecs[index] !== ARCHITECTURE_MAP_VIEW_IDS[index]) {
-      throw new Error(`architecture_map_view_id_mismatch: ${fromSpecs[index]}`);
-    }
-  }
-}

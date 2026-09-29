@@ -63,19 +63,6 @@ export function serializeMermaidDocument(doc: MermaidDocument): string {
   return text;
 }
 
-export function emptyAccounting(): ProjectionAccounting {
-  return Object.freeze({
-    selectedNodeIds: Object.freeze([]),
-    emittedNodeIds: Object.freeze([]),
-    aggregatedNodeMembers: Object.freeze({}),
-    omittedNodes: Object.freeze([]),
-    selectedEdgeIds: Object.freeze([]),
-    emittedEdgeIds: Object.freeze([]),
-    aggregatedEdgeMembers: Object.freeze({}),
-    omittedEdges: Object.freeze([])
-  });
-}
-
 export function toMermaidProjection(input: {
   viewId: ArchitectureMapViewId;
   doc: MermaidDocument;

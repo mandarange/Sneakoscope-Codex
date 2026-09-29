@@ -27,8 +27,6 @@ import { edgeBetween, fileNode } from './graph-test-fixtures.js';
 
 export { makeFixtureRoot, removeFixtureRoot, writeFixtureFile } from './graph-test-fixtures.js';
 
-export const FIXTURE_OBSERVED_AT = '2026-02-01T00:00:00.000Z';
-
 export function fixtureIdentity(overrides: Partial<FragmentManifestIdentity> = {}): FragmentManifestIdentity {
   return buildFragmentManifestIdentity({
     schemaRevision: '1.0.0',

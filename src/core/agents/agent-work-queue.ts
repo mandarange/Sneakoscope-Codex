@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { appendJsonl, nowIso, readJson, writeJsonAtomic } from '../fsx.js'
+import { appendJsonl, nowIso, writeJsonAtomic } from '../fsx.js'
 import { normalizeAgentFollowUpWorkItems } from './agent-follow-up-work-items.js'
 
 export const AGENT_WORK_QUEUE_SCHEMA = 'sks.agent-work-queue.v1'
@@ -199,13 +199,3 @@ export async function appendAgentWorkQueueEvent(root: string, eventType: string,
   })
 }
 
-export async function readAgentWorkQueue(root: string) {
-  return readJson<AgentWorkQueue>(path.join(root, 'agent-work-queue.json'), {
-    schema: AGENT_WORK_QUEUE_SCHEMA,
-    updated_at: nowIso(),
-    total_work_items: 0,
-    generated_work_item_count: 0,
-    max_queue_expansion: 10,
-    items: []
-  })
-}

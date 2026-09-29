@@ -180,19 +180,3 @@ export async function invalidateCodexModelsCache(input: {
   }
 }
 
-export function desktopPickerStatusFromCache(input: {
-  readonly catalogOk: boolean
-  readonly cache: InvalidateCodexModelsCacheResult | null
-  readonly restartAppRequested?: boolean
-}): {
-  readonly catalog_ok: boolean
-  readonly models_cache_invalidated: boolean
-  readonly restart_recommended: boolean
-} {
-  const cache = input.cache
-  return {
-    catalog_ok: input.catalogOk,
-    models_cache_invalidated: cache?.models_cache_invalidated === true,
-    restart_recommended: cache?.restart_recommended === true || input.restartAppRequested === true
-  }
-}

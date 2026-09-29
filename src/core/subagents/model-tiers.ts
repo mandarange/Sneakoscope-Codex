@@ -36,13 +36,6 @@ export const MODEL_TIER_EFFORT: Readonly<Record<ModelTier, ModelTierEffort>> = O
   deep: 'max'
 })
 
-export const MODEL_TIER_SUMMARY: Readonly<Record<ModelTier, string>> = Object.freeze({
-  fast: 'Fastest latest model. Mechanical edits, renames, formatting, and other one-step changes.',
-  balanced: 'Fast latest model. Simple coding whose result is already specified.',
-  context: 'Latest model at medium effort. Search, multi-file reading, broad exploration, and tool use.',
-  deep: 'Most capable latest model. Judgment, architecture, ambiguity, security, or high-stakes work.'
-})
-
 /** Families per tier, most specific first. */
 const TIER_FAMILIES: Readonly<Record<ModelTier, readonly string[]>> = Object.freeze({
   fast: ['luna'],
@@ -106,10 +99,6 @@ export function latestModelForTier(tier: ModelTier, input: { home?: string; env?
 /** The models SKS children may use right now: the resolved latest model of every tier. */
 export function latestTierModelSet(input: { home?: string; env?: NodeJS.ProcessEnv } = {}): Set<string> {
   return new Set(Object.values(resolveLatestModelTiers(input).models))
-}
-
-export function isModelTier(value: unknown): value is ModelTier {
-  return typeof value === 'string' && (MODEL_TIERS as readonly string[]).includes(value)
 }
 
 /** The tier a concrete model id belongs to by family, or null for other models. */

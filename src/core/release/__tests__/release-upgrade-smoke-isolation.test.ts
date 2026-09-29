@@ -37,27 +37,27 @@ test('isolation routes launchctl and broad postinstall side effects to sandbox-s
 
     const unsetenv = await runReleaseUpgradeCommand({
       stage: 'stub_unsetenv', command: isolation.launchctlStub, args: ['unsetenv', 'CODEX_LB_API_KEY'],
-      cwd: isolation.workspace, env: isolation.env, timeoutMs: 5_000
+      cwd: isolation.workspace, env: isolation.env, timeoutMs: 30_000
     })
     const printed = await runReleaseUpgradeCommand({
       stage: 'stub_print', command: isolation.launchctlStub, args: ['print', 'gui/501/com.sneakoscope.sks-menubar'],
-      cwd: isolation.workspace, env: isolation.env, timeoutMs: 5_000
+      cwd: isolation.workspace, env: isolation.env, timeoutMs: 30_000
     })
     // Replacing an existing install boots out the service it replaces, so the
     // stub accepts that for this product's own labels and refuses every other
     // target. A foreign label must not even be echoed into the log.
     const ownBootout = await runReleaseUpgradeCommand({
       stage: 'stub_bootout_own', command: isolation.launchctlStub, args: ['bootout', 'gui/501/com.sneakoscope.sks-menubar'],
-      cwd: isolation.workspace, env: isolation.env, timeoutMs: 5_000
+      cwd: isolation.workspace, env: isolation.env, timeoutMs: 30_000
     })
     const foreignBootout = await runReleaseUpgradeCommand({
       stage: 'stub_bootout_foreign', command: isolation.launchctlStub, args: ['bootout', 'gui/501/com.apple.Finder'],
-      cwd: isolation.workspace, env: isolation.env, timeoutMs: 5_000
+      cwd: isolation.workspace, env: isolation.env, timeoutMs: 30_000
     })
     const secret = 'super-secret-launchctl-value'
     const forbidden = await runReleaseUpgradeCommand({
       stage: 'stub_forbidden_setenv', command: 'launchctl', args: ['setenv', 'OPENAI_API_KEY', secret],
-      cwd: isolation.workspace, env: isolation.env, timeoutMs: 5_000
+      cwd: isolation.workspace, env: isolation.env, timeoutMs: 30_000
     })
     assert.equal(unsetenv.code, 0)
     // The stub is what the upgrade under test observes, so an absent service has

@@ -1,17 +1,7 @@
 import { validateBbox } from '../wiki-image/bbox.js';
-import { detectCodexExecResumeOutputSchema } from '../codex-exec-output-schema.js';
 
 const ISSUE_STATUSES = new Set(['open', 'fixed', 'accepted_not_applicable', 'blocked', 'needs_human', 'suggestion_only', 'remains_open']);
 const SEVERITIES = new Set(['P0', 'P1', 'P2', 'P3']);
-
-export async function outputSchemaExtractionPreference() {
-  const availability = await detectCodexExecResumeOutputSchema().catch(() => null);
-  return {
-    preferred: availability?.output_schema_supported === true,
-    availability,
-    fallback_cap: availability?.output_schema_supported === true ? 'verified' : 'verified_partial'
-  };
-}
 
 export function buildIssueLedgerFromGeneratedCallouts(generatedReviewLedger: any = {}, existing: any = null) {
   const existingIssues = Array.isArray(existing?.issues) ? migrateIssueRowsToV3(existing.issues) : [];

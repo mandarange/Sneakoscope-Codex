@@ -202,13 +202,6 @@ export async function repairAgentConfigFileReferences(input: {
   return writeReport(input.reportPath, root, report)
 }
 
-// Retained for compatibility with the startup postcheck API. Official custom
-// agents are discovered from .codex/agents and do not require config_file
-// references; legacy references are intentionally ignored and preserved.
-export async function missingAgentConfigFiles(_text: string): Promise<string[]> {
-  return []
-}
-
 async function writeReport(
   reportPath: string | null | undefined,
   root: string,

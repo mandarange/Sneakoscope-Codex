@@ -11,7 +11,6 @@ export { MERMAID_PROJECTION_SCHEMA };
 export type MermaidDirection = 'LR' | 'TD';
 
 export type MermaidSafeId = string & { readonly __mermaidSafeId: unique symbol };
-export type MermaidRelationLabel = string & { readonly __mermaidRelation: unique symbol };
 
 export type ProjectionOmissionReason =
   | 'below_relevance_threshold'

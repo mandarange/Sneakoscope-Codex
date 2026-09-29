@@ -1,7 +1,5 @@
 import { WIKI_VOXEL_LAYERS, buildWikiCoordinateIndex, compactWikiCoordinateIndex, normalizeWikiCoord, wikiCoordSimilarity } from './wiki-coordinate.js';
 
-const TAU = 2 * Math.PI;
-
 export const DEFAULT_TRUST_POLICY = {
   schema_version: 1,
   score_range: [0, 1],
@@ -332,12 +330,6 @@ export function selectClaims(mission: any, claims: any, budget: any = {}) {
   return [...selected, ...fill]
     .sort((a: any, b: any) => (Number(b.claim.required_weight || 0) - Number(a.claim.required_weight || 0)) || b.score - a.score)
     .map((x: any) => withTrust({ ...x.claim, triwiki_score: Number(x.score.toFixed(4)) }, trustPolicy));
-}
-
-export function geometricOffsets(max: any = 65536) {
-  const out: any[] = [];
-  for (let x = 1; x <= max; x *= 2) out.push(x);
-  return out;
 }
 
 export function contextCapsule({ mission, role = 'worker', contractHash = null, claims = [], q4 = {}, q3 = [], budget = {}, codePackEntries = [], wrongnessByModule = {} }: any) {

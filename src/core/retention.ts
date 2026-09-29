@@ -122,12 +122,6 @@ const FULL_RETENTION_SCAN_MAX_DEPTH = 80;
 const MISSION_COMPACTION_SCAN_MAX_FILES = 100_000;
 const MISSION_COMPACTION_SCAN_MAX_DEPTH = 20;
 
-export async function ensureRetentionPolicy(root: any) {
-  const p = path.join(root, '.sneakoscope', 'policy.json');
-  if (!(await exists(p))) await writeJsonAtomic(p, { retention: DEFAULT_RETENTION_POLICY });
-  return p;
-}
-
 export async function loadRetentionPolicy(root: any) {
   const p = path.join(root, '.sneakoscope', 'policy.json');
   const data = await readJson(p, {});

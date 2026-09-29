@@ -1,4 +1,4 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -67,63 +67,6 @@ export async function captureCodexAuthSnapshot(input: {
     has_access_token: hasAccessToken,
     has_api_key: hasApiKey
   };
-}
-
-export async function codexAuthApiKeyMatches(input: {
-  expectedApiKey: string;
-  home?: string;
-  authPath?: string;
-}): Promise<boolean> {
-  const expectedApiKey = String(input.expectedApiKey || '');
-  if (!expectedApiKey) return false;
-  const home = input.home || process.env.HOME || os.homedir();
-  const authPath = input.authPath || path.join(home, '.codex', 'auth.json');
-  try {
-    const stat = await fsp.lstat(authPath);
-    if (!stat.isFile() || stat.isSymbolicLink()) return false;
-    const parsed = parseJsonObject(await fsp.readFile(authPath, 'utf8'));
-    const apiKey = findNamedSecret(
-      parsed,
-      /^(?:key|api_key|apiKey|openai_api_key|OPENAI_API_KEY)$/
-    );
-    if (!apiKey) return false;
-    const actualDigest = Buffer.from(sha256(apiKey), 'hex');
-    const expectedDigest = Buffer.from(sha256(expectedApiKey), 'hex');
-    return timingSafeEqual(actualDigest, expectedDigest);
-  } catch {
-    return false;
-  }
-}
-
-export async function assertDesktopAuthUnchangedBySks(
-  before: CodexAuthSnapshot,
-  afterConfigCommitBeforeRestart: CodexAuthSnapshot
-): Promise<void> {
-  if (
-    before.path !== afterConfigCommitBeforeRestart.path
-    || before.exists !== afterConfigCommitBeforeRestart.exists
-    || before.sha256 !== afterConfigCommitBeforeRestart.sha256
-  ) {
-    throw new Error('desktop_auth_mutated_by_sks');
-  }
-}
-
-export function assertDesktopOAuthSemanticIdentity(
-  before: CodexAuthSnapshot,
-  afterAppRestart: CodexAuthSnapshot
-): void {
-  if (before.mode !== 'chatgpt_oauth' && before.mode !== 'mixed') {
-    throw new Error(`desktop_oauth_missing_before_restart:${before.mode}`);
-  }
-  if (afterAppRestart.mode !== 'chatgpt_oauth' && afterAppRestart.mode !== 'mixed') {
-    throw new Error(`desktop_oauth_missing_after_restart:${afterAppRestart.mode}`);
-  }
-  if (before.semantic_fingerprint === null || afterAppRestart.semantic_fingerprint === null) {
-    throw new Error('desktop_oauth_identity_unverifiable');
-  }
-  if (before.semantic_fingerprint !== afterAppRestart.semantic_fingerprint) {
-    throw new Error('desktop_oauth_identity_changed');
-  }
 }
 
 function parseJsonObject(text: string): Record<string, unknown> | null {

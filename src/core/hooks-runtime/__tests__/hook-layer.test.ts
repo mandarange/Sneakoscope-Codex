@@ -60,6 +60,16 @@ test('a project hook running the global CLI steps aside for an active user-level
   });
 });
 
+test('the user-level hook does nothing when Codex runs in the home directory or a filesystem root', async () => {
+  await withLayers(async ({ env, root }) => {
+    const input = { layer: 'user' as const, hookName: 'user-prompt-submit', runningPackageRoot: '/g', env };
+    assert.deepEqual(await hookLayerDeferral({ ...input, root: env.HOME! }), { defer: true, reason: 'not_a_project' });
+    assert.deepEqual(await hookLayerDeferral({ ...input, root: path.parse(root).root }), { defer: true, reason: 'not_a_project' });
+    assert.equal((await hookLayerDeferral({ ...input, root })).defer, false, 'a folder under home is a project');
+    assert.notEqual((await hookLayerDeferral({ ...input, layer: 'project', root: env.HOME! })).reason, 'not_a_project', 'the project layer keeps its own rules');
+  });
+});
+
 test('an untrusted user-level hook never makes the project hook step aside', async () => {
   await withLayers(async ({ env, codexHome, root }) => {
     const config = path.join(codexHome, 'config.toml');

@@ -96,46 +96,7 @@ export function realisticNarutoRealWriteProofFixture(overrides: Partial<NarutoRe
   }
 }
 
-export function buildNarutoRealWriteProof(input: {
-  missionId: string
-  changedFiles: string[]
-  workerIds: string[]
-  patchEnvelopes: NarutoRealWriteProof['patch_envelopes']
-  parentMergeArtifact: string
-  typecheck: NarutoRealWriteProof['typecheck']
-  cleanup: NarutoRealWriteProof['cleanup']
-  blockers?: string[]
-}): NarutoRealWriteProof {
-  const draft: NarutoRealWriteProof = {
-    schema: NARUTO_REAL_WRITE_PROOF_SCHEMA,
-    ok: false,
-    mission_id: input.missionId,
-    backend: 'codex-sdk',
-    readonly: false,
-    write_mode: 'parallel',
-    changed_files: uniqueStrings(input.changedFiles).map(normalizeRelPath).sort(),
-    worker_ids: uniqueStrings(input.workerIds).sort(),
-    patch_envelopes: input.patchEnvelopes.map((envelope) => ({
-      envelope_id: String(envelope.envelope_id || ''),
-      agent_id: String(envelope.agent_id || ''),
-      changed_files: uniqueStrings(envelope.changed_files).map(normalizeRelPath).sort(),
-      applied: envelope.applied === true
-    })),
-    parent_merge_artifact: input.parentMergeArtifact,
-    typecheck: input.typecheck,
-    cleanup: input.cleanup,
-    blockers: uniqueStrings(input.blockers || [])
-  }
-  const structural = validateNarutoRealWriteProof({ ...draft, ok: true, blockers: [] })
-  draft.blockers = uniqueStrings([...(input.blockers || []), ...structural.blockers])
-  draft.ok = draft.blockers.length === 0
-  return draft
-}
-
 function uniqueStrings(values: unknown): string[] {
   return [...new Set((Array.isArray(values) ? values : []).map((value) => String(value || '').trim()).filter(Boolean))]
 }
 
-function normalizeRelPath(value: string): string {
-  return String(value || '').replace(/\\/g, '/').replace(/^\.\/+/, '')
-}

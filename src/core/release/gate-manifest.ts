@@ -109,15 +109,6 @@ export function buildGateManifest(gateIds: string[]): { schema: string; gates: G
   return { schema: GATE_MANIFEST_SCHEMA, gates }
 }
 
-/** Parity between the manifest and the actual release-gate set. */
-export function validateManifestParity(manifestGateIds: string[], releaseGateIds: string[]): { ok: boolean; missing_from_manifest: string[]; missing_from_release: string[] } {
-  const manifest = new Set(manifestGateIds)
-  const release = new Set(releaseGateIds)
-  const missingFromManifest = [...release].filter((id) => !manifest.has(id))
-  const missingFromRelease = [...manifest].filter((id) => !release.has(id))
-  return { ok: missingFromManifest.length === 0 && missingFromRelease.length === 0, missing_from_manifest: missingFromManifest, missing_from_release: missingFromRelease }
-}
-
 function globToRegExp(glob: string): RegExp {
   return new RegExp(
     '^' +

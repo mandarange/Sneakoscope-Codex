@@ -170,10 +170,6 @@ export function readOpenRouterOnlyStateSync(input: OpenRouterOnlyLocation = {}):
   }
 }
 
-export async function readOpenRouterOnlyState(input: OpenRouterOnlyLocation = {}): Promise<OpenRouterOnlyState> {
-  return readOpenRouterOnlyStateSync(input)
-}
-
 export async function writeOpenRouterOnlyState(
   update: Partial<Pick<OpenRouterOnlyState, 'enabled' | 'subagent_models' | 'restore'>>,
   input: OpenRouterOnlyLocation = {}

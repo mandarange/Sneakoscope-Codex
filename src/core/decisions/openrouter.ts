@@ -1,6 +1,6 @@
 import { officialSubagentLifecycleLockHeld } from '../subagents/official-subagent-lock.js';
 import { resolveOpenRouterApiKey } from '../providers/openrouter/openrouter-secret-store.js';
-import { redactOpenRouterSecrets, redactOpenRouterString } from '../security/redact-secrets.js';
+import { redactOpenRouterSecrets } from '../security/redact-secrets.js';
 import { decodeUsage, decodeWireResponse } from './policy.js';
 import {
   DESIGN_DEFAULTS,
@@ -211,10 +211,6 @@ export function encodeRequest(
 
 export function redactDecisionValue<T>(value: T, env: NodeJS.ProcessEnv = process.env): T {
   return redactOpenRouterSecrets(value, env);
-}
-
-export function redactDecisionText(value: unknown, env: NodeJS.ProcessEnv = process.env): string {
-  return redactOpenRouterString(value, env);
 }
 
 async function readBoundedBody(

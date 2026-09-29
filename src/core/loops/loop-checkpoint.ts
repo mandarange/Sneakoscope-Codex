@@ -1,4 +1,4 @@
-import { readJson, writeJsonAtomic } from '../fsx.js';
+import { writeJsonAtomic } from '../fsx.js';
 import { loopCheckpointPath, loopLatestCheckpointPath } from './loop-artifacts.js';
 
 export interface SksLoopCheckpoint {
@@ -30,6 +30,3 @@ export async function writeLoopCheckpoint(input: Omit<SksLoopCheckpoint, 'schema
   return checkpoint;
 }
 
-export async function readLatestLoopCheckpoint(root: string, missionId: string, loopId: string): Promise<SksLoopCheckpoint | null> {
-  return readJson<SksLoopCheckpoint | null>(loopLatestCheckpointPath(root, missionId, loopId), null);
-}

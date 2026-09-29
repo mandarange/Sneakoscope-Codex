@@ -30,12 +30,6 @@ export function resolveSksModelMode(args: readonly string[] = []): SksModelModeD
   return decision('unknown', false, 'no_model_mode_flags', normalized);
 }
 
-/** @deprecated GLM MAD routes were removed. */
-export function assertGlmRoute(args: readonly string[] = []): never {
-  void args;
-  throw new Error('sks_glm_route_removed:use_codex_app_use_openrouter');
-}
-
 export function assertNonGlmMadRoute(args: readonly string[] = []): SksModelModeDecision {
   const resolved = resolveSksModelMode(args);
   if (resolved.mode !== 'gpt-mad') {

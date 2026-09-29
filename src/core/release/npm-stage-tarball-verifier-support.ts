@@ -4,8 +4,7 @@ import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 import type { ReleasePackReceipt } from './release-pack-receipt.js'
 import {
-  localNpmStageReviewEnvironmentBlocker,
-  REQUIRED_NPM_STAGE_CLI_VERSION
+  localNpmStageReviewEnvironmentBlocker
 } from './npm-stage-contract.js'
 
 export const NPM_STAGE_REVIEW_RECEIPT_SCHEMA = 'sks.npm-stage-review-receipt.v2'

@@ -17,7 +17,6 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { ensureDir, exists, readJson, writeJsonAtomic } from '../fsx.js';
 import {
   buildCodePackFromGraph,
   type BuildCodePackFromGraphOptions
@@ -46,10 +45,6 @@ export function codePackDir(root: string): string {
 
 export function codePackPath(root: string): string {
   return path.join(codePackDir(root), 'code-pack.json');
-}
-
-export function codePackPrevPath(root: string): string {
-  return path.join(codePackDir(root), 'code-pack.prev.json');
 }
 
 /**
@@ -98,16 +93,3 @@ export async function validateCodePack(pack: CodePack, root: string): Promise<{ 
   return { ok: issues.length === 0, issues };
 }
 
-export async function writeCodePackAtomic(root: string, pack: CodePack): Promise<{ ok: boolean; path: string; prev_path: string | null }> {
-  const targetPath = codePackPath(root);
-  const prevPath = codePackPrevPath(root);
-  await ensureDir(codePackDir(root));
-  let prevWritten: string | null = null;
-  if (await exists(targetPath)) {
-    const previous = await readJson<CodePack>(targetPath);
-    await writeJsonAtomic(prevPath, previous);
-    prevWritten = prevPath;
-  }
-  await writeJsonAtomic(targetPath, pack);
-  return { ok: true, path: targetPath, prev_path: prevWritten };
-}

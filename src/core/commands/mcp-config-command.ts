@@ -17,8 +17,7 @@ import {
   testMcpConnection,
   type McpPluginServerInput,
   type McpScope,
-  type McpScopeOptions,
-  type McpWritableScope
+  type McpScopeOptions
 } from '../mcp-config/index.js';
 
 const WRITABLE_ONLY = new Set(['add', 'edit', 'duplicate', 'enable', 'disable', 'remove', 'login', 'logout', 'backups', 'restore']);

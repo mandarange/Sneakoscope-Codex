@@ -1,6 +1,5 @@
 import path from 'node:path';
 import { appendJsonlBounded, nowIso, readJson, sha256, writeJsonAtomic } from '../../fsx.js';
-import { findLatestMission, missionDir } from '../../mission.js';
 import { withMadSksSqlPlaneLock } from './lock.js';
 import { MAD_SKS_SQL_PLANE_POLICY, type MadSksSqlPlaneOperationClass } from './policy.js';
 import {
@@ -53,8 +52,6 @@ export interface MadSksSqlPlaneCapabilityV2 {
     failed: number;
   };
 }
-
-export type MadSksSqlPlaneCapability = MadSksSqlPlaneCapabilityV2;
 
 export async function createMadSksSqlPlaneCapability(root: string, input: {
   missionId: string;
@@ -138,13 +135,6 @@ export async function readMadSksSqlPlaneCapability(root: string, missionId: stri
   return null;
 }
 
-export async function resolveMadSksSqlPlaneMissionId(root: string, state: any = {}, explicitMissionId: string | null = null) {
-  if (explicitMissionId && explicitMissionId !== 'latest') return explicitMissionId;
-  if (state?.mad_sks_sql_plane_capability_mission_id) return String(state.mad_sks_sql_plane_capability_mission_id);
-  if (state?.mission_id) return String(state.mission_id);
-  return findLatestMission(root, { mode: 'mad-sks' });
-}
-
 export function isMadSksSqlPlaneCapabilityActive(capability: MadSksSqlPlaneCapabilityV2 | null, nowMs = Date.now()) {
   if (!capability) return false;
   const expires = Date.parse(capability.expires_at || '');
@@ -212,25 +202,6 @@ export async function updateMadSksSqlPlaneCapability(root: string, missionId: st
   });
 }
 
-export async function recordMadSksSqlPlaneOperation(root: string, missionId: string, input: { operationId?: string; toolName?: string; sqlHash?: string } = {}) {
-  const capability = await readMadSksSqlPlaneCapability(root, missionId);
-  if (!capability) return null;
-  await appendJsonlBounded(path.join(madSksSqlPlaneDir(root, missionId), MAD_SKS_SQL_PLANE_LEDGER_FILE), {
-    ts: nowIso(),
-    type: 'db_operation.recorded',
-    mission_id: missionId,
-    cycle_id: capability.cycle_id,
-    operation_id: input.operationId || null,
-    tool_name: input.toolName || null,
-    sql_hash: input.sqlHash || null
-  });
-  return capability;
-}
-
-export async function consumeMadSksSqlPlaneCapability(root: string, missionId: string, input: { consumedBy?: string; reason?: string } = {}) {
-  return closeMadSksSqlPlaneCycle(root, missionId, '', input.consumedBy || input.reason || 'mad_sks_sql_plane_cycle_closed');
-}
-
 export async function closeMadSksSqlPlaneCycle(root: string, missionId: string, cycleId = '', reason = 'mad_sks_sql_plane_cycle_closed'): Promise<MadSksSqlPlaneCapabilityV2 | null> {
   const closed = await updateMadSksSqlPlaneCapability(root, missionId, (capability) => {
     if (cycleId && capability.cycle_id !== cycleId) return capability;
@@ -254,20 +225,3 @@ export async function closeMadSksSqlPlaneCycle(root: string, missionId: string, 
   return closed;
 }
 
-export async function revokeMadSksSqlPlaneCapability(root: string, missionId: string, reason = 'operator_revoked') {
-  const revoked = await updateMadSksSqlPlaneCapability(root, missionId, (capability) => ({
-    ...capability,
-    status: 'revoked',
-    closed_at: nowIso()
-  }));
-  if (revoked) {
-    await appendJsonlBounded(path.join(madSksSqlPlaneDir(root, missionId), MAD_SKS_SQL_PLANE_LEDGER_FILE), {
-      ts: nowIso(),
-      type: 'capability.revoked',
-      mission_id: missionId,
-      cycle_id: revoked.cycle_id,
-      reason
-    });
-  }
-  return revoked;
-}

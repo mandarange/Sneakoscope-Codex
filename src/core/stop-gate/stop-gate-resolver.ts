@@ -1,7 +1,7 @@
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { exists, readJson, sha256 } from '../fsx.js';
-import { missionDir, missionsDir, stateFile, findLatestMission } from '../mission.js';
+import { missionDir, stateFile, findLatestMission } from '../mission.js';
 import type { StopGateResolution } from './stop-gate-types.js';
 
 const GATE_FILE_CANDIDATES = ['stop-gate.json', 'naruto-gate.json'];

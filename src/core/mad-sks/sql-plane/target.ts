@@ -65,10 +65,6 @@ function normalizeExplicitMcpUrl(value: string, projectRef: string | null): { ur
   return { url: parsed.toString(), blocker: null };
 }
 
-export async function projectRootHash(root: string): Promise<string> {
-  return sha256(path.resolve(root)).slice(0, 24);
-}
-
 async function projectRefCandidates(root: string): Promise<string[]> {
   const files = ['.codex/config.toml', '.mcp.json', 'mcp.json', '.cursor/mcp.json', '.vscode/mcp.json'];
   const out = new Set<string>();

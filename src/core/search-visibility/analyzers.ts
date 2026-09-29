@@ -12,7 +12,6 @@ import type {
   SiteInventory,
 } from './types.js';
 
-export const GOOGLE_AI_FEATURES_URL = 'https://developers.google.com/search/docs/appearance/ai-features';
 export const GOOGLE_AI_OPTIMIZATION_URL = 'https://developers.google.com/search/docs/fundamentals/ai-optimization-guide';
 export const GOOGLE_STRUCTURED_DATA_URL = 'https://developers.google.com/search/docs/appearance/structured-data/intro-structured-data';
 export const GOOGLE_STRUCTURED_DATA_POLICIES_URL = 'https://developers.google.com/search/docs/appearance/structured-data/sd-policies';
@@ -20,7 +19,6 @@ export const GOOGLE_SITEMAP_URL = 'https://developers.google.com/search/docs/cra
 export const GOOGLE_HREFLANG_URL = 'https://developers.google.com/search/docs/specialty/international/localized-versions';
 export const GOOGLE_CANONICAL_URL = 'https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls';
 export const GOOGLE_ROBOTS_URL = 'https://developers.google.com/search/docs/crawling-indexing/robots/intro';
-export const GOOGLE_SPAM_POLICIES_URL = 'https://developers.google.com/search/docs/essentials/spam-policies';
 export const OPENAI_BOTS_URL = 'https://developers.openai.com/api/docs/bots';
 export const ANTHROPIC_CRAWLERS_URL = 'https://support.claude.com/en/articles/8896518-does-anthropic-crawl-data-from-the-web-and-how-can-site-owners-block-the-crawler';
 export const LLMS_TXT_URL = 'https://llmstxt.org/';

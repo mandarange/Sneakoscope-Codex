@@ -83,10 +83,6 @@ export const MAD_SKS_SQL_PLANE_POLICY = Object.freeze({
   }
 });
 
-export function madSksSqlPlanePolicySnapshot() {
-  return MAD_SKS_SQL_PLANE_POLICY;
-}
-
 export function isMadSksSqlPlaneToolName(toolName: unknown): boolean {
   const normalized = normalizeToolName(toolName);
   if (!normalized) return false;

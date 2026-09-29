@@ -13,36 +13,11 @@ import {
 import {
   MANAGED_OFFICIAL_SUBAGENT_ROLES,
   RETIRED_MANAGED_AGENT_ROLE_TOMBSTONES,
-  managedAgentRoleOwnsText,
-  managedOfficialSubagentRoleByFile,
-  managedOfficialSubagentRoleByName,
-  managedOfficialSubagentRoleContent
+  managedAgentRoleOwnsText
 } from '../managed-assets/managed-assets-manifest.js'
 import { installOfficialSubagentAgentConfigs, refreshGlobalOfficialSubagentAgentConfigs } from '../subagents/official-subagent-config.js'
 
 export const AGENT_ROLE_CONFIG_REPAIR_SCHEMA = 'sks.agent-role-config-repair.v1'
-
-export const SKS_OWNED_AGENT_CONFIGS = new Map<string, {
-  name: string
-  sandbox: 'read-only' | 'workspace-write' | null
-  content: string
-  id: string
-}>([
-  ...MANAGED_OFFICIAL_SUBAGENT_ROLES.map((role) => [
-    role.filename,
-    { name: role.codex_name, sandbox: role.sandbox ?? null, content: managedOfficialSubagentRoleContent(role), id: role.id }
-  ] as const),
-])
-
-export function managedAgentRoleConfigForFile(file: string): string | null {
-  const official = managedOfficialSubagentRoleByFile(file)
-  return official ? managedOfficialSubagentRoleContent(official) : null
-}
-
-export function managedAgentRoleConfigForRole(role: string): { file: string; content: string } | null {
-  const official = managedOfficialSubagentRoleByName(role)
-  return official ? { file: official.filename, content: managedOfficialSubagentRoleContent(official) } : null
-}
 
 export async function repairAgentRoleConfigs(input: {
   root: string

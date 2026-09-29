@@ -1,7 +1,7 @@
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { missionDir } from '../mission.js';
-import { exists, readText, rel, sha256 } from '../fsx.js';
+import { readText, rel, sha256 } from '../fsx.js';
 import { routeRequiresImageVoxelAnchors } from '../proof/route-proof-policy.js';
 import { evidenceHasPlaintextSecret, redactEvidence } from './evidence-redaction.js';
 import { createEvidenceRecord, validateEvidenceRecord } from './evidence-schema.js';

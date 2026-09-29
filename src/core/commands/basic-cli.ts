@@ -1,12 +1,11 @@
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { COMMANDS } from '../../cli/command-registry.js';
 import { COMMAND_MANIFEST_LITE, type CommandManifestLiteEntry } from '../../cli/command-manifest-lite.js';
 import { flag } from '../../cli/args.js';
 import { printJson, sksTextLogo } from '../../cli/output.js';
 import { ui as cliUi } from '../../cli/cli-theme.js';
-import { PACKAGE_VERSION, ensureDir, exists, nowIso, projectRoot, readJson, rmrf, sksRoot, tmpdir, writeJsonAtomic } from '../fsx.js';
+import { PACKAGE_VERSION, ensureDir, nowIso, projectRoot, readJson, rmrf, sksRoot, tmpdir, writeJsonAtomic } from '../fsx.js';
 import { DOLLAR_COMMANDS, USAGE_TOPICS, routePrompt, routeReasoning, reasoningInstruction, sksPrefixedDollarCommand } from '../routes.js';
 import { DOLLAR_COMMAND_ALIASES_LITE, DOLLAR_COMMANDS_LITE } from '../routes/dollar-manifest-lite.js';
 import { initProject, normalizeInstallScope, sksCommandPrefix } from '../init.js';

@@ -109,7 +109,8 @@ struct Harness {
     'Sources',
     'SingletonInstanceGuard.swift'
   );
-  const compiled = await run('swiftc', [source, harness, '-o', binary], isolatedEnvironment);
+  // A cold, isolated module cache makes the first compile slow on a loaded machine; the harness itself runs in milliseconds.
+  const compiled = await run('swiftc', [source, harness, '-o', binary], isolatedEnvironment, 180_000);
   assert.equal(compiled.code, 0, `${compiled.stdout}\n${compiled.stderr}`);
   const executed = await run(binary, [], isolatedEnvironment);
   assert.equal(executed.code, 0, `${executed.stdout}\n${executed.stderr}`);

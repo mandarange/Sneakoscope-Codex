@@ -25,21 +25,3 @@ export async function evaluateDoneGate(root: any, missionId: any) {
   return result;
 }
 
-export function defaultDoneGate() {
-  return {
-    passed: false,
-    unsupported_critical_claims: 0,
-    database_safety_violation: false,
-    database_destructive_operation_attempted: false,
-    database_safety_reviewed: true,
-    visual_drift: 'unknown',
-    wiki_drift: 'unknown',
-    tests_required: true,
-    test_evidence_present: false,
-    performance_evaluation_required: false,
-    performance_evaluation_present: false,
-    design_verification_required: false,
-    design_verification_present: false,
-    notes: []
-  };
-}

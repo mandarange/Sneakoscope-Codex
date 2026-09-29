@@ -1,7 +1,6 @@
 import '../../__tests__/helpers/isolated-test-home.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
 import fsp from 'node:fs/promises'

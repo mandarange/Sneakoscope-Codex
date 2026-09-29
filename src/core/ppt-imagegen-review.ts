@@ -1,6 +1,4 @@
-import { PPT_REVIEW_ARTIFACT_PATHS, pptReviewProofEvidence, writePptImagegenReviewArtifacts } from './ppt-review/index.js';
-
-export const PPT_IMAGEGEN_REVIEW_ARTIFACTS = Object.values(PPT_REVIEW_ARTIFACT_PATHS);
+import { pptReviewProofEvidence, writePptImagegenReviewArtifacts } from './ppt-review/index.js';
 
 export async function writePptImagegenReviewFixture(root: any, dir: string, missionId: string, opts: any = {}) {
   const artifacts = await writePptImagegenReviewArtifacts({

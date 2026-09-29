@@ -401,15 +401,6 @@ export function allowedLayerEdges(policy: ArchitectureMapPolicy): Set<string> {
   return allowed;
 }
 
-export function severityForCode(
-  policy: ArchitectureMapPolicy,
-  code: ArchitectureFindingCode
-): 'blocking' | 'warning' | 'info' {
-  if (policy.blockingCodes.includes(code)) return 'blocking';
-  if (code === 'insufficient_graph') return 'blocking';
-  return 'warning';
-}
-
 /** Resolve the policy layer id for a module directory (exact match, then longest prefix). */
 export function layerForModule(policy: ArchitectureMapPolicy, moduleDir: string): string | null {
   const exact = moduleLayerMap(policy).get(moduleDir);

@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
-import { nowIso, readJson, runProcess, sha256, writeTextAtomic } from '../fsx.js';
+import { readJson, runProcess, sha256, writeTextAtomic } from '../fsx.js';
 import { guardedProcessKill, guardContextForRoute } from '../safety/mutation-guard.js';
 import { createRequestedScopeContract } from '../safety/requested-scope-contract.js';
 import {
@@ -227,10 +227,3 @@ function invalid(code: string): never {
   throw new RemoteOwnerProofError(code);
 }
 
-export function newOwnerNonce(): string {
-  return crypto.randomBytes(32).toString('base64url');
-}
-
-export function ownerProofRegisteredAt(): string {
-  return nowIso();
-}

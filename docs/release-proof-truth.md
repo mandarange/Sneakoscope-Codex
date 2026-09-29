@@ -16,7 +16,34 @@ the hook CLI in that project routed an implementation prompt to Naruto and
 denied the parent's edit before the first child. A source checkout or a test
 process never rewrites the real home's hooks (or the canonical runner's shared
 home, which caught the first build writing it); a sandbox or test with its
-own home installs normally. No live Codex turn was run.
+own home installs normally.
+
+The launcher suites run the generated script under `sh`: it runs the pinned
+SKS, falls back to node on PATH when the pinned node is gone, and is silent
+when nothing is reachable; the pinned node is the prefix's stable alias of the
+running binary; the hook state is active only while the launcher can reach an
+SKS; and a fake `app-server` counts spawns to show one verification serves
+every project of an update until hooks.json or the trust config changes. The
+hook-layer suite covers the home directory and filesystem root. The real
+bundled Codex (0.153.4) and the ChatGPT app's Codex (0.158.0-alpha) each ran
+`codex exec` in a never-set-up git project against an unreachable model
+provider and fired the user-level SessionStart and UserPromptSubmit hooks
+(state directory and `info/exclude` entry created); both hooks completed and
+the model request, recorded by a mock model endpoint, carried the Naruto
+routing directive, the parent orchestration gate text, the spawn contract, and
+the global `~/.codex/AGENTS.md` rules block. The hook also ran through the
+launcher under `env -i` with a minimal PATH and its pinned node gone, and
+exited 0 in read-only, nonexistent, non-git, and home-directory cwds. No real
+model turn was run, so whether a live model then orchestrates is not proven.
+
+Dead-code removal proof is behavioural, not textual. The scan resolved every
+identifier through re-exports and treated names reached through `importDist`,
+command-module conventions, exact string dispatch, spawned scripts, and manifests
+as uses. On the tree without the 88 deleted files the full canonical suite passes
+(3,910 tests, run on a machine at load 70), as do every command's `--help` (97),
+the mutation-callsite gate (0 uncovered), and the architecture check. The first
+full run, before the removal finished, had two child-process timeouts under the
+same load; they passed alone and their hang guards are wider now.
 
 ## Historical 10.3.8 candidate
 

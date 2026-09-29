@@ -15,15 +15,6 @@ export function writeValidPngFixture(file) {
   return file;
 }
 
-export function writeRepoTempPngFixture(name, root = process.cwd()) {
-  return writeValidPngFixture(path.join(root, '.sneakoscope', 'tmp', 'fixtures', name));
-}
-
-export function repoTempPngFixtureArg(name, root = process.cwd()) {
-  const file = writeRepoTempPngFixture(name, root);
-  return path.relative(root, file).split(path.sep).join('/');
-}
-
 export function osTempPngFixtureArg(name) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-png-fixture-'));
   return writeValidPngFixture(path.join(dir, name));

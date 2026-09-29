@@ -1,5 +1,4 @@
-import path from 'node:path'
-import { appendJsonl, ensureDir, nowIso } from '../fsx.js'
+import { nowIso } from '../fsx.js'
 import { CORE_ROLLOUT_TRACE_SCHEMA, type CoreRolloutTrace, type SkillBackend } from './core-skill-types.js'
 
 export function createRolloutTrace(input: Partial<CoreRolloutTrace> & { route: string; backend: SkillBackend }): CoreRolloutTrace {
@@ -23,13 +22,3 @@ export function createRolloutTrace(input: Partial<CoreRolloutTrace> & { route: s
   }
 }
 
-export function rolloutTracePath(root: string): string {
-  return path.join(path.resolve(root), '.sneakoscope', 'reports', 'core-skill-rollout-traces.jsonl')
-}
-
-export async function recordRolloutTrace(root: string, trace: CoreRolloutTrace): Promise<string> {
-  const file = rolloutTracePath(root)
-  await ensureDir(path.dirname(file))
-  await appendJsonl(file, trace)
-  return file
-}

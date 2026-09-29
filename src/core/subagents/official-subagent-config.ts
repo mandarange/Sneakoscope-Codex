@@ -2,7 +2,7 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { parse } from 'smol-toml'
-import { ensureDir, exists, PACKAGE_VERSION, readText, sha256, writeTextAtomic } from '../fsx.js'
+import { PACKAGE_VERSION, readText, sha256, writeTextAtomic } from '../fsx.js'
 import { ensureConfinedDirectory, inspectConfinedPath } from '../managed-path-safety.js'
 import {
   MANAGED_OFFICIAL_SUBAGENT_ROLES,
@@ -36,9 +36,6 @@ export function defaultOfficialSubagentModel(): string {
   return latestDefaultSubagentModel()
 }
 export const DEFAULT_OFFICIAL_SUBAGENT_REASONING_EFFORT = DEFAULT_SUBAGENT_EFFORT
-/** MA v2 total concurrency = spawned children + root thread. */
-export const DEFAULT_MULTI_AGENT_V2_MAX_CONCURRENT_THREADS_PER_SESSION =
-  DEFAULT_OFFICIAL_SUBAGENT_MAX_THREADS + 1
 export const LEGACY_SKS_MAX_THREAD_VALUES = Object.freeze([4, 5, 6, 12])
 export const AGENTS_MAX_CONCURRENT_THREADS_KEY = 'max_concurrent_threads_per_session'
 export const LEGACY_AGENTS_MAX_THREADS_KEY = 'max_threads'

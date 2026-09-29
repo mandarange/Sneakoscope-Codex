@@ -1,5 +1,5 @@
 import { flag } from '../cli/args.js';
-import { projectRoot, exists, nowIso } from '../core/fsx.js';
+import { projectRoot, nowIso } from '../core/fsx.js';
 import { normalizeInstallScope } from '../core/init.js';
 import { appendMigrationEvents, hashConfigText } from '../core/migration/migration-transaction-journal.js';
 import { inspectSksMenuBarStatus, sksMenuBarPaths, sksMenuBarRestartDeferred } from '../core/codex-app/menubar/index.js';
@@ -191,23 +191,6 @@ export async function writeFixMigrationJournal(
   ].filter((event) => event.beforeHash != null || event.afterHash != null);
   if (!events.length) return null;
   return appendMigrationEvents(root, events);
-}
-
-async function backupProjectConfigBeforeFix(): Promise<string | null> {
-  try {
-    const fsp = await import('node:fs/promises');
-    const path = await import('node:path');
-    const root = await projectRoot();
-    if (!root) return null;
-    const configPath = path.join(root, '.codex', 'config.toml');
-    if (!(await exists(configPath))) return null;
-    const text = await fsp.readFile(configPath, 'utf8');
-    const backupPath = `${configPath}.doctor-pre-fix-${Date.now().toString(36)}.bak`;
-    await fsp.writeFile(backupPath, text);
-    return backupPath;
-  } catch {
-    return null;
-  }
 }
 
 export function installScopeFromArgs(args: any = []) {

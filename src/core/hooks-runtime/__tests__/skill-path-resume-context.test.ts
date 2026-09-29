@@ -4,28 +4,19 @@ import {
   escapeRegExp,
   evaluateHookPayload,
   fsp,
-  homeAdmissionGuardRoot,
-  initProject,
   installCurrentManagedSkill,
-  installGlobalSkills,
-  missionDir,
   normalizeHookResult,
   os,
   path,
   preToolPayload,
   setCurrent,
-  sha256,
   subagentPayload,
-  SUBAGENT_SKILL_AVAILABILITY_BLOCKER_FILENAME,
   test,
   validateCodexHookOutput,
   validateCompactSemanticOutput,
   validatePreToolUseSemanticOutput,
   validateSessionStartSemanticOutput,
-  validateSubagentStartSemanticOutput,
-  writeManagedSkill,
-  writeOfficialSubagentPlan,
-  writeTranscript
+  writeOfficialSubagentPlan
 } from './skill-path-context-fixtures.js';
 import { loadStateForSession } from '../../mission.js';
 

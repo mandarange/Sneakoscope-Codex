@@ -100,7 +100,6 @@ export async function mergeResearchSourceShards(input: {
     blockers: [...new Set(blockers)]
   }
   await writeJsonAtomic(path.join(input.dir, 'source-ledger.json'), sourceLedger)
-  const sourceQualityReportArtifact = 'source-quality-report.json'
   await writeSourceQualityReport(input.dir, sourceLedger, await readJson(path.join(input.dir, 'claim-evidence-matrix.json'), null))
   return {
     ok: blockers.length === 0,

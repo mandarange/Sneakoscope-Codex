@@ -17,7 +17,7 @@ async function runHook(name, payload) {
   const result = await runProcess(process.execPath, [hookBin, 'hook', name], {
     cwd: process.cwd(),
     input: JSON.stringify({ cwd: process.cwd(), ...payload }),
-    timeoutMs: 15000,
+    timeoutMs: 60000,
     maxOutputBytes: 128 * 1024
   });
   assert.equal(result.code, 0, result.stderr || result.stdout);

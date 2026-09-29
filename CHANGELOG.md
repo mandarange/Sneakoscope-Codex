@@ -30,6 +30,18 @@
   Other SKS project hooks are removed once the user-level hooks are active.
 - In a project that was never set up, SKS keeps its `.sneakoscope/` state out
   of git through `.git/info/exclude`, never the tracked `.gitignore`.
+- The user-level hook launcher no longer stops working silently after
+  `brew upgrade node`. It pinned the versioned Cellar path that Node reports
+  for itself, which the upgrade deletes, and fell back only to `sks` on PATH,
+  which a Codex app started from the Dock does not have. It now pins the npm
+  prefix's `bin/node` or a stable Homebrew alias, falls back to `node` on
+  PATH and the usual install locations, and `sks doctor` and the update check
+  report a launcher that can no longer reach an SKS.
+- Codex opened in the home directory or a filesystem root no longer gets SKS
+  state or mission gates: the user-level hook does nothing there instead of
+  creating `~/.sneakoscope`.
+- The project fan-out of `sks update` asks Codex about the hooks once instead of
+  once per known project, and closes the `codex app-server` it starts.
 
 ### Changed
 
@@ -38,6 +50,15 @@
   official-parity` compares SKS's view with Codex's `hooks/list` answer.
 - SKS Doctor shows an `sks_codex_hooks` row when the user-level hooks are
   missing or untrusted.
+- Removed code nothing reached: 491 unused exported functions, constants, and
+  types, unused imports and locals, and 88 files (48 modules and 40 check
+  scripts that no gate, npm script, or test ran; 4 of those scripts already
+  failed). What a command, hook, gate, or test reaches is unchanged.
+- Tests that failed only on a loaded machine no longer do: hang guards for the
+  cold Swift compile of the menu bar singleton test, the launchctl stubs of the
+  upgrade smoke isolation test, the CLI child of the hook output and postinstall
+  tests, and the native producer of the latency SLO gate (one longer retry when
+  it hangs; a finished run is still judged by the p95 budget).
 
 ## [10.3.8] - 2026-09-27
 

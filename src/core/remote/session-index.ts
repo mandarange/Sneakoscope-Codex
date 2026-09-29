@@ -1,10 +1,8 @@
 import path from 'node:path';
-import { readJson } from '../fsx.js';
 import { findRemoteMachine, isLexicallyWithinAllowedRoot } from './machine-registry.js';
 import {
   REMOTE_SESSION_INDEX_SCHEMA,
   type RemoteMachineRegistryV1,
-  type RemoteSessionIndexV1,
   type RemoteSessionIndexValidation,
   type RemoteSessionTargetV1
 } from './types.js';
@@ -58,18 +56,6 @@ export function validateRemoteSessionIndex(value: unknown, registry: RemoteMachi
     issues,
     index: issues.length === 0 ? { schema: REMOTE_SESSION_INDEX_SCHEMA, targets } : null
   };
-}
-
-export async function loadRemoteSessionIndex(file: string, registry: RemoteMachineRegistryV1): Promise<RemoteSessionIndexV1> {
-  const validation = validateRemoteSessionIndex(await readJson<unknown>(path.resolve(file), null), registry);
-  if (!validation.ok || !validation.index) throw new Error(`remote_session_index_invalid:${validation.issues.join(',')}`);
-  return validation.index;
-}
-
-export function findRemoteSessionTarget(index: RemoteSessionIndexV1, machineId: string, projectId: string): RemoteSessionTargetV1 {
-  const target = index.targets.find((candidate) => candidate.machine_id === machineId && candidate.project_id === projectId);
-  if (!target) throw new Error(`remote_session_target_unknown:${machineId}:${projectId}`);
-  return target;
 }
 
 function stringValue(value: unknown): string {

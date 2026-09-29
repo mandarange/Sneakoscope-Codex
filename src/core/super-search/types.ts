@@ -1,5 +1,4 @@
 export const SUPER_SEARCH_PROOF_SCHEMA = 'sks.super-search-proof.v1'
-export const SUPER_SEARCH_GATE_SCHEMA = 'sks.super-search-gate.v1'
 
 export type SuperSearchMode =
   | 'fast'

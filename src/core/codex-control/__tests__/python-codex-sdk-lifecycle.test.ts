@@ -1,4 +1,4 @@
-import test, { type TestContext } from 'node:test'
+import test from 'node:test'
 import assert from 'node:assert/strict'
 import fsp from 'node:fs/promises'
 import os from 'node:os'

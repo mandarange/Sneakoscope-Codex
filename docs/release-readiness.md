@@ -12,7 +12,18 @@ next update), and strips project SKS hooks that would run twice. Verification mu
 cover Codex's own `hooks/list` loading and trusting every installed hook,
 the pinned project hook keeping its event, user hooks never auto-trusted,
 a never-set-up project getting Naruto routing and the parent edit gate, and
-a source checkout or test process never rewriting the real home's hooks.
+a source checkout or test process never rewriting the real home's hooks. The
+launcher must keep running SKS when its pinned node has moved (node on PATH,
+the usual install locations, then `sks`, else a silent no-op), Doctor and the
+update check must report a launcher that cannot reach an SKS, the update
+fan-out must ask Codex once, and the user-level hook must do nothing in the
+home directory or a filesystem root.
+
+The release also removes code nothing reached: 491 unused exports, 88 files
+(48 modules and 40 check scripts that no gate, npm script, or test ran; 4 of
+those scripts already failed), and unused locals. Verification must show the
+removal changed no behaviour: the canonical suite, every command's `--help`,
+and the mutation-callsite and architecture gates on the same tree.
 
 ## Previous candidate: 10.3.8
 

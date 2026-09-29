@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { nowIso, readText, writeJsonAtomic } from '../fsx.js'
+import { nowIso, readText } from '../fsx.js'
 import {
   diffCodexAppUiSnapshots,
   scanProjectLocalForbiddenKeys,
@@ -45,9 +45,3 @@ export async function evaluateCodexAppFastUiPreservation(root: string = process.
   }
 }
 
-export async function writeCodexAppFastUiPreservationReport(root: string = process.cwd(), input: CodexAppFastUiPreservationInput = {}) {
-  const report = await evaluateCodexAppFastUiPreservation(root, input)
-  const reportPath = input.reportPath || path.join(path.resolve(root), '.sneakoscope', 'reports', 'codex-app-fast-ui-preservation.json')
-  await writeJsonAtomic(reportPath, report)
-  return { ...report, report_path: reportPath }
-}

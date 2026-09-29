@@ -1,7 +1,7 @@
 import path from 'node:path'
 import dns from 'node:dns/promises'
 import net from 'node:net'
-import { nowIso, sha256, writeTextAtomic } from '../fsx.js'
+import { sha256, writeTextAtomic } from '../fsx.js'
 import { evaluateRealEvidencePolicy } from '../verification/real-evidence-policy.js'
 import { classifyAuthority, independenceClusterForDomain, isOfficialUrl, makeSource, sourceFromKnownUrl } from './source-records.js'
 import type {
@@ -16,25 +16,6 @@ import type {
 } from './types.js'
 
 const DEFAULT_FETCH = globalThis.fetch
-
-export function normalizeGenericSourceRows(raw: unknown, providerId: string, family: string, intent: SearchIntent, tier: SuperSearchSourceRecord['authority_tier']): SuperSearchSourceRecord[] {
-  const rows = Array.isArray(raw) ? raw : Array.isArray((raw as any)?.results) ? (raw as any).results : raw ? [raw] : []
-  return rows.map((row: any, index: number) => {
-    const url = typeof row.url === 'string' ? row.url : typeof row.link === 'string' ? row.link : null
-    return makeSource({
-      providerId,
-      family,
-      type: intent === 'official_documentation' ? 'official_docs' : 'web_result',
-      title: String(row.title || row.name || `${providerId} result ${index + 1}`),
-      url,
-      snippet: String(row.snippet || row.summary || row.text || ''),
-      verdict: 'weak_content',
-      authority: tier,
-      primary: providerId === 'context7',
-      path: [providerId]
-    })
-  })
-}
 
 export async function materializeContext7SourceRows(
   raw: unknown,

@@ -32,10 +32,6 @@ export async function resetCodexLbCircuit(root: any = packageRoot()) {
   return writeCodexLbCircuit(root, emptyCircuit());
 }
 
-export async function recordCodexLbFailure(root: any = packageRoot(), failure: any = {}) {
-  return recordCodexLbHealthEvent(root, failure);
-}
-
 export async function recordCodexLbHealthEvent(root: any = packageRoot(), event: any = {}) {
   const current = await readCodexLbCircuit(root);
   const normalized = normalizeHealthEvent(event);
@@ -96,24 +92,6 @@ export function codexLbMetrics(circuit: any = emptyCircuit()) {
       repeated_timeout: 'circuit_open',
       explicit_bypass: 'env_opt_in_only'
     }
-  };
-}
-
-export async function codexLbProofEvidence(root: any = packageRoot()) {
-  const circuit = await readCodexLbCircuit(root);
-  const metrics = codexLbMetrics(circuit);
-  return {
-    schema: 'sks.codex-lb-proof-evidence.v1',
-    ok: metrics.ok,
-    status: circuit.state === 'open' ? 'blocked' : 'verified_partial',
-    circuit_state: circuit.state,
-    report_path: codexLbReportPath(root),
-    last_ok_at: circuit.last_ok_at,
-    last_failure_at: circuit.last_failure_at,
-    last_warning_at: circuit.last_warning_at,
-    recent_failures: circuit.recent_failures?.length || 0,
-    recent_warnings: circuit.recent_warnings?.length || 0,
-    policy: metrics.policy
   };
 }
 

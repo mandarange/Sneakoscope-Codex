@@ -40,7 +40,6 @@ export async function activateSksCodexHooks(input: {
   };
 }
 
-export type SksHookActivationReport = Awaited<ReturnType<typeof activateSksCodexHooks>>;
 export type { InstallGlobalSksHooksReport };
 
 /**

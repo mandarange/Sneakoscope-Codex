@@ -1,5 +1,4 @@
-import path from 'node:path';
-import { runProcess, projectRoot, isGitRepo, nowIso, sha256 } from './fsx.js';
+import { runProcess, projectRoot, isGitRepo } from './fsx.js';
 import { redactSecrets } from './secret-redaction.js';
 
 const TRAILER = 'Co-authored-by: Codex <noreply@openai.com>';
@@ -16,11 +15,7 @@ export async function simpleGitCommitCommand(args: any = [], opts: any = {}) {
 
 export async function simpleGitCommit(root: any, { message = null, push = false }: any = {}) {
   if (!await isGitRepo(root)) return { schema: 'sks.simple-git.v1', ok: false, reason: 'not_git_repo', root };
-  const [before, branch, head] = await Promise.all([
-    git(root, ['status', '--short']),
-    git(root, ['branch', '--show-current']),
-    git(root, ['rev-parse', '--short', 'HEAD'])
-  ]);
+  const before = await git(root, ['status', '--short']);
   const changed = statusLines(before.stdout);
   if (!changed.length) return { schema: 'sks.simple-git.v1', ok: false, reason: 'no_changes', root };
   const add = await git(root, ['add', '-A']);

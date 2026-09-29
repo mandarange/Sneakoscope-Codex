@@ -1,6 +1,5 @@
-import fs from 'node:fs/promises'
 import path from 'node:path'
-import { appendJsonl, exists, nowIso, readText, sha256, writeJsonAtomic } from '../fsx.js'
+import { appendJsonl, nowIso, readText, writeJsonAtomic } from '../fsx.js'
 
 export const AGENT_PATCH_TRANSACTION_JOURNAL_SCHEMA = 'sks.agent-patch-transaction-journal.v1'
 export const AGENT_PATCH_TRANSACTION_JOURNAL_ARTIFACT = 'agent-patch-transaction-journal.jsonl'
@@ -153,17 +152,3 @@ export async function summarizeAgentPatchTransactionJournal(artifactDir: string)
   }
 }
 
-export async function hashFilesForJournal(root: string, files: string[]): Promise<Record<string, string>> {
-  const out: Record<string, string> = {}
-  for (const file of [...new Set(files.map(normalizeRelPath).filter(Boolean))].sort()) {
-    const absolute = path.resolve(root, file)
-    if (!absolute.startsWith(path.resolve(root) + path.sep)) continue
-    out[file] = await exists(absolute) ? sha256(await fs.readFile(absolute)) : 'missing'
-  }
-  return out
-}
-
-function normalizeRelPath(value: string): string {
-  const normalized = path.posix.normalize(String(value || '').replace(/\\/g, '/').replace(/^\.\/+/, ''))
-  return normalized === '.' ? '' : normalized
-}

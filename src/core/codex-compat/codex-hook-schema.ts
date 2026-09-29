@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { exists, projectRoot, readJson } from '../fsx.js';
 import { CODEX_HOOK_EVENT_TO_FILE_STEM, CODEX_HOOK_EVENTS, type CodexHookEventName, codexHookEventName, readCodexHookSchema } from './codex-schema-snapshot.js';
-import { validateCodexHookSemanticOutput, type CodexHookSemanticValidation } from './codex-hook-semantic-validator.js';
+import { validateCodexHookSemanticOutput } from './codex-hook-semantic-validator.js';
 import { schemaIssueToCodexHookIssue, type CodexHookIssue } from './codex-hook-issues.js';
 
 export type CodexSchemaValidation = {
@@ -9,10 +9,6 @@ export type CodexSchemaValidation = {
   event: CodexHookEventName;
   issues: string[];
   structured_issues: CodexHookIssue[];
-};
-
-export type CodexHookOutputValidation = CodexSchemaValidation & {
-  semantic: CodexHookSemanticValidation;
 };
 
 export async function validateCodexHookOutput(eventLike: unknown, output: unknown): Promise<CodexSchemaValidation> {

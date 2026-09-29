@@ -1,5 +1,3 @@
-import fs from 'node:fs';
-import path from 'node:path';
 import type { TriWikiAffectedGraph } from './triwiki-affected-graph.js';
 
 export const TRIWIKI_SLA_CERTIFICATE_SCHEMA = 'sks.triwiki-sla-certificate.v1';
@@ -81,9 +79,3 @@ export function buildTriWikiSlaCertificate(input: {
   return certificate;
 }
 
-export function writeTriWikiSlaCertificate(root: string, certificate: TriWikiSlaCertificate): string {
-  const file = path.join(root, '.sneakoscope', 'reports', 'triwiki-sla-certificate.json');
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, `${JSON.stringify(certificate, null, 2)}\n`);
-  return file;
-}

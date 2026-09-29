@@ -44,10 +44,6 @@ export interface RouterIntentInheritance {
 
 const routerIntentStorage = new AsyncLocalStorage<IntentContract>();
 
-export function currentRouterIntentContract(): IntentContract | null {
-  return routerIntentStorage.getStore() || null;
-}
-
 /** Builds the immutable execution contract before the legacy alias router runs. */
 export function prepareRouterExecutionIntent(
   argv: readonly string[],

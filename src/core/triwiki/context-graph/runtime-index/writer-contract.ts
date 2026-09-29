@@ -17,29 +17,11 @@
 import {
   CONTEXT_GRAPH_EDGE_TYPES,
   CONTEXT_GRAPH_NODE_KINDS,
-  type ContextGraphEdge,
   type ContextGraphEdgeConfidence,
   type ContextGraphFreshness,
   type ContextGraphMetadataValue,
-  type ContextGraphNode,
   type ContextGraphRisk,
-  type ContextGraphSnapshot,
 } from '../contracts.js';
-import {
-  CONTEXT_INDEX_FORMAT_REVISION,
-  CONTEXT_INDEX_HEADER_BYTES,
-  CONTEXT_INDEX_LIMITS,
-  CONTEXT_INDEX_REQUIRED_SECTIONS,
-  CONTEXT_INDEX_SECTION,
-  CONTEXT_INDEX_SECTION_DESCRIPTOR_BYTES,
-  ContextIndexFormatError,
-  contextIndexChecksum,
-  encodeContextIndexHeader,
-  encodeSectionDescriptor,
-  quantizeTrust,
-  type ContextIndexSectionKind,
-  type SectionDescriptor,
-} from './format.js';
 
 export const CONTEXT_INDEX_NODE_ROW_BYTES = 40;
 export const CONTEXT_INDEX_EDGE_ROW_BYTES = 16;

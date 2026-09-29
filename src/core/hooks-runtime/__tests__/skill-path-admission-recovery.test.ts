@@ -1,15 +1,10 @@
 import {
   admissionBindingState,
   assert,
-  escapeRegExp,
   evaluateHookPayload,
   fsp,
-  homeAdmissionGuardRoot,
-  initProject,
   installCurrentManagedSkill,
-  installGlobalSkills,
   missionDir,
-  normalizeHookResult,
   os,
   path,
   preToolPayload,
@@ -18,12 +13,6 @@ import {
   subagentPayload,
   SUBAGENT_SKILL_AVAILABILITY_BLOCKER_FILENAME,
   test,
-  validateCodexHookOutput,
-  validateCompactSemanticOutput,
-  validatePreToolUseSemanticOutput,
-  validateSessionStartSemanticOutput,
-  validateSubagentStartSemanticOutput,
-  writeManagedSkill,
   writeOfficialSubagentPlan,
   writeTranscript
 } from './skill-path-context-fixtures.js';

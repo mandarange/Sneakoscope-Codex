@@ -1,4 +1,4 @@
-import { IMAGEGEN_MODEL_DOC_URL, IMAGEGEN_MODEL_POLICY } from '../imagegen/imagegen-model-policy.js';
+import { IMAGEGEN_MODEL_POLICY } from '../imagegen/imagegen-model-policy.js';
 export const CODEX_COMPUTER_USE_EVIDENCE_SOURCE = 'codex_computer_use';
 export const CODEX_IN_APP_BROWSER_EVIDENCE_SOURCE = 'codex_in_app_browser';
 export const CODEX_CHROME_EXTENSION_EVIDENCE_SOURCE = 'codex_chrome_extension';
@@ -8,12 +8,8 @@ export const CODEX_IMAGEGEN_EVIDENCE_SOURCE = 'codex_app_imagegen';
 export const CODEX_IN_APP_BROWSER_DOC_URL = 'https://learn.chatgpt.com/docs/browser';
 export const CODEX_CHROME_EXTENSION_DOC_URL = 'https://learn.chatgpt.com/docs/chrome-extension';
 export const CODEX_COMPUTER_USE_DOC_URL = 'https://learn.chatgpt.com/docs/computer-use';
-export const CODEX_RECORD_REPLAY_DOC_URL = 'https://developers.openai.com/codex/record-and-replay';
 export const CODEX_APP_SERVER_DOC_URL = 'https://developers.openai.com/codex/app-server';
 export const CODEX_APP_IMAGE_GENERATION_DOC_URL = 'https://learn.chatgpt.com/docs/image-generation';
-export const OPENAI_IMAGE_GENERATION_DOC_URL = 'https://developers.openai.com/api/docs/guides/image-generation';
-export const OPENAI_IMAGEGEN_CATALOG_DOC_URL = 'https://developers.openai.com/api/docs/models';
-export const OPENAI_IMAGEGEN_MODEL_DOC_URL = IMAGEGEN_MODEL_DOC_URL;
 
 export type QaInteractionSurface =
   | 'codex_in_app_browser'
@@ -22,15 +18,6 @@ export type QaInteractionSurface =
   | 'codex_app_plugin'
   | 'structured_mcp'
   | 'shell_or_api_diagnostic';
-
-export const QA_INTERACTION_SURFACES: readonly QaInteractionSurface[] = Object.freeze([
-  'codex_in_app_browser',
-  'codex_chrome_extension',
-  'codex_computer_use',
-  'codex_app_plugin',
-  'structured_mcp',
-  'shell_or_api_diagnostic'
-]);
 
 export const CODEX_QA_SURFACE_ROUTING_POLICY = `Codex QA surface routing follows the official Codex App split: use @Browser / in-app Browser (${CODEX_IN_APP_BROWSER_DOC_URL}) first for localhost, local development servers, file-backed previews, and public pages that do not require sign-in; use @Chrome / Codex Chrome Extension (${CODEX_CHROME_EXTENSION_DOC_URL}) for signed-in websites, cookies, browser profiles, extensions, existing tabs, or internal tools; use @Computer or @AppName (${CODEX_COMPUTER_USE_DOC_URL}) for native macOS/Windows apps, OS settings, cross-app workflows, and GUI-only bugs. Prefer structured Plugins/MCPs for repeatable data operations, then verify rendered user-visible results with Browser, Chrome, or Computer Use. Playwright, Selenium, Puppeteer, Chrome MCP, static screenshots, plugin cache, and final-agent prose are not Codex App live action proof. App Server evidence (${CODEX_APP_SERVER_DOC_URL}) must correlate thread, turn, item/tool events, approvals, diffs, actions, observations, findings, fixes, and same-flow replay before a real QA pass is claimed.`;
 export const CODEX_WEB_VERIFICATION_POLICY = CODEX_QA_SURFACE_ROUTING_POLICY;

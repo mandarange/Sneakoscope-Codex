@@ -122,11 +122,6 @@ export function demoteKernelConfidence(
   return RUNG_FLOOR[rung] as ContextGraphSeedConfidence;
 }
 
-/** The confidence a lane may assign before demotion. Lexical and coarse have one option. */
-export function laneCeilingConfidence(lane: RetrievalLane): ContextGraphSeedConfidence {
-  return lane === 'anchor' ? 'exact_reference' : 'text_candidate';
-}
-
 /**
  * Confidence as an integer, so a candidate's claim lives in the same typed
  * arrays as the rest of it. The order is strongest first and is this module's

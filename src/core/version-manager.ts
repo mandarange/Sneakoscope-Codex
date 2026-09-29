@@ -8,17 +8,6 @@ const VERSION_HOOK_MARKER = 'Sneakoscope Codex Version Guard';
 const VERSION_STATE_FILE = 'sks-version-state.json';
 const DEFAULT_BUMP = 'patch';
 
-export async function installVersionGitHook(root: any, commandPrefix: any = 'sks') {
-  void root;
-  void commandPrefix;
-  return {
-    ok: false,
-    installed: false,
-    reason: 'pre_commit_hooks_unsupported',
-    message: 'SKS no longer installs Git pre-commit hooks. Use `sks versioning bump` and release checks explicitly.'
-  };
-}
-
 export async function disableVersionGitHook(root: any) {
   await setVersionPolicyEnabled(root, false);
   const git = await gitPaths(root);
@@ -97,18 +86,6 @@ async function runtimeDriftStatus(root: any, packageVersion: any) {
   };
 }
 
-export async function runVersionPreCommit(root: any, opts: any = {}) {
-  if (process.env.SKS_DISABLE_VERSIONING === '1') return { ok: true, skipped: true, reason: 'SKS_DISABLE_VERSIONING=1' };
-  const policy = await versionPolicy(root);
-  if (!policy.enabled && !opts.force) return { ok: true, skipped: true, reason: 'disabled_by_policy' };
-  const pkgPath = path.join(root, 'package.json');
-  const pkg = await readJson(pkgPath, null);
-  if (!pkg?.version) return { ok: true, skipped: true, reason: 'package_json_version_missing' };
-  const git = await gitPaths(root);
-  if (!git.ok) return { ok: true, skipped: true, reason: git.reason || 'not_git' };
-  return withVersionLock(git.common_dir, async () => verifyProjectVersion(root, { ...opts, policy, git }));
-}
-
 export async function bumpProjectVersion(root: any, opts: any = {}) {
   const policy = { ...(opts.policy || await versionPolicy(root)), ...(opts.bump ? { bump: opts.bump } : {}) };
   const git = opts.git || await gitPaths(root);
@@ -165,43 +142,6 @@ export async function bumpProjectVersion(root: any, opts: any = {}) {
     synced_files: [...synced.relative_files, ...sourceVersion.relative_files, ...changelog.relative_files],
     staged_files: staged.relative_files,
     lock_scope: git.common_dir
-  };
-}
-
-export async function verifyProjectVersion(root: any, opts: any = {}) {
-  const git = opts.git || await gitPaths(root);
-  const pkgPath = path.join(root, 'package.json');
-  const pkg = await readJson(pkgPath, {});
-  const current = parseSemver(pkg.version);
-  if (!current) return { ok: false, reason: `Unsupported package.json version: ${pkg.version}` };
-  const version = formatSemver(current);
-  const sourceVersion = await syncSourcePackageVersion(root, version);
-  const synced = await syncPackageLockVersions(root, version);
-  if (!await changelogHasVersionSection(root, version)) {
-    return { ok: false, reason: 'changelog_section_missing', version, expected: `## [${version}]` };
-  }
-  const staged = await stageVersionFiles(root, [...synced.files, ...sourceVersion.files]);
-  if (!staged.ok) return { ok: false, reason: 'git_add_version_files_failed', stderr: staged.stderr };
-  const statePath = git.ok ? path.join(git.common_dir, VERSION_STATE_FILE) : null;
-  if (statePath) {
-    await writeJsonAtomic(statePath, {
-      schema_version: 1,
-      last_version: version,
-      updated_at: nowIso(),
-      pid: process.pid,
-      mode: 'verify',
-      changed: Boolean(synced.files.length || sourceVersion.files.length)
-    });
-  }
-  return {
-    ok: true,
-    changed: Boolean(synced.files.length || sourceVersion.files.length),
-    version,
-    previous_version: version,
-    synced_files: [...synced.relative_files, ...sourceVersion.relative_files],
-    staged_files: staged.relative_files,
-    lock_scope: git.common_dir,
-    mode: 'verify'
   };
 }
 
@@ -264,33 +204,6 @@ async function gitJson(root: any, spec: any) {
   const result = await git(root, ['show', spec], { maxOutputBytes: 256 * 1024 });
   if (result.code !== 0) return null;
   try { return JSON.parse(result.stdout); } catch { return null; }
-}
-
-async function withVersionLock(commonDir: any, fn: any) {
-  const lockDir = path.join(commonDir, 'sks-version.lock');
-  const started = Date.now();
-  let attempts = 0;
-  while (true) {
-    attempts += 1;
-    try {
-      await fsp.mkdir(lockDir);
-      await writeTextAtomic(path.join(lockDir, 'owner.json'), JSON.stringify({ pid: process.pid, started_at: nowIso() }, null, 2));
-      try {
-        const result = await fn();
-        return { ...result, lock_attempts: attempts };
-      } finally {
-        await fsp.rm(lockDir, { recursive: true, force: true }).catch(() => {});
-      }
-    } catch (err: any) {
-      if (err?.code !== 'EEXIST') throw err;
-      if (Date.now() - started > 15000) return { ok: false, reason: 'version_lock_timeout', lock_path: lockDir };
-      await sleep(150 + Math.min(750, attempts * 25));
-    }
-  }
-}
-
-function sleep(ms: any) {
-  return new Promise<any>((resolve: any) => setTimeout(resolve, ms));
 }
 
 async function syncPackageLockVersions(root: any, version: any) {
@@ -465,13 +378,6 @@ async function syncChangelogVersionSection(root: any, version: any) {
   if (next === text) return { files: [], relative_files: [] };
   await writeTextAtomic(file, next);
   return { files: [file], relative_files: [path.relative(root, file)] };
-}
-
-async function changelogHasVersionSection(root: any, version: any) {
-  const file = path.join(root, 'CHANGELOG.md');
-  const text = await readFileMaybe(file);
-  const sectionRe = new RegExp(`^##\\s+\\[${escapeRegExp(version)}\\]\\s+-\\s+\\d{4}-\\d{2}-\\d{2}\\s*$`, 'm');
-  return sectionRe.test(text ?? '');
 }
 
 async function stageVersionFiles(root: any, files: any) {

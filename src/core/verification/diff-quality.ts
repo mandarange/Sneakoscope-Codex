@@ -1,4 +1,3 @@
-import path from 'node:path';
 import { findReferences } from './impact-scan.js';
 
 export interface DiffQuality {

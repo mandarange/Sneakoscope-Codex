@@ -16,8 +16,6 @@ export const RELEASE_AUTHORIZATION_SNAPSHOT_KEYS = Object.freeze([
   'dist_file_count'
 ] as const)
 
-export type ReleaseAuthorizationSnapshotKey = typeof RELEASE_AUTHORIZATION_SNAPSHOT_KEYS[number]
-
 export interface ReleaseAuthorizationSnapshot {
   git_commit: string | null
   source_digest: string

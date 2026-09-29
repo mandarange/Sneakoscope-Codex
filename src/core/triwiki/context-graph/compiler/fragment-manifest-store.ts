@@ -29,11 +29,6 @@ export function contextFragmentManifestPath(root: string): string {
   return path.join(contextFragmentManifestDir(root), CONTEXT_FRAGMENT_MANIFEST_FILE);
 }
 
-/** Workspace-relative because it is the form that may be written into a receipt. */
-export function contextFragmentManifestRelative(): string {
-  return `${MANIFEST_SEGMENTS.join('/')}/${CONTEXT_FRAGMENT_MANIFEST_FILE}`;
-}
-
 export type FragmentManifestReadStatus = 'ok' | 'absent' | 'unreadable';
 
 export interface FragmentManifestReadResult {
@@ -68,6 +63,3 @@ export async function writeContextFragmentManifest(
   return validated;
 }
 
-export async function removeContextFragmentManifest(root: string): Promise<void> {
-  await fsp.rm(contextFragmentManifestPath(root), { force: true });
-}

@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { adapterForDetection } from './adapter-registry.js';
 import { auditGeo, auditSeo } from './analyzers.js';
-import { detectProject, discoverSiteInventory } from './discovery.js';
+import { detectProject } from './discovery.js';
 import { runMarketingResearch, runMarketingStrategy } from './marketing.js';
 import { applyMutationPlan, buildMutationPlan, isMarketingMutationPlan, rollbackMutationPlan } from './mutation.js';
 import { createSearchVisibilityMission, gateFileForMode, resolveSearchVisibilityMission, routeForMode, type SearchVisibilityMission } from './mission.js';
@@ -78,7 +78,6 @@ export async function runSearchVisibilityPlan(mode: SearchVisibilityMode, missio
     }
   }
   const mission = await resolveOrAudit(mode, missionRef, options);
-  const ctx = context(mode, mission.root, options);
   const inventory = await readJson<SiteInventory>(path.join(mission.artifactDir, 'site-inventory.json'));
   const findingsArtifact = await readJson(path.join(mission.artifactDir, mode === 'seo' ? 'seo-findings.json' : 'geo-findings.json'), {});
   const findings = Array.isArray(findingsArtifact.findings) ? findingsArtifact.findings : [];

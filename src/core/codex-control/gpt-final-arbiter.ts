@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { nowIso, readJson, writeJsonAtomic } from '../fsx.js'
+import { nowIso, writeJsonAtomic } from '../fsx.js'
 import { validateJsonSchemaRecursive } from '../json-schema-validator.js'
 import { evaluateGptFinalGate } from './gpt-final-gate.js'
 import { runCodexTask } from './codex-control-plane.js'

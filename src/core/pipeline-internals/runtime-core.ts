@@ -1,6 +1,5 @@
 import path from 'node:path';
 import { appendJsonl, exists, nowIso, readJson, readText, writeJsonAtomic } from '../fsx.js';
-import { containsUserQuestion, noQuestionContinuationReason } from '../no-question-guard.js';
 import { createMission, getOrCreateSessionMission, missionDir, sessionStateKey, setCurrent } from '../mission.js';
 import { buildQuestionSchemaForRoute, buildRequestIntake, REQUEST_INTAKE_ARTIFACT, writeQuestions } from '../questions.js';
 import { sealContract } from '../decision-contract.js';
@@ -21,11 +20,8 @@ import {
 } from '../engineering-sanity-review.js';
 import { createAndWriteWorkOrderLedgerForPrompt } from '../work-order-ledger.js';
 import { resolveChangedScopeBase, writeCodeStructureReport } from '../code-structure.js';
-import { writeMemorySweepReport } from '../memory-governor.js';
-import { writeMistakeMemoryReport } from '../mistake-memory.js';
-import { MISTAKE_RECALL_ARTIFACT, mistakeRecallGateStatus } from '../mistake-recall.js';
-import { recordSkillDreamEvent, SKILL_DREAM_POLICY, writeSkillForgeReport } from '../skill-forge.js';
-import { evaluateResearchGate, researchPaperArtifactForPlan, writeResearchPlan } from '../research.js';
+import { recordSkillDreamEvent, SKILL_DREAM_POLICY } from '../skill-forge.js';
+import { researchPaperArtifactForPlan, writeResearchPlan } from '../research.js';
 import {
   ALIGN_GATE_ARTIFACT,
   ALIGN_LEDGER_ARTIFACT,
@@ -33,20 +29,18 @@ import {
   alignNextActionText,
   writeAlignRouteArtifacts
 } from '../align/align-route.js';
-import { PPT_REQUIRED_GATE_FIELDS, writePptRouteArtifacts } from '../ppt.js';
+import { writePptRouteArtifacts } from '../ppt.js';
 import { writeQaLoopArtifacts } from '../qa-loop.js';
-import { IMAGE_UX_REVIEW_GATE_ARTIFACT, IMAGE_UX_REVIEW_POLICY_ARTIFACT, IMAGE_UX_REVIEW_SCREEN_INVENTORY_ARTIFACT, IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT, IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT, IMAGE_UX_REVIEW_ITERATION_REPORT_ARTIFACT, IMAGE_UX_REVIEW_REQUIRED_GATE_FIELDS, writeImageUxReviewRouteArtifacts } from '../image-ux-review.js';
+import { IMAGE_UX_REVIEW_GATE_ARTIFACT, IMAGE_UX_REVIEW_POLICY_ARTIFACT, IMAGE_UX_REVIEW_SCREEN_INVENTORY_ARTIFACT, IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT, IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT, IMAGE_UX_REVIEW_ITERATION_REPORT_ARTIFACT, writeImageUxReviewRouteArtifacts } from '../image-ux-review.js';
 import { responseLanguageInstruction } from '../language-preference.js';
 import { buildSsotGuard } from '../safety/ssot-guard.js';
 import { SPEED_LANE_POLICY } from '../proof-field.js';
-import { validateRouteCompletionProof } from '../proof/route-proof-gate.js';
-import { routeFromState, routeRequiresCompletionProof } from '../proof/route-proof-policy.js';
 import { permissionGateSummary } from '../permission-gates.js';
 import { prepareMadSksSqlPlaneMission } from '../mad-sks/sql-plane/coordinator.js';
 import { MAD_SKS_SQL_PLANE_CAPABILITY_FILE, madSksSqlPlaneRelativePath } from '../mad-sks/sql-plane/paths.js';
 import { OFFICIAL_SUBAGENT_EXECUTION_STAGE_ID } from '../agents/agent-schema.js';
-import { normalizeOfficialSubagentPolicy, officialSubagentPipelineStage } from '../agents/agent-plan.js';
-import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_IMAGEGEN_REQUIRED_POLICY, CODEX_WEB_VERIFICATION_POLICY, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, chatCaptureIntakeText, context7RequirementText, dollarCommand, evidenceMentionsForbiddenBrowserAutomation, explicitManagedSkillNames, hasFromChatImgSignal, hasMadSksSignal, imageUxReviewPipelinePolicyText, looksLikeCodeChangingWork, managedSkillNamesForPrompt, pptPipelineAllowlistPolicyText, reflectionRequiredForRoute, reasoningInstruction, routeNeedsContext7, routePrompt, routeReasoning, routeRequiresSubagents, stripDollarCommand, stripMadSksSignal, stripVisibleDecisionAnswerBlocks, subagentExecutionPolicyText, stackCurrentDocsPolicyText, triwikiContextTracking } from '../routes.js';
+import { normalizeOfficialSubagentPolicy } from '../agents/agent-plan.js';
+import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_IMAGEGEN_REQUIRED_POLICY, CODEX_WEB_VERIFICATION_POLICY, chatCaptureIntakeText, context7RequirementText, dollarCommand, explicitManagedSkillNames, hasFromChatImgSignal, hasMadSksSignal, imageUxReviewPipelinePolicyText, managedSkillNamesForPrompt, pptPipelineAllowlistPolicyText, reflectionRequiredForRoute, reasoningInstruction, routeNeedsContext7, routePrompt, routeReasoning, routeRequiresSubagents, stripDollarCommand, stripMadSksSignal, stripVisibleDecisionAnswerBlocks, subagentExecutionPolicyText, stackCurrentDocsPolicyText, triwikiContextTracking } from '../routes.js';
 import { coreEngineeringDirectiveReferenceText, engineeringSanityPolicyText } from '../lean-engineering-policy.js';
 import { classifyTaskProfile, gateProfileForTask, type GateProfile, type TaskProfile } from '../runtime/task-profile.js';
 import { chooseVerificationBudget, type VerificationBudget } from '../runtime/verification-budget.js';
@@ -109,9 +103,6 @@ function ambientGoalContinuation() {
 const REFLECTION_ARTIFACT = 'reflection.md';
 const REFLECTION_GATE = 'reflection-gate.json';
 const REFLECTION_MEMORY_PATH = '.sneakoscope/memory/q2_facts/post-route-reflection.md';
-const COMPLIANCE_LOOP_GUARD_ARTIFACT = 'compliance-loop-guard.json';
-const HARD_BLOCKER_ARTIFACT = 'hard-blocker.json';
-const DEFAULT_COMPLIANCE_LOOP_LIMIT = 3;
 const CLARIFICATION_BYPASS_ROUTES = new Set(['Answer', 'DFix', 'Help', 'Wiki', 'ComputerUse', 'Goal']);
 const QUESTION_GATE_ROUTES = new Set(['QALoop', 'PPT']);
 function reflectionInstructionText(commandPrefix: any = 'sks') {
@@ -672,7 +663,6 @@ export async function prepareRoute(root: any, prompt: any, state: any = {}, opts
   if (!route) return { route: null, additionalContext: promptPipelineContext(prompt, null, root) };
   const dreamContext = await routeSkillDreamContext(root, route, task);
   const required = routeNeedsContext7(route, cleanPrompt);
-  const reasoning = routeReasoning(route, cleanPrompt);
   const subagentsRequired = routeRequiresSubagents(route, cleanPrompt);
   const finish = async (prepared: any) => {
     const materialized = subagentsRequired && !['Naruto', 'Goal'].includes(route.id)
@@ -1098,45 +1088,6 @@ async function materializeAutoSealedMadSks(dir: any, id: any, route: any, routeC
       migration_apply_allowed: true,
       catastrophic_safety_guard_active: true
     }
-  };
-}
-
-async function materializeMadSksAuthorization(dir: any, id: any, route: any, routeContext: any = {}, contract: any = {}) {
-  if (!routeContext.mad_sks_authorization || route?.id === 'MadSKS') return {};
-  const gateFile = route?.stopGate || 'done-gate.json';
-  await writeJsonAtomic(path.join(dir, 'mad-sks-authorization.json'), {
-    schema_version: 1,
-    mission_id: id,
-    route: route?.command || route?.id || null,
-    status: 'active',
-    active_only_for_current_route: true,
-    deactivates_when_gate_passed: gateFile,
-    supabase_mcp_schema_cleanup_allowed: true,
-    direct_execute_sql_allowed: true,
-    normal_db_writes_allowed: true,
-    live_server_writes_allowed: true,
-    migration_apply_allowed: true,
-    catastrophic_safety_guard_active: true,
-    permission_profile: permissionGateSummary(),
-    contract_hash: contract.sealed_hash || null
-  });
-  await appendJsonl(path.join(dir, 'events.jsonl'), {
-    ts: nowIso(),
-    type: 'mad_sks.modifier_authorization_opened',
-    route: route?.id || null,
-    gate: gateFile,
-    catastrophic_safety_guard_active: true
-  });
-  return {
-    mad_sks_active: true,
-    mad_sks_modifier: true,
-    mad_sks_gate_file: gateFile,
-    supabase_mcp_schema_cleanup_allowed: true,
-    direct_execute_sql_allowed: true,
-    normal_db_writes_allowed: true,
-    live_server_writes_allowed: true,
-    migration_apply_allowed: true,
-    catastrophic_safety_guard_active: true
   };
 }
 
@@ -1572,34 +1523,6 @@ async function clarificationAwaitingAnswersContext(root: any, state: any) {
   if (!id) return '';
   const planNote = await activePipelinePlanNote(root, state);
   return `Active SKS route ${state.route_command || state.route || state.mode} is paused at its ambiguity gate and waiting for explicit user answers. Do not advance to implementation, tests, route materialization, or a new pipeline stage. If the user's reply is now available, seal it with "sks pipeline answer ${id} --stdin"; otherwise show only the missing slot ids from .sneakoscope/missions/${id}/questions.md and wait.${planNote}`;
-}
-
-function clarificationVisibleResponseContract(id: any) {
-  const answerCommand = `sks pipeline answer ${id} --stdin`;
-  return `
-
-VISIBLE RESPONSE CONTRACT:
-- Do not show a prequestion sheet in chat.
-- Seal internally with inferred answers using \`${answerCommand}\`, or re-prepare the current prompt so the route auto-seals.`;
-}
-
-function clarificationPlanHint(route: any, id: any) {
-  const command = `sks pipeline answer ${id} --stdin`;
-  return `
-
-Codex plan-tool interaction:
-Use update_plan only for real execution work:
-- in_progress: Auto-seal inferred route contract for ${route.command || '$SKS'}
-- pending: Continue the original route lifecycle with decision-contract.json
-Do not surface a prequestion sheet. If auto-sealing cannot proceed, use \`${command}\`.`;
-}
-
-function formatRequiredQuestions(schema: any) {
-  return schema.slots.map((s: any, i: any) => {
-    const options = s.options ? ` Options: ${s.options.join(', ')}.` : '';
-    const examples = s.examples ? ` Examples: ${s.examples.join(', ')}.` : '';
-    return `${i + 1}. ${s.id}: ${s.question}${options}${examples}`;
-  }).join('\n');
 }
 
 export async function clarificationStopReason(root: any, state: any, kind: any) {

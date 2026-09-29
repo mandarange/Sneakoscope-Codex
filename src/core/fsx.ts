@@ -368,13 +368,6 @@ export async function appendJsonlBounded(
   } catch {}
 }
 
-export async function copyFileIfMissing(src: string, dest: string): Promise<boolean> {
-  if (await exists(dest)) return false;
-  await ensureDir(path.dirname(dest));
-  await fsp.copyFile(src, dest);
-  return true;
-}
-
 export async function mergeManagedBlock(
   file: string,
   markerName: string,
@@ -880,17 +873,6 @@ export async function withScratchDir<T>(prefix = 'sks-', fn: (dir: string) => Pr
     return await fn(dir);
   } finally {
     if (!opts.keep) await fsp.rm(dir, { recursive: true, force: true }).catch(() => undefined);
-  }
-}
-
-export function withScratchDirSync<T>(prefix = 'sks-', fn: (dir: string) => T, opts: { baseDir?: string; keep?: boolean } = {}): T {
-  const base = opts.baseDir || managedSksTmpRoot();
-  fs.mkdirSync(base, { recursive: true });
-  const dir = fs.mkdtempSync(path.join(base, prefix));
-  try {
-    return fn(dir);
-  } finally {
-    if (!opts.keep) fs.rmSync(dir, { recursive: true, force: true });
   }
 }
 

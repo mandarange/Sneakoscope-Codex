@@ -6,7 +6,6 @@ import type {
   BridgeRoutingPolicy,
   CapabilityRequestedLevel,
   ProviderSessionPin,
-  WebSocketProbeResult,
 } from '../bridge-contracts.js';
 
 export const DESKTOP_BRIDGE_STATE_SCHEMA = 'sks.desktop-bridge-state.v2' as const;
@@ -292,8 +291,6 @@ export interface DesktopBridgeWebSocketProbeOptions {
   maxRetries?: number;
   jitter?: () => number;
 }
-
-export type DesktopBridgeWebSocketProbe = WebSocketProbeResult;
 
 export class DesktopBridgeError extends Error {
   readonly code: string;

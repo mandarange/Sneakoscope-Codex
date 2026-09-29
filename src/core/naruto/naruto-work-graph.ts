@@ -179,22 +179,6 @@ export function buildNarutoWorkGraph(input: BuildNarutoWorkGraphInput = {}): Nar
   }
 }
 
-export function validateNarutoWorkGraph(graph: NarutoWorkGraph): { ok: boolean; blockers: string[] } {
-  const ids = new Set<string>()
-  const blockers = [...graph.blockers]
-  for (const item of graph.work_items) {
-    if (ids.has(item.id)) blockers.push(`duplicate_work_item:${item.id}`)
-    ids.add(item.id)
-    for (const dep of item.dependencies) {
-      if (!ids.has(dep) && !graph.work_items.some((candidate) => candidate.id === dep)) blockers.push(`missing_dependency:${item.id}:${dep}`)
-    }
-    if (item.write_allowed && item.acceptance.requires_patch_envelope !== true) blockers.push(`write_item_missing_patch_envelope_acceptance:${item.id}`)
-  }
-  if (graph.total_work_items !== graph.work_items.length) blockers.push('naruto_work_graph_count_mismatch')
-  if (!graph.readonly && graph.write_allowed_count === 0) blockers.push('naruto_write_capable_graph_missing_write_items')
-  return { ok: blockers.length === 0, blockers: [...new Set(blockers)] }
-}
-
 export function planNarutoWorkWaves(items: NarutoWorkItem[], maxActiveWorkers: number): NarutoWorkWave[] {
   const pending = [...items]
   const waves: NarutoWorkWave[] = []

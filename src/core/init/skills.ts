@@ -34,8 +34,6 @@ import {
   skillFrontmatterDescription
 } from '../skills/skill-agent-metadata.js';
 import {
-  REMOVED_SKS_SKILL_NAMES,
-  LEGACY_UNPREFIXED_SKS_SKILL_NAMES,
   LEGACY_SKS_SUPPORT_SKILL_NAMES,
   PACKAGED_SKILLS_MANIFEST_SCHEMA,
   REMOVED_SKS_SKILL_NAME_SET,
@@ -57,8 +55,7 @@ import {
   mergePackagedSkillsManifestHashHistory,
   normalizeSkillsManifest,
   runtimeBuildSourceTime,
-  skillManifestGenerationSha256,
-  skillsManifestFromHashLedger
+  skillManifestGenerationSha256
 } from './skills/manifest.js';
 
 export { REMOVED_SKS_SKILL_NAMES, LEGACY_UNPREFIXED_SKS_SKILL_NAMES } from './skills/inventory.js';
@@ -326,10 +323,6 @@ export interface RemovedSksSkillResidueReport {
 
 export async function installGlobalSkills(home: string): Promise<SkillReconcileReport> {
   return reconcileSkills({ targetDir: path.join(home, '.agents', 'skills'), scope: 'global', fix: true });
-}
-
-export async function installProjectSkills(root: string): Promise<SkillReconcileReport> {
-  return reconcileSkills({ targetDir: path.join(root, '.agents', 'skills'), scope: 'project', fix: true });
 }
 
 export async function installSkills(root: any) {

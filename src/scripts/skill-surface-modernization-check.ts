@@ -521,17 +521,6 @@ export function buildSkillSurfaceInventory(
   };
 }
 
-export function authoritativeCommandSurfaceInventory(): {
-  command_names: string[];
-  duplicate_command_names: string[];
-} {
-  const names = COMMAND_MANIFEST_LITE.map((entry) => entry.name);
-  return {
-    command_names: sortedUnique(names),
-    duplicate_command_names: duplicateValues(names)
-  };
-}
-
 export function containsActiveOpenaiSkillsReference(value: string): boolean {
   return countActiveOpenaiSkillsReferences(value) > 0;
 }

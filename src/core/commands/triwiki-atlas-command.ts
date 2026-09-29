@@ -7,7 +7,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { flag, readOption } from '../../cli/args.js';
+import { readOption } from '../../cli/args.js';
 import {
   ARCHITECTURE_MAP_MANIFEST_SCHEMA,
   ARCHITECTURE_MAP_VIEW_IDS,

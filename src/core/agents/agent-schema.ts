@@ -10,14 +10,10 @@ export {
   HARD_NARUTO_MAX_THREADS
 } from '../subagents/thread-budget.js'
 
-export const AGENT_KERNEL_SCHEMA = 'sks.native-agent-kernel.v1'
 export const AGENT_RESULT_SCHEMA = 'sks.agent-result.v1'
 export const AGENT_LEDGER_EVENT_SCHEMA = 'sks.agent-ledger-event.v1'
 export const AGENT_PROOF_EVIDENCE_SCHEMA = 'sks.agent-proof-evidence.v1'
-export const AGENT_WORKER_PIPELINE = 'AGENT_WORKER_PIPELINE'
-export const AGENT_ORCHESTRATOR_PIPELINE = 'AGENT_ORCHESTRATOR_PIPELINE'
 export const DEFAULT_AGENT_COUNT = 5
-export const AGENT_COUNT = DEFAULT_AGENT_COUNT
 export const OFFICIAL_SUBAGENT_EXECUTION_STAGE_ID = 'official_subagent_execution'
 export const MAX_AGENT_COUNT = 20
 /**
@@ -30,7 +26,6 @@ export const HARD_AGENT_CONCURRENCY = HARD_NARUTO_MAX_THREADS
 export const AGENT_BACKENDS = ['fake', 'process', 'codex-sdk'] as const
 
 export type AgentBackend = typeof AGENT_BACKENDS[number]
-export type AgentExecutionBackend = 'codex-sdk' | 'python-codex-sdk' | 'fake'
 export type AgentWorkerPlacement = 'process'
 export type AgentServiceTier = 'fast' | 'standard'
 export type AgentStatus = 'pending' | 'running' | 'closed' | 'blocked' | 'failed'

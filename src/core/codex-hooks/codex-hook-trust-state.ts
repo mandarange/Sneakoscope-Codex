@@ -2,7 +2,7 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { exists, readJson, readText } from '../fsx.js';
-import { CODEX_HOOK_EVENTS, codexHookEventName, type CodexHookEventName } from '../codex-compat/codex-hook-events.js';
+import { CODEX_HOOK_EVENTS, type CodexHookEventName } from '../codex-compat/codex-hook-events.js';
 import { codexCommandHookCurrentHash, codexHookStateKey } from './codex-hook-hash.js';
 
 export type CodexHookTrustStatus = 'Managed' | 'Trusted' | 'Modified' | 'Untrusted';
@@ -116,6 +116,3 @@ export function parseTrustedHashes(tomlText: string): Record<string, string> {
   return hashes;
 }
 
-export function normalizeCodexHookEvent(value: unknown): CodexHookEventName | null {
-  return codexHookEventName(value);
-}

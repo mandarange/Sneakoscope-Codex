@@ -272,18 +272,6 @@ function renderFeatureFixtureMarkdown(report: any = {}) {
   return `${lines.join('\n')}\n`;
 }
 
-export function validateCompletionProofArtifact(file: any) {
-  const proof = JSON.parse(fs.readFileSync(file, 'utf8'));
-  return proof.schema === 'sks.completion-proof.v1' && ['verified', 'verified_partial', 'mock_only', 'blocked'].includes(proof.status);
-}
-
-export function validateImageVoxelArtifact(file: any, { requireAnchors = true, requireRelations = false }: any = {}) {
-  const ledger = JSON.parse(fs.readFileSync(file, 'utf8'));
-  const anchors = ledger.anchors?.length || 0;
-  const relations = ledger.relations?.length || 0;
-  return ledger.schema === 'sks.image-voxel-ledger.v1' && (!requireAnchors || anchors >= 1) && (!requireRelations || relations >= 1);
-}
-
 export function validateNoPlaintextSecrets(root: any) {
   const secretPattern = /(sk-proj-[A-Za-z0-9_-]{8,}|sk-clb-[A-Za-z0-9_-]{8,}|github_pat_[A-Za-z0-9_]{8,}|(?:CODEX_ACCESS_TOKEN|OPENAI_API_KEY)\s*[:=]\s*["']?(?:sk-[A-Za-z0-9_-]{8,}|[A-Za-z0-9_-]{32,}))/;
   const reportDir = path.join(root, '.sneakoscope');
@@ -306,8 +294,6 @@ export function validateNoPlaintextSecrets(root: any) {
   return true;
 }
 
-export const validateDbEvidenceArtifact = validateCompletionProofArtifact;
-export const validateHookReplayArtifact = validateCompletionProofArtifact;
 
 function secretScanRoots(reportDir: any) {
   const roots: string[] = [];

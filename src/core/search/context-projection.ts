@@ -24,8 +24,7 @@
  */
 import { compareContextGraphIds } from '../triwiki/context-graph/ids.js';
 import type {
-  ContextGraphSeedConfidence,
-  ContextGraphSelectedNode
+  ContextGraphSeedConfidence
 } from '../triwiki/context-graph/query-types.js';
 import type {
   ContextKernelResult,
@@ -215,5 +214,3 @@ export function firstProvenanceHash(match: SearchMatch | undefined): string | nu
   return typeof hash === 'string' && hash ? hash : null;
 }
 
-/** Retained so the v1 selected-node type stays referenced by exactly one module. */
-export type LegacySelectedNode = ContextGraphSelectedNode;

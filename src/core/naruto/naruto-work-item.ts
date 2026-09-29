@@ -108,28 +108,6 @@ export interface NarutoWorkWave {
   conflict_count: number
 }
 
-export const NARUTO_WORK_KINDS: NarutoWorkKind[] = [
-  'bugfix',
-  'feature',
-  'implementation',
-  'code_modification',
-  'refactor',
-  'chore',
-  'test_generation',
-  'test_execution',
-  'verification',
-  'research',
-  'documentation',
-  'ux_review',
-  'ppt_review',
-  'image_review',
-  'conflict_resolution',
-  'patch_rebase',
-  'rollback_preparation',
-  'integration_support',
-  'final_review_input_pack'
-]
-
 export const NARUTO_WRITE_WORK_KINDS = new Set<NarutoWorkKind>([
   'bugfix',
   'feature',
@@ -147,11 +125,6 @@ export const NARUTO_WRITE_WORK_KINDS = new Set<NarutoWorkKind>([
 
 export function isNarutoWriteKind(kind: NarutoWorkKind): boolean {
   return NARUTO_WRITE_WORK_KINDS.has(kind)
-}
-
-export function normalizeNarutoWorkKind(value: unknown, fallback: NarutoWorkKind = 'verification'): NarutoWorkKind {
-  const text = String(value || '')
-  return (NARUTO_WORK_KINDS as string[]).includes(text) ? text as NarutoWorkKind : fallback
 }
 
 export function normalizeNarutoPath(value: string): string {

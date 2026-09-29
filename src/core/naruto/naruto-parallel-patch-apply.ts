@@ -84,22 +84,6 @@ async function applyEnvelope(root: string, envelope: AgentPatchEnvelope, dryRun:
   }
 }
 
-export async function rollbackNarutoPatchResult(root: string, result: NarutoParallelPatchApplyResult['results'][number]): Promise<{ ok: boolean; restored: string[]; blockers: string[] }> {
-  const restored: string[] = []
-  const blockers: string[] = []
-  for (const entry of result.rollback) {
-    try {
-      const target = resolvePatchPath(root, entry.path)
-      await ensureDir(path.dirname(target))
-      await writeTextAtomic(target, entry.content)
-      restored.push(entry.path)
-    } catch (error: unknown) {
-      blockers.push(error instanceof Error ? error.message : String(error))
-    }
-  }
-  return { ok: blockers.length === 0, restored, blockers }
-}
-
 function applyOperation(before: string, operation: AgentPatchOperation): string {
   if (operation.op === 'write') return String(operation.content || '')
   if (operation.op === 'replace') return before.replace(String(operation.search || ''), String(operation.replace || ''))

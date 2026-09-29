@@ -259,10 +259,6 @@ export async function removeEmptyTreeVerified(boundary: string, root: string): P
   }
 }
 
-export async function lstatConfinedOrNull(boundary: string, target: string): Promise<ConfinedPathInspection> {
-  return inspectConfinedPath(boundary, target);
-}
-
 export function publicPathError(error: unknown, fallback: string): string {
   if (error instanceof ManagedPathSafetyError) return `${error.code}:${error.target}`;
   return `${errorCodeOf(error) || 'managed_path_operation_failed'}:${fallback}`;

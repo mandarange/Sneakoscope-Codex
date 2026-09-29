@@ -6,7 +6,7 @@ import { jevCapabilityActive, jevEnabled, readDecisionConfig } from './config.js
 import { requestOpenRouterDecision, type DecisionFetch } from './openrouter.js';
 import { compileDecision } from './policy.js';
 import { buildDecisionBundle, validatePlanCoverage } from './questions.js';
-import { applyRecoveryEffect, listProductionRecoveryCandidates } from './recovery.js';
+import { listProductionRecoveryCandidates } from './recovery.js';
 import { assembleRoutingSelection, buildRoutingCandidates, type RoutingRoleInput } from './routing.js';
 import { buildDecisionReceipt } from './receipt.js';
 import { applyOptionalContextSelection, graphFileDigest, hydrateContextCandidates, sourceSnapshotDigest } from './state.js';
@@ -23,7 +23,6 @@ import {
   type OptionQuestion,
   type DecisionReceipt,
   type PlanCandidate,
-  type RecoveryCandidate,
   type RoutingCandidate,
   type RoutingTierId,
   type SealedRoutingEffort
@@ -41,7 +40,6 @@ export interface DecisionTestOverrides {
 }
 
 let testOverrides: DecisionTestOverrides | null = null;
-const appliedEffects = new Set<string>();
 
 export function setDecisionTestOverrides(overrides: DecisionTestOverrides | null): void {
   testOverrides = overrides;
@@ -380,34 +378,6 @@ export async function consultJevOptions(input: {
     if (model && effort && tierId) tier = { model, effort, tier: tierId };
   }
   return { called: true, choices, tier, reason: 'applied' };
-}
-
-export function effectAlreadyConsumed(identity: string): boolean {
-  return appliedEffects.has(identity);
-}
-
-export function markEffectConsumed(identity: string): boolean {
-  if (appliedEffects.has(identity)) return false;
-  if (appliedEffects.size >= 256) {
-    const oldest = appliedEffects.values().next().value;
-    if (oldest !== undefined) appliedEffects.delete(oldest);
-  }
-  appliedEffects.add(identity);
-  return true;
-}
-
-export async function dispatchBoundRecovery(input: {
-  actionId: string;
-  diagnostic: string;
-  candidates: readonly RecoveryCandidate[];
-  consumptionIdentity: string;
-}): Promise<{ invoked: boolean; reason: string; consumptionEvidence: string | null }> {
-  if (!markEffectConsumed(input.consumptionIdentity)) {
-    return { invoked: false, reason: 'duplicate_delivery', consumptionEvidence: null };
-  }
-  const result = await applyRecoveryEffect(input);
-  if (!result.ok) return { invoked: false, reason: result.reason, consumptionEvidence: null };
-  return { invoked: true, reason: 'applied', consumptionEvidence: result.consumptionEvidence };
 }
 
 function applyEffects(

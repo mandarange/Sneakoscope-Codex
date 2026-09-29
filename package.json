@@ -49,7 +49,6 @@
     "!dist/core/triwiki/context-graph/optimizer",
     "!dist/core/agents/agent-cleanup-executor.js",
     "!dist/core/ops/upgrade-migration-fixtures.js",
-    "!dist/core/proof/route-finalizer-fixtures.js",
     "!dist/core/release/npm-stage-tarball-verifier.js",
     "!dist/core/release/npm-stage-tarball-verifier-support.js",
     "config/installed-public-surface-closure.v1.json",

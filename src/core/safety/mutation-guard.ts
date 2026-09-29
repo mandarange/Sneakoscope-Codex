@@ -15,8 +15,6 @@ import { evaluateMutation, recordMutation, type MutationLedgerKind } from './mut
 // config/skill mutation lacking a backup or no-op reason throws; every applied
 // mutation is recorded to the ledger.
 
-export const MUTATION_GUARD_SCHEMA = 'sks.mutation-guard.v1'
-
 export class MutationGuardViolationError extends Error {
   readonly kind: MutationLedgerKind
   readonly target: string

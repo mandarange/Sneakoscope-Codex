@@ -62,22 +62,6 @@ export function defaultOpenCodexCatalogPath(input: {
   return path.join(codexHomePath(input), 'opencodex-catalog.json');
 }
 
-/** SKS-managed ModelInfo catalog for OpenRouter Desktop activation. */
-export function sksOpenRouterCatalogPath(input: {
-  readonly home?: string;
-  readonly env?: NodeJS.ProcessEnv;
-} = {}): string {
-  return path.join(codexHomePath(input), 'sks-openrouter-catalog.json');
-}
-
-export async function readConfiguredCodexModelCatalog(input: {
-  readonly home?: string;
-  readonly env?: NodeJS.ProcessEnv;
-  readonly configPath?: string;
-} = {}): Promise<CodexModelCatalogReadResult> {
-  return (await readConfiguredCodexModelRoutingContext(input)).catalog;
-}
-
 export async function readConfiguredCodexModelRoutingContext(input: {
   readonly home?: string;
   readonly env?: NodeJS.ProcessEnv;
@@ -258,12 +242,6 @@ function normalizeCatalogModel(value: unknown, index: number): {
     },
     blockers
   };
-}
-
-/** Row-level ModelInfo validation blockers; empty means the row is acceptable. */
-export function catalogModelRowBlockers(value: unknown, index = 0): string[] {
-  if (!isRecord(value)) return [`codex_model_catalog_row_invalid:${index}:object`];
-  return validateCatalogModelInfo(value, index);
 }
 
 function validateCatalogModelInfo(value: Record<string, any>, index: number): string[] {

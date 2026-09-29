@@ -145,12 +145,6 @@ export async function withSecretPreservationGuard<T>(
   }
 }
 
-export function missingProtectedSecrets(before: SecretPreservationSnapshot, after: SecretPreservationSnapshot): Array<{ key: string; source: string }> {
-  return changedOrMissingProtectedSecrets(before, after)
-    .filter((item) => item.reason === 'missing')
-    .map((item) => ({ key: item.key, source: item.source }));
-}
-
 export function changedOrMissingProtectedSecrets(before: SecretPreservationSnapshot, after: SecretPreservationSnapshot): ChangedOrMissingSecret[] {
   const afterMap = new Map(after.fingerprints.filter((fp) => fp.present).map((fp) => [`${fp.source}\0${fp.key}`, fp]));
   return before.fingerprints

@@ -68,10 +68,6 @@ export function cachedByFingerprint<T>(root: string, bucket: string, fingerprint
   return value
 }
 
-export function clearContentDigestProcessMemo(): void {
-  processMemo.clear()
-}
-
 function readCache(root: string): ContentDigestCacheDocument {
   try {
     const parsed = JSON.parse(fs.readFileSync(contentDigestCachePath(root), 'utf8')) as ContentDigestCacheDocument

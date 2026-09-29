@@ -1,6 +1,6 @@
 import path from 'node:path';
 import fsp from 'node:fs/promises';
-import { appendJsonlBounded, ensureDir, exists, formatBytes, nowIso, PACKAGE_VERSION, readJson, runProcess, sksRoot, writeJsonAtomic } from '../fsx.js';
+import { ensureDir, exists, formatBytes, PACKAGE_VERSION, readJson, sksRoot, writeJsonAtomic } from '../fsx.js';
 import { contextCapsule } from '../triwiki-attention.js';
 import { rgbaKey, rgbaToWikiCoord, validateWikiCoordinateIndex } from '../wiki-coordinate.js';
 import { pruneWikiArtifacts } from '../retention.js';

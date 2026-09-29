@@ -19,10 +19,6 @@ import type { SearchVisibilityCliOptions, SearchVisibilityFramework, SearchVisib
 import { evaluateGate } from '../stop-gate/gate-evaluator.js';
 import { evaluateLocalGate } from './route-success-helpers.js';
 
-export async function seoCommand(args: string[] = []) {
-  return runSearchVisibilityCommand('seo', args, 'seo');
-}
-
 export async function seoGeoOptimizerCommand(args: string[] = []) {
   const normalized = normalizeOptimizerArgs(args);
   return runSearchVisibilityCommand(normalized.mode, normalized.args, 'seo-geo-optimizer');

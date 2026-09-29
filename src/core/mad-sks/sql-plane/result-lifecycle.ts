@@ -11,18 +11,6 @@ export interface MadSksSqlPlaneLifecycleHook {
   destructive?: boolean;
 }
 
-export async function recordPendingMadSksSqlPlaneLifecycleHook(_root: string, _missionId: string, hook: MadSksSqlPlaneLifecycleHook) {
-  return {
-    schema: 'sks.mad-sks-sql-plane-lifecycle-pending.v2',
-    pending_latest_removed: true,
-    hook
-  };
-}
-
-export async function readLatestPendingMadSksSqlPlaneLifecycleHook(_root: string, _missionId: string, payload: any = {}): Promise<MadSksSqlPlaneLifecycleHook | null> {
-  return lifecycleHookFromUnknown(payload);
-}
-
 export async function recordMadSksSqlPlaneToolResult(input: {
   root: string;
   missionId: string;

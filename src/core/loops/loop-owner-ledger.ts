@@ -1,1 +1,1 @@
-export { acquireLoopLease, releaseLoopLease, detectLoopLeaseConflicts, type SksLoopLease } from './loop-lease.js';
+export { acquireLoopLease, releaseLoopLease, type SksLoopLease } from './loop-lease.js';

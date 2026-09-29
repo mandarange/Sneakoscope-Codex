@@ -23,24 +23,15 @@ export interface OpenRouterRequestCacheKeyParts {
   readonly session_id: string | null;
 }
 
-/** @deprecated Prefer OpenRouterRequestCacheKeyParts */
-export type GlmRequestCacheKeyParts = OpenRouterRequestCacheKeyParts;
-
 export interface EncodeOpenRouterRequestWithCacheInput {
   readonly request: OpenRouterChatCompletionRequest;
   readonly cacheKeyParts?: OpenRouterRequestCacheKeyParts;
   readonly stringify?: (request: OpenRouterChatCompletionRequest) => string;
 }
 
-/** @deprecated Prefer EncodeOpenRouterRequestWithCacheInput */
-export type EncodeGlmRequestWithCacheInput = EncodeOpenRouterRequestWithCacheInput;
-
 export function createOpenRouterEncodedRequestCache(maxEntries = 128) {
   return new SksLruCache<EncodedRequestCacheEntry>(maxEntries);
 }
-
-/** @deprecated Prefer createOpenRouterEncodedRequestCache */
-export const createGlmEncodedRequestCache = createOpenRouterEncodedRequestCache;
 
 export function encodeOpenRouterRequestWithCache(
   input: OpenRouterChatCompletionRequest | EncodeOpenRouterRequestWithCacheInput,
@@ -81,9 +72,6 @@ export function encodeOpenRouterRequestWithCache(
   cache.set(key, entry);
   return { body, entry, cacheHit: false };
 }
-
-/** @deprecated Prefer encodeOpenRouterRequestWithCache */
-export const encodeGlmRequestWithCache = encodeOpenRouterRequestWithCache;
 
 export function digestRequestCacheKeyParts(parts: OpenRouterRequestCacheKeyParts): string {
   return crypto.createHash('sha256').update(stableStringify(parts)).digest('hex');

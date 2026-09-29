@@ -10,8 +10,3 @@ export function combineTrustStatus(statuses: any = []) {
   return values.length ? 'verified' : 'not_verified';
 }
 
-export function statusFromIssues(issues: any = [], fallback: any = 'verified') {
-  if (issues.some((issue: any) => /failed|schema|plaintext_secret/i.test(String(issue)))) return 'failed';
-  if (issues.length) return 'blocked';
-  return fallback;
-}

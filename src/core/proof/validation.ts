@@ -2,8 +2,6 @@ import { containsPlaintextSecret } from '../secret-redaction.js';
 import { COMPLETION_PROOF_SCHEMA, COMPLETION_PROOF_STATUSES } from './proof-schema.js';
 import { asRecordOrEmpty as asRecord } from '../json/records.js';
 
-type JsonRecord = Record<string, unknown>;
-
 export function validateCompletionProof(proof: unknown = {}) {
   const structuralIssues: string[] = [];
   const record = asRecord(proof);

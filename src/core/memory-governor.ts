@@ -2,11 +2,6 @@ import path from 'node:path';
 import { exists, nowIso, readJson, writeJsonAtomic } from './fsx.js';
 import { DEFAULT_FORGETTING_THRESHOLDS, MEMORY_LIFECYCLE_STATES, forgettingDecision } from './evaluation.js';
 
-export const MEMORY_OPERATIONS = new Set([
-  'ADD', 'KEEP_ACTIVE', 'PIN', 'UNPIN', 'UPDATE', 'CONSOLIDATE', 'DEMOTE', 'SOFT_FORGET', 'DISABLE', 'ARCHIVE',
-  'QUARANTINE', 'HARD_DELETE', 'NOOP', 'PROMOTE_SKILL', 'PROMOTE_RULE', 'PROMOTE_TEST'
-]);
-
 export const DEFAULT_RETRIEVAL_BUDGET = {
   top_k_default: 8,
   top_k_high_risk: 16,

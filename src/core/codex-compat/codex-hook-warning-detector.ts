@@ -9,8 +9,7 @@ import {
   codexHookIssueWarningString,
   dedupeCodexHookIssues,
   makeCodexHookIssue,
-  type CodexHookIssue,
-  type CodexHookIssueCategory
+  type CodexHookIssue
 } from './codex-hook-issues.js';
 import { validateCodexHookConfigFiles } from './codex-config-policy.js';
 

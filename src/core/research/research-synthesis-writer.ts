@@ -325,11 +325,6 @@ function counterevidenceIdsFromLedger(sourceLedger: any): string[] {
   return normalizeStringList((Array.isArray(sourceLedger?.counterevidence_sources) ? sourceLedger.counterevidence_sources : []).map((row: any) => row?.id))
 }
 
-function claimSourceIds(claimMatrix: any, claimId: string): string[] {
-  const claim = (Array.isArray(claimMatrix?.claims) ? claimMatrix.claims : []).find((row: any) => String(row?.id || '') === claimId)
-  return normalizeStringList([...(Array.isArray(claim?.source_ids) ? claim.source_ids : []), ...(Array.isArray(claim?.counterevidence_ids) ? claim.counterevidence_ids : [])])
-}
-
 function sourceCitationCount(text: string): number {
   return [...String(text || '').matchAll(/\b(?:source|src|mock-source|shard-[A-Za-z0-9_-]+|counter|mock-counter)-[A-Za-z0-9_.:-]+\b/g)].length
 }

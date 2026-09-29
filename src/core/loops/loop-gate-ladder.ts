@@ -1,7 +1,5 @@
 import type { SksLoopNode, SksLoopProof } from './loop-schema.js';
 
-export const LOOP_LEVEL_ORDER = ['L0-report', 'L1-assisted', 'L2-action', 'L3-unattended'] as const;
-
 export function canEscalateLoopLevel(input: {
   node: SksLoopNode;
   previousProof: SksLoopProof | null;
@@ -18,6 +16,3 @@ export function canEscalateLoopLevel(input: {
   return { ok: blockers.length === 0, blockers };
 }
 
-export function sourceMutationRequiresGptFinal(node: SksLoopNode): boolean {
-  return node.level === 'L2-action' || node.risk.requires_gpt_final || node.gates.final.includes('gpt:final-arbiter');
-}

@@ -1,12 +1,10 @@
-import path from 'node:path';
 import { findCodexBinary } from '../codex-adapter.js';
 import { compareSemverLike, parseCodexVersionText } from '../codex-compat/codex-version-policy.js';
 import { CURRENT_CODEX_RUNTIME_CONTRACT } from '../codex-compat/codex-runtime-contract.js';
-import { nowIso, runProcess, writeJsonAtomic } from '../fsx.js';
+import { nowIso, runProcess } from '../fsx.js';
 import {
   CODEX_CURRENT_FEATURE_FEATURE_KEYS,
   probeCodexCurrentFeatureFeatureDetails,
-  probeCodexCurrentFeatureFeatures,
   type CodexCurrentFeatureFeatureKey,
   type CodexCurrentFeatureFeatureProbeDetails,
   type CodexCurrentFeatureFeatureProbeResults,
@@ -168,18 +166,6 @@ function featureStateFor(
 function normalizeCertainty(certainty: CodexCurrentFeatureProbeCertainty): CodexCurrentFeatureFeatureCertainty {
   if (certainty === 'actual' || certainty === 'discovered' || certainty === 'fixture' || certainty === 'assumed_by_version') return certainty;
   return 'unverified';
-}
-
-export async function writeCodexCurrentFeatureCapabilityArtifacts(root: string, input: { missionId?: string | null; codexBin?: string | null } = {}) {
-  const report = await detectCodexCurrentFeatureCapability({ codexBin: input.codexBin || null });
-  const rootArtifact = path.join(root, '.sneakoscope', 'codex-current-feature-capability.json');
-  await writeJsonAtomic(rootArtifact, report);
-  let missionArtifact: string | null = null;
-  if (input.missionId) {
-    missionArtifact = path.join(root, '.sneakoscope', 'missions', input.missionId, 'codex-current-feature-capability.json');
-    await writeJsonAtomic(missionArtifact, report);
-  }
-  return { report, root_artifact: rootArtifact, mission_artifact: missionArtifact };
 }
 
 async function readCodexVersionText(codexBin: string | null): Promise<string | null> {

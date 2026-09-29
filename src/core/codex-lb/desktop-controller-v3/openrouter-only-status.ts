@@ -31,15 +31,6 @@ export interface OpenRouterOnlyStatus {
   warnings: string[];
 }
 
-/** The order status reports them in: the first one that holds is THE error. */
-export const OPENROUTER_ONLY_UNAVAILABLE_ERRORS = [
-  'openrouter_only_provider_disabled',
-  'openrouter_only_credential_missing',
-  'openrouter_only_subagent_list_empty',
-  'openrouter_only_main_model_not_openrouter',
-  'desktop_bridge_not_running'
-] as const;
-
 /** Codex's hosted image tool does not exist on OpenRouter models. */
 export const OPENROUTER_ONLY_CODEX_IMAGE_MODE_WARNING = 'openrouter_only_codex_image_mode_unavailable';
 

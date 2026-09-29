@@ -88,11 +88,6 @@ export function renderMcpServerBlock(input: McpServerMutationInput, legacyEnv: R
   return `${lines.join('\n')}\n`;
 }
 
-export function extractMcpServerBlock(text: string, name: string): string | null {
-  const range = serverRange(String(text || ''), name);
-  return range ? String(text || '').slice(range.start, range.end) : null;
-}
-
 function serverRange(source: string, name: string): { start: number; end: number } | null {
   const spans = tableSpans(source).filter((span) => isServerPath(span.path, name));
   if (!spans.length) return null;

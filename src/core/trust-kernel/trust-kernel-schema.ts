@@ -20,7 +20,6 @@ export const TRUST_STATUSES: readonly TrustStatus[] = [
   'failed',
   'not_verified'
 ] as const;
-export const TRUST_STATUS = Object.freeze([...TRUST_STATUSES]);
 
 export interface TrustKernelMetadata {
   trust_kernel_schema: typeof TRUST_KERNEL_SCHEMA;

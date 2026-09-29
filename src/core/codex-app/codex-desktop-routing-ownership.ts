@@ -15,8 +15,6 @@ export type CodexDesktopRoutingClass =
   | 'unconfigured'
 
 export const OPENCODEX_INJECT_MARKER = 'Auto-injected by opencodex'
-export const OPENCODEX_DESIGN_B_FORCE_HINT =
-  'OpenCodex Design B currently owns openai_base_url loopback routing. Stop OpenCodex inject or re-run with --force-routing-override only if replacing that owner is intentional.'
 
 export interface CodexDesktopRoutingOwnership {
   readonly schema: 'sks.codex-desktop-routing-ownership.v1'

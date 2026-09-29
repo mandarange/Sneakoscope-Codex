@@ -40,17 +40,3 @@ export function buildRecapturePlan(fixLoop: any = {}, opts: any = {}) {
   };
 }
 
-export function compareReReviewIssues(beforeLedger: any = {}, afterLedger: any = {}) {
-  const before = Array.isArray(beforeLedger.issues) ? beforeLedger.issues : [];
-  const after = Array.isArray(afterLedger.issues) ? afterLedger.issues : [];
-  const openBeforeP0P1 = before.filter((issue: any) => ['P0', 'P1'].includes(issue.severity) && !['fixed', 'accepted_not_applicable'].includes(issue.status));
-  const openAfterP0P1 = after.filter((issue: any) => ['P0', 'P1'].includes(issue.severity) && !['fixed', 'accepted_not_applicable'].includes(issue.status));
-  return {
-    schema: 'sks.image-ux-recheck-compare.v1',
-    before_open_p0_p1: openBeforeP0P1.length,
-    after_open_p0_p1: openAfterP0P1.length,
-    original_issues_cleared: openBeforeP0P1.every((issue: any) => !openAfterP0P1.some((afterIssue: any) => afterIssue.id === issue.id || afterIssue.post_fix_recheck_issue_id === issue.id)),
-    new_p0_p1_regressions: openAfterP0P1.filter((issue: any) => !before.some((beforeIssue: any) => beforeIssue.id === issue.id)).length,
-    passed: openAfterP0P1.length === 0
-  };
-}

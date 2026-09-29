@@ -42,9 +42,6 @@ export * from './ssot-provenance.js';
 export * from './runtime-control.js';
 export * from './verification-coverage.js';
 export * from './risk-domains.js';
-export * from './change-impact.js';
-export * from './architecture-delta.js';
-export * from './ownership-workstream.js';
 export * from './manifest.js';
 
 export interface ArchitectureMapViewArtifact {

@@ -1,6 +1,5 @@
-import fs from 'node:fs/promises';
 import path from 'node:path';
-import { nowIso, readJsonFile, writeOpsReport, type OpsReport } from './reporting.js';
+import { nowIso, readJsonFile, type OpsReport } from './reporting.js';
 
 export interface OpsMaturityScorecard extends OpsReport {
   schema: 'sks.ops-maturity-scorecard.v1';
@@ -59,10 +58,6 @@ export async function buildOpsMaturityScorecard(root: string): Promise<OpsMaturi
     rows,
     blockers
   };
-}
-
-export async function writeOpsMaturityScorecard(root: string): Promise<string> {
-  return writeOpsReport(root, 'ops-maturity-scorecard.json', await buildOpsMaturityScorecard(root));
 }
 
 async function scoreRow(reportDir: string, id: string, label: string, weight: number, critical: boolean, fileName: string): Promise<OpsMaturityRow> {

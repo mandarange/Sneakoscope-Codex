@@ -1,6 +1,5 @@
 import path from 'node:path';
 import { postToolEvidenceEnabled } from './verification-profile.js';
-import fsp from 'node:fs/promises';
 import { ensureDir, readJson, readText, writeJsonAtomic, writeTextAtomic, mergeManagedBlock, nowIso, PACKAGE_VERSION, exists } from './fsx.js';
 import { DEFAULT_RETENTION_POLICY } from './retention.js';
 import { DEFAULT_DB_SAFETY_POLICY } from './db-safety.js';
@@ -28,7 +27,7 @@ import {
   stampSksManagedCodexConfigMarker
 } from './subagents/official-subagent-config.js';
 import { escapeRegExp } from './text/regex.js';
-export { installGlobalSkills, installProjectSkills, installSkills } from './init/skills.js';
+export { installGlobalSkills, installSkills } from './init/skills.js';
 
 const REMOVED_SKILL_TOKENS = new Set(REMOVED_SKS_SKILL_NAMES.map((name) => name.replace(/[^a-z0-9]/g, '')));
 
@@ -85,50 +84,7 @@ const SKS_GENERATED_GIT_PATTERNS = [
   '.agents/',
   'AGENTS.md'
 ];
-const SKS_SKILL_MANIFEST_FILE = '.sks-generated.json';
 const GENERATED_PRUNE_POLICY = 'remove_previous_sks_generated_paths_absent_from_current_manifest';
-
-export const REQUIRED_GENERATED_CODEX_APP_FEATURE_FLAGS = [
-  'hooks',
-  'fast_mode',
-  'apps'
-];
-
-export function hasTopLevelCodexModeLock(text: any = '') {
-  const lines = String(text || '').split('\n');
-  const firstTable = lines.findIndex((x: any) => /^\s*\[.+\]\s*$/.test(x));
-  const top = (firstTable === -1 ? lines : lines.slice(0, firstTable)).join('\n');
-  return /^model_reasoning_effort\s*=/m.test(top);
-}
-
-export function hasDeprecatedCodexHooksFeatureFlag(text: any = '') {
-  const lines = String(text || '').split('\n');
-  const start = lines.findIndex((line: any) => line.trim() === '[features]');
-  if (start === -1) return false;
-  let end = lines.length;
-  for (let i = start + 1; i < lines.length; i += 1) {
-    if (/^\s*\[.+\]\s*$/.test(lines[i] || '')) {
-      end = i;
-      break;
-    }
-  }
-  return lines.slice(start + 1, end).some((line: any) => /^\s*codex_hooks\s*=/.test(line));
-}
-
-export function missingGeneratedCodexAppFeatureFlags(text: any = '') {
-  if (text && typeof text === 'object') return REQUIRED_GENERATED_CODEX_APP_FEATURE_FLAGS.filter((name: any) => text[name] !== true);
-  return REQUIRED_GENERATED_CODEX_APP_FEATURE_FLAGS.filter((name: any) => !String(text || '').includes(`${name} = true`));
-}
-
-export function hasCodexUnstableFeatureWarningSuppression(text: any = '') {
-  return /(^|\n)\s*suppress_unstable_features_warning\s*=\s*true\s*(?:#.*)?(?=\n|$)/.test(String(text || ''));
-}
-
-export function assertCodexWarningSuppressed(text: any = '', label: any = 'Codex config') {
-  if (!hasCodexUnstableFeatureWarningSuppression(text)) {
-    throw new Error(`selftest: ${label} missing suppress_unstable_features_warning`);
-  }
-}
 
 export function normalizeInstallScope(scope: any = 'global') {
   const value = String(scope || 'global').trim().toLowerCase();

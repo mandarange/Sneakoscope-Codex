@@ -1,6 +1,6 @@
 import fsp from 'node:fs/promises';
 import path from 'node:path';
-import { appendJsonlBounded, exists, nowIso, readJson, readText, sha256, writeJsonAtomic, writeTextAtomic } from './fsx.js';
+import { appendJsonlBounded, nowIso, readJson, readText, sha256, writeJsonAtomic, writeTextAtomic } from './fsx.js';
 import { missionDir } from './mission.js';
 import { ROUTES } from './routes.js';
 
@@ -493,18 +493,6 @@ export async function completeRecallPulseTaskGoal(root: any, missionId: any, tas
   return { ledger: updated, task: updated.task_goals.find((row: any) => row.task_id === id) };
 }
 
-export const RECALLPULSE_FOUNDATION_TASK_IDS = Object.freeze([
-  ...range(1, 180),
-  ...range(181, 230),
-  ...range(231, 270),
-  ...range(293, 300),
-  ...range(301, 340),
-  ...range(341, 380),
-  ...range(381, 410),
-  421, 424, 425, 427, 428, 429, 430, 431, 436, 437, 438, 439, 440, 443, 444, 445, 446, 450,
-  ...range(451, 480)
-].map((n: any) => String(n).padStart(3, '0')));
-
 function selectL1(pack: any = {}, { stageId = '', routeId = '' }: any = {}) {
   const finalStage = /final|honest|review/i.test(stageId);
   const maxItems = finalStage ? RECALLPULSE_POLICY.cache.l1.max_items_final : RECALLPULSE_POLICY.cache.l1.max_items_normal;
@@ -943,8 +931,3 @@ function fixture(id: any, passed: any, assertion: any) {
   return { id, passed: Boolean(passed), assertion };
 }
 
-function range(start: any, end: any) {
-  const out: any[] = [];
-  for (let i = start; i <= end; i++) out.push(i);
-  return out;
-}

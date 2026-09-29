@@ -1,5 +1,4 @@
 import type { SksIssue } from '../../results.js';
-import type { OpenRouterRequestCacheKeyParts } from './openrouter-request-cache.js';
 
 export const OPENROUTER_CHAT_COMPLETIONS_URL =
   'https://openrouter.ai/api/v1/chat/completions' as const;
@@ -51,24 +50,6 @@ export interface OpenRouterChatCompletionRequest {
   readonly provider?: OpenRouterProviderPreferences;
 }
 
-export interface OpenRouterChatCompletionResponse {
-  readonly id?: string;
-  readonly model?: string;
-  readonly choices?: readonly unknown[];
-  readonly usage?: unknown;
-  readonly [key: string]: unknown;
-}
-
-export interface OpenRouterSendInput {
-  readonly apiKey: string;
-  readonly request: OpenRouterChatCompletionRequest;
-  readonly endpoint?: typeof OPENROUTER_CHAT_COMPLETIONS_URL;
-  readonly signal?: AbortSignal;
-  readonly timeoutMs?: number;
-  readonly fetchImpl?: typeof fetch;
-  readonly cacheKeyParts?: OpenRouterRequestCacheKeyParts;
-}
-
 export interface OpenRouterKeyResolution {
   readonly key: string | null;
   readonly source: OpenRouterKeySource | null;
@@ -84,15 +65,6 @@ export interface OpenRouterKeyRecord {
   readonly updated_at: string;
   readonly key_hash: string;
   readonly key_preview: string;
-}
-
-export interface OpenRouterKeyValidation {
-  readonly schema: 'sks.openrouter-key-validation.v1';
-  readonly ok: boolean;
-  readonly requested_model: string;
-  readonly actual_model: string | null;
-  readonly strict_model_lock: true;
-  readonly gpt_fallback_allowed: false;
 }
 
 export interface OpenRouterIssue extends SksIssue {

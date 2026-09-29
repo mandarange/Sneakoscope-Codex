@@ -15,12 +15,6 @@ export function makeGitFixture(name: string) {
   return root
 }
 
-export function makeNonGitFixture(name: string) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), `sks-${name}-`))
-  fs.writeFileSync(path.join(root, 'plain.txt'), 'not git\n')
-  return root
-}
-
 export function run(command: string, args: string[], cwd: string, input?: string) {
   const result = spawnSync(command, args, {
     cwd,

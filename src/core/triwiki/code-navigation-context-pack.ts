@@ -1,5 +1,4 @@
-import path from 'node:path';
-import { ensureDir, PACKAGE_VERSION, writeJsonAtomic } from '../fsx.js';
+import { PACKAGE_VERSION } from '../fsx.js';
 import { contextCapsule } from '../triwiki-attention.js';
 import { sealTriWikiContextPack, validateTriWikiContextPackProvenance } from '../triwiki-provenance.js';
 import { validateWikiCoordinateIndex } from '../wiki-coordinate.js';
@@ -118,11 +117,3 @@ export function validateCodeNavigationContextPack(pack: any, root: string) {
   return { ok: issues.length === 0, checked: coordinate.checked, issues };
 }
 
-export async function writeCodeNavigationContextPack(root: string, pack: any) {
-  const validation = validateCodeNavigationContextPack(pack, root);
-  const file = path.join(root, '.sneakoscope', 'wiki', 'context-pack.json');
-  if (!validation.ok) return { ok: false, written: false, path: file, validation };
-  await ensureDir(path.dirname(file));
-  await writeJsonAtomic(file, pack);
-  return { ok: true, written: true, path: file, validation };
-}

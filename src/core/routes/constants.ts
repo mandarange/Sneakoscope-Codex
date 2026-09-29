@@ -1,6 +1,5 @@
 export const REFLECTION_SKILL_NAME = 'reflection';
 export const SOLUTION_SCOUT_SKILL_NAME = 'solution-scout';
-export const SOLUTION_SCOUT_STAGE_ID = 'solution_scout';
 
 export const FROM_CHAT_IMG_COVERAGE_ARTIFACT = 'from-chat-img-coverage-ledger.json';
 export const FROM_CHAT_IMG_WORK_ORDER_ARTIFACT = 'from-chat-img-work-order.md';

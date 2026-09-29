@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -59,17 +60,40 @@ export function globalHookCommandPrefix(launcherPath: string, platform: NodeJS.P
   return platform === 'win32' ? 'sks' : shellQuote(launcherPath);
 }
 
+/** Node locations tried after the pinned one: a GUI-launched Codex has no login-shell PATH, and node may have moved since the pin. */
+const LAUNCHER_NODE_FALLBACKS = ['/opt/homebrew/bin/node', '/usr/local/bin/node'];
+
 export function globalHookLauncherScript(target: GlobalHookTarget): string {
   return [
     '#!/bin/sh',
     '# Sneakoscope Codex hook launcher. SKS manages this file and `sks update` rewrites it.',
-    '# Runs the installed SKS, then `sks` on PATH, and does nothing when neither exists.',
+    '# Runs the installed SKS with its node (or another node when that one moved), then `sks` on PATH, and does nothing when none exists.',
     `node=${shellQuote(target.node || '')}`,
     `entry=${shellQuote(target.entry || '')}`,
-    'if [ -n "$node" ] && [ -x "$node" ] && [ -f "$entry" ]; then exec "$node" "$entry" "$@"; fi',
+    'if [ -f "$entry" ]; then',
+    `  for n in "$node" "$(command -v node 2>/dev/null)" ${LAUNCHER_NODE_FALLBACKS.map(shellQuote).join(' ')}; do`,
+    '    if [ -n "$n" ] && [ -x "$n" ]; then exec "$n" "$entry" "$@"; fi',
+    '  done',
+    'fi',
     'if command -v sks >/dev/null 2>&1; then exec sks "$@"; fi',
     'exit 0'
   ].join('\n') + '\n';
+}
+
+/**
+ * The node path to pin: one that survives `brew upgrade node` (the prefix's bin/node
+ * or a well-known symlink to the running binary) instead of the versioned Cellar
+ * path `process.execPath` reports, and otherwise the running binary itself.
+ */
+export async function stableNodePath(execPath: string = process.execPath, pkgRoot: string = packageRoot()): Promise<string> {
+  const real = await fsp.realpath(execPath).catch(() => null);
+  if (!real) return execPath;
+  const inPrefix = path.basename(path.dirname(pkgRoot)) === 'node_modules' && path.basename(path.dirname(path.dirname(pkgRoot))) === 'lib';
+  const prefixNode = inPrefix ? path.join(path.dirname(path.dirname(path.dirname(pkgRoot))), 'bin', 'node') : null;
+  for (const candidate of [prefixNode, ...LAUNCHER_NODE_FALLBACKS]) {
+    if (candidate && await fsp.realpath(candidate).catch(() => null) === real) return candidate;
+  }
+  return execPath;
 }
 
 /**
@@ -82,7 +106,7 @@ export async function resolveGlobalHookTarget(launcherPath: string, opts: { pack
   const pkg = path.resolve(opts.packageRootDir || packageRoot());
   const entry = path.join(pkg, 'dist', 'bin', 'sks.js');
   if (await exists(entry) && !(await isSourceCheckout(pkg)) && !(await isProjectLocalInstall(pkg))) {
-    return { node: opts.execPath || process.execPath, entry, source: 'installed_package' };
+    return { node: await stableNodePath(opts.execPath || process.execPath, pkg), entry, source: 'installed_package' };
   }
   const previous = parseLauncherTarget(await readText(launcherPath, ''));
   if (previous.node && previous.entry && await exists(previous.node) && await exists(previous.entry)) {
@@ -203,11 +227,11 @@ export async function installGlobalSksHooks(input: {
   warnings.push(...dead.warnings);
 
   if (!(input.verify ?? defaultHookVerification(env)) || blockers.length) return report(null);
-  let verification = await verifyGlobalSksHooks(paths, refs, env, input.listHooks);
+  let verification = await verifyGlobalSksHooksMemoized(paths, refs, env, input.listHooks);
   if (verification.checked && verification.corrections.length) {
     const corrected = await writeHookTrust(paths, verification.corrections);
     if (corrected.blocker) blockers.push(corrected.blocker);
-    const recheck = await verifyGlobalSksHooks(paths, refs, env, input.listHooks);
+    const recheck = await verifyGlobalSksHooksMemoized(paths, refs, env, input.listHooks);
     verification = { ...recheck, corrected_trust: verification.corrections.length };
   }
   if (!verification.checked) warnings.push(verification.blocker || 'codex_hooks_list_unavailable');
@@ -227,14 +251,16 @@ export async function readGlobalSksHookState(env: NodeJS.ProcessEnv = process.en
   const installed = new Set(refs.map((ref) => ref.event as string));
   const trusted = new Set(refs.filter((ref) => trust.trustedHashes[ref.key] === ref.hash).map((ref) => ref.event as string));
   const launcherExists = process.platform === 'win32' || await exists(paths.launcherPath);
+  const launcherReachesSks = process.platform === 'win32' || (launcherExists && await launcherReachesInstalledSks(paths.launcherPath, env));
   const missing = expected.filter((event) => !installed.has(event));
   const untrusted = expected.filter((event) => installed.has(event) && !trusted.has(event));
   return {
     schema: 'sks.codex-global-hook-state.v1',
-    active: launcherExists && missing.length === 0 && untrusted.length === 0,
+    active: launcherReachesSks && missing.length === 0 && untrusted.length === 0,
     hooks_path: paths.hooksPath,
     launcher_path: paths.launcherPath,
     launcher_exists: launcherExists,
+    launcher_reaches_sks: launcherReachesSks,
     missing_events: missing,
     untrusted_events: untrusted
   };
@@ -260,6 +286,26 @@ export async function removeGlobalSksHookArtifacts(env: NodeJS.ProcessEnv = proc
   }
   const dead = await removeDeadSksManagedHooks({ codexDir: paths.codexHome, trustConfigPath: paths.configPath, guardRoot: paths.guardRoot });
   return [...actions, ...dead.actions];
+}
+
+/**
+ * Asking Codex spawns its app-server, and `sks update` runs this once per known
+ * project with the same files: reuse the answer while hooks.json, the trust
+ * config, and the Codex binary choice are unchanged. Injected listers (tests)
+ * and failed checks are never cached.
+ */
+const VERIFICATION_MEMO_MS = 5 * 60_000;
+const verificationMemo = new Map<string, { at: number; result: Awaited<ReturnType<typeof verifyGlobalSksHooks>> }>();
+
+async function verifyGlobalSksHooksMemoized(paths: GlobalHookPaths, refs: SksHookHandlerRef[], env: NodeJS.ProcessEnv, listHooks?: CodexHooksLister) {
+  if (listHooks) return verifyGlobalSksHooks(paths, refs, env, listHooks);
+  const digest = createHash('sha256').update(await readText(paths.hooksPath, '')).update('\0').update(await readText(paths.configPath, '')).digest('hex');
+  const key = [paths.codexHome, env.SKS_CODEX_BIN || '', env.CODEX_BIN || '', digest].join('|');
+  const hit = verificationMemo.get(key);
+  if (hit && Date.now() - hit.at < VERIFICATION_MEMO_MS) return hit.result;
+  const result = await verifyGlobalSksHooks(paths, refs, env);
+  if (result.checked) verificationMemo.set(key, { at: Date.now(), result });
+  return result;
 }
 
 async function verifyGlobalSksHooks(
@@ -398,6 +444,21 @@ async function isProjectLocalInstall(pkg: string): Promise<boolean> {
   if (path.basename(path.dirname(pkg)) !== 'node_modules') return false;
   const manifest = await readJson<any>(path.join(path.dirname(path.dirname(pkg)), 'package.json'), null).catch(() => null);
   return ['dependencies', 'devDependencies', 'optionalDependencies'].some((field) => Boolean(manifest?.[field]?.sneakoscope));
+}
+
+/** Whether the launcher can still run an SKS: its pinned entry with some node, or `sks` on PATH. */
+async function launcherReachesInstalledSks(launcherPath: string, env: NodeJS.ProcessEnv): Promise<boolean> {
+  const { node, entry } = parseLauncherTarget(await readText(launcherPath, ''));
+  if (entry && await exists(entry)) {
+    for (const candidate of [node, ...LAUNCHER_NODE_FALLBACKS]) if (candidate && await exists(candidate)) return true;
+    if (await onPath('node', env)) return true;
+  }
+  return onPath('sks', env);
+}
+
+async function onPath(command: string, env: NodeJS.ProcessEnv): Promise<boolean> {
+  for (const dir of String(env.PATH || '').split(path.delimiter)) if (dir && await exists(path.join(dir, command))) return true;
+  return false;
 }
 
 function parseLauncherTarget(text: string): { node: string | null; entry: string | null } {

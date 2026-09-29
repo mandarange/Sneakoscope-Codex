@@ -337,11 +337,6 @@ export function codexRemoteControlStatusFromInfo(codex: any = {}) {
   };
 }
 
-export function codexSupportsRemoteControl(versionText: any) {
-  const current = codexCliVersionNumber(versionText);
-  return Boolean(current && compareVersions(current, CODEX_REMOTE_CONTROL_MIN_VERSION) >= 0);
-}
-
 export function parseProcessRows(text: any = '') {
   return String(text || '')
     .split(/\r?\n/)

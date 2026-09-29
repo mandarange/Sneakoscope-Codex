@@ -34,7 +34,6 @@ export interface MadSksSqlPlaneToolResult {
 
 export class MadSksSqlPlaneMcpExecutor {
   private client: Client | null = null;
-  private transport: StreamableHTTPClientTransport | null = null;
   // A successful inventory() result is cached for this executor instance's
   // lifetime (one DB operation cycle) — previously every executeSql/
   // applyMigration call re-fetched the full tool list from the MCP server
@@ -66,7 +65,6 @@ export class MadSksSqlPlaneMcpExecutor {
     try {
       await client.connect(transport, { timeout });
       this.client = client;
-      this.transport = transport;
     } catch (error) {
       await client.close().catch(() => undefined);
       throw error;
@@ -129,7 +127,6 @@ export class MadSksSqlPlaneMcpExecutor {
     // Modern 2026-07-28 MCP is stateless: there is no protocol session to terminate.
     await this.client?.close().catch(() => undefined);
     this.client = null;
-    this.transport = null;
     this.cachedInventory = null;
   }
 

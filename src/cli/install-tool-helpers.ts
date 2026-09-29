@@ -44,30 +44,6 @@ export async function ensureCodexCliTool({ skip = false, args = [] }: any = {}) 
   }
 }
 
-export async function maybePromptCodexUpdateForLaunch(args: any = [], opts: any = {}) {
-  if (hasFlag(args, '--json') || hasFlag(args, '--skip-cli-tools') || hasFlag(args, '--skip-codex-update') || process.env.SKS_SKIP_CODEX_UPDATE === '1') return { status: 'skipped' }
-  const latest = await npmPackageVersion('@openai/codex')
-  const codex = await getCodexInfo().catch(() => EMPTY_CODEX_INFO)
-  const current = codexCliVersionNumber(codex.version)
-  const command = 'npm i -g @openai/codex@latest'
-  const label = opts.label || 'Codex launch'
-  const missing = !codex.bin
-  const updateAvailable = Boolean(latest.version && current && compareVersions(latest.version, current) > 0)
-  if (!missing && !updateAvailable) return { status: 'current', latest: latest.version || null, current, bin: codex.bin || null, error: latest.error || null }
-  const prompt = missing
-    ? `Codex CLI missing. Install @openai/codex${latest.version ? ` ${latest.version}` : '@latest'} before ${label}? [Y/n] `
-    : `Codex CLI ${current} -> ${latest.version} update before ${label}? [Y/n] `
-  if (shouldAutoApproveInstall(args)) return installCodexLatest(command, latest.version, current)
-  if (!canAskYesNo()) {
-    const reason = missing ? 'Codex CLI missing' : `Codex CLI update available: ${current} -> ${latest.version}`
-    console.log(`${reason}. Run: ${command}`)
-    return { status: missing ? 'missing' : 'available', latest: latest.version || null, current, command, bin: codex.bin || null }
-  }
-  const answer = (await askQuestion(prompt)).trim()
-  if (!(answer === '' || /^(y|yes|예|네|응)$/i.test(answer))) return { status: 'skipped_by_user', latest: latest.version || null, current, command, bin: codex.bin || null }
-  return installCodexLatest(command, latest.version, current)
-}
-
 export async function maybePromptSksUpdateForLaunch(args: any = [], opts: any = {}) {
   void args
   void opts
@@ -99,25 +75,6 @@ export async function isProjectSetupCandidate(root: any) {
     if (await exists(path.join(root, marker))) return true
   }
   return false
-}
-
-export function hasTopLevelCodexModeLock(text: any = '') {
-  const lines = String(text || '').split('\n')
-  const firstTable = lines.findIndex((line) => /^\s*\[.+\]\s*$/.test(line))
-  const top = (firstTable === -1 ? lines : lines.slice(0, firstTable)).join('\n')
-  return /(^|\n)\s*model_reasoning_effort\s*=/.test(top)
-}
-
-export function hasDeprecatedCodexHooksFeatureFlag(text: any = '') {
-  const lines = String(text || '').split('\n')
-  const start = lines.findIndex((line) => line.trim() === '[features]')
-  if (start === -1) return false
-  const end = lines.findIndex((line, index) => index > start && /^\s*\[.+\]\s*$/.test(line))
-  return lines.slice(start + 1, end === -1 ? lines.length : end).some((line) => /^\s*codex_hooks\s*=/.test(line))
-}
-
-export function hasCodexUnstableFeatureWarningSuppression(text: any = '') {
-  return /(^|\n)\s*suppress_unstable_features_warning\s*=\s*true\s*(?:#.*)?(?=\n|$)/.test(String(text || ''))
 }
 
 export async function checkContext7(root: any) {
@@ -164,35 +121,6 @@ function hasFlag(args: any[] = [], name: string) {
 function isAgentRuntime(env: any = process.env) {
   return ['SKS_OPENCLAW', 'OPENCLAW', 'OPENCLAW_AGENT', 'OPENCLAW_RUN_ID', 'OPENCLAW_SESSION_ID', 'SKS_HERMES', 'HERMES_AGENT', 'HERMES_RUN_ID', 'HERMES_SESSION_ID']
     .some((key) => /^(1|true|yes|y)$/i.test(String(env[key] || '').trim()))
-}
-
-async function installCodexLatest(command: any, latestVersion: any, previousVersion: any = null) {
-  const npm = await which('npm').catch(() => null)
-  if (!npm) return { status: 'failed', latest: latestVersion || null, previous: previousVersion || null, command, error: 'npm not found on PATH' }
-  const install = await runProcess(npm, ['i', '-g', '@openai/codex@latest'], { timeoutMs: 180000, maxOutputBytes: 128 * 1024 }).catch((err: any) => ({ code: 1, stdout: '', stderr: err.message }))
-  if (install.code !== 0) return { status: 'failed', latest: latestVersion || null, previous: previousVersion || null, command, error: `${install.stderr || install.stdout || command + ' failed'}`.trim() }
-  const after = await getCodexInfo().catch(() => EMPTY_CODEX_INFO)
-  const afterVersion = codexCliVersionNumber(after.version)
-  if (!after.bin) return { status: 'updated_not_reflected', latest: latestVersion || null, previous: previousVersion || null, version: afterVersion || null, command, error: 'npm completed, but codex is not on PATH. Restart the shell or set SKS_CODEX_BIN.' }
-  if (latestVersion && afterVersion && compareVersions(afterVersion, latestVersion) < 0) {
-    return { status: 'updated_not_reflected', latest: latestVersion, previous: previousVersion || null, version: afterVersion, bin: after.bin, command, error: `npm completed, but PATH still resolves Codex CLI ${afterVersion}; expected ${latestVersion}.` }
-  }
-  console.log(`Codex CLI ready: ${previousVersion || 'missing'} -> ${after.version || after.bin}`)
-  return { status: previousVersion ? 'updated' : 'installed', latest: latestVersion || null, previous: previousVersion || null, version: afterVersion || null, raw_version: after.version || null, bin: after.bin || null, command }
-}
-
-function codexCliVersionNumber(versionText: any = '') {
-  return String(versionText || '').match(/(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)/)?.[1] || null
-}
-
-async function npmPackageVersion(name: any) {
-  const envName = `SKS_NPM_VIEW_${String(name || '').replace(/[^A-Za-z0-9]+/g, '_').toUpperCase()}_VERSION`
-  if (process.env[envName]) return { version: process.env[envName] }
-  const npm = await which('npm').catch(() => null)
-  if (!npm) return { error: 'npm not found' }
-  const result = await runProcess(npm, ['view', name, 'version'], { timeoutMs: 5000, maxOutputBytes: 4096 })
-  if (result.code !== 0) return { error: `${result.stderr || result.stdout || 'npm view failed'}`.trim() }
-  return { version: result.stdout.trim().split(/\s+/).pop() }
 }
 
 async function safeReadText(file: string) {

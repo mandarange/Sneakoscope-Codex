@@ -376,7 +376,6 @@ export {
 export {
   changedPathKernelSeeds,
   changedPathSeeds,
-  changedPathSnapshotSeeds,
   type ChangedPathSeed
 } from './changed-path-seeds.js';
 export type {

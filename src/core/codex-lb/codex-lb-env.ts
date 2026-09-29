@@ -27,8 +27,6 @@ const CODEX_LB_CREDENTIAL_AUTH_TRANSPORTS = [
 type CodexLbCredentialAuthTransport = (typeof CODEX_LB_CREDENTIAL_AUTH_TRANSPORTS)[number];
 const DEFAULT_CODEX_LB_CREDENTIAL_AUTH_TRANSPORT: CodexLbCredentialAuthTransport = 'authorization-bearer';
 
-export const CODEX_LB_SECURE_KEYCHAIN_SERVICE = 'com.sneakoscope.codex-lb.api-key.v2' as const;
-export const CODEX_LB_LEGACY_KEYCHAIN_SERVICE = 'sks-codex-lb' as const;
 
 export type CodexLbEnvSource = 'process.env' | 'keychain' | 'env-file' | 'project-local' | 'missing';
 

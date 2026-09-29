@@ -11,7 +11,7 @@
  * an experiment that changes nothing would still consume a slot of the budget.
  */
 import { shortDigest } from '../ids.js';
-import { contextGraphTunableParameters, resolveContextGraphTunableParameter } from './parameter-space.js';
+import { resolveContextGraphTunableParameter } from './parameter-space.js';
 import type { ContextGraphExperimentCandidate, ContextGraphParameterOverride, ContextGraphTuningTarget } from './types.js';
 
 export interface ContextGraphSweepPointer {
@@ -100,7 +100,3 @@ export function generateContextGraphCandidates(plan: ContextGraphCandidatePlan =
   return out;
 }
 
-/** Every sweepable pointer in the live space, for a caller that wants the full surface. */
-export function contextGraphSweepablePointers(): readonly ContextGraphSweepPointer[] {
-  return contextGraphTunableParameters().map((parameter) => ({ target: parameter.target, pointer: parameter.pointer }));
-}

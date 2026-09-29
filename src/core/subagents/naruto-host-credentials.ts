@@ -41,8 +41,6 @@ const RETIRED_DIRECT_MANAGED_PROVIDERS = new Set(['codex-lb', 'openrouter']);
 
 export const NARUTO_EFFORT_TIERS = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'] as const;
 
-export type NarutoEffortTier = (typeof NARUTO_EFFORT_TIERS)[number];
-
 export interface NarutoCredentialPolicyInput {
   readonly args?: readonly string[];
   readonly env?: NodeJS.ProcessEnv;

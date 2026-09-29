@@ -470,8 +470,6 @@ const COMMANDS_WITH_LEGACY_CONTRACT_OVERRIDES = applyCommandContractOverrides(CO
 
 export const COMMANDS = applyCommandManifestContract(COMMANDS_WITH_LEGACY_CONTRACT_OVERRIDES);
 
-export const TYPED_COMMANDS = COMMANDS;
-
 export type CommandName = Extract<keyof typeof COMMANDS, string>;
 
 export const LEGACY_COMMAND_ALIASES = {
@@ -495,12 +493,3 @@ export function commandNames(): CommandName[] {
   return Object.keys(COMMANDS).sort() as CommandName[];
 }
 
-export function typedCommandNames(): CommandName[] {
-  return commandNames();
-}
-
-export function assertCommandModule(value: unknown): asserts value is CommandModule {
-  if (!value || typeof value !== 'object' || typeof (value as Partial<CommandModule>).run !== 'function') {
-    throw new Error('Command module must expose run(command, args)');
-  }
-}

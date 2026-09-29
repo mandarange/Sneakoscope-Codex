@@ -157,10 +157,6 @@ export async function runMarketingStrategy(
   };
 }
 
-export async function readMarketingStrategyForPlan(artifactDir: string): Promise<MarketingStrategy | null> {
-  return readJson<MarketingStrategy | null>(path.join(artifactDir, 'marketing-strategy.json'), null);
-}
-
 function buildMarketingStrategy(missionId: string, inventory: SiteInventory, research: MarketingResearch): MarketingStrategy {
   const sources = [...research.internal_sources, ...research.external_sources];
   const sourceIds = sources.filter((source) => source.verified).map((source) => source.id);

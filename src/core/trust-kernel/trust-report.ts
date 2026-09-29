@@ -1,6 +1,6 @@
 import path from 'node:path';
 import fsp from 'node:fs/promises';
-import { exists, nowIso, readJson, writeJsonAtomic } from '../fsx.js';
+import { exists, readJson, writeJsonAtomic } from '../fsx.js';
 import { findLatestMission, missionDir } from '../mission.js';
 import { readRouteProof } from '../proof/proof-reader.js';
 import { validateCompletionContract } from './completion-contract.js';
@@ -325,14 +325,3 @@ function staleTrustReport(report: any = {}, issues: any = []) {
 }
 
 
-export interface TrustReport {
-  schema: typeof TRUST_REPORT_SCHEMA;
-  ok: boolean;
-  mission_id: string | null;
-  route: string | null;
-  status: import('./trust-kernel-schema.js').TrustStatus;
-  proof_status: import('./trust-kernel-schema.js').TrustStatus;
-  evidence_status: import('./trust-kernel-schema.js').TrustStatus;
-  route_contract_status: import('./trust-kernel-schema.js').TrustStatus;
-  issues: string[];
-}

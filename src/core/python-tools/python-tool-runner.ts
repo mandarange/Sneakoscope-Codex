@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import path from 'node:path'
-import { exists, nowIso, writeJsonAtomic } from '../fsx.js'
+import { exists, nowIso } from '../fsx.js'
 
 export const PYTHON_TOOL_RUNNER_SCHEMA = 'sks.python-tool-runner.v1'
 
@@ -31,12 +31,6 @@ export async function probePythonTools(root: string = process.cwd()): Promise<Py
     forbidden_runtime_paths: ['postinstall', 'publish', 'config_write', 'global_state_write'],
     blockers
   }
-}
-
-export async function writePythonToolProbe(root: string = process.cwd(), reportPath: string = path.join(root, '.sneakoscope', 'reports', 'python-tool-runner.json')) {
-  const report = await probePythonTools(root)
-  await writeJsonAtomic(reportPath, report)
-  return { ...report, report_path: reportPath }
 }
 
 async function findPython() {

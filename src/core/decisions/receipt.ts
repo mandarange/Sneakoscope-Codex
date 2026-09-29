@@ -9,21 +9,8 @@ import {
   type UsageReceipt
 } from './types.js';
 
-export function usageReceiptFromCompiled(compiled: CompiledDecision): UsageReceipt {
-  return { ...compiled.usage };
-}
-
 export function unknownUsageReceipt(): UsageReceipt {
   return { ...UNKNOWN_USAGE };
-}
-
-export function cacheHitUsage(historical: UsageReceipt): UsageReceipt {
-  return {
-    inputTokens: historical.inputTokens,
-    outputTokens: historical.outputTokens,
-    reportedCost: historical.reportedCost,
-    evidence: historical.evidence
-  };
 }
 
 export function buildDecisionReceipt(input: {

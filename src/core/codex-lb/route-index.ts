@@ -129,10 +129,6 @@ export function routeIndexMatchesGeneration(index: BridgeRouteIndex, expectedGen
     }) === index.generation;
 }
 
-export function stableJson(value: unknown): string {
-  return `${stableStringify(value)}\n`;
-}
-
 export function sha256Stable(value: unknown): string {
   return crypto.createHash('sha256').update(stableStringify(value)).digest('hex');
 }

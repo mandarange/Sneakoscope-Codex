@@ -10,15 +10,6 @@ export interface ResearchSourceEvidenceValidation {
   blockers: string[]
 }
 
-export function trustworthyVerifiedResearchSource(source: any): boolean {
-  return String(source?.acquisition_verdict || '') === 'verified_content'
-    && /^verified_content:/i.test(String(source?.credibility || ''))
-    && Boolean(String(source?.content_artifact || '').trim())
-    && /^[a-f0-9]{64}$/i.test(String(source?.content_sha256 || '').trim())
-    && Number(source?.content_length || 0) > 0
-    && source?.super_search_provenance?.validated === true
-}
-
 export function explicitResearchFixtureSource(source: any): boolean {
   return /^(?:deterministic_fixture|mock|selftest(?:-|$))/i.test(String(source?.kind || ''))
 }

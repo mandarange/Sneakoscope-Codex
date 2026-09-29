@@ -1,4 +1,5 @@
 import fsp from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { ensureDir, readText, writeTextAtomic } from '../fsx.js';
 import {
@@ -22,7 +23,10 @@ export function hookLayerFromArgs(args: readonly unknown[] = []): HookLayer {
  * when the project pins its own SKS build and Codex will run that hook (the
  * project is trusted and the handler's trust matches); a project hook that
  * runs the global CLI steps aside when the user-level hook is active. Each
- * side defers only when it is certain the other side runs.
+ * side defers only when it is certain the other side runs. The user-level hook
+ * also steps aside where there is no project: Codex opened in the home
+ * directory or a filesystem root would otherwise get SKS state and mission
+ * gates there.
  */
 export async function hookLayerDeferral(input: {
   layer: HookLayer;
@@ -33,10 +37,12 @@ export async function hookLayerDeferral(input: {
 }): Promise<{ defer: boolean; reason: string }> {
   const event = hookEventForSubcommand(input.hookName);
   if (!event) return { defer: false, reason: 'unknown_event' };
-  const codexHome = codexHomeDir(input.env || process.env);
+  const env = input.env || process.env;
+  const codexHome = codexHomeDir(env);
   const root = path.resolve(input.root);
   const projectHooksPath = path.join(root, '.codex', 'hooks.json');
   const userHooksPath = path.join(codexHome, 'hooks.json');
+  if (input.layer === 'user' && await isHomeOrFilesystemRoot(root, env)) return { defer: true, reason: 'not_a_project' };
   if (projectHooksPath === userHooksPath) return { defer: false, reason: 'project_is_codex_home' };
   const trust = parseCodexTrustState(await readText(path.join(codexHome, 'config.toml'), ''));
   if (input.layer === 'user') {
@@ -93,6 +99,15 @@ async function gitCommonDir(root: string): Promise<string | null> {
   const resolved = path.resolve(path.dirname(dotGit), gitdir);
   const common = (await readText(path.join(resolved, 'commondir'), '')).trim();
   return common ? path.resolve(resolved, common) : resolved;
+}
+
+async function isHomeOrFilesystemRoot(root: string, env: NodeJS.ProcessEnv): Promise<boolean> {
+  const real = await fsp.realpath(root).catch(() => root);
+  if (path.parse(real).root === real) return true;
+  for (const home of [env.HOME, os.homedir()]) {
+    if (home && (path.resolve(home) === root || await fsp.realpath(home).catch(() => path.resolve(home)) === real)) return true;
+  }
+  return false;
 }
 
 async function readJsonOrNull(file: string): Promise<unknown> {

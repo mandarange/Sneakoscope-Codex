@@ -324,26 +324,6 @@ export async function disableAutoReview(opts: any = {}) {
   return autoReviewStatus({ configPath });
 }
 
-export function autoReviewSummary(status: any = {}) {
-  const lines = [
-    'Codex Auto-Review',
-    '',
-    `Config:             ${status.config_path || codexConfigPath()}`,
-    `Approvals reviewer: ${status.approvals_reviewer || 'unset'}`,
-    `Enabled:            ${status.enabled ? 'yes' : 'no'}`,
-    `Profile:            ${status.profile ? AUTO_REVIEW_PROFILE : 'missing'}`,
-    `High profile:       ${status.high_profile ? AUTO_REVIEW_HIGH_PROFILE : 'missing'}`
-  ];
-  if (!status.enabled) {
-    lines.push('', 'Enable with: sks auto-review enable');
-    lines.push('Launch high mode with: sks --Auto-review --high');
-  }
-  if (status.legacy_invalid) {
-    lines.push('', 'Legacy reviewer value found: run sks auto-review enable or sks auto-review disable to rewrite Codex config.');
-  }
-  return lines.join('\n');
-}
-
 function readTomlString(text: any, key: any) {
   const re = new RegExp(`^${escapeRegExp(key)}\\s*=\\s*"([^"]*)"\\s*$`, 'm');
   return text.match(re)?.[1] || null;
@@ -353,10 +333,6 @@ function readTableString(text: any, table: any, key: any) {
   const body = tableBody(text, table);
   if (!body) return null;
   return readTomlString(body, key);
-}
-
-function tableHasString(text: any, table: any, key: any, value: any) {
-  return readTableString(text, table, key) === value;
 }
 
 function tableBody(text: any, table: any) {

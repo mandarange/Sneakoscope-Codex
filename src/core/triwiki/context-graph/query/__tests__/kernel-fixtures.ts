@@ -35,9 +35,6 @@ const NODE_GROUP_OFFSET = 32;
 export const KERNEL_SNAPSHOT_HASH = 'fedcba9876543210'.repeat(4);
 const CONFIG_HASH = new Uint8Array(32).fill(0x7c);
 
-/** Node integers are assigned in sorted node-id order, so these are stable. */
-export const DEEP = 0;
-export const FORMAT = 1;
 export const KERNEL = 2;
 export const LANES = 3;
 export const GATE = 4;

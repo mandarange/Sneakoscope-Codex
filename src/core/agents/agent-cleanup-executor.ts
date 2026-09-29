@@ -615,10 +615,6 @@ async function staleLockFiles(lockDir: string, projectHash: string, now: number,
   return out
 }
 
-async function listNamedFiles(dir: string, name: string): Promise<string[]> {
-  return (await listFiles(dir)).filter((file) => path.basename(file) === name)
-}
-
 async function listFiles(dir: string): Promise<string[]> {
   const out: string[] = []
   if (!(await exists(dir))) return out

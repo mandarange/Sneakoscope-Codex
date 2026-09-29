@@ -36,25 +36,6 @@ export function writeGatePackSharedArtifact(input: {
   return file;
 }
 
-export function readGatePackSharedArtifact(file: string): GatePackSharedArtifact | null {
-  try {
-    const json = JSON.parse(fs.readFileSync(file, 'utf8')) as GatePackSharedArtifact;
-    return json.schema === GATE_PACK_SHARED_ARTIFACT_SCHEMA ? json : null;
-  } catch {
-    return null;
-  }
-}
-
-export function assertGateFromSharedArtifact(file: string, gateId: string): { ok: boolean; blockers: string[]; artifact: GatePackSharedArtifact | null } {
-  const artifact = readGatePackSharedArtifact(file);
-  if (!artifact) return { ok: false, blockers: ['shared_artifact_missing_or_invalid'], artifact: null };
-  const gateIds = artifact.assertions.gate_ids;
-  if (Array.isArray(gateIds) && !gateIds.map(String).includes(gateId)) {
-    return { ok: false, blockers: [`gate_not_in_shared_artifact:${gateId}`], artifact };
-  }
-  return { ok: true, blockers: [], artifact };
-}
-
 function sharedAssertionsForPack(root: string, pack: GatePackDefinition): Record<string, unknown> {
   const packageJson = readJson(path.join(root, 'package.json'));
   return {

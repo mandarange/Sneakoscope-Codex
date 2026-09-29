@@ -1,7 +1,7 @@
 import path from 'node:path';
 import os from 'node:os';
 import fsp from 'node:fs/promises';
-import { ensureDir, exists, packageRoot, PACKAGE_VERSION, runProcess, tmpdir, writeTextAtomic } from '../core/fsx.js';
+import { ensureDir, exists, packageRoot, PACKAGE_VERSION, runProcess, writeTextAtomic } from '../core/fsx.js';
 import { EMPTY_CODEX_INFO, getCodexInfo } from '../core/codex-adapter.js';
 import { installGlobalSkills } from '../core/init.js';
 import { context7ConfigToml, DOLLAR_SKILL_NAMES, GETDESIGN_REFERENCE, hasContext7ConfigText, RECOMMENDED_SKILLS } from '../core/routes.js';
@@ -53,24 +53,6 @@ export async function ensureSksCommandDuringInstall(opts: any = {}): Promise<Sks
   }
   if (createdFallback) return { status: 'created_not_on_path', command: createdFallback };
   return { status: 'failed', error: lastError };
-}
-
-export async function selftestSksShimRepair() {
-  const staleShimTmp = tmpdir();
-  const staleBin = path.join(staleShimTmp, 'old-prefix', 'bin');
-  const stalePkg = path.join(staleShimTmp, 'old-prefix', 'lib', 'node_modules', 'sneakoscope');
-  const staleEntrypoint = path.join(stalePkg, 'dist', 'bin', 'sks.js');
-  await ensureDir(path.dirname(staleEntrypoint));
-  await ensureDir(staleBin);
-  await writeTextAtomic(path.join(stalePkg, 'package.json'), JSON.stringify({ name: 'sneakoscope', version: '0.0.1' }, null, 2));
-  await writeTextAtomic(staleEntrypoint, '#!/usr/bin/env node\nconsole.log("sneakoscope 0.0.1");\n');
-  await fsp.chmod(staleEntrypoint, 0o755).catch(() => {});
-  await fsp.symlink(staleEntrypoint, path.join(staleBin, 'sks'));
-  const repair = await ensureSksCommandDuringInstall({ force: true, pathEnv: staleBin, home: path.join(staleShimTmp, 'home') });
-  if (repair.status !== 'repaired') throw new Error(`selftest: stale global sks shim was not repaired (${repair.status})`);
-  const run = await runProcess(path.join(staleBin, 'sks'), ['--version'], { timeoutMs: 10000, maxOutputBytes: 16 * 1024 });
-  if (run.code !== 0 || !String(run.stdout || '').includes(PACKAGE_VERSION)) throw new Error('selftest: repaired stale sks shim does not run current package version');
-  return { ok: true, repaired: repair.repaired || [] };
 }
 
 async function reconcileSksPathShimsDuringInstall(opts: any = {}): Promise<SksPostinstallShimResult> {
