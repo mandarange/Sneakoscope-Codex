@@ -1,5 +1,6 @@
 import type { CodexTaskInput } from './codex-control-plane.js'
 import { mapCodexSdkSandboxPolicy } from './codex-sdk-sandbox-policy.js'
+import { parseGptModelId } from '../subagents/model-tiers.js'
 
 export interface CodexExecutionPolicy {
   sandbox: 'read-only' | 'workspace-write' | 'danger-full-access'
@@ -38,9 +39,9 @@ export function buildCodexSdkConfig(input: CodexTaskInput) {
   return config
 }
 
-/** Official Astra migration guidance maps the retired none/minimal settings to low. */
+/** Official Astra migration guidance maps the retired none/minimal settings to low, for every Astra generation. */
 export function normalizeAstraSdkEffort(model: string, effort: string): string {
-  return model.trim().toLowerCase() === 'gpt-6-astra' && ['none', 'minimal'].includes(effort.trim().toLowerCase())
+  return parseGptModelId(model.trim().toLowerCase())?.family === 'astra' && ['none', 'minimal'].includes(effort.trim().toLowerCase())
     ? 'low' : effort
 }
 

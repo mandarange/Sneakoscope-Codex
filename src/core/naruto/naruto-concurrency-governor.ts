@@ -43,7 +43,7 @@ export interface NarutoConcurrencyGovernorDecision {
  * Hardware-aware frame budget for Naruto-adjacent native pools.
  * max_threads is a hard cap (frame budget), never a spawn target; the absolute
  * ceiling is HARD_NARUTO_MAX_THREADS (256). Must not hard-code "4" — that
- * confused the GPT-5.6 four-profile matrix with agent count.
+ * confused the four model tiers with agent count.
  * Official Codex subagents are host-managed remote threads: local CPU/RAM/fd
  * budgets and an unmeasured default API budget do not cap that lane. A measured
  * external host cap or explicitly configured API budget still applies exactly.

@@ -262,8 +262,7 @@ test('installed guidance tells Naruto parents to orchestrate and lets Jev seal t
   assert.match(text, /newest model of the tier its work needs \(fast, balanced, context, or deep\); no model family is pinned/);
   assert.match(text, /Jev picks the tier for each new Naruto child spawn and SKS seals it/);
   // Installed guidance never pins a model family.
-  assert.doesNotMatch(text, /gpt-5\.6-|gpt-6-astra only|Off mode keeps gpt-6-astra/);
-  assert.equal(text.includes('model="gpt-6-astra"'), false);
+  assert.doesNotMatch(text, /gpt[- ]?\d/i);
 });
 
 test('the hook state is active only while the launcher can still reach an SKS', async () => {

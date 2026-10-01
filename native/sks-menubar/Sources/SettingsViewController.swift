@@ -40,7 +40,7 @@ final class SettingsViewController: NSViewController, ControlCenterPage {
         memoryToggle.setAccessibilityIdentifier("sks-context-management-toggle")
         memoryStatus.setAccessibilityIdentifier("sks-context-management-status")
         let memoryCard = NativeView.card(
-            title: "Astra context management",
+            title: "Context management",
             subtitle: "Experimental · Keep notes and retrieve earlier messages and tool results. Enabled by default in SKS. Applies to new tasks with supported Codex and eligible ChatGPT sign-in; API-key and custom-provider sessions may not activate it.",
             views: [NativeView.row([memoryToggle, NativeView.detail("Enable experimental context management")]), memoryStatus]
         )

@@ -98,7 +98,6 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     concurrency: opts.concurrency,
     prompt,
     maxAgentCount,
-    officialSubagentPolicy,
     ...(opts.readonly === undefined ? {} : { readonly: opts.readonly })
   })
   roster = applyFastModeToRoster(roster, fastModePolicy)

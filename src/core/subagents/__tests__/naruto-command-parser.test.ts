@@ -1,13 +1,15 @@
+import '../../__tests__/helpers/isolated-test-home.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { parseNarutoArgs } from '../../commands/naruto-command.js'
+import { latestModelForTier } from '../model-tiers.js'
 
 test('Naruto parser treats non-current execution options as unknown', () => {
   for (const args of [
     ['run', 'task', '--backend', 'codex-sdk'],
     ['run', 'task', '--scheduler', 'legacy'],
     ['run', 'task', '--pool-size=8'],
-    ['run', 'task', '--model', 'gpt-5.6-terra'],
+    ['run', 'task', '--model', 'any-model-id'],
     ['run', 'task', '--agent', 'worker']
   ]) {
     const parsed = parseNarutoArgs(args)
@@ -56,10 +58,10 @@ test('Naruto parser admits documented host/model flags only on run actions', () 
       '--provider-env-key',
       'GATEWAY_API_KEY',
       '--parent-model',
-      'gpt-5.6-sol',
+      latestModelForTier('deep'),
       '--parent-effort=max',
       '--subagent-model',
-      'gpt-6-astra',
+      latestModelForTier('deep'),
       '--subagent-effort=max',
       '--no-forced-login-method'
     ])
@@ -124,7 +126,7 @@ test('Naruto parser accepts top-level and subcommand-local help without position
 })
 
 test('Naruto help does not erase unknown or malformed options', () => {
-  const unknown = parseNarutoArgs(['run', 'task', '--model', 'gpt-6-astra', '--help'])
+  const unknown = parseNarutoArgs(['run', 'task', '--model', 'any-model-id', '--help'])
   assert.equal(unknown.action, 'help')
   assert.ok(unknown.argumentErrors.includes('unsupported_argument:--model'))
 

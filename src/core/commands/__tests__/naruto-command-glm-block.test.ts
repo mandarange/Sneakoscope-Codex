@@ -17,9 +17,9 @@ test('normal Naruto blocks command-local GLM before any provider delegation', as
     const result: any = await narutoCommand(['--glm', '--json'])
     assert.equal(process.exitCode, 1)
     assert.equal(result.ok, false)
-    assert.equal(result.reason, 'naruto_gpt_5_6_family_only_glm_override_forbidden')
-    assert.deepEqual(result.blockers, ['naruto_gpt_5_6_family_only_glm_override_forbidden'])
-    assert.match(output.join('\n'), /naruto_gpt_5_6_family_only_glm_override_forbidden/)
+    assert.equal(result.reason, 'retired_glm_naruto_flag:--glm')
+    assert.deepEqual(result.blockers, ['retired_glm_naruto_flag:--glm'])
+    assert.match(output.join('\n'), /retired_glm_naruto_flag:--glm/)
   } finally {
     console.log = previousLog
     process.exitCode = previousExitCode
@@ -135,7 +135,7 @@ test('Naruto parser treats non-current backend scheduler pool and model options 
     '--backend=codex-sdk',
     '--scheduler', 'legacy',
     '--pool-size=4',
-    '--model', 'gpt-5.6-terra'
+    '--model', 'any-model-id'
   ])
   assert.deepEqual(parsed.argumentErrors, [
     'unsupported_argument:--backend',
@@ -192,7 +192,8 @@ test('human Naruto help renders model mapping nesting and durable parent evidenc
     assert.match(text, new RegExp(`Worker: ${escapeRegExp(T.fast)} / low`))
     assert.match(text, new RegExp(`Expert: ${escapeRegExp(T.deep)} / max`))
     assert.match(text, /Jev mode on: Jev picks each Codex App child spawn's tier and SKS seals its newest model/)
-    assert.doesNotMatch(text, /gpt-5\.6-|only gpt-6-astra/)
+    // The help prints the resolved tier models above, but never states a pinned family.
+    assert.doesNotMatch(text, /(?:only|every child uses|pinned to) gpt[- ]?\d/i)
     assert.match(text, /The parent orchestrates only/)
     assert.match(text, /max_depth=1/)
     assert.match(text, /subagent-parent-summary\.json/)

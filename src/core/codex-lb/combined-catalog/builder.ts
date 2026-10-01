@@ -12,6 +12,7 @@ import {
   providerCatalogStatus,
   routeProviderState
 } from './normalize.js';
+import { pinCatalogToLatestGenerations } from './latest-generation.js';
 import { compareModels, unique } from './shared.js';
 import {
   applyBridgeModelSelection,
@@ -40,8 +41,9 @@ export function buildCombinedBridgeCatalog(
     openrouter: normalizeProviderCatalog(options.catalogs.openrouter)
   };
   const selection = options.selection || emptyBridgeModelSelection(createdAt);
-  const allModels = [...normalized['codex-lb'].models, ...normalized.openrouter.models]
-    .sort(compareModels);
+  const allModels = pinCatalogToLatestGenerations(
+    [...normalized['codex-lb'].models, ...normalized.openrouter.models].sort(compareModels)
+  );
   const availableOpenRouterModels = availableModelRows(allModels, selection);
   // The active catalog is what Codex Desktop reads, so it carries every
   // codex-lb model plus only the OpenRouter models the operator selected.

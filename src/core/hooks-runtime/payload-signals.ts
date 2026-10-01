@@ -155,7 +155,7 @@ export function observedParentModel(payload: any = {}) {
 export function observedParentModelMismatch(model: any, expectedModel: string) {
   const value = String(model || '').trim()
   if (!value) return false
-  return value.toLowerCase() !== expectedModel && !/gpt[-_. ]?5\.6[-_. ]?sol|\bsol(?:\s+max)?\b/i.test(value)
+  return value.toLowerCase() !== String(expectedModel || '').trim().toLowerCase()
 }
 
 export function looksLikeCodexUiSettingsEvent(payload: any = {}) {

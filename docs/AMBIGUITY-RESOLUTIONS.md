@@ -221,7 +221,7 @@
 | NC-9 | triwiki-cleanup 무복구 불변식 테스트/게이트 확인 | C5 | partial |
 | NC-10 | light 경로 집합(Answer/DFix/Help·status) 문서·게이트 반영 | C6 | done |
 | NC-11 | ownership/TriWiki 권위 문서의 P2·P6 정렬 | P2, P6 | done |
-| NC-12 | Naruto 모델 라우팅에 Luna Max(기계적 타이핑) 포함·문서/스킬 정렬 | R1 | done |
+| NC-12 | Naruto 모델 라우팅에 fast 티어(기계적 타이핑) 포함·문서/스킬 정렬 | R1 | done |
 | NC-13 | 릴리즈 최소 증거를 release gates로 문서화; 나머지는 권장 | R2 | done |
 | NC-14 | DB read-only/인가 계약을 DB 라우트에 한정해 문서화 | R3 | done |
 | NC-15 | SEO/GEO를 제품 계약 밖 내부 도구로 표기·마케팅 약속 금지 유지 | R4 | done |
@@ -281,13 +281,13 @@ Projection: [PRODUCT-CONTRACT.md](PRODUCT-CONTRACT.md).
 
 - **모순·모호:** 판단·탐색 역할만으로는 기계적 타이핑 슬라이스 라우팅이 불명.
 - **증거:** `README.md` model routing; AGENTS routing notes.
-- **Q→결정:** (c) Luna Max를 혼동 없는 디테일 타이핑 작업용으로 추가? → **채택.**
+- **Q→결정:** (c) 혼동 없는 디테일 타이핑 작업용 fast 티어 슬라이스를 추가? → **채택.**
 - **확정 계약:** Naruto 슬라이스 라우팅 제품 계약은 다음과 같다.
-  - **Astra Low (기계 작업):** 혼동 여지가 없는, 진짜 디테일한 타이핑 수준(기계적·범위가 극히 좁고 판단이 거의 불필요한) 작업
-  - **Astra Medium:** read-heavy 탐색·컨텍스트
-  - **Astra Low (구현):** 지시가 정해진 일반 코딩 실행. 기존 `sol_high_implementation` 프로필 ID는 호환성을 위해 유지
-  - **Astra Max:** 기획·분석·리뷰·고위험·집중 판단
-  - 네 작업 클래스는 유지하며 기본 effort는 Low/Medium/Max를 사용한다. 명시적 High 선택과 부모 모델·effort·서비스 티어 설정은 보존한다.
+  - **fast 티어 (low, 기계 작업):** 혼동 여지가 없는, 진짜 디테일한 타이핑 수준(기계적·범위가 극히 좁고 판단이 거의 불필요한) 작업
+  - **context 티어 (medium):** read-heavy 탐색·컨텍스트
+  - **balanced 티어 (low, 구현):** 지시가 정해진 일반 코딩 실행. 기존 `sol_high_implementation` 프로필 ID는 직렬화 호환성을 위해 유지(이름은 레거시 라벨이며 실제 effort는 low)
+  - **deep 티어 (max):** 기획·분석·리뷰·고위험·집중 판단
+  - 네 작업 클래스는 유지하며 각 티어는 Codex가 나열한 최신 모델로 해석된다. 기본 effort는 low/medium/max를 사용한다. 명시적 High 선택과 부모 모델·effort·서비스 티어 설정은 보존한다.
 - **후속:** README/스킬/라우터 문구 정렬 → `needs-code` (NC-12).
 - **상태:** `decided`
 

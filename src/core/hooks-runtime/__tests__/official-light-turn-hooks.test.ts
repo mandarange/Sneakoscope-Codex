@@ -1,6 +1,7 @@
 import '../../__tests__/helpers/isolated-test-home.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { BUILTIN_LATEST_TIER_MODELS as T } from '../../subagents/model-tiers.js';
 import os from 'node:os';
 import path from 'node:path';
 import fsp from 'node:fs/promises';
@@ -45,7 +46,7 @@ function officialSubagentHookPayload(event: 'SubagentStart' | 'SubagentStop', ag
     agent_type: 'worker',
     cwd: '/tmp/project',
     hook_event_name: event,
-    model: 'gpt-5.6-luna',
+    model: T.fast,
     permission_mode: 'default',
     session_id: 'official-parent',
     transcript_path: null,
@@ -184,7 +185,7 @@ test('standalone parent launch attaches its child hook session to the owning mis
   try {
     await prepareRoute(root, '$Naruto --agents 2 audit two packages', {}, {
       sessionKey: outerSession,
-      parentModel: 'gpt-5.6-sol'
+      parentModel: T.deep
     });
     const outerState: any = await loadStateForSession(root, outerSession);
     const before = (await fsp.readdir(path.join(root, '.sneakoscope', 'missions'))).sort();
@@ -222,7 +223,7 @@ test('standalone trusted host launch consumes its nonce, blocks replay, and admi
   try {
     await prepareRoute(root, '$Naruto Create and deliver an Excel workbook.', {}, {
       sessionKey: outerSession,
-      parentModel: 'gpt-5.6-sol'
+      parentModel: T.deep
     });
     const outerState: any = await loadStateForSession(root, outerSession);
     const dir = missionDir(root, outerState.mission_id);
@@ -637,7 +638,7 @@ test('same-session follow-up prompts remain bound to the open official workflow 
     await fsp.writeFile(path.join(root, '.codex', 'config.toml'), '[agents]\nmax_threads = 4\nmax_depth = 1\n');
     await prepareRoute(root, '$Naruto --agents 1 implement the active workflow', {}, {
       sessionKey: session,
-      parentModel: 'gpt-5.6-sol'
+      parentModel: T.deep
     });
     const initialState: any = await loadStateForSession(root, session);
     const missionId = initialState.mission_id;
@@ -717,7 +718,7 @@ test('active workflow additions fail closed at bounded prompt and queue limits',
     await fsp.writeFile(path.join(root, '.codex', 'config.toml'), '[agents]\nmax_threads = 4\nmax_depth = 1\n');
     await prepareRoute(root, '$Naruto --agents 1 keep bounded follow-up state', {}, {
       sessionKey: session,
-      parentModel: 'gpt-5.6-sol'
+      parentModel: T.deep
     });
     const state: any = await loadStateForSession(root, session);
     const dir = missionDir(root, state.mission_id);
@@ -770,7 +771,7 @@ test('a cwd-only hook payload does not queue onto a workspace-sticky official wo
     await fsp.writeFile(path.join(root, '.codex', 'config.toml'), '[agents]\nmax_threads = 4\nmax_depth = 1\n');
     await prepareRoute(root, '$Naruto --agents 1 implement the workspace sticky leftover', {}, {
       sessionKey: root,
-      parentModel: 'gpt-5.6-sol'
+      parentModel: T.deep
     });
     const sticky: any = await loadStateForSession(root, root);
     assert.ok(sticky.official_subagent_run_id);
@@ -800,7 +801,7 @@ test('an idle same-session official workflow does not capture an unrelated later
     await fsp.writeFile(path.join(root, '.codex', 'config.toml'), '[agents]\nmax_threads = 4\nmax_depth = 1\n');
     await prepareRoute(root, '$Naruto --agents 1 implement the idle leftover', {}, {
       sessionKey: session,
-      parentModel: 'gpt-5.6-sol'
+      parentModel: T.deep
     });
     const initialState: any = await loadStateForSession(root, session);
     const dir = missionDir(root, initialState.mission_id);
@@ -836,7 +837,7 @@ test('an explicit foreign hook session never inherits the active legacy global m
   try {
     await prepareRoute(root, '$Naruto --agents 1 inspect one bounded slice', {}, {
       sessionKey: parentSession,
-      parentModel: 'gpt-5.6-sol'
+      parentModel: T.deep
     });
     const parentState: any = await loadStateForSession(root, parentSession);
     const dir = missionDir(root, parentState.mission_id);
@@ -865,7 +866,7 @@ test('Naruto hooks accumulate later root waves under one workflow run and clear 
     await fsp.writeFile(path.join(root, '.codex', 'config.toml'), '[agents]\nmax_threads = 4\nmax_depth = 1\n');
     await prepareRoute(root, '$Naruto --agents 4 implement four independent checks', {}, {
       sessionKey: session,
-      parentModel: 'gpt-5.6-sol'
+      parentModel: T.deep
     });
     const state: any = await loadStateForSession(root, session);
     const dir = missionDir(root, state.mission_id);
@@ -940,7 +941,7 @@ test('reused pipeline Naruto missions rebuild request intake from the current pr
 
     const prepared: any = await prepareRoute(root, '$Naruto --agents 2 implement the current request', {}, {
       sessionKey: session,
-      parentModel: 'gpt-5.6-sol'
+      parentModel: T.deep
     });
     const intake = JSON.parse(await fsp.readFile(path.join(prior.dir, 'request-intake.json'), 'utf8'));
 
@@ -960,7 +961,7 @@ test('official events plus parent summary pass Naruto without legacy process art
   try {
     const prepared: any = await prepareRoute(root, '$Naruto --agents 2 implement two independent checks', {}, {
       sessionKey: session,
-      parentModel: 'gpt-5.6-sol'
+      parentModel: T.deep
     });
     assert.match(prepared.additionalContext, /requested subagents: 2/i);
     assert.match(prepared.additionalContext, /sks naruto parent-summary --mission .* --stdin --json/i);
@@ -1143,7 +1144,7 @@ test('generic parallel route materializes and refreshes official evidence withou
   try {
     const prepared: any = await prepareRoute(root, '$DB --agents 2 audit all schemas in parallel', {}, {
       sessionKey: session,
-      parentModel: 'gpt-5.6-sol'
+      parentModel: T.deep
     });
     const state: any = await loadStateForSession(root, session);
     const dir = missionDir(root, state.mission_id);
@@ -1204,7 +1205,7 @@ test('generic official evidence preserves config blockers and never marks invali
     await fsp.writeFile(path.join(root, '.codex', 'config.toml'), '[agents\nmax_threads = 12\n');
     await prepareRoute(root, '$DB --agents 1 audit the schema in parallel', {}, {
       sessionKey: session,
-      parentModel: 'gpt-5.6-sol'
+      parentModel: T.deep
     });
     let state: any = await loadStateForSession(root, session);
     const dir = missionDir(root, state.mission_id);
@@ -1232,18 +1233,18 @@ test('generic official evidence preserves config blockers and never marks invali
   }
 });
 
-test('known non-Sol App parent is recorded as advisory mismatch without hard-blocking the gate', async () => {
+test('known non-deep-tier App parent is recorded as advisory mismatch without hard-blocking the gate', async () => {
   const root = await tempRoot('sks-official-parent-mismatch-');
   const session = 'mismatch-parent';
   try {
     await prepareRoute(root, '$Naruto --agents 2 audit two packages', {}, {
       sessionKey: session,
-      parentModel: 'gpt-5.6-luna'
+      parentModel: T.fast
     });
     const state: any = await loadStateForSession(root, session);
     const gate = JSON.parse(await fsp.readFile(path.join(missionDir(root, state.mission_id), 'naruto-gate.json'), 'utf8'));
     assert.equal(gate.parent_model_match, false);
-    assert.equal(gate.blockers.includes('parent_model_mismatch:gpt-5.6-luna'), false);
+    assert.equal(gate.blockers.includes(`parent_model_mismatch:${T.fast}`), false);
   } finally {
     await fsp.rm(root, { recursive: true, force: true });
   }

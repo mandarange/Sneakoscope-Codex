@@ -1,7 +1,7 @@
 import './helpers/isolated-test-home.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { modelRouteReason, routeNarutoGpt56Model } from '../provider/model-router.js'
+import { modelRouteReason, routeNarutoTierModel } from '../provider/model-router.js'
 import { BUILTIN_LATEST_TIER_MODELS as T } from '../subagents/model-tiers.js'
 
 // No Codex models cache in the isolated HOME: tiers resolve to the built-in latest family.
@@ -10,7 +10,7 @@ const modelEfforts = Object.fromEntries(models.map((model) => [model, ['low', 'm
 
 test('Naruto routing fails closed for an explicit model that is not a current tier model', () => {
   for (const explicitModel of ['gpt-5.4', 'gpt-5.6-luna', 'gpt-5.6-terra']) {
-    const choice = routeNarutoGpt56Model({
+    const choice = routeNarutoTierModel({
       taskText: 'implementation',
       explicitModel,
       availableModels: [...models, explicitModel],
@@ -22,7 +22,7 @@ test('Naruto routing fails closed for an explicit model that is not a current ti
 })
 
 test('Naruto routing preserves a supported explicit current model at the task effort', () => {
-  const choice = routeNarutoGpt56Model({
+  const choice = routeNarutoTierModel({
     taskText: 'implementation',
     explicitModel: T.fast.toUpperCase(),
     availableModels: models,
@@ -39,13 +39,13 @@ test('without an explicit model each task picks the newest model of its tier', (
     ['security review', T.deep, 'max']
   ] as const) {
     const expected = { model, reasoning, serviceTier: 'fast' }
-    assert.deepEqual(routeNarutoGpt56Model({ taskText, availableModels: models, availableModelEfforts: modelEfforts }), expected)
-    assert.deepEqual(routeNarutoGpt56Model({ taskText }), expected)
+    assert.deepEqual(routeNarutoTierModel({ taskText, availableModels: models, availableModelEfforts: modelEfforts }), expected)
+    assert.deepEqual(routeNarutoTierModel({ taskText }), expected)
   }
 })
 
 test('Naruto routing rejects an unavailable model/effort pair without fallback', () => {
-  const choice = routeNarutoGpt56Model({
+  const choice = routeNarutoTierModel({
     taskText: 'browser QA',
     availableModels: models,
     availableModelEfforts: { ...modelEfforts, [T.context]: ['max'] }

@@ -1,3 +1,4 @@
+import '../../__tests__/helpers/isolated-test-home.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import os from 'node:os'
@@ -12,6 +13,10 @@ import {
 } from '../research-adversarial-review.js'
 import { recordSubagentEvent } from '../../subagents/subagent-evidence.js'
 import { writeVerifiedSuperSearchFixture } from './research-source-evidence-fixture.js'
+import { latestModelForTier } from '../../subagents/model-tiers.js'
+
+// The isolated HOME has no models cache, so the deep tier resolves to the built-in model.
+const deepModel = latestModelForTier('deep')
 
 const reviewerIds = ['evidence', 'method', 'falsification'] as const
 
@@ -44,7 +49,7 @@ test('mock adversarial loop records three structured review dimensions without m
   assert.equal(result.gate.passed, true)
   assert.equal(result.plan.reviewer_count, reviewerIds.length)
   assert.deepEqual([...new Set(result.plan.reviewers.map((reviewer: any) => reviewer.custom_agent))], ['research_reviewer'])
-  assert.deepEqual([...new Set(result.plan.reviewers.map((reviewer: any) => reviewer.model_policy))], ['gpt-6-astra max'])
+  assert.deepEqual([...new Set(result.plan.reviewers.map((reviewer: any) => reviewer.model_policy))], [`${deepModel} max`])
   assert.equal(result.gate.reviewer_count_observed, reviewerIds.length)
   assert.equal(result.gate.novelty_guaranteed, false)
   const debate = JSON.parse(await fsp.readFile(path.join(dir, 'debate-ledger.json'), 'utf8'))
@@ -277,7 +282,7 @@ test('real review convergence requires three distinct lifecycle-correlated offic
   await fsp.mkdir(path.join(dir, '.codex', 'agents'), { recursive: true })
   await fsp.writeFile(path.join(dir, '.codex', 'agents', 'research-reviewer.toml'), [
     'name = "research_reviewer"',
-    'model = "gpt-6-astra"',
+    `model = "${deepModel}"`,
     'model_reasoning_effort = "max"',
     'sandbox_mode = "read-only"'
   ].join('\n'))
@@ -382,7 +387,7 @@ test('real adversarial review fails closed when the project research_reviewer co
 test('adversarial review uses one absolute cycle deadline and fails closed after it expires', async () => {
   const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-research-adversarial-timeout-'))
   await fsp.mkdir(path.join(dir, '.codex', 'agents'), { recursive: true })
-  await fsp.writeFile(path.join(dir, '.codex', 'agents', 'research-reviewer.toml'), 'name = "research_reviewer"\nmodel = "gpt-6-astra"\nmodel_reasoning_effort = "max"\nsandbox_mode = "read-only"\n')
+  await fsp.writeFile(path.join(dir, '.codex', 'agents', 'research-reviewer.toml'), `name = "research_reviewer"\nmodel = "${deepModel}"\nmodel_reasoning_effort = "max"\nsandbox_mode = "read-only"\n`)
   const plan = { mission_id: 'M-RESEARCH-TIMEOUT', prompt: 'bounded evidence research', artifacts: { research_paper: 'research-paper.md' } }
   const sources = await writeVerifiedSuperSearchFixture(dir, ['source-1'], 'timeout')
   await fsp.writeFile(path.join(dir, 'source-ledger.json'), JSON.stringify({ sources, counterevidence_sources: [] }))

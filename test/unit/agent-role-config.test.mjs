@@ -148,7 +148,7 @@ async function findFile(root, name) {
 
 test('persisted older-family role models resolve to their tier models without mutating the stored preferences', async () => {
   const preferences = await import('../../dist/core/subagents/role-model-preferences.js');
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-astra-preferences-'));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-role-prefs-'));
   const filePath = path.join(root, 'role-models.json');
   const original = JSON.stringify({
     schema: 'sks.role-model-preferences.v2', version: 2, updated_at: '2026-09-08',
@@ -175,7 +175,7 @@ test('persisted older-family role models resolve to their tier models without mu
 
 test('role choices offer the current tier models and preserve the parent selection', async () => {
   const preferences = await import('../../dist/core/subagents/role-model-preferences.js');
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-astra-status-'));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-role-status-'));
   const configPath = path.join(root, 'config.toml');
   const filePath = path.join(root, 'role-models.json');
   const parentConfig = 'model = "gpt-5.6-sol"\nmodel_provider = "openai"\nmodel_reasoning_effort = "max"\n';
@@ -199,7 +199,7 @@ test('role choices offer the current tier models and preserve the parent selecti
 
 test('official child defaults override stale local and inherited models while leaving parent and effort intact', async () => {
   const config = await import('../../dist/core/subagents/official-subagent-config.js');
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-astra-default-'));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-child-default-'));
   const projectConfigPath = path.join(root, 'config.toml');
   const parent = 'model = "gpt-5.6-sol"\nmodel_reasoning_effort = "max"\n';
   const original = parent + '[agents]\ndefault_subagent_model = "gpt-5.6-luna"\ndefault_subagent_reasoning_effort = "medium"\n';
@@ -220,7 +220,7 @@ test('official child defaults override stale local and inherited models while le
 test('managed installed worker and implementation roles refresh to their tier models at low', async (t) => {
   const manifest = await import('../../dist/core/managed-assets/managed-assets-manifest.js');
   const config = await import('../../dist/core/subagents/official-subagent-config.js');
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-astra-refresh-'));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-role-refresh-'));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const roles = manifest.MANAGED_OFFICIAL_SUBAGENT_ROLES.filter((role) =>
     ['worker', 'implementation_specialist', 'ui_implementer', 'native_app_specialist'].includes(role.codex_name));

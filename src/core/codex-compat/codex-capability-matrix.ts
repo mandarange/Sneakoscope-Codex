@@ -14,7 +14,6 @@ export const SKS_CODEX_CAPABILITY_IDS = [
   'agents_max_concurrent_threads_per_session',
   'thread_list_search_read',
   'mcp_startup_tool_timeouts',
-  'gpt56_terra_luna_sol_routing',
   'exec_mcp_transient_recovery',
   'rollout_token_budget'
 ] as const;
@@ -92,14 +91,6 @@ export function buildCodexCapabilityMatrix(input: {
     // SKS owns MCP timeout knobs regardless of help text; treat as always wrap-available.
     forceAvailable: true
   });
-  const gpt56 = resolveBooleanCapability({
-    id: 'gpt56_terra_luna_sol_routing',
-    policy: policies.gpt56TerraLunaSolRouting || 'delegate',
-    markers: [/gpt-5\.6-(?:luna|terra|sol)/],
-    sources: [help, config],
-    // SKS model-policy matrix is package-owned; available when CLI is present enough to run.
-    forceAvailable: Boolean(detected)
-  });
   const execMcp = resolveBooleanCapability({
     id: 'exec_mcp_transient_recovery',
     policy: policies.execMcpTransientRecovery || 'probe',
@@ -123,7 +114,6 @@ export function buildCodexCapabilityMatrix(input: {
       agents_max_concurrent_threads_per_session: agentsConcurrency,
       thread_list_search_read: threadList,
       mcp_startup_tool_timeouts: mcpTimeouts,
-      gpt56_terra_luna_sol_routing: gpt56,
       exec_mcp_transient_recovery: execMcp,
       rollout_token_budget: rollout
     },

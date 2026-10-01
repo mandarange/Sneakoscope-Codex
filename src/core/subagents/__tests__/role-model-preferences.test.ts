@@ -31,7 +31,8 @@ test('role model preferences validate scope and syntax and keep an explicit curr
 
   const invalidRole: any = await setRoleModelPreference({
     role: 'made_up_role',
-    model: 'gpt-5.6-sol',
+    // A valid current model, so the invalid role is the only blocker.
+    model: T.deep,
     reasoning: 'high',
     env
   });
@@ -129,7 +130,7 @@ test('v1 role model preference stores remain readable and migrate on the next wr
 });
 
 for (const version of [1, 2]) {
-  test(`v${version} stored older-family profiles migrate to their tier's latest model in memory without changing disk`, async (t) => {
+  test(`v${version} stored older-generation profiles migrate to their tier's latest model in memory without changing disk`, async (t) => {
     const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-role-model-migration-'));
     t.after(async () => fs.rm(temp, { recursive: true, force: true }));
     const env = { HOME: path.join(temp, 'home'), SKS_HOME: path.join(temp, 'sks-home') } as NodeJS.ProcessEnv;
@@ -158,7 +159,7 @@ for (const version of [1, 2]) {
     assert.ok(read.store.roles.ui_implementer);
     assert.ok(read.store.roles.expert);
     assert.ok(read.store.roles.explorer);
-    // Each older family maps to its own tier; the effort resets to the role default.
+    // Each older generation maps to its own tier; the effort resets to the role default.
     assert.deepEqual([read.store.roles.ui_implementer.model, read.store.roles.ui_implementer.reasoning_effort], [T.balanced, 'low']);
     assert.deepEqual([read.store.roles.expert.provider, read.store.roles.expert.model, read.store.roles.expert.reasoning_effort], ['openai', T.balanced, 'max']);
     assert.deepEqual([read.store.roles.explorer.model, read.store.roles.explorer.reasoning_effort], [T.context, 'medium']);
@@ -362,12 +363,13 @@ test('app-session third-party parent stays selected while children use their tie
   assert.match(parentRequired.delegationPrompt, /keep the current app-selected main model openrouter:moonshotai\/kimi-k3/);
 });
 
-for (const mainModel of ['gpt-6-astra', 'gpt-5.6-sol', 'gpt-5.6-terra']) {
+// App-session mains: the current deep model plus two older generations.
+for (const mainModel of [T.deep, 'gpt-5.6-sol', 'gpt-5.6-terra']) {
 test(`${mainModel} app-session main keeps the child tier models`, async (t) => {
-  const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-role-model-sol-sealed-'));
+  const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-role-model-app-main-'));
   t.after(async () => fs.rm(temp, { recursive: true, force: true }));
   const root = path.join(temp, 'repo');
-  const dir = path.join(root, '.sneakoscope', 'missions', 'M-sol-main');
+  const dir = path.join(root, '.sneakoscope', 'missions', 'M-app-main');
   const home = path.join(temp, 'home');
   const codexHome = path.join(home, '.codex');
   const configPath = path.join(codexHome, 'config.toml');
@@ -397,7 +399,7 @@ test(`${mainModel} app-session main keeps the child tier models`, async (t) => {
   const prepared = await prepareOfficialSubagentMission({
     root,
     dir,
-    missionId: 'M-sol-main',
+    missionId: 'M-app-main',
     goal: 'Search broadly then apply a tiny rename',
     route: '$Naruto',
     mode: 'naruto',

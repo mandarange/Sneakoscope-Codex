@@ -9,8 +9,11 @@ import { resetDecisionTransportState } from '../../decisions/openrouter.js';
 import { defaultDecisionConfig } from '../../decisions/config.js';
 import { BUILTIN_LATEST_TIER_MODELS, resetLatestModelTierCache } from '../../subagents/model-tiers.js';
 import { effectiveChildModelAllowlist, openRouterOnlyStatePath, writeOpenRouterOnlyState } from '../../subagents/child-model-allowlist.js';
-import { jevSpawnModelRewrite, jevSpawnRouting, openRouterOnlyJevTurnLine, roleTierFallback } from '../jev-spawn-routing.js';
+import { jevSpawnRouting, openRouterOnlyJevTurnLine, roleTierFallback } from '../jev-spawn-routing.js';
 import { subagentSpawnPolicyBlockReason } from '../subagent-spawn-policy.js';
+
+// The rewritten spawn input only; see jevSpawnRouting.
+const rewrite = async (state: any, payload: any) => (await jevSpawnRouting(process.cwd(), state, payload)).input;
 
 process.env.SKS_JEV_DECISION_TEST_OVERRIDES = '1';
 
@@ -53,17 +56,17 @@ async function withJev(response: () => Response, run: () => Promise<void>) {
 
 test('Naruto spawn seals the newest model of the tier Jev picked and leaves non-spawn tools alone', async () => {
   await withJev(() => jevAnswer('balanced', 0.91, 0.9), async () => {
-    const rewritten = await jevSpawnModelRewrite(process.cwd(), { mode: 'NARUTO' }, {
+    const rewritten = await rewrite({ mode: 'NARUTO' }, {
       tool_name: 'spawn_agent',
       tool_input: { model: BUILTIN_LATEST_TIER_MODELS.deep, reasoning_effort: 'max', fork_turns: 'none', message: 'Implement the ordinary parser.' }
     });
     assert.equal(rewritten?.model, BUILTIN_LATEST_TIER_MODELS.balanced);
     assert.equal(rewritten?.reasoning_effort, 'low');
-    assert.equal(await jevSpawnModelRewrite(process.cwd(), { mode: 'NARUTO' }, {
+    assert.equal(await rewrite({ mode: 'NARUTO' }, {
       tool_name: 'exec_command',
       tool_input: { cmd: 'echo hi' }
     }), null);
-    assert.equal(await jevSpawnModelRewrite(process.cwd(), { mode: 'OFFICIAL' }, {
+    assert.equal(await rewrite({ mode: 'OFFICIAL' }, {
       tool_name: 'spawn_agent',
       tool_input: { model: BUILTIN_LATEST_TIER_MODELS.deep, message: 'Implement the parser.' }
     }), null);
@@ -73,7 +76,7 @@ test('Naruto spawn seals the newest model of the tier Jev picked and leaves non-
 test('an unconfident Jev seals a spawn without a current model to its role tier, never an old pinned family', async () => {
   await withJev(() => jevAnswer('balanced', 0.4, 0.4), async () => {
     // An old 5.6 model is not current: the worker role gets its own fast tier.
-    const worker = await jevSpawnModelRewrite(process.cwd(), { mode: 'NARUTO' }, {
+    const worker = await rewrite({ mode: 'NARUTO' }, {
       tool_name: 'spawn_agent',
       tool_input: { agent_type: 'worker', model: 'gpt-5.6-luna', message: 'Rename one label.' }
     });
@@ -81,14 +84,14 @@ test('an unconfident Jev seals a spawn without a current model to its role tier,
     assert.equal(worker?.reasoning_effort, 'low');
     assert.equal(worker?.fork_turns, 'none');
     // An unknown role falls back to the deep tier.
-    const unknown = await jevSpawnModelRewrite(process.cwd(), { mode: 'NARUTO' }, {
+    const unknown = await rewrite({ mode: 'NARUTO' }, {
       tool_name: 'spawn_agent',
       tool_input: { message: 'Implement the unsealed slice.' }
     });
     assert.deepEqual({ model: unknown?.model, effort: unknown?.reasoning_effort }, roleTierFallback(''));
     assert.equal(unknown?.model, BUILTIN_LATEST_TIER_MODELS.deep);
     // A spawn that already names a current tier model is left as written.
-    assert.equal(await jevSpawnModelRewrite(process.cwd(), { mode: 'NARUTO' }, {
+    assert.equal(await rewrite({ mode: 'NARUTO' }, {
       tool_name: 'spawn_agent',
       tool_input: { model: BUILTIN_LATEST_TIER_MODELS.context, reasoning_effort: 'medium', fork_turns: 'none', message: 'Explore the unsealed slice.' }
     }), null);
@@ -315,7 +318,7 @@ test('OpenRouter Only ignores a stored GPT role-model preference instead of lett
     const payload = spawnPayload({ agent_type: 'worker', model: T.deep, message: 'Rename one label.' });
     await withListJev(JEV_REPLIES[1]!, async () => {
       // Mode off: the preference wins, so the Naruto spawn is left alone.
-      assert.equal(await jevSpawnModelRewrite(process.cwd(), { mode: 'NARUTO' }, payload), null);
+      assert.equal(await rewrite({ mode: 'NARUTO' }, payload), null);
       await withOpenRouterOnly({ enabled: true, subagent_models: LIST }, async () => {
         resetDecisionTransportState();
         const routed = await jevSpawnRouting(process.cwd(), { mode: 'NARUTO' }, payload);
@@ -342,7 +345,7 @@ test('with OpenRouter Only off, a stored list leaves every spawn rewrite byte-id
       const rows = [];
       for (const row of payloads) {
         const routing = await jevSpawnRouting(process.cwd(), row.state, spawnPayload(row.input));
-        rows.push({ routing, legacy: await jevSpawnModelRewrite(process.cwd(), row.state, spawnPayload(row.input)) });
+        rows.push({ routing });
       }
       return rows;
     };

@@ -1,5 +1,7 @@
+import '../../__tests__/helpers/isolated-test-home.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { BUILTIN_LATEST_TIER_MODELS as T } from '../../subagents/model-tiers.js';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -282,7 +284,7 @@ test('standalone Naruto parent attach restores the owning route alias for parent
 
     for (const [prompt, skillName] of cases) {
       const outerSession = `outer-${skillName}`;
-      await prepareRoute(root, prompt, {}, { sessionKey: outerSession, parentModel: 'gpt-5.6-sol' });
+      await prepareRoute(root, prompt, {}, { sessionKey: outerSession, parentModel: T.deep });
       const outerState: any = await loadStateForSession(root, outerSession);
       assert.ok(outerState.required_skills.includes(skillName), prompt);
       process.env.SKS_NARUTO_PARENT_LAUNCH = '1';

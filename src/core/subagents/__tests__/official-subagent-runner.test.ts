@@ -10,6 +10,7 @@ import {
 } from '../official-subagent-runner.js'
 import { readOfficialSubagentConfig } from '../official-subagent-config.js'
 import { HARD_NARUTO_MAX_THREADS } from '../thread-budget.js'
+import { latestModelForTier } from '../model-tiers.js'
 import { prepareOfficialSubagentMission, writeNarutoGate } from '../official-subagent-preparation.js'
 import { trustedHostCapabilityReceiptBindingBlockers } from '../subagent-evidence.js'
 import { runProcess, sha256 } from '../../fsx.js'
@@ -182,7 +183,7 @@ test('app sessions return delegation context without launching nested Codex', as
   assert.equal(result.ok, false)
   assert.equal(result.prepared, true)
   assert.equal(result.completion_evidence, false)
-  assert.equal(result.parent_model, 'gpt-6-astra')
+  assert.equal(result.parent_model, latestModelForTier('deep'))
   assert.equal(result.parent_reasoning_effort, 'max')
 })
 
@@ -1787,12 +1788,7 @@ test('standalone parent launch exports the owning mission id to child hooks', as
       missionId: 'M-parent-owner',
       env: {
         HOME: home,
-        CODEX_HOME: path.join(home, '.codex'),
-        SKS_PROVIDER: '',
-        SKS_USE_CODEX_LB: '',
-        SKS_MODEL_PROVIDER: '',
-        CODEX_MODEL_PROVIDER: '',
-        OPENAI_MODEL_PROVIDER: ''
+        CODEX_HOME: path.join(home, '.codex')
       },
       runProcessImpl: async (_command, _args, opts: any) => {
         childEnv = opts.env
@@ -1820,12 +1816,7 @@ test('standalone parent passes a large fan-out frame budget through to the Codex
       appSession: false,
       env: {
         HOME: home,
-        CODEX_HOME: path.join(home, '.codex'),
-        SKS_PROVIDER: '',
-        SKS_USE_CODEX_LB: '',
-        SKS_MODEL_PROVIDER: '',
-        CODEX_MODEL_PROVIDER: '',
-        OPENAI_MODEL_PROVIDER: ''
+        CODEX_HOME: path.join(home, '.codex')
       },
       runProcessImpl: async (_command, args) => {
         launchedArgs = args
@@ -1912,12 +1903,7 @@ test('standalone parent registers the child PID before waiting and exposes a bou
       appSession: false,
       env: {
         HOME: home,
-        CODEX_HOME: path.join(home, '.codex'),
-        SKS_PROVIDER: '',
-        SKS_USE_CODEX_LB: '',
-        SKS_MODEL_PROVIDER: '',
-        CODEX_MODEL_PROVIDER: '',
-        OPENAI_MODEL_PROVIDER: ''
+        CODEX_HOME: path.join(home, '.codex')
       },
       onChildSpawn: async (pid) => {
         registeredPid = pid
@@ -1983,12 +1969,7 @@ test('standalone parent converts timeout and non-zero exits into bounded blocker
         appSession: false,
         env: {
           HOME: home,
-          CODEX_HOME: path.join(home, '.codex'),
-          SKS_PROVIDER: '',
-          SKS_USE_CODEX_LB: '',
-          SKS_MODEL_PROVIDER: '',
-          CODEX_MODEL_PROVIDER: '',
-          OPENAI_MODEL_PROVIDER: ''
+          CODEX_HOME: path.join(home, '.codex')
         },
         runProcessImpl: async () => fixture.process
       })
@@ -2159,8 +2140,8 @@ test('workflow metadata preserves an explicit parent model and effort', async ()
   const result = await runOfficialSubagentWorkflow({
     root: process.cwd(), goal: 'delegate and wait', prompt: 'delegate and wait',
     requestedSubagents: 1, maxThreads: 1, appSession: true,
-    credentialPolicy: { ...defaultNarutoCredentialPolicy(), parentModel: 'gpt-5.6-sol', parentEffort: 'high' }
+    credentialPolicy: { ...defaultNarutoCredentialPolicy(), parentModel: 'vendor/explicit-parent', parentEffort: 'high' }
   })
-  assert.equal(result.parent_model, 'gpt-5.6-sol')
+  assert.equal(result.parent_model, 'vendor/explicit-parent')
   assert.equal(result.parent_reasoning_effort, 'high')
 })

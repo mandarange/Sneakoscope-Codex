@@ -2,7 +2,7 @@ import path from 'node:path'
 import { readJson, writeJsonAtomic, writeTextAtomic, nowIso } from '../fsx.js'
 import { runCodexTask } from '../codex-control/codex-task-runner.js'
 import { researchPaperArtifactForPlan } from '../research.js'
-import { thinkingSubagentModel, SUBAGENT_EFFORT } from '../subagents/model-policy.js'
+import { judgmentSubagentModel, DEEP_SUBAGENT_EFFORT } from '../subagents/model-policy.js'
 import { analyzeResearchReportQuality, countWords } from './research-report-quality.js'
 import { analyzeResearchRepetition } from './research-repetition-detector.js'
 import { buildRealisticResearchPaper, buildRealisticResearchReport } from './research-realistic-report.js'
@@ -113,9 +113,9 @@ export async function runResearchCodexSynthesisWriter(input: {
       hardTimeoutMs: input.timeoutMs || 120000,
       ...(input.deadlineMs === undefined ? {} : { deadlineEpochMs: input.deadlineMs })
     },
-    model: thinkingSubagentModel(),
-    reasoningEffort: SUBAGENT_EFFORT,
-    modelReasoningEffort: SUBAGENT_EFFORT,
+    model: judgmentSubagentModel(),
+    reasoningEffort: DEEP_SUBAGENT_EFFORT,
+    modelReasoningEffort: DEEP_SUBAGENT_EFFORT,
     serviceTier: 'fast'
   })
   const worker = await readJson(result.workerResultPath as string, null)

@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { BUILTIN_LATEST_TIER_MODELS as T } from '../../subagents/model-tiers.js';
 import os from 'node:os';
 import path from 'node:path';
 import fsp from 'node:fs/promises';
@@ -89,7 +90,7 @@ export function subagentPayload(agentId: string, transcriptPath: string | null =
     agent_id: agentId,
     agent_type: 'worker',
     hook_event_name: 'SubagentStart',
-    model: 'gpt-5.6-luna',
+    model: T.fast,
     permission_mode: 'default',
     transcript_path: transcriptPath
   };
@@ -103,7 +104,7 @@ export function preToolPayload(
   return {
     cwd: '/tmp/project',
     hook_event_name: 'PreToolUse',
-    model: 'gpt-5.6-luna',
+    model: T.deep,
     permission_mode: 'default',
     session_id: sessionId,
     tool_input: { command: 'pwd' },

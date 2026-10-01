@@ -55,7 +55,7 @@ export function supportedRoleModelProfiles(): Array<{ provider: 'openai'; model:
     })));
 }
 
-/** A stored model from an older family moves to the latest model of its tier. */
+/** A stored model from an older generation (or another family of the same tier) moves to the latest model of its tier. */
 function currentRoleModel(model: string, fallback: string): string {
   if (latestTierModelSet().has(model)) return model;
   const tier = modelTierForModel(model);
@@ -133,7 +133,7 @@ async function readStoredRoleModelPreferences(input: {
       // A stored choice is honored on the latest model of its tier. Reads
       // migrate effective values only and leave the stored document intact.
       const effectiveModel = provider === 'openai' ? currentRoleModel(model, role.model) : role.model;
-      // An effort stored for an older family was bound to that model's limits;
+      // An effort stored for an older generation was bound to that model's limits;
       // only a choice already on a current model keeps its effort.
       const keepEffort = effectiveModel === model && isSupportedRoleModelProfile(effectiveModel, reasoning);
       roles[role.codex_name] = {

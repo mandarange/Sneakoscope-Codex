@@ -83,9 +83,8 @@ connectivity evidence, not SKS task accuracy or a privacy audit.
   difficulty Score and a high-stakes Noul. Code promotes a choice only at
   probability 0.85 and confidence 0.70. The top difficulty level, or a risk
   Noul at or above 0.70, escalates that role to `deep`. Each tier resolves to
-  the newest model the Codex models cache lists for it (today `gpt-6-luna`,
-  `gpt-6-sol`, `gpt-6-sol`, `gpt-6-astra`), so Jev keeps routing to the latest
-  models. Jev off gives each role its own tier. User role preferences on a
+  the newest model the Codex models cache lists for it (the current resolution per tier is in the Model Policy table of
+  `naruto.md`), so Jev keeps routing to the latest models. Jev off gives each role its own tier. User role preferences on a
   current model stay authoritative.
 - An automatic plan variant that already covers every required slice, before
   coherent plan/budget/prompt promotion.

@@ -12,10 +12,11 @@ SKS applies the prompting recommendations at its existing instruction boundaries
 - Keep responses concise. Copy and translation requests return the requested content.
 - Essential prompts omit strict-mode reflection and final-format rituals. Strict retains them.
 
-All managed children use GPT-6 Astra: low for tiny mechanical work, medium
-for exploration and tools, high for implementation, and max for judgment. SDK
-requests for the exact `gpt-6-astra` model map retired `none`/`minimal` efforts to
-`low`; supported efforts and saved host settings remain unchanged.
+Managed children run on model tiers (fast, balanced, context, deep); each tier
+resolves to the newest model Codex lists for it (see [Model Policy](naruto.md)).
+The deep tier is the Astra family. SDK requests for any Astra model map retired
+`none`/`minimal` efforts to `low`; supported efforts and saved host settings
+remain unchanged.
 
 ## New tool and continuation features
 
@@ -42,7 +43,7 @@ With the registered Codex-LB bridge running, use:
 sks agent-bridge async --prompt "Check SKS status and stats. While those tools run, explain what each check covers." --tools status,stats --json
 ```
 
-This explicit Responses mode uses the existing `codex-lb:gpt-6-astra` route and
+This explicit Responses mode uses the existing `codex-lb:<latest deep-tier model>` route and
 sets `async: true` on each selected function. It starts a tool when its complete
 call arrives, continues reading the model stream, and submits actual results on
 the original `call_id`. Stateless continuations preserve output and encrypted

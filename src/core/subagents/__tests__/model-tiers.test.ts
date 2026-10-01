@@ -5,11 +5,16 @@ import os from 'node:os'
 import path from 'node:path'
 import {
   BUILTIN_LATEST_TIER_MODELS,
+  catalogIsAuthoritative,
   codexListedEfforts,
+  compareModelVersions,
   effortForTier,
   latestTierModelSet,
   modelTierForModel,
-  resolveLatestModelTiers
+  notOlderThanBuiltin,
+  parseGptModelId,
+  resolveLatestModelTiers,
+  tierModelsFingerprint
 } from '../model-tiers.js'
 
 async function withCache(models: unknown[] | null, run: (env: NodeJS.ProcessEnv) => void | Promise<void>) {
@@ -94,4 +99,57 @@ test('model families map back to tiers', () => {
   assert.equal(modelTierForModel('gpt-5.6-terra'), 'context')
   assert.equal(modelTierForModel('gpt-6-astra'), 'deep')
   assert.equal(modelTierForModel('anthropic/claude-sonnet-4.5'), null)
+})
+
+test('a minor bump inside a family wins: gpt-6.1-sol beats gpt-6-sol and gpt-5.6-sol on the balanced and context tiers', async () => {
+  await withCache([
+    { slug: 'gpt-5.6-sol' },
+    { slug: 'gpt-6-sol' },
+    { slug: 'gpt-6.1-sol' },
+    { slug: 'gpt-6-astra' },
+    { slug: 'gpt-6-luna' },
+    { slug: 'gpt-5.6-terra' }
+  ], (env) => {
+    const models = resolveLatestModelTiers({ env }).models
+    assert.deepEqual(models, { fast: 'gpt-6-luna', balanced: 'gpt-6.1-sol', context: 'gpt-6.1-sol', deep: 'gpt-6-astra' })
+    assert.equal(latestTierModelSet({ env }).has('gpt-6-sol'), false)
+    assert.equal(latestTierModelSet({ env }).has('gpt-5.6-sol'), false)
+  })
+})
+
+test('version parsing and ordering are numeric per segment', () => {
+  assert.deepEqual(parseGptModelId('gpt-6.1-sol'), { version: [6, 1], family: 'sol' })
+  assert.equal(parseGptModelId('gpt-reserve'), null)
+  assert.equal(parseGptModelId('openai/gpt-6-sol'), null)
+  assert.ok(compareModelVersions([6, 1], [6]) > 0)
+  assert.ok(compareModelVersions([6], [5, 6]) > 0)
+  assert.ok(compareModelVersions([6, 10], [6, 9]) > 0)
+  assert.equal(compareModelVersions([6], [6, 0]), 0)
+})
+
+test('a model not older than the built-in id for its tier cannot be called stale without the cache', () => {
+  assert.equal(notOlderThanBuiltin(BUILTIN_LATEST_TIER_MODELS.balanced), true)
+  assert.equal(notOlderThanBuiltin('gpt-99-sol'), true)
+  assert.equal(notOlderThanBuiltin('gpt-5.6-sol'), false)
+  assert.equal(notOlderThanBuiltin('gpt-5.6-luna'), false)
+  assert.equal(notOlderThanBuiltin('anthropic/claude-sonnet-4.5'), false)
+})
+
+test('the tier fingerprint moves only when a newer model is listed, and is absent without a cache', async () => {
+  await withCache([{ slug: 'gpt-6-sol' }, { slug: 'gpt-6-astra' }, { slug: 'gpt-6-luna' }], (env) => {
+    assert.equal(catalogIsAuthoritative({ env }), true)
+    assert.match(String(tierModelsFingerprint({ env })), /^[0-9a-f]{16}$/)
+  })
+  let before: string | null = null
+  await withCache([{ slug: 'gpt-6-sol' }, { slug: 'gpt-6-astra' }], (env) => { before = tierModelsFingerprint({ env }) })
+  let same: string | null = null
+  await withCache([{ slug: 'gpt-6-sol' }, { slug: 'gpt-6-astra' }, { slug: 'gpt-5.6-sol' }], (env) => { same = tierModelsFingerprint({ env }) })
+  let after: string | null = null
+  await withCache([{ slug: 'gpt-6-sol' }, { slug: 'gpt-6-astra' }, { slug: 'gpt-6.1-sol' }], (env) => { after = tierModelsFingerprint({ env }) })
+  assert.equal(same, before)
+  assert.notEqual(after, before)
+  await withCache(null, (env) => {
+    assert.equal(catalogIsAuthoritative({ env }), false)
+    assert.equal(tierModelsFingerprint({ env }), null)
+  })
 })

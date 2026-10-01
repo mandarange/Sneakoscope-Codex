@@ -2,7 +2,7 @@ import path from 'node:path'
 import { readJson, sha256 } from '../fsx.js'
 import { runCodexTask } from '../codex-control/codex-task-runner.js'
 import { runSuperSearch, type SuperSearchSourceFunction, type SuperSearchSourceRecord } from '../super-search/index.js'
-import { TERRA_SUBAGENT_EFFORT } from '../subagents/model-policy.js'
+import { CONTEXT_SUBAGENT_EFFORT } from '../subagents/model-policy.js'
 import { latestModelForTier } from '../subagents/model-tiers.js'
 import {
   type ResearchSourceLayer,
@@ -14,7 +14,7 @@ export const RESEARCH_SOURCE_ACQUISITION_MODEL_POLICY = Object.freeze({
   get model() {
     return latestModelForTier('context')
   },
-  model_reasoning_effort: TERRA_SUBAGENT_EFFORT
+  model_reasoning_effort: CONTEXT_SUBAGENT_EFFORT
 })
 
 export interface ResearchSuperSearchShardInput {

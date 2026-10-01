@@ -24,7 +24,7 @@ import {
   SUBAGENT_MODELS_SETTINGS_HINT
 } from './subagent-spawn-policy.js';
 
-const SPAWN_TOOLS = new Set(['spawn_agent', 'collaboration.spawn_agent', 'functions.spawn_agent']);
+import { isSpawnAgentToolName, spawnPayloadToolName } from './spawn-tool-name.js';
 
 /** Which list entry an OpenRouter Only spawn got, and why. */
 export interface OpenRouterOnlySpawnRoute {
@@ -42,8 +42,7 @@ export interface JevSpawnRouting {
 }
 
 function spawnInput(payload: any): Record<string, unknown> | null {
-  const name = String(payload?.tool_name || payload?.toolName || payload?.tool?.name || '');
-  if (!SPAWN_TOOLS.has(name)) return null;
+  if (!isSpawnAgentToolName(spawnPayloadToolName(payload))) return null;
   const input = payload?.tool_input || payload?.toolInput || payload?.tool?.input;
   if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
   return { ...input };
@@ -98,15 +97,6 @@ export async function jevSpawnRouting(root: string, state: any, payload: any): P
   const allowlist = effectiveChildModelAllowlist();
   if (allowlist.mode === 'openrouter_only') return openRouterOnlySpawnRouting(root, state, input, allowlist);
   return { input: await tierSpawnRewrite(root, state, input), route: null };
-}
-
-/** The rewritten spawn input only; see jevSpawnRouting. */
-export async function jevSpawnModelRewrite(
-  root: string,
-  state: any,
-  payload: any
-): Promise<Record<string, unknown> | null> {
-  return (await jevSpawnRouting(root, state, payload)).input;
 }
 
 function listState(allowlist: Extract<ChildModelAllowlist, { mode: 'openrouter_only' }>): OpenRouterOnlyState {

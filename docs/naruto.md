@@ -92,14 +92,18 @@ Codex lists a newer family, every tier moves to it without an SKS release.
 | Tier | Effort | Today | Assigned role |
 | --- | --- | --- | --- |
 | deep | max | `gpt-6-astra` | Standalone root default, planning, analysis, review, architecture, debugging, security, database, release, and ambiguous work |
-| balanced | low | `gpt-6-sol` | Instructed ordinary UI, backend, logic, core, and native coding execution |
-| context | medium | `gpt-6-sol` (`terra` when its family is newest) | Large documents, logs, long-term memory, repository exploration, rapid large-scale first-draft code processing, plus Browser, Computer Use, and image execution |
+| balanced | low | `gpt-6.1-sol` | Instructed ordinary UI, backend, logic, core, and native coding execution |
+| context | medium | `gpt-6.1-sol` (Terra wins when it is listed at the same or a newer version) | Large documents, logs, long-term memory, repository exploration, rapid large-scale first-draft code processing, plus Browser, Computer Use, and image execution |
 | fast | low | `gpt-6-luna` | Tiny, short-context work with clear completion conditions and strong automatic verification |
 
 Active parent model, effort, and service-tier selections are preserved. A
 stored role preference on a current model wins for that role; a preference on
-an older family moves to the latest model of the same tier. The four serialized
-profile IDs remain stable for compatibility. With Jev mode on, Jev picks the
+an older generation moves to the latest model of the same tier. The four
+serialized profile IDs remain stable for compatibility, but their names are
+legacy labels: `luna_max_mechanical` is the fast tier (low effort),
+`sol_high_implementation` the balanced tier (low), `terra_max_context_tools` the
+context tier (medium), and `sol_max_judgment` the deep tier (max, Astra family).
+The tier decides model and effort, not the name. With Jev mode on, Jev picks the
 tier for each spawn and SKS seals that tier's newest model.
 
 Mixed work is split when practical. If a slice cannot safely separate execution
@@ -128,7 +132,7 @@ max_concurrent_threads_per_session = 256
 max_depth = 1
 interrupt_message = true
 default_subagent_model = "gpt-6-astra"   # the latest deep-tier model
-default_subagent_reasoning_effort = "high"
+default_subagent_reasoning_effort = "low"
 ```
 
 `max_concurrent_threads_per_session` under `[agents]` is the configured spawned-child

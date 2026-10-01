@@ -46,7 +46,6 @@ export const CURRENT_CODEX_RUNTIME_CONTRACT: CodexRuntimeContract = {
     remoteNativeEnvironment: 'probe',
     rolloutTokenBudget: 'probe',
     mcpStartupToolTimeouts: 'wrap',
-    gpt56TerraLunaSolRouting: 'delegate',
     mcpPaginatedDiscovery: 'wrap',
     portableAgentPlugins: 'delegate',
     automaticApprovalReview: 'delegate'

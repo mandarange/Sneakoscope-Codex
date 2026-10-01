@@ -8,7 +8,7 @@ import { runCodexTask } from '../codex-control/codex-control-plane.js'
 import { CODEX_AGENT_WORKER_RESULT_SCHEMA_ID, codexAgentWorkerResultSchema } from '../codex-control/schemas/agent-worker-result.schema.js'
 import { leanEngineeringCompactText, leanPolicyReference } from '../lean-engineering-policy.js'
 import { readCodexLbModelCatalog, readLbHealth } from '../codex-lb/codex-lb-env.js'
-import { categoryForWorkerRole, isNarutoGpt56Model, modelRouteReason, routeModel, type ModelChoice, type TaskCategory } from '../provider/model-router.js'
+import { categoryForWorkerRole, isNarutoTierModel, modelRouteReason, routeModel, type ModelChoice, type TaskCategory } from '../provider/model-router.js'
 import { codexTimeoutClassForRoute } from '../codex-control/codex-reliability-shield.js'
 import { decideSubagentModel } from '../subagents/model-policy.js'
 import { latestTierModelSet } from '../subagents/model-tiers.js'
@@ -271,7 +271,7 @@ export async function resolveWorkerModelRouting(input: {
   const explicitTierRaw = String(env.SKS_WORKER_SERVICE_TIER || env.SKS_SERVICE_TIER || '').trim()
   const explicitReasoning = normalizeModelReasoning(explicitReasoningRaw)
   const explicitTier = normalizeServiceTier(explicitTierRaw)
-  const explicitNarutoModelInvalid = narutoOnly && Boolean(explicitModel) && !isNarutoGpt56Model(explicitModel)
+  const explicitNarutoModelInvalid = narutoOnly && Boolean(explicitModel) && !isNarutoTierModel(explicitModel)
   const explicitNarutoReasoningInvalid = narutoOnly && Boolean(explicitReasoningRaw) && !explicitReasoning
   const explicitNarutoTierInvalid = narutoOnly && Boolean(explicitTierRaw) && !explicitTier
   const currentModels = latestTierModelSet()
@@ -279,7 +279,7 @@ export async function resolveWorkerModelRouting(input: {
     && currentModels.has(String(input.agent?.routed_model || ''))
     ? String(input.agent?.routed_model)
     : ''
-  const savedAstraEffort = savedPreferenceModel
+  const savedPreferenceEffort = savedPreferenceModel
     ? normalizeModelReasoning(input.agent?.routed_model_reasoning_effort)
     : null
   const jevModel = !explicitModel && input.agent?.routed_model_policy === 'jev_sealed_routing'
@@ -307,7 +307,7 @@ export async function resolveWorkerModelRouting(input: {
         narutoOnly: true,
         taskText: taskKindText,
         riskText,
-        reasoningEffort: jevEffort || savedAstraEffort || liveJevEffort,
+        reasoningEffort: jevEffort || savedPreferenceEffort || liveJevEffort,
         availableModels: lbCatalog?.models || [],
         availableModelEfforts: lbCatalog?.model_efforts || {},
         ...(selectedModel ? { model: selectedModel } : {})
@@ -316,7 +316,7 @@ export async function resolveWorkerModelRouting(input: {
         // The task's tier picks the newest fast or accurate model; a stored
         // role preference or an explicit current model wins.
         model: (explicitModel && currentModels.has(explicitModel) ? explicitModel : '') || savedPreferenceModel || liveJevModel || taskPolicy.model,
-        reasoning: explicitReasoning || savedAstraEffort || liveJevEffort || taskPolicy.modelReasoningEffort,
+        reasoning: explicitReasoning || savedPreferenceEffort || liveJevEffort || taskPolicy.modelReasoningEffort,
         serviceTier: explicitTier || input.fastModePolicy.service_tier || 'fast'
       } satisfies ModelChoice
   const blockers = [

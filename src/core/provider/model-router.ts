@@ -37,9 +37,6 @@ const CATEGORY_POLICY: Record<TaskCategory, Omit<ModelChoice, 'model'>> = {
 export function narutoModels(): string[] {
   return [...latestTierModelSet()];
 }
-// Keep the exported type and helper names compatible with existing callers.
-export type NarutoGpt56Model = string;
-
 const E2E_WORK_RE = /(e2e|end[-\s]?to[-\s]?end|test_execution|browser|chrome|computer[-\s]?use|computer\s+use|cross[-\s]?app|playwright|selenium|puppeteer|브라우저|컴퓨터\s*유즈)/i;
 
 export async function routeModel(category: TaskCategory, opts: {
@@ -53,7 +50,7 @@ export async function routeModel(category: TaskCategory, opts: {
   availableModelEfforts?: Record<string, string[]> | null;
 } = {}): Promise<ModelChoice> {
   if (opts.narutoOnly) {
-    return routeNarutoGpt56Model({
+    return routeNarutoTierModel({
       category,
       ...(opts.taskText !== undefined ? { taskText: opts.taskText } : {}),
       ...(opts.riskText !== undefined ? { riskText: opts.riskText } : {}),
@@ -70,7 +67,7 @@ export async function routeModel(category: TaskCategory, opts: {
   return { model, reasoning, serviceTier: policy.serviceTier };
 }
 
-export function routeNarutoGpt56Model(input: {
+export function routeNarutoTierModel(input: {
   category?: TaskCategory;
   taskText?: string;
   riskText?: string;
@@ -82,7 +79,7 @@ export function routeNarutoGpt56Model(input: {
 } = {}): ModelChoice {
   const category = input.category || 'agentic';
   const explicitRequested = String(input.explicitModel || '').trim();
-  const explicit = normalizeNarutoGpt56Model(input.explicitModel);
+  const explicit = normalizeNarutoTierModel(input.explicitModel);
   const invalidExplicit = Boolean(explicitRequested && !explicit);
   const explicitHighRisk = /critical|forensic|security|database|migration|release|production|high[- ]?risk|data\s*loss|permission|auth|보안|데이터베이스|마이그레이션|릴리스|운영|고위험/i.test(String(input.riskText || ''));
   const automatic = decideSubagentModel({
@@ -97,10 +94,10 @@ export function routeNarutoGpt56Model(input: {
       || explicitHighRisk
   });
   // No explicit model: the task's tier picks the latest fast or accurate model.
-  const preferred: NarutoGpt56Model = explicit || automatic.model;
+  const preferred: string = explicit || automatic.model;
   const available = input.availableModels == null
     ? narutoModels()
-    : input.availableModels.map(normalizeNarutoGpt56Model).filter((model): model is NarutoGpt56Model => Boolean(model));
+    : input.availableModels.map(normalizeNarutoTierModel).filter((model): model is string => Boolean(model));
   const degraded = new Set((input.degradedModels || []).map((model) => String(model).toLowerCase()));
   const usable = available.filter((model) => !degraded.has(model));
   const availableEfforts = effortsForModel(input.availableModelEfforts, preferred);
@@ -111,18 +108,13 @@ export function routeNarutoGpt56Model(input: {
   return { model, reasoning: intendedReasoning, serviceTier: 'fast' };
 }
 
-export function isNarutoGpt56Model(value: unknown): value is NarutoGpt56Model {
-  return normalizeNarutoGpt56Model(value) !== null;
+export function isNarutoTierModel(value: unknown): value is string {
+  return normalizeNarutoTierModel(value) !== null;
 }
 
-export function normalizeNarutoGpt56Model(value: unknown): NarutoGpt56Model | null {
+export function normalizeNarutoTierModel(value: unknown): string | null {
   const model = String(value || '').trim().toLowerCase();
   return narutoModels().includes(model) ? model : null;
-}
-
-/** Compatibility helper: child models come from tiers, independent of the parent. */
-export function childInheritsActiveMainModel(_value: unknown): boolean {
-  return false;
 }
 
 export function categoryForWorkerRole(role: string, taskText = ''): TaskCategory {
@@ -140,7 +132,7 @@ export function modelRouteReason(category: TaskCategory, choice: ModelChoice, op
   const model = choice.model || 'codex-selected';
   if (opts.explicit && !choice.model) return `${category}->blocked (explicit model unavailable)`;
   if (opts.explicit) return `${category}->${model} (explicit model preserved)`;
-  if (isNarutoGpt56Model(choice.model)) return `${category}->${model}@${choice.reasoning} (official subagent model policy)`;
+  if (isNarutoTierModel(choice.model)) return `${category}->${model}@${choice.reasoning} (official subagent model policy)`;
   const suffix = opts.quotaLow ? 'quota discipline' : 'Codex catalog passthrough';
   return `${category}->${model} (${suffix})`;
 }
@@ -153,6 +145,6 @@ function effortsForModel(catalog: Record<string, string[]> | null | undefined, m
   return (match?.[1] || []).map((effort) => String(effort).toLowerCase());
 }
 
-function reasoningForExplicitModel(_model: NarutoGpt56Model, policy: SubagentModelPolicyId): ModelReasoning {
+function reasoningForExplicitModel(_model: string, policy: SubagentModelPolicyId): ModelReasoning {
   return subagentModelProfile(policy).modelReasoningEffort;
 }

@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { BUILTIN_LATEST_TIER_MODELS as T } from '../subagents/model-tiers.js';
 import path from 'node:path';
 import os from 'node:os';
 import fsp from 'node:fs/promises';
@@ -71,7 +72,7 @@ async function writePassingOfficialNarutoArtifacts(dir: string, missionId: strin
     status: 'completed',
     route: '$sks-naruto',
     workflow: 'official_codex_subagent',
-    parent: { model: 'gpt-5.6-sol', model_reasoning_effort: 'max', observed_model_match: null },
+    parent: { model: T.deep, model_reasoning_effort: 'max', observed_model_match: null },
     requested_subagents: 1,
     max_threads: 12,
     max_depth: 1,

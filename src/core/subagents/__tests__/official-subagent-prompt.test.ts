@@ -180,7 +180,7 @@ test('the selected parent model never changes the child tier models', () => {
     decompositionStatus: 'ready',
     activeMainModel: {
       provider: 'openai',
-      model: 'gpt-5.6-sol'
+      model: T.deep
     },
     slices: [
       {
@@ -206,7 +206,7 @@ test('the selected parent model never changes the child tier models', () => {
   assert.match(prompt, /parent selection never overrides the child model; stored user role preferences stay authoritative/)
   assert.ok(prompt.includes(`pass model="${T.context}" and reasoning_effort="medium" from the sealed role policy`))
   assert.ok(prompt.includes(`pass model="${T.fast}" and reasoning_effort="low" from the sealed role policy`))
-  assert.doesNotMatch(prompt, /pass the exact active main model="gpt-5\.6-sol"/)
+  assert.doesNotMatch(prompt, /pass the exact active main model/)
 })
 
 test('a saved preference for a model that is not a current tier model is ignored', () => {

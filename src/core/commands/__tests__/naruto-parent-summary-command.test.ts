@@ -1,5 +1,7 @@
+import '../../__tests__/helpers/isolated-test-home.js';
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { BUILTIN_LATEST_TIER_MODELS as T } from '../../subagents/model-tiers.js'
 import os from 'node:os'
 import path from 'node:path'
 import fsp from 'node:fs/promises'
@@ -27,7 +29,7 @@ test('App Naruto parent-summary command fails closed, finalizes canonically, and
     assert.equal(skillInstall.ok, true, JSON.stringify(skillInstall, null, 2))
     await prepareRoute(root, '$Naruto --agents 2 verify the final result UX', {}, {
       sessionKey: session,
-      parentModel: 'gpt-5.6-sol'
+      parentModel: T.deep
     })
     let state: any = await loadStateForSession(root, session)
     const dir = missionDir(root, state.mission_id)
@@ -138,7 +140,7 @@ test('App parent-summary finalizes an official subagent run owned by another act
     assert.equal(skillInstall.ok, true, JSON.stringify(skillInstall, null, 2))
     await prepareRoute(root, '$Naruto --agents 1 verify an Image UX route slice', {}, {
       sessionKey: session,
-      parentModel: 'gpt-5.6-sol'
+      parentModel: T.deep
     })
     let state: any = await loadStateForSession(root, session)
     const runId = String(state.official_subagent_run_id)
@@ -186,7 +188,7 @@ async function recordThread(
     agent_id: threadId,
     thread_id: threadId,
     agent_type: 'worker',
-    model: 'gpt-5.6-luna',
+    model: T.fast,
     permission_mode: 'default'
   }
   await evaluateHookPayload('subagent-start', {

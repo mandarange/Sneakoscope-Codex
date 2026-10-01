@@ -112,7 +112,7 @@ test('automatic fanout keeps undecomposed task hints but exposes the 256 useful-
   assert.equal(critical.critical_multi_domain, true)
 })
 
-test('narrow specialists outrank a bounded Astra Low worker for UI, test, and root-cause language', () => {
+test('narrow specialists outrank a bounded fast-tier worker for UI, test, and root-cause language', () => {
   assert.equal(selectOfficialSubagentRole({
     description: 'UI exact bounded change',
     requiresWrite: true
@@ -149,7 +149,7 @@ test('specialist selection covers implementation, judgment, long-context, and Co
   }
 })
 
-test('mixed tool and judgment recommendations put Astra Max judgment first and retain the Astra Medium operator', () => {
+test('mixed tool and judgment recommendations put deep-tier judgment first and retain the context-tier operator', () => {
   const securityBrowser = recommendOfficialSubagentRoles({
     description: 'Security review using Chrome browser evidence',
     readOnly: true,

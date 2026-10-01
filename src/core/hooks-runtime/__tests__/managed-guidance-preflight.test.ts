@@ -1,3 +1,4 @@
+import '../../__tests__/helpers/isolated-test-home.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fsp from 'node:fs/promises';
@@ -5,6 +6,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { PACKAGE_VERSION } from '../../fsx.js';
 import { agentsBlockText } from '../../init.js';
+import {
+  managedOfficialSubagentFileContent,
+  managedOfficialSubagentRoleBody,
+  managedOfficialSubagentRoleByName,
+  managedOfficialSubagentRoleContent
+} from '../../managed-assets/managed-assets-manifest.js';
 import {
   MANAGED_GUIDANCE_STAMP_SCHEMA,
   managedGuidanceStampPath,
@@ -40,7 +47,7 @@ test('a hook-only project refreshes a stale managed AGENTS block once and keeps 
     const text = await fsp.readFile(agents, 'utf8');
     assert.match(text, /^# My project rules\n\nKeep this line\./);
     assert.ok(text.includes(agentsBlockText().trim()));
-    assert.doesNotMatch(text, /General work stays parent-owned|model="gpt-6-astra"/);
+    assert.doesNotMatch(text, /General work stays parent-owned|gpt[- ]?\d/i);
     const stamp = JSON.parse(await fsp.readFile(managedGuidanceStampPath(root), 'utf8'));
     assert.equal(stamp.schema, MANAGED_GUIDANCE_STAMP_SCHEMA);
     assert.equal(stamp.version, PACKAGE_VERSION);
@@ -76,5 +83,76 @@ test('unmarked user guidance and non-SKS directories are never touched', async (
     const result = await maybeReconcileManagedGuidancePreflight(root);
     assert.deepEqual(result?.refreshed, []);
     assert.equal(await fsp.readFile(agents, 'utf8'), userText);
+  });
+});
+
+test('when Codex lists a newer model on the same SKS version, role files pinned to the old one are refreshed once', async () => {
+  await withProject(async (root) => {
+    const codexHome = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-preflight-home-'));
+    const previous = process.env.CODEX_HOME;
+    process.env.CODEX_HOME = codexHome;
+    const cache = path.join(codexHome, 'models_cache.json');
+    const writeCache = (slugs: string[]) => fsp.writeFile(cache, JSON.stringify({ fetched_at: 'x', models: slugs.map((slug) => ({ slug })) }));
+    const role = managedOfficialSubagentRoleByName('implementation_specialist')!;
+    const roleFile = path.join(root, '.codex', 'agents', role.filename);
+    try {
+      await fsp.mkdir(path.join(root, '.sneakoscope'), { recursive: true });
+      await writeCache(['gpt-6-sol', 'gpt-6-luna', 'gpt-6-astra']);
+      // Written while gpt-6-sol was the newest sol.
+      await fsp.mkdir(path.dirname(roleFile), { recursive: true });
+      await fsp.writeFile(roleFile, managedOfficialSubagentFileContent(role.id, role.schema_version, managedOfficialSubagentRoleBody({ ...role, model: 'gpt-6-sol' })));
+      const first = await maybeReconcileManagedGuidancePreflight(root);
+      assert.ok(first);
+      assert.equal(await fsp.readFile(roleFile, 'utf8'), managedOfficialSubagentRoleContent(role));
+      const stamp = JSON.parse(await fsp.readFile(managedGuidanceStampPath(root), 'utf8'));
+      assert.match(String(stamp.tier_models), /^[0-9a-f]{16}$/);
+      assert.equal(stamp.role_pins.stale, 0);
+      assert.equal(await maybeReconcileManagedGuidancePreflight(root), null);
+
+      // The cache moves to a newer sol: the old pin is refreshed on the next hook, and only once.
+      await fsp.writeFile(roleFile, managedOfficialSubagentFileContent(role.id, role.schema_version, managedOfficialSubagentRoleBody({ ...role, model: 'gpt-6-sol' })));
+      await writeCache(['gpt-6-sol', 'gpt-6.1-sol', 'gpt-6-luna', 'gpt-6-astra']);
+      const second = await maybeReconcileManagedGuidancePreflight(root);
+      assert.ok(second);
+      assert.match(await fsp.readFile(roleFile, 'utf8'), /model = "gpt-6\.1-sol"/);
+      const moved = JSON.parse(await fsp.readFile(managedGuidanceStampPath(root), 'utf8'));
+      assert.notEqual(moved.tier_models, stamp.tier_models);
+      assert.deepEqual(moved.role_pins.updated, ['.codex/agents/' + role.filename]);
+      assert.equal(await maybeReconcileManagedGuidancePreflight(root), null);
+    } finally {
+      if (previous === undefined) delete process.env.CODEX_HOME;
+      else process.env.CODEX_HOME = previous;
+      await fsp.rm(codexHome, { recursive: true, force: true });
+    }
+  });
+});
+
+test('a role-pin refresh that cannot complete is stamped with what remains, not retried on every prompt', async () => {
+  await withProject(async (root) => {
+    const codexHome = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-preflight-home-'));
+    const previous = process.env.CODEX_HOME;
+    process.env.CODEX_HOME = codexHome;
+    const role = managedOfficialSubagentRoleByName('implementation_specialist')!;
+    try {
+      await fsp.mkdir(path.join(root, '.sneakoscope'), { recursive: true });
+      await fsp.writeFile(path.join(codexHome, 'models_cache.json'), JSON.stringify({ fetched_at: 'x', models: [{ slug: 'gpt-6-sol' }, { slug: 'gpt-6.1-sol' }] }));
+      // The project's agents directory is a symlink, which the installer refuses to write through.
+      const real = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-preflight-agents-'));
+      await fsp.writeFile(path.join(real, role.filename), managedOfficialSubagentFileContent(role.id, role.schema_version, managedOfficialSubagentRoleBody({ ...role, model: 'gpt-6-sol' })));
+      await fsp.mkdir(path.join(root, '.codex'), { recursive: true });
+      await fsp.symlink(real, path.join(root, '.codex', 'agents'));
+      try {
+        assert.ok(await maybeReconcileManagedGuidancePreflight(root));
+        const stamp = JSON.parse(await fsp.readFile(managedGuidanceStampPath(root), 'utf8'));
+        assert.deepEqual(stamp.role_pins, { stale: 1, updated: [], remaining: 1 });
+        assert.equal(await maybeReconcileManagedGuidancePreflight(root), null);
+      } finally {
+        await fsp.rm(real, { recursive: true, force: true });
+      }
+    } finally {
+      if (previous === undefined) delete process.env.CODEX_HOME;
+      else process.env.CODEX_HOME = previous;
+      await fsp.rm(codexHome, { recursive: true, force: true });
+    }
   });
 });

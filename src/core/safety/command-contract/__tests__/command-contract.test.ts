@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { COMMANDS } from '../../../../cli/command-registry.js';
+import { BUILTIN_LATEST_TIER_MODELS as T } from '../../../subagents/model-tiers.js';
 import {
   commandContract,
   commandContracts,
@@ -124,9 +125,9 @@ test('Naruto contract matches its local-only explicit-opt-in CLI surface', () =>
     auth_mode: 'host',
     model_provider: 'gateway',
     provider_env_key: 'GATEWAY_API_KEY',
-    parent_model: 'gpt-5.6-sol',
+    parent_model: T.deep,
     parent_effort: 'max',
-    subagent_model: 'gpt-5.6-terra',
+    subagent_model: T.fast,
     subagent_effort: 'max',
     no_forced_login_method: true
   }, contract.input_schema);
@@ -137,9 +138,9 @@ test('Naruto contract matches its local-only explicit-opt-in CLI surface', () =>
       '--auth-mode', 'host',
       '--model-provider', 'gateway',
       '--provider-env-key', 'GATEWAY_API_KEY',
-      '--parent-model', 'gpt-5.6-sol',
+      '--parent-model', T.deep,
       '--parent-effort', 'max',
-      '--subagent-model', 'gpt-5.6-terra',
+      '--subagent-model', T.fast,
       '--subagent-effort', 'max',
       '--no-forced-login-method'
     ]);
@@ -147,7 +148,7 @@ test('Naruto contract matches its local-only explicit-opt-in CLI surface', () =>
 
   const unknownAction = validateJsonSchema({ action: 'dashboard', json: true }, contract.input_schema);
   assert.equal(unknownAction.ok, false);
-  const unknownInput = validateJsonSchema({ action: 'run', task: 'x', model: 'gpt-5.6-terra' }, contract.input_schema);
+  const unknownInput = validateJsonSchema({ action: 'run', task: 'x', model: T.context }, contract.input_schema);
   assert.equal(unknownInput.ok, false);
   assert.ok(!unknownInput.ok && unknownInput.issues.some((entry) => entry.code === 'additionalProperties'));
 });

@@ -2,32 +2,37 @@ import '../../__tests__/helpers/isolated-test-home.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { BUILTIN_LATEST_TIER_MODELS as T } from '../../subagents/model-tiers.js';
-import { routeNarutoGpt56Model } from '../../provider/model-router.js';
+import { routeNarutoTierModel } from '../../provider/model-router.js';
 import { narutoWorkerBackendBlocker, resolveWorkerModelRouting } from '../native-worker-backend-router.js';
 import type { CodexTaskInput } from '../../codex-control/codex-control-plane.js';
 import { buildCodexExecutionPolicy, buildCodexSdkConfig } from '../../codex-control/codex-sdk-config-policy.js';
 import { normalizeCodexModelEffortCatalogPayload } from '../../codex-lb/codex-lb-env.js';
 
 // No Codex models cache in the isolated HOME: tiers resolve to the built-in latest family.
-const models = [...new Set([...Object.values(T), 'gpt-5.6-luna', 'gpt-5.6-terra'])];
+// Older generations the catalog still lists: only the tier models are current, so the
+// router must refuse these as non-current, not merely as unserved. Do not update them.
+const OLDER_SERVED = { luna: 'gpt-5.6-luna', terra: 'gpt-5.6-terra' } as const;
+// Never served and never current; refused the same way.
+const OLDER_UNSERVED = 'gpt-5.4';
+const models = [...new Set([...Object.values(T), ...Object.values(OLDER_SERVED)])];
 const modelEfforts = Object.fromEntries(models.map((model) => [model, ['low', 'medium', 'high', 'xhigh', 'max', 'ultra']]));
 
 test('Naruto automatic routing picks the newest model of each task tier', () => {
   const available = { availableModels: models, availableModelEfforts: modelEfforts };
-  assert.equal(routeNarutoGpt56Model({ ...available, taskText: 'exact one-line single-file rename' }).model, T.fast);
-  assert.equal(routeNarutoGpt56Model({ ...available, taskText: 'implementation code_modification' }).model, T.balanced);
-  assert.equal(routeNarutoGpt56Model({ ...available, taskText: 'test_execution browser' }).model, T.context);
-  assert.deepEqual(routeNarutoGpt56Model({
+  assert.equal(routeNarutoTierModel({ ...available, taskText: 'exact one-line single-file rename' }).model, T.fast);
+  assert.equal(routeNarutoTierModel({ ...available, taskText: 'implementation code_modification' }).model, T.balanced);
+  assert.equal(routeNarutoTierModel({ ...available, taskText: 'test_execution browser' }).model, T.context);
+  assert.deepEqual(routeNarutoTierModel({
     ...available,
     taskText: 'Debug the release security failure',
     explicitModel: T.fast,
     reasoningEffort: 'low'
   }), { model: T.fast, reasoning: 'low', serviceTier: 'fast' });
   // An old pinned family is not a current tier model, so it is refused.
-  assert.equal(routeNarutoGpt56Model({
+  assert.equal(routeNarutoTierModel({
     ...available,
     taskText: 'exact one-line single-file rename',
-    explicitModel: 'gpt-5.6-terra',
+    explicitModel: OLDER_SERVED.terra,
     reasoningEffort: 'medium'
   }).model, '');
 });
@@ -79,12 +84,12 @@ test('a live Jev pick routes an unsealed worker only when codex-lb serves that m
 });
 
 test('Naruto fails closed when the selected sealed model or effort is unavailable', () => {
-  assert.equal(routeNarutoGpt56Model({
+  assert.equal(routeNarutoTierModel({
     taskText: 'exact one-line single-file rename',
     availableModels: [T.deep],
     availableModelEfforts: modelEfforts
   }).model, '');
-  assert.equal(routeNarutoGpt56Model({
+  assert.equal(routeNarutoTierModel({
     taskText: 'refactor strategy',
     availableModels: models,
     availableModelEfforts: { ...modelEfforts, [T.deep]: ['xhigh'] }
@@ -130,7 +135,7 @@ test('native Naruto worker routing passes the exact selected model and effort in
 });
 
 test('internal Naruto worker routing blocks models that are not current tier models', async () => {
-  for (const model of ['gpt-5.4', 'gpt-5.6-luna', 'z-ai/glm-5.2', 'anthropic/claude-sonnet-4.5']) {
+  for (const model of [OLDER_UNSERVED, OLDER_SERVED.luna, 'z-ai/glm-5.2', 'anthropic/claude-sonnet-4.5']) {
     const routing = await resolveWorkerModelRouting({
       agent: { id: 'naruto_1', role: 'implementer', naruto_role: 'implementer' },
       slice: { id: 'W1', kind: 'implementation', title: 'Implement feature' },
@@ -179,12 +184,12 @@ test('Naruto rejects invalid explicit effort and service-tier overrides', async 
 
 test('Codex App and cache effort catalog shapes normalize to the same model contract', () => {
   assert.deepEqual(normalizeCodexModelEffortCatalogPayload({ data: [{
-    id: 'gpt-5.6-sol', supportedReasoningEfforts: [{ reasoningEffort: 'xhigh' }, { reasoningEffort: 'max' }]
-  }] }), { 'gpt-5.6-sol': ['xhigh', 'max'] });
+    id: T.balanced, supportedReasoningEfforts: [{ reasoningEffort: 'xhigh' }, { reasoningEffort: 'max' }]
+  }] }), { [T.balanced]: ['xhigh', 'max'] });
   assert.deepEqual(normalizeCodexModelEffortCatalogPayload({ models: [{
-    slug: 'gpt-5.6-luna', supported_reasoning_levels: [{ effort: 'xhigh' }, { effort: 'max' }]
-  }] }), { 'gpt-5.6-luna': ['xhigh', 'max'] });
+    slug: T.fast, supported_reasoning_levels: [{ effort: 'xhigh' }, { effort: 'max' }]
+  }] }), { [T.fast]: ['xhigh', 'max'] });
   assert.deepEqual(normalizeCodexModelEffortCatalogPayload({ models: [{
-    slug: 'gpt-5.6-terra', supported_reasoning_levels: [{ effort: 'medium' }, { effort: 'high' }]
-  }] }), { 'gpt-5.6-terra': ['medium', 'high'] });
+    slug: T.deep, supported_reasoning_levels: [{ effort: 'medium' }, { effort: 'high' }]
+  }] }), { [T.deep]: ['medium', 'high'] });
 });

@@ -8,8 +8,8 @@ import { resetVerificationProfileCache } from '../../verification-profile.js';
 
 const route = { id: 'Naruto', command: '$sks-naruto', route: 'official subagents', explicit_invocation: false, task_profile: 'bounded-work' };
 
-test('Astra guidance respects project verification profile and bounded delegation', async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-astra-prompt-'));
+test('Tier guidance respects project verification profile and bounded delegation', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-tier-prompt-'));
   const previous = process.env.SKS_VERIFICATION_PROFILE;
   delete process.env.SKS_VERIFICATION_PROFILE;
   try {
@@ -26,7 +26,8 @@ test('Astra guidance respects project verification profile and bounded delegatio
     assert.match(essential, /Codex subagent workflow: required\. The parent orchestrates only/);
     assert.match(essential, /Every child runs the newest model of the tier its work needs/);
     assert.match(essential, /When Jev mode is on, Jev picks each spawn's tier and SKS seals it/);
-    assert.doesNotMatch(essential, /gpt-5\.6-|every child uses gpt-6-astra/);
+    // Packaged guidance names tiers, never a model.
+    assert.doesNotMatch(essential, /gpt[- ]?\d/i);
     assert.match(essential, /A stored user role-model preference wins in both modes/);
     assert.doesNotMatch(essential, /regardless of parent model or saved role preferences|explicit Naruto or parallel task/);
     assert.match(essential, /Naruto route: prepare subagent-plan/);

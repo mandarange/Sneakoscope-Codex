@@ -6,11 +6,11 @@ import { BUILTIN_LATEST_TIER_MODELS as T } from '../../dist/core/subagents/model
 // Isolated HOME: no Codex models cache, so tiers resolve to the built-in latest family.
 const CURRENT = [...new Set([T.fast, T.balanced, T.context, T.deep])];
 import { buildAgentRoster } from '../../dist/core/agents/agent-roster.js';
-import { buildAgentEffortPolicy, decideAgentEffort, decideAgentWorkerModel, decideOfficialSubagentModel } from '../../dist/core/agents/agent-effort-policy.js';
+import { buildAgentEffortPolicy, decideAgentWorkerModel, decideOfficialSubagentModel } from '../../dist/core/agents/agent-effort-policy.js';
 
 test('native agent effort policy routes safety and release judgment to the deep tier at max', () => {
   for (const role of ['safety', 'release']) {
-    const decision = decideAgentEffort({ persona: { role }, prompt: 'review security and release readiness' });
+    const decision = decideOfficialSubagentModel({ persona: { role }, prompt: 'review security and release readiness' });
     assert.equal(decision.model, T.deep);
     assert.equal(decision.reasoning_effort, 'max');
     assert.equal(decision.model_reasoning_effort, 'max');
@@ -19,7 +19,7 @@ test('native agent effort policy routes safety and release judgment to the deep 
   }
 });
 
-test('native and official agents share task-weighted tier profiles', () => {
+test('task-weighted tier profiles route each role to its tier and effort', () => {
   const cases = [
     ['worker', 'exact one-line single-file mechanical rename', T.fast, 'low'],
     ['browser_use_operator', 'collect Chrome browser evidence', T.context, 'medium'],
@@ -29,12 +29,10 @@ test('native and official agents share task-weighted tier profiles', () => {
     ['security_reviewer', 'review the security boundary', T.deep, 'max']
   ];
   for (const [role, prompt, model, effort] of cases) {
-    for (const decide of [decideAgentEffort, decideOfficialSubagentModel]) {
-      const result = decide({ persona: { role }, prompt });
-      assert.equal(result.model, model, role);
-      assert.equal(result.reasoning_effort, effort, role);
-      assert.equal(result.model_reasoning_effort, effort, role);
-    }
+    const result = decideOfficialSubagentModel({ persona: { role }, prompt });
+    assert.equal(result.model, model, role);
+    assert.equal(result.reasoning_effort, effort, role);
+    assert.equal(result.model_reasoning_effort, effort, role);
   }
 });
 
@@ -53,7 +51,7 @@ test('native agent roster records the tier effort policy', () => {
 });
 
 test('parent and provider model inputs never replace the child tier model', () => {
-  for (const mainModel of ['future-codex-model', 'gpt-5.6-sol', 'gpt-5.6-luna', 'gpt-5.6-terra', 'z-ai/glm-5.2', 'anthropic/claude-sonnet-4.5']) {
+  for (const mainModel of ['future-codex-model', T.fast, T.context, T.deep, 'z-ai/glm-5.2', 'anthropic/claude-sonnet-4.5']) {
     const decision = decideAgentWorkerModel({ mainModel, effort: 'high', prompt: 'implement parser logic', role: 'implementation_specialist' });
     assert.equal(decision.model, T.balanced, mainModel);
     assert.equal(decision.model_reasoning_effort, 'low', mainModel);
@@ -62,9 +60,9 @@ test('parent and provider model inputs never replace the child tier model', () =
 });
 
 test('environment model selections cannot escape the child tier policy and remain unchanged', () => {
-  const keys = ['SKS_GLM_MODE', 'SKS_CODEX_MODEL', 'CODEX_MODEL'];
+  const keys = ['SKS_CODEX_MODEL', 'CODEX_MODEL'];
   const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
-  Object.assign(process.env, { SKS_GLM_MODE: '1', SKS_CODEX_MODEL: 'z-ai/glm-5.2', CODEX_MODEL: 'anthropic/claude-sonnet-4.5' });
+  Object.assign(process.env, { SKS_CODEX_MODEL: 'z-ai/glm-5.2', CODEX_MODEL: 'anthropic/claude-sonnet-4.5' });
   try {
     for (const [prompt, model, effort] of [
       ['exact one-line single-file mechanical rename', T.fast, 'low'],

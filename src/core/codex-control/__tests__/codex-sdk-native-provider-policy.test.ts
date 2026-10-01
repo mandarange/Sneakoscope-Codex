@@ -6,17 +6,18 @@ import path from 'node:path'
 import { buildCodexSdkConfig } from '../codex-sdk-config-policy.js'
 import { buildCodexSdkEnv, prepareNativeCodexAuthBridge } from '../codex-sdk-env-policy.js'
 import type { CodexTaskInput } from '../codex-control-plane.js'
+import { BUILTIN_LATEST_TIER_MODELS as T } from '../../subagents/model-tiers.js'
 
-test('Astra SDK configuration migrates retired efforts and preserves supported role settings', () => {
-  const input = taskInput('/tmp/sks-astra-config-test')
+test('SDK configuration maps retired none/minimal efforts to low for the deep tier model and leaves other models unchanged', () => {
+  const input = taskInput('/tmp/sks-sdk-config-test')
   for (const effort of ['none', 'minimal', 'low', 'medium', 'high', 'max']) {
-    const config = buildCodexSdkConfig({ ...input, model: 'gpt-6-astra', modelReasoningEffort: effort, serviceTier: 'standard' })
+    const config = buildCodexSdkConfig({ ...input, model: T.deep, modelReasoningEffort: effort, serviceTier: 'standard' })
     assert.equal(config.model_reasoning_effort, ['none', 'minimal'].includes(effort) ? 'low' : effort)
     assert.equal(config.service_tier, 'standard')
-    assert.equal(config.model, 'gpt-6-astra')
+    assert.equal(config.model, T.deep)
   }
-  const luna = buildCodexSdkConfig({ ...input, model: 'gpt-5.6-luna', modelReasoningEffort: 'max' })
-  assert.equal(luna.model_reasoning_effort, 'max')
+  const fast = buildCodexSdkConfig({ ...input, model: T.fast, modelReasoningEffort: 'none' })
+  assert.equal(fast.model_reasoning_effort, 'none')
   const custom = buildCodexSdkConfig({ ...input, model: 'custom-astra', modelReasoningEffort: 'none' })
   assert.equal(custom.model_reasoning_effort, 'none')
 })

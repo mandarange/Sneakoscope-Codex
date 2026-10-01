@@ -6,6 +6,8 @@ import { MODEL_TIERS, resolveLatestModelTiers } from '../subagents/model-tiers.j
 
 export type AgentReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra'
 export type AgentModelReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra'
+// A model-plus-effort label such as `<model>-<effort>`, not a ModelTier name
+// (fast|balanced|context|deep). It is persisted under `model_tier`, so the name stays.
 export type AgentWorkerModelTier = string
 
 export interface AgentEffortDecision {
@@ -26,10 +28,6 @@ export interface AgentEffortDecision {
   escalation_triggers: string[]
   downshift_triggers: string[]
   model_effort_capability?: CodexModelEffortCapability
-}
-
-export function decideAgentEffort(input: { persona?: Partial<AgentPersona>; prompt?: string; agentId?: string; readonly?: boolean } = {}): AgentEffortDecision {
-  return decideOfficialSubagentModel(input)
 }
 
 // Official Codex subagents use one of four tier profiles, each on the newest
@@ -80,7 +78,7 @@ export function decideOfficialSubagentModel(input: { persona?: Partial<AgentPers
       downshift_triggers: [
         'instructed UI, logic, backend, or native implementation selects the balanced tier',
         'long-context, Browser/Chrome, Computer Use, image-generation, or large search selects the context tier',
-        'tiny short-context mechanical search/typing/rename work selects the balanced tier'
+        'tiny short-context mechanical search/typing/rename work selects the fast tier'
       ]
     }
   }
@@ -134,7 +132,7 @@ export function decideOfficialSubagentModel(input: { persona?: Partial<AgentPers
     downshift_triggers: [
       'instructed UI, logic, backend, or native implementation selects the balanced tier',
       'long-context, Browser/Chrome, Computer Use, or image-generation execution selects the context tier',
-      'tiny short-context mechanical work selects the balanced tier'
+      'tiny short-context mechanical work selects the fast tier'
     ]
   }
 }
@@ -160,7 +158,7 @@ export function buildAgentEffortPolicy(roster: any = {}) {
     policy_version: 1,
     dynamic: true,
     service_tier: 'fast',
-    model_catalog_policy: 'official_subagent_four_profile_matrix',
+    model_catalog_policy: 'official_subagent_model_tiers',
     model_constraint: [...new Set(MODEL_TIERS.map((tier) => latest.models[tier]))],
     model_tiers: MODEL_TIERS.map((tier) => `${tier}:${latest.models[tier]}-${latest.efforts[tier]}`),
     allowed_efforts: ['low', 'medium', 'high', 'max'],

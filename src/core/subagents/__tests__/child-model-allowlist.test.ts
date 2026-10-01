@@ -13,6 +13,7 @@ import {
   readOpenRouterOnlyStateSync,
   writeOpenRouterOnlyState
 } from '../child-model-allowlist.js';
+import { BUILTIN_LATEST_TIER_MODELS as T } from '../model-tiers.js';
 
 async function withHome(run: (location: { home: string; env: NodeJS.ProcessEnv }) => Promise<void>) {
   const home = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-child-allowlist-'));
@@ -71,7 +72,7 @@ test('a missing or foreign file reads as off; only an enabled file switches the 
     assert.equal(allowlist.default_model, 'z-ai/glm-5.3');
     assert.equal(isAllowedChildModel('Z-AI/GLM-5.3', allowlist), true);
     assert.equal(allowlistedChildModel('Z-AI/GLM-5.3', allowlist), 'z-ai/glm-5.3');
-    assert.equal(isAllowedChildModel('gpt-6-sol', allowlist), false);
+    assert.equal(isAllowedChildModel(T.balanced, allowlist), false);
     assert.equal(isAllowedChildModel('', allowlist), false);
 
     await writeOpenRouterOnlyState({ enabled: false }, location);
@@ -99,7 +100,7 @@ test('ids are stored as the lowercase catalog slug Codex matches, and only routa
     await fs.writeFile(policy, JSON.stringify({ model_routes: {
       'z-ai/glm-5.3': { provider_id: 'openrouter', upstream_model: 'z-ai/glm-5.3' },
       'openrouter:z-ai/glm-5.3': { provider_id: 'openrouter', upstream_model: 'z-ai/glm-5.3' },
-      'gpt-6-sol': { provider_id: 'openai', upstream_model: 'gpt-6-sol' }
+      [T.balanced]: { provider_id: 'openai', upstream_model: T.balanced }
     } }), 'utf8');
     const allowlist = effectiveChildModelAllowlist(location);
     assert.equal(allowlist.mode, 'openrouter_only');

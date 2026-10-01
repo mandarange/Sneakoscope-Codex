@@ -34,7 +34,6 @@ test('capability matrix prefers live multi_agent_v2 probes over hard version loc
   assert.equal(assertNarutoMultiAgentV2Capability(preferredFloor).ok, true)
 
   assert.equal(withHelp.capabilities.mcp_startup_tool_timeouts.available, true)
-  assert.equal(withHelp.capabilities.gpt56_terra_luna_sol_routing.available, true)
   assert.match(withHelp.warnings.join('\n'), /below preferred/)
 })
 

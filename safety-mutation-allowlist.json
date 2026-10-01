@@ -2174,8 +2174,8 @@
       "file": "src/core/research/research-adversarial-review.ts",
       "symbol": "prepareResearchSubagentRun",
       "token": "fsp.rm",
-      "scope_contract_sha256": "d19010a35c6aedbd1a0bffbbbf498712f0fdd2d9283ce787892a70ec2ae30712",
-      "callsite_sha256": "e18a5556caaefaed26b28885386bc5400ba868e5724d1af937d9f7309534794c",
+      "scope_contract_sha256": "990e4242253aac7f7a1724c380fd590ed613b31af3af7de66a3816f5d339f537",
+      "callsite_sha256": "bd08fbaabf8f38b84db3c3195548d609b9291ed425e1b5629354353b889392b9",
       "occurrence": 1,
       "reason": "Research cycle preparation clears only prior official-subagent evidence files inside the selected mission directory."
     },
@@ -2183,8 +2183,8 @@
       "file": "src/core/research/research-adversarial-review.ts",
       "symbol": "prepareResearchSubagentRun",
       "token": "fsp.rm",
-      "scope_contract_sha256": "d19010a35c6aedbd1a0bffbbbf498712f0fdd2d9283ce787892a70ec2ae30712",
-      "callsite_sha256": "428244b0f15ba101751fabf8031ca19a5a4f2c37a3a23f42898fc5b6a7889e02",
+      "scope_contract_sha256": "990e4242253aac7f7a1724c380fd590ed613b31af3af7de66a3816f5d339f537",
+      "callsite_sha256": "8b476e625e45c92e83c98059f20ec8bc1697abebd0f9e7d593b4a9ce1fa6edaa",
       "occurrence": 1,
       "reason": "Research cycle preparation clears only prior official-subagent evidence files inside the selected mission directory."
     },
@@ -2192,8 +2192,8 @@
       "file": "src/core/research/research-adversarial-review.ts",
       "symbol": "prepareResearchSubagentRun",
       "token": "fsp.rm",
-      "scope_contract_sha256": "d19010a35c6aedbd1a0bffbbbf498712f0fdd2d9283ce787892a70ec2ae30712",
-      "callsite_sha256": "fa105a4a2d5dff12b2eb02447cf0b9ba837a198ad63d6b425e91c7b1143941a8",
+      "scope_contract_sha256": "990e4242253aac7f7a1724c380fd590ed613b31af3af7de66a3816f5d339f537",
+      "callsite_sha256": "9a1c3a22cdb1498b3175f981cec1a883dddf69f3aac690f3d996dcc14f2f19e1",
       "occurrence": 1,
       "reason": "Research cycle preparation clears only prior official-subagent evidence files inside the selected mission directory."
     },

@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { BUILTIN_LATEST_TIER_MODELS as T } from '../../subagents/model-tiers.js'
 import { createMission, loadStateForSession, setCurrent } from '../../mission.js'
 import { evaluateHookPayload } from '../../hooks-runtime.js'
 import {
@@ -259,7 +260,7 @@ test('App Naruto retry recovers a post-state preparation marker before using the
       workflow_run_id: interruptedPlan.workflow_run_id,
       agent_id: 'post-recovery-agent',
       agent_type: 'worker',
-      model: 'gpt-5.6-luna'
+      model: T.fast
     }, { root, state: recoveredState })
     const eventsAfter = await fs.readFile(path.join(dir, 'subagent-events.jsonl'), 'utf8')
     assert.notEqual(eventsAfter, eventsBefore)

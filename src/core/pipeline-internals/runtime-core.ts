@@ -45,7 +45,6 @@ import { coreEngineeringDirectiveReferenceText, engineeringSanityPolicyText } fr
 import { classifyTaskProfile, gateProfileForTask, type GateProfile, type TaskProfile } from '../runtime/task-profile.js';
 import { chooseVerificationBudget, type VerificationBudget } from '../runtime/verification-budget.js';
 import { stopFinalizationRitualsEnforced } from '../verification-profile.js';
-import { NARUTO_PARENT_MODEL } from '../subagents/model-policy.js';
 import { HARD_NARUTO_MAX_THREADS } from '../subagents/thread-budget.js';
 import {
   NARUTO_GATE_FILENAME,
@@ -1380,7 +1379,8 @@ async function prepareNaruto(root: any, route: any, task: any, required: any, op
     taskProfile,
     officialConfig,
     triwikiAttention,
-    parentModelMatch
+    parentModelMatch,
+    plan
   } = preparation;
   const routeContextPayload = {
     route: 'Naruto',
@@ -1398,7 +1398,7 @@ async function prepareNaruto(root: any, route: any, task: any, required: any, op
     requested_subagents_explicit: requestedSubagents !== undefined,
     max_threads: budget.maxThreads,
     max_depth: budget.maxDepth,
-    parent_model_policy: NARUTO_PARENT_MODEL,
+    parent_model_policy: plan.parent_model_policy,
     observed_parent_model: observedParentModel,
     parent_model_match: parentModelMatch,
     config_sources: officialConfig.sources,

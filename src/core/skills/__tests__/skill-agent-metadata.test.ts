@@ -143,7 +143,7 @@ test('every installed SKS skill has current metadata and fits the initial-list b
 });
 
 test('discovery description compaction is deterministic and Unicode-bounded', () => {
-  const source = 'Modernize SKS prompts, settings, skills, and commands for current GPT-5.6 and OpenAI guidance without retaining superseded compatibility controls.';
+  const source = 'Modernize SKS prompts, settings, skills, and commands for current model and OpenAI guidance without retaining superseded compatibility controls.';
   const compacted = compactSkillDiscoveryDescription(source);
   assert.equal(compacted, compactSkillDiscoveryDescription(source));
   assert.ok(Array.from(compacted).length <= SKILL_DISCOVERY_DESCRIPTION_MAX_CHARS);

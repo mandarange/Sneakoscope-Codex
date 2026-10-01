@@ -13,7 +13,8 @@ import {
   DEFAULT_SUBAGENT_EFFORT,
   defaultSubagentModel as latestDefaultSubagentModel
 } from './model-policy.js'
-import { latestTierModelSet } from './model-tiers.js'
+import { catalogIsAuthoritative, latestTierModelSet, notOlderThanBuiltin } from './model-tiers.js'
+import { pinnedModelOfRoleFile } from './role-model-pins.js'
 import {
   allowlistedChildModel,
   effectiveChildModelAllowlist,
@@ -187,7 +188,7 @@ export function mergeOfficialSubagentConfigResult(
   const existingDefault = /^\s*default_subagent_model\s*=\s*"([^"]*)"/m.exec(next)?.[1] || ''
   const childDefault = childModels.mode === 'openrouter_only'
     ? childModels.default_model
-    : latestTierModelSet().has(existingDefault) ? existingDefault : defaultOfficialSubagentModel()
+    : latestTierModelSet().has(existingDefault) || (!catalogIsAuthoritative() && notOlderThanBuiltin(existingDefault)) ? existingDefault : defaultOfficialSubagentModel()
   if (childDefault) {
     next = upsertTomlTableKey(next, 'agents', `default_subagent_model = "${childDefault}"`)
   }
@@ -512,11 +513,12 @@ export function resolveInheritedOfficialSubagentConfigPath(
  */
 export async function installOfficialSubagentAgentConfigs(
   root: string,
-  opts: { apply?: boolean; childModels?: ChildModelAllowlist } = {}
+  opts: { apply?: boolean; childModels?: ChildModelAllowlist; existingOnly?: boolean } = {}
 ): Promise<OfficialSubagentAgentInstallResult> {
   const childModels = opts.childModels ?? effectiveChildModelAllowlist()
   return installOfficialSubagentAgentConfigsAt(root, '.codex/agents', {
     ...(opts.apply === undefined ? {} : { apply: opts.apply }),
+    ...(opts.existingOnly === undefined ? {} : { existingOnly: opts.existingOnly }),
     readOnlyListRole: childModels.mode === 'openrouter_only'
   })
 }
@@ -525,6 +527,8 @@ interface ManagedRoleFile {
   filename: string
   codexName: string
   expected: string
+  /** The file rendered around another model id, for keeping a pin the catalog cannot judge. */
+  withModel?: (model: string) => string
   owns: (text: string) => boolean
   marker: string
 }
@@ -535,6 +539,7 @@ function managedRoleFiles(readOnlyListRole: boolean): ManagedRoleFile[] {
       filename: role.filename,
       codexName: role.codex_name,
       expected: managedOfficialSubagentRoleContent(role),
+      withModel: (model: string) => managedOfficialSubagentRoleContent({ ...role, model }),
       owns: (text: string) => managedOfficialSubagentRoleOwnsText(text, role),
       marker: role.ownership_marker
     })),
@@ -661,7 +666,11 @@ async function installOfficialSubagentAgentConfigsAt(
       continue
     }
 
-    if (current === expected) {
+    // Without the catalog, built-in ids cannot replace a pin that is not provably
+    // older: the file is refreshed around the pin it already carries.
+    const pinned = catalogIsAuthoritative() ? null : pinnedModelOfRoleFile(current)
+    const target = pinned && notOlderThanBuiltin(pinned) && role.withModel ? role.withModel(pinned) : expected
+    if (current === target) {
       existing.push(relative)
       generatedFiles.push(relative)
       continue
@@ -670,7 +679,7 @@ async function installOfficialSubagentAgentConfigsAt(
     if (role.owns(current)) {
       stale.push(relative)
       if (apply) {
-        await writeTextAtomic(absolute, expected)
+        await writeTextAtomic(absolute, target)
         updated.push(relative)
         generatedFiles.push(relative)
       }

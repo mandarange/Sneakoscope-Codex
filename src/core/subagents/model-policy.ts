@@ -1,21 +1,19 @@
-import { latestModelForTier, type ModelTier } from './model-tiers.js'
+import { MODEL_TIER_EFFORT, latestModelForTier, type ModelTier } from './model-tiers.js'
 
 // Standalone `sks naruto run` launches its own parent; the parent default is
 // the latest deep-tier model. An in-app parent always keeps the user's model.
-export const NARUTO_PARENT_MODEL = 'gpt-6-astra'
 export const NARUTO_PARENT_EFFORT = 'max'
 export function narutoParentModel(): string {
   return latestModelForTier('deep')
 }
 
-export const LUNA_SUBAGENT_EFFORT = 'low'
-export const TERRA_SUBAGENT_EFFORT = 'medium'
-export const DEFAULT_SUBAGENT_EFFORT = 'low'
-export const SOL_MAX_SUBAGENT_EFFORT = 'max'
-export const SUBAGENT_EFFORT = SOL_MAX_SUBAGENT_EFFORT
+// Effort per tier comes from MODEL_TIER_EFFORT, the single table.
+export const DEFAULT_SUBAGENT_EFFORT = MODEL_TIER_EFFORT.balanced
+export const CONTEXT_SUBAGENT_EFFORT = MODEL_TIER_EFFORT.context
+export const DEEP_SUBAGENT_EFFORT = MODEL_TIER_EFFORT.deep
 
 /** Latest model for judgment-heavy work (research synthesis, review). */
-export function thinkingSubagentModel(): string {
+export function judgmentSubagentModel(): string {
   return latestModelForTier('deep')
 }
 
@@ -24,6 +22,15 @@ export function defaultSubagentModel(): string {
   return latestModelForTier('deep')
 }
 
+/**
+ * Serialized policy ids are persisted in plans and evidence, so they never
+ * change, but the family and effort words inside them are historical labels.
+ * The tier decides the model and the effort:
+ *   luna_max_mechanical      fast tier      effort low
+ *   sol_high_implementation  balanced tier  effort low
+ *   terra_max_context_tools  context tier   effort medium
+ *   sol_max_judgment         deep tier      effort max
+ */
 export type SubagentModelPolicyId =
   | 'luna_max_mechanical'
   | 'sol_high_implementation'
@@ -72,10 +79,10 @@ function tierProfile(
 }
 
 export const SUBAGENT_MODEL_POLICIES: Readonly<Record<SubagentModelPolicyId, SubagentModelProfile>> = Object.freeze({
-  luna_max_mechanical: tierProfile('luna_max_mechanical', 'worker', 'fast', LUNA_SUBAGENT_EFFORT),
+  luna_max_mechanical: tierProfile('luna_max_mechanical', 'worker', 'fast', MODEL_TIER_EFFORT.fast),
   sol_high_implementation: tierProfile('sol_high_implementation', 'worker', 'balanced', DEFAULT_SUBAGENT_EFFORT),
-  sol_max_judgment: tierProfile('sol_max_judgment', 'expert', 'deep', SOL_MAX_SUBAGENT_EFFORT),
-  terra_max_context_tools: tierProfile('terra_max_context_tools', 'worker', 'context', TERRA_SUBAGENT_EFFORT)
+  sol_max_judgment: tierProfile('sol_max_judgment', 'expert', 'deep', MODEL_TIER_EFFORT.deep),
+  terra_max_context_tools: tierProfile('terra_max_context_tools', 'worker', 'context', MODEL_TIER_EFFORT.context)
 })
 
 const JUDGMENT_TASK_RE = new RegExp([
@@ -372,9 +379,9 @@ export function decideSubagentModel(input: {
     && /\b(?:already|previously|fully)\s+resolved\b|(?:review|debug|architecture)[^\n]{0,32}\bcontext\b[^\n]{0,16}\bresolved\b|(?:리뷰|검토|디버깅|아키텍처)[^\n]{0,24}(?:이미\s*)?해결/i.test(text)
   if (focusedJudgment && !resolvedIncidentalJudgment) return decision('sol_max_judgment')
 
-  // Large first-draft processing uses Astra Medium even when the
+  // Large first-draft processing uses the context tier (medium effort) even when the
   // prompt contains implementation verbs. Keep this narrow so normal feature
-  // implementation remains on Astra Low.
+  // implementation remains on the balanced tier (low effort).
   if (LARGE_FIRST_DRAFT_TASK_RE.test(text)) return decision('terra_max_context_tools')
 
   const simpleMechanical = input.simpleMechanical === true

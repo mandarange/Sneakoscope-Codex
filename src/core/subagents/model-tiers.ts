@@ -1,10 +1,9 @@
+import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { codexHomePath } from '../codex-app/codex-model-catalog.js'
 
-// Same file as CODEX_MODELS_CACHE_FILENAME in codex-app/codex-models-cache.ts.
-// That module loads the Codex runtime contract (and package.json) at import
-// time; this one sits under skill install, so it stays free of that import.
+// Codex writes this file ($CODEX_HOME/models_cache.json); SKS only reads it here.
 const MODELS_CACHE_FILENAME = 'models_cache.json'
 
 function modelsCachePath(input: { home?: string; env?: NodeJS.ProcessEnv }): string {
@@ -44,15 +43,26 @@ const TIER_FAMILIES: Readonly<Record<ModelTier, readonly string[]>> = Object.fre
   deep: ['astra']
 })
 
-/** Latest known family, used only when the Codex models cache is unavailable. */
+/**
+ * Newest known models, used only when the Codex models cache is unavailable.
+ * It is never written over a role file or default that already exists
+ * (`catalogIsAuthoritative`): without the cache SKS cannot tell what is newer.
+ */
 export const BUILTIN_LATEST_TIER_MODELS: Readonly<Record<ModelTier, string>> = Object.freeze({
   fast: 'gpt-6-luna',
-  balanced: 'gpt-6-sol',
-  context: 'gpt-6-sol',
+  balanced: 'gpt-6.1-sol',
+  context: 'gpt-6.1-sol',
   deep: 'gpt-6-astra'
 })
 
 const MODEL_ID_RE = /^gpt-(\d+(?:\.\d+)*)-([a-z]+)$/
+
+/** A `gpt-<version>-<family>` slug split into its numeric version and family; null for any other id. */
+export function parseGptModelId(slug: unknown): { version: number[]; family: string } | null {
+  const match = MODEL_ID_RE.exec(String(slug || '').trim())
+  if (!match) return null
+  return { version: String(match[1] || '0').split('.').map(Number), family: String(match[2] || '') }
+}
 
 export interface LatestModelTiers {
   readonly source: 'models_cache' | 'builtin'
@@ -96,6 +106,49 @@ export function latestModelForTier(tier: ModelTier, input: { home?: string; env?
   return resolveLatestModelTiers(input).models[tier]
 }
 
+/**
+ * True when the tiers come from Codex's own models cache. Without it SKS only
+ * knows its built-in ids, which may be older than what Codex lists, so a
+ * writer must not replace an existing pin or default with them.
+ */
+export function catalogIsAuthoritative(input: { home?: string; env?: NodeJS.ProcessEnv } = {}): boolean {
+  return resolveLatestModelTiers(input).source === 'models_cache'
+}
+
+/** True when Codex lists a non-hidden row of the same family with a strictly higher version. */
+export function supersededByNewerSameFamily(model: unknown, input: { home?: string; env?: NodeJS.ProcessEnv } = {}): boolean {
+  const id = parseGptModelId(model)
+  if (!id) return false
+  return Object.keys(resolveLatestModelTiers(input).supported_efforts).some((slug) => {
+    const other = parseGptModelId(slug)
+    return other !== null && other.family === id.family && compareModelVersions(other.version, id.version) > 0
+  })
+}
+
+/**
+ * True when `model` is at least as new as SKS's built-in model for its tier.
+ * Without the Codex cache SKS cannot call such a model stale, so a writer keeps
+ * it; anything older than the built-in id is provably superseded.
+ */
+export function notOlderThanBuiltin(model: unknown): boolean {
+  const id = parseGptModelId(model)
+  const tier = modelTierForModel(model)
+  const builtin = tier ? parseGptModelId(BUILTIN_LATEST_TIER_MODELS[tier]) : null
+  return Boolean(id && builtin && compareModelVersions(id.version, builtin.version) >= 0)
+}
+
+/**
+ * A short digest of the resolved tier models, or null without a usable cache.
+ * It changes exactly when Codex lists a newer model for some tier, which is
+ * when already-written role files and defaults need to follow.
+ */
+export function tierModelsFingerprint(input: { home?: string; env?: NodeJS.ProcessEnv } = {}): string | null {
+  const resolved = resolveLatestModelTiers(input)
+  if (resolved.source !== 'models_cache') return null
+  const text = MODEL_TIERS.map((tier) => `${tier}=${resolved.models[tier]}`).join('\n')
+  return createHash('sha256').update(text).digest('hex').slice(0, 16)
+}
+
 /** The models SKS children may use right now: the resolved latest model of every tier. */
 export function latestTierModelSet(input: { home?: string; env?: NodeJS.ProcessEnv } = {}): Set<string> {
   return new Set(Object.values(resolveLatestModelTiers(input).models))
@@ -103,9 +156,8 @@ export function latestTierModelSet(input: { home?: string; env?: NodeJS.ProcessE
 
 /** The tier a concrete model id belongs to by family, or null for other models. */
 export function modelTierForModel(model: unknown): ModelTier | null {
-  const match = MODEL_ID_RE.exec(String(model || '').trim())
-  if (!match) return null
-  const family = String(match[2] || '')
+  const family = parseGptModelId(model)?.family
+  if (!family) return null
   for (const tier of MODEL_TIERS) {
     if (TIER_FAMILIES[tier][0] === family) return tier
   }
@@ -138,8 +190,8 @@ function readCandidateRows(file: string): CandidateRow[] {
   for (const row of models.slice(0, 1024)) {
     if (!row || typeof row !== 'object') continue
     const slug = String(row.slug || row.model || row.id || '').trim()
-    const match = MODEL_ID_RE.exec(slug)
-    if (!match) continue
+    const id = parseGptModelId(slug)
+    if (!id) continue
     const visibility = String(row.visibility || 'list').toLowerCase()
     if (visibility === 'hide' || visibility === 'hidden') continue
     const efforts = Array.isArray(row.supported_reasoning_levels)
@@ -147,12 +199,13 @@ function readCandidateRows(file: string): CandidateRow[] {
         .map((level: any) => String(typeof level === 'string' ? level : level?.effort || '').trim().toLowerCase())
         .filter(Boolean)
       : []
-    rows.push({ slug, version: String(match[1] || '0').split('.').map(Number), family: String(match[2] || ''), efforts })
+    rows.push({ slug, version: id.version, family: id.family, efforts })
   }
   return rows
 }
 
-function compareVersions(a: number[], b: number[]): number {
+/** Numeric, segment-wise: 6.1 > 6 > 5.6 and 6.10 > 6.9. */
+export function compareModelVersions(a: readonly number[], b: readonly number[]): number {
   const length = Math.max(a.length, b.length)
   for (let index = 0; index < length; index += 1) {
     const diff = (a[index] || 0) - (b[index] || 0)
@@ -162,7 +215,7 @@ function compareVersions(a: number[], b: number[]): number {
 }
 
 function newestRow(rows: readonly CandidateRow[]): CandidateRow | null {
-  return [...rows].sort((left, right) => compareVersions(right.version, left.version))[0] || null
+  return [...rows].sort((left, right) => compareModelVersions(right.version, left.version))[0] || null
 }
 
 function resolveFromRows(rows: readonly CandidateRow[]): LatestModelTiers {
@@ -175,7 +228,7 @@ function resolveFromRows(rows: readonly CandidateRow[]): LatestModelTiers {
     const families = TIER_FAMILIES[tier]
     const candidates = rows
       .filter((row) => families.includes(row.family))
-      .sort((left, right) => compareVersions(right.version, left.version)
+      .sort((left, right) => compareModelVersions(right.version, left.version)
         || families.indexOf(left.family) - families.indexOf(right.family))
     // A cache without this tier's family falls back to the newest model the
     // cache does list, never to a built-in id the account may not have.

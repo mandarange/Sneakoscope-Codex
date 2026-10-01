@@ -5,6 +5,7 @@ import { setDecisionTestOverrides } from '../integration.js';
 import { defaultDecisionConfig } from '../config.js';
 import { chooseChildModel, chooseChildModels, childModelQuestion } from '../child-model-choice.js';
 import { normalizeOpenRouterOnlyState } from '../../subagents/child-model-allowlist.js';
+import { BUILTIN_LATEST_TIER_MODELS as T } from '../../subagents/model-tiers.js';
 
 process.env.SKS_JEV_DECISION_TEST_OVERRIDES = '1';
 
@@ -59,7 +60,7 @@ test('the question offers every list entry with its criteria and nothing else', 
 
 test('a confident Jev answer routes the child to the entry whose criteria fit', async () => {
   await withJev(() => optionAnswer('child_model_spawn', 'm1', 0.93, 0.92), async () => {
-    const choice = await chooseChildModel({ root: process.cwd(), task: 'Rename the save button label.', requestedModel: 'gpt-6-sol', state: STATE });
+    const choice = await chooseChildModel({ root: process.cwd(), task: 'Rename the save button label.', requestedModel: T.balanced, state: STATE });
     assert.equal(choice?.entry.model, 'google/gemini-3.8-flash');
     assert.equal(choice?.source, 'jev');
   });
@@ -67,7 +68,7 @@ test('a confident Jev answer routes the child to the entry whose criteria fit', 
 
 test('without a confident Jev answer the child keeps a listed request, else the default entry', async () => {
   await withJev(() => optionAnswer('child_model_spawn', 'm1', 0.4, 0.4), async () => {
-    const unlisted = await chooseChildModel({ root: process.cwd(), task: 'Refactor the parser.', requestedModel: 'gpt-6-sol', state: STATE });
+    const unlisted = await chooseChildModel({ root: process.cwd(), task: 'Refactor the parser.', requestedModel: T.balanced, state: STATE });
     assert.equal(unlisted?.entry.model, 'z-ai/glm-5.3');
     assert.equal(unlisted?.source, 'default');
     const listed = await chooseChildModel({ root: process.cwd(), task: 'Refactor the parser.', requestedModel: 'DeepSeek/DeepSeek-V4.1-Flash', state: STATE });

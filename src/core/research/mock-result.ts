@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { thinkingSubagentModel, SUBAGENT_EFFORT } from '../subagents/model-policy.js';
+import { judgmentSubagentModel, DEEP_SUBAGENT_EFFORT } from '../subagents/model-policy.js';
 import { nowIso, writeJsonAtomic, writeTextAtomic } from '../fsx.js';
 import { buildClaimEvidenceMatrixFromLedgers, writeClaimEvidenceMatrix } from './claim-evidence-matrix.js';
 import { DEFAULT_RESEARCH_QUALITY_CONTRACT, writeResearchQualityContract } from './research-quality-contract.js';
@@ -175,8 +175,8 @@ export async function writeMockResearchResult(dir: any, plan: any) {
       mandate: agent.mandate,
       model_policy: {
         custom_agent: RESEARCH_REVIEWER_CUSTOM_AGENT,
-        model: thinkingSubagentModel(),
-        reasoning_effort: SUBAGENT_EFFORT,
+        model: judgmentSubagentModel(),
+        reasoning_effort: DEEP_SUBAGENT_EFFORT,
         enforcement_source: 'mock_fixture'
       },
       query_set: sourceLedger.queries.filter((query: any) => query.agent_id === agent.id).map((query: any) => query.query),

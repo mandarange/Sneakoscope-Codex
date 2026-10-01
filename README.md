@@ -59,8 +59,8 @@ for setup boundaries and reported execution evidence.
 
 ## Everyday commands
 
-SKS enables experimental Astra context management by default during setup and
-repair. Turn it off in **SKS Center → Settings → Astra context management**, or
+SKS enables experimental Codex context management by default during setup and
+repair. Turn it off in **SKS Center → Settings → Context management**, or
 use `sks codex-app context-management off`. Updates preserve an explicit opt-out.
 Start a new task after changing the setting. Availability depends on a supported
 Codex client and eligible ChatGPT sign-in; API-key and custom-provider sessions
@@ -183,8 +183,8 @@ soon as Codex lists it:
 | Work | Tier | Effort | Today |
 | --- | --- | --- | --- |
 | Tiny mechanical tasks | fast | low | `gpt-6-luna` |
-| Instructed implementation | balanced | low | `gpt-6-sol` |
-| Exploration, large-context reads, and direct tool operation | context | medium | `gpt-6-sol` |
+| Instructed implementation | balanced | low | `gpt-6.1-sol` |
+| Exploration, large-context reads, and direct tool operation | context | medium | `gpt-6.1-sol` |
 | Planning, review, debugging, and focused judgment | deep | max | `gpt-6-astra` |
 
 With Jev mode on, Jev picks the tier for every spawn, every gated parent edit,

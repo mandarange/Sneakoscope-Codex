@@ -15,21 +15,3 @@ function copyArgs(args: unknown = []): string[] {
 export function preserveCodexModelArgs(args: unknown = []): string[] {
   return copyArgs(args);
 }
-
-/**
- * Backward-compatible aliases for callers compiled against older SKS builds.
- * Despite the historical name, these functions intentionally do not force a
- * model anymore.
- */
-export function forceRequiredCodexModelArgs(args: unknown = []): string[] {
-  return preserveCodexModelArgs(args);
-}
-
-export function forceRequiredCodexModelConfigArgs(args: unknown = []): string[] {
-  return preserveCodexModelArgs(args);
-}
-
-/** No model is forbidden by SKS; availability is decided by Codex itself. */
-export function isForbiddenCodexModel(_value: unknown = ''): boolean {
-  return false;
-}

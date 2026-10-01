@@ -3,6 +3,7 @@
 import '../../__tests__/helpers/isolated-test-home.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { BUILTIN_LATEST_TIER_MODELS as T } from '../../subagents/model-tiers.js'
 import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -407,7 +408,7 @@ test('terminal Naruto commit shares the event lock and rejects a later terminal 
       hook_event_name: 'SubagentStop',
       agent_id: 'late-thread',
       agent_type: 'worker',
-      model: 'gpt-5.6-luna',
+      model: T.fast,
       last_assistant_message: 'Late result.',
       stop_hook_active: false
     }, { root: fixture.root, state: fixture.state })
@@ -500,7 +501,7 @@ test('hook events reject an explicit stale run and bind a runless Stop to its cu
       workflow_run_id: 'stale-run',
       agent_id: 'reused-thread',
       agent_type: 'worker',
-      model: 'gpt-5.6-luna'
+      model: T.fast
     }, { root: fixture.root, state: fixture.state })
     await evaluateHookPayload('subagent-stop', {
       conversation_id: fixture.sessionKey,
@@ -509,7 +510,7 @@ test('hook events reject an explicit stale run and bind a runless Stop to its cu
       hook_event_name: 'SubagentStop',
       agent_id: 'reused-thread',
       agent_type: 'worker',
-      model: 'gpt-5.6-luna',
+      model: T.fast,
       last_assistant_message: 'Delayed stale-run result.',
       stop_hook_active: false
     }, { root: fixture.root, state: fixture.state })
@@ -521,7 +522,7 @@ test('hook events reject an explicit stale run and bind a runless Stop to its cu
       workflow_run_id: fixture.runId,
       agent_id: 'current-thread',
       agent_type: 'worker',
-      model: 'gpt-5.6-luna'
+      model: T.fast
     }, { root: fixture.root, state: fixture.state })
     await evaluateHookPayload('subagent-stop', {
       conversation_id: fixture.sessionKey,
@@ -530,7 +531,7 @@ test('hook events reject an explicit stale run and bind a runless Stop to its cu
       hook_event_name: 'SubagentStop',
       agent_id: 'current-thread',
       agent_type: 'worker',
-      model: 'gpt-5.6-luna',
+      model: T.fast,
       last_assistant_message: 'Current-run result.',
       stop_hook_active: false
     }, { root: fixture.root, state: fixture.state })
@@ -830,7 +831,7 @@ test('interrupted same-mission preparation recovers its committed bundle and cle
       workflow_run_id: r2RunId,
       agent_id: 'must-not-record',
       agent_type: 'worker',
-      model: 'gpt-5.6-luna'
+      model: T.fast
     }, { root: fixture.root, state: r2State })
     await refreshOfficialSubagentCompletionArtifacts(fixture.root, r2State, fixture.parentSummary, fixture.sessionKey)
     assert.equal(await fsp.readFile(path.join(fixture.dir, 'subagent-events.jsonl'), 'utf8'), eventsBeforeHook)

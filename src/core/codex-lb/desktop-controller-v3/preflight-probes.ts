@@ -1,5 +1,6 @@
 import type { BridgeProviderId, CapabilityProbeResultV3, DesktopBridgeStatusV3 } from '../bridge-contracts.js';
 import { capabilityProbeResultV3 } from '../probes/probe-evidence.js';
+import { probeRouteForProvider } from './probe-route.js';
 import { activeProviderIds, providerCode } from './shared.js';
 import type { ControllerCore, ProbeContext } from './types.js';
 
@@ -151,9 +152,7 @@ export function providerModelRouteProbe(
   context: ProbeContext,
   liveText: CapabilityProbeResultV3 | null = null
 ): CapabilityProbeResultV3 {
-  const route = core.policy
-    ? Object.entries(core.policy.model_routes).find(([, target]) => target.provider_id === providerId)
-    : null;
+  const route = probeRouteForProvider(core.policy, providerId);
   const verified = Boolean(route && core.catalogSync.providers[providerId].state === 'verified');
   const liveRouteProven = Boolean(verified && route && liveText
     && liveText.capability === 'text_responses'

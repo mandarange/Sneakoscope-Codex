@@ -16,6 +16,7 @@ import { runVoiceRealtimeProbeV3 } from '../probes/voice-realtime-probe.js';
 import { runAuxiliarySurfacesProbeV3 } from '../probes/auxiliary-surfaces-probe.js';
 import { capabilityProbeResultV3 } from '../probes/probe-evidence.js';
 import { validateCapabilityDeepEvidenceV2 } from '../trusted-deep-evidence.js';
+import { probeRouteForProvider } from './probe-route.js';
 import { bridgeClientUrl, providerCode, safeCode, timeoutMs, unique } from './shared.js';
 import type { ControllerCore, DesktopBridgeControllerV3Options, ProbeContext } from './types.js';
 
@@ -49,9 +50,7 @@ export async function probeProviderText(
   context: ProbeContext,
   options: DesktopBridgeControllerV3Options
 ): Promise<CapabilityProbeResultV3> {
-  const route = core.policy
-    ? Object.entries(core.policy.model_routes).find(([, target]) => target.provider_id === providerId)
-    : null;
+  const route = probeRouteForProvider(core.policy, providerId);
   if (!loopbackOrigin || !route) {
     return capabilityProbeResultV3({
       ...context,

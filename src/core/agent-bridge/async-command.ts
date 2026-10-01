@@ -8,6 +8,7 @@ import { desktopBridgeStatusV3 } from '../codex-lb/desktop-controller-v3.js';
 import { bridgeClientUrl } from '../codex-lb/desktop-controller-v3/shared.js';
 import { runProcess } from '../fsx.js';
 import { createResponsesTransport } from './responses-transport.js';
+import { latestModelForTier } from '../subagents/model-tiers.js';
 
 const USAGE = 'sks agent-bridge async --prompt "task" [--tools status,stats] [--json]';
 const MAX_PROMPT_BYTES = 16 * 1024;
@@ -48,7 +49,7 @@ export function parseAsyncCommandArgs(args: readonly string[]): { prompt: string
 export async function agentBridgeAsyncCommand(args: readonly string[]): Promise<unknown> {
   const json = args.includes('--json');
   if (args.includes('--help')) {
-    const help = { schema: 'sks.async-tool-run.v1', ok: true, status: 'help', usage: USAGE, model: 'gpt-6-astra', provider: 'codex-lb', tools: 'Explicitly selected R0 remote-readable SKS command contracts only.' };
+    const help = { schema: 'sks.async-tool-run.v1', ok: true, status: 'help', usage: USAGE, model: latestModelForTier('deep'), provider: 'codex-lb', tools: 'Explicitly selected R0 remote-readable SKS command contracts only.' };
     console.log(json ? JSON.stringify(help, null, 2) : USAGE);
     return help;
   }
@@ -56,11 +57,12 @@ export async function agentBridgeAsyncCommand(args: readonly string[]): Promise<
     const parsed = parseAsyncCommandArgs(args);
     const home = homedir();
     const status = await desktopBridgeStatusV3({ home });
-    const model = 'codex-lb:gpt-6-astra';
+    const deepModel = latestModelForTier('deep');
+    const model = `codex-lb:${deepModel}`;
     const route = status.routing.policy?.model_routes[model];
     // Aggregate readiness includes other providers; validate the selected route
     // here and let the authenticated Responses request establish live readiness.
-    if (!status.service.running || !status.service.loopback_origin || route?.provider_id !== 'codex-lb' || route.upstream_model !== 'gpt-6-astra') {
+    if (!status.service.running || !status.service.loopback_origin || route?.provider_id !== 'codex-lb' || route.upstream_model !== deepModel) {
       throw new Error('async_astra_bridge_route_unavailable');
     }
     const endpoint = await bridgeClientUrl(status.service.loopback_origin!, '/backend-api/codex/responses', { home });

@@ -5,6 +5,7 @@ import { nowIso, readJson, sha256, writeJsonAtomic } from '../fsx.js';
 import { ensureConfinedDirectory } from '../managed-path-safety.js';
 import { missionDir } from '../mission.js';
 import { readSubagentEvents } from '../subagents/subagent-evidence.js';
+import { isSpawnAgentToolName } from './spawn-tool-name.js';
 
 /**
  * Parent orchestration gate.
@@ -33,7 +34,6 @@ export const PARENT_ORCHESTRATION_GATE_SCHEMA = 'sks.parent-orchestration-gate.v
 export const PARENT_ORCHESTRATION_MAX_BLOCKS = 2;
 const MAX_TARGETS = 16;
 
-const SPAWN_TOOL_RE = /^(?:functions\.|collaboration\.)?spawn_agent$/;
 const FILE_EDIT_TOOL_RE = /^(?:functions\.)?(?:apply_patch|edit|write|multiedit|notebookedit|str_replace_editor|str_replace_based_edit_tool|file_write|fs_write|write_file|create_file|edit_file|update_file|delete_file)$/i;
 const SHELL_TOOL_RE = /^(?:functions\.)?(?:shell|shell_command|exec_command|local_shell|bash|container\.exec)$/i;
 const SHELL_WRITE_RE = new RegExp([
@@ -104,7 +104,7 @@ export type ParentOrchestrationDecision =
   | { action: 'escape'; reason: string; message: string | null; jev: JevToolDelegationDecision | null };
 
 export function isSpawnToolPayload(payload: any = {}): boolean {
-  return SPAWN_TOOL_RE.test(toolNameOf(payload));
+  return isSpawnAgentToolName(toolNameOf(payload));
 }
 
 function toolNameOf(payload: any = {}): string {
@@ -216,7 +216,7 @@ function collectShellTargets(command: string, targets: string[]): void {
  */
 export function parentMutationIntent(payload: any = {}): ParentMutationIntent | null {
   const toolName = toolNameOf(payload);
-  if (!toolName || SPAWN_TOOL_RE.test(toolName)) return null;
+  if (!toolName || isSpawnAgentToolName(toolName)) return null;
   const input = toolInputOf(payload);
   const command = commandText(input, payload);
   // Codex's freeform apply_patch arrives as `tool_input.command` = patch text.

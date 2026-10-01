@@ -6,6 +6,9 @@ import path from 'node:path';
 import { assertGate, emitGate, importDist } from './gate-lib.js';
 
 const mod = await importDist('core/agents/native-cli-worker.js');
+const tiers = await importDist('core/subagents/model-tiers.js');
+// The catalog lists the models the router resolves from Codex's cache, so the gate does not depend on one generation.
+const currentModels = [...tiers.latestTierModelSet()];
 const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-codex-sdk-router-'));
 const old = snapshotEnv();
 process.env.NODE_ENV = 'test';
@@ -24,11 +27,8 @@ try {
       backend: 'codex-sdk',
       naruto_model_catalog: {
         ok: true,
-        models: ['gpt-5.6-luna', 'gpt-6-astra'],
-        model_efforts: {
-          'gpt-5.6-luna': ['low', 'medium', 'high', 'xhigh', 'max'],
-          'gpt-6-astra': ['low', 'medium', 'high', 'xhigh', 'max', 'ultra']
-        },
+        models: currentModels,
+        model_efforts: Object.fromEntries(currentModels.map((model) => [model, ['low', 'medium', 'high', 'xhigh', 'max', 'ultra']])),
         blockers: []
       },
       agent_root: root,

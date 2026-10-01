@@ -6,7 +6,7 @@
 
 The route records retrieval receipts for all active sources in `align-ledger.json`:
 
-- [GPT-5.6 migration and prompting](https://developers.openai.com/api/docs/guides/latest-model)
+- [Latest model migration and prompting](https://developers.openai.com/api/docs/guides/latest-model)
 - [Programmatic tool calling](https://developers.openai.com/api/docs/guides/tools-programmatic-tool-calling)
 - [Agents](https://developers.openai.com/api/docs/guides/agents)
 - [Codex Skills](https://developers.openai.com/codex/skills)

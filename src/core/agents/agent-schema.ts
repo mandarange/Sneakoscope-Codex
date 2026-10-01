@@ -18,7 +18,7 @@ export const OFFICIAL_SUBAGENT_EXECUTION_STAGE_ID = 'official_subagent_execution
 export const MAX_AGENT_COUNT = 20
 /**
  * Default concurrent Naruto child budget. Must track DEFAULT_NARUTO_MAX_THREADS —
- * never the GPT-5.6 four-profile matrix count (profiles ≠ agents).
+ * never the four-tier profile count (tiers ≠ agents).
  */
 export const DEFAULT_AGENT_CONCURRENCY = DEFAULT_NARUTO_MAX_THREADS
 /** Hard concurrency ceiling shared with the Naruto capacity ledger. */

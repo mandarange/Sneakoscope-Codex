@@ -4,7 +4,7 @@ import { ROUTES, routeReasoning, reasoningInstruction } from '../routes.js'
 
 const naruto = ROUTES.find((route) => route.id === 'Naruto')
 
-test('explicit Naruto route reasoning matches the Astra Max parent policy', () => {
+test('explicit Naruto route reasoning matches the deep-tier parent policy', () => {
   assert.ok(naruto)
   for (const prompt of [
     'tiny typo fix',

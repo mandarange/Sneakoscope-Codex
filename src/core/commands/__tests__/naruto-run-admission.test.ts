@@ -161,11 +161,6 @@ test('20 standalone CLI callers attempt one pinned Codex parent for one mission'
       SKS_DISABLE_UPDATE_CHECK: '1',
       SKS_UPDATE_MIGRATION_GATE_DISABLED: '1',
       SKS_NARUTO_STANDALONE_CLI: '1',
-      SKS_PROVIDER: '',
-      SKS_USE_CODEX_LB: '',
-      SKS_MODEL_PROVIDER: '',
-      CODEX_MODEL_PROVIDER: '',
-      OPENAI_MODEL_PROVIDER: '',
       CODEX_THREAD_ID: ''
     }
     children = Array.from({ length: 20 }, (_, index) => spawnCliNarutoChild({

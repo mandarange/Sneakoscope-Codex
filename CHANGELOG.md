@@ -2,6 +2,62 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- A child could run an older model generation (for example `gpt-5.6-sol` while
+  `gpt-6.1-sol` is listed) because SKS's spawn guards never saw the spawn.
+  Codex 0.159 sends the multi-agent v2 spawn tool to hooks as
+  `collaborationspawn_agent` (namespace and name joined without a separator),
+  and the model check, the Jev tier seal, and the parent orchestration gate
+  recognised only `spawn_agent`, `functions.spawn_agent`, and
+  `collaboration.spawn_agent`. A spawn naming an old model passed untouched and
+  the child ran it. Every spawn guard now matches all the names Codex uses.
+- Role files pin a tier model and Codex runs that pin over the model a spawn
+  names, but nothing rewrote a pin when Codex's models cache moved to a newer
+  model, so a role could keep running the old generation while SKS reported the
+  new one. SKS now refreshes the SKS-owned role files that pin an older model at
+  three points: the first hook after the cache changes (the project's files),
+  the first hook in any project (the files in `~/.codex/agents`, which serve
+  every project, whether or not it was set up for SKS), and the spawn itself.
+  Codex reads a role file when the spawn executes, so a pin refreshed just
+  before the spawn applies to that spawn: it is allowed and runs the current
+  model, with no denial and no manual repair. Only existing files whose marker,
+  id and body hash still match are rewritten; files you edited are never
+  touched, and a pin newer than the current model is never rewritten downward.
+- The managed role catalog resolves its model on every read. The long-lived hook
+  daemon copied it once at startup, so after a cache refresh it told the parent
+  to spawn with a model the gate then rejected.
+- The live bridge health probe sent its real request to the alphabetically first
+  route (a hidden reviewer model, or the oldest generation). It now uses the
+  newest generation the provider serves, which is the model Desktop would use.
+- Without Codex's models cache, SKS no longer replaces a role pin or a default
+  child model with its built-in ids unless the existing value is provably older
+  than them, and the built-in balanced and context models are now the
+  `gpt-6.1-sol` generation.
+- `sks doctor --fix` moves a `[agents].default_subagent_model` in
+  `~/.codex/config.toml` that names a superseded generation (an older SKS
+  wrote `gpt-5.6-luna`) to the latest default child model. `sks doctor`
+  without `--fix` only reports it.
+- The bridge catalog Codex Desktop reads no longer advertises superseded
+  generations of a family next to the current one, and a retiring model's
+  migration prompt now points at the newest row of the family it named instead
+  of `gpt-5.6-sol`. Codex builds the spawn model list from the visible rows, so
+  a hidden generation can no longer be offered to a parent as a child model.
+  Superseded rows are hidden, not removed, so a thread or `model =` line that
+  still names one keeps working.
+
+### Changed
+
+- Leftover names that no longer matched the policy are gone: the `*Gpt56*`
+  router helpers, the unused `gpt56_terra_luna_sol_routing` capability, the
+  retired-GLM blocker id (`retired_glm_naruto_flag:--glm`), the duplicate effort
+  tables in the model policy, the `luna_max`/`sol_high`/`sol_max`/`terra_max`
+  keys in `sks naruto --help --json` (now `fast`/`balanced`/`deep`/`context`),
+  and several modules nothing called. Docs that said every child uses GPT-6
+  Astra, or quoted old models' prices, now describe the tiers.
+- `sks agent-bridge async` follows the latest deep-tier model, the Astra effort
+  migration covers every Astra generation, and `route-context.json` records the
+  plan's parent model policy instead of a fixed constant.
 
 ## [10.3.9] - 2026-09-28
 

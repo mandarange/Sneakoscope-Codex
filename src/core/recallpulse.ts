@@ -206,7 +206,7 @@ export async function evaluateRecallPulseFixtures(root: any, opts: any = {}) {
       fixture('repeated-stop-hook-blocker', true, 'Duplicate suppression keys collapse repeated blocker text into one durable status row.'),
       fixture('hook-only-status-visibility', true, 'mission-status-ledger.json preserves recoverable user-visible status.'),
       fixture('research-persona-missing', true, 'Research validation blocks missing agent display_name/persona/persona_boundary.'),
-      fixture('research-model-policy-not-sol-max', true, 'Research validation blocks reviewer rows that are not bound to the research_reviewer latest deep-tier max policy.'),
+      fixture('research-model-policy-not-deep-max', true, 'Research validation blocks reviewer rows that are not bound to the research_reviewer latest deep-tier max policy.'),
       fixture('research-review-evidence-missing', true, 'Research validation blocks reviewer outcomes without source evidence, falsifiers, or probes.'),
       fixture('research-impersonation', true, 'Research validation blocks persona-boundary violations.'),
       fixture('oversized-l1', true, 'L1 token and item limits reject oversized active recall.'),

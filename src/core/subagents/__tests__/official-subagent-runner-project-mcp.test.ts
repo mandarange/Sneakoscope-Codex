@@ -153,12 +153,7 @@ test('standalone Naruto parent consumes the existing project MCP config and call
     runProcessImpl: async (_command, args, options) => runProcess(fakeCodex, args, options),
     env: {
       HOME: home,
-      CODEX_HOME: codexHome,
-      SKS_PROVIDER: '',
-      SKS_USE_CODEX_LB: '',
-      SKS_MODEL_PROVIDER: '',
-      CODEX_MODEL_PROVIDER: '',
-      OPENAI_MODEL_PROVIDER: ''
+      CODEX_HOME: codexHome
     }
   })
   assert.equal(result.ok, true)

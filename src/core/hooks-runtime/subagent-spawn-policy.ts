@@ -1,12 +1,13 @@
 import { managedOfficialSubagentRoleByName } from '../managed-assets/managed-assets-manifest.js';
 import { READ_ONLY_LIST_ROLE } from '../subagents/read-only-list-role.js';
+import { stalePinBlockReason, stalePinForAgentType } from '../subagents/role-model-pins.js';
+import { isSpawnAgentToolName, spawnPayloadToolName } from './spawn-tool-name.js';
 import {
   effectiveChildModelAllowlist,
   isAllowedChildModel,
   type ChildModelAllowlist
 } from '../subagents/child-model-allowlist.js';
 
-const SPAWN_TOOLS = new Set(['spawn_agent', 'collaboration.spawn_agent', 'functions.spawn_agent']);
 
 export const SUBAGENT_MODELS_SETTINGS_HINT = 'SKS Control Center > Subagent Models';
 
@@ -55,11 +56,11 @@ const FORK_BLOCK_REASON = 'SKS child spawns require fork_turns="none" or a posit
  * A child must name a model the effective child allowlist permits: one of the
  * current latest tier models, or, in OpenRouter Only mode, one of the user's
  * subagent list models (case-insensitive). It never inherits the parent model
- * or falls back to an older pinned family.
+ * or falls back to an older pinned family. With `root`, a managed role whose
+ * file still pins an older tier model is refused too: Codex would run the pin.
  */
-export function subagentSpawnPolicyBlockReason(payload: any = {}): string | null {
-  const name = String(payload.tool_name || payload.toolName || payload.tool?.name || '');
-  if (!SPAWN_TOOLS.has(name)) return null;
+export function subagentSpawnPolicyBlockReason(payload: any = {}, opts: { root?: string } = {}): string | null {
+  if (!isSpawnAgentToolName(spawnPayloadToolName(payload))) return null;
   const input = payload.tool_input || payload.toolInput || payload.tool?.input || {};
   const allowlist = effectiveChildModelAllowlist();
   if (allowlist.mode === 'openrouter_only') {
@@ -76,6 +77,8 @@ export function subagentSpawnPolicyBlockReason(payload: any = {}): string | null
     if (!allowed.has(String(input.model || ''))) {
       return `SKS children must name a current model: ${[...allowed].join(', ')} (the latest fast, balanced, context, or deep tier). Retry spawn_agent with the slice contract model, which the SKS hook re-seals when Jev mode is on, and fork_turns="none" or a positive bounded turn count. Include the complete slice contract in message; do not inherit the parent model.`;
     }
+    const stale = opts.root ? stalePinForAgentType(String(input.agent_type || input.agentType || ''), { root: opts.root }) : null;
+    if (stale) return stalePinBlockReason(stale);
   }
   if (!boundedForkTurns(input.fork_turns)) return FORK_BLOCK_REASON;
   return null;

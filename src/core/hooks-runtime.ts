@@ -59,6 +59,7 @@ import {
   recordParentOrchestrationSpawn
 } from './hooks-runtime/parent-orchestration-gate.js';
 import { subagentSpawnPolicyBlockReason } from './hooks-runtime/subagent-spawn-policy.js';
+import { healStaleRolePinForSpawn } from './hooks-runtime/spawn-role-pin-heal.js';
 import { withFileLock } from './locks/file-lock.js';
 import {
   ensureConfinedDirectory,
@@ -778,12 +779,13 @@ async function hookPreTool(root: any, state: any, payload: any, noQuestion: any,
   // Rewrite first, then deny on the rewritten input: in OpenRouter Only mode
   // every spawn is routed to a list model, and a failed routing leaves the
   // original input to the same deny.
+  await healStaleRolePinForSpawn(payload, root).catch(() => false);
   const jevSpawn = await jevSpawnRouting(root, state, payload).catch(() => null);
   const jevSpawnInput = jevSpawn?.input ?? null;
   const spawnPayload = jevSpawnInput
     ? { ...payload, tool_input: jevSpawnInput, toolInput: jevSpawnInput }
     : payload;
-  const spawnPolicyBlock = subagentSpawnPolicyBlockReason(spawnPayload);
+  const spawnPolicyBlock = subagentSpawnPolicyBlockReason(spawnPayload, { root });
   if (spawnPolicyBlock) return { decision: 'block', permissionDecision: 'deny', reason: spawnPolicyBlock };
   const artifactDir = officialSubagentArtifactDir(root, state, sessionKey);
   const activeBinding = officialSubagentSkillGuardBinding(state, { allowClosedOfficialChild: true });

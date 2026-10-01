@@ -670,7 +670,9 @@ function officialSubagentRole(input: {
     codex_name: input.codexName,
     description: input.description,
     model_policy: profile.policy,
-    model: profile.model,
+    // Resolved on every read: the catalog outlives a models-cache refresh in the
+    // long-lived hook daemon, and a copied id would keep advertising the old one.
+    get model() { return subagentModelProfile(input.policy).model },
     model_reasoning_effort: profile.modelReasoningEffort,
     ...(input.sandbox ? { sandbox: input.sandbox } : {}),
     nickname_candidates: input.nicknames,

@@ -2,19 +2,17 @@ import '../../__tests__/helpers/isolated-test-home.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  CONTEXT_SUBAGENT_EFFORT,
+  DEEP_SUBAGENT_EFFORT,
   DEFAULT_SUBAGENT_EFFORT,
-  LUNA_SUBAGENT_EFFORT,
   NARUTO_PARENT_EFFORT,
-  SOL_MAX_SUBAGENT_EFFORT,
-  SUBAGENT_EFFORT,
-  TERRA_SUBAGENT_EFFORT,
   decideSubagentModel,
   defaultSubagentModel,
   narutoParentModel,
-  thinkingSubagentModel,
+  judgmentSubagentModel,
   type SubagentModelPolicyId
 } from '../model-policy.js'
-import { BUILTIN_LATEST_TIER_MODELS as T } from '../model-tiers.js'
+import { BUILTIN_LATEST_TIER_MODELS as T, MODEL_TIER_EFFORT } from '../model-tiers.js'
 
 // No models cache in the isolated HOME: tiers resolve to the built-in latest family.
 const POLICY_MODEL: Record<SubagentModelPolicyId, string> = {
@@ -24,20 +22,19 @@ const POLICY_MODEL: Record<SubagentModelPolicyId, string> = {
   sol_max_judgment: T.deep
 }
 import { decideOfficialSubagentModel } from '../../agents/agent-effort-policy.js'
-import { routeModel, routeNarutoGpt56Model, childInheritsActiveMainModel } from '../../provider/model-router.js'
+import { routeModel, routeNarutoTierModel } from '../../provider/model-router.js'
 
 test('parent and child defaults resolve to the latest tier models, not a pinned family', () => {
   assert.equal(narutoParentModel(), T.deep)
   assert.equal(NARUTO_PARENT_EFFORT, 'max')
   assert.equal(defaultSubagentModel(), T.deep)
   assert.equal(DEFAULT_SUBAGENT_EFFORT, 'low')
-  assert.equal(thinkingSubagentModel(), T.deep)
-  assert.equal(SUBAGENT_EFFORT, 'max')
-  assert.equal(LUNA_SUBAGENT_EFFORT, 'low')
-  assert.equal(TERRA_SUBAGENT_EFFORT, 'medium')
-  assert.equal(SOL_MAX_SUBAGENT_EFFORT, 'max')
+  assert.equal(judgmentSubagentModel(), T.deep)
+  // One effort table: the named constants are the tier efforts, not a second copy.
+  assert.equal(DEEP_SUBAGENT_EFFORT, MODEL_TIER_EFFORT.deep)
+  assert.equal(CONTEXT_SUBAGENT_EFFORT, MODEL_TIER_EFFORT.context)
+  assert.equal(DEFAULT_SUBAGENT_EFFORT, MODEL_TIER_EFFORT.balanced)
   assert.equal(new Set(Object.values(POLICY_MODEL)).size > 1, true, 'children are not one model')
-  for (const model of Object.values(POLICY_MODEL)) assert.doesNotMatch(model, /^gpt-5\.6-/)
 })
 
 test('model decision routes mechanical, implementation, context/tool, and judgment work', () => {
@@ -101,7 +98,7 @@ test('model decision routes mechanical, implementation, context/tool, and judgme
   }
 })
 
-test('mass/broad search and exploration route to Astra Medium while tiny typing shards stay on Astra Low', () => {
+test('mass/broad search and exploration route to the context tier while tiny typing shards stay on the fast tier', () => {
   for (const description of [
     'Mass search across the whole repository for every call site',
     'Bulk scan of many files to build an export inventory',
@@ -120,7 +117,7 @@ test('mass/broad search and exploration route to Astra Medium while tiny typing 
     assert.equal(decision.modelReasoningEffort, 'medium', description)
   }
 
-  // Tiny typing-level shards stay on Astra Low even when the surrounding sentence
+  // Tiny typing-level shards stay on the fast tier even when the surrounding sentence
   // mentions a large fan-out; the shard itself is the classification unit.
   for (const description of [
     'Shard 9 of 16 in the mass fan-out: simple search for the symbol name and type the replacement',
@@ -138,7 +135,7 @@ test('mass/broad search and exploration route to Astra Medium while tiny typing 
   }
 })
 
-test('mass-lane keywords never pull judgment or clear implementation off the Astra implementation and judgment profiles', () => {
+test('mass-lane keywords never pull judgment or clear implementation off the balanced and deep tier profiles', () => {
   for (const description of [
     'Security review of the database release plan',
     'Debug the failing migration before release',
@@ -268,7 +265,7 @@ test('explicit mechanical labels cannot override judgment, context, or complexit
   }).policy, 'sol_max_judgment')
 })
 
-test('official effort policy applies the sealed four-profile routing matrix', () => {
+test('official effort policy applies the sealed tier routing', () => {
   const mechanical = decideOfficialSubagentModel({
     persona: { role: 'implementer', naruto_role: 'worker' },
     prompt: 'apply this exact one-line single-file rename'
@@ -297,25 +294,26 @@ test('Naruto automatic routing picks the newest model of the task tier and fails
     availableModels: [...new Set(Object.values(T))],
     availableModelEfforts: Object.fromEntries([...new Set(Object.values(T))].map((model) => [model, ['low', 'medium', 'high', 'max']]))
   }
-  assert.deepEqual(routeNarutoGpt56Model({ ...catalog, taskText: 'exact one-line single-file rename' }), {
+  assert.deepEqual(routeNarutoTierModel({ ...catalog, taskText: 'exact one-line single-file rename' }), {
     model: T.fast, reasoning: 'low', serviceTier: 'fast'
   })
-  assert.deepEqual(routeNarutoGpt56Model({ ...catalog, taskText: 'implement parser logic' }), {
+  assert.deepEqual(routeNarutoTierModel({ ...catalog, taskText: 'implement parser logic' }), {
     model: T.balanced, reasoning: 'low', serviceTier: 'fast'
   })
-  assert.deepEqual(routeNarutoGpt56Model({ ...catalog, taskText: 'browser QA in Chrome' }), {
+  assert.deepEqual(routeNarutoTierModel({ ...catalog, taskText: 'browser QA in Chrome' }), {
     model: T.context, reasoning: 'medium', serviceTier: 'fast'
   })
-  assert.deepEqual(routeNarutoGpt56Model({ ...catalog, taskText: 'UI debugging review' }), {
+  assert.deepEqual(routeNarutoTierModel({ ...catalog, taskText: 'UI debugging review' }), {
     model: T.deep, reasoning: 'max', serviceTier: 'fast'
   })
   // The tier model is not offered, or not at the tier effort: fail closed.
-  assert.equal(routeNarutoGpt56Model({
+  assert.equal(routeNarutoTierModel({
     taskText: 'browser QA in Chrome',
     availableModels: [T.context],
     availableModelEfforts: { [T.context]: ['max'] }
   }).model, '')
-  assert.equal(routeNarutoGpt56Model({ taskText: 'exact one-line rename', explicitModel: 'gpt-5.6-luna', ...catalog }).model, '')
+  // A retired generation is refused even when it names a tier family.
+  assert.equal(routeNarutoTierModel({ taskText: 'exact one-line rename', explicitModel: 'gpt-5.6-luna', ...catalog }).model, '')
 })
 
 test('an explicit current model keeps its task-profile effort', () => {
@@ -323,16 +321,16 @@ test('an explicit current model keeps its task-profile effort', () => {
     availableModels: [...new Set(Object.values(T))],
     availableModelEfforts: Object.fromEntries([...new Set(Object.values(T))].map((model) => [model, ['low', 'medium', 'high', 'max']]))
   }
-  assert.deepEqual(routeNarutoGpt56Model({ ...catalog, taskText: 'exact one-line rename', explicitModel: T.deep }), {
+  assert.deepEqual(routeNarutoTierModel({ ...catalog, taskText: 'exact one-line rename', explicitModel: T.deep }), {
     model: T.deep, reasoning: 'low', serviceTier: 'fast'
   })
-  assert.deepEqual(routeNarutoGpt56Model({ ...catalog, taskText: 'browser QA', explicitModel: T.deep }), {
+  assert.deepEqual(routeNarutoTierModel({ ...catalog, taskText: 'browser QA', explicitModel: T.deep }), {
     model: T.deep, reasoning: 'medium', serviceTier: 'fast'
   })
-  assert.deepEqual(routeNarutoGpt56Model({ ...catalog, taskText: 'implement parser', explicitModel: T.deep }), {
+  assert.deepEqual(routeNarutoTierModel({ ...catalog, taskText: 'implement parser', explicitModel: T.deep }), {
     model: T.deep, reasoning: 'low', serviceTier: 'fast'
   })
-  assert.deepEqual(routeNarutoGpt56Model({ ...catalog, taskText: 'security review', explicitModel: T.deep }), {
+  assert.deepEqual(routeNarutoTierModel({ ...catalog, taskText: 'security review', explicitModel: T.deep }), {
     model: T.deep, reasoning: 'max', serviceTier: 'fast'
   })
 })
@@ -340,13 +338,4 @@ test('an explicit current model keeps its task-profile effort', () => {
 test('generic routing preserves an arbitrary explicit non-Naruto model', async () => {
   const choice = await routeModel('agentic', { model: 'future-codex-model' })
   assert.equal(choice.model, 'future-codex-model')
-})
-
-
-test('parent model selections never override child tier routing', () => {
-  assert.equal(childInheritsActiveMainModel('gpt-6-astra'), false)
-  assert.equal(childInheritsActiveMainModel('gpt-5.6-sol'), false)
-  assert.equal(childInheritsActiveMainModel('gpt-5.6-terra'), false)
-  assert.equal(childInheritsActiveMainModel('gpt-5.6-luna'), false)
-  assert.equal(childInheritsActiveMainModel('anthropic/claude-sonnet-4.5'), false)
 })

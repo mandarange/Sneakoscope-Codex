@@ -549,7 +549,7 @@ export async function runAgentScheduler(input: {
 
 export function normalizeTargetActiveSlots(value: unknown, maxActiveSlots: number = MAX_AGENT_COUNT) {
   // maxActiveSlots is the real frame-budget ceiling. Do not re-cap at the
-  // GPT-5.6 profile count or a legacy desktop "4" — that collapsed Naruto
+  // four-tier profile count or a legacy desktop "4" — that collapsed Naruto
   // parallelism to four creatable agents regardless of max_threads.
   const configuredCap = Number.isFinite(Number(maxActiveSlots)) && Number(maxActiveSlots) >= 1
     ? Math.floor(Number(maxActiveSlots))

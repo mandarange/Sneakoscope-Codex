@@ -1,6 +1,8 @@
+import '../../__tests__/helpers/isolated-test-home.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseAsyncCommandArgs, redactAsyncToolOutput } from '../async-command.js';
+import { agentBridgeAsyncCommand, parseAsyncCommandArgs, redactAsyncToolOutput } from '../async-command.js';
+import { latestModelForTier } from '../../subagents/model-tiers.js';
 
 test('async command accepts only explicit read-only remote command contracts', () => {
   assert.deepEqual(parseAsyncCommandArgs(['--prompt', 'Inspect setup']), { prompt: 'Inspect setup', tools: ['status', 'stats'] });
@@ -19,4 +21,9 @@ test('async tool output redacts nested credentials without truncating real resul
   assert.equal(result.content, content);
   assert.deepEqual(result.nested, { api_key: '[redacted]', authorization: '[redacted]' });
   assert.equal(redactAsyncToolOutput(content), content);
+});
+
+test('the async bridge follows the latest deep-tier model instead of a fixed generation', async () => {
+  const help: any = await agentBridgeAsyncCommand(['--help']);
+  assert.equal(help.model, latestModelForTier('deep'));
 });

@@ -55,13 +55,6 @@ export function codexUserConfigPath(input: {
   return path.join(codexHomePath(input), 'config.toml');
 }
 
-export function defaultOpenCodexCatalogPath(input: {
-  readonly home?: string;
-  readonly env?: NodeJS.ProcessEnv;
-} = {}): string {
-  return path.join(codexHomePath(input), 'opencodex-catalog.json');
-}
-
 export async function readConfiguredCodexModelRoutingContext(input: {
   readonly home?: string;
   readonly env?: NodeJS.ProcessEnv;

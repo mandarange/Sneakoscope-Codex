@@ -149,7 +149,7 @@ function isRouteTargetId(value: unknown): value is BridgeRouteTarget['provider_i
  * Which BARE official model ids `applyOfficialModelPassthrough` rewrites to the
  * official `openai` identity route — the same rule OpenCodex uses
  * (`isBareOpenAiFamilyModel` → `OPENAI_CODEX_PROVIDER_ID`). Provider-prefixed
- * spellings (`codex-lb:gpt-5.6-sol`) are the operator's explicit gateway picks
+ * spellings (`codex-lb:<model-id>`) are the operator's explicit gateway picks
  * and are never touched; SKS-internal gateway models (`codex-auto-review`)
  * stay on their provider route.
  */

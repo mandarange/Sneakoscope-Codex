@@ -226,8 +226,8 @@ export function resolveNarutoCredentialPolicy(input: NarutoCredentialPolicyInput
       blockers.push('naruto_subagent_model_must_be_current');
       resolvedModels.subagentModel = defaultSubagentModel();
     }
-    validateGpt56EffortPair('parent', String(resolvedModels.parentModel), String(resolvedModels.parentEffort), blockers);
-    validateGpt56EffortPair('subagent', String(resolvedModels.subagentModel), String(resolvedModels.subagentEffort), blockers);
+    validateListedEffortPair('parent', String(resolvedModels.parentModel), String(resolvedModels.parentEffort), blockers);
+    validateListedEffortPair('subagent', String(resolvedModels.subagentModel), String(resolvedModels.subagentEffort), blockers);
   }
 
   const envKeyRaw = resolve(args, env, '--provider-env-key', 'SKS_NARUTO_PROVIDER_ENV_KEY');
@@ -340,7 +340,7 @@ function validateOpenRouterOnlyModels(
 }
 
 /** An explicit effort must be one Codex lists for that model; unknown models are not second-guessed. */
-function validateGpt56EffortPair(
+function validateListedEffortPair(
   scope: 'parent' | 'subagent',
   model: string,
   effort: string,

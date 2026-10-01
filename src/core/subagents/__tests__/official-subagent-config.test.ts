@@ -188,7 +188,7 @@ test('fresh project config receives the official Codex subagent defaults', () =>
 })
 
 test('child default normalization keeps current tier models and moves older ones to the latest deep tier', async (t) => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-official-astra-config-'))
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-official-tier-config-'))
   t.after(() => fs.rm(root, { recursive: true, force: true }))
   const codexHome = path.join(root, 'home', '.codex')
   const projectConfigPath = path.join(root, '.codex', 'config.toml')
@@ -1045,19 +1045,21 @@ test('generated Naruto skill describes the official workflow and retired aliases
   assert.match(naruto, /PreToolUse gate denies parent-thread source edits until the first child thread starts and while children are still running/)
   assert.match(naruto, /Every child runs the newest model of the tier its work needs \(fast, balanced, context, or deep\); no model family is pinned/)
   assert.match(naruto, /When Jev mode is on, Jev picks the tier for each new spawn and SKS seals it/)
-  assert.doesNotMatch(naruto, /gpt-5\.6-|off mode keeps gpt-6-astra/)
+  // Packaged guidance names tiers, never a model.
+  assert.doesNotMatch(naruto, /gpt[- ]?\d/i)
   assert.doesNotMatch(naruto, /explicit parallel official subagents|continue parent-owned/)
   assert.match(naruto, /sks\.core-engineering-directive\.v1/)
   assert.match(naruto, /subagent-plan\.json/)
   assert.match(naruto, /subagent-parent-summary\.json/)
-  assert.doesNotMatch(naruto, /GPT-5\.6 Sol Max|Browser\/Chrome/)
+  assert.doesNotMatch(naruto, /Browser\/Chrome/)
   assert.doesNotMatch(naruto, /verification-summary\.json|five-artifact/)
   assert.doesNotMatch(naruto, /native shadow-clone|up to 100|--backend codex-exec|--clones N/)
   assert.match(agentsRules, /Implementation routes to Naruto \(`\$sks-naruto`, alias `\$sks-work`; standalone `sks naruto run`\), which is parent orchestration only/)
   assert.match(agentsRules, /reuse capacity across root-owned waves/)
   assert.match(agentsRules, /When Jev mode is on, Jev picks the tier for each new Naruto child spawn and SKS seals it/)
   assert.match(agentsRules, /Preserve the user-selected parent model, reasoning effort, and service tier/)
-  assert.doesNotMatch(agentsRules, /General work stays parent-owned|explicitly requested parallel work|must explicitly set model="gpt-6-astra"/)
+  assert.doesNotMatch(agentsRules, /General work stays parent-owned|explicitly requested parallel work/)
+  assert.doesNotMatch(agentsRules, /gpt[- ]?\d/i)
   assert.doesNotMatch(agentsRules, /native agent intake agents|fresh executor team/)
   assert.doesNotMatch(agentsRules, /\$Team|sks team|\$MAD-DB|sks mad-db/)
   for (const name of ['team', 'mad-db', 'swarm', 'shadow-clone', 'kage-bunshin']) {
