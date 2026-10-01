@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+
+## [10.3.10] - 2026-10-01
+
 ### Fixed
 
 - A child could run an older model generation (for example `gpt-5.6-sol` while

@@ -1,6 +1,30 @@
 # Release Proof Truth
 
-## 10.3.9 candidate
+## 10.3.10 candidate
+
+Model-generation proof runs against Codex itself. A mock Responses endpoint
+drives the real Codex CLI 0.159.2 with the multi-agent v2 tools: the hook
+payload for a spawn carries `tool_name` `collaborationspawn_agent`; a role
+file's pinned model overrides the spawn's `model` argument; Codex re-reads the
+role file when the spawn executes, so a PreToolUse hook that rewrites it changes
+the model the very child runs; and a model that is not in the visible catalog
+is refused ("Unknown model ... Available models"). With the real SKS hook
+installed behind trusted hooks, a spawn naming `gpt-5.6-sol` is denied and a
+spawn of a role whose file pins `gpt-6-sol` runs its child on `gpt-6.1-sol`;
+the installed 10.3.9 as the hook lets the `gpt-5.6-sol` child run. Copies of this
+Mac's real role files (25 files in each of several projects, pinned to
+`gpt-5.6-*`, `gpt-6-sol`, and one Astra-only generation), real models cache,
+config, bridge catalog, and route policy went through the same code: every
+owned role file ends byte-identical to its current content, files SKS does not
+own are untouched, the config changes on one line, `app-server` `model/list`
+shows the superseded rows hidden and the `gpt-5.5` upgrade pointing at
+`gpt-6.1-sol`, and the live probe picks `gpt-6.1-sol` instead of
+`codex-auto-review`. The installed-package smoke (100 commands) and the full
+canonical suite (3,904 tests plus the 33-test stamp phase) pass on the same
+tree. No real model turn was run, so whether a live model then picks the
+current tier models is not proven.
+
+## Historical 10.3.9 candidate
 
 Hook activation proof runs against Codex itself. The global-hooks suite pins
 the trust hash to the values Codex 0.153.4, 0.157.1, and 0.158 report from
@@ -367,12 +391,17 @@ Exact-commit proof can exist only after the candidate is committed and all
 source-bound gates are regenerated from that clean commit.
 
 All release artifacts bound to 9.2.7 or an earlier commit are historical. They
-must not be renamed, copied, or treated as 10.3.9 evidence.
+must not be renamed, copied, or treated as 10.3.10 evidence.
 
-New 10.3.9 claims:
+New 10.3.10 claims:
 
 | Claim | Current support | Boundary |
 | --- | --- | --- |
+| Spawn guards recognise every spawn tool name Codex sends | passed-hermetic | `spawn-tool-names` suite across `spawn_agent`, `functions.`, `collaboration.`, `collaborationspawn_agent`, `multi_agent_v1spawn_agent`; real Codex 0.159.2 hook payload denied a `gpt-5.6-sol` spawn |
+| An SKS-owned role file pinning an older model is refreshed before it runs | passed-hermetic | preflight, global-refresh, and spawn-heal suites; the real Codex child ran `gpt-6.1-sol`; newer pins, user-edited files, and a missing cache are left alone |
+| The bridge catalog and live probe use the newest generation | passed-hermetic | real live catalog: superseded rows hidden, `gpt-5.5` upgrade retargeted; Codex `model/list` agrees; probe route is `gpt-6.1-sol` |
+| `doctor --fix` moves a superseded default child model | passed-hermetic | applied to a copy of the real `config.toml`: one line changed; `sks doctor` alone only reports |
+| A live model turn follows the new routing | not proved | the end-to-end runs used a mock model endpoint |
 | Image generation follows the image mode and pins no model | passed-hermetic | capability, auth-readiness, PPT, and slide suites: Codex default accepts the built-in tool or the Codex bridge route, custom mode decides alone, evidence needs a recorded model, not a pinned one |
 | The custom OpenRouter path makes and edits real images | verified-on-machine | 2026-09-25, direct path, `black-forest-labs/flux.2-klein-4b`: generate, then edit with the output as reference; sidecar SHA-256 matched |
 | The Codex default route makes a real image outside a turn | verified-on-machine | 2026-09-25, the running 10.3.4 bridge, codex-lb `gpt-6-astra` route, hosted image tool with no image model set, 58 s |
@@ -447,8 +476,8 @@ New 10.3.9 claims:
 | `sks update` quarantines other-harness conflicts | passed-hermetic | `other-harness-cleanup` now calls `cleanupOtherHarnessConflicts` instead of failing closed; from-home update e2e still runs every migration stage |
 | Host extra skill dirs lose only SKS-owned retired residue | passed-hermetic | `~/.cursor/skills` and `~/.claude/skills` remove managed retired names only; user-authored collisions stay in place |
 | A stale or cwd-sticky official workflow cannot capture a later prompt | passed-hermetic | unnamed hooks use `loadOwnedRouteState`; idle > 2h is inactive even with leftover open threads; same-session follow-ups still bind while the run is fresh |
-| All checked version authorities report 10.3.9 | passed-hermetic | `release:version-truth` 15 surfaces at 10.3.9 after incremental build |
-| The reported 10.3.9 package is ready to publish | not proved | requires a clean exact-commit build, `npm run release:check:full` stamp, pack receipt, provenance, and the release commit fast-forward pushed to origin main (the prepublish reproducibility preflight refuses `head_not_origin_main`) |
+| All checked version authorities report 10.3.10 | passed-hermetic | `release:version-truth` 15 surfaces at 10.3.10 after incremental build |
+| The reported 10.3.10 package is ready to publish | not proved | requires a clean exact-commit build, `npm run release:check:full` stamp, pack receipt, provenance, and the release commit fast-forward pushed to origin main (the prepublish reproducibility preflight refuses `head_not_origin_main`) |
 
 ## 9.1.0 assertion (historical)
 

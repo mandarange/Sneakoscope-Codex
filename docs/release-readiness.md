@@ -1,6 +1,32 @@
 # SKS Release Readiness
 
-## 10.3.9 candidate
+## 10.3.10 candidate
+
+SKS runs children only on the newest model generation Codex lists. Codex 0.159
+sends the multi-agent v2 spawn to hooks as `collaborationspawn_agent`; the
+model check, the Jev tier seal, and the parent gate recognised only three other
+spellings, so a spawn naming an older generation ran untouched. Every spawn
+guard now matches every name Codex has used. Role files pin a tier model that
+Codex runs over the spawn's model, so SKS-owned role files that pin an older
+model are refreshed on the first hook after the models cache changes, in
+`~/.codex/agents` from any project, and at the spawn itself (Codex reads a
+role file when the spawn executes, so the refreshed pin applies to that spawn).
+The bridge catalog hides superseded generations and retargets upgrade
+pointers, the live bridge probe uses the newest generation, `doctor --fix`
+moves a superseded default child model, and leftovers that contradicted the tier
+policy are removed. Verification must cover the spawn guards under every tool
+name, a stale role pin refreshed while a newer, user-owned, or cache-less one is
+left alone, the catalog pass and probe route on a real catalog and Codex's own
+`model/list` view of it, the doctor migration on a copy of the real config, an
+end-to-end run with the real Codex CLI and the real SKS hook (a legacy-model
+spawn denied, a stale role pin refreshed so the child runs the current model,
+and the installed 10.3.9 letting a `gpt-5.6-sol` child run), and the canonical
+suite and gates on the same tree.
+
+## Previous candidate: 10.3.9
+
+Published 2026-09-29 as `sneakoscope@10.3.9` from commit 350ff181; the
+registry `gitHead` and file count (1749) match the release-check pack.
 
 SKS hooks move to the user-level `~/.codex/hooks.json`, the one hook source
 Codex loads for every project, so Jev, routing, and Naruto orchestration run
@@ -281,7 +307,7 @@ publication option; direct `npm publish` does not require its physical receipts.
 
 **SOURCE TAG CONDITIONAL / NPM PUBLICATION OPERATOR-OWNED.**
 
-10.0.0 is Essential Trust. SKS was built when models lied often enough that every completion had to be policed — an "Honest Mode" section matched by regex before a turn could end, a completion proof per route, a reflection gate, evidence ledgers written after every tool call, skill files whose one-byte drift denied every subsequent tool call — and those rituals became the product's largest cost: two cold hook processes per tool call (~1 s of harness time per call), finishes blocked over wording, and a `sks doctor --full` that could never be `ready` on a real machine because the image route's proof is a hardcoded `false`, which kept SKS Center's health badge permanently orange. 10.0 introduces a verification profile with `essential` as the default: the safety gates stay (DB safety and the catastrophic set, secret handling, the harness-maintenance guard, recursion and fan-out caps, no-question interactive-command refusal, host-capability allowlists) and the anti-lying rituals go — the Stop hook accepts a finished turn, managed-skill digest drift is repaired or advised instead of denying work, the interrupted-tool-output prompt is advised instead of refused, the PostToolUse evidence hook is no longer installed (and `sks update` removes the stale entry), hooks run through the warm per-project `sksd` daemon (~150 ms instead of ~600 ms, with a version guard that retires a daemon the next `sks update` outgrows), and the image route's manual proof is a warning. `strict` restores the pre-10 behavior (`SKS_VERIFICATION_PROFILE=strict` or `verification-profile.json`); inside the SKS test harness `strict` stays the default so the existing suite keeps proving it. It also fixes the readiness matrix's dead Desktop Bridge branch (it read the doctor's wrapper object). The release pipeline itself is unchanged in 10.0.0 and is slated for the same simplification in the next minor. Live evidence stays operator-owned: only the installed 10.0.0 finishing a real Codex turn without a Stop block, and `sks doctor --full --json` reporting `ready: true` on the operator's machine, can produce it. Regenerate the isolated 7.6.0 to 10.3.9 upgrade smoke, the full release gate DAG, pack receipt, and release-check stamp from the clean candidate commit. The 9.2.7 candidate below (commit 4de78199) was gate-verified but never published; its fixes ship inside 10.0.0.
+10.0.0 is Essential Trust. SKS was built when models lied often enough that every completion had to be policed — an "Honest Mode" section matched by regex before a turn could end, a completion proof per route, a reflection gate, evidence ledgers written after every tool call, skill files whose one-byte drift denied every subsequent tool call — and those rituals became the product's largest cost: two cold hook processes per tool call (~1 s of harness time per call), finishes blocked over wording, and a `sks doctor --full` that could never be `ready` on a real machine because the image route's proof is a hardcoded `false`, which kept SKS Center's health badge permanently orange. 10.0 introduces a verification profile with `essential` as the default: the safety gates stay (DB safety and the catastrophic set, secret handling, the harness-maintenance guard, recursion and fan-out caps, no-question interactive-command refusal, host-capability allowlists) and the anti-lying rituals go — the Stop hook accepts a finished turn, managed-skill digest drift is repaired or advised instead of denying work, the interrupted-tool-output prompt is advised instead of refused, the PostToolUse evidence hook is no longer installed (and `sks update` removes the stale entry), hooks run through the warm per-project `sksd` daemon (~150 ms instead of ~600 ms, with a version guard that retires a daemon the next `sks update` outgrows), and the image route's manual proof is a warning. `strict` restores the pre-10 behavior (`SKS_VERIFICATION_PROFILE=strict` or `verification-profile.json`); inside the SKS test harness `strict` stays the default so the existing suite keeps proving it. It also fixes the readiness matrix's dead Desktop Bridge branch (it read the doctor's wrapper object). The release pipeline itself is unchanged in 10.0.0 and is slated for the same simplification in the next minor. Live evidence stays operator-owned: only the installed 10.0.0 finishing a real Codex turn without a Stop block, and `sks doctor --full --json` reporting `ready: true` on the operator's machine, can produce it. Regenerate the isolated 7.6.0 to 10.3.10 upgrade smoke, the full release gate DAG, pack receipt, and release-check stamp from the clean candidate commit. The 9.2.7 candidate below (commit 4de78199) was gate-verified but never published; its fixes ship inside 10.0.0.
 
 9.2.7 makes Desktop Bridge readiness tell the truth after 9.2.6's heal. Recording the 9.2.6 live evidence on the maintainer's Mac showed the bridge `degraded` minutes after a green transport verify: the serving process's state heartbeat rewrote the whole state document from its in-memory copy every ~100 seconds, erasing the `last_verified_probe_ids` the verifier had just written, so the transport diagnostic never bound to the current process and readiness sat at `degraded` — `ready: false` with an empty blocker list, which doctor and every surface above it read as green. The heartbeat now adopts the on-disk ids before it writes. Two more truth gaps close with it: `sks doctor --json` (the fast path SKS Center's Diagnostics view calls) emitted a fixed `not_checked` bridge stub and now reads the serving process's own evidence (state file plus bounded log tail, no launchctl, no probes, no secret stores) into `desktop_bridge`, `warnings`, and `next_actions` while keeping the fast contract; and `sks doctor --fix` plus the `sks update` catalog-repair stage run one transport-level verify after a restart or whenever the bridge reads `degraded`, so a repaired machine finishes `ready`. The full doctor names a remaining `degraded` as `desktop_bridge_readiness_degraded:transport_unverified_for_current_process`. Live evidence stays operator-owned: only the installed 9.2.7 holding `readiness.state: ready` past a heartbeat tick on the operator's machine can produce it. Regenerate the isolated 7.6.0 to 9.2.7 upgrade smoke, the full release gate DAG, pack receipt, and release-check stamp from the clean candidate commit.
 
@@ -755,7 +781,7 @@ node ./dist/scripts/release-pack-receipt.js verify
 node ./dist/scripts/release-provenance-check.js --publish
 npm whoami --registry https://registry.npmjs.org/
 npm view sneakoscope maintainers --json --registry https://registry.npmjs.org/
-npm view sneakoscope@10.3.9 version --json --registry https://registry.npmjs.org/
+npm view sneakoscope@10.3.10 version --json --registry https://registry.npmjs.org/
 npm publish --dry-run --json \
   --registry https://registry.npmjs.org/ \
   --tag latest \
