@@ -19,9 +19,14 @@ owned role file ends byte-identical to its current content, files SKS does not
 own are untouched, the config changes on one line, `app-server` `model/list`
 shows the superseded rows hidden and the `gpt-5.5` upgrade pointing at
 `gpt-6.1-sol`, and the live probe picks `gpt-6.1-sol` instead of
-`codex-auto-review`. The installed-package smoke (100 commands) and the full
-canonical suite (3,904 tests plus the 33-test stamp phase) pass on the same
-tree. No real model turn was run, so whether a live model then picks the
+`codex-auto-review`. The first full release run also exposed a real
+regression, now fixed and covered: the SDK-bundled Codex 0.153.4 used by the
+real check rewrote the maintainer's `models_cache.json` without the newest
+models, the role refresh trusted it and lowered ten role files to 5.6 pins, and
+the tier resolver would have required 5.6 children. Tiers now follow the
+configured `model_catalog_json`, and a refresh never lowers a pin that is not
+older than its tier. The installed-package smoke (100 commands) and the full
+canonical suite pass on the same tree. No real model turn was run, so whether a live model then picks the
 current tier models is not proven.
 
 ## Historical 10.3.9 candidate
@@ -401,6 +406,7 @@ New 10.3.10 claims:
 | An SKS-owned role file pinning an older model is refreshed before it runs | passed-hermetic | preflight, global-refresh, and spawn-heal suites; the real Codex child ran `gpt-6.1-sol`; newer pins, user-edited files, and a missing cache are left alone |
 | The bridge catalog and live probe use the newest generation | passed-hermetic | real live catalog: superseded rows hidden, `gpt-5.5` upgrade retargeted; Codex `model/list` agrees; probe route is `gpt-6.1-sol` |
 | `doctor --fix` moves a superseded default child model | passed-hermetic | applied to a copy of the real `config.toml`: one line changed; `sks doctor` alone only reports |
+| Role refreshes never lower a pin and tiers follow the configured catalog | passed-hermetic | shrunken-cache regression test (explorer/implementation/expert pins kept, only the older worker pin rewritten), catalog-versus-cache resolver tests, and a heal of the real role files that restored 9 `gpt-6.1-sol` and 1 `gpt-6-luna` pins |
 | A live model turn follows the new routing | not proved | the end-to-end runs used a mock model endpoint |
 | Image generation follows the image mode and pins no model | passed-hermetic | capability, auth-readiness, PPT, and slide suites: Codex default accepts the built-in tool or the Codex bridge route, custom mode decides alone, evidence needs a recorded model, not a pinned one |
 | The custom OpenRouter path makes and edits real images | verified-on-machine | 2026-09-25, direct path, `black-forest-labs/flux.2-klein-4b`: generate, then edit with the output as reference; sidecar SHA-256 matched |

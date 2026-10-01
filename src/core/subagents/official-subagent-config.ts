@@ -11,9 +11,10 @@ import {
 } from '../managed-assets/managed-assets-manifest.js'
 import {
   DEFAULT_SUBAGENT_EFFORT,
-  defaultSubagentModel as latestDefaultSubagentModel
+  defaultSubagentModel as latestDefaultSubagentModel,
+  subagentModelProfile
 } from './model-policy.js'
-import { catalogIsAuthoritative, latestTierModelSet, notOlderThanBuiltin } from './model-tiers.js'
+import { catalogIsAuthoritative, latestTierModelSet, modelNotOlderForTier, notOlderThanBuiltin } from './model-tiers.js'
 import { pinnedModelOfRoleFile } from './role-model-pins.js'
 import {
   allowlistedChildModel,
@@ -527,8 +528,10 @@ interface ManagedRoleFile {
   filename: string
   codexName: string
   expected: string
-  /** The file rendered around another model id, for keeping a pin the catalog cannot judge. */
+  /** The file rendered around another model id, for keeping a pin that is not older. */
   withModel?: (model: string) => string
+  /** True for a pin the file may keep: a tier-appropriate model that is not older than the current one. */
+  keepsPin?: (model: string) => boolean
   owns: (text: string) => boolean
   marker: string
 }
@@ -540,6 +543,7 @@ function managedRoleFiles(readOnlyListRole: boolean): ManagedRoleFile[] {
       codexName: role.codex_name,
       expected: managedOfficialSubagentRoleContent(role),
       withModel: (model: string) => managedOfficialSubagentRoleContent({ ...role, model }),
+      keepsPin: (model: string) => model !== role.model && modelNotOlderForTier(model, subagentModelProfile(role.model_policy).tier),
       owns: (text: string) => managedOfficialSubagentRoleOwnsText(text, role),
       marker: role.ownership_marker
     })),
@@ -666,10 +670,11 @@ async function installOfficialSubagentAgentConfigsAt(
       continue
     }
 
-    // Without the catalog, built-in ids cannot replace a pin that is not provably
-    // older: the file is refreshed around the pin it already carries.
-    const pinned = catalogIsAuthoritative() ? null : pinnedModelOfRoleFile(current)
-    const target = pinned && notOlderThanBuiltin(pinned) && role.withModel ? role.withModel(pinned) : expected
+    // A pin that is not older than the tier's current model is never lowered,
+    // whatever the model list says at this moment: the file is refreshed around
+    // the pin it already carries.
+    const pinned = pinnedModelOfRoleFile(current)
+    const target = pinned && role.keepsPin?.(pinned) && role.withModel ? role.withModel(pinned) : expected
     if (current === target) {
       existing.push(relative)
       generatedFiles.push(relative)

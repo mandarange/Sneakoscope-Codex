@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
-import { codexHomePath } from '../codex-app/codex-model-catalog.js'
+import { codexHomePath, readTopLevelTomlString } from '../codex-app/codex-model-catalog.js'
 
 // Codex writes this file ($CODEX_HOME/models_cache.json); SKS only reads it here.
 const MODELS_CACHE_FILENAME = 'models_cache.json'
@@ -16,11 +17,15 @@ function modelsCachePath(input: { home?: string; env?: NodeJS.ProcessEnv }): str
  * No model name is pinned. When Codex publishes a newer family, every tier
  * moves to it without an SKS release.
  *
- * Resolution reads Codex's own models cache (`$CODEX_HOME/models_cache.json`,
- * written by the Codex app/CLI from the backend). Only `gpt-<version>-<family>`
- * rows that Codex lists (not hidden) count; the highest version wins, and a
- * family preference breaks ties. Without a usable cache the built-in latest
- * known family is used.
+ * Resolution reads the model list Codex itself uses: the `model_catalog_json`
+ * file named in `$CODEX_HOME/config.toml` when there is one (the SKS bridge
+ * serves Codex Desktop through it), else Codex's own models cache
+ * (`$CODEX_HOME/models_cache.json`). The cache alone is not trusted when a
+ * catalog is configured: any Codex client rewrites it with the models its own
+ * version can see, so an older client leaves a shorter list than Codex Desktop
+ * actually offers. Only `gpt-<version>-<family>` rows that Codex lists (not
+ * hidden) count; the highest version wins, and a family preference breaks ties.
+ * Without a usable list the built-in latest known family is used.
  */
 
 export type ModelTier = 'fast' | 'balanced' | 'context' | 'deep'
@@ -65,7 +70,7 @@ export function parseGptModelId(slug: unknown): { version: number[]; family: str
 }
 
 export interface LatestModelTiers {
-  readonly source: 'models_cache' | 'builtin'
+  readonly source: 'model_catalog' | 'models_cache' | 'builtin'
   readonly models: Readonly<Record<ModelTier, string>>
   readonly efforts: Readonly<Record<ModelTier, ModelTierEffort>>
   /** Reasoning efforts Codex lists per GPT model id; absent when unknown. */
@@ -86,18 +91,60 @@ export function resetLatestModelTierCache(): void {
   memo = null
 }
 
-export function resolveLatestModelTiers(input: { home?: string; env?: NodeJS.ProcessEnv } = {}): LatestModelTiers {
-  const file = modelsCachePath(input)
-  let stat: fs.Stats | null = null
+function fileKey(file: string): string {
   try {
-    stat = fs.statSync(file)
+    const stat = fs.statSync(file)
+    return `${file}:${stat.mtimeMs}:${stat.size}`
   } catch {
-    stat = null
+    return `${file}:absent`
   }
-  const key = stat ? `${file}:${stat.mtimeMs}:${stat.size}` : `${file}:absent`
+}
+
+function readableRows(file: string): CandidateRow[] {
+  try {
+    const stat = fs.statSync(file)
+    return stat.isFile() && stat.size <= 16 * 1024 * 1024 ? readCandidateRows(file) : []
+  } catch {
+    return []
+  }
+}
+
+let catalogPathMemo: { key: string; path: string | null } | null = null
+
+/** The `model_catalog_json` file the user's Codex config names, resolved the way Codex resolves it. */
+function configuredCatalogPath(input: { home?: string; env?: NodeJS.ProcessEnv }): string | null {
+  const configPath = path.join(codexHomePath(input), 'config.toml')
+  const key = fileKey(configPath)
+  if (catalogPathMemo?.key === key) return catalogPathMemo.path
+  let resolved: string | null = null
+  try {
+    const stat = fs.statSync(configPath)
+    if (stat.isFile() && stat.size <= 4 * 1024 * 1024) {
+      const value = readTopLevelTomlString(fs.readFileSync(configPath, 'utf8'), 'model_catalog_json')?.trim()
+      if (value) {
+        const env = input.env || process.env
+        const home = input.home || env.HOME || os.homedir()
+        resolved = value === '~' ? path.resolve(home)
+          : value.startsWith('~/') ? path.resolve(home, value.slice(2))
+            : path.isAbsolute(value) ? path.resolve(value)
+              : path.resolve(path.dirname(configPath), value)
+      }
+    }
+  } catch {
+    resolved = null
+  }
+  catalogPathMemo = { key, path: resolved }
+  return resolved
+}
+
+export function resolveLatestModelTiers(input: { home?: string; env?: NodeJS.ProcessEnv } = {}): LatestModelTiers {
+  const cacheFile = modelsCachePath(input)
+  const catalogFile = configuredCatalogPath(input)
+  const key = `${fileKey(cacheFile)}|${catalogFile ? fileKey(catalogFile) : 'no-catalog'}`
   if (memo?.key === key) return memo.value
-  const rows = stat && stat.isFile() && stat.size <= 16 * 1024 * 1024 ? readCandidateRows(file) : []
-  const value = resolveFromRows(rows)
+  const catalogRows = catalogFile ? readableRows(catalogFile) : []
+  const useCatalog = catalogRows.length > 0
+  const value = resolveFromRows(useCatalog ? catalogRows : readableRows(cacheFile), useCatalog ? 'model_catalog' : 'models_cache')
   memo = { key, value }
   return value
 }
@@ -112,7 +159,20 @@ export function latestModelForTier(tier: ModelTier, input: { home?: string; env?
  * writer must not replace an existing pin or default with them.
  */
 export function catalogIsAuthoritative(input: { home?: string; env?: NodeJS.ProcessEnv } = {}): boolean {
-  return resolveLatestModelTiers(input).source === 'models_cache'
+  return resolveLatestModelTiers(input).source !== 'builtin'
+}
+
+/**
+ * True when `model` is a tier-appropriate model at least as new as the tier's
+ * current one: a family the tier uses and a version that is not older. Such a
+ * model is never "stale", even when it is a different family than the one the
+ * tier resolves to today (a context tier on terra 5.6 does not make a 6.1 sol
+ * pin old).
+ */
+export function modelNotOlderForTier(model: unknown, tier: ModelTier, input: { home?: string; env?: NodeJS.ProcessEnv } = {}): boolean {
+  const id = parseGptModelId(model)
+  const current = parseGptModelId(resolveLatestModelTiers(input).models[tier])
+  return Boolean(id && current && TIER_FAMILIES[tier].includes(id.family) && compareModelVersions(id.version, current.version) >= 0)
 }
 
 /** True when Codex lists a non-hidden row of the same family with a strictly higher version. */
@@ -144,7 +204,7 @@ export function notOlderThanBuiltin(model: unknown): boolean {
  */
 export function tierModelsFingerprint(input: { home?: string; env?: NodeJS.ProcessEnv } = {}): string | null {
   const resolved = resolveLatestModelTiers(input)
-  if (resolved.source !== 'models_cache') return null
+  if (resolved.source === 'builtin') return null
   const text = MODEL_TIERS.map((tier) => `${tier}=${resolved.models[tier]}`).join('\n')
   return createHash('sha256').update(text).digest('hex').slice(0, 16)
 }
@@ -218,7 +278,7 @@ function newestRow(rows: readonly CandidateRow[]): CandidateRow | null {
   return [...rows].sort((left, right) => compareModelVersions(right.version, left.version))[0] || null
 }
 
-function resolveFromRows(rows: readonly CandidateRow[]): LatestModelTiers {
+function resolveFromRows(rows: readonly CandidateRow[], listSource: 'model_catalog' | 'models_cache'): LatestModelTiers {
   const models: Record<ModelTier, string> = { ...BUILTIN_LATEST_TIER_MODELS }
   // Efforts Codex lists for every GPT family row, not just the resolved ones,
   // so an explicit older model can still be validated against the catalog.
@@ -240,7 +300,7 @@ function resolveFromRows(rows: readonly CandidateRow[]): LatestModelTiers {
     models[tier] = pick.slug
   }
   return Object.freeze({
-    source: fromCache && rows.length ? 'models_cache' : 'builtin',
+    source: fromCache && rows.length ? listSource : 'builtin',
     models: Object.freeze(models),
     efforts: MODEL_TIER_EFFORT,
     supported_efforts: Object.freeze(supported)

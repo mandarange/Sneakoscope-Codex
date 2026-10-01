@@ -7,7 +7,8 @@ import {
   managedOfficialSubagentRoleOwnsText,
   type ManagedOfficialSubagentRole
 } from '../managed-assets/managed-assets-manifest.js'
-import { catalogIsAuthoritative, compareModelVersions, parseGptModelId } from './model-tiers.js'
+import { subagentModelProfile } from './model-policy.js'
+import { catalogIsAuthoritative, modelNotOlderForTier } from './model-tiers.js'
 
 /**
  * Managed role files pin a tier model, and Codex runs a role file's model even
@@ -15,8 +16,10 @@ import { catalogIsAuthoritative, compareModelVersions, parseGptModelId } from '.
  * newest therefore keeps running that generation after Codex lists a newer one
  * unless something notices. These helpers read the pins without writing, so the
  * spawn gate can refuse a stale role and the prompt preflight can refresh it.
- * Only a pin that is OLDER than the role's current model is stale: a newer pin
- * (the cache briefly listing fewer models) is never rewritten downward.
+ * Only a pin that is OLDER than the role's current model is stale: a pin of a
+ * family the tier uses and a version that is not older is never rewritten, even
+ * when the tier resolves to another family today or the model list briefly
+ * shrank (any Codex client rewrites the models cache with what it can see).
  */
 
 /** The top-level `model = "..."` of a role file, read before its instructions. */
@@ -48,12 +51,10 @@ function readRolePin(file: string, role: ManagedOfficialSubagentRole): RolePin {
     : { state: 'foreign' }
 }
 
-/** A pin differing from the role's current model is stale unless it is a newer version of the same family. */
-function pinIsStale(pinned: string, current: string): boolean {
-  if (pinned === current) return false
-  const a = parseGptModelId(pinned)
-  const b = parseGptModelId(current)
-  return !(a && b && a.family === b.family && compareModelVersions(a.version, b.version) > 0)
+/** A pin differing from the role's current model is stale unless it is a tier-appropriate model that is not older. */
+export function rolePinIsStale(pinned: string, role: ManagedOfficialSubagentRole): boolean {
+  if (pinned === role.model) return false
+  return !modelNotOlderForTier(pinned, subagentModelProfile(role.model_policy).tier)
 }
 
 /** The project agents directory (when a root is given) and the Codex-home one, project first. */
@@ -80,7 +81,7 @@ export function stalePinForAgentType(
     const pin = readRolePin(file, role)
     if (pin.state === 'missing') continue
     if (pin.state === 'foreign' || pin.pinned === null) return null
-    return pinIsStale(pin.pinned, role.model) ? { role: role.codex_name, file, pinned: pin.pinned, current: role.model } : null
+    return rolePinIsStale(pin.pinned, role) ? { role: role.codex_name, file, pinned: pin.pinned, current: role.model } : null
   }
   return null
 }
@@ -93,7 +94,7 @@ export function staleManagedRolePins(input: { root?: string; env?: NodeJS.Proces
     for (const role of MANAGED_OFFICIAL_SUBAGENT_ROLES) {
       const file = path.join(dir, role.filename)
       const pin = readRolePin(file, role)
-      if (pin.state === 'owned' && pin.pinned !== null && pinIsStale(pin.pinned, role.model)) {
+      if (pin.state === 'owned' && pin.pinned !== null && rolePinIsStale(pin.pinned, role)) {
         stale.set(file, { role: role.codex_name, file, pinned: pin.pinned, current: role.model })
       }
     }

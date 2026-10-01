@@ -25,8 +25,18 @@
   Codex reads a role file when the spawn executes, so a pin refreshed just
   before the spawn applies to that spawn: it is allowed and runs the current
   model, with no denial and no manual repair. Only existing files whose marker,
-  id and body hash still match are rewritten; files you edited are never
-  touched, and a pin newer than the current model is never rewritten downward.
+  id and body hash still match are rewritten, and files you edited are never
+  touched. A pin that is not older than its tier's current model, in a family
+  the tier uses, is never lowered by any path (the hook refreshes, `sks update`,
+  `sks init`, `sks doctor --fix`), whatever the model list says at that moment.
+- SKS now takes the model list from the `model_catalog_json` file named in
+  `~/.codex/config.toml` (the one the SKS bridge serves Codex Desktop through)
+  and falls back to `~/.codex/models_cache.json` only when no catalog is
+  configured. Any Codex client rewrites the cache with the models its own
+  version can see, so an older client (the SDK-bundled 0.153.4 that the release
+  checks run is one) left a list without `gpt-6.1-sol`; SKS then took 5.6 models
+  as the newest and refreshed role files down to them, and would have refused
+  `gpt-6.1-sol` spawns that Codex itself allows.
 - The managed role catalog resolves its model on every read. The long-lived hook
   daemon copied it once at startup, so after a cache refresh it told the parent
   to spawn with a model the gate then rejected.

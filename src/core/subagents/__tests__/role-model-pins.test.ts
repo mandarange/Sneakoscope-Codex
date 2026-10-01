@@ -159,3 +159,44 @@ test('the managed role catalog follows the models cache after its first read ins
     assert.match(managedOfficialSubagentRoleContent(role), /model = "gpt-6\.1-sol"/)
   })
 })
+
+test('a shrunken models cache never lowers a role file: only the genuinely older pin is rewritten', async () => {
+  // What an older Codex client leaves behind: no 6.1 sol, no 6 luna. The context tier then resolves to terra 5.6.
+  const shrunk = [{ slug: 'gpt-6-astra' }, { slug: 'gpt-5.6-sol' }, { slug: 'gpt-5.6-terra' }, { slug: 'gpt-5.6-luna' }]
+  await withProject(shrunk, null, async ({ root, env }) => {
+    assert.equal(managedOfficialSubagentRoleByName('explorer')!.model, 'gpt-5.6-terra')
+    const dir = path.join(root, '.codex', 'agents')
+    await fs.mkdir(dir, { recursive: true })
+    const write = async (name: string, model: string) => {
+      const r = managedOfficialSubagentRoleByName(name)!
+      const text = managedOfficialSubagentFileContent(r.id, r.schema_version, managedOfficialSubagentRoleBody({ ...r, model }))
+      await fs.writeFile(path.join(dir, r.filename), text)
+      return { file: path.join(dir, r.filename), text }
+    }
+    // newer than the shrunken list, in a family the tier uses: must be left byte-for-byte alone
+    const sol = await write('implementation_specialist', 'gpt-6.1-sol')
+    const explorer = await write('explorer', 'gpt-6.1-sol')
+    const expert = await write('expert', 'gpt-6-astra')
+    // older than the current model of its tier: the only file that should change
+    const worker = await write('worker', 'gpt-5.5-luna')
+    assert.deepEqual(staleManagedRolePins({ root, env }).map((entry) => entry.role), ['worker'])
+    const result = await refreshStaleManagedRolePins({ root, env })
+    assert.deepEqual(result.updated, ['.codex/agents/worker.toml'])
+    assert.equal(result.remaining, 0)
+    for (const kept of [sol, explorer, expert]) assert.equal(await fs.readFile(kept.file, 'utf8'), kept.text)
+    assert.match(await fs.readFile(worker.file, 'utf8'), /model = "gpt-5\.6-luna"/)
+  })
+})
+
+test('the installer keeps a tier-appropriate newer pin while it refreshes the rest of the file, with or without a cache', async () => {
+  await withProject(NEWEST, null, async ({ root }) => {
+    const dir = path.join(root, '.codex', 'agents')
+    await fs.mkdir(dir, { recursive: true })
+    const target = path.join(dir, role.filename)
+    // an older SKS body around a newer-than-current pin
+    await fs.writeFile(target, managedOfficialSubagentFileContent(role.id, role.schema_version, managedOfficialSubagentRoleBody({ ...role, model: 'gpt-6.9-sol', developer_instructions: `${role.developer_instructions}\nAn older SKS wrote this line.` })))
+    const result = await installOfficialSubagentAgentConfigs(root, { apply: true })
+    assert.ok(result.updated.includes('.codex/agents/implementation-specialist.toml'))
+    assert.equal(await fs.readFile(target, 'utf8'), managedOfficialSubagentRoleContent({ ...role, model: 'gpt-6.9-sol' }))
+  })
+})

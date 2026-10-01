@@ -14,9 +14,14 @@ role file when the spawn executes, so the refreshed pin applies to that spawn).
 The bridge catalog hides superseded generations and retargets upgrade
 pointers, the live bridge probe uses the newest generation, `doctor --fix`
 moves a superseded default child model, and leftovers that contradicted the tier
-policy are removed. Verification must cover the spawn guards under every tool
+policy are removed. Tiers follow the model list Codex is configured with (the
+`model_catalog_json` the bridge serves, else the models cache), and no role
+refresh lowers a pin that is not older than its tier's current model: the first
+full release run on the maintainer's Mac showed an older bundled Codex client
+shrinking the cache and a refresh lowering ten role files, which is now a
+regression test. Verification must cover the spawn guards under every tool
 name, a stale role pin refreshed while a newer, user-owned, or cache-less one is
-left alone, the catalog pass and probe route on a real catalog and Codex's own
+left alone, a shrunken models cache leaving role files untouched, the catalog pass and probe route on a real catalog and Codex's own
 `model/list` view of it, the doctor migration on a copy of the real config, an
 end-to-end run with the real Codex CLI and the real SKS hook (a legacy-model
 spawn denied, a stale role pin refreshed so the child runs the current model,
