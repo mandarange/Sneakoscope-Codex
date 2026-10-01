@@ -1,3 +1,4 @@
+import { releaseExclusiveGuiSurface } from './exclusive-gui-surface-gate.js';
 import {
   officialSubagentArtifactDir,
   recordAndRefreshSubagentEvidence,
@@ -11,6 +12,8 @@ export async function handleSubagentStop(
   payload: any = {},
   sessionKey: any = null
 ) {
+  // Before evidence capture, which can return nothing for a Stop without a turn id.
+  await releaseExclusiveGuiSurface({ root, sessionKey, payload }).catch(() => null);
   const artifactDir = officialSubagentArtifactDir(root, state, sessionKey);
   let lifecycleFailure: string | null = null;
   let capturedEvent: any = null;

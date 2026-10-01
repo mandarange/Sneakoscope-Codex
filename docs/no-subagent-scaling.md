@@ -18,6 +18,7 @@ canonical effort policy is:
   image-generation execution: context tier with `model_reasoning_effort="medium"`
 - mixed work is split by execution versus judgment when possible; an
   unsplittable mixed slice uses the deep tier
+- Computer Use and Browser/Chrome are single-owner GUI surfaces: one child per surface at a time, all of that surface's work in one slice, so a goal whose suggested roles are only surface operators never joins the 16-child mass lane (see the Delegation Contract in [naruto.md](naruto.md))
 - automatic requested children start at 4 for bounded non-trivial work, 6 for explicit parallel work, 8 for large-scale work, and 16 for mass mechanical or exploration work on the fast and context tiers; after decomposition either lane may expand to 256 only when ready DAG width, disjoint ownership, verifier/tool capacity, real host slots, and positive marginal usefulness all permit it
 - reviewer-only fan-out: at most 2 for ordinary work and 3 for critical multi-domain review
 - explicit `--agents N` and `--max-threads N` values from 1 through 256 remain authoritative when the operator supplies them

@@ -26,8 +26,16 @@ models, the role refresh trusted it and lowered ten role files to 5.6 pins, and
 the tier resolver would have required 5.6 children. Tiers now follow the
 configured `model_catalog_json`, and a refresh never lowers a pin that is not
 older than its tier. The installed-package smoke (100 commands) and the full
-canonical suite pass on the same tree. No real model turn was run, so whether a live model then picks the
-current tier models is not proven.
+canonical suite pass on the same tree. The surface gate was driven the same way:
+with the real SKS hook behind trusted hooks, two parallel `browser_use_operator`
+spawns let one through and denied the other (Codex created no thread for it and
+the model saw the denial), a spawn while the first child ran was denied naming
+that child, the surface was free again after the child's SubagentStop, a spawn
+Codex itself rejected left a pending claim that blocked an immediate retry and
+expired after 30 seconds, a child's own tool call refreshed its claim, and
+spawns without `agent_type` ran unrestricted. No real model turn was run, so
+whether a live model then picks the current tier models, or splits GUI work the
+way the new rule asks, is not proven.
 
 ## Historical 10.3.9 candidate
 
@@ -407,6 +415,7 @@ New 10.3.10 claims:
 | The bridge catalog and live probe use the newest generation | passed-hermetic | real live catalog: superseded rows hidden, `gpt-5.5` upgrade retargeted; Codex `model/list` agrees; probe route is `gpt-6.1-sol` |
 | `doctor --fix` moves a superseded default child model | passed-hermetic | applied to a copy of the real `config.toml`: one line changed; `sks doctor` alone only reports |
 | Role refreshes never lower a pin and tiers follow the configured catalog | passed-hermetic | shrunken-cache regression test (explorer/implementation/expert pins kept, only the older worker pin rewritten), catalog-versus-cache resolver tests, and a heal of the real role files that restored 9 `gpt-6.1-sol` and 1 `gpt-6-luna` pins |
+| Computer Use and browser are single-owner GUI surfaces | passed-hermetic | gate and fan-out suites, plus six real Codex 0.159.2 runs with the real hook: second parallel operator spawn denied and visible to the model, owned from SubagentStart to SubagentStop, released at Stop, a Codex-rejected spawn expires after 30 s, owner tool call refreshes the claim. Boundary: the gate sees only the operator roles by `agent_type`; a spawn without one, and OpenRouter Only mode (routed to a list role before the gate), rely on the prompt rule; a resumed operator re-takes its surface only at its next tool call (unit-tested, not driven through real Codex); no real GUI operation was performed |
 | A live model turn follows the new routing | not proved | the end-to-end runs used a mock model endpoint |
 | Image generation follows the image mode and pins no model | passed-hermetic | capability, auth-readiness, PPT, and slide suites: Codex default accepts the built-in tool or the Codex bridge route, custom mode decides alone, evidence needs a recorded model, not a pinned one |
 | The custom OpenRouter path makes and edits real images | verified-on-machine | 2026-09-25, direct path, `black-forest-labs/flux.2-klein-4b`: generate, then edit with the output as reference; sidecar SHA-256 matched |

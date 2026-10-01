@@ -19,6 +19,7 @@ import {
   type SubagentModelEntry
 } from './child-model-allowlist.js'
 import { READ_ONLY_LIST_ROLE } from './read-only-list-role.js'
+import { EXCLUSIVE_SURFACE_RULE } from './exclusive-surface-rule.js'
 
 export interface ActiveMainModelRouting {
   provider: string
@@ -237,7 +238,8 @@ Plan and capacity:
 - before every wave compute C_t = min(ready DAG width, disjoint ownership, verifier capacity, tool concurrency, available thread slots after reservations, marginal-useful workers); launch n_t <= C_t only while marginal useful throughput stays positive
 - use the largest safe useful wave within C_t; max depth: 1 applies only to child nesting, so the root parent may launch later direct-child waves; subagents must not spawn subagents
 - parallel writes require disjoint paths; serialize overlaps
-- reject duplicate slice fingerprints and homogeneous clone work; diversity may come from roles, disjoint shards, or different tool surfaces
+- ${EXCLUSIVE_SURFACE_RULE}
+- reject duplicate slice fingerprints and homogeneous clone work; diversity may come from roles, disjoint shards, or non-exclusive tool surfaces (never from a second child on the same Computer Use or browser surface)
 - security, database, release, authorization, and irreversible-effect checks are protected strata; aggregate speed or accuracy never offsets a failed protected gate
 - after each SubagentStart/SubagentStop, update \`subagent-plan.json.wave_lifecycle\` under the same workflow_run_id
 - after each settled wave: collect results, close completed threads, refresh evidence/ledger, follow \`next_parent_actions\` / \`parent_guidance\`, rescan the ready DAG, then launch the next defensible direct-child wave when \`remaining_to_start > 0\`; capacity is reusable

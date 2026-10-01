@@ -60,6 +60,12 @@ import {
 } from './hooks-runtime/parent-orchestration-gate.js';
 import { subagentSpawnPolicyBlockReason } from './hooks-runtime/subagent-spawn-policy.js';
 import { healStaleRolePinForSpawn } from './hooks-runtime/spawn-role-pin-heal.js';
+import {
+  bindExclusiveGuiSurfaceStart,
+  claimExclusiveGuiSurface,
+  refreshExclusiveGuiSurfaceOwner
+} from './hooks-runtime/exclusive-gui-surface-gate.js';
+import { EXCLUSIVE_SURFACE_CHILD_RULE } from './subagents/exclusive-surface-rule.js';
 import { withFileLock } from './locks/file-lock.js';
 import {
   ensureConfinedDirectory,
@@ -252,6 +258,8 @@ async function evaluateHookPayloadWithPlan(name: any, payload: any, opts: any, j
   return withNarutoDecision({ continue: true });
 }
 async function hookSubagentStart(root: any, state: any, payload: any = {}, sessionKey: any = null) {
+  // First, so an evidence-capture failure below cannot leave a surface unbound.
+  await bindExclusiveGuiSurfaceStart({ root, sessionKey, payload }).catch(() => null);
   const artifactDir = officialSubagentArtifactDir(root, state, sessionKey);
   const sessionArtifactDir = officialSubagentArtifactDir(root, {}, sessionKey);
   const skillGuardBinding = officialSubagentSkillGuardBinding(state);
@@ -290,6 +298,7 @@ async function hookSubagentStart(root: any, state: any, payload: any = {}, sessi
     'Keep the model and reasoning effort your spawn call sealed; do not retarget them.',
     'Use max_depth=1. Naruto children must not spawn children.',
     'Do not duplicate an already assigned slice.',
+    EXCLUSIVE_SURFACE_CHILD_RULE,
     'Parallel writes require disjoint paths; serialize overlapping paths.',
     'Finish only your assigned slice, return a concise result, then stop so the Naruto parent can close this thread.'
   ].join(' ') : '';
@@ -776,6 +785,8 @@ async function consumeActiveOfficialWorkflowQueue(
   }
 }
 async function hookPreTool(root: any, state: any, payload: any, noQuestion: any, sessionKey: any = null) {
+  // A child's own tool call keeps its Computer Use or browser claim alive.
+  await refreshExclusiveGuiSurfaceOwner({ root, sessionKey, payload }).catch(() => null);
   // Rewrite first, then deny on the rewritten input: in OpenRouter Only mode
   // every spawn is routed to a list model, and a failed routing leaves the
   // original input to the same deny.
@@ -862,6 +873,11 @@ async function hookPreTool(root: any, state: any, payload: any, noQuestion: any,
   // Every guard above accepted this spawn_agent call: from here on the
   // mission has a child, and the parent may integrate once it settles.
   if (isSpawnToolPayload(spawnPayload)) {
+    // The routed input: OpenRouter Only turns a managed role into a list role, and the child that starts then carries no operator role to bind or release a claim.
+    const guiSurface = await claimExclusiveGuiSurface({ root, sessionKey, payload: spawnPayload }).catch(() => null);
+    if (guiSurface?.action === 'block') {
+      return { decision: 'block', permissionDecision: 'deny', reason: guiSurface.message };
+    }
     await recordParentOrchestrationSpawn(root, state, jevSpawn?.route ? { spawnRoute: jevSpawn.route } : {}).catch(() => null);
   }
   const waveGuidance = await parentWaveGuidanceContext(root, state, sessionKey).catch(() => '');

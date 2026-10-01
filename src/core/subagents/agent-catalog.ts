@@ -9,6 +9,7 @@ import {
   type SubagentModelPolicyId,
   type SubagentModelReasoningEffort
 } from './model-policy.js'
+import { exclusiveSurfacesOfOnlyRoles } from './exclusive-tool-surface.js'
 import { HARD_NARUTO_MAX_THREADS } from './thread-budget.js'
 import { escapeRegExp } from '../text/regex.js'
 
@@ -211,7 +212,13 @@ function automaticSubagentFanout(input: {
   // scales far above the protected strata, but never when reviewer-only or
   // critical multi-domain caps apply.
   const massLane = decideSubagentModel({ description: text }).policy
+  // A goal whose roles are all Computer Use or browser operators drives shared
+  // GUI surfaces; bulk wording must not turn it into 16 children on one screen.
+  // Only the mass lane is withheld: the role ranking can return only operators
+  // for a goal that also changes code, so the count hint is left alone.
+  const guiSurfaces = exclusiveSurfacesOfOnlyRoles(input.suggestedRoles)
   const massParallel = MASS_PARALLEL_WORK_RE.test(text)
+    && guiSurfaces.length === 0
     && !NON_CHEAP_MASS_ACTION_RE.test(text)
     && (massLane === 'luna_max_mechanical' || massLane === 'terra_max_context_tools')
     && !reviewerOnly

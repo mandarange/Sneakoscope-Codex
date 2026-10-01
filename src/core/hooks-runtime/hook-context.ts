@@ -18,6 +18,7 @@ import { resolveManagedSkillSourcesForAdmission } from './managed-skill-admissio
 import { managedSkillDigestBlocksEnforced } from '../verification-profile.js';
 import { looksLikeActiveContinuationPrompt } from './naruto-decision-gate.js';
 import { effectiveChildModelAllowlist, type ChildModelAllowlist } from '../subagents/child-model-allowlist.js';
+import { EXCLUSIVE_SURFACE_SPAWN_LINE } from '../subagents/exclusive-surface-rule.js';
 import { renderChildModelCriteria, SUBAGENT_MODELS_SETTINGS_HINT } from './subagent-spawn-policy.js';
 import {
   extractUserPrompt,
@@ -35,7 +36,8 @@ const STANDALONE_PARENT_BASE_SKILLS = [
 const OFFICIAL_SUBAGENT_SPAWN_CONTRACT_HEAD = [
   'SKS official-subagent spawn contract:',
   '- Full-history forks (`fork_turns="all"`, including the omitted/default full-history mode) inherit the parent agent type, model, and reasoning effort.',
-  '- When selecting a custom `agent_type` or overriding `model`/`reasoning_effort`, set `fork_turns="none"` or a positive bounded turn count and put the complete bounded slice contract in `message`.'
+  '- When selecting a custom `agent_type` or overriding `model`/`reasoning_effort`, set `fork_turns="none"` or a positive bounded turn count and put the complete bounded slice contract in `message`.',
+  `- ${EXCLUSIVE_SURFACE_SPAWN_LINE}`
 ];
 
 const OFFICIAL_SUBAGENT_SPAWN_COMPATIBILITY_CONTEXT = [

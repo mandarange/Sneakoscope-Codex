@@ -19,13 +19,24 @@ policy are removed. Tiers follow the model list Codex is configured with (the
 refresh lowers a pin that is not older than its tier's current model: the first
 full release run on the maintainer's Mac showed an older bundled Codex client
 shrinking the cache and a refresh lowering ten role files, which is now a
-regression test. Verification must cover the spawn guards under every tool
+regression test. Computer Use and browser are one shared GUI each, so they
+are single-owner surfaces: the spawn gate denies a second concurrent
+`computer_use_operator` or `browser_use_operator` spawn on every parent,
+releases the surface at the owner's `SubagentStop` (a resumed operator takes it
+again with its next tool call), and lets a missed event expire (30 seconds for a
+spawn Codex rejected, 20 minutes without an owner tool call); a goal whose
+roles are only operators no longer joins the 16-child mass lane. OpenRouter Only
+mode routes a managed role to a list role first, so only the prompt rule covers
+it. Verification must cover the spawn guards under every tool
 name, a stale role pin refreshed while a newer, user-owned, or cache-less one is
 left alone, a shrunken models cache leaving role files untouched, the catalog pass and probe route on a real catalog and Codex's own
 `model/list` view of it, the doctor migration on a copy of the real config, an
 end-to-end run with the real Codex CLI and the real SKS hook (a legacy-model
 spawn denied, a stale role pin refreshed so the child runs the current model,
-and the installed 10.3.9 letting a `gpt-5.6-sol` child run), and the canonical
+and the installed 10.3.9 letting a `gpt-5.6-sol` child run), the surface gate
+under the real hook (a second parallel operator spawn denied with the denial
+visible to the model, the surface owned from SubagentStart to SubagentStop, a
+Codex-rejected spawn freeing the surface after 30 seconds), and the canonical
 suite and gates on the same tree.
 
 ## Previous candidate: 10.3.9

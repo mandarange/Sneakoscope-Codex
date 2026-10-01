@@ -8,6 +8,7 @@ import { PPT_PIPELINE_SKILL_ALLOWLIST } from './routes/ppt-policy.js';
 import { normalizeDollarSkillName, prefixKnownSksDollarReferences, sksPrefixedDollarCommand, sksPrefixedSkillName, unprefixedSksSkillName } from './routes/dollar-prefix.js';
 import { classifyTaskProfile, IMPLEMENTATION_VERB_RE, isTaskProfile, looksLikeDatabaseWorkRequest, type TaskProfile } from './runtime/task-profile.js';
 import { legacyCoreSkillNames } from './codex-native/core-skill-manifest.js';
+import { EXCLUSIVE_SURFACE_SPAWN_LINE } from './subagents/exclusive-surface-rule.js';
 
 export * from './routes/constants.js';
 export * from './routes/design-policy.js';
@@ -1283,6 +1284,7 @@ export function subagentExecutionPolicyText(route: any, prompt: any = '') {
     'Codex subagent workflow: required. The parent orchestrates only: it decomposes the task into disjoint slices, spawns a child for each slice, waits, integrates, verifies, and writes the final answer. It does not implement slice work itself; the PreToolUse gate denies parent source edits before the first child starts and while children are running.',
     'The parent keeps its user-selected model, effort, and service tier. Every child runs the newest model of the tier its work needs: fast for mechanical work, balanced for instructed implementation, context for long-context, browser, Computer Use, and image work, and deep for planning, review, debugging, and risk judgment. When Jev mode is on, Jev picks each spawn\'s tier and SKS seals it; do not pick child models yourself. A stored user role-model preference wins in both modes.',
     'Parallel writes require disjoint paths; serialize overlapping paths, prohibit nested delegation, avoid duplicate work, wait for all requested agent threads, and close completed threads after collecting results.',
+    EXCLUSIVE_SURFACE_SPAWN_LINE,
     'Completion evidence comes from official SubagentStart/SubagentStop events plus the parent integration summary, not process counts or PID evidence.'
   ].join(' ');
 }

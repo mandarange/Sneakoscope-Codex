@@ -59,6 +59,26 @@
   Superseded rows are hidden, not removed, so a thread or `model =` line that
   still names one keeps working.
 
+- Naruto could hand the same Computer Use or browser task to several children at
+  once. Both are one shared GUI (one screen with one pointer and keyboard focus,
+  one browser session), so the extra children only repeated each other's clicks.
+  Each surface is now single-owner. The SKS PreToolUse spawn gate denies a second
+  concurrent `computer_use_operator` or `browser_use_operator` spawn on every
+  parent and releases the surface at the owner's `SubagentStop`. SubagentStop
+  ends a child turn, so a resumed operator takes its surface again with its next
+  tool call. A claim also expires (30 seconds for a spawn Codex rejected after
+  the hook allowed it, 20 minutes without a tool call from the owner) so a missed
+  event cannot lock a surface, and a hook delivered twice is not denied by its
+  own claim. A goal whose suggested roles are only surface operators no longer
+  joins the 16-child mass lane, and the delegation prompt, route policy, spawn
+  contract, child guard, `AGENTS.md` block, and docs state the rule (the old
+  "diversity may come from different tool surfaces" line no longer invites a
+  second child on a surface). OpenRouter Only mode routes a managed role to a
+  list role before the gate runs, so the gate cannot see the surface there and
+  only the prompt rule applies. Verified with real Codex 0.159.2: a second
+  parallel operator spawn is denied and the model sees the denial, the surface
+  is owned from SubagentStart to SubagentStop, and the next spawn is allowed.
+
 ### Changed
 
 - Leftover names that no longer matched the policy are gone: the `*Gpt56*`

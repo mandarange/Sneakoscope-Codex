@@ -160,11 +160,31 @@ every requested thread and records one structured outcome per thread.
 The decomposed plan is validated before spawning. Duplicate slice fingerprints,
 unassigned parallel write scopes, and parent/child or identical path overlap are
 blocked or serialized. Useful diversity may come from specialist roles,
-disjoint file/module shards, or different tool surfaces; homogeneous clones do
-not count as extra capacity. Reviewer-only fan-out remains capped at two for
+disjoint file/module shards, or non-exclusive tool surfaces; homogeneous clones
+do not count as extra capacity. Reviewer-only fan-out remains capped at two for
 ordinary work and three for critical multi-domain review. Security, database,
 release, authorization, and irreversible-effect gates are protected strata and
 cannot be offset by aggregate speed or accuracy.
+
+Computer Use and browser (the in-app Browser or Chrome) are exclusive GUI
+surfaces: each is one screen or browser session with one pointer and keyboard
+focus, so two children on it only repeat the same task. At most one child owns
+a surface at a time. All of a surface's work goes in one slice handled by one
+`computer_use_operator` or `browser_use_operator` child, or its slices run one
+after another once the previous child has stopped; other children work without
+the surface and use the owner's returned evidence. The context tier is only the
+model choice for that work, not permission to fan it out, so a goal whose
+suggested roles are only surface operators never joins the 16-child mass lane.
+The SKS PreToolUse hook enforces this on every parent: it denies a second
+concurrent `spawn_agent` for a surface until the owning child's `SubagentStop`.
+`SubagentStop` ends a child turn, so a resumed operator takes its surface again
+with its next tool call when nobody else holds it. A claim also expires, so a
+missed event cannot lock a surface: 30 seconds for a spawn that never started
+(Codex can reject a spawn after the hook allowed it), 20 minutes without a tool
+call from the owner. The gate recognises the operator roles by the `agent_type`
+the spawn carries; OpenRouter Only mode routes a managed role to a list role
+first, so there the prompt rule alone applies. Image generation is not
+exclusive.
 
 TriWiki recall stays bounded: the parent selects a small set of
 `attention.use_first` anchors and children hydrate only relevant sources. The
