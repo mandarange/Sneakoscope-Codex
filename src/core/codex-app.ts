@@ -16,8 +16,12 @@ export const CODEX_APP_DOCS_URL = 'https://developers.openai.com/codex/app/featu
 export const CODEX_CHANGELOG_URL = 'https://developers.openai.com/codex/changelog';
 export const CODEX_ACCESS_TOKENS_DOCS_URL = 'https://developers.openai.com/codex/enterprise/access-tokens';
 export const CODEX_CHROME_EXTENSION_SETUP_DOCS_URL = CODEX_CHROME_EXTENSION_DOC_URL;
+// Every flag here is `stable true` in `codex features list` on the supported floor and
+// on current Codex, so a false row means the user (or a stale config) switched it off.
+// `codex_git_commit` and `remote_control` are `removed false` there: no config can turn them
+// on, so they never gate readiness (git actions depend on hooks plus the remote-control
+// command, which ships in the CLI).
 const REQUIRED_CODEX_APP_FEATURE_FLAGS = [
-  'codex_git_commit',
   'hooks',
   'fast_mode',
   'computer_use',
@@ -477,7 +481,7 @@ export function codexAppGuidance({ appInstalled, codex, mcpList, featureList, re
   if (featureList?.checked && featureList.ok && !requiredFeatureFlagsOk) {
     const missing = missingRequiredFeatureFlags(requiredFeatureFlags);
     lines.push(`Codex App feature flag(s) disabled or missing: ${missing.join(', ')}. Commit message generation, mobile/remote-control, and app-only tool paths can fail even when CLI chat works.`);
-    lines.push('Verify with: codex features list | rg "codex_git_commit|hooks|fast_mode|computer_use|browser_use|browser_use_external|image_generation|in_app_browser|guardian_approval|tool_suggest|apps|plugins"');
+    lines.push('Verify with: codex features list | rg "hooks|fast_mode|computer_use|browser_use|browser_use_external|image_generation|in_app_browser|guardian_approval|tool_suggest|apps|plugins"');
   }
   if (defaultPlugins?.missing_enabled?.length) {
     lines.push(`Codex default plugin(s) installed but not enabled: ${defaultPlugins.missing_enabled.join(', ')}. Composer/tool UI can hide built-in surfaces even while feature flags look green.`);
@@ -516,7 +520,7 @@ export function codexAppGuidance({ appInstalled, codex, mcpList, featureList, re
     lines.push('Run: sks bridge provider configure; sks bridge provider validate; sks bridge provider enable; sks bridge catalog sync; sks bridge route set-default.');
   }
   if (!gitActions?.ok) {
-    lines.push(`Codex App git commit/push actions are blocked: ${gitActions?.blockers?.join(', ') || 'git action readiness'}. The app Commit, Push, Commit and Push, and PR flows need codex_git_commit, hooks, and Codex CLI remote-control support.`);
+    lines.push(`Codex App git commit/push actions are blocked: ${gitActions?.blockers?.join(', ') || 'git action readiness'}. The app Commit, Push, Commit and Push, and PR flows need the hooks feature and Codex CLI remote-control support.`);
     lines.push('Run: sks doctor --fix; if remote-control is still blocked, update Codex CLI to the official latest stable release and restart older app-server/TUI sessions.');
   } else {
     lines.push('Codex App git actions are enabled for Commit, Push, Commit and Push, and PR flows; SKS hooks treat those app metadata actions as lightweight git UI actions.');
@@ -632,7 +636,6 @@ function missingRequiredFeatureFlags(flags: any = {}) {
 
 export function codexGitActionReadiness({ requiredFeatureFlags = {}, remoteControl = {} }: any = {}) {
   const blockers: any[] = [];
-  if (requiredFeatureFlags.codex_git_commit !== true) blockers.push('codex_git_commit');
   if (requiredFeatureFlags.hooks !== true) blockers.push('hooks');
   if (!remoteControl?.ok) blockers.push(remoteControl?.reason || 'codex_cli_remote_control');
   const ok = blockers.length === 0;
@@ -643,7 +646,7 @@ export function codexGitActionReadiness({ requiredFeatureFlags = {}, remoteContr
     push: ok,
     commit_push: ok,
     pull_request: ok,
-    required_flags: ['codex_git_commit', 'hooks'],
+    required_flags: ['hooks'],
     required_capabilities: ['codex_cli_remote_control']
   };
 }
