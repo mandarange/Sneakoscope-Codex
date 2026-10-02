@@ -4808,15 +4808,6 @@
       "reason": "src/scripts/packlist-performance-check.ts#runNpmPack writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
     {
-      "file": "src/scripts/patch-handoff-gate-lib.ts",
-      "symbol": "writeReport",
-      "token": "writeFileSync",
-      "scope_contract_sha256": "09fb079b376586ac47c8ca1e2286cb9e3aea6d1189a5af3fe769d76f386c6446",
-      "callsite_sha256": "c098654c3f14afcc9d6315c2a5743a856543f071ea27802dc6330c817bf6b07d",
-      "occurrence": 1,
-      "reason": "src/scripts/patch-handoff-gate-lib.ts#writeReport writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
       "file": "src/scripts/pipeline-codex-native-image-routing-real-blackbox.ts",
       "symbol": "imageScenario.callback@30",
       "token": "fs.writeFile",
