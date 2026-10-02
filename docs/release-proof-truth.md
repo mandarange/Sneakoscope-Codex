@@ -1,6 +1,30 @@
 # Release Proof Truth
 
-## 10.3.10 candidate
+## 10.4.0 candidate
+
+The legacy cleanup is proved by what still passes after the removals, not by
+new behavior. Each removal came from an audit that measured Codex 0.159.2,
+0.153.4, 0.150.1, and 0.145.0 and read the official releases, then survived a
+skeptic that looked for a live caller, a version floor that still includes the
+legacy case, persisted data from older SKS, a real Codex behavior that does not
+cover it, and tests or gates that pin it. The second pass deleted code only
+after a grep over src, test, scripts, config, docs, workflows, `package.json`,
+and the release registries found no reference, and each commit body records
+that proof. After the merge the build, the release registries (DAG coverage,
+gate-script parity, metadata, script-pack closure), the architecture and docs
+gates, and the mutation-callsite allowlist (848 rows reduced to 714, none
+uncovered) pass, `sks doctor --json` still emits `sks.doctor-status.v3` with
+`ok: true`, and `sks commands` lists a consistent verb set. With a stub Codex
+printing 0.140.0, `sks codex compatibility` reports it blocked below the minimum
+and exits 1. The canonical suite passes 3869 of 3871 in a linked worktree; the
+two failures are environment (a symlinked `node_modules` changes a realpath, and
+the gitignored `AGENTS.md` and `.codex/SNEAKOSCOPE.md` are missing there) and
+fail the same way on the previous commit. No real Codex turn was driven for the
+cleanup itself, `sks codex update` was not run because it changes the global
+install, and the floor value was not raised, so nothing here proves behavior on
+a Codex newer than 0.159.2.
+
+## Historical 10.3.10 candidate
 
 Model-generation proof runs against Codex itself. A mock Responses endpoint
 drives the real Codex CLI 0.159.2 with the multi-agent v2 tools: the hook
@@ -404,7 +428,19 @@ Exact-commit proof can exist only after the candidate is committed and all
 source-bound gates are regenerated from that clean commit.
 
 All release artifacts bound to 9.2.7 or an earlier commit are historical. They
-must not be renamed, copied, or treated as 10.3.10 evidence.
+must not be renamed, copied, or treated as 10.4.0 evidence.
+
+New 10.4.0 claims:
+
+| Claim | Current support | Boundary |
+| --- | --- | --- |
+| The Codex floor is one literal decoupled from the SDK pin | passed-hermetic | contract test pins that the floor never exceeds the pin; stub Codex 0.140.0 makes `sks codex compatibility` print blocked and exit 1; the Naruto spawn precheck blocks below the floor or on an unknown version |
+| The removed shims served no reachable legacy case | passed-hermetic | per-candidate skeptic checks plus unit suites and gates after the merge; users on a Codex older than 0.153.4 were already blocked by the floor |
+| `sks codex update` runs only the native `codex update` | passed-hermetic | `sks codex update-status --json` under an isolated HOME reports 0.159.2 with 0.160.0 available; the update itself was not run |
+| Doctor output stays valid without the removed fields | passed-hermetic | fast-inline `sks doctor --json` is `ok: true`; the full path emits a valid `runtime_readiness` without `agent_role_strategy`, `loop_mesh`, rollout, time, and overload fields and without `codex_permission_profiles` |
+| The deleted scripts, modules, and registries had no production reference | passed-hermetic | grep proof in each commit body; release registries consistent; mutation allowlist 714 rows, 0 uncovered |
+| Retired-flag refusals and old-mission readers survive | passed-hermetic | the retired `--glm` hint tests and the GLM stop-gate readers were kept on purpose |
+| The cleanup changes nothing on a Codex newer than 0.159.2 | not proved | no real Codex turn was driven for the cleanup |
 
 New 10.3.10 claims:
 
@@ -491,8 +527,9 @@ New 10.3.10 claims:
 | `sks update` quarantines other-harness conflicts | passed-hermetic | `other-harness-cleanup` now calls `cleanupOtherHarnessConflicts` instead of failing closed; from-home update e2e still runs every migration stage |
 | Host extra skill dirs lose only SKS-owned retired residue | passed-hermetic | `~/.cursor/skills` and `~/.claude/skills` remove managed retired names only; user-authored collisions stay in place |
 | A stale or cwd-sticky official workflow cannot capture a later prompt | passed-hermetic | unnamed hooks use `loadOwnedRouteState`; idle > 2h is inactive even with leftover open threads; same-session follow-ups still bind while the run is fresh |
-| All checked version authorities report 10.3.10 | passed-hermetic | `release:version-truth` 15 surfaces at 10.3.10 after incremental build |
-| The reported 10.3.10 package is ready to publish | not proved | requires a clean exact-commit build, `npm run release:check:full` stamp, pack receipt, provenance, and the release commit fast-forward pushed to origin main (the prepublish reproducibility preflight refuses `head_not_origin_main`) |
+| The 10.3.10 package is published | verified-on-machine | 2026-10-02, registry `gitHead` 0c70457e and file count 1755, sha512 integrity equals the pack receipt |
+| All checked version authorities report 10.4.0 | passed-hermetic | `release:version-truth` 15 surfaces at 10.4.0 after incremental build |
+| The reported 10.4.0 package is ready to publish | not proved | requires a clean exact-commit build, `npm run release:check:full` stamp, pack receipt, provenance, and the release commit fast-forward pushed to origin main (the prepublish reproducibility preflight refuses `head_not_origin_main`) |
 
 ## 9.1.0 assertion (historical)
 

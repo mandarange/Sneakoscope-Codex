@@ -1,6 +1,42 @@
 # SKS Release Readiness
 
-## 10.3.10 candidate
+## 10.4.0 candidate
+
+SKS drops the code that compensated for legacy Codex CLI versions and legacy
+models and keeps only what Codex 0.159 still does not do itself. An audit
+measured the installed Codex 0.159.2 against 0.153.4, 0.150.1, and 0.145.0 and
+read the official releases since 0.140: Codex now picks multi-agent v2 per
+model from its catalog, discovers role files and `[agents]` spawn defaults,
+runs native `/goal`, loads skills and AGENTS.md, and reports its own
+capabilities through `hooks/list` and the generated app-server schema, so SKS no
+longer probes or re-implements them. Removed: the release real-probe suite that
+tested the bundled 0.153.4 instead of the operator's Codex (including the web
+search probe that failed a release run on a network flake), the ten
+`codex-current` feature flags nothing read, the capability matrix that grepped
+`codex --help`, the `agent_type` probe and message-role fallback that could
+never succeed on a real host, the standalone-installer, Homebrew, and npm update
+planner (`sks codex update` runs the native `codex update`), the 0.130 and 0.132
+version ladders, the official-docs and external-reference analyzers, and the
+fake-mode environment switches that only served those probes. The four-alias
+version floor is one literal, `CODEX_MIN_VERSION` (0.153.4 for now), decoupled
+from the SDK pin so a later bump is one line. A second pass removed code nothing
+in production reaches: 59 orphan check and blackbox scripts, modules kept alive
+only by their own tests, an empty gate registry, the pipeline re-export shims,
+the codex-lb health circuit, the OpenRouter chat-stream client, and unreachable
+GLM remnants. About 12,600 net lines in 291 files are gone. Kept on purpose,
+because Codex does not do them: the parent-orchestration gate, the tier policy,
+the Computer Use and browser single-owner gate, hook trust writing, the v2
+nesting-depth policy, and every deliberate refusal for retired flags such as
+`--glm`. Verification must cover the build, the release registries and gates
+after the removals, the mutation-callsite allowlist, `sks doctor --json` and
+`sks commands`, the floor enforced against a stub Codex below it, and the
+canonical suite on the same tree.
+
+## Previous candidate: 10.3.10
+
+Published 2026-10-02 as `sneakoscope@10.3.10` from commit 0c70457e; the
+registry `gitHead`, file count (1755), and sha512 integrity match the
+release-check pack.
 
 SKS runs children only on the newest model generation Codex lists. Codex 0.159
 sends the multi-agent v2 spawn to hooks as `collaborationspawn_agent`; the
@@ -797,7 +833,7 @@ node ./dist/scripts/release-pack-receipt.js verify
 node ./dist/scripts/release-provenance-check.js --publish
 npm whoami --registry https://registry.npmjs.org/
 npm view sneakoscope maintainers --json --registry https://registry.npmjs.org/
-npm view sneakoscope@10.3.10 version --json --registry https://registry.npmjs.org/
+npm view sneakoscope@10.4.0 version --json --registry https://registry.npmjs.org/
 npm publish --dry-run --json \
   --registry https://registry.npmjs.org/ \
   --tag latest \

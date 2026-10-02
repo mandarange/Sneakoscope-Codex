@@ -3,6 +3,62 @@
 ## [Unreleased]
 
 
+## [10.4.0] - 2026-10-02
+
+### Removed
+
+- Code that compensated for legacy Codex CLI versions and legacy models. Codex
+  0.159 now picks multi-agent v2 per model from its catalog, discovers role files
+  and `[agents]` spawn defaults, runs native `/goal`, loads skills and AGENTS.md,
+  and reports its own capabilities through `hooks/list` and the generated
+  app-server schema, so SKS no longer probes or re-implements them.
+  - The release real-probe suite (`codex:current-core-real-probes`: web search,
+    rich tool schema, doctor redaction, marketplace source, plugin catalog,
+    sandbox alias, collab tool schema, image path, sandbox proxy). It tested the
+    SDK-bundled Codex 0.153.4, not the operator's Codex, and its web search probe
+    failed a 10.3.10 release run on a network flake. `codex:current:capability:real`
+    and `codex:current:app-server-v2:real` stay.
+  - The ten `codex-current` feature flags that nothing read, the capability
+    matrix that grepped `codex --help`, the `agent_type` capability probe and the
+    message-role fallback it fed (the probe could never succeed on a real host),
+    the `codex --output-schema` availability ladder, the 0.130 remote-control
+    version gate, the dead `codex plugin detail` and `--available` fallback, and
+    the dead hook output normalizer.
+  - The standalone-installer, Homebrew, and npm update planner: `sks codex update`
+    runs the native `codex update` and fails closed with
+    `codex_cli_update_method_unverified` when Codex does not advertise it.
+  - The official-docs-compat report and the external-reference analyzer behind
+    `sks codex-native reference-evidence` and `pattern-analysis` (the second verb
+    now prints usage).
+  - The fake-mode environment switches that only served those probes:
+    `SKS_CODEX_CURRENT_CORE_FAKE`, `SKS_CODEX_CURRENT_FEATURE_FAKE`,
+    `SKS_CODEX_CURRENT_FAKE`, `SKS_CODEX_CURRENT_APP_FAKE`, and their `*_FAIL`
+    knobs. Fixtures use `SKS_CODEX_PLUGIN_JSON_FAKE` and `SKS_CODEX_VERSION_FAKE`.
+  - Doctor JSON fields `runtime_readiness.agent_role_strategy`, `loop_mesh`,
+    `rollout_budget_strategy`, `current_time_source`, `overload_retry_policy`,
+    and the `codex_permission_profiles` inventory.
+- Code that nothing in production reaches: 59 orphan check and blackbox
+  scripts, the managed-config-merge module and its release gate, the evidence-key
+  v2 library, modules kept alive only by their own tests (architecture-hardening
+  state and contracts, mcp-manager, the codex-lb CLI image probe, subagent
+  terminology), the empty infra-harness gate registry, the unreferenced
+  doctor-status v2 schema, the 21 pipeline re-export shims and their budget
+  check, the never-written codex-lb health circuit, the OpenRouter chat-stream
+  client, and unreachable GLM remnants. Every deliberate refusal for retired
+  flags such as `--glm` and the readers for old missions stay.
+
+### Changed
+
+- The Codex version floor is one literal, `CODEX_MIN_VERSION` (0.153.4 for now),
+  decoupled from the `@openai/codex-sdk` pin, so a later bump is one line.
+  `sks codex version|compatibility|doctor|current` still enforce it and
+  `sks doctor` prints it next to the target.
+- The Naruto spawn precheck reports `codex_below_supported_floor:<version>` or
+  `codex_version_unknown` instead of `naruto_requires_multi_agent_v2`,
+  `multi_agent_v2_missing_on_codex_<version>`, and `multi_agent_v2_probe_empty`.
+- `sks doctor` removes the retired `.sneakoscope/codex-current-*` artifacts older
+  versions wrote into projects.
+
 ## [10.3.10] - 2026-10-01
 
 ### Fixed
