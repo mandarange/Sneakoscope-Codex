@@ -4718,24 +4718,6 @@
       "reason": "The provider context release gate writes only fixed auth and configuration fixtures inside its mkdtemp-owned Codex home."
     },
     {
-      "file": "src/scripts/python-tools-smoke-check.ts",
-      "symbol": "module",
-      "token": "fs.rm",
-      "scope_contract_sha256": "decefdf5e1e08a26f307dcea27ff601353af034cb94a7f8003bd7b0e08b7e4e6",
-      "callsite_sha256": "08b8ad2b4203cbbcbe086be4bce0128978fa4b14c70c0b41d6cf3b630852f850",
-      "occurrence": 1,
-      "reason": "src/scripts/python-tools-smoke-check.ts#module removes only its isolated fixture, generated build output, or scoped temporary artifact during cleanup."
-    },
-    {
-      "file": "src/scripts/python-tools-smoke-check.ts",
-      "symbol": "module",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "decefdf5e1e08a26f307dcea27ff601353af034cb94a7f8003bd7b0e08b7e4e6",
-      "callsite_sha256": "ec2973dfc37bfcd74fda6ee87be3efa9a3640b40ba7f65f7c01372479e1eeecd",
-      "occurrence": 1,
-      "reason": "src/scripts/python-tools-smoke-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
       "file": "src/scripts/qa-loop-app-handoff-confirmation-check.ts",
       "symbol": "module",
       "token": "fs.writeFile",
