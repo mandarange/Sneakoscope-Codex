@@ -819,7 +819,6 @@ async function codexFastModeConfigStatus(opts: any = {}) {
         blockers.push(`${config.scope}:top_level_model_reasoning_effort`);
       }
     }
-    if (/(^|\n)\s*fast_default_opt_out\s*=\s*true\s*(?:#.*)?(?=\n|$)/.test(tomlTable(config.text, 'notice'))) blockers.push(`${config.scope}:fast_default_opt_out`);
   }
   // 2026-07 renewal: [user.fast_mode] left the config schema. Its PRESENCE is now
   // the defect (a stale legacy stamp), not its absence — the old visible/enabled

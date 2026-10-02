@@ -6,26 +6,30 @@ import { nowIso, writeJsonAtomic } from '../fsx.js';
 import { validateCodexConfigRoundTrip } from '../codex/codex-config-toml.js';
 import { isUnmanagedProjectCodexConfig, writeCodexConfigGuarded } from '../codex/codex-config-guard.js';
 import { messageOf } from '../errors/message.js';
-import { ALLOWED_REASONING_EFFORTS } from '../routes/constants.js';
 import { escapeRegExp } from '../text/regex.js';
 
 export const CODEX_CONFIG_SYNTAX_REPAIR_SCHEMA = 'sks.codex-config-syntax-repair.v1';
 
-// Latest Codex config contract (2026-07 desktop merge): these keys/tables were
-// removed from the schema and are silently ignored by Codex. Doctor --fix strips
-// them so the file users run with matches current Codex syntax.
+// Syntax the current Codex no longer reads, measured against Codex 0.153.4 and
+// 0.159.2 (`codex exec`, `codex exec --strict-config`, `codex features list`):
+//   - `default_profile`, `[user.fast_mode]` and `features.fast_mode_ui` are not in
+//     the config schema; 0.159.2 warns "is ignored" and --strict-config rejects them.
+//   - `[profiles.sks-fast-high]` is the profile an older SKS wrote next to the
+//     default_profile stamp; it is the SKS provenance for the retired lock stack.
+//   - `features.codex_hooks` is a deprecated alias of `features.hooks` and Codex
+//     warns on every launch. `= true` is already the `hooks` default, so only that
+//     value is stripped; `codex_hooks = false` is the user's own opt-out and stays.
+// Everything else the older prune list covered (`features.multi_agent`,
+// `notice.fast_default_opt_out`, `features.remote_control`, `features.codex_git_commit`)
+// is either a live Codex key or one Codex accepts without a warning, so it is the
+// user's to keep: `multi_agent = false` disables multi-agent and `fast_default_opt_out`
+// is the native Fast opt-out.
 const RETIRED_TOP_LEVEL_VALUES = [{ key: 'default_profile', value: 'sks-fast-high' }];
 const RETIRED_TABLES = ['user.fast_mode', 'profiles.sks-fast-high'];
-const RETIRED_TABLE_KEYS: Array<{ table: string; key: string }> = [
-  { table: 'notice', key: 'fast_default_opt_out' },
-  { table: 'features', key: 'codex_hooks' },
-  { table: 'features', key: 'remote_control' },
+const RETIRED_TABLE_KEYS: Array<{ table: string; key: string; value?: string }> = [
   { table: 'features', key: 'fast_mode_ui' },
-  { table: 'features', key: 'codex_git_commit' },
-  { table: 'features', key: 'multi_agent' }
+  { table: 'features', key: 'codex_hooks', value: 'true' }
 ];
-// Current Codex service tiers. `priority` remains accepted for compatibility.
-const ALLOWED_SERVICE_TIERS = new Set(['fast', 'priority', 'standard']);
 
 type Scope = 'project' | 'global';
 
@@ -191,7 +195,7 @@ async function inspectOrRepairScope(
     next = removeTopLevelTomlKeyIfValue(next, entry.key, entry.value);
   }
   for (const table of RETIRED_TABLES) next = removeTomlTable(next, table);
-  for (const entry of RETIRED_TABLE_KEYS) next = removeTomlTableKey(next, entry.table, entry.key);
+  for (const entry of RETIRED_TABLE_KEYS) next = removeTomlTableKey(next, entry.table, entry.key, entry.value);
   for (const item of repairableValues) next = removeTopLevelTomlKey(next, item.key);
   next = next.replace(/\n{3,}/g, '\n\n').replace(/\s*$/, next.trim() ? '\n' : '');
   if (next === text) return base;
@@ -291,7 +295,7 @@ function findRetiredSyntax(text: string): string[] {
     if (hasTomlTable(text, table)) found.push(`[${table}]`);
   }
   for (const entry of RETIRED_TABLE_KEYS) {
-    if (hasTomlTableKey(text, entry.table, entry.key)) found.push(`${entry.table}.${entry.key}`);
+    if (hasTomlTableKey(text, entry.table, entry.key, entry.value)) found.push(`${entry.table}.${entry.key}`);
   }
   return found;
 }
@@ -301,28 +305,22 @@ function hasRetiredSksGlobalProvenance(text: string): boolean {
     || RETIRED_TABLES.some((table) => hasTomlTable(text, table));
 }
 
+// Codex hard-fails config load on exactly these (measured on 0.153.4 and 0.159.2):
+// a non-string service_tier, a non-string model_reasoning_effort, and an empty
+// model_reasoning_effort ("reasoning_effort must not be empty"). Any other string is
+// an open value Codex accepts (service_tier: default/priority/flex/legacy fast;
+// effort: whatever the model advertises), so unknown spellings are not repaired.
 function findInvalidValues(parsed: Record<string, any> | null | undefined): InvalidValueFinding[] {
   const findings: InvalidValueFinding[] = [];
-  if (parsed && Object.prototype.hasOwnProperty.call(parsed, 'service_tier')) {
-    const serviceTier = parsed.service_tier;
-    if (typeof serviceTier !== 'string') {
-      findings.push({ id: 'service_tier_non_string', key: 'service_tier', repairable: true });
-    } else {
-      const value = serviceTier.toLowerCase();
-      if (!ALLOWED_SERVICE_TIERS.has(value)) {
-        findings.push({ id: `service_tier_unknown:${value}`, key: 'service_tier', repairable: true });
-      }
-    }
+  if (parsed && Object.prototype.hasOwnProperty.call(parsed, 'service_tier') && typeof parsed.service_tier !== 'string') {
+    findings.push({ id: 'service_tier_non_string', key: 'service_tier', repairable: true });
   }
   if (parsed && Object.prototype.hasOwnProperty.call(parsed, 'model_reasoning_effort')) {
     const effort = parsed.model_reasoning_effort;
     if (typeof effort !== 'string') {
       findings.push({ id: 'model_reasoning_effort_non_string', key: 'model_reasoning_effort', repairable: true });
-    } else {
-      const value = effort.toLowerCase();
-      if (!ALLOWED_REASONING_EFFORTS.has(value)) {
-        findings.push({ id: `model_reasoning_effort_unknown:${value}`, key: 'model_reasoning_effort', repairable: true });
-      }
+    } else if (!effort.trim()) {
+      findings.push({ id: 'model_reasoning_effort_empty', key: 'model_reasoning_effort', repairable: true });
     }
   }
   return findings;
@@ -380,11 +378,16 @@ function removeTomlTable(text: string, table: string): string {
   return out.join('\n').replace(/^\n+/, '');
 }
 
-function hasTomlTableKey(text: string, table: string, key: string): boolean {
+function tomlKeyPattern(key: string, value?: string): RegExp {
+  const valuePattern = value === undefined ? '' : `\\s*${escapeRegExp(value)}\\s*(?:#.*)?$`;
+  return new RegExp(`^\\s*${escapeRegExp(key)}\\s*=${valuePattern}`);
+}
+
+function hasTomlTableKey(text: string, table: string, key: string, value?: string): boolean {
   const lines = String(text || '').split('\n');
   const header = new RegExp(`^\\s*\\[${escapeRegExp(table)}\\]\\s*(?:#.*)?$`);
   const anyHeader = /^\s*\[.+\]\s*(?:#.*)?$/;
-  const pattern = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`);
+  const pattern = tomlKeyPattern(key, value);
   let inside = false;
   for (const line of lines) {
     if (anyHeader.test(line)) inside = header.test(line);
@@ -393,11 +396,11 @@ function hasTomlTableKey(text: string, table: string, key: string): boolean {
   return false;
 }
 
-function removeTomlTableKey(text: string, table: string, key: string): string {
+function removeTomlTableKey(text: string, table: string, key: string, value?: string): string {
   const lines = String(text || '').split('\n');
   const header = new RegExp(`^\\s*\\[${escapeRegExp(table)}\\]\\s*(?:#.*)?$`);
   const anyHeader = /^\s*\[.+\]\s*(?:#.*)?$/;
-  const pattern = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`);
+  const pattern = tomlKeyPattern(key, value);
   let inside = false;
   const out: string[] = [];
   for (const line of lines) {

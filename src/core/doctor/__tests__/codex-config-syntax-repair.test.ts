@@ -21,15 +21,15 @@ async function writeManagedProjectConfig(root: string, text: string): Promise<st
   return file;
 }
 
-test('detects and strips retired codex syntax and invalid enum values from managed configs', async (t) => {
+test('detects and strips only syntax Codex no longer reads, and values Codex hard-rejects, from managed configs', async (t) => {
   const root = await fixtureRoot(t);
   const codexHome = path.join(root, 'home-codex');
   await fs.mkdir(codexHome, { recursive: true });
   await writeManagedProjectConfig(root, [
     'default_profile = "sks-fast-high"',
     'model = "gpt-5.6-sol"',
-    'service_tier = "turbo"',
-    'model_reasoning_effort = "insane"',
+    'service_tier = 3',
+    'model_reasoning_effort = ""',
     '',
     '[user.fast_mode]',
     'enabled = true',
@@ -43,7 +43,9 @@ test('detects and strips retired codex syntax and invalid enum values from manag
     '[features]',
     'hooks = true',
     'codex_hooks = true',
-    'multi_agent = true',
+    'fast_mode_ui = true',
+    'multi_agent = false',
+    'remote_control = true',
     ''
   ].join('\n'));
   const globalConfig = path.join(codexHome, 'config.toml');
@@ -57,20 +59,25 @@ test('detects and strips retired codex syntax and invalid enum values from manag
   assert.ok(project.retired_syntax_removed.includes('default_profile=sks-fast-high'));
   assert.ok(project.retired_syntax_removed.includes('[user.fast_mode]'));
   assert.ok(project.retired_syntax_removed.includes('[profiles.sks-fast-high]'));
-  assert.ok(project.retired_syntax_removed.includes('notice.fast_default_opt_out'));
   assert.ok(project.retired_syntax_removed.includes('features.codex_hooks'));
-  assert.ok(project.retired_syntax_removed.includes('features.multi_agent'));
-  assert.ok(project.invalid_values_repaired.some((id) => id.startsWith('service_tier_unknown')));
-  assert.ok(project.invalid_values_repaired.some((id) => id.startsWith('model_reasoning_effort_unknown')));
+  assert.ok(project.retired_syntax_removed.includes('features.fast_mode_ui'));
+  assert.ok(!project.retired_syntax_removed.includes('notice.fast_default_opt_out'));
+  assert.ok(!project.retired_syntax_removed.includes('features.multi_agent'));
+  assert.deepEqual(project.invalid_values_repaired.sort(), ['model_reasoning_effort_empty', 'service_tier_non_string']);
 
   const after = await fs.readFile(path.join(root, '.codex', 'config.toml'), 'utf8');
   assert.doesNotMatch(after, /default_profile\s*=/);
   assert.doesNotMatch(after, /\[user\.fast_mode\]/);
   assert.doesNotMatch(after, /\[profiles/);
-  assert.doesNotMatch(after, /fast_default_opt_out/);
   assert.doesNotMatch(after, /codex_hooks\s*=/);
+  assert.doesNotMatch(after, /fast_mode_ui\s*=/);
   assert.doesNotMatch(after, /service_tier\s*=/);
   assert.doesNotMatch(after, /model_reasoning_effort\s*=/);
+  // Keys current Codex still reads or accepts silently are the user's: `multi_agent = false`
+  // disables multi-agent, `fast_default_opt_out` is Codex's own Fast opt-out.
+  assert.match(after, /fast_default_opt_out = true/);
+  assert.match(after, /multi_agent = false/);
+  assert.match(after, /remote_control = true/);
   assert.match(after, /model = "gpt-5\.6-sol"/);
   assert.match(after, /hooks = true/);
   const { validateCodexConfigRoundTrip } = await import('../../codex/codex-config-toml.js');
@@ -82,11 +89,51 @@ test('detects and strips retired codex syntax and invalid enum values from manag
   assert.equal(await fs.readFile(globalConfig, 'utf8'), 'model = "gpt-5.6-sol"\nservice_tier = "fast"\n');
 });
 
+test('repair never strips native Codex keys the user set, in a managed project config or an SKS-provenanced global config', async (t) => {
+  const root = await fixtureRoot(t);
+  const codexHome = path.join(root, 'home-codex');
+  const globalConfig = path.join(codexHome, 'config.toml');
+  await fs.mkdir(codexHome, { recursive: true });
+  const nativeBlock = [
+    'service_tier = "flex"',
+    'model_reasoning_effort = "minimal"',
+    '',
+    '[notice]',
+    'fast_default_opt_out = true',
+    '',
+    '[features]',
+    'multi_agent = false',
+    'codex_hooks = false',
+    'remote_control = true',
+    'plugin_hooks = true',
+    'js_repl = true',
+    ''
+  ].join('\n');
+  // The SKS provenance (a retired profile table) makes the global config repairable at all;
+  // the native block next to it must come through byte for byte.
+  await fs.writeFile(globalConfig, `${nativeBlock}\n[profiles.sks-fast-high]\nmodel = "gpt-5.6-sol"\n`, { mode: 0o600 });
+  const projectFile = await writeManagedProjectConfig(root, `default_profile = "sks-fast-high"\n${nativeBlock}`);
+
+  const report = await runCodexConfigSyntaxRepair({ root, fix: true, codexHome, reportPath: null });
+  assert.equal(report.ok, true);
+  const global = report.configs.find((entry) => entry.scope === 'global');
+  const project = report.configs.find((entry) => entry.scope === 'project');
+  assert.ok(global && project);
+  assert.equal(global.changed, true);
+  assert.deepEqual(global.retired_syntax_removed, ['[profiles.sks-fast-high]']);
+  assert.deepEqual(global.invalid_values_repaired, []);
+  assert.equal(project.changed, true);
+  assert.deepEqual(project.retired_syntax_removed, ['default_profile=sks-fast-high']);
+  assert.deepEqual(project.invalid_values_repaired, []);
+  assert.equal(await fs.readFile(globalConfig, 'utf8'), nativeBlock);
+  assert.equal(await fs.readFile(projectFile, 'utf8'), `${MANAGED_MARKER}\n${nativeBlock}`);
+});
+
 test('inspect mode reports outdated syntax without mutating files', async (t) => {
   const root = await fixtureRoot(t);
   const codexHome = path.join(root, 'home-codex');
   await fs.mkdir(codexHome, { recursive: true });
-  const file = await writeManagedProjectConfig(root, 'default_profile = "sks-fast-high"\nservice_tier = "warp"\n');
+  const file = await writeManagedProjectConfig(root, 'default_profile = "sks-fast-high"\nservice_tier = 7\n');
   const before = await fs.readFile(file, 'utf8');
 
   const report = await runCodexConfigSyntaxRepair({ root, fix: false, codexHome, reportPath: null });
@@ -95,7 +142,7 @@ test('inspect mode reports outdated syntax without mutating files', async (t) =>
   assert.equal(project.changed, false);
   assert.equal(project.retired_syntax_removed.length, 0);
   assert.ok(project.warnings.some((item) => item.includes('codex_syntax_outdated:default_profile=sks-fast-high')));
-  assert.ok(project.warnings.some((item) => item.includes('service_tier_unknown:warp')));
+  assert.ok(project.warnings.some((item) => item.includes('service_tier_non_string')));
   assert.equal(await fs.readFile(file, 'utf8'), before);
 });
 

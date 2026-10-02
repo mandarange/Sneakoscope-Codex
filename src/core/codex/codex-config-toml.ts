@@ -13,10 +13,13 @@ export interface CodexConfigRoundTripValidation {
   service_tier?: string | null
   model?: string | null
   model_reasoning_effort?: string | null
-  // Keys the 2026-07 config schema removed (default_profile, [user.fast_mode],
-  // [profiles.<name>] tables, notice.fast_default_opt_out). Codex ignores them;
-  // SKS strips them on the next normalize pass. Their presence is reported here
-  // for migration/diagnostics but is NOT a validation blocker.
+  // Keys the current Codex config schema does not know (default_profile,
+  // [user.fast_mode], features.fast_mode_ui) plus [profiles.<name>] tables, which
+  // only the retired profile mechanism read. Codex ignores them (0.159 warns,
+  // --strict-config rejects); SKS strips the ones it wrote on the next normalize
+  // pass. Their presence is reported here for migration/diagnostics but is NOT a
+  // validation blocker. notice.fast_default_opt_out is NOT listed: it is Codex's
+  // own Fast opt-out and belongs to the user.
   legacy_keys: string[]
 }
 
@@ -42,7 +45,7 @@ export function validateCodexConfigRoundTrip(text: string = ''): CodexConfigRoun
   if (parsed.default_profile !== undefined) legacyKeys.push('default_profile')
   if (parsed.user?.fast_mode !== undefined) legacyKeys.push('user.fast_mode')
   if (parsed.profiles !== undefined) legacyKeys.push('profiles')
-  if (parsed.notice?.fast_default_opt_out !== undefined) legacyKeys.push('notice.fast_default_opt_out')
+  if (parsed.features?.fast_mode_ui !== undefined) legacyKeys.push('features.fast_mode_ui')
 
   const blockers = modelProviderAuthConflicts(parsed)
 
