@@ -12,30 +12,8 @@ export interface PromotionMutationOptions {
   ledgerRoot?: string
 }
 
-export class SkillDeploymentViolationError extends Error {
-  constructor(fnName: string) {
-    super(`optimizer call '${fnName}' is forbidden in deployment/inference context`)
-    this.name = 'SkillDeploymentViolationError'
-  }
-}
-
-let DEPLOYMENT_CONTEXT = false
-
-export function setDeploymentContext(active: boolean): void {
-  DEPLOYMENT_CONTEXT = active === true
-}
-
 export function isDeploymentContext(): boolean {
-  return DEPLOYMENT_CONTEXT || process.env.SKS_SKILL_DEPLOYMENT_CONTEXT === '1'
-}
-
-/**
- * Guard invoked at the entry of every optimizer/epoch function. In a
- * deployment/inference context the optimizer must never run — only the deployed
- * snapshot is read. Throws to make any accidental call a hard failure.
- */
-export function assertNotInDeployment(fnName: string): void {
-  if (isDeploymentContext()) throw new SkillDeploymentViolationError(fnName)
+  return process.env.SKS_SKILL_DEPLOYMENT_CONTEXT === '1'
 }
 
 /**
@@ -45,10 +23,6 @@ export function assertNotInDeployment(fnName: string): void {
  */
 export async function promoteToDeployedWithLedger(root: string, accepted: CoreSkillCard, opts: PromotionMutationOptions & { contract: RequestedScopeContract }): Promise<{ ok: boolean; blockers: string[]; snapshot: CoreSkillCard | null; archived_path: string | null }> {
   return promoteToDeployedInternal(root, accepted, opts, true)
-}
-
-export async function promoteToDeployedLegacyForCompatibility(root: string, accepted: CoreSkillCard): Promise<{ ok: boolean; blockers: string[]; snapshot: CoreSkillCard | null; archived_path: string | null }> {
-  return promoteToDeployedInternal(root, accepted, {}, false)
 }
 
 async function promoteToDeployedInternal(root: string, accepted: CoreSkillCard, opts: PromotionMutationOptions, ledgerRequired: boolean): Promise<{ ok: boolean; blockers: string[]; snapshot: CoreSkillCard | null; archived_path: string | null }> {

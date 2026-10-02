@@ -34,9 +34,6 @@ release is authorized. Current 8.1.3 classifications live in
 | `codex:product-design-plugin-routing` | `release` | `node ./dist/scripts/product-design-plugin-routing-check.js` | direct |
 | `context7:evidence-dedupe` | `release` | `node ./dist/scripts/context7-evidence-dedupe-check.js` | direct |
 | `core-skill:card-schema-deployment-snapshot` | `release` | `node ./dist/scripts/core-skill-card-schema-check.js && node ./dist/scripts/core-skill-deployment-snapshot-check.js` | direct |
-| `core-skill:heldout-validation` | `release` | `node ./dist/scripts/core-skill-heldout-validation-check.js` | direct |
-| `core-skill:no-inference-optimizer` | `release` | `node ./dist/scripts/core-skill-no-inference-optimizer-check.js` | direct |
-| `core-skill:patch` | `release` | `node ./dist/scripts/core-skill-patch-check.js && node ./dist/scripts/skills-manifest-continuity-check.js && node ./dist/scripts/uninstall-inventory-check.js` | direct |
 | `core-skill:route-runtime-integration` | `release` | `node ./dist/scripts/core-skill-route-runtime-integration-check.js` | `core-skill:route-runtime-integration` |
 | `dfix:fixture` | `release` | `node ./dist/scripts/dfix-fixture-check.js` | direct |
 | `dfix:patch-handoff` | `release` | `node ./dist/scripts/dfix-patch-handoff-check.js` | direct |
@@ -110,6 +107,7 @@ release is authorized. Current 8.1.3 classifications live in
 | `shared-memory:check` | `release` | `node ./dist/bin/sks.js wiki validate-shared --json \|\| node ./dist/scripts/shared-memory-fixture-check.js` | direct |
 | `side-effect:runtime-report` | `release` | `node ./dist/scripts/side-effect-runtime-report-check.js` | direct |
 | `skill:name-canonicalizer` | `release` | `node ./dist/scripts/skill-name-canonicalizer-check.js` | direct |
+| `skills:manifest-continuity` | `release` | `node ./dist/scripts/skills-manifest-continuity-check.js && node ./dist/scripts/uninstall-inventory-check.js` | direct |
 | `sksd:daemon` | `release` | `node ./dist/scripts/sksd-daemon-check.js` | direct |
 | `super-search:provider-interface` | `release` | `node ./dist/scripts/super-search-provider-interface-check.js` | direct |
 | `test:code-index-agent-bridge-regression` | `incremental` | `node --test --test-concurrency=1 dist/core/triwiki/__tests__/*.test.js dist/core/naruto/__tests__/*.test.js dist/core/agent-bridge/__tests__/*.test.js` | direct |

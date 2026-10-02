@@ -815,64 +815,6 @@
       "output_contract": "sks.gate-result.v2"
     },
     {
-      "id": "core-skill:heldout-validation",
-      "command": "node ./dist/scripts/core-skill-heldout-validation-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "confidence"
-      ],
-      "output_contract": "sks.gate-result.v2"
-    },
-    {
-      "id": "core-skill:no-inference-optimizer",
-      "command": "node ./dist/scripts/core-skill-no-inference-optimizer-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "confidence"
-      ],
-      "output_contract": "sks.gate-result.v2"
-    },
-    {
       "id": "release:version-truth",
       "command": "node ./dist/scripts/release-version-truth-check.js",
       "deps": [],
@@ -938,8 +880,8 @@
       "output_contract": "sks.gate-result.v2"
     },
     {
-      "id": "core-skill:patch",
-      "command": "node ./dist/scripts/core-skill-patch-check.js && node ./dist/scripts/skills-manifest-continuity-check.js && node ./dist/scripts/uninstall-inventory-check.js",
+      "id": "skills:manifest-continuity",
+      "command": "node ./dist/scripts/skills-manifest-continuity-check.js && node ./dist/scripts/uninstall-inventory-check.js",
       "deps": [],
       "resource": [
         "cpu-light",
@@ -2367,9 +2309,6 @@
         "codex-sdk:integration-comprehensive",
         "codex:current:capability",
         "core-skill:card-schema-deployment-snapshot",
-        "core-skill:heldout-validation",
-        "core-skill:no-inference-optimizer",
-        "core-skill:patch",
         "doctor:fix-proves-codex-read",
         "doctor:fixes-codex-app-fast-ui",
         "fast:codex-service-tier-proof",
@@ -2387,6 +2326,7 @@
         "responses:retry-policy-centralized",
         "shared-memory:check",
         "side-effect:runtime-report",
+        "skills:manifest-continuity",
         "trust:check",
         "proof:root-cause-policy",
         "ultra-router:auto-router",

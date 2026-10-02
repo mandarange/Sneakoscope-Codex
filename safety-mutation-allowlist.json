@@ -3260,69 +3260,6 @@
       "reason": "src/scripts/core-skill-deployment-snapshot-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
     {
-      "file": "src/scripts/core-skill-heldout-validation-check.ts",
-      "symbol": "module",
-      "token": "rmSync",
-      "scope_contract_sha256": "c1a5fcd3a36c16e65c3a3a29434df1a6eb6333c7b353de93c67adc1a83741d96",
-      "callsite_sha256": "03ab45deec90b9e9f2831626ee553b0ac1e8fce1c0d35ac4efc1515e42f8d98a",
-      "occurrence": 1,
-      "reason": "src/scripts/core-skill-heldout-validation-check.ts#module removes only its isolated fixture, generated build output, or scoped temporary artifact during cleanup."
-    },
-    {
-      "file": "src/scripts/core-skill-heldout-validation-check.ts",
-      "symbol": "module",
-      "token": "writeFileSync",
-      "scope_contract_sha256": "c1a5fcd3a36c16e65c3a3a29434df1a6eb6333c7b353de93c67adc1a83741d96",
-      "callsite_sha256": "9d10d7e39d6f420da9ddfd18dccec8d3f31fb7d825358fb69a5cfe242d742420",
-      "occurrence": 1,
-      "reason": "src/scripts/core-skill-heldout-validation-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/core-skill-no-inference-optimizer-check.ts",
-      "symbol": "module",
-      "token": "rmSync",
-      "scope_contract_sha256": "6cf4f66d4319fde5f17d4958b10dc2526e2bb584b91ced99284b2d3805046c27",
-      "callsite_sha256": "c25f8da92edb3ebef0dc94ea25ac9f1a06a7c540571949d950b2044f53c4404f",
-      "occurrence": 1,
-      "reason": "src/scripts/core-skill-no-inference-optimizer-check.ts#module removes only its isolated fixture, generated build output, or scoped temporary artifact during cleanup."
-    },
-    {
-      "file": "src/scripts/core-skill-no-inference-optimizer-check.ts",
-      "symbol": "module",
-      "token": "writeFileSync",
-      "scope_contract_sha256": "6cf4f66d4319fde5f17d4958b10dc2526e2bb584b91ced99284b2d3805046c27",
-      "callsite_sha256": "c898f76e539536933eb7fd6f8903d2af53453ff8193386dfcca124d0d79729c2",
-      "occurrence": 1,
-      "reason": "src/scripts/core-skill-no-inference-optimizer-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/core-skill-patch-check.ts",
-      "symbol": "module",
-      "token": "writeFileSync",
-      "scope_contract_sha256": "d667c373768d028b783aa72f26cb6bc6f1d4521dccd60af5fffd7b5bf488e60c",
-      "callsite_sha256": "363b039d9b0afab745dce92a575fc19120e8fdf34c75adb338e8cc58aea37ed0",
-      "occurrence": 1,
-      "reason": "src/scripts/core-skill-patch-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/core-skill-rollout-scoring-check.ts",
-      "symbol": "module",
-      "token": "rmSync",
-      "scope_contract_sha256": "0ce585370a6ce5fc76c4725adb081bd01733056ea824f0486933013674ff2b64",
-      "callsite_sha256": "495df5bf4f70ec63efe768ebee16a3a8e35e4cb11253292d04ad51824a5f9930",
-      "occurrence": 1,
-      "reason": "src/scripts/core-skill-rollout-scoring-check.ts#module removes only its isolated fixture, generated build output, or scoped temporary artifact during cleanup."
-    },
-    {
-      "file": "src/scripts/core-skill-rollout-scoring-check.ts",
-      "symbol": "module",
-      "token": "writeFileSync",
-      "scope_contract_sha256": "0ce585370a6ce5fc76c4725adb081bd01733056ea824f0486933013674ff2b64",
-      "callsite_sha256": "42d54d07a27590585b1cb3d7990630cfde779aa5b66e932f6282a401c51c4e04",
-      "occurrence": 1,
-      "reason": "src/scripts/core-skill-rollout-scoring-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
       "file": "src/scripts/core-skill-route-runtime-integration-check.ts",
       "symbol": "module",
       "token": "rmSync",
@@ -3330,33 +3267,6 @@
       "callsite_sha256": "1782cc5bbaa799a590cf2c42ce81fe1ce197670cb2ca348e2109e91c280b6dcb",
       "occurrence": 1,
       "reason": "src/scripts/core-skill-route-runtime-integration-check.ts#module removes only its isolated fixture, generated build output, or scoped temporary artifact during cleanup."
-    },
-    {
-      "file": "src/scripts/core-skill-trainer-check.ts",
-      "symbol": "module",
-      "token": "rmSync",
-      "scope_contract_sha256": "45842d1b4dd54e7950db93bae03766a25611957e956cd82bbe725d484e3ba504",
-      "callsite_sha256": "9a86fc9cd3e7376e706573b65b75a8b60c0cf54515088be3a704ac0161b64080",
-      "occurrence": 1,
-      "reason": "src/scripts/core-skill-trainer-check.ts#flatEvaluator removes only its isolated fixture, generated build output, or scoped temporary artifact during cleanup."
-    },
-    {
-      "file": "src/scripts/core-skill-trainer-check.ts",
-      "symbol": "module",
-      "token": "rmSync",
-      "scope_contract_sha256": "45842d1b4dd54e7950db93bae03766a25611957e956cd82bbe725d484e3ba504",
-      "callsite_sha256": "ac3a24022c33c3fd9fd9155607680e14f9e573468a46711838008d64e13df304",
-      "occurrence": 1,
-      "reason": "src/scripts/core-skill-trainer-check.ts#flatEvaluator removes only its isolated fixture, generated build output, or scoped temporary artifact during cleanup."
-    },
-    {
-      "file": "src/scripts/core-skill-trainer-check.ts",
-      "symbol": "module",
-      "token": "writeFileSync",
-      "scope_contract_sha256": "45842d1b4dd54e7950db93bae03766a25611957e956cd82bbe725d484e3ba504",
-      "callsite_sha256": "efff66f1e45f61762b6a7855d59e67b045030e04899e863d03a643e135e239ae",
-      "occurrence": 1,
-      "reason": "src/scripts/core-skill-trainer-check.ts#flatEvaluator writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
     {
       "file": "src/scripts/current-surface-update-e2e-check.ts",
