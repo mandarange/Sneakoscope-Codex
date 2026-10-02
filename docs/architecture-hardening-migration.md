@@ -38,21 +38,6 @@ Running the migration twice produces a no-op receipt. A failed write or
 generation activation preserves the previous verified generation. Credential
 removal is a separate, explicitly confirmed operation.
 
-## Persistent recovery state
-
-The architecture state service is provider-neutral infrastructure. It records
-draft, last-known-good, stage receipts, and rollback information; it is not a
-provider-mode selector. The four public stages remain:
-
-1. configuration saved;
-2. bridge applied;
-3. combined catalog refreshed;
-4. new session ready.
-
-A partial failure leaves last-known-good bytes intact. Session-pin compatibility
-is decoded into the current bridge pin contract and then validated for thread,
-provider, model, and generation affinity. Invalid or tampered pins fail closed.
-
 ## Verification
 
 Run the focused contracts:

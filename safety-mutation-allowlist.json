@@ -38,24 +38,6 @@
       "reason": "Doctor writes only the explicit --report-file JSON path requested by the caller for machine-readable output."
     },
     {
-      "file": "src/core/architecture-hardening/state/state-service.ts",
-      "symbol": "ArchitectureStateService.commit",
-      "token": "fsp.rm",
-      "scope_contract_sha256": "ff688bcbfb2a215438d2f43a592349ae86de58e52ea0e6aa73d7f04580211adb",
-      "callsite_sha256": "719f03f8995fd449618f5f373d357edec75cfb80fa04f65b9c1dd3ee4b585d78",
-      "occurrence": 1,
-      "reason": "State commit removes only its service-owned draft after atomically publishing and reading back the last-known-good generation."
-    },
-    {
-      "file": "src/core/architecture-hardening/state/state-service.ts",
-      "symbol": "ArchitectureStateService.rollbackDraft",
-      "token": "unlink",
-      "scope_contract_sha256": "cabfe8c399c6278b944ef1dc4d798bd6e5100a26c1a1b9ae5d05dc38d7c2cef0",
-      "callsite_sha256": "2b8535c98492ee440e7211a3771be9fa5aaf12e6f50d705cfdedeaf825b95f02",
-      "occurrence": 1,
-      "reason": "Draft rollback unlinks only the exact draft file owned by the caller-scoped architecture state service."
-    },
-    {
       "file": "src/core/agents/agent-cleanup-executor.ts",
       "symbol": "runAgentCleanupExecutor.run",
       "token": "fsp.rm",
