@@ -61,10 +61,8 @@ export function analyzeRuntimeScriptPackClosure(root: string): RuntimeScriptPack
   };
 
   collectRoots('package.json#scripts', JSON.stringify(pkg.scripts || {}), 'package.json', true);
-  for (const manifest of ['release-gates.v2.json', 'infra-harness-gates.json']) {
-    const absolute = path.join(absoluteRoot, manifest);
-    if (fs.existsSync(absolute)) collectRoots(manifest, fs.readFileSync(absolute, 'utf8'), manifest, true);
-  }
+  const releaseManifestPath = path.join(absoluteRoot, 'release-gates.v2.json');
+  if (fs.existsSync(releaseManifestPath)) collectRoots('release-gates.v2.json', fs.readFileSync(releaseManifestPath, 'utf8'), 'release-gates.v2.json', true);
 
   const requiredManifestPath = path.join(absoluteRoot, 'runtime-required-scripts.json');
   let dynamicReferencePolicies: Array<{ source: string; reason: string }> = [];

@@ -87,7 +87,6 @@ export const SKS_SSOT_AUTHORITY_INVENTORY: readonly SsotAuthorityDomain[] = Obje
     allowedReaders: Object.freeze(['release', 'doctor', 'install']),
     derivedArtifacts: Object.freeze([
       'release-gates.v2.json',
-      'infra-harness-gates.json',
       '.sneakoscope/reports/**',
       'dist/build-manifest.json'
     ]),

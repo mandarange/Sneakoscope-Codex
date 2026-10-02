@@ -27,7 +27,7 @@ function isScopedSurface(file) {
     || file.startsWith('test/')
     || file.startsWith('.codex/')
     || file.startsWith('.github/')
-    || /^(?:infra-harness|release|runtime-required|tsconfig)[^/]*\.(?:json|ya?ml)$/.test(file);
+    || /^(?:release|runtime-required|tsconfig)[^/]*\.(?:json|ya?ml)$/.test(file);
 }
 
 function isGeneratedTriWikiPack(file) {

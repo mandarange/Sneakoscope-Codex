@@ -14,7 +14,7 @@ that sits between repository truth and every consumer.
 Repository Truth
   ├─ source files / symbols / imports / exports
   ├─ command, route, pipeline manifests
-  ├─ release-gates.v2.json / infra-harness-gates.json
+  ├─ release-gates.v2.json
   ├─ tests / schemas / config
   ├─ TriWiki claims / sources / context pack
   ├─ proof cards / invalidation material
@@ -93,7 +93,7 @@ the same relation therefore produce the same id and merge rather than duplicate.
 | Extractor | Source of truth | Notes |
 | --- | --- | --- |
 | `code` | TypeScript compiler API | Parses with `ts.createSourceFile` and resolves specifiers with `ts.resolveModuleName` + the parsed `tsconfig`, so path aliases, package `exports`, index resolution, NodeNext `.js` → `.ts` mapping, and barrel re-export chains are the compiler's answer rather than a regex guess. Never executes project code and never loads TS plugins. |
-| `topology` | command/route/pipeline manifests, `release-gates.v2.json`, `infra-harness-gates.json`, `runtime-required-scripts.json` | Imports the manifest APIs; never regex-scrapes registry source and never runs a workspace command to discover topology. |
+| `topology` | command/route/pipeline manifests, `release-gates.v2.json`, `runtime-required-scripts.json` | Imports the manifest APIs; never regex-scrapes registry source and never runs a workspace command to discover topology. |
 | `evidence` | TriWiki context pack, proof bank | Bounded projections only. An invalidated, expired, or corrupt proof never produces a strong `verified_by` edge and is never marked fresh. |
 
 Unsupported languages, binaries, oversized files, and symlinks escaping the

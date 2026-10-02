@@ -23,7 +23,6 @@ test('runtime script closure follows manifest, package, static, dynamic, helper,
   await write(root, 'release-gates.v2.json', JSON.stringify({
     schema: 'sks.release-gates.v2', gates: [{ command: 'node ./dist/scripts/manifest-root.js' }]
   }));
-  await write(root, 'infra-harness-gates.json', JSON.stringify({ schema: 'sks.infra-harness-gates.v1', gates: [] }));
   await write(root, 'runtime-required-scripts.json', JSON.stringify({
     schema: 'sks.runtime-required-scripts.v1',
     scripts: [{ path: 'dist/scripts/manual.js', reason: 'fixture' }],
@@ -87,7 +86,6 @@ test('checkout-only policy fails closed when a product runtime also references t
     files: ['dist', '!dist/scripts/**']
   }));
   await write(root, 'release-gates.v2.json', JSON.stringify({ schema: 'sks.release-gates.v2', gates: [] }));
-  await write(root, 'infra-harness-gates.json', JSON.stringify({ schema: 'sks.infra-harness-gates.v1', gates: [] }));
   await write(root, 'runtime-required-scripts.json', JSON.stringify({
     schema: 'sks.runtime-required-scripts.v1',
     scripts: [],
@@ -121,7 +119,6 @@ test('checkout-only policy fails closed when an allowlisted package script impor
     ]
   }));
   await write(root, 'release-gates.v2.json', JSON.stringify({ schema: 'sks.release-gates.v2', gates: [] }));
-  await write(root, 'infra-harness-gates.json', JSON.stringify({ schema: 'sks.infra-harness-gates.v1', gates: [] }));
   await write(root, 'runtime-required-scripts.json', JSON.stringify({
     schema: 'sks.runtime-required-scripts.v1',
     scripts: [],

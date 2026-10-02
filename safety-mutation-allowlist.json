@@ -4793,8 +4793,8 @@
       "file": "src/scripts/packlist-performance-check.ts",
       "symbol": "module",
       "token": "writeFileSync",
-      "scope_contract_sha256": "0a5a0a10d07011977d3d8aa6433c9cd6c445e5fd2e8a9ea878bbc21d4f14322d",
-      "callsite_sha256": "f433e7b629c6314d373b2195147058962a2f8d15f2000f2a939ed4b33713f85d",
+      "scope_contract_sha256": "8b199bc6e9f9a3edf4accb5fbfaf585b14536ebcf5430a38344d0194c59b5e0c",
+      "callsite_sha256": "6a28e817c0a4891f89016a0cef4da3307a27cb1b9ac430bb9b31451e4e7cd1cf",
       "occurrence": 1,
       "reason": "src/scripts/packlist-performance-check.ts#runNpmPack writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
@@ -4802,8 +4802,8 @@
       "file": "src/scripts/packlist-performance-check.ts",
       "symbol": "module",
       "token": "writeFileSync",
-      "scope_contract_sha256": "0a5a0a10d07011977d3d8aa6433c9cd6c445e5fd2e8a9ea878bbc21d4f14322d",
-      "callsite_sha256": "731449a20d0deda461b764ab48689cac0031f1c3f93ae4a9cf9b2a826eb55a6f",
+      "scope_contract_sha256": "8b199bc6e9f9a3edf4accb5fbfaf585b14536ebcf5430a38344d0194c59b5e0c",
+      "callsite_sha256": "680753da0d79de81a14e2c060b6e4a99a46d6219a41a0999f1369d29657085fb",
       "occurrence": 1,
       "reason": "src/scripts/packlist-performance-check.ts#runNpmPack writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
@@ -5153,8 +5153,8 @@
       "file": "src/scripts/release-metadata-check.ts",
       "symbol": "module",
       "token": "writeFileSync",
-      "scope_contract_sha256": "9ab31efc9fa6dcc0cbbcdcf0bdf127b5df20cb51cc39249d2a775873a37de044",
-      "callsite_sha256": "94a079f6393f6dfb9eeed62029a2d269ad8f1f71dbce0d943c73f262895098e0",
+      "scope_contract_sha256": "9270e2c9f3569ea3112655cc57028e8f2d932b60a190bdaed00107929bd832cc",
+      "callsite_sha256": "12091991ab70d50ceb54267f12a74ccb5f845c4073dfc425c44df01987666d47",
       "occurrence": 1,
       "reason": "Release metadata validation writes only its fixed versioned JSON report beneath the repository .sneakoscope/reports directory."
     },

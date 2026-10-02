@@ -56,7 +56,7 @@ function gitCommit(root: string) {
 }
 
 function releaseGateHash(root: string, pkg: Record<string, any>) {
-  const manifests = ['release-gates.v2.json', 'infra-harness-gates.json'].map((rel) => {
+  const manifests = ['release-gates.v2.json'].map((rel) => {
     const file = path.join(root, rel)
     return fs.existsSync(file) ? `${rel}\0${fs.readFileSync(file, 'utf8')}` : `${rel}\0missing`
   }).join('\0')
@@ -106,7 +106,7 @@ function releaseRelevant(file: string) {
   if (file.startsWith('crates/sks-core/target/')) return false
   if (/\.tgz$|\.log$/i.test(file)) return false
   if (/^(package|package-lock)\.json$/.test(file)) return true
-  if (file === 'release-gates.v2.json' || file === 'infra-harness-gates.json' || file === 'runtime-required-scripts.json') return true
+  if (file === 'release-gates.v2.json' || file === 'runtime-required-scripts.json') return true
   if (file === '.npmignore' || file === '.npmrc' || file === 'LICENSE') return true
   if (file.startsWith('config/')) return true
   if (/^tsconfig.*\.json$/.test(file)) return true

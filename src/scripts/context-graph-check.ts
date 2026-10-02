@@ -218,7 +218,7 @@ function runLegacyClosure() {
     { id: 'triwiki_codepack_local', pattern: 'triwiki_codepack_local', pathspecs: ['.', ...excluded] },
     { id: 'simple_counts_comment', pattern: 'simple counts avoid needing a real dependency graph', pathspecs: ['.', ...excluded] },
     { id: 'scanCodebaseIndex', pattern: '\\bscanCodebaseIndex\\b', pathspecs: ['.', ...excluded] },
-    { id: 'code_index_scanner_module', pattern: 'code-index-scanner', pathspecs: ['src', 'package.json', 'release-gates.v2.json', 'infra-harness-gates.json', 'runtime-required-scripts.json', ':!src/scripts/context-graph-check.ts'] },
+    { id: 'code_index_scanner_module', pattern: 'code-index-scanner', pathspecs: ['src', 'package.json', 'release-gates.v2.json', 'runtime-required-scripts.json', ':!src/scripts/context-graph-check.ts'] },
     {
       id: 'attentionRelevance',
       pattern: '\\battentionRelevance\\b',

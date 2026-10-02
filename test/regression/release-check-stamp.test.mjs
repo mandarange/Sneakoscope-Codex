@@ -365,7 +365,6 @@ test('DAG-to-real proof rejects same-id release gate command drift in an isolate
   fsSync.mkdirSync(path.join(root, 'dist'), { recursive: true });
   fsSync.writeFileSync(path.join(root, 'package.json'), JSON.stringify(fixturePkg, null, 2) + '\n');
   fsSync.writeFileSync(path.join(root, 'dist', 'index.js'), 'export const ready = true;\n');
-  fsSync.writeFileSync(path.join(root, 'infra-harness-gates.json'), '{"gates":[]}\n');
   fsSync.writeFileSync(manifestPath, JSON.stringify({
     schema: 'sks.release-gates.v2',
     gates: [{ id: 'same:id', command: 'node check-a.js', preset: ['release'], output_contract: 'sks.gate-result.v2' }]

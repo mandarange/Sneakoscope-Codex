@@ -7,18 +7,12 @@ import { assertGate, emitGate, root } from './sks-cli-gate-lib.js';
 const pkg = readJson('package.json');
 const lock = readJson('package-lock.json');
 const releaseManifest = readJson('release-gates.v2.json');
-const harnessManifest = readJson('infra-harness-gates.json');
 const RELEASE_VERSION = String(pkg.version || '');
 const distManifest = readJsonIfExists('dist/build-manifest.json');
 const releaseGates = Array.isArray(releaseManifest?.gates)
   ? releaseManifest.gates.filter((gate: any) => Array.isArray(gate.preset) && gate.preset.includes('release'))
   : [];
-const harnessGates = Array.isArray(harnessManifest?.gates)
-  ? harnessManifest.gates.filter((gate: any) => Array.isArray(gate.preset) && gate.preset.includes('harness'))
-  : [];
 const releaseGateIds = new Set(releaseGates.map((gate: any) => gate.id));
-const harnessGateIds = new Set(harnessGates.map((gate: any) => gate.id));
-const allManifestGates = [...releaseGates, ...harnessGates];
 
 const requiredDocs = [
   'README.md',
@@ -96,7 +90,6 @@ const requiredReleaseGates = [
   'side-effect:runtime-report',
   'typecheck'
 ];
-const requiredHarnessGates = [];
 
 assertGate(/^\d+\.\d+\.\d+$/.test(RELEASE_VERSION), 'package.json version must be a stable semver', { version: pkg.version });
 assertGate(lock.version === RELEASE_VERSION, `package-lock version must be ${RELEASE_VERSION}`, { version: lock.version });
@@ -120,9 +113,7 @@ assertGate(
   'release:check must use the current release DAG'
 );
 assertGate(releaseManifest?.schema === 'sks.release-gates.v2', 'release gate manifest schema mismatch', { schema: releaseManifest?.schema || null });
-assertGate(harnessManifest?.schema === 'sks.infra-harness-gates.v1', 'infra harness manifest schema mismatch', { schema: harnessManifest?.schema || null });
 assertGate(releaseGates.length > 0 && releaseGates.length <= 200, 'release manifest must include 1..200 release gates', { release_gates: releaseGates.length });
-assertGate(harnessGates.length === 0, 'retired infra harness manifest must remain empty', { harness_gates: harnessGates.length });
 assertGate(Object.keys(pkg.scripts || {}).length <= 101, 'package script budget exceeded', { script_count: Object.keys(pkg.scripts || {}).length, limit: 101 });
 for (const script of requiredPackageScripts) assertGate(Boolean(pkg.scripts?.[script]), `missing package script: ${script}`);
 
@@ -135,15 +126,12 @@ assertGate(fullReleaseOrder.every((index) => index >= 0) && fullReleaseOrder.eve
 assertGate(pkg.scripts?.test === 'node ./dist/scripts/canonical-test-runner.js --all' && pkg.scripts?.['test:all'] === pkg.scripts?.test, 'npm test and test:all must preserve the exhaustive developer corpus');
 assertGate(pkg.scripts?.['test:release'] === 'node ./dist/scripts/canonical-test-runner.js', 'test:release must use the proof-producing release corpus selector');
 for (const id of requiredReleaseGates) assertGate(releaseGateIds.has(id), `critical release gate missing: ${id}`, { id });
-for (const id of requiredHarnessGates) assertGate(harnessGateIds.has(id), `critical harness gate missing: ${id}`, { id });
-const duplicateAcrossManifests = [...releaseGateIds].filter((id) => harnessGateIds.has(id));
-assertGate(duplicateAcrossManifests.length === 0, 'gate appears in both release and harness manifests', { duplicate_count: duplicateAcrossManifests.length });
-assertGate(allManifestGates.every((gate: any) => !/\bnpm\s+run\b/.test(String(gate.command))), 'gate manifest commands must not use npm run indirection');
-const retiredPublicSurfaceGateCount = allManifestGates.filter((gate: any) =>
+assertGate(releaseGates.every((gate: any) => !/\bnpm\s+run\b/.test(String(gate.command))), 'gate manifest commands must not use npm run indirection');
+const retiredPublicSurfaceGateCount = releaseGates.filter((gate: any) =>
   /(?:^|[^a-z0-9])(?:team|mad-db|tmux|xai|swarm|ralph)(?:[^a-z0-9]|$)/i.test(`${String(gate.id || '')}\n${String(gate.command || '')}`)
 ).length;
-assertGate(retiredPublicSurfaceGateCount === 0, 'release and harness manifests must use only the current public surface', { violation_count: retiredPublicSurfaceGateCount });
-for (const gate of allManifestGates) assertDistScriptTargetsExist(gate);
+assertGate(retiredPublicSurfaceGateCount === 0, 'release manifest must use only the current public surface', { violation_count: retiredPublicSurfaceGateCount });
+for (const gate of releaseGates) assertDistScriptTargetsExist(gate);
 
 assertGate(pkg.bin?.sks === 'dist/bin/sks.js', 'package runtime must use dist/bin/sks.js');
 assertGate(pkg.bin?.sneakoscope === 'dist/bin/sks.js', 'sneakoscope runtime must use dist/bin/sks.js');
@@ -267,7 +255,6 @@ const report = {
   version_surface_count: 9,
   package_script_count: requiredPackageScripts.length,
   release_gate_count: releaseGates.length,
-  harness_gate_count: harnessGates.length,
   required_doc_count: requiredDocs.length,
   dist_source_digest: distManifest?.source_digest || null,
   generated_at: new Date().toISOString(),
@@ -281,7 +268,6 @@ emitGate('release:metadata', {
   version: pkg.version,
   package_scripts: requiredPackageScripts.length,
   release_gates: releaseGates.length,
-  harness_gates: harnessGates.length,
   docs: requiredDocs.length,
   current_public_surface: true
 });

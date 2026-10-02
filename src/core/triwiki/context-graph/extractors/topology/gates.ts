@@ -28,10 +28,9 @@ export interface GateManifestSource {
   readonly schemas: readonly string[];
 }
 
-/** Manifests that declare the SKS gate DAG. Both share the same entry shape. */
+/** Manifests that declare the SKS gate DAG. */
 export const TOPOLOGY_GATE_MANIFESTS: readonly GateManifestSource[] = [
-  { path: 'release-gates.v2.json', schemas: ['sks.release-gates.v2'] },
-  { path: 'infra-harness-gates.json', schemas: ['sks.infra-harness-gates.v1'] }
+  { path: 'release-gates.v2.json', schemas: ['sks.release-gates.v2'] }
 ];
 
 /** Gate id namespaces that are release/security critical by construction. */
@@ -65,7 +64,7 @@ export interface TopologyGate {
 const GATE_ID_LINE = /"id"\s*:\s*"([^"]+)"/;
 
 /**
- * Parse both gate manifests. A manifest that exists but does not parse produces
+ * Parse the gate manifest. A manifest that exists but does not parse produces
  * an explicit lint error; only a manifest that is absent from this workspace is
  * allowed to contribute nothing.
  */

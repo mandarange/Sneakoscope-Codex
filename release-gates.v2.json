@@ -2035,7 +2035,6 @@
           "package.json",
           "package-lock.json",
           "release-gates.v2.json",
-          "infra-harness-gates.json",
           "runtime-required-scripts.json",
           "src/core/release/runtime-script-pack-closure.ts",
           "src/scripts/runtime-script-pack-closure-check.ts",
@@ -2070,7 +2069,6 @@
         "inputs": [
           "package.json",
           "release-gates.v2.json",
-          "infra-harness-gates.json",
           "docs/gates-policy.md",
           "src/scripts/cli-output-consistency-check.ts",
           "src/scripts/harness-benchmark-check.ts",

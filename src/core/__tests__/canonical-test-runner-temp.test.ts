@@ -220,7 +220,6 @@ async function fixtureRoot(prefix: string): Promise<string> {
   await Promise.all([
     fsp.writeFile(path.join(root, 'package.json'), JSON.stringify({ name: 'runner-fixture', version: '1.0.0', files: ['dist', 'src', 'test'] })),
     fsp.writeFile(path.join(root, 'release-gates.v2.json'), '{}'),
-    fsp.writeFile(path.join(root, 'infra-harness-gates.json'), '{}'),
     fsp.writeFile(path.join(root, 'src', 'index.ts'), 'export const value = 1\n')
   ]);
   git(root, ['init', '-q']);

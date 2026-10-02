@@ -96,7 +96,7 @@ assertGate(JSON.stringify(packedScripts) === JSON.stringify(runtimeScriptClosure
 assertGate(files.includes('package.json'), 'packlist_missing_runtime_entry', { missing: 'package.json' });
 assertGate(files.includes('README.md'), 'packlist_missing_runtime_entry', { missing: 'README.md' });
 assertGate(files.includes('LICENSE'), 'packlist_missing_runtime_entry', { missing: 'LICENSE' });
-for (const manifest of ['release-gates.v2.json', 'infra-harness-gates.json', 'runtime-required-scripts.json']) {
+for (const manifest of ['release-gates.v2.json', 'runtime-required-scripts.json']) {
   assertGate(files.includes(manifest), 'packlist_missing_runtime_manifest', { missing: manifest });
 }
 assertGate(files.some((f) => f.startsWith('schemas/')), 'packlist_missing_runtime_entry', { missing: 'schemas/' });

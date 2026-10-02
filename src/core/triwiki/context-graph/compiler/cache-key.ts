@@ -36,7 +36,6 @@ const COMMAND_MANIFEST_INPUTS = [
 ] as const;
 const GATE_MANIFEST_INPUTS = [
   'release-gates.v2.json',
-  'infra-harness-gates.json',
   'config/architecture-budgets.v1.json'
 ] as const;
 const PROOF_INDEX_DIR = '.sneakoscope/triwiki/proof-bank';

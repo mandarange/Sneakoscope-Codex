@@ -28,20 +28,14 @@ interface PackageJsonShape {
 
 const packageJson = readPackageJson(path.join(root, 'package.json'))
 const releaseManifest = readReleaseGateManifest(path.join(root, 'release-gates.v2.json'), 'sks.release-gates.v2')
-const harnessManifest = readReleaseGateManifest(path.join(root, 'infra-harness-gates.json'), 'sks.infra-harness-gates.v1')
 const releasePreset = releaseManifest.gates.filter((gate) => gate.preset.includes('release'))
-const harnessPreset = harnessManifest.gates.filter((gate) => gate.preset.includes('harness'))
 const releaseIds = new Set(releasePreset.map((gate) => gate.id))
-const harnessIds = new Set(harnessPreset.map((gate) => gate.id))
 const releaseContract = releaseGateContractSnapshot()
 const requiredReleasePresetIds = releaseContract.ids
-const requiredHarnessPresetIds: string[] = []
 const missingRequiredReleasePreset = requiredReleasePresetIds.filter((id) => !releaseIds.has(id))
 const unexpectedReleasePreset = [...releaseIds].filter((id) => !requiredReleasePresetIds.includes(id)).sort()
-const missingRequiredHarnessPreset = requiredHarnessPresetIds.filter((id) => !harnessIds.has(id))
-const duplicateAcrossManifests = [...releaseIds].filter((id) => harnessIds.has(id))
-const npmRunCommands = [...releasePreset, ...harnessPreset].filter((gate) => /\bnpm\s+run\b/.test(gate.command)).map((gate) => gate.id)
-const schemaComplete = [...releaseManifest.gates, ...harnessManifest.gates].every(isReleaseGate)
+const npmRunCommands = releasePreset.filter((gate) => /\bnpm\s+run\b/.test(gate.command)).map((gate) => gate.id)
+const schemaComplete = releaseManifest.gates.every(isReleaseGate)
 
 const report = {
   schema: 'sks.release-dag-full-coverage-check.v2',
@@ -49,26 +43,18 @@ const report = {
     && releasePreset.length <= 200
     && missingRequiredReleasePreset.length === 0
     && unexpectedReleasePreset.length === 0
-    && missingRequiredHarnessPreset.length === 0
-    && duplicateAcrossManifests.length === 0
-    && harnessPreset.length === 0
     && npmRunCommands.length === 0,
   release_gate_count: releasePreset.length,
-  harness_gate_count: harnessPreset.length,
   required_release_preset_ids: requiredReleasePresetIds,
   missing_required_release_preset: missingRequiredReleasePreset,
   unexpected_release_preset: unexpectedReleasePreset,
   release_gate_contract: releaseContract,
-  required_harness_preset_ids: requiredHarnessPresetIds,
-  missing_required_harness_preset: missingRequiredHarnessPreset,
-  duplicate_across_manifests: duplicateAcrossManifests,
-  retired_harness_empty: harnessPreset.length === 0,
   npm_run_commands: npmRunCommands,
   schema_complete: schemaComplete,
   package_script_count: Object.keys(packageJson.scripts || {}).length
 }
 
-assertGate(report.ok, 'release/harness gate manifests must satisfy consolidated v2 coverage policy', report)
+assertGate(report.ok, 'release gate manifest must satisfy consolidated v2 coverage policy', report)
 emitGate('release:dag-full-coverage', report)
 
 function readPackageJson(file: string): PackageJsonShape {

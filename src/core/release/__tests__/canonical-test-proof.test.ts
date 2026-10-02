@@ -103,7 +103,6 @@ async function fixtureRoot(): Promise<string> {
   await Promise.all([
     fsp.writeFile(path.join(root, 'package.json'), JSON.stringify({ name: 'fixture', version: '1.2.3', files: ['dist', 'src', 'test'] })),
     fsp.writeFile(path.join(root, 'release-gates.v2.json'), '{}'),
-    fsp.writeFile(path.join(root, 'infra-harness-gates.json'), '{}'),
     fsp.writeFile(path.join(root, 'src', 'index.ts'), 'export const value = 1\n'),
     fsp.writeFile(path.join(root, 'src', 'core', 'release', '__tests__', 'fixture.test.ts'), 'export {}\n'),
     fsp.writeFile(path.join(root, 'dist', 'core', 'release', '__tests__', 'fixture.test.js'), 'export {}\n'),

@@ -118,7 +118,6 @@ test('publish lifecycle supports official npm publish with prepack post-build ve
   }
   const runtimeManifests = {
     'release-gates.v2.json': 'sks.release-gates.v2',
-    'infra-harness-gates.json': 'sks.infra-harness-gates.v1',
     'runtime-required-scripts.json': 'sks.runtime-required-scripts.v1'
   };
   for (const [manifest, schema] of Object.entries(runtimeManifests)) {

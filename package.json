@@ -58,7 +58,6 @@
     "config/perf-budgets.v1.json",
     "config/skills-hash-ledger.v1.json",
     "release-gates.v2.json",
-    "infra-harness-gates.json",
     "runtime-required-scripts.json",
     "schemas",
     "crates/sks-core/Cargo.lock",

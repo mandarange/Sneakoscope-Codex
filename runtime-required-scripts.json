@@ -65,11 +65,6 @@
       "reason": "public check, gates, and release commands dispatch the packaged release gate DAG"
     },
     {
-      "source": "infra-harness-gates.json",
-      "classification": "checkout_ci",
-      "reason": "infrastructure harness gates are checkout-only verification"
-    },
-    {
       "source": ".github/workflows/**",
       "classification": "checkout_ci",
       "reason": "GitHub Actions runs against the release checkout and staged tarball, not from an installed customer package"
