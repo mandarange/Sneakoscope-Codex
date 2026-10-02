@@ -6,7 +6,6 @@ import { fastModeEnv, type FastModePolicy } from './fast-mode-policy.js'
 import { validateAgentWorkerResult } from './agent-worker-pipeline.js'
 import { appendParallelRuntimeEvent } from './parallel-runtime-proof.js'
 import { appendAgentMessage } from './agent-message-bus.js'
-import { markLoopWorkerInterrupted, registerLoopActiveWorker } from '../loops/loop-interrupt-registry.js'
 
 export const NATIVE_CLI_WORKER_RUNTIME_SCHEMA = 'sks.native-cli-worker-runtime.v3'
 
@@ -176,17 +175,9 @@ class NativeCliWorkerRuntimeRecorder {
     this.maxObserved = Math.max(this.maxObserved, this.active.size)
 
     let exit: { code: number | null; signal: NodeJS.Signals | null }
-    let loopHandle: Awaited<ReturnType<typeof registerLoopWorkerHandle>> = null
     try {
       await this.record(record)
 
-      loopHandle = await registerLoopWorkerHandle({
-        root: ctx.opts.projectRoot || this.input.projectRoot || ctx.opts.cwd || packageRoot(),
-        env: ctx.opts.env || {},
-        agentId: String(ctx.agent.id || ctx.agent.session_id || 'agent'),
-        sessionId: ctx.agent.session_id || null,
-        pid: child.pid || null
-      })
       await appendParallelRuntimeEvent(this.root, this.input.missionId, {
         event_type: 'worker_process_spawned',
         slot_id: ctx.agent.slot_id || ctx.agent.id || null,
@@ -224,14 +215,6 @@ class NativeCliWorkerRuntimeRecorder {
     // its result file happens to have been left.
     const timeoutBlockers = supervisor.timedOut ? [NATIVE_CLI_WORKER_TIMEOUT_BLOCKER] : []
     if (supervisor.timedOut) record.status = 'failed'
-    if (loopHandle) {
-      await markLoopWorkerInterrupted(
-        ctx.opts.projectRoot || this.input.projectRoot || ctx.opts.cwd || packageRoot(),
-        loopHandle.mission_id,
-        loopHandle.worker_id,
-        record.status === 'closed' ? 'completed' : 'failed'
-      ).catch(() => undefined)
-    }
 
     const parsed = await readJson<any>(path.join(this.root, resultRel), null).catch(() => null)
     if (!parsed) {
@@ -454,26 +437,4 @@ function changedFilesFromWorkerResult(result: any): string[] {
       ...(Array.isArray(envelope?.operations) ? envelope.operations.map((operation: any) => operation?.path) : [])
     ])
   return [...new Set([...direct, ...envelopeFiles].map((file) => String(file || '').replace(/\\/g, '/').replace(/^\.\/+/, '')).filter(Boolean))]
-}
-
-async function registerLoopWorkerHandle(input: {
-  root: string
-  env: NodeJS.ProcessEnv
-  agentId: string
-  sessionId: string | null
-  pid: number | null
-}) {
-  const missionId = String(input.env.SKS_MISSION_ID || input.env.SKS_PARENT_MISSION_ID || '').trim()
-  const loopId = String(input.env.SKS_LOOP_ID || '').trim()
-  const phase = String(input.env.SKS_LOOP_PHASE || '').trim()
-  if (!missionId || !loopId || (phase !== 'maker' && phase !== 'checker')) return null
-  return registerLoopActiveWorker(input.root, {
-    mission_id: missionId,
-    loop_id: loopId,
-    phase,
-    worker_id: input.agentId,
-    session_id: input.sessionId,
-    pid: input.pid,
-    interrupt_supported: Boolean(input.pid || input.sessionId)
-  }).catch(() => null)
 }

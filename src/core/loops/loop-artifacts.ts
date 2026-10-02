@@ -1,95 +1,23 @@
 import path from 'node:path';
 
-export function loopRoot(root: string, missionId: string): string {
+// Path helpers for the loop artifacts that the retired SKS Loop runtime wrote under
+// `.sneakoscope/missions/<mission>/loops/`. Only the two files that are still read for
+// old missions (the plan and the graph proof) keep a helper.
+
+function loopRoot(root: string, missionId: string): string {
   const missionsRoot = path.resolve(root, '.sneakoscope', 'missions');
   return containedJoin(missionsRoot, safeArtifactId('mission', missionId), 'loops');
-}
-
-export function loopNodeRoot(root: string, missionId: string, loopId: string): string {
-  return containedJoin(loopRoot(root, missionId), safeArtifactId('loop', loopId));
 }
 
 export function loopPlanPath(root: string, missionId: string): string {
   return path.join(loopRoot(root, missionId), 'loop-plan.json');
 }
 
-export function loopStatePath(root: string, missionId: string, loopId: string): string {
-  return path.join(loopNodeRoot(root, missionId, loopId), 'loop-state.json');
-}
-
-export function loopRunLogPath(root: string, missionId: string, loopId: string): string {
-  return path.join(loopNodeRoot(root, missionId, loopId), 'loop-run-log.jsonl');
-}
-
-export function loopProofPath(root: string, missionId: string, loopId: string): string {
-  return path.join(loopNodeRoot(root, missionId, loopId), 'loop-proof.json');
-}
-
-export function loopBudgetPath(root: string, missionId: string, loopId: string): string {
-  return path.join(loopNodeRoot(root, missionId, loopId), 'loop-budget.json');
-}
-
-export function loopCheckpointPath(root: string, missionId: string, loopId: string, iteration: number, phase: string): string {
-  return path.join(loopNodeRoot(root, missionId, loopId), 'checkpoints', `${String(Math.max(1, Math.floor(iteration))).padStart(4, '0')}-${sanitizeArtifactPart(phase)}.json`);
-}
-
-export function loopLatestCheckpointPath(root: string, missionId: string, loopId: string): string {
-  return path.join(loopNodeRoot(root, missionId, loopId), 'checkpoint-latest.json');
-}
-
 export function loopGraphProofPath(root: string, missionId: string): string {
   return path.join(loopRoot(root, missionId), 'loop-graph-proof.json');
 }
 
-export function loopIntegrationMergePath(root: string, missionId: string): string {
-  return path.join(loopRoot(root, missionId), 'integration-merge.json');
-}
-
-export function loopGptFinalArbiterPath(root: string, missionId: string): string {
-  return path.join(loopRoot(root, missionId), 'loop-gpt-final-arbiter.json');
-}
-
-export function loopFinalArbiterGateContractPath(root: string, missionId: string): string {
-  return path.join(loopRoot(root, missionId), 'gpt-final-arbiter-gate-contract.json');
-}
-
-export function loopFixturePolicyPath(root: string, missionId: string): string {
-  return path.join(loopRoot(root, missionId), 'fixture-policy.json');
-}
-
-export function loopMutationLedgerPath(root: string, missionId: string): string {
-  return path.join(loopRoot(root, missionId), 'mutation-ledger.jsonl');
-}
-
-export function loopSideEffectReportPath(root: string, missionId: string): string {
-  return path.join(loopRoot(root, missionId), 'loop-side-effect-report.json');
-}
-
-export function loopActiveWorkerHandlesPath(root: string, missionId: string): string {
-  return path.join(loopRoot(root, missionId), 'active-worker-handles.jsonl');
-}
-
-export function loopInterruptResultPath(root: string, missionId: string): string {
-  return path.join(loopRoot(root, missionId), 'interrupt-result.json');
-}
-
-export function loopConcurrencyBudgetPath(root: string, missionId: string): string {
-  return path.join(loopRoot(root, missionId), 'concurrency-budget.json');
-}
-
-export function loopKillRequestPath(root: string, missionId: string): string {
-  return path.join(loopRoot(root, missionId), 'kill-request.json');
-}
-
-export function loopGatePath(root: string, missionId: string, loopId: string, gateId: string): string {
-  return path.join(loopNodeRoot(root, missionId, loopId), 'gates', `${sanitizeArtifactPart(gateId)}.json`);
-}
-
-export function loopOwnerLedgerPath(root: string, missionId: string): string {
-  return path.join(loopRoot(root, missionId), 'loop-owner-ledger.json');
-}
-
-export function sanitizeArtifactPart(value: string): string {
+function sanitizeArtifactPart(value: string): string {
   return String(value || 'artifact').replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 96) || 'artifact';
 }
 

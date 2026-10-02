@@ -11,7 +11,6 @@ import {
   officialSubagentFanoutPolicy
 } from '../../dist/core/subagents/agent-catalog.js';
 import { defaultReleaseGateMaxTotal } from '../../dist/core/release/release-gate-resource-governor.js';
-import { computeLoopConcurrencyBudget } from '../../dist/core/loops/loop-concurrency-budget.js';
 
 test('Naruto official-subagent fanout stays bounded and preserves max_depth=1', () => {
   assert.equal(DEFAULT_NARUTO_REQUESTED_SUBAGENTS, 4);
@@ -78,30 +77,6 @@ test('live load and low free memory collapse Naruto to a single active worker', 
   assert.equal(governed.backpressure, 'saturated');
 });
 
-test('release and loop schedulers retain hard desktop-safe caps even with oversized env requests', () => {
+test('release scheduler retains a hard desktop-safe cap', () => {
   assert.ok(defaultReleaseGateMaxTotal() >= 1 && defaultReleaseGateMaxTotal() <= 4);
-  const plan = {
-    mission_id: 'M-resource-fixture',
-    global_budget: { max_model_calls: 100 },
-    graph: {
-      nodes: Array.from({ length: 8 }, (_, index) => ({
-        loop_id: `loop-${index}`,
-        maker: { worker_count: 8 },
-        checker: { worker_count: 8 },
-        budget: { max_model_calls: 8 }
-      }))
-    }
-  };
-  const budget = computeLoopConcurrencyBudget({
-    plan,
-    parallelism: 'extreme',
-    env: {
-      SKS_LOOP_MAX_ACTIVE_LOOPS: '999',
-      SKS_LOOP_MAX_ACTIVE_WORKERS: '999',
-      SKS_LOOP_MAX_MODEL_CALLS: '999'
-    }
-  });
-  assert.ok(budget.max_active_loops <= 4);
-  assert.ok(budget.max_active_workers <= 4);
-  assert.ok(budget.max_model_calls <= 4);
 });
