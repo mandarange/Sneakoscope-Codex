@@ -5,7 +5,7 @@ import { projectRoot, readText, runProcess, writeJsonAtomic, nowIso } from '../f
 import { ui } from '../../cli/cli-theme.js';
 import { runCompiledRules } from '../verification/mistake-rule-compiler.js';
 
-type Evidence = 'machine' | 'llm';
+type Evidence = 'machine';
 type Severity = 'blocker' | 'high' | 'medium' | 'low';
 
 interface ReviewFinding {
@@ -19,30 +19,20 @@ interface ReviewFinding {
   command?: string;
 }
 
-const LENSES = [
-  'review-correctness',
-  'review-security',
-  'review-lean',
-  'review-regression'
-];
-
 export async function reviewCommand(args: string[] = []) {
   const root = path.resolve(String(readOption(args, '--root', '') || await projectRoot()));
   const diff = await collectDiff(root, args);
   if (!diff.files.length) {
-    const report = buildReport({ files: [], machine: { checks: [], findings: [] }, lenses: [], fix: null });
+    const report = buildReport({ files: [], machine: { checks: [], findings: [] }, fix: null });
     if (flag(args, '--json')) return printJson(report);
     ui.banner('review');
     ui.ok('변경 없음');
     return report;
   }
-  const [machine, lenses] = await Promise.all([
-    runMachineChecks(root, diff),
-    runReadOnlyReviewLenses(diff)
-  ]);
+  const machine = await runMachineChecks(root, diff);
   let fix: any = null;
   if (flag(args, '--fix')) fix = await attemptMachineFix(root, machine.findings);
-  const report = buildReport({ files: diff.files, machine, lenses, fix });
+  const report = buildReport({ files: diff.files, machine, fix });
   await writeJsonAtomic(path.join(root, '.sneakoscope', 'reports', 'review-report.json'), report);
   if (flag(args, '--json')) return printJson(report);
   printReviewReport(report);
@@ -157,17 +147,6 @@ function secretPatternFindings(diffText: string): ReviewFinding[] {
   return findings;
 }
 
-async function runReadOnlyReviewLenses(diff: Awaited<ReturnType<typeof collectDiff>>) {
-  return LENSES.map((role) => ({
-    role,
-    evidence: 'llm' as const,
-    status: 'not_run',
-    findings: [] as ReviewFinding[],
-    unverified: [`${role} native read-only worker not run in this local review invocation`],
-    files: diff.files.length
-  }));
-}
-
 async function attemptMachineFix(root: string, findings: ReviewFinding[]) {
   const machine = findings.filter((finding) => finding.evidence === 'machine');
   if (!machine.length) return { attempted: false, reason: 'no_machine_findings' };
@@ -179,15 +158,14 @@ async function attemptMachineFix(root: string, findings: ReviewFinding[]) {
   return { attempted: false, reason: 'no_safe_machine_fixer_available', machine_findings: machine.length };
 }
 
-function buildReport(input: { files: string[]; machine: any; lenses: any[]; fix: any }) {
-  const findings = dedupeFindings([...(input.machine.findings || []), ...input.lenses.flatMap((lens) => lens.findings || [])]);
+function buildReport(input: { files: string[]; machine: any; fix: any }) {
+  const findings = dedupeFindings(input.machine.findings || []);
   const verdict = findings.some((finding) => finding.severity === 'blocker') ? 'blocked' : findings.length ? 'needs_attention' : 'clean';
   return {
     schema: 'sks.review-report.v1',
     generated_at: nowIso(),
     files: input.files.length,
     machine: input.machine.summary || { check_count: 0, finding_count: 0 },
-    lenses: input.lenses,
     findings,
     fix: input.fix,
     verdict
@@ -204,7 +182,7 @@ function dedupeFindings(findings: ReviewFinding[]): ReviewFinding[] {
       seen.add(key);
       return true;
     })
-    .sort((a, b) => a.evidence === b.evidence ? severityRank[a.severity] - severityRank[b.severity] : a.evidence === 'machine' ? -1 : 1);
+    .sort((a, b) => severityRank[a.severity] - severityRank[b.severity]);
 }
 
 function printReviewReport(report: any) {

@@ -173,8 +173,7 @@ async function researchPrepare(args: any) {
     stop_gate: route.stopGate,
     clarification_gate: false,
     pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok,
-    pipeline_plan_path: PIPELINE_PLAN_ARTIFACT,
-    goal_continuation: pipelinePlan.goal_continuation
+    pipeline_plan_path: PIPELINE_PLAN_ARTIFACT
   });
   await setCurrent(root, {
     mission_id: id,
@@ -198,7 +197,6 @@ async function researchPrepare(args: any) {
     reasoning_effort: reasoning.effort,
     reasoning_profile: reasoning.profile,
     reasoning_temporary: true,
-    goal_continuation: pipelinePlan.goal_continuation,
     pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok,
     pipeline_plan_path: PIPELINE_PLAN_ARTIFACT,
     prompt

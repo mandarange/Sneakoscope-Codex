@@ -10,7 +10,6 @@ import { PRODUCT_DESIGN_PIPELINE_STAGES, productDesignPluginPolicyText } from '.
 import { buildEvidenceEnvelope, buildRecallPulseGovernanceReport } from '../recallpulse.js';
 import { createSkillForgeReport, decideSkillInjection } from '../skill-forge.js';
 import { createWorkOrderLedger } from '../work-order-ledger.js';
-import { ambientGoalContinuation } from '../commands/command-utils.js';
 
 const ACTIVE_IDENTITY_SOURCES = [
   'src/core/proof-field.ts',
@@ -91,13 +90,10 @@ test('Proof Field, pipeline economy, and perf reports expose only Naruto trigger
   }
 });
 
-test('active defaults and RecallPulse samples use Naruto while Goal stays Codex-native', async () => {
+test('active defaults and RecallPulse samples use Naruto', async () => {
   assert.equal(decideSkillInjection().route, 'naruto');
   assert.equal(createSkillForgeReport().injection.route, 'naruto');
   assert.equal(createWorkOrderLedger().route, 'Naruto');
-  assert.match(ambientGoalContinuation().rule, /Codex native Goal/);
-  assert.match(ambientGoalContinuation().rule, /only persisted goal owner/);
-  assert.doesNotMatch(ambientGoalContinuation().rule, /\b(?:Naruto|Team)\b/);
   assert.ok(PRODUCT_DESIGN_PIPELINE_STAGES.every((stage: any) => !stage.routes.includes('Team')));
   assert.ok(PRODUCT_DESIGN_PIPELINE_STAGES.some((stage: any) => stage.routes.includes('Naruto')));
   assert.doesNotMatch(productDesignPluginPolicyText(), /\bTeam\b/);
