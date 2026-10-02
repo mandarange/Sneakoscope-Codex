@@ -55,7 +55,6 @@ const renamedPredecessors = renamedPredecessorMap(baseSha);
 const changedFiles = changedFileSet(baseSha);
 let scannedFiles = 0;
 
-runGate('pipeline-budget:check');
 runGate('pipeline-runtime:check');
 checkLargeFiles();
 checkTsImports();

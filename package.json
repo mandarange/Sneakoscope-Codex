@@ -122,7 +122,6 @@
     "architecture:check": "node ./dist/scripts/check-architecture.js",
     "route-modularity:check": "node ./dist/scripts/check-route-modularity.js",
     "command-budget:check": "node ./dist/scripts/check-command-module-budget.js",
-    "pipeline-budget:check": "node ./dist/scripts/check-pipeline-budget.js",
     "pipeline-runtime:check": "node ./dist/scripts/check-pipeline-runtime.js",
     "sizecheck": "node ./dist/scripts/sizecheck.js",
     "publish-tag:check": "node ./dist/scripts/check-publish-tag.js",

@@ -103,7 +103,6 @@ function createFixture(options = {}) {
   fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({
     type: 'module',
     scripts: {
-      'pipeline-budget:check': 'node -e "process.exit(0)"',
       'pipeline-runtime:check': 'node -e "process.exit(0)"'
     }
   }));

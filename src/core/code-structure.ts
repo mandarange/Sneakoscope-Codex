@@ -610,7 +610,6 @@ function isLeanOwnedTypeSafetyPath(file: string): boolean {
     'src/core/agents/native-worker-backend-router.ts',
     'src/scripts/check-architecture.ts',
     'src/scripts/check-command-module-budget.ts',
-    'src/scripts/check-pipeline-budget.ts',
     'src/scripts/check-route-modularity.ts',
     'src/scripts/check-publish-tag.ts',
     'src/scripts/gpt-final-arbiter-check.ts',

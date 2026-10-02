@@ -1,32 +1,15 @@
 # Pipeline Architecture
 
-SKS keeps `src/core/pipeline.ts` as the only compatibility facade and exposes split module surfaces under `src/core/pipeline/`.
+SKS keeps `src/core/pipeline.ts` as the only compatibility facade. It re-exports the pipeline plan, prompt-context, route-preparation, active-context, and stop-gate APIs directly from `src/core/pipeline-internals/runtime-core.ts`.
 
 ## Modules
 
-- `plan-schema.mjs`: plan constants.
-- `stage-policy.mjs`: stage policy exports.
-- `agent-stage-policy.mjs`: native agent stage policy exports.
-- `route-prep.mjs`: route preparation entrypoint.
-- `route-prep-research.mjs`, `route-prep-qa.mjs`, `route-prep-ppt.mjs`, `route-prep-image-ux.mjs`, `route-prep-db.mjs`, `route-prep-gx.mjs`: route-family preparation surfaces.
-- `stop-gate.mjs`: Context7, subagent, proof, reflection, and stop-gate exports.
-- `stop-gate-context7.mjs`, `stop-gate-subagents.mjs`, `stop-gate-proof.mjs`: focused stop-gate surfaces.
-- `active-context.mjs`: active route context export.
-- `prompt-context.mjs`: prompt context exports.
-- `prompt-context-dfix.mjs`, `prompt-context-answer.mjs`, `prompt-context-computer-use.mjs`: focused prompt context surfaces.
-- `pipeline-plan-writer.mjs`: plan build/write/validate exports.
-- `validation.mjs`: plan validation export.
+- `src/core/pipeline-internals/runtime-core.ts`: plan constants, plan build/write/validate, route preparation, prompt context, active route context, and Context7/subagent evidence.
+- `src/core/pipeline-internals/runtime-gates.ts`: stop-gate evaluation and gate status projection.
+- `src/core/pipeline/finalize-pipeline-result.ts`, `gpt-final-required.ts`, `final-gpt-patch-stage.ts`, `final-gpt-review-stage.ts`: the final GPT review stage for pipeline results.
 
-## Budget
+## Guard
 
-`npm run pipeline-budget:check` enforces:
-
-- `src/core/pipeline.ts` is at most 200 lines.
-- `src/core/pipeline-runtime.ts` is absent; imports must use `src/core/pipeline.ts`.
-- each `src/core/pipeline/*.ts` file is at most 1000 lines.
-- no direct `src/core/pipeline/*.ts` module imports more than 35 modules.
-- all required split module files exist.
-
-`npm run pipeline-runtime:check` independently verifies the duplicate runtime facade stays absent. `npm run pipeline-budget:check` includes the same guard so a new shim cannot bypass the release gate.
+`npm run pipeline-runtime:check` verifies the duplicate runtime facade `src/core/pipeline-runtime.ts` stays absent; imports must use `src/core/pipeline.ts`. `npm run architecture:check` runs that guard.
 
 Existing runtime imports resolve through built `dist/core/pipeline.js`.

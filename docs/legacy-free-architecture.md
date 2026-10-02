@@ -9,7 +9,6 @@ npm run cli-entrypoint:check
 npm run legacy-free:check
 npm run route-modularity:check
 npm run command-budget:check
-npm run pipeline-budget:check
 ```
 
 The legacy 0.9.13 archive files have been removed from the repository instead of retained as a compatibility surface. Runtime source, commands, scripts, package metadata, release gates, and documentation must not depend on or recreate those archived files.

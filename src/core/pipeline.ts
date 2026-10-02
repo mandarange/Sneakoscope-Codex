@@ -5,25 +5,13 @@ export {
   buildPipelinePlan,
   writePipelinePlan,
   validatePipelinePlan,
-  pipelinePlanState
-} from './pipeline/pipeline-plan-writer.js';
-
-export {
+  pipelinePlanState,
   promptPipelineContext,
   dfixQuickContext,
   answerOnlyContext,
-  computerUseFastContext
-} from './pipeline/prompt-context.js';
-
-export {
-  prepareRoute
-} from './pipeline/route-prep.js';
-
-export {
-  activeRouteContext
-} from './pipeline/active-context.js';
-
-export {
+  computerUseFastContext,
+  prepareRoute,
+  activeRouteContext,
   recordContext7Evidence,
   recordSubagentEvidence,
   subagentEvidence,
@@ -32,4 +20,4 @@ export {
   hasContext7DocsEvidence,
   projectGateStatus,
   evaluateStop
-} from './pipeline/stop-gate.js';
+} from './pipeline-internals/runtime-core.js';
