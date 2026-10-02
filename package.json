@@ -151,8 +151,6 @@
     "update:fastpath": "node ./dist/scripts/update-fastpath-check.js",
     "naruto:e2e-hermetic": "node ./dist/scripts/naruto-codex-e2e-check.js --mode hermetic",
     "naruto:e2e-real-codex": "node ./dist/scripts/naruto-codex-e2e-check.js --mode real-codex",
-    "naruto:e2e-hermetic-write": "node ./dist/scripts/naruto-write-e2e-check.js --mode hermetic",
-    "naruto:e2e-real-write": "node ./dist/scripts/naruto-write-e2e-check.js --mode real-codex",
     "super-search:offline-contract": "node ./dist/scripts/super-search-offline-contract-check.js",
     "super-search:local-http-smoke": "node ./dist/scripts/super-search-local-http-smoke-check.js",
     "super-search:live-smoke": "node ./dist/scripts/super-search-live-smoke-check.js",

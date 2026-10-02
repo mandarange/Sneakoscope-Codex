@@ -1667,15 +1667,6 @@
       "reason": "MCP health-channel close terminates only the process group of the child it spawned."
     },
     {
-      "file": "src/core/naruto/naruto-write-e2e.ts",
-      "symbol": "cleanupTempRoot",
-      "token": "fs.rm",
-      "scope_contract_sha256": "7a64c0f7b2bbe97635eff63255d981c2ee134303dfabcc28fa690d931b16629a",
-      "callsite_sha256": "9200bfbcc98dfd671965d2ebb3e9555f47442e87e7e0fbd4c9d5571c5d596130",
-      "occurrence": 1,
-      "reason": "Naruto write E2E cleanup removes only the isolated temporary repository root created for that verification run."
-    },
-    {
       "file": "src/core/ops/reporting.ts",
       "symbol": "writeOpsReport",
       "token": "fs.writeFile",
@@ -4754,24 +4745,6 @@
       "reason": "src/scripts/naruto-worktree-coding-blackbox.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
     {
-      "file": "src/scripts/naruto-write-e2e-check.ts",
-      "symbol": "writeReport",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "e3121280738110044e80617f770066f946f8d6644db9a364e72d51de29e4ab7c",
-      "callsite_sha256": "436dcf37972a6bf79cdb810950c49a863ead388d06494d2a4d6daffcc7d77207",
-      "occurrence": 1,
-      "reason": "src/scripts/naruto-write-e2e-check.ts#writeReport writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/naruto-write-e2e-check.ts",
-      "symbol": "writeReport",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "e3121280738110044e80617f770066f946f8d6644db9a364e72d51de29e4ab7c",
-      "callsite_sha256": "5439f0d4ffa2889684ec03542223afc38719c46971f7d204be1b1ce0fe4e28c3",
-      "occurrence": 1,
-      "reason": "src/scripts/naruto-write-e2e-check.ts#writeReport writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
       "file": "src/scripts/npm-publish-performance-check.ts",
       "symbol": "writeReport",
       "token": "writeFileSync",
@@ -5144,8 +5117,8 @@
       "file": "src/scripts/release-metadata-check.ts",
       "symbol": "module",
       "token": "writeFileSync",
-      "scope_contract_sha256": "9270e2c9f3569ea3112655cc57028e8f2d932b60a190bdaed00107929bd832cc",
-      "callsite_sha256": "12091991ab70d50ceb54267f12a74ccb5f845c4073dfc425c44df01987666d47",
+      "scope_contract_sha256": "bb60bb84f6003f8ba34b62751814d06f83990a2a4f604b542e43de8836bd0b35",
+      "callsite_sha256": "4d5e241413a1ba534ee043e2a5252c67d7153756b2e5bbc9a7dea8921172909f",
       "occurrence": 1,
       "reason": "Release metadata validation writes only its fixed versioned JSON report beneath the repository .sneakoscope/reports directory."
     },

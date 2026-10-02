@@ -54,8 +54,7 @@ const requiredPackageScripts = [
   'runtime:installed-smoke',
   'gates:run',
   'policy:gate-audit',
-  'naruto:e2e-hermetic',
-  'naruto:e2e-hermetic-write'
+  'naruto:e2e-hermetic'
 ];
 const requiredReleaseGates = [
   'architecture:guard',

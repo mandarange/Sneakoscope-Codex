@@ -7,9 +7,6 @@ import { assertGate, emitGate, root } from './gate-lib.js';
 import { COMMAND_MANIFEST_LITE } from '../cli/command-manifest-lite.js';
 import { ensureDir, nowIso, runProcess, writeJsonAtomic } from '../core/fsx.js';
 import { reviewCommand } from '../core/commands/review-command.js';
-import { simulateNarutoActivePool } from '../core/naruto/naruto-active-pool.js';
-import { decideNarutoConcurrency } from '../core/naruto/naruto-concurrency-governor.js';
-import { buildNarutoWorkGraph } from '../core/naruto/naruto-work-graph.js';
 
 const reportPath = path.join(root, '.sneakoscope', 'reports', 'harness-benchmark.json');
 const metrics = [];
@@ -24,32 +21,6 @@ metrics.push(await measure('stop_hook_light_budget', 25, async () => {
   const started = performance.now();
   await assertFile('dist/scripts/hook-latency-budget-check.js');
   return { mode: 'script_presence_budget_proxy', measured_ms: performance.now() - started };
-}));
-
-metrics.push(await measure('naruto_14_worker_fixture', 20000, async () => {
-  const graph = buildNarutoWorkGraph({
-    requestedWorkers: 14,
-    totalWorkItems: 14,
-    honorExplicitTotalWorkItems: true,
-    readonly: true,
-    writeCapable: false,
-    maxActiveWorkers: 14
-  });
-  const governor = decideNarutoConcurrency({
-    requestedWorkers: 14,
-    totalWorkItems: 14,
-    pendingWorkQueueSize: 14,
-    backend: 'fake',
-    hardware: { remoteApiRateLimitBudget: 14, fileDescriptorLimit: 4096, freeMemoryBytes: 8 * 1024 * 1024 * 1024, totalMemoryBytes: 16 * 1024 * 1024 * 1024 }
-  });
-  const report = simulateNarutoActivePool({ graph, governor: { ...governor, safe_active_workers: 14 } });
-  return {
-    command: 'simulateNarutoActivePool --fake --agents 14',
-    ok: report.ok === true && report.completed_count >= 14 && report.max_observed_active_workers >= 7,
-    completed_count: report.completed_count,
-    max_observed_active_workers: report.max_observed_active_workers,
-    blockers: report.blockers
-  };
 }));
 
 metrics.push(await measure('review_10_file_diff', 120000, async () => {

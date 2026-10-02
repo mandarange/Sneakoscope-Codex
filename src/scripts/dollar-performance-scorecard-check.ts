@@ -157,12 +157,6 @@ export function commandRouteSmokeFor(entry, routed = null) {
 export function reportBackedDollarSmoke(entry, routed = null) {
   const synced = isDollarMetadataSynced(entry, routed, null)
   const now = new Date().toISOString()
-  if (entry.command === '$sks-naruto') {
-    const real = readReport('naruto-real-write-e2e.json')
-    if (real?.ok === true) return smoke('read_only', true, now, synced, { report: 'naruto-real-write-e2e.json' })
-    const hermetic = readReport('naruto-write-e2e.json')
-    if (hermetic?.ok === true) return smoke('fixture', true, now, synced, { report: 'naruto-write-e2e.json' })
-  }
   if (entry.command === '$sks-super-search') {
     const offline = readReport('super-search-offline-contract.json')
     const local = readReport('super-search-local-http-smoke.json')
