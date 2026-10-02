@@ -74,25 +74,15 @@ function normalizeCodexFastModeUiConfigOnce(text: any = '', opts: any = {}) {
     next = removeTopLevelTomlKey(next, 'service_tier');
   }
   next = upsertTopLevelTomlBooleanIfAbsent(next, 'suppress_unstable_features_warning', true);
-  for (const featureLine of [
-    'hooks = true',
-    'fast_mode = true',
-    'apps = true',
-    'computer_use = true',
-    'browser_use = true',
-    'browser_use_external = true',
-    'image_generation = true',
-    'in_app_browser = true',
-    'guardian_approval = true',
-    'tool_suggest = true',
-    'plugins = true'
-  ]) {
-    next = upsertTomlTableKeyIfAbsent(next, 'features', featureLine);
-  }
-  // Global postinstall enables stable opt-in MA v2 without imposing project
+  // No stable `[features]` flag is seeded: hooks, fast_mode, apps, computer_use, browser_use,
+  // browser_use_external, image_generation, in_app_browser, guardian_approval, tool_suggest
+  // and plugins are `stable true` on 0.153.4 and 0.159.2 (see codex-feature-flags.ts).
+  // Global postinstall enables MA v2 (the catalog selects it per model, but gpt-5.6-luna and
+  // gpt-5.5 only get the v2 spawn tool with `enabled = true`) without imposing project
   // concurrency numbers. Project setup owns max_concurrent_threads_per_session.
+  // `expose_spawn_agent_model_overrides` is not written: it defaults to true on both versions.
   if (!hasTomlTable(next, 'features.multi_agent_v2') && !hasTomlTableKey(next, 'features', 'multi_agent_v2')) {
-    next = upsertTomlTable(next, 'features.multi_agent_v2', '[features.multi_agent_v2]\nenabled = true\nexpose_spawn_agent_model_overrides = true');
+    next = upsertTomlTable(next, 'features.multi_agent_v2', '[features.multi_agent_v2]\nenabled = true');
   }
   if (process.env.SKS_MANAGE_CODEX_APP_PLUGINS === '1') {
     for (const [name, marketplace] of DEFAULT_CODEX_APP_PLUGINS as any) {
@@ -146,27 +136,6 @@ function removeTomlTableKey(text: any, table: any, key: any, expectedValue: any 
   return lines.filter((line: any, index: any) => index <= start || index >= end || !keyPattern.test(line)).join('\n').replace(/\n{3,}/g, '\n\n');
 }
 
-function upsertTomlTableKey(text: any, table: any, line: any) {
-  const key = String(line).split('=')[0]?.trim() ?? '';
-  const lines = String(text || '').trimEnd().split('\n');
-  if (lines.length === 1 && lines[0] === '') lines.length = 0;
-  const start = lines.findIndex((entry: any) => entry.trim() === `[${table}]`);
-  if (start === -1) return [...lines, ...(lines.length ? [''] : []), `[${table}]`, line].join('\n').replace(/\n{3,}/g, '\n\n');
-  let end = lines.length;
-  for (let i = start + 1; i < lines.length; i += 1) {
-    if (/^\s*\[.+\]\s*$/.test(lines[i] || '')) { end = i; break; }
-  }
-  const keyPattern = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`);
-  for (let i = start + 1; i < end; i += 1) {
-    if (keyPattern.test(lines[i] || '')) {
-      lines[i] = line;
-      return lines.join('\n').replace(/\n{3,}/g, '\n\n');
-    }
-  }
-  lines.splice(end, 0, line);
-  return lines.join('\n').replace(/\n{3,}/g, '\n\n');
-}
-
 function hasTomlTableKey(text: any, table: any, key: any) {
   const lines = String(text || '').split('\n');
   const start = lines.findIndex((line) => line.trim() === `[${table}]`);
@@ -177,11 +146,6 @@ function hasTomlTableKey(text: any, table: any, key: any) {
     if (keyPattern.test(lines[i] || '')) return true;
   }
   return false;
-}
-
-function upsertTomlTableKeyIfAbsent(text: any, table: any, line: any) {
-  const key = String(line).split('=')[0]?.trim() ?? '';
-  return hasTomlTableKey(text, table, key) ? String(text || '') : upsertTomlTableKey(text, table, line);
 }
 
 function upsertTopLevelTomlBooleanIfAbsent(text: any, key: any, value: any) {

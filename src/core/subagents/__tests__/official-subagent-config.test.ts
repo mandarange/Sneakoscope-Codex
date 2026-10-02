@@ -172,8 +172,9 @@ test('fresh project config receives the official Codex subagent defaults', () =>
 
   assert.equal(parsed.agents.max_concurrent_threads_per_session, 256)
   assert.equal(parsed.agents.max_depth, 1)
-  assert.equal(parsed.agents.enabled, true)
-  assert.equal(parsed.agents.interrupt_message, true)
+  // enabled / interrupt_message default to true in Codex 0.153.4 and 0.159.2: nothing to freeze.
+  assert.equal(Object.hasOwn(parsed.agents, 'enabled'), false)
+  assert.equal(Object.hasOwn(parsed.agents, 'interrupt_message'), false)
   assert.equal(parsed.agents.default_subagent_model, latestModelForTier('deep'))
   assert.equal(parsed.agents.default_subagent_reasoning_effort, 'low')
   assert.equal(Object.hasOwn(parsed.agents, 'job_max_runtime_seconds'), false)
@@ -181,7 +182,8 @@ test('fresh project config receives the official Codex subagent defaults', () =>
   assert.equal(Object.hasOwn(parsed.agents, 'warn_on_max_threads'), false)
   assert.equal(parsed.features.multi_agent_v2.enabled, true)
   assert.equal(parsed.features.multi_agent_v2.max_concurrent_threads_per_session, 257)
-  assert.equal(parsed.features.multi_agent_v2.expose_spawn_agent_model_overrides, true)
+  // expose_spawn_agent_model_overrides defaults to true on both supported Codex versions.
+  assert.equal(Object.hasOwn(parsed.features.multi_agent_v2, 'expose_spawn_agent_model_overrides'), false)
 })
 
 test('child default normalization keeps current tier models and moves older ones to the latest deep tier', async (t) => {
@@ -658,7 +660,7 @@ test('official config merge supports an agents header with an inline comment', (
   assert.equal(parsed.agents.max_concurrent_threads_per_session, 256)
   assert.equal(parsed.agents.max_depth, 1)
   assert.equal(Object.hasOwn(parsed.agents, 'job_max_runtime_seconds'), false)
-  assert.equal(parsed.agents.interrupt_message, true)
+  assert.equal(Object.hasOwn(parsed.agents, 'interrupt_message'), false)
   assert.match(merged, /\[agents\] # operator note/)
 })
 
@@ -959,7 +961,7 @@ test('doctor repair migrates an SKS-owned legacy thread value and preserves max_
   assert.equal(parsed.agents.max_concurrent_threads_per_session, 256)
   assert.equal(parsed.agents.max_depth, 4)
   assert.equal(Object.hasOwn(parsed.agents, 'job_max_runtime_seconds'), false)
-  assert.equal(parsed.agents.interrupt_message, true)
+  assert.equal(Object.hasOwn(parsed.agents, 'interrupt_message'), false)
   assert.ok(result.config_file_repair.warnings.includes('official_subagent_max_depth_coerced_to_one:4:project'))
   assert.deepEqual(
     (await fs.readdir(path.join(root, '.codex', 'agents'))).sort(),

@@ -6,11 +6,16 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import {
   DEPRECATED_CODEX_HOOKS_ALIAS_FLAG,
-  MANAGED_CODEX_FEATURE_FLAGS,
   REMOVED_CODEX_FEATURE_FLAGS
 } from '../../dist/core/codex/codex-feature-flags.js';
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..');
+
+// The [features] keys older SKS versions wrote as `= true` at install and on every merge.
+const FORMERLY_SEEDED_STABLE_FLAGS = [
+  'hooks', 'fast_mode', 'apps', 'computer_use', 'browser_use', 'browser_use_external',
+  'image_generation', 'in_app_browser', 'guardian_approval', 'tool_suggest', 'plugins'
+];
 
 // `codex features list` is the only authority for what the installed Codex
 // accepts. The previous list was hand-maintained and drifted: nine of its
@@ -73,9 +78,11 @@ test('SKS only strips Codex feature flags Codex itself no longer honours', () =>
     `these flags are still live in the installed Codex and must not be stripped: ${wronglyStripped.join(', ')}`
   );
 
-  // The flags SKS seeds must exist and be honoured, or the seed is a no-op.
-  for (const flag of MANAGED_CODEX_FEATURE_FLAGS) {
-    assert.equal(stages.get(flag), 'stable', `managed feature flag ${flag} is not stable in the installed Codex`);
+  // SKS seeds no [features] flag any more. The flags it used to write `= true` are stable and already
+  // on with an EMPTY config, so a seeded line only froze today's default into the user's file.
+  for (const flag of FORMERLY_SEEDED_STABLE_FLAGS) {
+    assert.equal(stages.get(flag), 'stable', `${flag} is not stable in the installed Codex`);
+    assert.equal(stages.enabled.get(flag), true, `${flag} is not on by default in the installed Codex`);
   }
 
   // multi_agent_v2 is the feature the whole official-subagent lane depends on.

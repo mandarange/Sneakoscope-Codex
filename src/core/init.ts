@@ -9,7 +9,7 @@ import { disableVersionGitHook } from './version-manager.js';
 import { concurrentToolGuidanceText, coreEngineeringDirectiveReferenceText, coreEngineeringDirectiveText } from './lean-engineering-policy.js';
 import { DEFAULT_CODEX_APP_PLUGINS, DESIGN_SYSTEM_SSOT, DOLLAR_COMMANDS, DOLLAR_SKILL_NAMES, LEGACY_DOLLAR_SKILL_NAMES, PPT_CONDITIONAL_SKILL_ALLOWLIST, PPT_PIPELINE_MCP_ALLOWLIST, PPT_PIPELINE_SKILL_ALLOWLIST, RECOMMENDED_DESIGN_REFERENCES, RECOMMENDED_MCP_SERVERS, RECOMMENDED_SKILLS, context7ConfigToml, prefixKnownSksDollarReferences, sksPrefixedDollarCommand, triwikiContextTracking } from './routes.js';
 import { SKILL_DREAM_POLICY } from './skill-forge.js';
-import { DEPRECATED_CODEX_HOOKS_ALIAS_FLAG, MANAGED_CODEX_FEATURE_FLAGS, REMOVED_CODEX_FEATURE_FLAGS } from './codex/codex-feature-flags.js';
+import { DEPRECATED_CODEX_HOOKS_ALIAS_FLAG, REMOVED_CODEX_FEATURE_FLAGS } from './codex/codex-feature-flags.js';
 import { writeCodexConfigGuarded } from './codex/codex-config-guard.js';
 import { isSksHookHandler } from './codex-hooks/sks-hook-entries.js';
 import { legacyCoreSkillNames } from './codex-native/core-skill-manifest.js';
@@ -622,12 +622,10 @@ function installPolicy(scope: any, commandPrefix: any) {
   };
 }
 
-// SKS-managed Codex App feature flags. Seeded as defaults for fresh configs but
-// NEVER force-re-enabled on upgrade: force-writing these reverted a user's
-// `enabled = false` and blanked/broke the Codex App UI (same rationale as the
-// install-helpers path). All are SET-IF-ABSENT below.
-// Seeded and stripped `[features]` keys live in ./codex/codex-feature-flags.js,
-// where a unit test pins them against the vendored Codex binary.
+// The managed merge seeds no stable `[features]` flag: they are already on by default in
+// Codex (see ./codex/codex-feature-flags.js, where a unit test pins the stripped keys
+// against the vendored Codex binary), and force-writing them once reverted a user's
+// `enabled = false` and broke the Codex App UI.
 
 function mergeManagedCodexConfigToml(existingContent: any = '', opts: any = {}) {
   let next = String(existingContent || '').trimEnd();
@@ -641,11 +639,7 @@ function mergeManagedCodexConfigToml(existingContent: any = '', opts: any = {}) 
   }
   next = removeTomlTableKey(next, 'features', DEPRECATED_CODEX_HOOKS_ALIAS_FLAG, 'true');
   next = upsertTopLevelTomlBooleanIfAbsent(next, 'suppress_unstable_features_warning', true);
-  // Codex App feature flags: SET-IF-ABSENT only (see note above); flags the
-  // 2026-07 renewal removed from the schema are stripped.
-  for (const flag of MANAGED_CODEX_FEATURE_FLAGS) {
-    next = upsertTomlTableKeyIfAbsent(next, 'features', `${flag} = true`);
-  }
+  // Keys Codex does not read at all are stripped; nothing is seeded.
   for (const flag of REMOVED_CODEX_FEATURE_FLAGS) {
     next = removeTomlTableKey(next, 'features', flag);
   }
@@ -753,25 +747,6 @@ function hasTomlTable(text: any, table: any): boolean {
   return new RegExp(`(^|\\n)\\s*\\[${escapeRegExp(table)}\\]\\s*(?:#.*)?(?=\\n|$)`).test(String(text || ''));
 }
 
-function hasTomlTableKey(text: any, table: any, key: any): boolean {
-  const lines = String(text || '').split('\n');
-  const header = `[${table}]`;
-  const start = lines.findIndex((x: any) => x.trim() === header);
-  if (start === -1) return false;
-  let end = lines.length;
-  for (let i = start + 1; i < lines.length; i += 1) {
-    if (/^\s*\[.+\]\s*$/.test(lines[i] || '')) { end = i; break; }
-  }
-  const re = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`);
-  for (let i = start + 1; i < end; i += 1) if (re.test(lines[i] || '')) return true;
-  return false;
-}
-
-function upsertTomlTableKeyIfAbsent(text: any, table: any, line: any) {
-  const key = (String(line).split('=')[0] || '').trim();
-  return hasTomlTableKey(text, table, key) ? String(text || '') : upsertTomlTableKey(text, table, line);
-}
-
 function removeTomlTableKey(text: any, table: any, key: any, expectedValue: any = null) {
   const lines = String(text || '').trimEnd().split('\n');
   if (lines.length === 1 && lines[0] === '') return '';
@@ -800,33 +775,6 @@ function managedCodexConfigBlocks() {
       text: '[auto_review]\npolicy = "In MAD-SKS launches, allow only the scoped high-risk surfaces approved for the active invocation. The explicit sks mad-sks sql|apply-migration invocation is the SQL-plane approval boundary: execute only requested SQL-plane mutations with mission-local write transport, literal catastrophic-intent binding, read-back proof, and final read-only restoration. Supabase project/account/billing/credential control-plane actions remain denied."'
     }
   ];
-}
-
-function upsertTomlTableKey(text: any, table: any, line: any) {
-  const key = (String(line).split('=')[0] || '').trim();
-  let lines = String(text || '').split('\n');
-  if (lines.length === 1 && lines[0] === '') lines = [];
-  const header = `[${table}]`;
-  let start = lines.findIndex((x: any) => x.trim() === header);
-  if (start === -1) {
-    const prefix = lines.length && (lines[lines.length - 1] || '').trim() ? ['', header, line] : [header, line];
-    return [...lines, ...prefix].join('\n').replace(/\n{3,}/g, '\n\n');
-  }
-  let end = lines.length;
-  for (let i = start + 1; i < lines.length; i++) {
-    if (/^\s*\[.+\]\s*$/.test(lines[i] || '')) {
-      end = i;
-      break;
-    }
-  }
-  for (let i = start + 1; i < end; i++) {
-    if (new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`).test(lines[i] || '')) {
-      lines[i] = line;
-      return lines.join('\n').replace(/\n{3,}/g, '\n\n');
-    }
-  }
-  lines.splice(start + 1, 0, line);
-  return lines.join('\n').replace(/\n{3,}/g, '\n\n');
 }
 
 function upsertTomlTable(text: any, table: any, block: any) {

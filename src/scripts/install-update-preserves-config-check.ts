@@ -68,7 +68,9 @@ const results = [];
     && !/^model\s*=/m.test(topLevel)
     && !/^model_reasoning_effort\s*=/m.test(topLevel)
     && !/^service_tier = "fast"/m.test(topLevel)
-    && /\[features\]/.test(after)
+    && /\[features\.multi_agent_v2\]/.test(after)             // the MA v2 opt-in table SKS still writes
+    && !/^\s*(hooks|fast_mode|apps|computer_use|browser_use|browser_use_external|image_generation|in_app_browser|guardian_approval|tool_suggest|plugins)\s*=/m.test(after) // stable-on flags are not frozen into the file
+    && !/expose_spawn_agent_model_overrides/.test(after)
     && !/^max_threads\s*=/m.test(after);
   results.push({ case: 'fresh_config_seeds_defaults', ok, status: res.status });
 }

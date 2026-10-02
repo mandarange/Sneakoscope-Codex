@@ -61,13 +61,15 @@ assertGate(
 // Any remaining explicit config writes use the guarded desktop policy and backup.
 assertGate(desktopConfigPolicy.includes('backupCodexConfig'), 'postinstall config writes must back up the existing config');
 
-// Host-owned feature choices are set-if-absent, and model/reasoning keys are
-// changed only when bounded SKS provenance proves SKS created them.
+// Stable feature flags are never seeded (Codex already defaults them on), so host-owned feature
+// choices cannot be reverted, and model/reasoning keys are changed only when bounded SKS
+// provenance proves SKS created them.
 assertGate(
-  desktopConfigPolicy.includes('upsertTomlTableKeyIfAbsent')
+  !desktopConfigPolicy.includes("'computer_use = true'")
+    && !desktopConfigPolicy.includes('upsertTomlTableKey')
     && desktopConfigPolicy.includes('removeLegacyTopLevelCodexModeLocks')
     && codexConfigGuard.includes('hasSksModeLockProvenance'),
-  'postinstall must preserve host-owned feature/model choices'
+  'postinstall must not seed stable feature flags and must preserve host-owned model choices'
 );
 
 // The postinstall() body must be wrapped in try/catch/finally so it never fails `npm install`.
@@ -144,8 +146,8 @@ const mergeCandidates = [mergeNextExport, mergeNextAsync, mergeNextFn].filter((i
 const mergeEnd = mergeCandidates.length ? Math.min(...mergeCandidates) : init.length;
 const mergeBody = init.slice(mergeStart, mergeEnd);
 assertGate(
-  mergeBody.includes('upsertTomlTableKeyIfAbsent'),
-  'managed config merge must set feature flags only when absent'
+  !/upsertTomlTableKey(?:IfAbsent)?\(next, 'features'/.test(mergeBody),
+  'managed config merge must not seed stable [features] flags (they are already on by default in Codex)'
 );
 assertGate(
   mergeBody.includes("SKS_MANAGE_CODEX_APP_PLUGINS === '1'"),

@@ -1,21 +1,19 @@
 /**
- * The `[features]` keys SKS seeds, and the ones it strips.
+ * The `[features]` keys SKS strips from user configs.
  *
- * Stripping is destructive in one direction only: deleting the line for a flag
- * Codex STILL supports restores Codex's own default, which is `true` for every
- * stable flag. The previous hand-maintained list had drifted to include nine
- * live flags — `computer_use`, `browser_use`, `browser_use_external`,
- * `image_generation`, `in_app_browser`, `guardian_approval`, `tool_suggest`,
- * `plugins`, and `multi_agent` — so a user's explicit `= false` was deleted and
- * silently reverted to `true`.
+ * SKS no longer seeds any `[features]` flag. `hooks`, `fast_mode`, `apps`,
+ * `computer_use`, `browser_use`, `browser_use_external`, `image_generation`,
+ * `in_app_browser`, `guardian_approval`, `tool_suggest` and `plugins` are
+ * `stable true` in `codex features list` on 0.153.4 and 0.159.2, so a line saying
+ * `= true` changes nothing and only freezes today's default into the user's file.
+ * (A fresh sandbox CODEX_HOME with an empty config reports all eleven true on both.)
  *
- * Only flags Codex reports as `removed`, or does not know at all, belong in
- * REMOVED_CODEX_FEATURE_FLAGS: Codex ignores those, so deleting them is inert
- * cleanup. `codex features list` is the authority, and
- * `test/unit/codex-feature-flags.test.mjs` pins both lists against the vendored
- * Codex binary so they cannot rot again.
+ * Stripping is destructive in one direction only: deleting the line for a flag Codex
+ * STILL supports restores Codex's own default, which is `true` for every stable flag, so
+ * a user's explicit `= false` would be silently reverted. Only keys Codex does not read
+ * at all belong in the strip lists, and `test/unit/codex-feature-flags.test.mjs` pins them
+ * against the vendored Codex binary so they cannot rot again.
  */
-export const MANAGED_CODEX_FEATURE_FLAGS = Object.freeze(['hooks', 'fast_mode', 'apps'])
 
 /**
  * `[features]` keys the installed Codex does not know at all (measured on 0.153.4 and
