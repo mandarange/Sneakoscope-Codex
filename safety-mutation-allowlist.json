@@ -4316,8 +4316,8 @@
       "file": "src/scripts/install-update-preserves-config-check.ts",
       "symbol": "module",
       "token": "chmod",
-      "scope_contract_sha256": "5e7b7b297624f20f70bc9b5c38120187bc77ecc90b2cc8913623d88dabdd6b23",
-      "callsite_sha256": "f3565c7dde599542fbb96a50e06489aa1eed1e2fef93aad826fd2fbae7541969",
+      "scope_contract_sha256": "17ddd6b620193e9e3b846db1cda60991b5e8acfadec4b792ff76cb28002b6ba2",
+      "callsite_sha256": "6a5be4af30dfa9e5a68edb523fdc7dea798dc6e639f6b4bc7bf0da246b91df7e",
       "occurrence": 1,
       "reason": "Release/check script marks a mkdtemp fake Codex fixture executable so Context7 global setup preservation can be tested without mutating user config."
     },
@@ -4325,8 +4325,8 @@
       "file": "src/scripts/install-update-preserves-config-check.ts",
       "symbol": "module",
       "token": "fs.writeFile",
-      "scope_contract_sha256": "5e7b7b297624f20f70bc9b5c38120187bc77ecc90b2cc8913623d88dabdd6b23",
-      "callsite_sha256": "95f1d7b999d767da86e78dd8093925c2a5baac0d60c2928b4ff8ac4fa1dbff35",
+      "scope_contract_sha256": "17ddd6b620193e9e3b846db1cda60991b5e8acfadec4b792ff76cb28002b6ba2",
+      "callsite_sha256": "0dc52f726e5f0626d43e125bc2f34a07c3af9131e349a48ead350a324d0de07f",
       "occurrence": 1,
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
@@ -4334,8 +4334,8 @@
       "file": "src/scripts/install-update-preserves-config-check.ts",
       "symbol": "module",
       "token": "fs.writeFile",
-      "scope_contract_sha256": "5e7b7b297624f20f70bc9b5c38120187bc77ecc90b2cc8913623d88dabdd6b23",
-      "callsite_sha256": "973db3c6e68067a04c8fa5eb961b040bde267b1374bad9da127b9f9e70334d76",
+      "scope_contract_sha256": "17ddd6b620193e9e3b846db1cda60991b5e8acfadec4b792ff76cb28002b6ba2",
+      "callsite_sha256": "8b4952abf63f2ba666d09917e3852a5f11cf950efa6e55e64d654f3155b1b3d3",
       "occurrence": 1,
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
@@ -4343,27 +4343,27 @@
       "file": "src/scripts/install-update-preserves-config-check.ts",
       "symbol": "module",
       "token": "fs.writeFile",
-      "scope_contract_sha256": "5e7b7b297624f20f70bc9b5c38120187bc77ecc90b2cc8913623d88dabdd6b23",
-      "callsite_sha256": "a2c524f172548bfa653b0434b10ede9d187f090994f00ca2f063316a716bb056",
-      "occurrence": 1,
-      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
-    },
-    {
-      "file": "src/scripts/install-update-preserves-config-check.ts",
-      "symbol": "module",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "5e7b7b297624f20f70bc9b5c38120187bc77ecc90b2cc8913623d88dabdd6b23",
-      "callsite_sha256": "fdc1c4dc5664b356642845b742ca920e671539058aedd403f07b8fc29fb1f147",
-      "occurrence": 1,
-      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
-    },
-    {
-      "file": "src/scripts/install-update-preserves-config-check.ts",
-      "symbol": "module",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "5e7b7b297624f20f70bc9b5c38120187bc77ecc90b2cc8913623d88dabdd6b23",
-      "callsite_sha256": "a2c524f172548bfa653b0434b10ede9d187f090994f00ca2f063316a716bb056",
+      "scope_contract_sha256": "17ddd6b620193e9e3b846db1cda60991b5e8acfadec4b792ff76cb28002b6ba2",
+      "callsite_sha256": "0dc52f726e5f0626d43e125bc2f34a07c3af9131e349a48ead350a324d0de07f",
       "occurrence": 2,
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "src/scripts/install-update-preserves-config-check.ts",
+      "symbol": "module",
+      "token": "fs.writeFile",
+      "scope_contract_sha256": "17ddd6b620193e9e3b846db1cda60991b5e8acfadec4b792ff76cb28002b6ba2",
+      "callsite_sha256": "046171e33bb7a4be91dce96468cdd79ea521568cd9427f5c5760af2eafd177e0",
+      "occurrence": 1,
+      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "src/scripts/install-update-preserves-config-check.ts",
+      "symbol": "module",
+      "token": "fs.writeFile",
+      "scope_contract_sha256": "17ddd6b620193e9e3b846db1cda60991b5e8acfadec4b792ff76cb28002b6ba2",
+      "callsite_sha256": "ec70f02dbd2aed033ff6219fa373e6f06e5914946ade33f8dd88e5b32166ba6e",
+      "occurrence": 1,
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
@@ -4811,8 +4811,8 @@
       "file": "src/scripts/postinstall-safe-side-effects-check.ts",
       "symbol": "module",
       "token": "writeFileSync",
-      "scope_contract_sha256": "d79d3c8acd6654cdf4fdbf4c73ef0ccce99069c8036efa39feb925b8ae037390",
-      "callsite_sha256": "48104948ba94cb6ccc4c3288bfe8b4a1c058f5b15d427e1f2ecda17c48272e0b",
+      "scope_contract_sha256": "28f6c337b50cc608961450ed7b7fa33a88707a9da446a5b12ee9052bbee64da1",
+      "callsite_sha256": "17aa454b6db56a6da47d5b124d59c501eb465a91da0b63e0675e53a7ed25fdfc",
       "occurrence": 1,
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
