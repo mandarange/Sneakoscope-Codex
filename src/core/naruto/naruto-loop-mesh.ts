@@ -18,11 +18,7 @@ export async function runNarutoLoopMesh(input: {
   await writeJsonAtomic(`${loopRoot(input.root, input.plan.mission_id)}/naruto-loop-worker-routes.json`, {
     schema: 'sks.naruto-loop-worker-routes.v1',
     mission_id: input.plan.mission_id,
-    active_worker_budget: {
-      ...activeWorkerBudget,
-      usage_budget_source: loopConcurrencyBudget.usage_budget_source,
-      codex_usage_signal: loopConcurrencyBudget.codex_usage_signal
-    },
+    active_worker_budget: activeWorkerBudget,
     loop_concurrency_budget: loopConcurrencyBudget,
     routes
   });

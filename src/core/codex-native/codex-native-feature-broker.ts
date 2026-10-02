@@ -7,7 +7,6 @@ import { probeCodexAgentTypeSupport } from '../codex-app/codex-agent-type-probe.
 import { probeCodexHookApprovalState } from '../codex-app/codex-hook-approval-probe.js'
 import { detectCodexCurrentAppCapability } from '../codex-control/codex-current-app-capability.js'
 import { detectCodexCurrentCoreCapability } from '../codex-control/codex-current-core-capability.js'
-import { detectCodexCurrentFeatureCapability } from '../codex-control/codex-current-feature-capability.js'
 import { detectCodexCurrentCapability, type CodexCurrentFeatureKey } from '../codex-control/codex-current-capability.js'
 import { buildCodexPluginInventory } from '../codex-plugins/codex-plugin-json.js'
 import { nowIso, runProcess, sha256, writeJsonAtomic } from '../fsx.js'
@@ -54,7 +53,6 @@ export async function buildCodexNativeFeatureMatrix(input: {
     fixture: [
       process.env.SKS_CODEX_CURRENT_APP_FAKE,
       process.env.SKS_CODEX_CURRENT_CORE_FAKE,
-      process.env.SKS_CODEX_CURRENT_FEATURE_FAKE,
       process.env.SKS_CODEX_CURRENT_FAKE,
       process.env.SKS_CODEX_PLUGIN_JSON_FAKE
     ]
@@ -62,12 +60,11 @@ export async function buildCodexNativeFeatureMatrix(input: {
   if (!input.missionDir && !repairManagedAssets && invocationMatrixCache.has(cacheKey)) {
     return invocationMatrixCache.get(cacheKey) as CodexNativeFeatureMatrix
   }
-  const fixtureMode = process.env.SKS_CODEX_CURRENT_APP_FAKE === '1' || process.env.SKS_CODEX_CURRENT_CORE_FAKE === '1' || process.env.SKS_CODEX_CURRENT_FEATURE_FAKE === '1' || process.env.SKS_CODEX_CURRENT_FAKE === '1' || process.env.SKS_CODEX_PLUGIN_JSON_FAKE === '1'
+  const fixtureMode = process.env.SKS_CODEX_CURRENT_APP_FAKE === '1' || process.env.SKS_CODEX_CURRENT_CORE_FAKE === '1' || process.env.SKS_CODEX_CURRENT_FAKE === '1' || process.env.SKS_CODEX_PLUGIN_JSON_FAKE === '1'
   const codexBin = fixtureMode ? process.env.CODEX_BIN || 'codex' : await findCodexBinary().catch(() => null)
   const version = codexBin ? await codexVersion(codexBin) : null
   const currentApp = await detectCodexCurrentAppCapability({ codexBin }).catch((err: unknown) => ({ blockers: [messageOf(err)] }))
   const currentCore = await detectCodexCurrentCoreCapability({ codexBin }).catch((err: unknown) => ({ blockers: [messageOf(err)] }))
-  const currentFeatures = await detectCodexCurrentFeatureCapability({ codexBin }).catch((err: unknown) => ({ blockers: [messageOf(err)] }))
   const currentCapability = await detectCodexCurrentCapability({ codexBin, root }).catch((err: unknown) => ({
     schema: 'sks.codex-current-capability.v1',
     ok: false,
@@ -174,17 +171,6 @@ export async function buildCodexNativeFeatureMatrix(input: {
     native_thread_list_search: codexCurrentState(currentCapability, 'native_thread_list_search_schema'),
     remote_native_environment: codexCurrentState(currentCapability, 'remote_native_environment_schema'),
     app_server_overload: codexCurrentState(currentCapability, 'app_server_overload_schema'),
-    codex_current_feature: boolState(booleanFeature(currentFeatures, 'supports_current_contract'), 'actual-probe', '.sneakoscope/codex-current-feature-capability.json', blockersOf(currentFeatures)),
-    usage_views: boolState(booleanFeature((currentFeatures as any)?.features || {}, 'usage_views'), 'actual-probe', '.sneakoscope/codex-current-feature-capability.json', blockersOf(currentFeatures)),
-    goal_attachment_preservation: boolState(booleanFeature((currentFeatures as any)?.features || {}, 'goal_attachment_preservation'), 'actual-probe', '.sneakoscope/codex-current-feature-capability.json', blockersOf(currentFeatures)),
-    session_delete: boolState(booleanFeature((currentFeatures as any)?.features || {}, 'session_delete'), 'actual-probe', '.sneakoscope/codex-current-feature-capability.json', blockersOf(currentFeatures)),
-    import_command: boolState(booleanFeature((currentFeatures as any)?.features || {}, 'import_command'), 'actual-probe', '.sneakoscope/codex-current-feature-capability.json', blockersOf(currentFeatures)),
-    unified_mentions: boolState(booleanFeature((currentFeatures as any)?.features || {}, 'unified_mentions'), 'actual-probe', '.sneakoscope/codex-current-feature-capability.json', blockersOf(currentFeatures)),
-    bedrock_managed_auth: boolState(booleanFeature((currentFeatures as any)?.features || {}, 'bedrock_managed_auth'), 'actual-probe', '.sneakoscope/codex-current-feature-capability.json', blockersOf(currentFeatures)),
-    sqlite_auto_recovery: boolState(booleanFeature((currentFeatures as any)?.features || {}, 'sqlite_auto_recovery'), 'actual-probe', '.sneakoscope/codex-current-feature-capability.json', blockersOf(currentFeatures)),
-    mcp_reliability: boolState(booleanFeature((currentFeatures as any)?.features || {}, 'mcp_reliability'), 'actual-probe', '.sneakoscope/codex-current-feature-capability.json', blockersOf(currentFeatures)),
-    non_tty_interrupt: boolState(booleanFeature((currentFeatures as any)?.features || {}, 'non_tty_interrupt'), 'actual-probe', '.sneakoscope/codex-current-feature-capability.json', blockersOf(currentFeatures)),
-    large_repo_responsiveness: boolState(booleanFeature((currentFeatures as any)?.features || {}, 'large_repo_responsiveness'), 'actual-probe', '.sneakoscope/codex-current-feature-capability.json', blockersOf(currentFeatures)),
     slash_command_bridge: boolState(true, 'config', '.sneakoscope/reports/codex-native-feature-matrix.json'),
     project_memory: boolState(true, 'config', '.sneakoscope/context/AGENTS.generated.md')
   }
@@ -197,7 +183,6 @@ export async function buildCodexNativeFeatureMatrix(input: {
     probes: {
       codex_current_app: currentApp,
       codex_current_core: currentCore,
-      codex_current_feature: currentFeatures,
       codex_current: currentCapability,
       app,
       plugin_inventory: plugins,

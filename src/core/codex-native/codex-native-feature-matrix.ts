@@ -64,17 +64,6 @@ export interface CodexNativeFeatureMatrix {
     native_thread_list_search: CodexNativeFeatureState
     remote_native_environment: CodexNativeFeatureState
     app_server_overload: CodexNativeFeatureState
-    codex_current_feature: CodexNativeFeatureState
-    usage_views: CodexNativeFeatureState
-    goal_attachment_preservation: CodexNativeFeatureState
-    session_delete: CodexNativeFeatureState
-    import_command: CodexNativeFeatureState
-    unified_mentions: CodexNativeFeatureState
-    bedrock_managed_auth: CodexNativeFeatureState
-    sqlite_auto_recovery: CodexNativeFeatureState
-    mcp_reliability: CodexNativeFeatureState
-    non_tty_interrupt: CodexNativeFeatureState
-    large_repo_responsiveness: CodexNativeFeatureState
     slash_command_bridge: CodexNativeFeatureState
     project_memory: CodexNativeFeatureState
   }

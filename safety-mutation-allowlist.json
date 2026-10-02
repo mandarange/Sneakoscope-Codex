@@ -389,42 +389,6 @@
       "reason": "Current Codex core-probe cleanup removes only the fixed project-local .sneakoscope/tmp/codex-current-core-real-probes directory after its probes finish."
     },
     {
-      "file": "src/core/codex-control/codex-current-feature-probes.ts",
-      "symbol": "probeLargeRepoResponsiveness",
-      "token": "fs.rm",
-      "scope_contract_sha256": "b983e6405573d792aecb078e16f1d9c649d7c3c3c99de35f237eefdc077d4f32",
-      "callsite_sha256": "ebc286d25a4e1540248a7589fa0471b391184744c867fb1bffb6fcec9a4b18c1",
-      "occurrence": 1,
-      "reason": "Current Codex large-repo probe removes only its mkdtemp-created isolated temp fixture directory after scan timing."
-    },
-    {
-      "file": "src/core/codex-control/codex-current-feature-probes.ts",
-      "symbol": "probeLargeRepoResponsiveness.callback@218",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "1b82625b0dd44abe8168b029df7148c26c583b3384a56590dcd4d8891e86eb0d",
-      "callsite_sha256": "86b375c80573478c5614296d13ed05bf896c11cf4595bad0b8cfb58dee707d9a",
-      "occurrence": 1,
-      "reason": "Current Codex large-repo probe writes small fixture files only inside its mkdtemp-created isolated temp directory."
-    },
-    {
-      "file": "src/core/codex-control/codex-current-feature-probes.ts",
-      "symbol": "probeSqliteRecovery",
-      "token": "fs.rm",
-      "scope_contract_sha256": "1986d083d8847e18aebd89bc0dde5016296a5d37b4d3256f8f1999cbcc22f22f",
-      "callsite_sha256": "343e32406bb9e9c5bf1d154e3b0578c14c2a6e9e70a92fa75c6465c51efbe305",
-      "occurrence": 1,
-      "reason": "Current Codex SQLite recovery probe removes only its mkdtemp-created isolated temp fixture directory after the probe completes."
-    },
-    {
-      "file": "src/core/codex-control/codex-current-feature-probes.ts",
-      "symbol": "probeSqliteRecovery",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "1986d083d8847e18aebd89bc0dde5016296a5d37b4d3256f8f1999cbcc22f22f",
-      "callsite_sha256": "c3d3d24292bd866af49388be06e5ef755082fdde36bb41334c183fe4538a6135",
-      "occurrence": 1,
-      "reason": "Current Codex SQLite recovery probe writes a deliberately corrupt database fixture only inside its mkdtemp-created isolated temp directory."
-    },
-    {
       "file": "src/core/codex-control/codex-sdk-env-policy.ts",
       "symbol": "prepareNativeCodexAuthBridge",
       "token": "chmod",
