@@ -87,17 +87,6 @@ export function readMaxCycles(args: any, fallback: any) {
   return readBoundedIntegerFlag(args, '--max-cycles', fallback, 1, 50);
 }
 
-export function ambientGoalContinuation() {
-  return {
-    schema_version: 1,
-    enabled: true,
-    mode: 'codex_native_goal_only',
-    native_slash_command: '/goal',
-    non_disruptive: true,
-    rule: 'Use Codex native Goal as the only persisted goal owner. Never create SKS Goal missions, bridge artifacts, compatibility loops, or fallback goal state.'
-  };
-}
-
 export function knownGeneratedSkillNames() {
   return Array.from(new Set([...DOLLAR_SKILL_NAMES, ...RECOMMENDED_SKILLS]));
 }

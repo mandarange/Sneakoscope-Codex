@@ -89,16 +89,6 @@ export const PIPELINE_PLAN_ARTIFACT = 'pipeline-plan.json';
 export const PIPELINE_PLAN_SCHEMA_VERSION = 1;
 const SKILL_DREAM_HOT_PATH_COUNTERS = new Map<string, number>();
 
-function ambientGoalContinuation() {
-  return {
-    schema_version: 1,
-    enabled: true,
-    mode: 'codex_native_goal_only',
-    native_slash_command: '/goal',
-    non_disruptive: true,
-    rule: 'Codex native Goal is the only persisted goal owner. SKS must not create Goal missions, bridge artifacts, compatibility loops, or fallback goal state.'
-  };
-}
 const REFLECTION_ARTIFACT = 'reflection.md';
 const REFLECTION_GATE = 'reflection-gate.json';
 const REFLECTION_MEMORY_PATH = '.sneakoscope/memory/q2_facts/post-route-reflection.md';
@@ -210,7 +200,6 @@ export function buildPipelinePlan(input: any = {}) {
     route_economy: routeEconomy,
     official_subagents: officialSubagentPolicy,
     skill_dream: input.skillDream || { attached: false, reason: 'skill dreaming uses cheap counters and only runs inventory at threshold' },
-    goal_continuation: ambientGoalContinuation(),
     next_actions: planNextActions(route, task, taskProfile, ambiguity, lane),
     no_unrequested_fallback_code: true
   };
@@ -1488,7 +1477,7 @@ function routeState(id: any, route: any, phase: any, context7Required: any, extr
   const subagentsRequired = routeRequiresSubagents(route, extra.prompt || '');
   // Default off: only a caller that spread pipelinePlanState(plan) — i.e. a
   // plan that seeded engineering-sanity-review.json — may turn this gate on.
-  return { mission_id: id, route: route.id, route_command: route.command, mode: route.mode, phase, context7_required: context7Required, context7_verified: false, subagents_required: subagentsRequired, subagents_verified: !subagentsRequired, native_sessions_required: false, native_sessions_verified: false, reflection_required: route.stopGate !== 'none' && reflectionRequiredForRoute(route), engineering_sanity_required: false, engineering_sanity_scope_base: null, architecture_map_required: false, visible_progress_required: true, context_tracking: 'triwiki', required_skills: route.requiredSkills, stop_gate: route.stopGate, reasoning_effort: reasoning.effort, reasoning_profile: reasoning.profile, reasoning_temporary: false, reasoning_advisory: true, goal_continuation: ambientGoalContinuation(), ...extra };
+  return { mission_id: id, route: route.id, route_command: route.command, mode: route.mode, phase, context7_required: context7Required, context7_verified: false, subagents_required: subagentsRequired, subagents_verified: !subagentsRequired, native_sessions_required: false, native_sessions_verified: false, reflection_required: route.stopGate !== 'none' && reflectionRequiredForRoute(route), engineering_sanity_required: false, engineering_sanity_scope_base: null, architecture_map_required: false, visible_progress_required: true, context_tracking: 'triwiki', required_skills: route.requiredSkills, stop_gate: route.stopGate, reasoning_effort: reasoning.effort, reasoning_profile: reasoning.profile, reasoning_temporary: false, reasoning_advisory: true, ...extra };
 }
 
 function routeContext(route: any, id: any, task: any, required: any, next: any, pipelinePlan: any = null, root = process.cwd()) {
