@@ -2,23 +2,26 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { packageRoot } from '../fsx.js';
 
-export const CODEX_RUNTIME_CONTRACT_SCHEMA = 'sks.codex-runtime-contract.v2' as const;
+export const CODEX_RUNTIME_CONTRACT_SCHEMA = 'sks.codex-runtime-contract.v3' as const;
 
-export type CodexFeaturePolicy = 'delegate' | 'probe' | 'wrap' | 'disable';
+/**
+ * Oldest Codex CLI release SKS runs against.
+ *
+ * A literal on purpose: it moves when SKS stops supporting an older Codex, not when the bundled
+ * `@openai/codex-sdk` pin moves. It must stay at or below that pin because the bundled runtime has
+ * to pass it (the contract test pins this). Raising the floor is a one-line change here.
+ */
+export const CODEX_MIN_VERSION = '0.153.4';
 
 export interface CodexRuntimeContract {
   readonly schema: typeof CODEX_RUNTIME_CONTRACT_SCHEMA;
+  /** Release tag of the bundled runtime (the SDK pin), not a support requirement. */
   readonly targetTag: string;
-  readonly requiredCliVersion: string;
-  readonly preferredCliVersion: string;
+  /** Exact `@openai/codex-sdk` dependency; the bundled Codex runtime resolves to the same version. */
   readonly sdkVersion: string;
-  readonly minimumSupportedVersion: string;
-  readonly narutoCapabilityFloorVersion: string;
-  readonly protocolMode: 'exec-sdk' | 'app-server-v2';
+  /** Support floor; see CODEX_MIN_VERSION. */
+  readonly minVersion: string;
   readonly dependencySource: 'package.json#dependencies.@openai/codex-sdk';
-  readonly featurePolicies: Record<string, CodexFeaturePolicy>;
-  readonly requiredRealProbes: readonly string[];
-  readonly supportedPlatforms: readonly string[];
 }
 
 const sdkVersion = codexSdkDependencyVersion();
@@ -26,51 +29,10 @@ const sdkVersion = codexSdkDependencyVersion();
 export const CURRENT_CODEX_RUNTIME_CONTRACT: CodexRuntimeContract = {
   schema: CODEX_RUNTIME_CONTRACT_SCHEMA,
   targetTag: `rust-v${sdkVersion}`,
-  requiredCliVersion: sdkVersion,
-  preferredCliVersion: sdkVersion,
   sdkVersion,
-  minimumSupportedVersion: sdkVersion,
-  narutoCapabilityFloorVersion: sdkVersion,
-  protocolMode: 'app-server-v2',
-  dependencySource: 'package.json#dependencies.@openai/codex-sdk',
-  featurePolicies: {
-    multiAgentMode: 'delegate',
-    multiAgentV2: 'delegate',
-    agentsMaxConcurrentThreads: 'delegate',
-    indexedWebSearch: 'probe',
-    currentTimeRead: 'wrap',
-    threadListSearchRead: 'probe',
-    pluginCatalogRefresh: 'probe',
-    terminalSubagentErrorPropagation: 'probe',
-    execMcpTransientRecovery: 'probe',
-    remoteNativeEnvironment: 'probe',
-    rolloutTokenBudget: 'probe',
-    mcpStartupToolTimeouts: 'wrap',
-    mcpPaginatedDiscovery: 'wrap',
-    portableAgentPlugins: 'delegate',
-    automaticApprovalReview: 'delegate'
-  },
-  requiredRealProbes: [
-    'runtime_identity',
-    'protocol_schema_generation',
-    'multi_agent_mode_schema',
-    'indexed_web_search_schema',
-    'current_time_read_schema',
-    'thread_list_search_schema',
-    'terminal_error_schema',
-    'rollout_budget_schema'
-  ],
-  supportedPlatforms: [
-    'darwin-arm64',
-    'darwin-x64',
-    'linux-arm64',
-    'linux-x64',
-    'win32-arm64',
-    'win32-x64'
-  ]
+  minVersion: CODEX_MIN_VERSION,
+  dependencySource: 'package.json#dependencies.@openai/codex-sdk'
 };
-
-export const NARUTO_REQUIRED_CODEX_VERSION = CURRENT_CODEX_RUNTIME_CONTRACT.narutoCapabilityFloorVersion;
 
 export function codexSdkDependencyVersion(root = packageRoot()): string {
   const packagePath = path.join(root, 'package.json');

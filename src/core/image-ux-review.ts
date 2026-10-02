@@ -143,7 +143,7 @@ export function buildImageUxReviewPolicy(contract: any = {}) {
     codex_compatibility: {
       schema: 'sks.codex-current-image-ux-contract.v1',
       target_tag: CURRENT_CODEX_RUNTIME_CONTRACT.targetTag,
-      required_version: CURRENT_CODEX_RUNTIME_CONTRACT.requiredCliVersion,
+      required_version: CURRENT_CODEX_RUNTIME_CONTRACT.minVersion,
       output_schema_preferred: true
     },
     output_schema: outputSchema,

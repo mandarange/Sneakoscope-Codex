@@ -65,7 +65,6 @@ No P0 blocker is intentionally left open for latest Codex hook schema validation
 
 Bounded claims:
 
-- A local Codex CLI older than `0.133.0` reports `compatibility_degraded`; release hook validation still uses the vendored `latest` snapshot and semantic validator.
 - Live Codex Chrome Extension availability depends on Codex App/browser setup. If it is missing, web/browser/webapp QA and UX routes halt until the user completes setup. Live Computer Use availability depends on Codex App and macOS permissions and is only for native Mac/non-web targets. If either official capability is blocked or unavailable, SKS records the status and does not fabricate visual evidence. Real native smoke remains opt-in with `SKS_TEST_REAL_COMPUTER_USE=1`.
 - codex-lb health checks can still report structured network/auth blockers; the fixed invariant is that raw missing `CODEX_LB_API_KEY` messages and secret leaks are release failures.
 - The 1.0.6 black-box fixtures validate warning-zero, strict-subset classification, setup plan/apply truthfulness, codex-lb missing-env prevention, and no forbidden Computer Use wording; broader real-world Codex App/OS capability permutations remain environment-dependent.

@@ -2309,8 +2309,8 @@
       "file": "src/core/subagents/official-subagent-runner.ts",
       "symbol": "runOfficialSubagentWorkflow",
       "token": "fsp.rm",
-      "scope_contract_sha256": "039a527f8cd6df8b0cb34251a453cd045537e45ff53d4808d20ea0ca69a22a44",
-      "callsite_sha256": "b57bdcd32e69a58aa8b3124fbed449e35e2e99287fd7f33136bd069b62715042",
+      "scope_contract_sha256": "eaa1cc196f79cc2a886cb940e025ca3b5e5d0e0e71b17097aab39b80e797d3d0",
+      "callsite_sha256": "4458945bed5381ca61377c5941afa4a9db5241d997bb0d012aa5ca0a16653802",
       "occurrence": 1,
       "reason": "The standalone parent runner removes only its run-unique temporary parent-summary file after reading it."
     },
@@ -5729,8 +5729,8 @@
       "file": "src/scripts/official-docs-compat-report.ts",
       "symbol": "module",
       "token": "writeFileSync",
-      "scope_contract_sha256": "963a78fabfa2050696b1e9e39e2e91ffdf09a8f029eb2568d826d4129bb337ca",
-      "callsite_sha256": "a50ddc8fe62efb7a35caf75b7e54f6a76ca87a9bf89187c5d1b014657dd362ac",
+      "scope_contract_sha256": "5fe39343b7ecdef3b2e6e81e6c373f2aac46edf2c7ceb00e513c6a02e4a41a70",
+      "callsite_sha256": "177b4e292fe14867ceb8319d34d393a3a765ca9067ab8a2bcafecce0d387dcd5",
       "occurrence": 1,
       "reason": "Official-docs compatibility report writes only its project-local JSON and Markdown report artifacts."
     },
@@ -5738,8 +5738,8 @@
       "file": "src/scripts/official-docs-compat-report.ts",
       "symbol": "module",
       "token": "writeFileSync",
-      "scope_contract_sha256": "963a78fabfa2050696b1e9e39e2e91ffdf09a8f029eb2568d826d4129bb337ca",
-      "callsite_sha256": "1f71f171e05410c66b0e539626d3631f2f463bbdba2b49502b011d8677c5b9d1",
+      "scope_contract_sha256": "5fe39343b7ecdef3b2e6e81e6c373f2aac46edf2c7ceb00e513c6a02e4a41a70",
+      "callsite_sha256": "c90bba55b7c2919d2874ab68849ad01ed009a50a6735a34c4815789f6e39d65f",
       "occurrence": 1,
       "reason": "Official-docs compatibility report writes only its project-local JSON and Markdown report artifacts."
     },

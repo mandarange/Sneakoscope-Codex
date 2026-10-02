@@ -14,7 +14,7 @@ import {
   stripRetiredDirectProviderEnv
 } from '../codex-control/desktop-bridge-launch-guard.js'
 import { prepareCodexAppServerRuntimeEnv } from '../codex-control/codex-app-server-runtime-env.js'
-import { probeNarutoCodexCapability } from '../codex-compat/codex-capability-matrix.js'
+import { assertCodexFloor } from '../codex-compat/codex-version-policy.js'
 import { resolveOfficialCodexPackageRuntime } from '../codex-runtime/resolve-codex-runtime.js'
 import { withFileLock } from '../locks/file-lock.js'
 import {
@@ -535,15 +535,11 @@ export async function runOfficialSubagentWorkflow(input: OfficialSubagentWorkflo
     codexVersion = runtime.identity.version || null
   }
 
-  // Naruto requires Codex multi-agent V2 when available; older hosts fail with
+  // Naruto needs a Codex at or above the supported floor; older hosts fail with
   // an update CTA instead of silently reviving a legacy process runtime.
   if (!input.runProcessImpl) {
-    const capability = await probeNarutoCodexCapability({
-      codexBin: codexCommand,
-      version: codexVersion,
-      env: childEnv
-    })
-    if (!capability.naruto.ok) {
+    const floor = assertCodexFloor(codexVersion)
+    if (!floor.ok) {
       return {
         ...base,
         ok: false,
@@ -554,9 +550,8 @@ export async function runOfficialSubagentWorkflow(input: OfficialSubagentWorkflo
         parent_summary_file: null,
         host_capability_runtime: hostCapabilityRuntime,
         host_capability_evidence: hostCapabilityCollector.finish(),
-        capability_matrix: capability.matrix,
-        blockers: [...capability.naruto.blockers],
-        operator_actions: capability.naruto.guidance,
+        blockers: [...floor.blockers],
+        operator_actions: floor.guidance,
         completion_evidence: false
       }
     }

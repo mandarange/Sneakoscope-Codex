@@ -12,7 +12,7 @@ async function writeStubCodex(root: string, schemaGeneration: 'writes_schema' | 
     '#!/bin/sh',
     'if [ "$1" = "--version" ]; then',
     // The stub must report the CURRENT contract version: an older CLI is its own blocker, not the behavior under test.
-    `  echo "codex-cli ${CURRENT_CODEX_RUNTIME_CONTRACT.requiredCliVersion}"`,
+    `  echo "codex-cli ${CURRENT_CODEX_RUNTIME_CONTRACT.minVersion}"`,
     '  exit 0',
     'fi',
     ...(schemaGeneration === 'writes_schema'

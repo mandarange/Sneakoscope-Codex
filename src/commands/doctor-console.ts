@@ -233,6 +233,7 @@ export function renderDoctorConsoleReport(result: any, extras: DoctorConsoleExtr
   const currentAppSkipped = extras.codexCurrentAppCapability?.skipped === true;
   line('Codex current compatibility:');
   line(`  target: ${CURRENT_CODEX_RUNTIME_CONTRACT.targetTag}`);
+  line(`  minimum: ${CURRENT_CODEX_RUNTIME_CONTRACT.minVersion}`);
   line(`  runtime: ${codex.version || 'unknown'}`);
   line('Current Codex app features:');
   line(`  /app handoff: ${skippedOr(currentAppSkipped, codexCurrentApp.supports_app_handoff ? 'ok' : 'unavailable')}`);

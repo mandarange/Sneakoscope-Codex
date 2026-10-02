@@ -8,8 +8,8 @@ const resolved = await resolveOfficialCodexPackageRuntime({ requestedBy: 'codex-
 assertGate(resolved.ok && resolved.identity !== null, 'Official Codex runtime identity must resolve', resolved);
 const identity = resolved.identity!;
 assertGate(
-  compareSemverLike(identity.version, CURRENT_CODEX_RUNTIME_CONTRACT.requiredCliVersion) >= 0,
-  `Codex runtime must satisfy ${CURRENT_CODEX_RUNTIME_CONTRACT.requiredCliVersion}`,
+  compareSemverLike(identity.version, CURRENT_CODEX_RUNTIME_CONTRACT.minVersion) >= 0,
+  `Codex runtime must satisfy ${CURRENT_CODEX_RUNTIME_CONTRACT.minVersion}`,
   identity
 );
 assertGate(identity.sha256.length === 64, 'Codex runtime identity must include SHA-256', identity);

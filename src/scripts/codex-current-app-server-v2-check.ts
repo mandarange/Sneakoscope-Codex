@@ -44,8 +44,8 @@ if (requireReal) {
       list_returned_object: Boolean(list && typeof list === 'object')
     };
     assertGate(
-      compareSemverLike(runtimeIdentity.version, CURRENT_CODEX_RUNTIME_CONTRACT.minimumSupportedVersion) >= 0,
-      `app-server-v2 require-real must resolve Codex ${CURRENT_CODEX_RUNTIME_CONTRACT.minimumSupportedVersion} or newer`,
+      compareSemverLike(runtimeIdentity.version, CURRENT_CODEX_RUNTIME_CONTRACT.minVersion) >= 0,
+      `app-server-v2 require-real must resolve Codex ${CURRENT_CODEX_RUNTIME_CONTRACT.minVersion} or newer`,
       realProbe
     );
     assertGate(realProbe.list_returned_object === true, 'app-server-v2 require-real thread/list must return an object', realProbe);

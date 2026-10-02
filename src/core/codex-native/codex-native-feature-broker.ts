@@ -4,7 +4,7 @@ import fs from 'node:fs/promises'
 import { findCodexBinary } from '../codex-adapter.js'
 import { codexAppIntegrationStatus } from '../codex-app.js'
 import { meetsCodexFloor } from '../codex-compat/codex-version-policy.js'
-import { CURRENT_CODEX_RUNTIME_CONTRACT } from '../codex-compat/codex-runtime-contract.js'
+import { CODEX_MIN_VERSION } from '../codex-compat/codex-runtime-contract.js'
 import { probeCodexAgentTypeSupport } from '../codex-app/codex-agent-type-probe.js'
 import { probeCodexHookApprovalState } from '../codex-app/codex-hook-approval-probe.js'
 import { detectCodexCurrentCapability } from '../codex-control/codex-current-capability.js'
@@ -60,10 +60,9 @@ export async function buildCodexNativeFeatureMatrix(input: {
   }
   const fixtureMode = process.env.SKS_CODEX_PLUGIN_JSON_FAKE === '1'
   const codexBin = fixtureMode ? process.env.CODEX_BIN || 'codex' : await findCodexBinary().catch(() => null)
-  const floor = CURRENT_CODEX_RUNTIME_CONTRACT.minimumSupportedVersion
   // Fixture runs get a deterministic version (the floor unless the fixture env pins another) instead of the machine's Codex.
   const version = fixtureMode
-    ? process.env.SKS_CODEX_VERSION_FAKE || `codex-cli ${floor}`
+    ? process.env.SKS_CODEX_VERSION_FAKE || `codex-cli ${CODEX_MIN_VERSION}`
     : codexBin ? await codexVersion(codexBin) : null
   const atOrAboveFloor = Boolean(codexBin) && meetsCodexFloor(version)
   const floorBlockers = (reason: string) => [

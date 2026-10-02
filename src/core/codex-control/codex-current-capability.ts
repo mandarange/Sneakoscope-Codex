@@ -58,7 +58,7 @@ export async function detectCodexCurrentCapability(input: {
   if (!runtime.identity) {
     return blockedCapability([...runtime.blockers]);
   }
-  const versionOk = compareSemverLike(runtime.identity.version, CURRENT_CODEX_RUNTIME_CONTRACT.requiredCliVersion) >= 0;
+  const versionOk = compareSemverLike(runtime.identity.version, CURRENT_CODEX_RUNTIME_CONTRACT.minVersion) >= 0;
   const schemaProbe = await probeCodexAppServerSchema(root, runtime.identity);
   const states: Record<CodexCurrentFeatureKey, CodexCurrentFeatureState> = {
     runtime_identity: {
@@ -86,7 +86,7 @@ export async function detectCodexCurrentCapability(input: {
     ok: blockers.length === 0,
     release_authorizing: releaseAuthorizing,
     target_tag: CURRENT_CODEX_RUNTIME_CONTRACT.targetTag,
-    required_version: CURRENT_CODEX_RUNTIME_CONTRACT.requiredCliVersion,
+    required_version: CURRENT_CODEX_RUNTIME_CONTRACT.minVersion,
     runtime_identity: runtime.identity,
     generated_schema_sha256: schemaProbe.sha256,
     probe_mode: schemaProbe.ok ? 'real-schema' : 'blocked',
@@ -184,7 +184,7 @@ function blockedCapability(blockers: string[]): CodexCurrentCapability {
     ok: false,
     release_authorizing: false,
     target_tag: CURRENT_CODEX_RUNTIME_CONTRACT.targetTag,
-    required_version: CURRENT_CODEX_RUNTIME_CONTRACT.requiredCliVersion,
+    required_version: CURRENT_CODEX_RUNTIME_CONTRACT.minVersion,
     runtime_identity: null,
     generated_schema_sha256: null,
     probe_mode: 'blocked',

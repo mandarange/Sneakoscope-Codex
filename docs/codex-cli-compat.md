@@ -1,6 +1,6 @@
 # Codex CLI Compatibility
 
-SKS compatibility follows the **current stable** Codex dependency graph declared in `package.json`, then measures the resolved host at runtime. A release number is a dependency input, never a permanent product SSOT or a branch in application logic. App Server compatibility evidence is runtime-generated from `codex app-server generate-json-schema`; the package does not ship a second, version-named schema tree.
+SKS compatibility follows the **current stable** Codex dependency graph declared in `package.json`, then measures the resolved host at runtime. A release number is a dependency input, never a permanent product SSOT or a branch in application logic; the one hand-maintained number is the support floor (`CODEX_MIN_VERSION` in `src/core/codex-compat/codex-runtime-contract.ts`), which never exceeds the SDK pin. App Server compatibility evidence is runtime-generated from `codex app-server generate-json-schema`; the package does not ship a second, version-named schema tree.
 
 Updating SKS converges managed configuration, skills, MCP metadata, hooks, and release proof to the current measured contract instead of preserving historical Codex compatibility matrices. Hook outputs are validated against the vendored OpenAI Codex `latest` generated schemas plus the stricter SKS zero-warning strict subset. The current hook snapshot has 10 events and 20 schema files, including `SubagentStart` and `SubagentStop`.
 
@@ -31,12 +31,12 @@ sks codex doctor --json
 sks codex schema --json
 ```
 
-Version detection checks `codex --version`, `codex exec --help`, `codex exec resume --help`, `codex --help`, installed `@openai/codex`, Homebrew cask metadata, and finally the vendored hook snapshot metadata. A missing or older live Codex binary is not accepted as a compatible runtime; a newer host is accepted only after its capabilities are probed. SKS surfaces the update action (induce/check/fail). Host upgrade execution remains the user’s or Codex’s responsibility. Release hook validation uses the vendored snapshot, while App Server protocol validation uses the resolved runtime.
+Version detection checks `codex --version`, `codex exec --help`, `codex exec resume --help`, `codex --help`, installed `@openai/codex`, Homebrew cask metadata, and finally the vendored hook snapshot metadata. A live Codex below the support floor is blocked (`sks codex compatibility|version|doctor` and the Naruto spawn precheck enforce it), a missing binary is `integration_optional`, and newer hosts are accepted. SKS surfaces the update action (induce/check/fail). Host upgrade execution remains the user’s or Codex’s responsibility. Release hook validation uses the vendored snapshot, while App Server protocol validation uses the resolved runtime.
 
 ## Prefer-Latest Policy
 
 - **Preferred channel artifact**: the exact `@openai/codex-sdk` dependency in `package.json` selects the tested graph; the lockfile proves the SDK and CLI resolutions agree.
-- **Capability matrix**: features such as `multi_agent_v2`, `agents.max_concurrent_threads_per_session`, thread-list search, MCP startup/tool timeouts, and tier-based child model routing are probed or wrapped; missing capabilities fail that route with `sks codex update` / Menu Bar **Update Codex CLI Now** guidance.
+- **Support floor**: `CODEX_MIN_VERSION` is the oldest Codex SKS runs against; a Codex below it fails the check or the Naruto spawn with `sks codex update` / Menu Bar **Update Codex CLI Now** guidance. Features such as multi-agent v1/v2 and child model routing follow the Codex model catalog and the runtime-generated App Server schema rather than version or help-text probes.
 - **Update inducement**: SKS Menu Bar and Control Center surface Codex CLI update status and actions (`sks update status`, `sks codex update`).
 - Historical compatibility matrices and their release gates are not part of the active product or release surface.
 
@@ -49,7 +49,7 @@ Version detection checks `codex --version`, `codex exec --help`, `codex exec res
 - Missing or malformed tool-output correlation fails closed instead of being treated as a successful continuation.
 - Older runtime hosts and historical compatibility reports do not authorize or extend the current release contract. Prerelease or unknown newer fields are also not automatic release evidence.
 
-Fresh `codex exec` and `codex exec resume` are checked independently because a release gate that only inspects resume help can miss syntax drift in new sessions. Native agent output-schema fixtures must record which command form was exercised.
+Fresh `codex exec` and `codex exec resume` build their `--output-schema` arguments independently (a parity unit test pins both forms) because their argument order differs. Native agent output-schema fixtures must record which command form was exercised.
 
 ## Vendored Snapshot
 

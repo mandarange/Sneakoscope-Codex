@@ -51,9 +51,7 @@ const checks = [
   fileRow('codex_runtime_contract', codexTag, 'src/core/codex-compat/codex-runtime-contract.ts', [
     'codexSdkDependencyVersion',
     'package.json#dependencies.@openai/codex-sdk',
-    "protocolMode: 'app-server-v2'",
-    "mcpPaginatedDiscovery: 'wrap'",
-    "portableAgentPlugins: 'delegate'"
+    'CODEX_MIN_VERSION'
   ]),
   fileRow('codex_current_release_gates', codexTag, 'release-gates.v2.json', [
     'codex:current:dependency-graph',

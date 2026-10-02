@@ -149,7 +149,7 @@ async function writeFakeCodex(root: string, malformedSingleModel = false): Promi
     '#!/usr/bin/env node',
     "const fs = require('node:fs');",
     "const readline = require('node:readline');",
-    `if (process.argv.includes('--version')) { console.log('codex-cli ${CURRENT_CODEX_RUNTIME_CONTRACT.requiredCliVersion}'); process.exit(0); }`,
+    `if (process.argv.includes('--version')) { console.log('codex-cli ${CURRENT_CODEX_RUNTIME_CONTRACT.minVersion}'); process.exit(0); }`,
     `const modelListResult = ${JSON.stringify(modelListResult)};`,
     'const input = readline.createInterface({ input: process.stdin });',
     'input.on("line", (line) => {',
