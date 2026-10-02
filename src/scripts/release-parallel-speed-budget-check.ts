@@ -30,7 +30,7 @@ const parallelismOk = cachedRun
   || (Number(summary.peak_running || 0) >= parallelismPeakTarget && fastSlaMet)
 const wallOk = cachedRun ? summary.wall_ms <= cachedBudgetMs : summary.wall_ms <= budgetMs
 const failureIds = Array.isArray(summary.failures) ? summary.failures.map((entry) => String(entry?.id || '')).filter(Boolean) : []
-const selfFailureIds = new Set(['release:parallel-speed-budget', 'release:stability-report'])
+const selfFailureIds = new Set(['release:parallel-speed-budget'])
 const blockingFailureIds = failureIds.filter((id) => !selfFailureIds.has(id))
 const summaryOk = Number(summary.failed || 0) === 0 || (failureIds.length > 0 && blockingFailureIds.length === 0)
 const report = {

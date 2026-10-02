@@ -1,6 +1,6 @@
 # TypeScript Architecture
 
-`1.0.2` advances the runtime towards a fully suppressed-free TypeScript tree: suppression scanning (`npm run typecheck:suppressions`), migration bookkeeping (`.sneakoscope/reports/typescript-migration.*`), and tighter `dist` manifest metadata accompany the existing TypeScript-built `dist` runtime.
+`1.0.2` advances the runtime towards a fully suppressed-free TypeScript tree: suppression scanning (`npm run typecheck:suppressions`), and tighter `dist` manifest metadata accompany the existing TypeScript-built `dist` runtime.
 
 The published CLI entrypoint, router, command registry, Trust Kernel, Evidence Router, Completion Proof, Image Voxel, native agent kernel, and route command runtime remain built from TypeScript into `dist`.
 
@@ -12,7 +12,6 @@ The published CLI entrypoint, router, command registry, Trust Kernel, Evidence R
 - Trust Kernel, route contracts, Completion Proof, evidence records, Trust Reports, Image Voxel ledgers, native agent outputs, and feature fixtures have exported TypeScript interfaces and runtime guards.
 - `npm run build`, `npm run typecheck`, `npm run typecheck:contracts`, `npm run test:types`, `npm run schema:check`, and `npm run dist:check` are required before publish.
 - `npm run typecheck:suppressions` (part of `release:check`) blocks `@ts-nocheck`, `@ts-ignore`, and sloppy `@ts-expect-error` usages outside annotated generated waivers (`SKS-GEN:`).
-- `npm run typescript:migration-report` records suppression counts plus dist `.mjs` drift for auditors (see `.sneakoscope/reports/typescript-migration.json`).
 
 ## Contract Modules
 
