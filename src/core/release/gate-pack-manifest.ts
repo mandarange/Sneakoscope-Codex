@@ -27,7 +27,6 @@ export const REQUIRED_GATE_PACK_IDS = [
   'secret',
   'core-skill',
   'skill-dedupe',
-  'loop-mesh',
   'qa-research-image',
   'triwiki'
 ] as const;
@@ -71,7 +70,6 @@ export function packForGateId(id: string): string {
   if (id.startsWith('core-skill:')) return 'core-skill';
   if (id.includes('skill-dedupe') || id.startsWith('skill:')) return 'skill-dedupe';
   if (id.startsWith('orphan:')) return 'release-parity';
-  if (id.startsWith('loop:')) return 'loop-mesh';
   if (id.startsWith('qa-') || id.startsWith('research:') || id.startsWith('image:')) return 'qa-research-image';
   return 'release-parity';
 }
@@ -86,7 +84,6 @@ function descriptionForPack(id: string): string {
     secret: 'Secret-preservation and redaction checks.',
     'core-skill': 'Immutable core skill checks.',
     'skill-dedupe': 'Skill duplication and inventory checks.',
-    'loop-mesh': 'Loop mesh runtime checks.',
     'qa-research-image': 'QA, research, and image route checks.',
     triwiki: 'TriWiki proof bank and affected graph checks.'
   };
