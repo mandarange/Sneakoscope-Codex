@@ -3,10 +3,11 @@ import os from 'node:os'
 import fs from 'node:fs/promises'
 import { findCodexBinary } from '../codex-adapter.js'
 import { codexAppIntegrationStatus } from '../codex-app.js'
+import { compareSemverLike, parseCodexVersionText } from '../codex-compat/codex-version-policy.js'
+import { CURRENT_CODEX_RUNTIME_CONTRACT } from '../codex-compat/codex-runtime-contract.js'
 import { probeCodexAgentTypeSupport } from '../codex-app/codex-agent-type-probe.js'
 import { probeCodexHookApprovalState } from '../codex-app/codex-hook-approval-probe.js'
 import { detectCodexCurrentAppCapability } from '../codex-control/codex-current-app-capability.js'
-import { detectCodexCurrentCoreCapability } from '../codex-control/codex-current-core-capability.js'
 import { detectCodexCurrentCapability, type CodexCurrentFeatureKey } from '../codex-control/codex-current-capability.js'
 import { buildCodexPluginInventory } from '../codex-plugins/codex-plugin-json.js'
 import { nowIso, runProcess, sha256, writeJsonAtomic } from '../fsx.js'
@@ -52,19 +53,24 @@ export async function buildCodexNativeFeatureMatrix(input: {
     managedAssetFingerprint,
     fixture: [
       process.env.SKS_CODEX_CURRENT_APP_FAKE,
-      process.env.SKS_CODEX_CURRENT_CORE_FAKE,
       process.env.SKS_CODEX_CURRENT_FAKE,
+      process.env.SKS_CODEX_VERSION_FAKE,
       process.env.SKS_CODEX_PLUGIN_JSON_FAKE
     ]
   })
   if (!input.missionDir && !repairManagedAssets && invocationMatrixCache.has(cacheKey)) {
     return invocationMatrixCache.get(cacheKey) as CodexNativeFeatureMatrix
   }
-  const fixtureMode = process.env.SKS_CODEX_CURRENT_APP_FAKE === '1' || process.env.SKS_CODEX_CURRENT_CORE_FAKE === '1' || process.env.SKS_CODEX_CURRENT_FAKE === '1' || process.env.SKS_CODEX_PLUGIN_JSON_FAKE === '1'
+  const fixtureMode = process.env.SKS_CODEX_CURRENT_APP_FAKE === '1' || process.env.SKS_CODEX_CURRENT_FAKE === '1' || process.env.SKS_CODEX_PLUGIN_JSON_FAKE === '1'
   const codexBin = fixtureMode ? process.env.CODEX_BIN || 'codex' : await findCodexBinary().catch(() => null)
-  const version = codexBin ? await codexVersion(codexBin) : null
+  const floor = CURRENT_CODEX_RUNTIME_CONTRACT.minimumSupportedVersion
+  // Fixture runs get a deterministic version (the floor unless the fixture env pins another) instead of the machine's Codex.
+  const version = fixtureMode
+    ? process.env.SKS_CODEX_VERSION_FAKE || `codex-cli ${floor}`
+    : codexBin ? await codexVersion(codexBin) : null
+  const parsedVersion = parseCodexVersionText(version)
+  const atOrAboveFloor = Boolean(codexBin && parsedVersion && compareSemverLike(parsedVersion, floor) >= 0)
   const currentApp = await detectCodexCurrentAppCapability({ codexBin }).catch((err: unknown) => ({ blockers: [messageOf(err)] }))
-  const currentCore = await detectCodexCurrentCoreCapability({ codexBin }).catch((err: unknown) => ({ blockers: [messageOf(err)] }))
   const currentCapability = await detectCodexCurrentCapability({ codexBin, root }).catch((err: unknown) => ({
     schema: 'sks.codex-current-capability.v1',
     ok: false,
@@ -126,7 +132,7 @@ export async function buildCodexNativeFeatureMatrix(input: {
   const hookInstalled = hookApproval.approval_state !== 'not_installed'
   const features: CodexNativeFeatureMatrix['features'] = {
     plugin_json: boolState(booleanFeature(currentApp, 'supports_plugin_json'), 'actual-probe', '.sneakoscope/codex-current-app-capability.json', blockersOf(currentApp)),
-    plugin_marketplace: boolState(booleanFeature(currentCore, 'supports_marketplace_source_field') || plugins.marketplace_available, 'plugin-inventory', '.sneakoscope/codex-plugin-inventory.json', blockersOf(plugins)),
+    plugin_marketplace: boolState(atOrAboveFloor || plugins.marketplace_available, 'plugin-inventory', '.sneakoscope/codex-plugin-inventory.json', blockersOf(plugins)),
     hook_approval: codexNativeFeatureState({
       ok: hookApproved,
       source: 'actual-probe',
@@ -159,7 +165,10 @@ export async function buildCodexNativeFeatureMatrix(input: {
     }),
     app_handoff: boolState(booleanFeature(currentApp, 'supports_app_handoff'), 'actual-probe', '.sneakoscope/codex-current-app-capability.json', blockersOf(currentApp)),
     image_path_exposure: boolState(booleanFeature(currentApp, 'supports_image_path_exposure'), 'actual-probe', '.sneakoscope/codex-current-app-capability.json', blockersOf(currentApp)),
-    code_mode_web_search: boolState(booleanFeature(currentCore, 'supports_code_mode_web_search'), 'actual-probe', '.sneakoscope/codex-current-core-capability.json', blockersOf(currentCore)),
+    code_mode_web_search: boolState(atOrAboveFloor, 'config', '.sneakoscope/reports/codex-native-feature-matrix.json', [
+      ...(codexBin ? [] : ['codex_cli_missing']),
+      ...(atOrAboveFloor ? [] : ['codex_current_release_required_for_search_schema_marketplace_features'])
+    ]),
     codex_current: boolState(recordOk(currentCapability) === true, 'actual-probe', '.sneakoscope/codex/codex-current-capability.json', blockersOf(currentCapability), warningsOf(currentCapability)),
     multi_agent_mode: codexCurrentState(currentCapability, 'multi_agent_mode_schema'),
     rollout_budget: codexCurrentState(currentCapability, 'rollout_budget_schema'),
@@ -182,7 +191,6 @@ export async function buildCodexNativeFeatureMatrix(input: {
     features,
     probes: {
       codex_current_app: currentApp,
-      codex_current_core: currentCore,
       codex_current: currentCapability,
       app,
       plugin_inventory: plugins,

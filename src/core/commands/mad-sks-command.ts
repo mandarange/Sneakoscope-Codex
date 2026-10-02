@@ -18,7 +18,6 @@ import { runCodexLaunchPreflight } from '../preflight/parallel-preflight-engine.
 import { diffCodexAppUiSnapshots, writeCodexAppUiSnapshot } from '../codex-app/codex-app-ui-state-snapshot.js';
 import { checkSksUpdateNotice } from '../update/update-notice.js';
 import { writeCodexCurrentAppCapabilityArtifacts } from '../codex-control/codex-current-app-capability.js';
-import { writeCodexCurrentCoreCapabilityArtifacts } from '../codex-control/codex-current-core-capability.js';
 import { resolveCodexNativeInvocationPlan } from '../codex-native/codex-native-invocation-router.js';
 import { assertNonGlmMadRoute } from '../routes/model-mode-router.js';
 import { evaluateGate } from '../stop-gate/gate-evaluator.js';
@@ -339,7 +338,6 @@ async function activateMadPermissionState(cwd: any = process.cwd(), args: any[] 
 
 async function refreshMadNativeLaunchArtifacts(root: string, missionId: string, dir: string) {
   await writeCodexCurrentAppCapabilityArtifacts(root, { missionId }).catch(() => null);
-  await writeCodexCurrentCoreCapabilityArtifacts(root, { missionId }).catch(() => null);
   const codexNativeInvocation = await resolveCodexNativeInvocationPlan({
     root,
     missionId,
@@ -686,7 +684,6 @@ async function materializeMadSksRun(root: string, targetRoot: string, permission
   if (!(await exists(path.join(root, '.sneakoscope')))) await initProject(root, {});
   const { id, dir } = await createMission(root, { mode: 'mad-sks', prompt: userIntent });
   await writeCodexCurrentAppCapabilityArtifacts(root, { missionId: id }).catch(() => null);
-  await writeCodexCurrentCoreCapabilityArtifacts(root, { missionId: id }).catch(() => null);
   const before = await snapshotProtectedCore(packageRoot(), 'before');
   const authorization = opts.authorizationManifest || createMadSksAuthorizationManifest({ permission, userIntent });
   const authorizationPath = opts.authorizationManifestPath || path.join(dir, 'mad-sks-authorization.json');

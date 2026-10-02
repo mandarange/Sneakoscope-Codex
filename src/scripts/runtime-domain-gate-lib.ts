@@ -15,7 +15,6 @@ async function codexAppGate(id: string) {
   const rootDir = await tempRoot(`sks-${id.replace(/[:/]/g, '-')}-`)
   const previous = swapEnv({
     SKS_CODEX_CURRENT_APP_FAKE: '1',
-    SKS_CODEX_CURRENT_CORE_FAKE: '1',
     SKS_CODEX_PLUGIN_JSON_FAKE: '1',
     SKS_CODEX_AGENT_TYPE_SUPPORTED: id.includes('blackbox') ? '1' : ''
   })

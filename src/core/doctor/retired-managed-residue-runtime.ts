@@ -34,6 +34,28 @@ const RETIRED_REPORT_FILES = [
   'codex-app-glm-profile.json'
 ] as const;
 
+// Root-level capability snapshots older SKS versions wrote into the project; no current code reads them.
+const RETIRED_CAPABILITY_ARTIFACT_SCHEMAS: Readonly<Record<string, string>> = {
+  'codex-current-core-capability.json': 'sks.codex-current-core-capability.v1',
+  'codex-current-core-real-probes.json': 'sks.codex-current-core-real-probe-result.v1',
+  'codex-current-core-plugin-marketplace-real.json': 'sks.codex-current-core-plugin-marketplace-real.v1',
+  'codex-current-code-mode-web-search-policy.json': 'sks.codex-current-code-mode-web-search-policy.v1'
+};
+
+export async function reconcileRetiredCapabilityArtifacts(
+  root: string,
+  fix: boolean,
+  quarantineRoot: string,
+  counters: MutableCounters
+): Promise<void> {
+  for (const [name, schema] of Object.entries(RETIRED_CAPABILITY_ARTIFACT_SCHEMAS)) {
+    const file = path.join(root, '.sneakoscope', name);
+    if (!(await pathExistsForCleanup(root, file, counters))) continue;
+    const value = await readJson<any>(file, null).catch(() => null);
+    await reconcileKnownRetiredPath(root, file, value?.schema === schema, fix, quarantineRoot, counters);
+  }
+}
+
 export async function reconcileRetiredGitPolicyMode(
   root: string,
   fix: boolean,

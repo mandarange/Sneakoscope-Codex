@@ -380,15 +380,6 @@
       "reason": "Native source materialization writes only packaged Swift sources into the SKS staging directory."
     },
     {
-      "file": "src/core/codex-control/codex-current-core-probe-runner.ts",
-      "symbol": "cleanupProbeTempRoot",
-      "token": "fs.rm",
-      "scope_contract_sha256": "c266fa232fdbb47776dcbc81ff2df39d137a52062b50bf6dc4d0a1b59123d0a9",
-      "callsite_sha256": "c86a4c05caedb1368227fd9f43dd24dd15e30f15a4b802785a304397dfa86b31",
-      "occurrence": 1,
-      "reason": "Current Codex core-probe cleanup removes only the fixed project-local .sneakoscope/tmp/codex-current-core-real-probes directory after its probes finish."
-    },
-    {
       "file": "src/core/codex-control/codex-sdk-env-policy.ts",
       "symbol": "prepareNativeCodexAuthBridge",
       "token": "chmod",
@@ -3740,8 +3731,8 @@
       "file": "src/scripts/codex-native-runtime-e2e-fixture.ts",
       "symbol": "createCodexNativeRuntimeFixture",
       "token": "fs.writeFile",
-      "scope_contract_sha256": "576dd3d3a81bb84323865aa72fad4554bb50c393d75ac437954f4ee8416cb8c1",
-      "callsite_sha256": "1456769827607d4a033a725711d79fb2bd6dd2653c17e78818d2c513c0bf6b68",
+      "scope_contract_sha256": "78057a6ee462f89e2230978b33b8b2050e4bc6f64236699aed9d401cc65b2a5e",
+      "callsite_sha256": "675c3f22a6d0db4376286d9e0962606287301f5475f9d6144b41fbe7b1b69cc6",
       "occurrence": 1,
       "reason": "Codex Native runtime E2E helper writes only package, source, and docs files inside a fresh mkdtemp fixture root."
     },
@@ -3749,8 +3740,8 @@
       "file": "src/scripts/codex-native-runtime-e2e-fixture.ts",
       "symbol": "createCodexNativeRuntimeFixture",
       "token": "fs.writeFile",
-      "scope_contract_sha256": "576dd3d3a81bb84323865aa72fad4554bb50c393d75ac437954f4ee8416cb8c1",
-      "callsite_sha256": "806834e3a4f12140e44c160eca79f581cf5945ae17b4f9ba613097b18df690f2",
+      "scope_contract_sha256": "78057a6ee462f89e2230978b33b8b2050e4bc6f64236699aed9d401cc65b2a5e",
+      "callsite_sha256": "3b0f7fab3f09cc4201cd42735d78f076be4941ff66f07123414280fb2035c365",
       "occurrence": 1,
       "reason": "Codex Native runtime E2E helper writes only package, source, and docs files inside a fresh mkdtemp fixture root."
     },
@@ -3758,8 +3749,8 @@
       "file": "src/scripts/codex-native-runtime-e2e-fixture.ts",
       "symbol": "createCodexNativeRuntimeFixture",
       "token": "fs.writeFile",
-      "scope_contract_sha256": "576dd3d3a81bb84323865aa72fad4554bb50c393d75ac437954f4ee8416cb8c1",
-      "callsite_sha256": "be8687d5b1a3cfb18f1e4e69087bedb84cbf2c0bf32561b8bb8158bb06d1c257",
+      "scope_contract_sha256": "78057a6ee462f89e2230978b33b8b2050e4bc6f64236699aed9d401cc65b2a5e",
+      "callsite_sha256": "b0285740e45220438dd48f845c9b040f03a1fbe3ff7c1446ef1ab3bf0e209686",
       "occurrence": 1,
       "reason": "Codex Native runtime E2E helper writes only package, source, and docs files inside a fresh mkdtemp fixture root."
     },
@@ -3767,8 +3758,8 @@
       "file": "src/scripts/codex-native-runtime-e2e-fixture.ts",
       "symbol": "createCodexNativeRuntimeFixture",
       "token": "fs.writeFile",
-      "scope_contract_sha256": "576dd3d3a81bb84323865aa72fad4554bb50c393d75ac437954f4ee8416cb8c1",
-      "callsite_sha256": "df187108e6fbc1ae6dff2204bf11963ce1f92217a83f1bdd9875cbfcb01b7414",
+      "scope_contract_sha256": "78057a6ee462f89e2230978b33b8b2050e4bc6f64236699aed9d401cc65b2a5e",
+      "callsite_sha256": "5f31de2de6312fca333bb670882b87348db113bebebb2465aaa95a1aed50d1a8",
       "occurrence": 1,
       "reason": "Codex Native runtime E2E helper writes only package, source, and docs files inside a fresh mkdtemp fixture root."
     },
@@ -3776,8 +3767,8 @@
       "file": "src/scripts/codex-native-runtime-e2e-fixture.ts",
       "symbol": "createCodexNativeRuntimeFixture",
       "token": "fs.writeFile",
-      "scope_contract_sha256": "576dd3d3a81bb84323865aa72fad4554bb50c393d75ac437954f4ee8416cb8c1",
-      "callsite_sha256": "f7ac122e07f9fde9152ea01b9dfb5138e781b50596839dbf2539374211d1dc64",
+      "scope_contract_sha256": "78057a6ee462f89e2230978b33b8b2050e4bc6f64236699aed9d401cc65b2a5e",
+      "callsite_sha256": "521b323e693eb9b441b4311567030d0803e42098cf9788b04fcb6540297b2d5e",
       "occurrence": 1,
       "reason": "Codex Native runtime E2E helper writes only package, source, and docs files inside a fresh mkdtemp fixture root."
     },
@@ -6521,8 +6512,8 @@
       "file": "src/scripts/runtime-domain-gate-lib.ts",
       "symbol": "codexAppGate",
       "token": "fsp.writeFile",
-      "scope_contract_sha256": "3f1d6a15b9a17ae3465727c9914fbeb7f8eef3e7dd2b5340ed352cfa485e7c1b",
-      "callsite_sha256": "9c69fa9ba9593ce159a05403bf17f8c2f345584c3c9c9980bfd334fc43e11f1d",
+      "scope_contract_sha256": "71b620aefa37e36f6cef47bf96a211f02f662b8dda2b99c042a963be60f29c33",
+      "callsite_sha256": "a036ed29f5fbdecd1418a00f8170bc05a2571db8c8a42fe07fd4c371d5ea4a47",
       "occurrence": 1,
       "reason": "Runtime-domain gate writes only its scoped temporary fixture source before evaluating ownership rules."
     },
