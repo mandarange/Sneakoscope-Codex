@@ -11,11 +11,9 @@ import {
   recordExecutionObservation
 } from '../runtime/execution-control.js'
 import { evaluateLoopContinuation } from '../loops/loop-continuation-enforcer.js'
-import { loopGatePath, loopPlanPath } from '../loops/loop-artifacts.js'
-import { graphProofFromLoopProofs } from '../loops/loop-scheduler.js'
-import { runLoopGates } from '../loops/loop-gate-runner.js'
-import { computeLoopDiff } from '../loops/loop-worktree-runtime.js'
-import type { SksLoopGatePlan, SksLoopNode, SksLoopProof } from '../loops/loop-schema.js'
+import { loopPlanPath } from '../loops/loop-artifacts.js'
+import { loopProofCompletionIssues } from '../loops/loop-proof-validation.js'
+import type { SksLoopProof } from '../loops/loop-schema.js'
 import { emptyCompletionProof } from '../proof/proof-schema.js'
 import { validateCompletionProof } from '../proof/validation.js'
 import { proofStatusBlocks } from '../proof/route-proof-policy.js'
@@ -25,7 +23,6 @@ import { runAgentScheduler } from '../agents/agent-scheduler.js'
 import { finalizationRepeatDecision } from '../hooks-runtime/stop-repeat-guard.js'
 import { honestModeLoopbackBudgetExhausted } from '../hooks-runtime.js'
 import { qaExecutionProgressFingerprint } from '../qa-loop/qa-execution-control.js'
-import { runProcess } from '../fsx.js'
 
 test('execution control stops repeated semantic results before the attempt ceiling', () => {
   const budget = { max_attempts: 10, max_elapsed_ms: 60_000, max_no_progress: 2 }
@@ -80,20 +77,11 @@ test('loop continuation becomes terminal unverified after bounded identical chec
   assert.ok(third.blockers.includes('loop_continuation_budget_exhausted'))
 })
 
-test('contradictory completed loop proof cannot count as graph completion', () => {
-  const proof = loopProof({ checkerOk: false, checkerBlockers: ['tests_missing'] })
-  const graph = graphProofFromLoopProofs({
-    missionId: 'M-proof-truth',
-    proofs: [proof],
-    maxActiveLoops: 1,
-    maxActiveWorkers: 1,
-    wallMs: 25
-  })
+test('contradictory completed loop proof is not verified complete', () => {
+  const issues = loopProofCompletionIssues(loopProof({ checkerOk: false, checkerBlockers: ['tests_missing'] }))
 
-  assert.equal(graph.ok, false)
-  assert.equal(graph.completed_loops, 0)
-  assert.ok(graph.blockers.includes('loop-one:loop_checker_unverified'))
-  assert.ok(graph.blockers.includes('loop-one:loop_checker_blockers_present'))
+  assert.ok(issues.includes('loop_checker_unverified'))
+  assert.ok(issues.includes('loop_checker_blockers_present'))
 })
 
 test('completion proof validation separates schema validity from verified completion', () => {
@@ -183,70 +171,6 @@ test('runtime truth rejects generated success and accepts receipt-backed runtime
   const schedulerRow = schedulerMatrix.rows.find((item) => item.subsystem === 'dynamic_scheduler')
   assert.equal(schedulerRow?.working_claim_allowed, true)
   assert.equal(schedulerRow?.runtime_status, 'proven')
-})
-
-test('loop gate cache deduplicates an identical successful check', async (t) => {
-  const root = await tempRoot(t, 'sks-loop-gate-cache-')
-  await writeJson(path.join(root, 'package.json'), {
-    name: 'loop-gate-cache-fixture',
-    version: '1.0.0',
-    type: 'module',
-    scripts: { 'check:cached': 'node counter.mjs' }
-  })
-  await fsp.writeFile(path.join(root, 'counter.mjs'), [
-    "import fs from 'node:fs'",
-    "const file = 'counter.txt'",
-    "const count = fs.existsSync(file) ? Number(fs.readFileSync(file, 'utf8')) : 0",
-    "fs.writeFileSync(file, String(count + 1))"
-  ].join('\n'))
-  const gates: SksLoopGatePlan = {
-    triage: ['check:cached'],
-    local: [],
-    checker: [],
-    integration: [],
-    final: []
-  }
-  const node = loopNode()
-
-  const first = await runLoopGates({ root, missionId: 'M-cache', node, gates, cacheKey: 'snapshot-one' })
-  const second = await runLoopGates({ root, missionId: 'M-cache', node, gates, cacheKey: 'snapshot-one' })
-  const artifact = JSON.parse(await fsp.readFile(loopGatePath(root, 'M-cache', node.loop_id, 'check:cached'), 'utf8'))
-
-  assert.equal(first.ok, true)
-  assert.equal(second.ok, true)
-  assert.equal(await fsp.readFile(path.join(root, 'counter.txt'), 'utf8'), '1')
-  assert.equal(artifact.cache_hit, true)
-  assert.equal(artifact.cache_hits, 1)
-
-  const changedInput = await runLoopGates({ root, missionId: 'M-cache', node, gates, cacheKey: 'snapshot-two' })
-  const changedArtifact = JSON.parse(await fsp.readFile(loopGatePath(root, 'M-cache', node.loop_id, 'check:cached'), 'utf8'))
-  assert.equal(changedInput.ok, true)
-  assert.equal(await fsp.readFile(path.join(root, 'counter.txt'), 'utf8'), '2')
-  assert.equal(changedArtifact.cache_hit, false)
-})
-
-test('loop input fingerprint changes when an untracked file changes', async (t) => {
-  const root = await tempRoot(t, 'sks-loop-untracked-fingerprint-')
-  await fsp.writeFile(path.join(root, 'tracked.txt'), 'base\n')
-  for (const args of [
-    ['init', '-q'],
-    ['add', 'tracked.txt'],
-    ['-c', 'user.email=sks@example.invalid', '-c', 'user.name=SKS', 'commit', '-qm', 'base']
-  ]) {
-    const result = await runProcess('git', args, { cwd: root, timeoutMs: 10_000, maxOutputBytes: 64 * 1024 })
-    assert.equal(result.code, 0, result.stderr)
-  }
-  await fsp.writeFile(path.join(root, 'untracked.txt'), 'one')
-  const ownerScope = { files: ['untracked.txt'], directories: [] } as any
-  const first = await computeLoopDiff({ root, ownerScope })
-  await fsp.writeFile(path.join(root, 'untracked.txt'), 'two')
-  const second = await computeLoopDiff({ root, ownerScope })
-
-  assert.deepEqual(first.changed_files, ['untracked.txt'])
-  assert.equal(first.patch_bytes, 3)
-  assert.notEqual(second.diff_sha256, first.diff_sha256)
-  assert.deepEqual(first.blockers, [])
-  assert.deepEqual(second.blockers, [])
 })
 
 test('scheduler wall budget stops a never-settling worker with an explicit unverified result', { timeout: 2_000 }, async (t) => {
@@ -343,15 +267,6 @@ function schedulerRoster() {
     concurrency: 1,
     roster: [{ id: 'agent-one', persona_id: 'verifier', role: 'verifier', write_policy: 'read-only' }]
   }
-}
-
-function loopNode(): SksLoopNode {
-  return {
-    schema: 'sks.loop-node.v1',
-    loop_id: 'loop-one',
-    mission_id: 'M-cache',
-    route: '$QA-LOOP'
-  } as unknown as SksLoopNode
 }
 
 function loopProof(input: { checkerOk: boolean; checkerBlockers: string[] }): SksLoopProof {

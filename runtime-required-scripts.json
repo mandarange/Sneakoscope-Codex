@@ -135,16 +135,6 @@
       "reason": "built feature fixture commands are repository selftest fixtures"
     },
     {
-      "source": "src/core/loops/loop-worker-runtime.ts",
-      "classification": "installed_runtime",
-      "reason": "the public loop runtime launches the worker child as its execution entrypoint"
-    },
-    {
-      "source": "dist/core/loops/loop-worker-runtime.js",
-      "classification": "installed_runtime",
-      "reason": "the built public loop runtime launches the worker child as its execution entrypoint"
-    },
-    {
       "source": "src/core/align/align-route.ts",
       "classification": "installed_runtime",
       "reason": "the public Align route requires the packaged skill-surface audit as one of its exact verification receipts"
