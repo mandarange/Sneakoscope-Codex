@@ -56,11 +56,6 @@ test('version bump updates every current release and Codex document surface', as
       '| All checked version authorities report 1.2.3 | passed-hermetic | `release:version-truth` 15 surfaces at 1.2.3 after incremental build |',
       '| The reported 1.2.3 package is ready to publish | not proved | requires a stamp |'
     ].join('\n') + '\n',
-    'docs/official-docs-compat.md': [
-      'SKS 1.2.3 keeps release-gated behavior current.',
-      'official-docs-compat-1.2.3.json',
-      'official-docs-compat-1.2.3.md'
-    ].join('\n') + '\n',
     'docs/codex-cli-compat.md': 'SKS 1.2.3 targets the current Codex CLI and is not release-authorizing for SKS 1.2.3.\n',
     'docs/codex-app.md': 'SKS 1.2.3 targets the current Codex App.\nSKS 1.2.3 also reports the active auth class.\n',
     'docs/PERFORMANCE.md': 'Sneakoscope Codex 1.2.3 is designed for bounded runtime.\nThe 1.2.3 package pins dependencies.\nThe final 1.2.3 host-capability runtime stays bounded.\n',
@@ -126,7 +121,6 @@ test('version bump updates every current release and Codex document surface', as
         /^SKS 1\.2\.4 must not claim/m,
         /1\.2\.4 evidence/
       ],
-      'docs/official-docs-compat.md': [/^SKS 1\.2\.4 keeps release-gated behavior/m, /official-docs-compat-1\.2\.4\.json/, /official-docs-compat-1\.2\.4\.md/],
       'docs/codex-cli-compat.md': [/^SKS 1\.2\.4 targets/m, /not release-authorizing for SKS 1\.2\.4/],
       'docs/codex-app.md': [/^SKS 1\.2\.4 targets/m, /^SKS 1\.2\.4 also reports/m],
       'docs/PERFORMANCE.md': [/^Sneakoscope Codex 1\.2\.4 is designed/m, /the 1\.2\.4 package pins/i, /the final 1\.2\.4 host-capability/i],

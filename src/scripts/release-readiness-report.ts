@@ -127,7 +127,6 @@ for (const [id, actual] of Object.entries({
 
 const checks = {
   docs_truthfulness: runScript('dist/scripts/docs-truthfulness-check.js'),
-  official_docs_compat: runScript('dist/scripts/official-docs-compat-report.js', 60_000),
   release_metadata: runScript('dist/scripts/release-metadata-check.js', 60_000),
   release_provenance: runScript('dist/scripts/release-provenance-check.js'),
   imagegen_capability: runScript('dist/scripts/imagegen-capability-check.js'),

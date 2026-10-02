@@ -310,12 +310,6 @@ async function syncSourcePackageVersion(root: any, version: any) {
         .replace(/cannot serve as \d+\.\d+\.\d+ evidence\./m, `cannot serve as ${version} evidence.`)
     },
     {
-      rel: 'docs/official-docs-compat.md',
-      replace: (text: string) => text
-        .replace(/^SKS \d+\.\d+\.\d+ keeps release-gated behavior/m, `SKS ${version} keeps release-gated behavior`)
-        .replace(/official-docs-compat-\d+\.\d+\.\d+\.(json|md)/g, `official-docs-compat-${version}.$1`)
-    },
-    {
       rel: 'docs/codex-cli-compat.md',
       replace: (text: string) => text
         .replace(/^SKS \d+\.\d+\.\d+ targets/m, `SKS ${version} targets`)

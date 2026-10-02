@@ -5717,24 +5717,6 @@
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "src/scripts/official-docs-compat-report.ts",
-      "symbol": "module",
-      "token": "writeFileSync",
-      "scope_contract_sha256": "c562b6d8f4a1655f34148c91444fcab15e5e6180e3064c5734d02828d8a15c7c",
-      "callsite_sha256": "b0f4973805592bd5e23427b0d0bbed947d3ed1cdc97c88a9f58a745ff37216ad",
-      "occurrence": 1,
-      "reason": "Official-docs compatibility report writes only its project-local JSON and Markdown report artifacts."
-    },
-    {
-      "file": "src/scripts/official-docs-compat-report.ts",
-      "symbol": "module",
-      "token": "writeFileSync",
-      "scope_contract_sha256": "c562b6d8f4a1655f34148c91444fcab15e5e6180e3064c5734d02828d8a15c7c",
-      "callsite_sha256": "3e6b62a98b5e9ea472750d3f229c77371c1653ed8e22baf5417bfb2c3a3e74f9",
-      "occurrence": 1,
-      "reason": "Official-docs compatibility report writes only its project-local JSON and Markdown report artifacts."
-    },
-    {
       "file": "src/scripts/official-subagent-workflow-check.ts",
       "symbol": "module",
       "token": "rmSync",

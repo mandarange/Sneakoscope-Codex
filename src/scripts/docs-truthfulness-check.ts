@@ -12,7 +12,6 @@ const files = [
   'docs/codex-lb.md',
   'docs/codex-cli-compat.md',
   'docs/codex-app.md',
-  'docs/official-docs-compat.md',
   'docs/hooks-pat.md',
   'docs/goal-to-loop-migration.md',
   'docs/known-gaps.md',
