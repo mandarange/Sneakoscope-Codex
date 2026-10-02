@@ -294,7 +294,7 @@ async function activateMadPermissionState(cwd: any = process.cwd(), args: any[] 
     protected_core_digest: protectedCoreBefore.digest,
     expires_at: new Date(Date.now() + MAD_SKS_DEFAULT_TTL_MS).toISOString(),
     codex_native_invocation_plan: {
-      selected_strategy: 'message-role-fallback',
+      selected_strategy: 'sks-managed-artifact',
       hook_evidence_policy: 'background-verification-do-not-count-until-refreshed',
       blockers: [],
       warnings: ['native_invocation_plan_deferred_until_after_ui'],

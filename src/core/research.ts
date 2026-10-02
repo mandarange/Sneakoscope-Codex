@@ -416,7 +416,6 @@ function missionRootFromDir(dir: string): string | null {
 function compactExecutionProfile(profile: any) {
   return profile ? {
     mode: profile.mode || 'unknown',
-    agent_role_strategy: profile.agent_role_strategy || 'message-role',
     hooks_approval_required: profile.hooks_approval_required === true,
     hook_approval_state: profile.hook_approval_state || 'unknown',
     plugin_mcp_inventory_ready: profile.plugin_mcp_inventory_ready === true,

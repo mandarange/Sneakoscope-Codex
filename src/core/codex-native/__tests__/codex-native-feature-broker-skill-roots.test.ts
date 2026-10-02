@@ -32,7 +32,6 @@ test('feature broker requires authoritative HOME skills and rejects project-only
   assert.equal(MANAGED_SKILLS.some((skill) => currentSksSkillName(skill.id) === 'sks-loop'), false);
   const fixture = await createCodexNativeRuntimeFixture({
     hook: 'approved',
-    agentType: 'supported',
     appHandoff: true,
     imagePathExposure: true,
     mcpCandidates: true,
@@ -85,7 +84,6 @@ test('feature broker requires authoritative HOME skills and rejects project-only
 test('feature broker rejects valid managed skills reached through a HOME ancestor symlink', async () => {
   const fixture = await createCodexNativeRuntimeFixture({
     hook: 'approved',
-    agentType: 'supported',
     appHandoff: true,
     imagePathExposure: true,
     mcpCandidates: true,

@@ -10,9 +10,6 @@ export interface NarutoLoopWorkerRoute {
   allowed_files: string[];
   allowed_directories: string[];
   gates: string[];
-  agent_role_strategy: CodexAppExecutionProfile['agent_role_strategy'] | 'message-role';
-  agent_type: string | null;
-  message_role_prefix: string | null;
   execution_profile_artifact: string | null;
   mutation_outside_owner_scope_allowed: false;
 }
@@ -22,7 +19,6 @@ export function routeNarutoLoopWorker(node: SksLoopNode, role: Extract<SksLoopRo
   const roles = roleLabels(domain);
   const gates = [...node.gates.triage, ...node.gates.local, ...node.gates.checker, ...node.gates.integration, ...node.gates.final];
   const roleName = role === 'maker' ? roles.maker : roles.checker;
-  const strategy = profile?.agent_role_strategy || 'message-role';
   return {
     schema: 'sks.naruto-loop-worker-route.v1',
     loop_id: node.loop_id,
@@ -31,9 +27,6 @@ export function routeNarutoLoopWorker(node: SksLoopNode, role: Extract<SksLoopRo
     prompt: [
       `loop purpose: ${node.purpose}`,
       `role: ${roleName}`,
-      `agent role strategy: ${strategy}`,
-      `agent_type: ${strategy === 'agent_type' ? roleName.replace(/\s+/g, '-') : '-'}`,
-      `message role prefix: ${strategy === 'message-role' ? `Role: ${roleName}.` : '-'}`,
       `owner files: ${node.owner_scope.files.join(', ') || '-'}`,
       `owner directories: ${node.owner_scope.directories.join(', ') || '-'}`,
       `gates: ${gates.join(', ') || '-'}`,
@@ -45,9 +38,6 @@ export function routeNarutoLoopWorker(node: SksLoopNode, role: Extract<SksLoopRo
     allowed_files: node.owner_scope.files,
     allowed_directories: node.owner_scope.directories,
     gates,
-    agent_role_strategy: strategy,
-    agent_type: strategy === 'agent_type' ? roleName.replace(/\s+/g, '-') : null,
-    message_role_prefix: strategy === 'message-role' ? `Role: ${roleName}.` : null,
     execution_profile_artifact: profile?.artifact_path || null,
     mutation_outside_owner_scope_allowed: false
   };

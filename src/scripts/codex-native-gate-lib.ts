@@ -66,21 +66,18 @@ async function docsBrandNeutrality(id: string): Promise<void> {
 }
 
 async function featureBroker(id: string): Promise<void> {
-  const matrix = await buildFixtureMatrix(id, { hook: 'approved', agentType: 'supported' })
+  const matrix = await buildFixtureMatrix(id, { hook: 'approved' })
   assertGate(matrix.schema === 'sks.codex-native-feature-matrix.v1', 'matrix schema mismatch', matrix)
-  assertGate(matrix.features.agent_type.ok === true, 'agent_type feature not available in fixture', matrix.features.agent_type)
-  assertGate(matrix.invocation_defaults.loop_worker_role_strategy === 'agent_type', 'loop strategy should use agent_type', matrix.invocation_defaults)
-  emitGate(id, { strategy: matrix.invocation_defaults.loop_worker_role_strategy })
+  emitGate(id, { hook_evidence_policy: matrix.invocation_defaults.hook_evidence_policy })
 }
 
 async function harnessCompat(id: string): Promise<void> {
-  const previous = fakeEnv({ hook: 'approved', agentType: 'supported' })
+  const previous = fakeEnv({ hook: 'approved' })
   try {
     const tmp = await tempRoot(id)
     const mod = await importDist('core/codex-app/codex-app-harness-matrix.js')
     const matrix = await mod.buildCodexAppHarnessMatrix({ root: tmp })
     assertGate(matrix.schema === 'sks.codex-app-harness-matrix.v1', 'compat schema mismatch', matrix)
-    assertGate(matrix.app_features.agent_type_supported === true, 'compat adapter did not expose agent_type', matrix)
   } finally {
     restoreEnv(previous)
   }
@@ -88,22 +85,21 @@ async function harnessCompat(id: string): Promise<void> {
 }
 
 async function invocationDefaults(id: string): Promise<void> {
-  const approved = await buildFixtureMatrix(id, { hook: 'approved', agentType: 'supported' })
+  const approved = await buildFixtureMatrix(id, { hook: 'approved' })
   assertGate(approved.invocation_defaults.hook_evidence_policy === 'approved-only', 'approved hook must count', approved.invocation_defaults)
-  const unknown = await buildFixtureMatrix(`${id}-unknown`, { hook: 'unknown', agentType: 'unsupported' })
+  const unknown = await buildFixtureMatrix(`${id}-unknown`, { hook: 'unknown' })
   assertGate(unknown.invocation_defaults.hook_evidence_policy === 'unknown-do-not-count', 'unknown hook must not count', unknown.invocation_defaults)
-  assertGate(unknown.invocation_defaults.loop_worker_role_strategy === 'message-role', 'unsupported agent_type must fallback', unknown.invocation_defaults)
   emitGate(id)
 }
 
 async function invocationRouter(id: string): Promise<void> {
-  const previous = fakeEnv({ hook: 'unknown', agentType: 'unsupported' })
+  const previous = fakeEnv({ hook: 'unknown' })
   try {
     const tmp = await tempRoot(id)
     const mod = await importDist('core/codex-native/codex-native-invocation-router.js')
     const agent = await mod.resolveCodexNativeInvocationPlan({ root: tmp, missionId: 'M-router', route: '$Loop', desiredCapability: 'agent-role' })
     const hook = await mod.resolveCodexNativeInvocationPlan({ root: tmp, missionId: 'M-router', route: '$MAD', desiredCapability: 'hook-evidence' })
-    assertGate(agent.selected_strategy === 'message-role-fallback', 'agent-role should fallback when unsupported', agent)
+    assertGate(agent.selected_strategy === 'codex-sdk', 'agent-role plan should record the native codex-sdk strategy', agent)
     assertGate(hook.selected_strategy === 'blocked' && hook.blockers.includes('hook_approval_not_approved'), 'hook evidence must block when approval unknown', hook)
     assertGate(fs.existsSync(path.join(tmp, '.sneakoscope', 'missions', 'M-router', 'codex-native-invocation-plan.loop.agent-role.json')), 'mission invocation artifact missing')
   } finally {
@@ -114,7 +110,7 @@ async function invocationRouter(id: string): Promise<void> {
 
 async function routeMap(id: string): Promise<void> {
   const source = readText('src/core/codex-native/codex-native-invocation-router.ts')
-  for (const token of ['$Loop', '$QA-LOOP', '$Research', '$Image', '$MAD', '$Doctor', 'hook_approval_not_approved', 'message-role-fallback']) {
+  for (const token of ['$Loop', '$QA-LOOP', '$Research', '$Image', '$MAD', '$Doctor', 'hook_approval_not_approved']) {
     assertGate(source.includes(token), `route map token missing:${token}`)
   }
   emitGate(id)
@@ -165,7 +161,7 @@ async function skillContent(id: string): Promise<void> {
 }
 
 async function agentRoleContent(id: string): Promise<void> {
-  const previous = fakeEnv({ hook: 'approved', agentType: 'supported' })
+  const previous = fakeEnv({ hook: 'approved' })
   try {
     const tmp = await tempRoot(id)
     const mod = await importDist('core/codex-app/codex-agent-role-sync.js')
@@ -184,7 +180,7 @@ async function agentRoleContent(id: string): Promise<void> {
 }
 
 async function hookLifecycleProof(id: string): Promise<void> {
-  const previous = fakeEnv({ hook: 'unknown', agentType: 'supported' })
+  const previous = fakeEnv({ hook: 'unknown' })
   try {
     const tmp = await tempRoot(id)
     const mod = await importDist('core/codex-app/codex-hook-lifecycle.js')
@@ -253,7 +249,7 @@ async function noTsNoCheckReleaseScripts(id: string): Promise<void> {
 
 async function doctorReadinessUx(id: string): Promise<void> {
   const source = readText('src/commands/doctor.ts')
-  for (const token of ['SKS Runtime Readiness', 'Codex Native:', 'Loop Mesh:', 'QA Visual:', 'Research Sources:', 'hook-derived evidence will not count', 'message-role fallback active']) {
+  for (const token of ['SKS Runtime Readiness', 'Codex Native:', 'QA Visual:', 'Research Sources:', 'hook-derived evidence will not count']) {
     assertGate(source.includes(token), `doctor readiness token missing:${token}`)
   }
   emitGate(id)
@@ -279,17 +275,15 @@ async function doctorRepairActions(id: string): Promise<void> {
 }
 
 async function featureBrokerBlackbox(id: string): Promise<void> {
-  const all = await buildFixtureMatrix(`${id}-all`, { hook: 'approved', agentType: 'supported' })
-  assertGate(all.invocation_defaults.loop_worker_role_strategy === 'agent_type', 'all-ready scenario should use agent_type', all)
-  const unknownHook = await buildFixtureMatrix(`${id}-hook`, { hook: 'unknown', agentType: 'supported' })
+  const all = await buildFixtureMatrix(`${id}-all`, { hook: 'approved' })
+  assertGate(all.invocation_defaults.hook_evidence_policy === 'approved-only', 'all-ready scenario should count approved hooks', all.invocation_defaults)
+  const unknownHook = await buildFixtureMatrix(`${id}-hook`, { hook: 'unknown' })
   assertGate(unknownHook.invocation_defaults.hook_evidence_policy === 'unknown-do-not-count', 'unknown hook scenario should not count', unknownHook)
-  const noAgent = await buildFixtureMatrix(`${id}-agent`, { hook: 'approved', agentType: 'unsupported' })
-  assertGate(noAgent.invocation_defaults.loop_worker_role_strategy === 'message-role', 'agent unsupported scenario should fallback', noAgent)
   emitGate(id)
 }
 
-async function buildFixtureMatrix(id: string, opts: { hook: 'approved' | 'unknown'; agentType: 'supported' | 'unsupported' }): Promise<Record<string, any>> {
-  const previous = fakeEnv({ hook: opts.hook, agentType: opts.agentType })
+async function buildFixtureMatrix(id: string, opts: { hook: 'approved' | 'unknown' }): Promise<Record<string, any>> {
+  const previous = fakeEnv({ hook: opts.hook })
   try {
     const tmp = await tempRoot(id)
     const mod = await importDist('core/codex-native/codex-native-feature-broker.js')
@@ -337,13 +331,12 @@ function forbiddenTerms(): string[] {
   return ['bGF6eWNvZGV4', 'b3BlbmNsYXc=', 'aGVybWVz', 'b2gtbXktb3BlbmFnZW50', 'c2lzeXBodXNsYWJz'].map((value) => Buffer.from(value, 'base64').toString('utf8'))
 }
 
-function fakeEnv(opts: { hook: 'approved' | 'unknown'; agentType: 'supported' | 'unsupported' }): Record<string, string | undefined> {
+function fakeEnv(opts: { hook: 'approved' | 'unknown' }): Record<string, string | undefined> {
   return swapEnv({
     SKS_CODEX_CURRENT_APP_FAKE: '1',
     SKS_CODEX_CURRENT_CORE_FAKE: '1',
     SKS_CODEX_PLUGIN_JSON_FAKE: '1',
     SKS_CODEX_HOOK_APPROVAL_FIXTURE: opts.hook,
-    SKS_CODEX_AGENT_TYPE_FIXTURE: opts.agentType,
     CODEX_BIN: 'codex'
   })
 }

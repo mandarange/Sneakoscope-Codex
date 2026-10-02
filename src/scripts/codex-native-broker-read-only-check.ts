@@ -9,7 +9,6 @@ import { createCodexNativeRuntimeFixture, withFixtureEnv } from './codex-native-
 
 const fixture = await createCodexNativeRuntimeFixture({
   hook: 'approved',
-  agentType: 'supported',
   appHandoff: true,
   imagePathExposure: true,
   mcpCandidates: true,

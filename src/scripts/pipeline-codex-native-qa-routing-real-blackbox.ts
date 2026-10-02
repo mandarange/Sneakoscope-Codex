@@ -21,7 +21,6 @@ export async function runCodexNativeQaRoutingRealBlackbox(): Promise<void> {
 async function qaScenario(input: { hook: 'approved' | 'unknown'; appHandoff: boolean }): Promise<Record<string, unknown>> {
   const fixture = await createCodexNativeRuntimeFixture({
     hook: input.hook,
-    agentType: 'supported',
     appHandoff: input.appHandoff,
     imagePathExposure: true,
     mcpCandidates: true,

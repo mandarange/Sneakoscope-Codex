@@ -15,7 +15,6 @@ export async function buildCodexAppHarnessMatrixFromNative(input: {
 
 export function codexAppHarnessMatrixFromNative(matrix: CodexNativeFeatureMatrix): CodexAppHarnessMatrix {
   const hookApproval = probeRecord(matrix.probes.hook_approval)
-  const agentType = probeRecord(matrix.probes.agent_type)
   const hookState = typeof hookApproval.approval_state === 'string' ? hookApproval.approval_state : 'unknown'
   return {
     schema: 'sks.codex-app-harness-matrix.v1',
@@ -38,7 +37,6 @@ export function codexAppHarnessMatrixFromNative(matrix: CodexNativeFeatureMatrix
         ? hookState
         : 'unknown',
       skill_picker_ready: matrix.features.skill_picker.ok,
-      agent_type_supported: matrix.features.agent_type.ok,
       mcp_inventory_ready: matrix.features.mcp_inventory.ok,
       app_handoff_ready: matrix.features.app_handoff.ok,
       image_path_exposure_ready: matrix.features.image_path_exposure.ok
@@ -51,8 +49,7 @@ export function codexAppHarnessMatrixFromNative(matrix: CodexNativeFeatureMatrix
       loop_mesh_app_profile_available: true
     },
     probes: {
-      hook_approval: hookApproval as unknown as CodexAppHarnessMatrix['probes']['hook_approval'],
-      agent_type: agentType as unknown as CodexAppHarnessMatrix['probes']['agent_type']
+      hook_approval: hookApproval as unknown as CodexAppHarnessMatrix['probes']['hook_approval']
     },
     blockers: matrix.blockers,
     warnings: matrix.warnings

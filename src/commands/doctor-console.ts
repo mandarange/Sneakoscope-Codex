@@ -121,7 +121,6 @@ export function renderDoctorConsoleReport(result: any, extras: DoctorConsoleExtr
   const featureMatrixSkipped = codexNativeFeatureMatrix.skipped === true;
   line('SKS Runtime Readiness:');
   line(`  Codex Native: ${skippedOr(featureMatrixSkipped, String(runtimeReadiness.codex_native))}`);
-  line(`  Loop Mesh: ${skippedOr(featureMatrixSkipped, String(runtimeReadiness.loop_mesh))}`);
   line(`  QA Visual: ${skippedOr(featureMatrixSkipped, String(runtimeReadiness.qa_visual))}`);
   line(`  Research Sources: ${skippedOr(featureMatrixSkipped, String(runtimeReadiness.research_sources))}`);
   line(`  Image Follow-up: ${skippedOr(featureMatrixSkipped, String(runtimeReadiness.image_followup))}`);
@@ -176,7 +175,6 @@ export function renderDoctorConsoleReport(result: any, extras: DoctorConsoleExtr
   line(`  hook approval: ${skippedOr(harnessSkipped, appFeatures.hook_approval_state_detectable ? 'ok' : 'unknown')}`);
   line(`  skills: ${skippedOr(harnessSkipped, sksIntegrations.dollar_skills_synced ? 'ok' : 'degraded')}`);
   line(`  agent roles: ${skippedOr(harnessSkipped, sksIntegrations.agent_roles_synced ? 'ok' : 'degraded')}`);
-  line(`  native agent_type: ${skippedOr(harnessSkipped, appFeatures.agent_type_supported ? 'ok' : 'fallback message-role')}`);
   line(`  init-deep memory: ${skippedOr(harnessSkipped, sksIntegrations.init_deep_available ? 'available' : 'missing')}`);
   line(`  loop mesh app profile: ${skippedOr(harnessSkipped, sksIntegrations.loop_mesh_app_profile_available ? 'available' : 'missing')}`);
   line('Codex App UI:');

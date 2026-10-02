@@ -3570,7 +3570,7 @@
     },
     {
       "id": "codex-app:agent-role-comprehensive",
-      "command": "node ./dist/scripts/codex-agent-type-routing-check.js && node ./dist/scripts/codex-agent-role-sync-check.js && node ./dist/scripts/codex-agent-role-rich-content-check.js",
+      "command": "node ./dist/scripts/codex-agent-role-sync-check.js && node ./dist/scripts/codex-agent-role-rich-content-check.js",
       "deps": [],
       "resource": [
         "cpu-light",

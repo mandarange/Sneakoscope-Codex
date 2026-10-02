@@ -4,13 +4,11 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { planLoopsFromRequest } from '../core/loops/loop-planner.js'
 import { runLoopMakerWorkers } from '../core/loops/loop-worker-runtime.js'
-import { resolveCodexNativeInvocationPlan } from '../core/codex-native/codex-native-invocation-router.js'
 import { createCodexNativeRuntimeFixture, withFixtureEnv } from './codex-native-runtime-e2e-fixture.js'
 
 export async function runCodexNativeLoopRoutingRealBlackbox(): Promise<void> {
   const supported = await createCodexNativeRuntimeFixture({
     hook: 'approved',
-    agentType: 'supported',
     appHandoff: true,
     imagePathExposure: true,
     mcpCandidates: true,
@@ -27,29 +25,9 @@ export async function runCodexNativeLoopRoutingRealBlackbox(): Promise<void> {
     const node = plan.graph.nodes.find((row) => row.route !== '$Integration')
     assertGate(node, 'loop action node missing')
     const result = await runLoopMakerWorkers({ root: supported.root, plan, node, fixture: true })
-    assertGate(result.codex_native_invocation_plan?.selected_strategy === 'codex-app-native', 'loop fixture did not record codex-app-native strategy', result)
-    assertGate(result.codex_native_invocation_plan?.env.SKS_CODEX_NATIVE_AGENT_ROLE_STRATEGY === 'agent_type', 'loop fixture env missing agent_type strategy', result)
+    assertGate(result.codex_native_invocation_plan?.selected_strategy === 'codex-sdk', 'loop fixture did not record the codex-sdk strategy', result)
     const artifact = path.join(supported.root, '.sneakoscope', 'missions', supported.missionId, 'codex-native-invocation-plan.loop.agent-role.json')
     assertGate(await exists(artifact), 'loop invocation plan artifact missing', { artifact })
-  })
-
-  const unsupported = await createCodexNativeRuntimeFixture({
-    hook: 'approved',
-    agentType: 'unsupported',
-    appHandoff: true,
-    imagePathExposure: true,
-    mcpCandidates: true,
-    codeModeWebSearch: true
-  })
-  await withFixtureEnv(unsupported, async () => {
-    const plan = await resolveCodexNativeInvocationPlan({
-      root: unsupported.root,
-      missionId: unsupported.missionId,
-      route: '$Loop',
-      desiredCapability: 'agent-role'
-    })
-    assertGate(plan.selected_strategy === 'message-role-fallback', 'unsupported agent_type must use message-role fallback', plan)
-    assertGate(plan.warnings.some((warning) => warning.includes('message-role fallback')), 'fallback warning missing', plan)
   })
   emitGate('pipeline:codex-native-loop-routing-real-blackbox')
 }

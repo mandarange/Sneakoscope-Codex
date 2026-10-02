@@ -28,11 +28,6 @@ export interface DoctorCodexStartupRepairResult {
     warnings: string[]
     duplicate_toml_blocks_removed: string[]
   }>
-  agent_role_files: {
-    sanitized: string[]
-    created: string[]
-    blockers: string[]
-  }
   actions: string[]
   manual_actions: string[]
   blockers: string[]
@@ -49,10 +44,6 @@ export async function runDoctorCodexStartupRepair(input: {
 }): Promise<DoctorCodexStartupRepairResult> {
   const root = path.resolve(input.root || process.cwd())
   const codexHome = input.codexHome || process.env.CODEX_HOME || path.join(process.env.HOME || os.homedir(), '.codex')
-  // Project-scoped official custom-agent installation is owned by repairAgentRoleConfigs.
-  // This startup repair remains structural/MCP-only and never touches legacy
-  // or user agent TOMLs in project or global directories.
-  const roleFiles = { sanitized: [], created: [], blockers: [] }
   const configs = []
   for (const candidate of [
     { scope: 'project' as const, path: path.join(root, '.codex', 'config.toml'), agentDir: path.join(root, '.codex', 'agents') },
@@ -60,11 +51,12 @@ export async function runDoctorCodexStartupRepair(input: {
   ]) {
     configs.push(await inspectOrRepairConfig(root, candidate, input.fix, input.nodeReplCommandCandidates || [], input.includeDefaultNodeReplCandidates !== false))
   }
-  const blockers = [...roleFiles.blockers, ...configs.flatMap((entry) => entry.blockers.map((item) => `${entry.scope}:${item}`))]
+  // Project-scoped official custom-agent installation is owned by repairAgentRoleConfigs.
+  // This startup repair remains structural/MCP-only and never touches legacy
+  // or user agent TOMLs in project or global directories.
+  const blockers = [...configs.flatMap((entry) => entry.blockers.map((item) => `${entry.scope}:${item}`))]
   const warnings = configs.flatMap((entry) => entry.warnings.map((item) => `${entry.scope}:${item}`))
   const actions = [
-    ...roleFiles.sanitized.map((file) => `removed unsupported message_role_prefix from ${file}`),
-    ...roleFiles.created.map((file) => `created missing SKS agent role config ${file}`),
     ...configs.flatMap((entry) => [
       ...entry.agent_config_files_repaired.map((file) => `${entry.scope} agent config_file now points at ${file}`),
       ...(entry.mcp_blocks_repaired || []).map((server) => `${entry.scope} MCP block repaired: ${server}`),
@@ -87,7 +79,6 @@ export async function runDoctorCodexStartupRepair(input: {
     generated_at: nowIso(),
     fix: input.fix === true,
     configs,
-    agent_role_files: roleFiles,
     actions,
     manual_actions: [...new Set(manualActions)],
     blockers,

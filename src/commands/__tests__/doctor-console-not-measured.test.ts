@@ -42,11 +42,10 @@ function skippedProfileResult(): any {
     codex_app: { ok: false, skipped: true, warnings: ['codex_app_optional_diagnostic_skipped'] },
     runtime_readiness: {
       codex_native: 'ok',
-      loop_mesh: 'fallback',
       qa_visual: 'route-gated',
       research_sources: 'local-files',
       image_followup: 'artifact-path',
-      notes: ['message-role fallback active'],
+      notes: ['hook-derived evidence will not count'],
       repair_actions: ['Project memory: sks codex-native init-deep --apply --directory-local']
     },
     codex_native_feature_matrix: { ok: true, skipped: true, features: {} },
@@ -104,10 +103,8 @@ test('every console row fed by a skipped source says not-measured, never a failu
 
   // The rest of the sweep: every other row fed by a skipped source.
   assert.equal(row(lines, '  hook approval: '), `  hook approval: ${NOT_MEASURED}`);
-  assert.equal(row(lines, '  native agent_type: '), `  native agent_type: ${NOT_MEASURED}`);
   assert.equal(row(lines, '  loop mesh app profile: '), `  loop mesh app profile: ${NOT_MEASURED}`);
   assert.equal(row(lines, '  Codex Native: '), `  Codex Native: ${NOT_MEASURED}`);
-  assert.equal(row(lines, '  Loop Mesh: '), `  Loop Mesh: ${NOT_MEASURED}`);
   assert.equal(row(lines, '  image generation: '), `  image generation: ${NOT_MEASURED}`);
   assert.equal(row(lines, '  computer use: '), `  computer use: ${NOT_MEASURED}`);
   assert.equal(row(lines, '  app handoff: '), `  app handoff: ${NOT_MEASURED}`);
@@ -122,7 +119,7 @@ test('every console row fed by a skipped source says not-measured, never a failu
 
   // A skipped source stub's defaults are not measurements: no notes or repair
   // guidance derived from them may print as if they were.
-  assert.ok(!lines.some((line) => line.includes('message-role fallback active')), 'stub-derived notes must not print for a skipped matrix');
+  assert.ok(!lines.some((line) => line.includes('hook-derived evidence will not count')), 'stub-derived notes must not print for a skipped matrix');
   assert.ok(!lines.some((line) => line.includes('init-deep --apply')), 'stub-derived repair actions must not print for a skipped matrix');
 
   // Join-level truth: with everything measured green and the deep checks
@@ -142,7 +139,7 @@ test('a measured run still renders genuine failures as failures (control for the
   result.codex_native_feature_matrix = { ok: true, features: { multi_agent_mode: { ok: true } } };
   result.codex_app_harness_matrix = {
     ok: true,
-    app_features: { plugin_json: false, hook_approval_state_detectable: true, agent_type_supported: true },
+    app_features: { plugin_json: false, hook_approval_state_detectable: true },
     sks_integrations: { dollar_skills_synced: true, agent_roles_synced: false, init_deep_available: true, loop_mesh_app_profile_available: true }
   };
   result.repair.doctor_native_capability.native_capabilities = { ok: true, capabilities: [] };

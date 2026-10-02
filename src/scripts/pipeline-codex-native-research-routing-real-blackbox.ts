@@ -21,7 +21,6 @@ export async function runCodexNativeResearchRoutingRealBlackbox(): Promise<void>
 async function researchScenario(input: { mcpCandidates: boolean; codeModeWebSearch: boolean }): Promise<Record<string, unknown>> {
   const fixture = await createCodexNativeRuntimeFixture({
     hook: 'approved',
-    agentType: 'supported',
     appHandoff: true,
     imagePathExposure: true,
     mcpCandidates: input.mcpCandidates,

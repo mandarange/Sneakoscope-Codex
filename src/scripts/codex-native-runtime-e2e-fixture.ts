@@ -11,7 +11,6 @@ export interface CodexNativeRuntimeFixture {
 
 export async function createCodexNativeRuntimeFixture(input: {
   hook: 'approved' | 'unknown' | 'pending_review'
-  agentType: 'supported' | 'unsupported'
   appHandoff: boolean
   imagePathExposure: boolean
   mcpCandidates: boolean
@@ -50,7 +49,6 @@ export async function createCodexNativeRuntimeFixture(input: {
       SKS_CODEX_CURRENT_CORE_PROBE: '1',
       SKS_CODEX_PLUGIN_JSON_FAKE: '1',
       SKS_CODEX_HOOK_APPROVAL_FIXTURE: input.hook,
-      SKS_CODEX_AGENT_TYPE_FIXTURE: input.agentType,
       SKS_CODEX_CURRENT_APP_FAKE_APP_HANDOFF_FAIL: input.appHandoff ? '0' : '1',
       SKS_CODEX_CURRENT_APP_FAKE_IMAGE_PATH_FAIL: input.imagePathExposure ? '0' : '1',
       SKS_CODEX_CURRENT_APP_FAKE_PLUGIN_JSON_FAIL: '0',

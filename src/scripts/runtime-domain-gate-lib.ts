@@ -16,8 +16,7 @@ async function codexAppGate(id: string) {
   const previous = swapEnv({
     SKS_CODEX_CURRENT_APP_FAKE: '1',
     SKS_CODEX_CURRENT_CORE_FAKE: '1',
-    SKS_CODEX_PLUGIN_JSON_FAKE: '1',
-    SKS_CODEX_AGENT_TYPE_SUPPORTED: id.includes('blackbox') ? '1' : ''
+    SKS_CODEX_PLUGIN_JSON_FAKE: '1'
   })
   try {
     if (id === 'codex-app:harness-matrix' || id === 'doctor:codex-app-harness' || id === 'codex-app:harness-blackbox') {
@@ -44,9 +43,8 @@ async function codexAppGate(id: string) {
       const mod = await importDist('core/codex-app/codex-agent-role-sync.js')
       const manifest = await importDist('core/managed-assets/managed-assets-manifest.js')
       const codexHome = path.join(rootDir, 'codex-home')
-      const report = await mod.syncCodexAgentRoles({ root: rootDir, codexHome, apply: true, agentTypeSupported: true })
+      const report = await mod.syncCodexAgentRoles({ root: rootDir, codexHome, apply: true })
       const expectedRoles = manifest.MANAGED_OFFICIAL_SUBAGENT_ROLES.map((role: any) => role.codex_name)
-      assertGate(report.fallback === 'agent_type', 'agent role sync should use agent_type when supported', report)
       assertGate(report.directive_roles.length === 0 && report.official_roles.join(',') === expectedRoles.join(','), 'agent role sync must expose the official project custom-agent catalog', report)
       assertGate(manifest.MANAGED_OFFICIAL_SUBAGENT_ROLES.every((role: any) => fs.existsSync(path.join(rootDir, '.codex', 'agents', role.filename))), 'official project agent catalog missing', report)
       assertGate(!fs.existsSync(path.join(codexHome, 'agents')), 'agent role sync must not create global directive roles', report)

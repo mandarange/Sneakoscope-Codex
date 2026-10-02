@@ -15,7 +15,7 @@ const deep = latestModelForTier('deep')
 
 const root = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'sks-agent-role-content-'))
 const codexHome = path.join(root, 'codex-home')
-const report = await syncCodexAgentRoles({ root, codexHome, apply: true, agentTypeSupported: true })
+const report = await syncCodexAgentRoles({ root, codexHome, apply: true })
 const expert = await fs.promises.readFile(path.join(root, '.codex', 'agents', 'expert.toml'), 'utf8')
 const worker = await fs.promises.readFile(path.join(root, '.codex', 'agents', 'worker.toml'), 'utf8')
 const implementation = await fs.promises.readFile(path.join(root, '.codex', 'agents', 'implementation-specialist.toml'), 'utf8')
@@ -43,7 +43,7 @@ assertGate(JSON.stringify(distribution) === JSON.stringify({
   terra_max_context_tools: 6
 }), 'official role policy distribution mismatch')
 assertGate(!fs.existsSync(path.join(codexHome, 'agents')), 'agent role sync must not create global directive roles')
-assertGate(report.strategy === 'agent_type' && report.probe_artifact_path && report.clobbered_user_roles === false && report.official_roles.length === MANAGED_OFFICIAL_SUBAGENT_ROLES.length, 'agent role report strategy/probe/catalog/no-clobber fields missing')
+assertGate(report.clobbered_user_roles === false && report.official_roles.length === MANAGED_OFFICIAL_SUBAGENT_ROLES.length, 'agent role report catalog/no-clobber fields missing')
 emitGate('codex-native:agent-role-content')
 
 function assertGate(condition: unknown, message: string): asserts condition {

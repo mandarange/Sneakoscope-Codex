@@ -26,7 +26,6 @@ export interface CodexNativeInvocationPlan {
     | 'codex-cli-headless'
     | 'codex-sdk'
     | 'sks-managed-artifact'
-    | 'message-role-fallback'
     | 'blocked'
   required_artifacts: string[]
   proof_policy: string[]
@@ -65,14 +64,8 @@ function planFor(matrix: CodexNativeFeatureMatrix, route: CodexNativeRoute, capa
   const proofPolicy: string[] = ['record selected strategy and blockers before counting route evidence']
 
   if (capability === 'agent-role') {
-    if (matrix.invocation_defaults.loop_worker_role_strategy === 'agent_type') {
-      selected = 'codex-app-native'
-      proofPolicy.push('include native agent_type payload in worker proof')
-    } else {
-      selected = 'message-role-fallback'
-      warnings.push('agent_type unavailable; message-role fallback active')
-      proofPolicy.push('include message-role fallback in worker proof')
-    }
+    selected = 'codex-sdk'
+    proofPolicy.push('record the native agent role in worker proof')
   } else if (capability === 'visual-review') {
     if (matrix.invocation_defaults.hook_evidence_policy === 'unknown-do-not-count') warnings.push('hook-derived evidence will not count')
     selected = matrix.invocation_defaults.qa_visual_review_strategy === 'app-handoff' ? 'codex-app-native' : 'sks-managed-artifact'
@@ -126,7 +119,6 @@ function planFor(matrix: CodexNativeFeatureMatrix, route: CodexNativeRoute, capa
     env: {
       SKS_CODEX_NATIVE_STRATEGY: selected,
       SKS_CODEX_NATIVE_FEATURE_MATRIX: '.sneakoscope/reports/codex-native-feature-matrix.json',
-      SKS_CODEX_NATIVE_AGENT_ROLE_STRATEGY: matrix.invocation_defaults.loop_worker_role_strategy,
       SKS_CODEX_NATIVE_HOOK_EVIDENCE_POLICY: matrix.invocation_defaults.hook_evidence_policy
     },
     blockers,

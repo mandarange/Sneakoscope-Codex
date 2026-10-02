@@ -78,7 +78,7 @@ export interface NarutoWorkItem {
     required: boolean
     allocation_required: boolean
   }
-  codex_app_execution_profile?: Pick<CodexAppExecutionProfile, 'mode' | 'agent_role_strategy' | 'artifact_path' | 'agent_type_probe_artifact_path'>
+  codex_app_execution_profile?: Pick<CodexAppExecutionProfile, 'mode' | 'artifact_path'>
   codex_native_invocation_plan?: Pick<CodexNativeInvocationPlan, 'route' | 'desired_capability' | 'selected_strategy' | 'required_artifacts' | 'proof_policy' | 'env' | 'blockers' | 'warnings'>
   tournament?: number
 }
@@ -95,7 +95,7 @@ export interface NarutoWorkGraph {
   mixed_work_kinds: NarutoWorkKind[]
   write_allowed_count: number
   worktree_policy: NarutoWorktreePolicy
-  codex_app_execution_profile?: Pick<CodexAppExecutionProfile, 'mode' | 'agent_role_strategy' | 'artifact_path' | 'agent_type_probe_artifact_path'>
+  codex_app_execution_profile?: Pick<CodexAppExecutionProfile, 'mode' | 'artifact_path'>
   codex_native_invocation_plan?: Pick<CodexNativeInvocationPlan, 'route' | 'desired_capability' | 'selected_strategy' | 'required_artifacts' | 'proof_policy' | 'env' | 'blockers' | 'warnings'>
   blockers: string[]
   ok: boolean

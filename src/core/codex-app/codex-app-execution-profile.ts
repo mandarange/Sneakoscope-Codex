@@ -14,19 +14,17 @@ export async function resolveCodexAppExecutionProfile(input: { root: string; mat
     ? modeFromNative(nativeMatrix)
     : !matrix?.codex_cli.available
     ? 'degraded-no-app'
-    : matrix.app_features.app_handoff_ready && matrix.app_features.agent_type_supported
+    : matrix.app_features.app_handoff_ready
       ? 'codex-app-native'
       : matrix.codex_cli.available
         ? 'codex-cli-headless'
         : 'sks-loop-headless'
-  const agentRoleStrategy = nativeMatrix?.invocation_defaults.loop_worker_role_strategy || (matrix?.app_features.agent_type_supported ? 'agent_type' : 'message-role')
   const hookApprovalState = hookApprovalStateFrom(nativeMatrix) || matrix?.app_features.hook_approval_state || 'unknown'
   const profile: CodexAppExecutionProfile = {
     schema: 'sks.codex-app-execution-profile.v1',
     generated_at: nowIso(),
     ok: mode !== 'degraded-no-app',
     mode,
-    agent_role_strategy: agentRoleStrategy,
     hooks_assumed_running: false,
     hooks_approval_required: hookApprovalState !== 'approved',
     hook_approval_state: hookApprovalState,
@@ -36,7 +34,6 @@ export async function resolveCodexAppExecutionProfile(input: { root: string; mat
     loop_mesh_app_profile_available: true,
     artifact_path: '.sneakoscope/reports/codex-app-execution-profile.json',
     matrix_artifact_path: nativeMatrix ? '.sneakoscope/reports/codex-native-feature-matrix.json' : '.sneakoscope/reports/codex-app-harness-matrix.json',
-    agent_type_probe_artifact_path: '.sneakoscope/reports/codex-agent-type-probe.json',
     hook_approval_probe_artifact_path: '.sneakoscope/reports/codex-hook-approval-probe.json',
     blockers: mode === 'degraded-no-app' ? ['codex_cli_missing'] : [],
     warnings: nativeMatrix?.warnings || matrix?.warnings || []
@@ -47,7 +44,7 @@ export async function resolveCodexAppExecutionProfile(input: { root: string; mat
 
 function modeFromNative(matrix: CodexNativeFeatureMatrix): CodexAppExecutionProfileMode {
   if (!matrix.codex_cli.available) return 'degraded-no-app'
-  if (matrix.features.app_handoff.ok && matrix.features.agent_type.ok) return 'codex-app-native'
+  if (matrix.features.app_handoff.ok) return 'codex-app-native'
   return 'codex-cli-headless'
 }
 

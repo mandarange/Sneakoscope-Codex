@@ -3,7 +3,6 @@ import os from 'node:os'
 import fs from 'node:fs/promises'
 import { findCodexBinary } from '../codex-adapter.js'
 import { codexAppIntegrationStatus } from '../codex-app.js'
-import { probeCodexAgentTypeSupport } from '../codex-app/codex-agent-type-probe.js'
 import { probeCodexHookApprovalState } from '../codex-app/codex-hook-approval-probe.js'
 import { detectCodexCurrentAppCapability } from '../codex-control/codex-current-app-capability.js'
 import { detectCodexCurrentCoreCapability } from '../codex-control/codex-current-core-capability.js'
@@ -102,18 +101,6 @@ export async function buildCodexNativeFeatureMatrix(input: {
     blockers: [messageOf(err)],
     warnings: ['hook_approval_probe_failed']
   }))
-  const agentType = await probeCodexAgentTypeSupport(root, { codexBin }).catch((err: unknown) => ({
-    schema: 'sks.codex-agent-type-probe.v1' as const,
-    generated_at: nowIso(),
-    ok: false,
-    supported: false,
-    source: 'unknown' as const,
-    spawn_tool_name: 'unknown' as const,
-    schema_path: null,
-    evidence: [],
-    blockers: [messageOf(err)],
-    warnings: ['agent_type_probe_failed_message_role_fallback']
-  }))
   const skillSync = await inspectManagedSkillState(root)
   const agentRoles = await inspectManagedAgentRoleState(root)
   const appRecord: Record<string, unknown> = isRecord(app) ? app : {}
@@ -138,15 +125,6 @@ export async function buildCodexNativeFeatureMatrix(input: {
     skill_picker: boolState(skillPickerReady, 'config', '.sneakoscope/reports/codex-native-feature-matrix.json', [], skillPickerReady ? [] : ['skill_picker_unverified']),
     skill_sync: boolState(recordOk(skillSync) !== false, 'actual-probe', '.sneakoscope/reports/codex-skill-sync.json', blockersOf(skillSync)),
     agent_roles: boolState(recordOk(agentRoles) !== false, 'actual-probe', '.sneakoscope/reports/codex-agent-role-sync.json', blockersOf(agentRoles)),
-    agent_type: codexNativeFeatureState({
-      ok: agentType.supported === true,
-      source: agentType.source === 'fixture' ? 'fixture' : 'actual-probe',
-      artifact_path: '.sneakoscope/reports/codex-agent-type-probe.json',
-      evidence: agentType.evidence,
-      blockers: [],
-      warnings: [...agentType.warnings, ...(agentType.supported ? [] : ['agent_type_unavailable_message_role_fallback'])],
-      unavailableStatus: 'fallback'
-    }),
     mcp_inventory: codexNativeFeatureState({
       ok: mcpCandidates.candidates.length > 0,
       source: 'plugin-inventory',
@@ -199,13 +177,10 @@ export async function buildCodexNativeFeatureMatrix(input: {
       plugin_inventory: plugins,
       mcp_candidates: mcpCandidates,
       hook_approval: hookApproval,
-      agent_type: agentType,
       skill_sync: skillSync,
       agent_roles: agentRoles
     },
     invocation_defaults: {
-      loop_worker_role_strategy: 'message-role' as const,
-      multi_agent_mode: 'none' as const,
       rollout_budget_strategy: 'sks-local-only' as const,
       qa_visual_review_strategy: 'headless-artifact' as const,
       research_source_strategy: 'local-files' as const,

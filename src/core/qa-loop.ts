@@ -361,7 +361,6 @@ export function defaultQaGate(contract: any = {}, opts: any = {}) {
     codex_app_execution_profile: opts.executionProfile ? compactExecutionProfile(opts.executionProfile) : null,
     codex_app_execution_profile_artifact: opts.executionProfile ? 'qa-loop/execution-profile.json' : null,
     codex_app_hooks_approval_required: opts.executionProfile?.hooks_approval_required === true,
-    codex_app_agent_role_strategy: opts.executionProfile?.agent_role_strategy || null,
     codex_native_invocation: opts.codexNativeInvocation || null,
     api_e2e_required: apiRequired,
     unsafe_external_side_effects: false,
@@ -537,7 +536,6 @@ export async function writeMockQaResult(dir: any, mission: any, contract: any) {
     codex_app_execution_profile: previousGate.codex_app_execution_profile || null,
     codex_app_execution_profile_artifact: previousGate.codex_app_execution_profile_artifact || null,
     codex_app_hooks_approval_required: previousGate.codex_app_hooks_approval_required === true,
-    codex_app_agent_role_strategy: previousGate.codex_app_agent_role_strategy || null,
     codex_native_invocation: previousGate.codex_native_invocation || null,
     blockers: previousGate.blockers || [],
     verification_level: 'mock',
@@ -588,7 +586,7 @@ export function buildQaLoopPrompt({ id, mission, contract, cycle, previous, repo
     ? `\nCODEX DESKTOP /app HANDOFF:\n${JSON.stringify(appHandoff, null, 2)}\nThis is desktop-app review status only and is not web UI evidence.\n`
     : '';
   const executionProfileText = executionProfile
-    ? `\nCODEX APP EXECUTION PROFILE:\n${JSON.stringify(compactExecutionProfile(executionProfile), null, 2)}\nUse this routing profile for agent role strategy and app/headless assumptions.\n`
+    ? `\nCODEX APP EXECUTION PROFILE:\n${JSON.stringify(compactExecutionProfile(executionProfile), null, 2)}\nUse this routing profile for app/headless assumptions.\n`
     : '';
   return `SKS QA-LOOP
 MISSION: ${id}
@@ -825,7 +823,6 @@ function missionRootFromDir(dir: string): string | null {
 function compactExecutionProfile(profile: any) {
   return profile ? {
     mode: profile.mode || 'unknown',
-    agent_role_strategy: profile.agent_role_strategy || 'message-role',
     hooks_approval_required: profile.hooks_approval_required === true,
     hook_approval_state: profile.hook_approval_state || 'unknown',
     app_handoff_ready: profile.app_handoff_ready === true,

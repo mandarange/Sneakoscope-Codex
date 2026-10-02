@@ -20,8 +20,6 @@ export interface CodexNativeFeatureState {
 }
 
 export interface CodexNativeInvocationDefaults {
-  loop_worker_role_strategy: 'agent_type' | 'message-role'
-  multi_agent_mode: 'none' | 'explicitRequestOnly' | 'proactive'
   rollout_budget_strategy: 'codex-current-shared' | 'sks-local-only'
   qa_visual_review_strategy: 'app-handoff' | 'headless-artifact' | 'blocked'
   research_source_strategy: 'indexed-web-search' | 'mcp-plugin-candidates' | 'web-sources' | 'local-files'
@@ -48,7 +46,6 @@ export interface CodexNativeFeatureMatrix {
     skill_picker: CodexNativeFeatureState
     skill_sync: CodexNativeFeatureState
     agent_roles: CodexNativeFeatureState
-    agent_type: CodexNativeFeatureState
     mcp_inventory: CodexNativeFeatureState
     app_handoff: CodexNativeFeatureState
     image_path_exposure: CodexNativeFeatureState
@@ -108,14 +105,11 @@ export function codexNativeFeatureState(input: {
 export function computeCodexNativeInvocationDefaults(matrix: Pick<CodexNativeFeatureMatrix, 'features'>): CodexNativeInvocationDefaults {
   const features = matrix.features
   const hookStatus = features.hook_approval.status
-  const multiAgentOk = features.multi_agent_mode?.ok === true
   const rolloutBudgetOk = features.rollout_budget?.ok === true
   const indexedSearchOk = features.indexed_web_search?.ok === true
   const currentTimeOk = features.current_time_read?.ok === true
   const overloadOk = features.app_server_overload?.ok === true
   return {
-    loop_worker_role_strategy: features.agent_type.ok ? 'agent_type' : 'message-role',
-    multi_agent_mode: multiAgentOk && features.agent_type.ok ? 'proactive' : multiAgentOk ? 'explicitRequestOnly' : 'none',
     rollout_budget_strategy: rolloutBudgetOk ? 'codex-current-shared' : 'sks-local-only',
     qa_visual_review_strategy: features.app_handoff.ok ? 'app-handoff' : 'headless-artifact',
     research_source_strategy: indexedSearchOk ? 'indexed-web-search' : features.mcp_inventory.ok ? 'mcp-plugin-candidates' : features.code_mode_web_search.ok ? 'web-sources' : 'local-files',

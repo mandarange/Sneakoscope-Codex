@@ -46,7 +46,7 @@ export interface LoopWorkerRunResult {
   runtime_proof_path: string | null;
   worker_ids: string[];
   session_ids: string[];
-  codex_app_execution_profile?: Pick<CodexAppExecutionProfile, 'mode' | 'agent_role_strategy' | 'artifact_path' | 'agent_type_probe_artifact_path'>;
+  codex_app_execution_profile?: Pick<CodexAppExecutionProfile, 'mode' | 'artifact_path'>;
   codex_native_invocation_plan?: Pick<CodexNativeInvocationPlan, 'route' | 'desired_capability' | 'selected_strategy' | 'required_artifacts' | 'proof_policy' | 'env' | 'blockers' | 'warnings'>;
   fixture_policy?: LoopFixturePolicyDecision;
   fixture_allowed_reason?: string | null;
@@ -125,9 +125,7 @@ async function runLoopWorkerNative(input: LoopWorkerRunInput): Promise<LoopWorke
       SKS_LOOP_MAIN_ROOT: input.root,
       SKS_LOOP_WORKER_BUDGET: String(workerCount),
       SKS_CODEX_APP_EXECUTION_PROFILE: executionProfile?.mode || 'unknown',
-      SKS_CODEX_AGENT_ROLE_STRATEGY: executionProfile?.agent_role_strategy || 'message-role',
-      SKS_CODEX_NATIVE_STRATEGY: invocationPlan?.selected_strategy || 'message-role-fallback',
-      SKS_CODEX_NATIVE_AGENT_ROLE_STRATEGY: invocationPlan?.env.SKS_CODEX_NATIVE_AGENT_ROLE_STRATEGY || executionProfile?.agent_role_strategy || 'message-role',
+      SKS_CODEX_NATIVE_STRATEGY: invocationPlan?.selected_strategy || 'codex-sdk',
       SKS_CODEX_NATIVE_FEATURE_MATRIX: invocationPlan?.feature_matrix_artifact || '.sneakoscope/reports/codex-native-feature-matrix.json'
     },
     ...(input.worktree?.path ? {
@@ -176,9 +174,7 @@ async function normalizeNativeResult(input: LoopWorkerRunInput, result: any, exe
     ...(executionProfile ? {
       codex_app_execution_profile: {
         mode: executionProfile.mode,
-        agent_role_strategy: executionProfile.agent_role_strategy,
-        artifact_path: executionProfile.artifact_path,
-        agent_type_probe_artifact_path: executionProfile.agent_type_probe_artifact_path
+        artifact_path: executionProfile.artifact_path
       }
     } : {}),
     ...(invocationPlan ? {
@@ -260,9 +256,7 @@ async function runLoopWorkerFixture(input: LoopWorkerRunInput): Promise<LoopWork
 function buildLoopNarutoWorkGraph(input: LoopWorkerRunInput, workerCount: number, executionProfile: CodexAppExecutionProfile | null, invocationPlan: CodexNativeInvocationPlan | null): NarutoWorkGraph {
   const profilePayload = executionProfile ? {
     mode: executionProfile.mode,
-    agent_role_strategy: executionProfile.agent_role_strategy,
-    artifact_path: executionProfile.artifact_path,
-    agent_type_probe_artifact_path: executionProfile.agent_type_probe_artifact_path
+    artifact_path: executionProfile.artifact_path
   } : undefined;
   const invocationPayload = invocationPlan ? compactInvocationPlan(invocationPlan) : undefined;
   const workItems: NarutoWorkItem[] = Array.from({ length: Math.max(1, workerCount) }, (_, index) => {

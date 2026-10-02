@@ -12,7 +12,7 @@ release is authorized. Current 8.1.3 classifications live in
 | `all-features:deep-completion` | `release` | `node ./dist/scripts/all-feature-deep-completion-check.js` | direct |
 | `appshots:thread-attachment-discovery` | `release` | `node ./dist/scripts/appshots-thread-attachment-discovery-check.js` | direct |
 | `certificate:sla` | `release` | `node ./dist/scripts/certificate-sla-check.js` | direct |
-| `codex-app:agent-role-comprehensive` | `release` | `node ./dist/scripts/codex-agent-type-routing-check.js && node ./dist/scripts/codex-agent-role-sync-check.js && node ./dist/scripts/codex-agent-role-rich-content-check.js` | direct |
+| `codex-app:agent-role-comprehensive` | `release` | `node ./dist/scripts/codex-agent-role-sync-check.js && node ./dist/scripts/codex-agent-role-rich-content-check.js` | direct |
 | `codex-app:execution-profile` | `release` | `node ./dist/scripts/codex-app-execution-profile-check.js` | direct |
 | `codex-app:fast-ui-preservation` | `release` | `node ./dist/scripts/codex-app-fast-ui-preservation-check.js` | direct |
 | `codex-app:handoff` | `release` | `node ./dist/scripts/codex-app-handoff-check.js` | direct |

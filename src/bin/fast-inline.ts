@@ -104,8 +104,7 @@ export async function doctorJsonFastInline(input: {
     arg_warnings: [],
     node: { ok: true, version: process.version },
     runtime_readiness: {
-      hook_evidence_policy: 'unknown-do-not-count',
-      agent_role_strategy: 'message-role'
+      hook_evidence_policy: 'unknown-do-not-count'
     },
     codex: { bin: null, version: null, available: null, skipped: true, reason: 'fast_readonly_json' },
     repair: {

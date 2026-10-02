@@ -21,7 +21,6 @@ export async function runCodexNativeImageRoutingRealBlackbox(): Promise<void> {
 async function imageScenario(input: { imagePathExposure: boolean; missing: boolean }): Promise<Record<string, any>> {
   const fixture = await createCodexNativeRuntimeFixture({
     hook: 'approved',
-    agentType: 'supported',
     appHandoff: true,
     imagePathExposure: input.imagePathExposure,
     mcpCandidates: true,

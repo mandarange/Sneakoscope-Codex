@@ -28,7 +28,6 @@ export async function runTypedRoutingGate(id: string) {
   if (id === 'codex-app:type-safety') return codexAppTypeSafety(id)
   if (id === 'type-surface:codex-app') return typeSurfaceCodexApp(id)
   if (id.startsWith('codex-app:hook-approval')) return hookApprovalGate(id)
-  if (id.startsWith('codex-app:agent-type')) return agentTypeGate(id)
   if (id.includes('init-deep') || id.includes('planner-project-memory-deep')) return initDeepGate(id)
   if (id.includes('execution-profile-routing')) return executionProfileRoutingGate(id)
   if (id === 'codex-app:skill-rich-content') return richContentGate(id)
@@ -51,8 +50,7 @@ function noTsNoCheckCore(id: string) {
 function codexAppTypeSafety(id: string) {
   const required = [
     'src/core/codex-app/codex-app-types.ts',
-    'src/core/codex-app/codex-hook-approval-probe.ts',
-    'src/core/codex-app/codex-agent-type-probe.ts'
+    'src/core/codex-app/codex-hook-approval-probe.ts'
   ]
   for (const file of [...required, ...TARGET_TYPED_FILES]) assertGate(fs.existsSync(path.join(root, file)), `missing ${file}`)
   for (const file of TARGET_TYPED_FILES) {
@@ -61,13 +59,11 @@ function codexAppTypeSafety(id: string) {
   }
   const matrix = fs.readFileSync(path.join(root, 'src/core/codex-app/codex-app-harness-matrix.ts'), 'utf8')
   assertGate(!/hookApprovalKnown\s*=\s*false/.test(matrix), 'harness matrix must not hardcode hook approval unknown')
-  assertGate(!/SKS_CODEX_AGENT_TYPE_SUPPORTED\s*===\s*['"]1['"]/.test(matrix), 'harness matrix must not use env-only agent_type support')
   emitGate(id, { target_files: TARGET_TYPED_FILES.length })
 }
 
 async function typeSurfaceCodexApp(id: string) {
   const types = await importDist('core/codex-app/codex-app-types.js')
-  const agentProbe = await importDist('core/codex-app/codex-agent-type-probe.js')
   const sampleMatrix = {
     schema: 'sks.codex-app-harness-matrix.v1',
     generated_at: new Date().toISOString(),
@@ -81,7 +77,6 @@ async function typeSurfaceCodexApp(id: string) {
       hook_approval_state_detectable: true,
       hook_approval_state: 'approved',
       skill_picker_ready: true,
-      agent_type_supported: true,
       mcp_inventory_ready: true,
       app_handoff_ready: true,
       image_path_exposure_ready: true
@@ -98,9 +93,7 @@ async function typeSurfaceCodexApp(id: string) {
     warnings: []
   }
   assertGate(types.isCodexAppHarnessMatrix(sampleMatrix) === true, 'CodexAppHarnessMatrix guard rejected valid sample')
-  const payload = agentProbe.agentRolePayloadFor('sks-checker', { supported: true, schema: 'sks.codex-agent-type-probe.v1' })
-  assertGate(payload.strategy === 'agent_type' && payload.agent_type === 'sks-checker', 'agent role payload must select agent_type when supported', payload)
-  emitGate(id, { guards: 2 })
+  emitGate(id, { guards: 1 })
 }
 
 async function hookApprovalGate(id: string) {
@@ -121,25 +114,6 @@ async function hookApprovalGate(id: string) {
       assertGate(matrix.probes.hook_approval.schema === 'sks.codex-hook-approval-probe.v1', 'matrix must embed hook approval probe')
     }
     emitGate(id, { state: report.approval_state })
-  } finally {
-    restoreEnv(previous)
-  }
-}
-
-async function agentTypeGate(id: string) {
-  const rootDir = await tempRoot(id)
-  const schema = JSON.stringify([{ name: 'spawn_agent', parameters: { properties: { agent_type: { type: 'string' } } } }])
-  const previous = swapEnv({ SKS_CODEX_TOOL_SCHEMA_JSON: schema })
-  try {
-    const probeMod = await importDist('core/codex-app/codex-agent-type-probe.js')
-    const probe = await probeMod.probeCodexAgentTypeSupport(rootDir)
-    assertGate(probe.supported === true && probe.source === 'codex-tool-schema', 'agent_type probe must detect schema support', probe)
-    if (id.includes('routing') || id.includes('blackbox')) {
-      const roleMod = await importDist('core/codex-app/codex-agent-role-sync.js')
-      const report = await roleMod.syncCodexAgentRoles({ root: rootDir, codexHome: path.join(rootDir, 'codex-home'), apply: true })
-      assertGate(report.fallback === 'agent_type', 'agent role sync must route to agent_type when probe supports it', report)
-    }
-    emitGate(id, { supported: probe.supported })
   } finally {
     restoreEnv(previous)
   }
@@ -167,32 +141,32 @@ async function initDeepGate(id: string) {
 
 async function executionProfileRoutingGate(id: string) {
   const rootDir = await tempRoot(id)
-  const previous = swapEnv({ SKS_CODEX_HOOK_APPROVAL_FIXTURE: 'approved', SKS_CODEX_AGENT_TYPE_FIXTURE: 'supported' })
+  const previous = swapEnv({ SKS_CODEX_HOOK_APPROVAL_FIXTURE: 'approved' })
   try {
     const profileMod = await importDist('core/codex-app/codex-app-execution-profile.js')
     const profile = await profileMod.resolveCodexAppExecutionProfile({ root: rootDir })
-    assertGate(profile.agent_role_strategy === 'agent_type', 'execution profile must consume agent_type probe fixture', profile)
+    assertGate(profile.hook_approval_state === 'approved', 'execution profile must consume the hook approval fixture', profile)
     if (id === 'qa-loop:execution-profile-routing' || id === 'pipeline:execution-profile-routing-blackbox') {
       const qa = await importDist('core/qa-loop.js')
       const dir = path.join(rootDir, '.sneakoscope', 'missions', 'M-qa')
       await fsp.mkdir(dir, { recursive: true })
       await qa.writeQaLoopArtifacts(dir, { id: 'M-qa', prompt: 'QA no UI' }, { sealed_hash: 'sealed', answers: { QA_SCOPE: 'api_e2e_only', TARGET_ENVIRONMENT: 'local_dev_server', DESTRUCTIVE_DEPLOYED_TESTS_ALLOWED: 'never' } })
       const gate = JSON.parse(fs.readFileSync(path.join(dir, 'qa-gate.json'), 'utf8'))
-      assertGate(gate.codex_app_execution_profile?.agent_role_strategy === 'agent_type', 'QA gate must consume execution profile', gate)
+      assertGate(gate.codex_app_execution_profile?.hook_approval_state === 'approved', 'QA gate must consume execution profile', gate)
     }
     if (id === 'research:execution-profile-routing' || id === 'pipeline:execution-profile-routing-blackbox') {
       const research = await importDist('core/research.js')
       const dir = path.join(rootDir, '.sneakoscope', 'missions', 'M-research')
       await fsp.mkdir(dir, { recursive: true })
       const plan = await research.writeResearchPlan(dir, 'research execution profile routing', { root: rootDir, missionId: 'M-research' })
-      assertGate(plan.codex_app_execution_profile?.agent_role_strategy === 'agent_type', 'Research plan must consume execution profile', plan)
+      assertGate(plan.codex_app_execution_profile?.hook_approval_state === 'approved', 'Research plan must consume execution profile', plan)
       assertGate(plan.web_research_policy.source_tool_routing, 'Research plan must include source tool routing', plan)
     }
     if (id === 'loop:execution-profile-routing' || id === 'pipeline:execution-profile-routing-blackbox') {
       const source = fs.readFileSync(path.join(root, 'src/core/loops/loop-worker-runtime.ts'), 'utf8')
       assertGate(source.includes('codex_app_execution_profile') && source.includes('SKS_CODEX_APP_EXECUTION_PROFILE'), 'Loop worker runtime must persist execution profile routing')
     }
-    emitGate(id, { mode: profile.mode, strategy: profile.agent_role_strategy })
+    emitGate(id, { mode: profile.mode })
   } finally {
     restoreEnv(previous)
   }
@@ -216,20 +190,15 @@ async function richContentGate(id: string) {
     }
     return emitGate(id, { skills: report.created.length, search_visibility_skills_checked: 2 })
   }
-  const previous = swapEnv({ SKS_CODEX_AGENT_TYPE_FIXTURE: 'supported' })
-  try {
-    const mod = await importDist('core/codex-app/codex-agent-role-sync.js')
-    const codexHome = path.join(rootDir, 'codex-home')
-    const report = await mod.syncCodexAgentRoles({ root: rootDir, codexHome, apply: true })
-    const role = fs.readFileSync(path.join(rootDir, '.codex', 'agents', 'expert.toml'), 'utf8')
-    const tiers = await importDist('core/subagents/model-tiers.js')
-    const deep = tiers.latestModelForTier('deep')
-    assertGate(role.includes(`model = "${deep}"`) && role.includes('Do not spawn another subagent.'), 'official expert role must use the latest deep-tier model and no-nesting instructions', { role, report })
-    assertGate(!fs.existsSync(path.join(codexHome, 'agents')), 'rich-content sync must not create global directive roles', report)
-    emitGate(id, { roles: report.created.length })
-  } finally {
-    restoreEnv(previous)
-  }
+  const mod = await importDist('core/codex-app/codex-agent-role-sync.js')
+  const codexHome = path.join(rootDir, 'codex-home')
+  const report = await mod.syncCodexAgentRoles({ root: rootDir, codexHome, apply: true })
+  const role = fs.readFileSync(path.join(rootDir, '.codex', 'agents', 'expert.toml'), 'utf8')
+  const tiers = await importDist('core/subagents/model-tiers.js')
+  const deep = tiers.latestModelForTier('deep')
+  assertGate(role.includes(`model = "${deep}"`) && role.includes('Do not spawn another subagent.'), 'official expert role must use the latest deep-tier model and no-nesting instructions', { role, report })
+  assertGate(!fs.existsSync(path.join(codexHome, 'agents')), 'rich-content sync must not create global directive roles', report)
+  emitGate(id, { roles: report.created.length })
 }
 
 function* walkTs(dir: string): Generator<string> {

@@ -10,7 +10,6 @@ import { messageOf } from '../core/errors/message.js'
 export async function runCodexNativeDoctorMadRoutingRealBlackbox(): Promise<void> {
   const fixture = await createCodexNativeRuntimeFixture({
     hook: 'unknown',
-    agentType: 'unsupported',
     appHandoff: false,
     imagePathExposure: false,
     mcpCandidates: false,
@@ -26,7 +25,6 @@ export async function runCodexNativeDoctorMadRoutingRealBlackbox(): Promise<void
     const parsed = parseDoctorJson(doctor.stdout)
     assertGate(parsed.runtime_readiness, 'doctor JSON runtime readiness missing', { stdout_tail: doctor.stdout.slice(-1000), stderr_tail: doctor.stderr.slice(-1000) })
     assertGate(parsed.runtime_readiness.hook_evidence_policy === 'unknown-do-not-count', 'doctor must report unknown hook evidence does not count', parsed.runtime_readiness)
-    assertGate(parsed.runtime_readiness.agent_role_strategy === 'message-role', 'doctor must report message-role fallback', parsed.runtime_readiness)
 
     const madPlan = await resolveCodexNativeInvocationPlan({
       root: fixture.root,

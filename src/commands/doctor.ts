@@ -766,7 +766,6 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean, deps:
     generated_at: new Date().toISOString(),
     fix: doctorFix,
     configs: [],
-    agent_role_files: { sanitized: [], created: [], blockers: [err?.message || String(err)] },
     actions: [],
     manual_actions: [],
     blockers: [err?.message || String(err)],

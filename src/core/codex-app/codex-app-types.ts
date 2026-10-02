@@ -34,26 +34,6 @@ export interface CodexHookApprovalProbe {
   warnings: string[]
 }
 
-export interface CodexAgentTypeProbe {
-  schema: 'sks.codex-agent-type-probe.v1'
-  generated_at: string
-  ok: boolean
-  supported: boolean
-  source: 'codex-tool-schema' | 'codex-doctor-json' | 'codex-help' | 'env' | 'fixture' | 'unknown'
-  spawn_tool_name: 'spawn_agent' | 'unknown'
-  schema_path: string | null
-  evidence: string[]
-  blockers: string[]
-  warnings: string[]
-}
-
-export interface CodexAgentRolePayload {
-  strategy: 'agent_type' | 'message-role'
-  agent_type?: string
-  message_role_prefix?: string
-  probe_artifact_path?: string | null
-}
-
 export interface CodexAppHarnessMatrix {
   schema: 'sks.codex-app-harness-matrix.v1'
   generated_at: string
@@ -67,7 +47,6 @@ export interface CodexAppHarnessMatrix {
     hook_approval_state_detectable: boolean
     hook_approval_state: CodexHookApprovalState
     skill_picker_ready: boolean
-    agent_type_supported: boolean
     mcp_inventory_ready: boolean
     app_handoff_ready: boolean
     image_path_exposure_ready: boolean
@@ -81,7 +60,6 @@ export interface CodexAppHarnessMatrix {
   }
   probes: {
     hook_approval: CodexHookApprovalProbe
-    agent_type: CodexAgentTypeProbe
   }
   blockers: string[]
   warnings: string[]
@@ -98,7 +76,6 @@ export interface CodexAppExecutionProfile {
   generated_at: string
   ok: boolean
   mode: CodexAppExecutionProfileMode
-  agent_role_strategy: 'agent_type' | 'message-role'
   hooks_assumed_running: false
   hooks_approval_required: boolean
   hook_approval_state: CodexHookApprovalState
@@ -108,7 +85,6 @@ export interface CodexAppExecutionProfile {
   loop_mesh_app_profile_available: boolean
   artifact_path: string
   matrix_artifact_path: string
-  agent_type_probe_artifact_path: string
   hook_approval_probe_artifact_path: string
   blockers: string[]
   warnings: string[]

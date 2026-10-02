@@ -10,7 +10,7 @@ export function renderResearchPlanMarkdown(plan: any, helpers: {
   lines.push(`Methodology: ${plan.methodology}`)
   lines.push(`Research paper: ${helpers.researchPaperArtifactForPlan(plan)}`)
   if (plan.codex_app_execution_profile) {
-    lines.push(`Execution profile: ${plan.codex_app_execution_profile.mode}; agent role strategy ${plan.codex_app_execution_profile.agent_role_strategy}`)
+    lines.push(`Execution profile: ${plan.codex_app_execution_profile.mode}`)
   }
   if (plan.execution_policy) {
     lines.push(`Execution: ${plan.execution_policy.normal_run}; default cycle timeout ${plan.execution_policy.default_cycle_timeout_minutes} minutes`)
