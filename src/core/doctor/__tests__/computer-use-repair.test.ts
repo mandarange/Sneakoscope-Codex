@@ -25,7 +25,15 @@ const blockedPluginRepair = async () => ({
   next_actions: []
 });
 
-test('repairComputerUse detect-only (apply=false) does not attempt the feature-enable step', async () => {
+// A fake `codex` that records every invocation, so a test can prove which subcommands the repair ran.
+async function recordingFakeCodex(root: string): Promise<{ bin: string; calls: () => Promise<string> }> {
+  const bin = path.join(root, 'codex');
+  const log = path.join(root, 'codex-calls.txt');
+  await fs.writeFile(bin, `#!/bin/sh\necho "$@" >> ${JSON.stringify(log)}\nif [ "$1" = "--version" ]; then echo "codex-cli 0.159.2"; fi\nexit 0\n`, { mode: 0o755 });
+  return { bin, calls: async () => fs.readFile(log, 'utf8').catch(() => '') };
+}
+
+test('repairComputerUse detect-only (apply=false) probes twice and has no feature-enable step', async () => {
   const { root, cleanup } = await scratchRoot();
   try {
     let calls = 0;
@@ -39,17 +47,16 @@ test('repairComputerUse detect-only (apply=false) does not attempt the feature-e
     assert.equal(report.ok, false);
     assert.equal(report.recovered, false);
     assert.equal(calls, 2, 'probe should run once before and once after even when apply=false');
-    const enableStep = report.steps.find((s: any) => s.id === 'computer_use_feature_enable');
-    assert.equal(enableStep.attempted, false);
-    assert.equal(enableStep.blocker, 'doctor_fix_not_requested');
+    assert.equal(report.steps.some((s: any) => /feature_enable/.test(s.id)), false);
   } finally {
     await cleanup();
   }
 });
 
-test('repairComputerUse apply=true runs codex features enable computer_use and reports recovered on success', async () => {
+test('repairComputerUse apply=true never runs codex features enable (it would flip a user opt-out) and recovers through the plugin repair', async () => {
   const { root, cleanup } = await scratchRoot();
   try {
+    const codex = await recordingFakeCodex(root);
     let call = 0;
     const probe = async () => {
       call += 1;
@@ -61,10 +68,7 @@ test('repairComputerUse apply=true runs codex features enable computer_use and r
       apply: true,
       reportPath: null,
       probe,
-      // A guaranteed-nonexistent "codex" binary path so the repair function's own
-      // `codex --version` / `features enable` runProcess calls exercise real spawn
-      // handling (ENOENT) without ever touching a real machine-wide codex install.
-      codexBin: fakeCodexBin(root),
+      codexBin: codex.bin,
       pluginRepair: async () => ({ ok: true, changed: true, requires_new_task: true, installs: [{ ok: true }], blockers: [], next_actions: ['Start a new Codex/Work task.'] }) as any
     });
     assert.equal(report.ok, true);
@@ -72,9 +76,24 @@ test('repairComputerUse apply=true runs codex features enable computer_use and r
     assert.equal(report.before.status, 'codex_app_capability_missing');
     assert.equal(report.after.status, 'available');
     assert.deepEqual(report.blockers, []);
-    const enableStep = report.steps.find((s: any) => s.id === 'computer_use_feature_enable');
-    assert.equal(enableStep.attempted, true);
-    assert.equal(enableStep.command, `${fakeCodexBin(root)} features enable computer_use`);
+    assert.equal(report.steps.some((s: any) => /feature_enable/.test(s.id)), false);
+    const calls = await codex.calls();
+    assert.match(calls, /^--version$/m);
+    assert.doesNotMatch(calls, /features enable/);
+  } finally {
+    await cleanup();
+  }
+});
+
+test('repairComputerUse leaves a switched-off computer_use flag alone and tells the user how to re-enable it', async () => {
+  const { root, cleanup } = await scratchRoot();
+  try {
+    const codex = await recordingFakeCodex(root);
+    const probe = async () => ({ ok: false, status: 'codex_app_capability_missing', blockers: ['codex_app_capability_missing'] });
+    const report = await repairComputerUse({ root, apply: true, reportPath: null, probe, codexBin: codex.bin, pluginRepair: blockedPluginRepair as any });
+    assert.equal(report.recovered, false);
+    assert.doesNotMatch(await codex.calls(), /features enable/);
+    assert.ok(report.next_actions.some((line: string) => /run `codex features enable computer_use` yourself/.test(line)));
   } finally {
     await cleanup();
   }
@@ -152,9 +171,7 @@ test('repairComputerUse already-available state does not attempt any repair step
     const report = await repairComputerUse({ root, apply: true, reportPath: null, probe, codexBin: fakeCodexBin(root) });
     assert.equal(report.attempted, false);
     assert.equal(report.recovered, true);
-    const enableStep = report.steps.find((s: any) => s.id === 'computer_use_feature_enable');
-    assert.equal(enableStep.attempted, false);
-    assert.equal(enableStep.ok, true);
+    assert.equal(report.steps.some((s: any) => /feature_enable/.test(s.id)), false);
   } finally {
     await cleanup();
   }

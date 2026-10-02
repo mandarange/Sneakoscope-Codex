@@ -1139,8 +1139,8 @@
       "file": "src/core/doctor/imagegen-repair.ts",
       "symbol": "repairCodexImagegen",
       "token": "runProcess(npm/brew)",
-      "scope_contract_sha256": "2baeca6d8f95c10a2a3b395acfe02e1c67a871d2ede187795b0f62c174bd5b23",
-      "callsite_sha256": "2ba1c2e7817ec7987f1be808b5bbc9402e44edd5be3184ab194907d540c88cb6",
+      "scope_contract_sha256": "a2d94047b9e9bdea31ed7d91055ebb5bec607f621aa6d2f586f29d829b0c918b",
+      "callsite_sha256": "b93f6361c4e834fd1d642a0af761c9065900144d6a109a4656919dd68a821a15",
       "occurrence": 1,
       "reason": "Imagegen repair runs package installation only from the explicit doctor repair path for Codex imagegen recovery."
     },
@@ -3942,15 +3942,6 @@
       "callsite_sha256": "c5638d49bf11f2069932d32772684197beb88e13d7adeac0144f678c007513aa",
       "occurrence": 1,
       "reason": "The Fast UI release gate writes only fixed configuration fixtures inside its two mkdtemp-owned roots."
-    },
-    {
-      "file": "src/scripts/doctor-imagegen-repair-check.ts",
-      "symbol": "module",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "f258f0b8ddb5ce1bd627cd2844fdc93482f6c1af5d2feb9888ae3ca9ac7d198f",
-      "callsite_sha256": "2a6ffcb0ef9ac4cc9d35d42390742bcddb227b6b9e35ef7b9cafc26336754038",
-      "occurrence": 1,
-      "reason": "Release/check script writes, removes, or chmods only scoped fixture, report, manifest, or temp artifacts; exact callsite is audited."
     },
     {
       "file": "src/scripts/doctor-ops-semantics-check.ts",

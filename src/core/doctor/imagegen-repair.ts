@@ -99,30 +99,8 @@ export async function repairCodexImagegen(input: {
     });
   }
 
-  if (codexBin && before?.core_ready !== true && apply) {
-    const enable = await runProcess(codexBin, ['features', 'enable', 'image_generation'], {
-      timeoutMs: input.timeoutMs || 10000,
-      maxOutputBytes: 32 * 1024
-    }).catch((err: unknown) => ({ code: 1, stdout: '', stderr: messageOf(err) }));
-    steps.push({
-      id: 'image_generation_feature_enable',
-      ok: enable.code === 0,
-      attempted: true,
-      command: `${codexBin} features enable image_generation`,
-      exit_code: enable.code,
-      stdout_tail: tail(enable.stdout),
-      stderr_tail: tail(enable.stderr),
-      blocker: enable.code === 0 ? null : 'codex_feature_enable_unsupported_or_failed'
-    });
-  } else {
-    steps.push({
-      id: 'image_generation_feature_enable',
-      ok: before?.core_ready === true,
-      attempted: false,
-      command: codexBin ? `${codexBin} features enable image_generation` : 'codex features enable image_generation',
-      blocker: before?.core_ready === true ? null : apply ? 'codex_cli_missing' : 'doctor_fix_not_requested'
-    });
-  }
+  // `image_generation` is `stable true` in `codex features list`; a false row is a user opt-out and
+  // `codex features enable` would rewrite it (measured), so the repair never runs it.
 
   const after = await detectImagegenCapability({
     codexBin: codexBin || undefined,
@@ -160,8 +138,7 @@ export async function repairCodexImagegen(input: {
   };
 
   const recovered = realGenerationVerified;
-  const featureEnableStep = steps.find((step) => step.id === 'image_generation_feature_enable');
-  const configurationRecovered = before?.core_ready !== true && capabilityReady && featureEnableStep?.attempted === true && featureEnableStep.ok === true;
+  const configurationRecovered = before?.core_ready !== true && capabilityReady;
   const requiresNewTask = !recovered;
   const refreshActions = requiresNewTask ? [
     'Start a new Codex/Work task so the repaired $imagegen tool is attached to a fresh task manifest.',
@@ -200,7 +177,7 @@ export async function repairCodexImagegen(input: {
       ...refreshActions,
       ...(!capabilityReady ? [
         `Install/update Codex CLI if missing: npm i -g @openai/codex@latest`,
-        `Open Codex App settings and enable image_generation / $imagegen.`,
+        `Open Codex App settings and enable image_generation / $imagegen. If \`codex features list\` shows image_generation as false, you switched it off in a config file: run \`codex features enable image_generation\` yourself to turn it back on.`,
         `Verify configuration with: codex features list`
       ] : []),
       `Docs: ${CODEX_APP_IMAGE_GENERATION_DOC_URL}`

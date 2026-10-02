@@ -392,12 +392,13 @@ async function firstExistingNodeReplCommand(configText: string, extraCandidates:
     ...(includeDefaultCandidates ? [
       process.env.SKS_NODE_REPL_COMMAND,
       process.env.NODE_REPL_COMMAND,
+      // The desktop app (ChatGPT.app; Codex.app before the 2026-07 merge) writes the node_repl entry
+      // and its own NODE_REPL_NODE_PATH, so the replacement is derived from the config itself
+      // instead of a hard-coded app bundle path that goes stale when the app is renamed or moved.
       ...nodeReplCandidatesFromNodePaths([
         ...stringValues(configText, 'NODE_REPL_NODE_PATH'),
         process.env.NODE_REPL_NODE_PATH
-      ]),
-      '/Applications/Codex.app/Contents/Resources/cua_node/bin/node_repl',
-      '/Applications/Codex.app/Contents/Resources/node_repl'
+      ])
     ] : [])
   ]
     .map((item) => String(item || '').trim())

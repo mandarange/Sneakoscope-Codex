@@ -88,11 +88,11 @@ test('explicit all-repairable fixture stays isolated from production evidence', 
 });
 
 // Codex default image mode: Codex's own image tool is a valid path (SKS pins
-// no image model), but enabling it is configuration, never a verified output.
-test('ImageGen doctor enables the built-in tool as configuration and never fabricates a recovery', async () => {
+// no image model); detecting it is configuration, never a verified output.
+test('ImageGen doctor reports the built-in tool as configuration and never fabricates a recovery', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-imagegen-config-only-repair-'));
-  const stateFile = path.join(root, 'imagegen-enabled');
-  const codexBin = await writeFakeCodex(root, stateFile);
+  const callsFile = path.join(root, 'codex-calls.txt');
+  const codexBin = await writeFakeCodex(root, callsFile, true);
   const report = await withEnv({ SKS_CODEX_APP_IMAGEGEN_AVAILABLE: undefined, CODEX_LB_API_KEY: undefined }, () => repairCodexImagegen({
     root,
     apply: true,
@@ -100,7 +100,8 @@ test('ImageGen doctor enables the built-in tool as configuration and never fabri
     reportPath: null,
     timeoutMs: 5000
   }));
-  assert.equal(report.steps.find((step: any) => step.id === 'image_generation_feature_enable')?.ok, true);
+  assert.equal(report.steps.some((step: any) => /feature_enable/.test(step.id)), false);
+  assert.doesNotMatch(await fs.readFile(callsFile, 'utf8').catch(() => ''), /features enable/);
   assert.equal(report.capability_ready, true);
   assert.equal(report.evidence_level, 'configuration');
   assert.ok(report.blockers.includes('codex_imagegen_real_output_unverified'), JSON.stringify(report.blockers));
@@ -111,6 +112,25 @@ test('ImageGen doctor enables the built-in tool as configuration and never fabri
   assert.equal(report.communication_test.ok, false);
   assert.equal(report.communication_test.real_generation_round_trip_performed, false);
   assert.ok(report.manual_actions.some((action: string) => action.includes('sks imagegen generate')));
+});
+
+test('ImageGen doctor leaves a switched-off image_generation flag alone and says how to re-enable it', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-imagegen-optout-repair-'));
+  const callsFile = path.join(root, 'codex-calls.txt');
+  const codexBin = await writeFakeCodex(root, callsFile, false);
+  const report = await withEnv({ SKS_CODEX_APP_IMAGEGEN_AVAILABLE: undefined, CODEX_LB_API_KEY: undefined }, () => repairCodexImagegen({
+    root,
+    apply: true,
+    codexBin,
+    reportPath: null,
+    timeoutMs: 5000
+  }));
+  // `codex features enable` rewrites an explicit `image_generation = false` (measured on 0.153.4 and 0.159.2).
+  assert.doesNotMatch(await fs.readFile(callsFile, 'utf8').catch(() => ''), /features enable/);
+  assert.equal(report.capability_ready, false);
+  assert.equal(report.recovered, false);
+  assert.ok(report.blockers.includes('codex_app_builtin_imagegen_capability_missing'), JSON.stringify(report.blockers));
+  assert.ok(report.manual_actions.some((action: string) => action.includes('run `codex features enable image_generation` yourself')));
 });
 
 test('ImageGen preflight accepts the built-in tool but never satisfies final output proof', async () => {
@@ -139,19 +159,15 @@ test('ImageGen preflight accepts the built-in tool but never satisfies final out
   assert.ok(finalGate.blockers.includes('generated_review_image_missing'));
 });
 
-async function writeFakeCodex(root: string, stateFile: string): Promise<string> {
+async function writeFakeCodex(root: string, callsFile: string, imageGenerationOn: boolean): Promise<string> {
   const codexBin = path.join(root, 'codex');
   await fs.writeFile(codexBin, `#!/usr/bin/env node
 const fs = require('fs');
-const stateFile = ${JSON.stringify(stateFile)};
 const args = process.argv.slice(2).join(' ');
+fs.appendFileSync(${JSON.stringify(callsFile)}, args + '\\n');
 if (args === '--version') process.exit(0);
-if (args === 'features enable image_generation') {
-  fs.writeFileSync(stateFile, '1');
-  process.exit(0);
-}
 if (args === 'features list') {
-  console.log('image_generation stable ' + (fs.existsSync(stateFile) ? 'true' : 'false'));
+  console.log('image_generation stable ${imageGenerationOn ? 'true' : 'false'}');
   process.exit(0);
 }
 process.exit(64);
