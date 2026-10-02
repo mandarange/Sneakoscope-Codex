@@ -1,6 +1,7 @@
 import os from 'node:os';
 import path from 'node:path';
 import { writeCodexConfigGuarded } from '../../codex/codex-config-guard.js';
+import { CODEX_FAST_SERVICE_TIER_ID } from '../../codex/codex-service-tier.js';
 import { readText } from '../../fsx.js';
 import { escapeRegExp } from '../../text/regex.js';
 import type { UpdateMigrationStageRun } from '../update-migration-state.js';
@@ -97,7 +98,7 @@ function normalizeLegacyFastModeConfigForUpdate(
   next = removeTomlTableLocal(next, 'profiles.sks-fast-high');
   if (next !== before) actions.push('stripped_removed_fastmode_config_schema_keys');
   if (legacyFastDefault && !topLevelTomlString(next, 'service_tier')) {
-    next = insertTopLevelTomlKey(next, 'service_tier = "fast"');
+    next = insertTopLevelTomlKey(next, `service_tier = "${CODEX_FAST_SERVICE_TIER_ID}"`);
     actions.push('migrated_legacy_fast_default_to_service_tier');
   }
   return { text: ensureTrailingNewline(next), actions, defaultProfile: misplaced || topLevel };

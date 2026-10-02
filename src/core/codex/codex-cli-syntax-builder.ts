@@ -1,5 +1,7 @@
 export type CodexSandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access'
 
+import { codexServiceTierId } from './codex-service-tier.js'
+
 export type CodexServiceTier = 'fast' | 'standard'
 
 export type BuildCodexExecArgsOptions = {
@@ -41,7 +43,7 @@ export function buildCodexExecArgs(opts: BuildCodexExecArgsOptions): string[] {
   if (opts.danger) args.push('--dangerously-bypass-approvals-and-sandbox')
   else if (opts.sandbox) args.push('--sandbox', opts.sandbox)
   const serviceTier = normalizeCodexServiceTier(opts.serviceTier)
-  if (serviceTier) args.push('-c', `service_tier=${serviceTier}`)
+  if (serviceTier) args.push('-c', `service_tier=${codexServiceTierId(serviceTier)}`)
   args.push(opts.prompt)
   return args
 }

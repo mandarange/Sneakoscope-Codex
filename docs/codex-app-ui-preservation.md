@@ -4,7 +4,7 @@ SKS treats Codex App fast-mode, feature, provider, profile, auth, and app metada
 
 The 2.0.1 guardrails are:
 
-- `sks --mad` may pass `service_tier=fast` through task, CLI, or SDK config overrides.
+- `sks --mad` may pass `service_tier=priority` through task, CLI, or SDK config overrides.
 - SKS must not use project `.codex/config.toml` to force provider, profile, auth, telemetry, notification, or app metadata keys.
 - Codex App UI state repair requires a backup and an explicit repair scope such as `doctor --fix --repair-codex-app-ui`.
 - Snapshots record hashes and redacted metadata only. Secrets are not written to artifacts.

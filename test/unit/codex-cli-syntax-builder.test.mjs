@@ -23,7 +23,7 @@ test('codex exec args include official fast service tier config', () => {
   assert.equal(args.includes('--ignore-user-config'), false);
   assert.equal(args[args.indexOf('--sandbox') + 1], 'workspace-write');
   assert.ok(args.includes('-c'));
-  assert.ok(args.includes('service_tier=fast'));
+  assert.ok(args.includes('service_tier=priority'));
 });
 
 test('codex exec args reject unsupported mode combinations', () => {
@@ -47,7 +47,7 @@ test('removed full-auto compatibility options are absent from the builder surfac
   assert.doesNotMatch(String(buildCodexExecArgs), /fullAuto|--full-auto|allowFullAuto/);
 });
 
-test('codex exec args normalize desktop service tier aliases to SKS canonical tiers', () => {
-  assert.ok(buildCodexExecArgs({ prompt: 'x', serviceTier: 'priority' }).includes('service_tier=fast'));
-  assert.ok(buildCodexExecArgs({ prompt: 'x', serviceTier: 'default' }).includes('service_tier=standard'));
+test('codex exec args accept SKS and Codex tier spellings and pass Codex ids', () => {
+  for (const tier of ['fast', 'priority']) assert.ok(buildCodexExecArgs({ prompt: 'x', serviceTier: tier }).includes('service_tier=priority'), tier);
+  for (const tier of ['standard', 'default']) assert.ok(buildCodexExecArgs({ prompt: 'x', serviceTier: tier }).includes('service_tier=default'), tier);
 });

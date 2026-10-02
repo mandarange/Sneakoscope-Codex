@@ -181,7 +181,8 @@ test('project update migration repairs legacy menubar and fast-mode config', asy
     const configAfter = await fs.readFile(configPath, 'utf8');
     assert.match(configAfter, /^model = "future-codex-model"$/m);
     assert.match(configAfter, /^model_reasoning_effort = "high"$/m);
-    assert.match(configAfter, /^service_tier = "fast"$/m);
+    // the legacy `default_profile = "sks-fast-high"` Fast default becomes Codex's own tier id
+    assert.match(configAfter, /^service_tier = "priority"$/m);
     assert.doesNotMatch(configAfter, /^default_profile\s*=/m);
     assert.doesNotMatch(configAfter, /\[user\.fast_mode\]/);
     assert.doesNotMatch(configAfter, /\[profiles\.sks-fast-high\]/);

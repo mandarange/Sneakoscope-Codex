@@ -37,7 +37,7 @@ test('enableMadHighProfile migrates legacy profile table to Codex 0.134 profile 
   assert.match(profile, /^model_reasoning_effort\s*=\s*"xhigh"/m);
   assert.doesNotMatch(profile, /^model\s*=/m);
   assert.ok(result.launch_args.includes('-c'));
-  assert.ok(result.launch_args.includes('service_tier=fast'));
+  assert.ok(result.launch_args.includes('service_tier=priority'));
   assert.ok(result.launch_args.includes('model_reasoning_effort=xhigh'));
 });
 

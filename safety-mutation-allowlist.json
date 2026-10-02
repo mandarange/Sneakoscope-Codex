@@ -3992,8 +3992,8 @@
       "file": "src/scripts/fast-codex-service-tier-proof-check.ts",
       "symbol": "module",
       "token": "writeFileSync",
-      "scope_contract_sha256": "45a60878601406243a669fe0ba24bec8ba12192fe2fc3575f91d43b7ee312533",
-      "callsite_sha256": "5d67aa247d42b8f84d8267a9fc5112f7e364f47b7ace68b29ddf45f11f5603a7",
+      "scope_contract_sha256": "eb9b81e5b15b4a1c550470dc952cc5977d51f208bf824119ade68cb918eac9d1",
+      "callsite_sha256": "937230227025d09357ebf1af0a31b670935c0ac936e29a6616d293ae768f2df4",
       "occurrence": 1,
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
@@ -4001,8 +4001,8 @@
       "file": "src/scripts/fast-codex-service-tier-proof-check.ts",
       "symbol": "module",
       "token": "writeFileSync",
-      "scope_contract_sha256": "45a60878601406243a669fe0ba24bec8ba12192fe2fc3575f91d43b7ee312533",
-      "callsite_sha256": "e32e8e73383447cc6f1a5c68cb480fca2d57e6d9cc74df5cfbaa7184225a4200",
+      "scope_contract_sha256": "eb9b81e5b15b4a1c550470dc952cc5977d51f208bf824119ade68cb918eac9d1",
+      "callsite_sha256": "33c4eb7133c209539dab3b65674d5398be49926a514e220c5094b8cdda0c2e2c",
       "occurrence": 1,
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },

@@ -3,6 +3,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { ensureDir, exists, readText, writeTextAtomic } from './fsx.js';
 import { writeCodexConfigGuarded } from './codex/codex-config-guard.js';
+import { CODEX_FAST_SERVICE_TIER_ID } from './codex/codex-service-tier.js';
 import { inspectConfinedPath, removeManagedPathVerified } from './managed-path-safety.js';
 import {
   RETIRED_AUTO_REVIEW_POLICY_TEXTS,
@@ -245,7 +246,7 @@ export function buildMadHighLaunchProfileNoWrite(opts: any = {}) {
       '--ask-for-approval',
       'never',
       '-c',
-      'service_tier=fast',
+      `service_tier=${CODEX_FAST_SERVICE_TIER_ID}`,
       '-c',
       'model_reasoning_effort=xhigh'
     ],
@@ -284,7 +285,7 @@ export async function ensureMadHighProfileForSetupOrRepair(opts: any = {}) {
     config_path: configPath,
     profile_config_path: path.join(path.dirname(configPath), `${MAD_HIGH_PROFILE}.config.toml`),
     profile_name: MAD_HIGH_PROFILE,
-    launch_args: ['--profile', MAD_HIGH_PROFILE, '--sandbox', 'danger-full-access', '--ask-for-approval', 'never', '-c', 'service_tier=fast', '-c', 'model_reasoning_effort=xhigh'],
+    launch_args: ['--profile', MAD_HIGH_PROFILE, '--sandbox', 'danger-full-access', '--ask-for-approval', 'never', '-c', `service_tier=${CODEX_FAST_SERVICE_TIER_ID}`, '-c', 'model_reasoning_effort=xhigh'],
     sandbox_mode: 'danger-full-access',
     approval_policy: 'never',
     approvals_reviewer: AUTO_REVIEW_REVIEWER,

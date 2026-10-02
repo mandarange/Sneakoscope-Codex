@@ -29,13 +29,14 @@ The project preference is written to `.sneakoscope/state/fast-mode.json`.
 }
 ```
 
-SKS normalizes its service-tier vocabulary to `fast` and `standard`. Codex
-Desktop may describe the equivalent choices as `priority` and `default`.
-Routes that support this preference record it in their current policy and
-propagation evidence.
+SKS keeps `fast` and `standard` as its own words for this preference and in its
+reports; Codex's ids for the same choices are `priority` and `default`, which is
+what SKS writes into Codex config and `-c` overrides. Existing `fast` and
+`standard` values in settings are still read. Routes that support this preference
+record it in their current policy and propagation evidence.
 
-Global Desktop repair preserves `service_tier = "fast"` and
-`[features].fast_mode = true`. It removes only provenance-marked SKS global
+Global Desktop repair preserves an existing `service_tier` (`"fast"` or
+`"priority"`) and `[features].fast_mode = true`. It removes only provenance-marked SKS global
 `model_provider`, `model`, and `model_reasoning_effort` locks that can suppress
 the native Chat/Pro/model/Fast picker. Unmarked user choices, provider tables,
 URLs, and credential references remain untouched.

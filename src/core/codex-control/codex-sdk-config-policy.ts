@@ -1,6 +1,7 @@
 import type { CodexTaskInput } from './codex-control-plane.js'
 import { mapCodexSdkSandboxPolicy } from './codex-sdk-sandbox-policy.js'
 import { parseGptModelId } from '../subagents/model-tiers.js'
+import { codexServiceTierId } from '../codex/codex-service-tier.js'
 
 export interface CodexExecutionPolicy {
   sandbox: 'read-only' | 'workspace-write' | 'danger-full-access'
@@ -20,7 +21,7 @@ export function buildCodexSdkConfig(input: CodexTaskInput) {
     // credentials are not provider-selection consent.
     model_provider: 'openai',
     forced_login_method: 'chatgpt',
-    service_tier: serviceTier === 'standard' ? 'standard' : 'fast',
+    service_tier: codexServiceTierId(serviceTier === 'standard' ? 'standard' : 'fast'),
     model_reasoning_effort: normalizeAstraSdkEffort(model, effort),
     mcp_servers: {},
     sks: {
