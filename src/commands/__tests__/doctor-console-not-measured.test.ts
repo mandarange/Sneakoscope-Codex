@@ -108,9 +108,7 @@ test('every console row fed by a skipped source says not-measured, never a failu
   assert.equal(row(lines, '  image generation: '), `  image generation: ${NOT_MEASURED}`);
   assert.equal(row(lines, '  computer use: '), `  computer use: ${NOT_MEASURED}`);
   assert.equal(row(lines, '  app handoff: '), `  app handoff: ${NOT_MEASURED}`);
-  assert.equal(row(lines, '  multi-agent mode: '), `  multi-agent mode: ${NOT_MEASURED}`);
   assert.equal(row(lines, '  /app handoff: '), `  /app handoff: ${NOT_MEASURED}`);
-  assert.equal(row(lines, '  plugin JSON: '), `  plugin JSON: ${NOT_MEASURED}`);
   assert.equal(row(lines, 'Codex plugins: '), `Codex plugins: ${NOT_MEASURED}`);
   assert.equal(row(lines, '  Remote MCP servers: '), `  Remote MCP servers: ${NOT_MEASURED}`);
   assert.equal(row(lines, 'Image Gen repair: '), `Image Gen repair: ${NOT_MEASURED}`);
@@ -136,7 +134,7 @@ test('a measured run still renders genuine failures as failures (control for the
   const result = skippedProfileResult();
   result.codex_doctor = { available: false, disposition: 'warn', exit_code: 1 };
   result.codex_app = { ok: false };
-  result.codex_native_feature_matrix = { ok: true, features: { multi_agent_mode: { ok: true } } };
+  result.codex_native_feature_matrix = { ok: true, features: {} };
   result.codex_app_harness_matrix = {
     ok: true,
     app_features: { plugin_json: false, hook_approval_state_detectable: true },
@@ -159,11 +157,8 @@ test('a measured run still renders genuine failures as failures (control for the
   assert.equal(row(lines, '  init-deep memory: '), '  init-deep memory: available');
   assert.equal(row(lines, 'Codex App: '), 'Codex App: optional_missing');
   assert.equal(row(lines, '  codex doctor:    '), '  codex doctor:    unavailable');
-  assert.equal(row(lines, '  multi-agent mode: '), '  multi-agent mode: verified');
-  assert.equal(row(lines, '  rollout budget: '), '  rollout budget: unverified');
   assert.equal(row(lines, '  image generation: '), '  image generation: repair_required');
   assert.equal(row(lines, '  /app handoff: '), '  /app handoff: ok');
-  assert.equal(row(lines, '  plugin JSON: '), '  plugin JSON: unavailable');
   assert.equal(row(lines, 'Codex plugins: '), 'Codex plugins: warning');
   assert.equal(row(lines, 'Image Gen repair: '), 'Image Gen repair: ok');
   assert.equal(row(lines, 'Computer Use repair: '), 'Computer Use repair: blocked');

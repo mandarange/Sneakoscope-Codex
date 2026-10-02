@@ -34,6 +34,39 @@ const RETIRED_REPORT_FILES = [
   'codex-app-glm-profile.json'
 ] as const;
 
+// Root-level capability snapshots older SKS versions wrote into the project; no current code reads them.
+const RETIRED_CAPABILITY_ARTIFACT_SCHEMAS: Readonly<Record<string, string>> = {
+  'codex-current-core-capability.json': 'sks.codex-current-core-capability.v1',
+  'codex-current-core-real-probes.json': 'sks.codex-current-core-real-probe-result.v1',
+  'codex-current-core-plugin-marketplace-real.json': 'sks.codex-current-core-plugin-marketplace-real.v1',
+  'codex-current-code-mode-web-search-policy.json': 'sks.codex-current-code-mode-web-search-policy.v1'
+};
+
+export async function reconcileRetiredCapabilityArtifacts(
+  root: string,
+  fix: boolean,
+  quarantineRoot: string,
+  counters: MutableCounters
+): Promise<void> {
+  for (const [name, schema] of Object.entries(RETIRED_CAPABILITY_ARTIFACT_SCHEMAS)) {
+    const file = path.join(root, '.sneakoscope', name);
+    if (!(await pathExistsForCleanup(root, file, counters))) continue;
+    const value = await readJson<any>(file, null).catch(() => null);
+    await reconcileKnownRetiredPath(root, file, value?.schema === schema, fix, quarantineRoot, counters);
+  }
+  // Generated App Server schema cache ({ ok, text, sha256 } per runtime) that capability detection no longer reads.
+  const schemaCacheRoot = path.join(root, '.sneakoscope', 'cache', 'codex-current-schema');
+  if (!(await pathExistsForCleanup(root, schemaCacheRoot, counters))) return;
+  const walk = await walkEntries(root, schemaCacheRoot);
+  recordWalkErrors(walk.errors, counters);
+  for (const file of walk.entries) {
+    const value = await readJson<any>(file, null).catch(() => null);
+    const managed = typeof value?.ok === 'boolean' && typeof value?.text === 'string' && 'sha256' in value;
+    await reconcileKnownRetiredPath(root, file, managed, fix, quarantineRoot, counters);
+  }
+  if (fix) recordEmptyTreeOutcome(await removeEmptyTree(root, schemaCacheRoot), counters);
+}
+
 export async function reconcileRetiredGitPolicyMode(
   root: string,
   fix: boolean,

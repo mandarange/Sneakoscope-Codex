@@ -38,9 +38,9 @@ machine-readable configuration, and the number must not be copied out into prose
 - `CHANGELOG.md` and historical release ledgers, which record the past
 - fixtures and assertions that reproduce a specific historical bug
 
-So `remoteControlGuidance()` still gates on the compatibility constant, but the
-sentence the operator reads says "install the official latest stable release"
-instead of repeating the constant.
+So the Codex version floor in `codex-runtime-contract.ts` still gates the runtime
+checks, but the sentence the operator reads says "install the official latest
+stable release" instead of repeating the constant.
 
 ## The gate
 

@@ -41,7 +41,7 @@ function remoteControlHelp() {
     'Usage: sks codex-app remote-control [--status|--check|--dry-run|--json] [-- <codex remote-control args>]',
     '',
     'Starts Codex CLI remote-control, the headless remotely controllable app-server entrypoint.',
-    'SKS only wraps the first-party command and refuses older Codex CLI versions instead of falling back to app-server internals.'
+    'SKS only wraps the first-party command and refuses to run when the Codex CLI is missing instead of falling back to app-server internals.'
   ].join('\n');
 }
 

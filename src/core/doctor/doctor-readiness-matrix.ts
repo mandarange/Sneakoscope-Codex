@@ -78,9 +78,6 @@ export function buildDoctorReadinessMatrix(input: any = {}) {
   const codexCurrentAppDoctor = input.codex_current_app_doctor || null
   if (codexCurrentAppDoctor?.ok === false) for (const blocker of normalizeList(codexCurrentAppDoctor.blockers)) warnings.add(blocker)
   for (const warning of normalizeList(codexCurrentAppDoctor?.warnings)) warnings.add(warning)
-  const codexCurrentCoreRealProbes = input.codex_current_core_real_probes || null
-  if (codexCurrentCoreRealProbes?.real_probes_last_run_status === 'blocked') warnings.add('codex_current_core_real_probes_blocked')
-  if (codexCurrentCoreRealProbes?.real_probes_last_run_status === 'not_run') warnings.add('codex_current_core_real_probes_not_run')
   for (const warning of normalizeList(input.codex_plugin_app_template_policy?.doctor_warnings)) warnings.add(warning)
   const codexAppHarness = input.codex_app_harness_matrix || null
   for (const warning of normalizeList(codexAppHarness?.warnings)) warnings.add(warning)
@@ -204,7 +201,6 @@ export function buildDoctorReadinessMatrix(input: any = {}) {
     codex_config_readable_by_codex_cli: actualOk,
     codex_doctor: codexDoctor || null,
     codex_current_app_doctor: codexCurrentAppDoctor,
-    codex_current_core_real_probes: codexCurrentCoreRealProbes,
     codex_plugin_inventory: input.codex_plugin_inventory || null,
     codex_plugin_app_template_policy: input.codex_plugin_app_template_policy || null,
     codex_app_harness_matrix: codexAppHarness,

@@ -3,11 +3,10 @@ import os from 'node:os'
 import fs from 'node:fs/promises'
 import { findCodexBinary } from '../codex-adapter.js'
 import { codexAppIntegrationStatus } from '../codex-app.js'
+import { meetsCodexFloor } from '../codex-compat/codex-version-policy.js'
+import { CODEX_MIN_VERSION } from '../codex-compat/codex-runtime-contract.js'
 import { probeCodexHookApprovalState } from '../codex-app/codex-hook-approval-probe.js'
-import { detectCodexCurrentAppCapability } from '../codex-control/codex-current-app-capability.js'
-import { detectCodexCurrentCoreCapability } from '../codex-control/codex-current-core-capability.js'
-import { detectCodexCurrentFeatureCapability } from '../codex-control/codex-current-feature-capability.js'
-import { detectCodexCurrentCapability, type CodexCurrentFeatureKey } from '../codex-control/codex-current-capability.js'
+import { detectCodexCurrentCapability } from '../codex-control/codex-current-capability.js'
 import { buildCodexPluginInventory } from '../codex-plugins/codex-plugin-json.js'
 import { nowIso, runProcess, sha256, writeJsonAtomic } from '../fsx.js'
 import { inspectConfinedPath } from '../managed-path-safety.js'
@@ -51,22 +50,24 @@ export async function buildCodexNativeFeatureMatrix(input: {
     codexHome: process.env.CODEX_HOME || null,
     managedAssetFingerprint,
     fixture: [
-      process.env.SKS_CODEX_CURRENT_APP_FAKE,
-      process.env.SKS_CODEX_CURRENT_CORE_FAKE,
-      process.env.SKS_CODEX_CURRENT_FEATURE_FAKE,
-      process.env.SKS_CODEX_CURRENT_FAKE,
+      process.env.SKS_CODEX_VERSION_FAKE,
       process.env.SKS_CODEX_PLUGIN_JSON_FAKE
     ]
   })
   if (!input.missionDir && !repairManagedAssets && invocationMatrixCache.has(cacheKey)) {
     return invocationMatrixCache.get(cacheKey) as CodexNativeFeatureMatrix
   }
-  const fixtureMode = process.env.SKS_CODEX_CURRENT_APP_FAKE === '1' || process.env.SKS_CODEX_CURRENT_CORE_FAKE === '1' || process.env.SKS_CODEX_CURRENT_FEATURE_FAKE === '1' || process.env.SKS_CODEX_CURRENT_FAKE === '1' || process.env.SKS_CODEX_PLUGIN_JSON_FAKE === '1'
+  const fixtureMode = process.env.SKS_CODEX_PLUGIN_JSON_FAKE === '1'
   const codexBin = fixtureMode ? process.env.CODEX_BIN || 'codex' : await findCodexBinary().catch(() => null)
-  const version = codexBin ? await codexVersion(codexBin) : null
-  const currentApp = await detectCodexCurrentAppCapability({ codexBin }).catch((err: unknown) => ({ blockers: [messageOf(err)] }))
-  const currentCore = await detectCodexCurrentCoreCapability({ codexBin }).catch((err: unknown) => ({ blockers: [messageOf(err)] }))
-  const currentFeatures = await detectCodexCurrentFeatureCapability({ codexBin }).catch((err: unknown) => ({ blockers: [messageOf(err)] }))
+  // Fixture runs get a deterministic version (the floor unless the fixture env pins another) instead of the machine's Codex.
+  const version = fixtureMode
+    ? process.env.SKS_CODEX_VERSION_FAKE || `codex-cli ${CODEX_MIN_VERSION}`
+    : codexBin ? await codexVersion(codexBin) : null
+  const atOrAboveFloor = Boolean(codexBin) && meetsCodexFloor(version)
+  const floorBlockers = (reason: string) => [
+    ...(codexBin ? [] : ['codex_cli_missing']),
+    ...(atOrAboveFloor ? [] : [reason])
+  ]
   const currentCapability = await detectCodexCurrentCapability({ codexBin, root }).catch((err: unknown) => ({
     schema: 'sks.codex-current-capability.v1',
     ok: false,
@@ -111,8 +112,8 @@ export async function buildCodexNativeFeatureMatrix(input: {
   const hookApproved = hookApproval.approval_state === 'approved'
   const hookInstalled = hookApproval.approval_state !== 'not_installed'
   const features: CodexNativeFeatureMatrix['features'] = {
-    plugin_json: boolState(booleanFeature(currentApp, 'supports_plugin_json'), 'actual-probe', '.sneakoscope/codex-current-app-capability.json', blockersOf(currentApp)),
-    plugin_marketplace: boolState(booleanFeature(currentCore, 'supports_marketplace_source_field') || plugins.marketplace_available, 'plugin-inventory', '.sneakoscope/codex-plugin-inventory.json', blockersOf(plugins)),
+    plugin_json: boolState(atOrAboveFloor, 'config', '.sneakoscope/reports/codex-native-feature-matrix.json', floorBlockers('codex_current_release_required_for_app_plugin_features')),
+    plugin_marketplace: boolState(atOrAboveFloor || plugins.marketplace_available, 'plugin-inventory', '.sneakoscope/codex-plugin-inventory.json', blockersOf(plugins)),
     hook_approval: codexNativeFeatureState({
       ok: hookApproved,
       source: 'actual-probe',
@@ -134,31 +135,10 @@ export async function buildCodexNativeFeatureMatrix(input: {
       warnings: mcpCandidates.candidates.length ? [] : ['mcp_plugin_candidates_empty'],
       unavailableStatus: 'fallback'
     }),
-    app_handoff: boolState(booleanFeature(currentApp, 'supports_app_handoff'), 'actual-probe', '.sneakoscope/codex-current-app-capability.json', blockersOf(currentApp)),
-    image_path_exposure: boolState(booleanFeature(currentApp, 'supports_image_path_exposure'), 'actual-probe', '.sneakoscope/codex-current-app-capability.json', blockersOf(currentApp)),
-    code_mode_web_search: boolState(booleanFeature(currentCore, 'supports_code_mode_web_search'), 'actual-probe', '.sneakoscope/codex-current-core-capability.json', blockersOf(currentCore)),
+    app_handoff: boolState(atOrAboveFloor, 'config', '.sneakoscope/reports/codex-native-feature-matrix.json', floorBlockers('codex_current_release_required_for_app_plugin_features')),
+    image_path_exposure: boolState(atOrAboveFloor, 'config', '.sneakoscope/reports/codex-native-feature-matrix.json', floorBlockers('codex_current_release_required_for_app_plugin_features')),
+    code_mode_web_search: boolState(atOrAboveFloor, 'config', '.sneakoscope/reports/codex-native-feature-matrix.json', floorBlockers('codex_current_release_required_for_search_schema_marketplace_features')),
     codex_current: boolState(recordOk(currentCapability) === true, 'actual-probe', '.sneakoscope/codex/codex-current-capability.json', blockersOf(currentCapability), warningsOf(currentCapability)),
-    multi_agent_mode: codexCurrentState(currentCapability, 'multi_agent_mode_schema'),
-    rollout_budget: codexCurrentState(currentCapability, 'rollout_budget_schema'),
-    indexed_web_search: codexCurrentState(currentCapability, 'indexed_web_search_schema'),
-    current_time_read: codexCurrentState(currentCapability, 'current_time_read_schema'),
-    terminal_subagent_error: codexCurrentState(currentCapability, 'terminal_subagent_error_schema'),
-    exec_mcp_reconnect: codexCurrentState(currentCapability, 'exec_mcp_reconnect_schema'),
-    plugin_catalog_refresh: codexCurrentState(currentCapability, 'plugin_catalog_refresh_schema'),
-    native_thread_list_search: codexCurrentState(currentCapability, 'native_thread_list_search_schema'),
-    remote_native_environment: codexCurrentState(currentCapability, 'remote_native_environment_schema'),
-    app_server_overload: codexCurrentState(currentCapability, 'app_server_overload_schema'),
-    codex_current_feature: boolState(booleanFeature(currentFeatures, 'supports_current_contract'), 'actual-probe', '.sneakoscope/codex-current-feature-capability.json', blockersOf(currentFeatures)),
-    usage_views: boolState(booleanFeature((currentFeatures as any)?.features || {}, 'usage_views'), 'actual-probe', '.sneakoscope/codex-current-feature-capability.json', blockersOf(currentFeatures)),
-    goal_attachment_preservation: boolState(booleanFeature((currentFeatures as any)?.features || {}, 'goal_attachment_preservation'), 'actual-probe', '.sneakoscope/codex-current-feature-capability.json', blockersOf(currentFeatures)),
-    session_delete: boolState(booleanFeature((currentFeatures as any)?.features || {}, 'session_delete'), 'actual-probe', '.sneakoscope/codex-current-feature-capability.json', blockersOf(currentFeatures)),
-    import_command: boolState(booleanFeature((currentFeatures as any)?.features || {}, 'import_command'), 'actual-probe', '.sneakoscope/codex-current-feature-capability.json', blockersOf(currentFeatures)),
-    unified_mentions: boolState(booleanFeature((currentFeatures as any)?.features || {}, 'unified_mentions'), 'actual-probe', '.sneakoscope/codex-current-feature-capability.json', blockersOf(currentFeatures)),
-    bedrock_managed_auth: boolState(booleanFeature((currentFeatures as any)?.features || {}, 'bedrock_managed_auth'), 'actual-probe', '.sneakoscope/codex-current-feature-capability.json', blockersOf(currentFeatures)),
-    sqlite_auto_recovery: boolState(booleanFeature((currentFeatures as any)?.features || {}, 'sqlite_auto_recovery'), 'actual-probe', '.sneakoscope/codex-current-feature-capability.json', blockersOf(currentFeatures)),
-    mcp_reliability: boolState(booleanFeature((currentFeatures as any)?.features || {}, 'mcp_reliability'), 'actual-probe', '.sneakoscope/codex-current-feature-capability.json', blockersOf(currentFeatures)),
-    non_tty_interrupt: boolState(booleanFeature((currentFeatures as any)?.features || {}, 'non_tty_interrupt'), 'actual-probe', '.sneakoscope/codex-current-feature-capability.json', blockersOf(currentFeatures)),
-    large_repo_responsiveness: boolState(booleanFeature((currentFeatures as any)?.features || {}, 'large_repo_responsiveness'), 'actual-probe', '.sneakoscope/codex-current-feature-capability.json', blockersOf(currentFeatures)),
     slash_command_bridge: boolState(true, 'config', '.sneakoscope/reports/codex-native-feature-matrix.json'),
     project_memory: boolState(true, 'config', '.sneakoscope/context/AGENTS.generated.md')
   }
@@ -169,9 +149,6 @@ export async function buildCodexNativeFeatureMatrix(input: {
     codex_cli: { available: Boolean(codexBin), version, bin: codexBin },
     features,
     probes: {
-      codex_current_app: currentApp,
-      codex_current_core: currentCore,
-      codex_current_feature: currentFeatures,
       codex_current: currentCapability,
       app,
       plugin_inventory: plugins,
@@ -181,14 +158,11 @@ export async function buildCodexNativeFeatureMatrix(input: {
       agent_roles: agentRoles
     },
     invocation_defaults: {
-      rollout_budget_strategy: 'sks-local-only' as const,
       qa_visual_review_strategy: 'headless-artifact' as const,
       research_source_strategy: 'local-files' as const,
       image_followup_strategy: 'artifact-path' as const,
       hook_evidence_policy: 'unknown-do-not-count' as const,
-      skill_bridge_strategy: 'cli-only' as const,
-      current_time_source: 'external-clock' as const,
-      overload_retry_policy: 'generic' as const
+      skill_bridge_strategy: 'cli-only' as const
     },
     blockers: [
       ...(!codexBin ? ['codex_cli_missing'] : []),
@@ -348,10 +322,6 @@ async function codexVersion(bin: string): Promise<string | null> {
   return run?.code === 0 ? `${run.stdout || run.stderr || ''}`.trim() || null : null
 }
 
-function booleanFeature(value: unknown, key: string): boolean {
-  return isRecord(value) && value[key] === true
-}
-
 function blockersOf(value: unknown): string[] {
   if (!isRecord(value) || !Array.isArray(value.blockers)) return []
   return value.blockers.map((item) => String(item)).filter(Boolean)
@@ -364,34 +334,4 @@ function recordOk(value: unknown): boolean | undefined {
 function warningsOf(value: unknown): string[] {
   if (!isRecord(value) || !Array.isArray(value.warnings)) return []
   return value.warnings.map((item) => String(item)).filter(Boolean)
-}
-
-function codexCurrentState(capability: unknown, key: CodexCurrentFeatureKey): CodexNativeFeatureState {
-  const state = isRecord(capability)
-    && isRecord(capability.feature_states)
-    && isRecord(capability.feature_states[key])
-    ? capability.feature_states[key]
-    : null
-  const evidence = Array.isArray(state?.evidence) ? state.evidence.map(String) : []
-  const blockers = Array.isArray(state?.blockers) ? state.blockers.map(String) : [`codex_current_${key}_not_verified`]
-  const supported = state?.supported === true
-  const certainty = typeof state?.certainty === 'string' ? state.certainty : ''
-  const input: {
-    ok: boolean
-    source: CodexNativeFeatureState['source']
-    artifact_path: string
-    evidence: string[]
-    blockers: string[]
-    warnings: string[]
-    unavailableStatus?: 'unavailable' | 'unknown' | 'blocked' | 'fallback'
-  } = {
-    ok: supported,
-    source: 'actual-probe',
-    artifact_path: '.sneakoscope/codex/codex-current-capability.json',
-    evidence,
-    blockers: supported ? [] : blockers,
-    warnings: certainty && certainty !== 'actual' && certainty !== 'discovered' ? [`codex_current_${key}_${certainty}`] : []
-  }
-  if (!supported) input.unavailableStatus = 'fallback'
-  return codexNativeFeatureState(input)
 }

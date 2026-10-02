@@ -3,8 +3,7 @@ import { detectCodexCurrentCapability } from '../codex-control/codex-current-cap
 import { codexVersionReport } from './codex-version.js';
 import {
   CODEX_COMPAT_SCHEMA,
-  CODEX_HOOK_SCHEMA_BASELINE_TAG,
-  CODEX_REQUIRED_BASELINE_TAG
+  CODEX_HOOK_SCHEMA_BASELINE_TAG
 } from './codex-version-policy.js';
 import { CURRENT_CODEX_RUNTIME_CONTRACT } from './codex-runtime-contract.js';
 import { codexSchemaSnapshotReport } from './codex-schema-snapshot.js';
@@ -19,8 +18,7 @@ import { codexHookWarningCheck } from './codex-hook-warning-detector.js';
  */
 export async function codexCompatibilityReport(opts: any = {}) {
   const root = opts.root || await projectRoot();
-  const requiredBaseline = opts.requiredBaseline || opts.require || CODEX_REQUIRED_BASELINE_TAG;
-  const version = await codexVersionReport({ ...opts, requiredBaseline });
+  const version = await codexVersionReport(opts);
   const releaseContract = {
     ok: true,
     dependency_source: CURRENT_CODEX_RUNTIME_CONTRACT.dependencySource,
@@ -30,14 +28,13 @@ export async function codexCompatibilityReport(opts: any = {}) {
   const hooks = await codexHookWarningCheck(root, { recordWrongness: false });
   const current = await detectCodexCurrentCapability({
     root,
-    codexBin: opts.codexBin || null,
-    requireReal: opts.requireReal === true
+    codexBin: opts.codexBin || null
   });
   const ok = Boolean(version.policy.ok && snapshot.ok && hooks.ok && current.ok);
 
   return {
     schema: CODEX_COMPAT_SCHEMA,
-    required_baseline: requiredBaseline,
+    min_version: CURRENT_CODEX_RUNTIME_CONTRACT.minVersion,
     release_contract: releaseContract,
     detected: version.detected,
     current_capability: current,

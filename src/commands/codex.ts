@@ -1,4 +1,4 @@
-import { flag, readOption } from '../cli/args.js';
+import { flag } from '../cli/args.js';
 import { printJson } from '../cli/output.js';
 import { codexCompatibilityReport, codexDoctorReport } from '../core/codex-compat/codex-compat-report.js';
 import { codexVersionReport } from '../core/codex-compat/codex-version.js';
@@ -10,10 +10,9 @@ import { codexCliUpdateConsoleLines, inspectCodexCliUpdate, updateCodexCliNow } 
 export async function run(_command: any, args: any = []) {
   const action = args[0] || 'compatibility';
   if (action === 'compatibility' || action === 'compat') {
-    const requiredBaseline = readOption(args, '--require', null);
-    const result = await codexCompatibilityReport({ requiredBaseline, require: requiredBaseline });
+    const result = await codexCompatibilityReport();
     if (flag(args, '--json')) return printJson(result);
-    console.log(`Codex compatibility: ${result.ok ? result.status : 'blocked'} (${result.required_baseline})`);
+    console.log(`Codex compatibility: ${result.ok ? result.status : 'blocked'} (minimum ${result.min_version})`);
     for (const warning of result.warnings || []) console.log(`- ${warning}`);
     if (!result.ok) process.exitCode = 1;
     return;
@@ -50,9 +49,9 @@ export async function run(_command: any, args: any = []) {
     return;
   }
   if (action === 'current' || action === CURRENT_CODEX_RUNTIME_CONTRACT.targetTag) {
-    const result = await detectCodexCurrentCapability({ requireReal: flag(args, '--require-real') });
+    const result = await detectCodexCurrentCapability();
     if (flag(args, '--json')) return printJson(result);
-    console.log(`Codex ${CURRENT_CODEX_RUNTIME_CONTRACT.requiredCliVersion} compatibility: ${result.ok ? 'ok' : 'blocked'} (${result.probe_mode})`);
+    console.log(`Codex ${CURRENT_CODEX_RUNTIME_CONTRACT.minVersion} compatibility: ${result.ok ? 'ok' : 'blocked'} (${result.probe_mode})`);
     for (const blocker of result.blockers || []) console.log(`- blocker: ${blocker}`);
     for (const warning of result.warnings || []) console.log(`- warning: ${warning}`);
     if (!result.ok) process.exitCode = 1;

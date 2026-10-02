@@ -2,6 +2,8 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 
+export const BELOW_FLOOR_CODEX_VERSION_TEXT = 'codex-cli 0.100.0'
+
 export interface CodexNativeRuntimeFixture {
   root: string
   missionId: string
@@ -43,22 +45,12 @@ export async function createCodexNativeRuntimeFixture(input: {
       USERPROFILE: home,
       CODEX_HOME: codexHome,
       CODEX_BIN: 'codex',
-      SKS_CODEX_CURRENT_APP_FAKE: '1',
-      SKS_CODEX_CURRENT_APP_PROBE: '1',
-      SKS_CODEX_CURRENT_CORE_FAKE: '1',
-      SKS_CODEX_CURRENT_CORE_PROBE: '1',
       SKS_CODEX_PLUGIN_JSON_FAKE: '1',
       SKS_CODEX_HOOK_APPROVAL_FIXTURE: input.hook,
-      SKS_CODEX_CURRENT_APP_FAKE_APP_HANDOFF_FAIL: input.appHandoff ? '0' : '1',
-      SKS_CODEX_CURRENT_APP_FAKE_IMAGE_PATH_FAIL: input.imagePathExposure ? '0' : '1',
-      SKS_CODEX_CURRENT_APP_FAKE_PLUGIN_JSON_FAIL: '0',
       SKS_CODEX_PLUGIN_JSON_FAKE_NO_MCP: input.mcpCandidates ? '0' : '1',
-      SKS_CODEX_CURRENT_CORE_FAKE_WEB_SEARCH_FAIL: input.codeModeWebSearch ? '0' : '1',
-      SKS_CODEX_CURRENT_CORE_FAKE_MARKETPLACE_FAIL: '0',
-      SKS_CODEX_CURRENT_CORE_FAKE_PROFILE_ALIAS_FAIL: '0',
-      SKS_CODEX_CURRENT_CORE_FAKE_INTERRUPT_FAIL: '0',
-      SKS_CODEX_CURRENT_CORE_FAKE_RICH_SCHEMA_FAIL: '0',
-      SKS_CODEX_CURRENT_CORE_FAKE_DOCTOR_ENV_FAIL: '0',
+      // App handoff, image path exposure and code-mode web search all follow the Codex version now, so
+      // switching any of them off models a Codex below the supported floor.
+      ...(input.appHandoff && input.imagePathExposure && input.codeModeWebSearch ? {} : { SKS_CODEX_VERSION_FAKE: BELOW_FLOOR_CODEX_VERSION_TEXT }),
       SKS_LOOP_RUNTIME_FIXTURE: '1',
       SKS_TEST_RUNTIME_FIXTURE_ALLOWED: '1'
     }

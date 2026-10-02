@@ -4,25 +4,8 @@ import path from 'node:path';
 
 import {
   buildCodexExecOutputSchemaArgs,
-  buildCodexExecResumeOutputSchemaArgs,
-  detectCodexExecOutputSchemaSyntax
+  buildCodexExecResumeOutputSchemaArgs
 } from '../../dist/core/codex-exec-output-schema.js';
-
-test('Codex output-schema syntax detection checks fresh exec separately from resume', async () => {
-  const availability = await detectCodexExecOutputSchemaSyntax({
-    codexBin: process.execPath,
-    versionText: 'codex-cli 0.145.0',
-    execHelpText: 'Usage: codex exec --output-schema <file> --json <prompt>',
-    resumeHelpText: 'Usage: codex exec resume --json --output-schema <file> <session-id>'
-  });
-
-  assert.equal(availability.schema, 'sks.codex-exec-output-schema-syntax.v1');
-  assert.equal(availability.status, 'available');
-  assert.equal(availability.exec.output_schema_supported, true);
-  assert.equal(availability.resume.output_schema_supported, true);
-  assert.equal(availability.parity, true);
-  assert.deepEqual(availability.blockers, []);
-});
 
 test('fresh codex exec and exec resume builders preserve their distinct argument order', async () => {
   const schemaPath = path.join(process.cwd(), 'schemas/codex/image-ux-issue-ledger.schema.json');

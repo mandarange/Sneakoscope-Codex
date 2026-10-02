@@ -56,21 +56,18 @@ test('standalone parent args launch one latest deep-tier Codex parent with the o
   assert.equal(args.filter((arg) => arg === 'exec').length, 1)
 })
 
-test('Naruto capability branching prefers multi_agent_v2 probes and update CTAs', async () => {
-  const { assertNarutoMultiAgentV2Capability, buildCodexCapabilityMatrix } = await import('../../codex-compat/codex-capability-matrix.js')
-  const available = buildCodexCapabilityMatrix({
-    version: CURRENT_CODEX_RUNTIME_CONTRACT.sdkVersion,
-    helpText: 'multi_agent_v2 max_concurrent_threads_per_session'
-  })
-  assert.equal(assertNarutoMultiAgentV2Capability(available).ok, true)
-  const missing = buildCodexCapabilityMatrix({
-    version: '0.140.0',
-    helpText: 'legacy collab only'
-  })
-  const blocked = assertNarutoMultiAgentV2Capability(missing)
+test('Naruto spawn precheck passes at the supported floor and blocks below it with an update CTA', async () => {
+  const { assertCodexFloor } = await import('../../codex-compat/codex-version-policy.js')
+  assert.equal(assertCodexFloor(CURRENT_CODEX_RUNTIME_CONTRACT.minVersion).ok, true)
+  assert.equal(assertCodexFloor('999.0.0').ok, true)
+  const blocked = assertCodexFloor('0.140.0')
   assert.equal(blocked.ok, false)
   assert.ok(blocked.blockers.includes('update_codex_cli'))
+  assert.ok(blocked.blockers.includes('codex_below_supported_floor:0.140.0'))
   assert.ok(blocked.guidance.some((line) => /Menu Bar|sks codex update/i.test(line)))
+  const unknown = assertCodexFloor(null)
+  assert.equal(unknown.ok, false)
+  assert.ok(unknown.blockers.includes('codex_version_unknown'))
 })
 
 test('Codex thread environment selects the in-app path unless standalone is explicit', () => {

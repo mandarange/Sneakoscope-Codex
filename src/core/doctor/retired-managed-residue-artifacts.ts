@@ -4,6 +4,7 @@ import { reconcileMissionArtifacts, reconcileMissionIndex } from './retired-mana
 import { type MutableCounters } from './retired-managed-residue-private.js';
 import { reconcileTriWikiWrongnessProjections } from './retired-managed-projection-residue.js';
 import {
+  reconcileRetiredCapabilityArtifacts,
   reconcileRetiredGitPolicyMode,
   reconcileRetiredRecoveryReport,
   reconcileRetiredReports,
@@ -37,6 +38,7 @@ export async function reconcileRetiredArtifactResidue(input: {
   await reconcileTriWikiWrongnessProjections(input.root, input.fix, input.quarantineRoot, input.counters);
   await reconcileRetiredTeamArtifacts(input.root, input.fix, input.quarantineRoot, input.counters);
   await reconcileRetiredReports(input.root, input.fix, input.quarantineRoot, input.counters);
+  await reconcileRetiredCapabilityArtifacts(input.root, input.fix, input.quarantineRoot, input.counters);
   await reconcileRetiredRecoveryReport(input.root, input.fix, input.quarantineRoot, input.counters);
   await reconcileRetiredGitPolicyMode(input.root, input.fix, input.quarantineRoot, input.counters);
 }

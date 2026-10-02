@@ -8,7 +8,6 @@ import { restartLaunchAgent } from '../core/codex-app/menubar/launch-agent.js';
 export function buildRuntimeReadiness(matrix: any) {
   const defaults = matrix?.invocation_defaults || {};
   const hookPolicy = defaults.hook_evidence_policy || 'unknown-do-not-count';
-  const rolloutBudget = defaults.rollout_budget_strategy || 'sks-local-only';
   const researchSource = defaults.research_source_strategy || 'local-files';
   const codexNative = matrix?.ok === true ? 'ok' : matrix?.codex_cli?.available ? 'degraded' : 'blocked';
   const repairActions: string[] = [];
@@ -28,13 +27,8 @@ export function buildRuntimeReadiness(matrix: any) {
     research_sources: researchSource,
     image_followup: defaults.image_followup_strategy || 'blocked',
     hook_evidence_policy: hookPolicy,
-    rollout_budget_strategy: rolloutBudget,
-    current_time_source: defaults.current_time_source || 'external-clock',
-    overload_retry_policy: defaults.overload_retry_policy || 'generic',
     notes: [
-      ...(hookPolicy !== 'approved-only' ? ['hook-derived evidence will not count'] : []),
-      ...(rolloutBudget === 'codex-current-shared' ? ['Shared rollout budgeting is available for route proof'] : []),
-      ...(researchSource === 'indexed-web-search' ? ['Indexed web search is selected for source-intelligence routes'] : [])
+      ...(hookPolicy !== 'approved-only' ? ['hook-derived evidence will not count'] : [])
     ],
     repair_actions: [...new Set(repairActions)]
   };
@@ -64,14 +58,11 @@ export function fallbackCodexNativeFeatureMatrix(codex: any, blockers: string[] 
     codex_cli: { available: Boolean(codex?.bin || codex?.available), version: codex?.version || null, bin: codex?.bin || null },
     features: {},
     invocation_defaults: {
-      rollout_budget_strategy: 'sks-local-only',
       qa_visual_review_strategy: 'route-gated',
       research_source_strategy: 'local-files',
       image_followup_strategy: 'artifact-path',
       hook_evidence_policy: 'unknown-do-not-count',
-      skill_bridge_strategy: 'cli-only',
-      current_time_source: 'external-clock',
-      overload_retry_policy: 'generic'
+      skill_bridge_strategy: 'cli-only'
     },
     blockers,
     warnings

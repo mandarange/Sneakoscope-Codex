@@ -88,7 +88,6 @@ const liveOptionalPolicy = (expectedSchemas, passStatuses = ['passed', 'proven']
 })
 const tasks = [
   task('codex:actual-config-load-probe', 'direct', { command: nodeScript('codex-config-load-probe.js', '--actual-codex', '--require-actual-codex', '--json'), group: 'environment_required', phase: 'parallel_processing', policy: requiredPolicy(['sks.codex-config-load-probe.v2']) }),
-  task('codex:current-core-real-probes:require-real', 'direct', { command: nodeScript('codex-current-core-real-probes-check.js', '--require-real', '--allow-network'), group: 'environment_required', phase: 'parallel_processing', policy: requiredPolicy(['sks.release-gate.v1']) }),
   task('codex:current:app-server-v2:real', 'direct', { command: nodeScript('codex-current-app-server-v2-check.js'), group: 'environment_required', phase: 'parallel_processing', args: ['--require-real'], policy: requiredPolicy(['sks.release-gate.v1']) }),
   task('codex:current:capability:real', 'direct', { command: nodeScript('codex-current-capability-check.js'), group: 'environment_required', phase: 'parallel_verification', args: ['--require-real'], deps: ['codex:current:app-server-v2:real'], policy: requiredPolicy(['sks.release-gate.v1']) }),
   task('doctor:actual', 'direct', { command: [process.execPath, './dist/bin/sks.js', 'doctor', '--json'], group: 'environment_required', phase: 'parallel_processing', policy: requiredPolicy(['sks.doctor-status.v3'], { statusRequired: true, passStatuses: ['fast_readonly_ok', 'ok'] }) }),
