@@ -11,11 +11,9 @@ const CODEX_CLI_UPDATE_JSON_OUTPUT_LIMIT_BYTES = 60 * 1024;
 const CODEX_CLI_UPDATE_RAW_OUTPUT_LIMIT_BYTES = 20 * 1024;
 const CODEX_CLI_UPDATE_ARRAY_LIMIT = 12;
 const CODEX_CLI_UPDATE_ARRAY_ITEM_LIMIT_BYTES = 768;
-const CODEX_STANDALONE_INSTALLER_URL = 'https://chatgpt.com/codex/install.sh';
-const CODEX_STANDALONE_INSTALLER_PS1_URL = 'https://chatgpt.com/codex/install.ps1';
 
 export type OperatorCodexCliSource = 'explicit' | 'path' | 'unavailable';
-export type CodexCliUpdateMethod = 'native-self-update' | 'standalone-installer' | 'npm-global' | 'homebrew-cask' | 'unknown';
+export type CodexCliUpdateMethod = 'native-self-update' | 'unknown';
 
 export type OperatorCodexCliResolution = {
   ok: true;
@@ -296,15 +294,7 @@ export async function updateCodexCliNow(opts: {
   const capabilityOutput = `${capability.stdout || ''}${capability.stderr || ''}`.trim();
   const nativeSelfUpdateSupported = capability.code === 0
     && /Usage:\s+codex\s+update\b/i.test(capabilityOutput);
-  const updatePlan = nativeSelfUpdateSupported
-    ? {
-        method: 'native-self-update' as const,
-        command: 'codex update',
-        executable: before.path,
-        args: ['update']
-      }
-    : await detectCodexCliUpdatePlan({ before, env, deps, run });
-  if (!updatePlan) {
+  if (!nativeSelfUpdateSupported) {
     return updateResult({
       ok: false,
       status: 'failed',
@@ -316,18 +306,17 @@ export async function updateCodexCliNow(opts: {
       updateMethod: 'unknown',
       blockers: ['codex_cli_update_method_unverified'],
       guidance: [
-        'The selected Codex CLI neither advertises native self-update nor maps safely to the official standalone installer, npm global package, or Homebrew cask.',
-        'Reinstall Codex with an official supported method, then retry.'
+        'The selected Codex CLI does not advertise native self-update (codex update).',
+        'Reinstall or update Codex with its official installer, then retry.'
       ]
     });
   }
-  const result = updatePlan.method === 'standalone-installer'
-    ? await runStandaloneInstallerUpdate({ before, env, deps, run })
-    : await run(updatePlan.executable, updatePlan.args, {
-        timeoutMs: 180_000,
-        maxOutputBytes: 128 * 1024,
-        env
-      }).catch((err: unknown) => failedProcessResult(err));
+  const updatePlan = { method: 'native-self-update' as const, command: 'codex update' };
+  const result = await run(before.path, ['update'], {
+    timeoutMs: 180_000,
+    maxOutputBytes: 128 * 1024,
+    env
+  }).catch((err: unknown) => failedProcessResult(err));
   const rawOutput = `${result.stdout || ''}${result.stderr || ''}`.trim();
   if (result.code !== 0) {
     return updateResult({
@@ -339,7 +328,7 @@ export async function updateCodexCliNow(opts: {
       updateStatus: null,
       command: updatePlan.command,
       updateMethod: updatePlan.method,
-      blockers: [updateFailureBlocker(updatePlan.method)],
+      blockers: ['codex_cli_self_update_failed'],
       guidance: [`Run the detected updater in a terminal to review its output: ${updatePlan.command}`]
     });
   }
@@ -480,179 +469,6 @@ export function compareCodexCliVersions(left: unknown, right: unknown): number {
   if (!aPre) return 1;
   if (!bPre) return -1;
   return aPre.localeCompare(bPre, undefined, { numeric: true });
-}
-
-interface CodexCliUpdatePlan {
-  method: Exclude<CodexCliUpdateMethod, 'unknown'>;
-  command: string;
-  executable: string;
-  args: string[];
-}
-
-async function detectCodexCliUpdatePlan(input: {
-  before: OperatorCodexCliResolution & { ok: true; path: string; version: string };
-  env: NodeJS.ProcessEnv;
-  deps: CodexCliUpdateDependencies;
-  run: NonNullable<CodexCliUpdateDependencies['runProcessImpl']>;
-}): Promise<CodexCliUpdatePlan | null> {
-  const selectedPath = path.resolve(input.before.path);
-  const selectedRealPath = await realPathOrResolved(selectedPath);
-  const codexHome = await realPathOrResolved(input.env.CODEX_HOME || path.join(input.env.HOME || os.homedir(), '.codex'));
-  const standaloneRoot = await realPathOrResolved(path.join(codexHome, 'packages', 'standalone'));
-  if (isWithin(selectedRealPath, standaloneRoot)) {
-    return {
-      method: 'standalone-installer',
-      command: process.platform === 'win32'
-        ? `powershell -NoProfile -Command "irm ${CODEX_STANDALONE_INSTALLER_PS1_URL} | iex"`
-        : `curl -fsSL ${CODEX_STANDALONE_INSTALLER_URL} | CODEX_NON_INTERACTIVE=1 sh`,
-      executable: '',
-      args: []
-    };
-  }
-
-  const brew = await resolveUpdateExecutable('brew', input.env, input.deps);
-  if (brew) {
-    const caskPrefixResult = await input.run(brew, ['--prefix', '--cask', 'codex'], {
-      timeoutMs: 10_000,
-      maxOutputBytes: 16 * 1024,
-      env: input.env
-    }).catch((err: unknown) => failedProcessResult(err));
-    const caskPrefix = caskPrefixResult.code === 0
-      ? String(caskPrefixResult.stdout || '').trim().split(/\r?\n/).find(Boolean) || ''
-      : '';
-    if (caskPrefix && isWithin(selectedRealPath, await realPathOrResolved(caskPrefix))) {
-      return {
-        method: 'homebrew-cask',
-        command: 'brew upgrade --cask codex',
-        executable: brew,
-        args: ['upgrade', '--cask', 'codex']
-      };
-    }
-  }
-
-  const npm = await resolveUpdateExecutable('npm', input.env, input.deps);
-  if (npm) {
-    const [rootResult, prefixResult] = await Promise.all([
-      input.run(npm, ['root', '-g'], {
-        timeoutMs: 10_000,
-        maxOutputBytes: 16 * 1024,
-        env: input.env
-      }).catch((err: unknown) => failedProcessResult(err)),
-      input.run(npm, ['prefix', '-g'], {
-        timeoutMs: 10_000,
-        maxOutputBytes: 16 * 1024,
-        env: input.env
-      }).catch((err: unknown) => failedProcessResult(err))
-    ]);
-    const npmRoot = rootResult.code === 0
-      ? String(rootResult.stdout || '').trim().split(/\r?\n/).find(Boolean) || ''
-      : '';
-    const npmPrefix = prefixResult.code === 0
-      ? String(prefixResult.stdout || '').trim().split(/\r?\n/).find(Boolean) || ''
-      : '';
-    const packageDir = npmRoot ? await realPathOrResolved(path.resolve(npmRoot, '@openai', 'codex')) : '';
-    const npmBinCandidates = npmPrefix
-      ? process.platform === 'win32'
-        ? ['codex.cmd', 'codex.exe', 'codex'].map((name) => path.resolve(npmPrefix, name))
-        : [path.resolve(npmPrefix, 'bin', 'codex')]
-      : [];
-    const packageInstalled = Boolean(packageDir) && await exists(packageDir);
-    if (packageInstalled && (
-      isWithin(selectedRealPath, packageDir)
-      || npmBinCandidates.includes(selectedPath)
-    )) {
-      return {
-        method: 'npm-global',
-        command: 'npm install -g @openai/codex@latest',
-        executable: npm,
-        args: ['install', '-g', '@openai/codex@latest']
-      };
-    }
-  }
-  return null;
-}
-
-async function runStandaloneInstallerUpdate(input: {
-  before: OperatorCodexCliResolution & { ok: true; path: string; version: string };
-  env: NodeJS.ProcessEnv;
-  deps: CodexCliUpdateDependencies;
-  run: NonNullable<CodexCliUpdateDependencies['runProcessImpl']>;
-}): Promise<RunProcessResult> {
-  if (process.platform === 'win32') {
-    const powershell = await resolveUpdateExecutable('pwsh', input.env, input.deps)
-      || await resolveUpdateExecutable('powershell', input.env, input.deps);
-    if (!powershell) return failedProcessResult(new Error('codex_cli_standalone_update_prerequisite_missing'));
-    const codexHome = path.resolve(input.env.CODEX_HOME || path.join(input.env.HOME || os.homedir(), '.codex'));
-    return input.run(powershell, [
-      '-NoProfile',
-      '-NonInteractive',
-      '-ExecutionPolicy',
-      'Bypass',
-      '-Command',
-      `$ErrorActionPreference='Stop'; Invoke-RestMethod '${CODEX_STANDALONE_INSTALLER_PS1_URL}' | Invoke-Expression`
-    ], {
-      timeoutMs: 180_000,
-      maxOutputBytes: 128 * 1024,
-      env: {
-        ...input.env,
-        CODEX_HOME: codexHome,
-        CODEX_INSTALL_DIR: path.dirname(input.before.path),
-        CODEX_NON_INTERACTIVE: '1'
-      }
-    }).catch((err: unknown) => failedProcessResult(err));
-  }
-  const curl = await resolveUpdateExecutable('curl', input.env, input.deps);
-  const shell = await resolveUpdateExecutable('sh', input.env, input.deps);
-  if (!curl || !shell) {
-    return failedProcessResult(new Error('codex_cli_standalone_update_prerequisite_missing'));
-  }
-  const download = await input.run(curl, ['-fsSL', CODEX_STANDALONE_INSTALLER_URL], {
-    timeoutMs: 30_000,
-    maxOutputBytes: 512 * 1024,
-    env: input.env
-  }).catch((err: unknown) => failedProcessResult(err));
-  const installer = String(download.stdout || '');
-  if (download.code !== 0 || !/^#!\/bin\/sh\s*$/m.test(installer) || !installer.includes('CODEX_NON_INTERACTIVE')) {
-    return {
-      ...download,
-      code: download.code === 0 ? 1 : download.code,
-      stderr: String(download.stderr || 'codex_cli_standalone_installer_download_untrusted')
-    };
-  }
-  const codexHome = path.resolve(input.env.CODEX_HOME || path.join(input.env.HOME || os.homedir(), '.codex'));
-  return input.run(shell, ['-s', '--'], {
-    timeoutMs: 180_000,
-    maxOutputBytes: 128 * 1024,
-    input: installer,
-    env: {
-      ...input.env,
-      CODEX_HOME: codexHome,
-      CODEX_INSTALL_DIR: path.dirname(input.before.path),
-      CODEX_NON_INTERACTIVE: '1'
-    }
-  }).catch((err: unknown) => failedProcessResult(err));
-}
-
-async function resolveUpdateExecutable(
-  command: string,
-  env: NodeJS.ProcessEnv,
-  deps: CodexCliUpdateDependencies
-): Promise<string | null> {
-  return deps.whichImpl
-    ? deps.whichImpl(command).catch(() => null)
-    : resolveOperatorExecutable(command, env);
-}
-
-function updateFailureBlocker(method: Exclude<CodexCliUpdateMethod, 'unknown'>): string {
-  if (method === 'native-self-update') return 'codex_cli_self_update_failed';
-  if (method === 'standalone-installer') return 'codex_cli_standalone_update_failed';
-  if (method === 'homebrew-cask') return 'codex_cli_homebrew_cask_update_failed';
-  return 'codex_cli_npm_global_update_failed';
-}
-
-async function realPathOrResolved(value: string): Promise<string> {
-  const resolved = path.resolve(value);
-  return fsp.realpath(resolved).catch(() => resolved);
 }
 
 async function operatorCodexCandidates(explicitBin: string | undefined, env: NodeJS.ProcessEnv): Promise<OperatorCodexCandidate[]> {

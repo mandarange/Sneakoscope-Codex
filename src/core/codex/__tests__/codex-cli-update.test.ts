@@ -163,119 +163,6 @@ test('Codex CLI non-JSON update summary never renders raw updater output', () =>
   assert.doesNotMatch(rendered, /RAW_UPDATER_SECRET_SHOULD_NOT_RENDER/);
 });
 
-test('Codex CLI update falls back to the official standalone installer when native self-update is unavailable', async () => {
-  const fixture = await operatorFixture('sks-codex-cli-update-standalone-');
-  const codexHome = path.join(fixture.home, '.codex');
-  const standaloneBin = path.join(codexHome, 'packages', 'standalone', 'current', 'bin', 'codex');
-  let current = '0.144.1';
-  const calls: Array<{ command: string; args: string[]; opts?: Record<string, unknown> }> = [];
-  try {
-    await executableFixture(standaloneBin);
-    const deps = {
-      whichImpl: async (command: string) => ({ curl: '/fixture/curl', sh: '/fixture/sh', npm: '/fixture/npm' } as Record<string, string>)[command] || null,
-      runProcessImpl: async (command: string, args: string[], opts?: Record<string, unknown>) => {
-        calls.push({ command, args, ...(opts ? { opts } : {}) });
-        if (command === standaloneBin && args[0] === '--version') return processResult(0, `codex-cli ${current}\n`);
-        if (command === standaloneBin && args.join(' ') === 'update --help') return processResult(2, '', 'native updater unavailable');
-        if (command === '/fixture/curl') return processResult(0, '#!/bin/sh\nCODEX_NON_INTERACTIVE="${CODEX_NON_INTERACTIVE:-false}"\n');
-        if (command === '/fixture/sh') {
-          current = '0.145.0';
-          return processResult(0, 'standalone installer updated Codex\n');
-        }
-        if (command === '/fixture/npm' && args.join(' ') === 'view @openai/codex version') return processResult(0, '0.145.0\n');
-        return processResult(1, '', `unexpected command: ${command} ${args.join(' ')}`);
-      }
-    };
-    const result = await updateCodexCliNow({
-      home: fixture.home,
-      codexBin: standaloneBin,
-      env: { ...fixture.env, CODEX_HOME: codexHome },
-      deps
-    });
-    assert.equal(result.ok, true, JSON.stringify(result));
-    assert.equal(result.update_method, 'standalone-installer');
-    assert.match(String(result.command), /chatgpt\.com\/codex\/install\.sh/);
-    assert.equal(calls.some((call) => call.command === standaloneBin && call.args.join(' ') === 'update'), false);
-    const shellCall = calls.find((call) => call.command === '/fixture/sh');
-    assert.ok(shellCall);
-    assert.equal((shellCall.opts?.env as NodeJS.ProcessEnv)?.CODEX_NON_INTERACTIVE, '1');
-    assert.equal((shellCall.opts?.env as NodeJS.ProcessEnv)?.CODEX_HOME, codexHome);
-  } finally {
-    await fixture.cleanup();
-  }
-});
-
-test('Codex CLI update falls back to the matching Homebrew cask and never uses formula semantics', async () => {
-  const fixture = await operatorFixture('sks-codex-cli-update-homebrew-cask-');
-  const caskRoot = path.join(fixture.home, 'Caskroom', 'codex', '0.144.1');
-  const caskBin = path.join(caskRoot, 'codex');
-  let current = '0.144.1';
-  const calls: Array<{ command: string; args: string[] }> = [];
-  try {
-    await executableFixture(caskBin);
-    const deps = {
-      whichImpl: async (command: string) => command === 'brew' ? '/fixture/brew' : command === 'npm' ? '/fixture/npm' : null,
-      runProcessImpl: async (command: string, args: string[]) => {
-        calls.push({ command, args });
-        if (command === caskBin && args[0] === '--version') return processResult(0, `codex-cli ${current}\n`);
-        if (command === caskBin && args.join(' ') === 'update --help') return processResult(2, '', 'native updater unavailable');
-        if (command === '/fixture/brew' && args.join(' ') === '--prefix --cask codex') return processResult(0, `${caskRoot}\n`);
-        if (command === '/fixture/brew' && args.join(' ') === 'upgrade --cask codex') {
-          current = '0.145.0';
-          return processResult(0, 'upgraded cask codex\n');
-        }
-        if (command === '/fixture/npm' && args.join(' ') === 'view @openai/codex version') return processResult(0, '0.145.0\n');
-        return processResult(1, '', `unexpected command: ${command} ${args.join(' ')}`);
-      }
-    };
-    const result = await updateCodexCliNow({ home: fixture.home, codexBin: caskBin, env: fixture.env, deps });
-    assert.equal(result.ok, true, JSON.stringify(result));
-    assert.equal(result.update_method, 'homebrew-cask');
-    assert.equal(result.command, 'brew upgrade --cask codex');
-    assert.equal(calls.some((call) => call.command === caskBin && call.args.join(' ') === 'update'), false);
-    assert.equal(calls.some((call) => call.command === '/fixture/brew' && call.args.join(' ') === 'upgrade --cask codex'), true);
-    assert.equal(calls.some((call) => call.command === '/fixture/brew' && call.args.join(' ') === 'upgrade codex'), false);
-  } finally {
-    await fixture.cleanup();
-  }
-});
-
-test('Codex CLI update falls back to the matching npm global package without invoking native update', async () => {
-  const fixture = await operatorFixture('sks-codex-cli-update-npm-global-');
-  const npmPrefix = path.join(fixture.home, 'npm-global');
-  const npmRoot = path.join(npmPrefix, 'lib', 'node_modules');
-  const npmCodex = path.join(npmRoot, '@openai', 'codex', 'bin', 'codex.js');
-  let current = '0.144.1';
-  const calls: Array<{ command: string; args: string[] }> = [];
-  try {
-    await executableFixture(npmCodex);
-    const deps = {
-      whichImpl: async (command: string) => command === 'npm' ? '/fixture/npm' : null,
-      runProcessImpl: async (command: string, args: string[]) => {
-        calls.push({ command, args });
-        if (command === npmCodex && args[0] === '--version') return processResult(0, `codex-cli ${current}\n`);
-        if (command === npmCodex && args.join(' ') === 'update --help') return processResult(2, '', 'native updater unavailable');
-        if (command === '/fixture/npm' && args.join(' ') === 'root -g') return processResult(0, `${npmRoot}\n`);
-        if (command === '/fixture/npm' && args.join(' ') === 'prefix -g') return processResult(0, `${npmPrefix}\n`);
-        if (command === '/fixture/npm' && args.join(' ') === 'install -g @openai/codex@latest') {
-          current = '0.145.0';
-          return processResult(0, 'updated 1 package\n');
-        }
-        if (command === '/fixture/npm' && args.join(' ') === 'view @openai/codex version') return processResult(0, '0.145.0\n');
-        return processResult(1, '', `unexpected command: ${command} ${args.join(' ')}`);
-      }
-    };
-    const result = await updateCodexCliNow({ home: fixture.home, codexBin: npmCodex, env: fixture.env, deps });
-    assert.equal(result.ok, true, JSON.stringify(result));
-    assert.equal(result.update_method, 'npm-global');
-    assert.equal(result.command, 'npm install -g @openai/codex@latest');
-    assert.equal(calls.some((call) => call.command === npmCodex && call.args.join(' ') === 'update'), false);
-    assert.equal(calls.some((call) => call.command === '/fixture/npm' && call.args.join(' ') === 'install -g @openai/codex@latest'), true);
-  } finally {
-    await fixture.cleanup();
-  }
-});
-
 test('explicit operator Codex override takes precedence over a different PATH installation', async () => {
   const fixture = await operatorFixture('sks-codex-cli-explicit-');
   const explicitDir = path.join(fixture.home, 'explicit-bin');
@@ -512,7 +399,7 @@ test('Codex CLI update fails closed when the post-update version regresses', asy
   }
 });
 
-test('Codex CLI update fails closed when neither native self-update nor an official install method can be verified', async () => {
+test('Codex CLI update fails closed when native self-update cannot be verified', async () => {
   const fixture = await operatorFixture('sks-codex-cli-update-capability-');
   let updateRan = false;
   try {
