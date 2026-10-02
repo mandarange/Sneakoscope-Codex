@@ -382,8 +382,7 @@ export function hooksExplainReport() {
       'directory_rule_policy',
       'db_safety_policy',
       'visual_claim_source_policy',
-      'proof_required_policy',
-      'codex_lb_health_policy'
+      'proof_required_policy'
     ],
     sources: [
       { title: 'OpenAI Codex Hooks', url: 'https://developers.openai.com/codex/hooks' },

@@ -73,7 +73,6 @@ export function affectedGlobsFor(id: string): string[] {
         'package.json',
         'package-lock.json',
         'src/core/codex-app.ts',
-        'src/core/codex-lb-circuit.ts',
         'src/core/codex-lb/**',
         `src/scripts/${prefix}-*.ts`
       ]

@@ -45,7 +45,7 @@ function narutoWorker(agent = {}, slice = {}) {
 test('OpenRouter Only workers accept and choose only list models, with no codex-lb catalog requirement', async () => {
   await withOpenRouterOnly({ enabled: true, subagent_models: OR_LIST }, async () => {
     // lbCatalog is deliberately not injected: the mode never reads or requires it.
-    const deps = { env: {}, lbHealth: { ok: true }, consultJev: false };
+    const deps = { env: {}, consultJev: false };
     const cases = [
       [narutoWorker(), 'z-ai/glm-5.3', []],
       [narutoWorker({ routed_model: 'google/gemini-3.8-flash', routed_model_policy: 'openrouter_only_jev' }), 'google/gemini-3.8-flash', []],
@@ -76,7 +76,7 @@ test('OpenRouter Only workers accept and choose only list models, with no codex-
     }
   });
   await withOpenRouterOnly({ enabled: true, subagent_models: [] }, async () => {
-    const empty = await resolveWorkerModelRouting(narutoWorker(), { env: {}, lbHealth: { ok: true }, consultJev: false });
+    const empty = await resolveWorkerModelRouting(narutoWorker(), { env: {}, consultJev: false });
     assert.equal(empty.choice.model, '');
     assert.ok(empty.blockers.includes('openrouter_only_subagent_list_empty'));
   });
@@ -108,7 +108,7 @@ test('OpenRouter Only workers let Jev pick a list entry and fall back inside the
       ]) {
         resetDecisionTransportState();
         setDecisionTestOverrides({ config: { ...defaultDecisionConfig(), mode: 'jev', consentCloud: true }, fetchImpl });
-        const routing = await resolveWorkerModelRouting(narutoWorker(), { env: { OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY }, lbHealth: { ok: true } });
+        const routing = await resolveWorkerModelRouting(narutoWorker(), { env: { OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY } });
         assert.equal(routing.choice.model, expected);
         assert.ok(OR_LISTED.includes(routing.choice.model));
         assert.deepEqual(routing.blockers, []);
@@ -130,7 +130,7 @@ test('with OpenRouter Only off, a stored list leaves worker routing byte-identic
     narutoWorker({ routed_model: T.deep, routed_model_reasoning_effort: 'max', routed_model_policy: 'user_role_model_preference' }),
     { ...narutoWorker(), agent: { id: 'plain', role: 'executor' }, intake: { route: '$Team' } }
   ];
-  const deps = { env: {}, lbHealth: { ok: true }, lbCatalog: allTierCatalog(), consultJev: false };
+  const deps = { env: {}, lbCatalog: allTierCatalog(), consultJev: false };
   const snapshot = async () => Promise.all(inputs.map((input) => resolveWorkerModelRouting(input, deps)));
   const baseline = await snapshot();
   assert.ok(baseline.every((routing) => !/openrouter only/.test(routing.reason)));
@@ -157,7 +157,7 @@ test('Naruto worker uses its task tier model independently of the selected OpenR
     slice: { id: 'task-openrouter', role: 'implementation', description: 'implement provider routing' },
     intake: { route: '$Naruto' },
     fastModePolicy: { fast_mode: true, service_tier: 'fast' }
-  }, { lbCatalog: allTierCatalog(), lbHealth: { ok: true }, env: { CODEX_HOME: codexHome } });
+  }, { lbCatalog: allTierCatalog(), env: { CODEX_HOME: codexHome } });
 
   assert.deepEqual(routing.blockers, []);
   // Instructed implementation runs on the balanced tier at low; a stale
@@ -181,7 +181,7 @@ test('a stored preference for a model outside the current tiers cannot replace t
     slice: { id: 'task-role-override', role: 'review', description: 'review protocol compatibility' },
     intake: { route: '$Naruto', main_model: 'anthropic/claude-sonnet-4.5' },
     fastModePolicy: { fast_mode: true, service_tier: 'fast' }
-  }, { lbCatalog: allTierCatalog(), lbHealth: { ok: true }, env: {} });
+  }, { lbCatalog: allTierCatalog(), env: {} });
 
   assert.deepEqual(routing.blockers, []);
   assert.equal(routing.choice.model, T.deep);
@@ -209,7 +209,7 @@ test('native worker ignores a parent model sealed into an old plan', async () =>
     slice: { id: 'task-sealed-main', role: 'implementation', description: 'implement provider routing' },
     intake: { route: '$Naruto' },
     fastModePolicy: { fast_mode: true, service_tier: 'fast' }
-  }, { lbCatalog: allTierCatalog(), lbHealth: { ok: true }, env: { CODEX_HOME: codexHome } });
+  }, { lbCatalog: allTierCatalog(), env: { CODEX_HOME: codexHome } });
 
   assert.deepEqual(routing.blockers, []);
   assert.equal(routing.choice.model, T.balanced);
@@ -228,7 +228,7 @@ test('native worker preserves a saved current-model preference and validates it 
     fastModePolicy: { fast_mode: true, service_tier: 'fast' }
   };
   const catalog = { ok: true, models: [T.deep], model_efforts: { [T.deep]: ['max'] }, blockers: [] };
-  const deps = { env: {}, lbHealth: { ok: true }, lbCatalog: catalog };
+  const deps = { env: {}, lbCatalog: catalog };
   const routing = await resolveWorkerModelRouting(input, deps);
   assert.deepEqual(routing.blockers, []);
   assert.equal(routing.choice.model, T.deep);

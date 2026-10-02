@@ -15,12 +15,6 @@ export interface ModelChoice {
   serviceTier: ModelServiceTier;
 }
 
-export interface LbHealth {
-  ok: boolean;
-  degraded_models?: string[];
-  quota_low?: boolean;
-}
-
 const CATEGORY_POLICY: Record<TaskCategory, Omit<ModelChoice, 'model'>> = {
   quick: { reasoning: 'low', serviceTier: 'fast' },
   standard: { reasoning: 'medium', serviceTier: 'fast' },
@@ -40,7 +34,6 @@ export function narutoModels(): string[] {
 const E2E_WORK_RE = /(e2e|end[-\s]?to[-\s]?end|test_execution|browser|chrome|computer[-\s]?use|computer\s+use|cross[-\s]?app|playwright|selenium|puppeteer|브라우저|컴퓨터\s*유즈)/i;
 
 export async function routeModel(category: TaskCategory, opts: {
-  lbHealth?: LbHealth | null;
   model?: string | null;
   narutoOnly?: boolean;
   reasoningEffort?: ModelReasoning | null;
@@ -57,14 +50,12 @@ export async function routeModel(category: TaskCategory, opts: {
       ...(opts.model !== undefined ? { explicitModel: opts.model } : {}),
       ...(opts.reasoningEffort !== undefined ? { reasoningEffort: opts.reasoningEffort } : {}),
       ...(opts.availableModels !== undefined ? { availableModels: opts.availableModels } : {}),
-      ...(opts.availableModelEfforts !== undefined ? { availableModelEfforts: opts.availableModelEfforts } : {}),
-      degradedModels: opts.lbHealth?.degraded_models || []
+      ...(opts.availableModelEfforts !== undefined ? { availableModelEfforts: opts.availableModelEfforts } : {})
     });
   }
   const policy = CATEGORY_POLICY[category] || CATEGORY_POLICY.standard;
   const model = String(opts.model || process.env.SKS_CODEX_MODEL || process.env.CODEX_MODEL || '').trim();
-  const reasoning = opts.lbHealth?.quota_low && policy.reasoning === 'xhigh' ? 'high' : policy.reasoning;
-  return { model, reasoning, serviceTier: policy.serviceTier };
+  return { model, reasoning: policy.reasoning, serviceTier: policy.serviceTier };
 }
 
 export function routeNarutoTierModel(input: {
@@ -75,7 +66,6 @@ export function routeNarutoTierModel(input: {
   reasoningEffort?: ModelReasoning | null;
   availableModels?: string[] | null;
   availableModelEfforts?: Record<string, string[]> | null;
-  degradedModels?: string[];
 } = {}): ModelChoice {
   const category = input.category || 'agentic';
   const explicitRequested = String(input.explicitModel || '').trim();
@@ -98,13 +88,11 @@ export function routeNarutoTierModel(input: {
   const available = input.availableModels == null
     ? narutoModels()
     : input.availableModels.map(normalizeNarutoTierModel).filter((model): model is string => Boolean(model));
-  const degraded = new Set((input.degradedModels || []).map((model) => String(model).toLowerCase()));
-  const usable = available.filter((model) => !degraded.has(model));
   const availableEfforts = effortsForModel(input.availableModelEfforts, preferred);
   const intendedReasoning: ModelReasoning = input.reasoningEffort || (explicit
     ? reasoningForExplicitModel(explicit, automatic.policy)
     : automatic.modelReasoningEffort);
-  const model = !invalidExplicit && usable.includes(preferred) && (availableEfforts == null || availableEfforts.includes(intendedReasoning)) ? preferred : '';
+  const model = !invalidExplicit && available.includes(preferred) && (availableEfforts == null || availableEfforts.includes(intendedReasoning)) ? preferred : '';
   return { model, reasoning: intendedReasoning, serviceTier: 'fast' };
 }
 
@@ -128,13 +116,12 @@ export function categoryForWorkerRole(role: string, taskText = ''): TaskCategory
   return 'agentic';
 }
 
-export function modelRouteReason(category: TaskCategory, choice: ModelChoice, opts: { explicit?: boolean; quotaLow?: boolean; degraded?: string[] } = {}): string {
+export function modelRouteReason(category: TaskCategory, choice: ModelChoice, opts: { explicit?: boolean } = {}): string {
   const model = choice.model || 'codex-selected';
   if (opts.explicit && !choice.model) return `${category}->blocked (explicit model unavailable)`;
   if (opts.explicit) return `${category}->${model} (explicit model preserved)`;
   if (isNarutoTierModel(choice.model)) return `${category}->${model}@${choice.reasoning} (official subagent model policy)`;
-  const suffix = opts.quotaLow ? 'quota discipline' : 'Codex catalog passthrough';
-  return `${category}->${model} (${suffix})`;
+  return `${category}->${model} (Codex catalog passthrough)`;
 }
 
 function effortsForModel(catalog: Record<string, string[]> | null | undefined, model: string): string[] | null {

@@ -44,7 +44,7 @@ test('native worker routing uses the task tier until Jev has selected a model', 
     slice: { id: 'W-dynamic', kind: 'task', title: 'exact one-line single-file rename', description: 'exact one-line single-file rename' },
     intake: { route: '$Naruto' },
     fastModePolicy: { fast_mode: true, service_tier: 'fast' }
-  }, { lbCatalog: catalog, lbHealth: { ok: true, degraded_models: [] }, env: {} });
+  }, { lbCatalog: catalog, env: {} });
   assert.deepEqual(baseline.blockers, []);
   assert.equal(baseline.choice.model, T.fast);
   const selected = await resolveWorkerModelRouting({
@@ -58,7 +58,7 @@ test('native worker routing uses the task tier until Jev has selected a model', 
     slice: { id: 'W-dynamic', kind: 'task', title: 'Debug the release security failure', description: 'security review' },
     intake: { route: '$Naruto' },
     fastModePolicy: { fast_mode: true, service_tier: 'fast' }
-  }, { lbCatalog: catalog, lbHealth: { ok: true, degraded_models: [] }, env: {} });
+  }, { lbCatalog: catalog, env: {} });
   assert.equal(selected.blockers.length, 0);
   assert.equal(selected.choice.model, T.balanced);
   assert.equal(selected.choice.reasoning, 'low');
@@ -73,12 +73,12 @@ test('a live Jev pick routes an unsealed worker only when codex-lb serves that m
     fastModePolicy: { fast_mode: true, service_tier: 'fast' as const }
   };
   const consultJev = (async () => ({ called: true, model: T.deep, effort: 'high', tier: 'deep', reason: 'applied' })) as any;
-  const served = await resolveWorkerModelRouting(input, { lbCatalog: catalog, lbHealth: { ok: true, degraded_models: [] }, env: {}, consultJev });
+  const served = await resolveWorkerModelRouting(input, { lbCatalog: catalog, env: {}, consultJev });
   assert.deepEqual(served.blockers, []);
   assert.equal(served.choice.model, T.deep);
   assert.equal(served.choice.reasoning, 'high');
   const narrow = { ...catalog, models: models.filter((model) => model !== T.deep) };
-  const unserved = await resolveWorkerModelRouting(input, { lbCatalog: narrow, lbHealth: { ok: true, degraded_models: [] }, env: {}, consultJev });
+  const unserved = await resolveWorkerModelRouting(input, { lbCatalog: narrow, env: {}, consultJev });
   assert.deepEqual(unserved.blockers, []);
   assert.equal(unserved.choice.model, T.fast, 'an unserved Jev pick falls back to the task tier, never a blocker');
 });
@@ -103,7 +103,7 @@ test('native Naruto worker routing passes the exact selected model and effort in
     slice: { id: 'W1', kind: 'refactor', title: 'Refactor architecture', parent_prompt: 'release integration' },
     intake: { route: '$Naruto' },
     fastModePolicy: { fast_mode: true, service_tier: 'fast' }
-  }, { lbCatalog: catalog, lbHealth: { ok: true, degraded_models: [] }, env: {} });
+  }, { lbCatalog: catalog, env: {} });
   assert.equal(routing.blockers.length, 0);
   assert.equal(routing.choice.model, T.deep);
   assert.equal(routing.choice.reasoning, 'max');
@@ -143,7 +143,6 @@ test('internal Naruto worker routing blocks models that are not current tier mod
       fastModePolicy: { fast_mode: true, service_tier: 'fast' }
     }, {
       lbCatalog: { ok: true, models, model_efforts: modelEfforts, blockers: [] },
-      lbHealth: { ok: true, degraded_models: [] },
       env: { SKS_WORKER_MODEL: model }
     });
     assert.ok(routing.blockers.includes('naruto_worker_model_not_current'), model);
@@ -160,7 +159,6 @@ test('Naruto rejects the process backend and conflicting effort/tier overrides',
     fastModePolicy: { fast_mode: true, service_tier: 'fast' }
   }, {
     lbCatalog: { ok: true, models, model_efforts: modelEfforts, blockers: [] },
-    lbHealth: { ok: true, degraded_models: [] },
     env: { SKS_WORKER_REASONING: 'high', SKS_WORKER_SERVICE_TIER: 'standard' }
   });
   assert.ok(routing.blockers.includes('naruto_reasoning_override_conflicts_with_policy'));
@@ -175,7 +173,6 @@ test('Naruto rejects invalid explicit effort and service-tier overrides', async 
     fastModePolicy: { fast_mode: true, service_tier: 'fast' }
   }, {
     lbCatalog: { ok: true, models, model_efforts: modelEfforts, blockers: [] },
-    lbHealth: { ok: true, degraded_models: [] },
     env: { SKS_WORKER_REASONING: 'bogus', SKS_WORKER_SERVICE_TIER: 'bogus' }
   });
   assert.ok(routing.blockers.includes('naruto_reasoning_override_invalid'));

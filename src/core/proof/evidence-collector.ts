@@ -1,6 +1,5 @@
 import path from 'node:path';
 import { packageRoot, readJson, runProcess, which } from '../fsx.js';
-import { codexLbMetrics, readCodexLbCircuit } from '../codex-lb-circuit.js';
 import { imageVoxelSummary } from '../wiki-image/image-voxel-ledger.js';
 import { wrongnessProofEvidence } from '../triwiki-wrongness/wrongness-proof-linker.js';
 
@@ -15,7 +14,6 @@ export async function collectProofEvidence(root: any = packageRoot()) {
       schema: pack.schema || null,
       claims: pack.trust_summary?.claims || pack.wiki?.a?.length || 0
     } : null).catch(() => null),
-    codex_lb: await readCodexLbCircuit(root).then((circuit: any) => codexLbMetrics(circuit)).catch(() => null),
     db_safety: await readJson(path.join(root, '.sneakoscope', 'db-safety.json'), null).then((policy: any) => policy ? {
       status: 'present',
       mode: policy.mode || null,

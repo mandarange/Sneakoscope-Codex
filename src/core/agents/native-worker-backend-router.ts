@@ -7,7 +7,7 @@ import { normalizeAgentPatchEnvelope, type AgentPatchEnvelope } from './agent-pa
 import { runCodexTask } from '../codex-control/codex-control-plane.js'
 import { CODEX_AGENT_WORKER_RESULT_SCHEMA_ID, codexAgentWorkerResultSchema } from '../codex-control/schemas/agent-worker-result.schema.js'
 import { leanEngineeringCompactText, leanPolicyReference } from '../lean-engineering-policy.js'
-import { readCodexLbModelCatalog, readLbHealth } from '../codex-lb/codex-lb-env.js'
+import { readCodexLbModelCatalog } from '../codex-lb/codex-lb-env.js'
 import { categoryForWorkerRole, isNarutoTierModel, modelRouteReason, routeModel, type ModelChoice, type TaskCategory } from '../provider/model-router.js'
 import { codexTimeoutClassForRoute } from '../codex-control/codex-reliability-shield.js'
 import { decideSubagentModel } from '../subagents/model-policy.js'
@@ -52,7 +52,7 @@ export async function runNativeWorkerBackendRouter(input: {
   let patchEnvelopes: AgentPatchEnvelope[] = []
   let proofLevel = 'blocked'
   let outputLastMessagePath: string | null = null
-  let modelRouting: { category: TaskCategory; choice: ModelChoice; reason: string; explicit: boolean; lb_health: any; lb_catalog: any; blockers: string[] } | null = null
+  let modelRouting: { category: TaskCategory; choice: ModelChoice; reason: string; explicit: boolean; lb_catalog: any; blockers: string[] } | null = null
 
   const narutoBackendBlocker = narutoWorkerBackendBlocker(backend, narutoRequest)
   if (narutoBackendBlocker) {
@@ -240,7 +240,7 @@ export async function resolveWorkerModelRouting(input: {
   slice: any
   intake: any
   fastModePolicy: { fast_mode: boolean; service_tier: 'fast' | 'standard' }
-}, deps: { lbHealth?: any; lbCatalog?: any; env?: NodeJS.ProcessEnv; root?: string; consultJev?: typeof consultJevTurnModel | false } = {}) {
+}, deps: { lbCatalog?: any; env?: NodeJS.ProcessEnv; root?: string; consultJev?: typeof consultJevTurnModel | false } = {}) {
   const narutoOnly = Boolean(input.agent?.naruto_role) || /\$?naruto/i.test(String(input.intake?.route || ''))
   const taskKindText = [
     input.slice?.work_item_kind,
@@ -260,7 +260,6 @@ export async function resolveWorkerModelRouting(input: {
   if (allowlist.mode === 'openrouter_only') {
     return resolveOpenRouterOnlyWorkerRouting(input, deps, { allowlist, category, env, taskKindText, riskText })
   }
-  const lbHealth = Object.prototype.hasOwnProperty.call(deps, 'lbHealth') ? deps.lbHealth : await readLbHealth().catch(() => null)
   const lbCatalog = narutoOnly
     ? Object.prototype.hasOwnProperty.call(deps, 'lbCatalog')
       ? deps.lbCatalog
@@ -303,7 +302,6 @@ export async function resolveWorkerModelRouting(input: {
   const taskPolicy = decideSubagentModel({ title: taskKindText, description: riskText, role: input.agent?.role })
   const routed = narutoOnly
     ? await routeModel(category, {
-        lbHealth,
         narutoOnly: true,
         taskText: taskKindText,
         riskText,
@@ -333,14 +331,9 @@ export async function resolveWorkerModelRouting(input: {
     category,
     choice: routed,
     explicit: Boolean(explicitModel),
-    lb_health: lbHealth,
     lb_catalog: lbCatalog,
     blockers: [...new Set(blockers)],
-    reason: modelRouteReason(category, routed, {
-      explicit: Boolean(explicitModel),
-      quotaLow: lbHealth?.quota_low === true,
-      degraded: lbHealth?.degraded_models || []
-    })
+    reason: modelRouteReason(category, routed, { explicit: Boolean(explicitModel) })
   }
 }
 
@@ -353,7 +346,7 @@ export async function resolveWorkerModelRouting(input: {
 async function resolveOpenRouterOnlyWorkerRouting(input: {
   agent: any
   fastModePolicy: { fast_mode: boolean; service_tier: 'fast' | 'standard' }
-}, deps: { lbHealth?: any; root?: string; consultJev?: typeof consultJevTurnModel | false }, ctx: {
+}, deps: { root?: string; consultJev?: typeof consultJevTurnModel | false }, ctx: {
   allowlist: Extract<ChildModelAllowlist, { mode: 'openrouter_only' }>
   category: TaskCategory
   env: NodeJS.ProcessEnv
@@ -396,7 +389,6 @@ async function resolveOpenRouterOnlyWorkerRouting(input: {
     category,
     choice: routed,
     explicit: Boolean(explicitModel),
-    lb_health: Object.prototype.hasOwnProperty.call(deps, 'lbHealth') ? deps.lbHealth : null,
     lb_catalog: null,
     blockers: [...new Set(blockers)],
     reason: `${category}->${choiceModel || 'blocked'}@${routed.reasoning} (openrouter only list: ${why})`
