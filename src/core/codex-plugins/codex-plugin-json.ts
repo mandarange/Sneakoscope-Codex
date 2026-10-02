@@ -8,10 +8,6 @@ export interface CodexPluginInventory {
   schema: 'sks.codex-plugin-inventory.v1'
   generated_at: string
   codex_current_app_capability: any
-  fetch_concurrency: number
-  detail_fetch_count: number
-  detail_fetch_failed_count: number
-  detail_json_supported?: boolean
   catalog_complete: boolean
   installed_count: number
   available_count: number
@@ -44,48 +40,22 @@ export async function runCodexPluginListJson(
   if (process.env.SKS_CODEX_PLUGIN_JSON_FAKE === '1') return fakePluginList()
   const bin = codexBin === undefined ? await findCodexBinary() : codexBin
   if (!bin) return { plugins: [], blockers: ['codex_cli_missing'] }
-  const complete = await runJson(bin, ['plugin', 'list', '--available', '--json'])
-  if (!pluginListAvailableFlagUnsupported(complete)) return complete
-  return runJson(bin, ['plugin', 'list', '--json'])
-}
-
-export async function runCodexPluginDetailJson(pluginId: string, codexBin?: string | null): Promise<any> {
-  if (process.env.SKS_CODEX_PLUGIN_JSON_FAKE === '1') return fakePluginDetail(pluginId)
-  const bin = codexBin === undefined ? await findCodexBinary() : codexBin
-  if (!bin) return { blockers: ['codex_cli_missing'] }
-  return runCodexJson(bin, ['plugin', 'detail', pluginId, '--json'])
+  return runJson(bin, ['plugin', 'list', '--available', '--json'])
 }
 
 export async function buildCodexPluginInventory(input: {
   codexBin?: string | null
   listJson?: any
-  detailJsonSupported?: boolean
-  detailFactory?: (pluginId: string, codexBin?: string | null) => Promise<any>
 } = {}): Promise<CodexPluginInventory> {
   const started = Date.now()
   const capability = await detectCodexCurrentAppCapability()
   const codexBin = input.codexBin === undefined ? await findCodexBinary() : input.codexBin
   const listJson = input.listJson === undefined ? await runCodexPluginListJson(codexBin) : input.listJson
-  const summaries = normalizePluginList(listJson)
-  const concurrency = Math.max(1, Number(process.env.SKS_CODEX_PLUGIN_DETAIL_CONCURRENCY || 6) || 6)
-  const detailJsonSupported = input.detailJsonSupported ?? await codexPluginDetailJsonSupported(codexBin)
-  const detailFactory = input.detailFactory || runCodexPluginDetailJson
-  let detailFetchCount = 0
-  let failed = 0
-  const plugins = await mapWithConcurrency(summaries, concurrency, async (summary) => {
-    const fetchDetail = detailJsonSupported && summary?.installed !== false
-    if (fetchDetail) detailFetchCount += 1
-    const detail = fetchDetail
-      ? await detailFactory(pluginSelector(summary), codexBin).catch((err: any) => ({ error: err?.message || String(err) }))
-      : {}
-    if (fetchDetail && (detail?.error || normalizeList(detail?.blockers).length > 0)) failed += 1
-    return normalizePlugin(summary, detail)
-  })
+  const plugins = normalizePluginList(listJson).map(normalizePlugin)
   const installedCount = plugins.filter((plugin) => plugin.installed).length
   const availableCount = plugins.length - installedCount
   const catalogComplete = Array.isArray(listJson?.available) && normalizeList(listJson?.blockers).length === 0
   const blockers = [
-    ...(capability.supports_plugin_json ? [] : ['codex_0_138_plugin_json_unavailable']),
     ...normalizeList(listJson?.blockers),
     ...(process.env.SKS_CODEX_PLUGIN_JSON_FAKE_NO_MCP === '1' ? ['fixture_mcp_candidates_disabled'] : [])
   ]
@@ -93,10 +63,6 @@ export async function buildCodexPluginInventory(input: {
     schema: 'sks.codex-plugin-inventory.v1',
     generated_at: nowIso(),
     codex_current_app_capability: capability,
-    fetch_concurrency: concurrency,
-    detail_fetch_count: detailFetchCount,
-    detail_fetch_failed_count: failed,
-    detail_json_supported: detailJsonSupported,
     catalog_complete: catalogComplete,
     installed_count: installedCount,
     available_count: availableCount,
@@ -105,21 +71,6 @@ export async function buildCodexPluginInventory(input: {
     marketplace_available: plugins.some((plugin) => plugin.source === 'marketplace' || plugin.source === 'remote' || plugin.marketplace) || Boolean(listJson?.marketplace_available || listJson?.marketplaceAvailable),
     blockers
   }) as CodexPluginInventory
-}
-
-export async function mapWithConcurrency<T, R>(items: T[], concurrency: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const limit = Math.max(1, Math.floor(concurrency || 1))
-  const results = new Array<R>(items.length)
-  let next = 0
-  async function worker() {
-    while (next < items.length) {
-      const index = next
-      next += 1
-      results[index] = await fn(items[index] as T)
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(limit, items.length || 1) }, () => worker()))
-  return results
 }
 
 export async function writeCodexPluginInventoryArtifacts(root: string, inventory = null as CodexPluginInventory | null) {
@@ -176,28 +127,28 @@ export function normalizePluginList(value: any): any[] {
   return [...deduped.values()]
 }
 
-function normalizePlugin(summary: any, detail: any) {
-  const raw = { summary, detail }
-  const id = String(detail?.id || detail?.pluginId || summary?.id || summary?.pluginId || summary?.plugin_id || pluginSelector(summary) || summary?.name || 'unknown')
-  const name = String(detail?.name || summary?.name || id)
-  const marketplace = stringOrNull(detail?.marketplaceName || detail?.marketplace || summary?.marketplaceName || summary?.marketplace)
-  const sourceText = sourceValue(detail?.source || detail?.marketplaceSource || summary?.source || summary?.marketplaceSource).toLowerCase()
+function normalizePlugin(summary: any) {
+  const raw = { summary }
+  const id = String(summary?.id || summary?.pluginId || summary?.plugin_id || pluginSelector(summary) || summary?.name || 'unknown')
+  const name = String(summary?.name || id)
+  const marketplace = stringOrNull(summary?.marketplaceName || summary?.marketplace)
+  const sourceText = sourceValue(summary?.source || summary?.marketplaceSource).toLowerCase()
   const source: 'marketplace' | 'local' | 'remote' | 'unknown' = sourceText.includes('marketplace') ? 'marketplace'
     : sourceText.includes('remote') ? 'remote'
       : sourceText.includes('local') ? 'local'
         : 'unknown'
-  const installed = boolish(detail?.installed ?? summary?.installed, false)
+  const installed = boolish(summary?.installed, false)
   return {
     id,
     name,
     source,
     marketplace,
-    version: stringOrNull(detail?.version || summary?.version),
+    version: stringOrNull(summary?.version),
     installed,
-    enabled: boolish(detail?.enabled ?? summary?.enabled, installed),
-    default_prompts: normalizeList(detail?.default_prompts || detail?.defaultPrompts || detail?.prompts),
-    remote_mcp_servers: normalizeMcpServers(detail?.remote_mcp_servers || detail?.remoteMcpServers || detail?.mcp_servers || detail?.mcpServers),
-    unavailable_app_templates: normalizeList(detail?.unavailable_app_templates || detail?.unavailableAppTemplates || detail?.app_templates_unavailable),
+    enabled: boolish(summary?.enabled, installed),
+    default_prompts: normalizeList(summary?.default_prompts || summary?.defaultPrompts || summary?.prompts),
+    remote_mcp_servers: normalizeMcpServers(summary?.remote_mcp_servers || summary?.remoteMcpServers || summary?.mcp_servers || summary?.mcpServers),
+    unavailable_app_templates: normalizeList(summary?.unavailable_app_templates || summary?.unavailableAppTemplates || summary?.app_templates_unavailable),
     raw
   }
 }
@@ -215,13 +166,6 @@ function sourceValue(value: any): string {
     return String(value.source || value.sourceType || value.type || value.path || '')
   }
   return String(value || '')
-}
-
-async function codexPluginDetailJsonSupported(codexBin: string | null): Promise<boolean> {
-  if (process.env.SKS_CODEX_PLUGIN_JSON_FAKE === '1') return true
-  if (!codexBin) return false
-  const help = await runProcess(codexBin, ['plugin', '--help'], { timeoutMs: 5000, maxOutputBytes: 32 * 1024 }).catch(() => null)
-  return help?.code === 0 && /^\s*detail\s+/m.test(`${help.stdout || ''}\n${help.stderr || ''}`)
 }
 
 function normalizeMcpServers(value: any): Array<{ name: string; url: string | null; auth_type: string | null }> {
@@ -248,15 +192,6 @@ function boolish(value: any, fallback = false) {
   return fallback
 }
 
-function pluginListAvailableFlagUnsupported(value: any) {
-  const rawText = String(value?.raw_text || '')
-  const parseFailed = normalizeList(value?.blockers).some((blocker) => blocker.includes('codex_plugin_json_parse_failed'))
-  return parseFailed && (
-    /(?:unexpected|unrecognized|unknown)[^\n]*--available/i.test(rawText)
-    || /--available[^\n]*(?:unexpected|unrecognized|unknown)/i.test(rawText)
-  )
-}
-
 function fakePluginList() {
   const count = Math.max(1, Number(process.env.SKS_CODEX_PLUGIN_JSON_FAKE_COUNT || 1) || 1)
   return {
@@ -267,22 +202,12 @@ function fakePluginList() {
       ...(index === 0 ? {} : { id: `fixture-plugin-${index + 1}` }),
       source: 'marketplace',
       installed: true,
-      enabled: true
+      enabled: true,
+      default_prompts: ['Use the fixture plugin safely.'],
+      remote_mcp_servers: process.env.SKS_CODEX_PLUGIN_JSON_FAKE_NO_MCP === '1'
+        ? []
+        : [{ name: 'fixture-db-docs', url: 'https://mcp.example.test', auth_type: 'oauth' }],
+      unavailable_app_templates: ['fixture-desktop-template']
     }))
-  }
-}
-
-function fakePluginDetail(pluginId: string) {
-  return {
-    id: pluginId,
-    name: pluginId,
-    source: 'marketplace',
-    installed: true,
-    enabled: true,
-    default_prompts: ['Use the fixture plugin safely.'],
-    remote_mcp_servers: process.env.SKS_CODEX_PLUGIN_JSON_FAKE_NO_MCP === '1'
-      ? []
-      : [{ name: 'fixture-db-docs', url: 'https://mcp.example.test', auth_type: 'oauth' }],
-    unavailable_app_templates: ['fixture-desktop-template']
   }
 }
