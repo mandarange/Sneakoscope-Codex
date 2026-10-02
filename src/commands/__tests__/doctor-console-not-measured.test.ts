@@ -59,7 +59,6 @@ function skippedProfileResult(): any {
     imagegen_repair: { ok: true, skipped: true, manual_actions: [] },
     codex_current_app: { doctor: { ok: true, skipped: true }, plugin_app_template_policy: null },
     desktop_bridge: { ok: true, status: { readiness: { state: 'ready' } }, providers: {}, warnings: [], blockers: [] },
-    codex_permission_profiles: { codex_config_profile_field: 'profile', codex_permission_profile_field: 'permission_profile' },
     repair: {
       doctor_native_capability: {
         ok: true,

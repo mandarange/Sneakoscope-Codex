@@ -110,7 +110,6 @@
     "doctor:supabase-mcp-repair-blackbox": "node ./dist/scripts/doctor-supabase-mcp-repair-blackbox.js",
     "native-capability:postcheck": "node ./dist/scripts/native-capability-postcheck-check.js",
     "runtime:ts-rust-boundary": "node ./dist/scripts/runtime-ts-rust-boundary-check.js",
-    "codex:permission-profiles": "node ./dist/scripts/codex-permission-profiles-check.js",
     "mcp:tool-naming-parity": "node ./dist/scripts/mcp-tool-naming-parity-check.js",
     "runtime:terminal-current": "node ./dist/scripts/runtime-current-terminal-check.js",
     "codex:project-config-policy-splitter": "node ./dist/scripts/codex-project-config-policy-splitter-check.js",

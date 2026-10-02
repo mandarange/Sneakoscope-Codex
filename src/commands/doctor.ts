@@ -14,7 +14,6 @@ import {
   inspectOAuthCallbackPortConflict,
   oauthCallbackDoctorGuidance
 } from '../core/codex/oauth-callback-port-diagnostic.js';
-import { inventoryCodexPermissionProfiles } from '../core/codex/codex-permission-profiles.js';
 import { resolveProviderContext } from '../core/provider/provider-context.js';
 import { writeCodexCurrentAppCapabilityArtifacts } from '../core/codex-control/codex-current-app-capability.js';
 import { writeCodexPluginInventoryArtifacts, pluginAppTemplatePolicy } from '../core/codex-plugins/codex-plugin-json.js';
@@ -588,7 +587,6 @@ async function runDoctorJsonFastPath(args: any = [], root: string) {
     doctor_fix_postcheck: null,
     postcheck: null,
     agent_role_config: { schema: 'sks.agent-role-config-repair.v1', ok: true, apply: false, skipped: true, blockers: [] },
-    codex_permission_profiles: { skipped: true, reason: 'doctor_json_fast_path_optional_diagnostics_skipped' },
     command_aliases: { schema: 'sks.command-alias-cleanup.v1', ok: true, skipped: true, reason: 'doctor_json_fast_path_no_write' },
     sks_temp_sweep: { ok: true, skipped: true, action_count: 0, reason: 'doctor_without_fix', error: null },
     imagegen: { ok: false, auth_readiness: null, codex_app_builtin_available: false },
@@ -1213,7 +1211,6 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean, deps:
       processEnv: process.env
     }, { desktopBridgeStatusImpl: deps.desktopBridgeStatusImpl })
     : desktopBridgeBeforeFix;
-  const permissionProfiles = await inventoryCodexPermissionProfiles(root, { writeReport: true });
   const startupRoleRepair = (startupConfigRepair as any)?.role_repair;
   const agentRoleConfigRepair = doctorFix && startupRoleRepair
     ? startupRoleRepair
@@ -1672,7 +1669,6 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean, deps:
     } : null,
     agent_role_config: agentRoleConfigRepair,
     official_subagent_config: officialSubagentConfig,
-    codex_permission_profiles: permissionProfiles,
     command_aliases: commandAliasCleanup,
     sks_temp_sweep: {
       ok: (sksTempSweep as any).ok !== false,

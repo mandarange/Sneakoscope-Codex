@@ -65,7 +65,6 @@ export function renderDoctorConsoleReport(result: any, extras: DoctorConsoleExtr
   const codexCurrentAppDoctor = codexCurrentAppSection.doctor || {};
   const pluginPolicy = codexCurrentAppSection.plugin_app_template_policy;
   const desktopBridge = result.desktop_bridge || {};
-  const permissionProfiles = result.codex_permission_profiles || {};
   const configRepair = repair.codex_config;
   const migrationJournal = repair.migration_journal;
   const sksUpdate = repair.sks_update;
@@ -254,7 +253,6 @@ export function renderDoctorConsoleReport(result: any, extras: DoctorConsoleExtr
   for (const warning of desktopBridge.warnings || []) line(`  warning: ${warning}`);
   for (const blocker of desktopBridge.blockers || []) line(`  blocker: ${blocker}`);
   if (!desktopBridge.ok) for (const action of desktopBridge.recovery_actions || []) line(`  action: ${action}`);
-  line(`Permissions: config profile and permission profile are tracked separately (${permissionProfiles.codex_config_profile_field}, ${permissionProfiles.codex_permission_profile_field})`);
   line('Ready:');
   line(`  cli_ready: ${ready.cli_ready ? 'yes' : 'no'}`);
   line(`  mad_ready: ${ready.mad_ready ? 'yes' : 'no'}`);
