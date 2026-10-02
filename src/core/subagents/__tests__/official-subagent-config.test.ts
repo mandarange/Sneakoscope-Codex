@@ -969,6 +969,39 @@ test('doctor repair migrates an SKS-owned legacy thread value and preserves max_
   )
 })
 
+test('project setup does not copy global mcp_servers, plugins or marketplaces tables into the project config', async () => {
+  // Codex layers ~/.codex/config.toml under a project config natively (measured on 0.153.4 and
+  // 0.159.2 with `codex mcp list` and app-server config/read), so a copy would only duplicate
+  // global state, including any credentials in an MCP env table, into the repository.
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-official-config-no-global-copy-'))
+  const home = path.join(root, 'home')
+  const codexHome = path.join(home, '.codex')
+  const configPath = path.join(root, '.codex', 'config.toml')
+  await fs.mkdir(codexHome, { recursive: true })
+  await fs.writeFile(path.join(codexHome, 'config.toml'), [
+    '[mcp_servers.global_docs]',
+    'command = "node"',
+    'env = { TOKEN = "global-secret" }',
+    '',
+    '[plugins."demo@market"]',
+    'enabled = true',
+    '',
+    '[marketplaces.market]',
+    'source_type = "git"',
+    'source = "https://example.invalid/market.git"',
+    ''
+  ].join('\n'))
+
+  await initProject(root, { installScope: 'project', localOnly: true, home, codexHome })
+  const text = await fs.readFile(configPath, 'utf8')
+  const parsed = parse(text) as Record<string, any>
+  assert.equal(parsed.mcp_servers?.global_docs, undefined)
+  assert.equal(parsed.plugins?.['demo@market'], undefined)
+  assert.equal(parsed.marketplaces, undefined)
+  assert.doesNotMatch(text, /global-secret/)
+  assert.equal(parsed.agents.max_concurrent_threads_per_session, 256)
+})
+
 test('project setup backs up and preserves invalid config TOML without overwriting it', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-official-config-invalid-'))
   const home = path.join(root, 'home')

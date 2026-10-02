@@ -668,40 +668,6 @@ function mergeManagedCodexConfigToml(existingContent: any = '', opts: any = {}) 
   return `${next.trim()}\n`;
 }
 
-async function mergeGlobalCodexConfigIfAvailable(configText: any = '', configPath: any = '', opts: any = {}) {
-  const home = opts.home || process.env.HOME || '';
-  if (!home) return configText;
-  const codexHome = opts.codexHome || process.env.CODEX_HOME || path.join(home, '.codex');
-  const globalConfigPath = path.join(codexHome, 'config.toml');
-  if (configPath && path.resolve(configPath) === path.resolve(globalConfigPath)) return configText;
-  const globalConfig = await readText(globalConfigPath, '');
-  let next = mergeGlobalMcpServers(configText, globalConfig);
-  next = mergeGlobalCodexAppRuntimeTables(next, globalConfig);
-  return `${next.trim()}\n`;
-}
-
-function mergeGlobalMcpServers(configText: any = '', globalConfig: any = '') {
-  let next = configText;
-  const re = /(?:^|\n)(\[(mcp_servers\.[^\]\r\n]+)\][\s\S]*?)(?=\n\[[^\]]+\]|\s*$)/g;
-  for (const match of String(globalConfig || '').matchAll(re)) {
-      const block = (match[1] || '').trim();
-      const table = (match[2] || '').trim();
-    if (!new RegExp(`(^|\\n)\\[${escapeRegExp(table)}\\]`).test(next)) next = upsertTomlTable(next, table, block);
-  }
-  return next;
-}
-
-function mergeGlobalCodexAppRuntimeTables(configText: any = '', globalConfig: any = '') {
-  let next = configText;
-  const re = /(?:^|\n)(\[((?:marketplaces|plugins)\.[^\]\r\n]+)\][\s\S]*?)(?=\n\[[^\]]+\]|\s*$)/g;
-  for (const match of String(globalConfig || '').matchAll(re)) {
-      const block = (match[1] || '').trim();
-      const table = (match[2] || '').trim();
-    if (!new RegExp(`(^|\\n)\\[${escapeRegExp(table)}\\]`).test(next)) next = upsertTomlTable(next, table, block);
-  }
-  return next;
-}
-
 function removeWholeTomlTable(text: any = '', table: any = '') {
   const lines = String(text || '').trimEnd().split('\n');
   const header = `[${table}]`;
@@ -872,15 +838,14 @@ function upsertTomlTable(text: any, table: any, block: any) {
       };
       created.push('inherited global Codex config invalid and preserved (manual repair required)');
     } else {
-      const managedCodexConfig = await mergeGlobalCodexConfigIfAvailable(
-        mergeManagedCodexConfigToml(existingCodexConfig, {
-          sksOwned: configPreviouslySksOwned,
-          configWasFresh,
-          inheritedText: inheritedCodexConfig
-        }),
-        generatedCodexConfigPath,
-        { home: opts.home, codexHome: opts.codexHome }
-      );
+      // Codex layers the user-level config under this project file natively (measured: mcp_servers,
+      // plugins and marketplaces from ~/.codex/config.toml stay visible to a project that has its
+      // own config), so nothing is copied down from the global config.
+      const managedCodexConfig = mergeManagedCodexConfigToml(existingCodexConfig, {
+        sksOwned: configPreviouslySksOwned,
+        configWasFresh,
+        inheritedText: inheritedCodexConfig
+      });
       const managedConfigValidation = inspectOfficialSubagentToml(managedCodexConfig);
       if (!managedConfigValidation.ok) {
         await writeTextAtomic(generatedCodexConfigPath, existingCodexConfig);
