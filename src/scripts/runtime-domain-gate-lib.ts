@@ -7,7 +7,6 @@ import { assertGate, emitGate, importDist, root } from './gate-lib.js'
 
 export async function runRuntimeDomainGate(id: string) {
   if (id.startsWith('codex-app:') || id === 'doctor:codex-app-harness') return codexAppGate(id)
-  if (id.startsWith('loop:')) return loopGate(id)
   throw new Error(`unknown_gate:${id}`)
 }
 
@@ -71,27 +70,6 @@ async function codexAppGate(id: string) {
   } finally {
     restoreEnv(previous)
   }
-}
-
-async function loopGate(id: string) {
-  const rootDir = await tempRoot(`sks-${id.replace(/[:/]/g, '-')}-`)
-  if (id === 'loop:planner-project-memory') {
-    const init = await importDist('core/codex-app/codex-init-deep.js')
-    const planner = await importDist('core/loops/loop-planner.js')
-    await fsp.mkdir(path.join(rootDir, 'src/core/loops'), { recursive: true })
-    await fsp.writeFile(path.join(rootDir, 'src/core/loops/a.ts'), 'export {}\n')
-    await init.runCodexInitDeep({ root: rootDir, apply: true })
-    const plan = await planner.planLoopsFromRequest({ root: rootDir, missionId: 'M-loop-memory', request: 'update loop planner project memory', sourceCommand: 'loop' })
-    assertGate(plan.project_memory?.injected === true, 'loop planner must consume init-deep memory hints', plan)
-    return emitGate(id, { injected: true })
-  }
-  const planDir = path.join(rootDir, '.sneakoscope', 'missions', 'M-loop-cont', 'loops')
-  await fsp.mkdir(planDir, { recursive: true })
-  await fsp.writeFile(path.join(rootDir, '.sneakoscope', 'missions', 'M-loop-cont', 'loops', 'loop-plan.json'), JSON.stringify({ graph: { nodes: [{ loop_id: 'loop-a' }] } }))
-  const mod = await importDist('core/loops/loop-continuation-enforcer.js')
-  const report = await mod.evaluateLoopContinuation({ root: rootDir, missionId: 'M-loop-cont' })
-  assertGate(report.should_continue === true, 'loop continuation should request resume when proof missing', report)
-  emitGate(id, { should_continue: report.should_continue })
 }
 
 async function tempRoot(prefix: string) {

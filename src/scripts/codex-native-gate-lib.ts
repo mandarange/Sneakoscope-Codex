@@ -24,7 +24,6 @@ export async function runCodexNativeGate(id: string): Promise<void> {
   if (id === 'codex-native:agent-role-content') return agentRoleContent(id)
   if (id === 'codex-native:hook-lifecycle-proof') return hookLifecycleProof(id)
   if (id === 'init-deep:backup-retention') return initDeepBackupRetention(id)
-  if (id === 'init-deep:memory-scope-safety') return initDeepMemoryScopeSafety(id)
   if (id === 'release-scripts:type-safe') return releaseScriptsTypeSafe(id)
   if (id === 'lint:no-ts-nocheck-release-scripts') return noTsNoCheckReleaseScripts(id)
   if (id === 'doctor:codex-native-readiness-ux') return doctorReadinessUx(id)
@@ -117,10 +116,7 @@ async function routeMap(id: string): Promise<void> {
 }
 
 async function pipelineGate(id: string): Promise<void> {
-  if (id === 'pipeline:codex-native-loop-routing') {
-    const source = readText('src/core/loops/loop-worker-runtime.ts')
-    assertGate(source.includes('resolveCodexNativeInvocationPlan') && source.includes('SKS_CODEX_NATIVE_STRATEGY') && source.includes('codex_native_invocation_plan'), 'loop routing not wired')
-  } else if (id === 'pipeline:codex-native-qa-routing') {
+  if (id === 'pipeline:codex-native-qa-routing') {
     const source = readText('src/core/qa-loop.ts')
     assertGate(source.includes('resolveQaCodexNativeInvocation') && source.includes('hook_evidence_policy') && source.includes('image_path_strategy'), 'QA routing not wired')
   } else if (id === 'pipeline:codex-native-research-routing') {
@@ -136,7 +132,6 @@ async function pipelineGate(id: string): Promise<void> {
     assertGate(mad.includes('codex-native') || doctor.includes('hook-derived evidence will not count'), 'MAD/Doctor hook evidence policy not visible')
   } else if (id === 'pipeline:codex-native-e2e-blackbox') {
     await invocationRouter('pipeline:codex-native-e2e-blackbox/router')
-    await pipelineGate('pipeline:codex-native-loop-routing')
     await pipelineGate('pipeline:codex-native-qa-routing')
     await pipelineGate('pipeline:codex-native-research-routing')
     await pipelineGate('pipeline:codex-native-image-routing')
@@ -210,14 +205,6 @@ async function initDeepBackupRetention(id: string): Promise<void> {
     if (previous === undefined) delete process.env.SKS_INIT_DEEP_BACKUP_RETENTION
     else process.env.SKS_INIT_DEEP_BACKUP_RETENTION = previous
   }
-  emitGate(id)
-}
-
-async function initDeepMemoryScopeSafety(id: string): Promise<void> {
-  const planner = readText('src/core/loops/loop-planner.ts')
-  const owner = readText('src/core/loops/loop-owner-inference.ts')
-  assertGate(planner.includes('memory_did_not_expand_scope') && planner.includes('memory_hints_used'), 'loop planner must prove memory scope safety')
-  assertGate(owner.includes('memoryHintMayExpandOwnerScope'), 'owner inference must expose memory scope safety contract')
   emitGate(id)
 }
 

@@ -51,7 +51,6 @@ export async function createCodexNativeRuntimeFixture(input: {
       // App handoff, image path exposure and code-mode web search all follow the Codex version now, so
       // switching any of them off models a Codex below the supported floor.
       ...(input.appHandoff && input.imagePathExposure && input.codeModeWebSearch ? {} : { SKS_CODEX_VERSION_FAKE: BELOW_FLOOR_CODEX_VERSION_TEXT }),
-      SKS_LOOP_RUNTIME_FIXTURE: '1',
       SKS_TEST_RUNTIME_FIXTURE_ALLOWED: '1'
     }
   }

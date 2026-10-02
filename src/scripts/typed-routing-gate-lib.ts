@@ -28,7 +28,7 @@ export async function runTypedRoutingGate(id: string) {
   if (id === 'codex-app:type-safety') return codexAppTypeSafety(id)
   if (id === 'type-surface:codex-app') return typeSurfaceCodexApp(id)
   if (id.startsWith('codex-app:hook-approval')) return hookApprovalGate(id)
-  if (id.includes('init-deep') || id.includes('planner-project-memory-deep')) return initDeepGate(id)
+  if (id.includes('init-deep')) return initDeepGate(id)
   if (id.includes('execution-profile-routing')) return executionProfileRoutingGate(id)
   if (id === 'codex-app:skill-rich-content') return richContentGate(id)
   if (id === 'codex-app:agent-role-rich-content') return richContentGate(id)
@@ -131,11 +131,6 @@ async function initDeepGate(id: string) {
   assertGate(/BEGIN SKS INIT-DEEP MANAGED SECTION/.test(agents), 'directory AGENTS.md managed block missing', { agents })
   assertGate(agents.includes('Keep me.'), 'directory AGENTS.md must preserve user content', { agents })
   assertGate(report.directory_local_agents.backup_paths.length >= 1, 'directory AGENTS.md backup missing', report)
-  if (id === 'loop:planner-project-memory-deep') {
-    const planner = await importDist('core/loops/loop-planner.js')
-    const plan = await planner.planLoopsFromRequest({ root: rootDir, missionId: 'M-memory-deep', request: 'change naruto scheduler and loop planner', sourceCommand: 'loop' })
-    assertGate(plan.graph.nodes.some((node: any) => Array.isArray(node.memory_hints) && node.memory_hints.length), 'loop nodes must consume deep memory hints', plan)
-  }
   emitGate(id, { managed_agents: report.directory_local_agents.created.length + report.directory_local_agents.updated.length })
 }
 
@@ -161,10 +156,6 @@ async function executionProfileRoutingGate(id: string) {
       const plan = await research.writeResearchPlan(dir, 'research execution profile routing', { root: rootDir, missionId: 'M-research' })
       assertGate(plan.codex_app_execution_profile?.hook_approval_state === 'approved', 'Research plan must consume execution profile', plan)
       assertGate(plan.web_research_policy.source_tool_routing, 'Research plan must include source tool routing', plan)
-    }
-    if (id === 'loop:execution-profile-routing' || id === 'pipeline:execution-profile-routing-blackbox') {
-      const source = fs.readFileSync(path.join(root, 'src/core/loops/loop-worker-runtime.ts'), 'utf8')
-      assertGate(source.includes('codex_app_execution_profile') && source.includes('SKS_CODEX_APP_EXECUTION_PROFILE'), 'Loop worker runtime must persist execution profile routing')
     }
     emitGate(id, { mode: profile.mode })
   } finally {

@@ -59,7 +59,6 @@ release is authorized. Current 8.1.3 classifications live in
 | `init-deep:backup-retention` | `release` | `node ./dist/scripts/init-deep-backup-retention-check.js` | direct |
 | `migration:current-surface-e2e` | `release` | `node ./dist/scripts/current-surface-update-e2e-check.js` | direct |
 | `gpt-final:all-pipelines-required` | `release` | `node ./dist/scripts/gpt-final-all-pipelines-check.js` | direct |
-| `loop-integration-finalizer-check` | `release` | `node ./dist/scripts/loop-integration-finalizer-check.js` | direct |
 | `mad-sks:app-ui-no-mutation` | `release` | `node ./dist/scripts/mad-sks-app-ui-no-mutation-check.js` | direct |
 | `mad:preflight-blocks-unreadable-config` | `release` | `node ./dist/scripts/mad-preflight-blocks-unreadable-config-check.js` | direct |
 | `mcp:plugin-inventory` | `release` | `node ./dist/scripts/mcp-plugin-inventory-check.js` | direct |
@@ -70,7 +69,7 @@ release is authorized. Current 8.1.3 classifications live in
 | `native-capability:repair-matrix` | `release` | `node ./dist/scripts/native-capability-repair-matrix-check.js` | direct |
 | `native:image-generation-repair` | `release` | `node ./dist/scripts/native-image-generation-repair-check.js` | direct |
 | `package:published-contract` | `release` | `node ./dist/scripts/package-published-contract-check.js` | direct |
-| `pipeline:codex-native-routing-comprehensive` | `release` | `node ./dist/scripts/pipeline-codex-native-doctor-mad-routing-check.js && node ./dist/scripts/pipeline-codex-native-image-routing-check.js && node ./dist/scripts/pipeline-codex-native-loop-routing-check.js && node ./dist/scripts/pipeline-codex-native-qa-routing-check.js && node ./dist/scripts/pipeline-codex-native-research-routing-check.js` | direct |
+| `pipeline:codex-native-routing-comprehensive` | `release` | `node ./dist/scripts/pipeline-codex-native-doctor-mad-routing-check.js && node ./dist/scripts/pipeline-codex-native-image-routing-check.js && node ./dist/scripts/pipeline-codex-native-qa-routing-check.js && node ./dist/scripts/pipeline-codex-native-research-routing-check.js` | direct |
 | `policy:gate-audit` | `release` | `node ./dist/scripts/gate-policy-audit-check.js && node ./dist/scripts/cli-output-consistency-check.js && node ./dist/scripts/harness-benchmark-check.js` | direct |
 | `ppt:full-e2e-blackbox` | `release` | `node ./dist/scripts/ppt-full-e2e-blackbox-check.js` | direct |
 | `ppt:real-export-adapter` | `release` | `node ./dist/scripts/ppt-real-export-adapter-check.js` | direct |

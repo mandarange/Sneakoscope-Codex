@@ -1469,35 +1469,6 @@
       "output_contract": "sks.gate-result.v2"
     },
     {
-      "id": "loop-integration-finalizer-check",
-      "command": "node ./dist/scripts/loop-integration-finalizer-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-heavy",
-        "fs-write"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 240000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "confidence"
-      ],
-      "output_contract": "sks.gate-result.v2"
-    },
-    {
       "id": "mad-sks:sql-plane-capability",
       "command": "node ./dist/scripts/mad-sks-sql-plane-capability-check.js",
       "deps": [],
@@ -3588,7 +3559,7 @@
     },
     {
       "id": "pipeline:codex-native-routing-comprehensive",
-      "command": "node ./dist/scripts/pipeline-codex-native-doctor-mad-routing-check.js && node ./dist/scripts/pipeline-codex-native-image-routing-check.js && node ./dist/scripts/pipeline-codex-native-loop-routing-check.js && node ./dist/scripts/pipeline-codex-native-qa-routing-check.js && node ./dist/scripts/pipeline-codex-native-research-routing-check.js",
+      "command": "node ./dist/scripts/pipeline-codex-native-doctor-mad-routing-check.js && node ./dist/scripts/pipeline-codex-native-image-routing-check.js && node ./dist/scripts/pipeline-codex-native-qa-routing-check.js && node ./dist/scripts/pipeline-codex-native-research-routing-check.js",
       "deps": [],
       "resource": [
         "cpu-light",

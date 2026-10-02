@@ -3110,8 +3110,8 @@
       "file": "src/scripts/codex-native-runtime-e2e-fixture.ts",
       "symbol": "createCodexNativeRuntimeFixture",
       "token": "fs.writeFile",
-      "scope_contract_sha256": "b9ac1accdf2dbf93439bfc5ab83d0ac946eb16e612afd5379b9b3fded0e76171",
-      "callsite_sha256": "383821e1fe455e1510b8b50b2c47fbfc3e206261c5475b7fe5bef47b35c62903",
+      "scope_contract_sha256": "45605a44e95cf5a3315ab7abec3ea093510c1f6f2c66b312336b2a4a4d2ca292",
+      "callsite_sha256": "ba04a3a0b34e638c05b97654ee7b49e19a79351e33f54677a6a0e15d928119a1",
       "occurrence": 1,
       "reason": "Codex Native runtime E2E helper writes only package, source, and docs files inside a fresh mkdtemp fixture root."
     },
@@ -3119,8 +3119,8 @@
       "file": "src/scripts/codex-native-runtime-e2e-fixture.ts",
       "symbol": "createCodexNativeRuntimeFixture",
       "token": "fs.writeFile",
-      "scope_contract_sha256": "b9ac1accdf2dbf93439bfc5ab83d0ac946eb16e612afd5379b9b3fded0e76171",
-      "callsite_sha256": "940f416a98b3428ec1f66ae5142bc71e3bc199892f7038684625fc3db0bcfa66",
+      "scope_contract_sha256": "45605a44e95cf5a3315ab7abec3ea093510c1f6f2c66b312336b2a4a4d2ca292",
+      "callsite_sha256": "96c9b4d44311d5bc7a2828030d4433011ad687e904d12aeeb532da57140770d6",
       "occurrence": 1,
       "reason": "Codex Native runtime E2E helper writes only package, source, and docs files inside a fresh mkdtemp fixture root."
     },
@@ -3128,8 +3128,8 @@
       "file": "src/scripts/codex-native-runtime-e2e-fixture.ts",
       "symbol": "createCodexNativeRuntimeFixture",
       "token": "fs.writeFile",
-      "scope_contract_sha256": "b9ac1accdf2dbf93439bfc5ab83d0ac946eb16e612afd5379b9b3fded0e76171",
-      "callsite_sha256": "a4ce29e6d02da65eb28dd8af36ba3b1e6f99ab44f1966fa4c1e9044c80f11d44",
+      "scope_contract_sha256": "45605a44e95cf5a3315ab7abec3ea093510c1f6f2c66b312336b2a4a4d2ca292",
+      "callsite_sha256": "3950a94f4d68a5eef2b95175f6a9ca307e67899c0f5a4c0243c8826531aac5c4",
       "occurrence": 1,
       "reason": "Codex Native runtime E2E helper writes only package, source, and docs files inside a fresh mkdtemp fixture root."
     },
@@ -3137,8 +3137,8 @@
       "file": "src/scripts/codex-native-runtime-e2e-fixture.ts",
       "symbol": "createCodexNativeRuntimeFixture",
       "token": "fs.writeFile",
-      "scope_contract_sha256": "b9ac1accdf2dbf93439bfc5ab83d0ac946eb16e612afd5379b9b3fded0e76171",
-      "callsite_sha256": "01b92c92f266be88ad08289d19576e79ad30c5fa6cf4a8e09225245ddab0c846",
+      "scope_contract_sha256": "45605a44e95cf5a3315ab7abec3ea093510c1f6f2c66b312336b2a4a4d2ca292",
+      "callsite_sha256": "ddd34ea2e0cf927958edf9932c31cfc1615be3bae9ddde55a12996ca1cfbbcb4",
       "occurrence": 1,
       "reason": "Codex Native runtime E2E helper writes only package, source, and docs files inside a fresh mkdtemp fixture root."
     },
@@ -3146,8 +3146,8 @@
       "file": "src/scripts/codex-native-runtime-e2e-fixture.ts",
       "symbol": "createCodexNativeRuntimeFixture",
       "token": "fs.writeFile",
-      "scope_contract_sha256": "b9ac1accdf2dbf93439bfc5ab83d0ac946eb16e612afd5379b9b3fded0e76171",
-      "callsite_sha256": "3c4c4db82f3e58871ae922ffd13b22205157d157645143123a957ba8b83bfcdd",
+      "scope_contract_sha256": "45605a44e95cf5a3315ab7abec3ea093510c1f6f2c66b312336b2a4a4d2ca292",
+      "callsite_sha256": "dec5da6afdbad54f9e25c1aa9a370e52107e96166e28c55bd3a5907420c34343",
       "occurrence": 1,
       "reason": "Codex Native runtime E2E helper writes only package, source, and docs files inside a fresh mkdtemp fixture root."
     },
@@ -4385,123 +4385,6 @@
       "reason": "src/scripts/lib/valid-png-fixture.ts#writeValidPngFixture writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
     {
-      "file": "src/scripts/loop-directive-check-lib.ts",
-      "symbol": "runLoopDirectiveCheck",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "b477752e7ebefac6bb523f8e8476a1169c35de596f856ea7ddc76a433f9b7704",
-      "callsite_sha256": "32f8c484e6cc39b4002aec565db48d026270794a86a14d16ec492173978e5868",
-      "occurrence": 1,
-      "reason": "src/scripts/loop-directive-check-lib.ts#assert writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/loop-directive-check-lib.ts",
-      "symbol": "runLoopDirectiveCheck",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "b477752e7ebefac6bb523f8e8476a1169c35de596f856ea7ddc76a433f9b7704",
-      "callsite_sha256": "a613b1fbe8027a435ff3a5ee4e5ba65c6ca132a9b2e1c71bf388691bf3a260a5",
-      "occurrence": 1,
-      "reason": "src/scripts/loop-directive-check-lib.ts#assert writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/loop-directive-check-lib.ts",
-      "symbol": "runLoopDirectiveCheck",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "b477752e7ebefac6bb523f8e8476a1169c35de596f856ea7ddc76a433f9b7704",
-      "callsite_sha256": "a6e2ca6ad231b0f5628bb9efc2bf249f1510bf5f15270f2d49cb592ed7ebfe07",
-      "occurrence": 1,
-      "reason": "src/scripts/loop-directive-check-lib.ts#assert writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/loop-directive-check-lib.ts",
-      "symbol": "writeLightweightLoopArtifacts",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "50b054ef98d8b5883faab193689098cc5cbb95a7ea3d4da7c558279eb44167e9",
-      "callsite_sha256": "0f003809cbd4cb8875b2893f5c06d4412a2b4399f19e5448122cbf66a1ec630e",
-      "occurrence": 1,
-      "reason": "src/scripts/loop-directive-check-lib.ts#writeLightweightLoopArtifacts writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/loop-directive-check-lib.ts",
-      "symbol": "writeLightweightLoopArtifacts",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "50b054ef98d8b5883faab193689098cc5cbb95a7ea3d4da7c558279eb44167e9",
-      "callsite_sha256": "26d1b60a370bd3ea079b04d3b144a350b7238975c7a0fd5f03842ae9813b2526",
-      "occurrence": 1,
-      "reason": "src/scripts/loop-directive-check-lib.ts#writeLightweightLoopArtifacts writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/loop-directive-check-lib.ts",
-      "symbol": "writeLightweightLoopArtifacts",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "50b054ef98d8b5883faab193689098cc5cbb95a7ea3d4da7c558279eb44167e9",
-      "callsite_sha256": "36370b6040c82d7f7c4ad2fc195ec6268fdef82537481512d17d9748c3666395",
-      "occurrence": 1,
-      "reason": "src/scripts/loop-directive-check-lib.ts#writeLightweightLoopArtifacts writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/loop-hardening-check-lib.ts",
-      "symbol": "gitFixture",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "f0a7c72c7107b49412db11773c27de83d8b3938d979246350f764c3bd9908253",
-      "callsite_sha256": "f14fef7886306bc23791f724afbfd081ecf10d89a4b3c0163cf95bb222b55cbd",
-      "occurrence": 1,
-      "reason": "src/scripts/loop-hardening-check-lib.ts#gitFixture writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/loop-hardening-check-lib.ts",
-      "symbol": "runLoopHardeningCheck",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "3bde222eddca9f4e267c88dd0a11f692e64039c003267c64481c509c7f5bbe07",
-      "callsite_sha256": "573661fb0c96edef3e854354e4c4d293d63e372045ff2f6e84ee80e0ce9cde2c",
-      "occurrence": 1,
-      "reason": "src/scripts/loop-hardening-check-lib.ts#assert writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/loop-hardening-check-lib.ts",
-      "symbol": "runLoopHardeningCheck",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "3bde222eddca9f4e267c88dd0a11f692e64039c003267c64481c509c7f5bbe07",
-      "callsite_sha256": "857aa8fede3c386756665ddf2a2fb81c002db0f8582b200d9717bd134652b64d",
-      "occurrence": 1,
-      "reason": "src/scripts/loop-hardening-check-lib.ts#assert writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/loop-hardening-check-lib.ts",
-      "symbol": "runLoopHardeningCheck",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "3bde222eddca9f4e267c88dd0a11f692e64039c003267c64481c509c7f5bbe07",
-      "callsite_sha256": "d996e0711e4e4f9eae1ddb8837f354c796aaabf1f0ee115f0bd257a9d6a259d5",
-      "occurrence": 1,
-      "reason": "src/scripts/loop-hardening-check-lib.ts#assert writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/loop-hardening-check-lib.ts",
-      "symbol": "runLoopHardeningCheck",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "3bde222eddca9f4e267c88dd0a11f692e64039c003267c64481c509c7f5bbe07",
-      "callsite_sha256": "f74545a7940a86b4ffca103e6213ea4f6151a248860490148aec76b6b842a215",
-      "occurrence": 1,
-      "reason": "src/scripts/loop-hardening-check-lib.ts#assert writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/loop-worker-fixture-child.ts",
-      "symbol": "module",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "283cc18eb087cf95115c64bd5361476bc15383e0d26ea96e72a9d96088a63a10",
-      "callsite_sha256": "0e6f73690d4f192bc49a79e41465595f54f1a2a7a9218deb1739c4b57519b03d",
-      "occurrence": 1,
-      "reason": "src/scripts/loop-worker-fixture-child.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/loop-worker-fixture-child.ts",
-      "symbol": "module",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "283cc18eb087cf95115c64bd5361476bc15383e0d26ea96e72a9d96088a63a10",
-      "callsite_sha256": "302260661910e285914401ff33b6d9f14761e0bfbbebe1ff188a0f1898c83c02",
-      "occurrence": 1,
-      "reason": "src/scripts/loop-worker-fixture-child.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
       "file": "src/scripts/mad-preflight-blocks-unreadable-config-check.ts",
       "symbol": "module",
       "token": "codex config write",
@@ -5402,24 +5285,6 @@
       "reason": "Runtime-domain gate writes only its scoped temporary fixture source before evaluating ownership rules."
     },
     {
-      "file": "src/scripts/runtime-domain-gate-lib.ts",
-      "symbol": "loopGate",
-      "token": "fsp.writeFile",
-      "scope_contract_sha256": "b5632e2672fa5bee3544c74f346d0a387123482942cd966b69c50e7f79be85f5",
-      "callsite_sha256": "2f77836927c1f7f60d8d5a8f563e0774ad669c921831dae6aa52017af00d683c",
-      "occurrence": 1,
-      "reason": "src/scripts/runtime-domain-gate-lib.ts#loopGate writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/runtime-domain-gate-lib.ts",
-      "symbol": "loopGate",
-      "token": "fsp.writeFile",
-      "scope_contract_sha256": "b5632e2672fa5bee3544c74f346d0a387123482942cd966b69c50e7f79be85f5",
-      "callsite_sha256": "893559344f2b0c2782fb2acb76ed34a9a560944e6b8022bea4ba6ff8dd73faf3",
-      "occurrence": 1,
-      "reason": "src/scripts/runtime-domain-gate-lib.ts#loopGate writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
       "file": "src/scripts/runtime-proof-summary-check.ts",
       "symbol": "module",
       "token": "fs.writeFile",
@@ -5846,8 +5711,8 @@
       "file": "src/scripts/typed-routing-gate-lib.ts",
       "symbol": "initDeepGate",
       "token": "fsp.writeFile",
-      "scope_contract_sha256": "230f14ce2eebd7d6943c3254ee1a8299a0cea67f7ec72c69ec26e03b45409eb8",
-      "callsite_sha256": "2ff391f6191ef2c018413d9218efdd84ee8fe2e9345a2ec8dea75683a0bf0458",
+      "scope_contract_sha256": "cac573d407c5d193c98af6b70782bd2433a818c0072713d3c1399d903c9ed374",
+      "callsite_sha256": "d32d3defb30dcfc53fa14c56a96dbc28dbedd24df986d201b4009a2336f5bebc",
       "occurrence": 1,
       "reason": "src/scripts/typed-routing-gate-lib.ts#initDeepGate writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
@@ -5855,8 +5720,8 @@
       "file": "src/scripts/typed-routing-gate-lib.ts",
       "symbol": "initDeepGate",
       "token": "fsp.writeFile",
-      "scope_contract_sha256": "230f14ce2eebd7d6943c3254ee1a8299a0cea67f7ec72c69ec26e03b45409eb8",
-      "callsite_sha256": "43e07e5b7455ce0c5afce43ceffd9b7890b2aac2668e652b45ebb79106a0c5a1",
+      "scope_contract_sha256": "cac573d407c5d193c98af6b70782bd2433a818c0072713d3c1399d903c9ed374",
+      "callsite_sha256": "00623178a19c54f6edbdd3e5098dc3975ba8129125cff9ff362a66f1572e4123",
       "occurrence": 1,
       "reason": "src/scripts/typed-routing-gate-lib.ts#initDeepGate writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
