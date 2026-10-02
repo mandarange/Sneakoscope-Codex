@@ -30,9 +30,9 @@ test('Codex default mode pins no image model, and a fake adapter never makes it 
 test('the plain codex features list makes the built-in tool a ready Codex default path', async (t) => {
   const { env } = await tempHome(t);
   const codexBin = await writeFakeCodex(`
-codex_git_commit                    stable             true
+codex_git_commit                    removed            false
 image_generation                    stable             true
-remote_control                      stable             false
+remote_control                      removed            false
 `);
   // The shebang starts a second Node process; under the parallel canonical
   // runner its cold start can exceed 1s, so use the production probe budget.
@@ -52,9 +52,9 @@ remote_control                      stable             false
 test('the plain codex features list reader respects a disabled value', async (t) => {
   const { env } = await tempHome(t);
   const codexBin = await writeFakeCodex(`
-codex_git_commit                    stable             true
+codex_git_commit                    removed            false
 image_generation                    stable             false
-remote_control                      stable             true
+remote_control                      removed            false
 `);
   const capability = await withoutCodexImagegenEnv(() => detectImagegenCapability({ codexBin, timeoutMs: 5000, env, desktopBridgeStatus: null }));
   assert.equal(capability.codex_app.available, false);

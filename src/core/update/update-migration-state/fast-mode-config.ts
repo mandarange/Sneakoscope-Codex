@@ -95,7 +95,6 @@ function normalizeLegacyFastModeConfigForUpdate(
   next = removeTopLevelTomlKeyLocal(next, 'default_profile');
   next = removeTomlTableLocal(next, 'user.fast_mode');
   next = removeTomlTableLocal(next, 'profiles.sks-fast-high');
-  next = removeTomlTableKeyLocal(next, 'notice', 'fast_default_opt_out');
   if (next !== before) actions.push('stripped_removed_fastmode_config_schema_keys');
   if (legacyFastDefault && !topLevelTomlString(next, 'service_tier')) {
     next = insertTopLevelTomlKey(next, 'service_tier = "fast"');

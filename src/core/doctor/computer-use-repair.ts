@@ -62,39 +62,10 @@ export async function repairComputerUse(input: {
   }
   steps.push(versionStep);
 
+  // `computer_use` is `stable true` in `codex features list`, so the flag is only ever off because
+  // the user switched it off; `codex features enable` would undo that (measured: it rewrites an
+  // explicit `computer_use = false` to true), so the repair never runs it.
   const beforeReady = before?.status === 'available';
-  const needsFeatureFlag = before?.status === 'codex_app_capability_missing' || before?.status === 'unknown';
-
-  if (codexBin && !beforeReady && needsFeatureFlag && apply) {
-    const enable = await runProcess(codexBin, ['features', 'enable', 'computer_use'], {
-      timeoutMs: input.timeoutMs || 10000,
-      maxOutputBytes: 32 * 1024
-    }).catch((err: unknown) => ({ code: 1, stdout: '', stderr: messageOf(err) }));
-    steps.push({
-      id: 'computer_use_feature_enable',
-      ok: enable.code === 0,
-      attempted: true,
-      command: `${codexBin} features enable computer_use`,
-      exit_code: enable.code,
-      stdout_tail: tail(enable.stdout),
-      stderr_tail: tail(enable.stderr),
-      blocker: enable.code === 0 ? null : 'codex_feature_enable_unsupported_or_failed'
-    });
-  } else {
-    steps.push({
-      id: 'computer_use_feature_enable',
-      ok: beforeReady,
-      attempted: false,
-      command: codexBin ? `${codexBin} features enable computer_use` : 'codex features enable computer_use',
-      blocker: beforeReady
-        ? null
-        : !apply
-          ? 'doctor_fix_not_requested'
-          : !codexBin
-            ? 'codex_cli_missing'
-            : 'computer_use_capability_missing_not_feature_flag_shaped'
-    });
-  }
 
   const repairPlugins = input.pluginRepair || ensureCodexPlugins;
   const pluginRepair: any = beforeReady
@@ -136,7 +107,7 @@ export async function repairComputerUse(input: {
   const nextActions = recovered ? refreshActions : [
     ...refreshActions,
     'Install/update Codex CLI if missing: npm i -g @openai/codex@latest',
-    'Open Codex App settings and enable Computer Use, or run: codex features enable computer_use',
+    'Open Codex App settings and enable Computer Use. If `codex features list` shows computer_use as false, you switched it off in a config file: run `codex features enable computer_use` yourself to turn it back on.',
     after?.status === 'codex_app_missing'
       ? 'Open the ChatGPT/Codex desktop app after plugin installation, enable the Computer Use server and skill toggles, and grant Screen Recording/Accessibility when prompted.'
       : 'Verify with: codex features list',

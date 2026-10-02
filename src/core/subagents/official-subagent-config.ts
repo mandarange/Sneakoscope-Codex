@@ -162,23 +162,15 @@ export function mergeOfficialSubagentConfigResult(
     inheritedAgents
   })
 
-  next = upsertDefaultUnlessInherited(
-    next,
-    inheritedAgents,
-    'enabled',
-    `enabled = ${DEFAULT_OFFICIAL_SUBAGENT_ENABLED}`
-  )
+  // `agents.enabled` and `agents.interrupt_message` are not written: both default to true in
+  // the config schema of Codex 0.153.4 and 0.159.2, so a line would only freeze the default.
+  // `max_depth` stays: V2 ignores it, but it keeps a V1 session (a model whose catalog row does
+  // not select V2) from nesting subagents.
   next = upsertDefaultUnlessInherited(
     next,
     inheritedAgents,
     'max_depth',
     `max_depth = ${DEFAULT_OFFICIAL_SUBAGENT_MAX_DEPTH}`
-  )
-  next = upsertDefaultUnlessInherited(
-    next,
-    inheritedAgents,
-    'interrupt_message',
-    `interrupt_message = ${DEFAULT_OFFICIAL_SUBAGENT_INTERRUPT_MESSAGE}`
   )
   // The child default follows the latest models, independent of the user's
   // parent model. A current tier model already there is kept; an older one is
@@ -240,8 +232,8 @@ export function mergeOfficialMultiAgentV2FeatureConfig(
   // declaration alone; `officialSubagentConfigWarnings` names it instead.
   if (hasUnmanageableMultiAgentV2Declaration(next)) return ensureTrailingNewline(next)
 
-  // Prefer the table form so concurrency and spawn model overrides can be set.
-  // Boolean `features.multi_agent_v2 = true` alone cannot carry those knobs.
+  // Prefer the table form so the concurrency cap can be set.
+  // Boolean `features.multi_agent_v2 = true` alone cannot carry that knob.
   // The boolean's VALUE is carried across the conversion: dropping it turned an
   // explicit `multi_agent_v2 = false` into `enabled = true`, silently reversing
   // an opt-out. `codex features disable multi_agent_v2` writes exactly that
@@ -266,8 +258,7 @@ export function mergeOfficialMultiAgentV2FeatureConfig(
       [
         '[features.multi_agent_v2]',
         `enabled = ${booleanForm === null ? true : booleanForm}`,
-        `max_concurrent_threads_per_session = ${targetTotal}`,
-        'expose_spawn_agent_model_overrides = true'
+        `max_concurrent_threads_per_session = ${targetTotal}`
       ].join('\n')
     )
     return ensureTrailingNewline(next)
@@ -288,13 +279,6 @@ export function mergeOfficialMultiAgentV2FeatureConfig(
         `max_concurrent_threads_per_session = ${targetTotal}`
       )
     }
-    if (!hasTomlTableKey(next, 'features.multi_agent_v2', 'expose_spawn_agent_model_overrides')) {
-      next = upsertTomlTableKey(
-        next,
-        'features.multi_agent_v2',
-        'expose_spawn_agent_model_overrides = true'
-      )
-    }
   } else {
     const inherited = inheritedMaV2 || {}
     if (!hasTomlTableKey(next, 'features.multi_agent_v2', 'enabled') && !hasOwn(inherited, 'enabled')) {
@@ -308,16 +292,6 @@ export function mergeOfficialMultiAgentV2FeatureConfig(
         next,
         'features.multi_agent_v2',
         `max_concurrent_threads_per_session = ${targetTotal}`
-      )
-    }
-    if (
-      !hasTomlTableKey(next, 'features.multi_agent_v2', 'expose_spawn_agent_model_overrides')
-      && !hasOwn(inherited, 'expose_spawn_agent_model_overrides')
-    ) {
-      next = upsertTomlTableKey(
-        next,
-        'features.multi_agent_v2',
-        'expose_spawn_agent_model_overrides = true'
       )
     }
   }

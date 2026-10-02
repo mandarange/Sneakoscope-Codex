@@ -23,7 +23,7 @@ export function rustBuildHint() {
 }
 
 export async function findRustAccelerator() {
-  const env = process.env.SKS_RS_BIN || process.env.DCODEX_RS_BIN;
+  const env = process.env.SKS_RS_BIN;
   if (env) return await exists(env) ? env : null;
   const global = await which(process.platform === 'win32' ? 'sks-rs.exe' : 'sks-rs');
   if (global) return global;

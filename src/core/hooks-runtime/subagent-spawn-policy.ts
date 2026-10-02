@@ -36,20 +36,22 @@ function openRouterOnlyBlockReason(allowlist: ChildModelAllowlist): string {
 }
 
 /**
- * A MultiAgent v1 `fork_context: true` copies the whole parent thread into
- * the child, like fork_turns="all", so it cannot be trusted to run the model
- * the spawn names.
+ * A MultiAgent v1 `fork_context: true` copies the whole parent thread into the
+ * child, like fork_turns="all" (the v2 default). SKS keeps children bounded, so
+ * it is refused as an SKS rule. Codex honors a model override on a full-history fork
+ * in both spawn tools (measured: v2 on 0.153.4 and 0.159.2, the `multi_agent_v1`
+ * spawn_agent on 0.153.4), so this is not a Codex limit.
  */
 export function fullHistoryForkContext(input: Record<string, unknown>): boolean {
   return input.fork_context === true || String(input.fork_context ?? '').trim().toLowerCase() === 'true';
 }
 
-/** fork_turns="none" or a positive turn count: a fork that may carry a child model. */
+/** fork_turns="none" or a positive turn count: the bounded forks SKS allows for children. */
 export function boundedForkTurns(value: unknown): boolean {
   return value === 'none' || /^[1-9]\d*$/.test(String(value || ''));
 }
 
-const FORK_BLOCK_REASON = 'SKS child spawns require fork_turns="none" or a positive bounded turn count. Retry with the complete slice contract in message; full-history/default forks cannot carry an explicit child model.';
+const FORK_BLOCK_REASON = 'SKS policy: child spawns require fork_turns="none" or a positive bounded turn count, so a child starts from its slice contract instead of a copy of the whole parent thread. SKS does not use full-history/default forks for children (Codex itself would run one with a model override; this is an SKS rule, not a Codex restriction). Retry with the complete slice contract in message.';
 
 /**
  * Validate before the host selects a child model; SubagentStart is too late.
@@ -65,7 +67,7 @@ export function subagentSpawnPolicyBlockReason(payload: any = {}, opts: { root?:
   const allowlist = effectiveChildModelAllowlist();
   if (allowlist.mode === 'openrouter_only') {
     if (!isAllowedChildModel(input.model, allowlist)) return openRouterOnlyBlockReason(allowlist);
-    // A v1 full-history fork would run the parent's model, which the list may not hold.
+    // SKS keeps children bounded: a v1 full-history fork copies the parent thread.
     if (fullHistoryForkContext(input)) return `${FORK_BLOCK_REASON} Omit fork_context (fork_context=true is a full-history fork).`;
     // Managed role files pin a tier model, which Codex will not let a spawn override.
     const agent = String(input.agent_type || input.agentType || '').trim();

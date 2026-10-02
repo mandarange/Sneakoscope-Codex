@@ -17,12 +17,12 @@
 
 ## Known Gaps
 
-No P0 blocker is intentionally left open for Codex CLI `rust-v0.133.0` compatibility detection, `codex exec resume --output-schema` fixture coverage, UX-Review generated callout ingestion, text-only fallback blocking, mock-as-real blocking, Image Voxel relation validation, memory summary rebuilds, repeated blocker stops, version drift, or release readiness reporting.
+No P0 blocker is intentionally left open for Codex CLI compatibility detection, `codex exec resume --output-schema` fixture coverage, UX-Review generated callout ingestion, text-only fallback blocking, mock-as-real blocking, Image Voxel relation validation, memory summary rebuilds, repeated blocker stops, version drift, or release readiness reporting.
 
 Bounded 1.0.8 claims:
 
-- The Codex hook schema snapshot is `latest` for SKS 1.14.1; the runtime matrix targets `rust-v0.133.0` capability detection and preserves the zero-warning strict subset.
-- Codex 0.133 plugin discovery and marketplace config are P1 warning-only unless a route explicitly depends on those surfaces.
+- The Codex hook schema snapshot is `latest`; capability detection reads the Codex model catalog and the runtime-generated App Server schema, and preserves the zero-warning strict subset.
+- Codex plugin discovery and marketplace config are P1 warning-only unless a route explicitly depends on those surfaces.
 - Real UX-Review verification requires a real generated annotated callout image with a recorded image model and post-fix recapture/re-review evidence for changed screens. Fixture, mock, and unavailable/unlinked imagegen loops are `verified_partial`; unavailable/unlinked imagegen may close as `verified_partial/reference-only` only with source screenshots plus hashes, docs evidence, source Image Voxel anchors, and Honest Mode evidence.
 - If Codex App imagegen or Computer Use is unavailable, SKS records a structured blocker such as `imagegen_capability_missing` or `live_capture_blocked`; it does not fabricate screenshots, generated callouts, or fixed-screen evidence.
 - Naruto now uses Codex official subagents as execution lanes. Matched official

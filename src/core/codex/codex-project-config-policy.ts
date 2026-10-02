@@ -30,11 +30,12 @@ const MACHINE_LOCAL_TABLE_PREFIXES = [
   'experimental_telemetry'
 ]
 
-// Codex 0.134+ removed the legacy config-profile consumers: `--profile NAME` now
-// layers `$CODEX_HOME/<name>.config.toml` over the base config and the top-level
-// `profile = "..."` selector / `[profiles.*]` tables are deprecated and warned about
-// at startup. So these are NO LONGER machine-local-and-moved-to-home — they are
-// DROPPED from the project config entirely. The per-file profiles are owned by
+// Codex removed the legacy config-profile consumers: `--profile NAME` now layers
+// `$CODEX_HOME/<name>.config.toml` over the base config, a top-level `profile = "..."`
+// selector is a hard startup error ("legacy `profile = ...` config is no longer supported",
+// measured on 0.153.4 and 0.159.2) and `[profiles.*]` tables load without a warning. So these
+// are NO LONGER machine-local-and-moved-to-home — they are DROPPED from the project config
+// entirely. The per-file profiles are owned by
 // migrateSksProfilesToPerFile (src/core/auto-review.ts), which runs on `sks --mad`.
 // 2026-07 ChatGPT desktop merge: `default_profile` and `[user.fast_mode]` left the
 // config schema entirely (alongside the already-removed [profiles.*] tables), so

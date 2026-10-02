@@ -57,16 +57,14 @@ test('repairBrowserUse reports ok:true and no blockers when detection already sh
   assert.equal(report.current_task_tool_manifest_verified, false);
   assert.deepEqual(report.blockers, []);
   assert.deepEqual(report.next_actions, []);
-  const optionalStep = report.steps.find((step: any) => step.id === 'in_app_browser_feature_enable');
-  assert.equal(optionalStep.ok, false, 'Chrome readiness alone must not claim an optional native flag is enabled');
-  assert.equal(optionalStep.status, 'detect_only');
+  assert.equal(report.steps.some((step: any) => /feature_enable/.test(step.id)), false);
 });
 
-test('repairBrowserUse attempts the supported in_app_browser and browser_use feature flags', async () => {
+test('repairBrowserUse never runs codex features enable: a flag that is off is the user\'s opt-out', async () => {
   const root = await tempRoot();
   try {
     const callsPath = path.join(root, 'feature-calls.txt');
-    const codexBin = await writeFakeCodex(root, callsPath, []);
+    const codexBin = await writeFakeCodex(root, callsPath);
     let detection = 0;
     const report = await repairBrowserUse({
       root,
@@ -77,16 +75,10 @@ test('repairBrowserUse attempts the supported in_app_browser and browser_use fea
       pluginRepair: async () => ({ ok: true, changed: false, installs: [], blockers: [], next_actions: [] }) as any,
       nodeReplRepair: async () => ({ ok: true, blockers: [] })
     });
-    const calls = await fs.readFile(callsPath, 'utf8');
-    assert.match(calls, /^features enable in_app_browser$/m);
-    assert.match(calls, /^features enable browser_use$/m);
-    for (const id of ['in_app_browser_feature_enable', 'browser_use_feature_enable']) {
-      const step = report.steps.find((candidate: any) => candidate.id === id);
-      assert.equal(step.attempted, true);
-      assert.equal(step.ok, true);
-      assert.equal(step.status, 'enabled');
-    }
-    assert.deepEqual(report.optional_feature_enablement_blockers, []);
+    const calls = await fs.readFile(callsPath, 'utf8').catch(() => '');
+    assert.doesNotMatch(calls, /features enable/);
+    assert.equal(report.steps.some((step: any) => /feature_enable/.test(step.id)), false);
+    assert.equal(Object.hasOwn(report, 'optional_feature_enablement_blockers'), false);
     assert.equal(report.capability_ready, true);
     assert.equal(report.route_ready, false);
   } finally {
@@ -94,30 +86,23 @@ test('repairBrowserUse attempts the supported in_app_browser and browser_use fea
   }
 });
 
-test('repairBrowserUse records a rejected optional flag without fabricating feature success', async () => {
+test('repairBrowserUse leaves missing flags off and tells the user how to re-enable them', async () => {
   const root = await tempRoot();
   try {
-    const codexBin = await writeFakeCodex(root, path.join(root, 'feature-calls.txt'), ['in_app_browser']);
-    let detection = 0;
+    const callsPath = path.join(root, 'feature-calls.txt');
+    const codexBin = await writeFakeCodex(root, callsPath);
     const report = await repairBrowserUse({
       root,
       apply: true,
       reportPath: null,
       codexBin,
-      detectChromeExtensionStatus: async () => detection++ === 0 ? { ...MISSING_STATUS } : { ...READY_STATUS },
-      pluginRepair: async () => ({ ok: true, changed: false, installs: [], blockers: [], next_actions: [] }) as any,
+      detectChromeExtensionStatus: async () => ({ ...MISSING_STATUS }),
+      pluginRepair: blockedPluginRepair as any,
       nodeReplRepair: async () => ({ ok: true, blockers: [] })
     });
-    const rejected = report.steps.find((candidate: any) => candidate.id === 'in_app_browser_feature_enable');
-    assert.equal(rejected.attempted, true);
-    assert.equal(rejected.ok, false);
-    assert.equal(rejected.status, 'unsupported_or_failed');
-    assert.equal(rejected.blocker, 'codex_feature_enable_unsupported_or_failed');
-    assert.deepEqual(report.optional_feature_enablement_blockers, [
-      'in_app_browser_feature_enable:codex_feature_enable_unsupported_or_failed'
-    ]);
-    assert.equal(report.capability_ready, true, 'the independent Chrome capability may still be configured');
-    assert.equal(report.route_ready, false, 'configuration never becomes live interaction proof');
+    assert.doesNotMatch(await fs.readFile(callsPath, 'utf8').catch(() => ''), /features enable/);
+    assert.equal(report.recovered, false);
+    assert.ok(report.next_actions.some((line: string) => /run `codex features enable <flag>` yourself/.test(line)));
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
@@ -152,7 +137,7 @@ test('repairBrowserUse never reports ok:true when the Chrome extension itself is
   assert.match(pluginStep.blocker, /codex_plugin_not_ready_after_recheck/);
 });
 
-test('repairBrowserUse without --apply does not attempt feature-enable or node_repl repair steps', async () => {
+test('repairBrowserUse without --apply does not attempt the node_repl repair step', async () => {
   const root = await tempRoot();
   let nodeReplCalls = 0;
   const report = await repairBrowserUse({
@@ -173,9 +158,7 @@ test('repairBrowserUse without --apply does not attempt feature-enable or node_r
   assert.ok(nodeReplStep);
   assert.equal(nodeReplStep.attempted, false);
   assert.equal(nodeReplStep.blocker, 'doctor_fix_not_requested');
-  const featureStep = report.steps.find((step: any) => step.id === 'browser_use_external_feature_enable');
-  assert.ok(featureStep);
-  assert.equal(featureStep.attempted, false);
+  assert.equal(report.steps.some((step: any) => /feature_enable/.test(step.id)), false);
 });
 
 test('repairBrowserUse writes an atomic report file when reportPath is provided', async () => {
@@ -196,16 +179,12 @@ test('repairBrowserUse writes an atomic report file when reportPath is provided'
   assert.equal(onDisk.ok, false);
 });
 
-async function writeFakeCodex(root: string, callsPath: string, rejectedFlags: string[]): Promise<string> {
+async function writeFakeCodex(root: string, callsPath: string): Promise<string> {
   const codexBin = path.join(root, 'codex');
   await fs.writeFile(codexBin, `#!/usr/bin/env node
 const fs = require('fs');
 const args = process.argv.slice(2).join(' ');
 fs.appendFileSync(${JSON.stringify(callsPath)}, args + '\\n');
-if (args.startsWith('features enable ')) {
-  const flag = args.slice('features enable '.length);
-  process.exit(${JSON.stringify(rejectedFlags)}.includes(flag) ? 64 : 0);
-}
 process.exit(args === '--version' ? 0 : 64);
 `, { mode: 0o755 });
   return codexBin;

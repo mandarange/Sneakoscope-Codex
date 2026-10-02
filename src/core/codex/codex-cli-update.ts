@@ -486,8 +486,7 @@ async function operatorCodexCandidates(explicitBin: string | undefined, env: Nod
     explicitBin,
     env.SKS_CODEX_UPDATE_BIN,
     env.SKS_CODEX_BIN,
-    env.CODEX_BIN,
-    env.DCODEX_CODEX_BIN
+    env.CODEX_BIN
   ];
   for (const value of explicitValues) {
     const raw = String(value || '').trim();

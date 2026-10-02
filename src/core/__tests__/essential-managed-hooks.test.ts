@@ -14,7 +14,7 @@ async function withProfile<T>(profile: 'essential' | 'strict', run: () => T | Pr
   }
 }
 
-test('essential installs no PostToolUse hook; strict keeps all ten events', async () => {
+test('essential installs no PostToolUse hook; strict keeps all eight events (none for PreCompact/PostCompact)', async () => {
   const essential = await withProfile('essential', () => managedHookEventNames());
   assert.equal(essential.includes('PostToolUse'), false);
   assert.ok(essential.includes('PreToolUse'));
@@ -22,7 +22,8 @@ test('essential installs no PostToolUse hook; strict keeps all ten events', asyn
   assert.ok(essential.includes('SubagentStart'), 'subagent lifecycle hooks only fire during fan-out and stay');
   const strict = await withProfile('strict', () => managedHookEventNames());
   assert.equal(strict.includes('PostToolUse'), true);
-  assert.equal(strict.length, 10);
+  assert.equal(strict.length, 8);
+  assert.equal(strict.includes('PreCompact') || strict.includes('PostCompact'), false);
 });
 
 test('merging into a legacy hooks.json removes the SKS PostToolUse entry but keeps a user-authored one', async () => {

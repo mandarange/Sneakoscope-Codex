@@ -172,8 +172,9 @@ test('fresh project config receives the official Codex subagent defaults', () =>
 
   assert.equal(parsed.agents.max_concurrent_threads_per_session, 256)
   assert.equal(parsed.agents.max_depth, 1)
-  assert.equal(parsed.agents.enabled, true)
-  assert.equal(parsed.agents.interrupt_message, true)
+  // enabled / interrupt_message default to true in Codex 0.153.4 and 0.159.2: nothing to freeze.
+  assert.equal(Object.hasOwn(parsed.agents, 'enabled'), false)
+  assert.equal(Object.hasOwn(parsed.agents, 'interrupt_message'), false)
   assert.equal(parsed.agents.default_subagent_model, latestModelForTier('deep'))
   assert.equal(parsed.agents.default_subagent_reasoning_effort, 'low')
   assert.equal(Object.hasOwn(parsed.agents, 'job_max_runtime_seconds'), false)
@@ -181,7 +182,8 @@ test('fresh project config receives the official Codex subagent defaults', () =>
   assert.equal(Object.hasOwn(parsed.agents, 'warn_on_max_threads'), false)
   assert.equal(parsed.features.multi_agent_v2.enabled, true)
   assert.equal(parsed.features.multi_agent_v2.max_concurrent_threads_per_session, 257)
-  assert.equal(parsed.features.multi_agent_v2.expose_spawn_agent_model_overrides, true)
+  // expose_spawn_agent_model_overrides defaults to true on both supported Codex versions.
+  assert.equal(Object.hasOwn(parsed.features.multi_agent_v2, 'expose_spawn_agent_model_overrides'), false)
 })
 
 test('child default normalization keeps current tier models and moves older ones to the latest deep tier', async (t) => {
@@ -658,7 +660,7 @@ test('official config merge supports an agents header with an inline comment', (
   assert.equal(parsed.agents.max_concurrent_threads_per_session, 256)
   assert.equal(parsed.agents.max_depth, 1)
   assert.equal(Object.hasOwn(parsed.agents, 'job_max_runtime_seconds'), false)
-  assert.equal(parsed.agents.interrupt_message, true)
+  assert.equal(Object.hasOwn(parsed.agents, 'interrupt_message'), false)
   assert.match(merged, /\[agents\] # operator note/)
 })
 
@@ -959,12 +961,45 @@ test('doctor repair migrates an SKS-owned legacy thread value and preserves max_
   assert.equal(parsed.agents.max_concurrent_threads_per_session, 256)
   assert.equal(parsed.agents.max_depth, 4)
   assert.equal(Object.hasOwn(parsed.agents, 'job_max_runtime_seconds'), false)
-  assert.equal(parsed.agents.interrupt_message, true)
+  assert.equal(Object.hasOwn(parsed.agents, 'interrupt_message'), false)
   assert.ok(result.config_file_repair.warnings.includes('official_subagent_max_depth_coerced_to_one:4:project'))
   assert.deepEqual(
     (await fs.readdir(path.join(root, '.codex', 'agents'))).sort(),
     MANAGED_OFFICIAL_SUBAGENT_ROLES.map((role) => role.filename).sort()
   )
+})
+
+test('project setup does not copy global mcp_servers, plugins or marketplaces tables into the project config', async () => {
+  // Codex layers ~/.codex/config.toml under a project config natively (measured on 0.153.4 and
+  // 0.159.2 with `codex mcp list` and app-server config/read), so a copy would only duplicate
+  // global state, including any credentials in an MCP env table, into the repository.
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-official-config-no-global-copy-'))
+  const home = path.join(root, 'home')
+  const codexHome = path.join(home, '.codex')
+  const configPath = path.join(root, '.codex', 'config.toml')
+  await fs.mkdir(codexHome, { recursive: true })
+  await fs.writeFile(path.join(codexHome, 'config.toml'), [
+    '[mcp_servers.global_docs]',
+    'command = "node"',
+    'env = { TOKEN = "global-secret" }',
+    '',
+    '[plugins."demo@market"]',
+    'enabled = true',
+    '',
+    '[marketplaces.market]',
+    'source_type = "git"',
+    'source = "https://example.invalid/market.git"',
+    ''
+  ].join('\n'))
+
+  await initProject(root, { installScope: 'project', localOnly: true, home, codexHome })
+  const text = await fs.readFile(configPath, 'utf8')
+  const parsed = parse(text) as Record<string, any>
+  assert.equal(parsed.mcp_servers?.global_docs, undefined)
+  assert.equal(parsed.plugins?.['demo@market'], undefined)
+  assert.equal(parsed.marketplaces, undefined)
+  assert.doesNotMatch(text, /global-secret/)
+  assert.equal(parsed.agents.max_concurrent_threads_per_session, 256)
 })
 
 test('project setup backs up and preserves invalid config TOML without overwriting it', async () => {

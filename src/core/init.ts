@@ -9,7 +9,7 @@ import { disableVersionGitHook } from './version-manager.js';
 import { concurrentToolGuidanceText, coreEngineeringDirectiveReferenceText, coreEngineeringDirectiveText } from './lean-engineering-policy.js';
 import { DEFAULT_CODEX_APP_PLUGINS, DESIGN_SYSTEM_SSOT, DOLLAR_COMMANDS, DOLLAR_SKILL_NAMES, LEGACY_DOLLAR_SKILL_NAMES, PPT_CONDITIONAL_SKILL_ALLOWLIST, PPT_PIPELINE_MCP_ALLOWLIST, PPT_PIPELINE_SKILL_ALLOWLIST, RECOMMENDED_DESIGN_REFERENCES, RECOMMENDED_MCP_SERVERS, RECOMMENDED_SKILLS, context7ConfigToml, prefixKnownSksDollarReferences, sksPrefixedDollarCommand, triwikiContextTracking } from './routes.js';
 import { SKILL_DREAM_POLICY } from './skill-forge.js';
-import { MANAGED_CODEX_FEATURE_FLAGS, REMOVED_CODEX_FEATURE_FLAGS } from './codex/codex-feature-flags.js';
+import { DEPRECATED_CODEX_HOOKS_ALIAS_FLAG, REMOVED_CODEX_FEATURE_FLAGS } from './codex/codex-feature-flags.js';
 import { writeCodexConfigGuarded } from './codex/codex-config-guard.js';
 import { isSksHookHandler } from './codex-hooks/sks-hook-entries.js';
 import { legacyCoreSkillNames } from './codex-native/core-skill-manifest.js';
@@ -111,14 +111,17 @@ function sksHookCommand(commandPrefix: any, hookName: any, commandSuffix = '') {
   return `${commandPrefix} hook ${hookName}${commandSuffix}`;
 }
 
+// No PreCompact/PostCompact entries: Codex gives those events only the common output fields (no
+// additionalContext), so a hook there cannot reach the model, and the managed-skill refresh after a
+// compaction already rides SessionStart(source=compact). Older installs still carry the two entries;
+// mergeManagedHooksJson and pruneRetiredSksHookEvents drop them on the next update, and until then
+// `sks hook pre-compact|post-compact` answers `{ continue: true }` through the default dispatch.
 const MANAGED_HOOKS = {
   SessionStart: [{ hooks: [{ type: 'command', command: null, hookName: 'session-start', statusMessage: 'SKS preparing session context' }] }],
   UserPromptSubmit: [{ hooks: [{ type: 'command', command: null, hookName: 'user-prompt-submit', statusMessage: 'SKS routing prompt and context' }] }],
   PreToolUse: [{ matcher: '*', hooks: [{ type: 'command', command: null, hookName: 'pre-tool', statusMessage: 'SKS checking tool safety' }] }],
   PostToolUse: [{ matcher: '*', hooks: [{ type: 'command', command: null, hookName: 'post-tool', statusMessage: 'SKS recording tool evidence' }] }],
   PermissionRequest: [{ matcher: '*', hooks: [{ type: 'command', command: null, hookName: 'permission-request', statusMessage: 'SKS reviewing permission request' }] }],
-  PreCompact: [{ hooks: [{ type: 'command', command: null, hookName: 'pre-compact', statusMessage: 'SKS preparing compact context' }] }],
-  PostCompact: [{ hooks: [{ type: 'command', command: null, hookName: 'post-compact', statusMessage: 'SKS recording compact context' }] }],
   SubagentStart: [{ hooks: [{ type: 'command', command: null, hookName: 'subagent-start', statusMessage: 'SKS recording subagent start' }] }],
   SubagentStop: [{ hooks: [{ type: 'command', command: null, hookName: 'subagent-stop', statusMessage: 'SKS recording subagent stop' }] }],
   Stop: [{ hooks: [{ type: 'command', command: null, hookName: 'stop', statusMessage: 'SKS checking done gate' }] }]
@@ -248,7 +251,7 @@ const AGENTS_BLOCK = [
   '- Computer Use and browser are exclusive GUI surfaces: one child per surface at a time, with all of that surface\'s work in one slice. Never fan the same GUI task out to several children.',
   '- Every child runs the newest model of the tier its work needs (fast, balanced, context, or deep); no model family is pinned. When Jev mode is on, Jev picks the tier for each new Naruto child spawn and SKS seals it, except a spawn that names a managed role, which runs the tier pinned in its role file. A user role preference stays authoritative. Do not pick a child model yourself.',
   '- Preserve the user-selected parent model, reasoning effort, and service tier. Parent settings stay on the parent thread. A role preference wins over the Jev seal for that role.',
-  '- SKS child spawns must pass the sealed model and reasoning effort with `fork_turns="none"` or a positive bounded turn count; carry the complete bounded slice contract in `message`. Never use full-history inheritance for children. Full-history forks (`fork_turns="all"`, including the omitted default) inherit the parent agent type, model, and reasoning effort and must not be combined with `agent_type`, `model`, or `reasoning_effort`.',
+  '- SKS child spawns must pass the sealed model and reasoning effort with `fork_turns="none"` or a positive bounded turn count; carry the complete bounded slice contract in `message`. Never use a full-history fork for children (`fork_turns="all"`, including the omitted default): that is an SKS policy to keep a child on its slice contract, not a Codex restriction.',
   '- Route-specific skills own route-specific details. Do not inject unrelated Design, PPT, image, browser, research, DB, or release policy into ordinary work.',
   '- Do not stop at a plan when implementation was requested. Finish the requested outcome, including verification of the changed path, before stopping for review. Stop early only on a hard blocker or when the stated done-when conditions are met.',
   '- User instructions outrank skill guidance. Infer routine details, honor authorization already provided, and finish authorized preparation before asking for a decision that changes scope or has irreversible effects.',
@@ -622,12 +625,10 @@ function installPolicy(scope: any, commandPrefix: any) {
   };
 }
 
-// SKS-managed Codex App feature flags. Seeded as defaults for fresh configs but
-// NEVER force-re-enabled on upgrade: force-writing these reverted a user's
-// `enabled = false` and blanked/broke the Codex App UI (same rationale as the
-// install-helpers path). All are SET-IF-ABSENT below.
-// Seeded and stripped `[features]` keys live in ./codex/codex-feature-flags.js,
-// where a unit test pins them against the vendored Codex binary.
+// The managed merge seeds no stable `[features]` flag: they are already on by default in
+// Codex (see ./codex/codex-feature-flags.js, where a unit test pins the stripped keys
+// against the vendored Codex binary), and force-writing them once reverted a user's
+// `enabled = false` and broke the Codex App UI.
 
 function mergeManagedCodexConfigToml(existingContent: any = '', opts: any = {}) {
   let next = String(existingContent || '').trimEnd();
@@ -639,14 +640,9 @@ function mergeManagedCodexConfigToml(existingContent: any = '', opts: any = {}) 
   if (opts.sksOwned === true || opts.configWasFresh === true) {
     next = stampSksManagedCodexConfigMarker(next);
   }
-  next = removeTomlTableKey(next, 'notice', 'fast_default_opt_out');
-  next = removeTomlTableKey(next, 'features', 'codex_hooks');
+  next = removeTomlTableKey(next, 'features', DEPRECATED_CODEX_HOOKS_ALIAS_FLAG, 'true');
   next = upsertTopLevelTomlBooleanIfAbsent(next, 'suppress_unstable_features_warning', true);
-  // Codex App feature flags: SET-IF-ABSENT only (see note above); flags the
-  // 2026-07 renewal removed from the schema are stripped.
-  for (const flag of MANAGED_CODEX_FEATURE_FLAGS) {
-    next = upsertTomlTableKeyIfAbsent(next, 'features', `${flag} = true`);
-  }
+  // Keys Codex does not read at all are stripped; nothing is seeded.
   for (const flag of REMOVED_CODEX_FEATURE_FLAGS) {
     next = removeTomlTableKey(next, 'features', flag);
   }
@@ -673,40 +669,6 @@ function mergeManagedCodexConfigToml(existingContent: any = '', opts: any = {}) 
     }
   }
   return `${next.trim()}\n`;
-}
-
-async function mergeGlobalCodexConfigIfAvailable(configText: any = '', configPath: any = '', opts: any = {}) {
-  const home = opts.home || process.env.HOME || '';
-  if (!home) return configText;
-  const codexHome = opts.codexHome || process.env.CODEX_HOME || path.join(home, '.codex');
-  const globalConfigPath = path.join(codexHome, 'config.toml');
-  if (configPath && path.resolve(configPath) === path.resolve(globalConfigPath)) return configText;
-  const globalConfig = await readText(globalConfigPath, '');
-  let next = mergeGlobalMcpServers(configText, globalConfig);
-  next = mergeGlobalCodexAppRuntimeTables(next, globalConfig);
-  return `${next.trim()}\n`;
-}
-
-function mergeGlobalMcpServers(configText: any = '', globalConfig: any = '') {
-  let next = configText;
-  const re = /(?:^|\n)(\[(mcp_servers\.[^\]\r\n]+)\][\s\S]*?)(?=\n\[[^\]]+\]|\s*$)/g;
-  for (const match of String(globalConfig || '').matchAll(re)) {
-      const block = (match[1] || '').trim();
-      const table = (match[2] || '').trim();
-    if (!new RegExp(`(^|\\n)\\[${escapeRegExp(table)}\\]`).test(next)) next = upsertTomlTable(next, table, block);
-  }
-  return next;
-}
-
-function mergeGlobalCodexAppRuntimeTables(configText: any = '', globalConfig: any = '') {
-  let next = configText;
-  const re = /(?:^|\n)(\[((?:marketplaces|plugins)\.[^\]\r\n]+)\][\s\S]*?)(?=\n\[[^\]]+\]|\s*$)/g;
-  for (const match of String(globalConfig || '').matchAll(re)) {
-      const block = (match[1] || '').trim();
-      const table = (match[2] || '').trim();
-    if (!new RegExp(`(^|\\n)\\[${escapeRegExp(table)}\\]`).test(next)) next = upsertTomlTable(next, table, block);
-  }
-  return next;
 }
 
 function removeWholeTomlTable(text: any = '', table: any = '') {
@@ -754,26 +716,7 @@ function hasTomlTable(text: any, table: any): boolean {
   return new RegExp(`(^|\\n)\\s*\\[${escapeRegExp(table)}\\]\\s*(?:#.*)?(?=\\n|$)`).test(String(text || ''));
 }
 
-function hasTomlTableKey(text: any, table: any, key: any): boolean {
-  const lines = String(text || '').split('\n');
-  const header = `[${table}]`;
-  const start = lines.findIndex((x: any) => x.trim() === header);
-  if (start === -1) return false;
-  let end = lines.length;
-  for (let i = start + 1; i < lines.length; i += 1) {
-    if (/^\s*\[.+\]\s*$/.test(lines[i] || '')) { end = i; break; }
-  }
-  const re = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`);
-  for (let i = start + 1; i < end; i += 1) if (re.test(lines[i] || '')) return true;
-  return false;
-}
-
-function upsertTomlTableKeyIfAbsent(text: any, table: any, line: any) {
-  const key = (String(line).split('=')[0] || '').trim();
-  return hasTomlTableKey(text, table, key) ? String(text || '') : upsertTomlTableKey(text, table, line);
-}
-
-function removeTomlTableKey(text: any, table: any, key: any) {
+function removeTomlTableKey(text: any, table: any, key: any, expectedValue: any = null) {
   const lines = String(text || '').trimEnd().split('\n');
   if (lines.length === 1 && lines[0] === '') return '';
   const header = `[${table}]`;
@@ -786,7 +729,8 @@ function removeTomlTableKey(text: any, table: any, key: any) {
       break;
     }
   }
-  const keyPattern = new RegExp(`^\\s*${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*=`);
+  const valuePattern = expectedValue === null ? '' : `\\s*${escapeRegExp(String(expectedValue))}\\s*(?:#.*)?$`;
+  const keyPattern = new RegExp(`^\\s*${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*=${valuePattern}`);
   return lines.filter((line: any, index: any) => index <= start || index >= end || !keyPattern.test(line)).join('\n').replace(/\n{3,}/g, '\n\n');
 }
 
@@ -800,33 +744,6 @@ function managedCodexConfigBlocks() {
       text: '[auto_review]\npolicy = "In MAD-SKS launches, allow only the scoped high-risk surfaces approved for the active invocation. The explicit sks mad-sks sql|apply-migration invocation is the SQL-plane approval boundary: execute only requested SQL-plane mutations with mission-local write transport, literal catastrophic-intent binding, read-back proof, and final read-only restoration. Supabase project/account/billing/credential control-plane actions remain denied."'
     }
   ];
-}
-
-function upsertTomlTableKey(text: any, table: any, line: any) {
-  const key = (String(line).split('=')[0] || '').trim();
-  let lines = String(text || '').split('\n');
-  if (lines.length === 1 && lines[0] === '') lines = [];
-  const header = `[${table}]`;
-  let start = lines.findIndex((x: any) => x.trim() === header);
-  if (start === -1) {
-    const prefix = lines.length && (lines[lines.length - 1] || '').trim() ? ['', header, line] : [header, line];
-    return [...lines, ...prefix].join('\n').replace(/\n{3,}/g, '\n\n');
-  }
-  let end = lines.length;
-  for (let i = start + 1; i < lines.length; i++) {
-    if (/^\s*\[.+\]\s*$/.test(lines[i] || '')) {
-      end = i;
-      break;
-    }
-  }
-  for (let i = start + 1; i < end; i++) {
-    if (new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`).test(lines[i] || '')) {
-      lines[i] = line;
-      return lines.join('\n').replace(/\n{3,}/g, '\n\n');
-    }
-  }
-  lines.splice(start + 1, 0, line);
-  return lines.join('\n').replace(/\n{3,}/g, '\n\n');
 }
 
 function upsertTomlTable(text: any, table: any, block: any) {
@@ -924,15 +841,14 @@ function upsertTomlTable(text: any, table: any, block: any) {
       };
       created.push('inherited global Codex config invalid and preserved (manual repair required)');
     } else {
-      const managedCodexConfig = await mergeGlobalCodexConfigIfAvailable(
-        mergeManagedCodexConfigToml(existingCodexConfig, {
-          sksOwned: configPreviouslySksOwned,
-          configWasFresh,
-          inheritedText: inheritedCodexConfig
-        }),
-        generatedCodexConfigPath,
-        { home: opts.home, codexHome: opts.codexHome }
-      );
+      // Codex layers the user-level config under this project file natively (measured: mcp_servers,
+      // plugins and marketplaces from ~/.codex/config.toml stay visible to a project that has its
+      // own config), so nothing is copied down from the global config.
+      const managedCodexConfig = mergeManagedCodexConfigToml(existingCodexConfig, {
+        sksOwned: configPreviouslySksOwned,
+        configWasFresh,
+        inheritedText: inheritedCodexConfig
+      });
       const managedConfigValidation = inspectOfficialSubagentToml(managedCodexConfig);
       if (!managedConfigValidation.ok) {
         await writeTextAtomic(generatedCodexConfigPath, existingCodexConfig);
@@ -1127,7 +1043,7 @@ export function codexAppQuickReference(scope: any, commandPrefix: any) {
     'dollar-commands:',
     ...currentDollarCommands().map((c: any) => `- \`${sksPrefixedDollarCommand(c.command)}\`: ${c.route}`),
     'Routing: Answer is read-only, DFix handles tiny edits, and Naruto implementation is parent orchestration with child slices enforced by the PreToolUse gate (spawn before any source edit, and no parent edits beside running children). Answer and tiny DFix stay on the parent.',
-    'Subagent context: pass the sealed model and reasoning effort with `fork_turns="none"` or a positive bounded turn count. Each child uses the newest model of its tier; Jev mode picks that tier at each new spawn. Pass the complete bounded slice contract in `message`. Never use `fork_turns="all"` together with a custom model.',
+    'Subagent context: pass the sealed model and reasoning effort with `fork_turns="none"` or a positive bounded turn count. Each child uses the newest model of its tier; Jev mode picks that tier at each new spawn. Pass the complete bounded slice contract in `message`. Children never use `fork_turns="all"` or the omitted full-history default (SKS policy).',
     'Goal: Codex native /goal is the only persisted goal owner; no SKS Goal mission, bridge, compatibility loop, or fallback state is allowed.',
     'Context: use bounded TriWiki recall when a claim needs project memory; refresh after material changes; validate before handoff/final; use Context7 or official vendor docs when external contracts or versions matter.',
     'Completion: report the result, actual verification, and remaining gaps once. Reflection and Honest Mode are optional unless explicitly requested or required by the strict profile.',

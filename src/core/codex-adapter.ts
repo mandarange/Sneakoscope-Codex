@@ -11,7 +11,6 @@ import { prepareCodexAppServerRuntimeEnv } from './codex-control/codex-app-serve
 
 export async function findCodexBinary(): Promise<string | null> {
   const resolved = await resolveCodexRuntime({
-    explicitPath: process.env.DCODEX_CODEX_BIN || null,
     requestedBy: 'codex-adapter'
   });
   return resolved.identity?.realpath || null;
@@ -55,7 +54,7 @@ export function buildCodexExecArgs({ root, prompt, outputFile, json = true, prof
 
 export async function runCodexExec({ root, recoveryRoot = root, prompt, outputFile, json = true, profile = null, extraArgs = [], onStdout, onStderr, logDir = null, stdoutFile = null, stderrFile = null, maxBufferBytes = 256 * 1024, timeoutMs = null, env = process.env, codexBin = null, findCodexBinaryImpl = findCodexBinary, runProcessImpl = runProcess, prepareCodexRuntimeEnvImpl = prepareCodexAppServerRuntimeEnv }: any): Promise<RunProcessResult> {
   const args = buildCodexExecArgs({ root, prompt, outputFile, json, profile, extraArgs });
-  const effectiveTimeoutMs = Number(timeoutMs || process.env.SKS_CODEX_TIMEOUT_MS || process.env.DCODEX_CODEX_TIMEOUT_MS || 30 * 60 * 1000);
+  const effectiveTimeoutMs = Number(timeoutMs || process.env.SKS_CODEX_TIMEOUT_MS || 30 * 60 * 1000);
   const recoveryArgs = args.slice(1, -1);
   const runtimeEnv = await prepareCodexRuntimeEnvImpl({ env });
   const guarded = await withDesktopBridgeCliLaunchGuard({

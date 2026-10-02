@@ -2,8 +2,7 @@ import path from 'node:path';
 import { codexChromeExtensionStatus, CODEX_CHROME_EXTENSION_SETUP_DOCS_URL } from '../codex-app.js';
 import { ensureCodexPlugins } from '../codex-plugins/codex-plugin-repair.js';
 import { runDoctorCodexStartupRepair } from './doctor-codex-startup-repair.js';
-import { ensureDir, nowIso, runProcess, which, writeJsonAtomic } from '../fsx.js';
-import { redactString } from '../secret-redaction.js';
+import { ensureDir, nowIso, which, writeJsonAtomic } from '../fsx.js';
 import { messageOf } from '../errors/message.js';
 
 export const DOCTOR_BROWSER_USE_REPAIR_SCHEMA = 'sks.doctor-browser-use-repair.v1';
@@ -54,41 +53,10 @@ export async function repairBrowserUse(input: {
     blocker: codexBin ? null : 'codex_binary_missing'
   });
 
-  const requiredChromeFlags = new Set(['browser_use_external', 'plugins', 'apps']);
-  const flagsNeedingEnable = [...requiredChromeFlags, 'in_app_browser', 'browser_use'];
-  for (const flag of flagsNeedingEnable) {
-    const detectorRequiresFlag = Array.isArray(before?.required_flags) && before.required_flags.includes(flag);
-    const detectorReportsMissing = (before?.blockers || []).some((b: string) => b.includes(`${flag}_feature_missing`));
-    const explicitlyEnabled = before?.features?.[flag] === true || before?.feature_flags?.[flag] === true;
-    const alreadyOk = explicitlyEnabled
-      || (requiredChromeFlags.has(flag) && (before?.ok === true || (detectorRequiresFlag && !detectorReportsMissing)));
-    if (codexBin && apply && !alreadyOk) {
-      const enable = await runProcess(codexBin, ['features', 'enable', flag], {
-        timeoutMs: input.timeoutMs || 10000,
-        maxOutputBytes: 32 * 1024
-      }).catch((err: unknown) => ({ code: 1, stdout: '', stderr: messageOf(err) }));
-      steps.push({
-        id: `${flag}_feature_enable`,
-        ok: enable.code === 0,
-        attempted: true,
-        command: `${codexBin} features enable ${flag}`,
-        exit_code: enable.code,
-        stdout_tail: tail(enable.stdout),
-        stderr_tail: tail(enable.stderr),
-        status: enable.code === 0 ? 'enabled' : 'unsupported_or_failed',
-        blocker: enable.code === 0 ? null : 'codex_feature_enable_unsupported_or_failed'
-      });
-    } else {
-      steps.push({
-        id: `${flag}_feature_enable`,
-        ok: alreadyOk,
-        attempted: false,
-        command: codexBin ? `${codexBin} features enable ${flag}` : `codex features enable ${flag}`,
-        status: alreadyOk ? 'already_enabled' : apply ? 'blocked' : 'detect_only',
-        blocker: alreadyOk ? null : apply ? 'codex_cli_missing' : 'doctor_fix_not_requested'
-      });
-    }
-  }
+  // browser_use, browser_use_external, in_app_browser, plugins and apps are `stable true` in
+  // `codex features list`; a false row is a user opt-out, and `codex features enable` would
+  // rewrite it (measured), so the repair never runs it. The detector's blockers name any flag
+  // that is off.
 
   const repairPlugins = input.pluginRepair || ensureCodexPlugins;
   const pluginRepair: any = before?.ok === true
@@ -153,10 +121,6 @@ export async function repairBrowserUse(input: {
   }
 
   const recovered = after?.ok === true;
-  const optionalFeatureSteps = steps.filter((step) => step.id === 'in_app_browser_feature_enable' || step.id === 'browser_use_feature_enable');
-  const optionalFeatureEnablementBlockers = optionalFeatureSteps
-    .filter((step) => step.attempted && !step.ok)
-    .map((step) => `${step.id}:codex_feature_enable_unsupported_or_failed`);
   // This repair can establish configuration/plugin capability only. A live Browser or
   // Chrome action in a fresh Codex task is required before any route may claim use proof.
   const realBrowserInteractionVerified = false;
@@ -167,7 +131,8 @@ export async function repairBrowserUse(input: {
     'If a Chrome extension install/enable action is offered from within Codex App settings, follow it there rather than the Chrome Web Store directly, since Codex App is the source of truth for what "ready" means for this feature.',
     `If no in-app action is available, consult the setup docs: ${CODEX_CHROME_EXTENSION_SETUP_DOCS_URL}`,
     'After installing/enabling the extension, tell SKS it is installed and rerun this repair to re-detect.',
-    'Verify with: codex features list | rg "browser_use_external|plugins|apps"'
+    'Verify with: codex features list | rg "browser_use_external|plugins|apps"',
+    'If that shows a flag as false, you switched it off in a config file: run `codex features enable <flag>` yourself to turn it back on.'
   ];
 
   let report: any = {
@@ -190,7 +155,6 @@ export async function repairBrowserUse(input: {
     plugin_repair: pluginRepair,
     current_task_tool_manifest_verified: false,
     requires_new_task: pluginRepair?.requires_new_task === true,
-    optional_feature_enablement_blockers: optionalFeatureEnablementBlockers,
     completion_blockers: realBrowserInteractionVerified ? [] : ['codex_browser_real_interaction_unverified'],
     completion_actions: realBrowserInteractionVerified ? [] : [
       'Start a fresh Codex task so repaired Browser/Chrome tools are attached to the new task manifest.',
@@ -213,9 +177,4 @@ export async function repairBrowserUse(input: {
     }
   }
   return report;
-}
-
-function tail(value: unknown, max = 2000) {
-  const text = redactString(String(value || ''));
-  return text.length > max ? text.slice(-max) : text;
 }
