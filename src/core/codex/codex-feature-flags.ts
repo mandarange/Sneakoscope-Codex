@@ -17,15 +17,20 @@
  */
 export const MANAGED_CODEX_FEATURE_FLAGS = Object.freeze(['hooks', 'fast_mode', 'apps'])
 
-export const REMOVED_CODEX_FEATURE_FLAGS = Object.freeze([
-  // unknown to Codex 0.150.1 (multi_agent_mode was stage `removed` in 0.147
-  // and has since left the table entirely; `multi_agent` itself is stable)
-  'fast_mode_ui',
-  'codex_hooks',
-  'multi_agent_mode',
-  // stage `removed` in Codex 0.150.1
-  'remote_control',
-  'codex_git_commit',
-  'plugin_hooks',
-  'js_repl'
-])
+/**
+ * `[features]` keys the installed Codex does not know at all (measured on 0.153.4 and
+ * 0.159.2: `codex exec` on 0.159 warns "`features.fast_mode_ui` is ignored" and
+ * `--strict-config` rejects the field on both). Deleting them is inert cleanup at any
+ * value. Every other key an older SKS pruned is either live (`multi_agent`) or a
+ * `removed` flag Codex accepts silently (`remote_control`, `codex_git_commit`,
+ * `plugin_hooks`, `js_repl`, `multi_agent_mode`), so it stays the user's.
+ */
+export const REMOVED_CODEX_FEATURE_FLAGS = Object.freeze(['fast_mode_ui'])
+
+/**
+ * `codex_hooks` is a deprecated LIVE alias of `hooks` (Codex warns "`[features].codex_hooks`
+ * is deprecated. Use `[features].hooks` instead" on both versions, and `codex_hooks = false`
+ * turns `hooks` off). Only `= true`, which equals the `hooks` default, is stripped;
+ * `= false` is the user's opt-out and is left alone.
+ */
+export const DEPRECATED_CODEX_HOOKS_ALIAS_FLAG = 'codex_hooks'

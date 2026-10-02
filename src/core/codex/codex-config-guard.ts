@@ -44,11 +44,10 @@ export interface WriteCodexConfigGuardedResult {
 
 export const SKS_MANAGED_CODEX_CONFIG_MARKER = '# SKS-MANAGED-CODEX-CONFIG'
 
-// fast_mode_ui was removed from the [features] schema in the 2026-07 renewal.
 // Every SKS-managed Desktop feature flag is preserved across guarded mutations
 // so a provider switch or repair can never silently drop feature UI enablement.
-// Legacy flags (codex_hooks, remote_control, fast_mode_ui, codex_git_commit)
-// stay out of this list so normalization can still strip them.
+// The flags normalization still strips (fast_mode_ui, codex_hooks = true; see
+// codex-feature-flags.ts) stay out of this list.
 const FAST_FEATURE_KEYS = [
   'fast_mode',
   'hooks',

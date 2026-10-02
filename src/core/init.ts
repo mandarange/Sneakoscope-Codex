@@ -9,7 +9,7 @@ import { disableVersionGitHook } from './version-manager.js';
 import { concurrentToolGuidanceText, coreEngineeringDirectiveReferenceText, coreEngineeringDirectiveText } from './lean-engineering-policy.js';
 import { DEFAULT_CODEX_APP_PLUGINS, DESIGN_SYSTEM_SSOT, DOLLAR_COMMANDS, DOLLAR_SKILL_NAMES, LEGACY_DOLLAR_SKILL_NAMES, PPT_CONDITIONAL_SKILL_ALLOWLIST, PPT_PIPELINE_MCP_ALLOWLIST, PPT_PIPELINE_SKILL_ALLOWLIST, RECOMMENDED_DESIGN_REFERENCES, RECOMMENDED_MCP_SERVERS, RECOMMENDED_SKILLS, context7ConfigToml, prefixKnownSksDollarReferences, sksPrefixedDollarCommand, triwikiContextTracking } from './routes.js';
 import { SKILL_DREAM_POLICY } from './skill-forge.js';
-import { MANAGED_CODEX_FEATURE_FLAGS, REMOVED_CODEX_FEATURE_FLAGS } from './codex/codex-feature-flags.js';
+import { DEPRECATED_CODEX_HOOKS_ALIAS_FLAG, MANAGED_CODEX_FEATURE_FLAGS, REMOVED_CODEX_FEATURE_FLAGS } from './codex/codex-feature-flags.js';
 import { writeCodexConfigGuarded } from './codex/codex-config-guard.js';
 import { isSksHookHandler } from './codex-hooks/sks-hook-entries.js';
 import { legacyCoreSkillNames } from './codex-native/core-skill-manifest.js';
@@ -639,8 +639,7 @@ function mergeManagedCodexConfigToml(existingContent: any = '', opts: any = {}) 
   if (opts.sksOwned === true || opts.configWasFresh === true) {
     next = stampSksManagedCodexConfigMarker(next);
   }
-  next = removeTomlTableKey(next, 'notice', 'fast_default_opt_out');
-  next = removeTomlTableKey(next, 'features', 'codex_hooks');
+  next = removeTomlTableKey(next, 'features', DEPRECATED_CODEX_HOOKS_ALIAS_FLAG, 'true');
   next = upsertTopLevelTomlBooleanIfAbsent(next, 'suppress_unstable_features_warning', true);
   // Codex App feature flags: SET-IF-ABSENT only (see note above); flags the
   // 2026-07 renewal removed from the schema are stripped.
@@ -773,7 +772,7 @@ function upsertTomlTableKeyIfAbsent(text: any, table: any, line: any) {
   return hasTomlTableKey(text, table, key) ? String(text || '') : upsertTomlTableKey(text, table, line);
 }
 
-function removeTomlTableKey(text: any, table: any, key: any) {
+function removeTomlTableKey(text: any, table: any, key: any, expectedValue: any = null) {
   const lines = String(text || '').trimEnd().split('\n');
   if (lines.length === 1 && lines[0] === '') return '';
   const header = `[${table}]`;
@@ -786,7 +785,8 @@ function removeTomlTableKey(text: any, table: any, key: any) {
       break;
     }
   }
-  const keyPattern = new RegExp(`^\\s*${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*=`);
+  const valuePattern = expectedValue === null ? '' : `\\s*${escapeRegExp(String(expectedValue))}\\s*(?:#.*)?$`;
+  const keyPattern = new RegExp(`^\\s*${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*=${valuePattern}`);
   return lines.filter((line: any, index: any) => index <= start || index >= end || !keyPattern.test(line)).join('\n').replace(/\n{3,}/g, '\n\n');
 }
 

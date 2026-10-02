@@ -5,6 +5,7 @@ import { DEFAULT_CODEX_APP_PLUGINS } from '../routes.js';
 import { ensureDir, PACKAGE_VERSION, readText, writeTextAtomic } from '../fsx.js';
 import { removeLegacyTopLevelCodexModeLocks, writeCodexConfigGuarded } from '../codex/codex-config-guard.js';
 import { cleanupCodexConfigBackups, validateCodexConfigRoundTrip } from '../codex/codex-config-toml.js';
+import { DEPRECATED_CODEX_HOOKS_ALIAS_FLAG, REMOVED_CODEX_FEATURE_FLAGS } from '../codex/codex-feature-flags.js';
 import { escapeRegExp } from '../text/regex.js';
 
 export async function ensureGlobalCodexFastModeDuringInstall(opts: any = {}) {
@@ -60,12 +61,13 @@ function normalizeCodexFastModeUiConfigOnce(text: any = '', opts: any = {}) {
   next = removeTopLevelTomlKeyIfValue(next, 'default_profile', 'sks-fast-high');
   next = removeTomlTable(next, 'user.fast_mode');
   next = removeTomlTable(next, 'profiles.sks-fast-high');
-  next = removeTomlTableKey(next, 'notice', 'fast_default_opt_out');
-  for (const legacyFlag of ['codex_hooks', 'remote_control', 'fast_mode_ui', 'codex_git_commit']) {
-    next = removeTomlTableKey(next, 'features', legacyFlag, 'true');
+  // Only what Codex ignores or warns about is stripped (see codex-feature-flags.ts);
+  // `features.multi_agent`, `notice.fast_default_opt_out` and the silently accepted
+  // `removed` flags belong to the user.
+  next = removeTomlTableKey(next, 'features', DEPRECATED_CODEX_HOOKS_ALIAS_FLAG, 'true');
+  for (const legacyFlag of REMOVED_CODEX_FEATURE_FLAGS) {
+    next = removeTomlTableKey(next, 'features', legacyFlag);
   }
-  // Bare features.multi_agent is pre-V2; MA v2 lives in [features.multi_agent_v2].
-  next = removeTomlTableKey(next, 'features', 'multi_agent');
   if (opts.forceFastMode === true) {
     next = upsertTopLevelTomlString(next, 'service_tier', 'fast');
   } else if (opts.forceFastModeOff === true) {
