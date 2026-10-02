@@ -221,7 +221,7 @@ Subagent rules:
     : 'select the narrowest matching project custom agent by its description; the custom agent name is the spawn type'}
 - custom \`agent_type\` selection and spawn-time \`model\`/\`reasoning_effort\` overrides must use \`fork_turns="none"\` or a positive bounded turn count, with the complete bounded slice contract in \`message\`; context contract: pass fork_turns="none" for listed slices
 - \`spawn_agent\` has no provider argument; ${listOnly ? 'children use the OpenRouter list model named in the spawn contract' : narutoChildren ? 'Naruto children use the tier model named in the spawn contract' : 'children use the sealed model slug'}
-- never combine \`fork_turns="all"\` or the omitted/default full-history mode with \`agent_type\`, \`model\`, or \`reasoning_effort\`; Codex rejects that start before SubagentStart
+- SKS policy: never use \`fork_turns="all"\` or the omitted/default full-history mode for a child, and never combine either with \`agent_type\`, \`model\`, or \`reasoning_effort\`; Codex would run that spawn, but the SKS hook denies it before SubagentStart
 - never use a full-history fork for SKS children
 ${spawnModelRouting}
 ${Object.keys(effortPreferences).length ? `- stored role effort preferences override role defaults, including later slices: ${JSON.stringify(effortPreferences)}` : ''}

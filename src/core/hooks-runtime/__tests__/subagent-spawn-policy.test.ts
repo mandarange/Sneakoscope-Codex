@@ -34,6 +34,17 @@ test('child spawns accept every current tier model and reject old or foreign mod
   assert.equal(subagentSpawnPolicyBlockReason({ tool_name: 'exec_command', tool_input: { cmd: 'echo spawn_agent' } }), null);
 });
 
+test('the bounded-fork denial is an SKS policy and never claims Codex rejects or ignores the child model', () => {
+  // Measured on Codex 0.153.4 and 0.159.2 with a mock Responses server: a v2 spawn_agent with the
+  // default fork or fork_turns="all" plus model/reasoning_effort runs the child on those overrides.
+  // The denial therefore has to describe an SKS rule, not a Codex limitation.
+  const input = { model: T.deep, reasoning_effort: 'high', message: 'Implement the assigned parser change.' };
+  const reason = subagentSpawnPolicyBlockReason({ tool_name: 'collaboration.spawn_agent', tool_input: input })!;
+  assert.match(reason, /^SKS policy:/);
+  assert.match(reason, /this is an SKS rule, not a Codex restriction/);
+  assert.doesNotMatch(reason, /cannot carry|rejects|ignores/i);
+});
+
 test('actual PreToolUse dispatch denies a spawn without a current model on every repeated invocation', async () => {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-tier-spawn-'));
   try {

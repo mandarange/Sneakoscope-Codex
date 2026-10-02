@@ -35,7 +35,7 @@ const STANDALONE_PARENT_BASE_SKILLS = [
 
 const OFFICIAL_SUBAGENT_SPAWN_CONTRACT_HEAD = [
   'SKS official-subagent spawn contract:',
-  '- Full-history forks (`fork_turns="all"`, including the omitted/default full-history mode) inherit the parent agent type, model, and reasoning effort.',
+  '- A full-history fork (`fork_turns="all"`, which is also the default when `fork_turns` is omitted) copies the whole parent thread into the child. SKS policy: children never use one.',
   '- When selecting a custom `agent_type` or overriding `model`/`reasoning_effort`, set `fork_turns="none"` or a positive bounded turn count and put the complete bounded slice contract in `message`.',
   `- ${EXCLUSIVE_SURFACE_SPAWN_LINE}`
 ];
