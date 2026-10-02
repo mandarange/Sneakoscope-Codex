@@ -3611,15 +3611,6 @@
       "reason": "Current Codex thread-store check writes or removes only isolated temporary files created for this check."
     },
     {
-      "file": "src/scripts/codex-exec-output-schema-actual-syntax-check.ts",
-      "symbol": "module",
-      "token": "writeFileSync",
-      "scope_contract_sha256": "62070b8f1dc1b0d31aff82dba78b9e16ab2e27ce577ef1e84456e82d49e10033",
-      "callsite_sha256": "a5f81ff8b6480d455ed480fb4dce20db64fea6f8d8cedd29858e6db0374a69c1",
-      "occurrence": 1,
-      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
-    },
-    {
       "file": "src/scripts/codex-history-search-check.ts",
       "symbol": "module",
       "token": "writeFileSync",

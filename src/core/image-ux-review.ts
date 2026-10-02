@@ -8,7 +8,6 @@ import { nowIso, sha256, writeJsonAtomic } from './fsx.js';
 import { imageDimensions, sha256File } from './wiki-image/image-hash.js';
 import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_CHROME_EXTENSION_DOC_URL, CODEX_IMAGEGEN_REQUIRED_POLICY, CODEX_WEB_VERIFICATION_POLICY } from './routes.js';
 import { CURRENT_CODEX_RUNTIME_CONTRACT } from './codex-compat/codex-runtime-contract.js';
-import { detectCodexExecResumeOutputSchema } from './codex-exec-output-schema.js';
 import { buildCalloutPrompt, imagegenCapabilityBlocker } from './image-ux-review/imagegen-adapter.js';
 import { buildIssueLedgerFromGeneratedCallouts } from './image-ux-review/callout-extraction.js';
 import { planImageUxFixTasks } from './image-ux-review/fix-task-planner.js';
@@ -679,7 +678,6 @@ export async function writeImageUxReviewRouteArtifacts(dir: any, contract: any =
   const fixLoop = runImageUxFixLoop(issueLedger, fixTaskPlan, opts.fixLoop || {});
   const recapturePlan = selectImageUxRecapturePlan(fixLoop, opts, existingRecapture);
   const iterationReport = buildImageUxIterationReport(contract, policy, generatedReviewLedger, issueLedger, fixTaskPlan, fixLoop, recapturePlan);
-  const outputSchema = await detectCodexExecResumeOutputSchema().catch((err: any) => ({ ok: true, status: 'integration_optional', warnings: [err.message] }));
   const honestModeEvidence = await ensureImageUxHonestModeEvidence(dir, {
     contract,
     inventory,
@@ -733,7 +731,7 @@ export async function writeImageUxReviewRouteArtifacts(dir: any, contract: any =
     fix_loop: fixLoop,
     recapture_plan: recapturePlan,
     iteration_report: iterationReport,
-    output_schema: outputSchema,
+    output_schema: { schema_path: 'schemas/codex/image-ux-issue-ledger.schema.json' },
     honest_mode_evidence: honestModeEvidence,
     gate
   };
