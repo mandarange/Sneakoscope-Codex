@@ -441,6 +441,9 @@ New 10.4.0 claims:
 | The deleted scripts, modules, and registries had no production reference | passed-hermetic | grep proof in each commit body; release registries consistent; mutation allowlist 714 rows, 0 uncovered |
 | Retired-flag refusals and old-mission readers survive | passed-hermetic | the retired `--glm` hint tests and the GLM stop-gate readers were kept on purpose |
 | The cleanup changes nothing on a Codex newer than 0.159.2 | not proved | no real Codex turn was driven for the cleanup |
+| A PermissionRequest no guard denied is left to Codex's own prompt | passed-hermetic | `permission-request-default` suite: an unmatched request carries no decision, an explicit allow comes only from a user git action in a no-question route, and a command decides on its own text; not driven through a real Codex approval prompt |
+| The harness guard and parent gate classify tools by what they execute | passed-hermetic | harness-guard and parent-gate suites: quoted text and heredoc bodies are not commands, `exec_command`'s `cmd` is read, filesystem MCP write/edit/move are source edits with both ends of a move as targets; the shell tokenizer is a conservative approximation, not a full shell parser |
+| A child running a follow-up turn counts as running again | passed-hermetic | `child-thread-resume`, `child-thread-activity`, and skill-admission suites: the first hook of an unseen turn is recorded as a `SubagentResume`, the timeline reopens the thread until its next Stop, completion evidence ignores it; a real Codex `followup_task` was not driven |
 
 New 10.3.10 claims:
 

@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+
+## [10.4.0] - 2026-10-02
+
 ### Fixed
 
 - The PermissionRequest hook approved every permission request that no SKS
@@ -15,9 +18,22 @@
   is present it now decides on the command text alone (`git status|diff|add|
   commit|push|branch|remote|rev-parse|log` or `gh pr`); the force-style denials
   are unchanged.
-
-
-## [10.4.0] - 2026-10-02
+- The harness guard, which stops an agent from running `sks setup`, `sks doctor
+  --fix`, or an uninstall, classified any payload that merely mentioned such a
+  command (a patch body, a search pattern, a goal) as that command, and missed the
+  `cmd` key `exec_command` uses. It now reads the simple commands of a shell tool's
+  command line, so quoted text and heredoc bodies are not commands. The parent
+  orchestration gate treats the filesystem MCP `write_file`, `edit_file`, and
+  `move_file` tools as source edits and both ends of a move or rename as targets.
+- Codex sends no second `SubagentStart` when the parent follows up on a settled
+  child (`followup_task`, `send_message`), so the parent gate and the wave
+  lifecycle counted a child that was running a follow-up turn as settled. The
+  first hook of a turn the log has not seen is now recorded as a `SubagentResume`
+  and the child counts as running until its next `SubagentStop`. A spawn that
+  names a managed role is no longer sealed to a Jev tier Codex would not run
+  (Codex runs the role file's pin over the spawn's model): the input names the
+  role's own pin and Jev is not asked. The MAD-SKS SQL plane reads Codex's real
+  `tool_use_id` and no longer takes a lock when no operation was reserved.
 
 ### Removed
 

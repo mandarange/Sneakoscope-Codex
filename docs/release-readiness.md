@@ -30,7 +30,15 @@ nesting-depth policy, and every deliberate refusal for retired flags such as
 `--glm`. Verification must cover the build, the release registries and gates
 after the removals, the mutation-callsite allowlist, `sks doctor --json` and
 `sks commands`, the floor enforced against a stub Codex below it, and the
-canonical suite on the same tree.
+canonical suite on the same tree. The release also carries three fixes that had
+sat uncommitted in separate session worktrees: the user-level PermissionRequest
+hook no longer approves every request no guard denied (Codex's own prompt runs),
+the harness guard and the parent gate classify shell and filesystem MCP tools by
+what they execute, and a child that runs a follow-up turn counts as running again
+(with a spawn that names a managed role no longer sealed to a Jev tier Codex
+would not run). Their verification must cover the PermissionRequest default, the
+shell tokenizer cases, the filesystem MCP edit cases, the resume timeline, and
+the skill digests that moved with the text.
 
 ## Previous candidate: 10.3.10
 
