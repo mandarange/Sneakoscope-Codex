@@ -1,6 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { codexGitActionReadiness } from '../../dist/core/codex-app.js';
+import { codexGitActionReadiness, codexRemoteControlStatusFromInfo } from '../../dist/core/codex-app.js';
+
+test('remote-control status only depends on the Codex CLI being present', () => {
+  const present = codexRemoteControlStatusFromInfo({ bin: '/fixture/codex', version: 'codex-cli 0.159.2' });
+  assert.equal(present.ok, true);
+  assert.equal(present.reason, 'available');
+  assert.equal(present.command, '/fixture/codex remote-control');
+  const missing = codexRemoteControlStatusFromInfo({});
+  assert.equal(missing.ok, false);
+  assert.equal(missing.reason, 'codex_cli_missing');
+});
 
 test('Codex App git actions accept command-based remote-control readiness after feature flag removal', () => {
   const readiness = codexGitActionReadiness({
@@ -29,10 +39,10 @@ test('Codex App git actions still block when the remote-control command is unava
     },
     remoteControl: {
       ok: false,
-      reason: 'requires_codex_cli_0.130.0_or_newer'
+      reason: 'codex_cli_missing'
     }
   });
 
   assert.equal(readiness.ok, false);
-  assert.deepEqual(readiness.blockers, ['requires_codex_cli_0.130.0_or_newer']);
+  assert.deepEqual(readiness.blockers, ['codex_cli_missing']);
 });

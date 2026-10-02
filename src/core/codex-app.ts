@@ -16,7 +16,6 @@ export const CODEX_APP_DOCS_URL = 'https://developers.openai.com/codex/app/featu
 export const CODEX_CHANGELOG_URL = 'https://developers.openai.com/codex/changelog';
 export const CODEX_ACCESS_TOKENS_DOCS_URL = 'https://developers.openai.com/codex/enterprise/access-tokens';
 export const CODEX_CHROME_EXTENSION_SETUP_DOCS_URL = CODEX_CHROME_EXTENSION_DOC_URL;
-export const CODEX_REMOTE_CONTROL_MIN_VERSION = '0.130.0';
 const REQUIRED_CODEX_APP_FEATURE_FLAGS = [
   'codex_git_commit',
   'hooks',
@@ -313,27 +312,17 @@ export async function codexRemoteControlStatus(opts: any = {}) {
 }
 
 export function codexRemoteControlStatusFromInfo(codex: any = {}) {
-  const current = codexCliVersionNumber(codex.version);
-  const versionKnown = Boolean(current);
-  const supported = Boolean(codex.bin && current && compareVersions(current, CODEX_REMOTE_CONTROL_MIN_VERSION) >= 0);
+  const present = Boolean(codex.bin);
   return {
-    ok: supported,
-    min_version: CODEX_REMOTE_CONTROL_MIN_VERSION,
+    ok: present,
     docs_url: CODEX_CHANGELOG_URL,
     codex_cli: {
-      ok: Boolean(codex.bin),
+      ok: present,
       bin: codex.bin || null,
-      version: codex.version || null,
-      version_number: current
+      version: codex.version || null
     },
     command: codex.bin ? `${codex.bin} remote-control` : 'codex remote-control',
-    reason: supported
-      ? 'available'
-      : !codex.bin
-        ? 'codex_cli_missing'
-        : versionKnown
-          ? `requires_codex_cli_${CODEX_REMOTE_CONTROL_MIN_VERSION}_or_newer`
-          : 'codex_cli_version_unknown'
+    reason: present ? 'available' : 'codex_cli_missing'
   };
 }
 
@@ -401,13 +390,12 @@ export function formatCodexRemoteControlStatus(status: any) {
     'Codex remote-control',
     '',
     `Codex CLI: ${status.codex_cli.ok ? 'ok' : 'missing'}${status.codex_cli.version ? ` ${status.codex_cli.version}` : ''}`,
-    `Minimum:   ${status.min_version}`,
     `Ready:     ${status.ok ? 'yes' : 'no'}`,
     `Command:   ${status.command}`,
     '',
     status.ok
       ? 'Run: sks codex-app remote-control -- <codex remote-control args>'
-      : remoteControlGuidance(status)
+      : remoteControlGuidance()
   ];
   return lines.filter(Boolean).join('\n');
 }
@@ -477,9 +465,6 @@ export function codexAppGuidance({ appInstalled, codex, mcpList, featureList, re
   if (!codex?.bin) lines.push('Install Codex CLI too: npm i -g @openai/codex, or set SKS_CODEX_BIN.');
   if (remoteControl?.ok) {
     lines.push('Codex remote-control is available for headless remotely controllable app-server sessions: sks codex-app remote-control.');
-    lines.push('Codex CLI 0.130.0+ app-server threads can pick up config changes without restarting the app-server; restart older CLI/TUI sessions if they were launched before config changes.');
-  } else if (codex?.bin) {
-    lines.push(remoteControlGuidance(remoteControl || codexRemoteControlStatusFromInfo(codex)));
   }
   if (mcpList?.checked && !mcpList.ok) {
     lines.push(`Codex MCP/config check failed: ${summarizeCodexMcpError(mcpList.stderr || mcpList.stdout)}`);
@@ -576,7 +561,7 @@ export function formatCodexAppStatus(status: any, { includeRaw = false }: any = 
     '',
     `Codex App:   ${status.app.installed ? 'ok' : 'missing'}${status.app.path ? ` ${status.app.path}` : ''}`,
     `Codex CLI:   ${status.codex_cli.ok ? 'ok' : 'missing'}${status.codex_cli.version ? ` ${status.codex_cli.version}` : ''}`,
-    `Remote Ctrl: ${status.remote_control?.ok ? 'ok' : 'missing'}${status.remote_control?.codex_cli?.version_number ? ` min ${status.remote_control.min_version}` : ''}`,
+    `Remote Ctrl: ${status.remote_control?.ok ? 'ok' : 'missing'}`,
     `App Flags:  ${status.features?.required_flags_ok ? 'ok' : `missing ${missingRequiredFeatureFlags(status.features?.required_flags).join(', ') || 'required flags'}`}`,
     `Fast UI:    ${status.features?.fast_mode_config?.ok ? 'ok' : `locked ${(status.features?.fast_mode_config?.blockers || []).join(', ') || 'config'}`}`,
     `SKS Menu:   ${sksNativeMenuSummary(status.app?.sks_menu)}`,
@@ -659,8 +644,7 @@ export function codexGitActionReadiness({ requiredFeatureFlags = {}, remoteContr
     commit_push: ok,
     pull_request: ok,
     required_flags: ['codex_git_commit', 'hooks'],
-    required_capabilities: ['codex_cli_remote_control'],
-    remote_control_min_version: CODEX_REMOTE_CONTROL_MIN_VERSION
+    required_capabilities: ['codex_cli_remote_control']
   };
 }
 
@@ -1028,27 +1012,7 @@ function tomlTable(text: any = '', table: any = '') {
   return String(text || '').match(re)?.[1] || '';
 }
 
-// Guidance stays capability-first: the machine comparison against
-// CODEX_REMOTE_CONTROL_MIN_VERSION still gates the feature, but the operator is
-// told to install the official latest stable release rather than a number that
-// goes stale the next time Codex ships.
-function remoteControlGuidance(status: any = {}) {
-  if (!status.codex_cli?.ok) return 'Codex remote-control needs a Codex CLI that exposes the app-server entrypoint. Install the official latest stable release: npm i -g @openai/codex@latest';
-  if (status.reason === 'codex_cli_version_unknown') return 'Codex remote-control needs a Codex CLI that exposes the app-server entrypoint, but the installed CLI version could not be parsed. Check: codex --version';
-  return 'The installed Codex CLI does not expose remote-control. Update to the official latest stable release: npm i -g @openai/codex@latest';
-}
-
-function codexCliVersionNumber(versionText: any = '') {
-  const match = String(versionText || '').match(/(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)/);
-  return match ? match[1] : null;
-}
-
-function compareVersions(a: any, b: any) {
-  const pa = String(a || '').split(/[.-]/).map((x: any) => Number.parseInt(x, 10) || 0);
-  const pb = String(b || '').split(/[.-]/).map((x: any) => Number.parseInt(x, 10) || 0);
-  for (let i = 0; i < Math.max(pa.length, pb.length, 3); i++) {
-    if ((pa[i] || 0) > (pb[i] || 0)) return 1;
-    if ((pa[i] || 0) < (pb[i] || 0)) return -1;
-  }
-  return 0;
+// remote-control ships natively in the Codex CLI, so the only unready state is a missing CLI.
+function remoteControlGuidance() {
+  return 'Codex remote-control needs the Codex CLI. Install the official latest stable release: npm i -g @openai/codex@latest';
 }
