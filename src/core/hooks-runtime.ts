@@ -18,7 +18,7 @@ import { activeRouteContext, evaluateStop, prepareRoute, promptPipelineContext a
 import { localizedFinalizationReason } from './language-preference.js';
 import { managedSkillDigestBlocksEnforced, postToolEvidenceEnabled, stopFinalizationRitualsEnforced } from './verification-profile.js';
 import { classifyToolError } from './evaluation.js';
-import { dollarCommand, managedSkillNamesForPrompt, stripVisibleDecisionAnswerBlocks, withJevRouteOverride } from './routes.js';
+import { dollarCommand, managedSkillNamesForPrompt, stripVisibleDecisionAnswerBlocks, withJevParallelJudgment, withJevRouteOverride } from './routes.js';
 import { customImageModeLine, planJevTurn, type JevTurnPlan } from './hooks-runtime/jev-turn-plan.js';
 import { coreEngineeringDirectiveReferenceText } from './lean-engineering-policy.js';
 import {
@@ -195,7 +195,8 @@ export async function evaluateHookPayload(name: any, payload: any = {}, opts: an
   // Jev plans the prompt before anything routes it, so the Naruto gate, the
   // prompt handler, and skill admission all see one route decision.
   const jevPlan = await planJevTurn(root, extractUserPrompt(payload)).catch(() => null);
-  return withJevRouteOverride(jevPlan?.routeOverride || null, () => evaluateHookPayloadWithPlan(name, payload, { ...opts, root }, jevPlan));
+  const parallel = jevPlan?.parallel === true ? { text: stripVisibleDecisionAnswerBlocks(extractUserPrompt(payload)), parallel: true } : null;
+  return withJevRouteOverride(jevPlan?.routeOverride || null, () => withJevParallelJudgment(parallel, () => evaluateHookPayloadWithPlan(name, payload, { ...opts, root }, jevPlan)));
 }
 
 async function evaluateHookPayloadWithPlan(name: any, payload: any, opts: any, jevPlan: JevTurnPlan | null): Promise<JsonData> {

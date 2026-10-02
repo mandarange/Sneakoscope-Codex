@@ -65,10 +65,20 @@ test('route-owned QA execution and official Release Review never activate two fa
   assert.doesNotMatch(release.next_actions.join('\n'), /sks agent run/i);
 });
 
-test('implicit Naruto implementation is parent orchestration with one official execution stage', () => {
-  // Since 10.3.2 ordinary implementation routes to Naruto and the parent
-  // orchestrates; 10.3.4 also covers imperative work without a listed verb.
+test('implicit implementation is parent-owned with no delegation stage; asking for parallel work gets one official execution stage', () => {
+  // Child agents run when the user asks for them (or Jev judges the work splits), not because a task is implementation-shaped.
   for (const task of ['work on the parser', '로그인 버그 수정해줘', 'Implement the route parser', 'make the header sticky', '결제 모듈 연동해줘']) {
+    const routed: any = routePrompt(task);
+    assert.equal(routed.id, 'SKS', task);
+    assert.equal(routed.explicit_invocation, false, task);
+    const plan: any = buildPipelinePlan({ route: routed, task });
+    assert.equal(plan.route.subagents_required, false, task);
+    assert.equal(plan.official_subagents.required, false, task);
+    assert.equal(plan.stages.some((stage: any) => stage.id === 'official_subagent_execution'), false, task);
+    assert.equal(plan.stages.some((stage: any) => stage.id === 'native_agent_intake'), false, task);
+  }
+
+  for (const task of ['implement the route parser and the formatter in parallel', '서브에이전트로 나눠서 로그인 모듈들 수정해줘']) {
     const routed: any = routePrompt(task);
     assert.equal(routed.id, 'Naruto', task);
     assert.equal(routed.explicit_invocation, false, task);

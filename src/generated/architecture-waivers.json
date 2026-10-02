@@ -77,6 +77,13 @@
       "reason": "update split debt: the update stage pipeline, result assembly, and self-verification still share one module",
       "policy": "shrink-only",
       "baseline_lines": 2296
+    },
+    {
+      "schema": "sks.architecture-waiver.v1",
+      "file": "src/core/hooks-runtime/__tests__/naruto-decision-gate.test.ts",
+      "reason": "existing oversized hook decision-gate test pending split",
+      "policy": "shrink-only",
+      "baseline_lines": 2008
     }
   ]
 }

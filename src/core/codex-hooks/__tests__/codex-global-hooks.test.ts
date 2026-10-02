@@ -258,7 +258,8 @@ test('real Codex loads and trusts every installed SKS hook', async (t) => {
 
 test('installed guidance tells Naruto parents to orchestrate and lets Jev seal the child', () => {
   const text = agentsBlockText();
-  assert.match(text, /parent orchestration only/);
+  assert.match(text, /there the parent orchestrates only/);
+  assert.match(text, /ordinary implementation stay parent-owned/);
   assert.match(text, /newest model of the tier its work needs \(fast, balanced, context, or deep\); no model family is pinned/);
   assert.match(text, /Jev picks the tier for each new Naruto child spawn and SKS seals it/);
   // Installed guidance never pins a model family.

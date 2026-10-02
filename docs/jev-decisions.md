@@ -97,7 +97,14 @@ connectivity evidence, not SKS task accuracy or a privacy audit.
   database, computer use, SEO), with the keyword router's guess as a fact and a
   `keep_baseline` escape. A confident pick replaces the keyword route for that
   prompt only, scoped to the hook call. An explicit `$sks-*` command is never
-  re-routed and does not ask for a route. When the custom image model mode is
+  re-routed and does not ask for a route.
+- The same request asks whether the work is worth child agents: `single` (one
+  agent does it directly, the default for a fix, a test, a refactor or config
+  change in one area, a review, and anything whose steps depend on each other) or
+  `parallel` (two or more independent parts that finish clearly faster as separate
+  child agents). Only a confident `parallel` starts Naruto for that prompt; an
+  unsure answer, a Jev that is off, or an explicit `$sks-*` command keeps the
+  deterministic rule (child agents only when the user asked for them). When the custom image model mode is
   on, the request also asks whether the turn makes an image, so the custom-mode
   instruction appears only on image turns.
 - `sks imagegen generate`: the aspect ratio and quality the caller left open

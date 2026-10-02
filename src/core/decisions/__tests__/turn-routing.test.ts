@@ -6,7 +6,7 @@ import '../../__tests__/helpers/isolated-test-home.js';
 import { ROUTING_TIERS } from '../types.js';
 import { BUILTIN_LATEST_TIER_MODELS, resetLatestModelTierCache } from '../../subagents/model-tiers.js';
 import { customImageModeLine, planJevTurn } from '../../hooks-runtime/jev-turn-plan.js';
-import { routePrompt, withJevRouteOverride } from '../../routes.js';
+import { routePrompt, routeRequiresSubagents, withJevParallelJudgment, withJevRouteOverride } from '../../routes.js';
 
 process.env.SKS_JEV_DECISION_TEST_OVERRIDES = '1';
 
@@ -130,8 +130,9 @@ test('a confident Jev turn picks the pipeline, and routePrompt follows it inside
     const plan = await planJevTurn(process.cwd(), prompt, turnEnv());
     assert.ok(seen.includes('option_route'), seen.join(','));
     assert.equal(plan?.routeId, 'Naruto');
+    // Implementing is the main agent's own work unless Jev also judged that it splits: the Naruto pick runs as the parent-owned route.
     const routed = await withJevRouteOverride(plan?.routeOverride || null, async () => routePrompt(prompt)?.id);
-    assert.equal(routed, 'Naruto');
+    assert.equal(routed, 'SKS');
     assert.equal(routePrompt(prompt)?.id || null, plan?.baselineRouteId ?? null, 'outside the hook scope the keyword router answers');
   } finally {
     setDecisionTestOverrides(null);
@@ -164,7 +165,7 @@ test('an explicit $command is never re-routed, and an unconfident answer keeps t
 
 test('the custom image mode line appears only on image turns', () => {
   const plan = (imageNeeded: boolean | null, customImageModel: string | null = 'google/gemini-3.1-flash-image') => ({
-    decision: { called: false, choices: {}, tier: null, reason: 'off' }, baselineRouteId: null, routeId: null, routeOverride: null, customImageModel, imageNeeded
+    decision: { called: false, choices: {}, tier: null, reason: 'off' }, baselineRouteId: null, routeId: null, routeOverride: null, customImageModel, imageNeeded, parallel: null
   });
   assert.match(customImageModeLine(plan(null), '서비스 로고 이미지 만들어줘', null), /sks imagegen generate/);
   assert.match(customImageModeLine(plan(null), 'Make the quarterly deck', 'PPT'), /google\/gemini-3\.1-flash-image/);
@@ -172,4 +173,55 @@ test('the custom image mode line appears only on image turns', () => {
   assert.match(customImageModeLine(plan(true), 'Refactor the settings page', null), /Do not use the built-in image tool/);
   assert.equal(customImageModeLine(plan(null, null), '서비스 로고 이미지 만들어줘', null), '', 'custom mode off adds nothing');
   assert.equal(customImageModeLine(null, '서비스 로고 이미지 만들어줘', null), '');
+});
+
+test('Jev judges single or parallel in the same call as the pipeline, and unsure means single', async () => {
+  const asked: string[][] = [];
+  // The decision transport replays the answer to an identical request, so every run asks about its own prompt.
+  const run = async (prompt: string, picks: Record<string, { choice: string; confidence?: number }>) => {
+    setDecisionTestOverrides({
+      config: enabledConfig(),
+      fetchImpl: async (_url, init) => {
+        const body = JSON.parse(String(init?.body || ''));
+        asked.push(Object.keys(body.questions));
+        return answerAll(body, picks);
+      }
+    });
+    try {
+      const plan = await planJevTurn(process.cwd(), prompt, turnEnv());
+      const route = async () => withJevRouteOverride(plan?.routeOverride || null, () => withJevParallelJudgment(
+        plan?.parallel === true ? { text: prompt, parallel: true } : null,
+        async () => ({ id: routePrompt(prompt)?.id, subagents: routeRequiresSubagents(routePrompt(prompt), prompt) })
+      ));
+      return { plan, routed: await route() };
+    } finally {
+      setDecisionTestOverrides(null);
+    }
+  };
+
+  const parallel = await run('Add structured logging to the importer, exporter, and scheduler packages.', { option_route: { choice: 'implement' }, option_parallelism: { choice: 'parallel' } });
+  assert.equal(parallel.plan?.parallel, true);
+  assert.deepEqual(parallel.routed, { id: 'Naruto', subagents: true });
+  assert.ok(asked[0]?.includes('option_parallelism'), asked[0]?.join(','));
+
+  const single = await run('Rename the config loader helper and update its callers.', { option_route: { choice: 'implement' }, option_parallelism: { choice: 'single' } });
+  assert.equal(single.plan?.parallel, false);
+  assert.deepEqual(single.routed, { id: 'SKS', subagents: false });
+
+  const unsure = await run('Convert the date utilities from moment to the platform Temporal API.', { option_route: { choice: 'implement' }, option_parallelism: { choice: 'parallel', confidence: 0.5 } });
+  assert.equal(unsure.plan?.parallel, null);
+  assert.deepEqual(unsure.routed, { id: 'SKS', subagents: false });
+});
+
+test('a parallel judgment applies only to the prompt it was made for', async () => {
+  const prompt = 'Add structured logging to the importer, exporter, and scheduler packages.';
+  const route = routePrompt(prompt);
+  assert.equal(route?.id, 'SKS');
+  assert.equal(routeRequiresSubagents(route, prompt), false);
+  const other = await withJevParallelJudgment({ text: 'a different prompt', parallel: true }, async () => routeRequiresSubagents(route, prompt));
+  assert.equal(other, false);
+  const naruto = { id: 'Naruto', explicit_invocation: false, task_profile: 'bounded-work' };
+  assert.equal(routeRequiresSubagents(naruto, prompt), false);
+  assert.equal(await withJevParallelJudgment({ text: prompt, parallel: true }, async () => routeRequiresSubagents(naruto, prompt)), true);
+  assert.equal(await withJevParallelJudgment({ text: 'a different prompt', parallel: true }, async () => routeRequiresSubagents(naruto, prompt)), false);
 });

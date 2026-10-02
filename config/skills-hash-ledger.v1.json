@@ -335,6 +335,7 @@
     {
       "canonical_name": "sks-naruto",
       "trusted_sha256": [
+        "26528b6b7d063c7cf0b5b9e996947d504cbc7ef4af976e480b5df3e6c7fcbac9",
         "5ac4c3ea1d4478f12f55df3c3d6c4ab272a40f731de8aa659aee08cb8e517a8b",
         "c88999663811a50d096b7cbb696fbea5b8f72707bcbf4a232bb07fe3a10cb2a6",
         "b2eb207b2773ab1995ee6e113ba6f3b64de43389e76aef4a0f06d4845ff86223",
@@ -342,7 +343,6 @@
         "da43debf97f0b4a1583d8202a7306aca97ac97865accf9bca8f41d75c84a1cb9",
         "b981bea4183376c6c0204941ad6c2e78782e2cdea4f8d25cc85630c609faaf95",
         "5df9c9678eb68fd79ceb998ae7a52dd54dc92336ad5169e8a01acca89f76bd60",
-        "a1219f6dbad9c8c185953125ef0b8dccf081aa01efb8e8acaa543c6214ac049c",
         "49b5e3dcc1b537b49c2cf09e5b875cb16acb05c622b22798e265e64dacd8ac90"
       ]
     },
@@ -388,6 +388,7 @@
     {
       "canonical_name": "sks-prompt-pipeline",
       "trusted_sha256": [
+        "01b0d58e26d4493442041d1cd51b4a25ac15014be79b065a59520e21ef69a4b1",
         "5e423981384fc3825c74327c4ca0fe09905a0dc81a533676c7e76ebb385348fc",
         "f82a103e7962e416961add515d7b3e65df89848dec1fbb9319bd49d7f1dac982",
         "93fd938dccd65d9b4d1dd140b60e1baedc627e7fcc54f9afd95eb2e44efd1143",

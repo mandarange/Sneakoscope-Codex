@@ -1250,21 +1250,28 @@ test('known non-deep-tier App parent is recorded as advisory mismatch without ha
   }
 });
 
-test('automatic bounded implementation work is Naruto parent orchestration with one official workflow', async () => {
+test('ordinary implementation work is parent-owned, and asking for parallel work is Naruto parent orchestration with one official workflow', async () => {
   const root = await tempRoot('sks-bounded-naruto-');
   const session = 'bounded-naruto';
+  const parallelSession = 'bounded-naruto-parallel';
   try {
-    await prepareRoute(root, '로그인 버그 수정해줘', {}, { sessionKey: session });
+    // An ordinary implementation request is the main agent's own work: no mission, no subagent plan, no spawn-before-edit gate.
+    const ordinary: any = await prepareRoute(root, '로그인 버그 수정해줘', {}, { sessionKey: session });
+    assert.equal(ordinary.route?.id, 'SKS');
     const state: any = await loadStateForSession(root, session);
-    // Since 10.3.2 an ordinary implementation request routes to Naruto and the
-    // parent orchestrates; 10.3.4 enforces spawn-before-edit in PreToolUse.
-    assert.equal(state.route, 'Naruto');
-    assert.equal(state.subagents_required, true);
-    assert.equal(state.session_scope, session);
-    assert.ok(String(state.official_subagent_run_id || '').trim());
-    const dir = missionDir(root, state.mission_id);
-    await fsp.access(path.join(dir, 'pipeline-plan.json'));
-    await fsp.access(path.join(dir, 'subagent-plan.json'));
+    assert.ok(!state?.route && !state?.mission_id && !state?.subagents_required);
+    assert.ok(!String(state?.official_subagent_run_id || '').trim());
+
+    // Asked to split the work across subagents, the parent orchestrates; 10.3.4 enforces spawn-before-edit in PreToolUse.
+    await prepareRoute(root, '로그인 버그와 결제 버그를 서브에이전트로 나눠서 수정해줘', {}, { sessionKey: parallelSession });
+    const parallel: any = await loadStateForSession(root, parallelSession);
+    assert.equal(parallel.route, 'Naruto');
+    assert.equal(parallel.subagents_required, true);
+    assert.equal(parallel.session_scope, parallelSession);
+    assert.ok(String(parallel.official_subagent_run_id || '').trim());
+    const parallelDir = missionDir(root, parallel.mission_id);
+    await fsp.access(path.join(parallelDir, 'pipeline-plan.json'));
+    await fsp.access(path.join(parallelDir, 'subagent-plan.json'));
   } finally {
     await fsp.rm(root, { recursive: true, force: true });
   }

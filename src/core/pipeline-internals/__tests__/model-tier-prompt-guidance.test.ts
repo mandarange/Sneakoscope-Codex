@@ -17,7 +17,11 @@ test('Tier guidance respects project verification profile and bounded delegation
     const profile = path.join(root, '.sneakoscope/verification-profile.json');
     await fs.writeFile(profile, JSON.stringify({ profile: 'essential' }));
     resetVerificationProfileCache();
-    const essential = promptPipelineContext('implement a parser correction', route, root);
+    // Naruto the user asked for (explicit route): implicit implementation is parent-owned and carries none of this text.
+    const essential = promptPipelineContext('implement a parser correction', { ...route, explicit_invocation: true }, root);
+    const implicit = promptPipelineContext('implement a parser correction', route, root);
+    assert.doesNotMatch(implicit, /Codex subagent workflow: required|Naruto route: prepare subagent-plan/);
+    assert.match(implicit, /Subagent policy: not required/);
     assert.match(essential, /Honor authorization already given/);
     assert.match(essential, /when a claim needs project memory/);
     assert.doesNotMatch(essential, /before each stage|read the bounded current context pack/);
@@ -41,7 +45,7 @@ test('Tier guidance respects project verification profile and bounded delegation
     assert.match(parallel, /Naruto route: prepare subagent-plan/);
     await fs.writeFile(profile, JSON.stringify({ profile: 'strict' }));
     resetVerificationProfileCache();
-    const strict = promptPipelineContext('implement a parser correction', route, root);
+    const strict = promptPipelineContext('implement a parser correction', { ...route, explicit_invocation: true }, root);
     assert.match(strict, /then run SKS Honest Mode/);
     assert.match(strict, /Post-route reflection:/);
   } finally {

@@ -2,14 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { narutoDecisionForRoute, routePrompt, routeRequiresSubagents } from '../routes.js';
 
+// Implementation the user did not ask to parallelize runs as the lightest parent-owned route (SKS), not as Naruto.
 const cases = [
-  { prompt: '이거 왜 안 고쳐져? 로그인 버그 수정해줘', expectedRoute: 'Naruto', reason: 'direct_work' },
-  { prompt: 'Can you fix the login bug?', expectedRoute: 'Naruto', reason: 'direct_work' },
-  { prompt: '왜 모든 물음표를 answer로 보내? 이 라우팅 고쳐줘', expectedRoute: 'Naruto', reason: 'question_shaped_directive' },
+  { prompt: '이거 왜 안 고쳐져? 로그인 버그 수정해줘', expectedRoute: 'SKS', reason: 'direct_work' },
+  { prompt: 'Can you fix the login bug?', expectedRoute: 'SKS', reason: 'direct_work' },
+  { prompt: '왜 모든 물음표를 answer로 보내? 이 라우팅 고쳐줘', expectedRoute: 'SKS', reason: 'question_shaped_directive' },
   { prompt: 'How do I fix a typo in README?', expectedRoute: 'Answer', reason: 'answer_only' },
   { prompt: '이 함수가 왜 이렇게 동작해?', expectedRoute: 'Answer', reason: 'answer_only' },
-  { prompt: '이거 가능한지 확인하고 문제 있으면 고쳐줘', expectedRoute: 'Naruto', reason: 'conditional_work' },
-  { prompt: 'Could you update package version and prepare release?', expectedRoute: 'Naruto', reason: 'direct_work' },
+  { prompt: '이거 가능한지 확인하고 문제 있으면 고쳐줘', expectedRoute: 'SKS', reason: 'conditional_work' },
+  { prompt: 'Could you update package version and prepare release?', expectedRoute: 'SKS', reason: 'direct_work' },
   { prompt: '이 문구 오타만 고쳐줄 수 있어?', expectedRoute: 'DFix', reason: 'tiny_direct_fix' },
 ] as const;
 
@@ -24,12 +25,13 @@ test('question-shaped prompts route by intent instead of question mark shape', (
   }
 });
 
-test('greetings, answers, and read-only audits stay parent-owned while implementation requires subagents', () => {
+test('greetings, answers, audits, and ordinary implementation stay parent-owned; child agents run only when asked', () => {
   assert.equal(routePrompt('hi'), null);
   assert.equal(routePrompt('이 함수 설명해줘')?.id, 'Answer');
   const bounded = routePrompt('로그인 버그 수정해줘');
-  assert.equal(bounded?.id, 'Naruto');
-  assert.equal(routeRequiresSubagents(bounded, '로그인 버그 수정해줘'), true);
+  assert.equal(bounded?.id, 'SKS');
+  assert.equal(bounded?.task_profile, 'bounded-work');
+  assert.equal(routeRequiresSubagents(bounded, '로그인 버그 수정해줘'), false);
   const parallel = routePrompt('여러 패키지를 병렬 검토해줘');
   assert.equal(parallel?.id, 'Naruto');
   assert.equal(routeRequiresSubagents(parallel, '여러 패키지를 병렬 검토해줘'), true);
@@ -45,15 +47,16 @@ test('greetings, answers, and read-only audits stay parent-owned while implement
   assert.equal(routePrompt('$Work')?.id, 'Naruto');
   assert.equal(routePrompt('$Work')?.explicit_invocation, true);
   const ordinaryWork = routePrompt('work on the parser');
-  assert.equal(ordinaryWork?.id, 'Naruto');
+  assert.equal(ordinaryWork?.id, 'SKS');
   assert.equal(ordinaryWork?.task_profile, 'bounded-work');
   assert.equal(ordinaryWork?.explicit_invocation, false);
-  assert.equal(routeRequiresSubagents(ordinaryWork, 'work on the parser'), true);
+  assert.equal(routeRequiresSubagents(ordinaryWork, 'work on the parser'), false);
   // Implementation phrased without a listed change verb is still work, not an answer.
   for (const prompt of ['set up eslint for this repo', 'Port this module to TypeScript', 'please handle the null case in parseUser', '검색 기능 붙여줘', '로그인 페이지 디자인 바꿔']) {
     const route = routePrompt(prompt);
-    assert.equal(route?.id, 'Naruto', prompt);
-    assert.equal(routeRequiresSubagents(route, prompt), true, prompt);
+    assert.equal(route?.id, 'SKS', prompt);
+    assert.equal(route?.task_profile, 'bounded-work', prompt);
+    assert.equal(routeRequiresSubagents(route, prompt), false, prompt);
   }
   for (const prompt of ['왜 로그인이 안돼?', 'What is a parser?', 'how do I convert this file to UTF-8?']) {
     assert.equal(routeRequiresSubagents(routePrompt(prompt), prompt), false, prompt);
@@ -70,7 +73,7 @@ test('removed dollar-command aliases do not redirect into current execution rout
 test('implementation language and Korean fix conjugations route as work', () => {
   for (const prompt of ['UI implementation 해줘', 'UI 버그 고치고 리뷰해줘', '이 문제는 이번 버전에서 반드시 해결해야해']) {
     const route = routePrompt(prompt);
-    assert.equal(route?.id, 'Naruto', prompt);
+    assert.equal(route?.id, 'SKS', prompt);
     assert.equal(route?.task_profile, 'bounded-work', prompt);
   }
   const parallel = routePrompt('parallel implementation');
@@ -86,7 +89,7 @@ test('legacy DB command and routing discussion stays out of the database route',
     '레거시 sks db 커맨드를 삭제해줘'
   ]) {
     const route = routePrompt(prompt);
-    assert.equal(route?.id, 'Naruto', prompt);
+    assert.equal(route?.id, 'SKS', prompt);
     assert.equal(route?.task_profile, 'bounded-work', prompt);
   }
 

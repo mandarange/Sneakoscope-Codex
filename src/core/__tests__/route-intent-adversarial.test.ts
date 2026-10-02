@@ -2,10 +2,12 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { hasFromChatImgSignal, hasMadSksSignal, routePrompt, stripMadSksSignal } from '../routes.js'
 
+// Work the user did not ask to parallelize routes to the lightest parent-owned route (SKS); only an explicit $sks-naruto,
+// --agents, a parallel cue, or the from-chat-img pipeline routes to Naruto.
 const cases = [
-  { prompt: 'Can you fix the failing tests?', expected: ['Naruto'] },
-  { prompt: '고쳐줄 수 있어? 로그인 테스트 깨져', expected: ['Naruto'] },
-  { prompt: '이거 왜 안 고쳐져? 수정해줘', expected: ['Naruto'] },
+  { prompt: 'Can you fix the failing tests?', expected: ['SKS'] },
+  { prompt: '고쳐줄 수 있어? 로그인 테스트 깨져', expected: ['SKS'] },
+  { prompt: '이거 왜 안 고쳐져? 수정해줘', expected: ['SKS'] },
   { prompt: 'How do I fix this myself?', expected: ['Answer'] },
   { prompt: '이 함수 왜 이렇게 동작해? 설명만 해줘', expected: ['Answer'] },
   { prompt: 'README 오타만 고쳐줄래?', expected: ['DFix'] },
@@ -18,11 +20,11 @@ const cases = [
   { prompt: 'DB 스키마 수정해줘', expected: ['DB'] },
   {
     prompt: '[Root orchestrator Sol Max DAG 분해, 계약 확정, 통합, 최종 판정 Judgment lane Sol Max 아키텍처, 디버깅, 보안, DB, 릴리스, 모호한 작업 Implementation lane Sol High 일반 UI·backend·logic·native 구현 Context/tool lane Terra Max 대형 문서·로그·저장소 탐색, Browser, Computer Use, Image 실행 Mechanical lane Luna Max tiny·short-context·명확한 완료 조건·강한 자동 검증이 있는 작업] 이거대로 반영해줘',
-    expected: ['Naruto']
+    expected: ['SKS']
   },
   {
     prompt: 'sks 의 모든 달러 커맨드에는 sks- 라는 접두사 붙여서 보이게해주고 레거시 커맨드 중복커맨드는 제거되게해줘 sks update나 sks doctor --fix 시',
-    expected: ['Naruto']
+    expected: ['SKS']
   },
   { prompt: '커밋하고 푸시해줘', expected: ['CommitAndPush'] }
 ] as const

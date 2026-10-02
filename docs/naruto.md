@@ -5,6 +5,27 @@ child work. Codex official subagents are the sealed transport underneath;
 `$sks-work` is the intentional plan-execution alias. Retired route names, native
 agent swarms, and custom process schedulers are not alternate Naruto runtimes.
 
+## When Naruto runs
+
+Naruto is not the default for implementation. Ordinary work (a bug fix, a test,
+a refactor or config change in one area, a review) is the main agent's own, the
+way Codex works by default: it carries no mission, no subagent plan, and no
+parent edit gate, and the hook adds about a fifth of the text a Naruto turn
+carries. Naruto runs when:
+
+- you invoke `$sks-naruto` or `$sks-work`, pass `--agents N`, or ask for
+  subagents or parallel work in so many words (a risk word such as "payment" or
+  "deploy" in the same prompt does not cancel the request);
+- you invoked a specialized route by name (`$sks-review`, `$sks-ppt`, `$sks-db`, ...), which
+  keeps its panel of children, while the same route picked from the prompt's
+  wording does not fan out by itself;
+- Jev mode is on and Jev judges that the task splits into two or more
+  independent parts (different files or modules, no shared edits). Single is the
+  default and the answer whenever Jev is unsure.
+
+A task that merely looks like implementation, or names a risky area, never starts
+child agents on its own.
+
 ## Usage
 
 ```bash

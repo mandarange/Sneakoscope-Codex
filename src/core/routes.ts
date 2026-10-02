@@ -6,7 +6,7 @@ import { ALLOWED_REASONING_EFFORTS, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_
 import { CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_WEB_VERIFICATION_POLICY, RESERVED_CODEX_PLUGIN_SKILL_NAMES } from './routes/evidence.js';
 import { PPT_PIPELINE_SKILL_ALLOWLIST } from './routes/ppt-policy.js';
 import { normalizeDollarSkillName, prefixKnownSksDollarReferences, sksPrefixedDollarCommand, sksPrefixedSkillName, unprefixedSksSkillName } from './routes/dollar-prefix.js';
-import { classifyTaskProfile, IMPLEMENTATION_VERB_RE, isTaskProfile, looksLikeDatabaseWorkRequest, type TaskProfile } from './runtime/task-profile.js';
+import { classifyTaskProfile, hasExplicitParallelCue, IMPLEMENTATION_VERB_RE, isTaskProfile, looksLikeDatabaseWorkRequest, type TaskProfile } from './runtime/task-profile.js';
 import { legacyCoreSkillNames } from './codex-native/core-skill-manifest.js';
 import { EXCLUSIVE_SURFACE_SPAWN_LINE } from './subagents/exclusive-surface-rule.js';
 
@@ -24,6 +24,12 @@ export * from './routes/dollar-prefix.js';
  * win over it.
  */
 const jevRouteOverride = new AsyncLocalStorage<{ text: string; routeId: string }>();
+// Jev's judgment, for the prompt one hook invocation handles, of whether the work is worth splitting across child agents.
+const jevParallelJudgment = new AsyncLocalStorage<{ text: string; parallel: boolean }>();
+
+export function withJevParallelJudgment<T>(judgment: { text: string; parallel: boolean } | null, run: () => Promise<T>): Promise<T> {
+  return judgment ? jevParallelJudgment.run({ text: judgment.text.trim(), parallel: judgment.parallel }, run) : run();
+}
 
 export function withJevRouteOverride<T>(override: { text: string; routeId: string } | null, run: () => Promise<T>): Promise<T> {
   return override ? jevRouteOverride.run({ text: override.text.trim(), routeId: override.routeId }, run) : run();
@@ -901,7 +907,24 @@ export function looksLikeSuperSearchRequest(prompt: any = '') {
   return /\b(?:SuperSearch|Super-Search|source\s+intelligence|provider-independent\s+source|source\s+acquisition|citation\s+proof|x-search|site:x\.com|site:twitter\.com)\b|슈퍼\s*서치|소스\s*인텔리전스/i.test(text);
 }
 
+/**
+ * The route for a prompt. The keyword router picks Naruto for anything that
+ * looks like implementation work; that is only the route to run when the work is
+ * actually delegated. An implicit Naruto pick that is not delegated (see
+ * narutoDecisionForRoute) runs as the lightest parent-owned route instead, so the
+ * turn carries no "the parent orchestrates only" instructions it will not follow.
+ */
 export function routePrompt(prompt: any): any {
+  const route = routePromptByKeywords(prompt);
+  if (route?.id !== 'Naruto' || route.explicit_invocation !== false) return route;
+  const text = stripVisibleDecisionAnswerBlocks(prompt);
+  if (hasFromChatImgSignal(text)) return route;
+  return narutoDecisionForRoute(route, text, route.task_profile).mode === 'generic_naruto'
+    ? route
+    : withTaskProfile(withPromptIntentScores(routeById('SKS'), route.intent_scores ?? scorePromptIntent(text)), route.task_profile, false);
+}
+
+function routePromptByKeywords(prompt: any): any {
   const text = stripVisibleDecisionAnswerBlocks(prompt);
   const intentScores = scorePromptIntent(text);
   const taskProfile = classifyTaskProfile(text);
@@ -942,6 +965,8 @@ export function routePrompt(prompt: any): any {
   if (/\bautoresearch\b/i.test(text) && !looksLikeCodeChangingWork(text)) return select(routeById('AutoResearch'));
   if (/\b(research|hypothesis|falsify|novelty|frontier)\b|조사|연구/i.test(text) && !looksLikeCodeChangingWork(text)) return select(routeById('Research'));
   if (taskProfile === 'parallel-read' || taskProfile === 'parallel-write') return select(routeById('Naruto'));
+  // The user asked for parallel work on something that also carries a risk word: the request still stands.
+  if (taskProfile === 'high-risk' && hasExplicitParallelCue(text)) return select(routeById('Naruto'));
   if (looksLikeQuestionShapedDirective(text)) return select(routeById('Naruto'));
   if (looksLikeDirectWorkRequest(text)) return select(routeById('Naruto'));
   if (looksLikeAnswerOnlyRequest(text)) return select(routeById('Answer'));
@@ -1187,34 +1212,35 @@ export function narutoDecisionForRoute(
   if (NARUTO_GATE_BYPASS_ROUTE_IDS.has(routeId)) {
     return narutoRouteDecision('none', routeId, profile, `lightweight_route_bypass:${routeId}`, true);
   }
+  // Child agents run when the user asked for them, never because a task looks
+  // implementation-shaped, risky, or routed to a specialized pipeline: one agent
+  // working directly is Codex's default and is enough for most work.
   if (routeId === 'Naruto' && route.explicit_invocation !== false) {
     return narutoRouteDecision('generic_naruto', routeId, profile, 'explicit_official_subagent_route', false);
   }
   if (/(?:^|\s)--agents(?:=|\s+)\d+\b/i.test(String(prompt || ''))) {
     return narutoRouteDecision('generic_naruto', routeId, profile, 'explicit_subagent_count', false);
   }
-  if (NARUTO_GATE_SPECIALIZED_PARALLEL_ROUTE_IDS.has(routeId)) {
-    return narutoRouteDecision('generic_naruto', routeId, profile, `specialized_route_default_parallel:${routeId}`, false);
+  if (profile === 'parallel-read' || profile === 'parallel-write' || (profile === 'high-risk' && hasExplicitParallelCue(prompt))) {
+    return narutoRouteDecision('generic_naruto', routeId, profile, `explicit_parallel_request:${profile}`, false);
   }
-  // The router already judged this prompt to be work (it chose Naruto) even
-  // though the verb-based profile found no change verb. Letting that fall to
-  // the answer bypass left the parent implementing alone with no gate armed.
-  if (routeId === 'Naruto' && profile === 'answer') {
-    return narutoRouteDecision('generic_naruto', routeId, profile, 'naruto_route_work_without_change_verb', false);
+  // Jev mode: Jev judged whether this prompt's work splits into independent parts worth child agents.
+  const judgment = jevParallelJudgment.getStore();
+  if (judgment?.parallel === true && judgment.text === stripVisibleDecisionAnswerBlocks(String(prompt || '')).trim()
+    && (routeId === 'Naruto' || NARUTO_GATE_SPECIALIZED_PARALLEL_ROUTE_IDS.has(routeId))) {
+    return narutoRouteDecision('generic_naruto', routeId, profile, 'jev_judged_parallel', false);
+  }
+  if (NARUTO_GATE_SPECIALIZED_PARALLEL_ROUTE_IDS.has(routeId)) {
+    // A specialized pipeline the user invoked by name keeps its panel of children;
+    // the same pipeline chosen from the prompt's wording does not fan out by itself.
+    return route.explicit_invocation === true
+      ? narutoRouteDecision('generic_naruto', routeId, profile, `specialized_route_default_parallel:${routeId}`, false)
+      : narutoRouteDecision('none', routeId, profile, `specialized_route_parent_owned:${routeId}`, false);
   }
   if (profile === 'passthrough' || profile === 'answer' || profile === 'tiny-change') {
     return narutoRouteDecision('none', routeId, profile, `task_profile_${profile}_bypass`, true);
   }
-  if (profile === 'bounded-work') {
-    if (routeId === 'Naruto') {
-      return narutoRouteDecision('generic_naruto', routeId, profile, 'naruto_parent_orchestrates', false);
-    }
-    return narutoRouteDecision('none', routeId, profile, 'task_profile_bounded_work_parent_owned', false);
-  }
-  if (profile === 'parallel-read' || profile === 'parallel-write' || profile === 'high-risk') {
-    return narutoRouteDecision('generic_naruto', routeId, profile, `task_profile_${profile}_default_parallel`, false);
-  }
-  return narutoRouteDecision('none', routeId, profile, `task_profile_${profile}_bypass`, true);
+  return narutoRouteDecision('none', routeId, profile, `task_profile_${profile}_parent_owned`, false);
 }
 
 export function routeRequiresSubagents(route: any, prompt: any = '', profile: TaskProfile = classifyTaskProfile(prompt)) {

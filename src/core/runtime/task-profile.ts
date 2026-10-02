@@ -45,6 +45,16 @@ const PARALLEL_CUE_RE =
   /\b(parallel|subagents?|one agent per|fan out|independent slices?|naruto)\b|병렬|하위\s*에이전트|서브\s*에이전트|나루토|분담/i
 
 /**
+ * The prompt asks for parallel or subagent work in so many words. The task
+ * profile cannot carry this on its own: a risk word ("payment", "deploy")
+ * classifies the prompt as high-risk before the parallel cue is looked at, and
+ * risk is not a request for child agents either way.
+ */
+export function hasExplicitParallelCue(prompt: unknown): boolean {
+  return PARALLEL_CUE_RE.test(String(prompt ?? ''))
+}
+
+/**
  * Implementation verbs shared by the task-profile classifier and the prompt
  * router. Two separate lists drifted: the router sent "make the header sticky"
  * to Naruto while this classifier called it an answer, so the orchestration

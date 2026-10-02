@@ -170,9 +170,16 @@ sidecars, and the Jev choices.
 
 ## Naruto workflow
 
-The parent orchestrates: it decomposes the task, spawns a child for each
-disjoint slice, waits, and owns integration and final verification. It does not
-implement slices itself. The SKS PreToolUse hook denies parent source edits
+Naruto is for work you ask to split, not the default for implementation. A bug
+fix, a test, a refactor or config change, or a review is the main agent's own
+job, the way Codex works by default: no mission, no subagent plan, no parent edit
+gate. Naruto runs when you invoke `$sks-naruto`, pass `--agents N`, or ask for
+subagents or parallel work in so many words, and, with Jev mode on, when Jev
+judges that the task splits into independent parts (single is its default).
+
+Inside Naruto the parent orchestrates: it decomposes the task, spawns a child for
+each disjoint slice, waits, and owns integration and final verification. It does
+not implement slices itself. The SKS PreToolUse hook denies parent source edits
 until the first child starts and while children are still running. Children
 receive bounded tasks and do not spawn children.
 

@@ -9,6 +9,8 @@ import { classifyTaskProfile } from '../runtime/task-profile.js'
  * answers, together:
  * - which SKS pipeline fits the prompt (replacing the keyword router when
  *   Jev is confident; explicit `$commands` always win),
+ * - whether the work is worth splitting across child agents (single is the
+ *   default and the answer whenever Jev is unsure),
  * - the model tier of the turn (the reasoning hint / default child seal),
  * - whether the turn makes an image, when the custom image model mode is on.
  * Jev off, a greeting, or an unconfident answer keeps the deterministic path.
@@ -16,7 +18,7 @@ import { classifyTaskProfile } from '../runtime/task-profile.js'
 
 export const JEV_ROUTE_OPTIONS = Object.freeze({
   answer: { routeId: 'Answer', summary: 'Explain, answer a question, review, or discuss. No file changes.' },
-  implement: { routeId: 'Naruto', summary: 'Implement, fix, refactor, configure, or otherwise change code or files. SKS orchestrates child agents.' },
+  implement: { routeId: 'Naruto', summary: 'Implement, fix, refactor, configure, or otherwise change code or files. The main agent does the work itself unless the parallelism question says it splits.' },
   tiny_fix: { routeId: 'DFix', summary: 'One tiny direct edit: a typo, one string, or one obvious line.' },
   research: { routeId: 'Research', summary: 'Investigate an open question with hypotheses and sources. No code change.' },
   experiment: { routeId: 'AutoResearch', summary: 'Run experiments or benchmarks to improve a measurable metric.' },
@@ -41,6 +43,8 @@ export interface JevTurnPlan {
   routeOverride: { text: string; routeId: string } | null
   customImageModel: string | null
   imageNeeded: boolean | null
+  /** Jev judged the work splits into independent parts worth child agents; null when Jev did not decide. */
+  parallel: boolean | null
 }
 
 function routeQuestion(): OptionQuestion {
@@ -48,6 +52,17 @@ function routeQuestion(): OptionQuestion {
     id: 'route',
     instructions: 'Choose the SKS pipeline for state.task by what the user wants done, not by keywords. A question about code is answer; a request to change code or files is implement or tiny_fix.',
     options: Object.fromEntries(Object.entries(JEV_ROUTE_OPTIONS).map(([id, row]) => [id, row.summary]))
+  }
+}
+
+function parallelismQuestion(): OptionQuestion {
+  return {
+    id: 'parallelism',
+    instructions: 'Decide how state.task is executed. Choose single by default: one agent working through it directly is enough for a bug fix, a test, a refactor or config change in one area, a review, and anything whose steps depend on each other, however many steps it takes. Choose parallel only when it splits into two or more independent parts (different files, modules, or packages, no shared edits, no ordering) that would finish clearly faster as separate child agents.',
+    options: {
+      single: 'One agent does the whole task directly. The right choice unless the work clearly splits.',
+      parallel: 'The task splits into two or more independent parts that child agents can do at the same time without touching the same files.'
+    }
   }
 }
 
@@ -72,7 +87,7 @@ export async function planJevTurn(root: string, rawPrompt: string, env: NodeJS.P
   const imagegen = await readImagegenConfig(env).catch(() => null)
   const customImageModel = imagegen?.mode === 'openrouter' ? imagegen.openrouter_model : null
   const questions: OptionQuestion[] = []
-  if (!explicit) questions.push(routeQuestion())
+  if (!explicit) questions.push(routeQuestion(), parallelismQuestion())
   if (customImageModel) questions.push(imageQuestion())
   const decision = await consultJevOptions({
     root,
@@ -86,13 +101,15 @@ export async function planJevTurn(root: string, rawPrompt: string, env: NodeJS.P
   const choice = decision.choices.route as JevRouteOption | undefined
   const routeId = choice && JEV_ROUTE_OPTIONS[choice] ? JEV_ROUTE_OPTIONS[choice].routeId : null
   const imageChoice = decision.choices.image_need
+  const parallelChoice = decision.choices.parallelism
   return {
     decision,
     baselineRouteId,
     routeId,
     routeOverride: routeId && routeId !== baselineRouteId ? { text: prompt, routeId } : null,
     customImageModel,
-    imageNeeded: imageChoice === 'yes' ? true : imageChoice === 'no' ? false : null
+    imageNeeded: imageChoice === 'yes' ? true : imageChoice === 'no' ? false : null,
+    parallel: parallelChoice === 'parallel' ? true : parallelChoice === 'single' ? false : null
   }
 }
 
