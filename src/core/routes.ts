@@ -211,7 +211,7 @@ export const ROUTES = [
     route: 'machine-first diff review',
     description: 'Review staged or selected diffs with machine evidence sorted above LLM opinion.',
     requiredSkills: ['review', 'honest-mode'],
-    lifecycle: ['diff_collection', 'machine_checks', 'read_only_review_lenses', 'dedupe_findings', 'optional_one_fix_attempt', 'review_report'],
+    lifecycle: ['diff_collection', 'machine_checks', 'dedupe_findings', 'optional_one_fix_attempt', 'review_report'],
     context7Policy: 'optional',
     reasoningPolicy: 'high',
     stopGate: 'review-report.json',
