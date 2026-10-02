@@ -38,8 +38,9 @@ function openRouterOnlyBlockReason(allowlist: ChildModelAllowlist): string {
 /**
  * A MultiAgent v1 `fork_context: true` copies the whole parent thread into the
  * child, like fork_turns="all" (the v2 default). SKS keeps children bounded, so
- * it is refused as an SKS rule. Codex's own v2 spawn honors a model override on a
- * full-history fork (measured on 0.153.4 and 0.159.2), so this is not a Codex limit.
+ * it is refused as an SKS rule. Codex honors a model override on a full-history fork
+ * in both spawn tools (measured: v2 on 0.153.4 and 0.159.2, the `multi_agent_v1`
+ * spawn_agent on 0.153.4), so this is not a Codex limit.
  */
 export function fullHistoryForkContext(input: Record<string, unknown>): boolean {
   return input.fork_context === true || String(input.fork_context ?? '').trim().toLowerCase() === 'true';
