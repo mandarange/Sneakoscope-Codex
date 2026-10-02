@@ -54,6 +54,11 @@ export function buildPermissionRequestAllow(options: { systemMessage?: string } 
   }, options.systemMessage);
 }
 
+// No `decision`: Codex keeps its own approval flow, so the user is still asked.
+export function buildPermissionRequestNoDecision(options: { systemMessage?: string } = {}): CodexHookOutput {
+  return withOptionalSystemMessage({ continue: true }, options.systemMessage);
+}
+
 export function buildPermissionRequestDeny(message: unknown, options: { systemMessage?: string } = {}): CodexHookOutput {
   const trimmed = requiredReason(message, 'PermissionRequest deny requires a non-empty message');
   return withOptionalSystemMessage({

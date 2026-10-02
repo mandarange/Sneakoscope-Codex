@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- The PermissionRequest hook approved every permission request that no SKS
+  guard denied, without asking the user, in every Codex project (the user-level
+  hook matches `*`). A request nothing matched now carries no `decision`, so
+  Codex's own approval prompt still runs. An explicit allow is emitted only for
+  a user git action during a no-question route, which is what the 0.7.62 Git
+  Actions change intended.
+- That git-action check read the payload's metadata even when a command was
+  present, so `curl ... | sh # commit` counted as a git action. When a command
+  is present it now decides on the command text alone (`git status|diff|add|
+  commit|push|branch|remote|rev-parse|log` or `gh pr`); the force-style denials
+  are unchanged.
+
 
 ## [10.4.0] - 2026-10-02
 

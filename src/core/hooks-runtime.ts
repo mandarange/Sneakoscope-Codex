@@ -1131,8 +1131,9 @@ async function hookPermission(root: any, state: any, payload: any, noQuestion: a
   if (clarificationGateLocked(state) && !clarificationAnswerToolAllowed(payload)) {
     return { decision: 'deny', permissionDecision: 'deny', reason: clarificationPauseBlockReason(state) };
   }
-  if (noQuestion && looksLikeUserGitAction(payload)) return { continue: true };
+  // No opinion outside no-question mode: Codex keeps its own approval prompt.
   if (!noQuestion) return { continue: true };
+  if (looksLikeUserGitAction(payload)) return { decision: 'allow', permissionDecision: 'allow' };
   return {
     decision: 'deny',
     permissionDecision: 'deny',
@@ -1161,8 +1162,13 @@ function madSksImmutableBlockReason(decision: any = {}) {
 
 function looksLikeUserGitAction(payload: any = {}) {
   const command = extractCommand(payload);
+  // A command decides on its own text; the words in the payload's metadata
+  // (hook_event_name, tool_name, a trailing `# commit`) say nothing about it.
+  if (String(command).trim()) {
+    if (/\b(?:reset\s+--hard|clean\s+-[^\s]*f|checkout\s+--|restore\s+|rm\s+|push\s+--force|push\s+-[^\s]*f)\b/i.test(command)) return false;
+    return /^\s*(?:git\s+(?:status|diff|add|commit|push|branch|remote|rev-parse|log)|gh\s+pr)\b/i.test(command);
+  }
   const haystack = [
-    command,
     codexGitActionMetadataText(payload),
     payload.action,
     payload.intent,
@@ -1173,11 +1179,8 @@ function looksLikeUserGitAction(payload: any = {}) {
     payload.tool_name,
     payload.toolName
   ].filter(Boolean).join(' ');
-  if (/\b(?:reset\s+--hard|clean\s+-[^\s]*f|checkout\s+--|restore\s+|rm\s+|push\s+--force|push\s+-[^\s]*f)\b/i.test(command)) return false;
   if (codexGitActionMetadataSignal(haystack)) return true;
-  if (/\bcodex\b[\s_-]*(?:app\s*)?(?:git\s*)?(?:action|commit|push|pr)\b/i.test(haystack)) return true;
-  if (!/^\s*git\s+/i.test(command)) return false;
-  return /\bgit\s+(?:status|diff|add|commit|push|branch|remote|rev-parse|log)\b/i.test(command);
+  return /\bcodex\b[\s_-]*(?:app\s*)?(?:git\s*)?(?:action|commit|push|pr)\b/i.test(haystack);
 }
 
 function clarificationGateLocked(state: any = {}) {

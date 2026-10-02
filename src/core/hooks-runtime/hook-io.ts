@@ -10,6 +10,7 @@ import {
   buildCompactContinue,
   buildPermissionRequestAllow,
   buildPermissionRequestDeny,
+  buildPermissionRequestNoDecision,
   buildPostToolUseBlock,
   buildPostToolUseContinue,
   buildPreToolUseAllowRewrite,
@@ -65,10 +66,11 @@ export function normalizeHookResult(name: any, result: any = {}) {
   if (eventName === 'PermissionRequest') {
     if (out.decision === 'deny' || out.permissionDecision === 'deny') {
       return buildPermissionRequestDeny(reason, { systemMessage });
-    } else if (out.decision === 'allow' || out.permissionDecision === 'allow') {
+    }
+    if (out.decision === 'allow' || out.permissionDecision === 'allow') {
       return buildPermissionRequestAllow({ systemMessage });
     }
-    return buildPermissionRequestAllow({ systemMessage });
+    return buildPermissionRequestNoDecision({ systemMessage });
   }
 
   if (eventName === 'Stop') {
