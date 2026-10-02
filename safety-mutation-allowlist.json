@@ -2909,15 +2909,6 @@
       "reason": "src/scripts/build-dist.ts#removeDistNonRuntimeArtifacts removes only its isolated fixture, generated build output, or scoped temporary artifact during cleanup."
     },
     {
-      "file": "src/scripts/build-once-runner-blackbox.ts",
-      "symbol": "module",
-      "token": "fs.rm",
-      "scope_contract_sha256": "5ecc03e54300f79ea770b026314b33246a15128f436a814b3c4129cfe06e50de",
-      "callsite_sha256": "b6ba8d4bf745d9c2dd0168516e3f0102578a9fdde3df7ff4f622ccfb39d9d8fc",
-      "occurrence": 1,
-      "reason": "src/scripts/build-once-runner-blackbox.ts#module removes only its isolated fixture, generated build output, or scoped temporary artifact during cleanup."
-    },
-    {
       "file": "src/scripts/canonical-test-runner.ts",
       "symbol": "finalize",
       "token": "process.kill",
@@ -3080,69 +3071,6 @@
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
-      "file": "src/scripts/codex-app-ui-clobber-guard-check.ts",
-      "symbol": "module",
-      "token": "codex config write",
-      "scope_contract_sha256": "c018e3a229d77d24776ae102e3090863769f40f51298bacba4706d6250405c13",
-      "callsite_sha256": "164ca928cfe02d281671762a2a2ad539e8ad7abae8fe3cd574dcb86bff6e86c5",
-      "occurrence": 1,
-      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
-    },
-    {
-      "file": "src/scripts/codex-app-ui-clobber-guard-check.ts",
-      "symbol": "module",
-      "token": "codex config write",
-      "scope_contract_sha256": "c018e3a229d77d24776ae102e3090863769f40f51298bacba4706d6250405c13",
-      "callsite_sha256": "1ee8b623cb896fe22f2ad20741b96bdb05f8778b7259b03d8be07dd6564c1c3d",
-      "occurrence": 1,
-      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
-    },
-    {
-      "file": "src/scripts/codex-app-ui-clobber-guard-check.ts",
-      "symbol": "module",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "c018e3a229d77d24776ae102e3090863769f40f51298bacba4706d6250405c13",
-      "callsite_sha256": "319a04c6cfad7fb426304431e54756c9e7fa4fad014f6da3ea3a8b535d6e798b",
-      "occurrence": 1,
-      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
-    },
-    {
-      "file": "src/scripts/codex-app-ui-clobber-guard-check.ts",
-      "symbol": "module",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "c018e3a229d77d24776ae102e3090863769f40f51298bacba4706d6250405c13",
-      "callsite_sha256": "76b60d18672eabe14414e1f2cefd0be2dfd891a3cbc90c9705403e27de4637fb",
-      "occurrence": 1,
-      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
-    },
-    {
-      "file": "src/scripts/codex-app-ui-clobber-guard-check.ts",
-      "symbol": "module",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "c018e3a229d77d24776ae102e3090863769f40f51298bacba4706d6250405c13",
-      "callsite_sha256": "f31d35fa05d3da0433593d229eccd56a84597ff2465223949b5d1d5b960b83da",
-      "occurrence": 1,
-      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
-    },
-    {
-      "file": "src/scripts/codex-config-eperm-fixture.ts",
-      "symbol": "module",
-      "token": "codex config write",
-      "scope_contract_sha256": "a3baf5250740fc75ada6a47f76bd286295085035d263656dd152d2d753decda3",
-      "callsite_sha256": "559c5ffb6c140959443e7c6ff5d6e2e7dce82bce84939965db30dde01a17df6a",
-      "occurrence": 1,
-      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
-    },
-    {
-      "file": "src/scripts/codex-config-eperm-fixture.ts",
-      "symbol": "module",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "a3baf5250740fc75ada6a47f76bd286295085035d263656dd152d2d753decda3",
-      "callsite_sha256": "c6d3a662d3828213e87e0f7ab04a71f5d5ede40c71121ed6390291c0fcd25eb9",
-      "occurrence": 1,
-      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
-    },
-    {
       "file": "src/scripts/codex-config-load-probe.ts",
       "symbol": "module",
       "token": "fs.rm",
@@ -3170,24 +3098,6 @@
       "reason": "Current Codex thread-store check writes or removes only isolated temporary files created for this check."
     },
     {
-      "file": "src/scripts/codex-history-search-check.ts",
-      "symbol": "module",
-      "token": "writeFileSync",
-      "scope_contract_sha256": "2e46156a98cb9b899872659637b0a526425e4057ca6a4357c89af17bf6cd85af",
-      "callsite_sha256": "15cfb4bc23b16039da611af980272cf5ca831da79827209ec324a697e2d5ae19",
-      "occurrence": 1,
-      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
-    },
-    {
-      "file": "src/scripts/codex-history-search-check.ts",
-      "symbol": "module",
-      "token": "writeFileSync",
-      "scope_contract_sha256": "2e46156a98cb9b899872659637b0a526425e4057ca6a4357c89af17bf6cd85af",
-      "callsite_sha256": "341e148bdf3efefc147bd2c43d2c4e36fd33a671f61eeddee030e3fb81fa95fb",
-      "occurrence": 1,
-      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
-    },
-    {
       "file": "src/scripts/desktop-bridge-transport-check.ts",
       "symbol": "module",
       "token": "fs.rm",
@@ -3195,33 +3105,6 @@
       "callsite_sha256": "9f9e31998e8e0becddfde5c053a876dbe216677a725bd5ae6d261f043f2921d7",
       "occurrence": 1,
       "reason": "The Desktop Bridge transport gate removes only the exact mkdtemp root captured by its isolated fixture run."
-    },
-    {
-      "file": "src/scripts/codex-native-broker-read-only-check.ts",
-      "symbol": "module.callback@18",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "e79bbd4fd42354bdbcfe3916231ea721bcfc598b17878211b5e34d6cdd039341",
-      "callsite_sha256": "2ebf9e775bf926985dca40cf6af7af602e760a0af0565bc18fbff7df1f5c691a",
-      "occurrence": 1,
-      "reason": "Codex Native broker read-only gate writes decoy user skill and agent files only inside the mkdtemp runtime fixture."
-    },
-    {
-      "file": "src/scripts/codex-native-broker-read-only-check.ts",
-      "symbol": "module.callback@18",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "e79bbd4fd42354bdbcfe3916231ea721bcfc598b17878211b5e34d6cdd039341",
-      "callsite_sha256": "a1501b13e0c10a878d1006d04047f6d086e9893e37a2860bfe89806aeb825765",
-      "occurrence": 1,
-      "reason": "Codex Native broker read-only gate writes decoy user skill and agent files only inside the mkdtemp runtime fixture."
-    },
-    {
-      "file": "src/scripts/codex-native-broker-read-only-check.ts",
-      "symbol": "module.callback@18",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "e79bbd4fd42354bdbcfe3916231ea721bcfc598b17878211b5e34d6cdd039341",
-      "callsite_sha256": "d425f8e421beca6f76300454ba8728ea9b58bbe6a233b76c368c26177e19fad3",
-      "occurrence": 1,
-      "reason": "Codex Native broker read-only gate writes decoy user skill and agent files only inside the mkdtemp runtime fixture."
     },
     {
       "file": "src/scripts/codex-native-gate-lib.ts",
@@ -3267,15 +3150,6 @@
       "callsite_sha256": "e88adf6603966c23676ab95ccf9293b48d908ca57c8b15f7d7b17e8d29250608",
       "occurrence": 1,
       "reason": "src/scripts/codex-native-gate-lib.ts#tempRoot writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/codex-native-repair-transaction-check.ts",
-      "symbol": "module",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "e1b033d5b3ff40e0361d1fa31ecca45f1e907bd463524df6d7481618abaaa69f",
-      "callsite_sha256": "27efb53d31c00c2535fc9cdc5e74028bbe82b7e22e336b142cbafbc15ef39520",
-      "occurrence": 1,
-      "reason": "Codex Native repair transaction gate writes only a mkdtemp source fixture file before exercising confirmed repair behavior."
     },
     {
       "file": "src/scripts/codex-native-runtime-e2e-fixture.ts",
@@ -3474,42 +3348,6 @@
       "callsite_sha256": "363b039d9b0afab745dce92a575fc19120e8fdf34c75adb338e8cc58aea37ed0",
       "occurrence": 1,
       "reason": "src/scripts/core-skill-patch-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/core-skill-promotion-side-effect-ledger-check.ts",
-      "symbol": "module",
-      "token": "rmSync",
-      "scope_contract_sha256": "b7e48f4754def990e01b467a6a0bb452a6f3fa86806a7d73d4980f345e7e6e52",
-      "callsite_sha256": "1f6fa5b22463602aa7785ac40fc4a912ba63e29b214c52ebfa5c3f431002ff37",
-      "occurrence": 1,
-      "reason": "src/scripts/core-skill-promotion-side-effect-ledger-check.ts#module removes only its isolated fixture, generated build output, or scoped temporary artifact during cleanup."
-    },
-    {
-      "file": "src/scripts/core-skill-promotion-side-effect-ledger-check.ts",
-      "symbol": "module",
-      "token": "rmSync",
-      "scope_contract_sha256": "b7e48f4754def990e01b467a6a0bb452a6f3fa86806a7d73d4980f345e7e6e52",
-      "callsite_sha256": "358c5b987bdbb09c1d5181f11c7de474ef81b889b60f8782b88167a5dd962565",
-      "occurrence": 1,
-      "reason": "src/scripts/core-skill-promotion-side-effect-ledger-check.ts#module removes only its isolated fixture, generated build output, or scoped temporary artifact during cleanup."
-    },
-    {
-      "file": "src/scripts/core-skill-promotion-side-effect-ledger-check.ts",
-      "symbol": "module",
-      "token": "rmSync",
-      "scope_contract_sha256": "b7e48f4754def990e01b467a6a0bb452a6f3fa86806a7d73d4980f345e7e6e52",
-      "callsite_sha256": "43fc3b0d416f6f5c4737ad71fc60854df2518800525e873b151ccdf10907eaa2",
-      "occurrence": 1,
-      "reason": "src/scripts/core-skill-promotion-side-effect-ledger-check.ts#module removes only its isolated fixture, generated build output, or scoped temporary artifact during cleanup."
-    },
-    {
-      "file": "src/scripts/core-skill-promotion-side-effect-ledger-check.ts",
-      "symbol": "module",
-      "token": "writeFileSync",
-      "scope_contract_sha256": "b7e48f4754def990e01b467a6a0bb452a6f3fa86806a7d73d4980f345e7e6e52",
-      "callsite_sha256": "65c99cf3930ab5cf78147912a3a2fea8445f870425e08a0e8f2bfcad84ca42b2",
-      "occurrence": 1,
-      "reason": "src/scripts/core-skill-promotion-side-effect-ledger-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
     {
       "file": "src/scripts/core-skill-rollout-scoring-check.ts",
@@ -3989,60 +3827,6 @@
       "reason": "The unification release gate removes only the exact mkdtemp-owned temporary root captured at gate startup."
     },
     {
-      "file": "src/scripts/dfix-fast-blackbox-check.ts",
-      "symbol": "module",
-      "token": "writeFileSync",
-      "scope_contract_sha256": "32a2be4cd98ab2f4c32b4faaabc81509b657feb32feac47b69e5e910d3bd03ee",
-      "callsite_sha256": "8f66299c30dd5ca67616d2be5eb1d57aebf1fa8cc3135bc14a5dbcdca49db3d7",
-      "occurrence": 1,
-      "reason": "src/scripts/dfix-fast-blackbox-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/dfix-fast-blackbox-check.ts",
-      "symbol": "module",
-      "token": "writeFileSync",
-      "scope_contract_sha256": "32a2be4cd98ab2f4c32b4faaabc81509b657feb32feac47b69e5e910d3bd03ee",
-      "callsite_sha256": "b2d0f6858a15f263a61252f05a8801fa43f6727099d011e97b27fe73daa5bb42",
-      "occurrence": 1,
-      "reason": "src/scripts/dfix-fast-blackbox-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/dfix-fast-blackbox-check.ts",
-      "symbol": "module",
-      "token": "writeFileSync",
-      "scope_contract_sha256": "32a2be4cd98ab2f4c32b4faaabc81509b657feb32feac47b69e5e910d3bd03ee",
-      "callsite_sha256": "ee4199c739478079049c47769739bb81a8056ad74f360e276b2d823771a72ed4",
-      "occurrence": 1,
-      "reason": "src/scripts/dfix-fast-blackbox-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/dfix-parallel-write-blackbox.ts",
-      "symbol": "module",
-      "token": "writeFileSync",
-      "scope_contract_sha256": "252413a84e1155e365be6484645a3028d4992c7d55fc232a33a26395e6b45c5c",
-      "callsite_sha256": "104e079323d42a504168706c538f56dd126c7c531fd80b49873c1678b8af67ca",
-      "occurrence": 1,
-      "reason": "src/scripts/dfix-parallel-write-blackbox.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/dfix-parallel-write-blackbox.ts",
-      "symbol": "module",
-      "token": "writeFileSync",
-      "scope_contract_sha256": "252413a84e1155e365be6484645a3028d4992c7d55fc232a33a26395e6b45c5c",
-      "callsite_sha256": "5491d984fe594f67248af12d68f9dd7581e96a7a932e1b6a590773177ced10b7",
-      "occurrence": 1,
-      "reason": "src/scripts/dfix-parallel-write-blackbox.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/dfix-parallel-write-blackbox.ts",
-      "symbol": "module",
-      "token": "writeFileSync",
-      "scope_contract_sha256": "252413a84e1155e365be6484645a3028d4992c7d55fc232a33a26395e6b45c5c",
-      "callsite_sha256": "7ec59f0d3d374a6bc53e2ed59fbd1a96d371d678f8c3a01f4956c019228766c4",
-      "occurrence": 1,
-      "reason": "src/scripts/dfix-parallel-write-blackbox.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
       "file": "src/scripts/doctor-fix-proves-codex-read-check.ts",
       "symbol": "module",
       "token": "codex config write",
@@ -4250,24 +4034,6 @@
       "reason": "The build step sets executable mode only on dist/bin/sks.js and dist/bin/install.js beneath the resolved build output directory."
     },
     {
-      "file": "src/scripts/evidence-fixture-check.ts",
-      "symbol": "module",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "9bd5592ce46ba2dc869633b356976062a47b0aa4a3147437c5d4b7b28f6c1fd1",
-      "callsite_sha256": "824cb5da71f713718bb8bca895a95b79a31cb7e0ad5cfaf5c3c943c5d758ebb4",
-      "occurrence": 1,
-      "reason": "src/scripts/evidence-fixture-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/evidence-fixture-check.ts",
-      "symbol": "module",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "9bd5592ce46ba2dc869633b356976062a47b0aa4a3147437c5d4b7b28f6c1fd1",
-      "callsite_sha256": "9bcbb77dfd274f01fe8ad9b141146be67ff43d78be4623867a3ba59da88755da",
-      "occurrence": 1,
-      "reason": "src/scripts/evidence-fixture-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
       "file": "src/scripts/fast-codex-service-tier-proof-check.ts",
       "symbol": "module",
       "token": "writeFileSync",
@@ -4293,60 +4059,6 @@
       "callsite_sha256": "5560c4474a4f7092d9b765d48452fe84177dfa2287e0ca12806e3211013d1a73",
       "occurrence": 1,
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
-    },
-    {
-      "file": "src/scripts/gate-pack-runner-blackbox.ts",
-      "symbol": "module",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "7423f04dd3c9c6634535f85e56fcf4cb6aa894deb691a46f0bc452fb0e68869d",
-      "callsite_sha256": "eb0c473d08261fe2af765fde11b7cdbcc9171ed83afd246f42bb469b0b4b6072",
-      "occurrence": 1,
-      "reason": "src/scripts/gate-pack-runner-blackbox.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/gate-pack-runner-blackbox.ts",
-      "symbol": "module",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "7423f04dd3c9c6634535f85e56fcf4cb6aa894deb691a46f0bc452fb0e68869d",
-      "callsite_sha256": "6e294d0e26ebda145de0aa95a7465fc03536639f8a4a71fc0984939e9a0096cf",
-      "occurrence": 1,
-      "reason": "src/scripts/gate-pack-runner-blackbox.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/gate-pack-runner-blackbox.ts",
-      "symbol": "module",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "7423f04dd3c9c6634535f85e56fcf4cb6aa894deb691a46f0bc452fb0e68869d",
-      "callsite_sha256": "565571a8206ed907b36c031a21035ab1758c5ab41f16bbff64ae56bbd0321676",
-      "occurrence": 1,
-      "reason": "src/scripts/gate-pack-runner-blackbox.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/git-precommit-fixture-check.ts",
-      "symbol": "fixtureRoot",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "558d1113383f901b58ffa517cb1cd3a60f2559019a0b73ea333a4bcf181e5b88",
-      "callsite_sha256": "4ae3a5c50e90e280b74bde0c79c08c0597a952d40eedd5f47ed2270b171c9b3e",
-      "occurrence": 1,
-      "reason": "src/scripts/git-precommit-fixture-check.ts#fixtureRoot writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/git-precommit-fixture-check.ts",
-      "symbol": "module",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "e607ef4317fb713fd0df24a1a6067db69514968bfb88d6a830afbc3374989f1b",
-      "callsite_sha256": "8541b40f13c73f78b9f8b9cb6ecdd84e7b0ca9f6da301937eb96f179dc10353d",
-      "occurrence": 1,
-      "reason": "src/scripts/git-precommit-fixture-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/git-precommit-fixture-check.ts",
-      "symbol": "module",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "e607ef4317fb713fd0df24a1a6067db69514968bfb88d6a830afbc3374989f1b",
-      "callsite_sha256": "d68ad2d294e6df52ea748e18c419f8d42999539e69aaf46e833e7669333caf2e",
-      "occurrence": 1,
-      "reason": "src/scripts/git-precommit-fixture-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
     {
       "file": "src/scripts/git-worktree-checkpoint-check.ts",
@@ -4376,15 +4088,6 @@
       "reason": "src/scripts/git-worktree-checkpoint-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
     {
-      "file": "src/scripts/git-worktree-cleanup-check.ts",
-      "symbol": "module",
-      "token": "writeFileSync",
-      "scope_contract_sha256": "5d1fd5cf7b47b28a5dd56d8c03b70d8dad2fadc8ff3db566cd1b77cb2852b140",
-      "callsite_sha256": "575daaf0f91d0fea6bdc5598f16252791923a7985a20e07ff111e61c9fda8197",
-      "occurrence": 1,
-      "reason": "src/scripts/git-worktree-cleanup-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
       "file": "src/scripts/git-worktree-cross-rebase-check.ts",
       "symbol": "module",
       "token": "writeFileSync",
@@ -4410,15 +4113,6 @@
       "callsite_sha256": "fac4a7d4df8ac6fa7ca92a536cbe5eb22041f505c127c22b9f30f7677efe1310",
       "occurrence": 1,
       "reason": "src/scripts/git-worktree-cross-rebase-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/git-worktree-diff-export-check.ts",
-      "symbol": "module",
-      "token": "writeFileSync",
-      "scope_contract_sha256": "fd72501034f2cbb8ae185bee051e5e945cd3ed967add77764a3e90edefb2b8a4",
-      "callsite_sha256": "5c8353d9b6167821d2ccce666120ca41b09b0429d967d3f58848c447e12ab707",
-      "occurrence": 1,
-      "reason": "src/scripts/git-worktree-diff-export-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
     {
       "file": "src/scripts/git-worktree-dirty-lock-check.ts",
@@ -4455,24 +4149,6 @@
       "callsite_sha256": "d16102fe28a48e281e0e56b4903438e55d4783a43345ef44d5609919c032f2fe",
       "occurrence": 1,
       "reason": "src/scripts/git-worktree-integration-primary-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/git-worktree-merge-queue-check.ts",
-      "symbol": "module",
-      "token": "writeFileSync",
-      "scope_contract_sha256": "d4378204cfdbaaefcece23069288192bbe335268d911b3f7aecf9f90553d136f",
-      "callsite_sha256": "23331f0a7fba449073d74f4e66c787b69c7e8ce46a5bb872aea5ee450b113e3a",
-      "occurrence": 1,
-      "reason": "src/scripts/git-worktree-merge-queue-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/git-worktree-merge-queue-check.ts",
-      "symbol": "module",
-      "token": "writeFileSync",
-      "scope_contract_sha256": "d4378204cfdbaaefcece23069288192bbe335268d911b3f7aecf9f90553d136f",
-      "callsite_sha256": "3dd4792e57563b4e6d6e5efb443caae6277597f29cb6f4fb47ae893b8e7a40cc",
-      "occurrence": 1,
-      "reason": "src/scripts/git-worktree-merge-queue-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
     {
       "file": "src/scripts/git-worktree-untracked-diff-check.ts",
@@ -4619,15 +4295,6 @@
       "reason": "src/scripts/hook-latency-quantum-check.ts#seedRoot writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
     {
-      "file": "src/scripts/hooks-runtime-replay-warning-zero-v2.ts",
-      "symbol": "module",
-      "token": "writeFileSync",
-      "scope_contract_sha256": "d5c4bd2a432384e31ced9b648b478e2b85b84aba0e385fbf1ac8068e4c0d0da8",
-      "callsite_sha256": "daccb7c7ecb65202c262e0a32c525bf2d833e0f45cb1cbdaec8003868c9a9069",
-      "occurrence": 1,
-      "reason": "src/scripts/hooks-runtime-replay-warning-zero-v2.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
       "file": "src/scripts/image-artifact-path-contract-check.ts",
       "symbol": "module",
       "token": "fs.writeFile",
@@ -4635,42 +4302,6 @@
       "callsite_sha256": "bb3955fcfc96aa8c9c88e3269fef9f4d85c965dc46b82d1241da34d413484839",
       "occurrence": 1,
       "reason": "src/scripts/image-artifact-path-contract-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/image-artifact-registry-check.ts",
-      "symbol": "module",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "a6600c7d4011e4bba01ef1fa32504f3b410c4671582ad0f8c0321f65cd9e0109",
-      "callsite_sha256": "737abfe90a3ee869c4f5a015db8c3989d1d11efbee1dec82a7642ec772f4d626",
-      "occurrence": 1,
-      "reason": "src/scripts/image-artifact-registry-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/image-fidelity-fixture-check.ts",
-      "symbol": "module",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "8b8240e491f183f80415e8ae8de687082eb48867434409fab49833b4ae9b5e58",
-      "callsite_sha256": "05b2797249542b66c0293d1f23651e0fe0c9ad1e2de011e1dc4c7dff3fa0d2d3",
-      "occurrence": 1,
-      "reason": "src/scripts/image-fidelity-fixture-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/image-followup-edit-path-check.ts",
-      "symbol": "module",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "ee817f4c48da7b697d280cb546e377d3aa9d043d186c445e90b15e53adcf09dd",
-      "callsite_sha256": "2b63dc28eea7cc8d69e965445ac2800c88842877db68ac7acd9e912d80b0aea0",
-      "occurrence": 1,
-      "reason": "src/scripts/image-followup-edit-path-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/image-global-path-contract-check.ts",
-      "symbol": "module",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "9fe6c0a18845513f9a3099989bbde95d8ff421e76b2a488ac3fa240563b3e875",
-      "callsite_sha256": "2d49a6c9e4a8ab10a57516649ef1e0f4f614dba47d0b3d826ea412cf485a26d9",
-      "occurrence": 1,
-      "reason": "src/scripts/image-global-path-contract-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
     {
       "file": "src/scripts/imagegen-capability-check.ts",
