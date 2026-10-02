@@ -1010,15 +1010,6 @@
       "reason": "Runtime artifact writer has caller-scoped path and is externally audited for guard migration."
     },
     {
-      "file": "src/core/config/managed-config-merge.ts",
-      "symbol": "writeMergedText",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "1e17538b1e9120e77b1c2bd196ba2c6c3e69b0e4f298c9ada9dcb8b66c90ed4c",
-      "callsite_sha256": "4db8c04aabb39b41f9f732ff1db30c47a6f9c52b91ba3d2aa23aa21be6bcaa01",
-      "occurrence": 1,
-      "reason": "Managed config merge writes a same-directory backup before applying a protected-key-preserving managed config update."
-    },
-    {
       "file": "src/core/config/secret-preservation.ts",
       "symbol": "restoreSecretLines",
       "token": "fs.writeFile",
@@ -5189,8 +5180,8 @@
       "file": "src/scripts/release-metadata-check.ts",
       "symbol": "module",
       "token": "writeFileSync",
-      "scope_contract_sha256": "9f0e578b0034960f3be338923c8801420fa537b02fada2d3b94d5861eaf484e1",
-      "callsite_sha256": "ec41fde835430295decee0ba5f5e5393433d2100a76e237823bd93ddecf9d89e",
+      "scope_contract_sha256": "9ab31efc9fa6dcc0cbbcdcf0bdf127b5df20cb51cc39249d2a775873a37de044",
+      "callsite_sha256": "94a079f6393f6dfb9eeed62029a2d269ad8f1f71dbce0d943c73f262895098e0",
       "occurrence": 1,
       "reason": "Release metadata validation writes only its fixed versioned JSON report beneath the repository .sneakoscope/reports directory."
     },
@@ -5198,8 +5189,8 @@
       "file": "src/scripts/release-parallel-speed-budget-check.ts",
       "symbol": "module",
       "token": "writeFileSync",
-      "scope_contract_sha256": "192c530755c6840e5a745cab755e43d9f065675f787cb3f399417e8116383c9a",
-      "callsite_sha256": "8eef67f353a46935d1c44e673ab06da103a6ed8bea0c883af2762130d647bc9f",
+      "scope_contract_sha256": "0f510171aa78008928985dc551b502d195aa7567292680192010105c374343f5",
+      "callsite_sha256": "8091d3c874ea063d215db056f3713a8b9d94fc3e25dd41e4d2e3af1f746e2175",
       "occurrence": 1,
       "reason": "Release/check script writes the scoped speed-budget proof report under .sneakoscope/reports."
     },

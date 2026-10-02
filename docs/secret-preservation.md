@@ -20,7 +20,6 @@ Relevant gates:
 
 ```bash
 npm run secret:preservation
-npm run config:managed-merge
 npm run secret:preservation-guard
 npm run secret:line-rollback
 npm run secret:supabase-preservation-blackbox

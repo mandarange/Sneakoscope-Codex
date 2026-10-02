@@ -13,7 +13,6 @@ export const RELEASE_GATE_CONTRACT_IDS: readonly string[] = Object.freeze([
   'codex:current:policy',
   'codex:current:thread-store',
   'commands:current-surface-only',
-  'config:managed-merge',
   'docs:truthfulness',
   'install-surface:ssot',
   'latest-version:guidance',

@@ -74,7 +74,6 @@ const requiredReleaseGates = [
   'codex:current:thread-store',
   'codex:current:capability',
   'commands:current-surface-only',
-  'config:managed-merge',
   'docs:truthfulness',
   'install-surface:ssot',
   'latest-version:guidance',

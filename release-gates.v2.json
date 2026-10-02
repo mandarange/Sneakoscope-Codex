@@ -728,44 +728,9 @@
       "output_contract": "sks.gate-result.v2"
     },
     {
-      "id": "config:managed-merge",
-      "command": "node ./dist/scripts/managed-config-merge-check.js",
-      "deps": [
-        "secret:preservation"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 300000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "docs/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v2"
-    },
-    {
       "id": "safety:mutation-callsite-coverage",
       "command": "node ./dist/scripts/mutation-callsite-coverage-check.js",
-      "deps": [
-        "config:managed-merge"
-      ],
+      "deps": [],
       "resource": [
         "cpu-light",
         "fs-read"

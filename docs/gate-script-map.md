@@ -32,7 +32,6 @@ release is authorized. Current 8.1.3 classifications live in
 | `codex:current:thread-store` | `release` | `node ./dist/scripts/codex-current-thread-store-check.js` | direct |
 | `codex:app-handoff-comprehensive` | `release` | `node ./dist/scripts/codex-app-handoff-check.js && node ./dist/scripts/codex-app-handoff-launch-check.js && node ./dist/scripts/qa-loop-app-handoff-check.js && node ./dist/scripts/qa-loop-app-handoff-capability-check.js && node ./dist/scripts/qa-loop-app-handoff-cli-check.js && node ./dist/scripts/qa-loop-app-handoff-confirmation-check.js && node ./dist/scripts/qa-loop-app-handoff-gate-lifecycle-check.js && node ./dist/scripts/qa-loop-app-handoff-launch-check.js && node ./dist/scripts/qa-loop-app-handoff-status-lifecycle-check.js` | direct |
 | `codex:product-design-plugin-routing` | `release` | `node ./dist/scripts/product-design-plugin-routing-check.js` | direct |
-| `config:managed-merge` | `release` | `node ./dist/scripts/managed-config-merge-check.js` | direct |
 | `context7:evidence-dedupe` | `release` | `node ./dist/scripts/context7-evidence-dedupe-check.js` | direct |
 | `core-skill:card-schema-deployment-snapshot` | `release` | `node ./dist/scripts/core-skill-card-schema-check.js && node ./dist/scripts/core-skill-deployment-snapshot-check.js` | direct |
 | `core-skill:heldout-validation` | `release` | `node ./dist/scripts/core-skill-heldout-validation-check.js` | direct |
