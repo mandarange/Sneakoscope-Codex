@@ -1,6 +1,43 @@
 # SKS Release Readiness
 
-## 10.4.0 candidate
+## 10.5.0 candidate
+
+SKS stops doing more than the task needs. Measured through the real hook, a
+one-line fix ("Fix the null check in parseConfig") was routed to Naruto, the
+parent-orchestrates-only route, and the UserPromptSubmit hook injected about
+19,000 characters (155 lines): the delegation contract, a subagent plan, the
+parent-edit gate, and a parent summary schema. A risk word such as `deploy` or
+`auth` marked a prompt high-risk and default-parallel, a specialized route
+always fanned out, and a Jev `implement` answer always meant Naruto with no
+single-or-parallel judgment. Ordinary implementation now runs in the main agent
+under the lightest parent-owned route (about 3,800 characters, 26 lines for the
+same prompt). Child agents run only for an explicit `$sks-naruto` or `$sks-work`,
+`--agents N`, a parallel or subagent request in the prompt (a risk word no longer
+cancels it), a specialized route the user named, or, in Jev mode, when Jev judges
+that the work splits into independent parts. The same single Jev call that picks
+the pipeline now also answers `single` or `parallel`; `single` is the default and
+the answer whenever Jev is unsure. A second pass removed more code written for
+older Codex versions: the retired SKS-run Naruto scheduler and patch write-E2E
+modules, the Core Skill Engine optimizer and its gates, the retired `$Loop`
+runtime's upper layers, the four never-run review lens stubs, the PreCompact and
+PostCompact hooks (SessionStart with `source=compact` already refreshes
+context), and the `DCODEX_*` aliases. Four fixes stop SKS from undoing what
+Codex honours: doctor, update, and the install writers no longer strip
+`features.multi_agent`, `features.codex_hooks`, `notice.fast_default_opt_out`,
+or `remote_control`; no repair runs `codex features enable`, which rewrote a
+user's `= false` opt-out; Codex App git readiness no longer waits on the removed
+`codex_git_commit` flag; and project configs no longer receive copies of global
+tables Codex already shows. Verification must cover the build, the release
+registries and gates after the removals (including the renamed
+`skills:manifest-continuity` gate), the mutation-callsite allowlist, the routing
+tests that pin which prompts reach Naruto, the Jev single-or-parallel decision,
+the hook injection size, and the canonical suite on the same tree. No model turn
+was run to compare how a real Codex session behaves under the lighter prompt.
+
+## Previous candidate: 10.4.0
+
+Published 2026-10-02 as `sneakoscope@10.4.0` from commit fb7b2385; the registry
+`gitHead`, file count (1692), and sha512 integrity match the release-check pack.
 
 SKS drops the code that compensated for legacy Codex CLI versions and legacy
 models and keeps only what Codex 0.159 still does not do itself. An audit
@@ -841,7 +878,7 @@ node ./dist/scripts/release-pack-receipt.js verify
 node ./dist/scripts/release-provenance-check.js --publish
 npm whoami --registry https://registry.npmjs.org/
 npm view sneakoscope maintainers --json --registry https://registry.npmjs.org/
-npm view sneakoscope@10.4.0 version --json --registry https://registry.npmjs.org/
+npm view sneakoscope@10.5.0 version --json --registry https://registry.npmjs.org/
 npm publish --dry-run --json \
   --registry https://registry.npmjs.org/ \
   --tag latest \

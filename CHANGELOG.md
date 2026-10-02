@@ -3,6 +3,65 @@
 ## [Unreleased]
 
 
+## [10.5.0] - 2026-10-02
+
+### Changed
+
+- Child agents no longer run by default for implementation. The router sent every
+  implementation-shaped prompt to Naruto, where the parent only orchestrates and a
+  full delegation prompt (about 19,000 characters, a subagent plan, a parent-edit
+  gate, a parent summary schema) is injected, even for a one-line fix. A risk word
+  such as `deploy` or `auth` also made a prompt high-risk and default-parallel, and
+  specialized routes always fanned out. Child agents now run only for an explicit
+  `$sks-naruto` or `$sks-work`, `--agents N`, a parallel or subagent request in the
+  prompt (a risk word does not cancel it), a specialized route the user named, or,
+  with Jev mode on, when Jev judges that the task splits into independent parts. A
+  routed-to-Naruto prompt that is not delegated runs as the lightest parent-owned
+  route, so none of the orchestrate-only text or gate is injected: a one-line fix
+  carries about 3,800 characters of hook text instead of 19,000.
+- Jev answers a new single-or-parallel question in the same call that picks the
+  pipeline. `single` is the default and the answer whenever Jev is unsure; only a
+  confident `parallel` starts Naruto for that prompt.
+- The AGENTS block, the `prompt-pipeline` skill, the `sks-naruto` skill
+  description, the README, and the Naruto guide say that implementation is the main
+  agent's own work and Naruto is for work you ask to split.
+- SKS writes Codex's own service tier ids (`priority`, `default`) wherever it
+  configures Fast for Codex.
+- The spawn policy says that bounded forks are an SKS rule: Codex 0.159 and
+  0.153.4 both run a child on the `model` and `reasoning_effort` a spawn names,
+  whatever the fork.
+
+### Fixed
+
+- `sks doctor`, `sks update`, and the install writers stripped keys Codex still
+  honours: `features.multi_agent`, `features.codex_hooks` (a live alias, `= false`
+  turns hooks off), `notice.fast_default_opt_out`, and `remote_control`. They also
+  repaired values Codex accepts. Only SKS-owned tables are removed now.
+- `codex features enable` ran from the doctor repairs and the install-time image
+  repair, and rewrote a user's `<flag> = false` opt-out to true. The repairs no
+  longer run it.
+- Codex App git-action readiness was gated on `codex_git_commit`, a flag Codex
+  removed, so readiness reported blocked on an empty config.
+- SKS seeded `[features]` flags and `[agents]` defaults that are already on by
+  default, and copied the global `[mcp_servers]`, `[plugins]`, and `[marketplaces]`
+  tables into project Codex configs, where they are already visible.
+
+### Removed
+
+- The retired SKS-run Naruto scheduler and patch write-E2E modules, the Core Skill
+  Engine optimizer and its release gates (the manifest-continuity and uninstall
+  inventory checks stay as the `skills:manifest-continuity` gate), the retired
+  `$Loop` runtime's gates, schemas, docs, and upper layers (the `sks loop`
+  refusal and the readers of old loop state stay), the unregistered Python tools
+  smoke check, and a context-pack projection helper nothing called.
+- The four never-run LLM lens stubs of `sks review` (the `lenses` key of
+  `review-report.json` is gone), the unread `goal_continuation` route metadata, the
+  write-only DFix persona and lease ledger, and an unread QA-LOOP contract field.
+- The SKS PreCompact and PostCompact hooks (SessionStart with `source=compact`
+  already refreshes the context), the `DCODEX_*` environment aliases from a
+  predecessor product, the hard-coded Codex.app `node_repl` paths, and an unwired
+  imagegen repair check script.
+
 ## [10.4.0] - 2026-10-02
 
 ### Fixed

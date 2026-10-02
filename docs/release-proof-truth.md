@@ -1,6 +1,32 @@
 # Release Proof Truth
 
-## 10.4.0 candidate
+## 10.5.0 candidate
+
+The lighter default is proved at the routing and hook layers, not by a model
+turn. The routing suites pin that an ordinary implementation prompt, a prompt
+that carries a risk word, and a Jev `implement` answer without a `parallel`
+judgment do not require subagents, and that `$sks-naruto`, `--agents N`, a
+parallel or subagent request (including one that also carries a risk word), a
+named specialized route, and a confident Jev `parallel` do; a Jev judgment binds
+only to the prompt it was made for. The hook injection for a one-line fix was
+measured through the real UserPromptSubmit path: 19,084 characters and 155 lines
+before, 3,815 and 26 after, with an explicit parallel request still injecting
+the full 19,115. The Jev parallelism question is asked in the same call as the
+pipeline choice and an unconfident answer means single, pinned by the turn-routing
+suite. Config-writer claims are pinned by tests that run the writers over a
+config holding each key. The stage-3 removals were checked the same way as the
+10.4.0 ones: a grep over src, test, scripts, config, docs, workflows,
+`package.json`, and the release registries before each deletion, recorded in the
+commit bodies. After the merge and the version bump the build, thirteen release
+gates, and the canonical suite (3891 of 3892 in a linked worktree; the one failure is
+the symlinked `node_modules` realpath, which fails the same way on the previous
+commit) pass. This does not prove that a real Codex session behaves better
+under the lighter prompt, that Jev's single-or-parallel answers are good on real
+prompts (the decision tests answer from fixtures), or that a Codex newer than
+0.159.2 behaves the same. It does not authorize publication, deployment, a
+credential change, a Git tag, or a push.
+
+## Historical 10.4.0 candidate
 
 The legacy cleanup is proved by what still passes after the removals, not by
 new behavior. Each removal came from an audit that measured Codex 0.159.2,
@@ -428,7 +454,18 @@ Exact-commit proof can exist only after the candidate is committed and all
 source-bound gates are regenerated from that clean commit.
 
 All release artifacts bound to 9.2.7 or an earlier commit are historical. They
-must not be renamed, copied, or treated as 10.4.0 evidence.
+must not be renamed, copied, or treated as 10.5.0 evidence.
+
+New 10.5.0 claims:
+
+| Claim | Current support | Boundary |
+| --- | --- | --- |
+| Ordinary implementation does not start child agents | passed-hermetic | `naruto-explicit-only` and `turn-routing` suites; `naruto-ssot-routing-check` asserts ordinary and risk-word prompts are not Naruto; no real Codex session was driven |
+| An explicit request still starts child agents | passed-hermetic | explicit `$sks-naruto`/`$sks-work`, `--agents N`, a parallel or subagent cue (also with a risk word), a named specialized route, and a confident Jev `parallel` each require subagents in the same suites |
+| Jev judges single or parallel per prompt, and unsure means single | passed-hermetic | `turn-routing` suite with distinct prompts per case (the decision transport caches identical requests); the judgment applies only to the prompt it was made for; answers come from test fixtures, not a live model |
+| The hook injects far less for ordinary work | verified-on-machine | one-line fix prompt through the real UserPromptSubmit hook: 19,084 to 3,815 characters, 155 to 26 lines; explicit parallel still 19,115 |
+| Config repairs keep keys and opt-outs Codex honours | passed-hermetic | writer suites over configs with `features.multi_agent`, `features.codex_hooks = false`, `notice.fast_default_opt_out`, `remote_control`, and a `= false` feature opt-out; no repair runs `codex features enable` |
+| The stage-3 removals served no reachable case | passed-hermetic | grep proof in each commit body; release registries, gates, and the mutation allowlist consistent after the merge; the loop refusal and old-loop-state readers were kept on purpose |
 
 New 10.4.0 claims:
 
@@ -531,8 +568,9 @@ New 10.3.10 claims:
 | Host extra skill dirs lose only SKS-owned retired residue | passed-hermetic | `~/.cursor/skills` and `~/.claude/skills` remove managed retired names only; user-authored collisions stay in place |
 | A stale or cwd-sticky official workflow cannot capture a later prompt | passed-hermetic | unnamed hooks use `loadOwnedRouteState`; idle > 2h is inactive even with leftover open threads; same-session follow-ups still bind while the run is fresh |
 | The 10.3.10 package is published | verified-on-machine | 2026-10-02, registry `gitHead` 0c70457e and file count 1755, sha512 integrity equals the pack receipt |
-| All checked version authorities report 10.4.0 | passed-hermetic | `release:version-truth` 15 surfaces at 10.4.0 after incremental build |
-| The reported 10.4.0 package is ready to publish | not proved | requires a clean exact-commit build, `npm run release:check:full` stamp, pack receipt, provenance, and the release commit fast-forward pushed to origin main (the prepublish reproducibility preflight refuses `head_not_origin_main`) |
+| The 10.4.0 package is published | verified-on-machine | 2026-10-02, registry `gitHead` fb7b2385 and file count 1692, sha512 integrity equals the pack receipt |
+| All checked version authorities report 10.5.0 | passed-hermetic | `release:version-truth` after the version bump |
+| The reported 10.5.0 package is ready to publish | not proved | requires a clean exact-commit build, `npm run release:check:full` stamp, pack receipt, provenance, and the release commit fast-forward pushed to origin main (the prepublish reproducibility preflight refuses `head_not_origin_main`) |
 
 ## 9.1.0 assertion (historical)
 
