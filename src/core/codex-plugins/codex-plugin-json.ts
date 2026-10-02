@@ -85,7 +85,7 @@ export async function buildCodexPluginInventory(input: {
   const availableCount = plugins.length - installedCount
   const catalogComplete = Array.isArray(listJson?.available) && normalizeList(listJson?.blockers).length === 0
   const blockers = [
-    ...(capability.supports_plugin_json ? [] : ['codex_0_138_plugin_json_unavailable']),
+    ...(capability.ok ? [] : ['codex_0_138_plugin_json_unavailable']),
     ...normalizeList(listJson?.blockers),
     ...(process.env.SKS_CODEX_PLUGIN_JSON_FAKE_NO_MCP === '1' ? ['fixture_mcp_candidates_disabled'] : [])
   ]

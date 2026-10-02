@@ -29,6 +29,12 @@ export function parseCodexVersionText(text: unknown): string | null {
   return match?.[1] ?? null;
 }
 
+/** True when `version` parses and is at or above the supported floor. */
+export function meetsCodexFloor(version: unknown): boolean {
+  const parsed = parseCodexVersionText(version);
+  return Boolean(parsed && compareSemverLike(parsed, CODEX_MINIMUM_SUPPORTED_VERSION) >= 0);
+}
+
 export function requiredCodexVersionFromBaseline(value: unknown): string {
   return parseCodexVersionText(value) || CODEX_PREFERRED_VERSION;
 }

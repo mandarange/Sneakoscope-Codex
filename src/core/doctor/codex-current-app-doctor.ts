@@ -21,7 +21,6 @@ export async function runCodexCurrentAppDoctor(root: string, input: { fix?: bool
   const checks = {
     bash_fallback: await bashFallbackCheck(),
     linux_proxy_socket_path: linuxProxySocketCheck(root),
-    oauth_mcp_prerefresh: oauthMcpPrerefreshCheck(capability),
     agents_logical_path: await agentsLogicalPathCheck(root),
     plugin_discovery_cache: await pluginDiscoveryCacheCheck(root, input.fix === true, fixed)
   }
@@ -70,15 +69,6 @@ function linuxProxySocketCheck(root: string) {
     candidate,
     length: candidate.length,
     warnings: candidate.length < 100 ? [] : ['linux_proxy_socket_path_long'],
-    blockers: []
-  }
-}
-
-function oauthMcpPrerefreshCheck(capability: any) {
-  return {
-    ok: true,
-    supported: capability.supports_oauth_mcp_prerefresh === true,
-    warnings: capability.supports_oauth_mcp_prerefresh ? [] : ['oauth_mcp_prerefresh_requires_current_codex'],
     blockers: []
   }
 }

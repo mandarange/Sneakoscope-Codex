@@ -54,6 +54,17 @@ export async function reconcileRetiredCapabilityArtifacts(
     const value = await readJson<any>(file, null).catch(() => null);
     await reconcileKnownRetiredPath(root, file, value?.schema === schema, fix, quarantineRoot, counters);
   }
+  // Generated App Server schema cache ({ ok, text, sha256 } per runtime) that capability detection no longer reads.
+  const schemaCacheRoot = path.join(root, '.sneakoscope', 'cache', 'codex-current-schema');
+  if (!(await pathExistsForCleanup(root, schemaCacheRoot, counters))) return;
+  const walk = await walkEntries(root, schemaCacheRoot);
+  recordWalkErrors(walk.errors, counters);
+  for (const file of walk.entries) {
+    const value = await readJson<any>(file, null).catch(() => null);
+    const managed = typeof value?.ok === 'boolean' && typeof value?.text === 'string' && 'sha256' in value;
+    await reconcileKnownRetiredPath(root, file, managed, fix, quarantineRoot, counters);
+  }
+  if (fix) recordEmptyTreeOutcome(await removeEmptyTree(root, schemaCacheRoot), counters);
 }
 
 export async function reconcileRetiredGitPolicyMode(

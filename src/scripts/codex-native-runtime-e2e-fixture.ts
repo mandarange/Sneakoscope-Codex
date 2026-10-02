@@ -46,17 +46,13 @@ export async function createCodexNativeRuntimeFixture(input: {
       USERPROFILE: home,
       CODEX_HOME: codexHome,
       CODEX_BIN: 'codex',
-      SKS_CODEX_CURRENT_APP_FAKE: '1',
-      SKS_CODEX_CURRENT_APP_PROBE: '1',
       SKS_CODEX_PLUGIN_JSON_FAKE: '1',
       SKS_CODEX_HOOK_APPROVAL_FIXTURE: input.hook,
       SKS_CODEX_AGENT_TYPE_FIXTURE: input.agentType,
-      SKS_CODEX_CURRENT_APP_FAKE_APP_HANDOFF_FAIL: input.appHandoff ? '0' : '1',
-      SKS_CODEX_CURRENT_APP_FAKE_IMAGE_PATH_FAIL: input.imagePathExposure ? '0' : '1',
-      SKS_CODEX_CURRENT_APP_FAKE_PLUGIN_JSON_FAIL: '0',
       SKS_CODEX_PLUGIN_JSON_FAKE_NO_MCP: input.mcpCandidates ? '0' : '1',
-      // Without code-mode web search the fixture models a Codex below the supported floor.
-      ...(input.codeModeWebSearch ? {} : { SKS_CODEX_VERSION_FAKE: BELOW_FLOOR_CODEX_VERSION_TEXT }),
+      // App handoff, image path exposure and code-mode web search all follow the Codex version now, so
+      // switching any of them off models a Codex below the supported floor.
+      ...(input.appHandoff && input.imagePathExposure && input.codeModeWebSearch ? {} : { SKS_CODEX_VERSION_FAKE: BELOW_FLOOR_CODEX_VERSION_TEXT }),
       SKS_LOOP_RUNTIME_FIXTURE: '1',
       SKS_TEST_RUNTIME_FIXTURE_ALLOWED: '1'
     }

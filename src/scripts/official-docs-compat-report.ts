@@ -66,8 +66,7 @@ const checks = [
   fileRow('codex_runtime_generated_app_server_schema', codexTag, 'src/core/codex-control/codex-current-capability.ts', [
     'generate-json-schema',
     'real-schema',
-    'generated_schema_sha256',
-    'binary_sha256'
+    'generated_schema_sha256'
   ]),
   fileRow('codex_native_capability_self_repair', 'Codex Desktop native capabilities', 'src/core/doctor/doctor-native-capability-repair.ts', [
     'repairNativeCapabilities',

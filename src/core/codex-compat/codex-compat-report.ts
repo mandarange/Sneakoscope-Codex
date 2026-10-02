@@ -30,8 +30,7 @@ export async function codexCompatibilityReport(opts: any = {}) {
   const hooks = await codexHookWarningCheck(root, { recordWrongness: false });
   const current = await detectCodexCurrentCapability({
     root,
-    codexBin: opts.codexBin || null,
-    requireReal: opts.requireReal === true
+    codexBin: opts.codexBin || null
   });
   const ok = Boolean(version.policy.ok && snapshot.ok && hooks.ok && current.ok);
 

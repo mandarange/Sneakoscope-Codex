@@ -420,7 +420,6 @@ function forbiddenTerms(): string[] {
 
 function fakeEnv(opts: { hook: 'approved' | 'unknown'; agentType: 'supported' | 'unsupported' }): Record<string, string | undefined> {
   return swapEnv({
-    SKS_CODEX_CURRENT_APP_FAKE: '1',
     SKS_CODEX_PLUGIN_JSON_FAKE: '1',
     SKS_CODEX_HOOK_APPROVAL_FIXTURE: opts.hook,
     SKS_CODEX_AGENT_TYPE_FIXTURE: opts.agentType,

@@ -234,15 +234,8 @@ export function renderDoctorConsoleReport(result: any, extras: DoctorConsoleExtr
   line('Codex current compatibility:');
   line(`  target: ${CURRENT_CODEX_RUNTIME_CONTRACT.targetTag}`);
   line(`  runtime: ${codex.version || 'unknown'}`);
-  line(`  multi-agent mode: ${skippedOr(featureMatrixSkipped, codexNativeFeatureMatrix.features?.multi_agent_mode?.ok ? 'verified' : 'unverified')}`);
-  line(`  rollout budget: ${skippedOr(featureMatrixSkipped, codexNativeFeatureMatrix.features?.rollout_budget?.ok ? 'verified' : 'unverified')}`);
-  line(`  indexed search: ${skippedOr(featureMatrixSkipped, codexNativeFeatureMatrix.features?.indexed_web_search?.ok ? 'verified' : 'unverified')}`);
-  line(`  current time: ${skippedOr(featureMatrixSkipped, codexNativeFeatureMatrix.features?.current_time_read?.ok ? 'verified' : 'unverified')}`);
   line('Current Codex app features:');
   line(`  /app handoff: ${skippedOr(currentAppSkipped, codexCurrentApp.supports_app_handoff ? 'ok' : 'unavailable')}`);
-  line(`  plugin JSON: ${skippedOr(currentAppSkipped, codexCurrentApp.supports_plugin_json ? 'ok' : 'unavailable')}`);
-  line(`  image path exposure: ${skippedOr(currentAppSkipped, codexCurrentApp.supports_image_path_exposure ? 'ok' : 'unavailable')}`);
-  line(`  OAuth MCP pre-refresh: ${skippedOr(currentAppSkipped, codexCurrentApp.supports_oauth_mcp_prerefresh ? 'ok' : 'unavailable')}`);
   const pluginInventorySkipped = extras.pluginInventory?.skipped === true;
   const pluginReport = extras.pluginInventory?.report;
   const plugins = pluginReport?.plugins || [];

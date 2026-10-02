@@ -4,7 +4,6 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { assertGate, emitGate, importDist } from './gate-lib.js'
-process.env.SKS_CODEX_CURRENT_APP_FAKE = '1'
 process.env.SKS_CODEX_APP_LAUNCH_FAKE = '1'
 const mod = await importDist('core/codex-app/codex-app-handoff.js')
 const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-app-handoff-launch-'))

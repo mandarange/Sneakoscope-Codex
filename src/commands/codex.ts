@@ -50,7 +50,7 @@ export async function run(_command: any, args: any = []) {
     return;
   }
   if (action === 'current' || action === CURRENT_CODEX_RUNTIME_CONTRACT.targetTag) {
-    const result = await detectCodexCurrentCapability({ requireReal: flag(args, '--require-real') });
+    const result = await detectCodexCurrentCapability();
     if (flag(args, '--json')) return printJson(result);
     console.log(`Codex ${CURRENT_CODEX_RUNTIME_CONTRACT.requiredCliVersion} compatibility: ${result.ok ? 'ok' : 'blocked'} (${result.probe_mode})`);
     for (const blocker of result.blockers || []) console.log(`- blocker: ${blocker}`);

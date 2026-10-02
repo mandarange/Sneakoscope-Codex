@@ -232,7 +232,7 @@ test('doctor maps only explicit legacy git-policy modes and quarantines unknown 
   }
 });
 
-test('doctor removes retired codex-current core capability snapshots and quarantines a user collision', async () => {
+test('doctor removes retired codex-current capability snapshots and schema cache and quarantines a user collision', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-current-surface-capability-'));
   try {
     const managedFile = path.join(root, '.sneakoscope', 'codex-current-core-capability.json');
@@ -241,6 +241,9 @@ test('doctor removes retired codex-current core capability snapshots and quarant
     await fs.writeFile(managedFile, `${JSON.stringify({ schema: 'sks.codex-current-core-capability.v1', ok: true })}\n`);
     const userBytes = Buffer.from('{ "schema": "user-owned", "keep": true }\n');
     await fs.writeFile(userFile, userBytes);
+    const schemaCacheFile = path.join(root, '.sneakoscope', 'cache', 'codex-current-schema', 'abc.json');
+    await fs.mkdir(path.dirname(schemaCacheFile), { recursive: true });
+    await fs.writeFile(schemaCacheFile, `${JSON.stringify({ ok: true, text: 'schema text', sha256: 'abc' })}\n`);
 
     const detected = await reconcileRetiredManagedResidue({ root, fix: false });
     assert.equal(detected.ok, false);
@@ -251,6 +254,7 @@ test('doctor removes retired codex-current core capability snapshots and quarant
     assert.equal(fixed.preserved_user_file_count, 1);
     await assert.rejects(fs.access(managedFile));
     await assert.rejects(fs.access(userFile));
+    await assert.rejects(fs.access(path.dirname(schemaCacheFile)));
     const quarantined = await findFile(root, 'codex-current-core-real-probes.json');
     assert.ok(quarantined?.includes(path.join('.sneakoscope', 'quarantine', 'retired-public-surface')));
     assert.deepEqual(await fs.readFile(quarantined!), userBytes);
