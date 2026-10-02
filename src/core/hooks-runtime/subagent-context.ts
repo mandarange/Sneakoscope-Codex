@@ -29,6 +29,18 @@ export async function sealedSubagentRoutingContext(artifactDir: string, payload:
   // With Jev on, the PreToolUse hook re-seals model and effort on the spawn
   // call itself, so the planned role model is no longer the child's model.
   const jevSealed = await readDecisionConfig().then(jevEnabled).catch(() => false)
+  // A managed role file pins the child's model and Codex runs that pin over the
+  // spawn call's model, so Jev cannot have sealed it: report the role's own tier.
+  if (jevSealed && role) {
+    return [
+      'SKS sealed child routing:',
+      `- custom agent: ${agentName}`,
+      `- model: ${role.model}`,
+      `- model_reasoning_effort: ${role.model_reasoning_effort}`,
+      '- pinned by the role file, which Codex runs over any spawn-call model; Jev does not re-seal a managed role',
+      '- keep this profile; do not retarget model/effort or spawn nested agents'
+    ].join('\n')
+  }
   if (jevSealed) {
     return [
       'SKS sealed child routing:',

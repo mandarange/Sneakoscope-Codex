@@ -110,10 +110,12 @@ connectivity evidence, not SKS task accuracy or a privacy audit.
   replaces the two-failure rule, so a failure that needs deeper reasoning
   raises the effort at once and a flaky or environmental one does not.
 - Each Naruto `spawn_agent` call: Jev picks the tier at spawn time and SKS
-  seals that tier's newest model and effort. When Jev was called but could not
-  decide and the parent passed no current model, the child gets its role's own
-  tier (deep for an unknown role, with `fork_turns="none"` when absent) instead
-  of bouncing off the spawn policy.
+  seals that tier's newest model and effort. A spawn that names a managed role
+  is not sealed: Codex runs the role file's pinned model over the spawn's
+  `model`, so the hook only names that pin (the role's own tier) and Jev is not
+  asked. When Jev was called but could not decide and the parent passed no
+  current model, the child gets its role's own tier (deep for an unknown role,
+  with `fork_turns="none"` when absent) instead of bouncing off the spawn policy.
 - In Jev mode the context and plan decisions always run (derived from the
   mode, not stored flags), a Jev-fixed automatic child count is stated to the
   parent, and the delegation prompt drops its tier rules: the parent reads one

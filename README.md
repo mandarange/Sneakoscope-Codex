@@ -187,7 +187,7 @@ soon as Codex lists it:
 | Exploration, large-context reads, and direct tool operation | context | medium | `gpt-6.1-sol` |
 | Planning, review, debugging, and focused judgment | deep | max | `gpt-6-astra` |
 
-With Jev mode on, Jev picks the tier for every spawn, every gated parent edit,
+With Jev mode on, Jev picks the tier for every spawn that names no managed role (a managed role runs the tier pinned in its role file), every gated parent edit,
 the plan, and the context, so the parent spends no time on those choices. It
 also picks the pipeline for each prompt; an explicit SKS dollar command always
 wins. A stored role-model preference on a current model wins in both modes.

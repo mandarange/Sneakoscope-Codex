@@ -167,7 +167,7 @@ export function buildAgentEffortPolicy(roster: any = {}) {
     agent_count: roster.agent_count || decisions.length,
     concurrency: roster.concurrency || decisions.length,
     decisions,
-    rule: 'Every child uses the newest model of the tier its work needs: fast for tiny mechanical work, balanced for instructed implementation, context for reads and tool execution, and deep for focused judgment. With Jev mode on, Jev picks the tier for each spawn. The parent keeps its user-selected model, reasoning effort, and service tier; stored role preferences may override role defaults.'
+    rule: 'Every child uses the newest model of the tier its work needs: fast for tiny mechanical work, balanced for instructed implementation, context for reads and tool execution, and deep for focused judgment. With Jev mode on, Jev picks the tier for each spawn that names no managed role; a managed role runs the tier pinned in its role file. The parent keeps its user-selected model, reasoning effort, and service tier; stored role preferences may override role defaults.'
   }
 }
 

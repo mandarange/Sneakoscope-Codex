@@ -20,7 +20,14 @@ export const SUBAGENT_EVIDENCE_FILENAME = 'subagent-evidence.json'
 export const SUBAGENT_EVENT_LOG_FILENAME = 'subagent-events.jsonl'
 export const SUBAGENT_PARENT_SUMMARY_FILENAME = 'subagent-parent-summary.json'
 
-export type SubagentEventName = 'SubagentStart' | 'SubagentStop'
+/** Hook events Codex delivers for a child thread. */
+export type SubagentLifecycleEventName = 'SubagentStart' | 'SubagentStop'
+/**
+ * `SubagentResume` is SKS's own record that a started child ran a follow-up turn
+ * (a child hook whose turn differs from the newest recorded one); Codex has no
+ * second Start for it. Only the child-thread timeline reads it.
+ */
+export type SubagentEventName = SubagentLifecycleEventName | 'SubagentResume'
 
 export interface NormalizedSubagentEvent {
   schema: typeof SUBAGENT_EVENT_SCHEMA
@@ -51,7 +58,7 @@ export interface SubagentEvidence {
   failed_thread_ids: string[]
   open_thread_ids: string[]
   unmatched_stop_thread_ids: string[]
-  event_sources: SubagentEventName[]
+  event_sources: SubagentLifecycleEventName[]
   parent_summary_present: boolean
   parent_summary_trustworthy: boolean
   parent_summary_status: 'completed' | 'blocked' | 'failed' | 'ambiguous' | null
@@ -334,7 +341,7 @@ export function normalizeSubagentEvent(payload: unknown, explicitEventName?: unk
       nested.executionEpoch
     ) || null,
     model: firstText(row.model, nested.model) || null,
-    outcome: persistedOutcome ?? (eventName === 'SubagentStart'
+    outcome: persistedOutcome ?? (eventName !== 'SubagentStop'
       ? 'started'
       : stopFailed(merged)
         ? 'failed'
@@ -359,9 +366,11 @@ export function buildSubagentEvidence(input: BuildSubagentEvidenceInput): Subage
   const countPolicy: SubagentCountPolicy = input.countPolicy === 'dynamic_automatic'
     ? 'dynamic_automatic'
     : 'exact'
+  // A resume only reopens a thread for the live timeline; completion evidence is
+  // still decided by Start, Stop and the parent's outcome for each thread.
   const normalizedEvents = (input.events || [])
     .map((event) => normalizeSubagentEvent(event))
-    .filter((event): event is NormalizedSubagentEvent => Boolean(event))
+    .filter((event): event is NormalizedSubagentEvent => event !== null && event.event_name !== 'SubagentResume')
   const parentSummary = normalizeSubagentParentSummary(input.parentSummary)
   const hostCapabilityEvidence = normalizeTrustedHostCapabilityEvidence(input.hostCapabilityEvidence)
   const hostCapabilityBlockers = validateParentHostCapabilityBinding(parentSummary.raw, hostCapabilityEvidence)
@@ -373,7 +382,7 @@ export function buildSubagentEvidence(input: BuildSubagentEvidenceInput): Subage
   const failedStops = new Set<string>()
   const unmatchedStops = new Set<string>()
   const ambiguousStops = new Set<string>()
-  const eventSources = new Set<SubagentEventName>()
+  const eventSources = new Set<SubagentLifecycleEventName>()
   let missingThreadId = false
   const parentSummaryStructurallyTrustworthy = parentSummary.trustworthy
     && hostCapabilityBlockers.length === 0
@@ -383,7 +392,7 @@ export function buildSubagentEvidence(input: BuildSubagentEvidenceInput): Subage
     && (parentSummary.status === 'completed' || parentSummary.raw?.status === 'blocked')
 
   for (const event of events) {
-    eventSources.add(event.event_name)
+    eventSources.add(event.event_name as SubagentLifecycleEventName)
     if (!event.thread_id) {
       missingThreadId = true
       continue
@@ -660,12 +669,13 @@ function normalizeEventName(value: unknown): SubagentEventName | null {
   const normalized = String(value || '').trim().toLowerCase().replace(/[^a-z]+/g, '')
   if (normalized === 'subagentstart') return 'SubagentStart'
   if (normalized === 'subagentstop') return 'SubagentStop'
+  if (normalized === 'subagentresume') return 'SubagentResume'
   return null
 }
 
 function normalizePersistedOutcome(value: unknown, eventName: SubagentEventName): NormalizedSubagentEvent['outcome'] | null {
   const normalized = String(value || '').trim().toLowerCase()
-  if (eventName === 'SubagentStart') return normalized === 'started' ? 'started' : null
+  if (eventName !== 'SubagentStop') return normalized === 'started' ? 'started' : null
   if (normalized === 'stopped' || normalized === 'failed' || normalized === 'ambiguous') return normalized
   return null
 }
@@ -1255,7 +1265,7 @@ function hasMeaningfulSummary(value: unknown): boolean {
   return isRecord(value) && Object.keys(value).length > 0
 }
 
-function eventSourceOrder(a: SubagentEventName, b: SubagentEventName): number {
+function eventSourceOrder(a: SubagentLifecycleEventName, b: SubagentLifecycleEventName): number {
   return (a === 'SubagentStart' ? 0 : 1) - (b === 'SubagentStart' ? 0 : 1)
 }
 

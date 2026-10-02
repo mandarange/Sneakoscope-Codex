@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { ensureDir, nowIso, readJson, sha256, writeJsonAtomic } from '../../fsx.js';
+import { ensureDir, exists, nowIso, readJson, sha256, writeJsonAtomic } from '../../fsx.js';
 import { appendMadSksSqlPlaneLedgerEvent } from './ledger.js';
 import { withMadSksSqlPlaneLock } from './lock.js';
 import type { MadSksSqlPlaneCapabilityV2 } from './capability.js';
@@ -108,6 +108,9 @@ export async function transitionMadSksSqlPlaneOperation(input: {
   errorCode?: string | null;
   verificationArtifact?: string | null;
 }) {
+  // Every PostToolUse reaches here with its tool_use_id, but only a reserved
+  // operation has a file; a miss must not create lock directories or take a lock.
+  if (!(await exists(operationFile(input.root, input.missionId, input.toolCallId)))) return null;
   return withMadSksSqlPlaneLock(input.root, input.missionId, `operation-${safeKey(input.toolCallId)}`, async () => {
     const file = operationFile(input.root, input.missionId, input.toolCallId);
     const existing = await readJson<MadSksSqlPlaneOperationV2 | null>(file, null);
@@ -141,7 +144,11 @@ export async function transitionMadSksSqlPlaneOperation(input: {
 }
 
 export function extractCanonicalToolCallId(payload: any = {}): string | null {
+  // Codex Pre/PostToolUse payloads identify the call by `tool_use_id`; the other
+  // keys are for hosts that name it differently.
   const candidates = [
+    payload.tool_use_id,
+    payload.toolUseId,
     payload.tool_call_id,
     payload.toolCallId,
     payload.call_id,

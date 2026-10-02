@@ -10,6 +10,7 @@ import {
   MAX_MASS_AUTOMATIC_SUBAGENT_COUNT
 } from './agent-catalog.js'
 import { buildWaveParentGuidance, type WaveParentGuidance } from './wave-parent-guidance.js'
+import { childThreadTimeline } from './child-thread-activity.js'
 
 export const SUBAGENT_WAVE_LIFECYCLE_SCHEMA = 'sks.subagent-wave-lifecycle.v1'
 
@@ -147,7 +148,7 @@ export interface SubagentWaveLifecycle {
   next_parent_actions: string[]
   parent_guidance: WaveParentGuidance
   waves: SubagentWaveRecord[]
-  last_event: 'SubagentStart' | 'SubagentStop' | null
+  last_event: NormalizedSubagentEvent['event_name'] | null
   updated_at: string
 }
 
@@ -297,18 +298,20 @@ function projectLifecycle(
     events: NormalizedSubagentEvent[]
     evidence: SubagentEvidence | Record<string, unknown> | null
     waveCapacity: number
-    lastEvent: 'SubagentStart' | 'SubagentStop' | null
+    lastEvent: NormalizedSubagentEvent['event_name'] | null
     targetChangeRejected: boolean
   }
 ): SubagentWaveLifecycle {
-  const starts = uniqueThreadIds(input.events.filter((event) => event.event_name === 'SubagentStart'))
+  const timeline = childThreadTimeline(input.events)
+  const starts = timeline.started
+  const open = new Set(timeline.open)
   const stops = new Set<string>()
   const waves = previous.waves.map((wave) => ({ ...wave, thread_ids: [...wave.thread_ids], settled_thread_ids: [...wave.settled_thread_ids] }))
   const assigned = new Set(waves.flatMap((wave) => wave.thread_ids))
 
   for (const event of input.events) {
     const threadId = event.thread_id
-    if (!threadId) continue
+    if (!threadId || event.event_name === 'SubagentResume') continue
     if (event.event_name === 'SubagentStop') {
       stops.add(threadId)
       const wave = waves.find((row) => row.thread_ids.includes(threadId))
@@ -335,7 +338,7 @@ function projectLifecycle(
   }
 
   for (const wave of waves) {
-    wave.settled_thread_ids = wave.thread_ids.filter((threadId) => stops.has(threadId))
+    wave.settled_thread_ids = wave.thread_ids.filter((threadId) => !open.has(threadId))
     const settled = wave.thread_ids.length > 0 && wave.settled_thread_ids.length === wave.thread_ids.length
     wave.status = settled ? 'settled' : 'running'
     wave.settled_at = settled
@@ -349,13 +352,14 @@ function projectLifecycle(
       latestStopOutcomes.set(event.thread_id, event.outcome)
     }
   }
+  // A thread resumed after a failed Stop is running again, not failed.
   const failed = new Set([...latestStopOutcomes]
-    .filter(([, outcome]) => outcome === 'failed')
+    .filter(([threadId, outcome]) => outcome === 'failed' && !open.has(threadId))
     .map(([threadId]) => threadId))
-  const cumulativeSettled = [...stops].filter((threadId) => starts.includes(threadId)).length
+  const openThreads = open.size
+  const cumulativeSettled = starts.length - openThreads
   const completed = Math.max(0, cumulativeSettled - failed.size)
-  const openThreads = Math.max(0, starts.length - cumulativeSettled)
-  const peakOpenThreads = maxConcurrentOpenThreads(input.events)
+  const peakOpenThreads = timeline.peakOpen
   const remainingToStart = Math.max(0, input.targetSubagents - starts.length)
   const lastWave = waves.at(-1)
   const postWaveRescanRequired = Boolean(
@@ -413,25 +417,6 @@ function normalizeLifecycle(value: unknown, workflowRunId: string): SubagentWave
 
 function uniqueThreadIds(events: NormalizedSubagentEvent[]): string[] {
   return [...new Set(events.map((event) => event.thread_id || '').filter(Boolean))]
-}
-
-function maxConcurrentOpenThreads(events: readonly NormalizedSubagentEvent[]): number {
-  const started = new Set<string>()
-  const open = new Set<string>()
-  let peak = 0
-  for (const event of events) {
-    const threadId = event.thread_id
-    if (!threadId) continue
-    if (event.event_name === 'SubagentStart') {
-      if (started.has(threadId)) continue
-      started.add(threadId)
-      open.add(threadId)
-      peak = Math.max(peak, open.size)
-      continue
-    }
-    if (started.has(threadId)) open.delete(threadId)
-  }
-  return peak
 }
 
 function latestEventTime(

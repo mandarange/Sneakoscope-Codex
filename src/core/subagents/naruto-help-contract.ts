@@ -44,7 +44,7 @@ export function renderNarutoUsage(): string {
     'Automatic fan-out starts at 4/6/8, or 16 for eligible mass mechanical or exploration work on the fast and context tiers.',
     'After decomposition, either lane may expand to 256 independent useful children.',
     'A measured lower Codex host or explicit provider/API limit remains authoritative.',
-    'Jev mode on: Jev picks each Codex App child spawn\'s tier and SKS seals its newest model; a stored role preference wins.',
+    'Jev mode on: Jev picks each Codex App child spawn\'s tier and SKS seals its newest model, except a spawn naming a managed role, which runs the tier pinned in its role file; a stored role preference wins.',
     'The parent orchestrates only; the PreToolUse gate denies parent source edits before the first child starts and while children run.'
   ].join('\n')
 }

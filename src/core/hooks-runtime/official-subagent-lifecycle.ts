@@ -4,6 +4,7 @@ import { nowIso, readJson, sha256, writeJsonAtomic } from '../fsx.js';
 import { missionDir, updateCurrentIfMissionAndRun } from '../mission.js';
 import { ensureConfinedDirectory } from '../managed-path-safety.js';
 import { NARUTO_PARENT_EFFORT, narutoParentModel } from '../subagents/model-policy.js';
+import { childResumeDetected, childThreadTimeline } from '../subagents/child-thread-activity.js';
 import { officialSubagentRolePlan } from '../subagents/agent-catalog.js';
 import {
   bindTrustworthySubagentParentSummaryToRun,
@@ -119,12 +120,7 @@ export async function inspectActiveOfficialSubagentWorkflow(
       return { status: 'inactive' };
     }
     const events = (await readSubagentEvents(artifactDir)).filter((event) => event.run_id === workflowRunId);
-    const liveThreads = new Set<string>();
-    for (const event of events) {
-      if (!event.thread_id) continue;
-      if (event.event_name === 'SubagentStart') liveThreads.add(event.thread_id);
-      else if (event.event_name === 'SubagentStop') liveThreads.delete(event.thread_id);
-    }
+    const liveThreads = new Set(childThreadTimeline(events).open);
     if (liveThreads.size > MAX_LIFECYCLE_THREADS) {
       return { status: 'invalid', missionId, workflowRunId, reason: 'active_event_bound_exceeded' };
     }
@@ -156,11 +152,35 @@ export async function inspectActiveOfficialSubagentWorkflow(
   }
 }
 
+/**
+ * Codex sends no second SubagentStart when the parent follows up on a settled
+ * child (`followup_task` / `send_message`); the child just runs another turn and
+ * its hooks carry that turn's id. Record the first hook of such a turn as a
+ * resume so the child counts as running until its next SubagentStop. Runs on
+ * every child tool hook, so the unlocked read below keeps the common case (same
+ * turn as the newest recorded event) to one file read.
+ */
+export async function recordChildThreadResume(
+  root: string,
+  state: any,
+  payload: any,
+  sessionKey: any = null
+) {
+  const runId = String(state?.official_subagent_run_id || '').trim();
+  if (!runId || !String(state?.mission_id || '').trim() || state?.route_closed === true) return null;
+  const child = normalizeSubagentEvent(payload, 'SubagentResume');
+  if (!child?.agent_id || !child.thread_id || !child.turn_id) return null;
+  const artifactDir = officialSubagentArtifactDir(root, state, sessionKey);
+  const runEvents = (await readSubagentEvents(artifactDir)).filter((row) => row.run_id === runId);
+  if (!childResumeDetected(runEvents, child.thread_id, child.turn_id)) return null;
+  return recordAndRefreshSubagentEvidence(root, state, payload, 'SubagentResume', sessionKey);
+}
+
 export async function recordAndRefreshSubagentEvidence(
   root: string,
   state: any,
   payload: any,
-  eventName: 'SubagentStart' | 'SubagentStop',
+  eventName: 'SubagentStart' | 'SubagentStop' | 'SubagentResume',
   sessionKey: any = null
 ) {
   const artifactDir = officialSubagentArtifactDir(root, state, sessionKey);
@@ -185,6 +205,18 @@ export async function recordAndRefreshSubagentEvidence(
     const explicitRunId = normalizedInputEvent?.run_id || null;
     if (explicitRunId && explicitRunId !== workflowRunId) return null;
     const priorEvents = await readSubagentEvents(artifactDir);
+    // Re-checked under the lock: two tool hooks of one resumed turn can both pass
+    // the unlocked check, and only the first may record.
+    if (eventName === 'SubagentResume'
+      && !(normalizedInputEvent?.thread_id
+        && normalizedInputEvent.turn_id
+        && childResumeDetected(
+          priorEvents.filter((row) => row.run_id === workflowRunId),
+          normalizedInputEvent.thread_id,
+          normalizedInputEvent.turn_id
+        ))) {
+      return null;
+    }
     let boundRunId = explicitRunId;
     if (!boundRunId
       && eventName === 'SubagentStop'
@@ -213,12 +245,14 @@ export async function recordAndRefreshSubagentEvidence(
     const event = await recordSubagentEvent(artifactDir, eventPayload, eventName);
     if (!event) return null;
     const events = [...priorEvents, event];
-    await clearOfficialSubagentLifecycleCaptureFailure(
-      artifactDir,
-      state,
-      eventPayload,
-      eventName
-    );
+    if (eventName !== 'SubagentResume') {
+      await clearOfficialSubagentLifecycleCaptureFailure(
+        artifactDir,
+        state,
+        eventPayload,
+        eventName
+      );
+    }
     const lifecycle = await refreshSubagentWaveLifecycle(artifactDir, { plan, event, events });
     const refreshedPlan = lifecycle ? { ...plan, wave_lifecycle: lifecycle } : plan;
     const existing: any = await readJson(path.join(artifactDir, SUBAGENT_EVIDENCE_FILENAME), {});

@@ -4,6 +4,7 @@ import { consultJevToolDelegation, type JevToolDelegationDecision } from '../dec
 import { nowIso, readJson, sha256, writeJsonAtomic } from '../fsx.js';
 import { ensureConfinedDirectory } from '../managed-path-safety.js';
 import { missionDir } from '../mission.js';
+import { childThreadTimeline } from '../subagents/child-thread-activity.js';
 import { readSubagentEvents } from '../subagents/subagent-evidence.js';
 import { SHELL_TOOL_RE } from './shell-tool-name.js';
 import { isSpawnAgentToolName } from './spawn-tool-name.js';
@@ -349,27 +350,15 @@ export async function recordParentOrchestrationSpawn(
   return next;
 }
 
-/** Child threads of this run that started, and those still running (no SubagentStop yet). */
+/** Child threads of this run that started, and those still running (newest Start or resume has no Stop after it). */
 async function childThreadActivity(
   root: string,
   missionId: string,
   workflowRunId: string | null
 ): Promise<{ started: number; running: string[] }> {
   const events = await readSubagentEvents(missionDir(root, missionId)).catch(() => []);
-  const started = new Set<string>();
-  const running = new Set<string>();
-  for (const event of events) {
-    if (workflowRunId && event.run_id && event.run_id !== workflowRunId) continue;
-    const thread = event.thread_id || event.agent_id;
-    if (!thread) continue;
-    if (event.event_name === 'SubagentStart') {
-      started.add(thread);
-      running.add(thread);
-    } else if (event.event_name === 'SubagentStop') {
-      running.delete(thread);
-    }
-  }
-  return { started: started.size, running: [...running].sort() };
+  const timeline = childThreadTimeline(events.filter((event) => !(workflowRunId && event.run_id && event.run_id !== workflowRunId)));
+  return { started: timeline.started.length, running: timeline.open };
 }
 
 function missionGoal(state: any = {}): string {
@@ -389,7 +378,7 @@ function blockMessage(missionId: string, intent: ParentMutationIntent, jev: JevT
   return [
     `SKS parent orchestration gate denied ${intent.toolName} on ${renderTargets(intent)}: mission ${missionId} has no child thread yet.`,
     'The Naruto parent orchestrates only. Decompose the task into disjoint slices and spawn each child with spawn_agent first',
-    '(sealed model and reasoning_effort; Jev seals them when Jev mode is on; fork_turns="none"; the complete slice contract in message),',
+    '(sealed model and reasoning_effort; Jev seals them when Jev mode is on and the spawn names no managed role, whose pinned tier Codex runs; fork_turns="none"; the complete slice contract in message),',
     'wait for the children, then integrate and verify.',
     'Until the first child starts, the parent may write only .sneakoscope artifacts.' + jevNote
   ].join(' ');

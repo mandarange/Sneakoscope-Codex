@@ -39,6 +39,7 @@ import {
   recordOfficialSubagentLifecycleCaptureFailure,
   officialSubagentArtifactDir,
   recordAndRefreshSubagentEvidence,
+  recordChildThreadResume,
   refreshOfficialSubagentCompletionArtifacts
 } from './hooks-runtime/official-subagent-lifecycle.js';
 import { finalizationRepeatDecision } from './hooks-runtime/stop-repeat-guard.js';
@@ -249,9 +250,16 @@ async function evaluateHookPayloadWithPlan(name: any, payload: any, opts: any, j
   if (name === 'session-start' || name === 'pre-compact' || name === 'post-compact') {
     return withNarutoDecision(await hookActiveSkillContextRefresh(root, state, name));
   }
-  if (name === 'pre-tool') return withNarutoDecision(await hookPreTool(root, state, payload, noQuestion, sessionKey));
-  if (name === 'post-tool') return withNarutoDecision(await hookPostTool(root, state, payload, noQuestion, sessionKey));
-  if (name === 'permission-request') return withNarutoDecision(await hookPermission(root, state, payload, noQuestion, sessionKey));
+  if (name === 'pre-tool' || name === 'post-tool' || name === 'permission-request') {
+    const hook = name === 'pre-tool' ? hookPreTool : name === 'post-tool' ? hookPostTool : hookPermission;
+    try {
+      return withNarutoDecision(await hook(root, state, payload, noQuestion, sessionKey));
+    } finally {
+      // A child hook in a turn the log has not seen is a follow-up turn: count the child as running again.
+      // After the hook, because its first PreToolUse must still see the child as settled to reissue its skill admission.
+      await recordChildThreadResume(root, state, payload, sessionKey).catch(() => null);
+    }
+  }
   if (name === 'stop') return withNarutoDecision(await hookStop(root, state, payload, noQuestion, sessionKey));
   if (name === 'subagent-start') return withNarutoDecision(await hookSubagentStart(root, state, payload, sessionKey));
   if (name === 'subagent-stop') return withNarutoDecision(await handleSubagentStop(root, state, payload, sessionKey));

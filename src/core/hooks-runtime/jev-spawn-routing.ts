@@ -163,10 +163,13 @@ async function openRouterOnlySpawnRouting(
 
 /**
  * Naruto child spawn: Jev picks the tier and SKS seals the newest model of
- * that tier. An open parent thread is not rerouted. When Jev was called but
- * could not seal the spawn, a child that carries no current model gets its
- * role's tier instead of bouncing off the spawn policy, so the parent keeps
- * delegating instead of retrying alone.
+ * that tier. An open parent thread is not rerouted. A spawn that names a
+ * managed role is not Jev's to seal: Codex runs the role file's pinned model
+ * over the spawn's `model`, so the input only names that pin (the role's own
+ * tier) and Jev is not asked. When Jev was called but could not seal the spawn,
+ * a child that carries no current model gets its role's tier instead of
+ * bouncing off the spawn policy, so the parent keeps delegating instead of
+ * retrying alone.
  */
 async function tierSpawnRewrite(
   root: string,
@@ -179,11 +182,17 @@ async function tierSpawnRewrite(
     const preferences = await readRoleModelPreferences().catch(() => null);
     if (preferences?.store.roles[agent]) return null;
   }
+  const missingFork = input.fork_turns === undefined;
+  const forkTurns = missingFork ? { fork_turns: 'none' } : {};
+  if (agent && managedOfficialSubagentRoleByName(agent)) {
+    const pin = roleTierFallback(agent);
+    if (!missingFork && input.model === pin.model && input.reasoning_effort === pin.effort) return null;
+    return { ...input, model: pin.model, reasoning_effort: pin.effort, ...forkTurns };
+  }
   const task = spawnTask(input);
   if (!task) return null;
   const decision = await consultJevTurnModel({ root, prompt: task, roleId: 'spawn' }).catch(() => null);
   if (!decision?.called) return null;
-  const forkTurns = input.fork_turns === undefined ? { fork_turns: 'none' } : {};
   if (!decision.model || !decision.effort) {
     if (latestTierModelSet().has(String(input.model || ''))) return null;
     const fallback = roleTierFallback(agent);

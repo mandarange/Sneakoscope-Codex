@@ -8,6 +8,7 @@ import { evaluateHookPayload, evaluateHookPayloadOnce } from '../../hooks-runtim
 import { normalizeHookResult } from '../hook-io.js';
 import { subagentSpawnPolicyBlockReason } from '../subagent-spawn-policy.js';
 import { sealedSubagentRoutingContext } from '../subagent-context.js';
+import { decisionPaths, writeDecisionConfig } from '../../decisions/config.js';
 import { officialSubagentSpawnCompatibilityContext } from '../hook-context.js';
 import { parentOrchestrationLedgerPath, readParentOrchestrationLedger } from '../parent-orchestration-gate.js';
 import { BUILTIN_LATEST_TIER_MODELS as T } from '../../subagents/model-tiers.js';
@@ -62,6 +63,29 @@ test('resumed old plans cannot reintroduce an old pinned model; the role tier mo
     assert.match(context, new RegExp(`model: ${T.fast.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
     assert.match(context, /model_reasoning_effort: low/);
     assert.doesNotMatch(context, /gpt-5\.6/);
+  } finally {
+    await fsp.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('with Jev on, a managed role child context reports the role pin instead of a Jev seal', async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-jev-role-pin-'));
+  try {
+    await fsp.writeFile(path.join(root, 'subagent-plan.json'), JSON.stringify({
+      workflow: 'official_codex_subagent', mode: 'naruto', agents: { worker: { routed_model: T.deep, routed_model_reasoning_effort: 'max' } }
+    }));
+    await writeDecisionConfig({ mode: 'jev', consentCloud: true });
+    try {
+      const pinned = await sealedSubagentRoutingContext(root, { agent_type: 'worker' });
+      assert.ok(pinned.includes(`- model: ${T.fast}`), pinned);
+      assert.match(pinned, /- model_reasoning_effort: low/);
+      assert.match(pinned, /pinned by the role file/);
+      assert.doesNotMatch(pinned, /sealed on the spawn call by Jev/);
+      // A child with no managed role is still sealed on the spawn call by Jev.
+      assert.match(await sealedSubagentRoutingContext(root, { agent_type: 'project_custom_agent' }), /sealed on the spawn call by Jev routing/);
+    } finally {
+      await fsp.rm(decisionPaths().configPath, { force: true });
+    }
   } finally {
     await fsp.rm(root, { recursive: true, force: true });
   }

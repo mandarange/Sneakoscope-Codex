@@ -9,6 +9,7 @@ import { resetDecisionTransportState } from '../../decisions/openrouter.js';
 import { defaultDecisionConfig } from '../../decisions/config.js';
 import { BUILTIN_LATEST_TIER_MODELS, resetLatestModelTierCache } from '../../subagents/model-tiers.js';
 import { effectiveChildModelAllowlist, openRouterOnlyStatePath, writeOpenRouterOnlyState } from '../../subagents/child-model-allowlist.js';
+import { MANAGED_OFFICIAL_SUBAGENT_ROLES } from '../../managed-assets/managed-assets-manifest.js';
 import { jevSpawnRouting, openRouterOnlyJevTurnLine, roleTierFallback } from '../jev-spawn-routing.js';
 import { subagentSpawnPolicyBlockReason } from '../subagent-spawn-policy.js';
 
@@ -95,6 +96,51 @@ test('an unconfident Jev seals a spawn without a current model to its role tier,
       tool_name: 'spawn_agent',
       tool_input: { model: BUILTIN_LATEST_TIER_MODELS.context, reasoning_effort: 'medium', fork_turns: 'none', message: 'Explore the unsealed slice.' }
     }), null);
+  });
+});
+
+test('a spawn that names a managed role names the role pin: Jev is not asked and no tier is claimed that Codex would not run', async () => {
+  let asked = 0;
+  await withJev(() => { asked += 1; return jevAnswer('deep', 0.95, 0.95); }, async () => {
+    const state = { mode: 'NARUTO' };
+    const message = 'Rename one label.';
+    // worker is a fast-tier role: Codex runs its pin over the spawn's model, so the input names the pin, not Jev's deep.
+    const worker = await rewrite(state, {
+      tool_name: 'spawn_agent',
+      tool_input: { agent_type: 'worker', model: BUILTIN_LATEST_TIER_MODELS.deep, reasoning_effort: 'max', fork_turns: 'none', message }
+    });
+    assert.equal(worker?.model, BUILTIN_LATEST_TIER_MODELS.fast);
+    assert.equal(worker?.reasoning_effort, 'low');
+    assert.equal(worker?.agent_type, 'worker');
+    // Already naming its pin: left byte-identical.
+    assert.equal(await rewrite(state, {
+      tool_name: 'spawn_agent',
+      tool_input: { agent_type: 'worker', model: BUILTIN_LATEST_TIER_MODELS.fast, reasoning_effort: 'low', fork_turns: 'none', message }
+    }), null);
+    // A missing fork_turns is still filled so the spawn policy accepts the call.
+    assert.equal((await rewrite(state, {
+      tool_name: 'spawn_agent',
+      tool_input: { agent_type: 'worker', model: BUILTIN_LATEST_TIER_MODELS.fast, reasoning_effort: 'low', message }
+    }))?.fork_turns, 'none');
+    // Every managed role (an alias included) ends up naming exactly its own pin.
+    for (const role of MANAGED_OFFICIAL_SUBAGENT_ROLES) {
+      const input = { agent_type: role.codex_name, model: BUILTIN_LATEST_TIER_MODELS.context, reasoning_effort: 'medium', fork_turns: 'none', message };
+      const out = await rewrite(state, { tool_name: 'spawn_agent', tool_input: input });
+      assert.deepEqual(
+        { model: out?.model ?? input.model, effort: out?.reasoning_effort ?? input.reasoning_effort },
+        { model: role.model, effort: role.model_reasoning_effort },
+        role.codex_name
+      );
+      assert.equal(subagentSpawnPolicyBlockReason({ tool_name: 'spawn_agent', tool_input: out ?? input }), null, role.codex_name);
+    }
+    assert.equal(asked, 0);
+    // A spawn that names no managed role is still Jev's to seal.
+    const generic = await rewrite(state, {
+      tool_name: 'spawn_agent',
+      tool_input: { model: BUILTIN_LATEST_TIER_MODELS.fast, reasoning_effort: 'low', fork_turns: 'none', message: 'Review the parser design.' }
+    });
+    assert.equal(generic?.model, BUILTIN_LATEST_TIER_MODELS.deep);
+    assert.equal(asked, 1);
   });
 });
 

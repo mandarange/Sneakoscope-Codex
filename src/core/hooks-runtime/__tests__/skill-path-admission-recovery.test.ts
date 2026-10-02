@@ -207,6 +207,11 @@ test('a stopped official child reissues admission on its first resumed PreToolUs
       .split('\n')
       .map((line) => JSON.parse(line));
     assert.equal(events.filter((event) => event.event_name === 'SubagentStart').length, 1);
+    // The resumed turn is recorded after admission was reissued, so the child now counts as running.
+    const resumes = events.filter((event) => event.event_name === 'SubagentResume');
+    assert.equal(resumes.length, 1);
+    assert.equal(resumes[0].turn_id, resumedTurnId);
+    assert.equal(resumes[0].thread_id, agentId);
 
     const unassignedThread = 'unassigned-official-child';
     const unassignedTranscript = await writeTranscript(home, unassignedThread, true);
