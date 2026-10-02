@@ -303,7 +303,7 @@ test('TriWiki attention takes the pack trust order and attaches hydrate hints, w
       ],
       hydrate_first: [
         ['wiki-policy', 'code_citations:src/core/hooks-runtime.ts'],
-        ['code:core-mcp-manager', 'code_citations:src/core/codex-app/mcp-manager.ts']
+        ['code:core-mcp-config', 'code_citations:src/core/mcp-config/index.ts']
       ]
     }
   }, 5, 'Improve every hook gate and the MCP manager')

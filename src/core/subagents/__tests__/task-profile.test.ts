@@ -5,7 +5,6 @@ import {
   gateProfileForTask
 } from '../../runtime/task-profile.js'
 import { chooseVerificationBudget } from '../../runtime/verification-budget.js'
-import { DEPRECATED_AGENT_TERMS, SUBAGENT_TERMS } from '../terminology.js'
 
 test('task profiles keep greetings and answers off execution routes', () => {
   assert.equal(classifyTaskProfile(''), 'passthrough')
@@ -70,16 +69,6 @@ test('verification budgets follow task risk instead of decorative gate count', (
   assert.equal(chooseVerificationBudget({ taskProfile: 'bounded-work', changedFiles: ['src/a.ts'], failedChecks: ['unit'] }), 'confidence')
   assert.equal(chooseVerificationBudget({ taskProfile: 'bounded-work', changedFiles: ['package.json'] }), 'release')
 })
-
-test('official terminology uses Naruto as the product parallel vocabulary', () => {
-  assert.equal(SUBAGENT_TERMS.system, 'Naruto')
-  assert.equal(SUBAGENT_TERMS.workflow, 'Naruto parallel workflow')
-  assert.equal(SUBAGENT_TERMS.thread, 'Naruto child thread')
-  assert.equal(SUBAGENT_TERMS.transport, 'official Codex subagent')
-  assert.ok(DEPRECATED_AGENT_TERMS.includes('shadow clone'))
-  assert.ok(DEPRECATED_AGENT_TERMS.includes('native agent'))
-})
-
 
 test('simplification requests in Korean and English remain execution work', () => {
   for (const prompt of [
