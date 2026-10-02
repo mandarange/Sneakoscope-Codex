@@ -13,7 +13,7 @@ test('SDK configuration maps retired none/minimal efforts to low for the deep ti
   for (const effort of ['none', 'minimal', 'low', 'medium', 'high', 'max']) {
     const config = buildCodexSdkConfig({ ...input, model: T.deep, modelReasoningEffort: effort, serviceTier: 'standard' })
     assert.equal(config.model_reasoning_effort, ['none', 'minimal'].includes(effort) ? 'low' : effort)
-    assert.equal(config.service_tier, 'standard')
+    assert.equal(config.service_tier, 'default')
     assert.equal(config.model, T.deep)
   }
   const fast = buildCodexSdkConfig({ ...input, model: T.fast, modelReasoningEffort: 'none' })

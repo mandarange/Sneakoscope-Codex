@@ -6,6 +6,7 @@ import { ensureDir, PACKAGE_VERSION, readText, writeTextAtomic } from '../fsx.js
 import { removeLegacyTopLevelCodexModeLocks, writeCodexConfigGuarded } from '../codex/codex-config-guard.js';
 import { cleanupCodexConfigBackups, validateCodexConfigRoundTrip } from '../codex/codex-config-toml.js';
 import { DEPRECATED_CODEX_HOOKS_ALIAS_FLAG, REMOVED_CODEX_FEATURE_FLAGS } from '../codex/codex-feature-flags.js';
+import { CODEX_FAST_SERVICE_TIER_ID } from '../codex/codex-service-tier.js';
 import { escapeRegExp } from '../text/regex.js';
 
 export async function ensureGlobalCodexFastModeDuringInstall(opts: any = {}) {
@@ -69,7 +70,7 @@ function normalizeCodexFastModeUiConfigOnce(text: any = '', opts: any = {}) {
     next = removeTomlTableKey(next, 'features', legacyFlag);
   }
   if (opts.forceFastMode === true) {
-    next = upsertTopLevelTomlString(next, 'service_tier', 'fast');
+    next = upsertTopLevelTomlString(next, 'service_tier', CODEX_FAST_SERVICE_TIER_ID);
   } else if (opts.forceFastModeOff === true) {
     next = removeTopLevelTomlKey(next, 'service_tier');
   }

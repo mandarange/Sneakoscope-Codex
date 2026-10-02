@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { nowIso, writeJsonAtomic } from '../fsx.js'
 import { buildCodexExecArgs } from '../codex/codex-cli-syntax-builder.js'
+import { codexServiceTierId } from '../codex/codex-service-tier.js'
 import { inspectCodexConfigReadability } from '../codex/codex-config-readability.js'
 import { repairCodexConfigEperm } from '../codex/codex-config-eperm-repair.js'
 import { splitCodexProjectConfigPolicy } from '../codex/codex-project-config-policy.js'
@@ -65,7 +66,8 @@ export async function runCodexLaunchPreflight(rootInput: string = process.cwd(),
   })
   const fastTierProof = {
     schema: 'sks.codex-fast-tier-cli-proof.v1',
-    ok: codexArgs.includes('-c') && codexArgs.includes(`service_tier=${opts.serviceTier || 'fast'}`),
+    // The `-c` override carries Codex's id (priority/default); fast/standard are SKS's names for them.
+    ok: codexArgs.includes('-c') && codexArgs.includes(`service_tier=${codexServiceTierId(['standard', 'default'].includes(String(opts.serviceTier || '').toLowerCase()) ? 'standard' : 'fast')}`),
     service_tier: opts.serviceTier || 'fast',
     codex_args: codexArgs
   }

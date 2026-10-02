@@ -74,5 +74,5 @@ test('MAD launch preflight records fast service tier CLI proof', async () => {
   assert.equal(report.ok, true);
   assert.equal(report.fast_tier_proof.ok, true);
   assert.ok(report.fast_tier_proof.codex_args.includes('-c'));
-  assert.ok(report.fast_tier_proof.codex_args.includes('service_tier=fast'));
+  assert.ok(report.fast_tier_proof.codex_args.includes('service_tier=priority'));
 });
