@@ -6,10 +6,8 @@ import { fileURLToPath } from 'node:url';
 import {
   BOUNDED_TRIWIKI_ATTENTION_SCHEMA,
   DEFAULT_TRIWIKI_ATTENTION_ANCHOR_LIMIT,
-  extractBoundedTriwikiAttention,
   readBoundedTriwikiAttention
 } from '../triwiki-attention.js';
-import { projectContextPackAnchors } from '../../triwiki/context-graph/projections/anchors.js';
 import {
   HUB_FILE,
   createProjectionFixture,
@@ -145,60 +143,4 @@ test('the retired lexical scorer is not present in the shipped module', () => {
   const shipped = fs.readFileSync(fileURLToPath(new URL('../triwiki-attention.js', import.meta.url)), 'utf8');
   assert.ok(!shipped.includes('attentionRelevance'), 'the token-overlap scorer must not survive');
   assert.ok(!shipped.includes('attentionQueryTokens'), 'the query tokenizer must not survive');
-});
-
-test('the context pack projection keeps declared order and carries enriched anchor fields', async () => {
-  const fixture = await createIndexedProjectionFixture({ fillerModules: 2 });
-  try {
-    // Anchored on canonical node ids. `code:<module-label>` resolved in v1 and
-    // does not against format revision 1, which has no label table — see the
-    // blocked case in `projections/__tests__/anchors.test.ts`.
-    const moduleNode = fixture.snapshot.nodes.find((node) => node.kind === 'module');
-    assert.ok(moduleNode);
-    const rows = projectContextPackAnchors(fixture.reader, fixture.cursor, [
-      { id: `code:${moduleNode.id}` },
-      { id: fixture.hubFileNodeId }
-    ]);
-    const attention = extractBoundedTriwikiAttention({ attention: { mode: 'graph', use_first: rows } }, 5);
-    assert.equal(attention.available, true);
-    assert.equal(attention.source, '.sneakoscope/wiki/context-pack.json');
-    assert.deepEqual(
-      attention.anchors.map((anchor) => anchor.id),
-      [`code:${moduleNode.id}`, fixture.hubFileNodeId]
-    );
-    for (const anchor of attention.anchors) {
-      assert.ok(anchor.provenance.length > 0);
-      assert.ok(anchor.reason_path.length > 0);
-      assert.ok(anchor.token_cost > 0);
-    }
-  } finally {
-    removeProjectionFixture(fixture.root);
-  }
-});
-
-test('legacy tuple rows still project, and a hydrate reason never becomes a claim hash', () => {
-  const attention = extractBoundedTriwikiAttention(
-    {
-      attention: {
-        mode: 'aggressive_triwiki_active_recall',
-        use_first: [
-          ['claim-a', 'hash-a', 'source-a'],
-          ['claim-b', 'hash-b', 'source-b'],
-          ['claim-c', 'hash-c', 'source-c']
-        ],
-        hydrate_first: [['claim-a', 'code_citations:src/a.ts']]
-      }
-    },
-    2
-  );
-  assert.equal(attention.anchor_limit, 2);
-  assert.deepEqual(attention.anchors.map((anchor) => anchor.id), ['claim-a', 'claim-b']);
-  const first = attention.anchors[0];
-  assert.ok(first);
-  assert.equal(first.claim_hash, 'hash-a');
-  assert.equal(first.hydrate_hint, 'code_citations:src/a.ts');
-  assert.deepEqual(first.reason_path, []);
-  assert.equal(first.freshness, 'unknown');
-  assert.equal(attention.full_pack_injected, false);
-  assert.equal(attention.hydration_policy, 'on_demand_only');
 });

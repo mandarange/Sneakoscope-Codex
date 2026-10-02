@@ -7,7 +7,13 @@ import {
   validateOfficialSubagentSlices
 } from '../official-subagent-prompt.js'
 import { resolveSubagentThreadBudget } from '../thread-budget.js'
-import { extractBoundedTriwikiAttention } from '../triwiki-attention.js'
+import {
+  BOUNDED_TRIWIKI_ATTENTION_SCHEMA,
+  DEFAULT_TRIWIKI_ATTENTION_TOKEN_BUDGET,
+  TRIWIKI_ATTENTION_GRAPH_SOURCE,
+  type BoundedTriwikiAttention
+} from '../triwiki-attention.js'
+import { CONTEXT_GRAPH_REPAIR_COMMAND } from '../../triwiki/context-graph/contracts.js'
 
 test('official prompt seals model, ownership, wait, and no-nesting rules', () => {
   const prompt = buildOfficialSubagentPrompt({
@@ -253,20 +259,34 @@ test('official prompt carries deterministic host capability workflows', () => {
 })
 
 test('official prompt carries only bounded TriWiki attention anchors', () => {
-  const triwikiAttention = extractBoundedTriwikiAttention({
-    attention: {
-      mode: 'aggressive_triwiki_active_recall',
-      use_first: [
-        ['claim-a', 'hash-a', 'source-a'],
-        ['claim-b', 'hash-b', 'source-b'],
-        ['claim-c', 'hash-c', 'source-c']
-      ],
-      hydrate_first: [
-        ['claim-a', 'code_citations:src/a.ts'],
-        ['claim-b', 'code_citations:src/b.ts']
-      ]
-    }
-  }, 2)
+  const anchor = (id: string, hydrateHint: string) => ({
+    id,
+    claim_hash: `hash-${id}`,
+    source_hash: `source-${id}`,
+    hydrate_hint: hydrateHint,
+    reason_path: [],
+    trust_score: 0,
+    freshness: 'unknown' as const,
+    token_cost: 0,
+    provenance: []
+  })
+  const triwikiAttention: BoundedTriwikiAttention = {
+    schema: BOUNDED_TRIWIKI_ATTENTION_SCHEMA,
+    source: TRIWIKI_ATTENTION_GRAPH_SOURCE,
+    available: true,
+    attention_mode: 'context_graph:implementation',
+    anchor_limit: 2,
+    anchors: [anchor('claim-a', 'code_citations:src/a.ts'), anchor('claim-b', 'code_citations:src/b.ts')],
+    hydration_policy: 'on_demand_only',
+    full_pack_injected: false,
+    reason: null,
+    repair_command: CONTEXT_GRAPH_REPAIR_COMMAND,
+    snapshot_hash: null,
+    snapshot_freshness: null,
+    profile: null,
+    token_cost: 0,
+    token_budget: DEFAULT_TRIWIKI_ATTENTION_TOKEN_BUDGET
+  }
   const prompt = buildOfficialSubagentPrompt({
     goal: 'Review the bounded source scope',
     maxThreads: 12,
@@ -281,44 +301,8 @@ test('official prompt carries only bounded TriWiki attention anchors', () => {
   assert.match(prompt, /attention\.use_first anchors/)
   assert.match(prompt, /claim-a/)
   assert.match(prompt, /claim-b/)
-  assert.doesNotMatch(prompt, /claim-c/)
   assert.match(prompt, /do not inject the full context pack/)
   assert.match(prompt, /do not launch shell workers, a custom scheduler, a worker pool, or model fanout/)
-})
-
-test('TriWiki attention takes the pack trust order and attaches hydrate hints, without ranking by token overlap', () => {
-  // Query relevance is the Context Graph's job now. The pack-only path is a
-  // deterministic projection of `use_first`: it must not re-introduce the
-  // lexical scorer that used to promote hydrate-only rows whose text happened
-  // to share words with the goal.
-  const triwikiAttention = extractBoundedTriwikiAttention({
-    attention: {
-      mode: 'aggressive_triwiki_active_recall',
-      use_first: [
-        ['wiki-policy', 'hash-policy', 'source-policy'],
-        ['wrongness-policy', 'hash-wrongness', 'source-wrongness'],
-        ['docs-policy', 'hash-docs', 'source-docs'],
-        ['unrelated-ppt', 'hash-ppt', 'source-ppt'],
-        ['unrelated-search', 'hash-search', 'source-search']
-      ],
-      hydrate_first: [
-        ['wiki-policy', 'code_citations:src/core/hooks-runtime.ts'],
-        ['code:core-mcp-config', 'code_citations:src/core/mcp-config/index.ts']
-      ]
-    }
-  }, 5, 'Improve every hook gate and the MCP manager')
-
-  assert.deepEqual(triwikiAttention.anchors.map((anchor) => anchor.id), [
-    'wiki-policy',
-    'wrongness-policy',
-    'docs-policy',
-    'unrelated-ppt',
-    'unrelated-search'
-  ])
-  assert.equal(triwikiAttention.anchors[0]?.hydrate_hint, 'code_citations:src/core/hooks-runtime.ts')
-  assert.equal(triwikiAttention.anchors.length, 5)
-  assert.equal(triwikiAttention.full_pack_injected, false)
-  assert.equal(triwikiAttention.hydration_policy, 'on_demand_only')
 })
 
 test('official prompt injects only the bounded relevant role catalog instead of the full catalog', () => {
