@@ -5,6 +5,7 @@ import { nowIso, readJson, sha256, writeJsonAtomic } from '../fsx.js';
 import { ensureConfinedDirectory } from '../managed-path-safety.js';
 import { missionDir } from '../mission.js';
 import { readSubagentEvents } from '../subagents/subagent-evidence.js';
+import { SHELL_TOOL_RE } from './shell-tool-name.js';
 import { isSpawnAgentToolName } from './spawn-tool-name.js';
 
 /**
@@ -34,8 +35,10 @@ export const PARENT_ORCHESTRATION_GATE_SCHEMA = 'sks.parent-orchestration-gate.v
 export const PARENT_ORCHESTRATION_MAX_BLOCKS = 2;
 const MAX_TARGETS = 16;
 
-const FILE_EDIT_TOOL_RE = /^(?:functions\.)?(?:apply_patch|edit|write|multiedit|notebookedit|str_replace_editor|str_replace_based_edit_tool|file_write|fs_write|write_file|create_file|edit_file|update_file|delete_file)$/i;
-const SHELL_TOOL_RE = /^(?:functions\.)?(?:shell|shell_command|exec_command|local_shell|bash|container\.exec)$/i;
+// The filesystem MCP server reaches hooks as `mcp__filesystem__<tool>`; every other MCP host tool is not a source edit.
+const FILE_EDIT_TOOL_RE = /^(?:functions\.)?(?:mcp__filesystem__)?(?:apply_patch|edit|write|multiedit|notebookedit|str_replace_editor|str_replace_based_edit_tool|file_write|fs_write|write_file|create_file|edit_file|update_file|delete_file|move_file)$/i;
+// apply_patch headers: `*** Update|Add|Delete File: <path>` and the rename destination `*** Move to: <path>` (no `File`).
+const PATCH_HEADER_SOURCE = String.raw`\*\*\*\s+(?:(?:Update|Add|Delete)\s+File|Move to):`;
 const SHELL_WRITE_RE = new RegExp([
   String.raw`(?:^|[\s;&|(])(?:rm|mv|cp|touch|mkdir|tee|ln|install)\b`,
   String.raw`\bsed\s+(?:-[a-zA-Z]*i|--in-place)`,
@@ -43,14 +46,14 @@ const SHELL_WRITE_RE = new RegExp([
   String.raw`\bpython\d?\s+-c\b`,
   String.raw`\bnode\s+-e\b`,
   String.raw`(?<![<>\d])>{1,2}(?!&)\s*(?!\/dev\/null)\S`,
-  String.raw`\*\*\*\s+(?:Update|Add|Delete|Move to)\s+File:`,
+  PATCH_HEADER_SOURCE,
   String.raw`\bgit\s+(?:apply|checkout|restore|stash|reset|commit|rebase|merge|cherry-pick|clean)\b`,
   String.raw`\b(?:npm|pnpm|yarn|bun)\s+(?:install|add|remove|uninstall|i)\b`,
   String.raw`\bcargo\s+(?:add|remove)\b`,
   String.raw`\bpip\d?\s+install\b`
 ].join('|'), 'i');
-const PATCH_FILE_RE = /\*\*\*\s+(?:Update|Add|Delete|Move to)\s+File:\s*([^\n\r]+)/g;
-const PATCH_HEADER_RE = /\*\*\*\s+(?:Update|Add|Delete|Move to)\s+File:/;
+const PATCH_FILE_RE = new RegExp(`${PATCH_HEADER_SOURCE}\\s*([^\\n\\r]+)`, 'g');
+const PATCH_HEADER_RE = new RegExp(PATCH_HEADER_SOURCE);
 const SHELL_PATH_TOKEN_RE = /(?:^|\s)((?:\.{1,2}\/|\/|~\/)?[\w@.+-]+(?:\/[\w@.+-]+)+|[\w@+-]+\.[a-z0-9]{1,8})(?=\s|$)/gi;
 
 export interface ParentMutationIntent {
@@ -171,7 +174,8 @@ function pushTarget(targets: string[], value: unknown): void {
 }
 
 function collectInputTargets(input: Record<string, unknown>, targets: string[]): void {
-  for (const key of ['path', 'file_path', 'filePath', 'file', 'filename', 'target', 'target_path', 'targetPath', 'destination']) {
+  // `source` + `destination` are move_file's two ends: a move out of `src/` into `.sneakoscope/` still edits source.
+  for (const key of ['path', 'file_path', 'filePath', 'file', 'filename', 'target', 'target_path', 'targetPath', 'source', 'destination']) {
     if (typeof input[key] === 'string') pushTarget(targets, input[key]);
   }
   for (const key of ['paths', 'files', 'targets']) {
@@ -210,7 +214,8 @@ function collectShellTargets(command: string, targets: string[]): void {
 
 /**
  * Classify a PreToolUse payload as a parent-side source mutation. Read-only
- * tools, MCP host tools, and verification shell commands return null. Any
+ * tools, MCP host tools (except the filesystem server's edit tools), and
+ * verification shell commands return null. Any
  * mutation whose every known target is a `.sneakoscope/` artifact is exempt:
  * plans, mission files, and receipts are the parent's own bookkeeping.
  */

@@ -302,3 +302,97 @@ test('a confident Jev parent_owned answer releases one scaffolding edit; delegat
     else process.env.OPENROUTER_API_KEY = previousKey;
   }
 });
+
+// The filesystem MCP server reaches hooks as `mcp__filesystem__<tool>`; its input keys are
+// write_file {path, content}, edit_file {path, edits: [{oldText, newText}], dryRun}, move_file {source, destination}.
+function filesystemCall(tool: string, toolInput: Record<string, unknown>) {
+  return {
+    session_id: SESSION,
+    turn_id: 'turn-parent-1',
+    hook_event_name: 'PreToolUse',
+    tool_name: `mcp__filesystem__${tool}`,
+    tool_use_id: 'call-fs-1',
+    tool_input: toolInput
+  };
+}
+
+test('filesystem MCP edit tools are source edits; other MCP and read tools are not', () => {
+  const write = parentMutationIntent(filesystemCall('write_file', { path: '/repo/src/auth/parser.ts', content: 'export {};\n' }));
+  assert.equal(write?.kind, 'file_edit');
+  assert.deepEqual(write?.targets, ['/repo/src/auth/parser.ts']);
+  assert.equal(write?.exempt, false);
+
+  const edit = parentMutationIntent(filesystemCall('edit_file', { path: 'src/auth/parser.ts', edits: [{ oldText: 'a', newText: 'b' }], dryRun: false }));
+  assert.equal(edit?.kind, 'file_edit');
+  assert.deepEqual(edit?.targets, ['src/auth/parser.ts']);
+
+  const bookkeeping = parentMutationIntent(filesystemCall('write_file', { path: '.sneakoscope/missions/M-1/plan.md', content: 'plan' }));
+  assert.equal(bookkeeping?.exempt, true);
+
+  // Both ends of a move are edited: moving source out of src/ into .sneakoscope/ is not bookkeeping.
+  const moved = parentMutationIntent(filesystemCall('move_file', { source: 'src/auth/parser.ts', destination: '.sneakoscope/trash/parser.ts' }));
+  assert.equal(moved?.kind, 'file_edit');
+  assert.deepEqual(moved?.targets, ['src/auth/parser.ts', '.sneakoscope/trash/parser.ts']);
+  assert.equal(moved?.exempt, false);
+  assert.equal(parentMutationIntent(filesystemCall('move_file', { source: '.sneakoscope/a.md', destination: '.sneakoscope/b.md' }))?.exempt, true);
+
+  assert.equal(parentMutationIntent(filesystemCall('read_text_file', { path: 'src/auth/parser.ts' })), null);
+  assert.equal(parentMutationIntent(filesystemCall('list_directory', { path: 'src' })), null);
+  assert.equal(parentMutationIntent({ tool_name: 'mcp__playwright__browser_click', tool_input: { ref: 'e1' } }), null);
+  assert.equal(parentMutationIntent({ tool_name: 'mcp__notes__write_file', tool_input: { path: 'src/a.ts' } }), null);
+});
+
+test('before the first spawn the parent is denied a filesystem MCP edit exactly like apply_patch', async () => {
+  setDecisionTestOverrides({ config: defaultDecisionConfig() });
+  try {
+    await withRoot(async (root) => {
+      const state = narutoState();
+      const denied = await evaluateParentOrchestrationGate({
+        root,
+        state,
+        payload: filesystemCall('edit_file', { path: 'src/auth/parser.ts', edits: [{ oldText: 'a', newText: 'b' }] }),
+        sessionKey: SESSION
+      });
+      assert.equal(denied.action, 'block');
+      assert.equal(denied.reason, 'no_child_thread');
+      const child = await evaluateParentOrchestrationGate({
+        root,
+        state,
+        payload: { ...filesystemCall('write_file', { path: 'src/auth/parser.ts', content: 'x' }), agent_id: '019fd711-aaaa-7000-8000-000000000002', agent_type: 'worker' },
+        sessionKey: SESSION
+      });
+      assert.equal(child.reason, 'not_root_parent');
+    });
+  } finally {
+    setDecisionTestOverrides(null);
+  }
+});
+
+test('an apply_patch rename destination (`*** Move to:`) is a target, so a rename out of .sneakoscope is not exempt', () => {
+  const renamePatch = (from: string, to: string) => [
+    '*** Begin Patch',
+    `*** Update File: ${from}`,
+    `*** Move to: ${to}`,
+    '@@',
+    '-const a = config.value;',
+    '+const a = config.nextValue;',
+    '*** End Patch'
+  ].join('\n');
+  const patch = (from: string, to: string) => ({ ...applyPatch([]), tool_input: { command: renamePatch(from, to) } });
+
+  const outOfBookkeeping = parentMutationIntent(patch('.sneakoscope/missions/M-1/draft.md', 'src/auth/parser.ts'));
+  assert.deepEqual(outOfBookkeeping?.targets, ['.sneakoscope/missions/M-1/draft.md', 'src/auth/parser.ts']);
+  assert.equal(outOfBookkeeping?.exempt, false);
+
+  const intoBookkeeping = parentMutationIntent(patch('src/auth/parser.ts', '.sneakoscope/trash/parser.ts'));
+  assert.deepEqual(intoBookkeeping?.targets, ['src/auth/parser.ts', '.sneakoscope/trash/parser.ts']);
+  assert.equal(intoBookkeeping?.exempt, false);
+
+  assert.equal(parentMutationIntent(patch('.sneakoscope/a.md', '.sneakoscope/b.md'))?.exempt, true);
+
+  // The same patch through a shell heredoc is a shell write whose targets are the headers, rename destination included.
+  const heredoc = parentMutationIntent({ tool_name: 'Bash', tool_input: { command: `apply_patch <<'EOF'\n${renamePatch('.sneakoscope/x.md', 'src/y.ts')}\nEOF` } });
+  assert.equal(heredoc?.kind, 'shell_write');
+  assert.deepEqual(heredoc?.targets, ['.sneakoscope/x.md', 'src/y.ts']);
+  assert.equal(heredoc?.exempt, false);
+});

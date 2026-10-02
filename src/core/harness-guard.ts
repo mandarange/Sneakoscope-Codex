@@ -1,6 +1,7 @@
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { appendJsonlBounded, exists, nowIso, readJson, readText, sha256, writeJsonAtomic } from './fsx.js';
+import { SHELL_TOOL_RE } from './hooks-runtime/shell-tool-name.js';
 
 export const HARNESS_GUARD_PATH = '.sneakoscope/harness-guard.json';
 
@@ -152,8 +153,11 @@ export function classifyHarnessPayload(root: any, payload: any = {}, policy: any
   const hay = strings.join('\n');
   const toolName = [payload.tool_name, payload.toolName, payload.name, payload.tool?.name, payload.server, payload.mcp_tool, payload.tool, payload.type].filter(Boolean).join(' ').toLowerCase();
   const command = extractCommand(payload);
-  const writeIntent = hasWriteIntent(toolName, command, hay);
-  const maintenance = classifyMaintenanceCommand(command || hay);
+  // Only a shell tool executes its command text. Any other tool's payload (a patch body, a search pattern, a goal)
+  // merely mentions a maintenance command, so it is never classified.
+  const executed = SHELL_TOOL_RE.test(String(payload.tool_name || payload.toolName || payload.tool?.name || payload.name || '').trim()) ? command : '';
+  const maintenance = classifyMaintenanceCommand(executed);
+  const writeIntent = maintenance.block || hasWriteIntent(toolName, command, hay);
   const writeTargets = extractWriteTargets(root, payload, strings, command);
   const protectedMatches = findProtectedMatches(root, writeTargets.length ? writeTargets : strings, policy);
   const packageEdit = writeIntent && packageManifestEditDetected(writeTargets, hay);
@@ -195,8 +199,13 @@ async function listFiles(dir: any) {
   return out;
 }
 
+// Bash and apply_patch carry the text in `command`; `exec_command` names it `cmd`.
 function extractCommand(payload: any = {}) {
-  return payload.command || payload.tool_input?.command || payload.toolInput?.command || payload.input?.command || payload.tool?.input?.command || '';
+  for (const holder of [payload, payload.tool_input, payload.toolInput, payload.input, payload.tool?.input]) {
+    const raw = holder?.command || holder?.cmd;
+    if (raw) return raw;
+  }
+  return '';
 }
 
 function collectPayloadStrings(obj: any, out: any = [], depth: any = 0) {
@@ -231,7 +240,7 @@ function collectPathFieldStrings(obj: any, out: any = [], depth: any = 0) {
   if (typeof obj !== 'object') return out;
   for (const [key, value] of Object.entries(obj)) {
     const normalized = String(key || '').toLowerCase();
-    if (typeof value === 'string' && /^(?:path|file|filename|target|destination|dest|to|from|cwd|workdir|file_path|target_path|output_path|artifact_path)$/.test(normalized)) out.push(value);
+    if (typeof value === 'string' && /^(?:path|file|filename|target|source|destination|dest|to|from|cwd|workdir|file_path|target_path|output_path|artifact_path)$/.test(normalized)) out.push(value);
     collectPathFieldStrings(value, out, depth + 1);
   }
   return out;
@@ -282,27 +291,116 @@ function packageManifestEditDetected(writeTargets: string[], hay: string) {
   return hasPackageTarget && /\bsneakoscope\b/i.test(hay);
 }
 
+// A write verb as a whole `_`-separated word of a tool name's last `__` / `.` segment. `\b` cannot do this: `_` is a word character,
+// so it never separates `write` in `mcp__filesystem__write_file`.
+const WRITE_TOOL_NAME_RE = /(^|_)(?:write|edit|create|delete|remove|rename|move|str_replace|apply_patch)(_|$)/;
+
+function writeToolName(toolName: string) {
+  return toolName.split(/\s+/).some((name) => WRITE_TOOL_NAME_RE.test(name.split(/__|\./).pop() || ''));
+}
+
 function hasWriteIntent(toolName: any, command: any, hay: any) {
-  if (/\b(apply_patch|edit|write|create|delete|remove|rename|str_replace|file_write|fs_write)\b/i.test(toolName)) return true;
+  if (/\b(apply_patch|edit|write|create|delete|remove|rename|str_replace|file_write|fs_write)\b/i.test(toolName) || writeToolName(String(toolName))) return true;
   const c = String(command || hay || '');
   return /(^|[\s;&|])(?:rm|mv|cp|touch|chmod|chown|mkdir|rmdir|tee)\b/i.test(c)
     || /\b(?:sed\s+-i|perl\s+-pi|python\d?\s+-c|node\s+-e)\b/i.test(c)
     || />{1,2}\s*(?:\.\/)?(?:\.codex|\.agents|\.sneakoscope|AGENTS\.md|package(?:-lock)?\.json)\b/i.test(c)
-    || /\*\*\*\s+(?:Update|Add|Delete|Move to)\s+File:/i.test(c)
-    || classifyMaintenanceCommand(c).block;
+    || /\*\*\*\s+(?:Update|Add|Delete|Move to)\s+File:/i.test(c);
 }
 
+const COMMAND_WRAPPERS = new Set(['sudo', 'env', 'time', 'command', 'exec', 'nohup', 'nice']);
+
+/**
+ * The simple commands of a shell command line, each as its unquoted words. A quoted string is one word and a heredoc
+ * body is dropped, so a search pattern or a document that only mentions `sks doctor --fix` is not a command.
+ */
+function simpleCommands(text: string): string[][] {
+  const commands: string[][] = [];
+  let words: string[] = [];
+  let word: string | null = null;
+  let quote: string | null = null;
+  const heredocs: string[] = [];
+  const endWord = () => { if (word !== null) words.push(word); word = null; };
+  const endCommand = () => { endWord(); if (words.length) commands.push(words); words = []; };
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i] || '';
+    if (quote) {
+      if (ch === quote) quote = null;
+      else if (ch === '\\' && quote === '"') word = `${word ?? ''}${text[++i] ?? ''}`;
+      else word = `${word ?? ''}${ch}`;
+    } else if (ch === '\\') {
+      word = `${word ?? ''}${text[++i] ?? ''}`;
+    } else if (ch === '"' || ch === "'") {
+      quote = ch;
+      word = word ?? '';
+    } else if (ch === '#' && word === null) {
+      while (i + 1 < text.length && text[i + 1] !== '\n') i += 1;
+    } else if (ch === '<' && text[i + 1] === '<' && text[i + 2] !== '<') {
+      const tag = /^-?\s*(?:(["'])([A-Za-z_][\w.-]*)\1|([A-Za-z_][\w.-]*))/.exec(text.slice(i + 2));
+      if (tag) {
+        heredocs.push(tag[2] || tag[3] || '');
+        i += 1 + tag[0].length;
+      }
+      endWord();
+    } else if (ch === '\n') {
+      endCommand();
+      let body = i + 1;
+      for (const tag of heredocs.splice(0)) {
+        const lines = text.slice(body).split('\n');
+        const end = lines.findIndex((line) => line.trim() === tag);
+        body = end < 0 ? text.length : body + lines.slice(0, end + 1).join('\n').length + 1;
+      }
+      i = body - 1;
+    } else if (';&|()`'.includes(ch)) {
+      endCommand();
+    } else if (/\s/.test(ch)) {
+      endWord();
+    } else {
+      word = `${word ?? ''}${ch}`;
+    }
+  }
+  endCommand();
+  return commands;
+}
+
+/** The program a simple command runs (past env assignments and wrappers such as `sudo`) and its arguments. */
+function programAndArgs(words: string[]) {
+  let i = 0;
+  let wrapped = false;
+  for (; i < words.length; i += 1) {
+    const word = words[i] || '';
+    if (/^[A-Za-z_]\w*=/.test(word)) continue;
+    if (COMMAND_WRAPPERS.has(path.basename(word))) wrapped = true;
+    else if (!(wrapped && word.startsWith('-'))) break;
+  }
+  return { program: path.basename(words[i] || ''), args: words.slice(i + 1) };
+}
+
+/** The arguments after `sks` for `sks`, `sneakoscope`, `node …/sks.js`, and `npx [-y] [-p pkg] sks`; null for any other command. */
+function sksArgs({ program, args }: { program: string; args: string[] }) {
+  if (program === 'sks' || program === 'sneakoscope') return args;
+  if (program === 'node' && /(^|\/)sks\.js$/.test(args[0] || '')) return args.slice(1);
+  if (program !== 'npx') return null;
+  let i = 0;
+  while (i < args.length && (args[i] || '').startsWith('-')) i += args[i] === '-p' || args[i] === '--package' ? 2 : 1;
+  return args[i] === 'sks' ? args.slice(i + 1) : null;
+}
+
+/** Maintenance commands the agent must not run, matched per simple command: one that quotes or embeds the text does not count. */
 function classifyMaintenanceCommand(command: any = '') {
-  const c = String(command || '').replace(/\s+/g, ' ').trim();
-  const low = c.toLowerCase();
-  const reasons: any[] = [];
-  const sksInvoke = '(?:sks|sneakoscope|node\\s+\\S*sks\\.js|npx\\s+(?:-y\\s+)?(?:-p\\s+\\S+\\s+)?sks)';
-  if (new RegExp(`(^|[\\s;&|])${sksInvoke}(?:\\s+|$)(?:setup|init|fix-path)\\b`).test(low)) reasons.push('sks_harness_maintenance_command_blocked');
-  if (new RegExp(`(^|[\\s;&|])${sksInvoke}\\s+doctor\\b[\\s\\S]*\\s--fix\\b`).test(low)) reasons.push('sks_doctor_fix_blocked');
-  if (new RegExp(`(^|[\\s;&|])${sksInvoke}\\s+context7\\s+setup\\b`).test(low)) reasons.push('sks_context7_setup_blocked');
-  if (/(^|[\s;&|])npm\s+(?:remove|rm|uninstall)\s+[^;&|]*\bsneakoscope\b/.test(low)) reasons.push('sneakoscope_uninstall_blocked');
-  if (/(^|[\s;&|])(?:pnpm|yarn)\s+(?:remove|uninstall)\s+[^;&|]*\bsneakoscope\b/.test(low)) reasons.push('sneakoscope_uninstall_blocked');
-  return { block: reasons.length > 0, reasons };
+  const reasons = new Set<string>();
+  for (const words of simpleCommands(String(command || '').toLowerCase())) {
+    const run = programAndArgs(words);
+    const sks = sksArgs(run);
+    if (sks) {
+      if (['setup', 'init', 'fix-path'].includes(sks[0] || '')) reasons.add('sks_harness_maintenance_command_blocked');
+      if (sks[0] === 'doctor' && sks.some((arg) => arg === '--fix' || arg.startsWith('--fix='))) reasons.add('sks_doctor_fix_blocked');
+      if (sks[0] === 'context7' && sks[1] === 'setup') reasons.add('sks_context7_setup_blocked');
+    }
+    const removeVerbs = run.program === 'npm' ? ['remove', 'rm', 'uninstall'] : run.program === 'pnpm' || run.program === 'yarn' ? ['remove', 'uninstall'] : [];
+    if (removeVerbs.includes(run.args[0] || '') && run.args.slice(1).some((arg) => /\bsneakoscope\b/.test(arg))) reasons.add('sneakoscope_uninstall_blocked');
+  }
+  return { block: reasons.size > 0, reasons: [...reasons] };
 }
 
 function findProtectedMatches(root: any, strings: any, policy: any) {
