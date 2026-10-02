@@ -77,9 +77,9 @@ function normalizeCodexFastModeUiConfigOnce(text: any = '', opts: any = {}) {
   // No stable `[features]` flag is seeded: hooks, fast_mode, apps, computer_use, browser_use,
   // browser_use_external, image_generation, in_app_browser, guardian_approval, tool_suggest
   // and plugins are `stable true` on 0.153.4 and 0.159.2 (see codex-feature-flags.ts).
-  // Global postinstall enables MA v2 (the catalog selects it per model, but gpt-5.6-luna and
-  // gpt-5.5 only get the v2 spawn tool with `enabled = true`) without imposing project
-  // concurrency numbers. Project setup owns max_concurrent_threads_per_session.
+  // Global postinstall enables MA v2 (the catalog selects it per model; a model whose row does not,
+  // such as one the installed Codex's bundled catalog does not know yet, gets the V1 spawn tool or
+  // none unless `enabled = true`) without imposing project concurrency numbers. Project setup owns max_concurrent_threads_per_session.
   // `expose_spawn_agent_model_overrides` is not written: it defaults to true on both versions.
   if (!hasTomlTable(next, 'features.multi_agent_v2') && !hasTomlTableKey(next, 'features', 'multi_agent_v2')) {
     next = upsertTomlTable(next, 'features.multi_agent_v2', '[features.multi_agent_v2]\nenabled = true');

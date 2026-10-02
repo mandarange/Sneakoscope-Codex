@@ -31,7 +31,7 @@ sks codex doctor --json
 sks codex schema --json
 ```
 
-Version detection checks `codex --version`, `codex exec --help`, `codex exec resume --help`, `codex --help`, installed `@openai/codex`, Homebrew cask metadata, and finally the vendored hook snapshot metadata. A live Codex below the support floor is blocked (`sks codex compatibility|version|doctor` and the Naruto spawn precheck enforce it), a missing binary is `integration_optional`, and newer hosts are accepted. SKS surfaces the update action (induce/check/fail). Host upgrade execution remains the user’s or Codex’s responsibility. Release hook validation uses the vendored snapshot, while App Server protocol validation uses the resolved runtime.
+Version detection resolves the Codex binary (an explicit path, `SKS_CODEX_BIN`, `CODEX_BIN`, the `@openai/codex` installed with SKS, then `codex` on `PATH`) and reads `codex --version`, then `codex --help`; only when no runnable binary reports a version does it fall back to `npm list -g @openai/codex` and `brew info --cask codex`. A live Codex below the support floor is blocked (`sks codex compatibility|version|doctor` and the Naruto spawn precheck enforce it), a missing binary is `integration_optional`, and newer hosts are accepted. SKS surfaces the update action (induce/check/fail). Host upgrade execution remains the user’s or Codex’s responsibility. Release hook validation uses the vendored snapshot, while App Server protocol validation uses the resolved runtime.
 
 ## Prefer-Latest Policy
 
@@ -43,7 +43,7 @@ Version detection checks `codex --version`, `codex exec --help`, `codex exec res
 ## Current Measured Package Contract
 
 - `package.json` and `package-lock.json` must agree on one SDK/CLI dependency graph. A version-named release manifest or App Server schema directory is rejected as duplicate truth.
-- Naruto enables stable opt-in `features.multi_agent_v2` when the host exposes it, with unified `[agents]` concurrency and default subagent model/reasoning settings. SKS wraps Codex official multi-agent only.
+- Naruto runs on Codex multi-agent V2. The model catalog (`multi_agent_version`) selects V2 per model, but a model whose row does not select it, including one the installed Codex's bundled catalog does not know yet, gets the V1 spawn tool or none. SKS therefore also writes `[features.multi_agent_v2] enabled = true`, which gives every model the V2 spawn tool. `[agents]` carries the concurrency cap and the default subagent model/reasoning settings; `agents.enabled`, `agents.interrupt_message` and the spawn tool's `model`/`reasoning_effort` arguments are Codex defaults and are not written. SKS wraps Codex official multi-agent only.
 - Binary identity, runtime-generated App Server v2 schema, thread-store behavior, and runtime policy are separate release gates; a version string alone is not sufficient evidence.
 - Official subagent lifecycle uses `SubagentStart` and `SubagentStop`, but completion additionally requires a trustworthy structured parent outcome for every thread.
 - Missing or malformed tool-output correlation fails closed instead of being treated as a successful continuation.

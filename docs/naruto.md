@@ -113,7 +113,11 @@ unavailable.
 
 ## Agent Configuration
 
-Naruto requires Codex multi-agent V2 (`features.multi_agent_v2`) when available.
+Naruto runs on Codex multi-agent V2. The Codex model catalog selects V2 per model
+(`multi_agent_version`), but a model whose catalog row does not select it, including a
+model the installed Codex's bundled catalog does not know yet, gets the V1 spawn tool or
+none. `[features.multi_agent_v2] enabled = true` gives every model the V2 spawn tool, which
+is why SKS writes it.
 Hosts that lack MA v2 fail closed with explicit “update Codex CLI” guidance
 (`sks codex update` / Menu Bar → Update Codex CLI Now); SKS does not revive a
 legacy process runtime. Use the official latest stable Codex CLI; capability
@@ -124,16 +128,17 @@ configuration uses:
 [features.multi_agent_v2]
 enabled = true
 max_concurrent_threads_per_session = 257
-expose_spawn_agent_model_overrides = true
 
 [agents]
-enabled = true
 max_concurrent_threads_per_session = 256
 max_depth = 1
-interrupt_message = true
 default_subagent_model = "gpt-6-astra"   # the latest deep-tier model
 default_subagent_reasoning_effort = "low"
 ```
+
+`agents.enabled`, `agents.interrupt_message` and the spawn tool's `model` /
+`reasoning_effort` arguments (`expose_spawn_agent_model_overrides`) already default to
+true in Codex, so SKS does not write them; configs that carry them keep them.
 
 `max_concurrent_threads_per_session` under `[agents]` is the configured spawned-child
 frame budget (the SKS-owned default is 256), which is also the absolute hard frame
@@ -141,8 +146,8 @@ cap. The MA v2 feature total includes the root thread (`256 + 1 = 257`). An
 external-host rejection or lower advertised total is a real concurrency limiter and
 must remain visible in the plan/evidence instead of being relabeled as a 256-child
 wave.
-`max_depth = 1` remains fail-closed for any V1 fallback; V2 ignores nesting depth
-and SKS still forbids nested delegation. Legacy `agents.max_threads` and
+`max_depth = 1` stays as the V1 guard (the Codex schema says V2 ignores it) and SKS
+still forbids nested delegation. Legacy `agents.max_threads` and
 `job_max_runtime_seconds` are migrated or stripped on SKS-owned configs.
 
 Explicit user configuration is preserved. SKS installs a project-scoped
