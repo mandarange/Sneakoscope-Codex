@@ -3,52 +3,7 @@ import type { SksIssue } from '../../results.js';
 export const OPENROUTER_CHAT_COMPLETIONS_URL =
   'https://openrouter.ai/api/v1/chat/completions' as const;
 
-export type OpenRouterRole = 'system' | 'user' | 'assistant' | 'tool';
-export type OpenRouterReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
 export type OpenRouterKeySource = 'env' | 'user-secret-store' | 'prompt';
-
-export interface OpenRouterChatMessage {
-  readonly role: OpenRouterRole;
-  readonly content: string;
-  readonly name?: string;
-  readonly tool_call_id?: string;
-}
-
-export interface OpenRouterProviderPreferences {
-  readonly allow_fallbacks: false;
-  readonly require_parameters: boolean;
-  readonly sort?: 'price' | 'throughput' | 'latency';
-  readonly preferred_min_throughput?: number | {
-    readonly p50?: number;
-    readonly p90?: number;
-  };
-  readonly preferred_max_latency?: number | {
-    readonly p50?: number;
-    readonly p90?: number;
-  };
-  readonly order?: readonly string[];
-}
-
-export interface OpenRouterChatCompletionRequest {
-  readonly model: string;
-  readonly messages: readonly OpenRouterChatMessage[];
-  readonly session_id?: string;
-  readonly stream?: boolean;
-  readonly temperature?: number;
-  readonly top_p?: number;
-  readonly max_tokens?: number;
-  readonly stop?: string | readonly string[];
-  readonly reasoning?: {
-    readonly effort?: OpenRouterReasoningEffort;
-    readonly enabled?: boolean;
-    readonly exclude?: boolean;
-  };
-  readonly tools?: readonly unknown[];
-  readonly tool_choice?: 'auto' | 'none' | 'required' | Record<string, unknown>;
-  readonly parallel_tool_calls?: boolean;
-  readonly response_format?: unknown;
-  readonly provider?: OpenRouterProviderPreferences;
-}
 
 export interface OpenRouterKeyResolution {
   readonly key: string | null;
