@@ -83,15 +83,6 @@
       "reason": "Process lifecycle helper terminates only owned child or process tree during cleanup."
     },
     {
-      "file": "src/core/evidence/v2/evidence-key.ts",
-      "symbol": "ensureProjectId",
-      "token": "fsp.writeFile",
-      "scope_contract_sha256": "731032a3478f8a4a00cbf5ef88d75db39a85abfcaf135bb6e4f17a69e361a14b",
-      "callsite_sha256": "9014d571fb71edc4ce73a665e53721c2a995645353295f17bfa4a5e324b04833",
-      "occurrence": 1,
-      "reason": "Evidence identity writes one 0600 project-id file with exclusive create beneath the caller-resolved project root."
-    },
-    {
       "file": "src/core/agents/agent-patch-apply-worker.ts",
       "symbol": "applyAgentPatchEnvelope",
       "token": "fs.writeFile",
