@@ -14,7 +14,6 @@ const CORE_NO_TS_NOCHECK_DIRS = [
 
 const TARGET_TYPED_FILES = [
   'src/core/codex-app/codex-app-harness-matrix.ts',
-  'src/core/codex-native/codex-native-pattern-analysis.ts',
   'src/core/codex-app/codex-skill-sync.ts',
   'src/core/codex-app/codex-agent-role-sync.ts',
   'src/core/codex-app/codex-init-deep.ts',
@@ -53,8 +52,7 @@ function codexAppTypeSafety(id: string) {
   const required = [
     'src/core/codex-app/codex-app-types.ts',
     'src/core/codex-app/codex-hook-approval-probe.ts',
-    'src/core/codex-app/codex-agent-type-probe.ts',
-    'src/core/codex-native/codex-native-reference-source.ts'
+    'src/core/codex-app/codex-agent-type-probe.ts'
   ]
   for (const file of [...required, ...TARGET_TYPED_FILES]) assertGate(fs.existsSync(path.join(root, file)), `missing ${file}`)
   for (const file of TARGET_TYPED_FILES) {

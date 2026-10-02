@@ -848,15 +848,6 @@
       "reason": "Credential rollback removes only a confined, owner-matched regular target captured as absent before the current transaction."
     },
     {
-      "file": "src/core/codex-native/codex-native-reference-cache.ts",
-      "symbol": "ensureCodexNativeReferenceSnapshot",
-      "token": "fs.rm",
-      "scope_contract_sha256": "607e631b656fdf3525744a6ef3feeeb3e70c7e514dd013560ec1e0c2ecda707c",
-      "callsite_sha256": "1e64a4ce8271df400f502b233e4465af36a3e0ba57b6b7b2b756b7bbd8c8f95c",
-      "occurrence": 1,
-      "reason": "Codex Native reference refresh removes only the scoped .sneakoscope/cache/codex-native-reference snapshot before a fresh clone."
-    },
-    {
       "file": "src/core/codex-native/native-capability-postcheck.ts",
       "symbol": "writeReadSample",
       "token": "fs.writeFile",
@@ -3693,15 +3684,6 @@
     },
     {
       "file": "src/scripts/codex-native-gate-lib.ts",
-      "symbol": "ensureCurrentReferenceSeed",
-      "token": "fsp.writeFile",
-      "scope_contract_sha256": "92ff87ba518255d9a03b29cff7876875452727d966f80d26c81002d95d63b06d",
-      "callsite_sha256": "bcb4cd686883b2fe09d6524e01110315c1a5a3d4390d6f1b4b83a4098342222e",
-      "occurrence": 1,
-      "reason": "src/scripts/codex-native-gate-lib.ts#ensureCurrentReferenceSeed writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/codex-native-gate-lib.ts",
       "symbol": "initDeepBackupRetention",
       "token": "fsp.writeFile",
       "scope_contract_sha256": "3bff38d4657474f8cc897aa1645317dc9cbe875925f9d079c8c3a51ab77ccb3c",
@@ -3720,57 +3702,12 @@
     },
     {
       "file": "src/scripts/codex-native-gate-lib.ts",
-      "symbol": "referenceFixture",
-      "token": "fsp.writeFile",
-      "scope_contract_sha256": "010e2fdcdce7632c67629d9c7ba5ca055ba59262e3749a53e73792519245a9a7",
-      "callsite_sha256": "f0d663a036e44d356b3c76de03c1ef09a4a935b96ec9a99d976ec06a3450d41a",
-      "occurrence": 1,
-      "reason": "src/scripts/codex-native-gate-lib.ts#referenceFixture writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/codex-native-gate-lib.ts",
       "symbol": "tempRoot",
       "token": "fsp.writeFile",
       "scope_contract_sha256": "f2f4a2a4652a45f0e66948573073556f0601b4fc9681b39c7826a6b3a72589d2",
       "callsite_sha256": "e88adf6603966c23676ab95ccf9293b48d908ca57c8b15f7d7b17e8d29250608",
       "occurrence": 1,
       "reason": "src/scripts/codex-native-gate-lib.ts#tempRoot writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/codex-native-reference-cache-blackbox.ts",
-      "symbol": "module",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "811e0f419a6dce557689732e42b098b63928456b205da9e561ce6eec3af73574",
-      "callsite_sha256": "da59fc1f9c04dc4ada7a2ab6d90cd144403113ba7ba0d5a0f4990971a9526d10",
-      "occurrence": 1,
-      "reason": "Codex Native reference-cache blackbox writes only mkdtemp cache/source fixture files for offline and local-git proof."
-    },
-    {
-      "file": "src/scripts/codex-native-reference-cache-blackbox.ts",
-      "symbol": "module",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "811e0f419a6dce557689732e42b098b63928456b205da9e561ce6eec3af73574",
-      "callsite_sha256": "db9a11faaa43c981e25dc6eedac6ff92b7fdb078f9a8578361799a2b6a70afe3",
-      "occurrence": 1,
-      "reason": "Codex Native reference-cache blackbox writes only mkdtemp cache/source fixture files for offline and local-git proof."
-    },
-    {
-      "file": "src/scripts/codex-native-reference-cache-check.ts",
-      "symbol": "module",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "93016bd1d6da48a63be2cfa4e0adb76f2b03f94513be97056b12001f22c1466a",
-      "callsite_sha256": "33b31dd9937c865c75b0b5289197a306ac984f058d15a0de7ee842333a1cb99f",
-      "occurrence": 1,
-      "reason": "Codex Native reference-cache gate writes only a mkdtemp offline cache fixture used to verify cache reuse."
-    },
-    {
-      "file": "src/scripts/codex-native-reference-cache-check.ts",
-      "symbol": "module",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "93016bd1d6da48a63be2cfa4e0adb76f2b03f94513be97056b12001f22c1466a",
-      "callsite_sha256": "9664b277d46b3f607fc746d2d9251ca387c5a8acf87819d56f392c93bdfecfb0",
-      "occurrence": 1,
-      "reason": "Codex Native reference-cache gate writes only a mkdtemp offline cache fixture used to verify cache reuse."
     },
     {
       "file": "src/scripts/codex-native-repair-transaction-check.ts",

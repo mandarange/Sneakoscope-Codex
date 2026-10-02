@@ -10,8 +10,6 @@ import { syncCodexSksSkills } from '../core/codex-app/codex-skill-sync.js';
 import { buildCodexNativeFeatureMatrix } from '../core/codex-native/codex-native-feature-broker.js';
 import { resolveCodexNativeInvocationPlan } from '../core/codex-native/codex-native-invocation-router.js';
 import { buildCodexNativeInteropPolicy } from '../core/codex-native/codex-native-interop-policy.js';
-import { analyzeCodexNativeReferenceSource } from '../core/codex-native/codex-native-reference-evidence.js';
-import { writeCodexNativePatternAnalysis } from '../core/codex-native/codex-native-pattern-analysis.js';
 import { repairCodexNativeManagedAssets } from '../core/codex-native/codex-native-repair-transaction.js';
 
 export async function run(_command: any, args: any = []) {
@@ -29,15 +27,13 @@ export async function run(_command: any, args: any = []) {
   if (action === 'hook-lifecycle') return printCodexNativeResult(args, await buildCodexHookLifecycle({ root, apply: flag(args, '--apply') || flag(args, '--fix') }));
   if (action === 'execution-profile') return printCodexNativeResult(args, await resolveCodexAppExecutionProfile({ root }));
   if (action === 'interop-policy') return printCodexNativeResult(args, await buildCodexNativeInteropPolicy({ root }));
-  if (action === 'reference-evidence') return printCodexNativeResult(args, await analyzeCodexNativeReferenceSource({ root, writeReport: true }));
-  if (action === 'pattern-analysis') return printCodexNativeResult(args, await writeCodexNativePatternAnalysis(root));
   if (action === 'route' || action === 'invocation-plan') {
     const route = readOption(args, '--route', '$Loop') as '$Loop' | '$QA-LOOP' | '$Research' | '$Image' | '$MAD' | '$Doctor';
     const desiredCapability = readOption(args, '--capability', 'agent-role') as any;
     const missionId = readOption(args, '--mission', null);
     return printCodexNativeResult(args, await resolveCodexNativeInvocationPlan({ root, missionId, route, desiredCapability }));
   }
-  console.error('Usage: sks codex-native status|feature-broker|harness-compat|skill-sync|agent-role-sync|init-deep|hook-lifecycle|execution-profile|interop-policy|reference-evidence|pattern-analysis|invocation-plan [--json]');
+  console.error('Usage: sks codex-native status|feature-broker|harness-compat|skill-sync|agent-role-sync|init-deep|hook-lifecycle|execution-profile|interop-policy|invocation-plan [--json]');
   process.exitCode = 1;
 }
 

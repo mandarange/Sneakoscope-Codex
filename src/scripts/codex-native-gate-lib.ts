@@ -10,7 +10,6 @@ import { spawnSync } from 'node:child_process'
 export const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 
 export async function runCodexNativeGate(id: string): Promise<void> {
-  if (id === 'brand-neutrality:rename-map') return brandRenameMap(id)
   if (id === 'brand-neutrality:zero-leakage') return brandZeroLeakage(id)
   if (id === 'brand-neutrality:zero-leakage-blackbox') return brandZeroLeakageBlackbox(id)
   if (id === 'docs:brand-neutrality') return docsBrandNeutrality(id)
@@ -20,9 +19,6 @@ export async function runCodexNativeGate(id: string): Promise<void> {
   if (id === 'codex-native:invocation-router') return invocationRouter(id)
   if (id === 'codex-native:route-map') return routeMap(id)
   if (id.startsWith('pipeline:codex-native-')) return pipelineGate(id)
-  if (id === 'codex-native:pattern-analysis') return patternAnalysis(id)
-  if (id === 'codex-native:reference-evidence') return referenceEvidence(id)
-  if (id === 'codex-native:pattern-analysis-blackbox') return patternAnalysisBlackbox(id)
   if (id === 'codex-native:interop-policy') return interopPolicy(id)
   if (id === 'codex-native:skill-content') return skillContent(id)
   if (id === 'codex-native:agent-role-content') return agentRoleContent(id)
@@ -35,20 +31,6 @@ export async function runCodexNativeGate(id: string): Promise<void> {
   if (id === 'doctor:codex-native-repair-actions') return doctorRepairActions(id)
   if (id === 'codex-native:feature-broker-blackbox') return featureBrokerBlackbox(id)
   throw new Error(`unknown_gate:${id}`)
-}
-
-async function brandRenameMap(id: string): Promise<void> {
-  const mod = await importDist('core/codex-native/codex-native-rename-map.js')
-  const targets = mod.codexNativeRenameTargets() as string[]
-  for (const expected of [
-    'codex-native:pattern-analysis',
-    'codex-native:reference-evidence',
-    'codex-native:feature-broker',
-    'codex-native:invocation-router',
-    'sks.codex-native-feature-matrix.v1',
-    '.sneakoscope/reports/codex-native-invocation-plan.json'
-  ]) assertGate(targets.includes(expected), `rename target missing:${expected}`, { targets })
-  emitGate(id, { targets: targets.length })
 }
 
 async function brandZeroLeakage(id: string): Promise<void> {
@@ -80,7 +62,6 @@ async function brandZeroLeakageBlackbox(id: string): Promise<void> {
 async function docsBrandNeutrality(id: string): Promise<void> {
   const report = await scanBrandLeakage(root, ['README.md', 'CHANGELOG.md', 'docs'])
   assertGate(report.ok, 'docs contain forbidden external reference terms', report)
-  assertGate(fs.existsSync(path.join(root, 'docs', 'codex-native-patterns.md')), 'codex native patterns docs missing')
   emitGate(id, { scanned_files: report.scanned_files })
 }
 
@@ -164,52 +145,6 @@ async function pipelineGate(id: string): Promise<void> {
     await pipelineGate('pipeline:codex-native-research-routing')
     await pipelineGate('pipeline:codex-native-image-routing')
   }
-  emitGate(id)
-}
-
-async function referenceEvidence(id: string): Promise<void> {
-  const previous = fakeEnv({ hook: 'approved', agentType: 'supported' })
-  try {
-    const tmp = await tempRoot(id)
-    const sourceDir = await referenceFixture(tmp)
-    const mod = await importDist('core/codex-native/codex-native-reference-evidence.js')
-    const report = await mod.analyzeCodexNativeReferenceSource({ root: tmp, sourceDir, writeReport: true })
-    assertGate(report.schema === 'sks.codex-native-reference-evidence.v1' && report.evidence.length >= 4, 'reference evidence report incomplete', report)
-    assertGate(!JSON.stringify(report).includes('secret-reference-token'), 'reference evidence should store hashes only', report)
-    await ensureCurrentReferenceSeed()
-    const currentReport = await mod.analyzeCodexNativeReferenceSource({ root, writeReport: true })
-    assertGate(currentReport.schema === 'sks.codex-native-reference-evidence.v1' && currentReport.evidence.length >= 4, 'current reference evidence report incomplete', currentReport)
-  } finally {
-    restoreEnv(previous)
-  }
-  emitGate(id)
-}
-
-async function patternAnalysis(id: string): Promise<void> {
-  const tmp = await tempRoot(id)
-  const sourceDir = await referenceFixture(tmp)
-  const mod = await importDist('core/codex-native/codex-native-pattern-analysis.js')
-  const report = await mod.writeCodexNativePatternAnalysis(tmp, { sourceDir })
-  assertGate(report.schema === 'sks.codex-native-pattern-analysis.v1' && report.patterns.length >= 12, 'pattern analysis incomplete', report)
-  await ensureCurrentReferenceSeed()
-  const currentReport = await mod.writeCodexNativePatternAnalysis(root)
-  assertGate(currentReport.schema === 'sks.codex-native-pattern-analysis.v1' && currentReport.patterns.length >= 12, 'current pattern analysis incomplete', currentReport)
-  emitGate(id, { patterns: report.patterns.length })
-}
-
-async function ensureCurrentReferenceSeed(): Promise<void> {
-  const cacheDir = path.join(root, '.sneakoscope', 'cache', 'codex-native-reference')
-  await fsp.mkdir(cacheDir, { recursive: true })
-  await fsp.writeFile(
-    path.join(cacheDir, 'README.md'),
-    'npx optional tooling no global install. plugin install enable marketplace lifecycle. hook approval trust. skill command picker slash command $Loop. agent_type fallback. AGENTS.md directory-local project memory. plan work proof. continuation resume stop hook. doctor readiness matrix. MCP tool candidate server candidate. non-clobber managed preserve user checksum.\n',
-    'utf8'
-  )
-}
-
-async function patternAnalysisBlackbox(id: string): Promise<void> {
-  await patternAnalysis(id)
-  await brandZeroLeakage('brand-neutrality:zero-leakage')
   emitGate(id)
 }
 
@@ -362,22 +297,6 @@ async function buildFixtureMatrix(id: string, opts: { hook: 'approved' | 'unknow
   } finally {
     restoreEnv(previous)
   }
-}
-
-async function referenceFixture(tmp: string): Promise<string> {
-  const dir = path.join(tmp, 'reference-source')
-  await fsp.mkdir(dir, { recursive: true })
-  await fsp.writeFile(path.join(dir, 'README.md'), [
-    'Use npx for optional no-global setup.',
-    'Codex plugin lifecycle keeps install and approval separate.',
-    'Hook approval requires startup review before evidence counts.',
-    '$Loop and $Research are command picker route bridges.',
-    'spawn_agent uses agent_type when present and message-role fallback otherwise.',
-    'Directory-local AGENTS.md memory is guidance only.',
-    'Plan work proof separation keeps long tasks resumable.',
-    'Doctor readiness matrix lists MCP server candidates and non-clobber managed assets.'
-  ].join('\n'), 'utf8')
-  return dir
 }
 
 async function scanBrandLeakage(base: string, customTargets?: string[]): Promise<{ schema: string; ok: boolean; scanned_files: number; redacted_offenders: string[]; forbidden_term_hashes: string[] }> {
