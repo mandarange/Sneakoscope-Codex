@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import os from 'node:os';
 import fsp from 'node:fs/promises';
-import { findGlmOnlyMadFlagBlockers, findRetiredGlmMadFlagBlockers, findUnsupportedMadArgumentErrors, madHighCommand, stripMadLaunchOnlyArgs } from '../mad-sks-command.js';
+import { findRetiredGlmMadFlagBlockers, findUnsupportedMadArgumentErrors, madHighCommand, stripMadLaunchOnlyArgs } from '../mad-sks-command.js';
 
 test('retired GLM MAD flags are blocked instead of launched', () => {
   assert.deepEqual(findRetiredGlmMadFlagBlockers(['--mad', '--bench']), ['retired_glm_mad_flag:--bench']);
@@ -11,7 +11,7 @@ test('retired GLM MAD flags are blocked instead of launched', () => {
     'retired_glm_mad_flag:--trace',
     'retired_glm_mad_flag:--exact-provider'
   ]);
-  assert.deepEqual(findGlmOnlyMadFlagBlockers(['--mad', '--glm', '--trace']), [
+  assert.deepEqual(findRetiredGlmMadFlagBlockers(['--mad', '--glm', '--trace']), [
     'retired_glm_mad_flag:--glm',
     'retired_glm_mad_flag:--trace'
   ]);

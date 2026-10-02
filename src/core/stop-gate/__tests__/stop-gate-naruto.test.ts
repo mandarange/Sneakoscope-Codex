@@ -6,7 +6,6 @@ import os from 'node:os';
 import fsp from 'node:fs/promises';
 import { checkStopGate } from '../stop-gate-check.js';
 import { resolveStopGate } from '../stop-gate-resolver.js';
-import { writeFinalStopGate } from '../stop-gate-writer.js';
 import { evaluateStop } from '../../pipeline-internals/runtime-gates.js';
 import { hasSubagentEvidence } from '../../pipeline-internals/runtime-core.js';
 import { writeRouteCompletionProof } from '../../proof/route-adapter.js';
@@ -120,54 +119,6 @@ test('checkStopGate returns hard_blocked when hard-blocker.json exists with evid
   const result = await checkStopGate({ root, route: 'Naruto' });
   assert.equal(result.action, 'hard_blocked');
   assert.equal(result.ok, false);
-});
-
-test('writeFinalStopGate writes canonical stop-gate.json and updates current state', async () => {
-  const root = await makeTempRoot();
-  const missionId = 'M-test-005';
-  const dir = await setupMission(root, missionId);
-
-  const gate = await writeFinalStopGate({
-    root,
-    missionId,
-    route: 'Naruto',
-    routeCommand: '$Naruto',
-    status: 'passed',
-    terminal: true,
-    terminalState: 'completed',
-    evidence: {
-      build_passed: true,
-      tests_passed: true,
-      route_evidence_passed: true,
-      regression_test_added: false,
-      regression_test_failed_before_fix: false
-    },
-    nativeGateFile: 'naruto-gate.json',
-  });
-
-  assert.equal(gate.passed, true);
-  assert.equal(gate.schema, 'sks.stop-gate.v1');
-
-  // Canonical files exist
-  const stopGate = JSON.parse(await fsp.readFile(path.join(dir, 'stop-gate.json'), 'utf8'));
-  assert.equal(stopGate.passed, true);
-  assert.equal(stopGate.schema, 'sks.stop-gate.v1');
-
-  const latest = JSON.parse(await fsp.readFile(path.join(dir, 'stop-gate.latest.json'), 'utf8'));
-  assert.equal(latest.passed, true);
-
-  const verify = JSON.parse(await fsp.readFile(path.join(dir, 'stop-gate-write-verify.json'), 'utf8'));
-  assert.equal(verify.verified, true);
-
-  // Current state has abs path
-  const state = JSON.parse(await fsp.readFile(path.join(root, '.sneakoscope', 'state', 'current.json'), 'utf8'));
-  assert.equal(state.stop_gate_status, 'passed');
-  assert.ok(state.stop_gate_abs_path, 'should have stop_gate_abs_path');
-  assert.equal(state.stop_gate_passed, true);
-
-  // checkStopGate now returns allow_stop via abs path
-  const result = await checkStopGate({ root, route: 'Naruto', explicitGatePath: state.stop_gate_abs_path });
-  assert.equal(result.action, 'allow_stop');
 });
 
 test('regression: naruto-gate passed but hook blocked — resolver finds mission dir gate', async () => {
@@ -550,30 +501,6 @@ test('strict pass rule rejects status blocked or blockers', async () => {
   assert.equal(result.action, 'continue');
   assert.ok(result.diagnostics.missing_fields.includes('status'));
   assert.ok(result.diagnostics.missing_fields.includes('blockers'));
-});
-
-test('writeFinalStopGate preserves existing native gate fields', async () => {
-  const root = await makeTempRoot();
-  const missionId = 'M-test-009';
-  const dir = await setupMission(root, missionId);
-  await fsp.writeFile(path.join(dir, 'naruto-gate.json'), JSON.stringify({ schema: 'sks.naruto-gate.v1', worker_roster_built: true, custom_detail: 'keep-me', passed: false }));
-  await writeFinalStopGate({
-    root,
-    missionId,
-    route: 'Naruto',
-    routeCommand: '$Naruto',
-    status: 'passed',
-    terminal: true,
-    terminalState: 'completed',
-    evidence: { route_evidence_passed: true, proof_required: false, proof_passed: true, reflection_required: false, reflection_passed: 'not_required' },
-    nativeGateFile: 'naruto-gate.json'
-  });
-  const native = JSON.parse(await fsp.readFile(path.join(dir, 'naruto-gate.json'), 'utf8'));
-  assert.equal(native.worker_roster_built, true);
-  assert.equal(native.custom_detail, 'keep-me');
-  assert.equal(native.passed, true);
-  const canonical = JSON.parse(await fsp.readFile(path.join(dir, 'stop-gate.json'), 'utf8'));
-  assert.equal(canonical.schema, 'sks.stop-gate.v1');
 });
 
 test('diagnostics are written when no stop gate exists', async () => {

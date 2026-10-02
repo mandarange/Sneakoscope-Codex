@@ -19,7 +19,6 @@ import { diffCodexAppUiSnapshots, writeCodexAppUiSnapshot } from '../codex-app/c
 import { checkSksUpdateNotice } from '../update/update-notice.js';
 import { writeCodexCurrentAppCapabilityArtifacts } from '../codex-control/codex-current-app-capability.js';
 import { resolveCodexNativeInvocationPlan } from '../codex-native/codex-native-invocation-router.js';
-import { assertNonGlmMadRoute } from '../routes/model-mode-router.js';
 import { evaluateGate } from '../stop-gate/gate-evaluator.js';
 import { writeMadNativeSession } from './mad-sks-headless.js';
 
@@ -106,7 +105,6 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
     process.exitCode = 1;
     return result;
   }
-  assertNonGlmMadRoute(rawArgs.includes('--mad') ? rawArgs : ['--mad', ...rawArgs]);
   const cleanArgs = stripMadLaunchOnlyArgs(args);
   const dryRun = rawArgs.includes('--dry-run');
   if (rawArgs.includes('--json') && !dryRun) {
@@ -415,11 +413,6 @@ export function findRetiredGlmMadFlagBlockers(args: readonly string[] = []): rea
   return blockers;
 }
 
-/** @deprecated Prefer findRetiredGlmMadFlagBlockers */
-export function findGlmOnlyMadFlagBlockers(args: readonly string[] = [], _glmMadLaunch = false): readonly string[] {
-  return findRetiredGlmMadFlagBlockers(args);
-}
-
 export function findUnsupportedMadArgumentErrors(args: readonly unknown[] = []): readonly string[] {
   const errors: string[] = [];
   for (const value of args) {
@@ -430,7 +423,7 @@ export function findUnsupportedMadArgumentErrors(args: readonly unknown[] = []):
   return [...new Set(errors)];
 }
 
-export function stripMadLaunchOnlyArgs(args: any[] = [], _opts: { readonly includeGlmFlags?: boolean } = {}) {
+export function stripMadLaunchOnlyArgs(args: any[] = []) {
   const flags = madLaunchOnlyFlags();
   const valueFlags = madLaunchValueFlags();
   const out: string[] = [];

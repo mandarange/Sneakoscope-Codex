@@ -21,15 +21,6 @@ const RETIRED_GLOBAL_EXECUTION_OPTION_NAMES = new Set([
   '--glm'
 ]);
 
-export function detectGlobalMode(args: readonly string[] = []): null {
-  void args;
-  return null;
-}
-
-export function stripGlobalModeFlags(args: readonly string[]): string[] {
-  return args.filter((arg) => arg !== '--mad' && arg !== '--glm');
-}
-
 export function findRetiredGlobalExecutionArgumentErrors(args: readonly string[] = []): string[] {
   const errors: string[] = [];
   for (const value of args) {
@@ -39,23 +30,4 @@ export function findRetiredGlobalExecutionArgumentErrors(args: readonly string[]
     if (RETIRED_GLOBAL_EXECUTION_OPTION_NAMES.has(name)) errors.push(`unsupported_argument:${name}`);
   }
   return [...new Set(errors)];
-}
-
-export interface GlobalModeBlockedResult {
-  readonly ok: false;
-  readonly status: 'blocked';
-  readonly mode: 'glm';
-  readonly reason: 'glm_mad_removed';
-  readonly hint: 'use sks bridge provider configure|validate|enable, sks bridge catalog sync, and sks bridge route set-default';
-}
-
-/** @deprecated GLM MAD CLI was removed. */
-export function glmWithoutMadResult(): GlobalModeBlockedResult {
-  return {
-    ok: false,
-    status: 'blocked',
-    mode: 'glm',
-    reason: 'glm_mad_removed',
-    hint: 'use sks bridge provider configure|validate|enable, sks bridge catalog sync, and sks bridge route set-default'
-  };
 }
