@@ -186,9 +186,9 @@ test('compact-resume SessionStart attaches authoritative skill context and PreTo
         transcript_path: null
       }, { root });
       const output: any = normalizeHookResult(hook, result);
-      assert.match(String(output.systemMessage || ''), /refresh active managed-skill paths.*compact resume.*reverify/i);
-      assert.doesNotMatch(String(output.systemMessage || ''), new RegExp(escapeRegExp(naruto)));
-      assert.doesNotMatch(String(output.systemMessage || ''), /path mismatch|\.codex\/skills|plugin-cache/i);
+      // No SKS hook is registered for the compact events any more (Codex gives them no way to reach the
+      // model); an entry an older install still has answers with a bare continue.
+      assert.equal(output.systemMessage, undefined);
       assert.equal(output.hookSpecificOutput, undefined);
       assert.equal((await validateCodexHookOutput(event, output)).ok, true);
       assert.equal(validateCompactSemanticOutput(event, output).ok, true);

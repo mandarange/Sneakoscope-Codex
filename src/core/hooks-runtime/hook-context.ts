@@ -253,16 +253,8 @@ export async function activeAuthoritativeSksSkillRefresh(
 
 export async function hookActiveSkillContextRefresh(
   root: string,
-  state: any,
-  name: 'session-start' | 'pre-compact' | 'post-compact'
+  state: any
 ) {
-  if (name !== 'session-start') {
-    if (!activeSksSkillNames(state).length) return { continue: true };
-    return {
-      continue: true,
-      systemMessage: 'SKS will refresh active managed-skill paths from the current installation on compact resume and reverify them before the next tool call.'
-    };
-  }
   const spawnCompatibility = officialSubagentsRequiredForPromptOrState(state, '', {})
     ? officialSubagentSpawnCompatibilityContext()
     : '';

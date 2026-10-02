@@ -111,14 +111,17 @@ function sksHookCommand(commandPrefix: any, hookName: any, commandSuffix = '') {
   return `${commandPrefix} hook ${hookName}${commandSuffix}`;
 }
 
+// No PreCompact/PostCompact entries: Codex gives those events only the common output fields (no
+// additionalContext), so a hook there cannot reach the model, and the managed-skill refresh after a
+// compaction already rides SessionStart(source=compact). Older installs still carry the two entries;
+// mergeManagedHooksJson and pruneRetiredSksHookEvents drop them on the next update, and until then
+// `sks hook pre-compact|post-compact` answers `{ continue: true }` through the default dispatch.
 const MANAGED_HOOKS = {
   SessionStart: [{ hooks: [{ type: 'command', command: null, hookName: 'session-start', statusMessage: 'SKS preparing session context' }] }],
   UserPromptSubmit: [{ hooks: [{ type: 'command', command: null, hookName: 'user-prompt-submit', statusMessage: 'SKS routing prompt and context' }] }],
   PreToolUse: [{ matcher: '*', hooks: [{ type: 'command', command: null, hookName: 'pre-tool', statusMessage: 'SKS checking tool safety' }] }],
   PostToolUse: [{ matcher: '*', hooks: [{ type: 'command', command: null, hookName: 'post-tool', statusMessage: 'SKS recording tool evidence' }] }],
   PermissionRequest: [{ matcher: '*', hooks: [{ type: 'command', command: null, hookName: 'permission-request', statusMessage: 'SKS reviewing permission request' }] }],
-  PreCompact: [{ hooks: [{ type: 'command', command: null, hookName: 'pre-compact', statusMessage: 'SKS preparing compact context' }] }],
-  PostCompact: [{ hooks: [{ type: 'command', command: null, hookName: 'post-compact', statusMessage: 'SKS recording compact context' }] }],
   SubagentStart: [{ hooks: [{ type: 'command', command: null, hookName: 'subagent-start', statusMessage: 'SKS recording subagent start' }] }],
   SubagentStop: [{ hooks: [{ type: 'command', command: null, hookName: 'subagent-stop', statusMessage: 'SKS recording subagent stop' }] }],
   Stop: [{ hooks: [{ type: 'command', command: null, hookName: 'stop', statusMessage: 'SKS checking done gate' }] }]

@@ -182,13 +182,17 @@ test('persisted explicit alias skills survive compact resume and PreToolUse with
     }, { root, state });
     assert.match(String(sessionStart.additionalContext || ''), new RegExp(escapeRegExp(skillPath)));
 
+    // A hook entry an older install still registers for the compact events gets a plain continue:
+    // the managed-skill refresh is SessionStart(source=compact), asserted above.
     for (const hook of ['pre-compact', 'post-compact'] as const) {
       const compact: any = await evaluateHookPayload(hook, {
         cwd: root,
         session_id: sessionKey,
         hook_event_name: hook
       }, { root, state });
-      assert.match(String(compact.systemMessage || ''), /refresh active managed-skill paths/i);
+      assert.equal(compact.continue, true);
+      assert.equal(compact.systemMessage, undefined);
+      assert.equal(compact.additionalContext, undefined);
       assert.deepEqual(state.required_skills, ['sks-fast-mode', 'sks-honest-mode', 'sks-fast-off']);
     }
 

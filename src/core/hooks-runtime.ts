@@ -247,9 +247,12 @@ async function evaluateHookPayloadWithPlan(name: any, payload: any, opts: any, j
     const withSkillContext = await attachAuthoritativeSksSkillContext(root, state, payload, withImageMode);
     return withNarutoDecision(attachOfficialSubagentSpawnCompatibilityContext(state, payload, withSkillContext));
   }
-  if (name === 'session-start' || name === 'pre-compact' || name === 'post-compact') {
-    return withNarutoDecision(await hookActiveSkillContextRefresh(root, state, name));
+  if (name === 'session-start') {
+    return withNarutoDecision(await hookActiveSkillContextRefresh(root, state));
   }
+  // SKS no longer registers PreCompact/PostCompact (see MANAGED_HOOKS). An entry an older install still
+  // has until the next update strips it answers silently instead of with the default visible message.
+  if (name === 'pre-compact' || name === 'post-compact') return withNarutoDecision({ continue: true, silent: true });
   if (name === 'pre-tool' || name === 'post-tool' || name === 'permission-request') {
     const hook = name === 'pre-tool' ? hookPreTool : name === 'post-tool' ? hookPostTool : hookPermission;
     try {

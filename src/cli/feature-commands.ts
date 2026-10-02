@@ -244,8 +244,6 @@ async function hooksTrustReport(root: any) {
       { event: 'PreToolUse', command: 'sks hook pre-tool', writes: ['.sneakoscope/bus/tool-events.jsonl'], network: false, secret_policy: 'redacted', risk: 'medium' },
       { event: 'PermissionRequest', command: 'sks hook permission-request', writes: ['.sneakoscope/state'], network: false, secret_policy: 'redacted', risk: 'medium' },
       { event: 'PostToolUse', command: 'sks hook post-tool', writes: ['.sneakoscope/missions'], network: false, secret_policy: 'redacted', risk: 'medium' },
-      { event: 'PreCompact', command: 'sks hook pre-compact', writes: ['.sneakoscope/state'], network: false, secret_policy: 'redacted', risk: 'low' },
-      { event: 'PostCompact', command: 'sks hook post-compact', writes: ['.sneakoscope/state'], network: false, secret_policy: 'redacted', risk: 'low' },
       { event: 'UserPromptSubmit', command: 'sks hook user-prompt-submit', writes: ['.sneakoscope/missions'], network: false, secret_policy: 'redacted', risk: 'medium' },
       { event: 'SubagentStart', command: 'sks hook subagent-start', writes: ['.sneakoscope/missions'], network: false, secret_policy: 'redacted', risk: 'low' },
       { event: 'SubagentStop', command: 'sks hook subagent-stop', writes: ['.sneakoscope/missions'], network: false, secret_policy: 'redacted', risk: 'low' },

@@ -35,7 +35,7 @@ test('compact-resume SessionStart restores the spawn compatibility rule for an a
       mission_id: 'M-subagent-context-resume',
       route_closed: false,
       subagents_required: true
-    }, 'session-start');
+    });
     const output: any = normalizeHookResult('session-start', result);
 
     assert.equal(result.silent, true);
