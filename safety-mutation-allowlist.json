@@ -626,8 +626,8 @@
       "file": "src/core/codex-lb/desktop-service.ts",
       "symbol": "writeDesktopBridgeServiceSettingsUnlocked",
       "token": "chmod",
-      "scope_contract_sha256": "2d9cbc9907b79a0b3f0c31610d1d9f00f31f6d98319ddce44079e6e5f3d621da",
-      "callsite_sha256": "5e8d23b526b2d1a9c96ff7476bde8a36a2d63f1c1ba51041d4185dab2e021709",
+      "scope_contract_sha256": "ae27af5213e55f2ea266811b47a27636f88a907ff55e4c32c4c30658df67ac73",
+      "callsite_sha256": "ba1bb939a4f75677d07528f7443a007b56f85e50560c74f6af186e213dc0b9e9",
       "occurrence": 1,
       "reason": "The service settings writer applies 0600 only to the validated settings document it just wrote atomically."
     },
