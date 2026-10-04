@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import {
+  DESKTOP_BRIDGE_SETTINGS_MAX_BYTES,
   defaultDesktopBridgeServiceSettings,
   desktopBridgeServicePaths,
   desktopBridgeServiceStatus,
@@ -328,4 +329,38 @@ test('a PATH-resolved JavaScript sks entry is launched through the current inter
     stderrPath: '/tmp/sks-err.log'
   });
   assert.match(plist, /<string>\/opt\/nvm\/bin\/node<\/string>\n\s*<string>\/opt\/nvm\/lib\/node_modules\/sneakoscope\/dist\/bin\/sks\.js<\/string>/);
+});
+
+test('session pins past the settings byte cap do not hide a saved Codex-LB preference', async (t) => {
+  const setup = await fixture(t);
+  const base = defaultDesktopBridgeServiceSettings({
+    auth_priority_enabled: true,
+    listen_port: 54_321,
+    client_capability_sha256: CLIENT_CAPABILITY_SHA256
+  });
+  const pins = Array.from({ length: 900 }, (_, index) => ({
+    thread_id: `thread-${String(index).padStart(4, '0')}`,
+    provider_id: 'codex-lb' as const,
+    public_model: 'public-model',
+    upstream_model: 'upstream-model',
+    catalog_generation: 'catalog-session-pin',
+    route_policy_generation: 'policy-session-pin',
+    created_at: new Date(Date.UTC(2026, 0, 1) + index * 1000).toISOString()
+  }));
+  const text = `${JSON.stringify({ ...base, provider_session_pins: pins }, null, 2)}\n`;
+  assert.ok(Buffer.byteLength(text) > DESKTOP_BRIDGE_SETTINGS_MAX_BYTES);
+  await fsp.mkdir(path.dirname(setup.paths.settings_path), { recursive: true });
+  await fsp.writeFile(setup.paths.settings_path, text, { mode: 0o600 });
+
+  const read = await readDesktopBridgeServiceSettings(setup.paths.settings_path);
+  assert.equal(read?.auth_priority_enabled, true);
+  assert.equal(read?.provider_session_pins[0]?.thread_id, 'thread-0899');
+  assert.equal(read?.provider_session_pins.some((pin) => pin.thread_id === 'thread-0000'), false);
+
+  await writeDesktopBridgeServiceSettings(setup.paths.settings_path, read!);
+  const written = await fsp.readFile(setup.paths.settings_path);
+  assert.ok(written.byteLength <= DESKTOP_BRIDGE_SETTINGS_MAX_BYTES);
+  const again = await readDesktopBridgeServiceSettings(setup.paths.settings_path);
+  assert.equal(again?.auth_priority_enabled, true);
+  assert.equal(again?.provider_session_pins[0]?.thread_id, 'thread-0899');
 });

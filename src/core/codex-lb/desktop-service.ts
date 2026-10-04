@@ -34,6 +34,12 @@ export const DEFAULT_DESKTOP_BRIDGE_HOST = '127.0.0.1' as const;
 export const DEFAULT_DESKTOP_BRIDGE_PORT = 49_152;
 export const DESKTOP_BRIDGE_SETTINGS_SCHEMA = 'sks.desktop-bridge-settings.v2' as const;
 export const DESKTOP_BRIDGE_SERVICE_SCHEMA = 'sks.desktop-bridge-service.v2' as const;
+/** A settings document above this is not loaded whole. Session pins are trimmed
+ *  to fit; any other payload this large is rejected. */
+export const DESKTOP_BRIDGE_SETTINGS_MAX_BYTES = 256 * 1024;
+/** Files between the normal cap and this ceiling are pin-recovery candidates.
+ *  Larger files are refused before parse. */
+const DESKTOP_BRIDGE_SETTINGS_RECOVERY_MAX_BYTES = 2 * 1024 * 1024;
 const DEFAULT_ALLOWED_ORIGINS = ['app://codex'] as const;
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 
@@ -189,9 +195,17 @@ export async function readDesktopBridgeServiceSettings(file: string): Promise<De
   let stat; try { stat = await fsp.lstat(file); } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null; throw error; }
   if (!stat.isFile() || stat.isSymbolicLink()) throw new Error('desktop_bridge_settings_not_regular_file');
   if ((stat.mode & 0o077) !== 0) throw new Error('desktop_bridge_settings_permissions_unsafe');
-  const raw = await fsp.readFile(file, 'utf8'); if (Buffer.byteLength(raw) > 256 * 1024) throw new Error('desktop_bridge_settings_too_large');
+  if (stat.size > DESKTOP_BRIDGE_SETTINGS_RECOVERY_MAX_BYTES) throw new Error('desktop_bridge_settings_too_large');
+  const raw = await fsp.readFile(file, 'utf8');
+  const rawBytes = Buffer.byteLength(raw);
+  if (rawBytes > DESKTOP_BRIDGE_SETTINGS_RECOVERY_MAX_BYTES) throw new Error('desktop_bridge_settings_too_large');
   let parsed: unknown; try { parsed = JSON.parse(raw); } catch { throw new Error('desktop_bridge_settings_invalid_json'); }
-  return validateDesktopBridgeServiceSettings(parsed);
+  const validated = validateDesktopBridgeServiceSettings(parsed);
+  // Session pins grow with every bridged thread. Once they push the document
+  // past the cap, a hard reject made every later read look like missing
+  // settings, so a saved Codex-LB preference was reported as off and could
+  // not be written back. Drop the oldest pins and keep the rest of the file.
+  return rawBytes <= DESKTOP_BRIDGE_SETTINGS_MAX_BYTES ? validated : sessionPinsThatFit(validated);
 }
 
 export async function writeDesktopBridgeServiceSettings(file: string, settings: DesktopBridgeServiceSettings): Promise<void> {
@@ -200,10 +214,50 @@ export async function writeDesktopBridgeServiceSettings(file: string, settings: 
   });
 }
 
+function desktopBridgeSettingsDocument(settings: DesktopBridgeServiceSettings) {
+  return {
+    schema: settings.schema,
+    listen_host: settings.listen_host,
+    listen_port: settings.listen_port,
+    provider_registry: settings.provider_registry,
+    route_policy: settings.route_policy,
+    provider_session_pins: settings.provider_session_pins,
+    client_capability_sha256: settings.client_capability_sha256,
+    allowed_origins: settings.allowed_origins,
+    connect_timeout_ms: settings.connect_timeout_ms,
+    idle_timeout_ms: settings.idle_timeout_ms,
+    official_passthrough: settings.official_passthrough,
+    auth_priority_enabled: settings.auth_priority_enabled ?? false
+  };
+}
+
+function desktopBridgeSettingsText(settings: DesktopBridgeServiceSettings): string {
+  return `${JSON.stringify(desktopBridgeSettingsDocument(settings), null, 2)}\n`;
+}
+
+/** Keeps the newest session pins that still leave the on-disk document readable. */
+export function sessionPinsThatFit(settings: DesktopBridgeServiceSettings, maxBytes = DESKTOP_BRIDGE_SETTINGS_MAX_BYTES): DesktopBridgeServiceSettings {
+  if (Buffer.byteLength(desktopBridgeSettingsText(settings)) <= maxBytes) return settings;
+  const pins = settings.provider_session_pins
+    .map((pin, index) => ({ pin, index }))
+    .sort((left, right) => Date.parse(right.pin.created_at) - Date.parse(left.pin.created_at) || left.index - right.index)
+    .map((row) => row.pin);
+  let lo = 0;
+  let hi = pins.length;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    const size = Buffer.byteLength(desktopBridgeSettingsText({ ...settings, provider_session_pins: pins.slice(0, mid) }));
+    if (size <= maxBytes) lo = mid;
+    else hi = mid - 1;
+  }
+  const fitted = { ...settings, provider_session_pins: pins.slice(0, lo) };
+  if (Buffer.byteLength(desktopBridgeSettingsText(fitted)) > maxBytes) throw new Error('desktop_bridge_settings_too_large');
+  return fitted;
+}
+
 async function writeDesktopBridgeServiceSettingsUnlocked(file: string, settings: DesktopBridgeServiceSettings): Promise<void> {
-  const validated = validateDesktopBridgeServiceSettings(settings);
-  const persisted = { schema: validated.schema, listen_host: validated.listen_host, listen_port: validated.listen_port, provider_registry: validated.provider_registry, route_policy: validated.route_policy, provider_session_pins: validated.provider_session_pins, client_capability_sha256: validated.client_capability_sha256, allowed_origins: validated.allowed_origins, connect_timeout_ms: validated.connect_timeout_ms, idle_timeout_ms: validated.idle_timeout_ms, official_passthrough: validated.official_passthrough, auth_priority_enabled: validated.auth_priority_enabled ?? false };
-  await writeTextAtomic(file, `${JSON.stringify(persisted, null, 2)}\n`, { mode: 0o600 }); await fsp.chmod(file, 0o600);
+  const validated = sessionPinsThatFit(validateDesktopBridgeServiceSettings(settings));
+  await writeTextAtomic(file, desktopBridgeSettingsText(validated), { mode: 0o600 }); await fsp.chmod(file, 0o600);
 }
 
 async function runtimeCredentials(settings: DesktopBridgeServiceSettings, options: DesktopBridgeServiceOptions & { home: string }): Promise<{ registry: DesktopBridgeProviderRegistrySnapshot; resolver: DesktopBridgeCredentialResolver; sources: Partial<Record<BridgeProviderId, DesktopBridgeCredentialSource>>; loaded: CodexLbEnvLoadResult | null }> {

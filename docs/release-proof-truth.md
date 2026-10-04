@@ -2,11 +2,20 @@
 
 ## 10.5.1 candidate
 
-The only product change from 10.5.0 is the `smol-toml` floor. The merged lock
-resolves `smol-toml@1.7.1`, and that tarball's registry integrity is
+The product changes from 10.5.0 are the `smol-toml` floor and the Desktop
+Bridge settings reader. The merged lock resolves `smol-toml@1.7.1`, and that
+tarball's registry integrity is
 `sha512-PPlsspAZ4jbMBu5DMFhfUGDQLu/vrL4SyBROVS37x8ynnVmFIs1VPBz1Co8Xks3TvpIaZXmU85y4DrQ+UyVFoQ==`.
 Upstream `skipUntil` leaves the scan when a comment reaches end of input
-without a newline, which is CVE-2026-85730. Version authorities move together
+without a newline, which is CVE-2026-85730. On this machine the bridge
+settings file was 262532 bytes, 388 bytes over the 256KiB read cap, because
+598 session pins occupied 224699 bytes. `auth_priority_enabled` was already
+`true` in that file. `sks bridge auth-priority status --json` from the
+installed 10.5.0 reported `enabled: false, state: off` and
+`desktop_bridge_settings_missing`, which is the Center message for a toggle
+whose saved state does not match the request. After the oldest pins were
+removed, the same command reported `enabled: true, state: active`. The code
+now trims pins to the cap on read and write. Version authorities move together
 to 10.5.1. Publication still requires this commit's full release stamp, pack
 receipt, provenance, and `origin/main` equality. This does not claim the later
 `smol-toml` 1.9.0 parser changes, and it does not authorize publication until

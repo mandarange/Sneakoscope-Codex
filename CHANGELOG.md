@@ -11,6 +11,13 @@
   value is followed by a comment that has no trailing newline (CVE-2026-85730).
   SKS uses that parser for Codex config and role files.
 
+### Fixed
+
+- Desktop Bridge settings that grew past 256KiB on session pins were treated as
+  missing. SKS Center then showed the saved Codex-LB preference as off and
+  refused to save a change. The newest pins that still fit are kept, and a
+  file already over the cap is read instead of discarded.
+
 ## [10.5.0] - 2026-10-02
 
 ### Changed
