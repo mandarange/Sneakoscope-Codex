@@ -3,6 +3,14 @@
 ## [Unreleased]
 
 
+## [10.5.1] - 2026-10-04
+
+### Security
+
+- `smol-toml` is 1.7.1. `parse()` no longer hangs when an array or inline-table
+  value is followed by a comment that has no trailing newline (CVE-2026-85730).
+  SKS uses that parser for Codex config and role files.
+
 ## [10.5.0] - 2026-10-02
 
 ### Changed

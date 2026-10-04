@@ -1,6 +1,18 @@
 # Release Proof Truth
 
-## 10.5.0 candidate
+## 10.5.1 candidate
+
+The only product change from 10.5.0 is the `smol-toml` floor. The merged lock
+resolves `smol-toml@1.7.1`, and that tarball's registry integrity is
+`sha512-PPlsspAZ4jbMBu5DMFhfUGDQLu/vrL4SyBROVS37x8ynnVmFIs1VPBz1Co8Xks3TvpIaZXmU85y4DrQ+UyVFoQ==`.
+Upstream `skipUntil` leaves the scan when a comment reaches end of input
+without a newline, which is CVE-2026-85730. Version authorities move together
+to 10.5.1. Publication still requires this commit's full release stamp, pack
+receipt, provenance, and `origin/main` equality. This does not claim the later
+`smol-toml` 1.9.0 parser changes, and it does not authorize publication until
+those release checks pass on this commit.
+
+## Historical 10.5.0 candidate
 
 The lighter default is proved at the routing and hook layers, not by a model
 turn. The routing suites pin that an ordinary implementation prompt, a prompt

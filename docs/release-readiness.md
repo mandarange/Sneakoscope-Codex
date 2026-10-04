@@ -1,6 +1,16 @@
 # SKS Release Readiness
 
-## 10.5.0 candidate
+## 10.5.1 candidate
+
+10.5.1 publishes the merged `smol-toml` 1.7.1 bump and nothing else. `parse()`
+stops hanging when an array or inline-table value is followed by a comment
+with no trailing newline (CVE-2026-85730). Codex config and role-file parsing
+go through that function. The lockfile integrity matches the registry tarball
+for `smol-toml@1.7.1`. Later `smol-toml` releases exist; this package stays on
+1.7.1. Verification is the clean-commit `npm run release:check:full` stamp,
+pack receipt, provenance, and a `main` commit that matches `origin/main`.
+
+## Previous candidate: 10.5.0
 
 SKS stops doing more than the task needs. Measured through the real hook, a
 one-line fix ("Fix the null check in parseConfig") was routed to Naruto, the
@@ -878,7 +888,7 @@ node ./dist/scripts/release-pack-receipt.js verify
 node ./dist/scripts/release-provenance-check.js --publish
 npm whoami --registry https://registry.npmjs.org/
 npm view sneakoscope maintainers --json --registry https://registry.npmjs.org/
-npm view sneakoscope@10.5.0 version --json --registry https://registry.npmjs.org/
+npm view sneakoscope@10.5.1 version --json --registry https://registry.npmjs.org/
 npm publish --dry-run --json \
   --registry https://registry.npmjs.org/ \
   --tag latest \
