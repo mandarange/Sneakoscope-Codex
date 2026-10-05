@@ -5,7 +5,7 @@ import { flag } from './command-utils.js';
 export async function harnessCommand(sub: any, args: any = []) {
   const action = sub || 'fixture';
   if (!['fixture', 'review'].includes(action)) {
-    console.error('Usage: sks harness fixture|review [--json]');
+    console.error('Usage: maintainer harness fixture|review [--json]');
     process.exitCode = 1;
     return;
   }

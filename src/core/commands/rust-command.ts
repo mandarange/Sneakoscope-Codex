@@ -9,7 +9,7 @@ export async function rustCommand(args: any = []) {
   if (action === 'status') return rustStatus(args.slice(1));
   if (action === 'smoke') return rustSmoke(args.slice(1));
   if (action === 'doctor') return rustStatus(args.slice(1));
-  console.error('Usage: sks rust status|smoke [--json] [--require-native]');
+  console.error('Usage: maintainer rust status|smoke [--json] [--require-native]');
   process.exitCode = 2;
 }
 

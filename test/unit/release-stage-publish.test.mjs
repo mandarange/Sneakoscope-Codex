@@ -86,7 +86,7 @@ function options(overrides = {}) {
   };
 }
 
-// The property that matters: a bare `sks release stage` may perform read-only
+// The property that matters: a bare `maintainer release stage` may perform read-only
 // authentication and visibility checks, but must never push, dispatch, stage,
 // approve, or publish anything.
 test('without --confirm nothing outward-facing runs', () => {

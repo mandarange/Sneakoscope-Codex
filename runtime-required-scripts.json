@@ -61,8 +61,8 @@
     },
     {
       "source": "release-gates.v2.json",
-      "classification": "installed_runtime",
-      "reason": "public check, gates, and release commands dispatch the packaged release gate DAG"
+      "classification": "checkout_ci",
+      "reason": "the release gate DAG is run by maintainers from a source checkout (npm run maintainer -- gates|check|release); it is not an installed runtime entrypoint"
     },
     {
       "source": ".github/workflows/**",
@@ -86,33 +86,33 @@
     },
     {
       "source": "src/core/commands/check-command.ts",
-      "classification": "installed_runtime",
-      "reason": "the public check command directly dispatches proof-bank and release scripts"
+      "classification": "checkout_ci",
+      "reason": "maintainer commands run from a source checkout through npm run maintainer and are not installed runtime entrypoints"
     },
     {
       "source": "dist/core/commands/check-command.js",
-      "classification": "installed_runtime",
-      "reason": "the built public check command directly dispatches proof-bank and release scripts"
+      "classification": "checkout_ci",
+      "reason": "maintainer commands run from a source checkout through npm run maintainer and are not installed runtime entrypoints"
     },
     {
       "source": "src/core/commands/gates-command.ts",
-      "classification": "installed_runtime",
-      "reason": "the public gates command dispatches the packaged release DAG"
+      "classification": "checkout_ci",
+      "reason": "maintainer commands run from a source checkout through npm run maintainer and are not installed runtime entrypoints"
     },
     {
       "source": "dist/core/commands/gates-command.js",
-      "classification": "installed_runtime",
-      "reason": "the built public gates command dispatches the packaged release DAG"
+      "classification": "checkout_ci",
+      "reason": "maintainer commands run from a source checkout through npm run maintainer and are not installed runtime entrypoints"
     },
     {
       "source": "src/core/commands/release-command.ts",
-      "classification": "installed_runtime",
-      "reason": "the public release command directly dispatches the packaged release DAG"
+      "classification": "checkout_ci",
+      "reason": "maintainer commands run from a source checkout through npm run maintainer and are not installed runtime entrypoints"
     },
     {
       "source": "dist/core/commands/release-command.js",
-      "classification": "installed_runtime",
-      "reason": "the built public release command directly dispatches the packaged release DAG"
+      "classification": "checkout_ci",
+      "reason": "maintainer commands run from a source checkout through npm run maintainer and are not installed runtime entrypoints"
     },
     {
       "source": "src/core/dfix/verification-selector.ts",
@@ -163,6 +163,26 @@
       "source": "dist/core/release/stage-publish.js",
       "classification": "checkout_ci",
       "reason": "the built staged publish driver remains a checkout-only release helper gated on this repository origin"
+    },
+    {
+      "source": "src/scripts/maintainer-cli.ts",
+      "classification": "checkout_ci",
+      "reason": "maintainer commands run from a source checkout through npm run maintainer and are not installed runtime entrypoints"
+    },
+    {
+      "source": "dist/scripts/maintainer-cli.js",
+      "classification": "checkout_ci",
+      "reason": "maintainer commands run from a source checkout through npm run maintainer and are not installed runtime entrypoints"
+    },
+    {
+      "source": "src/core/commands/bench-command.ts",
+      "classification": "checkout_ci",
+      "reason": "maintainer commands run from a source checkout through npm run maintainer and are not installed runtime entrypoints"
+    },
+    {
+      "source": "dist/core/commands/bench-command.js",
+      "classification": "checkout_ci",
+      "reason": "maintainer commands run from a source checkout through npm run maintainer and are not installed runtime entrypoints"
     }
   ],
   "dynamic_reference_policies": [

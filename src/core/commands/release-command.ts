@@ -9,7 +9,7 @@ import type { ProcessRunner } from '../release/stage-publish.js';
 
 export function usage(): string {
   return [
-    'Usage: sks release affected|full|background|stage [--json]',
+    'Usage: maintainer release affected|full|background|stage [--json]',
     '',
     'Run affected release proof, full release proof, or background release proof explicitly.',
     '',

@@ -18,7 +18,6 @@ export const CRITICAL_COMMANDS = new Set([
   'mad-sks',
   'qa-loop',
   'review',
-  'release',
   'commit-and-push'
 ])
 
@@ -39,7 +38,6 @@ export const smokeCommands = [
   { name: 'mad-sks', budget_p95_ms: 0, kind: 'blocked_negative', evidence: 'mad_sks_restore_and_readback_contract' },
   { name: 'qa-loop', budget_p95_ms: 0, kind: 'fixture', evidence: 'qa_loop_route_fixture' },
   { name: 'review', budget_p95_ms: 0, kind: 'fixture', evidence: 'review_diff_fixture' },
-  { name: 'release', budget_p95_ms: 0, kind: 'fixture', evidence: 'release_gate_fixture' },
   { name: 'commit-and-push', budget_p95_ms: 0, kind: 'blocked_negative', evidence: 'commit_and_push_remote_contract' }
 ]
 

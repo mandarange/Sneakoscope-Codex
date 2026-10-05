@@ -12,7 +12,9 @@ import { COMMANDS } from '../command-registry.js';
 const RETIRED_COMMANDS = [
   'loop', 'run', 'rollback',
   // Folded into `sks proof <subcommand>`.
-  'trust', 'stop-gate', 'validate-artifacts', 'hproof', 'proof-field'
+  'trust', 'stop-gate', 'validate-artifacts', 'hproof', 'proof-field',
+  // Moved to the maintainer CLI (npm run maintainer -- <command>).
+  'check', 'gates', 'task', 'release', 'daemon', 'versioning', 'bench', 'perf', 'features', 'all-features', 'harness', 'rust'
 ] as const;
 
 async function captured<T>(run: () => Promise<T>): Promise<{ result: T; stdout: string; stderr: string; exitCode: typeof process.exitCode }> {

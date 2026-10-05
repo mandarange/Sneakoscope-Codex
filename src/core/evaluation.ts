@@ -263,7 +263,7 @@ export function harnessGrowthReport(input: any = {}) {
         skill_id: 'skill.harness.weekly-review',
         name: 'Weekly Harness Review',
         trigger_summary: 'Run on weekly harness review automation or explicit harness growth request.',
-        validation: { commands: ['sks harness fixture --json'], manual_checks: ['review proposed deletions before live hard-delete'], schemas: ['harness-growth-report.json'] }
+        validation: { commands: ['npm run maintainer -- harness fixture --json'], manual_checks: ['review proposed deletions before live hard-delete'], schemas: ['harness-growth-report.json'] }
       })
     },
     experiments: {

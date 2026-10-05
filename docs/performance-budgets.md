@@ -3,7 +3,7 @@
 SKS 1.14.1 records core hot-path budgets with:
 
 ```bash
-sks bench core --json
+npm run maintainer -- bench core --json
 ```
 
 Artifacts:
@@ -22,7 +22,6 @@ Artifacts:
 | `sks proof validate --json` | 250ms |
 | `sks proof trust validate latest --json` | 300ms |
 | `sks wiki image-validate --json` | 300ms |
-| `sks features check --json` | 1200ms |
 | `sks naruto status --json` | 1000ms |
 
 Budget misses are evidence, not marketing copy. README or release notes should only claim a speed win when the benchmark artifact exists and passes on the target environment.
@@ -38,7 +37,7 @@ Tiers:
 - `global-shim`
 - `npx-one-shot`
 
-Use `sks bench core --tier source-ci --json` for release CI. `perf:gate` selects `source-ci` when `CI=true`; otherwise it uses the local tier unless `SKS_PERF_TIER` is set.
+Use `npm run maintainer -- bench core --tier source-ci --json` for release CI. `perf:gate` selects `source-ci` when `CI=true`; otherwise it uses the local tier unless `SKS_PERF_TIER` is set.
 
 ## 1.14.1 DFix Speed Budgets
 

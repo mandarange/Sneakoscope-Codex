@@ -9,24 +9,22 @@ import {
   type CommandNameLite,
   type CommandRiskLite
 } from './command-manifest-lite.js';
+import {
+  argsCommand,
+  command,
+  commandArgsCommand,
+  directCommand,
+  noArgsCommand,
+  subcommand,
+  type CommandLoader,
+  type CommandModule
+} from './command-loaders.js';
 
-export type CommandRun = (command: string, args: string[]) => Promise<unknown> | unknown;
-export type ArgsRun = (args: string[]) => Promise<unknown> | unknown;
-export type SubcommandRun = (subcommand: string, args: string[]) => Promise<unknown> | unknown;
-export type CommandArgsRun = (command: string, args: string[]) => Promise<unknown> | unknown;
+export type { ArgsRun, CommandArgsRun, CommandLoader, CommandModule, CommandRun, SubcommandRun } from './command-loaders.js';
 
 export type CommandRisk = CommandRiskLite;
 export type CommandLatency = CommandLatencyLite;
 export type CommandInputProfile = CommandInputProfileLite;
-
-export interface CommandModule {
-  run: CommandRun;
-  /**
-   * Optional richer usage text. The router prints this for `--help` instead of
-   * the manifest-derived default, and never calls `run` for a help request.
-   */
-  usage?: (command: string) => string;
-}
 
 /**
  * Everything about a command except how to load it comes from
@@ -38,124 +36,6 @@ export type CommandEntry = Omit<CommandManifestLiteEntry, 'name'> & {
   packageRequiredFiles: readonly string[];
 };
 
-interface CommandLoader {
-  lazy: () => Promise<CommandModule>;
-  packageRequiredFiles: readonly string[];
-}
-
-type CommandCallable = (...args: unknown[]) => Promise<unknown> | unknown;
-
-/** Loaded ESM modules are unknown at the boundary; narrow before calling exports. */
-function hasFunctionExport<K extends string>(
-  mod: unknown,
-  exportName: K
-): mod is Record<K, CommandCallable> {
-  if (!mod || typeof mod !== 'object') return false;
-  const v = (mod as Record<string, unknown>)[exportName];
-  return typeof v === 'function';
-}
-
-function functionExport<T>(mod: unknown, exportName: string): T {
-  if (!hasFunctionExport(mod, exportName)) throw new Error(`Missing export ${exportName}`);
-  return mod[exportName] as T;
-}
-
-/** Pick runner from default export object shape used by legacy command files. */
-function pickRunner(mod: Record<string, unknown>): CommandCallable | null {
-  for (const k of ['run', 'main', 'default'] as const) {
-    const v = mod[k];
-    if (typeof v === 'function') return v as CommandCallable;
-  }
-  return null;
-}
-
-/**
- * Every wrapper below builds a fresh CommandModule from one named export, which
- * silently dropped any `usage()` the module also exported — so the router's
- * "a command opts into richer help by exporting usage()" branch was unreachable
- * for every registered command. Carry it through when it is there.
- */
-function usageOf(mod: unknown): { usage?: (command: string) => string } {
-  const candidate = (mod as Record<string, unknown> | null)?.usage;
-  return typeof candidate === 'function' ? { usage: candidate as (command: string) => string } : {};
-}
-
-function normalizeCommandModule(moduleValue: unknown): CommandModule {
-  if (!moduleValue || typeof moduleValue !== 'object')
-    throw new Error('Invalid command module');
-
-  const rec = moduleValue as Record<string, unknown>;
-  const runner = pickRunner(rec);
-  if (!runner)
-    throw new Error('Command module must export run/main/default callable');
-
-  return {
-    run: async (command: string, args: string[]) => runner(command, args) as unknown,
-    ...usageOf(rec),
-  } satisfies CommandModule;
-}
-
-function directCommand<T extends { run?: CommandRun; main?: CommandRun; default?: CommandRun }>(
-  loader: () => Promise<T>
-): () => Promise<CommandModule> {
-  return async () => normalizeCommandModule(await loader());
-}
-
-function argsCommand<T extends object, K extends keyof T & string>(
-  loader: () => Promise<T>,
-  exportName: K
-): () => Promise<CommandModule> {
-  return async () => {
-    const mod = await loader();
-    const fn = functionExport<ArgsRun>(mod, exportName);
-    return { run: (_command: string, args: string[]) => fn(args) as unknown, ...usageOf(mod) };
-  };
-}
-
-function noArgsCommand<T extends object, K extends keyof T & string>(
-  loader: () => Promise<T>,
-  exportName: K
-): () => Promise<CommandModule> {
-  return async () => {
-    const mod = await loader();
-    const fn = functionExport<() => Promise<unknown> | unknown>(mod, exportName);
-    return { run: () => fn() as unknown, ...usageOf(mod) };
-  };
-}
-
-function commandArgsCommand<T extends object, K extends keyof T & string>(
-  loader: () => Promise<T>,
-  exportName: K
-): () => Promise<CommandModule> {
-  return async () => {
-    const mod = await loader();
-    const fn = functionExport<CommandArgsRun>(mod, exportName);
-    return { run: (command: string, args: string[]) => fn(command, args) as unknown, ...usageOf(mod) };
-  };
-}
-
-function subcommand<T extends object, K extends keyof T & string>(
-  loader: () => Promise<T>,
-  exportName: K,
-  fallbackSubcommand?: string
-): () => Promise<CommandModule> {
-  return async () => {
-    const mod = await loader();
-    const fn = functionExport<SubcommandRun>(mod, exportName);
-    return {
-      run: (_command: string, args: string[]) => {
-        const [subcommandName = fallbackSubcommand, ...rest] = args;
-        return fn(subcommandName ?? '', rest) as unknown;
-      },
-      ...usageOf(mod),
-    };
-  };
-}
-
-function command(packageRequiredFile: string, lazy: () => Promise<CommandModule>): CommandLoader {
-  return { lazy, packageRequiredFiles: [packageRequiredFile] };
-}
-
 const basicModule = '../core/commands/basic-cli.js';
 const basicArgs = (exportName: string) => argsCommand(() => import(basicModule), exportName);
 const basicNoArgs = (exportName: string) => noArgsCommand(() => import(basicModule), exportName);
@@ -166,12 +46,7 @@ const COMMAND_LOADERS = {
   help: command('dist/commands/help.js', directCommand(() => import('../commands/help.js'))),
   version: command('dist/commands/version.js', directCommand(() => import('../commands/version.js'))),
   commands: command('dist/core/commands/basic-cli.js', basicArgs('commandsCommand')),
-  check: command('dist/core/commands/check-command.js', argsCommand(() => import('../core/commands/check-command.js'), 'checkCommand')),
-  gates: command('dist/core/commands/gates-command.js', argsCommand(() => import('../core/commands/gates-command.js'), 'gatesCommand')),
-  task: command('dist/core/commands/task-command.js', argsCommand(() => import('../core/commands/task-command.js'), 'taskCommand')),
-  release: command('dist/core/commands/release-command.js', argsCommand(() => import('../core/commands/release-command.js'), 'releaseCommand')),
   triwiki: command('dist/core/commands/triwiki-command.js', argsCommand(() => import('../core/commands/triwiki-command.js'), 'triwikiCommand')),
-  daemon: command('dist/core/commands/daemon-command.js', argsCommand(() => import('../core/commands/daemon-command.js'), 'daemonCommand')),
   plan: command('dist/core/commands/plan-command.js', argsCommand(() => import('../core/commands/plan-command.js'), 'planCommand')),
   status: command('dist/core/commands/status-command.js', argsCommand(() => import('../core/commands/status-command.js'), 'statusCommand')),
   review: command('dist/core/commands/review-command.js', argsCommand(() => import('../core/commands/review-command.js'), 'reviewCommand')),
@@ -223,7 +98,6 @@ const COMMAND_LOADERS = {
   pipeline: command('dist/commands/pipeline.js', directCommand(() => import('../commands/pipeline.js'))),
   guard: command('dist/commands/guard.js', directCommand(() => import('../commands/guard.js'))),
   conflicts: command('dist/commands/conflicts.js', directCommand(() => import('../commands/conflicts.js'))),
-  versioning: command('dist/commands/versioning.js', directCommand(() => import('../commands/versioning.js'))),
   reasoning: command('dist/core/commands/basic-cli.js', basicArgs('reasoningCommand')),
   aliases: command('dist/core/commands/basic-cli.js', basicNoArgs('aliasesCommand')),
   cleanup: command('dist/core/commands/cleanup-command.js', subcommand(() => import('../core/commands/cleanup-command.js'), 'cleanupCommand', 'plan')),
@@ -237,18 +111,12 @@ const COMMAND_LOADERS = {
   wrongness: command('dist/core/commands/wrongness-command.js', argsCommand(() => import('../core/commands/wrongness-command.js'), 'wrongnessCommand')),
   'skill-dream': command('dist/core/commands/skill-dream-command.js', subcommand(() => import('../core/commands/skill-dream-command.js'), 'skillDreamCommand', 'status')),
   'code-structure': command('dist/core/commands/code-structure-command.js', subcommand(() => import('../core/commands/code-structure-command.js'), 'codeStructureCommand', 'scan')),
-  rust: command('dist/commands/rust.js', directCommand(() => import('../commands/rust.js'))),
-  gx: command('dist/core/commands/gx-command.js', subcommand(() => import('../core/commands/gx-command.js'), 'gxCommand', 'validate')),
   eval: command('dist/core/commands/eval-command.js', subcommand(() => import('../core/commands/eval-command.js'), 'evalCommand', 'run')),
-  harness: command('dist/core/commands/harness-command.js', subcommand(() => import('../core/commands/harness-command.js'), 'harnessCommand', 'fixture')),
+  gx: command('dist/core/commands/gx-command.js', subcommand(() => import('../core/commands/gx-command.js'), 'gxCommand', 'validate')),
   wiki: command('dist/commands/wiki.js', directCommand(() => import('../commands/wiki.js'))),
   memory: command('dist/commands/memory.js', directCommand(() => import('../commands/memory.js'))),
   gc: command('dist/core/commands/gc-command.js', gcArgs('gcCommand')),
   stats: command('dist/core/commands/gc-command.js', gcArgs('statsCommand')),
-  features: command('dist/commands/features.js', directCommand(() => import('../commands/features.js'))),
-  'all-features': command('dist/commands/all-features.js', directCommand(() => import('../commands/all-features.js'))),
-  perf: command('dist/commands/perf.js', directCommand(() => import('../commands/perf.js'))),
-  bench: command('dist/core/commands/bench-command.js', argsCommand(() => import('../core/commands/bench-command.js'), 'benchCommand')),
   'mcp-server': command('dist/core/commands/mcp-server-command.js', argsCommand(() => import('../core/commands/mcp-server-command.js'), 'mcpServerCommand')),
   'agent-bridge': command('dist/core/commands/agent-bridge-command.js', subcommand(() => import('../core/commands/agent-bridge-command.js'), 'agentBridgeCommand', 'setup')),
   decision: command('dist/commands/decision.js', directCommand(() => import('../commands/decision.js'))),

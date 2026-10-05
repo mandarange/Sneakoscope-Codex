@@ -42,9 +42,9 @@ test('a command that exports usage() gets its own text, not the manifest floor',
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-help-usage-'));
   execFileSync('git', ['init', '-q', '.'], { cwd });
   try {
-    const stdout = String(runHelp('release', '--help', cwd).stdout || '');
-    assert.match(stdout, /Usage: sks release affected\|full\|background\|stage/);
-    assert.match(stdout, /stage never runs `npm stage approve`/);
+    const stdout = String(runHelp('align', '--help', cwd).stdout || '');
+    assert.match(stdout, /Usage: sks align prepare\|run\|status\|proof\|fixture/);
+    assert.doesNotMatch(stdout, /Usage: sks align \[options\]/);
   } finally {
     fs.rmSync(cwd, { recursive: true, force: true });
   }

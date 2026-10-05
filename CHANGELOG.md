@@ -72,11 +72,38 @@
   a subject word such as "parallel" no longer start child agents; only an
   explicit request, `--agents N`, `$sks-naruto`/`$sks-work`, or an artifact
   pipeline does.
+- The evidence checks `trust`, `stop-gate`, `validate-artifacts`, `hproof` and
+  `proof-field` are subcommands of `sks proof` (`sks proof trust validate`,
+  `sks proof stop-gate check`, `sks proof artifacts`, `sks proof hproof check`,
+  `sks proof field scan`). The MCP `proof` tool gains the read-only `trust` and
+  `stop-gate` actions; the artifact-writing checks stay CLI-only.
+- The command manifest is the single source of command metadata. The registry
+  keeps only the lazy loader and package file, the command catalog (`usage` and
+  description) is derived from the manifest, and the contract layer takes input
+  schemas from it. Seven commands that disagreed about migration-gate and
+  active-route flags now have one answer; `dollar-commands` is read-only (R0).
+- The test suite runs under the product default (`essential`); tests that assert
+  strict-only behavior pin `strict` explicitly.
+- `sks usage` no longer advertises topics that do not resolve.
 
 ### Removed
 
 - Command wrappers, re-export barrels, the context-graph optimizer and the
   incremental compiler that no product path reached.
+- `sks loop` (retired earlier; now an ordinary unknown command), together with
+  the Stop-hook continuation branch, `src/core/loops/*` and the `$Loop`
+  codex-native route label nothing could reach.
+- `sks run`, which classified a prompt and shelled out to the route's own
+  command, and `sks rollback`, which only `rm -rf`'d managed paths
+  (`sks uninstall` owns removal).
+- The maintainer commands `check`, `gates`, `task`, `release`, `daemon`,
+  `versioning`, `bench`, `perf`, `features`, `all-features`, `harness` and `rust`
+  are no longer in the shipped `sks` CLI or the agent-bridge tool manifest. Run
+  them from a source checkout with `npm run maintainer -- <command>`.
+  `config/installed-public-surface-closure.v1.json` now pins all of these removed
+  names as rejected by the installed package.
+- The npm package no longer ships ~200 release-gate scripts, the maintainer
+  command modules, or two configs only checkouts read (1582 → 1379 files).
 
 ### Documentation
 
@@ -88,6 +115,7 @@
 ### Maintenance
 
 - Added a CI workflow that runs install, build, typecheck, and the canonical test command on pushes and pull requests.
+- `test/unit/release-stage-publish.test.mjs` runs against a throwaway repository with the canonical origin instead of inheriting the host clone's `origin` (nine tests failed on any checkout whose remote differs in case).
 
 
 ## [10.5.1] - 2026-10-04

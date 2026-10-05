@@ -158,7 +158,7 @@ function scanCommandGateContract() {
   if (goal?.mutatesRouteState === true || goal?.ownsGates === true || (goal?.ownedGateFiles?.length ?? 0) > 0) {
     issues.push('goal:native_goal_command_must_be_stateless')
   }
-  for (const migrationBypass of ['check', 'gates', 'task', 'release', 'triwiki', 'daemon', 'pipeline', 'wiki', 'proof']) {
+  for (const migrationBypass of ['triwiki', 'pipeline', 'wiki', 'proof']) {
     const entry = (COMMANDS as Record<string, any>)[migrationBypass]
     if (entry?.skipMigrationGate !== true) issues.push(`${migrationBypass}:missing_skip_migration_gate_contract`)
   }

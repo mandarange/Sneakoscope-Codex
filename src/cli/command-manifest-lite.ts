@@ -11,8 +11,7 @@ export type CommandInputProfileLite =
   | 'paths'
   | 'pipeline-status'
   | 'stats'
-  | 'proof'
-  | 'gates';
+  | 'proof';
 
 export type ActiveRoutePolicy = 'always' | 'diagnostic-only' | 'blocked-while-active';
 
@@ -56,12 +55,7 @@ const COMMAND_MANIFEST_LITE_BASE = [
   { name: 'help', summary: 'Show SKS help', maturity: 'stable', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'version', summary: 'Show SKS version', maturity: 'stable', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'commands', summary: 'List SKS commands', maturity: 'stable', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
-  { name: 'check', summary: 'Run five-minute proof-bank affected checks', maturity: 'stable', skipMigrationGate: true },
-  { name: 'gates', summary: 'Run release gate DAG by gate id or preset', maturity: 'stable', skipMigrationGate: true },
-  { name: 'task', summary: 'Run an SLA-bounded SKS task check', maturity: 'stable', skipMigrationGate: true },
-  { name: 'release', summary: 'Run affected/full/background release gates', maturity: 'stable', skipMigrationGate: true },
   { name: 'triwiki', summary: 'Inspect TriWiki index, affected graph, and proof bank', maturity: 'stable', skipMigrationGate: true },
-  { name: 'daemon', summary: 'Inspect or warm the local SKS daemon cache', maturity: 'stable', skipMigrationGate: true },
   { name: 'plan', summary: 'Write a planning-only SKS plan artifact without code edits', maturity: 'stable' },
   { name: 'status', summary: 'Show concise active mission and trust status', maturity: 'stable', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'review', summary: 'Review a git diff with machine evidence first', maturity: 'stable', allowedDuringActiveRoute: true },
@@ -113,7 +107,6 @@ const COMMAND_MANIFEST_LITE_BASE = [
   { name: 'pipeline', summary: 'Inspect pipeline missions and seal a paused route\'s answers', maturity: 'beta', skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'guard', summary: 'Check harness guard', maturity: 'beta' },
   { name: 'conflicts', summary: 'Check harness conflicts', maturity: 'beta' },
-  { name: 'versioning', summary: 'Manage release version metadata', maturity: 'stable' },
   { name: 'reasoning', summary: 'Show reasoning route', maturity: 'labs' },
   { name: 'aliases', summary: 'Show command aliases', maturity: 'stable' },
   { name: 'cleanup', summary: 'Permanently blank active TriWiki without retaining a previous generation', maturity: 'beta' },
@@ -127,18 +120,12 @@ const COMMAND_MANIFEST_LITE_BASE = [
   { name: 'wrongness', summary: 'Record and inspect TriWiki wrongness negative evidence', maturity: 'beta' },
   { name: 'skill-dream', summary: 'Track skill dream counters', maturity: 'labs' },
   { name: 'code-structure', summary: 'Scan source structure', maturity: 'labs' },
-  { name: 'rust', summary: 'Inspect optional Rust accelerator status and smoke parity', maturity: 'beta' },
   { name: 'gx', summary: 'Render/validate GX cartridges', maturity: 'labs' },
   { name: 'eval', summary: 'Run eval reports', maturity: 'labs' },
-  { name: 'harness', summary: 'Run harness fixtures', maturity: 'labs' },
   { name: 'wiki', summary: 'Manage TriWiki and image voxel ledgers', maturity: 'beta', skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'memory', summary: 'Project TriWiki memory into managed AGENTS.md blocks or run memory GC', maturity: 'beta' },
   { name: 'gc', summary: 'Compact/prune runtime state', maturity: 'labs', skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'stats', summary: 'Show storage stats', maturity: 'labs', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
-  { name: 'features', summary: 'Validate feature registry', maturity: 'beta' },
-  { name: 'all-features', summary: 'Run all-features selftest', maturity: 'beta' },
-  { name: 'perf', summary: 'Run performance checks', maturity: 'beta' },
-  { name: 'bench', summary: 'Run core trust-kernel benchmark budgets', maturity: 'beta' },
   { name: 'mcp-server', summary: 'Run a stdio MCP server exposing SKS commands as tools for MCP-capable agent hosts', maturity: 'beta', skipMigrationGate: true, allowedDuringActiveRoute: true },
   { name: 'agent-bridge', summary: 'Register SKS tools or run read-only tools with native Astra async calling', maturity: 'beta', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'decision', summary: 'Manage optional Jev decisions through OpenRouter: status, enable, disable, probe, evaluate', maturity: 'labs', skipMigrationGate: true, allowedDuringActiveRoute: true },
@@ -162,18 +149,12 @@ const COMMAND_CONTRACT_OVERRIDES_LITE = {
   imagegen: { risk: 'R2', latency: 'long', supportsJson: true, remoteAllowed: false, inputProfile: 'json-only' },
   cleanup: { risk: 'R3', latency: 'long', supportsJson: true, remoteAllowed: false, inputProfile: 'json-only' },
   autoresearch: { latency: 'long' },
-  bench: { latency: 'long' },
   bridge: { risk: 'R3', latency: 'long', supportsJson: true, remoteAllowed: false, inputProfile: 'json-only' },
-  check: { risk: 'R1', latency: 'long' },
   'commit-and-push': { risk: 'R3' },
   'computer-use': { latency: 'long' },
   config: { risk: 'R2', supportsJson: true, remoteAllowed: false, inputProfile: 'json-only' },
   dfix: { latency: 'long' },
   eval: { latency: 'long' },
-  gates: {
-    risk: 'R1', latency: 'long', supportsJson: true, remoteAllowed: true,     inputProfile: 'gates', requiredCapabilities: ['project.git', 'proof.gates']
-  },
-  harness: { latency: 'long' },
   'image-ux-review': { latency: 'long' },
   install: { risk: 'R2', latency: 'long' },
   'mad-sks': { risk: 'R3', latency: 'long' },
@@ -185,7 +166,6 @@ const COMMAND_CONTRACT_OVERRIDES_LITE = {
     supportsJson: true, remoteAllowed: true, inputProfile: 'paths',
     requiredCapabilities: ['project.fs.read']
   },
-  perf: { latency: 'long' },
   pipeline: {
     risk: 'R2', latency: 'normal', supportsJson: true, remoteAllowed: true, inputProfile: 'pipeline-status',
     requiredCapabilities: ['proof.pipeline']
@@ -197,7 +177,6 @@ const COMMAND_CONTRACT_OVERRIDES_LITE = {
   },
   'qa-loop': { latency: 'long' },
   recallpulse: { latency: 'long' },
-  release: { risk: 'R1', latency: 'long' },
   remote: { risk: 'R2', latency: 'long', supportsJson: true, remoteAllowed: false, inputProfile: 'json-only' },
   research: { latency: 'long' },
   review: { risk: 'R1' },
@@ -210,7 +189,6 @@ const COMMAND_CONTRACT_OVERRIDES_LITE = {
     supportsJson: true, remoteAllowed: true, inputProfile: 'json-only',
     requiredCapabilities: ['proof.read']
   },
-  task: { risk: 'R1', latency: 'long' },
   uninstall: { risk: 'R3', latency: 'long' },
   update: { latency: 'long' },
   'update-check': {
@@ -244,25 +222,9 @@ const COMMAND_HELP_LITE = {
     usage: 'sks commands [--json]',
     description: 'List every user-facing command with a short description.'
   },
-  check: {
-    usage: 'sks check --tier instant|affected|confidence|release|real-check [--sla 5m] [--changed-since auto] [--json]',
-    description: 'Run build-once proof-bank checks: affected/confidence use incremental build and cached proof reuse; release keeps full clean proof for publish readiness.'
-  },
-  task: {
-    usage: 'sks task run [--sla 5m] [--json]',
-    description: 'Run the normal affected-scope, release-equivalent task verification path.'
-  },
-  release: {
-    usage: 'sks release affected|full|background|stage [--json]',
-    description: 'Run affected release proof, full release proof, or background release proof explicitly, or drive the staged npm publish up to the human approval step.'
-  },
   triwiki: {
     usage: 'sks triwiki index|affected|proof-bank|graph-status|graph-lint|graph-query|atlas-status|atlas-lint|atlas-list|atlas-show|atlas-why [--json]',
     description: 'Inspect TriWiki module cards, gate impact maps, affected graphs, proof bank status, and Architecture Map views.'
-  },
-  daemon: {
-    usage: 'sks daemon status|warm|stop [--json]',
-    description: 'Inspect or warm the local SKS daemon cache state for build/proof reuse.'
   },
   plan: {
     usage: 'sks plan "task" [--json]',
@@ -396,18 +358,6 @@ const COMMAND_HELP_LITE = {
     usage: 'sks conflicts check|prompt|cleanup --yes [--json]',
     description: 'Detect other Codex harnesses such as OMX/DCodex, print a cleanup prompt, or quarantine them automatically.'
   },
-  versioning: {
-    usage: 'sks versioning status|bump|disable [--json]',
-    description: 'Manage explicit project version syncs; SKS does not install Git pre-commit hooks.'
-  },
-  features: {
-    usage: 'sks features list|check|inventory [--json] [--write-docs]',
-    description: 'Build and validate the feature registry that maps CLI commands, hidden handlers, dollar routes, app skill aliases, and skills.'
-  },
-  'all-features': {
-    usage: 'sks all-features selftest --mock [--json]',
-    description: 'Run the mock all-features contract selftest for feature registry, proof, Voxel TriWiki, and failure-contract coverage.'
-  },
   aliases: {
     usage: 'sks aliases',
     description: 'Show command aliases and npm binary names.'
@@ -460,25 +410,13 @@ const COMMAND_HELP_LITE = {
     usage: 'sks research prepare|run|status ...',
     description: 'Run evidence-bound research missions with layered sources, independent review, paper, novelty, and falsification checks.'
   },
-  eval: {
-    usage: 'sks eval run|compare|thresholds ...',
-    description: 'Run deterministic context-quality and performance evidence checks.'
-  },
-  harness: {
-    usage: 'sks harness fixture|review [--json]',
-    description: 'Run Harness Growth Factory fixtures for forgetting, skills, experiments, tool taxonomy, permissions, and MultiAgentV2.'
-  },
-  perf: {
-    usage: 'sks perf run|workflow|cold-start [--json] [--iterations N]',
-    description: 'Measure structured SKS performance budgets, including cold-start, Proof Field workflow decisions, and fast-lane evidence.'
-  },
-  bench: {
-    usage: 'sks bench core|route-fixtures|blackbox|trust-kernel [--json]',
-    description: 'Measure core trust-kernel hot paths and write performance budget artifacts.'
-  },
   proof: {
     usage: 'sks proof show|latest|validate|export|smoke|trust report|validate|status|explain [latest|mission-id]|artifacts [mission-id|latest] [--required a,b]|stop-gate [check] [--route r] [--mission id]|hproof check [mission-id|latest]|field scan [--intent "task"] [--json|--md]',
     description: 'Show, validate, export, or smoke-write the unified Completion Proof Engine surface, and run the evidence checks behind it: route trust-kernel validation, stop-gate resolution, schema-backed mission artifacts, the H-Proof done gate, and Potential Proof Field cones.'
+  },
+  eval: {
+    usage: 'sks eval run|compare|thresholds ...',
+    description: 'Run deterministic context-quality and performance evidence checks.'
   },
   wrongness: {
     usage: 'sks wrongness list|show|add|resolve|summarize|validate|context|rules ...',
@@ -491,10 +429,6 @@ const COMMAND_HELP_LITE = {
   'code-structure': {
     usage: 'sks code-structure scan [--json]',
     description: 'Scan handwritten source files for 1000/2000/3000-line structure gates and split-review exceptions.'
-  },
-  rust: {
-    usage: 'sks rust status|smoke [--json] [--require-native]',
-    description: 'Inspect optional Rust accelerator availability and verify JS fallback parity for image hash, voxel validation, secret scanning, and search files/text/batch.'
   },
   wiki: {
     usage: 'sks wiki coords|pack|refresh|publish|rebuild-index|validate|validate-shared|wrongness ...',
@@ -593,14 +527,6 @@ export function commandInputSchema(profile: CommandInputProfileLite): Record<str
       trust_action: { type: 'string', enum: ['report', 'status', 'explain'] },
       route: boundedString(1, 80),
       gate: boundedString(1, 1024),
-      json: { type: 'boolean' }
-    });
-  }
-  if (profile === 'gates') {
-    return objectSchema({
-      target: boundedString(1, 120),
-      mode: { type: 'string', enum: ['preset', 'gate'] },
-      full: { type: 'boolean' },
       json: { type: 'boolean' }
     });
   }

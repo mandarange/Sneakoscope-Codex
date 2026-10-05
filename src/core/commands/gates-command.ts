@@ -11,7 +11,7 @@ export async function gatesCommand(args: string[] = []): Promise<unknown> {
   if (sub !== 'run') {
     const result = { schema: 'sks.gates-command.v1', ok: false, error: `Unknown subcommand: ${sub}` }
     if (json) return printJson(result)
-    console.error('Usage: sks gates run <gate-id|preset> [--full] [--json]')
+    console.error('Usage: maintainer gates run <gate-id|preset> [--full] [--json]')
     process.exitCode = 1
     return result
   }

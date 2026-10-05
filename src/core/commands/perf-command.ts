@@ -5,7 +5,7 @@ import { flag, positionalArgs, readFlagValue } from './command-utils.js';
 
 export async function perfCommand(sub: any, args: any = []) {
   if (!['run', 'workflow'].includes(sub)) {
-    console.error('Usage: sks perf run|workflow [--json] [--iterations N] [--intent "task"] [--changed file1,file2]');
+    console.error('Usage: maintainer perf run|workflow [--json] [--iterations N] [--intent "task"] [--changed file1,file2]');
     process.exitCode = 1;
     return;
   }

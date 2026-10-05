@@ -2,7 +2,8 @@
 // @ts-nocheck
 import fs from 'node:fs';
 import path from 'node:path';
-import { assertGate, emitGate, requireContains, root, runSksJson } from './real-execution-check-lib.js';
+import { assertGate, emitGate, requireContains, root } from './real-execution-check-lib.js';
+import { runMaintainerJson } from './maintainer-gate-lib.js';
 
 const requiredGates = [
   'ux-review:run-wires-imagegen',
@@ -36,7 +37,7 @@ requireContains('all-features:deep-completion', 'src/core/feature-registry.ts', 
   'unavailable_blocker'
 ]);
 
-const report = runSksJson(['features', 'complete', '--json'], { allowFailure: true });
+const report = runMaintainerJson(['features', 'complete', '--json'], { allowFailure: true });
 assertGate(report.schema === 'sks.all-feature-completion.v1', 'all-feature completion schema mismatch', report);
 assertGate(Array.isArray(report.features) && report.features.length > 0, 'all-feature completion rows missing', report);
 assertGate(report.contract_coverage_ok === true, 'all-feature contract coverage must be complete', report);

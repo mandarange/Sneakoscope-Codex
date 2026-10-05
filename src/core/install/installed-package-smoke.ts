@@ -54,7 +54,15 @@ export interface InstalledPackageSmokeReport {
 
 export const INSTALLED_REQUIRED_COMMANDS = ['naruto', 'mcp', 'update', 'menubar', 'config'] as const
 export const INSTALLED_REQUIRED_DOLLAR_COMMANDS = ['$sks-naruto', '$sks-work'] as const
-export const INSTALLED_REMOVED_COMMANDS = ['team', 'mad-db', 'tmux', 'xai', 'swarm', 'agent', 'ralph', 'ui'] as const
+export const INSTALLED_REMOVED_COMMANDS = [
+  'team', 'mad-db', 'tmux', 'xai', 'swarm', 'agent', 'ralph', 'ui',
+  // Retired outright.
+  'loop', 'run', 'rollback',
+  // Folded into `sks proof <subcommand>`.
+  'trust', 'stop-gate', 'validate-artifacts', 'hproof', 'proof-field',
+  // Moved to the maintainer CLI, which is not part of the installed package.
+  'check', 'gates', 'task', 'release', 'daemon', 'versioning', 'bench', 'perf', 'features', 'all-features', 'harness', 'rust'
+] as const
 export const INSTALLED_REMOVED_DOLLAR_COMMANDS = Array.from(new Set([
   '$Agent', '$Team', '$MAD-DB', '$Swarm', '$ShadowClone', '$Kagebunshin', '$Ralph',
   // Local LLM support was removed in full. The rest of this list is derived from

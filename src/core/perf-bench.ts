@@ -171,7 +171,7 @@ function workflowRecommendation(proofField: any, validation: any) {
     return {
       mode: 'full_proof',
       reason: `proof field invalid: ${validation.issues.join(', ')}`,
-      next: ['repair proof-field report generation', 'rerun sks perf workflow --json']
+      next: ['repair proof-field report generation', 'rerun npm run maintainer -- perf workflow --json']
     };
   }
   const decision = proofField.fast_lane_decision;

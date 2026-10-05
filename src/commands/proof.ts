@@ -1,5 +1,6 @@
 import { projectRoot } from '../core/fsx.js';
 import { flag } from '../cli/args.js';
+import { COMMAND_MANIFEST_BY_NAME } from '../cli/command-manifest-lite.js';
 import { printJson } from '../cli/output.js';
 import { collectProofEvidence } from '../core/proof/evidence-collector.js';
 import { findLatestMission } from '../core/mission.js';
@@ -10,6 +11,11 @@ import { renderProofMarkdown, writeCompletionProof } from '../core/proof/proof-w
 import { validateCompletionProof } from '../core/proof/validation.js';
 import { buildRuntimeProofSummary, renderRuntimeProofSummary } from '../core/agents/runtime-proof-summary.js';
 import { summarizeTriWikiProofBank } from '../core/triwiki/triwiki-proof-bank.js';
+
+export function usage(): string {
+  const { usage: synopsis, description } = COMMAND_MANIFEST_BY_NAME.proof;
+  return `Usage: ${synopsis}\n\n${description}`;
+}
 
 export async function run(_command: any, args: any = []) {
   const action = args[0] || 'show';

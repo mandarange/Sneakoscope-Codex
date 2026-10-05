@@ -69,11 +69,6 @@ const ARGUMENT_BUILDERS: Record<CommandInputProfile, ArgvBuilder> = {
     }
     const mission = typeof input.mission === 'string' && action === 'route' ? [input.mission] : [];
     return [action, ...mission, ...booleanFlag(input, 'completion', '--completion'), ...jsonFlag(input)];
-  },
-  gates: (input) => {
-    const target = stringValue(input.target, 'affected');
-    const selector = input.mode === 'gate' ? ['--gate', target] : ['--preset', target];
-    return ['run', ...selector, ...booleanFlag(input, 'full', '--full'), ...jsonFlag(input)];
   }
 };
 

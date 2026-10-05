@@ -8,7 +8,7 @@ import { inspectPublishRegistryAuth, isRealNpmPublish } from '../core/release/pu
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 // Direct `npm publish` may precede the Git release tag. It still requires a
 // clean main checkout that exactly matches live origin/main.
-// Source-bound physical receipts remain enforced by `sks release stage` / CI.
+// Source-bound physical receipts remain enforced by `maintainer release stage` / CI.
 const report = inspectPublishPreflight({
   root,
   requireReleaseTag: false,

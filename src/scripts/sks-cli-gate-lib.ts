@@ -22,7 +22,10 @@ export function emitGate(name, detail = {}) {
 }
 
 export function runSksJson(args, options = {}) {
-  const entrypoint = path.join(root, 'dist', 'bin', 'sks.js');
+  return runEntrypointJson(path.join(root, 'dist', 'bin', 'sks.js'), args, options);
+}
+
+export function runEntrypointJson(entrypoint, args, options = {}) {
   assertGate(fs.existsSync(entrypoint), 'dist entrypoint missing; run npm run build first', { entrypoint });
   const mappedMissionRoot = args.map((arg) => fixtureMissionRoots.get(String(arg))).find(Boolean);
   const result = spawnSync(process.execPath, [entrypoint, ...args], {
