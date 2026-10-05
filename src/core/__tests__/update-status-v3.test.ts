@@ -384,10 +384,15 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-async function waitFor(predicate: () => boolean): Promise<void> {
-  for (let attempts = 0; attempts < 100; attempts += 1) {
+// The coordinator reads its cache and lock files before fetching, and that I/O
+// can take many event-loop turns when the suite runs in parallel. Bound the wait
+// by time, not by a tick count.
+async function waitFor(predicate: () => boolean, timeoutMs = 5_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
     if (predicate()) return;
-    await new Promise<void>((resolve) => setImmediate(resolve));
+    await new Promise<void>((resolve) => setTimeout(resolve, 2));
   }
+  if (predicate()) return;
   throw new Error('condition was not reached');
 }

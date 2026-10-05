@@ -222,7 +222,9 @@ test('unreadable config fails closed without falling back to an empty document',
   if (process.platform === 'win32') return t.skip('POSIX permission semantics required');
   const s = await fixture(t);
   await fsp.writeFile(s.globalConfig, '[mcp_servers.docs]\ncommand = "node"\n', { mode: 0o600 });
-  if (process.getuid?.() === 0) {
+  // Root reads a mode-000 file, so an unreadable path is simulated with a directory there.
+  const asRoot = process.getuid?.() === 0;
+  if (asRoot) {
     await fsp.rm(s.globalConfig, { force: true });
     await fsp.mkdir(s.globalConfig);
     t.after(() => fsp.rm(s.globalConfig, { recursive: true, force: true }).catch(() => undefined));
@@ -232,7 +234,7 @@ test('unreadable config fails closed without falling back to an empty document',
   }
   const result = await listMcpInventory('global', { home: s.home, cli: new FakeCli() });
   assert.equal(result.ok, false);
-  assert.deepEqual(result.blockers, ['mcp_config_read_failed']);
+  assert.deepEqual(result.blockers, [asRoot ? 'mcp_config_not_regular_file' : 'mcp_config_read_failed']);
   assert.deepEqual(result.servers, []);
 });
 

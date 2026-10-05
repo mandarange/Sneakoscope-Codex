@@ -4,7 +4,7 @@ import http from 'node:http';
 import net, { type AddressInfo } from 'node:net';
 import test from 'node:test';
 import { PassThrough } from 'node:stream';
-import { startDesktopBridge, stopDesktopBridge, desktopBridgeClientPath, type DesktopBridgeConfig, type DesktopBridgeHandle } from '../index.js';
+import { startDesktopBridge, stopDesktopBridge, desktopBridgeClientPath, type DesktopBridgeConfig, type DesktopBridgeHandle, selectAvailableDesktopBridgePort } from '../index.js';
 import { PACKAGE_VERSION } from '../../../version.js';
 import { runDesktopBridgeRestageStage } from '../../../update/update-migration-state/desktop-bridge-restage.js';
 import { safeEndUpgradeSocket } from '../websocket-forward.js';
@@ -91,7 +91,7 @@ test('an established raw native websocket outlives idleTimeoutMs of silence', as
     });
   });
   const upstreamPort = await listen(upstream);
-  const holder = net.createServer(); const bridgePort = await listen(holder); await close(holder);
+  const bridgePort = await selectAvailableDesktopBridgePort('127.0.0.1');
   const idleTimeoutMs = 1_000;
   let bridge: DesktopBridgeHandle | null = null;
   const client = new net.Socket();
@@ -147,7 +147,7 @@ test('an established raw native websocket outlives idleTimeoutMs of silence', as
 test('version skew fires once, only after two consecutive identical mismatches', async () => {
   const upstream = http.createServer((_req, res) => res.end());
   const upstreamPort = await listen(upstream);
-  const holder = net.createServer(); const bridgePort = await listen(holder); await close(holder);
+  const bridgePort = await selectAvailableDesktopBridgePort('127.0.0.1');
   // null and the current version reset the streak; a changed value restarts it.
   const reads = [null, '9.9.9', PACKAGE_VERSION, '9.9.9', '99.0.0', '99.0.0', '99.0.0'];
   let readIndex = 0;
@@ -177,7 +177,7 @@ test('version skew fires once, only after two consecutive identical mismatches',
 test('a bridge running the installed version never sees a skew', async () => {
   const upstream = http.createServer((_req, res) => res.end());
   const upstreamPort = await listen(upstream);
-  const holder = net.createServer(); const bridgePort = await listen(holder); await close(holder);
+  const bridgePort = await selectAvailableDesktopBridgePort('127.0.0.1');
   const skews: string[] = [];
   let bridge: DesktopBridgeHandle | null = null;
   try {
@@ -233,7 +233,7 @@ test('an upstream error keeps its identifiers and loses its text', async () => {
     res.end(JSON.stringify({ error: { type: 'invalid_request_error', code: 'response_not_found', message: 'secret request echo: sk-live-abcdef' } }));
   });
   const upstreamPort = await listen(upstream);
-  const holder = net.createServer(); const bridgePort = await listen(holder); await close(holder);
+  const bridgePort = await selectAvailableDesktopBridgePort('127.0.0.1');
   let bridge: DesktopBridgeHandle | null = null;
   try {
     bridge = await startDesktopBridge(bridgeConfig(bridgePort, upstreamPort, 2_000), { writeState: false });
@@ -293,7 +293,7 @@ test('a gateway upstream_error 404 is replayed, then surfaced as 503 only after 
     res.end(JSON.stringify({ error: { code: 'upstream_error', message: 'Upstream request failed' } }));
   });
   const upstreamPort = await listen(upstream);
-  const holder = net.createServer(); const bridgePort = await listen(holder); await close(holder);
+  const bridgePort = await selectAvailableDesktopBridgePort('127.0.0.1');
   let bridge: DesktopBridgeHandle | null = null;
   const call = (): Promise<{ status: number; retryAfter: string | undefined }> => new Promise((resolve, reject) => {
     const request = http.request({
@@ -360,7 +360,7 @@ test('a gateway upstream_error 502 is replayed until it heals', async () => {
     res.end(JSON.stringify({ error: { code: 'upstream_error', message: 'Upstream request failed' } }));
   });
   const upstreamPort = await listen(upstream);
-  const holder = net.createServer(); const bridgePort = await listen(holder); await close(holder);
+  const bridgePort = await selectAvailableDesktopBridgePort('127.0.0.1');
   let bridge: DesktopBridgeHandle | null = null;
   try {
     bridge = await startDesktopBridge(bridgeConfig(bridgePort, upstreamPort, 2_000), { writeState: false });
@@ -381,7 +381,7 @@ test('an unidentified 502 is replayed, then surfaced without the gateway sentenc
     res.end('<html>Bad Gateway</html>');
   });
   const upstreamPort = await listen(upstream);
-  const holder = net.createServer(); const bridgePort = await listen(holder); await close(holder);
+  const bridgePort = await selectAvailableDesktopBridgePort('127.0.0.1');
   let bridge: DesktopBridgeHandle | null = null;
   try {
     bridge = await startDesktopBridge(bridgeConfig(bridgePort, upstreamPort, 2_000), { writeState: false });
@@ -414,7 +414,7 @@ test('a compact-shaped 503 timeout heals on a later fresh replay', async () => {
     }));
   });
   const upstreamPort = await listen(upstream);
-  const holder = net.createServer(); const bridgePort = await listen(holder); await close(holder);
+  const bridgePort = await selectAvailableDesktopBridgePort('127.0.0.1');
   let bridge: DesktopBridgeHandle | null = null;
   try {
     bridge = await startDesktopBridge(bridgeConfig(bridgePort, upstreamPort, 2_000), { writeState: false });
@@ -434,7 +434,7 @@ test('a 429 keeps status and becomes rate_limited with Retry-After', async () =>
     res.end(JSON.stringify({ error: { code: 'upstream_error', message: 'Upstream request failed' } }));
   });
   const upstreamPort = await listen(upstream);
-  const holder = net.createServer(); const bridgePort = await listen(holder); await close(holder);
+  const bridgePort = await selectAvailableDesktopBridgePort('127.0.0.1');
   let bridge: DesktopBridgeHandle | null = null;
   try {
     bridge = await startDesktopBridge(bridgeConfig(bridgePort, upstreamPort, 2_000), { writeState: false });

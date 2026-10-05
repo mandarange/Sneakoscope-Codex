@@ -22,6 +22,7 @@ test('Computer Use status output avoids MAD-SKS safety-block wording', async (t)
   assert.doesNotMatch(text, /Computer Use blocked by safety policy|MAD-SKS disabled Computer Use|안전 정책상 차단/i);
   const json = JSON.parse(result.stdout);
   assert.equal(json.ok, false);
-  assert.equal(json.status, 'codex_app_capability_missing');
+  // Off macOS the status is decided before any Codex App probe.
+  assert.equal(json.status, process.platform === 'darwin' ? 'codex_app_capability_missing' : 'not_macos');
   assert.equal(json.mad_sks_independent, true);
 });

@@ -11,6 +11,7 @@ import {
   startDesktopBridge,
   type DesktopBridgeConfig,
   type DesktopBridgeOpenRouterOnlyConfig,
+  selectAvailableDesktopBridgePort,
 } from '../index.js';
 
 const CAPABILITY = Buffer.alloc(32, 0x6f).toString('base64url');
@@ -35,9 +36,10 @@ async function listen(server: net.Server): Promise<number> {
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   return (server.address() as AddressInfo).port;
 }
+// The bridge only listens on IANA dynamic ports (49152-65535); an OS-assigned
+// ephemeral port is below that range on Linux, so pick one the bridge accepts.
 async function freePort(): Promise<number> {
-  const server = net.createServer(); const port = await listen(server);
-  await new Promise<void>((resolve) => server.close(() => resolve())); return port;
+  return selectAvailableDesktopBridgePort('127.0.0.1');
 }
 
 /** Records every HTTP request and echoes every WebSocket message. */

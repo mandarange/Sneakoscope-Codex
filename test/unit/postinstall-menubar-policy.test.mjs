@@ -25,7 +25,7 @@ test('explicit opt-ins install even when piped, and launch honours the deferral 
 
 test('ensure never throws, maps installer results, and skips without touching the installer', async () => {
   let calls = 0;
-  const skipped = await ensureSksMenuBarDuringPostinstall({ npm_config_global: 'true' }, piped, async () => { calls += 1; return {}; });
+  const skipped = await ensureSksMenuBarDuringPostinstall({ npm_config_global: 'true' }, piped, async () => { calls += 1; return {}; }, 'darwin');
   assert.equal(skipped.status, 'skipped');
   assert.equal(calls, 0);
   const installed = await ensureSksMenuBarDuringPostinstall({ SKS_POSTINSTALL_MENUBAR: '1' }, piped, async (opts) => {
@@ -33,17 +33,17 @@ test('ensure never throws, maps installer results, and skips without touching th
     assert.equal(opts.apply, true);
     assert.equal(opts.quiet, true);
     return { ok: true, actions: ['compiled 37 Swift sources'], app_path: '/tmp/SKSMenuBar.app', launch: { requested: true, ok: true }, blockers: [] };
-  });
+  }, 'darwin');
   assert.equal(calls, 1);
   assert.equal(installed.status, 'installed');
   assert.equal(installed.launched, true);
   assert.match(describePostinstallMenuBar(installed), /installed at \/tmp\/SKSMenuBar.app and started/);
-  const current = await ensureSksMenuBarDuringPostinstall({ SKS_POSTINSTALL_MENUBAR: '1' }, piped, async () => ({ ok: true, actions: ['menubar_up_to_date'], app_path: '/tmp/SKSMenuBar.app', launch: { requested: false, ok: true }, blockers: [] }));
+  const current = await ensureSksMenuBarDuringPostinstall({ SKS_POSTINSTALL_MENUBAR: '1' }, piped, async () => ({ ok: true, actions: ['menubar_up_to_date'], app_path: '/tmp/SKSMenuBar.app', launch: { requested: false, ok: true }, blockers: [] }), 'darwin');
   assert.equal(current.status, 'up_to_date');
-  const blocked = await ensureSksMenuBarDuringPostinstall({ SKS_POSTINSTALL_MENUBAR: '1' }, piped, async () => ({ ok: false, actions: [], app_path: null, launch: { requested: false, ok: false }, blockers: ['swiftc_missing'] }));
+  const blocked = await ensureSksMenuBarDuringPostinstall({ SKS_POSTINSTALL_MENUBAR: '1' }, piped, async () => ({ ok: false, actions: [], app_path: null, launch: { requested: false, ok: false }, blockers: ['swiftc_missing'] }), 'darwin');
   assert.equal(blocked.status, 'blocked');
   assert.match(describePostinstallMenuBar(blocked), /swiftc_missing/);
-  const failed = await ensureSksMenuBarDuringPostinstall({ SKS_POSTINSTALL_MENUBAR: '1' }, piped, async () => { throw new Error('boom'); });
+  const failed = await ensureSksMenuBarDuringPostinstall({ SKS_POSTINSTALL_MENUBAR: '1' }, piped, async () => { throw new Error('boom'); }, 'darwin');
   assert.equal(failed.status, 'failed');
   assert.match(describePostinstallMenuBar(failed), /boom/);
   assert.match(describePostinstallMenuBar(skipped), /not installed during npm install \(non-interactive install\)/);

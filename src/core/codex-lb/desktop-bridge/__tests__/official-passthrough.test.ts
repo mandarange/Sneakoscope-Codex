@@ -3,7 +3,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import http, { type IncomingMessage, type ServerResponse } from 'node:http';
 import net, { type AddressInfo } from 'node:net';
 import test from 'node:test';
-import { startDesktopBridge, stopDesktopBridge, desktopBridgeClientPath, type DesktopBridgeConfig, type DesktopBridgeHandle } from '../index.js';
+import { startDesktopBridge, stopDesktopBridge, desktopBridgeClientPath, type DesktopBridgeConfig, type DesktopBridgeHandle, selectAvailableDesktopBridgePort } from '../index.js';
 
 const CLIENT_CAPABILITY = Buffer.alloc(32, 0x51).toString('base64url');
 const CLIENT_CAPABILITY_SHA256 = createHash('sha256').update(CLIENT_CAPABILITY).digest('hex');
@@ -19,8 +19,10 @@ async function close(server: net.Server): Promise<void> { if (server.listening) 
 function accept(key: string): string { return createHash('sha1').update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`).digest('base64'); }
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
+// The bridge only listens on IANA dynamic ports (49152-65535); an OS-assigned
+// ephemeral port is below that range on Linux, so pick one the bridge accepts.
 async function freePort(): Promise<number> {
-  const holder = net.createServer(); const port = await listen(holder); await close(holder); return port;
+  return selectAvailableDesktopBridgePort('127.0.0.1');
 }
 
 function bridgeConfig(port: number, providerPort: number, officialPort: number | null, opts: { officialModelRoute?: boolean } = {}): DesktopBridgeConfig {

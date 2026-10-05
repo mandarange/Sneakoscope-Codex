@@ -4,7 +4,7 @@ import http from 'node:http';
 import net, { type AddressInfo } from 'node:net';
 import type { Duplex } from 'node:stream';
 import test from 'node:test';
-import { desktopBridgeClientPath, probeDesktopBridgeWebSocket, startDesktopBridge, stopDesktopBridge, type DesktopBridgeConfig, type DesktopBridgeHandle } from '../index.js';
+import { desktopBridgeClientPath, probeDesktopBridgeWebSocket, startDesktopBridge, stopDesktopBridge, type DesktopBridgeConfig, type DesktopBridgeHandle, selectAvailableDesktopBridgePort } from '../index.js';
 
 const CLIENT_CAPABILITY = Buffer.alloc(32, 0x46).toString('base64url');
 const CLIENT_CAPABILITY_SHA256 = createHash('sha256').update(CLIENT_CAPABILITY).digest('hex');
@@ -75,7 +75,7 @@ function bridgeConfig(port: number, upstreamPort: number): DesktopBridgeConfig {
 
 test('R20 diagnostic protocol proves upgrade, protocol, frame round trip, and clean close independently', async () => {
   const upstream = http.createServer((_req, res) => res.end()); const upstreamPort = await listen(upstream);
-  const holder = net.createServer(); const bridgePort = await listen(holder); await close(holder); let bridge: DesktopBridgeHandle | null = null;
+  const bridgePort = await selectAvailableDesktopBridgePort('127.0.0.1'); let bridge: DesktopBridgeHandle | null = null;
   try {
     bridge = await startDesktopBridge(bridgeConfig(bridgePort, upstreamPort), { writeState: false });
     const diagnosticUrl = `ws://127.0.0.1:${bridgePort}${desktopBridgeClientPath(CLIENT_CAPABILITY, '/__sks/diagnostics/websocket')}`;

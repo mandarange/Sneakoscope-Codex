@@ -181,7 +181,9 @@ test('actual npm publish lifecycle reports repository blockers without misdiagno
   assert.match(result.stdout, /"schema": "sks\.publish-preflight\.v1"/);
   assert.match(result.stdout, /"ok": false/);
   assert.match(result.stderr, /npm publish blocked by reproducibility preflight/);
-  assert.match(`${result.stdout}\n${result.stderr}`, /publish_requires_main_branch:detached|worktree_not_clean/);
+  // Any repository blocker proves the preflight ran: a detached CI checkout, a feature
+  // branch, a dirty tree, or missing npm auth on a clean main.
+  assert.match(`${result.stdout}\n${result.stderr}`, /publish_requires_main_branch:|worktree_not_clean|npm_publish_auth_missing_or_expired/);
   assert.match(result.stderr, /Prepublish stopped at the reproducibility preflight/);
   assert.doesNotMatch(result.stderr, /current authoritative full-release stamp/);
   assert.doesNotMatch(result.stderr, /Run `npm run release:check:full` separately/);
