@@ -1049,8 +1049,8 @@
       "file": "src/core/daemon/sksd-hook-daemon.ts",
       "symbol": "startSksdHookDaemon",
       "token": "fsp.rm",
-      "scope_contract_sha256": "73e36640ceb3652f9215a969fb58864aa73bcd8aee8976a2ee34fe64027e3d82",
-      "callsite_sha256": "71c4f8b3df07bec8a77060a765f8a2a8c278e86423d7bd8b7556260edabffc83",
+      "scope_contract_sha256": "9181340d56c04e4eba6c7132ef87f7771be7d052ba48fc068e642fb13d0004ba",
+      "callsite_sha256": "25e80650b3065e22f252a65aee54f3d03fef50fab12b993a7a00cce290208f88",
       "occurrence": 1,
       "reason": "Hook daemon startup removes only the stale Unix socket path derived from the current project namespace before binding."
     },

@@ -44,7 +44,7 @@ import {
 import { classifyTaskProfile } from './runtime/task-profile.js';
 import { resolveSubagentThreadBudget } from './subagents/thread-budget.js';
 import { readOfficialSubagentConfig } from './subagents/official-subagent-config.js';
-import { jevSpawnRouting, openRouterOnlyJevTurnLine } from './hooks-runtime/jev-spawn-routing.js';
+import { isNarutoParentState, jevSpawnRouting, openRouterOnlyJevTurnLine } from './hooks-runtime/jev-spawn-routing.js';
 import { effectiveChildModelAllowlist } from './subagents/child-model-allowlist.js';
 import {
   evaluateParentOrchestrationGate,
@@ -805,7 +805,7 @@ async function hookPreTool(root: any, state: any, payload: any, noQuestion: any,
   const spawnPayload = jevSpawnInput
     ? { ...payload, tool_input: jevSpawnInput, toolInput: jevSpawnInput }
     : payload;
-  const spawnPolicyBlock = subagentSpawnPolicyBlockReason(spawnPayload, { root });
+  const spawnPolicyBlock = subagentSpawnPolicyBlockReason(spawnPayload, { root, narutoParent: isNarutoParentState(state) });
   if (spawnPolicyBlock) return { decision: 'block', permissionDecision: 'deny', reason: spawnPolicyBlock };
   const artifactDir = officialSubagentArtifactDir(root, state, sessionKey);
   const activeBinding = officialSubagentSkillGuardBinding(state, { allowClosedOfficialChild: true });

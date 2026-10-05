@@ -128,15 +128,23 @@ const MANAGED_HOOKS = {
 };
 
 /**
- * Events the essential profile does not install. PostToolUse existed to write
- * proof evidence after every tool call — a second cold process per call whose
- * output nothing in the essential profile reads.
+ * PostToolUse in the essential profile. Strict records proof evidence after
+ * every tool call; essential needs the completed call only where a safety
+ * lifecycle depends on it: host-capability (acas-tools) calls, whose next step
+ * is admitted only after the previous one completed, and MCP database tools,
+ * whose MAD-SKS SQL-plane operation stays pending until its result is recorded.
+ * No other tool call pays for a second hook process.
  */
-const ESSENTIAL_PROFILE_OMITTED_HOOK_EVENTS = new Set(['PostToolUse']);
+export const ESSENTIAL_POST_TOOL_MATCHER = '^(?:mcp__(?:acas-tools|acas_tools)__.*|mcp__.*(?:supabase|postgres|database|execute_sql|apply_migration|sql_query).*)$';
 
-export function managedHookEventNames(root?: string | null): string[] {
-  const all = Object.keys(MANAGED_HOOKS);
-  return postToolEvidenceEnabled(root) ? all : all.filter((event) => !ESSENTIAL_PROFILE_OMITTED_HOOK_EVENTS.has(event));
+export function managedHookEventNames(_root?: string | null): string[] {
+  return Object.keys(MANAGED_HOOKS);
+}
+
+function managedHookMatcher(eventName: string, entry: any, root?: string | null): string | undefined {
+  if (!('matcher' in entry)) return undefined;
+  if (eventName === 'PostToolUse' && !postToolEvidenceEnabled(root)) return ESSENTIAL_POST_TOOL_MATCHER;
+  return entry.matcher;
 }
 
 function buildManagedHooks(commandPrefix: any, root?: string | null, commandSuffix = '') {
@@ -145,7 +153,7 @@ function buildManagedHooks(commandPrefix: any, root?: string | null, commandSuff
   for (const [eventName, entries] of Object.entries(MANAGED_HOOKS)) {
     if (!events.has(eventName)) continue;
     hooks[eventName] = entries.map((entry: any) => ({
-      ...('matcher' in entry ? { matcher: entry.matcher } : {}),
+      ...('matcher' in entry ? { matcher: managedHookMatcher(eventName, entry, root) } : {}),
       hooks: entry.hooks.map(({ hookName, ...hook }: any) => ({
         ...hook,
         command: sksHookCommand(commandPrefix, hookName, commandSuffix)

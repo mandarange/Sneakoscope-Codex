@@ -32,6 +32,11 @@ Selection, highest precedence first:
 4. Inside the SKS test harness (`NODE_TEST_CONTEXT` / `SKS_TEST_ISOLATION=1`): `strict`, so the existing suite keeps proving the legacy behavior; essential-profile tests ask for `essential` explicitly, and the built-CLI gates run outside the harness.
 5. Otherwise `essential`.
 
+The hooks live in the user-level `~/.codex/hooks.json`, so the one thing a
+project file cannot change is which tool calls PostToolUse sees: that follows
+the environment variable or the global file. A project that wants strict's
+per-call PostToolUse evidence sets the profile globally.
+
 The resolver lives in `src/core/verification-profile.ts`; every enforcement
 point asks it a specific question (`stopFinalizationRitualsEnforced`,
 `managedSkillDigestBlocksEnforced`, `postToolEvidenceEnabled`,
@@ -52,7 +57,10 @@ on trusting the model's prose.
   ChatGPT identity to a provider or a provider key to the client.
 - **Harness-maintenance guard** — an agent cannot run `sks doctor --fix`,
   `sks setup/init`, or uninstall SKS to escape supervision.
-- **Fan-out bounds** — recursion guard, `max_depth = 1`, thread caps.
+- **Fan-out bounds** — recursion guard, `max_depth = 1`, thread caps. The
+  tier-model and bounded-fork rules apply to a Naruto parent's children;
+  outside Naruto a `spawn_agent` is Codex's own (OpenRouter Only still limits
+  every child to the subagent list).
 - **No-question autonomy guards** — interactive commands (`sudo`, `ssh`,
   `read -p` …) refused while an autonomous loop runs.
 - **Host-capability allowlists** for desktop-control tools.
@@ -66,7 +74,7 @@ on trusting the model's prose.
 | Stop hook Honest Mode / completion-summary wording gate | `decision: block` until the final message contained the right phrases | a finished turn is finished (`essential_profile_stop_accepted`) |
 | Honest-gap loopback (two forced retries over a gap regex) | blocked | gone |
 | Route completion proof, reflection gate, work-order ledger, root-cause analysis, engineering-sanity / DB-access / architecture-map review artifacts as Stop blockers | blocked | not evaluated at Stop; `sks proof …` commands still work when a user asks |
-| PostToolUse evidence hook | one cold process per tool call writing Context7 / subagent / error-taxonomy ledgers | not installed; `sks update` and `sks doctor --fix` remove the stale entry from `.codex/hooks.json` and the managed TOML while keeping user-authored hooks |
+| PostToolUse evidence hook | one cold process per tool call writing Context7 / subagent / error-taxonomy ledgers | installed only for host-capability (`acas-tools`) and MCP database tools, whose safety lifecycle needs the completed call (the next host-capability step, the MAD-SKS SQL-plane result); no other tool call pays for it, and `sks update` rewrites a stale `*` entry while keeping user-authored hooks |
 | Managed-skill digest drift blocks prompts and tool calls | `content_digest_mismatch` denied everything until `sks doctor --fix` | repaired or advised; never a denial |
 | Interrupted-tool-output quarantine | every later prompt in the thread was refused until the thread was replaced | only the turn that reports the lost output gets the recovery advice (strict refuses that one turn); the thread continues after recovery (ledger T5) |
 | `route-image` manual real-output proof as a doctor blocker | `doctor --full` `ok: false` on every real machine; Center badge orange | a warning (`route:route-image:…`), `ready: true` when the machine is actually healthy |
@@ -87,6 +95,15 @@ same `evaluateHookPayloadOnce` in a warm process: ~150 ms per hook instead of
 request carries the caller's package version and a mismatch retires the daemon
 (`sksd_version_mismatch`) so the next call spawns one on the new code — the
 same stale-long-lived-process lesson the Desktop Bridge taught in 9.2.x.
+
+Decisions also read the environment (the recursion guard's `SKS_AGENT_WORKER`,
+a standalone Naruto parent's `SKS_NARUTO_PARENT_*`, the profile variable, Jev's
+provider key), and a daemon used to answer with the environment of whichever
+hook process spawned it. Now the daemon starts without per-process markers, a
+caller that carries them evaluates inline, and every request carries a
+fingerprint of the decision-relevant environment that the daemon must match
+(`sksd_env_mismatch` otherwise, answered inline) — so a daemon decision is the
+decision the caller would have made itself.
 
 Per tool call in the essential profile: one PreToolUse hook (~150 ms warm)
 instead of PreToolUse + PostToolUse cold (~1 s).

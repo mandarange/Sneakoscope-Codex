@@ -7,6 +7,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { sha256 } from '../fsx.js';
 import { PACKAGE_VERSION } from '../version.js';
+import { daemonSpawnEnv, hookDecisionEnvFingerprint } from './sksd-hook-env.js';
 
 // 20차 P2-1: hook round-trip daemon. `.codex/hooks.json` fires PreToolUse/
 // PostToolUse for every tool call, each spawning a fresh `sks hook <event>`
@@ -37,6 +38,8 @@ export interface SksdHookRequest {
    * spawns a daemon on the new code.
    */
   sks_version?: string;
+  /** hookDecisionEnvFingerprint of the caller; a daemon with a different one refuses (sksd-hook-env.ts). */
+  env_fingerprint?: string;
 }
 
 export interface SksdHookResponse {
@@ -47,6 +50,7 @@ export interface SksdHookResponse {
 }
 
 export const SKSD_VERSION_MISMATCH_ERROR = 'sksd_version_mismatch';
+export const SKSD_ENV_MISMATCH_ERROR = 'sksd_env_mismatch';
 
 // Unix domain socket paths have a ~100 byte limit on macOS/Linux. TMPDIR can
 // itself be a deeply nested hermetic test root, so sockets use a short,
@@ -170,8 +174,9 @@ async function removeStaleSocketPath(socketPath: string): Promise<void> {
 export async function startSksdHookDaemon(
   root: string,
   handleHook: (name: string, payload: unknown) => Promise<unknown>,
-  options: { exitOnRetire?: boolean } = {},
+  options: { exitOnRetire?: boolean; envFingerprint?: string } = {},
 ): Promise<SksdHookDaemonHandle | null> {
+  const envFingerprint = options.envFingerprint ?? hookDecisionEnvFingerprint(process.env);
   const socketPath = sksdSocketPath(root);
   const pidFilePath = sksdPidFilePath(root);
   const runtimeDir = path.dirname(socketPath);
@@ -210,6 +215,9 @@ export async function startSksdHookDaemon(
           retire = true;
           throw new Error(SKSD_VERSION_MISMATCH_ERROR);
         }
+        // Decisions read the environment; a caller whose decision-relevant
+        // environment differs from this process's evaluates inline instead.
+        if (request.env_fingerprint && request.env_fingerprint !== envFingerprint) throw new Error(SKSD_ENV_MISMATCH_ERROR);
         const result = await handleHook(request.name, request.payload);
         response = { schema: 'sks.sksd-hook-response.v1', ok: true, result };
       } catch (err: unknown) {
@@ -303,7 +311,10 @@ export function spawnSksdHookDaemonDetached(root: string): void {
   const entrypoint = fileURLToPath(new URL('./sksd-hook-daemon-entrypoint.js', import.meta.url));
   const child = spawn(process.execPath, [entrypoint, root], {
     detached: true,
-    stdio: 'ignore'
+    stdio: 'ignore',
+    // The daemon serves every session in the project, so it never carries one
+    // process tree's markers or one thread's id.
+    env: daemonSpawnEnv(process.env)
   });
   child.unref();
 }
@@ -311,7 +322,7 @@ export function spawnSksdHookDaemonDetached(root: string): void {
 // Thin client used by `sks hook <event>`: attempt a fast socket round-trip;
 // return null (never throws) if the daemon isn't reachable so the caller
 // can fail open to the direct in-process path.
-export async function callSksdHookDaemon(root: string, name: string, payload: unknown): Promise<{ ok: true; result: unknown } | null> {
+export async function callSksdHookDaemon(root: string, name: string, payload: unknown): Promise<{ ok: true; result: unknown } | { ok: false; error: string } | null> {
   const socketPath = sksdSocketPath(root);
   if (!safeRuntimeDirPresent(path.dirname(socketPath))) return null;
   const socketStat = fs.lstatSync(socketPath, { throwIfNoEntry: false });
@@ -319,7 +330,7 @@ export async function callSksdHookDaemon(root: string, name: string, payload: un
   return new Promise((resolve) => {
     const socket = net.createConnection(socketPath);
     let settled = false;
-    const finish = (value: { ok: true; result: unknown } | null) => {
+    const finish = (value: { ok: true; result: unknown } | { ok: false; error: string } | null) => {
       if (settled) return;
       settled = true;
       clearTimeout(connectTimer);
@@ -332,7 +343,7 @@ export async function callSksdHookDaemon(root: string, name: string, payload: un
     let buffer = '';
     socket.on('connect', () => {
       clearTimeout(connectTimer);
-      const request: SksdHookRequest = { schema: 'sks.sksd-hook-request.v1', name, payload, sks_version: PACKAGE_VERSION };
+      const request: SksdHookRequest = { schema: 'sks.sksd-hook-request.v1', name, payload, sks_version: PACKAGE_VERSION, env_fingerprint: hookDecisionEnvFingerprint(process.env) };
       socket.write(`${JSON.stringify(request)}\n`);
     });
     socket.on('data', (chunk) => {
@@ -341,7 +352,9 @@ export async function callSksdHookDaemon(root: string, name: string, payload: un
       if (newlineIdx === -1) return;
       try {
         const response = JSON.parse(buffer.slice(0, newlineIdx)) as SksdHookResponse;
-        finish(response.ok ? { ok: true, result: response.result } : null);
+        finish(response.ok
+          ? { ok: true, result: response.result }
+          : { ok: false, error: String(response.error || 'sksd_request_failed') });
       } catch {
         finish(null);
       }

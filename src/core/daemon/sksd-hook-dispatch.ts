@@ -10,7 +10,8 @@
 // hand-maintained per-file rewrite list, which this file isn't on — as a
 // plain ESM module under core/, sks-dispatch.ts's dynamic import() of it
 // works regardless of dist/bin/'s module-type override.
-import { callSksdHookDaemon, spawnSksdHookDaemonDetached } from './sksd-hook-daemon.js';
+import { callSksdHookDaemon, SKSD_VERSION_MISMATCH_ERROR, spawnSksdHookDaemonDetached } from './sksd-hook-daemon.js';
+import { hasPerProcessHookEnv } from './sksd-hook-env.js';
 // loadHookPayload/normalizeHookResult come from the lightweight hook-io
 // module, not hooks-runtime.js directly — hooks-runtime.js pulls in ~20
 // domain modules (pipeline, mission, db-safety, harness-guard, ...) that a
@@ -32,11 +33,16 @@ export async function hookDaemonInline(name: string, extraArgs: readonly string[
   }
   let result: unknown;
   try {
-    const daemonResponse = await callSksdHookDaemon(root, name, payload);
-    if (daemonResponse) {
+    // A worker or standalone Naruto parent decides with its own markers, which
+    // the shared daemon must not see or lend to other sessions (sksd-hook-env.ts).
+    const daemonResponse = hasPerProcessHookEnv(process.env) ? null : await callSksdHookDaemon(root, name, payload);
+    if (daemonResponse?.ok) {
       result = daemonResponse.result;
     } else {
-      spawnSksdHookDaemonDetached(root);
+      // Spawn only when no daemon answered or the one that did has retired;
+      // a daemon that refused this caller's environment stays and serves others.
+      const retired = daemonResponse?.error === SKSD_VERSION_MISMATCH_ERROR;
+      if (!hasPerProcessHookEnv(process.env) && (!daemonResponse || retired)) spawnSksdHookDaemonDetached(root);
       const { evaluateHookPayloadOnce } = await import('../hooks-runtime.js');
       result = await evaluateHookPayloadOnce(name, payload, { root });
     }

@@ -1,4 +1,5 @@
 import '../../__tests__/helpers/isolated-test-home.js';
+import { setCurrent } from '../../mission.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fsp from 'node:fs/promises';
@@ -39,10 +40,14 @@ test('a spawn naming an older generation is refused under every tool name, inclu
   for (const name of NOT_SPAWN) assert.equal(subagentSpawnPolicyBlockReason({ tool_name: name, tool_input: v2Input('gpt-5.6-sol') }), null, name);
 });
 
-test('the real PreToolUse path denies a legacy-model spawn sent as collaborationspawn_agent', async () => {
+test('the real PreToolUse path denies a Naruto parent\'s legacy-model spawn sent as collaborationspawn_agent', async () => {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-spawn-names-'));
   try {
     const payload = { session_id: 's', turn_id: 't', tool_use_id: 'u', cwd: root, tool_name: 'collaborationspawn_agent', tool_input: v2Input('gpt-5.6-sol') };
+    // Outside Naruto the spawn is Codex's own and SKS does not police it.
+    const native: any = normalizeHookResult('pre-tool', await evaluateHookPayloadOnce('pre-tool', { ...payload, session_id: 's-native', tool_use_id: 'u-native' }, { root }));
+    assert.notEqual(native.hookSpecificOutput?.permissionDecision, 'deny', JSON.stringify(native));
+    await setCurrent(root, { mission_id: 'M-naruto', mode: 'NARUTO', route: 'Naruto', route_command: '$Naruto' }, { sessionKey: 's' });
     const wire: any = normalizeHookResult('pre-tool', await evaluateHookPayloadOnce('pre-tool', payload, { root }));
     assert.equal(wire.hookSpecificOutput.permissionDecision, 'deny');
     assert.match(wire.hookSpecificOutput.permissionDecisionReason, /must name a current model/);

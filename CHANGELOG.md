@@ -30,6 +30,20 @@
 - Ledger T5: a lost tool output (`[No tool output found …]`) affects only the
   turn that reports it; the thread continues after recovery instead of being
   refused for the rest of its life.
+- In the default profile, host-capability tasks (DB schema then query,
+  spreadsheet create then update, document write then render) were denied at
+  their second step, and a MAD-SKS SQL-plane operation never recorded its
+  result, because PostToolUse was not installed. It is installed again for
+  exactly those tools (`acas-tools` and MCP database tools); other tool calls
+  still run one hook.
+- The warm hook daemon answered with the environment of whichever process
+  spawned it: a daemon started by a Naruto worker treated every later session
+  as a worker, and a worker served by a plain daemon escaped its recursion
+  guard. Marker-carrying callers now evaluate inline, the daemon starts
+  without markers, and requests whose decision environment differs are
+  answered inline.
+- SKS no longer denies Codex's own `spawn_agent` calls outside a Naruto
+  parent; the tier-model and bounded-fork rules apply to Naruto children.
 
 ### Changed
 

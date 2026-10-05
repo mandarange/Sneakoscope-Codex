@@ -1,4 +1,5 @@
 import '../../__tests__/helpers/isolated-test-home.js';
+import { setCurrent } from '../../mission.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fsp from 'node:fs/promises';
@@ -45,13 +46,16 @@ test('the bounded-fork denial is an SKS policy and never claims Codex rejects or
   assert.doesNotMatch(reason, /cannot carry|rejects|ignores/i);
 });
 
-test('actual PreToolUse dispatch denies a spawn without a current model on every repeated invocation', async () => {
+test('actual PreToolUse dispatch denies a Naruto parent\'s spawn without a current model on every repeated invocation', async () => {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-tier-spawn-'));
   try {
     const payload = {
       session_id: 'tier-parent', turn_id: 'turn-1', tool_use_id: 'spawn-1',
       tool_name: 'spawn_agent', tool_input: { model: 'anthropic/claude-sonnet-4.5', fork_turns: 'none', message: 'Implement the parser.' }
     };
+    const native: any = normalizeHookResult('pre-tool', await evaluateHookPayloadOnce('pre-tool', { ...payload, session_id: 'native-parent', tool_use_id: 'spawn-native' }, { root }));
+    assert.notEqual(native.hookSpecificOutput?.permissionDecision, 'deny', 'outside Naruto the spawn is Codex\'s own');
+    await setCurrent(root, { mission_id: 'M-naruto', mode: 'NARUTO', route: 'Naruto', route_command: '$Naruto' }, { sessionKey: 'tier-parent' });
     for (let i = 0; i < 2; i++) {
       const result = await evaluateHookPayloadOnce('pre-tool', payload, { root });
       const wire: any = normalizeHookResult('pre-tool', result);
