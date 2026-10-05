@@ -13,7 +13,7 @@
 
 - `npm run package-boundary:check` builds, runs `npm pack --dry-run --json --ignore-scripts`, verifies required files, rejects forbidden paths, and checks relative import closure under `dist`.
 - `npm run dist:check` rejects `dist/**/*.mjs`, `.mjs` imports, missing build manifest, volatile build-manifest timestamps, missing executable bin, and contract-only runtime markers.
-- `npm run blackbox:command-import-smoke` packs the tarball, installs it into a temp consumer, imports `dist/cli/command-registry.js`, and lazy-imports every registered command.
+- `npm run blackbox:command-import-smoke` packs the tarball, unpacks it into a temp directory with the checkout's dependencies linked (no network), imports `dist/cli/command-registry.js`, and lazy-loads every registered command.
 - `npm run blackbox:matrix` runs real pack install, npx one-shot, global shim, no-git, spaces, Unicode, and optional read-only directory scenarios.
 - `npm run git-hygiene:check`, `npm run shared-memory:check`, and `npm run git-collaboration:e2e` validate the new shared-memory git collaboration surface before release.
 

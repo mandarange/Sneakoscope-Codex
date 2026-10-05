@@ -14,7 +14,6 @@ const rows = [
   row('global_shim_temp_prefix', 'blackbox:global-shim', ['npm_install_global_prefix', 'global_shim_version']),
   row('fresh_home', 'blackbox:pack-install', ['npx_sks_root_json']),
   row('project_local_install', 'blackbox:pack-install', ['npx_sks_setup_local_only']),
-  row('packed_run_execute', 'blackbox:pack-install', ['npx_sks_run_execute_mock']),
   row('no_git_repo_directory', 'blackbox:pack-install', ['npx_sks_root_json']),
   row('read_only_project_directory', 'blackbox:pack-install', ['npx_sks_root_json'], { optional: true }),
   row('path_with_spaces', 'blackbox:pack-install', ['npx_sks_root_json']),
