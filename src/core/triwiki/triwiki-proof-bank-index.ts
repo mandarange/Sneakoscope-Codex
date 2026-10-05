@@ -1,20 +1,5 @@
-import path from 'node:path';
 import type { TriWikiProofCard } from './triwiki-proof-card.js';
-import {
-  PROOF_INDEX_REL,
-  TRIWIKI_PROOF_INDEX_REPAIR_ENTRY_POINT,
-  buildTriWikiProofIndexRecord,
-  loadTriWikiProofIndexDocument,
-  nodeTriWikiProofIndexFs,
-  triWikiProofCardRelPath,
-  triWikiProofIndexRecordIsIndeterminate,
-  triWikiProofIndexRecordIsReusable,
-  withTriWikiProofIndexLock,
-  writeTriWikiProofIndexDocument,
-  type TriWikiProofIndexFs,
-  type TriWikiProofIndexRecord,
-  type TriWikiProofIndexStatus
-} from './triwiki-proof-bank-index-store.js';
+import { PROOF_INDEX_REL, TRIWIKI_PROOF_INDEX_REPAIR_ENTRY_POINT, buildTriWikiProofIndexRecord, loadTriWikiProofIndexDocument, nodeTriWikiProofIndexFs, triWikiProofCardRelPath, withTriWikiProofIndexLock, writeTriWikiProofIndexDocument, type TriWikiProofIndexFs, type TriWikiProofIndexRecord, type TriWikiProofIndexStatus } from './triwiki-proof-bank-index-store.js';
 import { rebuildTriWikiProofIndexRecords } from './triwiki-proof-bank-index-repair.js';
 
 export {
@@ -40,7 +25,6 @@ export { rebuildTriWikiProofIndexRecords, repairTriWikiProofIndex } from './triw
 export type { TriWikiProofIndexRebuild, TriWikiProofIndexRepairResult } from './triwiki-proof-bank-index-repair.js';
 
 export const TRIWIKI_PROOF_INDEX_READ_SCHEMA = 'sks.triwiki-proof-index-read.v1';
-export const TRIWIKI_PROOF_INDEX_SUMMARY_SCHEMA = 'sks.triwiki-proof-bank-index-summary.v1';
 export const TRIWIKI_PROOF_INDEX_UPDATE_SCHEMA = 'sks.triwiki-proof-index-update.v1';
 
 export interface TriWikiProofIndexReadOptions {
@@ -76,69 +60,6 @@ export function readTriWikiProofIndex(root: string, options: TriWikiProofIndexRe
     entry_count: parsed.entries.length,
     repair_entry_point: TRIWIKI_PROOF_INDEX_REPAIR_ENTRY_POINT,
     detail: parsed.detail
-  };
-}
-
-export interface TriWikiProofBankIndexedSummaryOptions extends TriWikiProofIndexReadOptions {
-  /** Injected clock so expiry-driven counts stay reproducible under test. */
-  now?: Date | undefined;
-  /** `stat` each indexed card to count manifest rows whose file is gone. Off by default. */
-  verifyPresence?: boolean | undefined;
-}
-
-export interface TriWikiProofBankIndexedSummary {
-  schema: typeof TRIWIKI_PROOF_INDEX_SUMMARY_SCHEMA;
-  ok: boolean;
-  status: TriWikiProofIndexStatus;
-  index_path: string;
-  proof_count: number;
-  reusable_count: number;
-  invalidated_count: number;
-  /** Rows written without `result`/`schema_class`: counted, never assumed healthy. */
-  indeterminate_count: number;
-  /** `null` unless `verifyPresence` was requested. */
-  missing_card_count: number | null;
-  repair_entry_point: typeof TRIWIKI_PROOF_INDEX_REPAIR_ENTRY_POINT;
-  detail: string | null;
-}
-
-/**
- * Index-first proof bank summary. Unlike `summarizeTriWikiProofBank`, this never
- * walks the proof directory; when the manifest cannot be trusted it says so and
- * points at the repair entry point instead of quietly scanning.
- */
-export function summarizeTriWikiProofBankIndexed(
-  root: string,
-  options: TriWikiProofBankIndexedSummaryOptions = {}
-): TriWikiProofBankIndexedSummary {
-  const facade = options.fs ?? nodeTriWikiProofIndexFs;
-  const read = readTriWikiProofIndex(root, { fs: facade });
-  const now = options.now ?? new Date();
-  let reusable = 0;
-  let invalidated = 0;
-  let indeterminate = 0;
-  let missingCards = 0;
-  for (const entry of read.entries) {
-    if (triWikiProofIndexRecordIsReusable(entry, now)) reusable += 1;
-    if (entry.reusable !== true || entry.invalidation_reasons.length > 0) invalidated += 1;
-    if (triWikiProofIndexRecordIsIndeterminate(entry)) indeterminate += 1;
-    if (options.verifyPresence) {
-      const stat = facade.statSync(absoluteFromRel(root, entry.path));
-      if (!stat || !stat.isFile()) missingCards += 1;
-    }
-  }
-  return {
-    schema: TRIWIKI_PROOF_INDEX_SUMMARY_SCHEMA,
-    ok: read.ok,
-    status: read.status,
-    index_path: PROOF_INDEX_REL,
-    proof_count: read.entry_count,
-    reusable_count: reusable,
-    invalidated_count: invalidated,
-    indeterminate_count: indeterminate,
-    missing_card_count: options.verifyPresence ? missingCards : null,
-    repair_entry_point: TRIWIKI_PROOF_INDEX_REPAIR_ENTRY_POINT,
-    detail: read.detail
   };
 }
 
@@ -263,10 +184,6 @@ export function removeTriWikiProofIndexEntries(
       entry_count: merged.length
     };
   });
-}
-
-function absoluteFromRel(root: string, rel: string): string {
-  return path.join(root, ...rel.split('/'));
 }
 
 function updateFailure(status: TriWikiProofIndexUpdateStatus, detail: string | null): TriWikiProofIndexUpdate {

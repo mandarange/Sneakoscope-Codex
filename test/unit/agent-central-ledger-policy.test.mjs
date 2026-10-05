@@ -3,20 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { appendAgentLedgerEvent, validateAgentLedgerWriteScope } from '../../dist/core/agents/agent-central-ledger.js';
+import { appendAgentLedgerEvent } from '../../dist/core/agents/agent-central-ledger.js';
 import { agentHardTimeoutMs, killTimedOutAgentSessions } from '../../dist/core/agents/agent-lifecycle.js';
 import { writeAgentProofEvidence } from '../../dist/core/agents/agent-proof-evidence.js';
-
-test('agent ledger write scope blocks other sessions and orchestrator-only files', () => {
-  assert.equal(validateAgentLedgerWriteScope({ actor_agent_id: 'agent_a', target_path: 'sessions/agent_a.json' }).ok, true);
-  assert.equal(validateAgentLedgerWriteScope({ actor_agent_id: 'agent_a', target_path: 'agent-messages.jsonl', mode: 'append' }).ok, true);
-  const other = validateAgentLedgerWriteScope({ actor_agent_id: 'agent_a', target_path: 'sessions/agent_b.json' });
-  assert.equal(other.ok, false);
-  assert.equal(other.reason, 'agent_cannot_modify_other_session_record');
-  const proof = validateAgentLedgerWriteScope({ actor_agent_id: 'agent_a', target_path: 'agent-proof-evidence.json' });
-  assert.equal(proof.ok, false);
-  assert.equal(proof.reason, 'agent_cannot_modify_orchestrator_only_file');
-});
 
 test('central ledger events redact secret-looking payloads', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-agent-ledger-redact-'));

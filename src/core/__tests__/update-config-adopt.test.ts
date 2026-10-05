@@ -4,12 +4,7 @@ import assert from 'node:assert/strict';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import {
-  adoptProjectCodexConfig,
-  formatSksConfigAdoptText,
-  runSksConfigAdopt,
-  SKS_CONFIG_ADOPT_RECEIPT_SCHEMA
-} from '../config-adopt/config-adopt.js';
+import { formatSksConfigAdoptText, runSksConfigAdopt, SKS_CONFIG_ADOPT_RECEIPT_SCHEMA } from '../config-adopt/config-adopt.js';
 import {
   SKS_MANAGED_CODEX_CONFIG_MARKER,
   writeCodexConfigGuarded
@@ -195,34 +190,6 @@ test('config adopt preserves invalid TOML and returns actionable human diagnosti
     assert.match(human, /File:/);
     assert.match(human, /Blocker:/);
     assert.match(human, /Remedy:/);
-  } finally {
-    await fixture.cleanup();
-  }
-});
-
-test('adoptProjectCodexConfig translates projectRoot and dry-run performs zero writes', async () => {
-  const before = 'model = "gpt-5.4"\n';
-  const fixture = await configFixture(before);
-  try {
-    await fsp.chmod(fixture.configPath, 0o640);
-    const beforeStat = await fsp.stat(fixture.configPath);
-    const beforeCodexNames = await fsp.readdir(path.dirname(fixture.configPath));
-    const result = await adoptProjectCodexConfig({
-      projectRoot: fixture.root,
-      dryRun: true
-    });
-    const afterStat = await fsp.stat(fixture.configPath);
-    assert.equal(result.ok, true);
-    assert.equal(result.status, 'would_adopt');
-    assert.equal(result.changed, false);
-    assert.equal(result.backup_path, null);
-    assert.equal(result.receipt_path, null);
-    assert.equal(await fsp.readFile(fixture.configPath, 'utf8'), before);
-    assert.equal(afterStat.ino, beforeStat.ino);
-    assert.equal(afterStat.mtimeMs, beforeStat.mtimeMs);
-    assert.equal(afterStat.mode & 0o777, beforeStat.mode & 0o777);
-    assert.deepEqual(await fsp.readdir(path.dirname(fixture.configPath)), beforeCodexNames);
-    await assert.rejects(fsp.access(path.join(fixture.root, '.sneakoscope')));
   } finally {
     await fixture.cleanup();
   }

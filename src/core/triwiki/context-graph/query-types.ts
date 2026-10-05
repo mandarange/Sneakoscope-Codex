@@ -125,23 +125,6 @@ export interface ContextGraphQueryResult {
   processSpawns: 0;
 }
 
-/** Additive metadata surfaced on `SearchResponse.context`. */
-export interface ContextGraphSearchMeta {
-  snapshotHash: string;
-  snapshotFreshness: 'fresh' | 'stale';
-  profile: ContextGraphQueryProfileName;
-  seedCount: number;
-  visitedNodes: number;
-  selectedNodes: number;
-  explanationPathCount: number;
-  provenanceCoverage: number;
-  staleExcluded: number;
-  invalidatedExcluded: number;
-  tokenCost: number;
-  tokenBudget: number;
-  omissionReasons: Record<string, number>;
-}
-
 export function emptyContextGraphQueryResult(
   snapshotHash: string,
   profile: ContextGraphQueryProfileName,

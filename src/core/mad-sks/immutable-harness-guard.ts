@@ -190,16 +190,6 @@ export async function snapshotProtectedCore(root: string = packageRoot(), label 
   };
 }
 
-export async function buildProtectedCoreSnapshot({
-  packageRoot: packageRootInput = packageRoot(),
-  label = 'snapshot'
-}: {
-  packageRoot?: string;
-  label?: string;
-} = {}) {
-  return snapshotProtectedCore(packageRootInput, label);
-}
-
 export function compareProtectedCoreSnapshots(before: any = {}, after: any = {}) {
   const beforeEntries = new Map((before.entries || []).map((entry: any) => [entry.id, entry]));
   const changed = [];

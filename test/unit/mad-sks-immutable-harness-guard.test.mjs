@@ -4,11 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-import {
-  buildProtectedCoreSnapshot,
-  evaluateMadSksWrite,
-  resolveProtectedCore
-} from '../../dist/core/mad-sks/immutable-harness-guard.js';
+import { evaluateMadSksWrite, resolveProtectedCore } from '../../dist/core/mad-sks/immutable-harness-guard.js';
 
 test('MAD-SKS immutable harness guard allows the Sneakoscope engine source repo but blocks installed core writes', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-mad-core-'));
@@ -65,15 +61,3 @@ test('MAD-SKS immutable harness guard allows the Sneakoscope engine source repo 
   assert.equal(allowed.decision, 'allowed');
 });
 
-test('MAD-SKS protected core snapshot records hashes before and after guarded work', async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-mad-snapshot-'));
-  await fs.mkdir(path.join(root, 'dist', 'bin'), { recursive: true });
-  await fs.writeFile(path.join(root, 'dist', 'bin', 'sks.js'), '#!/usr/bin/env node\n');
-
-  const snapshot = await buildProtectedCoreSnapshot({ packageRoot: root, label: 'before' });
-
-  assert.equal(snapshot.schema, 'sks.mad-sks-protected-core-snapshot.v1');
-  assert.equal(snapshot.label, 'before');
-  assert.ok(snapshot.entries.some((entry) => entry.relative_path === 'dist/bin/sks.js'));
-  assert.match(snapshot.snapshot_hash, /^[a-f0-9]{64}$/);
-});

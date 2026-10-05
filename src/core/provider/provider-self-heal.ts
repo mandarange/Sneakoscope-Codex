@@ -51,32 +51,6 @@ export async function ensureProviderCapability(input: {
   return ensureNativeProviderCapability(input, root);
 }
 
-export async function ensureProviderCapabilities(input: {
-  root?: string;
-  capabilities: ProviderCapabilityId[];
-  apply?: boolean;
-  env?: NodeJS.ProcessEnv;
-  reportDir?: string | null;
-  fixture?: 'all-repairable' | 'manual-required' | false;
-}): Promise<ProviderSelfHealReport[]> {
-  const root = path.resolve(input.root || process.cwd());
-  const reportDir = input.reportDir === null
-    ? null
-    : input.reportDir || path.join(root, '.sneakoscope', 'reports', 'provider-self-heal');
-  const reports: ProviderSelfHealReport[] = [];
-  for (const capability of input.capabilities) {
-    reports.push(await ensureProviderCapability({
-      root,
-      capability,
-      fixture: input.fixture || false,
-      reportPath: reportDir ? path.join(reportDir, `${capability}.json`) : null,
-      ...(input.apply === undefined ? {} : { apply: input.apply }),
-      ...(input.env ? { env: input.env } : {})
-    }));
-  }
-  return reports;
-}
-
 async function ensureSuperSearchCodexWeb(
   input: Parameters<typeof ensureProviderCapability>[0],
   root: string

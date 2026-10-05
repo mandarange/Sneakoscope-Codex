@@ -253,11 +253,6 @@ export function triWikiProofIndexRecordIsReusable(record: TriWikiProofIndexRecor
   return isReusableTriWikiProofCard(surrogate, now);
 }
 
-/** A row is "indeterminate" when the writer did not record the fidelity fields. */
-export function triWikiProofIndexRecordIsIndeterminate(record: TriWikiProofIndexRecord): boolean {
-  return !record.result || !record.schema_class;
-}
-
 export function serializeTriWikiProofIndexDocument(entries: readonly TriWikiProofIndexRecord[]): string {
   const document: TriWikiProofIndexDocument = {
     schema: TRIWIKI_PROOF_INDEX_SCHEMA,

@@ -294,16 +294,6 @@ export async function runSksConfigAdopt(
   };
 }
 
-export async function adoptProjectCodexConfig(input: {
-  projectRoot: string;
-  dryRun?: boolean;
-}): Promise<SksConfigAdoptResult> {
-  return runSksConfigAdopt({
-    root: input.projectRoot,
-    ...(input.dryRun === undefined ? {} : { dryRun: input.dryRun })
-  });
-}
-
 export function insertSksManagedCodexConfigMarker(text: string): string {
   const source = String(text || '');
   if (hasExplicitSksManagedCodexConfigMarker(source)) return source;

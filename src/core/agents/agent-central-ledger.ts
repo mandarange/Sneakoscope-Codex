@@ -7,34 +7,6 @@ import { redactSecrets } from '../secret-redaction.js'
 
 const LEDGER_LOCKS = new Map<string, Promise<unknown>>()
 
-export const AGENT_ORCHESTRATOR_ONLY_FILES = Object.freeze([
-  'agent-roster.json',
-  'agent-personas.json',
-  'agent-task-board.json',
-  'agent-task-board.md',
-  'agent-leases.json',
-  'agent-conflict-graph.json',
-  'agent-consensus.json',
-  'agent-proof-evidence.json',
-  'agent-cleanup.json',
-  'agent-session-cleanup.json',
-  'agent-trust-report.json',
-  'agent-trust-report.md',
-  'agent-wrongness-records.json',
-  'agent-lifecycle-policy.json',
-  'agent-lifecycle-aggregate.json',
-  'agent-lifecycle.json',
-  'agent-central-ledger.json',
-  'agent-ledger-compaction.json',
-  'agent-central-ledger-compaction.json',
-  'agent-no-overlap-proof.json',
-  'agent-backend-report.json',
-  'agent-output-validation.json',
-  'agent-output-tails.json',
-  'agent-effort-policy.json',
-  'agent-route-collaboration-plan.json'
-])
-
 async function withLedgerLock<T>(root: string, fn: () => Promise<T>): Promise<T> {
   const previous = LEDGER_LOCKS.get(root) || Promise.resolve()
   const next = previous.catch(() => undefined).then(fn)
@@ -44,27 +16,6 @@ async function withLedgerLock<T>(root: string, fn: () => Promise<T>): Promise<T>
 
 export function agentLedgerRoot(missionDir: string) {
   return path.join(missionDir, 'agents')
-}
-
-export function validateAgentLedgerWriteScope(input: { actor_agent_id: string; target_path: string; mode?: 'append' | 'write' }) {
-  const actor = String(input.actor_agent_id || '')
-  const target = normalizeLedgerPath(input.target_path)
-  const mode = input.mode || 'write'
-  const orchestrator = actor === 'orchestrator' || actor === 'parent_orchestrator'
-  const sessionMatch = target.match(/^sessions\/([^/]+)\.json$/)
-  const generationSessionMatch = target.match(/^sessions\/([^/]+)\/gen-\d+\/agent-session-record\.json$/)
-  const messageAppend = target === 'agent-messages.jsonl' && mode === 'append'
-  const eventAppend = target === 'agent-events.jsonl' && mode === 'append'
-  const handoffAppend = target === 'agent-handoffs.jsonl' && mode === 'append'
-  const ownSessionWrite = Boolean((sessionMatch && sessionMatch[1] === actor) || (generationSessionMatch && generationSessionMatch[1] === actor))
-  const orchestratorOnly = AGENT_ORCHESTRATOR_ONLY_FILES.includes(target as any) || target === 'agent-sessions.json'
-
-  if (orchestrator) return { ok: true, reason: 'orchestrator_write_allowed', actor_agent_id: actor, target_path: target, mode }
-  if (ownSessionWrite) return { ok: true, reason: 'own_session_record_allowed', actor_agent_id: actor, target_path: target, mode }
-  if (messageAppend || eventAppend || handoffAppend) return { ok: true, reason: 'central_append_allowed', actor_agent_id: actor, target_path: target, mode }
-  if ((sessionMatch && sessionMatch[1] !== actor) || (generationSessionMatch && generationSessionMatch[1] !== actor)) return { ok: false, reason: 'agent_cannot_modify_other_session_record', actor_agent_id: actor, target_path: target, mode }
-  if (orchestratorOnly) return { ok: false, reason: 'agent_cannot_modify_orchestrator_only_file', actor_agent_id: actor, target_path: target, mode }
-  return { ok: false, reason: 'agent_ledger_write_scope_unclaimed', actor_agent_id: actor, target_path: target, mode }
 }
 
 export async function initializeAgentCentralLedger(missionDir: string, input: { missionId: string; roster: any; partition?: any; route?: string; prompt?: string; dynamicScheduler?: boolean }) {
@@ -174,6 +125,3 @@ function hashEntry(entry: any) {
   return crypto.createHash('sha256').update(JSON.stringify(entry)).digest('hex')
 }
 
-function normalizeLedgerPath(file: string) {
-  return String(file || '').replace(/\\/g, '/').replace(/^\.?\/+/, '').replace(/^agents\//, '')
-}

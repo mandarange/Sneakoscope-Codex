@@ -12,12 +12,7 @@ import {
 } from '../../contracts.js';
 import { contextGraphSnapshotPath } from '../../paths.js';
 import { writeContextGraphSnapshot } from '../../store/snapshot-store.js';
-import {
-  clearContextGraphSnapshotCache,
-  contextGraphSnapshotCacheStats,
-  queryContextGraph,
-  contextGraphSearchMeta
-} from '../index.js';
+import { clearContextGraphSnapshotCache, contextGraphSnapshotCacheStats, queryContextGraph } from '../index.js';
 import {
   buildFixtureSnapshot,
   fixtureMeta,
@@ -161,24 +156,6 @@ test('repeated queries in one process reuse the cached snapshot', async () => {
     assert.equal(stats.hits, 9);
     assert.ok(stats.hitRate >= 0.9, `cache hit rate ${stats.hitRate} is at least 0.90`);
     assert.equal(stats.entries, 1);
-  } finally {
-    clearContextGraphSnapshotCache();
-    removeFixtureRoot(root);
-  }
-});
-
-test('the search meta projection carries only counts and the snapshot identity', async () => {
-  clearContextGraphSnapshotCache();
-  const root = makeFixtureRoot('cg-query-meta');
-  try {
-    const snapshot = buildFixtureSnapshot();
-    await writeFixtureWorkspace(root, snapshot);
-    const result = await queryContextGraph({ root, query: 'runService' });
-    const meta = contextGraphSearchMeta(result);
-    assert.equal(meta.snapshotHash, snapshot.snapshotHash);
-    assert.equal(meta.provenanceCoverage, 1);
-    assert.equal(meta.selectedNodes, result.selectedNodes);
-    assert.ok(!JSON.stringify(meta).includes(root), 'no absolute workspace path leaks into the projection');
   } finally {
     clearContextGraphSnapshotCache();
     removeFixtureRoot(root);

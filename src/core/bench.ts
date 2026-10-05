@@ -62,7 +62,6 @@ export const CORE_BENCH_BUDGET_TIERS = Object.freeze({
   }
 });
 
-export const CORE_BENCH_BUDGETS = CORE_BENCH_BUDGET_TIERS['source-local'];
 export const TRUST_VALIDATE_BENCH_COMMAND = 'sks proof trust validate bench-fixture --json';
 export const CORE_BENCH_WARMUP_ITERATIONS = 1;
 export const UX_REVIEW_STAGED_LATENCY_BUDGETS = Object.freeze({

@@ -3,24 +3,7 @@ import test from 'node:test';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import {
-  CONTEXT_OPERATION_JOURNAL_REPAIR_COMMAND,
-  CONTEXT_OPERATION_JOURNAL_SCHEMA,
-  CONTEXT_OPERATION_MAX_BLOCKERS,
-  CONTEXT_OPERATION_PHASES,
-  ContextOperationJournalError,
-  advanceContextOperationPhase,
-  buildContextOperationJournal,
-  contextOperationPhaseRank,
-  deriveContextOperationId,
-  parseContextOperationJournal,
-  planContextOperationRecovery,
-  readContextOperationJournalFile,
-  recordContextOperationBlockers,
-  removeContextOperationJournalFile,
-  writeContextOperationJournalFile,
-  type ContextOperationJournal,
-} from '../operation-journal.js';
+import { CONTEXT_OPERATION_JOURNAL_REPAIR_COMMAND, CONTEXT_OPERATION_JOURNAL_SCHEMA, CONTEXT_OPERATION_MAX_BLOCKERS, CONTEXT_OPERATION_PHASES, ContextOperationJournalError, advanceContextOperationPhase, buildContextOperationJournal, contextOperationPhaseRank, deriveContextOperationId, parseContextOperationJournal, planContextOperationRecovery, readContextOperationJournalFile, removeContextOperationJournalFile, writeContextOperationJournalFile, type ContextOperationJournal } from '../operation-journal.js';
 
 /**
  * The journal is the only evidence a crashed compile leaves behind. Everything
@@ -176,12 +159,6 @@ test('a journal only moves forward', () => {
   const committed = advanceContextOperationPhase(indexed, 'committed');
   assert.throws(() => advanceContextOperationPhase(committed, 'indexed'), rejects('phase_regression'));
   assert.equal(committed.indexChecksum, CHECKSUM);
-});
-
-test('blockers are recorded without moving the phase', () => {
-  const blocked = recordContextOperationBlockers(build({ phase: 'merged' }), ['lint_error', 'lint_error']);
-  assert.equal(blocked.phase, 'merged');
-  assert.deepEqual(blocked.blockers, ['lint_error']);
 });
 
 test('recovery planning: nothing in flight means start', () => {
