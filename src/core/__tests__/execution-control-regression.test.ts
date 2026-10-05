@@ -224,11 +224,6 @@ async function tempRoot(t: TestContext, prefix: string) {
   return root
 }
 
-async function writeJson(file: string, value: unknown) {
-  await fsp.mkdir(path.dirname(file), { recursive: true })
-  await fsp.writeFile(file, `${JSON.stringify(value, null, 2)}\n`)
-}
-
 function schedulerRoster() {
   return {
     agent_count: 1,

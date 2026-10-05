@@ -164,18 +164,6 @@ function tomlTableBlock(text: string, table: string): string | null {
   return lines.slice(start, end).join('\n');
 }
 
-function removeTomlTableKeyLocal(text: string, table: string, key: string): string {
-  const lines = String(text || '').split(/\r?\n/);
-  let inTable = false;
-  const out: string[] = [];
-  for (const line of lines) {
-    if (/^\s*\[[^\]]+\]\s*$/.test(line)) inTable = tableHeaderMatches(line, table);
-    if (inTable && new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`).test(line)) continue;
-    out.push(line);
-  }
-  return out.join('\n');
-}
-
 function tableHeaderMatches(line: string, table: string): boolean {
   return new RegExp(`^\\s*\\[${escapeRegExp(table)}\\]\\s*$`).test(line || '');
 }

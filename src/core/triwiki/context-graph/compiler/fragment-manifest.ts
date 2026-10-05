@@ -166,10 +166,3 @@ export function contextFragmentManifestHash(manifest: ContextFragmentManifest): 
   return sha256(serializeContextFragmentManifest(manifest));
 }
 
-/** The previous build's inventory, recovered from the entries rather than stored twice. */
-export function fragmentManifestSourceHashes(manifest: ContextFragmentManifest): ReadonlyMap<string, string> {
-  const hashes = new Map<string, string>();
-  for (const entry of manifest.entries) hashes.set(entry.sourcePath, entry.sourceHash);
-  return hashes;
-}
-

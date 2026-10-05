@@ -470,12 +470,6 @@ async function operatorFixture(prefix: string) {
   };
 }
 
-async function executableFixture(file: string) {
-  await fsp.mkdir(path.dirname(file), { recursive: true });
-  await fsp.writeFile(file, process.platform === 'win32' ? '@exit /b 0\r\n' : '#!/bin/sh\nexit 0\n', 'utf8');
-  await fsp.chmod(file, 0o755).catch(() => {});
-}
-
 function missingStatus(fixture: Awaited<ReturnType<typeof operatorFixture>>): CodexCliUpdateStatus {
   return {
     schema: CODEX_CLI_UPDATE_STATUS_SCHEMA,
