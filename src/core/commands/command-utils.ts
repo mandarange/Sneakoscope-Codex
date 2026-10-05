@@ -10,7 +10,7 @@ export const flag = (args: any = [], name: any) => args.includes(name);
 // flags; anything else stays in the reconstructed prompt.
 const KNOWN_BOOLEAN_FLAGS = new Set([
   '--json', '--mock', '--execute', '--auto', '--visual', '--research', '--db',
-  '--legacy-goal-runtime', '--help', '-h'
+  '--legacy-goal-runtime', '--help', '-h', '--quiet'
 ]);
 
 export function promptOf(args: any = [], knownFlags: Set<string> = KNOWN_BOOLEAN_FLAGS) {

@@ -7,9 +7,8 @@
       "sks root --json": 80,
       "sks commands --json": 120,
       "sks proof validate --json": 250,
-      "sks trust validate bench-fixture --json": 300,
+      "sks proof trust validate bench-fixture --json": 300,
       "sks wiki image-validate --json": 300,
-      "sks features check --json": 1200,
       "sks naruto status --json": 1000
     },
     "source-ci": {
@@ -18,9 +17,8 @@
       "sks root --json": 140,
       "sks commands --json": 320,
       "sks proof validate --json": 350,
-      "sks trust validate bench-fixture --json": 450,
+      "sks proof trust validate bench-fixture --json": 450,
       "sks wiki image-validate --json": 450,
-      "sks features check --json": 1800,
       "sks naruto status --json": 1400
     },
     "packed-local": {
@@ -29,9 +27,8 @@
       "sks root --json": 180,
       "sks commands --json": 260,
       "sks proof validate --json": 500,
-      "sks trust validate bench-fixture --json": 650,
+      "sks proof trust validate bench-fixture --json": 650,
       "sks wiki image-validate --json": 650,
-      "sks features check --json": 2400,
       "sks naruto status --json": 1800
     },
     "global-shim": {
@@ -40,9 +37,8 @@
       "sks root --json": 240,
       "sks commands --json": 320,
       "sks proof validate --json": 700,
-      "sks trust validate bench-fixture --json": 800,
+      "sks proof trust validate bench-fixture --json": 800,
       "sks wiki image-validate --json": 800,
-      "sks features check --json": 2800,
       "sks naruto status --json": 2200
     },
     "npx-one-shot": {
@@ -51,9 +47,8 @@
       "sks root --json": 3000,
       "sks commands --json": 3500,
       "sks proof validate --json": 3500,
-      "sks trust validate bench-fixture --json": 3500,
+      "sks proof trust validate bench-fixture --json": 3500,
       "sks wiki image-validate --json": 3500,
-      "sks features check --json": 5000,
       "sks naruto status --json": 5000
     }
   },
@@ -62,31 +57,31 @@
       "sks --version": 80,
       "sks help": 150,
       "sks root --json": 150,
-      "sks features check --json": 1500
+      "sks commands --json": 150
     },
     "source-ci": {
       "sks --version": 120,
       "sks help": 220,
       "sks root --json": 220,
-      "sks features check --json": 2200
+      "sks commands --json": 220
     },
     "packed-local": {
       "sks --version": 160,
       "sks help": 280,
       "sks root --json": 280,
-      "sks features check --json": 2800
+      "sks commands --json": 280
     },
     "global-shim": {
       "sks --version": 220,
       "sks help": 350,
       "sks root --json": 350,
-      "sks features check --json": 3200
+      "sks commands --json": 350
     },
     "npx-one-shot": {
       "sks --version": 3000,
       "sks help": 3000,
       "sks root --json": 3000,
-      "sks features check --json": 5000
+      "sks commands --json": 3000
     }
   },
   "ux_review_staged_latency_ms": {

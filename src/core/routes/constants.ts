@@ -10,7 +10,7 @@ export const FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT = 'from-chat-img-temp-triwiki.j
 export const FROM_CHAT_IMG_QA_LOOP_ARTIFACT = 'from-chat-img-qa-loop.json';
 export const FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS = 5;
 
-export const USAGE_TOPICS = 'install|setup|bootstrap|root|deps|auto-review|naruto|qa-loop|ppt|image-ux-review|computer-use|goal|fast-mode|review|research|seo-geo-optimizer|git|codex|codex-app|codex-native|hooks|features|all-features|dfix|commit|commit-and-push|design|imagegen|dollar|context7|super-search|pipeline|reasoning|guard|conflicts|versioning|eval|harness|hproof|gx|wiki|memory|wrongness|code-structure|proof-field|skill-dream|rust|align';
+export const USAGE_TOPICS = 'install|setup|bootstrap|root|deps|auto-review|naruto|qa-loop|ppt|image-ux-review|computer-use|goal|fast-mode|review|research|seo-geo-optimizer|git|codex|codex-app|codex-native|hooks|dfix|commit|commit-and-push|imagegen|context7|super-search|pipeline|reasoning|guard|conflicts|eval|gx|wiki|memory|wrongness|code-structure|skill-dream|align';
 
 export const RECOMMENDED_MCP_SERVERS = [
   {

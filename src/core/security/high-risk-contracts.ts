@@ -2,7 +2,6 @@
 export const HIGH_RISK_CONTRACT_TARGETS = [
   'super-search fetch',
   'commit-and-push',
-  'rollback apply',
   'doctor --fix',
   'update now --dry-run',
   '$DB',
@@ -30,12 +29,6 @@ export function highRiskNegativeFixtures() {
       fixture: 'dirty_staged_ambiguity',
       input: { remotes: ['origin'], stagedChanges: ['src/a.ts'], unstagedChanges: ['src/a.ts'] },
       blocker: 'dirty_staged_ambiguity'
-    },
-    {
-      target: 'rollback apply',
-      fixture: 'missing_explicit_rollback_id',
-      input: { action: 'apply', rollbackId: '' },
-      blocker: 'rollback_id_required'
     },
     {
       target: 'doctor --fix',
@@ -101,11 +94,6 @@ export function highRiskCliNegativeSmokeSpecs() {
       expected_blockers: ['git_remote_missing']
     },
     {
-      target: 'rollback apply',
-      argv: ['sks', 'rollback', 'apply', '--yes', '--json'],
-      expected_blockers: ['rollback_id_required']
-    },
-    {
       target: 'doctor --fix',
       argv: ['sks', 'doctor', '--fix', '--json', '--profile', 'fast', '--machine-only'],
       expected_blockers: ['user_owned_file_without_sks_marker']
@@ -117,7 +105,7 @@ export function highRiskCliNegativeSmokeSpecs() {
     },
     {
       target: '$DB',
-      argv: ['sks', 'run', 'DROP TABLE users;', '--db', '--execute', '--json'],
+      argv: ['sks', 'mad-sks', 'sql', 'DROP TABLE users;', '--json'],
       expected_blockers: ['destructive_sql_requires_mad_sks']
     },
     {
@@ -189,7 +177,6 @@ function blockersFromCliText(target: string, text: string, parsed: any, run: any
   if (/SKS project migration blocked|update_migration_lock_held/i.test(text)) blockers.push('update_migration_lock_held')
   if (target === 'super-search fetch' && /direct_url_fetch_ssrf_blocked/i.test(text)) blockers.push('direct_url_fetch_ssrf_blocked')
   if (target === 'commit-and-push' && /No configured push destination|No remote configured|fatal:.*remote|git_push_failed/i.test(text)) blockers.push('git_remote_missing')
-  if (target === 'rollback apply' && /Unknown rollback id: (?:missing|--yes)|rollback.*missing/i.test(text)) blockers.push('rollback_id_required')
   if (target === 'doctor --fix' && /doctor_touched_user_owned_file_without_sks_marker/i.test(text)) blockers.push('doctor_touched_user_owned_file_without_sks_marker')
   else if (target === 'doctor --fix' && /(?:^|\s)user_owned_file_without_sks_marker(?:\s|$)/i.test(text)) blockers.push('user_owned_file_without_sks_marker')
   if (target === '$DB' && /drop_table|drop_statement|destructive/i.test(text)) blockers.push('destructive_sql_requires_mad_sks')
@@ -216,8 +203,6 @@ export function highRiskBlockers(target: string, input: any = {}) {
       return superSearchFetchBlockers(input)
     case 'commit-and-push':
       return commitAndPushBlockers(input)
-    case 'rollback apply':
-      return rollbackApplyBlockers(input)
     case 'doctor --fix':
       return doctorFixBlockers(input)
     case 'update now --dry-run':
@@ -247,10 +232,6 @@ function commitAndPushBlockers(input: any) {
   const ambiguous = (input.unstagedChanges || []).some((file: string) => staged.has(file))
   if (ambiguous) blockers.push('dirty_staged_ambiguity')
   return blockers
-}
-
-function rollbackApplyBlockers(input: any) {
-  return input.action === 'apply' && !String(input.rollbackId || '').trim() ? ['rollback_id_required'] : []
 }
 
 function doctorFixBlockers(input: any) {

@@ -5,6 +5,11 @@ import os from 'node:os';
 import fsp from 'node:fs/promises';
 import { callSksdHookDaemon, sksdSocketPath, startSksdHookDaemon } from '../sksd-hook-daemon.js';
 
+/** The handler result of a successful daemon round-trip. */
+function resultOf(response: Awaited<ReturnType<typeof callSksdHookDaemon>>): unknown {
+  return response && response.ok ? response.result : undefined;
+}
+
 async function tempRoot(t: TestContext) {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sksd-hook-test-'));
   const socketPath = sksdSocketPath(root);
@@ -36,7 +41,7 @@ test('sksd hook daemon: real socket round-trip returns the handler result', asyn
     const response = await callSksdHookDaemon(root, 'pre-tool', { cwd: root, tool_name: 'Read' });
     assert.ok(response, 'daemon should have responded');
     assert.equal(response.ok, true);
-    assert.deepEqual(response.result, { continue: true, echoed: { cwd: root, tool_name: 'Read' } });
+    assert.deepEqual(resultOf(response), { continue: true, echoed: { cwd: root, tool_name: 'Read' } });
     assert.equal(calls.length, 1);
     assert.equal(calls[0]?.name, 'pre-tool');
   } finally {
@@ -55,8 +60,8 @@ test('sksd hook daemon: multiple sequential requests over the same warm daemon',
   try {
     const first = await callSksdHookDaemon(root, 'pre-tool', {});
     const second = await callSksdHookDaemon(root, 'post-tool', {});
-    assert.deepEqual(first?.result, { continue: true, call_index: 1 });
-    assert.deepEqual(second?.result, { continue: true, call_index: 2 });
+    assert.deepEqual(resultOf(first), { continue: true, call_index: 1 });
+    assert.deepEqual(resultOf(second), { continue: true, call_index: 2 });
   } finally {
     await daemon!.close();
   }
@@ -70,7 +75,7 @@ test('sksd hook daemon: a second startSksdHookDaemon for the same root is a no-o
     const second = await startSksdHookDaemon(root, async () => ({ continue: true, who: 'second' }));
     assert.equal(second, null, 'must not start a duplicate daemon for a root that already has a live one');
     const response = await callSksdHookDaemon(root, 'pre-tool', {});
-    assert.deepEqual(response?.result, { continue: true, who: 'first' }, 'the original daemon must still be the one serving requests');
+    assert.deepEqual(resultOf(response), { continue: true, who: 'first' }, 'the original daemon must still be the one serving requests');
   } finally {
     await first!.close();
   }
@@ -113,7 +118,7 @@ test('sksd hook daemon: after close(), a fresh daemon can start again for the sa
   assert.ok(second, 'a new daemon should be able to bind the same socket once the old one is closed');
   try {
     const response = await callSksdHookDaemon(root, 'pre-tool', {});
-    assert.deepEqual(response?.result, { continue: true, who: 'second' });
+    assert.deepEqual(resultOf(response), { continue: true, who: 'second' });
   } finally {
     await second!.close();
   }
@@ -137,7 +142,7 @@ test('sksd hook daemon: long hermetic TMPDIR still uses a short private socket p
     assert.ok(daemon);
     try {
       const response = await callSksdHookDaemon(root, 'pre-tool', {});
-      assert.deepEqual(response?.result, { continue: true });
+      assert.deepEqual(resultOf(response), { continue: true });
       assert.equal((await fsp.lstat(path.dirname(socketPath))).mode & 0o777, 0o700);
       assert.equal((await fsp.lstat(socketPath)).mode & 0o777, 0o600);
       assert.equal((await fsp.lstat(pidFilePath)).mode & 0o777, 0o600);
@@ -198,4 +203,35 @@ test('sksd hook daemon: a request from a different SKS version is refused and re
   } finally {
     await daemon.close();
   }
+});
+
+test('sksd hook daemon: a caller whose decision environment differs is refused without retiring the daemon', async (t) => {
+  const { SKSD_ENV_MISMATCH_ERROR } = await import('../sksd-hook-daemon.js');
+  const root = await tempRoot(t);
+  let handled = 0;
+  const daemon = await startSksdHookDaemon(root, async () => { handled += 1; return { continue: true }; }, { envFingerprint: 'daemon-environment' });
+  assert.ok(daemon);
+  try {
+    const refused = await callSksdHookDaemon(root, 'pre-tool', {});
+    assert.deepEqual(refused, { ok: false, error: SKSD_ENV_MISMATCH_ERROR });
+    assert.equal(handled, 0, 'a decision from a foreign environment must never be served');
+    // Still alive for callers that share its environment.
+    assert.notEqual(await callSksdHookDaemon(root, 'pre-tool', {}), null);
+  } finally {
+    await daemon.close();
+  }
+});
+
+test('sksd hook env: worker and standalone-parent markers stay out of the daemon and its fingerprint', async () => {
+  const { daemonSpawnEnv, hasPerProcessHookEnv, hookDecisionEnvFingerprint } = await import('../sksd-hook-env.js');
+  const plain = { HOME: '/home/u', CODEX_HOME: '/home/u/.codex', SKS_VERIFICATION_PROFILE: 'essential', PATH: '/bin' };
+  const worker = { ...plain, SKS_AGENT_WORKER: '1', SKS_AGENT_GENERATION_DEPTH: '1', SKS_NARUTO_PARENT_LAUNCH: '1', SKS_NARUTO_PARENT_MISSION_ID: 'M-1', CODEX_THREAD_ID: 'thread-a' };
+  assert.equal(hasPerProcessHookEnv(plain), false);
+  assert.equal(hasPerProcessHookEnv(worker), true);
+  assert.deepEqual(daemonSpawnEnv(worker), plain, 'the daemon starts without markers or a caller thread');
+  assert.equal(hookDecisionEnvFingerprint(daemonSpawnEnv(worker)), hookDecisionEnvFingerprint(plain));
+  assert.notEqual(hookDecisionEnvFingerprint({ ...plain, SKS_VERIFICATION_PROFILE: 'strict' }), hookDecisionEnvFingerprint(plain));
+  assert.notEqual(hookDecisionEnvFingerprint({ ...plain, OPENROUTER_API_KEY: 'sk-or' }), hookDecisionEnvFingerprint(plain));
+  assert.equal(hookDecisionEnvFingerprint({ ...plain, OPENROUTER_API_KEY: 'sk-or-a' }), hookDecisionEnvFingerprint({ ...plain, OPENROUTER_API_KEY: 'sk-or-b' }), 'key values never enter the fingerprint');
+  assert.equal(hookDecisionEnvFingerprint({ ...plain, SKS_HOOK_DAEMON: '1' }), hookDecisionEnvFingerprint(plain));
 });

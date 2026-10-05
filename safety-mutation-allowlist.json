@@ -869,8 +869,8 @@
       "file": "src/core/commands/image-ux-review-command.ts",
       "symbol": "imageUxFixture",
       "token": "fsp.writeFile",
-      "scope_contract_sha256": "fdc410f3a52493cdb7d8dcf7181d4a60a2ec3db0ea399d1532e87d3ee4d097f8",
-      "callsite_sha256": "e7aa0cf43139629f6140f2cccd75a1d6fdce9930eb412d2e35d292a8021f5f43",
+      "scope_contract_sha256": "3997e5de3870c6f6cc847e8253be8400df284cbbf6893df52ad8a8ef07cc5463",
+      "callsite_sha256": "37019d175dd15a215938d1dedfb6f1579c9c56bb0243d0c5942ef65588cbd395",
       "occurrence": 1,
       "reason": "Runtime artifact writer has caller-scoped path and is externally audited for guard migration."
     },
@@ -1049,8 +1049,8 @@
       "file": "src/core/daemon/sksd-hook-daemon.ts",
       "symbol": "startSksdHookDaemon",
       "token": "fsp.rm",
-      "scope_contract_sha256": "73e36640ceb3652f9215a969fb58864aa73bcd8aee8976a2ee34fe64027e3d82",
-      "callsite_sha256": "71c4f8b3df07bec8a77060a765f8a2a8c278e86423d7bd8b7556260edabffc83",
+      "scope_contract_sha256": "9181340d56c04e4eba6c7132ef87f7771be7d052ba48fc068e642fb13d0004ba",
+      "callsite_sha256": "25e80650b3065e22f252a65aee54f3d03fef50fab12b993a7a00cce290208f88",
       "occurrence": 1,
       "reason": "Hook daemon startup removes only the stale Unix socket path derived from the current project namespace before binding."
     },
@@ -2313,15 +2313,6 @@
       "callsite_sha256": "9d46e0cbeee5527523e2a8db168d51e371b8fbf9ea20a5ebca6d7f22081bf9a3",
       "occurrence": 1,
       "reason": "Benchmark reporting writes only leak-scanned JSON to a path proven confined beneath the workspace .sneakoscope reports directory."
-    },
-    {
-      "file": "src/core/triwiki/context-graph/optimizer/artifact.ts",
-      "symbol": "writeContextGraphPatchArtifact",
-      "token": "writeFileSync",
-      "scope_contract_sha256": "5adbd8acbc654345080619fd82540ba352eb742369b4267dc78dfccdfc0e1314",
-      "callsite_sha256": "58aa724a237dbaedeba0c3dde9bdb8c24c6dd1d6bbce8ec8f676fffb41bdd9ec",
-      "occurrence": 1,
-      "reason": "The optimizer writes only a leak-scanned proposal whose resolved candidate path is proven confined beneath its fixed workspace report directory."
     },
     {
       "file": "src/core/triwiki/context-graph/store/fragment-cache.ts",
@@ -4550,8 +4541,8 @@
       "file": "src/scripts/packlist-performance-check.ts",
       "symbol": "module",
       "token": "writeFileSync",
-      "scope_contract_sha256": "8b199bc6e9f9a3edf4accb5fbfaf585b14536ebcf5430a38344d0194c59b5e0c",
-      "callsite_sha256": "6a28e817c0a4891f89016a0cef4da3307a27cb1b9ac430bb9b31451e4e7cd1cf",
+      "scope_contract_sha256": "5cbc7a04ca123e826ed0decdc3c3694524cc4c9791b32fcd67370f9fe8db7682",
+      "callsite_sha256": "fd087f01ec94a2304b0c3daa13d0ddadcbbf037e946cc05a23d956b9df57f572",
       "occurrence": 1,
       "reason": "src/scripts/packlist-performance-check.ts#runNpmPack writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
@@ -4559,8 +4550,8 @@
       "file": "src/scripts/packlist-performance-check.ts",
       "symbol": "module",
       "token": "writeFileSync",
-      "scope_contract_sha256": "8b199bc6e9f9a3edf4accb5fbfaf585b14536ebcf5430a38344d0194c59b5e0c",
-      "callsite_sha256": "680753da0d79de81a14e2c060b6e4a99a46d6219a41a0999f1369d29657085fb",
+      "scope_contract_sha256": "5cbc7a04ca123e826ed0decdc3c3694524cc4c9791b32fcd67370f9fe8db7682",
+      "callsite_sha256": "0c8bfc4b059a541222ae941f883456851b39de31d9780a1884f457183a991056",
       "occurrence": 1,
       "reason": "src/scripts/packlist-performance-check.ts#runNpmPack writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
@@ -5877,15 +5868,6 @@
       "callsite_sha256": "60e9e3b80cd180388c63cf28053a838d8ca60e57dd841893d753e5155bc7343f",
       "occurrence": 1,
       "reason": "Preparation removes its own staging directory for the mission it is assembling; the path is created by this function and never user content."
-    },
-    {
-      "file": "src/core/triwiki/context-graph/compiler/fragment-store.ts",
-      "symbol": "pruneSourceFragmentStore",
-      "token": "fsp.rm",
-      "scope_contract_sha256": "cfd02ce71a3eea1f9c449421cdbb976ac9be294054ca6706e1fc89613ac0dcea",
-      "callsite_sha256": "403bd7f98cf812b97a3f48cd7366fe516de46a1c73a8c6925f2aa94d6947af6a",
-      "occurrence": 1,
-      "reason": "Fragment-store pruning removes only content-hash-named cache files inside the store directory it just listed; generated cache, never source truth."
     },
     {
       "file": "src/core/triwiki/context-graph/store/generation-io.ts",

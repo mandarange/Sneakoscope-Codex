@@ -54,9 +54,10 @@ export interface PostinstallMenuBarOutcome {
 export async function ensureSksMenuBarDuringPostinstall(
   env: NodeJS.ProcessEnv = process.env,
   io: PostinstallMenuBarIo = { stdinTTY: Boolean(input.isTTY), stdoutTTY: Boolean(output.isTTY) },
-  installer: typeof installSksMenuBar = installSksMenuBar
+  installer: typeof installSksMenuBar = installSksMenuBar,
+  platform: NodeJS.Platform = process.platform
 ): Promise<PostinstallMenuBarOutcome> {
-  const policy = postinstallMenuBarPolicy(env, io);
+  const policy = postinstallMenuBarPolicy(env, io, platform);
   if (!policy.install) return { status: 'skipped', reason: policy.reason, app_path: null, launched: false, blockers: [] };
   try {
     const result = await installer({ root: globalSksRoot(), apply: true, launch: policy.launch, env, quiet: true });

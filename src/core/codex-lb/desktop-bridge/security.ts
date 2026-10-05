@@ -584,6 +584,9 @@ async function resolveOrDeferRemoteTarget(raw: string, lookup: DesktopBridgeLook
  */
 const UNREACHABLE_UPSTREAM_ERROR_CODES = new Set([
   'EHOSTUNREACH', 'ENETUNREACH', 'ENETDOWN', 'EHOSTDOWN', 'EADDRNOTAVAIL', 'ECONNREFUSED', 'ETIMEDOUT',
+  // The pinned address is IPv6 and this host no longer has an IPv6 stack
+  // (IPv6 disabled, or an IPv4-only container or network).
+  'EAFNOSUPPORT',
   // The pinned address answers, but with a certificate for some other host:
   // the IP has been handed to a different tenant since the bridge resolved it.
   'ERR_TLS_CERT_ALTNAME_INVALID',

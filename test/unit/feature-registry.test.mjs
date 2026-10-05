@@ -44,7 +44,7 @@ test('feature registry carries fixture contracts', async () => {
     [...registry.source_inventory.handler_keys].sort(),
     Object.keys(COMMANDS).sort()
   );
-  assert.ok(registry.features.some((feature) => feature.id === 'cli-gates'));
+  assert.equal(registry.features.some((feature) => feature.id === 'cli-gates'), false, 'maintainer commands are not product features');
   assert.ok(registry.features.some((feature) => feature.id === 'cli-naruto'));
   const bridge = registry.features.find((feature) => feature.id === 'cli-bridge');
   assert.equal(bridge.fixture.kind, 'execute');

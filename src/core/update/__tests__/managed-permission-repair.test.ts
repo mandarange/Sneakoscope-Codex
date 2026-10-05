@@ -28,7 +28,9 @@ function fixture() {
   return { base, home, root, globalRoot: path.join(home, '.sneakoscope-global'), write, cleanup }
 }
 
-test('owned read-only folders and user flags are fixed without elevation, so update can delete them', async () => {
+test('owned read-only folders and user flags are fixed without elevation, so update can delete them', async (t) => {
+  // Plain root has no user to hand files back to, so the repair deliberately does nothing.
+  if (process.getuid?.() === 0 && !process.env.SUDO_UID) return t.skip('needs a non-root user')
   const f = fixture()
   try {
     const mission = path.join(f.root, '.sneakoscope', 'missions', 'm1')

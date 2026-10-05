@@ -2,7 +2,6 @@ import path from 'node:path'
 import { findLatestMission, missionDir } from '../mission.js'
 import { readJson, writeJsonAtomic } from '../fsx.js'
 import { readAgentMessageBus, type AgentMessageBusEntry } from './agent-message-bus.js'
-import { readLoopGraphProof, summarizeLoopGraphProof } from '../loops/loop-observability.js'
 
 export const RUNTIME_PROOF_SUMMARY_SCHEMA = 'sks.runtime-proof-summary.v1'
 
@@ -32,15 +31,6 @@ export interface RuntimeProofSummary {
     warning_count: number
     error_count: number
   }
-  loops: {
-    total: number
-    running: number
-    completed: number
-    blocked: number
-    speedup_ratio: number
-    active_loop_ids: string[]
-    blocked_loop_ids: string[]
-  }
   terminal_proof: {
     accepted: boolean
     gate_file: string | null
@@ -60,7 +50,6 @@ export async function buildRuntimeProofSummary(root: string, missionIdInput: str
   const stopGate = await readJson<any>(path.join(dir, 'stop-gate.json'), null)
   const messagesAll = await readAgentMessageBus(root, missionId, { max: 500 })
   const recentMessages = await readAgentMessageBus(root, missionId, { max: opts.maxMessages || 8 })
-  const loopSummary = summarizeLoopGraphProof(await readLoopGraphProof(root, missionId).catch(() => null))
   const failedMessages = messagesAll.filter((row) => row.event_type === 'worker_failed')
   const errorMessages = messagesAll.filter((row) => row.level === 'error')
   const terminalProofAccepted = canonicalTerminalProofAccepted(stopGate, missionId)
@@ -97,7 +86,6 @@ export async function buildRuntimeProofSummary(root: string, missionIdInput: str
       warning_count: messagesAll.filter((row) => row.level === 'warning').length,
       error_count: errorMessages.length
     },
-    loops: loopSummary,
     terminal_proof: {
       accepted: terminalProofAccepted,
       gate_file: terminalProofAccepted ? 'stop-gate.json' : null,
@@ -117,7 +105,6 @@ export function renderRuntimeProofSummary(summary: RuntimeProofSummary): string 
     `Unique PIDs: ${summary.parallel.unique_worker_pids}`,
     `Speedup: ${summary.parallel.speedup_ratio}x`,
     `Model calls max: ${summary.model_calls.max_observed}`,
-    `Loops: ${summary.loops.total} total / ${summary.loops.completed} done / ${summary.loops.blocked} blocked / ${summary.loops.speedup_ratio}x`,
     ...(summary.messages.recent.length ? [
       'Recent worker messages:',
       ...summary.messages.recent.map((row) => `  ${messageStatusLabel(row)} ${row.slot_id || row.worker_id}: ${row.message}`)

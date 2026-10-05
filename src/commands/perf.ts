@@ -12,31 +12,31 @@ const COLD_START_TIERS = Object.freeze({
     'sks --version': 80,
     'sks help': 150,
     'sks root --json': 150,
-    'sks features check --json': 1500
+    'sks commands --json': 150
   },
   'source-ci': {
     'sks --version': 120,
     'sks help': 220,
     'sks root --json': 220,
-    'sks features check --json': 2200
+    'sks commands --json': 220
   },
   'packed-local': {
     'sks --version': 160,
     'sks help': 280,
     'sks root --json': 280,
-    'sks features check --json': 2800
+    'sks commands --json': 280
   },
   'global-shim': {
     'sks --version': 220,
     'sks help': 350,
     'sks root --json': 350,
-    'sks features check --json': 3200
+    'sks commands --json': 350
   },
   'npx-one-shot': {
     'sks --version': 3000,
     'sks help': 3000,
     'sks root --json': 3000,
-    'sks features check --json': 5000
+    'sks commands --json': 3000
   }
 });
 
@@ -44,7 +44,7 @@ const COLD_START_COMMANDS = Object.freeze([
   { cmd: 'sks --version', args: ['--version'] },
   { cmd: 'sks help', args: ['help'] },
   { cmd: 'sks root --json', args: ['root', '--json'] },
-  { cmd: 'sks features check --json', args: ['features', 'check', '--json'] }
+  { cmd: 'sks commands --json', args: ['commands', '--json'] }
 ]);
 
 export async function run(_command: any, args: any = []) {

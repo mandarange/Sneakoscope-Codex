@@ -57,7 +57,7 @@ test('a command reaches a gate through the preset pipeline it dispatches', async
   try {
     writeControlPlane(root);
     write(root, 'package.json', '{"name":"fixture"}\n');
-    write(root, 'src/core/commands/release-command.ts', 'export const releaseCommand = 1;\n');
+    write(root, 'src/core/commands/review-command.ts', 'export const reviewCommand = 1;\n');
     write(root, 'src/scripts/release-proof-truth-check.ts', 'export const check = 1;\n');
     writeGateManifest(root, [
       {
@@ -65,7 +65,7 @@ test('a command reaches a gate through the preset pipeline it dispatches', async
         command: 'node ./dist/scripts/release-proof-truth-check.js',
         deps: [],
         cache: { enabled: true, inputs: ['package.json'] },
-        preset: ['release'],
+        preset: ['review'],
         output_contract: 'sks.gate-result.v2'
       }
     ]);
@@ -73,21 +73,21 @@ test('a command reaches a gate through the preset pipeline it dispatches', async
     const fragment = await extract(root);
     assert.deepEqual(fragment.issues.filter((issue) => issue.severity === 'error'), []);
 
-    const toPipeline = edgeBetween(fragment, 'command:release', 'pipeline:gates:release', 'routes_to');
-    assert.ok(toPipeline, 'the release command must reach the release preset pipeline');
+    const toPipeline = edgeBetween(fragment, 'command:review', 'pipeline:gates:review', 'routes_to');
+    assert.ok(toPipeline, 'the review command must reach the review preset pipeline');
     assert.equal(toPipeline?.provenance.path, 'release-gates.v2.json');
 
-    const toGate = edgeBetween(fragment, 'pipeline:gates:release', 'gate:release:proof-truth', 'gated_by');
+    const toGate = edgeBetween(fragment, 'pipeline:gates:review', 'gate:release:proof-truth', 'gated_by');
     assert.ok(toGate, 'the preset pipeline must be gated by its member gate');
 
-    const handler = edgeBetween(fragment, 'command:release', 'file:src/core/commands/release-command.ts', 'routes_to');
+    const handler = edgeBetween(fragment, 'command:review', 'file:src/core/commands/review-command.ts', 'routes_to');
     assert.ok(handler, 'a command must route to its handler file');
     assert.equal(handler?.confidence, 'derived', 'a convention-derived handler is not a manifest claim');
     assert.equal(handler?.provenance.path, TOPOLOGY_COMMAND_MANIFEST_PATH);
 
-    const commandNode = fragment.nodes.find((node) => node.id === 'command:release');
+    const commandNode = fragment.nodes.find((node) => node.id === 'command:review');
     assert.equal(commandNode?.kind, 'command');
-    assert.equal(commandNode?.metadata.commandName, 'release');
+    assert.equal(commandNode?.metadata.commandName, 'review');
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -97,7 +97,7 @@ test('runtime-required-scripts.json turns a handler file into a manifest-grade o
   const root = makeRoot();
   try {
     writeControlPlane(root);
-    write(root, 'src/core/commands/gates-command.ts', 'export const gatesCommand = 1;\n');
+    write(root, 'src/core/commands/review-command.ts', 'export const reviewCommand = 1;\n');
     write(
       root,
       TOPOLOGY_RUNTIME_SCRIPTS_PATH,
@@ -105,21 +105,21 @@ test('runtime-required-scripts.json turns a handler file into a manifest-grade o
         schema: 'sks.runtime-required-scripts.v1',
         scripts: [],
         reference_source_policies: [
-          { source: 'src/core/commands/gates-command.ts', classification: 'installed_runtime', reason: 'dispatches the packaged DAG' }
+          { source: 'src/core/commands/review-command.ts', classification: 'installed_runtime', reason: 'dispatches the packaged DAG' }
         ]
       })
     );
 
     const fragment = await extract(root);
-    const owns = edgeBetween(fragment, 'command:gates', 'file:src/core/commands/gates-command.ts', 'owns');
+    const owns = edgeBetween(fragment, 'command:review', 'file:src/core/commands/review-command.ts', 'owns');
     assert.ok(owns, 'a manifest that names a command source expresses ownership');
     assert.equal(owns?.confidence, 'manifest');
     assert.equal(owns?.provenance.path, TOPOLOGY_RUNTIME_SCRIPTS_PATH);
 
-    const routes = edgeBetween(fragment, 'command:gates', 'file:src/core/commands/gates-command.ts', 'routes_to');
+    const routes = edgeBetween(fragment, 'command:review', 'file:src/core/commands/review-command.ts', 'routes_to');
     assert.equal(routes?.confidence, 'manifest', 'a manifest-declared handler is not merely derived');
 
-    const fileNode = fragment.nodes.find((node) => node.id === 'file:src/core/commands/gates-command.ts');
+    const fileNode = fragment.nodes.find((node) => node.id === 'file:src/core/commands/review-command.ts');
     assert.equal(fileNode?.metadata.runtimeClassification, 'installed_runtime');
   } finally {
     fs.rmSync(root, { recursive: true, force: true });

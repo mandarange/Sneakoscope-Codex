@@ -1,5 +1,6 @@
 import { projectRoot } from '../core/fsx.js';
 import { flag } from '../cli/args.js';
+import { COMMAND_MANIFEST_BY_NAME } from '../cli/command-manifest-lite.js';
 import { printJson } from '../cli/output.js';
 import { collectProofEvidence } from '../core/proof/evidence-collector.js';
 import { findLatestMission } from '../core/mission.js';
@@ -11,10 +12,22 @@ import { validateCompletionProof } from '../core/proof/validation.js';
 import { buildRuntimeProofSummary, renderRuntimeProofSummary } from '../core/agents/runtime-proof-summary.js';
 import { summarizeTriWikiProofBank } from '../core/triwiki/triwiki-proof-bank.js';
 
+export function usage(): string {
+  const { usage: synopsis, description } = COMMAND_MANIFEST_BY_NAME.proof;
+  return `Usage: ${synopsis}\n\n${description}`;
+}
+
 export async function run(_command: any, args: any = []) {
-  const root = await projectRoot();
   const action = args[0] || 'show';
   const rest = args.slice(1);
+  // Evidence checks that used to be separate top-level commands. They load
+  // lazily so plain `sks proof` keeps its small import graph.
+  if (action === 'trust') return (await import('../core/commands/trust-command.js')).trustCommand(rest);
+  if (action === 'artifacts') return (await import('../core/commands/validate-artifacts-command.js')).validateArtifactsCommand(rest);
+  if (action === 'stop-gate') return (await import('../core/commands/stop-gate-command.js')).stopGateCommand('stop-gate', rest);
+  if (action === 'hproof') return (await import('../core/commands/hproof-command.js')).hproofCommand(rest[0] || 'check', rest.slice(1));
+  if (action === 'field') return (await import('../core/commands/proof-field-command.js')).proofFieldCommand(rest[0] || 'scan', rest.slice(1));
+  const root = await projectRoot();
   if (action === 'bank' && rest[0] === 'status') {
     const status = summarizeTriWikiProofBank(root);
     if (flag(args, '--json')) return printJson(status);
@@ -126,7 +139,7 @@ export async function run(_command: any, args: any = []) {
     console.log(`Completion proof written: ${result.files.latest_json}`);
     return;
   }
-  console.error('Usage: sks proof show|latest|validate|route <mission-id|latest>|finalize <mission-id|latest> [--route route] [--strict] [--mock] [--json]|export --md|repair latest|smoke [--json]');
+  console.error('Usage: sks proof show|latest|validate|route <mission-id|latest>|finalize <mission-id|latest> [--route route] [--strict] [--mock] [--json]|export --md|repair latest|smoke|trust report|validate|status|explain [mission-id|latest]|artifacts [mission-id|latest] [--required a,b]|stop-gate [check] [--route route] [--mission id] [--gate path]|hproof check [mission-id|latest]|field scan [--json] [--intent "task"] [--changed file1,file2]');
   process.exitCode = 1;
 }
 

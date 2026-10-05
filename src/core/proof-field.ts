@@ -49,7 +49,7 @@ export const PROOF_CONE_DEFINITIONS = Object.freeze([
     id: 'cli_runtime',
     surfaces: ['cli', 'commands', 'runtime'],
     match: [/src\/cli|src\/commands|bin\/sks|fsx|codex-adapter/i],
-    verification: ['npm run packcheck', 'node ./dist/bin/sks.js commands --json', 'node ./dist/bin/sks.js proof-field scan --json'],
+    verification: ['npm run packcheck', 'node ./dist/bin/sks.js commands --json', 'node ./dist/bin/sks.js proof field scan --json'],
     negative_work: ['browser_ui_e2e']
   },
   {

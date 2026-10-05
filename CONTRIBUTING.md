@@ -22,6 +22,19 @@ npm test
 
 The build is the source of truth for `dist/`; do not hand-edit generated output. Follow the repository's release-readiness guide before changing version files or publishing.
 
+### Maintainer commands
+
+Commands for developing and releasing SKS itself are not part of the shipped `sks` CLI, so users and agent hosts never see them. Run them from a source checkout after `npm run build`:
+
+```sh
+npm run maintainer                      # list the maintainer commands
+npm run maintainer -- check --tier confidence --sla 5m
+npm run maintainer -- release affected
+npm run maintainer -- features check --json
+```
+
+The set is `check`, `gates`, `task`, `release`, `daemon`, `versioning`, `bench`, `perf`, `features`, `all-features`, `harness`, and `rust`. `--help` prints usage without running the command.
+
 ## Pull requests
 
 A good pull request explains the user-visible problem, the resulting behavior, and the evidence that supports it. Include:

@@ -261,9 +261,15 @@ function standaloneTestEnv(): NodeJS.ProcessEnv {
 function pidAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
-    return true;
   } catch {
     return false;
+  }
+  // In a container whose PID 1 does not reap orphans, a killed descendant stays
+  // a zombie: signal 0 still succeeds, but the process no longer runs.
+  try {
+    return !/^\d+ \(.*\) Z /.test(fs.readFileSync(`/proc/${pid}/stat`, 'utf8'));
+  } catch {
+    return true;
   }
 }
 

@@ -79,8 +79,8 @@ sks proof finalize latest --route '$sks-naruto' --json
 sks proof finalize latest --strict --json
 sks proof export --md
 sks proof repair latest --json
-sks trust report latest --json
-sks trust validate latest --json
+sks proof trust report latest --json
+sks proof trust validate latest --json
 ```
 
 Route finalization lives under `src/core/proof/route-finalizer.ts`, route policy in `route-finalizer-policy.ts` and `route-proof-policy.ts`, route writing in `route-adapter.ts`, and Stop validation in `route-proof-gate.ts`.

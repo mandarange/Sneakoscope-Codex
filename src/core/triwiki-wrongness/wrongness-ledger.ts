@@ -251,7 +251,7 @@ export async function recordWrongnessFromTrustReport(root: string, report: unkno
       detected_by: {
         source: 'trust_validate',
         artifact: missionId ? `.sneakoscope/missions/${missionId}/trust-report.json` : null,
-        command: 'sks trust validate',
+        command: 'sks proof trust validate',
         detail: issue
       },
       root_cause: {

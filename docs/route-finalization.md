@@ -22,8 +22,8 @@ sks proof finalize latest --json
 sks proof finalize latest --route '$sks-naruto' --json
 sks proof finalize latest --route '$sks-image-ux-review' --mock --require-relation --json
 sks proof route latest --json
-sks trust report latest --json
-sks trust explain latest
+sks proof trust report latest --json
+sks proof trust explain latest
 ```
 
 `sks proof repair latest` remains an emergency repair command. Normal route completion should go through the route finalizer and write both mission-local proof and `.sneakoscope/proof/latest.*`.

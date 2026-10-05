@@ -23,7 +23,6 @@ const FIXTURES = Object.freeze({
     validates_json_fields: ['imagegen_repair', 'repair.imagegen']
   }),
   'cli-paths': fixture('execute_and_validate_artifacts', 'sks paths managed --json', ['.sneakoscope/managed-paths.json'], 'pass'),
-  'cli-rollback': fixture('execute', 'sks rollback list --json', [], 'pass'),
   'cli-config': fixture('execute', 'sks config --help', [], 'pass', {
     quality: 'wiring_only',
     reason: 'The non-mutating help path proves the installed config command is wired; config-adopt mutation and dry-run behavior are covered by focused config-adopt tests.'
@@ -46,12 +45,9 @@ const FIXTURES = Object.freeze({
     reason: 'Remote readiness is environment-dependent on the official Codex host and local project capabilities; SSH worker behavior is covered by dedicated hermetic protocol and policy tests.'
   }),
   'cli-hooks': fixture('execute', 'sks hooks trust-report --json', [], 'pass'),
-  'cli-features': fixture('execute', 'sks features check --json', [], 'pass'),
   'cli-commands': fixture('execute', 'sks commands --json', [], 'pass'),
-  'cli-check': fixture('execute', 'sks check --tier confidence --sla 5m --plan --json', [], 'pass'),
   'cli-plan': fixture('execute', 'sks plan "fixture" --json', [], 'pass'),
   'cli-review': fixture('execute', 'sks review --diff HEAD --json', [], 'pass'),
-  'cli-run': fixture('execute_and_validate_artifacts', 'sks run "fixture" --mock --json', ['run-classification.json', 'completion-proof.json', 'evidence-index.json', 'route-completion-contract.json', 'trust-report.json', 'work-order-ledger.json'], 'blocked', { reason: 'finalizeMockRun() in run-command.ts intentionally hardcodes gate.passed=false for every --mock invocation so a mock run can never claim a real completion; it does write all declared artifacts, including a work-order-ledger honestly closed to blocked (18차).' }),
   'cli-status': fixture('execute', 'sks status --json', [], 'pass'),
   'cli-usage': fixture('execute', 'sks usage overview', [], 'pass'),
   'cli-quickstart': fixture('execute', 'sks quickstart', [], 'pass'),
@@ -63,7 +59,6 @@ const FIXTURES = Object.freeze({
   'cli-update-check': fixture('static', 'sks update-check --json', [], 'pass'),
   'cli-guard': fixture('execute', 'sks guard check --json', [], 'pass'),
   'cli-conflicts': fixture('execute', 'sks conflicts check --json', [], 'pass'),
-  'cli-versioning': fixture('execute', 'sks versioning status --json', [], 'pass'),
   'cli-aliases': fixture('execute', 'sks aliases', [], 'pass'),
   'cli-fix-path': fixture('execute', 'sks fix-path --json', [], 'pass'),
   // selftest --real executes this fixture directly against this real repo (no
@@ -88,19 +83,14 @@ const FIXTURES = Object.freeze({
   'cli-image-ux-review': fixture('execute_and_validate_artifacts', 'sks image-ux-review fixture --mock --json', ['completion-proof.json', 'image-voxel-ledger.json', 'image-ux-generated-review-ledger.json'], 'blocked', { reason: 'Same as route-image-ux-review: the image-ux-review fixture command intentionally always exits 1 by design (honest mock, cannot claim a real completion), even though it does write all declared artifacts.' }),
   'cli-computer-use': fixture('real_optional', 'sks computer-use status --json', [], 'pass'),
   'cli-pipeline': fixture('execute_and_validate_artifacts', 'sks pipeline plan latest --agents 1 --json', ['pipeline-plan.json'], 'pass'),
-  'cli-validate-artifacts': fixture('execute_and_validate_artifacts', 'sks validate-artifacts latest --json', ['artifact-validation.json'], 'pass'),
-  'cli-hproof': fixture('execute_and_validate_artifacts', 'sks hproof check latest', ['done-gate.evaluated.json'], 'pass'),
-  'cli-proof-field': fixture('execute', 'sks proof-field scan --json --intent fixture', [], 'pass'),
   'cli-recallpulse': fixture('execute_and_validate_artifacts', 'sks recallpulse run latest --json', ['mission-status-ledger.json'], 'pass'),
   'cli-gx': fixture('execute_and_validate_artifacts', 'sks gx validate fixture --mock', ['gx-validation.json'], 'blocked', { reason: 'gxValidateFixture() intentionally exits non-zero (execution_class: mock_fixture) for an honest mock/blocked result; without --mock the command crashes on a missing cartridge instead.' }),
-  'cli-perf': fixture('execute', 'sks perf cold-start --json --iterations 1', [], 'pass'),
-  'cli-bench': fixture('execute_and_validate_artifacts', 'sks bench core --tier npx-one-shot --json --iterations 1', ['.sneakoscope/reports/performance/core-bench.json'], 'pass'),
   'cli-code-structure': fixture('execute', 'sks code-structure scan --json', [], 'pass', { timeout_ms: 180000 }),
-  'cli-rust': fixture('execute', 'sks rust smoke --json', [], 'pass'),
   'cli-decision': fixture('execute', 'sks decision status --json', [], 'pass'),
   'cli-imagegen': fixture('execute', 'sks imagegen status --json', [], 'pass'),
   'cli-skill-dream': fixture('execute', 'sks skill-dream status --json', [], 'pass'),
   'cli-gc': fixture('execute', 'sks gc --dry-run --json', [], 'pass'),
+  'cli-eval': fixture('execute', 'sks eval run --mock --json', [], 'pass'),
   'cli-cleanup': fixture('execute', 'sks cleanup plan --json', [], 'pass', {
     reason: 'Destructive blank-state apply stays behind explicit `sks cleanup run --apply`; the contract fixture only exercises the read-only plan surface.'
   }),
@@ -110,7 +100,6 @@ const FIXTURES = Object.freeze({
   'cli-fast-mode': fixture('execute', 'sks fast-mode status --json', [], 'pass'),
   'cli-dfix': fixture('execute_and_validate_artifacts', 'sks dfix fixture --json', ['completion-proof.json', 'dfix-gate.json', 'dfix-verification.json'], 'pass'),
   'cli-wiki': fixture('execute_and_validate_artifacts', 'sks wiki image-ingest test/fixtures/images/one-by-one.png --json', [{ path: '.sneakoscope/wiki/image-voxel-ledger.json', schema: 'sks.image-voxel-ledger.v1', require_anchors: false }], 'pass'),
-  'cli-wizard': fixture('execute', 'sks wizard', [], 'pass'),
   'cli-bootstrap': fixture('execute', 'sks bootstrap --dry-run', [], 'pass'),
   'cli-deps': fixture('execute', 'sks deps check --json', [], 'pass'),
   'cli-auth': fixture('execute', 'sks auth status --json', [], 'pass'),
@@ -127,17 +116,10 @@ const FIXTURES = Object.freeze({
   'cli-context7': fixture('real_optional', 'sks context7 check --json', [], 'pass'),
   'cli-super-search': fixture('execute', 'sks super-search doctor --json', [], 'pass'),
   'cli-search': fixture('execute', 'sks search status --json', [], 'pass'),
-  'cli-task': fixture('execute', 'sks task instant --plan --json', [], 'pass'),
-  'cli-release': fixture('execute', 'sks release affected --json', [], 'blocked', { reason: '18차: the phantom requiredSections schema mismatch (five_lane_review/integration_evidence/session_cleanup, from commit d4526f84 with no producer ever wired up) has been fixed -- missing_sections is now honestly empty. The release-gate DAG still legitimately fails/blocks on other real gates (e.g. release:readiness) independent of this fix, so the command still exits non-zero and this fixture stays honestly blocked rather than claiming full green.' }),
   'cli-triwiki': fixture('execute', 'sks triwiki index --json', [], 'pass'),
-  'cli-daemon': fixture('execute', 'sks daemon status --json', [], 'pass'),
-  'cli-all-features': fixture('execute_and_validate_artifacts', 'sks all-features complete --json', [`.sneakoscope/reports/all-feature-completion-${PACKAGE_VERSION}.json`], 'pass'),
   'cli-init': fixture('execute', 'sks init --local-only --dry-run', [], 'pass'),
-  'cli-eval': fixture('execute', 'sks eval run --mock --json', [], 'pass'),
-  'cli-harness': fixture('execute', 'sks harness fixture --mock --json', [], 'pass'),
   'cli-naruto': fixture('execute_and_validate_artifacts', 'sks naruto run "fixture" --agents 4 --max-threads 4 --json', ['subagent-plan.json', 'subagent-events.jsonl', 'subagent-evidence.json', 'naruto-summary.json', 'naruto-gate.json', 'work-order-ledger.json'], 'pass', preparationFixtureContract()),
   'cli-reasoning': fixture('execute', 'sks reasoning status --json', [], 'pass'),
-  'cli-profile': fixture('execute', 'sks profile status --json', [], 'pass'),
   'skill-db-safety-guard': fixture('execute', 'node --test test/unit/db-safety.test.mjs', [], 'pass', { root_mode: 'source_checkout_required' }),
   'skill-honest-mode': fixture('execute_and_validate_artifacts', 'sks proof smoke --json', ['completion-proof.json', 'trust-report.json'], 'pass'),
   'skill-imagegen': fixture('execute_and_validate_artifacts', 'sks image-ux-review fixture --mock --json', ['image-ux-generated-review-ledger.json', 'image-voxel-ledger.json'], 'pass'),
@@ -151,7 +133,6 @@ const FIXTURES = Object.freeze({
   'skill-context7-docs': fixture('real_optional', 'sks context7 check --json', [], 'pass'),
   'skill-seo-geo-optimizer': fixture('execute_and_validate_artifacts', 'sks seo-geo-optimizer fixture --mode geo --json', ['search-visibility/site-inventory.json', 'search-visibility/geo-findings.json', 'geo-gate.json', 'completion-proof.json'], 'pass'),
   'cli-proof': fixture('execute_and_validate_artifacts', 'sks proof smoke --json', ['.sneakoscope/proof/latest.json'], 'pass'),
-  'cli-trust': fixture('execute_and_validate_artifacts', 'sks trust report latest --json', ['trust-report.json'], 'pass'),
   'cli-wrongness': fixture('execute', 'sks wrongness validate project --json', [], 'pass', {
     reason: 'Release fixtures must not add synthetic project-wide wrongness records. The read-only validator exercises the CLI and ledger schema without contaminating trust state for later route proofs.'
   }),
@@ -179,13 +160,13 @@ const FIXTURES = Object.freeze({
   'route-align': fixture('execute_and_validate_artifacts', 'sks align fixture --json', ['work-order-ledger.json', 'align-plan.json', 'align-ledger.json', 'align-gate.json', 'completion-proof.json'], 'blocked', {
     reason: 'The Align route fixture creates a real hermetic mission, work-order ledger, and canonical Completion Proof, then honestly closes the work item as blocked because the six modernization workstreams were not executed. This verifies route wiring and proof closure without inventing official-doc work.'
   }),
-  'route-super-search': fixture('execute', 'sks run "$Super-Search doctor" --execute --json', [], 'pass'),
+  'route-super-search': fixture('execute', 'sks super-search doctor --json', [], 'pass'),
   'route-seo-geo-optimizer': fixture('execute_and_validate_artifacts', 'sks seo-geo-optimizer fixture --mode geo --json', ['search-visibility/site-inventory.json', 'search-visibility/geo-findings.json', 'search-visibility/verification-report.json', 'geo-gate.json', 'completion-proof.json'], 'pass'),
   'route-autoresearch': fixture('mock', '$AutoResearch fixture route', ['research-gate.json', 'completion-proof.json'], 'pass', {
-    reason: 'Producing research-gate.json + completion-proof.json requires the two-step `research prepare` then `research run latest --mock --autoresearch --json` sequence (same as route-research\'s safe-args setup step), which a single spawned command cannot express; the $AutoResearch pipeline-dispatch route (`sks run "$AutoResearch ..."`) instead writes autoresearch-gate.json, a different contract. Left as documented mock pending multi-step fixture setup support.'
+    reason: 'Producing research-gate.json + completion-proof.json requires the two-step `research prepare` then `research run latest --mock --autoresearch --json` sequence (same as route-research\'s safe-args setup step), which a single spawned command cannot express; the $AutoResearch pipeline-dispatch route instead writes autoresearch-gate.json, a different contract. Left as documented mock pending multi-step fixture setup support.'
   }),
   'route-mad-sks': fixture('mock', '$MAD-SKS permission gate + sql_plane route', [{ path: 'mad-sks-gate.json', schema: 'sks.mad-sks-gate.v1' }, 'completion-proof.json'], 'pass', {
-    reason: 'mad-sks-gate.json is written by materializeAutoSealedMadSks() inside prepareClarificationGate() in pipeline-internals/runtime-core.ts, which only runs via the real Codex App route dispatch pipeline (prepareRoute), not via `sks run "<prompt>" --json` (that CLI command only classifies the route in lightweight prepare mode and never calls prepareRoute); `sks run ... --execute` enters the Naruto execution path instead. No safe single sks CLI invocation reaches materializeAutoSealedMadSks; verified live in a hermetic run where mad-sks-gate.json was not produced. Left as documented mock.'
+    reason: 'mad-sks-gate.json is written by materializeAutoSealedMadSks() inside prepareClarificationGate() in pipeline-internals/runtime-core.ts, which only runs via the real Codex App route dispatch pipeline (prepareRoute). No safe single sks CLI invocation reaches materializeAutoSealedMadSks, so mad-sks-gate.json cannot be produced by a spawned command. Left as documented mock.'
   }),
   'route-from-chat-img': fixture('mock', '$From-Chat-IMG visual work order route', ['from-chat-img-work-order.md', 'image-voxel-ledger.json', 'completion-proof.json'], 'pass', {
     reason: 'hasFromChatImgSignal() routes $From-Chat-IMG to the full Naruto multi-agent work-order pipeline (routes.ts routeById(\'Naruto\')), which requires real chat-screenshot attachments to produce from-chat-img-work-order.md; there is no lightweight deterministic `--mock` single-command invocation that produces this route\'s specific work-order/coverage artifacts the way route-naruto\'s generic fixture prompt does. Left as documented mock.'
@@ -225,7 +206,6 @@ const FIXTURES = Object.freeze({
 });
 
 const STATIC_CONTRACT_FEATURES = new Set([
-  'cli-wizard',
   'cli-bootstrap',
   'cli-deps',
   'cli-auth',
@@ -235,18 +215,11 @@ const STATIC_CONTRACT_FEATURES = new Set([
   'cli-commit',
   'cli-commit-and-push',
   'cli-context7',
-  'cli-all-features',
-  'cli-eval',
-  'cli-harness',
   'cli-naruto',
   'cli-reasoning',
-  'cli-profile',
-  'cli-gates',
   'cli-postinstall',
   'cli-menubar',
-  'cli-stop-gate',
   'cli-route',
-  'cli-loop',
   'cli-autoresearch',
   'cli-hook',
   'handler-$',

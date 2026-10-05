@@ -8,7 +8,6 @@ import { assertGate, emitGate, importDist, root } from './gate-lib.js'
 const CORE_NO_TS_NOCHECK_DIRS = [
   'src/core/doctor',
   'src/core/codex-app',
-  'src/core/loops',
   'src/core/naruto'
 ]
 
@@ -19,8 +18,7 @@ const TARGET_TYPED_FILES = [
   'src/core/codex-app/codex-init-deep.ts',
   'src/core/codex-app/codex-hook-lifecycle.ts',
   'src/core/codex-app/codex-app-execution-profile.ts',
-  'src/core/codex-native/codex-native-interop-policy.ts',
-  'src/core/loops/loop-continuation-enforcer.ts'
+  'src/core/codex-native/codex-native-interop-policy.ts'
 ]
 
 export async function runTypedRoutingGate(id: string) {

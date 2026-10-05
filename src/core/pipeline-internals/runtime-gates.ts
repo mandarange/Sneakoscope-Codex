@@ -2,6 +2,7 @@ import { isRecordedImagegenModel } from '../imagegen/imagegen-evidence.js';
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { appendJsonl, exists, nowIso, readJson, readText, sha256, writeJsonAtomic } from '../fsx.js';
+import { isClarificationAwaiting } from '../clarification-gate-state.js';
 import { containsUserQuestion, noQuestionContinuationReason } from '../no-question-guard.js';
 import { missionDir, setCurrent } from '../mission.js';
 import { evaluateResearchGate } from '../research.js';
@@ -37,7 +38,6 @@ import {
   subagentEvidence,
   PIPELINE_PLAN_ARTIFACT,
 } from './runtime-core.js';
-import { projectTriwikiToAgentsMd } from '../triwiki/agents-md-projector.js';
 import {
   effectiveSubagentTarget,
   normalizeLegacySubagentCountFields,
@@ -166,7 +166,7 @@ export async function projectGateStatus(root: any, state: any = {}) {
   const hasActiveGate = Boolean(id && state?.stop_gate && !['none', 'honest_mode', 'clarification-gate'].includes(state.stop_gate));
   const activeGate: any = hasActiveGate ? await passedActiveGate(root, state) : null;
   const activeGateNotApplicable = activeGate?.not_applicable === true;
-  if (clarificationGatePending(state)) {
+  if (isClarificationAwaiting(state)) {
     gates.push({
       id: 'clarification-gate',
       ok: false,
@@ -264,7 +264,7 @@ export async function evaluateStop(root: any, state: any, payload: any, opts: an
   }
   const last = extractLastMessage(payload);
   const jsonCache = new Map<string, Promise<any>>();
-  if (clarificationGatePending(state)) {
+  if (isClarificationAwaiting(state)) {
     if (await hasVisibleClarificationQuestionBlock(root, state, last)) return { continue: true };
     return {
       decision: 'block',
@@ -442,33 +442,7 @@ export async function evaluateStop(root: any, state: any, payload: any, opts: an
   if (!reflection.ok) return complianceBlock(root, state, reflectionStopReason(state, reflection), { gate: 'reflection', missing: reflection.missing });
   const coverage = await workOrderCoverageGateStatus(root, state);
   if (!coverage.ok) return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} route has unresolved work-order-ledger items (neither verified nor honestly blocked): ${coverage.blockers.join(', ')}.`, { gate: 'work-order-ledger', missing: coverage.blockers });
-  fireAndForgetProjectMemory(root, state);
   return null;
-}
-
-function fireAndForgetProjectMemory(root: any, state: any = {}) {
-  if (!state?.mission_id) return;
-  void projectTriwikiToAgentsMd(String(root)).then((report) => {
-    const id = state.mission_id;
-    if (!id) return null;
-    return appendJsonl(path.join(missionDir(root, id), 'events.jsonl'), {
-      ts: nowIso(),
-      type: 'triwiki.agents_md_projected',
-      proof_invalidating: false,
-      ok: report.ok,
-      reason: report.reason,
-      written: report.written
-    });
-  }).catch((err: any) => {
-    const id = state.mission_id;
-    if (!id) return null;
-    return appendJsonl(path.join(missionDir(root, id), 'events.jsonl'), {
-      ts: nowIso(),
-      type: 'triwiki.agents_md_project_failed',
-      proof_invalidating: false,
-      error: err?.message || String(err)
-    }).catch(() => undefined);
-  });
 }
 
 async function routeProofGateStatus(root: any, state: any = {}) {
@@ -481,18 +455,6 @@ async function routeProofGateStatus(root: any, state: any = {}) {
     state,
     visualClaim: state.visual_claim === true ? true : (state.visual_claim === false ? false : undefined)
   });
-}
-
-function clarificationGatePending(state: any = {}) {
-  const phase = String(state.phase || '');
-  return Boolean(state?.clarification_required && phase.includes('CLARIFICATION_AWAITING_ANSWERS'))
-    || Boolean(
-      state?.mission_id
-      && state.implementation_allowed === false
-      && state.ambiguity_gate_required === true
-      && state.ambiguity_gate_passed !== true
-      && (phase.includes('CLARIFICATION_AWAITING_ANSWERS') || state.stop_gate === 'clarification-gate')
-    );
 }
 
 async function complianceBlock(root: any, state: any = {}, reason: any = '', detail: any = {}) {

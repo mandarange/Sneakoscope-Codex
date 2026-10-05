@@ -14,34 +14,26 @@ import { maybeRecordMadSksSqlPlaneToolResultFromToolUse } from './mad-sks/sql-pl
 import { checkHarnessModification, harnessGuardBlockReason, isHarnessSourceProject } from './harness-guard.js';
 import { isMadSksRouteState } from './permission-gates.js';
 import { classifyMadSksShellCommand } from './mad-sks/write-guard.js';
-import { activeRouteContext, evaluateStop, prepareRoute, promptPipelineContext as routePipelineContext, recordContext7Evidence, recordSubagentEvidence, routePrompt } from './pipeline.js';
 import { localizedFinalizationReason } from './language-preference.js';
 import { managedSkillDigestBlocksEnforced, postToolEvidenceEnabled, stopFinalizationRitualsEnforced } from './verification-profile.js';
 import { classifyToolError } from './evaluation.js';
-import { dollarCommand, managedSkillNamesForPrompt, stripVisibleDecisionAnswerBlocks, withJevParallelJudgment, withJevRouteOverride } from './routes.js';
+import { dollarCommand, managedSkillNamesForPrompt, routePrompt, stripVisibleDecisionAnswerBlocks, withJevParallelJudgment, withJevRouteOverride } from './routes.js';
 import { customImageModeLine, planJevTurn, type JevTurnPlan } from './hooks-runtime/jev-turn-plan.js';
 import { coreEngineeringDirectiveReferenceText } from './lean-engineering-policy.js';
 import {
   agentWorkerHookContext,
   agentWorkerHookRecursionDecision
 } from './agents/agent-recursion-guard.js';
-import { evaluateLoopContinuation } from './loops/loop-continuation-enforcer.js';
 import { diagnosticPromptAllowedDuringNoQuestions } from './routes/diagnostic-allowlist.js';
 import { maybeReconcileProjectSkillsPreflight } from './hooks-runtime/skill-reconcile-preflight.js';
 import { codePackFreshnessNote } from './hooks-runtime/code-pack-freshness-preflight.js';
 import { claimHookInvocation } from './hooks-runtime/hook-invocation-dedupe.js';
 import { armLightTurnStopBypass, clearLightTurnStopBypass, consumeLightTurnStopBypass, hasMatchingLightTurnStopBypass } from './hooks-runtime/light-turn.js';
 import { evaluateHookNarutoDecisionGate, looksLikeActiveContinuationPrompt } from './hooks-runtime/naruto-decision-gate.js';
-import { consultJevTurnModel } from './decisions/integration.js';
 import {
   ensureOfficialSubagentArtifactDirConfined,
-  inspectActiveOfficialSubagentWorkflow,
-  recordOfficialSubagentLifecycleCaptureFailure,
-  officialSubagentArtifactDir,
-  recordAndRefreshSubagentEvidence,
-  recordChildThreadResume,
-  refreshOfficialSubagentCompletionArtifacts
-} from './hooks-runtime/official-subagent-lifecycle.js';
+  officialSubagentArtifactDir
+} from './hooks-runtime/subagent-artifact-dir.js';
 import { finalizationRepeatDecision } from './hooks-runtime/stop-repeat-guard.js';
 import { armCodexGitActionStopBypass, consumeCodexGitActionStopBypass, consumeLightRouteStop, hasCompletionSummary, hasDfixLightCompletion, hasHonestMode, hasHonestModeUnresolvedGap, honestModeLoopbackBudgetExhausted, recordHonestModeLoopback, recordHonestModeTerminalUnverified, resolveHonestModeLoopback, shouldLoopBackAfterHonestMode, successfulAppNarutoStopNeedsVisibleSummary } from './hooks-runtime/stop-finalization.js';
 import {
@@ -51,9 +43,8 @@ import {
 import { classifyTaskProfile } from './runtime/task-profile.js';
 import { resolveSubagentThreadBudget } from './subagents/thread-budget.js';
 import { readOfficialSubagentConfig } from './subagents/official-subagent-config.js';
-import { jevSpawnRouting, openRouterOnlyJevTurnLine } from './hooks-runtime/jev-spawn-routing.js';
+import { isNarutoParentState, jevSpawnRouting, openRouterOnlyJevTurnLine } from './hooks-runtime/jev-spawn-routing.js';
 import { effectiveChildModelAllowlist } from './subagents/child-model-allowlist.js';
-import { maybeReconcileManagedGuidancePreflight } from './hooks-runtime/managed-guidance-preflight.js';
 import {
   evaluateParentOrchestrationGate,
   isSpawnToolPayload,
@@ -78,7 +69,6 @@ import {
   renderAuthoritativeSksSkillContext
 } from './codex-native/sks-skill-paths.js';
 import { resolveManagedSkillSourcesForAdmission } from './hooks-runtime/managed-skill-admission.js';
-import { handleSubagentStop } from './hooks-runtime/subagent-stop-hook.js';
 import {
   authoritativeSksSkillResolutionBlockers,
   clearSubagentSkillAvailabilityGuards,
@@ -132,9 +122,7 @@ import {
 import {
   interruptedToolOutputRecoveryBlockReason,
   missingToolOutputCallId,
-  missingToolOutputCallIdFromPayload,
-  quarantineMissingToolOutput,
-  readToolOutputQuarantine
+  missingToolOutputCallIdFromPayload
 } from './hooks-runtime/tool-output-quarantine.js';
 import {
   activeAuthoritativeSksSkillRefresh,
@@ -157,8 +145,15 @@ import {
   sealedSubagentRoutingContext,
   subagentRouteContext
 } from './hooks-runtime/subagent-context.js';
+// The route pipeline (planning, Stop evaluation, strict-profile evidence) loads
+// every route implementation. Only prompt, Stop, and strict PostToolUse turns
+// need it, so PreToolUse — the hook on every tool call — never pays for it.
+const loadPipeline = () => import('./pipeline.js');
+
 export { loadHookPayload, normalizeHookResult };
-export { refreshOfficialSubagentCompletionArtifacts };
+// The official-subagent lifecycle (Naruto evidence, terminal finalization)
+// matters only while a child workflow is bound to the session.
+const loadSubagentLifecycle = () => import('./hooks-runtime/official-subagent-lifecycle.js');
 export { honestModeGapLines, honestModeLoopbackBudgetExhausted } from './hooks-runtime/stop-finalization.js';
 async function loadState(root: any, payload: any = {}) {
   const sessionKey = conversationId(payload);
@@ -234,7 +229,9 @@ async function evaluateHookPayloadWithPlan(name: any, payload: any, opts: any, j
   });
   const withNarutoDecision = (result: any) => ({ ...result, sksNarutoDecision });
   if (name === 'user-prompt-submit' || name === 'session-start') {
-    await maybeReconcileManagedGuidancePreflight(root).catch(() => null);
+    await import('./hooks-runtime/managed-guidance-preflight.js')
+      .then(({ maybeReconcileManagedGuidancePreflight }) => maybeReconcileManagedGuidancePreflight(root))
+      .catch(() => null);
   }
   if (name === 'user-prompt-submit') {
     const result = await hookUserPrompt(root, state, payload, noQuestion, sessionKey);
@@ -261,12 +258,19 @@ async function evaluateHookPayloadWithPlan(name: any, payload: any, opts: any, j
     } finally {
       // A child hook in a turn the log has not seen is a follow-up turn: count the child as running again.
       // After the hook, because its first PreToolUse must still see the child as settled to reissue its skill admission.
-      await recordChildThreadResume(root, state, payload, sessionKey).catch(() => null);
+      if (state?.official_subagent_run_id) {
+        await loadSubagentLifecycle()
+          .then((lifecycle) => lifecycle.recordChildThreadResume(root, state, payload, sessionKey))
+          .catch(() => null);
+      }
     }
   }
   if (name === 'stop') return withNarutoDecision(await hookStop(root, state, payload, noQuestion, sessionKey));
   if (name === 'subagent-start') return withNarutoDecision(await hookSubagentStart(root, state, payload, sessionKey));
-  if (name === 'subagent-stop') return withNarutoDecision(await handleSubagentStop(root, state, payload, sessionKey));
+  if (name === 'subagent-stop') {
+    const { handleSubagentStop } = await import('./hooks-runtime/subagent-stop-hook.js');
+    return withNarutoDecision(await handleSubagentStop(root, state, payload, sessionKey));
+  }
   return withNarutoDecision({ continue: true });
 }
 async function hookSubagentStart(root: any, state: any, payload: any = {}, sessionKey: any = null) {
@@ -322,10 +326,13 @@ async function hookSubagentStart(root: any, state: any, payload: any = {}, sessi
         repairMode: 'stale-generation'
       }).catch(() => null)
     : null;
+  // Skill-file drift blocks a child only where it blocks tool calls (strict);
+  // in essential the child keeps working. Guard and artifact blockers stay.
+  const skillResolutionBlockers = skillNames.length ? authoritativeSksSkillResolutionBlockers(resolution) : [];
   const skillBlockers = [
     ...(bindingIncomplete ? ['subagent_skill_availability_guard_invalid'] : []),
     ...artifactDirBlockers,
-    ...(skillNames.length ? authoritativeSksSkillResolutionBlockers(resolution) : [])
+    ...(managedSkillDigestBlocksEnforced(root) ? skillResolutionBlockers : [])
   ];
   if (skillGuardBinding) {
     try {
@@ -349,10 +356,11 @@ async function hookSubagentStart(root: any, state: any, payload: any = {}, sessi
     // A host that never ran the parent's spawn through PreToolUse still lifts
     // the pre-spawn gate here; a spawn already counted is not counted twice.
     await recordParentOrchestrationSpawn(root, state, { atLeastOne: true }).catch(() => null);
+    const lifecycle = await loadSubagentLifecycle();
     try {
-      await recordAndRefreshSubagentEvidence(root, state, payload, 'SubagentStart', sessionKey);
+      await lifecycle.recordAndRefreshSubagentEvidence(root, state, payload, 'SubagentStart', sessionKey);
     } catch {
-      const lifecycleBlocker = await recordOfficialSubagentLifecycleCaptureFailure(
+      const lifecycleBlocker = await lifecycle.recordOfficialSubagentLifecycleCaptureFailure(
         artifactDir,
         state,
         payload,
@@ -420,7 +428,7 @@ async function attachJevTurnRouting(root: string, payload: any, result: any, orc
   // The prompt plan already asked Jev for the tier; never ask twice.
   const decision = plan
     ? { called: plan.decision.called, model: plan.decision.tier?.model || null, effort: plan.decision.tier?.effort || null, tier: plan.decision.tier?.tier || null, reason: plan.decision.reason }
-    : await consultJevTurnModel({ root, prompt }).catch(() => null);
+    : await import('./decisions/integration.js').then(({ consultJevTurnModel }) => consultJevTurnModel({ root, prompt })).catch(() => null);
   if (!decision?.called) return result;
   if (plan?.routeOverride) {
     result = attachContextLine(result, `Jev routed this prompt to the ${plan.routeOverride.routeId} pipeline (the keyword router guessed ${plan.baselineRouteId || 'none'}).`);
@@ -457,25 +465,13 @@ async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: a
   const explicitSession = explicitConversationId(payload);
   const detectedMissingCallId = missingToolOutputCallId(submittedPrompt)
     || missingToolOutputCallIdFromPayload(payload);
-  let toolOutputQuarantine = explicitSession
-    ? await readToolOutputQuarantine(root, sessionKey).catch(() => null)
-    : null;
-  if (detectedMissingCallId && explicitSession) {
-    toolOutputQuarantine = await quarantineMissingToolOutput({
-      root,
-      sessionKey,
-      callId: detectedMissingCallId,
-      missionId: state?.mission_id,
-      turnId: hookTurnId(payload)
-    }).catch(() => toolOutputQuarantine);
-  }
-  if (submittedPrompt && (detectedMissingCallId || toolOutputQuarantine)) {
+  // Only the turn that reports a lost tool output gets the recovery advice
+  // (strict refuses that one turn); later turns in the thread continue (T5).
+  if (submittedPrompt && detectedMissingCallId) {
     const reason = interruptedToolOutputRecoveryBlockReason({
-      callId: detectedMissingCallId || toolOutputQuarantine?.call_id,
-      missionId: state?.mission_id || toolOutputQuarantine?.mission_id
+      callId: detectedMissingCallId,
+      missionId: state?.mission_id
     });
-    // Strict: refuse the prompt until the thread is replaced. Essential: the
-    // model hears the same recovery advice and the user keeps steering.
     if (stopFinalizationRitualsEnforced(root)) return { decision: 'block', reason };
     return { continue: true, additionalContext: reason, systemMessage: visibleHookMessage('user-prompt-submit', reason) };
   }
@@ -511,7 +507,7 @@ async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: a
       session_scope: sessionKey
     };
     await setCurrent(root, attachedState, { sessionKey, replace: true });
-    const activeContext = await activeRouteContext(root, attachedState);
+    const activeContext = await (await loadPipeline()).activeRouteContext(root, attachedState);
     const skillContext = skillAdmission.resolution
       ? renderAuthoritativeSksSkillContext(skillAdmission.resolution)
       : '';
@@ -584,7 +580,7 @@ async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: a
       return { continue: true, additionalContext, systemMessage: visibleHookMessage('user-prompt-submit', additionalContext) };
     }
     if (activeContinuation) {
-      const activeContext = await activeRouteContext(root, state);
+      const activeContext = await (await loadPipeline()).activeRouteContext(root, state);
       return {
         continue: true,
         additionalContext: activeContext,
@@ -606,7 +602,7 @@ async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: a
       && state?.route_closed !== true
       && state?.official_subagent_run_id
       && !activeGoalOverlayContext(state, route)
-      ? await inspectActiveOfficialSubagentWorkflow(root, state, sessionKey)
+      ? await (await loadSubagentLifecycle()).inspectActiveOfficialSubagentWorkflow(root, state, sessionKey)
       : { status: 'inactive' as const };
     if (activeOfficialWorkflow.status === 'invalid') {
       return {
@@ -653,7 +649,7 @@ async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: a
             reason: `SKS preserved active workflow_run_id=${activeOfficialWorkflow.workflowRunId} but could not queue this addition (${queued.reason}). Wait for the root parent to drain the bounded active-run queue, then retry.`
           };
         }
-        const activeContext = await activeRouteContext(root, state);
+        const activeContext = await (await loadPipeline()).activeRouteContext(root, state);
         const skillContext = activeSkillAdmission.resolution
           ? renderAuthoritativeSksSkillContext(activeSkillAdmission.resolution)
           : '';
@@ -681,15 +677,15 @@ async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: a
       goalOverlay
     });
     if (isBlockingClarificationAwaiting(state) && !looksLikeClarificationCancel(prompt)) {
-      const activeContext = await activeRouteContext(root, state);
+      const activeContext = await (await loadPipeline()).activeRouteContext(root, state);
       const additionalContext = [updateContext, activeContext].filter(Boolean).join('\n\n');
       return { continue: true, additionalContext, systemMessage: visibleHookMessage('user-prompt-submit', additionalContext) };
     }
     const shouldLoadActiveContext = !command && !bypassActiveRoute && !goalOverlay && !prepareFreshRoute;
-    const activeContext = shouldLoadActiveContext ? await activeRouteContext(root, state) : '';
+    const activeContext = shouldLoadActiveContext ? await (await loadPipeline()).activeRouteContext(root, state) : '';
     const contexts = [updateContext, skillContext];
-    if (activeContext && shouldLoadActiveContext) contexts.push(routePipelineContext(prompt), activeContext);
-    else contexts.push((await prepareRoute(root, prompt, state, {
+    if (activeContext && shouldLoadActiveContext) contexts.push((await loadPipeline()).promptPipelineContext(prompt), activeContext);
+    else contexts.push((await (await loadPipeline()).prepareRoute(root, prompt, state, {
       sessionKey,
       parentModel: observedParentModel(payload)
     })).additionalContext);
@@ -808,7 +804,7 @@ async function hookPreTool(root: any, state: any, payload: any, noQuestion: any,
   const spawnPayload = jevSpawnInput
     ? { ...payload, tool_input: jevSpawnInput, toolInput: jevSpawnInput }
     : payload;
-  const spawnPolicyBlock = subagentSpawnPolicyBlockReason(spawnPayload, { root });
+  const spawnPolicyBlock = subagentSpawnPolicyBlockReason(spawnPayload, { root, narutoParent: isNarutoParentState(state) });
   if (spawnPolicyBlock) return { decision: 'block', permissionDecision: 'deny', reason: spawnPolicyBlock };
   const artifactDir = officialSubagentArtifactDir(root, state, sessionKey);
   const activeBinding = officialSubagentSkillGuardBinding(state, { allowClosedOfficialChild: true });
@@ -868,7 +864,7 @@ async function hookPreTool(root: any, state: any, payload: any, noQuestion: any,
       return { decision: 'block', permissionDecision: 'deny', reason: dbBlockReason(dbDecision) };
     }
   }
-  if (clarificationGateLocked(state) && !clarificationAnswerToolAllowed(payload)) {
+  if (isBlockingClarificationAwaiting(state) && !clarificationAnswerToolAllowed(payload)) {
     return { decision: 'block', permissionDecision: 'deny', reason: clarificationPauseBlockReason(state) };
   }
   const command = extractCommand(payload);
@@ -941,8 +937,8 @@ async function hookPostTool(root: any, state: any, payload: any, noQuestion: any
   await Promise.all([
     recordHostCapabilityPostTool(root, state, payload, sessionKey).catch(() => null),
     recordMadSksSqlPlanePostToolLifecycle(root, state, payload).catch(() => null),
-    evidence ? recordContext7Evidence(root, state, payload).catch(() => null) : Promise.resolve(null),
-    evidence ? recordSubagentEvidence(root, state, payload).catch(() => null) : Promise.resolve(null),
+    evidence ? loadPipeline().then((pipeline) => pipeline.recordContext7Evidence(root, state, payload)).catch(() => null) : Promise.resolve(null),
+    evidence ? loadPipeline().then((pipeline) => pipeline.recordSubagentEvidence(root, state, payload)).catch(() => null) : Promise.resolve(null),
     evidence && toolFailed(payload) ? recordToolErrorTaxonomy(root, state, payload).catch(() => null) : Promise.resolve(null)
   ]);
   if (!noQuestion) return { continue: true };
@@ -1140,7 +1136,7 @@ async function hookPermission(root: any, state: any, payload: any, noQuestion: a
   if (dbDecision.action === 'block' || dbDecision.action === 'confirm') {
     return { decision: 'deny', permissionDecision: 'deny', reason: dbBlockReason(dbDecision) };
   }
-  if (clarificationGateLocked(state) && !clarificationAnswerToolAllowed(payload)) {
+  if (isBlockingClarificationAwaiting(state) && !clarificationAnswerToolAllowed(payload)) {
     return { decision: 'deny', permissionDecision: 'deny', reason: clarificationPauseBlockReason(state) };
   }
   // No opinion outside no-question mode: Codex keeps its own approval prompt.
@@ -1195,23 +1191,16 @@ function looksLikeUserGitAction(payload: any = {}) {
   return /\bcodex\b[\s_-]*(?:app\s*)?(?:git\s*)?(?:action|commit|push|pr)\b/i.test(haystack);
 }
 
-function clarificationGateLocked(state: any = {}) {
-  if (isBlockingClarificationAwaiting(state)) return true;
-  return Boolean(
-    state?.mission_id
-    && state.implementation_allowed === false
-    && state.ambiguity_gate_required === true
-    && state.ambiguity_gate_passed !== true
-    && (String(state.phase || '').includes('CLARIFICATION_AWAITING_ANSWERS') || String(state.stop_gate || '') === 'clarification-gate')
-  );
-}
+// `sks pipeline answer` seals any paused route; `sks qa-loop answer` is the
+// QA-LOOP route's own spelling of the same step.
+const CLARIFICATION_ANSWER_COMMAND_RE = /\b(?:pipeline|qa-loop)\s+answer\b/i;
 
 function clarificationAnswerToolAllowed(payload: any = {}) {
   const command = extractCommand(payload);
-  if (/\bpipeline\s+answer\b/i.test(command) && /\b(?:sks|sks\.js|bin\/sks\.js|node)\b/i.test(command)) return true;
+  if (CLARIFICATION_ANSWER_COMMAND_RE.test(command) && /\b(?:sks|sks\.js|bin\/sks\.js|node)\b/i.test(command)) return true;
   if (!payloadMentionsAnswersJson(payload)) return false;
   if (!command) return true;
-  if (/\bpipeline\s+answer\b/i.test(command)) return true;
+  if (CLARIFICATION_ANSWER_COMMAND_RE.test(command)) return true;
   return !/\b(npm|git|selftest|packcheck|release:check|publish:dry|publish:ignore-scripts|publish:npm|doctor|naruto|qa-loop|wiki|db|test)\b/i.test(command);
 }
 
@@ -1235,28 +1224,6 @@ async function hookStop(root: any, state: any, payload: any, noQuestion: any, se
     const lightTurn = await consumeLightTurnStopBypass(root, { sessionKey, turnId: hookTurnId(payload) });
     if (lightTurn.accepted) return { continue: true, action: 'light_turn', silent: true };
   }
-  if (state?.mode === 'LOOP' || state?.route === 'Loop' || state?.route_command === '$Loop') {
-    const missionId = state?.mission_id;
-    if (missionId) {
-      const continuation = await evaluateLoopContinuation({ root, missionId }).catch(() => null);
-      if (continuation?.should_continue) {
-        return {
-          decision: 'block',
-          reason: `SKS Loop continuation required. Resume with: ${continuation.resume_instruction}`
-        };
-      }
-      if (continuation?.terminal_blocked) {
-        return {
-          continue: true,
-          action: 'loop_terminal_unverified',
-          status: 'unverified',
-          stop_reason: continuation.stop_reason,
-          completion_claim_allowed: false,
-          systemMessage: `SKS Loop stopped without a success claim (${continuation.stop_reason}). See .sneakoscope/missions/${missionId}/loop-continuation-enforcer.json.`
-        };
-      }
-    }
-  }
   if (await consumeCodexGitActionStopBypass(root, payload)) {
     return {
       continue: true,
@@ -1276,7 +1243,9 @@ async function hookStop(root: any, state: any, payload: any, noQuestion: any, se
     };
   }
   if (state?.subagents_required === true) {
-    await refreshOfficialSubagentCompletionArtifacts(root, state, last, sessionKey).catch(() => null);
+    await loadSubagentLifecycle()
+      .then((lifecycle) => lifecycle.refreshOfficialSubagentCompletionArtifacts(root, state, last, sessionKey))
+      .catch(() => null);
   }
   // Essential profile: a finished turn is finished. No Honest Mode wording
   // gate, no completion-summary regex, no gap loopback, no route proof or
@@ -1285,7 +1254,7 @@ async function hookStop(root: any, state: any, payload: any, noQuestion: any, se
   if (!noQuestion && !stopFinalizationRitualsEnforced(root)) {
     return { continue: true, action: 'essential_profile_stop_accepted' };
   }
-  const routeDecision = await evaluateStop(root, state, payload, { noQuestion });
+  const routeDecision = await (await loadPipeline()).evaluateStop(root, state, payload, { noQuestion });
   if (routeDecision && !successfulAppNarutoStopNeedsVisibleSummary(state, routeDecision)) {
     return routeDecision;
   }

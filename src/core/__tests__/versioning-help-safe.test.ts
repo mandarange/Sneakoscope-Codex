@@ -11,12 +11,12 @@ test('versioning bump --help never advances package metadata', () => {
   const before = '{"name":"fixture","version":"1.2.3"}\n'
   fs.writeFileSync(packageFile, before)
   try {
-    const result = spawnSync(process.execPath, [path.resolve(process.cwd(), 'dist/bin/sks.js'), 'versioning', 'bump', '--help'], {
+    const result = spawnSync(process.execPath, [path.resolve(process.cwd(), 'dist/scripts/maintainer-cli.js'), 'versioning', 'bump', '--help'], {
       cwd: root,
       encoding: 'utf8'
     })
     assert.equal(result.status, 0, result.stderr)
-    assert.match(result.stdout, /Usage: sks versioning/)
+    assert.match(result.stdout, /Usage: maintainer versioning/)
     assert.equal(fs.readFileSync(packageFile, 'utf8'), before)
   } finally {
     fs.rmSync(root, { recursive: true, force: true })

@@ -12,8 +12,8 @@ If a native binary exists but reports a stale version, SKS treats it as `js_fall
 ## Commands
 
 ```bash
-sks rust status --json
-sks rust smoke --json
+npm run maintainer -- rust status --json
+npm run maintainer -- rust smoke --json
 sks-rs --version
 sks-rs secret-scan <path>
 sks-rs jsonl-tail <path> --bytes 262144

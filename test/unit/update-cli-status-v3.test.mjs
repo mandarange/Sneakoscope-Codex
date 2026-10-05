@@ -38,7 +38,8 @@ test('update status, update check, and update-check expose the same v3 schema', 
   }
 });
 
-test('update CLI binds a Center-style explicit project root into dry-run and rollback receipts', async () => {
+test('update CLI binds a Center-style explicit project root into dry-run and rollback receipts', async (t) => {
+  if (process.platform === 'win32') return t.skip('POSIX shell shim');
   const home = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-update-cli-project-root-'));
   const projectRoot = path.join(home, 'selected project');
   const projectRootAlias = path.join(home, 'selected-project-link');
@@ -48,9 +49,17 @@ test('update CLI binds a Center-style explicit project root into dry-run and rol
     await fs.mkdir(projectRoot, { recursive: true });
     await fs.symlink(projectRoot, projectRootAlias, process.platform === 'win32' ? 'junction' : 'dir');
     const canonicalProjectRoot = await fs.realpath(projectRoot);
+    // `update now` first proves which SKS is installed. Give it a hermetic one:
+    // an `sks` on PATH that is this build, and an empty npm global prefix, so the
+    // test does not depend on whether the machine has SKS installed globally.
+    const bin = path.join(home, 'bin');
+    await fs.mkdir(bin, { recursive: true });
+    await fs.writeFile(path.join(bin, 'sks'), `#!/bin/sh\nexec "${process.execPath}" "${sksEntrypoint}" "$@"\n`, { mode: 0o755 });
     const env = {
       ...process.env,
       HOME: home,
+      PATH: `${bin}${path.delimiter}${process.env.PATH || ''}`,
+      npm_config_prefix: path.join(home, 'npm-global'),
       SKS_GLOBAL_ROOT: path.join(home, '.sneakoscope-global'),
       SKS_UPDATE_STATUS_PATH: path.join(home, 'update-status.json'),
       SKS_NPM_VIEW_SNEAKOSCOPE_VERSION: '99.99.99',

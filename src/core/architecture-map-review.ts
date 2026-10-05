@@ -12,7 +12,8 @@ import { renderArchitectureCapsule } from './triwiki/context-graph/architecture/
 import { buildArchitectureDelta, buildArchitectureReview } from './triwiki/context-graph/architecture/delta.js';
 import { buildArchitectureInputBundle, policyContentHash } from './triwiki/context-graph/architecture/input-bundle.js';
 import type { ArchitectureMapPolicy } from './triwiki/context-graph/architecture/policy.js';
-import { loadArchitectureMapPolicy } from './triwiki/context-graph/architecture/policy.js';
+import { loadProjectArchitectureMapPolicy } from './triwiki/context-graph/architecture/policy.js';
+import { packageRoot } from './fsx.js';
 import { buildArchitectureScope } from './triwiki/context-graph/architecture/slice.js';
 import {
   validateArchitectureBaseline,
@@ -58,7 +59,7 @@ export function resolveArchitectureMapPolicy(input: {
   policyRoot?: string;
 }): ArchitectureMapPolicy {
   if (input.policy) return input.policy;
-  if (input.policyRoot) return loadArchitectureMapPolicy(input.policyRoot);
+  if (input.policyRoot) return loadProjectArchitectureMapPolicy(input.policyRoot, packageRoot());
   throw new Error('architecture_map_policy_required');
 }
 

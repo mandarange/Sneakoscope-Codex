@@ -25,10 +25,10 @@ Active wrongness memory is also part of trust evaluation. High-severity active w
 ## Commands
 
 ```bash
-sks trust report latest --json
-sks trust validate latest --json
-sks trust status latest
-sks trust explain latest
+sks proof trust report latest --json
+sks proof trust validate latest --json
+sks proof trust status latest
+sks proof trust explain latest
 ```
 
 ## Hard Invariants
@@ -53,4 +53,4 @@ The stable Trust Kernel blocks stale and mismatched trust artifacts across the w
 - `static_contract_evidence_for_runtime_route`: runtime routes cannot be satisfied by static contracts.
 - evidence records with paths require `sha256`, and unresolved paths are blocked through the evidence router.
 
-Use `sks trust validate latest --json --strict` to require fully verified status; `verified_partial` is blocked in strict mode.
+Use `sks proof trust validate latest --json --strict` to require fully verified status; `verified_partial` is blocked in strict mode.

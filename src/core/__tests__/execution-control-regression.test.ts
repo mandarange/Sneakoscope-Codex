@@ -10,10 +10,6 @@ import {
   preflightExecutionControl,
   recordExecutionObservation
 } from '../runtime/execution-control.js'
-import { evaluateLoopContinuation } from '../loops/loop-continuation-enforcer.js'
-import { loopPlanPath } from '../loops/loop-artifacts.js'
-import { loopProofCompletionIssues } from '../loops/loop-proof-validation.js'
-import type { SksLoopProof } from '../loops/loop-schema.js'
 import { emptyCompletionProof } from '../proof/proof-schema.js'
 import { validateCompletionProof } from '../proof/validation.js'
 import { proofStatusBlocks } from '../proof/route-proof-policy.js'
@@ -54,34 +50,6 @@ test('QA progress fingerprint ignores reordered duplicate reasons but observes r
 
   assert.deepEqual(duplicate, first)
   assert.notDeepEqual(progressed, first)
-})
-
-test('loop continuation becomes terminal unverified after bounded identical checks', async (t) => {
-  const root = await tempRoot(t, 'sks-loop-continuation-')
-  const missionId = 'M-loop-bounded'
-  await writeJson(loopPlanPath(root, missionId), {
-    schema: 'sks.loop-plan.v1',
-    graph: { nodes: [{ loop_id: 'loop-one' }] }
-  })
-
-  const first = await evaluateLoopContinuation({ root, missionId, maxContinuationTurns: 2 })
-  const second = await evaluateLoopContinuation({ root, missionId, maxContinuationTurns: 2 })
-  const third = await evaluateLoopContinuation({ root, missionId, maxContinuationTurns: 2 })
-
-  assert.equal(first.should_continue, true)
-  assert.equal(second.should_continue, true)
-  assert.equal(third.should_continue, false)
-  assert.equal(third.terminal_blocked, true)
-  assert.equal(third.stop_reason, 'continuation_budget_exhausted')
-  assert.equal(third.resume_instruction, null)
-  assert.ok(third.blockers.includes('loop_continuation_budget_exhausted'))
-})
-
-test('contradictory completed loop proof is not verified complete', () => {
-  const issues = loopProofCompletionIssues(loopProof({ checkerOk: false, checkerBlockers: ['tests_missing'] }))
-
-  assert.ok(issues.includes('loop_checker_unverified'))
-  assert.ok(issues.includes('loop_checker_blockers_present'))
 })
 
 test('completion proof validation separates schema validity from verified completion', () => {
@@ -267,18 +235,4 @@ function schedulerRoster() {
     concurrency: 1,
     roster: [{ id: 'agent-one', persona_id: 'verifier', role: 'verifier', write_policy: 'read-only' }]
   }
-}
-
-function loopProof(input: { checkerOk: boolean; checkerBlockers: string[] }): SksLoopProof {
-  return {
-    schema: 'sks.loop-proof.v1',
-    mission_id: 'M-proof-truth',
-    loop_id: 'loop-one',
-    status: 'completed',
-    maker_result: { ok: true, worker_count: 1, artifacts: [], patch_candidates: [] },
-    checker_result: { ok: input.checkerOk, worker_count: 1, artifacts: [], blockers: input.checkerBlockers },
-    gate_result: { ok: true, selected_gates: [], passed_gates: [], failed_gates: [], skipped_gates: [], blockers: [] },
-    blockers: [],
-    handoff: { required: false, reason: null, artifact: null }
-  } as unknown as SksLoopProof
 }

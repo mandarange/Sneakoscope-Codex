@@ -48,6 +48,11 @@ function spawnInput(payload: any): Record<string, unknown> | null {
   return { ...input };
 }
 
+/** Whether the hook state is a Naruto parent, the only parent SKS orchestrates children for. */
+export function isNarutoParentState(state: any): boolean {
+  return narutoParent(state);
+}
+
 function narutoParent(state: any): boolean {
   const mode = String(state?.mode || '').toUpperCase();
   const route = String(state?.route || state?.route_command || '').replace(/^\$/, '').toUpperCase();

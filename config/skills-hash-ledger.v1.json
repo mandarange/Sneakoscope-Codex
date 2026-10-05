@@ -4,6 +4,7 @@
     {
       "canonical_name": "sks",
       "trusted_sha256": [
+        "d5adbf63047d4882258d70bb46017e4aa7b6d5804154c68ef4204d0e0e5916d6",
         "8aa34586ba331f0447668c2ce863fe6c9ec4f881828ebed26ca5ecc754d66840",
         "d0288d27c8bc1c89decb258c6805ed4286cd0d65371ef0eec453be233b39a2a1",
         "905fc5472d36f0780b56f0e09404f42ea20293b1a4615d2050b7db3043231dbd",
@@ -319,12 +320,6 @@
       ]
     },
     {
-      "canonical_name": "sks-loop",
-      "trusted_sha256": [
-        "e56f9c4d0f7227961779daf6806943f1926bb588ce21a965a813e8ad91cfd5c8"
-      ]
-    },
-    {
       "canonical_name": "sks-mad-sks",
       "trusted_sha256": [
         "fd0c72e86d2a4314664ece6000b67683df1d795e030f3eb9fc9a776477d137e8",
@@ -422,6 +417,7 @@
     {
       "canonical_name": "sks-reflection",
       "trusted_sha256": [
+        "712f148432811ad359a9ea23266e904ecf9ae39fa43584c831676a7233aa9c68",
         "bcea113ad0988f579aa3fd18c0f6c32eda220127b2c05331a8e4573dc2d25621",
         "d5b6e80644a55a50b60961fe3aa5ae342fd035b39605a07d13dcc82fb0f0149c",
         "5013cefe58746a23e998bd83dedf2c4de9270010297be6fc0c0f0ae2aae73fb8",
@@ -495,6 +491,7 @@
     {
       "canonical_name": "sks-wiki",
       "trusted_sha256": [
+        "62829492fa621da5f8c94566c30c1947ecfbcd9ddd509a9e5e1408db15222a76",
         "56b94d1e84cf2dd024033919b08bc5b55f5e02f7b68dff9704aed09e04022b28",
         "a6b3cf12e88b413073525c146aa27287557536b5a48eade83b87a11d8f371c72",
         "460a7dd5498fbf68697da64d6a56122ca088607edea8f815eea54aca580895fe",
@@ -505,6 +502,7 @@
     {
       "canonical_name": "sks-work",
       "trusted_sha256": [
+        "55d8708b5b02e3ad5ec44407872fcbcd99a5b73b5c4ad6ab2cb4b58f185b5a8f",
         "44bafa26bb2b042efb149a37ff3b84045a52e8278024140e1081fd6e54be47e6",
         "9619bcbe29fe84853500dbcac169d81915388144cbe677ef4f5831220e3a02d3",
         "7b4893af053caba27eab1b1d73ff375856522e433fb85dfabde50ea844c75639"

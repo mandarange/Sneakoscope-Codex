@@ -2,13 +2,14 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { leanEngineeringCompactText, leanEngineeringLongText } from './lean-engineering-policy.js';
 export { leanEngineeringCompactText, leanEngineeringLongText };
 
-import { ALLOWED_REASONING_EFFORTS, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, RECOMMENDED_SKILLS, REFLECTION_SKILL_NAME, USAGE_TOPICS } from './routes/constants.js';
+import { ALLOWED_REASONING_EFFORTS, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, RECOMMENDED_SKILLS, REFLECTION_SKILL_NAME } from './routes/constants.js';
 import { CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_WEB_VERIFICATION_POLICY, RESERVED_CODEX_PLUGIN_SKILL_NAMES } from './routes/evidence.js';
 import { PPT_PIPELINE_SKILL_ALLOWLIST } from './routes/ppt-policy.js';
 import { normalizeDollarSkillName, prefixKnownSksDollarReferences, sksPrefixedDollarCommand, sksPrefixedSkillName, unprefixedSksSkillName } from './routes/dollar-prefix.js';
 import { classifyTaskProfile, hasExplicitParallelCue, IMPLEMENTATION_VERB_RE, isTaskProfile, looksLikeDatabaseWorkRequest, type TaskProfile } from './runtime/task-profile.js';
 import { legacyCoreSkillNames } from './codex-native/core-skill-manifest.js';
 import { EXCLUSIVE_SURFACE_SPAWN_LINE } from './subagents/exclusive-surface-rule.js';
+import { COMMAND_MANIFEST_LITE } from '../cli/command-manifest-lite.js';
 
 export * from './routes/constants.js';
 export * from './routes/design-policy.js';
@@ -81,8 +82,8 @@ export function triwikiContextTracking(commandPrefix: any = 'sks') {
   return {
     ssot: 'triwiki',
     default_pack: '.sneakoscope/wiki/context-pack.json',
-    pack_command: `${prefix} wiki pack`,
-    refresh_command: `${prefix} wiki refresh`,
+    pack_command: `${prefix} align run`,
+    refresh_command: `${prefix} align run`,
     prune_command: `${prefix} wiki prune`,
     validate_command: `${prefix} wiki validate .sneakoscope/wiki/context-pack.json`,
     hydrate_policy: 'hydrate_by_id_hash_source_path_rgba_trig_coordinate',
@@ -109,7 +110,7 @@ export function stackCurrentDocsPolicy(commandPrefix: any = 'sks') {
     trigger: 'when_tech_stack_is_added_or_package_framework_runtime_version_changes',
     evidence_required: ['context7_resolve_library_id_and_query_docs', 'or_official_vendor_web_docs'],
     memory_path: '.sneakoscope/memory/q2_facts/stack-current-docs.md',
-    refresh_command: `${prefix} wiki refresh`,
+    refresh_command: `${prefix} align run`,
     validate_command: `${prefix} wiki validate .sneakoscope/wiki/context-pack.json`,
     priority: 'must_precede_coding_style_defaults',
     examples: [
@@ -161,7 +162,7 @@ export const ROUTES = [
     command: '$Answer',
     mode: 'ANSWER',
     route: 'answer-only research',
-    description: 'Answer questions without starting implementation. Uses TriWiki, web, Context7 when relevant, and Honest Mode fact-checking.',
+    description: 'Answer questions without starting implementation. Uses TriWiki, web, and Context7 when relevant, and separates verified facts from inference.',
     requiredSkills: ['answer', 'honest-mode'],
     lifecycle: ['intent_classification', 'triwiki_hydration', 'web_or_context7_evidence_when_needed', 'honest_fact_check', 'direct_answer'],
     context7Policy: 'if_external_docs',
@@ -246,7 +247,7 @@ export const ROUTES = [
     command: '$Naruto',
     mode: 'NARUTO',
     route: 'Codex official subagent workflow',
-    description: '$Naruto runs implementation work through Codex official subagents. The parent orchestrates: it owns decomposition, integration, and scoped verification, spawns a child per disjoint slice, and does not implement slices itself; standalone launches default to the latest deep-tier model. Each child runs the newest model of the tier its work needs; Jev mode picks the tier on spawn, and a stored role preference wins. Honor explicit counts and measured host limits, and reuse returned capacity.',
+    description: '$Naruto splits work the user asked to parallelize across Codex official subagents. The parent orchestrates: it owns decomposition, integration, and scoped verification, spawns a child per disjoint slice, and does not implement slices itself; standalone launches default to the latest deep-tier model. Each child runs the newest model of the tier its work needs; Jev mode picks the tier on spawn, and a stored role preference wins. Honor explicit counts and measured host limits, and reuse returned capacity.',
     requiredSkills: ['naruto', 'pipeline-runner', 'prompt-pipeline', 'honest-mode'],
     dollarAliases: ['$Work'],
     appSkillAliases: ['work', 'from-chat-img'],
@@ -486,12 +487,12 @@ export const ROUTES = [
     route: 'TriWiki refresh and maintenance',
     description: 'Refresh, pack, validate, or prune TriWiki context packs from Codex App.',
     requiredSkills: ['wiki', 'sks', 'honest-mode'],
-    lifecycle: ['intent_classification', 'wiki_refresh_or_pack', 'wiki_validate', 'honest_mode'],
+    lifecycle: ['intent_classification', 'align_refresh', 'wiki_validate', 'honest_mode'],
     context7Policy: 'optional',
     reasoningPolicy: 'medium',
     stopGate: 'none',
     coverageExemptReason: 'single fixed maintenance action (refresh/pack/validate/prune), not a free-form work order',
-    cliEntrypoint: 'sks wiki refresh|pack|validate|prune',
+    cliEntrypoint: 'sks align run | sks wiki validate|prune',
     examples: ['$Wiki refresh', '$Wiki prune and validate']
   },
   {
@@ -641,95 +642,8 @@ ROUTE_BY_DOLLAR_COMMAND.set('sks-from-chat-img', ROUTE_BY_ID.get('naruto'));
 ROUTE_BY_DOLLAR_COMMAND.set('work', ROUTE_BY_ID.get('naruto'));
 ROUTE_BY_DOLLAR_COMMAND.set('plan', ROUTE_BY_ID.get('planner'));
 
-export const COMMAND_CATALOG = [
-  { name: 'help', usage: 'sks help [topic]', description: 'Show CLI help or focused help for a topic.' },
-  { name: 'version', usage: 'sks version | sks --version', description: 'Print the installed Sneakoscope Codex version.' },
-  { name: 'update-check', usage: 'sks update-check [--json]', description: 'Refresh the shared update-status.v3 snapshot.' },
-  { name: 'mcp', usage: 'sks mcp config list|get|add|edit|duplicate|enable|disable|remove|test|login|logout|backups|restore [--scope global|project|effective] [--stdin-json] [--json]', description: 'Manage global/project MCP configuration through the shared guarded MCP Config Domain v2.' },
-  { name: 'wizard', usage: 'sks wizard', description: 'Open an interactive setup UI for install scope, setup, doctor, and verification.' },
-  { name: 'commands', usage: 'sks commands [--json]', description: 'List every user-facing command with a short description.' },
-  { name: 'check', usage: 'sks check --tier instant|affected|confidence|release|real-check [--sla 5m] [--changed-since auto] [--json]', description: 'Run build-once proof-bank checks: affected/confidence use incremental build and cached proof reuse; release keeps full clean proof for publish readiness.' },
-  { name: 'task', usage: 'sks task run [--sla 5m] [--json]', description: 'Run the normal affected-scope, release-equivalent task verification path.' },
-  { name: 'release', usage: 'sks release affected|full|background|stage [--json]', description: 'Run affected release proof, full release proof, or background release proof explicitly, or drive the staged npm publish up to the human approval step.' },
-  { name: 'triwiki', usage: 'sks triwiki index|affected|proof-bank|graph-status|graph-lint|graph-query|atlas-status|atlas-lint|atlas-list|atlas-show|atlas-why [--json]', description: 'Inspect TriWiki module cards, gate impact maps, affected graphs, proof bank status, and Architecture Map views.' },
-  { name: 'daemon', usage: 'sks daemon status|warm|stop [--json]', description: 'Inspect or warm the local SKS daemon cache state for build/proof reuse.' },
-  { name: 'run', usage: 'sks run "task" [--visual|--research|--db] [--json]', description: 'Classify a plain-language task, materialize a mission, and route it through the SKS trust kernel.' },
-  { name: 'plan', usage: 'sks plan "task" [--json]', description: 'Write a planning-only artifact under .sneakoscope/plans without editing code.' },
-  { name: 'status', usage: 'sks status [--json]', description: 'Show the active mission, route, phase, proof, trust, official-subagent evidence, image voxel, DB safety, and next action.' },
-  { name: 'review', usage: 'sks review [--staged|--diff <ref>] [--fix] [--json]', description: 'Review a diff with machine-evidence findings sorted above LLM review notes.' },
-  { name: 'usage', usage: `sks usage [${USAGE_TOPICS}]`, description: 'Print copy-ready workflows for common tasks.' },
-  { name: 'quickstart', usage: 'sks quickstart', description: 'Show the shortest safe setup and verification flow.' },
-  { name: 'bootstrap', usage: 'sks bootstrap [--install-scope global|project] [--local-only] [--json]', description: 'Initialize the current project, install SKS Codex App files/skills, check Context7/Codex App/Codex CLI, and print ready true/false.' },
-  { name: 'root', usage: 'sks root [--json]', description: 'Show whether SKS is using a project root or the per-user global SKS runtime root.' },
-  { name: 'update', usage: 'sks update status|check|review|now|rollback [--refresh] [--version <version>] [--json] [--dry-run]', description: 'Inspect update-status.v3, review the exact staged operation, update the global package, or run guarded rollback.' },
-  { name: 'uninstall', usage: 'sks uninstall [--dry-run] [--yes] [--keep-config] [--keep-data] [--purge-projects] [--json]', description: 'Remove SKS global skills, hooks, menu bar, state, temp files, and optional project residue while preserving user-owned content by default.' },
-  { name: 'deps', usage: 'sks deps check [--json] [--yes]', description: 'Check Node/npm and Codex CLI readiness; pass --yes to repair missing Codex CLI tooling when supported.' },
-  { name: 'codex', usage: 'sks codex compatibility|version|update-status [--refresh]|update|doctor|schema|current [--json]', description: 'Check Codex CLI compatibility/version/update status, run the official `codex update`, and inspect current manifest, capability, and hook-schema evidence.' },
-  { name: 'codex-app', usage: 'sks codex-app [check|status|restart|context-management [status|on|off]|context-1m [status|on|off]|product-design|chrome-extension|pat status|remote-control]', description: 'Check Codex App integration, Desktop Bridge readiness, Product Design plugin readiness, Codex Chrome Extension web verification readiness, PAT-safe status, first-party MCP/plugin readiness, Codex CLI remote-control availability, and the opt-in Codex 1M context window toggle (each model gets its largest supported window) with automatic Codex restart. Provider routing is managed only by sks bridge.' },
-  { name: 'codex-native', usage: 'sks codex-native status|feature-broker|invocation-plan|init-deep [--json]', description: 'Inspect Codex Native feature broker readiness, invocation routing, and managed memory setup.' },
-  { name: 'hooks', usage: 'sks hooks explain|status|trust-report|replay|codex-validate|warning-check ... [--json]', description: 'Explain Codex hook events, validate current vendored event output schemas, replay fixtures, and enforce warning-zero SKS hook policies.' },
-  { name: 'remote', usage: 'sks remote readiness|machines|worker ... [--json]', description: 'Inspect official Codex Remote readiness and the allowlisted proof-aware SSH stdio worker surface.' },
-  { name: 'mad-sks', usage: 'sks mad-sks plan|run|apply|sql|apply-migration|status|close|rollback-apply ... | sks --mad [--high]', description: 'Open or inspect MAD-SKS scoped permission workflows, merged SQL-plane execution, and the native Codex permission launcher.' },
-  { name: 'auto-review', usage: 'sks auto-review status|enable|start [--high] | sks --Auto-review --high', description: 'Enable Codex automatic approval review and launch the native Codex session with the auto-review profile.' },
-  { name: 'dollar-commands', usage: 'sks dollar-commands [--json]', description: 'List Codex App $ commands such as $sks-dfix and $sks-naruto.' },
-  { name: 'fast-mode', usage: 'sks fast-mode on|off|status|clear [--project] [--json]', description: 'Toggle the global Codex Desktop Fast (service tier) default used by $sks-fast-on/$sks-fast-off and keep project worker preference in sync; pass --project for project-local only.' },
-  { name: 'commit', usage: 'sks commit [--message "msg"] [--json]', description: 'Stage current changes, summarize them, and create a simple git commit without the full SKS pipeline.' },
-  { name: 'commit-and-push', usage: 'sks commit-and-push [--message "msg"] [--json]', description: 'Stage current changes, create a simple git commit, and push without the full SKS pipeline.' },
-  { name: 'dfix', usage: 'sks dfix', description: 'Explain $sks-dfix ultralight direct-fix mode.' },
-  { name: 'qa-loop', usage: 'sks qa-loop prepare|answer|run|status ...', description: 'Dogfood UI/API as human proxy with safety gates, safe fixes, rechecks, Codex Chrome Extension-first web UI evidence, report.' },
-  { name: 'ppt', usage: 'sks ppt build|status <mission-id|latest> [--json]', description: 'Build or inspect $sks-ppt HTML/PDF artifacts from a sealed presentation decision contract.' },
-  { name: 'image-ux-review', usage: 'sks ux-review run --image <path> --fix --json | sks image-ux-review status <mission-id|latest> [--json]', description: ("Run or inspect $sks-image-ux-review imagegen annotated UI/UX review artifacts, issue ledgers, safe fix loops, recapture, and proof gates.") },
-  { name: 'computer-use', usage: 'sks computer-use import|status|smoke|require ... [--json]', description: 'Record native Mac/non-web Computer Use visual evidence while keeping web verification on the Chrome Extension path.' },
-  { name: 'context7', usage: 'sks context7 check|setup|tools|resolve|docs|evidence ...', description: 'Check, configure, and call the local Context7 MCP requirement.' },
-  { name: 'super-search', usage: 'sks super-search doctor|run|x|fetch|status|inspect|sources|claims|cache|bench', description: 'Run Super-Search provider-independent source intelligence.' },
-  { name: 'search', usage: 'sks search status|files|text|structure|symbol|context|benchmark|doctor [--json]', description: 'Local SearchProvider engines for files/text/structure/symbol/context (no required rg/ast-grep/fd).' },
-  { name: 'recallpulse', usage: 'sks recallpulse run|status|eval|governance|checklist <mission-id|latest>', description: 'Run report-only RecallPulse active recall, durable status, proof capsule, evidence envelope, and governance checks.' },
-  { name: 'pipeline', usage: 'sks pipeline status|resume|plan|answer ...', description: 'Inspect the active skill-first route, materialized execution plan, ambiguity gates, and completion gates.' },
-  { name: 'guard', usage: 'sks guard check [--json]', description: 'Check SKS harness self-protection lock, fingerprints, and source-repo exception state.' },
-  { name: 'conflicts', usage: 'sks conflicts check|prompt|cleanup --yes [--json]', description: 'Detect other Codex harnesses such as OMX/DCodex, print a cleanup prompt, or quarantine them automatically.' },
-  { name: 'versioning', usage: 'sks versioning status|bump|disable [--json]', description: 'Manage explicit project version syncs; SKS does not install Git pre-commit hooks.' },
-  { name: 'features', usage: 'sks features list|check|inventory [--json] [--write-docs]', description: 'Build and validate the feature registry that maps CLI commands, hidden handlers, dollar routes, app skill aliases, and skills.' },
-  { name: 'all-features', usage: 'sks all-features selftest --mock [--json]', description: 'Run the mock all-features contract selftest for feature registry, proof, Voxel TriWiki, and failure-contract coverage.' },
-  { name: 'aliases', usage: 'sks aliases', description: 'Show command aliases and npm binary names.' },
-  { name: 'cleanup', usage: 'sks cleanup plan|run|status|proof [--apply] [--json]', description: 'Permanently blank active TriWiki without retaining a previous generation; preserve source and audit history.' },
-  { name: 'align', usage: 'sks align prepare|run|status|proof [mission|"scope"] [--json]', description: 'Create or replace TriWiki as a code-only repository navigation graph with exact file/symbol/line coordinates and transactional publication.' },
-  { name: 'setup', usage: 'sks setup [--bootstrap] [--install-scope global|project] [--local-only] [--force] [--json]', description: 'Initialize SKS state, Codex App files, hooks, skills, and rules.' },
-  { name: 'fix-path', usage: 'sks fix-path [--install-scope global|project] [--json]', description: 'Refresh hook commands with the resolved SKS binary path.' },
-  { name: 'doctor', usage: 'sks doctor [--fix] [--local-only] [--json] [--install-scope global|project]', description: 'Check and repair SKS generated files, while blocking setup if another Codex harness is detected.' },
-  { name: 'git', usage: 'sks git policy|install|status|doctor|precommit|publish-plan|summary [--json]', description: 'Install and validate SKS git hygiene, merge-friendly shared TriWiki shards, ignored runtime state, and precommit checks.' },
-  { name: 'paths', usage: 'sks paths managed [--json]', description: 'List SKS-owned managed paths and rollback eligibility.' },
-  { name: 'rollback', usage: 'sks rollback list|apply <id> [--json]', description: 'List or explicitly apply managed-path rollback actions with confirmation.' },
-  { name: 'init', usage: 'sks init [--force] [--local-only] [--install-scope global|project]', description: 'Initialize the local SKS control surface.' },
-  { name: 'selftest', usage: 'sks selftest [--mock]', description: 'Run local smoke tests without calling a model.' },
-  { name: 'goal', usage: 'sks goal create|edit|pause|resume|clear|status ...', description: 'Print a detailed Codex native /goal command without creating SKS Goal state.' },
-  { name: 'seo-geo-optimizer', usage: 'sks seo-geo-optimizer [seo|geo] doctor|audit|research|strategy|plan|apply|verify|status|rollback|fixture [mission|latest] [--mode seo|geo] [--target auto|website|docs|package] [--include-marketing] [--json]', description: 'Run the unified SEO/GEO optimizer on the shared search-visibility kernel with mode-specific gates, marketing research/strategy, safe apply, and proof.' },
-  { name: 'research', usage: 'sks research prepare|run|status ...', description: 'Run evidence-bound research missions with layered sources, independent review, paper, novelty, and falsification checks.' },
-  { name: 'eval', usage: 'sks eval run|compare|thresholds ...', description: 'Run deterministic context-quality and performance evidence checks.' },
-  { name: 'harness', usage: 'sks harness fixture|review [--json]', description: 'Run Harness Growth Factory fixtures for forgetting, skills, experiments, tool taxonomy, permissions, and MultiAgentV2.' },
-  { name: 'perf', usage: 'sks perf run|workflow|cold-start [--json] [--iterations N]', description: 'Measure structured SKS performance budgets, including cold-start, Proof Field workflow decisions, and fast-lane evidence.' },
-  { name: 'bench', usage: 'sks bench core|route-fixtures|blackbox|trust-kernel [--json]', description: 'Measure core trust-kernel hot paths and write performance budget artifacts.' },
-  { name: 'proof', usage: 'sks proof show|latest|validate|export|smoke [--json|--md]', description: 'Show, validate, export, or smoke-write the unified Completion Proof Engine surface.' },
-  { name: 'trust', usage: 'sks trust report|validate|status|explain [latest|mission-id] [--json]', description: 'Validate route contracts, evidence indexes, stale/mock evidence, and trust report blockers.' },
-  { name: 'wrongness', usage: 'sks wrongness list|show|add|resolve|summarize|validate|context|rules ...', description: 'Record, retrieve, and validate TriWiki wrongness memory: negative evidence, failed assumptions, stale proof, visual/DB/hook mismatches, and avoidance rules.' },
-  { name: 'proof-field', usage: 'sks proof-field scan [--json] [--intent "task"] [--changed file1,file2]', description: 'Analyze Potential Proof Field cones, negative-work cache, and fast-lane eligibility for a change set.' },
-  { name: 'skill-dream', usage: 'sks skill-dream status|run|record [--json]', description: 'Track generated-skill usage in lightweight JSON and periodically report keep, merge, prune, and improvement candidates without deleting skills automatically.' },
-  { name: 'code-structure', usage: 'sks code-structure scan [--json]', description: 'Scan handwritten source files for 1000/2000/3000-line structure gates and split-review exceptions.' },
-  { name: 'rust', usage: 'sks rust status|smoke [--json] [--require-native]', description: 'Inspect optional Rust accelerator availability and verify JS fallback parity for image hash, voxel validation, secret scanning, and search files/text/batch.' },
-  { name: 'validate-artifacts', usage: 'sks validate-artifacts [mission-id|latest] [--json]', description: 'Validate schema-backed mission artifacts for work orders, official subagent evidence, visual maps, dogfood reports, skills, mistake memory, and Honest Mode.' },
-  { name: 'wiki', usage: 'sks wiki coords|pack|refresh|publish|rebuild-index|validate|validate-shared|wrongness ...', description: 'Build, refresh, publish shared shards, rebuild ignored indexes, validate, and attach wrongness-memory context to RGBA/trig LLM Wiki packs with attention.use_first and attention.hydrate_first for compact recall plus source hydration.' },
-  { name: 'memory', usage: 'sks memory build [--json] | sks memory gc [--dry-run]', description: 'Project TriWiki context-pack memory into managed AGENTS.md blocks or run bounded memory cleanup.' },
-  { name: 'hproof', usage: 'sks hproof check [mission-id|latest]', description: 'Evaluate the H-Proof done gate for a mission.' },
-  { name: 'naruto', usage: 'sks naruto run \"task\" [--agents N] [--max-threads N] [--trusted-project] [--json] | sks naruto status|subagents|proof [latest|M-...] [--json] | sks naruto parent-summary --mission M-... --stdin [--json]', description: 'Run or inspect the Codex official subagent workflow: an orchestrating parent (latest deep-tier standalone default), children on the newest model of their tier (Jev picks the tier on spawn when Jev mode is on), max_depth=1, and structured parent-thread completion evidence.' },
-  { name: 'reasoning', usage: 'sks reasoning ["prompt"] [--json]', description: 'Show SKS temporary reasoning-effort routing: medium for simple tasks, high for logic, xhigh for research.' },
-  { name: 'gx', usage: 'sks gx init|render|validate|drift|snapshot [name]', description: 'Create and verify deterministic SVG/HTML visual context cartridges.' },
-  { name: 'profile', usage: 'sks profile show|set <model>', description: 'Inspect or set the current SKS model profile metadata.' },
-  { name: 'gc', usage: 'sks gc [--dry-run] [--json]', description: 'Compact oversized logs and prune stale runtime artifacts.' },
-  { name: 'stats', usage: 'sks stats [--full] [--json]', description: 'Show package and .sneakoscope storage size.' },
-  { name: 'mcp-server', usage: 'sks mcp-server [--expose-exec] [--probe]', description: 'Run a modern stateless stdio MCP server exposing SKS read-only commands as tools for any MCP-capable agent host; --expose-exec also exposes non-read-only commands; --probe round-trips server/discover and tools/list, then exits.' },
-  { name: 'agent-bridge', usage: 'sks agent-bridge setup [--trusted-project] [--json] | async --prompt "task" [--tools status,stats] [--json]', description: 'Publish the agent-bridge manifest or run selected read-only SKS tools with native Astra Async tool calling through the registered Codex-LB bridge.' },
-  { name: 'decision', usage: 'sks decision status|enable|disable|probe|evaluate [--json]', description: 'Manage optional Jev decisions through the existing OpenRouter credential (off by default). Enable records cloud consent; a valid answer is compiled into SKS plan or context selection. There is no advisory mode and no local model runtime.' },
-  { name: 'imagegen', usage: 'sks imagegen status|models|enable --model <id>|disable|generate --prompt <text> --out <file> [--reference <file>] [--json]', description: 'Generate images with the active SKS image mode. Off (default): Codex image generation, no pinned model. On: the OpenRouter image model chosen in SKS Control Center, called through the SKS Desktop Bridge. With Jev on, Jev picks the aspect ratio and quality you leave open. Each image gets a .sks-imagegen.json evidence file.' }
-];
+export const COMMAND_CATALOG = COMMAND_MANIFEST_LITE.flatMap(({ name, usage, description }) =>
+  usage && description ? [{ name, usage, description }] : []);
 
 export function routeById(id: any): any {
   const key = String(id || '').replace(/^\$/, '').toLowerCase();
@@ -1183,15 +1097,16 @@ const NARUTO_GATE_ROUTE_OWNED_IDS = new Set([
   'QALoop'
 ]);
 
+// Artifact pipelines whose explicit invocation starts a panel of children. Review,
+// DB, and MAD-SKS are not here: their skills are single-agent work (a one-pass
+// diff review, a migration safety review, a capability-bound SQL run), and child
+// agents holding a write-capable DB profile would widen the blast radius.
 const NARUTO_GATE_SPECIALIZED_PARALLEL_ROUTE_IDS = new Set([
-  'Review',
   'ReleaseReview',
   'PPT',
   'ImageUXReview',
   'SuperSearch',
   'SEOGEOOptimizer',
-  'DB',
-  'MadSKS',
   'GX'
 ]);
 
@@ -1367,7 +1282,7 @@ function reasoning(effort: any, reason: any) {
 
 export function context7RequirementText(required: any = true) {
   if (!required) return 'Context7 MCP is optional for this route unless external API/library documentation becomes relevant.';
-  return 'Context7 MCP is required before completion: call resolve-library-id for the relevant package or API, then query-docs (or legacy get-library-docs), and let SKS record both PostToolUse events.';
+  return 'Context7 MCP is required before completion: call resolve-library-id for the relevant package or API, then query-docs (or legacy get-library-docs).';
 }
 
 export function context7ConfigToml(transport: any = 'remote') {

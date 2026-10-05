@@ -204,7 +204,7 @@ test('compact-resume SessionStart attaches authoritative skill context and PreTo
     const preToolOutput: any = normalizeHookResult('pre-tool', preToolResult);
     assert.doesNotMatch(JSON.stringify(preToolOutput), new RegExp(escapeRegExp(naruto)));
     assert.doesNotMatch(JSON.stringify(preToolOutput), /Authoritative SKS skill sources/);
-    assert.equal(preToolOutput.systemMessage, 'SKS: tool call inspected.');
+    assert.equal(preToolOutput.systemMessage, undefined, 'an allowed tool call with nothing to add stays silent');
     assert.equal((await validateCodexHookOutput('PreToolUse', preToolOutput)).ok, true);
     assert.equal(validatePreToolUseSemanticOutput(preToolOutput).ok, true);
     assert.equal((await loadStateForSession(root, sessionId)).official_subagent_run_id, workflowRunId);

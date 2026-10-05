@@ -4,7 +4,7 @@ import { flag } from '../cli/args.js';
 import { printJson } from '../cli/output.js';
 export async function run(_command: any, args: any = []) {
   if (flag(args, '--help') || flag(args, '-h')) {
-    const usage = 'Usage: sks versioning status|bump [major|minor|patch]|disable [--json]';
+    const usage = 'Usage: maintainer versioning status|bump [major|minor|patch]|disable [--json]';
     if (flag(args, '--json')) return printJson({ ok: true, command: 'versioning', usage, mutated: false });
     console.log(usage);
     return;

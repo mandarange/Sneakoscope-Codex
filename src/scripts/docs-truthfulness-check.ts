@@ -66,9 +66,15 @@ for (const file of files) {
   });
 }
 
+// `sks bootstrap` generates these per checkout and .gitignore excludes them, so a
+// fresh clone (CI) has none; they are checked whenever they exist.
+const generatedLocalFiles = new Set(['AGENTS.md', '.codex/SNEAKOSCOPE.md']);
+
 for (const file of currentDollarSurfaceFiles) {
   const full = path.join(root, file);
-  const text = fs.existsSync(full) ? fs.readFileSync(full, 'utf8') : '';
+  const present = fs.existsSync(full);
+  if (!present && generatedLocalFiles.has(file)) continue;
+  const text = present ? fs.readFileSync(full, 'utf8') : '';
   const legacyDollarCommands = [...new Set(text.match(legacyDollarCommandPattern) || [])];
   results.push({
     file: `${file}#dollar-surface`,

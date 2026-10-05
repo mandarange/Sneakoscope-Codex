@@ -11,6 +11,7 @@ import {
 } from '../align/align-route.js';
 import { projectRoot, readJson } from '../fsx.js';
 import {
+  closeRouteState,
   findLatestMission,
   loadOwnedRouteState,
   missionDir,
@@ -113,18 +114,27 @@ async function alignRun(args: any[]) {
   }
   if (!missionId) return missing(args);
   const execution = await executeCodeNavigationAlign({ root, missionDir: missionDir(root, missionId), missionId });
+  // A run that opened its own mission is a self-contained refresh: prove and
+  // close it here, or the open Align route would block the next route command.
+  const routeClosed = Boolean(prepared) && execution.ok
+    && await finalizeAndCloseAlignRoute(root, missionId, execution.gate, null);
+  const base = commandResult(prepared, missionId, 'run', {
+    maintenance: Boolean(ownership.maintenance_mission_id),
+    activeStopGate: ownership.active_stop_gate
+  });
   const result = {
-    ...commandResult(prepared, missionId, 'run', {
-      maintenance: Boolean(ownership.maintenance_mission_id),
-      activeStopGate: ownership.active_stop_gate
-    }),
+    ...base,
     ok: execution.ok,
     status: execution.gate.status,
     active_route_preserved: Boolean(ownership.maintenance_mission_id),
+    route_closed: routeClosed,
+    next_action: routeClosed ? 'none' : base.next_action,
     gate: execution.gate,
     ledger: execution.ledger
   };
   if (!result.ok) process.exitCode = 1;
+  // `--quiet` is for callers that report the result themselves (`sks memory build`).
+  if (flag(args, '--quiet')) return result;
   if (flag(args, '--json')) printJson(result);
   else {
     console.log(`SKS align run: ${result.ok ? 'pass' : 'blocked'} ${missionId}`);
@@ -141,9 +151,7 @@ interface AlignRunOwnership {
 }
 
 async function alignRunOwnership(root: string, requested: string): Promise<AlignRunOwnership> {
-  const sessionKey = process.env.SKS_NARUTO_STANDALONE_CLI === '1'
-    ? ''
-    : String(process.env.CODEX_THREAD_ID || '').trim();
+  const sessionKey = ownerSessionKey() || '';
   if (requested) return { active_align_mission_id: null, maintenance_mission_id: null, active_stop_gate: null };
   const state = await loadOwnedRouteState(root, sessionKey);
   const active = Boolean(state?.mission_id)
@@ -186,6 +194,7 @@ async function alignProof(args: any[]) {
   const refreshed = await refreshAlignGate(dir, missionId, root);
   const proof = await finalizeAlignRoute(root, missionId, refreshed.gate);
   const ok = alignCompletionVerified(refreshed.gate, proof);
+  if (ok) await closeVerifiedAlignRoute(root, missionId, ownerSessionKey());
   const result = {
     schema: 'sks.align-proof.v3',
     schema_version: 3,
@@ -225,13 +234,22 @@ async function alignFixture(args: any[]) {
   return result;
 }
 
+// The route writes these once and the work-order ledger is closed only after the
+// proof exists, so each is older than the mission's last event by construction.
+// Judging them by mtime against that event made a passing run read as stale
+// whenever the machine was slow enough to separate the two timestamps.
+const stableAlignArtifact = (artifactPath: string) => ({ path: artifactPath, ignoreStale: true });
+
 async function finalizeAlignRoute(root: string, missionId: string, gate: any) {
   const proof: any = await maybeFinalizeRoute(root, {
     missionId,
     route: '$Align',
     gateFile: ALIGN_GATE_ARTIFACT,
     gate,
-    artifacts: [ALIGN_PLAN_ARTIFACT, ALIGN_LEDGER_ARTIFACT, ALIGN_GATE_ARTIFACT, 'work-order-ledger.json', 'completion-proof.json'],
+    artifacts: [
+      ...[ALIGN_PLAN_ARTIFACT, ALIGN_LEDGER_ARTIFACT, ALIGN_GATE_ARTIFACT, 'work-order-ledger.json'].map(stableAlignArtifact),
+      'completion-proof.json'
+    ],
     claims: [
       { id: 'align-absent-or-existing-input', status: gate.absent_or_existing_input_supported && gate.prior_state_ignored_as_input ? 'supported' : 'blocked', evidence: ALIGN_LEDGER_ARTIFACT },
       { id: 'align-exhaustive-code-navigation-index', status: gate.exact_source_file_coverage && gate.code_extractor_only ? 'supported' : 'blocked', evidence: ALIGN_LEDGER_ARTIFACT },
@@ -248,6 +266,27 @@ async function finalizeAlignRoute(root: string, missionId: string, gate: any) {
     blockers: gate.blockers?.length ? gate.blockers : ok ? [] : [`align_completion_proof_${proof?.proof?.status || 'invalid'}`]
   });
   return proof;
+}
+
+async function finalizeAndCloseAlignRoute(root: string, missionId: string, gate: any, sessionKey: string | null): Promise<boolean> {
+  const proof = await finalizeAlignRoute(root, missionId, gate);
+  if (!alignCompletionVerified(gate, proof)) return false;
+  return closeVerifiedAlignRoute(root, missionId, sessionKey);
+}
+
+// Closes the route only while this mission still owns the state; a mismatch
+// means another route took over and is left alone. The session file is used
+// only when it holds this mission, so an unrelated session cannot be closed.
+async function closeVerifiedAlignRoute(root: string, missionId: string, sessionKey: string | null): Promise<boolean> {
+  const owned: any = sessionKey ? await loadOwnedRouteState(root, sessionKey).catch(() => ({})) : {};
+  const scoped = Boolean(sessionKey) && String(owned?.mission_id || '') === missionId;
+  const closed: any = await closeRouteState(root, { missionId, ...(scoped ? { sessionKey } : {}), reason: 'align_verified' }).catch(() => null);
+  return closed?.ok === true;
+}
+
+function ownerSessionKey(): string | null {
+  if (process.env.SKS_NARUTO_STANDALONE_CLI === '1') return null;
+  return String(process.env.CODEX_THREAD_ID || '').trim() || null;
 }
 
 function alignCompletionVerified(gate: any, proof: any): boolean {

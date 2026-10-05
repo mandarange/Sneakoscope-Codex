@@ -17,7 +17,7 @@ export const CONTEXT_GRAPH_SCHEMA_REVISION = '1.0.0' as const;
 export const CONTEXT_GRAPH_MISSING_ERROR = 'context_graph_missing' as const;
 export const CONTEXT_GRAPH_STALE_ERROR = 'context_graph_stale' as const;
 export const CONTEXT_GRAPH_CORRUPT_ERROR = 'context_graph_corrupt' as const;
-/** Product SSOT for code-index rebuild (NC-21). `sks wiki refresh --code` aliases here. */
+/** Product SSOT for code-index rebuild (NC-21/S3). `sks wiki refresh` and `sks wiki pack` alias here. */
 export const CONTEXT_GRAPH_REPAIR_COMMAND = 'sks align run' as const;
 
 /**

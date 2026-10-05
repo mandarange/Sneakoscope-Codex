@@ -4,7 +4,7 @@ import http, { type IncomingMessage } from 'node:http';
 import net, { type AddressInfo } from 'node:net';
 import test from 'node:test';
 import { buildProviderUpstreamHeaders, buildProviderWebSocketHeaders, redactHeaderValue } from '../header-policy.js';
-import { desktopBridgeClientPath, startDesktopBridge, stopDesktopBridge, type DesktopBridgeConfig, type DesktopBridgeHandle } from '../index.js';
+import { desktopBridgeClientPath, startDesktopBridge, stopDesktopBridge, type DesktopBridgeConfig, type DesktopBridgeHandle, selectAvailableDesktopBridgePort } from '../index.js';
 
 const CLIENT_CAPABILITY = Buffer.alloc(32, 0x45).toString('base64url');
 const CLIENT_CAPABILITY_SHA256 = createHash('sha256').update(CLIENT_CAPABILITY).digest('hex');
@@ -94,7 +94,7 @@ test('R47/R48 security: canonical Codex ingress translates provider paths and ke
     });
   });
   const lb = upstream('lb'); const openrouter = upstream('openrouter'); const lbPort = await listen(lb); const orPort = await listen(openrouter);
-  const holder = net.createServer(); const bridgePort = await listen(holder); await close(holder); let bridge: DesktopBridgeHandle | null = null;
+  const bridgePort = await selectAvailableDesktopBridgePort('127.0.0.1'); let bridge: DesktopBridgeHandle | null = null;
   const config: DesktopBridgeConfig = {
     providerRegistry: {
       schema: 'sks.desktop-bridge-provider-registry.v1', generation: 'registry-1', created_at: '2026-08-05T00:00:00.000Z',

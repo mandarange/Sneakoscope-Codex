@@ -6,7 +6,7 @@ export async function taskCommand(args: string[] = []): Promise<unknown> {
   if (sub === 'run') return checkCommand(['--tier', 'confidence', ...rest]);
   if (sub === 'affected') return checkCommand(['--tier', 'affected', ...rest]);
   if (sub === 'instant') return checkCommand(['--tier', 'instant', ...rest]);
-  console.error('Usage: sks task run|affected|instant [--sla 5m] [--json]');
+  console.error('Usage: maintainer task run|affected|instant [--sla 5m] [--json]');
   process.exitCode = 1;
   return null;
 }

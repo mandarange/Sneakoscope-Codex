@@ -8,6 +8,18 @@ import { buildOfficialPassthroughWebSocketHeaders, buildProviderWebSocketHeaders
 import { createDesktopBridgeRejectionLogger } from './rejection-log.js';
 import { assertDesktopBridgeRouteContext, ensureDesktopBridgeRemoteTarget, isUnreachableUpstreamError, refreshDesktopBridgeRemoteTarget, resolveAndBindDesktopBridgeRouteContext, resolveCodexSessionIdentity, resolveDesktopBridgeTarget, safeBridgeErrorCode } from './security.js';
 import { DEFAULT_DESKTOP_BRIDGE_MAX_REQUEST_BODY_BYTES, DesktopBridgeError, type CodexSessionIdentity, type DesktopBridgeRouteContext, type PreparedDesktopBridgeConfig } from './types.js';
+import {
+  buildCompactionSummaryRequest,
+  compactionCreatedEvent,
+  compactionFailedEvent,
+  compactionResponseEvents,
+  expandBridgeCompactionItems,
+  newCompactionResponseId,
+  parseProviderSummary,
+  requestsRemoteCompaction,
+  summaryWithinBounds,
+} from './compaction-adapter.js';
+import { requestProviderCompactionSummary } from './http-forward.js';
 
 const MAX_PENDING_MESSAGES = 256;
 const CLOSE_GRACE_MS = 1_000;
@@ -30,7 +42,14 @@ function bytes(data: RawData): Buffer {
   return Buffer.isBuffer(data) ? data : Array.isArray(data) ? Buffer.concat(data) : Buffer.from(data);
 }
 
-interface PendingMessage { data: Buffer; binary: boolean; create: Record<string, unknown> | null; originalBytes: number }
+interface PendingMessage {
+  data: Buffer;
+  binary: boolean;
+  create: Record<string, unknown> | null;
+  originalBytes: number;
+  /** A remote-compaction create on a provider route, answered by the bridge (compaction-adapter.ts). */
+  compaction?: Record<string, unknown> | null;
+}
 
 function withLineage(identity: CodexSessionIdentity, next: CodexSessionIdentity): CodexSessionIdentity {
   return {
@@ -141,7 +160,52 @@ export function forwardResponsesWebSocket(req: IncomingMessage, socket: Duplex, 
         bound = route;
         await connect(route);
       }
-      if (route.upstream_model !== model) message.data = Buffer.from(JSON.stringify({ ...message.create, model: route.upstream_model }));
+      const create = { ...message.create!, model: route.upstream_model };
+      // No upstream can read a bridge-made compaction item; it travels as the summary it carries.
+      const expanded = expandBridgeCompactionItems(create);
+      if (route.provider_id !== BRIDGE_OFFICIAL_ROUTE_ID && requestsRemoteCompaction(create)) {
+        message.compaction = create;
+        return;
+      }
+      if (route.upstream_model !== model || expanded) message.data = Buffer.from(JSON.stringify(create));
+    }
+    /** Answers a provider-route compaction create with a summary from the thread's own model. */
+    async function answerCompaction(create: Record<string, unknown>): Promise<void> {
+      const route = bound!;
+      const provider = config.providers[route.provider_id as Exclude<DesktopBridgeRouteContext['provider_id'], typeof BRIDGE_OFFICIAL_ROUTE_ID>];
+      if (!provider) throw new DesktopBridgeError('bridge_provider_route_unavailable');
+      const credential = await config.resolveProviderCredential(provider.provider_id, provider.credential_generation);
+      const responseId = newCompactionResponseId();
+      const send = (event: Record<string, unknown>): void => relay(client, Buffer.from(JSON.stringify(event)), false);
+      const body = Buffer.from(JSON.stringify(buildCompactionSummaryRequest(create, route.upstream_model)));
+      let accepted = false;
+      try {
+        const call = await requestProviderCompactionSummary(config, { provider, credential, clientHeaders: req.headers, requestUrl: req.url || '/' }, body, () => {
+          if (accepted) return;
+          accepted = true;
+          send(compactionCreatedEvent(responseId, route.public_model));
+        });
+        if (stopped) return;
+        if (call.status >= 300) {
+          logRejection({ code: `bridge_compaction_summary_status_${call.status}`, transport: 'websocket', ...(req.url ? { url: req.url } : {}) });
+          send(compactionFailedEvent(responseId, route.public_model, call.status === 429 ? 'rate_limit_exceeded' : 'bridge_upstream_request_failed'));
+          return;
+        }
+        const parsed = parseProviderSummary(call.body.toString('utf8'));
+        if (parsed.failed || !summaryWithinBounds(parsed.summary)) {
+          logRejection({ code: 'bridge_compaction_summary_unusable', transport: 'websocket', ...(req.url ? { url: req.url } : {}) });
+          send(compactionFailedEvent(responseId, route.public_model, 'bridge_compaction_summary_unusable'));
+          return;
+        }
+        const events = compactionResponseEvents(responseId, route.public_model, parsed.summary!, parsed.usage);
+        send(events.itemDone);
+        send(events.completed);
+      } catch (error) {
+        if (stopped) return;
+        const code = safeBridgeErrorCode(error);
+        logRejection({ code: `bridge_compaction_summary_failed:${code}`, transport: 'websocket', ...(req.url ? { url: req.url } : {}) });
+        send(compactionFailedEvent(responseId, route.public_model, code));
+      }
     }
     async function connect(route: DesktopBridgeRouteContext): Promise<void> {
       const official = route.provider_id === BRIDGE_OFFICIAL_ROUTE_ID;
@@ -232,7 +296,8 @@ export function forwardResponsesWebSocket(req: IncomingMessage, socket: Duplex, 
           const message = pending[0]!;
           if (message.create) await resolveCreate(message);
           if (stopped || client.readyState !== WebSocket.OPEN) return;
-          relay(upstream!, message.data, message.binary);
+          if (message.compaction) await answerCompaction(message.compaction);
+          else relay(upstream!, message.data, message.binary);
           pending.shift();
           pendingBytes -= message.originalBytes;
         }

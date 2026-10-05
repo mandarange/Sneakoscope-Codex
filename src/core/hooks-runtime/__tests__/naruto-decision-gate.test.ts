@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { CODEX_HOOK_EVENTS } from '../../codex-compat/codex-hook-events.js';
 import { evaluateHookPayload } from '../../hooks-runtime.js';
 import { normalizeHookResult } from '../hook-io.js';
 import { runOfficialSubagentWorkflow } from '../../subagents/official-subagent-runner.js';
@@ -115,7 +114,7 @@ test('Naruto decision gate bypasses trivial and ordinary implementation work and
   assert.equal(activeOwned.action, 'route_owned');
 });
 
-test('all ten Codex hook events pass through and record the common Naruto decision gate', async () => {
+test('all ten Codex hook events pass through the common Naruto decision gate; only the prompt decision is recorded', async () => {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-hook-naruto-gate-'));
   const base = { cwd: root, session_id: 'all-hook-gate-events', turn_id: 'turn-all-hook-gate-events' };
   try {
@@ -130,7 +129,7 @@ test('all ten Codex hook events pass through and record the common Naruto decisi
         payload.hook_event_name = name === 'subagent-start' ? 'SubagentStart' : 'SubagentStop';
       }
       const result: any = await evaluateHookPayload(name, payload, { root, state: {} });
-      assert.equal(result.sksNarutoDecision?.recorded, true, name);
+      assert.equal(result.sksNarutoDecision?.recorded, name === 'user-prompt-submit', name);
       assert.ok(['none', 'generic_naruto', 'route_owned'].includes(result.sksNarutoDecision?.mode), name);
       assert.equal(typeof result.sksNarutoDecision?.required, 'boolean', name);
     }
@@ -139,8 +138,8 @@ test('all ten Codex hook events pass through and record the common Naruto decisi
       .trim()
       .split('\n')
       .map((line) => JSON.parse(line));
-    assert.equal(rows.length, CODEX_HOOK_EVENTS.length);
-    assert.deepEqual(new Set(rows.map((row) => row.event)), new Set(CODEX_HOOK_EVENTS));
+    assert.equal(rows.length, 1);
+    assert.deepEqual(rows.map((row) => row.event), ['UserPromptSubmit']);
     assert.ok(rows.every((row) => row.prompt === undefined));
     assert.ok(rows.every((row) => typeof row.session_hash === 'string'));
 

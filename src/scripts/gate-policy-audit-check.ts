@@ -144,7 +144,7 @@ function scanCommandGateContract() {
     if (entry.mutatesRouteState === true && (!Array.isArray(entry.ownedGateFiles) || entry.ownedGateFiles.length === 0)) issues.push(`${name}:route_mutator_without_owned_gate_files`)
     if (entry.allowedDuringActiveRoute === true && !entry.activeRoutePolicy) issues.push(`${name}:missing_active_route_policy`)
   }
-  for (const required of ['help', 'version', 'commands', 'status', 'root', 'stop-gate', 'route', 'doctor']) {
+  for (const required of ['help', 'version', 'commands', 'status', 'root', 'proof', 'route', 'doctor']) {
     const entry = (COMMANDS as Record<string, any>)[required]
     if (!entry?.skipMigrationGate) issues.push(`${required}:missing_skipMigrationGate`)
   }
@@ -158,7 +158,7 @@ function scanCommandGateContract() {
   if (goal?.mutatesRouteState === true || goal?.ownsGates === true || (goal?.ownedGateFiles?.length ?? 0) > 0) {
     issues.push('goal:native_goal_command_must_be_stateless')
   }
-  for (const migrationBypass of ['check', 'gates', 'task', 'release', 'triwiki', 'daemon', 'pipeline', 'wiki', 'stop-gate']) {
+  for (const migrationBypass of ['triwiki', 'pipeline', 'wiki', 'proof']) {
     const entry = (COMMANDS as Record<string, any>)[migrationBypass]
     if (entry?.skipMigrationGate !== true) issues.push(`${migrationBypass}:missing_skip_migration_gate_contract`)
   }

@@ -60,7 +60,7 @@ The installer resolves the latest npm release, installs `sks`, runs setup and Do
 
 | Need | SKS provides |
 | --- | --- |
-| Keep work focused | Lightweight answers stay lightweight; implementation follows the route you asked for. |
+| Keep work focused | Answers, tiny edits, ordinary implementation, reviews, and DB work run directly in the main agent, the way Codex works by default. Naruto splits work across official Codex subagents only when you ask for it. |
 | Keep context bounded | TriWiki indexes repository code into context that can be checked against source. |
 | Know what actually ran | Tests, diagnostics, and release evidence are recorded for completion claims. |
 | Recover safely | Doctor and update flows report a concrete recovery action when a check needs attention. |
@@ -73,7 +73,7 @@ Inside a Codex conversation:
 | Command | Use it for |
 | --- | --- |
 | `$sks-plan "task"` | Write a plan without editing product code. |
-| `$sks-work` | Execute the latest plan. |
+| `$sks-work` | Execute the latest plan with Naruto child agents. |
 | `$sks-review` | Review the current changes. |
 | `$sks-naruto "task"` | Explicitly split independent work across official subagents. |
 | `$sks-help` | Explore available SKS workflows. |
@@ -88,7 +88,7 @@ sks update-check
 sks update
 ```
 
-`$sks-naruto` is opt-in for work you ask to split. Ordinary fixes, tests, refactors, and reviews stay with the main agent by default.
+Naruto runs only when you invoke `$sks-naruto` or `$sks-work`, pass `--agents N`, or ask for subagents or parallel work in so many words (a word like "parallel" in a file name is not a request); with Jev mode on, Jev may also judge that a task splits into independent parts. Ordinary fixes, tests, refactors, reviews, and DB work stay with the main agent by default. See the [Naruto guide](docs/naruto.md).
 
 ## How the trust loop works
 

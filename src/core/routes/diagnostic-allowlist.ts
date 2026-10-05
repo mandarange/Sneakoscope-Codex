@@ -31,12 +31,11 @@ function safeDiagnosticSubcommand(command: string, subcommand: string, args: rea
   const allowed: Record<string, readonly string[]> = {
     doctor: ['', 'status', 'check'],
     route: ['', 'status'],
-    rollback: ['', 'list', 'status'],
     menubar: ['', 'status'],
     wiki: ['status', 'validate', 'validate-shared'],
     gc: ['stats', 'status'],
     pipeline: ['', 'status'],
-    'stop-gate': ['', 'check'],
+    proof: ['', 'show', 'latest', 'validate', 'route', 'stop-gate'],
     status: [''],
     root: [''],
     help: [''],

@@ -49,10 +49,10 @@ function readProfileFile(file: string): VerificationProfile | null {
 }
 
 /**
- * Whether this process is the SKS test harness. Inside it the legacy `strict`
- * profile stays the default so the existing suite keeps proving strict
- * behavior; `essential` is exercised by tests that ask for it explicitly and
- * by the built-CLI gates, which run outside the harness.
+ * Whether this process is the SKS test harness. The harness resolves the same
+ * profile as production — `essential` unless a test asks for `strict` — so the
+ * suite proves the behavior users actually get. It only changes isolation: no
+ * detached hook daemon per temp root and no writes to the real global hooks.
  */
 export function isVerificationTestHarness(env: NodeJS.ProcessEnv = process.env): boolean {
   return env.NODE_TEST_CONTEXT !== undefined || env.SKS_TEST_ISOLATION === '1';
@@ -60,19 +60,18 @@ export function isVerificationTestHarness(env: NodeJS.ProcessEnv = process.env):
 
 /**
  * Precedence: `SKS_VERIFICATION_PROFILE` → `<root>/.sneakoscope/verification-profile.json`
- * → `<global root>/verification-profile.json` → harness default (`strict`)
- * → product default (`essential`). Cached briefly per root; hooks call this on
- * every event.
+ * → `<global root>/verification-profile.json` → product default (`essential`).
+ * Cached briefly per root; hooks call this on every event.
  */
 export function resolveVerificationProfile(root?: string | null, env: NodeJS.ProcessEnv = process.env): VerificationProfile {
   const explicit = normalizeVerificationProfile(env[VERIFICATION_PROFILE_ENV]);
   if (explicit) return explicit;
-  const key = `${root ? path.resolve(root) : ''}|${globalRootDir(env)}|${isVerificationTestHarness(env) ? 't' : 'p'}`;
+  const key = `${root ? path.resolve(root) : ''}|${globalRootDir(env)}`;
   const cached = cache.get(key);
   if (cached && Date.now() - cached.at < CACHE_TTL_MS) return cached.profile;
   const profile = (root ? readProfileFile(path.join(path.resolve(root), '.sneakoscope', VERIFICATION_PROFILE_FILE)) : null)
     ?? readProfileFile(path.join(globalRootDir(env), VERIFICATION_PROFILE_FILE))
-    ?? (isVerificationTestHarness(env) ? 'strict' : DEFAULT_VERIFICATION_PROFILE);
+    ?? DEFAULT_VERIFICATION_PROFILE;
   cache.set(key, { at: Date.now(), profile });
   return profile;
 }
@@ -121,7 +120,7 @@ export function hookDaemonEnabled(env: NodeJS.ProcessEnv = process.env): boolean
 export interface VerificationProfileSummary {
   schema: 'sks.verification-profile.v1';
   profile: VerificationProfile;
-  source: 'env' | 'project_file' | 'global_file' | 'harness_default' | 'default';
+  source: 'env' | 'project_file' | 'global_file' | 'default';
   hook_daemon: boolean;
   post_tool_evidence: boolean;
   stop_finalization_rituals: boolean;
@@ -136,8 +135,8 @@ export function verificationProfileSummary(root?: string | null, env: NodeJS.Pro
   const source: VerificationProfileSummary['source'] = explicit ? 'env'
     : projectFile ? 'project_file'
       : globalFile ? 'global_file'
-        : isVerificationTestHarness(env) ? 'harness_default' : 'default';
-  const profile = explicit ?? projectFile ?? globalFile ?? (isVerificationTestHarness(env) ? 'strict' : DEFAULT_VERIFICATION_PROFILE);
+        : 'default';
+  const profile = explicit ?? projectFile ?? globalFile ?? DEFAULT_VERIFICATION_PROFILE;
   const strict = profile === 'strict';
   return {
     schema: 'sks.verification-profile.v1',

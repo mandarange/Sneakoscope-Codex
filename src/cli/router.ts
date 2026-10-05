@@ -238,7 +238,7 @@ async function dispatchInner(argv: readonly string[]): Promise<unknown> {
       for (const blocker of migrationGate.blockers) console.error(`Required blocker: ${blocker}`);
       for (const warning of migrationGate.warnings) console.error(`Optional warning: ${warning}`);
       console.error(`Receipt: ${migrationGate.receipt_path}`);
-      console.error('Remedies: run `sks doctor --fix --yes`, then retry; diagnostics that must bypass this gate are marked skipMigrationGate in the command registry.');
+      console.error('Remedies: run `sks doctor --fix --yes`, then retry; diagnostics that must bypass this gate are marked skipMigrationGate in the command manifest.');
       if (argv.includes('--json')) console.log(JSON.stringify(migrationGate, null, 2));
       process.exitCode = 1;
       return migrationGate;
@@ -412,14 +412,6 @@ export function safeActiveRouteContinuation(command: CommandNameLite, args: read
   ]).get(command);
   if (!expectedRoutes) return false;
   if (!expectedRoutes.includes(activeRoute)) return false;
-  if (subcommand === 'prepare') {
-    const parentMissionId = String(process.env.SKS_RUN_PARENT_MISSION_ID || '').trim();
-    return command !== 'autoresearch'
-      && String(state.mode || '').toUpperCase() === 'RUN'
-      && String(state.phase || '').toUpperCase() === 'RUN_ROUTE_SELECTED'
-      && Boolean(parentMissionId)
-      && parentMissionId === String(state.mission_id || '');
-  }
   if (subcommand !== 'run') return false;
   const requestedMission = String(args[1] || '').trim();
   return Boolean(state.mission_id) && (requestedMission === String(state.mission_id) || requestedMission === 'latest');
@@ -452,5 +444,5 @@ function activeRouteStateBlocksCommand(state: any = {}) {
   const mode = String(state.mode || '').toUpperCase();
   if (!mode || ['WIKI', 'STATUS', 'HELP'].includes(mode)) return false;
   if (/(?:DONE|COMPLETE|CLOSED|BLOCKED|FAILED)$/i.test(String(state.phase || ''))) return false;
-  return Boolean(state.route || state.route_command || ['NARUTO', 'QALOOP', 'RESEARCH', 'LOOP', 'MADSKS', 'GOAL'].includes(mode));
+  return Boolean(state.route || state.route_command || ['NARUTO', 'QALOOP', 'RESEARCH', 'MADSKS', 'GOAL'].includes(mode));
 }

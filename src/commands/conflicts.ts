@@ -12,7 +12,7 @@ export async function run(_command: any, args: any = []) {
   const action = args[0] || 'check';
   const root = await projectRoot();
   if (action === 'cleanup') {
-    if (!flag(args, '--yes') && !flag(args, '--json')) {
+    if (!flag(args, '--yes')) {
       process.exitCode = 1;
       console.error('Refusing cleanup without --yes. Re-run: sks conflicts cleanup --yes');
       return { ok: false, status: 'confirmation_required' };

@@ -7,10 +7,30 @@ export async function simpleGitCommitCommand(args: any = [], opts: any = {}) {
   const root = await projectRoot();
   const json = args.includes('--json');
   const message = argValue(args, '--message') || argValue(args, '-m') || null;
-  const result = await simpleGitCommit(root, { message, push: Boolean(opts.push) });
+  const result = args.includes('--dry-run')
+    ? await simpleGitCommitPlan(root, { message, push: Boolean(opts.push) })
+    : await simpleGitCommit(root, { message, push: Boolean(opts.push) });
   if (json) console.log(JSON.stringify(result, null, 2));
   else printSimpleGitCommit(result);
   if (!result.ok) process.exitCode = 1;
+}
+
+/** What `sks commit[-and-push] --dry-run` would do: nothing is staged, committed, or pushed. */
+export async function simpleGitCommitPlan(root: any, { message = null, push = false }: any = {}) {
+  if (!await isGitRepo(root)) return { schema: 'sks.simple-git.v1', ok: false, reason: 'not_git_repo', root };
+  const before = await git(root, ['status', '--short']);
+  const changed = statusLines(before.stdout);
+  if (!changed.length) return { schema: 'sks.simple-git.v1', ok: false, reason: 'no_changes', root };
+  return redactSecrets({
+    schema: 'sks.simple-git.v1',
+    ok: true,
+    dry_run: true,
+    root,
+    action: push ? 'commit-and-push' : 'commit',
+    changed,
+    message: ensureCodexTrailer(message || buildCommitMessage(changed)),
+    pushed: false
+  });
 }
 
 export async function simpleGitCommit(root: any, { message = null, push = false }: any = {}) {
@@ -110,6 +130,12 @@ function printSimpleGitCommit(result: any) {
   if (!result.ok) {
     console.error(`Git ${result.action || 'commit'} failed: ${result.reason}`);
     if (result.command?.stderr) console.error(result.command.stderr);
+    return;
+  }
+  if (result.dry_run) {
+    console.log(`Git ${result.action} (dry run): nothing staged, committed, or pushed.`);
+    console.log(`Changed: ${result.changed.length} path(s)`);
+    console.log(result.message);
     return;
   }
   console.log(`Git ${result.action}: ${result.hash}`);

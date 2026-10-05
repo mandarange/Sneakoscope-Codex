@@ -16,7 +16,7 @@ export async function benchCommand(args: any = []) {
     console.log(`${action}: ${result.ok ? 'pass' : 'blocked'}`);
     return result;
   }
-  if (action === 'route-fixtures') return commandBench('sks.route-fixture-bench.v1', ['all-features', 'selftest', '--mock', '--execute-fixtures', '--strict-artifacts', '--json'], args);
+  if (action === 'route-fixtures') return commandBench('sks.route-fixture-bench.v1', ['all-features', 'selftest', '--mock', '--execute-fixtures', '--strict-artifacts', '--json'], args, maintainerCliEntrypoint());
   if (action === 'lean-policy') {
     const report = await runLeanPolicyBench(root);
     if (!report.ok) process.exitCode = 1;
@@ -25,11 +25,11 @@ export async function benchCommand(args: any = []) {
     return report;
   }
   if (action === 'blackbox') return commandBench('sks.blackbox-bench.v1', ['blackbox-matrix-placeholder'], args);
-  console.error('Usage: sks bench core|route-fixtures|lean-policy|blackbox|trust-kernel [--json] [--iterations N]');
+  console.error('Usage: maintainer bench core|route-fixtures|lean-policy|blackbox|trust-kernel [--json] [--iterations N]');
   process.exitCode = 2;
 }
 
-async function commandBench(schema: any, commandArgs: any, args: any = []) {
+async function commandBench(schema: any, commandArgs: any, args: any = [], entrypoint: string = benchCliEntrypoint()) {
   if (schema === 'sks.blackbox-bench.v1') {
     const result = {
       schema,
@@ -43,13 +43,13 @@ async function commandBench(schema: any, commandArgs: any, args: any = []) {
   }
   const root = await benchRoot();
   const start = Date.now();
-  const result = await runProcess(process.execPath, [benchCliEntrypoint(), ...commandArgs], {
+  const result = await runProcess(process.execPath, [entrypoint, ...commandArgs], {
     cwd: root,
     timeoutMs: 120_000,
     maxOutputBytes: 512 * 1024,
     env: { SKS_SKIP_NPM_FRESHNESS_CHECK: '1', CI: 'true' }
   });
-  const report = { schema, ok: result.code === 0, duration_ms: Date.now() - start, command: ['sks', ...commandArgs].join(' '), status: result.code === 0 ? 'verified_partial' : 'blocked' };
+  const report = { schema, ok: result.code === 0, duration_ms: Date.now() - start, command: ['maintainer', ...commandArgs].join(' '), status: result.code === 0 ? 'verified_partial' : 'blocked' };
   if (flag(args, '--json')) return console.log(JSON.stringify(report, null, 2));
   console.log(`${schema}: ${report.status}`);
   if (!report.ok) process.exitCode = 1;
@@ -58,4 +58,8 @@ async function commandBench(schema: any, commandArgs: any, args: any = []) {
 
 export function benchCliEntrypoint(moduleUrl: string | URL = import.meta.url): string {
   return fileURLToPath(new URL('../../bin/sks.js', moduleUrl));
+}
+
+export function maintainerCliEntrypoint(moduleUrl: string | URL = import.meta.url): string {
+  return fileURLToPath(new URL('../../scripts/maintainer-cli.js', moduleUrl));
 }

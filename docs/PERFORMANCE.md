@@ -5,7 +5,7 @@ Sneakoscope Codex 10.5.1 is designed to keep runtime, package size, RAM, and sto
 ## Speed
 
 - `codex exec` output is streamed to files and only a bounded tail is retained in memory.
-- `sks perf run --json` records structured startup and package-payload measurements and writes `.sneakoscope/perf/budgets.json`.
+- `npm run maintainer -- perf run --json` records structured startup and package-payload measurements and writes `.sneakoscope/perf/budgets.json`.
 - Codex native `/goal` workflows exclusively own persisted goals; SKS creates no Goal mission, bridge artifact, compatibility loop, or fallback state.
 - `sks wiki sweep` records intentional forgetting and promotion candidates so default recall stays top-K instead of becoming an unbounded memory dump.
 - `sks code-structure scan` flags 1000/2000/3000-line handwritten source files before new logic is added to oversized modules.
@@ -24,8 +24,8 @@ Sneakoscope Codex 10.5.1 is designed to keep runtime, package size, RAM, and sto
 ## Evaluation metrics
 
 `sks eval run` creates a deterministic JSON report in `.sneakoscope/reports/` unless `--no-save` is used. The built-in scenario compares an uncompressed all-claims baseline with a TriWiki compressed context capsule.
-`sks perf run --json` is the lightweight runtime probe for CLI startup and package payload budgets.
-`sks perf cold-start --json` and the release `perf:gate` use 20 process-spawn samples by default so p95 is not just the single slowest run. The release gate also retries once when every command exited successfully and only the timing budget missed, which keeps transient OS scheduling noise from blocking publish while still failing persistent regressions.
+`npm run maintainer -- perf run --json` is the lightweight runtime probe for CLI startup and package payload budgets.
+`npm run maintainer -- perf cold-start --json` and the release `perf:gate` use 20 process-spawn samples by default so p95 is not just the single slowest run. The release gate also retries once when every command exited successfully and only the timing budget missed, which keeps transient OS scheduling noise from blocking publish while still failing persistent regressions.
 
 Tracked metrics:
 
@@ -55,7 +55,7 @@ B channel -> phase angle
 A channel -> concentration/confidence
 ```
 
-Each anchor stores id, RGBA key, `[domain, layer, phase, concentration]`, source path, status/risk, and a text hash. Each valid pack also includes `sks.wiki-voxel.v1` rows keyed by quantized domain/radius/phase with semantic, trust, freshness, priority, conflict, route, and cost metadata. Coordinate-only legacy packs are invalid and should be regenerated with `sks wiki refresh` or `sks wiki pack` before any pipeline uses them.
+Each anchor stores id, RGBA key, `[domain, layer, phase, concentration]`, source path, status/risk, and a text hash. Each valid pack also includes `sks.wiki-voxel.v1` rows keyed by quantized domain/radius/phase with semantic, trust, freshness, priority, conflict, route, and cost metadata. Coordinate-only legacy packs are invalid and should be regenerated with `sks align run` (`sks wiki refresh` and `sks wiki pack` are aliases of it) before any pipeline uses them.
 
 ## Package size
 

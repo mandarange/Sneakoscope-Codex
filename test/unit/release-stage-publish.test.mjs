@@ -1,7 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { stagePublish } from '../../dist/core/release/stage-publish.js';
+import { RELEASE_ORIGIN_IDENTITY } from '../../dist/core/release/release-origin.js';
+
+// stagePublish reads `git remote get-url origin` from its root and compares it
+// to the release identity. Run it against a throwaway repository with the
+// canonical origin so the verdict never depends on how this checkout was cloned.
+const RELEASE_ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-stage-publish-root-'));
+for (const args of [['init', '-q'], ['remote', 'add', 'origin', `https://${RELEASE_ORIGIN_IDENTITY}.git`]]) {
+  assert.equal(spawnSync('git', args, { cwd: RELEASE_ROOT }).status, 0, `git ${args[0]} failed`);
+}
+fs.symlinkSync(path.resolve('dist'), path.join(RELEASE_ROOT, 'dist'), 'dir');
+process.on('exit', () => fs.rmSync(RELEASE_ROOT, { recursive: true, force: true }));
 
 const COMMIT = 'a'.repeat(40);
 const DISPATCH_NONCE = 'b'.repeat(32);
@@ -60,7 +74,7 @@ function options(overrides = {}) {
   return {
     calls,
     opts: {
-      root: process.cwd(),
+      root: RELEASE_ROOT,
       version: '7.3.0',
       physicalEvidenceRunId: PHYSICAL_EVIDENCE_RUN_ID,
       generateDispatchNonce: () => DISPATCH_NONCE,
@@ -72,7 +86,7 @@ function options(overrides = {}) {
   };
 }
 
-// The property that matters: a bare `sks release stage` may perform read-only
+// The property that matters: a bare `maintainer release stage` may perform read-only
 // authentication and visibility checks, but must never push, dispatch, stage,
 // approve, or publish anything.
 test('without --confirm nothing outward-facing runs', () => {

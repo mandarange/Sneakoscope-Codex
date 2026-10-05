@@ -172,3 +172,34 @@ test('publishing a generation does not move the cache key it was built under', a
     removeFixtureRoot(root);
   }
 });
+
+test('align\'s own AGENTS.md projections do not stale the index; a source change still does', async (t) => {
+  if (!gitAvailable()) {
+    t.skip('git is required to prove a reusable cache key');
+    return;
+  }
+  const { readContextGraphGitState } = await import('../cache-key.js');
+  const root = makeFixtureRoot('cg-cache-key-agents-projection');
+  try {
+    writeFixtureFile(root, 'package.json', '{"name":"fixture","version":"0.0.0"}\n');
+    writeFixtureFile(root, 'src/a.ts', 'export const A = 1;\n');
+    writeFixtureFile(root, 'AGENTS.md', '<!-- BEGIN SKS PROJECT MEMORY (auto) -->\nGenerated: 1\n<!-- END SKS PROJECT MEMORY -->\n');
+    initGitRepo(root);
+    const before = await readContextGraphGitState(root);
+
+    // The projection rewrites tracked and new AGENTS.md files on every align run.
+    writeFixtureFile(root, 'AGENTS.md', '<!-- BEGIN SKS PROJECT MEMORY (auto) -->\nGenerated: 2\n<!-- END SKS PROJECT MEMORY -->\n');
+    writeFixtureFile(root, 'src/AGENTS.md', '<!-- BEGIN SKS PROJECT MEMORY (auto) -->\nlocal\n<!-- END SKS PROJECT MEMORY -->\n');
+    const afterProjection = await readContextGraphGitState(root);
+    assert.equal(afterProjection.trackedDirtyFingerprint, before.trackedDirtyFingerprint);
+    assert.equal(afterProjection.untrackedFingerprint, before.untrackedFingerprint);
+    assert.equal(afterProjection.state, 'clean');
+
+    writeFixtureFile(root, 'src/b.ts', 'export const B = 2;\n');
+    const afterSource = await readContextGraphGitState(root);
+    assert.notEqual(afterSource.untrackedFingerprint, before.untrackedFingerprint);
+    assert.equal(afterSource.state, 'dirty');
+  } finally {
+    removeFixtureRoot(root);
+  }
+});

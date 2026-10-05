@@ -2,6 +2,119 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Context compaction no longer fails on Codex-LB and OpenRouter threads with
+  `Error running remote compact task: … bridge_upstream_request_failed`. SKS
+  points Codex's built-in OpenAI provider at the Desktop Bridge, so Codex
+  compacts remotely (a `compaction_trigger` request, or `/responses/compact`),
+  which only the official backend implements. For a provider-routed thread the
+  bridge now asks the thread's own model for a handoff summary and returns it as
+  the compaction item, over HTTP and the Responses WebSocket; later turns carry
+  the summary as a user message. Verified with the bundled Codex CLI through
+  the bridge: the same auto-compaction that failed the turn before now
+  completes it. Official-route threads keep native compaction.
+- `sks align run` works in a project without
+  `config/architecture-map-policy.v1.json` (it failed with
+  `architecture_map_policy_unreadable`), and a self-contained run, like a
+  verified `sks align proof`, closes its Align route instead of blocking the
+  next route command until `sks route close`.
+- The ambiguity gate pointed at `sks pipeline answer`, which did not exist, and
+  denied `sks qa-loop answer`. `sks pipeline answer <id|latest> (--stdin |
+  <answers.json>)` now seals a paused route; a rejected reply leaves it paused.
+- `sks commit --dry-run` made a real commit, `sks memory --dry-run` ran a real
+  GC, and `sks conflicts cleanup --json` skipped its `--yes` confirmation.
+- The npm package left out a module the agent janitor imports, so `qa-loop`,
+  `ppt`, `image-ux-review` and `auto-review` crashed with
+  `ERR_MODULE_NOT_FOUND`.
+- Ledger T5: a lost tool output (`[No tool output found …]`) affects only the
+  turn that reports it; the thread continues after recovery instead of being
+  refused for the rest of its life.
+- In the default profile, host-capability tasks (DB schema then query,
+  spreadsheet create then update, document write then render) were denied at
+  their second step, and a MAD-SKS SQL-plane operation never recorded its
+  result, because PostToolUse was not installed. It is installed again for
+  exactly those tools (`acas-tools` and MCP database tools); other tool calls
+  still run one hook.
+- The warm hook daemon answered with the environment of whichever process
+  spawned it: a daemon started by a Naruto worker treated every later session
+  as a worker, and a worker served by a plain daemon escaped its recursion
+  guard. Marker-carrying callers now evaluate inline, the daemon starts
+  without markers, and requests whose decision environment differs are
+  answered inline.
+- SKS no longer denies Codex's own `spawn_agent` calls outside a Naruto
+  parent; the tier-model and bounded-fork rules apply to Naruto children.
+- `sks align run` left its own index stale in every project that does not
+  ignore `AGENTS.md`: the projection it writes after the scan changed the
+  workspace fingerprint, so `sks wiki validate` and the freshness preflight
+  asked for another align forever. Align's `AGENTS.md` outputs no longer count
+  as source changes; real source edits still do.
+- `.codex/SNEAKOSCOPE.md` written by any current version was never refreshed
+  again, because the managed-file check required the pre-10.3.9 `Files:` line.
+- TriWiki has one writer (ledger S3): `sks wiki refresh` and `sks wiki pack`
+  built a second context pack (memory claims plus code entries) into the same
+  file as `sks align run`, so whichever ran last won. Both are now aliases of
+  `sks align run`; `sks memory build` runs it before compiling mistake rules,
+  and the strict Stop no longer re-projects `AGENTS.md` behind align's back.
+- `sks align run` no longer intermittently leaves its own route open. Its trust
+  report judged `work-order-ledger.json` stale against the mission's last event by
+  mtime, which only held when the two timestamps landed together; on a slower
+  machine about one run in three stayed open and blocked the next route command.
+  The artifacts the route writes once are now exempt from that check.
+
+### Changed
+
+- The essential profile stops producing strict-only rituals: route plans no
+  longer seed request intake, a repository scan, engineering-sanity and
+  architecture-map artifacts, or proof stages, and "Honest Mode" appears in
+  route, language, Naruto and Computer Use text only under `strict`.
+- An allowed tool call that SKS has nothing to say about no longer shows
+  "SKS: tool call inspected.", and the Naruto decision is logged per prompt,
+  not per hook event.
+- A PreToolUse hook for a plain shell command loads about 160 modules instead
+  of about 610 (~580 ms to ~180 ms cold).
+- Ordinary work stays with the parent agent: a review, DB or MAD-SKS route and
+  a subject word such as "parallel" no longer start child agents; only an
+  explicit request, `--agents N`, `$sks-naruto`/`$sks-work`, or an artifact
+  pipeline does.
+- The evidence checks `trust`, `stop-gate`, `validate-artifacts`, `hproof` and
+  `proof-field` are subcommands of `sks proof` (`sks proof trust validate`,
+  `sks proof stop-gate check`, `sks proof artifacts`, `sks proof hproof check`,
+  `sks proof field scan`). The MCP `proof` tool gains the read-only `trust` and
+  `stop-gate` actions; the artifact-writing checks stay CLI-only.
+- The command manifest is the single source of command metadata. The registry
+  keeps only the lazy loader and package file, the command catalog (`usage` and
+  description) is derived from the manifest, and the contract layer takes input
+  schemas from it. Seven commands that disagreed about migration-gate and
+  active-route flags now have one answer; `dollar-commands` is read-only (R0).
+- The test suite runs under the product default (`essential`); tests that assert
+  strict-only behavior pin `strict` explicitly.
+- `sks usage` no longer advertises topics that do not resolve.
+
+### Removed
+
+- Command wrappers, re-export barrels, the context-graph optimizer and the
+  incremental compiler that no product path reached.
+- `sks loop` (retired earlier; now an ordinary unknown command), together with
+  the Stop-hook continuation branch, `src/core/loops/*` and the `$Loop`
+  codex-native route label nothing could reach.
+- `sks run`, which classified a prompt and shelled out to the route's own
+  command, and `sks rollback`, which only `rm -rf`'d managed paths
+  (`sks uninstall` owns removal).
+- `sks wizard`, a second name for `sks quickstart` that described an interactive
+  setup UI it never opened, and `sks profile`, which wrote
+  `.sneakoscope/model/current.json` for nothing to read.
+- The maintainer commands `check`, `gates`, `task`, `release`, `daemon`,
+  `versioning`, `bench`, `perf`, `features`, `all-features`, `harness` and `rust`
+  are no longer in the shipped `sks` CLI or the agent-bridge tool manifest. Run
+  them from a source checkout with `npm run maintainer -- <command>`.
+  `config/installed-public-surface-closure.v1.json` now pins all of these removed
+  names as rejected by the installed package.
+- The npm package no longer ships ~200 release-gate scripts, the maintainer
+  command modules, or two configs only checkouts read (1582 → 1380 files). It
+  keeps the scripts its own lifecycle needs (version truth, publish tag and
+  preflight, release stamp and pack receipt).
+
 ### Documentation
 
 - Reworked the README around the first five minutes: value proposition, one-command install, project bootstrap, Doctor, and the plan → build → verify → review loop.
@@ -12,6 +125,7 @@
 ### Maintenance
 
 - Added a CI workflow that runs install, build, typecheck, and the canonical test command on pushes and pull requests.
+- `test/unit/release-stage-publish.test.mjs` runs against a throwaway repository with the canonical origin instead of inheriting the host clone's `origin` (nine tests failed on any checkout whose remote differs in case).
 
 
 ## [10.5.1] - 2026-10-04

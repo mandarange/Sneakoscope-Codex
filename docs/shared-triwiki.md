@@ -5,7 +5,7 @@ Shared TriWiki stores durable project memory as one-record-per-file JSON shards 
 ## Publish
 
 ```bash
-sks wiki refresh --json
+sks align run --json
 sks wiki publish latest --shared --json
 sks wiki rebuild-index --json
 sks wiki rebuild-summary --json

@@ -5,11 +5,11 @@ import { flag } from '../../cli/args.js';
 import { printJson } from '../../cli/output.js';
 import { exists, projectRoot, readJson, writeJsonAtomic, writeTextAtomic } from '../fsx.js';
 import { createMission } from '../mission.js';
-import { type ProcessRunner, stagePublish } from '../release/stage-publish.js';
+import type { ProcessRunner } from '../release/stage-publish.js';
 
 export function usage(): string {
   return [
-    'Usage: sks release affected|full|background|stage [--json]',
+    'Usage: maintainer release affected|full|background|stage [--json]',
     '',
     'Run affected release proof, full release proof, or background release proof explicitly.',
     '',
@@ -89,6 +89,9 @@ export async function releaseCommand(args: string[] = []): Promise<unknown> {
 }
 
 async function runStageSubcommand(root: string, args: string[], json: boolean): Promise<unknown> {
+  // Staging needs the maintainer-only tarball verifier, which the npm package
+  // does not ship; loading it only here keeps the other subcommands runnable.
+  const { stagePublish } = await import('../release/stage-publish.js');
   const report = stagePublish({
     root,
     confirm: flag(args, '--confirm'),

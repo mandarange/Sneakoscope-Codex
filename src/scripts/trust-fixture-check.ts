@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { runProcess } from '../core/fsx.js';
+import { createMission } from '../core/mission.js';
 
 const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-trust-fixture-'));
 const home = path.join(root, '.home');
@@ -17,22 +18,23 @@ await runProcess('git', ['init', '-q'], {
   env: { CI: 'true' }
 });
 const sks = path.join(process.cwd(), 'dist', 'bin', 'sks.js');
-const run = await runJson(root, sks, ['run', 'fixture', '--mock', '--json'], { allowNonZero: true });
-const trust = await runJson(root, sks, ['trust', 'validate', run.mission_id, '--json'], { allowNonZero: true });
-const issues = [...new Set([...(run.trust_report?.issues || []), ...(trust.issues || [])])];
-const fakeSuccessBlocked = run.ok === false && run.status === 'mock_only';
-const runTrustStatus = String(run.trust_status || '');
+process.env.HOME = home;
+process.env.SKS_GLOBAL_ROOT = globalRoot;
+const mission = await createMission(root, { mode: 'fixture', prompt: 'trust fixture' });
+const finalize = await runJson(root, sks, ['proof', 'finalize', mission.id, '--mock', '--json'], { allowNonZero: true });
+const trust = await runJson(root, sks, ['proof', 'trust', 'validate', mission.id, '--json'], { allowNonZero: true });
+const issues = [...new Set([...(finalize.validation?.issues || []), ...(trust.issues || [])])];
+const finalizeStatus = String(finalize.proof?.status || '');
+const fakeSuccessBlocked = finalizeStatus === 'mock_only' && finalize.validation?.completion_ok === false;
 const trustStatus = String(trust.status || '');
 const ok = fakeSuccessBlocked
-  && ['blocked', 'mock_only'].includes(runTrustStatus)
   && ['blocked', 'mock_only'].includes(trustStatus)
   && trust.ok !== true;
 console.log(JSON.stringify({
   schema: 'sks.trust-fixture-check.v1',
   ok,
-  mission_id: run.mission_id,
-  run_status: run.status,
-  run_trust_status: runTrustStatus,
+  mission_id: mission.id,
+  finalize_status: finalizeStatus,
   trust_status: trustStatus,
   fake_success_blocked: fakeSuccessBlocked,
   issues

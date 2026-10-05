@@ -14,7 +14,8 @@ function isEmptyAnswer(v: any, slot: any = {}) {
 export function validateAnswers(schema: any, answers: any) {
   const errors: any[] = [];
   const resolved: any[] = [];
-  for (const slot of schema.slots) {
+  const slots = Array.isArray(schema?.slots) ? schema.slots : [];
+  for (const slot of slots) {
     const value = answers[slot.id];
     if (slot.required && isEmptyAnswer(value, slot)) {
       errors.push({ slot: slot.id, error: 'required_answer_missing' });
@@ -36,7 +37,7 @@ export function validateAnswers(schema: any, answers: any) {
     errors.push({ slot: 'DATABASE_TARGET_ENVIRONMENT', error: 'production_write_target_forbidden' });
   }
   errors.push(...validateQaLoopAnswers(schema, answers));
-  return { ok: errors.length === 0, errors, resolved, totalRequired: schema.slots.filter((s: any) => s.required).length };
+  return { ok: errors.length === 0, errors, resolved, totalRequired: slots.filter((s: any) => s.required).length };
 }
 
 export function buildDecisionContract({ mission, schema, answers, mistakeRecall = null, requestIntake = null }: any) {

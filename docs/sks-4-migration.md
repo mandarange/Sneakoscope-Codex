@@ -4,11 +4,11 @@ SKS 4.0.0 is a destructive verification-pipeline release. The default foreground
 
 ## Operational Changes
 
-- Use `sks check --tier confidence --sla 5m` for normal foreground verification.
-- Use `sks task run --sla 5m` for task-shaped affected verification.
-- Use `sks release affected` for release-equivalent changed-scope proof.
-- Use `sks release full` for the full foreground release graph.
-- Use `sks check --tier real-check` only for explicit real environment, app, browser, network, OAuth, or registry verification.
+- Use `npm run maintainer -- check --tier confidence --sla 5m` for normal foreground verification.
+- Use `npm run maintainer -- task run --sla 5m` for task-shaped affected verification.
+- Use `npm run maintainer -- release affected` for release-equivalent changed-scope proof.
+- Use `npm run maintainer -- release full` for the full foreground release graph.
+- Use `npm run maintainer -- check --tier real-check` only for explicit real environment, app, browser, network, OAuth, or registry verification.
 - Use `sks triwiki index`, `sks triwiki affected`, and `sks proof bank status` to inspect the new proof bank surface.
 
 ## Removed Runtime Migration

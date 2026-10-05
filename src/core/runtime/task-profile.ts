@@ -41,8 +41,24 @@ const DATABASE_WORK_RE =
 const DATABASE_CONTROL_SURFACE_META_RE =
   /\bsks\s+db\b|\b(?:db|database|migrate|migrations?)\b[\s\S]{0,48}\b(?:command|cli|route|routing|parser|classifier|regex|help|usage|topic|docs?|documentation|constant|keyword|alias)\b|\b(?:command|cli|route|routing|parser|classifier|regex|help|usage|topic|docs?|documentation|constant|keyword|alias)\b[\s\S]{0,48}\b(?:db|database|migrate|migrations?)\b|(?:db|디비|데이터베이스|migration|migrate|마이그레이션)\s*(?:커맨드|명령|명령어|CLI|라우트|라우팅|파서|분류기|정규식|도움말|헬프|사용법|토픽|문서|상수|키워드|별칭)|(?:커맨드|명령|명령어|CLI|라우트|라우팅|파서|분류기|정규식|도움말|헬프|사용법|토픽|문서|상수|키워드|별칭)[\s\S]{0,32}(?:db|디비|데이터베이스|migration|migrate|마이그레이션)/i
 
-const PARALLEL_CUE_RE =
-  /\b(parallel|subagents?|one agent per|fan out|independent slices?|naruto)\b|병렬|하위\s*에이전트|서브\s*에이전트|나루토|분담/i
+// A request for parallel or subagent work, phrased as a request. Bare nouns are
+// subject matter, not a request: "fix the flaky parallel test runner", "refactor
+// the naruto gate", or "add a subagents section to the docs" stay parent-owned.
+const PARALLEL_CUE_RE = new RegExp([
+  String.raw`\bin\s+parallel\b`,
+  String.raw`\bparallel(?:ize|ise|ized|ised|izing|ising)\b`,
+  String.raw`\bparallel\s+(?:implementation|work|execution|edits?|changes?|review|audit)\b`,
+  String.raw`\b(?:use|using|with|via|spawn|start|launch|across)\s+(?:\d+\s+|two\s+|three\s+|four\s+|several\s+|multiple\s+|some\s+|a\s+few\s+|many\s+)?(?:sub-?agents?|child\s+agents?|parallel\s+agents?|naruto)\b`,
+  String.raw`\bsplit\b[^.\n]{0,60}\b(?:across|between|among|into)\s+(?:\d+\s+|several\s+|multiple\s+)?(?:sub-?agents?|agents|workers|independent\s+slices?)\b`,
+  String.raw`\bone\s+(?:sub-?)?agent\s+(?:per|for\s+each)\b`,
+  String.raw`\bfan\s+(?:it|this|that|them|these|the\s+work|the\s+tasks?)\s+out\b`,
+  String.raw`\bfan\s+out\s+(?:the\s+work|the\s+tasks?|across|over|to)\b`,
+  String.raw`병렬로\s*(?:[가-힣]{1,6}\s*)?(?:해\s*줘|해\s*주세요|해라|하자|해서|진행|작업|분담|나눠|돌려)`,
+  String.raw`병렬\s*(?:검토|감사|점검|분석|조사|연구|수정|구현|리팩터링?|작업|처리|진행|실행|테스트)\s*(?:해|하자|으로)`,
+  String.raw`(?:서브|하위)\s*에이전트들?\s*(?:로|를\s*(?:써|사용|띄워|이용)|에게|한테)`,
+  String.raw`나루토(?:로|를\s*(?:써|사용|이용|돌려))`,
+  String.raw`분담\s*(?:해|하여|해서)`
+].join('|'), 'i')
 
 /**
  * The prompt asks for parallel or subagent work in so many words. The task

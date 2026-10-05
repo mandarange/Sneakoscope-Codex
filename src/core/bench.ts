@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { ensureDir, nowIso, packageRoot, projectRoot, runProcess, writeJsonAtomic, writeTextAtomic } from './fsx.js';
+import { createMission } from './mission.js';
 import { percentile } from './perf-bench.js';
 import { runFakeCodexSdkTask } from './codex-control/codex-fake-sdk-adapter.js';
 import { GPT_FINAL_ARBITER_RESULT_SCHEMA_ID, gptFinalArbiterResultSchema } from './codex-control/gpt-final-review-schema.js';
@@ -15,9 +16,8 @@ export const CORE_BENCH_BUDGET_TIERS = Object.freeze({
     'sks root --json': 80,
     'sks commands --json': 120,
     'sks proof validate --json': 250,
-    'sks trust validate bench-fixture --json': 300,
+    'sks proof trust validate bench-fixture --json': 300,
     'sks wiki image-validate --json': 300,
-    'sks features check --json': 1200,
     'sks naruto status --json': 1000
   },
   'source-ci': {
@@ -26,9 +26,8 @@ export const CORE_BENCH_BUDGET_TIERS = Object.freeze({
     'sks root --json': 140,
     'sks commands --json': 320,
     'sks proof validate --json': 350,
-    'sks trust validate bench-fixture --json': 450,
+    'sks proof trust validate bench-fixture --json': 450,
     'sks wiki image-validate --json': 450,
-    'sks features check --json': 1800,
     'sks naruto status --json': 1400
   },
   'packed-local': {
@@ -37,9 +36,8 @@ export const CORE_BENCH_BUDGET_TIERS = Object.freeze({
     'sks root --json': 180,
     'sks commands --json': 260,
     'sks proof validate --json': 500,
-    'sks trust validate bench-fixture --json': 650,
+    'sks proof trust validate bench-fixture --json': 650,
     'sks wiki image-validate --json': 650,
-    'sks features check --json': 2400,
     'sks naruto status --json': 1800
   },
   'global-shim': {
@@ -48,9 +46,8 @@ export const CORE_BENCH_BUDGET_TIERS = Object.freeze({
     'sks root --json': 240,
     'sks commands --json': 320,
     'sks proof validate --json': 700,
-    'sks trust validate bench-fixture --json': 800,
+    'sks proof trust validate bench-fixture --json': 800,
     'sks wiki image-validate --json': 800,
-    'sks features check --json': 2800,
     'sks naruto status --json': 2200
   },
   'npx-one-shot': {
@@ -59,15 +56,14 @@ export const CORE_BENCH_BUDGET_TIERS = Object.freeze({
     'sks root --json': 3000,
     'sks commands --json': 3500,
     'sks proof validate --json': 3500,
-    'sks trust validate bench-fixture --json': 3500,
+    'sks proof trust validate bench-fixture --json': 3500,
     'sks wiki image-validate --json': 3500,
-    'sks features check --json': 5000,
     'sks naruto status --json': 5000
   }
 });
 
 export const CORE_BENCH_BUDGETS = CORE_BENCH_BUDGET_TIERS['source-local'];
-export const TRUST_VALIDATE_BENCH_COMMAND = 'sks trust validate bench-fixture --json';
+export const TRUST_VALIDATE_BENCH_COMMAND = 'sks proof trust validate bench-fixture --json';
 export const CORE_BENCH_WARMUP_ITERATIONS = 1;
 export const UX_REVIEW_STAGED_LATENCY_BUDGETS = Object.freeze({
   source_screenshot_ingest: 500,
@@ -102,7 +98,6 @@ const STATIC_CORE_COMMANDS: readonly CoreBenchCommand[] = Object.freeze([
   ['sks commands --json', ['commands', '--json']],
   ['sks proof validate --json', ['proof', 'validate', '--json']],
   ['sks wiki image-validate --json', ['wiki', 'image-validate', '--json']],
-  ['sks features check --json', ['features', 'check', '--json']],
   ['sks naruto status --json', ['naruto', 'status', '--json']]
 ]);
 
@@ -115,7 +110,7 @@ function coreCommands(benchTrustMission: any): CoreBenchCommand[] {
     : undefined;
   return [
     ...STATIC_CORE_COMMANDS.slice(0, 5),
-    [TRUST_VALIDATE_BENCH_COMMAND, ['trust', 'validate', missionId, '--json', '--no-wrongness'], trustRoot],
+    [TRUST_VALIDATE_BENCH_COMMAND, ['proof', 'trust', 'validate', missionId, '--json', '--no-wrongness'], trustRoot],
     ...STATIC_CORE_COMMANDS.slice(5)
   ];
 }
@@ -124,14 +119,14 @@ export async function runCoreBench(root: any = process.cwd(), { iterations = 3, 
   const script = path.join(packageRoot(), 'dist', 'bin', 'sks.js');
   const budgets = ((CORE_BENCH_BUDGET_TIERS as Record<string, Record<string, number>>)[tier] || CORE_BENCH_BUDGET_TIERS['source-local']) as Record<string, number>;
   const measuredIterations = Math.max(1, Number(iterations) || 1);
-  const benchTrustMission = await ensureBenchTrustMission(root, script);
+  const benchTrustMission = await ensureBenchTrustMission(root);
   const rows: any[] = [];
   for (const [label, args, commandRoot] of coreCommands(benchTrustMission)) {
     const values: any[] = [];
     const failures: any[] = [];
-    // TRUST_VALIDATE_BENCH_COMMAND measures latency of `sks trust validate` against a
+    // TRUST_VALIDATE_BENCH_COMMAND measures latency of `sks proof trust validate` against a
     // mock fixture mission. A --mock `$Naruto` run can never satisfy the real agent
-    // gate, so `sks trust validate` legitimately exits 1 (report.ok === false,
+    // gate, so `sks proof trust validate` legitimately exits 1 (report.ok === false,
     // status: 'blocked') every time regardless of environment. This row exists to
     // measure command latency, not to assert the mock mission's trust status, so a
     // well-formed trust-validation report (valid JSON with the expected schema) is
@@ -191,37 +186,13 @@ function isWellFormedTrustValidation(stdout: string): boolean {
   return Boolean(parsed && parsed.schema === 'sks.trust-validation.v1' && typeof parsed.status === 'string');
 }
 
-async function ensureBenchTrustMission(root: any, script: any) {
+// The trust row measures `sks proof trust validate` latency against a real mission
+// directory. An empty mission is enough: the validator reports it as blocked in
+// a well-formed report, which isWellFormedTrustValidation accepts.
+async function ensureBenchTrustMission(root: any) {
   const benchRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-core-bench-trust-')).catch(() => root);
-  // `sks run` blocks the agent gate (and skips writing completion-proof.json) when
-  // its cwd is not a git repo (git_collaboration.status -> not_git_repo). The bench
-  // trust-mission scratch dir must be a git repo so completion-proof.json/
-  // trust-report.json/run-classification.json actually get written and
-  // hasBenchTrustArtifacts() can find a usable mission instead of falling back to
-  // a nonexistent 'bench-fixture-missing' id (which always fails trust validate).
-  await runProcess('git', ['init', '-q', '.'], { cwd: benchRoot, timeoutMs: 10_000 }).catch(() => null);
-  const beforeMissionIds = await listMissionIds(benchRoot);
-  const result = await runProcess(process.execPath, [script, 'run', 'fixture', '--mock', '--json'], {
-    cwd: benchRoot,
-    timeoutMs: 60_000,
-    maxOutputBytes: 4 * 1024 * 1024,
-    env: { SKS_SKIP_NPM_FRESHNESS_CHECK: '1', SKS_DISABLE_UPDATE_CHECK: '1', CI: 'true' }
-  });
-  return {
-    missionId: parseMissionId(result.stdout) || await findBenchTrustMission(benchRoot, beforeMissionIds),
-    root: benchRoot,
-    setup_code: result.code
-  };
-}
-
-function parseMissionId(text: any) {
-  const parsed = parseJsonOutput(text);
-  if (parsed?.mission_id || parsed?.id || parsed?.proof?.mission_id || parsed?.completion_proof?.mission_id) {
-    return parsed?.mission_id || parsed?.id || parsed?.proof?.mission_id || parsed?.completion_proof?.mission_id;
-  }
-  const directMatch = String(text || '').match(/"mission_id"\s*:\s*"(M-\d{8}-\d{6}-[a-f0-9]+)"/i);
-  if (directMatch?.[1]) return directMatch[1];
-  return null;
+  const mission = await createMission(benchRoot, { mode: 'bench', prompt: 'fixture' }).catch(() => null);
+  return { missionId: typeof mission?.id === 'string' ? mission.id : null, root: benchRoot };
 }
 
 function parseJsonOutput(text: any = '') {
@@ -238,53 +209,6 @@ function parseJsonOutput(text: any = '') {
     } catch {}
   }
   return null;
-}
-
-async function listMissionIds(root: any) {
-  try {
-    const entries = await fs.readdir(path.join(root, '.sneakoscope', 'missions'), { withFileTypes: true });
-    return entries.filter((entry: any) => entry.isDirectory() && /^M-\d{8}-\d{6}-/.test(entry.name)).map((entry: any) => entry.name);
-  } catch {
-    return [];
-  }
-}
-
-async function findBenchTrustMission(root: any, beforeMissionIds: any[] = []) {
-  const missionRoot = path.join(root, '.sneakoscope', 'missions');
-  const before = new Set(beforeMissionIds);
-  let entries: any[] = [];
-  try {
-    entries = await fs.readdir(missionRoot, { withFileTypes: true });
-  } catch {
-    return null;
-  }
-  const candidates = await Promise.all(entries
-    .filter((entry: any) => entry.isDirectory() && /^M-\d{8}-\d{6}-/.test(entry.name))
-    .map(async (entry: any) => {
-      const dir = path.join(missionRoot, entry.name);
-      let mtimeMs = 0;
-      try {
-        mtimeMs = (await fs.stat(dir)).mtimeMs;
-      } catch {}
-      return { id: entry.name, dir, isNew: !before.has(entry.name), mtimeMs };
-    }));
-  candidates.sort((a: any, b: any) => Number(b.isNew) - Number(a.isNew) || b.mtimeMs - a.mtimeMs);
-  for (const candidate of candidates) {
-    if (await hasBenchTrustArtifacts(candidate.dir)) return candidate.id;
-  }
-  return null;
-}
-
-async function hasBenchTrustArtifacts(dir: any) {
-  const required = ['run-classification.json', 'completion-proof.json', 'trust-report.json'];
-  for (const artifact of required) {
-    try {
-      await fs.access(path.join(dir, artifact));
-    } catch {
-      return false;
-    }
-  }
-  return true;
 }
 
 export async function writeCoreBenchArtifacts(root: any, report: any) {

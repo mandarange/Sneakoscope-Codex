@@ -9,7 +9,21 @@ import { createDesktopBridgeRejectionLogger } from './rejection-log.js';
 import { OPENROUTER_ONLY_REFUSAL_CODES, openRouterOnlyEnabled } from './exclusive-provider-guard.js';
 import { ensureDesktopBridgeRemoteTarget, isUnreachableUpstreamError, refreshDesktopBridgeRemoteTarget, resolveAndBindDesktopBridgeRouteContext, resolveCodexSessionIdentity, resolveDesktopBridgeTarget, safeBridgeErrorCode, singleBridgeHeader } from './security.js';
 import { desktopBridgeListenOrigin } from './state.js';
-import { DEFAULT_DESKTOP_BRIDGE_MAX_REQUEST_BODY_BYTES, DesktopBridgeError, DesktopBridgeRequestBodyTooLargeError, type DesktopBridgeResolvedCredential, type DesktopBridgeRouteContext, type PreparedDesktopBridgeConfig } from './types.js';
+import {
+  buildCompactionSummaryRequest,
+  compactEndpointResult,
+  compactionCreatedEvent,
+  compactionFailedEvent,
+  compactionResponseEvents,
+  expandBridgeCompactionItems,
+  newCompactionResponseId,
+  parseProviderSummary,
+  requestsRemoteCompaction,
+  sseEvent,
+  summaryWithinBounds,
+  type BridgeCompactionKind,
+} from './compaction-adapter.js';
+import { DEFAULT_DESKTOP_BRIDGE_MAX_REQUEST_BODY_BYTES, DesktopBridgeError, DesktopBridgeRequestBodyTooLargeError, type DesktopBridgeResolvedCredential, type DesktopBridgeRouteContext, type PreparedDesktopBridgeConfig, type PreparedDesktopBridgeProvider } from './types.js';
 
 const MAX_UPSTREAM_ERROR_BODY_BYTES = 1024 * 1024;
 
@@ -22,6 +36,10 @@ export interface PreparedDesktopBridgeRequest {
   /** True when the bridge decoded a compressed request body and now owns a
    *  plain-JSON body, so content-encoding must not be forwarded upstream. */
   contentEncodingStripped?: boolean;
+  /** Set when Codex asks for remote compaction; a provider route answers it
+   *  with a summary from the thread's own model (compaction-adapter.ts). */
+  compaction?: BridgeCompactionKind | null;
+  payload?: Record<string, unknown> | null;
 }
 
 // Codex CLI 0.147 compresses Responses POST bodies (content-encoding: zstd).
@@ -72,6 +90,10 @@ function modelBodyKind(req: IncomingMessage, pathname: string, config: PreparedD
   if (RESPONSES_PATHS.includes(pathname)) return 'responses';
   return openRouterOnlyEnabled(config) && req.method === 'POST'
     && RESPONSES_PATHS.some((prefix) => pathname.startsWith(`${prefix}/`)) ? 'sub-endpoint' : null;
+}
+
+function isCompactEndpoint(req: IncomingMessage, pathname: string): boolean {
+  return req.method === 'POST' && RESPONSES_PATHS.some((prefix) => pathname === `${prefix}/compact`);
 }
 
 async function readBoundedBody(req: IncomingMessage, maximum: number): Promise<Buffer> {
@@ -133,12 +155,20 @@ export async function prepareDesktopBridgeRequest(req: IncomingMessage, config: 
     pathname, transport: 'http', headers: req.headers, identity: sessionIdentity,
   }, config);
   // A sub-endpoint body without a model is forwarded untouched.
+  let rewrite = false;
   if (payload && (bodyKind === 'responses' || typeof payload.model === 'string') && payload.model !== route.upstream_model) {
     payload.model = route.upstream_model;
-    body = Buffer.from(JSON.stringify(payload));
+    rewrite = true;
   }
+  // No upstream can read a bridge-made compaction item; it travels as the
+  // summary it carries, whichever route this request takes.
+  if (expandBridgeCompactionItems(payload)) rewrite = true;
+  if (payload && rewrite) body = Buffer.from(JSON.stringify(payload));
+  const compaction: BridgeCompactionKind | null = bodyKind === 'responses' && requestsRemoteCompaction(payload)
+    ? 'trigger'
+    : bodyKind === 'sub-endpoint' && isCompactEndpoint(req, pathname) ? 'endpoint' : null;
   const credential = route.provider_id === BRIDGE_OFFICIAL_ROUTE_ID ? null : await resolveCredential(config, route);
-  return { body, route, credential, contentEncodingStripped };
+  return { body, route, credential, contentEncodingStripped, compaction, payload };
 }
 
 function connectTimeout(request: ClientRequest, config: PreparedDesktopBridgeConfig): void {
@@ -361,6 +391,21 @@ export async function forwardHttp(
     // A deferred pin (DNS was down at start) resolves here or fails as
     // `bridge_remote_dns_failed`; a pin past its TTL re-resolves before use.
     await ensureDesktopBridgeRemoteTarget(remote, config.remoteLookup);
+    if (!official && request.compaction && request.payload) {
+      await answerCompactionWithProviderSummary(req, res, config, {
+        kind: request.compaction,
+        payload: request.payload,
+        route: request.route,
+        provider: provider!,
+        credential: request.credential!,
+        clientHeaders: req.headers,
+        requestUrl: request.compaction === 'endpoint'
+          ? String(req.url || '/').replace(/\/compact(?=$|\?)/, '')
+          : String(req.url || '/'),
+        authenticatedLocalBaseUrl,
+      });
+      return;
+    }
     const target = resolveDesktopBridgeTarget(req.url, remote);
     const transport = remote.secure ? https : http;
     const headers = official
@@ -558,4 +603,183 @@ export async function forwardHttp(
       }
     }
   } catch (error) { writeHttpBridgeError(res, error instanceof StalePooledSocketFailure ? error.reason : error, req); }
+}
+
+/** The provider's whole summary answer; a compaction summary is far smaller. */
+const MAX_COMPACTION_SUMMARY_RESPONSE_BYTES = 32 * 1024 * 1024;
+/** Codex waits on the compaction stream; a comment line keeps idle proxies and timers from cutting it. */
+const COMPACTION_KEEPALIVE_MS = 15_000;
+
+interface ProviderCompactionInput {
+  kind: BridgeCompactionKind;
+  payload: Record<string, unknown>;
+  route: DesktopBridgeRouteContext;
+  provider: PreparedDesktopBridgeProvider;
+  credential: DesktopBridgeResolvedCredential;
+  clientHeaders: IncomingMessage['headers'];
+  /** The bridge-relative Responses create URL the summary request is posted to. */
+  requestUrl: string;
+  authenticatedLocalBaseUrl: string;
+}
+
+interface ProviderSummaryCall {
+  status: number;
+  headers: IncomingMessage['headers'];
+  body: Buffer;
+}
+
+/**
+ * POSTs the summary request to the thread's provider and buffers the answer,
+ * with forwardHttp's transient replays (fresh connections, re-resolution of an
+ * unreachable pin). `onAccepted` runs once the provider answers 2xx, so the
+ * caller can start its own stream while the summary is still being written.
+ */
+export async function requestProviderCompactionSummary(
+  config: PreparedDesktopBridgeConfig,
+  input: Pick<ProviderCompactionInput, 'provider' | 'credential' | 'clientHeaders' | 'requestUrl'>,
+  body: Buffer,
+  onAccepted: () => void = () => undefined,
+): Promise<ProviderSummaryCall> {
+  const remote = input.provider.remote;
+  let remaining = TRANSIENT_UPSTREAM_REPLAY_LIMIT;
+  for (let attempt = 0; ; attempt += 1) {
+    await ensureDesktopBridgeRemoteTarget(remote, config.remoteLookup);
+    const target = resolveDesktopBridgeTarget(input.requestUrl, remote);
+    const headers = buildProviderUpstreamHeaders(input.clientHeaders, {
+      providerId: input.provider.provider_id, authTransport: input.provider.auth_transport, credential: input.credential,
+    }, target.host);
+    delete headers['content-encoding'];
+    headers['content-type'] = 'application/json';
+    headers.accept = 'text/event-stream';
+    headers['accept-encoding'] = 'identity';
+    headers['content-length'] = String(body.length);
+    try {
+      const result = await new Promise<ProviderSummaryCall>((resolve, reject) => {
+        const upstream = (remote.secure ? https : http).request({
+          protocol: target.protocol, hostname: remote.address, family: remote.family, port: remote.port,
+          method: 'POST', path: `${target.pathname}${target.search}`, headers, agent: false,
+          ...(remote.tlsServername ? { servername: remote.tlsServername } : {}),
+        });
+        connectTimeout(upstream, config);
+        upstream.setTimeout(config.idleTimeoutMs, () => upstream.destroy(new DesktopBridgeError('bridge_upstream_idle_timeout')));
+        upstream.once('error', reject);
+        upstream.once('response', (response) => {
+          const status = response.statusCode || 502;
+          if (status < 300) onAccepted();
+          const chunks: Buffer[] = [];
+          let total = 0;
+          response.on('data', (raw: Buffer) => {
+            total += raw.length;
+            if (total > MAX_COMPACTION_SUMMARY_RESPONSE_BYTES) {
+              response.destroy(new DesktopBridgeError('bridge_compaction_summary_too_large'));
+              return;
+            }
+            chunks.push(raw);
+          });
+          response.once('error', reject);
+          response.once('end', () => resolve({ status, headers: response.headers, body: Buffer.concat(chunks) }));
+        });
+        upstream.end(body);
+      });
+      if (result.status < 300 || remaining <= 0) return result;
+      const { upstreamCode, upstreamType } = upstreamErrorIds(result.body);
+      if (!isTransientUpstreamFailure(result.status, upstreamType, upstreamCode)) return result;
+    } catch (error) {
+      if (remaining <= 0 || error instanceof DesktopBridgeError) throw error;
+      if (isUnreachableUpstreamError(error)) await refreshDesktopBridgeRemoteTarget(remote, config.remoteLookup);
+    }
+    remaining -= 1;
+    const backoffMs = TRANSIENT_UPSTREAM_REPLAY_BACKOFF_MS[Math.min(attempt, TRANSIENT_UPSTREAM_REPLAY_BACKOFF_MS.length - 1)];
+    if (backoffMs) await delay(backoffMs);
+  }
+}
+
+function upstreamErrorIds(body: Buffer): { upstreamCode: string | null; upstreamType: string | null } {
+  try {
+    const parsed = JSON.parse(body.toString('utf8')) as { error?: { type?: unknown; code?: unknown }; detail?: unknown };
+    return {
+      upstreamCode: safeUpstreamErrorId(parsed?.error?.code) ?? safeUpstreamErrorId(parsed?.detail),
+      upstreamType: safeUpstreamErrorId(parsed?.error?.type),
+    };
+  } catch {
+    return { upstreamCode: null, upstreamType: null };
+  }
+}
+
+/**
+ * Answers a remote-compaction request on a provider route with a summary from
+ * the thread's own provider and model (see compaction-adapter.ts for why).
+ */
+async function answerCompactionWithProviderSummary(
+  req: IncomingMessage,
+  res: ServerResponse,
+  config: PreparedDesktopBridgeConfig,
+  input: ProviderCompactionInput,
+): Promise<void> {
+  const streaming = input.kind === 'trigger';
+  const responseId = newCompactionResponseId();
+  const publicModel = input.route.public_model;
+  const body = Buffer.from(JSON.stringify(buildCompactionSummaryRequest(input.payload, input.route.upstream_model)));
+  let keepalive: NodeJS.Timeout | null = null;
+  const startStream = (): void => {
+    if (!streaming || res.headersSent) return;
+    res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store', connection: 'keep-alive' });
+    res.write(sseEvent(compactionCreatedEvent(responseId, publicModel)));
+    keepalive = setInterval(() => { if (!res.writableEnded) res.write(': keepalive\n\n'); }, COMPACTION_KEEPALIVE_MS);
+    keepalive.unref();
+  };
+  const log = (code: string, status?: number) => logHttpRejection({
+    code,
+    transport: 'http',
+    ...(req.method === undefined ? {} : { method: req.method }),
+    ...(req.url === undefined ? {} : { url: req.url }),
+    ...(status === undefined ? {} : { status }),
+    provider_id: input.provider.provider_id,
+    public_model: publicModel,
+  });
+  try {
+    const call = await requestProviderCompactionSummary(config, input, body, startStream);
+    if (call.status >= 300) {
+      const { upstreamCode, upstreamType } = upstreamErrorIds(call.body);
+      log(upstreamCode ? `bridge_compaction_summary_status_${call.status}:${upstreamCode}` : `bridge_compaction_summary_status_${call.status}`, call.status);
+      const transient = isTransientUpstreamFailure(call.status, upstreamType, upstreamCode);
+      const clientStatus = transient ? 503 : call.status;
+      const errorBody = buildRedactedUpstreamErrorBody(call.status, upstreamCode, upstreamType, transient);
+      res.writeHead(clientStatus, {
+        'content-type': 'application/json', 'cache-control': 'no-store', 'content-length': String(errorBody.length),
+        ...(transient || call.status === 429 ? { 'retry-after': String(call.headers['retry-after'] || '10') } : {}),
+      });
+      res.end(errorBody);
+      return;
+    }
+    const parsed = parseProviderSummary(call.body.toString('utf8'));
+    const summary = parsed.failed || !summaryWithinBounds(parsed.summary) ? null : parsed.summary;
+    if (!summary) {
+      log('bridge_compaction_summary_unusable', call.status);
+      if (streaming) {
+        res.end(sseEvent(compactionFailedEvent(responseId, publicModel, 'bridge_compaction_summary_unusable')));
+      } else {
+        writeHttpBridgeError(res, new DesktopBridgeError('bridge_compaction_summary_unusable'), req);
+      }
+      return;
+    }
+    if (streaming) {
+      const events = compactionResponseEvents(responseId, publicModel, summary, parsed.usage);
+      res.write(sseEvent(events.itemDone));
+      res.end(sseEvent(events.completed));
+      return;
+    }
+    const result = Buffer.from(JSON.stringify(compactEndpointResult(input.payload, summary)));
+    res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store', 'content-length': String(result.length) });
+    res.end(result);
+  } catch (error) {
+    if (res.headersSent) {
+      log(`bridge_compaction_summary_failed:${safeBridgeErrorCode(error)}`);
+      res.end(sseEvent(compactionFailedEvent(responseId, publicModel, safeBridgeErrorCode(error))));
+      return;
+    }
+    writeHttpBridgeError(res, error, req);
+  } finally {
+    if (keepalive) clearInterval(keepalive);
+  }
 }

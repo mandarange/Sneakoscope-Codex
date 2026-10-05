@@ -450,9 +450,15 @@ function managedAgentsBlockNeedsReconcile(text: string): boolean {
   return current !== agentsBlockText().trim();
 }
 
-function isManagedQuickReference(text: string): boolean {
+/**
+ * A quick reference SKS generated, in any version's layout. The check used to
+ * require the pre-10.3.9 `Files:` line, so every file the current writer
+ * produced stopped being recognized and was never refreshed again.
+ */
+export function isManagedQuickReference(text: string): boolean {
   return text.startsWith('# ㅅㅋㅅ\n')
-    && text.includes('Files: AGENTS.md, .codex/hooks.json, .codex/config.toml, .codex/SNEAKOSCOPE.md');
+    && /^Install scope:\s*`[^`]+`/m.test(text)
+    && /^Files: AGENTS\.md, /m.test(text);
 }
 
 function quickReferenceInstallScope(text: string, fallback: 'global' | 'project' = 'global'): 'global' | 'project' {

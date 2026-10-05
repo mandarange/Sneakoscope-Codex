@@ -1,4 +1,5 @@
 import '../../__tests__/helpers/isolated-test-home.js';
+import '../../__tests__/helpers/strict-verification-profile.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { BUILTIN_LATEST_TIER_MODELS as T } from '../../subagents/model-tiers.js';
@@ -7,7 +8,6 @@ import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { evaluateHookPayload, evaluateHookPayloadOnce } from '../../hooks-runtime.js';
 import { lightTurnReceiptPath } from '../light-turn.js';
-import { toolOutputQuarantinePath } from '../tool-output-quarantine.js';
 import { prepareRoute } from '../../pipeline.js';
 import { createMission, loadStateForSession, missionDir, setCurrent, stateFileForSession } from '../../mission.js';
 import { sha256, writeJsonAtomic } from '../../fsx.js';
@@ -451,7 +451,7 @@ test('active continuation prompts trust persisted state and tolerate terminal pu
   }
 });
 
-test('missing custom tool output quarantines every later prompt in the same thread and permits a fresh thread', async () => {
+test('missing custom tool output stops only the turn that reports it; the thread continues after recovery (T5)', async () => {
   const root = await tempRoot('sks-interrupted-tool-output-');
   const session = 'interrupted-tool-output-session';
   const state = {
@@ -472,7 +472,8 @@ test('missing custom tool output quarantines every later prompt in the same thre
     assert.equal(submitted.continue, undefined);
     assert.match(String(submitted.reason || ''), /call_interrupted_1/);
     assert.match(String(submitted.reason || ''), /M-interrupted-tool-output/);
-    assert.match(String(submitted.reason || ''), /fresh Codex thread/i);
+    assert.match(String(submitted.reason || ''), /continuing in this thread is fine/i);
+    assert.doesNotMatch(String(submitted.reason || ''), /blocked same-thread continuation/i);
     assert.match(String(submitted.reason || ''), /sks bridge status --json/);
     assert.match(String(submitted.reason || ''), /sks bridge verify --level deep --strict/);
     assert.match(String(submitted.reason || ''), /sks bridge provider disable codex-lb/);
@@ -480,17 +481,14 @@ test('missing custom tool output quarantines every later prompt in the same thre
     assert.doesNotMatch(String(submitted.reason || ''), /infer success/i);
     await assert.rejects(fsp.access(lightTurnReceiptPath(root, session)));
 
-    const quarantine = JSON.parse(await fsp.readFile(toolOutputQuarantinePath(root, session), 'utf8'));
-    assert.equal(quarantine.active, true);
-    assert.equal(quarantine.call_id, 'call_interrupted_1');
-
     const later: any = await evaluateHookPayload('user-prompt-submit', {
       conversation_id: session,
       turn_id: 'turn-after-interrupted-output',
       prompt: '계속해줘'
     }, { root, state });
-    assert.equal(later.decision, 'block');
-    assert.match(String(later.reason || ''), /call_interrupted_1/);
+    assert.equal(later.decision, undefined, 'a recovered thread is not refused again');
+    assert.equal(later.continue, true);
+    assert.doesNotMatch(String(later.additionalContext || ''), /call_interrupted_1/);
 
     const fresh: any = await evaluateHookPayload('user-prompt-submit', {
       conversation_id: 'fresh-thread-after-interrupted-output',
@@ -504,7 +502,7 @@ test('missing custom tool output quarantines every later prompt in the same thre
   }
 });
 
-test('missing custom tool output in prior assistant and raw error fields quarantines a continuation prompt', async () => {
+test('missing custom tool output reported in prior assistant and raw error fields stops that continuation turn', async () => {
   const root = await tempRoot('sks-interrupted-tool-output-prior-fields-');
   const state = {
     mission_id: 'M-interrupted-tool-output-prior-fields',
@@ -524,8 +522,6 @@ test('missing custom tool output in prior assistant and raw error fields quarant
     }, { root, state });
     assert.equal(priorAssistant.decision, 'block');
     assert.match(String(priorAssistant.reason || ''), /call_lost_review/);
-    const priorAssistantQuarantine = JSON.parse(await fsp.readFile(toolOutputQuarantinePath(root, priorAssistantSession), 'utf8'));
-    assert.equal(priorAssistantQuarantine.call_id, 'call_lost_review');
 
     const rawErrorSession = 'interrupted-raw-error-session';
     const rawError: any = await evaluateHookPayload('user-prompt-submit', {
@@ -540,8 +536,6 @@ test('missing custom tool output in prior assistant and raw error fields quarant
     }, { root, state });
     assert.equal(rawError.decision, 'block');
     assert.match(String(rawError.reason || ''), /call_lost_raw_error/);
-    const rawErrorQuarantine = JSON.parse(await fsp.readFile(toolOutputQuarantinePath(root, rawErrorSession), 'utf8'));
-    assert.equal(rawErrorQuarantine.call_id, 'call_lost_raw_error');
   } finally {
     await fsp.rm(root, { recursive: true, force: true });
   }

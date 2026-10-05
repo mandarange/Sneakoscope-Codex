@@ -205,7 +205,7 @@ export function defaultSharedMemoryManifest(policy: SksGitPolicy = defaultGitPol
     generated_indexes: [
       generated('project_index', '.sneakoscope/wiki/indexes/project-index.json', 'sks wiki rebuild-index --json'),
       generated('wrongness_index', '.sneakoscope/wiki/indexes/wrongness-index.json', 'sks wiki rebuild-index --json'),
-      generated('context_packs', '.sneakoscope/wiki/context-packs/latest.json', 'sks wiki refresh')
+      generated('context_packs', '.sneakoscope/wiki/context-packs/latest.json', 'sks align run')
     ],
     local_runtime_plane: LOCAL_RUNTIME_DIRS.map((dir) => ({
       id: dir.split('/').at(-1) || dir,

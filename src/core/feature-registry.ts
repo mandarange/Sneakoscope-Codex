@@ -503,34 +503,25 @@ const SAFE_EXECUTABLE_FIXTURE_ARGS = Object.freeze({
   'cli-help': ['help'],
   'cli-version': ['--version'],
   'cli-root': ['root', '--json'],
-  'cli-features': ['features', 'check', '--json'],
   'cli-commands': ['commands', '--json'],
-  'cli-run': ['run', 'fixture', '--mock', '--json'],
   'cli-status': ['status', '--json'],
   'cli-usage': ['usage', 'overview'],
   'cli-quickstart': ['quickstart'],
   'cli-guard': ['guard', 'check', '--json'],
   'cli-conflicts': ['conflicts', 'check', '--json'],
-  'cli-versioning': ['versioning', 'status', '--json'],
   'cli-aliases': ['aliases'],
   'cli-fix-path': ['fix-path', '--json'],
   'cli-selftest': ['selftest', '--mock'],
   'cli-git': ['git', 'policy', '--json'],
   'cli-seo-geo-optimizer': ['seo-geo-optimizer', 'fixture', '--mode', 'seo', '--json'],
   'cli-paths': ['paths', 'managed', '--json'],
-  'cli-rollback': ['rollback', 'list', '--json'],
-  'cli-proof-field': ['proof-field', 'scan', '--json', '--intent', 'fixture'],
   'cli-proof': ['proof', 'smoke', '--json'],
-  'cli-trust': { setup: [['run', 'fixture', '--mock', '--json']], command: ['trust', 'report', 'latest', '--json'] },
   'cli-wrongness': ['wrongness', 'validate', 'project', '--json'],
   'cli-wiki': ['wiki', 'image-ingest', 'test/fixtures/images/one-by-one.png', '--json'],
   'cli-codex': ['codex', 'compatibility', '--json'],
   'cli-bridge': ['bridge', 'status', '--json'],
   'cli-hooks': ['hooks', 'trust-report', '--json'],
-  'cli-perf': ['perf', 'cold-start', '--json', '--iterations', '1'],
-  'cli-bench': ['bench', 'core', '--tier', 'npx-one-shot', '--json', '--iterations', '1'],
   'cli-code-structure': ['code-structure', 'scan', '--json'],
-  'cli-rust': ['rust', 'smoke', '--json'],
   'cli-decision': ['decision', 'status', '--json'],
   'cli-imagegen': ['imagegen', 'status', '--json'],
   'cli-skill-dream': ['skill-dream', 'status', '--json'],
@@ -540,11 +531,8 @@ const SAFE_EXECUTABLE_FIXTURE_ARGS = Object.freeze({
   'cli-stats': ['stats', '--json'],
   'cli-dollar-commands': ['dollar-commands', '--json'],
   'cli-fast-mode': ['fast-mode', 'status', '--json'],
-  'cli-task': ['task', 'instant', '--plan', '--json'],
   'cli-triwiki': ['triwiki', 'index', '--json'],
-  'cli-daemon': ['daemon', 'status', '--json'],
   'cli-dfix': ['dfix', 'fixture', '--json'],
-  'cli-all-features': ['all-features', 'complete', '--json'],
   'cli-naruto': ['naruto', 'run', 'fixture', '--agents', '4', '--max-threads', '4', '--json'],
   'cli-align': ['align', 'prepare', 'fixture modernization contract', '--json'],
   'route-naruto': ['naruto', 'run', 'fixture', '--agents', '4', '--max-threads', '4', '--json'],
@@ -583,7 +571,7 @@ export function renderFeatureInventoryMarkdown(registry: any) {
     '',
     '## Release Coverage Rule',
     '',
-    '`sks features check --json` fails when a CLI command, hidden handler, dollar route, app skill alias, or project skill is not mapped to the feature registry. `npm run release:check` runs that check.',
+    '`npm run maintainer -- features check --json` fails when a CLI command, hidden handler, dollar route, app skill alias, or project skill is not mapped to the feature registry. `npm run release:check` runs that check.',
     '',
     '## Stable / Beta / Labs Map',
     '',
@@ -611,8 +599,8 @@ export function renderFeatureInventoryMarkdown(registry: any) {
   lines.push('- [x] Collected dollar routes and app skill aliases from `src/core/routes.js`.');
   lines.push('- [x] Scanned README, Codex quick reference, AGENTS, and generated skill manifest for dollar-route mentions.');
   lines.push('- [x] Mapped project skills from `.agents/skills` into the registry.');
-  lines.push('- [x] Exposed the registry through `sks features list --json`.');
-  lines.push('- [x] Added a release coverage check through `sks features check --json`.');
+  lines.push('- [x] Exposed the registry through `npm run maintainer -- features list --json`.');
+  lines.push('- [x] Added a release coverage check through `npm run maintainer -- features check --json`.');
   lines.push('- [x] Documented fixture status for every registry feature.');
   return `${lines.join('\n')}\n`;
 }
@@ -755,7 +743,7 @@ function imagegenWiringFeatures() {
     baseFeature({
       id: 'ux-review:run-wires-imagegen',
       commands: ['npm run ux-review:run-wires-imagegen', 'sks ux-review run --image <screenshot> --generate-callouts --json'],
-      aliases: ['$Image-UX-Review', '$UX-Review'],
+      aliases: ['$Image-UX-Review'],
       category: 'visual-memory',
       maturity: 'beta',
       intent: ("Image UX route start gate, shared SKS imagegen adapter, callout extraction, and Codex App evidence validation wiring."),

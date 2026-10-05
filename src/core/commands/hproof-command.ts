@@ -3,7 +3,7 @@ import { evaluateDoneGate } from '../hproof.js';
 import { resolveMissionId } from './command-utils.js';
 
 export async function hproofCommand(sub: any, args: any = []) {
-  if (sub !== 'check') return console.error('Usage: sks hproof check [mission-id]');
+  if (sub !== 'check') return console.error('Usage: sks proof hproof check [mission-id]');
   const root = await sksRoot();
   const id = await resolveMissionId(root, args[0]);
   if (!id) throw new Error('No mission found.');

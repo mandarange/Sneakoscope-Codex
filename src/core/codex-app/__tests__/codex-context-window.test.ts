@@ -131,6 +131,9 @@ test('command round-trips a real config file and skips restart when Codex is not
     const opts = {
       env,
       home,
+      // The restart policy only probes the app on macOS; pin the platform so
+      // the not-running branch is what this test exercises on every OS.
+      platform: 'darwin' as const,
       isRunningImpl: async () => false,
       restartImpl: async () => {
         restartCalls.push('restart');
@@ -182,6 +185,7 @@ test('command restarts a running Codex and reports the restart outcome', async (
     const result = await codexContext1mCommand(['on'], {
       env: { HOME: home } as NodeJS.ProcessEnv,
       home,
+      platform: 'darwin',
       isRunningImpl: async () => true,
       restartImpl: async () => {
         restartCalls.push('restart');

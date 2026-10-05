@@ -432,3 +432,12 @@ async function writeBytes(file, bytes) {
   await fs.mkdir(path.dirname(file), { recursive: true });
   await fs.writeFile(file, bytes);
 }
+
+test('every generated SNEAKOSCOPE.md layout is recognized as managed, so a current file keeps refreshing', async () => {
+  const { isManagedQuickReference } = await import('../../dist/core/doctor/current-project-guidance.js');
+  const { codexAppQuickReference } = await import('../../dist/core/init.js');
+  assert.equal(isManagedQuickReference(codexAppQuickReference('project', 'sks')), true, 'the current writer output');
+  assert.equal(isManagedQuickReference('# ㅅㅋㅅ\nInstall scope: `project`\nCommand: `sks <command>`\nFiles: AGENTS.md, .codex/hooks.json, .codex/config.toml, .codex/SNEAKOSCOPE.md\n'), true, 'the pre-10.3.9 layout');
+  assert.equal(isManagedQuickReference('Customer quick reference: sks agent-bridge status.\n'), false);
+  assert.equal(isManagedQuickReference('# ㅅㅋㅅ\nmy own notes\n'), false);
+});

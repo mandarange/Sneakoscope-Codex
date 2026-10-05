@@ -31,9 +31,9 @@ export const DEFAULT_TRIWIKI_MODULE_CARDS: TriWikiModuleCard[] = [
   moduleCard('secret-preservation', ['src/core/**/secret*.ts', 'src/scripts/secret-*.ts', 'safety-mutation-allowlist.json'], ['secret:', 'supabase-secret'], ['doctor-production'], 'critical'),
   moduleCard('core-skill', ['.agents/skills/**', 'src/scripts/core-skill-*.ts'], ['core-skill:'], ['core-skill'], 'high'),
   moduleCard('skill-dedupe', ['src/scripts/skill-*.ts', '.sneakoscope/skills/**'], ['skill:'], ['skill-dedupe'], 'medium'),
-  moduleCard('qa-loop', ['src/commands/qa-loop.ts', 'src/scripts/qa-*.ts'], ['qa-', 'qa:'], ['qa-research-image'], 'medium'),
-  moduleCard('research', ['src/commands/research.ts', 'src/scripts/research-*.ts'], ['research:'], ['qa-research-image'], 'medium'),
-  moduleCard('image-path', ['src/commands/image-ux-review.ts', 'src/scripts/*image*.ts', 'src/scripts/ux-review-*.ts'], ['image:', 'ux-review:'], ['qa-research-image'], 'medium'),
+  moduleCard('qa-loop', ['src/core/qa-loop.ts', 'src/core/qa-loop/**', 'src/core/commands/qa-loop-command.ts', 'src/scripts/qa-*.ts'], ['qa-', 'qa:'], ['qa-research-image'], 'medium'),
+  moduleCard('research', ['src/core/research.ts', 'src/core/research/**', 'src/core/commands/research-command.ts', 'src/scripts/research-*.ts'], ['research:'], ['qa-research-image'], 'medium'),
+  moduleCard('image-path', ['src/core/image-ux-review.ts', 'src/core/image-ux-review/**', 'src/core/commands/image-ux-review-command.ts', 'src/scripts/*image*.ts', 'src/scripts/ux-review-*.ts'], ['image:', 'ux-review:'], ['qa-research-image'], 'medium'),
   moduleCard('legacy-purge', ['src/scripts/legacy-*.ts', 'src/scripts/orphan-*.ts', 'docs/sks-4-migration.md'], ['legacy:', 'orphan:'], ['release-parity'], 'high'),
   moduleCard('cli-check', ['src/core/commands/check-command.ts', 'src/commands/**/*.ts', 'src/cli/**'], ['cli:', 'sks:', 'check:'], ['native-capability'], 'high')
 ];

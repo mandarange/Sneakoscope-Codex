@@ -29,7 +29,6 @@ import {
   pptReviewProofEvidence,
   writePptImagegenReviewArtifacts
 } from '../ppt-review/index.js';
-import { writeRouteCollaborationArtifacts } from '../agents/route-collaboration-ledger.js';
 import { requireCodexImagegen } from '../imagegen/require-imagegen.js';
 
 export async function pptCommand(command: any, args: any = []) {
@@ -225,6 +224,7 @@ async function pptFixture(root: string, command: any, args: any[]) {
   const gate = mockPptFixtureGate(build.gate);
   await writeJsonAtomic(path.join(dir, 'ppt-gate.json'), gate);
   const review = await writePptImagegenReviewArtifacts({ root, dir, missionId: id, mock: true });
+  const { writeRouteCollaborationArtifacts } = await import('../agents/route-collaboration-ledger.js');
   const native = await writeRouteCollaborationArtifacts(root, {
     missionId: id,
     route: '$PPT',

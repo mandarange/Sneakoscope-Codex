@@ -21,7 +21,14 @@ test('ordinary implementation work runs directly in the parent, however it is wo
     'update the deploy script to use node 22',
     'fix the auth redirect bug',
     // A specialized pipeline chosen from wording does not fan out by itself.
-    'Optimize the SQL query in reports.ts'
+    'Optimize the SQL query in reports.ts',
+    // Words like parallel, naruto, subagents, or fan out as subject matter are not a request.
+    'fix the flaky parallel test runner',
+    'refactor the naruto decision gate to be simpler',
+    'add a subagents section to the README docs',
+    'rename the fan out helper',
+    '병렬 테스트 러너의 버그 고쳐줘',
+    '나루토 결정 게이트를 단순화해줘'
   ]) {
     const decision = decide(prompt)
     assert.equal(decision.required, false, `${prompt} -> ${decision.route}/${decision.reason}`)
@@ -39,7 +46,10 @@ test('child agents run when the user asks for them', () => {
     ['fix the auth and the payment bugs in parallel', /^explicit_parallel_request:high-risk$/],
     ['$sks-naruto fix the importer', /^explicit_official_subagent_route$/],
     ['$work fix the importer', /^explicit_official_subagent_route$/],
-    ['fix the importer --agents 4', /^explicit_subagent_count$/]
+    ['fix the importer --agents 4', /^explicit_subagent_count$/],
+    ['use 3 subagents to migrate the importers', /^explicit_parallel_request/],
+    ['split the refactor across agents', /^explicit_parallel_request/],
+    ['이 작업들 병렬로 진행해줘', /^explicit_parallel_request/]
   ] as const) {
     const decision = decide(prompt)
     assert.equal(decision.required, true, prompt)
@@ -47,13 +57,21 @@ test('child agents run when the user asks for them', () => {
   }
 })
 
-test('a specialized route the user named keeps its panel, the same route picked from wording does not', () => {
-  const named = narutoDecisionForRoute({ ...routeById('Review'), explicit_invocation: true }, 'review the release', 'bounded-work')
+test('an artifact pipeline the user named keeps its panel, the same route picked from wording does not', () => {
+  const named = narutoDecisionForRoute({ ...routeById('PPT'), explicit_invocation: true }, 'build the investor deck', 'bounded-work')
   assert.equal(named.required, true)
   assert.match(named.reason, /^specialized_route_default_parallel:/)
-  const implicit = narutoDecisionForRoute({ ...routeById('Review'), explicit_invocation: false }, 'review the release', 'bounded-work')
+  const implicit = narutoDecisionForRoute({ ...routeById('PPT'), explicit_invocation: false }, 'build the investor deck', 'bounded-work')
   assert.equal(implicit.required, false)
   assert.match(implicit.reason, /^specialized_route_parent_owned:/)
+})
+
+test('review, DB, and MAD-SKS stay single-agent even when named explicitly', () => {
+  for (const id of ['Review', 'DB', 'MadSKS']) {
+    const named = narutoDecisionForRoute({ ...routeById(id), explicit_invocation: true }, 'review the migration', 'bounded-work')
+    assert.equal(named.required, false, id)
+    assert.notEqual(named.mode, 'generic_naruto', id)
+  }
 })
 
 test('a routed-to-Naruto prompt that is not delegated gets the lightest parent-owned route and no orchestration text', () => {

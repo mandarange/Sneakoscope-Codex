@@ -4,7 +4,7 @@ import { validateWikiCoordinateIndex } from './wiki-coordinate.js'
 import { validateTriWikiContextPackProvenance } from './triwiki-provenance.js'
 
 // Inference-path TriWiki consumption. Routes/the agent kernel READ the deployed
-// context pack written by `sks wiki refresh|pack` (the SSOT); they never rebuild
+// context pack written by `sks align run` (the one writer); they never rebuild
 // it on the hot path. This is the seam that turns the TriWiki engine from an
 // advisory prompt note into an actually-consulted, proof-referenced context source.
 export const TRIWIKI_CONTEXT_PACK_REL = '.sneakoscope/wiki/context-pack.json'
@@ -24,7 +24,7 @@ export interface TriWikiRuntimeContext {
   warning: string | null
 }
 
-function emptyContext(file: string, warning = 'no_triwiki_context_pack (run `sks wiki refresh` to populate the project memory pack)'): TriWikiRuntimeContext {
+function emptyContext(file: string, warning = 'no_triwiki_context_pack (run `sks align run` to build the project context pack)'): TriWikiRuntimeContext {
   return {
     schema: TRIWIKI_RUNTIME_SCHEMA,
     present: false,
@@ -57,17 +57,17 @@ export async function loadTriWikiRuntimeContext(root: string): Promise<TriWikiRu
   const attention = pack.attention
   const wiki = pack.wiki
   if (!wiki || typeof wiki !== 'object') {
-    return emptyContext(file, 'invalid_triwiki_context_pack:wiki_index_missing (run `sks wiki refresh`)')
+    return emptyContext(file, 'invalid_triwiki_context_pack:wiki_index_missing (run `sks align run`)')
   }
   const coordinateValidation = validateWikiCoordinateIndex(wiki, { root, claims: pack.claims })
   const provenanceValidation = validateTriWikiContextPackProvenance(pack, { root })
   const issues = [...coordinateValidation.issues, ...provenanceValidation.issues]
   if (issues.length) {
     const issueIds = issues.map((issue: any) => String(issue.id || 'unknown')).slice(0, 8)
-    return emptyContext(file, `invalid_triwiki_context_pack:${issueIds.join(',')} (run \`sks wiki refresh\`)`)
+    return emptyContext(file, `invalid_triwiki_context_pack:${issueIds.join(',')} (run \`sks align run\`)`)
   }
   if (!attention || !Array.isArray(attention.use_first) || !Array.isArray(attention.hydrate_first) || !Array.isArray(pack.claims)) {
-    return emptyContext(file, 'invalid_triwiki_context_pack:attention_or_claims_missing (run `sks wiki refresh`)')
+    return emptyContext(file, 'invalid_triwiki_context_pack:attention_or_claims_missing (run `sks align run`)')
   }
   const anchorCount = Array.isArray(wiki.a) ? wiki.a.length : (Array.isArray(wiki.anchors) ? wiki.anchors.length : 0)
   return {

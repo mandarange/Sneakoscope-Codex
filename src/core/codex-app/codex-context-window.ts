@@ -228,6 +228,7 @@ export interface CodexContext1mCommandOptions {
   env?: NodeJS.ProcessEnv
   home?: string
   root?: string
+  platform?: NodeJS.Platform
   isRunningImpl?: typeof isCodexAppRunningByBundleId
   restartImpl?: typeof restartCodexApp
 }
@@ -282,6 +283,7 @@ export async function codexContext1mCommand(args: string[] = [], opts: CodexCont
       changed,
       noRestart,
       ...(opts.root === undefined ? {} : { root: opts.root }),
+      ...(opts.platform === undefined ? {} : { platform: opts.platform }),
       ...(opts.isRunningImpl === undefined ? {} : { isRunningImpl: opts.isRunningImpl }),
       ...(opts.restartImpl === undefined ? {} : { restartImpl: opts.restartImpl })
     })

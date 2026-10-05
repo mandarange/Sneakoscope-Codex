@@ -1,26 +1,25 @@
 import { dirSize, formatBytes, packageRoot, projectRoot, sksRoot } from '../fsx.js';
 import { applyRetentionPlan, enforceRetention, lightweightStorageReport, refreshMissionIndex, retentionStatus, storageReport } from '../retention.js';
 import { flag } from './command-utils.js';
-import { projectTriwikiToAgentsMd } from '../triwiki/agents-md-projector.js';
 import { compileMistakeRules } from '../verification/mistake-rule-compiler.js';
 
 export async function memoryCommand(sub: any, args: any = []) {
   const action = String(sub || '').toLowerCase();
   if (['build', 'project', 'agents', 'agents-md'].includes(action)) {
+    // The AGENTS.md projection has one writer, `sks align run` (S3); this
+    // command runs it, then compiles the mistake rules it alone owns.
     const root = await projectRoot();
-    const [result, rules] = await Promise.all([
-      projectTriwikiToAgentsMd(root, { maxLocalFiles: Number(readOption(args, '--max-local-files', 8)) }),
-      compileMistakeRules(root).catch((err) => ({ compiled: [], skipped: [`compile_failed:${err instanceof Error ? err.message : String(err)}`] }))
-    ]);
-    const output = { ...result, mistake_rules: rules };
-    if (flag(args, '--json')) return console.log(JSON.stringify(output, null, 2));
-    console.log(`SKS memory build: ${result.ok ? 'ok' : result.reason}`);
-    for (const file of result.written) console.log(`- ${file}`);
+    const json = flag(args, '--json');
+    const { alignCommand } = await import('./align-command.js');
+    const align: any = await alignCommand('run', json ? ['--quiet'] : []);
+    const rules = await compileMistakeRules(root).catch((err) => ({ compiled: [], skipped: [`compile_failed:${err instanceof Error ? err.message : String(err)}`] }));
+    const output = { schema: 'sks.memory-build.v2', ok: align?.ok === true, align_mission_id: align?.mission_id || null, mistake_rules: rules };
+    if (json) return console.log(JSON.stringify(output, null, 2));
     console.log(`- mistake rules compiled: ${rules.compiled.length}, skipped: ${rules.skipped.length}`);
-    if (!result.ok) process.exitCode = 1;
+    if (!output.ok) process.exitCode = 1;
     return output;
   }
-  return gcCommand(args || []);
+  return gcCommand(sub ? [sub, ...(args || [])] : (args || []));
 }
 
 export async function gcCommand(args: any = []) {

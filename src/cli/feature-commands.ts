@@ -57,7 +57,7 @@ export async function featuresCommand(sub: any = 'list', args: any = []) {
     }
     return;
   }
-  console.error('Usage: sks features list|check|inventory|complete [--json] [--write-docs]');
+  console.error('Usage: maintainer features list|check|inventory|complete [--json] [--write-docs]');
   process.exitCode = 1;
 }
 
@@ -75,7 +75,7 @@ export async function allFeaturesCommand(sub: any = 'selftest', args: any = []) 
     return;
   }
   if (action !== 'selftest') {
-    console.error('Usage: sks all-features selftest|complete --mock [--execute-fixtures] [--json]');
+    console.error('Usage: maintainer all-features selftest|complete --mock [--execute-fixtures] [--json]');
     process.exitCode = 1;
     return;
   }

@@ -128,15 +128,23 @@ const MANAGED_HOOKS = {
 };
 
 /**
- * Events the essential profile does not install. PostToolUse existed to write
- * proof evidence after every tool call — a second cold process per call whose
- * output nothing in the essential profile reads.
+ * PostToolUse in the essential profile. Strict records proof evidence after
+ * every tool call; essential needs the completed call only where a safety
+ * lifecycle depends on it: host-capability (acas-tools) calls, whose next step
+ * is admitted only after the previous one completed, and MCP database tools,
+ * whose MAD-SKS SQL-plane operation stays pending until its result is recorded.
+ * No other tool call pays for a second hook process.
  */
-const ESSENTIAL_PROFILE_OMITTED_HOOK_EVENTS = new Set(['PostToolUse']);
+export const ESSENTIAL_POST_TOOL_MATCHER = '^(?:mcp__(?:acas-tools|acas_tools)__.*|mcp__.*(?:supabase|postgres|database|execute_sql|apply_migration|sql_query).*)$';
 
-export function managedHookEventNames(root?: string | null): string[] {
-  const all = Object.keys(MANAGED_HOOKS);
-  return postToolEvidenceEnabled(root) ? all : all.filter((event) => !ESSENTIAL_PROFILE_OMITTED_HOOK_EVENTS.has(event));
+export function managedHookEventNames(_root?: string | null): string[] {
+  return Object.keys(MANAGED_HOOKS);
+}
+
+function managedHookMatcher(eventName: string, entry: any, root?: string | null): string | undefined {
+  if (!('matcher' in entry)) return undefined;
+  if (eventName === 'PostToolUse' && !postToolEvidenceEnabled(root)) return ESSENTIAL_POST_TOOL_MATCHER;
+  return entry.matcher;
 }
 
 function buildManagedHooks(commandPrefix: any, root?: string | null, commandSuffix = '') {
@@ -145,7 +153,7 @@ function buildManagedHooks(commandPrefix: any, root?: string | null, commandSuff
   for (const [eventName, entries] of Object.entries(MANAGED_HOOKS)) {
     if (!events.has(eventName)) continue;
     hooks[eventName] = entries.map((entry: any) => ({
-      ...('matcher' in entry ? { matcher: entry.matcher } : {}),
+      ...('matcher' in entry ? { matcher: managedHookMatcher(eventName, entry, root) } : {}),
       hooks: entry.hooks.map(({ hookName, ...hook }: any) => ({
         ...hook,
         command: sksHookCommand(commandPrefix, hookName, commandSuffix)
@@ -247,7 +255,7 @@ const AGENTS_BLOCK = [
   '',
   '- Codex native `/goal` is the only persisted goal owner. Goal objectives must state the outcome, scope, constraints, verification, done-when conditions, stop conditions, and non-goals.',
   '- Answer, Help, Goal, tiny DFix, and ordinary implementation stay parent-owned: do the work directly, the way Codex does by default, and do not split it across subagents on your own. Naruto (`$sks-naruto`, alias `$sks-work`; standalone `sks naruto run`) runs only when the user asks for subagents or parallel work, or when Jev mode judges that the work splits into independent parts; there the parent orchestrates only: decompose, assign disjoint slices, spawn, integrate, and verify. Do not implement those slices in the parent thread. The SKS PreToolUse hook denies parent-thread source edits until the first child thread starts and while children are still running; .sneakoscope artifacts stay parent-writable, and Jev may release a confirmed orchestration-scaffolding edit.',
-  '- The parent owns decomposition, integration, verification, and the final answer. Delegate implementation slices with disjoint write scopes, reuse capacity across root-owned waves, and never nest subagents.',
+  '- Inside Naruto the parent owns decomposition, integration, verification, and the final answer: delegate slices with disjoint write scopes, reuse capacity across root-owned waves, and never nest subagents. Naming an artifact pipeline (`$sks-ppt`, `$sks-image-ux-review`, `$sks-gx`, `$sks-seo-geo-optimizer`, `$sks-super-search`, `$sks-release-review`) also starts its panel of children.',
   '- Computer Use and browser are exclusive GUI surfaces: one child per surface at a time, with all of that surface\'s work in one slice. Never fan the same GUI task out to several children.',
   '- Every child runs the newest model of the tier its work needs (fast, balanced, context, or deep); no model family is pinned. When Jev mode is on, Jev picks the tier for each new Naruto child spawn and SKS seals it, except a spawn that names a managed role, which runs the tier pinned in its role file. A user role preference stays authoritative. Do not pick a child model yourself.',
   '- Preserve the user-selected parent model, reasoning effort, and service tier. Parent settings stay on the parent thread. A role preference wins over the Jev seal for that role.',
@@ -1042,7 +1050,7 @@ export function codexAppQuickReference(scope: any, commandPrefix: any) {
     coreEngineeringDirectiveReferenceText(),
     'dollar-commands:',
     ...currentDollarCommands().map((c: any) => `- \`${sksPrefixedDollarCommand(c.command)}\`: ${c.route}`),
-    'Routing: Answer is read-only, DFix handles tiny edits, and ordinary implementation stays on the parent. Naruto, only when the user asks for subagents or parallel work or Jev judges the work splits, is parent orchestration with child slices enforced by the PreToolUse gate (spawn before any source edit, and no parent edits beside running children).',
+    'Routing: Answer is read-only, DFix handles tiny edits, and ordinary implementation, review, and DB work stay on the parent. Naruto runs only for `$sks-naruto`/`$sks-work`, `--agents N`, an explicit request for subagents or parallel work, a named artifact pipeline, or a Jev split; it is parent orchestration with child slices enforced by the PreToolUse gate (spawn before any source edit, and no parent edits beside running children).',
     'Subagent context: pass the sealed model and reasoning effort with `fork_turns="none"` or a positive bounded turn count. Each child uses the newest model of its tier; Jev mode picks that tier at each new spawn. Pass the complete bounded slice contract in `message`. Children never use `fork_turns="all"` or the omitted full-history default (SKS policy).',
     'Goal: Codex native /goal is the only persisted goal owner; no SKS Goal mission, bridge, compatibility loop, or fallback state is allowed.',
     'Context: use bounded TriWiki recall when a claim needs project memory; refresh after material changes; validate before handoff/final; use Context7 or official vendor docs when external contracts or versions matter.',

@@ -15,12 +15,13 @@ import {
 const production = { HOME: '/nonexistent-home-for-profile-test' } as NodeJS.ProcessEnv;
 const harness = { ...production, NODE_TEST_CONTEXT: 'child' } as NodeJS.ProcessEnv;
 
-test('the product default is essential; the test harness default stays strict', () => {
+test('the product default is essential, and the test harness resolves the same default', () => {
   resetVerificationProfileCache();
   assert.equal(DEFAULT_VERIFICATION_PROFILE, 'essential');
   assert.equal(resolveVerificationProfile(null, production), 'essential');
-  assert.equal(resolveVerificationProfile(null, harness), 'strict');
-  assert.equal(resolveVerificationProfile(null, { ...production, SKS_TEST_ISOLATION: '1' }), 'strict');
+  assert.equal(resolveVerificationProfile(null, harness), 'essential');
+  assert.equal(resolveVerificationProfile(null, { ...production, SKS_TEST_ISOLATION: '1' }), 'essential');
+  assert.equal(verificationProfileSummary(null, harness).source, 'default');
 });
 
 test('SKS_VERIFICATION_PROFILE wins over every file and default; garbage is ignored', async (t) => {
