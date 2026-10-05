@@ -15,12 +15,6 @@ interface DirectoryScore {
   guidance: string
 }
 
-export interface InitDeepMemoryHint {
-  path: string
-  scope: string
-  summary: string
-}
-
 interface DirectoryLocalAgentsReport {
   created: string[]
   updated: string[]
@@ -158,55 +152,6 @@ function hashText(text: string): string {
   return (hash >>> 0).toString(16).padStart(8, '0')
 }
 
-export async function readInitDeepMemory(root: string): Promise<{ path: string; text: string } | null> {
-  const file = path.join(root, '.sneakoscope', 'context', 'AGENTS.generated.md')
-  const text = await fs.readFile(file, 'utf8').catch(() => '')
-  return text.trim() ? { path: file, text } : null
-}
-
-export async function readInitDeepMemoryHints(root: string, scopePaths: string[] = []): Promise<InitDeepMemoryHint[]> {
-  const resolvedRoot = path.resolve(root)
-  const hints: InitDeepMemoryHint[] = []
-  const generated = await readInitDeepMemory(resolvedRoot).catch(() => null)
-  if (generated) {
-    hints.push({
-      path: path.relative(resolvedRoot, generated.path),
-      scope: '.',
-      summary: generated.text.split(/\r?\n/).filter((line) => /^##\s+/.test(line)).slice(0, 8).join(' | ')
-    })
-  }
-  const candidateDirs = new Set<string>()
-  for (const scopePath of scopePaths) {
-    const absolute = path.resolve(resolvedRoot, scopePath)
-    if (!absolute.startsWith(resolvedRoot)) continue
-    const stat = await fs.stat(absolute).catch(() => null)
-    let dir = stat?.isFile() ? path.dirname(absolute) : absolute
-    while (dir.startsWith(resolvedRoot)) {
-      candidateDirs.add(dir)
-      if (dir === resolvedRoot) break
-      dir = path.dirname(dir)
-    }
-  }
-  for (const dir of [...candidateDirs].sort((a, b) => b.length - a.length)) {
-    const file = path.join(dir, 'AGENTS.md')
-    const text = await fs.readFile(file, 'utf8').catch(() => '')
-    if (!text.trim()) continue
-    const managed = extractManagedSection(text, 'SKS INIT-DEEP MANAGED SECTION')
-    const userSummary = text.replace(/<!-- BEGIN [\s\S]*?<!-- END [^>]+-->/g, '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean).slice(0, 4).join(' | ')
-    const summary = [managed ? managed.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).slice(0, 4).join(' | ') : '', userSummary ? `user:${userSummary}` : ''].filter(Boolean).join(' || ')
-    if (summary) {
-      hints.push({
-        path: path.relative(resolvedRoot, file),
-        scope: path.relative(resolvedRoot, dir) || '.',
-        summary
-      })
-    }
-  }
-  const unique = new Map<string, InitDeepMemoryHint>()
-  for (const hint of hints) unique.set(`${hint.path}:${hint.scope}`, hint)
-  return [...unique.values()].slice(0, 12)
-}
-
 async function scoreDirectories(root: string): Promise<DirectoryScore[]> {
   const counts = new Map<string, { file_count: number; langs: Set<string> }>()
   await walk(path.join(root, 'src'), root, counts)
@@ -303,11 +248,3 @@ function renderDirectoryAgentsBlock(row: DirectoryScore): string {
   ].filter(Boolean).join('\n')
 }
 
-function extractManagedSection(text: string, markerName: string): string {
-  const begin = `<!-- BEGIN ${markerName} -->`
-  const end = `<!-- END ${markerName} -->`
-  const beginIdx = text.indexOf(begin)
-  const endIdx = text.indexOf(end)
-  if (beginIdx < 0 || endIdx < beginIdx) return ''
-  return text.slice(beginIdx + begin.length, endIdx).trim()
-}

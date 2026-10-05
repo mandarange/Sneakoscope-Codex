@@ -5,21 +5,6 @@ import { scanAgentTextForRecursion } from './agent-recursion-guard.js'
 import { validateAgentResultSchema, validateAndNormalizeAgentFollowUps } from './agent-output-validator.js'
 import { isRecord } from '../json/records.js'
 
-export function agentWorkerEnv(agent: any, allowedCommandsFile: string) {
-  return {
-    SKS_AGENT_WORKER: '1',
-    SKS_PIPELINE_MODE: 'agent-worker',
-    SKS_DISABLE_ROUTE_RECURSION: '1',
-    SKS_AGENT_SESSION_ID: agent.session_id,
-    SKS_AGENT_ID: agent.id,
-    SKS_AGENT_SLOT_ID: agent.slot_id || agent.worker_slot_id || agent.id,
-    SKS_AGENT_SESSION_GENERATION_ID: agent.session_generation_id || agent.session_id,
-    SKS_AGENT_ALLOWED_COMMANDS_FILE: allowedCommandsFile,
-    SKS_FAST_MODE: agent.fast_mode === false ? '0' : '1',
-    SKS_SERVICE_TIER: agent.service_tier || 'fast'
-  }
-}
-
 export function validateAgentWorkerResult(result: any): AgentRunnerResult {
   const guard = scanAgentTextForRecursion(JSON.stringify(result || {}))
   const followUps = validateAndNormalizeAgentFollowUps(result?.follow_up_work_items, result?.session_id)

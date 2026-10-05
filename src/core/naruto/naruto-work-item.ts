@@ -108,25 +108,6 @@ export interface NarutoWorkWave {
   conflict_count: number
 }
 
-export const NARUTO_WRITE_WORK_KINDS = new Set<NarutoWorkKind>([
-  'bugfix',
-  'feature',
-  'implementation',
-  'code_modification',
-  'refactor',
-  'chore',
-  'test_generation',
-  'documentation',
-  'conflict_resolution',
-  'patch_rebase',
-  'rollback_preparation',
-  'integration_support'
-])
-
-export function isNarutoWriteKind(kind: NarutoWorkKind): boolean {
-  return NARUTO_WRITE_WORK_KINDS.has(kind)
-}
-
 export function normalizeNarutoPath(value: string): string {
   return String(value || '').replace(/\\/g, '/').replace(/^\.\/+/, '').split('/').filter((part) => part && part !== '.').join('/')
 }

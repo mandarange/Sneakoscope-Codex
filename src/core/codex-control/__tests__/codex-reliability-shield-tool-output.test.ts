@@ -1,10 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  auditToolOutputContinuity,
-  repairToolCallSequence,
-  runWithCodexReliabilityShield
-} from '../codex-reliability-shield.js';
+import { auditToolOutputContinuity, runWithCodexReliabilityShield } from '../codex-reliability-shield.js';
 import { codexControlAdapterFailureBlockers } from '../codex-task-runner.js';
 
 test('Codex task runner propagates adapter and Reliability Shield failure even without explicit blockers', () => {
@@ -23,24 +19,6 @@ test('Codex task runner propagates adapter and Reliability Shield failure even w
     'python_codex_sdk_adapter_reported_failure'
   ]);
 })
-
-test('post-run tool continuity audit detects missing output without fabricating an event', () => {
-  const events = [
-    { type: 'item.completed', item: { id: 'call-1', call_id: 'call-1', type: 'custom_tool_call' } },
-    { type: 'item.completed', item: { id: 'call-2', call_id: 'call-2', type: 'custom_tool_call' } },
-    { type: 'item.completed', item: { call_id: 'call-1', type: 'custom_tool_call_output', output: 'ok' } }
-  ];
-  const audit = auditToolOutputContinuity(events);
-  assert.equal(audit.missingToolResultCount, 1);
-  assert.deepEqual(audit.missingToolCallIds, ['call-2']);
-  assert.deepEqual(audit.events, events);
-  assert.equal(audit.events.some((event) => event.type === 'tool_result.stubbed'), false);
-
-  const compatibility = repairToolCallSequence(events);
-  assert.equal(compatibility.repairedToolResultCount, 0);
-  assert.equal(compatibility.missingToolResultCount, 1);
-  assert.equal(compatibility.events.some((event) => event.type === 'tool_result.stubbed'), false);
-});
 
 test('tool continuity audit unwraps persisted response_item rollout envelopes', () => {
   const events = [

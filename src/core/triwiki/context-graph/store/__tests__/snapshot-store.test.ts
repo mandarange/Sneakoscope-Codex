@@ -18,7 +18,7 @@ import {
   readContextGraphSnapshot,
   writeContextGraphSnapshot
 } from '../snapshot-store.js';
-import { contextGraphStatus } from '../graph-status.js';
+import { contextGraphStatus } from './graph-status.js';
 import { withContextGraphCompileLock } from '../compile-lock.js';
 import { appendContextGraphEvent } from '../event-log.js';
 import { fragmentCacheKey, pruneFragmentCache, readCachedFragment, writeCachedFragment } from '../fragment-cache.js';

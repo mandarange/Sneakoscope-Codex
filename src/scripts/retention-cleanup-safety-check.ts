@@ -13,6 +13,12 @@ const { enforceRetention } = await import(pathToFileURL(retentionPath).href);
 
 const tmp = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-retention-cleanup-'));
 try {
+  // Retention also sweeps the machine-wide managed scratch root (<tmpdir>/sks). Point it at
+  // this fixture so leftovers from other processes cannot skew the apply/dry-run counts,
+  // and so the check never deletes scratch that belongs to someone else.
+  const isolatedOsTmp = path.join(tmp, 'os-tmp');
+  await fsp.mkdir(isolatedOsTmp, { recursive: true });
+  process.env.TMPDIR = isolatedOsTmp;
   const applyRoot = path.join(tmp, 'apply');
   const dryRoot = path.join(tmp, 'dry');
   await writeFixture(applyRoot);

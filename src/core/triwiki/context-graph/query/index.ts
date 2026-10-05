@@ -13,14 +13,7 @@
  * There is no branch anywhere in it that falls back to text search when the graph
  * is unusable; that case returns an explicit error and the repair command.
  */
-import {
-  CONTEXT_GRAPH_QUERY_SCHEMA,
-  emptyContextGraphQueryResult,
-  type ContextGraphOmissionReason,
-  type ContextGraphQueryRequest,
-  type ContextGraphQueryResult,
-  type ContextGraphSearchMeta
-} from '../query-types.js';
+import { CONTEXT_GRAPH_QUERY_SCHEMA, emptyContextGraphQueryResult, type ContextGraphOmissionReason, type ContextGraphQueryRequest, type ContextGraphQueryResult } from '../query-types.js';
 import {
   CONTEXT_GRAPH_TRAVERSAL_CAPS,
   contextGraphQueryProfile,
@@ -229,29 +222,6 @@ export async function queryContextGraph(
     warnings: [...load.warnings, ...(options.warnings ?? [])]
   };
   return queryContextGraphSnapshot(load.index, request, snapshotOptions);
-}
-
-/** Additive projection for `SearchResponse.context`; carries no path outside the workspace. */
-export function contextGraphSearchMeta(result: ContextGraphQueryResult): ContextGraphSearchMeta {
-  const omissionReasons: Record<string, number> = {};
-  for (const [reason, count] of Object.entries(result.omissionReasons)) {
-    if (typeof count === 'number' && count > 0) omissionReasons[reason] = count;
-  }
-  return {
-    snapshotHash: result.snapshotHash,
-    snapshotFreshness: result.snapshotFreshness,
-    profile: result.profile,
-    seedCount: result.seedCount,
-    visitedNodes: result.visitedNodes,
-    selectedNodes: result.selectedNodes,
-    explanationPathCount: result.explanationPathCount,
-    provenanceCoverage: result.provenanceCoverage,
-    staleExcluded: result.staleExcluded,
-    invalidatedExcluded: result.invalidatedExcluded,
-    tokenCost: result.tokenCost,
-    tokenBudget: result.tokenBudget,
-    omissionReasons
-  };
 }
 
 export {

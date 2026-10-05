@@ -26,7 +26,3 @@ export const PROTECTED_SECRET_KEYS = [
   ...PROTECTED_SUPABASE_CONFIG_PATHS
 ] as const;
 
-export function isProtectedSecretKey(key: string): boolean {
-  const normalized = String(key || '').trim();
-  return PROTECTED_SECRET_KEYS.some((candidate) => candidate === normalized);
-}

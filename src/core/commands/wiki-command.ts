@@ -313,11 +313,6 @@ async function wikiImageLinkProof(args: any = []) {
   if (!result.ok) process.exitCode = 1;
 }
 
-export function wikiVoxelRowCount(wiki: any = {}) {
-  const overlay = wiki.vx || wiki.voxel_overlay || {};
-  return (overlay.rows || overlay.v || []).length;
-}
-
 function wikiValidationResult(pack: any = {}, root: string | null = null) {
   const wikiIndex = pack.wiki || pack;
   const coordinate = validateWikiCoordinateIndex(wikiIndex, { root, claims: pack.claims });

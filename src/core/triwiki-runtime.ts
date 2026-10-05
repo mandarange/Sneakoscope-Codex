@@ -85,19 +85,6 @@ export async function loadTriWikiRuntimeContext(root: string): Promise<TriWikiRu
   }
 }
 
-/** Compact instruction block injected into read-only agents / route additionalContext. */
-export function triWikiContextBlock(ctx: TriWikiRuntimeContext): string {
-  if (!ctx.present) return `TriWiki unavailable: ${ctx.warning || 'context pack missing or invalid'}; do not rely on cached project memory.`
-  const ids = (rows: any[]) => rows.map((row: any) => (Array.isArray(row) ? row[0] : row?.id)).filter(Boolean).slice(0, 6)
-  const use = ids(ctx.use_first)
-  const hyd = ids(ctx.hydrate_first)
-  return [
-    `TriWiki context pack: ${ctx.claim_count} claims, ${ctx.anchor_count} anchors (trust avg ${ctx.trust_avg ?? 'n/a'}).`,
-    use.length ? `use_first (high-trust; recall first): ${use.join(', ')}` : 'use_first: none',
-    hyd.length ? `hydrate_first (verify source before risky/user-visible actions): ${hyd.join(', ')}` : 'hydrate_first: none'
-  ].join('\n')
-}
-
 /** Proof fields recorded by the kernel/route so its proof references the wiki it acted on. */
 export function triWikiProofRecord(ctx: TriWikiRuntimeContext) {
   return {

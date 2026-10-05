@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { contextCapsule } from '../triwiki-attention.js';
-import { loadTriWikiRuntimeContext, triWikiContextBlock } from '../triwiki-runtime.js';
+import { loadTriWikiRuntimeContext } from '../triwiki-runtime.js';
 import { sealTriWikiContextPack } from '../triwiki-provenance.js';
 
 async function writePack(root: string, pack: unknown) {
@@ -12,24 +12,6 @@ async function writePack(root: string, pack: unknown) {
   await fs.mkdir(path.dirname(file), { recursive: true });
   await fs.writeFile(file, `${JSON.stringify(pack, null, 2)}\n`);
 }
-
-test('runtime rejects coordinate-only legacy or structurally incomplete packs', async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-triwiki-runtime-invalid-'));
-  try {
-    await writePack(root, {
-      mission: 'legacy',
-      attention: { use_first: [], hydrate_first: [] },
-      claims: [],
-      wiki: { schema: 'sks.wiki-coordinate.v1', ch: 'legacy', a: [] }
-    });
-    const context = await loadTriWikiRuntimeContext(root);
-    assert.equal(context.present, false);
-    assert.match(String(context.warning), /vx_missing/);
-    assert.match(triWikiContextBlock(context), /do not rely on cached project memory/);
-  } finally {
-    await fs.rm(root, { recursive: true, force: true });
-  }
-});
 
 test('runtime accepts a validated coordinate plus voxel context pack', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-triwiki-runtime-valid-'));

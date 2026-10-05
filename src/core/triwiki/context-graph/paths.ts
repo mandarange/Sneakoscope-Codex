@@ -130,7 +130,3 @@ export function contextGraphBenchmarkReportPath(root: string): string {
   return path.join(root, '.sneakoscope', 'reports', 'context-graph-benchmark.json');
 }
 
-export function contextGraphExperimentLogPath(root: string): string {
-  return path.join(root, '.sneakoscope', 'reports', 'context-graph-experiments.jsonl');
-}
-

@@ -35,10 +35,6 @@ const ACTIVE_TRIWIKI_BLOCKS = Object.freeze([
   [TRIWIKI_INIT_DEEP_BLOCK_BEGIN, TRIWIKI_INIT_DEEP_BLOCK_END]
 ] as const);
 
-export async function projectTriwikiToAgentsMd(root: string, opts: { maxLocalFiles?: number } = {}): Promise<ProjectorReport> {
-  return (await projectTriwikiToAgentsMdTransactional(root, opts)).report;
-}
-
 export async function projectTriwikiToAgentsMdTransactional(
   root: string,
   opts: { maxLocalFiles?: number } = {}

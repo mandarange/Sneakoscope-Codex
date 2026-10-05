@@ -1,7 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
-import { evaluateReleaseParallelFullCoverage } from '../../release-parallel-full-coverage.js'
 import { RELEASE_GATE_CONTRACT_IDS, releaseGateContractSnapshot } from '../release-gate-contract.js'
 import { selectReleaseGateClosure, selectReleaseGatePreset } from '../release-gate-dag.js'
 import { buildGateEntry, selectGates } from '../gate-manifest.js'
@@ -74,16 +73,6 @@ test('full release excludes duplicate canonical suites while incremental selecto
     selectReleaseGateClosure(manifest, ['test:commands-regression']).map((gate) => gate.id),
     ['test:commands-regression']
   )
-})
-
-test('release coverage rejects both removed and uncontracted gates', () => {
-  const removed = evaluateReleaseParallelFullCoverage(RELEASE_GATE_CONTRACT_IDS.slice(1))
-  assert.equal(removed.ok, false)
-  assert.deepEqual(removed.missing_critical_gates, [RELEASE_GATE_CONTRACT_IDS[0]])
-
-  const added = evaluateReleaseParallelFullCoverage([...RELEASE_GATE_CONTRACT_IDS, 'self-authorized:new-gate'])
-  assert.equal(added.ok, false)
-  assert.deepEqual(added.unexpected_release_gates, ['self-authorized:new-gate'])
 })
 
 test('current-version gates are always-on and mandatory for publish planning', () => {

@@ -114,6 +114,21 @@
   command modules, or two configs only checkouts read (1582 → 1380 files). It
   keeps the scripts its own lifecycle needs (version truth, publish tag and
   preflight, release stamp and pack receipt).
+- Dead code: exports and declarations with no reference anywhere (including
+  helpers left behind by earlier removals), and helpers, policies and constants
+  whose only caller was their own test, together with those tests: the Scout
+  policy checks, lean-decision validators, MCP read-only scheduler proof,
+  protected-core snapshot, agent worker env builder, ledger write-scope check,
+  Codex quit, image reference revalidation and transfer permits, project config
+  adoption, context-graph seed acquisition, indexed proof-bank summary, fragment
+  cache reasons, operation-journal blockers, search meta projection, intent
+  replay and terminal-state helpers, the hook TOML builder, tool-call sequence
+  repair, the stale `CORE_BENCH_BUDGETS` table, the `benchmark/adapters` barrel,
+  and an unused Python stream bridge. Test fixtures and oracles that lived in
+  shipped modules moved under `__tests__` (`graph-status`, the skill-dream
+  fixture). Context Graph v2 consumers that have a documented migration but no
+  product caller yet (Naruto advisor, affected verification, freshness
+  preflight) are left in place.
 
 ### Documentation
 
@@ -124,6 +139,16 @@
 
 ### Maintenance
 
+- Twelve standalone regression scripts under `dist/scripts` that nothing ran now
+  run in the suite (`test/unit/standalone-regression-checks.test.mjs`), each with
+  an isolated HOME and scratch directory. `retention-cleanup-safety-check` no
+  longer sweeps the shared `<tmpdir>/sks` root.
+- The `blackbox:*` npm scripts that `docs/black-box-package-tests.md` documents
+  are back, with a `blackbox:command-import-smoke` that unpacks the tarball and
+  lazy-loads every registered command. The manual real-Supabase SQL-plane check
+  is documented in `docs/mad-sks.md`. The unreferenced `feature:check` alias is
+  gone (`npm run maintainer -- features check`), keeping the package script
+  count inside the 101 budget.
 - Added a CI workflow that runs install, build, typecheck, and the canonical test command on pushes and pull requests.
 - `test/unit/release-stage-publish.test.mjs` runs against a throwaway repository with the canonical origin instead of inheriting the host clone's `origin` (nine tests failed on any checkout whose remote differs in case).
 

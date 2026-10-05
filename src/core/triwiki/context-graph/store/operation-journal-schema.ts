@@ -349,22 +349,3 @@ export function advanceContextOperationPhase(
   });
 }
 
-/** Record a blocker without moving the phase; the operation stays where it failed. */
-export function recordContextOperationBlockers(
-  journal: ContextOperationJournal,
-  codes: readonly string[],
-): ContextOperationJournal {
-  return buildContextOperationJournal({
-    operationId: journal.operationId,
-    baseSnapshotHash: journal.baseSnapshotHash,
-    targetSnapshotHash: journal.targetSnapshotHash,
-    configFingerprint: journal.configFingerprint,
-    sourceFingerprint: journal.sourceFingerprint,
-    tempIndex: journal.tempIndex,
-    phase: journal.phase,
-    indexChecksum: journal.indexChecksum,
-    fragmentManifestHash: journal.fragmentManifestHash,
-    startedAt: journal.startedAt,
-    blockers: [...journal.blockers, ...codes].slice(0, CONTEXT_OPERATION_MAX_BLOCKERS),
-  });
-}

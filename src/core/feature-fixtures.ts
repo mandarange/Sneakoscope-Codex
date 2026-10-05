@@ -1,5 +1,3 @@
-import { PACKAGE_VERSION } from './fsx.js';
-
 export { runFeatureFixture } from './feature-fixture-executor.js';
 
 export const FEATURE_FIXTURE_SCHEMA = 'sks.feature-fixtures.v1';

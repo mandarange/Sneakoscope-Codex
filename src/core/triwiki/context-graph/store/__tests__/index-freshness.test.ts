@@ -18,7 +18,7 @@ import { contextIndexPointerPath, contextIndexStoreDir } from '../generation-lay
 import { CONTEXT_INDEX_POINTER_SCHEMA } from '../generation-pointer.js';
 import { CONTEXT_INDEX_FORMAT_REVISION } from '../../runtime-index/format.js';
 import { codeNavigationGraphExtractors } from '../../extractors/index.js';
-import { contextGraphStatus } from '../graph-status.js';
+import { contextGraphStatus } from './graph-status.js';
 import { contextIndexFreshness } from '../index-freshness.js';
 import { writeContextGraphSnapshot } from '../snapshot-store.js';
 import {

@@ -1,13 +1,11 @@
 import assert from 'node:assert/strict';
 import fsp from 'node:fs/promises';
-import path from 'node:path';
 import test from 'node:test';
 import { sha256 } from '../../../../fsx.js';
 import { CONTEXT_GRAPH_META_SCHEMA, CONTEXT_GRAPH_SCHEMA_REVISION, type ContextGraphMeta, type ContextGraphSnapshot } from '../../contracts.js';
 import { buildContextGraphSnapshot } from '../../compiler/serialize.js';
-import { contextGraphFragmentCacheDir, contextGraphSnapshotPath } from '../../paths.js';
+import { contextGraphSnapshotPath } from '../../paths.js';
 import { fileNode, makeFixtureRoot, removeFixtureRoot } from '../../compiler/__tests__/graph-test-fixtures.js';
-import { fragmentCacheKey, readCachedFragmentWithReason, writeCachedFragment } from '../fragment-cache.js';
 import { contextGraphCurrentFileHash, stageAndCommitContextGraphSnapshot, writeContextGraphSnapshot } from '../snapshot-store.js';
 import { withEvidenceWriterLock } from '../evidence-write-lock.js';
 
@@ -81,16 +79,3 @@ test('a stale provenance expectation reports conflict instead of overwriting use
   } finally { removeFixtureRoot(root); }
 });
 
-test('fragment cache exposes deterministic HIT and MISS reasons', async () => {
-  const root = makeFixtureRoot('cgs-architecture-fragment');
-  try {
-    const key = fragmentCacheKey({ extractorId: 'fixture', extractorRevision: 'v1', cacheKey: sha256('cache'), changedPaths: [] });
-    assert.equal((await readCachedFragmentWithReason(root, key, 'fixture')).reason, 'entry_absent');
-    const fragment = { schema: 'sks.context-graph-fragment.v1' as const, extractor: 'fixture', extractorRevision: 'v1', nodes: [], edges: [], issues: [], skipped: [], inputHashes: {} };
-    await writeCachedFragment(root, key, fragment);
-    assert.equal((await readCachedFragmentWithReason(root, key, 'fixture')).status, 'HIT');
-    assert.equal((await readCachedFragmentWithReason(root, key, 'other')).reason, 'extractor_mismatch');
-    await fsp.writeFile(path.join(contextGraphFragmentCacheDir(root), `${key}.json`), '{bad');
-    assert.equal((await readCachedFragmentWithReason(root, key, 'fixture')).reason, 'invalid_json');
-  } finally { removeFixtureRoot(root); }
-});

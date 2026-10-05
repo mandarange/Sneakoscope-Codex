@@ -514,12 +514,6 @@ export const MANAGED_SKILLS: readonly ManagedSkillAsset[] = Object.freeze([
   'align'
 ].map((id) => ({ id, required_for: ['codex-native-runtime'] })))
 
-export function managedAgentRoleByFile(filename: string): ManagedAgentRole | null {
-  const base = filename.split(/[\\/]/).pop() || filename
-  assertUniqueManagedAgentRoleFilenames()
-  return RETIRED_MANAGED_AGENT_ROLE_TOMBSTONES.find((role) => role.filename === base) || null
-}
-
 export function managedOfficialSubagentRoleByName(name: string): ManagedOfficialSubagentRole | null {
   const normalized = normalizeRoleName(name)
   return MANAGED_OFFICIAL_SUBAGENT_ROLES.find((role) => [
@@ -617,15 +611,6 @@ export function managedOfficialSubagentFileOwnsText(text: string, id: string): b
 
 export function normalizeRoleName(name: string): string {
   return String(name || '').trim().replace(/\.toml$/i, '').replace(/_/g, '-').toLowerCase()
-}
-
-export function assertUniqueManagedAgentRoleFilenames(): void {
-  const seen = new Map<string, string>()
-  for (const role of [...RETIRED_MANAGED_AGENT_ROLE_TOMBSTONES, ...MANAGED_OFFICIAL_SUBAGENT_ROLES]) {
-    const existing = seen.get(role.filename)
-    if (existing) throw new Error(`duplicate managed agent role filename: ${role.filename} for ${existing} and ${role.id}`)
-    seen.set(role.filename, role.id)
-  }
 }
 
 function role(

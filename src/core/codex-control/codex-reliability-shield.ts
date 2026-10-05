@@ -233,18 +233,6 @@ export function auditToolOutputContinuity(events: any[]) {
   }
 }
 
-/**
- * @deprecated This post-run helper cannot repair the Responses protocol. It now
- * preserves the event stream and reports missing outputs for fail-closed callers.
- */
-export function repairToolCallSequence(events: any[]) {
-  const audit = auditToolOutputContinuity(events)
-  return {
-    ...audit,
-    repairedToolResultCount: 0
-  }
-}
-
 export function buildKeepaliveHeartbeats(events: any[]) {
   return events
     .filter((event) => /reasoning|thinking/i.test(String(event?.type || event?.item?.type || '')))

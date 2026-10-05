@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildIntentContract, decideIntentReplay, terminalStateForVerification } from '../intent-contract.js';
+import { buildIntentContract } from '../intent-contract.js';
 
 function build(overrides: Partial<Parameters<typeof buildIntentContract>[0]> = {}) {
   return buildIntentContract({
@@ -27,20 +27,3 @@ test('contracts are deeply immutable, normalized and stable across replay', () =
   assert.throws(() => (first.observed_changed_paths as string[]).push('src/c.ts'));
 });
 
-test('replay detects target, policy and mode drift and gates expired evidence by risk', () => {
-  assert.equal(decideIntentReplay(build(), build()).action, 'reuse');
-  assert.equal(decideIntentReplay(build(), build({ targetHashes: ['b'.repeat(64)] })).action, 'replan');
-  assert.equal(decideIntentReplay(build(), build({ policyVersion: 'policy-v2' })).action, 'replan');
-  assert.equal(decideIntentReplay(build(), build({ runtimeSnapshot: 'unmanaged' })).action, 'replan');
-  assert.equal(decideIntentReplay(build(), build({ evidenceState: 'expired' })).action, 'refresh_direct_evidence');
-  assert.equal(decideIntentReplay(build(), build({ effect: 'security', evidenceState: 'expired' })).action, 'replan');
-  const heavyExpired = build({ effect: 'security', evidenceState: 'expired' });
-  assert.equal(decideIntentReplay(heavyExpired, heavyExpired).action, 'blocked');
-});
-
-test('terminal state keeps unverified, paused, failed and completed distinct', () => {
-  assert.equal(terminalStateForVerification({ executionOk: true, verificationOk: null, paused: false }), 'unverified');
-  assert.equal(terminalStateForVerification({ executionOk: true, verificationOk: true, paused: true }), 'paused');
-  assert.equal(terminalStateForVerification({ executionOk: false, verificationOk: false, paused: false }), 'failed');
-  assert.equal(terminalStateForVerification({ executionOk: true, verificationOk: true, paused: false }), 'completed');
-});

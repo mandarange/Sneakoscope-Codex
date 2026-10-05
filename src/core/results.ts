@@ -6,6 +6,3 @@ export interface SksIssue {
   readonly cause?: unknown;
 }
 
-export type SksResult<T, E extends SksIssue = SksIssue> =
-  | { readonly ok: true; readonly value: T }
-  | { readonly ok: false; readonly error: E };
