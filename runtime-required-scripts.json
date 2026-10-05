@@ -13,31 +13,6 @@
       "reason": "installed doctor and repair paths probe whether Codex can load the managed project config"
     },
     {
-      "path": "dist/scripts/desktop-bridge-unification-check.js",
-      "category": "installed_runtime",
-      "reason": "the installed public release gate DAG hermetically verifies Desktop Bridge credential coexistence, migration idempotency, rollback isolation, retired CLI routing, and no-fallback policy"
-    },
-    {
-      "path": "dist/scripts/desktop-bridge-transport-check.js",
-      "category": "installed_runtime",
-      "reason": "the installed public release gate DAG verifies the packaged localhost Desktop bridge transports and redaction"
-    },
-    {
-      "path": "dist/scripts/desktop-bridge-latency-check.js",
-      "category": "installed_runtime",
-      "reason": "the installed public release gate DAG enforces localhost-only Desktop bridge HTTP and SSE latency budgets"
-    },
-    {
-      "path": "dist/scripts/desktop-bridge-capabilities-check.js",
-      "category": "installed_runtime",
-      "reason": "the installed public release gate DAG verifies capability evidence state boundaries in the packaged runtime"
-    },
-    {
-      "path": "dist/scripts/desktop-bridge-real-evidence-check.js",
-      "category": "installed_runtime",
-      "reason": "the installed full release proof fails closed unless trusted real Codex Desktop evidence covers native features, lifecycle recovery, and the remote other-Mac runtime"
-    },
-    {
       "path": "dist/scripts/release-physical-gates-check.js",
       "category": "installed_package_verification",
       "reason": "the installed full release proof validates macOS-captured, source-bound physical receipts including both Desktop Bridge providers, OAuth preservation, native UI, WebSocket, and production deep artifacts"
@@ -51,6 +26,21 @@
       "path": "dist/scripts/release-pack-receipt.js",
       "category": "installed_package_verification",
       "reason": "packaged release verification creates, inspects, and compares immutable tarball receipts"
+    },
+    {
+      "path": "dist/scripts/release-version-truth-check.js",
+      "category": "installed_package_verification",
+      "reason": "the published package re-verifies that its version metadata matches the release it claims to be"
+    },
+    {
+      "path": "dist/scripts/check-publish-tag.js",
+      "category": "installed_package_verification",
+      "reason": "the published package re-verifies that its publish tag is latest and matches the version"
+    },
+    {
+      "path": "dist/scripts/publish-preflight.js",
+      "category": "installed_package_verification",
+      "reason": "publish preflight ships with the lifecycle verifier that runs it against the packed tarball"
     }
   ],
   "reference_source_policies": [

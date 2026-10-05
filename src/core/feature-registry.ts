@@ -743,7 +743,7 @@ function imagegenWiringFeatures() {
     baseFeature({
       id: 'ux-review:run-wires-imagegen',
       commands: ['npm run ux-review:run-wires-imagegen', 'sks ux-review run --image <screenshot> --generate-callouts --json'],
-      aliases: ['$Image-UX-Review', '$UX-Review'],
+      aliases: ['$Image-UX-Review'],
       category: 'visual-memory',
       maturity: 'beta',
       intent: ("Image UX route start gate, shared SKS imagegen adapter, callout extraction, and Codex App evidence validation wiring."),

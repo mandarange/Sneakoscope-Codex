@@ -29,7 +29,7 @@ test('command contract registry covers the command registry without regex or com
 
 test('risk and remote policy are explicit and fail closed for R3', () => {
   assert.equal(commandContract('status')?.risk, 'R0');
-  assert.equal(commandContract('gates')?.risk, 'R1');
+  assert.equal(commandContract('review')?.risk, 'R1');
   assert.equal(commandContract('update')?.risk, 'R2');
   assert.equal(commandContract('mad-sks')?.risk, 'R3');
   assert.equal(commandContract('mad-sks')?.remote_allowed, false);

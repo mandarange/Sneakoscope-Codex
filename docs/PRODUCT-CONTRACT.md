@@ -32,6 +32,14 @@ This page is the English product-facing projection of those decisions.
 - **Adapters (e.g. codex-lb):** must not rewrite host credentials/sessions or forge tool output.
 - **Installed harness:** immutable outside the engine repo except user-run `sks doctor --fix` and explicit install/update. Agents never run `sks doctor --fix`.
 
+## CLI surface
+
+- **One source of command metadata:** `src/cli/command-manifest-lite.ts` defines every shipped `sks` command: summary, usage, maturity, risk, flags, gate files and input schema. The registry adds only the lazy loader; help, `sks commands`, the agent-bridge tool manifest and the contract layer all derive from the manifest.
+- **Shipped vs maintainer commands:** `sks` carries commands a user or agent runs in a project. Commands that verify, benchmark or release SKS itself (`check`, `gates`, `task`, `release`, `daemon`, `versioning`, `bench`, `perf`, `features`, `all-features`, `harness`, `rust`) live in the maintainer CLI (`npm run maintainer -- <command>`), which is not packaged and is never exposed as an agent tool.
+- **Evidence checks live under `sks proof`:** `sks proof trust|stop-gate|artifacts|hproof|field` replace the former top-level `trust`, `stop-gate`, `validate-artifacts`, `hproof` and `proof-field`.
+- **Retired names are unknown, not aliased:** `loop`, `run`, `rollback`, the folded proof commands and the maintainer commands answer `unknown_command` with no replacement hint, and the installed-package probes pin that.
+- **Skills only name real commands:** every `sks <command>` a managed skill tells an agent to run must resolve to a shipped command; a test installs the skills and checks.
+
 ## Desktop Bridge routing (8.1.3)
 
 - **One managed runtime:** SKS routes managed Codex Desktop and CLI traffic through one local Desktop Bridge. There are no competing provider or bridge modes.
