@@ -2,6 +2,56 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Context compaction no longer fails on Codex-LB and OpenRouter threads with
+  `Error running remote compact task: … bridge_upstream_request_failed`. SKS
+  points Codex's built-in OpenAI provider at the Desktop Bridge, so Codex
+  compacts remotely (a `compaction_trigger` request, or `/responses/compact`),
+  which only the official backend implements. For a provider-routed thread the
+  bridge now asks the thread's own model for a handoff summary and returns it as
+  the compaction item, over HTTP and the Responses WebSocket; later turns carry
+  the summary as a user message. Verified with the bundled Codex CLI through
+  the bridge: the same auto-compaction that failed the turn before now
+  completes it. Official-route threads keep native compaction.
+- `sks align run` works in a project without
+  `config/architecture-map-policy.v1.json` (it failed with
+  `architecture_map_policy_unreadable`), and a self-contained run, like a
+  verified `sks align proof`, closes its Align route instead of blocking the
+  next route command until `sks route close`.
+- The ambiguity gate pointed at `sks pipeline answer`, which did not exist, and
+  denied `sks qa-loop answer`. `sks pipeline answer <id|latest> (--stdin |
+  <answers.json>)` now seals a paused route; a rejected reply leaves it paused.
+- `sks commit --dry-run` made a real commit, `sks memory --dry-run` ran a real
+  GC, and `sks conflicts cleanup --json` skipped its `--yes` confirmation.
+- The npm package left out a module the agent janitor imports, so `qa-loop`,
+  `ppt`, `image-ux-review` and `auto-review` crashed with
+  `ERR_MODULE_NOT_FOUND`.
+- Ledger T5: a lost tool output (`[No tool output found …]`) affects only the
+  turn that reports it; the thread continues after recovery instead of being
+  refused for the rest of its life.
+
+### Changed
+
+- The essential profile stops producing strict-only rituals: route plans no
+  longer seed request intake, a repository scan, engineering-sanity and
+  architecture-map artifacts, or proof stages, and "Honest Mode" appears in
+  route, language, Naruto and Computer Use text only under `strict`.
+- An allowed tool call that SKS has nothing to say about no longer shows
+  "SKS: tool call inspected.", and the Naruto decision is logged per prompt,
+  not per hook event.
+- A PreToolUse hook for a plain shell command loads about 160 modules instead
+  of about 610 (~580 ms to ~180 ms cold).
+- Ordinary work stays with the parent agent: a review, DB or MAD-SKS route and
+  a subject word such as "parallel" no longer start child agents; only an
+  explicit request, `--agents N`, `$sks-naruto`/`$sks-work`, or an artifact
+  pipeline does.
+
+### Removed
+
+- Command wrappers, re-export barrels, the context-graph optimizer and the
+  incremental compiler that no product path reached.
+
 
 ## [10.5.1] - 2026-10-04
 

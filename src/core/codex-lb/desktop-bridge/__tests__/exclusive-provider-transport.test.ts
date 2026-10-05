@@ -239,9 +239,12 @@ test('HTTP: mode on holds Responses sub-endpoints such as compact to the same ro
   assert.deepEqual(await f.post(compact, { model: UNLISTED, input: [] }, childHeaders), { status: 409, code: 'openrouter_only_subagent_model_blocked' });
   assert.deepEqual(f.official.requests, []);
   assert.deepEqual(f.lb.requests, []);
-  // An OpenRouter thread compacts on OpenRouter, never on the official identity.
-  assert.deepEqual(await f.post(compact, { model: LISTED, input: [] }, childHeaders), { status: 200, code: null });
-  assert.deepEqual(f.openrouter.requests, [{ path: '/api/v1/responses/compact', model: LISTED }]);
+  // An OpenRouter thread compacts on OpenRouter, never on the official identity:
+  // OpenRouter has no /responses/compact, so the bridge asks the thread's model
+  // for the summary on /responses (compaction-provider-route.test.ts covers the
+  // answer itself; this echo upstream sends no summary, hence the 502).
+  assert.deepEqual(await f.post(compact, { model: LISTED, input: [] }, childHeaders), { status: 502, code: 'bridge_compaction_summary_unusable' });
+  assert.deepEqual(f.openrouter.requests, [{ path: '/api/v1/responses', model: LISTED }]);
   // A sub-endpoint body without a model stays on the model-less passthrough, untouched.
   assert.deepEqual(await f.post('/backend-api/codex/responses/resp_1/cancel', { reason: 'user' }), { status: 200, code: null });
   assert.deepEqual(f.official.requests, [{ path: '/backend-api/codex/responses/resp_1/cancel', model: null }]);

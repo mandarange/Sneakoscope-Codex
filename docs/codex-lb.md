@@ -85,6 +85,27 @@ provider, public/upstream model, catalog generation, and route-policy
 generation, so a running thread cannot drift to another provider when a
 profile or catalog changes.
 
+### Context compaction on a provider route
+
+SKS points Codex's built-in OpenAI provider at the bridge, so Codex compacts
+long threads *remotely*: it sends a Responses request ending in a
+`compaction_trigger` item (or, on older Codex, a POST to `/responses/compact`)
+and expects one opaque `compaction` item back. Only the official backend
+implements that, so a thread routed to Codex-LB or OpenRouter used to stop with
+`Error running remote compact task: … bridge_upstream_request_failed`.
+
+For a thread on a provider route the bridge now compacts the way Codex itself
+compacts for non-OpenAI providers: it asks the thread's own provider and model
+for a handoff summary (Codex's summarization prompt, tool calls disabled) and
+returns it as the `compaction` item, over HTTP or the Responses WebSocket. The
+item carries a bridge envelope; on later turns the bridge replaces it with the
+summary as a user message before forwarding, on every route, because no
+upstream can read it. The thread never leaves its provider, so the provider and
+official identities never cross. Official-route threads keep native remote
+compaction. A provider that refuses the summary request is reported with its
+own error identifiers (`bridge_compaction_summary_status_<status>` in the
+bridge log).
+
 ## Verification levels
 
 ```sh
