@@ -9,7 +9,11 @@ import { COMMANDS } from '../command-registry.js';
  * alias, and the router answers with the ordinary unknown-command contract
  * instead of a tombstone that keeps the name alive.
  */
-const RETIRED_COMMANDS = ['loop', 'run', 'rollback'] as const;
+const RETIRED_COMMANDS = [
+  'loop', 'run', 'rollback',
+  // Folded into `sks proof <subcommand>`.
+  'trust', 'stop-gate', 'validate-artifacts', 'hproof', 'proof-field'
+] as const;
 
 async function captured<T>(run: () => Promise<T>): Promise<{ result: T; stdout: string; stderr: string; exitCode: typeof process.exitCode }> {
   const stdout: string[] = [];

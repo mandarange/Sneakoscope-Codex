@@ -1,4 +1,5 @@
 import '../../__tests__/helpers/isolated-test-home.js';
+import '../../__tests__/helpers/strict-verification-profile.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { BUILTIN_LATEST_TIER_MODELS as T } from '../../subagents/model-tiers.js';

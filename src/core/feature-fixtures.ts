@@ -86,9 +86,6 @@ const FIXTURES = Object.freeze({
   'cli-image-ux-review': fixture('execute_and_validate_artifacts', 'sks image-ux-review fixture --mock --json', ['completion-proof.json', 'image-voxel-ledger.json', 'image-ux-generated-review-ledger.json'], 'blocked', { reason: 'Same as route-image-ux-review: the image-ux-review fixture command intentionally always exits 1 by design (honest mock, cannot claim a real completion), even though it does write all declared artifacts.' }),
   'cli-computer-use': fixture('real_optional', 'sks computer-use status --json', [], 'pass'),
   'cli-pipeline': fixture('execute_and_validate_artifacts', 'sks pipeline plan latest --agents 1 --json', ['pipeline-plan.json'], 'pass'),
-  'cli-validate-artifacts': fixture('execute_and_validate_artifacts', 'sks validate-artifacts latest --json', ['artifact-validation.json'], 'pass'),
-  'cli-hproof': fixture('execute_and_validate_artifacts', 'sks hproof check latest', ['done-gate.evaluated.json'], 'pass'),
-  'cli-proof-field': fixture('execute', 'sks proof-field scan --json --intent fixture', [], 'pass'),
   'cli-recallpulse': fixture('execute_and_validate_artifacts', 'sks recallpulse run latest --json', ['mission-status-ledger.json'], 'pass'),
   'cli-gx': fixture('execute_and_validate_artifacts', 'sks gx validate fixture --mock', ['gx-validation.json'], 'blocked', { reason: 'gxValidateFixture() intentionally exits non-zero (execution_class: mock_fixture) for an honest mock/blocked result; without --mock the command crashes on a missing cartridge instead.' }),
   'cli-perf': fixture('execute', 'sks perf cold-start --json --iterations 1', [], 'pass'),
@@ -149,7 +146,6 @@ const FIXTURES = Object.freeze({
   'skill-context7-docs': fixture('real_optional', 'sks context7 check --json', [], 'pass'),
   'skill-seo-geo-optimizer': fixture('execute_and_validate_artifacts', 'sks seo-geo-optimizer fixture --mode geo --json', ['search-visibility/site-inventory.json', 'search-visibility/geo-findings.json', 'geo-gate.json', 'completion-proof.json'], 'pass'),
   'cli-proof': fixture('execute_and_validate_artifacts', 'sks proof smoke --json', ['.sneakoscope/proof/latest.json'], 'pass'),
-  'cli-trust': fixture('execute_and_validate_artifacts', 'sks trust report latest --json', ['trust-report.json'], 'pass'),
   'cli-wrongness': fixture('execute', 'sks wrongness validate project --json', [], 'pass', {
     reason: 'Release fixtures must not add synthetic project-wide wrongness records. The read-only validator exercises the CLI and ledger schema without contaminating trust state for later route proofs.'
   }),
@@ -242,9 +238,7 @@ const STATIC_CONTRACT_FEATURES = new Set([
   'cli-gates',
   'cli-postinstall',
   'cli-menubar',
-  'cli-stop-gate',
   'cli-route',
-  'cli-loop',
   'cli-autoresearch',
   'cli-hook',
   'handler-$',

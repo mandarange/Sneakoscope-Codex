@@ -68,5 +68,5 @@ function nextAction(state: any = {}, trust: any = {}, proof: any = {}) {
   if (!proof?.schema) return `write completion proof for ${state.mission_id}`;
   if (trust?.ok) return 'ready for final Honest Mode summary';
   if (trust?.issues?.length) return `resolve trust blocker: ${trust.issues[0]}`;
-  return 'run sks trust validate latest --json';
+  return 'run sks proof trust validate latest --json';
 }

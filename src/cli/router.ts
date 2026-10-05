@@ -412,14 +412,6 @@ export function safeActiveRouteContinuation(command: CommandNameLite, args: read
   ]).get(command);
   if (!expectedRoutes) return false;
   if (!expectedRoutes.includes(activeRoute)) return false;
-  if (subcommand === 'prepare') {
-    const parentMissionId = String(process.env.SKS_RUN_PARENT_MISSION_ID || '').trim();
-    return command !== 'autoresearch'
-      && String(state.mode || '').toUpperCase() === 'RUN'
-      && String(state.phase || '').toUpperCase() === 'RUN_ROUTE_SELECTED'
-      && Boolean(parentMissionId)
-      && parentMissionId === String(state.mission_id || '');
-  }
   if (subcommand !== 'run') return false;
   const requestedMission = String(args[1] || '').trim();
   return Boolean(state.mission_id) && (requestedMission === String(state.mission_id) || requestedMission === 'latest');

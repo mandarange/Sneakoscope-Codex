@@ -83,7 +83,7 @@ export async function writeRouteCompletionProof(root: any, {
     claims: linkProofClaimsToEvidence(written.proof, firstTrust.evidenceIndex)
   }, {
     command: {
-      cmd: `sks trust finalize ${missionId}`,
+      cmd: `sks proof finalize ${missionId}`,
       route: publicRoute,
       status: firstTrust.report?.status || normalizedStatus
     }

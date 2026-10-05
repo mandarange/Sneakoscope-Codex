@@ -17,7 +17,7 @@ The release target is a smaller and stronger surface:
 
 - `sks status` shows active proof, trust, native agent, image voxel, and DB safety status.
 - `sks proof show` exposes Completion Proof.
-- `sks trust report latest` explains route completion blockers.
+- `sks proof trust report latest` explains route completion blockers.
 - `sks doctor` keeps install and managed paths inspectable.
 
 SKS does not copy every external harness role, plugin, runtime, or router idea. It strengthens the proof/evidence/safety path that decides whether a Codex task can honestly be called complete.

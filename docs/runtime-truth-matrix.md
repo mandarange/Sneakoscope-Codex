@@ -29,7 +29,7 @@ Run the current inspection surfaces with:
 
 ```bash
 sks naruto proof latest --json
-sks validate-artifacts latest --json
+sks proof artifacts latest --json
 sks pipeline status --json
 npm run release:check:affected
 ```

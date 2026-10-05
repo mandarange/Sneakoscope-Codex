@@ -19,7 +19,7 @@ export async function stopGateCommand(command: string, args: string[]): Promise<
       error: `Unknown subcommand: ${subcommand}. Available: check`,
     };
     if (json) console.log(JSON.stringify(result, null, 2));
-    else console.error(`Unknown stop-gate subcommand: ${subcommand}. Use: sks stop-gate check --route Naruto --json`);
+    else console.error(`Unknown stop-gate subcommand: ${subcommand}. Use: sks proof stop-gate check --route Naruto --json`);
     return result as unknown as StopGateCheckResult;
   }
 

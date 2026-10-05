@@ -2,6 +2,7 @@
 // under $HOME/.agents/skills — isolate the home, then seed the managed skills
 // so the guard reflects a healthy install instead of the operator's real one.
 import '../../dist/core/__tests__/helpers/isolated-test-home.js';
+import '../../dist/core/__tests__/helpers/strict-verification-profile.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';

@@ -30,7 +30,7 @@ export async function trustCommand(args: any = []) {
     if (action === 'validate' && !report.ok) process.exitCode = 1;
     return report;
   }
-  console.error('Usage: sks trust report|validate|status|explain [latest|mission-id] [--json] [--strict] [--no-wrongness]');
+  console.error('Usage: sks proof trust report|validate|status|explain [latest|mission-id] [--json] [--strict] [--no-wrongness]');
   process.exitCode = 2;
 }
 

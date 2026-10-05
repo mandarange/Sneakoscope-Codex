@@ -1,3 +1,4 @@
+import '../../dist/core/__tests__/helpers/strict-verification-profile.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fsp from 'node:fs/promises';

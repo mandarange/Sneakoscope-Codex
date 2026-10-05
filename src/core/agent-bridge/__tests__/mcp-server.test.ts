@@ -224,17 +224,17 @@ test('runMcpServer tools/list returns only read-only manifest tools by default',
 });
 
 test('invokeSksTool validates input, applies argv, and uses latency bounds', async () => {
-  const contract = commandContract('stop-gate');
+  const contract = commandContract('proof');
   assert.ok(contract);
   let observedArgs: readonly string[] = [];
   let observedOptions: any = null;
-  const result = await invokeSksTool(contract, { route: 'Naruto', json: true }, async (_command, args, options) => {
+  const result = await invokeSksTool(contract, { action: 'stop-gate', route: 'Naruto', json: true }, async (_command, args, options) => {
     observedArgs = args;
     observedOptions = options;
     return { code: 0, stdout: '{}', stderr: '', stdoutBytes: 2, stderrBytes: 0, truncated: false, timedOut: false };
   });
   assert.equal(result.ok, true);
-  assert.deepEqual(result.argv, ['stop-gate', 'check', '--route', 'Naruto', '--json']);
+  assert.deepEqual(result.argv, ['proof', 'stop-gate', 'check', '--route', 'Naruto', '--json']);
   assert.ok(observedArgs.includes('stop-gate'));
   assert.equal(observedOptions.timeoutMs, 15_000);
   assert.equal(observedOptions.maxOutputBytes, 128 * 1024);

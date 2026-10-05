@@ -11,11 +11,8 @@ export type CommandInputProfileLite =
   | 'paths'
   | 'pipeline-status'
   | 'stats'
-  | 'stop-gate'
   | 'proof'
-  | 'trust'
-  | 'gates'
-  | 'validate-artifacts';
+  | 'gates';
 
 export type ActiveRoutePolicy = 'always' | 'diagnostic-only' | 'blocked-while-active';
 
@@ -102,7 +99,6 @@ const COMMAND_MANIFEST_LITE_BASE = [
   { name: 'commit-and-push', summary: 'Create a simple git commit and push', maturity: 'stable' },
   { name: 'dfix', summary: 'Run DFix diagnose/plan/patch/verify loop', maturity: 'stable', mutatesRouteState: true, ownedGateFiles: ['dfix-gate.json'] },
   { name: 'naruto', summary: 'Run the $sks-naruto Codex official subagent workflow', maturity: 'labs', mutatesRouteState: true, ownedGateFiles: ['naruto-gate.json', 'stop-gate.json'] },
-  { name: 'stop-gate', summary: 'Check canonical stop-gate resolution for a route/mission', maturity: 'beta', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'route', summary: 'Inspect or close active route state', maturity: 'beta', skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'qa-loop', summary: 'Run QA loop missions', maturity: 'beta', mutatesRouteState: true, ownedGateFiles: ['qa-gate.json'] },
   { name: 'research', summary: 'Run research missions', maturity: 'labs', mutatesRouteState: true, ownedGateFiles: ['research-gate.json'] },
@@ -127,12 +123,8 @@ const COMMAND_MANIFEST_LITE_BASE = [
   { name: 'seo-geo-optimizer', summary: 'Run unified SEO/GEO optimizer audit/plan/apply/verify plus research/strategy (--include-marketing) on the search-visibility kernel', maturity: 'beta' },
   { name: 'hook', summary: 'Codex hook entrypoint', maturity: 'beta', skipMigrationGate: true },
   { name: 'profile', summary: 'Inspect/set profile', maturity: 'labs' },
-  { name: 'hproof', summary: 'Evaluate H-Proof gate', maturity: 'beta' },
-  { name: 'validate-artifacts', summary: 'Validate mission artifacts', maturity: 'beta' },
-  { name: 'proof', summary: 'Show and validate completion proof', maturity: 'beta' },
-  { name: 'trust', summary: 'Report and validate route trust kernel evidence', maturity: 'beta' },
+  { name: 'proof', summary: 'Show and validate completion proof and the evidence behind it: route trust, stop gate, mission artifacts, H-Proof, proof field', maturity: 'beta', skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'wrongness', summary: 'Record and inspect TriWiki wrongness negative evidence', maturity: 'beta' },
-  { name: 'proof-field', summary: 'Scan proof field', maturity: 'beta' },
   { name: 'skill-dream', summary: 'Track skill dream counters', maturity: 'labs' },
   { name: 'code-structure', summary: 'Scan source structure', maturity: 'labs' },
   { name: 'rust', summary: 'Inspect optional Rust accelerator status and smoke parity', maturity: 'beta' },
@@ -201,7 +193,7 @@ const COMMAND_CONTRACT_OVERRIDES_LITE = {
   postinstall: { latency: 'long' },
   ppt: { latency: 'long' },
   proof: {
-    risk: 'R0', latency: 'fast', supportsJson: true, remoteAllowed: true,     inputProfile: 'proof', requiredCapabilities: ['proof.read']
+    risk: 'R0', latency: 'fast', supportsJson: true, remoteAllowed: true,     inputProfile: 'proof', requiredCapabilities: ['proof.read', 'proof.trust', 'proof.stop-gate']
   },
   'qa-loop': { latency: 'long' },
   recallpulse: { latency: 'long' },
@@ -218,24 +210,13 @@ const COMMAND_CONTRACT_OVERRIDES_LITE = {
     supportsJson: true, remoteAllowed: true, inputProfile: 'json-only',
     requiredCapabilities: ['proof.read']
   },
-  'stop-gate': {
-    supportsJson: true, remoteAllowed: true, inputProfile: 'stop-gate',
-    requiredCapabilities: ['proof.stop-gate']
-  },
   task: { risk: 'R1', latency: 'long' },
-  trust: {
-    risk: 'R0', latency: 'fast', supportsJson: true, remoteAllowed: true,     inputProfile: 'trust', requiredCapabilities: ['proof.trust']
-  },
   uninstall: { risk: 'R3', latency: 'long' },
   update: { latency: 'long' },
   'update-check': {
     supportsJson: true, remoteAllowed: true, inputProfile: 'json-only',
     requiredCapabilities: ['network.npm.read']
   },
-  'validate-artifacts': {
-    risk: 'R1', supportsJson: true, remoteAllowed: true, inputProfile: 'validate-artifacts',
-    requiredCapabilities: ['proof.artifacts']
-  }
 } as const satisfies Partial<Record<CommandNameLite, Partial<CommandContractMetadataLite>>>;
 
 const COMMAND_HELP_LITE = {
@@ -496,20 +477,12 @@ const COMMAND_HELP_LITE = {
     description: 'Measure core trust-kernel hot paths and write performance budget artifacts.'
   },
   proof: {
-    usage: 'sks proof show|latest|validate|export|smoke [--json|--md]',
-    description: 'Show, validate, export, or smoke-write the unified Completion Proof Engine surface.'
-  },
-  trust: {
-    usage: 'sks trust report|validate|status|explain [latest|mission-id] [--json]',
-    description: 'Validate route contracts, evidence indexes, stale/mock evidence, and trust report blockers.'
+    usage: 'sks proof show|latest|validate|export|smoke|trust report|validate|status|explain [latest|mission-id]|artifacts [mission-id|latest] [--required a,b]|stop-gate [check] [--route r] [--mission id]|hproof check [mission-id|latest]|field scan [--intent "task"] [--json|--md]',
+    description: 'Show, validate, export, or smoke-write the unified Completion Proof Engine surface, and run the evidence checks behind it: route trust-kernel validation, stop-gate resolution, schema-backed mission artifacts, the H-Proof done gate, and Potential Proof Field cones.'
   },
   wrongness: {
     usage: 'sks wrongness list|show|add|resolve|summarize|validate|context|rules ...',
     description: 'Record, retrieve, and validate TriWiki wrongness memory: negative evidence, failed assumptions, stale proof, visual/DB/hook mismatches, and avoidance rules.'
-  },
-  'proof-field': {
-    usage: 'sks proof-field scan [--json] [--intent "task"] [--changed file1,file2]',
-    description: 'Analyze Potential Proof Field cones, negative-work cache, and fast-lane eligibility for a change set.'
   },
   'skill-dream': {
     usage: 'sks skill-dream status|run|record [--json]',
@@ -523,10 +496,6 @@ const COMMAND_HELP_LITE = {
     usage: 'sks rust status|smoke [--json] [--require-native]',
     description: 'Inspect optional Rust accelerator availability and verify JS fallback parity for image hash, voxel validation, secret scanning, and search files/text/batch.'
   },
-  'validate-artifacts': {
-    usage: 'sks validate-artifacts [mission-id|latest] [--json]',
-    description: 'Validate schema-backed mission artifacts for work orders, official subagent evidence, visual maps, dogfood reports, skills, mistake memory, and Honest Mode.'
-  },
   wiki: {
     usage: 'sks wiki coords|pack|refresh|publish|rebuild-index|validate|validate-shared|wrongness ...',
     description: 'Build, refresh, publish shared shards, rebuild ignored indexes, validate, and attach wrongness-memory context to RGBA/trig LLM Wiki packs with attention.use_first and attention.hydrate_first for compact recall plus source hydration.'
@@ -534,10 +503,6 @@ const COMMAND_HELP_LITE = {
   memory: {
     usage: 'sks memory build [--json] | sks memory gc [--dry-run]',
     description: 'Project TriWiki context-pack memory into managed AGENTS.md blocks or run bounded memory cleanup.'
-  },
-  hproof: {
-    usage: 'sks hproof check [mission-id|latest]',
-    description: 'Evaluate the H-Proof done gate for a mission.'
   },
   naruto: {
     usage: 'sks naruto run "task" [--agents N] [--max-threads N] [--trusted-project] [--json] | sks naruto status|subagents|proof [latest|M-...] [--json] | sks naruto parent-summary --mission M-... --stdin [--json]',
@@ -620,26 +585,14 @@ export function commandInputSchema(profile: CommandInputProfileLite): Record<str
     });
   }
   if (profile === 'stats') return objectSchema({ full: { type: 'boolean' }, json: { type: 'boolean' } });
-  if (profile === 'stop-gate') {
-    return objectSchema({
-      route: boundedString(1, 80),
-      mission: boundedString(1, 160),
-      gate: boundedString(1, 1024),
-      json: { type: 'boolean' }
-    });
-  }
   if (profile === 'proof') {
     return objectSchema({
-      action: { type: 'string', enum: ['show', 'latest', 'validate', 'route'] },
+      action: { type: 'string', enum: ['show', 'latest', 'validate', 'route', 'trust', 'stop-gate'] },
       mission: boundedString(1, 160),
       completion: { type: 'boolean' },
-      json: { type: 'boolean' }
-    });
-  }
-  if (profile === 'trust') {
-    return objectSchema({
-      action: { type: 'string', enum: ['report', 'status', 'explain'] },
-      mission: boundedString(1, 160),
+      trust_action: { type: 'string', enum: ['report', 'status', 'explain'] },
+      route: boundedString(1, 80),
+      gate: boundedString(1, 1024),
       json: { type: 'boolean' }
     });
   }
@@ -648,17 +601,6 @@ export function commandInputSchema(profile: CommandInputProfileLite): Record<str
       target: boundedString(1, 120),
       mode: { type: 'string', enum: ['preset', 'gate'] },
       full: { type: 'boolean' },
-      json: { type: 'boolean' }
-    });
-  }
-  if (profile === 'validate-artifacts') {
-    return objectSchema({
-      mission: boundedString(1, 160),
-      required: {
-        type: 'array',
-        items: boundedString(1, 80),
-        maxItems: 32
-      },
       json: { type: 'boolean' }
     });
   }

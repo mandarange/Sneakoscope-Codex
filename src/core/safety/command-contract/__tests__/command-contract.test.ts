@@ -40,11 +40,11 @@ test('risk and remote policy are explicit and fail closed for R3', () => {
 });
 
 test('per-tool schema rejects unknown or mistyped arguments', () => {
-  const contract = commandContract('stop-gate');
+  const contract = commandContract('proof');
   assert.ok(contract);
-  const ok = validateJsonSchema({ route: 'Naruto', json: true }, contract.input_schema);
+  const ok = validateJsonSchema({ action: 'stop-gate', route: 'Naruto', json: true }, contract.input_schema);
   assert.equal(ok.ok, true);
-  const unknown = validateJsonSchema({ route: 'Naruto', shell: 'rm -rf /' }, contract.input_schema);
+  const unknown = validateJsonSchema({ action: 'stop-gate', route: 'Naruto', shell: 'rm -rf /' }, contract.input_schema);
   assert.equal(unknown.ok, false);
   assert.ok(unknown.issues.some((entry) => entry.code === 'additionalProperties'));
   const mistyped = validateJsonSchema({ json: 'yes' }, contract.input_schema);
@@ -53,14 +53,20 @@ test('per-tool schema rejects unknown or mistyped arguments', () => {
 });
 
 test('validated argv builders apply typed arguments and never accept arbitrary argv', () => {
-  const contract = commandContract('stop-gate');
+  const contract = commandContract('proof');
   assert.ok(contract);
-  const validation = validateJsonSchema({ route: 'Naruto', mission: 'M-1', json: true }, contract.input_schema);
+  const validation = validateJsonSchema({ action: 'stop-gate', route: 'Naruto', mission: 'M-1', json: true }, contract.input_schema);
   assert.equal(validation.ok, true);
   if (!validation.ok) return;
   assert.deepEqual(contract.argv_builder(validation.value), [
-    'stop-gate', 'check', '--route', 'Naruto', '--mission', 'M-1', '--json'
+    'proof', 'stop-gate', 'check', '--route', 'Naruto', '--mission', 'M-1', '--json'
   ]);
+  const trust = validateJsonSchema({ action: 'trust', trust_action: 'explain', mission: 'latest', json: true }, contract.input_schema);
+  assert.equal(trust.ok, true);
+  if (!trust.ok) return;
+  assert.deepEqual(contract.argv_builder(trust.value), ['proof', 'trust', 'explain', 'latest', '--json']);
+  const writes = validateJsonSchema({ action: 'artifacts' }, contract.input_schema);
+  assert.equal(writes.ok, false, 'the read-only proof tool does not expose the artifact-writing check');
 });
 
 test('JSON-capable local R2 commands preserve the explicit JSON flag without exposing arbitrary argv', () => {

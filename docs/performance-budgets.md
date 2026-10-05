@@ -20,7 +20,7 @@ Artifacts:
 | `sks root --json` | 80ms |
 | `sks commands --json` | 120ms |
 | `sks proof validate --json` | 250ms |
-| `sks trust validate latest --json` | 300ms |
+| `sks proof trust validate latest --json` | 300ms |
 | `sks wiki image-validate --json` | 300ms |
 | `sks features check --json` | 1200ms |
 | `sks naruto status --json` | 1000ms |

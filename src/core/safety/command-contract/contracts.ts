@@ -9,151 +9,73 @@ import type {
   CommandContractV3,
   CommandLatency
 } from './types.js';
-import { narutoCommandInputSchema } from '../../subagents/naruto-command-input-contract.js';
+import { commandInputSchema } from '../../../cli/command-manifest-lite.js';
 
 type JsonObject = Record<string, unknown>;
 type ArgvBuilder = (input: JsonObject) => string[];
 
-interface ArgumentProfile {
-  schema: JsonObject;
-  build: ArgvBuilder;
-}
-
-const ARGUMENT_PROFILES: Record<CommandInputProfile, ArgumentProfile> = {
-  none: {
-    schema: objectSchema({}),
-    build: () => []
+const ARGUMENT_BUILDERS: Record<CommandInputProfile, ArgvBuilder> = {
+  none: () => [],
+  'json-only': jsonFlag,
+  naruto: (input) => {
+    const task = typeof input.prompt === 'string'
+      ? input.prompt
+      : typeof input.task === 'string'
+        ? input.task
+        : '';
+    const action = stringValue(input.action, task ? 'run' : 'help');
+    return [
+      action,
+      ...(task ? [task] : []),
+      ...valueFlag(input, 'mission', '--mission'),
+      ...numberFlag(input, 'agents', '--agents'),
+      ...numberFlag(input, 'max_threads', '--max-threads'),
+      ...booleanFlag(input, 'stdin', '--stdin'),
+      ...booleanFlag(input, 'readonly', '--readonly'),
+      ...booleanFlag(input, 'trusted_project', '--trusted-project'),
+      ...valueFlag(input, 'auth_mode', '--auth-mode'),
+      ...valueFlag(input, 'model_provider', '--model-provider'),
+      ...valueFlag(input, 'provider_env_key', '--provider-env-key'),
+      ...valueFlag(input, 'parent_model', '--parent-model'),
+      ...valueFlag(input, 'parent_effort', '--parent-effort'),
+      ...valueFlag(input, 'subagent_model', '--subagent-model'),
+      ...valueFlag(input, 'subagent_effort', '--subagent-effort'),
+      ...booleanFlag(input, 'no_forced_login_method', '--no-forced-login-method'),
+      ...jsonFlag(input)
+    ];
   },
-  'json-only': {
-    schema: objectSchema({ json: { type: 'boolean' } }),
-    build: jsonFlag
-  },
-  naruto: {
-    schema: narutoCommandInputSchema(),
-    build: (input) => {
-      const task = typeof input.prompt === 'string'
-        ? input.prompt
-        : typeof input.task === 'string'
-          ? input.task
-          : '';
-      const action = stringValue(input.action, task ? 'run' : 'help');
+  paths: (input) => [stringValue(input.action, 'managed'), ...jsonFlag(input)],
+  'pipeline-status': (input) => [stringValue(input.action, 'status'), ...jsonFlag(input)],
+  stats: (input) => [...booleanFlag(input, 'full', '--full'), ...jsonFlag(input)],
+  proof: (input) => {
+    const action = stringValue(input.action, 'show');
+    if (action === 'trust') {
       return [
-        action,
-        ...(task ? [task] : []),
-        ...valueFlag(input, 'mission', '--mission'),
-        ...numberFlag(input, 'agents', '--agents'),
-        ...numberFlag(input, 'max_threads', '--max-threads'),
-        ...booleanFlag(input, 'stdin', '--stdin'),
-        ...booleanFlag(input, 'readonly', '--readonly'),
-        ...booleanFlag(input, 'trusted_project', '--trusted-project'),
-        ...valueFlag(input, 'auth_mode', '--auth-mode'),
-        ...valueFlag(input, 'model_provider', '--model-provider'),
-        ...valueFlag(input, 'provider_env_key', '--provider-env-key'),
-        ...valueFlag(input, 'parent_model', '--parent-model'),
-        ...valueFlag(input, 'parent_effort', '--parent-effort'),
-        ...valueFlag(input, 'subagent_model', '--subagent-model'),
-        ...valueFlag(input, 'subagent_effort', '--subagent-effort'),
-        ...booleanFlag(input, 'no_forced_login_method', '--no-forced-login-method'),
+        'trust',
+        stringValue(input.trust_action, 'status'),
+        ...(typeof input.mission === 'string' ? [input.mission] : []),
         ...jsonFlag(input)
       ];
     }
-  },
-  paths: {
-    schema: objectSchema({
-      action: { type: 'string', enum: ['managed', 'git-policy'] },
-      json: { type: 'boolean' }
-    }),
-    build: (input) => [stringValue(input.action, 'managed'), ...jsonFlag(input)]
-  },
-  'pipeline-status': {
-    schema: objectSchema({
-      action: { type: 'string', enum: ['status'] },
-      json: { type: 'boolean' }
-    }),
-    build: (input) => [stringValue(input.action, 'status'), ...jsonFlag(input)]
-  },
-  stats: {
-    schema: objectSchema({ full: { type: 'boolean' }, json: { type: 'boolean' } }),
-    build: (input) => [...booleanFlag(input, 'full', '--full'), ...jsonFlag(input)]
-  },
-  'stop-gate': {
-    schema: objectSchema({
-      route: boundedString(1, 80),
-      mission: boundedString(1, 160),
-      gate: boundedString(1, 1024),
-      json: { type: 'boolean' }
-    }),
-    build: (input) => [
-      'check',
-      ...valueFlag(input, 'route', '--route'),
-      ...valueFlag(input, 'mission', '--mission'),
-      ...valueFlag(input, 'gate', '--gate'),
-      ...jsonFlag(input)
-    ]
-  },
-  proof: {
-    schema: objectSchema({
-      action: { type: 'string', enum: ['show', 'latest', 'validate', 'route'] },
-      mission: boundedString(1, 160),
-      completion: { type: 'boolean' },
-      json: { type: 'boolean' }
-    }),
-    build: (input) => {
-      const action = stringValue(input.action, 'show');
-      const mission = typeof input.mission === 'string' && action === 'route' ? [input.mission] : [];
-      return [action, ...mission, ...booleanFlag(input, 'completion', '--completion'), ...jsonFlag(input)];
+    if (action === 'stop-gate') {
+      return [
+        'stop-gate',
+        'check',
+        ...valueFlag(input, 'route', '--route'),
+        ...valueFlag(input, 'mission', '--mission'),
+        ...valueFlag(input, 'gate', '--gate'),
+        ...jsonFlag(input)
+      ];
     }
+    const mission = typeof input.mission === 'string' && action === 'route' ? [input.mission] : [];
+    return [action, ...mission, ...booleanFlag(input, 'completion', '--completion'), ...jsonFlag(input)];
   },
-  trust: {
-    schema: objectSchema({
-      action: { type: 'string', enum: ['report', 'status', 'explain'] },
-      mission: boundedString(1, 160),
-      json: { type: 'boolean' }
-    }),
-    build: (input) => [
-      stringValue(input.action, 'status'),
-      ...(typeof input.mission === 'string' ? [input.mission] : []),
-      ...jsonFlag(input)
-    ]
-  },
-  gates: {
-    schema: objectSchema({
-      target: boundedString(1, 120),
-      mode: { type: 'string', enum: ['preset', 'gate'] },
-      full: { type: 'boolean' },
-      json: { type: 'boolean' }
-    }),
-    build: (input) => {
-      const target = stringValue(input.target, 'affected');
-      const selector = input.mode === 'gate' ? ['--gate', target] : ['--preset', target];
-      return ['run', ...selector, ...booleanFlag(input, 'full', '--full'), ...jsonFlag(input)];
-    }
-  },
-  'validate-artifacts': {
-    schema: objectSchema({
-      mission: boundedString(1, 160),
-      required: {
-        type: 'array',
-        items: boundedString(1, 80),
-        maxItems: 32
-      },
-      json: { type: 'boolean' }
-    }),
-    build: (input) => [
-      ...(typeof input.mission === 'string' ? [input.mission] : []),
-      ...(Array.isArray(input.required) && input.required.length > 0 ? ['--required', input.required.join(',')] : []),
-      ...jsonFlag(input)
-    ]
+  gates: (input) => {
+    const target = stringValue(input.target, 'affected');
+    const selector = input.mode === 'gate' ? ['--gate', target] : ['--preset', target];
+    return ['run', ...selector, ...booleanFlag(input, 'full', '--full'), ...jsonFlag(input)];
   }
 };
-
-function objectSchema(properties: JsonObject): JsonObject {
-  return { type: 'object', properties, additionalProperties: false };
-}
-
-function boundedString(minLength: number, maxLength: number): JsonObject {
-  return { type: 'string', minLength, maxLength };
-}
 
 function stringValue(value: unknown, fallback: string): string {
   return typeof value === 'string' ? value : fallback;
@@ -180,7 +102,7 @@ function maturityFor(command: CommandEntry): CommandContractV3['maturity'] {
 }
 
 function buildContract(name: CommandName, command: CommandEntry): CommandContractV3 {
-  const profile = ARGUMENT_PROFILES[command.inputProfile];
+  const build = ARGUMENT_BUILDERS[command.inputProfile];
   const r3Denied = command.risk === 'R3';
   const remoteAllowed = !r3Denied && command.remoteAllowed;
   return {
@@ -193,8 +115,8 @@ function buildContract(name: CommandName, command: CommandEntry): CommandContrac
     latency: command.latency,
     supports_json: command.supportsJson,
     remote_allowed: remoteAllowed,
-    input_schema: profile.schema,
-    argv_builder: (input: unknown) => [name, ...profile.build((input ?? {}) as JsonObject)],
+    input_schema: commandInputSchema(command.inputProfile),
+    argv_builder: (input: unknown) => [name, ...build((input ?? {}) as JsonObject)],
     required_capabilities: [...command.requiredCapabilities]
   };
 }

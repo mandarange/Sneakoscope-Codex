@@ -1,5 +1,6 @@
 import '../../dist/core/__tests__/helpers/isolated-test-home.js';
 
+import '../../dist/core/__tests__/helpers/strict-verification-profile.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';

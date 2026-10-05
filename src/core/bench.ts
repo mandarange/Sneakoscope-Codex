@@ -16,7 +16,7 @@ export const CORE_BENCH_BUDGET_TIERS = Object.freeze({
     'sks root --json': 80,
     'sks commands --json': 120,
     'sks proof validate --json': 250,
-    'sks trust validate bench-fixture --json': 300,
+    'sks proof trust validate bench-fixture --json': 300,
     'sks wiki image-validate --json': 300,
     'sks features check --json': 1200,
     'sks naruto status --json': 1000
@@ -27,7 +27,7 @@ export const CORE_BENCH_BUDGET_TIERS = Object.freeze({
     'sks root --json': 140,
     'sks commands --json': 320,
     'sks proof validate --json': 350,
-    'sks trust validate bench-fixture --json': 450,
+    'sks proof trust validate bench-fixture --json': 450,
     'sks wiki image-validate --json': 450,
     'sks features check --json': 1800,
     'sks naruto status --json': 1400
@@ -38,7 +38,7 @@ export const CORE_BENCH_BUDGET_TIERS = Object.freeze({
     'sks root --json': 180,
     'sks commands --json': 260,
     'sks proof validate --json': 500,
-    'sks trust validate bench-fixture --json': 650,
+    'sks proof trust validate bench-fixture --json': 650,
     'sks wiki image-validate --json': 650,
     'sks features check --json': 2400,
     'sks naruto status --json': 1800
@@ -49,7 +49,7 @@ export const CORE_BENCH_BUDGET_TIERS = Object.freeze({
     'sks root --json': 240,
     'sks commands --json': 320,
     'sks proof validate --json': 700,
-    'sks trust validate bench-fixture --json': 800,
+    'sks proof trust validate bench-fixture --json': 800,
     'sks wiki image-validate --json': 800,
     'sks features check --json': 2800,
     'sks naruto status --json': 2200
@@ -60,7 +60,7 @@ export const CORE_BENCH_BUDGET_TIERS = Object.freeze({
     'sks root --json': 3000,
     'sks commands --json': 3500,
     'sks proof validate --json': 3500,
-    'sks trust validate bench-fixture --json': 3500,
+    'sks proof trust validate bench-fixture --json': 3500,
     'sks wiki image-validate --json': 3500,
     'sks features check --json': 5000,
     'sks naruto status --json': 5000
@@ -68,7 +68,7 @@ export const CORE_BENCH_BUDGET_TIERS = Object.freeze({
 });
 
 export const CORE_BENCH_BUDGETS = CORE_BENCH_BUDGET_TIERS['source-local'];
-export const TRUST_VALIDATE_BENCH_COMMAND = 'sks trust validate bench-fixture --json';
+export const TRUST_VALIDATE_BENCH_COMMAND = 'sks proof trust validate bench-fixture --json';
 export const CORE_BENCH_WARMUP_ITERATIONS = 1;
 export const UX_REVIEW_STAGED_LATENCY_BUDGETS = Object.freeze({
   source_screenshot_ingest: 500,
@@ -116,7 +116,7 @@ function coreCommands(benchTrustMission: any): CoreBenchCommand[] {
     : undefined;
   return [
     ...STATIC_CORE_COMMANDS.slice(0, 5),
-    [TRUST_VALIDATE_BENCH_COMMAND, ['trust', 'validate', missionId, '--json', '--no-wrongness'], trustRoot],
+    [TRUST_VALIDATE_BENCH_COMMAND, ['proof', 'trust', 'validate', missionId, '--json', '--no-wrongness'], trustRoot],
     ...STATIC_CORE_COMMANDS.slice(5)
   ];
 }
@@ -130,9 +130,9 @@ export async function runCoreBench(root: any = process.cwd(), { iterations = 3, 
   for (const [label, args, commandRoot] of coreCommands(benchTrustMission)) {
     const values: any[] = [];
     const failures: any[] = [];
-    // TRUST_VALIDATE_BENCH_COMMAND measures latency of `sks trust validate` against a
+    // TRUST_VALIDATE_BENCH_COMMAND measures latency of `sks proof trust validate` against a
     // mock fixture mission. A --mock `$Naruto` run can never satisfy the real agent
-    // gate, so `sks trust validate` legitimately exits 1 (report.ok === false,
+    // gate, so `sks proof trust validate` legitimately exits 1 (report.ok === false,
     // status: 'blocked') every time regardless of environment. This row exists to
     // measure command latency, not to assert the mock mission's trust status, so a
     // well-formed trust-validation report (valid JSON with the expected schema) is
@@ -192,7 +192,7 @@ function isWellFormedTrustValidation(stdout: string): boolean {
   return Boolean(parsed && parsed.schema === 'sks.trust-validation.v1' && typeof parsed.status === 'string');
 }
 
-// The trust row measures `sks trust validate` latency against a real mission
+// The trust row measures `sks proof trust validate` latency against a real mission
 // directory. An empty mission is enough: the validator reports it as blocked in
 // a well-formed report, which isWellFormedTrustValidation accepts.
 async function ensureBenchTrustMission(root: any) {

@@ -6,12 +6,12 @@ import { flag, positionalArgs, readFlagValue } from './command-utils.js';
 export async function proofFieldCommand(sub: any, args: any = []) {
   const action = sub || 'scan';
   if (!['scan', 'help', '--help'].includes(action)) {
-    console.error('Usage: sks proof-field scan [--json] [--intent "task"] [--changed file1,file2]');
+    console.error('Usage: sks proof field scan [--json] [--intent "task"] [--changed file1,file2]');
     process.exitCode = 1;
     return;
   }
   if (action === 'help' || action === '--help') {
-    console.log('Usage: sks proof-field scan [--json] [--intent "task"] [--changed file1,file2]');
+    console.log('Usage: sks proof field scan [--json] [--intent "task"] [--changed file1,file2]');
     return;
   }
   const root = await sksRoot();
