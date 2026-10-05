@@ -1,7 +1,8 @@
 import path from 'node:path';
 import { appendJsonl, exists, nowIso, readJson, readText, writeJsonAtomic } from '../fsx.js';
 import { createMission, getOrCreateSessionMission, missionDir, sessionStateKey, setCurrent } from '../mission.js';
-import { buildQuestionSchemaForRoute, buildRequestIntake, REQUEST_INTAKE_ARTIFACT, writeQuestions } from '../questions.js';
+import { buildRequestIntake, REQUEST_INTAKE_ARTIFACT, writeQuestions } from '../questions.js';
+import { buildQuestionSchemaForRoute } from '../route-question-schema.js';
 import { sealContract } from '../decision-contract.js';
 import { scanDbSafety } from '../db-safety.js';
 import {

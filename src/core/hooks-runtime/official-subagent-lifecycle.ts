@@ -49,6 +49,7 @@ import {
   officialSubagentEvidenceReady,
   terminalBlockedNarutoGate
 } from '../subagents/terminal-subagent-state.js';
+import { ensureOfficialSubagentArtifactDirConfined, officialSubagentArtifactDir } from './subagent-artifact-dir.js';
 
 const SUBAGENT_LIFECYCLE_CAPTURE_FAILURE_SCHEMA = 'sks.subagent-lifecycle-capture-failure.v1';
 const MAX_SUBAGENT_LIFECYCLE_CAPTURE_FAILURES = 528;
@@ -294,14 +295,8 @@ export async function recordAndRefreshSubagentEvidence(
   });
 }
 
-export function officialSubagentArtifactDir(root: any, state: any = {}, sessionKey: any = null) {
-  if (state?.mission_id) return missionDir(root, state.mission_id);
-  return path.join(root, '.sneakoscope', 'state', 'subagents', sha256(String(sessionKey || 'default')).slice(0, 32));
-}
 
-export async function ensureOfficialSubagentArtifactDirConfined(root: string, artifactDir: string): Promise<void> {
-  await ensureConfinedDirectory(path.resolve(root), path.resolve(artifactDir));
-}
+export { ensureOfficialSubagentArtifactDirConfined, officialSubagentArtifactDir };
 
 export async function refreshOfficialSubagentCompletionArtifacts(
   root: any,

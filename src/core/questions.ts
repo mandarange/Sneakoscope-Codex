@@ -1,17 +1,10 @@
 import path from 'node:path';
 import { nowIso, sha256, writeJsonAtomic, writeTextAtomic } from './fsx.js';
-import { buildQaLoopQuestionSchema } from './qa-loop.js';
 import { CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_WEB_VERIFICATION_POLICY, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, hasFromChatImgSignal } from './routes.js';
 
 export const REQUEST_INTAKE_ARTIFACT = 'request-intake.json';
 
-export function buildQuestionSchemaForRoute(route: any, prompt: any) {
-  if (String(route?.id || '') === 'QALoop') return buildQaLoopQuestionSchema(prompt);
-  if (String(route?.id || '') === 'MadSKS') return buildMadSksQuestionSchema(prompt);
-  return buildQuestionSchema(prompt);
-}
-
-function buildMadSksQuestionSchema(prompt: any) {
+export function buildMadSksQuestionSchema(prompt: any) {
   const task = String(prompt || '').trim() || 'MAD-SKS scoped database override';
   return {
     schema_version: 1,

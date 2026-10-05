@@ -27,6 +27,12 @@ export async function runSks(args: string[]): Promise<void> {
     // and the test harness stays on the cold path so no detached daemon leaks.
     const { hookDaemonInline } = await import('../core/daemon/sksd-hook-dispatch.js');
     await hookDaemonInline(args[1], args.slice(2));
+  } else if (args[0] === 'hook' && args[1] && !args[1].startsWith('-')) {
+    // Without the daemon a hook still skips the command router: like the daemon
+    // path, it evaluates the hook directly instead of loading every command's
+    // migration and contract machinery on each tool call.
+    const { run } = await import('../commands/hook.js');
+    await run('hook', args.slice(1));
   } else if (args.length === 3 && args[0] === 'naruto' && args[1] === 'help' && args[2] === '--json') {
     const { narutoHelpJsonFastInline } = await import('./fast-inline.js');
     await narutoHelpJsonFastInline();

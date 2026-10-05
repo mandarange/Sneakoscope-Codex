@@ -7,7 +7,7 @@ import {
   exclusiveSurfaceOfRole,
   type ExclusiveToolSurface
 } from '../subagents/exclusive-tool-surface.js'
-import { officialSubagentArtifactDir } from './official-subagent-lifecycle.js'
+import { officialSubagentArtifactDir } from './subagent-artifact-dir.js'
 import { isSpawnAgentToolName, spawnPayloadToolName } from './spawn-tool-name.js'
 
 /**

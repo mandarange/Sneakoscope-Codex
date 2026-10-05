@@ -87,6 +87,15 @@ same stale-long-lived-process lesson the Desktop Bridge taught in 9.2.x.
 Per tool call in the essential profile: one PreToolUse hook (~150 ms warm)
 instead of PreToolUse + PostToolUse cold (~1 s).
 
+The cold path itself is also kept small, so a daemon miss, `SKS_HOOK_DAEMON=0`,
+and the daemon's own start stay cheap. A hook skips the command router, and
+`hooks-runtime` loads the route pipeline, the official-subagent lifecycle, the
+SubagentStop handler, Jev, and the managed-guidance preflight only on the events
+that use them. A PreToolUse hook for a plain shell command loads about 160
+modules instead of about 610 (measured on a Linux container: ~580 ms → ~180 ms
+cold). Keep it that way: a module PreToolUse imports statically is paid on every
+tool call, so route-specific code belongs behind a dynamic `import()`.
+
 ## Doctor: measured health, not proof of everything
 
 `ready` means: Codex CLI present and its config readable, managed hooks and

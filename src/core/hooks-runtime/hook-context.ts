@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { readJson } from '../fsx.js';
 import { missionDir, validateExternallyReservedMissionId } from '../mission.js';
-import { routePrompt } from '../pipeline.js';
+import { routePrompt } from '../routes.js';
 import {
   allowlistedManagedRouteSkillNames,
   dollarCommand,
