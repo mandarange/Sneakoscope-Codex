@@ -1,0 +1,33 @@
+name: Feature request
+description: Propose a focused improvement to SKS.
+title: "feat: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user problem would this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: Describe the smallest behavior that would solve the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Project constraints
+      options:
+        - label: This proposal keeps the design deterministic and testable.
+          required: true
+        - label: This proposal does not require hidden credentials or silent provider fallback.
+          required: true

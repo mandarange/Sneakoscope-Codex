@@ -1,0 +1,55 @@
+name: Bug report
+description: Report a reproducible SKS failure.
+title: "bug: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please remove credentials, tokens, private source, and personal paths before posting.
+  - type: input
+    id: version
+    attributes:
+      label: SKS version
+      description: Output of `sks --version`.
+      placeholder: 10.5.1
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Include OS, Node.js version, and Codex client/host.
+      placeholder: macOS 15.6, Node 22.14, Codex Desktop
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: List the smallest commands or steps that reproduce the issue.
+      placeholder: |
+        1. Run ...
+        2. Run ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Redacted diagnostics
+      description: Paste the relevant output from `sks doctor --json` or `sks status --json` after redaction.
+      render: shell
