@@ -8,7 +8,7 @@ import { executeCodeNavigationAlign } from '../../align/code-navigation-align.js
 import { refreshAlignGate, writeAlignRouteArtifacts } from '../../align/align-route.js';
 import { buildCodeNavigationContextPack } from '../../triwiki/code-navigation-context-pack.js';
 import { CODE_PACK_SCHEMA, type CodePack } from '../../triwiki/code-pack.js';
-import { contextGraphStatus } from '../../triwiki/context-graph/store/graph-status.js';
+import { contextGraphStatus } from '../../triwiki/context-graph/store/__tests__/graph-status.js';
 import {
   alignGraphExtractors,
   codeNavigationGraphExtractors

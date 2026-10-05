@@ -125,7 +125,6 @@
     "pipeline-runtime:check": "node ./dist/scripts/check-pipeline-runtime.js",
     "sizecheck": "node ./dist/scripts/sizecheck.js",
     "publish-tag:check": "node ./dist/scripts/check-publish-tag.js",
-    "feature:check": "node ./dist/scripts/maintainer-cli.js features check --json",
     "maintainer": "node ./dist/scripts/maintainer-cli.js",
     "feature-quality:check": "node ./dist/scripts/check-feature-quality.js --release",
     "core-skill:no-drift": "node ./dist/scripts/core-skill-no-drift-check.js",

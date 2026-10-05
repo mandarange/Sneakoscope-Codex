@@ -14,7 +14,8 @@ import path from 'node:path';
 import test from 'node:test';
 import { materializeFixture } from '../../fixtures/index.js';
 import type { ContextGraphBenchmarkMode, ContextGraphBenchmarkQuery } from '../../types.js';
-import { createBaselineLexicalAdapter, createCandidateGraphAdapter } from '../index.js';
+import { createBaselineLexicalAdapter } from '../baseline-lexical.js';
+import { createCandidateGraphAdapter } from '../candidate-graph.js';
 
 /** Reachable only by walking `imports` / `reexports` backwards from the seed. */
 const REVERSE_DEPENDENTS = ['src/core/naruto/slice-planner.ts', 'src/core/wiki/validation.ts'] as const;

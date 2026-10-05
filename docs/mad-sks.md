@@ -37,6 +37,12 @@ Catastrophic SQL classes are allowed only when the sealed user request
 explicitly names the operation and target; control-plane account, billing,
 credential, token, project, organization, and branch operations remain denied.
 
+A source checkout can exercise this boundary against a disposable Supabase
+project with `node dist/scripts/mad-sks-sql-plane-real-supabase-e2e.js`. It
+needs `SKS_MAD_SKS_SQL_PLANE_E2E_PROJECT_REF` and `SUPABASE_ACCESS_TOKEN`;
+without them it reports `unverified`, and `--require-real` turns that into a
+failure. It is not part of the release gates.
+
 ## Official Subagent Cockpit
 
 MAD-SKS uses the native Codex CLI and official subagent lifecycle events for the

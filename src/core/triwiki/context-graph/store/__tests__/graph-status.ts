@@ -15,17 +15,17 @@ import {
   CONTEXT_GRAPH_STALE_REASONS,
   type ContextGraphStaleReason,
   type ContextGraphStatus
-} from '../contracts.js';
+} from '../../contracts.js';
 import {
   compareCacheKeyParts,
   computeContextGraphCacheKey,
   type ContextGraphCacheKeyResult,
   type ExtractorIdentity
-} from '../compiler/cache-key.js';
-import { readSourceHashes } from '../compiler/freshness.js';
-import { inspectCodePackHeadFreshness } from '../../code-pack-head-freshness.js';
-import { inspectCodeNavigationSources } from '../../code-navigation-policy.js';
-import { readContextGraphMeta, readContextGraphSnapshot } from './snapshot-store.js';
+} from '../../compiler/cache-key.js';
+import { readSourceHashes } from '../../compiler/freshness.js';
+import { inspectCodePackHeadFreshness } from '../../../code-pack-head-freshness.js';
+import { inspectCodeNavigationSources } from '../../../code-navigation-policy.js';
+import { readContextGraphMeta, readContextGraphSnapshot } from '../snapshot-store.js';
 
 const STATUS_SCHEMA = 'sks.context-graph-status.v1' as const;
 const METADATA_ONLY_HEAD_CHECK_TIMEOUT_MS = 5_000;

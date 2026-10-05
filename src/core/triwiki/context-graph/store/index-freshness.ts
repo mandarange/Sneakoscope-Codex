@@ -159,7 +159,7 @@ export async function contextIndexFreshness(
   const metaLoad = await readContextGraphMeta(root);
   const presence = await indexPresence(root);
 
-  // Ordering, taken from `graph-status.ts`: missing beats corrupt beats stale.
+  // Ordering, taken from the legacy `store/__tests__/graph-status.ts` oracle: missing beats corrupt beats stale.
   // The JSON path answers `missing` from the snapshot's absence alone, before it
   // has looked at the meta at all, and the pointer is this path's "a graph
   // exists". So an unpublished index is `missing` whatever the meta says.
@@ -206,7 +206,7 @@ export async function contextIndexFreshness(
 }
 
 /**
- * The git-derived half. Reproduced from `graph-status.ts` step for step,
+ * The git-derived half. Reproduced from the legacy `store/__tests__/graph-status.ts` oracle step for step,
  * because "the same verdicts" is the requirement — the only substitution is
  * `meta.schemaRevision` for `snapshot.schemaRevision`, which the compiler
  * writes from the same `CONTEXT_GRAPH_SCHEMA_REVISION` constant.

@@ -3,7 +3,6 @@ import { canonicalJson } from '../../json/canonical.js';
 
 export type IntentRisk = 'FAST' | 'HEAVY' | 'ULTRA';
 export type IntentEffect = 'read' | 'write' | 'auth' | 'security' | 'delete' | 'deploy' | 'dependency';
-export type IntentTerminalState = 'failed' | 'paused' | 'unverified' | 'completed';
 export type RoutingRuntimeSnapshot = 'desktop-bridge' | 'unmanaged';
 
 export interface IntentContract {
@@ -21,11 +20,6 @@ export interface IntentContract {
   readonly risk: IntentRisk;
   readonly risk_reason: string;
   readonly force: boolean;
-}
-
-export interface IntentReplayDecision {
-  readonly action: 'reuse' | 'refresh_direct_evidence' | 'replan' | 'blocked';
-  readonly reasons: readonly string[];
 }
 
 export function buildIntentContract(input: {
@@ -67,27 +61,6 @@ export function buildIntentContract(input: {
   if (!base.target_hashes.length || base.target_hashes.some((hash) => !/^[a-f0-9]{64}$/.test(hash))) throw new Error('intent_target_hash_invalid');
   const contract = { ...base, contract_hash: stableHash(base) };
   return deepFreeze(contract);
-}
-
-export function decideIntentReplay(previous: IntentContract, current: IntentContract): IntentReplayDecision {
-  const reasons: string[] = [];
-  if (previous.policy_version !== current.policy_version) reasons.push('policy_version_changed');
-  if (previous.runtime_snapshot !== current.runtime_snapshot) reasons.push('runtime_snapshot_changed');
-  if (JSON.stringify(previous.target_hashes) !== JSON.stringify(current.target_hashes)) reasons.push('target_hash_changed');
-  if (previous.effect !== current.effect || previous.canonical_command !== current.canonical_command) reasons.push('intent_effect_changed');
-  if (reasons.length) return { action: 'replan', reasons };
-  if (current.evidence_state !== 'valid') {
-    if (current.risk === 'FAST') return { action: 'refresh_direct_evidence', reasons: ['evidence_expired_or_missing'] };
-    return { action: 'blocked', reasons: ['heavy_evidence_required'] };
-  }
-  return { action: 'reuse', reasons: [] };
-}
-
-export function terminalStateForVerification(input: { executionOk: boolean; verificationOk: boolean | null; paused: boolean }): IntentTerminalState {
-  if (input.paused) return 'paused';
-  if (!input.executionOk) return 'failed';
-  if (input.verificationOk !== true) return 'unverified';
-  return 'completed';
 }
 
 function normalizeEffectText(value: string): string {

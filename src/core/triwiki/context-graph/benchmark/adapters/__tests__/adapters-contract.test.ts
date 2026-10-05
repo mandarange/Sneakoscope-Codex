@@ -18,15 +18,9 @@ import type {
   ContextGraphBenchmarkQuery,
   ContextGraphBenchmarkRun
 } from '../../types.js';
-import {
-  BASELINE_LEXICAL_ADAPTER_ID,
-  CANDIDATE_GRAPH_ADAPTER_ID,
-  contextGraphBenchmarkAdapters,
-  createBaselineLexicalAdapter,
-  createCandidateGraphAdapter,
-  lexicalAlternationPattern,
-  lexicalQueryTerms
-} from '../index.js';
+import { BASELINE_LEXICAL_ADAPTER_ID, createBaselineLexicalAdapter } from '../baseline-lexical.js';
+import { CANDIDATE_GRAPH_ADAPTER_ID, createCandidateGraphAdapter } from '../candidate-graph.js';
+import { lexicalAlternationPattern, lexicalQueryTerms } from '../lexical-terms.js';
 
 const NOW = '2026-01-01T00:00:00.000Z';
 
@@ -107,7 +101,7 @@ function assertWellFormedRun(run: ContextGraphBenchmarkRun, query: ContextGraphB
 }
 
 test('the adapter set is one baseline and one candidate with stable ids', () => {
-  const adapters = contextGraphBenchmarkAdapters();
+  const adapters = [createBaselineLexicalAdapter(), createCandidateGraphAdapter()];
   assert.equal(adapters.length, 2);
   assert.deepEqual(adapters.map((adapter) => adapter.kind), ['baseline', 'candidate']);
   assert.deepEqual(adapters.map((adapter) => adapter.id), [BASELINE_LEXICAL_ADAPTER_ID, CANDIDATE_GRAPH_ADAPTER_ID]);
