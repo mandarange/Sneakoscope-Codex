@@ -12,7 +12,6 @@ export const CRITICAL_COMMANDS = new Set([
   'setup',
   'bootstrap',
   'update',
-  'run',
   'naruto',
   'super-search',
   'seo-geo-optimizer',
@@ -20,7 +19,6 @@ export const CRITICAL_COMMANDS = new Set([
   'qa-loop',
   'review',
   'release',
-  'rollback',
   'commit-and-push'
 ])
 
@@ -36,14 +34,12 @@ export const smokeCommands = [
   { name: 'setup', budget_p95_ms: 0, kind: 'fixture', evidence: 'setup_dry_run_contract' },
   { name: 'bootstrap', budget_p95_ms: 0, kind: 'fixture', evidence: 'bootstrap_fixture_contract' },
   { name: 'update', budget_p95_ms: 0, kind: 'fixture', evidence: 'update_now_dry_run_contract' },
-  { name: 'run', budget_p95_ms: 0, kind: 'fixture', evidence: 'run_route_classification_fixture' },
   { name: 'naruto', budget_p95_ms: 0, kind: 'fixture', evidence: 'naruto_route_fixture' },
   { name: 'seo-geo-optimizer', budget_p95_ms: 0, kind: 'fixture', evidence: 'seo_geo_optimizer_fixture' },
   { name: 'mad-sks', budget_p95_ms: 0, kind: 'blocked_negative', evidence: 'mad_sks_restore_and_readback_contract' },
   { name: 'qa-loop', budget_p95_ms: 0, kind: 'fixture', evidence: 'qa_loop_route_fixture' },
   { name: 'review', budget_p95_ms: 0, kind: 'fixture', evidence: 'review_diff_fixture' },
   { name: 'release', budget_p95_ms: 0, kind: 'fixture', evidence: 'release_gate_fixture' },
-  { name: 'rollback', budget_p95_ms: 0, kind: 'blocked_negative', evidence: 'rollback_apply_requires_id_contract' },
   { name: 'commit-and-push', budget_p95_ms: 0, kind: 'blocked_negative', evidence: 'commit_and_push_remote_contract' }
 ]
 

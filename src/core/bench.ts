@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { ensureDir, nowIso, packageRoot, projectRoot, runProcess, writeJsonAtomic, writeTextAtomic } from './fsx.js';
+import { createMission } from './mission.js';
 import { percentile } from './perf-bench.js';
 import { runFakeCodexSdkTask } from './codex-control/codex-fake-sdk-adapter.js';
 import { GPT_FINAL_ARBITER_RESULT_SCHEMA_ID, gptFinalArbiterResultSchema } from './codex-control/gpt-final-review-schema.js';
@@ -124,7 +125,7 @@ export async function runCoreBench(root: any = process.cwd(), { iterations = 3, 
   const script = path.join(packageRoot(), 'dist', 'bin', 'sks.js');
   const budgets = ((CORE_BENCH_BUDGET_TIERS as Record<string, Record<string, number>>)[tier] || CORE_BENCH_BUDGET_TIERS['source-local']) as Record<string, number>;
   const measuredIterations = Math.max(1, Number(iterations) || 1);
-  const benchTrustMission = await ensureBenchTrustMission(root, script);
+  const benchTrustMission = await ensureBenchTrustMission(root);
   const rows: any[] = [];
   for (const [label, args, commandRoot] of coreCommands(benchTrustMission)) {
     const values: any[] = [];
@@ -191,37 +192,13 @@ function isWellFormedTrustValidation(stdout: string): boolean {
   return Boolean(parsed && parsed.schema === 'sks.trust-validation.v1' && typeof parsed.status === 'string');
 }
 
-async function ensureBenchTrustMission(root: any, script: any) {
+// The trust row measures `sks trust validate` latency against a real mission
+// directory. An empty mission is enough: the validator reports it as blocked in
+// a well-formed report, which isWellFormedTrustValidation accepts.
+async function ensureBenchTrustMission(root: any) {
   const benchRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-core-bench-trust-')).catch(() => root);
-  // `sks run` blocks the agent gate (and skips writing completion-proof.json) when
-  // its cwd is not a git repo (git_collaboration.status -> not_git_repo). The bench
-  // trust-mission scratch dir must be a git repo so completion-proof.json/
-  // trust-report.json/run-classification.json actually get written and
-  // hasBenchTrustArtifacts() can find a usable mission instead of falling back to
-  // a nonexistent 'bench-fixture-missing' id (which always fails trust validate).
-  await runProcess('git', ['init', '-q', '.'], { cwd: benchRoot, timeoutMs: 10_000 }).catch(() => null);
-  const beforeMissionIds = await listMissionIds(benchRoot);
-  const result = await runProcess(process.execPath, [script, 'run', 'fixture', '--mock', '--json'], {
-    cwd: benchRoot,
-    timeoutMs: 60_000,
-    maxOutputBytes: 4 * 1024 * 1024,
-    env: { SKS_SKIP_NPM_FRESHNESS_CHECK: '1', SKS_DISABLE_UPDATE_CHECK: '1', CI: 'true' }
-  });
-  return {
-    missionId: parseMissionId(result.stdout) || await findBenchTrustMission(benchRoot, beforeMissionIds),
-    root: benchRoot,
-    setup_code: result.code
-  };
-}
-
-function parseMissionId(text: any) {
-  const parsed = parseJsonOutput(text);
-  if (parsed?.mission_id || parsed?.id || parsed?.proof?.mission_id || parsed?.completion_proof?.mission_id) {
-    return parsed?.mission_id || parsed?.id || parsed?.proof?.mission_id || parsed?.completion_proof?.mission_id;
-  }
-  const directMatch = String(text || '').match(/"mission_id"\s*:\s*"(M-\d{8}-\d{6}-[a-f0-9]+)"/i);
-  if (directMatch?.[1]) return directMatch[1];
-  return null;
+  const mission = await createMission(benchRoot, { mode: 'bench', prompt: 'fixture' }).catch(() => null);
+  return { missionId: typeof mission?.id === 'string' ? mission.id : null, root: benchRoot };
 }
 
 function parseJsonOutput(text: any = '') {
@@ -238,53 +215,6 @@ function parseJsonOutput(text: any = '') {
     } catch {}
   }
   return null;
-}
-
-async function listMissionIds(root: any) {
-  try {
-    const entries = await fs.readdir(path.join(root, '.sneakoscope', 'missions'), { withFileTypes: true });
-    return entries.filter((entry: any) => entry.isDirectory() && /^M-\d{8}-\d{6}-/.test(entry.name)).map((entry: any) => entry.name);
-  } catch {
-    return [];
-  }
-}
-
-async function findBenchTrustMission(root: any, beforeMissionIds: any[] = []) {
-  const missionRoot = path.join(root, '.sneakoscope', 'missions');
-  const before = new Set(beforeMissionIds);
-  let entries: any[] = [];
-  try {
-    entries = await fs.readdir(missionRoot, { withFileTypes: true });
-  } catch {
-    return null;
-  }
-  const candidates = await Promise.all(entries
-    .filter((entry: any) => entry.isDirectory() && /^M-\d{8}-\d{6}-/.test(entry.name))
-    .map(async (entry: any) => {
-      const dir = path.join(missionRoot, entry.name);
-      let mtimeMs = 0;
-      try {
-        mtimeMs = (await fs.stat(dir)).mtimeMs;
-      } catch {}
-      return { id: entry.name, dir, isNew: !before.has(entry.name), mtimeMs };
-    }));
-  candidates.sort((a: any, b: any) => Number(b.isNew) - Number(a.isNew) || b.mtimeMs - a.mtimeMs);
-  for (const candidate of candidates) {
-    if (await hasBenchTrustArtifacts(candidate.dir)) return candidate.id;
-  }
-  return null;
-}
-
-async function hasBenchTrustArtifacts(dir: any) {
-  const required = ['run-classification.json', 'completion-proof.json', 'trust-report.json'];
-  for (const artifact of required) {
-    try {
-      await fs.access(path.join(dir, artifact));
-    } catch {
-      return false;
-    }
-  }
-  return true;
 }
 
 export async function writeCoreBenchArtifacts(root: any, report: any) {

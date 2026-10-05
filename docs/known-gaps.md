@@ -81,7 +81,7 @@ Bounded claims:
 Static contracts are not runtime verification. They document expected behavior and must be promoted through executable fixtures before being used as completion proof.
 # 1.0.3 Known Gaps
 
-No P0 stable-release blocker is intentionally left open for TypeScript-built `dist` runtime, actual typed command registry, package boundary, command import smoke, `sks run --execute`, strict TypeScript suppression gates, feature quality, architecture hard-fail, performance tiers, or Trust Kernel stale/mock/static blocking.
+No P0 stable-release blocker is intentionally left open for TypeScript-built `dist` runtime, actual typed command registry, package boundary, command import smoke, strict TypeScript suppression gates, feature quality, architecture hard-fail, performance tiers, or Trust Kernel stale/mock/static blocking.
 
 Remaining non-P0 work:
 

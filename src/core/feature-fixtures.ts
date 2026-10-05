@@ -23,7 +23,6 @@ const FIXTURES = Object.freeze({
     validates_json_fields: ['imagegen_repair', 'repair.imagegen']
   }),
   'cli-paths': fixture('execute_and_validate_artifacts', 'sks paths managed --json', ['.sneakoscope/managed-paths.json'], 'pass'),
-  'cli-rollback': fixture('execute', 'sks rollback list --json', [], 'pass'),
   'cli-config': fixture('execute', 'sks config --help', [], 'pass', {
     quality: 'wiring_only',
     reason: 'The non-mutating help path proves the installed config command is wired; config-adopt mutation and dry-run behavior are covered by focused config-adopt tests.'
@@ -51,7 +50,6 @@ const FIXTURES = Object.freeze({
   'cli-check': fixture('execute', 'sks check --tier confidence --sla 5m --plan --json', [], 'pass'),
   'cli-plan': fixture('execute', 'sks plan "fixture" --json', [], 'pass'),
   'cli-review': fixture('execute', 'sks review --diff HEAD --json', [], 'pass'),
-  'cli-run': fixture('execute_and_validate_artifacts', 'sks run "fixture" --mock --json', ['run-classification.json', 'completion-proof.json', 'evidence-index.json', 'route-completion-contract.json', 'trust-report.json', 'work-order-ledger.json'], 'blocked', { reason: 'finalizeMockRun() in run-command.ts intentionally hardcodes gate.passed=false for every --mock invocation so a mock run can never claim a real completion; it does write all declared artifacts, including a work-order-ledger honestly closed to blocked (18차).' }),
   'cli-status': fixture('execute', 'sks status --json', [], 'pass'),
   'cli-usage': fixture('execute', 'sks usage overview', [], 'pass'),
   'cli-quickstart': fixture('execute', 'sks quickstart', [], 'pass'),
@@ -179,13 +177,13 @@ const FIXTURES = Object.freeze({
   'route-align': fixture('execute_and_validate_artifacts', 'sks align fixture --json', ['work-order-ledger.json', 'align-plan.json', 'align-ledger.json', 'align-gate.json', 'completion-proof.json'], 'blocked', {
     reason: 'The Align route fixture creates a real hermetic mission, work-order ledger, and canonical Completion Proof, then honestly closes the work item as blocked because the six modernization workstreams were not executed. This verifies route wiring and proof closure without inventing official-doc work.'
   }),
-  'route-super-search': fixture('execute', 'sks run "$Super-Search doctor" --execute --json', [], 'pass'),
+  'route-super-search': fixture('execute', 'sks super-search doctor --json', [], 'pass'),
   'route-seo-geo-optimizer': fixture('execute_and_validate_artifacts', 'sks seo-geo-optimizer fixture --mode geo --json', ['search-visibility/site-inventory.json', 'search-visibility/geo-findings.json', 'search-visibility/verification-report.json', 'geo-gate.json', 'completion-proof.json'], 'pass'),
   'route-autoresearch': fixture('mock', '$AutoResearch fixture route', ['research-gate.json', 'completion-proof.json'], 'pass', {
-    reason: 'Producing research-gate.json + completion-proof.json requires the two-step `research prepare` then `research run latest --mock --autoresearch --json` sequence (same as route-research\'s safe-args setup step), which a single spawned command cannot express; the $AutoResearch pipeline-dispatch route (`sks run "$AutoResearch ..."`) instead writes autoresearch-gate.json, a different contract. Left as documented mock pending multi-step fixture setup support.'
+    reason: 'Producing research-gate.json + completion-proof.json requires the two-step `research prepare` then `research run latest --mock --autoresearch --json` sequence (same as route-research\'s safe-args setup step), which a single spawned command cannot express; the $AutoResearch pipeline-dispatch route instead writes autoresearch-gate.json, a different contract. Left as documented mock pending multi-step fixture setup support.'
   }),
   'route-mad-sks': fixture('mock', '$MAD-SKS permission gate + sql_plane route', [{ path: 'mad-sks-gate.json', schema: 'sks.mad-sks-gate.v1' }, 'completion-proof.json'], 'pass', {
-    reason: 'mad-sks-gate.json is written by materializeAutoSealedMadSks() inside prepareClarificationGate() in pipeline-internals/runtime-core.ts, which only runs via the real Codex App route dispatch pipeline (prepareRoute), not via `sks run "<prompt>" --json` (that CLI command only classifies the route in lightweight prepare mode and never calls prepareRoute); `sks run ... --execute` enters the Naruto execution path instead. No safe single sks CLI invocation reaches materializeAutoSealedMadSks; verified live in a hermetic run where mad-sks-gate.json was not produced. Left as documented mock.'
+    reason: 'mad-sks-gate.json is written by materializeAutoSealedMadSks() inside prepareClarificationGate() in pipeline-internals/runtime-core.ts, which only runs via the real Codex App route dispatch pipeline (prepareRoute). No safe single sks CLI invocation reaches materializeAutoSealedMadSks, so mad-sks-gate.json cannot be produced by a spawned command. Left as documented mock.'
   }),
   'route-from-chat-img': fixture('mock', '$From-Chat-IMG visual work order route', ['from-chat-img-work-order.md', 'image-voxel-ledger.json', 'completion-proof.json'], 'pass', {
     reason: 'hasFromChatImgSignal() routes $From-Chat-IMG to the full Naruto multi-agent work-order pipeline (routes.ts routeById(\'Naruto\')), which requires real chat-screenshot attachments to produce from-chat-img-work-order.md; there is no lightweight deterministic `--mock` single-command invocation that produces this route\'s specific work-order/coverage artifacts the way route-naruto\'s generic fixture prompt does. Left as documented mock.'

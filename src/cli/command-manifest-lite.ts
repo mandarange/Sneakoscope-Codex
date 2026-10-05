@@ -65,7 +65,6 @@ const COMMAND_MANIFEST_LITE_BASE = [
   { name: 'release', summary: 'Run affected/full/background release gates', maturity: 'stable', skipMigrationGate: true },
   { name: 'triwiki', summary: 'Inspect TriWiki index, affected graph, and proof bank', maturity: 'stable', skipMigrationGate: true },
   { name: 'daemon', summary: 'Inspect or warm the local SKS daemon cache', maturity: 'stable', skipMigrationGate: true },
-  { name: 'run', summary: 'Classify and execute a task through the SKS trust kernel', maturity: 'beta' },
   { name: 'plan', summary: 'Write a planning-only SKS plan artifact without code edits', maturity: 'stable' },
   { name: 'status', summary: 'Show concise active mission and trust status', maturity: 'stable', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'review', summary: 'Review a git diff with machine evidence first', maturity: 'stable', allowedDuringActiveRoute: true },
@@ -87,7 +86,6 @@ const COMMAND_MANIFEST_LITE_BASE = [
   { name: 'doctor', summary: 'Check and repair SKS install', maturity: 'stable', skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'git', summary: 'Inspect and enforce SKS git collaboration hygiene', maturity: 'beta' },
   { name: 'paths', summary: 'Inspect SKS managed paths', maturity: 'beta', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
-  { name: 'rollback', summary: 'List or apply managed-path rollback actions', maturity: 'beta', skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'postinstall', summary: 'Restore package state; bootstrap only with explicit opt-in', maturity: 'stable', skipMigrationGate: true },
   { name: 'codex', summary: 'Check Codex CLI compatibility and vendored hook schemas', maturity: 'beta', skipMigrationGate: true },
   { name: 'codex-app', summary: 'Check Codex App readiness', maturity: 'beta', skipMigrationGate: true },
@@ -211,7 +209,6 @@ const COMMAND_CONTRACT_OVERRIDES_LITE = {
   remote: { risk: 'R2', latency: 'long', supportsJson: true, remoteAllowed: false, inputProfile: 'json-only' },
   research: { latency: 'long' },
   review: { risk: 'R1' },
-  run: { latency: 'long' },
   search: { risk: 'R0', latency: 'normal', supportsJson: true, remoteAllowed: true, inputProfile: 'json-only' },
   stats: {
     supportsJson: true, remoteAllowed: true, inputProfile: 'stats',
@@ -285,10 +282,6 @@ const COMMAND_HELP_LITE = {
   daemon: {
     usage: 'sks daemon status|warm|stop [--json]',
     description: 'Inspect or warm the local SKS daemon cache state for build/proof reuse.'
-  },
-  run: {
-    usage: 'sks run "task" [--visual|--research|--db] [--json]',
-    description: 'Classify a plain-language task, materialize a mission, and route it through the SKS trust kernel.'
   },
   plan: {
     usage: 'sks plan "task" [--json]',
@@ -465,10 +458,6 @@ const COMMAND_HELP_LITE = {
   paths: {
     usage: 'sks paths managed [--json]',
     description: 'List SKS-owned managed paths and rollback eligibility.'
-  },
-  rollback: {
-    usage: 'sks rollback list|apply <id> [--json]',
-    description: 'List or explicitly apply managed-path rollback actions with confirmation.'
   },
   init: {
     usage: 'sks init [--force] [--local-only] [--install-scope global|project]',
