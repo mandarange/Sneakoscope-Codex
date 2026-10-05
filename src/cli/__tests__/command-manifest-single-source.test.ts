@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { COMMAND_CATALOG } from '../../core/routes.js';
 import { COMMANDS, commandNames } from '../command-registry.js';
 import { COMMAND_MANIFEST_BY_NAME, COMMAND_MANIFEST_LITE, commandManifestNames } from '../command-manifest-lite.js';
 
@@ -15,6 +16,18 @@ test('the registry carries exactly the manifest metadata plus a loader', () => {
     assert.deepEqual(entry, manifest, `${name}: registry metadata drifted from the manifest`);
     assert.equal(typeof COMMANDS[name].lazy, 'function', `${name}: missing loader`);
     assert.ok(COMMANDS[name].packageRequiredFiles.length > 0, `${name}: missing package file`);
+  }
+});
+
+test('the command catalog is the manifest entries that carry usage text, not a third table', () => {
+  const documented = COMMAND_MANIFEST_LITE.filter((entry) => entry.usage && entry.description);
+  assert.deepEqual(
+    COMMAND_CATALOG,
+    documented.map(({ name, usage, description }) => ({ name, usage, description }))
+  );
+  assert.ok(COMMAND_CATALOG.length > 0);
+  for (const entry of COMMAND_MANIFEST_LITE) {
+    assert.equal(Boolean(entry.usage), Boolean(entry.description), `${entry.name}: usage and description come as a pair`);
   }
 });
 
