@@ -39,7 +39,17 @@ export function normalizeHookResult(name: any, result: any = {}) {
   // must be silent so Codex does not inject the same route or Stop feedback
   // twice into one turn.
   if (out.suppressedDuplicate === true) return { continue: true };
-  const systemMessage = out.silent === true
+  // A tool hook that allows the call and adds nothing says nothing: Codex shows
+  // every systemMessage, and a notice on each tool call is noise.
+  const toolEvent = eventName === 'PreToolUse' || eventName === 'PostToolUse' || eventName === 'PermissionRequest';
+  const quietToolPass = toolEvent
+    && !out.systemMessage
+    && !out.reason
+    && !out.additionalContext
+    && !out.updatedInput
+    && !['block', 'deny', 'allow'].includes(String(out.decision || ''))
+    && !['deny', 'allow'].includes(String(out.permissionDecision || ''));
+  const systemMessage = out.silent === true || quietToolPass
     ? undefined
     : out.systemMessage || visibleHookMessage(name, out.reason || out.additionalContext || '');
   const reason = out.reason || 'SKS guard denied this action.';
@@ -116,10 +126,10 @@ export function visibleHookMessage(name: any, text: any = '') {
     if (body.includes('SKS answer-only pipeline active')) return 'SKS: answer-only research context injected.';
     if (body.includes('SKS wiki pipeline active')) return 'SKS: wiki refresh context injected.';
     if (body.includes('Codex native Goal control requested')) return 'SKS: native Codex Goal control selected; no SKS Goal state was created.';
-    if (body.includes('Computer Use fast lane active')) return 'SKS: native Computer Use lane injected; defer TriWiki/Honest Mode to final closeout.';
+    if (body.includes('Computer Use fast lane active')) return 'SKS: native Computer Use lane injected.';
     if (body.includes('MANDATORY ambiguity-removal gate') || body.includes('VISIBLE RESPONSE CONTRACT') || body.includes('Required questions still pending')) return 'SKS: stale clarification gate detected; continue from inferred route contract.';
     if (body.includes('$Naruto route prepared') || body.includes('Codex subagent workflow')) return 'SKS: Naruto Codex subagent delegation context injected.';
-    if (body.includes('$Research route prepared')) return 'SKS: Research route, xhigh Eureka agent council, source/debate ledgers, paper output, and falsification gate injected.';
+    if (body.includes('$Research route prepared')) return 'SKS: Research route, source ledgers, and falsification review injected.';
     if (body.includes('$AutoResearch route prepared')) return 'SKS: AutoResearch experiment loop and evidence gate injected.';
     if (body.includes('$PPT route prepared')) return 'SKS: PPT route and delivery-context gate injected.';
     if (body.includes('$Image-UX-Review route prepared') || body.includes('$UX-Review route prepared')) return 'SKS: Image UX Review route and image evidence gate injected.';

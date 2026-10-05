@@ -77,6 +77,17 @@ export function selectPipelineLane(route: any, task: any, proof: any, taskProfil
   return { lane: SPEED_LANE_POLICY.balanced_lane, source: 'route_policy', fast_lane_allowed: false, reason: 'Balanced parent-owned route until Proof Field proves a narrower lane.', blockers: ['proof_field_not_attached'], skip_when_fast: [], keep: SPEED_LANE_POLICY.always_keep };
 }
 
+// Stages whose only output is an artifact the strict Stop gate evaluates. The
+// essential profile never evaluates them, so its plans do not list them.
+export const STRICT_FINALIZATION_STAGE_IDS: ReadonlySet<string> = new Set([
+  'mistake_recall',
+  'work_order_coverage',
+  'architecture_map_baseline',
+  'architecture_map_review',
+  'completion_proof',
+  'reflection'
+]);
+
 export function buildPipelineStages(
   route: any,
   task: any,
@@ -85,7 +96,8 @@ export function buildPipelineStages(
   ambiguity: any,
   lane: any,
   context7Required: any,
-  officialSubagentPolicy: any = normalizeOfficialSubagentPolicy(route, task, {})
+  officialSubagentPolicy: any = normalizeOfficialSubagentPolicy(route, task, {}),
+  opts: { strictFinalization?: boolean } = {}
 ) {
   if (gateProfile === 'none') return [];
   const ids: string[] = [...GATE_PROFILE_STAGES[gateProfile]];
@@ -106,8 +118,11 @@ export function buildPipelineStages(
   if (specializedRoute) ids.push('route_materialization');
   if (specializedRoute) ids.push('completion_proof');
   if (reflectionRequiredForRoute(route)) ids.push('reflection');
+  const stageIds = opts.strictFinalization === false
+    ? ids.filter((id) => !STRICT_FINALIZATION_STAGE_IDS.has(id))
+    : ids;
 
-  return [...new Set(ids)].map((id: any) => {
+  return [...new Set(stageIds)].map((id: any) => {
     const configuredGate = (STAGE_BLOCKING_GATE as Record<string, string>)[id] || null;
     const blockingGate = configuredGate === 'safety' && gateProfile !== 'full'
       ? 'ownership'

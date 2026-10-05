@@ -161,7 +161,7 @@ export const ROUTES = [
     command: '$Answer',
     mode: 'ANSWER',
     route: 'answer-only research',
-    description: 'Answer questions without starting implementation. Uses TriWiki, web, Context7 when relevant, and Honest Mode fact-checking.',
+    description: 'Answer questions without starting implementation. Uses TriWiki, web, and Context7 when relevant, and separates verified facts from inference.',
     requiredSkills: ['answer', 'honest-mode'],
     lifecycle: ['intent_classification', 'triwiki_hydration', 'web_or_context7_evidence_when_needed', 'honest_fact_check', 'direct_answer'],
     context7Policy: 'if_external_docs',
@@ -1368,7 +1368,7 @@ function reasoning(effort: any, reason: any) {
 
 export function context7RequirementText(required: any = true) {
   if (!required) return 'Context7 MCP is optional for this route unless external API/library documentation becomes relevant.';
-  return 'Context7 MCP is required before completion: call resolve-library-id for the relevant package or API, then query-docs (or legacy get-library-docs), and let SKS record both PostToolUse events.';
+  return 'Context7 MCP is required before completion: call resolve-library-id for the relevant package or API, then query-docs (or legacy get-library-docs).';
 }
 
 export function context7ConfigToml(transport: any = 'remote') {

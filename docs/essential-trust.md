@@ -68,9 +68,13 @@ on trusting the model's prose.
 | Route completion proof, reflection gate, work-order ledger, root-cause analysis, engineering-sanity / DB-access / architecture-map review artifacts as Stop blockers | blocked | not evaluated at Stop; `sks proof …` commands still work when a user asks |
 | PostToolUse evidence hook | one cold process per tool call writing Context7 / subagent / error-taxonomy ledgers | not installed; `sks update` and `sks doctor --fix` remove the stale entry from `.codex/hooks.json` and the managed TOML while keeping user-authored hooks |
 | Managed-skill digest drift blocks prompts and tool calls | `content_digest_mismatch` denied everything until `sks doctor --fix` | repaired or advised; never a denial |
-| Interrupted-tool-output quarantine | the next prompt was refused until the thread was replaced | the model receives the recovery advice; the user keeps steering |
+| Interrupted-tool-output quarantine | every later prompt in the thread was refused until the thread was replaced | only the turn that reports the lost output gets the recovery advice (strict refuses that one turn); the thread continues after recovery (ledger T5) |
 | `route-image` manual real-output proof as a doctor blocker | `doctor --full` `ok: false` on every real machine; Center badge orange | a warning (`route:route-image:…`), `ready: true` when the machine is actually healthy |
 | "then run Honest Mode" in the managed `AGENTS.md`; `$Honest-Mode` skill described as required | ritual text in every session | plain guidance: state the result, what was verified, what remains — once |
+| Proof artifacts seeded into every routed plan | request intake, a repository scan for the code-structure report, engineering-sanity and architecture-map seeds, and completion-proof / reflection / work-order stages in every `$` route plan | not produced; the plan lists only stages essential acts on and ends with "report the result, what was verified, and what remains, once" |
+| "Honest Mode" in route context, the language instruction, the Naruto parent summary, and Computer Use / PPT closing steps | injected on every routed turn | strict only |
+| Per-tool-call notices and logs | a "tool call inspected" notice on every allowed tool call and a Naruto decision row per hook event | silent unless SKS denies, rewrites, or adds context; only the prompt-time Naruto decision is logged |
+| Managed-skill drift at SubagentStart | a "MANDATORY … BLOCK HANDOFF" that stopped the child | the child keeps working; strict still hands off |
 
 ## Hooks: warm daemon by default
 

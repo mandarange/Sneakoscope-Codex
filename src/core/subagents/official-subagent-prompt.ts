@@ -59,6 +59,8 @@ export function buildOfficialSubagentPrompt(input: {
   /** Jev mode is on: Jev picks every child tier, so the parent reads no model rules. */
   jevRouting?: boolean
   activeMainModel?: ActiveMainModelRouting | null
+  /** The strict profile asks the parent for an Honest Mode assessment; essential does not. Defaults to strict. */
+  strictFinalization?: boolean
   parentOutputMode?: OfficialSubagentParentOutputMode
   missionId?: string
   workflowRunId?: string
@@ -268,19 +270,19 @@ Project custom agent catalog:
 ${catalog}
 
 ${parentOutputMode === 'app_naruto_stdin'
-    ? renderAppNarutoParentOutput(input.missionId, input.workflowRunId)
-    : renderRawJsonParentOutput()}
+    ? renderAppNarutoParentOutput(input.missionId, input.workflowRunId, input.strictFinalization !== false)
+    : renderRawJsonParentOutput(input.strictFinalization !== false)}
 `.trim()
 }
 
-function renderRawJsonParentOutput(): string {
+function renderRawJsonParentOutput(strictFinalization = true): string {
   return `Final parent output:
-- return one JSON object as the final message; prose outside that object is not completion evidence; keep Completion Summary and Honest Mode in its summary
+- return one JSON object as the final message; prose outside that object is not completion evidence; ${strictFinalization ? 'keep Completion Summary and Honest Mode in its summary' : 'its summary states the integrated result, what was verified, and what remains'}
 {
   "schema": "sks.subagent-parent-summary.v1",
   "run_id": "workflow_run_id from subagent-plan.json",
   "status": "completed|blocked|failed",
-  "summary": "Completion Summary: concise integrated result. Honest Mode: goal/evidence/checks/gaps assessment.",
+  "summary": "${strictFinalization ? 'Completion Summary: concise integrated result. Honest Mode: goal/evidence/checks/gaps assessment.' : 'Concise integrated result, verification, and remaining gaps.'}",
   "thread_outcomes": [{ "thread_id": "official agent/thread id", "status": "completed|blocked|failed", "summary": "slice result" }],
   "changed_files": [],
   "verification": [{ "name": "focused check", "status": "passed|not_applicable", "reason": "required when not_applicable" }],
@@ -295,22 +297,22 @@ function renderRawJsonParentOutput(): string {
 `
 }
 
-function renderAppNarutoParentOutput(missionId: unknown, workflowRunId: unknown): string {
+function renderAppNarutoParentOutput(missionId: unknown, workflowRunId: unknown, strictFinalization = true): string {
   const mission = String(missionId || '').trim()
   const runId = String(workflowRunId || '').trim()
   return `Final parent output for this active Codex App Naruto run:
 - build one exact JSON object using the strict sks.subagent-parent-summary.v1 schema below, with run_id=${JSON.stringify(runId || 'workflow_run_id from subagent-plan.json')}
 - send that object only through stdin to \`sks naruto parent-summary --mission ${mission || '<mission-id>'} --stdin --json\`; this command is the sole parent-summary commit path
 - do not expose, paste, quote, embed, or fence the JSON in the user-visible response
-- only after the command accepts the object, return concise Markdown in the user's language with completion summary, verification, remaining gaps/blockers, and Honest Mode
+- only after the command accepts the object, return concise Markdown in the user's language with completion summary, verification, and remaining gaps/blockers${strictFinalization ? ', and Honest Mode' : ''}
 - if the parent status, any thread outcome, or any blocker is blocked/failed, state the blocker or failure first and do not use completion or success wording
-- a successful visible response must contain an explicit completion summary and Honest Mode assessment; hard-blocked/failed responses state the blocker first instead
+- a successful visible response must contain an explicit completion summary${strictFinalization ? ' and Honest Mode assessment' : ''}; hard-blocked/failed responses state the blocker first instead
 - use this exact object schema for the stdin submission:
 {
   "schema": "sks.subagent-parent-summary.v1",
   "run_id": "workflow_run_id from subagent-plan.json",
   "status": "completed|blocked|failed",
-  "summary": "Concise integrated result and Honest Mode assessment.",
+  "summary": "${strictFinalization ? 'Concise integrated result and Honest Mode assessment.' : 'Concise integrated result, verification, and remaining gaps.'}",
   "thread_outcomes": [
     { "thread_id": "official agent/thread id", "status": "completed|blocked|failed", "summary": "slice result" }
   ],

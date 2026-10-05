@@ -1,4 +1,5 @@
 import fsp from 'node:fs/promises'
+import { stopFinalizationRitualsEnforced } from '../verification-profile.js'
 import path from 'node:path'
 import { nowIso, randomId, readJson, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
 import { SSOT_GUARD_ARTIFACT, buildSsotGuard, validateSsotGuardArtifact } from '../safety/ssot-guard.js'
@@ -385,6 +386,7 @@ async function deriveOfficialSubagentPreparation(
     ? `${goal}\n\nConstraint: run every delegated slice in read-only mode. Do not edit files.`
     : goal
   const delegationPrompt = buildOfficialSubagentPrompt({
+    strictFinalization: stopFinalizationRitualsEnforced(input.root),
     goal: delegationGoal,
     slices,
     requestedSubagents: budget.requestedSubagents,
@@ -566,6 +568,7 @@ async function deriveOfficialSubagentPreparation(
     mode,
     goal,
     delegationGoal,
+    strictFinalization: stopFinalizationRitualsEnforced(input.root),
     observedParentModel,
     parentModelMatch,
     workflowRunId,
@@ -621,6 +624,7 @@ interface DerivedOfficialSubagentPreparation {
   mode: 'generic' | 'naruto'
   goal: string
   delegationGoal: string
+  strictFinalization: boolean
   observedParentModel: string | null
   parentModelMatch: boolean | null
   workflowRunId: string
@@ -704,6 +708,7 @@ function applyOfficialSubagentDecision(
       }]))
     : {}
   const delegationPrompt = buildOfficialSubagentPrompt({
+    strictFinalization: derived.strictFinalization,
     goal: derived.delegationGoal,
     slices: derived.slices,
     requestedSubagents: budget.requestedSubagents,

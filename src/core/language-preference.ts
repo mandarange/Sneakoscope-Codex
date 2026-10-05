@@ -68,7 +68,7 @@ export function responseLanguageInstruction(prompt: any = '') {
   if (language.code === 'ko') {
     return [
       '응답 언어: 사용자 요청은 주로 한국어입니다.',
-      '진행 업데이트, 사용자에게 보이는 요약, 최종 완료 요약, SKS 솔직모드는 한국어로 작성하세요.',
+      '진행 업데이트, 사용자에게 보이는 요약, 최종 답변은 한국어로 작성하세요.',
       '코드, 명령어, 파일 경로, 패키지명, API명, 인용 원문은 원래 언어 그대로 유지하세요.',
       '이후 사용자 메시지가 다른 응답 언어를 명시하면 가장 최근의 명시적 언어 요청을 따르세요.'
     ].join(' ');
@@ -76,7 +76,7 @@ export function responseLanguageInstruction(prompt: any = '') {
   if (language.code === 'en') {
     return [
       'Response language: the user prompt is primarily English.',
-      'Write assistant progress updates, user-visible summaries, final completion summary, and SKS Honest Mode in English.',
+      'Write assistant progress updates, user-visible summaries, and the final answer in English.',
       'Preserve code, commands, file paths, package names, API names, and quoted source text in their original language.',
       'If a later user message explicitly asks for a different response language, follow the latest explicit language request.'
     ].join(' ');

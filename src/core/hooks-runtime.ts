@@ -123,9 +123,7 @@ import {
 import {
   interruptedToolOutputRecoveryBlockReason,
   missingToolOutputCallId,
-  missingToolOutputCallIdFromPayload,
-  quarantineMissingToolOutput,
-  readToolOutputQuarantine
+  missingToolOutputCallIdFromPayload
 } from './hooks-runtime/tool-output-quarantine.js';
 import {
   activeAuthoritativeSksSkillRefresh,
@@ -329,10 +327,13 @@ async function hookSubagentStart(root: any, state: any, payload: any = {}, sessi
         repairMode: 'stale-generation'
       }).catch(() => null)
     : null;
+  // Skill-file drift blocks a child only where it blocks tool calls (strict);
+  // in essential the child keeps working. Guard and artifact blockers stay.
+  const skillResolutionBlockers = skillNames.length ? authoritativeSksSkillResolutionBlockers(resolution) : [];
   const skillBlockers = [
     ...(bindingIncomplete ? ['subagent_skill_availability_guard_invalid'] : []),
     ...artifactDirBlockers,
-    ...(skillNames.length ? authoritativeSksSkillResolutionBlockers(resolution) : [])
+    ...(managedSkillDigestBlocksEnforced(root) ? skillResolutionBlockers : [])
   ];
   if (skillGuardBinding) {
     try {
@@ -465,25 +466,13 @@ async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: a
   const explicitSession = explicitConversationId(payload);
   const detectedMissingCallId = missingToolOutputCallId(submittedPrompt)
     || missingToolOutputCallIdFromPayload(payload);
-  let toolOutputQuarantine = explicitSession
-    ? await readToolOutputQuarantine(root, sessionKey).catch(() => null)
-    : null;
-  if (detectedMissingCallId && explicitSession) {
-    toolOutputQuarantine = await quarantineMissingToolOutput({
-      root,
-      sessionKey,
-      callId: detectedMissingCallId,
-      missionId: state?.mission_id,
-      turnId: hookTurnId(payload)
-    }).catch(() => toolOutputQuarantine);
-  }
-  if (submittedPrompt && (detectedMissingCallId || toolOutputQuarantine)) {
+  // Only the turn that reports a lost tool output gets the recovery advice
+  // (strict refuses that one turn); later turns in the thread continue (T5).
+  if (submittedPrompt && detectedMissingCallId) {
     const reason = interruptedToolOutputRecoveryBlockReason({
-      callId: detectedMissingCallId || toolOutputQuarantine?.call_id,
-      missionId: state?.mission_id || toolOutputQuarantine?.mission_id
+      callId: detectedMissingCallId,
+      missionId: state?.mission_id
     });
-    // Strict: refuse the prompt until the thread is replaced. Essential: the
-    // model hears the same recovery advice and the user keeps steering.
     if (stopFinalizationRitualsEnforced(root)) return { decision: 'block', reason };
     return { continue: true, additionalContext: reason, systemMessage: visibleHookMessage('user-prompt-submit', reason) };
   }

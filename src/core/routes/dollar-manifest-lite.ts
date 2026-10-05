@@ -16,7 +16,7 @@ const COMPUTER_USE_DESCRIPTION = 'Maximum-speed Codex Computer Use lane for nati
 
 const DOLLAR_COMMANDS_LITE_BASE = [
   { command: '$DFix', route: 'fast direct fix', description: 'Tiny simple direct edits such as copy, labels, typos, wording, spacing, colors, or clearly scoped one-line changes. Bypasses the general SKS pipeline and runs an ultralight, no-record task-list path.' },
-  { command: '$Answer', route: 'answer-only research', description: 'Answer questions without starting implementation. Uses TriWiki, web, Context7 when relevant, and Honest Mode fact-checking.' },
+  { command: '$Answer', route: 'answer-only research', description: 'Answer questions without starting implementation. Uses TriWiki, web, and Context7 when relevant, and separates verified facts from inference.' },
   { command: '$SKS', route: 'general SKS workflow', description: 'General Sneakoscope setup, help, status, and workflow routing.' },
   { command: '$Plan', route: 'planning-only frontdoor', description: 'Plan scaffold only: writes a fixed-template .sneakoscope/plans/<slug>.md (goal/scope/steps headings to fill in), not project-specific decision-complete planning. Keeps implementation disallowed until an explicit $Work alias or $Naruto runs the plan.' },
   { command: '$Review', route: 'machine-first diff review', description: 'Review staged or selected diffs with machine evidence sorted above LLM opinion.' },

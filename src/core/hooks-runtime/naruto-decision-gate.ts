@@ -45,9 +45,10 @@ export function hookNarutoDecisionLogPath(root: string): string {
 
 export async function evaluateHookNarutoDecisionGate(input: HookNarutoDecisionInput): Promise<HookNarutoDecision> {
   const decision = decideHookNaruto(input);
-  const prompt = decision.event === 'UserPromptSubmit'
-    ? stripVisibleDecisionAnswerBlocks(extractPrompt(input.payload))
-    : '';
+  // Only the prompt decision can arm Naruto; every other event derives its
+  // decision from state, so logging it would be a write per tool call.
+  if (decision.event !== 'UserPromptSubmit') return { ...decision, recorded: false };
+  const prompt = stripVisibleDecisionAnswerBlocks(extractPrompt(input.payload));
   const row = {
     ts: nowIso(),
     schema: decision.schema,
