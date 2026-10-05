@@ -23,7 +23,9 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 20.11.x
+          # The locked test dependencies (including jsdom) require a current
+          # Node 24 runtime even though the published CLI engine remains >=20.11.
+          node-version: 24.x
           cache: npm
       - name: Install dependencies
         run: npm ci --ignore-scripts
