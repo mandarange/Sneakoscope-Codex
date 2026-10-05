@@ -417,6 +417,7 @@
     {
       "canonical_name": "sks-reflection",
       "trusted_sha256": [
+        "712f148432811ad359a9ea23266e904ecf9ae39fa43584c831676a7233aa9c68",
         "bcea113ad0988f579aa3fd18c0f6c32eda220127b2c05331a8e4573dc2d25621",
         "d5b6e80644a55a50b60961fe3aa5ae342fd035b39605a07d13dcc82fb0f0149c",
         "5013cefe58746a23e998bd83dedf2c4de9270010297be6fc0c0f0ae2aae73fb8",
@@ -490,6 +491,7 @@
     {
       "canonical_name": "sks-wiki",
       "trusted_sha256": [
+        "62829492fa621da5f8c94566c30c1947ecfbcd9ddd509a9e5e1408db15222a76",
         "56b94d1e84cf2dd024033919b08bc5b55f5e02f7b68dff9704aed09e04022b28",
         "a6b3cf12e88b413073525c146aa27287557536b5a48eade83b87a11d8f371c72",
         "460a7dd5498fbf68697da64d6a56122ca088607edea8f815eea54aca580895fe",

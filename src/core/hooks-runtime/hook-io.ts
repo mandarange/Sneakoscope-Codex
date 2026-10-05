@@ -124,7 +124,7 @@ export function visibleHookMessage(name: any, text: any = '') {
   if (name === 'user-prompt-submit') {
     if (body.includes('DFix ultralight pipeline active')) return 'SKS: DFix ultralight task list injected.';
     if (body.includes('SKS answer-only pipeline active')) return 'SKS: answer-only research context injected.';
-    if (body.includes('SKS wiki pipeline active')) return 'SKS: wiki refresh context injected.';
+    if (body.includes('SKS wiki pipeline active')) return 'SKS: TriWiki maintenance context injected.';
     if (body.includes('Codex native Goal control requested')) return 'SKS: native Codex Goal control selected; no SKS Goal state was created.';
     if (body.includes('Computer Use fast lane active')) return 'SKS: native Computer Use lane injected.';
     if (body.includes('MANDATORY ambiguity-removal gate') || body.includes('VISIBLE RESPONSE CONTRACT') || body.includes('Required questions still pending')) return 'SKS: stale clarification gate detected; continue from inferred route contract.';

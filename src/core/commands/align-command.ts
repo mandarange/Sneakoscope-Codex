@@ -133,6 +133,8 @@ async function alignRun(args: any[]) {
     ledger: execution.ledger
   };
   if (!result.ok) process.exitCode = 1;
+  // `--quiet` is for callers that report the result themselves (`sks memory build`).
+  if (flag(args, '--quiet')) return result;
   if (flag(args, '--json')) printJson(result);
   else {
     console.log(`SKS align run: ${result.ok ? 'pass' : 'blocked'} ${missionId}`);

@@ -49,7 +49,7 @@ export const SKS_SSOT_AUTHORITY_INVENTORY: readonly SsotAuthorityDomain[] = Obje
     title: 'TriWiki context pack',
     authorityKind: 'file' as const,
     canonicalSources: Object.freeze(['.sneakoscope/wiki/context-pack.json']),
-    allowedWriters: Object.freeze(['sks wiki pack', 'sks align run', 'triwiki refresh']),
+    allowedWriters: Object.freeze(['sks align run']),
     allowedReaders: Object.freeze(['pipeline stages', 'naruto parent', 'honest mode']),
     derivedArtifacts: Object.freeze([
       'subagent-parent-summary.json',

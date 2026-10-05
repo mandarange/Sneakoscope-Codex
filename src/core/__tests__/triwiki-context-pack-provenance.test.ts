@@ -4,7 +4,6 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { contextCapsule } from '../triwiki-attention.js';
-import { writeValidatedWikiContextPack } from '../commands/wiki-command.js';
 import { loadTriWikiRuntimeContext } from '../triwiki-runtime.js';
 import { validateWikiCoordinateIndex } from '../wiki-coordinate.js';
 import {
@@ -111,29 +110,6 @@ test('context-pack provenance detects payload, source manifest, and missing prov
   }
 });
 
-test('invalid context-pack candidate never overwrites the valid predecessor', async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-triwiki-transaction-'));
-  const file = path.join(root, '.sneakoscope', 'wiki', 'context-pack.json');
-  try {
-    const predecessor = sealTriWikiContextPack(fixturePack(), { generatedAt: '2026-07-11T00:00:00.000Z', root });
-    const first = await writeValidatedWikiContextPack(file, predecessor, root);
-    assert.equal(first.written, true);
-    const predecessorBytes = await fs.readFile(file, 'utf8');
-
-    const invalidBase = fixturePack();
-    const invalidClaim = invalidBase.claims[0];
-    assert.ok(invalidClaim);
-    invalidClaim.text = 'claim text changed without rebuilding its anchor';
-    const invalid = sealTriWikiContextPack(invalidBase, { generatedAt: '2026-07-11T00:01:00.000Z', root });
-    const rejected = await writeValidatedWikiContextPack(file, invalid, root);
-    assert.equal(rejected.written, false);
-    assert.ok(rejected.validation.result.issues.some((issue: any) => issue.id === 'anchor_hash_mismatch'));
-    assert.equal(await fs.readFile(file, 'utf8'), predecessorBytes);
-  } finally {
-    await fs.rm(root, { recursive: true, force: true });
-  }
-});
-
 test('runtime invalidates cited source byte changes but ignores dynamic mission churn', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-triwiki-source-bytes-'));
   const file = path.join(root, '.sneakoscope', 'wiki', 'context-pack.json');
@@ -154,7 +130,8 @@ test('runtime invalidates cited source byte changes but ignores dynamic mission 
     assert.deepEqual(sealed.provenance.source_manifest.citations, ['src/a.ts']);
     assert.deepEqual(sealed.provenance.source_manifest.excluded_dynamic_citations, ['.sneakoscope/missions']);
     assert.ok(sealed.provenance.source_manifest.excluded_dynamic_prefixes.includes('.sneakoscope/missions'));
-    assert.equal((await writeValidatedWikiContextPack(file, sealed, root)).written, true);
+    await fs.mkdir(path.dirname(file), { recursive: true });
+    await fs.writeFile(file, `${JSON.stringify(sealed, null, 2)}\n`);
     assert.equal((await loadTriWikiRuntimeContext(root)).present, true);
 
     await fs.writeFile(path.join(root, '.sneakoscope', 'missions', 'M-fixture', 'mission.json'), '{"revision":2}\n');

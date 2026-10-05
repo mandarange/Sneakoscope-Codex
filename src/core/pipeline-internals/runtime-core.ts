@@ -96,7 +96,7 @@ const REFLECTION_MEMORY_PATH = '.sneakoscope/memory/q2_facts/post-route-reflecti
 const CLARIFICATION_BYPASS_ROUTES = new Set(['Answer', 'DFix', 'Help', 'Wiki', 'ComputerUse', 'Goal']);
 const QUESTION_GATE_ROUTES = new Set(['QALoop', 'PPT']);
 function reflectionInstructionText(commandPrefix: any = 'sks') {
-  return `Post-route reflection: full routes load \`reflection\` after work/tests and before final; DFix/Answer/Help/Wiki/SKS discovery are exempt. Write ${REFLECTION_ARTIFACT}; record only real misses/gaps, or no_issue_acknowledged. For lessons, append TriWiki claim rows to ${REFLECTION_MEMORY_PATH}. Run "${commandPrefix} wiki refresh" or pack, validate, then pass ${REFLECTION_GATE}.`;
+  return `Post-route reflection: full routes load \`reflection\` after work/tests and before final; DFix/Answer/Help/Wiki/SKS discovery are exempt. Write ${REFLECTION_ARTIFACT}; record only real misses/gaps, or no_issue_acknowledged. For lessons, append TriWiki claim rows to ${REFLECTION_MEMORY_PATH}. Run "${commandPrefix} align run", validate, then pass ${REFLECTION_GATE}.`;
 }
 
 export function buildPipelinePlan(input: any = {}) {
@@ -811,7 +811,7 @@ async function prepareWikiQuickRoute(route: any, task: any) {
       `SKS wiki pipeline active. Route: ${route.command} (${route.route}).`,
       responseLanguageInstruction(task),
       `Task: ${task || 'refresh and validate TriWiki'}`,
-      'Run policy: refresh/update/갱신 -> `sks wiki refresh` then validate; prune/clean/정리 -> `sks wiki refresh --prune` or dry-run prune first; pack -> `sks wiki pack` then validate.',
+      'Run policy: refresh/update/pack/갱신 -> `sks align run` (the one TriWiki writer) then `sks wiki validate`; prune/clean/정리 -> `sks wiki prune --dry-run` first, then `sks wiki prune`.',
       stackCurrentDocsPolicyText(),
       'Report claims, anchors, trust, validation, and blockers. Do not create mission state, ask ambiguity-gate questions, open worker sessions, or run unrelated work.'
     ].join('\n')

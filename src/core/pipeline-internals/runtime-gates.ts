@@ -38,7 +38,6 @@ import {
   subagentEvidence,
   PIPELINE_PLAN_ARTIFACT,
 } from './runtime-core.js';
-import { projectTriwikiToAgentsMd } from '../triwiki/agents-md-projector.js';
 import {
   effectiveSubagentTarget,
   normalizeLegacySubagentCountFields,
@@ -443,33 +442,7 @@ export async function evaluateStop(root: any, state: any, payload: any, opts: an
   if (!reflection.ok) return complianceBlock(root, state, reflectionStopReason(state, reflection), { gate: 'reflection', missing: reflection.missing });
   const coverage = await workOrderCoverageGateStatus(root, state);
   if (!coverage.ok) return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} route has unresolved work-order-ledger items (neither verified nor honestly blocked): ${coverage.blockers.join(', ')}.`, { gate: 'work-order-ledger', missing: coverage.blockers });
-  fireAndForgetProjectMemory(root, state);
   return null;
-}
-
-function fireAndForgetProjectMemory(root: any, state: any = {}) {
-  if (!state?.mission_id) return;
-  void projectTriwikiToAgentsMd(String(root)).then((report) => {
-    const id = state.mission_id;
-    if (!id) return null;
-    return appendJsonl(path.join(missionDir(root, id), 'events.jsonl'), {
-      ts: nowIso(),
-      type: 'triwiki.agents_md_projected',
-      proof_invalidating: false,
-      ok: report.ok,
-      reason: report.reason,
-      written: report.written
-    });
-  }).catch((err: any) => {
-    const id = state.mission_id;
-    if (!id) return null;
-    return appendJsonl(path.join(missionDir(root, id), 'events.jsonl'), {
-      ts: nowIso(),
-      type: 'triwiki.agents_md_project_failed',
-      proof_invalidating: false,
-      error: err?.message || String(err)
-    }).catch(() => undefined);
-  });
 }
 
 async function routeProofGateStatus(root: any, state: any = {}) {

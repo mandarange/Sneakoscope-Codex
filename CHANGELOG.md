@@ -44,6 +44,18 @@
   answered inline.
 - SKS no longer denies Codex's own `spawn_agent` calls outside a Naruto
   parent; the tier-model and bounded-fork rules apply to Naruto children.
+- `sks align run` left its own index stale in every project that does not
+  ignore `AGENTS.md`: the projection it writes after the scan changed the
+  workspace fingerprint, so `sks wiki validate` and the freshness preflight
+  asked for another align forever. Align's `AGENTS.md` outputs no longer count
+  as source changes; real source edits still do.
+- `.codex/SNEAKOSCOPE.md` written by any current version was never refreshed
+  again, because the managed-file check required the pre-10.3.9 `Files:` line.
+- TriWiki has one writer (ledger S3): `sks wiki refresh` and `sks wiki pack`
+  built a second context pack (memory claims plus code entries) into the same
+  file as `sks align run`, so whichever ran last won. Both are now aliases of
+  `sks align run`; `sks memory build` runs it before compiling mistake rules,
+  and the strict Stop no longer re-projects `AGENTS.md` behind align's back.
 
 ### Changed
 

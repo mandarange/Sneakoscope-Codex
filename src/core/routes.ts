@@ -81,8 +81,8 @@ export function triwikiContextTracking(commandPrefix: any = 'sks') {
   return {
     ssot: 'triwiki',
     default_pack: '.sneakoscope/wiki/context-pack.json',
-    pack_command: `${prefix} wiki pack`,
-    refresh_command: `${prefix} wiki refresh`,
+    pack_command: `${prefix} align run`,
+    refresh_command: `${prefix} align run`,
     prune_command: `${prefix} wiki prune`,
     validate_command: `${prefix} wiki validate .sneakoscope/wiki/context-pack.json`,
     hydrate_policy: 'hydrate_by_id_hash_source_path_rgba_trig_coordinate',
@@ -109,7 +109,7 @@ export function stackCurrentDocsPolicy(commandPrefix: any = 'sks') {
     trigger: 'when_tech_stack_is_added_or_package_framework_runtime_version_changes',
     evidence_required: ['context7_resolve_library_id_and_query_docs', 'or_official_vendor_web_docs'],
     memory_path: '.sneakoscope/memory/q2_facts/stack-current-docs.md',
-    refresh_command: `${prefix} wiki refresh`,
+    refresh_command: `${prefix} align run`,
     validate_command: `${prefix} wiki validate .sneakoscope/wiki/context-pack.json`,
     priority: 'must_precede_coding_style_defaults',
     examples: [
@@ -486,12 +486,12 @@ export const ROUTES = [
     route: 'TriWiki refresh and maintenance',
     description: 'Refresh, pack, validate, or prune TriWiki context packs from Codex App.',
     requiredSkills: ['wiki', 'sks', 'honest-mode'],
-    lifecycle: ['intent_classification', 'wiki_refresh_or_pack', 'wiki_validate', 'honest_mode'],
+    lifecycle: ['intent_classification', 'align_refresh', 'wiki_validate', 'honest_mode'],
     context7Policy: 'optional',
     reasoningPolicy: 'medium',
     stopGate: 'none',
     coverageExemptReason: 'single fixed maintenance action (refresh/pack/validate/prune), not a free-form work order',
-    cliEntrypoint: 'sks wiki refresh|pack|validate|prune',
+    cliEntrypoint: 'sks align run | sks wiki validate|prune',
     examples: ['$Wiki refresh', '$Wiki prune and validate']
   },
   {

@@ -235,8 +235,20 @@ function parsePorcelain(stdout: string): { tracked: string[]; untracked: string[
   return { tracked: tracked.sort(), untracked: untracked.sort() };
 }
 
+/**
+ * `AGENTS.md` files are align's own output: the TriWiki projection writes a
+ * managed block (with a generation timestamp) into them after the scan. Counting
+ * them made every `sks align run` in a project without ignore rules for them
+ * leave its own index `dirty_fingerprint_changed`, so the graph could never be
+ * fresh. They are guidance, not code-index inputs.
+ */
+function isAlignProjectionOutput(relative: string): boolean {
+  return path.posix.basename(relative) === 'AGENTS.md';
+}
+
 function isRelevant(relative: string): boolean {
   if (relative.startsWith('.sneakoscope/')) return false;
+  if (isAlignProjectionOutput(relative)) return false;
   if (relative.startsWith('node_modules/') || relative.includes('/node_modules/')) return false;
   if (relative.startsWith('dist/')) return false;
   return RELEVANT_EXTENSIONS.has(path.posix.extname(relative));
@@ -276,6 +288,7 @@ export async function readContextGraphGitState(root: string): Promise<ContextGra
   // report `dirty` forever on an artifact it regenerates on every compile.
   const relevantTracked = tracked.filter(
     (relative) => !WIKI_CONTEXT_GIT_EXCLUDED.has(relative)
+      && !isAlignProjectionOutput(relative)
       && !(relative.startsWith(`${WIKI_CONTEXT_DIR}/`) && isExcludedWikiPath(relative, WIKI_CONTEXT_EXCLUDED))
   );
   const relevantUntracked = untracked.filter(
