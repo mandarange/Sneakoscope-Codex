@@ -100,7 +100,6 @@ const FIXTURES = Object.freeze({
   'cli-fast-mode': fixture('execute', 'sks fast-mode status --json', [], 'pass'),
   'cli-dfix': fixture('execute_and_validate_artifacts', 'sks dfix fixture --json', ['completion-proof.json', 'dfix-gate.json', 'dfix-verification.json'], 'pass'),
   'cli-wiki': fixture('execute_and_validate_artifacts', 'sks wiki image-ingest test/fixtures/images/one-by-one.png --json', [{ path: '.sneakoscope/wiki/image-voxel-ledger.json', schema: 'sks.image-voxel-ledger.v1', require_anchors: false }], 'pass'),
-  'cli-wizard': fixture('execute', 'sks wizard', [], 'pass'),
   'cli-bootstrap': fixture('execute', 'sks bootstrap --dry-run', [], 'pass'),
   'cli-deps': fixture('execute', 'sks deps check --json', [], 'pass'),
   'cli-auth': fixture('execute', 'sks auth status --json', [], 'pass'),
@@ -121,7 +120,6 @@ const FIXTURES = Object.freeze({
   'cli-init': fixture('execute', 'sks init --local-only --dry-run', [], 'pass'),
   'cli-naruto': fixture('execute_and_validate_artifacts', 'sks naruto run "fixture" --agents 4 --max-threads 4 --json', ['subagent-plan.json', 'subagent-events.jsonl', 'subagent-evidence.json', 'naruto-summary.json', 'naruto-gate.json', 'work-order-ledger.json'], 'pass', preparationFixtureContract()),
   'cli-reasoning': fixture('execute', 'sks reasoning status --json', [], 'pass'),
-  'cli-profile': fixture('execute', 'sks profile status --json', [], 'pass'),
   'skill-db-safety-guard': fixture('execute', 'node --test test/unit/db-safety.test.mjs', [], 'pass', { root_mode: 'source_checkout_required' }),
   'skill-honest-mode': fixture('execute_and_validate_artifacts', 'sks proof smoke --json', ['completion-proof.json', 'trust-report.json'], 'pass'),
   'skill-imagegen': fixture('execute_and_validate_artifacts', 'sks image-ux-review fixture --mock --json', ['image-ux-generated-review-ledger.json', 'image-voxel-ledger.json'], 'pass'),
@@ -208,7 +206,6 @@ const FIXTURES = Object.freeze({
 });
 
 const STATIC_CONTRACT_FEATURES = new Set([
-  'cli-wizard',
   'cli-bootstrap',
   'cli-deps',
   'cli-auth',
@@ -220,7 +217,6 @@ const STATIC_CONTRACT_FEATURES = new Set([
   'cli-context7',
   'cli-naruto',
   'cli-reasoning',
-  'cli-profile',
   'cli-postinstall',
   'cli-menubar',
   'cli-route',

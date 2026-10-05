@@ -5,14 +5,14 @@ Generated from `sks commands --json`, `src/cli/command-registry.ts COMMANDS`, `s
 ## Coverage
 
 - Status: coverage-ok
-- Features: 113
-- CLI commands: 78
-- Handler keys: 78
+- Features: 111
+- CLI commands: 76
+- Handler keys: 76
 - Dollar routes: 30
 - App skill aliases: 31
 - Skills: 0
-- Fixture statuses: pass=105, blocked=8
-- Feature quality: runtime_verified=83, wiring_only=18, integration_optional=5, static_contract=7, missing=0
+- Fixture statuses: pass=103, blocked=8
+- Feature quality: runtime_verified=81, wiring_only=18, integration_optional=5, static_contract=7, missing=0
 
 ## Release Coverage Rule
 
@@ -36,7 +36,6 @@ Generated from `sks commands --json`, `src/cli/command-registry.ts COMMANDS`, `s
 | `cli-update-check` | core-cli | stable | sks update-check [--json] | static:pass | static_contract | not_assessed | none recorded |
 | `cli-config` | core-cli | stable | sks config | execute:pass | wiring_only | not_assessed | none recorded |
 | `cli-mcp` | core-cli | beta | sks mcp config list\|get\|add\|edit\|duplicate\|enable\|disable\|remove\|test\|login\|logout\|backups\|restore [--scope global\|project\|effective] [--stdin-json] [--json] | execute:pass | runtime_verified | not_assessed | none recorded |
-| `cli-wizard` | core-cli | stable | sks wizard | execute:pass | runtime_verified | not_assessed | none recorded |
 | `cli-usage` | core-cli | stable | sks usage [install\|setup\|bootstrap\|root\|deps\|auto-review\|naruto\|qa-loop\|ppt\|image-ux-review\|computer-use\|goal\|fast-mode\|review\|research\|seo-geo-optimizer\|git\|codex\|codex-app\|codex-native\|hooks\|dfix\|commit\|commit-and-push\|imagegen\|context7\|super-search\|pipeline\|reasoning\|guard\|conflicts\|eval\|gx\|wiki\|memory\|wrongness\|code-structure\|skill-dream\|align] | execute:pass | runtime_verified | not_assessed | none recorded |
 | `cli-quickstart` | core-cli | stable | sks quickstart | execute:pass | runtime_verified | not_assessed | none recorded |
 | `cli-setup` | install | stable | sks setup [--bootstrap] [--install-scope global\|project] [--local-only] [--force] [--json] | real_optional:pass | integration_optional | not_assessed | none recorded |
@@ -85,7 +84,6 @@ Generated from `sks commands --json`, `src/cli/command-registry.ts COMMANDS`, `s
 | `cli-goal` | proof-route | beta | sks goal create\|edit\|pause\|resume\|clear\|status ... | execute:pass | runtime_verified | not_assessed | none recorded |
 | `cli-seo-geo-optimizer` | core-cli | beta | sks seo-geo-optimizer [seo\|geo] doctor\|audit\|research\|strategy\|plan\|apply\|verify\|status\|rollback\|fixture [mission\|latest] [--mode seo\|geo] [--target auto\|website\|docs\|package] [--include-marketing] [--json] | execute_and_validate_artifacts:pass | runtime_verified | not_assessed | none recorded |
 | `cli-hook` | core-cli | beta | sks hook | static:pass | static_contract | not_assessed | none recorded |
-| `cli-profile` | core-cli | labs | sks profile show\|set <model> | execute:pass | runtime_verified | not_assessed | none recorded |
 | `cli-proof` | core-cli | beta | sks proof show\|latest\|validate\|export\|smoke\|trust report\|validate\|status\|explain [latest\|mission-id]\|artifacts [mission-id\|latest] [--required a,b]\|stop-gate [check] [--route r] [--mission id]\|hproof check [mission-id\|latest]\|field scan [--intent "task"] [--json\|--md] | execute_and_validate_artifacts:pass | runtime_verified | not_assessed | none recorded |
 | `cli-wrongness` | visual-memory | beta | sks wrongness list\|show\|add\|resolve\|summarize\|validate\|context\|rules ... | execute:pass | runtime_verified | not_assessed | none recorded |
 | `cli-skill-dream` | loop | labs | sks skill-dream status\|run\|record [--json] | execute:pass | runtime_verified | not_assessed | none recorded |

@@ -38,7 +38,7 @@
     "!dist/native/**/UITests",
     "!dist/native/**/QAFixtures",
     "!dist/scripts/**",
-    "dist/scripts/{canonical-test-runner.js,check-publish-tag.js,codex-config-load-probe.js,dfix-fixture-check.js,dfix-verification-check.js,gate-lib.js,lib/ensure-dist-fresh.js,publish-preflight.js,release-check-stamp.js,release-pack-receipt.js,release-physical-gates-check.js,release-version-truth-check.js,sks-cli-gate-lib.js}",
+    "dist/scripts/{canonical-test-runner.js,check-publish-tag.js,codex-config-load-probe.js,desktop-bridge-capabilities-check.js,desktop-bridge-latency-check.js,desktop-bridge-real-evidence-check.js,desktop-bridge-transport-check.js,desktop-bridge-transport-client.js,desktop-bridge-unification-check.js,dfix-fixture-check.js,dfix-verification-check.js,gate-lib.js,lib/ensure-dist-fresh.js,publish-preflight.js,release-check-stamp.js,release-pack-receipt.js,release-physical-gates-check.js,release-version-truth-check.js,sks-cli-gate-lib.js}",
     "!dist/core/triwiki/context-graph/benchmark",
     "!dist/core/ops/upgrade-migration-fixtures.js",
     "!dist/core/release/npm-stage-tarball-verifier.js",

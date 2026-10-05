@@ -234,13 +234,22 @@ async function alignFixture(args: any[]) {
   return result;
 }
 
+// The route writes these once and the work-order ledger is closed only after the
+// proof exists, so each is older than the mission's last event by construction.
+// Judging them by mtime against that event made a passing run read as stale
+// whenever the machine was slow enough to separate the two timestamps.
+const stableAlignArtifact = (artifactPath: string) => ({ path: artifactPath, ignoreStale: true });
+
 async function finalizeAlignRoute(root: string, missionId: string, gate: any) {
   const proof: any = await maybeFinalizeRoute(root, {
     missionId,
     route: '$Align',
     gateFile: ALIGN_GATE_ARTIFACT,
     gate,
-    artifacts: [ALIGN_PLAN_ARTIFACT, ALIGN_LEDGER_ARTIFACT, ALIGN_GATE_ARTIFACT, 'work-order-ledger.json', 'completion-proof.json'],
+    artifacts: [
+      ...[ALIGN_PLAN_ARTIFACT, ALIGN_LEDGER_ARTIFACT, ALIGN_GATE_ARTIFACT, 'work-order-ledger.json'].map(stableAlignArtifact),
+      'completion-proof.json'
+    ],
     claims: [
       { id: 'align-absent-or-existing-input', status: gate.absent_or_existing_input_supported && gate.prior_state_ignored_as_input ? 'supported' : 'blocked', evidence: ALIGN_LEDGER_ARTIFACT },
       { id: 'align-exhaustive-code-navigation-index', status: gate.exact_source_file_coverage && gate.code_extractor_only ? 'supported' : 'blocked', evidence: ALIGN_LEDGER_ARTIFACT },

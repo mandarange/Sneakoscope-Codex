@@ -58,6 +58,8 @@ export const INSTALLED_REMOVED_COMMANDS = [
   'team', 'mad-db', 'tmux', 'xai', 'swarm', 'agent', 'ralph', 'ui',
   // Retired outright.
   'loop', 'run', 'rollback',
+  // Duplicate of quickstart, and a profile setter nothing read.
+  'wizard', 'profile',
   // Folded into `sks proof <subcommand>`.
   'trust', 'stop-gate', 'validate-artifacts', 'hproof', 'proof-field',
   // Moved to the maintainer CLI, which is not part of the installed package.

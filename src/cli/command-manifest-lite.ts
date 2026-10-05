@@ -66,7 +66,6 @@ const COMMAND_MANIFEST_LITE_BASE = [
   { name: 'update-check', summary: 'Show the shared SKS, Codex CLI, and Menu Bar update status', maturity: 'stable', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'config', summary: 'Adopt project Codex config into SKS management', maturity: 'stable', skipMigrationGate: true },
   { name: 'mcp', summary: 'Manage scoped Codex MCP configuration', maturity: 'beta', skipMigrationGate: true },
-  { name: 'wizard', summary: 'Open setup wizard help', maturity: 'stable' },
   { name: 'usage', summary: 'Show focused usage topic', maturity: 'stable', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'quickstart', summary: 'Show quickstart flow', maturity: 'stable' },
   { name: 'setup', summary: 'Initialize SKS state', maturity: 'stable', skipMigrationGate: true },
@@ -115,7 +114,6 @@ const COMMAND_MANIFEST_LITE_BASE = [
   { name: 'goal', summary: 'Print stateless Codex native Goal controls', maturity: 'beta' },
   { name: 'seo-geo-optimizer', summary: 'Run unified SEO/GEO optimizer audit/plan/apply/verify plus research/strategy (--include-marketing) on the search-visibility kernel', maturity: 'beta' },
   { name: 'hook', summary: 'Codex hook entrypoint', maturity: 'beta', skipMigrationGate: true },
-  { name: 'profile', summary: 'Inspect/set profile', maturity: 'labs' },
   { name: 'proof', summary: 'Show and validate completion proof and the evidence behind it: route trust, stop gate, mission artifacts, H-Proof, proof field', maturity: 'beta', skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'wrongness', summary: 'Record and inspect TriWiki wrongness negative evidence', maturity: 'beta' },
   { name: 'skill-dream', summary: 'Track skill dream counters', maturity: 'labs' },
@@ -213,10 +211,6 @@ const COMMAND_HELP_LITE = {
   mcp: {
     usage: 'sks mcp config list|get|add|edit|duplicate|enable|disable|remove|test|login|logout|backups|restore [--scope global|project|effective] [--stdin-json] [--json]',
     description: 'Manage global/project MCP configuration through the shared guarded MCP Config Domain v2.'
-  },
-  wizard: {
-    usage: 'sks wizard',
-    description: 'Open an interactive setup UI for install scope, setup, doctor, and verification.'
   },
   commands: {
     usage: 'sks commands [--json]',
@@ -449,10 +443,6 @@ const COMMAND_HELP_LITE = {
   gx: {
     usage: 'sks gx init|render|validate|drift|snapshot [name]',
     description: 'Create and verify deterministic SVG/HTML visual context cartridges.'
-  },
-  profile: {
-    usage: 'sks profile show|set <model>',
-    description: 'Inspect or set the current SKS model profile metadata.'
   },
   gc: {
     usage: 'sks gc [--dry-run] [--json]',

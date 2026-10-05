@@ -11,6 +11,8 @@ import { COMMANDS } from '../command-registry.js';
  */
 const RETIRED_COMMANDS = [
   'loop', 'run', 'rollback',
+  // Duplicate of quickstart; a profile setter whose state file nothing read.
+  'wizard', 'profile',
   // Folded into `sks proof <subcommand>`.
   'trust', 'stop-gate', 'validate-artifacts', 'hproof', 'proof-field',
   // Moved to the maintainer CLI (npm run maintainer -- <command>).

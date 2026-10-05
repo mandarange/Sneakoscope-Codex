@@ -56,6 +56,11 @@
   file as `sks align run`, so whichever ran last won. Both are now aliases of
   `sks align run`; `sks memory build` runs it before compiling mistake rules,
   and the strict Stop no longer re-projects `AGENTS.md` behind align's back.
+- `sks align run` no longer intermittently leaves its own route open. Its trust
+  report judged `work-order-ledger.json` stale against the mission's last event by
+  mtime, which only held when the two timestamps landed together; on a slower
+  machine about one run in three stayed open and blocked the next route command.
+  The artifacts the route writes once are now exempt from that check.
 
 ### Changed
 
@@ -96,6 +101,9 @@
 - `sks run`, which classified a prompt and shelled out to the route's own
   command, and `sks rollback`, which only `rm -rf`'d managed paths
   (`sks uninstall` owns removal).
+- `sks wizard`, a second name for `sks quickstart` that described an interactive
+  setup UI it never opened, and `sks profile`, which wrote
+  `.sneakoscope/model/current.json` for nothing to read.
 - The maintainer commands `check`, `gates`, `task`, `release`, `daemon`,
   `versioning`, `bench`, `perf`, `features`, `all-features`, `harness` and `rust`
   are no longer in the shipped `sks` CLI or the agent-bridge tool manifest. Run
@@ -103,7 +111,9 @@
   `config/installed-public-surface-closure.v1.json` now pins all of these removed
   names as rejected by the installed package.
 - The npm package no longer ships ~200 release-gate scripts, the maintainer
-  command modules, or two configs only checkouts read (1582 → 1379 files).
+  command modules, or two configs only checkouts read (1582 → 1380 files). It
+  keeps the scripts its own lifecycle needs (version truth, publish tag and
+  preflight, release stamp and pack receipt).
 
 ### Documentation
 
