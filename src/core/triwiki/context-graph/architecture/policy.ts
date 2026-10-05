@@ -382,6 +382,28 @@ export function loadArchitectureMapPolicy(root: string): ArchitectureMapPolicy {
   return parseArchitectureMapPolicy(json);
 }
 
+/**
+ * The architecture-map policy for a project. A project that declares its own
+ * layers in `config/architecture-map-policy.v1.json` gets them; any other
+ * project gets a neutral policy built from the packaged one (`templateRoot`,
+ * the SKS package root): the same budgets and thresholds, a single layer that
+ * names no real module, and no boundaries. Every module is then unconstrained
+ * and the map is a plain module graph, so `sks align` works in every project
+ * instead of failing on a file only the SKS repository has.
+ */
+export function loadProjectArchitectureMapPolicy(root: string, templateRoot: string): ArchitectureMapPolicy {
+  if (typeof root !== 'string' || !root) fail('architecture_map_policy_root_missing', 'root');
+  if (fs.existsSync(path.join(root, ...ARCHITECTURE_MAP_POLICY_FILE.split('/')))) return loadArchitectureMapPolicy(root);
+  const template = loadArchitectureMapPolicy(templateRoot);
+  return parseArchitectureMapPolicy({
+    ...template,
+    module_id_source: 'Neutral policy: this project declares no config/architecture-map-policy.v1.json, so no module belongs to a layer and none is constrained.',
+    layers: [{ id: 'project', purpose: 'Placeholder layer of the neutral policy; it names no real module.', modules: ['.'] }],
+    boundaries: { mode: 'allow-list', allow: [] },
+    exceptions: { mode: 'shrink-only', entries: [] }
+  });
+}
+
 export function moduleLayerMap(policy: ArchitectureMapPolicy): Map<string, string> {
   const map = new Map<string, string>();
   for (const layer of policy.layers) {

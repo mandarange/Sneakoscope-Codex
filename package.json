@@ -46,7 +46,6 @@
     "dist/scripts/{real-execution-check-lib.js,gate-lib.js,runtime-domain-gate-lib.js,typed-routing-gate-lib.js,codex-native-gate-lib.js,skill-fixture-check-lib.js,sks-uninstall-regression-check.js,sksd-daemon-check.js,super-search-provider-interface-check.js,triwiki-cache-key-check.js,triwiki-proof-bank-blackbox.js,triwiki-proof-bank-check.js,triwiki-proof-card-check.js,trust-fixture-check.js,type-surface-codex-app-check.js,ultra-router-auto-router-check.js,uninstall-inventory-check.js,install-surface-ssot-check.js,ux-review-extract-wires-real-extractor-check.js,ux-review-imagegen-blackbox-check.js,ux-review-patch-diff-recheck-check.js,ux-review-real-imagegen-smoke-check.js,ux-review-run-wires-imagegen-check.js,wrongness-fixture-check.js}",
     "dist/scripts/check-publish-tag.js",
     "!dist/core/triwiki/context-graph/benchmark",
-    "!dist/core/agents/agent-cleanup-executor.js",
     "!dist/core/ops/upgrade-migration-fixtures.js",
     "!dist/core/release/npm-stage-tarball-verifier.js",
     "!dist/core/release/npm-stage-tarball-verifier-support.js",

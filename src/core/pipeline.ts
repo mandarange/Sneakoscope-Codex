@@ -11,6 +11,7 @@ export {
   answerOnlyContext,
   computerUseFastContext,
   prepareRoute,
+  sealRouteClarification,
   activeRouteContext,
   recordContext7Evidence,
   recordSubagentEvidence,

@@ -2,6 +2,7 @@ import { isRecordedImagegenModel } from '../imagegen/imagegen-evidence.js';
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { appendJsonl, exists, nowIso, readJson, readText, sha256, writeJsonAtomic } from '../fsx.js';
+import { isClarificationAwaiting } from '../clarification-gate-state.js';
 import { containsUserQuestion, noQuestionContinuationReason } from '../no-question-guard.js';
 import { missionDir, setCurrent } from '../mission.js';
 import { evaluateResearchGate } from '../research.js';
@@ -166,7 +167,7 @@ export async function projectGateStatus(root: any, state: any = {}) {
   const hasActiveGate = Boolean(id && state?.stop_gate && !['none', 'honest_mode', 'clarification-gate'].includes(state.stop_gate));
   const activeGate: any = hasActiveGate ? await passedActiveGate(root, state) : null;
   const activeGateNotApplicable = activeGate?.not_applicable === true;
-  if (clarificationGatePending(state)) {
+  if (isClarificationAwaiting(state)) {
     gates.push({
       id: 'clarification-gate',
       ok: false,
@@ -264,7 +265,7 @@ export async function evaluateStop(root: any, state: any, payload: any, opts: an
   }
   const last = extractLastMessage(payload);
   const jsonCache = new Map<string, Promise<any>>();
-  if (clarificationGatePending(state)) {
+  if (isClarificationAwaiting(state)) {
     if (await hasVisibleClarificationQuestionBlock(root, state, last)) return { continue: true };
     return {
       decision: 'block',
@@ -481,18 +482,6 @@ async function routeProofGateStatus(root: any, state: any = {}) {
     state,
     visualClaim: state.visual_claim === true ? true : (state.visual_claim === false ? false : undefined)
   });
-}
-
-function clarificationGatePending(state: any = {}) {
-  const phase = String(state.phase || '');
-  return Boolean(state?.clarification_required && phase.includes('CLARIFICATION_AWAITING_ANSWERS'))
-    || Boolean(
-      state?.mission_id
-      && state.implementation_allowed === false
-      && state.ambiguity_gate_required === true
-      && state.ambiguity_gate_passed !== true
-      && (phase.includes('CLARIFICATION_AWAITING_ANSWERS') || state.stop_gate === 'clarification-gate')
-    );
 }
 
 async function complianceBlock(root: any, state: any = {}, reason: any = '', detail: any = {}) {

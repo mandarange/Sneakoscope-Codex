@@ -1,7 +1,9 @@
+import fsp from 'node:fs/promises';
 import path from 'node:path';
-import { projectRoot, readJson } from '../fsx.js';
-import { listSessionStates, loadOwnedRouteState, missionDir, setCurrent } from '../mission.js';
-import { PIPELINE_PLAN_ARTIFACT, pipelinePlanState, projectGateStatus, writePipelinePlan } from '../pipeline.js';
+import { projectRoot, readJson, readStdin } from '../fsx.js';
+import { isClarificationAwaiting } from '../clarification-gate-state.js';
+import { listSessionStates, loadMission, loadOwnedRouteState, missionDir, setCurrent } from '../mission.js';
+import { PIPELINE_PLAN_ARTIFACT, pipelinePlanState, projectGateStatus, sealRouteClarification, writePipelinePlan } from '../pipeline.js';
 import { routePrompt } from '../routes.js';
 import { positionalArgs } from '../../cli/args.js';
 import { flag, readFlagValue, resolveMissionId } from './command-utils.js';
@@ -59,8 +61,64 @@ export async function pipelineCommand(args: any = []) {
     console.log(`Pipeline gate: ${result.ok ? 'pass' : 'blocked'}`);
     return;
   }
-  console.error('Usage: sks pipeline status|plan [--json]');
+  if (action === 'answer') return pipelineAnswer(root, state, args.slice(1));
+  console.error('Usage: sks pipeline status|plan|answer [--json]');
   process.exitCode = 1;
+}
+
+const ANSWER_USAGE = 'Usage: sks pipeline answer <mission-id|latest> (--stdin | <answers.json>) [--json]';
+
+// Seals a route paused at its ambiguity gate with the user's answers, the one
+// action that gate allows. Answers overlay the inferred defaults for each slot.
+async function pipelineAnswer(root: any, state: any, args: any = []) {
+  const json = flag(args, '--json');
+  const positionals = positionalArgs(args);
+  const id = await resolveMissionId(root, positionals[0] || state.mission_id || 'latest');
+  const source = flag(args, '--stdin') ? 'stdin' : positionals[1] || null;
+  if (!id || !source) throw new Error(ANSWER_USAGE);
+  const raw = source === 'stdin' ? await readStdin() : await fsp.readFile(path.resolve(source), 'utf8');
+  let answers: any;
+  try {
+    answers = JSON.parse(raw);
+  } catch {
+    answers = null;
+  }
+  if (!answers || typeof answers !== 'object' || Array.isArray(answers)) {
+    return answerFailure(json, { mission_id: id, reason: 'answers_not_a_json_object' }, 'Answers must be a JSON object keyed by slot id.');
+  }
+  if (id !== state.mission_id || !isClarificationAwaiting(state)) {
+    return answerFailure(json, { mission_id: id, reason: 'mission_not_awaiting_answers' }, `Mission ${id} is not paused at its ambiguity gate; nothing to answer.`);
+  }
+  const { dir, mission } = await loadMission(root, id);
+  const schema = await readJson(path.join(dir, 'required-answers.schema.json'), null);
+  if (!Array.isArray(schema?.slots)) return answerFailure(json, { mission_id: id, reason: 'answer_schema_missing' }, `Mission ${id} has no required-answers.schema.json.`);
+  const routeContext = await readJson(path.join(dir, 'route-context.json'), {});
+  const routeCommand = routeContext.command || state.route_command;
+  if (!routeCommand) return answerFailure(json, { mission_id: id, reason: 'route_unknown' }, `Mission ${id} records no route to resume.`);
+  const route = routePrompt(routeCommand);
+  const { result, materialized } = await sealRouteClarification(root, {
+    id,
+    dir,
+    mission,
+    route,
+    routeContext,
+    task: routeContext.task || mission.prompt || '',
+    required: Boolean(routeContext.context7_required),
+    answers,
+    sessionKey: state._session_key || null
+  });
+  if (!result.ok) {
+    return answerFailure(json, { mission_id: id, reason: 'answer_validation_failed', validation: result.validation }, `Answers failed validation; ${route.command} stays paused.\n${JSON.stringify(result.validation?.errors || [], null, 2)}`);
+  }
+  const phase = materialized.phase || `${route.mode}_CLARIFICATION_CONTRACT_SEALED`;
+  if (json) return console.log(JSON.stringify({ schema: 'sks.pipeline-answer.v1', ok: true, mission_id: id, route: route.command, phase, contract_hash: result.contract?.sealed_hash || null }, null, 2));
+  console.log(`Contract sealed for ${route.command} (${id}); route resumes at ${phase}.`);
+}
+
+function answerFailure(json: boolean, result: any, message: string) {
+  process.exitCode = 2;
+  if (json) return console.log(JSON.stringify({ schema: 'sks.pipeline-answer.v1', ok: false, ...result }, null, 2));
+  console.error(message);
 }
 
 function sessionStatusRow(row: any) {

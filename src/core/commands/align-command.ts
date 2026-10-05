@@ -11,6 +11,7 @@ import {
 } from '../align/align-route.js';
 import { projectRoot, readJson } from '../fsx.js';
 import {
+  closeRouteState,
   findLatestMission,
   loadOwnedRouteState,
   missionDir,
@@ -113,14 +114,21 @@ async function alignRun(args: any[]) {
   }
   if (!missionId) return missing(args);
   const execution = await executeCodeNavigationAlign({ root, missionDir: missionDir(root, missionId), missionId });
+  // A run that opened its own mission is a self-contained refresh: prove and
+  // close it here, or the open Align route would block the next route command.
+  const routeClosed = Boolean(prepared) && execution.ok
+    && await finalizeAndCloseAlignRoute(root, missionId, execution.gate, null);
+  const base = commandResult(prepared, missionId, 'run', {
+    maintenance: Boolean(ownership.maintenance_mission_id),
+    activeStopGate: ownership.active_stop_gate
+  });
   const result = {
-    ...commandResult(prepared, missionId, 'run', {
-      maintenance: Boolean(ownership.maintenance_mission_id),
-      activeStopGate: ownership.active_stop_gate
-    }),
+    ...base,
     ok: execution.ok,
     status: execution.gate.status,
     active_route_preserved: Boolean(ownership.maintenance_mission_id),
+    route_closed: routeClosed,
+    next_action: routeClosed ? 'none' : base.next_action,
     gate: execution.gate,
     ledger: execution.ledger
   };
@@ -141,9 +149,7 @@ interface AlignRunOwnership {
 }
 
 async function alignRunOwnership(root: string, requested: string): Promise<AlignRunOwnership> {
-  const sessionKey = process.env.SKS_NARUTO_STANDALONE_CLI === '1'
-    ? ''
-    : String(process.env.CODEX_THREAD_ID || '').trim();
+  const sessionKey = ownerSessionKey() || '';
   if (requested) return { active_align_mission_id: null, maintenance_mission_id: null, active_stop_gate: null };
   const state = await loadOwnedRouteState(root, sessionKey);
   const active = Boolean(state?.mission_id)
@@ -186,6 +192,7 @@ async function alignProof(args: any[]) {
   const refreshed = await refreshAlignGate(dir, missionId, root);
   const proof = await finalizeAlignRoute(root, missionId, refreshed.gate);
   const ok = alignCompletionVerified(refreshed.gate, proof);
+  if (ok) await closeVerifiedAlignRoute(root, missionId, ownerSessionKey());
   const result = {
     schema: 'sks.align-proof.v3',
     schema_version: 3,
@@ -248,6 +255,27 @@ async function finalizeAlignRoute(root: string, missionId: string, gate: any) {
     blockers: gate.blockers?.length ? gate.blockers : ok ? [] : [`align_completion_proof_${proof?.proof?.status || 'invalid'}`]
   });
   return proof;
+}
+
+async function finalizeAndCloseAlignRoute(root: string, missionId: string, gate: any, sessionKey: string | null): Promise<boolean> {
+  const proof = await finalizeAlignRoute(root, missionId, gate);
+  if (!alignCompletionVerified(gate, proof)) return false;
+  return closeVerifiedAlignRoute(root, missionId, sessionKey);
+}
+
+// Closes the route only while this mission still owns the state; a mismatch
+// means another route took over and is left alone. The session file is used
+// only when it holds this mission, so an unrelated session cannot be closed.
+async function closeVerifiedAlignRoute(root: string, missionId: string, sessionKey: string | null): Promise<boolean> {
+  const owned: any = sessionKey ? await loadOwnedRouteState(root, sessionKey).catch(() => ({})) : {};
+  const scoped = Boolean(sessionKey) && String(owned?.mission_id || '') === missionId;
+  const closed: any = await closeRouteState(root, { missionId, ...(scoped ? { sessionKey } : {}), reason: 'align_verified' }).catch(() => null);
+  return closed?.ok === true;
+}
+
+function ownerSessionKey(): string | null {
+  if (process.env.SKS_NARUTO_STANDALONE_CLI === '1') return null;
+  return String(process.env.CODEX_THREAD_ID || '').trim() || null;
 }
 
 function alignCompletionVerified(gate: any, proof: any): boolean {

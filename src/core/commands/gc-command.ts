@@ -20,7 +20,7 @@ export async function memoryCommand(sub: any, args: any = []) {
     if (!result.ok) process.exitCode = 1;
     return output;
   }
-  return gcCommand(args || []);
+  return gcCommand(sub ? [sub, ...(args || [])] : (args || []));
 }
 
 export async function gcCommand(args: any = []) {

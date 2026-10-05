@@ -103,7 +103,7 @@ const COMMAND_MANIFEST_LITE_BASE = [
   { name: 'super-search', summary: 'Run Super-Search provider-independent source intelligence', maturity: 'beta' },
   { name: 'search', summary: 'Local files/text/structure/symbol/context search engines', maturity: 'beta', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'recallpulse', summary: 'RecallPulse evidence route', maturity: 'labs' },
-  { name: 'pipeline', summary: 'Inspect pipeline missions', maturity: 'beta', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
+  { name: 'pipeline', summary: 'Inspect pipeline missions and seal a paused route\'s answers', maturity: 'beta', skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'guard', summary: 'Check harness guard', maturity: 'beta' },
   { name: 'conflicts', summary: 'Check harness conflicts', maturity: 'beta' },
   { name: 'versioning', summary: 'Manage release version metadata', maturity: 'stable' },

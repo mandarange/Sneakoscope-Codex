@@ -336,7 +336,7 @@ const COMMAND_DEFINITIONS = {
     subcommand(() => import('../commands/search.js'), 'run', 'dist/commands/search.js', 'status')
   )),
   recallpulse: entry('labs', 'RecallPulse evidence route', 'dist/commands/recallpulse.js', directCommand(() => import('../commands/recallpulse.js'), 'dist/commands/recallpulse.js')),
-  pipeline: activeRouteDiagnostic(entry('beta', 'Inspect pipeline missions', 'dist/commands/pipeline.js', directCommand(() => import('../commands/pipeline.js'), 'dist/commands/pipeline.js'))),
+  pipeline: activeRouteDiagnostic(entry('beta', 'Inspect pipeline missions and seal a paused route\'s answers', 'dist/commands/pipeline.js', directCommand(() => import('../commands/pipeline.js'), 'dist/commands/pipeline.js'))),
   guard: entry('beta', 'Check harness guard', 'dist/commands/guard.js', directCommand(() => import('../commands/guard.js'), 'dist/commands/guard.js')),
   conflicts: entry('beta', 'Check harness conflicts', 'dist/commands/conflicts.js', directCommand(() => import('../commands/conflicts.js'), 'dist/commands/conflicts.js')),
   versioning: entry('stable', 'Manage release version metadata', 'dist/commands/versioning.js', directCommand(() => import('../commands/versioning.js'), 'dist/commands/versioning.js')),

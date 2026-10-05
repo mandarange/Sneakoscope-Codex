@@ -930,6 +930,68 @@ async function prepareGoalNativeOnlyRoute(route: any, task: any): Promise<any> {
   };
 }
 
+/**
+ * Seal a route's decision contract and advance the route state. Answers are
+ * the inferred defaults for the mission's question schema, overlaid with any
+ * explicit answers: the UserPromptSubmit hook passes none, `sks pipeline
+ * answer` passes the user's reply. A rejected reply is not kept, so the next
+ * attempt starts from the defaults again. When validation fails the route
+ * stays paused at its ambiguity gate.
+ */
+export async function sealRouteClarification(root: any, { id, dir, mission, route, routeContext = {}, task, required = false, answers = {}, sessionKey = null, auto = false }: any) {
+  const schema = await readJson(path.join(dir, 'required-answers.schema.json'), {});
+  await writeJsonAtomic(path.join(dir, 'answers.json'), { ...autoAnswersForSchema(schema), ...answers });
+  const result = await sealContract(dir, mission);
+  const materialized: any = result.ok ? await materializeSealedRoute(dir, id, route, routeContext, mission, task, result.contract || {}) : {};
+  const effectiveTask = materialized.prompt || task;
+  const plan = await writePipelinePlan(dir, { missionId: id, route, task: effectiveTask, required, ambiguity: { required: true, slots: 0, auto_sealed: auto && result.ok, passed: result.ok, contract_hash: result.contract?.sealed_hash || null } });
+  await appendJsonl(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: auto ? 'route.clarification.auto_sealed' : 'route.clarification.answered', route: route.id, slots: 0, ok: result.ok });
+  await setCurrent(root, routeState(id, route, result.ok ? (materialized.phase || `${route.mode}_CLARIFICATION_CONTRACT_SEALED`) : `${route.mode}_CLARIFICATION_AWAITING_ANSWERS`, required, {
+    prompt: effectiveTask,
+    questions_allowed: false,
+    implementation_allowed: result.ok,
+    clarification_required: false,
+    clarification_passed: result.ok,
+    ambiguity_gate_required: true,
+    ambiguity_gate_passed: result.ok,
+    ...pipelinePlanState(plan),
+    original_stop_gate: route.stopGate,
+    stop_gate: route.stopGate,
+    ...(materialized.state || {})
+  }), { sessionKey });
+  return { result, materialized, plan };
+}
+
+async function materializeSealedRoute(dir: any, id: any, route: any, routeContext: any, mission: any, task: any, contract: any) {
+  if (route?.id === 'MadSKS') return materializeAutoSealedMadSks(dir, id, route, routeContext, contract);
+  if (route?.id === 'QALoop') {
+    const artifactResult = await writeQaLoopArtifacts(dir, mission, contract);
+    return {
+      phase: 'QALOOP_CLARIFICATION_CONTRACT_SEALED',
+      prompt: routeContext.task || task,
+      state: {
+        qa_loop_artifacts_ready: true,
+        qa_report_file: artifactResult.report_file,
+        qa_checklist_count: artifactResult.checklist_count,
+        questions_allowed: false
+      }
+    };
+  }
+  if (route?.id === 'PPT') {
+    await writePptRouteArtifacts(dir, contract);
+    return {
+      phase: 'PPT_AUDIENCE_STRATEGY_READY',
+      prompt: routeContext.task || task,
+      state: {
+        ppt_audience_strategy_ready: true,
+        ppt_gate_ready: true,
+        questions_allowed: false
+      }
+    };
+  }
+  return {};
+}
+
 async function prepareClarificationGate(root: any, route: any, task: any, required: any, opts: any = {}) {
   const { id, dir, mission } = await createMission(root, { mode: String(route.mode || route.id || 'route').toLowerCase(), prompt: task, sessionKey: opts.sessionKey });
   const schema = buildQuestionSchemaForRoute(route, task);
@@ -937,57 +999,25 @@ async function prepareClarificationGate(root: any, route: any, task: any, requir
   await writeQuestions(dir, schema);
   const routeContext = { route: route.id, command: route.command, mode: route.mode, task, required_skills: route.requiredSkills, context7_required: required, original_stop_gate: route.stopGate, clarification_gate: true, mad_sks_authorization: Boolean(opts.madSksAuthorization || route.id === 'MadSKS') };
   await writeJsonAtomic(path.join(dir, 'route-context.json'), routeContext);
-  {
-    await writeJsonAtomic(path.join(dir, 'answers.json'), autoAnswersForSchema(schema));
-    const result = await sealContract(dir, mission);
-    let materialized: any = {};
-    if (result.ok && route?.id === 'MadSKS') {
-      materialized = await materializeAutoSealedMadSks(dir, id, route, routeContext, result.contract || {});
-    } else if (result.ok && route?.id === 'QALoop') {
-      const artifactResult = await writeQaLoopArtifacts(dir, mission, result.contract);
-      materialized = {
-        phase: 'QALOOP_CLARIFICATION_CONTRACT_SEALED',
-        prompt: routeContext.task || task,
-        state: {
-          qa_loop_artifacts_ready: true,
-          qa_report_file: artifactResult.report_file,
-          qa_checklist_count: artifactResult.checklist_count,
-          questions_allowed: false
-        }
-      };
-    } else if (result.ok && route?.id === 'PPT') {
-      await writePptRouteArtifacts(dir, result.contract);
-      materialized = {
-        phase: 'PPT_AUDIENCE_STRATEGY_READY',
-        prompt: routeContext.task || task,
-        state: {
-          ppt_audience_strategy_ready: true,
-          ppt_gate_ready: true,
-          questions_allowed: false
-        }
-      };
-    }
-    const effectiveTask = materialized.prompt || task;
-    const plan = await writePipelinePlan(dir, { missionId: id, route, task: effectiveTask, required, ambiguity: { required: true, slots: 0, auto_sealed: result.ok, passed: result.ok, contract_hash: result.contract?.sealed_hash || null } });
-    await appendJsonl(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'route.clarification.auto_sealed', route: route.id, slots: 0, ok: result.ok });
-    await setCurrent(root, routeState(id, route, result.ok ? (materialized.phase || `${route.mode}_CLARIFICATION_CONTRACT_SEALED`) : `${route.mode}_CLARIFICATION_AWAITING_ANSWERS`, required, {
-      prompt: effectiveTask,
-      questions_allowed: false,
-      implementation_allowed: result.ok,
-      clarification_required: false,
-      clarification_passed: result.ok,
-      ambiguity_gate_required: true,
-      ambiguity_gate_passed: result.ok,
-      ...pipelinePlanState(plan),
-      original_stop_gate: route.stopGate,
-      stop_gate: route.stopGate,
-      ...(materialized.state || {})
-    }), { sessionKey: opts.sessionKey });
-    const materializedLine = materialized.phase ? `\nRoute artifacts were materialized immediately; state advanced to ${materialized.phase}.` : '';
+  const { result, materialized } = await sealRouteClarification(root, { id, dir, mission, route, routeContext, task, required, sessionKey: opts.sessionKey, auto: true });
+  if (!result.ok) {
+    const failed = (result.validation?.errors || []).map((error: any) => error.slot).filter(Boolean);
     return {
       route,
       mission_id: id,
       additionalContext: `${promptPipelineContext(task, route, root)}
+
+The ${route.command} contract could not be sealed from the prompt alone${failed.length ? ` (slots: ${[...new Set(failed)].join(', ')})` : ''}.
+Mission: ${id}
+Answer schema: .sneakoscope/missions/${id}/required-answers.schema.json
+Next atomic action: ask the user only for those slots, then seal the reply with "sks pipeline answer ${id} --stdin".`
+    };
+  }
+  const materializedLine = materialized.phase ? `\nRoute artifacts were materialized immediately; state advanced to ${materialized.phase}.` : '';
+  return {
+    route,
+    mission_id: id,
+    additionalContext: `${promptPipelineContext(task, route, root)}
 
 Route contract auto-sealed for ${route.command}: contract answers were inferred from the prompt, TriWiki/current-code defaults, and conservative SKS safety policy.
 Mission: ${id}
@@ -996,8 +1026,7 @@ Resolved answers: .sneakoscope/missions/${id}/resolved-answers.json
 Pipeline plan: .sneakoscope/missions/${id}/${PIPELINE_PLAN_ARTIFACT}
 ${materializedLine}
 Next atomic action: continue the original route lifecycle with the sealed decision-contract.json.`
-    };
-  }
+  };
 }
 
 function autoAnswersForSchema(schema: any = {}) {

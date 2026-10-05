@@ -30,7 +30,6 @@ import { buildCalloutPrompt, generatedImageMetadata, generateImagegenCalloutRevi
 import { extractRealCallouts } from '../image-ux-review/real-callout-extractor.js';
 import { addImageRelation, ingestImage } from '../wiki-image/image-voxel-ledger.js';
 import { sha256File, imageDimensions } from '../wiki-image/image-hash.js';
-import { writeRouteCollaborationArtifacts } from '../agents/route-collaboration-ledger.js';
 import { codexChromeExtensionStatus } from '../codex-app.js';
 import { requireCodexImagegen } from '../imagegen/require-imagegen.js';
 import { imagegenEvidenceClassBlockers, isFullImagegenEvidenceClass, isFullImagegenOutputSource } from '../imagegen/imagegen-evidence.js';
@@ -646,6 +645,7 @@ async function imageUxFixture(root: string, command: string, args: any[]) {
   artifacts.gate = gate;
   await writeJsonAtomic(path.join(dir, 'image-ux-review-gate.json'), gate);
   await ensureFixtureImageVoxelRelation(root, id, relImage);
+  const { writeRouteCollaborationArtifacts } = await import('../agents/route-collaboration-ledger.js');
   const native = await writeRouteCollaborationArtifacts(root, {
     missionId: id,
     route: routeForCommand(command),

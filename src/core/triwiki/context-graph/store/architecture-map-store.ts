@@ -7,7 +7,8 @@
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import type { ArchitectureMapPolicy } from '../architecture/policy.js';
-import { loadArchitectureMapPolicy } from '../architecture/policy.js';
+import { loadProjectArchitectureMapPolicy } from '../architecture/policy.js';
+import { packageRoot } from '../../../fsx.js';
 import type { ContextGraphSnapshot } from '../contracts.js';
 import {
   buildArchitectureMapViews,
@@ -59,7 +60,7 @@ export async function publishArchitectureMapToStage(
   snapshot: ContextGraphSnapshot,
   options: { root: string; policy?: ArchitectureMapPolicy; missionId?: string | null }
 ): Promise<PublishArchitectureMapResult> {
-  const policy = options.policy ?? loadArchitectureMapPolicy(options.root);
+  const policy = options.policy ?? loadProjectArchitectureMapPolicy(options.root, packageRoot());
   const built = buildArchitectureMapViews(snapshot, policy, {
     rootId: options.root,
     missionId: options.missionId ?? null

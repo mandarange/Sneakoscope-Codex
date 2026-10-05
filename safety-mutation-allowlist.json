@@ -869,8 +869,8 @@
       "file": "src/core/commands/image-ux-review-command.ts",
       "symbol": "imageUxFixture",
       "token": "fsp.writeFile",
-      "scope_contract_sha256": "fdc410f3a52493cdb7d8dcf7181d4a60a2ec3db0ea399d1532e87d3ee4d097f8",
-      "callsite_sha256": "e7aa0cf43139629f6140f2cccd75a1d6fdce9930eb412d2e35d292a8021f5f43",
+      "scope_contract_sha256": "3997e5de3870c6f6cc847e8253be8400df284cbbf6893df52ad8a8ef07cc5463",
+      "callsite_sha256": "37019d175dd15a215938d1dedfb6f1579c9c56bb0243d0c5942ef65588cbd395",
       "occurrence": 1,
       "reason": "Runtime artifact writer has caller-scoped path and is externally audited for guard migration."
     },
@@ -4541,8 +4541,8 @@
       "file": "src/scripts/packlist-performance-check.ts",
       "symbol": "module",
       "token": "writeFileSync",
-      "scope_contract_sha256": "8b199bc6e9f9a3edf4accb5fbfaf585b14536ebcf5430a38344d0194c59b5e0c",
-      "callsite_sha256": "6a28e817c0a4891f89016a0cef4da3307a27cb1b9ac430bb9b31451e4e7cd1cf",
+      "scope_contract_sha256": "5cbc7a04ca123e826ed0decdc3c3694524cc4c9791b32fcd67370f9fe8db7682",
+      "callsite_sha256": "fd087f01ec94a2304b0c3daa13d0ddadcbbf037e946cc05a23d956b9df57f572",
       "occurrence": 1,
       "reason": "src/scripts/packlist-performance-check.ts#runNpmPack writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
@@ -4550,8 +4550,8 @@
       "file": "src/scripts/packlist-performance-check.ts",
       "symbol": "module",
       "token": "writeFileSync",
-      "scope_contract_sha256": "8b199bc6e9f9a3edf4accb5fbfaf585b14536ebcf5430a38344d0194c59b5e0c",
-      "callsite_sha256": "680753da0d79de81a14e2c060b6e4a99a46d6219a41a0999f1369d29657085fb",
+      "scope_contract_sha256": "5cbc7a04ca123e826ed0decdc3c3694524cc4c9791b32fcd67370f9fe8db7682",
+      "callsite_sha256": "0c8bfc4b059a541222ae941f883456851b39de31d9780a1884f457183a991056",
       "occurrence": 1,
       "reason": "src/scripts/packlist-performance-check.ts#runNpmPack writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },

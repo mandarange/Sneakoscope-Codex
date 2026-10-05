@@ -876,7 +876,7 @@ async function hookPreTool(root: any, state: any, payload: any, noQuestion: any,
       return { decision: 'block', permissionDecision: 'deny', reason: dbBlockReason(dbDecision) };
     }
   }
-  if (clarificationGateLocked(state) && !clarificationAnswerToolAllowed(payload)) {
+  if (isBlockingClarificationAwaiting(state) && !clarificationAnswerToolAllowed(payload)) {
     return { decision: 'block', permissionDecision: 'deny', reason: clarificationPauseBlockReason(state) };
   }
   const command = extractCommand(payload);
@@ -1148,7 +1148,7 @@ async function hookPermission(root: any, state: any, payload: any, noQuestion: a
   if (dbDecision.action === 'block' || dbDecision.action === 'confirm') {
     return { decision: 'deny', permissionDecision: 'deny', reason: dbBlockReason(dbDecision) };
   }
-  if (clarificationGateLocked(state) && !clarificationAnswerToolAllowed(payload)) {
+  if (isBlockingClarificationAwaiting(state) && !clarificationAnswerToolAllowed(payload)) {
     return { decision: 'deny', permissionDecision: 'deny', reason: clarificationPauseBlockReason(state) };
   }
   // No opinion outside no-question mode: Codex keeps its own approval prompt.
@@ -1203,23 +1203,16 @@ function looksLikeUserGitAction(payload: any = {}) {
   return /\bcodex\b[\s_-]*(?:app\s*)?(?:git\s*)?(?:action|commit|push|pr)\b/i.test(haystack);
 }
 
-function clarificationGateLocked(state: any = {}) {
-  if (isBlockingClarificationAwaiting(state)) return true;
-  return Boolean(
-    state?.mission_id
-    && state.implementation_allowed === false
-    && state.ambiguity_gate_required === true
-    && state.ambiguity_gate_passed !== true
-    && (String(state.phase || '').includes('CLARIFICATION_AWAITING_ANSWERS') || String(state.stop_gate || '') === 'clarification-gate')
-  );
-}
+// `sks pipeline answer` seals any paused route; `sks qa-loop answer` is the
+// QA-LOOP route's own spelling of the same step.
+const CLARIFICATION_ANSWER_COMMAND_RE = /\b(?:pipeline|qa-loop)\s+answer\b/i;
 
 function clarificationAnswerToolAllowed(payload: any = {}) {
   const command = extractCommand(payload);
-  if (/\bpipeline\s+answer\b/i.test(command) && /\b(?:sks|sks\.js|bin\/sks\.js|node)\b/i.test(command)) return true;
+  if (CLARIFICATION_ANSWER_COMMAND_RE.test(command) && /\b(?:sks|sks\.js|bin\/sks\.js|node)\b/i.test(command)) return true;
   if (!payloadMentionsAnswersJson(payload)) return false;
   if (!command) return true;
-  if (/\bpipeline\s+answer\b/i.test(command)) return true;
+  if (CLARIFICATION_ANSWER_COMMAND_RE.test(command)) return true;
   return !/\b(npm|git|selftest|packcheck|release:check|publish:dry|publish:ignore-scripts|publish:npm|doctor|naruto|qa-loop|wiki|db|test)\b/i.test(command);
 }
 

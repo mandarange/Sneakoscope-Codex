@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { readJson } from '../fsx.js';
+import { isClarificationAwaiting } from '../clarification-gate-state.js';
 import { missionDir, validateExternallyReservedMissionId } from '../mission.js';
 import { routePrompt } from '../routes.js';
 import {
@@ -294,15 +295,6 @@ export function looksLikeExplicitActiveWorkflowReplacementPrompt(prompt: unknown
     || /\b(?:start over|switch to a new task)\b/.test(normalized)
     || /(?:현재|기존|이전)[^\n]{0,32}(?:작업|워크플로|실행|미션)[^\n]{0,24}(?:취소|교체|대체|폐기|중단)/.test(normalized)
     || /(?:취소|교체|대체|폐기|중단)[^\n]{0,24}(?:새 작업|새로운 작업|다른 작업)/.test(normalized);
-}
-
-function isClarificationAwaiting(state: any = {}) {
-  const phase = String(state.phase || '');
-  const stopGate = String(state.stop_gate || '');
-  const gateAwaiting = phase.includes('CLARIFICATION_AWAITING_ANSWERS') || stopGate === 'clarification-gate';
-  if (!gateAwaiting || !state?.mission_id) return false;
-  if (state.ambiguity_gate_required !== true || state.ambiguity_gate_passed === true) return false;
-  return Boolean(state.clarification_required || state.implementation_allowed === false);
 }
 
 function officialSubagentsRequiredForPromptOrState(state: any = {}, prompt: string, result: any) {
