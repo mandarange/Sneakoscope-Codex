@@ -1,9 +1,8 @@
 /**
  * Query profiles and the central traversal caps.
  *
- * This file plus `query/ranking-config.ts` are the only two surfaces the bounded
- * optimizer in `optimizer/` is allowed to mutate, so every profile weight and
- * every traversal bound lives here rather than being copied into call sites.
+ * Every profile weight and every traversal bound lives here (ranking weights
+ * live in `query/ranking-config.ts`) rather than being copied into call sites.
  */
 import type { ContextGraphEdgeType } from './contracts.js';
 

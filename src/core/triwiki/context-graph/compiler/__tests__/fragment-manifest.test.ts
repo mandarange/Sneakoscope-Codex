@@ -1,23 +1,25 @@
 import assert from 'node:assert/strict';
-import fsp from 'node:fs/promises';
 import test from 'node:test';
 import { sha256 } from '../../../../fsx.js';
 import {
   ContextFragmentManifestError,
   buildContextFragmentManifest,
   buildFragmentManifestEntry,
+  buildFragmentManifestIdentity,
   computeSourceInventoryFingerprint,
   contextFragmentManifestHash,
   parseContextFragmentManifest,
   serializeContextFragmentManifest,
   type FragmentManifestEntry,
 } from '../fragment-manifest.js';
-import {
-  contextFragmentManifestPath,
-  readContextFragmentManifest,
-  writeContextFragmentManifest,
-} from '../fragment-manifest-store.js';
-import { fixtureIdentity, makeFixtureRoot, removeFixtureRoot } from './incremental-fixtures.js';
+
+function fixtureIdentity() {
+  return buildFragmentManifestIdentity({
+    schemaRevision: '1.0.0',
+    configFingerprint: sha256('config'),
+    tokenizerFingerprint: sha256('tokenizer'),
+  });
+}
 
 function entry(overrides: Partial<FragmentManifestEntry> = {}): FragmentManifestEntry {
   return buildFragmentManifestEntry({
@@ -103,28 +105,4 @@ test('the inventory fingerprint moves with content and with membership', () => {
   removed.delete('src/b.ts');
   assert.notEqual(computeSourceInventoryFingerprint(base), computeSourceInventoryFingerprint(changed));
   assert.notEqual(computeSourceInventoryFingerprint(base), computeSourceInventoryFingerprint(removed));
-});
-
-test('the store round-trips, reports damage without throwing, and writes no host path', async () => {
-  const root = makeFixtureRoot('cg-fragment-manifest');
-  try {
-    assert.equal((await readContextFragmentManifest(root)).status, 'absent');
-
-    const manifest = manifestOf([entry(), entry({ sourcePath: 'src/b.ts', sourceHash: sha256('b'), fragmentHash: sha256('fragment-b') })]);
-    await writeContextFragmentManifest(root, manifest);
-    const loaded = await readContextFragmentManifest(root);
-    assert.equal(loaded.status, 'ok');
-    assert.equal(contextFragmentManifestHash(loaded.manifest!), contextFragmentManifestHash(manifest));
-
-    const text = await fsp.readFile(contextFragmentManifestPath(root), 'utf8');
-    assert.equal(text.includes(root), false);
-    assert.equal(/"[^"]*(?:\/Users\/|\/tmp\/|\/var\/folders\/|~\/)/.test(text), false);
-
-    await fsp.writeFile(contextFragmentManifestPath(root), '{ not json', 'utf8');
-    const damaged = await readContextFragmentManifest(root);
-    assert.equal(damaged.status, 'unreadable');
-    assert.equal(damaged.manifest, null);
-  } finally {
-    removeFixtureRoot(root);
-  }
 });

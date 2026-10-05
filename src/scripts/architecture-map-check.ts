@@ -137,7 +137,6 @@ async function loadCore() {
 
 async function runContract(): Promise<void> {
   const { policyMod, contracts } = await loadCore();
-  const allowlist = await importDist('core/triwiki/context-graph/optimizer/allowlist.js');
   const align = await importDist('core/align/align-route.js');
   const store = await importDist('core/triwiki/context-graph/store/architecture-map-store.js');
 
@@ -164,11 +163,6 @@ async function runContract(): Promise<void> {
     assertGate(exists(schemaRel), 'architecture_map_schema_missing', { path: schemaRel });
   }
 
-  const classification = allowlist.classifyContextGraphPatchTarget(POLICY_FILE);
-  assertGate(classification === 'forbidden', 'architecture_map_policy_patch_target_not_forbidden', {
-    path: POLICY_FILE,
-    classification
-  });
   assertGate(
     readText('src/scripts/check-architecture.ts').includes('imports 5+ unrelated route domains'),
     'architecture_map_check_architecture_missing_domain_fan_in'
@@ -196,7 +190,6 @@ async function runContract(): Promise<void> {
     mode,
     policy_file: POLICY_FILE,
     layers: policy.layers.length,
-    patch_target: classification,
     align_artifacts: store.ARCHITECTURE_MAP_ARTIFACT_RELS.length
   });
 }
