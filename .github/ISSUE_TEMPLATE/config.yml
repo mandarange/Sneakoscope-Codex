@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://github.com/mandarange/Sneakoscope-Codex#documentation
+    about: Check the documentation, FAQ, and troubleshooting guide first.
+  - name: Security vulnerability
+    url: https://github.com/mandarange/Sneakoscope-Codex/security/advisories/new
+    about: Report vulnerabilities privately instead of opening a public issue.

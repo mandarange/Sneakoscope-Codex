@@ -184,7 +184,9 @@
     "generative-engine-optimization",
     "bounded-memory",
     "rollback",
-    "release-integrity"
+    "release-integrity",
+    "codex-cli-tools",
+    "developer-tools"
   ],
   "license": "MIT",
   "dependencies": {
