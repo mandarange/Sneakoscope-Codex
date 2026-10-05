@@ -1,0 +1,15 @@
+diff --git a/package.json b/package.json
+index 92113d4d..ea73d6aa 100644
+--- a/package.json
++++ b/package.json
+@@ -184,7 +184,9 @@
+     "generative-engine-optimization",
+     "bounded-memory",
+     "rollback",
+-    "release-integrity"
++    "release-integrity",
++    "codex-cli-tools",
++    "developer-tools"
+   ],
+   "license": "MIT",
+   "dependencies": {

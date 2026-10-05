@@ -4,11 +4,12 @@
 
 # Sneakoscope Codex
 
-**Plan, build, and verify with Codex.**
+**Make Codex work explainable, bounded, and test-backed.**
 
+[![CI](https://github.com/mandarange/Sneakoscope-Codex/actions/workflows/ci.yml/badge.svg)](https://github.com/mandarange/Sneakoscope-Codex/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/sneakoscope?color=cb3837&logo=npm)](https://www.npmjs.com/package/sneakoscope)
-[![node](https://img.shields.io/badge/node-%3E%3D20.11-339933?logo=node.js&logoColor=white)](#requirements)
-[![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![Node.js >=20.11](https://img.shields.io/badge/node-%3E%3D20.11-339933?logo=node.js&logoColor=white)](#quick-start)
+[![MIT license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 </div>
 
@@ -18,231 +19,181 @@ Sneakoscope Codex (`sks`) is an open-source trust layer for Codex CLI and ChatGP
 
 Current package: **SKS 10.5.1**. Install the latest stable release from npm.
 
-[Quick start](#install-in-one-command) · [Commands](#everyday-commands) · [SKS Center](#sks-center-macos) · [Documentation](#documentation) · [Changelog](CHANGELOG.md)
+Sneakoscope Codex (`sks`) is a local trust layer for Codex CLI and ChatGPT Desktop. It keeps agent work bounded, preserves project context, records machine-verifiable evidence, and prevents release claims that current tests or artifacts cannot support.
 
-## Install in one command
+Use SKS when you want an AI coding session to end with something you can inspect: the change, the checks that ran, and the evidence behind the result. SKS is local-first and deterministic. It does not promise model quality, search rankings, or traffic.
+
+## Quick start
+
+Requirements: Node.js **20.11+**, npm, Git, and a current Codex CLI or supported Codex desktop host.
 
 ```sh
 npm exec --yes --package=sneakoscope@latest -- sneakoscope install --yes
 ```
 
-The installer resolves the latest release, installs it globally, runs setup and
-Doctor, and checks that `sks` on your PATH points to the installed version.
-
-SKS turns on in every project you open in Codex. Its hooks live in the
-user-level `~/.codex/hooks.json`, and `sks update` keeps them installed and
-trusted. To add a project's own SKS files (TriWiki context, ignore rules), run
-this from its root:
+From the root of a project you want SKS to understand:
 
 ```sh
-sks bootstrap --yes
+sks bootstrap
+sks doctor --json
 ```
 
-## What SKS adds
+Then open the project in Codex. Start with the smallest useful loop:
 
-| Capability | What you get |
+```text
+$sks-plan "Describe the change and the checks it needs"
+$sks-work
+$sks-review
+```
+
+Use the terminal to inspect the same state:
+
+```sh
+sks status --json
+sks review --staged
+sks update-check
+```
+
+The installer resolves the latest npm release, installs `sks`, runs setup and Doctor, and verifies that the command on your `PATH` is the version it installed. `sks bootstrap` adds the project-local SKS context and ignore rules; it does not replace your source of truth.
+
+## What you get
+
+| Need | SKS provides |
 | --- | --- |
-| Focused execution | Answers and tiny edits stay lightweight; implementation work runs through official Codex subagents while the parent orchestrates and integrates. |
-| Project context | TriWiki indexes repository code and supplies bounded context that can be checked against source. |
-| Verification | Tests, diagnostics, and release evidence support completion claims. Security and data-integrity checks stay in place. |
-| Native controls | SKS Center brings connections, updates, MCP servers, and diagnostics together on macOS. |
-| Consistent setup | `sks update` installs the latest release, runs Doctor, turns SKS hooks on for every Codex project, and reconciles SKS-managed files and legacy assets. |
-
-The default `essential` profile avoids repetitive completion rituals. `strict`
-adds stronger completion requirements. See [Essential Trust](docs/essential-trust.md).
-
-With Codex-LB connected, `sks agent-bridge async --prompt "Check SKS status while
-explaining what the check covers" --tools status --json` runs native Astra Async
-tool calling with selected read-only SKS tools, using WebSocket first and safe
-HTTP fallback. See [Astra guidance](docs/astra-guidance.md)
-for setup boundaries and reported execution evidence.
+| Keep work focused | Lightweight answers stay lightweight; implementation follows the route you asked for. |
+| Keep context bounded | TriWiki indexes repository code into context that can be checked against source. |
+| Know what actually ran | Tests, diagnostics, and release evidence are recorded for completion claims. |
+| Recover safely | Doctor and update flows report a concrete recovery action when a check needs attention. |
+| Operate locally | The CLI works without a hosted control plane; macOS users can also use SKS Center. |
 
 ## Everyday commands
 
-SKS enables experimental Codex context management by default during setup and
-repair. Turn it off in **SKS Center → Settings → Context management**, or
-use `sks codex-app context-management off`. Updates preserve an explicit opt-out.
-Start a new task after changing the setting. Availability depends on a supported
-Codex client and eligible ChatGPT sign-in; API-key and custom-provider sessions
-may not activate it. See [OpenAI's context management guidance](https://learn.chatgpt.com/docs/models#experimental-context-management).
+Inside a Codex conversation:
 
-Use these inside a Codex conversation:
-
-| Command | Purpose |
+| Command | Use it for |
 | --- | --- |
-| `$sks-plan "task"` | Create a plan without editing product code. |
+| `$sks-plan "task"` | Write a plan without editing product code. |
 | `$sks-work` | Execute the latest plan. |
-| `$sks-naruto "task"` | Run an official subagent workflow. |
 | `$sks-review` | Review the current changes. |
+| `$sks-naruto "task"` | Explicitly split independent work across official subagents. |
 | `$sks-help` | Explore available SKS workflows. |
 
-Use these in your terminal:
+In a terminal:
 
 ```sh
 sks --help
 sks status --json
-sks review --staged
 sks doctor --json
 sks update-check
 sks update
 ```
 
-`sks update` runs setup reconciliation even when the package is already current.
-It preserves user-authored configuration and cleans up recognized SKS-owned
-legacy assets. If a check needs attention, follow its reported recovery action
-in your terminal.
+`$sks-naruto` is opt-in for work you ask to split. Ordinary fixes, tests, refactors, and reviews stay with the main agent by default.
 
-## SKS Center (macOS)
+## How the trust loop works
 
-Open **SKS Control Center** from the SKS menu bar.
-The Menu Bar app (with the Control Center) is built from source on macOS when you run
-`npm i -g sneakoscope` interactively in a terminal, and by `sks install`, `sks doctor --fix`,
-`sks update`, or `sks menubar install`. Dependency, CI, and piped installs never touch your
-home directory; set `SKS_POSTINSTALL_MENUBAR=1` to force the build in a script, or
-`SKS_POSTINSTALL_NO_MENUBAR=1` to skip it.
+1. **Plan** — describe the outcome and the evidence it needs.
+2. **Build** — make the smallest change that satisfies the plan.
+3. **Verify** — run the project checks and SKS diagnostics.
+4. **Review** — inspect the diff and the evidence before claiming completion.
 
-| Page | Use it to |
-| --- | --- |
-| Overview | Check local health and find the next action. |
-| Connections | Connect Codex-LB or OpenRouter, choose Prefer Codex-LB or OpenRouter Only, and manage exposed models. |
-| Subagent Models | Keep the OpenRouter models subagents may use in OpenRouter Only Mode, with the criteria Jev routes by. |
-| Updates | Check and update SKS and Codex CLI, with operation progress and recovery details. |
-| MCP Servers | Manage server configuration, health checks, and authentication. |
-| Image Generation | Keep Codex's default image generation, or route it through the Desktop Bridge to an OpenRouter image model you pick. |
-| Diagnostics | Inspect issues and run targeted checks. |
-| Settings | Configure lifecycle behavior, notifications, and advanced options. |
-| Remote Coding | Find the independent [Paseo companion](https://paseo.sh/docs) and its setup guidance. |
+SKS keeps these steps observable. It does not turn a failed check into a success, invent test output, or silently substitute a provider.
 
-Connection controls appear first. Model catalogs, bridge diagnostics, and
-advanced settings expand when you need them.
+## Optional integrations
 
-## Desktop Bridge
+### SKS Center on macOS
 
-One local bridge manages routing for independent **Codex-LB** and **OpenRouter**
-profiles. ChatGPT sign-in remains owned by Codex. Provider choices and existing
-session pins remain authoritative; unavailable routes are reported explicitly.
+The menu bar app exposes connections, updates, MCP servers, image generation, and diagnostics in one place. Build it from an interactive macOS install or run:
 
-In **Connections**, turn on **Prefer Codex-LB** to use the saved Codex-LB
-connection first for eligible models. The switch distinguishes a saved preference
-from connection readiness: **on but unavailable** means setup needs attention.
-Turning it off restores the configured official-model routing preference.
+```sh
+sks menubar install
+```
 
-Turn on **OpenRouter Only** instead to run the main thread and every subagent on
-OpenRouter models. The two switches are mutually exclusive: turning one on turns
-the other off. Subagents may use only the models on the **Subagent Models** page,
-and with Jev mode on, Jev picks one for each child from the criteria you wrote.
-See [OpenRouter Only Mode](docs/openrouter-only-mode.md).
+Dependency, CI, and piped installs do not touch your home directory. Set `SKS_POSTINSTALL_MENUBAR=1` to force the build in a script, or `SKS_POSTINSTALL_NO_MENUBAR=1` to skip it.
 
-The same controls are available from the CLI:
+### Desktop Bridge
+
+The Desktop Bridge can route eligible models through Codex-LB or OpenRouter while keeping provider choice and session pins explicit:
 
 ```sh
 sks bridge auth-priority status --json
 sks bridge auth-priority on --json
-sks bridge auth-priority off --json
-sks bridge openrouter-only on --json
-sks bridge subagent-models list --json
 sks bridge status --json
-sks bridge route explain gpt-6-astra --json
 ```
 
-Enter credentials through the native connection dialog or the CLI's
-`--api-key-stdin` option. See the [provider guide](docs/codex-lb.md) for
-configuration, transport checks, and recovery commands.
+Enter credentials only through the native connection dialog or an explicit `--api-key-stdin` flow. See [Codex-LB guidance](docs/codex-lb.md) and [OpenRouter Only Mode](docs/openrouter-only-mode.md).
 
-## Image generation
+### Image generation
 
-SKS image routes (image generation, UX-Review callouts, PPT assets, slide
-reviews) follow one image mode. By default they use Codex's own image
-generation. Turn on a custom image model on the **Image Generation** page to
-send every SKS image through the Desktop Bridge to an OpenRouter image model
-you pick. SKS pins no image model and records which model made each image.
+SKS records which image mode produced an artifact and keeps the default Codex image route available:
 
 ```sh
 sks imagegen status --json
 sks imagegen models --json
-sks imagegen enable --model black-forest-labs/flux.2-klein-4b
 sks imagegen generate --prompt "App icon, flat, blue" --out icon.png
-sks imagegen disable
 ```
 
-See [Image generation](docs/image-generation.md) for both modes, evidence
-sidecars, and the Jev choices.
-
-## Naruto workflow
-
-Naruto is for work you ask to split, not the default for implementation. A bug
-fix, a test, a refactor or config change, or a review is the main agent's own
-job, the way Codex works by default: no mission, no subagent plan, no parent edit
-gate. Naruto runs when you invoke `$sks-naruto`, pass `--agents N`, or ask for
-subagents or parallel work in so many words, and, with Jev mode on, when Jev
-judges that the task splits into independent parts (single is its default).
-
-Inside Naruto the parent orchestrates: it decomposes the task, spawns a child for
-each disjoint slice, waits, and owns integration and final verification. It does
-not implement slices itself. The SKS PreToolUse hook denies parent source edits
-until the first child starts and while children are still running. Children
-receive bounded tasks and do not spawn children.
-
-No model family is pinned. Every child runs the newest model of the tier its
-work needs, read from the Codex models cache, so a new model family is used as
-soon as Codex lists it:
-
-| Work | Tier | Effort | Today |
-| --- | --- | --- | --- |
-| Tiny mechanical tasks | fast | low | `gpt-6-luna` |
-| Instructed implementation | balanced | low | `gpt-6.1-sol` |
-| Exploration, large-context reads, and direct tool operation | context | medium | `gpt-6.1-sol` |
-| Planning, review, debugging, and focused judgment | deep | max | `gpt-6-astra` |
-
-With Jev mode on, Jev picks the tier for every spawn that names no managed role (a managed role runs the tier pinned in its role file), every gated parent edit,
-the plan, and the context, so the parent spends no time on those choices. It
-also picks the pipeline for each prompt; an explicit SKS dollar command always
-wins. A stored role-model preference on a current model wins in both modes.
-
-An active Codex task keeps the user's selected main model, effort, and service
-tier. Codex native `/goal` remains the persisted goal owner. Parallelism depends
-on useful independent work and the host's available capacity.
-
-See the [Naruto guide](docs/naruto.md) for explicit agent counts, role preferences,
-trust boundaries, and completion evidence.
-
-## Project context
-
-```sh
-sks align run
-sks search context "How does authentication routing work?" --json
-sks wiki validate .sneakoscope/wiki/context-pack.json --json
-```
-
-`align` rebuilds the repository navigation graph and its context projections.
-These are generated local caches; refresh them after material changes. See the
-[Context Graph guide](docs/architecture/context-graph.md) for source lookup and
-freshness semantics.
-
-## Requirements
-
-- Node.js **20.11 or newer** and npm.
-- Git for repository workflows and reviews.
-- The latest stable Codex CLI or supported desktop host; capabilities are checked at runtime.
-- macOS for the native menu bar and Center. Linux and Windows CLI support is best-effort.
+See [Image generation](docs/image-generation.md) for provider boundaries and evidence sidecars.
 
 ## Documentation
 
 - [Product contract](docs/PRODUCT-CONTRACT.md) — supported surfaces and ownership.
 - [Essential Trust](docs/essential-trust.md) — verification profiles and safety boundaries.
-- [Astra guidance](docs/astra-guidance.md) — how SKS applies the official model recommendations.
+- [Astra guidance](docs/astra-guidance.md) — how SKS applies official model recommendations.
 - [Agent Bridge](docs/AGENT-BRIDGE.md) — integrate through the CLI or MCP interface.
-- [Codex-LB priority](docs/codex-lb-priority.md) — how Codex App WebSockets follow the Center priority setting.
-- [OpenRouter Only Mode](docs/openrouter-only-mode.md) — run everything on OpenRouter with a subagent model list Jev routes by.
+- [Context Graph](docs/architecture/context-graph.md) — bounded source lookup and freshness.
 - [Release readiness](docs/release-readiness.md) — build, verify, and publish a release.
 - [Release evidence](docs/release-proof-truth.md) — what each verification result proves.
+- [FAQ](docs/faq.md) — common setup questions.
+- [Troubleshooting](docs/troubleshooting.md) — concrete recovery paths.
 - [Changelog](CHANGELOG.md) — changes by version.
 
-For development: `npm ci --ignore-scripts`, then `npm run build`.
-Use `npm run typecheck` and `npm test` to verify changes; follow the release guide
-before publication.
+## FAQ and troubleshooting
 
-Questions or bugs? [Open an issue](https://github.com/mandarange/Sneakoscope-Codex/issues).
+### Does SKS send my source code to a hosted service?
+
+SKS is local-first. Provider integrations are explicit opt-in routes; inspect the provider and bridge status before using them. Do not paste credentials or private source into an issue.
+
+### Why does `sks doctor` report a problem after an update?
+
+Run `sks doctor --json`, read the reported recovery action, and run that action exactly. If the issue remains, capture the command, operating system, Node.js version, and redacted JSON in a bug report.
+
+### How do I turn off experimental context management?
+
+In SKS Center, open **Settings → Context management**, or run:
+
+```sh
+sks codex-app context-management off
+```
+
+Start a new Codex task after changing the setting. Availability depends on the Codex client and account session.
+
+### Why is the menu bar app missing?
+
+The native Center is macOS-only. Run `sks menubar install` from an interactive terminal, then run `sks doctor --json`. Linux and Windows CLI support is best-effort.
+
+### Does SKS guarantee better AI output or search visibility?
+
+No. SKS verifies process evidence and release claims. Model behavior and search outcomes remain separate measurements.
+
+For a reproducible issue, use the [bug report form](https://github.com/mandarange/Sneakoscope-Codex/issues/new?template=bug_report.yml). For a question, start a discussion or open an issue with the smallest redacted reproduction.
+
+## Development
+
+```sh
+npm ci --ignore-scripts
+npm run build
+npm run typecheck
+npm test
+```
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Release work follows [release readiness](docs/release-readiness.md); do not publish a package from an unverified working tree.
+
+## Support and security
+
+- Bug reports: [issue form](https://github.com/mandarange/Sneakoscope-Codex/issues/new?template=bug_report.yml)
+- Feature ideas: [feature form](https://github.com/mandarange/Sneakoscope-Codex/issues/new?template=feature_request.yml)
+- Security reports: see [SECURITY.md](SECURITY.md)
 
 ## License
 
