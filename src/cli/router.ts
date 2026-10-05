@@ -238,7 +238,7 @@ async function dispatchInner(argv: readonly string[]): Promise<unknown> {
       for (const blocker of migrationGate.blockers) console.error(`Required blocker: ${blocker}`);
       for (const warning of migrationGate.warnings) console.error(`Optional warning: ${warning}`);
       console.error(`Receipt: ${migrationGate.receipt_path}`);
-      console.error('Remedies: run `sks doctor --fix --yes`, then retry; diagnostics that must bypass this gate are marked skipMigrationGate in the command registry.');
+      console.error('Remedies: run `sks doctor --fix --yes`, then retry; diagnostics that must bypass this gate are marked skipMigrationGate in the command manifest.');
       if (argv.includes('--json')) console.log(JSON.stringify(migrationGate, null, 2));
       process.exitCode = 1;
       return migrationGate;

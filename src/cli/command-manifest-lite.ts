@@ -16,6 +16,8 @@ export type CommandInputProfileLite =
   | 'gates'
   | 'validate-artifacts';
 
+export type ActiveRoutePolicy = 'always' | 'diagnostic-only' | 'blocked-while-active';
+
 export interface CommandManifestLiteEntry {
   name: string;
   summary: string;
@@ -25,8 +27,14 @@ export interface CommandManifestLiteEntry {
   allowedDuringActiveRoute?: boolean;
   skipMigrationGate?: boolean;
   mutatesRouteState?: boolean;
+  /** Gate files a route-state mutator owns under its mission directory. */
+  ownedGateFiles?: readonly string[];
   deprecated?: boolean;
   hidden?: boolean;
+  /** Derived from the flags above; never written in the table. */
+  activeRoutePolicy?: ActiveRoutePolicy;
+  /** Derived: true exactly when `ownedGateFiles` is non-empty. */
+  ownsGates?: boolean;
   risk: CommandRiskLite;
   latency: CommandLatencyLite;
   supportsJson: boolean;
@@ -36,7 +44,8 @@ export interface CommandManifestLiteEntry {
 }
 
 type CommandManifestLiteSourceEntry = Omit<CommandManifestLiteEntry,
-  'risk' | 'latency' | 'supportsJson' | 'remoteAllowed' | 'inputProfile' | 'requiredCapabilities'>;
+  'risk' | 'latency' | 'supportsJson' | 'remoteAllowed' | 'inputProfile' | 'requiredCapabilities'
+  | 'activeRoutePolicy' | 'ownsGates'>;
 
 export type CommandContractMetadataLite = Pick<CommandManifestLiteEntry,
   'risk' | 'latency' | 'supportsJson' | 'remoteAllowed' | 'inputProfile' | 'requiredCapabilities'>;
@@ -57,13 +66,13 @@ const COMMAND_MANIFEST_LITE_BASE = [
   { name: 'review', summary: 'Review a git diff with machine evidence first', maturity: 'stable', allowedDuringActiveRoute: true },
   { name: 'root', summary: 'Show active SKS root', maturity: 'stable', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'install', summary: 'Install the exact packaged SKS version globally and verify the resolved CLI', maturity: 'stable', skipMigrationGate: true },
-  { name: 'update', summary: 'Inspect, review, apply, or roll back the global SKS update', maturity: 'stable' },
-  { name: 'uninstall', summary: 'Uninstall SKS global skills, hooks, config, menu bar, and optional project residue', maturity: 'stable', allowedDuringActiveRoute: true },
+  { name: 'update', summary: 'Inspect, review, apply, or roll back the global SKS update', maturity: 'stable', skipMigrationGate: true },
+  { name: 'uninstall', summary: 'Uninstall SKS global skills, hooks, config, menu bar, and optional project residue', maturity: 'stable', skipMigrationGate: true, allowedDuringActiveRoute: true },
   { name: 'update-check', summary: 'Show the shared SKS, Codex CLI, and Menu Bar update status', maturity: 'stable', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'config', summary: 'Adopt project Codex config into SKS management', maturity: 'stable', skipMigrationGate: true },
   { name: 'mcp', summary: 'Manage scoped Codex MCP configuration', maturity: 'beta', skipMigrationGate: true },
   { name: 'wizard', summary: 'Open setup wizard help', maturity: 'stable' },
-  { name: 'usage', summary: 'Show focused usage topic', maturity: 'stable', readonly: true, allowedDuringActiveRoute: true, diagnostic: true },
+  { name: 'usage', summary: 'Show focused usage topic', maturity: 'stable', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'quickstart', summary: 'Show quickstart flow', maturity: 'stable' },
   { name: 'setup', summary: 'Initialize SKS state', maturity: 'stable', skipMigrationGate: true },
   { name: 'bootstrap', summary: 'Initialize SKS project files', maturity: 'stable', skipMigrationGate: true },
@@ -72,7 +81,7 @@ const COMMAND_MANIFEST_LITE_BASE = [
   { name: 'fix-path', summary: 'Repair hook command paths', maturity: 'stable' },
   { name: 'doctor', summary: 'Check and repair SKS install', maturity: 'stable', skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'git', summary: 'Inspect and enforce SKS git collaboration hygiene', maturity: 'beta' },
-  { name: 'paths', summary: 'Inspect SKS managed paths', maturity: 'beta', readonly: true, allowedDuringActiveRoute: true, diagnostic: true },
+  { name: 'paths', summary: 'Inspect SKS managed paths', maturity: 'beta', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'rollback', summary: 'List or apply managed-path rollback actions', maturity: 'beta', skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'postinstall', summary: 'Restore package state; bootstrap only with explicit opt-in', maturity: 'stable', skipMigrationGate: true },
   { name: 'codex', summary: 'Check Codex CLI compatibility and vendored hook schemas', maturity: 'beta', skipMigrationGate: true },
@@ -82,23 +91,23 @@ const COMMAND_MANIFEST_LITE_BASE = [
   { name: 'menubar', summary: 'Inspect/install/restart/uninstall SKS menu bar', maturity: 'beta', skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'remote', summary: 'Inspect official Remote readiness and run the proof-aware SSH stdio worker', maturity: 'beta' },
   { name: 'hooks', summary: 'Explain and inspect Codex hooks', maturity: 'beta', skipMigrationGate: true },
-  { name: 'mad-sks', summary: 'MAD-SKS scoped permission modifier + SQL-plane execution', maturity: 'beta', mutatesRouteState: true },
+  { name: 'mad-sks', summary: 'MAD-SKS scoped permission modifier + SQL-plane execution', maturity: 'beta', mutatesRouteState: true, ownedGateFiles: ['mad-sks-gate.json'] },
   { name: 'auto-review', summary: 'Manage auto-review profile', maturity: 'beta' },
   { name: 'dollar-commands', summary: 'List Codex App dollar commands', maturity: 'stable', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'fast-mode', summary: 'Toggle SKS Fast mode default for dollar-command routes', maturity: 'stable', skipMigrationGate: true },
   { name: 'commit', summary: 'Create a simple git commit', maturity: 'stable' },
   { name: 'commit-and-push', summary: 'Create a simple git commit and push', maturity: 'stable' },
-  { name: 'dfix', summary: 'Run DFix diagnose/plan/patch/verify loop', maturity: 'stable', mutatesRouteState: true },
-  { name: 'naruto', summary: 'Run the $sks-naruto Codex official subagent workflow', maturity: 'labs', mutatesRouteState: true },
+  { name: 'dfix', summary: 'Run DFix diagnose/plan/patch/verify loop', maturity: 'stable', mutatesRouteState: true, ownedGateFiles: ['dfix-gate.json'] },
+  { name: 'naruto', summary: 'Run the $sks-naruto Codex official subagent workflow', maturity: 'labs', mutatesRouteState: true, ownedGateFiles: ['naruto-gate.json', 'stop-gate.json'] },
   { name: 'stop-gate', summary: 'Check canonical stop-gate resolution for a route/mission', maturity: 'beta', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'route', summary: 'Inspect or close active route state', maturity: 'beta', skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'loop', summary: 'Retired: use Codex native Goal for persisted goals/loops (NC-38)', maturity: 'labs' },
-  { name: 'qa-loop', summary: 'Run QA loop missions', maturity: 'beta', mutatesRouteState: true },
-  { name: 'research', summary: 'Run research missions', maturity: 'labs', mutatesRouteState: true },
-  { name: 'autoresearch', summary: 'Alias for research/autoresearch route', maturity: 'labs', mutatesRouteState: true },
-  { name: 'ppt', summary: 'Inspect/build PPT artifacts', maturity: 'labs', mutatesRouteState: true },
-  { name: 'image-ux-review', summary: 'Inspect image UX artifacts', maturity: 'labs', mutatesRouteState: true },
-  { name: 'computer-use', summary: 'Record native Mac/non-web Computer Use visual evidence', maturity: 'beta', mutatesRouteState: true },
+  { name: 'qa-loop', summary: 'Run QA loop missions', maturity: 'beta', mutatesRouteState: true, ownedGateFiles: ['qa-gate.json'] },
+  { name: 'research', summary: 'Run research missions', maturity: 'labs', mutatesRouteState: true, ownedGateFiles: ['research-gate.json'] },
+  { name: 'autoresearch', summary: 'Alias for research/autoresearch route', maturity: 'labs', mutatesRouteState: true, ownedGateFiles: ['research-gate.json'] },
+  { name: 'ppt', summary: 'Inspect/build PPT artifacts', maturity: 'labs', mutatesRouteState: true, ownedGateFiles: ['ppt-gate.json'] },
+  { name: 'image-ux-review', summary: 'Inspect image UX artifacts', maturity: 'labs', mutatesRouteState: true, ownedGateFiles: ['image-ux-review-gate.json'] },
+  { name: 'computer-use', summary: 'Record native Mac/non-web Computer Use visual evidence', maturity: 'beta', mutatesRouteState: true, ownedGateFiles: ['computer-use-gate.json'] },
   { name: 'context7', summary: 'Context7 checks and docs', maturity: 'beta' },
   { name: 'super-search', summary: 'Run Super-Search provider-independent source intelligence', maturity: 'beta' },
   { name: 'search', summary: 'Local files/text/structure/symbol/context search engines', maturity: 'beta', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
@@ -110,7 +119,7 @@ const COMMAND_MANIFEST_LITE_BASE = [
   { name: 'reasoning', summary: 'Show reasoning route', maturity: 'labs' },
   { name: 'aliases', summary: 'Show command aliases', maturity: 'stable' },
   { name: 'cleanup', summary: 'Permanently blank active TriWiki without retaining a previous generation', maturity: 'beta' },
-  { name: 'align', summary: 'Create or replace TriWiki as a code-only repository navigation graph', maturity: 'beta', mutatesRouteState: true },
+  { name: 'align', summary: 'Create or replace TriWiki as a code-only repository navigation graph', maturity: 'beta', mutatesRouteState: true, ownedGateFiles: ['align-gate.json'] },
   { name: 'selftest', summary: 'Run local mock selftest', maturity: 'stable' },
   { name: 'goal', summary: 'Print stateless Codex native Goal controls', maturity: 'beta' },
   { name: 'seo-geo-optimizer', summary: 'Run unified SEO/GEO optimizer audit/plan/apply/verify plus research/strategy (--include-marketing) on the search-visibility kernel', maturity: 'beta' },
@@ -131,13 +140,13 @@ const COMMAND_MANIFEST_LITE_BASE = [
   { name: 'wiki', summary: 'Manage TriWiki and image voxel ledgers', maturity: 'beta', skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'memory', summary: 'Project TriWiki memory into managed AGENTS.md blocks or run memory GC', maturity: 'beta' },
   { name: 'gc', summary: 'Compact/prune runtime state', maturity: 'labs', skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
-  { name: 'stats', summary: 'Show storage stats', maturity: 'labs', readonly: true, diagnostic: true },
+  { name: 'stats', summary: 'Show storage stats', maturity: 'labs', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'features', summary: 'Validate feature registry', maturity: 'beta' },
   { name: 'all-features', summary: 'Run all-features selftest', maturity: 'beta' },
   { name: 'perf', summary: 'Run performance checks', maturity: 'beta' },
   { name: 'bench', summary: 'Run core trust-kernel benchmark budgets', maturity: 'beta' },
   { name: 'mcp-server', summary: 'Run a stdio MCP server exposing SKS commands as tools for MCP-capable agent hosts', maturity: 'beta', skipMigrationGate: true, allowedDuringActiveRoute: true },
-  { name: 'agent-bridge', summary: 'Register SKS tools or run read-only tools with native Astra async calling', maturity: 'beta', readonly: true, diagnostic: true },
+  { name: 'agent-bridge', summary: 'Register SKS tools or run read-only tools with native Astra async calling', maturity: 'beta', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'decision', summary: 'Manage optional Jev decisions through OpenRouter: status, enable, disable, probe, evaluate', maturity: 'labs', skipMigrationGate: true, allowedDuringActiveRoute: true },
   { name: 'imagegen', summary: 'Generate images with the active SKS image mode (Codex default or a custom OpenRouter model): status, models, enable, disable, generate', maturity: 'beta', skipMigrationGate: true, allowedDuringActiveRoute: true }
 ] as const satisfies readonly CommandManifestLiteSourceEntry[];
@@ -166,7 +175,6 @@ const COMMAND_CONTRACT_OVERRIDES_LITE = {
   'computer-use': { latency: 'long' },
   config: { risk: 'R2', supportsJson: true, remoteAllowed: false, inputProfile: 'json-only' },
   dfix: { latency: 'long' },
-  'dollar-commands': { risk: 'R2', latency: 'normal' },
   eval: { latency: 'long' },
   gates: {
     risk: 'R1', latency: 'long', supportsJson: true, remoteAllowed: true,     inputProfile: 'gates', requiredCapabilities: ['project.git', 'proof.gates']
@@ -230,10 +238,23 @@ const COMMAND_CONTRACT_OVERRIDES_LITE = {
   }
 } as const satisfies Partial<Record<CommandNameLite, Partial<CommandContractMetadataLite>>>;
 
-export const COMMAND_MANIFEST_LITE = COMMAND_MANIFEST_LITE_BASE.map((entry) => ({
+function derivedRouteFields(entry: CommandManifestLiteSourceEntry): Pick<CommandManifestLiteEntry, 'activeRoutePolicy' | 'ownsGates'> {
+  const activeRoutePolicy: ActiveRoutePolicy | undefined = entry.mutatesRouteState ? 'blocked-while-active'
+    : entry.readonly ? 'always'
+      : entry.diagnostic ? 'diagnostic-only'
+        : entry.allowedDuringActiveRoute ? 'always'
+          : undefined;
+  return {
+    ...(activeRoutePolicy ? { activeRoutePolicy } : {}),
+    ...((entry.ownedGateFiles?.length ?? 0) > 0 ? { ownsGates: true } : {})
+  };
+}
+
+export const COMMAND_MANIFEST_LITE = COMMAND_MANIFEST_LITE_BASE.map((entry: CommandManifestLiteSourceEntry) => ({
   ...SAFE_COMMAND_CONTRACT_LITE,
-  ...('readonly' in entry && entry.readonly === true ? { risk: 'R0' as const, latency: 'fast' as const } : {}),
+  ...(entry.readonly === true ? { risk: 'R0' as const, latency: 'fast' as const } : {}),
   ...entry,
+  ...derivedRouteFields(entry),
   ...(COMMAND_CONTRACT_OVERRIDES_LITE[entry.name as keyof typeof COMMAND_CONTRACT_OVERRIDES_LITE] || {})
 })) as readonly (CommandManifestLiteEntry & { name: CommandNameLite })[];
 
