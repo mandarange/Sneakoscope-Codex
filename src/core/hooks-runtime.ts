@@ -24,7 +24,6 @@ import {
   agentWorkerHookContext,
   agentWorkerHookRecursionDecision
 } from './agents/agent-recursion-guard.js';
-import { evaluateLoopContinuation } from './loops/loop-continuation-enforcer.js';
 import { diagnosticPromptAllowedDuringNoQuestions } from './routes/diagnostic-allowlist.js';
 import { maybeReconcileProjectSkillsPreflight } from './hooks-runtime/skill-reconcile-preflight.js';
 import { codePackFreshnessNote } from './hooks-runtime/code-pack-freshness-preflight.js';
@@ -1224,28 +1223,6 @@ async function hookStop(root: any, state: any, payload: any, noQuestion: any, se
   if (!noQuestion) {
     const lightTurn = await consumeLightTurnStopBypass(root, { sessionKey, turnId: hookTurnId(payload) });
     if (lightTurn.accepted) return { continue: true, action: 'light_turn', silent: true };
-  }
-  if (state?.mode === 'LOOP' || state?.route === 'Loop' || state?.route_command === '$Loop') {
-    const missionId = state?.mission_id;
-    if (missionId) {
-      const continuation = await evaluateLoopContinuation({ root, missionId }).catch(() => null);
-      if (continuation?.should_continue) {
-        return {
-          decision: 'block',
-          reason: `SKS Loop continuation required. Resume with: ${continuation.resume_instruction}`
-        };
-      }
-      if (continuation?.terminal_blocked) {
-        return {
-          continue: true,
-          action: 'loop_terminal_unverified',
-          status: 'unverified',
-          stop_reason: continuation.stop_reason,
-          completion_claim_allowed: false,
-          systemMessage: `SKS Loop stopped without a success claim (${continuation.stop_reason}). See .sneakoscope/missions/${missionId}/loop-continuation-enforcer.json.`
-        };
-      }
-    }
   }
   if (await consumeCodexGitActionStopBypass(root, payload)) {
     return {

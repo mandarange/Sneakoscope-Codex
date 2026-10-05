@@ -101,7 +101,6 @@ const COMMAND_MANIFEST_LITE_BASE = [
   { name: 'naruto', summary: 'Run the $sks-naruto Codex official subagent workflow', maturity: 'labs', mutatesRouteState: true, ownedGateFiles: ['naruto-gate.json', 'stop-gate.json'] },
   { name: 'stop-gate', summary: 'Check canonical stop-gate resolution for a route/mission', maturity: 'beta', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'route', summary: 'Inspect or close active route state', maturity: 'beta', skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
-  { name: 'loop', summary: 'Retired: use Codex native Goal for persisted goals/loops (NC-38)', maturity: 'labs' },
   { name: 'qa-loop', summary: 'Run QA loop missions', maturity: 'beta', mutatesRouteState: true, ownedGateFiles: ['qa-gate.json'] },
   { name: 'research', summary: 'Run research missions', maturity: 'labs', mutatesRouteState: true, ownedGateFiles: ['research-gate.json'] },
   { name: 'autoresearch', summary: 'Alias for research/autoresearch route', maturity: 'labs', mutatesRouteState: true, ownedGateFiles: ['research-gate.json'] },
@@ -182,7 +181,6 @@ const COMMAND_CONTRACT_OVERRIDES_LITE = {
   harness: { latency: 'long' },
   'image-ux-review': { latency: 'long' },
   install: { risk: 'R2', latency: 'long' },
-  loop: { latency: 'long' },
   'mad-sks': { risk: 'R3', latency: 'long' },
   mcp: { risk: 'R2', latency: 'long', supportsJson: true, inputProfile: 'json-only' },
   naruto: {

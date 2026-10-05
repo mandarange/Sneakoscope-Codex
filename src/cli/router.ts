@@ -452,5 +452,5 @@ function activeRouteStateBlocksCommand(state: any = {}) {
   const mode = String(state.mode || '').toUpperCase();
   if (!mode || ['WIKI', 'STATUS', 'HELP'].includes(mode)) return false;
   if (/(?:DONE|COMPLETE|CLOSED|BLOCKED|FAILED)$/i.test(String(state.phase || ''))) return false;
-  return Boolean(state.route || state.route_command || ['NARUTO', 'QALOOP', 'RESEARCH', 'LOOP', 'MADSKS', 'GOAL'].includes(mode));
+  return Boolean(state.route || state.route_command || ['NARUTO', 'QALOOP', 'RESEARCH', 'MADSKS', 'GOAL'].includes(mode));
 }

@@ -96,11 +96,11 @@ async function invocationRouter(id: string): Promise<void> {
   try {
     const tmp = await tempRoot(id)
     const mod = await importDist('core/codex-native/codex-native-invocation-router.js')
-    const agent = await mod.resolveCodexNativeInvocationPlan({ root: tmp, missionId: 'M-router', route: '$Loop', desiredCapability: 'agent-role' })
+    const agent = await mod.resolveCodexNativeInvocationPlan({ root: tmp, missionId: 'M-router', route: '$QA-LOOP', desiredCapability: 'agent-role' })
     const hook = await mod.resolveCodexNativeInvocationPlan({ root: tmp, missionId: 'M-router', route: '$MAD', desiredCapability: 'hook-evidence' })
     assertGate(agent.selected_strategy === 'codex-sdk', 'agent-role plan should record the native codex-sdk strategy', agent)
     assertGate(hook.selected_strategy === 'blocked' && hook.blockers.includes('hook_approval_not_approved'), 'hook evidence must block when approval unknown', hook)
-    assertGate(fs.existsSync(path.join(tmp, '.sneakoscope', 'missions', 'M-router', 'codex-native-invocation-plan.loop.agent-role.json')), 'mission invocation artifact missing')
+    assertGate(fs.existsSync(path.join(tmp, '.sneakoscope', 'missions', 'M-router', 'codex-native-invocation-plan.qa-loop.agent-role.json')), 'mission invocation artifact missing')
   } finally {
     restoreEnv(previous)
   }
@@ -109,7 +109,7 @@ async function invocationRouter(id: string): Promise<void> {
 
 async function routeMap(id: string): Promise<void> {
   const source = readText('src/core/codex-native/codex-native-invocation-router.ts')
-  for (const token of ['$Loop', '$QA-LOOP', '$Research', '$Image', '$MAD', '$Doctor', 'hook_approval_not_approved']) {
+  for (const token of ['$QA-LOOP', '$Research', '$Image', '$MAD', '$Doctor', 'hook_approval_not_approved']) {
     assertGate(source.includes(token), `route map token missing:${token}`)
   }
   emitGate(id)

@@ -213,7 +213,6 @@ const COMMAND_LOADERS = {
   naruto: command('dist/core/commands/naruto-command.js', argsCommand(() => import('../core/commands/naruto-command.js'), 'narutoCommand')),
   'stop-gate': command('dist/core/commands/stop-gate-command.js', commandArgsCommand(() => import('../core/commands/stop-gate-command.js'), 'stopGateCommand')),
   route: command('dist/core/commands/route-command.js', subcommand(() => import('../core/commands/route-command.js'), 'routeCommand', 'status')),
-  loop: command('dist/core/commands/loop-command.js', subcommand(() => import('../core/commands/loop-command.js'), 'loopCommand', 'help')),
   'qa-loop': command('dist/core/commands/qa-loop-command.js', subcommand(() => import('../core/commands/qa-loop-command.js'), 'qaLoopCommand')),
   research: command('dist/core/commands/research-command.js', subcommand(() => import('../core/commands/research-command.js'), 'researchCommand')),
   autoresearch: command('dist/core/commands/autoresearch-command.js', subcommand(() => import('../core/commands/autoresearch-command.js'), 'autoresearchCommand', 'status')),

@@ -3,7 +3,7 @@ import { nowIso, writeJsonAtomic } from '../fsx.js'
 import { buildCodexNativeFeatureMatrix } from './codex-native-feature-broker.js'
 import type { CodexNativeFeatureMatrix } from './codex-native-feature-matrix.js'
 
-export type CodexNativeRoute = '$Loop' | '$QA-LOOP' | '$Research' | '$Image' | '$MAD' | '$Doctor'
+export type CodexNativeRoute = '$QA-LOOP' | '$Research' | '$Image' | '$MAD' | '$Doctor'
 
 export type CodexNativeDesiredCapability =
   | 'agent-role'

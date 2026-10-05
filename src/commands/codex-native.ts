@@ -28,7 +28,7 @@ export async function run(_command: any, args: any = []) {
   if (action === 'execution-profile') return printCodexNativeResult(args, await resolveCodexAppExecutionProfile({ root }));
   if (action === 'interop-policy') return printCodexNativeResult(args, await buildCodexNativeInteropPolicy({ root }));
   if (action === 'route' || action === 'invocation-plan') {
-    const route = readOption(args, '--route', '$Loop') as '$Loop' | '$QA-LOOP' | '$Research' | '$Image' | '$MAD' | '$Doctor';
+    const route = readOption(args, '--route', '$QA-LOOP') as '$QA-LOOP' | '$Research' | '$Image' | '$MAD' | '$Doctor';
     const desiredCapability = readOption(args, '--capability', 'agent-role') as any;
     const missionId = readOption(args, '--mission', null);
     return printCodexNativeResult(args, await resolveCodexNativeInvocationPlan({ root, missionId, route, desiredCapability }));
