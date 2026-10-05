@@ -56,7 +56,8 @@ test('substantive prompt during an active Naruto state prepares a fresh parallel
     const result = await evaluateHookPayload('user-prompt-submit', {
       cwd: root,
       conversation_id: 'active-route-fresh-parallel',
-      prompt: '새 훅 병렬 처리 구조를 분석하고 코드 수정해줘'
+      // An explicit request for child agents; "병렬 처리 구조" alone would be subject matter.
+      prompt: '새 훅 구조를 분석하고 서브에이전트로 나눠서 코드 수정해줘'
     }, { root, state: ACTIVE_NARUTO_STATE });
 
     const context = String(result.additionalContext || '');

@@ -246,7 +246,7 @@ export const ROUTES = [
     command: '$Naruto',
     mode: 'NARUTO',
     route: 'Codex official subagent workflow',
-    description: '$Naruto runs implementation work through Codex official subagents. The parent orchestrates: it owns decomposition, integration, and scoped verification, spawns a child per disjoint slice, and does not implement slices itself; standalone launches default to the latest deep-tier model. Each child runs the newest model of the tier its work needs; Jev mode picks the tier on spawn, and a stored role preference wins. Honor explicit counts and measured host limits, and reuse returned capacity.',
+    description: '$Naruto splits work the user asked to parallelize across Codex official subagents. The parent orchestrates: it owns decomposition, integration, and scoped verification, spawns a child per disjoint slice, and does not implement slices itself; standalone launches default to the latest deep-tier model. Each child runs the newest model of the tier its work needs; Jev mode picks the tier on spawn, and a stored role preference wins. Honor explicit counts and measured host limits, and reuse returned capacity.',
     requiredSkills: ['naruto', 'pipeline-runner', 'prompt-pipeline', 'honest-mode'],
     dollarAliases: ['$Work'],
     appSkillAliases: ['work', 'from-chat-img'],
@@ -1183,15 +1183,16 @@ const NARUTO_GATE_ROUTE_OWNED_IDS = new Set([
   'QALoop'
 ]);
 
+// Artifact pipelines whose explicit invocation starts a panel of children. Review,
+// DB, and MAD-SKS are not here: their skills are single-agent work (a one-pass
+// diff review, a migration safety review, a capability-bound SQL run), and child
+// agents holding a write-capable DB profile would widen the blast radius.
 const NARUTO_GATE_SPECIALIZED_PARALLEL_ROUTE_IDS = new Set([
-  'Review',
   'ReleaseReview',
   'PPT',
   'ImageUXReview',
   'SuperSearch',
   'SEOGEOOptimizer',
-  'DB',
-  'MadSKS',
   'GX'
 ]);
 

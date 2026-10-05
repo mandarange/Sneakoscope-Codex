@@ -14,11 +14,17 @@ parent edit gate, and the hook adds about a fifth of the text a Naruto turn
 carries. Naruto runs when:
 
 - you invoke `$sks-naruto` or `$sks-work`, pass `--agents N`, or ask for
-  subagents or parallel work in so many words (a risk word such as "payment" or
-  "deploy" in the same prompt does not cancel the request);
-- you invoked a specialized route by name (`$sks-review`, `$sks-ppt`, `$sks-db`, ...), which
-  keeps its panel of children, while the same route picked from the prompt's
-  wording does not fan out by itself;
+  subagents or parallel work as a request ("in parallel", "use 3 subagents",
+  "split this across agents"); a word such as "parallel" or "naruto" used as
+  subject matter ("fix the parallel test runner") is not a request, and a risk
+  word such as "payment" or "deploy" does not cancel a real one;
+- you invoked an artifact pipeline by name (`$sks-ppt`, `$sks-image-ux-review`,
+  `$sks-gx`, `$sks-seo-geo-optimizer`, `$sks-super-search`, `$sks-release-review`),
+  which keeps its panel of children, while the same route picked from the
+  prompt's wording does not fan out by itself. `$sks-review`, `$sks-db`, and
+  `$sks-mad-sks` stay single-agent even when named: a diff review, a migration
+  review, and a capability-bound SQL run are one agent's job, and children
+  holding a write-capable database profile would widen the blast radius;
 - Jev mode is on and Jev judges that the task splits into two or more
   independent parts (different files or modules, no shared edits). Single is the
   default and the answer whenever Jev is unsure.

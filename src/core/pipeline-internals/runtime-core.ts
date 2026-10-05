@@ -595,7 +595,7 @@ export function dfixQuickContext(prompt: any, route: any = routePrompt(prompt), 
     'Task list:',
     '1. Infer the smallest visible Direct Fix target from the request and current files.',
     '2. Inspect only the files needed to locate that target.',
-    `3. Apply only the listed Direct Fix edit; keep broad implementation routed to Naruto, and for UI/UX micro-edits read design.md when present and use imagegen for any image/logo/raster asset. ${CODEX_IMAGEGEN_REQUIRED_POLICY}`,
+    `3. Apply only the listed Direct Fix edit; anything broader is ordinary work done outside DFix, and for UI/UX micro-edits read design.md when present and use imagegen for any image/logo/raster asset. ${CODEX_IMAGEGEN_REQUIRED_POLICY}`,
     '4. Run only cheap verification when useful, such as syntax check, focused test, or local render smoke.',
     stopFinalizationRitualsEnforced(root)
       ? '5. Final response: start with `DFix 완료 요약:` and include one `DFix 솔직모드:` line with verified / not verified / remaining issue status. Do not create TriWiki/TriFix/reflection/state records and do not enter repeated full-route Honest Mode loops.'

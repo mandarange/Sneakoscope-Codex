@@ -133,9 +133,8 @@ export function quickstartCommand() {
   sks doctor
   sks commands
   sks dollar-commands
-  sks all-features selftest --mock --execute-fixtures --strict-artifacts --json
 
-For implementation work, use Codex App prompt routes such as $sks-naruto, $sks-goal, $sks-qa-loop, $sks-image-ux-review, and $sks-computer-use.`);
+Ask Codex for ordinary work directly; SKS hooks keep it safe. Use $sks-plan to plan, $sks-naruto or $sks-work to split work across child agents, and $sks-help to see every route.`);
 }
 
 export async function updateStatusCommand(args: any = []) {

@@ -42,7 +42,7 @@ sks bootstrap --yes
 
 | Capability | What you get |
 | --- | --- |
-| Focused execution | Answers and tiny edits stay lightweight; implementation work runs through official Codex subagents while the parent orchestrates and integrates. |
+| Focused execution | Answers, tiny edits, ordinary implementation, reviews, and DB work run directly in the main agent, the way Codex works by default. Naruto splits work across official Codex subagents only when you ask for it. |
 | Project context | TriWiki indexes repository code and supplies bounded context that can be checked against source. |
 | Verification | Tests, diagnostics, and release evidence support completion claims. Security and data-integrity checks stay in place. |
 | Native controls | SKS Center brings connections, updates, MCP servers, and diagnostics together on macOS. |
@@ -71,7 +71,7 @@ Use these inside a Codex conversation:
 | Command | Purpose |
 | --- | --- |
 | `$sks-plan "task"` | Create a plan without editing product code. |
-| `$sks-work` | Execute the latest plan. |
+| `$sks-work` | Execute the latest plan with Naruto child agents. |
 | `$sks-naruto "task"` | Run an official subagent workflow. |
 | `$sks-review` | Review the current changes. |
 | `$sks-help` | Explore available SKS workflows. |
@@ -171,11 +171,16 @@ sidecars, and the Jev choices.
 ## Naruto workflow
 
 Naruto is for work you ask to split, not the default for implementation. A bug
-fix, a test, a refactor or config change, or a review is the main agent's own
-job, the way Codex works by default: no mission, no subagent plan, no parent edit
-gate. Naruto runs when you invoke `$sks-naruto`, pass `--agents N`, or ask for
-subagents or parallel work in so many words, and, with Jev mode on, when Jev
-judges that the task splits into independent parts (single is its default).
+fix, a test, a refactor or config change, a review (`$sks-review` included), or
+database work (`$sks-db`, `$sks-mad-sks`) is the main agent's own job, the way
+Codex works by default: no subagent plan and no parent edit gate. Naruto runs
+when you invoke `$sks-naruto` or `$sks-work`, pass `--agents N`, ask for subagents
+or parallel work as a request ("in parallel", "use 3 subagents", "split this
+across agents"; a word like "parallel" in a file name is not a request), or name
+an artifact pipeline that works as a panel (`$sks-ppt`, `$sks-image-ux-review`,
+`$sks-gx`, `$sks-seo-geo-optimizer`, `$sks-super-search`, `$sks-release-review`).
+With Jev mode on, Jev may also judge that a task splits into independent parts
+(single is its default).
 
 Inside Naruto the parent orchestrates: it decomposes the task, spawns a child for
 each disjoint slice, waits, and owns integration and final verification. It does
@@ -183,9 +188,10 @@ not implement slices itself. The SKS PreToolUse hook denies parent source edits
 until the first child starts and while children are still running. Children
 receive bounded tasks and do not spawn children.
 
-No model family is pinned. Every child runs the newest model of the tier its
-work needs, read from the Codex models cache, so a new model family is used as
-soon as Codex lists it:
+No model version is pinned. Each tier maps to a model family (fast: Luna,
+balanced: Sol, context: Terra or Sol, deep: Astra), and every child runs the
+newest version of its tier's family that the Codex models cache lists, so a new
+version is used as soon as Codex lists it:
 
 | Work | Tier | Effort | Today |
 | --- | --- | --- | --- |

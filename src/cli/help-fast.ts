@@ -8,7 +8,7 @@ SNEAKOSCOPE CODEX v${PACKAGE_VERSION}
 3-pillar frontdoor
 
   $sks-plan "task"          plan only; writes .sneakoscope/plans, no code edits
-  $sks-work                 execute the latest plan with evidence gates
+  $sks-work                 execute the latest plan with Naruto child agents
 
 Local surfaces
 
@@ -24,7 +24,7 @@ Discovery
   for (const row of commandRows().filter((entry: any) => entry.maturity !== 'labs').slice(0, 18)) {
     console.log(`  ${row.usage.padEnd(58)} ${row.description}`);
   }
-  console.log('\nRun `sks commands` for the full catalog. Core promise: machine-verified completion, not vibes.');
+  console.log('\nRun `sks commands` for the full catalog.');
 }
 
 function commandRows() {
