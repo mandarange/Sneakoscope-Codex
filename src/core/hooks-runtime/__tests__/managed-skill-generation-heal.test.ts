@@ -45,7 +45,7 @@ const NARUTO_8_0_1 = [
   '',
   '## Runtime contract',
   '',
-  'CLI entrypoint: sks naruto run "<task>" [--agents N] [--max-threads N] [--json]; sks naruto status|subagents|proof [--mission <id>] [--json]; sks naruto execution status [--json]; sks naruto execution set --mode auto|current-session|standalone [--restart] [--json]; sks naruto parent-summary --mission <id> --stdin [--json]',
+  'CLI entrypoint: sks naruto run "<task>" [--agents N] [--max-threads N] [--json]; sks naruto status|subagents|proof [--mission <id>] [--json]; sks naruto parent-summary --mission <id> --stdin [--json]',
   'Core directive: sks.core-engineering-directive.v1/83a59fec2975649a',
   '',
   '## Safety',
