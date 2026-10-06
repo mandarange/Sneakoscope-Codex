@@ -58,3 +58,10 @@ jobs:
             echo "::error title=npm test failure::$line"
           done < <(tail -n 40 "$RUNNER_TEMP/sks-npm-test.log")
           exit 1
+      - name: Upload test failure log
+        if: steps.test.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-test-failure-${{ github.run_id }}
+          path: ${{ runner.temp }}/sks-npm-test.log
+          if-no-files-found: error
