@@ -51,11 +51,8 @@ jobs:
             tail -n 160 "$RUNNER_TEMP/sks-npm-test.log"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-          details=$(tail -n 120 "$RUNNER_TEMP/sks-npm-test.log")
-          details=${details//'%'/'%25'}
-          details=${details//$'\r'/'%0D'}
-          details=${details//$'\n'/'%0A'}
-          echo "::error title=npm test failure::$details"
+          details=$(tail -n 120 "$RUNNER_TEMP/sks-npm-test.log" | base64 -w0)
+          echo "::error title=npm test failure::base64:$details"
           exit 1
       - name: Upload test failure log
         if: always() && steps.test.outcome == 'failure'
