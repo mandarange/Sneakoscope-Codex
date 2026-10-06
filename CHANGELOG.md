@@ -87,7 +87,8 @@
 
 - Refreshed runtime and tooling dependencies to current stable releases: MCP
   SDK 2.3.1, Codex SDK 0.160.1, TypeScript 6.0.3, smol-toml
-  1.9.0, ws 8.22.0, and matching current type, jsdom, and Mermaid packages.
+  1.9.0, ws 8.22.0, @types/node 24.19.1, and matching current @types/ws,
+  jsdom, and Mermaid packages.
 
 - The essential profile stops producing strict-only rituals: route plans no
   longer seed request intake, a repository scan, engineering-sanity and

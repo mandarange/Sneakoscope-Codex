@@ -5,8 +5,8 @@
 10.5.1 carries the Desktop Bridge settings read that was hiding a saved
 Codex-LB preference, plus the stable dependency refresh in this follow-up tree.
 `smol-toml@1.9.0`, MCP SDK 2.3.1, Codex SDK 0.160.1, TypeScript 6.0.3, and
-the current stable ws, jsdom, Mermaid, and type packages are resolved in the
-lockfile. Session pins that push bridge settings past 256KiB are trimmed to the
+the current stable ws, jsdom, Mermaid, and Node 24 type packages are resolved
+in the lockfile. Session pins that push bridge settings past 256KiB are trimmed to the
 newest pins that fit, instead of making the whole file look missing.
 Verification is the clean-commit `npm run release:check:full` stamp, pack
 receipt, provenance, and a `main` commit that matches `origin/main`.
