@@ -4,6 +4,10 @@
 
 ### Fixed
 
+- Official Codex runtime resolution now accepts npm's hoisted project layout
+  when a packaged install places `@openai/codex` in the parent `node_modules`.
+  The existing manifest pins, metadata checks, realpath containment, and
+  official-runtime trust verification remain required for every candidate.
 - Context compaction no longer fails on Codex-LB and OpenRouter threads with
   `Error running remote compact task: … bridge_upstream_request_failed`. SKS
   points Codex's built-in OpenAI provider at the Desktop Bridge, so Codex

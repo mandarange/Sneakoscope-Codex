@@ -70,10 +70,47 @@ export async function resolveOfficialCodexPackageRuntime(input: {
 } = {}): Promise<CodexRuntimeResolution> {
   const requestedBy = input.requestedBy || 'official-codex-package-runtime-resolver';
   const root = packageRoot();
-  const nodeModulesRoot = path.join(root, 'node_modules');
+  const platformRuntime = officialCodexPlatformRuntime();
+  const nodeModulesRoots = officialNodeModulesRoots(root);
+  const blocked: CodexRuntimeResolution[] = [];
+  for (const nodeModulesRoot of nodeModulesRoots) {
+    const resolution = await resolveOfficialCodexPackageRuntimeAtNodeModulesRoot(
+      nodeModulesRoot,
+      requestedBy,
+      platformRuntime
+    );
+    if (resolution.ok) return resolution;
+    blocked.push(resolution);
+  }
+  // Prefer the actual validation failure over another candidate's absence.
+  return blocked.find((resolution) => !resolution.blockers.includes('codex_sdk_official_runtime_package_not_found'))
+    || blocked[blocked.length - 1] || officialRuntimeBlocked(
+    path.join(nodeModulesRoots[0] || path.join(root, 'node_modules'), '@openai', 'codex'),
+    'codex_sdk_official_runtime_package_not_found'
+  );
+}
+
+function officialNodeModulesRoots(root: string): string[] {
+  const roots = [path.join(root, 'node_modules')];
+  const parent = path.dirname(root);
+  // npm installs unscoped packages directly under node_modules, and scoped
+  // packages under node_modules/@scope. A directory merely nested somewhere
+  // beneath node_modules is not an installed package layout.
+  if (path.basename(parent) === 'node_modules') {
+    roots.push(parent);
+  } else if (path.basename(parent).startsWith('@') && path.basename(path.dirname(parent)) === 'node_modules') {
+    roots.push(path.dirname(parent));
+  }
+  return roots;
+}
+
+async function resolveOfficialCodexPackageRuntimeAtNodeModulesRoot(
+  nodeModulesRoot: string,
+  requestedBy: string,
+  platformRuntime: OfficialCodexPlatformRuntime | null
+): Promise<CodexRuntimeResolution> {
   const basePackageRoot = path.join(nodeModulesRoot, '@openai', 'codex');
   const basePackageJsonPath = path.join(basePackageRoot, 'package.json');
-  const platformRuntime = officialCodexPlatformRuntime();
   if (!platformRuntime) {
     return officialRuntimeBlocked(basePackageRoot, 'codex_sdk_official_runtime_platform_unsupported');
   }

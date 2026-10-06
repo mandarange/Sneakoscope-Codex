@@ -15,15 +15,6 @@
   rewritten. The safe gap is a fail-closed recovery action, not automatic
   conversion.
 
-## Packaged install layout
-
-- `npm run blackbox:pack-install` stops at its `naruto run` step, reported as
-  `blocked: codex_sdk_official_runtime_package_not_found`, when the tarball is
-  installed into a project. The official Codex runtime resolver only looks in
-  the package's own `node_modules`, and npm hoists `@openai/codex` next to the
-  package in that layout. Global installs nest it and are unaffected. The
-  resolver's path containment is a trust boundary, so it is not loosened here.
-
 ## Known Gaps
 
 No P0 blocker is intentionally left open for Codex CLI compatibility detection, `codex exec resume --output-schema` fixture coverage, UX-Review generated callout ingestion, text-only fallback blocking, mock-as-real blocking, Image Voxel relation validation, memory summary rebuilds, repeated blocker stops, version drift, or release readiness reporting.
