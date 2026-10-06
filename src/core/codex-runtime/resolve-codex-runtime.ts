@@ -69,11 +69,56 @@ export async function resolveOfficialCodexPackageRuntime(input: {
   readonly requestedBy?: string;
 } = {}): Promise<CodexRuntimeResolution> {
   const requestedBy = input.requestedBy || 'official-codex-package-runtime-resolver';
-  const root = packageRoot();
-  const nodeModulesRoot = path.join(root, 'node_modules');
+  return resolveOfficialCodexPackageRuntimeAtPackageRoot(packageRoot(), requestedBy);
+}
+
+/**
+ * Resolve the pinned package layout for a package root.
+ *
+ * The product resolver above always supplies the compiled package's own
+ * packageRoot(). Keeping this layout evaluator separate lets tests construct
+ * isolated npm layouts without adding a user-controlled path override to the
+ * product-facing resolver.
+ */
+export async function resolveOfficialCodexPackageRuntimeAtPackageRoot(
+  root: string,
+  requestedBy = 'official-codex-package-runtime-resolver'
+): Promise<CodexRuntimeResolution> {
+  const platformRuntime = officialCodexPlatformRuntime();
+  const nodeModulesRoots = officialNodeModulesRoots(root);
+  const blocked: CodexRuntimeResolution[] = [];
+  for (const nodeModulesRoot of nodeModulesRoots) {
+    const resolution = await resolveOfficialCodexPackageRuntimeAtNodeModulesRoot(
+      nodeModulesRoot,
+      requestedBy,
+      platformRuntime
+    );
+    if (resolution.ok) return resolution;
+    blocked.push(resolution);
+  }
+  return blocked[blocked.length - 1] || officialRuntimeBlocked(
+    path.join(nodeModulesRoots[0] || path.join(root, 'node_modules'), '@openai', 'codex'),
+    'codex_sdk_official_runtime_package_not_found'
+  );
+}
+
+function officialNodeModulesRoots(root: string): string[] {
+  const roots = [path.join(root, 'node_modules')];
+  let ancestor = path.dirname(root);
+  while (ancestor !== path.dirname(ancestor)) {
+    if (path.basename(ancestor) === 'node_modules') roots.push(ancestor);
+    ancestor = path.dirname(ancestor);
+  }
+  return [...new Set(roots)];
+}
+
+async function resolveOfficialCodexPackageRuntimeAtNodeModulesRoot(
+  nodeModulesRoot: string,
+  requestedBy: string,
+  platformRuntime: OfficialCodexPlatformRuntime | null
+): Promise<CodexRuntimeResolution> {
   const basePackageRoot = path.join(nodeModulesRoot, '@openai', 'codex');
   const basePackageJsonPath = path.join(basePackageRoot, 'package.json');
-  const platformRuntime = officialCodexPlatformRuntime();
   if (!platformRuntime) {
     return officialRuntimeBlocked(basePackageRoot, 'codex_sdk_official_runtime_platform_unsupported');
   }
