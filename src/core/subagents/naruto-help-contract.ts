@@ -21,7 +21,7 @@ export function renderNarutoUsage(): string {
     '',
     'Usage: sks naruto run "<task>" [options]',
     '       sks naruto status|subagents|proof [latest|M-...] [--json]',
-    '       sks naruto execution status|set --mode auto|current-session|standalone [--restart] [--json]',
+    '       sks naruto execution status [--json] | sks naruto execution set --mode auto|current-session|standalone [--restart] [--json]',
     '       sks naruto parent-summary --mission M-... --stdin [--json]',
     '',
     'Run or inspect the Codex official-subagent Naruto workflow.',

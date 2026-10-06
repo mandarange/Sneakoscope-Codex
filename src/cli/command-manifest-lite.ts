@@ -433,7 +433,7 @@ const COMMAND_HELP_LITE = {
     description: 'Project TriWiki context-pack memory into managed AGENTS.md blocks or run bounded memory cleanup.'
   },
   naruto: {
-    usage: 'sks naruto run "task" [--agents N] [--max-threads N] [--trusted-project] [--json] | sks naruto status|subagents|proof [latest|M-...] [--json] | sks naruto execution status|set --mode auto|current-session|standalone [--restart] [--json] | sks naruto parent-summary --mission M-... --stdin [--json]',
+    usage: 'sks naruto run "task" [--agents N] [--max-threads N] [--trusted-project] [--json] | sks naruto status|subagents|proof [latest|M-...] [--json] | sks naruto execution status [--json] | sks naruto execution set --mode auto|current-session|standalone [--restart] [--json] | sks naruto parent-summary --mission M-... --stdin [--json]',
     description: 'Run or inspect the Codex official subagent workflow: an orchestrating parent (latest deep-tier standalone default), children on the newest model of their tier (Jev picks the tier on spawn when Jev mode is on), max_depth=1, and structured parent-thread completion evidence.'
   },
   reasoning: {
