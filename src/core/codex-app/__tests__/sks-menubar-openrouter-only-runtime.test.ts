@@ -93,7 +93,7 @@ struct OpenRouterOnlyHarness {
         // set refusals carry the 0-based row index; the page shows 1-based rows.
         let refused = envelope("subagent-models.set", ok: false, blockers: ["subagent_model_duplicate:1"], result: [:])
         precondition(OpenRouterOnlyReceipt.decode(refused).primaryIssue == "Row 2: this model is already on the list.")
-        precondition(OpenRouterOnlyMessages.describe("subagent_model_id_invalid:0") == "Row 1: not an OpenRouter model id (vendor/model).")
+        precondition(OpenRouterOnlyMessages.describe("subagent_model_id_invalid:0") == "Row 1: not a valid model id for this connection.")
 
         // Subagent list snapshot: available rows are validated and de-duplicated.
         let list = envelope("subagent-models.list", result: [

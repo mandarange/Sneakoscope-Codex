@@ -268,7 +268,7 @@ async function deriveOfficialSubagentPreparation(
       ...(sliceWriteScopes.length === 0 ? {} : { changedPaths: sliceWriteScopes })
     }
   )
-  const roleModelPreferences = await readRoleModelPreferences({ env: input.env || process.env, openRouterOnly: childModels.list !== null })
+  const roleModelPreferences = await readRoleModelPreferences({ env: input.env || process.env, openRouterOnly: childModels.allowlist.mode === 'openrouter_only', listMode: childModels.list !== null })
   const roleModelRouting = await readConfiguredCodexModelRoutingContext({ env: input.env || process.env })
   const roleModelCatalog = roleModelRouting.catalog
   const activeMainModel = input.sessionScope && roleModelRouting.selected_provider && roleModelRouting.selected_model
@@ -376,10 +376,11 @@ async function deriveOfficialSubagentPreparation(
   }
   const observedParentModel = String(input.observedParentModel || '').trim() || null
   // OpenRouter Only Mode: the parent is the OpenRouter main model in config.toml, not a tier model.
-  const parentModelPolicy = childModels.list ? childModels.list.mainModel : narutoParentModel()
+  const openRouterChildren = childModels.allowlist.mode === 'openrouter_only'
+  const parentModelPolicy = openRouterChildren ? childModels.list!.mainModel : narutoParentModel()
   const parentModelMatch = !observedParentModel
     ? null
-    : childModels.list
+    : openRouterChildren
       ? canonicalChildModelId(observedParentModel) === canonicalChildModelId(parentModelPolicy)
       : observedParentModelMatchesPolicy(observedParentModel)
   const delegationGoal = input.readOnly
@@ -453,7 +454,7 @@ async function deriveOfficialSubagentPreparation(
       ? [`exact_subagent_decomposition_incomplete:requested=${budget.requestedSubagents}:ready_slices=${slices.length}`]
       : []),
     ...(budget.capacity.exhausted ? ['subagent_capacity_exhausted'] : []),
-    ...(childModels.list && !childModels.list.allowlist.default_model ? ['openrouter_only_subagent_list_empty'] : [])
+    ...(childModels.list && !childModels.list.allowlist.default_model ? [childModels.allowlist.mode === 'openrouter_only' ? 'openrouter_only_subagent_list_empty' : 'configured_subagent_list_unavailable'] : [])
   ]
   const plan = {
     schema: 'sks.subagent-plan.v1',
@@ -505,7 +506,7 @@ async function deriveOfficialSubagentPreparation(
     parent: {
       model: parentModelPolicy,
       // OpenRouter rows list low..xhigh; the GPT-only `max` maps to the deepest one.
-      model_reasoning_effort: childModels.list ? 'xhigh' : NARUTO_PARENT_EFFORT
+      model_reasoning_effort: openRouterChildren ? 'xhigh' : NARUTO_PARENT_EFFORT
     },
     agent_catalog: agentCatalog,
     agents: agentRouting,
@@ -514,6 +515,7 @@ async function deriveOfficialSubagentPreparation(
       path: roleModelPreferences.path,
       overrides: roleModelPreferences.store.roles,
       ignored_for_openrouter_only: roleModelPreferences.ignored_for_openrouter_only,
+      ignored_for_subagent_list: roleModelPreferences.ignored_for_subagent_list || [],
       routing: {
         selected_provider: roleModelRouting.selected_provider,
         selected_model: roleModelRouting.selected_model,
@@ -765,7 +767,7 @@ function applyOfficialSubagentDecision(
     fanout_policy: fanoutPolicy,
     capacity_controller: budget.capacity,
     jev_decision: decided.receipt,
-    ...(listed ? { openrouter_only: listed.evidence } : {}),
+    ...(listed ? { [derived.childModels.allowlist.mode === 'openrouter_only' ? 'openrouter_only' : 'subagent_model_list']: listed.evidence } : {}),
     native_host_dispatch: 'unverified'
   }
   return {

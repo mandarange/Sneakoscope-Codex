@@ -139,6 +139,44 @@ correlation and never grants project trust, so App host-capability requests requ
 
 ## Model Policy
 
+### Connection-specific subagent lists
+
+**SKS Center → Subagent Models** edits the list for the current connection:
+Codex-LB, OpenAI OAuth, or OpenRouter Only. Each connection keeps its own list
+when you switch modes on Connections. Choose models, supported reasoning
+efforts, one default, and criteria for Jev, then Apply.
+
+Codex-LB choices come from the bridge catalog configured in Codex. OpenAI
+OAuth choices come from Codex's own model cache. Hidden models and superseded
+generations of a listed family are omitted. If the catalog is unavailable,
+open Codex and refresh the connection's catalog before adding a model.
+Only efforts the selected model reports can be saved, including `max` and
+`ultra` where supported; Default leaves the effort to Codex.
+
+A configured list controls plan defaults, Jev choices, and child spawns.
+Jev selects from the list using the saved criteria. With Jev off or unable to
+decide, a listed requested model is kept, otherwise the default is used.
+Stored role-model preferences remain on disk but do not override an active
+list. Read-only children keep their read-only sandbox through the model-less
+list role. Named role files can override a spawn's model, so native list-mode
+spawns omit `agent_type` and carry the role brief in the message; read-only
+slices use the verified model-less role. Custom files that shadow that role
+are preserved and reported as blockers. If Apply reports a pending or failed Codex restart, restart Codex
+before starting children that need the newly installed role.
+
+Clearing a Codex-LB or OAuth list restores the automatic tier policy below.
+An empty OpenRouter Only list still blocks child spawns. Editing a child list
+does not change the parent model, credentials, or connection mode.
+
+`sks bridge subagent-models list --json` reports the current profile and its
+available models. For a CLI write, send `profile` (`codex_lb`, `openai`, or
+`openrouter_only`) with `subagent_models` to `sks bridge subagent-models set
+--stdin --json`; a profile mismatch is rejected so a stale page cannot edit
+another connection. Older callers that omit `profile` retain OpenRouter-list
+staging, including while OpenRouter Only is off.
+
+### Automatic tiers
+
 No model family is pinned. Each tier resolves to the newest model the Codex
 models cache (`$CODEX_HOME/models_cache.json`) lists for that family, preferring
 the highest version; without a cache SKS uses the built-in latest family. When

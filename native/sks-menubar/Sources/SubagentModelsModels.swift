@@ -1,16 +1,43 @@
 import Foundation
 
 /// One `available` row of `sks bridge subagent-models list --json`: an
-/// OpenRouter model the bridge catalog knows.
+/// model the current connection's catalog knows.
 struct SubagentModelOption: Equatable {
     let publicId: String
     let displayName: String
     /// false for a saved or drafted model the catalog no longer lists.
     var listed = true
+    var reasoningEfforts: [String]? = nil
 
     var menuTitle: String {
         guard listed else { return "\(publicId)  ·  not in the current catalog" }
         return displayName == publicId ? publicId : "\(displayName)  ·  \(publicId)"
+    }
+}
+
+struct SubagentModelSettings: Equatable {
+    let profile: String
+    let configured: Bool
+    let editable: Bool
+    let models: [SubagentModelEntry]
+    let error: String?
+    let warnings: [String]
+
+    var title: String {
+        profile == "codex_lb" ? "Codex-LB" : profile == "openai" ? "OpenAI OAuth" : "OpenRouter Only"
+    }
+
+    static func decode(_ value: Any) -> SubagentModelSettings? {
+        guard let raw = value as? [String: Any],
+              raw["schema"] as? String == "sks.subagent-model-settings.v1",
+              let profile = raw["profile"] as? String, ["openrouter_only", "codex_lb", "openai"].contains(profile),
+              let configured = raw["configured"] as? Bool,
+              let editable = raw["editable"] as? Bool,
+              let rows = raw["subagent_models"] as? [Any] else { return nil }
+        let models = rows.compactMap(SubagentModelEntry.decode)
+        guard models.count == rows.count else { return nil }
+        return SubagentModelSettings(profile: profile, configured: configured, editable: editable,
+            models: models, error: OpenRouterOnlyJSON.text(raw["error"]), warnings: OpenRouterOnlyJSON.strings(raw["warnings"]))
     }
 }
 
@@ -22,23 +49,33 @@ struct SubagentModelsSnapshot: Equatable {
     let mode: OpenRouterOnlyState
     /// nil when the answer did not include `available` (keep the previous list).
     let available: [SubagentModelOption]?
+    let settings: SubagentModelSettings?
+
+    var profile: String { settings?.profile ?? "openrouter_only" }
+    var models: [SubagentModelEntry] { settings?.models ?? mode.subagentModels }
+    var editable: Bool { settings?.editable ?? mode.enabled }
+    /// Older CLIs only have the OpenRouter list and do not accept a profile binding.
+    var boundProfile: String? { settings?.profile }
 
     static func decode(_ payload: [String: Any]) -> SubagentModelsSnapshot? {
         guard payload["schema"] as? String == OpenRouterOnlyCommand.resultSchema,
               let operation = payload["operation"] as? String, operations.contains(operation),
               let mode = OpenRouterOnlyState.decode(payload) else { return nil }
         let result = payload["result"] as? [String: Any]
+        let settings = result?["subagent_model_settings"].flatMap(SubagentModelSettings.decode)
+        if result?["subagent_model_settings"] != nil && settings == nil { return nil }
         var seen = Set<String>()
         let available = (result?["available"] as? [Any]).map { rows in
             rows.compactMap { value -> SubagentModelOption? in
                 guard let row = value as? [String: Any],
                       let id = OpenRouterOnlyJSON.text(row["public_id"]),
-                      SubagentModelRules.isModelId(id),
+                      SubagentModelRules.isModelId(id, profile: settings?.profile ?? "openrouter_only"),
                       seen.insert(id.lowercased()).inserted else { return nil }
-                return SubagentModelOption(publicId: id, displayName: OpenRouterOnlyJSON.text(row["display_name"]) ?? id)
+                return SubagentModelOption(publicId: id, displayName: OpenRouterOnlyJSON.text(row["display_name"]) ?? id,
+                    reasoningEfforts: (row["reasoning_efforts"] as? [Any]).map { OpenRouterOnlyJSON.strings($0) })
             }
         }
-        return SubagentModelsSnapshot(mode: mode, available: available)
+        return SubagentModelsSnapshot(mode: mode, available: available, settings: settings)
     }
 }
 
@@ -46,6 +83,14 @@ struct SubagentModelsSnapshot: Equatable {
 /// always sends the complete list, never a patch.
 enum SubagentModelDraft {
     static let effortTitles = ["Default", "low", "medium", "high", "xhigh"]
+
+    static func effortTitles(for entry: SubagentModelEntry, available: [SubagentModelOption], profile: String) -> [String] {
+        let supported = available.first { $0.publicId == entry.model }?.reasoningEfforts
+            ?? (profile == "openrouter_only" ? SubagentModelRules.efforts : SubagentModelRules.nativeEfforts)
+        var titles = ["Default"] + supported.filter { SubagentModelRules.nativeEfforts.contains($0) }
+        if let effort = entry.reasoningEffort, !titles.contains(effort) { titles.append(effort) }
+        return titles
+    }
 
     /// Popup rows: every available model, then saved or drafted models the CLI
     /// no longer lists, so a popup never misstates a choice.
@@ -91,7 +136,7 @@ enum SubagentModelDraft {
     }
 
     static func effort(title: String?) -> String? {
-        guard let title, SubagentModelRules.efforts.contains(title) else { return nil }
+        guard let title, SubagentModelRules.nativeEfforts.contains(title) else { return nil }
         return title
     }
 
@@ -136,18 +181,26 @@ enum SubagentModelDraft {
     }
 
     /// Local mirror of normalizeSubagentModelList; codes carry the row index.
-    static func issues(_ entries: [SubagentModelEntry]) -> [String] {
+    static func issues(_ entries: [SubagentModelEntry], profile: String = "openrouter_only", available: [SubagentModelOption]? = nil) -> [String] {
         var seen = Set<String>()
         var issues: [String] = []
         for (index, entry) in entries.enumerated() {
             let model = entry.model.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !SubagentModelRules.isModelId(model) {
+            let efforts = profile == "openrouter_only" ? SubagentModelRules.efforts : SubagentModelRules.nativeEfforts
+            if !SubagentModelRules.isModelId(model, profile: profile) {
                 issues.append("subagent_model_id_invalid:\(index)")
             } else if !seen.insert(model.lowercased()).inserted {
                 issues.append("subagent_model_duplicate:\(index)")
-            } else if let effort = entry.reasoningEffort, !SubagentModelRules.efforts.contains(effort) {
+            } else if let effort = entry.reasoningEffort, !efforts.contains(effort) {
                 issues.append("subagent_model_effort_invalid:\(index)")
-            } else if entry.criteriaUnreadable {
+            } else if profile != "openrouter_only", let available {
+                if let option = available.first(where: { $0.publicId == model }) {
+                    if let effort = entry.reasoningEffort, let supported = option.reasoningEfforts, !supported.contains(effort) {
+                        issues.append("subagent_model_effort_unsupported:\(index)")
+                    }
+                } else { issues.append("subagent_model_not_available:\(index)") }
+            }
+            if entry.criteriaUnreadable {
                 issues.append("subagent_model_criteria_redacted:\(index)")
             } else if index >= SubagentModelRules.maxModels {
                 issues.append("subagent_model_list_too_long:\(index)")
@@ -185,7 +238,7 @@ enum SubagentModelDraft {
     }
 
     /// stdin for `bridge subagent-models set --stdin --json`.
-    static func stdinPayload(_ entries: [SubagentModelEntry]) -> String? {
+    static func stdinPayload(_ entries: [SubagentModelEntry], profile: String? = nil) -> String? {
         let rows: [[String: Any]] = normalizedForSubmit(entries).map { entry in
             [
                 "model": entry.model,
@@ -194,7 +247,9 @@ enum SubagentModelDraft {
                 "default": entry.isDefault
             ]
         }
-        guard let data = try? JSONSerialization.data(withJSONObject: ["subagent_models": rows], options: [.sortedKeys, .withoutEscapingSlashes]),
+        var payload: [String: Any] = ["subagent_models": rows]
+        if let profile { payload["profile"] = profile }
+        guard let data = try? JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys, .withoutEscapingSlashes]),
               let text = String(data: data, encoding: .utf8) else { return nil }
         return text + "\n"
     }

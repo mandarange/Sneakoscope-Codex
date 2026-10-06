@@ -12,11 +12,12 @@ import {
 } from './agent-catalog.js'
 import type { RoleModelPreference } from './role-model-preferences.js'
 import {
-  SUBAGENT_MODEL_EFFORTS,
   allowlistedChildModel,
   effectiveChildModelAllowlist,
-  type ChildModelAllowlist,
-  type SubagentModelEntry
+  childModelListLabel,
+  listChildModelEffort,
+  type ListChildModelAllowlist,
+  type ChildModelAllowlist
 } from './child-model-allowlist.js'
 import { READ_ONLY_LIST_ROLE } from './read-only-list-role.js'
 import { EXCLUSIVE_SURFACE_RULE } from './exclusive-surface-rule.js'
@@ -111,7 +112,7 @@ export function buildOfficialSubagentPrompt(input: {
   // OpenRouter Only Mode: children run only the user's list models; tier rules,
   // role-file models, and stored role-model preferences do not apply.
   const childModels = input.childModels ?? effectiveChildModelAllowlist()
-  const listOnly = childModels.mode === 'openrouter_only' ? childModels : null
+  const listOnly = childModels.mode !== 'tiers' ? childModels : null
   const catalog = renderAgentCatalog([
     ...resolvedSlices.map((row) => row.agentName),
     ...(input.recommendedAgents || [])
@@ -127,7 +128,7 @@ export function buildOfficialSubagentPrompt(input: {
   const narutoChildren = input.narutoChildRouting === true
   const jevRouting = input.jevRouting === true
   const spawnModelRouting = listOnly
-    ? renderListSpawnModelRouting(listOnly.entries, jevRouting)
+    ? renderListSpawnModelRouting(listOnly, jevRouting)
     : renderSpawnModelRouting(narutoChildren, jevRouting)
   // Every child runs the newest model of the tier its work needs. With Jev on
   // the parent gets no tier rules to weigh: Jev decides each spawn.
@@ -142,7 +143,7 @@ export function buildOfficialSubagentPrompt(input: {
         '- the parent orchestrates only: decompose the goal, assign disjoint slices, spawn children, and integrate their results',
         '- do not implement the assigned slice work in the parent thread',
         ...(listOnly
-          ? ['- use the model (and reasoning_effort, when named) in each slice spawn contract; each is on the user\'s OpenRouter subagent list']
+          ? [`- use the model (and reasoning_effort, when named) in each slice spawn contract; each is on the user's ${childModelListLabel(listOnly)} subagent list`]
           : [
               '- use the model and reasoning_effort named in each slice spawn contract; each is the newest model of its tier',
               ...tierRules,
@@ -222,7 +223,7 @@ Subagent rules:
     ? `select the narrowest matching role from the catalog by its description and put its brief in \`message\`; do not pass a catalog role as \`agent_type\`: role files pin a tier model that Codex will not let a spawn override. Read-only slices pass \`agent_type="${READ_ONLY_LIST_ROLE.codex_name}"\` (read-only sandbox, no pinned model); if Codex reports that role unknown, never spawn the slice without it: report that the user must run \`sks doctor --fix\` in this project and start a new thread`
     : 'select the narrowest matching project custom agent by its description; the custom agent name is the spawn type'}
 - custom \`agent_type\` selection and spawn-time \`model\`/\`reasoning_effort\` overrides must use \`fork_turns="none"\` or a positive bounded turn count, with the complete bounded slice contract in \`message\`; context contract: pass fork_turns="none" for listed slices
-- \`spawn_agent\` has no provider argument; ${listOnly ? 'children use the OpenRouter list model named in the spawn contract' : narutoChildren ? 'Naruto children use the tier model named in the spawn contract' : 'children use the sealed model slug'}
+- \`spawn_agent\` has no provider argument; ${listOnly ? `children use the ${childModelListLabel(listOnly)} list model named in the spawn contract` : narutoChildren ? 'Naruto children use the tier model named in the spawn contract' : 'children use the sealed model slug'}
 - SKS policy: never use \`fork_turns="all"\` or the omitted/default full-history mode for a child, and never combine either with \`agent_type\`, \`model\`, or \`reasoning_effort\`; Codex would run that spawn, but the SKS hook denies it before SubagentStart
 - never use a full-history fork for SKS children
 ${spawnModelRouting}
@@ -356,10 +357,11 @@ function renderSpawnModelRouting(narutoChildRouting: boolean, jevRouting: boolea
  * OpenRouter Only Mode routing text: the parent sees the user's list with its
  * criteria instead of tier rules, and learns that nothing else can spawn.
  */
-function renderListSpawnModelRouting(entries: readonly SubagentModelEntry[], jevRouting: boolean): string {
+function renderListSpawnModelRouting(list: ListChildModelAllowlist, jevRouting: boolean): string {
+  const entries = list.entries
   const rows = entries.map((entry) => `  - \`${entry.model}\`${entry.default ? ' (default)' : ''}${entry.reasoning_effort ? ` [${entry.reasoning_effort}]` : ''}: ${entry.criteria || 'general work'}`)
   return [
-    '- OpenRouter Only Mode: every child runs a model from the user\'s subagent list; any other model is denied by the SKS spawn hook and the Desktop Bridge',
+    `- ${childModelListLabel(list)} Mode: every child runs a model from the user's subagent list; any other model is denied by the SKS spawn hook${list.mode === 'openrouter_only' ? ' and the Desktop Bridge' : ''}`,
     rows.length
       ? '- allowed child models and when to use each (the default when none fits):'
       : '- the subagent list is empty: spawn nothing and report that a model must be added in Control Center > Subagent Models',
@@ -378,7 +380,7 @@ function renderListSliceContract(input: {
   brief: string
   readOnly: boolean
   routed: { routed_model?: string; routed_model_reasoning_effort?: string | null } | undefined
-  allowlist: Extract<ChildModelAllowlist, { mode: 'openrouter_only' }>
+  allowlist: ListChildModelAllowlist
 }): { model: string; contract: string } {
   // A row model off the list (a tier model) never passes through: the slice
   // takes the default entry at that entry's effort.
@@ -386,18 +388,16 @@ function renderListSliceContract(input: {
   const model = routedModel || input.allowlist.default_model
   if (!model) {
     return {
-      model: 'none (the OpenRouter subagent list is empty)',
+      model: `none (the ${childModelListLabel(input.allowlist)} subagent list is empty)`,
       contract: 'stop before spawning: the user must add a model to the subagent list first'
     }
   }
   const entry = input.allowlist.entries.find((row) => row.model === model)
   const routedEffort = String(input.routed?.routed_model_reasoning_effort || '')
-  const effort = routedModel && (SUBAGENT_MODEL_EFFORTS as readonly string[]).includes(routedEffort)
-    ? routedEffort
-    : entry?.reasoning_effort ?? null
+  const effort = entry ? listChildModelEffort(entry, routedModel ? routedEffort : null) : null
   const brief = String(input.brief || '').replace(/\s+/g, ' ').trim().slice(0, 200)
   return {
-    model: `${model} (${effort ? `effort ${effort}` : 'model default effort'}, OpenRouter list)`,
+    model: `${model} (${effort ? `effort ${effort}` : 'model default effort'}, ${input.allowlist.mode === 'openrouter_only' ? 'OpenRouter' : childModelListLabel(input.allowlist)} list)`,
     contract: [
       input.readOnly
         ? `pass agent_type=${JSON.stringify(READ_ONLY_LIST_ROLE.codex_name)} (keeps the read-only sandbox; the \`${input.agentName}\` role file pins a tier model)`

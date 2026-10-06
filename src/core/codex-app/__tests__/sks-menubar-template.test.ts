@@ -836,7 +836,7 @@ test('Control Center Decisions page can enable and disable Jev through the same 
   assert.doesNotMatch(`${models}\n${view}`, /Qwen|MLX|local_feature_retired|sks\.local-decision/);
 });
 
-test('Subagent Models page edits the OpenRouter Only list through stdin and only while the mode is on', () => {
+test('Subagent Models page binds the current connection profile and sends its list through stdin', () => {
   const root = path.join(resolvePackagedMenuBarSourceRoot(), 'Sources');
   const state = fs.readFileSync(path.join(root, 'OpenRouterOnlyState.swift'), 'utf8');
   const models = fs.readFileSync(path.join(root, 'SubagentModelsModels.swift'), 'utf8');
@@ -852,11 +852,13 @@ test('Subagent Models page edits the OpenRouter Only list through stdin and only
   assert.match(state, /static let maxCriteriaCharacters = 240/);
   assert.match(state, /static let efforts = \["low", "medium", "high", "xhigh"\]/);
   assert.match(models, /static let effortTitles = \["Default", "low", "medium", "high", "xhigh"\]/);
-  assert.match(models, /withJSONObject: \["subagent_models": rows\]/);
+  assert.match(models, /var payload: \[String: Any\] = \["subagent_models": rows\]/);
+  assert.match(models, /payload\["profile"\] = profile/);
   assert.match(view, /processClient\.run\(OpenRouterOnlyCommand\.listSubagentModels, timeout: NativeView\.statusTimeout\)/);
   assert.match(view, /processClient\.run\(OpenRouterOnlyCommand\.setSubagentModels, stdin: stdin, timeout: NativeView\.mutationTimeout\)/);
   assert.match(view, /operations\.begin\(kind: "bridge-subagent-models", mutationGroup: "codex-config"/);
-  assert.match(view, /private var editable: Bool \{ snapshot\?\.mode\.enabled == true && !busy \}/);
+  assert.match(view, /private var editable: Bool \{ snapshot\?\.editable == true && !busy \}/);
+  assert.match(view, /let submittedProfile = snapshot\?\.boundProfile/);
   assert.match(view, /applyButton\.isEnabled = editable && dirty/);
   assert.match(view, /guard let self, requestGeneration == self\.generation, !self\.busy else \{ return \}/);
   assert.match(view, /OpenRouterOnlyJSON\.unavailableReason\(code: result\.code, output: result\.output, payload: payload\)/);

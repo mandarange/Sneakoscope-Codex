@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Added
+
+- SKS Center's Subagent Models page now keeps independent Codex-LB and OpenAI
+  OAuth lists alongside OpenRouter Only. Catalog-supported models, reasoning
+  efforts, defaults, and Jev criteria are applied consistently to plans and
+  child spawns; clearing a native list restores automatic tiers.
+
 ## [10.5.3] - 2026-10-06
 
 ### Fixed

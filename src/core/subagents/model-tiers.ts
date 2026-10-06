@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { codexHomePath, readTopLevelTomlString } from '../codex-app/codex-model-catalog.js'
+import { codexHomePath, inferProviderFromModel, normalizeCodexModelId, readTopLevelTomlString } from '../codex-app/codex-model-catalog.js'
 
 // Codex writes this file ($CODEX_HOME/models_cache.json); SKS only reads it here.
 const MODELS_CACHE_FILENAME = 'models_cache.json'
@@ -238,30 +238,79 @@ export function effortForTier(tier: ModelTier, resolved: LatestModelTiers = reso
   return byDistance.find((effort) => supported.includes(effort)) || wanted
 }
 
-function readCandidateRows(file: string): CandidateRow[] {
+function readModelRows(file: string): Record<string, any>[] {
   let parsed: any
   try {
+    const stat = fs.statSync(file)
+    if (!stat.isFile() || stat.size > 16 * 1024 * 1024) return []
     parsed = JSON.parse(fs.readFileSync(file, 'utf8'))
   } catch {
     return []
   }
   const models = Array.isArray(parsed?.models) ? parsed.models : Array.isArray(parsed) ? parsed : []
+  return models.slice(0, 1024).filter((row: unknown) => row && typeof row === 'object' && !Array.isArray(row))
+}
+
+function modelEfforts(row: Record<string, any>): string[] {
+  return Array.isArray(row.supported_reasoning_levels)
+    ? [...new Set<string>(row.supported_reasoning_levels
+      .map((level: any) => String(typeof level === 'string' ? level : level?.effort || '').trim().toLowerCase())
+      .filter(Boolean))]
+    : []
+}
+
+function readCandidateRows(file: string): CandidateRow[] {
   const rows: CandidateRow[] = []
-  for (const row of models.slice(0, 1024)) {
-    if (!row || typeof row !== 'object') continue
+  for (const row of readModelRows(file)) {
     const slug = String(row.slug || row.model || row.id || '').trim()
     const id = parseGptModelId(slug)
     if (!id) continue
     const visibility = String(row.visibility || 'list').toLowerCase()
     if (visibility === 'hide' || visibility === 'hidden') continue
-    const efforts = Array.isArray(row.supported_reasoning_levels)
-      ? row.supported_reasoning_levels
-        .map((level: any) => String(typeof level === 'string' ? level : level?.effort || '').trim().toLowerCase())
-        .filter(Boolean)
-      : []
+    const efforts = modelEfforts(row)
     rows.push({ slug, version: id.version, family: id.family, efforts })
   }
   return rows
+}
+
+export interface SelectableChildModel {
+  public_id: string
+  display_name: string
+  reasoning_efforts: string[]
+}
+
+/**
+ * Explicit child lists use models the selected connection actually advertises.
+ * OAuth reads Codex's own cache; Codex-LB reads its configured bridge catalog.
+ * A missing catalog yields no choices, never built-in or guessed model ids.
+ */
+export function selectableChildModels(
+  profile: 'codex_lb' | 'openai',
+  input: { home?: string; env?: NodeJS.ProcessEnv } = {}
+): SelectableChildModel[] {
+  const file = profile === 'codex_lb' ? configuredCatalogPath(input) : modelsCachePath(input)
+  if (!file) return []
+  const models: SelectableChildModel[] = []
+  const seen = new Set<string>()
+  for (const row of readModelRows(file)) {
+    const model = normalizeCodexModelId(row.slug || row.public_id || row.model || row.id)
+    const provider = String(row.provider_id || row.provider || inferProviderFromModel(model))
+    if (!model || seen.has(model.toLowerCase()) || ['hide', 'hidden'].includes(String(row.visibility).toLowerCase())
+      || row.multi_agent_version === 'disabled'
+      || (profile === 'openai' && model.includes('/'))
+      || provider !== (profile === 'codex_lb' ? 'codex-lb' : 'openai')) continue
+    seen.add(model.toLowerCase())
+    models.push({ public_id: model, display_name: String(row.display_name || model), reasoning_efforts: modelEfforts(row) })
+  }
+  const newest = new Map<string, number[]>()
+  for (const row of models) {
+    const id = parseGptModelId(row.public_id)
+    if (id && (!newest.has(id.family) || compareModelVersions(id.version, newest.get(id.family)!) > 0)) newest.set(id.family, id.version)
+  }
+  return models.filter((row) => {
+    const id = parseGptModelId(row.public_id)
+    return !id || compareModelVersions(id.version, newest.get(id.family)!) === 0
+  })
 }
 
 /** Numeric, segment-wise: 6.1 > 6 > 5.6 and 6.10 > 6.9. */

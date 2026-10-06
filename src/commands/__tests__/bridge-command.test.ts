@@ -174,7 +174,15 @@ test('subagent-models set takes its rows (free-text criteria included) only from
   assert.equal((await executeBridgeCommand(['subagent-models', 'set', '--stdin', '--no-restart', '--json'], quiet)).exit_code, 0);
   assert.deepEqual(quiet.requests, [{ operation: 'subagent-models.set', subagent_models: rows, no_restart: true }]);
 
+  for (const profile of ['codex_lb', 'openai'] as const) {
+    const native = fixture();
+    native.setStdin(JSON.stringify({ profile, subagent_models: [{ model: 'gpt-6-astra', reasoning_effort: 'ultra' }] }));
+    assert.equal((await executeBridgeCommand(['subagent-models', 'set', '--stdin', '--json'], native)).exit_code, 0);
+    assert.deepEqual(native.requests, [{ operation: 'subagent-models.set', profile, subagent_models: [{ model: 'gpt-6-astra', reasoning_effort: 'ultra' }], no_restart: false }]);
+  }
+
   const cases: Array<[string[], string, string]> = [
+    [['subagent-models', 'set', '--stdin'], '{"profile":"unknown","subagent_models":[]}', 'bridge_subagent_models_profile_invalid'],
     [['subagent-models', 'set'], '{"subagent_models":[]}', 'bridge_subagent_models_stdin_required'],
     [['subagent-models', 'set', '--stdin'], '', 'bridge_subagent_models_stdin_empty'],
     [['subagent-models', 'set', '--stdin'], '{not json', 'bridge_subagent_models_stdin_invalid_json'],

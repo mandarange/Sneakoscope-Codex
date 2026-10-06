@@ -111,7 +111,7 @@ export async function executeDesktopBridgeCommandV3(
         return setOpenRouterOnly(request.enabled, request.no_restart === true, options);
       }
       if (request.operation === 'subagent-models.set') {
-        return setSubagentModels(request.subagent_models, request.no_restart === true, options);
+        return setSubagentModels(request.subagent_models, request.no_restart === true, options, request.profile);
       }
       if (request.operation === 'route.official-models') return setOfficialModelsMode(request.mode, options);
       if (request.operation === 'route.explain') return explainRoute(request.model, options);

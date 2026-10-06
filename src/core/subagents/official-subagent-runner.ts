@@ -190,7 +190,7 @@ export function buildOfficialSubagentCodexArgs(input: {
     '-c', `agents.max_concurrent_threads_per_session=${maxThreads}`,
     '-c', 'agents.max_depth=1',
     '-c', `agents.default_subagent_model="${policy.subagentModel}"`,
-    '-c', `agents.default_subagent_reasoning_effort="${policy.subagentEffort}"`,
+    ...(policy.subagentEffort ? ['-c', `agents.default_subagent_reasoning_effort="${policy.subagentEffort}"`] : []),
     '-c', 'agents.interrupt_message=true',
     ...(input.projectConfigArgs || []),
     ...(input.hostCapabilityConfigArgs || []),
@@ -369,8 +369,8 @@ export async function runOfficialSubagentWorkflow(input: OfficialSubagentWorkflo
     parent_model: credentialPolicy.parentModel,
     parent_reasoning_effort: credentialPolicy.parentEffort,
     // OpenRouter Only Mode: the run's child default is the user's list entry.
-    ...(credentialPolicy.childModelMode === 'openrouter_only'
-      ? { child_model_mode: 'openrouter_only', subagent_model: credentialPolicy.subagentModel }
+    ...(credentialPolicy.childModelMode !== 'tiers'
+      ? { child_model_mode: credentialPolicy.childModelMode, subagent_model: credentialPolicy.subagentModel }
       : {}),
     session_scope: input.sessionKey || null,
     host_capability_request: hostCapabilityRequest

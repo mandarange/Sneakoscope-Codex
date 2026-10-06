@@ -14,7 +14,7 @@ import {
 } from '../codex-app/codex-model-catalog.js';
 import { isRecord } from '../json/records.js';
 import { codexListedEfforts, latestModelForTier, latestTierModelSet, modelTierForModel } from './model-tiers.js';
-import { defaultSubagentEntry, readOpenRouterOnlyStateSync } from './child-model-allowlist.js';
+import { defaultSubagentEntry, readOpenRouterOnlyStateSync, effectiveChildModelAllowlist, childModelListProfile } from './child-model-allowlist.js';
 
 export const ROLE_MODEL_PREFERENCES_SCHEMA = 'sks.role-model-preferences.v2' as const;
 const LEGACY_ROLE_MODEL_PREFERENCES_SCHEMA = 'sks.role-model-preferences.v1';
@@ -77,6 +77,7 @@ export interface RoleModelPreferencesRead {
    * never short-circuit that routing. Empty while the mode is off.
    */
   ignored_for_openrouter_only: string[];
+  ignored_for_subagent_list?: string[];
 }
 
 /**
@@ -89,16 +90,21 @@ export async function readRoleModelPreferences(input: {
   readonly filePath?: string;
   /** The caller's own read of the mode, so one plan never reads the store twice. */
   readonly openRouterOnly?: boolean;
+  readonly listMode?: boolean;
 } = {}): Promise<RoleModelPreferencesRead> {
   const read = await readStoredRoleModelPreferences(input);
-  const openRouterOnly = input.openRouterOnly ?? readOpenRouterOnlyStateSync({ env: input.env || process.env }).enabled;
-  if (!openRouterOnly) return read;
+  const allowlist = input.listMode === undefined || input.openRouterOnly === undefined
+    ? effectiveChildModelAllowlist({ env: input.env || process.env }) : null;
+  const openRouterOnly = input.openRouterOnly ?? allowlist?.mode === 'openrouter_only';
+  const listMode = input.listMode ?? input.openRouterOnly ?? allowlist?.mode !== 'tiers';
+  if (!listMode) return read;
   // An unreadable store blocks nothing it no longer decides.
   return {
     ...read,
     store: { ...read.store, roles: {} },
     blockers: [],
-    ignored_for_openrouter_only: Object.keys(read.store.roles)
+    ignored_for_openrouter_only: openRouterOnly ? Object.keys(read.store.roles) : [],
+    ignored_for_subagent_list: Object.keys(read.store.roles)
   };
 }
 
@@ -169,7 +175,9 @@ export async function roleModelPreferencesStatus(input: {
   const env = input.env || process.env;
   const read = await readStoredRoleModelPreferences(input);
   const openRouterOnly = readOpenRouterOnlyStateSync({ env });
-  const listDefault = openRouterOnly.enabled ? defaultSubagentEntry(openRouterOnly) : null;
+  const childModels = effectiveChildModelAllowlist({ env, ...(input.home ? { home: input.home } : {}) });
+  const listMode = childModels.mode !== 'tiers';
+  const listDefault = listMode ? defaultSubagentEntry({ subagent_models: childModels.entries }) : null;
   const routing = await readConfiguredCodexModelRoutingContext({
     env,
     ...(input.home ? { home: input.home } : {}),
@@ -199,13 +207,13 @@ export async function roleModelPreferencesStatus(input: {
     // OpenRouter Only Mode: the stored override is kept (shown above) but not
     // applied; Jev or the list default picks each child's model at spawn time.
     // '' means none: an empty list, or the model's own default effort.
-    if (openRouterOnly.enabled) {
+    if (childModels.mode !== 'tiers') {
       return {
         ...base,
-        effective_provider: 'openrouter',
+        effective_provider: childModels.mode === 'openrouter_only' ? 'openrouter' : childModels.profile === 'codex_lb' ? 'codex-lb' : 'openai',
         effective_model: listDefault?.model ?? '',
         effective_reasoning_effort: listDefault?.reasoning_effort ?? '',
-        effective_source: 'openrouter-only-list'
+        effective_source: childModels.mode === 'openrouter_only' ? 'openrouter-only-list' : 'configured-subagent-list'
       };
     }
     return {
@@ -242,6 +250,13 @@ export async function roleModelPreferencesStatus(input: {
       blockers: catalog.blockers
     },
     roles,
+    subagent_model_list: {
+      active: listMode,
+      profile: childModels.mode === 'tiers' ? null : childModelListProfile(childModels),
+      preferences_ignored: listMode,
+      default_subagent_model: listDefault?.model ?? null,
+      models: listMode ? childModels.models : []
+    },
     openrouter_only: {
       enabled: openRouterOnly.enabled,
       preferences_ignored: openRouterOnly.enabled,

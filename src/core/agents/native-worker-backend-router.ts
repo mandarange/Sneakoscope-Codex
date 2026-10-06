@@ -15,12 +15,12 @@ import { latestTierModelSet } from '../subagents/model-tiers.js'
 import { consultJevTurnModel } from '../decisions/integration.js'
 import { chooseChildModel, fallbackChildModel } from '../decisions/child-model-choice.js'
 import {
-  OPENROUTER_ONLY_SCHEMA,
   allowlistedChildModel,
   effectiveChildModelAllowlist,
+  childModelListProfile,
+  listChildModelEffort,
   isSubagentModelEffort,
-  type ChildModelAllowlist,
-  type OpenRouterOnlyState,
+  type ListChildModelAllowlist,
   type SubagentModelEffort
 } from '../subagents/child-model-allowlist.js'
 
@@ -52,7 +52,7 @@ export async function runNativeWorkerBackendRouter(input: {
   let patchEnvelopes: AgentPatchEnvelope[] = []
   let proofLevel = 'blocked'
   let outputLastMessagePath: string | null = null
-  let modelRouting: { category: TaskCategory; choice: ModelChoice; reason: string; explicit: boolean; lb_catalog: any; blockers: string[] } | null = null
+  let modelRouting: Awaited<ReturnType<typeof resolveWorkerModelRouting>> | null = null
 
   const narutoBackendBlocker = narutoWorkerBackendBlocker(backend, narutoRequest)
   if (narutoBackendBlocker) {
@@ -111,8 +111,10 @@ export async function runNativeWorkerBackendRouter(input: {
       cwd: String(input.intake.cwd || root),
       prompt: buildWorkerPrompt(input.slice),
       model: modelRouting.choice.model,
-      reasoningEffort: modelRouting.choice.reasoning,
-      modelReasoningEffort: modelRouting.choice.reasoning,
+      ...(modelRouting.choice.reasoning ? {
+        reasoningEffort: modelRouting.choice.reasoning,
+        modelReasoningEffort: modelRouting.choice.reasoning
+      } : {}),
       serviceTier: modelRouting.choice.serviceTier,
       inputFiles: input.intake.input_files || [],
       inputImages: input.intake.input_images || [],
@@ -257,7 +259,7 @@ export async function resolveWorkerModelRouting(input: {
   const category = categoryForWorkerRole(String(input.agent?.role || 'executor'), taskKindText)
   const env = deps.env || process.env
   const allowlist = effectiveChildModelAllowlist({ env })
-  if (allowlist.mode === 'openrouter_only') {
+  if (allowlist.mode !== 'tiers') {
     return resolveOpenRouterOnlyWorkerRouting(input, deps, { allowlist, category, env, taskKindText, riskText })
   }
   const lbCatalog = narutoOnly
@@ -347,18 +349,19 @@ async function resolveOpenRouterOnlyWorkerRouting(input: {
   agent: any
   fastModePolicy: { fast_mode: boolean; service_tier: 'fast' | 'standard' }
 }, deps: { root?: string; consultJev?: typeof consultJevTurnModel | false }, ctx: {
-  allowlist: Extract<ChildModelAllowlist, { mode: 'openrouter_only' }>
+  allowlist: ListChildModelAllowlist
   category: TaskCategory
   env: NodeJS.ProcessEnv
   taskKindText: string
   riskText: string
 }) {
   const { allowlist, category, env } = ctx
-  const state: OpenRouterOnlyState = { schema: OPENROUTER_ONLY_SCHEMA, enabled: true, subagent_models: allowlist.entries, restore: null, updated_at: null }
+  const state = { subagent_models: allowlist.entries }
   const explicitModel = String(env.SKS_WORKER_MODEL || env.SKS_AGENT_MODEL || '').trim()
-  const explicitReasoning = listReasoning(env.SKS_WORKER_REASONING || env.SKS_WORKER_MODEL_REASONING)
+  const rawEffort = env.SKS_WORKER_REASONING || env.SKS_WORKER_MODEL_REASONING
+  const explicitReasoning = allowlist.mode === 'openrouter_only' ? listReasoning(rawEffort) : normalizeModelReasoning(rawEffort)
   const explicitTier = normalizeServiceTier(String(env.SKS_WORKER_SERVICE_TIER || env.SKS_SERVICE_TIER || '').trim())
-  const planned = /^openrouter_only_/.test(String(input.agent?.routed_model_policy || ''))
+  const planned = /^(openrouter_only|configured_list)_/.test(String(input.agent?.routed_model_policy || ''))
     ? allowlistedChildModel(input.agent?.routed_model, allowlist)
     : null
   const requested = String(input.agent?.routed_model || input.agent?.model || '').trim() || null
@@ -370,18 +373,23 @@ async function resolveOpenRouterOnlyWorkerRouting(input: {
       ? fallbackChildModel(state, planned, 'planned')
       : deps.consultJev === false || !task
         ? fallbackChildModel(state, requested, deps.consultJev === false ? 'jev_skipped' : 'empty_task')
-        : await chooseChildModel({ root: deps.root || process.cwd(), task, role: input.agent?.role || null, requestedModel: requested, state, env })
+        : await chooseChildModel({ root: deps.root || process.cwd(), task, role: input.agent?.role || null, requestedModel: requested, state, env, profile: childModelListProfile(allowlist) })
           .catch(() => fallbackChildModel(state, requested, 'consult_failed'))
   const taskPolicy = decideSubagentModel({ title: ctx.taskKindText, description: ctx.riskText, role: input.agent?.role })
   const choiceModel = choice?.entry.model || ''
-  const routed: ModelChoice = {
+  const routed: Omit<ModelChoice, 'reasoning'> & { reasoning: ModelChoice['reasoning'] | null } = {
     model: choiceModel,
-    reasoning: explicitReasoning || choice?.entry.reasoning_effort || listReasoning(taskPolicy.modelReasoningEffort) || 'medium',
+    reasoning: allowlist.mode === 'openrouter_only'
+      ? explicitReasoning || choice?.entry.reasoning_effort || listReasoning(taskPolicy.modelReasoningEffort) || 'medium'
+      : explicitReasoning || (choice ? listChildModelEffort(choice.entry, null) : null),
     serviceTier: explicitTier || input.fastModePolicy.service_tier || 'fast'
   }
   const blockers = [
-    ...(!allowlist.entries.length ? ['openrouter_only_subagent_list_empty'] : []),
-    ...(explicitModel && !explicitListed ? ['openrouter_only_subagent_model_not_listed'] : []),
+    ...(!allowlist.entries.length ? [allowlist.mode === 'openrouter_only' ? 'openrouter_only_subagent_list_empty' : 'configured_subagent_list_unavailable'] : []),
+    ...(explicitModel && !explicitListed ? [allowlist.mode === 'openrouter_only' ? 'openrouter_only_subagent_model_not_listed' : 'configured_subagent_model_not_listed'] : []),
+    ...(allowlist.mode === 'configured' && rawEffort
+      && (!explicitReasoning || !choice?.entry.supported_reasoning_efforts?.includes(explicitReasoning))
+      ? ['configured_subagent_effort_unsupported'] : []),
     ...(!choiceModel ? ['naruto_worker_model_unavailable'] : [])
   ]
   const why = choice ? `${choice.source}${choice.reason === 'applied' ? '' : `:${choice.reason}`}` : 'blocked'
@@ -391,7 +399,7 @@ async function resolveOpenRouterOnlyWorkerRouting(input: {
     explicit: Boolean(explicitModel),
     lb_catalog: null,
     blockers: [...new Set(blockers)],
-    reason: `${category}->${choiceModel || 'blocked'}@${routed.reasoning} (openrouter only list: ${why})`
+    reason: `${category}->${choiceModel || 'blocked'}@${routed.reasoning || 'default'} (${allowlist.mode === 'openrouter_only' ? 'openrouter only' : allowlist.profile} list: ${why})`
   }
 }
 

@@ -1,16 +1,16 @@
 import { chooseChildModels, type ChildModelChoice, type ChildModelLane } from '../decisions/child-model-choice.js'
 import { MAX_JEV_ROUTING_ROLES } from '../decisions/routing.js'
 import {
-  SUBAGENT_MODEL_EFFORTS,
   defaultSubagentEntry,
-  readOpenRouterOnlyStateSync,
-  routableSubagentState,
+  effectiveChildModelAllowlist,
+  childModelListProfile,
+  listChildModelEffort,
   type ChildModelAllowlist,
+  type ListChildModelAllowlist,
   type OpenRouterOnlyLocation,
   type OpenRouterOnlyState,
   type SubagentModelEntry
 } from './child-model-allowlist.js'
-import { latestTierModelSet } from './model-tiers.js'
 import { readCodexMainModel } from './naruto-host-credentials.js'
 import type { OfficialSubagentSlice } from './official-subagent-prompt.js'
 import { READ_ONLY_LIST_ROLE } from './read-only-list-role.js'
@@ -23,14 +23,14 @@ import { READ_ONLY_LIST_ROLE } from './read-only-list-role.js'
  * routing and role-model preferences never apply in this mode.
  */
 
-export type ListChildModels = Extract<ChildModelAllowlist, { mode: 'openrouter_only' }>
+export type ListChildModels = ListChildModelAllowlist
 
 export interface ChildModelPlanContext {
   /** Every child decision in this plan reads this one allowlist. */
   allowlist: ChildModelAllowlist
-  /** Set only while OpenRouter Only Mode is on. */
+  /** Set whenever an explicit connection-specific list controls children. */
   list: {
-    state: OpenRouterOnlyState
+    state: Pick<OpenRouterOnlyState, 'subagent_models'>
     allowlist: ListChildModels
     /** Top-level `model` in the Codex config.toml: the parent in this mode. */
     mainModel: string | null
@@ -43,39 +43,28 @@ export interface ChildModelPlanContext {
  * bridge controller mid-plan cannot leave them disagreeing.
  */
 export function readChildModelPlanContext(location: OpenRouterOnlyLocation = {}): ChildModelPlanContext {
-  const stored = readOpenRouterOnlyStateSync(location)
-  if (!stored.enabled) {
-    return { allowlist: { mode: 'tiers', models: [...latestTierModelSet(location)], entries: [], default_model: null }, list: null }
-  }
-  // Only entries the bridge routes are chosen, like every spawn decision.
-  const { state, unroutable } = routableSubagentState(stored, location)
-  const allowlist: ListChildModels = {
-    mode: 'openrouter_only',
-    models: state.subagent_models.map((entry) => entry.model),
-    entries: state.subagent_models,
-    default_model: defaultSubagentEntry(state)?.model ?? null,
-    unroutable
-  }
+  const allowlist = effectiveChildModelAllowlist(location)
+  if (allowlist.mode === 'tiers') return { allowlist, list: null }
+  const state = { subagent_models: allowlist.entries }
   return { allowlist, list: { state, allowlist, mainModel: readCodexMainModel(location) } }
 }
 
 /** The entry's effort, else the role's effort when OpenRouter lists it, else none (model default). */
 export function listEntryEffort(entry: SubagentModelEntry, roleEffort: unknown): string | null {
-  if (entry.reasoning_effort) return entry.reasoning_effort
-  const effort = String(roleEffort || '')
-  return (SUBAGENT_MODEL_EFFORTS as readonly string[]).includes(effort) ? effort : null
+  return listChildModelEffort(entry, roleEffort)
 }
 
-function routedRow(row: Record<string, any>, choice: ChildModelChoice | null) {
+function routedRow(row: Record<string, any>, choice: ChildModelChoice | null, list: ListChildModelAllowlist) {
+  const prefix = list.mode === 'openrouter_only' ? 'openrouter_only' : 'configured_list'
   return {
     ...row,
-    routed_provider: 'openrouter',
+    routed_provider: list.mode === 'openrouter_only' ? 'openrouter' : list.profile === 'codex_lb' ? 'codex-lb' : 'openai',
     routed_model: choice?.entry.model ?? null,
     routed_model_reasoning_effort: choice ? listEntryEffort(choice.entry, row.model_reasoning_effort) : null,
-    routed_model_policy: choice?.source === 'jev' ? 'openrouter_only_jev' : 'openrouter_only_default',
+    routed_model_policy: `${prefix}_${choice?.source === 'jev' ? 'jev' : 'default'}`,
     routing_dynamic: true,
-    role_model_preference_source: 'ignored_openrouter_only',
-    openrouter_only_choice: choice
+    role_model_preference_source: `ignored_${prefix}`,
+    [list.mode === 'openrouter_only' ? 'openrouter_only_choice' : 'subagent_list_choice']: choice
       ? { model: choice.entry.model, source: choice.source, reason: choice.reason, default_entry: choice.entry.default }
       : { model: null, source: 'default', reason: 'subagent_list_empty', default_entry: false }
   }
@@ -88,7 +77,7 @@ export function listBaselineAgentRouting(
 ): Record<string, any> {
   const fallback = defaultSubagentEntry(list.state)
   const choice: ChildModelChoice | null = fallback ? { entry: fallback, source: 'default', reason: 'baseline' } : null
-  return Object.fromEntries(Object.entries(agentRouting).map(([name, row]) => [name, routedRow(row, choice)]))
+  return Object.fromEntries(Object.entries(agentRouting).map(([name, row]) => [name, routedRow(row, choice, list.allowlist)]))
 }
 
 /**
@@ -131,6 +120,7 @@ export async function chooseListRoleModels(input: {
       goal: input.goal || 'Plan official subagent roles.',
       lanes,
       state: input.list.state,
+      profile: childModelListProfile(input.list.allowlist),
       ...(input.env ? { env: input.env } : {})
     })
     return { lanes: lanes.map((lane) => lane.id), choices }
@@ -174,8 +164,8 @@ export function applyListRoleModels(
   for (const [name, row] of Object.entries(agents)) {
     const choice = chosen?.choices[name]
       ?? (fallback ? { entry: fallback, source: 'default' as const, reason: routed.has(name) ? 'keep_baseline' : capped } : null)
-    next[name] = routedRow(row, choice)
-    roles[name] = next[name].openrouter_only_choice
+    next[name] = routedRow(row, choice, list.allowlist)
+    roles[name] = next[name].openrouter_only_choice ?? next[name].subagent_list_choice
     if (choice?.source === 'jev') jevModels[name] = choice.entry.model
   }
   return {
@@ -183,6 +173,7 @@ export function applyListRoleModels(
     jevModels,
     evidence: {
       enabled: true,
+      ...(list.allowlist.mode === 'configured' ? { profile: list.allowlist.profile } : {}),
       main_model: list.mainModel,
       default_subagent_model: fallback?.model ?? null,
       subagent_models: list.state.subagent_models.map((entry) => ({ ...entry })),
@@ -192,7 +183,7 @@ export function applyListRoleModels(
       jev_decided_roles: Object.keys(jevModels),
       roles,
       read_only_role: { name: READ_ONLY_LIST_ROLE.codex_name, installed: readOnlyRoleInstalled },
-      warnings: readOnlyRoleInstalled === false ? ['openrouter_only_read_only_role_missing'] : []
+      warnings: readOnlyRoleInstalled === false ? [`${list.allowlist.mode === 'openrouter_only' ? 'openrouter_only' : 'subagent_list'}_read_only_role_missing`] : []
     }
   }
 }

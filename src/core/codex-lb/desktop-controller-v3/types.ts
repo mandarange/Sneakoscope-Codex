@@ -27,7 +27,7 @@ export type DesktopBridgeControllerRequestV3 =
   | { operation: 'openrouter-only.status' }
   | { operation: 'openrouter-only.set'; enabled: boolean; no_restart?: boolean }
   | { operation: 'subagent-models.list' }
-  | { operation: 'subagent-models.set'; subagent_models: readonly unknown[]; no_restart?: boolean }
+  | { operation: 'subagent-models.set'; subagent_models: readonly unknown[]; no_restart?: boolean; profile?: 'openrouter_only' | 'codex_lb' | 'openai' }
   | { operation: 'ensure' }
   | { operation: 'repair' }
   | { operation: 'verify'; level: CapabilityRequestedLevel }

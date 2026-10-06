@@ -35,7 +35,7 @@ export type BridgeCommandRequest =
   | { operation: 'openrouter-only.status' }
   | { operation: 'openrouter-only.set'; enabled: boolean; no_restart: boolean }
   | { operation: 'subagent-models.list' }
-  | { operation: 'subagent-models.set'; subagent_models: unknown[]; no_restart: boolean }
+  | { operation: 'subagent-models.set'; subagent_models: unknown[]; no_restart: boolean; profile?: 'openrouter_only' | 'codex_lb' | 'openai' }
   | { operation: 'serve'; settings_path: string }
   | { operation: 'ensure' }
   | { operation: 'repair' }
@@ -130,7 +130,8 @@ export function usage(command = 'bridge'): string {
     '',
     'Provider secrets are accepted only through --api-key-stdin. Readiness changes the exit code only with --strict or --require-ready.',
     'OpenRouter Only Mode and Codex-LB authentication priority are mutually exclusive; turning one on turns the other off.',
-    'subagent-models set reads {"subagent_models":[{"model","criteria","reasoning_effort","default"}]} (max 16) from stdin.'
+    'subagent-models set reads {"profile":"codex_lb|openai|openrouter_only","subagent_models":[{"model","criteria","reasoning_effort","default"}]} (max 16) from stdin.',
+    'The profile must match the current connection. Omitting profile preserves the legacy OpenRouter-list staging behavior.'
   ].join('\n');
 }
 
@@ -262,7 +263,7 @@ async function parseInvocation(args: string[], io: BridgeCommandIo): Promise<Par
         ...base,
         request: {
           operation: 'subagent-models.set',
-          subagent_models: subagentModelsFromStdin(await io.readStdin()),
+          ...subagentModelsFromStdin(await io.readStdin()),
           no_restart: parsed.flags.has('--no-restart')
         },
         label: 'Subagent model list update'
@@ -472,7 +473,7 @@ function parseArgs(args: string[]): ParsedArgs {
 }
 
 /** `{"subagent_models":[...]}`; the controller validates each row. */
-function subagentModelsFromStdin(text: string): unknown[] {
+function subagentModelsFromStdin(text: string): { subagent_models: unknown[]; profile?: 'openrouter_only' | 'codex_lb' | 'openai' } {
   const raw = String(text || '').trim();
   if (!raw) throw new BridgeCliError('bridge_subagent_models_stdin_empty', 'retry_with_stdin');
   if (Buffer.byteLength(raw, 'utf8') > MAX_STDIN_JSON_BYTES) {
@@ -488,7 +489,11 @@ function subagentModelsFromStdin(text: string): unknown[] {
     ? (parsed as Record<string, unknown>).subagent_models
     : undefined;
   if (!Array.isArray(models)) throw new BridgeCliError('bridge_subagent_models_stdin_invalid', 'retry_with_stdin');
-  return models;
+  const profile = (parsed as Record<string, unknown>).profile;
+  if (profile !== undefined && profile !== 'openrouter_only' && profile !== 'codex_lb' && profile !== 'openai') {
+    throw new BridgeCliError('bridge_subagent_models_profile_invalid', 'retry_with_stdin');
+  }
+  return { subagent_models: models, ...(profile === undefined ? {} : { profile }) };
 }
 
 function rejectSecretArgv(args: string[]): void {

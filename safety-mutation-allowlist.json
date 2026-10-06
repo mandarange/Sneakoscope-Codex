@@ -2246,8 +2246,8 @@
       "file": "src/core/subagents/official-subagent-runner.ts",
       "symbol": "runOfficialSubagentWorkflow",
       "token": "fsp.rm",
-      "scope_contract_sha256": "eaa1cc196f79cc2a886cb940e025ca3b5e5d0e0e71b17097aab39b80e797d3d0",
-      "callsite_sha256": "4458945bed5381ca61377c5941afa4a9db5241d997bb0d012aa5ca0a16653802",
+      "scope_contract_sha256": "ba66f3d846c9cf20381b553e5719847ae767daa21890aebd2b745498d8737e04",
+      "callsite_sha256": "fd562f3c706cbc2f39b5b1fca0a31eff10ac02a8fef7c1a06a5101017914caee",
       "occurrence": 1,
       "reason": "The standalone parent runner removes only its run-unique temporary parent-summary file after reading it."
     },

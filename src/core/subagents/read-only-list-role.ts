@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { parse } from 'smol-toml'
 import { writeTextAtomic } from '../fsx.js'
 import {
   MANAGED_ASSET_SCHEMA_VERSION,
@@ -10,7 +11,7 @@ import {
 } from '../managed-assets/managed-assets-manifest.js'
 
 /**
- * The read-only child role for OpenRouter Only Mode.
+ * The read-only child role for configured child-model lists.
  *
  * Every managed role file pins a tier `model`, and Codex will not let a spawn
  * change a role's pinned model, so list-mode spawns cannot pass those roles as
@@ -18,17 +19,17 @@ import {
  * read-only roles would silently inherit the parent's sandbox. This role keeps
  * `sandbox_mode = "read-only"` and pins no model or effort, so a read-only
  * slice spawns with it plus the list model. SKS installs it in the project's
- * `.codex/agents/` while the mode is on, and in `~/.codex/agents/` (loaded for
- * every project) when the mode is turned on; the role catalog never offers it.
+ * `.codex/agents/` while a list controls children, and in `~/.codex/agents/`
+ * when a connection's list is applied; the role catalog never offers it.
  */
 
 export const READ_ONLY_LIST_ROLE = Object.freeze({
   id: 'sks-official-read-only-list-child',
   filename: 'read-only-list-child.toml',
   codex_name: 'read_only_list_child',
-  description: 'Read-only child for OpenRouter Only Mode slices whose spawn contract names it; it keeps the read-only sandbox and pins no model, so the spawn model from the subagent list applies.',
+  description: 'Read-only child for configured subagent-list slices whose spawn contract names it; it keeps the read-only sandbox and pins no model, so the spawn model from the subagent list applies.',
   nickname_candidates: Object.freeze(['Lens', 'Prism', 'Quill', 'Tally']),
-  developer_instructions: `You are a read-only child in OpenRouter Only Mode.
+  developer_instructions: `You are a read-only child using the configured subagent model list.
 
 The parent's spawn message carries your role brief, slice, and done condition; follow it.
 Stay read-only: do not edit files and do not spawn another subagent.
@@ -63,11 +64,26 @@ export function readOnlyListRoleOwnsText(text: string): boolean {
   return managedOfficialSubagentFileOwnsText(text, READ_ONLY_LIST_ROLE.id)
 }
 
-function ownedCopyAt(file: string): boolean {
+function ownedCopyAt(file: string): 'missing' | 'safe' | 'blocked' {
   try {
-    return readOnlyListRoleOwnsText(fs.readFileSync(file, 'utf8'))
-  } catch {
-    return false
+    if (!fs.lstatSync(file).isFile() || fs.statSync(file).size > 256 * 1024) return 'blocked'
+    const text = fs.readFileSync(file, 'utf8')
+    const role = parse(text)
+    return readOnlyListRoleOwnsText(text) && role.sandbox_mode === 'read-only'
+      && role.model === undefined && role.model_reasoning_effort === undefined ? 'safe' : 'blocked'
+  } catch (error: any) {
+    return error?.code === 'ENOENT' ? 'missing' : 'blocked'
+  }
+}
+
+function hasRoleConfigOverride(file: string): boolean {
+  try {
+    if (fs.statSync(file).size > 4 * 1024 * 1024) return true
+    const config = parse(fs.readFileSync(file, 'utf8'))
+    const agents = config.agents as Record<string, any> | undefined
+    return Boolean(agents?.[READ_ONLY_LIST_ROLE.codex_name]?.config_file)
+  } catch (error: any) {
+    return error?.code !== 'ENOENT'
   }
 }
 
@@ -81,7 +97,10 @@ export function userReadOnlyListRolePath(home: string): string {
  * copy installed later needs a new thread.
  */
 export function readOnlyListRoleInstalled(root: string, home: string = process.env.HOME || os.homedir()): boolean {
-  return ownedCopyAt(path.join(root, '.codex', 'agents', READ_ONLY_LIST_ROLE.filename)) || ownedCopyAt(userReadOnlyListRolePath(home))
+  if (hasRoleConfigOverride(path.join(root, '.codex', 'config.toml')) || hasRoleConfigOverride(path.join(home, '.codex', 'config.toml'))) return false
+  const project = ownedCopyAt(path.join(root, '.codex', 'agents', READ_ONLY_LIST_ROLE.filename))
+  // The project layer shadows the home layer, including a user-owned file.
+  return project === 'safe' || (project === 'missing' && ownedCopyAt(userReadOnlyListRolePath(home)) === 'safe')
 }
 
 export type UserReadOnlyListRoleInstall = 'created' | 'updated' | 'unchanged' | 'preserved_user_file'

@@ -149,9 +149,10 @@ export async function statusReport(env: NodeJS.ProcessEnv) {
   // Roles are never omitted then: list-mode plans send Jev no tier routing roles.
   const childModels = effectiveChildModelAllowlist({ env });
   const openRouterOnly = childModels.mode === 'openrouter_only';
+  const listMode = childModels.mode !== 'tiers';
   const childTierPoints = new Set(['spawn_tier', 'worker_tier', 'role_tiers', 'role_omission']);
   const decisionPoints = ['turn_route', 'turn_tier', 'spawn_tier', 'worker_tier', 'role_tiers', 'role_omission', 'plan', 'context', 'parent_edit_delegation', 'image_need', 'image_parameters', 'qa_effort_escalation']
-    .filter((point) => !openRouterOnly || !childTierPoints.has(point));
+    .filter((point) => !listMode || !childTierPoints.has(point));
   return {
     schema: 'sks.jev-decision-status.v1',
     ok: true,
@@ -172,8 +173,14 @@ export async function statusReport(env: NodeJS.ProcessEnv) {
       recovery: config.capabilities.recovery
     },
     decision_points: jevEnabled(config)
-      ? [...decisionPoints, ...(openRouterOnly ? ['child_model'] : [])]
+      ? [...decisionPoints, ...(listMode ? ['child_model'] : [])]
       : [],
+    subagent_model_list: {
+      active: listMode,
+      profile: childModels.mode === 'configured' ? childModels.profile : openRouterOnly ? 'openrouter_only' : null,
+      models: listMode ? childModels.models : [],
+      default_model: childModels.default_model
+    },
     openrouter_only: {
       enabled: openRouterOnly,
       subagent_model_count: openRouterOnly ? childModels.models.length : 0,

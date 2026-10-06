@@ -2,7 +2,7 @@ import path from 'node:path';
 import { readJson } from '../fsx.js';
 import { managedOfficialSubagentRoleByName } from '../managed-assets/managed-assets-manifest.js';
 import { latestModelForTier } from '../subagents/model-tiers.js';
-import { effectiveChildModelAllowlist } from '../subagents/child-model-allowlist.js';
+import { effectiveChildModelAllowlist, childModelListLabel } from '../subagents/child-model-allowlist.js';
 import { jevEnabled, readDecisionConfig } from '../decisions/config.js';
 import { renderChildModelList } from './subagent-spawn-policy.js';
 
@@ -17,11 +17,11 @@ export async function sealedSubagentRoutingContext(artifactDir: string, payload:
   // OpenRouter Only: the PreToolUse hook sealed a list model on the spawn call
   // itself; a plan or role tier model is never this child's model.
   const allowlist = effectiveChildModelAllowlist();
-  if (allowlist.mode === 'openrouter_only') {
+  if (allowlist.mode !== 'tiers') {
     return [
       'SKS sealed child routing:',
       `- custom agent: ${agentName}`,
-      `- model and model_reasoning_effort: sealed on the spawn call from the OpenRouter Only subagent list (${renderChildModelList(allowlist) || 'empty'})`,
+      `- model and model_reasoning_effort: sealed on the spawn call from the ${childModelListLabel(allowlist)} subagent list (${renderChildModelList(allowlist) || 'empty'})`,
       '- keep this sealed profile; do not retarget model/effort or spawn nested agents'
     ].join('\n');
   }

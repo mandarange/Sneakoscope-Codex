@@ -87,6 +87,22 @@ esac
   write('set.json', commandResult('subagent-models.set', { openrouter_only: modeState(true, savedRows) }));
   write('saved-list.json', commandResult('subagent-models.list', { openrouter_only: modeState(true, savedRows), available }));
   write('off-list.json', commandResult('subagent-models.list', { openrouter_only: modeState(false, savedRows), available }));
+  const nativeAvailable = [
+    { public_id: 'gpt-6-astra', display_name: 'Astra', reasoning_efforts: ['low', 'high', 'max', 'ultra'] },
+    { public_id: 'gpt-6-luna', display_name: 'Luna', reasoning_efforts: ['low', 'max'] }
+  ];
+  for (const profile of ['codex_lb', 'openai']) {
+    const model = profile === 'codex_lb' ? 'gpt-6-astra' : 'gpt-6-luna';
+    for (const saved of [false, true]) {
+      const entry = { model, criteria: saved ? `${profile} saved criteria` : `${profile} initial criteria`, reasoning_effort: saved ? profile === 'codex_lb' ? 'ultra' : 'max' : 'low', default: true, routable: true };
+      const result = {
+        openrouter_only: modeState(false, savedRows), available: nativeAvailable,
+        subagent_model_settings: { schema: 'sks.subagent-model-settings.v1', profile, configured: true, editable: true, error: null, warnings: [], subagent_models: [entry] }
+      };
+      write(`${profile}-${saved ? 'saved' : 'initial'}.json`, commandResult('subagent-models.list', result));
+      if (saved) write(`${profile}-set.json`, commandResult('subagent-models.set', result));
+    }
+  }
   write('older.json', JSON.stringify({ schema: 'sks.bridge-command-error.v1', ok: false, execution_ok: false, status: 'failed', blockers: ['bridge_command_invalid'] }));
   write('status-delay', '0');
   write('models.json', commandResult('models.list', {
@@ -125,7 +141,7 @@ esac
   assert.equal(executed.status, 0, executed.stderr || executed.stdout);
   assert.match(executed.stdout, /native-openrouter-only-pages-ok/);
 
-  const receivedText = fs.readFileSync(path.join(fixture, 'received.json'), 'utf8');
+  const receivedText = fs.readFileSync(path.join(fixture, 'received-openrouter.json'), 'utf8');
   assert.doesNotMatch(receivedText, /redacted/i);
   assert.deepEqual(JSON.parse(receivedText), {
     subagent_models: [
@@ -135,10 +151,17 @@ esac
     ]
   });
   assert.equal(fs.readFileSync(path.join(fixture, 'set-args'), 'utf8'), 'bridge subagent-models set --stdin --json\n');
+  for (const profile of ['codex_lb', 'openai']) {
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(fixture, `received-${profile}.json`), 'utf8')), {
+      profile,
+      subagent_models: [{ model: profile === 'codex_lb' ? 'gpt-6-astra' : 'gpt-6-luna', criteria: `${profile} saved criteria`, reasoning_effort: profile === 'codex_lb' ? 'ultra' : 'max', default: true }]
+    });
+  }
   const receipts = fs.readdirSync(operationsDir).filter((name) => name.endsWith('.json'))
     .map((name) => JSON.parse(fs.readFileSync(path.join(operationsDir, name), 'utf8')));
   assert.deepEqual(receipts.map((row) => `${row.kind}:${row.state}`).sort(), [
-    'bridge-auth-priority:succeeded', 'bridge-openrouter-only:succeeded', 'bridge-subagent-models:succeeded'
+    'bridge-auth-priority:succeeded', 'bridge-openrouter-only:succeeded',
+    'bridge-subagent-models:succeeded', 'bridge-subagent-models:succeeded', 'bridge-subagent-models:succeeded'
   ]);
 });
 
@@ -255,6 +278,7 @@ pump(pageView, "apply did not finish") {
 }
 precondition(!apply.isEnabled)
 precondition(criteriaText(pageView, 2) == "token: budget-heavy" && criteriaText(pageView, 1) == "risk-assessment-heavy reviews")
+copyFixture("received.json", to: "received-openrouter.json")
 
 // Mode off: rows are read-only and the page points to Connections.
 copyFixture("off-list.json", to: "list.json")
@@ -290,6 +314,33 @@ try! "1".write(to: fixture.appendingPathComponent("list-exit"), atomically: true
 page.refreshOnAppear()
 pump(pageView, "older CLI message missing") { labels(pageView).contains("does not include OpenRouter Only") }
 precondition(!add.isEnabled && !apply.isEnabled)
+
+// Current CLI: both native connection profiles are editable while OpenRouter Only is off.
+try! "0".write(to: fixture.appendingPathComponent("list-exit"), atomically: true, encoding: .utf8)
+for profile in ["codex_lb", "openai"] {
+    copyFixture("\(profile)-initial.json", to: "list.json")
+    copyFixture("\(profile)-set.json", to: "set.json")
+    page.refreshOnAppear()
+    let label = profile == "codex_lb" ? "Codex-LB" : "OpenAI OAuth"
+    pump(pageView, "native connection list did not load") { labels(pageView).contains(label + " · custom list") }
+    precondition(add.isEnabled, "Add Model must be usable without OpenRouter Only")
+    precondition(criteriaText(pageView, 0) == "\(profile) initial criteria", "a different connection's dirty draft leaked")
+    let field = find(pageView, "sks-subagent-models-criteria-0", NSTextField.self)
+    precondition(field.isEnabled)
+    field.stringValue = "\(profile) saved criteria"
+    page.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification, object: field))
+    let effort = find(pageView, "sks-subagent-models-effort-0", NSPopUpButton.self)
+    precondition(profile == "codex_lb" ? effort.itemTitles.contains("ultra") : !effort.itemTitles.contains("ultra"), "efforts must match the selected model")
+    effort.selectItem(withTitle: profile == "codex_lb" ? "ultra" : "max")
+    _ = effort.target?.perform(effort.action, with: effort)
+    copyFixture("\(profile)-saved.json", to: "list.json")
+    press(apply)
+    pump(pageView, "native list apply did not finish") { labels(pageView).contains("Subagent model list saved · 1 model") && !apply.isEnabled }
+    copyFixture("received.json", to: "received-\(profile).json")
+    let dirty = find(pageView, "sks-subagent-models-criteria-0", NSTextField.self)
+    dirty.stringValue = "unapplied \(profile) draft"
+    page.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification, object: dirty))
+}
 client.terminateAll()
 print("native-openrouter-only-pages-ok")
 `;
