@@ -792,7 +792,11 @@ export function validateDesktopBridgeConfig(config: DesktopBridgeConfig): void {
   if (config.officialPassthrough) validateRemoteUrl(config.officialPassthrough.baseUrl);
   if (config.openRouterOnly !== undefined && config.openRouterOnly !== null) validateOpenRouterOnlyConfig(config.openRouterOnly);
   assertRegistryAndPolicy(config, config.providerRegistry);
-  if (!Object.values(config.providerRegistry.providers).some((provider) => provider.enabled)) {
+  const hasEnabledProvider = Object.values(config.providerRegistry.providers).some((provider) => provider.enabled);
+  const routes = Object.values(config.routePolicy.model_routes);
+  const hasOfficialOnlyPolicy = routes.length > 0
+    && routes.every((route) => route.provider_id === BRIDGE_OFFICIAL_ROUTE_ID);
+  if (!hasEnabledProvider && !(hasOfficialOnlyPolicy && Boolean(config.officialPassthrough))) {
     throw new DesktopBridgeError('bridge_provider_registry_no_enabled_provider');
   }
 }

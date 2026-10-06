@@ -17,7 +17,7 @@ import {
   writeDesktopBridgeServiceSettings
 } from '../desktop-service.js';
 import { renderDesktopBridgeLaunchdPlist } from '../desktop-bridge/launchd.js';
-import { createDesktopBridgePublicState, writeDesktopBridgeState } from '../desktop-bridge/index.js';
+import { createDesktopBridgePublicState, validateDesktopBridgeConfig, writeDesktopBridgeState } from '../desktop-bridge/index.js';
 
 const CLIENT_CAPABILITY = Buffer.alloc(32, 0x49).toString('base64url');
 const CLIENT_CAPABILITY_SHA256 = createHash('sha256').update(CLIENT_CAPABILITY).digest('hex');
@@ -284,6 +284,41 @@ test('runtime never promotes an unvalidated or rotated OpenRouter credential to 
     }),
     /desktop_bridge_provider_credentials_unavailable/
   );
+});
+
+test('official-only runtime starts without a bridge provider credential', async (t) => {
+  const setup = await fixture(t);
+  const settings = defaultDesktopBridgeServiceSettings({
+    client_capability_sha256: CLIENT_CAPABILITY_SHA256,
+    route_policy: {
+      schema: 'sks.bridge-routing-policy.v1',
+      default_provider_id: null,
+      fallback: 'none',
+      model_routes: {
+        'gpt-6-sol': { provider_id: 'openai', upstream_model: 'gpt-6-sol' }
+      },
+      catalog_generation: 'official-only-catalog',
+      policy_generation: 'official-only-policy',
+      changed_at: '2026-08-05T00:00:00.000Z'
+    },
+    official_passthrough: {
+      enabled: true,
+      base_url: 'https://chatgpt.com/backend-api/codex',
+      models: 'passthrough'
+    }
+  });
+
+  const runtime = await resolveDesktopBridgeRuntimeConfig({
+    home: setup.home,
+    clientCapability: CLIENT_CAPABILITY,
+    settings,
+    env: { HOME: setup.home }
+  });
+
+  assert.equal(runtime.credential_source, null);
+  assert.equal(Object.values(runtime.config.providerRegistry.providers).some((provider) => provider.enabled), false);
+  assert.equal(runtime.config.officialPassthrough?.baseUrl, 'https://chatgpt.com/backend-api/codex');
+  assert.doesNotThrow(() => validateDesktopBridgeConfig(runtime.config));
 });
 
 test('launchd bootstrap retries only after the previous service instance is fully removed', async () => {

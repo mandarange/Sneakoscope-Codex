@@ -108,11 +108,12 @@ function normalizeConfig(raw: unknown): DecisionConfig {
   if (!isRecord(raw) || raw.schema !== DECISION_CONFIG_SCHEMA) return fallback;
   const mode: DecisionMode = raw.mode === 'jev' ? 'jev' : 'off';
   const consentCloud = raw.consentCloud === true;
+  const canonicalModel = raw.model === undefined || raw.model === DESIGN_DEFAULTS.model;
   return {
     schema: DECISION_CONFIG_SCHEMA,
-    mode: mode === 'jev' && consentCloud ? 'jev' : 'off',
+    mode: mode === 'jev' && consentCloud && canonicalModel ? 'jev' : 'off',
     provider: 'openrouter',
-    model: typeof raw.model === 'string' && raw.model.trim() ? raw.model.trim() : DESIGN_DEFAULTS.model,
+    model: DESIGN_DEFAULTS.model,
     consentCloud,
     consentAt: typeof raw.consentAt === 'string' ? raw.consentAt : null,
     capabilities: {

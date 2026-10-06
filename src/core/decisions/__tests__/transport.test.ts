@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { resolveOpenRouterApiKey } from '../../providers/openrouter/openrouter-secret-store.js';
 import {
   encodeRequest,
+  DECISION_MEMO_TTL_MS,
   OPENROUTER_DECISIONS_ENDPOINT,
   requestOpenRouterDecision,
   resetDecisionTransportState
@@ -63,6 +64,31 @@ test('credential reuse uses the existing OpenRouter helper and never a Jev secre
   const files = await fsp.readdir(home).catch(() => []);
   assert.equal(files.some((name) => /jev/i.test(name)), false);
   await fsp.rm(home, { recursive: true, force: true });
+});
+
+test('identical decisions are memoized briefly and fetched again after the TTL', async () => {
+  const bundle = planningBundle();
+  const env = { OPENROUTER_API_KEY: 'sk-or-test-memo-ffffffffffff' };
+  let now = 1_000;
+  let fetched = 0;
+  const fetchImpl = async () => {
+    fetched += 1;
+    return jsonResponse(SYNTHETIC_RESPONSE);
+  };
+
+  const first = await requestOpenRouterDecision(bundle, { env, now: () => now, fetchImpl });
+  assert.equal(first.ok, true);
+  assert.equal(first.cacheHit, false);
+  const cached = await requestOpenRouterDecision(bundle, { env, now: () => now, fetchImpl });
+  assert.equal(cached.ok, true);
+  assert.equal(cached.cacheHit, true);
+  assert.equal(fetched, 1);
+
+  now += DECISION_MEMO_TTL_MS + 1;
+  const refreshed = await requestOpenRouterDecision(bundle, { env, now: () => now, fetchImpl });
+  assert.equal(refreshed.ok, true);
+  assert.equal(refreshed.cacheHit, false);
+  assert.equal(fetched, 2);
 });
 
 test('401/402/429/5xx, malformed JSON, and aborted calls keep unknown usage', async () => {

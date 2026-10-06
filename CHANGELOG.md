@@ -4,6 +4,13 @@
 
 ### Fixed
 
+- Desktop Bridge official-only routing no longer fails startup when both gateway
+  providers are disabled: an all-`openai` route policy with official passthrough
+  now correctly uses the client's own identity and requires no bridge key.
+- Jev now evaluates lightweight Answer prompts before returning their compact
+  answer context, rejects stale persisted models instead of showing a misleading
+  enabled mode, and expires identical decision responses after a bounded memo
+  lifetime.
 - Official Codex runtime resolution now accepts npm's hoisted project layout
   when a packaged install places `@openai/codex` in the parent `node_modules`.
   The existing manifest pins, metadata checks, realpath containment, and

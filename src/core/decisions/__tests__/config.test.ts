@@ -5,6 +5,7 @@ import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { readDecisionConfig, writeDecisionConfig } from '../config.js';
+import { DESIGN_DEFAULTS } from '../types.js';
 
 async function tempEnv(t: test.TestContext): Promise<NodeJS.ProcessEnv> {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-jev-config-'));
@@ -50,4 +51,23 @@ test('enable requires explicit cloud consent and the pinned model', async (t) =>
   assert.equal(stat.mode & 0o777, 0o600);
   const reread = await readDecisionConfig(env);
   assert.equal(reread.mode, 'jev');
+});
+
+test('a persisted unsupported model disables Jev and is normalized to the pinned model', async (t) => {
+  const env = await tempEnv(t);
+  const configDir = path.join(env.SKS_HOME!, 'decisions');
+  await fsp.mkdir(configDir, { recursive: true });
+  await fsp.writeFile(path.join(configDir, 'config.json'), JSON.stringify({
+    schema: 'sks.jev-decision-config.v1',
+    mode: 'jev',
+    provider: 'openrouter',
+    model: 'typesafe/jev-unsupported',
+    consentCloud: true,
+    consentAt: '2026-09-19T00:00:00.000Z'
+  }));
+
+  const config = await readDecisionConfig(env);
+  assert.equal(config.mode, 'off');
+  assert.equal(config.model, DESIGN_DEFAULTS.model);
+  assert.equal(config.consentCloud, true);
 });
