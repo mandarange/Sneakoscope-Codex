@@ -25,6 +25,9 @@
   seam, and an unused Naruto credential receipt projection. Production guards,
   the explicit unsupported recovery capability, and credential argument policy
   remain intact.
+- Context-management edits now compare TOML values semantically, so the stable
+  smol-toml 1.9 parser's null-prototype objects do not block otherwise valid
+  config updates.
 - Context compaction no longer fails on Codex-LB and OpenRouter threads with
   `Error running remote compact task: … bridge_upstream_request_failed`. SKS
   points Codex's built-in OpenAI provider at the Desktop Bridge, so Codex
