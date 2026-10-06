@@ -14,8 +14,11 @@ final class SettingsViewController: NSViewController, ControlCenterPage {
     private let followCodexLifecycle = NSButton(checkboxWithTitle: "Show SKS Menu only while Codex is running", target: nil, action: nil)
     private let status = NativeView.detail("Settings use the native app configuration file.")
     private let contextStatus = NativeView.detail("Codex 1M context: checking current state…")
+    private let narutoModePopup = NSPopUpButton()
+    private let narutoModeStatus = NativeView.detail("Naruto execution mode: checking saved preference…")
     private var notificationButton: NSButton!
     private var contextToggleButton: NSButton!
+    private var narutoApplyButton: NSButton!
     private var contextEnabled: Bool?
     private var contextBusy = false
     private var contextGeneration = 0
@@ -24,6 +27,8 @@ final class SettingsViewController: NSViewController, ControlCenterPage {
     private var memoryEnabled: Bool?
     private var memoryBusy = false
     private var memoryGeneration = 0
+    private var narutoBusy = false
+    private var narutoGeneration = 0
     init(processClient: ProcessClient, operations: OperationCoordinator, notifications: NotificationCoordinator) {
         self.processClient = processClient
         self.operations = operations
@@ -43,6 +48,24 @@ final class SettingsViewController: NSViewController, ControlCenterPage {
             title: "Context management",
             subtitle: "Experimental · Keep notes and retrieve earlier messages and tool results. Enabled by default in SKS. Applies to new tasks with supported Codex and eligible ChatGPT sign-in; API-key and custom-provider sessions may not activate it.",
             views: [NativeView.row([memoryToggle, NativeView.detail("Enable experimental context management")]), memoryStatus]
+        )
+        narutoModePopup.removeAllItems()
+        for mode in ["auto", "current-session", "standalone"] {
+            narutoModePopup.addItem(withTitle: Self.narutoModeTitle(mode))
+            narutoModePopup.lastItem?.representedObject = mode
+        }
+        narutoModePopup.isEnabled = false
+        narutoModePopup.setAccessibilityLabel("Naruto execution mode")
+        narutoModePopup.setAccessibilityIdentifier("sks-naruto-execution-mode")
+        narutoApplyButton = ControlKit.primaryButton("Apply", target: self, action: #selector(applyNarutoExecution))
+        narutoApplyButton.isEnabled = false
+        narutoApplyButton.setAccessibilityLabel("Apply Naruto execution mode and restart Codex")
+        narutoApplyButton.setAccessibilityIdentifier("sks-naruto-execution-apply")
+        narutoModeStatus.setAccessibilityIdentifier("sks-naruto-execution-status")
+        let narutoCard = NativeView.card(
+            title: "Naruto execution",
+            subtitle: "Choose whether SKS Naruto uses the current Codex App parent or launches the official workflow as a standalone terminal command. Apply saves the preference and restarts a running Codex App so the new mode is active.",
+            views: [NativeView.row([narutoModePopup, narutoApplyButton]), narutoModeStatus]
         )
         followCodexLifecycle.target = self; followCodexLifecycle.action = #selector(save)
         followCodexLifecycle.setAccessibilityLabel("Show SKS Menu only while Codex is running")
@@ -66,13 +89,14 @@ final class SettingsViewController: NSViewController, ControlCenterPage {
         )
         view = NativeView.page([
             ControlKit.header("Settings", "Choose how SKS works on this Mac."),
-            memoryCard, lifecycleCard, notificationsCard, NativeDisclosure("Advanced", views: [contextCard])
+            memoryCard, narutoCard, lifecycleCard, notificationsCard, NativeDisclosure("Advanced", views: [contextCard])
         ])
     }
 
     func refreshOnAppear() {
         refreshContextManagement()
         refreshContext1m()
+        refreshNarutoExecution()
         let configResult = readConfig()
         switch configResult {
         case .loaded(let config):
@@ -101,6 +125,86 @@ final class SettingsViewController: NSViewController, ControlCenterPage {
             case .malformed:
                 status.stringValue = "The settings file is malformed. No option can be changed or overwritten; repair it, then reopen Settings."
             }
+        }
+    }
+
+    private static func narutoModeTitle(_ mode: String) -> String {
+        switch mode {
+        case "current-session": return "Current Codex App session"
+        case "standalone": return "Standalone terminal workflow"
+        default: return "Auto (Codex App when available)"
+        }
+    }
+
+    private func refreshNarutoExecution() {
+        guard !narutoBusy else { return }
+        narutoGeneration += 1
+        let requestGeneration = narutoGeneration
+        processClient.run(["naruto", "execution", "status", "--json"], timeout: NativeView.statusTimeout) { [weak self] result in
+            guard let self, requestGeneration == self.narutoGeneration, !self.narutoBusy else { return }
+            let payload = self.json(result.output)
+            guard result.code == 0,
+                  payload?["schema"] as? String == "sks.naruto-execution-result.v1",
+                  payload?["ok"] as? Bool == true,
+                  let mode = payload?["mode"] as? String,
+                  ["auto", "current-session", "standalone"].contains(mode) else {
+                self.narutoModePopup.isEnabled = false
+                self.narutoApplyButton.isEnabled = false
+                self.narutoModeStatus.stringValue = "Naruto execution preference unavailable. Run sks update, then reopen Settings."
+                self.narutoModeStatus.textColor = .systemOrange
+                return
+            }
+            self.narutoModePopup.selectItem(withTitle: Self.narutoModeTitle(mode))
+            self.narutoModePopup.isEnabled = true
+            self.narutoApplyButton.isEnabled = true
+            let stored = payload?["stored"] as? Bool == true
+            self.narutoModeStatus.stringValue = "\(Self.narutoModeTitle(mode)) · \(stored ? "saved preference" : "default until the next update")"
+            self.narutoModeStatus.textColor = .secondaryLabelColor
+        }
+    }
+
+    @objc private func applyNarutoExecution() {
+        guard !narutoBusy,
+              let mode = narutoModePopup.selectedItem?.representedObject as? String,
+              ["auto", "current-session", "standalone"].contains(mode) else { return }
+        guard let operation = operations.begin(kind: "naruto-execution-mode", mutationGroup: "codex-config", summary: "Apply Naruto execution mode") else {
+            narutoModeStatus.stringValue = "Another configuration change is running. Try again when it finishes."
+            narutoModeStatus.textColor = .systemOrange
+            return
+        }
+        narutoBusy = true
+        narutoGeneration += 1
+        narutoModePopup.isEnabled = false
+        narutoApplyButton.isEnabled = false
+        narutoModeStatus.stringValue = "Saving Naruto execution mode and restarting Codex if it is running…"
+        narutoModeStatus.textColor = .secondaryLabelColor
+        _ = operations.update(operation, state: .running, stage: "applying", progress: nil, summary: narutoModeStatus.stringValue)
+        processClient.run(["naruto", "execution", "set", "--mode", mode, "--restart", "--json"], timeout: NativeView.mutationTimeout) { [weak self] result in
+            guard let self else { return }
+            self.narutoBusy = false
+            let payload = self.json(result.output)
+            let ok = result.code == 0
+                && payload?["schema"] as? String == "sks.naruto-execution-result.v1"
+                && payload?["ok"] as? Bool == true
+                && payload?["mode"] as? String == mode
+            let restart = payload?["restart"] as? [String: Any]
+            let summary: String
+            if ok, restart?["status"] as? String == "restarted" {
+                summary = "Naruto mode saved · Codex restarted. Start a new task to use it."
+            } else if ok, restart?["reason"] as? String == "codex_not_running" {
+                summary = "Naruto mode saved · Codex is not running; it applies on the next launch."
+            } else if ok, restart?["reason"] as? String == "not_macos" {
+                summary = "Naruto mode saved · restart Codex on macOS to apply it."
+            } else if ok {
+                summary = "Naruto mode saved · Codex restart was skipped by policy."
+            } else {
+                let blocker = (payload?["blockers"] as? [String])?.first
+                summary = blocker.map { "Naruto mode was not confirmed · \($0)" } ?? "Naruto mode was not confirmed · unexpected CLI response."
+            }
+            _ = self.operations.update(operation, state: ok ? .succeeded : .failed, stage: "complete", progress: 1, summary: summary)
+            self.narutoModeStatus.stringValue = summary
+            self.narutoModeStatus.textColor = ok ? .systemGreen : .systemRed
+            self.refreshNarutoExecution()
         }
     }
 

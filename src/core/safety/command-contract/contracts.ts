@@ -18,12 +18,22 @@ const ARGUMENT_BUILDERS: Record<CommandInputProfile, ArgvBuilder> = {
   none: () => [],
   'json-only': jsonFlag,
   naruto: (input) => {
+    const action = stringValue(input.action, input.prompt || input.task ? 'run' : 'help');
+    if (action === 'execution') {
+      const executionCommand = stringValue(input.execution_command, 'status');
+      return [
+        'execution',
+        ...(executionCommand === 'status' ? [] : [executionCommand]),
+        ...valueFlag(input, 'mode', '--mode'),
+        ...booleanFlag(input, 'restart', '--restart'),
+        ...jsonFlag(input)
+      ];
+    }
     const task = typeof input.prompt === 'string'
       ? input.prompt
       : typeof input.task === 'string'
         ? input.task
         : '';
-    const action = stringValue(input.action, task ? 'run' : 'help');
     return [
       action,
       ...(task ? [task] : []),

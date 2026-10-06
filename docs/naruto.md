@@ -46,6 +46,34 @@ printf '%s' '<sks.subagent-parent-summary.v1 JSON>' \
   | sks naruto parent-summary --mission M-... --stdin --json
 ```
 
+## Choosing the execution lane
+
+`sks update` creates the global Naruto execution preference at
+`~/.sneakoscope/preferences/naruto-execution.json` when it is missing. It seeds
+`current-session` for a marked Codex App process and `standalone` for an update
+run from a terminal, then preserves a choice made by the operator on later
+updates. The preference is deliberately separate from shell environment
+variables, so a terminal that inherited `CODEX_THREAD_ID` can be switched
+without editing a profile or weakening the App-session trust boundary.
+
+Inspect or change it with:
+
+```bash
+sks naruto execution status --json
+sks naruto execution set --mode auto --restart --json
+sks naruto execution set --mode current-session --restart --json
+sks naruto execution set --mode standalone --restart --json
+```
+
+`auto` keeps the existing App contract when a thread id is present,
+`current-session` requires that id, and `standalone` makes a terminal command
+launch the official Codex workflow even when the shell inherited an App id.
+SKS Center → Settings → Naruto execution exposes the same values. Apply writes
+the preference and asks the restart policy to quit and reopen a running Codex
+App on macOS; if Codex is not running, the setting applies at its next launch.
+The result reports a launch-guard or restart blocker instead of claiming that a
+reboot occurred.
+
 Automatic fan-out starts at four Naruto children for bounded non-trivial work, six for
 explicitly parallel work, eight for large-scale work, and sixteen for mass mechanical or exploration
 fan-out on the fast and context tiers. After decomposition the parent may resize either lane

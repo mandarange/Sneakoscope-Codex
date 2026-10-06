@@ -18,6 +18,7 @@ import type {
   IntentEffect,
   RoutingRuntimeSnapshot,
 } from '../core/safety/intent-contract/intent-contract.js';
+import { narutoUsesCurrentSession } from '../core/subagents/naruto-execution-mode.js';
 
 export interface NormalizedCommand {
   command: CommandNameLite | null;
@@ -285,9 +286,9 @@ async function ensureActiveRouteCommandGate(command: CommandNameLite, args: read
     import('../core/mission.js')
   ]);
   const root = await projectRoot(process.cwd()).catch(() => process.cwd());
-  const appSessionKey = process.env.SKS_NARUTO_STANDALONE_CLI === '1'
-    ? ''
-    : String(process.env.CODEX_THREAD_ID || '').trim();
+  const appSessionKey = narutoUsesCurrentSession()
+    ? String(process.env.CODEX_THREAD_ID || '').trim()
+    : '';
   const state = await loadOwnedRouteState(root, appSessionKey);
   if (safeActiveRouteContinuation(command, args, state)) return { ok: true, status: 'allowed_active_route_continuation' };
   if (!activeRouteStateBlocksCommand(state)) return { ok: true, status: 'allowed' };
@@ -337,6 +338,9 @@ export function safeReadOnlySubcommand(command: CommandNameLite, args: readonly 
   if (command === 'naruto' && ['status', 'subagents', 'proof'].includes(sub)) {
     return !args.some((arg) => ['--fix', '--yes', '-y', '--write', '--apply', '--execute', '--force', '--real'].includes(String(arg)));
   }
+  if (command === 'naruto' && sub === 'execution' && nested === 'status') {
+    return !args.some((arg) => ['--fix', '--yes', '-y', '--write', '--apply', '--execute', '--force', '--real'].includes(String(arg)));
+  }
   // SKS Center probes use nested read paths (`mcp config list|test|backups`,
   // `remote readiness`). Treat those as migration-safe so a blocked project
   // receipt cannot blank Overview / MCP / Remote pages.
@@ -362,6 +366,7 @@ export function safeActiveRouteContinuation(command: CommandNameLite, args: read
   const subcommand = String(args[0] || '').toLowerCase();
   const activeRoute = String(state.route || state.route_command || state.mode || '').replace(/^\$/, '').replace(/[-_]/g, '').toUpperCase();
   if (command === 'naruto') {
+    if (subcommand === 'execution' && String(args[1] || '').toLowerCase() === 'set') return true;
     if (subcommand === 'parent-summary') {
       const explicitParentSummaryMission = optionValue(args, ['--mission']);
       return Boolean(state.mission_id)

@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- `sks update` now selects and preserves the safe Naruto execution lane for the
+  current host, while SKS Center can apply the App-session or standalone choice and report the
+  guarded Codex App restart result. Model-picker Apply now restarts a running
+  Codex App after a catalog selection changes.
+
 ## [10.5.2] - 2026-10-06
 
 ### Security

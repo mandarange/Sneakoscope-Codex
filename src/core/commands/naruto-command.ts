@@ -65,6 +65,7 @@ import {
 } from '../agent-bridge/host-capability-runtime.js'
 import { renderHostCapabilityBlockedLines } from '../agent-bridge/host-capability-policy.js'
 import { uniqueStrings } from '../text/strings.js'
+import { configureNarutoExecution } from './naruto-config-command.js'
 import {
   completeNarutoTerminalBundle,
   refreshOfficialSubagentCompletionArtifacts
@@ -123,8 +124,50 @@ export async function narutoCommand(commandOrArgs: string | string[] = 'naruto',
   if (parsed.action === 'status') return narutoStatus(parsed)
   if (parsed.action === 'subagents') return narutoSubagents(parsed)
   if (parsed.action === 'proof') return narutoProof(parsed)
+  if (parsed.action === 'execution') return narutoExecution(parsed)
   if (parsed.action === 'parent-summary') return narutoParentSummary(parsed)
   return narutoRun(parsed)
+}
+
+async function narutoExecution(parsed: NarutoArgs) {
+  const configuration = await configureNarutoExecution({
+    ...(parsed.executionMode ? { mode: parsed.executionMode } : {}),
+    restart: parsed.restart
+  })
+  const result = {
+    schema: 'sks.naruto-execution-result.v1',
+    ok: configuration.ok,
+    action: 'execution',
+    command: parsed.executionCommand,
+    mode: configuration.mode,
+    stored: configuration.stored,
+    changed: configuration.changed,
+    path: configuration.path,
+    blockers: configuration.blockers,
+    restart: configuration.restart
+  }
+  return emit(parsed, result, () => {
+    if (!configuration.ok) {
+      for (const blocker of configuration.blockers) console.error(`Naruto execution setting blocked: ${blocker}`)
+      return
+    }
+    if (parsed.executionCommand === 'status') {
+      console.log(`Naruto execution mode: ${configuration.mode} (${configuration.stored ? 'saved' : 'default'})`)
+      console.log(`Preference: ${configuration.path}`)
+      return
+    }
+    const restart = configuration.restart
+    const suffix = restart?.status === 'restarted'
+      ? ' Codex was restarted; start a new task.'
+      : restart?.reason === 'codex_not_running'
+        ? ' Codex is not running; the setting applies on its next launch.'
+        : restart?.reason === 'not_macos'
+          ? ' The setting is saved; restart Codex on macOS to apply it.'
+          : restart?.status === 'skipped'
+            ? ` The setting is saved; restart skipped (${restart.reason || 'policy'}).`
+            : ''
+    console.log(`Naruto execution mode saved: ${configuration.mode}.${suffix}`)
+  }, !configuration.ok)
 }
 
 async function narutoParentSummary(parsed: NarutoArgs) {

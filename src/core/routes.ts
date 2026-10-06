@@ -256,7 +256,7 @@ export const ROUTES = [
     reasoningPolicy: 'high',
     stopGate: 'naruto-gate.json',
     coverage_required: true,
-    cliEntrypoint: 'sks naruto run "task" [--agents N] [--max-threads N] [--trusted-project] | sks naruto status|subagents|proof | sks naruto parent-summary --mission M-... --stdin',
+    cliEntrypoint: 'sks naruto run "task" [--agents N] [--max-threads N] [--trusted-project] | sks naruto status|subagents|proof | sks naruto execution status|set --mode auto|current-session|standalone [--restart] | sks naruto parent-summary --mission M-... --stdin',
     examples: ['$Naruto run review twelve independent packages with --agents 12', '$Work']
   },
   {

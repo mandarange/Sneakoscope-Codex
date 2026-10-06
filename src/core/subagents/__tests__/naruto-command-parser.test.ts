@@ -45,6 +45,21 @@ test('Naruto parser keeps explicit scaling and read-only status surfaces', () =>
   assert.equal(parseNarutoArgs(['proof', 'latest']).action, 'proof')
 })
 
+test('Naruto parser exposes the persisted execution-mode command without mixing it with run options', () => {
+  const status = parseNarutoArgs(['execution', 'status', '--json'])
+  assert.deepEqual({ action: status.action, executionCommand: status.executionCommand, executionMode: status.executionMode, restart: status.restart, errors: status.argumentErrors }, {
+    action: 'execution', executionCommand: 'status', executionMode: undefined, restart: false, errors: []
+  })
+  const set = parseNarutoArgs(['execution', 'set', '--mode', 'standalone', '--restart', '--json'])
+  assert.deepEqual({ action: set.action, executionCommand: set.executionCommand, executionMode: set.executionMode, restart: set.restart, errors: set.argumentErrors }, {
+    action: 'execution', executionCommand: 'set', executionMode: 'standalone', restart: true, errors: []
+  })
+  assert.ok(parseNarutoArgs(['execution', 'set', '--restart']).argumentErrors.includes('naruto_execution_set_requires_mode'))
+  assert.ok(parseNarutoArgs(['execution', 'set', '--mode', 'legacy']).argumentErrors.includes('invalid_naruto_execution_mode:legacy'))
+  assert.ok(parseNarutoArgs(['execution', 'status', '--mode', 'auto']).argumentErrors.some((error) => error.includes('option_not_supported_for_action:execution:--mode')))
+  assert.ok(parseNarutoArgs(['execution', 'set', '--mode', 'standalone', '--agents', '2']).argumentErrors.some((error) => error.includes('option_not_supported_for_action:execution:--agents')))
+})
+
 test('Naruto parser admits documented host/model flags only on run actions', () => {
   const previousProviderKey = process.env.GATEWAY_API_KEY
   process.env.GATEWAY_API_KEY = 'test-only-present'

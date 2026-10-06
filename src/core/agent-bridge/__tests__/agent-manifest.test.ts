@@ -257,7 +257,7 @@ test('Naruto manifest metadata and actions match the parser help contract', () =
   assert.equal(naruto.remote_allowed, false);
   assert.equal(naruto.requires_explicit_opt_in, true);
   assert.equal(naruto.example_invocation, 'sks naruto help --json');
-  assert.deepEqual((naruto.input_schema as any).properties.action.enum, ['run', 'status', 'subagents', 'proof', 'parent-summary', 'help']);
+  assert.deepEqual((naruto.input_schema as any).properties.action.enum, ['run', 'status', 'subagents', 'proof', 'parent-summary', 'execution', 'help']);
 });
 
 test('manifest validation rejects Naruto risk, opt-in, and action drift', () => {

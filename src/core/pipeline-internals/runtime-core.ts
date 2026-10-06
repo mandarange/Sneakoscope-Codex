@@ -47,6 +47,7 @@ import { classifyTaskProfile, gateProfileForTask, type GateProfile, type TaskPro
 import { chooseVerificationBudget, type VerificationBudget } from '../runtime/verification-budget.js';
 import { stopFinalizationRitualsEnforced } from '../verification-profile.js';
 import { HARD_NARUTO_MAX_THREADS } from '../subagents/thread-budget.js';
+import { narutoUsesCurrentSession } from '../subagents/naruto-execution-mode.js';
 import {
   NARUTO_GATE_FILENAME,
   NARUTO_SUMMARY_FILENAME,
@@ -660,7 +661,7 @@ export async function prepareRoute(root: any, prompt: any, state: any = {}, opts
     ...selectedRoute,
     requiredSkills: managedSkillNamesForPrompt(selectedRoute, cleanPrompt)
   } : null;
-  const codexThreadId = String(process.env.CODEX_THREAD_ID || '').trim();
+  const codexThreadId = narutoUsesCurrentSession() ? String(process.env.CODEX_THREAD_ID || '').trim() : '';
   const sessionKey = opts.sessionKey || codexThreadId || state?._session_key || null;
   const madSksAuthorization = hasMadSksSignal(cleanPrompt);
   const task = stripDollarCommand(stripMadSksSignal(cleanPrompt)) || stripMadSksSignal(stripDollarCommand(cleanPrompt)) || String(cleanPrompt || '').trim();

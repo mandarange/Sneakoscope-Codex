@@ -453,6 +453,16 @@ const UPDATE_MIGRATION_STAGES: UpdateMigrationStageDefinition[] = [
     run: runCurrentPublicSurfaceReconcileStage
   },
   {
+    id: 'naruto-execution-mode',
+    min_from_version: '0.0.0',
+    run: async () => {
+      const { writeNarutoExecutionMode } = await import('../subagents/naruto-execution-mode.js');
+      const initialMode = process.env.SKS_NARUTO_APP_SESSION === '1' ? 'current-session' : 'standalone';
+      const result = await writeNarutoExecutionMode(initialMode, process.env, true);
+      return { ok: true, status: 'ok' as const, actions: [result.changed ? `naruto_execution_${initialMode}_initialized` : 'naruto_execution_preference_preserved'], blockers: [], warnings: [], detail: { mode: result.mode, initial_mode: initialMode } };
+    }
+  },
+  {
     id: 'session-state-split',
     min_from_version: '0.0.0',
     run: runSessionStateSplitStage
