@@ -1,5 +1,6 @@
 import { readText, writeJsonAtomic } from '../../fsx.js';
 import { readTopLevelTomlString } from '../../codex-app/codex-model-catalog.js';
+import { codexRestartBlockers, maybeRestartRunningCodexApp } from '../../codex-app/codex-app-restart-policy.js';
 import {
   BRIDGE_MODEL_SELECTION_SCHEMA,
   MAX_SELECTED_OPENROUTER_MODELS,
@@ -455,15 +456,16 @@ export async function listSelectableModels(
 }
 
 /**
- * Replaces the OpenRouter selection and rebuilds the active catalog so the
- * Codex Desktop picker reflects the choice on its next read. codex-lb models
- * are never filtered.
+ * Replaces the OpenRouter selection and rebuilds the active catalog. A changed
+ * selection also restarts a running Codex App so its picker reads the new
+ * catalog immediately; codex-lb models are never filtered.
  */
 export async function selectExposedModels(
   publicIds: readonly string[],
   options: DesktopBridgeControllerV3Options
 ): Promise<DesktopBridgeCommandResult> {
   const paths = controllerPaths(options);
+  const before = await readBridgeModelSelectionState(paths.home, nowIso(options));
   const requested = [...new Set(publicIds.map((id) => String(id || '').trim()).filter(Boolean))].sort();
   if (requested.length > MAX_SELECTED_OPENROUTER_MODELS) {
     throw new Error('bridge_model_selection_limit_exceeded');
@@ -478,12 +480,24 @@ export async function selectExposedModels(
   const activation = sync.activation && typeof sync.activation === 'object'
     ? sync.activation as Record<string, unknown>
     : {};
+  const changed = before.selection.openrouter.public_ids.join('\0') !== requested.join('\0');
+  const restart = sync.ok === true
+    ? await maybeRestartRunningCodexApp({
+      env: controllerEnv(options),
+      changed,
+      noRestart: false,
+      ...(options.platform ? { platform: options.platform } : {}),
+      ...(options.codexAppRunningImpl ? { isRunningImpl: options.codexAppRunningImpl } : {}),
+      ...(options.codexAppRestartImpl ? { restartImpl: options.codexAppRestartImpl } : {})
+    })
+    : null;
+  const restartBlockers = codexRestartBlockers(restart);
   return commandResult(
     'models.select',
-    sync.ok === true,
+    sync.ok === true && restartBlockers.length === 0,
     status,
-    { selected_count: requested.length, catalog_sync: sync },
-    sync.ok === true ? [] : stringArray(activation.blockers),
+    { selected_count: requested.length, changed, catalog_sync: sync, codex_restart: restart },
+    [...(sync.ok === true ? [] : stringArray(activation.blockers)), ...restartBlockers],
     options
   );
 }

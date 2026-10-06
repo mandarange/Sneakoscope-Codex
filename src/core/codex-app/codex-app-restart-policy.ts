@@ -19,6 +19,12 @@ export interface CodexAppRestartOutcome {
   blockers: string[]
 }
 
+export const CODEX_RESTART_FAILED_BLOCKER = 'codex_restart_failed_manual_restart_required';
+
+export function codexRestartBlockers(restart: CodexAppRestartOutcome | null): string[] {
+  return restart?.attempted && !restart.ok ? [CODEX_RESTART_FAILED_BLOCKER] : [];
+}
+
 export interface CodexAppRestartPolicyInput {
   env: NodeJS.ProcessEnv
   changed: boolean
