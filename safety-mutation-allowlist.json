@@ -875,15 +875,6 @@
       "reason": "Runtime artifact writer has caller-scoped path and is externally audited for guard migration."
     },
     {
-      "file": "src/core/commands/rollback-command.ts",
-      "symbol": "rollbackCommand",
-      "token": "fs.rm",
-      "scope_contract_sha256": "8b34c2149deefb9c559e7caee1e5a7a2b4d7f658004f287760d7e7126a8f9cf6",
-      "callsite_sha256": "6fc1378e037721fcd045b6d51f993e38d3225862ad9cad04c552b7616e1f7979",
-      "occurrence": 1,
-      "reason": "Cleanup/removal path is route-owned, generated, or temporary artifact; exact callsite is audited."
-    },
-    {
       "file": "src/core/commands/uninstall-command.ts",
       "symbol": "purgeProjectArtifacts",
       "token": "fsp.rm",
@@ -2786,8 +2777,8 @@
       "file": "src/scripts/blackbox-matrix.ts",
       "symbol": "module",
       "token": "writeFileSync",
-      "scope_contract_sha256": "8320892c87839feec5344f9807daf46f51074b18ca88de29ca4ead0d0d50d61e",
-      "callsite_sha256": "f27ece03c9871482f453231aa715a8278fddfede35c3cacc7be5f9fd05c9b731",
+      "scope_contract_sha256": "d0530555eb725b671885ed218913f8e42b4905665dfaa023516a104d2e04417f",
+      "callsite_sha256": "a9a0d1171cfb62d50174c7b898a17a93cad449dacb5691ef142c6f87ff340d75",
       "occurrence": 1,
       "reason": "src/scripts/blackbox-matrix.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
@@ -2813,8 +2804,8 @@
       "file": "src/scripts/blackbox-pack-install.ts",
       "symbol": "module",
       "token": "rmSync",
-      "scope_contract_sha256": "7c10a55cb99a498c8f2ef5396ed5f382a0a6c73638fa4dde55d60c0f1e1bddb1",
-      "callsite_sha256": "b1d9ef4518b36abd5dbc3f46cecfa24dcf6b4ee369fbfa61f947ef39f24b5b7e",
+      "scope_contract_sha256": "1c282b54c767c4fe21721f3c521d1d688481db64427fa917d5ca1436068b5a42",
+      "callsite_sha256": "15873fd81d3956209705f189a013b2689e11f59701ae0f7e3426b66253c891c3",
       "occurrence": 1,
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
@@ -2822,8 +2813,8 @@
       "file": "src/scripts/blackbox-pack-install.ts",
       "symbol": "module",
       "token": "writeFileSync",
-      "scope_contract_sha256": "7c10a55cb99a498c8f2ef5396ed5f382a0a6c73638fa4dde55d60c0f1e1bddb1",
-      "callsite_sha256": "4fc1bdc029db05f581221c82ce7128eaf2f91eedf1bc56a8ec3893e8c56961bc",
+      "scope_contract_sha256": "1c282b54c767c4fe21721f3c521d1d688481db64427fa917d5ca1436068b5a42",
+      "callsite_sha256": "4bf18705f2df94732a326c58eba9d1c782418459d9299e35ddef6838b73a979b",
       "occurrence": 1,
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
@@ -4208,8 +4199,8 @@
       "file": "src/scripts/install-update-preserves-config-check.ts",
       "symbol": "module",
       "token": "chmod",
-      "scope_contract_sha256": "17ddd6b620193e9e3b846db1cda60991b5e8acfadec4b792ff76cb28002b6ba2",
-      "callsite_sha256": "6a5be4af30dfa9e5a68edb523fdc7dea798dc6e639f6b4bc7bf0da246b91df7e",
+      "scope_contract_sha256": "56974cfe4d93ff8e09484e20bf6f027a59942418c9c19b94b6e1e906c887ca14",
+      "callsite_sha256": "86fd2a2e2754bbf39faa52f1ddc67564a3d6ae0cd0911c98129ff3bcd1aad7ba",
       "occurrence": 1,
       "reason": "Release/check script marks a mkdtemp fake Codex fixture executable so Context7 global setup preservation can be tested without mutating user config."
     },
@@ -4217,8 +4208,8 @@
       "file": "src/scripts/install-update-preserves-config-check.ts",
       "symbol": "module",
       "token": "fs.writeFile",
-      "scope_contract_sha256": "17ddd6b620193e9e3b846db1cda60991b5e8acfadec4b792ff76cb28002b6ba2",
-      "callsite_sha256": "0dc52f726e5f0626d43e125bc2f34a07c3af9131e349a48ead350a324d0de07f",
+      "scope_contract_sha256": "56974cfe4d93ff8e09484e20bf6f027a59942418c9c19b94b6e1e906c887ca14",
+      "callsite_sha256": "f7d94c7889713072d0298f0efd09dd3f2819f8dd57c7bebd65c6b0dd1726e4c6",
       "occurrence": 1,
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
@@ -4226,8 +4217,8 @@
       "file": "src/scripts/install-update-preserves-config-check.ts",
       "symbol": "module",
       "token": "fs.writeFile",
-      "scope_contract_sha256": "17ddd6b620193e9e3b846db1cda60991b5e8acfadec4b792ff76cb28002b6ba2",
-      "callsite_sha256": "8b4952abf63f2ba666d09917e3852a5f11cf950efa6e55e64d654f3155b1b3d3",
+      "scope_contract_sha256": "56974cfe4d93ff8e09484e20bf6f027a59942418c9c19b94b6e1e906c887ca14",
+      "callsite_sha256": "4556c35f15c3a1d9a45867ac86c9b1dd66f41270cf9bcaaa1eac9599b398477f",
       "occurrence": 1,
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
@@ -4235,8 +4226,8 @@
       "file": "src/scripts/install-update-preserves-config-check.ts",
       "symbol": "module",
       "token": "fs.writeFile",
-      "scope_contract_sha256": "17ddd6b620193e9e3b846db1cda60991b5e8acfadec4b792ff76cb28002b6ba2",
-      "callsite_sha256": "0dc52f726e5f0626d43e125bc2f34a07c3af9131e349a48ead350a324d0de07f",
+      "scope_contract_sha256": "56974cfe4d93ff8e09484e20bf6f027a59942418c9c19b94b6e1e906c887ca14",
+      "callsite_sha256": "f7d94c7889713072d0298f0efd09dd3f2819f8dd57c7bebd65c6b0dd1726e4c6",
       "occurrence": 2,
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
@@ -4244,8 +4235,8 @@
       "file": "src/scripts/install-update-preserves-config-check.ts",
       "symbol": "module",
       "token": "fs.writeFile",
-      "scope_contract_sha256": "17ddd6b620193e9e3b846db1cda60991b5e8acfadec4b792ff76cb28002b6ba2",
-      "callsite_sha256": "046171e33bb7a4be91dce96468cdd79ea521568cd9427f5c5760af2eafd177e0",
+      "scope_contract_sha256": "56974cfe4d93ff8e09484e20bf6f027a59942418c9c19b94b6e1e906c887ca14",
+      "callsite_sha256": "466f91a4538971ecf85c1572f267f7e1da8eac6ac41a2c4efe69bbd474b369ec",
       "occurrence": 1,
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
@@ -4253,8 +4244,8 @@
       "file": "src/scripts/install-update-preserves-config-check.ts",
       "symbol": "module",
       "token": "fs.writeFile",
-      "scope_contract_sha256": "17ddd6b620193e9e3b846db1cda60991b5e8acfadec4b792ff76cb28002b6ba2",
-      "callsite_sha256": "ec70f02dbd2aed033ff6219fa373e6f06e5914946ade33f8dd88e5b32166ba6e",
+      "scope_contract_sha256": "56974cfe4d93ff8e09484e20bf6f027a59942418c9c19b94b6e1e906c887ca14",
+      "callsite_sha256": "800da3c1148910bf9dcc3af60773565125e0fd6a377034b817c74ddb48a7ff6c",
       "occurrence": 1,
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
@@ -5045,8 +5036,8 @@
       "file": "src/scripts/retention-cleanup-safety-check.ts",
       "symbol": "module",
       "token": "fsp.rm",
-      "scope_contract_sha256": "c6b0eb233aef35779e1109a35d760567241c295545cd5e56754b48fb0d9a8abf",
-      "callsite_sha256": "6f519419a544ff63eb0181f3a60f84ea3eb1d873e535ae8f876e58d2de6049eb",
+      "scope_contract_sha256": "ac2d0e555541fe69e76017316759c821f21395cd6c33a3549348034b5ef30b7b",
+      "callsite_sha256": "27b275b0fdc7c787cc7a23bef1b3d5464e89dfe4c1355534fd4bb2f9a8b6749c",
       "occurrence": 1,
       "reason": "src/scripts/retention-cleanup-safety-check.ts#module removes only its isolated fixture, generated build output, or scoped temporary artifact during cleanup."
     },
@@ -5054,8 +5045,8 @@
       "file": "src/scripts/retention-cleanup-safety-check.ts",
       "symbol": "module",
       "token": "fsp.writeFile",
-      "scope_contract_sha256": "c6b0eb233aef35779e1109a35d760567241c295545cd5e56754b48fb0d9a8abf",
-      "callsite_sha256": "c72d581eb34b28ef20a619a37fa9f4d9b2d2b61582a35c973e7a26279b0be1a8",
+      "scope_contract_sha256": "ac2d0e555541fe69e76017316759c821f21395cd6c33a3549348034b5ef30b7b",
+      "callsite_sha256": "c529d2d7c7a3ef4ae2c53ffeaaf2df8ad27e520a6c1ef8839ca5f628cca3dae0",
       "occurrence": 1,
       "reason": "src/scripts/retention-cleanup-safety-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
@@ -5666,8 +5657,8 @@
       "file": "src/scripts/trust-fixture-check.ts",
       "symbol": "module",
       "token": "fs.writeFile",
-      "scope_contract_sha256": "1d71ee8b144cd9fb5a738828cb90f8a23ac3a97b025df829cd7f5259074c970e",
-      "callsite_sha256": "175e89d41eb072b2e12ed08325da94a85913167b8f687ed5a7a7e5e5edaf69cf",
+      "scope_contract_sha256": "33764c29101a1bc1f7ab8ed2985f117129c93c9a9fb1f3837b1f97e7dfa17ec6",
+      "callsite_sha256": "c897daa615a581bed25161728cfe84114ced86050a4b2f856d4b619f2de7ebc9",
       "occurrence": 1,
       "reason": "src/scripts/trust-fixture-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
@@ -6129,6 +6120,24 @@
       "callsite_sha256": "177d0ec9b4a4ec0e30453157c90693d77c8f4cc7c331ce0dca25fc9b4b65edab",
       "occurrence": 1,
       "reason": "Makes the SKS-owned hook launcher under $CODEX_HOME/sks/bin executable so Codex can run the user-level hook commands."
+    },
+    {
+      "file": "src/core/codex-lb/desktop-service.ts",
+      "symbol": "autoApplyOfficialModelsAtServe",
+      "token": "fsp.rm",
+      "scope_contract_sha256": "ae7fe056f04d44b068694e92e50e104d70167ae6b01bf52a33c8309b9c49ffc9",
+      "callsite_sha256": "a95ff9a25dc168888cab83e08e915a60f5d35475f6836a83514f5a44a00e4bd7",
+      "occurrence": 1,
+      "reason": "Roll back only the newly created bridge settings document when the paired route-policy write fails and no prior settings existed; rollback failures propagate and startup stops."
+    },
+    {
+      "file": "src/scripts/blackbox-command-import-smoke.ts",
+      "symbol": "module",
+      "token": "rmSync",
+      "scope_contract_sha256": "6f5d895d9f86fb0032e1d29c685895b6a87255ef0c098e3977409618ccec08f8",
+      "callsite_sha256": "41a8bb9da0c01253617622983ad94b6b5c10e05a3ba12126b635f1efa05bae1e",
+      "occurrence": 1,
+      "reason": "Remove only this check's owned mkdtemp command-import unpack directory in finally; --keep preserves it for inspection."
     }
   ]
 }

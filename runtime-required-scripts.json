@@ -66,6 +66,16 @@
       "path": "dist/scripts/publish-preflight.js",
       "category": "installed_package_verification",
       "reason": "publish preflight ships with the lifecycle verifier that runs it against the packed tarball"
+    },
+    {
+      "path": "dist/scripts/prepublish-release-check-or-fast.js",
+      "category": "installed_package_verification",
+      "reason": "npm prepack and prepublishOnly invoke the shipped lifecycle verifier before packaging or publication"
+    },
+    {
+      "path": "dist/scripts/prepublish-fast-check.js",
+      "category": "installed_package_verification",
+      "reason": "the shipped lifecycle verifier runs the lightweight current-release-stamp eligibility check"
     }
   ],
   "reference_source_policies": [

@@ -160,7 +160,9 @@ test('npm pack excludes native checkout-only QA surfaces while retaining require
     'dist/native/sks-menubar/Sources/AppDelegate.swift',
     'dist/native/sks-menubar/Sources/RemoteCodingViewController.swift',
     'dist/scripts/release-version-truth-check.js',
-    'dist/scripts/check-publish-tag.js'
+    'dist/scripts/check-publish-tag.js',
+    'dist/scripts/prepublish-release-check-or-fast.js',
+    'dist/scripts/prepublish-fast-check.js'
   ]) {
     assert.ok(packedPaths.includes(requiredPath), `published package must include ${requiredPath}`);
   }
@@ -168,29 +170,45 @@ test('npm pack excludes native checkout-only QA surfaces while retaining require
 });
 
 test('actual npm publish lifecycle reports repository blockers without misdiagnosing the release stamp', () => {
-  const result = spawnSync(process.execPath, ['./dist/scripts/prepublish-release-check-or-fast.js'], {
-    cwd: process.cwd(),
-    encoding: 'utf8',
-    env: {
-      ...process.env,
-      npm_lifecycle_event: 'prepublishOnly',
-      npm_command: 'publish'
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-publish-lifecycle-'));
+  try {
+    const scriptsDir = path.join(fixture, 'dist', 'scripts');
+    fs.mkdirSync(scriptsDir, { recursive: true });
+    for (const script of ['prepublish-release-check-or-fast.js', 'publish-preflight.js']) {
+      fs.copyFileSync(path.join('dist', 'scripts', script), path.join(scriptsDir, script));
     }
-  });
-  assert.notEqual(result.status, 0);
-  assert.match(result.stdout, /"schema": "sks\.publish-preflight\.v1"/);
-  assert.match(result.stdout, /"ok": false/);
-  assert.match(result.stderr, /npm publish blocked by reproducibility preflight/);
-  // Any repository blocker proves the preflight ran: a detached CI checkout, a feature
-  // branch, a dirty tree, or missing npm auth on a clean main.
-  assert.match(`${result.stdout}\n${result.stderr}`, /publish_requires_main_branch:|worktree_not_clean|npm_publish_auth_missing_or_expired/);
-  assert.match(result.stderr, /Prepublish stopped at the reproducibility preflight/);
-  assert.doesNotMatch(result.stderr, /current authoritative full-release stamp/);
-  assert.doesNotMatch(result.stderr, /Run `npm run release:check:full` separately/);
-  assert.doesNotMatch(result.stderr, /Lifecycle-enabled npm publish is unsupported/);
-  assert.doesNotMatch(result.stderr, /Direct npm publish is disabled/);
-  assert.doesNotMatch(buildManifestWriter, /generated_at/);
-  assert.match(distRuntimeCheck, /build_manifest_generated_at_non_deterministic/);
+    fs.symlinkSync(path.resolve('dist/core'), path.join(fixture, 'dist', 'core'), 'junction');
+    fs.copyFileSync('package.json', path.join(fixture, 'package.json'));
+    const initialized = spawnSync('git', ['init', '--quiet', '-b', 'publish-lifecycle-fixture'], {
+      cwd: fixture,
+      encoding: 'utf8'
+    });
+    assert.equal(initialized.status, 0, initialized.stderr);
+    const result = spawnSync(process.execPath, ['./dist/scripts/prepublish-release-check-or-fast.js'], {
+      cwd: fixture,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        npm_lifecycle_event: 'prepublishOnly',
+        npm_command: 'publish',
+        npm_config_dry_run: 'true'
+      }
+    });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stdout, /"schema": "sks\.publish-preflight\.v1"/);
+    assert.match(result.stdout, /"ok": false/);
+    assert.match(result.stderr, /npm publish blocked by reproducibility preflight/);
+    assert.match(result.stdout, /publish_requires_main_branch:publish-lifecycle-fixture/);
+    assert.match(result.stderr, /Prepublish stopped at the reproducibility preflight/);
+    assert.doesNotMatch(result.stderr, /current authoritative full-release stamp/);
+    assert.doesNotMatch(result.stderr, /Run `npm run release:check:full` separately/);
+    assert.doesNotMatch(result.stderr, /Lifecycle-enabled npm publish is unsupported/);
+    assert.doesNotMatch(result.stderr, /Direct npm publish is disabled/);
+    assert.doesNotMatch(buildManifestWriter, /generated_at/);
+    assert.match(distRuntimeCheck, /build_manifest_generated_at_non_deterministic/);
+  } finally {
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
 });
 
 test('install-surface version proof fails closed when the marketplace plugin version is absent', () => {

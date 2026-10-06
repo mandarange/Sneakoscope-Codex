@@ -11,6 +11,10 @@
 
 ### Fixed
 
+- Restore the prepack and prepublish lifecycle verifier scripts to the npm
+  package's declared runtime script closure.
+- Run the publish-preflight regression against an isolated feature-branch
+  fixture so clean main CI and the operator's npm login cannot change its result.
 - Desktop Bridge official-only routing no longer fails startup when both gateway
   providers are disabled: an all-`openai` route policy with official passthrough
   now correctly uses the client's own identity and requires no bridge key.
