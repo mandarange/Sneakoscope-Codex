@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { officialSubagentLifecycleLockHeld } from '../subagents/official-subagent-lock.js';
 import { resolveOpenRouterApiKey } from '../providers/openrouter/openrouter-secret-store.js';
 import { redactOpenRouterSecrets } from '../security/redact-secrets.js';
@@ -82,7 +83,9 @@ export async function requestOpenRouterDecision(
   const resolved = await resolveOpenRouterApiKey({ env: options.env || process.env });
   if (!resolved.key) return fail('missing_key', resolved.blockers.join(',') || 'missing_openrouter_key', null);
 
-  const memoKey = encoded.body;
+  // Keep a credential rotation from reusing a response produced under a
+  // different OpenRouter account without retaining the raw key in the memo.
+  const memoKey = `${createHash('sha256').update(resolved.key).digest('hex')}:${encoded.body}`;
   const cached = memo.get(memoKey);
   if (cached) {
     if (nowMs - cached.storedAt < DECISION_MEMO_TTL_MS) {
