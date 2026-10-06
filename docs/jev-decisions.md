@@ -35,7 +35,7 @@ and its private socket directory. It does not touch a shared Hugging Face cache.
 | Endpoint | `POST https://openrouter.ai/api/alpha/decisions` (not `/api/v1/...`, not TypeSafe `/v1/systemone`) |
 | Model | `typesafe/jev-1.13` |
 | Provider policy | `zdr:true`, `data_collection:"deny"`, `allow_fallbacks:false`. SKS never weakens this automatically. |
-| Deadline | 1500 ms for the Decisions request, including body consumption; retries 0. Local snapshot work does not consume that budget. A Jev failure keeps the baseline and does not fail preparation. |
+| Deadline | 1500 ms for the Decisions request, including body consumption. Local snapshot work does not consume that budget. A Jev failure keeps the baseline and does not fail preparation. |
 | Recovery | Unsupported on this host: no SKS-owned ambiguous-failure handler exists |
 
 ## Control Center

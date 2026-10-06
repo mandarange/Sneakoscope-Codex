@@ -14,6 +14,7 @@ import {
 
 export const OPENROUTER_DECISIONS_ENDPOINT = DESIGN_DEFAULTS.endpoint;
 export const OPENROUTER_DECISIONS_MODEL = DESIGN_DEFAULTS.model;
+export const DECISION_MEMO_TTL_MS = 60_000;
 
 export type DecisionFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -74,33 +75,37 @@ export async function requestOpenRouterDecision(
     return fail('busy', 'max_in_flight', null);
   }
   const now = options.now || Date.now;
-  const circuitState = inspectCircuit(now());
+  const nowMs = now();
+  const circuitState = inspectCircuit(nowMs);
   if (circuitState === 'open') return fail('circuit_open', 'circuit_open', null);
+
+  const resolved = await resolveOpenRouterApiKey({ env: options.env || process.env });
+  if (!resolved.key) return fail('missing_key', resolved.blockers.join(',') || 'missing_openrouter_key', null);
 
   const memoKey = encoded.body;
   const cached = memo.get(memoKey);
   if (cached) {
-    const decoded = decodeWireResponse(bundle, cached.response);
-    if (decoded.ok) {
-      return {
-        ok: true,
-        response: decoded.response,
-        usage: {
-          inputTokens: decoded.response.usage.input_tokens,
-          outputTokens: decoded.response.usage.output_tokens,
-          reportedCost: decoded.response.usage.cost === undefined ? null : decoded.response.usage.cost,
-          evidence: 'provider_response'
-        },
-        resolvedModel: decoded.response.model,
-        responseId: decoded.response.id || null,
-        cacheHit: true,
-        status: 200
-      };
+    if (nowMs - cached.storedAt < DECISION_MEMO_TTL_MS) {
+      const decoded = decodeWireResponse(bundle, cached.response);
+      if (decoded.ok) {
+        return {
+          ok: true,
+          response: decoded.response,
+          usage: {
+            inputTokens: decoded.response.usage.input_tokens,
+            outputTokens: decoded.response.usage.output_tokens,
+            reportedCost: decoded.response.usage.cost === undefined ? null : decoded.response.usage.cost,
+            evidence: 'provider_response'
+          },
+          resolvedModel: decoded.response.model,
+          responseId: decoded.response.id || null,
+          cacheHit: true,
+          status: 200
+        };
+      }
     }
+    memo.delete(memoKey);
   }
-
-  const resolved = await resolveOpenRouterApiKey({ env: options.env || process.env });
-  if (!resolved.key) return fail('missing_key', resolved.blockers.join(',') || 'missing_openrouter_key', null);
 
   const controller = new AbortController();
   const parent = options.signal;
@@ -145,7 +150,7 @@ export async function requestOpenRouterDecision(
     }
     const decoded = decodeWireResponse(bundle, parsed);
     if (!decoded.ok) return recordFailure(status, decoded.reason, 'schema_rejected', now());
-    remember(memoKey, decoded.response);
+    remember(memoKey, decoded.response, nowMs);
     circuit.failures = 0;
     circuit.halfOpen = false;
     return {
@@ -292,12 +297,12 @@ function fail(
   return { ok: false, reason, usage, status, detail, cacheHit: false };
 }
 
-function remember(key: string, response: DecisionsWireResponse): void {
+function remember(key: string, response: DecisionsWireResponse, storedAt: number): void {
   if (memo.size >= DESIGN_DEFAULTS.memoEntries) {
     const oldest = memo.keys().next().value;
     if (oldest !== undefined) memo.delete(oldest);
   }
-  memo.set(key, { response, storedAt: Date.now() });
+  memo.set(key, { response, storedAt });
 }
 
 function privacyUnavailable(text: string): boolean {
