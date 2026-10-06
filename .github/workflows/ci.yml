@@ -34,4 +34,27 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
       - name: Test
-        run: npm test
+        id: test
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee "$RUNNER_TEMP/sks-npm-test.log"
+      - name: Surface test failure
+        if: steps.test.outcome == 'failure'
+        run: |
+          {
+            echo '## npm test failure output'
+            echo
+            echo 'The last 160 lines are copied here so the failure remains inspectable when the Actions log receiver is unavailable.'
+            echo
+            echo '```text'
+            tail -n 160 "$RUNNER_TEMP/sks-npm-test.log"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          while IFS= read -r line; do
+            line=${line//'%'/'%25'}
+            line=${line//$'\r'/'%0D'}
+            line=${line//$'\n'/'%0A'}
+            echo "::error title=npm test failure::$line"
+          done < <(tail -n 40 "$RUNNER_TEMP/sks-npm-test.log")
+          exit 1
