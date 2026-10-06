@@ -69,21 +69,7 @@ export async function resolveOfficialCodexPackageRuntime(input: {
   readonly requestedBy?: string;
 } = {}): Promise<CodexRuntimeResolution> {
   const requestedBy = input.requestedBy || 'official-codex-package-runtime-resolver';
-  return resolveOfficialCodexPackageRuntimeAtPackageRoot(packageRoot(), requestedBy);
-}
-
-/**
- * Resolve the pinned package layout for a package root.
- *
- * The product resolver above always supplies the compiled package's own
- * packageRoot(). Keeping this layout evaluator separate lets tests construct
- * isolated npm layouts without adding a user-controlled path override to the
- * product-facing resolver.
- */
-export async function resolveOfficialCodexPackageRuntimeAtPackageRoot(
-  root: string,
-  requestedBy = 'official-codex-package-runtime-resolver'
-): Promise<CodexRuntimeResolution> {
+  const root = packageRoot();
   const platformRuntime = officialCodexPlatformRuntime();
   const nodeModulesRoots = officialNodeModulesRoots(root);
   const blocked: CodexRuntimeResolution[] = [];
@@ -96,7 +82,9 @@ export async function resolveOfficialCodexPackageRuntimeAtPackageRoot(
     if (resolution.ok) return resolution;
     blocked.push(resolution);
   }
-  return blocked[blocked.length - 1] || officialRuntimeBlocked(
+  // Prefer the actual validation failure over another candidate's absence.
+  return blocked.find((resolution) => !resolution.blockers.includes('codex_sdk_official_runtime_package_not_found'))
+    || blocked[blocked.length - 1] || officialRuntimeBlocked(
     path.join(nodeModulesRoots[0] || path.join(root, 'node_modules'), '@openai', 'codex'),
     'codex_sdk_official_runtime_package_not_found'
   );
@@ -104,12 +92,16 @@ export async function resolveOfficialCodexPackageRuntimeAtPackageRoot(
 
 function officialNodeModulesRoots(root: string): string[] {
   const roots = [path.join(root, 'node_modules')];
-  let ancestor = path.dirname(root);
-  while (ancestor !== path.dirname(ancestor)) {
-    if (path.basename(ancestor) === 'node_modules') roots.push(ancestor);
-    ancestor = path.dirname(ancestor);
+  const parent = path.dirname(root);
+  // npm installs unscoped packages directly under node_modules, and scoped
+  // packages under node_modules/@scope. A directory merely nested somewhere
+  // beneath node_modules is not an installed package layout.
+  if (path.basename(parent) === 'node_modules') {
+    roots.push(parent);
+  } else if (path.basename(parent).startsWith('@') && path.basename(path.dirname(parent)) === 'node_modules') {
+    roots.push(path.dirname(parent));
   }
-  return [...new Set(roots)];
+  return roots;
 }
 
 async function resolveOfficialCodexPackageRuntimeAtNodeModulesRoot(
