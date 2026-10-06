@@ -22,6 +22,7 @@ import { maybeFinalizeRoute } from '../proof/auto-finalize.js';
 import { sksPrefixedDollarCommand } from '../routes/dollar-prefix.js';
 import { closeWorkOrderLedgerForRouteResult } from '../work-order-ledger.js';
 import { flag, positionalArgs, promptOf, warnOnMultipleActiveSessions } from './command-utils.js';
+import { narutoUsesCurrentSession } from '../subagents/naruto-execution-mode.js';
 
 const ACTIONS = new Set(['prepare', 'run', 'status', 'proof', 'fixture', 'help', '--help', '-h']);
 
@@ -285,7 +286,7 @@ async function closeVerifiedAlignRoute(root: string, missionId: string, sessionK
 }
 
 function ownerSessionKey(): string | null {
-  if (process.env.SKS_NARUTO_STANDALONE_CLI === '1') return null;
+  if (!narutoUsesCurrentSession()) return null;
   return String(process.env.CODEX_THREAD_ID || '').trim() || null;
 }
 

@@ -89,6 +89,20 @@ test('ON refuses a list with no routable model; while ON a failed sync keeps the
   assert.equal(rt.codexRestarts.length - restartsOn, 0, '--no-restart leaves Codex alone');
 });
 
+test('models.select restarts a running Codex App after a picker selection changes', async (t) => {
+  const setup = await fixture(t);
+  const rt = runtime(setup, { env: { SKS_SKIP_CODEX_APP_RESTART: '' } });
+  const selected = await run({ operation: 'models.select', public_ids: ['vendor-c/model-three'] }, rt.options);
+  assert.equal(selected.ok, true, JSON.stringify(selected.execution));
+  assert.equal(selected.result.changed, true);
+  assert.equal((selected.result.codex_restart as Record<string, unknown>).status, 'restarted');
+  assert.deepEqual(rt.codexRestarts, ['restart']);
+  const unchanged = await run({ operation: 'models.select', public_ids: ['vendor-c/model-three'] }, rt.options);
+  assert.equal(unchanged.ok, true, JSON.stringify(unchanged.execution));
+  assert.equal((unchanged.result.codex_restart as Record<string, unknown>).reason, 'config_unchanged');
+  assert.deepEqual(rt.codexRestarts, ['restart']);
+});
+
 test('OFF keeps an OpenRouter main model the user picked while ON routable, and the default provider survives the round trip', async (t) => {
   const setup = await fixture(t);
   const rt = runtime(setup);

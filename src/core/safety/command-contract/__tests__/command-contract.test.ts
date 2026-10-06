@@ -90,7 +90,7 @@ test('Naruto contract matches its local-only explicit-opt-in CLI surface', () =>
   assert.equal(contract.supports_json, true);
   assert.equal(contract.remote_allowed, false);
   assert.equal(contract.input_schema.additionalProperties, false);
-  assert.deepEqual((contract.input_schema as any).properties.action.enum, ['run', 'status', 'subagents', 'proof', 'parent-summary', 'help']);
+  assert.deepEqual((contract.input_schema as any).properties.action.enum, ['run', 'status', 'subagents', 'proof', 'parent-summary', 'execution', 'help']);
 
   const run = validateJsonSchema({ action: 'run', task: 'bounded task', mission: 'M-1', agents: 2, max_threads: 4, readonly: true, trusted_project: true, json: true }, contract.input_schema);
   assert.equal(run.ok, true);
@@ -115,6 +115,17 @@ test('Naruto contract matches its local-only explicit-opt-in CLI surface', () =>
       'naruto', 'parent-summary', '--mission', 'M-1', '--stdin', '--json'
     ]);
   }
+
+  const execution = validateJsonSchema({ action: 'execution', execution_command: 'set', mode: 'standalone', restart: true, json: true }, contract.input_schema);
+  assert.equal(execution.ok, true);
+  if (execution.ok) assert.deepEqual(contract.argv_builder(execution.value), [
+    'naruto', 'execution', 'set', '--mode', 'standalone', '--restart', '--json'
+  ]);
+  const executionStatus = validateJsonSchema({ action: 'execution', json: true }, contract.input_schema);
+  assert.equal(executionStatus.ok, true);
+  if (executionStatus.ok) assert.deepEqual(contract.argv_builder(executionStatus.value), ['naruto', 'execution', '--json']);
+  const executionRunField = validateJsonSchema({ action: 'execution', execution_command: 'set', mode: 'auto', task: 'must not be accepted' }, contract.input_schema);
+  assert.equal(executionRunField.ok, false);
 
   const misplacedTask = validateJsonSchema({ action: 'status', task: 'must not be silently dropped', json: true }, contract.input_schema);
   assert.equal(misplacedTask.ok, false);

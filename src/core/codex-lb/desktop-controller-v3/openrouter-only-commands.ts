@@ -1,5 +1,5 @@
 import { readTopLevelTomlString } from '../../codex-app/codex-model-catalog.js';
-import { maybeRestartRunningCodexApp, type CodexAppRestartOutcome } from '../../codex-app/codex-app-restart-policy.js';
+import { codexRestartBlockers, maybeRestartRunningCodexApp, type CodexAppRestartOutcome } from '../../codex-app/codex-app-restart-policy.js';
 import { readText } from '../../fsx.js';
 import { isOpenRouterModelId } from '../../imagegen/imagegen-config.js';
 import {
@@ -75,14 +75,8 @@ function syncBlockers(sync: Record<string, unknown>): string[] {
   return blockers.length > 0 ? blockers : ['combined_catalog_sync_failed'];
 }
 
-export const CODEX_RESTART_FAILED_BLOCKER = 'codex_restart_failed_manual_restart_required';
 /** Codex reads its model catalog only at launch; new list entries wait for a relaunch. */
 export const CODEX_RELAUNCH_FOR_SUBAGENT_MODELS_WARNING = 'codex_relaunch_required_for_new_subagent_models';
-
-/** A restart SKS attempted that failed leaves Codex on the old catalog and main model. */
-export function codexRestartBlockers(restart: CodexAppRestartOutcome | null): string[] {
-  return restart?.attempted && !restart.ok ? [CODEX_RESTART_FAILED_BLOCKER] : [];
-}
 
 function restartCodex(
   changed: boolean,

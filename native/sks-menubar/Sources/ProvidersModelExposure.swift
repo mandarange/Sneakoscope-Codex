@@ -78,7 +78,7 @@ extension ProvidersViewController: NSTableViewDataSource, NSTableViewDelegate {
         clear.setAccessibilityIdentifier("sks-provider-exposure-clear")
         let card = NativeView.card(
             title: "Models in Codex",
-            subtitle: "Select OpenRouter models, apply, then relaunch Codex to update its picker. Codex-LB models are included unless OpenRouter Only is on.",
+            subtitle: "Select OpenRouter models and apply. SKS rebuilds the bridge catalog and restarts a running Codex App so its picker is current. Codex-LB models are included unless OpenRouter Only is on.",
             views: [exposureStatus, exposureSearchField, scroll, ControlKit.actionRow([exposureApplyButton, clear])]
         )
         card.setAccessibilityIdentifier("sks-provider-card-model-exposure")
@@ -154,9 +154,20 @@ extension ProvidersViewController: NSTableViewDataSource, NSTableViewDelegate {
             let blocker = truth?.blockers.first.map(ProviderSecretRedactor.redact)
             let extra = self.openRouterOnlyEnabled == true ? " plus the subagent list models; Codex-LB models stay hidden while OpenRouter Only is on"
                 : self.openRouterOnlyEnabled == false ? " plus every Codex-LB model" : ""
-            let summary = completed
-                ? "Exposure applied · \(self.exposurePending.count) OpenRouter model(s)\(extra). Restart Codex to refresh its picker."
-                : blocker.map { "Exposure not applied · \($0)" } ?? "Exposure result schema invalid"
+            let restart = self.json(result.output)?["result"] as? [String: Any]
+            let codexRestart = restart?["codex_restart"] as? [String: Any]
+            let summary: String
+            if completed, codexRestart?["status"] as? String == "restarted" {
+                summary = "Exposure applied · \(self.exposurePending.count) OpenRouter model(s)\(extra). Codex restarted; its picker is current."
+            } else if completed, codexRestart?["reason"] as? String == "codex_not_running" {
+                summary = "Exposure applied · \(self.exposurePending.count) OpenRouter model(s)\(extra). Codex is not running; the picker updates on its next launch."
+            } else if completed, codexRestart?["reason"] as? String == "not_macos" {
+                summary = "Exposure applied · \(self.exposurePending.count) OpenRouter model(s)\(extra). Restart Codex on macOS to refresh its picker."
+            } else if completed {
+                summary = "Exposure applied · \(self.exposurePending.count) OpenRouter model(s)\(extra). Codex restart was skipped by policy."
+            } else {
+                summary = blocker.map { "Exposure not applied · \($0)" } ?? "Exposure result schema invalid"
+            }
             _ = self.operations.update(snapshot, state: completed ? .succeeded : .failed, stage: "complete", progress: 1, summary: summary)
             self.exposureStatus.stringValue = summary
             self.exposureStatus.textColor = completed ? .systemGreen : .systemRed

@@ -20,8 +20,8 @@ import { DESKTOP_BRIDGE_OFFICIAL_UPSTREAM_BASE_URL } from '../desktop-bridge/ind
 import { resolveBridgeRequestRoute } from '../request-route-resolver.js';
 import { applyOfficialModelPassthrough, buildBridgeRoutingPolicy, setBridgeRoutingDefault, writeBridgeRoutingPolicy } from '../provider-route-policy.js';
 import { syncCatalogInternal } from './catalog.js';
+import { codexRestartBlockers } from '../../codex-app/codex-app-restart-policy.js';
 import {
-  codexRestartBlockers,
   releaseOpenRouterOnlyForAuthPriority,
   releaseOpenRouterOnlyWithoutBridge,
   restartCodexAfterOpenRouterOnlyOff

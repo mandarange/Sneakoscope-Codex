@@ -1,5 +1,6 @@
 import { NARUTO_ACTIONS } from '../safety/command-contract/types.js'
 import { NARUTO_AUTH_MODES, NARUTO_EFFORT_TIERS } from './naruto-host-credentials.js'
+import { NARUTO_EXECUTION_MODES } from './naruto-execution-mode.js'
 import { HARD_NARUTO_MAX_THREADS } from './thread-budget.js'
 
 type JsonObject = Record<string, unknown>
@@ -35,6 +36,12 @@ export const NARUTO_RUN_ONLY_INPUT_FIELDS = Object.freeze([
   'no_forced_login_method'
 ] as const)
 
+export const NARUTO_EXECUTION_INPUT_FIELDS = Object.freeze([
+  'execution_command',
+  'mode',
+  'restart'
+] as const)
+
 export function narutoCommandInputSchema(): JsonObject {
   const properties: JsonObject = {
     action: { type: 'string', enum: [...NARUTO_ACTIONS] },
@@ -54,6 +61,9 @@ export function narutoCommandInputSchema(): JsonObject {
     subagent_model: identifierSchema(),
     subagent_effort: { type: 'string', enum: [...NARUTO_EFFORT_TIERS] },
     no_forced_login_method: { type: 'boolean' },
+    execution_command: { type: 'string', enum: ['status', 'set'] },
+    mode: { type: 'string', enum: [...NARUTO_EXECUTION_MODES] },
+    restart: { type: 'boolean' },
     json: { type: 'boolean' }
   }
   const exactlyOneTask = {
@@ -66,16 +76,16 @@ export function narutoCommandInputSchema(): JsonObject {
   const runBranch = {
     properties: { action: { const: 'run' } },
     required: ['action'],
-    allOf: [exactlyOneTask, absentFields(['stdin'])]
+    allOf: [exactlyOneTask, absentFields(['stdin', ...NARUTO_EXECUTION_INPUT_FIELDS])]
   }
   const implicitRunBranch = {
     not: { required: ['action'] },
-    allOf: [exactlyOneTask, absentFields(['stdin'])]
+    allOf: [exactlyOneTask, absentFields(['stdin', ...NARUTO_EXECUTION_INPUT_FIELDS])]
   }
   const observationBranch = {
     properties: { action: { enum: ['status', 'subagents', 'proof'] } },
     required: ['action'],
-    allOf: [runOnlyAbsent, absentFields(['stdin'])]
+    allOf: [runOnlyAbsent, absentFields(['stdin', ...NARUTO_EXECUTION_INPUT_FIELDS])]
   }
   const parentSummaryBranch = {
     properties: {
@@ -83,11 +93,34 @@ export function narutoCommandInputSchema(): JsonObject {
       stdin: { const: true }
     },
     required: ['action', 'mission', 'stdin'],
-    allOf: [runOnlyAbsent]
+    allOf: [runOnlyAbsent, absentFields(NARUTO_EXECUTION_INPUT_FIELDS)]
   }
   const helpBranch = {
     properties: { action: { const: 'help' } },
     required: ['action'],
+    allOf: [runOnlyAbsent, absentFields(['mission', 'stdin', ...NARUTO_EXECUTION_INPUT_FIELDS])]
+  }
+  const executionStatusBranch = {
+    properties: { action: { const: 'execution' } },
+    required: ['action'],
+    allOf: [runOnlyAbsent, absentFields(['mission', 'stdin', ...NARUTO_EXECUTION_INPUT_FIELDS])]
+  }
+  const executionStatusExplicitBranch = {
+    properties: {
+      action: { const: 'execution' },
+      execution_command: { const: 'status' }
+    },
+    required: ['action', 'execution_command'],
+    allOf: [runOnlyAbsent, absentFields(['mission', 'stdin', 'mode', 'restart'])]
+  }
+  const executionSetBranch = {
+    properties: {
+      action: { const: 'execution' },
+      execution_command: { const: 'set' },
+      mode: { type: 'string', enum: [...NARUTO_EXECUTION_MODES] },
+      restart: { type: 'boolean' }
+    },
+    required: ['action', 'execution_command', 'mode'],
     allOf: [runOnlyAbsent, absentFields(['mission', 'stdin'])]
   }
   const implicitHelpBranch = {
@@ -96,6 +129,7 @@ export function narutoCommandInputSchema(): JsonObject {
         { required: ['action'] },
         { required: ['mission'] },
         { required: ['stdin'] },
+        ...NARUTO_EXECUTION_INPUT_FIELDS.map((field) => ({ required: [field] })),
         ...NARUTO_RUN_ONLY_INPUT_FIELDS.map((field) => ({ required: [field] }))
       ]
     }
@@ -109,6 +143,9 @@ export function narutoCommandInputSchema(): JsonObject {
       implicitRunBranch,
       observationBranch,
       parentSummaryBranch,
+      executionStatusBranch,
+      executionStatusExplicitBranch,
+      executionSetBranch,
       helpBranch,
       implicitHelpBranch
     ]

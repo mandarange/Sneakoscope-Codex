@@ -14,8 +14,13 @@ import {
   narutoParentModel
 } from './model-policy.js'
 import { HARD_NARUTO_MAX_THREADS } from './thread-budget.js'
+import {
+  isNarutoExecutionMode,
+  type NarutoExecutionMode
+} from './naruto-execution-mode.js'
 
-type NarutoAction = 'run' | 'status' | 'subagents' | 'proof' | 'parent-summary' | 'help'
+type NarutoAction = 'run' | 'status' | 'subagents' | 'proof' | 'parent-summary' | 'execution' | 'help'
+type NarutoExecutionCommand = 'status' | 'set'
 
 export interface NarutoArgs {
   action: NarutoAction
@@ -23,6 +28,9 @@ export interface NarutoArgs {
   requestedSubagents: number | undefined
   maxThreads: number | undefined
   missionId: string
+  executionCommand: NarutoExecutionCommand
+  executionMode: NarutoExecutionMode | undefined
+  restart: boolean
   json: boolean
   stdin: boolean
   readOnly: boolean
@@ -39,7 +47,7 @@ export function parseNarutoArgs(args: string[]): NarutoArgs {
     : args
   const first = normalized[0] && !normalized[0].startsWith('-') ? normalized[0] : ''
   const actionName = first
-  const actions = new Set(['run', 'status', 'subagents', 'proof', 'parent-summary', 'help'])
+  const actions = new Set(['run', 'status', 'subagents', 'proof', 'parent-summary', 'execution', 'help'])
   const action = (actions.has(actionName) ? actionName : 'run') as NarutoAction
   const explicitAction = actions.has(actionName)
   const rest = explicitAction ? normalized.slice(1) : normalized
@@ -48,6 +56,7 @@ export function parseNarutoArgs(args: string[]): NarutoArgs {
   const maxThreadsOption = optionValue(optionArgs, '--max-threads')
   const missionOption = optionValue(optionArgs, '--mission')
   const missionIdOption = optionValue(optionArgs, '--mission-id')
+  const modeOption = optionValue(optionArgs, '--mode')
   const credentialOptions = NARUTO_CREDENTIAL_VALUE_FLAGS.map((name) => ({
     name,
     option: optionValue(optionArgs, name)
@@ -57,6 +66,7 @@ export function parseNarutoArgs(args: string[]): NarutoArgs {
     ...optionErrors('--max-threads', maxThreadsOption, true),
     ...optionErrors('--mission', missionOption, false),
     ...optionErrors('--mission-id', missionIdOption, false),
+    ...optionErrors('--mode', modeOption, false),
     ...credentialOptions.flatMap(({ name, option }) => optionErrors(name, option, false)),
     ...booleanOptionErrors(validationArgs),
     ...unknownOptionErrors(validationArgs)
@@ -77,7 +87,7 @@ export function parseNarutoArgs(args: string[]): NarutoArgs {
     : undefined
   const prompt = action === 'run' ? positional.join(' ').trim() : ''
   const positionalHead = String(positional[0] || '').toLowerCase()
-  const subcommandNames = new Set(['run', 'status', 'subagents', 'proof', 'parent-summary', 'help'])
+  const subcommandNames = new Set(['run', 'status', 'subagents', 'proof', 'parent-summary', 'execution', 'help'])
   if (!first && !explicitAction && positionalHead && !subcommandNames.has(positionalHead)) {
     argumentErrors.push(`unknown_subcommand:${positionalHead}`)
   }
@@ -86,7 +96,24 @@ export function parseNarutoArgs(args: string[]): NarutoArgs {
   } else if (!explicitAction && subcommandNames.has(positionalHead)) {
     argumentErrors.push(`misplaced_subcommand:${positionalHead}`)
   }
-  if (action !== 'run') {
+  let executionCommand: NarutoExecutionCommand = 'status'
+  if (action === 'execution') {
+    const command = String(positional[0] || 'status').toLowerCase()
+    if (command === 'status' || command === 'set') executionCommand = command
+    else argumentErrors.push(`invalid_naruto_execution_command:${command}`)
+    if (positional.length > 1) {
+      for (const value of positional.slice(1)) argumentErrors.push(`unexpected_positional:${value}`)
+    }
+    if (executionCommand === 'status') {
+      if (modeOption.present) argumentErrors.push('option_not_supported_for_action:execution:--mode')
+      if (normalized.includes('--restart')) argumentErrors.push('option_not_supported_for_action:execution:--restart')
+    } else {
+      if (!modeOption.present || !modeOption.value) argumentErrors.push('naruto_execution_set_requires_mode')
+      if (modeOption.value !== undefined && !isNarutoExecutionMode(modeOption.value)) {
+        argumentErrors.push(`invalid_naruto_execution_mode:${modeOption.value}`)
+      }
+    }
+  } else if (action !== 'run') {
     let missionConsumed = false
     for (const value of positional) {
       if (!missionConsumed && positionalMission !== undefined && value === positionalMission) {
@@ -111,6 +138,10 @@ export function parseNarutoArgs(args: string[]): NarutoArgs {
     ...(normalized.includes('--trusted-project') ? ['--trusted-project'] : []),
     ...(normalized.includes('--no-forced-login-method') ? ['--no-forced-login-method'] : [])
   ]
+  const presentExecutionOptions = [
+    ...(modeOption.present ? ['--mode'] : []),
+    ...(normalized.includes('--restart') ? ['--restart'] : [])
+  ]
   if (action === 'parent-summary') {
     if (!missionOption.present || !missionOption.value || missionOption.value === 'latest') {
       argumentErrors.push('parent_summary_requires_explicit_mission')
@@ -124,6 +155,11 @@ export function parseNarutoArgs(args: string[]): NarutoArgs {
         argumentErrors.push(`option_not_supported_for_action:${action}:${name}`)
       }
     }
+    if (action !== 'execution' || executionCommand === 'status') {
+      for (const name of presentExecutionOptions) {
+        argumentErrors.push(`option_not_supported_for_action:${action}:${name}`)
+      }
+    }
     if (normalized.includes('--stdin')) argumentErrors.push('stdin_only_supported_for_parent_summary')
   }
   return {
@@ -132,6 +168,9 @@ export function parseNarutoArgs(args: string[]): NarutoArgs {
     requestedSubagents,
     maxThreads,
     missionId: String(missionFlag || positionalMission || 'latest'),
+    executionCommand,
+    executionMode: modeOption.value && isNarutoExecutionMode(modeOption.value) ? modeOption.value : undefined,
+    restart: normalized.includes('--restart'),
     json: normalized.includes('--json'),
     stdin: normalized.includes('--stdin'),
     readOnly: normalized.includes('--readonly') || normalized.includes('--read-only'),
@@ -150,11 +189,11 @@ export function parseNarutoArgs(args: string[]): NarutoArgs {
 
 function positionalValues(args: string[]) {
   const valueFlags = new Set([
-    '--agents', '--max-threads', '--mission', '--mission-id',
+    '--agents', '--max-threads', '--mission', '--mission-id', '--mode',
     ...NARUTO_CREDENTIAL_VALUE_FLAGS
   ])
   const booleanFlags = new Set([
-    '--json', '--stdin', '--readonly', '--read-only', '--trusted-project',
+    '--json', '--stdin', '--readonly', '--read-only', '--trusted-project', '--restart',
     ...NARUTO_CREDENTIAL_BOOLEAN_FLAGS
   ])
   const result: string[] = []
@@ -213,8 +252,8 @@ function optionErrors(name: string, option: ReturnType<typeof optionValue>, nume
 
 function unknownOptionErrors(args: string[]): string[] {
   const canonical = new Set([
-    '--agents', '--max-threads', '--mission', '--mission-id',
-    '--json', '--stdin', '--readonly', '--read-only', '--trusted-project', '--help', '-h', '--',
+    '--agents', '--max-threads', '--mission', '--mission-id', '--mode',
+    '--json', '--stdin', '--readonly', '--read-only', '--trusted-project', '--restart', '--help', '-h', '--',
     ...NARUTO_CREDENTIAL_VALUE_FLAGS,
     ...NARUTO_CREDENTIAL_BOOLEAN_FLAGS
   ])
@@ -235,6 +274,7 @@ function booleanOptionErrors(args: string[]): string[] {
     '--readonly',
     '--read-only',
     '--trusted-project',
+    '--restart',
     ...NARUTO_CREDENTIAL_BOOLEAN_FLAGS,
     '--help',
     '-h'

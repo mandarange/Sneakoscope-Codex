@@ -7,11 +7,12 @@ import { PIPELINE_PLAN_ARTIFACT, pipelinePlanState, projectGateStatus, sealRoute
 import { routePrompt } from '../routes.js';
 import { positionalArgs } from '../../cli/args.js';
 import { flag, readFlagValue, resolveMissionId } from './command-utils.js';
+import { narutoUsesCurrentSession } from '../subagents/naruto-execution-mode.js';
 
 export async function pipelineCommand(args: any = []) {
   const root = await projectRoot();
   const action = args[0] || 'status';
-  const sessionKey = process.env.SKS_NARUTO_STANDALONE_CLI === '1' ? '' : process.env.CODEX_THREAD_ID;
+  const sessionKey = narutoUsesCurrentSession() ? process.env.CODEX_THREAD_ID : '';
   const state = await loadOwnedRouteState(root, sessionKey);
   const sessions = await listSessionStates(root);
   if (action === 'status') {

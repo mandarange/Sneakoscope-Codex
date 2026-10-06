@@ -14,6 +14,7 @@ const REQUIRED_MIGRATION_STAGES = [
   'other-harness-cleanup',
   'retired-local-decision',
   'current-public-surface-reconcile',
+  'naruto-execution-mode',
   'session-state-split',
   'skills-reconcile',
   'menubar-retarget',

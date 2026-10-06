@@ -9,6 +9,7 @@ import {
   narutoParentModel
 } from './model-policy.js'
 import { nextAgentGenerationEnv } from '../agents/agent-recursion-guard.js'
+import { narutoUsesCurrentSession } from './naruto-execution-mode.js'
 import {
   inspectDesktopBridgeCliLaunchGuard,
   stripRetiredDirectProviderEnv
@@ -136,9 +137,7 @@ export interface OfficialSubagentWorkflowInput {
 }
 
 export function detectCodexAppSession(env: NodeJS.ProcessEnv = process.env): boolean {
-  if (env.SKS_NARUTO_STANDALONE_CLI === '1') return false
-  if (env.SKS_NARUTO_APP_SESSION === '1') return true
-  return Boolean(env.CODEX_THREAD_ID)
+  return narutoUsesCurrentSession(env)
 }
 
 export function codexAppSessionKey(env: NodeJS.ProcessEnv = process.env): string | null {

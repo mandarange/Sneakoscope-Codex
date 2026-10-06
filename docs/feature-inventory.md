@@ -61,7 +61,7 @@ Generated from `sks commands --json`, `src/cli/command-registry.ts COMMANDS`, `s
 | `cli-commit` | core-cli | stable | sks commit [--message "msg"] [--json] | mock:pass | wiring_only | not_assessed | none recorded |
 | `cli-commit-and-push` | core-cli | stable | sks commit-and-push [--message "msg"] [--json] | mock:pass | wiring_only | not_assessed | none recorded |
 | `cli-dfix` | core-cli | stable | sks dfix | execute_and_validate_artifacts:pass | runtime_verified | not_assessed | none recorded |
-| `cli-naruto` | proof-route | labs | sks naruto run "task" [--agents N] [--max-threads N] [--trusted-project] [--json] \| sks naruto status\|subagents\|proof [latest\|M-...] [--json] \| sks naruto parent-summary --mission M-... --stdin [--json] | execute_and_validate_artifacts:pass | runtime_verified | not_assessed | none recorded |
+| `cli-naruto` | proof-route | labs | sks naruto run "task" [--agents N] [--max-threads N] [--trusted-project] [--json] \| sks naruto status\|subagents\|proof [latest\|M-...] [--json] \| sks naruto execution status\|set --mode auto\|current-session\|standalone [--restart] [--json] \| sks naruto parent-summary --mission M-... --stdin [--json] | execute_and_validate_artifacts:pass | runtime_verified | not_assessed | none recorded |
 | `cli-route` | core-cli | beta | sks route | static:pass | static_contract | not_assessed | none recorded |
 | `cli-qa-loop` | loop | beta | sks qa-loop prepare\|answer\|run\|status ... | execute_and_validate_artifacts:pass | runtime_verified | not_assessed | none recorded |
 | `cli-research` | loop | labs | sks research prepare\|run\|status ... | execute_and_validate_artifacts:blocked | runtime_verified | not_assessed | none recorded |
