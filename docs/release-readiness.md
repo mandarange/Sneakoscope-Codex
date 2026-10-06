@@ -1,6 +1,23 @@
 # SKS Release Readiness
 
-## 10.5.3 candidate
+## 10.5.4 candidate
+
+10.5.4 packages the Subagent Models changes merged in PR #13. SKS Center
+keeps separate model lists for Codex-LB, OpenAI OAuth, and OpenRouter Only.
+Native choices and reasoning efforts come from the active catalogs. Saved
+lists reach child-spawn policy, Jev decisions, plans, and standalone workers;
+clearing a native list restores automatic tiers. Profile-bound writes reject
+a mode change during editing, and parent model/provider settings stay intact.
+
+Verification requires the final clean commit's full release workflow,
+release stamp, pack receipt, provenance, live main parity, GitHub CI, and the
+normal npm publish dry-run lifecycle. Use Node 26.7.0 consistently on this
+host with `PATH="/opt/homebrew/bin:$PATH" npm publish`. The native UI tests
+exercise real Cocoa controls with command fixtures; they do not prove a live
+account model call or an installed-app update. The npm upload remains
+operator-owned.
+
+## Previous candidate: 10.5.3
 
 10.5.3 packages the Naruto execution-lane and SKS Center Apply fixes merged
 in PR #12. The update migration seeds the safe host lane only when no explicit

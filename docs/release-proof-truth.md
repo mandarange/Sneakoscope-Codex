@@ -1,6 +1,23 @@
 # Release Proof Truth
 
-## 10.5.3 candidate
+## 10.5.4 candidate
+
+The version authorities advance together to 10.5.4 for PR #13. The merged
+source tree matches the reviewed feature commit. Regression coverage checks
+mode-isolated lists, catalog model/effort validation, pure OAuth without a
+bridge, malformed-store rejection, profile-change races, child selection,
+and the native Cocoa page using scoped command fixtures. Fixture execution
+does not establish a live provider call or change the installed SKS Center.
+
+This candidate requires fresh canonical release tests, the full release DAG,
+pack receipt, required real checks, dist freshness, release stamp, provenance,
+GitHub CI, live main parity, and normal npm publish dry-run on the final clean
+commit. Evidence lives under `.sneakoscope/reports/release/10.5.4` and the
+canonical report paths. The canonical proof binds the Node runtime; this host
+uses Node 26.7.0 for verification and publication. Publication remains the
+operator's action, and earlier candidate records below remain historical.
+
+## Historical 10.5.3 candidate
 
 The version authorities advance together to 10.5.3 for the Naruto execution
 preference and SKS Center Apply changes merged in PR #12. Existing tests pin

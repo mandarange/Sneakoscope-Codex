@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [10.5.4] - 2026-10-06
+
 ### Added
 
 - SKS Center's Subagent Models page now keeps independent Codex-LB and OpenAI
