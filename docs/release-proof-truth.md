@@ -1,6 +1,25 @@
 # Release Proof Truth
 
-## 10.5.1 candidate
+## 10.5.2 candidate
+
+The version authorities advance together to 10.5.2. The main-branch fixes
+are listed under 10.5.2 in CHANGELOG.md; older release records below remain
+historical evidence.
+
+This candidate requires fresh evidence from its clean final commit: the
+canonical release tests, full release DAG, pack receipt, real checks, dist
+freshness, release stamp, provenance, live main parity, and normal npm publish
+dry-run. Reports are generated under `.sneakoscope/reports/release/10.5.2`
+and the canonical `.sneakoscope/reports` paths. A source change or a different
+Node runtime invalidates the corresponding release proof. No npm publication
+is implied by the preparation commit.
+
+Compatible development-only security patches update source-map-js and
+DOMPurify. The production dependency audit is clean; Mermaid/KaTeX retain
+two low-severity development audit entries pending an upstream compatible
+KaTeX update.
+
+## Historical 10.5.1 candidate
 
 The product changes from 10.5.0 are the `smol-toml` floor and the Desktop
 Bridge settings reader. The current lock resolves stable `smol-toml@1.9.0`,

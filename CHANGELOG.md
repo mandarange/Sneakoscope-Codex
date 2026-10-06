@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [10.5.2] - 2026-10-06
+
+### Security
+
+- Update development-only source-map-js to 1.2.2 and DOMPurify to 3.4.16
+  for compatible denial-of-service and sanitization fixes.
+
 ### Fixed
 
 - Desktop Bridge official-only routing no longer fails startup when both gateway

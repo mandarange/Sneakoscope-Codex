@@ -1,6 +1,27 @@
 # SKS Release Readiness
 
-## 10.5.1 candidate
+## 10.5.2 candidate
+
+10.5.2 packages the fixes and command-surface cleanup merged on main since
+10.5.1. It includes provider-routed compaction, official-only bridge startup,
+atomic bridge route persistence, Jev answer routing, the hoisted official
+Codex runtime, the shared TriWiki writer, and corrected dry-run behavior.
+The full change list is in CHANGELOG.md.
+
+The lockfile also advances the development-only source-map-js to 1.2.2 and
+DOMPurify to 3.4.16 for their compatible security fixes. Mermaid still pins
+KaTeX below its patched 0.18.2 release; the two remaining low-severity audit
+entries are confined to development dependencies. Production dependencies
+have no npm audit findings. No incompatible dependency override is applied.
+
+Publication requires the clean final commit's `npm run release:check:full`,
+release stamp, pack receipt, provenance, live `origin/main` equality, and
+normal `npm publish --dry-run` lifecycle. The local default Node 24.0.2 is
+below the locked test tooling's engine floor; use the installed supported
+Node 26.7.0 by prepending `/opt/homebrew/bin` to PATH for verification and
+publication. The actual npm upload remains operator-owned.
+
+## Previous candidate: 10.5.1
 
 10.5.1 carries the Desktop Bridge settings read that was hiding a saved
 Codex-LB preference, plus the stable dependency refresh in this follow-up tree.
@@ -889,14 +910,14 @@ node ./dist/scripts/release-pack-receipt.js verify
 node ./dist/scripts/release-provenance-check.js --publish
 npm whoami --registry https://registry.npmjs.org/
 npm view sneakoscope maintainers --json --registry https://registry.npmjs.org/
-npm view sneakoscope@10.5.1 version --json --registry https://registry.npmjs.org/
+npm view sneakoscope@10.5.2 version --json --registry https://registry.npmjs.org/
 npm publish --dry-run --json \
   --registry https://registry.npmjs.org/ \
   --tag latest \
   --access public
 ```
 
-Before publication, the version lookup should report that 8.3.3 is not already
+Before publication, the version lookup should report that 10.5.2 is not already
 present. The dry run is not publication. The user performs the actual publish,
 push, tag, workflow dispatch, or approval separately.
 
