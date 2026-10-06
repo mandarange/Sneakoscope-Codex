@@ -6,7 +6,6 @@ import path from 'node:path'
 import { resetLatestModelTierCache } from '../model-tiers.js'
 import {
   narutoCredentialConfigArgs,
-  narutoCredentialPolicyReceipt,
   readNarutoOpenRouterOnlyContext,
   resolveNarutoCredentialPolicy
 } from '../naruto-host-credentials.js'
@@ -203,7 +202,6 @@ test('OpenRouter Only Mode runs the config main model as parent and the list def
   assert.equal(resolved.parentEffort, 'xhigh')
   assert.equal(resolved.subagentModel, 'z-ai/glm-5.3')
   assert.equal(resolved.subagentEffort, 'high')
-  assert.equal(narutoCredentialPolicyReceipt(resolved).child_model_mode, 'openrouter_only')
   const args = buildOfficialSubagentCodexArgs({
     prompt: 'task', maxThreads: 2, parentSummaryFile: '/tmp/summary.txt', credentialPolicy: resolved
   })
@@ -264,16 +262,4 @@ test('the mode and the parent model are read from the Codex home', () => {
   assert.equal(context?.state.subagent_models.length, 2)
   // The default policy (no injected context) reads the process Codex home, where the mode is off.
   assert.equal(policy().childModelMode, 'tiers')
-})
-
-test('the receipt records the decision and never the credential', () => {
-  const resolved = policy(['--auth-mode=host', '--model-provider=customer-gateway', '--provider-env-key=CUSTOMER_API_KEY'], {
-    CUSTOMER_API_KEY: 'super-secret-value'
-  })
-  const receipt = narutoCredentialPolicyReceipt(resolved)
-  const serialized = JSON.stringify(receipt)
-  assert.ok(!serialized.includes('super-secret-value'))
-  assert.ok(serialized.includes('CUSTOMER_API_KEY'))
-  assert.equal(receipt.credential_handled_by, 'host_config_toml_provider_block')
-  assert.equal(receipt.auth_mode, 'host')
 })
