@@ -1,6 +1,23 @@
 # Release Proof Truth
 
-## 10.5.2 candidate
+## 10.5.3 candidate
+
+The version authorities advance together to 10.5.3 for the Naruto execution
+preference and SKS Center Apply changes merged in PR #12. Existing tests pin
+preference preservation, malformed and symlinked-file rejection, session-lane
+selection, guarded restart success, and failed restart propagation. Those
+fixtures do not prove that the operator's live Codex App was restarted.
+
+This candidate requires fresh canonical release tests, the full release DAG,
+pack receipt, required real execution checks, dist freshness, release stamp,
+provenance, CI, remote-main parity, and publish dry-run from its final clean
+commit. Reports are written under `.sneakoscope/reports/release/10.5.3` and
+the canonical `.sneakoscope/reports` paths. Canonical proof binds the exact
+Node runtime; use Node 26.7.0 for both verification and publication on this
+host. A source change or a different Node runtime invalidates its proof.
+Actual npm publication remains the operator's action.
+
+## Historical 10.5.2 candidate
 
 The version authorities advance together to 10.5.2. The main-branch fixes
 are listed under 10.5.2 in CHANGELOG.md; older release records below remain

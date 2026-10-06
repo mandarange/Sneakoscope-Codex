@@ -1,6 +1,25 @@
 # SKS Release Readiness
 
-## 10.5.2 candidate
+## 10.5.3 candidate
+
+10.5.3 packages the Naruto execution-lane and SKS Center Apply fixes merged
+in PR #12. The update migration seeds the safe host lane only when no explicit
+preference exists. Settings can persist `auto`, `current-session`, or
+`standalone`; Apply uses the guarded Codex App restart and reports an
+unconfirmed restart as a blocker. Model-picker Apply also restarts a running
+Codex App after a changed catalog selection. Existing choices and the
+standalone/App session overrides remain authoritative.
+
+Verification requires the clean final commit's `npm run release:check:full`,
+release stamp, pack receipt, provenance, live `origin/main` equality, current
+GitHub CI, and normal `npm publish --dry-run` lifecycle. The release tests
+and publication must use the same Node runtime. This host's test tooling is
+supported by Node 26.7.0 at `/opt/homebrew/bin/node`; run publication with
+`PATH="/opt/homebrew/bin:$PATH" npm publish` to preserve that runtime binding.
+The actual npm upload remains operator-owned. Existing low-severity
+Mermaid/KaTeX development audit entries are reported separately.
+
+## Previous candidate: 10.5.2
 
 10.5.2 packages the fixes and command-surface cleanup merged on main since
 10.5.1. It includes provider-routed compaction, official-only bridge startup,
@@ -910,14 +929,14 @@ node ./dist/scripts/release-pack-receipt.js verify
 node ./dist/scripts/release-provenance-check.js --publish
 npm whoami --registry https://registry.npmjs.org/
 npm view sneakoscope maintainers --json --registry https://registry.npmjs.org/
-npm view sneakoscope@10.5.2 version --json --registry https://registry.npmjs.org/
+npm view sneakoscope@10.5.3 version --json --registry https://registry.npmjs.org/
 npm publish --dry-run --json \
   --registry https://registry.npmjs.org/ \
   --tag latest \
   --access public
 ```
 
-Before publication, the version lookup should report that 10.5.2 is not already
+Before publication, the version lookup should report that 10.5.3 is not already
 present. The dry run is not publication. The user performs the actual publish,
 push, tag, workflow dispatch, or approval separately.
 

@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [10.5.3] - 2026-10-06
+
 ### Fixed
 
 - `sks update` now selects and preserves the safe Naruto execution lane for the

@@ -3254,8 +3254,8 @@
       "file": "src/scripts/current-surface-update-e2e-check.ts",
       "symbol": "module",
       "token": "fsp.rm",
-      "scope_contract_sha256": "b357b554e2f818f9b0ca901efcad59d15ef77be1d3a9264eafb1237cdb74ba82",
-      "callsite_sha256": "78cf3856b1cb16babb594423ff74ef904c0e5c7431ddf45af5a110abc08fc228",
+      "scope_contract_sha256": "bc9ac9a2beee9f6a4252f3e4185fb48e5592f32d9caf7b35e5b932244f3ee902",
+      "callsite_sha256": "ce65e2f6a96a35e396222aaf612948ef748698b03bba6db6661edc1604416236",
       "occurrence": 1,
       "reason": "Current-surface E2E removes only its mkdtemp-owned upgrade fixture root in finally."
     },
