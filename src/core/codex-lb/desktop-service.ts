@@ -341,7 +341,7 @@ function normalizeEndpointForBinding(value: string): string {
   catch { return String(value || '').trim().replace(/\/+$/, ''); }
 }
 
-export async function resolveDesktopBridgeRuntimeConfig(options: DesktopBridgeServiceOptions = {}): Promise<{ config: DesktopBridgeConfig; settings: DesktopBridgeServiceSettings; loaded_env: CodexLbEnvLoadResult | null; credential_source: DesktopBridgeCredentialSource; credential_sources: Partial<Record<BridgeProviderId, DesktopBridgeCredentialSource>>; paths: DesktopBridgeServicePaths }> {
+export async function resolveDesktopBridgeRuntimeConfig(options: DesktopBridgeServiceOptions = {}): Promise<{ config: DesktopBridgeConfig; settings: DesktopBridgeServiceSettings; loaded_env: CodexLbEnvLoadResult | null; credential_source: DesktopBridgeCredentialSource | null; credential_sources: Partial<Record<BridgeProviderId, DesktopBridgeCredentialSource>>; paths: DesktopBridgeServicePaths }> {
   const home = options.home || options.env?.HOME || process.env.HOME || os.homedir(); const paths = overridePaths(desktopBridgeServicePaths(home), options);
   let settings = defaultDesktopBridgeServiceSettings({ ...((await readDesktopBridgeServiceSettings(paths.settings_path)) || {}), ...(options.settings || {}), ...(options.providerRegistry ? { provider_registry: options.providerRegistry } : {}), ...(options.routePolicy ? { route_policy: options.routePolicy } : {}), ...(options.providerSessionPins ? { provider_session_pins: [...options.providerSessionPins] } : {}) });
   const clientCapability = options.clientCapability
@@ -366,8 +366,7 @@ export async function resolveDesktopBridgeRuntimeConfig(options: DesktopBridgeSe
   const openRouterOnly = resolveDesktopBridgeOpenRouterOnly({ home, ...(options.env ? { env: options.env } : {}) });
   const config: DesktopBridgeConfig = { providerRegistry: settings.provider_registry, routePolicy: settings.route_policy, providerSessionPins: settings.provider_session_pins, ...(options.resolveRequestRoute ? { resolveRequestRoute: options.resolveRequestRoute } : {}), persistProviderSessionPins, resolveProviderCredential: credentials.resolver, clientCapabilitySha256: settings.client_capability_sha256, listenHost: settings.listen_host, listenPort: settings.listen_port, allowedPathPrefixes: DESKTOP_BRIDGE_ALLOWED_PATH_PREFIXES, allowedOrigins: settings.allowed_origins, connectTimeoutMs: settings.connect_timeout_ms, idleTimeoutMs: settings.idle_timeout_ms, officialPassthrough: settings.official_passthrough.enabled ? { baseUrl: settings.official_passthrough.base_url } : null, ...(openRouterOnly ? { openRouterOnly } : {}) };
   const primary = credentials.sources['codex-lb'] || credentials.sources.openrouter;
-  if (!primary) throw new Error('desktop_bridge_provider_credentials_unavailable');
-  return { config, settings, loaded_env: credentials.loaded, credential_source: primary, credential_sources: credentials.sources, paths };
+  return { config, settings, loaded_env: credentials.loaded, credential_source: primary || null, credential_sources: credentials.sources, paths };
 }
 
 async function persistDesktopBridgeSessionPins(
