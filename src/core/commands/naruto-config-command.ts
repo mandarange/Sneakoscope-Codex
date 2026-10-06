@@ -1,4 +1,4 @@
-import { maybeRestartRunningCodexApp, type CodexAppRestartPolicyInput } from '../codex-app/codex-app-restart-policy.js';
+import { codexRestartBlockers, maybeRestartRunningCodexApp, type CodexAppRestartPolicyInput } from '../codex-app/codex-app-restart-policy.js';
 import { readNarutoExecutionMode, writeNarutoExecutionMode, type NarutoExecutionMode } from '../subagents/naruto-execution-mode.js';
 
 export async function configureNarutoExecution(input: {
@@ -18,7 +18,9 @@ export async function configureNarutoExecution(input: {
     const restart = input.mode && input.restart
       ? await maybeRestartRunningCodexApp({ env, changed: true, noRestart: false, ...input.restartOptions })
       : null;
-    const blockers = restart && !restart.ok ? restart.blockers : [];
+    const blockers = restart && !restart.ok
+      ? [...restart.blockers, ...codexRestartBlockers(restart)]
+      : [];
     return { ...preference, ok: blockers.length === 0, blockers, restart };
   } catch (error) {
     return { ...readNarutoExecutionMode(env), ok: false, changed: false, restart: null,
