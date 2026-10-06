@@ -118,6 +118,9 @@
   command modules, or two configs only checkouts read (1582 → 1380 files). It
   keeps the scripts its own lifecycle needs (version truth, publish tag and
   preflight, release stamp and pack receipt).
+- Superseded PR #5 handoff manifests and applied patch snapshots were removed
+  from the repository root; the maintainer-only GitHub settings checklist now
+  lives in `docs/github-settings.md`.
 - Dead code: exports and declarations with no reference anywhere (including
   helpers left behind by earlier removals), and helpers, policies and constants
   whose only caller was their own test, together with those tests: the Scout
