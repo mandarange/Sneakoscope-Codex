@@ -51,12 +51,11 @@ jobs:
             tail -n 160 "$RUNNER_TEMP/sks-npm-test.log"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-          while IFS= read -r line; do
-            line=${line//'%'/'%25'}
-            line=${line//$'\r'/'%0D'}
-            line=${line//$'\n'/'%0A'}
-            echo "::error title=npm test failure::$line"
-          done < <(tail -n 40 "$RUNNER_TEMP/sks-npm-test.log")
+          details=$(tail -n 120 "$RUNNER_TEMP/sks-npm-test.log")
+          details=${details//'%'/'%25'}
+          details=${details//$'\r'/'%0D'}
+          details=${details//$'\n'/'%0A'}
+          echo "::error title=npm test failure::$details"
           exit 1
       - name: Upload test failure log
         if: always() && steps.test.outcome == 'failure'
