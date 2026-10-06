@@ -15,6 +15,16 @@
   when a packaged install places `@openai/codex` in the parent `node_modules`.
   The existing manifest pins, metadata checks, realpath containment, and
   official-runtime trust verification remain required for every candidate.
+- Desktop Bridge official-model convergence now persists settings and the route
+  policy as one fail-closed operation: a route-policy write failure restores the
+  previous settings and prevents the bridge from serving a half-persisted route.
+- `sks triwiki graph-status --fast` now uses the shared Context Graph freshness
+  note, so missing, corrupt, or stale graphs name the same repair command as
+  the hook preflight.
+- Removed an unreachable agent-depth helper, the test-only Jev recovery handler
+  seam, and an unused Naruto credential receipt projection. Production guards,
+  the explicit unsupported recovery capability, and credential argument policy
+  remain intact.
 - Context compaction no longer fails on Codex-LB and OpenRouter threads with
   `Error running remote compact task: … bridge_upstream_request_failed`. SKS
   points Codex's built-in OpenAI provider at the Desktop Bridge, so Codex
@@ -74,6 +84,10 @@
   The artifacts the route writes once are now exempt from that check.
 
 ### Changed
+
+- Refreshed runtime and tooling dependencies to current stable releases: MCP
+  SDK 2.3.1, Codex SDK 0.160.1, TypeScript 6.0.3, smol-toml
+  1.9.0, ws 8.22.0, and matching current type, jsdom, and Mermaid packages.
 
 - The essential profile stops producing strict-only rituals: route plans no
   longer seed request intake, a repository scan, engineering-sanity and

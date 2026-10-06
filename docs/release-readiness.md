@@ -2,13 +2,11 @@
 
 ## 10.5.1 candidate
 
-10.5.1 publishes the merged `smol-toml` 1.7.1 bump and the Desktop Bridge
-settings read that was hiding a saved Codex-LB preference. `parse()` stops
-hanging when an array or inline-table value is followed by a comment with no
-trailing newline (CVE-2026-85730). Codex config and role-file parsing go
-through that function. The lockfile integrity matches the registry tarball for
-`smol-toml@1.7.1`. Later `smol-toml` releases exist; this package stays on
-1.7.1. Session pins that push bridge settings past 256KiB are trimmed to the
+10.5.1 carries the Desktop Bridge settings read that was hiding a saved
+Codex-LB preference, plus the stable dependency refresh in this follow-up tree.
+`smol-toml@1.9.0`, MCP SDK 2.3.1, Codex SDK 0.160.1, TypeScript 6.0.3, and
+the current stable ws, jsdom, Mermaid, and type packages are resolved in the
+lockfile. Session pins that push bridge settings past 256KiB are trimmed to the
 newest pins that fit, instead of making the whole file look missing.
 Verification is the clean-commit `npm run release:check:full` stamp, pack
 receipt, provenance, and a `main` commit that matches `origin/main`.
