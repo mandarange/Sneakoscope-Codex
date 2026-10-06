@@ -180,9 +180,7 @@ export async function evaluateHookPayloadOnce(name: any, payload: any = {}, opts
 function hookPayloadIsLightTurnCandidate(payload: any = {}) {
   const prompt = stripVisibleDecisionAnswerBlocks(extractUserPrompt(payload));
   if (dollarCommand(prompt)) return false;
-  const profile = classifyTaskProfile(prompt);
-  if (profile === 'passthrough') return true;
-  return routePrompt(prompt)?.id === 'Answer';
+  return classifyTaskProfile(prompt) === 'passthrough';
 }
 export async function evaluateHookPayload(name: any, payload: any = {}, opts: any = {}): Promise<JsonData> {
   if (name !== 'user-prompt-submit') return evaluateHookPayloadWithPlan(name, payload, opts, null);

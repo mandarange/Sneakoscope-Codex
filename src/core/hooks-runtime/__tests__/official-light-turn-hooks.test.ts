@@ -19,6 +19,9 @@ import {
 } from '../../agent-bridge/host-capability-runtime.js';
 import { prepareOfficialSubagentMission } from '../../subagents/official-subagent-preparation.js';
 import { installGlobalSkills } from '../../init/skills.js';
+import { defaultDecisionConfig } from '../../decisions/config.js';
+import { setDecisionTestOverrides } from '../../decisions/integration.js';
+import { resetDecisionTransportState } from '../../decisions/openrouter.js';
 
 const priorFixtureHome = process.env.HOME;
 const priorFixtureCodexHome = process.env.CODEX_HOME;
@@ -75,6 +78,37 @@ function structuredParentSummary(threadIds: string[]) {
     changed_files: [],
     verification: ['affected checks passed'],
     blockers: []
+  });
+}
+
+function enabledDecisionConfig() {
+  return { ...defaultDecisionConfig(), mode: 'jev' as const, consentCloud: true };
+}
+
+function confidentJevResponse(body: { questions: Record<string, { type: string; criteria?: Record<string, string> | string[] }> }): Response {
+  const answers: Record<string, unknown> = {};
+  for (const [id, question] of Object.entries(body.questions)) {
+    if (question.type === 'choice') {
+      const keys = Object.keys(question.criteria || {});
+      const choice = id === 'option_route' ? 'answer' : id === 'option_parallelism' ? 'single' : keys[0];
+      const remainder = keys.find((key) => key !== choice);
+      const probabilities = Object.fromEntries(keys.map((key) => [key, key === choice ? (remainder ? 0.9 : 1) : key === remainder ? 0.1 : 0]));
+      answers[id] = { type: 'choice', choice, confidence: 0.95, probabilities };
+    } else if (question.type === 'score') {
+      const criteria = Array.isArray(question.criteria) ? question.criteria : [];
+      answers[id] = {
+        type: 'score',
+        score: 0,
+        confidence: 0.9,
+        probabilities: Object.fromEntries(criteria.map((_, index) => [String(index), index === 0 ? 1 : 0]))
+      };
+    } else {
+      answers[id] = { type: 'noul', noul: 0.5 };
+    }
+  }
+  return new Response(JSON.stringify({ model: 'typesafe/jev-1.13', answers, usage: { input_tokens: 8, output_tokens: 4 } }), {
+    status: 200,
+    headers: { 'content-type': 'application/json' }
   });
 }
 
@@ -555,6 +589,44 @@ test('plain answer fast path avoids mission, TriWiki, route digest, and code-pac
     assert.doesNotMatch(submitted.additionalContext, /\$Team route prepared|Pipeline plan:|Mission:/i);
     await assert.rejects(fsp.access(path.join(root, '.sneakoscope', 'missions')));
   } finally {
+    await fsp.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('Jev still evaluates a plain answer prompt before the lightweight answer response', async () => {
+  const root = await tempRoot('sks-jev-light-answer-');
+  let fetched = 0;
+  const previousOverrideFlag = process.env.SKS_JEV_DECISION_TEST_OVERRIDES;
+  const previousKey = process.env.OPENROUTER_API_KEY;
+  process.env.SKS_JEV_DECISION_TEST_OVERRIDES = '1';
+  process.env.OPENROUTER_API_KEY = 'sk-or-test-light-answer-aaaaaaaa';
+  resetDecisionTransportState();
+  setDecisionTestOverrides({
+    config: enabledDecisionConfig(),
+    fetchImpl: async (_url, init) => {
+      fetched += 1;
+      const body = JSON.parse(String(init?.body || '')) as { questions: Record<string, { type: string; criteria?: Record<string, string> | string[] }> };
+      assert.ok(Object.keys(body.questions).some((id) => id === 'option_route'), Object.keys(body.questions).join(','));
+      return confidentJevResponse(body);
+    }
+  });
+  try {
+    const submitted: any = await evaluateHookPayloadOnce('user-prompt-submit', {
+      conversation_id: 'jev-answer-session',
+      turn_id: 'jev-answer-turn',
+      prompt: '이 함수가 왜 이렇게 동작해?'
+    }, { root, state: {} });
+    assert.equal(fetched, 1);
+    assert.equal(submitted.continue, true);
+    assert.equal(submitted.sksTaskProfile, 'answer');
+    assert.match(submitted.additionalContext, /answer-only pipeline active \(light turn\)/i);
+  } finally {
+    setDecisionTestOverrides(null);
+    resetDecisionTransportState();
+    if (previousOverrideFlag === undefined) delete process.env.SKS_JEV_DECISION_TEST_OVERRIDES;
+    else process.env.SKS_JEV_DECISION_TEST_OVERRIDES = previousOverrideFlag;
+    if (previousKey === undefined) delete process.env.OPENROUTER_API_KEY;
+    else process.env.OPENROUTER_API_KEY = previousKey;
     await fsp.rm(root, { recursive: true, force: true });
   }
 });
