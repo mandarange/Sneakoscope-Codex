@@ -4,7 +4,6 @@ import {
   AGENT_GENERATION_DEPTH_ENV,
   MAX_AGENT_GENERATION_DEPTH,
   agentGenerationDepth,
-  agentGenerationDepthExceeded,
   agentWorkerHookContext,
   agentWorkerHookRecursionDecision,
   nextAgentGenerationEnv
@@ -61,11 +60,11 @@ test('generation depth increments across a spawn boundary and then refuses', () 
   assert.equal(agentGenerationDepth({}), 0)
   const first = nextAgentGenerationEnv({})
   assert.equal(first[AGENT_GENERATION_DEPTH_ENV], '1')
-  assert.equal(agentGenerationDepthExceeded(first), false, 'one generation of workers is the product')
+  assert.equal(agentGenerationDepth(first), MAX_AGENT_GENERATION_DEPTH, 'one generation of workers is the product')
 
   const second = nextAgentGenerationEnv(first)
   assert.equal(second[AGENT_GENERATION_DEPTH_ENV], String(MAX_AGENT_GENERATION_DEPTH + 1))
-  assert.equal(agentGenerationDepthExceeded(second), true, 'a worker spawning its own fan-out is the bug')
+  assert.equal(agentGenerationDepth(second), MAX_AGENT_GENERATION_DEPTH + 1, 'a worker spawning its own fan-out is the bug')
 })
 
 test('a depth marker alone identifies a worker, even if the boolean was lost', () => {
@@ -79,7 +78,7 @@ test('an unreadable depth reads as zero rather than as permission', () => {
     assert.ok(depth >= 0 && Number.isFinite(depth), `${value} produced ${depth}`)
   }
   // A garbage value must not read as "infinitely deep" and lock the product out.
-  assert.equal(agentGenerationDepthExceeded({ [AGENT_GENERATION_DEPTH_ENV]: 'many' }), false)
+  assert.equal(agentGenerationDepth({ [AGENT_GENERATION_DEPTH_ENV]: 'many' }), 0)
 })
 
 test('the official subagent child inherits the markers instead of looking like a fresh root', () => {
@@ -98,7 +97,7 @@ test('a child spawned from inside a worker carries the next generation, not the 
     env: { ...WORKER_ENV, [AGENT_GENERATION_DEPTH_ENV]: '1' }
   })
   assert.equal(childEnv[AGENT_GENERATION_DEPTH_ENV], '2')
-  assert.equal(agentGenerationDepthExceeded(childEnv), true)
+  assert.equal(agentGenerationDepth(childEnv), MAX_AGENT_GENERATION_DEPTH + 1)
 })
 
 test('the child environment still carries no secret-bearing variable', () => {

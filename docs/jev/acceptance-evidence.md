@@ -29,7 +29,6 @@ not a live test. A planned test is not an executed test.
 | Leftover `local-decision` files are ignored and never become cloud consent | pass | `src/core/decisions/__tests__/config.test.ts` — `default mode is off and leftover local-decision files are ignored` |
 | Enable requires pinned model and `--consent-cloud` | pass | `src/core/decisions/__tests__/cli.test.ts` — `enable requires the pinned model and cloud consent; disable returns to baseline` |
 | Recovery is unsupported in production | pass | `src/core/decisions/__tests__/recovery.test.ts` — `production recovery remains unsupported and lists no live handlers` |
-| Injected recovery handler is reached without a generative call | pass | `src/core/decisions/__tests__/recovery.test.ts` — `a stub Jev Choice reaches an injected handler without a generative call` |
 | Cache hits do not repeat reported cost | pass | `src/core/decisions/__tests__/receipt.test.ts` |
 | Evaluator can report no improvement without treating it as a software error | pass | `src/core/decisions/__tests__/evaluation.test.ts` |
 | Compiler/consumers have no second-judge path | pass | `src/core/decisions/__tests__/policy.test.ts` — `compiler and consumers do not call a second LLM judge` |

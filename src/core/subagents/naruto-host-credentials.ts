@@ -361,24 +361,3 @@ export function narutoCredentialConfigArgs(policy: NarutoCredentialPolicy): stri
   if (policy.forcedLoginMethod) out.push('-c', `forced_login_method="${policy.forcedLoginMethod}"`);
   return out;
 }
-
-/** Bounded, secret-free projection for a run receipt or proof card. */
-export function narutoCredentialPolicyReceipt(policy: NarutoCredentialPolicy): Record<string, unknown> {
-  return {
-    schema: policy.schema,
-    auth_mode: policy.authMode,
-    model_provider: policy.modelProvider,
-    forced_login_method: policy.forcedLoginMethod,
-    // The NAME only. The value never leaves the host's environment.
-    provider_env_key: policy.providerEnvKey,
-    parent_model: policy.parentModel,
-    parent_effort: policy.parentEffort,
-    subagent_model: policy.subagentModel,
-    subagent_effort: policy.subagentEffort,
-    child_model_mode: policy.childModelMode,
-    sources: policy.sources,
-    warnings: policy.warnings,
-    blockers: policy.blockers,
-    credential_handled_by: policy.authMode === 'host' ? 'host_config_toml_provider_block' : 'sks_managed_chatgpt_login'
-  };
-}

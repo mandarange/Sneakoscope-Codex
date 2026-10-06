@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { CONTEXT_GRAPH_REPAIR_COMMAND } from '../../triwiki/context-graph/contracts.js';
+import { triwikiGraphCommand } from '../../commands/triwiki-graph-command.js';
 import type { ContextGraphCacheKeyParts, ContextGraphMeta, ContextGraphStaleReason } from '../../triwiki/context-graph/contracts.js';
 import { contextGraphCacheKey, type ContextGraphCacheKeyResult } from '../../triwiki/context-graph/compiler/cache-key.js';
 import { compileContextGraph } from '../../triwiki/context-graph/compiler/index.js';
@@ -155,6 +156,8 @@ test('a changed source file makes the graph stale without any spawn', async () =
     assert.ok(note);
     assert.ok(note.includes('context_graph_stale'));
     assert.ok(note.includes(CONTEXT_GRAPH_REPAIR_COMMAND));
+    const command = await triwikiGraphCommand(root, 'graph-status', ['--fast']);
+    assert.ok(command.lines.some((line) => line === note), 'graph-status --fast must surface the shared freshness note');
     assert.deepEqual(fingerprint(root), before);
   } finally {
     cleanup(root);

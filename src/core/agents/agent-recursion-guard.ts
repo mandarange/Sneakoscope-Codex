@@ -109,10 +109,6 @@ export function nextAgentGenerationEnv(env: NodeJS.ProcessEnv = process.env): Re
   return { [AGENT_GENERATION_DEPTH_ENV]: String(agentGenerationDepth(env) + 1) }
 }
 
-export function agentGenerationDepthExceeded(env: NodeJS.ProcessEnv = process.env): boolean {
-  return agentGenerationDepth(env) > MAX_AGENT_GENERATION_DEPTH
-}
-
 export async function writeAgentRecursionGuardReport(dir: string, input: unknown) {
   const result = scanAgentTextForRecursion(input)
   const report = {

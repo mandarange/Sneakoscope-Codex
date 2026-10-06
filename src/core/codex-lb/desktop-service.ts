@@ -597,8 +597,29 @@ async function autoApplyOfficialModelsAtServe(
   const converged = applyOfficialModelPassthrough(settings.route_policy, { mode });
   if (converged.policy_generation === settings.route_policy.policy_generation) return;
   const nextSettings = { ...settings, route_policy: converged };
-  await writeDesktopBridgeServiceSettings(options.settingsPath || desktopBridgeServicePaths(home).settings_path, nextSettings);
-  await writeBridgeRoutingPolicy(bridgeRoutePolicyPath(path.join(path.resolve(home), '.codex')), converged).catch(() => undefined);
+  const settingsPath = options.settingsPath || desktopBridgeServicePaths(home).settings_path;
+  const routePolicyPath = bridgeRoutePolicyPath(path.join(path.resolve(home), '.codex'));
+  // Keep the previous document so a route-policy failure cannot leave the
+  // service settings ahead of the controller's policy file. The bridge must
+  // either persist both halves of the convergence or refuse to serve.
+  const previousSettings = await readDesktopBridgeServiceSettings(settingsPath);
+  let settingsPersisted = false;
+  try {
+    await writeDesktopBridgeServiceSettings(settingsPath, nextSettings);
+    settingsPersisted = true;
+    await writeBridgeRoutingPolicy(routePolicyPath, converged);
+  } catch (error) {
+    if (settingsPersisted) {
+      try {
+        if (previousSettings) await writeDesktopBridgeServiceSettings(settingsPath, previousSettings);
+        else await fsp.rm(settingsPath, { force: true });
+      } catch (rollbackError) {
+        const detail = rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
+        throw new Error(`desktop_bridge_policy_persistence_rollback_failed:${detail}`);
+      }
+    }
+    throw error;
+  }
   settings.route_policy = converged;
   runtime.config.routePolicy = converged;
   process.stdout.write(`${JSON.stringify({ schema: 'sks.desktop-bridge-log.v2', event: 'sks.desktop_bridge.official_models_auto_applied', at: new Date().toISOString(), sks_version: PACKAGE_VERSION, mode, policy_generation: converged.policy_generation, secret_fields_redacted: true })}\n`);

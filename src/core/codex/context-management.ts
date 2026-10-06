@@ -17,7 +17,13 @@ export function setContextManagement(text: string, enabled: boolean, onlyIfAbsen
   expected.features.context_management ??= {};
   expected.features.context_management.experimental_mode = enabled;
   const valid = (candidate: string) => {
-    try { return isDeepStrictEqual(parse(candidate), expected); } catch { return false; }
+    try {
+      // smol-toml 1.9+ returns null-prototype objects to make parsed keys safe
+      // against prototype pollution. Compare the semantic TOML value rather
+      // than the parser's container prototype so the edit proof stays stable
+      // across parser implementations and versions.
+      return isDeepStrictEqual(tomlComparable(parse(candidate)), tomlComparable(expected));
+    } catch { return false; }
   };
   if (current !== undefined) {
     for (const match of text.matchAll(/\b(?:true|false)\b/g)) {
@@ -43,4 +49,14 @@ export function setContextManagement(text: string, enabled: boolean, onlyIfAbsen
     for (const candidate of candidates) if (valid(candidate)) return candidate;
   }
   throw new Error('context_management_config_edit_unsupported');
+}
+
+function tomlComparable(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(tomlComparable);
+  if (!value || typeof value !== 'object') return value;
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== null && prototype !== Object.prototype) return value;
+  const result: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(value)) result[key] = tomlComparable(child);
+  return result;
 }

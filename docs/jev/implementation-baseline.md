@@ -35,7 +35,7 @@ Searched `src/core/subagents`, `src/core/agents`, `src/core/agent-bridge`, and `
 | Codex `spawn_agent` / `send_input` | native-host-owned | SKS cannot prove host execution from a saved plan. |
 | Local-decision `kind: 'recovery'` evaluate CLI | retired advisory | Produced advice; no dispatcher invoked a handler. |
 
-**Recovery capability: unsupported.** No enforceable SKS recovery handler exists for an ambiguous observed failure. The compiler still types `dispatch_recovery` for tests and replay. Production mode does not invent an advisory substitute.
+**Recovery capability: unsupported.** No enforceable SKS recovery handler exists for an ambiguous observed failure. The compiler still types `dispatch_recovery` for replay compatibility, but no test-only handler seam is kept. Production mode does not invent an advisory substitute.
 
 ## Removal inventory
 
