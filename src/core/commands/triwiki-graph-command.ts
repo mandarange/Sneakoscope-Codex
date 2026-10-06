@@ -11,7 +11,10 @@ import {
   CONTEXT_GRAPH_REPAIR_COMMAND,
   type ContextGraphLintIssue
 } from '../triwiki/context-graph/contracts.js';
-import { contextGraphFreshnessPreflight } from '../hooks-runtime/context-graph-freshness-preflight.js';
+import {
+  contextGraphFreshnessNoteFor,
+  contextGraphFreshnessPreflight
+} from '../hooks-runtime/context-graph-freshness-preflight.js';
 import { alignGraphExtractors } from '../triwiki/context-graph/extractors/index.js';
 import { runContextGraphLint } from '../triwiki/context-graph/lint/index.js';
 import { contextGraphQueryProfile } from '../triwiki/context-graph/profiles.js';
@@ -40,6 +43,7 @@ function issueLine(issue: ContextGraphLintIssue): string {
  */
 async function graphStatusFast(root: string): Promise<{ result: unknown; ok: boolean; lines: string[] }> {
   const preflight = await contextGraphFreshnessPreflight(root);
+  const freshnessNote = contextGraphFreshnessNoteFor(preflight);
   return {
     // The preflight carries its own schema id; keep it rather than restating a
     // different one over the top of it.
@@ -47,9 +51,8 @@ async function graphStatusFast(root: string): Promise<{ result: unknown; ok: boo
     ok: preflight.usable,
     lines: [
       `Context graph: ${preflight.status} (${preflight.node_count} nodes, ${preflight.edge_count} edges, ${preflight.coverage})`,
-      ...(preflight.reasons.length ? [`Stale reasons: ${preflight.reasons.join(', ')}`] : []),
+      ...(freshnessNote ? [freshnessNote] : []),
       ...(preflight.unverified_reasons.length ? [`Not evaluated: ${preflight.unverified_reasons.join(', ')}`] : []),
-      ...(preflight.usable ? [] : [`Repair: ${preflight.repair_command}`])
     ]
   };
 }
