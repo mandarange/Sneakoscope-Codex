@@ -6,11 +6,15 @@ import {
   MAX_SUBAGENT_MODELS,
   normalizeSubagentModelList,
   readOpenRouterOnlyStateSync,
+  readNativeSubagentModelStore,
+  writeNativeSubagentModels,
   writeOpenRouterOnlyState,
   type OpenRouterOnlyLocation,
   type OpenRouterOnlyState,
   type SubagentModelEntry
 } from '../../subagents/child-model-allowlist.js';
+import type { NativeSubagentModelProfile, SubagentModelProfile } from '../../subagents/child-model-allowlist.js';
+import { selectableChildModels } from '../../subagents/model-tiers.js';
 import type { DesktopBridgeCommandOperation, DesktopBridgeCommandResult } from '../bridge-contracts.js';
 import { assertDesktopBridgeStatusV3 } from '../bridge-runtime-validation.js';
 import { readActiveCombinedBridgeCatalog } from '../combined-catalog.js';
@@ -33,7 +37,7 @@ import {
 import { openRouterOnlyProviderBlocker, openRouterOnlyStatusFromCore } from './openrouter-only-status.js';
 import { commandResult, controllerEnv, controllerPaths, nowIso, stringArray } from './shared.js';
 import { loadCore, statusFromCore } from './status.js';
-import type { ControllerPaths, DesktopBridgeControllerV3Options } from './types.js';
+import type { ControllerCore, ControllerPaths, DesktopBridgeControllerV3Options } from './types.js';
 
 /**
  * OpenRouter Only Mode and its subagent model list, as controller operations.
@@ -60,11 +64,46 @@ async function finish(
   const status = statusFromCore(core, options);
   assertDesktopBridgeStatusV3(status);
   const openRouterOnly = await openRouterOnlyStatusFromCore(core, options);
+  const subagentSettings = operation.startsWith('subagent-models.')
+    ? await subagentModelSettings(core, openRouterOnly)
+    : null;
   return commandResult(operation, ok, status, {
     openrouter_only: openRouterOnly,
     auth_priority: status.auth_priority,
-    ...extra
+    ...extra,
+    ...(subagentSettings ? { subagent_model_settings: subagentSettings, available: subagentSettings.available } : {})
   }, blockers, options);
+}
+
+async function subagentModelSettings(
+  core: ControllerCore,
+  openRouterOnly: Awaited<ReturnType<typeof openRouterOnlyStatusFromCore>>
+) {
+  if (openRouterOnly.enabled) {
+    return {
+      schema: 'sks.subagent-model-settings.v1', profile: 'openrouter_only' as const,
+      configured: true, editable: true, error: openRouterOnly.error,
+      subagent_models: openRouterOnly.subagent_models,
+      jev_enabled: openRouterOnly.jev_enabled, warnings: openRouterOnly.warnings,
+      available: (await availableOpenRouterModels(core.paths.home)).map((row) => ({ ...row, reasoning_efforts: ['low', 'medium', 'high', 'xhigh'] }))
+    };
+  }
+  const profile: NativeSubagentModelProfile = core.authPriorityEnabled ? 'codex_lb' : 'openai';
+  const location = openRouterOnlyStoreLocation(core.paths);
+  const saved = readNativeSubagentModelStore(location);
+  const available = selectableChildModels(profile, location);
+  const entries = saved.store.profiles[profile];
+  return {
+    schema: 'sks.subagent-model-settings.v1', profile,
+    configured: entries.length > 0, editable: saved.blockers.length === 0,
+    error: saved.blockers[0] ?? (available.length ? null : 'subagent_model_catalog_unavailable'),
+    subagent_models: entries.map((entry) => ({
+      ...entry,
+      routable: available.some((row) => row.public_id === entry.model
+        && (!entry.reasoning_effort || row.reasoning_efforts.includes(entry.reasoning_effort)))
+    })),
+    jev_enabled: openRouterOnly.jev_enabled, warnings: saved.blockers, available
+  };
 }
 
 function syncBlockers(sync: Record<string, unknown>): string[] {
@@ -382,26 +421,62 @@ async function availableOpenRouterModels(home: string): Promise<Array<{ public_i
 }
 
 export async function listSubagentModels(options: DesktopBridgeControllerV3Options): Promise<DesktopBridgeCommandResult> {
-  const available = await availableOpenRouterModels(controllerPaths(options).home);
-  return finish('subagent-models.list', true, [], { available }, options);
+  return finish('subagent-models.list', true, [], {}, options);
 }
 
 export async function setSubagentModels(
   raw: unknown,
   noRestart: boolean,
-  options: DesktopBridgeControllerV3Options
+  options: DesktopBridgeControllerV3Options,
+  expectedProfile?: SubagentModelProfile
 ): Promise<DesktopBridgeCommandResult> {
   if (!Array.isArray(raw)) return finish('subagent-models.set', false, ['subagent_models_payload_invalid'], {}, options);
-  const { entries, issues } = normalizeSubagentModelList(raw);
+  const core = await loadCore(options);
+  const activeProfile: SubagentModelProfile = core.openRouterOnlyEnabled ? 'openrouter_only' : core.authPriorityEnabled ? 'codex_lb' : 'openai';
+  if (expectedProfile && activeProfile !== expectedProfile) {
+    return finish('subagent-models.set', false, ['subagent_model_profile_changed'], {}, options);
+  }
+  // Existing CLI clients can still stage the OpenRouter list while its mode is
+  // off. New Center requests bind the current profile explicitly, so a mode
+  // change during editing cannot write a different connection's preferences.
+  const profile = expectedProfile ?? 'openrouter_only';
+  const { entries, issues } = normalizeSubagentModelList(raw, profile);
   if (issues.length > 0) {
     return finish('subagent-models.set', false, issues.map((issue) => `${issue.code}:${issue.index}`), {}, options);
   }
   const paths = controllerPaths(options);
   const location = openRouterOnlyStoreLocation(paths);
   const before = readOpenRouterOnlyStateSync(location);
-  if (!before.enabled) {
+  if (!before.enabled && profile === 'openrouter_only') {
     await writeOpenRouterOnlyState({ subagent_models: entries }, location);
     return finish('subagent-models.set', true, [], { catalog_sync: null }, options);
+  }
+  if (profile !== 'openrouter_only') {
+    const nativeProfile: NativeSubagentModelProfile = core.authPriorityEnabled ? 'codex_lb' : 'openai';
+    const available = selectableChildModels(nativeProfile, location);
+    const blockers = entries.flatMap((entry, index) => {
+      const model = available.find((row) => row.public_id === entry.model);
+      return !model ? [`subagent_model_not_available:${index}`]
+        : entry.reasoning_effort && !model.reasoning_efforts.includes(entry.reasoning_effort)
+          ? [`subagent_model_effort_unsupported:${index}`] : [];
+    });
+    const saved = readNativeSubagentModelStore(location);
+    if (saved.blockers.length || blockers.length) {
+      return finish('subagent-models.set', false, [...saved.blockers, ...blockers], {}, options);
+    }
+    const role = entries.length ? await ensureUserReadOnlyListRole(paths.home) : 'unchanged';
+    if (role === 'preserved_user_file') {
+      return finish('subagent-models.set', false, ['subagent_model_read_only_role_unavailable'], {}, options);
+    }
+    await writeNativeSubagentModels(nativeProfile, entries, location);
+    const changed = JSON.stringify(saved.store.profiles[nativeProfile]) !== JSON.stringify(entries);
+    const roleChanged = role === 'created' || role === 'updated';
+    const restart = await restartCodex(roleChanged, noRestart, options);
+    const relaunchPending = roleChanged && !restart.attempted && restart.reason !== 'codex_not_running';
+    return finish('subagent-models.set', true, codexRestartBlockers(restart), {
+      changed, catalog_sync: null, read_only_role: role, codex_restart: restart,
+      warnings: relaunchPending ? [CODEX_RELAUNCH_FOR_SUBAGENT_MODELS_WARNING] : []
+    }, options);
   }
   // New entries must be in Codex's catalog before a child can be spawned on
   // them. The list is committed with that catalog, before the bridge

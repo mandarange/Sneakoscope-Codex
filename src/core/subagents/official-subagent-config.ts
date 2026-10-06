@@ -179,7 +179,7 @@ export function mergeOfficialSubagentConfigResult(
   // empty list leaves the line alone because no child can spawn until it has one.
   const childModels = opts.childModels ?? effectiveChildModelAllowlist()
   const existingDefault = /^\s*default_subagent_model\s*=\s*"([^"]*)"/m.exec(next)?.[1] || ''
-  const childDefault = childModels.mode === 'openrouter_only'
+  const childDefault = childModels.mode !== 'tiers'
     ? childModels.default_model
     : latestTierModelSet().has(existingDefault) || (!catalogIsAuthoritative() && notOlderThanBuiltin(existingDefault)) ? existingDefault : defaultOfficialSubagentModel()
   if (childDefault) {
@@ -350,7 +350,7 @@ export async function readOfficialSubagentConfig(
   )
   // The mode store lives under HOME (never CODEX_HOME), the same file the hooks and bridge read.
   const childModels = opts.childModels ?? effectiveChildModelAllowlist({ home })
-  const listDefault = childModels.mode === 'openrouter_only' ? childModels.default_model : null
+  const listDefault = childModels.mode !== 'tiers' ? childModels.default_model : null
   const defaultSubagentModel = resolveLayeredValue(
     projectLayer.agents.default_subagent_model,
     globalLayer.agents.default_subagent_model,
@@ -383,9 +383,9 @@ export async function readOfficialSubagentConfig(
   const depthCoerced = maxDepth.value > 1
   const warnings = [
     ...(modelCoerced
-      ? [`${childModels.mode === 'openrouter_only' ? 'official_subagent_model_coerced_to_list_default' : 'official_subagent_model_coerced_to_latest'}:${defaultSubagentModel.value}:${defaultSubagentModel.source}`]
+      ? [`${childModels.mode !== 'tiers' ? 'official_subagent_model_coerced_to_list_default' : 'official_subagent_model_coerced_to_latest'}:${defaultSubagentModel.value}:${defaultSubagentModel.source}`]
       : []),
-    ...(childModels.mode === 'openrouter_only' && !listDefault ? ['official_subagent_model_list_empty_openrouter_only'] : []),
+    ...(childModels.mode !== 'tiers' && !listDefault ? ['official_subagent_model_list_empty_openrouter_only'] : []),
     ...(depthCoerced ? [`official_subagent_max_depth_coerced_to_one:${maxDepth.value}:${maxDepth.source}`] : []),
     ...capacityNormalizationWarnings(maxThreads, multiAgentV2),
     ...(projectLayer.legacyWarnings),
@@ -418,7 +418,7 @@ export async function readOfficialSubagentConfig(
 }
 
 function coercedChildDefault(value: string, childModels: ChildModelAllowlist): { model: string; coerced: boolean } {
-  if (childModels.mode === 'openrouter_only') {
+  if (childModels.mode !== 'tiers') {
     if (!childModels.default_model) return { model: value, coerced: false }
     const listed = allowlistedChildModel(value, childModels)
     return listed ? { model: listed, coerced: false } : { model: childModels.default_model, coerced: true }
@@ -494,7 +494,7 @@ export async function installOfficialSubagentAgentConfigs(
   return installOfficialSubagentAgentConfigsAt(root, '.codex/agents', {
     ...(opts.apply === undefined ? {} : { apply: opts.apply }),
     ...(opts.existingOnly === undefined ? {} : { existingOnly: opts.existingOnly }),
-    readOnlyListRole: childModels.mode === 'openrouter_only'
+    readOnlyListRole: childModels.mode !== 'tiers'
   })
 }
 

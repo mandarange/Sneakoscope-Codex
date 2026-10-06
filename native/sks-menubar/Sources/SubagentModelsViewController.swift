@@ -1,15 +1,14 @@
 import Cocoa
 
-/// Control Center page for the OpenRouter Only subagent model list. While the
-/// mode is on, every subagent runs one of these models and any other model is
-/// refused; Jev reads each row's criteria to pick one per subagent. The page
+/// Connection-specific subagent lists for OpenRouter Only, Codex-LB and OAuth.
+/// A configured list controls child models; Jev reads each row's criteria. The page
 /// edits a local draft and Apply sends the complete list on stdin to
 /// `sks bridge subagent-models set`. The CLI owns validation and routing.
 final class SubagentModelsViewController: NSViewController, ControlCenterPage, NSTextFieldDelegate {
     private let processClient: ProcessClient
     private let operations: OperationCoordinator
     private let badge = ControlKit.badge("Checking…", tone: .neutral)
-    private let modeDetail = NativeView.detail("Checking OpenRouter Only…")
+    private let modeDetail = NativeView.detail("Checking the current connection…")
     private let modeIssues = NativeView.detail("")
     private let hint = NativeView.detail("Turn on OpenRouter Only on the Connections page to edit this list.")
     private let rowsStack = NSStackView()
@@ -63,14 +62,14 @@ final class SubagentModelsViewController: NSViewController, ControlCenterPage, N
         actionStatus.isHidden = true
         hintRow = NativeView.row([hint, connectionsButton])
         hintRow.isHidden = true
-        let modeCard = NativeView.card(title: "OpenRouter Only", subtitle: "", views: [badge, modeDetail, modeIssues, hintRow])
+        let modeCard = NativeView.card(title: "Connection", subtitle: "", views: [badge, modeDetail, modeIssues, hintRow])
         let listCard = NativeView.card(
             title: "Subagent model list",
-            subtitle: "While OpenRouter Only is on, subagents may run only these models. With Jev on, Jev reads each model's criteria to choose one for every subagent; otherwise a subagent keeps a listed model the parent asked for, or uses the default.",
+            subtitle: "Save a separate list for Codex-LB, OpenAI OAuth, and OpenRouter Only. Subagents use this connection's listed models. With Jev on, Jev chooses by your criteria; otherwise a listed requested model or the default is used.",
             views: [rowsStack, listStatus, ControlKit.actionRow([addButton, applyButton, spinner], trailing: [revertButton, refreshButton]), actionStatus]
         )
         view = NativeView.page([
-            ControlKit.header("Subagent Models", "Choose the OpenRouter models subagents may run and when Jev should pick each one."),
+            ControlKit.header("Subagent Models", "Choose the models subagents may run on the current connection and when Jev should pick each one."),
             modeCard, listCard
         ])
         renderRows()
@@ -102,11 +101,12 @@ final class SubagentModelsViewController: NSViewController, ControlCenterPage, N
     /// A newer saved list replaces the draft unless the draft holds unapplied edits.
     private func accept(_ snapshot: SubagentModelsSnapshot) {
         let dirty = SubagentModelDraft.isDirty(draft: draft, saved: saved)
+        let sameProfile = self.snapshot?.profile == snapshot.profile
         self.snapshot = snapshot
-        if let rows = snapshot.available { available = rows }
-        saved = restoringCriteria(snapshot.mode.subagentModels, known: saved + draft)
-        if !(dirty && snapshot.mode.enabled) { draft = saved }
-        renderMode(snapshot.mode)
+        if let rows = snapshot.available { available = rows } else if !sameProfile { available = [] }
+        saved = restoringCriteria(snapshot.models, known: sameProfile ? saved + draft : [])
+        if !(dirty && sameProfile && snapshot.editable) { draft = saved }
+        renderMode(snapshot)
         renderRows()
         updateControls()
     }
@@ -126,7 +126,20 @@ final class SubagentModelsViewController: NSViewController, ControlCenterPage, N
         updateControls()
     }
 
-    private func renderMode(_ mode: OpenRouterOnlyState) {
+    private func renderMode(_ snapshot: SubagentModelsSnapshot) {
+        if let settings = snapshot.settings, settings.profile != "openrouter_only" {
+            let unavailable = settings.error != nil || settings.models.contains { $0.routable == false }
+            ControlKit.setBadge(badge, text: settings.title + (settings.configured ? " · custom list" : " · automatic tiers"), tone: unavailable ? .warning : .ok)
+            modeDetail.stringValue = "This list applies to new subagents using \(settings.title). An empty list restores automatic tier selection. Lists for other connections are kept."
+            let issues = ([settings.error].compactMap { $0 } + settings.warnings).map(OpenRouterOnlyMessages.describe)
+                + settings.models.filter { $0.routable == false }.map { "\($0.model) is unavailable with its saved effort. Choose a current model and supported effort." }
+            modeIssues.stringValue = ProviderSecretRedactor.redact(issues.joined(separator: "\n"))
+            modeIssues.textColor = .systemOrange
+            modeIssues.isHidden = issues.isEmpty
+            hintRow.isHidden = true
+            return
+        }
+        let mode = snapshot.mode
         let badgeText = mode.state == "active" ? "OpenRouter Only is on"
             : mode.state == "unavailable" ? "OpenRouter Only is on · unavailable" : "OpenRouter Only is off"
         ControlKit.setBadge(badge, text: badgeText, tone: mode.state == "active" ? .ok : mode.state == "unavailable" ? .warning : .neutral)
@@ -142,13 +155,13 @@ final class SubagentModelsViewController: NSViewController, ControlCenterPage, N
         hintRow.isHidden = mode.enabled
     }
 
-    private var editable: Bool { snapshot?.mode.enabled == true && !busy }
+    private var editable: Bool { snapshot?.editable == true && !busy }
 
     private func renderRows() {
         rowsStack.arrangedSubviews.forEach { rowsStack.removeArrangedSubview($0); $0.removeFromSuperview() }
         if draft.isEmpty {
             let text = snapshot == nil ? "The subagent model list has not loaded."
-                : snapshot?.mode.enabled == true ? "No subagent models yet. Choose Add Model, then Apply."
+                : snapshot?.editable == true ? "No subagent models yet. Choose Add Model, then Apply."
                 : "No subagent models yet. Turning OpenRouter Only on fills this list from the OpenRouter models selected for the Codex picker."
             addRow(NativeView.detail(text))
             return
@@ -180,7 +193,7 @@ final class SubagentModelsViewController: NSViewController, ControlCenterPage, N
         modelPopup.setAccessibilityLabel("Subagent model \(number)")
         modelPopup.setAccessibilityIdentifier("sks-subagent-models-model-\(index)")
         let effortPopup = NSPopUpButton()
-        effortPopup.addItems(withTitles: SubagentModelDraft.effortTitles)
+        effortPopup.addItems(withTitles: SubagentModelDraft.effortTitles(for: entry, available: available, profile: snapshot?.profile ?? "openrouter_only"))
         effortPopup.selectItem(withTitle: entry.reasoningEffort ?? SubagentModelDraft.effortTitles[0])
         effortPopup.target = self
         effortPopup.action = #selector(effortChanged(_:))
@@ -243,7 +256,9 @@ final class SubagentModelsViewController: NSViewController, ControlCenterPage, N
         if let preferred = draft.first(where: \.isDefault) { parts.append("default \(preferred.model)") }
         if dirty { parts.append("unapplied changes") }
         if editable, available.isEmpty {
-            parts.append("no OpenRouter models are in the bridge catalog yet; select some under Models in Codex on the Connections page")
+            parts.append(snapshot?.profile == "openrouter_only"
+                ? "no OpenRouter models are in the bridge catalog yet; select some under Models in Codex on the Connections page"
+                : "no models are available for this connection; open Codex and refresh the catalog")
         } else if editable, draft.count < SubagentModelRules.maxModels, SubagentModelDraft.adding(draft, available: available) == nil {
             parts.append("every catalog model is already on the list")
         }
@@ -307,11 +322,12 @@ final class SubagentModelsViewController: NSViewController, ControlCenterPage, N
 
     @objc private func applyList() {
         guard editable else { return }
-        let issues = SubagentModelDraft.issues(draft)
+        let issues = SubagentModelDraft.issues(draft, profile: snapshot?.profile ?? "openrouter_only", available: available)
         guard issues.isEmpty else {
             return show(actionStatus, issues.map(OpenRouterOnlyMessages.describe).joined(separator: "\n"), color: .systemOrange)
         }
-        guard let stdin = SubagentModelDraft.stdinPayload(draft) else {
+        let submittedProfile = snapshot?.boundProfile
+        guard let stdin = SubagentModelDraft.stdinPayload(draft, profile: submittedProfile) else {
             return show(actionStatus, "The list could not be prepared for SKS. Nothing was sent.", color: .systemOrange)
         }
         let summary = "Apply subagent model list"
@@ -319,16 +335,17 @@ final class SubagentModelsViewController: NSViewController, ControlCenterPage, N
             return show(actionStatus, "Another configuration change is running. Try again when it finishes.", color: .systemOrange)
         }
         let submitted = SubagentModelDraft.normalizedForSubmit(draft)
-        setBusy(true, message: "Saving the subagent model list · updating bridge routes…")
+        setBusy(true, message: "Saving this connection's subagent model list…")
         _ = operations.update(operation, state: .running, stage: "applying", progress: nil, summary: summary)
         processClient.run(OpenRouterOnlyCommand.setSubagentModels, stdin: stdin, timeout: NativeView.mutationTimeout) { [weak self] result in
             guard let self else { return }
             let payload = OpenRouterOnlyJSON.object(from: result.output)
             let receipt = OpenRouterOnlyReceipt.decode(payload)
             let answer = payload.flatMap { SubagentModelsSnapshot.decode($0) }
-            let answerRows = answer.map { self.restoringCriteria($0.mode.subagentModels, known: submitted) }
+            let sameProfile = answer?.boundProfile == submittedProfile
+            let answerRows = answer.map { self.restoringCriteria($0.models, known: sameProfile ? submitted : []) }
             let complete = !result.timedOut && !result.truncated
-            let stored = answerRows.map { !SubagentModelDraft.isDirty(draft: submitted, saved: $0) } ?? false
+            let stored = sameProfile && (answerRows.map { !SubagentModelDraft.isDirty(draft: submitted, saved: $0) } ?? false)
             let succeeded = complete && result.code == 0 && receipt.ok && receipt.blockers.isEmpty && stored
             let resultWarnings = OpenRouterOnlyJSON.strings((payload?["result"] as? [String: Any])?["warnings"])
             let relaunch = resultWarnings.contains("codex_relaunch_required_for_new_subagent_models")
@@ -336,7 +353,11 @@ final class SubagentModelsViewController: NSViewController, ControlCenterPage, N
             let issue = ProviderSecretRedactor.redact(receipt.primaryIssue ?? NativeView.redactPreview(result.output))
             let message: String
             if succeeded {
-                message = "Subagent model list saved · \(submitted.count) model\(submitted.count == 1 ? "" : "s"). New subagents use it now." + relaunch
+                if submitted.isEmpty, let profile = submittedProfile, profile != "openrouter_only" {
+                    message = "Subagent model list cleared · automatic tier selection restored."
+                } else {
+                    message = "Subagent model list saved · \(submitted.count) model\(submitted.count == 1 ? "" : "s")." + (relaunch.isEmpty ? " New subagents use it now." : relaunch)
+                }
             } else if !complete {
                 message = "SKS did not confirm the change · rechecking the saved list."
             } else if stored {

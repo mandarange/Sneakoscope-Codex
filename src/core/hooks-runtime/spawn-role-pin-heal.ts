@@ -16,7 +16,7 @@ export async function healStaleRolePinForSpawn(payload: any, root: string): Prom
   const input = payload?.tool_input || payload?.toolInput || payload?.tool?.input || {};
   const agent = String(input.agent_type || input.agentType || '').trim();
   if (!agent || !stalePinForAgentType(agent, { root })) return false;
-  if (effectiveChildModelAllowlist().mode === 'openrouter_only') return false;
+  if (effectiveChildModelAllowlist().mode !== 'tiers') return false;
   await refreshStaleManagedRolePins({ root });
   return true;
 }

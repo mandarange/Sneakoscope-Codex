@@ -1,11 +1,13 @@
 import { managedOfficialSubagentRoleByName } from '../managed-assets/managed-assets-manifest.js';
-import { READ_ONLY_LIST_ROLE } from '../subagents/read-only-list-role.js';
+import { READ_ONLY_LIST_ROLE, readOnlyListRoleInstalled } from '../subagents/read-only-list-role.js';
 import { stalePinBlockReason, stalePinForAgentType } from '../subagents/role-model-pins.js';
 import { isSpawnAgentToolName, spawnPayloadToolName } from './spawn-tool-name.js';
 import {
   effectiveChildModelAllowlist,
+  childModelListLabel,
   isAllowedChildModel,
-  type ChildModelAllowlist
+  type ChildModelAllowlist,
+  type ListChildModelAllowlist
 } from '../subagents/child-model-allowlist.js';
 
 
@@ -13,26 +15,27 @@ export const SUBAGENT_MODELS_SETTINGS_HINT = 'SKS Control Center > Subagent Mode
 
 /** The OpenRouter Only list as a parent reads it: `a (default), b`. */
 export function renderChildModelList(allowlist: ChildModelAllowlist): string {
-  if (allowlist.mode !== 'openrouter_only') return allowlist.models.join(', ');
+  if (allowlist.mode === 'tiers') return allowlist.models.join(', ');
   return allowlist.entries.map((entry) => `${entry.model}${entry.default ? ' (default)' : ''}`).join(', ');
 }
 
 /** The OpenRouter Only list with the user's criteria, for parent guidance. */
 export function renderChildModelCriteria(allowlist: ChildModelAllowlist): string {
-  if (allowlist.mode !== 'openrouter_only') return allowlist.models.join(', ');
+  if (allowlist.mode === 'tiers') return allowlist.models.join(', ');
   return allowlist.entries
     .map((entry) => `${entry.model}${entry.default ? ' (default)' : ''}: ${entry.criteria || 'general work'}`)
     .join('; ');
 }
 
-function openRouterOnlyBlockReason(allowlist: ChildModelAllowlist): string {
-  if (!allowlist.models.length && allowlist.mode === 'openrouter_only' && allowlist.unroutable?.length) {
-    return `SKS OpenRouter Only mode: no model on the subagent list has an OpenRouter route right now (${allowlist.unroutable.join(', ')}), so no child may be spawned. Ask the user to replace them in ${SUBAGENT_MODELS_SETTINGS_HINT}, then retry spawn_agent. Do not implement the slice in the parent instead.`;
+function openRouterOnlyBlockReason(allowlist: ListChildModelAllowlist): string {
+  const label = childModelListLabel(allowlist);
+  if (!allowlist.models.length && allowlist.unroutable?.length) {
+    return `SKS ${label} mode: no model on the subagent list is available with its saved effort right now (${allowlist.unroutable.join(', ')}), so no child may be spawned. Ask the user to replace them in ${SUBAGENT_MODELS_SETTINGS_HINT}, then retry spawn_agent. Do not implement the slice in the parent instead.`;
   }
   if (!allowlist.models.length) {
-    return `SKS OpenRouter Only mode is on but the subagent model list is empty, so no child may be spawned. Ask the user to add models in ${SUBAGENT_MODELS_SETTINGS_HINT} (or to turn OpenRouter Only off), then retry spawn_agent. Do not implement the slice in the parent instead.`;
+    return `SKS ${label} mode: the subagent model list is empty or unavailable, so no child may be spawned. Ask the user to review the list in ${SUBAGENT_MODELS_SETTINGS_HINT}, then retry spawn_agent. Do not implement the slice in the parent instead.`;
   }
-  return `SKS OpenRouter Only mode: children may run only a model on the user's subagent list: ${renderChildModelList(allowlist)}. Every other model is denied. Retry spawn_agent with one of them (the SKS hook routes each spawn to a list model, by Jev when Jev mode is on) and fork_turns="none" or a positive bounded turn count. Include the complete slice contract in message; do not inherit the parent model. The user adds models in ${SUBAGENT_MODELS_SETTINGS_HINT}.`;
+  return `SKS ${label} mode: children may run only a model on the user's subagent list: ${renderChildModelList(allowlist)}. Every other model is denied. Retry spawn_agent with one of them (the SKS hook routes each spawn to a list model, by Jev when Jev mode is on) and fork_turns="none" or a positive bounded turn count. Include the complete slice contract in message; do not inherit the parent model. The user adds models in ${SUBAGENT_MODELS_SETTINGS_HINT}.`;
 }
 
 /**
@@ -68,15 +71,21 @@ export function subagentSpawnPolicyBlockReason(payload: any = {}, opts: { root?:
   // Tier and fork rules are Naruto's child contract. Outside a Naruto parent a
   // spawn is Codex's own, the way Codex works by default; OpenRouter Only
   // still applies everywhere, because the mode itself forbids other models.
-  if (allowlist.mode !== 'openrouter_only' && opts.narutoParent === false) return null;
-  if (allowlist.mode === 'openrouter_only') {
+  if (allowlist.mode === 'tiers' && opts.narutoParent === false) return null;
+  if (allowlist.mode !== 'tiers') {
     if (!isAllowedChildModel(input.model, allowlist)) return openRouterOnlyBlockReason(allowlist);
     // SKS keeps children bounded: a v1 full-history fork copies the parent thread.
     if (fullHistoryForkContext(input)) return `${FORK_BLOCK_REASON} Omit fork_context (fork_context=true is a full-history fork).`;
     // Managed role files pin a tier model, which Codex will not let a spawn override.
     const agent = String(input.agent_type || input.agentType || '').trim();
+    if (allowlist.mode === 'configured' && agent && agent !== READ_ONLY_LIST_ROLE.codex_name) {
+      return `SKS ${childModelListLabel(allowlist)} subagent list: agent_type "${agent}" may pin its own model or effort, which Codex uses instead of the spawn values. Omit agent_type and include the role brief in message; read-only slices must use agent_type="${READ_ONLY_LIST_ROLE.codex_name}".`;
+    }
+    if (allowlist.mode === 'configured' && agent === READ_ONLY_LIST_ROLE.codex_name && opts.root && !readOnlyListRoleInstalled(opts.root)) {
+      return `SKS could not verify the model-less read-only role for this project. A missing role or custom role/config override must be resolved before retrying ${READ_ONLY_LIST_ROLE.codex_name}; do not remove the role to bypass its read-only sandbox.`;
+    }
     if (agent && managedOfficialSubagentRoleByName(agent)) {
-      return `SKS OpenRouter Only mode: agent_type "${agent}" pins a tier model, so it cannot run a list model. Omit agent_type and put the role brief in message; read-only slices pass agent_type="${READ_ONLY_LIST_ROLE.codex_name}".`;
+      return `SKS ${childModelListLabel(allowlist)} mode: agent_type "${agent}" pins a tier model, so it cannot run a list model. Omit agent_type and put the role brief in message; read-only slices pass agent_type="${READ_ONLY_LIST_ROLE.codex_name}".`;
     }
   } else {
     const allowed = new Set(allowlist.models);

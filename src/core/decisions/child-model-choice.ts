@@ -5,6 +5,7 @@ import {
   defaultSubagentEntry,
   subagentEntryForModel,
   type OpenRouterOnlyState,
+  type SubagentModelProfile,
   type SubagentModelEntry
 } from '../subagents/child-model-allowlist.js'
 
@@ -68,7 +69,7 @@ export function childModelQuestion(id: string, entries: readonly SubagentModelEn
   }
 }
 
-export function fallbackChildModel(state: OpenRouterOnlyState, requestedModel: unknown, reason: string): ChildModelChoice | null {
+export function fallbackChildModel(state: Pick<OpenRouterOnlyState, 'subagent_models'>, requestedModel: unknown, reason: string): ChildModelChoice | null {
   const requested = subagentEntryForModel(state, requestedModel)
   if (requested) return { entry: requested, source: 'requested', reason }
   const fallback = defaultSubagentEntry(state)
@@ -84,7 +85,8 @@ export async function chooseChildModels(input: {
   workflowId: string
   goal: string
   lanes: readonly ChildModelLane[]
-  state: OpenRouterOnlyState
+  state: Pick<OpenRouterOnlyState, 'subagent_models'>
+  profile?: SubagentModelProfile
   env?: NodeJS.ProcessEnv
   deadlineMs?: number
 }): Promise<Record<string, ChildModelChoice>> {
@@ -119,7 +121,7 @@ export async function chooseChildModels(input: {
       workflowId: input.workflowId,
       goal: input.goal,
       questions,
-      facts: { openrouter_only: true, subagent_models: entries.map((entry) => canonicalChildModelId(entry.model)) },
+      facts: { openrouter_only: (input.profile ?? 'openrouter_only') === 'openrouter_only', subagent_model_profile: input.profile ?? 'openrouter_only', subagent_models: entries.map((entry) => canonicalChildModelId(entry.model)) },
       ...(input.env ? { env: input.env } : {}),
       ...(input.deadlineMs === undefined ? {} : { deadlineMs: input.deadlineMs })
     })
@@ -146,7 +148,8 @@ export async function chooseChildModel(input: {
   task: string
   role?: string | null
   requestedModel?: string | null
-  state: OpenRouterOnlyState
+  state: Pick<OpenRouterOnlyState, 'subagent_models'>
+  profile?: SubagentModelProfile
   env?: NodeJS.ProcessEnv
   deadlineMs?: number
 }): Promise<ChildModelChoice | null> {
@@ -156,6 +159,7 @@ export async function chooseChildModel(input: {
     goal: input.task || 'Spawn a child agent.',
     lanes: [{ id: 'spawn', task: input.task, role: input.role ?? null, requestedModel: input.requestedModel ?? null }],
     state: input.state,
+    ...(input.profile ? { profile: input.profile } : {}),
     ...(input.env ? { env: input.env } : {}),
     ...(input.deadlineMs === undefined ? {} : { deadlineMs: input.deadlineMs })
   })

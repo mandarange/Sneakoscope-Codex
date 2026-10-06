@@ -442,7 +442,7 @@ async function attachJevTurnRouting(root: string, payload: any, result: any, orc
       : `Jev rated this turn as ${decision.effort}-effort work (${decision.model} tier). Treat it as this turn's reasoning hint; the parent model, effort, and service tier stay as the user set them.`
     : '';
   const allowlist = effectiveChildModelAllowlist();
-  const line = allowlist.mode === 'openrouter_only'
+  const line = allowlist.mode !== 'tiers'
     ? openRouterOnlyJevTurnLine(allowlist, decision.effort, orchestrationRequired)
     : tierLine;
   if (!line) return { ...result, jev_turn: decision };

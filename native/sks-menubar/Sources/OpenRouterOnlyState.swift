@@ -17,9 +17,13 @@ enum SubagentModelRules {
     static let maxModels = 16
     static let maxCriteriaCharacters = 240
     static let efforts = ["low", "medium", "high", "xhigh"]
+    static let nativeEfforts = ["low", "medium", "high", "xhigh", "max", "ultra"]
 
     /// Same pattern as isOpenRouterModelId: `vendor/model[:variant]`, at most 160 characters.
-    static func isModelId(_ id: String) -> Bool {
+    static func isModelId(_ id: String, profile: String = "openrouter_only") -> Bool {
+        if profile != "openrouter_only" {
+            return id.count <= 240 && id.range(of: #"^[A-Za-z0-9][A-Za-z0-9._:/+\-]*$"#, options: .regularExpression) != nil
+        }
         guard id.count <= 160 else { return false }
         return id.range(of: #"^[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9._:-]*$"#, options: [.regularExpression, .caseInsensitive]) != nil
     }
@@ -36,7 +40,7 @@ struct SubagentModelEntry: Equatable {
 
     static func decode(_ value: Any) -> SubagentModelEntry? {
         guard let row = value as? [String: Any], let model = OpenRouterOnlyJSON.text(row["model"]) else { return nil }
-        let effort = OpenRouterOnlyJSON.text(row["reasoning_effort"]).flatMap { SubagentModelRules.efforts.contains($0) ? $0 : nil }
+        let effort = OpenRouterOnlyJSON.text(row["reasoning_effort"]).flatMap { SubagentModelRules.nativeEfforts.contains($0) ? $0 : nil }
         return SubagentModelEntry(
             model: model,
             criteria: row["criteria"] as? String ?? "",
@@ -158,11 +162,23 @@ enum OpenRouterOnlyMessages {
         case "openrouter_only_codex_image_mode_unavailable":
             return "Codex's built-in image generation does not work on OpenRouter models. Choose a custom image model on the Image Generation page."
         case "subagent_model_id_invalid":
-            return row + "not an OpenRouter model id (vendor/model)."
+            return row + "not a valid model id for this connection."
         case "subagent_model_duplicate":
             return row + "this model is already on the list."
         case "subagent_model_effort_invalid":
-            return row + "effort must be Default, low, medium, high, or xhigh."
+            return row + "choose Default or an effort supported by this model."
+        case "subagent_model_effort_unsupported":
+            return row + "this model does not support the selected effort."
+        case "subagent_model_not_available":
+            return row + "this model is not available on the current connection. Refresh and choose an available model."
+        case "subagent_model_profile_changed":
+            return "The connection mode changed. Refresh this page before applying its list."
+        case "subagent_model_catalog_unavailable":
+            return "No model catalog is available for this connection. Open Codex, refresh the connection's catalog, then reload this page."
+        case "subagent_model_lists_unreadable", "subagent_model_lists_unsafe_path":
+            return "SKS cannot safely read the saved model lists. Check the preferences file and its permissions."
+        case "subagent_model_read_only_role_unavailable":
+            return "The read-only child role is owned by a custom file. Resolve that role conflict before applying the list."
         case "subagent_model_list_too_long":
             return row + "the list holds at most \(SubagentModelRules.maxModels) models."
         case "subagent_model_criteria_redacted":

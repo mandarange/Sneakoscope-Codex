@@ -7,11 +7,12 @@ import {
 } from '../decisions/child-model-choice.js';
 import { managedOfficialSubagentRoleByName } from '../managed-assets/managed-assets-manifest.js';
 import {
-  OPENROUTER_ONLY_SCHEMA,
   effectiveChildModelAllowlist,
-  isSubagentModelEffort,
-  type ChildModelAllowlist,
-  type OpenRouterOnlyState
+  childModelListLabel,
+  childModelListProfile,
+  listChildModelEffort,
+  type ListChildModelAllowlist,
+  type SubagentModelProfile
 } from '../subagents/child-model-allowlist.js';
 import { subagentModelProfile } from '../subagents/model-policy.js';
 import { effortForTier, latestModelForTier, latestTierModelSet } from '../subagents/model-tiers.js';
@@ -28,7 +29,8 @@ import { isSpawnAgentToolName, spawnPayloadToolName } from './spawn-tool-name.js
 
 /** Which list entry an OpenRouter Only spawn got, and why. */
 export interface OpenRouterOnlySpawnRoute {
-  mode: 'openrouter_only';
+  mode: 'openrouter_only' | 'configured';
+  profile?: SubagentModelProfile;
   model: string;
   source: ChildModelChoiceSource;
   /** 'applied' when Jev decided, else why the fallback ran (off, missing_key, single_entry, ...). */
@@ -100,12 +102,12 @@ export async function jevSpawnRouting(root: string, state: any, payload: any): P
   const input = spawnInput(payload);
   if (!input) return { input: null, route: null };
   const allowlist = effectiveChildModelAllowlist();
-  if (allowlist.mode === 'openrouter_only') return openRouterOnlySpawnRouting(root, state, input, allowlist);
+  if (allowlist.mode !== 'tiers') return openRouterOnlySpawnRouting(root, state, input, allowlist);
   return { input: await tierSpawnRewrite(root, state, input), route: null };
 }
 
-function listState(allowlist: Extract<ChildModelAllowlist, { mode: 'openrouter_only' }>): OpenRouterOnlyState {
-  return { schema: OPENROUTER_ONLY_SCHEMA, enabled: true, subagent_models: allowlist.entries, restore: null, updated_at: null };
+function listState(allowlist: ListChildModelAllowlist) {
+  return { subagent_models: allowlist.entries };
 }
 
 /**
@@ -121,7 +123,7 @@ async function openRouterOnlySpawnRouting(
   root: string,
   parentState: any,
   input: Record<string, unknown>,
-  allowlist: Extract<ChildModelAllowlist, { mode: 'openrouter_only' }>
+  allowlist: ListChildModelAllowlist
 ): Promise<JevSpawnRouting> {
   if (fullHistoryForkContext(input)) return { input: null, route: null };
   const forkTurns = input.fork_turns === undefined && narutoParent(parentState) ? 'none' : input.fork_turns;
@@ -131,12 +133,13 @@ async function openRouterOnlySpawnRouting(
   const agent = String(input.agent_type || input.agentType || '').trim() || null;
   const task = spawnTask(input, { items: true });
   const choice: ChildModelChoice | null = task
-    ? await chooseChildModel({ root, task, role: agent, requestedModel: requested, state })
+    ? await chooseChildModel({ root, task, role: agent, requestedModel: requested, state, profile: childModelListProfile(allowlist) })
       .catch(() => fallbackChildModel(state, requested, 'consult_failed'))
     : fallbackChildModel(state, requested, 'empty_task');
   if (!choice) return { input: null, route: null };
   const route: OpenRouterOnlySpawnRoute = {
-    mode: 'openrouter_only',
+    mode: allowlist.mode,
+    ...(allowlist.mode === 'configured' ? { profile: allowlist.profile } : {}),
     model: choice.entry.model,
     source: choice.source,
     reason: choice.reason
@@ -153,8 +156,7 @@ async function openRouterOnlySpawnRouting(
   }
   // The entry's effort wins; otherwise keep only an effort every list model
   // accepts, and let Codex use the model default for anything else.
-  const effort = choice.entry.reasoning_effort
-    || (isSubagentModelEffort(input.reasoning_effort) ? input.reasoning_effort : null);
+  const effort = listChildModelEffort(choice.entry, input.reasoning_effort);
   if (effort) next.reasoning_effort = effort;
   else delete next.reasoning_effort;
   next.fork_turns = forkTurns;
@@ -217,7 +219,7 @@ async function tierSpawnRewrite(
  * hint, and the list children run on instead of a tier model.
  */
 export function openRouterOnlyJevTurnLine(
-  allowlist: Extract<ChildModelAllowlist, { mode: 'openrouter_only' }>,
+  allowlist: ListChildModelAllowlist,
   effort: string | null,
   orchestrationRequired: boolean
 ): string {
@@ -227,5 +229,5 @@ export function openRouterOnlyJevTurnLine(
   const list = allowlist.entries.length
     ? `every spawn_agent child runs a model from the user's subagent list (${renderChildModelList(allowlist)}); Jev picks the list model for each spawn from the user's criteria, and any other model is denied.`
     : `the subagent model list is empty, so spawn_agent is denied until the user adds models in ${SUBAGENT_MODELS_SETTINGS_HINT}.`;
-  return `${hint}SKS OpenRouter Only mode: ${list}`;
+  return `${hint}SKS ${childModelListLabel(allowlist)} mode: ${list}`;
 }
