@@ -1307,6 +1307,24 @@
       "reason": "Central filesystem primitive kept as an audited helper for higher-level guarded flows."
     },
     {
+      "file": "src/core/git-hygiene/shared-memory-publish.ts",
+      "symbol": "promoteJevMemoryIntake.callback@248",
+      "token": "fsp.rm",
+      "scope_contract_sha256": "8b46c2ca2627ff12ed4b75a0d9989ab4342a79efcde6a5beba245ebe9dfa78ab",
+      "callsite_sha256": "1d07adb4973cb9cde5a243ab7a50796d36116284de27a508d2a75a4313b6e728",
+      "occurrence": 1,
+      "reason": "Explicit memory promotion holds the TriWiki lock; failure removes only canonical-subtree files absent from its prewrite snapshot before restoring prior bytes."
+    },
+    {
+      "file": "src/core/git-hygiene/shared-memory-publish.ts",
+      "symbol": "promoteJevMemoryIntake.callback@248",
+      "token": "fsp.rm",
+      "scope_contract_sha256": "8b46c2ca2627ff12ed4b75a0d9989ab4342a79efcde6a5beba245ebe9dfa78ab",
+      "callsite_sha256": "1d07adb4973cb9cde5a243ab7a50796d36116284de27a508d2a75a4313b6e728",
+      "occurrence": 2,
+      "reason": "Explicit memory promotion rollback removes only fixed canonical or mission-intake paths recorded as absent before this transaction, preserving backed-up existing files."
+    },
+    {
       "file": "src/core/git/git-worktree-manager.ts",
       "symbol": "allocateWorkerWorktree",
       "token": "fsp.rm",
@@ -2669,10 +2687,10 @@
       "file": "src/core/wiki-image/route-image-evidence.ts",
       "symbol": "ensureRouteImageEvidence",
       "token": "fsp.writeFile",
-      "scope_contract_sha256": "c2faf892a82e15ec286e9a3883148acadb367e3a0df8f83c9dc9369ca31d1f00",
-      "callsite_sha256": "e72527b5e9947f035ed003bed18d8ac054b9ad9063b133126aadf176fd1cc362",
+      "scope_contract_sha256": "a2289a2b79956e005790a62d71f043380f59722ed25bf8c97507657f0d7d78d3",
+      "callsite_sha256": "4b3918f563f945303023bbd5277f6de8919c61ecf0751a20cfe8d450cafcebf4",
       "occurrence": 1,
-      "reason": "Runtime artifact writer has caller-scoped path and is externally audited for guard migration."
+      "reason": "Explicit mock mode writes the fixed one-pixel PNG into the validated mission artifact path; ledger provenance marks it as mock evidence."
     },
     {
       "file": "src/scripts/agent-janitor-check.ts",

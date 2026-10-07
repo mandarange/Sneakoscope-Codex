@@ -18,6 +18,11 @@
 - Bind cached Jev plans to their inputs and coordinate sibling task leases
   to avoid duplicate subagent work and stale decision reuse.
 
+### Fixed
+
+- Register the reviewed memory-promotion rollback and mission image-fixture
+  call sites in the release mutation audit.
+
 ## [10.5.6] - 2026-10-07
 ### Fixed
 
