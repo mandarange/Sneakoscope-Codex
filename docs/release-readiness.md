@@ -1,6 +1,21 @@
 # SKS Release Readiness
 
-## 10.5.6 candidate
+## 10.5.7 candidate
+
+10.5.7 includes the Jev fast-path and TriWiki memory integration from PR #15.
+Jev compiles bounded execution profiles while code-owned safety and mutation
+gates remain mandatory. Memory intake stays inside its mission until explicit
+promotion validates consent, provenance, lifecycle, and evidence. Canonical
+memories survive code-index refreshes and are recalled through a bounded overlay.
+
+Release verification requires the final clean commit's full canonical test
+corpus, full release workflow, pack receipt, real checks, stamp, provenance,
+live main equality, exact-commit CI, and normal npm publish dry-run. Evidence
+lives under `.sneakoscope/reports/release/10.5.7` and canonical report paths.
+Use Node 26.7.0 consistently on this host:
+`PATH="/opt/homebrew/bin:$PATH" npm publish`. Upload remains operator-owned.
+
+## Historical 10.5.6 candidate
 
 10.5.6 preserves model/effort pairs from SKS Center through Jev selection,
 planning, spawn hooks, and standalone workers. Jev accepts its documented

@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+## [10.5.7] - 2026-10-07
+
+### Added
+
+- Integrate Jev execution profiles with source, graph, policy, and decision
+  bindings; retain code-owned safety gates and explicit user choices.
+- Stage bounded mission memory, validate explicit promotion into canonical
+  TriWiki, and recall provenance-backed records with lifecycle and token limits.
+- Preserve canonical memories across code-index refreshes and validate image
+  evidence through promotion, recall, and retention.
+
+### Changed
+
+- Bind cached Jev plans to their inputs and coordinate sibling task leases
+  to avoid duplicate subagent work and stale decision reuse.
 
 ## [10.5.6] - 2026-10-07
 ### Fixed

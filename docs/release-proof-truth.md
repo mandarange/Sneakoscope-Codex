@@ -1,6 +1,22 @@
 # Release Proof Truth
 
-## 10.5.6 candidate
+## 10.5.7 candidate
+
+This candidate packages PR #15's Jev execution profiles, decision-cache
+bindings, sibling task leases, mission memory intake, explicit canonical
+promotion, bounded recall, and preservation across code-navigation alignment.
+Source, graph, policy, evidence, and lifecycle checks remain code-owned.
+
+The PR's acceptance record is historical: it includes exhaustive-suite
+failures and environment-blocked gates and cannot authorize this release.
+The final clean candidate requires fresh full tests, release gates, required
+real checks, pack receipt, stamp, provenance, live main parity, exact-commit
+CI, and the normal npm publish dry-run. Reports belong under
+`.sneakoscope/reports/release/10.5.7` and canonical report paths. Fixture
+results do not establish live OpenRouter quality or an installed-app upgrade.
+Actual npm publication is the operator's action.
+
+## Historical 10.5.6 candidate
 
 This candidate includes model/effort selection, Jev snapshot compatibility,
 Naruto lifecycle projection repair, and session-owned finalization independent

@@ -1,6 +1,6 @@
 # Sneakoscope Codex performance and leak policy
 
-Sneakoscope Codex 10.5.6 is designed to keep runtime, package size, RAM, and storage bounded.
+Sneakoscope Codex 10.5.7 is designed to keep runtime, package size, RAM, and storage bounded.
 
 ## Speed
 
