@@ -65,6 +65,7 @@ export const SHARED_MEMORY_TRACK = [
   '.sneakoscope/wiki/image-voxels/**/*.json',
   '.sneakoscope/wiki/avoidance-rules/**/*.json',
   '.sneakoscope/wiki/summaries/**/*.md',
+  '.sneakoscope/wiki/summaries/**/*.json',
   '.sneakoscope/wiki/project-policy.json',
   '.sneakoscope/shared-memory-manifest.json',
   '.sneakoscope/git-policy.json'

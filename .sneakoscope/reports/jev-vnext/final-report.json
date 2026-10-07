@@ -1,0 +1,159 @@
+{
+  "schema": "sks.jev-vnext-final-report.v1",
+  "generated_at": "2026-10-07T11:31:54.502Z",
+  "base_commit": "ce6203869b83fd729be08cfb2f74ec2c632c41ba",
+  "candidate_commit": null,
+  "package_version": "10.5.6",
+  "changed_paths": [
+    ".sneakoscope/reports/jev-vnext/baseline-inventory.json",
+    ".sneakoscope/reports/jev-vnext/baseline.json",
+    ".sneakoscope/reports/jev-vnext/change-manifest.json",
+    ".sneakoscope/reports/jev-vnext/final-report.json",
+    ".sneakoscope/reports/jev-vnext/migration-manifest.json",
+    ".sneakoscope/reports/jev-vnext/pipeline-owner-map.json",
+    "docs/feature-inventory.md",
+    "docs/image-voxel-ledger.md",
+    "docs/jev-decisions.md",
+    "docs/jev-triwiki-memory.md",
+    "docs/jev/acceptance-evidence.md",
+    "docs/jev/archive/acceptance-evidence-10.3.md",
+    "docs/jev/archive/implementation-baseline-10.3.md",
+    "docs/jev/implementation-baseline.md",
+    "docs/shared-triwiki.md",
+    "docs/triwiki-runtime-state.md",
+    "docs/voxel-triwiki.md",
+    "src/cli/command-manifest-lite.ts",
+    "src/core/agents/agent-message-bus.ts",
+    "src/core/align/align-route.ts",
+    "src/core/align/code-navigation-align.ts",
+    "src/core/artifact-schemas.ts",
+    "src/core/commands/__tests__/align-command.test.ts",
+    "src/core/commands/gc-command.ts",
+    "src/core/commands/wiki-command.ts",
+    "src/core/decisions/cli.ts",
+    "src/core/decisions/config.ts",
+    "src/core/decisions/integration.ts",
+    "src/core/decisions/policy.ts",
+    "src/core/decisions/questions.ts",
+    "src/core/decisions/state.ts",
+    "src/core/decisions/types.ts",
+    "src/core/git-hygiene/git-policy.ts",
+    "src/core/git-hygiene/git-status.ts",
+    "src/core/git-hygiene/shared-memory-publish.ts",
+    "src/core/git-hygiene/validators.ts",
+    "src/core/hooks-runtime.ts",
+    "src/core/hooks-runtime/__tests__/jev-subagent-dedup.test.ts",
+    "src/core/hooks-runtime/jev-spawn-routing.ts",
+    "src/core/hooks-runtime/jev-turn-plan.ts",
+    "src/core/hooks-runtime/parent-orchestration-gate.ts",
+    "src/core/hooks-runtime/subagent-spawn-policy.ts",
+    "src/core/memory-governor.ts",
+    "src/core/memory/__tests__/jev-memory-intake.test.ts",
+    "src/core/memory/jev-memory-intake.ts",
+    "src/core/perf/lru-cache.ts",
+    "src/core/pipeline-internals/__tests__/jev-plan-orchestration.test.ts",
+    "src/core/pipeline-internals/pipeline-stage-builder.ts",
+    "src/core/pipeline-internals/runtime-core.ts",
+    "src/core/pipeline-internals/runtime-gates.ts",
+    "src/core/router/route-cache.ts",
+    "src/core/subagents/official-subagent-preparation.ts",
+    "src/core/triwiki-attention.ts",
+    "src/core/wiki-image/image-voxel-ledger.ts",
+    "src/core/wiki-image/image-voxel-schema.ts",
+    "src/core/wiki-image/route-image-evidence.ts",
+    "src/core/wiki-image/validation.ts",
+    "src/core/wiki-image/visual-anchor.ts"
+  ],
+  "artifact_hashes": {
+    "docs/jev-triwiki-memory.md": "a23c9870ab95bc1b07842597c32184aa551b5af503bd94c95346f30f0a9ba398",
+    "docs/jev/acceptance-evidence.md": "65dbb2e494b6a086288763b25320216f1f121c69c05eccb4149cfec541c825bb",
+    "docs/jev/implementation-baseline.md": "c7b69f0921b102409924c952c959292ec7d2b7fe38cdd0e1c13511e3ee759407",
+    "docs/jev-decisions.md": "9d427caf413b20c63f0eb10e4979e619d6938366266732907d8aa98fd0c9f254",
+    "docs/shared-triwiki.md": "e62bae319617704b839af16f1c392ea9a6e8a508fdbf6ca167514fa083417ac4",
+    "docs/triwiki-runtime-state.md": "a9568e9f6c81ea49fabfae1dcb35247b7012d309995108f4ff397ac3fcc72d4e",
+    "docs/voxel-triwiki.md": "a50981987a299acc8ab65cd8d1d6b2a923217e6e33093fc222fac891b868975c",
+    "docs/image-voxel-ledger.md": "ff6520e3986b18baf739d4e932058fd84b7c7081579510c608eb9ca12a69777d",
+    ".sneakoscope/reports/jev-vnext/baseline-inventory.json": "3376fb8300d66a6dbb270fe1a88d2d6fd990f63e611de6ec01f7b08386f8d123",
+    ".sneakoscope/reports/jev-vnext/baseline.json": "16faa8aecb7a0d93d7ddd3dac1450814b322645e042b021edad03fa0226e3d79",
+    ".sneakoscope/reports/jev-vnext/change-manifest.json": "e4fca0d1243f2fbd080adad20741be002a8570ebe3c72c5f729356d36d0f12dd",
+    ".sneakoscope/reports/jev-vnext/migration-manifest.json": "541eb4021f4a62c62a9ea93b85723a85ebed8aeaa7d4558fba5963123b65d07f",
+    ".sneakoscope/reports/jev-vnext/pipeline-owner-map.json": "4e22ddad02ce746d6e30b256a5907781775cc956854d5423053a5601c4b3afd3",
+    "docs/feature-inventory.md": "5f9abc5a6d70f5ecb735b76d9576d0abe7358e361184edeec1ac76479f044d5d"
+  },
+  "validation": {
+    "typecheck": "passed",
+    "build_clean": "passed",
+    "architecture": "passed",
+    "schema": "passed",
+    "runtime_source_truth": "passed",
+    "focused_jev": {
+      "pass": 10,
+      "fail": 0
+    },
+    "image_shared_voxel": {
+      "pass": 9,
+      "fail": 0
+    },
+    "release": {
+      "pass": 198,
+      "fail": 0
+    },
+    "exhaustive": {
+      "pass": 3868,
+      "fail": 12,
+      "skipped": 46
+    },
+    "retention_rollback": "passed",
+    "migration_safety": "passed",
+    "mission_promotion_smoke": "passed",
+    "security_high_risk": {
+      "status": "blocked_environment",
+      "negative_smokes_closed": true,
+      "blocker": "locked_installed_version_probe_failed"
+    },
+    "perf_budgets": {
+      "status": "failed_baseline_cohorts",
+      "over_budget": [
+        "commands",
+        "mad-sks-help"
+      ]
+    },
+    "route_intent": {
+      "status": "baseline_limit",
+      "failures": 3
+    }
+  },
+  "release_gates": {
+    "affected": {
+      "selected": 16,
+      "passed": 14,
+      "blocked": 2,
+      "sla_met": true
+    },
+    "fast": {
+      "selected": 16,
+      "passed": 14,
+      "blocked": 2,
+      "sla_met": true
+    },
+    "blockers": [
+      "locked_installed_version_probe_failed"
+    ]
+  },
+  "known_gaps": [
+    "No live OpenRouter workload was run.",
+    "Named shared-memory/context-graph scripts are absent from package.json.",
+    "Exhaustive process/permission/signal/doctor fixture failures remain outside this change.",
+    "Route-intent regression retains the existing implicit-Naruto parent-owned baseline behavior.",
+    "Perf budget cohorts for command/help remain above configured limits in this environment."
+  ],
+  "rollback_rehearsal": {
+    "command": "npm run recovery:rollback-smoke",
+    "status": "passed"
+  },
+  "file_gate": {
+    "exact": true,
+    "manifest": ".sneakoscope/reports/jev-vnext/change-manifest.json",
+    "outside_manifest": []
+  }
+}

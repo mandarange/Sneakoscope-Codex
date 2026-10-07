@@ -29,6 +29,25 @@ export interface ImageVoxelAnchor {
   image_id: string;
   bbox: [number, number, number, number];
   label?: string;
+  rgba?: string;
+  coord?: Record<string, unknown>;
+  evidence_path?: string | null;
+  claim_id?: string | null;
+  relation_id?: string | null;
+}
+
+export interface ImageVoxelRelation {
+  id: string;
+  relation_id?: string;
+  type: string;
+  before_image_id?: string | null;
+  after_image_id?: string | null;
+  source_image_id?: string | null;
+  generated_image_id?: string | null;
+  fixed_image_id?: string | null;
+  changed_anchor_ids?: string[];
+  verification?: string;
+  status?: string;
 }
 
 export interface ImageVoxelLedger {
@@ -38,7 +57,7 @@ export interface ImageVoxelLedger {
   mission_id?: string | null;
   images: ImageVoxelImage[];
   anchors: ImageVoxelAnchor[];
-  relations: unknown[];
+  relations: ImageVoxelRelation[];
 }
 
 export function isImageVoxelLedger(value: unknown): value is ImageVoxelLedger {

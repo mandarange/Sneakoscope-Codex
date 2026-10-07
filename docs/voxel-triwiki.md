@@ -24,3 +24,20 @@ sks wiki image-link-proof latest --json
 Validation fails when an anchor references a missing image, a screenshot lacks dimensions, a bbox falls outside image dimensions, or a visual route completion has zero anchors. Generic image ingest may stay anchorless as `not_verified` or `verified_partial`; visual/UI completion claims require anchors, and before/after fix claims require relations or must remain partial.
 
 Failed image validation now writes image wrongness records in `.sneakoscope/wiki/image-wrongness-index.json` and, when scoped, `.sneakoscope/missions/<id>/image-wrongness-ledger.json`. Those records are also mirrored into TriWiki wrongness memory so visual claims cannot be upgraded while bbox, anchor, dimension, stale-image, or relation errors remain active.
+
+## Jev vNext ledger isolation
+
+Mission and global ledgers use separate locked read-merge-write paths. A
+mission update cannot overwrite global images; `promoteMissionImageVoxelLedger`
+is the explicit merge boundary. Image paths are repository-relative and
+symlink-safe, and runtime writes recompute the actual file SHA-256 and
+dimensions before the ledger is committed. Bboxes, stale markers, anchor
+freshness, and relation references are validated against the same
+`imageRelationDedupeKey` used by the writer.
+
+`image_voxel_refs` in a memory intake must match an existing mission ledger
+image, anchor, dimensions, bbox, SHA-256, and relation before visual evidence
+can be promoted. Invalid or stale evidence remains blocked and is not used as
+high-confidence retrieval context. Coordinates and voxel layers are the
+existing deterministic RGBA projection; no learned embedding or vector index
+is introduced.

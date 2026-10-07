@@ -75,6 +75,11 @@ export function buildDecisionBinding(input: {
   candidates: unknown;
   questions: unknown;
   requestedModel?: string;
+  candidateDigest?: string | null;
+  turnId?: string | null;
+  stageManifestDigest?: string | null;
+  memoryPolicyRevision?: string | null;
+  configDigest?: string | null;
 }): DecisionBinding {
   return {
     projectId: input.projectId,
@@ -82,10 +87,14 @@ export function buildDecisionBinding(input: {
     workflowRevision: input.workflowRevision,
     sourceDigest: input.sourceDigest,
     graphDigest: input.graphDigest,
-    candidateDigest: stableDigest(input.candidates),
+    candidateDigest: input.candidateDigest || stableDigest(input.candidates),
     questionDigest: stableDigest(input.questions),
     policyRevision: POLICY_REVISION,
-    requestedModel: input.requestedModel || DESIGN_DEFAULTS.model
+    requestedModel: input.requestedModel || DESIGN_DEFAULTS.model,
+    ...(input.turnId ? { turnId: input.turnId } : {}),
+    ...(input.stageManifestDigest ? { stageManifestDigest: input.stageManifestDigest } : {}),
+    ...(input.memoryPolicyRevision ? { memoryPolicyRevision: input.memoryPolicyRevision } : {}),
+    ...(input.configDigest ? { configDigest: input.configDigest } : {})
   };
 }
 

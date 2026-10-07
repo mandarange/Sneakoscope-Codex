@@ -135,6 +135,7 @@ function commandText(input: Record<string, unknown>, payload: any = {}): string 
 }
 
 function narutoState(state: any = {}): boolean {
+  if (Number(state?.spawn_depth || 0) >= 1 || state?.child_thread === true || state?.is_child === true || state?.agent_id) return false;
   const mode = String(state?.mode || '').toUpperCase();
   const route = String(state?.route || state?.route_command || '').replace(/^\$/, '').toUpperCase();
   return mode === 'NARUTO' || route === 'NARUTO' || state?.subagents_required === true;
@@ -450,7 +451,9 @@ export async function evaluateParentOrchestrationGate(input: {
     const message = ledger.escapes === 0 ? escapeMessage(missionId, intent, next) : null;
     return { action: 'escape', reason: 'max_blocks_reached', message, jev: null };
   }
-  const jev = await consultJevToolDelegation({
+  const jev: JevToolDelegationDecision = state?.jev_execution_plan
+    ? { called: false, choice: null, reason: 'turn_binding_keeps_delegation_baseline' }
+    : await consultJevToolDelegation({
     root,
     missionGoal: missionGoal(state),
     toolName: intent.toolName,

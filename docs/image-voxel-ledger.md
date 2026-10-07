@@ -18,3 +18,9 @@ Validation fails when anchors point at missing images, bbox values exceed image 
 In SKS 1.0.8, UX-Review writes source/generated/fixed image relations such as `generated_callout_review_of`, `issue_detected_in`, `fix_attempt_for_issue`, `after_screenshot_of`, `re_review_of`, and `wrong_callout`. Validators reject unresolved image refs, duplicate relations, stale source screenshots, and bbox coordinates outside image dimensions.
 
 Mock fixtures are allowed for release selftests only when they are marked as mock or `verified_partial`. Real visual completion still requires real screenshots or generated callout evidence with a recorded image model, valid image hashes, anchors inside image bounds, and before/after relations for fix claims.
+
+For Jev vNext, mission writes are atomic and isolated from the global ledger.
+Promotion re-reads and validates the mission ledger before merging. The memory
+publisher accepts visual candidates only when their evidence paths and
+`image_voxel_refs` resolve to current files and validated ledger rows; a Jev
+response cannot invent image IDs, coordinates, bbox values, or dimensions.

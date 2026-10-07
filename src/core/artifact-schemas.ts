@@ -1,5 +1,116 @@
 import path from 'node:path';
 import { exists, nowIso, readJson, writeJsonAtomic } from './fsx.js';
+import { MEMORY_DISPOSITIONS, MEMORY_POLICY_REVISION, type MemoryDisposition } from './decisions/types.js';
+import { containsPlaintextSecret } from './secret-redaction.js';
+import { stableDigest } from './decisions/state.js';
+
+export const JEV_MEMORY_LIMITS = Object.freeze({ textChars: 512, evidence: 16, images: 8, entryBytes: 8192, fileBytes: 131072, entries: 16 });
+export type MemoryScope = 'mission' | 'project' | 'user' | 'route';
+export interface JevMemoryIntake {
+  schema: 'sks.jev-memory-intake.v1';
+  memory_id: string;
+  idempotency_key: string;
+  workflow_run_id: string;
+  candidate_digest: string;
+  mission_id: string;
+  turn_id: string;
+  session_id_hash: string;
+  disposition: MemoryDisposition;
+  scope: MemoryScope;
+  text_redacted?: string;
+  text_hash: string;
+  source_kind: 'user_prompt' | 'mission_artifact' | 'tool_evidence' | 'image_evidence';
+  source_digest: string;
+  evidence_refs: string[];
+  evidence_hashes: Record<string, string>;
+  context_graph_hash: string;
+  jev_decision: { digest: string } | null;
+  image_voxel_refs: Array<{ image_id: string; anchor_id: string; sha256: string; width: number; height: number; bbox: [number, number, number, number]; relation_id: string }>;
+  lifecycle_state: 'ACTIVE' | 'PINNED' | 'DORMANT' | 'STALE' | 'CONFLICTED' | 'QUARANTINED' | 'DELETE_CANDIDATE' | 'DELETED';
+  ttl: number;
+  created_at: string;
+  policy_revision: string;
+  redaction_status: { status: 'pass'; rule_digest: string };
+  promotion_status: 'staged' | 'needs_confirmation' | 'promoted' | 'rejected' | 'tombstoned';
+}
+export interface MemoryTombstone {
+  schema: 'sks.memory-tombstone.v1';
+  id: string;
+  memory_id: string;
+  reason: 'explicit_forget' | 'policy_quarantine';
+  previous_digest: string;
+  created_at: string;
+}
+export const MEMORY_HASH = /^[a-f0-9]{64}$/;
+export const MEMORY_ID = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,95}$/;
+export function memoryRelativePath(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= 320
+    && !value.includes('\\') && !value.includes('\0') && !path.posix.isAbsolute(value)
+    && !/^[A-Za-z]:/.test(value) && !value.split('/').some((part) => part === '..' || part === '.' || !part);
+}
+export function validateJevMemoryIntake(data: unknown) {
+  const row = data as JevMemoryIntake | null;
+  const errors: string[] = [];
+  if (!row || row.schema !== 'sks.jev-memory-intake.v1') return validationResult('sks.jev-memory-intake.v1', ['schema']);
+  const allowed = ['schema','memory_id','idempotency_key','workflow_run_id','candidate_digest','mission_id','turn_id','session_id_hash','disposition','scope','text_redacted','text_hash','source_kind','source_digest','evidence_refs','evidence_hashes','context_graph_hash','jev_decision','image_voxel_refs','lifecycle_state','ttl','created_at','policy_revision','redaction_status','promotion_status'];
+  if (Object.keys(row).some((key) => !allowed.includes(key))) errors.push('unknown_field');
+  for (const key of ['memory_id','idempotency_key','candidate_digest','session_id_hash','text_hash','source_digest','context_graph_hash'] as const) if (typeof row[key] !== 'string' || !MEMORY_HASH.test(row[key])) errors.push(key);
+  for (const key of ['mission_id','turn_id','workflow_run_id'] as const) if (typeof row[key] !== 'string' || !MEMORY_ID.test(row[key])) errors.push(key);
+  if (!MEMORY_DISPOSITIONS.includes(row.disposition) || ['sensitive_no_store','ephemeral_turn','keep_baseline','needs_confirmation'].includes(row.disposition)) errors.push('disposition_not_storable');
+  if (!['mission','project','user','route'].includes(row.scope)) errors.push('scope');
+  if (!['user_prompt','mission_artifact','tool_evidence','image_evidence'].includes(row.source_kind)) errors.push('source_kind');
+  if (typeof row.text_redacted !== 'string' || !row.text_redacted.trim() || row.text_redacted.length > JEV_MEMORY_LIMITS.textChars) errors.push('text_bound');
+  if (!Array.isArray(row.evidence_refs) || row.evidence_refs.length > JEV_MEMORY_LIMITS.evidence || row.evidence_refs.some((ref) => !memoryRelativePath(ref))) errors.push('evidence_refs');
+  if (!row.evidence_hashes || typeof row.evidence_hashes !== 'object' || Array.isArray(row.evidence_hashes)
+    || Object.keys(row.evidence_hashes).length > JEV_MEMORY_LIMITS.evidence
+    || Object.entries(row.evidence_hashes).some(([ref, hash]) => !memoryRelativePath(ref) || !MEMORY_HASH.test(hash) || !row.evidence_refs?.includes(ref))
+    || row.evidence_refs?.some(ref => !row.evidence_hashes?.[ref])) errors.push('evidence_hashes');
+  if (!Array.isArray(row.image_voxel_refs) || row.image_voxel_refs.length > JEV_MEMORY_LIMITS.images) errors.push('image_voxel_refs');
+  else for (const ref of row.image_voxel_refs) {
+    if (!ref || typeof ref !== 'object') { errors.push('image_ref'); continue; }
+    if (!MEMORY_ID.test(ref.image_id || '') || !MEMORY_ID.test(ref.anchor_id || '') || !MEMORY_HASH.test(ref.sha256 || '') || !ref.relation_id || ref.relation_id.length > 96) errors.push('image_ref_identity');
+    if (!Number.isInteger(ref.width) || ref.width <= 0 || !Number.isInteger(ref.height) || ref.height <= 0 || !Array.isArray(ref.bbox) || ref.bbox.length !== 4 || !ref.bbox.every(Number.isFinite) || ref.bbox[0] < 0 || ref.bbox[1] < 0 || ref.bbox[2] <= 0 || ref.bbox[3] <= 0 || ref.bbox[0] + ref.bbox[2] > ref.width || ref.bbox[1] + ref.bbox[3] > ref.height) errors.push('image_ref_bbox');
+  }
+  if (!['ACTIVE','PINNED','DORMANT','STALE','CONFLICTED','QUARANTINED','DELETE_CANDIDATE','DELETED'].includes(row.lifecycle_state)) errors.push('lifecycle');
+  const zeroTtl = ['ephemeral_turn', 'sensitive_no_store', 'needs_confirmation', 'keep_baseline'].includes(row.disposition);
+  if (!Number.isSafeInteger(row.ttl) || row.ttl < 0 || row.ttl > 365 * 86400 || (!zeroTtl && row.ttl === 0) || (zeroTtl && row.ttl !== 0)) errors.push('ttl');
+  if (typeof row.created_at !== 'string' || !Number.isFinite(Date.parse(row.created_at)) || !row.created_at.endsWith('Z')) errors.push('created_at');
+  if (row.policy_revision !== MEMORY_POLICY_REVISION) errors.push('policy_revision');
+  if (row.redaction_status?.status !== 'pass' || !MEMORY_HASH.test(row.redaction_status?.rule_digest || '')) errors.push('redaction_status');
+  if (row.jev_decision !== null && (!MEMORY_HASH.test(row.jev_decision?.digest || '') || Object.keys(row.jev_decision).length !== 1)) errors.push('jev_decision');
+  if (!['staged','needs_confirmation','promoted','rejected','tombstoned'].includes(row.promotion_status)) errors.push('promotion_status');
+  if (Buffer.byteLength(JSON.stringify(row)) > JEV_MEMORY_LIMITS.entryBytes) errors.push('entry_bytes');
+  if (containsPlaintextSecret(row) || /data:image\/|[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}|(?:\/Users\/|\/home\/)[^/\s]+/.test(row.text_redacted || '')) errors.push('sensitive_content');
+  if (row.text_hash !== stableDigest(row.text_redacted)) errors.push('text_hash_mismatch');
+  if (row.memory_id !== stableDigest({ text: row.text_hash, scope: row.scope, source: row.source_digest })) errors.push('memory_id_mismatch');
+  if (row.idempotency_key !== stableDigest({ workflow: row.workflow_run_id, turn: row.turn_id, candidate: row.candidate_digest })) errors.push('idempotency_key_mismatch');
+  return validationResult('sks.jev-memory-intake.v1', errors);
+}
+
+export interface CanonicalMemoryMetadata {
+  intake: JevMemoryIntake;
+  effective_trust: number;
+  evidence_score: number;
+  priority: number;
+}
+export function validateCanonicalMemoryMetadata(value: unknown) {
+  const row = value as CanonicalMemoryMetadata | null;
+  const errors = row ? [...validateJevMemoryIntake(row.intake).errors] : ['memory_metadata'];
+  if (row) for (const key of ['effective_trust', 'evidence_score', 'priority'] as const) {
+    if (typeof row[key] !== 'number' || !Number.isFinite(row[key]) || row[key] < 0 || row[key] > 1) errors.push(key);
+  }
+  if (row && Object.keys(row).some(key => !['intake','effective_trust','evidence_score','priority'].includes(key))) errors.push('unknown_memory_metadata');
+  return validationResult('sks.canonical-memory-metadata.v1', errors);
+}
+export function validateMemoryTombstone(data: unknown) {
+  const row = data as MemoryTombstone | null;
+  const errors: string[] = [];
+  if (!row || row.schema !== 'sks.memory-tombstone.v1') return validationResult('sks.memory-tombstone.v1', ['schema']);
+  if (!MEMORY_HASH.test(row.memory_id) || !MEMORY_HASH.test(row.previous_digest) || row.id !== row.memory_id) errors.push('identity');
+  if (!['explicit_forget','policy_quarantine'].includes(row.reason) || !Number.isFinite(Date.parse(row.created_at))) errors.push('reason_or_time');
+  if (Object.keys(row).length !== 6 || containsPlaintextSecret(row)) errors.push('unexpected_content');
+  return validationResult('sks.memory-tombstone.v1', errors);
+}
 
 export const EFFORTS = new Set(['none', 'low', 'medium', 'high', 'xhigh', 'forensic_vision', 'recovery']);
 export const WORK_ORDER_STATUSES = new Set(['pending', 'in_progress', 'implemented', 'verified', 'blocked']);

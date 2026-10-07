@@ -59,6 +59,9 @@ import {
 } from './hooks-runtime/exclusive-gui-surface-gate.js';
 import { EXCLUSIVE_SURFACE_CHILD_RULE } from './subagents/exclusive-surface-rule.js';
 import { withFileLock } from './locks/file-lock.js';
+import { buildJevMemoryIntake, stageJevMemoryIntake } from './memory/jev-memory-intake.js';
+import { readSharedMemoryOverlay } from './git-hygiene/shared-memory-publish.js';
+import { readDecisionConfig } from './decisions/config.js';
 import {
   ensureConfinedDirectory,
   inspectConfinedPath,
@@ -185,9 +188,13 @@ function hookPayloadIsLightTurnCandidate(payload: any = {}) {
 export async function evaluateHookPayload(name: any, payload: any = {}, opts: any = {}): Promise<JsonData> {
   if (name !== 'user-prompt-submit') return evaluateHookPayloadWithPlan(name, payload, opts, null);
   const root = opts.root || await projectRoot(payload.cwd || process.cwd());
+  const stateForPlan = await loadState(root, payload).catch(() => ({}));
   // Jev plans the prompt before anything routes it, so the Naruto gate, the
   // prompt handler, and skill admission all see one route decision.
-  const jevPlan = await planJevTurn(root, extractUserPrompt(payload)).catch(() => null);
+  const jevPlan = await planJevTurn(root, extractUserPrompt(payload), process.env, {
+    missionId: stateForPlan?.mission_id || null,
+    turnId: hookTurnId(payload) || null
+  }).catch(() => null);
   const parallel = jevPlan?.parallel === true ? { text: stripVisibleDecisionAnswerBlocks(extractUserPrompt(payload)), parallel: true } : null;
   return withJevRouteOverride(jevPlan?.routeOverride || null, () => withJevParallelJudgment(parallel, () => evaluateHookPayloadWithPlan(name, payload, { ...opts, root }, jevPlan)));
 }
@@ -232,7 +239,7 @@ async function evaluateHookPayloadWithPlan(name: any, payload: any, opts: any, j
       .catch(() => null);
   }
   if (name === 'user-prompt-submit') {
-    const result = await hookUserPrompt(root, state, payload, noQuestion, sessionKey);
+    const result = await hookUserPrompt(root, state, payload, noQuestion, sessionKey, jevPlan);
     // A fresh Naruto preparation and a continuation of an open Naruto mission
     // are both parent-orchestration turns.
     const orchestrationRequired = sksNarutoDecision.required === true
@@ -455,11 +462,49 @@ async function attachJevTurnRouting(root: string, payload: any, result: any, orc
   };
 }
 
-async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: any, sessionKey: any = null) {
+async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: any, sessionKey: any = null, jevPlan: JevTurnPlan | null = null) {
   // A receipt is scoped to exactly one submitted turn. Every later prompt,
   // including Codex App git/settings events, invalidates it before returning.
   await clearLightTurnStopBypass(root, { sessionKey }).catch(() => undefined);
   const submittedPrompt = stripVisibleDecisionAnswerBlocks(extractUserPrompt(payload));
+  let stagedMemory: { staged: boolean; duplicate: boolean; memory_id: string } | null = null;
+  const disposition = jevPlan?.memoryDisposition;
+  if (state?.mission_id && jevPlan?.executionPlan) {
+    await setCurrent(root, {
+      jev_execution_plan: jevPlan.executionPlan,
+      jev_turn_binding: jevPlan.decisionBinding ? {
+        plan_id: jevPlan.executionPlan.plan_id,
+        source_digest: jevPlan.executionPlan.source_digest,
+        graph_digest: jevPlan.executionPlan.graph_digest,
+        policy_revision: jevPlan.executionPlan.policy_revision,
+        config_digest: jevPlan.executionPlan.config_digest
+      } : null,
+      jev_turn_tier: jevPlan.decision.tier ? { ...jevPlan.decision.tier } : null
+    }, { sessionKey, replace: false }).catch(() => null);
+  }
+  if (state?.mission_id && jevPlan?.decisionBinding && disposition
+    && ['mission_memory', 'durable_preference', 'durable_policy', 'visual_evidence', 'negative_evidence'].includes(disposition)
+    && submittedPrompt) {
+    try {
+      const intake = buildJevMemoryIntake({
+        missionId: String(state.mission_id),
+        turnId: hookTurnId(payload) || `turn-${Date.now()}`,
+        workflowRunId: state.workflow_run_id || state.mission_id,
+        sessionId: sessionKey,
+        disposition,
+        text: submittedPrompt,
+        sourceDigest: jevPlan.decisionBinding.sourceDigest,
+        contextGraphHash: jevPlan.decisionBinding.graphDigest || null,
+        jevDecisionDigest: jevPlan.decisionBinding.questionDigest
+      });
+      stagedMemory = await stageJevMemoryIntake(root, intake);
+    } catch {
+      // Intake is an optional, mission-scoped candidate. A redaction, schema,
+      // path, or lock failure keeps the deterministic route and never writes a
+      // canonical shard from the prompt hook.
+      stagedMemory = null;
+    }
+  }
   const explicitSession = explicitConversationId(payload);
   const detectedMissingCallId = missingToolOutputCallId(submittedPrompt)
     || missingToolOutputCallIdFromPayload(payload);
@@ -685,11 +730,22 @@ async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: a
     if (activeContext && shouldLoadActiveContext) contexts.push((await loadPipeline()).promptPipelineContext(prompt), activeContext);
     else contexts.push((await (await loadPipeline()).prepareRoute(root, prompt, state, {
       sessionKey,
-      parentModel: observedParentModel(payload)
+      parentModel: observedParentModel(payload),
+      turnPlanBinding: jevPlan?.executionPlan && jevPlan.decisionBinding
+        ? {
+            plan_id: jevPlan.executionPlan.plan_id,
+            source_digest: jevPlan.executionPlan.source_digest,
+            graph_digest: jevPlan.executionPlan.graph_digest,
+            policy_revision: jevPlan.executionPlan.policy_revision,
+            config_digest: jevPlan.executionPlan.config_digest
+          }
+        : null
     })).additionalContext);
     if (goalOverlay) contexts.push(goalOverlay);
     const codePackNote = await codePackFreshnessNote(root);
     if (codePackNote) contexts.push(codePackNote);
+    const memoryContext = await jevMemoryOverlayContext(root, state, prompt, route?.id || null);
+    if (memoryContext) contexts.push(memoryContext);
     const additionalContext = contexts.filter(Boolean).join('\n\n');
     return { continue: true, additionalContext, systemMessage: visibleHookMessage('user-prompt-submit', additionalContext) };
   }
@@ -706,6 +762,28 @@ async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: a
     decision: 'block',
     reason: 'SKS no-question/no-interruption mode is active. User prompt has been queued until the run completes.'
   };
+}
+
+/** Hook context contains only redacted excerpts and bounded provenance. The
+ * canonical reader remains the sole memory I/O path; an unavailable overlay is
+ * surfaced explicitly so the model cannot treat an empty result as truth. */
+async function jevMemoryOverlayContext(root: string, state: any, prompt: string, routeId: string | null): Promise<string> {
+  if (!state?.mission_id || ['Answer', 'DFix', 'Help'].includes(String(routeId || ''))) return '';
+  const config = await readDecisionConfig().catch(() => null);
+  if (!config || config.mode !== 'jev' || config.consentCloud !== true || config.memoryIntake !== true) return '';
+  const boundPlan = state?.jev_execution_plan;
+  const boundSource = typeof boundPlan?.source_digest === 'string' && /^[a-f0-9]{64}$/i.test(boundPlan.source_digest) ? boundPlan.source_digest : undefined;
+  const boundGraph = typeof boundPlan?.graph_digest === 'string' && /^[a-f0-9]{64}$/i.test(boundPlan.graph_digest) ? boundPlan.graph_digest : undefined;
+  const overlay = await readSharedMemoryOverlay(root, {
+    missionId: String(state.mission_id),
+    query: prompt,
+    highRisk: String(routeId || '').toLowerCase().includes('mad'),
+    sourceDigest: boundSource,
+    graphDigest: boundGraph
+  }).catch((error) => ({ available: false, unavailable: true, reason: 'canonical_memory_unavailable', issues: [error instanceof Error ? error.message : String(error)], items: [], tokens: 0 }));
+  if (!overlay.available) return `SKS memory overlay unavailable (${overlay.reason || 'canonical_memory_empty'}); do not infer durable memory from this turn.`;
+  const lines = overlay.items.slice(0, 16).map((item: any) => `- ${item.text}\n  provenance: ${item.source} [${item.evidence_digest}]`);
+  return `SKS bounded memory overlay (read-only, ${overlay.items.length} item(s), ${overlay.tokens} tokens):\n${lines.join('\n')}`;
 }
 
 async function queueActiveOfficialWorkflowPrompt(input: {
@@ -802,7 +880,7 @@ async function hookPreTool(root: any, state: any, payload: any, noQuestion: any,
   const spawnPayload = jevSpawnInput
     ? { ...payload, tool_input: jevSpawnInput, toolInput: jevSpawnInput }
     : payload;
-  const spawnPolicyBlock = subagentSpawnPolicyBlockReason(spawnPayload, { root, narutoParent: isNarutoParentState(state) });
+  const spawnPolicyBlock = subagentSpawnPolicyBlockReason(spawnPayload, { root, narutoParent: isNarutoParentState(state), spawnDepth: Number(state?.spawn_depth || 0) });
   if (spawnPolicyBlock) return { decision: 'block', permissionDecision: 'deny', reason: spawnPolicyBlock };
   const artifactDir = officialSubagentArtifactDir(root, state, sessionKey);
   const activeBinding = officialSubagentSkillGuardBinding(state, { allowClosedOfficialChild: true });

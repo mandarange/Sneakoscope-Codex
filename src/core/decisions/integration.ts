@@ -49,6 +49,10 @@ function activeOverrides(): DecisionTestOverrides | null {
   return process.env.SKS_JEV_DECISION_TEST_OVERRIDES === '1' ? testOverrides : null;
 }
 
+export async function decisionRuntimeConfig(env: NodeJS.ProcessEnv = process.env): Promise<DecisionConfig> {
+  return activeOverrides()?.config ?? readDecisionConfig(env);
+}
+
 export interface OfficialSubagentDecisionInput {
   root: string;
   dir: string;
@@ -67,6 +71,13 @@ export interface OfficialSubagentDecisionInput {
   signal?: AbortSignal;
   deadlineMs?: number;
   fetchImpl?: DecisionFetch;
+  turnPlanBinding?: {
+    plan_id: string;
+    source_digest: string;
+    graph_digest: string | null;
+    policy_revision?: string;
+    config_digest?: string;
+  } | null;
 }
 
 export interface OfficialSubagentDecisionResult {
@@ -104,6 +115,14 @@ async function decideOfficialSubagentPreparationInner(
   if (!jevEnabled(config)) {
     overrides?.observe?.({ mode: config.mode, eligible: false, compiled: baseline.compiled, receipt: baseline.receipt });
     return baseline;
+  }
+  if (input.turnPlanBinding) {
+    const [source, graph] = await Promise.all([sourceSnapshotDigest(input.root), graphFileDigest(input.root)]);
+    const matches = Boolean(input.turnPlanBinding.plan_id)
+      && input.turnPlanBinding.source_digest === source && input.turnPlanBinding.graph_digest === graph;
+    const reused = keep(input, matches ? 'turn_binding_reused' : 'stale_snapshot', started);
+    overrides?.observe?.({ mode: config.mode, eligible: true, compiled: reused.compiled, receipt: reused.receipt });
+    return reused;
   }
   const resolved = await resolveOpenRouterApiKey({ env });
   if (!resolved.key) {
@@ -315,6 +334,8 @@ export interface JevOptionsDecision {
   /** The model tier for the goal, when `tierRoleId` asked for it in the same call. */
   tier: { model: string; effort: SealedRoutingEffort; tier: RoutingTierId } | null;
   reason: string;
+  binding?: DecisionBundle['binding'] | null;
+  semanticRoundTrips?: number;
 }
 
 /**
@@ -331,13 +352,20 @@ export async function consultJevOptions(input: {
   questions: readonly OptionQuestion[];
   facts?: Record<string, unknown>;
   tierRoleId?: 'turn' | 'spawn' | null;
+  turnId?: string | null;
+  sourceDigest?: string | null;
+  graphDigest?: string | null;
+  candidateDigest?: string | null;
+  stageManifestDigest?: string | null;
+  memoryPolicyRevision?: string | null;
+  configDigest?: string | null;
   env?: NodeJS.ProcessEnv;
   deadlineMs?: number;
 }): Promise<JevOptionsDecision> {
   const overrides = activeOverrides();
   const env = input.env || process.env;
   const config = overrides?.config ?? await readDecisionConfig(env);
-  const none = (reason: string, called = false): JevOptionsDecision => ({ called, choices: {}, tier: null, reason });
+  const none = (reason: string, called = false): JevOptionsDecision => ({ called, choices: {}, tier: null, reason, binding: null, semanticRoundTrips: 0 });
   if (!jevEnabled(config)) return none('off');
   const goal = String(input.goal || '').trim();
   if (!goal || (!input.questions.length && !input.tierRoleId)) return none('empty_candidate');
@@ -347,11 +375,16 @@ export async function consultJevOptions(input: {
     projectId: sha256(input.root).slice(0, 32),
     workflowRunId: input.workflowId,
     workflowRevision: input.workflowId,
-    sourceDigest: sha256(JSON.stringify([input.workflowId, goal.slice(0, 400)])).slice(0, 32),
-    graphDigest: null,
+    sourceDigest: input.sourceDigest || sha256(JSON.stringify([input.workflowId, goal.slice(0, 400)])).slice(0, 32),
+    graphDigest: input.graphDigest || null,
     goal,
     ...(input.facts ? { facts: input.facts } : {}),
     optionQuestions: input.questions,
+    ...(input.turnId !== undefined ? { turnId: input.turnId } : {}),
+    ...(input.candidateDigest !== undefined ? { candidateDigest: input.candidateDigest } : {}),
+    ...(input.stageManifestDigest !== undefined ? { stageManifestDigest: input.stageManifestDigest } : {}),
+    ...(input.memoryPolicyRevision !== undefined ? { memoryPolicyRevision: input.memoryPolicyRevision } : {}),
+    ...(input.configDigest !== undefined ? { configDigest: input.configDigest } : {}),
     ...(input.tierRoleId ? { routingCandidates: [{ id: input.tierRoleId, summary: goal.slice(0, 240) }] } : {})
   });
   const transport = await requestOpenRouterDecision(bundle, {
@@ -359,12 +392,14 @@ export async function consultJevOptions(input: {
     deadlineMs: input.deadlineMs ?? DESIGN_DEFAULTS.deadlineMs,
     ...(overrides?.fetchImpl ? { fetchImpl: overrides.fetchImpl } : {})
   });
-  if (!transport.ok) return none(transport.reason, true);
+  if (!transport.ok) return { ...none(transport.reason, true), semanticRoundTrips: 1, binding: bundle.binding };
   const compiled = compileDecision(bundle, transport.response);
-  if (compiled.kind !== 'apply') return none(compiled.reason, true);
+  if (compiled.kind !== 'apply') return { ...none(compiled.reason, true), semanticRoundTrips: 1, binding: bundle.binding };
   const choices: Record<string, string> = {};
   for (const effect of compiled.effects) {
     if (effect.kind === 'select_option') choices[effect.questionId] = effect.option;
+    if (effect.kind === 'select_execution_profile') choices.execution_profile = effect.profile;
+    if (effect.kind === 'select_memory_disposition') choices.memory_disposition = effect.disposition;
   }
   let tier: JevOptionsDecision['tier'] = null;
   if (input.tierRoleId) {
@@ -377,7 +412,7 @@ export async function consultJevOptions(input: {
     const tierId = selected?.tiers[roleId];
     if (model && effort && tierId) tier = { model, effort, tier: tierId };
   }
-  return { called: true, choices, tier, reason: 'applied' };
+  return { called: true, choices, tier, reason: 'applied', binding: compiled.binding, semanticRoundTrips: 1 };
 }
 
 function applyEffects(

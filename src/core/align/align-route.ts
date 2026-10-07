@@ -104,6 +104,7 @@ export interface AlignLedger {
     active_artifacts: string[];
     artifact_sha256: Record<string, string>;
     agents_projections: Array<{ path: string; sha256: string }>;
+    canonical_memory_sha256?: Record<string, string>;
   };
   validation: {
     absent_or_existing_input_supported: boolean;

@@ -3,7 +3,10 @@
 `sks decision` is an optional OpenRouter Decisions integration. When enabled,
 Jev answers bounded Choice / Noul / Score questions over SKS-supplied evidence.
 Trusted TypeScript compiles a valid answer into an existing plan variant or
-optional-context selection. There is no advisory mode and no second LLM judge.
+optional-context selection. There is no second LLM judge. The Jev transport
+still has one semantic round trip per turn; the code-owned execution policy is
+`baseline`, `observe`, or `optimize` and controls whether the fixed execution
+profile can reduce optional read-only stages.
 
 ## What it is, in one paragraph
 
@@ -21,6 +24,14 @@ model the same question.
 |---|---|
 | `off` (default) | No network call, no source hydration solely for Jev, no new mission artifact. Routes keep their baseline. |
 | `jev` | After explicit `--consent-cloud`, SKS may send one bounded Decisions request outside the official subagent lifecycle lock. A valid answer is applied before coherent plan/budget/prompt promotion. |
+
+Execution policy is independent from the transport mode. `baseline` always
+uses the deterministic plan, `observe` compiles and reports a profile while
+keeping baseline execution, and `optimize` permits only the fixed profiles
+`direct_fast`, `bounded_fast`, `parallel_fast`, `visual_fast`, `memory_fast`,
+or `deep_verify` after consent and freshness gates pass. Mutation, publish,
+align, destructive, permission, and final verification stages remain
+code-owned and cannot be skipped by Jev.
 
 Existing OpenRouter credentials are reused and never rewritten. There is no
 local-model decision provider. `sks update` deletes the managed

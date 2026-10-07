@@ -1,7 +1,7 @@
 import fsp from 'node:fs/promises'
 import { stopFinalizationRitualsEnforced } from '../verification-profile.js'
 import path from 'node:path'
-import { nowIso, randomId, readJson, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
+import { nowIso, randomId, readJson, sha256, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
 import { SSOT_GUARD_ARTIFACT, buildSsotGuard, validateSsotGuardArtifact } from '../safety/ssot-guard.js'
 import { attentionRiskForTask, classifyTaskProfile } from '../runtime/task-profile.js'
 import { chooseVerificationBudget } from '../runtime/verification-budget.js'
@@ -74,8 +74,13 @@ import {
 } from './child-model-plan.js'
 import { readOnlyListRoleInstalled } from './read-only-list-role.js'
 import { canonicalChildModelId } from './child-model-allowlist.js'
+import { attachOrCreateTask, buildTaskKey } from '../pipeline-internals/pipeline-stage-builder.js'
 
 export { OFFICIAL_SUBAGENT_LIFECYCLE_LOCK, withOfficialSubagentLifecycleLock }
+
+function stablePreparationDigest(value: unknown): string {
+  return sha256(typeof value === 'string' ? value : JSON.stringify(value)).slice(0, 64)
+}
 
 export const NARUTO_RESULT_SCHEMA = 'sks.naruto-subagent-workflow.v1'
 export const SUBAGENT_PLAN_FILENAME = 'subagent-plan.json'
@@ -117,6 +122,15 @@ export interface OfficialSubagentPreparationInput {
     SubagentThreadBudgetInput,
     'requested' | 'configuredMaxThreads' | 'independentSliceCount'
   >
+  /** Validated turn bundle binding. When it matches the source/graph snapshot
+   * this preparation consumes it instead of issuing another semantic request. */
+  turnPlanBinding?: {
+    plan_id: string;
+    source_digest: string;
+    graph_digest: string | null;
+    policy_revision?: string;
+    config_digest?: string;
+  } | null
 }
 
 export async function prepareOfficialSubagentMission(input: OfficialSubagentPreparationInput) {
@@ -125,7 +139,7 @@ export async function prepareOfficialSubagentMission(input: OfficialSubagentPrep
   const derived = await deriveOfficialSubagentPreparation(input, opened.snapshot)
   // OpenRouter Only Mode: Jev picks each role's list model in its own call,
   // made here with the plan call and, like it, outside the lifecycle lock.
-  const listChoices = derived.childModels.list
+  const listChoices = derived.childModels.list && !input.turnPlanBinding
     ? chooseListRoleModels({
         root: input.root,
         goal: derived.goal,
@@ -151,6 +165,7 @@ export async function prepareOfficialSubagentMission(input: OfficialSubagentPrep
     routingRoles: derived.mode === 'naruto' && !derived.childModels.list
       ? routingRolesFromAgents(derived.agentRouting, derived.slices.map((slice) => slice.agent || ''))
       : [],
+    turnPlanBinding: input.turnPlanBinding || null,
     env: input.env || process.env
   })
   const rebuilt = applyOfficialSubagentDecision(derived, decided, await listChoices)
@@ -456,6 +471,27 @@ async function deriveOfficialSubagentPreparation(
     ...(budget.capacity.exhausted ? ['subagent_capacity_exhausted'] : []),
     ...(childModels.list && !childModels.list.allowlist.default_model ? [childModels.allowlist.mode === 'openrouter_only' ? 'openrouter_only_subagent_list_empty' : 'configured_subagent_list_unavailable'] : [])
   ]
+  // The preparation path is the first concrete child coordinator boundary.
+  // Derive the stable identity from the turn binding and declared slice scope,
+  // then attach to an active lease instead of creating a duplicate worker.
+  // Only digests and bounded identifiers enter the persisted plan.
+  const orchestrationPlanId = input.turnPlanBinding?.plan_id
+    || stablePreparationDigest({ mission: input.missionId, route: input.route, source: snapshot.sourceDigest, graph: snapshot.graphDigest })
+  const taskKey = buildTaskKey({
+    projectId: sha256(input.root).slice(0, 32),
+    planId: orchestrationPlanId,
+    normalizedGoalDigest: stablePreparationDigest(goal.replace(/\s+/g, ' ').trim().toLowerCase()),
+    scopeDigest: stablePreparationDigest(sliceWriteScopes.slice().sort()),
+    sourceSnapshotDigest: snapshot.sourceDigest,
+    requiredRole: mode === 'naruto' ? 'main_child_coordinator' : 'official_subagent_preparation',
+    dependencyDigest: stablePreparationDigest(slices.map((slice) => ({ id: slice.id, paths: slice.paths || [] })).sort((a, b) => String(a.id).localeCompare(String(b.id))))
+  })
+  const taskLease = attachOrCreateTask({
+    taskKey,
+    planId: orchestrationPlanId,
+    baseSnapshotDigest: snapshot.sourceDigest,
+    ttlMs: 120_000
+  })
   const plan = {
     schema: 'sks.subagent-plan.v1',
     mission_id: input.missionId,
@@ -534,6 +570,18 @@ async function deriveOfficialSubagentPreparation(
     verification_budget: verification,
     verification_checks: [],
     verification: { budget: verification },
+    orchestration: {
+      schema: 'sks.task-coordination.v1',
+      coordinator: 'main',
+      task_key: taskKey,
+      task_identity: taskLease.identity,
+      task_state: taskLease.state,
+      attached: taskLease.attached,
+      source_snapshot_digest: snapshot.sourceDigest,
+      graph_digest: snapshot.graphDigest,
+      dependency_ids: slices.map((slice) => String(slice.id || '')).filter(Boolean).slice(0, 32),
+      child_write_boundary: 'main_coordinator_only'
+    },
     created_at: nowIso()
   }
   const preparedResultBase = {
@@ -553,6 +601,7 @@ async function deriveOfficialSubagentPreparation(
   }
   return {
     preparedResultBase,
+    turnPlanBinding: input.turnPlanBinding || null,
     slices,
     requestedSource,
     sliceWriteScopes,
@@ -594,6 +643,7 @@ async function deriveOfficialSubagentPreparation(
 }
 
 interface DerivedOfficialSubagentPreparation {
+  turnPlanBinding: OfficialSubagentPreparationInput['turnPlanBinding']
   preparedResultBase: {
     plan: Record<string, any>
     budget: ReturnType<typeof resolveSubagentThreadBudget>
@@ -768,7 +818,16 @@ function applyOfficialSubagentDecision(
     capacity_controller: budget.capacity,
     jev_decision: decided.receipt,
     ...(listed ? { [derived.childModels.allowlist.mode === 'openrouter_only' ? 'openrouter_only' : 'subagent_model_list']: listed.evidence } : {}),
-    native_host_dispatch: 'unverified'
+    native_host_dispatch: 'unverified',
+    ...(derived.turnPlanBinding ? {
+      jev_turn_binding: {
+        plan_id: derived.turnPlanBinding.plan_id,
+        source_digest: derived.turnPlanBinding.source_digest,
+        graph_digest: derived.turnPlanBinding.graph_digest,
+        policy_revision: derived.turnPlanBinding.policy_revision || null,
+        config_digest: derived.turnPlanBinding.config_digest || null
+      }
+    } : {})
   }
   return {
     ...derived,

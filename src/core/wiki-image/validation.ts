@@ -1,8 +1,27 @@
 import { IMAGE_VOXEL_LEDGER_SCHEMA } from './image-voxel-schema.js';
 import { validateBbox } from './bbox.js';
+import { memoryRelativePath } from '../artifact-schemas.js';
+
+export function imageRelationDedupeKey(relation: any = {}) {
+  return [
+    relation.type,
+    relation.before_image_id,
+    relation.after_image_id,
+    relation.source_image_id,
+    relation.generated_image_id,
+    relation.fixed_image_id,
+    relation.issue_id,
+    relation.fix_task_id,
+    Array.isArray(relation.changed_anchor_ids) ? [...new Set(relation.changed_anchor_ids.map(String))].sort().join(',') : String(relation.anchors || '')
+  ].join('|');
+}
 
 export function validateImageVoxelLedger(ledger: any = {}, opts: any = {}) {
   const issues: any[] = [];
+  // Historical fixture ledgers use short symbolic digests. Keep the pure
+  // shape validator backward compatible; any filesystem writer/readback that
+  // has a root must opt into the actual SHA-256/file-integrity contract.
+  const requireFileIntegrity = opts.requireFileIntegrity === true || typeof opts.root === 'string';
   if (ledger.schema !== IMAGE_VOXEL_LEDGER_SCHEMA) issues.push('schema');
   const images = Array.isArray(ledger.images) ? ledger.images : [];
   const anchors = Array.isArray(ledger.anchors) ? ledger.anchors : [];
@@ -14,9 +33,10 @@ export function validateImageVoxelLedger(ledger: any = {}, opts: any = {}) {
     if (image.id && imageById.has(image.id)) issues.push(`duplicate_image:${image.id}`);
     if (image.id) imageById.set(image.id, image);
     if (!image.path) issues.push(`image_path:${image.id || 'unknown'}`);
-    if (!image.sha256) issues.push(`image_sha256:${image.id || 'unknown'}`);
+    if (!image.sha256 || (requireFileIntegrity && !/^[a-f0-9]{64}$/i.test(String(image.sha256)))) issues.push(`image_sha256:${image.id || 'unknown'}`);
+    if (!memoryRelativePath(image.path)) issues.push(`image_path_escape:${image.id || 'unknown'}`);
     if (image.stale === true || image.freshness === 'stale') issues.push(`stale_image:${image.id || 'unknown'}`);
-    if (!Number.isFinite(Number(image.width)) || !Number.isFinite(Number(image.height))) issues.push(`image_dimensions:${image.id || 'unknown'}`);
+    if (!Number.isInteger(Number(image.width)) || Number(image.width) <= 0 || !Number.isInteger(Number(image.height)) || Number(image.height) <= 0) issues.push(`image_dimensions:${image.id || 'unknown'}`);
   }
   if (opts.requireAnchors && anchors.length === 0) issues.push(`missing_anchors:${opts.route || 'visual-route'}`);
   for (const anchor of anchors) {
@@ -56,16 +76,7 @@ export function validateImageVoxelLedger(ledger: any = {}, opts: any = {}) {
     'slide_issue_regressed_after_patch'
   ]);
   for (const relation of relations) {
-    const relationKey = [
-      relation.type,
-      relation.before_image_id,
-      relation.after_image_id,
-      relation.source_image_id,
-      relation.generated_image_id,
-      relation.fixed_image_id,
-      relation.issue_id,
-      relation.fix_task_id
-    ].join('|');
+    const relationKey = imageRelationDedupeKey(relation);
     if (relationKeys.has(relationKey)) issues.push(`duplicate_relation:${relation.type || 'unknown'}`);
     relationKeys.add(relationKey);
     if (relation.before_image_id && !imageById.has(relation.before_image_id)) issues.push(`relation_before:${relation.before_image_id}`);

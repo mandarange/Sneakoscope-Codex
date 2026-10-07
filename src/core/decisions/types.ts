@@ -9,6 +9,46 @@ export type Entry = string | Json[] | { [key: string]: Json | Entry };
 
 export type DecisionMode = 'off' | 'jev';
 
+export const MEMORY_DISPOSITIONS = Object.freeze([
+  'ephemeral_turn', 'mission_memory', 'durable_preference', 'durable_policy',
+  'visual_evidence', 'negative_evidence', 'sensitive_no_store', 'needs_confirmation', 'keep_baseline'
+] as const);
+export type MemoryDisposition = typeof MEMORY_DISPOSITIONS[number];
+export const EXECUTION_PROFILES = Object.freeze([
+  'direct_fast', 'bounded_fast', 'parallel_fast', 'visual_fast', 'memory_fast', 'deep_verify', 'baseline'
+] as const);
+export type ExecutionProfile = typeof EXECUTION_PROFILES[number];
+export type ExecutionPolicy = 'baseline' | 'observe' | 'optimize';
+export const EXECUTION_POLICY_REVISION = 'sks.jev-execution-policy.v1';
+export const MEMORY_POLICY_REVISION = 'sks.jev-memory-policy.v1';
+
+/** Compiled by SKS. No stage names, paths, permissions or budgets come from Jev. */
+export interface JevExecutionPlan {
+  schema: 'sks.jev-execution-plan.v1';
+  plan_id: string;
+  policy: ExecutionPolicy;
+  execution_profile: ExecutionProfile;
+  proposed_profile: ExecutionProfile;
+  baseline_plan: string | null;
+  context_profile: 'none' | 'use_first' | 'hydrate_first' | 'deep';
+  qa_profile: 'minimal' | 'reduced_readonly' | 'standard' | 'deep';
+  memory_mode: MemoryDisposition;
+  policy_revision: string;
+  source_digest: string;
+  graph_digest: string | null;
+  candidate_digest: string;
+  config_digest: string;
+  stage_manifest_digest: string;
+  precondition_digest: string;
+  expires_at: number;
+  required_stages: string[];
+  optional_stages: string[];
+  skipped_stages: string[];
+  reinstated_stages: string[];
+  parallel_groups: string[][];
+  reason: string;
+}
+
 export type Question =
   | { type: 'choice'; instructions: Entry; criteria: Record<string, Entry | null> }
   | { type: 'noul'; instructions: Entry; criteria?: { true: Entry; false: Entry } }
@@ -57,6 +97,10 @@ export interface DecisionBinding {
   questionDigest: string;
   policyRevision: string;
   requestedModel: string;
+  turnId?: string;
+  stageManifestDigest?: string;
+  memoryPolicyRevision?: string;
+  configDigest?: string;
 }
 
 export interface UsageReceipt {
@@ -73,6 +117,8 @@ export type DecisionEffect =
   | { kind: 'omit_role'; roleId: string }
   | { kind: 'dispatch_recovery'; actionId: string }
   | { kind: 'select_delegation'; choice: DelegationChoice }
+  | { kind: 'select_execution_profile'; profile: ExecutionProfile }
+  | { kind: 'select_memory_disposition'; disposition: MemoryDisposition }
   | { kind: 'select_option'; questionId: string; option: string };
 
 /**
@@ -117,7 +163,8 @@ export type BaselineReason =
   | 'stale_snapshot'
   | 'unknown_model'
   | 'budget_exceeded'
-  | 'promotion_required';
+  | 'promotion_required'
+  | 'turn_binding_reused';
 
 export type CompiledDecision =
   | {
@@ -314,6 +361,11 @@ export interface DecisionConfig {
     recovery: DecisionCapabilityState;
   };
   updatedAt: string | null;
+  executionPolicy?: ExecutionPolicy;
+  memoryIntake?: boolean;
+  memoryPromotion?: boolean;
+  allowUserMemory?: boolean;
+  enabledProfiles?: ExecutionProfile[];
 }
 
 export const UNKNOWN_USAGE: UsageReceipt = Object.freeze({

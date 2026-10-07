@@ -27,6 +27,7 @@ import {
 } from './subagent-spawn-policy.js';
 
 import { isSpawnAgentToolName, spawnPayloadToolName } from './spawn-tool-name.js';
+import { graphFileDigest, sourceSnapshotDigest } from '../decisions/state.js';
 
 /** Which list entry an OpenRouter Only spawn got, and why. */
 export interface OpenRouterOnlySpawnRoute {
@@ -59,6 +60,8 @@ export function isNarutoParentState(state: any): boolean {
 }
 
 function narutoParent(state: any): boolean {
+  if (state?.spawn_depth !== undefined && Number(state.spawn_depth) >= 1) return false;
+  if (state?.child_thread === true || state?.is_child === true || state?.agent_id) return false;
   const mode = String(state?.mode || '').toUpperCase();
   const route = String(state?.route || state?.route_command || '').replace(/^\$/, '').toUpperCase();
   return mode === 'NARUTO' || route === 'NARUTO' || state?.subagents_required === true;
@@ -136,7 +139,7 @@ async function openRouterOnlySpawnRouting(
   const requestedEffort = String(input.reasoning_effort || '') || null;
   const agent = String(input.agent_type || input.agentType || '').trim() || null;
   const task = spawnTask(input, { items: true });
-  const choice: ChildModelChoice | null = task
+  const choice: ChildModelChoice | null = task && !parentState?.jev_execution_plan
     ? await chooseChildModel({ root, task, role: agent, requestedModel: requested, requestedEffort, state, profile: childModelListProfile(allowlist) })
       .catch(() => fallbackChildModel(state, requested, 'consult_failed', requestedEffort))
     : fallbackChildModel(state, requested, 'empty_task', requestedEffort);
@@ -204,6 +207,21 @@ async function tierSpawnRewrite(
   }
   const task = spawnTask(input);
   if (!task) return null;
+  const boundPlan = state?.jev_execution_plan;
+  const boundTier = state?.jev_turn_tier;
+  if (boundPlan && boundTier?.model && boundTier?.effort && Number(boundPlan.expires_at || 0) > Date.now()) {
+    const source = await sourceSnapshotDigest(root).catch(() => null);
+    const graph = await graphFileDigest(root).catch(() => null);
+    if (source === boundPlan.source_digest && graph === (boundPlan.graph_digest || null)) {
+      const next = { ...input, model: String(boundTier.model), reasoning_effort: String(boundTier.effort), ...forkTurns };
+      if (input.model === next.model && input.reasoning_effort === next.reasoning_effort && input.fork_turns === next.fork_turns) return null;
+      return next;
+    }
+  }
+  if (boundPlan) {
+    const fallback = roleTierFallback(agent);
+    return { ...input, model: fallback.model, reasoning_effort: fallback.effort, ...forkTurns };
+  }
   const decision = await consultJevTurnModel({ root, prompt: task, roleId: 'spawn' }).catch(() => null);
   if (!decision?.called) return null;
   if (!decision.model || !decision.effort) {

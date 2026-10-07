@@ -81,7 +81,7 @@ import {
   selectPipelineLane,
   buildPipelineStages,
   planVerification,
-  pipelineInvariants
+  pipelineInvariants, compilePipelineExecutionPlan, executionPlanState, validateExecutionPlan
 } from './pipeline-stage-builder.js';
 
 export { routePrompt };
@@ -99,7 +99,6 @@ const QUESTION_GATE_ROUTES = new Set(['QALoop', 'PPT']);
 function reflectionInstructionText(commandPrefix: any = 'sks') {
   return `Post-route reflection: full routes load \`reflection\` after work/tests and before final; DFix/Answer/Help/Wiki/SKS discovery are exempt. Write ${REFLECTION_ARTIFACT}; record only real misses/gaps, or no_issue_acknowledged. For lessons, append TriWiki claim rows to ${REFLECTION_MEMORY_PATH}. Run "${commandPrefix} align run", validate, then pass ${REFLECTION_GATE}.`;
 }
-
 export function buildPipelinePlan(input: any = {}) {
   const route = input.route || routePrompt(input.task || '$SKS');
   const task = String(input.task || '').trim();
@@ -125,14 +124,13 @@ export function buildPipelinePlan(input: any = {}) {
     taskProfile,
     changedFiles: Array.isArray(input.changedFiles) ? input.changedFiles : []
   });
-  // Plans built outside writePipelinePlan keep the legacy (strict) stage set.
   const strictFinalization = input.strictFinalization !== false;
   const stages = buildPipelineStages(route, task, taskProfile, gateProfile, ambiguity, lane, Boolean(input.required), officialSubagentPolicy, { strictFinalization });
   const verification = planVerification(route, task, proof, verificationBudget);
   const skipped = stages.filter((stage: any) => stage.status === 'skipped').map((stage: any) => stage.id);
   const kept = stages.filter((stage: any) => stage.status !== 'skipped' && stage.status !== 'not_applicable').map((stage: any) => stage.id);
   const routeEconomy = routeEconomyPlan(proof);
-  const invariants = pipelineInvariants({ taskProfile, gateProfile, stages, verificationBudget });
+  const invariants = pipelineInvariants({ taskProfile, gateProfile, stages, verificationBudget }); const executionPlan = compilePipelineExecutionPlan(input, stages, taskProfile, requestIntake, null);
   return {
     schema_version: PIPELINE_PLAN_SCHEMA_VERSION,
     generated_at: nowIso(),
@@ -183,9 +181,6 @@ export function buildPipelinePlan(input: any = {}) {
     kept_stages: kept,
     verification_budget: verificationBudget,
     verification,
-    // Filled in by writePipelinePlan once the mission's changed-scope base is
-    // resolved; a persisted plan without it never seeded the review artifact
-    // and must never turn the engineering-sanity Stop gate on.
     engineering_sanity_review: null as EngineeringSanityReviewBinding | null,
     architecture_map: null as null | {
       baseline_artifact: string;
@@ -195,21 +190,17 @@ export function buildPipelinePlan(input: any = {}) {
       required: true;
       seeded_at: string;
     },
-    // Set when the stage was planned but its baseline could not be sealed, so
-    // the binding above was cleared rather than left as an unsatisfiable
-    // requirement. Carries the seed's own remediation text.
     architecture_map_unavailable: null as null | { reason: string },
     invariants,
     proof_field: proof,
     ssot_guard: buildSsotGuard({ route: route?.id || 'SKS', mode: route?.mode || 'SKS', task }),
     route_economy: routeEconomy,
-    official_subagents: officialSubagentPolicy,
+    official_subagents: officialSubagentPolicy, execution_plan: executionPlan, ...executionPlanState({ execution_plan: executionPlan, planned_stages: [...executionPlan.required_stages, ...executionPlan.optional_stages], skipped_execution_stages: executionPlan.skipped_stages, reinstated_execution_stages: executionPlan.reinstated_stages, semantic_round_trips: Number(input.semanticRoundTrips ?? 0) }),
     skill_dream: input.skillDream || { attached: false, reason: 'skill dreaming uses cheap counters and only runs inventory at threshold' },
     next_actions: planNextActions(route, task, taskProfile, ambiguity, lane, strictFinalization, Boolean(requestIntake)),
     no_unrequested_fallback_code: true
   };
 }
-
 function taskProfileForRoute(route: any, task: string, classified: TaskProfile): TaskProfile {
   if (classified !== 'answer' && classified !== 'passthrough') return classified;
   const routeId = String(route?.id || '');
@@ -306,7 +297,7 @@ export function pipelinePlanState(plan: any) {
     pipeline_plan_path: PIPELINE_PLAN_ARTIFACT,
     engineering_sanity_required: Boolean(sanity),
     engineering_sanity_scope_base: sanity?.changed_scope_base || null,
-    architecture_map_required: Boolean(plan?.architecture_map)
+    architecture_map_required: Boolean(plan?.architecture_map), ...executionPlanState(plan)
   };
 }
 
@@ -377,7 +368,7 @@ export function validatePipelinePlan(plan: any = {}) {
     && Number(stage.max_depth || 0) === 1
     && Array.isArray(stage.outputs)
     && stage.outputs.includes(SUBAGENT_EVIDENCE_FILENAME))) issues.push('official_subagent_execution_stage');
-  return { ok: issues.length === 0, issues };
+  issues.push(...validateExecutionPlan(plan)); return { ok: issues.length === 0, issues };
 }
 
 function validateRequiredGateProfileStages(plan: any, gateProfile: GateProfile): string[] {
@@ -672,7 +663,7 @@ export async function prepareRoute(root: any, prompt: any, state: any = {}, opts
   const subagentsRequired = routeRequiresSubagents(route, cleanPrompt);
   const finish = async (prepared: any) => {
     const materialized = subagentsRequired && !['Naruto', 'Goal'].includes(route.id)
-      ? await materializeOfficialSubagentOverlay(root, prepared, route, task, { sessionKey, parentModel: opts.parentModel || null })
+      ? await materializeOfficialSubagentOverlay(root, prepared, route, task, { sessionKey, parentModel: opts.parentModel || null, turnPlanBinding: opts.turnPlanBinding || null })
       : prepared;
     return withSkillDreamContext(materialized, dreamContext);
   };
@@ -697,7 +688,7 @@ export async function prepareRoute(root: any, prompt: any, state: any = {}, opts
     return withSkillDreamContext(prepared, dreamContext);
   }
   if (QUESTION_GATE_ROUTES.has(route.id)) return finish(await prepareClarificationGate(root, route, task, required, { madSksAuthorization, sessionKey }));
-  if (route.id === 'Naruto' && subagentsRequired) return finish(await prepareNaruto(root, route, task, required, { madSksAuthorization, sessionKey, parentModel: opts.parentModel || null }));
+  if (route.id === 'Naruto' && subagentsRequired) return finish(await prepareNaruto(root, route, task, required, { madSksAuthorization, sessionKey, parentModel: opts.parentModel || null, turnPlanBinding: opts.turnPlanBinding || null }));
   if (route.id === 'Naruto') return finish(await prepareLightRoute(root, parentOwnedProfileRoute(route, explicitlyInvokedSkills), task, required, { sessionKey }));
   if (route.id === 'Research') return finish(await prepareResearch(root, route, task, required, { sessionKey }));
   if (route.id === 'AutoResearch') return finish(await prepareAutoResearch(root, route, task, required, { sessionKey }));
@@ -1308,7 +1299,8 @@ async function materializeOfficialSubagentOverlay(root: any, prepared: any, rout
     mode: 'generic',
     observedParentModel,
     preparationOnly: true,
-    statePatch: ({ budget: preparedBudget, workflowRunId }) => ({
+    turnPlanBinding: opts.turnPlanBinding || null,
+    statePatch: ({ plan: preparedPlan, budget: preparedBudget, workflowRunId }) => ({
       mission_id: id,
       subagents_required: true,
       subagents_verified: false,
@@ -1318,6 +1310,9 @@ async function materializeOfficialSubagentOverlay(root: any, prepared: any, rout
       subagent_max_threads: preparedBudget.maxThreads,
       subagent_max_depth: preparedBudget.maxDepth,
       official_subagent_run_id: workflowRunId,
+      task_key: preparedPlan.orchestration?.task_key || null,
+      task_state: preparedPlan.orchestration?.task_state || 'planned',
+      task_fencing_token: preparedPlan.orchestration?.task_identity?.fencing_token || null,
       session_scope: opts.sessionKey || null,
       subagent_plan_file: SUBAGENT_PLAN_FILENAME,
       subagent_evidence_file: SUBAGENT_EVIDENCE_FILENAME
@@ -1348,7 +1343,6 @@ async function materializeOfficialSubagentOverlay(root: any, prepared: any, rout
     ].filter(Boolean).join('\n\n')
   };
 }
-
 async function prepareNaruto(root: any, route: any, task: any, required: any, opts: any = {}) {
   const cleanTask = stripDollarCommand(task) || String(task || '').trim();
   const fromChatImgRequired = hasFromChatImgSignal(cleanTask);
@@ -1390,7 +1384,8 @@ async function prepareNaruto(root: any, route: any, task: any, required: any, op
     mode: 'naruto',
     observedParentModel,
     preparationOnly: true,
-    statePatch: ({ budget: preparedBudget, workflowRunId: preparedRunId }) => ({
+    turnPlanBinding: opts.turnPlanBinding || null,
+    statePatch: ({ plan: preparedPlan, budget: preparedBudget, workflowRunId: preparedRunId }) => ({
       mission_id: id,
       route: 'Naruto',
       route_command: '$Naruto',
@@ -1405,6 +1400,9 @@ async function prepareNaruto(root: any, route: any, task: any, required: any, op
       subagent_max_threads: preparedBudget.maxThreads,
       subagent_max_depth: preparedBudget.maxDepth,
       official_subagent_run_id: preparedRunId,
+      task_key: preparedPlan.orchestration?.task_key || null,
+      task_state: preparedPlan.orchestration?.task_state || 'planned',
+      task_fencing_token: preparedPlan.orchestration?.task_identity?.fencing_token || null,
       session_scope: opts.sessionKey || null,
       subagent_plan_file: SUBAGENT_PLAN_FILENAME,
       subagent_evidence_file: SUBAGENT_EVIDENCE_FILENAME,
@@ -1444,6 +1442,7 @@ async function prepareNaruto(root: any, route: any, task: any, required: any, op
     parent_model_match: parentModelMatch,
     config_sources: officialConfig.sources,
     config_blockers: officialConfig.blockers,
+    orchestration: plan.orchestration || null,
     triwiki_attention: triwikiAttention,
     from_chat_img_required: fromChatImgRequired,
     mad_sks_authorization: Boolean(opts.madSksAuthorization)
@@ -1487,13 +1486,13 @@ async function prepareNaruto(root: any, route: any, task: any, required: any, op
     session_scope: opts.sessionKey || null,
     observed_parent_model: observedParentModel,
     parent_model_match: parentModelMatch,
+    orchestration: plan.orchestration || null,
     from_chat_img_required: fromChatImgRequired,
     naruto_gate_file: NARUTO_GATE_FILENAME,
     ...pipelinePlanState(pipelinePlan)
   }), { sessionKey: opts.sessionKey });
   return routeContext(route, id, cleanTask, required, `Use the delegation context below in the current Codex parent session. First replace parent_required with a defensible independent/disjoint decomposition, then spawn and wait for every requested agent thread. Record official events and integrate the parent summary before passing ${NARUTO_GATE_FILENAME}.\n\n${delegationPrompt}`, null, root);
 }
-
 function officialSubagentOptionsFromTask(task: any): {
   requestedSubagents?: number;
   maxThreads?: number;
@@ -1806,4 +1805,4 @@ export async function hasContext7DocsEvidence(root: any, state: any) {
   return (await context7Evidence(root, state)).ok;
 }
 
-export { projectGateStatus, evaluateStop } from './runtime-gates.js';
+export { projectGateStatus, evaluateStop, mutationBarrier, fastPathGateStatus } from './runtime-gates.js'; export { TASK_STATES, canTransitionTaskState, transitionTaskState, buildTaskKey, buildMissionEnvelope, buildHandoffEnvelope, buildAuthoritySnapshot, intersectAuthorityCapabilities, attachOrCreateTask, fenceTaskResult, transitionTask, taskLedgerSnapshot, restoreTaskLedger, clearTaskLease } from './pipeline-stage-builder.js';

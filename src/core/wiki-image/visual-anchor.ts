@@ -1,4 +1,6 @@
 import { rgbaKey, rgbaToWikiCoord } from '../wiki-coordinate.js';
+import { sha256 } from '../fsx.js';
+import { imageRelationDedupeKey } from './validation.js';
 
 export function createVisualAnchor({ id, imageId, bbox, label, source, evidencePath, trustScore = 0.5, rgba = [58, 132, 210, 240], route = null, claimId = null }: any = {}) {
   const key = Array.isArray(rgba) ? rgbaKey(rgba) : String(rgba || '3a84d2f0');
@@ -31,7 +33,7 @@ export function createVisualAnchor({ id, imageId, bbox, label, source, evidenceP
 }
 
 export function createImageRelation({ type = 'before_after', beforeImageId, afterImageId, sourceImageId, generatedImageId, fixedImageId, issueId, fixTaskId, anchors = [], verification = 'changed-screen-recheck', status = 'verified_partial' }: any = {}) {
-  return {
+  const relation = {
     type,
     source_image_id: sourceImageId || beforeImageId || null,
     generated_image_id: generatedImageId || (type === 'generated_callout_review_of' ? afterImageId : null),
@@ -44,4 +46,6 @@ export function createImageRelation({ type = 'before_after', beforeImageId, afte
     verification,
     status
   };
+  const relationId = `rel-${sha256(imageRelationDedupeKey(relation)).slice(0, 24)}`;
+  return { ...relation, id: relationId, relation_id: relationId };
 }

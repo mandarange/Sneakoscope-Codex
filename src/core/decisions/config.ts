@@ -5,6 +5,7 @@ import { nowIso, readJson, writeJsonAtomic } from '../fsx.js';
 import { ensureConfinedDirectory, inspectConfinedPath, ManagedPathSafetyError } from '../managed-path-safety.js';
 import {
   DESIGN_DEFAULTS,
+  EXECUTION_PROFILES,
   type DecisionCapabilityState,
   type DecisionConfig,
   type DecisionMode
@@ -42,7 +43,9 @@ export function defaultDecisionConfig(): DecisionConfig {
       plan: capability(false, false, 'not_enabled'),
       recovery: capability(false, false, 'unsupported_no_sks_handler')
     },
-    updatedAt: null
+    updatedAt: null,
+    executionPolicy: 'baseline', memoryIntake: false, memoryPromotion: false,
+    allowUserMemory: false, enabledProfiles: []
   };
 }
 
@@ -55,7 +58,7 @@ export async function readDecisionConfig(
 }
 
 export async function writeDecisionConfig(
-  patch: Partial<Pick<DecisionConfig, 'mode' | 'consentCloud' | 'consentAt' | 'model'>> & {
+  patch: Partial<Pick<DecisionConfig, 'mode' | 'consentCloud' | 'consentAt' | 'model' | 'executionPolicy' | 'memoryIntake' | 'memoryPromotion' | 'allowUserMemory' | 'enabledProfiles'>> & {
     capabilities?: Partial<DecisionConfig['capabilities']>;
   },
   env: NodeJS.ProcessEnv = process.env
@@ -64,6 +67,11 @@ export async function writeDecisionConfig(
   const current = await readDecisionConfig(env);
   const next: DecisionConfig = {
     ...current,
+    ...(patch.executionPolicy === undefined ? {} : { executionPolicy: patch.executionPolicy }),
+    ...(patch.memoryIntake === undefined ? {} : { memoryIntake: patch.memoryIntake }),
+    ...(patch.memoryPromotion === undefined ? {} : { memoryPromotion: patch.memoryPromotion }),
+    ...(patch.allowUserMemory === undefined ? {} : { allowUserMemory: patch.allowUserMemory }),
+    ...(patch.enabledProfiles === undefined ? {} : { enabledProfiles: patch.enabledProfiles }),
     ...(patch.mode === undefined ? {} : { mode: patch.mode }),
     ...(patch.model === undefined ? {} : { model: patch.model }),
     ...(patch.consentCloud === undefined ? {} : { consentCloud: patch.consentCloud }),
@@ -78,6 +86,11 @@ export async function writeDecisionConfig(
   if (next.mode !== 'off' && next.mode !== 'jev') throw new Error(`invalid_decision_mode:${String(next.mode)}`);
   if (next.mode === 'jev' && next.consentCloud !== true) throw new Error('jev_cloud_consent_required');
   if (next.model !== DESIGN_DEFAULTS.model) throw new Error(`unsupported_decision_model:${next.model}`);
+  if (!['baseline', 'observe', 'optimize'].includes(next.executionPolicy || 'baseline')) throw new Error('invalid_execution_policy');
+  if (next.enabledProfiles?.some(profile => !EXECUTION_PROFILES.includes(profile))) throw new Error('invalid_execution_profile');
+  if (!jevEnabled(next)) {
+    next.executionPolicy = 'baseline'; next.memoryIntake = false; next.memoryPromotion = false; next.enabledProfiles = [];
+  }
   await fsp.mkdir(paths.sksHome, { recursive: true });
   await ensureConfinedDirectory(paths.sksHome, paths.configDir);
   const inspected = await inspectConfinedPath(paths.sksHome, paths.configPath);
@@ -121,7 +134,12 @@ function normalizeConfig(raw: unknown): DecisionConfig {
       plan: normalizeCapability(raw.capabilities, 'plan', fallback.capabilities.plan),
       recovery: capability(false, false, 'unsupported_no_sks_handler')
     },
-    updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : null
+    updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : null,
+    executionPolicy: mode === 'jev' && consentCloud && canonicalModel && ['observe', 'optimize'].includes(String(raw.executionPolicy)) ? raw.executionPolicy as 'observe' | 'optimize' : 'baseline',
+    memoryIntake: mode === 'jev' && consentCloud && canonicalModel && raw.memoryIntake === true,
+    memoryPromotion: mode === 'jev' && consentCloud && canonicalModel && raw.memoryPromotion === true,
+    allowUserMemory: raw.allowUserMemory === true,
+    enabledProfiles: Array.isArray(raw.enabledProfiles) ? EXECUTION_PROFILES.filter(profile => (raw.enabledProfiles as unknown[]).includes(profile)) : []
   };
 }
 

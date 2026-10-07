@@ -46,7 +46,7 @@ async function fixtureRoot() {
   await write(root, '.codex/managed-hooks/fixture-hook.sh', `#!/bin/sh\nfixture_hook() { printf '%s\\n' ok; }\n`);
   await write(root, 'docs/guide.md', 'HOSTILE_DOCUMENT_SENTINEL must never enter the code index.\n');
   await write(root, '.sneakoscope/memory/q2_facts/old.md', 'HOSTILE_MEMORY_SENTINEL\n');
-  await write(root, '.sneakoscope/wiki/wrongness/old.json', '{"text":"HOSTILE_WRONGNESS_SENTINEL"}\n');
+  await write(root, '.sneakoscope/wiki/wrongness/old.json', JSON.stringify({ schema: 'sks.triwiki-wrongness-record.v1', id: 'old-wrongness', text: 'HOSTILE_WRONGNESS_SENTINEL' }) + '\n');
   await write(root, '.sneakoscope/missions/M-history/mission.json', '{"prompt":"HOSTILE_MISSION_SENTINEL"}\n');
   await write(root, '.sneakoscope/triwiki/proof-bank/proof.json', '{"claim":"HOSTILE_PROOF_SENTINEL"}\n');
   await write(root, 'AGENTS.md', `before\n${PROJECT_BLOCK}\nafter\n`);
@@ -224,6 +224,7 @@ test('align replaces an existing wrong TriWiki without requiring cleanup or reta
     assert.equal(fs.existsSync(path.join(root, '.sneakoscope/tmp/triwiki-align')), false);
     const active = await fsp.readFile(path.join(root, '.sneakoscope/wiki/context-graph.json'), 'utf8');
     assert.equal(active.includes('HOSTILE_WRONGNESS_SENTINEL'), false);
+    assert.equal(fs.existsSync(path.join(root, '.sneakoscope/wiki/wrongness/old.json')), true, 'validated canonical wrongness must survive align');
 
     await write(root, '.sneakoscope/tmp/triwiki-align/orphan/previous/wiki/retained.md', 'late stale generation\n');
     const staleGate = await refreshAlignGate(dir, missionId, root);

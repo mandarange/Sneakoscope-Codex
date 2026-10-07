@@ -73,6 +73,11 @@ export function buildDecisionBundle(input: {
   requiredSliceIds?: readonly string[];
   requiredVerificationIds?: readonly string[];
   recoveryDiagnostic?: string;
+  candidateDigest?: string | null;
+  turnId?: string | null;
+  stageManifestDigest?: string | null;
+  memoryPolicyRevision?: string | null;
+  configDigest?: string | null;
 }): DecisionBundle {
   const planCandidates = [...(input.planCandidates || [])];
   const contextCandidates = [...(input.contextCandidates || [])];
@@ -222,7 +227,12 @@ export function buildDecisionBundle(input: {
       graphDigest: input.graphDigest,
       candidates: { planCandidates, contextCandidates, recoveryCandidates, routingCandidates: routedRoles, delegationCandidate, optionQuestions: askedOptions },
       questions,
-      requestedModel: DESIGN_DEFAULTS.model
+      requestedModel: DESIGN_DEFAULTS.model,
+      ...(input.candidateDigest !== undefined ? { candidateDigest: input.candidateDigest } : {}),
+      ...(input.turnId !== undefined ? { turnId: input.turnId } : {}),
+      ...(input.stageManifestDigest !== undefined ? { stageManifestDigest: input.stageManifestDigest } : {}),
+      ...(input.memoryPolicyRevision !== undefined ? { memoryPolicyRevision: input.memoryPolicyRevision } : {}),
+      ...(input.configDigest !== undefined ? { configDigest: input.configDigest } : {})
     }),
     request,
     planCandidates,
@@ -234,6 +244,54 @@ export function buildDecisionBundle(input: {
     baselinePlanId: input.baselinePlanId ?? planCandidates[0]?.id ?? null,
     questionBindings
   };
+}
+
+/**
+ * Fixed Jev choices used by the turn fast path.  The model can select one of
+ * these IDs, but it cannot provide a stage, path, budget, TTL, or write
+ * instruction.  The code-owned compiler resolves the selected ID later.
+ */
+export function executionProfileQuestion(): OptionQuestion {
+  return {
+    id: 'execution_profile',
+    instructions: 'Choose the execution profile for state.task. Select the fastest safe profile that preserves all required verification. Use baseline when evidence is weak, the task mutates shared state, or the profile is not clearly eligible.',
+    options: Object.fromEntries([
+      ['direct_fast', 'One bounded direct read-only path with required checks.'],
+      ['bounded_fast', 'A bounded workflow with a small fixed amount of optional context.'],
+      ['parallel_fast', 'Independent read-only work may run in the fixed bounded parallel group.'],
+      ['visual_fast', 'Use existing verified visual evidence with deterministic image checks.'],
+      ['memory_fast', 'Use bounded canonical memory overlay and deterministic lifecycle filtering.'],
+      ['deep_verify', 'Keep the full verification path for risk, ambiguity, stale evidence, or mutation.'],
+      ['baseline', 'Keep the normal deterministic pipeline.']
+    ])
+  };
+}
+
+export function memoryDispositionQuestion(): OptionQuestion {
+  return {
+    id: 'memory_disposition',
+    instructions: 'Choose only the memory disposition for the supplied bounded candidate metadata. Do not create text, a path, a TTL, a trust score, or a write instruction. Keep baseline when no explicit mission-scoped memory action is justified.',
+    options: Object.fromEntries([
+      ['ephemeral_turn', 'Keep this candidate only for the current turn.'],
+      ['mission_memory', 'Stage a mission-scoped candidate for later explicit promotion.'],
+      ['durable_preference', 'Stage an explicit durable preference candidate for confirmation or promotion.'],
+      ['durable_policy', 'Stage an explicit durable policy candidate for confirmation or promotion.'],
+      ['visual_evidence', 'Stage verified image evidence with an existing ledger reference.'],
+      ['negative_evidence', 'Stage verified wrongness or regression evidence through the existing owner.'],
+      ['sensitive_no_store', 'Do not store this candidate.'],
+      ['needs_confirmation', 'Keep the candidate pending explicit confirmation.']
+    ])
+  };
+}
+
+export function buildFastPathOptionQuestions(input: {
+  includeProfile?: boolean;
+  includeMemory?: boolean;
+} = {}): OptionQuestion[] {
+  return [
+    input.includeProfile === false ? null : executionProfileQuestion(),
+    input.includeMemory ? memoryDispositionQuestion() : null
+  ].filter((row): row is OptionQuestion => Boolean(row));
 }
 
 function questionRoom(questions: Record<string, Question>, recoverySlot: number): number {
@@ -398,4 +456,3 @@ function appendRoutingSpeculation(
     bindings[neededId] = { kind: 'routing_needed', roleId: role.id };
   }
 }
-

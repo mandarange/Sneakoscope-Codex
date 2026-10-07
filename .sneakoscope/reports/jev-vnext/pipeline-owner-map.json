@@ -1,0 +1,40 @@
+{
+  "schema": "sks.jev-vnext-pipeline-owner-map.v2",
+  "revision": "sks.jev-vnext-owner.v2",
+  "generated_at": "2026-10-07T11:13:57.813Z",
+  "owners": {
+    "semantic_decision": "src/core/decisions/{types,questions,policy,integration,state,receipt}.ts",
+    "turn_plan": "src/core/hooks-runtime/jev-turn-plan.ts",
+    "execution_plan": "src/core/pipeline-internals/pipeline-stage-builder.ts",
+    "runtime_binding": "src/core/pipeline-internals/runtime-core.ts",
+    "runtime_gates": "src/core/pipeline-internals/runtime-gates.ts",
+    "plan_cache": "src/core/perf/lru-cache.ts + src/core/router/route-cache.ts",
+    "spawn_routing": "src/core/hooks-runtime/jev-spawn-routing.ts",
+    "parent_gate": "src/core/hooks-runtime/parent-orchestration-gate.ts",
+    "subagent_preparation": "src/core/subagents/official-subagent-preparation.ts",
+    "orchestration_messages": "src/core/agents/agent-message-bus.ts",
+    "authority": "src/core/pipeline-internals/pipeline-stage-builder.ts + runtime-core.ts",
+    "memory_policy": "src/core/memory-governor.ts + src/core/evaluation.ts",
+    "staged_intake": "src/core/memory/jev-memory-intake.ts",
+    "canonical_publish_overlay": "src/core/git-hygiene/shared-memory-publish.ts",
+    "image_ledger": "src/core/wiki-image/image-voxel-ledger.ts + validation.ts",
+    "lifecycle": "src/core/memory-governor.ts + src/core/evaluation.ts",
+    "retrieval_projection": "src/core/triwiki-attention.ts + shared-memory-publish.ts",
+    "align_preservation": "src/core/align/code-navigation-align.ts + shared-memory-publish.ts",
+    "cli_memory_authority": "src/core/commands/gc-command.ts + wiki-command.ts",
+    "recallpulse": "src/core/recallpulse.ts",
+    "release_gates": "release-gates.v2.json + src/core/release/"
+  },
+  "no_new_owners": [
+    "src/core/center",
+    "src/core/jev-fast-path",
+    "src/core/pipeline",
+    "src/core/decisions/execution-plan.ts",
+    "src/core/decisions/stage-manifest.ts",
+    "src/core/decisions/plan-cache.ts",
+    "src/core/memory/jev-memory-policy.ts",
+    "src/core/memory/jev-memory-record.ts",
+    "src/core/memory/jev-memory-promotion.ts",
+    "src/core/memory/jev-memory-retrieval.ts"
+  ]
+}
