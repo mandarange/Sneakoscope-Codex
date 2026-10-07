@@ -246,7 +246,7 @@ Plan and capacity:
 - ${EXCLUSIVE_SURFACE_RULE}
 - reject duplicate slice fingerprints and homogeneous clone work; diversity may come from roles, disjoint shards, or non-exclusive tool surfaces (never from a second child on the same Computer Use or browser surface)
 - security, database, release, authorization, and irreversible-effect checks are protected strata; aggregate speed or accuracy never offsets a failed protected gate
-- after each SubagentStart/SubagentStop, update \`subagent-plan.json.wave_lifecycle\` under the same workflow_run_id
+- after each SubagentStart/SubagentStop, read the runtime-maintained \`subagent-plan.json.wave_lifecycle\` under the same workflow_run_id; hooks rebuild it from official events. Never write planned slice rows into this derived field or edit the event ledger.
 - after each settled wave: collect results, close completed threads, refresh evidence/ledger, follow \`next_parent_actions\` / \`parent_guidance\`, rescan the ready DAG, then launch the next defensible direct-child wave when \`remaining_to_start > 0\`; capacity is reusable
 - when guidance says \`spawn_next_direct_child_wave_upto:N\`, immediately spawn that wave with sealed role profiles
 - automatic targets may resize between waves when the ready DAG changes, but update plan/evidence before spawning; explicit operator and route-owned counts remain exact

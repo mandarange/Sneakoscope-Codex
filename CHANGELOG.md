@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+
+## [10.5.6] - 2026-10-07
 ### Fixed
 
 - Subagent Models accepts separate reasoning efforts for the same model.
@@ -10,6 +12,16 @@
   remain invalid, and ambiguous fallback requests use the list default.
 - Accept OpenRouter's documented Jev 1.13 snapshot response instead of
   discarding successful decisions as an unknown model.
+- Rebuild Naruto wave state from official run events so a malformed cached
+  schedule cannot block lifecycle capture. Parent instructions now treat that
+  state as runtime-owned, and matching retries preserve unrelated failures.
+- Allow a Codex chat to finalize its own Naruto mission after the next-run
+  execution preference changes to standalone, preserving session/run checks.
+
+### Documentation
+
+- Introduce SKS Center near the top of the README with a native UI preview and
+  a guide to connections, subagent models, decisions, updates, and diagnostics.
 
 ## [10.5.5] - 2026-10-07
 

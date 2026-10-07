@@ -246,6 +246,7 @@ export async function recordAndRefreshSubagentEvidence(
     const event = await recordSubagentEvent(artifactDir, eventPayload, eventName);
     if (!event) return null;
     const events = [...priorEvents, event];
+    const lifecycle = await refreshSubagentWaveLifecycle(artifactDir, { plan, event, events });
     if (eventName !== 'SubagentResume') {
       await clearOfficialSubagentLifecycleCaptureFailure(
         artifactDir,
@@ -254,7 +255,6 @@ export async function recordAndRefreshSubagentEvidence(
         eventName
       );
     }
-    const lifecycle = await refreshSubagentWaveLifecycle(artifactDir, { plan, event, events });
     const refreshedPlan = lifecycle ? { ...plan, wave_lifecycle: lifecycle } : plan;
     const existing: any = await readJson(path.join(artifactDir, SUBAGENT_EVIDENCE_FILENAME), {});
     const parentSummary: any = await readJson(path.join(artifactDir, SUBAGENT_PARENT_SUMMARY_FILENAME), null);

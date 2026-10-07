@@ -7,7 +7,8 @@ import {
   ACTIVE_OFFICIAL_WORKFLOW_IDLE_MS,
   inspectActiveOfficialSubagentWorkflow,
   officialSubagentLifecycleCaptureBlockers,
-  recordOfficialSubagentLifecycleCaptureFailure
+  recordOfficialSubagentLifecycleCaptureFailure,
+  recordAndRefreshSubagentEvidence
 } from '../official-subagent-lifecycle.js';
 
 test('lifecycle capture failures persist as run-scoped completion blockers', async () => {
@@ -171,6 +172,46 @@ test('inspect treats leftover open threads as inactive after idle silence', asyn
       official_subagent_run_id: runId
     }, 'session');
     assert.equal(result.status, 'inactive');
+  } finally {
+    await fsp.rm(root, { recursive: true, force: true });
+  }
+});
+
+
+test('official hook retry rebuilds malformed waves and clears only its own capture failure', async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-lifecycle-rebuild-'));
+  const missionId = 'M-rebuild';
+  const runId = 'naruto-rebuild';
+  const dir = path.join(root, '.sneakoscope', 'missions', missionId);
+  const state = { mission_id: missionId, official_subagent_run_id: runId };
+  const payload = { agent_id: 'real-child', workflow_run_id: runId, turn_id: 'real-turn' };
+  try {
+    await fsp.mkdir(dir, { recursive: true });
+    await fsp.writeFile(path.join(dir, 'subagent-plan.json'), JSON.stringify({
+      schema: 'sks.subagent-plan.v1', workflow: 'official_codex_subagent',
+      mission_id: missionId, workflow_run_id: runId, requested_subagents: 2,
+      requested_subagents_source: 'operator',
+      wave_lifecycle: { schema: 'sks.subagent-wave-lifecycle.v1', workflow_run_id: runId,
+        count_policy: 'exact', requested_target_subagents: 2, target_subagents: 2,
+        waves: [{ wave: 1, slices: ['screenshots', 'content'], status: 'starting' }] }
+    }));
+    await recordOfficialSubagentLifecycleCaptureFailure(dir, state, payload, 'SubagentStart');
+    const other = await recordOfficialSubagentLifecycleCaptureFailure(
+      dir, state, { ...payload, agent_id: 'other-child' }, 'SubagentStart');
+    const stale = await recordAndRefreshSubagentEvidence(root, state,
+      { ...payload, workflow_run_id: 'stale-run' }, 'SubagentStart');
+    assert.equal(stale, null);
+    assert.equal((await officialSubagentLifecycleCaptureBlockers(dir, runId)).length, 2);
+    assert.ok(await recordAndRefreshSubagentEvidence(root, state, payload, 'SubagentStart'));
+    assert.deepEqual(await officialSubagentLifecycleCaptureBlockers(dir, runId), [other]);
+    assert.ok(await recordAndRefreshSubagentEvidence(root, state, payload, 'SubagentStop'));
+    const plan = JSON.parse(await fsp.readFile(path.join(dir, 'subagent-plan.json'), 'utf8'));
+    const evidence = JSON.parse(await fsp.readFile(path.join(dir, 'subagent-evidence.json'), 'utf8'));
+    assert.equal(plan.wave_lifecycle.cumulative_started, 1);
+    assert.equal(plan.wave_lifecycle.cumulative_completed, 1);
+    assert.equal(plan.wave_lifecycle.remaining_to_start, 1);
+    assert.equal(evidence.ok, false);
+    assert.ok(evidence.blockers.includes(other));
   } finally {
     await fsp.rm(root, { recursive: true, force: true });
   }

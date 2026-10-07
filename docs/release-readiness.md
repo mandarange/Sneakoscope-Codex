@@ -1,6 +1,20 @@
 # SKS Release Readiness
 
-## 10.5.5 candidate
+## 10.5.6 candidate
+
+10.5.6 preserves model/effort pairs from SKS Center through Jev selection,
+planning, spawn hooks, and standalone workers. Jev accepts its documented
+1.13 snapshot response. Naruto rebuilds derived wave state from official
+run events and permits an owned chat's parent summary after a saved launch
+preference change. The README introduces SKS Center with a native UI preview
+using example settings.
+
+Verification requires the final clean commit's focused regressions, full
+release workflow, stamp, pack receipt, provenance, remote main parity, exact
+commit CI, and normal npm publish dry-run. Use Node 26.7.0 consistently:
+`PATH="/opt/homebrew/bin:$PATH" npm publish`. The npm upload remains operator-owned.
+
+## Historical 10.5.5 candidate
 
 10.5.5 repairs the ignored root network_access and Supabase read_only settings
 and the deprecated Guardian thread_context field during update and user-run

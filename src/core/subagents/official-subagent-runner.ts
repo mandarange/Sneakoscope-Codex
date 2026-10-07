@@ -142,6 +142,11 @@ export function detectCodexAppSession(env: NodeJS.ProcessEnv = process.env): boo
 
 export function codexAppSessionKey(env: NodeJS.ProcessEnv = process.env): string | null {
   if (!detectCodexAppSession(env)) return null
+  return currentCodexThreadSessionKey(env)
+}
+
+/** Existing mission ownership is independent of the next run's launch preference. */
+export function currentCodexThreadSessionKey(env: NodeJS.ProcessEnv = process.env): string | null {
   const threadId = String(env.CODEX_THREAD_ID || '').trim()
   return threadId || null
 }

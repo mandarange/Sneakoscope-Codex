@@ -17,11 +17,44 @@
 Sneakoscope Codex (`sks`) is an open-source trust layer for Codex CLI and ChatGPT Desktop. It coordinates bounded AI coding agents, records machine-verifiable evidence, preserves project memory, and blocks release claims that are not supported by current tests or artifacts. Search visibility outcomes are measured separately; SKS does not promise rankings or traffic.
 <!-- END SKS SEARCH VISIBILITY MARKETING -->
 
-Current package: **SKS 10.5.5**. Install the latest stable release from npm.
+Current package: **SKS 10.5.6**. Install the latest stable release from npm.
 
 Sneakoscope Codex (`sks`) is a local trust layer for Codex CLI and ChatGPT Desktop. It keeps agent work bounded, preserves project context, records machine-verifiable evidence, and prevents release claims that current tests or artifacts cannot support.
 
 Use SKS when you want an AI coding session to end with something you can inspect: the change, the checks that ran, and the evidence behind the result. SKS is local-first and deterministic. It does not promise model quality, search rankings, or traffic.
+
+## SKS Center — one place for your Codex setup
+
+On macOS, **SKS Center** puts connections, subagent model choices, updates,
+and diagnostics in a native menu bar app. Open the SKS menu bar icon and choose
+**Open SKS Control Center…** to manage your setup without memorizing CLI commands.
+
+![SKS Center showing a connection-specific subagent model list with separate reasoning efforts](docs/assets/sks-center-subagent-models.png)
+
+*Native SKS Center UI with an example configuration. Models and available
+reasoning efforts depend on your connection's current catalog.*
+
+| Page | What you can manage |
+| --- | --- |
+| **Connections** | Codex-LB, OpenAI OAuth, OpenRouter, and model visibility. |
+| **Subagent Models** | Separate lists per connection, a default option, reasoning effort, and criteria for Jev. The same model can have different efforts for different work. |
+| **Decisions** | Jev's decision mode and cloud consent. |
+| **Settings** | Naruto's execution preference and app settings. |
+| **Image Generation** | Image mode, supported model choices, and provider setup. |
+| **MCP Servers** | Connected tools and server configuration. |
+| **Updates & Diagnostics** | Available updates, operation progress, logs, and health checks. |
+
+After installing SKS, install or rebuild the macOS app with:
+
+```sh
+sks menubar install
+```
+
+Interactive macOS installs can build it automatically. Dependency, CI, and
+piped installs skip the menu bar setup; scripts can opt in with
+`SKS_POSTINSTALL_MENUBAR=1` or opt out with `SKS_POSTINSTALL_NO_MENUBAR=1`.
+See [connection setup](docs/codex-lb.md), [subagent model lists](docs/naruto.md#connection-specific-subagent-lists),
+and [image generation](docs/image-generation.md) for the underlying settings.
 
 ## Quick start
 
@@ -181,16 +214,6 @@ Naruto runs only when you invoke `$sks-naruto` or `$sks-work`, pass `--agents N`
 SKS keeps these steps observable. It does not turn a failed check into a success, invent test output, or silently substitute a provider.
 
 ## Optional integrations
-
-### SKS Center on macOS
-
-The menu bar app exposes connections, updates, MCP servers, image generation, and diagnostics in one place. Build it from an interactive macOS install or run:
-
-```sh
-sks menubar install
-```
-
-Dependency, CI, and piped installs do not touch your home directory. Set `SKS_POSTINSTALL_MENUBAR=1` to force the build in a script, or `SKS_POSTINSTALL_NO_MENUBAR=1` to skip it.
 
 ### Desktop Bridge
 

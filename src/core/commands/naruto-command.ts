@@ -40,6 +40,7 @@ import {
 import { withFileLock } from '../locks/file-lock.js'
 import {
   codexAppSessionKey,
+  currentCodexThreadSessionKey,
   detectCodexAppSession,
   runOfficialSubagentWorkflow
 } from '../subagents/official-subagent-runner.js'
@@ -172,9 +173,8 @@ async function narutoExecution(parsed: NarutoArgs) {
 
 async function narutoParentSummary(parsed: NarutoArgs) {
   const root = await sksRoot()
-  const appSession = detectCodexAppSession()
-  const sessionKey = appSession ? codexAppSessionKey() : null
-  if (!appSession || !sessionKey) {
+  const sessionKey = currentCodexThreadSessionKey()
+  if (!sessionKey) {
     return blockedParentSummary(parsed, ['naruto_parent_summary_app_session_required'])
   }
   return withFileLock({

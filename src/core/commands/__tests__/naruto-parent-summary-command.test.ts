@@ -10,6 +10,7 @@ import { loadStateForSession, missionDir, setCurrent } from '../../mission.js'
 import { prepareRoute } from '../../pipeline.js'
 import { runProcess } from '../../fsx.js'
 import { installGlobalSkills } from '../../init/skills.js'
+import { writeNarutoExecutionMode } from '../../subagents/naruto-execution-mode.js'
 
 const PARENT_SUMMARY_STDIN_LIMIT = 1024 * 1024
 
@@ -85,6 +86,15 @@ test('App Naruto parent-summary command fails closed, finalizes canonically, and
 
     await recordThread(root, state, session, runId, 'parent-summary-a2')
     state = await loadStateForSession(root, session)
+
+    // Changing the next run's launch mode must not strand this owned App run.
+    await writeNarutoExecutionMode('standalone', { HOME: home, SKS_HOME: path.join(home, '.sneakoscope') })
+    const missingSession = await invokeParentSummary(root, '', state.mission_id, JSON.stringify(summary))
+    assert.equal(missingSession.code, 1)
+    assert.ok(missingSession.result.blockers.includes('naruto_parent_summary_app_session_required'))
+    const otherSession = await invokeParentSummary(root, 'other-session', state.mission_id, JSON.stringify(summary))
+    assert.equal(otherSession.code, 1)
+    assert.ok(otherSession.result.blockers.includes('naruto_parent_summary_session_scope_mismatch'), JSON.stringify(otherSession.result))
 
     const completed = await invokeParentSummary(root, session, state.mission_id, JSON.stringify(summary))
     assert.equal(completed.code, 0, JSON.stringify({
@@ -240,9 +250,10 @@ async function invokeParentSummary(
     input,
     env: {
       CODEX_THREAD_ID: session,
-      SKS_NARUTO_APP_SESSION: '1',
+      SKS_NARUTO_APP_SESSION: '0',
       SKS_NARUTO_STANDALONE_CLI: '0',
       SKS_GLOBAL_ROOT: root,
+      SKS_HOME: path.join(String(process.env.HOME), '.sneakoscope'),
       HOME: String(process.env.HOME),
       USERPROFILE: String(process.env.USERPROFILE),
       CODEX_HOME: String(process.env.CODEX_HOME)

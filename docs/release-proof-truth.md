@@ -1,6 +1,27 @@
 # Release Proof Truth
 
-## 10.5.5 candidate
+## 10.5.6 candidate
+
+This candidate includes model/effort selection, Jev snapshot compatibility,
+Naruto lifecycle projection repair, and session-owned finalization independent
+of the saved next-run execution preference. Focused tests exercise malformed
+wave rows, unrelated capture failures, stale runs, missing/wrong sessions,
+and canonical finalization. The reported lifecycle exception was reproduced
+from copied prior failure artifacts and the corrected path replayed on that
+copy; the original mission was not modified.
+
+The README image is the real native controller rendered with example data.
+It proves the documented UI layout, not a live provider call or installed-app
+upgrade. Existing stopped missions are not silently finalized or exempted
+from their remaining evidence and skill-availability checks.
+
+Release authorization requires fresh canonical tests, full release gates,
+pack receipt, required real checks, stamp, provenance, remote main equality,
+CI and normal npm publish dry-run on the final clean commit. Evidence lives
+under `.sneakoscope/reports/release/10.5.6` and the canonical report paths.
+Publication remains the operator's action; earlier records are historical.
+
+## Historical 10.5.5 candidate
 
 This candidate combines guarded Codex configuration repair, a smaller managed
 prompt surface, and current official-reference maintenance through $sks-align,

@@ -530,3 +530,36 @@ test('a decomposed wider wave is not throttled by the pre-decomposition first_wa
     await fs.rm(staged, { recursive: true, force: true })
   }
 })
+
+
+test('official events rebuild malformed planning rows and discard phantom cached threads', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-wave-rebuild-'))
+  const runId = 'rebuild-run'
+  try {
+    const initial = createSubagentWaveLifecycle({ workflowRunId: runId, targetSubagents: 2, countPolicy: 'exact' })
+    const plan = { schema: 'sks.subagent-plan.v1', workflow_run_id: runId, requested_subagents: 2,
+      requested_subagents_source: 'operator', wave_lifecycle: initial }
+    await recordSubagentEvent(dir, { agent_id: 'first', workflow_run_id: runId }, 'SubagentStart')
+    await recordSubagentEvent(dir, { agent_id: 'first', workflow_run_id: runId }, 'SubagentStop')
+    await recordSubagentEvent(dir, { agent_id: 'foreign', workflow_run_id: 'another-run' }, 'SubagentStart')
+    await recordSubagentEvent(dir, { agent_id: 'second', workflow_run_id: runId }, 'SubagentStart')
+    for (const waves of [
+      [{ wave: 1, slices: ['screenshots', 'content'], status: 'starting' }],
+      [{ wave: 99, thread_ids: ['phantom'], settled_thread_ids: [], status: 'running' }]
+    ]) {
+      await fs.writeFile(path.join(dir, 'subagent-plan.json'), JSON.stringify({
+        ...plan, wave_lifecycle: { ...initial, waves }
+      }))
+      const lifecycle = await refreshSubagentWaveLifecycle(dir)
+      assert.equal(lifecycle?.target_subagents, 2)
+      assert.equal(lifecycle?.count_policy, 'exact')
+      assert.equal(lifecycle?.cumulative_started, 2)
+      assert.equal(lifecycle?.cumulative_completed, 1)
+      assert.equal(lifecycle?.open_threads, 1)
+      assert.deepEqual(lifecycle?.waves.map(wave => wave.thread_ids), [['first'], ['second']])
+      assert.deepEqual((await refreshSubagentWaveLifecycle(dir))?.waves, lifecycle?.waves)
+    }
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true })
+  }
+})

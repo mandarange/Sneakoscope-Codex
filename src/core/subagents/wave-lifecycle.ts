@@ -306,8 +306,11 @@ function projectLifecycle(
   const starts = timeline.started
   const open = new Set(timeline.open)
   const stops = new Set<string>()
-  const waves = previous.waves.map((wave) => ({ ...wave, thread_ids: [...wave.thread_ids], settled_thread_ids: [...wave.settled_thread_ids] }))
-  const assigned = new Set(waves.flatMap((wave) => wave.thread_ids))
+  // Waves are a projection of the run-bound event ledger, never planning input.
+  // Rebuild them so partial writes or parent-authored schedules cannot invent
+  // threads or prevent the official lifecycle hooks from recording real work.
+  const waves: SubagentWaveLifecycle['waves'] = []
+  const assigned = new Set<string>()
 
   for (const event of input.events) {
     const threadId = event.thread_id

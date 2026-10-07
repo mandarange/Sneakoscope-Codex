@@ -402,6 +402,21 @@ write before render plus an artifact receipt emitted by the render call.
 
 ## Completion Evidence
 
+`subagent-plan.json.wave_lifecycle` is maintained by the runtime from the
+current run's official events. Keep planned slice schedules in decomposition;
+do not edit wave rows or the event ledger. Each lifecycle refresh rebuilds the
+derived waves, including after a malformed cached projection.
+
+`official_subagent_lifecycle_capture_failed` means recording or projecting a
+lifecycle event failed; it does not establish that screenshots, external tools,
+or official subagents are unavailable. A successful retry clears only the
+matching run/thread/event failure. Other failures and missing thread outcomes
+remain completion blockers.
+
+An existing Codex chat can submit its own `parent-summary` even after the
+saved execution preference changes to `standalone`. The current thread,
+mission, run, and session ownership still have to match.
+
 Preparation is not completion. A run passes only when:
 
 - official start/stop events correlate to unique thread IDs;
