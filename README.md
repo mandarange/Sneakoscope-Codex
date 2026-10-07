@@ -8,7 +8,7 @@
 
 [![CI](https://github.com/mandarange/Sneakoscope-Codex/actions/workflows/ci.yml/badge.svg)](https://github.com/mandarange/Sneakoscope-Codex/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/sneakoscope?color=cb3837&logo=npm)](https://www.npmjs.com/package/sneakoscope)
-[![Recommended Node.js 24.15+ LTS](https://img.shields.io/badge/node-24.15%2B%20LTS-339933?logo=node.js&logoColor=white)](#requirements)
+[![Recommended Node.js 24 LTS](https://img.shields.io/badge/node-24%20LTS-339933?logo=node.js&logoColor=white)](#requirements)
 [![MIT license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 </div>
@@ -60,9 +60,9 @@ and [image generation](docs/image-generation.md) for the underlying settings.
 
 ### Requirements
 
-- **Recommended: Node.js 24 LTS, version 24.15.0 or newer within 24.x.** Use a current patch from the [official Node.js releases](https://nodejs.org/en/about/previous-releases).
+- **Recommended: the latest patch release of Node.js 24 LTS.** Get it from the [official Node.js releases](https://nodejs.org/en/about/previous-releases).
 - npm, Git, and a current Codex CLI or supported Codex desktop host.
-- For development and tests, the locked dependencies require **Node 22.22.2+ on 22.x, 24.15.0+ on 24.x, or 26.0.0+**. CI uses 24.x; release preparation is also verified on Node 26.7.0. See [Contributing](CONTRIBUTING.md#local-setup).
+- For source development and tests, see the locked dependency compatibility ranges in [Contributing](CONTRIBUTING.md#local-setup). CI uses the 24.x line.
 
 The published CLI's declared `package.json` engine floor is still `>=20.11`.
 That is separate from the development/test requirements above; Node 20 is now
