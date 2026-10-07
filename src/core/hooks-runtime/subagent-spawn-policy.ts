@@ -6,6 +6,8 @@ import {
   effectiveChildModelAllowlist,
   childModelListLabel,
   isAllowedChildModel,
+  isAllowedChildModelEffort,
+  subagentEntryLabel,
   type ChildModelAllowlist,
   type ListChildModelAllowlist
 } from '../subagents/child-model-allowlist.js';
@@ -16,14 +18,14 @@ export const SUBAGENT_MODELS_SETTINGS_HINT = 'SKS Control Center > Subagent Mode
 /** The OpenRouter Only list as a parent reads it: `a (default), b`. */
 export function renderChildModelList(allowlist: ChildModelAllowlist): string {
   if (allowlist.mode === 'tiers') return allowlist.models.join(', ');
-  return allowlist.entries.map((entry) => `${entry.model}${entry.default ? ' (default)' : ''}`).join(', ');
+  return allowlist.entries.map((entry) => `${subagentEntryLabel(entry)}${entry.default ? ' (default)' : ''}`).join(', ');
 }
 
 /** The OpenRouter Only list with the user's criteria, for parent guidance. */
 export function renderChildModelCriteria(allowlist: ChildModelAllowlist): string {
   if (allowlist.mode === 'tiers') return allowlist.models.join(', ');
   return allowlist.entries
-    .map((entry) => `${entry.model}${entry.default ? ' (default)' : ''}: ${entry.criteria || 'general work'}`)
+    .map((entry) => `${subagentEntryLabel(entry)}${entry.default ? ' (default)' : ''}: ${entry.criteria || 'general work'}`)
     .join('; ');
 }
 
@@ -96,5 +98,8 @@ export function subagentSpawnPolicyBlockReason(payload: any = {}, opts: { root?:
     if (stale) return stalePinBlockReason(stale);
   }
   if (!boundedForkTurns(input.fork_turns)) return FORK_BLOCK_REASON;
+  if (allowlist.mode !== 'tiers' && !isAllowedChildModelEffort(input.model, input.reasoning_effort, allowlist)) {
+    return `SKS ${childModelListLabel(allowlist)} subagent list: the model and reasoning_effort must match a listed option: ${renderChildModelList(allowlist)}. Retry with the selected option's effort.`;
+  }
   return null;
 }

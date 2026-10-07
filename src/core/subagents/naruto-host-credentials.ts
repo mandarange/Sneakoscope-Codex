@@ -29,6 +29,7 @@ import {
   allowlistedChildModel,
   readOpenRouterOnlyStateSync,
   subagentEntryForModel,
+  isAllowedChildModelEffort,
   type OpenRouterOnlyLocation,
   type OpenRouterOnlyState,
   type ChildModelAllowlist
@@ -229,11 +230,16 @@ export function resolveNarutoCredentialPolicy(input: NarutoCredentialPolicyInput
     validateOpenRouterOnlyModels(openRouterOnly, resolvedModels, sources, blockers);
   } else if (configured) {
     const model = allowlistedChildModel(resolvedModels.subagentModel, configured);
-    const entry = configured.entries.find((row) => row.model === model);
+    const entry = subagentEntryForModel({ subagent_models: configured.entries }, model,
+      sources.subagentEffort === 'default' ? null : resolvedModels.subagentEffort)
+      || (sources.subagentModel === 'default' && sources.subagentEffort === 'default' ? configuredDefault : null);
     if (!entry) blockers.push(configured.entries.length ? 'naruto_subagent_model_not_in_list' : 'naruto_subagent_model_list_empty');
     else {
       resolvedModels.subagentModel = entry.model;
       if (sources.subagentEffort === 'default') resolvedModels.subagentEffort = entry.reasoning_effort ?? '';
+      if (!isAllowedChildModelEffort(entry.model, resolvedModels.subagentEffort, configured)) {
+        blockers.push('naruto_subagent_effort_not_in_list');
+      }
       if (resolvedModels.subagentEffort && !entry.supported_reasoning_efforts?.includes(resolvedModels.subagentEffort)) {
         blockers.push(`naruto_subagent_effort_unsupported:${resolvedModels.subagentModel}:${resolvedModels.subagentEffort}`);
       }
@@ -344,12 +350,16 @@ function validateOpenRouterOnlyModels(
   if (!listDefault) {
     blockers.push('naruto_subagent_model_list_empty');
   } else {
-    const listed = subagentEntryForModel(context.state, resolved.subagentModel);
+    const listed = subagentEntryForModel(context.state, resolved.subagentModel,
+      sources.subagentEffort === 'default' ? null : resolved.subagentEffort);
     if (!listed) blockers.push(`naruto_subagent_model_not_in_list:${String(resolved.subagentModel || '').slice(0, 64)}`);
     const entry = listed ?? listDefault;
     resolved.subagentModel = entry.model;
     // A chosen entry brings its own effort unless the run named one.
     if (sources.subagentEffort === 'default' && entry.reasoning_effort) resolved.subagentEffort = entry.reasoning_effort;
+    if (sources.subagentEffort !== 'default' && entry.reasoning_effort && entry.reasoning_effort !== resolved.subagentEffort) {
+      blockers.push('naruto_subagent_effort_not_in_list');
+    }
   }
   for (const scope of ['parent', 'subagent'] as const) {
     const effort = String(resolved[`${scope}Effort`] || '');

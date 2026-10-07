@@ -92,7 +92,7 @@ struct OpenRouterOnlyHarness {
 
         // set refusals carry the 0-based row index; the page shows 1-based rows.
         let refused = envelope("subagent-models.set", ok: false, blockers: ["subagent_model_duplicate:1"], result: [:])
-        precondition(OpenRouterOnlyReceipt.decode(refused).primaryIssue == "Row 2: this model is already on the list.")
+        precondition(OpenRouterOnlyReceipt.decode(refused).primaryIssue == "Row 2: this model and effort are already on the list. Choose a different effort.")
         precondition(OpenRouterOnlyMessages.describe("subagent_model_id_invalid:0") == "Row 1: not a valid model id for this connection.")
 
         // Subagent list snapshot: available rows are validated and de-duplicated.
@@ -122,7 +122,8 @@ struct OpenRouterOnlyHarness {
         precondition(options[2].menuTitle == "Vendor/Deep  ·  not in the current catalog")
         guard let added = SubagentModelDraft.adding(saved, available: available) else { fatalError("add failed") }
         precondition(added.last?.model == "vendor/new" && added.last?.isDefault == false)
-        precondition(SubagentModelDraft.adding(added, available: available) == nil)
+        guard let effortAdded = SubagentModelDraft.adding(added, available: available) else { fatalError("effort add failed") }
+        precondition(effortAdded.last?.model == "vendor/fast" && effortAdded.last?.reasoningEffort == "low")
         precondition(SubagentModelDraft.adding([], available: available)?.first?.isDefault == true)
         let full = (0..<16).map { SubagentModelEntry(model: "vendor/m\\($0)", criteria: "", reasoningEffort: nil, isDefault: $0 == 0, routable: nil) }
         precondition(SubagentModelDraft.adding(full, available: [SubagentModelOption(publicId: "vendor/extra", displayName: "Extra")]) == nil)
@@ -141,6 +142,8 @@ struct OpenRouterOnlyHarness {
         invalid.append(SubagentModelEntry(model: "vendor/x", criteria: "", reasoningEffort: "extreme", isDefault: false, routable: nil))
         precondition(SubagentModelDraft.issues(invalid) == ["subagent_model_duplicate:2", "subagent_model_id_invalid:3", "subagent_model_effort_invalid:4"])
         precondition(SubagentModelDraft.issues(saved).isEmpty)
+        let paired = saved + [SubagentModelEntry(model: "vendor/fast", criteria: "browser", reasoningEffort: "low", isDefault: false, routable: nil)]
+        precondition(SubagentModelDraft.issues(paired).isEmpty)
 
         // Criteria ProcessClient redacted are not the saved text: never applied back.
         let hidden = SubagentModelEntry(model: "vendor/b", criteria: "[redacted]", reasoningEffort: nil, isDefault: false, routable: true)
@@ -164,6 +167,10 @@ struct OpenRouterOnlyHarness {
         let restored = SubagentModelDraft.restoringCriteria(answerRows, known: known, redact: redact)
         precondition(restored.map(\\.criteria) == ["token: budget-heavy", hidden.criteria, "Cookie: [redacted]", "Authorization: RBAC reviews"], restored.map(\\.criteria).joined(separator: "|"))
         precondition(SubagentModelDraft.issues(restored) == ["subagent_model_criteria_redacted:1", "subagent_model_criteria_redacted:2"])
+        let hiddenPair = ["high", "low"].map { effort in SubagentModelEntry(model: "vendor/a", criteria: "[redacted]", reasoningEffort: effort, isDefault: false, routable: true) }
+        let knownPair = ["low", "high"].map { effort in SubagentModelEntry(model: "vendor/a", criteria: "token: " + effort, reasoningEffort: effort, isDefault: false, routable: nil) }
+        let restoredPair = SubagentModelDraft.restoringCriteria(hiddenPair, known: knownPair, redact: { _ in "[redacted]" })
+        precondition(restoredPair.map(\\.criteria) == ["token: high", "token: low"], "criteria must stay with the matching effort")
 
         precondition(SubagentModelDraft.cleanCriteria("  large\\trefactors\\n and   UI  ") == "large refactors and UI")
         precondition(SubagentModelDraft.cleanCriteria("\\u{00A0}UI\\u{2003}work\\u{FEFF}") == "UI work")

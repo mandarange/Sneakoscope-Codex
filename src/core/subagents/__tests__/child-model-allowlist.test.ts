@@ -8,6 +8,8 @@ import {
   defaultSubagentEntry,
   effectiveChildModelAllowlist,
   isAllowedChildModel,
+  isAllowedChildModelEffort,
+  subagentEntryForModel,
   normalizeSubagentModelList,
   openRouterOnlyStatePath,
   readOpenRouterOnlyStateSync,
@@ -28,7 +30,7 @@ test('the list keeps order, rejects bad rows, and always has exactly one default
   const { entries, issues } = normalizeSubagentModelList([
     { model: 'google/gemini-3.8-flash', criteria: '  fast\nUI edits  ' },
     { model: 'z-ai/glm-5.3', criteria: 'deep refactors', reasoning_effort: 'high', default: true },
-    { model: 'Z-AI/GLM-5.3', criteria: 'duplicate by case' },
+    { model: 'Z-AI/GLM-5.3', reasoning_effort: 'high', criteria: 'duplicate by case' },
     { model: 'not a model id' },
     { model: 'deepseek/deepseek-v4.1-flash', reasoning_effort: 'max' }
   ]);
@@ -46,6 +48,36 @@ test('the list keeps order, rejects bad rows, and always has exactly one default
   const tooLong = normalizeSubagentModelList(Array.from({ length: 17 }, (_, index) => ({ model: `vendor/model-${index}` })));
   assert.equal(tooLong.entries.length, 16);
   assert.deepEqual(tooLong.issues, [{ index: 16, code: 'subagent_model_list_too_long' }]);
+});
+
+test('model/effort pairs persist independently; fallback never chooses the first of ambiguous efforts', async () => {
+  for (const profile of ['openrouter_only', 'openai', 'codex_lb'] as const) {
+    const model = profile === 'openrouter_only' ? 'vendor/astra' : 'gpt-6-astra';
+    const normalized = normalizeSubagentModelList([
+      { model: profile === 'openrouter_only' ? 'vendor/sol' : 'gpt-6.1-sol', reasoning_effort: 'xhigh', default: true },
+      { model, reasoning_effort: 'high', criteria: 'design' },
+      { model, reasoning_effort: 'low', criteria: 'browser' },
+      { model: model.toUpperCase(), reasoning_effort: 'low' }
+    ], profile);
+    assert.deepEqual(normalized.issues, [{ index: 3, code: 'subagent_model_duplicate' }]);
+    assert.equal(normalized.entries.length, 3);
+    const state = { subagent_models: normalized.entries };
+    assert.equal(subagentEntryForModel(state, model, 'low')?.criteria, 'browser');
+    assert.equal(subagentEntryForModel(state, model, 'high')?.criteria, 'design');
+    assert.equal(subagentEntryForModel(state, model), null);
+    const allowlist = { mode: 'openrouter_only' as const, models: normalized.entries.map(e => e.model), entries: normalized.entries, default_model: normalized.entries[0]!.model };
+    assert.equal(isAllowedChildModelEffort(model, 'low', allowlist), true);
+    assert.equal(isAllowedChildModelEffort(model, 'medium', allowlist), false);
+    assert.equal(isAllowedChildModelEffort(model, null, allowlist), false);
+    if (profile === 'openrouter_only') await withHome(async location => {
+      await writeOpenRouterOnlyState({ enabled: true, subagent_models: normalized.entries }, location);
+      assert.deepEqual(readOpenRouterOnlyStateSync(location).subagent_models, normalized.entries);
+    });
+    const inherited = normalizeSubagentModelList([...normalized.entries, { model, reasoning_effort: null }], profile);
+    assert.deepEqual(inherited.issues, []);
+    assert.equal(subagentEntryForModel({ subagent_models: inherited.entries }, model, 'low')?.reasoning_effort, 'low');
+    assert.equal(subagentEntryForModel({ subagent_models: inherited.entries }, model, 'medium')?.reasoning_effort, null);
+  }
 });
 
 test('a missing or foreign file reads as off; only an enabled file switches the allowlist', async () => {

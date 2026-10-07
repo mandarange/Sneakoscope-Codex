@@ -5,6 +5,7 @@ import {
   effectiveChildModelAllowlist,
   childModelListProfile,
   listChildModelEffort,
+  subagentEntryKey,
   type ChildModelAllowlist,
   type ListChildModelAllowlist,
   type OpenRouterOnlyLocation,
@@ -65,7 +66,7 @@ function routedRow(row: Record<string, any>, choice: ChildModelChoice | null, li
     routing_dynamic: true,
     role_model_preference_source: `ignored_${prefix}`,
     [list.mode === 'openrouter_only' ? 'openrouter_only_choice' : 'subagent_list_choice']: choice
-      ? { model: choice.entry.model, source: choice.source, reason: choice.reason, default_entry: choice.entry.default }
+      ? { model: choice.entry.model, reasoning_effort: listEntryEffort(choice.entry, row.model_reasoning_effort), entry_key: subagentEntryKey(choice.entry), source: choice.source, reason: choice.reason, default_entry: choice.entry.default }
       : { model: null, source: 'default', reason: 'subagent_list_empty', default_entry: false }
   }
 }

@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Subagent Models accepts separate reasoning efforts for the same model.
+  Jev sees each option's effort and full criteria; plans, spawn hooks, and
+  standalone workers preserve the selected model/effort pair. Identical pairs
+  remain invalid, and ambiguous fallback requests use the list default.
+- Accept OpenRouter's documented Jev 1.13 snapshot response instead of
+  discarding successful decisions as an unknown model.
+
 ## [10.5.5] - 2026-10-07
 
 ### Fixed

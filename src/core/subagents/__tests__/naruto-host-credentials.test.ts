@@ -218,10 +218,11 @@ test('OpenRouter Only Mode runs the config main model as parent and the list def
 })
 
 test('OpenRouter Only Mode accepts list models with a slash and blocks everything else with a clear code', () => {
-  const listed = listPolicy(['--subagent-model', 'Google/Gemini-3.8-Flash:free', '--subagent-effort', 'medium'])
+  const listed = listPolicy(['--subagent-model', 'Google/Gemini-3.8-Flash:free', '--subagent-effort', 'low'])
   assert.deepEqual(listed.blockers, [])
   assert.equal(listed.subagentModel, 'google/gemini-3.8-flash:free')
-  assert.equal(listed.subagentEffort, 'medium')
+  assert.equal(listed.subagentEffort, 'low')
+  assert.ok(listPolicy(['--subagent-model', 'google/gemini-3.8-flash:free', '--subagent-effort', 'medium']).blockers.includes('naruto_subagent_effort_not_in_list'))
   assert.equal(listed.hint, null)
   // A chosen entry brings its own effort when the run names none.
   const chosen = listPolicy(['--subagent-model', 'google/gemini-3.8-flash:free'])

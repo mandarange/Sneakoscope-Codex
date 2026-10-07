@@ -16,6 +16,8 @@ import {
   effectiveChildModelAllowlist,
   childModelListLabel,
   listChildModelEffort,
+  subagentEntryForModel,
+  defaultSubagentEntry,
   type ListChildModelAllowlist,
   type ChildModelAllowlist
 } from './child-model-allowlist.js'
@@ -385,16 +387,17 @@ function renderListSliceContract(input: {
   // A row model off the list (a tier model) never passes through: the slice
   // takes the default entry at that entry's effort.
   const routedModel = allowlistedChildModel(input.routed?.routed_model, input.allowlist)
-  const model = routedModel || input.allowlist.default_model
-  if (!model) {
+  const routedEffort = String(input.routed?.routed_model_reasoning_effort || '')
+  const state = { subagent_models: input.allowlist.entries }
+  const entry = subagentEntryForModel(state, routedModel, routedEffort) || defaultSubagentEntry(state)
+  if (!entry) {
     return {
       model: `none (the ${childModelListLabel(input.allowlist)} subagent list is empty)`,
       contract: 'stop before spawning: the user must add a model to the subagent list first'
     }
   }
-  const entry = input.allowlist.entries.find((row) => row.model === model)
-  const routedEffort = String(input.routed?.routed_model_reasoning_effort || '')
-  const effort = entry ? listChildModelEffort(entry, routedModel ? routedEffort : null) : null
+  const model = entry.model
+  const effort = listChildModelEffort(entry, routedModel ? routedEffort : null)
   const brief = String(input.brief || '').replace(/\s+/g, ' ').trim().slice(0, 200)
   return {
     model: `${model} (${effort ? `effort ${effort}` : 'model default effort'}, ${input.allowlist.mode === 'openrouter_only' ? 'OpenRouter' : childModelListLabel(input.allowlist)} list)`,

@@ -146,16 +146,28 @@ Codex-LB, OpenAI OAuth, or OpenRouter Only. Each connection keeps its own list
 when you switch modes on Connections. Choose models, supported reasoning
 efforts, one default, and criteria for Jev, then Apply.
 
+Each option is a **model + reasoning effort** pair. The same model may appear
+at multiple efforts with separate criteria, for example Sol `xhigh` for code,
+Astra `high` for design, and Astra `low` for computer/browser operation.
+Only an identical model/effort pair is a duplicate. Jev receives the effort
+and complete criteria for each option, and the selected pair is carried
+through plans, spawn requests, and standalone worker configuration.
+
 Codex-LB choices come from the bridge catalog configured in Codex. OpenAI
 OAuth choices come from Codex's own model cache. Hidden models and superseded
 generations of a listed family are omitted. If the catalog is unavailable,
 open Codex and refresh the connection's catalog before adding a model.
 Only efforts the selected model reports can be saved, including `max` and
-`ultra` where supported; Default leaves the effort to Codex.
+`ultra` where supported; Default keeps a supported effort explicitly requested
+by the caller, or leaves it to Codex when none is specified.
 
 A configured list controls plan defaults, Jev choices, and child spawns.
 Jev selects from the list using the saved criteria. With Jev off or unable to
-decide, a listed requested model is kept, otherwise the default is used.
+decide, an exact requested model/effort pair is kept. A model-only request can
+use its Default-effort option, its marked default, or its sole listed option;
+an ambiguous request falls back to the list's default rather than whichever
+effort appears first. Explicit standalone effort overrides must remain within
+the list. A spawn with an unlisted effort is rejected.
 Stored role-model preferences remain on disk but do not override an active
 list. Read-only children keep their read-only sandbox through the model-less
 list role. Named role files can override a spawn's model, so native list-mode

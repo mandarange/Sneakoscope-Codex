@@ -90,6 +90,9 @@ export interface ParentOrchestrationLedger {
 export interface ParentSpawnRoute {
   mode: string;
   model: string;
+  reasoning_effort?: string | null;
+  entry_key?: string;
+  profile?: string;
   source: string;
   reason: string;
 }
@@ -98,7 +101,12 @@ function spawnRouteOf(raw: unknown): ParentSpawnRoute | null {
   if (!raw || typeof raw !== 'object') return null;
   const row = raw as Record<string, unknown>;
   const text = (value: unknown) => String(value ?? '').trim().slice(0, 200);
-  const route = { mode: text(row.mode), model: text(row.model), source: text(row.source), reason: text(row.reason) };
+  const route: ParentSpawnRoute = {
+    mode: text(row.mode), model: text(row.model), source: text(row.source), reason: text(row.reason),
+    ...(Object.hasOwn(row, 'reasoning_effort') ? { reasoning_effort: text(row.reasoning_effort) || null } : {}),
+    ...(typeof row.entry_key === 'string' ? { entry_key: text(row.entry_key) } : {}),
+    ...(typeof row.profile === 'string' ? { profile: text(row.profile) } : {})
+  };
   return route.mode && route.model && route.source ? route : null;
 }
 

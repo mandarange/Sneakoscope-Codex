@@ -131,12 +131,12 @@ export function normalizeSubagentModelList(raw: unknown, profile: SubagentModelP
       issues.push({ index, code: 'subagent_model_id_invalid' })
       return
     }
-    const key = canonicalChildModelId(model)
+    const effort = record.reasoning_effort ?? null
+    const key = subagentEntryKey({ model, reasoning_effort: effort as SubagentModelEffort | null })
     if (seen.has(key)) {
       issues.push({ index, code: 'subagent_model_duplicate' })
       return
     }
-    const effort = record.reasoning_effort ?? null
     if (effort !== null && effort !== '' && !isSubagentModelEffort(effort, profile)) {
       issues.push({ index, code: 'subagent_model_effort_invalid' })
       return
@@ -149,7 +149,7 @@ export function normalizeSubagentModelList(raw: unknown, profile: SubagentModelP
     entries.push({
       // Codex matches a spawn model against catalog slugs exactly, and the
       // bridge catalog lowercases OpenRouter ids.
-      model: profile === 'openrouter_only' ? key : model,
+      model: profile === 'openrouter_only' ? canonicalChildModelId(model) : model,
       criteria: cleanCriteria(record.criteria),
       reasoning_effort: isSubagentModelEffort(effort, profile) ? effort : null,
       default: record.default === true
@@ -209,10 +209,24 @@ export function defaultSubagentEntry(state: Pick<OpenRouterOnlyState, 'subagent_
   return state.subagent_models.find((entry) => entry.default) || state.subagent_models[0] || null
 }
 
-export function subagentEntryForModel(state: Pick<OpenRouterOnlyState, 'subagent_models'>, model: unknown): SubagentModelEntry | null {
+/** A list option is a model/effort pair; Default remains a distinct, inherited-effort option. */
+export function subagentEntryKey(entry: Pick<SubagentModelEntry, 'model' | 'reasoning_effort'>): string {
+  return JSON.stringify([canonicalChildModelId(entry.model), entry.reasoning_effort || null])
+}
+
+export function subagentEntryLabel(entry: Pick<SubagentModelEntry, 'model' | 'reasoning_effort'>): string {
+  return `${entry.model} [${entry.reasoning_effort || 'default effort'}]`
+}
+
+export function subagentEntryForModel(state: Pick<OpenRouterOnlyState, 'subagent_models'>, model: unknown, requestedEffort?: unknown): SubagentModelEntry | null {
   const key = canonicalChildModelId(model)
   if (!key) return null
-  return state.subagent_models.find((entry) => canonicalChildModelId(entry.model) === key) || null
+  const entries = state.subagent_models.filter((entry) => canonicalChildModelId(entry.model) === key)
+  const effort = String(requestedEffort || '')
+  return (effort ? entries.find((entry) => entry.reasoning_effort === effort) : null)
+    || entries.find((entry) => !entry.reasoning_effort)
+    || entries.find((entry) => entry.default)
+    || (entries.length === 1 ? entries[0]! : null)
 }
 
 export type ChildModelAllowlist =
@@ -249,6 +263,16 @@ export function listChildModelEffort(entry: SubagentModelEntry, requested: unkno
   const supported = entry.supported_reasoning_efforts ?? SUBAGENT_MODEL_EFFORTS
   const effort = entry.reasoning_effort || String(requested || '')
   return supported.includes(effort) && isSubagentModelEffort(effort, 'openai') ? effort : null
+}
+
+/** Validate the actual spawn pair after routing, including inherited-effort entries. */
+export function isAllowedChildModelEffort(model: unknown, effort: unknown, allowlist: ChildModelAllowlist): boolean {
+  if (allowlist.mode === 'tiers') return isAllowedChildModel(model, allowlist)
+  const key = canonicalChildModelId(model)
+  const requested = String(effort || '')
+  return allowlist.entries.some((entry) => canonicalChildModelId(entry.model) === key
+    && (entry.reasoning_effort ? entry.reasoning_effort === requested
+      : !requested || listChildModelEffort(entry, requested) === requested))
 }
 
 interface NativeSubagentModelStore {
@@ -388,7 +412,7 @@ export function effectiveChildModelAllowlist(input: OpenRouterOnlyLocation = {})
     return {
       mode: 'configured', profile, models: entries.map((entry) => entry.model), entries,
       default_model: defaultSubagentEntry({ subagent_models: entries })?.model ?? null,
-      unroutable: selected.filter((row) => !entries.some((entry) => canonicalChildModelId(entry.model) === canonicalChildModelId(row.model))).map((row) => row.model),
+      unroutable: selected.filter((row) => !entries.some((entry) => subagentEntryKey(entry) === subagentEntryKey(row))).map(subagentEntryLabel),
       blockers: saved.blockers
     }
   }

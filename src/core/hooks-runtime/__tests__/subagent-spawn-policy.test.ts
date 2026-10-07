@@ -132,12 +132,12 @@ const MATRIX: unknown[] = [undefined, '', ...Object.values(T), 'gpt-5.6-luna', '
 test('OpenRouter Only mode admits only list models, case-insensitively, and names the list when it denies', async () => {
   await withOpenRouterOnly({ enabled: true, subagent_models: LIST }, async () => {
     for (const model of ['google/gemini-3.8-flash', 'z-ai/glm-5.3', 'Z-AI/GLM-5.3', 'Google/Gemini-3.8-Flash']) {
-      assert.equal(subagentSpawnPolicyBlockReason(withModel(model)), null, model);
+      assert.equal(subagentSpawnPolicyBlockReason(withModel(model, { reasoning_effort: model.toLowerCase().startsWith('google/') ? 'low' : 'high' })), null, model);
     }
-    assert.equal(subagentSpawnPolicyBlockReason(withModel('z-ai/glm-5.3', { fork_turns: '2' })), null);
+    assert.equal(subagentSpawnPolicyBlockReason(withModel('z-ai/glm-5.3', { fork_turns: '2', reasoning_effort: 'high' })), null);
     for (const model of [undefined, '', ...Object.values(T), 'gpt-5.6-luna', 'anthropic/claude-sonnet-4.5', 'google/gemini-3.8', 'z-ai/glm-5.3:free']) {
       const reason = subagentSpawnPolicyBlockReason(withModel(model))!;
-      assert.match(reason, /OpenRouter Only mode: children may run only a model on the user's subagent list: google\/gemini-3\.8-flash, z-ai\/glm-5\.3 \(default\)/, String(model));
+      assert.match(reason, /OpenRouter Only mode: children may run only a model on the user's subagent list: google\/gemini-3\.8-flash \[low\], z-ai\/glm-5\.3 \[high\] \(default\)/, String(model));
       for (const tier of Object.values(T)) assert.equal(reason.includes(tier), false, `${String(model)} names ${tier}`);
     }
     // The fork rule still holds for a listed model, including a v1 full-history fork_context.
@@ -147,7 +147,7 @@ test('OpenRouter Only mode admits only list models, case-insensitively, and name
     for (const fork_context of [true, 'true', 'TRUE']) {
       assert.match(subagentSpawnPolicyBlockReason(withModel('z-ai/glm-5.3', { fork_context }))!, /fork_context=true is a full-history fork/);
     }
-    assert.equal(subagentSpawnPolicyBlockReason(withModel('z-ai/glm-5.3', { fork_context: false })), null);
+    assert.equal(subagentSpawnPolicyBlockReason(withModel('z-ai/glm-5.3', { fork_context: false, reasoning_effort: 'high' })), null);
   });
   await withOpenRouterOnly({ enabled: true, subagent_models: [] }, async () => {
     for (const model of [undefined, T.deep, 'z-ai/glm-5.3']) {
@@ -189,9 +189,9 @@ test('OpenRouter Only guidance and sealed child context name the list models, ne
     await withOpenRouterOnly({ enabled: true, subagent_models: LIST }, async () => {
       const contract = officialSubagentSpawnCompatibilityContext();
       assert.match(contract, /fork_turns="none"/);
-      assert.match(contract, /google\/gemini-3\.8-flash: Fast UI edits and renames\.; z-ai\/glm-5\.3 \(default\): Deep refactors and debugging\./);
+      assert.match(contract, /google\/gemini-3\.8-flash \[low\]: Fast UI edits and renames\.; z-ai\/glm-5\.3 \[high\] \(default\): Deep refactors and debugging\./);
       const context = await sealedSubagentRoutingContext(root, { agent_type: 'worker' });
-      assert.match(context, /OpenRouter Only subagent list \(google\/gemini-3\.8-flash, z-ai\/glm-5\.3 \(default\)\)/);
+      assert.match(context, /OpenRouter Only subagent list \(google\/gemini-3\.8-flash \[low\], z-ai\/glm-5\.3 \[high\] \(default\)\)/);
       for (const text of [contract, context]) {
         for (const tier of Object.values(T)) assert.equal(text.includes(tier), false, tier);
         assert.doesNotMatch(text, /newest model of the role tier/);
@@ -278,7 +278,7 @@ test('an accepted Naruto spawn in OpenRouter Only mode records the list entry an
       assert.notEqual(result.permissionDecision, 'deny', String(result.reason));
       const ledger = await readParentOrchestrationLedger(root, mission, 'run-0001');
       assert.equal(ledger.spawns, 1);
-      assert.deepEqual(ledger.last_spawn_route, { mode: 'openrouter_only', model: 'google/gemini-3.8-flash', source: 'requested', reason: 'off' });
+      assert.deepEqual(ledger.last_spawn_route, { mode: 'openrouter_only', model: 'google/gemini-3.8-flash', reasoning_effort: 'low', entry_key: '["google/gemini-3.8-flash","low"]', source: 'requested', reason: 'off' });
     });
     // Mode off mid-mission: the next tier spawn does not inherit the old list route.
     const tier: any = await evaluateHookPayload('pre-tool', {

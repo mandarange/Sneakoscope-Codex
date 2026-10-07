@@ -11,6 +11,7 @@ import {
   childModelListLabel,
   childModelListProfile,
   listChildModelEffort,
+  subagentEntryKey,
   type ListChildModelAllowlist,
   type SubagentModelProfile
 } from '../subagents/child-model-allowlist.js';
@@ -32,6 +33,8 @@ export interface OpenRouterOnlySpawnRoute {
   mode: 'openrouter_only' | 'configured';
   profile?: SubagentModelProfile;
   model: string;
+  reasoning_effort: string | null;
+  entry_key: string;
   source: ChildModelChoiceSource;
   /** 'applied' when Jev decided, else why the fallback ran (off, missing_key, single_entry, ...). */
   reason: string;
@@ -130,17 +133,20 @@ async function openRouterOnlySpawnRouting(
   if (!boundedForkTurns(forkTurns)) return { input: null, route: null };
   const state = listState(allowlist);
   const requested = String(input.model || '').trim() || null;
+  const requestedEffort = String(input.reasoning_effort || '') || null;
   const agent = String(input.agent_type || input.agentType || '').trim() || null;
   const task = spawnTask(input, { items: true });
   const choice: ChildModelChoice | null = task
-    ? await chooseChildModel({ root, task, role: agent, requestedModel: requested, state, profile: childModelListProfile(allowlist) })
-      .catch(() => fallbackChildModel(state, requested, 'consult_failed'))
-    : fallbackChildModel(state, requested, 'empty_task');
+    ? await chooseChildModel({ root, task, role: agent, requestedModel: requested, requestedEffort, state, profile: childModelListProfile(allowlist) })
+      .catch(() => fallbackChildModel(state, requested, 'consult_failed', requestedEffort))
+    : fallbackChildModel(state, requested, 'empty_task', requestedEffort);
   if (!choice) return { input: null, route: null };
   const route: OpenRouterOnlySpawnRoute = {
     mode: allowlist.mode,
     ...(allowlist.mode === 'configured' ? { profile: allowlist.profile } : {}),
     model: choice.entry.model,
+    reasoning_effort: listChildModelEffort(choice.entry, requestedEffort),
+    entry_key: subagentEntryKey(choice.entry),
     source: choice.source,
     reason: choice.reason
   };

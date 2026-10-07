@@ -101,12 +101,26 @@ enum SubagentModelDraft {
         return available + missing
     }
 
-    /// A new row takes the first available model not already on the list.
+    static func entryKey(_ entry: SubagentModelEntry) -> String {
+        entry.model.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() + "|" + (entry.reasoningEffort ?? "")
+    }
+
+    /// Prefer a new model, then an unused effort of an existing model.
     static func adding(_ entries: [SubagentModelEntry], available: [SubagentModelOption]) -> [SubagentModelEntry]? {
         guard entries.count < SubagentModelRules.maxModels else { return nil }
         let used = Set(entries.map { $0.model.lowercased() })
-        guard let next = available.first(where: { !used.contains($0.publicId.lowercased()) }) else { return nil }
-        return entries + [SubagentModelEntry(model: next.publicId, criteria: "", reasoningEffort: nil, isDefault: entries.isEmpty, routable: nil)]
+        if let next = available.first(where: { !used.contains($0.publicId.lowercased()) }) {
+            return entries + [SubagentModelEntry(model: next.publicId, criteria: "", reasoningEffort: nil, isDefault: entries.isEmpty, routable: nil)]
+        }
+        let keys = Set(entries.map(entryKey))
+        for model in available {
+            let efforts: [String?] = [nil] + (model.reasoningEfforts ?? SubagentModelRules.efforts).map { Optional($0) }
+            for effort in efforts {
+                let next = SubagentModelEntry(model: model.publicId, criteria: "", reasoningEffort: effort, isDefault: entries.isEmpty, routable: nil)
+                if !keys.contains(entryKey(next)) { return entries + [next] }
+            }
+        }
+        return nil
     }
 
     static func removing(_ entries: [SubagentModelEntry], at index: Int) -> [SubagentModelEntry] {
@@ -189,7 +203,7 @@ enum SubagentModelDraft {
             let efforts = profile == "openrouter_only" ? SubagentModelRules.efforts : SubagentModelRules.nativeEfforts
             if !SubagentModelRules.isModelId(model, profile: profile) {
                 issues.append("subagent_model_id_invalid:\(index)")
-            } else if !seen.insert(model.lowercased()).inserted {
+            } else if !seen.insert(entryKey(entry)).inserted {
                 issues.append("subagent_model_duplicate:\(index)")
             } else if let effort = entry.reasoningEffort, !efforts.contains(effort) {
                 issues.append("subagent_model_effort_invalid:\(index)")
@@ -215,7 +229,7 @@ enum SubagentModelDraft {
     static func restoringCriteria(_ incoming: [SubagentModelEntry], known: [SubagentModelEntry], redact: (String) -> String) -> [SubagentModelEntry] {
         incoming.map { entry in
             guard entry.criteriaUnreadable, let match = known.first(where: {
-                $0.model.lowercased() == entry.model.lowercased() && !$0.criteriaUnreadable
+                entryKey($0) == entryKey(entry) && !$0.criteriaUnreadable
                     && (redact(cleanCriteria($0.criteria)) == entry.criteria || fitsRedacted(cleanCriteria($0.criteria), answer: entry.criteria))
             }) else { return entry }
             var copy = entry

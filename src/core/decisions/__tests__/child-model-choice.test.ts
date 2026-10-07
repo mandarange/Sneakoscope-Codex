@@ -53,7 +53,7 @@ async function withJev(response: (() => Response) | null, run: () => Promise<voi
 test('the question offers every list entry with its criteria and nothing else', () => {
   const question = childModelQuestion('child_model_spawn', STATE.subagent_models, { id: 'spawn', task: 'Rename a label.' });
   assert.deepEqual(Object.keys(question.options), ['m1', 'm2', 'm3']);
-  assert.equal(question.options.m2, 'z-ai/glm-5.3 (default): Deep refactors and debugging.');
+  assert.equal(question.options.m2, 'z-ai/glm-5.3 [high] (default): Deep refactors and debugging.');
   assert.match(question.options.m3 || '', /General work/);
   assert.equal((question.state as { default_option: string }).default_option, 'm2');
 });

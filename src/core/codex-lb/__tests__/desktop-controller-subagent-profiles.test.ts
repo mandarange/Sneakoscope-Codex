@@ -29,9 +29,20 @@ test('OAuth lists work with no gateway configuration or running Desktop Bridge',
   const list = await run({ operation: 'subagent-models.list' }, options)
   assert.equal((list.result.subagent_model_settings as any).profile, 'openai')
   assert.equal((list.result.subagent_model_settings as any).editable, true)
-  const saved = await run({ operation: 'subagent-models.set', profile: 'openai', no_restart: true, subagent_models: [{ model: OAUTH_MODEL, reasoning_effort: 'ultra' }] }, options)
+  const models = [
+    { model: OAUTH_MODEL, reasoning_effort: 'high', criteria: 'design' },
+    { model: OAUTH_MODEL, reasoning_effort: 'low', criteria: 'browser', default: true }
+  ]
+  const saved = await run({ operation: 'subagent-models.set', profile: 'openai', no_restart: true, subagent_models: models }, options)
   assert.equal(saved.ok, true, JSON.stringify(saved.execution))
   assert.equal(readNativeSubagentModelStore({ home }).store.profiles.openai[0]?.model, OAUTH_MODEL)
+  const reloaded = await run({ operation: 'subagent-models.list' }, options)
+  assert.deepEqual((reloaded.result.subagent_model_settings as any).subagent_models.map((e: any) => [e.model, e.reasoning_effort, e.criteria, e.default]), [
+    [OAUTH_MODEL, 'high', 'design', false], [OAUTH_MODEL, 'low', 'browser', true]
+  ])
+  const duplicate = await run({ operation: 'subagent-models.set', profile: 'openai', no_restart: true, subagent_models: [...models, models[1]] }, options)
+  assert.equal(duplicate.ok, false)
+  assert.ok(duplicate.execution.blockers.includes('subagent_model_duplicate:2'))
   await assert.rejects(fs.access(path.join(home, '.codex', 'sks', 'desktop-bridge-settings.json')))
   await assert.rejects(fs.access(path.join(home, '.codex', 'auth.json')))
 })

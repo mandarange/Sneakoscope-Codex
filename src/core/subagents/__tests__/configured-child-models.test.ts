@@ -19,6 +19,7 @@ import { setDecisionTestOverrides } from '../../decisions/integration.js'
 import { defaultDecisionConfig } from '../../decisions/config.js'
 import { resetDecisionTransportState } from '../../decisions/openrouter.js'
 import { ensureUserReadOnlyListRole, READ_ONLY_LIST_ROLE } from '../read-only-list-role.js'
+import { buildCodexSdkConfig } from '../../codex-control/codex-sdk-config-policy.js'
 
 const FAST = 'gpt-6-luna'
 const DEEP = 'gpt-6-astra'
@@ -92,6 +93,86 @@ test('missing catalog and unsupported saved effort cannot silently fall back to 
   assert.deepEqual(selectableChildModels('openai', f), [])
   assert.deepEqual(effectiveChildModelAllowlist(f).models, [])
   assert.equal(effectiveChildModelAllowlist(f).mode, 'configured')
+})
+
+test('same-model efforts survive persistence, Jev wire selection, plan prompts, spawn gates and worker config', async t => {
+  const f = await fixture(t)
+  const pairs = [
+    { model: FAST, reasoning_effort: 'low', default: true, criteria: 'Routine coding' },
+    { model: DEEP, reasoning_effort: 'high', criteria: 'Design judgment. '.repeat(14).slice(0, 215) + 'DESIGN END CRITERION' },
+    { model: DEEP, reasoning_effort: 'low', criteria: 'Browser and computer operation' }
+  ]
+  const keys = ['HOME', 'SKS_HOME', 'CODEX_HOME', 'OPENROUTER_API_KEY', 'SKS_JEV_DECISION_TEST_OVERRIDES'] as const
+  const before = Object.fromEntries(keys.map(key => [key, process.env[key]]))
+  Object.assign(process.env, f.env, { OPENROUTER_API_KEY: 'sk-or-test-nativeeffortpairsaaaa', SKS_JEV_DECISION_TEST_OVERRIDES: '1' })
+  delete process.env.CODEX_HOME
+  t.after(() => {
+    for (const key of keys) { if (before[key] === undefined) delete process.env[key]; else process.env[key] = before[key] }
+    setDecisionTestOverrides(null)
+    resetDecisionTransportState()
+  })
+  for (const profile of ['openai', 'codex_lb'] as const) {
+    await f.setProfile(profile)
+    await writeNativeSubagentModels(profile, pairs, f)
+    const saved = readNativeSubagentModelStore(f).store.profiles[profile]
+    assert.deepEqual(saved.map(e => [e.model, e.reasoning_effort]), [[FAST, 'low'], [DEEP, 'high'], [DEEP, 'low']])
+    await assert.rejects(writeNativeSubagentModels(profile, [...pairs, pairs[2]], f), /subagent_models_payload_invalid/)
+    assert.deepEqual(readNativeSubagentModelStore(f).store.profiles[profile], saved)
+    const ctx = readChildModelPlanContext(f)
+    assert.ok(ctx.list)
+    for (const [effort, option, task] of [['high', 'm2', 'Review the visual design'], ['low', 'm3', 'Operate the browser']] as const) {
+      let observedWire = false
+      resetDecisionTransportState()
+      setDecisionTestOverrides({ config: { ...defaultDecisionConfig(), mode: 'jev', consentCloud: true }, fetchImpl: async (_url, init) => {
+        const request = JSON.parse(String(init?.body))
+        assert.match(request.questions.option_child_model_spawn.criteria.m2, /gpt-6-astra \[high\]/)
+        assert.match(request.questions.option_child_model_spawn.criteria.m3, /gpt-6-astra \[low\]/)
+        assert.equal(request.state.options.child_model_spawn.entries.m2.criteria, pairs[1]!.criteria)
+        observedWire = true
+        return new Response(JSON.stringify({ model: 'typesafe/jev-1.13', answers: { option_child_model_spawn: {
+          type: 'choice', choice: option, confidence: 0.99,
+          probabilities: { m1: 0.005, m2: option === 'm2' ? 0.985 : 0.005, m3: option === 'm3' ? 0.985 : 0.005, keep_baseline: 0.005 }
+        } }, usage: { input_tokens: 10, output_tokens: 2 } }), { status: 200 })
+      } })
+      const payload = { tool_name: 'spawn_agent', tool_input: { model: DEEP, reasoning_effort: 'max', message: task, fork_turns: 'none' } }
+      const routed = await jevSpawnRouting(f.home, {}, payload)
+      assert.equal(observedWire, true)
+      assert.equal(routed.route?.source, 'jev')
+      assert.equal(routed.route?.reasoning_effort, effort)
+      assert.equal(routed.input?.model, DEEP)
+      assert.equal(routed.input?.reasoning_effort, effort)
+      assert.equal(subagentSpawnPolicyBlockReason({ ...payload, tool_input: routed.input }), null)
+      assert.match(String(subagentSpawnPolicyBlockReason(payload)), /model and reasoning_effort must match/)
+      const entry = ctx.list.state.subagent_models.find(e => e.model === DEEP && e.reasoning_effort === effort)!
+      const applied = applyListRoleModels({ worker: { model_reasoning_effort: 'max' } }, { lanes: ['worker'], choices: { worker: { entry, source: 'jev', reason: 'applied' } } }, ctx.list)
+      const prompt = buildOfficialSubagentPrompt({ goal: task, slices: [{ id: 'one', title: task, description: task, agent: 'worker', kind: 'worker', paths: ['src/example.ts'] }], childModels: ctx.allowlist, routedAgents: applied.agents } as any)
+      assert.ok(prompt.includes(`pass model="${DEEP}" and reasoning_effort="${effort}"`), prompt)
+      const workerInput = { agent: applied.agents.worker, slice: { title: task }, intake: { route: '$Naruto' }, fastModePolicy: { fast_mode: true, service_tier: 'fast' as const } }
+      const worker = await resolveWorkerModelRouting(workerInput, { env: f.env, consultJev: false })
+      assert.deepEqual(worker.blockers, [])
+      assert.equal(worker.choice.reasoning, effort)
+      const sdk = buildCodexSdkConfig({ model: worker.choice.model, modelReasoningEffort: worker.choice.reasoning } as any)
+      assert.equal(sdk.model, DEEP)
+      assert.equal(sdk.model_reasoning_effort, effort)
+      const explicit = await resolveWorkerModelRouting(workerInput, { env: { ...f.env, SKS_WORKER_MODEL: DEEP, SKS_WORKER_REASONING: effort }, consultJev: false })
+      assert.deepEqual(explicit.blockers, [])
+      assert.equal(explicit.choice.reasoning, effort)
+      const invalid = await resolveWorkerModelRouting(workerInput, { env: { ...f.env, SKS_WORKER_MODEL: DEEP, SKS_WORKER_REASONING: 'max' }, consultJev: false })
+      assert.ok(invalid.blockers.includes('subagent_effort_conflicts_with_list'))
+      const ambiguousExplicit = await resolveWorkerModelRouting({ ...workerInput, agent: {} }, { env: { ...f.env, SKS_WORKER_MODEL: DEEP }, consultJev: false })
+      assert.ok(ambiguousExplicit.blockers.includes('subagent_model_effort_ambiguous'))
+      const policy = resolveNarutoCredentialPolicy({ env: f.env, args: [`--subagent-model=${DEEP}`, `--subagent-effort=${effort}`], openRouterOnly: null, childModels: ctx.allowlist, defaultParentModel: FAST, defaultParentEffort: 'high', defaultSubagentModel: FAST, defaultSubagentEffort: 'low' })
+      assert.deepEqual(policy.blockers, [])
+      assert.equal(policy.subagentEffort, effort)
+    }
+    setDecisionTestOverrides({ config: defaultDecisionConfig() })
+    const requestedLow = await jevSpawnRouting(f.home, {}, { tool_name: 'spawn_agent', tool_input: { model: DEEP, reasoning_effort: 'low', message: 'Operate the browser', fork_turns: 'none' } })
+    assert.equal(requestedLow.route?.source, 'requested')
+    assert.equal(requestedLow.route?.reasoning_effort, 'low')
+    const ambiguous = await jevSpawnRouting(f.home, {}, { tool_name: 'spawn_agent', tool_input: { model: DEEP, message: 'Ambiguous work', fork_turns: 'none' } })
+    assert.equal(ambiguous.input?.model, FAST)
+    assert.equal(ambiguous.route?.source, 'default')
+  }
 })
 
 test('malformed and symlinked list files are preserved and writes fail closed', async t => {

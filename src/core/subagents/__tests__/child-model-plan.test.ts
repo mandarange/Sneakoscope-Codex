@@ -49,10 +49,10 @@ test('every role lands on a list model with its source recorded, and effort neve
   assert.equal(applied.agents.explorer.routed_model_reasoning_effort, null)
   assert.equal(applied.agents.explorer.routed_model_policy, 'openrouter_only_default')
   assert.deepEqual(applied.evidence.roles, {
-    explorer: { model: 'z-ai/glm-5.3', source: 'default', reason: 'keep_baseline', default_entry: true },
-    worker: { model: 'google/gemini-3.8-flash', source: 'jev', reason: 'applied', default_entry: false },
+    explorer: { model: 'z-ai/glm-5.3', reasoning_effort: null, entry_key: '["z-ai/glm-5.3",null]', source: 'default', reason: 'keep_baseline', default_entry: true },
+    worker: { model: 'google/gemini-3.8-flash', reasoning_effort: 'low', entry_key: '["google/gemini-3.8-flash","low"]', source: 'jev', reason: 'applied', default_entry: false },
     // Jev decided this plan, so a role past the lane cap names the cap.
-    extra: { model: 'z-ai/glm-5.3', source: 'default', reason: 'role_cap', default_entry: true }
+    extra: { model: 'z-ai/glm-5.3', reasoning_effort: null, entry_key: '["z-ai/glm-5.3",null]', source: 'default', reason: 'role_cap', default_entry: true }
   })
   assert.deepEqual(applied.evidence.routed_roles, ['explorer', 'worker'])
   assert.deepEqual(applied.evidence.jev_decided_roles, ['worker'])

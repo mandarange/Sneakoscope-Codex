@@ -13,6 +13,7 @@ import {
   ROUTING_RISK_NOUL_MIN,
   ROUTING_ROLE_OMIT_NOUL_MAX,
   UNKNOWN_USAGE,
+  DESIGN_DEFAULTS,
   ESCALATION_ROUTING_TIER,
   routingTier,
   type Answer,
@@ -100,7 +101,12 @@ export function decodeWireResponse(
   }
   const model = text(response.model);
   if (!model) return { ok: false, reason: 'invalid_response' };
-  if (model !== bundle.binding.requestedModel) return { ok: false, reason: 'unknown_model' };
+  // OpenRouter returns the served snapshot for the public Jev alias.
+  // Verified in its official example and a live Decisions response:
+  // https://openrouter.ai/blog/insights/what-is-jev/
+  const knownSnapshot = bundle.binding.requestedModel === DESIGN_DEFAULTS.model
+    && model === 'typesafe/jev-1.13-20260917';
+  if (model !== bundle.binding.requestedModel && !knownSnapshot) return { ok: false, reason: 'unknown_model' };
   const answersRaw = response.answers;
   if (!isRecord(answersRaw)) return { ok: false, reason: 'invalid_response' };
   const usage = decodeUsage(response.usage);
@@ -474,4 +480,3 @@ function isFiniteNumber(value: unknown): value is number {
 function text(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
-

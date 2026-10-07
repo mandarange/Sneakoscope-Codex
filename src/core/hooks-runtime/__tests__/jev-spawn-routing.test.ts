@@ -255,7 +255,7 @@ test('OpenRouter Only: Jev picks by the list criteria; fallbacks keep a listed r
   await withOpenRouterOnly({ enabled: true, subagent_models: LIST }, async () => {
     await withListJev(JEV_REPLIES[1]!, async () => {
       const routed = await jevSpawnRouting(process.cwd(), {}, spawnPayload({ model: 'z-ai/glm-5.3', fork_turns: 'none', message: 'Rename the save button label.' }));
-      assert.deepEqual(routed.route, { mode: 'openrouter_only', model: 'google/gemini-3.8-flash', source: 'jev', reason: 'applied' });
+      assert.deepEqual(routed.route, { mode: 'openrouter_only', model: 'google/gemini-3.8-flash', reasoning_effort: 'low', entry_key: '["google/gemini-3.8-flash","low"]', source: 'jev', reason: 'applied' });
       assert.deepEqual(routed.input, { model: 'google/gemini-3.8-flash', reasoning_effort: 'low', fork_turns: 'none', message: 'Rename the save button label.' });
     });
     await withListJev(JEV_REPLIES[4]!, async () => {
@@ -269,13 +269,13 @@ test('OpenRouter Only: Jev picks by the list criteria; fallbacks keep a listed r
     // An empty task never asks Jev.
     await withListJev(JEV_REPLIES[1]!, async () => {
       const empty = await jevSpawnRouting(process.cwd(), {}, spawnPayload({ model: T.deep, fork_turns: 'none' }));
-      assert.deepEqual(empty.route, { mode: 'openrouter_only', model: 'z-ai/glm-5.3', source: 'default', reason: 'empty_task' });
+      assert.deepEqual(empty.route, { mode: 'openrouter_only', model: 'z-ai/glm-5.3', reasoning_effort: 'high', entry_key: '["z-ai/glm-5.3","high"]', source: 'default', reason: 'empty_task' });
       // A v1 spawn that carries its task in text items is routed by Jev, not as an empty task.
       resetDecisionTransportState();
       const items = await jevSpawnRouting(process.cwd(), {}, spawnPayload({
         model: T.deep, fork_turns: 'none', items: [{ type: 'mention', path: 'app://x' }, { type: 'text', text: 'Rename the save button label.' }]
       }));
-      assert.deepEqual(items.route, { mode: 'openrouter_only', model: 'google/gemini-3.8-flash', source: 'jev', reason: 'applied' });
+      assert.deepEqual(items.route, { mode: 'openrouter_only', model: 'google/gemini-3.8-flash', reasoning_effort: 'low', entry_key: '["google/gemini-3.8-flash","low"]', source: 'jev', reason: 'applied' });
     });
   });
 });
@@ -413,7 +413,7 @@ test('the OpenRouter Only Jev turn line names the list, never a tier model', asy
     if (allowlist.mode !== 'openrouter_only') return;
     const line = openRouterOnlyJevTurnLine(allowlist, 'high', true);
     assert.match(line, /Jev rated this task as high-effort work/);
-    assert.match(line, /google\/gemini-3\.8-flash, z-ai\/glm-5\.3 \(default\), deepseek\/deepseek-v4\.1-flash/);
+    assert.match(line, /google\/gemini-3\.8-flash \[low\], z-ai\/glm-5\.3 \[high\] \(default\), deepseek\/deepseek-v4\.1-flash \[default effort\]/);
     for (const tier of Object.values(T)) assert.equal(line.includes(tier), false);
     assert.match(openRouterOnlyJevTurnLine({ ...allowlist, entries: [], models: [], default_model: null }, null, false), /list is empty[\s\S]*Subagent Models/);
   });

@@ -97,7 +97,7 @@ esac
       const entry = { model, criteria: saved ? `${profile} saved criteria` : `${profile} initial criteria`, reasoning_effort: saved ? profile === 'codex_lb' ? 'ultra' : 'max' : 'low', default: true, routable: true };
       const result = {
         openrouter_only: modeState(false, savedRows), available: nativeAvailable,
-        subagent_model_settings: { schema: 'sks.subagent-model-settings.v1', profile, configured: true, editable: true, error: null, warnings: [], subagent_models: [entry] }
+        subagent_model_settings: { schema: 'sks.subagent-model-settings.v1', profile, configured: true, editable: true, error: null, warnings: [], subagent_models: saved ? [entry, { model, criteria: `${profile} browser criteria`, reasoning_effort: 'low', default: false, routable: true }] : [entry] }
       };
       write(`${profile}-${saved ? 'saved' : 'initial'}.json`, commandResult('subagent-models.list', result));
       if (saved) write(`${profile}-set.json`, commandResult('subagent-models.set', result));
@@ -154,7 +154,10 @@ esac
   for (const profile of ['codex_lb', 'openai']) {
     assert.deepEqual(JSON.parse(fs.readFileSync(path.join(fixture, `received-${profile}.json`), 'utf8')), {
       profile,
-      subagent_models: [{ model: profile === 'codex_lb' ? 'gpt-6-astra' : 'gpt-6-luna', criteria: `${profile} saved criteria`, reasoning_effort: profile === 'codex_lb' ? 'ultra' : 'max', default: true }]
+      subagent_models: [
+        { model: profile === 'codex_lb' ? 'gpt-6-astra' : 'gpt-6-luna', criteria: `${profile} saved criteria`, reasoning_effort: profile === 'codex_lb' ? 'ultra' : 'max', default: true },
+        { model: profile === 'codex_lb' ? 'gpt-6-astra' : 'gpt-6-luna', criteria: `${profile} browser criteria`, reasoning_effort: 'low', default: false }
+      ]
     });
   }
   const receipts = fs.readdirSync(operationsDir).filter((name) => name.endsWith('.json'))
@@ -251,7 +254,7 @@ setStatusDelay("0")
 let page = SubagentModelsViewController(processClient: client, operations: operations)
 let pageView = page.view
 page.refreshOnAppear()
-pump(pageView, "list did not load") { labels(pageView).contains("2 of 16 models") }
+pump(pageView, "list did not load") { labels(pageView).contains("2 of 16 options") }
 let apply = find(pageView, "sks-subagent-models-apply", NSButton.self)
 let add = find(pageView, "sks-subagent-models-add", NSButton.self)
 precondition(!apply.isEnabled, "a clean list is not appliable")
@@ -266,7 +269,7 @@ page.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification
 precondition(apply.isEnabled, "an edit enables Apply")
 press(add)
 press(find(pageView, "sks-subagent-models-default-2", NSButton.self))
-precondition(!add.isEnabled, "every catalog model is already on the list")
+precondition(add.isEnabled, "different efforts remain available after every model is listed")
 // ProcessClient redacts this in the answer; stdin carries it intact and the page keeps it.
 let tokenCriteria = find(pageView, "sks-subagent-models-criteria-2", NSTextField.self)
 tokenCriteria.stringValue = "token: budget-heavy"
@@ -274,7 +277,7 @@ page.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification
 copyFixture("saved-list.json", to: "list.json")
 press(apply)
 pump(pageView, "apply did not finish") {
-    labels(pageView).contains("Subagent model list saved · 3 models") && labels(pageView).contains("3 of 16 models")
+    labels(pageView).contains("Subagent model list saved · 3 models") && labels(pageView).contains("3 of 16 options")
 }
 precondition(!apply.isEnabled)
 precondition(criteriaText(pageView, 2) == "token: budget-heavy" && criteriaText(pageView, 1) == "risk-assessment-heavy reviews")
@@ -297,7 +300,7 @@ copyFixture("saved-list.json", to: "list.json")
 let fresh = SubagentModelsViewController(processClient: client, operations: operations)
 let freshView = fresh.view
 fresh.refreshOnAppear()
-pump(freshView, "fresh list did not load") { labels(freshView).contains("3 of 16 models") }
+pump(freshView, "fresh list did not load") { labels(freshView).contains("3 of 16 options") }
 precondition(criteriaText(freshView, 2) == "[redacted]")
 precondition(!find(freshView, "sks-subagent-models-criteria-unreadable-2", NSTextField.self).isHiddenOrHasHiddenAncestor)
 let freshCriteria = find(freshView, "sks-subagent-models-criteria-0", NSTextField.self)
@@ -333,9 +336,26 @@ for profile in ["codex_lb", "openai"] {
     precondition(profile == "codex_lb" ? effort.itemTitles.contains("ultra") : !effort.itemTitles.contains("ultra"), "efforts must match the selected model")
     effort.selectItem(withTitle: profile == "codex_lb" ? "ultra" : "max")
     _ = effort.target?.perform(effort.action, with: effort)
+    press(add)
+    let repeatedModel = find(pageView, "sks-subagent-models-model-1", NSPopUpButton.self)
+    repeatedModel.selectItem(at: profile == "codex_lb" ? 0 : 1)
+    _ = repeatedModel.target?.perform(repeatedModel.action, with: repeatedModel)
+    let repeatedEffort = find(pageView, "sks-subagent-models-effort-1", NSPopUpButton.self)
+    repeatedEffort.selectItem(withTitle: profile == "codex_lb" ? "ultra" : "max")
+    _ = repeatedEffort.target?.perform(repeatedEffort.action, with: repeatedEffort)
+    let priorWrites = calls().filter { $0.hasPrefix("bridge subagent-models set") }.count
+    press(apply)
+    precondition(labels(pageView).contains("this model and effort are already on the list"), labels(pageView))
+    precondition(calls().filter { $0.hasPrefix("bridge subagent-models set") }.count == priorWrites, "duplicate pair must not be sent")
+    repeatedEffort.selectItem(withTitle: "low")
+    _ = repeatedEffort.target?.perform(repeatedEffort.action, with: repeatedEffort)
+    let browserCriteria = find(pageView, "sks-subagent-models-criteria-1", NSTextField.self)
+    browserCriteria.stringValue = "\(profile) browser criteria"
+    page.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification, object: browserCriteria))
     copyFixture("\(profile)-saved.json", to: "list.json")
     press(apply)
-    pump(pageView, "native list apply did not finish") { labels(pageView).contains("Subagent model list saved · 1 model") && !apply.isEnabled }
+    pump(pageView, "native list apply did not finish") { labels(pageView).contains("Subagent model list saved · 2 models") && !apply.isEnabled }
+    precondition(criteriaText(pageView, 1) == "\(profile) browser criteria")
     copyFixture("received.json", to: "received-\(profile).json")
     let dirty = find(pageView, "sks-subagent-models-criteria-0", NSTextField.self)
     dirty.stringValue = "unapplied \(profile) draft"

@@ -520,7 +520,7 @@ test('OpenRouter Only Mode: one Jev call picks each role a list model; no tier q
   const evidence = prepared.plan.openrouter_only;
   assert.equal(evidence.enabled, true);
   assert.equal(evidence.default_subagent_model, 'z-ai/glm-5.3');
-  assert.deepEqual(evidence.roles.explorer, { model: 'deepseek/deepseek-v4.1-flash', source: 'jev', reason: 'applied', default_entry: false });
+  assert.deepEqual(evidence.roles.explorer, { model: 'deepseek/deepseek-v4.1-flash', reasoning_effort: 'medium', entry_key: '["deepseek/deepseek-v4.1-flash",null]', source: 'jev', reason: 'applied', default_entry: false });
   assert.deepEqual(evidence.routed_roles.slice(0, 3).sort(), ['explorer', 'security_reviewer', 'worker']);
   assert.deepEqual([...evidence.jev_decided_roles].sort(), ['explorer', 'security_reviewer', 'worker']);
   // The plan records the OpenRouter parent, not a tier model.

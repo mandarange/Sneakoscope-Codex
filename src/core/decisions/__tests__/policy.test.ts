@@ -34,6 +34,21 @@ test('unknown Choice label and missing option keep the baseline', () => {
   assert.equal(compiled.kind, 'keep_baseline');
 });
 
+test('the documented Jev snapshot is accepted without losing its identity; unknown models stay blocked', () => {
+  const bundle = planningBundle();
+  const model = 'typesafe/jev-1.13-20260917';
+  const response = { ...SYNTHETIC_RESPONSE, model };
+  const decoded = decodeWireResponse(bundle, response);
+  assert.equal(decoded.ok, true);
+  if (decoded.ok) assert.equal(decoded.response.model, model);
+  const compiled = compileDecision(bundle, response);
+  assert.equal(compiled.kind, 'apply');
+  if (compiled.kind === 'apply') assert.equal(compiled.resolvedModel, model);
+  for (const invalid of ['typesafe/jev-1.12-20260917', 'typesafe/jev-1.13-20990101', 'other/jev-1.13-20260917', model + '-extra']) {
+    assert.deepEqual(decodeWireResponse(bundle, { ...response, model: invalid }), { ok: false, reason: 'unknown_model' });
+  }
+});
+
 test('missing required uncertainty does not invent confidence', () => {
   const bundle = planningBundle();
   const compiled = compileDecision(bundle, SYNTHETIC_RESPONSE_MISSING_UNCERTAINTY);

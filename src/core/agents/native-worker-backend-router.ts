@@ -20,6 +20,7 @@ import {
   childModelListProfile,
   listChildModelEffort,
   isSubagentModelEffort,
+  isAllowedChildModelEffort,
   type ListChildModelAllowlist,
   type SubagentModelEffort
 } from '../subagents/child-model-allowlist.js'
@@ -365,28 +366,31 @@ async function resolveOpenRouterOnlyWorkerRouting(input: {
     ? allowlistedChildModel(input.agent?.routed_model, allowlist)
     : null
   const requested = String(input.agent?.routed_model || input.agent?.model || '').trim() || null
+  const requestedEffort = explicitReasoning || String(input.agent?.routed_model_reasoning_effort || input.agent?.model_reasoning_effort || '') || null
   const explicitListed = explicitModel ? allowlistedChildModel(explicitModel, allowlist) : null
   const task = `${ctx.taskKindText}\n${ctx.riskText}`.trim().slice(0, 1200)
   const choice = explicitModel
-    ? (explicitListed ? fallbackChildModel(state, explicitListed, 'explicit') : null)
+    ? (explicitListed ? fallbackChildModel(state, explicitListed, 'explicit', requestedEffort) : null)
     : planned
-      ? fallbackChildModel(state, planned, 'planned')
+      ? fallbackChildModel(state, planned, 'planned', requestedEffort)
       : deps.consultJev === false || !task
-        ? fallbackChildModel(state, requested, deps.consultJev === false ? 'jev_skipped' : 'empty_task')
-        : await chooseChildModel({ root: deps.root || process.cwd(), task, role: input.agent?.role || null, requestedModel: requested, state, env, profile: childModelListProfile(allowlist) })
-          .catch(() => fallbackChildModel(state, requested, 'consult_failed'))
+        ? fallbackChildModel(state, requested, deps.consultJev === false ? 'jev_skipped' : 'empty_task', requestedEffort)
+        : await chooseChildModel({ root: deps.root || process.cwd(), task, role: input.agent?.role || null, requestedModel: requested, requestedEffort, state, env, profile: childModelListProfile(allowlist) })
+          .catch(() => fallbackChildModel(state, requested, 'consult_failed', requestedEffort))
   const taskPolicy = decideSubagentModel({ title: ctx.taskKindText, description: ctx.riskText, role: input.agent?.role })
   const choiceModel = choice?.entry.model || ''
   const routed: Omit<ModelChoice, 'reasoning'> & { reasoning: ModelChoice['reasoning'] | null } = {
     model: choiceModel,
-    reasoning: allowlist.mode === 'openrouter_only'
-      ? explicitReasoning || choice?.entry.reasoning_effort || listReasoning(taskPolicy.modelReasoningEffort) || 'medium'
-      : explicitReasoning || (choice ? listChildModelEffort(choice.entry, null) : null),
+    reasoning: choice ? listChildModelEffort(choice.entry, requestedEffort
+      || (allowlist.mode === 'openrouter_only' ? listReasoning(taskPolicy.modelReasoningEffort) || 'medium' : null)) : null,
     serviceTier: explicitTier || input.fastModePolicy.service_tier || 'fast'
   }
   const blockers = [
     ...(!allowlist.entries.length ? [allowlist.mode === 'openrouter_only' ? 'openrouter_only_subagent_list_empty' : 'configured_subagent_list_unavailable'] : []),
     ...(explicitModel && !explicitListed ? [allowlist.mode === 'openrouter_only' ? 'openrouter_only_subagent_model_not_listed' : 'configured_subagent_model_not_listed'] : []),
+    ...(explicitListed && choiceModel !== explicitListed ? ['subagent_model_effort_ambiguous'] : []),
+    ...(rawEffort && (!explicitReasoning || !isAllowedChildModelEffort(choiceModel, explicitReasoning, allowlist)
+      || explicitReasoning !== routed.reasoning) ? ['subagent_effort_conflicts_with_list'] : []),
     ...(allowlist.mode === 'configured' && rawEffort
       && (!explicitReasoning || !choice?.entry.supported_reasoning_efforts?.includes(explicitReasoning))
       ? ['configured_subagent_effort_unsupported'] : []),

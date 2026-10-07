@@ -65,7 +65,7 @@ final class SubagentModelsViewController: NSViewController, ControlCenterPage, N
         let modeCard = NativeView.card(title: "Connection", subtitle: "", views: [badge, modeDetail, modeIssues, hintRow])
         let listCard = NativeView.card(
             title: "Subagent model list",
-            subtitle: "Save a separate list for Codex-LB, OpenAI OAuth, and OpenRouter Only. Subagents use this connection's listed models. With Jev on, Jev chooses by your criteria; otherwise a listed requested model or the default is used.",
+            subtitle: "Save a separate list for each connection. Add the same model at different efforts with separate criteria. With Jev on, Jev chooses a model and effort together; otherwise a listed requested option or the default is used.",
             views: [rowsStack, listStatus, ControlKit.actionRow([addButton, applyButton, spinner], trailing: [revertButton, refreshButton]), actionStatus]
         )
         view = NativeView.page([
@@ -252,15 +252,15 @@ final class SubagentModelsViewController: NSViewController, ControlCenterPage, N
         refreshButton.isEnabled = !busy
         if busy || loading { spinner.startAnimation(nil) } else { spinner.stopAnimation(nil) }
         guard snapshot != nil else { return show(listStatus, "") }
-        var parts = ["\(draft.count) of \(SubagentModelRules.maxModels) models"]
-        if let preferred = draft.first(where: \.isDefault) { parts.append("default \(preferred.model)") }
+        var parts = ["\(draft.count) of \(SubagentModelRules.maxModels) options"]
+        if let preferred = draft.first(where: \.isDefault) { parts.append("default \(preferred.model) [\(preferred.reasoningEffort ?? "Default")]") }
         if dirty { parts.append("unapplied changes") }
         if editable, available.isEmpty {
             parts.append(snapshot?.profile == "openrouter_only"
                 ? "no OpenRouter models are in the bridge catalog yet; select some under Models in Codex on the Connections page"
                 : "no models are available for this connection; open Codex and refresh the catalog")
         } else if editable, draft.count < SubagentModelRules.maxModels, SubagentModelDraft.adding(draft, available: available) == nil {
-            parts.append("every catalog model is already on the list")
+            parts.append("every available model and effort is already on the list")
         }
         show(listStatus, parts.joined(separator: " · "), color: dirty ? .systemOrange : .secondaryLabelColor)
     }

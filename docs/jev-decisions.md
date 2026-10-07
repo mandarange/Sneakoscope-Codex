@@ -38,6 +38,12 @@ and its private socket directory. It does not touch a shared Hugging Face cache.
 | Deadline | 1500 ms for the Decisions request, including body consumption. Local snapshot work does not consume that budget. A Jev failure keeps the baseline and does not fail preparation. |
 | Recovery | Unsupported on this host: no SKS-owned ambiguous-failure handler exists |
 
+OpenRouter may return the served snapshot ID instead of the requested alias.
+SKS accepts the documented `typesafe/jev-1.13-20260917` snapshot for
+`typesafe/jev-1.13` and retains the returned ID in execution evidence. Unknown
+models and unverified snapshots still keep the baseline. See the
+[official Jev response example](https://openrouter.ai/blog/insights/what-is-jev/).
+
 ## Control Center
 
 The Control Center **Decisions** section (sidebar, `cpu` icon) is a thin front

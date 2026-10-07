@@ -164,7 +164,7 @@ enum OpenRouterOnlyMessages {
         case "subagent_model_id_invalid":
             return row + "not a valid model id for this connection."
         case "subagent_model_duplicate":
-            return row + "this model is already on the list."
+            return row + "this model and effort are already on the list. Choose a different effort."
         case "subagent_model_effort_invalid":
             return row + "choose Default or an effort supported by this model."
         case "subagent_model_effort_unsupported":
