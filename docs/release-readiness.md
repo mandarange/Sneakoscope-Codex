@@ -7,6 +7,9 @@ Jev compiles bounded execution profiles while code-owned safety and mutation
 gates remain mandatory. Memory intake stays inside its mission until explicit
 promotion validates consent, provenance, lifecycle, and evidence. Canonical
 memories survive code-index refreshes and are recalled through a bounded overlay.
+The release also fixes immediate false staleness after align rebuilds the two
+derived shared-memory indexes; real source and canonical memory changes still
+invalidate the graph.
 
 Release verification requires the final clean commit's full canonical test
 corpus, full release workflow, pack receipt, real checks, stamp, provenance,

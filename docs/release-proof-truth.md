@@ -6,6 +6,9 @@ This candidate packages PR #15's Jev execution profiles, decision-cache
 bindings, sibling task leases, mission memory intake, explicit canonical
 promotion, bounded recall, and preservation across code-navigation alignment.
 Source, graph, policy, evidence, and lifecycle checks remain code-owned.
+Release verification reproduced a fresh align reporting `wiki_context_changed`.
+The cache key now excludes the two generated shared-memory index paths, with
+regressions for repeated align, source edits, and canonical memory changes.
 
 The PR's acceptance record is historical: it includes exhaustive-suite
 failures and environment-blocked gates and cannot authorize this release.

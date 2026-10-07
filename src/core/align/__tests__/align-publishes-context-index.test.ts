@@ -24,6 +24,9 @@ import {
 import { contextIndexOperationJournalPath } from '../../triwiki/context-graph/store/generation-layout.js';
 import { resolveCurrentContextIndex } from '../../triwiki/context-graph/store/generation-resolve.js';
 import { listContextIndexGenerations } from '../../triwiki/context-graph/store/generation-retention.js';
+import { contextIndexFreshness } from '../../triwiki/context-graph/store/index-freshness.js';
+import { alignGraphExtractors } from '../../triwiki/context-graph/extractors/index.js';
+import { initGitRepo } from '../../triwiki/context-graph/compiler/__tests__/graph-test-fixtures.js';
 import { ALIGN_OUTPUT_ARTIFACTS, writeAlignRouteArtifacts } from '../align-route.js';
 import { executeCodeNavigationAlign } from '../code-navigation-align.js';
 
@@ -155,6 +158,28 @@ test('a second align republishes and retains one generation, not a stale pair', 
     assert.deepEqual([...(await listContextIndexGenerations(root))], [resolved.pointer.snapshotHash]);
     assert.equal(resolved.pointer.previousSnapshotHash, null);
     assert.ok(await selectedCount(root, 'extra') > 0);
+  } finally {
+    clearWorkspaceContextIndex(root);
+    clearContextGraphSnapshotCache();
+    await fsp.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('align stays fresh after rebuilding shared-memory indexes in a committed workspace', async () => {
+  const root = await fixtureRoot();
+  try {
+    initGitRepo(root);
+    await align(root, 'M-align-shared-index-first');
+    const first = await contextIndexFreshness(root, { extractors: alignGraphExtractors() });
+    assert.equal(first.status, 'fresh', first.reasons.join('\n'));
+
+    await align(root, 'M-align-shared-index-second');
+    const second = await contextIndexFreshness(root, { extractors: alignGraphExtractors() });
+    assert.equal(second.status, 'fresh', second.reasons.join('\n'));
+
+    await write(root, 'src/runner.ts', 'export function runService(value: number) { return value + 2; }\n');
+    const changed = await contextIndexFreshness(root, { extractors: alignGraphExtractors() });
+    assert.equal(changed.status, 'stale', 'real source edits must still invalidate the index');
   } finally {
     clearWorkspaceContextIndex(root);
     clearContextGraphSnapshotCache();

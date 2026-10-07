@@ -84,6 +84,12 @@ const WIKI_CONTEXT_GIT_EXCLUDED = new Set(
  * thing.
  */
 const WIKI_CONTEXT_EXCLUDED_DIRS: readonly string[] = Object.freeze(['context-graph/', 'architecture-map/']);
+// Align rebuilds these derived indexes with new timestamps after compiling the
+// graph. Canonical records remain inputs; these generated indexes cannot be.
+const WIKI_CONTEXT_EXCLUDED_PATHS = new Set([
+  'indexes/project-index.json',
+  'indexes/wrongness-index.json'
+]);
 
 /** True when a wiki-relative path is a graph artifact, by name or by subtree. */
 function isExcludedWikiPath(relative: string, exclude: ReadonlySet<string>): boolean {
@@ -91,7 +97,8 @@ function isExcludedWikiPath(relative: string, exclude: ReadonlySet<string>): boo
   const within = relative.startsWith(`${WIKI_CONTEXT_DIR}/`)
     ? relative.slice(WIKI_CONTEXT_DIR.length + 1)
     : relative;
-  return WIKI_CONTEXT_EXCLUDED_DIRS.some((dir) => within.startsWith(dir));
+  return WIKI_CONTEXT_EXCLUDED_PATHS.has(within)
+    || WIKI_CONTEXT_EXCLUDED_DIRS.some((dir) => within.startsWith(dir));
 }
 
 const RELEVANT_EXTENSIONS = new Set([

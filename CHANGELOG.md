@@ -20,6 +20,8 @@
 
 ### Fixed
 
+- Keep a newly aligned Context Graph fresh when shared-memory indexes are
+  rebuilt; source edits and canonical memory changes still invalidate it.
 - Register the reviewed memory-promotion rollback and mission image-fixture
   call sites in the release mutation audit.
 

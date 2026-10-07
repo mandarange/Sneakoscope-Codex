@@ -149,6 +149,8 @@ test('publishing a generation does not move the cache key it was built under', a
     writeFixtureFile(root, '.sneakoscope/wiki/code-navigation-manifest.json', '{"inventory":"generated"}\n');
     writeFixtureFile(root, '.sneakoscope/wiki/architecture-map/manifest.json', '{"graph":"generated"}\n');
     writeFixtureFile(root, '.sneakoscope/wiki/architecture-map/views/project-topology.mmd', 'graph TD\n');
+    writeFixtureFile(root, '.sneakoscope/wiki/indexes/project-index.json', '{"generated_at":"first","claims":[]}\n');
+    writeFixtureFile(root, '.sneakoscope/wiki/indexes/wrongness-index.json', '{"generated_at":"first","wrongness":[]}\n');
     const published = await computeContextGraphCacheKey({ root, extractors: EXTRACTORS });
 
     assert.equal(published.parts.wikiContextHash, before.parts.wikiContextHash, 'publishing must not move the wiki hash');
@@ -157,6 +159,8 @@ test('publishing a generation does not move the cache key it was built under', a
     // Same content, new operation id and timestamp: what a republish actually writes.
     writeFixtureFile(root, `${store}/current.json`, '{"committedAt":"2026-08-13T00:00:09.000Z"}\n');
     writeFixtureFile(root, `${store}/generations/deadbeef.meta.json`, '{"operationId":"op-2"}\n');
+    writeFixtureFile(root, '.sneakoscope/wiki/indexes/project-index.json', '{"generated_at":"second","claims":[]}\n');
+    writeFixtureFile(root, '.sneakoscope/wiki/indexes/wrongness-index.json', '{"generated_at":"second","wrongness":[]}\n');
     const republished = await computeContextGraphCacheKey({ root, extractors: EXTRACTORS });
     assert.equal(republished.key, before.key, 'a republish must not move the cache key either');
 
@@ -168,6 +172,10 @@ test('publishing a generation does not move the cache key it was built under', a
     writeFixtureFile(root, 'architecture-map/app.ts', 'export const app = 1;\n');
     const outsideWiki = await computeContextGraphCacheKey({ root, extractors: EXTRACTORS });
     assert.notEqual(outsideWiki.key, afterSourceEdit.key, 'the artifact exclusion must stay inside .sneakoscope/wiki');
+
+    writeFixtureFile(root, '.sneakoscope/wiki/records/claims/project-index.json', '{"text":"canonical memory"}\n');
+    const canonicalChange = await computeContextGraphCacheKey({ root, extractors: EXTRACTORS });
+    assert.notEqual(canonicalChange.parts.wikiContextHash, outsideWiki.parts.wikiContextHash, 'canonical records remain inputs even with the same basename');
   } finally {
     removeFixtureRoot(root);
   }
