@@ -11,7 +11,13 @@ Thanks for helping make agent-assisted development easier to verify. Contributio
 
 ## Local setup
 
-Requirements: Node.js 20.11 or newer, npm, and Git.
+Use **Node.js 24 LTS, version 24.15.0 or newer within 24.x**, plus npm and Git.
+The locked development dependencies accept `^22.22.2 || ^24.15.0 || >=26.0.0`;
+Node 26.7.0 is also used for local release verification. CI uses the 24.x line.
+
+The published CLI's `engines.node` value (`>=20.11`) is its declared runtime
+floor. It does not describe the requirements for this source checkout:
+`jsdom` and its CSS dependencies require the newer versions listed above.
 
 ```sh
 npm ci --ignore-scripts

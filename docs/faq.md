@@ -10,11 +10,16 @@ It is a local trust layer and CLI for Codex CLI and supported Codex desktop host
 
 ## What is the smallest install?
 
+Install SKS globally once for your user account. This verified installer runs
+the global npm installation, runs Doctor, and checks the installed CLI on `PATH`:
+
 ```sh
 npm exec --yes --package=sneakoscope@latest -- sneakoscope install --yes
 ```
 
 Then run `sks bootstrap` from a project root and `sks doctor --json` to inspect setup.
+See the README's [requirements and global install steps](../README.md#quick-start)
+for the recommended Node version and the explicit `npm install --global` flow.
 
 ## What files does bootstrap add?
 
@@ -22,7 +27,12 @@ Bootstrap creates the project-local SKS context and ignore rules that let the re
 
 ## What does `sks update` change?
 
-It resolves the latest release, runs setup reconciliation, keeps trusted SKS hooks installed, and cleans up recognized SKS-owned legacy assets. User-authored configuration remains authoritative.
+Run `sks update` from your project root to update the global SKS package. It
+verifies the installed command, reconciles setup and trusted hooks, and cleans
+up recognized SKS-owned legacy assets. From 10.5.5 it also repairs the known
+ignored Codex settings and refreshes managed guidance. User-authored
+configuration remains authoritative. Check the result with `sks --version`
+and `sks doctor --json`; see [the update steps](../README.md#update-an-existing-installation).
 
 ## Is the macOS menu bar required?
 

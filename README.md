@@ -8,7 +8,7 @@
 
 [![CI](https://github.com/mandarange/Sneakoscope-Codex/actions/workflows/ci.yml/badge.svg)](https://github.com/mandarange/Sneakoscope-Codex/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/sneakoscope?color=cb3837&logo=npm)](https://www.npmjs.com/package/sneakoscope)
-[![Node.js >=20.11](https://img.shields.io/badge/node-%3E%3D20.11-339933?logo=node.js&logoColor=white)](#quick-start)
+[![Recommended Node.js 24.15+ LTS](https://img.shields.io/badge/node-24.15%2B%20LTS-339933?logo=node.js&logoColor=white)](#requirements)
 [![MIT license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 </div>
@@ -25,42 +25,83 @@ Use SKS when you want an AI coding session to end with something you can inspect
 
 ## Quick start
 
-Requirements: Node.js **20.11+**, npm, Git, and a current Codex CLI or supported Codex desktop host.
+### Requirements
+
+- **Recommended: Node.js 24 LTS, version 24.15.0 or newer within 24.x.** Use a current patch from the [official Node.js releases](https://nodejs.org/en/about/previous-releases).
+- npm, Git, and a current Codex CLI or supported Codex desktop host.
+- For development and tests, the locked dependencies require **Node 22.22.2+ on 22.x, 24.15.0+ on 24.x, or 26.0.0+**. CI uses 24.x; release preparation is also verified on Node 26.7.0. See [Contributing](CONTRIBUTING.md#local-setup).
+
+The published CLI's declared `package.json` engine floor is still `>=20.11`.
+That is separate from the development/test requirements above; Node 20 is now
+end-of-life, so use a supported LTS release for a new installation.
+
+### Install SKS globally
+
+Install SKS once for your user account so `sks` is available across projects:
+
+```sh
+npm install --global sneakoscope@latest
+sks doctor --fix --global-only --yes
+sks --version
+```
+
+Run these commands in your terminal. The global-only Doctor step reconciles
+user-level SKS skills and configuration, and reports any setup blockers.
+Make sure your npm global binary directory is on `PATH`.
+
+Alternatively, the verified installer performs the global npm installation,
+runs Doctor, and checks that `sks` on `PATH` resolves to the installed version:
 
 ```sh
 npm exec --yes --package=sneakoscope@latest -- sneakoscope install --yes
 ```
 
-From the root of a project you want SKS to understand:
+### Enable SKS for a project
+
+From the root of each project you want SKS to understand:
 
 ```sh
 sks bootstrap
 sks doctor --json
 ```
 
-Then open the project in Codex. Start with the smallest useful loop:
+Then open the project in Codex. Refresh its context and ask for ordinary work
+directly in the conversation:
 
 ```text
-$sks-plan "Describe the change and the checks it needs"
-$sks-work
+$sks-align
+Fix the failing test and verify the changed behavior.
 $sks-review
 ```
 
-Use the terminal to inspect the same state:
+`sks bootstrap` adds project-local SKS context and ignore rules. Ordinary work
+stays with the main agent; choose `$sks-naruto` or `$sks-work` when you want
+parallel child work.
+
+## Update an existing installation
+
+Run this from your project root in a terminal:
 
 ```sh
-sks status --json
-sks review --staged
-sks update-check
+sks update
+sks --version
+sks doctor --json
 ```
 
-The installer resolves the latest npm release, installs `sks`, runs setup and Doctor, and verifies that the command on your `PATH` is the version it installed. `sks bootstrap` adds the project-local SKS context and ignore rules; it does not replace your source of truth.
+`sks update` updates the **global** SKS package, verifies the installed command,
+and reconciles SKS-managed skills, hooks, configuration and SKS Center where
+available. In 10.5.5 and later it also repairs the known ignored Codex settings
+and refreshes managed guidance. User-authored text and explicit preferences
+are preserved. If a step fails, follow the recovery action in its output.
+
+To check available updates first, run `sks update check`. For a repair without
+requesting a newer package, run `sks doctor --fix` yourself in the terminal.
 
 ## What you get
 
 | Need | SKS provides |
 | --- | --- |
-| Keep work focused | Answers, tiny edits, ordinary implementation, reviews, and DB work run directly in the main agent, the way Codex works by default. Naruto splits work across official Codex subagents only when you ask for it. |
+| Keep work focused | Answers, tiny edits, ordinary implementation, reviews, and DB work run directly in the main agent. Naruto delegates through official Codex subagents when explicitly requested or selected by Jev. |
 | Keep context bounded | TriWiki indexes repository code into context that can be checked against source. |
 | Know what actually ran | Tests, diagnostics, and release evidence are recorded for completion claims. |
 | Recover safely | Doctor and update flows report a concrete recovery action when a check needs attention. |
@@ -73,23 +114,58 @@ and model choices are preserved. See [harness maintenance](docs/align-modernizat
 
 ## Everyday commands
 
-Inside a Codex conversation:
+### Core dollar commands
+
+Type these into the **Codex desktop app or Codex CLI conversation**:
 
 | Command | Use it for |
 | --- | --- |
+| `$sks-align` | Refresh official guidance and rebuild TriWiki from the current codebase. |
+| `$sks-mad-sks "scope and task"` | Explicitly authorize a bounded high-risk task; combine with another dollar command when appropriate. |
 | `$sks-plan "task"` | Write a plan without editing product code. |
-| `$sks-work` | Execute the latest plan with Naruto child agents. |
+| `$sks-work` | Run parallel child work through the Naruto execution alias. |
 | `$sks-review` | Review the current changes. |
 | `$sks-naruto "task"` | Explicitly split independent work across official subagents. |
 | `$sks-help` | Explore available SKS workflows. |
 
-In a terminal:
+#### `$sks-align`: keep the harness and project context current
+
+Use it when starting in a repository, after structural code changes, or when
+you want to refresh the managed instructions against current official guidance:
+
+```text
+$sks-align
+```
+
+Align searches current official Codex/model guidance, refreshes only
+SKS-managed instruction areas, and rebuilds the source-only TriWiki index.
+Your own instructions and model choices are preserved. External references
+stay separate from code facts; unavailable retrieval is reported while the
+previous references are retained. See [harness maintenance](docs/align-modernization.md).
+
+#### `$sks-mad-sks`: explicitly authorize a scoped high-risk task
+
+Name the target, allowed changes and boundaries in the request. For example:
+
+```text
+$sks-mad-sks Fix permissions only under ./dist so this project's build can run.
+Preserve source files, credentials, and other projects.
+```
+
+It temporarily widens only the approved scopes for that invocation and can
+be combined with another dollar command, such as `$sks-db` for an explicitly
+authorized database task. Database work uses the bound
+project's SQL-plane capability, read-back verification and final read-only
+restoration. Host approval boundaries and protected control-plane operations
+remain enforced. See [MAD-SKS](docs/mad-sks.md) before authorizing such work.
+
+### Terminal commands
 
 ```sh
 sks --help
 sks status --json
 sks doctor --json
-sks update-check
+sks update check
 sks update
 ```
 
@@ -144,7 +220,8 @@ See [Image generation](docs/image-generation.md) for provider boundaries and evi
 
 - [Product contract](docs/PRODUCT-CONTRACT.md) — supported surfaces and ownership.
 - [Essential Trust](docs/essential-trust.md) — verification profiles and safety boundaries.
-- [Astra guidance](docs/astra-guidance.md) — how SKS applies official model recommendations.
+- [Harness maintenance and Align](docs/align-modernization.md) — current official references, thin managed instructions, and source-only TriWiki.
+- [MAD-SKS](docs/mad-sks.md) — explicit permission scope, execution boundaries, and verification.
 - [Agent Bridge](docs/AGENT-BRIDGE.md) — integrate through the CLI or MCP interface.
 - [Context Graph](docs/architecture/context-graph.md) — bounded source lookup and freshness.
 - [Release readiness](docs/release-readiness.md) — build, verify, and publish a release.
