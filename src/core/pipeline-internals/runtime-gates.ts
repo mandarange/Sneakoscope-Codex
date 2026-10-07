@@ -995,3 +995,31 @@ async function hasVisibleClarificationQuestionBlock(root: any, state: any = {}, 
   const requiredIds = slots.slice(0, Math.min(3, slots.length)).map((slot: any) => slot.id).filter(Boolean);
   return requiredIds.every((id: any) => body.includes(id)) && /sks pipeline answer|answers\.json|slot id|슬롯|항목/i.test(body);
 }
+
+/** Fast profiles can only bypass optional read-only work. Mutation and
+ * publication always re-enter the existing coordinator/single-writer gates. */
+export function mutationBarrier(input: {
+  executionProfile?: string;
+  stageId?: string;
+  readOnly?: boolean;
+  permission?: boolean;
+  consent?: boolean;
+  stale?: boolean;
+  approval?: boolean;
+} = {}): { allowed: boolean; profile: string; reason: string } {
+  const profile = String(input.executionProfile || 'baseline');
+  const stage = String(input.stageId || '');
+  const mutation = input.readOnly === false || ['publish', 'align', 'destructive_action', 'focused_implementation'].includes(stage);
+  if (!mutation) return { allowed: true, profile, reason: 'read_only_stage' };
+  if (profile !== 'baseline' && profile !== 'deep_verify') return { allowed: false, profile: 'baseline', reason: 'fast_profile_mutation_blocked' };
+  if (input.permission === false) return { allowed: false, profile, reason: 'permission_missing' };
+  if (input.consent === false) return { allowed: false, profile, reason: 'consent_missing' };
+  if (input.stale === true) return { allowed: false, profile: 'deep_verify', reason: 'stale_precondition' };
+  if (input.approval === false) return { allowed: false, profile, reason: 'approval_required' };
+  return { allowed: true, profile, reason: 'coordinator_gate_required' };
+}
+
+export function fastPathGateStatus(input: Parameters<typeof mutationBarrier>[0] = {}) {
+  const barrier = mutationBarrier(input);
+  return { ...barrier, mutation_barrier: barrier.allowed || barrier.reason === 'coordinator_gate_required' };
+}

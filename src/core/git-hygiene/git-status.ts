@@ -1,8 +1,8 @@
 import fsp from 'node:fs/promises';
 import path from 'node:path';
-import type { Dirent } from 'node:fs';
 import { rel, runProcess } from '../fsx.js';
 import { classifySksPath, readGitPolicy, type SksGitPolicy } from './git-policy.js';
+import { inspectConfinedPath } from '../managed-path-safety.js';
 
 export interface GitStatusSummary {
   schema: 'sks.git-status.v1';
@@ -110,28 +110,29 @@ export async function fileSize(root: string, relPath: string): Promise<number> {
 
 export async function listSharedFiles(root: string): Promise<string[]> {
   const out: string[] = [];
-  async function walk(dir: string): Promise<void> {
-    let entries: Dirent[] = [];
-    try {
-      entries = await fsp.readdir(dir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const entry of entries) {
-      const file = path.join(dir, entry.name);
-      if (entry.isDirectory()) await walk(file);
-      else if (entry.isFile()) out.push(rel(root, file));
-    }
+  const pending: Array<{ file: string; depth: number }> = [];
+  for (const dir of ['.sneakoscope/wiki/records', '.sneakoscope/wiki/wrongness', '.sneakoscope/wiki/image-voxels', '.sneakoscope/wiki/avoidance-rules', '.sneakoscope/wiki/summaries']) {
+    pending.push({ file: path.join(root, dir), depth: 0 });
   }
-  for (const dir of ['.sneakoscope/wiki/records', '.sneakoscope/wiki/wrongness', '.sneakoscope/wiki/image-voxels', '.sneakoscope/wiki/avoidance-rules']) {
-    await walk(path.join(root, dir));
+  let visited = 0;
+  while (pending.length) {
+    const { file, depth } = pending.pop()!;
+    if (++visited > 4096 || depth > 32) throw new Error('shared_memory_inventory_budget');
+    const inspected = await inspectConfinedPath(root, file);
+    if (!inspected.exists) continue;
+    if (inspected.leafSymlink) throw new Error('shared_memory_symlink');
+    if (inspected.stat?.isFile()) out.push(rel(root, file));
+    else if (inspected.stat?.isDirectory()) {
+      const children = await fsp.readdir(file);
+      if (visited + pending.length + children.length > 4096) throw new Error('shared_memory_inventory_budget');
+      for (const child of children.sort()) pending.push({ file: path.join(file, child), depth: depth + 1 });
+    } else throw new Error('shared_memory_non_regular');
   }
   for (const file of ['.sneakoscope/git-policy.json', '.sneakoscope/shared-memory-manifest.json']) {
-    try {
-      await fsp.access(path.join(root, file));
-      out.push(file);
-    } catch {}
+    const inspected = await inspectConfinedPath(root, path.join(root, file));
+    if (!inspected.exists) continue;
+    if (inspected.leafSymlink || !inspected.stat?.isFile()) throw new Error('shared_memory_policy_path');
+    out.push(file);
   }
   return out.sort();
 }
-

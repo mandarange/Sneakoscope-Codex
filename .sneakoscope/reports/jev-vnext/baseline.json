@@ -1,0 +1,57 @@
+{
+  "schema": "sks.jev-vnext-baseline.v2",
+  "generated_at": "2026-10-07T11:31:23.784Z",
+  "base_branch": "origin/main",
+  "base_commit": "ce6203869b83fd729be08cfb2f74ec2c632c41ba",
+  "requested_commit": "ce6203869b83fd729be08cfb2f74ec2c632c41ba",
+  "requested_commit_present": true,
+  "package_version": "10.5.6",
+  "node_process": "v24.19.0",
+  "npm_version": "11.9.0",
+  "baseline_worktree": "clean temporary worktree at exact base",
+  "baseline_commands": {
+    "typecheck": {
+      "command": "npm run typecheck",
+      "status": "passed"
+    },
+    "build_clean": {
+      "command": "npm run build:clean",
+      "status": "passed"
+    },
+    "architecture": {
+      "command": "npm run architecture:check",
+      "status": "passed"
+    },
+    "test_release": {
+      "command": "npm run test:release",
+      "status": "passed",
+      "tests": 198,
+      "failed": 0
+    }
+  },
+  "current_commands": {
+    "typecheck": "passed",
+    "build_clean": "passed",
+    "architecture": "passed",
+    "schema": "passed",
+    "runtime_no_src_mjs": "passed",
+    "runtime_ts_source_of_truth": "passed",
+    "test_release": {
+      "passed": 198,
+      "failed": 0
+    }
+  },
+  "source_inventory_counts": {
+    "tracked": 2851,
+    "source": 2162,
+    "tests": 861,
+    "docs": 145,
+    "schemas": 53,
+    "config": 9,
+    "package": 4
+  },
+  "known_gap": [
+    "No live OpenRouter workload was run.",
+    "Environment lacks an installed global/PATH sks binary for the locked version probe used by two release DAG gates."
+  ]
+}

@@ -5,6 +5,41 @@ import { compileMistakeRules } from '../verification/mistake-rule-compiler.js';
 
 export async function memoryCommand(sub: any, args: any = []) {
   const action = String(sub || '').toLowerCase();
+  if (['promote', 'forget', 'recall'].includes(action)) {
+    const root = await sksRoot();
+    const json = flag(args, '--json');
+    if (action === 'promote') {
+      const missionId = String(readOption(args, '--mission', '') || '').trim();
+      if (!missionId || !flag(args, '--yes')) {
+        const blocked = { schema: 'sks.jev-memory-promotion.v1', ok: false, promoted: [], rejected: ['explicit_mission_and_yes_required'] };
+        if (json) console.log(JSON.stringify(blocked, null, 2)); else { console.log('Memory promotion blocked: pass --mission <id> --yes.'); process.exitCode = 1; }
+        return blocked;
+      }
+      const { promoteJevMemoryIntake } = await import('../git-hygiene/shared-memory-publish.js');
+      const result = await promoteJevMemoryIntake(root, missionId, { explicit: true, requireConfirmation: true });
+      if (json) console.log(JSON.stringify(result, null, 2)); else console.log(result.ok ? `Memory promotion: ${result.promoted.length} record(s)` : `Memory promotion blocked: ${result.rejected.join(', ')}`);
+      if (!result.ok) process.exitCode = 1;
+      return result;
+    }
+    if (action === 'forget') {
+      const memoryId = String(readOption(args, '--memory-id', positionalMemoryId(args)) || '').trim();
+      const previousDigest = String(readOption(args, '--previous-digest', '') || '').trim();
+      if (!memoryId || !previousDigest) {
+        const blocked = { schema: 'sks.memory-tombstone.v1', ok: false, blockers: ['memory_id_and_previous_digest_required'] };
+        if (json) console.log(JSON.stringify(blocked, null, 2)); else { console.log('Memory forget blocked: pass --memory-id <id> --previous-digest <digest>.'); process.exitCode = 1; }
+        return blocked;
+      }
+      const { writeJevMemoryTombstone } = await import('../git-hygiene/shared-memory-publish.js');
+      const result = await writeJevMemoryTombstone(root, { memoryId, previousDigest });
+      const output = { ...result, ok: true };
+      if (json) console.log(JSON.stringify(output, null, 2)); else console.log(`Memory tombstone written: ${result.path}`);
+      return output;
+    }
+    const { readSharedMemoryOverlay } = await import('../git-hygiene/shared-memory-publish.js');
+    const result = await readSharedMemoryOverlay(root, { query: String(readOption(args, '--query', '') || ''), highRisk: flag(args, '--high-risk') });
+    if (json) console.log(JSON.stringify(result, null, 2)); else console.log(`Memory recall: ${result.available ? result.items.length : `unavailable (${result.reason || 'unknown'})`}`);
+    return result;
+  }
   if (['build', 'project', 'agents', 'agents-md'].includes(action)) {
     // The AGENTS.md projection has one writer, `sks align run` (S3); this
     // command runs it, then compiles the mistake rules it alone owns.
@@ -98,6 +133,10 @@ function readOption(args: any[] = [], name: string, fallback: unknown = null) {
   if (index >= 0 && args[index + 1] && !String(args[index + 1]).startsWith('--')) return args[index + 1];
   const prefixed = args.find((arg) => String(arg).startsWith(`${name}=`));
   return prefixed ? String(prefixed).slice(name.length + 1) : fallback;
+}
+
+function positionalMemoryId(args: any[] = []) {
+  return (args || []).find((arg: any) => !String(arg).startsWith('--')) || '';
 }
 
 export async function statsCommand(args: any = []) {

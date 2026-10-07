@@ -1,7 +1,7 @@
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { ensureDir, exists, packageRoot } from '../fsx.js';
-import { addImageRelation, addVisualAnchor, ingestImage, missionImageLedgerPath, readImageVoxelLedger, writeImageVoxelLedger } from './image-voxel-ledger.js';
+import { addImageRelation, addVisualAnchor, ingestImage, missionImageLedgerPath, readImageVoxelLedger, validateImageVoxelLedgerFiles, writeImageVoxelLedger } from './image-voxel-ledger.js';
 import { validateImageVoxelLedger } from './validation.js';
 import { emptyImageVoxelLedger } from './image-voxel-schema.js';
 
@@ -19,8 +19,11 @@ export async function ensureRouteImageEvidence(root: any = packageRoot(), {
   let ledger = await readImageVoxelLedger(root, await exists(missionLedger) ? missionLedger : undefined);
   if (ledger?.mission_id !== missionId) ledger = { ...emptyImageVoxelLedger(), ...ledger, mission_id: missionId };
   let existingValidation = validateImageVoxelLedger(ledger, { requireAnchors: true, requireRelations: requireRelation, route });
+  if (existingValidation.ok) {
+    const integrity = await validateImageVoxelLedgerFiles(root, ledger);
+    if (!integrity.ok) existingValidation = { ...existingValidation, ok: false, status: 'blocked', issues: integrity.issues };
+  }
   if (existingValidation.ok && ledger.anchors?.length) {
-    await writeImageVoxelLedger(root, ledger);
     return { ok: true, status: 'verified_partial', ledger, validation: existingValidation, created_mock: false };
   }
   if (!mock) {
@@ -33,10 +36,10 @@ export async function ensureRouteImageEvidence(root: any = packageRoot(), {
   }
   ledger = sanitizeMissionLedger(ledger, missionId);
   existingValidation = validateImageVoxelLedger(ledger, { requireAnchors: true, requireRelations: requireRelation, route });
-  await writeImageVoxelLedger(root, ledger);
   const imagePath = path.join(root, '.sneakoscope', 'missions', missionId, 'visual-fixture.png');
   await ensureDir(path.dirname(imagePath));
   await fsp.writeFile(imagePath, Buffer.from(ONE_BY_ONE_PNG_BASE64, 'base64'));
+  await writeImageVoxelLedger(root, ledger);
   await ingestImage(root, path.relative(root, imagePath), { missionId, source: `${source}:mock`, id: `${missionId}-mock-before` });
   await ingestImage(root, path.relative(root, imagePath), { missionId, source: `${source}:mock`, id: `${missionId}-mock-after` });
   const anchorId = `${missionId}-mock-anchor`;

@@ -45,6 +45,7 @@ import {
   clearWorkspaceContextIndex
 } from '../triwiki/context-graph/query/index.js';
 import { withTriWikiStateLock } from '../triwiki/triwiki-cleanup.js';
+import { preserveCanonicalMemory, rebuildSharedIndexes } from '../git-hygiene/shared-memory-publish.js';
 import { publishArchitectureMapToStage } from '../triwiki/context-graph/store/architecture-map-store.js';
 import {
   alignPendingRoot,
@@ -125,7 +126,9 @@ interface PriorSurface {
 
 const ALIGN_REPLACED_SURFACES = Object.freeze([
   { key: 'wiki', rel: '.sneakoscope/wiki' },
-  { key: 'memory', rel: '.sneakoscope/memory' },
+  // Legacy runtime memory is generated state. Canonical shared memory lives
+  // under `.sneakoscope/wiki` and is copied into the new generation above.
+  { key: 'legacy_memory_runtime', rel: '.sneakoscope/memory' },
   { key: 'context_graph_cache', rel: '.sneakoscope/cache/context-graph' },
   { key: 'code_pack_freshness_cache', rel: '.sneakoscope/cache/code-pack-head-freshness.json' },
   { key: 'generated_agents_projection', rel: '.sneakoscope/context/AGENTS.generated.md' },
@@ -245,6 +248,7 @@ async function validateStaging(input: {
   pack: CodePack;
   contextPack: any;
   manifest: CodeNavigationManifest;
+  canonicalHashes?: Record<string, string>;
 }) {
   for (const artifact of ALIGN_OUTPUT_ARTIFACTS) {
     if (!artifact.startsWith(WIKI_PREFIX)) return false;
@@ -260,7 +264,13 @@ async function validateStaging(input: {
   const packValidation = await validateCodePack(pack, input.root);
   if (!packValidation.ok || !isCodePackProjectionBoundToSnapshot(input.snapshot.snapshotHash, pack)) return false;
   const contextPack = await readJson<any>(path.join(input.stageWiki, 'context-pack.json'), null);
-  return validateCodeNavigationContextPack(contextPack, input.root).ok;
+  if (!validateCodeNavigationContextPack(contextPack, input.root).ok) return false;
+  for (const [relative, expected] of Object.entries(input.canonicalHashes || {})) {
+    const file = path.join(input.stageWiki, relative);
+    const stat = await fsp.stat(file).catch(() => null);
+    if (!stat?.isFile() || await fileSha256(file) !== expected) return false;
+  }
+  return true;
 }
 
 async function runLocked(
@@ -277,6 +287,30 @@ async function runLocked(
   const staleStage = await lstatOrNull(stageBase);
   if (staleStage?.isSymbolicLink()) throw new Error('code_navigation_staging_symlink_refused');
   if (staleStage) {
+    // A killed coordinator may have moved the old wiki but never completed the
+    // swap. Recover it before deleting staging; it contains canonical records.
+    const entries = await fsp.readdir(stageBase, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.isSymbolicLink()) throw new Error('align_recovery_stage_invalid');
+      const journal = await readJson<any>(path.join(stageBase, entry.name, 'swap-journal.json'), null);
+      const priorRoot = path.join(stageBase, entry.name, 'previous');
+      for (const surface of ALIGN_REPLACED_SURFACES) {
+        const prior = path.join(priorRoot, surface.key);
+        if (!(await lstatOrNull(prior))) continue;
+        if ((await lstatOrNull(prior))?.isSymbolicLink()) throw new Error('align_recovery_symlink');
+        const active = path.join(root, surface.rel);
+        // Recovery is conservative: a live active surface wins. Restore a
+        // moved prior generation only when the active path is absent and the
+        // journal proves that the swap had started. Never overwrite a newer
+        // successful generation while cleaning an abandoned stage.
+        if (!await lstatOrNull(active) && journal?.phase === 'prior_moved') {
+          await ensureDir(path.dirname(active));
+          await guardedRename(guard, prior, active);
+        } else if (await lstatOrNull(prior)) {
+          await guardedRm(guard, prior, { recursive: true, force: true });
+        }
+      }
+    }
     await guardedRm(guard, stageBase, { recursive: true, force: true });
     if (await lstatOrNull(stageBase)) throw new Error('code_navigation_stale_staging_not_removed');
   }
@@ -419,8 +453,13 @@ async function runLocked(
     await writeJsonAtomic(path.join(stageWiki, 'code-pack.json'), pack);
     await writeJsonAtomic(path.join(stageWiki, 'context-pack.json'), contextPack);
     await publishArchitectureMapToStage(stageWiki, snapshot, { root, missionId });
+    // Copy byte-for-byte under the same lock as publish, then rebuild only
+    // derived indexes. Canonical records never seed the source-only graph.
+    const canonicalHashes = await preserveCanonicalMemory(root, stageWiki);
+    await rebuildSharedIndexes(pendingRoot);
+    ledger.publication.canonical_memory_sha256 = canonicalHashes;
     ledger.publication.staged = true;
-    ledger.validation.staged_readback = await validateStaging({ stageWiki, root, snapshot, pack, contextPack, manifest });
+    ledger.validation.staged_readback = await validateStaging({ stageWiki, root, snapshot, pack, contextPack, manifest, canonicalHashes });
     if (!ledger.validation.staged_readback) throw new Error('code_navigation_staging_validation_failed');
 
     const prior = await inspectPriorSurfaces(root);
@@ -429,15 +468,36 @@ async function runLocked(
     ledger.input_state.prior_state_digest = prior.length
       ? crypto.createHash('sha256').update(prior.map((surface) => surface.descriptor).sort().join('\n')).digest('hex')
       : null;
+    await writeJsonAtomic(path.join(stageRoot, 'swap-journal.json'), {
+      schema: 'sks.align-swap-journal.v1',
+      phase: 'prepared',
+      mission_id: missionId,
+      active_surfaces: prior.map((surface) => surface.rel).sort(),
+      created_at: nowIso()
+    });
     for (const surface of prior) {
       const temporary = path.join(previousRoot, surface.key);
       await ensureDir(path.dirname(temporary));
       await guardedRename(guard, surface.absolute, temporary);
       movedPrior.push({ surface, temporary });
     }
+    await writeJsonAtomic(path.join(stageRoot, 'swap-journal.json'), {
+      schema: 'sks.align-swap-journal.v1',
+      phase: 'prior_moved',
+      mission_id: missionId,
+      active_surfaces: prior.map((surface) => surface.rel).sort(),
+      created_at: nowIso()
+    });
     await ensureDir(path.dirname(activeWiki));
     await guardedRename(guard, stageWiki, activeWiki);
     promoted = true;
+    await writeJsonAtomic(path.join(stageRoot, 'swap-journal.json'), {
+      schema: 'sks.align-swap-journal.v1',
+      phase: 'promoted',
+      mission_id: missionId,
+      active_surfaces: prior.map((surface) => surface.rel).sort(),
+      created_at: nowIso()
+    });
     clearContextGraphSnapshotCache();
     // The published generation moved with the directory, so any reader resident
     // from before the rename describes a store that no longer exists.

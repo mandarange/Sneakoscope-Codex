@@ -1,0 +1,57 @@
+{
+  "schema": "sks.jev-vnext-migration.v2",
+  "generated_at": "2026-10-07T11:13:57.813Z",
+  "base_commit": "ce6203869b83fd729be08cfb2f74ec2c632c41ba",
+  "policy_revision": "sks.jev-memory-policy.v1",
+  "intake_schema": "sks.jev-memory-intake.v1",
+  "canonical_schema": "sks.triwiki-claim-record.v1",
+  "align_strategy": "A",
+  "legacy_inventory": {
+    "path": ".sneakoscope/memory",
+    "tracked": false,
+    "active_entries": 0,
+    "status": "not_applicable",
+    "reason": "generated runtime surface only; no legacy intake/schema records exist in the baseline inventory"
+  },
+  "steps": [
+    {
+      "id": "legacy-inventory",
+      "status": "completed",
+      "proof": "baseline-inventory.json; zero tracked legacy intake/schema files"
+    },
+    {
+      "id": "shadow-read",
+      "status": "completed",
+      "proof": "bounded canonical overlay and unavailable-on-missing-binding tests"
+    },
+    {
+      "id": "new-owner-validation",
+      "status": "completed",
+      "proof": "typecheck, schema, focused intake/promotion/image tests"
+    },
+    {
+      "id": "import-switch",
+      "status": "completed",
+      "proof": "prompt hook writes only v1 mission intake; canonical promotion remains explicit"
+    },
+    {
+      "id": "old-path-delete",
+      "status": "not_applicable",
+      "proof": "no legacy vNext adapter/path was present; generated .sneakoscope/memory remains cleanup-only"
+    },
+    {
+      "id": "orphan-scan",
+      "status": "completed",
+      "proof": "rg call-site scan, TypeScript, build, architecture, and release suite"
+    }
+  ],
+  "rollback": {
+    "jev": "disable mode/capability and stop intake promotion",
+    "canonical": "retain shards and tombstones; no hard delete",
+    "align": "restore prior generated wiki atomically"
+  },
+  "notes": [
+    "Existing .sneakoscope/wiki/records, wrongness, image-voxels, avoidance-rules, summaries, and project policy remain canonical tracked surfaces.",
+    "No legacy data was auto-promoted or deleted."
+  ]
+}

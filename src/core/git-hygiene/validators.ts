@@ -2,6 +2,8 @@ import fsp from 'node:fs/promises';
 import { GIT_POLICY_SCHEMA, SHARED_MEMORY_MANIFEST_SCHEMA, type SksGitPolicy, type SharedMemoryManifest } from './git-policy.js';
 import { isMockPositiveSharedClaim, sharedRecordHasSecret } from './shared-memory-security.js';
 import { asRecordOrEmpty as asRecord } from '../json/records.js';
+import { validateCanonicalMemoryMetadata, validateMemoryTombstone } from '../artifact-schemas.js';
+import { stableDigest } from '../decisions/state.js';
 
 export interface ValidationResult {
   ok: boolean;
@@ -38,8 +40,29 @@ export function validateSharedRecord(record: unknown, policy?: SksGitPolicy): Va
     'sks.triwiki-wrongness-record.v1',
     'sks.triwiki-wrongness.v1',
     'sks.image-voxel-record.v1',
-    'sks.avoidance-rule-record.v1'
+    'sks.avoidance-rule-record.v1',
+    'sks.memory-tombstone.v1'
   ].includes(schema)) issues.push(`schema:${schema || 'missing'}`);
+  if (schema === 'sks.memory-tombstone.v1') {
+    const validation = validateMemoryTombstone(record);
+    issues.push(...validation.errors);
+  }
+  if (row.memory_metadata !== undefined) {
+    const validation = validateCanonicalMemoryMetadata(row.memory_metadata);
+    if (!validation.ok) issues.push(...validation.errors.map((issue: string) => `memory_metadata:${issue}`));
+    else {
+      const metadata = asRecord(row.memory_metadata);
+      const intake = asRecord(metadata.intake);
+      for (const key of ['memory_id', 'mission_id', 'disposition', 'scope', 'lifecycle_state', 'ttl', 'source_kind', 'idempotency_key', 'policy_revision', 'source_digest', 'created_at']) {
+        if (row[key] !== intake[key]) issues.push(`memory_binding:${key}`);
+      }
+      if (row.effective_trust !== metadata.effective_trust || row.trust_score !== metadata.effective_trust) issues.push('memory_binding:trust');
+      if (row.evidence_digest !== intake.text_hash || stableDigest(row.evidence_refs) !== stableDigest(intake.evidence_refs)
+        || stableDigest(row.evidence_hashes) !== stableDigest(intake.evidence_hashes)) issues.push('memory_binding:evidence');
+      const text = schema === 'sks.triwiki-wrongness-record.v1' ? asRecord(asRecord(row.wrongness).claim).text : asRecord(row.claim).text;
+      if (stableDigest(text) !== intake.text_hash) issues.push('memory_binding:text');
+    }
+  }
   if (!String(row.id || '').trim()) issues.push('id');
   if (policy?.security?.block_secret_patterns && sharedRecordHasSecret(record)) issues.push('secret');
   if (policy?.security?.block_mock_real_confusion && isMockPositiveSharedClaim(record)) issues.push('mock_positive_claim');

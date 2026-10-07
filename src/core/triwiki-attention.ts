@@ -1,4 +1,4 @@
-import { WIKI_VOXEL_LAYERS, buildWikiCoordinateIndex, compactWikiCoordinateIndex, normalizeWikiCoord, wikiCoordSimilarity } from './wiki-coordinate.js';
+import { rgbaFromHash, rgbaToWikiCoord, WIKI_VOXEL_LAYERS, buildWikiCoordinateIndex, compactWikiCoordinateIndex, normalizeWikiCoord, wikiCoordSimilarity } from './wiki-coordinate.js';
 
 export const DEFAULT_TRUST_POLICY = {
   schema_version: 1,
@@ -390,4 +390,41 @@ export function contextCapsule({ mission, role = 'worker', contractHash = null, 
       return row;
     })
   };
+}
+
+/** Deterministic projection/ranking for the memory overlay. The canonical reader
+ * owns bounded I/O; this owner ranks only validated memory records. Code graph
+ * attention never consumes this overlay or falls back to it. */
+export interface MemoryAttentionItem {
+  memory_id: string
+  text: string
+  source: string
+  effective_trust: number
+  lifecycle: string
+  freshness: string
+  [key: string]: unknown
+}
+
+export function rankMemoryOverlayItems<T extends MemoryAttentionItem>(items: readonly T[], query = ''): T[] {
+  const needle = String(query || '').trim().toLowerCase()
+  return [...items].map((item) => {
+    const rgba = rgbaFromHash(item.memory_id)
+    return {
+      ...item,
+      coord: rgbaToWikiCoord(rgba),
+      voxel_layers: {
+        sem: Math.min(1, item.text.length / 512),
+        trust: Math.max(0, Math.min(1, item.effective_trust)),
+        fresh: item.freshness === 'fresh' ? 1 : 0,
+        prio: Math.max(0, Math.min(1, item.effective_trust)),
+        conflict: item.lifecycle === 'CONFLICTED' ? 1 : 0,
+        route: 0.5,
+        cost: Math.min(1, item.text.length / 6000)
+      },
+      _query_hit: needle ? `${item.text} ${item.source}`.toLowerCase().includes(needle) : false
+    }
+  }).sort((a, b) => Number(Boolean(b._query_hit)) - Number(Boolean(a._query_hit))
+    || b.effective_trust - a.effective_trust
+    || a.memory_id.localeCompare(b.memory_id))
+    .map(({ _query_hit: _ignored, ...item }) => item as T) as T[]
 }

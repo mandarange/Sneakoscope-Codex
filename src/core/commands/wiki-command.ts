@@ -14,7 +14,7 @@ import { validateImageVoxelLedger } from '../wiki-image/validation.js';
 import { maybeFinalizeRoute } from '../proof/auto-finalize.js';
 import { wikiWrongnessCommand } from '../triwiki-wrongness/wrongness-cli.js';
 import { recordImageWrongnessFromValidation } from '../triwiki-wrongness/image-wrongness.js';
-import { publishSharedMemory, rebuildSharedIndexes, sharedMemorySummary, validateSharedMemory } from '../git-hygiene/shared-memory-publish.js';
+import { promoteJevMemoryIntake, publishSharedMemory, rebuildSharedIndexes, sharedMemorySummary, validateSharedMemory } from '../git-hygiene/shared-memory-publish.js';
 import {
   codePackPath,
   isCodePackProjectionBoundToSnapshot,
@@ -52,12 +52,24 @@ export async function wikiCommand(sub: any, args: any = []) {
   if (sub === 'pack') return wikiRefreshViaAlign(args);
   if (sub === 'publish') {
     const root = await sksRoot();
-    if (!flag(args, '--shared')) throw new Error('Usage: sks wiki publish latest --shared [--redact] [--json]');
+    if (!flag(args, '--shared')) throw new Error('Usage: sks wiki publish latest --shared [--redact] [--jev-memory --mission <id>] [--json]');
     const target = positionalArgs(args)[0] || 'latest';
     if (target !== 'latest') throw new Error('Usage: sks wiki publish latest --shared [--redact] [--json]');
+    let promotion: any = null;
+    const missionId = readFlagValue(args, '--mission', '');
+    if (flag(args, '--jev-memory')) {
+      if (!missionId) throw new Error('Usage: --jev-memory requires --mission <id>');
+      promotion = await promoteJevMemoryIntake(root, missionId, { explicit: true, requireConfirmation: true });
+      if (!promotion.ok) {
+        process.exitCode = 2;
+        if (flag(args, '--json')) return console.log(JSON.stringify({ promotion }, null, 2));
+        console.log(`Jev memory promotion: blocked (${promotion.rejected.join(', ')})`);
+        return;
+      }
+    }
     const result = await publishSharedMemory(root, { target: 'wiki', redact: flag(args, '--redact') });
     process.exitCode = result.ok ? 0 : 2;
-    if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
+    if (flag(args, '--json')) return console.log(JSON.stringify({ ...result, ...(promotion ? { promotion } : {}) }, null, 2));
     console.log(`Shared wiki publish: ${result.ok ? 'ok' : 'blocked'}`);
     console.log(`Written: ${result.written.length}`);
     for (const blocker of result.blockers) console.log(`- ${blocker}`);

@@ -121,7 +121,7 @@ const COMMAND_MANIFEST_LITE_BASE = [
   { name: 'gx', summary: 'Render/validate GX cartridges', maturity: 'labs' },
   { name: 'eval', summary: 'Run eval reports', maturity: 'labs' },
   { name: 'wiki', summary: 'Manage TriWiki and image voxel ledgers', maturity: 'beta', skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
-  { name: 'memory', summary: 'Project TriWiki memory into managed AGENTS.md blocks or run memory GC', maturity: 'beta' },
+  { name: 'memory', summary: 'Project TriWiki memory, explicit Jev promotion, digest-bound forgetting, or bounded recall', maturity: 'beta' },
   { name: 'gc', summary: 'Compact/prune runtime state', maturity: 'labs', skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'stats', summary: 'Show storage stats', maturity: 'labs', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'mcp-server', summary: 'Run a stdio MCP server exposing SKS commands as tools for MCP-capable agent hosts', maturity: 'beta', skipMigrationGate: true, allowedDuringActiveRoute: true },
@@ -429,8 +429,8 @@ const COMMAND_HELP_LITE = {
     description: 'Build, refresh, publish shared shards, rebuild ignored indexes, validate, and attach wrongness-memory context to RGBA/trig LLM Wiki packs with attention.use_first and attention.hydrate_first for compact recall plus source hydration.'
   },
   memory: {
-    usage: 'sks memory build [--json] | sks memory gc [--dry-run]',
-    description: 'Project TriWiki context-pack memory into managed AGENTS.md blocks or run bounded memory cleanup.'
+    usage: 'sks memory build [--json] | sks memory gc [--dry-run] | sks memory promote --mission <id> --yes [--json] | sks memory forget --memory-id <id> --previous-digest <digest> [--json] | sks memory recall [--query <text>] [--high-risk] [--json]',
+    description: 'Project TriWiki context-pack memory, explicitly promote a Jev mission intake, write a digest-bound tombstone, or read bounded canonical memory.'
   },
   naruto: {
     usage: 'sks naruto run "task" [--agents N] [--max-threads N] [--trusted-project] [--json] | sks naruto status|subagents|proof [latest|M-...] [--json] | sks naruto execution status [--json] | sks naruto execution set --mode auto|current-session|standalone [--restart] [--json] | sks naruto parent-summary --mission M-... --stdin [--json]',

@@ -16,6 +16,8 @@ import {
   DESIGN_DEFAULTS,
   ESCALATION_ROUTING_TIER,
   routingTier,
+  EXECUTION_PROFILES,
+  MEMORY_DISPOSITIONS,
   type Answer,
   type BaselineReason,
   type CompiledDecision,
@@ -338,6 +340,12 @@ function compileOption(
   if (!labels.includes(answer.choice)) return { kind: 'baseline', reason: 'invalid_response' };
   const uncertainty = requiredChoiceUncertainty(answer, labels);
   if (!uncertainty.ok) return { kind: 'baseline', reason: uncertainty.reason };
+  if (questionId === 'execution_profile' && (EXECUTION_PROFILES as readonly string[]).includes(answer.choice)) {
+    return { kind: 'effect', effect: { kind: 'select_execution_profile', profile: answer.choice as typeof EXECUTION_PROFILES[number] } };
+  }
+  if (questionId === 'memory_disposition' && (MEMORY_DISPOSITIONS as readonly string[]).includes(answer.choice)) {
+    return { kind: 'effect', effect: { kind: 'select_memory_disposition', disposition: answer.choice as typeof MEMORY_DISPOSITIONS[number] } };
+  }
   return { kind: 'effect', effect: { kind: 'select_option', questionId, option: answer.choice } };
 }
 

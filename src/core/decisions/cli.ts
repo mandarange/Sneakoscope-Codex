@@ -9,7 +9,7 @@ import { buildEvaluationReport, type EvaluationTaskRow } from './evaluation.js';
 import { OPENROUTER_DECISIONS_ENDPOINT, OPENROUTER_DECISIONS_MODEL, requestOpenRouterDecision } from './openrouter.js';
 import { buildDecisionBundle } from './questions.js';
 import { RECOVERY_CAPABILITY } from './recovery.js';
-import { DESIGN_DEFAULTS } from './types.js';
+import { DESIGN_DEFAULTS, EXECUTION_PROFILES, type ExecutionPolicy } from './types.js';
 
 export const EXIT_USAGE = 2;
 export const EXIT_FAILURE = 1;
@@ -26,7 +26,7 @@ export interface Parsed {
 
 const OPTION_SPEC: Record<Subcommand, { booleans: readonly string[]; values: readonly string[] }> = {
   status: { booleans: ['--json'], values: [] },
-  enable: { booleans: ['--json', '--consent-cloud'], values: ['--provider', '--model'] },
+  enable: { booleans: ['--json', '--consent-cloud', '--memory-intake', '--memory-promotion', '--allow-user-memory'], values: ['--provider', '--model', '--execution-policy', '--profiles'] },
   disable: { booleans: ['--json'], values: [] },
   probe: { booleans: ['--json'], values: [] },
   evaluate: { booleans: ['--json'], values: ['--dataset', '--output'] }
@@ -73,6 +73,8 @@ export function usage(): string {
     '',
     '  status [--json]     local, non-billable readiness',
     '  enable --provider openrouter --model typesafe/jev-1.13 --consent-cloud [--json]',
+    '    [--execution-policy baseline|observe|optimize] [--profiles <comma-separated IDs>]',
+    '    [--memory-intake] [--memory-promotion] [--allow-user-memory]',
     '  disable [--json]    return to the deterministic baseline',
     '  probe [--json]      explicit tiny synthetic Decisions request',
     '  evaluate --dataset <path> --output <path> [--json]',
@@ -151,7 +153,7 @@ export async function statusReport(env: NodeJS.ProcessEnv) {
   const openRouterOnly = childModels.mode === 'openrouter_only';
   const listMode = childModels.mode !== 'tiers';
   const childTierPoints = new Set(['spawn_tier', 'worker_tier', 'role_tiers', 'role_omission']);
-  const decisionPoints = ['turn_route', 'turn_tier', 'spawn_tier', 'worker_tier', 'role_tiers', 'role_omission', 'plan', 'context', 'parent_edit_delegation', 'image_need', 'image_parameters', 'qa_effort_escalation']
+  const decisionPoints = ['turn_route', 'turn_tier', 'spawn_tier', 'worker_tier', 'role_tiers', 'role_omission', 'plan', 'context', 'parent_edit_delegation', 'image_need', 'image_parameters', 'qa_effort_escalation', 'execution_profile', 'memory_disposition']
     .filter((point) => !listMode || !childTierPoints.has(point));
   return {
     schema: 'sks.jev-decision-status.v1',
@@ -161,6 +163,10 @@ export async function statusReport(env: NodeJS.ProcessEnv) {
     model: config.model,
     endpoint: OPENROUTER_DECISIONS_ENDPOINT,
     consentCloud: config.consentCloud,
+    execution_policy: config.executionPolicy,
+    enabled_profiles: config.enabledProfiles,
+    memory_intake: config.memoryIntake,
+    memory_promotion: config.memoryPromotion,
     credential: {
       present: Boolean(resolved.key),
       source: resolved.source,
@@ -211,11 +217,19 @@ async function runEnable(parsed: Parsed, env: NodeJS.ProcessEnv): Promise<number
   if (model !== OPENROUTER_DECISIONS_MODEL) throw new UsageError(`--model must be ${OPENROUTER_DECISIONS_MODEL}`);
   if (!parsed.flags.has('--consent-cloud')) throw new UsageError('--consent-cloud is required to send bounded evidence to OpenRouter');
   const json = parsed.flags.has('--json');
+  const executionPolicy = parsed.values.get('--execution-policy') || 'baseline';
+  if (!['baseline', 'observe', 'optimize'].includes(executionPolicy)) throw new UsageError('invalid execution policy');
+  const profiles = (parsed.values.get('--profiles') || '').split(',').filter(Boolean);
+  if (profiles.some(profile => !(EXECUTION_PROFILES as readonly string[]).includes(profile))) throw new UsageError('invalid execution profile');
   const config = await writeDecisionConfig({
     mode: 'jev',
     model,
     consentCloud: true,
     consentAt: nowIso(),
+    executionPolicy: executionPolicy as ExecutionPolicy,
+    enabledProfiles: EXECUTION_PROFILES.filter(profile => profiles.includes(profile)),
+    memoryIntake: parsed.flags.has('--memory-intake'), memoryPromotion: parsed.flags.has('--memory-promotion'),
+    allowUserMemory: parsed.flags.has('--allow-user-memory'),
     capabilities: {
       context: { ready: true, promoted: false, reason: 'implementation_ready_not_workload_promoted' },
       plan: { ready: true, promoted: false, reason: 'implementation_ready_host_dispatch_unverified' },

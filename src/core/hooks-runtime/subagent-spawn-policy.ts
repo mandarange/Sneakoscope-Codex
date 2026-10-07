@@ -66,9 +66,10 @@ const FORK_BLOCK_REASON = 'SKS policy: child spawns require fork_turns="none" or
  * or falls back to an older pinned family. With `root`, a managed role whose
  * file still pins an older tier model is refused too: Codex would run the pin.
  */
-export function subagentSpawnPolicyBlockReason(payload: any = {}, opts: { root?: string; narutoParent?: boolean } = {}): string | null {
+export function subagentSpawnPolicyBlockReason(payload: any = {}, opts: { root?: string; narutoParent?: boolean; spawnDepth?: number } = {}): string | null {
   if (!isSpawnAgentToolName(spawnPayloadToolName(payload))) return null;
   const input = payload.tool_input || payload.toolInput || payload.tool?.input || {};
+  if (Number(opts.spawnDepth ?? input.spawn_depth ?? 0) >= 1) return 'SKS child boundary: spawn_depth=1 is terminal; ask the main parent for decomposition through the bounded message protocol.';
   const allowlist = effectiveChildModelAllowlist();
   // Tier and fork rules are Naruto's child contract. Outside a Naruto parent a
   // spawn is Codex's own, the way Codex works by default; OpenRouter Only

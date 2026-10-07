@@ -91,7 +91,7 @@ Generated from `sks commands --json`, `src/cli/command-registry.ts COMMANDS`, `s
 | `cli-gx` | visual-memory | labs | sks gx init\|render\|validate\|drift\|snapshot [name] | execute_and_validate_artifacts:blocked | runtime_verified | not_assessed | none recorded |
 | `cli-eval` | loop | labs | sks eval run\|compare\|thresholds ... | execute:pass | runtime_verified | not_assessed | none recorded |
 | `cli-wiki` | visual-memory | beta | sks wiki coords\|pack\|refresh\|publish\|rebuild-index\|validate\|validate-shared\|wrongness ... | execute_and_validate_artifacts:pass | runtime_verified | not_assessed | none recorded |
-| `cli-memory` | core-cli | beta | sks memory build [--json] \| sks memory gc [--dry-run] | execute:pass | runtime_verified | not_assessed | none recorded |
+| `cli-memory` | core-cli | beta | sks memory build [--json] \| sks memory gc [--dry-run] \| sks memory promote --mission <id> --yes \| sks memory forget --memory-id <id> --previous-digest <digest> \| sks memory recall [--query <text>] | execute:pass | runtime_verified | not_assessed | Jev promotion and forgetting remain explicit and digest-bound |
 | `cli-gc` | core-cli | labs | sks gc [--dry-run] [--json]<br>sks memory | execute:pass | runtime_verified | not_assessed | none recorded |
 | `cli-stats` | core-cli | labs | sks stats [--full] [--json] | execute:pass | runtime_verified | not_assessed | none recorded |
 | `cli-mcp-server` | core-cli | beta | sks mcp-server [--expose-exec] [--probe] | execute:pass | runtime_verified | not_assessed | none recorded |
