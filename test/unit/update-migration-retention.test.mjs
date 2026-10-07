@@ -142,6 +142,7 @@ test('project update migration repairs legacy menubar and fast-mode config', asy
     await writeText(configPath, [
       'model = "future-codex-model"',
       'model_reasoning_effort = "high"',
+      'network_access = "enabled"',
       '',
       '[user.fast_mode]',
       'visible = true',
@@ -150,6 +151,13 @@ test('project update migration repairs legacy menubar and fast-mode config', asy
       '[profiles.sks-fast-high]',
       'model = "gpt-5.4"',
       'service_tier = "default"',
+      '',
+      '[features.guardianv2]',
+      'thread_context = true',
+      '',
+      '[mcp_servers.supabase]',
+      'url = "https://mcp.supabase.com/mcp?project_ref=fixture&features=database,docs"',
+      'read_only = true',
       ''
     ].join('\n'));
     await fs.mkdir(path.join(project, '.sneakoscope'), { recursive: true });
@@ -186,6 +194,11 @@ test('project update migration repairs legacy menubar and fast-mode config', asy
     assert.doesNotMatch(configAfter, /^default_profile\s*=/m);
     assert.doesNotMatch(configAfter, /\[user\.fast_mode\]/);
     assert.doesNotMatch(configAfter, /\[profiles\.sks-fast-high\]/);
+    assert.doesNotMatch(configAfter, /^network_access\s*=/m);
+    assert.doesNotMatch(configAfter, /^thread_context\s*=/m);
+    assert.doesNotMatch(configAfter, /^read_only\s*=/m);
+    assert.match(configAfter, /read_only=true/);
+    assert.match(configAfter, /project_ref=fixture/);
   } finally {
     if (previousHome === undefined) delete process.env.HOME;
     else process.env.HOME = previousHome;

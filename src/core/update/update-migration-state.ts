@@ -16,6 +16,7 @@ import { runDesktopBridgeRestageStage } from './update-migration-state/desktop-b
 import { runSessionStateSplitStage } from './update-migration-state/session-state-split.js';
 import { runRetiredLocalDecisionStage } from './update-migration-state/retired-local-decision.js';
 import {
+  runConfigSyntaxRepairStage,
   runHookTrustRefreshStage,
   runOtherHarnessCleanupStage
 } from './update-migration-state/simple-stages.js';
@@ -476,6 +477,12 @@ const UPDATE_MIGRATION_STAGES: UpdateMigrationStageDefinition[] = [
     id: 'config-fastmode-normalize',
     min_from_version: '0.0.0',
     run: runConfigFastModeNormalizeStage
+  },
+  {
+    // Preserve a retired SKS Fast preference before dropping its old syntax.
+    id: 'config-syntax-repair',
+    min_from_version: '0.0.0',
+    run: runConfigSyntaxRepairStage
   },
   {
     id: 'hook-trust-refresh',

@@ -15,7 +15,7 @@ const STDIO_SUPABASE = [
   ''
 ].join('\n');
 
-const URL_SUPABASE = '[mcp_servers.supabase]\nurl = "https://mcp.supabase.com/mcp?project_ref=abc"\n';
+const URL_SUPABASE = '[mcp_servers.supabase]\nurl = "https://mcp.supabase.com/mcp?project_ref=abc&read_only=true"\n';
 const MANAGED_MARKER = '# SKS managed test fixture\n';
 
 async function scenario(): Promise<{ root: string; codexHome: string; projectConfig: string; restore: () => void }> {
@@ -86,4 +86,32 @@ test('repairSupabaseMcp leaves a matching url supabase block alone (no false col
   } finally {
     s.restore();
   }
+});
+
+test('transport collision never removes the project entry in favor of a writable global URL', async () => {
+  const s = await scenario();
+  try {
+    await fs.writeFile(path.join(s.codexHome, 'config.toml'), URL_SUPABASE.replace('&read_only=true', ''));
+    const before = await fs.readFile(s.projectConfig, 'utf8');
+    const report = await repairSupabaseMcp({ root: s.root, apply: true, reportPath: null });
+    assert.equal(report.ok, false);
+    assert.equal(report.transport_collision_resolved, false);
+    assert.ok(report.blockers.includes('supabase_mcp_inherited_url_not_read_only'));
+    assert.equal(await fs.readFile(s.projectConfig, 'utf8'), before);
+  } finally { s.restore(); }
+});
+
+test('doctor migrates the ignored read_only field into the hosted URL and preserves authentication', async () => {
+  const s = await scenario();
+  try {
+    await fs.writeFile(s.projectConfig, `${MANAGED_MARKER}${URL_SUPABASE.replace('&read_only=true', '')}read_only = true\nbearer_token_env_var = "USER_SUPABASE_TOKEN"\n`);
+    const report = await repairSupabaseMcp({ root: s.root, apply: true, reportPath: null });
+    assert.equal(report.ok, true);
+    assert.equal(report.read_only_migrated, true);
+    assert.equal(report.manual_required, false);
+    const after = await fs.readFile(s.projectConfig, 'utf8');
+    assert.match(after, /read_only=true/);
+    assert.doesNotMatch(after, /^read_only\s*=/m);
+    assert.match(after, /bearer_token_env_var = "USER_SUPABASE_TOKEN"/);
+  } finally { s.restore(); }
 });

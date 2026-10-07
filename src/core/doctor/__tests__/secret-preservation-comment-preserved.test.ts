@@ -16,7 +16,7 @@ const STDIO_SUPABASE = [
   ''
 ].join('\n');
 
-const URL_SUPABASE = '[mcp_servers.supabase]\nurl = "https://mcp.supabase.com/mcp?project_ref=abc"\n';
+const URL_SUPABASE = '[mcp_servers.supabase]\nurl = "https://mcp.supabase.com/mcp?project_ref=abc&read_only=true"\n';
 const MANAGED_MARKER = '# SKS managed test fixture\n';
 
 async function scenario(): Promise<{ root: string; codexHome: string; projectConfig: string; restore: () => void }> {

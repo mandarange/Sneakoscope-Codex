@@ -1,6 +1,27 @@
 # SKS Release Readiness
 
-## 10.5.4 candidate
+## 10.5.5 candidate
+
+10.5.5 repairs the ignored root network_access and Supabase read_only settings
+and the deprecated Guardian thread_context field during update and user-run
+Doctor. The guarded repair includes native profile files, retains supported
+network choices and authentication, and migrates Supabase read-only intent to
+its supported transport option. Doctor no longer upgrades an explicit global
+child-model default merely because a newer catalog entry exists.
+
+The managed harness is smaller and model-neutral. In Codex app and CLI
+conversations, $sks-align refreshes managed guidance from live official document
+search/retrieval and rebuilds source-only TriWiki. Update and Doctor use the
+same maintenance. Failed retrieval preserves the previous references; short
+source-linked prompting reminders refresh without copying model-specific
+recipes. User text outside managed blocks is preserved.
+
+Verification requires the final clean commit's full release workflow, stamp,
+pack receipt, provenance, live main equality, GitHub CI and normal npm publish
+dry-run. Use Node 26.7.0 on this host for both verification and publication:
+PATH="/opt/homebrew/bin:$PATH" npm publish. The actual upload remains operator-owned.
+
+## Previous candidate: 10.5.4
 
 10.5.4 packages the Subagent Models changes merged in PR #13. SKS Center
 keeps separate model lists for Codex-LB, OpenAI OAuth, and OpenRouter Only.

@@ -11,7 +11,7 @@ import { runDoctorFixTransaction } from '../core/doctor/doctor-transaction.js';
 import { doctorRepairPostcheck } from '../core/doctor/doctor-repair-postcheck.js';
 
 const root = await makeTempRoot('sks-doctor-production-');
-await writeText(path.join(root, '.codex', 'config.toml'), '# SKS-MANAGED-CODEX-CONFIG\n[mcp_servers.context7]\ncommand = "npx"\n\n[mcp_servers.supabase]\nurl = "https://supabase.example/mcp"\nread_only = true\n\n[agents.analysis_scout]\nconfig_file = ".codex/agents/stale.toml"\nmessage_role_prefix = "legacy"\n');
+await writeText(path.join(root, '.codex', 'config.toml'), '# SKS-MANAGED-CODEX-CONFIG\n[mcp_servers.context7]\ncommand = "npx"\n\n[mcp_servers.supabase]\nurl = "https://mcp.supabase.com/mcp?project_ref=fixture"\nread_only = true\n\n[agents.analysis_scout]\nconfig_file = ".codex/agents/stale.toml"\nmessage_role_prefix = "legacy"\n');
 const startup = await repairCodexStartupConfig({ root, apply: true, home: path.join(root, 'home'), codexHome: path.join(root, 'codex-home') });
 const startupText = await fs.readFile(path.join(root, '.codex', 'config.toml'), 'utf8');
 const startupConfig = parse(startupText);

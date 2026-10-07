@@ -2,8 +2,10 @@ import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import { nowIso, writeJsonAtomic } from '../fsx.js';
+import { parse } from 'smol-toml';
+import { repairDeprecatedCodexConfigText, supabaseMcpIsReadOnly } from '../codex/deprecated-config.js';
 import { isUnmanagedProjectCodexConfig, writeCodexConfigGuarded } from '../codex/codex-config-guard.js';
-import { mcpServerBlock, mcpServerExplicitlyDisabled, readProjectCodexConfig, replaceOrAppendMcpServerBlock, tomlTableRange } from '../mcp/mcp-config-preservation.js';
+import { mcpServerBlock, mcpServerExplicitlyDisabled, readProjectCodexConfig, tomlTableRange } from '../mcp/mcp-config-preservation.js';
 import { messageOf } from '../errors/message.js';
 
 export interface SupabaseMcpRepairReport {
@@ -32,7 +34,8 @@ export interface SupabaseMcpRepairReport {
 export async function repairSupabaseMcp(input: { root: string; apply?: boolean; reportPath?: string | null }): Promise<SupabaseMcpRepairReport> {
   const root = path.resolve(input.root);
   const config = await readProjectCodexConfig(root);
-  const disabled = mcpServerExplicitlyDisabled(config.text, 'supabase') || mcpServerExplicitlyDisabled(config.text, 'supabase_sauron');
+  const serverBefore = supabaseServer(config.text);
+  const disabled = serverBefore?.enabled === false || mcpServerExplicitlyDisabled(config.text, 'supabase') || mcpServerExplicitlyDisabled(config.text, 'supabase_sauron');
   const block = mcpServerBlock(config.text, 'supabase') || '';
   const configured = Boolean(block);
   const tokenEnvPresent = Boolean(process.env.SUPABASE_ACCESS_TOKEN);
@@ -68,8 +71,7 @@ export async function repairSupabaseMcp(input: { root: string; apply?: boolean; 
     }
     return report;
   }
-  const readOnlyBefore = /read[_-]?only\s*=\s*true|access_mode\s*=\s*"read-only"|--read-only/.test(block);
-  const unsafeWriteAccessBefore = configured && !disabled && !readOnlyBefore && /write|service_role|SUPABASE_ACCESS_TOKEN/.test(block);
+  const readOnlyBefore = supabaseMcpIsReadOnly(serverBefore);
   // Codex merges the global (~/.codex) and project (.codex) config per key. When
   // the project defines a stdio supabase server (command=...) while the global
   // one uses a streamable-http url, the merged table has both `command` and
@@ -84,45 +86,59 @@ export async function repairSupabaseMcp(input: { root: string; apply?: boolean; 
   let afterText = config.text;
   let readOnlyMigrated = false;
   let transportCollisionResolved = false;
-  if (stdioUrlTransportCollision && input.apply) {
+  const repairBlockers: string[] = [];
+  const repairWarnings: string[] = [];
+  const inheritedReadOnly = !stdioUrlTransportCollision || supabaseMcpIsReadOnly(supabaseServer(globalConfig.text));
+  if (!inheritedReadOnly) repairBlockers.push('supabase_mcp_inherited_url_not_read_only');
+  if (stdioUrlTransportCollision && inheritedReadOnly && input.apply) {
     const range = tomlTableRange(config.text, 'mcp_servers.supabase', true);
     if (range) {
       const commented = commentOutStdioSupabaseBlock(config.text.slice(range.start, range.end));
       afterText = `${config.text.slice(0, range.start)}${commented}${config.text.slice(range.end)}`;
-      transportCollisionResolved = afterText !== config.text;
-      if (transportCollisionResolved) await writeCodexConfigGuarded({
+      const changed = afterText !== config.text;
+      const written = changed ? await writeCodexConfigGuarded({
         root,
         configPath: config.path,
         before: config.text,
         cause: 'supabase-mcp-transport-collision',
         mutate: () => afterText
-      });
+      }) : null;
+      transportCollisionResolved = written?.ok === true && written.changed;
+      if (written && !written.ok) {
+        afterText = config.text;
+        repairBlockers.push(`supabase_mcp_write_refused:${written.status}`);
+      }
     }
-  } else if (configured && !disabled && !readOnlyBefore && input.apply) {
-    afterText = replaceOrAppendMcpServerBlock(config.text, 'supabase', setReadOnly(block));
-    readOnlyMigrated = afterText !== config.text;
-    if (readOnlyMigrated) await writeCodexConfigGuarded({
-      root,
-      configPath: config.path,
-      before: config.text,
-      cause: 'supabase-mcp-repair',
-      mutate: () => afterText
-    });
+  } else if (!stdioUrlTransportCollision && configured && !disabled && (!readOnlyBefore || Object.hasOwn(serverBefore || {}, 'read_only')) && input.apply) {
+    const repaired = repairDeprecatedCodexConfigText(config.text, { enforceSupabaseReadOnly: true });
+    repairBlockers.push(...repaired.blockers);
+    repairWarnings.push(...repaired.warnings);
+    if (!repairBlockers.length && repaired.text !== config.text) {
+      const written = await writeCodexConfigGuarded({
+        root, configPath: config.path, before: config.text,
+        cause: 'supabase-mcp-repair', verifyUnchangedBeforeWrite: true,
+        preserveTextFormatting: true, mutate: () => repaired.text
+      });
+      if (written.ok) {
+        afterText = repaired.text;
+        readOnlyMigrated = written.changed;
+      } else repairBlockers.push(`supabase_mcp_write_refused:${written.status}`);
+    }
   }
   // A resolved collision comments the whole stdio block out, so the project no
   // longer contributes an active supabase server at all.
   const effectivelyConfigured = configured && !transportCollisionResolved;
-  const afterBlock = transportCollisionResolved ? '' : readOnlyMigrated ? mcpServerBlock(afterText, 'supabase') || '' : block;
-  const readOnlyAfter = /read[_-]?only\s*=\s*true|access_mode\s*=\s*"read-only"|--read-only/.test(afterBlock);
-  const unsafeWriteAccess = effectivelyConfigured && !disabled && !readOnlyAfter && /write|service_role|SUPABASE_ACCESS_TOKEN/.test(afterBlock);
+  const readOnlyAfter = supabaseMcpIsReadOnly(supabaseServer(afterText));
+  const unsafeWriteAccess = effectivelyConfigured && !disabled && !readOnlyAfter;
   const transportCollisionUnresolved = stdioUrlTransportCollision && !transportCollisionResolved;
-  const writeScopeRequiresConfirmation = effectivelyConfigured && !disabled && (unsafeWriteAccessBefore || !readOnlyAfter);
-  const readyBlocking = unsafeWriteAccess || transportCollisionUnresolved;
-  const manualRequired = effectivelyConfigured && !disabled && (!tokenEnvPresent || writeScopeRequiresConfirmation);
+  const writeScopeRequiresConfirmation = effectivelyConfigured && !disabled && !readOnlyAfter;
+  const readyBlocking = unsafeWriteAccess || transportCollisionUnresolved || repairBlockers.length > 0;
+  const tokenRequired = projectTransport === 'stdio' && /\bSUPABASE_ACCESS_TOKEN\b/.test(block);
+  const manualRequired = effectivelyConfigured && !disabled && ((tokenRequired && !tokenEnvPresent) || writeScopeRequiresConfirmation || repairBlockers.length > 0);
   let report: SupabaseMcpRepairReport = {
     schema: 'sks.doctor-supabase-mcp-repair.v1',
     generated_at: nowIso(),
-    ok: (!configured || disabled || !unsafeWriteAccess) && !transportCollisionUnresolved,
+    ok: (!configured || disabled || !unsafeWriteAccess) && !transportCollisionUnresolved && !repairBlockers.length,
     apply: input.apply === true,
     configured,
     disabled,
@@ -143,11 +159,13 @@ export async function repairSupabaseMcp(input: { root: string; apply?: boolean; 
           : 'Set SUPABASE_ACCESS_TOKEN only when an explicit MAD-SKS SQL-plane run needs Supabase MCP auth; otherwise keep persistent Supabase MCP disabled/read-only.'
         : null,
     blockers: [
+      ...repairBlockers,
       ...(unsafeWriteAccess ? ['supabase_mcp_write_access_not_safe_by_default'] : []),
       ...(transportCollisionUnresolved ? ['supabase_mcp_stdio_url_transport_collision'] : [])
     ],
     warnings: [
-      ...(effectivelyConfigured && !tokenEnvPresent ? ['supabase_access_token_unset_write_features_manual_required'] : []),
+      ...repairWarnings,
+      ...(effectivelyConfigured && tokenRequired && !tokenEnvPresent ? ['supabase_access_token_unset_write_features_manual_required'] : []),
       ...(readOnlyMigrated ? ['supabase_mcp_migrated_to_read_only'] : []),
       ...(transportCollisionResolved ? ['supabase_mcp_stdio_block_disabled_for_url_collision'] : [])
     ],
@@ -165,12 +183,8 @@ export async function repairSupabaseMcp(input: { root: string; apply?: boolean; 
   return report;
 }
 
-function setReadOnly(block: string): string {
-  const lines = String(block || '').replace(/\s*$/, '').split(/\r?\n/);
-  const index = lines.findIndex((line) => /^\s*read[_-]?only\s*=/.test(line));
-  if (index >= 0) lines[index] = 'read_only = true';
-  else lines.push('read_only = true');
-  return `${lines.join('\n')}\n`;
+function supabaseServer(text: string): Record<string, any> | null {
+  try { return (parse(text).mcp_servers as any)?.supabase || null; } catch { return null; }
 }
 
 async function readGlobalCodexConfigText(): Promise<{ path: string; text: string }> {

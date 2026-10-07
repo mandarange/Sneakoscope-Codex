@@ -7,6 +7,7 @@ import { validateCodexConfigRoundTrip } from '../codex/codex-config-toml.js';
 import { isUnmanagedProjectCodexConfig, writeCodexConfigGuarded } from '../codex/codex-config-guard.js';
 import { messageOf } from '../errors/message.js';
 import { escapeRegExp } from '../text/regex.js';
+import { repairDeprecatedCodexConfigText } from '../codex/deprecated-config.js';
 
 export const CODEX_CONFIG_SYNTAX_REPAIR_SCHEMA = 'sks.codex-config-syntax-repair.v1';
 
@@ -68,10 +69,22 @@ export async function runCodexConfigSyntaxRepair(input: {
   const root = path.resolve(input.root || process.cwd());
   const codexHome = input.codexHome || process.env.CODEX_HOME || path.join(process.env.HOME || os.homedir(), '.codex');
   const configs: CodexConfigSyntaxRepairConfigEntry[] = [];
-  for (const candidate of [
-    { scope: 'project' as const, path: path.join(root, '.codex', 'config.toml') },
-    { scope: 'global' as const, path: path.join(codexHome, 'config.toml') }
-  ]) {
+  const candidates = [
+    { scope: 'global' as const, path: path.join(codexHome, 'config.toml') },
+    { scope: 'project' as const, path: path.join(root, '.codex', 'config.toml') }
+  ];
+  // Current --profile overrides live in separate *.config.toml files.
+  const profiles = await fsp.readdir(codexHome).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === 'ENOENT') return [];
+    throw error;
+  });
+  for (const name of profiles.filter(name => name.endsWith('.config.toml')).sort()) {
+    candidates.push({ scope: 'global', path: path.join(codexHome, name) });
+  }
+  const seen = new Set<string>();
+  for (const candidate of candidates) {
+    if (seen.has(candidate.path)) continue;
+    seen.add(candidate.path);
     configs.push(await inspectOrRepairScope(
       root,
       candidate,
@@ -164,22 +177,29 @@ async function inspectOrRepairScope(
     for (const blocker of validation.blockers) base.blockers.push(blocker);
   }
 
-  const retired = findRetiredSyntax(text);
+  const current = repairDeprecatedCodexConfigText(text, { enforceSupabaseReadOnly: true });
+  const oldProvenance = candidate.scope === 'project' || hasRetiredSksGlobalProvenance(text);
+  const retired = oldProvenance ? findRetiredSyntax(text) : [];
   const invalidValues = findInvalidValues(validation.parsed);
   const repairableValues = candidate.scope === 'project'
     ? invalidValues.filter((item) => item.repairable)
     : [];
-  const detected = [...retired, ...repairableValues.map((item) => item.id)];
+  const detected = [...retired, ...current.removed, ...current.migrated, ...repairableValues.map((item) => item.id)];
   if (candidate.scope === 'project' && isUnmanagedProjectCodexConfig(root, candidate.path, text)) {
     base.warnings.push('unmanaged_project_config_preserved');
     if (detected.length) base.warnings.push('user_owned_file_without_sks_marker');
     return base;
   }
-  if (candidate.scope === 'global' && !hasRetiredSksGlobalProvenance(text)) {
-    if (retired.length || invalidValues.length || validation.legacy_keys.length) {
+  if (candidate.scope === 'global' && !oldProvenance && !current.removed.length && !current.migrated.length) {
+    if (findRetiredSyntax(text).length || invalidValues.length || validation.legacy_keys.length) {
       base.warnings.push('unmanaged_global_config_preserved');
     }
-    if (retired.length) base.warnings.push('retired_syntax_without_sks_provenance');
+    if (findRetiredSyntax(text).length) base.warnings.push('retired_syntax_without_sks_provenance');
+    return base;
+  }
+  base.warnings.push(...current.warnings);
+  if (current.blockers.length) {
+    base.blockers.push(...current.blockers);
     return base;
   }
   if (!fix) {
@@ -187,17 +207,17 @@ async function inspectOrRepairScope(
     return base;
   }
   if (!detected.length) return base;
-  base.retired_syntax_removed.push(...retired);
-  base.invalid_values_repaired.push(...repairableValues.map((item) => item.id));
+  base.retired_syntax_removed.push(...retired, ...current.removed);
+  base.invalid_values_repaired.push(...repairableValues.map((item) => item.id), ...current.migrated);
 
-  let next = text;
-  for (const entry of RETIRED_TOP_LEVEL_VALUES) {
-    next = removeTopLevelTomlKeyIfValue(next, entry.key, entry.value);
+  let next = current.text;
+  if (oldProvenance) {
+    for (const entry of RETIRED_TOP_LEVEL_VALUES) next = removeTopLevelTomlKeyIfValue(next, entry.key, entry.value);
+    for (const table of RETIRED_TABLES) next = removeTomlTable(next, table);
+    for (const entry of RETIRED_TABLE_KEYS) next = removeTomlTableKey(next, entry.table, entry.key, entry.value);
   }
-  for (const table of RETIRED_TABLES) next = removeTomlTable(next, table);
-  for (const entry of RETIRED_TABLE_KEYS) next = removeTomlTableKey(next, entry.table, entry.key, entry.value);
   for (const item of repairableValues) next = removeTopLevelTomlKey(next, item.key);
-  next = next.replace(/\n{3,}/g, '\n\n').replace(/\s*$/, next.trim() ? '\n' : '');
+  if (retired.length || repairableValues.length) next = next.replace(/\n{3,}/g, '\n\n').replace(/\s*$/, next.trim() ? '\n' : '');
   if (next === text) return base;
   let guarded: Awaited<ReturnType<typeof writeCodexConfigGuarded>>;
   try {
@@ -215,6 +235,7 @@ async function inspectOrRepairScope(
       // The repair intentionally drops invalid service_tier / fast-mode lock keys;
       // re-merging them would resurrect the exact syntax this phase removed.
       preserveFastUiKeys: false,
+      preserveTextFormatting: true,
       verifyUnchangedBeforeWrite: true,
       expectedBeforeExists: true,
       expectedBeforeMode: snapshot.mode,

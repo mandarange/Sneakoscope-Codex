@@ -8,6 +8,16 @@ import type { UpdateMigrationStageRun } from '../update-migration-state.js';
 
 type StageOutcome = Omit<UpdateMigrationStageRun, 'schema' | 'id' | 'min_from_version' | 'from_version'>;
 
+export async function runConfigSyntaxRepairStage(root: string): Promise<StageOutcome> {
+  const { runCodexConfigSyntaxRepair } = await import('../../doctor/codex-config-syntax-repair.js');
+  const repair = await runCodexConfigSyntaxRepair({ root, fix: true });
+  return {
+    ok: repair.ok, status: repair.ok ? 'ok' : 'failed',
+    actions: repair.actions, blockers: repair.blockers, warnings: repair.warnings,
+    detail: { report_path: repair.report_path, changed_configs: repair.configs.filter(row => row.changed).map(row => row.path) }
+  };
+}
+
 export async function runOtherHarnessCleanupStage(root: string): Promise<StageOutcome> {
   const { cleanupOtherHarnessConflicts, scanHarnessConflicts } = await import('../../harness-conflicts.js');
   const scan = await scanHarnessConflicts(root);

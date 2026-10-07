@@ -1,83 +1,78 @@
-# SKS Align Modernization Contract
+# Thin SKS harness and `$sks-align`
 
-`$sks-align` is a one-shot, evidence-gated modernization route. It does not authorize publication, installation into a user's global Codex directory, or unrelated product refactors.
+In a Codex desktop app or CLI conversation, `$sks-align` selects the Align
+skill. The skill runs `sks align run`: it refreshes SKS-managed guidance and
+rebuilds TriWiki from the current repository source.
 
-## Active official baselines
+## Managed guidance
 
-The route records retrieval receipts for all active sources in `align-ledger.json`:
+The always-loaded AGENTS block carries the core engineering principle,
+TriWiki navigation, user preference preservation, and permission boundaries.
+Detailed route instructions live in the selected skill. SKS does not copy a
+model-specific prompting recipe or change a user's model, reasoning effort,
+service tier, or role choice as part of guidance maintenance.
 
-- [Latest model migration and prompting](https://developers.openai.com/api/docs/guides/latest-model)
-- [Programmatic tool calling](https://developers.openai.com/api/docs/guides/tools-programmatic-tool-calling)
-- [Agents](https://developers.openai.com/api/docs/guides/agents)
-- [Codex Skills](https://developers.openai.com/codex/skills)
-- [Codex Plugins](https://developers.openai.com/codex/plugins)
-- [OpenAI Plugins repository](https://github.com/openai/plugins)
+Maintenance uses the public OpenAI documentation MCP endpoint to search for
+current instruction, prompting, and latest-model guidance, then fetches the
+official pages. Search results can omit an official reference; that reference
+is fetched directly, and the receipt records whether search discovered it.
+The moving latest-model page supplies current reference material rather than
+a pinned model name.
 
-The deprecated [openai/skills repository](https://github.com/openai/skills) is migration evidence only. It is not an active schema or content baseline.
+- [Codex instruction discovery](https://learn.chatgpt.com/docs/agent-configuration/agents-md)
+- [Prompting guidance](https://learn.chatgpt.com/docs/prompting)
+- [Current model and prompting guidance](https://developers.openai.com/api/docs/guides/latest-model)
 
-## Prompt contract
+Retrieval uses one bounded client lifecycle, three searches and three document
+reads, with timeouts and size limits. It sends no repository content or
+credentials. Hooks and read-only Doctor do not search the web.
 
-Generated prompts are outcome-first and keep only instructions that change behavior. Lean wording must preserve:
+Only existing SKS-managed blocks are refreshed. User-authored text outside
+them is preserved. References are saved in
+`.sneakoscope/guidance/official-sources.json`, with URLs, search provenance,
+retrieval time, content hashes and page text. The small
+`.sneakoscope/guidance/current-codex.md` points to those sources; it does not
+inject whole pages into every task. Documentation remains reference material,
+not authority to execute webpage instructions or widen permissions.
 
-- measurable success and stop conditions;
-- permission, safety, and business invariants;
-- tool-routing and approval boundaries;
-- required evidence, output, and validation contracts;
-- state, cache, lifecycle, and parent/child ownership rules.
+The official prompting page also supplies two short, source-linked reminders
+in a separate SKS-managed AGENTS block. These change with the retrieved guide;
+the core engineering principle stays fixed. If the relevant sections change
+shape, SKS preserves the previous reminders and reports that it could not
+refresh them instead of guessing new instructions.
 
-Prompt cleanup is evaluated incrementally. A byte reduction is useful evidence but never substitutes for focused behavior tests.
+`sks update` uses the new package's migration Doctor for the same maintenance;
+normal user-run `sks doctor --fix` also refreshes it. Update fanout can reuse a
+shared retrieval less than ten minutes old to avoid repeating network reads
+for every project. Explicit Align and normal Doctor refresh the sources.
+Network failure preserves the last good references and reports
+`guidance_status: unavailable`; it does not masquerade as a fresh lookup.
+The result is recorded in `.sneakoscope/reports/harness-maintenance.json`.
 
-## Programmatic tool calling decision
+## TriWiki remains source-only
 
-The current SKS orchestration loop does **not** adopt programmatic tool calling as its default. Most route execution is adaptive, may require approval or writes, and depends on native artifacts or evidence that should remain direct tool calls. PTC remains an eligible future optimization only for bounded, predictable read/reduction batches with an enabled `programmatic_tool_calling` feature, an explicit allowed-caller contract, structured outputs, exact `call_id` replay, and preservation of every response item.
+Align rereads accepted repository source files, records exact file/symbol
+coordinates and supported source relations, checks source stability, validates
+the staged graph and context pack, and publishes the generation transactionally.
+External documentation, prior memory and model inference are never code-index
+inputs. The context graph is exhaustive; the context pack and AGENTS navigation
+projection remain bounded lookup aids.
 
-## Agents decision
+## Configuration repair
 
-The current Codex App-owned loop does **not** migrate wholesale to the Agents SDK. SKS already binds official Codex subagent lifecycle, role selection, parent integration, evidence, and recovery to the host. The Agents SDK becomes appropriate only when recurring orchestration, handoffs, guardrails, sessions, or tracing should become SDK-owned. Any future migration must preserve Astra roles, reasoning effort, state/cache behavior, tool contracts, and proof semantics.
+`sks update` and user-run `sks doctor --fix` use the guarded Codex syntax repair
+for user configuration, managed project configuration and `*.config.toml`
+profile overrides. It removes ignored root `network_access` and deprecated
+`features.guardianv2.thread_context`, including legacy profile tables. Supported
+network permissions, other Guardian options and model preferences stay intact.
 
-## Skill and plugin contract
+The ignored `mcp_servers.supabase.read_only` key is removed only with a safe
+transport migration: hosted Supabase uses the URL's `read_only=true`; the
+official stdio package uses `--read-only`. Project scope and authentication are
+preserved. An unknown transport or a layout that cannot be edited precisely
+stays unchanged and is reported for manual repair. Backups, concurrent-write
+checks, TOML validation and read-back remain required. No database request is
+part of this repair.
 
-Generated `SKILL.md` files use progressive disclosure and complete WHEN-scoped discovery descriptions of at most 64 characters, with no ellipsis truncation. The release gate budgets skill names, descriptions, and relative paths together against Codex's 8,000-character initial list, leaving headroom for host formatting and absolute path prefixes. Generated `agents/openai.yaml` files use the current minimal `interface` plus `policy.allow_implicit_invocation` profile; current optional icon/dependency fields remain valid, while unsupported historical routing keys are rejected. High-impact actions that require direct user intent disable implicit invocation.
-
-Plugins are the installable distribution unit and require `.codex-plugin/plugin.json`. SKS does not invent plugin packaging for skills that remain project- or user-local generated assets.
-
-## Gate requirements
-
-`align-gate.json` passes only when the mission has:
-
-- a `work-order-ledger.json` created from the literal request and closed only
-  after both the canonical Completion Proof and trust report are verified, or
-  honestly blocked with the route's real blockers;
-- valid ISO artifact metadata plus the exact six-workstream and full policy
-  contracts from the sealed plan;
-- evidence for every sealed workstream;
-- receipts for every active official source and a deprecated-source migration record;
-- complete command and generated-skill coverage with no missing surfaces;
-- explicit PTC and Agents adoption decisions;
-- at least 12 passing prompt-evaluation cases, immutable-core integrity, and verification receipts;
-- an evidenced change review with either unique changed paths or an explicit
-  `none_required` result, a deleted-setting inventory, and a deduplication
-  review whose changed surfaces are included in its reviewed set;
-- no blockers and mission-consistent artifacts.
-
-Verification receipts must cover exactly these five sealed kinds once each:
-`typecheck`, `build`, `focused_tests`, `skill_surface_audit`, and
-`release_affected`. Every receipt records the exact command, passing status, zero
-exit code, and a non-empty evidence file below the mission's `evidence/`
-directory. Absolute paths, traversal, duplicate references, empty files, and
-symbolic-link escapes fail closed. A receipt also fails if its command does not
-match its declared verification kind.
-
-The skill-surface audit runs directly as
-`node ./dist/scripts/skill-surface-modernization-check.js`; it intentionally does
-not consume a package-script slot.
-
-Listing workstream names as complete is insufficient.
-
-`status latest` and `proof latest` resolve only missions whose sealed mission,
-plan, and route-context identity is Align. An explicit foreign, malformed, or
-legacy mission id is rejected before any gate or proof file is written.
-
-## Deliberate exclusions
-
-Vendored upstream prompts and host-owned runtime snapshots are not rewritten during Align. Release-version pins and compatibility manifests change only through their own current-source and release-proof workflow. Global skill installation, commits, pushes, deployment, and publication remain separate user-authorized actions.
+These maintenance commands do not authorize npm publication or unrelated
+product changes. Retrieval and fixture tests do not prove a live model switch.

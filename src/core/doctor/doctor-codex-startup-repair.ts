@@ -3,7 +3,6 @@ import os from 'node:os'
 import { exists, nowIso, readText, writeJsonAtomic } from '../fsx.js'
 import { isUnmanagedProjectCodexConfig, writeCodexConfigGuarded } from '../codex/codex-config-guard.js'
 import { escapeRegExp } from '../text/regex.js'
-import { moveStaleSubagentDefault } from './stale-subagent-default.js'
 
 export const DOCTOR_CODEX_STARTUP_REPAIR_SCHEMA = 'sks.doctor-codex-startup-repair.v1'
 
@@ -142,12 +141,6 @@ async function inspectOrRepairConfig(root: string, candidate: { scope: Scope; pa
   warnings.push(...nodeReplRepair.warnings)
   staleMcpBlocksRemoved.push(...nodeReplRepair.removed)
   mcpBlocksRepaired.push(...nodeReplRepair.repaired)
-
-  if (candidate.scope === 'global') {
-    const moved = moveStaleSubagentDefault(next)
-    if (fix) next = moved.text
-    if (moved.from) warnings.push(`default_subagent_model_${fix ? 'moved_to_latest' : 'not_latest'}:${moved.from}->${moved.to}`)
-  }
 
   for (const server of ['supabase_sauron']) {
     if (tomlBlock(next, `mcp_servers.${server}`)) optionalMcpBlocksIgnored.push(server)

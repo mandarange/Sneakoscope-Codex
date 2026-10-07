@@ -17,7 +17,7 @@
 Sneakoscope Codex (`sks`) is an open-source trust layer for Codex CLI and ChatGPT Desktop. It coordinates bounded AI coding agents, records machine-verifiable evidence, preserves project memory, and blocks release claims that are not supported by current tests or artifacts. Search visibility outcomes are measured separately; SKS does not promise rankings or traffic.
 <!-- END SKS SEARCH VISIBILITY MARKETING -->
 
-Current package: **SKS 10.5.4**. Install the latest stable release from npm.
+Current package: **SKS 10.5.5**. Install the latest stable release from npm.
 
 Sneakoscope Codex (`sks`) is a local trust layer for Codex CLI and ChatGPT Desktop. It keeps agent work bounded, preserves project context, records machine-verifiable evidence, and prevents release claims that current tests or artifacts cannot support.
 
@@ -65,6 +65,11 @@ The installer resolves the latest npm release, installs `sks`, runs setup and Do
 | Know what actually ran | Tests, diagnostics, and release evidence are recorded for completion claims. |
 | Recover safely | Doctor and update flows report a concrete recovery action when a check needs attention. |
 | Operate locally | The CLI works without a hosted control plane; macOS users can also use SKS Center. |
+
+`$sks-align` refreshes the thin managed guidance against current official Codex
+references and rebuilds TriWiki. Update and user-run `sks doctor --fix` share
+that maintenance and repair known ignored configuration settings. User text
+and model choices are preserved. See [harness maintenance](docs/align-modernization.md).
 
 ## Everyday commands
 

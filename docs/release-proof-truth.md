@@ -1,6 +1,29 @@
 # Release Proof Truth
 
-## 10.5.4 candidate
+## 10.5.5 candidate
+
+This candidate combines guarded Codex configuration repair, a smaller managed
+prompt surface, and current official-reference maintenance through $sks-align,
+update and user-run Doctor. External documents remain outside TriWiki's
+source-only navigation graph. No model-specific prompt recipe is installed.
+
+Tests cover configuration backups, credential and preference preservation,
+profile overrides, concurrent changes, supported Supabase transport options,
+managed-block boundaries, source retrieval failure and changed document
+sections. Live official documentation search/fetch and isolated prompt
+projection were exercised. A copy of the operator's real configuration loaded
+through Codex 0.160.1 app-server strict configuration after repair. The reported
+Guardian warning was not reproduced through that app-server; its key removal
+and profile handling are covered by regression tests. No installed-app UI
+result is inferred from these checks.
+
+Release authorization requires the final clean commit's canonical release
+suite, full release DAG, pack receipt, required real checks, stamp, provenance,
+remote main parity, CI and npm publish dry-run. Evidence is recorded under
+.sneakoscope/reports/release/10.5.5 and the canonical report paths. Earlier
+candidate records remain historical. npm publication is the operator's action.
+
+## Historical 10.5.4 candidate
 
 The version authorities advance together to 10.5.4 for PR #13. The merged
 source tree matches the reviewed feature commit. Regression coverage checks

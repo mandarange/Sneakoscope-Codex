@@ -114,10 +114,13 @@ async function alignRun(args: any[]) {
     missionId = created.missionId || null;
   }
   if (!missionId) return missing(args);
+  const { maintainHarnessGuidance } = await import('../agent-guidance/harness-maintenance.js');
+  const guidance = await maintainHarnessGuidance({ root, trigger: 'align' });
   const execution = await executeCodeNavigationAlign({ root, missionDir: missionDir(root, missionId), missionId });
+  const aligned = execution.ok && guidance.ok;
   // A run that opened its own mission is a self-contained refresh: prove and
   // close it here, or the open Align route would block the next route command.
-  const routeClosed = Boolean(prepared) && execution.ok
+  const routeClosed = Boolean(prepared) && aligned
     && await finalizeAndCloseAlignRoute(root, missionId, execution.gate, null);
   const base = commandResult(prepared, missionId, 'run', {
     maintenance: Boolean(ownership.maintenance_mission_id),
@@ -125,13 +128,14 @@ async function alignRun(args: any[]) {
   });
   const result = {
     ...base,
-    ok: execution.ok,
-    status: execution.gate.status,
+    ok: aligned,
+    status: aligned ? 'pass' : 'blocked',
     active_route_preserved: Boolean(ownership.maintenance_mission_id),
     route_closed: routeClosed,
     next_action: routeClosed ? 'none' : base.next_action,
     gate: execution.gate,
-    ledger: execution.ledger
+    ledger: execution.ledger,
+    harness_maintenance: guidance
   };
   if (!result.ok) process.exitCode = 1;
   // `--quiet` is for callers that report the result themselves (`sks memory build`).
@@ -140,6 +144,9 @@ async function alignRun(args: any[]) {
   else {
     console.log(`SKS align run: ${result.ok ? 'pass' : 'blocked'} ${missionId}`);
     if (result.ok) console.log(`Indexed ${execution.ledger.scan.source_file_count} source files into ${execution.ledger.graph.snapshot_hash}`);
+    console.log(`Official guidance: ${guidance.guidance_status}${guidance.fetched_at ? ` (${guidance.fetched_at})` : ''}`);
+    for (const warning of guidance.warnings) console.log(`- ${warning}`);
+    for (const blocker of guidance.blockers) console.log(`- ${blocker}`);
     for (const blocker of execution.gate.blockers) console.log(`- ${blocker}`);
   }
   return result;

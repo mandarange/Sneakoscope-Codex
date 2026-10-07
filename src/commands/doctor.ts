@@ -1,6 +1,6 @@
 import os from 'node:os';
 import path from 'node:path';
-import { projectRoot, exists, formatBytes, nowIso, writeJsonAtomic } from '../core/fsx.js';
+import { projectRoot, exists, ensureDir, formatBytes, nowIso, writeJsonAtomic } from '../core/fsx.js';
 import { flag } from '../cli/args.js';
 import { printJson } from '../cli/output.js';
 import { ui as cliUi } from '../cli/cli-theme.js';
@@ -37,6 +37,8 @@ import {
   doctorProfileRequiresDesktopBridgeReadiness
 } from './doctor-profile.js';
 import { renderDoctorConsoleReport } from './doctor-console.js';
+import type { HarnessMaintenanceReport } from '../core/agent-guidance/harness-maintenance.js';
+import { isVerificationTestHarness } from '../core/verification-profile.js';
 import {
   buildCodexAppUiDiagnosticFailure, buildRuntimeReadiness,
   captureCodexConfigSnapshot, deferredNativeRepair,
@@ -263,6 +265,13 @@ export async function executeDoctorGlobalOnlyFix(args: any[] = [], root: string,
   // rebuilds and verifies the Menu Bar in its own stages right afterwards), so
   // it skips the Menu Bar install exactly like the project migration profile.
   const doctorProfile = doctorProfileFromArgs(args, true);
+  const syntaxRepair = await (await import('../core/doctor/codex-config-syntax-repair.js')).runCodexConfigSyntaxRepair({
+    root: home, fix: true, codexHome: doctorEnv.CODEX_HOME || path.join(home, '.codex')
+  });
+  const harnessMaintenance = await doctorHarnessMaintenance(
+    path.resolve(deps.globalRuntimeRoot || doctorEnv.SKS_GLOBAL_ROOT || path.join(home, '.sneakoscope-global')),
+    doctorProfile, doctorEnv, deps
+  );
   const menuBarPolicy = doctorMenuBarInstallPolicy(args, true, doctorEnv);
   const menuBar = menuBarPolicy.phase_enabled
     ? await installMenuBarImpl({
@@ -316,6 +325,8 @@ export async function executeDoctorGlobalOnlyFix(args: any[] = [], root: string,
     && (globalFastMode as any)?.ok !== false;
   const menuBarReady = (menuBar as any)?.ok !== false;
   const migrationScopeBlockers = [...new Set([
+    ...syntaxRepair.blockers,
+    ...(harnessMaintenance?.blockers || []),
     ...(!globalSkillsReady ? [`global_skills_reconcile_failed:${(globalSkills as any)?.error || 'core_skill_integrity'}`] : []),
     ...((currentSurface as any)?.ok !== true ? ((currentSurface as any)?.blockers || ['global_current_surface_reconcile_failed']) : []),
     ...(!globalFastModeReady ? [`global_fast_mode_repair_failed:${(globalFastMode as any)?.error || (globalFastMode as any)?.status || 'unknown'}`] : [])
@@ -368,6 +379,8 @@ export async function executeDoctorGlobalOnlyFix(args: any[] = [], root: string,
     ...migrationReceiptBlockers
   ].map(String).filter(Boolean))];
   const warnings = [...new Set([
+    ...syntaxRepair.warnings,
+    ...(harnessMaintenance?.warnings || []),
     ...(!bridgeReadinessRequired ? bridgeBlockers.map((blocker) => `migration_optional_blocker:${blocker}`) : []),
     ...((desktopBridgeRepair as any)?.warnings || []),
     ...((desktopBridge as any)?.warnings || [])
@@ -398,6 +411,8 @@ export async function executeDoctorGlobalOnlyFix(args: any[] = [], root: string,
     ],
     skills: { global: globalSkills, project: { skipped: true, reason: 'global_only_doctor' } },
     current_public_surface: currentSurface,
+    codex_config_syntax_repair: syntaxRepair,
+    harness_maintenance: harnessMaintenance,
     codex_app_fast_mode: globalFastMode,
     openrouter_provider: desktopBridge.providers?.openrouter || null,
     sks_menubar: menuBar,
@@ -643,6 +658,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean, deps:
     actions: []
   })) : { ok: true, skipped: true, reason: 'doctor_without_fix', actions: [] };
   const doctorProfile = doctorProfileFromArgs(args, doctorFix);
+  const harnessMaintenance = doctorFix ? await doctorHarnessMaintenance(root, doctorProfile, process.env, deps) : null;
   const machineOnly = flag(args, '--machine-only');
   const reportFile = readOption(args, '--report-file', null);
   const argWarnings = doctorArgWarnings(args);
@@ -1576,6 +1592,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean, deps:
   // exited 1 naming nothing. Each condition now carries the blocker it implies,
   // and `resultOk` is derived from the list so the two cannot disagree.
   const resultBlockers = [
+    ...(harnessMaintenance?.blockers || []),
     ...(ready.ready
       ? []
       : (Array.isArray((ready as any).blockers) && (ready as any).blockers.length
@@ -1625,7 +1642,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean, deps:
     root,
     arg_warnings: argWarnings,
     blockers: [...new Set(resultBlockers.map(String))],
-    warnings: [...oauthCallbackPortDiagnostic.warnings, ...(desktopBridge.warnings || [])],
+    warnings: [...oauthCallbackPortDiagnostic.warnings, ...(desktopBridge.warnings || []), ...(harnessMaintenance?.warnings || [])],
     operator_actions: [...new Set([
       ...oauthCallbackOperatorActions,
       ...((desktopBridge as any).ok === false ? (desktopBridge as any).recovery_actions || [] : []),
@@ -1656,6 +1673,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean, deps:
     codex_startup_repair: codexStartupRepair,
     startup_config_repair: startupConfigRepair,
     codex_config_syntax_repair: codexConfigSyntaxRepair,
+    harness_maintenance: harnessMaintenance,
     context7_mcp_repair: context7McpRepair,
     supabase_mcp_repair: supabaseMcpRepair,
     doctor_fix_transaction: doctorFixTransaction,
@@ -1724,4 +1742,25 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean, deps:
   });
   for (const consoleLine of consoleLines) console.log(consoleLine);
   if (!result.ok) process.exitCode = 1;
+}
+
+async function doctorHarnessMaintenance(
+  root: string,
+  profile: string,
+  env: NodeJS.ProcessEnv,
+  deps: any
+): Promise<HarnessMaintenanceReport | null> {
+  // Background migration preflights are not a request to search the web. The
+  // explicit updater marks its new-version Doctor with the existing defer flag.
+  const duringUpdate = env.SKS_UPDATE_DEFER_MENUBAR_RESTART === '1';
+  if (profile === 'migration' && !duringUpdate) return null;
+  await ensureDir(root);
+  const maintain = deps.maintainHarnessGuidanceImpl
+    || (await import('../core/agent-guidance/harness-maintenance.js')).maintainHarnessGuidance;
+  const codexHome = deps.codexHome || deps.env?.CODEX_HOME
+    || (deps.home ? path.join(deps.home, '.codex') : !isVerificationTestHarness() ? env.CODEX_HOME : undefined);
+  return maintain({
+    root, trigger: duringUpdate ? 'update' : 'doctor', reuseRecent: duringUpdate,
+    ...(codexHome ? { codexHome } : {})
+  });
 }

@@ -175,16 +175,6 @@ export function modelNotOlderForTier(model: unknown, tier: ModelTier, input: { h
   return Boolean(id && current && TIER_FAMILIES[tier].includes(id.family) && compareModelVersions(id.version, current.version) >= 0)
 }
 
-/** True when Codex lists a non-hidden row of the same family with a strictly higher version. */
-export function supersededByNewerSameFamily(model: unknown, input: { home?: string; env?: NodeJS.ProcessEnv } = {}): boolean {
-  const id = parseGptModelId(model)
-  if (!id) return false
-  return Object.keys(resolveLatestModelTiers(input).supported_efforts).some((slug) => {
-    const other = parseGptModelId(slug)
-    return other !== null && other.family === id.family && compareModelVersions(other.version, id.version) > 0
-  })
-}
-
 /**
  * True when `model` is at least as new as SKS's built-in model for its tier.
  * Without the Codex cache SKS cannot call such a model stale, so a writer keeps

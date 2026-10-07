@@ -107,6 +107,11 @@ export function renderDoctorConsoleReport(result: any, extras: DoctorConsoleExtr
     for (const action of codexConfigSyntaxRepair.manual_actions || []) line(`  manual: ${action}`);
     for (const warning of codexConfigSyntaxRepair.warnings || []) line(`  warning: ${warning}`);
   }
+  if (result.harness_maintenance) {
+    const guidance = result.harness_maintenance;
+    line(`Official harness guidance: ${guidance.guidance_status}${guidance.fetched_at ? ` (${guidance.fetched_at})` : ''}`);
+    for (const warning of guidance.warnings || []) line(`  warning: ${warning}`);
+  }
   // A null bridge report means the probe was never run for this profile;
   // formatCodexDoctorConsoleStatus renders that as not-measured, and reserves
   // `unavailable` for a probe that ran and found the bridge unusable.

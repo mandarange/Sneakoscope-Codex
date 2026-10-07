@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+## [10.5.5] - 2026-10-07
+
+### Fixed
+
+- `sks update` and `sks doctor --fix` remove ignored root `network_access`
+  and deprecated Guardian `thread_context`, including profile overrides.
+  Supabase's ignored `read_only` field is migrated to the actual hosted URL
+  option or official stdio flag, preserving project scope and authentication.
+- Doctor no longer replaces an explicitly selected child model merely because
+  a newer catalog entry exists.
+
+### Changed
+
+- Keep always-loaded SKS guidance focused on TriWiki, the engineering principle,
+  user preferences and safety boundaries. Route details stay in their skills.
+- `$sks-align` in Codex app/CLI conversations now refreshes managed guidance
+  from searched and fetched official Codex/model references before rebuilding
+  the source-only TriWiki index. Update and user-run Doctor share the refresh;
+  failed retrieval preserves prior references and reports its status.
+
 ## [10.5.4] - 2026-10-06
 
 ### Added

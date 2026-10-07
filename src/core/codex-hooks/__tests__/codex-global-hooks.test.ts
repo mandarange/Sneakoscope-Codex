@@ -256,12 +256,12 @@ test('real Codex loads and trusts every installed SKS hook', async (t) => {
   });
 });
 
-test('installed guidance tells Naruto parents to orchestrate and lets Jev seal the child', () => {
+test('installed guidance keeps ordinary work local and delegates Naruto details to its skill', () => {
   const text = agentsBlockText();
-  assert.match(text, /there the parent orchestrates only/);
-  assert.match(text, /ordinary implementation stay parent-owned/);
-  assert.match(text, /newest model of the tier its work needs \(fast, balanced, context, or deep\); no model family is pinned/);
-  assert.match(text, /Jev picks the tier for each new Naruto child spawn and SKS seals it/);
+  assert.match(text, /Ordinary work stays parent-owned/);
+  assert.match(text, /For Naruto, follow its current skill: the parent orchestrates/);
+  assert.match(text, /Preserve explicit model, reasoning, service-tier, and role preferences/);
+  assert.match(text, /Do not add model-family tuning/);
   // Installed guidance never pins a model family.
   assert.doesNotMatch(text, /gpt[- ]?\d/i);
 });
