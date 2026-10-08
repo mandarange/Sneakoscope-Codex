@@ -1,6 +1,11 @@
 # SKS Release Readiness
 
-## 10.5.7 candidate
+## 10.5.7 published
+
+Published to npm on 2026-10-08 from
+`4c2d557bf17a554fe403153a46fefc9ae630721a`. Registry `latest`, `gitHead`,
+SHA-512 integrity, and the 1,385-file count match the verified release package.
+See the [GitHub release](https://github.com/mandarange/Sneakoscope-Codex/releases/tag/v10.5.7).
 
 10.5.7 includes the Jev fast-path and TriWiki memory integration from PR #15.
 Jev compiles bounded execution profiles while code-owned safety and mutation
@@ -11,12 +16,18 @@ The release also fixes immediate false staleness after align rebuilds the two
 derived shared-memory indexes; real source and canonical memory changes still
 invalidate the graph.
 
-Release verification requires the final clean commit's full canonical test
-corpus, full release workflow, pack receipt, real checks, stamp, provenance,
-live main equality, exact-commit CI, and normal npm publish dry-run. Evidence
-lives under `.sneakoscope/reports/release/10.5.7` and canonical report paths.
-Use Node 26.7.0 consistently on this host:
-`PATH="/opt/homebrew/bin:$PATH" npm publish`. Upload remains operator-owned.
+The published commit passed 198 local canonical release tests, all 31 full
+release gates, seven required execution checks, package receipt verification,
+provenance, and the normal npm publish dry-run. Its
+[GitHub CI](https://github.com/mandarange/Sneakoscope-Codex/actions/runs/37630790230)
+passed 3,914 tests with zero failures and 46 platform skips. The release stamp
+was verified after the dry-run rebuild. Evidence is retained under
+`.sneakoscope/reports/release/10.5.7`.
+
+Optional physical Desktop Bridge and live image-generation evidence was not
+established by this release run. The production dependency audit was clean;
+two low-severity development dependency findings remained. Later documentation
+commits do not change the source identity of this published package.
 
 ## Historical 10.5.6 candidate
 

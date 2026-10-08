@@ -1,8 +1,8 @@
 # Release Proof Truth
 
-## 10.5.7 candidate
+## 10.5.7 published
 
-This candidate packages PR #15's Jev execution profiles, decision-cache
+This release packages PR #15's Jev execution profiles, decision-cache
 bindings, sibling task leases, mission memory intake, explicit canonical
 promotion, bounded recall, and preservation across code-navigation alignment.
 Source, graph, policy, evidence, and lifecycle checks remain code-owned.
@@ -10,14 +10,26 @@ Release verification reproduced a fresh align reporting `wiki_context_changed`.
 The cache key now excludes the two generated shared-memory index paths, with
 regressions for repeated align, source edits, and canonical memory changes.
 
-The PR's acceptance record is historical: it includes exhaustive-suite
-failures and environment-blocked gates and cannot authorize this release.
-The final clean candidate requires fresh full tests, release gates, required
-real checks, pack receipt, stamp, provenance, live main parity, exact-commit
-CI, and the normal npm publish dry-run. Reports belong under
-`.sneakoscope/reports/release/10.5.7` and canonical report paths. Fixture
-results do not establish live OpenRouter quality or an installed-app upgrade.
-Actual npm publication is the operator's action.
+The PR's acceptance record is historical. Fresh verification of published
+commit `4c2d557bf17a554fe403153a46fefc9ae630721a` passed 198 canonical release
+tests, 31 full release gates, seven required execution checks, the package
+receipt, provenance, stamp, and normal publish dry-run. Exact-commit
+[CI](https://github.com/mandarange/Sneakoscope-Codex/actions/runs/37630790230)
+passed 3,914 tests, with zero failures and 46 platform skips. The config-load
+probe initially timed out at 20 seconds; rerunning the required execution
+phase with its supported 120-second timeout produced the required success
+response without changing configuration or credentials.
+
+Registry readback on 2026-10-08 confirmed `sneakoscope@10.5.7`, `latest`, that
+exact `gitHead`, 1,385 files, and SHA-512 integrity matching the prepublication
+package receipt. Reports are retained under `.sneakoscope/reports/release/10.5.7`.
+The GitHub version tag identifies the published source commit; later README
+changes are documentation follow-up, not a replacement npm artifact.
+
+Optional physical Desktop Bridge and live image-generation evidence remains
+unproven by this run. Fixture results do not establish live OpenRouter quality,
+a performance improvement, or an installed-app upgrade. The production audit
+had zero findings; the development audit retained two low-severity findings.
 
 ## Historical 10.5.6 candidate
 

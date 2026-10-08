@@ -14,14 +14,19 @@
 </div>
 
 <!-- BEGIN SKS SEARCH VISIBILITY MARKETING -->
-Sneakoscope Codex (`sks`) is an open-source trust layer for Codex CLI and ChatGPT Desktop. It coordinates bounded AI coding agents, records machine-verifiable evidence, preserves project memory, and blocks release claims that are not supported by current tests or artifacts. Search visibility outcomes are measured separately; SKS does not promise rankings or traffic.
+Sneakoscope Codex (`sks`) is an open-source local tool for the Codex CLI and Codex desktop app. It adds a macOS control center, bounded agent workflows, repository context, and evidence checks for SKS releases.
 <!-- END SKS SEARCH VISIBILITY MARKETING -->
 
-Current package: **SKS 10.5.7**. Install the latest stable release from npm.
+Current package: **SKS 10.5.7**, published on npm.
+[Release notes](https://github.com/mandarange/Sneakoscope-Codex/releases/tag/v10.5.7)
+· [Changelog](CHANGELOG.md). Install the latest stable release from npm.
 
-Sneakoscope Codex (`sks`) is a local trust layer for Codex CLI and ChatGPT Desktop. It keeps agent work bounded, preserves project context, records machine-verifiable evidence, and prevents release claims that current tests or artifacts cannot support.
-
-Use SKS when you want an AI coding session to end with something you can inspect: the change, the checks that ran, and the evidence behind the result. SKS is local-first and deterministic. It does not promise model quality, search rankings, or traffic.
+Ordinary work stays with the main agent. Optional Jev decisions use OpenRouter
+with cloud consent; source indexing and safety checks run locally. The default
+`essential` verification profile keeps safety checks active without requiring
+completion-proof rituals on every turn. `strict` adds those checks. SKS's npm
+release workflow requires its own current test and artifact evidence in either
+profile. See [verification profiles](docs/essential-trust.md).
 
 ## SKS Center — one place for your Codex setup
 
@@ -50,7 +55,7 @@ After installing SKS, install or rebuild the macOS app with:
 sks menubar install
 ```
 
-Interactive macOS installs can build it automatically. Dependency, CI, and
+Interactive global macOS installs can build it automatically. Dependency, CI, and
 piped installs skip the menu bar setup; scripts can opt in with
 `SKS_POSTINSTALL_MENUBAR=1` or opt out with `SKS_POSTINSTALL_NO_MENUBAR=1`.
 See [connection setup](docs/codex-lb.md), [subagent model lists](docs/naruto.md#connection-specific-subagent-lists),
@@ -62,6 +67,8 @@ and [image generation](docs/image-generation.md) for the underlying settings.
 
 - **Recommended: the latest patch release of Node.js 24 LTS.** Get it from the [official Node.js releases](https://nodejs.org/en/about/previous-releases).
 - npm, Git, and a current Codex CLI or supported Codex desktop host.
+- Building SKS Center on macOS also requires Xcode Command Line Tools and Swift;
+  the installer reports `xcode-select --install` if the tools are missing.
 - For source development and tests, see the locked dependency compatibility ranges in [Contributing](CONTRIBUTING.md#local-setup). CI uses the 24.x line.
 
 The published CLI's declared `package.json` engine floor is still `>=20.11`.
@@ -89,9 +96,10 @@ runs Doctor, and checks that `sks` on `PATH` resolves to the installed version:
 npm exec --yes --package=sneakoscope@latest -- sneakoscope install --yes
 ```
 
-### Enable SKS for a project
+### Add project context
 
-From the root of each project you want SKS to understand:
+Global SKS hooks and skills apply across projects. From a project root, create
+its local context and ignore rules with:
 
 ```sh
 sks bootstrap
@@ -107,9 +115,10 @@ Fix the failing test and verify the changed behavior.
 $sks-review
 ```
 
-`sks bootstrap` adds project-local SKS context and ignore rules. Ordinary work
-stays with the main agent; choose `$sks-naruto` or `$sks-work` when you want
-parallel child work.
+`sks bootstrap` initializes the project's SKS files. `$sks-align` builds the
+source index and refreshes managed guidance. Choose `$sks-naruto` or `$sks-work`
+when you explicitly want child agents; enabled Jev can also select parallel
+work when it judges that the task has independent parts.
 
 ## Update an existing installation
 
@@ -136,7 +145,8 @@ requesting a newer package, run `sks doctor --fix` yourself in the terminal.
 | --- | --- |
 | Keep work focused | Answers, tiny edits, ordinary implementation, reviews, and DB work run directly in the main agent. Naruto delegates through official Codex subagents when explicitly requested or selected by Jev. |
 | Keep context bounded | TriWiki indexes repository code into context that can be checked against source. |
-| Know what actually ran | Tests, diagnostics, and release evidence are recorded for completion claims. |
+| Reuse project memory | Opt-in Jev intake stages mission candidates; explicit promotion validates durable records separately from the code index. |
+| Know what actually ran | Diagnostics report measured checks; release gates bind tests and package evidence to the candidate commit. |
 | Recover safely | Doctor and update flows report a concrete recovery action when a check needs attention. |
 | Operate locally | The CLI works without a hosted control plane; macOS users can also use SKS Center. |
 
@@ -144,6 +154,20 @@ requesting a newer package, run `sks doctor --fix` yourself in the terminal.
 references and rebuilds TriWiki. Update and user-run `sks doctor --fix` share
 that maintenance and repair known ignored configuration settings. User text
 and model choices are preserved. See [harness maintenance](docs/align-modernization.md).
+
+### New in 10.5.7
+
+- **Jev execution profiles:** a decision can propose a bounded execution plan.
+  The default policy is `baseline`; fast profiles require `optimize` and an
+  explicit profile list. Required safety and mutation stages stay code-owned.
+- **TriWiki memory:** eligible mission candidates can be staged and explicitly
+  promoted into durable records after provenance, scope, lifecycle, and
+  evidence checks. Intake and promotion are separate opt-ins.
+- **Reliable index refresh:** align preserves canonical memory, and rebuilding
+  the generated memory indexes no longer makes a freshly aligned graph stale.
+
+These are implementation and validation results, not a measured speed or model
+quality improvement. See the [Jev and memory guide](docs/jev-triwiki-memory.md).
 
 ## Everyday commands
 
@@ -211,9 +235,39 @@ Naruto runs only when you invoke `$sks-naruto` or `$sks-work`, pass `--agents N`
 3. **Verify** — run the project checks and SKS diagnostics.
 4. **Review** — inspect the diff and the evidence before claiming completion.
 
-SKS keeps these steps observable. It does not turn a failed check into a success, invent test output, or silently substitute a provider.
+Inspect the actual checks and their scope before relying on a result. A passing
+fixture, configured integration, or successful build does not establish a live
+provider result or deployment.
 
 ## Optional integrations
+
+### Jev decisions and memory
+
+Jev is **off by default**. It requires an OpenRouter key and explicit cloud
+consent. Configure the connection in SKS Center, then use **Decisions** or the
+CLI to enable it:
+
+```sh
+sks decision status --json
+sks decision enable --provider openrouter --model typesafe/jev-1.13 --consent-cloud --json
+```
+
+`status` makes no OpenRouter request. Enabling Jev permits bounded decision
+requests, which may contain redacted task text and selected source excerpts;
+the `baseline` execution policy and disabled memory options remain the defaults.
+
+Advanced settings are CLI options: `--execution-policy observe` keeps baseline
+execution; `--execution-policy optimize --profiles <ids>` permits selected fast
+profiles when their preconditions pass. `--memory-intake` enables eligible
+mission candidates; `--memory-promotion` additionally permits an explicit
+`sks memory promote --mission <id> --yes` under the `optimize` policy.
+User-scoped memory additionally requires `--allow-user-memory`.
+Re-running `decision enable` without these flags resets them to their defaults.
+
+Use `sks memory recall --json` to inspect available records. Disabling Jev with
+`sks decision disable` stops its decision and intake paths without deleting
+canonical memory. See [Jev setup](docs/jev-decisions.md) and
+[memory boundaries](docs/jev-triwiki-memory.md) before enabling advanced options.
 
 ### Desktop Bridge
 
@@ -247,6 +301,8 @@ See [Image generation](docs/image-generation.md) for provider boundaries and evi
 - [MAD-SKS](docs/mad-sks.md) — explicit permission scope, execution boundaries, and verification.
 - [Agent Bridge](docs/AGENT-BRIDGE.md) — integrate through the CLI or MCP interface.
 - [Context Graph](docs/architecture/context-graph.md) — bounded source lookup and freshness.
+- [Jev decisions](docs/jev-decisions.md) — optional cloud decisions, setup, and fallback behavior.
+- [Jev and TriWiki memory](docs/jev-triwiki-memory.md) — execution profiles, memory intake, explicit promotion, and bounded recall.
 - [Release readiness](docs/release-readiness.md) — build, verify, and publish a release.
 - [Release evidence](docs/release-proof-truth.md) — what each verification result proves.
 - [FAQ](docs/faq.md) — common setup questions.
@@ -257,7 +313,11 @@ See [Image generation](docs/image-generation.md) for provider boundaries and evi
 
 ### Does SKS send my source code to a hosted service?
 
-SKS is local-first. Provider integrations are explicit opt-in routes; inspect the provider and bridge status before using them. Do not paste credentials or private source into an issue.
+TriWiki builds its code index locally. Codex sends the context needed for its
+work to the configured model provider; optional Jev can send bounded, redacted
+task text and selected source excerpts to OpenRouter after cloud consent.
+Local indexing is not a promise that the whole session stays offline. Inspect
+your provider and decision settings before using sensitive repositories.
 
 ### Why does `sks doctor` report a problem after an update?
 
@@ -279,7 +339,9 @@ The native Center is macOS-only. Run `sks menubar install` from an interactive t
 
 ### Does SKS guarantee better AI output or search visibility?
 
-No. SKS verifies process evidence and release claims. Model behavior and search outcomes remain separate measurements.
+No. SKS checks defined safety and evidence contracts. It does not guarantee
+model quality, faster execution, rankings, traffic, or correctness beyond the
+checks that actually ran.
 
 For a reproducible issue, use the [bug report form](https://github.com/mandarange/Sneakoscope-Codex/issues/new?template=bug_report.yml). For a question, start a discussion or open an issue with the smallest redacted reproduction.
 
