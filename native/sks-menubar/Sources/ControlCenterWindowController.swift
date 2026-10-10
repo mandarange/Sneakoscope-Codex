@@ -121,7 +121,7 @@ final class ControlCenterWindowController: NSWindowController, NSTableViewDataSo
         cell.spacing = 7
         cell.edgeInsets = NSEdgeInsets(top: 0, left: 6, bottom: 0, right: 0)
         cell.setAccessibilityLabel(item.displayTitle)
-        cell.setAccessibilityIdentifier("sks-center-sidebar-\(item.rawValue.lowercased().replacingOccurrences(of: " ", with: "-"))")
+        cell.setAccessibilityIdentifier("sks-center-sidebar-\(NativeView.identifier(item.displayTitle))")
         return cell
     }
 
@@ -136,7 +136,7 @@ final class ControlCenterWindowController: NSWindowController, NSTableViewDataSo
         let preservedFrame = window?.frame
         contentHost.subviews.forEach { $0.removeFromSuperview() }
         guard let controller = controllers[section] else { return }
-        controller.view.setAccessibilityIdentifier("sks-center-page-\(section.rawValue.lowercased().replacingOccurrences(of: " ", with: "-"))")
+        controller.view.setAccessibilityIdentifier("sks-center-page-\(NativeView.identifier(section.displayTitle))")
         let page = NativeView.scrollable(controller.view)
         contentHost.addSubview(page)
         NSLayoutConstraint.activate([
