@@ -29,7 +29,7 @@ final class NativeDisclosure: NSStackView {
         toggle.target = self
         toggle.action = #selector(toggleExpanded)
         toggle.setAccessibilityLabel(title)
-        toggle.setAccessibilityIdentifier("sks-disclosure-" + title.lowercased().replacingOccurrences(of: " ", with: "-"))
+        toggle.setAccessibilityIdentifier("sks-disclosure-" + NativeView.identifier(title))
         body.orientation = .vertical
         body.alignment = .width
         body.spacing = 12
@@ -219,7 +219,9 @@ enum NativeView {
         return String(compact.prefix(limit)) + "…"
     }
 
-    private static func identifier(_ value: String) -> String {
+    /// Canonicalizes user-facing labels for stable, punctuation-safe UI test selectors.
+    /// Keep this shared across every Control Center surface that exposes an identifier.
+    static func identifier(_ value: String) -> String {
         value.lowercased()
             .components(separatedBy: CharacterSet.alphanumerics.inverted)
             .filter { !$0.isEmpty }
