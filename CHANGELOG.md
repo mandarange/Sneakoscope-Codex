@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+
+## [10.5.8] - 2026-10-11
+
+### Fixed
+
+- Canonicalize SKS Center accessibility identifiers across disclosure controls.
+- Keep the current-surface migration E2E gate independent of the host npm/PATH installation.
+- Refresh the mutation allowlist for the isolated migration fixture cleanup callsite.
+
 ## [10.5.7] - 2026-10-07
 
 ### Added

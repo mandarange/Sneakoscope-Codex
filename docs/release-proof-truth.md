@@ -1,5 +1,17 @@
 # Release Proof Truth
 
+## 10.5.8 candidate
+
+This candidate carries the canonical SKS Center accessibility identifiers from
+PR #16 and the hermetic current-surface migration gate fix. The package version
+is advanced because 10.5.7 is already published; no 10.5.8 registry or GitHub
+publication is claimed before the operator's `npm publish` step.
+
+Fresh proof for the candidate is bound to its clean main commit: canonical
+tests, the full release DAG, pack receipt, required real checks, dist freshness,
+7.6.0 upgrade smoke, macOS Menu Bar proof, and release stamp. Optional trusted
+physical capture remains unproven and is excluded from the direct npm path.
+
 ## 10.5.7 published
 
 This release packages PR #15's Jev execution profiles, decision-cache

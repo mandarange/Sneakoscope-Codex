@@ -1,5 +1,18 @@
 # SKS Release Readiness
 
+## 10.5.8 release candidate
+
+10.5.8 carries the canonical SKS Center accessibility identifiers from PR #16
+and makes the current-surface migration E2E gate deterministic by fixing its
+simulated installed-version probe to the fixture instead of reading the host's
+global npm/PATH installation. npm already contains 10.5.7, so this candidate
+uses 10.5.8 for the next publication.
+
+The candidate is verified from a clean `main` commit with the canonical suite,
+full release DAG, package receipt, required real checks, dist freshness,
+upgrade smoke, macOS Menu Bar proof, and release stamp. Optional trusted
+physical capture remains separate evidence; npm publication is operator-owned.
+
 ## 10.5.7 published
 
 Published to npm on 2026-10-08 from
@@ -1010,7 +1023,7 @@ node ./dist/scripts/release-pack-receipt.js verify
 node ./dist/scripts/release-provenance-check.js --publish
 npm whoami --registry https://registry.npmjs.org/
 npm view sneakoscope maintainers --json --registry https://registry.npmjs.org/
-npm view sneakoscope@10.5.3 version --json --registry https://registry.npmjs.org/
+npm view sneakoscope@10.5.8 version --json --registry https://registry.npmjs.org/
 npm publish --dry-run --json \
   --registry https://registry.npmjs.org/ \
   --tag latest \

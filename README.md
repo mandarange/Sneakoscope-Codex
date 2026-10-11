@@ -17,8 +17,8 @@
 Sneakoscope Codex (`sks`) is an open-source local tool for the Codex CLI and Codex desktop app. It adds a macOS control center, bounded agent workflows, repository context, and evidence checks for SKS releases.
 <!-- END SKS SEARCH VISIBILITY MARKETING -->
 
-Current package: **SKS 10.5.7**, published on npm.
-[Release notes](https://github.com/mandarange/Sneakoscope-Codex/releases/tag/v10.5.7)
+Current package: **SKS 10.5.8**, prepared for npm publication.
+[Release notes](https://github.com/mandarange/Sneakoscope-Codex/releases/tag/v10.5.8)
 · [Changelog](CHANGELOG.md). Install the latest stable release from npm.
 
 Ordinary work stays with the main agent. Optional Jev decisions use OpenRouter
