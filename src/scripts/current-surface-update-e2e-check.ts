@@ -43,6 +43,19 @@ try {
     json: false,
     quiet: false,
     timeoutMs: 60_000,
+    // The fixture represents a 4.8.4 installation. Use the explicit
+    // test-only probe seam so the gate cannot observe the maintainer's
+    // unrelated npm-global/PATH installation and turn the update into a
+    // false already-current run.
+    lockedInstalledVersionProbe: async () => ({
+      ok: true,
+      version: '4.8.4',
+      source: 'npm-global' as const,
+      npm_global_version: '4.8.4',
+      path_version: '4.8.4',
+      path_binary: path.join(home, '.local', 'bin', 'sks'),
+      errors: []
+    }),
     env: {
       ...process.env,
       HOME: home,
