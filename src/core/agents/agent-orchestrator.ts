@@ -658,15 +658,18 @@ export async function resolveAgentMissionPrompt(root: string, opts: AgentRunOpti
     readJson(path.join(dir, 'route-context.json'), null),
     readJson(path.join(dir, 'mission.json'), null)
   ])
-  return String(
-    intake?.transformed_prompt
-      || routeContext?.transformed_prompt
-      || routeContext?.task
-      || routeContext?.prompt
-      || mission?.prompt
-      || direct
-      || 'Native agent run'
-  ).trim()
+  // Persisted artifacts are JSON, not typed options. Preserve source precedence
+  // without letting whitespace or a non-text value replace the actual task.
+  const candidates: unknown[] = [
+    intake?.transformed_prompt,
+    routeContext?.transformed_prompt,
+    routeContext?.task,
+    routeContext?.prompt,
+    mission?.prompt,
+    direct,
+    'Native agent run'
+  ]
+  return candidates.find((value): value is string => typeof value === 'string' && value.trim().length > 0)!.trim()
 }
 
 function normalizeMissionHardTimeoutMs(opts: any = {}, route = '') {
