@@ -807,8 +807,69 @@ export function runProcess(
 export async function terminateProcessTree(pid: number | undefined, child: ReturnType<typeof spawn>): Promise<void> {
   signalProcessTree(pid, 'SIGTERM', child);
   if (await waitForProcessTreeExit(pid, 1_000)) return;
+  // Kill descendants while the group leader is still alive so it can reap
+  // them. Killing the whole group in one syscall can orphan grandchildren as
+  // zombies on Linux containers whose PID 1 does not reap promptly; callers
+  // then observe those PIDs as alive even though the work has stopped.
+  await killProcessGroupDescendants(pid);
   signalProcessTree(pid, 'SIGKILL', child);
   await waitForProcessTreeExit(pid, 1_500);
+}
+
+async function killProcessGroupDescendants(groupId: number | undefined): Promise<void> {
+  if (!groupId || process.platform === 'win32') return;
+  const members = linuxProcessGroupMembers(groupId)
+    .filter((member) => member.pid !== groupId)
+    .sort((left, right) => right.depth - left.depth || right.pid - left.pid);
+  for (const member of members) {
+    try {
+      process.kill(member.pid, 'SIGKILL');
+    } catch {}
+  }
+  if (members.length) await new Promise((resolve) => setTimeout(resolve, 50));
+}
+
+function linuxProcessGroupMembers(groupId: number): Array<{ pid: number; depth: number }> {
+  if (process.platform !== 'linux') return [];
+  let entries: string[];
+  try {
+    entries = fs.readdirSync('/proc');
+  } catch {
+    return [];
+  }
+  const rows: Array<{ pid: number; ppid: number }> = [];
+  for (const entry of entries) {
+    if (!/^\d+$/.test(entry)) continue;
+    const stat = readLinuxProcessStat(Number(entry));
+    if (!stat || stat.pgrp !== groupId) continue;
+    rows.push({ pid: stat.pid, ppid: stat.ppid });
+  }
+  const parents = new Map(rows.map((row) => [row.pid, row.ppid]));
+  return rows.map((row) => {
+    let depth = 0;
+    const seen = new Set<number>();
+    let current = row.ppid;
+    while (parents.has(current) && !seen.has(current)) {
+      seen.add(current);
+      depth += 1;
+      current = parents.get(current)!;
+    }
+    return { pid: row.pid, depth };
+  });
+}
+
+function readLinuxProcessStat(pid: number): { pid: number; ppid: number; pgrp: number } | null {
+  try {
+    const text = fs.readFileSync(`/proc/${pid}/stat`, 'utf8');
+    const close = text.lastIndexOf(')');
+    if (close < 0) return null;
+    const fields = text.slice(close + 1).trim().split(/\s+/);
+    const ppid = Number(fields[1]);
+    const pgrp = Number(fields[2]);
+    return Number.isInteger(ppid) && Number.isInteger(pgrp) ? { pid, ppid, pgrp } : null;
+  } catch {
+    return null;
+  }
 }
 
 function signalProcessTree(pid: number | undefined, signal: NodeJS.Signals, child: ReturnType<typeof spawn>): void {
