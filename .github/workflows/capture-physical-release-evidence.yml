@@ -28,6 +28,7 @@ jobs:
       - name: Checkout exact release source
         uses: actions/checkout@v6
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Verify capture identity
