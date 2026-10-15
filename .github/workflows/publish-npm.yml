@@ -42,6 +42,7 @@ jobs:
       - name: Checkout exact main source
         uses: actions/checkout@v6
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Setup minimum Node.js
@@ -159,6 +160,7 @@ jobs:
       - name: Checkout exact main source
         uses: actions/checkout@v6
         with:
+          persist-credentials: false
           fetch-depth: 0
       - name: Setup Node.js 24
         uses: actions/setup-node@v6
@@ -427,6 +429,7 @@ jobs:
       - name: Checkout exact main source
         uses: actions/checkout@v6
         with:
+          persist-credentials: false
           fetch-depth: 0
       - name: Setup Node.js 24
         uses: actions/setup-node@v6
@@ -566,6 +569,7 @@ jobs:
       - name: Checkout exact main source
         uses: actions/checkout@v6
         with:
+          persist-credentials: false
           fetch-depth: 0
       - name: Setup Node.js 24
         uses: actions/setup-node@v6
