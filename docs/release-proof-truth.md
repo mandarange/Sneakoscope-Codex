@@ -614,9 +614,9 @@ Exact-commit proof can exist only after the candidate is committed and all
 source-bound gates are regenerated from that clean commit.
 
 All release artifacts bound to 9.2.7 or an earlier commit are historical. They
-must not be renamed, copied, or treated as 10.5.0 evidence.
+must not be renamed, copied, or treated as 10.5.9 evidence.
 
-New 10.5.0 claims:
+New 10.5.9 claims:
 
 | Claim | Current support | Boundary |
 | --- | --- | --- |
@@ -729,8 +729,8 @@ New 10.3.10 claims:
 | A stale or cwd-sticky official workflow cannot capture a later prompt | passed-hermetic | unnamed hooks use `loadOwnedRouteState`; idle > 2h is inactive even with leftover open threads; same-session follow-ups still bind while the run is fresh |
 | The 10.3.10 package is published | verified-on-machine | 2026-10-02, registry `gitHead` 0c70457e and file count 1755, sha512 integrity equals the pack receipt |
 | The 10.4.0 package is published | verified-on-machine | 2026-10-02, registry `gitHead` fb7b2385 and file count 1692, sha512 integrity equals the pack receipt |
-| All checked version authorities report 10.5.0 | passed-hermetic | `release:version-truth` after the version bump |
-| The reported 10.5.0 package is ready to publish | not proved | requires a clean exact-commit build, `npm run release:check:full` stamp, pack receipt, provenance, and the release commit fast-forward pushed to origin main (the prepublish reproducibility preflight refuses `head_not_origin_main`) |
+| All checked version authorities report 10.5.9 | passed-hermetic | `release:version-truth` after the version bump |
+| The reported 10.5.9 package is ready to publish | not proved | requires a clean exact-commit build, `npm run release:check:full` stamp, pack receipt, provenance, and the release commit fast-forward pushed to origin main (the prepublish reproducibility preflight refuses `head_not_origin_main`) |
 
 ## 9.1.0 assertion (historical)
 
