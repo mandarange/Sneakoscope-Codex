@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Update the bundled Codex SDK/runtime to 0.163.0.
+- Refresh `smol-toml` to 1.9.1.
+
+
 
 
 ## [10.5.9] - 2026-10-16
