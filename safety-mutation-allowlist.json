@@ -6156,6 +6156,15 @@
       "callsite_sha256": "41a8bb9da0c01253617622983ad94b6b5c10e05a3ba12126b635f1efa05bae1e",
       "occurrence": 1,
       "reason": "Remove only this check's owned mkdtemp command-import unpack directory in finally; --keep preserves it for inspection."
+    },
+    {
+      "file": "src/core/fsx.ts",
+      "symbol": "killProcessGroupDescendants",
+      "token": "process.kill",
+      "scope_contract_sha256": "d7a22ba4829c626d4bafbec1ada793ef26390d7d8cb8f42cbfbb071a0c210b03",
+      "callsite_sha256": "154eef008b64a762b5cc1e6107de4a05e9988257ca72950a8341b45e3c66840c",
+      "occurrence": 1,
+      "reason": "Descendant cleanup sends SIGKILL only to non-leader members of the owned worker process group after the bounded SIGTERM grace period."
     }
   ]
 }
