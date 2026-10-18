@@ -11,7 +11,9 @@ ephemeral forks were refused with `bridge_codex_session_identity_conflict`
 because Codex now sends its cache-affinity key as `session-id`. The release
 also forwards Codex's zstd request bodies compressed, waits out no-route
 network blips, replays Cloudflare 520–523, and stops parsing HEAD probes as
-creates.
+creates. It folds in PR #20 (workflow actions pinned to the commits of their
+v6.1.0 and v6.5.0 tags) and PR #22 (dev-only `@types/node` and `jsdom` patch
+refresh).
 
 Release authority requires the canonical suite, full release DAG, package
 receipt, required real checks, dist freshness, upgrade smoke, macOS Menu Bar

@@ -5,8 +5,12 @@
 This candidate carries the Desktop Bridge repairs for Codex 0.162 and 0.163 on
 Codex-LB from PR #21: Responses Lite compaction, continued-WebSocket
 compaction, the cache-key `session-id` header, compressed request bodies,
-no-route waits, and Cloudflare 520–523 replays. No 10.6.0 registry or GitHub
-publication is claimed before the operator's `npm publish` step.
+no-route waits, and Cloudflare 520–523 replays. It also folds in PR #20
+(workflow action pins; `git ls-remote` confirmed both SHAs are the commits of
+the `v6.1.0`/`v6.5.0` and current `v6` tags) and PR #22 (dev-only patch
+refresh; each new lockfile integrity equals the registry's). No 10.6.0
+registry or GitHub publication is claimed before the operator's `npm publish`
+step.
 
 Fresh proof for the candidate is bound to its clean main commit: canonical
 tests, the full release DAG, pack receipt, required real checks, dist
