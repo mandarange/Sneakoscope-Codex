@@ -1,6 +1,23 @@
 # Release Proof Truth
 
-## 10.5.8 candidate
+## 10.6.0 candidate
+
+This candidate carries the Desktop Bridge repairs for Codex 0.162 and 0.163 on
+Codex-LB from PR #21: Responses Lite compaction, continued-WebSocket
+compaction, the cache-key `session-id` header, compressed request bodies,
+no-route waits, and Cloudflare 520–523 replays. No 10.6.0 registry or GitHub
+publication is claimed before the operator's `npm publish` step.
+
+Fresh proof for the candidate is bound to its clean main commit: canonical
+tests, the full release DAG, pack receipt, required real checks, dist
+freshness, 7.6.0 upgrade smoke, macOS Menu Bar proof, and release stamp. The
+live compaction evidence came from a scratch bridge on a separate port, not
+from the installed service; see "New 10.6.0 claims" for each boundary.
+
+## Historical 10.5.8 candidate
+
+Published as 10.5.8 on 2026-10-12 (registry `gitHead` `a178f9ce`); 10.5.9
+followed on 2026-10-18 (`618f280b`).
 
 This candidate carries the canonical SKS Center accessibility identifiers from
 PR #16 and the hermetic current-surface migration gate fix. The package version
@@ -614,9 +631,20 @@ Exact-commit proof can exist only after the candidate is committed and all
 source-bound gates are regenerated from that clean commit.
 
 All release artifacts bound to 9.2.7 or an earlier commit are historical. They
-must not be renamed, copied, or treated as 10.5.9 evidence.
+must not be renamed, copied, or treated as 10.6.0 evidence.
 
-New 10.5.9 claims:
+New 10.6.0 claims:
+
+| Claim | Current support | Boundary |
+| --- | --- | --- |
+| A Codex-LB compaction of a Responses Lite model completes | verified-on-machine | 2026-10-18: scratch bridge from the candidate source, Codex-LB, App-bundled Codex 0.163.0-alpha.10.2, `model_auto_compact_token_limit = 4000`; two compactions on gpt-6.1-sol with zero bridge rejections; the installed bridge was not changed |
+| The summary request satisfies Responses Lite | passed-hermetic | `compaction-adapter` and `compaction-provider-route` suites, including a fake Codex-LB that refuses `parallel_tool_calls != false` as the live backend did (`unsupported_value`) |
+| A continued WebSocket compaction summarizes the whole conversation | passed-hermetic | continuation-chain case in `compaction-provider-route`; the live WebSocket runs above had no first-attempt summary failure |
+| A cache-key `session-id` header is not an identity conflict | passed-hermetic | `desktop-bridge-transport` and `responses-websocket` suites; one live zstd create with a Guardian-style header returned 200 |
+| Compressed request bodies reach Codex-LB and the official backend compressed | passed-hermetic | transport suite asserts byte-identical zstd when untouched and re-compression after a model rewrite; Codex-LB accepted zstd and gzip in a direct probe; no latency benchmark was run |
+| A no-route network blip no longer fails the turn | not proved | the error classification is unit-tested; no real network outage was reproduced |
+
+New 10.5.0 claims:
 
 | Claim | Current support | Boundary |
 | --- | --- | --- |
@@ -729,8 +757,8 @@ New 10.3.10 claims:
 | A stale or cwd-sticky official workflow cannot capture a later prompt | passed-hermetic | unnamed hooks use `loadOwnedRouteState`; idle > 2h is inactive even with leftover open threads; same-session follow-ups still bind while the run is fresh |
 | The 10.3.10 package is published | verified-on-machine | 2026-10-02, registry `gitHead` 0c70457e and file count 1755, sha512 integrity equals the pack receipt |
 | The 10.4.0 package is published | verified-on-machine | 2026-10-02, registry `gitHead` fb7b2385 and file count 1692, sha512 integrity equals the pack receipt |
-| All checked version authorities report 10.5.9 | passed-hermetic | `release:version-truth` after the version bump |
-| The reported 10.5.9 package is ready to publish | not proved | requires a clean exact-commit build, `npm run release:check:full` stamp, pack receipt, provenance, and the release commit fast-forward pushed to origin main (the prepublish reproducibility preflight refuses `head_not_origin_main`) |
+| All checked version authorities report 10.6.0 | passed-hermetic | `release:version-truth` after the version bump |
+| The reported 10.6.0 package is ready to publish | not proved | requires a clean exact-commit build, `npm run release:check:full` stamp, pack receipt, provenance, and the release commit fast-forward pushed to origin main (the prepublish reproducibility preflight refuses `head_not_origin_main`) |
 
 ## 9.1.0 assertion (historical)
 

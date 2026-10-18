@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [10.6.0] - 2026-10-18
+
 ### Fixed
 
 - Desktop Bridge: compaction on Codex-LB no longer fails with
