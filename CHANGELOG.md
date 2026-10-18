@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [10.6.1] - 2026-10-18
+
+### Changed
+
+- Pin the CI and release workflows' `actions/checkout` and
+  `actions/setup-node` to the commits of their v6.1.0 and v6.5.0 tags instead
+  of the movable `v6` tag (#20).
+- Refresh dev-only `@types/node` to 24.19.2 and `jsdom` to 30.1.3 (#22).
+
 ## [10.6.0] - 2026-10-18
 
 ### Fixed

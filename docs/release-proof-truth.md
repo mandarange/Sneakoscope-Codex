@@ -1,18 +1,30 @@
 # Release Proof Truth
 
-## 10.6.0 candidate
+## 10.6.1 candidate
 
-This candidate carries the Desktop Bridge repairs for Codex 0.162 and 0.163 on
-Codex-LB from PR #21: Responses Lite compaction, continued-WebSocket
-compaction, the cache-key `session-id` header, compressed request bodies,
-no-route waits, and Cloudflare 520–523 replays. No 10.6.0 registry or GitHub
-publication is claimed before the operator's `npm publish` step.
+This candidate carries PR #20 (workflow action pins) and PR #22 (dev-only
+`@types/node` and `jsdom` patch refresh), which landed after 10.6.0 was
+published. No product code changes. No 10.6.1 registry or GitHub publication
+is claimed before the operator's `npm publish` step.
 
 Fresh proof for the candidate is bound to its clean main commit: canonical
 tests, the full release DAG, pack receipt, required real checks, dist
-freshness, 7.6.0 upgrade smoke, macOS Menu Bar proof, and release stamp. The
-live compaction evidence came from a scratch bridge on a separate port, not
-from the installed service; see "New 10.6.0 claims" for each boundary.
+freshness, 7.6.0 upgrade smoke, macOS Menu Bar proof, and release stamp; see
+"New 10.6.1 claims" for each boundary.
+
+## 10.6.0 published
+
+This release carries the Desktop Bridge repairs for Codex 0.162 and 0.163 on
+Codex-LB from PR #21: Responses Lite compaction, continued-WebSocket
+compaction, the cache-key `session-id` header, compressed request bodies,
+no-route waits, and Cloudflare 520–523 replays. Published 2026-10-18T11:02:07Z
+from `08d97fbe`; registry SHA-512 integrity equals the pack receipt (1,385
+files).
+
+Its proof is bound to `08d97fbe`: release tests, the full release DAG, pack
+receipt, required real checks, dist freshness, and release stamp. The live
+compaction evidence came from a scratch bridge on a separate port, not from
+the installed service; see "New 10.6.0 claims" for each boundary.
 
 ## Historical 10.5.8 candidate
 
@@ -631,12 +643,21 @@ Exact-commit proof can exist only after the candidate is committed and all
 source-bound gates are regenerated from that clean commit.
 
 All release artifacts bound to 9.2.7 or an earlier commit are historical. They
-must not be renamed, copied, or treated as 10.6.0 evidence.
+must not be renamed, copied, or treated as 10.6.1 evidence.
+
+New 10.6.1 claims:
+
+| Claim | Current support | Boundary |
+| --- | --- | --- |
+| The pinned workflow actions run what the `v6` tags run today | verified-on-machine | `git ls-remote` on 2026-10-18: `actions/checkout` `refs/tags/v6.1.0` and `refs/tags/v6` are both `d23441a4…`; `actions/setup-node` `refs/tags/v6.5.0` and `refs/tags/v6` are both `24997072…`; only workflow files changed |
+| The dev dependency refresh changes no runtime dependency | passed-hermetic | the four changed lockfile entries are `dev: true` and each integrity equals the registry's; `npm ci --ignore-scripts`, typecheck, and the release corpus pass |
+| The 10.6.1 package is ready to publish | not proved | requires the release stamp on the clean main commit and that commit fast-forward pushed to origin main |
 
 New 10.6.0 claims:
 
 | Claim | Current support | Boundary |
 | --- | --- | --- |
+| The 10.6.0 package is published | verified-on-machine | 2026-10-18, registry `gitHead` 08d97fbe and file count 1385, sha512 integrity equals the pack receipt |
 | A Codex-LB compaction of a Responses Lite model completes | verified-on-machine | 2026-10-18: scratch bridge from the candidate source, Codex-LB, App-bundled Codex 0.163.0-alpha.10.2, `model_auto_compact_token_limit = 4000`; two compactions on gpt-6.1-sol with zero bridge rejections; the installed bridge was not changed |
 | The summary request satisfies Responses Lite | passed-hermetic | `compaction-adapter` and `compaction-provider-route` suites, including a fake Codex-LB that refuses `parallel_tool_calls != false` as the live backend did (`unsupported_value`) |
 | A continued WebSocket compaction summarizes the whole conversation | passed-hermetic | continuation-chain case in `compaction-provider-route`; the live WebSocket runs above had no first-attempt summary failure |
@@ -757,8 +778,8 @@ New 10.3.10 claims:
 | A stale or cwd-sticky official workflow cannot capture a later prompt | passed-hermetic | unnamed hooks use `loadOwnedRouteState`; idle > 2h is inactive even with leftover open threads; same-session follow-ups still bind while the run is fresh |
 | The 10.3.10 package is published | verified-on-machine | 2026-10-02, registry `gitHead` 0c70457e and file count 1755, sha512 integrity equals the pack receipt |
 | The 10.4.0 package is published | verified-on-machine | 2026-10-02, registry `gitHead` fb7b2385 and file count 1692, sha512 integrity equals the pack receipt |
-| All checked version authorities report 10.6.0 | passed-hermetic | `release:version-truth` after the version bump |
-| The reported 10.6.0 package is ready to publish | not proved | requires a clean exact-commit build, `npm run release:check:full` stamp, pack receipt, provenance, and the release commit fast-forward pushed to origin main (the prepublish reproducibility preflight refuses `head_not_origin_main`) |
+| All checked version authorities report 10.6.1 | passed-hermetic | `release:version-truth` after the version bump |
+| The reported 10.6.1 package is ready to publish | not proved | requires a clean exact-commit build, `npm run release:check:full` stamp, pack receipt, provenance, and the release commit fast-forward pushed to origin main (the prepublish reproducibility preflight refuses `head_not_origin_main`) |
 
 ## 9.1.0 assertion (historical)
 
