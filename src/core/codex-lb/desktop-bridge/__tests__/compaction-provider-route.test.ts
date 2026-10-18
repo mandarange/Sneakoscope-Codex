@@ -45,7 +45,12 @@ function summaryStream(): string {
   );
 }
 
-function upstream(t: TestContext, reply: (body: any) => Reply = () => ({ status: 200, body: summaryStream(), contentType: 'text/event-stream' })) {
+function upstream(
+  t: TestContext,
+  reply: (body: any) => Reply = () => ({ status: 200, body: summaryStream(), contentType: 'text/event-stream' }),
+  /** Events a socket answers a create with; the default echoes the create back. */
+  socketReply?: (message: any) => object[],
+) {
   const requests: Recorded[] = [];
   const socketMessages: any[] = [];
   const upgrades: string[] = [];
@@ -69,8 +74,10 @@ function upstream(t: TestContext, reply: (body: any) => Reply = () => ({ status:
     wss.handleUpgrade(req, socket, head, (ws) => {
       ws.on('error', () => undefined);
       ws.on('message', (data, binary) => {
-        socketMessages.push(JSON.parse(String(data)));
-        ws.send(data, { binary });
+        const message = JSON.parse(String(data));
+        socketMessages.push(message);
+        if (socketReply) for (const event of socketReply(message)) ws.send(JSON.stringify(event));
+        else ws.send(data, { binary });
       });
     });
   });
@@ -87,8 +94,8 @@ async function listen(server: net.Server): Promise<number> {
   return (server.address() as AddressInfo).port;
 }
 
-async function fixture(t: TestContext, options: { mode?: DesktopBridgeOpenRouterOnlyConfig; lbReply?: (body: any) => Reply } = {}) {
-  const lb = upstream(t, options.lbReply);
+async function fixture(t: TestContext, options: { mode?: DesktopBridgeOpenRouterOnlyConfig; lbReply?: (body: any) => Reply; lbSocketReply?: (message: any) => object[] } = {}) {
+  const lb = upstream(t, options.lbReply, options.lbSocketReply);
   const openrouter = upstream(t);
   const official = upstream(t, () => ({ status: 200, body: '{"ok":true}' }));
   const lbBase = `http://127.0.0.1:${await listen(lb.server)}/backend-api/codex`;
@@ -174,6 +181,7 @@ test('HTTP: a Codex-LB thread compacts through its own provider and later turns 
   assert.equal(summaryRequest.path, '/backend-api/codex/responses');
   assert.equal(summaryRequest.body.model, 'gpt-lb-upstream');
   assert.equal(summaryRequest.body.tool_choice, 'none');
+  assert.equal(summaryRequest.body.parallel_tool_calls, false);
   assert.equal(summaryRequest.body.input.some((entry: any) => entry.type === 'compaction_trigger'), false);
   assert.deepEqual(summaryRequest.body.input.at(-1), user(CODEX_SUMMARIZATION_PROMPT));
   assert.equal(f.official.requests.length, 0, 'a provider thread never compacts on the official identity');
@@ -184,6 +192,53 @@ test('HTTP: a Codex-LB thread compacts through its own provider and later turns 
   const forwarded = f.lb.requests[1]!.body.input;
   assert.deepEqual(forwarded[1], user(`${CODEX_SUMMARY_PREFIX}\n${SUMMARY}`));
   assert.equal(JSON.stringify(forwarded).includes('sks-bridge-compaction'), false);
+});
+
+const LITE_REFUSAL = { message: 'X-OpenAI-Internal-Codex-Responses-Lite requires `parallel_tool_calls` to be false.', type: 'invalid_request_error', code: 'unsupported_value', param: 'parallel_tool_calls' };
+
+/** Codex-LB in front of the Responses Lite backend: HTTP 200, then `response.failed`, unless parallel_tool_calls is false. */
+function responsesLiteBackend(body: any): Reply {
+  const lite = Array.isArray(body?.input) && body.input.some((item: any) => item?.type === 'additional_tools');
+  if (lite && body.parallel_tool_calls !== false) {
+    return { status: 200, contentType: 'text/event-stream', body: sse(
+      { type: 'response.created', response: { status: 'in_progress', error: LITE_REFUSAL } },
+      { type: 'response.failed', response: { status: 'failed', error: LITE_REFUSAL } },
+    ) };
+  }
+  return { status: 200, body: summaryStream(), contentType: 'text/event-stream' };
+}
+
+test('Responses Lite: a gpt-6.x thread compacts through Codex-LB over HTTP and WebSocket', { timeout: 20_000 }, async (t) => {
+  // The live failure: every compaction of a Responses Lite model (tools in an
+  // `additional_tools` input item) ended in `bridge_upstream_request_failed`.
+  const f = await fixture(t, { lbReply: responsesLiteBackend });
+  const lite = {
+    model: 'gpt-lb', stream: true, store: false, tool_choice: 'auto', parallel_tool_calls: false,
+    input: [{ type: 'additional_tools', id: 'at_1', role: 'developer', tools: TOOLS }, user('fix the parser'), { type: 'compaction_trigger' }],
+  };
+  const viaHttp = await f.post('/backend-api/codex/responses', lite);
+  assert.equal(viaHttp.status, 200);
+  assert.deepEqual(events(viaHttp.text).map((event) => event.type), ['response.created', 'response.output_item.done', 'response.completed']);
+  assert.equal(f.lb.requests[0]!.body.parallel_tool_calls, false);
+  assert.equal(f.lb.requests[0]!.body.tool_choice, 'none');
+
+  const ws = await f.socket();
+  const received: any[] = [];
+  ws.on('message', (data) => received.push(JSON.parse(String(data))));
+  ws.send(JSON.stringify({ type: 'response.create', ...lite }));
+  while (received.length < 3) await once(ws, 'message');
+  assert.deepEqual(received.map((event) => event.type), ['response.created', 'response.output_item.done', 'response.completed']);
+  assert.equal(decodeBridgeCompaction(received[1].item.encrypted_content), SUMMARY);
+});
+
+test('HTTP: a summary the provider fails in-stream reaches Codex with the provider code, never its message', { timeout: 20_000 }, async (t) => {
+  const f = await fixture(t, { lbReply: () => ({ status: 200, contentType: 'text/event-stream', body: sse({ type: 'response.failed', response: { status: 'failed', error: LITE_REFUSAL } }) }) });
+  const result = await f.post('/backend-api/codex/responses', { model: 'gpt-lb', input: [user('hi'), { type: 'compaction_trigger' }] });
+  assert.equal(result.status, 200);
+  const stream = events(result.text);
+  assert.deepEqual(stream.map((event) => event.type), ['response.created', 'response.failed']);
+  assert.equal(stream[1].response.error.code, 'unsupported_value');
+  assert.equal(result.text.includes('requires'), false);
 });
 
 test('HTTP: an official thread keeps native remote compaction', { timeout: 20_000 }, async (t) => {
@@ -236,4 +291,37 @@ test('Responses WebSocket: a provider-bound socket answers compaction itself and
   assert.equal(echoed.type, 'response.create');
   assert.equal(echoed.model, 'gpt-lb-upstream');
   assert.deepEqual(echoed.input[0], user(`${CODEX_SUMMARY_PREFIX}\n${SUMMARY}`));
+});
+
+test('Responses WebSocket: a continued socket compacts the whole conversation, not just the delta', { timeout: 20_000 }, async (t) => {
+  // Codex continues a response by id and sends only the new items; the summary
+  // request built from that delta alone was refused (param `input`) live.
+  const call = { type: 'function_call', call_id: 'c1', name: 'shell', arguments: '{"command":"ls"}' };
+  const output = { type: 'function_call_output', call_id: 'c1', output: 'README.md' };
+  const f = await fixture(t, { lbSocketReply: () => [
+    { type: 'response.created', response: { id: 'resp_1', error: null } },
+    { type: 'response.output_item.done', output_index: 0, item: call },
+    { type: 'response.completed', response: { id: 'resp_1', output: [call] } },
+  ] });
+  const ws = await f.socket();
+  const received: any[] = [];
+  ws.on('message', (data) => received.push(JSON.parse(String(data))));
+  ws.send(JSON.stringify({ type: 'response.create', model: 'gpt-lb', input: [user('list the files')] }));
+  while (received.length < 3) await once(ws, 'message');
+  ws.send(JSON.stringify({ type: 'response.create', model: 'gpt-lb', previous_response_id: 'resp_1', input: [output, { type: 'compaction_trigger' }] }));
+  while (received.length < 6) await once(ws, 'message');
+  assert.deepEqual(received.slice(3).map((event) => event.type), ['response.created', 'response.output_item.done', 'response.completed']);
+  const summaryRequest = f.lb.requests[0]!.body;
+  assert.deepEqual(summaryRequest.input.slice(0, 3), [user('list the files'), call, output]);
+  assert.deepEqual(summaryRequest.input.at(-1), user(CODEX_SUMMARIZATION_PROMPT));
+  assert.equal(summaryRequest.previous_response_id, undefined);
+
+  // A continuation this socket never carried cannot be vouched for: a
+  // retryable failure at once (Codex then resends the full history), and no
+  // provider call built from a fragment.
+  ws.send(JSON.stringify({ type: 'response.create', model: 'gpt-lb', previous_response_id: 'resp_unknown', input: [{ type: 'compaction_trigger' }] }));
+  while (received.length < 7) await once(ws, 'message');
+  assert.equal(received[6].type, 'response.failed');
+  assert.equal(received[6].response.error.code, 'bridge_compaction_history_unavailable');
+  assert.equal(f.lb.requests.length, 1);
 });

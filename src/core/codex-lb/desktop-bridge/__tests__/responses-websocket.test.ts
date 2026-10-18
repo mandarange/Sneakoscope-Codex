@@ -207,6 +207,16 @@ test('create metadata binds body-only thread identity and rejects conflicting id
   const error = JSON.parse(await exchange(conflicting, { type: 'response.create', model: MODEL, client_metadata: { thread_id: 'wrong-thread' } }));
   assert.equal(error.error.code, 'bridge_codex_session_identity_conflict'); await conflictClosed;
   assert.equal(f.lb.messages.length, 1); assert.deepEqual(pins, ['body-thread']);
+  // A Guardian review socket: `session-id` carries the cache key
+  // `<source>:<parent thread>`, the turn metadata the real session. Served.
+  const review = await f.client({
+    'thread-id': 'review-thread', 'session-id': 'guardian:parent-thread',
+    'x-codex-turn-metadata': JSON.stringify({ session_id: 'review-thread', thread_id: 'review-thread' }),
+  });
+  const echoed = JSON.parse(await exchange(review, { type: 'response.create', model: MODEL, client_metadata: { session_id: 'review-thread', thread_id: 'review-thread' } }));
+  assert.equal(echoed.type, 'response.create');
+  assert.equal(f.lb.messages.length, 2);
+  assert.equal(pins.at(-1), 'review-thread', 'the review thread is pinned by its own thread id');
 });
 
 test('disconnect while credentials resolve never opens an orphan upstream', { timeout: 4_000 }, async (t) => {

@@ -17,6 +17,8 @@ import {
   newCompactionResponseId,
   parseProviderSummary,
   requestsRemoteCompaction,
+  ResponsesContinuationChain,
+  summaryFailure,
   summaryWithinBounds,
 } from './compaction-adapter.js';
 import { requestProviderCompactionSummary } from './http-forward.js';
@@ -49,6 +51,8 @@ interface PendingMessage {
   originalBytes: number;
   /** A remote-compaction create on a provider route, answered by the bridge (compaction-adapter.ts). */
   compaction?: Record<string, unknown> | null;
+  /** The routed create `data` carries upstream, for the socket's continuation chain. */
+  routed?: Record<string, unknown> | null;
 }
 
 function withLineage(identity: CodexSessionIdentity, next: CodexSessionIdentity): CodexSessionIdentity {
@@ -87,6 +91,7 @@ export function forwardResponsesWebSocket(req: IncomingMessage, socket: Duplex, 
     const pending: PendingMessage[] = [];
     let closeTimer: NodeJS.Timeout | null = null;
     let handshakeTimer: NodeJS.Timeout | null = null;
+    const chain = new ResponsesContinuationChain(maxBytes);
     const initialTimer = setTimeout(closeUnbound, config.websocketInitialCreateTimeoutMs ?? INITIAL_CREATE_TIMEOUT_MS);
     initialTimer.unref();
     const localSocket = socket as Partial<net.Socket>;
@@ -143,8 +148,8 @@ export function forwardResponsesWebSocket(req: IncomingMessage, socket: Duplex, 
       const model = message.create?.model;
       if (typeof model !== 'string' || !model.trim()) throw new DesktopBridgeError('bridge_websocket_model_required');
       const nextIdentity = resolveCodexSessionIdentity(req.headers, message.create);
-      if (bound && ((nextIdentity.thread_id && nextIdentity.thread_id !== identity.thread_id)
-        || (nextIdentity.session_id && nextIdentity.session_id !== identity.session_id))) {
+      // The thread keys the pin this socket is bound to; `session_id` routes nothing.
+      if (bound && nextIdentity.thread_id && nextIdentity.thread_id !== identity.thread_id) {
         throw new DesktopBridgeError('bridge_codex_session_identity_conflict');
       }
       // The pin identity is the first create's; lineage accumulates, so a
@@ -168,6 +173,7 @@ export function forwardResponsesWebSocket(req: IncomingMessage, socket: Duplex, 
         return;
       }
       if (route.upstream_model !== model || expanded) message.data = Buffer.from(JSON.stringify(create));
+      message.routed = create;
     }
     /** Answers a provider-route compaction create with a summary from the thread's own model. */
     async function answerCompaction(create: Record<string, unknown>): Promise<void> {
@@ -177,7 +183,14 @@ export function forwardResponsesWebSocket(req: IncomingMessage, socket: Duplex, 
       const credential = await config.resolveProviderCredential(provider.provider_id, provider.credential_generation);
       const responseId = newCompactionResponseId();
       const send = (event: Record<string, unknown>): void => relay(client, Buffer.from(JSON.stringify(event)), false);
-      const body = Buffer.from(JSON.stringify(buildCompactionSummaryRequest(create, route.upstream_model)));
+      // A continued socket sent only the delta; the summary needs the conversation.
+      const input = chain.fullInput(create);
+      if (!input) {
+        logRejection({ code: 'bridge_compaction_history_unavailable', transport: 'websocket', provider_id: provider.provider_id, public_model: route.public_model, ...(req.url ? { url: req.url } : {}) });
+        send(compactionFailedEvent(responseId, route.public_model, 'bridge_compaction_history_unavailable'));
+        return;
+      }
+      const body = Buffer.from(JSON.stringify(buildCompactionSummaryRequest({ ...create, input }, route.upstream_model)));
       let accepted = false;
       try {
         const call = await requestProviderCompactionSummary(config, { provider, credential, clientHeaders: req.headers, requestUrl: req.url || '/' }, body, () => {
@@ -186,15 +199,11 @@ export function forwardResponsesWebSocket(req: IncomingMessage, socket: Duplex, 
           send(compactionCreatedEvent(responseId, route.public_model));
         });
         if (stopped) return;
-        if (call.status >= 300) {
-          logRejection({ code: `bridge_compaction_summary_status_${call.status}`, transport: 'websocket', ...(req.url ? { url: req.url } : {}) });
-          send(compactionFailedEvent(responseId, route.public_model, call.status === 429 ? 'rate_limit_exceeded' : 'bridge_upstream_request_failed'));
-          return;
-        }
         const parsed = parseProviderSummary(call.body.toString('utf8'));
-        if (parsed.failed || !summaryWithinBounds(parsed.summary)) {
-          logRejection({ code: 'bridge_compaction_summary_unusable', transport: 'websocket', ...(req.url ? { url: req.url } : {}) });
-          send(compactionFailedEvent(responseId, route.public_model, 'bridge_compaction_summary_unusable'));
+        if (call.status >= 300 || parsed.failed || !summaryWithinBounds(parsed.summary)) {
+          const failure = summaryFailure(parsed, call.status);
+          logRejection({ code: failure.logCode, transport: 'websocket', status: call.status, provider_id: provider.provider_id, public_model: route.public_model, ...(req.url ? { url: req.url } : {}) });
+          send(compactionFailedEvent(responseId, route.public_model, failure.code));
           return;
         }
         const events = compactionResponseEvents(responseId, route.public_model, parsed.summary!, parsed.usage);
@@ -262,7 +271,9 @@ export function forwardResponsesWebSocket(req: IncomingMessage, socket: Duplex, 
       });
       peer.on('message', (data, binary) => {
         if (stopped) return;
-        try { relay(client, bytes(data), binary); } catch (error) { fail(error); }
+        const frame = bytes(data);
+        chain.received(frame);
+        try { relay(client, frame, binary); } catch (error) { fail(error); }
       });
       peer.on('close', (code, reason) => {
         upstreamSocket?.destroy();
@@ -297,7 +308,11 @@ export function forwardResponsesWebSocket(req: IncomingMessage, socket: Duplex, 
           if (message.create) await resolveCreate(message);
           if (stopped || client.readyState !== WebSocket.OPEN) return;
           if (message.compaction) await answerCompaction(message.compaction);
-          else relay(upstream!, message.data, message.binary);
+          else {
+            relay(upstream!, message.data, message.binary);
+            // Only a provider socket ever answers a compaction itself.
+            if (message.routed && bound?.provider_id !== BRIDGE_OFFICIAL_ROUTE_ID) chain.sent(message.routed, message.data);
+          }
           pending.shift();
           pendingBytes -= message.originalBytes;
         }

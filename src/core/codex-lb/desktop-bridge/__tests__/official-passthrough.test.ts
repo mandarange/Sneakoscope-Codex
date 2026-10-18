@@ -142,6 +142,20 @@ test('official passthrough carries the client identity for unrouted models and u
     assert.equal(provider.seen[0]!.accountId, undefined);
     assert.equal(provider.seen[0]!.codexLbKey, 'provider-secret-key');
     assert.equal(official.seen.length, 2);
+
+    // A bodyless HEAD probe on the Responses path is not a create: it used to
+    // be parsed as one and refused as invalid JSON.
+    const probe = await new Promise<number>((resolve, reject) => {
+      const request = http.request({
+        host: '127.0.0.1', port: bridgePort, method: 'HEAD', path: desktopBridgeClientPath(CLIENT_CAPABILITY, '/backend-api/codex/responses'),
+        headers: { origin: 'app://codex', authorization: CLIENT_OAUTH },
+      }, (response) => { response.resume(); resolve(response.statusCode || 0); });
+      request.once('error', reject);
+      request.end();
+    });
+    assert.equal(probe, 200);
+    assert.equal(official.seen.length, 3);
+    assert.equal(official.seen[2]!.authorization, CLIENT_OAUTH);
   } finally {
     if (bridge) await stopDesktopBridge(bridge);
     await close(official.server); await close(provider.server);

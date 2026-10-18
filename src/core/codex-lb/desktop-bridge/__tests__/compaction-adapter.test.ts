@@ -13,6 +13,7 @@ import {
   normalizeCompactionUsage,
   parseProviderSummary,
   requestsRemoteCompaction,
+  summaryFailure,
 } from '../compaction-adapter.js';
 
 const userMessage = (text: string) => ({ type: 'message', role: 'user', content: [{ type: 'input_text', text }] });
@@ -78,7 +79,7 @@ test('the summary request is the compaction request with the trigger replaced an
   assert.equal(request.store, false);
   assert.equal(request.tool_choice, 'none');
   assert.deepEqual(request.tools, tools);
-  assert.equal(request.parallel_tool_calls, undefined);
+  assert.equal(request.parallel_tool_calls, false, 'explicitly false: absent defaults to true');
   assert.equal(request.previous_response_id, undefined);
   const input = request.input as any[];
   assert.equal(input.some((item) => item.type === 'compaction_trigger'), false);
@@ -87,6 +88,30 @@ test('the summary request is the compaction request with the trigger replaced an
   const toolless = buildCompactionSummaryRequest({ model: 'm', input: [{ type: 'compaction_trigger' }], tools: [] }, 'm');
   assert.equal(toolless.tools, undefined);
   assert.equal(toolless.tool_choice, undefined);
+  assert.equal(toolless.parallel_tool_calls, false);
+});
+
+test('a Responses Lite summary request keeps parallel_tool_calls false and disables tools carried in the input', () => {
+  // Captured from Codex 0.163 for gpt-6.1-sol: tools ride an `additional_tools`
+  // input item, `tools` is absent, and the backend refuses the request unless
+  // `parallel_tool_calls` is false ("X-OpenAI-Internal-Codex-Responses-Lite
+  // requires `parallel_tool_calls` to be false", code unsupported_value).
+  const request = buildCompactionSummaryRequest({
+    model: 'gpt-6.1-sol', stream: true, store: false, tool_choice: 'auto', parallel_tool_calls: false,
+    reasoning: { effort: 'xhigh', context: 'all_turns', summary: 'auto' },
+    input: [
+      { type: 'additional_tools', id: 'at_1', role: 'developer', tools: [{ type: 'namespace', name: 'functions', tools: [] }] },
+      userMessage('fix the parser'),
+      { type: 'compaction_trigger' },
+    ],
+  }, 'gpt-6.1-sol');
+  assert.equal(request.parallel_tool_calls, false);
+  assert.equal(request.tool_choice, 'none');
+  assert.equal(request.tools, undefined);
+  assert.equal((request.input as any[])[0].type, 'additional_tools');
+  assert.deepEqual(request.reasoning, { effort: 'medium', context: 'all_turns', summary: 'auto' }, 'a summary does not need xhigh reasoning');
+  const light = buildCompactionSummaryRequest({ model: 'm', reasoning: { effort: 'low' }, input: [{ type: 'compaction_trigger' }] }, 'm');
+  assert.deepEqual(light.reasoning, { effort: 'low' });
 });
 
 function sse(...events: object[]): string {
@@ -102,7 +127,7 @@ test('the provider summary is read from finished items, the completed output, or
     { type: 'response.output_item.done', item: assistant('Summary: parser fixed.') },
     { type: 'response.completed', response: { id: 'r1', output: [assistant('Summary: parser fixed.')], usage } },
   ));
-  assert.deepEqual(streamed, { summary: 'Summary: parser fixed.', usage, failed: false });
+  assert.deepEqual(streamed, { summary: 'Summary: parser fixed.', usage, failed: false, error: null });
 
   const completedOnly = parseProviderSummary(sse({ type: 'response.completed', response: { id: 'r2', output: [{ type: 'reasoning' }, assistant('From completed.')] } }));
   assert.equal(completedOnly.summary, 'From completed.');
@@ -116,9 +141,25 @@ test('the provider summary is read from finished items, the completed output, or
     { type: 'response.failed', response: { error: { code: 'server_error' } } },
   ));
   assert.equal(failed.failed, true);
+  assert.deepEqual(failed.error, { code: 'server_error', param: null });
+
+  // Codex-LB's real refusal of the Responses Lite request: HTTP 200, then
+  // `response.failed`. The identifiers survive; the message never does.
+  const refusal = { message: 'X-OpenAI-Internal-Codex-Responses-Lite requires `parallel_tool_calls` to be false.', type: 'invalid_request_error', code: 'unsupported_value', param: 'parallel_tool_calls' };
+  const refused = parseProviderSummary(sse(
+    { type: 'response.created', response: { status: 'in_progress', error: refusal } },
+    { type: 'response.failed', response: { status: 'failed', error: refusal } },
+  ));
+  assert.deepEqual(refused.error, { code: 'unsupported_value', param: 'parallel_tool_calls' });
+  assert.deepEqual(summaryFailure(refused, 200), { code: 'unsupported_value', logCode: 'bridge_compaction_summary_failed:unsupported_value:parallel_tool_calls' });
+  assert.deepEqual(summaryFailure(parseProviderSummary(JSON.stringify({ error: refusal })), 400),
+    { code: 'unsupported_value', logCode: 'bridge_compaction_summary_status_400:unsupported_value:parallel_tool_calls' });
+  assert.equal(summaryFailure(parseProviderSummary('{}'), 429).code, 'rate_limit_exceeded');
+  assert.deepEqual(summaryFailure(cut, 200), { code: 'bridge_compaction_summary_unusable', logCode: 'bridge_compaction_summary_unusable' });
+  assert.equal(JSON.stringify(summaryFailure(refused, 200)).includes('requires'), false);
 
   const json = parseProviderSummary(JSON.stringify({ id: 'r3', output: [assistant('Non-streamed.')], usage }));
-  assert.deepEqual(json, { summary: 'Non-streamed.', usage, failed: false });
+  assert.deepEqual(json, { summary: 'Non-streamed.', usage, failed: false, error: null });
   assert.equal(parseProviderSummary('{"ok":true}').failed, true);
 });
 

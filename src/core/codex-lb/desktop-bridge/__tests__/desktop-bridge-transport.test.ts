@@ -38,18 +38,20 @@ test('large Responses requests survive HTTP routing and compressed decoding with
   const input = 'image-and-tool-history:'.repeat(800_000);
   const model = `codex-lb:${PUBLIC_MODEL}`;
   const body = Buffer.from(JSON.stringify({ model, input }));
-  const zstdCompress = (zlib as unknown as { zstdCompressSync?: (value: Buffer) => Buffer }).zstdCompressSync;
+  const zlibZstd = zlib as unknown as { zstdCompressSync?: (value: Buffer) => Buffer; zstdDecompressSync?: (value: Buffer) => Buffer };
+  const zstdCompress = zlibZstd.zstdCompressSync;
   assert.ok(body.length > 16 * 1024 * 1024);
-  let calls = 0;
+  const received: Array<{ encoding: string | undefined; raw: Buffer }> = [];
   const upstream = http.createServer(async (req, res) => {
     const chunks: Buffer[] = [];
     for await (const chunk of req) chunks.push(chunk);
-    const received = JSON.parse(Buffer.concat(chunks).toString());
-    assert.deepEqual(received, { model: PUBLIC_MODEL, input });
-    assert.equal(req.headers['content-encoding'], undefined);
+    const raw = Buffer.concat(chunks);
+    const encoding = req.headers['content-encoding'];
+    received.push({ encoding, raw });
+    const json = JSON.parse((encoding === 'zstd' ? zlibZstd.zstdDecompressSync!(raw) : raw).toString());
+    assert.equal(json.input, input);
     assert.equal(req.headers.authorization, undefined);
     assert.equal(req.headers['x-codex-lb-api-key'], CODEX_LB_SECRET);
-    calls += 1;
     res.end('{"ok":true}');
   });
   const upstreamPort = await listen(upstream);
@@ -57,14 +59,51 @@ test('large Responses requests survive HTTP routing and compressed decoding with
   config.routePolicy.model_routes[model] = { provider_id: 'codex-lb', upstream_model: PUBLIC_MODEL };
   const bridge = await startDesktopBridge(config, { writeState: false });
   t.after(async () => { await bridge.stop(); await close(upstream); });
+  const post = (payload: Buffer, encoding: string) => request({ port: config.listenPort, path: '/backend-api/codex/responses', method: 'POST',
+    headers: { 'content-type': 'application/json', 'content-length': payload.length, ...(encoding === 'identity' ? {} : { 'content-encoding': encoding }), authorization: 'Bearer client-secret' }, chunks: [payload] });
   for (const encoding of ['identity', 'gzip', 'zstd']) {
     if (encoding === 'zstd' && !zstdCompress) continue;
     const encoded = encoding === 'gzip' ? zlib.gzipSync(body) : encoding === 'zstd' ? zstdCompress!(body) : body;
-    const response = await request({ port: config.listenPort, path: '/backend-api/codex/responses', method: 'POST',
-      headers: { 'content-type': 'application/json', 'content-length': encoded.length, ...(encoding === 'identity' ? {} : { 'content-encoding': encoding }), authorization: 'Bearer client-secret' }, chunks: [encoded] });
+    const response = await post(encoded, encoding);
     assert.equal(response.status, 200, response.body.toString());
   }
-  assert.equal(calls, zstdCompress ? 3 : 2);
+  // The routed model was rewritten: gzip goes upstream plain, Codex's zstd is
+  // re-compressed — never the decoded context, 5–10× larger, over the uplink.
+  assert.deepEqual(received.map((row) => row.encoding), zstdCompress ? [undefined, undefined, 'zstd'] : [undefined, undefined]);
+  if (!zstdCompress) return;
+  assert.ok(received[2]!.raw.length * 10 < body.length, 'the rewritten body travels compressed');
+  // Nothing to rewrite: the client's compressed bytes travel exactly as sent.
+  const untouched = zstdCompress(Buffer.from(JSON.stringify({ model: PUBLIC_MODEL, input })));
+  assert.equal((await post(untouched, 'zstd')).status, 200);
+  assert.equal(received[3]!.encoding, 'zstd');
+  assert.ok(received[3]!.raw.equals(untouched));
+});
+
+test('an upstream that cannot read a compressed body gets one plain replay and plain bodies from then on', { timeout: 10_000 }, async (t) => {
+  const zstdCompress = (zlib as unknown as { zstdCompressSync?: (value: Buffer) => Buffer }).zstdCompressSync;
+  if (!zstdCompress) { t.skip('zstd unavailable in this Node'); return; }
+  const encodings: Array<string | undefined> = [];
+  const upstream = http.createServer(async (req, res) => {
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) chunks.push(chunk);
+    encodings.push(req.headers['content-encoding']);
+    try { JSON.parse(Buffer.concat(chunks).toString()); } catch {
+      res.writeHead(400, { 'content-type': 'application/json' });
+      res.end('{"detail":"There was an error parsing the body"}');
+      return;
+    }
+    res.end('{"ok":true}');
+  });
+  const upstreamPort = await listen(upstream);
+  const config = bridgeConfig(await selectAvailableDesktopBridgePort('127.0.0.1'), upstreamPort, 'x-codex-lb-api-key');
+  const bridge = await startDesktopBridge(config, { writeState: false });
+  t.after(async () => { await bridge.stop(); await close(upstream); });
+  const payload = zstdCompress(Buffer.from(JSON.stringify({ model: PUBLIC_MODEL, input: 'hi' })));
+  const post = () => request({ port: config.listenPort, path: '/backend-api/codex/responses', method: 'POST',
+    headers: { 'content-type': 'application/json', 'content-length': payload.length, 'content-encoding': 'zstd' }, chunks: [payload] });
+  assert.equal((await post()).status, 200);
+  assert.equal((await post()).status, 200);
+  assert.deepEqual(encodings, ['zstd', undefined, undefined]);
 });
 
 test('HTTP request limits return 413 for declared, chunked and decoded overflow before routing', { timeout: 10_000 }, async (t) => {
@@ -118,8 +157,14 @@ test('real Codex wire identity resolves to thread pin identity and rejects incon
   assert.deepEqual(resolveCodexSessionIdentity(headers, {
     client_metadata: { session_id: threadId, thread_id: threadId, turn_id: `${threadId}:turn` },
   }), { thread_id: threadId, session_id: threadId, parent_thread_id: null, subagent_kind: null, thread_source: 'user' });
-  assert.throws(() => resolveCodexSessionIdentity({ ...headers, 'session-id': 'different-session' }),
-    /bridge_codex_session_identity_conflict|bridge_codex_session_identity_mismatch/);
+  // Codex 0.16x sends the Responses cache-affinity key as `session-id` — a
+  // Guardian review's is `<source>:<parent thread>` — while the real session id
+  // rides the turn metadata. The header is never a conflict; the metadata wins.
+  assert.deepEqual(resolveCodexSessionIdentity({ ...headers, 'session-id': `guardian:${threadId}` }, {
+    client_metadata: { session_id: threadId, thread_id: threadId },
+  }), { thread_id: threadId, session_id: threadId, parent_thread_id: null, subagent_kind: null, thread_source: 'user' });
+  assert.equal(resolveCodexSessionIdentity({ 'thread-id': threadId, 'session-id': 'cache-key' }).session_id, 'cache-key',
+    'with no metadata the header is the only session id there is');
   assert.throws(() => resolveCodexSessionIdentity(headers, {
     client_metadata: { session_id: threadId, thread_id: 'different-thread' },
   }), /bridge_codex_session_identity_conflict/);

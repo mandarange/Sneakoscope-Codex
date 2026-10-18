@@ -46,6 +46,13 @@ const COMPACTION_ITEM_TYPES = new Set(['compaction', 'compaction_summary', 'cont
 const MAX_SUMMARY_CHARS = 512 * 1024;
 /** V1 keeps recent real user messages next to the summary, bounded like Codex's own retention. */
 const MAX_RETAINED_USER_MESSAGE_CHARS = 80_000;
+/**
+ * A handoff summary gains nothing from extended reasoning, and on a near-full
+ * context `xhigh`/`max` reasoning turned every compaction into minutes of
+ * waiting. Efforts above the ceiling are lowered to it; lower ones are kept.
+ */
+const SUMMARY_REASONING_EFFORT_CEILING = 'medium';
+const EFFORTS_ABOVE_SUMMARY_CEILING = new Set(['high', 'xhigh', 'max', 'ultra']);
 
 export type BridgeCompactionKind = 'trigger' | 'endpoint';
 
@@ -53,6 +60,12 @@ type JsonObject = Record<string, unknown>;
 
 function isObject(value: unknown): value is JsonObject {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+/** An upstream error identifier: bounded, machine-shaped, nothing else survives. */
+export function safeUpstreamErrorId(value: unknown): string | null {
+  const text = String(value ?? '').trim();
+  return /^[A-Za-z0-9_.:-]{1,64}$/.test(text) ? text : null;
 }
 
 export function isCompactionTriggerItem(item: unknown): boolean {
@@ -101,6 +114,12 @@ export function expandBridgeCompactionItems(payload: JsonObject | null): boolean
   return changed;
 }
 
+/** Tool definitions travel in `tools`, or — Responses Lite — as an `additional_tools` input item. */
+function carriesToolDefinitions(body: JsonObject): boolean {
+  return (Array.isArray(body.tools) && body.tools.length > 0)
+    || (Array.isArray(body.input) && body.input.some((item) => isObject(item) && item.type === 'additional_tools'));
+}
+
 /**
  * The provider request that produces the summary: the same request Codex sent,
  * with the trigger replaced by Codex's summarization prompt and tool calls
@@ -119,21 +138,142 @@ export function buildCompactionSummaryRequest(payload: JsonObject, upstreamModel
     ],
     stream: true,
   };
-  if (Array.isArray(body.tools) && body.tools.length > 0) body.tool_choice = 'none';
+  if (carriesToolDefinitions(body)) body.tool_choice = 'none';
   else {
     delete body.tools;
     delete body.tool_choice;
   }
-  delete body.parallel_tool_calls;
+  // Explicitly false, never absent: an absent field defaults to true, and the
+  // Responses Lite backend behind every gpt-6.x / gpt-5.6 model refuses that
+  // (`unsupported_value`: "requires parallel_tool_calls to be false"), which
+  // failed every Codex-LB compaction. Codex's own local compaction sends false.
+  body.parallel_tool_calls = false;
+  if (isObject(body.reasoning) && EFFORTS_ABOVE_SUMMARY_CEILING.has(String(body.reasoning.effort))) {
+    body.reasoning = { ...body.reasoning, effort: SUMMARY_REASONING_EFFORT_CEILING };
+  }
   delete body.previous_response_id;
   expandBridgeCompactionItems(body);
   return body;
+}
+
+interface ContinuationLink {
+  /** The create frame exactly as the upstream received it. */
+  create: Buffer;
+  /** That response's `response.output_item.done` frames, in order. */
+  outputs: Buffer[];
+  responseId: string | null;
+  settled: boolean;
+}
+
+function frameEvent(frame: Buffer): JsonObject | null {
+  try {
+    const event: unknown = JSON.parse(frame.toString('utf8'));
+    return isObject(event) ? event : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * What the upstream holds for one Responses WebSocket. Codex continues a
+ * response by id and sends only the new items (`previous_response_id` plus a
+ * delta), so a compaction create on a continued socket carries a fraction of
+ * the conversation, and a summary request built from it alone was refused
+ * (`invalid_request_error`, param `input`) until Codex retried with the full
+ * history. The chain keeps the raw frames the upstream saw since the last full
+ * create, so the full input is rebuilt exactly as Codex builds it: each
+ * create's input, then that response's finished output items, then the delta.
+ */
+export class ResponsesContinuationChain {
+  private links: ContinuationLink[] | null = [];
+  private bytes = 0;
+
+  constructor(private readonly maxBytes: number) {}
+
+  /** A create relayed upstream. */
+  sent(create: JsonObject, frame: Buffer): void {
+    const previous = typeof create.previous_response_id === 'string' ? create.previous_response_id : null;
+    const last = this.links?.at(-1);
+    const link: ContinuationLink = { create: frame, outputs: [], responseId: null, settled: false };
+    if (!previous) {
+      this.links = [link];
+      this.bytes = frame.length;
+    } else if (this.links && last?.settled && last.responseId === previous) {
+      this.links.push(link);
+      this.track(frame.length);
+    } else {
+      this.links = null;
+    }
+  }
+
+  /** An upstream event frame; byte checks first, because nearly every frame is a delta. */
+  received(frame: Buffer): void {
+    const link = this.links?.at(-1);
+    if (!link || link.settled) return;
+    if (frame.includes('"response.output_item.done"')) {
+      link.outputs.push(frame);
+      this.track(frame.length);
+    } else if (frame.includes('"response.completed"')) {
+      const event = frameEvent(frame);
+      if (event?.type !== 'response.completed') return;
+      link.settled = true;
+      link.responseId = isObject(event.response) && typeof event.response.id === 'string' ? event.response.id : null;
+    } else if (frame.includes('"response.failed"') || frame.includes('"response.incomplete"') || frame.includes('"type":"error"')) {
+      const type = frameEvent(frame)?.type;
+      if (type === 'response.failed' || type === 'response.incomplete' || type === 'error') {
+        link.settled = true;
+        link.responseId = null;
+      }
+    }
+  }
+
+  /** The whole input a create stands for, or null when this socket cannot vouch for its continuation. */
+  fullInput(create: JsonObject): unknown[] | null {
+    const delta = Array.isArray(create.input) ? create.input : [];
+    const previous = typeof create.previous_response_id === 'string' ? create.previous_response_id : null;
+    if (!previous) return delta;
+    const last = this.links?.at(-1);
+    if (!this.links || !last?.settled || last.responseId !== previous) return null;
+    const input: unknown[] = [];
+    for (const link of this.links) {
+      const sent = frameEvent(link.create);
+      if (!sent || !Array.isArray(sent.input)) return null;
+      input.push(...sent.input);
+      for (const frame of link.outputs) {
+        const event = frameEvent(frame);
+        if (event?.type === 'response.output_item.done' && isObject(event.item)) input.push(event.item);
+      }
+    }
+    return [...input, ...delta];
+  }
+
+  /** A chain larger than one request may be is not worth keeping. */
+  private track(size: number): void {
+    this.bytes += size;
+    if (this.bytes > this.maxBytes) this.links = null;
+  }
+}
+
+export interface ProviderSummaryError {
+  code: string;
+  param: string | null;
 }
 
 export interface ProviderSummaryResult {
   summary: string | null;
   usage: JsonObject | null;
   failed: boolean;
+  /** The provider's own identifiers for a failed summary; its message is never kept. */
+  error: ProviderSummaryError | null;
+}
+
+/** `{ code, param }` from a Responses error object, identifiers only. */
+function summaryError(error: unknown, fallback: string): ProviderSummaryError {
+  const record = isObject(error) ? error : {};
+  return {
+    code: safeUpstreamErrorId(record.code) ?? safeUpstreamErrorId(record.type) ?? fallback,
+    param: safeUpstreamErrorId(record.param),
+  };
 }
 
 function messageText(item: unknown): string {
@@ -160,9 +300,15 @@ export function parseProviderSummary(text: string): ProviderSummaryResult {
       const parsed = JSON.parse(trimmed);
       const response = isObject(parsed) && isObject(parsed.response) ? parsed.response : parsed;
       const summary = outputText(isObject(response) ? response.output : null).trim();
-      return { summary: summary || null, usage: isObject(response) && isObject(response.usage) ? response.usage : null, failed: !summary };
+      const failure = isObject(response) && isObject(response.error) ? summaryError(response.error, 'response_failed') : null;
+      return {
+        summary: summary || null,
+        usage: isObject(response) && isObject(response.usage) ? response.usage : null,
+        failed: !summary,
+        error: summary ? null : failure,
+      };
     } catch {
-      return { summary: null, usage: null, failed: true };
+      return { summary: null, usage: null, failed: true, error: null };
     }
   }
   const finished: string[] = [];
@@ -171,6 +317,7 @@ export function parseProviderSummary(text: string): ProviderSummaryResult {
   let usage: JsonObject | null = null;
   let completed = false;
   let failed = false;
+  let error: ProviderSummaryError | null = null;
   for (const block of text.split(/\r?\n\r?\n/)) {
     const data = block.split(/\r?\n/).filter((line) => line.startsWith('data:')).map((line) => line.slice(5).trimStart()).join('\n');
     if (!data || data === '[DONE]') continue;
@@ -194,20 +341,50 @@ export function parseProviderSummary(text: string): ProviderSummaryResult {
         }
         break;
       case 'response.failed':
-      case 'response.incomplete':
+        failed = true;
+        error ??= summaryError(isObject(event.response) ? event.response.error : null, 'response_failed');
+        break;
+      case 'response.incomplete': {
+        failed = true;
+        const details = isObject(event.response) ? event.response.incomplete_details : null;
+        error ??= { code: 'response_incomplete', param: isObject(details) ? safeUpstreamErrorId(details.reason) : null };
+        break;
+      }
       case 'error':
         failed = true;
+        error ??= summaryError(isObject(event.error) ? event.error : { code: event.code, param: event.param }, 'response_failed');
         break;
       default:
         break;
     }
   }
   const summary = (finished.join('\n\n') || completedOutput || deltas).trim();
-  return { summary: summary || null, usage, failed: failed || !completed || !summary };
+  return { summary: summary || null, usage, failed: failed || !completed || !summary, error };
 }
 
 export function summaryWithinBounds(summary: string | null): summary is string {
   return typeof summary === 'string' && summary.length > 0 && summary.length <= MAX_SUMMARY_CHARS;
+}
+
+/**
+ * How a summary the provider did not deliver is reported; `status` is the
+ * provider's HTTP status. Codex maps a `response.failed` code the way it maps
+ * the official backend's (`context_length_exceeded`, `rate_limit_exceeded`,
+ * `insufficient_quota` …), so the provider's own code travels. The log code
+ * adds the parameter the provider named — a refused summary request used to be
+ * logged as a bare status, and the field it objected to was nowhere.
+ */
+export function summaryFailure(result: ProviderSummaryResult, status: number): { code: string; logCode: string } {
+  const named = result.error ? `:${result.error.code}${result.error.param ? `:${result.error.param}` : ''}` : '';
+  if (status >= 300) {
+    return {
+      code: status === 429 ? 'rate_limit_exceeded' : result.error?.code ?? 'bridge_upstream_request_failed',
+      logCode: `bridge_compaction_summary_status_${status}${named}`,
+    };
+  }
+  return result.error
+    ? { code: result.error.code, logCode: `bridge_compaction_summary_failed${named}` }
+    : { code: 'bridge_compaction_summary_unusable', logCode: 'bridge_compaction_summary_unusable' };
 }
 
 function wholeNumber(value: unknown): number | null {

@@ -7,6 +7,7 @@ import {
   DESKTOP_BRIDGE_ALLOWED_PATH_PREFIXES,
   desktopBridgeClientPath,
   ensureDesktopBridgeRemoteTarget,
+  isNoRouteUpstreamError,
   isUnreachableUpstreamError,
   prepareDesktopBridgeConfig,
   refreshDesktopBridgeRemoteTarget,
@@ -117,6 +118,15 @@ test('unreachable-class socket errors are recognized; stale-pool and bridge erro
   assert.equal(isUnreachableUpstreamError(new DesktopBridgeError('bridge_upstream_connect_timeout')), true);
   assert.equal(isUnreachableUpstreamError(new DesktopBridgeError('bridge_upstream_idle_timeout')), false);
   assert.equal(isUnreachableUpstreamError(null), false);
+  // Only kernel-immediate "no route" failures earn the longer outage wait; a
+  // refused or timed-out connect reached the network and keeps the short budget.
+  for (const code of ['ENETUNREACH', 'EHOSTUNREACH', 'ENETDOWN', 'EHOSTDOWN', 'EADDRNOTAVAIL', 'EAFNOSUPPORT']) {
+    assert.equal(isNoRouteUpstreamError(Object.assign(new Error(code), { code })), true, code);
+  }
+  for (const code of ['ECONNREFUSED', 'ETIMEDOUT', 'ECONNRESET']) {
+    assert.equal(isNoRouteUpstreamError(Object.assign(new Error(code), { code })), false, code);
+  }
+  assert.equal(isNoRouteUpstreamError(new DesktopBridgeError('bridge_upstream_connect_timeout')), false);
 });
 
 test('avoidAddress steers re-resolution away from a dead pin when the answer set allows it', async () => {
@@ -133,6 +143,19 @@ test('avoidAddress steers re-resolution away from a dead pin when the answer set
   const only: DesktopBridgeLookup = async () => [{ address: '::1', family: 6 }];
   const stuck = await resolveDesktopBridgeRemoteTarget('http://localhost:8443/backend-api/codex', only, { avoidAddress: '::1' });
   assert.equal(stuck.address, '::1');
+  // A pin dies with its family (no route for it on this network), so the other
+  // family comes first; stepping to a sibling of the same family flip-flopped
+  // between two dead pins.
+  const mixed: DesktopBridgeLookup = async () => [
+    { address: '127.0.0.2', family: 4 },
+    { address: '127.0.0.3', family: 4 },
+    { address: '::1', family: 6 },
+  ];
+  assert.equal((await resolveDesktopBridgeRemoteTarget('http://localhost:8443/backend-api/codex', mixed, { avoidAddress: '127.0.0.2' })).address, '::1');
+  // Without a failure, a vanished pin is replaced within the family that worked.
+  assert.equal((await resolveDesktopBridgeRemoteTarget('http://localhost:8443/backend-api/codex', mixed, { preferAddress: '127.0.0.9', preferFamily: 4 })).address, '127.0.0.2');
+  const v6First: DesktopBridgeLookup = async () => [{ address: '::1', family: 6 }, { address: '127.0.0.3', family: 4 }];
+  assert.equal((await resolveDesktopBridgeRemoteTarget('http://localhost:8443/backend-api/codex', v6First, { preferAddress: '127.0.0.2', preferFamily: 4 })).address, '127.0.0.3');
 });
 
 test('refresh mutates the shared target in place, dedupes concurrent callers, and keeps the pin on failure', async () => {

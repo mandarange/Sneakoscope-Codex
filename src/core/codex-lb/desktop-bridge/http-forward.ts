@@ -7,7 +7,7 @@ import { BRIDGE_OFFICIAL_ROUTE_ID } from '../bridge-contracts.js';
 import { buildOfficialPassthroughHeaders, buildProviderUpstreamHeaders, rewriteResponseHeaders } from './header-policy.js';
 import { createDesktopBridgeRejectionLogger } from './rejection-log.js';
 import { OPENROUTER_ONLY_REFUSAL_CODES, openRouterOnlyEnabled } from './exclusive-provider-guard.js';
-import { ensureDesktopBridgeRemoteTarget, isUnreachableUpstreamError, refreshDesktopBridgeRemoteTarget, resolveAndBindDesktopBridgeRouteContext, resolveCodexSessionIdentity, resolveDesktopBridgeTarget, safeBridgeErrorCode, singleBridgeHeader } from './security.js';
+import { ensureDesktopBridgeRemoteTarget, isNoRouteUpstreamError, isUnreachableUpstreamError, refreshDesktopBridgeRemoteTarget, resolveAndBindDesktopBridgeRouteContext, resolveCodexSessionIdentity, resolveDesktopBridgeTarget, safeBridgeErrorCode, singleBridgeHeader } from './security.js';
 import { desktopBridgeListenOrigin } from './state.js';
 import {
   buildCompactionSummaryRequest,
@@ -19,7 +19,9 @@ import {
   newCompactionResponseId,
   parseProviderSummary,
   requestsRemoteCompaction,
+  safeUpstreamErrorId,
   sseEvent,
+  summaryFailure,
   summaryWithinBounds,
   type BridgeCompactionKind,
 } from './compaction-adapter.js';
@@ -36,6 +38,9 @@ export interface PreparedDesktopBridgeRequest {
   /** True when the bridge decoded a compressed request body and now owns a
    *  plain-JSON body, so content-encoding must not be forwarded upstream. */
   contentEncodingStripped?: boolean;
+  /** Set when `body` still carries the client's content-encoding: the same
+   *  request as plain JSON, for an upstream that refuses the encoded one. */
+  plainBody?: Buffer | null;
   /** Set when Codex asks for remote compaction; a provider route answers it
    *  with a summary from the thread's own model (compaction-adapter.ts). */
   compaction?: BridgeCompactionKind | null;
@@ -77,6 +82,26 @@ function decodeBridgeRequestBody(body: Buffer, encoding: string, maximum: number
   }
 }
 
+/**
+ * Upstreams that take Codex's compressed request bodies as sent: the official
+ * backend is where Codex sends them natively, and Codex-LB accepts zstd and
+ * gzip (verified live). A Codex-LB that turns out not to is remembered after
+ * one refused request and gets plain JSON from then on.
+ */
+const encodedBodyRefusals = new Set<string>();
+
+function keepsClientEncoding(route: DesktopBridgeRouteContext): boolean {
+  return route.provider_id === BRIDGE_OFFICIAL_ROUTE_ID
+    || (route.provider_id === 'codex-lb' && !encodedBodyRefusals.has(route.provider_id));
+}
+
+/** zstd — what Codex sends — off the event loop; any other encoding goes plain once rewritten. */
+async function reencodeLikeClient(plain: Buffer, encoding: string): Promise<Buffer | null> {
+  const compress = (zlib as unknown as { zstdCompress?: (b: Buffer, callback: (error: Error | null, result: Buffer) => void) => void }).zstdCompress;
+  if (encoding !== 'zstd' || !compress) return null;
+  return new Promise((resolve) => compress(plain, (error, result) => resolve(error ? null : result)));
+}
+
 const RESPONSES_PATHS = ['/backend-api/codex/responses', '/api/v1/responses', '/v1/responses'];
 
 /**
@@ -87,7 +112,9 @@ const RESPONSES_PATHS = ['/backend-api/codex/responses', '/api/v1/responses', '/
  * model-less, byte for byte.
  */
 function modelBodyKind(req: IncomingMessage, pathname: string, config: PreparedDesktopBridgeConfig): 'responses' | 'sub-endpoint' | null {
-  if (RESPONSES_PATHS.includes(pathname)) return 'responses';
+  // Only a POST is a create. A HEAD or GET on the same path (a reachability
+  // probe) has no body, and parsing its empty one refused it as invalid JSON.
+  if (RESPONSES_PATHS.includes(pathname)) return req.method === 'POST' ? 'responses' : null;
   return openRouterOnlyEnabled(config) && req.method === 'POST'
     && RESPONSES_PATHS.some((prefix) => pathname.startsWith(`${prefix}/`)) ? 'sub-endpoint' : null;
 }
@@ -126,14 +153,17 @@ export async function prepareDesktopBridgeRequest(req: IncomingMessage, config: 
   let body: Buffer | null = null;
   let payload: Record<string, unknown> | null = null;
   let contentEncodingStripped = false;
+  let encoding = '';
+  let encodedBody: Buffer | null = null;
   const bodyKind = modelBodyKind(req, pathname, config);
   if (bodyKind) {
     const maximum = config.maxRequestBodyBytes ?? DEFAULT_DESKTOP_BRIDGE_MAX_REQUEST_BODY_BYTES;
     body = await readBoundedBody(req, maximum);
-    const encoding = String(req.headers['content-encoding'] || '').trim().toLowerCase();
+    encoding = String(req.headers['content-encoding'] || '').trim().toLowerCase();
     let decoded = body;
     if (encoding && encoding !== 'identity') {
       decoded = decodeBridgeRequestBody(body, encoding, maximum);
+      encodedBody = body;
       contentEncodingStripped = true;
     }
     // A sub-endpoint POST may carry no body at all (a cancel); any body it
@@ -167,8 +197,23 @@ export async function prepareDesktopBridgeRequest(req: IncomingMessage, config: 
   const compaction: BridgeCompactionKind | null = bodyKind === 'responses' && requestsRemoteCompaction(payload)
     ? 'trigger'
     : bodyKind === 'sub-endpoint' && isCompactEndpoint(req, pathname) ? 'endpoint' : null;
+  // Codex zstd-compresses every HTTP create, 5–10× on a long context, and the
+  // bridge used to upload the decoded JSON instead — the whole context, every
+  // request, at uplink speed. An untouched body now travels exactly as the
+  // client sent it, and a rewritten one is re-compressed the same way. A
+  // compaction the bridge answers itself is never forwarded, so it stays plain.
+  let plainBody: Buffer | null = null;
+  const answeredByBridge = Boolean(compaction) && route.provider_id !== BRIDGE_OFFICIAL_ROUTE_ID;
+  if (encodedBody && body && !answeredByBridge && keepsClientEncoding(route)) {
+    const upstreamBody = rewrite ? await reencodeLikeClient(body, encoding) : encodedBody;
+    if (upstreamBody) {
+      plainBody = body;
+      body = upstreamBody;
+      contentEncodingStripped = false;
+    }
+  }
   const credential = route.provider_id === BRIDGE_OFFICIAL_ROUTE_ID ? null : await resolveCredential(config, route);
-  return { body, route, credential, contentEncodingStripped, compaction, payload };
+  return { body, route, credential, contentEncodingStripped, plainBody, compaction, payload };
 }
 
 function connectTimeout(request: ClientRequest, config: PreparedDesktopBridgeConfig): void {
@@ -213,17 +258,19 @@ function writeHttpBridgeError(res: ServerResponse, error: unknown, req?: Incomin
   res.end(JSON.stringify({ error: { type: 'sks_bridge_error', code, message: code } }));
 }
 
-/** An upstream error identifier: bounded, machine-shaped, nothing else survives. */
-function safeUpstreamErrorId(value: unknown): string | null {
-  const text = String(value ?? '').trim();
-  return /^[A-Za-z0-9_.:-]{1,64}$/.test(text) ? text : null;
-}
-
-const TRANSIENT_UPSTREAM_STATUSES = new Set([500, 502, 503, 524]);
+// 520–523 are Cloudflare's "origin unreachable / reset / timed out at connect"
+// answers — the same transient as a 502, observed in bursts from Codex-LB.
+const TRANSIENT_UPSTREAM_STATUSES = new Set([500, 502, 503, 520, 521, 522, 523, 524]);
 const TRANSIENT_UPSTREAM_IDENTIFIERS = new Set(['upstream_error', 'upstream_request_timeout']);
 /** First try plus this many fresh-connection replays. Codex compact treats any leftover 503 as fatal. */
 export const TRANSIENT_UPSTREAM_REPLAY_LIMIT = 3;
 const TRANSIENT_UPSTREAM_REPLAY_BACKOFF_MS = [200, 400, 800] as const;
+/**
+ * Waits for a request that found no route at all (`isNoRouteUpstreamError`):
+ * each attempt fails in the kernel without reaching the upstream, so ~11 s of
+ * patience absorbs a Wi-Fi roam or DHCP renewal that used to fail the turn.
+ */
+export const NO_ROUTE_REPLAY_BACKOFF_MS = [250, 500, 1_000, 2_000, 3_000, 4_000] as const;
 
 function isTransientUpstreamIdentifier(value: string | null): boolean {
   return Boolean(value && TRANSIENT_UPSTREAM_IDENTIFIERS.has(value));
@@ -264,7 +311,13 @@ function redactedUpstreamClientMessage(statusCode: number, transient: boolean): 
   return 'bridge_upstream_request_failed';
 }
 
-async function readRedactedUpstreamError(response: IncomingMessage): Promise<{ upstreamCode: string | null; upstreamType: string | null }> {
+/**
+ * Words an upstream uses when it could not even read a request body (a JSON
+ * parser fed compressed bytes). Tested here, never logged or forwarded.
+ */
+const UNREADABLE_BODY_HINT = /json|pars(?:e|ing)|decod|encod|compress|utf-?8/i;
+
+async function readRedactedUpstreamError(response: IncomingMessage): Promise<{ upstreamCode: string | null; upstreamType: string | null; unreadableBody: boolean }> {
   let total = 0;
   const chunks: Buffer[] = [];
   for await (const raw of response) {
@@ -286,14 +339,15 @@ async function readRedactedUpstreamError(response: IncomingMessage): Promise<{ u
   // still dies here.
   let upstreamCode: string | null = null;
   let upstreamType: string | null = null;
+  const text = Buffer.concat(chunks).toString('utf8');
   try {
-    const parsed = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { error?: { type?: unknown; code?: unknown }; detail?: unknown };
+    const parsed = JSON.parse(text) as { error?: { type?: unknown; code?: unknown }; detail?: unknown };
     upstreamCode = safeUpstreamErrorId(parsed?.error?.code) ?? safeUpstreamErrorId(parsed?.detail);
     upstreamType = safeUpstreamErrorId(parsed?.error?.type);
   } catch {
     // Not JSON, or truncated: nothing recoverable without risking content.
   }
-  return { upstreamCode, upstreamType };
+  return { upstreamCode, upstreamType, unreadableBody: UNREADABLE_BODY_HINT.test(text.slice(0, 4096)) };
 }
 
 function buildRedactedUpstreamErrorBody(
@@ -343,10 +397,11 @@ function upstreamAgent(secure: boolean, key: string, idleTimeoutMs: number): htt
   return agent;
 }
 
-/** Exposed for teardown; a stopped bridge should not hold sockets open. */
+/** Exposed for teardown; a stopped bridge holds no sockets and forgets what it learned about its upstreams. */
 export function destroyDesktopBridgeUpstreamAgents(): void {
   for (const agent of upstreamAgents.values()) agent.destroy();
   upstreamAgents.clear();
+  encodedBodyRefusals.clear();
 }
 
 const STALE_CONNECTION_ERROR_CODES = new Set(['ECONNRESET', 'EPIPE', 'ECONNABORTED']);
@@ -371,6 +426,17 @@ class StalePooledSocketFailure extends Error {
 
 /** The pinned upstream address is unreachable; re-resolve, then replay. */
 class UnreachableUpstreamFailure extends StalePooledSocketFailure {}
+
+/** The upstream could not read the client-encoded body; replay it once as plain JSON. */
+class EncodedBodyRefusedFailure extends StalePooledSocketFailure {}
+
+/** Which replays the next attempt may still ask for. */
+interface ReplayBudget {
+  transient: boolean;
+  noRoute: boolean;
+  /** The body still carries the client's encoding and a plain copy exists. */
+  plainFallback: boolean;
+}
 
 export async function forwardHttp(
   req: IncomingMessage,
@@ -425,7 +491,9 @@ export async function forwardHttp(
     // A streamed request body is consumed as it is forwarded, so only a
     // buffered one can be replayed. Every Responses call arrives buffered.
     const replayable = Buffer.isBuffer(request.body);
-    const attempt = (useFreshConnection: boolean, canReplay: boolean): Promise<void> => new Promise<void>((resolve, reject) => {
+    let body = request.body;
+    let plainFallbackActive = false;
+    const attempt = (useFreshConnection: boolean, budget: ReplayBudget): Promise<void> => new Promise<void>((resolve, reject) => {
       let responseStarted = false; let settled = false;
       const abort = (): void => { if (!res.writableEnded) upstream.destroy(new DesktopBridgeError('bridge_client_disconnected')); };
       const finish = (error?: unknown): void => {
@@ -446,7 +514,7 @@ export async function forwardHttp(
       req.once('aborted', abort); res.once('close', abort);
       upstream.once('error', (error) => {
         if (!responseStarted && isUnreachableUpstreamError(error)) {
-          if (replayable && canReplay) {
+          if (replayable && (isNoRouteUpstreamError(error) ? budget.noRoute : budget.transient)) {
             finish(new UnreachableUpstreamFailure(error));
             return;
           }
@@ -462,13 +530,19 @@ export async function forwardHttp(
       });
       upstream.once('response', (response) => {
         const statusCode = response.statusCode || 502;
+        if (plainFallbackActive && statusCode < 400 && !official && !encodedBodyRefusals.has(provider!.provider_id)) {
+          // The plain replay of a refused encoded body went through: this
+          // upstream cannot read client encodings, so stop sending them.
+          encodedBodyRefusals.add(provider!.provider_id);
+          logHttpRejection({ code: 'bridge_upstream_encoded_body_refused', transport: 'http', ...(req.method === undefined ? {} : { method: req.method }), ...(req.url === undefined ? {} : { url: req.url }), provider_id: provider!.provider_id });
+        }
         if (official) {
           // Official passthrough: the upstream is the operator's own official
           // backend, so its error bodies stream back VERBATIM — redaction here
           // would erase quota, plan, and auth detail Codex renders natively.
           // Status-class transients (500/502/503/524) still get the buffered
           // replay so a gateway blip cannot kill a compact task.
-          if (statusCode >= 400 && TRANSIENT_UPSTREAM_STATUSES.has(statusCode) && replayable && canReplay) {
+          if (statusCode >= 400 && TRANSIENT_UPSTREAM_STATUSES.has(statusCode) && replayable && budget.transient) {
             response.resume();
             responseStarted = true;
             finish(new StalePooledSocketFailure(new DesktopBridgeError('bridge_upstream_transient_mislabel')));
@@ -499,7 +573,15 @@ export async function forwardHttp(
           // produced it. A user report with a cf-ray id was undiagnosable from
           // the bridge log. Status, model, provider and path only; the body may
           // carry upstream detail and is never logged.
-          void readRedactedUpstreamError(response).then(({ upstreamCode, upstreamType }) => {
+          void readRedactedUpstreamError(response).then(({ upstreamCode, upstreamType, unreadableBody }) => {
+            // A typed API error means the body was read; only an untyped
+            // complaint about the body itself (or a 415) blames the encoding.
+            if (budget.plainFallback && (statusCode === 415
+              || (unreadableBody && !upstreamType && !upstreamCode && (statusCode === 400 || statusCode === 422)))) {
+              responseStarted = true;
+              finish(new EncodedBodyRefusedFailure(new DesktopBridgeError(`bridge_upstream_encoded_body_refused_${statusCode}`)));
+              return;
+            }
             // The gateway wraps its own upstream failures as `type`/`code`
             // `upstream_error` but often labels them 404 (or 502/503/524).
             // Codex treats 404 as permanent, so compact tasks die. Either
@@ -508,7 +590,7 @@ export async function forwardHttp(
             // A genuine not-found (`response_not_found`, `model_not_found`)
             // carries a different identifier and stays 404.
             const transientMislabel = isTransientUpstreamFailure(statusCode, upstreamType, upstreamCode);
-            if (transientMislabel && replayable && canReplay) {
+            if (transientMislabel && replayable && budget.transient) {
               // Codex compact treats any leftover 503 as fatal
               // (`unexpected status 503 … Upstream request failed`) and does
               // not honor Retry-After. Absorb the transient here and replay
@@ -553,24 +635,44 @@ export async function forwardHttp(
         catch (error) { response.destroy(error instanceof Error ? error : undefined); finish(error); return; }
         void pipeline(response, res).then(() => finish(), finish);
       });
-      if (request.body) upstream.end(request.body);
+      if (body) upstream.end(body);
       else void pipeline(req, upstream).catch((error) => { if (!responseStarted) finish(error); });
     });
 
-    let remainingReplays = replayable ? TRANSIENT_UPSTREAM_REPLAY_LIMIT : 0;
+    let transientReplays = replayable ? TRANSIENT_UPSTREAM_REPLAY_LIMIT : 0;
+    let noRouteWaits = replayable ? NO_ROUTE_REPLAY_BACKOFF_MS.length : 0;
     let useFreshConnection = false;
     for (;;) {
       try {
-        await attempt(useFreshConnection, remainingReplays > 0);
+        await attempt(useFreshConnection, {
+          transient: transientReplays > 0,
+          noRoute: noRouteWaits > 0,
+          plainFallback: Boolean(request.plainBody) && !plainFallbackActive,
+        });
         return;
       } catch (error) {
-        if (!(error instanceof StalePooledSocketFailure) || remainingReplays <= 0) throw error;
-        remainingReplays -= 1;
-        if (error instanceof UnreachableUpstreamFailure) {
+        if (!(error instanceof StalePooledSocketFailure)) throw error;
+        let backoffMs = 0;
+        if (error instanceof EncodedBodyRefusedFailure) {
+          body = request.plainBody!;
+          plainFallbackActive = true;
+          headers['content-length'] = String(body.length);
+          delete headers['content-encoding'];
+        } else if (error instanceof UnreachableUpstreamFailure) {
+          const noRoute = isNoRouteUpstreamError(error.reason);
+          if ((noRoute ? noRouteWaits : transientReplays) <= 0) throw error;
+          if (noRoute) {
+            backoffMs = NO_ROUTE_REPLAY_BACKOFF_MS[NO_ROUTE_REPLAY_BACKOFF_MS.length - noRouteWaits]!;
+            noRouteWaits -= 1;
+          } else {
+            backoffMs = TRANSIENT_UPSTREAM_REPLAY_BACKOFF_MS[TRANSIENT_UPSTREAM_REPLAY_LIMIT - transientReplays]!;
+            transientReplays -= 1;
+          }
           // The pinned address is dead (network change since the bridge
-          // resolved DNS). Re-resolve before the replay so it dials whatever
-          // the network answers NOW; the mutation is visible to every other
-          // request sharing this remote, so one replay heals the process.
+          // resolved DNS), or the network has no route for a moment. Re-resolve
+          // before the replay so it dials whatever the network answers NOW; the
+          // mutation is visible to every other request sharing this remote, so
+          // one replay heals the process.
           const staleAddress = remote.address;
           await refreshDesktopBridgeRemoteTarget(remote, config.remoteLookup);
           agent.destroy();
@@ -582,6 +684,9 @@ export async function forwardHttp(
             ...(req.url === undefined ? {} : { url: req.url }),
           });
         } else {
+          if (transientReplays <= 0) throw error;
+          backoffMs = TRANSIENT_UPSTREAM_REPLAY_BACKOFF_MS[TRANSIENT_UPSTREAM_REPLAY_LIMIT - transientReplays]!;
+          transientReplays -= 1;
           if (!useFreshConnection) {
             // One transition kills every idle socket to that host, not just this one.
             // `destroy` only reaps the free list, so streams in flight are untouched.
@@ -596,9 +701,6 @@ export async function forwardHttp(
           });
         }
         useFreshConnection = true;
-        const backoffIndex = TRANSIENT_UPSTREAM_REPLAY_LIMIT - remainingReplays - 1;
-        const backoffMs = TRANSIENT_UPSTREAM_REPLAY_BACKOFF_MS[Math.max(0, backoffIndex)]
-          ?? TRANSIENT_UPSTREAM_REPLAY_BACKOFF_MS[TRANSIENT_UPSTREAM_REPLAY_BACKOFF_MS.length - 1];
         if (backoffMs) await delay(backoffMs);
       }
     }
@@ -641,8 +743,9 @@ export async function requestProviderCompactionSummary(
   onAccepted: () => void = () => undefined,
 ): Promise<ProviderSummaryCall> {
   const remote = input.provider.remote;
-  let remaining = TRANSIENT_UPSTREAM_REPLAY_LIMIT;
-  for (let attempt = 0; ; attempt += 1) {
+  let transientReplays = TRANSIENT_UPSTREAM_REPLAY_LIMIT;
+  let noRouteWaits = NO_ROUTE_REPLAY_BACKOFF_MS.length;
+  for (;;) {
     await ensureDesktopBridgeRemoteTarget(remote, config.remoteLookup);
     const target = resolveDesktopBridgeTarget(input.requestUrl, remote);
     const headers = buildProviderUpstreamHeaders(input.clientHeaders, {
@@ -681,16 +784,24 @@ export async function requestProviderCompactionSummary(
         });
         upstream.end(body);
       });
-      if (result.status < 300 || remaining <= 0) return result;
+      if (result.status < 300 || transientReplays <= 0) return result;
       const { upstreamCode, upstreamType } = upstreamErrorIds(result.body);
       if (!isTransientUpstreamFailure(result.status, upstreamType, upstreamCode)) return result;
+      await delay(TRANSIENT_UPSTREAM_REPLAY_BACKOFF_MS[TRANSIENT_UPSTREAM_REPLAY_LIMIT - transientReplays]!);
+      transientReplays -= 1;
     } catch (error) {
-      if (remaining <= 0 || error instanceof DesktopBridgeError) throw error;
+      if (error instanceof DesktopBridgeError) throw error;
+      const noRoute = isNoRouteUpstreamError(error);
+      if ((noRoute ? noRouteWaits : transientReplays) <= 0) throw error;
       if (isUnreachableUpstreamError(error)) await refreshDesktopBridgeRemoteTarget(remote, config.remoteLookup);
+      if (noRoute) {
+        await delay(NO_ROUTE_REPLAY_BACKOFF_MS[NO_ROUTE_REPLAY_BACKOFF_MS.length - noRouteWaits]!);
+        noRouteWaits -= 1;
+      } else {
+        await delay(TRANSIENT_UPSTREAM_REPLAY_BACKOFF_MS[TRANSIENT_UPSTREAM_REPLAY_LIMIT - transientReplays]!);
+        transientReplays -= 1;
+      }
     }
-    remaining -= 1;
-    const backoffMs = TRANSIENT_UPSTREAM_REPLAY_BACKOFF_MS[Math.min(attempt, TRANSIENT_UPSTREAM_REPLAY_BACKOFF_MS.length - 1)];
-    if (backoffMs) await delay(backoffMs);
   }
 }
 
@@ -739,9 +850,10 @@ async function answerCompactionWithProviderSummary(
   });
   try {
     const call = await requestProviderCompactionSummary(config, input, body, startStream);
+    const parsed = parseProviderSummary(call.body.toString('utf8'));
     if (call.status >= 300) {
       const { upstreamCode, upstreamType } = upstreamErrorIds(call.body);
-      log(upstreamCode ? `bridge_compaction_summary_status_${call.status}:${upstreamCode}` : `bridge_compaction_summary_status_${call.status}`, call.status);
+      log(summaryFailure(parsed, call.status).logCode, call.status);
       const transient = isTransientUpstreamFailure(call.status, upstreamType, upstreamCode);
       const clientStatus = transient ? 503 : call.status;
       const errorBody = buildRedactedUpstreamErrorBody(call.status, upstreamCode, upstreamType, transient);
@@ -752,12 +864,12 @@ async function answerCompactionWithProviderSummary(
       res.end(errorBody);
       return;
     }
-    const parsed = parseProviderSummary(call.body.toString('utf8'));
     const summary = parsed.failed || !summaryWithinBounds(parsed.summary) ? null : parsed.summary;
     if (!summary) {
-      log('bridge_compaction_summary_unusable', call.status);
+      const failure = summaryFailure(parsed, call.status);
+      log(failure.logCode, call.status);
       if (streaming) {
-        res.end(sseEvent(compactionFailedEvent(responseId, publicModel, 'bridge_compaction_summary_unusable')));
+        res.end(sseEvent(compactionFailedEvent(responseId, publicModel, failure.code)));
       } else {
         writeHttpBridgeError(res, new DesktopBridgeError('bridge_compaction_summary_unusable'), req);
       }

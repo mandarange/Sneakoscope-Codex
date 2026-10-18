@@ -2,10 +2,37 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Desktop Bridge: compaction on Codex-LB no longer fails with
+  `bridge_upstream_request_failed`. The bridge's summary request dropped
+  `parallel_tool_calls`, which the Responses Lite backend behind gpt-6.x and
+  gpt-5.6 refuses unless it is `false`; it now sends `false`, disables tools
+  carried as `additional_tools`, and caps summary reasoning at `medium`.
+- Desktop Bridge: a compaction on a continued Responses WebSocket rebuilds the
+  whole conversation from the socket's continuation chain instead of
+  summarizing only the delta Codex sent with `previous_response_id`.
+- Desktop Bridge: the `session-id` header is Codex's cache-affinity key
+  (Guardian reviews and ephemeral forks send their parent's), so it no longer
+  conflicts with the metadata session id; those requests stopped failing with
+  `bridge_codex_session_identity_conflict`.
+- Desktop Bridge: a `HEAD`/`GET` probe on the Responses path is no longer
+  parsed as a create, and Cloudflare 520–523 answers are replayed like 502.
+- Desktop Bridge: a failed summary reports the provider's own error code to
+  Codex and logs the offending parameter.
+
 ### Changed
 
 - Update the bundled Codex SDK/runtime to 0.163.0.
 - Refresh `smol-toml` to 1.9.1.
+- Desktop Bridge: Codex's zstd request bodies travel to the official backend
+  and Codex-LB compressed (re-compressed after a model rewrite) instead of as
+  5–10× larger plain JSON; an upstream that cannot read them gets one plain
+  replay and plain bodies from then on.
+- Desktop Bridge: a request that finds no network route waits out the blip
+  (~11 s) instead of failing the turn, re-resolution after an unreachable pin
+  prefers the other address family, and requests on threads whose pin is
+  already persisted no longer queue behind other threads' pin writes.
 
 
 

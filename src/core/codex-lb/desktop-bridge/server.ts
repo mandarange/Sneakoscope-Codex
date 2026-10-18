@@ -333,6 +333,11 @@ export async function startPreparedDesktopBridge(
   server.on('clientError', (_error, socket) => {
     if (!socket.destroyed) socket.end('HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n');
   });
+  // Past `maxConnections` Node closes new sockets without a response, and the
+  // client can only report a reset; the log line is the one trace it leaves.
+  server.on('drop', () => {
+    logBridgeRejection({ code: 'bridge_connection_limit_reached', transport: 'http' });
+  });
   server.on('upgrade', (req, socket, head) => {
     try {
       assertLoopbackPeer(req.socket.remoteAddress);

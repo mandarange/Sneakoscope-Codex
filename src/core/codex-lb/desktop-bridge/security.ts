@@ -152,12 +152,21 @@ function codexMetadataObject(value: unknown, source: 'header' | 'body'): Record<
   return parsed as Record<string, unknown>;
 }
 
-function oneCodexIdentity(values: unknown[], kind: 'thread' | 'session'): string | null {
+function oneCodexIdentity(values: unknown[]): string | null {
   const canonical = values
     .filter((value) => value !== undefined && value !== null && value !== '')
     .map(canonicalSessionId);
   if (new Set(canonical).size > 1) throw new DesktopBridgeError('bridge_codex_session_identity_conflict');
   return canonical[0] || null;
+}
+
+/** The first well-formed session id; a malformed one reads as absent, never as a refusal. */
+function firstSessionId(values: readonly unknown[]): string | null {
+  for (const value of values) {
+    if (value === undefined || value === null || value === '') continue;
+    try { return canonicalSessionId(value); } catch { /* not an identity this bridge can use */ }
+  }
+  return null;
 }
 
 export function resolveCodexSessionIdentity(
@@ -172,12 +181,22 @@ export function resolveCodexSessionIdentity(
     singleBridgeHeader(headers, 'thread-id'),
     turnMetadata?.thread_id,
     clientMetadata?.thread_id,
-  ], 'thread');
-  const sessionId = oneCodexIdentity([
-    singleBridgeHeader(headers, 'session-id'),
-    turnMetadata?.session_id,
+  ]);
+  // The `session-id` HEADER is not the session identity. Codex 0.16x sends the
+  // Responses cache-affinity key there ("ChatGPT derives cache affinity from the
+  // Responses session-id header"): a Guardian/auto-review session's key is
+  // `<source>:<parent thread>`, an ephemeral fork's is its source session's id,
+  // while the thread's real session id rides the turn metadata. Comparing the
+  // two refused every such request — the WebSocket upgrade 502'd until Codex
+  // spent its reconnect budget, then the HTTP fallback 400'd, hundreds of
+  // `bridge_codex_session_identity_conflict` rows per log window. The metadata
+  // wins; the header is only a fallback for clients that send no metadata.
+  // Nothing routes on `session_id`.
+  const sessionId = firstSessionId([
     clientMetadata?.session_id,
-  ], 'session');
+    turnMetadata?.session_id,
+    singleBridgeHeader(headers, 'session-id'),
+  ]);
   if (sessionId && !threadId) throw new DesktopBridgeError('bridge_codex_thread_id_missing');
   // `thread_id` and `session_id` are DIFFERENT identifiers and coincide only on a
   // root turn. A spawned agent runs in its own thread inside the parent's
@@ -426,8 +445,21 @@ export async function resolveAndBindDesktopBridgeRouteContext(
   request: DesktopBridgeRouteRequest,
   config: PreparedDesktopBridgeConfig,
 ): Promise<DesktopBridgeRouteContext> {
+  // Steady state: the thread's pin is already persisted exactly as this route
+  // needs it, so there is nothing to write and nothing to wait for. Every other
+  // request used to queue behind any thread's pin write (a locked rewrite of the
+  // whole settings file); only a request that changes a pin queues now, and it
+  // re-resolves inside the queue when a write before it replaced the pins.
+  // A refusal is always decided by the queued evaluation, exactly as before.
+  const pinsRead = config.providerSessionPins;
+  let steady: DesktopBridgeRouteContext | null = null;
+  try { steady = assertDesktopBridgeRouteContext(request, config); } catch { steady = null; }
+  const steadyPin = steady?.session_pin;
+  if (steady && !steadyPin) return steady;
+  const persisted = steadyPin ? pinsRead.find((entry) => entry.thread_id === steadyPin.thread_id) : undefined;
+  if (steady && steadyPin && persisted && sameSessionPin(persisted, steadyPin)) return steady;
   return withSessionPinMutation(config, async () => {
-    const route = assertDesktopBridgeRouteContext(request, config);
+    const route = steady && config.providerSessionPins === pinsRead ? steady : assertDesktopBridgeRouteContext(request, config);
     const pin = route.session_pin;
     if (!pin) return route;
     const existing = config.providerSessionPins.find((entry) => entry.thread_id === pin.thread_id) || null;
@@ -515,7 +547,7 @@ const defaultLookup: DesktopBridgeLookup = async (hostname) => {
 export async function resolveDesktopBridgeRemoteTarget(
   raw: string,
   lookup: DesktopBridgeLookup = defaultLookup,
-  options: { avoidAddress?: string; preferAddress?: string } = {},
+  options: { avoidAddress?: string; preferAddress?: string; preferFamily?: 4 | 6 } = {},
 ): Promise<DesktopBridgeRemoteTarget> {
   const remote = validateRemoteUrl(raw);
   const hostname = stripIpv6Brackets(remote.hostname);
@@ -531,10 +563,17 @@ export async function resolveDesktopBridgeRemoteTarget(
   }
   // Every returned address passed the checks above, so any of them is a valid
   // pin. `preferAddress` keeps a working pin stable while DNS still lists it
-  // (a periodic re-resolution must not flap between families); `avoidAddress`
-  // steers away from an address that just proved unreachable when the answer
-  // set offers an alternative.
+  // (a periodic re-resolution must not flap between families), and
+  // `preferFamily` keeps it on the family that has been working when the old
+  // address is gone. `avoidAddress` steers away from an address that just
+  // proved unreachable — to the other family first: a pin dies with its family
+  // far more often than alone (IPv6 with no route on this network), and
+  // stepping to the next address of the same family flip-flopped between two
+  // dead pins on every failure.
+  const avoided = options.avoidAddress ? addresses.find((row) => row.address === options.avoidAddress) : undefined;
   const selected = (options.preferAddress ? addresses.find((row) => row.address === options.preferAddress) : undefined)
+    ?? (avoided ? addresses.find((row) => row.family !== avoided.family) : undefined)
+    ?? (options.preferFamily ? addresses.find((row) => row.family === options.preferFamily && row.address !== options.avoidAddress) : undefined)
     ?? addresses.find((row) => row.address !== options.avoidAddress)
     ?? addresses[0];
   if (!selected) throw new DesktopBridgeError('bridge_remote_dns_empty');
@@ -598,6 +637,20 @@ export function isUnreachableUpstreamError(error: unknown): boolean {
   return typeof code === 'string' && UNREACHABLE_UPSTREAM_ERROR_CODES.has(code);
 }
 
+/**
+ * The subset the kernel answers at once, without a packet leaving this host:
+ * there is no route right now. On a laptop that is a network blip (Wi-Fi
+ * roaming, a DHCP renewal, wake from sleep) that lasts seconds; the bridge log
+ * showed one every ~15 minutes, each failing a turn after ~1.4 s of replays.
+ * Such a request never reached the upstream, so waiting the blip out is free.
+ */
+const NO_ROUTE_UPSTREAM_ERROR_CODES = new Set(['ENETUNREACH', 'EHOSTUNREACH', 'ENETDOWN', 'EHOSTDOWN', 'EADDRNOTAVAIL', 'EAFNOSUPPORT']);
+
+export function isNoRouteUpstreamError(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null)?.code;
+  return typeof code === 'string' && NO_ROUTE_UPSTREAM_ERROR_CODES.has(code);
+}
+
 /** Concurrent requests failing on the same dead pin trigger ONE re-resolution. */
 export const REMOTE_REFRESH_COOLDOWN_MS = 5_000;
 /**
@@ -643,7 +696,7 @@ export async function refreshDesktopBridgeRemoteTarget(
     let resolvedAt = state.resolvedAt;
     try {
       const fresh = await resolveDesktopBridgeRemoteTarget(remote.baseUrl, lookup, reason === 'stale'
-        ? { preferAddress: remote.address }
+        ? { preferAddress: remote.address, preferFamily: remote.family }
         : reason === 'unreachable' ? { avoidAddress: remote.address } : {});
       const changed = remote.unresolved === true || fresh.address !== remote.address || fresh.family !== remote.family;
       remote.address = fresh.address;
