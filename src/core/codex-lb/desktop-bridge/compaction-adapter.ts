@@ -21,6 +21,7 @@
  * synthesis. The transport lives with the forwarders.
  */
 import { randomUUID } from 'node:crypto';
+import { adviseModelCapacityRetry } from './capacity-retry-advice.js';
 
 // The two texts Codex itself uses for local compaction
 // (codex-rs/prompts/templates/compact/{prompt,summary_prefix}.md, Apache-2.0),
@@ -449,13 +450,16 @@ export function compactionResponseEvents(responseId: string, publicModel: string
 
 /**
  * Codex maps a `response.failed` code the way it maps the official backend's:
- * `rate_limit_exceeded` waits and retries, an unknown code is retryable.
+ * `rate_limit_exceeded` waits and retries, an unknown code is retryable, and
+ * `server_is_overloaded` retries only with the advice added here.
  */
 export function compactionFailedEvent(responseId: string, publicModel: string, code: string): JsonObject {
-  return {
+  const event = {
     type: 'response.failed',
     response: { ...responseBase(responseId, publicModel), status: 'failed', error: { code, message: code } },
   };
+  adviseModelCapacityRetry(event);
+  return event;
 }
 
 export function sseEvent(event: JsonObject): string {

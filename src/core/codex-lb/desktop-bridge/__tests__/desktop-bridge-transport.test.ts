@@ -452,6 +452,45 @@ test('correct client capability is stripped before upstream while HTTP/SSE binds
   }
 });
 
+test('a capacity failure inside a provider event stream reaches Codex with retry advice; other events stay byte-identical', async () => {
+  // Codex-LB's rebuilt failure carries no `headers`; without advice Codex ends the turn.
+  const failedData = JSON.stringify({ type: 'response.failed', response: { id: 'resp_cap', status: 'failed', error: { code: 'server_is_overloaded', message: 'Selected model is at capacity. Please try a different model.' } } });
+  const created = 'event: response.created\ndata: {"type":"response.created","response":{"id":"resp_cap"}}';
+  const upstream = http.createServer((_req, res) => {
+    res.writeHead(200, { 'content-type': 'text/event-stream' });
+    res.write(`${created}\n\n`);
+    // Split mid-event, as the network may deliver it.
+    res.write(`event: response.failed\ndata: ${failedData.slice(0, 40)}`);
+    setTimeout(() => res.end(`${failedData.slice(40)}\n\n`), 20);
+  });
+  const upstreamPort = await listen(upstream);
+  const bridgePort = await selectAvailableDesktopBridgePort('127.0.0.1');
+  let bridge: DesktopBridgeHandle | null = null;
+  try {
+    bridge = await startDesktopBridge(bridgeConfig(bridgePort, upstreamPort, 'x-codex-lb-api-key'), { writeState: false });
+    const result = await request({
+      port: bridgePort,
+      path: '/backend-api/codex/responses',
+      method: 'POST',
+      headers: { 'x-sks-model': PUBLIC_MODEL, ...codexSessionHeaders('thread-capacity'), 'content-type': 'application/json' },
+      chunks: [Buffer.from('{"stream":true}')],
+    });
+    assert.equal(result.status, 200);
+    const [first, failed, rest] = result.body.toString().split('\n\n');
+    assert.equal(first, created);
+    assert.equal(rest, '');
+    const lines = failed!.split('\n');
+    assert.equal(lines[0], 'event: response.failed');
+    const advised = JSON.parse(lines[1]!.slice('data: '.length));
+    assert.deepEqual(advised.response.error.headers, { 'Retry-After': '5' });
+    delete advised.response.error.headers;
+    assert.deepEqual(advised, JSON.parse(failedData));
+  } finally {
+    if (bridge) await stopDesktopBridge(bridge);
+    await close(upstream);
+  }
+});
+
 test('multipart request bytes are unchanged and current Codex-LB bearer auth is explicit', async () => {
   const received = createHash('sha256');
   let receivedLength = 0;
