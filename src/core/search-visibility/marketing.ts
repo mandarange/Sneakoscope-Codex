@@ -3,7 +3,7 @@ import { exists, readJson, readText, sha256, writeJsonAtomic, type JsonData } fr
 import { detectProject, discoverSiteInventory } from './discovery.js';
 import { createSearchVisibilityMission, resolveSearchVisibilityMission, routeForMode, type SearchVisibilityMission } from './mission.js';
 import { runSuperSearch } from '../super-search/index.js';
-import { evaluateMarketingTruthfulness } from './marketing-truthfulness.js';
+import { classifyClaim, evaluateMarketingTruthfulness } from './marketing-truthfulness.js';
 import type {
   MarketingClaim,
   MarketingResearch,
@@ -15,31 +15,17 @@ import type {
   SiteInventory,
 } from './types.js';
 
-const INTERNAL_SOURCE_CANDIDATES = [
-  'package.json',
-  'README.md',
-  'CHANGELOG.md',
-  'src/core/routes.ts',
-  'src/core/routes/dollar-manifest-lite.ts',
-  'src/core/agents/agent-orchestrator.ts',
-  'src/cli/command-manifest-lite.ts',
-  'config/perf-budgets.v1.json',
-  '.sneakoscope/reports/perf-budget.json',
-  '.sneakoscope/reports/super-search-local-http-smoke.json',
-  '.sneakoscope/reports/installed-package-smoke.json',
-];
+// Marketing describes whichever project it runs in. Every source is that
+// project's own: its package metadata and docs, the URLs its package.json
+// declares (plus --url), and only the competitors the user names with
+// --competitor. Nothing here names SKS.
+const INTERNAL_SOURCE_FILES = ['package.json', 'CHANGELOG.md'];
 
-const EXTERNAL_SOURCE_URLS = [
-  'https://github.com/mandarange/Sneakoscope-Codex',
-  'https://www.npmjs.com/package/sneakoscope',
-];
+// README sections that say how to use a project rather than what it is.
+const NON_POSITIONING_SECTION = /^(?:install(?:ation|ing)?|usage|getting started|quick ?start|setup|requirements|prerequisites|configuration|development|contributing|contributors|license|changelog|faq|support|credits|acknowledg(?:e)?ments|table of contents|contents|testing|tests?|build(?:ing)?|scripts|roadmap|security|code of conduct|authors?|sponsors?|related|see also|links|api|reference|examples?|demo|screenshots?)\b/i;
 
-const COMPETITOR_SOURCE_URLS = [
-  'https://github.com/Yeachan-Heo/oh-my-codex',
-  'https://github.com/code-yeongyu/lazycodex',
-  'https://www.npmjs.com/package/oh-my-codex',
-  'https://www.npmjs.com/package/lazycodex-ai',
-];
+const MAX_MESSAGE_PILLARS = 4;
+const MAX_KEYWORDS = 20;
 
 export async function runMarketingResearch(
   mode: SearchVisibilityMode,
@@ -52,19 +38,26 @@ export async function runMarketingResearch(
   const inventory = await discoverSiteInventory(ctx, detected);
   await writeJsonAtomic(path.join(mission.artifactDir, 'site-inventory.json'), inventory);
 
-  const internalSources = await collectInternalSources(mission.root);
+  const internalSources = await collectInternalSources(mission.root, inventory);
+  const projectUrls = await projectSourceUrls(mission.root, inventory, options);
+  const competitorUrls = unique(options.competitorUrls || []);
   const externalSources = options.offline
     ? []
-    : await collectSuperSearchSources(mission, EXTERNAL_SOURCE_URLS, 'external', options.maxMarketingSources);
-  const competitorSources = !options.offline && options.includeCompetitors
-    ? await collectSuperSearchSources(mission, COMPETITOR_SOURCE_URLS, 'competitor', options.maxMarketingSources)
+    : await collectSuperSearchSources(mission, projectUrls, 'external', options.maxMarketingSources);
+  const competitorSources = !options.offline && options.includeCompetitors && competitorUrls.length
+    ? await collectSuperSearchSources(mission, competitorUrls, 'competitor', options.maxMarketingSources)
     : [];
-  const claims = buildMarketingClaims(inventory, internalSources, externalSources);
+  const claims = buildMarketingClaims(inventory, internalSources);
   const truth = evaluateMarketingTruthfulness({ claims });
+  // A claim the truthfulness gate rejects is kept out of the strategy rather
+  // than stopping research: a project's own description may say "fast" without
+  // a measurement, and the strategy simply does not repeat it.
   const blockedClaims = claims.filter((claim) => !claim.publishable || claim.blockers.length || truth.unsupported_claims.includes(claim.id));
-  const blockers = [...truth.blockers];
+  const blockers: string[] = [];
   if (!internalSources.length) blockers.push('marketing_internal_sources_missing');
-  if (!options.offline && !externalSources.some((source) => source.verified)) blockers.push('marketing_external_sources_unverified');
+  if (!options.offline && !projectUrls.length) blockers.push('marketing_project_urls_missing');
+  else if (!options.offline && !externalSources.some((source) => source.verified)) blockers.push('marketing_external_sources_unverified');
+  if (options.includeCompetitors && !competitorUrls.length) blockers.push('marketing_competitor_urls_required');
 
   const research: MarketingResearch = {
     schema: 'sks.search-visibility.marketing-research.v1',
@@ -81,6 +74,8 @@ export async function runMarketingResearch(
   await writeJsonAtomic(path.join(mission.artifactDir, 'marketing-source-ledger.json'), {
     schema: 'sks.search-visibility.marketing-source-ledger.v1',
     mission_id: mission.id,
+    project_urls: projectUrls,
+    competitor_urls: competitorUrls,
     sources: [...internalSources, ...externalSources, ...competitorSources],
   });
   await writeJsonAtomic(path.join(mission.artifactDir, 'marketing-claim-ledger.json'), {
@@ -105,6 +100,7 @@ export async function runMarketingResearch(
     route: routeForMode(mode),
     status: research.ok ? 'verified_partial' : 'blocked',
     artifacts_dir: `.sneakoscope/missions/${mission.id}/search-visibility`,
+    project_urls: projectUrls,
     internal_sources: internalSources.length,
     external_sources: externalSources.length,
     competitor_sources: competitorSources.length,
@@ -126,7 +122,11 @@ export async function runMarketingStrategy(
   if (!research.ok) return blockedStrategy(mission, ['marketing_research_gate_not_passed', ...research.blockers]);
   const inventory = await readJson<SiteInventory | null>(path.join(mission.artifactDir, 'site-inventory.json'), null);
   if (!inventory) return blockedStrategy(mission, ['site_inventory_required_for_strategy']);
-  const strategy = buildMarketingStrategy(mission.id, inventory, research);
+  // Pillars quote the README, so the README must still be the one research read.
+  const readmeSource = research.internal_sources.find((source) => Boolean(source.path) && source.path === inventory.readme.path);
+  const readmeText = readmeSource?.path ? await readText(path.join(mission.root, readmeSource.path), '') : '';
+  if (readmeSource?.sha256 && sha256(readmeText) !== readmeSource.sha256) return blockedStrategy(mission, ['marketing_readme_changed_since_research']);
+  const strategy = buildMarketingStrategy(mission.id, inventory, research, readmeText);
   const truth = evaluateMarketingTruthfulness({ strategy });
   const strategy_quality = scoreMarketingStrategy(strategy, truth);
   const blockers = [...strategy.blockers, ...truth.blockers, ...strategy_quality.blockers];
@@ -157,121 +157,128 @@ export async function runMarketingStrategy(
   };
 }
 
-function buildMarketingStrategy(missionId: string, inventory: SiteInventory, research: MarketingResearch): MarketingStrategy {
-  const sources = [...research.internal_sources, ...research.external_sources];
-  const sourceIds = sources.filter((source) => source.verified).map((source) => source.id);
-  const packageSource = sourceIds.find((id) => id.includes('package-json')) || sourceIds[0] || '';
-  const readmeSource = sourceIds.find((id) => id.includes('readme')) || packageSource;
-  const perfSource = sourceIds.find((id) => id.includes('perf-budget') || id.includes('perf'));
-  const parallelSource = sourceIds.find((id) => id.includes('agent-orchestrator') || id.includes('naruto'));
-  const superSearchSource = sourceIds.find((id) => id.includes('super-search'));
-  const oneLiner = `${inventory.package.name || 'Sneakoscope'} is a proof-first Codex trust layer for bounded agent workflows, search visibility, and evidence-backed release gates.`;
-  const strategySources = unique([packageSource, readmeSource, superSearchSource, parallelSource, perfSource].filter(Boolean) as string[]);
-  const competitorContrast = buildCompetitorContrast(research, strategySources);
-  const keywords = unique([
-    'sneakoscope',
-    'codex',
-    'sks',
-    'codex-cli',
-    'codex-app',
-    'agent-orchestration',
-    'proof-gates',
-    ...(superSearchSource ? ['super-search'] : []),
-    'seo',
-    'generative-engine-optimization',
-    'bounded-memory',
-    'rollback',
-    'release-integrity',
-  ]).slice(0, 20);
-  const messagePillars = [
-    { title: 'Proof-first route gates', claim: 'SKS records route artifacts, blockers, and release gates so Codex workflows can separate verified work from unverified claims.', source_ids: [readmeSource || packageSource].filter(Boolean) },
-    ...(superSearchSource ? [{ title: 'Source-backed search visibility', claim: 'Super-Search and SEO/GEO artifacts keep source ledgers and claim ledgers attached to search visibility work.', source_ids: [superSearchSource] }] : []),
-    ...(parallelSource ? [{ title: 'Bounded parallel implementation', claim: 'The Naruto agent orchestrator runs bounded multi-agent coding workflows.', source_ids: [parallelSource] }] : []),
-    ...(perfSource ? [{ title: 'Measured fast paths', claim: 'Performance budget reports define p95 budgets for selected SKS fast-path commands.', source_ids: [perfSource] }] : []),
+function buildMarketingStrategy(missionId: string, inventory: SiteInventory, research: MarketingResearch, readmeText: string): MarketingStrategy {
+  const verifiedId = (source: MarketingSource | undefined) => (source?.verified ? source.id : null);
+  const packageSource = verifiedId(research.internal_sources.find((source) => Boolean(source.path) && source.path === inventory.package.path));
+  const readmeSource = verifiedId(research.internal_sources.find((source) => Boolean(source.path) && source.path === inventory.readme.path));
+  const projectName = inventory.package.name || inventory.readme.h1 || 'This project';
+  const excluded: string[] = [];
+  const passes = (id: string, text: string, claimType: MarketingClaim['claim_type'], sourceIds: string[]) => {
+    const gate = evaluateMarketingTruthfulness({
+      claims: [{ id, text, claim_type: claimType, source_ids: sourceIds, publishable: true, blockers: sourceIds.length ? [] : ['source_ids_required'] }],
+    });
+    if (!gate.ok) excluded.push(...gate.blockers);
+    return gate.ok;
+  };
+
+  // Positioning is the project's own words: its package description, else the
+  // README's opening paragraph. A candidate the truthfulness gate rejects (an
+  // unmeasured "fast", a ranking promise) is skipped, never rewritten.
+  const candidates = [
+    { id: 'positioning-package-description', text: (inventory.package.description || '').trim(), source: packageSource },
+    { id: 'positioning-readme-lead', text: readmeLead(readmeText), source: readmeSource },
   ];
+  const positioning = candidates.find((candidate) => Boolean(candidate.text && candidate.source)
+    && passes(candidate.id, candidate.text, 'positioning', [candidate.source as string])) || null;
+  const positioningSource = positioning?.source || null;
+  const oneLiner = positioning?.text || '';
+
+  const messagePillars = readmeSections(readmeText)
+    .filter((section) => !NON_POSITIONING_SECTION.test(section.title))
+    .map((section) => ({ title: section.title, claim: section.lead, source_ids: readmeSource ? [readmeSource] : [] }))
+    .filter((pillar, index) => Boolean(pillar.claim)
+      && passes(`pillar-${index + 1}`, `${pillar.title}: ${pillar.claim}`, classifyClaim(`${pillar.title}: ${pillar.claim}`), pillar.source_ids))
+    .slice(0, MAX_MESSAGE_PILLARS);
+
+  // Keywords only grow: the project's own list first, then its name and the
+  // frameworks its package declares.
+  const existingKeywords = unique(inventory.package.keywords.map((keyword) => keyword.trim()));
+  const identityKeywords = unique([bareName(inventory.package.name), ...frameworkKeywords(inventory)])
+    .filter((keyword) => !existingKeywords.includes(keyword));
+  const keywords = [...existingKeywords, ...identityKeywords].slice(0, MAX_KEYWORDS);
+  const keywordClusters = packageSource
+    ? [
+      { name: 'package keywords', keywords: existingKeywords, source_ids: [packageSource] },
+      { name: 'project identity', keywords: identityKeywords, source_ids: [packageSource] },
+    ].filter((cluster) => cluster.keywords.length)
+    : [];
+
+  const competitorContrast = research.competitor_sources
+    .filter((source) => source.verified && oneLiner)
+    .map((source) => ({
+      competitor: source.title,
+      their_claim: source.summary,
+      project_contrast: `${projectName}: ${oneLiner}`,
+      source_ids: unique([source.id, positioningSource || '']),
+      safe_to_publish: true,
+    }))
+    .filter((contrast, index) => passes(`competitor-contrast-${index + 1}`, `${contrast.competitor}: ${contrast.their_claim} ${contrast.project_contrast}`, 'competitor', contrast.source_ids));
+
+  const readmePlan: MarketingStrategy['readme_plan'] = positioningSource ? [{
+    operation: 'readme-positioning-block-update',
+    text: [
+      '<!-- BEGIN SKS MARKETING POSITIONING -->',
+      oneLiner,
+      ...(messagePillars.length ? ['', ...messagePillars.map((pillar) => `- **${pillar.title}:** ${pillar.claim}`)] : []),
+      '<!-- END SKS MARKETING POSITIONING -->',
+      '',
+    ].join('\n'),
+    source_ids: unique([positioningSource, ...messagePillars.flatMap((pillar) => pillar.source_ids)]),
+  }] : [];
+
+  const packagePlan: MarketingStrategy['package_plan'] = [];
+  // An existing description is the author's own and is never replaced.
+  if (packageSource && positioningSource && !inventory.package.description) {
+    packagePlan.push({ operation: 'package-description-update', description: oneLiner, source_ids: [positioningSource] });
+  }
+  if (packageSource && identityKeywords.length && passes('package-keywords', keywords.join(', '), 'positioning', [packageSource])) {
+    packagePlan.push({ operation: 'package-keywords-update', keywords, source_ids: [packageSource] });
+  }
+
   const strategy: MarketingStrategy = {
     schema: 'sks.search-visibility.marketing-strategy.v1',
     ok: true,
     mission_id: missionId,
     positioning: {
       one_liner: oneLiner,
-      source_ids: [packageSource || readmeSource].filter(Boolean),
+      source_ids: positioningSource ? [positioningSource] : [],
     },
     message_pillars: messagePillars,
-    keyword_clusters: [
-      { name: 'codex trust layer', keywords: keywords.slice(0, 7), source_ids: [packageSource || readmeSource].filter(Boolean) },
-      { name: 'agent release integrity', keywords: keywords.slice(7, 14), source_ids: [readmeSource || packageSource].filter(Boolean) },
-      { name: 'search visibility', keywords: keywords.slice(7, 11), source_ids: [superSearchSource || packageSource].filter(Boolean) },
-    ],
+    keyword_clusters: keywordClusters,
     strategy_quality: {
       score: 0,
       source_backed_claims: 0,
       unsupported_claims: 0,
       competitor_contrast_count: competitorContrast.length,
-      keyword_cluster_count: 3,
+      keyword_cluster_count: keywordClusters.length,
       blockers: [],
     },
     competitor_contrast: competitorContrast,
-    readme_plan: [{
-      operation: 'readme-positioning-block-update',
-      text: [
-        '<!-- BEGIN SKS MARKETING POSITIONING -->',
-        '## Search Visibility Positioning',
-        '',
-        oneLiner,
-        '',
-        '- Source-ledger claims are kept in SKS marketing research and strategy artifacts.',
-        '- SEO/GEO mutation plans update only package metadata and this managed README block in this release.',
-        '- External visibility outcomes require separate measured evidence.',
-        '<!-- END SKS MARKETING POSITIONING -->',
-        '',
-      ].join('\n'),
-      source_ids: strategySources,
-    }],
-    package_plan: [
-      {
-        operation: 'package-description-update',
-        description: 'Proof-first Codex trust layer for bounded agent workflows, search visibility evidence, and release integrity gates.',
-        source_ids: strategySources,
-      },
-      {
-        operation: 'package-keywords-update',
-        keywords,
-        source_ids: strategySources,
-      },
-    ],
+    readme_plan: readmePlan,
+    package_plan: packagePlan,
     docs_plan: [
-      { title: 'Document marketing claim sources and prohibited guarantees in release notes.', source_ids: [readmeSource || packageSource].filter(Boolean), auto_apply: false },
+      { title: 'Document marketing claim sources and prohibited guarantees in release notes.', source_ids: [positioningSource || packageSource || readmeSource].filter(Boolean) as string[], auto_apply: false },
     ],
     do_not_claim: [
       'guaranteed ranking',
       'guaranteed traffic',
       'guaranteed AI citation',
-      'best or fastest Codex tool',
+      'best or fastest in its category without a measurement',
       'competitor disparagement',
     ],
+    excluded_claims: unique(excluded),
     blockers: [],
   };
+  if (!positioningSource) {
+    strategy.blockers.push(candidates.some((candidate) => candidate.text && candidate.source) ? 'positioning_claim_unsupported' : 'positioning_source_missing');
+  }
   for (const pillar of strategy.message_pillars) {
     if (!pillar.source_ids.length) strategy.blockers.push(`pillar_source_missing:${pillar.title}`);
   }
   for (const plan of strategy.package_plan) {
     if (!plan.source_ids.length) strategy.blockers.push(`package_plan_source_missing:${plan.operation}`);
   }
-  if (strategy.positioning.source_ids.length === 0) strategy.blockers.push('positioning_source_missing');
   return strategy;
-}
-
-function buildCompetitorContrast(research: MarketingResearch, strategySources: string[]): MarketingStrategy['competitor_contrast'] {
-  return research.competitor_sources
-    .filter((source) => source.verified)
-    .map((source) => ({
-      competitor: source.title,
-      their_claim: source.summary,
-      sks_contrast: 'SKS positions itself around proof-first release integrity and source-backed search visibility, while workflow-first Codex layers emphasize orchestration convenience.',
-      source_ids: unique([source.id, ...strategySources]),
-      safe_to_publish: true,
-    }));
 }
 
 function scoreMarketingStrategy(strategy: MarketingStrategy, truth: ReturnType<typeof evaluateMarketingTruthfulness>): MarketingStrategy['strategy_quality'] {
@@ -279,23 +286,17 @@ function scoreMarketingStrategy(strategy: MarketingStrategy, truth: ReturnType<t
   let score = 0;
   const sourceBackedClaims = countSourceBackedStrategyClaims(strategy);
 
-  if (strategy.positioning.source_ids.length) score += 20;
+  if (strategy.positioning.source_ids.length) score += 25;
   else blockers.push('strategy_quality_source_backed_positioning_missing');
-  if (strategy.message_pillars.length >= 3 && strategy.message_pillars.every((pillar) => pillar.source_ids.length)) score += 20;
+  if (strategy.message_pillars.length >= 2 && strategy.message_pillars.every((pillar) => pillar.source_ids.length)) score += 25;
   else blockers.push('strategy_quality_message_pillars_below_threshold');
-  if (strategy.keyword_clusters.length >= 2 && strategy.keyword_clusters.every((cluster) => cluster.source_ids.length)) score += 15;
-  else blockers.push('strategy_quality_keyword_clusters_below_threshold');
-  if (strategy.competitor_contrast.every((contrast) => contrast.safe_to_publish && contrast.source_ids.length)) score += 15;
+  if (strategy.keyword_clusters.length >= 1 && strategy.keyword_clusters.every((cluster) => cluster.source_ids.length)) score += 15;
+  else blockers.push('strategy_quality_keyword_clusters_missing');
+  if (strategy.competitor_contrast.every((contrast) => contrast.safe_to_publish && contrast.source_ids.length)) score += 10;
   else blockers.push('strategy_quality_competitor_contrast_unsafe');
   if (truth.forbidden_phrases.length === 0) score += 15;
   else blockers.push('strategy_quality_forbidden_phrases_present');
-  if (hasSupportedSpecialClaim(strategy, /p95|latency|performance|fast/i, /perf|budget|report/i)
-    && hasSupportedSpecialClaim(strategy, /parallel|worker|naruto/i, /parallel|naruto|agent|report|routes/i)
-    && hasSupportedSpecialClaim(strategy, /super-search|source-backed|source backed/i, /super-search|source|report/i)) {
-    score += 15;
-  } else {
-    blockers.push('strategy_quality_special_claim_sources_missing');
-  }
+  if (truth.unsupported_claims.length === 0) score += 10;
   if (score < 80) blockers.push('strategy_quality_score_below_80');
   if (truth.unsupported_claims.length) blockers.push('strategy_quality_unsupported_claims_present');
   if (truth.source_less_publishable_claims.length) blockers.push('strategy_quality_source_less_publishable_claims_present');
@@ -322,16 +323,92 @@ function countSourceBackedStrategyClaims(strategy: MarketingStrategy): number {
   ].filter((item) => item.source_ids.length > 0).length;
 }
 
-function hasSupportedSpecialClaim(strategy: MarketingStrategy, textPattern: RegExp, sourcePattern: RegExp): boolean {
-  const candidates = [
-    ...strategy.message_pillars.map((pillar) => ({ text: pillar.claim, source_ids: pillar.source_ids })),
-    ...strategy.readme_plan.map((plan) => ({ text: plan.text, source_ids: plan.source_ids })),
-    ...strategy.package_plan.map((plan) => ({
-      text: plan.operation === 'package-description-update' ? plan.description : plan.keywords.join(', '),
-      source_ids: plan.source_ids,
-    })),
-  ];
-  return candidates.some((candidate) => textPattern.test(candidate.text) && candidate.source_ids.some((id) => sourcePattern.test(id)));
+/** The first prose paragraph of a README: not a heading, badge, image, HTML or code. */
+function readmeLead(text: string): string {
+  for (const paragraph of paragraphs(stripFencedCode(text))) {
+    if (/^(?:#|<|!\[|\[!\[|>|[-*+] |\d+\. |\||<!--)/.test(paragraph)) continue;
+    const plain = plainMarkdown(paragraph);
+    if (plain.length >= 20) return firstSentences(plain);
+  }
+  return '';
+}
+
+/** Level-2 sections with the first prose sentence under each. */
+function readmeSections(text: string): Array<{ title: string; lead: string }> {
+  const out: Array<{ title: string; lead: string }> = [];
+  const body = stripFencedCode(text);
+  const matches = [...body.matchAll(/^##[ \t]+(.+?)[ \t]*#*[ \t]*$/gm)];
+  for (const [index, match] of matches.entries()) {
+    const start = (match.index || 0) + match[0].length;
+    const end = index + 1 < matches.length ? matches[index + 1]!.index || body.length : body.length;
+    const section = body.slice(start, end).split(/^#{1,6}[ \t]/m)[0] || '';
+    const lead = paragraphs(section)
+      .filter((paragraph) => !/^(?:<|!\[|\[!\[|\||<!--)/.test(paragraph))
+      .map((paragraph) => plainMarkdown(paragraph.replace(/^(?:[-*+]|\d+\.)\s+/, '')))
+      .find((paragraph) => paragraph.length >= 12) || '';
+    out.push({ title: plainMarkdown(match[1] || ''), lead: lead ? firstSentences(lead, 1) : '' });
+  }
+  return out.filter((section) => section.title);
+}
+
+function stripFencedCode(text: string): string {
+  return String(text || '').replace(/^(```|~~~)[^\n]*\n[\s\S]*?^\1[ \t]*$/gm, '');
+}
+
+function paragraphs(text: string): string[] {
+  return String(text || '').split(/\r?\n[ \t]*\r?\n/).map((paragraph) => paragraph.trim()).filter(Boolean);
+}
+
+function plainMarkdown(text: string): string {
+  return String(text || '')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/(\*\*|__|\*|_)(.+?)\1/g, '$2')
+    .replace(/<[^>]+>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function firstSentences(text: string, count = 2): string {
+  const sentences = text.match(/[^.!?]+[.!?]+(?=\s|$)/g);
+  const picked = sentences ? sentences.slice(0, count).join(' ').trim() : text;
+  return picked.length > 280 ? `${picked.slice(0, 277).trimEnd()}...` : picked;
+}
+
+function bareName(name: string | null): string {
+  return String(name || '').replace(/^@[^/]+\//, '').trim().toLowerCase();
+}
+
+function frameworkKeywords(inventory: SiteInventory): string[] {
+  const names: Record<string, string> = { next: 'nextjs', react: 'react', astro: 'astro', nuxt: 'nuxt', svelte: 'svelte' };
+  return Object.keys(inventory.package.framework_versions || {}).map((dependency) => names[dependency] || '').filter(Boolean);
+}
+
+/** The URLs a project declares for itself; an npm page only for a package that is not private. */
+async function projectSourceUrls(root: string, inventory: SiteInventory, options: SearchVisibilityCliOptions): Promise<string[]> {
+  const pkg: any = await readJson(path.join(root, 'package.json'), null);
+  const published = Boolean(inventory.package.name) && pkg?.private !== true;
+  return unique([
+    options.url || '',
+    inventory.package.homepage || '',
+    httpsRepositoryUrl(inventory.package.repository) || '',
+    published ? `https://www.npmjs.com/package/${inventory.package.name}` : '',
+  ].filter((url) => /^https?:\/\//i.test(url)));
+}
+
+function httpsRepositoryUrl(value: string | null): string | null {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  const shorthand = raw.match(/^(?:(github|gitlab|bitbucket):)?([\w.-]+\/[\w.-]+)$/i);
+  if (shorthand) {
+    const hosts: Record<string, string> = { github: 'github.com', gitlab: 'gitlab.com', bitbucket: 'bitbucket.org' };
+    return `https://${hosts[(shorthand[1] || 'github').toLowerCase()]}/${shorthand[2]!.replace(/\.git$/i, '')}`;
+  }
+  const ssh = raw.match(/^git@([^:]+):(.+?)(?:\.git)?$/i);
+  if (ssh) return `https://${ssh[1]}/${ssh[2]}`;
+  const url = raw.replace(/^git\+/i, '').replace(/^git:\/\//i, 'https://').replace(/\.git$/i, '');
+  return /^https?:\/\//i.test(url) ? url : null;
 }
 
 async function resolveOrCreateMarketingMission(
@@ -349,9 +426,9 @@ async function resolveOrCreateMarketingMission(
   return createSearchVisibilityMission(mode, prompt, options);
 }
 
-async function collectInternalSources(root: string): Promise<MarketingSource[]> {
+async function collectInternalSources(root: string, inventory: SiteInventory): Promise<MarketingSource[]> {
   const out: MarketingSource[] = [];
-  for (const rel of INTERNAL_SOURCE_CANDIDATES) {
+  for (const rel of unique([inventory.package.path || '', inventory.readme.path || '', ...INTERNAL_SOURCE_FILES])) {
     const full = path.join(root, rel);
     if (!(await exists(full))) continue;
     const text = await readText(full, '');
@@ -407,17 +484,13 @@ async function collectSuperSearchSources(
   return out;
 }
 
-function buildMarketingClaims(inventory: SiteInventory, internalSources: MarketingSource[], externalSources: MarketingSource[]): MarketingClaim[] {
-  const packageSource = internalSources.find((source) => source.path === 'package.json');
-  const readmeSource = internalSources.find((source) => source.path === 'README.md');
-  const perfSource = internalSources.find((source) => source.path?.includes('perf-budget'));
-  const superSearchSource = internalSources.find((source) => source.path?.includes('super-search-local-http-smoke')) || externalSources.find((source) => source.verified);
+function buildMarketingClaims(inventory: SiteInventory, internalSources: MarketingSource[]): MarketingClaim[] {
+  const packageSource = internalSources.find((source) => Boolean(source.path) && source.path === inventory.package.path);
+  const readmeSource = internalSources.find((source) => Boolean(source.path) && source.path === inventory.readme.path);
   const claims: MarketingClaim[] = [];
   if (inventory.package.name) claims.push(publishableClaim('pkg-name', `${inventory.package.name} is the package name published in package metadata.`, 'identity', [packageSource?.id]));
   if (inventory.package.description) claims.push(publishableClaim('pkg-description', inventory.package.description, 'capability', [packageSource?.id]));
-  if (readmeSource) claims.push(publishableClaim('readme-positioning', `README describes ${inventory.readme.h1 || inventory.package.name || 'the project'} and its SKS command surfaces.`, 'positioning', [readmeSource.id]));
-  if (perfSource) claims.push(publishableClaim('perf-budget-source', 'Performance budget artifacts define command p95 budgets for release gates.', 'performance', [perfSource.id]));
-  if (superSearchSource) claims.push(publishableClaim('super-search-source-backed', 'Super-Search artifacts provide source ledgers for search visibility evidence.', 'super_search', [superSearchSource.id]));
+  if (readmeSource) claims.push(publishableClaim('readme-positioning', `README describes ${inventory.readme.h1 || inventory.package.name || 'the project'}.`, 'positioning', [readmeSource.id]));
   return claims;
 }
 

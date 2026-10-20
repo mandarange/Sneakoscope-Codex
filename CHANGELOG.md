@@ -63,6 +63,20 @@
 
 ### Fixed
 
+- SEO/GEO marketing described SKS in every project. Research read SKS's own
+  source files and fetched SKS's GitHub and npm pages, the competitors were
+  SKS's, and `--include-marketing` apply rewrote a user's package.json
+  description to "Proof-first Codex trust layer…" with `sneakoscope` and
+  `codex` keywords. The strategy now comes from the project itself:
+  positioning is its package description or README lead, message pillars are
+  its README sections, keywords only add its package name and declared
+  frameworks to its own list, research fetches the homepage, repository and
+  npm page its package.json declares (or `--url`), and competitors are only
+  the URLs passed with `--competitor`. An existing description is never
+  replaced, the README block holds only the project's text, and a claim the
+  truthfulness gate rejects (an unmeasured "fastest") is left out and listed
+  instead of blocking the run. Claim checks match whole words, so "breakfast"
+  is no longer a speed claim.
 - `sks memory` with no subcommand, or a misspelled one, ran a real retention
   pass that deletes runtime state; it now prints usage and exits 2. Retention
   stays available as `sks memory gc`.

@@ -5369,8 +5369,8 @@
       "file": "src/scripts/seo-marketing-truthfulness-check.ts",
       "symbol": "module",
       "token": "rmSync",
-      "scope_contract_sha256": "c8d340cad02ff96c1fde7072652d98402923b6a8ee7ba7183b5a6e2ee212053b",
-      "callsite_sha256": "783fb7338ca65b548acbb621cd96a4a7f4c6955d38d4eef883d8c680939c12d8",
+      "scope_contract_sha256": "ba9ea40bc25085f91862edb0062f5c0d2a35cc9e4b5ece0062ca804e347b0a09",
+      "callsite_sha256": "40be5c62b3a146ce755f60dafab9752c8b1c5e2b498ba17405e5c0a6f3a5904e",
       "occurrence": 1,
       "reason": "src/scripts/seo-marketing-truthfulness-check.ts#module removes only its isolated fixture, generated build output, or scoped temporary artifact during cleanup."
     },
@@ -5378,8 +5378,8 @@
       "file": "src/scripts/seo-marketing-truthfulness-check.ts",
       "symbol": "module",
       "token": "writeFileSync",
-      "scope_contract_sha256": "c8d340cad02ff96c1fde7072652d98402923b6a8ee7ba7183b5a6e2ee212053b",
-      "callsite_sha256": "86cf4836dfdcd7e0f72bf9e824ccc7061810be18606c8a7b2ef4a1cfb0e5350c",
+      "scope_contract_sha256": "ba9ea40bc25085f91862edb0062f5c0d2a35cc9e4b5ece0062ca804e347b0a09",
+      "callsite_sha256": "4bdf8636ad89893ec4360e35821e034452ebca8df995afa0d5a3149be7edc70a",
       "occurrence": 1,
       "reason": "src/scripts/seo-marketing-truthfulness-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
@@ -5387,8 +5387,8 @@
       "file": "src/scripts/seo-marketing-truthfulness-check.ts",
       "symbol": "seedFixture",
       "token": "writeFileSync",
-      "scope_contract_sha256": "7a0a350bfe460b24e8a04142239094e85683cef949e7dc01b53d3aeedf1b0879",
-      "callsite_sha256": "35f917f4ed56a50167e729a6ed09af2b11c25c0c5a60cdddb5dc33715b6edc3f",
+      "scope_contract_sha256": "8a6d31a33654928b4bab65a1412e97c5fb5aec500a215564184cffc2aada472c",
+      "callsite_sha256": "40e4aa85253b48a4a11e0a30985f24cc320ae251e380218b7890ba60c9b10197",
       "occurrence": 1,
       "reason": "src/scripts/seo-marketing-truthfulness-check.ts#seedFixture writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
@@ -5396,8 +5396,8 @@
       "file": "src/scripts/seo-marketing-truthfulness-check.ts",
       "symbol": "seedFixture",
       "token": "writeFileSync",
-      "scope_contract_sha256": "7a0a350bfe460b24e8a04142239094e85683cef949e7dc01b53d3aeedf1b0879",
-      "callsite_sha256": "96e062269928262624254227636f5151f3a736945d041eeea81a2a01f82312ad",
+      "scope_contract_sha256": "8a6d31a33654928b4bab65a1412e97c5fb5aec500a215564184cffc2aada472c",
+      "callsite_sha256": "3bcc2c55de264e22250c093ee7703f2fb3f7e1d984ec450796160f2f0cf71f4e",
       "occurrence": 1,
       "reason": "src/scripts/seo-marketing-truthfulness-check.ts#seedFixture writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
@@ -5405,53 +5405,8 @@
       "file": "src/scripts/seo-marketing-truthfulness-check.ts",
       "symbol": "seedFixture",
       "token": "writeFileSync",
-      "scope_contract_sha256": "7a0a350bfe460b24e8a04142239094e85683cef949e7dc01b53d3aeedf1b0879",
-      "callsite_sha256": "a7ce96aea7777e1ad7a2479496c1b62fc080e16dafae4ad48613406c30259acb",
-      "occurrence": 1,
-      "reason": "src/scripts/seo-marketing-truthfulness-check.ts#seedFixture writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/seo-marketing-truthfulness-check.ts",
-      "symbol": "seedFixture",
-      "token": "writeFileSync",
-      "scope_contract_sha256": "7a0a350bfe460b24e8a04142239094e85683cef949e7dc01b53d3aeedf1b0879",
-      "callsite_sha256": "5a71280d204805b2a9e253e1b4cca1f6812e09e21437f5775e4ede6c702141c3",
-      "occurrence": 1,
-      "reason": "src/scripts/seo-marketing-truthfulness-check.ts#seedFixture writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/seo-marketing-truthfulness-check.ts",
-      "symbol": "seedFixture",
-      "token": "writeFileSync",
-      "scope_contract_sha256": "7a0a350bfe460b24e8a04142239094e85683cef949e7dc01b53d3aeedf1b0879",
-      "callsite_sha256": "6fb6925438949ce8085d2ed6cd57d0841ea124741336d33311991f5c115e4bc1",
-      "occurrence": 1,
-      "reason": "SEO truthfulness verification writes this minimal source file only inside its mkdtemp fixture root to exercise the real source-policy scan."
-    },
-    {
-      "file": "src/scripts/seo-marketing-truthfulness-check.ts",
-      "symbol": "seedFixture",
-      "token": "writeFileSync",
-      "scope_contract_sha256": "7a0a350bfe460b24e8a04142239094e85683cef949e7dc01b53d3aeedf1b0879",
-      "callsite_sha256": "a1db43935dd120f0a1a49f26968f5b855361f294ce6c7b06e6b7b353446cac84",
-      "occurrence": 1,
-      "reason": "src/scripts/seo-marketing-truthfulness-check.ts#seedFixture writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/seo-marketing-truthfulness-check.ts",
-      "symbol": "seedFixture",
-      "token": "writeFileSync",
-      "scope_contract_sha256": "7a0a350bfe460b24e8a04142239094e85683cef949e7dc01b53d3aeedf1b0879",
-      "callsite_sha256": "06242cc6e8d7886031a852ad5009a4f89533b3d1ff5d4ffe41c2a131d73c38ac",
-      "occurrence": 1,
-      "reason": "src/scripts/seo-marketing-truthfulness-check.ts#seedFixture writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
-    },
-    {
-      "file": "src/scripts/seo-marketing-truthfulness-check.ts",
-      "symbol": "seedFixture",
-      "token": "writeFileSync",
-      "scope_contract_sha256": "7a0a350bfe460b24e8a04142239094e85683cef949e7dc01b53d3aeedf1b0879",
-      "callsite_sha256": "a6fb4bb9d125599c5fd4e3147e106cc45428f3ce962d8bc9b4bfc0c37e08ed61",
+      "scope_contract_sha256": "8a6d31a33654928b4bab65a1412e97c5fb5aec500a215564184cffc2aada472c",
+      "callsite_sha256": "953eb6edc71f31d5b0e6b40e5be0779caa8bbe15da591e2cb4f80a7bac46a8e1",
       "occurrence": 1,
       "reason": "src/scripts/seo-marketing-truthfulness-check.ts#seedFixture writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },

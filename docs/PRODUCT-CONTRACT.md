@@ -101,6 +101,7 @@ This page is the English product-facing projection of those decisions.
 - SKS product version is a marketing/release identifier, not a strict semver product gate.
 - Trusted-project may default on for local personal repos under operator policy; users must not modify the installed SKS engine; Codex `config.toml` remains user-editable.
 - Internal/optional routes (not core trust-layer completion): SEO/GEO, Design, PPT, GX, Autoresearch, `$sks-research`.
+- **SEO/GEO marketing describes the project it runs in:** positioning, pillars and keywords come from that project's package metadata and README, research fetches only URLs the project declares or the user passes, competitors are only `--competitor` URLs, and an existing package description is never replaced.
 - Performance: no product SLA or bench-number promises; measurements are internal/optional.
 - Naruto accepts an oversized persisted thread preference without rewriting it, but uses an effective maximum of 256 child threads and 257 total threads. Explicit CLI values above 256 are rejected; the parent remains outside the child-slot cap.
 - Contributions: welcome via standard PR/issues.

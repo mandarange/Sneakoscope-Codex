@@ -36,6 +36,8 @@ export interface SearchVisibilityCliOptions {
   includeLlmsTxt: boolean;
   includeMarketing: boolean;
   includeCompetitors: boolean;
+  /** Competitor pages to research; only URLs the user names with --competitor. */
+  competitorUrls?: string[];
   strategyRef: string | null;
   maxMarketingSources: number;
   observeQueries: boolean;
@@ -254,7 +256,7 @@ export interface MarketingStrategy {
   competitor_contrast: Array<{
     competitor: string;
     their_claim: string;
-    sks_contrast: string;
+    project_contrast: string;
     source_ids: string[];
     safe_to_publish: boolean;
   }>;
@@ -265,6 +267,8 @@ export interface MarketingStrategy {
   >;
   docs_plan: Array<{ title: string; source_ids: string[]; auto_apply: false }>;
   do_not_claim: string[];
+  /** Truthfulness verdicts for project claims the strategy chose not to repeat. */
+  excluded_claims?: string[];
   blockers: string[];
 }
 

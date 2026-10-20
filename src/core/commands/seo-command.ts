@@ -21,7 +21,7 @@ import { evaluateLocalGate } from './route-success-helpers.js';
 
 const SEO_GEO_USAGE = [
   'Usage: sks seo-geo-optimizer [seo|geo] doctor|audit|research|strategy|plan|apply|verify|status|rollback|fixture [mission|latest] [--mode seo|geo] [--root <path>] [--url <origin>] [--target auto|website|docs|package] [--framework auto|next-app|next-pages|static] [--offline] [--strict] [--include-marketing] [--json]',
-  '       sks seo-geo-optimizer research [mission|latest] [--offline] [--include-competitors] [--json]',
+  '       sks seo-geo-optimizer research [mission|latest] [--offline] [--include-competitors --competitor <url>...] [--json]',
   '       sks seo-geo-optimizer strategy <mission|latest> [--json]',
   '       sks seo-geo-optimizer apply <mission|latest> --mode seo|geo --apply [--include-marketing] [--include-llms-txt] [--scope <rule-or-path,...>] [--yes] [--json]',
   '       sks seo-geo-optimizer rollback <mission|latest> --mode seo|geo --apply [--yes] [--json]'
@@ -165,12 +165,22 @@ async function parseOptions(args: string[]): Promise<SearchVisibilityCliOptions>
     includeLlmsTxt: flag(args, '--include-llms-txt'),
     includeMarketing: flag(args, '--include-marketing'),
     includeCompetitors: flag(args, '--include-competitors'),
+    competitorUrls: readRepeated(args, '--competitor'),
     strategyRef: readOption(args, '--strategy-ref', null),
     maxMarketingSources: Number(readOption(args, '--max-marketing-sources', '4')) || 4,
     observeQueries: flag(args, '--observe-queries'),
     queryFile: readOption(args, '--query-file', null),
     scope: String(readOption(args, '--scope', '') || '').split(',').map((item) => item.trim()).filter(Boolean),
   };
+}
+
+/** Every value of a repeatable flag; each may also be a comma-separated list. */
+function readRepeated(args: string[], name: string): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < args.length; i += 1) {
+    if (args[i] === name && args[i + 1]) out.push(...String(args[i + 1]).split(','));
+  }
+  return out.map((value) => value.trim()).filter(Boolean);
 }
 
 function targetOption(value: string): SearchVisibilityTarget {
@@ -182,7 +192,7 @@ function frameworkOption(value: string): SearchVisibilityFramework {
 }
 
 function firstPositional(args: string[]): string | null {
-  const valueFlags = new Set(['--root', '--url', '--target', '--framework', '--scope', '--query-file', '--strategy-ref', '--max-marketing-sources']);
+  const valueFlags = new Set(['--root', '--url', '--target', '--framework', '--scope', '--query-file', '--strategy-ref', '--max-marketing-sources', '--competitor']);
   for (let i = 0; i < args.length; i += 1) {
     const value = args[i] || '';
     if (valueFlags.has(value)) {

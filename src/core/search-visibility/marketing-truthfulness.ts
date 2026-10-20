@@ -21,6 +21,10 @@ export const FORBIDDEN_MARKETING_PHRASES = [
 ];
 
 const COMPETITOR_DISPARAGEMENT_RE = /\b(?:worse than|inferior to|kills|destroys|beats|crushes|replaces)\b/i;
+// Whole words: "breakfast" is not a speed claim and "networker" is not a parallel one.
+const PERFORMANCE_CLAIM_RE = /\b(?:p95|latency|performance|fast(?:er|est)?)\b/i;
+const PARALLEL_CLAIM_RE = /\b(?:parallel|workers?|naruto)\b/i;
+const SOURCE_BACKED_CLAIM_RE = /super-search|source-backed|source backed/i;
 
 export function evaluateMarketingTruthfulness(input: {
   claims?: MarketingClaim[];
@@ -46,13 +50,13 @@ export function evaluateMarketingTruthfulness(input: {
     if (/ranking|traffic|AI citation|검색 순위|트래픽|AI 답변 노출/i.test(text) && claim.claim_type !== 'unsupported') {
       unsupported_claims.push(claim.id);
     }
-    if ((claim.claim_type === 'performance' || /p95|latency|performance|fast/i.test(text)) && !claim.source_ids.some((id) => /perf|budget|report/i.test(id))) {
+    if ((claim.claim_type === 'performance' || PERFORMANCE_CLAIM_RE.test(text)) && !claim.source_ids.some((id) => /perf|budget|report/i.test(id))) {
       unsupported_claims.push(claim.id);
     }
-    if ((claim.claim_type === 'parallel' || /parallel|worker|naruto/i.test(text)) && !claim.source_ids.some((id) => /parallel|naruto|agent|report/i.test(id))) {
+    if ((claim.claim_type === 'parallel' || PARALLEL_CLAIM_RE.test(text)) && !claim.source_ids.some((id) => /parallel|naruto|agent|report/i.test(id))) {
       unsupported_claims.push(claim.id);
     }
-    if ((claim.claim_type === 'super_search' || /super-search|source-backed|source backed/i.test(text)) && !claim.source_ids.some((id) => /super-search|source|report/i.test(id))) {
+    if ((claim.claim_type === 'super_search' || SOURCE_BACKED_CLAIM_RE.test(text)) && !claim.source_ids.some((id) => /super-search|source|report/i.test(id))) {
       unsupported_claims.push(claim.id);
     }
   }
@@ -124,7 +128,7 @@ function claimsFromStrategy(strategy: MarketingStrategy | null): MarketingClaim[
   for (const [index, contrast] of (strategy.competitor_contrast || []).entries()) {
     out.push({
       id: `strategy-competitor-contrast-${index + 1}`,
-      text: `${contrast.competitor}: ${contrast.their_claim} ${contrast.sks_contrast}`,
+      text: `${contrast.competitor}: ${contrast.their_claim} ${contrast.project_contrast}`,
       claim_type: 'competitor',
       source_ids: contrast.source_ids,
       publishable: contrast.safe_to_publish,
@@ -135,9 +139,9 @@ function claimsFromStrategy(strategy: MarketingStrategy | null): MarketingClaim[
 }
 
 export function classifyClaim(text: string): MarketingClaim['claim_type'] {
-  if (/super-search|source-backed|source backed/i.test(text)) return 'super_search';
-  if (/parallel|worker|naruto/i.test(text)) return 'parallel';
-  if (/p95|latency|performance|fast/i.test(text)) return 'performance';
+  if (SOURCE_BACKED_CLAIM_RE.test(text)) return 'super_search';
+  if (PARALLEL_CLAIM_RE.test(text)) return 'parallel';
+  if (PERFORMANCE_CLAIM_RE.test(text)) return 'performance';
   if (/competitor|alternative|compared/i.test(text)) return 'competitor';
   if (/codex|sneakoscope|sks/i.test(text)) return 'capability';
   return 'positioning';
