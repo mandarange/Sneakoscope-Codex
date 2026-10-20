@@ -26,4 +26,4 @@ Every release update touching `package.json`, `release-gates.v2.json`, or `src/s
 - release preset count is at or below 200;
 - npm script count is at or below 100;
 - repeated route families are represented by comprehensive gates.
-- split-review target files from the 2026-07-02 cleanup (`research.ts`, `ppt.ts`, `init.ts`, `hooks-runtime.ts`, `recallpulse.ts`) remain at or below 1200 lines.
+- split-review target files from the 2026-07-02 cleanup (`research.ts`, `ppt.ts`, `init.ts`, `hooks-runtime.ts`) remain at or below 1200 lines.

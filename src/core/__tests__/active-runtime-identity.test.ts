@@ -7,7 +7,6 @@ import { buildProofField, SPEED_LANE_POLICY, validateProofFieldReport } from '..
 import { buildPipelinePlan, validatePipelinePlan } from '../pipeline-internals/runtime-core.js';
 import { runWorkflowPerfBench, validateWorkflowPerfReport } from '../perf-bench.js';
 import { PRODUCT_DESIGN_PIPELINE_STAGES, productDesignPluginPolicyText } from '../product-design-plugin.js';
-import { buildEvidenceEnvelope, buildRecallPulseGovernanceReport } from '../recallpulse.js';
 import { createSkillForgeReport, decideSkillInjection } from '../skill-forge.js';
 import { createWorkOrderLedger } from '../work-order-ledger.js';
 
@@ -17,7 +16,6 @@ const ACTIVE_IDENTITY_SOURCES = [
   'src/core/perf-bench.ts',
   'src/core/pipeline-internals/runtime-core.ts',
   'src/core/product-design-plugin.ts',
-  'src/core/recallpulse.ts',
   'src/core/skill-forge.ts',
   'src/core/work-order-ledger.ts',
   'src/core/code-structure.ts',
@@ -90,26 +88,11 @@ test('Proof Field, pipeline economy, and perf reports expose only Naruto trigger
   }
 });
 
-test('active defaults and RecallPulse samples use Naruto', async () => {
+test('active defaults use Naruto', async () => {
   assert.equal(decideSkillInjection().route, 'naruto');
   assert.equal(createSkillForgeReport().injection.route, 'naruto');
   assert.equal(createWorkOrderLedger().route, 'Naruto');
   assert.ok(PRODUCT_DESIGN_PIPELINE_STAGES.every((stage: any) => !stage.routes.includes('Team')));
   assert.ok(PRODUCT_DESIGN_PIPELINE_STAGES.some((stage: any) => stage.routes.includes('Naruto')));
   assert.doesNotMatch(productDesignPluginPolicyText(), /\bTeam\b/);
-
-  const envelope = buildEvidenceEnvelope({});
-  assert.ok(Object.hasOwn(envelope.route_extensions, 'Naruto'));
-  assert.equal(Object.hasOwn(envelope.route_extensions, 'Team'), false);
-
-  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-recallpulse-current-route-'));
-  try {
-    const governance = await buildRecallPulseGovernanceReport(root, { writeDecisions: false });
-    const sampleRoutes = governance.rollout.requested_samples.map((sample: any) => sample.route_id);
-    assert.ok(sampleRoutes.includes('Naruto'));
-    assert.equal(sampleRoutes.includes('Team'), false);
-    assert.doesNotMatch(JSON.stringify(governance.route_gate_inventory), /\bTeam\b/);
-  } finally {
-    await fsp.rm(root, { recursive: true, force: true });
-  }
 });

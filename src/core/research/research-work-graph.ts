@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { nowIso, writeJsonAtomic } from '../fsx.js'
-import { RESEARCH_REVIEWER_CONTRACT } from '../recallpulse/policy.js'
+import { RESEARCH_REVIEWER_CONTRACT } from './research-reviewer-contract.js'
 import type { NarutoWorkGraph, NarutoWorkItem, NarutoWorkKind } from '../naruto/naruto-work-item.js'
 import { RESEARCH_SOURCE_LAYERS } from './research-source-layer-catalog.js'
 

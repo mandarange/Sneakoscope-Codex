@@ -14,7 +14,7 @@ import { assertGate, emitGate, importDist, root } from './gate-lib.js';
 const { scanLatestVersionGuidance, latestVersionGuidanceReport } = await importDist('core/policy/latest-version-guidance.js');
 
 /** Docs that record the past or describe machine compatibility rather than advising a user. */
-const DOC_EXEMPT_RE = /(?:^|\/)(?:CHANGELOG|RECALLPULSE_[^/]*|known-gaps|release-proof-truth)\.md$|compat|codex-0|migration|legacy-upgrade|sks-4-migration|-tasks\.md$/i;
+const DOC_EXEMPT_RE = /(?:^|\/)(?:CHANGELOG|known-gaps|release-proof-truth)\.md$|compat|codex-0|migration|legacy-upgrade|sks-4-migration|-tasks\.md$/i;
 
 /** Modules whose numbers exist for machine comparison, not user guidance. */
 const SOURCE_EXEMPT = new Set([

@@ -215,7 +215,7 @@ function buildMicroWins(input: {
     kind: 'verification',
     dopamineWeight: 0.9,
     expectedReward: 'quick feedback loop',
-    verificationSignal: 'verification-dag.json node completed',
+    verificationSignal: 'listed verification commands passed',
     dependencies: tasks.filter((row) => row.kind === 'write').map((row) => row.id)
   }))
   tasks.push(task(tasks.length, {
@@ -224,7 +224,7 @@ function buildMicroWins(input: {
     kind: 'rollback',
     dopamineWeight: 0.75,
     expectedReward: 'failure feels recoverable',
-    verificationSignal: 'rollback-dag.json node completed',
+    verificationSignal: 'rollback diff and digest recorded',
     dependencies: tasks.filter((row) => row.kind === 'write').map((row) => row.id)
   }))
   if (input.visualRequired) {
@@ -263,7 +263,7 @@ function task(index: number, input: {
     owner_agent: `executor_${(index % 3) + 1}`,
     owner_persona: input.kind === 'verification' ? 'verifier' : input.kind === 'rollback' ? 'safety' : input.kind === 'read_only' ? 'planner' : 'implementer',
     max_duration_minutes: input.kind === 'write' ? 25 : 15,
-    proof_artifact: input.kind === 'write' ? 'agent-patch-proof.json' : input.kind === 'rollback' ? 'rollback-dag.json' : input.kind === 'operator_action' ? 'appshots-operator-action.json' : 'strategy-trust-evidence.json',
+    proof_artifact: input.kind === 'write' ? 'agent-patch-proof.json' : input.kind === 'rollback' ? 'verification-rollback-dag.json' : input.kind === 'operator_action' ? 'appshots-operator-action.json' : 'strategy-trust-evidence.json',
     kind: input.kind,
     write_paths: uniquePaths(input.writePaths || []),
     readonly_paths: uniquePaths(input.readonlyPaths || []),

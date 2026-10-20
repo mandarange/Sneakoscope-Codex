@@ -23,6 +23,14 @@
 - Skill dreaming. Every tenth prompt, route preparation wrote a skill-usage
   report and added a "review keep/merge/prune candidates" note to the prompt;
   nothing ever read the report.
+- Code that only its own tests or a self-test gate reached: the parallel
+  verification engine (DAG, worker pool, artifact lock), the MCP tool-name
+  normalizer, the v1 context-graph seed engine and `context-graph-affected`
+  (both replaced by the query facade), the RecallPulse runtime (its research
+  reviewer contract moves to the research module), the router's per-command
+  intent context that nothing read, and the auto-review profile writers left
+  by the removed command. The stop-repeat guard no longer appends to
+  `mission-status-ledger.json`, which nothing read.
 
 ### Changed
 
@@ -64,6 +72,12 @@
   re-plan. Plans already told agents to run it, but the flag did not exist.
 - `--changed` and `--intent` values are no longer read as positional words, so
   `sks proof field scan --changed a.ts` no longer takes `a.ts` as the intent.
+- Release-truth remedies told maintainers to run npm scripts that do not exist
+  (`strategy:adhd-orchestrating-gate`, `appshots:evidence`), and ADHD
+  orchestration named `verification-dag.json` and `rollback-dag.json`, which
+  nothing writes; they now name what actually produces the evidence. The
+  `codex-sdk:all-pipelines` gate no longer asserts a skill backend type that
+  was removed on 2026-10-02.
 - Codex SDK tasks name why a run failed. A failed turn reached SKS only as
   `Codex Exec exited with code 1: Reading prompt from stdin...`, because the
   SDK raises the exit after the stream and the adapter dropped the events it

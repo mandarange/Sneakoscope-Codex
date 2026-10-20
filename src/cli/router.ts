@@ -1,4 +1,3 @@
-import { AsyncLocalStorage } from 'node:async_hooks';
 import { createHash } from 'node:crypto';
 import {
   COMMAND_ALIASES_LITE,
@@ -42,8 +41,6 @@ export interface RouterIntentInheritance {
   readonly evidenceState?: IntentContract['evidence_state'];
   readonly retryBudget?: number;
 }
-
-const routerIntentStorage = new AsyncLocalStorage<IntentContract>();
 
 /** Builds the immutable execution contract before the legacy alias router runs. */
 export function prepareRouterExecutionIntent(
@@ -111,9 +108,10 @@ export function normalizeCommand(args: readonly string[] = []): NormalizedComman
 export async function dispatch(args?: readonly string[]): Promise<unknown> {
   const argv = args ?? process.argv.slice(2);
   try {
-    let intent: NormalizedIntentCommand | null = null;
+    // The intent contract is validation only: it rejects legacy options before
+    // any command runs. Nothing downstream reads the contract itself.
     try {
-      intent = prepareRouterExecutionIntent(argv);
+      prepareRouterExecutionIntent(argv);
     } catch (error) {
       const code = error instanceof Error ? error.message : String(error);
       if (code === 'intent_legacy_option_unsupported') {
@@ -127,9 +125,7 @@ export async function dispatch(args?: readonly string[]): Promise<unknown> {
         throw error;
       }
     }
-    return intent
-      ? await routerIntentStorage.run(intent.contract, () => dispatchInner(argv))
-      : await dispatchInner(argv);
+    return await dispatchInner(argv);
   } catch (err: unknown) {
     // Final choke point: any uncaught bug anywhere in the dispatch chain (gate
     // checks, lazy command import, command run()) must never leak a raw stack

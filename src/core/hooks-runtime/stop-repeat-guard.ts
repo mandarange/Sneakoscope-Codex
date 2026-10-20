@@ -1,6 +1,5 @@
 import path from 'node:path'
 import { nowIso, readJson, sha256, writeJsonAtomic } from '../fsx.js'
-import { appendMissionStatus } from '../recallpulse.js'
 import { conversationId } from './payload-signals.js'
 
 const STOP_REPEAT_GUARD_ARTIFACT = 'stop-hook-repeat-guard.json'
@@ -53,18 +52,6 @@ export async function finalizationRepeatDecision(root: any, state: any = {}, pay
       completion_claim_allowed: false,
       systemMessage: `SKS could not persist the ${kind} repeat budget. Finalization stopped fail-closed and completion remains unverified.`
     }
-  }
-  if (state.mission_id) {
-    await appendMissionStatus(root, state.mission_id, {
-      category: repeatCount >= limit ? 'warning' : 'blocker',
-      audience: ['user', 'route', 'final-summary'],
-      stage_id: 'before_final',
-      message: repeatCount >= limit
-        ? `Repeated ${kind} stop prompt was suppressed; route completion is still unclaimed until evidence passes.`
-        : reason,
-      dedupe_key: key,
-      evidence: [STOP_REPEAT_GUARD_ARTIFACT]
-    }).catch(() => null)
   }
   if (repeatCount < limit) return null
   return {

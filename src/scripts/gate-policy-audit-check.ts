@@ -15,8 +15,7 @@ const splitReviewFiles = [
   'src/core/research.ts',
   'src/core/ppt.ts',
   'src/core/init.ts',
-  'src/core/hooks-runtime.ts',
-  'src/core/recallpulse.ts'
+  'src/core/hooks-runtime.ts'
 ]
 const policyCallsiteAllowlist = new Map([
   ['mkdtemp|src/core/codex-control/codex-sdk-env-policy.ts|prepareNativeCodexAuthBridge|mkdtemp', 'identity-checked 0700 OAuth bridge root with explicit cleanup proof'],

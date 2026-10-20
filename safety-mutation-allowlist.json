@@ -1749,15 +1749,6 @@
     },
     {
       "file": "src/core/perf/release-latency-slo.ts",
-      "symbol": "measureSshHello",
-      "token": "fs.writeFile",
-      "scope_contract_sha256": "9d3c6581a327517a32227a30814f8a023290f04c68354c593663dccc4a74ba76",
-      "callsite_sha256": "f3e035707310ff63056135a959a94def4959f6d425e143cc48529ab256234625",
-      "occurrence": 1,
-      "reason": "SSH latency measurement writes only its fake worker fixture under the run-local temp root."
-    },
-    {
-      "file": "src/core/perf/release-latency-slo.ts",
       "symbol": "measureUpdateCacheRead",
       "token": "fs.writeFile",
       "scope_contract_sha256": "adfee43a77955834c0db2af3daaf9f2196d4d26de06f2ff88eed173757930adb",
@@ -1769,8 +1760,8 @@
       "file": "src/core/perf/release-latency-slo.ts",
       "symbol": "runReleaseLatencySlo",
       "token": "fs.rm",
-      "scope_contract_sha256": "6a9a8192e9264e5c265146354a4657222b358bcf6559d457be9466561c41538e",
-      "callsite_sha256": "8338c63676d46fc2fe3661ee438d48792b43fb4341750b1f090023dffec455b6",
+      "scope_contract_sha256": "39abfdff5998b13a26456c970029f74e69a5ab93ebd9dc9b2a058545cbe44ba9",
+      "callsite_sha256": "93ba185af6976dcf32643ec9a9b20991164d2dd9ff6a7179dc214ba3a5f23aae",
       "occurrence": 1,
       "reason": "Release latency measurement removes only its mkdtemp-owned fixture root in finally."
     },
@@ -2646,24 +2637,6 @@
       "callsite_sha256": "9aa2dede2572fca2742ea1c1e969ac69806abd48cb49eab3ad0a3f6e19e5f0e1",
       "occurrence": 1,
       "reason": "Mistake-rule compiler writes only temporary good/bad validation fixtures in an isolated directory."
-    },
-    {
-      "file": "src/core/verification/verification-worker-pool.ts",
-      "symbol": "terminateProcessTree",
-      "token": "process.kill",
-      "scope_contract_sha256": "d273202b2cfb7dfadf5a77d8ce4e76b1a5581ef08de6d503b47569d93b73ed14",
-      "callsite_sha256": "742227021698ed42d4651469e10d4f2ff410eb399cab0c206810a3147b6cd091",
-      "occurrence": 1,
-      "reason": "Process lifecycle helper terminates only owned child or process tree during cleanup."
-    },
-    {
-      "file": "src/core/verification/verification-worker-pool.ts",
-      "symbol": "terminateProcessTree",
-      "token": "process.kill",
-      "scope_contract_sha256": "d273202b2cfb7dfadf5a77d8ce4e76b1a5581ef08de6d503b47569d93b73ed14",
-      "callsite_sha256": "964a19b6295b4f484ce7c5b92945bda6f6e1de661a22157fd63f3ff37323aa17",
-      "occurrence": 1,
-      "reason": "Process lifecycle helper terminates only owned child or process tree during cleanup."
     },
     {
       "file": "src/core/version-manager.ts",
@@ -4271,8 +4244,8 @@
       "file": "src/scripts/latest-version-guidance-check.ts",
       "symbol": "module",
       "token": "writeFileSync",
-      "scope_contract_sha256": "d76914313cfe33b0e1d3b93ba349e9fe7a083c5df317e7666727b8636201b3d2",
-      "callsite_sha256": "6368ed8e56a58b50503dbfc742c0153884d4e83190aa3bd4598627ca021159d0",
+      "scope_contract_sha256": "deb18008339ef0194c10fa437ca946ae95eb2432188fc8a7c88ddb974cd96cd2",
+      "callsite_sha256": "a9146395f9bd1c8becf26c1bce4635b859223093d7647b5cfcd94569f7ceeec3",
       "occurrence": 1,
       "reason": "The latest-version guidance gate writes only its fixed machine-readable report beneath the workspace .sneakoscope reports directory."
     },
@@ -4577,8 +4550,8 @@
       "file": "src/scripts/postinstall-safe-side-effects-check.ts",
       "symbol": "module",
       "token": "writeFileSync",
-      "scope_contract_sha256": "28f6c337b50cc608961450ed7b7fa33a88707a9da446a5b12ee9052bbee64da1",
-      "callsite_sha256": "17aa454b6db56a6da47d5b124d59c501eb465a91da0b63e0675e53a7ed25fdfc",
+      "scope_contract_sha256": "2c889b79c6c3b25c890561efc42f933c79b5fa4762aa05d90e1e50aad43ac4db",
+      "callsite_sha256": "a6f70b3496d87818265c071d012224acd4e846bc652b64a3d10f6f12964473a6",
       "occurrence": 1,
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
