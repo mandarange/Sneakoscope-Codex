@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [10.7.0] - 2026-10-20
+
 ### Removed
 
 - Nine commands that duplicated another one: `sks usage` (use `sks help
