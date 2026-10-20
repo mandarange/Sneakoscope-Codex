@@ -6,6 +6,7 @@ import {
   CODEX_SUMMARY_PREFIX,
   buildCompactionSummaryRequest,
   compactEndpointResult,
+  compactionFailedEvent,
   compactionResponseEvents,
   decodeBridgeCompaction,
   encodeBridgeCompaction,
@@ -157,6 +158,12 @@ test('the provider summary is read from finished items, the completed output, or
   assert.equal(summaryFailure(parseProviderSummary('{}'), 429).code, 'rate_limit_exceeded');
   assert.deepEqual(summaryFailure(cut, 200), { code: 'bridge_compaction_summary_unusable', logCode: 'bridge_compaction_summary_unusable' });
   assert.equal(JSON.stringify(summaryFailure(refused, 200)).includes('requires'), false);
+  // A capacity refusal is retried by Codex only with advice; other codes carry none.
+  const overloaded = summaryFailure(parseProviderSummary(JSON.stringify({ error: { code: 'server_is_overloaded' } })), 503);
+  assert.deepEqual((compactionFailedEvent('resp_c', 'gpt-x', overloaded.code).response as any).error,
+    { code: 'server_is_overloaded', message: 'server_is_overloaded', headers: { 'Retry-After': '5' } });
+  assert.deepEqual((compactionFailedEvent('resp_c', 'gpt-x', 'unsupported_value').response as any).error,
+    { code: 'unsupported_value', message: 'unsupported_value' });
 
   const json = parseProviderSummary(JSON.stringify({ id: 'r3', output: [assistant('Non-streamed.')], usage }));
   assert.deepEqual(json, { summary: 'Non-streamed.', usage, failed: false, error: null });

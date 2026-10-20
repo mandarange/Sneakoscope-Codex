@@ -25,6 +25,7 @@ import {
   summaryWithinBounds,
   type BridgeCompactionKind,
 } from './compaction-adapter.js';
+import { isAdvisableEventStream, modelCapacityAdvisingSse } from './capacity-retry-advice.js';
 import { DEFAULT_DESKTOP_BRIDGE_MAX_REQUEST_BODY_BYTES, DesktopBridgeError, DesktopBridgeRequestBodyTooLargeError, type DesktopBridgeResolvedCredential, type DesktopBridgeRouteContext, type PreparedDesktopBridgeConfig, type PreparedDesktopBridgeProvider } from './types.js';
 
 const MAX_UPSTREAM_ERROR_BODY_BYTES = 1024 * 1024;
@@ -631,9 +632,21 @@ export async function forwardHttp(
           return;
         }
         responseStarted = true;
-        try { res.writeHead(statusCode, rewriteResponseHeaders(response.headers, upstreamBaseUrl, authenticatedLocalBaseUrl)); }
-        catch (error) { response.destroy(error instanceof Error ? error : undefined); finish(error); return; }
-        void pipeline(response, res).then(() => finish(), finish);
+        // A capacity failure inside the stream gets the retry advice the gateway drops.
+        const advising = isAdvisableEventStream(response.headers) ? modelCapacityAdvisingSse(() => logHttpRejection({
+          code: 'bridge_upstream_model_capacity_retry_advised',
+          transport: 'http',
+          ...(req.method === undefined ? {} : { method: req.method }),
+          ...(req.url === undefined ? {} : { url: req.url }),
+          provider_id: provider!.provider_id,
+          public_model: request.route.public_model,
+        })) : null;
+        try {
+          const responseHeaders = rewriteResponseHeaders(response.headers, upstreamBaseUrl, authenticatedLocalBaseUrl);
+          if (advising) delete responseHeaders['content-length'];
+          res.writeHead(statusCode, responseHeaders);
+        } catch (error) { response.destroy(error instanceof Error ? error : undefined); finish(error); return; }
+        void (advising ? pipeline(response, advising, res) : pipeline(response, res)).then(() => finish(), finish);
       });
       if (body) upstream.end(body);
       else void pipeline(req, upstream).catch((error) => { if (!responseStarted) finish(error); });

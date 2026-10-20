@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Desktop Bridge: a momentary model-capacity failure on the Codex-LB route no
+  longer ends the turn with "Selected model is at capacity. Please try a
+  different model." Codex retries `server_is_overloaded` only when the failure
+  carries `Retry-After`, and Codex-LB re-emits it without one. The bridge now
+  adds 5 s advice when none was sent, on WebSocket frames, SSE streams and its
+  own compaction failures, so Codex retries the request within its own budget
+  (about 25 s per transport) before surfacing the error. Official-route
+  failures and upstream advice pass unchanged, and each advised failure is
+  logged with its provider and model.
+
 ## [10.6.1] - 2026-10-18
 
 ### Changed

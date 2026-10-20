@@ -219,6 +219,28 @@ test('create metadata binds body-only thread identity and rejects conflicting id
   assert.equal(pins.at(-1), 'review-thread', 'the review thread is pinned by its own thread id');
 });
 
+test('a provider capacity failure reaches Codex with retry advice; official and advised frames stay verbatim', { timeout: 4_000 }, async (t) => {
+  // The echo upstream answers each frame with itself, standing in for the
+  // `response.failed` Codex-LB rebuilds without `headers`.
+  const f = await fixture(t); const ws = await f.client({ 'thread-id': 'capacity-thread' });
+  await exchange(ws, { type: 'response.create', model: MODEL });
+  const failed = { type: 'response.failed', response: { object: 'response', status: 'failed', error: { code: 'server_is_overloaded', message: 'Selected model is at capacity. Please try a different model.', type: 'server_error' } } };
+  const relayed = JSON.parse(await exchange(ws, failed));
+  assert.deepEqual(relayed.response.error.headers, { 'Retry-After': '5' }, 'Codex retries an overload only with advice');
+  delete relayed.response.error.headers;
+  assert.deepEqual(relayed, failed, 'nothing else in the failure changes');
+  const wrapped = JSON.parse(await exchange(ws, { type: 'error', status: 503, error: { code: 'server_is_overloaded', headers: { 'x-request-id': 'r1' } } }));
+  assert.deepEqual(wrapped.error.headers, { 'x-request-id': 'r1', 'Retry-After': '5' });
+  for (const verbatim of [
+    '{"type":"error","status":503,"error":{"code":"server_is_overloaded","headers":{"retry-after":"1"}}}',
+    '{"type":"error","status":503,"headers":{"Retry-After":"2"},"error":{"code":"server_is_overloaded"}}',
+    '{"type":"response.output_text.delta","delta":"server_is_overloaded"}',
+  ]) assert.equal(await exchange(ws, verbatim), verbatim);
+  const official = await f.client({ 'thread-id': 'official-capacity-thread' });
+  await exchange(official, { type: 'response.create', model: 'official-model' });
+  assert.equal(await exchange(official, JSON.stringify(failed)), JSON.stringify(failed), 'the official backend decides its own advice');
+});
+
 test('disconnect while credentials resolve never opens an orphan upstream', { timeout: 4_000 }, async (t) => {
   let release!: () => void; let entered!: () => void;
   const barrier = new Promise<void>((resolve) => { release = resolve; }); const started = new Promise<void>((resolve) => { entered = resolve; });

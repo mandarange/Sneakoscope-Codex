@@ -22,6 +22,7 @@ import {
   summaryWithinBounds,
 } from './compaction-adapter.js';
 import { requestProviderCompactionSummary } from './http-forward.js';
+import { modelCapacityAdvisedFrame } from './capacity-retry-advice.js';
 
 const MAX_PENDING_MESSAGES = 256;
 const CLOSE_GRACE_MS = 1_000;
@@ -85,6 +86,8 @@ export function forwardResponsesWebSocket(req: IncomingMessage, socket: Duplex, 
     let boundBaseUrl: string | null = null;
     let boundCredentialGeneration: string | null = null;
     let boundCredentialFingerprint: string | null = null;
+    /** The public model of the latest create; one socket may carry several. */
+    let routedModel: string | null = null;
     let stopped = false;
     let processing = false;
     let pendingBytes = 0;
@@ -161,6 +164,7 @@ export function forwardResponsesWebSocket(req: IncomingMessage, socket: Duplex, 
       const route = await resolveAndBindDesktopBridgeRouteContext(request, config);
       if (stopped || client.readyState !== WebSocket.OPEN) return;
       assertBinding(route);
+      routedModel = route.public_model;
       if (!bound) {
         bound = route;
         await connect(route);
@@ -271,7 +275,13 @@ export function forwardResponsesWebSocket(req: IncomingMessage, socket: Duplex, 
       });
       peer.on('message', (data, binary) => {
         if (stopped) return;
-        const frame = bytes(data);
+        let frame = bytes(data);
+        // A provider's capacity failure reaches Codex with the retry advice the gateway drops.
+        const advised = official || binary ? null : modelCapacityAdvisedFrame(frame);
+        if (advised) {
+          frame = advised;
+          logRejection({ code: 'bridge_upstream_model_capacity_retry_advised', transport: 'websocket', provider_id: route.provider_id, public_model: routedModel ?? route.public_model, ...(req.url ? { url: req.url } : {}) });
+        }
         chain.received(frame);
         try { relay(client, frame, binary); } catch (error) { fail(error); }
       });
