@@ -52,7 +52,6 @@ release is authorized. Current 8.1.3 classifications live in
 | `git:worktree-dirty-lock` | `release` | `node ./dist/scripts/git-worktree-dirty-lock-check.js` | direct |
 | `git:worktree-dirty-main-detection` | `release` | `node ./dist/scripts/git-worktree-dirty-main-detection-check.js` | direct |
 | `git:worktree-manifest-append` | `release` | `node ./dist/scripts/git-worktree-manifest-append-check.js` | direct |
-| `goal:artifact-compat` | `release` | `node ./dist/scripts/goal-artifact-compat-check.js` | direct |
 | `hook:latency-budget` | `release` | `node ./dist/scripts/hook-latency-budget-check.js` | direct |
 | `hooks:concurrent-session-collision` | `release` | `node ./dist/scripts/concurrent-session-collision-check.js` | direct |
 | `image:artifact-path-contract` | `release` | `node ./dist/scripts/image-artifact-path-contract-check.js` | direct |

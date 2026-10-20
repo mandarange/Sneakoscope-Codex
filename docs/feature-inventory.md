@@ -5,14 +5,14 @@ Generated from `sks commands --json`, `src/cli/command-registry.ts COMMANDS`, `s
 ## Coverage
 
 - Status: coverage-ok
-- Features: 102
-- CLI commands: 67
-- Handler keys: 67
+- Features: 95
+- CLI commands: 60
+- Handler keys: 60
 - Dollar routes: 30
 - App skill aliases: 31
 - Skills: 0
-- Fixture statuses: pass=94, blocked=8
-- Feature quality: runtime_verified=72, wiring_only=18, integration_optional=6, static_contract=6, missing=0
+- Fixture statuses: pass=87, blocked=8
+- Feature quality: runtime_verified=66, wiring_only=18, integration_optional=5, static_contract=6, missing=0
 
 ## Release Coverage Rule
 
@@ -22,7 +22,7 @@ Generated from `sks commands --json`, `src/cli/command-registry.ts COMMANDS`, `s
 
 | Feature | Category | Maturity | Commands / Routes | Fixture | Declared quality | Runtime truth | Known Gaps |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `cli-help` | core-cli | stable | sks help [command\|$route] | execute:pass | runtime_verified | not_assessed | none recorded |
+| `cli-help` | core-cli | stable | sks help [command \| '$sks-<route>'] | execute:pass | runtime_verified | not_assessed | none recorded |
 | `cli-version` | core-cli | stable | sks version \| sks --version | execute:pass | runtime_verified | not_assessed | none recorded |
 | `cli-commands` | core-cli | stable | sks commands [--json] | execute:pass | runtime_verified | not_assessed | none recorded |
 | `cli-triwiki` | core-cli | stable | sks triwiki index\|affected\|proof-bank\|graph-status\|graph-lint\|graph-query\|atlas-status\|atlas-lint\|atlas-list\|atlas-show\|atlas-why [--json] | execute:pass | runtime_verified | not_assessed | none recorded |
@@ -47,10 +47,8 @@ Generated from `sks commands --json`, `src/cli/command-registry.ts COMMANDS`, `s
 | `cli-codex-app` | integration | beta | sks codex-app [check\|status\|restart\|context-management [status\|on\|off]\|context-1m [status\|on\|off]\|product-design\|chrome-extension\|pat status\|remote-control\|harness-matrix\|skill-sync\|agent-role-sync\|init-deep [--directory-local]\|hook-lifecycle\|execution-profile] | real_optional:pass | integration_optional | not_assessed | mobile/event payload details remain unknown |
 | `cli-bridge` | core-cli | beta | sks bridge | execute:pass | runtime_verified | not_assessed | none recorded |
 | `cli-menubar` | core-cli | beta | sks menubar | static:pass | static_contract | not_assessed | none recorded |
-| `cli-remote` | core-cli | beta | sks remote readiness\|machines\|worker ... [--json] | real_optional:pass | integration_optional | not_assessed | none recorded |
 | `cli-hooks` | integration | beta | sks hooks explain\|status\|trust-report\|replay\|codex-validate\|warning-check ... [--json]<br>sks hook | execute:pass | runtime_verified | not_assessed | mobile/event payload details remain unknown |
 | `cli-mad-sks` | core-cli | beta | sks mad-sks plan\|run\|apply\|sql\|apply-migration\|status\|close\|rollback-apply ... \| sks --mad [--high] | static:pass | static_contract | not_assessed | none recorded |
-| `cli-auto-review` | core-cli | beta | sks auto-review status\|enable\|start [--high] \| sks --Auto-review --high | execute:pass | runtime_verified | not_assessed | none recorded |
 | `cli-dollar-commands` | core-cli | stable | sks dollar-commands [--json] | execute:pass | runtime_verified | not_assessed | none recorded |
 | `cli-fast-mode` | core-cli | stable | sks fast-mode on\|off\|status\|clear [--project] [--json] | execute:pass | runtime_verified | not_assessed | none recorded |
 | `cli-commit` | core-cli | stable | sks commit [--message "msg"] [--json] | mock:pass | wiring_only | not_assessed | none recorded |
@@ -66,20 +64,15 @@ Generated from `sks commands --json`, `src/cli/command-registry.ts COMMANDS`, `s
 | `cli-context7` | integration | beta | sks context7 check\|setup\|tools\|resolve\|docs\|evidence ... | real_optional:pass | integration_optional | not_assessed | none recorded |
 | `cli-super-search` | core-cli | beta | sks super-search doctor\|run\|x\|fetch\|status\|inspect\|sources\|claims\|cache\|bench | execute:pass | runtime_verified | not_assessed | none recorded |
 | `cli-search` | core-cli | beta | sks search status\|files\|text\|structure\|symbol\|context\|benchmark\|doctor [--json] | execute:pass | runtime_verified | not_assessed | none recorded |
-| `cli-recallpulse` | loop | labs | sks recallpulse run\|status\|eval\|governance\|checklist <mission-id\|latest> | execute_and_validate_artifacts:pass | runtime_verified | not_assessed | none recorded |
-| `cli-pipeline` | proof-route | beta | sks pipeline status\|plan [--json] \| sks pipeline answer <mission-id\|latest> (--stdin \| <answers.json>) [--json] | execute_and_validate_artifacts:pass | runtime_verified | not_assessed | none recorded |
+| `cli-pipeline` | proof-route | beta | sks pipeline status\|plan [--json] \| sks pipeline plan [mission-id\|latest] [--route <$route>] [--agents N\|--force-agents\|--no-agents] [--proof-field [--changed a,b]] [--json] \| sks pipeline answer <mission-id\|latest> (--stdin \| <answers.json>) [--json] | execute_and_validate_artifacts:pass | runtime_verified | not_assessed | none recorded |
 | `cli-guard` | safety | beta | sks guard check [--json] | execute:pass | runtime_verified | not_assessed | none recorded |
 | `cli-conflicts` | safety | beta | sks conflicts check\|prompt\|cleanup --yes [--json] | execute:pass | runtime_verified | not_assessed | none recorded |
-| `cli-reasoning` | core-cli | labs | sks reasoning ["prompt"] [--json] | execute:pass | runtime_verified | not_assessed | none recorded |
 | `cli-cleanup` | core-cli | beta | sks cleanup plan\|run\|status\|proof [--apply] [--json] | execute:pass | runtime_verified | not_assessed | none recorded |
 | `cli-align` | core-cli | beta | sks align prepare\|run\|status\|proof [mission\|"scope"] [--json] | execute_and_validate_artifacts:pass | runtime_verified | not_assessed | none recorded |
 | `cli-selftest` | core-cli | stable | sks selftest [--mock] | execute:pass | runtime_verified | not_assessed | none recorded |
-| `cli-goal` | proof-route | beta | sks goal create\|edit\|pause\|resume\|clear\|status ... | execute:pass | runtime_verified | not_assessed | none recorded |
 | `cli-seo-geo-optimizer` | core-cli | beta | sks seo-geo-optimizer [seo\|geo] doctor\|audit\|research\|strategy\|plan\|apply\|verify\|status\|rollback\|fixture [mission\|latest] [--mode seo\|geo] [--target auto\|website\|docs\|package] [--include-marketing] [--json] | execute_and_validate_artifacts:pass | runtime_verified | not_assessed | none recorded |
 | `cli-hook` | core-cli | beta | sks hook | static:pass | static_contract | not_assessed | none recorded |
 | `cli-proof` | core-cli | beta | sks proof show\|latest\|validate\|export\|smoke\|trust report\|validate\|status\|explain [latest\|mission-id]\|artifacts [mission-id\|latest] [--required a,b]\|stop-gate [check] [--route r] [--mission id]\|hproof check [mission-id\|latest]\|field scan [--intent "task"] [--json\|--md] | execute_and_validate_artifacts:pass | runtime_verified | not_assessed | none recorded |
-| `cli-skill-dream` | loop | labs | sks skill-dream status\|run\|record [--json] | execute:pass | runtime_verified | not_assessed | none recorded |
-| `cli-code-structure` | core-cli | labs | sks code-structure scan [--json] | execute:pass | runtime_verified | not_assessed | none recorded |
 | `cli-gx` | visual-memory | labs | sks gx init\|render\|validate\|drift\|snapshot [name] | execute_and_validate_artifacts:blocked | runtime_verified | not_assessed | none recorded |
 | `cli-eval` | loop | labs | sks eval run\|compare\|thresholds ... | execute:pass | runtime_verified | not_assessed | none recorded |
 | `cli-wiki` | visual-memory | beta | sks wiki validate\|validate-shared\|publish\|rebuild-index\|rebuild-summary\|prune\|coords\|pack\|refresh ... \| sks wiki wrongness list\|show\|add\|resolve\|summarize\|validate\|context\|rules\|publish ... \| sks wiki image-ingest\|anchor-add\|relation-add\|image-validate\|image-summary ... | execute_and_validate_artifacts:pass | runtime_verified | not_assessed | none recorded |

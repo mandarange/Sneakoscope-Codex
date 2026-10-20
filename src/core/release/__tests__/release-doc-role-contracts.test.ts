@@ -43,19 +43,3 @@ test('TriWiki code-pack parent-commit freshness semantics stay documented and co
   ]) assert.match(freshness, new RegExp(token));
 });
 
-test('official Remote and SKS proof-aware fleet control remain separate in docs and code', async () => {
-  const [docs, worker, command] = await Promise.all([
-    source('docs/release-readiness.md'),
-    source('src/core/remote/worker.ts'),
-    source('src/core/commands/remote-command.ts')
-  ]);
-  assert.match(docs, proseContract('official Remote transport remains host-owned'));
-  assert.match(docs, proseContract('SKS does not implement, proxy, or reverse engineer'));
-  assert.match(docs, proseContract('proof-aware fleet control'));
-  assert.match(worker, /official_remote_transport_owned:\s*false/);
-  assert.match(worker, /official_remote_session_ids_are_sks_session_ids:\s*false/);
-  assert.doesNotMatch(worker, /official_remote_transport_owned:\s*true/);
-  assert.match(command, /action === 'readiness'/);
-  assert.match(command, /action === 'machines'/);
-  assert.match(command, /action === 'worker'/);
-});

@@ -4,6 +4,7 @@
     {
       "canonical_name": "sks",
       "trusted_sha256": [
+        "eb09af342c2f2bc3d269e6d1c2f92d718ed069582d1165bfe46600b5c2225a8b",
         "32d97c9b68a0a97794f48bd2f200bb3c0cd68816c00fef3397e86df671342ac5",
         "d5adbf63047d4882258d70bb46017e4aa7b6d5804154c68ef4204d0e0e5916d6",
         "8aa34586ba331f0447668c2ce863fe6c9ec4f881828ebed26ca5ecc754d66840",
@@ -406,6 +407,7 @@
     {
       "canonical_name": "sks-reasoning-router",
       "trusted_sha256": [
+        "00403fa829bc673966c2e125d5a2d42111ed6fd8c821b1f0e50176127658b888",
         "2ec66071b1c021e8c2ddd8f1ecefd16502c8325adab2c3c804a9e8d4123b1a8d",
         "b0f458caa1c3bd7bb7241a09b80fce5700aeb99b340e84c08a9b2b66bc875ba7",
         "41e14e8d5b93d743096664869ee68c41c86e911b0bbc165bdcd10e4a45faa4b6",
@@ -413,8 +415,7 @@
         "647f730520a1c7dc89c2642f5b8502624c65a861ae41aecf1fb137db40fd0611",
         "da0ddb58adc68ddeebdb9c45bf111c26eaa64d3e9dffe1dd39d7f30b943b8b88",
         "1595beabf2d31397217311fa1323bd62c801cf6c87db9029ff544c457efec8bb",
-        "a7d879d157c6d5b6b81a67dba7b5b731ac18ea986841fe1ab2cafbd6623481c3",
-        "dc0b8c6a4093269c2c36b58432b25409704d06fea8ca558f43b598625ca0d9de"
+        "a7d879d157c6d5b6b81a67dba7b5b731ac18ea986841fe1ab2cafbd6623481c3"
       ]
     },
     {

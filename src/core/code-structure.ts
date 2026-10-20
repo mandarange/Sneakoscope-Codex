@@ -156,7 +156,7 @@ async function resolveScanFiles(root: string, opts: any, changedScope: any) {
   // normal state when a route is prepared, before any edit — into a full-repo
   // deep scan, which stalls the UserPromptSubmit hook that seeds the
   // engineering-sanity review. Only a caller that asked for no scope at all
-  // (`sks code-structure scan` without --changed, the wiki sweep) scans it all.
+  // (the wiki sweep) scans it all.
   if (opts.changed || opts.changedSince || opts.changedFiles?.length) return changedSourceFiles;
   return listSourceFiles(root);
 }
@@ -602,7 +602,6 @@ function buildSemanticReview(input: any) {
 function isLeanOwnedTypeSafetyPath(file: string): boolean {
   return [
     'src/core/code-structure.ts',
-    'src/core/commands/code-structure-command.ts',
     'src/core/lean-engineering-policy.ts',
     'src/core/codex-control/gpt-final-arbiter.ts',
     'src/core/codex-control/gpt-final-review-schema.ts',

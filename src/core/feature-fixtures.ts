@@ -39,9 +39,6 @@ const FIXTURES = Object.freeze({
   'cli-mcp': fixture('execute', 'sks mcp config list --scope project --trusted-project --json', [], 'pass', {
     reason: 'Project-scoped MCP inventory is a read-only, hermetic runtime probe when the trusted-project boundary is explicit; mutation, health, auth, and merge behavior remain covered by dedicated tests.'
   }),
-  'cli-remote': fixture('real_optional', 'sks remote readiness --json', [], 'pass', {
-    reason: 'Remote readiness is environment-dependent on the official Codex host and local project capabilities; SSH worker behavior is covered by dedicated hermetic protocol and policy tests.'
-  }),
   'cli-hooks': fixture('execute', 'sks hooks trust-report --json', [], 'pass'),
   'cli-commands': fixture('execute', 'sks commands --json', [], 'pass'),
   'cli-plan': fixture('execute', 'sks plan "fixture" --json', [], 'pass'),
@@ -67,7 +64,6 @@ const FIXTURES = Object.freeze({
   'cli-selftest': fixture('execute', 'sks selftest --mock', [], 'pass'),
   'cli-git': fixture('execute', 'sks git policy --json', [], 'pass'),
   'cli-uninstall': fixture('execute', 'sks uninstall --dry-run --json', [], 'pass'),
-  'cli-goal': fixture('execute', 'sks goal create "Fixture smoke: create a minimal Node.js CLI health-check script" --json', [], 'pass', { reason: 'The compatibility command is stateless: it prints a detailed Codex native /goal request and writes no SKS mission, artifact, loop, or fallback state.' }),
   'cli-align': fixture('execute_and_validate_artifacts', 'sks align prepare "fixture modernization contract" --json', ['work-order-ledger.json', 'align-plan.json', 'align-ledger.json', 'align-gate.json'], 'pass', {
     reason: 'The CLI fixture exercises the real hermetic preparation path, including literal-request work-order registration. It intentionally leaves align-gate.json blocked because no external modernization work is fabricated.'
   }),
@@ -78,12 +74,9 @@ const FIXTURES = Object.freeze({
   'cli-image-ux-review': fixture('execute_and_validate_artifacts', 'sks image-ux-review fixture --mock --json', ['completion-proof.json', 'image-voxel-ledger.json', 'image-ux-generated-review-ledger.json'], 'blocked', { reason: 'Same as route-image-ux-review: the image-ux-review fixture command intentionally always exits 1 by design (honest mock, cannot claim a real completion), even though it does write all declared artifacts.' }),
   'cli-computer-use': fixture('real_optional', 'sks computer-use status --json', [], 'pass'),
   'cli-pipeline': fixture('execute_and_validate_artifacts', 'sks pipeline plan latest --agents 1 --json', ['pipeline-plan.json'], 'pass'),
-  'cli-recallpulse': fixture('execute_and_validate_artifacts', 'sks recallpulse run latest --json', ['mission-status-ledger.json'], 'pass'),
   'cli-gx': fixture('execute_and_validate_artifacts', 'sks gx validate fixture --mock', ['gx-validation.json'], 'blocked', { reason: 'gxValidateFixture() intentionally exits non-zero (execution_class: mock_fixture) for an honest mock/blocked result; without --mock the command crashes on a missing cartridge instead.' }),
-  'cli-code-structure': fixture('execute', 'sks code-structure scan --json', [], 'pass', { timeout_ms: 180000 }),
   'cli-decision': fixture('execute', 'sks decision status --json', [], 'pass'),
   'cli-imagegen': fixture('execute', 'sks imagegen status --json', [], 'pass'),
-  'cli-skill-dream': fixture('execute', 'sks skill-dream status --json', [], 'pass'),
   'cli-gc': fixture('execute', 'sks gc --dry-run --json', [], 'pass'),
   'cli-eval': fixture('execute', 'sks eval run --mock --json', [], 'pass'),
   'cli-cleanup': fixture('execute', 'sks cleanup plan --json', [], 'pass', {
@@ -98,7 +91,6 @@ const FIXTURES = Object.freeze({
     reason: 'Bootstrap is real project setup (`setup --local-only`) and refuses --dry-run, so it runs only on opt-in real runs.'
   }),
   'cli-mad-sks': fixture('static', 'sks mad-sks status --json', [], 'pass'),
-  'cli-auto-review': fixture('execute', 'sks auto-review status --json', [], 'pass'),
   'cli-commit': fixture('mock', 'sks commit --dry-run', [], 'pass', {
     reason: '`--dry-run` prints the commit plan without touching git (simpleGitCommitPlan in git-simple.ts, covered by git-simple-dry-run.test.ts); the fixture stays mock because the hermetic fixture project is not a git repository.'
   }),
@@ -110,7 +102,6 @@ const FIXTURES = Object.freeze({
   'cli-search': fixture('execute', 'sks search status --json', [], 'pass'),
   'cli-triwiki': fixture('execute', 'sks triwiki index --json', [], 'pass'),
   'cli-naruto': fixture('execute_and_validate_artifacts', 'sks naruto run "fixture" --agents 4 --max-threads 4 --json', ['subagent-plan.json', 'subagent-events.jsonl', 'subagent-evidence.json', 'naruto-summary.json', 'naruto-gate.json', 'work-order-ledger.json'], 'pass', preparationFixtureContract()),
-  'cli-reasoning': fixture('execute', 'sks reasoning status --json', [], 'pass'),
   'skill-db-safety-guard': fixture('execute', 'node --test test/unit/db-safety.test.mjs', [], 'pass', { root_mode: 'source_checkout_required' }),
   'skill-honest-mode': fixture('execute_and_validate_artifacts', 'sks proof smoke --json', ['completion-proof.json', 'trust-report.json'], 'pass'),
   'skill-imagegen': fixture('execute_and_validate_artifacts', 'sks image-ux-review fixture --mock --json', ['image-ux-generated-review-ledger.json', 'image-voxel-ledger.json'], 'pass'),
@@ -195,12 +186,10 @@ const FIXTURES = Object.freeze({
 
 const STATIC_CONTRACT_FEATURES = new Set([
   'cli-bootstrap',
-  'cli-auto-review',
   'cli-commit',
   'cli-commit-and-push',
   'cli-context7',
   'cli-naruto',
-  'cli-reasoning',
   'cli-postinstall',
   'cli-menubar',
   'cli-route',

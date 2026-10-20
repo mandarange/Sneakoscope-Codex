@@ -19,7 +19,10 @@ const RETIRED_COMMANDS = [
   'check', 'gates', 'task', 'release', 'daemon', 'versioning', 'bench', 'perf', 'features', 'all-features', 'harness', 'rust',
   // Duplicates of a surviving command: help <command>, dollar-commands, setup,
   // doctor, research --autoresearch, wiki wrongness, gc status, codex-app.
-  'usage', 'aliases', 'init', 'fix-path', 'deps', 'autoresearch', 'wrongness', 'stats', 'codex-native'
+  'usage', 'aliases', 'init', 'fix-path', 'deps', 'autoresearch', 'wrongness', 'stats', 'codex-native',
+  // Orphans nothing in the product reached: an SSH worker SKS Center never used,
+  // a profile toggle, report-only views, and a /goal printer the skill covers.
+  'remote', 'auto-review', 'recallpulse', 'code-structure', 'skill-dream', 'reasoning', 'goal'
 ] as const;
 
 async function captured<T>(run: () => Promise<T>): Promise<{ result: T; stdout: string; stderr: string; exitCode: typeof process.exitCode }> {

@@ -4,6 +4,7 @@ import { projectRoot, readJson, readStdin } from '../fsx.js';
 import { isClarificationAwaiting } from '../clarification-gate-state.js';
 import { listSessionStates, loadMission, loadOwnedRouteState, missionDir, setCurrent } from '../mission.js';
 import { PIPELINE_PLAN_ARTIFACT, pipelinePlanState, projectGateStatus, sealRouteClarification, writePipelinePlan } from '../pipeline.js';
+import { buildProofField } from '../proof-field.js';
 import { routePrompt } from '../routes.js';
 import { positionalArgs } from '../../cli/args.js';
 import { flag, readFlagValue, resolveMissionId } from './command-utils.js';
@@ -23,7 +24,7 @@ export async function pipelineCommand(args: any = []) {
     return;
   }
   if (action === 'plan') {
-    if (hasAgentPlanFlags(args)) {
+    if (hasReplanFlags(args)) {
       const positionals = positionalArgs(args.slice(1));
       const missionArg = positionals[0] || state.mission_id || 'latest';
       const id = await resolveMissionId(root, missionArg);
@@ -39,13 +40,20 @@ export async function pipelineCommand(args: any = []) {
         force: flag(args, '--force-agents'),
         noAgents: flag(args, '--no-agents')
       };
+      const task = routeContext.task || mission.prompt || state.prompt || '';
+      const changedRaw = readFlagValue(args, '--changed', '');
+      const proofField = flag(args, '--proof-field')
+        ? await buildProofField(root, { intent: task, changedFiles: changedRaw ? changedRaw.split(',').filter(Boolean) : undefined })
+        : undefined;
       const plan = await writePipelinePlan(dir, {
         missionId: id,
         route,
-        task: routeContext.task || mission.prompt || state.prompt || '',
+        task,
         required: Boolean(routeContext.context7_required || state.context7_required),
         ambiguity: { required: true, auto_sealed: true, status: 'auto_sealed' },
-        agents
+        agents,
+        proofField,
+        changedFiles: proofField?.changed_files
       });
       // Re-planning the active mission re-seeds engineering-sanity-review.json
       // against a freshly resolved changed-scope base; the route state has to
@@ -140,6 +148,6 @@ function printSessionTable(sessions: any[] = []) {
   }
 }
 
-function hasAgentPlanFlags(args: any = []) {
-  return flag(args, '--force-agents') || flag(args, '--no-agents') || args.includes('--agents');
+function hasReplanFlags(args: any = []) {
+  return flag(args, '--force-agents') || flag(args, '--no-agents') || args.includes('--agents') || flag(args, '--proof-field');
 }

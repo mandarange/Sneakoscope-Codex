@@ -1,4 +1,5 @@
-import { COMMAND_MANIFEST_LITE, type CommandManifestLiteEntry } from './command-manifest-lite.js';
+import { COMMAND_MANIFEST_LITE, visibleCommandManifest, type CommandManifestLiteEntry } from './command-manifest-lite.js';
+import { sksTextLogo } from './output.js';
 
 interface FastCommandRow {
   name: string;
@@ -19,6 +20,14 @@ export function commandsJsonFast(): void {
     aliases: ['sks', 'sneakoscope'],
     commands
   }, null, 2));
+}
+
+export function commandsTextFast(): void {
+  const commands = visibleCommandManifest();
+  console.log(`${sksTextLogo()}\n\nCommands\n`);
+  const width = Math.max(...commands.map((entry) => entry.name.length)) + 2;
+  for (const entry of commands) console.log(`sks ${entry.name.padEnd(width)}${entry.summary}`);
+  console.log('\nRun `sks help <command>` for its usage.');
 }
 
 function fastCommandRow(entry: CommandManifestLiteEntry): FastCommandRow {

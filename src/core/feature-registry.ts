@@ -514,10 +514,8 @@ const SAFE_EXECUTABLE_FIXTURE_ARGS = Object.freeze({
   'cli-codex': ['codex', 'compatibility', '--json'],
   'cli-bridge': ['bridge', 'status', '--json'],
   'cli-hooks': ['hooks', 'trust-report', '--json'],
-  'cli-code-structure': ['code-structure', 'scan', '--json'],
   'cli-decision': ['decision', 'status', '--json'],
   'cli-imagegen': ['imagegen', 'status', '--json'],
-  'cli-skill-dream': ['skill-dream', 'status', '--json'],
   'cli-gc': ['gc', '--dry-run', '--json'],
   'cli-cleanup': ['cleanup', 'plan', '--json'],
   'cli-memory': ['memory', 'gc', '--dry-run', '--json'],
@@ -950,8 +948,8 @@ function slug(value: any) {
 }
 
 function commandCategory(name: any) {
-  if (['naruto', 'pipeline', 'goal'].includes(name)) return 'proof-route';
-  if (['qa-loop', 'research', 'recallpulse', 'skill-dream', 'eval'].includes(name)) return 'loop';
+  if (['naruto', 'pipeline'].includes(name)) return 'proof-route';
+  if (['qa-loop', 'research', 'eval'].includes(name)) return 'loop';
   if (['codex', 'codex-app', 'hooks', 'context7', 'computer-use'].includes(name)) return 'integration';
   if (['guard', 'conflicts'].includes(name)) return 'safety';
   if (['wiki', 'gx', 'image-ux-review', 'ppt'].includes(name)) return 'visual-memory';

@@ -1116,13 +1116,12 @@ The release flow starts from a clean worktree and refreshes the pack after
 source changes. Source-change history, a non-ancestor pack, truncated history,
 or an unverified Git read is a blocker rather than inferred freshness.
 
-## Official Remote and SKS fleet control
+## Official Remote
 
-The official Remote transport remains host-owned. SKS does not implement,
-proxy, or reverse engineer that transport and never presents an SKS worker ID
-as an official Remote session ID. The separate SKS SSH stdio worker is
-proof-aware fleet control over an allowlisted typed channel; it is not a
-replacement for official high-fidelity Remote coding.
+The official Remote transport is host-owned: SKS does not implement, proxy, or
+reverse engineer it, and `sks codex-app remote-control` only wraps Codex's own
+`codex remote-control`. The former SKS SSH stdio worker (`sks remote`) was a
+parallel remote runtime nothing in SKS Center used, and it was removed.
 
 ## Release staging boundary
 

@@ -8,7 +8,7 @@ Sneakoscope Codex 10.6.2 is designed to keep runtime, package size, RAM, and sto
 - `npm run maintainer -- perf run --json` records structured startup and package-payload measurements and writes `.sneakoscope/perf/budgets.json`.
 - Codex native `/goal` workflows exclusively own persisted goals; SKS creates no Goal mission, bridge artifact, compatibility loop, or fallback state.
 - `sks wiki sweep` records intentional forgetting and promotion candidates so default recall stays top-K instead of becoming an unbounded memory dump.
-- `sks code-structure scan` flags 1000/2000/3000-line handwritten source files before new logic is added to oversized modules.
+- The engineering-sanity review's code-structure report (written with the plan, and by `sks wiki sweep`) flags 1000/2000/3000-line handwritten source files before new logic is added to oversized modules.
 - TriWiki claim selection uses bounded top-K selection plus the latest RGBA/trig wiki anchors and required voxel overlay metadata instead of sorting unbounded context into prompts.
 - Voxel TriWiki code indexing uses full-content cache hashes, excludes cache/worktree mirrors, enforces a dedicated token budget, and serializes wrongness-ledger updates so fast recall cannot trade correctness for partial hashes or lost concurrent writes.
 - GX visual context renders deterministic SVG/HTML from JSON sources, avoiding external image-generation latency, cost, and nondeterminism. Rendered nodes expose the same RGBA wiki-coordinate anchors used by TriWiki.

@@ -341,21 +341,14 @@ export function safeReadOnlySubcommand(command: CommandNameLite, args: readonly 
   if (command === 'naruto' && sub === 'execution' && nested === 'status') {
     return !args.some((arg) => ['--fix', '--yes', '-y', '--write', '--apply', '--execute', '--force', '--real'].includes(String(arg)));
   }
-  // SKS Center probes use nested read paths (`mcp config list|test|backups`,
-  // `remote readiness`). Treat those as migration-safe so a blocked project
-  // receipt cannot blank Overview / MCP / Remote pages.
+  // SKS Center probes use nested read paths (`mcp config list|test|backups`).
+  // Treat those as migration-safe so a blocked project receipt cannot blank the
+  // Overview or MCP pages.
   if (command === 'mcp' && sub === 'config' && ['list', 'test', 'backups', 'show'].includes(nested)) {
     return !args.some((arg) => ['--fix', '--yes', '-y', '--write', '--apply', '--execute', '--force', '--real'].includes(String(arg)));
   }
   // `codex-app context-1m status` is the SKS Center 1M-context card probe.
   if (command === 'codex-app' && ['context-1m', 'context-management'].includes(sub) && (nested === 'status' || nested === '' || nested.startsWith('--'))) {
-    return !args.some((arg) => ['--fix', '--yes', '-y', '--write', '--apply', '--execute', '--force', '--real'].includes(String(arg)));
-  }
-  if (command === 'remote' && ['readiness', 'status', 'show'].includes(sub)) {
-    return !args.some((arg) => ['--fix', '--yes', '-y', '--write', '--apply', '--execute', '--force', '--real'].includes(String(arg)));
-  }
-  // `remote machines list|validate` only reads and validates the machine registry.
-  if (command === 'remote' && ['machines', 'machine'].includes(sub) && ['list', 'validate'].includes(nested)) {
     return !args.some((arg) => ['--fix', '--yes', '-y', '--write', '--apply', '--execute', '--force', '--real'].includes(String(arg)));
   }
   if (!['status', 'show', 'list', 'observe', 'watch', 'doctor', 'help'].includes(sub)) return false;
@@ -448,5 +441,5 @@ function activeRouteStateBlocksCommand(state: any = {}) {
   const mode = String(state.mode || '').toUpperCase();
   if (!mode || ['WIKI', 'STATUS', 'HELP'].includes(mode)) return false;
   if (/(?:DONE|COMPLETE|CLOSED|BLOCKED|FAILED)$/i.test(String(state.phase || ''))) return false;
-  return Boolean(state.route || state.route_command || ['NARUTO', 'QALOOP', 'RESEARCH', 'MADSKS', 'GOAL'].includes(mode));
+  return Boolean(state.route || state.route_command || ['NARUTO', 'QALOOP', 'RESEARCH', 'MADSKS'].includes(mode));
 }

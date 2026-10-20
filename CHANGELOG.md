@@ -14,6 +14,15 @@
   `sks codex-app init-deep --directory-local`). They answer
   `unknown_command` like every other retired name.
 - The unused `visual-review` and `ui-ux-review` command aliases.
+- Seven commands with no job left: `sks goal` (Codex's native `/goal` owns
+  goals; the `$sks-goal` skill still writes the command), `sks remote` and its
+  SSH stdio worker (Codex has its own remote control), `sks auto-review`
+  (Codex's approval reviewer is a Codex setting), `sks recallpulse`,
+  `sks skill-dream`, `sks code-structure` (the scan still runs inside the
+  engineering-sanity review and the wiki sweep) and `sks reasoning`.
+- Skill dreaming. Every tenth prompt, route preparation wrote a skill-usage
+  report and added a "review keep/merge/prune candidates" note to the prompt;
+  nothing ever read the report.
 
 ### Changed
 
@@ -26,6 +35,23 @@
 - The MCP and agent-bridge `search` tool takes an action and a query; it used
   to run `sks search --json`, which only printed help. The `stats` tool is
   gone with its command.
+- Plans and Proof Field reports in a user project name that project's checks.
+  They used to list SKS's own maintainer commands (`npm run packcheck`,
+  `sks selftest --mock`, `node ./dist/bin/sks.js eval run`,
+  `npm run release:check`, `test/unit/db-safety.test.mjs`) for any change.
+  Proof Field now reads the project's package scripts through its package
+  manager (npm, pnpm, yarn or bun), uses `tsc --noEmit`, `cargo test`, `pytest`
+  or `npm pack --dry-run` where those apply, and otherwise names the check in
+  plain words. Its cones recognise ordinary source, test, style, config and
+  docs files, so a change outside SKS's own tree can reach the fast lane
+  instead of always counting as an unknown surface.
+- Proof Field skips a piece of work only when every selected cone skips it; a
+  README edit no longer lets a code change in the same diff skip browser
+  checks.
+- `$MAD-SKS` contracts state the user's database task and how each write is
+  verified, instead of acceptance criteria about SKS's own MAD-SKS feature.
+  Release- and install-flavoured tasks get the project's test, build and
+  package checks rather than `packcheck`, `selftest` and `sizecheck`.
 
 ### Fixed
 
@@ -34,6 +60,10 @@
   stays available as `sks memory gc`.
 - `sks setup --dry-run` (and `sks bootstrap --dry-run`) installed hooks and
   skills anyway; setup now refuses the flag and points at `sks doctor --json`.
+- `sks pipeline plan --proof-field [--changed a,b]` attaches a Proof Field to a
+  re-plan. Plans already told agents to run it, but the flag did not exist.
+- `--changed` and `--intent` values are no longer read as positional words, so
+  `sks proof field scan --changed a.ts` no longer takes `a.ts` as the intent.
 - Codex SDK tasks name why a run failed. A failed turn reached SKS only as
   `Codex Exec exited with code 1: Reading prompt from stdin...`, because the
   SDK raises the exit after the stream and the adapter dropped the events it

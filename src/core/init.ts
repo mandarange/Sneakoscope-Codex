@@ -8,7 +8,6 @@ import { repairSksGeneratedArtifacts } from './harness-conflicts.js';
 import { disableVersionGitHook } from './version-manager.js';
 import { coreEngineeringDirectiveReferenceText, coreEngineeringDirectiveText } from './lean-engineering-policy.js';
 import { DEFAULT_CODEX_APP_PLUGINS, DESIGN_SYSTEM_SSOT, DOLLAR_COMMANDS, DOLLAR_SKILL_NAMES, LEGACY_DOLLAR_SKILL_NAMES, PPT_CONDITIONAL_SKILL_ALLOWLIST, PPT_PIPELINE_MCP_ALLOWLIST, PPT_PIPELINE_SKILL_ALLOWLIST, RECOMMENDED_DESIGN_REFERENCES, RECOMMENDED_MCP_SERVERS, RECOMMENDED_SKILLS, context7ConfigToml, prefixKnownSksDollarReferences, sksPrefixedDollarCommand, triwikiContextTracking } from './routes.js';
-import { SKILL_DREAM_POLICY } from './skill-forge.js';
 import { DEPRECATED_CODEX_HOOKS_ALIAS_FLAG, REMOVED_CODEX_FEATURE_FLAGS } from './codex/codex-feature-flags.js';
 import { writeCodexConfigGuarded } from './codex/codex-config-guard.js';
 import { isSksHookHandler } from './codex-hooks/sks-hook-entries.js';
@@ -333,14 +332,6 @@ export async function initProject(root: any, opts: any = {}) {
     recommended_mcp_servers: RECOMMENDED_MCP_SERVERS,
     design_system_ssot: DESIGN_SYSTEM_SSOT,
     recommended_design_references: RECOMMENDED_DESIGN_REFERENCES,
-    skill_dreaming: {
-      state: SKILL_DREAM_POLICY.state_path,
-      latest_report: SKILL_DREAM_POLICY.latest_report_path,
-      min_events_between_runs: SKILL_DREAM_POLICY.min_events_between_runs,
-      min_interval_hours: SKILL_DREAM_POLICY.min_interval_hours,
-      apply_mode: SKILL_DREAM_POLICY.apply_mode,
-      no_auto_delete: SKILL_DREAM_POLICY.no_auto_delete
-    },
     harness_guard: {
       enabled: true,
       policy: '.sneakoscope/harness-guard.json',

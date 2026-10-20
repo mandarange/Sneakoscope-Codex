@@ -14,16 +14,16 @@ export function buildMadSksQuestionSchema(prompt: any) {
     inferred_answers: {
       GOAL_PRECISE: `명시적인 MAD-SKS 호출 범위에서만 DB 권한 조건을 넓혀 작업한다: ${task}`,
       ACCEPTANCE_CRITERIA: [
-        '$MAD-SKS is listed in dollar commands and routes to MADSKS mode',
-        'Supabase MCP column cleanup, schema cleanup, direct execute SQL, and normal DB writes are allowed only while the active MAD-SKS mission gate remains open',
-        'the widened permission is inactive after the MAD-SKS gate is passed or permissions_deactivated is true',
-        'whole database/table removal and all-row delete/update operations remain blocked as non-sensible catastrophic operations'
+        `the requested database work is done: ${task}`,
+        'every database write runs while this MAD-SKS mission gate is open, and the widened permission is off once the gate passes',
+        'whole database/table removal and all-row delete/update operations remain blocked',
+        'the final response lists each database write and the read-only query that verified it'
       ],
       NON_GOALS: [],
       PUBLIC_API_CHANGE_ALLOWED: 'yes_if_needed',
       DB_SCHEMA_CHANGE_ALLOWED: 'yes_if_needed',
       DEPENDENCY_CHANGE_ALLOWED: 'no',
-      TEST_SCOPE: ['packcheck', 'selftest'],
+      TEST_SCOPE: ['a read-only query that verifies each database write', 'the project tests that cover the changed schema or data, or documented justification'],
       MID_RUN_UNKNOWN_POLICY: ['preserve_existing_behavior', 'smallest_reversible_change', 'defer_optional_scope', 'block_only_if_no_safe_path'],
       RISK_BOUNDARY: [
         'MAD-SKS permission widening is explicit-invocation-only',
@@ -309,8 +309,12 @@ export function inferAnswersForPrompt(prompt: any, explicitAnswers: any = {}) {
   if (!hasAnswer(explicitAnswers.PUBLIC_API_CHANGE_ALLOWED)) addInferred(inferred, notes, 'PUBLIC_API_CHANGE_ALLOWED', cliSurfaceWork || installWork ? 'yes_if_needed' : 'no', 'public-api');
   if (!hasAnswer(explicitAnswers.DEPENDENCY_CHANGE_ALLOWED)) addInferred(inferred, notes, 'DEPENDENCY_CHANGE_ALLOWED', 'no', 'no-new-deps');
   if (!hasAnswer(explicitAnswers.TEST_SCOPE)) {
-    const releaseLike = versionWork || installWork;
-    addInferred(inferred, notes, 'TEST_SCOPE', releaseLike ? ['packcheck', 'selftest', 'sizecheck', 'npm publish --dry-run'] : ['focused relevant tests or documented justification'], 'tests');
+    const scope = versionWork
+      ? ['the project test suite', 'the project build and package checks', 'npm publish --dry-run']
+      : installWork
+        ? ['the project test suite', 'a clean install and first run of the project']
+        : ['focused relevant tests or documented justification'];
+    addInferred(inferred, notes, 'TEST_SCOPE', scope, 'tests');
   }
   if (!hasAnswer(explicitAnswers.MID_RUN_UNKNOWN_POLICY)) {
     addInferred(inferred, notes, 'MID_RUN_UNKNOWN_POLICY', ['preserve_existing_behavior', 'smallest_reversible_change', 'defer_optional_scope', 'block_only_if_no_safe_path'], 'ladder');

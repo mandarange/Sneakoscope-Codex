@@ -3,7 +3,6 @@ import path from 'node:path';
 import {
   COMMAND_ALIASES_LITE,
   COMMAND_MANIFEST_BY_NAME,
-  visibleCommandManifest,
   type CommandManifestLiteEntry,
   type CommandNameLite
 } from '../../cli/command-manifest-lite.js';
@@ -11,7 +10,7 @@ import { flag } from '../../cli/args.js';
 import { printJson, sksTextLogo } from '../../cli/output.js';
 import { ui as cliUi } from '../../cli/cli-theme.js';
 import { PACKAGE_VERSION, ensureDir, nowIso, projectRoot, readJson, rmrf, tmpdir, writeJsonAtomic } from '../fsx.js';
-import { DOLLAR_COMMANDS, routePrompt, routeReasoning, reasoningInstruction, sksPrefixedDollarCommand } from '../routes.js';
+import { DOLLAR_COMMANDS, sksPrefixedDollarCommand } from '../routes.js';
 import { DOLLAR_COMMAND_ALIASES_LITE, DOLLAR_COMMANDS_LITE } from '../routes/dollar-manifest-lite.js';
 import { initProject, normalizeInstallScope, sksCommandPrefix } from '../init.js';
 import { buildFeatureRegistry, validateFeatureRegistry } from '../feature-registry.js';
@@ -70,15 +69,8 @@ export async function helpCommand(args: string[] = []): Promise<unknown> {
 }
 
 export async function commandsCommand(args: string[] = []): Promise<unknown> {
-  if (flag(args, '--json')) {
-    const { commandsJsonFast } = await import('../../cli/commands-fast.js');
-    return commandsJsonFast();
-  }
-  const commands = visibleCommandManifest();
-  console.log(`${sksTextLogo()}\n\nCommands\n`);
-  const width = Math.max(...commands.map((entry) => entry.name.length)) + 2;
-  for (const entry of commands) console.log(`sks ${entry.name.padEnd(width)}${entry.summary}`);
-  console.log('\nRun `sks help <command>` for its usage.');
+  const { commandsJsonFast, commandsTextFast } = await import('../../cli/commands-fast.js');
+  return flag(args, '--json') ? commandsJsonFast() : commandsTextFast();
 }
 
 export function dollarCommandsCommand(args: any = []) {
@@ -497,58 +489,6 @@ export async function selftestRealCommand(args: any = []) {
     process.exitCode = 1;
   }
   return output;
-}
-
-export async function reasoningCommand(args: any = []) {
-  const prompt = args.filter((arg: any) => !String(arg).startsWith('--')).join(' ').trim();
-  const route = routePrompt(prompt || '$SKS');
-  const info = routeReasoning(route, prompt);
-  const result = {
-    route: route?.command || '$SKS',
-    effort: info.effort,
-    profile: info.profile,
-    reason: info.reason,
-    temporary: true,
-    instruction: reasoningInstruction(info)
-  };
-  if (flag(args, '--json')) return printJson(result);
-  console.log('SKS Reasoning Route');
-  console.log(`Route:   ${result.route}`);
-  console.log(`Effort:  ${result.effort}`);
-  console.log(`Profile: ${result.profile}`);
-}
-
-export async function autoReviewCommand(sub: any = 'status', args: any = []) {
-  const { autoReviewStatus, enableAutoReview, disableAutoReview } = await import('../auto-review.js');
-  const { writeRouteCollaborationArtifacts } = await import('../agents/route-collaboration-ledger.js');
-  const action = sub || 'status';
-  const result = action === 'fixture'
-    ? await reviewNativeAgentFixture()
-    : action === 'enable' || action === 'start'
-    ? await enableAutoReview({ high: flag(args, '--high') })
-    : action === 'disable'
-      ? await disableAutoReview()
-      : await autoReviewStatus();
-  if (flag(args, '--json')) return printJson(result);
-  console.log(JSON.stringify(result, null, 2));
-
-  async function reviewNativeAgentFixture() {
-    const root = await projectRoot();
-    const { id } = await createMission(root, { mode: 'review', prompt: 'Review native agent collaboration fixture' });
-    const native = await writeRouteCollaborationArtifacts(root, {
-      missionId: id,
-      route: '$Review',
-      routeKey: 'Review',
-      prompt: 'Review route approval safety, verification, and integration through the native agent runtime.',
-      mode: 'REVIEW'
-    });
-    return {
-      schema: 'sks.review-native-agent-fixture.v1',
-      ok: native.ok,
-      mission_id: id,
-      native_agent_collaboration: native
-    };
-  }
 }
 
 function installScopeFromArgs(args: any = [], fallback: any = 'global') {

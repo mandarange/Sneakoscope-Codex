@@ -66,7 +66,9 @@ export const INSTALLED_REMOVED_COMMANDS = [
   'check', 'gates', 'task', 'release', 'daemon', 'versioning', 'bench', 'perf', 'features', 'all-features', 'harness', 'rust',
   // Duplicates of a surviving command (help <command>, dollar-commands, setup,
   // doctor, research --autoresearch, wiki wrongness, gc status, codex-app).
-  'usage', 'aliases', 'init', 'fix-path', 'deps', 'autoresearch', 'wrongness', 'stats', 'codex-native'
+  'usage', 'aliases', 'init', 'fix-path', 'deps', 'autoresearch', 'wrongness', 'stats', 'codex-native',
+  // Orphan commands nothing in the product reached.
+  'remote', 'auto-review', 'recallpulse', 'code-structure', 'skill-dream', 'reasoning', 'goal'
 ] as const
 export const INSTALLED_REMOVED_DOLLAR_COMMANDS = Array.from(new Set([
   '$Agent', '$Team', '$MAD-DB', '$Swarm', '$ShadowClone', '$Kagebunshin', '$Ralph',

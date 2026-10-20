@@ -7,7 +7,6 @@ export const AGENT_RECURSIVE_COMMAND_DENYLIST = Object.freeze([
   'sks naruto run',
   'sks research run',
   'sks qa-loop',
-  'sks goal',
   '$Naruto',
   '$Work',
   '$Research',

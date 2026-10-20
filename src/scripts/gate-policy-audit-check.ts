@@ -153,11 +153,8 @@ function scanCommandGateContract() {
     const entry = (COMMANDS as Record<string, any>)[routeStarter]
     if (entry?.mutatesRouteState !== true) issues.push(`${routeStarter}:missing_route_state_mutator_contract`)
   }
-  const goal = (COMMANDS as Record<string, any>).goal
-  if (!goal) issues.push('goal:missing_native_goal_command_contract')
-  if (goal?.mutatesRouteState === true || goal?.ownsGates === true || (goal?.ownedGateFiles?.length ?? 0) > 0) {
-    issues.push('goal:native_goal_command_must_be_stateless')
-  }
+  // Codex native /goal owns persisted goals: SKS ships no goal command at all.
+  if ((COMMANDS as Record<string, any>).goal) issues.push('goal:sks_must_not_ship_a_goal_command')
   for (const migrationBypass of ['triwiki', 'pipeline', 'wiki', 'proof']) {
     const entry = (COMMANDS as Record<string, any>)[migrationBypass]
     if (entry?.skipMigrationGate !== true) issues.push(`${migrationBypass}:missing_skip_migration_gate_contract`)

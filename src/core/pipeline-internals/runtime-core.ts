@@ -21,7 +21,6 @@ import {
 } from '../engineering-sanity-review.js';
 import { createAndWriteWorkOrderLedgerForPrompt } from '../work-order-ledger.js';
 import { resolveChangedScopeBase, writeCodeStructureReport } from '../code-structure.js';
-import { recordSkillDreamEvent, SKILL_DREAM_POLICY } from '../skill-forge.js';
 import { researchPaperArtifactForPlan, writeResearchPlan } from '../research.js';
 import {
   ALIGN_GATE_ARTIFACT,
@@ -89,7 +88,6 @@ export { LIGHTWEIGHT_ROUTES, GATE_PROFILE_STAGES, STAGE_BLOCKING_GATE, BLOCKING_
 
 export const PIPELINE_PLAN_ARTIFACT = 'pipeline-plan.json';
 export const PIPELINE_PLAN_SCHEMA_VERSION = 1;
-const SKILL_DREAM_HOT_PATH_COUNTERS = new Map<string, number>();
 
 const REFLECTION_ARTIFACT = 'reflection.md';
 const REFLECTION_GATE = 'reflection-gate.json';
@@ -196,7 +194,6 @@ export function buildPipelinePlan(input: any = {}) {
     ssot_guard: buildSsotGuard({ route: route?.id || 'SKS', mode: route?.mode || 'SKS', task }),
     route_economy: routeEconomy,
     official_subagents: officialSubagentPolicy, execution_plan: executionPlan, ...executionPlanState({ execution_plan: executionPlan, planned_stages: [...executionPlan.required_stages, ...executionPlan.optional_stages], skipped_execution_stages: executionPlan.skipped_stages, reinstated_execution_stages: executionPlan.reinstated_stages, semantic_round_trips: Number(input.semanticRoundTrips ?? 0) }),
-    skill_dream: input.skillDream || { attached: false, reason: 'skill dreaming uses cheap counters and only runs inventory at threshold' },
     next_actions: planNextActions(route, task, taskProfile, ambiguity, lane, strictFinalization, Boolean(requestIntake)),
     no_unrequested_fallback_code: true
   };
@@ -658,14 +655,13 @@ export async function prepareRoute(root: any, prompt: any, state: any = {}, opts
   const task = stripDollarCommand(stripMadSksSignal(cleanPrompt)) || stripMadSksSignal(stripDollarCommand(cleanPrompt)) || String(cleanPrompt || '').trim();
   const explicit = Boolean(dollarCommand(cleanPrompt));
   if (!route) return { route: null, additionalContext: promptPipelineContext(prompt, null, root) };
-  const dreamContext = await routeSkillDreamContext(root, route, task);
   const required = routeNeedsContext7(route, cleanPrompt);
   const subagentsRequired = routeRequiresSubagents(route, cleanPrompt);
   const finish = async (prepared: any) => {
     const materialized = subagentsRequired && !['Naruto', 'Goal'].includes(route.id)
       ? await materializeOfficialSubagentOverlay(root, prepared, route, task, { sessionKey, parentModel: opts.parentModel || null, turnPlanBinding: opts.turnPlanBinding || null })
       : prepared;
-    return withSkillDreamContext(materialized, dreamContext);
+    return materialized;
   };
   if (route.id === 'DFix') return finish(await prepareDfixQuickRoute(root, route, task));
   if (route.id === 'Answer') return finish(await prepareAnswerOnlyRoute(route, task));
@@ -684,8 +680,7 @@ export async function prepareRoute(root: any, prompt: any, state: any = {}, opts
         ...(madRouteBase.requiredSkills || [])
       ]))
     };
-    const prepared = await prepareMadSksSqlPlane(root, madRoute, task, routeNeedsContext7(madRoute, cleanPrompt), { sessionKey });
-    return withSkillDreamContext(prepared, dreamContext);
+    return prepareMadSksSqlPlane(root, madRoute, task, routeNeedsContext7(madRoute, cleanPrompt), { sessionKey });
   }
   if (QUESTION_GATE_ROUTES.has(route.id)) return finish(await prepareClarificationGate(root, route, task, required, { madSksAuthorization, sessionKey }));
   if (route.id === 'Naruto' && subagentsRequired) return finish(await prepareNaruto(root, route, task, required, { madSksAuthorization, sessionKey, parentModel: opts.parentModel || null, turnPlanBinding: opts.turnPlanBinding || null }));
@@ -721,35 +716,6 @@ function parentOwnedProfileRoute(route: any, explicitlyInvokedSkills: readonly s
     coverage_required: false,
     explicit_invocation: false
   };
-}
-
-async function routeSkillDreamContext(root: any, route: any, task: any) {
-  try {
-    const counterKey = path.resolve(root);
-    const observed = (SKILL_DREAM_HOT_PATH_COUNTERS.get(counterKey) || 0) + 1;
-    SKILL_DREAM_HOT_PATH_COUNTERS.set(counterKey, observed);
-    if (observed % SKILL_DREAM_POLICY.min_events_between_runs !== 0) return '';
-    const result = await recordSkillDreamEvent(root, {
-      route: route.id,
-      command: route.command,
-      required_skills: route.requiredSkills || [],
-      prompt: task
-    }, { event_count: SKILL_DREAM_POLICY.min_events_between_runs });
-    if (!result.report) return '';
-    return [
-      'Skill dreaming threshold reached.',
-      `Report: ${path.relative(root, result.report.report_path)}`,
-      `Mode: ${result.report.apply_mode}; no_auto_delete=${result.report.no_auto_delete}.`,
-      'Review keep/merge/prune/improve candidates before adding more generated skills.'
-    ].join('\n');
-  } catch (err: any) {
-    return `Skill dreaming record failed: ${err.message || err}. Do not claim .sneakoscope/skills/dream-state.json was updated.`;
-  }
-}
-
-function withSkillDreamContext(result: any, dreamContext: any) {
-  if (!dreamContext) return result;
-  return { ...result, additionalContext: `${result.additionalContext || ''}\n\n${dreamContext}`.trim() };
 }
 
 async function prepareDfixQuickRoute(root: string, route: any, task: any) {

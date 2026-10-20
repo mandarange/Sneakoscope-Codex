@@ -90,7 +90,8 @@ function dollarRouteFallback(value: string): string {
   const fallbacks: Record<string, string> = {
     answer: 'help', plan: 'plan', review: 'review', work: 'naruto', 'release-review': 'review',
     'commit-and-push': 'commit-and-push', 'super-search': 'super-search', 'seo-geo-optimizer': 'seo-geo-optimizer',
-    db: 'mad-sks', wiki: 'wiki', help: 'help', goal: 'goal', align: 'align', gx: 'gx', ppt: 'ppt',
+    // Goal is Codex-native: SKS runs nothing for it, like Answer.
+    db: 'mad-sks', wiki: 'wiki', help: 'help', goal: 'help', align: 'align', gx: 'gx', ppt: 'ppt',
     autoresearch: 'research', research: 'research', 'qa-loop': 'qa-loop', 'image-ux-review': 'image-ux-review',
     'computer-use': 'computer-use', dfix: 'dfix', naruto: 'naruto', commit: 'commit', sks: 'root'
   };

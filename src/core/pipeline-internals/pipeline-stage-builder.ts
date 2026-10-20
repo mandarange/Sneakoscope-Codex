@@ -404,10 +404,7 @@ export function planVerification(route: any, task: any, proof: any, budget: Veri
     out.add('run the focused build or typecheck for the affected package');
     out.add('run affected regression tests and the risk-specific safety check');
   }
-  if (budget === 'release') {
-    out.add('npm run packcheck');
-    out.add('sks selftest --mock --json');
-  }
+  if (budget === 'release') out.add('run the full test suite and the project\'s own build and package checks');
   if (route?.id === 'Naruto') out.add('validate official subagent evidence and the parent integration summary');
   if (routeNeedsEngineeringSanityReview(route, task)) {
     out.add('complete the engineering sanity review for SOLID boundaries, N+1/repeated I/O, bounded loops, and verification bypasses');

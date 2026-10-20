@@ -1,4 +1,3 @@
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import fs from 'node:fs/promises'
 import os from 'node:os'
@@ -7,16 +6,13 @@ import { performance } from 'node:perf_hooks'
 import { loadNativeMenuBarSources } from '../codex-app/menubar/resources.js'
 import { runProcess, writeJsonAtomic } from '../fsx.js'
 import { listMcpInventory, type CodexMcpCliPort } from '../mcp-config/index.js'
-import { RemoteSshWorkerClient } from '../remote/ssh-worker-client.js'
-import type { RemoteMachineV1 } from '../remote/types.js'
 import { emptyUpdateStatus, readUpdateStatusCache } from '../update/update-status.js'
 
 export const RELEASE_LATENCY_LIMITS = {
   menubar_first_state_render: 250,
   control_center_open: 400,
   mcp_static_list: 250,
-  update_cache_read: 50,
-  ssh_worker_hello: 3000
+  update_cache_read: 50
 } as const
 
 export type ReleaseLatencySloId = keyof typeof RELEASE_LATENCY_LIMITS
@@ -60,8 +56,7 @@ export async function runReleaseLatencySlo(
   try {
     const portable = [
       await capture('mcp_static_list', budgetMap, () => measureMcpStaticList(tmp, runs(budgetMap, 'mcp_static_list', 9))),
-      await capture('update_cache_read', budgetMap, () => measureUpdateCacheRead(tmp, runs(budgetMap, 'update_cache_read', 15))),
-      await capture('ssh_worker_hello', budgetMap, () => measureSshHello(tmp, runs(budgetMap, 'ssh_worker_hello', 5)))
+      await capture('update_cache_read', budgetMap, () => measureUpdateCacheRead(tmp, runs(budgetMap, 'update_cache_read', 15)))
     ]
     const native = platform === 'darwin'
       ? await measureNativeMenuBar(root, budgetMap).catch((error) => nativeFailureMeasurements(budgetMap, error))
@@ -158,31 +153,6 @@ async function measureUpdateCacheRead(tmp: string, count: number) {
   const read = async () => { if (!(await readUpdateStatusCache(env))) throw new Error('update_cache_unreadable') }
   await read()
   return { producer: 'readUpdateStatusCache:v3', samples: await samples(count, read), evidence: { cache_bytes: Buffer.byteLength(JSON.stringify(snapshot)), network_included: false } }
-}
-
-async function measureSshHello(tmp: string, count: number) {
-  const worker = path.join(tmp, 'ssh-worker-fixture.mjs')
-  await fs.writeFile(worker, [
-    "import readline from 'node:readline'",
-    "const lines=readline.createInterface({input:process.stdin})",
-    "lines.on('line',(line)=>{const request=JSON.parse(line);process.stdout.write(JSON.stringify({schema:'sks.remote-worker.response.v1',id:request.id,type:request.type,ok:true,data:{protocol:'jsonl-stdio'}})+'\\n')})"
-  ].join('\n'), { mode: 0o600 })
-  const projectRoot = path.join(tmp, 'remote-project')
-  await fs.mkdir(projectRoot, { recursive: true })
-  const machine: RemoteMachineV1 = { id: 'local', display_name: 'Local', transport: 'ssh-stdio', ssh_alias: 'local-sks', allowed_roots: [tmp], enabled: true }
-  const values: number[] = []
-  for (let index = 0; index < count; index += 1) {
-    const client = new RemoteSshWorkerClient({
-      machine, projectRoot, projectId: 'latency-probe', reconnectAttempts: 1, requestTimeoutMs: 5_000,
-      loadSshConfig: async () => 'hostname localhost\nstricthostkeychecking yes\nuserknownhostsfile /tmp/sks-known-hosts',
-      spawnProcess: () => spawn(process.execPath, [worker], { stdio: ['pipe', 'pipe', 'pipe'] }) as ChildProcessWithoutNullStreams
-    })
-    const started = performance.now()
-    await client.connect()
-    values.push(performance.now() - started)
-    await client.close()
-  }
-  return { producer: 'RemoteSshWorkerClient.connect:local_stdio_child', samples: values, evidence: { transport: 'local_process_ssh_stdio_fixture', network_included: false, process_startup_included: true } }
 }
 
 async function measureNativeMenuBar(
