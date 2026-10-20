@@ -11,6 +11,9 @@ This page is the English product-facing projection of those decisions.
 | CLI | `sks` |
 | npm package | `sneakoscope` |
 
+- **Product sentence:** the npm package description (ledger P1) is the one official description.
+- **GitHub About:** GitHub caps the About description at 350 characters and the product sentence is 368, so the repository uses this recorded short form: "Open-source trust layer for Codex CLI and ChatGPT Desktop: coordinates bounded AI coding agents, records machine-verifiable evidence, preserves project memory, and blocks release claims not backed by current tests or artifacts."
+
 ## Hosts and platforms
 
 - **First-class hosts:** Codex CLI and ChatGPT Desktop (equal).

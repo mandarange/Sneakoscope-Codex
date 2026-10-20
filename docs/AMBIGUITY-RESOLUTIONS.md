@@ -782,4 +782,5 @@ Round 1–10 완료. 추가 인터뷰 Round는 열지 않는다.
 | A1-5 | **기본 경로가 파괴적인 동작으로 조용히 떨어지지 않는다.** 모르는 하위 명령은 사용법을 출력하고 0이 아닌 코드로 끝나며, `--dry-run`을 지원하지 않는 명령은 그 플래그를 거부한다. | `sks memory` 오타가 실제 정리를 실행했고 `setup --dry-run`이 설치를 했다. | decided |
 | A1-6 | **자기 테스트나 자기 게이트만 도달하는 모듈은 제품 코드가 아니다.** 제품 진입점과 실제 게이트 어디에서도 쓰이지 않는 모듈·게이트·문서는 제거한다. | 병렬 검증 엔진, MCP 도구 이름 정규화기, RecallPulse 런타임 등. | decided |
 | A1-7 | **안내 문구는 검증 프로필을 따른다.** 기본 `essential` 프로필에서 `sks status`의 다음 행동, `sks plan` 템플릿은 completion proof나 Honest Mode, SKS 게이트 보고서를 요구하지 않는다. | 10.0의 essential 기본값과 어긋나는 strict 전용 의례가 안내에 남아 있었다. | decided |
+| A1-8 | **GitHub About 설명은 P1의 짧은 변형을 쓴다.** GitHub About은 350자까지만 받는데 P1 문장은 368자이므로, P1 후속 규칙에 따른 의도적 변형으로 다음 문장을 쓴다: "Open-source trust layer for Codex CLI and ChatGPT Desktop: coordinates bounded AI coding agents, records machine-verifiable evidence, preserves project memory, and blocks release claims not backed by current tests or artifacts." 기존 "Deterministic Codex Harness for Zero-Hallucination Autonomous Development"는 P1과 맞지 않고 증명할 수 없는 절대 주장이라 쓰지 않는다. | 저장소 설정이라 코드로 바뀌지 않으며 저장소 소유자가 적용한다. | decided |
 
