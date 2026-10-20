@@ -41,6 +41,9 @@ export interface CodexTaskInput {
   requestedScopeContract: RequestedScopeContract
   reliabilityPolicy?: {
     maxEmptyResultRetries?: number
+    /** Retries of a model-capacity failure, each after the matching `capacityBackoffMs` wait. 0 disables them. */
+    maxCapacityRetries?: number
+    capacityBackoffMs?: number[]
     idleTimeoutMs?: number
     hardTimeoutMs?: number
     deadlineEpochMs?: number
