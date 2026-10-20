@@ -131,6 +131,10 @@
   mentions capacity no longer counts as a failure. Config warnings and
   reasoning no longer count as work, so a failure after only those stays
   retryable.
+- The `migration:current-surface-e2e` release gate failed on any machine
+  without SKS installed globally. The hook launcher it checks never pins a
+  source checkout, so it could only reach `sks` through the maintainer's own
+  global install. The fixture now puts its own `sks` on PATH.
 
 ## [10.6.2] - 2026-10-20
 

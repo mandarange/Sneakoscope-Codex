@@ -32,6 +32,18 @@ try {
   const home = path.join(tempRoot, 'home');
   const project = path.join(tempRoot, 'project');
   await seedUpgradeFixture(home, project);
+  // A real global install puts `sks` on PATH. This one is simulated, so the
+  // fixture provides the bin the locked probe below reports. Without it the
+  // hook launcher, which never pins a source checkout, could reach SKS only
+  // through the maintainer's own global install, and the gate failed on any
+  // machine without one.
+  const fixtureBin = path.join(home, '.local', 'bin');
+  await fsp.mkdir(fixtureBin, { recursive: true });
+  await fsp.writeFile(
+    path.join(fixtureBin, 'sks'),
+    `#!/bin/sh\nexec ${shellQuote(process.execPath)} ${shellQuote(path.join(packageRoot(), 'dist', 'bin', 'sks.js'))} "$@"\n`,
+    { mode: 0o755 }
+  );
   process.env.HOME = home;
   process.env.SKS_GLOBAL_ROOT = path.join(home, '.sneakoscope-global');
   process.chdir(project);
@@ -59,6 +71,7 @@ try {
     env: {
       ...process.env,
       HOME: home,
+      PATH: [fixtureBin, process.env.PATH].filter(Boolean).join(path.delimiter),
       SKS_GLOBAL_ROOT: path.join(home, '.sneakoscope-global'),
       SKS_INSTALLED_SKS_VERSION: '4.8.4',
       SKS_NPM_VIEW_SNEAKOSCOPE_VERSION: PACKAGE_VERSION,
@@ -240,9 +253,21 @@ try {
     json: false,
     quiet: false,
     timeoutMs: 5000,
+    // Same seam as the update above: the fixture is already current, which the
+    // real probe could only confirm from the maintainer's own global install.
+    lockedInstalledVersionProbe: async () => ({
+      ok: true,
+      version: PACKAGE_VERSION,
+      source: 'npm-global' as const,
+      npm_global_version: PACKAGE_VERSION,
+      path_version: PACKAGE_VERSION,
+      path_binary: path.join(fixtureBin, 'sks'),
+      errors: []
+    }),
     env: {
       ...process.env,
       HOME: home,
+      PATH: [fixtureBin, process.env.PATH].filter(Boolean).join(path.delimiter),
       SKS_GLOBAL_ROOT: path.join(home, '.sneakoscope-global'),
       SKS_INSTALLED_SKS_VERSION: PACKAGE_VERSION,
       SKS_NPM_VIEW_SNEAKOSCOPE_VERSION: PACKAGE_VERSION,
@@ -316,6 +341,10 @@ async function writeIsolatedFixture(file: string, content: string): Promise<void
     throw new Error(`isolated_fixture_path_refused:${target}`);
   }
   await fsp.writeFile(target, content);
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", `'\\''`)}'`;
 }
 
 async function seedUpgradeFixture(home: string, project: string): Promise<void> {
