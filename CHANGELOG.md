@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Codex SDK tasks name why a run failed. A failed turn reached SKS only as
+  `Codex Exec exited with code 1: Reading prompt from stdin...`, because the
+  SDK raises the exit after the stream and the adapter dropped the events it
+  had already received. The blocker now carries Codex's own message (model
+  capacity, usage limit, a rejected model) and the events stay with the
+  result.
+- The reliability shield retries a model-capacity failure up to three times,
+  waiting about 15, 45 and 90 s (jittered, and never past the task deadline),
+  instead of retrying at once or not at all. After an attempt did work, only
+  read-only tasks are retried; a usage limit is terminal; agent text that
+  mentions capacity no longer counts as a failure. Config warnings and
+  reasoning no longer count as work, so a failure after only those stays
+  retryable.
+
 ## [10.6.2] - 2026-10-20
 
 ### Fixed

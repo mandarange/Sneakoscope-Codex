@@ -91,7 +91,27 @@ export async function runRealCodexSdkTask(input: CodexTaskInput, policy: {
       if (event?.type === 'item.completed' && event?.item?.type === 'agent_message') finalResponse = String(event.item.text || '')
     }
   } catch (err: any) {
-    if (!timedOut && controller.signal.aborted !== true && String(err?.name || '') !== 'AbortError') throw err
+    if (!timedOut && controller.signal.aborted !== true && String(err?.name || '') !== 'AbortError') {
+      // `codex exec` reports a failed turn as `error` / `turn.failed` events on stdout and then exits
+      // non-zero; the SDK raises that exit only after it has yielded every event, and its message holds
+      // just the first stderr line ("Reading prompt from stdin..."). The events name the real cause
+      // (model capacity, usage limit, ...), so they travel with the failure instead of dying with the throw.
+      const reported = codexReportedFailure(events)
+      if (!reported) throw err
+      return {
+        ok: false,
+        sdkThreadId: String(thread.id || events.find((event) => event?.type === 'thread.started')?.thread_id || ''),
+        sdkRunId: extractRunId(events),
+        events,
+        finalResponse,
+        structuredOutput: null,
+        blockers: [`codex_sdk_run_failed:${reported.message || 'turn_failed'} (${firstLine(err)})`],
+        liveEventsWritten,
+        runtimeIdentity: runtime.identity,
+        executionPolicy,
+        raw: { failed_event: reported.event, exec_error: String(err?.message || err) }
+      }
+    }
     return {
       ok: false,
       sdkThreadId: String(thread.id || events.find((event) => event?.type === 'thread.started')?.thread_id || ''),
@@ -108,7 +128,7 @@ export async function runRealCodexSdkTask(input: CodexTaskInput, policy: {
   } finally {
     clearTimeout(timer)
   }
-  const failed = events.find((event) => event?.type === 'turn.failed' || event?.type === 'error')
+  const failed = codexReportedFailure(events)
   if (failed) {
     return {
       ok: false,
@@ -117,11 +137,11 @@ export async function runRealCodexSdkTask(input: CodexTaskInput, policy: {
       events,
       finalResponse,
       structuredOutput: null,
-      blockers: ['codex_turn_failed'],
+      blockers: [failed.message ? `codex_turn_failed:${failed.message}` : 'codex_turn_failed'],
       liveEventsWritten,
       runtimeIdentity: runtime.identity,
       executionPolicy,
-      raw: { failed_event: failed }
+      raw: { failed_event: failed.event }
     }
   }
   const structuredOutput = parseStructuredOutput(finalResponse, Boolean(input.outputSchema))
@@ -138,6 +158,28 @@ export async function runRealCodexSdkTask(input: CodexTaskInput, policy: {
     liveEventsWritten,
     raw: { item_count: events.filter((event) => String(event?.type || '').startsWith('item.')).length }
   }
+}
+
+/**
+ * The failure Codex itself reported in a stream: the last `turn.failed` / `error` event that carries a
+ * message (the `error` event usually precedes `turn.failed` with the same text), else the first failure
+ * event without one. Null when the stream reported no failure.
+ */
+export function codexReportedFailure(events: readonly any[]): { event: any; message: string } | null {
+  let first: any = null
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index]
+    const type = event?.type
+    if (type !== 'turn.failed' && type !== 'error') continue
+    const message = String((type === 'turn.failed' ? event?.error?.message : event?.message) || '').replace(/\s+/g, ' ').trim()
+    if (message) return { event, message: message.slice(0, 300) }
+    first = event
+  }
+  return first ? { event: first, message: '' } : null
+}
+
+function firstLine(err: any): string {
+  return String(err?.message || err).trim().split('\n')[0]!.trim().slice(0, 200)
 }
 
 export async function resolveCodexSdkRuntime(_input?: Pick<CodexTaskInput, 'requestedScopeContract'>) {

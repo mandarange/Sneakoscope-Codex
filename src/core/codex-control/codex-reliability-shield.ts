@@ -14,8 +14,24 @@ export interface CodexReliabilityAttemptResult {
   [key: string]: unknown
 }
 
+/**
+ * Model capacity is a shortage that clears by itself, and a retry right after it fails again: the
+ * 2026-10-20 release smoke failed 12 of 12 back-to-back attempts. Each capacity retry waits longer.
+ */
+const DEFAULT_CAPACITY_BACKOFF_MS = [15_000, 45_000, 90_000]
+const MODEL_CAPACITY_RE = /selected model is at capacity|model(?:\s+[\w.-]+)?\s+is\s+at\s+capacity|try a different model|capacity(?:\s+is)?\s+exhausted|temporarily at capacity/i
+/** Account quota; waiting minutes does not lift it, so it is never retried. */
+const USAGE_LIMIT_RE = /hit your usage limit|usage limit (?:has been )?reached/i
+/** Completed items that are not output or a side effect: config warnings and thinking. */
+const NON_WORK_ITEM_TYPES = new Set(['error', 'reasoning'])
+
 export interface CodexReliabilityPolicy {
   maxEmptyResultRetries: number
+  /** Capacity retries; the nth waits `capacityBackoffMs[n - 1]`. */
+  maxCapacityRetries: number
+  capacityBackoffMs: number[]
+  /** A capacity failure after the attempt did work is retried only when a rerun cannot repeat a side effect. */
+  retryCapacityAfterWork: boolean
   idleTimeoutMs: number
   timeoutClass: 'short' | 'standard' | 'long'
 }
@@ -29,6 +45,7 @@ export interface CodexReliabilityReport {
   timeout_class: CodexReliabilityPolicy['timeoutClass']
   idle_timeout_ms: number
   max_empty_result_retries: number
+  max_capacity_retries: number
   attempts: CodexReliabilityAttemptReport[]
   selected_attempt: number
   retry_count: number
@@ -53,6 +70,8 @@ export interface CodexReliabilityAttemptReport {
   fatal_error: boolean
   mcp_auth_error: boolean
   model_capacity_error: boolean
+  /** How long the shield waited before the next attempt because of a capacity failure; null when it did not. */
+  capacity_wait_ms: number | null
   capacity_fallback_hint: string | null
   repaired_tool_result_count: number
   missing_tool_result_count: number
@@ -74,8 +93,15 @@ export function normalizeCodexReliabilityPolicy(input: CodexTaskInput): CodexRel
     policy.timeoutClass || (input.tier === 'orchestrator' ? 'long' : 'standard')
   )
   const fallbackIdle = timeoutClass === 'short' ? 20_000 : timeoutClass === 'long' ? 180_000 : 60_000
+  const backoff = (Array.isArray(policy.capacityBackoffMs) && policy.capacityBackoffMs.length
+    ? policy.capacityBackoffMs
+    : DEFAULT_CAPACITY_BACKOFF_MS
+  ).slice(0, 5).map((wait, index) => clampInt(wait, DEFAULT_CAPACITY_BACKOFF_MS[index] ?? 90_000, 0, 10 * 60_000))
   return {
     maxEmptyResultRetries: clampInt(policy.maxEmptyResultRetries, 1, 0, 3),
+    maxCapacityRetries: clampInt(policy.maxCapacityRetries, backoff.length, 0, backoff.length),
+    capacityBackoffMs: backoff,
+    retryCapacityAfterWork: input.sandboxPolicy === 'read-only',
     idleTimeoutMs: clampInt(policy.idleTimeoutMs, fallbackIdle, 1_000, 15 * 60_000),
     timeoutClass
   }
@@ -86,12 +112,15 @@ export async function runWithCodexReliabilityShield(
   runAttempt: (attempt: number, controls?: { noMcp?: boolean }) => Promise<CodexReliabilityAttemptResult>
 ): Promise<CodexReliabilityAttemptResult & { reliabilityShield: CodexReliabilityReport }> {
   const policy = normalizeCodexReliabilityPolicy(input)
+  const deadlineEpochMs = Number(input.reliabilityPolicy?.deadlineEpochMs)
   const attempts: CodexReliabilityAttemptReport[] = []
   let selected: CodexReliabilityAttemptResult | null = null
   let selectedAttempt = 0
+  let emptyRetries = 0
+  let capacityRetries = 0
   const controls: { noMcp?: boolean } = {}
 
-  for (let attempt = 1; attempt <= policy.maxEmptyResultRetries + 1; attempt += 1) {
+  for (let attempt = 1; ; attempt += 1) {
     const raw = await runAttempt(attempt, controls)
     const continuity = auditToolOutputContinuity(Array.isArray(raw.events) ? raw.events : [])
     const heartbeats = buildKeepaliveHeartbeats(continuity.events)
@@ -109,6 +138,19 @@ export async function runWithCodexReliabilityShield(
       missing_tool_result_count: continuity.missingToolResultCount,
       heartbeat_count: heartbeats.length
     }
+    // Capacity retries have their own budget and backoff. An attempt that is not retried - budget spent,
+    // deadline too close, or unrecoverable for another reason - ends the run as a capacity failure.
+    let capacityWaitMs: number | null = null
+    if (report.model_capacity_error) {
+      capacityWaitMs = report.retryable ? nextCapacityWaitMs(policy, capacityRetries, deadlineEpochMs) : null
+      if (capacityWaitMs === null) {
+        report.retryable = false
+        report.retry_reason = null
+        report.blockers = [...report.blockers, 'codex_model_capacity_unavailable']
+      } else {
+        report.capacity_wait_ms = capacityWaitMs
+      }
+    }
     attempts.push(report)
     selected = {
       ...raw,
@@ -118,11 +160,18 @@ export async function runWithCodexReliabilityShield(
     }
     selectedAttempt = attempt
     if (report.retryable && report.mcp_auth_error) controls.noMcp = true
-    if (!report.retryable || attempt > policy.maxEmptyResultRetries) break
+    if (!report.retryable) break
+    if (capacityWaitMs !== null) {
+      capacityRetries += 1
+      await new Promise<void>((resolve) => setTimeout(resolve, capacityWaitMs))
+    } else if (emptyRetries < policy.maxEmptyResultRetries) {
+      emptyRetries += 1
+    } else {
+      break
+    }
   }
 
   const blockers = attempts.flatMap((attempt) => attempt.blockers)
-  const modelCapacityRetryCount = attempts.filter((attempt) => attempt.model_capacity_error && attempt.retryable).length
   const report: CodexReliabilityReport = {
     schema: CODEX_RELIABILITY_SHIELD_SCHEMA,
     generated_at: nowIso(),
@@ -132,6 +181,7 @@ export async function runWithCodexReliabilityShield(
     timeout_class: policy.timeoutClass,
     idle_timeout_ms: policy.idleTimeoutMs,
     max_empty_result_retries: policy.maxEmptyResultRetries,
+    max_capacity_retries: policy.maxCapacityRetries,
     attempts,
     selected_attempt: selectedAttempt,
     retry_count: Math.max(0, selectedAttempt - 1),
@@ -139,8 +189,9 @@ export async function runWithCodexReliabilityShield(
     repaired_tool_result_count: attempts.reduce((sum, attempt) => sum + attempt.repaired_tool_result_count, 0),
     missing_tool_result_count: attempts.reduce((sum, attempt) => sum + attempt.missing_tool_result_count, 0),
     no_duplicate_streamed_output: attempts.slice(0, -1).every((attempt) => attempt.meaningful_event_count === 0),
-    model_capacity_retry_count: modelCapacityRetryCount,
-    selected_model_capacity_fallback: selectedAttempt > 1 && modelCapacityRetryCount > 0,
+    model_capacity_retry_count: capacityRetries,
+    // True when the run recovered: capacity retries happened and the attempt that was kept did not hit capacity.
+    selected_model_capacity_fallback: capacityRetries > 0 && attempts[attempts.length - 1]?.model_capacity_error === false,
     blockers
   }
   const selectedResult = selected || { ok: false, events: [], blockers: ['codex_sdk_attempt_missing'] }
@@ -170,7 +221,8 @@ export function evaluateCodexReliabilityAttempt(
   let retryable = false
   let retryReason: string | null = null
 
-  if (modelCapacity) blockers.push('codex_model_capacity_unavailable')
+  // No capacity blocker here: whether a retry is still affordable is the loop's call, and it records
+  // `codex_model_capacity_unavailable` when none is. Otherwise a recovered run would carry it forever.
   if (mcpAuth) blockers.push('codex_reliability_mcp_auth_error')
   if (!modelCapacity && idle && partial) blockers.push('codex_reliability_idle_after_partial_output')
   if (!modelCapacity && partial && !idle) blockers.push('codex_reliability_partial_output_without_structured_result')
@@ -180,10 +232,17 @@ export function evaluateCodexReliabilityAttempt(
   if (mcpAuth) {
     retryable = true
     retryReason = 'mcp_auth_error_retry_no_mcp'
-  } else if (!modelCapacity && !fatal && idle && meaningful.length === 0) {
+  } else if (modelCapacity) {
+    // Capacity clears on its own, so a retry is safe unless this attempt already produced output or a
+    // side effect that a rerun could repeat; a read-only task has none to repeat.
+    if (meaningful.length === 0 || policy.retryCapacityAfterWork) {
+      retryable = true
+      retryReason = 'model_capacity_backoff_retry'
+    }
+  } else if (!fatal && idle && meaningful.length === 0) {
     retryable = true
     retryReason = 'stream_idle_before_meaningful_event'
-  } else if (!modelCapacity && !fatal && empty) {
+  } else if (!fatal && empty) {
     retryable = true
     retryReason = 'empty_sdk_result_before_meaningful_event'
   }
@@ -200,6 +259,7 @@ export function evaluateCodexReliabilityAttempt(
     fatal_error: fatal,
     mcp_auth_error: mcpAuth,
     model_capacity_error: modelCapacity,
+    capacity_wait_ms: null,
     capacity_fallback_hint: null,
     repaired_tool_result_count: 0,
     missing_tool_result_count: 0,
@@ -208,9 +268,22 @@ export function evaluateCodexReliabilityAttempt(
   }
 }
 
+/**
+ * Whether the attempt's own failure signals - its blockers and its `error` / `turn.failed` events - report
+ * model capacity. Agent text never counts: a worker that merely writes "try a different model" is not
+ * a capacity failure, and a retry of it would rerun a finished task.
+ */
 export function isCodexModelCapacityError(result: CodexReliabilityAttemptResult, events: any[]) {
-  const text = collectText(result, events)
-  return /selected model is at capacity|model(?:\s+[\w.-]+)?\s+is\s+at\s+capacity|try a different model|capacity(?:\s+is)?\s+exhausted|temporarily at capacity/i.test(text)
+  return MODEL_CAPACITY_RE.test(collectFailureSignalText(result, events))
+}
+
+function nextCapacityWaitMs(policy: CodexReliabilityPolicy, retriesDone: number, deadlineEpochMs: number): number | null {
+  const base = policy.capacityBackoffMs[retriesDone]
+  if (retriesDone >= policy.maxCapacityRetries || base === undefined) return null
+  // Jitter, so parallel workers that hit the same capacity wall do not retry in lockstep.
+  const wait = Math.round(base * (0.75 + Math.random() * 0.5))
+  const hasDeadline = Number.isFinite(deadlineEpochMs) && deadlineEpochMs > 0
+  return hasDeadline && deadlineEpochMs - Date.now() <= wait ? null : wait
 }
 
 export function isMissingToolOutputProtocolError(result: CodexReliabilityAttemptResult, events: any[]) {
@@ -249,8 +322,10 @@ export function buildKeepaliveHeartbeats(events: any[]) {
 function isMeaningfulEvent(event: any) {
   const type = String(event?.type || '')
   const itemType = String(event?.item?.type || '')
+  // Codex reports config warnings as completed `error` items and thinking as `reasoning` items. A failure
+  // after only those is still a failure before any work, which is what keeps it retryable.
+  if (type === 'item.completed' && !NON_WORK_ITEM_TYPES.has(itemType)) return true
   return type === 'turn.completed'
-    || type === 'item.completed'
     || itemType === 'agent_message'
     || itemType === 'file_change'
     || itemType === 'command_execution'
@@ -259,8 +334,9 @@ function isMeaningfulEvent(event: any) {
 
 function hasFatalError(result: CodexReliabilityAttemptResult, events: any[]) {
   if (isMcpAuthError(result, events)) return false
-  const text = collectFatalSignalText(result, events)
+  const text = collectFailureSignalText(result, events)
   return /\b(?:4\d\d|fatal|unauthorized|forbidden|authrequired|invalid oauth|side-effect applied|partial patch applied)\b/i.test(text)
+    || USAGE_LIMIT_RE.test(text)
 }
 
 function isMcpAuthError(result: CodexReliabilityAttemptResult, events: any[]) {
@@ -283,7 +359,8 @@ function collectText(result: CodexReliabilityAttemptResult, events: any[]) {
   ].join('\n')
 }
 
-function collectFatalSignalText(result: CodexReliabilityAttemptResult, events: any[]) {
+/** What the attempt itself reported as failing: its blockers and the messages of its `error` / `turn.failed` events. */
+function collectFailureSignalText(result: CodexReliabilityAttemptResult, events: any[]) {
   return [
     ...(Array.isArray(result.blockers) ? result.blockers : []),
     ...events
