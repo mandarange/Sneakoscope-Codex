@@ -16,14 +16,14 @@ Wrongness memory is the negative-evidence side of TriWiki. It records claims, as
 ## Commands
 
 ```bash
-sks wrongness list --json
-sks wrongness add --kind incorrect_claim --claim "Claim text" --reason "Why it was wrong" --json
-sks wrongness resolve WRONG-... --reason "Corrected by current evidence" --json
-sks wrongness summarize latest --json
-sks wrongness validate project --json
-sks wrongness context --route '$sks-naruto' --json
-sks wrongness publish latest --shared --json
-sks wrongness rebuild-summary --json
+sks wiki wrongness list --json
+sks wiki wrongness add --kind incorrect_claim --claim "Claim text" --reason "Why it was wrong" --json
+sks wiki wrongness resolve WRONG-... --reason "Corrected by current evidence" --json
+sks wiki wrongness summarize latest --json
+sks wiki wrongness validate project --json
+sks wiki wrongness context --route '$sks-naruto' --json
+sks wiki wrongness publish latest --shared --json
+sks wiki wrongness rebuild-summary --json
 sks wiki wrongness list --json
 sks wiki rebuild-summary --json
 ```
@@ -34,6 +34,6 @@ Active high-severity wrongness blocks full trust. Active medium-severity wrongne
 
 Wrongness evidence is attached to Completion Proof under `evidence.wrongness`, indexed by the evidence router as `wrongness` and `image_wrongness`, and surfaced in `trust-report.json`.
 
-Shared wrongness shards are merged back into project wrongness context. That means a fresh checkout can still retrieve active avoidance rules after `sks wrongness publish latest --shared` has committed the shard files.
+Shared wrongness shards are merged back into project wrongness context. That means a fresh checkout can still retrieve active avoidance rules after `sks wiki wrongness publish latest --shared` has committed the shard files.
 
 SKS 1.0.8 adds schema-versioned memory summary rebuilds for TriWiki, Wrongness, and shared memory generated indexes. Stale summaries should be rebuilt before long-running route handoff or final claims.

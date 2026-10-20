@@ -33,7 +33,7 @@ function safeDiagnosticSubcommand(command: string, subcommand: string, args: rea
     route: ['', 'status'],
     menubar: ['', 'status'],
     wiki: ['status', 'validate', 'validate-shared'],
-    gc: ['stats', 'status'],
+    gc: ['status'],
     pipeline: ['', 'status'],
     proof: ['', 'show', 'latest', 'validate', 'route', 'stop-gate'],
     status: [''],
@@ -41,8 +41,6 @@ function safeDiagnosticSubcommand(command: string, subcommand: string, args: rea
     help: [''],
     version: [''],
     commands: [''],
-    usage: [''],
-    stats: [''],
     paths: ['', 'status']
   };
   return (allowed[command] || ['']).includes(subcommand);

@@ -7,7 +7,7 @@ SKS 1.0.3 makes repository memory merge-friendly by separating shared records fr
 ```bash
 sks git install --json
 sks wiki publish latest --shared --json
-sks wrongness publish latest --shared --json
+sks wiki wrongness publish latest --shared --json
 sks wiki rebuild-index --json
 sks wiki validate-shared --json
 sks git precommit --json

@@ -13,10 +13,9 @@ test('unknown feature fixtures are missing instead of implicit static pass', () 
   assert.equal(fixtureForFeature('cli-update').status, 'pass');
 });
 
-test('wrongness release fixture validates without mutating project memory', () => {
-  const fixture = fixtureForFeature('cli-wrongness');
+test('memory retention fixture is an explicit dry run, never a bare memory command', () => {
+  const fixture = fixtureForFeature('cli-memory');
   assert.equal(fixture.kind, 'execute');
-  assert.equal(fixture.command, 'sks wrongness validate project --json');
+  assert.equal(fixture.command, 'sks memory gc --dry-run --json');
   assert.deepEqual(fixture.expected_artifacts, []);
-  assert.doesNotMatch(fixture.command, /\bwrongness\s+add\b/);
 });

@@ -149,7 +149,7 @@ function scanCommandGateContract() {
     if (!entry?.skipMigrationGate) issues.push(`${required}:missing_skipMigrationGate`)
   }
   // NC-38: `loop` is retired (stateless error surface); Goal owns persisted loops.
-  for (const routeStarter of ['naruto', 'dfix', 'qa-loop', 'research', 'autoresearch', 'mad-sks', 'ppt', 'image-ux-review', 'computer-use']) {
+  for (const routeStarter of ['naruto', 'dfix', 'qa-loop', 'research', 'mad-sks', 'ppt', 'image-ux-review', 'computer-use']) {
     const entry = (COMMANDS as Record<string, any>)[routeStarter]
     if (entry?.mutatesRouteState !== true) issues.push(`${routeStarter}:missing_route_state_mutator_contract`)
   }

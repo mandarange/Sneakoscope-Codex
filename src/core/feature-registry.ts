@@ -16,11 +16,8 @@ export const ALL_FEATURE_COMPLETION_SCHEMA = 'sks.all-feature-completion.v1';
 
 const HANDLER_ALIAS_TO_COMMAND = Object.freeze({
   hook: 'hooks',
-  memory: 'gc',
   postinstall: 'postinstall',
-  'ux-review': 'image-ux-review',
-  'visual-review': 'image-ux-review',
-  'ui-ux-review': 'image-ux-review'
+  'ux-review': 'image-ux-review'
 });
 
 const FEATURE_ACCEPTANCE_DEFAULTS = Object.freeze([
@@ -505,18 +502,14 @@ const SAFE_EXECUTABLE_FIXTURE_ARGS = Object.freeze({
   'cli-root': ['root', '--json'],
   'cli-commands': ['commands', '--json'],
   'cli-status': ['status', '--json'],
-  'cli-usage': ['usage', 'overview'],
   'cli-quickstart': ['quickstart'],
   'cli-guard': ['guard', 'check', '--json'],
   'cli-conflicts': ['conflicts', 'check', '--json'],
-  'cli-aliases': ['aliases'],
-  'cli-fix-path': ['fix-path', '--json'],
   'cli-selftest': ['selftest', '--mock'],
   'cli-git': ['git', 'policy', '--json'],
   'cli-seo-geo-optimizer': ['seo-geo-optimizer', 'fixture', '--mode', 'seo', '--json'],
   'cli-paths': ['paths', 'managed', '--json'],
   'cli-proof': ['proof', 'smoke', '--json'],
-  'cli-wrongness': ['wrongness', 'validate', 'project', '--json'],
   'cli-wiki': ['wiki', 'image-ingest', 'test/fixtures/images/one-by-one.png', '--json'],
   'cli-codex': ['codex', 'compatibility', '--json'],
   'cli-bridge': ['bridge', 'status', '--json'],
@@ -527,8 +520,7 @@ const SAFE_EXECUTABLE_FIXTURE_ARGS = Object.freeze({
   'cli-skill-dream': ['skill-dream', 'status', '--json'],
   'cli-gc': ['gc', '--dry-run', '--json'],
   'cli-cleanup': ['cleanup', 'plan', '--json'],
-  'cli-memory': ['memory', '--dry-run', '--json'],
-  'cli-stats': ['stats', '--json'],
+  'cli-memory': ['memory', 'gc', '--dry-run', '--json'],
   'cli-dollar-commands': ['dollar-commands', '--json'],
   'cli-fast-mode': ['fast-mode', 'status', '--json'],
   'cli-triwiki': ['triwiki', 'index', '--json'],
@@ -608,14 +600,13 @@ export function renderFeatureInventoryMarkdown(registry: any) {
 function commandFeature(command: any, handlerAliases: any = []) {
   const name = command.name;
   const category = commandCategory(name);
-  const maturity = commandMaturity(name);
   const aliases = [...new Set(handlerAliases.map((alias: any) => `sks ${alias}`))];
   return baseFeature({
     id: `cli-${name}`,
     commands: [command.usage],
     aliases,
     category,
-    maturity: command.maturity || maturity,
+    maturity: command.maturity,
     intent: command.description,
     completion_proof_integration: proofContract(category),
     voxel_triwiki_integration: voxelContract(category),
@@ -959,19 +950,13 @@ function slug(value: any) {
 }
 
 function commandCategory(name: any) {
-  if (['naruto', 'pipeline', 'goal', 'hproof', 'proof-field', 'validate-artifacts'].includes(name)) return 'proof-route';
-  if (['qa-loop', 'research', 'recallpulse', 'skill-dream', 'eval', 'perf'].includes(name)) return 'loop';
-  if (['codex', 'codex-app', 'codex-native', 'codex-lb', 'hooks', 'context7', 'computer-use'].includes(name)) return 'integration';
-  if (['db', 'guard', 'conflicts', 'harness', 'versioning'].includes(name)) return 'safety';
-  if (['wiki', 'wrongness', 'gx', 'image-ux-review', 'ppt'].includes(name)) return 'visual-memory';
-  if (['setup', 'bootstrap', 'doctor', 'deps', 'init', 'postinstall', 'fix-path'].includes(name)) return 'install';
+  if (['naruto', 'pipeline', 'goal'].includes(name)) return 'proof-route';
+  if (['qa-loop', 'research', 'recallpulse', 'skill-dream', 'eval'].includes(name)) return 'loop';
+  if (['codex', 'codex-app', 'hooks', 'context7', 'computer-use'].includes(name)) return 'integration';
+  if (['guard', 'conflicts'].includes(name)) return 'safety';
+  if (['wiki', 'gx', 'image-ux-review', 'ppt'].includes(name)) return 'visual-memory';
+  if (['setup', 'bootstrap', 'doctor', 'postinstall'].includes(name)) return 'install';
   return 'core-cli';
-}
-
-function commandMaturity(name: any) {
-  if (['help', 'version', 'commands', 'usage', 'root', 'quickstart', 'setup', 'doctor', 'selftest', 'update-check', 'fast-mode'].includes(name)) return 'stable';
-  if (['codex', 'codex-app', 'codex-native', 'codex-lb', 'hooks', 'features', 'all-features', 'wiki', 'wrongness', 'naruto', 'pipeline', 'goal', 'db', 'guard', 'computer-use', 'mad-sks', 'seo-geo-optimizer'].includes(name)) return 'beta';
-  return 'labs';
 }
 
 function routeMaturity(command: any) {

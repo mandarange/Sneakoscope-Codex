@@ -16,7 +16,10 @@ const RETIRED_COMMANDS = [
   // Folded into `sks proof <subcommand>`.
   'trust', 'stop-gate', 'validate-artifacts', 'hproof', 'proof-field',
   // Moved to the maintainer CLI (npm run maintainer -- <command>).
-  'check', 'gates', 'task', 'release', 'daemon', 'versioning', 'bench', 'perf', 'features', 'all-features', 'harness', 'rust'
+  'check', 'gates', 'task', 'release', 'daemon', 'versioning', 'bench', 'perf', 'features', 'all-features', 'harness', 'rust',
+  // Duplicates of a surviving command: help <command>, dollar-commands, setup,
+  // doctor, research --autoresearch, wiki wrongness, gc status, codex-app.
+  'usage', 'aliases', 'init', 'fix-path', 'deps', 'autoresearch', 'wrongness', 'stats', 'codex-native'
 ] as const;
 
 async function captured<T>(run: () => Promise<T>): Promise<{ result: T; stdout: string; stderr: string; exitCode: typeof process.exitCode }> {

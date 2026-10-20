@@ -1,12 +1,17 @@
 import fsp from 'node:fs/promises';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { COMMAND_MANIFEST_LITE, type CommandManifestLiteEntry } from '../../cli/command-manifest-lite.js';
+import {
+  COMMAND_ALIASES_LITE,
+  COMMAND_MANIFEST_BY_NAME,
+  visibleCommandManifest,
+  type CommandManifestLiteEntry,
+  type CommandNameLite
+} from '../../cli/command-manifest-lite.js';
 import { flag } from '../../cli/args.js';
 import { printJson, sksTextLogo } from '../../cli/output.js';
 import { ui as cliUi } from '../../cli/cli-theme.js';
-import { PACKAGE_VERSION, ensureDir, nowIso, projectRoot, readJson, rmrf, sksRoot, tmpdir, writeJsonAtomic } from '../fsx.js';
-import { DOLLAR_COMMANDS, USAGE_TOPICS, routePrompt, routeReasoning, reasoningInstruction, sksPrefixedDollarCommand } from '../routes.js';
+import { PACKAGE_VERSION, ensureDir, nowIso, projectRoot, readJson, rmrf, tmpdir, writeJsonAtomic } from '../fsx.js';
+import { DOLLAR_COMMANDS, routePrompt, routeReasoning, reasoningInstruction, sksPrefixedDollarCommand } from '../routes.js';
 import { DOLLAR_COMMAND_ALIASES_LITE, DOLLAR_COMMANDS_LITE } from '../routes/dollar-manifest-lite.js';
 import { initProject, normalizeInstallScope, sksCommandPrefix } from '../init.js';
 import { buildFeatureRegistry, validateFeatureRegistry } from '../feature-registry.js';
@@ -25,43 +30,55 @@ import { persistSksUpdateNoticeFromVersions } from '../update/update-notice.js';
 import { updateStageFailureDiagnostics } from '../update/update-stage-diagnostics.js';
 import { withSecretPreservationGuard } from '../config/config-migration-journal.js';
 
-interface CommandRow {
-  name: string;
-  usage: string;
-  description: string;
-  maturity: CommandManifestLiteEntry['maturity'];
-}
-
-const REMOVED_USAGE_TOPICS = new Set(['db', 'ui']);
-
-export async function helpCommand(args: string[] = []): Promise<void | unknown> {
-  const topic = args[0];
-  if (topic) return usageCommand([topic]);
-  console.log(`${sksTextLogo()}\n\nUsage\n`);
-  console.log('  sks');
-  console.log('  sks help [topic]');
-  console.log('  sks commands [--json]');
-  console.log('  sks dollar-commands [--json]');
-  console.log('  sks proof show --json');
-  console.log('');
-  for (const row of commandRows().filter((entry) => entry.maturity !== 'labs')) {
-    console.log(`  ${row.usage.padEnd(58)} ${row.description}`);
+/**
+ * `sks help` lists the commands; `sks help <command>` prints exactly what
+ * `sks <command> --help` prints; `sks help $route` describes a Codex App route.
+ * A bare word is always a command name, so a retired command never resolves to
+ * a route by accident (`sks help db` is unknown; `sks help '$sks-db'` is not).
+ */
+export async function helpCommand(args: string[] = []): Promise<unknown> {
+  const topic = args.find((arg) => !arg.startsWith('-'));
+  if (!topic) {
+    const { helpFast } = await import('../../cli/help-fast.js');
+    helpFast();
+    return { ok: true, status: 'help' };
   }
-  console.log('\nThree core promises: Completion Proof for serious routes, Image Voxel TriWiki for visual routes, and release-gated Codex App/Desktop Bridge/hooks/Rust evidence.');
+  if (topic.startsWith('$')) {
+    const wanted = sksPrefixedDollarCommand(topic).toLowerCase();
+    const route = DOLLAR_COMMANDS.find((entry: any) => entry.command.toLowerCase() === wanted);
+    if (route) {
+      console.log(`${route.command}\n\n${route.route}: ${route.description}`);
+      return { ok: true, status: 'help', topic: route.command };
+    }
+  } else {
+    const name = (COMMAND_ALIASES_LITE as Record<string, string>)[topic] || topic;
+    const entry = (COMMAND_MANIFEST_BY_NAME as Record<string, CommandManifestLiteEntry | undefined>)[name];
+    if (entry) {
+      const [{ COMMANDS }, { renderManifestHelp }] = await Promise.all([
+        import('../../cli/command-registry.js'),
+        import('../../cli/help.js')
+      ]);
+      const mod = await COMMANDS[name as CommandNameLite].lazy();
+      console.log(typeof mod.usage === 'function' ? mod.usage(topic) : renderManifestHelp(name, entry));
+      return { ok: true, status: 'help', topic: name };
+    }
+  }
+  console.log(`Unknown help topic: ${topic}`);
+  console.log('Topics: a command from `sks commands`, or a $ route from `sks dollar-commands` (for example `sks help \'$sks-plan\'`).');
+  process.exitCode = 1;
+  return { ok: false, status: 'unknown_topic', topic };
 }
 
-export function commandsCommand(args: string[] = []): unknown {
-  const commands = commandRows();
+export async function commandsCommand(args: string[] = []): Promise<unknown> {
   if (flag(args, '--json')) {
-    return printJson({
-      schema: 'sks.command-registry.v1',
-      aliases: ['sks', 'sneakoscope'],
-      commands
-    });
+    const { commandsJsonFast } = await import('../../cli/commands-fast.js');
+    return commandsJsonFast();
   }
+  const commands = visibleCommandManifest();
   console.log(`${sksTextLogo()}\n\nCommands\n`);
-  const width = Math.max(...commands.map((entry) => entry.usage.length));
-  for (const entry of commands) console.log(`${entry.usage.padEnd(width)}  ${entry.description}`);
+  const width = Math.max(...commands.map((entry) => entry.name.length)) + 2;
+  for (const entry of commands) console.log(`sks ${entry.name.padEnd(width)}${entry.summary}`);
+  console.log('\nRun `sks help <command>` for its usage.');
 }
 
 export function dollarCommandsCommand(args: any = []) {
@@ -71,70 +88,21 @@ export function dollarCommandsCommand(args: any = []) {
   const width = Math.max(...DOLLAR_COMMANDS_LITE.map((entry: any) => entry.command.length));
   for (const entry of DOLLAR_COMMANDS_LITE) console.log(`${entry.command.padEnd(width)}  ${entry.route}: ${entry.description}`);
   console.log(`\nCanonical Codex App picker skills: ${DOLLAR_COMMAND_ALIASES_LITE.map((entry: any) => entry.app_skill).join(', ')}`);
-}
-
-export function aliasesCommand() {
-  console.log('Aliases');
-  console.log('- sks, sneakoscope');
-  console.log('- $ aliases:');
-  for (const entry of DOLLAR_COMMAND_ALIASES_LITE) console.log(`  ${entry.app_skill} -> ${entry.canonical}`);
-}
-
-export function dfixCommand() {
-  console.log(`SKS Direct Fix Mode
-
-Prompt command:
-  $sks-dfix <tiny direct fix request>
-
-Rules:
-  Apply only the requested tiny copy/config/docs/labels/spacing/translation/simple mechanical edit.
-  Keep verification cheap and explicit.
-  Finish with a DFix completion summary and one Honest check line.`);
-}
-
-export function usageCommand(args: any = []) {
-  const topic = args[0] || 'overview';
-  if (topic === 'overview') {
-    console.log(`Usage topics: ${USAGE_TOPICS}`);
-    console.log('Try: sks usage goal, sks usage naruto, sks usage image-ux-review');
-    return;
-  }
-  if (topic === 'seo-geo-optimizer') {
-    console.log('seo-geo-optimizer\n');
-    console.log('Usage: sks seo-geo-optimizer [seo|geo] doctor|audit|plan|apply|verify|status|rollback|fixture [mission|latest] [--mode seo|geo] [--root <path>] [--url <origin>] [--target auto|website|docs|package] [--framework auto|next-app|next-pages|static] [--offline] [--strict] [--json]');
-    console.log('       sks seo-geo-optimizer apply <mission|latest> --mode seo|geo --apply [--include-llms-txt] [--scope <rule-or-path,...>] [--yes] [--json]');
-    console.log('       sks seo-geo-optimizer rollback <mission|latest> --mode seo|geo --apply [--yes] [--json]');
-    console.log('Unified SEO/GEO optimizer audit/plan/apply/verify lifecycle on the search-visibility kernel.');
-    return;
-  }
-  const row = commandRows().find((entry: any) => entry.name === topic);
-  if (row) {
-    console.log(`${row.name}\n`);
-    console.log(`Usage: ${row.usage}`);
-    console.log(row.description);
-    return;
-  }
-  const route = REMOVED_USAGE_TOPICS.has(String(topic).toLowerCase())
-    ? null
-    : DOLLAR_COMMANDS.find((entry: any) => entry.command.toLowerCase() === sksPrefixedDollarCommand(topic).toLowerCase());
-  if (route) {
-    console.log(`${sksPrefixedDollarCommand(route.command)}\n`);
-    console.log(`${route.route}: ${route.description}`);
-    return;
-  }
-  console.log(`Unknown usage topic: ${topic}`);
-  console.log(`Known topics: ${USAGE_TOPICS}`);
+  console.log('Command aliases: sks and sneakoscope are the same CLI.');
 }
 
 export function quickstartCommand() {
   console.log(`Sneakoscope Codex Quickstart
 
-  sks setup --local-only
-  sks doctor
-  sks commands
-  sks dollar-commands
+  sks setup              install hooks and skills (then once per project)
+  sks doctor             check the install; sks doctor --fix repairs it
+  sks commands           every CLI command
+  sks dollar-commands    every Codex App $ route
 
-Ask Codex for ordinary work directly; SKS hooks keep it safe. Use $sks-plan to plan, $sks-naruto or $sks-work to split work across child agents, and $sks-help to see every route.`);
+Then ask Codex for work directly: the main agent does ordinary work itself while
+SKS hooks keep it safe. Use $sks-plan to plan without edits, $sks-naruto or
+$sks-work when you want the work split across child agents, and $sks-help for
+the rest.`);
 }
 
 export async function updateStatusCommand(args: any = []) {
@@ -302,7 +270,21 @@ function applyUpdateCommandExitCode(result: any): void {
 }
 
 export async function setupCommand(args: any = []) {
-  if (flag(args, '--help') || flag(args, '-h')) return usageCommand(['setup']);
+  // Setup has no dry run. Accepting the flag and installing anyway is how
+  // `sks bootstrap --dry-run` used to change a real project.
+  if (flag(args, '--dry-run')) {
+    const refused = {
+      schema: 'sks.setup.v1',
+      ok: false,
+      status: 'dry_run_unsupported',
+      blockers: ['setup_has_no_dry_run'],
+      next_action: '`sks doctor --json` reports what setup would repair without changing anything.'
+    };
+    process.exitCode = 2;
+    if (flag(args, '--json')) printJson(refused);
+    else console.error(`Setup has no dry run; nothing was changed. ${refused.next_action}`);
+    return refused;
+  }
   const root = await projectRoot();
   const { formatHarnessConflictReport, scanHarnessConflicts } = await import('../harness-conflicts.js');
   const conflictScan = await scanHarnessConflicts(root);
@@ -384,44 +366,7 @@ export async function setupCommand(args: any = []) {
 }
 
 export async function bootstrapCommand(args: any = []) {
-  if (flag(args, '--help') || flag(args, '-h')) return usageCommand(['bootstrap']);
   return setupCommand(['--local-only', ...args]);
-}
-
-export async function initCommand(args: any = []) {
-  if (flag(args, '--help') || flag(args, '-h')) return usageCommand(['init']);
-  return setupCommand(args);
-}
-
-export async function fixPathCommand(args: any = []) {
-  const root = await projectRoot();
-  const installScope = installScopeFromArgs(args);
-  let res: any = null;
-  await withSecretPreservationGuard(root, 'fix-path-command', async () => {
-    res = await initProject(root, { installScope, localOnly: flag(args, '--local-only'), globalCommand: 'sks', force: true });
-  });
-  const readiness = initProjectInstallReadiness(res);
-  const result = {
-    schema: 'sks.fix-path.v1',
-    ok: readiness.ok,
-    status: readiness.status,
-    root,
-    install_scope: installScope,
-    hook_command_prefix: sksCommandPrefix(installScope, { globalCommand: 'sks' }),
-    hooks: path.join(root, '.codex', 'hooks.json'),
-    skill_install: res?.skill_install,
-    blockers: readiness.blockers,
-    warnings: readiness.warnings
-  };
-  if (!result.ok) process.exitCode = 1;
-  if (flag(args, '--json')) {
-    printJson(result);
-    return result;
-  }
-  console.log(`${result.ok ? 'SKS hook path refreshed' : 'SKS hook path refresh blocked'}: ${path.relative(root, result.hooks)}`);
-  for (const warning of readiness.warnings) console.log(`Warning: ${warning}`);
-  for (const blocker of readiness.blockers) console.error(`Blocker: ${blocker}`);
-  return result;
 }
 
 function initProjectInstallReadiness(res: any) {
@@ -461,42 +406,6 @@ function initProjectInstallReadiness(res: any) {
         ? 'install_blocked'
         : 'completed';
   return { ok, status, blockers, warnings };
-}
-
-export async function depsCommand(sub: any = 'check', args: any = []) {
-  const action = sub || 'check';
-  if (action !== 'check' && action !== 'status') {
-    console.error('Usage: sks deps check [--json] [--yes]');
-    process.exitCode = 1;
-    return;
-  }
-  const npm = whichSync('npm');
-  const nodeOk = Number(process.versions.node.split('.')[0]) >= 20;
-  const root = await sksRoot();
-  const { ensureRelatedCliTools } = await import('../../cli/install-helpers.js');
-  const repairRequested = flag(args, '--yes') || flag(args, '-y');
-  const cliTools = await ensureRelatedCliTools(repairRequested ? args : [...args, '--dry-run']);
-  const codexReady = cliTools.codex.status === 'present' || cliTools.codex.status === 'installed';
-  const result = {
-    schema: 'sks.deps-status.v1',
-    root,
-    ready: Boolean(nodeOk && npm && codexReady),
-    node: { ok: nodeOk, version: process.version },
-    npm: { ok: Boolean(npm), bin: npm },
-    cli_tools: cliTools,
-    next_actions: [
-      ...(!nodeOk ? ['Install Node.js 20.11+.'] : []),
-      ...(!npm ? ['Install npm or a Node.js distribution that includes npm.'] : []),
-      ...(!codexReady ? [`Run sks deps check --yes or npm i -g @openai/codex@latest.`] : [])
-    ]
-  };
-  if (flag(args, '--json')) return printJson(result);
-  console.log('SKS Dependencies');
-  console.log(`Node: ${result.node.ok ? 'ok' : 'missing'} ${result.node.version}`);
-  console.log(`npm:  ${result.npm.ok ? 'ok' : 'missing'} ${result.npm.bin || ''}`.trim());
-  console.log(`Codex CLI: ${cliTools.codex.status}${cliTools.codex.version ? ` ${cliTools.codex.version}` : ''}`);
-  for (const action of result.next_actions) console.log(`Next: ${action}`);
-  if (!result.ready) process.exitCode = 1;
 }
 
 export async function postinstallCommand(args: any = []) {
@@ -642,28 +551,11 @@ export async function autoReviewCommand(sub: any = 'status', args: any = []) {
   }
 }
 
-function commandRows(): CommandRow[] {
-  return COMMAND_MANIFEST_LITE.map((entry) => ({
-    name: entry.name,
-    usage: `sks ${entry.name}`,
-    description: entry.summary,
-    maturity: entry.maturity
-  })).sort((a, b) => a.name.localeCompare(b.name));
-}
-
 function installScopeFromArgs(args: any = [], fallback: any = 'global') {
   if (flag(args, '--project')) return 'project';
   if (flag(args, '--global')) return 'global';
   const index = args.indexOf('--install-scope');
   return normalizeInstallScope(index >= 0 && args[index + 1] ? args[index + 1] : fallback);
-}
-
-function whichSync(command: any) {
-  const result = spawnSync(process.platform === 'win32' ? 'where' : 'command', process.platform === 'win32' ? [command] : ['-v', command], {
-    encoding: 'utf8',
-    shell: process.platform !== 'win32'
-  });
-  return result.status === 0 ? String(result.stdout || '').trim().split(/\r?\n/)[0] : null;
 }
 
 function valueAfter(args: any[] = [], name: string): string | null {

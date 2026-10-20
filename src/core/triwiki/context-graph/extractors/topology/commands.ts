@@ -7,8 +7,7 @@
  */
 import {
   COMMAND_ALIASES_LITE,
-  COMMAND_MANIFEST_LITE,
-  LEGACY_COMMAND_ALIASES_LITE
+  COMMAND_MANIFEST_LITE
 } from '../../../../../cli/command-manifest-lite.js';
 import type { ContextGraphEdgeConfidence, ContextGraphMetadata, ContextGraphRisk } from '../../contracts.js';
 import { contextGraphNodeId } from '../../ids.js';
@@ -121,15 +120,9 @@ export function commandNodeIdFor(name: string): string {
   return contextGraphNodeId({ kind: 'command', name });
 }
 
-/**
- * Every alias, including the legacy (renamed) ones, mapped to its canonical
- * command name. A rename must never mint a second command node.
- */
+/** Every alias mapped to its canonical command name, so an alias never mints a second command node. */
 function commandAliasMap(): Record<string, string> {
-  return {
-    ...(LEGACY_COMMAND_ALIASES_LITE as Record<string, string>),
-    ...(COMMAND_ALIASES_LITE as Record<string, string>)
-  };
+  return COMMAND_ALIASES_LITE as Record<string, string>;
 }
 
 /** Resolve an alias (a renamed or shorthand verb) to its canonical command name. */
@@ -177,7 +170,6 @@ export function buildCommandGraph(
       remoteAllowed: entry.remoteAllowed,
       readonlyCommand: entry.readonly === true,
       diagnostic: entry.diagnostic === true,
-      deprecated: entry.deprecated === true,
       hidden: entry.hidden === true,
       mutatesRouteState: entry.mutatesRouteState === true,
       requiredCapabilities: [...entry.requiredCapabilities],

@@ -63,7 +63,10 @@ export const INSTALLED_REMOVED_COMMANDS = [
   // Folded into `sks proof <subcommand>`.
   'trust', 'stop-gate', 'validate-artifacts', 'hproof', 'proof-field',
   // Moved to the maintainer CLI, which is not part of the installed package.
-  'check', 'gates', 'task', 'release', 'daemon', 'versioning', 'bench', 'perf', 'features', 'all-features', 'harness', 'rust'
+  'check', 'gates', 'task', 'release', 'daemon', 'versioning', 'bench', 'perf', 'features', 'all-features', 'harness', 'rust',
+  // Duplicates of a surviving command (help <command>, dollar-commands, setup,
+  // doctor, research --autoresearch, wiki wrongness, gc status, codex-app).
+  'usage', 'aliases', 'init', 'fix-path', 'deps', 'autoresearch', 'wrongness', 'stats', 'codex-native'
 ] as const
 export const INSTALLED_REMOVED_DOLLAR_COMMANDS = Array.from(new Set([
   '$Agent', '$Team', '$MAD-DB', '$Swarm', '$ShadowClone', '$Kagebunshin', '$Ralph',

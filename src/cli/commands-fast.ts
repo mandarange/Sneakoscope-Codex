@@ -7,7 +7,6 @@ interface FastCommandRow {
   maturity: CommandManifestLiteEntry['maturity'];
   readonly?: boolean;
   mutating?: boolean;
-  deprecated?: boolean;
   hidden?: boolean;
 }
 
@@ -25,13 +24,12 @@ export function commandsJsonFast(): void {
 function fastCommandRow(entry: CommandManifestLiteEntry): FastCommandRow {
   const row: FastCommandRow = {
     name: entry.name,
-    usage: `sks ${entry.name}`,
+    usage: entry.usage || `sks ${entry.name}`,
     description: entry.summary,
     maturity: entry.maturity
   };
   if (entry.readonly === true) row.readonly = true;
   if (entry.mutatesRouteState === true) row.mutating = true;
-  if (entry.deprecated === true) row.deprecated = true;
   if (entry.hidden === true) row.hidden = true;
   return row;
 }

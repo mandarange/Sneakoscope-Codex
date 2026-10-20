@@ -56,7 +56,12 @@ const ARGUMENT_BUILDERS: Record<CommandInputProfile, ArgvBuilder> = {
   },
   paths: (input) => [stringValue(input.action, 'managed'), ...jsonFlag(input)],
   'pipeline-status': (input) => [stringValue(input.action, 'status'), ...jsonFlag(input)],
-  stats: (input) => [...booleanFlag(input, 'full', '--full'), ...jsonFlag(input)],
+  // `sks search --json` alone prints help, so the tool always names its mode.
+  search: (input) => {
+    const action = stringValue(input.action, 'status');
+    const query = typeof input.query === 'string' && action !== 'status' ? [input.query] : [];
+    return [action, ...query, ...jsonFlag(input)];
+  },
   proof: (input) => {
     const action = stringValue(input.action, 'show');
     if (action === 'trust') {

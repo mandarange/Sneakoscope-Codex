@@ -78,7 +78,7 @@ Each anchor stores id, RGBA key, `[domain, layer, phase, concentration]`, source
 - Old missions, old cycle directories, arenas, temp files, oversized JSONL logs, and terminal inactive worker runtime homes are removed or rotated by `sks gc`; `route_closed` records are inactive, while recently updated non-closed sessions receive a two-hour protection window.
 - Mission compaction preserves durable JSON and review/image evidence in place and removes only known disposable runtime files. Existing legacy gzip archives are hydrated transparently only after their payload path and original SHA-256 are verified.
 - Cleanup containment checks reject symlink or realpath escapes, and bounded scans report when the inspected set is incomplete instead of claiming a full cleanup.
-- `sks stats` reports package/state size, while the full retention budget scan counts every `.sneakoscope` top-level directory and root file with a per-directory 1,000,000-file safety ceiling instead of silently stopping at the former partial scan.
+- `sks gc status --full` reports package/state size, while the full retention budget scan counts every `.sneakoscope` top-level directory and root file with a per-directory 1,000,000-file safety ceiling instead of silently stopping at the former partial scan.
 - Release-gate run storage retains the five most recent run directories by default.
 
 ## Rust decision

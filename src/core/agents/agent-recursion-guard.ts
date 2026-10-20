@@ -6,7 +6,6 @@ export const AGENT_RECURSION_GUARD_REPORT_SCHEMA = 'sks.agent-recursion-guard.v1
 export const AGENT_RECURSIVE_COMMAND_DENYLIST = Object.freeze([
   'sks naruto run',
   'sks research run',
-  'sks autoresearch run',
   'sks qa-loop',
   'sks goal',
   '$Naruto',

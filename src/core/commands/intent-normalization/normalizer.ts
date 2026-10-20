@@ -91,7 +91,7 @@ function dollarRouteFallback(value: string): string {
     answer: 'help', plan: 'plan', review: 'review', work: 'naruto', 'release-review': 'review',
     'commit-and-push': 'commit-and-push', 'super-search': 'super-search', 'seo-geo-optimizer': 'seo-geo-optimizer',
     db: 'mad-sks', wiki: 'wiki', help: 'help', goal: 'goal', align: 'align', gx: 'gx', ppt: 'ppt',
-    autoresearch: 'autoresearch', research: 'research', 'qa-loop': 'qa-loop', 'image-ux-review': 'image-ux-review',
+    autoresearch: 'research', research: 'research', 'qa-loop': 'qa-loop', 'image-ux-review': 'image-ux-review',
     'computer-use': 'computer-use', dfix: 'dfix', naruto: 'naruto', commit: 'commit', sks: 'root'
   };
   const command = fallbacks[value];

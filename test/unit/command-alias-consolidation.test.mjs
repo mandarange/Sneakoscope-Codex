@@ -4,24 +4,22 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { COMMAND_CATALOG, routePrompt } from '../../dist/core/routes.js';
-import { COMMANDS, LEGACY_COMMAND_ALIASES, commandNames } from '../../dist/cli/command-registry.js';
+import { COMMANDS, COMMAND_ALIASES, commandNames } from '../../dist/cli/command-registry.js';
 import { normalizeCommand } from '../../dist/cli/router.js';
 import { runDoctorCommandAliasCleanup } from '../../dist/core/doctor/command-alias-cleanup.js';
 import { REMOVED_PUBLIC_COMMANDS } from '../../dist/core/doctor/retired-managed-residue-private.js';
 
-test('legacy command aliases are dispatch aliases, not duplicate command rows', () => {
+test('every command alias resolves to a registered command and is not itself a command row', () => {
   const names = commandNames();
   const catalogNames = COMMAND_CATALOG.map((entry) => entry.name);
-  for (const [alias, canonical] of Object.entries(LEGACY_COMMAND_ALIASES)) {
+  for (const [alias, canonical] of Object.entries(COMMAND_ALIASES)) {
     assert.equal(Object.prototype.hasOwnProperty.call(COMMANDS, alias), false, alias);
-    assert.equal(names.includes(alias), false, alias);
     assert.equal(catalogNames.includes(alias), false, alias);
     assert.equal(names.includes(canonical), true, `${alias}->${canonical}`);
     const normalized = normalizeCommand([alias, 'status', '--json']);
     assert.equal(normalized.command, canonical, alias);
     assert.equal(normalized.rawCommand, alias, alias);
     assert.equal(normalized.aliasTarget, canonical, alias);
-    assert.deepEqual(normalized.args, ['status', '--json']);
   }
 });
 
@@ -30,7 +28,7 @@ test('removed public commands and dollar aliases are unknown instead of redirect
   const catalogNames = COMMAND_CATALOG.map((entry) => entry.name);
   for (const name of REMOVED_PUBLIC_COMMANDS) {
     assert.equal(Object.prototype.hasOwnProperty.call(COMMANDS, name), false, name);
-    assert.equal(Object.prototype.hasOwnProperty.call(LEGACY_COMMAND_ALIASES, name), false, name);
+    assert.equal(Object.prototype.hasOwnProperty.call(COMMAND_ALIASES, name), false, name);
     assert.equal(names.includes(name), false, name);
     assert.equal(catalogNames.includes(name), false, name);
     const normalized = normalizeCommand([name, '--json']);

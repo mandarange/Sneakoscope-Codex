@@ -62,7 +62,7 @@ export async function run(_command: any, args: any = []) {
   }
   if (action === 'skill-sync') return printCodexAppResult(args, await syncCodexSksSkills({ root: await sksRoot(), apply: flag(args, '--apply') || flag(args, '--fix') }));
   if (action === 'agent-role-sync') return printCodexAppResult(args, await syncCodexAgentRoles({ root: await sksRoot(), apply: flag(args, '--apply') || flag(args, '--fix') }));
-  if (action === 'init-deep') return printCodexAppResult(args, await runCodexInitDeep({ root: await sksRoot(), apply: !flag(args, '--check-only') && !flag(args, '--dry-run') }));
+  if (action === 'init-deep') return printCodexAppResult(args, await runCodexInitDeep({ root: await sksRoot(), apply: !flag(args, '--check-only') && !flag(args, '--dry-run'), directoryLocal: flag(args, '--directory-local') }));
   if (action === 'hook-lifecycle') return printCodexAppResult(args, await buildCodexHookLifecycle({ root: await sksRoot(), apply: flag(args, '--apply') || flag(args, '--fix') }));
   if (action === 'execution-profile') return printCodexAppResult(args, await resolveCodexAppExecutionProfile({ root: await sksRoot() }));
   if (action === 'role-models') {
@@ -134,7 +134,7 @@ export async function run(_command: any, args: any = []) {
     if (!status.ok) process.exitCode = 1;
     return;
   }
-  console.error('Usage: sks codex-app check|status|restart|context-management [status|on|off]|context-1m [status|on|off] [--no-restart]|harness-matrix|skill-sync|agent-role-sync|init-deep|hook-lifecycle|execution-profile|role-models|set-role-model --role <name> [--provider <id>] --model <catalog-slug> --reasoning <effort>|reset-role-model --role <name>|product-design [--check-only]|ensure-product-design|chrome-extension|pat status|remote-control [--json]');
+  console.error('Usage: sks codex-app check|status|restart|context-management [status|on|off]|context-1m [status|on|off] [--no-restart]|harness-matrix|skill-sync|agent-role-sync|init-deep [--directory-local]|hook-lifecycle|execution-profile|role-models|set-role-model --role <name> [--provider <id>] --model <catalog-slug> --reasoning <effort>|reset-role-model --role <name>|product-design [--check-only]|ensure-product-design|chrome-extension|pat status|remote-control [--json]');
   console.error('Provider routing moved to: sks bridge provider configure|validate|enable; sks bridge catalog sync; sks bridge route set-default.');
   process.exitCode = 1;
 }

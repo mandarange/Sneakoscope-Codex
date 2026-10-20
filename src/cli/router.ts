@@ -411,8 +411,7 @@ export function safeActiveRouteContinuation(command: CommandNameLite, args: read
     return subcommand === 'run' && !requestedMission;
   }
   const expectedRoutes = new Map<CommandNameLite, readonly string[]>([
-    ['research', ['RESEARCH']],
-    ['autoresearch', ['AUTORESEARCH', 'RESEARCH']],
+    ['research', ['RESEARCH', 'AUTORESEARCH']],
     ['qa-loop', ['QALOOP']]
   ]).get(command);
   if (!expectedRoutes) return false;

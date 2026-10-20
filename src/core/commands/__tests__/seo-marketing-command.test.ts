@@ -10,11 +10,11 @@ test('seo-geo-optimizer research and strategy actions are wired through the CLI 
   process.exitCode = undefined;
   const root = await makeMarketingRoot();
 
-  const research: any = await runSearchVisibilityCommand('seo', ['research', '--root', root, '--offline', '--json'], 'seo-geo-optimizer');
+  const research: any = await runSearchVisibilityCommand('seo', ['research', '--root', root, '--offline', '--json']);
   assert.equal(research.ok, true);
   assert.equal(process.exitCode, undefined);
 
-  const strategy: any = await runSearchVisibilityCommand('seo', ['strategy', research.mission_id, '--root', root, '--offline', '--json'], 'seo-geo-optimizer');
+  const strategy: any = await runSearchVisibilityCommand('seo', ['strategy', research.mission_id, '--root', root, '--offline', '--json']);
   assert.equal(strategy.ok, true);
   assert.equal(process.exitCode, undefined);
   const strategyArtifact = JSON.parse(await fsp.readFile(path.join(root, '.sneakoscope', 'missions', research.mission_id, 'search-visibility', 'marketing-strategy.json'), 'utf8'));
@@ -30,8 +30,8 @@ test('seo-geo-optimizer plan --include-marketing blocks without creating strateg
   process.exitCode = undefined;
   const root = await makeMarketingRoot();
 
-  const research: any = await runSearchVisibilityCommand('seo', ['research', '--root', root, '--offline', '--json'], 'seo-geo-optimizer');
-  const plan: any = await runSearchVisibilityCommand('seo', ['plan', research.mission_id, '--root', root, '--mode', 'seo', '--include-marketing', '--offline', '--json'], 'seo-geo-optimizer');
+  const research: any = await runSearchVisibilityCommand('seo', ['research', '--root', root, '--offline', '--json']);
+  const plan: any = await runSearchVisibilityCommand('seo', ['plan', research.mission_id, '--root', root, '--mode', 'seo', '--include-marketing', '--offline', '--json']);
   assert.equal(plan.ok, false);
   assert.equal(plan.status, 'blocked');
   assert.ok(plan.blockers.includes('marketing_strategy_required_for_include_marketing'));
@@ -44,10 +44,10 @@ test('seo-geo-optimizer apply --include-marketing ignores stale full SEO gate bl
   process.exitCode = undefined;
   const root = await makeMarketingRoot();
 
-  const research: any = await runSearchVisibilityCommand('seo', ['research', '--root', root, '--offline', '--json'], 'seo-geo-optimizer');
-  const strategy: any = await runSearchVisibilityCommand('seo', ['strategy', research.mission_id, '--root', root, '--offline', '--json'], 'seo-geo-optimizer');
+  const research: any = await runSearchVisibilityCommand('seo', ['research', '--root', root, '--offline', '--json']);
+  const strategy: any = await runSearchVisibilityCommand('seo', ['strategy', research.mission_id, '--root', root, '--offline', '--json']);
   assert.equal(strategy.ok, true);
-  const plan: any = await runSearchVisibilityCommand('seo', ['plan', research.mission_id, '--root', root, '--mode', 'seo', '--include-marketing', '--offline', '--json'], 'seo-geo-optimizer');
+  const plan: any = await runSearchVisibilityCommand('seo', ['plan', research.mission_id, '--root', root, '--mode', 'seo', '--include-marketing', '--offline', '--json']);
   assert.equal(plan.ok, true);
   await fsp.writeFile(path.join(root, '.sneakoscope', 'missions', research.mission_id, 'seo-gate.json'), JSON.stringify({
     schema: 'sks.search-visibility.gate.v1',
@@ -56,7 +56,7 @@ test('seo-geo-optimizer apply --include-marketing ignores stale full SEO gate bl
     blockers: ['missing:search-visibility/adapter-detection.json'],
   }, null, 2));
 
-  const apply: any = await runSearchVisibilityCommand('seo', ['apply', research.mission_id, '--root', root, '--mode', 'seo', '--include-marketing', '--apply', '--offline', '--json'], 'seo-geo-optimizer');
+  const apply: any = await runSearchVisibilityCommand('seo', ['apply', research.mission_id, '--root', root, '--mode', 'seo', '--include-marketing', '--apply', '--offline', '--json']);
   assert.equal(apply.ok, true, apply.blockers.join(', '));
   assert.equal(apply.status, 'applied');
   assert.equal(apply.verification.ok, true);

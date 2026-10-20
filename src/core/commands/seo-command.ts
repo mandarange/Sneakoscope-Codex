@@ -19,12 +19,25 @@ import type { SearchVisibilityCliOptions, SearchVisibilityFramework, SearchVisib
 import { evaluateGate } from '../stop-gate/gate-evaluator.js';
 import { evaluateLocalGate } from './route-success-helpers.js';
 
-export async function seoGeoOptimizerCommand(args: string[] = []) {
-  const normalized = normalizeOptimizerArgs(args);
-  return runSearchVisibilityCommand(normalized.mode, normalized.args, 'seo-geo-optimizer');
+const SEO_GEO_USAGE = [
+  'Usage: sks seo-geo-optimizer [seo|geo] doctor|audit|research|strategy|plan|apply|verify|status|rollback|fixture [mission|latest] [--mode seo|geo] [--root <path>] [--url <origin>] [--target auto|website|docs|package] [--framework auto|next-app|next-pages|static] [--offline] [--strict] [--include-marketing] [--json]',
+  '       sks seo-geo-optimizer research [mission|latest] [--offline] [--include-competitors] [--json]',
+  '       sks seo-geo-optimizer strategy <mission|latest> [--json]',
+  '       sks seo-geo-optimizer apply <mission|latest> --mode seo|geo --apply [--include-marketing] [--include-llms-txt] [--scope <rule-or-path,...>] [--yes] [--json]',
+  '       sks seo-geo-optimizer rollback <mission|latest> --mode seo|geo --apply [--yes] [--json]'
+];
+
+/** Printed by `sks seo-geo-optimizer --help` and `sks help seo-geo-optimizer`. */
+export function usage(): string {
+  return SEO_GEO_USAGE.join('\n');
 }
 
-export async function runSearchVisibilityCommand(mode: 'seo' | 'geo', args: string[] = [], displayCommand: 'seo' | 'geo' | 'seo-geo-optimizer' = mode) {
+export async function seoGeoOptimizerCommand(args: string[] = []) {
+  const normalized = normalizeOptimizerArgs(args);
+  return runSearchVisibilityCommand(normalized.mode, normalized.args);
+}
+
+export async function runSearchVisibilityCommand(mode: 'seo' | 'geo', args: string[] = []) {
   const action = args[0] || 'doctor';
   const rest = args.slice(1);
   const options = await parseOptions(rest);
@@ -66,7 +79,7 @@ export async function runSearchVisibilityCommand(mode: 'seo' | 'geo', args: stri
   else if (action === 'status') result = await runSearchVisibilityStatus(mode, firstPositional(rest) || 'latest', options);
   else if (action === 'rollback') result = await runSearchVisibilityRollback(mode, firstPositional(rest) || 'latest', options);
   else if (action === 'fixture') result = await runSearchVisibilityFixture(mode, options);
-  else return usage(mode, 2, displayCommand);
+  else return invalidSubcommand(mode);
   result = await applySearchVisibilityGateResult(mode, action, result, options);
   if (isBlocked(result)) process.exitCode = 1;
   if (options.json) {
@@ -181,22 +194,10 @@ function firstPositional(args: string[]): string | null {
   return null;
 }
 
-function usage(mode: 'seo' | 'geo', exitCode: number, displayCommand: 'seo' | 'geo' | 'seo-geo-optimizer' = mode) {
-  if (displayCommand === 'seo-geo-optimizer') {
-    console.error('Usage: sks seo-geo-optimizer [seo|geo] doctor|audit|research|strategy|plan|apply|verify|status|rollback|fixture [mission|latest] [--mode seo|geo] [--root <path>] [--url <origin>] [--target auto|website|docs|package] [--framework auto|next-app|next-pages|static] [--offline] [--strict] [--include-marketing] [--json]');
-    console.error('       sks seo-geo-optimizer research [mission|latest] [--offline] [--include-competitors] [--json]');
-    console.error('       sks seo-geo-optimizer strategy <mission|latest> [--json]');
-    console.error('       sks seo-geo-optimizer apply <mission|latest> --mode seo|geo --apply [--include-marketing] [--include-llms-txt] [--scope <rule-or-path,...>] [--yes] [--json]');
-    console.error('       sks seo-geo-optimizer rollback <mission|latest> --mode seo|geo --apply [--yes] [--json]');
-    process.exitCode = exitCode;
-    return { schema: 'sks.search-visibility.usage.v1', ok: false, status: 'blocked', mode, command: displayCommand, reason: 'invalid_subcommand' };
-  }
-  const applyFlag = mode === 'geo' ? ' [--include-llms-txt]' : '';
-  console.error(`Usage: sks ${mode} doctor|audit|research|strategy|plan|apply|verify|status|rollback|fixture [mission|latest] [--root <path>] [--url <origin>] [--target auto|website|docs|package] [--framework auto|next-app|next-pages|static] [--offline] [--strict] [--include-marketing] [--json]`);
-  console.error(`       sks ${mode} apply <mission|latest> --apply${applyFlag} [--include-marketing] [--scope <rule-or-path,...>] [--yes] [--json]`);
-  console.error(`       sks ${mode} rollback <mission|latest> --apply [--yes] [--json]`);
-  process.exitCode = exitCode;
-  return { schema: 'sks.search-visibility.usage.v1', ok: false, status: 'blocked', mode, reason: 'invalid_subcommand' };
+function invalidSubcommand(mode: 'seo' | 'geo') {
+  console.error(usage());
+  process.exitCode = 2;
+  return { schema: 'sks.search-visibility.usage.v1', ok: false, status: 'blocked', mode, command: 'seo-geo-optimizer', reason: 'invalid_subcommand' };
 }
 
 function isBlocked(value: unknown): boolean {

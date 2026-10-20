@@ -1,7 +1,6 @@
 import {
   COMMAND_ALIASES_LITE,
   COMMAND_MANIFEST_BY_NAME,
-  LEGACY_COMMAND_ALIASES_LITE,
   commandManifestNames,
   type CommandInputProfileLite,
   type CommandLatencyLite,
@@ -39,7 +38,7 @@ export type CommandEntry = Omit<CommandManifestLiteEntry, 'name'> & {
 const basicModule = '../core/commands/basic-cli.js';
 const basicArgs = (exportName: string) => argsCommand(() => import(basicModule), exportName);
 const basicNoArgs = (exportName: string) => noArgsCommand(() => import(basicModule), exportName);
-const gcArgs = (exportName: 'gcCommand' | 'statsCommand' | 'memoryCommand') =>
+const gcArgs = (exportName: 'gcCommand' | 'memoryCommand') =>
   argsCommand(() => import('../core/commands/gc-command.js'), exportName);
 
 const COMMAND_LOADERS = {
@@ -57,20 +56,15 @@ const COMMAND_LOADERS = {
   'update-check': command('dist/core/commands/basic-cli.js', basicArgs('updateCheckCommand')),
   config: command('dist/core/config-adopt/index.js', subcommand(() => import('../core/config-adopt/index.js'), 'configCommand', 'adopt')),
   mcp: command('dist/core/commands/mcp-config-command.js', argsCommand(() => import('../core/commands/mcp-config-command.js'), 'mcpConfigCommand')),
-  usage: command('dist/core/commands/basic-cli.js', basicArgs('usageCommand')),
   quickstart: command('dist/core/commands/basic-cli.js', basicNoArgs('quickstartCommand')),
   setup: command('dist/core/commands/basic-cli.js', basicArgs('setupCommand')),
   bootstrap: command('dist/core/commands/basic-cli.js', basicArgs('bootstrapCommand')),
-  init: command('dist/core/commands/basic-cli.js', basicArgs('initCommand')),
-  deps: command('dist/core/commands/basic-cli.js', subcommand(() => import(basicModule), 'depsCommand', 'check')),
-  'fix-path': command('dist/core/commands/basic-cli.js', basicArgs('fixPathCommand')),
   doctor: command('dist/commands/doctor.js', directCommand(() => import('../commands/doctor.js'))),
   git: command('dist/commands/git.js', directCommand(() => import('../commands/git.js'))),
   paths: command('dist/core/commands/paths-command.js', argsCommand(() => import('../core/commands/paths-command.js'), 'pathsCommand')),
   postinstall: command('dist/core/commands/basic-cli.js', basicArgs('postinstallCommand')),
   codex: command('dist/commands/codex.js', directCommand(() => import('../commands/codex.js'))),
   'codex-app': command('dist/commands/codex-app.js', directCommand(() => import('../commands/codex-app.js'))),
-  'codex-native': command('dist/commands/codex-native.js', directCommand(() => import('../commands/codex-native.js'))),
   bridge: command('dist/commands/bridge.js', directCommand(() => import('../commands/bridge.js'))),
   menubar: command('dist/core/commands/menubar-command.js', subcommand(() => import('../core/commands/menubar-command.js'), 'menubarCommand', 'status')),
   remote: command('dist/core/commands/remote-command.js', argsCommand(() => import('../core/commands/remote-command.js'), 'remoteCommand')),
@@ -86,7 +80,6 @@ const COMMAND_LOADERS = {
   route: command('dist/core/commands/route-command.js', subcommand(() => import('../core/commands/route-command.js'), 'routeCommand', 'status')),
   'qa-loop': command('dist/core/commands/qa-loop-command.js', subcommand(() => import('../core/commands/qa-loop-command.js'), 'qaLoopCommand')),
   research: command('dist/core/commands/research-command.js', subcommand(() => import('../core/commands/research-command.js'), 'researchCommand')),
-  autoresearch: command('dist/core/commands/autoresearch-command.js', subcommand(() => import('../core/commands/autoresearch-command.js'), 'autoresearchCommand', 'status')),
   ppt: command('dist/core/commands/ppt-command.js', commandArgsCommand(() => import('../core/commands/ppt-command.js'), 'pptCommand')),
   'image-ux-review': command('dist/core/commands/image-ux-review-command.js', commandArgsCommand(() => import('../core/commands/image-ux-review-command.js'), 'imageUxReviewCommand')),
   'computer-use': command('dist/core/commands/computer-use-command.js', commandArgsCommand(() => import('../core/commands/computer-use-command.js'), 'computerUseCommand')),
@@ -98,7 +91,6 @@ const COMMAND_LOADERS = {
   guard: command('dist/commands/guard.js', directCommand(() => import('../commands/guard.js'))),
   conflicts: command('dist/commands/conflicts.js', directCommand(() => import('../commands/conflicts.js'))),
   reasoning: command('dist/core/commands/basic-cli.js', basicArgs('reasoningCommand')),
-  aliases: command('dist/core/commands/basic-cli.js', basicNoArgs('aliasesCommand')),
   cleanup: command('dist/core/commands/cleanup-command.js', subcommand(() => import('../core/commands/cleanup-command.js'), 'cleanupCommand', 'plan')),
   align: command('dist/core/commands/align-command.js', subcommand(() => import('../core/commands/align-command.js'), 'alignCommand', 'prepare')),
   selftest: command('dist/core/commands/basic-cli.js', basicArgs('selftestCommand')),
@@ -106,7 +98,6 @@ const COMMAND_LOADERS = {
   'seo-geo-optimizer': command('dist/core/commands/seo-command.js', argsCommand(() => import('../core/commands/seo-command.js'), 'seoGeoOptimizerCommand')),
   hook: command('dist/commands/hook.js', directCommand(() => import('../commands/hook.js'))),
   proof: command('dist/commands/proof.js', directCommand(() => import('../commands/proof.js'))),
-  wrongness: command('dist/core/commands/wrongness-command.js', argsCommand(() => import('../core/commands/wrongness-command.js'), 'wrongnessCommand')),
   'skill-dream': command('dist/core/commands/skill-dream-command.js', subcommand(() => import('../core/commands/skill-dream-command.js'), 'skillDreamCommand', 'status')),
   'code-structure': command('dist/core/commands/code-structure-command.js', subcommand(() => import('../core/commands/code-structure-command.js'), 'codeStructureCommand', 'scan')),
   eval: command('dist/core/commands/eval-command.js', subcommand(() => import('../core/commands/eval-command.js'), 'evalCommand', 'run')),
@@ -114,7 +105,6 @@ const COMMAND_LOADERS = {
   wiki: command('dist/commands/wiki.js', directCommand(() => import('../commands/wiki.js'))),
   memory: command('dist/commands/memory.js', directCommand(() => import('../commands/memory.js'))),
   gc: command('dist/core/commands/gc-command.js', gcArgs('gcCommand')),
-  stats: command('dist/core/commands/gc-command.js', gcArgs('statsCommand')),
   'mcp-server': command('dist/core/commands/mcp-server-command.js', argsCommand(() => import('../core/commands/mcp-server-command.js'), 'mcpServerCommand')),
   'agent-bridge': command('dist/core/commands/agent-bridge-command.js', subcommand(() => import('../core/commands/agent-bridge-command.js'), 'agentBridgeCommand', 'setup')),
   decision: command('dist/commands/decision.js', directCommand(() => import('../commands/decision.js'))),
@@ -129,8 +119,6 @@ export const COMMANDS = Object.fromEntries(
 ) as { [K in CommandNameLite]: CommandEntry };
 
 export type CommandName = CommandNameLite;
-
-export const LEGACY_COMMAND_ALIASES = LEGACY_COMMAND_ALIASES_LITE;
 
 export const COMMAND_ALIASES = COMMAND_ALIASES_LITE;
 

@@ -251,7 +251,7 @@ async function doctorRepairActions(id: string): Promise<void> {
   })
   const expected = [
     ['Codex Native managed assets: sks doctor', '--fix', '--repair-codex-native', '--yes'].join(' '),
-    'Project memory: sks codex-native init-deep --apply --directory-local'
+    'Project memory: sks codex-app init-deep --directory-local'
   ]
   assertGate(
     expected.every((action) => readiness.repair_actions.includes(action)),

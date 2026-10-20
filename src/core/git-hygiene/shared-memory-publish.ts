@@ -674,7 +674,7 @@ export async function publishPlan(root: string): Promise<JsonRecord> {
     commands: [
       'sks git doctor --fix',
       'sks wiki publish latest --shared',
-      'sks wrongness publish latest --shared',
+      'sks wiki wrongness publish latest --shared',
       'sks wiki rebuild-index --json',
       'sks wiki validate-shared --json',
       'sks git precommit --json'

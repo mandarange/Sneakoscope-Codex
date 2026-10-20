@@ -2921,7 +2921,7 @@
     },
     {
       "id": "wrongness:check",
-      "command": "node ./dist/bin/sks.js wrongness validate project --json && node ./dist/scripts/wrongness-fixture-check.js",
+      "command": "node ./dist/bin/sks.js wiki wrongness validate project --json && node ./dist/scripts/wrongness-fixture-check.js",
       "deps": [],
       "resource": [
         "cpu-light",

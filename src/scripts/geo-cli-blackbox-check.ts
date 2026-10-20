@@ -6,8 +6,8 @@ const commands = runSksJson(['commands', '--json']).json;
 assertGate(commands.commands.some((row) => row.name === 'seo-geo-optimizer' && /unified SEO\/GEO optimizer/i.test(row.description)), 'commands --json must expose seo-geo-optimizer');
 assertGate(!commands.commands.some((row) => row.name === 'seo' || row.name === 'geo'), 'commands --json must not expose split seo/geo command surfaces');
 
-const optimizerUsage = runSks(['usage', 'seo-geo-optimizer']);
-assertGate(/sks seo-geo-optimizer \[seo\|geo\] doctor\|audit\|plan\|apply\|verify\|status\|rollback\|fixture/.test(optimizerUsage.stdout), 'usage seo-geo-optimizer must expose unified lifecycle');
+const optimizerUsage = runSks(['help', 'seo-geo-optimizer']);
+assertGate(/sks seo-geo-optimizer \[seo\|geo\] doctor\|audit\|research\|strategy\|plan\|apply\|verify\|status\|rollback\|fixture/.test(optimizerUsage.stdout), 'help seo-geo-optimizer must expose unified lifecycle');
 
 const doctor = runSksJson(['seo-geo-optimizer', 'doctor', '--mode', 'geo', '--json']).json;
 assertGate(doctor.route === '$SEO-GEO-OPTIMIZER' && doctor.schema === 'sks.search-visibility.doctor-command.v1', 'optimizer geo doctor must preserve unified route identity', doctor);

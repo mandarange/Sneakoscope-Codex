@@ -2,8 +2,38 @@
 
 ## [Unreleased]
 
+### Removed
+
+- Nine commands that duplicated another one: `sks usage` (use `sks help
+  <command>`), `sks aliases` (`sks dollar-commands`), `sks init` and
+  `sks fix-path` (`sks setup [--force]`), `sks deps` (`sks doctor`),
+  `sks autoresearch` (`sks research … --autoresearch`), the top-level
+  `sks wrongness` (`sks wiki wrongness`, which now carries every verb),
+  `sks stats` (`sks gc status [--full]`) and `sks codex-native`
+  (`sks codex-app`; Doctor's project-memory repair now names
+  `sks codex-app init-deep --directory-local`). They answer
+  `unknown_command` like every other retired name.
+- The unused `visual-review` and `ui-ux-review` command aliases.
+
+### Changed
+
+- Help has one path: `sks help <command>` prints exactly what
+  `sks <command> --help` prints, `sks help '$route'` describes a route, and an
+  unknown topic exits 1. `sks help` lists every non-labs command instead of
+  stopping after the first 18, and per-command help shows the command's real
+  usage line instead of `[options]`. The old help screen's "three core
+  promises" line is gone.
+- The MCP and agent-bridge `search` tool takes an action and a query; it used
+  to run `sks search --json`, which only printed help. The `stats` tool is
+  gone with its command.
+
 ### Fixed
 
+- `sks memory` with no subcommand, or a misspelled one, ran a real retention
+  pass that deletes runtime state; it now prints usage and exits 2. Retention
+  stays available as `sks memory gc`.
+- `sks setup --dry-run` (and `sks bootstrap --dry-run`) installed hooks and
+  skills anyway; setup now refuses the flag and points at `sks doctor --json`.
 - Codex SDK tasks name why a run failed. A failed turn reached SKS only as
   `Codex Exec exited with code 1: Reading prompt from stdin...`, because the
   SDK raises the exit after the stream and the adapter dropped the events it

@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { dispatch, normalizeCommand } from '../router.js'
-import { usageCommand } from '../../core/commands/basic-cli.js'
+import { helpCommand } from '../../core/commands/basic-cli.js'
 
 test('legacy sks db is absent from normalization and returns unknown_command', async () => {
   assert.equal(normalizeCommand(['db', 'check']).command, null)
@@ -30,15 +30,18 @@ test('legacy sks db is absent from normalization and returns unknown_command', a
   }
 })
 
-test('legacy db is not exposed as a public usage topic', () => {
+test('legacy db is not exposed as a help topic', async () => {
   const stdout: string[] = []
   const previousLog = console.log
+  const previousExitCode = process.exitCode
   try {
     console.log = (...args: unknown[]) => stdout.push(args.map(String).join(' '))
-    usageCommand(['db'])
-    assert.match(stdout.join('\n'), /Unknown usage topic: db/)
+    const result: any = await helpCommand(['db'])
+    assert.equal(result.status, 'unknown_topic')
+    assert.match(stdout.join('\n'), /Unknown help topic: db/)
     assert.doesNotMatch(stdout.join('\n'), /^\$DB$/m)
   } finally {
     console.log = previousLog
+    process.exitCode = previousExitCode
   }
 })

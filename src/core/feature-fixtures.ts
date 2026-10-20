@@ -47,7 +47,6 @@ const FIXTURES = Object.freeze({
   'cli-plan': fixture('execute', 'sks plan "fixture" --json', [], 'pass'),
   'cli-review': fixture('execute', 'sks review --diff HEAD --json', [], 'pass'),
   'cli-status': fixture('execute', 'sks status --json', [], 'pass'),
-  'cli-usage': fixture('execute', 'sks usage overview', [], 'pass'),
   'cli-quickstart': fixture('execute', 'sks quickstart', [], 'pass'),
   'cli-install': fixture('static', 'npm exec --yes --package=sneakoscope@latest -- sneakoscope install --yes', [], 'pass', {
     quality: 'wiring_only',
@@ -57,8 +56,6 @@ const FIXTURES = Object.freeze({
   'cli-update-check': fixture('static', 'sks update-check --json', [], 'pass'),
   'cli-guard': fixture('execute', 'sks guard check --json', [], 'pass'),
   'cli-conflicts': fixture('execute', 'sks conflicts check --json', [], 'pass'),
-  'cli-aliases': fixture('execute', 'sks aliases', [], 'pass'),
-  'cli-fix-path': fixture('execute', 'sks fix-path --json', [], 'pass'),
   // selftest --real executes this fixture directly against this real repo (no
   // hermetic isolation for execute/execute_and_validate_artifacts fixtures - see
   // feature-fixture-executor.ts), so a real full scan (~79 modules) needs a
@@ -92,30 +89,26 @@ const FIXTURES = Object.freeze({
   'cli-cleanup': fixture('execute', 'sks cleanup plan --json', [], 'pass', {
     reason: 'Destructive blank-state apply stays behind explicit `sks cleanup run --apply`; the contract fixture only exercises the read-only plan surface.'
   }),
-  'cli-memory': fixture('execute', 'sks memory --dry-run --json', [], 'pass', { timeout_ms: 300000 }),
-  'cli-stats': fixture('execute', 'sks stats --json', [], 'pass'),
+  'cli-memory': fixture('execute', 'sks memory gc --dry-run --json', [], 'pass', { timeout_ms: 300000 }),
   'cli-dollar-commands': fixture('execute', 'sks dollar-commands --json', [], 'pass'),
   'cli-fast-mode': fixture('execute', 'sks fast-mode status --json', [], 'pass'),
   'cli-dfix': fixture('execute_and_validate_artifacts', 'sks dfix fixture --json', ['completion-proof.json', 'dfix-gate.json', 'dfix-verification.json'], 'pass'),
   'cli-wiki': fixture('execute_and_validate_artifacts', 'sks wiki image-ingest test/fixtures/images/one-by-one.png --json', [{ path: '.sneakoscope/wiki/image-voxel-ledger.json', schema: 'sks.image-voxel-ledger.v1', require_anchors: false }], 'pass'),
-  'cli-bootstrap': fixture('execute', 'sks bootstrap --dry-run', [], 'pass'),
-  'cli-deps': fixture('execute', 'sks deps check --json', [], 'pass'),
-  'cli-auth': fixture('execute', 'sks auth status --json', [], 'pass'),
-  'cli-codex-native': fixture('execute', 'sks codex-native status --json', [], 'pass'),
-  'cli-mad': fixture('execute', 'sks mad --help', [], 'pass'),
+  'cli-bootstrap': fixture('real_optional', 'sks bootstrap --json', [], 'pass', {
+    reason: 'Bootstrap is real project setup (`setup --local-only`) and refuses --dry-run, so it runs only on opt-in real runs.'
+  }),
   'cli-mad-sks': fixture('static', 'sks mad-sks status --json', [], 'pass'),
   'cli-auto-review': fixture('execute', 'sks auto-review status --json', [], 'pass'),
   'cli-commit': fixture('mock', 'sks commit --dry-run', [], 'pass', {
-    reason: 'simpleGitCommitCommand() in git-simple.ts performs a real `git add -A && git commit` against whatever repo cwd it runs in; it has no --dry-run implementation (argValue() only reads --message/-m/--json, so --dry-run is silently ignored) and would mutate git history if actually spawned by an automated fixture runner. Left as documented mock rather than execute a real commit or invent an unsupported --dry-run mode.'
+    reason: '`--dry-run` prints the commit plan without touching git (simpleGitCommitPlan in git-simple.ts, covered by git-simple-dry-run.test.ts); the fixture stays mock because the hermetic fixture project is not a git repository.'
   }),
   'cli-commit-and-push': fixture('mock', 'sks commit-and-push --dry-run', [], 'pass', {
-    reason: 'Same underlying simpleGitCommitCommand() as cli-commit plus a real `git push`; genuinely destructive (commits and pushes to the remote) with no real --dry-run support. Left as documented mock rather than execute a real commit+push or invent an unsupported --dry-run mode.'
+    reason: 'Same handler as cli-commit plus a push; `--dry-run` prints the plan only. Mock for the same reason as cli-commit.'
   }),
   'cli-context7': fixture('real_optional', 'sks context7 check --json', [], 'pass'),
   'cli-super-search': fixture('execute', 'sks super-search doctor --json', [], 'pass'),
   'cli-search': fixture('execute', 'sks search status --json', [], 'pass'),
   'cli-triwiki': fixture('execute', 'sks triwiki index --json', [], 'pass'),
-  'cli-init': fixture('execute', 'sks init --local-only --dry-run', [], 'pass'),
   'cli-naruto': fixture('execute_and_validate_artifacts', 'sks naruto run "fixture" --agents 4 --max-threads 4 --json', ['subagent-plan.json', 'subagent-events.jsonl', 'subagent-evidence.json', 'naruto-summary.json', 'naruto-gate.json', 'work-order-ledger.json'], 'pass', preparationFixtureContract()),
   'cli-reasoning': fixture('execute', 'sks reasoning status --json', [], 'pass'),
   'skill-db-safety-guard': fixture('execute', 'node --test test/unit/db-safety.test.mjs', [], 'pass', { root_mode: 'source_checkout_required' }),
@@ -131,9 +124,6 @@ const FIXTURES = Object.freeze({
   'skill-context7-docs': fixture('real_optional', 'sks context7 check --json', [], 'pass'),
   'skill-seo-geo-optimizer': fixture('execute_and_validate_artifacts', 'sks seo-geo-optimizer fixture --mode geo --json', ['search-visibility/site-inventory.json', 'search-visibility/geo-findings.json', 'geo-gate.json', 'completion-proof.json'], 'pass'),
   'cli-proof': fixture('execute_and_validate_artifacts', 'sks proof smoke --json', ['.sneakoscope/proof/latest.json'], 'pass'),
-  'cli-wrongness': fixture('execute', 'sks wrongness validate project --json', [], 'pass', {
-    reason: 'Release fixtures must not add synthetic project-wide wrongness records. The read-only validator exercises the CLI and ledger schema without contaminating trust state for later route proofs.'
-  }),
   'route-naruto': fixture('execute_and_validate_artifacts', 'sks naruto run "fixture" --agents 4 --max-threads 4 --json', ['subagent-plan.json', 'subagent-events.jsonl', 'subagent-evidence.json', 'naruto-summary.json', 'naruto-gate.json', 'work-order-ledger.json'], 'pass', preparationFixtureContract({ timeout_ms: 90000 })),
   'route-work': fixture('static', '$Work compatibility alias for the Naruto Codex official subagent workflow', [], 'pass', { quality: 'wiring_only', reason: 'Pure alias of $Naruto; official workflow execution is covered by route-naruto.' }),
   'route-plan': fixture('execute', 'sks plan "fixture" --json', [], 'pass'),
@@ -194,10 +184,10 @@ const FIXTURES = Object.freeze({
     reason: 'Pure alias of the cli-help command; no independent behavior to verify beyond cli-help\'s own execute fixture.'
   }),
   'route-commit': fixture('mock', '$Commit git route', ['completion-proof.json'], 'pass', {
-    reason: 'Dollar-command alias of cli-commit; dispatches to the same simpleGitCommitCommand() that performs a real `git add -A && git commit` with no working --dry-run mode, so it is not safe to execute from an automated fixture runner. Left as documented mock alongside cli-commit.'
+    reason: 'Dollar-command alias of cli-commit; documented mock alongside cli-commit.'
   }),
   'route-commit-and-push': fixture('mock', '$Commit-And-Push git route', ['completion-proof.json'], 'pass', {
-    reason: 'Dollar-command alias of cli-commit-and-push; dispatches to the same simpleGitCommitCommand() that performs a real commit and `git push` with no working --dry-run mode. Left as documented mock alongside cli-commit-and-push.'
+    reason: 'Dollar-command alias of cli-commit-and-push; documented mock alongside cli-commit-and-push.'
   }),
   'route-release-review': fixture('execute_and_validate_artifacts', 'sks naruto run "$Release-Review release audit" --agents 3 --max-threads 3 --read-only --json', ['subagent-plan.json', 'subagent-events.jsonl', 'subagent-evidence.json', 'naruto-summary.json', 'naruto-gate.json', 'work-order-ledger.json'], 'pass', preparationFixtureContract({ timeout_ms: 90000 })),
   'proof-official-subagent-evidence': fixture('execute_and_validate_artifacts', 'sks naruto run "fixture" --agents 2 --max-threads 2 --json', ['subagent-plan.json', 'subagent-events.jsonl', 'subagent-parent-summary.json', 'subagent-evidence.json', 'naruto-gate.json'], 'pass', preparationFixtureContract({ timeout_ms: 90000 }))
@@ -205,10 +195,6 @@ const FIXTURES = Object.freeze({
 
 const STATIC_CONTRACT_FEATURES = new Set([
   'cli-bootstrap',
-  'cli-deps',
-  'cli-auth',
-  'cli-codex-native',
-  'cli-mad',
   'cli-auto-review',
   'cli-commit',
   'cli-commit-and-push',
@@ -218,16 +204,7 @@ const STATIC_CONTRACT_FEATURES = new Set([
   'cli-postinstall',
   'cli-menubar',
   'cli-route',
-  'cli-autoresearch',
-  'cli-hook',
-  'handler-$',
-  'handler-autoresearch',
-  'handler-autoreview',
-  'handler-computer-use',
-  'handler-cu',
-  'handler-dollars',
-  'handler-mad-sks',
-  'handler-postinstall'
+  'cli-hook'
 ]);
 
 export function fixtureForFeature(featureId: any) {
