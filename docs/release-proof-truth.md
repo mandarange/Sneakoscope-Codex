@@ -1,16 +1,26 @@
 # Release Proof Truth
 
-## 10.6.1 candidate
+## 10.6.2 candidate
 
-This candidate carries PR #20 (workflow action pins) and PR #22 (dev-only
-`@types/node` and `jsdom` patch refresh), which landed after 10.6.0 was
-published. No product code changes. No 10.6.1 registry or GitHub publication
-is claimed before the operator's `npm publish` step.
+This candidate carries PR #25: the Desktop Bridge adds `Retry-After` advice to
+a `server_is_overloaded` ("Selected model is at capacity") failure that
+Codex-LB re-emits without it, on provider routes only, so Codex retries the
+request instead of ending the turn. No 10.6.2 registry or GitHub publication is
+claimed before the operator's `npm publish` step.
 
 Fresh proof for the candidate is bound to its clean main commit: canonical
 tests, the full release DAG, pack receipt, required real checks, dist
 freshness, 7.6.0 upgrade smoke, macOS Menu Bar proof, and release stamp; see
-"New 10.6.1 claims" for each boundary.
+"New 10.6.2 claims" for each boundary. The live retry evidence came from a
+scratch bridge on a separate port with a mock Codex-LB, not from the installed
+service or the real gateway.
+
+## 10.6.1 published
+
+This release carried PR #20 (workflow action pins) and PR #22 (dev-only
+`@types/node` and `jsdom` patch refresh), which landed after 10.6.0 was
+published; no product code changed. Published 2026-10-18T11:29:53Z from
+`fe7b6192`; registry SHA-512 integrity equals the pack receipt (1,385 files).
 
 ## 10.6.0 published
 
@@ -643,15 +653,25 @@ Exact-commit proof can exist only after the candidate is committed and all
 source-bound gates are regenerated from that clean commit.
 
 All release artifacts bound to 9.2.7 or an earlier commit are historical. They
-must not be renamed, copied, or treated as 10.6.1 evidence.
+must not be renamed, copied, or treated as 10.6.2 evidence.
+
+New 10.6.2 claims:
+
+| Claim | Current support | Boundary |
+| --- | --- | --- |
+| A capacity failure without `Retry-After` is retried instead of ending the turn | verified-on-machine | 2026-10-19: scratch bridge from the candidate source, a mock Codex-LB whose first real create fails with `server_is_overloaded` and no headers, App-bundled Codex 0.163.0-alpha.10.2 (`codex exec`); relayed unchanged, the turn ended in 0.5 s with "Selected model is at capacity"; through the candidate, Codex retried after 5 s and completed (6.1 s); seven consecutive failures recovered over HTTPS after the WebSocket fallback (39.4 s); a sustained outage ended after five WebSocket and five HTTPS retries (59.1 s); the installed bridge was not changed |
+| Advice is added only where it is missing | passed-hermetic | `capacity-retry-advice`, `responses-websocket`, `desktop-bridge-transport`, and `compaction-adapter` suites: upstream `Retry-After` in either slot, other error codes, the official route, a delta that only contains the code, and compressed streams pass unchanged; an SSE event split across chunks is rewritten whole |
+| The real Codex-LB emits the failure without `Retry-After` | not proved | read from Codex-LB's source (`response_failed_event`) and the 2026-10-19 Codex logs, which hold no stream-retry row for any of the failed turns while 386 such rows exist elsewhere in the log; no capacity failure from the live gateway was captured |
+| Jev's model selection did not cause the failed turns | verified-on-machine | 2026-10-19 Codex rollouts and `state_5.sqlite`: the failed turns are root Desktop turns on the model set in `config.toml`; the two affected threads have no `spawn_agent` call and no spawn edge; Jev's turn plan adds only a reasoning hint |
+| The 10.6.2 package is ready to publish | not proved | requires the release stamp on the clean main commit and that commit fast-forward pushed to origin main |
 
 New 10.6.1 claims:
 
 | Claim | Current support | Boundary |
 | --- | --- | --- |
+| The 10.6.1 package is published | verified-on-machine | 2026-10-18, registry `gitHead` fe7b6192 and file count 1385, sha512 integrity equals the pack receipt |
 | The pinned workflow actions run what the `v6` tags run today | verified-on-machine | `git ls-remote` on 2026-10-18: `actions/checkout` `refs/tags/v6.1.0` and `refs/tags/v6` are both `d23441a4…`; `actions/setup-node` `refs/tags/v6.5.0` and `refs/tags/v6` are both `24997072…`; only workflow files changed |
 | The dev dependency refresh changes no runtime dependency | passed-hermetic | the four changed lockfile entries are `dev: true` and each integrity equals the registry's; `npm ci --ignore-scripts`, typecheck, and the release corpus pass |
-| The 10.6.1 package is ready to publish | not proved | requires the release stamp on the clean main commit and that commit fast-forward pushed to origin main |
 
 New 10.6.0 claims:
 
@@ -778,8 +798,8 @@ New 10.3.10 claims:
 | A stale or cwd-sticky official workflow cannot capture a later prompt | passed-hermetic | unnamed hooks use `loadOwnedRouteState`; idle > 2h is inactive even with leftover open threads; same-session follow-ups still bind while the run is fresh |
 | The 10.3.10 package is published | verified-on-machine | 2026-10-02, registry `gitHead` 0c70457e and file count 1755, sha512 integrity equals the pack receipt |
 | The 10.4.0 package is published | verified-on-machine | 2026-10-02, registry `gitHead` fb7b2385 and file count 1692, sha512 integrity equals the pack receipt |
-| All checked version authorities report 10.6.1 | passed-hermetic | `release:version-truth` after the version bump |
-| The reported 10.6.1 package is ready to publish | not proved | requires a clean exact-commit build, `npm run release:check:full` stamp, pack receipt, provenance, and the release commit fast-forward pushed to origin main (the prepublish reproducibility preflight refuses `head_not_origin_main`) |
+| All checked version authorities report 10.6.2 | passed-hermetic | `release:version-truth` after the version bump |
+| The reported 10.6.2 package is ready to publish | not proved | requires a clean exact-commit build, `npm run release:check:full` stamp, pack receipt, provenance, and the release commit fast-forward pushed to origin main (the prepublish reproducibility preflight refuses `head_not_origin_main`) |
 
 ## 9.1.0 assertion (historical)
 

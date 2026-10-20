@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [10.6.2] - 2026-10-20
+
 ### Fixed
 
 - Desktop Bridge: a momentary model-capacity failure on the Codex-LB route no
