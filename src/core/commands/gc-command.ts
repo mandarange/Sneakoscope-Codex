@@ -71,7 +71,7 @@ export async function gcCommand(args: any = []) {
   if (action === 'plan') {
     const res = await enforceRetention(root, { dryRun: true, pruneReportLogs: true });
     if (flag(args, '--json')) return console.log(JSON.stringify(res.plan, null, 2));
-    console.log('ㅅㅋㅅ GC plan');
+    console.log('SKS GC plan');
     console.log(`Plan hash: ${res.plan.plan_hash}`);
     console.log(`Actions: ${res.actions.length}`);
     return res.plan;
@@ -80,7 +80,7 @@ export async function gcCommand(args: any = []) {
     if (!flag(args, '--yes')) {
       const blocked = { schema: 'sks.retention-apply.v1', ok: false, applied: false, blockers: ['gc_apply_requires_yes'] };
       if (flag(args, '--json')) return console.log(JSON.stringify(blocked, null, 2));
-      console.log('ㅅㅋㅅ GC apply blocked: pass --yes after reviewing `sks gc plan --json`.');
+      console.log('SKS GC apply blocked: pass --yes after reviewing `sks gc plan --json`.');
       process.exitCode = 1;
       return blocked;
     }
@@ -89,7 +89,7 @@ export async function gcCommand(args: any = []) {
       planHash: readOption(args, '--plan-hash', null)
     });
     if (flag(args, '--json')) return console.log(JSON.stringify(res, null, 2));
-    console.log(res.ok ? 'ㅅㅋㅅ GC applied' : 'ㅅㅋㅅ GC apply blocked');
+    console.log(res.ok ? 'SKS GC applied' : 'SKS GC apply blocked');
     console.log(`Actions: ${res.action_count || 0}`);
     for (const blocker of res.blockers || []) console.log(`- ${blocker}`);
     if (!res.ok) process.exitCode = 1;
@@ -111,7 +111,7 @@ export async function gcCommand(args: any = []) {
       package: packageBytes === null ? null : { bytes: packageBytes, human: formatBytes(packageBytes) }
     };
     if (flag(args, '--json')) return console.log(JSON.stringify(output, null, 2));
-    console.log('ㅅㅋㅅ GC status');
+    console.log('SKS GC status');
     console.log(`Missions: ${res.mission_index?.mission_count ?? 'unknown'}`);
     console.log(`Latest plan: ${res.latest_plan?.plan_hash || 'none'}`);
     console.log(`State:   ${storage?.total_human || 'not scanned (use --full)'}`);
@@ -120,7 +120,7 @@ export async function gcCommand(args: any = []) {
   }
   const res = await enforceRetention(root, { dryRun: flag(args, '--dry-run'), pruneReportLogs: true });
   if (flag(args, '--json')) return console.log(JSON.stringify(res, null, 2));
-  console.log(flag(args, '--dry-run') ? 'ㅅㅋㅅ GC dry run' : 'ㅅㅋㅅ GC completed');
+  console.log(flag(args, '--dry-run') ? 'SKS GC dry run' : 'SKS GC completed');
   console.log(`Storage: ${res.report.total_human || '0 B'}`);
   console.log(`Actions: ${res.actions.length}`);
   console.log(`Protected: ${res.cleanup.protected_durable_context.length} durable context classes`);

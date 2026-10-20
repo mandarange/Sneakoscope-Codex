@@ -26,7 +26,7 @@ export async function reviewCommand(args: string[] = []) {
     const report = buildReport({ files: [], machine: { checks: [], findings: [] }, fix: null });
     if (flag(args, '--json')) return printJson(report);
     ui.banner('review');
-    ui.ok('변경 없음');
+    ui.ok('no changes to review');
     return report;
   }
   const machine = await runMachineChecks(root, diff);

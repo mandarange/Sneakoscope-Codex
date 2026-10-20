@@ -4,7 +4,6 @@ SKS core skills are treated as product contracts, not editable setup output.
 
 SKS keeps the built-in route skills content-addressed and immutable. The core skill template version is a content schema version (`sks-core-skill-template.v2`), not the package release version, so ordinary release bumps do not create false drift. Version 2 uses focused frontmatter descriptions plus progressive-disclosure sections for outcome, activation, workflow, runtime contract, safety, evidence, and failure recovery.
 
-- `sks-loop`
 - `sks-naruto`
 - `sks-qa-loop`
 - `sks-research`
@@ -14,6 +13,7 @@ SKS keeps the built-in route skills content-addressed and immutable. The core sk
 - `sks-init-deep`
 - `sks-search-visibility-core`
 - `sks-seo-geo-optimizer`
+- `sks-cleanup`
 - `sks-align`
 
 Every generated skill may also include `agents/openai.yaml`. SKS emits a minimal profile from the current Codex schema:
@@ -27,17 +27,15 @@ Every generated skill may also include `agents/openai.yaml`. SKS emits a minimal
 
 Setup, update, and doctor flows may install a missing managed copy or restore a corrupted managed copy from the manifest. They must not overwrite user-authored skill collisions.
 
-Project skill names are canonicalized before duplicate detection. Variants such as a dollar-prefixed Loop skill, `Loop`, `loop.md`, and `loop/SKILL.md` all map to `loop`. SKS-managed duplicates can be quarantined under `.sneakoscope/quarantine/skills/<canonical>/<timestamp>/`; user-authored duplicates are reported unless the operator explicitly opts into user duplicate quarantine.
+Project skill names are canonicalized before duplicate detection. Variants such as a dollar-prefixed Naruto skill, `Naruto`, `naruto.md`, and `naruto/SKILL.md` all map to `naruto`. SKS-managed duplicates can be quarantined under `.sneakoscope/quarantine/skills/<canonical>/<timestamp>/`; user-authored duplicates are reported unless the operator explicitly opts into user duplicate quarantine.
 
 The registry ledger records `active_unique_by_canonical_name`, `active_entries`, and `duplicate_active_canonical_names` so doctor/setup/update can prove whether the Codex picker has more than one active skill for the same canonical name.
 
 Relevant gates:
 
 ```bash
-npm run core-skill:manifest
-npm run core-skill:immutable-sync
 npm run core-skill:no-drift
-npm run skill:registry-ledger
-npm run skill:sync-atomic
+node ./dist/scripts/skill-registry-ledger-check.js
+node ./dist/scripts/skill-sync-atomic-check.js
 npm run skill:dedupe-blackbox
 ```

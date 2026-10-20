@@ -376,6 +376,7 @@
     {
       "canonical_name": "sks-ppt",
       "trusted_sha256": [
+        "93887312718febbb795cab3d09b1d47a30485eee7c6416fb02c78c65ab5c4686",
         "a25e537ff49b5bffdc093a5f772a8d218003ca1bb81e0aa304561684a9551b31",
         "fba3f438b9f22dae0813cd12bf310539a7d2b71c8cd9322eb840514e24884eaf",
         "c9a0d90e12560dd3f04959869051370e6baf46eda6eb63f708ea1661c5c9d041",
@@ -431,6 +432,7 @@
     {
       "canonical_name": "sks-release-review",
       "trusted_sha256": [
+        "dfc2af7dd2c41ab2529ed54b2dca0dfd85e2de0d3304afbfe4a420e6627ce01a",
         "36846d6180051c85e3093e7e405ad9d4d447f7295769f71f8450c18afee50e98",
         "bb6ef28431fd6c390041c9a2855b906fd01a1f6da02111f094258914cf826bb9",
         "7cf879a2efd61822d3dccd4eb69fb704bfbab4b114b820b6dfa0d13b5f20e9fa"

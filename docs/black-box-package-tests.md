@@ -49,4 +49,4 @@ Required real rows:
 - Korean/Unicode path
 - optional read-only project directory
 
-The matrix invokes the underlying blackbox scripts with `--json`, validates required step labels, and writes `.sneakoscope/reports/blackbox-matrix.json`. `npm run test:blackbox` keeps the package test files named in the stable release goal as fast contract tests; the real install/runtime proof remains `blackbox:matrix` and `blackbox:check`.
+The matrix invokes the underlying blackbox scripts with `--json`, validates required step labels, and writes `.sneakoscope/reports/blackbox-matrix.json`. `node --test test/unit/blackbox-script-shape.test.mjs` is the fast contract test for the blackbox scripts' package-consumer commands and step labels; the real install/runtime proof remains `blackbox:matrix` and `blackbox:check`.

@@ -60,6 +60,24 @@
   verified, instead of acceptance criteria about SKS's own MAD-SKS feature.
   Release- and install-flavoured tasks get the project's test, build and
   package checks rather than `packcheck`, `selftest` and `sizecheck`.
+- `sks status`, the `sks plan` template and the PPT and Release-Review
+  skills follow the verification profile: in `essential` they
+  ask for a summary of what was verified and what remains, not a completion
+  proof, Honest Mode or an SKS gate report. The plan template no longer tells
+  a project to "preserve SKS proof-first gates".
+- `sks help menubar` and `sks help install` show the real subcommands instead
+  of a generic `[options]` line.
+- English output everywhere: `sks review` with nothing to review says so in
+  English, and `sks gc` prints the SKS label. The installer banner uses the
+  product sentence instead of "proof-first Codex harness".
+- The README release link points at the latest release instead of v10.5.8.
+- Seven skill bodies in the installer (DFix, Align, Cleanup, QA-LOOP,
+  Research, Search Visibility, SEO/GEO) were never written: those routes ship
+  from the immutable core-skill manifest, so edits to the old copies did
+  nothing. The dead copies are gone; installed skills are unchanged.
+- Twelve docs told readers to run npm scripts that no longer exist; each now
+  names the gate or test that does that job, or drops the step when nothing
+  does. `skill-integrity.md` lists the current core skills.
 
 ### Fixed
 
@@ -86,6 +104,12 @@
   re-plan. Plans already told agents to run it, but the flag did not exist.
 - `--changed` and `--intent` values are no longer read as positional words, so
   `sks proof field scan --changed a.ts` no longer takes `a.ts` as the intent.
+- Read-only commands no longer load the update-migration machinery only to be
+  told the gate is skipped: `sks status --json` loads 88 modules instead of
+  273 (about 270 ms down to 135 ms), and `sks commands` and
+  `sks mad-sks --help` skip the full router and MAD-SKS runtime (about 410 ms
+  and 400 ms down to under 100 ms). Every command in the perf budget is now
+  within it.
 - Release-truth remedies told maintainers to run npm scripts that do not exist
   (`strategy:adhd-orchestrating-gate`, `appshots:evidence`), and ADHD
   orchestration named `verification-dag.json` and `rollback-dag.json`, which

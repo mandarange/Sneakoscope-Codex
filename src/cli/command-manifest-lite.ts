@@ -299,6 +299,14 @@ const COMMAND_HELP_LITE = {
     usage: 'sks pipeline status|plan [--json] | sks pipeline plan [mission-id|latest] [--route \'$sks-<route>\'] [--agents N|--force-agents|--no-agents] [--proof-field [--changed a,b]] [--json] | sks pipeline answer <mission-id|latest> (--stdin | <answers.json>) [--json]',
     description: 'Inspect the active route and its plan, re-plan a mission (agent count, or --proof-field to size verification from the changed files and the project\'s own scripts), or seal the answers a paused route\'s ambiguity gate is waiting for.'
   },
+  menubar: {
+    usage: 'sks menubar status|install [--no-launch]|restart|rollback [--no-launch]|uninstall [--json]',
+    description: 'Inspect, install, restart, roll back, or uninstall the SKS menu bar app (macOS).'
+  },
+  install: {
+    usage: 'sks install [--yes|--no-tui] (first install: npm exec --yes --package=sneakoscope@latest -- sneakoscope install)',
+    description: 'Install the exact packaged SKS version globally, then repair and verify the resolved CLI with its own sks doctor --fix.'
+  },
   guard: {
     usage: 'sks guard check [--json]',
     description: 'Check SKS harness self-protection lock, fingerprints, and source-repo exception state.'

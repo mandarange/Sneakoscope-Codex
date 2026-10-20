@@ -80,6 +80,7 @@ This page is the English product-facing projection of those decisions.
 - In `essential`, a finished turn finishes: no Honest Mode or completion-summary wording gate, no Stop-time completion proof, reflection, or ledger requirements, no per-tool-call evidence hook, no denial over managed-skill digest drift. `sks proof …` remains available on request.
 - Completion still means saying plainly what was done, what was verified, and what remains; mock, fixture, or capability evidence is never described as a real run.
 - **Light paths** (Answer, DFix, Help/status-class read-only routes) stay light in both profiles.
+- **Guidance follows the profile:** in `essential`, `sks status` and the `sks plan` template ask for a plain summary of what changed and what was verified, not a completion proof, Honest Mode, or an SKS gate report.
 - **Plans name the project's own checks:** route plans, Proof Field reports and inferred test scopes take verification commands from the target project's package scripts (npm, pnpm, yarn or bun) or name the check in plain words. They never tell an agent to run SKS's own maintainer commands (`packcheck`, `selftest`, `release:check`) in a user project.
 - Blocked missions with blockers are correct answers; do not disable safety or forge evidence to look green.
 - Honest Mode (`strict` only): once at the end of batched work; retry only remaining gaps (not every intermediate step).

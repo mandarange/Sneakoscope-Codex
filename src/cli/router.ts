@@ -218,16 +218,16 @@ async function dispatchInner(argv: readonly string[]): Promise<unknown> {
     // migration gate's lock — a stuck/contended migration lock previously
     // made `sks <cmd> --help` take the full MIGRATION_LOCK_WAIT_MS (20s) and
     // then fail, for a request that only wants usage text.
-    const { ensureCurrentMigrationBeforeCommand } = await import('../core/update/update-migration-state.js');
-    const migrationGate = await ensureCurrentMigrationBeforeCommand({
-      command,
-      args: rest,
-      skipMigrationGate: entry.skipMigrationGate === true
-        || entry.readonly === true
-        || safeReadOnlySubcommand(command, rest)
-        || safeActiveRouteVisualQuery(command, rest)
-    });
-    if (!migrationGate.ok) {
+    const skipMigrationGate = entry.skipMigrationGate === true
+      || entry.readonly === true
+      || safeReadOnlySubcommand(command, rest)
+      || safeActiveRouteVisualQuery(command, rest);
+    // A skipped gate answers ok without doing anything, so read-only commands
+    // do not load the migration machinery (a ~200-module import) to hear it.
+    const migrationGate = skipMigrationGate
+      ? null
+      : await (await import('../core/update/update-migration-state.js')).ensureCurrentMigrationBeforeCommand({ command, args: rest, skipMigrationGate: false });
+    if (migrationGate && !migrationGate.ok) {
       console.error('SKS project migration blocked.');
       console.error(`Scope: ${migrationGate.scope || 'project'}`);
       console.error(`Stage: ${migrationGate.failed_stage_id || migrationGate.status}`);

@@ -15,8 +15,7 @@ In 1.16.0, DFix and native agent stabilization both feed wrongness memory throug
 Release gates run:
 
 ```bash
-npm run wrongness:fixtures
-npm run wrongness:check
+npm run gates:run -- --gate wrongness:check
 ```
 
-`wrongness:fixtures` exercises the runtime CLI and the automatic source adapters. `wrongness:check` validates the project ledger and runs a hermetic fixture root that writes test, DB, hook, and image wrongness records.
+`wrongness:check` validates the project ledger and runs a hermetic fixture root that writes test, DB, hook, and image wrongness records.

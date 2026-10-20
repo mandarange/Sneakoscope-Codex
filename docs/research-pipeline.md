@@ -17,13 +17,10 @@ Final review has two layers: deterministic validators, followed by three indepen
 Fast checks:
 
 ```sh
-npm run research:quality-gates
-npm run research:synthesis-writer
-npm run research:repetition-detector
-npm run research:template-report-rejection
-npm run research:handoff-consumability
-npm run research:stage-cycle-runtime-blackbox
-npm run research:short-report-rejection
-npm run codex-sdk:research-pipeline
+node ./dist/scripts/research-complete-package-fixture-check.js
+node ./dist/scripts/research-final-reviewer-blackbox.js
+node ./dist/scripts/research-claim-builder-check.js
+node ./dist/scripts/research-blueprint-densifier-check.js
+node ./dist/scripts/codex-sdk-all-pipelines-check.js
 sks research run latest --mock --json
 ```

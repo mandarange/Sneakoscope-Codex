@@ -30,7 +30,7 @@ Generated from `sks commands --json`, `src/cli/command-registry.ts COMMANDS`, `s
 | `cli-status` | core-cli | stable | sks status [--json] | execute:pass | runtime_verified | not_assessed | none recorded |
 | `cli-review` | core-cli | stable | sks review [--staged\|--diff <ref>] [--fix] [--json] | execute:pass | runtime_verified | not_assessed | none recorded |
 | `cli-root` | core-cli | stable | sks root [--json] | execute:pass | runtime_verified | not_assessed | none recorded |
-| `cli-install` | core-cli | stable | sks install | static:pass | wiring_only | not_assessed | none recorded |
+| `cli-install` | core-cli | stable | sks install [--yes\|--no-tui] (first install: npm exec --yes --package=sneakoscope@latest -- sneakoscope install) | static:pass | wiring_only | not_assessed | none recorded |
 | `cli-update` | core-cli | stable | sks update status\|check\|review\|now\|rollback [--refresh] [--version <version>] [--json] [--dry-run] | execute:pass | runtime_verified | not_assessed | none recorded |
 | `cli-uninstall` | core-cli | stable | sks uninstall [--dry-run] [--yes] [--keep-config] [--keep-data] [--purge-projects] [--json] | execute:pass | runtime_verified | not_assessed | none recorded |
 | `cli-update-check` | core-cli | stable | sks update-check [--json] | static:pass | static_contract | not_assessed | none recorded |
@@ -46,7 +46,7 @@ Generated from `sks commands --json`, `src/cli/command-registry.ts COMMANDS`, `s
 | `cli-codex` | integration | beta | sks codex compatibility\|version\|update-status [--refresh]\|update\|doctor\|schema\|current [--json] | execute:pass | runtime_verified | not_assessed | none recorded |
 | `cli-codex-app` | integration | beta | sks codex-app [check\|status\|restart\|context-management [status\|on\|off]\|context-1m [status\|on\|off]\|product-design\|chrome-extension\|pat status\|remote-control\|harness-matrix\|skill-sync\|agent-role-sync\|init-deep [--directory-local]\|hook-lifecycle\|execution-profile] | real_optional:pass | integration_optional | not_assessed | mobile/event payload details remain unknown |
 | `cli-bridge` | core-cli | beta | sks bridge | execute:pass | runtime_verified | not_assessed | none recorded |
-| `cli-menubar` | core-cli | beta | sks menubar | static:pass | static_contract | not_assessed | none recorded |
+| `cli-menubar` | core-cli | beta | sks menubar status\|install [--no-launch]\|restart\|rollback [--no-launch]\|uninstall [--json] | static:pass | static_contract | not_assessed | none recorded |
 | `cli-hooks` | integration | beta | sks hooks explain\|status\|trust-report\|replay\|codex-validate\|warning-check ... [--json]<br>sks hook | execute:pass | runtime_verified | not_assessed | mobile/event payload details remain unknown |
 | `cli-mad-sks` | core-cli | beta | sks mad-sks plan\|run\|apply\|sql\|apply-migration\|status\|close\|rollback-apply ... \| sks --mad [--high] | static:pass | static_contract | not_assessed | none recorded |
 | `cli-dollar-commands` | core-cli | stable | sks dollar-commands [--json] | execute:pass | runtime_verified | not_assessed | none recorded |
@@ -64,7 +64,7 @@ Generated from `sks commands --json`, `src/cli/command-registry.ts COMMANDS`, `s
 | `cli-context7` | integration | beta | sks context7 check\|setup\|tools\|resolve\|docs\|evidence ... | real_optional:pass | integration_optional | not_assessed | none recorded |
 | `cli-super-search` | core-cli | beta | sks super-search doctor\|run\|x\|fetch\|status\|inspect\|sources\|claims\|cache\|bench | execute:pass | runtime_verified | not_assessed | none recorded |
 | `cli-search` | core-cli | beta | sks search status\|files\|text\|structure\|symbol\|context\|benchmark\|doctor [--json] | execute:pass | runtime_verified | not_assessed | none recorded |
-| `cli-pipeline` | proof-route | beta | sks pipeline status\|plan [--json] \| sks pipeline plan [mission-id\|latest] [--route <$route>] [--agents N\|--force-agents\|--no-agents] [--proof-field [--changed a,b]] [--json] \| sks pipeline answer <mission-id\|latest> (--stdin \| <answers.json>) [--json] | execute_and_validate_artifacts:pass | runtime_verified | not_assessed | none recorded |
+| `cli-pipeline` | proof-route | beta | sks pipeline status\|plan [--json] \| sks pipeline plan [mission-id\|latest] [--route '$sks-<route>'] [--agents N\|--force-agents\|--no-agents] [--proof-field [--changed a,b]] [--json] \| sks pipeline answer <mission-id\|latest> (--stdin \| <answers.json>) [--json] | execute_and_validate_artifacts:pass | runtime_verified | not_assessed | none recorded |
 | `cli-guard` | safety | beta | sks guard check [--json] | execute:pass | runtime_verified | not_assessed | none recorded |
 | `cli-conflicts` | safety | beta | sks conflicts check\|prompt\|cleanup --yes [--json] | execute:pass | runtime_verified | not_assessed | none recorded |
 | `cli-cleanup` | core-cli | beta | sks cleanup plan\|run\|status\|proof [--apply] [--json] | execute:pass | runtime_verified | not_assessed | none recorded |
