@@ -33,10 +33,8 @@ test('risk and remote policy are explicit and fail closed for R3', () => {
   assert.equal(commandContract('update')?.risk, 'R2');
   assert.equal(commandContract('mad-sks')?.risk, 'R3');
   assert.equal(commandContract('mad-sks')?.remote_allowed, false);
-  for (const name of ['mcp', 'remote']) {
-    assert.equal(commandContract(name)?.risk, 'R2');
-    assert.equal(commandContract(name)?.remote_allowed, false);
-  }
+  assert.equal(commandContract('mcp')?.risk, 'R2');
+  assert.equal(commandContract('mcp')?.remote_allowed, false);
 });
 
 test('per-tool schema rejects unknown or mistyped arguments', () => {
@@ -70,7 +68,7 @@ test('validated argv builders apply typed arguments and never accept arbitrary a
 });
 
 test('JSON-capable local R2 commands preserve the explicit JSON flag without exposing arbitrary argv', () => {
-  for (const name of ['align', 'mcp', 'remote']) {
+  for (const name of ['align', 'mcp']) {
     const contract = commandContract(name);
     assert.ok(contract, name);
     const validation = validateJsonSchema({ json: true }, contract.input_schema);

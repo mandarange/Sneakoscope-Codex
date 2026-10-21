@@ -54,8 +54,15 @@ export async function memoryCommand(sub: any, args: any = []) {
     if (!output.ok) process.exitCode = 1;
     return output;
   }
-  return gcCommand(sub ? [sub, ...(args || [])] : (args || []));
+  // Retention is only ever an explicit `sks memory gc ...`; anything else used
+  // to fall through to a real GC, so a typo deleted runtime state.
+  if (action === 'gc') return gcCommand(args || []);
+  console.error(`Usage: ${MEMORY_USAGE}`);
+  process.exitCode = 2;
+  return { schema: 'sks.memory-usage.v1', ok: false, status: 'unknown_subcommand', subcommand: action || null };
 }
+
+const MEMORY_USAGE = 'sks memory recall|promote|forget|build|gc ... (see `sks help memory`)';
 
 export async function gcCommand(args: any = []) {
   const action = String(args[0] || '').toLowerCase();
@@ -64,7 +71,7 @@ export async function gcCommand(args: any = []) {
   if (action === 'plan') {
     const res = await enforceRetention(root, { dryRun: true, pruneReportLogs: true });
     if (flag(args, '--json')) return console.log(JSON.stringify(res.plan, null, 2));
-    console.log('ㅅㅋㅅ GC plan');
+    console.log('SKS GC plan');
     console.log(`Plan hash: ${res.plan.plan_hash}`);
     console.log(`Actions: ${res.actions.length}`);
     return res.plan;
@@ -73,7 +80,7 @@ export async function gcCommand(args: any = []) {
     if (!flag(args, '--yes')) {
       const blocked = { schema: 'sks.retention-apply.v1', ok: false, applied: false, blockers: ['gc_apply_requires_yes'] };
       if (flag(args, '--json')) return console.log(JSON.stringify(blocked, null, 2));
-      console.log('ㅅㅋㅅ GC apply blocked: pass --yes after reviewing `sks gc plan --json`.');
+      console.log('SKS GC apply blocked: pass --yes after reviewing `sks gc plan --json`.');
       process.exitCode = 1;
       return blocked;
     }
@@ -82,7 +89,7 @@ export async function gcCommand(args: any = []) {
       planHash: readOption(args, '--plan-hash', null)
     });
     if (flag(args, '--json')) return console.log(JSON.stringify(res, null, 2));
-    console.log(res.ok ? 'ㅅㅋㅅ GC applied' : 'ㅅㅋㅅ GC apply blocked');
+    console.log(res.ok ? 'SKS GC applied' : 'SKS GC apply blocked');
     console.log(`Actions: ${res.action_count || 0}`);
     for (const blocker of res.blockers || []) console.log(`- ${blocker}`);
     if (!res.ok) process.exitCode = 1;
@@ -90,16 +97,30 @@ export async function gcCommand(args: any = []) {
   }
   if (action === 'status') {
     await refreshMissionIndex(root).catch(() => null);
-    const res = await retentionStatus(root);
-    if (flag(args, '--json')) return console.log(JSON.stringify(res, null, 2));
-    console.log('ㅅㅋㅅ GC status');
+    // Storage is measured now, not read back from the last report: a cheap
+    // walk by default, the recursive one plus the installed package with --full.
+    const full = flag(args, '--full');
+    const [res, storage, packageBytes] = await Promise.all([
+      retentionStatus(root),
+      full ? storageReport(root) : lightweightStorageReport(root),
+      full ? dirSize(packageRoot()).catch(() => 0) : Promise.resolve(null)
+    ]);
+    const output = {
+      ...res,
+      storage,
+      package: packageBytes === null ? null : { bytes: packageBytes, human: formatBytes(packageBytes) }
+    };
+    if (flag(args, '--json')) return console.log(JSON.stringify(output, null, 2));
+    console.log('SKS GC status');
     console.log(`Missions: ${res.mission_index?.mission_count ?? 'unknown'}`);
     console.log(`Latest plan: ${res.latest_plan?.plan_hash || 'none'}`);
-    return res;
+    console.log(`State:   ${storage?.total_human || 'not scanned (use --full)'}`);
+    if (output.package) console.log(`Package: ${output.package.human}`);
+    return output;
   }
   const res = await enforceRetention(root, { dryRun: flag(args, '--dry-run'), pruneReportLogs: true });
   if (flag(args, '--json')) return console.log(JSON.stringify(res, null, 2));
-  console.log(flag(args, '--dry-run') ? 'ㅅㅋㅅ GC dry run' : 'ㅅㅋㅅ GC completed');
+  console.log(flag(args, '--dry-run') ? 'SKS GC dry run' : 'SKS GC completed');
   console.log(`Storage: ${res.report.total_human || '0 B'}`);
   console.log(`Actions: ${res.actions.length}`);
   console.log(`Protected: ${res.cleanup.protected_durable_context.length} durable context classes`);
@@ -110,11 +131,11 @@ function gcHelp(json = false) {
   const help = {
     schema: 'sks.gc-help.v1',
     ok: true,
-    usage: 'sks gc [plan|apply|status] [--dry-run] [--json]',
+    usage: 'sks gc [plan|apply --yes|status [--full]] [--dry-run] [--json]',
     commands: {
       plan: 'Create a hashed dry-run plan using the configured retention policy.',
       apply: 'Apply a reviewed plan with --yes and optional --plan-hash.',
-      status: 'Show the latest mission index, plan, cleanup, and storage status.'
+      status: 'Show the mission index, latest plan and cleanup, and current storage size (--full also sizes the installed package).'
     }
   };
   if (json) console.log(JSON.stringify(help, null, 2));
@@ -123,7 +144,7 @@ function gcHelp(json = false) {
     console.log('  sks gc --dry-run');
     console.log('  sks gc plan [--json]');
     console.log('  sks gc apply --yes [--plan-hash <hash>] [--json]');
-    console.log('  sks gc status [--json]');
+    console.log('  sks gc status [--full] [--json]');
   }
   return help;
 }
@@ -137,21 +158,4 @@ function readOption(args: any[] = [], name: string, fallback: unknown = null) {
 
 function positionalMemoryId(args: any[] = []) {
   return (args || []).find((arg: any) => !String(arg).startsWith('--')) || '';
-}
-
-export async function statsCommand(args: any = []) {
-  const root = await sksRoot();
-  const full = flag(args, '--full');
-  const report = full ? await storageReport(root) : await lightweightStorageReport(root);
-  const pkgBytes = full ? await dirSize(packageRoot()).catch(() => 0) : null;
-  const out = {
-    package: full
-      ? { bytes: pkgBytes, human: formatBytes(pkgBytes), full_size: true }
-      : { bytes: null, human: null, full_size: false, note: 'Run `sks stats --full --json` for recursive package sizing.' },
-    storage: report
-  };
-  if (flag(args, '--json')) return console.log(JSON.stringify(out, null, 2));
-  console.log('ㅅㅋㅅ Stats');
-  console.log(`Package: ${out.package.human || 'not scanned (use --full)'}`);
-  console.log(`State:   ${report.total_human || 'not scanned (use --full)'}`);
 }

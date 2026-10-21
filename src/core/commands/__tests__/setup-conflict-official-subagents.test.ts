@@ -4,7 +4,7 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { dispatch } from '../../../cli/router.js'
-import { fixPathCommand, setupCommand } from '../basic-cli.js'
+import { setupCommand } from '../basic-cli.js'
 import { run as doctorRun } from '../../../commands/doctor.js'
 import { cleanupOtherHarnessConflicts } from '../../harness-conflicts.js'
 import { MANAGED_OFFICIAL_SUBAGENT_ROLES } from '../../managed-assets/managed-assets-manifest.js'
@@ -221,27 +221,6 @@ test('setup reports a failed authoritative global skill install instead of compl
     assert.equal(result.skill_install.ok, false)
     assert.ok(result.blockers.includes('authoritative_sks_skill_install_failed'))
     assert.ok(result.blockers.some((item: string) => item.startsWith('skill_install:')))
-  })
-})
-
-test('fix-path reports a failed authoritative global skill install instead of success', async () => {
-  await withTempProject('sks-fix-path-global-skill-blocked-', async () => {
-    const home = String(process.env.HOME)
-    await fs.mkdir(home, { recursive: true })
-    await fs.writeFile(path.join(home, '.agents'), 'user-owned non-directory collision\n')
-
-    const result: any = await fixPathCommand([
-      '--local-only',
-      '--install-scope', 'project',
-      '--json'
-    ])
-
-    assert.equal(result.ok, false)
-    assert.equal(result.status, 'skill_blocked')
-    assert.equal(result.skill_install.ok, false)
-    assert.ok(result.blockers.includes('authoritative_sks_skill_install_failed'))
-    assert.ok(result.blockers.some((item: string) => item.startsWith('skill_install:')))
-    assert.equal(process.exitCode, 1)
   })
 })
 

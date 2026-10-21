@@ -1,4 +1,3 @@
-import { AsyncLocalStorage } from 'node:async_hooks';
 import { createHash } from 'node:crypto';
 import {
   COMMAND_ALIASES_LITE,
@@ -42,8 +41,6 @@ export interface RouterIntentInheritance {
   readonly evidenceState?: IntentContract['evidence_state'];
   readonly retryBudget?: number;
 }
-
-const routerIntentStorage = new AsyncLocalStorage<IntentContract>();
 
 /** Builds the immutable execution contract before the legacy alias router runs. */
 export function prepareRouterExecutionIntent(
@@ -111,9 +108,10 @@ export function normalizeCommand(args: readonly string[] = []): NormalizedComman
 export async function dispatch(args?: readonly string[]): Promise<unknown> {
   const argv = args ?? process.argv.slice(2);
   try {
-    let intent: NormalizedIntentCommand | null = null;
+    // The intent contract is validation only: it rejects legacy options before
+    // any command runs. Nothing downstream reads the contract itself.
     try {
-      intent = prepareRouterExecutionIntent(argv);
+      prepareRouterExecutionIntent(argv);
     } catch (error) {
       const code = error instanceof Error ? error.message : String(error);
       if (code === 'intent_legacy_option_unsupported') {
@@ -127,9 +125,7 @@ export async function dispatch(args?: readonly string[]): Promise<unknown> {
         throw error;
       }
     }
-    return intent
-      ? await routerIntentStorage.run(intent.contract, () => dispatchInner(argv))
-      : await dispatchInner(argv);
+    return await dispatchInner(argv);
   } catch (err: unknown) {
     // Final choke point: any uncaught bug anywhere in the dispatch chain (gate
     // checks, lazy command import, command run()) must never leak a raw stack
@@ -222,16 +218,16 @@ async function dispatchInner(argv: readonly string[]): Promise<unknown> {
     // migration gate's lock — a stuck/contended migration lock previously
     // made `sks <cmd> --help` take the full MIGRATION_LOCK_WAIT_MS (20s) and
     // then fail, for a request that only wants usage text.
-    const { ensureCurrentMigrationBeforeCommand } = await import('../core/update/update-migration-state.js');
-    const migrationGate = await ensureCurrentMigrationBeforeCommand({
-      command,
-      args: rest,
-      skipMigrationGate: entry.skipMigrationGate === true
-        || entry.readonly === true
-        || safeReadOnlySubcommand(command, rest)
-        || safeActiveRouteVisualQuery(command, rest)
-    });
-    if (!migrationGate.ok) {
+    const skipMigrationGate = entry.skipMigrationGate === true
+      || entry.readonly === true
+      || safeReadOnlySubcommand(command, rest)
+      || safeActiveRouteVisualQuery(command, rest);
+    // A skipped gate answers ok without doing anything, so read-only commands
+    // do not load the migration machinery (a ~200-module import) to hear it.
+    const migrationGate = skipMigrationGate
+      ? null
+      : await (await import('../core/update/update-migration-state.js')).ensureCurrentMigrationBeforeCommand({ command, args: rest, skipMigrationGate: false });
+    if (migrationGate && !migrationGate.ok) {
       console.error('SKS project migration blocked.');
       console.error(`Scope: ${migrationGate.scope || 'project'}`);
       console.error(`Stage: ${migrationGate.failed_stage_id || migrationGate.status}`);
@@ -341,21 +337,14 @@ export function safeReadOnlySubcommand(command: CommandNameLite, args: readonly 
   if (command === 'naruto' && sub === 'execution' && nested === 'status') {
     return !args.some((arg) => ['--fix', '--yes', '-y', '--write', '--apply', '--execute', '--force', '--real'].includes(String(arg)));
   }
-  // SKS Center probes use nested read paths (`mcp config list|test|backups`,
-  // `remote readiness`). Treat those as migration-safe so a blocked project
-  // receipt cannot blank Overview / MCP / Remote pages.
+  // SKS Center probes use nested read paths (`mcp config list|test|backups`).
+  // Treat those as migration-safe so a blocked project receipt cannot blank the
+  // Overview or MCP pages.
   if (command === 'mcp' && sub === 'config' && ['list', 'test', 'backups', 'show'].includes(nested)) {
     return !args.some((arg) => ['--fix', '--yes', '-y', '--write', '--apply', '--execute', '--force', '--real'].includes(String(arg)));
   }
   // `codex-app context-1m status` is the SKS Center 1M-context card probe.
   if (command === 'codex-app' && ['context-1m', 'context-management'].includes(sub) && (nested === 'status' || nested === '' || nested.startsWith('--'))) {
-    return !args.some((arg) => ['--fix', '--yes', '-y', '--write', '--apply', '--execute', '--force', '--real'].includes(String(arg)));
-  }
-  if (command === 'remote' && ['readiness', 'status', 'show'].includes(sub)) {
-    return !args.some((arg) => ['--fix', '--yes', '-y', '--write', '--apply', '--execute', '--force', '--real'].includes(String(arg)));
-  }
-  // `remote machines list|validate` only reads and validates the machine registry.
-  if (command === 'remote' && ['machines', 'machine'].includes(sub) && ['list', 'validate'].includes(nested)) {
     return !args.some((arg) => ['--fix', '--yes', '-y', '--write', '--apply', '--execute', '--force', '--real'].includes(String(arg)));
   }
   if (!['status', 'show', 'list', 'observe', 'watch', 'doctor', 'help'].includes(sub)) return false;
@@ -411,8 +400,7 @@ export function safeActiveRouteContinuation(command: CommandNameLite, args: read
     return subcommand === 'run' && !requestedMission;
   }
   const expectedRoutes = new Map<CommandNameLite, readonly string[]>([
-    ['research', ['RESEARCH']],
-    ['autoresearch', ['AUTORESEARCH', 'RESEARCH']],
+    ['research', ['RESEARCH', 'AUTORESEARCH']],
     ['qa-loop', ['QALOOP']]
   ]).get(command);
   if (!expectedRoutes) return false;
@@ -449,5 +437,5 @@ function activeRouteStateBlocksCommand(state: any = {}) {
   const mode = String(state.mode || '').toUpperCase();
   if (!mode || ['WIKI', 'STATUS', 'HELP'].includes(mode)) return false;
   if (/(?:DONE|COMPLETE|CLOSED|BLOCKED|FAILED)$/i.test(String(state.phase || ''))) return false;
-  return Boolean(state.route || state.route_command || ['NARUTO', 'QALOOP', 'RESEARCH', 'MADSKS', 'GOAL'].includes(mode));
+  return Boolean(state.route || state.route_command || ['NARUTO', 'QALOOP', 'RESEARCH', 'MADSKS'].includes(mode));
 }

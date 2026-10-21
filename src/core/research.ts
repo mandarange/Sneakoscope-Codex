@@ -2,7 +2,7 @@ import path from 'node:path';
 import { judgmentSubagentModel, DEEP_SUBAGENT_EFFORT } from './subagents/model-policy.js';
 import { appendJsonlBounded, nowIso, readJson, readText, writeJsonAtomic, writeTextAtomic, exists } from './fsx.js';
 import { OUTCOME_RUBRIC } from './proof-field.js';
-import { RESEARCH_REVIEWER_CONTRACT } from './recallpulse.js';
+import { RESEARCH_REVIEWER_CONTRACT } from './research/research-reviewer-contract.js';
 import { CLAIM_EVIDENCE_MATRIX_ARTIFACT, defaultClaimEvidenceMatrix, readClaimEvidenceMatrix, validateClaimEvidenceMatrix, writeClaimEvidenceMatrix } from './research/claim-evidence-matrix.js';
 import { EXPERIMENT_PLAN_JSON_ARTIFACT, EXPERIMENT_PLAN_MARKDOWN_ARTIFACT, defaultExperimentPlan, readExperimentPlan, validateExperimentPlan, writeExperimentPlan } from './research/experiment-plan.js';
 import { IMPLEMENTATION_BLUEPRINT_ARTIFACT, defaultImplementationBlueprint, readImplementationBlueprint, validateImplementationBlueprint, writeImplementationBlueprint } from './research/implementation-blueprint.js';

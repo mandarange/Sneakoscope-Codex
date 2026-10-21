@@ -1,4 +1,3 @@
-import { USAGE_TOPICS } from '../core/routes/constants.js';
 import { narutoCommandInputSchema } from '../core/subagents/naruto-command-input-contract.js';
 
 export type CommandMaturity = 'stable' | 'beta' | 'labs';
@@ -10,7 +9,7 @@ export type CommandInputProfileLite =
   | 'naruto'
   | 'paths'
   | 'pipeline-status'
-  | 'stats'
+  | 'search'
   | 'proof';
 
 export type ActiveRoutePolicy = 'always' | 'diagnostic-only' | 'blocked-while-active';
@@ -30,7 +29,7 @@ export interface CommandManifestLiteEntry {
   description?: string;
   /** Gate files a route-state mutator owns under its mission directory. */
   ownedGateFiles?: readonly string[];
-  deprecated?: boolean;
+  /** Internal entry (npm lifecycle, hook launcher): kept out of help and command lists. */
   hidden?: boolean;
   /** Derived from the flags above; never written in the table. */
   activeRoutePolicy?: ActiveRoutePolicy;
@@ -52,7 +51,7 @@ export type CommandContractMetadataLite = Pick<CommandManifestLiteEntry,
   'risk' | 'latency' | 'supportsJson' | 'remoteAllowed' | 'inputProfile' | 'requiredCapabilities'>;
 
 const COMMAND_MANIFEST_LITE_BASE = [
-  { name: 'help', summary: 'Show SKS help', maturity: 'stable', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
+  { name: 'help', summary: 'Show SKS help, or the usage of one command or $ route', maturity: 'stable', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'version', summary: 'Show SKS version', maturity: 'stable', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'commands', summary: 'List SKS commands', maturity: 'stable', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'triwiki', summary: 'Inspect TriWiki index, affected graph, and proof bank', maturity: 'stable', skipMigrationGate: true },
@@ -66,26 +65,19 @@ const COMMAND_MANIFEST_LITE_BASE = [
   { name: 'update-check', summary: 'Show the shared SKS, Codex CLI, and Menu Bar update status', maturity: 'stable', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'config', summary: 'Adopt project Codex config into SKS management', maturity: 'stable', skipMigrationGate: true },
   { name: 'mcp', summary: 'Manage scoped Codex MCP configuration', maturity: 'beta', skipMigrationGate: true },
-  { name: 'usage', summary: 'Show focused usage topic', maturity: 'stable', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'quickstart', summary: 'Show quickstart flow', maturity: 'stable' },
-  { name: 'setup', summary: 'Initialize SKS state', maturity: 'stable', skipMigrationGate: true },
+  { name: 'setup', summary: 'Install SKS hooks, skills, and project files (--force rewrites them)', maturity: 'stable', skipMigrationGate: true },
   { name: 'bootstrap', summary: 'Initialize SKS project files', maturity: 'stable', skipMigrationGate: true },
-  { name: 'init', summary: 'Initialize local control surface', maturity: 'stable' },
-  { name: 'deps', summary: 'Check local dependencies', maturity: 'stable' },
-  { name: 'fix-path', summary: 'Repair hook command paths', maturity: 'stable' },
   { name: 'doctor', summary: 'Check and repair SKS install', maturity: 'stable', skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'git', summary: 'Inspect and enforce SKS git collaboration hygiene', maturity: 'beta' },
   { name: 'paths', summary: 'Inspect SKS managed paths', maturity: 'beta', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
-  { name: 'postinstall', summary: 'Restore package state; bootstrap only with explicit opt-in', maturity: 'stable', skipMigrationGate: true },
+  { name: 'postinstall', summary: 'Restore package state; bootstrap only with explicit opt-in', maturity: 'stable', skipMigrationGate: true, hidden: true },
   { name: 'codex', summary: 'Check Codex CLI compatibility and vendored hook schemas', maturity: 'beta', skipMigrationGate: true },
   { name: 'codex-app', summary: 'Check Codex App readiness', maturity: 'beta', skipMigrationGate: true },
-  { name: 'codex-native', summary: 'Inspect Codex Native broker and routing readiness', maturity: 'beta' },
   { name: 'bridge', summary: 'Manage the single Desktop Bridge runtime, provider profiles, catalog, and routes', maturity: 'beta', skipMigrationGate: true },
   { name: 'menubar', summary: 'Inspect/install/restart/uninstall SKS menu bar', maturity: 'beta', skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
-  { name: 'remote', summary: 'Inspect official Remote readiness and run the proof-aware SSH stdio worker', maturity: 'beta' },
   { name: 'hooks', summary: 'Explain and inspect Codex hooks', maturity: 'beta', skipMigrationGate: true },
   { name: 'mad-sks', summary: 'MAD-SKS scoped permission modifier + SQL-plane execution', maturity: 'beta', mutatesRouteState: true, ownedGateFiles: ['mad-sks-gate.json'] },
-  { name: 'auto-review', summary: 'Manage auto-review profile', maturity: 'beta' },
   { name: 'dollar-commands', summary: 'List Codex App dollar commands', maturity: 'stable', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'fast-mode', summary: 'Toggle SKS Fast mode default for dollar-command routes', maturity: 'stable', skipMigrationGate: true },
   { name: 'commit', summary: 'Create a simple git commit', maturity: 'stable' },
@@ -94,36 +86,27 @@ const COMMAND_MANIFEST_LITE_BASE = [
   { name: 'naruto', summary: 'Run the $sks-naruto Codex official subagent workflow', maturity: 'labs', mutatesRouteState: true, ownedGateFiles: ['naruto-gate.json', 'stop-gate.json'] },
   { name: 'route', summary: 'Inspect or close active route state', maturity: 'beta', skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'qa-loop', summary: 'Run QA loop missions', maturity: 'beta', mutatesRouteState: true, ownedGateFiles: ['qa-gate.json'] },
-  { name: 'research', summary: 'Run research missions', maturity: 'labs', mutatesRouteState: true, ownedGateFiles: ['research-gate.json'] },
-  { name: 'autoresearch', summary: 'Alias for research/autoresearch route', maturity: 'labs', mutatesRouteState: true, ownedGateFiles: ['research-gate.json'] },
+  { name: 'research', summary: 'Run research missions (--autoresearch for the iterative experiment loop)', maturity: 'labs', mutatesRouteState: true, ownedGateFiles: ['research-gate.json'] },
   { name: 'ppt', summary: 'Inspect/build PPT artifacts', maturity: 'labs', mutatesRouteState: true, ownedGateFiles: ['ppt-gate.json'] },
   { name: 'image-ux-review', summary: 'Inspect image UX artifacts', maturity: 'labs', mutatesRouteState: true, ownedGateFiles: ['image-ux-review-gate.json'] },
   { name: 'computer-use', summary: 'Record native Mac/non-web Computer Use visual evidence', maturity: 'beta', mutatesRouteState: true, ownedGateFiles: ['computer-use-gate.json'] },
   { name: 'context7', summary: 'Context7 checks and docs', maturity: 'beta' },
   { name: 'super-search', summary: 'Run Super-Search provider-independent source intelligence', maturity: 'beta' },
   { name: 'search', summary: 'Local files/text/structure/symbol/context search engines', maturity: 'beta', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
-  { name: 'recallpulse', summary: 'RecallPulse evidence route', maturity: 'labs' },
   { name: 'pipeline', summary: 'Inspect pipeline missions and seal a paused route\'s answers', maturity: 'beta', skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'guard', summary: 'Check harness guard', maturity: 'beta' },
   { name: 'conflicts', summary: 'Check harness conflicts', maturity: 'beta' },
-  { name: 'reasoning', summary: 'Show reasoning route', maturity: 'labs' },
-  { name: 'aliases', summary: 'Show command aliases', maturity: 'stable' },
   { name: 'cleanup', summary: 'Permanently blank active TriWiki without retaining a previous generation', maturity: 'beta' },
   { name: 'align', summary: 'Create or replace TriWiki as a code-only repository navigation graph', maturity: 'beta', mutatesRouteState: true, ownedGateFiles: ['align-gate.json'] },
   { name: 'selftest', summary: 'Run local mock selftest', maturity: 'stable' },
-  { name: 'goal', summary: 'Print stateless Codex native Goal controls', maturity: 'beta' },
   { name: 'seo-geo-optimizer', summary: 'Run unified SEO/GEO optimizer audit/plan/apply/verify plus research/strategy (--include-marketing) on the search-visibility kernel', maturity: 'beta' },
-  { name: 'hook', summary: 'Codex hook entrypoint', maturity: 'beta', skipMigrationGate: true },
+  { name: 'hook', summary: 'Codex hook entrypoint', maturity: 'beta', skipMigrationGate: true, hidden: true },
   { name: 'proof', summary: 'Show and validate completion proof and the evidence behind it: route trust, stop gate, mission artifacts, H-Proof, proof field', maturity: 'beta', skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
-  { name: 'wrongness', summary: 'Record and inspect TriWiki wrongness negative evidence', maturity: 'beta' },
-  { name: 'skill-dream', summary: 'Track skill dream counters', maturity: 'labs' },
-  { name: 'code-structure', summary: 'Scan source structure', maturity: 'labs' },
   { name: 'gx', summary: 'Render/validate GX cartridges', maturity: 'labs' },
   { name: 'eval', summary: 'Run eval reports', maturity: 'labs' },
-  { name: 'wiki', summary: 'Manage TriWiki and image voxel ledgers', maturity: 'beta', skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
+  { name: 'wiki', summary: 'Manage TriWiki shards, image voxel ledgers, and wrongness memory', maturity: 'beta', skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'memory', summary: 'Project TriWiki memory, explicit Jev promotion, digest-bound forgetting, or bounded recall', maturity: 'beta' },
-  { name: 'gc', summary: 'Compact/prune runtime state', maturity: 'labs', skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
-  { name: 'stats', summary: 'Show storage stats', maturity: 'labs', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
+  { name: 'gc', summary: 'Plan, apply, or report runtime-state retention and storage size', maturity: 'labs', skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'mcp-server', summary: 'Run a stdio MCP server exposing SKS commands as tools for MCP-capable agent hosts', maturity: 'beta', skipMigrationGate: true, allowedDuringActiveRoute: true },
   { name: 'agent-bridge', summary: 'Register SKS tools or run read-only tools with native Astra async calling', maturity: 'beta', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'decision', summary: 'Manage optional Jev decisions through OpenRouter: status, enable, disable, probe, evaluate', maturity: 'labs', skipMigrationGate: true, allowedDuringActiveRoute: true },
@@ -146,7 +129,6 @@ const COMMAND_CONTRACT_OVERRIDES_LITE = {
   decision: { risk: 'R2', latency: 'long', supportsJson: true, remoteAllowed: false, inputProfile: 'json-only' },
   imagegen: { risk: 'R2', latency: 'long', supportsJson: true, remoteAllowed: false, inputProfile: 'json-only' },
   cleanup: { risk: 'R3', latency: 'long', supportsJson: true, remoteAllowed: false, inputProfile: 'json-only' },
-  autoresearch: { latency: 'long' },
   bridge: { risk: 'R3', latency: 'long', supportsJson: true, remoteAllowed: false, inputProfile: 'json-only' },
   'commit-and-push': { risk: 'R3' },
   'computer-use': { latency: 'long' },
@@ -174,13 +156,10 @@ const COMMAND_CONTRACT_OVERRIDES_LITE = {
     risk: 'R0', latency: 'fast', supportsJson: true, remoteAllowed: true,     inputProfile: 'proof', requiredCapabilities: ['proof.read', 'proof.trust', 'proof.stop-gate']
   },
   'qa-loop': { latency: 'long' },
-  recallpulse: { latency: 'long' },
-  remote: { risk: 'R2', latency: 'long', supportsJson: true, remoteAllowed: false, inputProfile: 'json-only' },
   research: { latency: 'long' },
   review: { risk: 'R1' },
-  search: { risk: 'R0', latency: 'normal', supportsJson: true, remoteAllowed: true, inputProfile: 'json-only' },
-  stats: {
-    supportsJson: true, remoteAllowed: true, inputProfile: 'stats',
+  search: {
+    risk: 'R0', latency: 'normal', supportsJson: true, remoteAllowed: true, inputProfile: 'search',
     requiredCapabilities: ['project.fs.read']
   },
   status: {
@@ -197,8 +176,8 @@ const COMMAND_CONTRACT_OVERRIDES_LITE = {
 
 const COMMAND_HELP_LITE = {
   help: {
-    usage: 'sks help [topic]',
-    description: 'Show CLI help or focused help for a topic.'
+    usage: 'sks help [command | \'$sks-<route>\']',
+    description: 'Show the command list, or the usage of one command (the same text as `sks <command> --help`) or one $ route.'
   },
   version: {
     usage: 'sks version | sks --version',
@@ -232,10 +211,6 @@ const COMMAND_HELP_LITE = {
     usage: 'sks review [--staged|--diff <ref>] [--fix] [--json]',
     description: 'Review a diff with machine-evidence findings sorted above LLM review notes.'
   },
-  usage: {
-    usage: `sks usage [${USAGE_TOPICS}]`,
-    description: 'Print copy-ready workflows for common tasks.'
-  },
   quickstart: {
     usage: 'sks quickstart',
     description: 'Show the shortest safe setup and verification flow.'
@@ -256,37 +231,21 @@ const COMMAND_HELP_LITE = {
     usage: 'sks uninstall [--dry-run] [--yes] [--keep-config] [--keep-data] [--purge-projects] [--json]',
     description: 'Remove SKS global skills, hooks, menu bar, state, temp files, and optional project residue while preserving user-owned content by default.'
   },
-  deps: {
-    usage: 'sks deps check [--json] [--yes]',
-    description: 'Check Node/npm and Codex CLI readiness; pass --yes to repair missing Codex CLI tooling when supported.'
-  },
   codex: {
     usage: 'sks codex compatibility|version|update-status [--refresh]|update|doctor|schema|current [--json]',
     description: 'Check Codex CLI compatibility/version/update status, run the official `codex update`, and inspect current manifest, capability, and hook-schema evidence.'
   },
   'codex-app': {
-    usage: 'sks codex-app [check|status|restart|context-management [status|on|off]|context-1m [status|on|off]|product-design|chrome-extension|pat status|remote-control]',
-    description: 'Check Codex App integration, Desktop Bridge readiness, Product Design plugin readiness, Codex Chrome Extension web verification readiness, PAT-safe status, first-party MCP/plugin readiness, Codex CLI remote-control availability, and the opt-in Codex 1M context window toggle (each model gets its largest supported window) with automatic Codex restart. Provider routing is managed only by sks bridge.'
-  },
-  'codex-native': {
-    usage: 'sks codex-native status|feature-broker|invocation-plan|init-deep [--json]',
-    description: 'Inspect Codex Native feature broker readiness, invocation routing, and managed memory setup.'
+    usage: 'sks codex-app [check|status|restart|context-management [status|on|off]|context-1m [status|on|off]|product-design|chrome-extension|pat status|remote-control|harness-matrix|skill-sync|agent-role-sync|init-deep [--directory-local]|hook-lifecycle|execution-profile]',
+    description: 'Check Codex App integration, Desktop Bridge readiness, Product Design plugin readiness, Codex Chrome Extension web verification readiness, PAT-safe status, first-party MCP/plugin readiness, Codex CLI remote-control availability, managed skill and agent-role sync, project memory (init-deep), and the opt-in Codex 1M context window toggle (each model gets its largest supported window) with automatic Codex restart. Provider routing is managed only by sks bridge.'
   },
   hooks: {
     usage: 'sks hooks explain|status|trust-report|replay|codex-validate|warning-check ... [--json]',
     description: 'Explain Codex hook events, validate current vendored event output schemas, replay fixtures, and enforce warning-zero SKS hook policies.'
   },
-  remote: {
-    usage: 'sks remote readiness|machines|worker ... [--json]',
-    description: 'Inspect official Codex Remote readiness and the allowlisted proof-aware SSH stdio worker surface.'
-  },
   'mad-sks': {
     usage: 'sks mad-sks plan|run|apply|sql|apply-migration|status|close|rollback-apply ... | sks --mad [--high]',
     description: 'Open or inspect MAD-SKS scoped permission workflows, merged SQL-plane execution, and the native Codex permission launcher.'
-  },
-  'auto-review': {
-    usage: 'sks auto-review status|enable|start [--high] | sks --Auto-review --high',
-    description: 'Enable Codex automatic approval review and launch the native Codex session with the auto-review profile.'
   },
   'dollar-commands': {
     usage: 'sks dollar-commands [--json]',
@@ -305,8 +264,8 @@ const COMMAND_HELP_LITE = {
     description: 'Stage current changes, create a simple git commit, and push without the full SKS pipeline.'
   },
   dfix: {
-    usage: 'sks dfix',
-    description: 'Explain $sks-dfix ultralight direct-fix mode.'
+    usage: 'sks dfix diagnose|plan|patch|verify|rollback-plan|proof|trust|fixture|status [--json]',
+    description: 'Run the DFix diagnose/plan/patch/verify loop for a small direct fix. The $sks-dfix skill itself needs no mission; this CLI records one.'
   },
   'qa-loop': {
     usage: 'sks qa-loop prepare|answer|run|status ...',
@@ -336,13 +295,17 @@ const COMMAND_HELP_LITE = {
     usage: 'sks search status|files|text|structure|symbol|context|benchmark|doctor [--json]',
     description: 'Local SearchProvider engines for files/text/structure/symbol/context (no required rg/ast-grep/fd).'
   },
-  recallpulse: {
-    usage: 'sks recallpulse run|status|eval|governance|checklist <mission-id|latest>',
-    description: 'Run report-only RecallPulse active recall, durable status, proof capsule, evidence envelope, and governance checks.'
-  },
   pipeline: {
-    usage: 'sks pipeline status|resume|plan|answer ...',
-    description: 'Inspect the active skill-first route, materialized execution plan, ambiguity gates, and completion gates.'
+    usage: 'sks pipeline status|plan [--json] | sks pipeline plan [mission-id|latest] [--route \'$sks-<route>\'] [--agents N|--force-agents|--no-agents] [--proof-field [--changed a,b]] [--json] | sks pipeline answer <mission-id|latest> (--stdin | <answers.json>) [--json]',
+    description: 'Inspect the active route and its plan, re-plan a mission (agent count, or --proof-field to size verification from the changed files and the project\'s own scripts), or seal the answers a paused route\'s ambiguity gate is waiting for.'
+  },
+  menubar: {
+    usage: 'sks menubar status|install [--no-launch]|restart|rollback [--no-launch]|uninstall [--json]',
+    description: 'Inspect, install, restart, roll back, or uninstall the SKS menu bar app (macOS).'
+  },
+  install: {
+    usage: 'sks install [--yes|--no-tui] (first install: npm exec --yes --package=sneakoscope@latest -- sneakoscope install)',
+    description: 'Install the exact packaged SKS version globally, then repair and verify the resolved CLI with its own sks doctor --fix.'
   },
   guard: {
     usage: 'sks guard check [--json]',
@@ -351,10 +314,6 @@ const COMMAND_HELP_LITE = {
   conflicts: {
     usage: 'sks conflicts check|prompt|cleanup --yes [--json]',
     description: 'Detect other Codex harnesses such as OMX/DCodex, print a cleanup prompt, or quarantine them automatically.'
-  },
-  aliases: {
-    usage: 'sks aliases',
-    description: 'Show command aliases and npm binary names.'
   },
   cleanup: {
     usage: 'sks cleanup plan|run|status|proof [--apply] [--json]',
@@ -368,10 +327,6 @@ const COMMAND_HELP_LITE = {
     usage: 'sks setup [--bootstrap] [--install-scope global|project] [--local-only] [--force] [--json]',
     description: 'Initialize SKS state, Codex App files, hooks, skills, and rules.'
   },
-  'fix-path': {
-    usage: 'sks fix-path [--install-scope global|project] [--json]',
-    description: 'Refresh hook commands with the resolved SKS binary path.'
-  },
   doctor: {
     usage: 'sks doctor [--fix] [--local-only] [--json] [--install-scope global|project]',
     description: 'Check and repair SKS generated files, while blocking setup if another Codex harness is detected.'
@@ -384,25 +339,17 @@ const COMMAND_HELP_LITE = {
     usage: 'sks paths managed [--json]',
     description: 'List SKS-owned managed paths and rollback eligibility.'
   },
-  init: {
-    usage: 'sks init [--force] [--local-only] [--install-scope global|project]',
-    description: 'Initialize the local SKS control surface.'
-  },
   selftest: {
     usage: 'sks selftest [--mock]',
     description: 'Run local smoke tests without calling a model.'
-  },
-  goal: {
-    usage: 'sks goal create|edit|pause|resume|clear|status ...',
-    description: 'Print a detailed Codex native /goal command without creating SKS Goal state.'
   },
   'seo-geo-optimizer': {
     usage: 'sks seo-geo-optimizer [seo|geo] doctor|audit|research|strategy|plan|apply|verify|status|rollback|fixture [mission|latest] [--mode seo|geo] [--target auto|website|docs|package] [--include-marketing] [--json]',
     description: 'Run the unified SEO/GEO optimizer on the shared search-visibility kernel with mode-specific gates, marketing research/strategy, safe apply, and proof.'
   },
   research: {
-    usage: 'sks research prepare|run|status ...',
-    description: 'Run evidence-bound research missions with layered sources, independent review, paper, novelty, and falsification checks.'
+    usage: 'sks research prepare|run|status ... [--autoresearch]',
+    description: 'Run evidence-bound research missions with layered sources, independent review, paper, novelty, and falsification checks; --autoresearch runs the iterative experiment loop.'
   },
   proof: {
     usage: 'sks proof show|latest|validate|export|smoke|trust report|validate|status|explain [latest|mission-id]|artifacts [mission-id|latest] [--required a,b]|stop-gate [check] [--route r] [--mission id]|hproof check [mission-id|latest]|field scan [--intent "task"] [--json|--md]',
@@ -412,52 +359,32 @@ const COMMAND_HELP_LITE = {
     usage: 'sks eval run|compare|thresholds ...',
     description: 'Run deterministic context-quality and performance evidence checks.'
   },
-  wrongness: {
-    usage: 'sks wrongness list|show|add|resolve|summarize|validate|context|rules ...',
-    description: 'Record, retrieve, and validate TriWiki wrongness memory: negative evidence, failed assumptions, stale proof, visual/DB/hook mismatches, and avoidance rules.'
-  },
-  'skill-dream': {
-    usage: 'sks skill-dream status|run|record [--json]',
-    description: 'Track generated-skill usage in lightweight JSON and periodically report keep, merge, prune, and improvement candidates without deleting skills automatically.'
-  },
-  'code-structure': {
-    usage: 'sks code-structure scan [--json]',
-    description: 'Scan handwritten source files for 1000/2000/3000-line structure gates and split-review exceptions.'
-  },
   wiki: {
-    usage: 'sks wiki coords|pack|refresh|publish|rebuild-index|validate|validate-shared|wrongness ...',
-    description: 'Build, refresh, publish shared shards, rebuild ignored indexes, validate, and attach wrongness-memory context to RGBA/trig LLM Wiki packs with attention.use_first and attention.hydrate_first for compact recall plus source hydration.'
+    usage: 'sks wiki validate|validate-shared|publish|rebuild-index|rebuild-summary|prune|coords|pack|refresh ... | sks wiki wrongness list|show|add|resolve|summarize|validate|context|rules|publish ... | sks wiki image-ingest|anchor-add|relation-add|image-validate|image-summary ...',
+    description: 'Validate, publish, and inspect TriWiki shards and image voxel ledgers, and record or query wrongness memory: negative evidence, failed assumptions, stale proof, and avoidance rules. `refresh` and `pack` run `sks align run`, the one TriWiki writer.'
   },
   memory: {
-    usage: 'sks memory build [--json] | sks memory gc [--dry-run] | sks memory promote --mission <id> --yes [--json] | sks memory forget --memory-id <id> --previous-digest <digest> [--json] | sks memory recall [--query <text>] [--high-risk] [--json]',
-    description: 'Project TriWiki context-pack memory, explicitly promote a Jev mission intake, write a digest-bound tombstone, or read bounded canonical memory.'
+    usage: 'sks memory recall [--query <text>] [--high-risk] [--json] | sks memory promote --mission <id> --yes [--json] | sks memory forget --memory-id <id> --previous-digest <digest> [--json] | sks memory build [--json] | sks memory gc [--dry-run] [--json]',
+    description: 'Read bounded canonical memory, explicitly promote a Jev mission intake, write a digest-bound tombstone, project TriWiki memory into AGENTS.md (build), or run memory retention (gc).'
   },
   naruto: {
     usage: 'sks naruto run "task" [--agents N] [--max-threads N] [--trusted-project] [--json] | sks naruto status|subagents|proof [latest|M-...] [--json] | sks naruto execution status [--json] | sks naruto execution set --mode auto|current-session|standalone [--restart] [--json] | sks naruto parent-summary --mission M-... --stdin [--json]',
     description: 'Run or inspect the Codex official subagent workflow: an orchestrating parent (latest deep-tier standalone default), children on the newest model of their tier (Jev picks the tier on spawn when Jev mode is on), max_depth=1, and structured parent-thread completion evidence.'
-  },
-  reasoning: {
-    usage: 'sks reasoning ["prompt"] [--json]',
-    description: 'Show SKS temporary reasoning-effort routing: medium for simple tasks, high for logic, xhigh for research.'
   },
   gx: {
     usage: 'sks gx init|render|validate|drift|snapshot [name]',
     description: 'Create and verify deterministic SVG/HTML visual context cartridges.'
   },
   gc: {
-    usage: 'sks gc [--dry-run] [--json]',
-    description: 'Compact oversized logs and prune stale runtime artifacts.'
-  },
-  stats: {
-    usage: 'sks stats [--full] [--json]',
-    description: 'Show package and .sneakoscope storage size.'
+    usage: 'sks gc [plan|apply --yes|status [--full]] [--dry-run] [--json]',
+    description: 'Retention compacts or removes old missions and transient runtime files; `plan` previews it, `apply --yes` runs a reviewed plan. `status --full` also sizes the installed package.'
   },
   'mcp-server': {
     usage: 'sks mcp-server [--expose-exec] [--probe]',
     description: 'Run a modern stateless stdio MCP server exposing SKS read-only commands as tools for any MCP-capable agent host; --expose-exec also exposes non-read-only commands; --probe round-trips server/discover and tools/list, then exits.'
   },
   'agent-bridge': {
-    usage: 'sks agent-bridge setup [--trusted-project] [--json] | async --prompt "task" [--tools status,stats] [--json]',
+    usage: 'sks agent-bridge setup [--trusted-project] [--json] | async --prompt "task" [--tools status,search] [--json]',
     description: 'Publish the agent-bridge manifest or run selected read-only SKS tools with native Astra Async tool calling through the registered Codex-LB bridge.'
   },
   decision: {
@@ -508,7 +435,13 @@ export function commandInputSchema(profile: CommandInputProfileLite): Record<str
       json: { type: 'boolean' }
     });
   }
-  if (profile === 'stats') return objectSchema({ full: { type: 'boolean' }, json: { type: 'boolean' } });
+  if (profile === 'search') {
+    return objectSchema({
+      action: { type: 'string', enum: ['status', 'files', 'text', 'structure', 'symbol', 'context'] },
+      query: boundedString(1, 500),
+      json: { type: 'boolean' }
+    });
+  }
   if (profile === 'proof') {
     return objectSchema({
       action: { type: 'string', enum: ['show', 'latest', 'validate', 'route', 'trust', 'stop-gate'] },
@@ -531,11 +464,7 @@ function boundedString(minLength: number, maxLength: number): Record<string, unk
   return { type: 'string', minLength, maxLength };
 }
 
-export const LEGACY_COMMAND_ALIASES_LITE = {
-} as const satisfies Record<string, CommandNameLite>;
-
 export const COMMAND_ALIASES_LITE = {
-  ...LEGACY_COMMAND_ALIASES_LITE,
   '--help': 'help',
   '-h': 'help',
   '--version': 'version',
@@ -543,9 +472,7 @@ export const COMMAND_ALIASES_LITE = {
   '--mad': 'mad-sks',
   '--MAD': 'mad-sks',
   '--mad-sks': 'mad-sks',
-  'ux-review': 'image-ux-review',
-  'visual-review': 'image-ux-review',
-  'ui-ux-review': 'image-ux-review'
+  'ux-review': 'image-ux-review'
 } as const satisfies Record<string, CommandNameLite>;
 
 export const COMMAND_MANIFEST_BY_NAME = Object.fromEntries(
@@ -556,4 +483,12 @@ export const COMMAND_NAME_SET = new Set<string>(COMMAND_MANIFEST_LITE.map((entry
 
 export function commandManifestNames(): CommandNameLite[] {
   return COMMAND_MANIFEST_LITE.map((entry) => entry.name).sort() as CommandNameLite[];
+}
+
+/** Every command a user can see, sorted: internal entries stay out of help and listings. */
+export function visibleCommandManifest(): readonly CommandManifestLiteEntry[] {
+  return COMMAND_MANIFEST_LITE
+    .filter((entry) => entry.hidden !== true)
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name));
 }

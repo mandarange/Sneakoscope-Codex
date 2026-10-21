@@ -30,9 +30,9 @@ export function isHelpRequest(args: readonly string[]): boolean {
  */
 export function renderManifestHelp(command: string, entry: CommandManifestLiteEntry | undefined): string {
   if (!entry) return `Usage: sks ${command}\n\nNo manifest entry is registered for this command.`;
-  const lines = [`Usage: sks ${entry.name} [options]`, '', entry.summary];
+  const lines = [`Usage: ${entry.usage || `sks ${entry.name} [options]`}`, '', entry.summary];
+  if (entry.description && entry.description !== entry.summary) lines.push(entry.description);
   const notes: string[] = [];
-  if (entry.deprecated) notes.push('deprecated — kept only for compatibility');
   if (entry.maturity !== 'stable') notes.push(`maturity: ${entry.maturity}`);
   if (entry.readonly) notes.push('read-only: does not mutate project or Codex state');
   if (entry.diagnostic) notes.push('diagnostic');

@@ -3,7 +3,7 @@
 Wrongness memory can be promoted from local/project ledgers into tracked shards:
 
 ```bash
-sks wrongness publish latest --shared --json
+sks wiki wrongness publish latest --shared --json
 sks wiki validate-shared --json
 ```
 

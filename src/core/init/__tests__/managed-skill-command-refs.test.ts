@@ -33,6 +33,18 @@ test('every `sks <command>` a managed skill tells an agent to run is a shipped c
       if (!known.has(word)) unknown.push(`${name}: sks ${word}`);
     }
   }
+  // A command list written as prose ("Use local SKS commands: a, b, c.") names
+  // commands too; the `sks <command>` scan above cannot see it.
+  for (const name of await fsp.readdir(skillsDir)) {
+    const text = await fsp.readFile(path.join(skillsDir, name, 'SKILL.md'), 'utf8').catch(() => '');
+    for (const list of text.matchAll(/Use local SKS commands: ([^.]+)\./g)) {
+      for (const item of list[1]!.split(',')) {
+        const word = item.trim().split(/\s+/)[0]!;
+        references += 1;
+        if (!known.has(word)) unknown.push(`${name}: listed command ${word}`);
+      }
+    }
+  }
   assert.ok(skills > 20, `expected the managed skill set, saw ${skills}`);
   assert.ok(references > 20, `expected skills to reference commands, saw ${references}`);
   assert.deepEqual(unknown, [], 'managed skills point at commands the shipped CLI does not have');

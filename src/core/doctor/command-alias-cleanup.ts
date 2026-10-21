@@ -5,7 +5,7 @@ import { COMMAND_CATALOG } from '../routes.js';
 import { nowIso, writeJsonAtomic } from '../fsx.js';
 import { cleanupRemovedSksSkillResidue, type RemovedSksSkillResidueReport } from '../init/skills.js';
 import type { LegacyGenerationConvergenceReport } from '../init/legacy-generation-convergence.js';
-import { COMMANDS, LEGACY_COMMAND_ALIASES, commandNames } from '../../cli/command-registry.js';
+import { COMMANDS, COMMAND_ALIASES, commandNames } from '../../cli/command-registry.js';
 import { REMOVED_PUBLIC_COMMANDS } from './retired-managed-residue-private.js';
 import { reconcileRetiredManagedResidue, RETIRED_MANAGED_RESIDUE_SCHEMA, type RetiredManagedResidueReport } from './retired-managed-residue.js';
 import { CURRENT_PROJECT_GUIDANCE_SCHEMA, reconcileCurrentProjectGuidance, type CurrentProjectGuidanceReport } from './current-project-guidance.js';
@@ -162,15 +162,15 @@ export function commandAliasCleanupReport(
   skillLegacySurface: SkillLegacySurfaceReport = emptySkillLegacySurface(Boolean(opts.fix))
 ) {
   const root = opts.root;
-  const legacyAliases = Object.entries(LEGACY_COMMAND_ALIASES).map(([alias, canonical]) => ({ alias, canonical }));
+  const aliases = Object.entries(COMMAND_ALIASES).map(([alias, canonical]) => ({ alias, canonical }));
   const registeredRemovedCommands = REMOVED_PUBLIC_COMMANDS
     .filter((name) => Object.prototype.hasOwnProperty.call(COMMANDS, name));
   const catalogRemovedCommands = REMOVED_PUBLIC_COMMANDS
     .filter((name) => COMMAND_CATALOG.some((row: any) => row.name === name));
   const redirectingRemovedCommands = REMOVED_PUBLIC_COMMANDS
-    .filter((name) => Object.prototype.hasOwnProperty.call(LEGACY_COMMAND_ALIASES, name));
+    .filter((name) => Object.prototype.hasOwnProperty.call(COMMAND_ALIASES, name));
   const canonical = commandNames();
-  const missingCanonicalTargets = legacyAliases
+  const missingCanonicalTargets = aliases
     .filter((entry) => !canonical.includes(entry.canonical as any))
     .map((entry) => `${entry.alias}->${entry.canonical}`);
   const blockers = [
@@ -204,8 +204,8 @@ export function commandAliasCleanupReport(
     fix: Boolean(opts.fix),
     report_path: path.join(root, '.sneakoscope', 'reports', 'command-alias-cleanup.json'),
     canonical_command_count: canonical.length,
-    current_alias_count: legacyAliases.length,
-    aliases: legacyAliases,
+    current_alias_count: aliases.length,
+    aliases,
     detected: {
       retired_registry_entry_count: registeredRemovedCommands.length,
       retired_catalog_entry_count: catalogRemovedCommands.length,

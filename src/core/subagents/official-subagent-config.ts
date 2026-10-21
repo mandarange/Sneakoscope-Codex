@@ -197,7 +197,7 @@ export function mergeOfficialSubagentConfigResult(
     inheritedFeatures,
     // Clamp, do not hand a user-supplied value straight to
     // boundedManagedMaxThreads: it THROWS above the ceiling, and the throw
-    // escaped through doctor --fix and `sks init`, killing the whole Codex
+    // escaped through doctor --fix and `sks setup`, killing the whole Codex
     // startup-config repair phase. The read path already normalizes the same
     // over-cap value with a warning, so clamping here matches it.
     maxThreads: Math.min(readAgentsMaxThreads(next) || targetMaxThreads, HARD_NARUTO_MAX_THREADS)

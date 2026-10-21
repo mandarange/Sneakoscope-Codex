@@ -5,7 +5,7 @@ import { agentBridgeAsyncCommand, parseAsyncCommandArgs, redactAsyncToolOutput }
 import { latestModelForTier } from '../../subagents/model-tiers.js';
 
 test('async command accepts only explicit read-only remote command contracts', () => {
-  assert.deepEqual(parseAsyncCommandArgs(['--prompt', 'Inspect setup']), { prompt: 'Inspect setup', tools: ['status', 'stats'] });
+  assert.deepEqual(parseAsyncCommandArgs(['--prompt', 'Inspect setup']), { prompt: 'Inspect setup', tools: ['status', 'search'] });
   assert.deepEqual(parseAsyncCommandArgs(['--prompt', 'Inspect', '--tools', 'status', '--json']), { prompt: 'Inspect', tools: ['status'] });
   for (const tools of ['doctor', 'naruto', 'agent-bridge', 'status,status', 'unknown']) {
     assert.throws(() => parseAsyncCommandArgs(['--prompt', 'Inspect', '--tools', tools]), /async_tool/);

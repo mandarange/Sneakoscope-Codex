@@ -1,7 +1,7 @@
 import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { ensureDir, exists, readText, writeTextAtomic } from './fsx.js';
+import { ensureDir, readText, writeTextAtomic } from './fsx.js';
 import { writeCodexConfigGuarded } from './codex/codex-config-guard.js';
 import { CODEX_FAST_SERVICE_TIER_ID } from './codex/codex-service-tier.js';
 import { inspectConfinedPath, removeManagedPathVerified } from './managed-path-safety.js';
@@ -14,42 +14,9 @@ import { escapeRegExp } from './text/regex.js';
 export { RETIRED_SKS_CONFIG_PROFILE_NAMES } from './doctor/retired-auto-review-config.js';
 
 export const AUTO_REVIEW_REVIEWER = 'auto_review';
-export const LEGACY_AUTO_REVIEW_REVIEWER = 'guardian_subagent';
-export const AUTO_REVIEW_PROFILE = 'sks-auto-review';
-export const AUTO_REVIEW_HIGH_PROFILE = 'sks-auto-review-high';
 export const MAD_HIGH_PROFILE = 'sks-mad-high';
+const LEGACY_AUTO_REVIEW_REVIEWER = 'guardian_subagent';
 export const AUTO_REVIEW_POLICY_TEXT = 'In MAD-SKS launches, allow only scoped high-risk work approved for the active invocation and keep catastrophic DB wipe/all-row safeguards active. The explicit $MAD-SKS or sks mad-sks sql|apply-migration invocation is the SQL-plane approval boundary: execute requested execute_sql/apply_migration mutations with mission-local write transport, read-back proof, and final read-only restoration. Supabase project/account/billing/credential control-plane actions remain denied.';
-export const REVIEW_NATIVE_AGENT_PLAN = Object.freeze({
-  schema: 'sks.review-native-agent-plan.v1',
-  backend: 'native_multi_session_agent_kernel',
-  central_ledger: 'agents/agent-events.jsonl',
-  personas: [
-    {
-      id: 'review_safety',
-      role: 'safety',
-      label: 'Review Safety',
-      read_only: true,
-      mandate: 'Review permission, DB, destructive action, and unrequested fallback risks before approval.'
-    },
-    {
-      id: 'review_verifier',
-      role: 'verifier',
-      label: 'Review Verifier',
-      read_only: true,
-      mandate: 'Check claims, tests, and route evidence before approval.'
-    },
-    {
-      id: 'review_integrator',
-      role: 'integrator',
-      label: 'Review Integrator',
-      read_only: true,
-      mandate: 'Close approval only after ledger, session cleanup, and proof graph pass.'
-    }
-  ],
-  safety_personas_read_only_by_default: true,
-  manual_agent_count_syntax: 'sks auto-review fixture --json and sks naruto run "$Review <review task>" --agents 5 --max-threads 4 --json',
-  dynamic_effort: 'parent assigns high effort to safety/integrator lanes and medium or higher to verification lanes when proof risk is present'
-});
 
 export function codexHome(env: any = process.env) {
   return path.resolve(env.CODEX_HOME || path.join(env.HOME || os.homedir(), '.codex'));
@@ -61,59 +28,6 @@ export function codexConfigPath(env: any = process.env) {
 
 export function codexProfileConfigPath(profile: any, env: any = process.env) {
   return path.join(codexHome(env), `${String(profile || '').trim()}.config.toml`);
-}
-
-export function autoReviewProfileName(opts: any = {}) {
-  return opts.high ? AUTO_REVIEW_HIGH_PROFILE : AUTO_REVIEW_PROFILE;
-}
-
-export async function autoReviewStatus(opts: any = {}) {
-  const configPath = opts.configPath || codexConfigPath(opts.env || process.env);
-  const text = await readText(configPath, '');
-  const profileText = await readText(path.join(path.dirname(configPath), `${AUTO_REVIEW_PROFILE}.config.toml`), '');
-  const highProfileText = await readText(path.join(path.dirname(configPath), `${AUTO_REVIEW_HIGH_PROFILE}.config.toml`), '');
-  const approvalsReviewer = readTomlString(text, 'approvals_reviewer');
-  const profileReviewer = readTomlString(profileText, 'approvals_reviewer');
-  const highProfileReviewer = readTomlString(highProfileText, 'approvals_reviewer');
-  const legacyReviewProfile = readTableString(text, `profiles.${AUTO_REVIEW_PROFILE}`, 'approvals_reviewer');
-  const legacyHighProfile = readTableString(text, `profiles.${AUTO_REVIEW_HIGH_PROFILE}`, 'approvals_reviewer');
-  return {
-    config_path: configPath,
-    exists: await exists(configPath),
-    approvals_reviewer: approvalsReviewer,
-    enabled: approvalsReviewer === AUTO_REVIEW_REVIEWER,
-    profile: profileReviewer === AUTO_REVIEW_REVIEWER,
-    high_profile: highProfileReviewer === AUTO_REVIEW_REVIEWER,
-    legacy_invalid: [approvalsReviewer, profileReviewer, highProfileReviewer, legacyReviewProfile, legacyHighProfile].includes(LEGACY_AUTO_REVIEW_REVIEWER),
-    policy: readTableString(text, 'auto_review', 'policy') || '',
-    native_agent_plan: REVIEW_NATIVE_AGENT_PLAN
-  };
-}
-
-export async function enableAutoReview(opts: any = {}) {
-  const configPath = opts.configPath || codexConfigPath(opts.env || process.env);
-  const high = Boolean(opts.high);
-  await ensureDir(path.dirname(configPath));
-  const current = await readText(configPath, '');
-  let next = current || '';
-  next = upsertTopLevelString(next, 'approvals_reviewer', AUTO_REVIEW_REVIEWER);
-  next = removeLegacyProfileConfig(next, AUTO_REVIEW_PROFILE);
-  next = removeLegacyProfileConfig(next, AUTO_REVIEW_HIGH_PROFILE);
-  next = upsertAutoReviewPolicy(next);
-  if (!next.endsWith('\n')) next += '\n';
-  await writeCodexConfigGuarded({
-    configPath,
-    before: current,
-    cause: 'auto-review-enable',
-    mutate: () => next
-  });
-  await writeProfileConfig(configPath, AUTO_REVIEW_PROFILE, profileConfigBlock({ effort: 'medium' }));
-  await writeProfileConfig(configPath, AUTO_REVIEW_HIGH_PROFILE, profileConfigBlock({ effort: 'high' }));
-  return {
-    ...(await autoReviewStatus({ configPath })),
-    profile_name: autoReviewProfileName({ high }),
-    launch_args: ['--profile', autoReviewProfileName({ high })]
-  };
 }
 
 // Canonical registry of every SKS config profile. Codex 0.134+ deprecated the
@@ -259,70 +173,8 @@ export function buildMadHighLaunchProfileNoWrite(opts: any = {}) {
   };
 }
 
-export async function ensureMadHighProfileForSetupOrRepair(opts: any = {}) {
-  const configPath = opts.configPath || codexConfigPath(opts.env || process.env);
-  const env = opts.env || process.env;
-  await ensureDir(path.dirname(configPath));
-  const current = await readText(configPath, '');
-  let next = removeLegacyProfileConfig(current, MAD_HIGH_PROFILE);
-  next = upsertAutoReviewPolicy(next);
-  if (!next.endsWith('\n')) next += '\n';
-  await writeCodexConfigGuarded({
-    configPath,
-    before: current,
-    cause: 'mad-high-profile-setup',
-    mutate: () => next
-  });
-  // Convert all SKS profiles to per-file overlays and strip the deprecated tables /
-  // selectors so Codex stops warning about the legacy config profile on launch.
-  await migrateSksProfilesToPerFile({ configPath, env });
-  await writeProfileConfig(configPath, MAD_HIGH_PROFILE, profileConfigBlock({
-    effort: 'xhigh',
-    approvalPolicy: 'never',
-    sandboxMode: 'danger-full-access'
-  }));
-  return {
-    config_path: configPath,
-    profile_config_path: path.join(path.dirname(configPath), `${MAD_HIGH_PROFILE}.config.toml`),
-    profile_name: MAD_HIGH_PROFILE,
-    launch_args: ['--profile', MAD_HIGH_PROFILE, '--sandbox', 'danger-full-access', '--ask-for-approval', 'never', '-c', `service_tier=${CODEX_FAST_SERVICE_TIER_ID}`, '-c', 'model_reasoning_effort=xhigh'],
-    sandbox_mode: 'danger-full-access',
-    approval_policy: 'never',
-    approvals_reviewer: AUTO_REVIEW_REVIEWER,
-    model_reasoning_effort: 'xhigh',
-    service_tier: 'fast',
-    scope: 'setup_or_repair_only',
-    writes_user_codex_config: true
-  };
-}
-
-export async function enableMadHighProfile(opts: any = {}) {
-  if (opts.allowUserConfigWrite !== true) {
-    throw new Error('enableMadHighProfile writes Codex user config; use buildMadHighLaunchProfileNoWrite for sks --mad');
-  }
-  return ensureMadHighProfileForSetupOrRepair(opts);
-}
-
 export function madHighProfileName() {
   return MAD_HIGH_PROFILE;
-}
-
-export async function disableAutoReview(opts: any = {}) {
-  const configPath = opts.configPath || codexConfigPath(opts.env || process.env);
-  const current = await readText(configPath, '');
-  let next = upsertTopLevelString(current, 'approvals_reviewer', 'user');
-  next = removeLegacyProfileConfig(next, AUTO_REVIEW_PROFILE);
-  next = removeLegacyProfileConfig(next, AUTO_REVIEW_HIGH_PROFILE);
-  if (!next.endsWith('\n')) next += '\n';
-  await writeCodexConfigGuarded({
-    configPath,
-    before: current,
-    cause: 'auto-review-disable',
-    mutate: () => next
-  });
-  await writeProfileConfig(configPath, AUTO_REVIEW_PROFILE, profileConfigBlock({ effort: 'medium', reviewer: 'user' }));
-  await writeProfileConfig(configPath, AUTO_REVIEW_HIGH_PROFILE, profileConfigBlock({ effort: 'high', reviewer: 'user' }));
-  return autoReviewStatus({ configPath });
 }
 
 function readTomlString(text: any, key: any) {
@@ -356,35 +208,6 @@ function topLevelBody(text: any) {
   const lines = String(text || '').split('\n');
   const firstTable = lines.findIndex((line: string) => /^\s*\[.+\]\s*$/.test(line));
   return (firstTable === -1 ? lines : lines.slice(0, firstTable)).join('\n');
-}
-
-function upsertTopLevelString(text: any, key: any, value: any) {
-  const line = `${key} = "${value}"`;
-  const lines = String(text || '').split('\n');
-  const firstTable = lines.findIndex((x: any) => /^\s*\[.+\]\s*$/.test(x));
-  const end = firstTable === -1 ? lines.length : firstTable;
-  for (let i = 0; i < end; i++) {
-    if (new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`).test(lines[i] || '')) {
-      lines[i] = line;
-      return lines.join('\n').replace(/\n+$/, '\n');
-    }
-  }
-  lines.splice(end, 0, line);
-  return lines.join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n');
-}
-
-function profileConfigBlock(opts: any = {}) {
-  const effort = opts.effort || 'medium';
-  const reviewer = opts.reviewer || AUTO_REVIEW_REVIEWER;
-  const approvalPolicy = opts.approvalPolicy || 'on-request';
-  const sandboxMode = opts.sandboxMode || 'workspace-write';
-  return [
-    'service_tier = "fast"',
-    `approval_policy = "${approvalPolicy}"`,
-    `approvals_reviewer = "${reviewer}"`,
-    `sandbox_mode = "${sandboxMode}"`,
-    `model_reasoning_effort = "${effort}"`
-  ].join('\n');
 }
 
 async function writeProfileConfig(configPath: string, profile: string, text: string) {
@@ -462,6 +285,21 @@ function normalizeGeneratedProfileText(text: string): string {
     .map((line) => line.trim())
     .filter(Boolean)
     .join('\n');
+}
+
+// Profile bodies older SKS releases generated; kept only to recognise them.
+function profileConfigBlock(opts: any = {}) {
+  const effort = opts.effort || 'medium';
+  const reviewer = opts.reviewer || AUTO_REVIEW_REVIEWER;
+  const approvalPolicy = opts.approvalPolicy || 'on-request';
+  const sandboxMode = opts.sandboxMode || 'workspace-write';
+  return [
+    'service_tier = "fast"',
+    `approval_policy = "${approvalPolicy}"`,
+    `approvals_reviewer = "${reviewer}"`,
+    `sandbox_mode = "${sandboxMode}"`,
+    `model_reasoning_effort = "${effort}"`
+  ].join('\n');
 }
 
 function managedRetiredProfileBodies(): Set<string> {

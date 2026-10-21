@@ -45,10 +45,6 @@ export async function researchCommand(sub: any, args: any = []) {
   process.exitCode = 1;
 }
 
-export async function autoresearchCommand(sub: any, args: any = []) {
-  return researchCommand(sub || 'status', args);
-}
-
 const REMOVED_RESEARCH_RUNTIME_FLAGS = new Set([
   '--native-proof-only',
   '--legacy-research-cycle',

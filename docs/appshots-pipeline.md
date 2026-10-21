@@ -15,12 +15,7 @@ Privacy rules are always explicit: redact sensitive text, avoid secrets and cred
 Run:
 
 ```bash
-npm run appshots:capability
-npm run appshots:operator-policy
-npm run appshots:evidence
-npm run appshots:source-intelligence
-npm run appshots:triwiki-voxel
-npm run appshots:privacy-safety
+node ./dist/scripts/appshots-thread-attachment-discovery-check.js
 ```
 
 Official Appshots reference: https://developers.openai.com/codex/appshots

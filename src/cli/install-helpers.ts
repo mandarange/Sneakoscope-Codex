@@ -38,7 +38,7 @@ export async function postinstall({ bootstrap }: any) {
       : 'Automatic bootstrap was not run; npm install leaves project, HOME, Codex, and global SKS state unchanged by default.');
     if (menuBar.status === 'skipped') console.log(describePostinstallMenuBar(menuBar));
     console.log('Next: run `sks bootstrap` when you are ready to initialize SKS.');
-    console.log('Dependency diagnostics remain explicit: sks deps check');
+    console.log('Dependency diagnostics remain explicit: sks doctor');
     console.log('Explicit lifecycle opt-in: SKS_POSTINSTALL_BOOTSTRAP=1 npm i -g sneakoscope');
     console.log('Optional Homebrew/npm-global tool repair remains off unless SKS_POSTINSTALL_AUTO_INSTALL_CLI_TOOLS=1 is also set.');
     const reason = process.env.SKS_POSTINSTALL_NO_BOOTSTRAP === '1'

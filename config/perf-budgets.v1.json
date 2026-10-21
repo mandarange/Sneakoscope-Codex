@@ -17,7 +17,6 @@
     { "id": "menubar_first_state_render", "budget_p95_ms": 250, "measured_runs": 5 },
     { "id": "control_center_open", "budget_p95_ms": 400, "measured_runs": 5 },
     { "id": "mcp_static_list", "budget_p95_ms": 250, "measured_runs": 9 },
-    { "id": "update_cache_read", "budget_p95_ms": 50, "measured_runs": 15 },
-    { "id": "ssh_worker_hello", "budget_p95_ms": 3000, "measured_runs": 5 }
+    { "id": "update_cache_read", "budget_p95_ms": 50, "measured_runs": 15 }
   ]
 }

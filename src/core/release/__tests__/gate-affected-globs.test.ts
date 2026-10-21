@@ -41,17 +41,16 @@ const CONTEXT_GRAPH_V2_GATES = [
 /**
  * The `context-graph` globs as they stood on `57d40103`, before any consumer was
  * migrated. Every one of these must still be selectable; the list is never edited
- * down, only appended to.
+ * down, only appended to — except for a module that was deleted, whose glob
+ * leaves with it (`search/context-graph-seeds.ts`, `verification/context-graph-affected.ts`).
  */
 const FROZEN_CONTEXT_GRAPH_GLOBS = [
   'src/core/triwiki/context-graph/**',
   'src/core/search/context.ts',
-  'src/core/search/context-graph-seeds.ts',
   'src/core/subagents/triwiki-attention.ts',
   'src/core/triwiki/code-pack.ts',
   'src/core/naruto/context-graph-advisor.ts',
   'src/core/naruto/context-graph-advisor-scope.ts',
-  'src/core/verification/context-graph-affected.ts',
   'src/core/commands/wiki-command.ts',
   'src/core/commands/triwiki-graph-command.ts',
   'config/context-graph-benchmark.json',
@@ -98,7 +97,6 @@ test('every runtime consumer of the context graph selects the gates that prove i
     'src/core/triwiki/code-pack.ts',
     'src/core/triwiki/triwiki-cleanup.ts',
     'src/core/naruto/context-graph-advisor.ts',
-    'src/core/verification/context-graph-affected.ts',
     'src/core/align/code-navigation-align.ts',
     'src/core/align/align-context-index.ts',
     'src/core/commands/wiki-command.ts',

@@ -132,7 +132,7 @@ export async function inspectAgentBridgeHostCapabilities(
 export function usage(): string {
   return [
     'Usage: sks agent-bridge setup [--trusted-project] [--json]',
-    '       sks agent-bridge async --prompt "task" [--tools status,stats] [--json]',
+    '       sks agent-bridge async --prompt "task" [--tools status,search] [--json]',
     '',
     'setup: register read-only SKS tools with an external agent host.',
     'async: run native Astra Async tool calling through the registered Codex-LB bridge.',

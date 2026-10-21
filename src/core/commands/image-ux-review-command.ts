@@ -983,5 +983,5 @@ function missingMission(args: any[]) {
 }
 
 function routeForCommand(command: any) {
-  return command === 'ux-review' ? '$UX-Review' : command === 'visual-review' ? '$Visual-Review' : command === 'ui-ux-review' ? '$UI-UX-Review' : '$Image-UX-Review';
+  return command === 'ux-review' ? '$UX-Review' : '$Image-UX-Review';
 }

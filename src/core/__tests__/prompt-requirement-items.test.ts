@@ -45,10 +45,11 @@ test('release inference names the real non-publishing npm dry-run command', () =
     'npm publish --dry-run gate passes',
     'npm publish is not run'
   ]);
+  // The scope names the project's own checks; SKS's maintainer scripts are not
+  // something a user's release can run.
   assert.deepEqual(answers.TEST_SCOPE, [
-    'packcheck',
-    'selftest',
-    'sizecheck',
+    'the project test suite',
+    'the project build and package checks',
     'npm publish --dry-run'
   ]);
   assert.doesNotMatch(JSON.stringify(answers), /publish:dry/);

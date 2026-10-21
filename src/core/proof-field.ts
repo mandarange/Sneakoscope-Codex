@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { nowIso, readText, rel, runProcess, sha256, writeJsonAtomic } from './fsx.js';
+import { exists, nowIso, readJson, readText, rel, runProcess, sha256, writeJsonAtomic } from './fsx.js';
 import { buildDecisionLatticeReport, validateDecisionLatticeReport } from './decision-lattice.js';
 
 export const PROOF_FIELD_SCHEMA_VERSION = 1;
@@ -30,55 +30,81 @@ export const SPEED_LANE_POLICY = Object.freeze({
   fail_closed_on: ['database_surface', 'security_surface', 'visual_forensic_surface', 'unknown_surface', 'broad_change_set', 'verification_failed', 'unsupported_claim']
 });
 
+/**
+ * Kinds of evidence a proof cone needs. `buildProofField` turns each kind into
+ * the target project's own command, read from its package scripts. A kind the
+ * project has no command for becomes the plain instruction, or is left out when
+ * it has none; the report never names a command the project does not have.
+ */
+const CHECK_KINDS = Object.freeze({
+  typecheck: { scripts: ['typecheck', 'type-check', 'check-types', 'tsc'], instruction: null },
+  lint: { scripts: ['lint'], instruction: null },
+  test: { scripts: ['test'], instruction: 'run the tests that cover the changed files' },
+  build: { scripts: ['build'], instruction: null },
+  package: { scripts: ['packcheck', 'pack:check', 'release:check'], instruction: null },
+  db: { scripts: ['db:check', 'test:db', 'db:test'], instruction: 'verify each database change with a read-only query' },
+  docs: { scripts: ['docs:check', 'lint:docs', 'lint:md'], instruction: 're-read the changed docs against the code they describe' },
+  visual: { scripts: [], instruction: 'check the changed UI in a browser or screenshot' }
+} as const);
+type CheckKind = keyof typeof CHECK_KINDS;
+
 export const PROOF_CONE_DEFINITIONS = Object.freeze([
   {
     id: 'db_safety',
     surfaces: ['database', 'supabase', 'mad-sks'],
-    match: [/db-safety|supabase|migration|rls|schema|sql/i],
-    verification: ['npm run packcheck', 'sks selftest --mock --json', 'node --test test/unit/db-safety.test.mjs'],
+    match: [/db-safety|supabase|migration|\brls\b|schema|\.sql$|(?:^|\/)prisma\//i],
+    checks: ['db', 'test'] as CheckKind[],
     negative_work: ['browser_ui_e2e', 'visual_snapshot']
-  },
-  {
-    id: 'route_surface',
-    surfaces: ['routes', 'skills', 'cli-help', 'docs'],
-    match: [/routes\.js|init\.js|codex-app|README|AGENTS|skills/i],
-    verification: ['npm run packcheck', 'sks selftest --mock --json', 'sks commands --json'],
-    negative_work: ['database_migration', 'from_chat_img_forensics']
-  },
-  {
-    id: 'cli_runtime',
-    surfaces: ['cli', 'commands', 'runtime'],
-    match: [/src\/cli|src\/commands|bin\/sks|fsx|codex-adapter/i],
-    verification: ['npm run packcheck', 'node ./dist/bin/sks.js commands --json', 'node ./dist/bin/sks.js proof field scan --json'],
-    negative_work: ['browser_ui_e2e']
-  },
-  {
-    id: 'context_memory',
-    surfaces: ['triwiki', 'memory', 'evaluation'],
-    match: [/triwiki|wiki|memory|evaluation|perf-bench|proof-field/i],
-    verification: ['npm run packcheck', 'node ./dist/bin/sks.js eval run --json', 'node ./dist/bin/sks.js wiki validate .sneakoscope/wiki/context-pack.json'],
-    negative_work: ['database_migration', 'browser_ui_e2e']
   },
   {
     id: 'release_surface',
     surfaces: ['package', 'changelog', 'release'],
-    match: [/package\.json|package-lock\.json|CHANGELOG|README/i],
-    verification: ['npm run release:check'],
+    match: [/(?:^|\/)(?:package\.json|package-lock\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb?|CHANGELOG\.md)$|(?:^|\/)\.github\/workflows\//i],
+    checks: ['build', 'package', 'test'] as CheckKind[],
     negative_work: []
   },
   {
     id: 'visual_forensic',
     surfaces: ['from-chat-img', 'visual', 'qa-loop'],
     match: [/from-chat-img|visual|screenshot|qa-loop|dogfood/i],
-    verification: ['npm run packcheck', 'sks selftest --mock --json'],
+    checks: ['visual', 'test'] as CheckKind[],
     negative_work: ['database_migration']
+  },
+  {
+    id: 'project_config',
+    surfaces: ['config'],
+    match: [/(?:^|\/)(?:tsconfig[^/]*\.json|\.eslintrc[^/]*|eslint\.config\.[cm]?[jt]s|(?:next|vite|vitest|jest|tailwind|postcss)\.config\.[cm]?[jt]s)$/i],
+    checks: ['typecheck', 'build', 'test'] as CheckKind[],
+    negative_work: ['database_migration', 'visual_snapshot']
+  },
+  {
+    id: 'source_code',
+    surfaces: ['source'],
+    match: [/\.(?:[cm]?[jt]sx?|py|rs|go|rb|php|java|kt|swift|cs|c|cc|cpp|h|vue|svelte|astro)$/i],
+    checks: ['typecheck', 'lint', 'test'] as CheckKind[],
+    negative_work: ['database_migration', 'visual_snapshot']
+  },
+  {
+    id: 'ui_styles',
+    surfaces: ['styles', 'assets'],
+    match: [/\.(?:css|scss|sass|less|svg|html)$/i],
+    checks: ['build', 'visual'] as CheckKind[],
+    negative_work: ['database_migration']
+  },
+  {
+    id: 'docs_surface',
+    surfaces: ['docs'],
+    match: [/\.(?:md|mdx|rst|txt)$|(?:^|\/)docs\//i],
+    checks: ['docs'] as CheckKind[],
+    negative_work: ['database_migration', 'browser_ui_e2e', 'visual_snapshot']
   }
 ]);
 
 export async function buildProofField(root: any, opts: any = {}) {
   const changedFiles = normalizeChangedFiles(opts.changedFiles || await gitChangedFiles(root));
   const intent = String(opts.intent || '').trim();
-  const selectedCones = selectProofCones(changedFiles, intent);
+  const project = opts.project || await projectChecks(root);
+  const selectedCones = selectProofCones(changedFiles, intent, project);
   const risk = riskSummary(changedFiles, selectedCones, intent);
   const negativeWork = buildNegativeWorkCache(selectedCones, risk);
   const fastLane = fastLaneDecision({ changedFiles, selectedCones, risk, negativeWork });
@@ -86,7 +112,7 @@ export async function buildProofField(root: any, opts: any = {}) {
   const contractClarity = contractClarityScore({ intent, changedFiles, selectedCones, risk });
   const workflowComplexity = workflowComplexityScore({ changedFiles, selectedCones, risk, verification: fastLane.verification });
   const narutoTriggerMatrix = narutoTriggerDecision({ intent, changedFiles, risk });
-  const verificationStageCache = verificationStageCachePlan({ sourceHash, changedFiles, verification: fastLane.verification });
+  const verificationStageCache = verificationStageCachePlan({ sourceHash, changedFiles, commands: fastLane.commands });
   const simplicity = outcomeScorecard({ intent, changedFiles, selectedCones, risk, negativeWork, fastLane, workflowComplexity });
   const executionLane = executionLaneDecision({ fastLane, simplicity, workflowComplexity, narutoTriggerMatrix });
   const decisionLattice = normalizeDecisionLatticeReport(await buildDecisionLatticeReport({
@@ -178,21 +204,78 @@ function normalizeChangedFiles(files: any = []) {
     .sort();
 }
 
-function selectProofCones(files: any, intent: any) {
-  const haystack = `${files.join('\n')}\n${intent || ''}`;
-  const selected = PROOF_CONE_DEFINITIONS
-    .filter((cone: any) => cone.match.some((re: any) => re.test(haystack)))
+export interface ProjectChecks {
+  scripts: Record<string, string>;
+  runner: 'npm' | 'pnpm' | 'yarn' | 'bun';
+  tsconfig: boolean;
+  cargo: boolean;
+  pytest: boolean;
+  publishable: boolean;
+}
+
+/** Reads what the target project can actually run; SKS's own scripts are not assumed. */
+export async function projectChecks(root: any): Promise<ProjectChecks> {
+  const pkg: any = await readJson(path.join(root, 'package.json'), null);
+  const scripts = pkg && typeof pkg.scripts === 'object' && pkg.scripts ? pkg.scripts : {};
+  const has = (file: string) => exists(path.join(root, file));
+  const runner = await has('pnpm-lock.yaml') ? 'pnpm'
+    : await has('yarn.lock') ? 'yarn'
+      : (await has('bun.lockb') || await has('bun.lock')) ? 'bun'
+        : 'npm';
+  return {
+    scripts,
+    runner,
+    tsconfig: await has('tsconfig.json'),
+    cargo: await has('Cargo.toml'),
+    pytest: await has('pytest.ini') || await has('pyproject.toml'),
+    publishable: Boolean(pkg && pkg.name && pkg.private !== true)
+  };
+}
+
+function checkStep(kind: CheckKind, project: ProjectChecks): { command: string | null; step: string } | null {
+  // `npm init` writes a test script that only fails; it is not a check.
+  const script = CHECK_KINDS[kind].scripts.find((name) => typeof project.scripts[name] === 'string' && !/no test specified/.test(project.scripts[name]!));
+  const run = (name: string) => project.runner === 'yarn' ? `yarn ${name}`
+    : name === 'test' && project.runner !== 'bun' ? `${project.runner} test`
+      : `${project.runner} run ${name}`;
+  const exec = { npm: 'npx', pnpm: 'pnpm exec', yarn: 'yarn', bun: 'bunx' }[project.runner];
+  let command: string | null = script ? run(script) : null;
+  if (!command && kind === 'typecheck' && project.tsconfig) command = `${exec} tsc --noEmit`;
+  if (!command && kind === 'test' && project.cargo) command = 'cargo test';
+  if (!command && kind === 'test' && project.pytest) command = 'python -m pytest';
+  if (!command && kind === 'package' && project.publishable) command = 'npm pack --dry-run';
+  const step = command || CHECK_KINDS[kind].instruction;
+  return step ? { command, step } : null;
+}
+
+function coneVerification(kinds: readonly CheckKind[], project: ProjectChecks) {
+  const steps = kinds.map((kind) => checkStep(kind, project)).filter((step): step is { command: string | null; step: string } => Boolean(step));
+  return {
+    verification: [...new Set(steps.map((step) => step.step))],
+    commands: [...new Set(steps.map((step) => step.command).filter((command): command is string => Boolean(command)))]
+  };
+}
+
+function selectProofCones(files: any, intent: any, project: ProjectChecks) {
+  // Each path is tested on its own: the cone patterns anchor on file endings.
+  const texts = [...files, String(intent || '')];
+  const selected: any[] = PROOF_CONE_DEFINITIONS
+    .filter((cone: any) => texts.some((text: string) => cone.match.some((re: any) => re.test(text))))
     .map((cone: any) => ({
       id: cone.id,
       surfaces: cone.surfaces,
-      verification: cone.verification,
+      checks: cone.checks,
+      ...coneVerification(cone.checks, project),
+      negative_work: cone.negative_work,
       matched_files: files.filter((file: any) => cone.match.some((re: any) => re.test(file)))
     }));
   if (!selected.length) {
     selected.push({
       id: 'generic_local_change',
       surfaces: ['unknown'],
-      verification: ['npm run packcheck', 'focused relevant tests or documented justification'],
+      checks: ['test'],
+      ...coneVerification(['test'], project),
+      negative_work: [],
       matched_files: files
     });
   }
@@ -215,8 +298,8 @@ function riskSummary(files: any, cones: any, intent: any) {
 }
 
 function buildNegativeWorkCache(cones: any, risk: any) {
-  const required = new Set(cones.flatMap((cone: any) => cone.verification));
-  const candidates = new Set(cones.flatMap((cone: any) => cone.negative_work || []));
+  // Work is skippable only when no selected cone touches it, so every cone has to list it.
+  const candidates = new Set((cones[0]?.negative_work || []).filter((id: any) => cones.every((cone: any) => (cone.negative_work || []).includes(id))));
   const out: any[] = [];
   for (const id of candidates) {
     const blockedByRisk = (id === 'database_migration' && risk.flags.database)
@@ -227,7 +310,7 @@ function buildNegativeWorkCache(cones: any, risk: any) {
       reason: blockedByRisk ? 'risk flag requires explicit verification' : 'selected proof cones do not touch this surface'
     });
   }
-  if (!required.has('npm run release:check') && !risk.flags.release) {
+  if (!cones.some((cone: any) => cone.id === 'release_surface') && !risk.flags.release) {
     out.push({ id: 'full_release_gate', disposition: 'skip_with_evidence', reason: 'no package/release surface in selected cones' });
   }
   return out.sort((a: any, b: any) => a.id.localeCompare(b.id));
@@ -235,6 +318,7 @@ function buildNegativeWorkCache(cones: any, risk: any) {
 
 function fastLaneDecision({ changedFiles, selectedCones, risk, negativeWork }: any) {
   const verification = [...new Set(selectedCones.flatMap((cone: any) => cone.verification))];
+  const commands = [...new Set(selectedCones.flatMap((cone: any) => cone.commands))];
   const safeSkips = negativeWork.filter((item: any) => item.disposition === 'skip_with_evidence').map((item: any) => item.id);
   const blockers: any[] = [];
   if (!changedFiles.length) blockers.push('no_changed_files');
@@ -249,6 +333,7 @@ function fastLaneDecision({ changedFiles, selectedCones, risk, negativeWork }: a
     eligible: mode === 'fast_lane',
     blockers,
     verification,
+    commands,
     negative_work: safeSkips,
     escalate_on: ['verification_failed', 'proof_cone_unknown', 'source_hash_changed', 'unsupported_claim', 'user_scope_expanded']
   };
@@ -348,8 +433,8 @@ function narutoTriggerDecision({ intent, changedFiles, risk }: any) {
   };
 }
 
-function verificationStageCachePlan({ sourceHash, changedFiles, verification }: any) {
-  const stage1 = [...new Set(verification || [])].filter((command: any) => /packcheck|selftest|commands --json|wiki validate|eval run/i.test(command));
+function verificationStageCachePlan({ sourceHash, changedFiles, commands }: any) {
+  const stage1 = [...new Set(commands || [])];
   const cacheInput = { source_hash: sourceHash || null, changed_files: changedFiles, stage1 };
   return {
     schema_version: 1,

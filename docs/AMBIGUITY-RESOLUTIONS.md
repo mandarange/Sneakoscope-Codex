@@ -766,3 +766,21 @@ Projection: [PRODUCT-CONTRACT.md](PRODUCT-CONTRACT.md).
 
 Round 1–10 완료. 추가 인터뷰 Round는 열지 않는다.  
 다음 단계는 `needs-code` 백로그(**NC-1–NC-60**) 구현이다.
+
+---
+
+## 개정 A1 — 2026-10-20 정리 라운드 (PROC-5에 따른 명시적 추가)
+
+인터뷰가 아니라 코드 감사에서 나온 모순을 기존 결정(P1 공식 제품 문장, W4 영어 SSOT, X7 원장 지위)에 맞춰 확정한 것이다.
+
+| ID | 결정 | 근거 | 상태 |
+| --- | --- | --- | --- |
+| A1-1 | **한 일에 한 이름.** 다른 명령과 같은 일을 하는 CLI 명령은 별칭으로 남기지 않고 제거한다 (`usage`, `aliases`, `init`, `fix-path`, `deps`, `autoresearch`, 최상위 `wrongness`, `stats`, `codex-native`). `sks help <명령>`은 `sks <명령> --help`와 같은 내용을 출력한다. | 같은 일을 두 이름이 하면서 출력·플래그가 갈라져 있었다. | decided |
+| A1-2 | **할 일이 없는 명령은 없앤다.** 호스트(Codex)가 이미 소유하거나 아무것도 읽지 않는 산출물만 쓰는 명령(`goal`, `remote`, `auto-review`, `recallpulse`, `skill-dream`, `code-structure`, `reasoning`)은 labs로 남기지 않고 제거하며, 제거된 이름은 대체 안내 없이 `unknown_command`이다. | P2(호스트 소유 경계), P3(Goal은 Codex 네이티브만). | decided |
+| A1-3 | **사용자 프로젝트에는 그 프로젝트의 검사만 지시한다.** 라우트 계획, Proof Field, 추론된 테스트 범위, `$MAD-SKS` 계약은 대상 프로젝트의 스크립트(npm·pnpm·yarn·bun)에서 검증 명령을 만들고, 없으면 평문으로 검사를 적는다. SKS 저장소 전용 명령(`packcheck`, `selftest`, `release:check`)을 사용자 프로젝트에 지시하지 않는다. | SKS 유지보수 명령이 모든 사용자 계획에 들어가고 있었다. | decided |
+| A1-4 | **SEO/GEO 마케팅은 실행된 프로젝트를 설명한다.** 포지셔닝·메시지 필러·키워드는 그 프로젝트의 package.json과 README에서 오고, 조사는 그 프로젝트가 선언한 URL(또는 `--url`)만 가져오며, 경쟁사는 `--competitor`로 지정한 URL뿐이다. 기존 package description은 대체하지 않고, 진실성 게이트가 거부한 주장은 빼고 목록으로 남긴다. | P1의 "검색 결과를 약속하지 않는다"와 같은 정직성 원칙; SKS 문구가 사용자 package.json에 쓰이고 있었다. | decided |
+| A1-5 | **기본 경로가 파괴적인 동작으로 조용히 떨어지지 않는다.** 모르는 하위 명령은 사용법을 출력하고 0이 아닌 코드로 끝나며, `--dry-run`을 지원하지 않는 명령은 그 플래그를 거부한다. | `sks memory` 오타가 실제 정리를 실행했고 `setup --dry-run`이 설치를 했다. | decided |
+| A1-6 | **자기 테스트나 자기 게이트만 도달하는 모듈은 제품 코드가 아니다.** 제품 진입점과 실제 게이트 어디에서도 쓰이지 않는 모듈·게이트·문서는 제거한다. | 병렬 검증 엔진, MCP 도구 이름 정규화기, RecallPulse 런타임 등. | decided |
+| A1-7 | **안내 문구는 검증 프로필을 따른다.** 기본 `essential` 프로필에서 `sks status`의 다음 행동, `sks plan` 템플릿은 completion proof나 Honest Mode, SKS 게이트 보고서를 요구하지 않는다. | 10.0의 essential 기본값과 어긋나는 strict 전용 의례가 안내에 남아 있었다. | decided |
+| A1-8 | **GitHub About 설명은 P1의 짧은 변형을 쓴다.** GitHub About은 350자까지만 받는데 P1 문장은 368자이므로, P1 후속 규칙에 따른 의도적 변형으로 다음 문장을 쓴다: "Open-source trust layer for Codex CLI and ChatGPT Desktop: coordinates bounded AI coding agents, records machine-verifiable evidence, preserves project memory, and blocks release claims not backed by current tests or artifacts." 기존 "Deterministic Codex Harness for Zero-Hallucination Autonomous Development"는 P1과 맞지 않고 증명할 수 없는 절대 주장이라 쓰지 않는다. | 저장소 설정이라 코드로 바뀌지 않으며 저장소 소유자가 적용한다. | decided |
+

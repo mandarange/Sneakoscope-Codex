@@ -393,6 +393,7 @@ function classifyMaintenanceCommand(command: any = '') {
     const run = programAndArgs(words);
     const sks = sksArgs(run);
     if (sks) {
+      // init and fix-path are setup's former names; an older SKS on PATH still runs them.
       if (['setup', 'init', 'fix-path'].includes(sks[0] || '')) reasons.add('sks_harness_maintenance_command_blocked');
       if (sks[0] === 'doctor' && sks.some((arg) => arg === '--fix' || arg.startsWith('--fix='))) reasons.add('sks_doctor_fix_blocked');
       if (sks[0] === 'context7' && sks[1] === 'setup') reasons.add('sks_context7_setup_blocked');

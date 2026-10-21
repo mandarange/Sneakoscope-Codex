@@ -16,35 +16,28 @@ import { normalizeWrongnessKind } from './wrongness-schema.js';
 import { publishSharedMemory } from '../git-hygiene/shared-memory-publish.js';
 import { rebuildMemorySummaries } from '../memory-summary.js';
 
-export async function wrongnessCommand(args: string[] = []) {
+const WRONGNESS_USAGE = 'Usage: sks wiki wrongness list|show|add|resolve|summarize|validate|context|rules|publish|rebuild-summary [latest|mission-id|project] [--json]';
+
+/**
+ * `sks wiki wrongness ...`: record, retrieve and validate TriWiki negative
+ * evidence. This is the only wrongness entry point; the former top-level
+ * `sks wrongness` carried a second, larger copy of the same verbs.
+ */
+export async function wikiWrongnessCommand(args: string[] = []) {
   const root = await projectRoot();
   const [actionRaw = 'list', ...rest] = args;
-  const action = actionRaw === 'ls' ? 'list' : actionRaw;
+  const action = actionRaw === 'ls' ? 'list' : actionRaw === 'pack' || actionRaw === 'summary' ? 'summarize' : actionRaw;
   if (action === 'list') return listWrongness(root, rest);
   if (action === 'show') return showWrongness(root, rest);
   if (action === 'add') return addWrongness(root, rest);
   if (action === 'resolve') return resolveWrongness(root, rest);
-  if (action === 'summarize' || action === 'summary') return summarizeWrongnessCommand(root, rest);
+  if (action === 'summarize') return summarizeWrongnessCommand(root, rest);
   if (action === 'validate') return validateWrongnessCommand(root, rest);
   if (action === 'context') return contextWrongness(root, rest);
   if (action === 'rules') return avoidanceRules(root, rest);
   if (action === 'publish') return publishWrongness(root, rest);
   if (action === 'rebuild-summary') return rebuildWrongnessSummary(root, rest);
-  console.error('Usage: sks wrongness list|show|add|resolve|summarize|validate|context|rules|publish [latest|mission-id|project] [--json]');
-  process.exitCode = 2;
-}
-
-export async function wikiWrongnessCommand(args: string[] = []) {
-  const root = await projectRoot();
-  const [actionRaw = 'list', ...rest] = args;
-  const action = actionRaw === 'pack' ? 'summarize' : actionRaw;
-  if (action === 'list') return listWrongness(root, rest);
-  if (action === 'validate') return validateWrongnessCommand(root, rest);
-  if (action === 'summarize' || action === 'summary') return summarizeWrongnessCommand(root, rest);
-  if (action === 'context') return contextWrongness(root, rest);
-  if (action === 'publish') return publishWrongness(root, rest);
-  if (action === 'rebuild-summary') return rebuildWrongnessSummary(root, rest);
-  console.error('Usage: sks wiki wrongness list|validate|pack|summarize|context|publish [latest|mission-id|project] [--json]');
+  console.error(WRONGNESS_USAGE);
   process.exitCode = 2;
 }
 
@@ -76,7 +69,7 @@ async function listWrongness(root: string, args: string[]) {
 
 async function showWrongness(root: string, args: string[]) {
   const id = positionalArgs(args)[0];
-  if (!id) throw new Error('Usage: sks wrongness show <id>');
+  if (!id) throw new Error('Usage: sks wiki wrongness show <id>');
   const record = await findWrongnessRecord(root, id);
   if (!record) {
     const output = { schema: 'sks.wrongness-show.v1', ok: false, id, issue: 'wrongness_record_missing' };
@@ -137,7 +130,7 @@ async function addWrongness(root: string, args: string[]) {
 
 async function resolveWrongness(root: string, args: string[]) {
   const id = positionalArgs(args)[0];
-  if (!id) throw new Error('Usage: sks wrongness resolve <id> [--reason "..."]');
+  if (!id) throw new Error('Usage: sks wiki wrongness resolve <id> [--reason "..."]');
   const falseAlarm = flag(args, '--false-alarm');
   const result = await resolveWrongnessRecord(root, id, falseAlarm ? 'False alarm; does not block trust.' : readOption(args, '--reason', 'Resolved'), falseAlarm ? 'false_alarm' : 'resolved');
   if (flag(args, '--json')) console.log(JSON.stringify({ schema: 'sks.wrongness-resolve.v1', ok: result.updated > 0, ...result }, null, 2));
@@ -197,9 +190,9 @@ async function avoidanceRules(root: string, args: string[]) {
 }
 
 async function publishWrongness(root: string, args: string[]) {
-  if (!flag(args, '--shared')) throw new Error('Usage: sks wrongness publish latest --shared [--redact] [--json]');
+  if (!flag(args, '--shared')) throw new Error('Usage: sks wiki wrongness publish latest --shared [--redact] [--json]');
   const target = positionalArgs(args)[0] || 'latest';
-  if (target !== 'latest') throw new Error('Usage: sks wrongness publish latest --shared [--redact] [--json]');
+  if (target !== 'latest') throw new Error('Usage: sks wiki wrongness publish latest --shared [--redact] [--json]');
   const result = await publishSharedMemory(root, { target: 'wrongness', redact: flag(args, '--redact') });
   process.exitCode = result.ok ? 0 : 2;
   if (flag(args, '--json')) console.log(JSON.stringify(result, null, 2));

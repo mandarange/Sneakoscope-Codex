@@ -22,9 +22,7 @@ Saved artifact path repair is a fallback for handoff continuity. It can make fol
 Relevant gates:
 
 ```bash
-npm run native-capability:repair-matrix
-npm run native-capability:repair
+node ./dist/scripts/native-capability-repair-matrix-check.js
+node ./dist/scripts/native-image-generation-repair-check.js
 npm run native-capability:postcheck
-npm run doctor:native-capability-repair
-npm run doctor:native-capability-repair-blackbox
 ```

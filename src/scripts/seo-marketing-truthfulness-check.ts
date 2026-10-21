@@ -78,24 +78,29 @@ try {
 }
 
 function seedFixture(dir) {
+  // A plain project, not an SKS-shaped one: the strategy has to stand on the
+  // project's own package metadata and README.
   fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(path.join(dir, 'package.json'), `${JSON.stringify({
-    name: 'sks-seo-marketing-fixture',
+    name: 'bakery-shop',
     version: '0.0.0',
     private: true,
-    description: 'Proof-first Codex trust layer fixture.',
-    keywords: ['sks', 'codex', 'seo']
+    description: 'Preorder and pickup scheduling for small bakeries.',
+    keywords: ['bakery', 'preorders']
   }, null, 2)}\n`)
-  fs.writeFileSync(path.join(dir, 'README.md'), '# SKS SEO Marketing Fixture\n\nSuper-Search and SEO/GEO artifacts keep source-backed release evidence.\n')
-  fs.writeFileSync(path.join(dir, 'CHANGELOG.md'), '# Changelog\n\n## Fixture\n\n- Source-backed release evidence.\n')
-  fs.mkdirSync(path.join(dir, 'src/core'), { recursive: true })
-  fs.writeFileSync(path.join(dir, 'src/core/routes.ts'), 'export const ROUTES = []\n')
-  fs.mkdirSync(path.join(dir, 'src/core/agents'), { recursive: true })
-  fs.writeFileSync(path.join(dir, 'src/core/agents/agent-orchestrator.ts'), 'export async function runNativeAgentOrchestrator() {}\n')
-  fs.mkdirSync(path.join(dir, 'src/cli'), { recursive: true })
-  fs.writeFileSync(path.join(dir, 'src/cli/command-manifest-lite.ts'), 'export const COMMAND_MANIFEST_LITE = []\n')
-  fs.mkdirSync(path.join(dir, 'config'), { recursive: true })
-  fs.writeFileSync(path.join(dir, 'config/perf-budgets.v1.json'), '{"schema":"sks.perf-budgets.v1","commands":[]}\n')
-  fs.mkdirSync(path.join(dir, '.sneakoscope/reports'), { recursive: true })
-  fs.writeFileSync(path.join(dir, '.sneakoscope/reports/super-search-local-http-smoke.json'), '{"ok":true,"verified_content":true}\n')
+  fs.writeFileSync(path.join(dir, 'README.md'), [
+    '# Bakery Shop',
+    '',
+    'Bakery Shop lets small bakeries take preorders and manage pickup slots.',
+    '',
+    '## Preorders',
+    '',
+    'Customers reserve a pickup slot when they place an order.',
+    '',
+    '## Inventory sync',
+    '',
+    'Stock counts update as soon as an order is placed.',
+    ''
+  ].join('\n'))
+  fs.writeFileSync(path.join(dir, 'CHANGELOG.md'), '# Changelog\n\n## 0.0.0\n\n- First release.\n')
 }

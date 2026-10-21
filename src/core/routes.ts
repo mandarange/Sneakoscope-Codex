@@ -345,7 +345,7 @@ export const ROUTES = [
     stopGate: 'none',
     coverage_required: false,
     coverageExemptReason: 'Goal creation and lifecycle are owned entirely by Codex native /goal; SKS creates no route mission or evidence artifacts.',
-    cliEntrypoint: 'Codex native /goal; sks goal is a stateless command-rendering compatibility helper only',
+    cliEntrypoint: 'Codex native /goal only; SKS has no goal command',
     examples: ['$Goal define a measurable migration outcome and completion criteria']
   },
   {

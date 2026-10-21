@@ -29,7 +29,6 @@ interface FastPathBudget {
 const NARUTO_AGENT_BRIDGE_FORBIDDEN_MODULES = [
   forbidden('command-registry', /src\/cli\/command-registry\.ts$/),
   forbidden('route-table', /src\/core\/routes\.ts$/),
-  forbidden('remote', /src\/core\/(?:commands\/remote-command\.ts|remote(?:\/|\.ts$))/),
   forbidden('menubar', /(?:^|\/)(?:menubar|sks-menubar)(?:\/|[-.])/),
   forbidden('provider-ui', /(?:openrouter|provider-card|provider-model-ui|multi-provider)/i),
   forbidden('image-research-route', /src\/core\/(?:wiki-image|image-ux-review|research|search-visibility)(?:\/|\.ts$)/),

@@ -23,8 +23,7 @@ export const SERIOUS_ROUTE_ALIASES = Object.freeze([
   '$Goal',
   '$MAD-SKS',
   'hproof',
-  'proof-field',
-  'recallpulse'
+  'proof-field'
 ]);
 
 export const VISUAL_ROUTE_ALIASES = Object.freeze([
@@ -75,8 +74,7 @@ const ROUTE_NORMALIZATION = Object.freeze({
   'mad-sks': '$MAD-SKS',
   hproof: 'hproof',
   prooffield: 'proof-field',
-  'proof-field': 'proof-field',
-  recallpulse: 'recallpulse'
+  'proof-field': 'proof-field'
 });
 
 export function normalizeProofRoute(route: any) {

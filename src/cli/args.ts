@@ -50,7 +50,9 @@ export function positionalArgs(args: any = []) {
     '--role',
     '--max-anchors',
     '--lines',
-    '--dir'
+    '--dir',
+    '--intent',
+    '--changed'
   ]);
   for (let i = 0; i < args.length; i += 1) {
     const arg = String(args[i]);

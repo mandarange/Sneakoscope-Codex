@@ -11,6 +11,9 @@ This page is the English product-facing projection of those decisions.
 | CLI | `sks` |
 | npm package | `sneakoscope` |
 
+- **Product sentence:** the npm package description (ledger P1) is the one official description.
+- **GitHub About:** GitHub caps the About description at 350 characters and the product sentence is 368, so the repository uses this recorded short form: "Open-source trust layer for Codex CLI and ChatGPT Desktop: coordinates bounded AI coding agents, records machine-verifiable evidence, preserves project memory, and blocks release claims not backed by current tests or artifacts."
+
 ## Hosts and platforms
 
 - **First-class hosts:** Codex CLI and ChatGPT Desktop (equal).
@@ -37,7 +40,10 @@ This page is the English product-facing projection of those decisions.
 - **One source of command metadata:** `src/cli/command-manifest-lite.ts` defines every shipped `sks` command: summary, usage, maturity, risk, flags, gate files and input schema. The registry adds only the lazy loader; help, `sks commands`, the agent-bridge tool manifest and the contract layer all derive from the manifest.
 - **Shipped vs maintainer commands:** `sks` carries commands a user or agent runs in a project. Commands that verify, benchmark or release SKS itself (`check`, `gates`, `task`, `release`, `daemon`, `versioning`, `bench`, `perf`, `features`, `all-features`, `harness`, `rust`) live in the maintainer CLI (`npm run maintainer -- <command>`), which is not packaged and is never exposed as an agent tool.
 - **Evidence checks live under `sks proof`:** `sks proof trust|stop-gate|artifacts|hproof|field` replace the former top-level `trust`, `stop-gate`, `validate-artifacts`, `hproof` and `proof-field`.
-- **Retired names are unknown, not aliased:** `loop`, `run`, `rollback`, the folded proof commands and the maintainer commands answer `unknown_command` with no replacement hint, and the installed-package probes pin that.
+- **One name per job:** a command that duplicated another is removed rather than kept as an alias — `usage` (use `sks help <command>`, which prints what `sks <command> --help` prints), `aliases` (`sks dollar-commands`), `init` and `fix-path` (`sks setup [--force]`), `deps` (`sks doctor`), `autoresearch` (`sks research … --autoresearch`), the top-level `wrongness` (`sks wiki wrongness`), `stats` (`sks gc status [--full]`) and `codex-native` (`sks codex-app`, `sks doctor`).
+- **No command without a job:** `goal` (Codex native `/goal` owns goals; `$sks-goal` writes the command), `remote` (Codex remote control), `auto-review` (Codex's own approval-reviewer setting), `recallpulse`, `skill-dream`, `code-structure` (the scan still runs inside the engineering-sanity review and the wiki sweep) and `reasoning` were removed rather than kept as labs entries.
+- **Retired names are unknown, not aliased:** `loop`, `run`, `rollback`, the folded proof commands, the maintainer commands and the removed duplicates and orphans answer `unknown_command` with no replacement hint, and the installed-package probes pin that.
+- **No silent fallbacks to a destructive default:** an unknown `sks memory` subcommand prints usage instead of running retention, and `sks setup`/`sks bootstrap` refuse `--dry-run` instead of installing anyway.
 - **Skills only name real commands:** every `sks <command>` a managed skill tells an agent to run must resolve to a shipped command; a test installs the skills and checks.
 
 ## Desktop Bridge routing (8.1.3)
@@ -77,6 +83,8 @@ This page is the English product-facing projection of those decisions.
 - In `essential`, a finished turn finishes: no Honest Mode or completion-summary wording gate, no Stop-time completion proof, reflection, or ledger requirements, no per-tool-call evidence hook, no denial over managed-skill digest drift. `sks proof …` remains available on request.
 - Completion still means saying plainly what was done, what was verified, and what remains; mock, fixture, or capability evidence is never described as a real run.
 - **Light paths** (Answer, DFix, Help/status-class read-only routes) stay light in both profiles.
+- **Guidance follows the profile:** in `essential`, `sks status` and the `sks plan` template ask for a plain summary of what changed and what was verified, not a completion proof, Honest Mode, or an SKS gate report.
+- **Plans name the project's own checks:** route plans, Proof Field reports and inferred test scopes take verification commands from the target project's package scripts (npm, pnpm, yarn or bun) or name the check in plain words. They never tell an agent to run SKS's own maintainer commands (`packcheck`, `selftest`, `release:check`) in a user project.
 - Blocked missions with blockers are correct answers; do not disable safety or forge evidence to look green.
 - Honest Mode (`strict` only): once at the end of batched work; retry only remaining gaps (not every intermediate step).
 - Release required evidence: **release gates**. Typecheck, focused tests, and package dry-run are recommended, not automatic required substitutes.
@@ -97,6 +105,7 @@ This page is the English product-facing projection of those decisions.
 - SKS product version is a marketing/release identifier, not a strict semver product gate.
 - Trusted-project may default on for local personal repos under operator policy; users must not modify the installed SKS engine; Codex `config.toml` remains user-editable.
 - Internal/optional routes (not core trust-layer completion): SEO/GEO, Design, PPT, GX, Autoresearch, `$sks-research`.
+- **SEO/GEO marketing describes the project it runs in:** positioning, pillars and keywords come from that project's package metadata and README, research fetches only URLs the project declares or the user passes, competitors are only `--competitor` URLs, and an existing package description is never replaced.
 - Performance: no product SLA or bench-number promises; measurements are internal/optional.
 - Naruto accepts an oversized persisted thread preference without rewriting it, but uses an effective maximum of 256 child threads and 257 total threads. Explicit CLI values above 256 are rejected; the parent remains outside the child-slot cap.
 - Contributions: welcome via standard PR/issues.

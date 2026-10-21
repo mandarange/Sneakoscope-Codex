@@ -15,7 +15,7 @@ export async function installPackageCommand(args: readonly string[] = process.ar
     return;
   }
 
-  console.log('SKS installer - proof-first Codex harness');
+  console.log('SKS installer - open-source trust layer for Codex CLI and ChatGPT Desktop');
   const previousProbe = spawnSync('sks', ['--version'], { encoding: 'utf8' });
   const previousVersion = previousProbe.status === 0
     ? extractSemVer(`${previousProbe.stdout || ''}\n${previousProbe.stderr || ''}`)

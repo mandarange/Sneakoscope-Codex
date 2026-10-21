@@ -15,8 +15,7 @@ const splitReviewFiles = [
   'src/core/research.ts',
   'src/core/ppt.ts',
   'src/core/init.ts',
-  'src/core/hooks-runtime.ts',
-  'src/core/recallpulse.ts'
+  'src/core/hooks-runtime.ts'
 ]
 const policyCallsiteAllowlist = new Map([
   ['mkdtemp|src/core/codex-control/codex-sdk-env-policy.ts|prepareNativeCodexAuthBridge|mkdtemp', 'identity-checked 0700 OAuth bridge root with explicit cleanup proof'],
@@ -149,15 +148,12 @@ function scanCommandGateContract() {
     if (!entry?.skipMigrationGate) issues.push(`${required}:missing_skipMigrationGate`)
   }
   // NC-38: `loop` is retired (stateless error surface); Goal owns persisted loops.
-  for (const routeStarter of ['naruto', 'dfix', 'qa-loop', 'research', 'autoresearch', 'mad-sks', 'ppt', 'image-ux-review', 'computer-use']) {
+  for (const routeStarter of ['naruto', 'dfix', 'qa-loop', 'research', 'mad-sks', 'ppt', 'image-ux-review', 'computer-use']) {
     const entry = (COMMANDS as Record<string, any>)[routeStarter]
     if (entry?.mutatesRouteState !== true) issues.push(`${routeStarter}:missing_route_state_mutator_contract`)
   }
-  const goal = (COMMANDS as Record<string, any>).goal
-  if (!goal) issues.push('goal:missing_native_goal_command_contract')
-  if (goal?.mutatesRouteState === true || goal?.ownsGates === true || (goal?.ownedGateFiles?.length ?? 0) > 0) {
-    issues.push('goal:native_goal_command_must_be_stateless')
-  }
+  // Codex native /goal owns persisted goals: SKS ships no goal command at all.
+  if ((COMMANDS as Record<string, any>).goal) issues.push('goal:sks_must_not_ship_a_goal_command')
   for (const migrationBypass of ['triwiki', 'pipeline', 'wiki', 'proof']) {
     const entry = (COMMANDS as Record<string, any>)[migrationBypass]
     if (entry?.skipMigrationGate !== true) issues.push(`${migrationBypass}:missing_skip_migration_gate_contract`)

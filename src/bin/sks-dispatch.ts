@@ -1,7 +1,8 @@
 export async function runSks(args: string[]): Promise<void> {
-  if (args[0] === 'commands' && args.includes('--json')) {
-    const { commandsJsonFast } = await import('../cli/commands-fast.js');
-    commandsJsonFast();
+  if (args[0] === 'commands' && !args.includes('--help') && !args.includes('-h')) {
+    const { commandsJsonFast, commandsTextFast } = await import('../cli/commands-fast.js');
+    if (args.includes('--json')) commandsJsonFast();
+    else commandsTextFast();
   } else if (args[0] === 'dollar-commands' && args.includes('--json')) {
     const { dollarCommandsJsonFast } = await import('../core/routes/dollar-manifest-lite.js');
     dollarCommandsJsonFast();

@@ -1,6 +1,6 @@
 # TypeScript Architecture
 
-`1.0.2` advances the runtime towards a fully suppressed-free TypeScript tree: suppression scanning (`npm run typecheck:suppressions`), and tighter `dist` manifest metadata accompany the existing TypeScript-built `dist` runtime.
+The runtime is TypeScript compiled into `dist`, with a deterministic `dist` build manifest.
 
 The published CLI entrypoint, router, command registry, Trust Kernel, Evidence Router, Completion Proof, Image Voxel, native agent kernel, and route command runtime remain built from TypeScript into `dist`.
 
@@ -10,8 +10,7 @@ The published CLI entrypoint, router, command registry, Trust Kernel, Evidence R
 - `src/bin/sks.ts` builds the published `dist/bin/sks.js` binary.
 - `src/cli/command-registry.ts` is the actual typed runtime command registry used by the CLI.
 - Trust Kernel, route contracts, Completion Proof, evidence records, Trust Reports, Image Voxel ledgers, native agent outputs, and feature fixtures have exported TypeScript interfaces and runtime guards.
-- `npm run build`, `npm run typecheck`, `npm run typecheck:contracts`, `npm run test:types`, `npm run schema:check`, and `npm run dist:check` are required before publish.
-- `npm run typecheck:suppressions` (part of `release:check`) blocks `@ts-nocheck`, `@ts-ignore`, and sloppy `@ts-expect-error` usages outside annotated generated waivers (`SKS-GEN:`).
+- `npm run build`, `npm run typecheck`, and `npm run schema:check` are required before publish.
 
 ## Contract Modules
 
@@ -24,8 +23,4 @@ The published CLI entrypoint, router, command registry, Trust Kernel, Evidence R
 
 ## Build Output
 
-The npm package uses `files: ["dist", ...]`; source implementation files are not published. `npm run build` cleans `dist`, compiles TypeScript, copies only runtime config assets, writes a deterministic `dist/build-manifest.json`, and blocks copied `.mjs` runtime files or volatile manifest timestamps through `npm run dist:check`.
-
-## Type Contract Tests
-
-`test/types/*.test.ts` compiles the command registry, Trust Kernel, evidence, Completion Proof, Image Voxel, and native agent contracts under the same strict compiler rules as the source tree. These tests are type-only and run through `npm run test:types`.
+The npm package uses `files: ["dist", ...]`; source implementation files are not published. `npm run build` cleans `dist`, compiles TypeScript, copies only runtime config assets, and writes a deterministic `dist/build-manifest.json`; `node ./dist/scripts/check-dist-runtime.js` blocks copied `.mjs` runtime files or volatile manifest timestamps.

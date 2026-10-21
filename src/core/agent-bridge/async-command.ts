@@ -10,7 +10,7 @@ import { runProcess } from '../fsx.js';
 import { createResponsesTransport } from './responses-transport.js';
 import { latestModelForTier } from '../subagents/model-tiers.js';
 
-const USAGE = 'sks agent-bridge async --prompt "task" [--tools status,stats] [--json]';
+const USAGE = 'sks agent-bridge async --prompt "task" [--tools status,search] [--json]';
 const MAX_PROMPT_BYTES = 16 * 1024;
 
 export function redactAsyncToolOutput(stdout: string): string {
@@ -20,7 +20,7 @@ export function redactAsyncToolOutput(stdout: string): string {
 
 export function parseAsyncCommandArgs(args: readonly string[]): { prompt: string; tools: string[] } {
   let prompt = '';
-  let selected = 'status,stats';
+  let selected = 'status,search';
   const seen = new Set<string>();
   for (let i = 0; i < args.length; i++) {
     const flag = args[i]!;

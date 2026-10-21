@@ -1,4 +1,5 @@
-import { COMMAND_MANIFEST_LITE, type CommandManifestLiteEntry } from './command-manifest-lite.js';
+import { COMMAND_MANIFEST_LITE, visibleCommandManifest, type CommandManifestLiteEntry } from './command-manifest-lite.js';
+import { sksTextLogo } from './output.js';
 
 interface FastCommandRow {
   name: string;
@@ -7,7 +8,6 @@ interface FastCommandRow {
   maturity: CommandManifestLiteEntry['maturity'];
   readonly?: boolean;
   mutating?: boolean;
-  deprecated?: boolean;
   hidden?: boolean;
 }
 
@@ -22,16 +22,23 @@ export function commandsJsonFast(): void {
   }, null, 2));
 }
 
+export function commandsTextFast(): void {
+  const commands = visibleCommandManifest();
+  console.log(`${sksTextLogo()}\n\nCommands\n`);
+  const width = Math.max(...commands.map((entry) => entry.name.length)) + 2;
+  for (const entry of commands) console.log(`sks ${entry.name.padEnd(width)}${entry.summary}`);
+  console.log('\nRun `sks help <command>` for its usage.');
+}
+
 function fastCommandRow(entry: CommandManifestLiteEntry): FastCommandRow {
   const row: FastCommandRow = {
     name: entry.name,
-    usage: `sks ${entry.name}`,
+    usage: entry.usage || `sks ${entry.name}`,
     description: entry.summary,
     maturity: entry.maturity
   };
   if (entry.readonly === true) row.readonly = true;
   if (entry.mutatesRouteState === true) row.mutating = true;
-  if (entry.deprecated === true) row.deprecated = true;
   if (entry.hidden === true) row.hidden = true;
   return row;
 }

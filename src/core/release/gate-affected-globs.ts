@@ -101,13 +101,11 @@ export function affectedGlobsFor(id: string): string[] {
       return [
         'src/core/triwiki/context-graph/**',
         'src/core/search/context.ts',
-        'src/core/search/context-graph-seeds.ts',
         'src/core/subagents/triwiki-attention.ts',
         'src/core/triwiki/code-pack.ts',
         'src/core/triwiki/triwiki-cleanup.ts',
         'src/core/naruto/context-graph-advisor.ts',
         'src/core/naruto/context-graph-advisor-scope.ts',
-        'src/core/verification/context-graph-affected.ts',
         'src/core/align/code-navigation-align.ts',
         // The publish seam align runs before it builds its pack. Listed
         // explicitly because the entry above is an exact path: extracting the

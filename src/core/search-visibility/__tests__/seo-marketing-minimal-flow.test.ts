@@ -81,21 +81,26 @@ test('latest search visibility lookup ignores newer non-seo missions', async () 
 
 async function makeMarketingRoot(): Promise<string> {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-seo-marketing-flow-'));
-  await fsp.mkdir(path.join(root, '.sneakoscope', 'reports'), { recursive: true });
   await fsp.writeFile(path.join(root, 'package.json'), JSON.stringify({
-    name: 'sneakoscope-fixture',
+    name: 'bakery-shop',
     version: '0.0.0',
-    description: 'Proof-first Codex trust layer for bounded route evidence.',
-    keywords: ['sneakoscope', 'codex', 'seo'],
+    keywords: ['bakery', 'seo'],
   }, null, 2));
-  await fsp.writeFile(path.join(root, 'README.md'), '# Sneakoscope Fixture\n\nUse `sks seo-geo-optimizer` for search visibility proof.\n');
+  await fsp.writeFile(path.join(root, 'README.md'), [
+    '# Bakery Shop',
+    '',
+    'Bakery Shop lets small bakeries take preorders and manage pickup slots.',
+    '',
+    '## Preorders',
+    '',
+    'Customers reserve a pickup slot when they place an order.',
+    '',
+    '## Inventory sync',
+    '',
+    'Stock counts update as soon as an order is placed.',
+    '',
+  ].join('\n'));
   await fsp.writeFile(path.join(root, 'CHANGELOG.md'), '# Changelog\n');
-  await fsp.mkdir(path.join(root, 'src', 'core'), { recursive: true });
-  await fsp.writeFile(path.join(root, 'src', 'core', 'routes.ts'), 'export const ROUTES = ["naruto"]\n');
-  await fsp.mkdir(path.join(root, 'src', 'core', 'agents'), { recursive: true });
-  await fsp.writeFile(path.join(root, 'src', 'core', 'agents', 'agent-orchestrator.ts'), 'export async function runNativeAgentOrchestrator() {}\n');
-  await fsp.writeFile(path.join(root, '.sneakoscope', 'reports', 'perf-budget.json'), JSON.stringify({ ok: true, budgets: [{ command: 'doctor', p95_ms: 100 }] }));
-  await fsp.writeFile(path.join(root, '.sneakoscope', 'reports', 'super-search-local-http-smoke.json'), JSON.stringify({ ok: true, verified_content: true }));
   return root;
 }
 

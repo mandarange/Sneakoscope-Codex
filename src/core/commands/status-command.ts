@@ -4,6 +4,7 @@ import { listSessionStates, stateFile } from '../mission.js';
 import { readRouteProof } from '../proof/proof-reader.js';
 import { latestTrustReport } from '../trust-kernel/trust-report.js';
 import { flag } from './command-utils.js';
+import { stopFinalizationRitualsEnforced } from '../verification-profile.js';
 
 export async function statusCommand(args: any = []) {
   const root = await projectRoot();
@@ -24,7 +25,7 @@ export async function statusCommand(args: any = []) {
     agent_status: proof?.evidence?.agents?.status || (state.agents_required === false ? 'not_required' : 'not_recorded'),
     image_voxel_status: proof?.evidence?.image_voxels?.status || 'not_recorded',
     db_safety_status: proof?.evidence?.db || proof?.evidence?.db_safety ? 'recorded' : 'not_recorded',
-    next_action: nextAction(state, trust, proof),
+    next_action: nextAction(state, trust, proof, stopFinalizationRitualsEnforced(root)),
     sessions: sessions.map(sessionStatusRow),
     files: missionId ? {
       mission: path.join(root, '.sneakoscope', 'missions', missionId),
@@ -63,8 +64,15 @@ function printSessionTable(sessions: any[] = []) {
   }
 }
 
-function nextAction(state: any = {}, trust: any = {}, proof: any = {}) {
+function nextAction(state: any = {}, trust: any = {}, proof: any = {}, strict = false) {
   if (!state.mission_id) return 'no active mission; ask Codex directly, or use $sks-plan or $sks-naruto';
+  // Completion proof and Honest Mode are strict-profile rituals; the default
+  // essential profile finishes with a plain summary.
+  if (!strict) {
+    return trust?.issues?.length
+      ? `resolve trust blocker: ${trust.issues[0]}`
+      : 'finish the route and state what changed and what was verified';
+  }
   if (!proof?.schema) return `write completion proof for ${state.mission_id}`;
   if (trust?.ok) return 'ready for final Honest Mode summary';
   if (trust?.issues?.length) return `resolve trust blocker: ${trust.issues[0]}`;

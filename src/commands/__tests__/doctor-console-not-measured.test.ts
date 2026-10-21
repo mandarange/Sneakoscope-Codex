@@ -46,7 +46,7 @@ function skippedProfileResult(): any {
       research_sources: 'local-files',
       image_followup: 'artifact-path',
       notes: ['hook-derived evidence will not count'],
-      repair_actions: ['Project memory: sks codex-native init-deep --apply --directory-local']
+      repair_actions: ['Project memory: sks codex-app init-deep --directory-local']
     },
     codex_native_feature_matrix: { ok: true, skipped: true, features: {} },
     command_aliases: { ok: true, status: 'clean', canonical_command_count: 12 },

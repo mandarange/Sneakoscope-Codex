@@ -1,6 +1,6 @@
 # Sneakoscope Codex performance and leak policy
 
-Sneakoscope Codex 10.6.2 is designed to keep runtime, package size, RAM, and storage bounded.
+Sneakoscope Codex 10.7.0 is designed to keep runtime, package size, RAM, and storage bounded.
 
 ## Speed
 
@@ -8,7 +8,7 @@ Sneakoscope Codex 10.6.2 is designed to keep runtime, package size, RAM, and sto
 - `npm run maintainer -- perf run --json` records structured startup and package-payload measurements and writes `.sneakoscope/perf/budgets.json`.
 - Codex native `/goal` workflows exclusively own persisted goals; SKS creates no Goal mission, bridge artifact, compatibility loop, or fallback state.
 - `sks wiki sweep` records intentional forgetting and promotion candidates so default recall stays top-K instead of becoming an unbounded memory dump.
-- `sks code-structure scan` flags 1000/2000/3000-line handwritten source files before new logic is added to oversized modules.
+- The engineering-sanity review's code-structure report (written with the plan, and by `sks wiki sweep`) flags 1000/2000/3000-line handwritten source files before new logic is added to oversized modules.
 - TriWiki claim selection uses bounded top-K selection plus the latest RGBA/trig wiki anchors and required voxel overlay metadata instead of sorting unbounded context into prompts.
 - Voxel TriWiki code indexing uses full-content cache hashes, excludes cache/worktree mirrors, enforces a dedicated token budget, and serializes wrongness-ledger updates so fast recall cannot trade correctness for partial hashes or lost concurrent writes.
 - GX visual context renders deterministic SVG/HTML from JSON sources, avoiding external image-generation latency, cost, and nondeterminism. Rendered nodes expose the same RGBA wiki-coordinate anchors used by TriWiki.
@@ -78,7 +78,7 @@ Each anchor stores id, RGBA key, `[domain, layer, phase, concentration]`, source
 - Old missions, old cycle directories, arenas, temp files, oversized JSONL logs, and terminal inactive worker runtime homes are removed or rotated by `sks gc`; `route_closed` records are inactive, while recently updated non-closed sessions receive a two-hour protection window.
 - Mission compaction preserves durable JSON and review/image evidence in place and removes only known disposable runtime files. Existing legacy gzip archives are hydrated transparently only after their payload path and original SHA-256 are verified.
 - Cleanup containment checks reject symlink or realpath escapes, and bounded scans report when the inspected set is incomplete instead of claiming a full cleanup.
-- `sks stats` reports package/state size, while the full retention budget scan counts every `.sneakoscope` top-level directory and root file with a per-directory 1,000,000-file safety ceiling instead of silently stopping at the former partial scan.
+- `sks gc status --full` reports package/state size, while the full retention budget scan counts every `.sneakoscope` top-level directory and root file with a per-directory 1,000,000-file safety ceiling instead of silently stopping at the former partial scan.
 - Release-gate run storage retains the five most recent run directories by default.
 
 ## Rust decision

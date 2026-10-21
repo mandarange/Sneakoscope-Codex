@@ -123,7 +123,7 @@ assertGate(
 
 // Explicit repair / opt-in paths must be surfaced to the user.
 assertGate(helpers.includes('sks bootstrap'), 'postinstall must surface `sks bootstrap` repair path');
-assertGate(helpers.includes('sks deps check'), 'postinstall must surface `sks deps check` repair path');
+assertGate(helpers.includes('Dependency diagnostics remain explicit: sks doctor'), 'postinstall must surface the `sks doctor` diagnostics path');
 assertGate(
   helpers.includes("['sks doctor', '--fix'].join(' ')"),
   'postinstall must surface the explicit Doctor repair path'

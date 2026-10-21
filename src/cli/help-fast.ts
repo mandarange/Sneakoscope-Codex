@@ -1,37 +1,24 @@
-import { COMMAND_MANIFEST_LITE } from './command-manifest-lite.js';
+import { visibleCommandManifest } from './command-manifest-lite.js';
 import { PACKAGE_VERSION } from '../core/version.js';
 
 export function helpFast() {
   console.log(`SKS
 SNEAKOSCOPE CODEX v${PACKAGE_VERSION}
 
-3-pillar frontdoor
+Ask Codex for work directly; the main agent does ordinary work and SKS hooks keep it safe.
 
   $sks-plan "task"          plan only; writes .sneakoscope/plans, no code edits
   $sks-work                 execute the latest plan with Naruto child agents
 
-Local surfaces
-
   sks review --staged       machine-first diff review
-  sks doctor --fix          repair/validate the harness
+  sks doctor --fix          repair and validate the install
+  sks help <command>        usage of one command (or a $ route)
+  sks dollar-commands       every Codex App $ route
 
-Discovery
-
-  sks commands [--json]     all commands
-  sks dollar-commands       all Codex App $ routes
-  sks help [topic]          focused help
+Commands
 `);
-  for (const row of commandRows().filter((entry: any) => entry.maturity !== 'labs').slice(0, 18)) {
-    console.log(`  ${row.usage.padEnd(58)} ${row.description}`);
-  }
-  console.log('\nRun `sks commands` for the full catalog.');
-}
-
-function commandRows() {
-  return COMMAND_MANIFEST_LITE.map((entry) => ({
-    name: entry.name,
-    usage: `sks ${entry.name}`,
-    description: entry.summary,
-    maturity: entry.maturity
-  })).sort((a: any, b: any) => a.name.localeCompare(b.name));
+  const commands = visibleCommandManifest().filter((entry) => entry.maturity !== 'labs');
+  const width = Math.max(...commands.map((entry) => entry.name.length)) + 2;
+  for (const entry of commands) console.log(`  sks ${entry.name.padEnd(width)}${entry.summary}`);
+  console.log('\nLabs commands (optional routes) are listed by `sks commands`.');
 }

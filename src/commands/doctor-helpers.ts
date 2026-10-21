@@ -19,7 +19,7 @@ export function buildRuntimeReadiness(matrix: any) {
       '--yes'
     ].join(' '));
   }
-  if (matrix?.features?.project_memory?.ok !== true) repairActions.push('Project memory: sks codex-native init-deep --apply --directory-local');
+  if (matrix?.features?.project_memory?.ok !== true) repairActions.push('Project memory: sks codex-app init-deep --directory-local');
   return {
     schema: 'sks.runtime-readiness-story.v1',
     codex_native: codexNative,

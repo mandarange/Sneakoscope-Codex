@@ -9,7 +9,6 @@ export const LIGHT_COMPLETION_ROUTES = [
   'help',
   'status',
   'dollar-commands',
-  'aliases',
   'commands',
   'quickstart'
 ] as const;
@@ -28,6 +27,6 @@ export function isLightCompletionRoute(route: unknown): boolean {
   if (!key) return false;
   if ((LIGHT_COMPLETION_ROUTES as readonly string[]).includes(key)) return true;
   // Help/status-class read-only surfaces (not doctor --fix)
-  if (key === 'sks' || key === 'usage' || key === 'version') return true;
+  if (key === 'sks' || key === 'version') return true;
   return false;
 }

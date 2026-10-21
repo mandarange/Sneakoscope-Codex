@@ -19,10 +19,8 @@ Nested guards reuse the active outer transaction, so `doctor --fix` can wrap set
 Relevant gates:
 
 ```bash
-npm run secret:preservation
+node ./dist/scripts/secret-preservation-check.js
 npm run secret:preservation-guard
-npm run secret:line-rollback
 npm run secret:supabase-preservation-blackbox
 npm run update:preserves-supabase-keys
-npm run update:secret-preservation-guard
 ```

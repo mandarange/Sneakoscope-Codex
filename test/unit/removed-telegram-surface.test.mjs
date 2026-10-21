@@ -6,7 +6,6 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 import { buildFeatureRegistry } from '../../dist/core/feature-registry.js';
-import { remoteCommand } from '../../dist/core/commands/remote-command.js';
 
 const root = process.cwd();
 const cli = path.join(root, 'dist', 'bin', 'sks.js');
@@ -69,22 +68,6 @@ test('public feature inventory has no Telegram transport', async () => {
   assert.equal(registry.source_inventory.handler_keys.includes('telegram'), false);
   assert.equal(registry.features.some((feature) => feature.id === 'cli-telegram'), false);
   assert.equal(serialized.includes('telegram'), false);
-});
-
-test('remote command help presents Paseo as an independent companion', async () => {
-  const lines = [];
-  const originalLog = console.log;
-  console.log = (...args) => lines.push(args.join(' '));
-  try {
-    const result = await remoteCommand(['--help']);
-    assert.deepEqual(result, { schema: 'sks.remote-command.v2', ok: true, action: 'help' });
-  } finally {
-    console.log = originalLog;
-  }
-
-  const output = lines.join('\n');
-  assert.match(output, /separately installed independent companion such as Paseo/);
-  assert.doesNotMatch(output, /supported mobile-first integration/i);
 });
 
 test('Paseo project config keeps its ordered setup and named npm scripts', () => {

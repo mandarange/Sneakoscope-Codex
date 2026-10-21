@@ -2,8 +2,122 @@
 
 ## [Unreleased]
 
+## [10.7.0] - 2026-10-20
+
+### Removed
+
+- Nine commands that duplicated another one: `sks usage` (use `sks help
+  <command>`), `sks aliases` (`sks dollar-commands`), `sks init` and
+  `sks fix-path` (`sks setup [--force]`), `sks deps` (`sks doctor`),
+  `sks autoresearch` (`sks research … --autoresearch`), the top-level
+  `sks wrongness` (`sks wiki wrongness`, which now carries every verb),
+  `sks stats` (`sks gc status [--full]`) and `sks codex-native`
+  (`sks codex-app`; Doctor's project-memory repair now names
+  `sks codex-app init-deep --directory-local`). They answer
+  `unknown_command` like every other retired name.
+- The unused `visual-review` and `ui-ux-review` command aliases.
+- Seven commands with no job left: `sks goal` (Codex's native `/goal` owns
+  goals; the `$sks-goal` skill still writes the command), `sks remote` and its
+  SSH stdio worker (Codex has its own remote control), `sks auto-review`
+  (Codex's approval reviewer is a Codex setting), `sks recallpulse`,
+  `sks skill-dream`, `sks code-structure` (the scan still runs inside the
+  engineering-sanity review and the wiki sweep) and `sks reasoning`.
+- Skill dreaming. Every tenth prompt, route preparation wrote a skill-usage
+  report and added a "review keep/merge/prune candidates" note to the prompt;
+  nothing ever read the report.
+- Code that only its own tests or a self-test gate reached: the parallel
+  verification engine (DAG, worker pool, artifact lock), the MCP tool-name
+  normalizer, the v1 context-graph seed engine and `context-graph-affected`
+  (both replaced by the query facade), the RecallPulse runtime (its research
+  reviewer contract moves to the research module), the router's per-command
+  intent context that nothing read, and the auto-review profile writers left
+  by the removed command. The stop-repeat guard no longer appends to
+  `mission-status-ledger.json`, which nothing read.
+
+### Changed
+
+- Help has one path: `sks help <command>` prints exactly what
+  `sks <command> --help` prints, `sks help '$route'` describes a route, and an
+  unknown topic exits 1. `sks help` lists every non-labs command instead of
+  stopping after the first 18, and per-command help shows the command's real
+  usage line instead of `[options]`. The old help screen's "three core
+  promises" line is gone.
+- The MCP and agent-bridge `search` tool takes an action and a query; it used
+  to run `sks search --json`, which only printed help. The `stats` tool is
+  gone with its command.
+- Plans and Proof Field reports in a user project name that project's checks.
+  They used to list SKS's own maintainer commands (`npm run packcheck`,
+  `sks selftest --mock`, `node ./dist/bin/sks.js eval run`,
+  `npm run release:check`, `test/unit/db-safety.test.mjs`) for any change.
+  Proof Field now reads the project's package scripts through its package
+  manager (npm, pnpm, yarn or bun), uses `tsc --noEmit`, `cargo test`, `pytest`
+  or `npm pack --dry-run` where those apply, and otherwise names the check in
+  plain words. Its cones recognise ordinary source, test, style, config and
+  docs files, so a change outside SKS's own tree can reach the fast lane
+  instead of always counting as an unknown surface.
+- Proof Field skips a piece of work only when every selected cone skips it; a
+  README edit no longer lets a code change in the same diff skip browser
+  checks.
+- `$MAD-SKS` contracts state the user's database task and how each write is
+  verified, instead of acceptance criteria about SKS's own MAD-SKS feature.
+  Release- and install-flavoured tasks get the project's test, build and
+  package checks rather than `packcheck`, `selftest` and `sizecheck`.
+- `sks status`, the `sks plan` template and the PPT and Release-Review
+  skills follow the verification profile: in `essential` they
+  ask for a summary of what was verified and what remains, not a completion
+  proof, Honest Mode or an SKS gate report. The plan template no longer tells
+  a project to "preserve SKS proof-first gates".
+- `sks help menubar` and `sks help install` show the real subcommands instead
+  of a generic `[options]` line.
+- English output everywhere: `sks review` with nothing to review says so in
+  English, and `sks gc` prints the SKS label. The installer banner uses the
+  product sentence instead of "proof-first Codex harness".
+- The README release link points at the latest release instead of v10.5.8.
+- Seven skill bodies in the installer (DFix, Align, Cleanup, QA-LOOP,
+  Research, Search Visibility, SEO/GEO) were never written: those routes ship
+  from the immutable core-skill manifest, so edits to the old copies did
+  nothing. The dead copies are gone; installed skills are unchanged.
+- Twelve docs told readers to run npm scripts that no longer exist; each now
+  names the gate or test that does that job, or drops the step when nothing
+  does. `skill-integrity.md` lists the current core skills.
+
 ### Fixed
 
+- SEO/GEO marketing described SKS in every project. Research read SKS's own
+  source files and fetched SKS's GitHub and npm pages, the competitors were
+  SKS's, and `--include-marketing` apply rewrote a user's package.json
+  description to "Proof-first Codex trust layer…" with `sneakoscope` and
+  `codex` keywords. The strategy now comes from the project itself:
+  positioning is its package description or README lead, message pillars are
+  its README sections, keywords only add its package name and declared
+  frameworks to its own list, research fetches the homepage, repository and
+  npm page its package.json declares (or `--url`), and competitors are only
+  the URLs passed with `--competitor`. An existing description is never
+  replaced, the README block holds only the project's text, and a claim the
+  truthfulness gate rejects (an unmeasured "fastest") is left out and listed
+  instead of blocking the run. Claim checks match whole words, so "breakfast"
+  is no longer a speed claim.
+- `sks memory` with no subcommand, or a misspelled one, ran a real retention
+  pass that deletes runtime state; it now prints usage and exits 2. Retention
+  stays available as `sks memory gc`.
+- `sks setup --dry-run` (and `sks bootstrap --dry-run`) installed hooks and
+  skills anyway; setup now refuses the flag and points at `sks doctor --json`.
+- `sks pipeline plan --proof-field [--changed a,b]` attaches a Proof Field to a
+  re-plan. Plans already told agents to run it, but the flag did not exist.
+- `--changed` and `--intent` values are no longer read as positional words, so
+  `sks proof field scan --changed a.ts` no longer takes `a.ts` as the intent.
+- Read-only commands no longer load the update-migration machinery only to be
+  told the gate is skipped: `sks status --json` loads 88 modules instead of
+  273 (about 270 ms down to 135 ms), and `sks commands` and
+  `sks mad-sks --help` skip the full router and MAD-SKS runtime (about 410 ms
+  and 400 ms down to under 100 ms). Every command in the perf budget is now
+  within it.
+- Release-truth remedies told maintainers to run npm scripts that do not exist
+  (`strategy:adhd-orchestrating-gate`, `appshots:evidence`), and ADHD
+  orchestration named `verification-dag.json` and `rollback-dag.json`, which
+  nothing writes; they now name what actually produces the evidence. The
+  `codex-sdk:all-pipelines` gate no longer asserts a skill backend type that
+  was removed on 2026-10-02.
 - Codex SDK tasks name why a run failed. A failed turn reached SKS only as
   `Codex Exec exited with code 1: Reading prompt from stdin...`, because the
   SDK raises the exit after the stream and the adapter dropped the events it
@@ -17,6 +131,10 @@
   mentions capacity no longer counts as a failure. Config warnings and
   reasoning no longer count as work, so a failure after only those stays
   retryable.
+- The `migration:current-surface-e2e` release gate failed on any machine
+  without SKS installed globally. The hook launcher it checks never pins a
+  source checkout, so it could only reach `sks` through the maintainer's own
+  global install. The fixture now puts its own `sks` on PATH.
 
 ## [10.6.2] - 2026-10-20
 

@@ -17,8 +17,7 @@ const TARGET_TYPED_FILES = [
   'src/core/codex-app/codex-agent-role-sync.ts',
   'src/core/codex-app/codex-init-deep.ts',
   'src/core/codex-app/codex-hook-lifecycle.ts',
-  'src/core/codex-app/codex-app-execution-profile.ts',
-  'src/core/codex-native/codex-native-interop-policy.ts'
+  'src/core/codex-app/codex-app-execution-profile.ts'
 ]
 
 export async function runTypedRoutingGate(id: string) {

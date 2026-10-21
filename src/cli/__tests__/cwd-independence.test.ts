@@ -19,8 +19,10 @@ const READ_ONLY_COMMANDS = (Object.keys(COMMANDS) as CommandName[])
   .filter((name) => COMMANDS[name].readonly === true)
   .sort();
 
-test('at least the expected number of read-only commands are covered by this sweep', () => {
-  assert.ok(READ_ONLY_COMMANDS.length >= 12, `expected >=12 read-only commands, got ${READ_ONLY_COMMANDS.length}: ${READ_ONLY_COMMANDS.join(', ')}`);
+test('the sweep covers the read-only commands launchd and agent hosts call', () => {
+  for (const name of ['commands', 'dollar-commands', 'help', 'paths', 'root', 'search', 'status', 'update-check', 'version']) {
+    assert.ok((READ_ONLY_COMMANDS as string[]).includes(name), `${name} is not a read-only command any more: ${READ_ONLY_COMMANDS.join(', ')}`);
+  }
 });
 
 for (const name of READ_ONLY_COMMANDS) {
