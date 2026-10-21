@@ -17,8 +17,9 @@
 Sneakoscope Codex (`sks`) is an open-source local tool for the Codex CLI and Codex desktop app. It adds a macOS control center, bounded agent workflows, repository context, and evidence checks for SKS releases.
 <!-- END SKS SEARCH VISIBILITY MARKETING -->
 
-Current package: **SKS 10.7.0**, prepared for npm publication.
+Current package: **SKS 10.7.0**, published on npm.
 [Latest release notes](https://github.com/mandarange/Sneakoscope-Codex/releases/latest)
+· [npm package](https://www.npmjs.com/package/sneakoscope/v/10.7.0)
 · [Changelog](CHANGELOG.md). Install the latest stable release from npm.
 
 Ordinary work stays with the main agent. Optional Jev decisions use OpenRouter
@@ -132,9 +133,9 @@ sks doctor --json
 
 `sks update` updates the **global** SKS package, verifies the installed command,
 and reconciles SKS-managed skills, hooks, configuration and SKS Center where
-available. In 10.5.5 and later it also repairs the known ignored Codex settings
-and refreshes managed guidance. User-authored text and explicit preferences
-are preserved. If a step fails, follow the recovery action in its output.
+available. It also repairs the known ignored Codex settings and refreshes
+managed guidance. User-authored text and explicit preferences are preserved. If
+a step fails, follow the recovery action in its output.
 
 To check available updates first, run `sks update check`. For a repair without
 requesting a newer package, run `sks doctor --fix` yourself in the terminal.
@@ -155,7 +156,24 @@ references and rebuilds TriWiki. Update and user-run `sks doctor --fix` share
 that maintenance and repair known ignored configuration settings. User text
 and model choices are preserved. See [harness maintenance](docs/align-modernization.md).
 
-### New in 10.5.7
+### New in 10.7.0
+
+- **A smaller command surface:** duplicate and unused commands were removed;
+  use `sks help <command>` for the supported command path.
+- **Project-aware verification:** Plans and Proof Field reports use the target
+  project's own package scripts and checks instead of SKS maintainer commands.
+- **Project-owned marketing:** SEO/GEO research and apply flows describe the
+  project they run in and preserve an existing project description.
+- **Essential-profile guidance:** read-only paths stay lightweight while
+  safety checks remain active; destructive defaults and misleading proof paths
+  are refused.
+- **Faster read-only commands:** status and help paths no longer load unrelated
+  update-migration machinery.
+
+These changes are product behavior and validation improvements; they do not
+claim a measured model-quality or general speed increase.
+
+### Earlier highlights: 10.5.7
 
 - **Jev execution profiles:** a decision can propose a bounded execution plan.
   The default policy is `baseline`; fast profiles require `optimize` and an
