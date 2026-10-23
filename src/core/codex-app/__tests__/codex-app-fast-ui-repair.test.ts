@@ -21,7 +21,7 @@ async function fixture(t: TestContext, config: string) {
   return { root, codexHome, configPath }
 }
 
-test('Codex App Fast UI repair removes a provenance-owned retired direct provider selection', async (t) => {
+test('Codex App Fast UI repair removes a marked retired direct provider selection and keeps the model choice', async (t) => {
   const input = [
     'suppress_unstable_features_warning = true',
     '# SKS moved machine-local Codex config from .codex/config.toml',
@@ -68,13 +68,16 @@ test('Codex App Fast UI repair removes a provenance-owned retired direct provide
 
   assert.equal(repaired.ok, false)
   assert.equal(repaired.fast_selector, 'repaired')
-  assert.equal(repaired.before_fast_selector, 'maybe_hidden_or_locked')
+  // The user's own model and effort never locked the Fast selector.
+  assert.equal(repaired.before_fast_selector, 'available')
   assert.equal(repaired.after_fast_selector, 'available')
-  assert.deepEqual(globalAction?.removed_keys, ['model_provider', 'model', 'model_reasoning_effort'])
+  // The selection carries its own SKS marker; the model lines under the
+  // "moved machine-local" comment are the user's and stay.
+  assert.deepEqual(globalAction?.removed_keys, ['model_provider'])
   assert.doesNotMatch(after, /^model_provider =/m)
   assert.match(after, /^service_tier = "fast"$/m)
-  assert.doesNotMatch(after, /^model =/m)
-  assert.doesNotMatch(after, /^model_reasoning_effort =/m)
+  assert.match(after, /^model = "gpt-5\.6-sol"$/m)
+  assert.match(after, /^model_reasoning_effort = "ultra"$/m)
   assert.match(after, /^fast_mode = true$/m)
   assert.match(after, /^\[model_providers\.codex-lb\]$/m)
   assert.ok(globalAction?.backup_path)
@@ -96,7 +99,7 @@ test('Codex App Fast UI repair removes a provenance-owned retired direct provide
   assert.equal(second.actions.some((action) => action.changed), false)
 })
 
-test('Codex App Fast UI repair follows SKS provenance past unrelated comments and removes the direct selection', async (t) => {
+test('Codex App Fast UI repair removes the marked direct selection past unrelated comments and keeps the model choice', async (t) => {
   const input = [
     '# SKS moved machine-local Codex config from .codex/config.toml',
     '',
@@ -136,11 +139,11 @@ test('Codex App Fast UI repair follows SKS provenance past unrelated comments an
   const after = await fs.readFile(configPath, 'utf8')
 
   assert.equal(repaired.ok, false)
-  assert.deepEqual(repaired.actions.find((action) => action.scope === 'codex_home')?.removed_keys, ['model_provider', 'model', 'model_reasoning_effort'])
+  assert.deepEqual(repaired.actions.find((action) => action.scope === 'codex_home')?.removed_keys, ['model_provider'])
   assert.doesNotMatch(after, /^model_provider =/m)
   assert.match(after, /^notify = /m)
-  assert.doesNotMatch(after, /^model =/m)
-  assert.doesNotMatch(after, /^model_reasoning_effort =/m)
+  assert.match(after, /^model = "gpt-5\.6-sol"$/m)
+  assert.match(after, /^model_reasoning_effort = "max"$/m)
 })
 
 test('Codex App UI snapshot reports API-key auth with an OAuth backup as Chat/Pro inactive without exposing secrets', async (t) => {
@@ -172,7 +175,7 @@ test('Codex App UI repair points inactive ChatGPT OAuth to current Desktop Bridg
   assert.doesNotMatch(repaired.next_action, /sks codex-lb/)
 })
 
-test('Codex App Fast UI repair still removes SKS-marked non-lb provider locks after migration', async (t) => {
+test('Codex App Fast UI repair keeps the keys under a moved machine-local comment, which belong to the user', async (t) => {
   const input = [
     '# SKS moved machine-local Codex config from .codex/config.toml',
     '',
@@ -185,17 +188,11 @@ test('Codex App Fast UI repair still removes SKS-marked non-lb provider locks af
     ''
   ].join('\n')
   const { root, codexHome, configPath } = await fixture(t, input)
+  // SKS writes that comment above keys it moved FROM the user's project
+  // config, and the Codex app appends the picker choice under it.
   const repaired = await repairCodexAppFastUi(root, { codexHome, apply: true })
-  const after = await fs.readFile(configPath, 'utf8')
-  assert.deepEqual(repaired.actions.find((action) => action.scope === 'codex_home')?.removed_keys, [
-    'model_provider',
-    'model',
-    'model_reasoning_effort'
-  ])
-  assert.doesNotMatch(after, /^model_provider =/m)
-  assert.doesNotMatch(after, /^model =/m)
-  assert.doesNotMatch(after, /^model_reasoning_effort =/m)
-  assert.match(after, /^service_tier = "fast"$/m)
+  assert.equal(repaired.actions.some((action) => action.changed), false)
+  assert.equal(await fs.readFile(configPath, 'utf8'), input)
 })
 
 test('Codex App Fast UI repair preserves unmarked user model and effort choices', async (t) => {
@@ -365,7 +362,7 @@ test('Fast UI repair does not infer readiness from retired catalog or picker inp
   assert.equal(repaired.blockers.includes('selected_provider:routing_or_picker_unverified'), false)
 })
 
-test('Codex App Fast UI repair removes an SKS-owned OpenRouter selection without deleting an unproven model choice', async (t) => {
+test('Codex App Fast UI repair leaves an OpenRouter selection the moved machine-local comment cannot prove', async (t) => {
   const input = [
     '# SKS moved machine-local Codex config from .codex/config.toml at 2026-07-24T07:04:58.256Z',
     '',
@@ -393,9 +390,6 @@ test('Codex App Fast UI repair removes an SKS-owned OpenRouter selection without
   } as any)
   const after = await fs.readFile(configPath, 'utf8')
   const globalAction = repaired.actions.find((action) => action.scope === 'codex_home')
-  assert.equal(globalAction?.changed, true)
-  assert.deepEqual(globalAction?.removed_keys, ['model_provider'])
-  assert.doesNotMatch(after, /^model_provider =/m)
-  assert.match(after, /^model = "moonshotai\/kimi-k3"$/m)
-  assert.match(after, /^model_catalog_json = /m)
+  assert.equal(globalAction?.changed, false)
+  assert.equal(after, input)
 })

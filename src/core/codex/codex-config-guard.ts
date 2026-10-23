@@ -719,21 +719,33 @@ export function isUnmanagedProjectCodexConfig(root: string, configPath: string, 
     && !hasSksManagedCodexConfigMarker(text)
 }
 
+/**
+ * Removes a top-level `model` / `model_reasoning_effort` that a legacy SKS
+ * install locked, proven by an SKS marker inline or in the comment block above
+ * it. The marker goes with the lock it vouched for: left behind, it vouched for
+ * whatever model line the Codex app wrote under it later, and every install,
+ * update or doctor run deleted the user's own picker choice again.
+ */
 export function removeLegacyTopLevelCodexModeLocks(text: string = '') {
   const lines = String(ensureTrailingNewline(text) || '').split('\n')
   const firstTable = lines.findIndex((x) => /^\s*\[.+\]\s*$/.test(x))
   const end = firstTable === -1 ? lines.length : firstTable
-  return ensureTrailingNewline(lines.filter((line, index) => {
-    if (index >= end) return true
-    if (!/^\s*(?:model|model_reasoning_effort)\s*=/.test(line)) return true
-    return !hasSksModeLockProvenance(lines, index)
-  }).join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n'))
+  const drop = new Set<number>()
+  for (let index = 0; index < end; index += 1) {
+    if (!/^\s*(?:model|model_reasoning_effort)\s*=/.test(lines[index] || '')) continue
+    const marker = sksModeLockProvenance(lines, index)
+    if (marker === null) continue
+    drop.add(index)
+    if (marker >= 0) drop.add(marker)
+  }
+  return ensureTrailingNewline(lines.filter((_, index) => !drop.has(index)).join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n'))
 }
 
-function hasSksModeLockProvenance(lines: string[], index: number) {
+/** The line of the SKS marker vouching for a top-level lock: -1 when inline, null when there is none. */
+function sksModeLockProvenance(lines: string[], index: number): number | null {
   const current = String(lines[index] || '')
   const inlineComment = current.includes('#') ? current.slice(current.indexOf('#')) : ''
-  if (isSksModeLockMarker(inlineComment)) return true
+  if (isSksModeLockMarker(inlineComment)) return -1
   const allowedManagedKeys = new Set([
     'service_tier', 'model', 'model_reasoning_effort', 'model_provider',
     'approval_policy', 'sandbox_mode', 'web_search', 'notify', 'preferred_auth_method'
@@ -743,17 +755,20 @@ function hasSksModeLockProvenance(lines: string[], index: number) {
     const candidate = String(lines[cursor] || '').trim()
     if (!candidate) continue
     if (candidate.startsWith('#')) {
-      if (isSksModeLockMarker(candidate)) return true
+      if (isSksModeLockMarker(candidate)) return cursor
       continue
     }
     const key = candidate.match(/^([A-Za-z0-9_-]+)\s*=/)?.[1] || ''
-    if (!allowedManagedKeys.has(key)) return false
+    if (!allowedManagedKeys.has(key)) return null
   }
-  return false
+  return null
 }
 
+// "SKS moved machine-local Codex config" is not one: that comment sits above
+// keys SKS moved FROM the user's project config, and the Codex app appends its
+// own `model` under it — the user's choice, deleted on every guarded write.
 function isSksModeLockMarker(value: string = '') {
-  return /^#\s*(?:SKS|Sneakoscope)\b.*(?:moved machine-local Codex config|forced fast UI|managed (?:Codex )?(?:model|reasoning)|codex-lb (?:model|reasoning))/i.test(String(value || '').trim())
+  return /^#\s*(?:SKS|Sneakoscope)\b.*(?:forced fast UI|managed (?:Codex )?(?:model|reasoning)|codex-lb (?:model|reasoning))/i.test(String(value || '').trim())
 }
 
 function mergeLostFastUiKeys(before: string, nextInput: string) {

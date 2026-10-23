@@ -4559,8 +4559,8 @@
       "file": "src/scripts/postinstall-safe-side-effects-check.ts",
       "symbol": "module",
       "token": "writeFileSync",
-      "scope_contract_sha256": "2c889b79c6c3b25c890561efc42f933c79b5fa4762aa05d90e1e50aad43ac4db",
-      "callsite_sha256": "a6f70b3496d87818265c071d012224acd4e846bc652b64a3d10f6f12964473a6",
+      "scope_contract_sha256": "882becf6084347824ea1c77dab861a20174d553cf309ca029973979f26ea4bb4",
+      "callsite_sha256": "8a2985306cb7a9f46e647b15f889e2035b2dd9d01a8084f1c1e8c80926b1d956",
       "occurrence": 1,
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },

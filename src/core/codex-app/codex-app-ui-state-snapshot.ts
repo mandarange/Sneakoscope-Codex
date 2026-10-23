@@ -2,6 +2,11 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { exists, nowIso, readText, sha256, writeJsonAtomic } from '../fsx.js'
+import {
+  HISTORICAL_DESKTOP_COMPAT_MARKER,
+  HISTORICAL_OAUTH_SELECTION_MARKER,
+  HISTORICAL_PROVIDER_SELECTION_MARKER
+} from '../codex-lb/desktop-bridge-migration/historical-toml.js'
 
 export const CODEX_APP_UI_STATE_SNAPSHOT_SCHEMA = 'sks.codex-app-ui-state-snapshot.v1'
 
@@ -17,6 +22,9 @@ export const PROJECT_LOCAL_FORBIDDEN_CODEX_KEYS = [
 const HOST_OWNED_KEY_RE = /^(?:model|model_reasoning_effort|openai_base_url|chatgpt_base_url|apps_mcp_product_sku|model_provider|model_providers(?:\.|$)|notify|profile|profiles(?:\.|$)|experimental_realtime_ws_base_url|otel(?:\.|$)|features\.fast_mode|service_tier|user\.fast_mode(?:\.|$))/
 const SECRET_KEY_RE = /(?:key|token|secret|password|credential|cookie|authorization|auth|bearer|refresh|access|headers?|env)/i
 const SKS_GLOBAL_UI_LOCK_KEYS = new Set(['model_provider', 'model', 'model_reasoning_effort'])
+const RETIRED_SKS_SELECTION_MARKERS = new Set([
+  HISTORICAL_DESKTOP_COMPAT_MARKER, HISTORICAL_PROVIDER_SELECTION_MARKER, HISTORICAL_OAUTH_SELECTION_MARKER
+])
 const SKS_GLOBAL_UI_LOCK_CONTEXT_KEYS = new Set([
   'service_tier', 'model_provider', 'model', 'model_reasoning_effort',
   'approval_policy', 'sandbox_mode', 'web_search', 'notify', 'preferred_auth_method'
@@ -204,6 +212,8 @@ export function isSksOwnedGlobalUiLock(lines: string[], index: number) {
   if (!SKS_GLOBAL_UI_LOCK_KEYS.has(key)) return false
   const inlineComment = current.includes('#') ? current.slice(current.indexOf('#')) : ''
   if (isSksGlobalUiLockMarker(inlineComment)) return true
+  // A retired SKS provider selection carries its own marker on the line above.
+  if (key === 'model_provider' && RETIRED_SKS_SELECTION_MARKERS.has(String(lines[index - 1] || '').trim())) return true
   const lowerBound = Math.max(0, index - 16)
   for (let cursor = index - 1; cursor >= lowerBound; cursor -= 1) {
     const candidate = String(lines[cursor] || '').trim()
@@ -219,8 +229,10 @@ export function isSksOwnedGlobalUiLock(lines: string[], index: number) {
   return false
 }
 
+// Not "SKS moved machine-local Codex config": the keys under it are the
+// user's own, moved from a project config (see isSksModeLockMarker).
 function isSksGlobalUiLockMarker(value: string) {
-  return /^#\s*(?:SKS|Sneakoscope)\b.*(?:moved machine-local Codex config|forced fast UI|legacy (?:provider|model|reasoning) lock|managed (?:Codex )?(?:provider|model|reasoning)|codex-lb (?:provider|model|reasoning))/i.test(String(value || '').trim())
+  return /^#\s*(?:SKS|Sneakoscope)\b.*(?:forced fast UI|legacy (?:provider|model|reasoning) lock|managed (?:Codex )?(?:provider|model|reasoning)|codex-lb (?:provider|model|reasoning))/i.test(String(value || '').trim())
 }
 
 export function scanProjectLocalForbiddenKeys(text: string) {

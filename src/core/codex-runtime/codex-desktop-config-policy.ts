@@ -212,11 +212,13 @@ export async function safeWriteCodexConfigToml(
     expectedBeforeMode?: number
   } = {}
 ) {
+  // No mode-lock removal here: this writer runs on every catalog sync,
+  // provider change and context toggle, and must never take the user's
+  // `model` with it. Legacy locks are the fast-mode normalizer's job.
   return writeCodexConfigGuarded({
     configPath,
     before: String(current || ''),
     cause: tag,
-    removeTopLevelModeLocks: true,
     ...(opts.preserveFastUiKeys === undefined ? {} : { preserveFastUiKeys: opts.preserveFastUiKeys }),
     ...(opts.verifyUnchangedBeforeWrite === undefined ? {} : { verifyUnchangedBeforeWrite: opts.verifyUnchangedBeforeWrite }),
     ...(opts.expectedBeforeExists === undefined ? {} : { expectedBeforeExists: opts.expectedBeforeExists }),

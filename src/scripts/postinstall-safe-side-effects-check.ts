@@ -68,7 +68,7 @@ assertGate(
   !desktopConfigPolicy.includes("'computer_use = true'")
     && !desktopConfigPolicy.includes('upsertTomlTableKey')
     && desktopConfigPolicy.includes('removeLegacyTopLevelCodexModeLocks')
-    && codexConfigGuard.includes('hasSksModeLockProvenance'),
+    && codexConfigGuard.includes('sksModeLockProvenance'),
   'postinstall must not seed stable feature flags and must preserve host-owned model choices'
 );
 

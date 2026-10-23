@@ -27,6 +27,18 @@
   reach Codex as sent — `usage_limit_reached` with its `resets_at` and no
   invented Retry-After, `context_length_exceeded`, `previous_response_not_found`
   — minus any credential in the body. Routing refusals answer 409 on every path.
+- SKS no longer deletes the model you picked in Codex. Guarded config writes
+  (catalog sync, provider changes, 1M context) stopped treating SKS's own
+  "moved machine-local Codex config" comment as proof that the `model` line
+  under it was SKS's, and a legacy SKS lock marker now goes with the lock it
+  vouched for.
+- The "GPT-5.5 is outdated, switching to GPT-6.1" notice for a model you never
+  chose: SKS no longer rewrites the provider's model-migration pointer, and
+  `doctor --fix` / `sks update` remove `gpt-5.5` and `model_provider =
+  "codex-lb"` pins that SKS 4.x left in its role files and project configs
+  (backed up first) when the active catalog lists the model as retired.
+- The Codex Desktop default model is a Codex-LB model again: OpenRouter rows
+  sorted first, so with no `model` set Codex picked an OpenRouter model.
 
 ## [10.7.0] - 2026-10-20
 

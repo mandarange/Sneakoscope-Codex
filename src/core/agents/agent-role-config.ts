@@ -16,6 +16,7 @@ import {
   managedAgentRoleOwnsText
 } from '../managed-assets/managed-assets-manifest.js'
 import { installOfficialSubagentAgentConfigs, refreshGlobalOfficialSubagentAgentConfigs } from '../subagents/official-subagent-config.js'
+import { reconcileStaleSksModelPins } from './sks-model-pin-hygiene.js'
 
 export const AGENT_ROLE_CONFIG_REPAIR_SCHEMA = 'sks.agent-role-config-repair.v1'
 
@@ -38,6 +39,7 @@ export async function repairAgentRoleConfigs(input: {
     ...(input.globalRuntimeRoot ? { globalRuntimeRoot: input.globalRuntimeRoot } : {}),
     fix: input.apply === true
   })
+  const modelPinHygiene = await reconcileStaleSksModelPins({ root, codexHome, fix: input.apply === true })
   const officialRepair = await installOfficialSubagentAgentConfigs(root, { apply: input.apply === true })
   const globalRepair = path.join(root, '.codex') === codexHome
     ? null
@@ -58,7 +60,7 @@ export async function repairAgentRoleConfigs(input: {
     schema: AGENT_ROLE_CONFIG_REPAIR_SCHEMA,
     generated_at: nowIso(),
     ok: input.apply
-      ? requiredFixes === appliedFixes && manualBlockers.length === 0 && retiredRoleCleanup.ok
+      ? requiredFixes === appliedFixes && manualBlockers.length === 0 && retiredRoleCleanup.ok && modelPinHygiene.errors.length === 0
       : manualBlockers.length === 0 && retiredRoleCleanup.ok && (globalRepair?.stale.length || 0) === 0,
     apply: input.apply === true,
     missing,
@@ -71,12 +73,14 @@ export async function repairAgentRoleConfigs(input: {
     manual_blockers: manualBlockers,
     manifest_role_ids: MANAGED_OFFICIAL_SUBAGENT_ROLES.map((role) => role.id),
     retired_role_cleanup: retiredRoleCleanup,
+    model_pin_hygiene: modelPinHygiene,
     warnings_suppressed: true,
     blockers: [
       ...manualBlockers,
       ...(!input.apply ? (globalRepair?.stale.map((file) => `stale_global_official_subagent_agent:${globalPath(file)}`) || []) : []),
       ...(input.apply && requiredFixes !== appliedFixes ? ['agent_role_config_repair_incomplete'] : []),
-      ...(!retiredRoleCleanup.ok ? ['retired_agent_role_cleanup_incomplete'] : [])
+      ...(!retiredRoleCleanup.ok ? ['retired_agent_role_cleanup_incomplete'] : []),
+      ...modelPinHygiene.errors.map((error) => `model_pin_hygiene_failed:${error}`)
     ]
   }
   if (input.reportPath) await writeJsonAtomic(input.reportPath, report)
