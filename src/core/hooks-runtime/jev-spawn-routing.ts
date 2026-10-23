@@ -139,7 +139,7 @@ async function openRouterOnlySpawnRouting(
   const requestedEffort = String(input.reasoning_effort || '') || null;
   const agent = String(input.agent_type || input.agentType || '').trim() || null;
   const task = spawnTask(input, { items: true });
-  const choice: ChildModelChoice | null = task && !parentState?.jev_execution_plan
+  const choice: ChildModelChoice | null = task
     ? await chooseChildModel({ root, task, role: agent, requestedModel: requested, requestedEffort, state, profile: childModelListProfile(allowlist) })
       .catch(() => fallbackChildModel(state, requested, 'consult_failed', requestedEffort))
     : fallbackChildModel(state, requested, 'empty_task', requestedEffort);
@@ -207,6 +207,9 @@ async function tierSpawnRewrite(
   }
   const task = spawnTask(input);
   if (!task) return null;
+  // This turn's plan seals its spawns while it is fresh and its source still
+  // matches. A stale one is not a reason to seal anything: the deep-tier
+  // fallback it used to take ran every later child on the deepest model.
   const boundPlan = state?.jev_execution_plan;
   const boundTier = state?.jev_turn_tier;
   if (boundPlan && boundTier?.model && boundTier?.effort && Number(boundPlan.expires_at || 0) > Date.now()) {
@@ -217,10 +220,6 @@ async function tierSpawnRewrite(
       if (input.model === next.model && input.reasoning_effort === next.reasoning_effort && input.fork_turns === next.fork_turns) return null;
       return next;
     }
-  }
-  if (boundPlan) {
-    const fallback = roleTierFallback(agent);
-    return { ...input, model: fallback.model, reasoning_effort: fallback.effort, ...forkTurns };
   }
   const decision = await consultJevTurnModel({ root, prompt: task, roleId: 'spawn' }).catch(() => null);
   if (!decision?.called) return null;

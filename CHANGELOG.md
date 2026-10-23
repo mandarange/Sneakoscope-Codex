@@ -43,6 +43,9 @@
   (backed up first) when the active catalog lists the model as retired.
 - The Codex Desktop default model is a Codex-LB model again: OpenRouter rows
   sorted first, so with no `model` set Codex picked an OpenRouter model.
+- A Jev plan no longer outlives its turn: a stale one sent every later child to
+  the deepest model and switched off Jev's per-spawn model choice in
+  OpenRouter Only mode.
 
 ## [10.7.0] - 2026-10-20
 
