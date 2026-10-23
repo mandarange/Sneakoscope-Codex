@@ -1,6 +1,6 @@
 import dns from 'node:dns/promises';
 import net from 'node:net';
-import { BRIDGE_OFFICIAL_ROUTE_ID, type BridgeProviderId, type BridgeRoutingPolicy, type ProviderSessionPin } from '../bridge-contracts.js';
+import { BRIDGE_OFFICIAL_ROUTE_ID, type BridgeProviderId, type BridgeRouteTargetId, type BridgeRoutingPolicy, type ProviderSessionPin } from '../bridge-contracts.js';
 import {
   canonicalizeBridgeModelId,
   normalizeBridgeUpstreamModelId,
@@ -277,19 +277,72 @@ export function desktopBridgeOfficialPassthroughEnabled(config: DesktopBridgeCon
 }
 
 /**
- * A route context that carries the request to the official upstream with the
- * client's own identity. It never creates or requires a session pin: there is
- * exactly one official upstream, so thread affinity is inherent, and pins stay
- * a provider-routing concern.
+ * The pin a thread gets on a route. A thread that moves to another target keeps
+ * the target it left as `handoff_from` (sticky across later moves within the
+ * new target), so its history's account-bound items are stripped from then on.
  */
-function officialRouteContext(publicModel: string, policy: BridgeRoutingPolicy, upstreamModel?: string): DesktopBridgeRouteContext {
+function mintSessionPin(
+  sessionId: string,
+  target: { provider_id: BridgeRouteTargetId; upstream_model: string },
+  publicModel: string,
+  policy: BridgeRoutingPolicy,
+  previous: ProviderSessionPin | null,
+): ProviderSessionPin {
+  const handoffFrom = previous && previous.provider_id !== target.provider_id ? previous.provider_id : previous?.handoff_from;
+  return {
+    thread_id: sessionId,
+    provider_id: target.provider_id,
+    public_model: publicModel,
+    upstream_model: target.upstream_model,
+    catalog_generation: policy.catalog_generation,
+    route_policy_generation: policy.policy_generation,
+    created_at: new Date().toISOString(),
+    ...(handoffFrom ? { handoff_from: handoffFrom } : {}),
+  };
+}
+
+/**
+ * A route context that carries the request to the official upstream with the
+ * client's own identity. The pin, when the request names a thread and a model,
+ * keeps that thread on the official identity after bare official ids move to a
+ * provider (auth priority, Codex-LB registration).
+ */
+function officialRouteContext(
+  publicModel: string,
+  policy: BridgeRoutingPolicy,
+  upstreamModel?: string,
+  pin: ProviderSessionPin | null = null,
+): DesktopBridgeRouteContext {
   return {
     provider_id: BRIDGE_OFFICIAL_ROUTE_ID,
     public_model: publicModel,
     upstream_model: upstreamModel || publicModel,
     catalog_generation: policy.catalog_generation,
     route_policy_generation: policy.policy_generation,
-    session_pin: null,
+    session_pin: pin,
+  };
+}
+
+/** A pin honored as is; aged generation stamps are re-stamped, never refused. */
+function pinnedRouteContext(pin: ProviderSessionPin, publicModel: string, policy: BridgeRoutingPolicy): DesktopBridgeRouteContext {
+  const aged = pin.catalog_generation !== policy.catalog_generation
+    || pin.route_policy_generation !== policy.policy_generation;
+  return {
+    provider_id: pin.provider_id,
+    public_model: publicModel,
+    upstream_model: pin.upstream_model,
+    // Always the live generations: the context is re-checked against the
+    // current policy downstream, so replaying the pin's own stamps here would
+    // fail that check for the very drift this branch just forgave.
+    catalog_generation: policy.catalog_generation,
+    route_policy_generation: policy.policy_generation,
+    session_pin: aged
+      ? {
+          ...pin,
+          catalog_generation: policy.catalog_generation,
+          route_policy_generation: policy.policy_generation,
+        }
+      : pin,
   };
 }
 
@@ -302,6 +355,9 @@ export function resolveBridgeRequestRoute(
   const sessionId = request.session_id ? canonicalSessionId(request.session_id) : null;
   const pin = sessionId ? pins.find((entry) => entry.thread_id === sessionId) || null : null;
   if (pin && pin.public_model === publicModel) {
+    // The official upstream serves any model under the client's own identity,
+    // so an official pin needs no route: it holds after the bare id moved.
+    if (pin.provider_id === BRIDGE_OFFICIAL_ROUTE_ID) return pinnedRouteContext(pin, publicModel, policy);
     // A pin exists to keep a thread on its provider, and that is the only thing
     // worth refusing over. Its generation stamps are bookkeeping: since
     // `policy_generation` digests the entire route map, any unrelated catalog
@@ -313,40 +369,14 @@ export function resolveBridgeRequestRoute(
     if (!current || current.provider_id !== pin.provider_id || current.upstream_model !== pin.upstream_model) {
       throw new DesktopBridgeError('session_pin_route_unavailable');
     }
-    const aged = pin.catalog_generation !== policy.catalog_generation
-      || pin.route_policy_generation !== policy.policy_generation;
-    return {
-      provider_id: pin.provider_id,
-      public_model: publicModel,
-      upstream_model: pin.upstream_model,
-      // Always the live generations: the context is re-checked against the
-      // current policy downstream, so replaying the pin's own stamps here would
-      // fail that check for the very drift this branch just forgave.
-      catalog_generation: policy.catalog_generation,
-      route_policy_generation: policy.policy_generation,
-      session_pin: aged
-        ? {
-            ...pin,
-            catalog_generation: policy.catalog_generation,
-            route_policy_generation: policy.policy_generation,
-          }
-        : pin,
-    };
+    return pinnedRouteContext(pin, publicModel, policy);
   }
   const route = policy.model_routes[publicModel];
   if (!route) throw new DesktopBridgeError('catalog_model_route_missing');
+  const nextPin = sessionId ? mintSessionPin(sessionId, route, publicModel, policy, pin) : null;
   // An explicit `openai` route means official passthrough: the request keeps
-  // the client's own identity, and no provider pin is minted for the thread.
-  if (route.provider_id === BRIDGE_OFFICIAL_ROUTE_ID) return officialRouteContext(publicModel, policy, route.upstream_model);
-  const nextPin = sessionId ? {
-    thread_id: sessionId,
-    provider_id: route.provider_id,
-    public_model: publicModel,
-    upstream_model: route.upstream_model,
-    catalog_generation: policy.catalog_generation,
-    route_policy_generation: policy.policy_generation,
-    created_at: new Date().toISOString(),
-  } satisfies ProviderSessionPin : null;
+  // the client's own identity, and the thread is pinned to it.
+  if (route.provider_id === BRIDGE_OFFICIAL_ROUTE_ID) return officialRouteContext(publicModel, policy, route.upstream_model, nextPin);
   return {
     provider_id: route.provider_id,
     public_model: publicModel,
@@ -357,12 +387,45 @@ export function resolveBridgeRequestRoute(
   };
 }
 
-/** The provider this request's thread is pinned to, if any. */
-function threadPinProvider(request: DesktopBridgeRouteRequest, config: PreparedDesktopBridgeConfig): string | null {
+function threadPin(request: DesktopBridgeRouteRequest, pins: readonly ProviderSessionPin[]): ProviderSessionPin | null {
   if (!request.session_id) return null;
   let threadId: string;
   try { threadId = canonicalSessionId(request.session_id); } catch { return null; }
-  return config.providerSessionPins.find((pin) => pin.thread_id === threadId)?.provider_id ?? null;
+  return pins.find((pin) => pin.thread_id === threadId) ?? null;
+}
+
+/** The provider this request's thread is pinned to, if any. */
+function threadPinProvider(request: DesktopBridgeRouteRequest, config: PreparedDesktopBridgeConfig): string | null {
+  return threadPin(request, config.providerSessionPins)?.provider_id ?? null;
+}
+
+/** The model a thread is pinned to, for a request that names none (a Responses sub-endpoint such as a cancel). */
+export function pinnedPublicModel(threadId: string | null, config: PreparedDesktopBridgeConfig): string | null {
+  if (!threadId) return null;
+  return threadPin({ session_id: threadId } as DesktopBridgeRouteRequest, config.providerSessionPins)?.public_model ?? null;
+}
+
+const RESPONSES_PATH_PREFIXES = ['/backend-api/codex/responses', '/api/v1/responses', '/v1/responses'];
+
+/** A Responses create or one of its sub-endpoints: the requests that carry a thread's conversation. */
+export function isResponsesFamilyPath(pathname: string): boolean {
+  return RESPONSES_PATH_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
+
+/**
+ * The route target a thread moves FROM on this request, or null when it stays
+ * (or was never pinned). Read before the new pin is written. A request that
+ * re-pins nothing (a model-less official call such as a file upload) moves
+ * nothing.
+ */
+export function threadRouteMove(
+  request: DesktopBridgeRouteRequest,
+  route: DesktopBridgeRouteContext,
+  config: PreparedDesktopBridgeConfig,
+): { from: BridgeRouteTargetId; to: BridgeRouteTargetId } | null {
+  if (!route.session_pin) return null;
+  const previous = threadPin(request, config.providerSessionPins);
+  return previous && previous.provider_id !== route.provider_id ? { from: previous.provider_id, to: route.provider_id } : null;
 }
 
 export function assertDesktopBridgeRouteContext(
@@ -376,14 +439,26 @@ export function assertDesktopBridgeRouteContext(
     route = resolver(request, policy, config.providerSessionPins);
   } catch (error) {
     // Unclaimed models may use the official identity. A failed provider pin
-    // must never move an existing thread to another account.
+    // must never move an existing thread to another account, and neither may a
+    // thread pinned to a provider that names an unknown model: its history
+    // belongs to that provider's account. Model-less requests outside the
+    // Responses family (models, files, wham) keep the client's own identity.
     if (desktopBridgeOfficialPassthroughEnabled(config)
       && error instanceof DesktopBridgeError
       && error.code === 'catalog_model_route_missing') {
       const model = canonicalizeBridgeModelId(request.public_model) || '';
       const live = model ? policy.model_routes[model] : undefined;
+      const pin = threadPin(request, config.providerSessionPins);
+      const responses = isResponsesFamilyPath(request.pathname);
+      if (pin && pin.provider_id !== BRIDGE_OFFICIAL_ROUTE_ID && responses) {
+        // OpenRouter Only Mode names its own refusal where it applies.
+        assertOpenRouterOnlyRoute(request, officialRouteContext(model, policy), config);
+        throw error;
+      }
       if (!live || live.provider_id === BRIDGE_OFFICIAL_ROUTE_ID) {
-        route = officialRouteContext(model, policy, live?.upstream_model);
+        const sessionId = model && responses && request.session_id ? canonicalSessionId(request.session_id) : null;
+        const target = { provider_id: BRIDGE_OFFICIAL_ROUTE_ID, upstream_model: live?.upstream_model || model };
+        route = officialRouteContext(model, policy, live?.upstream_model, sessionId ? mintSessionPin(sessionId, target, model, policy, pin) : null);
       } else throw error;
     } else if (error instanceof DesktopBridgeError && error.code === 'session_pin_route_unavailable'
       && openRouterOnlyRefusesPinnedProvider(request, threadPinProvider(request, config), config)) {
@@ -400,7 +475,8 @@ export function assertDesktopBridgeRouteContext(
     if (route.catalog_generation !== policy.catalog_generation || route.route_policy_generation !== policy.policy_generation) {
       throw new DesktopBridgeError('session_pin_route_unavailable');
     }
-    if (route.session_pin) throw new DesktopBridgeError('bridge_session_pin_invalid');
+    // A model-less official request (models, files) carries no pin.
+    assertRouteSessionPin(request, route, false);
     return route;
   }
   const existingPin = request.session_id ? config.providerSessionPins.find((pin) =>
@@ -415,20 +491,7 @@ export function assertDesktopBridgeRouteContext(
   if (route.catalog_generation !== policy.catalog_generation || route.route_policy_generation !== policy.policy_generation) {
     throw new DesktopBridgeError('session_pin_route_unavailable');
   }
-  if (request.session_id) {
-    const sessionId = canonicalSessionId(request.session_id);
-    if (!route.session_pin
-      || route.session_pin.thread_id !== sessionId
-      || route.session_pin.provider_id !== route.provider_id
-      || route.session_pin.public_model !== route.public_model
-      || route.session_pin.upstream_model !== route.upstream_model
-      || route.session_pin.catalog_generation !== route.catalog_generation
-      || route.session_pin.route_policy_generation !== route.route_policy_generation) {
-      throw new DesktopBridgeError('bridge_session_pin_invalid');
-    }
-  } else if (route.session_pin) {
-    throw new DesktopBridgeError('bridge_session_pin_invalid');
-  }
+  assertRouteSessionPin(request, route, true);
   const provider = config.providers[route.provider_id];
   if (!provider || !provider.enabled) throw new DesktopBridgeError('bridge_provider_route_unavailable');
   if (provider.credential_state !== 'ready') throw new DesktopBridgeError(`${route.provider_id.replace('-', '_')}_credential_unavailable`);
@@ -441,9 +504,40 @@ export function assertDesktopBridgeRouteContext(
   return route;
 }
 
+/**
+ * The pin a context carries must be exactly the one this request earns:
+ * provider routes always pin a named thread; official routes pin it when the
+ * request names a model. A request without a thread carries none.
+ */
+function assertRouteSessionPin(request: DesktopBridgeRouteRequest, route: DesktopBridgeRouteContext, required: boolean): void {
+  if (!request.session_id) {
+    if (route.session_pin) throw new DesktopBridgeError('bridge_session_pin_invalid');
+    return;
+  }
+  if (!route.session_pin) {
+    if (required) throw new DesktopBridgeError('bridge_session_pin_invalid');
+    return;
+  }
+  const sessionId = canonicalSessionId(request.session_id);
+  if (route.session_pin.thread_id !== sessionId
+    || route.session_pin.provider_id !== route.provider_id
+    || route.session_pin.public_model !== route.public_model
+    || route.session_pin.upstream_model !== route.upstream_model
+    || route.session_pin.catalog_generation !== route.catalog_generation
+    || route.session_pin.route_policy_generation !== route.route_policy_generation) {
+    throw new DesktopBridgeError('bridge_session_pin_invalid');
+  }
+}
+
+/**
+ * Resolve the route and write the thread's pin. `beforeBind` sees the final
+ * route while the thread's previous pin is still in place, so a request it
+ * refuses (a move the history cannot survive) leaves the thread where it was.
+ */
 export async function resolveAndBindDesktopBridgeRouteContext(
   request: DesktopBridgeRouteRequest,
   config: PreparedDesktopBridgeConfig,
+  beforeBind?: (route: DesktopBridgeRouteContext) => void,
 ): Promise<DesktopBridgeRouteContext> {
   // Steady state: the thread's pin is already persisted exactly as this route
   // needs it, so there is nothing to write and nothing to wait for. Every other
@@ -455,11 +549,14 @@ export async function resolveAndBindDesktopBridgeRouteContext(
   let steady: DesktopBridgeRouteContext | null = null;
   try { steady = assertDesktopBridgeRouteContext(request, config); } catch { steady = null; }
   const steadyPin = steady?.session_pin;
-  if (steady && !steadyPin) return steady;
   const persisted = steadyPin ? pinsRead.find((entry) => entry.thread_id === steadyPin.thread_id) : undefined;
-  if (steady && steadyPin && persisted && sameSessionPin(persisted, steadyPin)) return steady;
+  if (steady && (!steadyPin || (persisted && sameSessionPin(persisted, steadyPin)))) {
+    beforeBind?.(steady);
+    return steady;
+  }
   return withSessionPinMutation(config, async () => {
     const route = steady && config.providerSessionPins === pinsRead ? steady : assertDesktopBridgeRouteContext(request, config);
+    beforeBind?.(route);
     const pin = route.session_pin;
     if (!pin) return route;
     const existing = config.providerSessionPins.find((entry) => entry.thread_id === pin.thread_id) || null;
@@ -504,7 +601,8 @@ function sameSessionPin(left: ProviderSessionPin, right: ProviderSessionPin): bo
     && left.public_model === right.public_model
     && left.upstream_model === right.upstream_model
     && left.catalog_generation === right.catalog_generation
-    && left.route_policy_generation === right.route_policy_generation;
+    && left.route_policy_generation === right.route_policy_generation
+    && left.handoff_from === right.handoff_from;
 }
 
 export function canonicalSessionId(value: unknown): string {
@@ -790,15 +888,19 @@ function assertRegistryAndPolicy(config: DesktopBridgeConfig, registry: DesktopB
     }
   }
   const pinIds = new Set<string>();
+  // An official pin stays valid when passthrough is later turned off: the
+  // thread then fails its own requests, while the bridge still starts.
+  const pinTargets: readonly string[] = [...ids, BRIDGE_OFFICIAL_ROUTE_ID];
   for (const pin of config.providerSessionPins) {
     const keys = Object.keys(pin as unknown as Record<string, unknown>);
     if (keys.some((key) => ![
       'thread_id', 'provider_id', 'public_model', 'upstream_model',
-      'catalog_generation', 'route_policy_generation', 'created_at',
+      'catalog_generation', 'route_policy_generation', 'created_at', 'handoff_from',
     ].includes(key))
       || canonicalSessionId(pin.thread_id) !== pin.thread_id
       || pinIds.has(pin.thread_id)
-      || !ids.includes(pin.provider_id)
+      || !pinTargets.includes(pin.provider_id)
+      || (pin.handoff_from !== undefined && (!pinTargets.includes(pin.handoff_from) || pin.handoff_from === pin.provider_id))
       || canonicalizeBridgeModelId(pin.public_model) !== pin.public_model
       || normalizeBridgeUpstreamModelId(pin.upstream_model) !== pin.upstream_model
       || !pin.catalog_generation

@@ -65,7 +65,8 @@ export function resolveBridgeRequestRoute(
   }
 
   const threadPin = request.thread_id ? findSessionPin(options.session_pins, request.thread_id) : null;
-  const pin = threadPin && canonicalizeBridgeModelId(threadPin.public_model) === model ? threadPin : null;
+  // An official pin (provider `openai`) routes no provider; the explain path reports provider routes only.
+  const pin = threadPin && threadPin.provider_id !== 'openai' && canonicalizeBridgeModelId(threadPin.public_model) === model ? threadPin : null;
   // A pin that cannot be replayed exactly as recorded still constrains the
   // request: the fresh route has to keep the thread on the same provider and
   // upstream model. `null` here means there is nothing to keep it on.
@@ -79,7 +80,7 @@ export function resolveBridgeRequestRoute(
   const pinStillAvailable = pinClaim && qualifiedPinRoute && qualifiedPolicyRoute
     && sameTarget(qualifiedPinRoute, pinClaim) && sameTarget(qualifiedPolicyRoute, pinClaim);
   if (pin && (pinAffinity === 'honored' || pinStillAvailable)) {
-    const route = { provider_id: pin.provider_id, upstream_model: pin.upstream_model } as const;
+    const route = { provider_id: pin.provider_id as BridgeProviderId, upstream_model: pin.upstream_model } as const;
     const providerBlocker = validateProviderRoute(route, request.requested_endpoint_origin, options.registry, options.route_index);
     if (providerBlocker) return blocked(base, providerBlocker);
     return {

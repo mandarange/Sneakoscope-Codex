@@ -71,7 +71,7 @@ test('R26: ambiguous public IDs are explicit conflicts with no silent provider p
   }]);
 });
 
-test('codex-lb models sort before openrouter rows and default to picker priority 100', async () => {
+test('codex-lb models sort before openrouter rows: their own priority, else 500; openrouter 1000+', async () => {
   const registry = await registryFixture();
   const result = buildCombinedBridgeCatalog(registry, {
     catalogs: {
@@ -94,16 +94,50 @@ test('codex-lb models sort before openrouter rows and default to picker priority
     created_at: '2026-08-08T00:00:00.000Z'
   });
   assert.equal(result.ok, true, JSON.stringify(result.blockers));
-  // Ordering, not alphabet, decides provider precedence: every codex-lb row
-  // precedes every openrouter row so gateway models survive picker truncation.
+  // Codex sorts by ascending priority; every codex-lb row precedes every
+  // openrouter row so gateway models survive picker truncation and the
+  // default Codex computes is never an OpenRouter model.
   assert.deepEqual(
     result.catalog.models.map((model) => `${model.provider_id}:${model.public_id}`),
     ['codex-lb:aa-lb-pinned', 'codex-lb:zz-lb-model', 'openrouter:aa-or-model']
   );
   const byId = new Map(result.catalog.models.map((model) => [model.public_id, model]));
-  assert.equal(byId.get('zz-lb-model')?.priority, 100);
+  assert.equal(byId.get('zz-lb-model')?.priority, 500);
   assert.equal(byId.get('aa-lb-pinned')?.priority, 7);
-  assert.equal(byId.get('aa-or-model')?.priority, 1);
+  assert.equal(byId.get('aa-or-model')?.priority, 1000);
+});
+
+test('the default Codex computes from the catalog is the newest listed Codex-LB model', async () => {
+  const registry = await registryFixture();
+  const result = buildCombinedBridgeCatalog(registry, {
+    catalogs: {
+      'codex-lb': {
+        provider_id: 'codex-lb' as const,
+        state: 'verified' as const,
+        generation: 'lb-generation',
+        models: { models: [
+          { slug: 'gpt-5.5', display_name: 'GPT-5.5', priority: 10, upgrade: { model: 'gpt-6-sol', migration_markdown: 'Switch to GPT-6 Sol.' } },
+          { slug: 'gpt-6-sol', display_name: 'GPT-6 Sol', priority: 2 },
+          { slug: 'gpt-6.1-sol', display_name: 'GPT-6.1 Sol', priority: 1 }
+        ] }
+      },
+      openrouter: {
+        provider_id: 'openrouter' as const,
+        state: 'verified' as const,
+        generation: 'or-generation',
+        models: [{ id: 'aa-or-model', name: 'OR First Alphabetically' }, { id: 'zz-or-model', name: 'OR Last' }]
+      }
+    },
+    created_at: '2026-10-22T00:00:00.000Z'
+  });
+  assert.equal(result.ok, true, JSON.stringify(result.blockers));
+  // Codex: sort by ascending priority, default = first picker-visible row.
+  const ordered = [...result.catalog.models].sort((left, right) => left.priority - right.priority);
+  assert.deepEqual(result.catalog.models.map((model) => model.public_id), ordered.map((model) => model.public_id), 'emitted in Codex order');
+  assert.equal(ordered.find((model) => model.visibility === 'list')?.public_id, 'gpt-6.1-sol');
+  assert.deepEqual(result.catalog.models.filter((model) => model.provider_id === 'openrouter').map((model) => model.priority), [1000, 1001]);
+  // The provider's own migration pointer is served as is.
+  assert.deepEqual(result.catalog.models.find((model) => model.public_id === 'gpt-5.5')?.upgrade, { model: 'gpt-6-sol', migration_markdown: 'Switch to GPT-6 Sol.' });
 });
 
 test('deterministic catalog and route generations ignore observation time and contain no secrets', async () => {

@@ -219,18 +219,20 @@ test('the desktop-bridge restage stage skips itself under a test runner', async 
 });
 
 /**
- * The redaction keeps the upstream's error *identifiers* while still killing
- * its free text. Wholesale replacement erased both, so a gateway saying
- * "response not found" and one saying "rate limited" reached the user as the
- * identical sentence — this bridge's own redaction manufactured the
- * undiagnosable report. `code`/`type` are machine-shaped and carry no request
- * content; the message, which can echo request content, still dies at the
- * bridge.
+ * Codex-LB speaks the official protocol, so its error reaches Codex the way the
+ * official backend's does: status, code, type and message as sent, because
+ * Codex acts on them (`previous_response_not_found` resends the full input,
+ * `context_length_exceeded` compacts). A wrapper code erased exactly that. Only
+ * credentials die at the bridge: the key it injected, and any bearer token or
+ * `sk-` key the gateway echoed.
  */
-test('an upstream error keeps its identifiers and loses its text', async () => {
+test('a Codex-LB error reaches Codex as sent, minus any credential', async () => {
   const upstream = http.createServer((req, res) => {
     res.writeHead(404, { 'content-type': 'application/json' });
-    res.end(JSON.stringify({ error: { type: 'invalid_request_error', code: 'response_not_found', message: 'secret request echo: sk-live-abcdef' } }));
+    res.end(JSON.stringify({ error: {
+      type: 'invalid_request_error', code: 'previous_response_not_found', param: 'previous_response_id',
+      message: 'Previous response resp_1 not found (key unused-diagnostic-secret, Bearer sk-clb-abcdefghijklmnop1234)',
+    } }));
   });
   const upstreamPort = await listen(upstream);
   const bridgePort = await selectAvailableDesktopBridgePort('127.0.0.1');
@@ -252,12 +254,12 @@ test('an upstream error keeps its identifiers and loses its text', async () => {
     });
     assert.equal(body.status, 404, 'the status passes through untouched');
     const parsed = JSON.parse(body.text);
-    assert.equal(parsed.error.upstream_code, 'response_not_found', 'the identifier survives');
-    assert.equal(parsed.error.upstream_type, 'invalid_request_error');
-    assert.equal(body.text.includes('sk-live'), false, 'the free text does not');
-    assert.equal(body.text.includes('secret'), false);
-    assert.equal(parsed.error.message, 'bridge_upstream_request_failed');
-    assert.equal(body.text.includes('Upstream request failed'), false);
+    assert.equal(parsed.error.code, 'previous_response_not_found', 'the code Codex acts on survives');
+    assert.equal(parsed.error.type, 'invalid_request_error');
+    assert.equal(parsed.error.param, 'previous_response_id');
+    assert.equal(parsed.error.message, 'Previous response resp_1 not found (key [REDACTED], Bearer [REDACTED])');
+    assert.equal(body.text.includes('unused-diagnostic-secret'), false, 'the injected key never reaches the client');
+    assert.equal(body.text.includes('sk-clb'), false, 'nor does an echoed key');
   } finally {
     if (bridge) await stopDesktopBridge(bridge);
     await close(upstream);
@@ -266,12 +268,12 @@ test('an upstream error keeps its identifiers and loses its text', async () => {
 
 /**
  * The gateway's self-described transient ("type": "upstream_error", no code)
- * mislabelled as 404 used to become one 503 that Codex compact treats as
- * fatal (`unexpected status 503 Service Unavailable: Upstream request failed`).
- * The bridge now absorbs those transients internally. A genuine not-found —
- * a different type, or any specific code — still passes through as 404.
+ * mislabelled as 404 is absorbed by a bounded replay before Codex sees it. An
+ * unhealed one then reaches Codex as the gateway sent it — no translated 503,
+ * no invented Retry-After. A genuine not-found — a different type, or any
+ * specific code — passes through as 404 at once.
  */
-test('a gateway upstream_error 404 is replayed, then surfaced as 503 only after the budget is spent', async () => {
+test('a gateway upstream_error 404 is replayed, then surfaced as sent once the budget is spent', async () => {
   // The gateway spells its transient in error.code (observed live:
   // bridge_upstream_status_404:upstream_error). An affinity miss often
   // lands on the right node on a later attempt, so the bridge replays the
@@ -314,8 +316,8 @@ test('a gateway upstream_error 404 is replayed, then surfaced as 503 only after 
     assert.equal(calls, 2, 'heals on the first replay');
     mode = 'always404'; calls = 0;
     const exhausted = await call();
-    assert.equal(exhausted.status, 503, 'an unhealed transient surfaces only after the budget');
-    assert.equal(exhausted.retryAfter, '10');
+    assert.equal(exhausted.status, 404, 'an unhealed transient surfaces as sent, only after the budget');
+    assert.equal(exhausted.retryAfter, undefined, 'no advice the gateway did not give');
     assert.equal(calls, 1 + TRANSIENT_UPSTREAM_REPLAY_LIMIT, 'replays stay bounded');
     mode = 'real'; calls = 0;
     const real = await call();
@@ -373,7 +375,7 @@ test('a gateway upstream_error 502 is replayed until it heals', async () => {
   }
 });
 
-test('an unidentified 502 is replayed, then surfaced without the gateway sentence', async () => {
+test('an unidentified 502 is replayed, then surfaced as sent', async () => {
   let calls = 0;
   const upstream = http.createServer((_req, res) => {
     calls += 1;
@@ -386,13 +388,10 @@ test('an unidentified 502 is replayed, then surfaced without the gateway sentenc
   try {
     bridge = await startDesktopBridge(bridgeConfig(bridgePort, upstreamPort, 2_000), { writeState: false });
     const exhausted = await postResponses(bridgePort);
-    assert.equal(exhausted.status, 503);
-    assert.equal(exhausted.retryAfter, '10');
+    assert.equal(exhausted.status, 502);
+    assert.equal(exhausted.retryAfter, undefined);
     assert.equal(calls, 1 + TRANSIENT_UPSTREAM_REPLAY_LIMIT);
-    const parsed = JSON.parse(exhausted.text);
-    assert.equal(parsed.error.message, 'temporary_upstream_failure');
-    assert.equal(exhausted.text.includes('Upstream request failed'), false);
-    assert.equal(exhausted.text.includes('Bad Gateway'), false);
+    assert.equal(exhausted.text, '<html>Bad Gateway</html>');
   } finally {
     if (bridge) await stopDesktopBridge(bridge);
     await close(upstream);
@@ -428,10 +427,22 @@ test('a compact-shaped 503 timeout heals on a later fresh replay', async () => {
   }
 });
 
-test('a 429 keeps status and becomes rate_limited with Retry-After', async () => {
+/**
+ * `usage_limit_reached` is terminal until its `resets_at`: a forced Retry-After
+ * told Codex to hammer an exhausted account. Codex-LB's own back-pressure
+ * carries its own Retry-After, which travels as sent.
+ */
+test('a Codex-LB 429 keeps its status, body and advice, and gains none', async () => {
+  const resetsAt = 1_767_225_600;
+  let mode: 'usage' | 'backpressure' = 'usage';
   const upstream = http.createServer((_req, res) => {
-    res.writeHead(429, { 'content-type': 'application/json' });
-    res.end(JSON.stringify({ error: { code: 'upstream_error', message: 'Upstream request failed' } }));
+    if (mode === 'usage') {
+      res.writeHead(429, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ error: { type: 'usage_limit_reached', code: 'usage_limit_reached', message: 'The usage limit has been reached', resets_at: resetsAt } }));
+      return;
+    }
+    res.writeHead(429, { 'content-type': 'application/json', 'retry-after': '5' });
+    res.end(JSON.stringify({ error: { type: 'rate_limit_error', code: 'rate_limit_error', message: 'proxy_overloaded' } }));
   });
   const upstreamPort = await listen(upstream);
   const bridgePort = await selectAvailableDesktopBridgePort('127.0.0.1');
@@ -440,11 +451,33 @@ test('a 429 keeps status and becomes rate_limited with Retry-After', async () =>
     bridge = await startDesktopBridge(bridgeConfig(bridgePort, upstreamPort, 2_000), { writeState: false });
     const limited = await postResponses(bridgePort);
     assert.equal(limited.status, 429);
-    assert.equal(limited.retryAfter, '10');
-    const parsed = JSON.parse(limited.text);
-    assert.equal(parsed.error.message, 'rate_limited');
-    assert.equal(parsed.error.upstream_code, 'upstream_error');
-    assert.equal(limited.text.includes('Upstream request failed'), false);
+    assert.equal(limited.retryAfter, undefined, 'a terminal usage limit is never made retryable');
+    assert.deepEqual(JSON.parse(limited.text).error, { type: 'usage_limit_reached', code: 'usage_limit_reached', message: 'The usage limit has been reached', resets_at: resetsAt });
+    mode = 'backpressure';
+    const pressured = await postResponses(bridgePort);
+    assert.equal(pressured.status, 429);
+    assert.equal(pressured.retryAfter, '5');
+    assert.equal(JSON.parse(pressured.text).error.code, 'rate_limit_error');
+  } finally {
+    if (bridge) await stopDesktopBridge(bridge);
+    await close(upstream);
+  }
+});
+
+test('a Codex-LB capacity failure without advice gains the Retry-After Codex needs to retry it', async () => {
+  const upstream = http.createServer((_req, res) => {
+    res.writeHead(400, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ error: { type: 'server_error', code: 'server_is_overloaded', message: 'Selected model is at capacity' } }));
+  });
+  const upstreamPort = await listen(upstream);
+  const bridgePort = await selectAvailableDesktopBridgePort('127.0.0.1');
+  let bridge: DesktopBridgeHandle | null = null;
+  try {
+    bridge = await startDesktopBridge(bridgeConfig(bridgePort, upstreamPort, 2_000), { writeState: false });
+    const overloaded = await postResponses(bridgePort);
+    assert.equal(overloaded.status, 400);
+    assert.equal(overloaded.retryAfter, '5');
+    assert.equal(JSON.parse(overloaded.text).error.code, 'server_is_overloaded');
   } finally {
     if (bridge) await stopDesktopBridge(bridge);
     await close(upstream);

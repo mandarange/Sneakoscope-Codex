@@ -168,9 +168,10 @@ function normalizeCodexLbBridgeCatalogModels(
         ...codexModelInfoFields(publicId, row, {
           tools: row.supports_tools === true || row.supports_tool_choice === true
         }),
-        // Authenticated gateway models outrank third-party catalog rows in the
-        // Desktop picker regardless of its sort direction on ties.
-        ...(typeof row.priority === 'number' ? {} : { priority: 100 })
+        // Codex sorts rows by ascending priority and makes the first listed
+        // one its default. Codex-LB's own priorities are kept; a row without
+        // one still sorts before every OpenRouter row (builder.ts, 1000+).
+        ...(typeof row.priority === 'number' ? {} : { priority: CODEX_LB_DEFAULT_PRIORITY })
       } as BridgeCatalogModel);
     } catch (error) {
       blockers.push(error instanceof Error ? error.message : `codex_lb_model_catalog_row_invalid:${index}`);
@@ -220,6 +221,11 @@ export const OPENROUTER_REASONING_LEVELS: readonly { readonly effort: string; re
 ];
 
 export const OPENROUTER_DEFAULT_REASONING_LEVEL = 'medium';
+
+/** Picker priority of a Codex-LB row that carries none (Codex sorts ascending). */
+export const CODEX_LB_DEFAULT_PRIORITY = 500;
+/** OpenRouter rows follow every Codex-LB row: 1000 + their place in the catalog. */
+export const OPENROUTER_PRIORITY_BASE = 1000;
 
 function openRouterReasoningLevels(): Record<string, string>[] {
   return OPENROUTER_REASONING_LEVELS.map((level) => ({ ...level }));

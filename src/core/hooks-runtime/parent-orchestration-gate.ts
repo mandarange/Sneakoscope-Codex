@@ -451,9 +451,7 @@ export async function evaluateParentOrchestrationGate(input: {
     const message = ledger.escapes === 0 ? escapeMessage(missionId, intent, next) : null;
     return { action: 'escape', reason: 'max_blocks_reached', message, jev: null };
   }
-  const jev: JevToolDelegationDecision = state?.jev_execution_plan
-    ? { called: false, choice: null, reason: 'turn_binding_keeps_delegation_baseline' }
-    : await consultJevToolDelegation({
+  const jev: JevToolDelegationDecision = await consultJevToolDelegation({
     root,
     missionGoal: missionGoal(state),
     toolName: intent.toolName,

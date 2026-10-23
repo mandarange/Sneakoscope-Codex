@@ -199,6 +199,22 @@ export interface BridgeProviderProfileStatus {
 
 export type BridgeRouteTargetId = BridgeProviderId | typeof BRIDGE_OFFICIAL_ROUTE_ID;
 
+/**
+ * How a route target answers Codex's remote compaction (a create whose input
+ * ends in `compaction_trigger`, or `POST /responses/compact`). `native`: the
+ * upstream implements it — the official backend, and Codex-LB, which runs it on
+ * the thread's own account — so the request travels like any other turn.
+ * `bridge_summary`: the upstream has none, and the bridge answers with a
+ * summary from the thread's own model (desktop-bridge/compaction-adapter.ts).
+ */
+export type BridgeRemoteCompaction = 'native' | 'bridge_summary';
+
+export const BRIDGE_REMOTE_COMPACTION: Readonly<Record<BridgeRouteTargetId, BridgeRemoteCompaction>> = Object.freeze({
+  openai: 'native',
+  'codex-lb': 'native',
+  openrouter: 'bridge_summary',
+});
+
 export interface BridgeRouteTarget {
   provider_id: BridgeRouteTargetId;
   upstream_model: string;
@@ -269,12 +285,23 @@ export interface BridgeRouteIndex {
 
 export interface ProviderSessionPin {
   thread_id: string;
-  provider_id: BridgeProviderId;
+  /**
+   * `openai` pins a thread to official passthrough, so a later change of where
+   * bare official ids route (auth priority, Codex-LB registration) never moves
+   * a running thread to another identity.
+   */
+  provider_id: BridgeRouteTargetId;
   public_model: string;
   upstream_model: string;
   catalog_generation: string;
   route_policy_generation: string;
   created_at: string;
+  /**
+   * The route the thread left for its current one. Its history may still carry
+   * that route's account-bound items, which the bridge strips before forwarding
+   * (desktop-bridge/provider-handoff.ts). Absent on a thread that never moved.
+   */
+  handoff_from?: BridgeRouteTargetId;
 }
 
 export interface HttpProbeResult {

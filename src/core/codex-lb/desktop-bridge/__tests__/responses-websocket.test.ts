@@ -129,18 +129,20 @@ test('a prewarmed model-less socket outlives the request and idle timeouts until
   assert.equal(f.lb.headers.length, 1); assert.equal(f.official.headers.length, 0);
 });
 
-test('declared official route preserves OAuth and fails visibly before a provider switch or pin mutation', { timeout: 4_000 }, async (t) => {
+test('declared official route preserves OAuth, pins the thread, and fails visibly before a provider switch', { timeout: 4_000 }, async (t) => {
   let writes = 0;
   const f = await fixture(t, (value) => { value.persistProviderSessionPins = async () => { writes += 1; }; });
   const ws = await f.client({ 'thread-id': 'official-thread', 'x-codex-lb-api-key': 'must-strip' });
   await exchange(ws, { type: 'response.create', model: 'official-model' });
   assert.equal(f.official.headers[0]!.authorization, OAUTH); assert.equal(f.official.headers[0]!['chatgpt-account-id'], 'account');
-  assert.equal(f.official.headers[0]!['x-codex-lb-api-key'], undefined); assert.equal(writes, 0);
+  // The thread is pinned to the official identity, so a later change of where
+  // the bare id routes never moves it.
+  assert.equal(f.official.headers[0]!['x-codex-lb-api-key'], undefined); assert.equal(writes, 1);
   const closed = once(ws, 'close'); const response = once(ws, 'message');
   ws.send(Buffer.from(JSON.stringify({ type: 'response.create', model: MODEL })));
   const error = JSON.parse(String((await response)[0]));
   assert.equal(error.error.code, 'bridge_websocket_route_change_forbidden');
-  assert.equal((await closed)[0], 1011); assert.equal(f.lb.headers.length, 0); assert.equal(f.official.messages.length, 1); assert.equal(writes, 0);
+  assert.equal((await closed)[0], 1011); assert.equal(f.lb.headers.length, 0); assert.equal(f.official.messages.length, 1); assert.equal(writes, 1, 'a refused switch writes no pin');
 });
 
 test('persisted session pin keeps the bare model on LB despite a new official priority', { timeout: 4_000 }, async (t) => {

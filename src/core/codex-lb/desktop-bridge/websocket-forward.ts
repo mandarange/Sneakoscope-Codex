@@ -11,6 +11,7 @@ import { OPENROUTER_ONLY_REFUSAL_CODES, openRouterOnlyEnabled } from './exclusiv
 import { desktopBridgeOfficialPassthroughEnabled, ensureDesktopBridgeRemoteTarget, isUnreachableUpstreamError, refreshDesktopBridgeRemoteTarget, resolveAndBindDesktopBridgeRouteContext, resolveCodexSessionIdentity, resolveDesktopBridgeTarget, safeBridgeErrorCode, singleBridgeHeader, canonicalSessionId } from './security.js';
 import { desktopBridgeListenOrigin } from './state.js';
 import { forwardResponsesWebSocket, isResponsesWebSocketRequest } from './responses-websocket.js';
+import { admitCodexLbTurnState } from './codex-lb-turn-state.js';
 import {
   DESKTOP_BRIDGE_DIAGNOSTIC_PROTOCOL,
   DesktopBridgeError,
@@ -249,6 +250,7 @@ export async function forwardWebSocket(
     const headers = official
       ? buildOfficialPassthroughWebSocketHeaders(req.headers, target.host)
       : buildProviderWebSocketHeaders(req.headers, { providerId: provider!.provider_id, authTransport: provider!.auth_transport, credential: credential! }, target.host);
+    if (provider?.provider_id === 'codex-lb') admitCodexLbTurnState(headers, route.session_pin?.thread_id ?? null, credential!.fingerprint);
     upstream.write([`${req.method || 'GET'} ${target.pathname}${target.search} HTTP/1.1`, ...serializeHeaders(headers), '', ''].join('\r\n'));
     if (head.length) upstream.write(head);
     const onData = (chunk: Buffer): void => {

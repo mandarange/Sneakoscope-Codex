@@ -8,6 +8,7 @@ import {
   type ProviderCatalogBuildInput
 } from './contracts.js';
 import {
+  OPENROUTER_PRIORITY_BASE,
   normalizeProviderCatalog,
   providerCatalogStatus,
   routeProviderState
@@ -41,9 +42,16 @@ export function buildCombinedBridgeCatalog(
     openrouter: normalizeProviderCatalog(options.catalogs.openrouter)
   };
   const selection = options.selection || emptyBridgeModelSelection(createdAt);
+  // Codex sorts by ascending priority and makes the first listed row its
+  // default. OpenRouter rows used to carry 1 and every unprioritized Codex-LB
+  // row 100, so whenever `model` was unset Codex defaulted to an OpenRouter
+  // model; they now follow every Codex-LB row. Emitted in (priority, slug)
+  // order, so ties are deterministic.
+  let openRouterIndex = 0;
   const allModels = pinCatalogToLatestGenerations(
     [...normalized['codex-lb'].models, ...normalized.openrouter.models].sort(compareModels)
-  );
+  ).map((model) => model.provider_id === 'openrouter' ? { ...model, priority: OPENROUTER_PRIORITY_BASE + openRouterIndex++ } : model)
+    .sort((left, right) => left.priority - right.priority || left.slug.localeCompare(right.slug) || compareModels(left, right));
   const availableOpenRouterModels = availableModelRows(allModels, selection);
   // The active catalog is what Codex Desktop reads, so it carries every
   // codex-lb model plus only the OpenRouter models the operator selected.

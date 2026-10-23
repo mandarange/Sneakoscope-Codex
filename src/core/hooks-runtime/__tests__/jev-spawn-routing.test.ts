@@ -418,3 +418,32 @@ test('the OpenRouter Only Jev turn line names the list, never a tier model', asy
     assert.match(openRouterOnlyJevTurnLine({ ...allowlist, entries: [], models: [], default_model: null }, null, false), /list is empty[\s\S]*Subagent Models/);
   });
 });
+
+// A turn plan left in state used to outlive its turn: every later spawn of the
+// session took the deep-tier fallback, and list mode stopped asking Jev.
+const STALE_PLAN = {
+  jev_execution_plan: { plan_id: 'old-turn', expires_at: Date.now() - 60_000, source_digest: 'a'.repeat(64), graph_digest: null },
+  jev_turn_tier: { model: BUILTIN_LATEST_TIER_MODELS.deep, effort: 'max', tier: 'deep' }
+};
+
+test('a stale turn plan never seals a spawn to the deep tier: Jev decides it', async () => {
+  await withJev(() => jevAnswer('balanced', 0.91, 0.9), async () => {
+    resetDecisionTransportState();
+    const rewritten = await rewrite({ mode: 'NARUTO', ...STALE_PLAN }, {
+      tool_name: 'spawn_agent',
+      tool_input: { fork_turns: 'none', message: 'Implement the ordinary parser.' }
+    });
+    assert.equal(rewritten?.model, BUILTIN_LATEST_TIER_MODELS.balanced);
+    assert.equal(rewritten?.reasoning_effort, 'low');
+  });
+});
+
+test('OpenRouter Only: a turn plan in state does not switch off the per-spawn choice', async () => {
+  await withOpenRouterOnly({ enabled: true, subagent_models: LIST }, async () => {
+    await withListJev(JEV_REPLIES[1]!, async () => {
+      const routed = await jevSpawnRouting(process.cwd(), STALE_PLAN, spawnPayload({ model: 'z-ai/glm-5.3', fork_turns: 'none', message: 'Rename the save button label.' }));
+      assert.equal(routed.route?.source, 'jev');
+      assert.equal(routed.route?.model, 'google/gemini-3.8-flash');
+    });
+  });
+});

@@ -5,7 +5,11 @@
 SKS has one managed Desktop and CLI routing runtime: the local **Desktop
 Bridge**. Codex-LB and OpenRouter are independent provider profiles registered
 with that bridge; neither is a runtime mode or a global Codex provider
-selection.
+selection. Codex stays bound to the bridge (`model_provider = "openai"` with
+`openai_base_url` pointing at it); enabling or disabling a provider changes
+bridge routing only. A `model_provider = "codex-lb"` that SKS 10.7.0 and
+earlier wrote under the managed marker is set back to `openai` by the next
+catalog sync.
 
 ChatGPT OAuth remains owned by Codex. SKS does not copy, rewrite, or send that
 OAuth authorization to either provider upstream. Codex-LB and OpenRouter
@@ -69,7 +73,10 @@ The bridge builds one combined catalog and one explicit route index. A model is
 routed by an index entry, not by a model-name convention or by the currently
 selected profile. A conflicting public model ID is blocked with
 `catalog_model_route_ambiguous`; an unknown model is blocked with
-`catalog_model_route_missing`. The fallback policy is always `none`.
+`catalog_model_route_missing`. A thread pinned to a provider never falls back
+to the official identity: an unknown model there fails with
+`catalog_model_route_missing` (409). Only a thread with no provider pin may
+still use the official identity for a model no provider claims.
 
 ```sh
 sks bridge catalog sync --json
@@ -80,31 +87,52 @@ sks bridge route explain <model> --json
 ```
 
 The default provider helps with uniquely resolvable aliases and new-selection
-UI filtering. It is never a silent request fallback. A session pin records the
-provider, public/upstream model, catalog generation, and route-policy
-generation, so a running thread cannot drift to another provider when a
-profile or catalog changes.
+UI filtering. It is never a silent request fallback. Every thread is pinned at
+its first request — official-route threads too (provider `openai`) — so a
+profile, catalog or auth-priority change never moves a running thread to
+another identity. A thread moves only when its model changes to one routed
+elsewhere; that request and every later one drop reasoning items and any other
+`encrypted_content`, which only the previous account can read, and the move
+drops `previous_response_id` and `x-codex-turn-state`. A move whose history
+holds a native compaction item is refused with Codex's non-retryable
+`invalid_prompt` and a message: switch back, or start a new thread.
 
 ### Context compaction on a provider route
 
 SKS points Codex's built-in OpenAI provider at the bridge, so Codex compacts
 long threads *remotely*: it sends a Responses request ending in a
 `compaction_trigger` item (or, on older Codex, a POST to `/responses/compact`)
-and expects one opaque `compaction` item back. Only the official backend
-implements that, so a thread routed to Codex-LB or OpenRouter used to stop with
-`Error running remote compact task: … bridge_upstream_request_failed`.
+and expects one opaque `compaction` item back. How a route answers is a
+per-provider capability (`BRIDGE_REMOTE_COMPACTION`):
 
-For a thread on a provider route the bridge now compacts the way Codex itself
-compacts for non-OpenAI providers: it asks the thread's own provider and model
-for a handoff summary (Codex's summarization prompt, tool calls disabled) and
-returns it as the `compaction` item, over HTTP or the Responses WebSocket. The
-item carries a bridge envelope; on later turns the bridge replaces it with the
-summary as a user message before forwarding, on every route, because no
-upstream can read it. The thread never leaves its provider, so the provider and
-official identities never cross. Official-route threads keep native remote
-compaction. A provider that refuses the summary request is reported with its
-own error identifiers (`bridge_compaction_summary_status_<status>` in the
-bridge log).
+- **Native** — the official backend and Codex-LB. Codex-LB runs the compaction
+  itself on the thread's own account, so the request travels like any other
+  turn: same headers, unchanged body apart from the model alias, and no bridge
+  idle limit below five minutes (a compaction streams nothing for 45–150 s).
+  `POST /responses/compact` is routed by the thread's pin, then its body
+  model, in every mode — it never leaves for the official identity.
+- **Bridge summary** — OpenRouter, which has none. The bridge asks the thread's
+  own provider and model for a handoff summary (Codex's summarization prompt,
+  tool calls disabled) and returns it as the `compaction` item, over HTTP or
+  the Responses WebSocket. The item carries a bridge envelope; on later turns
+  the bridge replaces it with the summary as a user message before forwarding,
+  on every route, because no upstream can read it. A provider that refuses the
+  summary request is reported with its own error identifiers
+  (`bridge_compaction_summary_status_<status>` in the bridge log).
+
+### Codex-LB requests and errors
+
+Codex-LB is a protocol-transparent proxy of the official backend, so it gets
+the official route's headers with only the identity swapped: the key replaces
+the client's `Authorization`, and `chatgpt-account-id` and cookies are
+dropped. `user-agent`, `originator`, `version`, session, thread and
+subagent headers travel, so Codex-LB recognizes Codex and keeps each thread on
+its account. An `x-codex-turn-state` reaches it only when Codex-LB issued that
+value for the same thread and key. Its errors reach Codex as sent — status,
+code, message, `resets_at` — so `context_length_exceeded`,
+`usage_limit_reached` and `previous_response_not_found` keep their effect;
+the bridge only removes credentials from the body and adds `Retry-After: 5`
+to a `server_is_overloaded` that arrived without advice.
 
 ## Verification levels
 

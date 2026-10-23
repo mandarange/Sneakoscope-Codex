@@ -1,4 +1,6 @@
 import { readText, writeJsonAtomic } from '../../fsx.js';
+import { repairManagedCodexLbClientSelection } from '../../../cli/install-helpers-codex-lb-config.js';
+import { safeWriteCodexConfigToml } from '../../codex-runtime/codex-desktop-config-policy.js';
 import { readTopLevelTomlString } from '../../codex-app/codex-model-catalog.js';
 import { codexRestartBlockers, maybeRestartRunningCodexApp } from '../../codex-app/codex-app-restart-policy.js';
 import {
@@ -97,11 +99,27 @@ export async function syncCatalog(options: DesktopBridgeControllerV3Options): Pr
   );
 }
 
+/**
+ * Sets back a `model_provider = "codex-lb"` the old provider toggle wrote under
+ * the managed marker (repairManagedCodexLbClientSelection), so the sync goes on
+ * instead of refusing it as user-owned. A guarded write that is refused (the
+ * config changed underneath, say) blocks this sync; the next one tries again.
+ */
+async function repairCodexLbClientSelection(configPath: string): Promise<string | null> {
+  const current = await readText(configPath, '');
+  const next = repairManagedCodexLbClientSelection(current);
+  if (next === current) return null;
+  const write = await safeWriteCodexConfigToml(configPath, current, next, 'codex-lb-client-provider-repair', { verifyUnchangedBeforeWrite: true });
+  return write.ok ? null : `codex_lb_client_provider_repair_refused:${write.status}`;
+}
+
 export async function syncCatalogInternal(
   options: DesktopBridgeControllerV3Options,
   behavior: CatalogSyncBehavior = {}
 ): Promise<Record<string, unknown>> {
   const paths = controllerPaths(options);
+  const repair = await repairCodexLbClientSelection(paths.configPath);
+  if (repair) return blockedSync(inspectHistoricalDesktopBridgeIntent(''), [repair]);
   const historicalIntent = inspectHistoricalDesktopBridgeIntent(await readText(paths.configPath, ''));
   if (historicalIntent.blockers.length > 0) return blockedSync(historicalIntent, historicalIntent.blockers);
   const rawCredentials = await resolveRawCredentials(options, paths);

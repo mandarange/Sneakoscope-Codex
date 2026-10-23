@@ -12,15 +12,18 @@ const INTERNAL_PREFIX = 'x-sks-';
 const REQUEST_HEADER_ALLOWLIST = new Set([
   'accept', 'accept-encoding', 'cache-control', 'content-encoding', 'content-length', 'content-type',
 ]);
-// Non-credential Codex session metadata the ChatGPT backend requires on
-// /backend-api/codex/responses; dropping these makes the codex-lb gateway's
-// upstream call fail for real Codex CLI traffic. Codex sends both hyphen and
-// underscore spellings across versions.
+// Codex session metadata; redacted from the bridge log like credentials.
 const CODEX_LOCAL_HEADERS = new Set([
   'thread-id', 'thread_id', 'session-id', 'session_id', 'x-client-request-id',
-  'x-codex-installation-id', 'x-codex-turn-metadata', 'x-codex-window-id',
+  'x-codex-installation-id', 'x-codex-turn-metadata', 'x-codex-window-id', 'x-codex-turn-state',
   'originator', 'openai-beta',
 ]);
+/**
+ * The client's own identity on an official-shaped request. Codex-LB
+ * authenticates with its own key and discards these, and a ChatGPT token it
+ * did receive would be the operator's credential leaving for a third party.
+ */
+const CLIENT_IDENTITY_HEADERS = new Set(['authorization', 'cookie', 'chatgpt-account-id']);
 const NEVER_FORWARD_FROM_CLIENT = new Set([
   'authorization', 'cookie', 'forwarded', 'proxy-authorization', 'x-api-key', 'x-codex-lb-api-key',
   'x-forwarded-for', 'x-forwarded-host', 'x-forwarded-port', 'x-forwarded-proto', 'x-real-ip',
@@ -53,6 +56,16 @@ function injectCredential(
   else result.authorization = `Bearer ${credential.value}`;
 }
 
+/**
+ * Codex-LB is a protocol-transparent proxy of the official backend, so it gets
+ * the official route's headers with only the identity swapped: the key
+ * replaces the client's credentials. A narrower list cost it what it keys on —
+ * user-agent and originator (native-client detection: raw event lifecycle, no
+ * synthetic failures), the turn-state that pins a turn to its account, the
+ * client version, and subagent lineage. A turn-state Codex-LB did not issue is
+ * dropped by the caller (codex-lb-turn-state.ts). OpenRouter is a third party
+ * and receives the content headers only.
+ */
 export function buildProviderUpstreamHeaders(
   inbound: IncomingHttpHeaders,
   context: {
@@ -62,13 +75,17 @@ export function buildProviderUpstreamHeaders(
   },
   upstreamHost: string,
 ): OutgoingHttpHeaders {
+  if (context.providerId === 'codex-lb') {
+    const result = buildOfficialPassthroughHeaders(inbound, upstreamHost);
+    for (const name of CLIENT_IDENTITY_HEADERS) delete result[name];
+    injectCredential(result, context.providerId, context.authTransport, context.credential);
+    return result;
+  }
   const result: OutgoingHttpHeaders = {};
   for (const [rawName, rawValue] of Object.entries(inbound)) {
     if (rawValue === undefined) continue;
     const name = rawName.toLowerCase();
-    const providerAllowed = (context.providerId === 'openrouter' && OPENROUTER_CLIENT_HEADERS.has(name))
-      || (context.providerId === 'codex-lb' && CODEX_LOCAL_HEADERS.has(name));
-    if (!REQUEST_HEADER_ALLOWLIST.has(name) && !providerAllowed) continue;
+    if (!REQUEST_HEADER_ALLOWLIST.has(name) && !(context.providerId === 'openrouter' && OPENROUTER_CLIENT_HEADERS.has(name))) continue;
     result[name] = rawValue;
   }
   result.host = upstreamHost;

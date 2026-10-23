@@ -54,36 +54,31 @@ test('a hidden newest row does not hide the older listed generation', () => {
   assert.deepEqual(visibilityOf(out), { 'gpt-6-sol': 'list', 'gpt-6.1-sol': 'hide' });
 });
 
-test('an upgrade pointer to a superseded generation is retargeted with its text and retirement date kept', () => {
-  const retiring = row('gpt-5.5', {
-    upgrade: {
-      model: 'gpt-5.6-sol',
-      migration_markdown: 'GPT-5.5 retires on October 14, 2026. Switch to GPT-5.6 Sol for the best results.',
-      retirement_at: '2026-10-14T00:00:00Z'
-    }
-  });
-  const out = pinCatalogToLatestGenerations([retiring, row('gpt-5.6-sol'), row('gpt-6.1-sol')]);
-  const upgrade = out[0]!.upgrade as Record<string, string>;
-  assert.equal(upgrade.model, 'gpt-6.1-sol');
-  assert.equal(upgrade.retirement_at, '2026-10-14T00:00:00Z');
-  assert.equal(upgrade.migration_markdown, 'GPT-5.5 retires on October 14, 2026. Switch to GPT-6.1-Sol for the best results.');
-  // the input row is not mutated
-  assert.equal((retiring.upgrade as Record<string, string>).model, 'gpt-5.6-sol');
+test('an upgrade pointer is served as the provider sent it, even when it names a hidden generation', () => {
+  // OpenAI's catalog says gpt-5.5 → gpt-6-sol. Retargeting it at the newest
+  // sol row put "GPT-6.1 Sol" into Codex's migration notice, a model the
+  // provider never named, and moved again with every generation.
+  const upgrade = {
+    model: 'gpt-6-sol',
+    migration_markdown: 'GPT-5.5 retires on October 14, 2026. Switch to GPT-6 Sol for the best results.',
+    retirement_at: '2026-10-14T00:00:00Z'
+  };
+  const retiring = row('gpt-5.5', { upgrade });
+  const out = pinCatalogToLatestGenerations([retiring, row('gpt-6-sol'), row('gpt-6.1-sol')]);
+  assert.deepEqual(out[0]!.upgrade, upgrade);
+  assert.equal(JSON.stringify(out.map((model) => model.upgrade ?? null)).includes('6.1'), false);
+  assert.equal(out[0]!.visibility, 'list');
 });
 
-test('an upgrade pointer that is already the newest, names an unknown model, or has no family stays as served', () => {
-  const newest = row('gpt-5.5', { upgrade: { model: 'gpt-6.1-sol', migration_markdown: 'Switch.' } });
-  const unknown = row('gpt-5.4', { upgrade: { model: 'gpt-9-sol', migration_markdown: 'Switch.' } });
-  const familyless = row('gpt-5.3-codex-spark', { upgrade: { model: 'gpt-5.5', migration_markdown: 'Switch.' } });
-  const out = pinCatalogToLatestGenerations([newest, unknown, familyless, row('gpt-6.1-sol'), row('gpt-5.5')]);
-  assert.deepEqual((out[0]!.upgrade as Record<string, string>).model, 'gpt-6.1-sol');
-  assert.deepEqual((out[1]!.upgrade as Record<string, string>).model, 'gpt-9-sol');
-  assert.deepEqual((out[2]!.upgrade as Record<string, string>).model, 'gpt-5.5');
+test('a row this hides loses its upgrade pointer', () => {
+  const out = pinCatalogToLatestGenerations([
+    row('gpt-6-sol', { upgrade: { model: 'gpt-6.1-sol', migration_markdown: 'Switch.' } }),
+    row('gpt-6.1-sol')
+  ]);
+  assert.equal(out[0]!.visibility, 'hide');
+  assert.equal('upgrade' in out[0]!, false);
 });
 
-test('equal versions do not hide each other and a display name is replaced only as a whole name', () => {
+test('equal versions do not hide each other', () => {
   assert.deepEqual(visibilityOf(pinCatalogToLatestGenerations([row('gpt-6-sol'), row('gpt-6.0-sol')])), { 'gpt-6-sol': 'list', 'gpt-6.0-sol': 'list' });
-  const retiring = row('gpt-5.5', { upgrade: { model: 'gpt-5.6-sol', migration_markdown: 'Switch to GPT-5.6 Sol or GPT-5.6-Solar.' } });
-  const out = pinCatalogToLatestGenerations([retiring, row('gpt-5.6-sol'), row('gpt-6.1-sol')]);
-  assert.equal((out[0]!.upgrade as Record<string, string>).migration_markdown, 'Switch to GPT-6.1-Sol or GPT-5.6-Solar.');
 });

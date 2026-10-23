@@ -1,6 +1,3 @@
-import { bindCodexClientProvider } from '../../../cli/install-helpers-codex-lb-config.js';
-import { safeWriteCodexConfigToml } from '../../codex-runtime/codex-desktop-config-policy.js';
-import { readText } from '../../fsx.js';
 import { testOpenRouterConnection } from '../../providers/openrouter/openrouter-account.js';
 import { openRouterSecretPaths } from '../../providers/openrouter/openrouter-secret-store.js';
 import type { BridgeProviderId, DesktopBridgeCommandResult } from '../bridge-contracts.js';
@@ -160,11 +157,8 @@ export async function setProviderState(
       });
     }
   }
-  if (providerId === 'codex-lb') {
-    const current = await readText(paths.configPath, '');
-    const next = bindCodexClientProvider(current, enabled ? 'codex-lb' : 'openai');
-    if (next !== current) await safeWriteCodexConfigToml(paths.configPath, current, next, 'codex-lb-client-provider');
-  }
+  // Codex stays bound to the bridge: enabling a provider changes bridge
+  // routing only, never Codex's own `model_provider`.
   const status = await desktopBridgeStatusV3(options);
   return commandResult(operation, true, status, { provider_id: providerId, enabled }, [], options);
 }

@@ -1,15 +1,16 @@
 /**
- * Remote compaction for threads the bridge routes to a provider.
+ * Remote compaction for threads routed to a provider without one.
  *
  * SKS points Codex's built-in OpenAI provider at this bridge (`openai_base_url`),
  * so Codex believes it is talking to OpenAI and compacts *remotely*: a
  * Responses create whose input ends in `{"type":"compaction_trigger"}`, answered
  * by exactly one `compaction` output item (and, on older Codex, a POST to
- * `/responses/compact` answered by `{ "output": [...] }`). Only the official
- * backend implements that. A thread routed to Codex-LB or OpenRouter therefore
- * failed every compaction with `bridge_upstream_request_failed`.
+ * `/responses/compact` answered by `{ "output": [...] }`). The official backend
+ * implements that, and so does Codex-LB, which runs it on the thread's own
+ * account: those routes are `native` (BRIDGE_REMOTE_COMPACTION) and their
+ * compaction requests travel like any other turn. OpenRouter has none.
  *
- * For such a thread the bridge compacts the way Codex compacts for every
+ * For an OpenRouter thread the bridge compacts the way Codex compacts for every
  * non-OpenAI provider: it asks the thread's own provider and model for a handoff
  * summary and returns it as a `compaction` item whose `encrypted_content` is a
  * bridge envelope. Later requests carry that item back; no upstream can read
@@ -90,6 +91,11 @@ export function decodeBridgeCompaction(encrypted: unknown): string | null {
   } catch {
     return null;
   }
+}
+
+/** A compaction item an upstream made: opaque, and readable only by the account that made it. */
+export function isNativeCompactionItem(item: unknown): boolean {
+  return isObject(item) && COMPACTION_ITEM_TYPES.has(String(item.type)) && decodeBridgeCompaction(item.encrypted_content) === null;
 }
 
 function summaryMessage(summary: string): JsonObject {

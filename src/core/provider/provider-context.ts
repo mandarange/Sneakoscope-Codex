@@ -125,8 +125,13 @@ function selectedBridgeProvider(status: DesktopBridgeStatusV3 | null): BridgePro
   // policy default or session pin for provider-context classification.
   return (selected === 'codex-lb' || selected === 'openrouter' ? selected : null)
     || status?.routing.policy?.default_provider_id
-    || status?.routing.session_pin?.provider_id
+    || providerPinOf(status?.routing.session_pin?.provider_id)
     || null
+}
+
+/** A thread pinned to official passthrough (`openai`) names no provider identity. */
+function providerPinOf(pinned: string | undefined): BridgeProviderId | null {
+  return pinned === 'codex-lb' || pinned === 'openrouter' ? pinned : null
 }
 
 async function currentDesktopBridgeStatus(options: Record<string, unknown>): Promise<DesktopBridgeStatusV3> {

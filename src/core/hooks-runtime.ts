@@ -469,17 +469,21 @@ async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: a
   const submittedPrompt = stripVisibleDecisionAnswerBlocks(extractUserPrompt(payload));
   let stagedMemory: { staged: boolean; duplicate: boolean; memory_id: string } | null = null;
   const disposition = jevPlan?.memoryDisposition;
-  if (state?.mission_id && jevPlan?.executionPlan) {
+  // A plan binds the turn it was made for. Left in state, it silently overrode
+  // every later spawn's model (and switched off Jev's per-spawn choice), so a
+  // prompt without one clears it; Stop clears it too.
+  const plan = jevPlan?.executionPlan || null;
+  if (state?.mission_id && (plan || state?.jev_execution_plan)) {
     await setCurrent(root, {
-      jev_execution_plan: jevPlan.executionPlan,
-      jev_turn_binding: jevPlan.decisionBinding ? {
-        plan_id: jevPlan.executionPlan.plan_id,
-        source_digest: jevPlan.executionPlan.source_digest,
-        graph_digest: jevPlan.executionPlan.graph_digest,
-        policy_revision: jevPlan.executionPlan.policy_revision,
-        config_digest: jevPlan.executionPlan.config_digest
+      jev_execution_plan: plan,
+      jev_turn_binding: plan && jevPlan?.decisionBinding ? {
+        plan_id: plan.plan_id,
+        source_digest: plan.source_digest,
+        graph_digest: plan.graph_digest,
+        policy_revision: plan.policy_revision,
+        config_digest: plan.config_digest
       } : null,
-      jev_turn_tier: jevPlan.decision.tier ? { ...jevPlan.decision.tier } : null
+      jev_turn_tier: plan && jevPlan?.decision.tier ? { ...jevPlan.decision.tier } : null
     }, { sessionKey, replace: false }).catch(() => null);
   }
   if (state?.mission_id && jevPlan?.decisionBinding && disposition
@@ -1296,6 +1300,9 @@ function clarificationPauseBlockReason(state: any = {}) {
 
 async function hookStop(root: any, state: any, payload: any, noQuestion: any, sessionKey: any = null) {
   const last = extractLastMessage(payload);
+  if (state?.jev_execution_plan) {
+    await setCurrent(root, { jev_execution_plan: null, jev_turn_binding: null, jev_turn_tier: null }, { sessionKey, replace: false }).catch(() => null);
+  }
   if (!noQuestion) {
     const lightTurn = await consumeLightTurnStopBypass(root, { sessionKey, turnId: hookTurnId(payload) });
     if (lightTurn.accepted) return { continue: true, action: 'light_turn', silent: true };

@@ -16,7 +16,10 @@ const inbound = {
   'x-codex-window-id': 'thread-1:0', 'x-codex-turn-metadata': JSON.stringify({
     installation_id: 'install-1', thread_id: 'thread-1', session_id: 'thread-1', sandbox: 'seatbelt',
   }),
-  originator: 'codex_cli_rs', 'user-agent': 'codex_cli_rs/9.9.9',
+  originator: 'codex_cli_rs', 'user-agent': 'codex_cli_rs/9.9.9', version: '0.163.0',
+  'chatgpt-account-id': 'acct-operator', 'x-codex-turn-state': 'turn_0123456789abcdef0123456789abcdef',
+  'x-openai-subagent': 'collab_spawn', 'x-codex-parent-thread-id': 'thread-0', 'x-codex-beta-features': 'remote_compaction',
+  'x-sks-model': 'internal-routing-hint', 'x-forwarded-for': '10.0.0.1',
   'http-referer': 'https://client.example', 'x-title': 'Desktop',
 };
 
@@ -33,20 +36,24 @@ test('Codex-LB and OpenRouter policies strip OAuth/cookies and inject only the s
   ]);
   assert.equal(lb.authorization, undefined); assert.equal(lb['x-codex-lb-api-key'], 'lb-only-secret');
   assert.equal(openrouter.authorization, 'Bearer or-only-secret'); assert.equal(openrouter['x-codex-lb-api-key'], undefined);
-  // codex-lb keeps the non-credential Codex session metadata the ChatGPT
-  // backend requires; openrouter never receives any of it.
-  assert.equal(lb['thread-id'], 'thread-1'); assert.equal(lb['session-id'], 'thread-1');
-  assert.equal(lb['x-client-request-id'], 'request-1'); assert.equal(lb['x-codex-window-id'], 'thread-1:0');
-  assert.equal(lb['x-codex-turn-metadata'], inbound['x-codex-turn-metadata']);
-  assert.equal(lb.originator, 'codex_cli_rs');
-  for (const name of ['thread-id', 'session-id', 'x-client-request-id', 'x-codex-window-id', 'x-codex-turn-metadata', 'originator']) {
-    assert.equal(openrouter[name], undefined);
+  // Codex-LB gets every header the official route forwards — what it keys
+  // affinity, native-client detection and attribution on — with the identity
+  // swapped; openrouter, a third party, receives none of it.
+  const codexHeaders = [
+    'thread-id', 'session-id', 'x-client-request-id', 'x-codex-window-id', 'x-codex-turn-metadata', 'originator',
+    'user-agent', 'version', 'x-codex-turn-state', 'x-openai-subagent', 'x-codex-parent-thread-id', 'x-codex-beta-features',
+  ] as const;
+  for (const name of codexHeaders) {
+    assert.equal(lb[name], inbound[name], name);
+    assert.equal(openrouter[name], undefined, name);
   }
+  assert.equal(lb['chatgpt-account-id'], undefined, 'the ChatGPT account never reaches the gateway');
+  assert.equal(lb['x-sks-model'], undefined); assert.equal(lb['x-forwarded-for'], undefined);
   for (const headers of [lb, openrouter]) {
-    assert.equal(headers.cookie, undefined); assert.equal(headers['user-agent'], undefined); assert.equal(headers['x-remove-me'], undefined);
-    assert.doesNotMatch(JSON.stringify(headers), /chatgpt-oauth-secret|chatgpt=session|forged/);
+    assert.equal(headers.cookie, undefined); assert.equal(headers['x-remove-me'], undefined);
+    assert.doesNotMatch(JSON.stringify(headers), /chatgpt-oauth-secret|chatgpt=session|forged|acct-operator/);
   }
-  assert.equal(lb['http-referer'], undefined); assert.equal(openrouter['http-referer'], 'https://client.example');
+  assert.equal(lb['http-referer'], 'https://client.example'); assert.equal(openrouter['http-referer'], 'https://client.example');
   assert.equal(openrouter['x-title'], 'Desktop');
 });
 
@@ -122,15 +129,10 @@ test('R47/R48 security: canonical Codex ingress translates provider paths and ke
     assert.equal(seen.get('openrouter')?.path, '/api/v1/responses');
     assert.equal(JSON.parse(seen.get('lb')?.body || '{}').model, 'lb/upstream'); assert.equal(JSON.parse(seen.get('openrouter')?.body || '{}').model, 'or/upstream');
     assert.doesNotMatch(JSON.stringify([...seen.values()]), /desktop-oauth|desktop=session/);
+    // A Codex-LB error travels as sent, but never with a credential in it.
     const redacted = await post(bridgePort, 'public_error');
     assert.equal(redacted.status, 401);
-    assert.deepEqual(JSON.parse(redacted.body), {
-      error: {
-        type: 'upstream_error',
-        code: 'bridge_upstream_request_failed',
-        message: 'bridge_upstream_request_failed',
-      },
-    });
-    assert.doesNotMatch(redacted.body, /sk-sensitive-upstream-key-12345678/);
+    assert.deepEqual(JSON.parse(redacted.body), { error: 'Bearer [REDACTED]', api_key: '[REDACTED]' });
+    assert.doesNotMatch(redacted.body, /sk-sensitive-upstream-key-12345678|lb-concurrent-secret/);
   } finally { if (bridge) await stopDesktopBridge(bridge); await Promise.all([close(lb), close(openrouter)]); }
 });

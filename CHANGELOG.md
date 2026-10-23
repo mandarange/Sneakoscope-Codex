@@ -2,6 +2,51 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Compaction on a Codex-LB thread no longer loses the conversation. Codex-LB
+  compacts natively on the thread's own account, so its compaction requests
+  now travel to it unchanged instead of being replaced by a bridge-written
+  summary, and a bridge idle limit can no longer cut one short.
+  `POST /responses/compact` follows the thread's own route in every mode; it
+  used to leave for chatgpt.com under the user's own ChatGPT login. OpenRouter
+  threads keep the bridge summary.
+- Switching a thread's model between Codex-LB, OpenRouter and the ChatGPT
+  account no longer fails on the other account's items: the move and every
+  later turn drop reasoning items and their `encrypted_content`, and the move
+  drops `previous_response_id` and the turn-state. A switch whose history holds
+  a native compaction is refused with a readable message instead of failing on
+  every retry. Official-route threads are now pinned too, so a change of auth
+  priority or Codex-LB registration no longer moves a running thread to
+  another identity, and a thread pinned to a provider never falls back to the
+  official identity for an unknown model. Pin writes no longer fail every new
+  thread between a settings write and the next bridge restart.
+- Codex-LB sees Codex as Codex: `user-agent`, `originator`, `version`,
+  subagent and turn-state headers reach it (only turn-states it issued for the
+  same thread and key), so it keeps each thread on its account. Its errors
+  reach Codex as sent — `usage_limit_reached` with its `resets_at` and no
+  invented Retry-After, `context_length_exceeded`, `previous_response_not_found`
+  — minus any credential in the body. Routing refusals answer 409 on every path.
+- Enabling Codex-LB in SKS Center no longer breaks Codex and every later
+  catalog sync by writing `model_provider = "codex-lb"`; Codex stays bound to
+  the bridge, and a selection an earlier toggle wrote is repaired by the next
+  sync.
+- SKS no longer deletes the model you picked in Codex. Guarded config writes
+  (catalog sync, provider changes, 1M context) stopped treating SKS's own
+  "moved machine-local Codex config" comment as proof that the `model` line
+  under it was SKS's, and a legacy SKS lock marker now goes with the lock it
+  vouched for.
+- The "GPT-5.5 is outdated, switching to GPT-6.1" notice for a model you never
+  chose: SKS no longer rewrites the provider's model-migration pointer, and
+  `doctor --fix` / `sks update` remove `gpt-5.5` and `model_provider =
+  "codex-lb"` pins that SKS 4.x left in its role files and project configs
+  (backed up first) when the active catalog lists the model as retired.
+- The Codex Desktop default model is a Codex-LB model again: OpenRouter rows
+  sorted first, so with no `model` set Codex picked an OpenRouter model.
+- A Jev plan no longer outlives its turn: a stale one sent every later child to
+  the deepest model and switched off Jev's per-spawn model choice in
+  OpenRouter Only mode.
+
 ## [10.7.0] - 2026-10-20
 
 ### Removed

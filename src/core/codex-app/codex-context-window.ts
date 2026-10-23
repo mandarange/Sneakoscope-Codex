@@ -9,9 +9,7 @@ import { maybeRestartRunningCodexApp, type CodexAppRestartOutcome } from './code
 
 export const CODEX_CONTEXT_1M_SCHEMA = 'sks.codex-context-1m.v1'
 // Inline marker: keeping ownership and the pre-enable value on the key line
-// itself means the pair can never be separated by another writer, and the
-// mode-lock provenance scan in codex-config-guard stops at these keys before
-// it can misattribute the operator's `model` line to SKS.
+// itself means the pair can never be separated by another writer.
 export const CODEX_CONTEXT_1M_MARKER = 'sks-codex-context-1m'
 export const CODEX_CONTEXT_1M_TARGETS = {
   model_context_window: 1_000_000,
