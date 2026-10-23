@@ -1,6 +1,7 @@
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 import { readText, writeTextAtomic } from '../fsx.js'
+import { hasCodexLbProviderTable } from '../../cli/install-helpers-codex-lb-config.js'
 import { hasSksManagedCodexConfigMarker, writeCodexConfigGuarded } from '../codex/codex-config-guard.js'
 import { bridgeRouteIndexPath, combinedBridgeCatalogPath } from '../codex-lb/combined-catalog.js'
 import { readActiveCombinedBridgeCatalog } from '../codex-lb/combined-catalog/persistence.js'
@@ -19,8 +20,12 @@ import { backupInvalidToml } from '../subagents/official-subagent-config.js'
  * because their body hash and stale-pin refresh (role-model-pins.ts) own them.
  * A model pin is removed when the active combined catalog does not list the
  * model, hides it, or marks it for upgrade. `model_provider = "codex-lb"` is
- * removed outright: the managed setup defines no such provider, so the bridge
- * (which routes Codex-LB) is the only path that works.
+ * removed when no `[model_providers.codex-lb]` table defines that provider: the
+ * managed setup defines none, so the bridge (which routes Codex-LB) is the only
+ * path that works. A table means someone's own direct setup, which stays — as
+ * repairManagedCodexLbClientSelection leaves it. A project config counts as
+ * SKS-owned only on evidence other than that selection, because the ownership
+ * predicate also accepts the codex-lb selection itself.
  */
 
 export const MODEL_PIN_HYGIENE_SCHEMA = 'sks.model-pin-hygiene.v1'
@@ -71,7 +76,11 @@ function topLevelEnd(lines: readonly string[]): number {
 }
 
 /** The pin lines to drop from a file's top level, as `key = "value"` labels. */
-function stalePinLines(text: string, pinState: ((model: string) => PinState) | null): { indexes: number[]; labels: string[] } {
+function stalePinLines(
+  text: string,
+  pinState: ((model: string) => PinState) | null,
+  codexLbProviderDefined: boolean
+): { indexes: number[]; labels: string[] } {
   const lines = text.split('\n')
   const indexes: number[] = []
   const labels: string[] = []
@@ -79,7 +88,9 @@ function stalePinLines(text: string, pinState: ((model: string) => PinState) | n
     const match = /^\s*(model|model_provider)\s*=\s*"([^"]*)"\s*(?:#.*)?$/.exec(lines[index] || '')
     if (!match) continue
     const [, key, value] = match as unknown as [string, string, string]
-    const stale = key === 'model_provider' ? value === 'codex-lb' : pinState !== null && pinState(value) !== 'current'
+    const stale = key === 'model_provider'
+      ? value === 'codex-lb' && !codexLbProviderDefined
+      : pinState !== null && pinState(value) !== 'current'
     if (!stale) continue
     indexes.push(index)
     labels.push(`${key} = "${value}"`)
@@ -90,6 +101,19 @@ function stalePinLines(text: string, pinState: ((model: string) => PinState) | n
 function withoutLines(text: string, indexes: readonly number[]): string {
   const drop = new Set(indexes)
   return text.split('\n').filter((_, index) => !drop.has(index)).join('\n')
+}
+
+const CODEX_LB_SELECTION_EVIDENCE = [
+  /^\s*model_provider\s*=\s*["']codex-lb["']\s*(?:#.*)?$/,
+  /^\s*\[model_providers\.(?:"codex-lb"|codex-lb)\]\s*(?:#.*)?$/
+]
+
+/** SKS ownership of a project config, proven by something other than its codex-lb selection. */
+function sksOwnedProjectConfig(text: string): boolean {
+  const withoutSelection = text.split('\n')
+    .filter((line) => !CODEX_LB_SELECTION_EVIDENCE.some((pattern) => pattern.test(line)))
+    .join('\n')
+  return hasSksManagedCodexConfigMarker(withoutSelection)
 }
 
 function isLegacySksRole(file: string, text: string): boolean {
@@ -125,13 +149,21 @@ export async function reconcileStaleSksModelPins(input: {
     remaining: [],
     errors: []
   }
+  // Codex resolves a role's or project's provider against every config layer,
+  // so a table in the user or project config makes the selection loadable.
+  const projectConfig = path.join(root, '.codex', 'config.toml')
+  const projectText = projectConfig !== path.join(codexHome, 'config.toml') && await regularFile(projectConfig)
+    ? await readText(projectConfig, '')
+    : null
+  const providerDefinedAbove = hasCodexLbProviderTable(await readText(path.join(codexHome, 'config.toml'), ''))
+    || (projectText !== null && hasCodexLbProviderTable(projectText))
   const agentDirs = [...new Set([path.join(codexHome, 'agents'), path.join(root, '.codex', 'agents')])]
   for (const dir of agentDirs) {
     for (const file of await roleFiles(dir)) {
       if (!(await regularFile(file))) continue
       const text = await readText(file, '')
       if (!isLegacySksRole(file, text)) continue
-      const pins = stalePinLines(text, pinState)
+      const pins = stalePinLines(text, pinState, providerDefinedAbove || hasCodexLbProviderTable(text))
       if (!pins.indexes.length) continue
       if (!input.fix) { report.remaining.push({ file, removed: pins.labels, backup_path: null }); continue }
       try {
@@ -145,10 +177,9 @@ export async function reconcileStaleSksModelPins(input: {
       }
     }
   }
-  const projectConfig = path.join(root, '.codex', 'config.toml')
-  if (projectConfig !== path.join(codexHome, 'config.toml') && await regularFile(projectConfig)) {
-    const text = await readText(projectConfig, '')
-    const pins = hasSksManagedCodexConfigMarker(text) ? stalePinLines(text, pinState) : { indexes: [], labels: [] }
+  if (projectText !== null) {
+    const text = projectText
+    const pins = sksOwnedProjectConfig(text) ? stalePinLines(text, pinState, providerDefinedAbove) : { indexes: [], labels: [] }
     if (pins.indexes.length && !input.fix) report.remaining.push({ file: projectConfig, removed: pins.labels, backup_path: null })
     else if (pins.indexes.length) {
       const write = await writeCodexConfigGuarded({

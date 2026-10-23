@@ -121,3 +121,31 @@ test('without an active catalog only the codex-lb provider pin goes; a model pin
   assert.deepEqual(fixed.changes.find((row) => path.basename(row.file) === 'sks-planner.toml')?.removed, ['model_provider = "codex-lb"'])
   assert.match(await f.read(path.join(f.codexHome, 'agents', 'sks-planner.toml')), /^model = "gpt-5\.5"$/m)
 })
+
+// The ownership predicate also accepts the codex-lb selection itself, so a
+// user's own direct setup would read as SKS-owned and lose its provider.
+const DIRECT_TABLE = '\n[model_providers.codex-lb]\nname = "codex-lb"\nbase_url = "https://lb.example.test/backend-api/codex"\nenv_key = "CODEX_LB_API_KEY"\n'
+
+test('a direct Codex-LB setup backed by a provider table is never treated as an SKS pin', async (t) => {
+  const f = await fixture(t, true)
+  const projectConfig = path.join(f.root, '.codex', 'config.toml')
+  const userOwned = `model_provider = "codex-lb"\nmodel = "gpt-5.5"\n${DIRECT_TABLE}`
+  await fs.writeFile(projectConfig, userOwned)
+  let fixed = await reconcileStaleSksModelPins({ root: f.root, codexHome: f.codexHome, fix: true })
+  assert.equal(await f.read(projectConfig), userOwned, 'no SKS evidence beyond the selection: not ours')
+  assert.equal(fixed.changes.some((row) => row.file === projectConfig), false)
+
+  // SKS-owned on its own evidence: the stale model goes, the defined provider stays.
+  await fs.writeFile(projectConfig, `# SKS-MANAGED-CODEX-CONFIG\n${userOwned}`)
+  fixed = await reconcileStaleSksModelPins({ root: f.root, codexHome: f.codexHome, fix: true })
+  assert.deepEqual(fixed.changes.find((row) => row.file === projectConfig)?.removed, ['model = "gpt-5.5"'])
+  assert.match(await f.read(projectConfig), /^model_provider = "codex-lb"$/m)
+})
+
+test('a legacy role keeps model_provider = "codex-lb" when the user config defines that provider', async (t) => {
+  const f = await fixture(t, true)
+  await fs.writeFile(path.join(f.codexHome, 'config.toml'), `model = "gpt-6.1-sol"\n${DIRECT_TABLE}`)
+  const fixed = await reconcileStaleSksModelPins({ root: f.root, codexHome: f.codexHome, fix: true })
+  assert.deepEqual(fixed.changes.find((row) => path.basename(row.file) === 'sks-planner.toml')?.removed, ['model = "gpt-5.5"'])
+  assert.match(await f.read(path.join(f.codexHome, 'agents', 'sks-planner.toml')), /^model_provider = "codex-lb"$/m)
+})

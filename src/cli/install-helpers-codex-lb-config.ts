@@ -30,7 +30,8 @@ export function repairManagedCodexLbClientSelection(text: string): string {
   return upsertTopLevelTomlString(source, 'model_provider', 'openai');
 }
 
-function hasCodexLbProviderTable(text: string): boolean {
+/** A real `[model_providers.codex-lb]` table: someone's own direct Codex-LB setup. */
+export function hasCodexLbProviderTable(text: string): boolean {
   return /^\s*\[model_providers\.(?:"codex-lb"|codex-lb)\]\s*(?:#.*)?$/m.test(text);
 }
 
