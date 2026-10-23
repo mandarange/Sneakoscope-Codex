@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [10.7.1] - 2026-10-23
+
 ### Fixed
 
 - Compaction on a Codex-LB thread no longer loses the conversation. Codex-LB

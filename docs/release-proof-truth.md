@@ -1,17 +1,29 @@
 # Release Proof Truth
 
-## 10.7.0 candidate
+## 10.7.1 candidate
 
-This candidate carries the cleanup in PR #28: sixteen retired commands,
-project-neutral verification in plans and Proof Field, SEO/GEO marketing that
-describes the target project, profile-aware guidance, and the removal of code
-only its own tests reached. No 10.7.0 registry or GitHub publication is
-claimed before the operator's `npm publish` step.
+This candidate carries PR #30, the hotfix set of the Codex-LB client work:
+native Codex-LB compaction with `/responses/compact` routed by thread pin,
+pinned official threads and a stripping handoff between providers, Codex-LB
+headers and errors passed through, a Codex-LB toggle that no longer writes
+`model_provider`, the user's `model` line and the provider's migration
+pointer left alone, stale SKS model pins removed, and a turn-scoped Jev plan.
+No 10.7.1 registry or GitHub publication is claimed before the operator's
+`npm publish` step.
 
 Fresh proof for the candidate is bound to its clean main commit: canonical
 tests, the full release DAG, pack receipt, required real checks, dist
 freshness, 7.6.0 upgrade smoke, macOS Menu Bar proof, and release stamp; see
-"New 10.7.0 claims" for each boundary.
+"New 10.7.1 claims" for each boundary.
+
+## 10.7.0 published
+
+This release carried the cleanup in PR #28: sixteen retired commands,
+project-neutral verification in plans and Proof Field, SEO/GEO marketing that
+describes the target project, profile-aware guidance, and the removal of code
+only its own tests reached. Published 2026-10-21T05:03:00Z from `b710657b`;
+the registry reports 1,354 files. The integrity comparison with the pack
+receipt is not recorded here.
 
 ## 10.6.2 published
 
@@ -659,7 +671,22 @@ Exact-commit proof can exist only after the candidate is committed and all
 source-bound gates are regenerated from that clean commit.
 
 All release artifacts bound to 9.2.7 or an earlier commit are historical. They
-must not be renamed, copied, or treated as 10.7.0 evidence.
+must not be renamed, copied, or treated as 10.7.1 evidence.
+
+New 10.7.1 claims:
+
+| Claim | Current support | Boundary |
+| --- | --- | --- |
+| A Codex-LB thread compacts natively and `/responses/compact` never leaves for the official identity | passed-hermetic | `compaction-provider-route` suite: the trigger and the compact endpoint reach the fake Codex-LB unchanged with the thread's headers, with and without OpenRouter Only; a 1.6 s native compaction outlives a 1 s idle limit |
+| A provider move never carries the previous account's items, and a move over a native compaction is refused readably | passed-hermetic | `provider-handoff` suite over HTTP and the Responses WebSocket: Codex-LB → OpenRouter → Codex-LB drops reasoning and `encrypted_content`; the refusal answers `invalid_prompt` and the socket stays open |
+| An official-route thread keeps its identity after its bare id moves to Codex-LB | passed-hermetic | `provider-handoff` suite: a second bridge started with the flipped policy and the first bridge's pins |
+| Codex-LB receives Codex's headers and only the turn-states it issued, and its errors reach Codex as sent minus credentials | passed-hermetic | `provider-header-policy`, `bridge-convergence-and-keepalive` and `provider-handoff` suites; `usage_limit_reached` keeps `resets_at` and gains no Retry-After |
+| Enabling Codex-LB leaves Codex's `model_provider` alone, and a sync repairs one an older toggle wrote | passed-hermetic | `desktop-controller-provider-mutation` and `codex-client-gateway-binding` tests |
+| SKS writers keep the user's `model` line, the provider's migration pointer is served as is, and Codex-LB rows sort first | passed-hermetic | `codex-mode-lock-provenance`, `codex-app-fast-ui-repair`, `latest-generation` and `combined-catalog-conflict` tests |
+| Stale SKS model pins are removed only from SKS-owned files, with a backup, and direct Codex-LB setups stay | passed-hermetic | `sks-model-pin-hygiene` test; a dry run against the maintainer's `~/.codex` on 2026-10-23 found no stale pin |
+| A Jev plan never outlives its turn | passed-hermetic | `jev-spawn-routing` tests: a stale plan no longer seals the deep tier, and list mode keeps the per-spawn choice |
+| The hotfix holds on a live Codex-LB (one account per thread, native compaction, native-client detection) | not proved | needs an operator-provided key and Codex-LB's request log |
+| The 10.7.1 package is ready to publish | not proved | requires the release stamp on the clean main commit and that commit fast-forward pushed to origin main |
 
 New 10.7.0 claims:
 
@@ -669,7 +696,7 @@ New 10.7.0 claims:
 | Plans and Proof Field in a user project name only that project's checks | passed-hermetic | `proof-field-project-checks` test: pnpm scripts, npm's placeholder test script, no package scripts, and a release-surface plan contain no SKS repository command |
 | SEO/GEO marketing describes the target project and never replaces an existing description | passed-hermetic | `seo-marketing-project-positioning` test and the neutral fixtures in the marketing flow, command and truthfulness-gate checks |
 | Read-only commands are within the perf budget | verified-on-machine | 2026-10-20, `perf:budgets` in a Linux cloud container: `status --json` p50 134 ms / p95 147 ms, all ten commands within budget; not measured on macOS |
-| The 10.7.0 package is ready to publish | not proved | requires the release stamp on the clean main commit and that commit fast-forward pushed to origin main |
+| The 10.7.0 package is published | verified-on-machine | 2026-10-21, registry `gitHead` b710657b and file count 1354 (`npm view`); integrity comparison with the pack receipt not recorded |
 
 New 10.6.2 claims:
 
@@ -814,8 +841,8 @@ New 10.3.10 claims:
 | A stale or cwd-sticky official workflow cannot capture a later prompt | passed-hermetic | unnamed hooks use `loadOwnedRouteState`; idle > 2h is inactive even with leftover open threads; same-session follow-ups still bind while the run is fresh |
 | The 10.3.10 package is published | verified-on-machine | 2026-10-02, registry `gitHead` 0c70457e and file count 1755, sha512 integrity equals the pack receipt |
 | The 10.4.0 package is published | verified-on-machine | 2026-10-02, registry `gitHead` fb7b2385 and file count 1692, sha512 integrity equals the pack receipt |
-| All checked version authorities report 10.7.0 | passed-hermetic | `release:version-truth` after the version bump |
-| The reported 10.7.0 package is ready to publish | not proved | requires a clean exact-commit build, `npm run release:check:full` stamp, pack receipt, provenance, and the release commit fast-forward pushed to origin main (the prepublish reproducibility preflight refuses `head_not_origin_main`) |
+| All checked version authorities report 10.7.1 | passed-hermetic | `release:version-truth` after the version bump |
+| The reported 10.7.1 package is ready to publish | not proved | requires a clean exact-commit build, `npm run release:check:full` stamp, pack receipt, provenance, and the release commit fast-forward pushed to origin main (the prepublish reproducibility preflight refuses `head_not_origin_main`) |
 
 ## 9.1.0 assertion (historical)
 
