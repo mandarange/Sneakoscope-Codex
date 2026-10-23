@@ -358,32 +358,28 @@ export async function resolveDesktopBridgeRuntimeConfig(options: DesktopBridgeSe
   const officialOnly = providerRouteIds.length === 0 && settings.official_passthrough.enabled;
   if (!officialOnly && !providerRouteIds.some((id) => credentials.registry.providers[id].credential_state === 'ready')) throw new Error('desktop_bridge_provider_credentials_unavailable');
   const persistProviderSessionPins = options.persistProviderSessionPins
-    || ((pins: readonly ProviderSessionPin[]) => persistDesktopBridgeSessionPins(
-      paths.settings_path,
-      settings,
-      pins,
-    ));
+    || ((pins: readonly ProviderSessionPin[]) => persistDesktopBridgeSessionPins(paths.settings_path, pins));
   const openRouterOnly = resolveDesktopBridgeOpenRouterOnly({ home, ...(options.env ? { env: options.env } : {}) });
   const config: DesktopBridgeConfig = { providerRegistry: settings.provider_registry, routePolicy: settings.route_policy, providerSessionPins: settings.provider_session_pins, ...(options.resolveRequestRoute ? { resolveRequestRoute: options.resolveRequestRoute } : {}), persistProviderSessionPins, resolveProviderCredential: credentials.resolver, clientCapabilitySha256: settings.client_capability_sha256, listenHost: settings.listen_host, listenPort: settings.listen_port, allowedPathPrefixes: DESKTOP_BRIDGE_ALLOWED_PATH_PREFIXES, allowedOrigins: settings.allowed_origins, connectTimeoutMs: settings.connect_timeout_ms, idleTimeoutMs: settings.idle_timeout_ms, officialPassthrough: settings.official_passthrough.enabled ? { baseUrl: settings.official_passthrough.base_url } : null, ...(openRouterOnly ? { openRouterOnly } : {}) };
   const primary = credentials.sources['codex-lb'] || credentials.sources.openrouter;
   return { config, settings, loaded_env: credentials.loaded, credential_source: primary || null, credential_sources: credentials.sources, paths };
 }
 
+/**
+ * Pins are written into whatever settings the file holds now. A controller
+ * write the running bridge has not loaded yet (a catalog sync, a provider
+ * toggle) used to refuse every pin write until the next restart, and with it
+ * every new thread; a pin's generation stamps are bookkeeping the resolver
+ * re-stamps on use, so they are no reason to refuse. Without a settings file
+ * there is nothing to write into, and the pin lives in memory only.
+ */
 async function persistDesktopBridgeSessionPins(
   file: string,
-  expected: DesktopBridgeServiceSettings,
   pins: readonly ProviderSessionPin[],
 ): Promise<void> {
   await withFileLock(settingsLockOptions(file), async () => {
     const current = await readDesktopBridgeServiceSettings(file);
-    if (!current
-      || current.listen_host !== expected.listen_host
-      || current.listen_port !== expected.listen_port
-      || current.provider_registry.generation !== expected.provider_registry.generation
-      || current.route_policy.policy_generation !== expected.route_policy.policy_generation
-      || current.route_policy.catalog_generation !== expected.route_policy.catalog_generation) {
-      throw new DesktopBridgeError('session_pin_route_unavailable');
-    }
+    if (!current) return;
     await writeDesktopBridgeServiceSettingsUnlocked(file, {
       ...current,
       provider_session_pins: [...pins],
@@ -770,8 +766,10 @@ function validateProviderSessionPins(value: unknown): ProviderSessionPin[] {
     const pin = value as Record<string, unknown>;
     const allowed = new Set([
       'thread_id', 'provider_id', 'public_model', 'upstream_model',
-      'catalog_generation', 'route_policy_generation', 'created_at'
+      'catalog_generation', 'route_policy_generation', 'created_at', 'handoff_from'
     ]);
+    // `openai` pins a thread to official passthrough (bridge-contracts ProviderSessionPin).
+    const target = (value: unknown) => value === 'codex-lb' || value === 'openrouter' || value === BRIDGE_OFFICIAL_ROUTE_ID;
     const threadId = typeof pin.thread_id === 'string' ? pin.thread_id.trim() : '';
     if (Object.keys(pin).some((key) => !allowed.has(key))
       || !threadId
@@ -779,7 +777,8 @@ function validateProviderSessionPins(value: unknown): ProviderSessionPin[] {
       || threadId.length > 256
       || !/^[A-Za-z0-9._:/-]+$/.test(threadId)
       || seen.has(threadId)
-      || (pin.provider_id !== 'codex-lb' && pin.provider_id !== 'openrouter')
+      || !target(pin.provider_id)
+      || (pin.handoff_from !== undefined && (!target(pin.handoff_from) || pin.handoff_from === pin.provider_id))
       || canonicalizeBridgeModelId(pin.public_model) !== pin.public_model
       || normalizeBridgeUpstreamModelId(pin.upstream_model) !== pin.upstream_model
       || typeof pin.catalog_generation !== 'string'
@@ -798,7 +797,8 @@ function validateProviderSessionPins(value: unknown): ProviderSessionPin[] {
       upstream_model: pin.upstream_model,
       catalog_generation: pin.catalog_generation,
       route_policy_generation: pin.route_policy_generation,
-      created_at: pin.created_at
+      created_at: pin.created_at,
+      ...(pin.handoff_from === undefined ? {} : { handoff_from: pin.handoff_from })
     } as ProviderSessionPin;
   });
 }

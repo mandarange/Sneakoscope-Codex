@@ -2,6 +2,32 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Compaction on a Codex-LB thread no longer loses the conversation. Codex-LB
+  compacts natively on the thread's own account, so its compaction requests
+  now travel to it unchanged instead of being replaced by a bridge-written
+  summary, and a bridge idle limit can no longer cut one short.
+  `POST /responses/compact` follows the thread's own route in every mode; it
+  used to leave for chatgpt.com under the user's own ChatGPT login. OpenRouter
+  threads keep the bridge summary.
+- Switching a thread's model between Codex-LB, OpenRouter and the ChatGPT
+  account no longer fails on the other account's items: the move and every
+  later turn drop reasoning items and their `encrypted_content`, and the move
+  drops `previous_response_id` and the turn-state. A switch whose history holds
+  a native compaction is refused with a readable message instead of failing on
+  every retry. Official-route threads are now pinned too, so a change of auth
+  priority or Codex-LB registration no longer moves a running thread to
+  another identity, and a thread pinned to a provider never falls back to the
+  official identity for an unknown model. Pin writes no longer fail every new
+  thread between a settings write and the next bridge restart.
+- Codex-LB sees Codex as Codex: `user-agent`, `originator`, `version`,
+  subagent and turn-state headers reach it (only turn-states it issued for the
+  same thread and key), so it keeps each thread on its account. Its errors
+  reach Codex as sent — `usage_limit_reached` with its `resets_at` and no
+  invented Retry-After, `context_length_exceeded`, `previous_response_not_found`
+  — minus any credential in the body. Routing refusals answer 409 on every path.
+
 ## [10.7.0] - 2026-10-20
 
 ### Removed

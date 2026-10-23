@@ -3,11 +3,19 @@ import https from 'node:https';
 import type { Socket } from 'node:net';
 import zlib from 'node:zlib';
 import { pipeline } from 'node:stream/promises';
-import { BRIDGE_OFFICIAL_ROUTE_ID } from '../bridge-contracts.js';
+import { BRIDGE_OFFICIAL_ROUTE_ID, BRIDGE_REMOTE_COMPACTION } from '../bridge-contracts.js';
 import { buildOfficialPassthroughHeaders, buildProviderUpstreamHeaders, rewriteResponseHeaders } from './header-policy.js';
 import { createDesktopBridgeRejectionLogger } from './rejection-log.js';
-import { OPENROUTER_ONLY_REFUSAL_CODES, openRouterOnlyEnabled } from './exclusive-provider-guard.js';
-import { ensureDesktopBridgeRemoteTarget, isNoRouteUpstreamError, isUnreachableUpstreamError, refreshDesktopBridgeRemoteTarget, resolveAndBindDesktopBridgeRouteContext, resolveCodexSessionIdentity, resolveDesktopBridgeTarget, safeBridgeErrorCode, singleBridgeHeader } from './security.js';
+import { OPENROUTER_ONLY_REFUSAL_CODES } from './exclusive-provider-guard.js';
+import { ensureDesktopBridgeRemoteTarget, isNoRouteUpstreamError, isResponsesFamilyPath, isUnreachableUpstreamError, pinnedPublicModel, refreshDesktopBridgeRemoteTarget, resolveAndBindDesktopBridgeRouteContext, resolveCodexSessionIdentity, resolveDesktopBridgeTarget, safeBridgeErrorCode, singleBridgeHeader, threadRouteMove } from './security.js';
+import { admitCodexLbTurnState, forgetCodexLbTurnStates, rememberCodexLbTurnState } from './codex-lb-turn-state.js';
+import {
+  ProviderHandoffRefusedError,
+  assertProviderHandoffAllowed,
+  providerHandoffRefusalBody,
+  stripProviderBoundItems,
+  type ThreadRouteMove,
+} from './provider-handoff.js';
 import { desktopBridgeListenOrigin } from './state.js';
 import {
   buildCompactionSummaryRequest,
@@ -25,10 +33,16 @@ import {
   summaryWithinBounds,
   type BridgeCompactionKind,
 } from './compaction-adapter.js';
-import { isAdvisableEventStream, modelCapacityAdvisingSse } from './capacity-retry-advice.js';
-import { DEFAULT_DESKTOP_BRIDGE_MAX_REQUEST_BODY_BYTES, DesktopBridgeError, DesktopBridgeRequestBodyTooLargeError, type DesktopBridgeResolvedCredential, type DesktopBridgeRouteContext, type PreparedDesktopBridgeConfig, type PreparedDesktopBridgeProvider } from './types.js';
+import { MODEL_CAPACITY_ERROR_CODE, MODEL_CAPACITY_RETRY_AFTER_SECONDS, isAdvisableEventStream, modelCapacityAdvisingSse } from './capacity-retry-advice.js';
+import { DEFAULT_DESKTOP_BRIDGE_MAX_REQUEST_BODY_BYTES, DesktopBridgeError, DesktopBridgeRequestBodyTooLargeError, isDesktopBridgeRoutingConflict, type DesktopBridgeResolvedCredential, type DesktopBridgeRouteContext, type PreparedDesktopBridgeConfig, type PreparedDesktopBridgeProvider } from './types.js';
 
 const MAX_UPSTREAM_ERROR_BODY_BYTES = 1024 * 1024;
+/**
+ * A native compaction streams `response.created` and then nothing until the
+ * compaction item, which takes minutes on a long thread (45–150 s observed on
+ * Codex-LB, with a 180 s budget there). No idle limit below this may cut it.
+ */
+const NATIVE_COMPACTION_IDLE_FLOOR_MS = 300_000;
 
 export interface PreparedDesktopBridgeRequest {
   body: Buffer | null;
@@ -42,10 +56,14 @@ export interface PreparedDesktopBridgeRequest {
   /** Set when `body` still carries the client's content-encoding: the same
    *  request as plain JSON, for an upstream that refuses the encoded one. */
   plainBody?: Buffer | null;
-  /** Set when Codex asks for remote compaction; a provider route answers it
-   *  with a summary from the thread's own model (compaction-adapter.ts). */
+  /** Set when Codex asks for remote compaction; a `bridge_summary` route
+   *  answers it with a summary from the thread's own model (compaction-adapter.ts). */
   compaction?: BridgeCompactionKind | null;
   payload?: Record<string, unknown> | null;
+  /** The thread the request belongs to, when Codex named one. */
+  threadId?: string | null;
+  /** Set when this request moves its thread to another route target. */
+  move?: ThreadRouteMove | null;
 }
 
 // Codex CLI 0.147 compresses Responses POST bodies (content-encoding: zstd).
@@ -106,18 +124,18 @@ async function reencodeLikeClient(plain: Buffer, encoding: string): Promise<Buff
 const RESPONSES_PATHS = ['/backend-api/codex/responses', '/api/v1/responses', '/v1/responses'];
 
 /**
- * Where the request body names the model: every Responses create, and — only
- * in OpenRouter Only Mode — a POST to a Responses sub-endpoint such as
- * `/responses/compact`, which must meet the same route check instead of riding
- * the model-less official passthrough. Mode off keeps treating sub-endpoints as
- * model-less, byte for byte.
+ * Where the request body names the model: every Responses create, and every
+ * POST to a Responses sub-endpoint such as `/responses/compact`. A
+ * sub-endpoint carries the same conversation as the create, so it meets the
+ * same route check and goes to the thread's own route; treated as model-less,
+ * a compact of a Codex-LB or OpenRouter thread used to leave for the official
+ * backend under the user's own ChatGPT login.
  */
-function modelBodyKind(req: IncomingMessage, pathname: string, config: PreparedDesktopBridgeConfig): 'responses' | 'sub-endpoint' | null {
+function modelBodyKind(req: IncomingMessage, pathname: string): 'responses' | 'sub-endpoint' | null {
   // Only a POST is a create. A HEAD or GET on the same path (a reachability
   // probe) has no body, and parsing its empty one refused it as invalid JSON.
   if (RESPONSES_PATHS.includes(pathname)) return req.method === 'POST' ? 'responses' : null;
-  return openRouterOnlyEnabled(config) && req.method === 'POST'
-    && RESPONSES_PATHS.some((prefix) => pathname.startsWith(`${prefix}/`)) ? 'sub-endpoint' : null;
+  return req.method === 'POST' && RESPONSES_PATHS.some((prefix) => pathname.startsWith(`${prefix}/`)) ? 'sub-endpoint' : null;
 }
 
 function isCompactEndpoint(req: IncomingMessage, pathname: string): boolean {
@@ -156,7 +174,7 @@ export async function prepareDesktopBridgeRequest(req: IncomingMessage, config: 
   let contentEncodingStripped = false;
   let encoding = '';
   let encodedBody: Buffer | null = null;
-  const bodyKind = modelBodyKind(req, pathname, config);
+  const bodyKind = modelBodyKind(req, pathname);
   if (bodyKind) {
     const maximum = config.maxRequestBodyBytes ?? DEFAULT_DESKTOP_BRIDGE_MAX_REQUEST_BODY_BYTES;
     body = await readBoundedBody(req, maximum);
@@ -179,12 +197,21 @@ export async function prepareDesktopBridgeRequest(req: IncomingMessage, config: 
     if (contentEncodingStripped) body = decoded;
   }
   const headerModel = singleBridgeHeader(req.headers, 'x-sks-model');
-  const model = typeof payload?.model === 'string' ? payload.model : headerModel;
   const sessionIdentity = resolveCodexSessionIdentity(req.headers, payload);
-  const route = await resolveAndBindDesktopBridgeRouteContext({
+  // A Responses-family request that names no model (a cancel, a retrieve)
+  // follows its thread's pin rather than leaving for the official identity.
+  const model = typeof payload?.model === 'string'
+    ? payload.model
+    : headerModel || (isResponsesFamilyPath(pathname) ? pinnedPublicModel(sessionIdentity.thread_id, config) : null);
+  const routeRequest = {
     public_model: String(model || ''), session_id: sessionIdentity.thread_id,
-    pathname, transport: 'http', headers: req.headers, identity: sessionIdentity,
-  }, config);
+    pathname, transport: 'http' as const, headers: req.headers, identity: sessionIdentity,
+  };
+  let move: ThreadRouteMove | null = null;
+  const route = await resolveAndBindDesktopBridgeRouteContext(routeRequest, config, (resolved) => {
+    move = threadRouteMove(routeRequest, resolved, config);
+    assertProviderHandoffAllowed(payload, move);
+  });
   // A sub-endpoint body without a model is forwarded untouched.
   let rewrite = false;
   if (payload && (bodyKind === 'responses' || typeof payload.model === 'string') && payload.model !== route.upstream_model) {
@@ -194,6 +221,8 @@ export async function prepareDesktopBridgeRequest(req: IncomingMessage, config: 
   // No upstream can read a bridge-made compaction item; it travels as the
   // summary it carries, whichever route this request takes.
   if (expandBridgeCompactionItems(payload)) rewrite = true;
+  // A thread that moved carries account-bound items of the route it left.
+  if (route.session_pin?.handoff_from && stripProviderBoundItems(payload, Boolean(move))) rewrite = true;
   if (payload && rewrite) body = Buffer.from(JSON.stringify(payload));
   const compaction: BridgeCompactionKind | null = bodyKind === 'responses' && requestsRemoteCompaction(payload)
     ? 'trigger'
@@ -204,8 +233,7 @@ export async function prepareDesktopBridgeRequest(req: IncomingMessage, config: 
   // client sent it, and a rewritten one is re-compressed the same way. A
   // compaction the bridge answers itself is never forwarded, so it stays plain.
   let plainBody: Buffer | null = null;
-  const answeredByBridge = Boolean(compaction) && route.provider_id !== BRIDGE_OFFICIAL_ROUTE_ID;
-  if (encodedBody && body && !answeredByBridge && keepsClientEncoding(route)) {
+  if (encodedBody && body && !answeredByBridge(compaction, route) && keepsClientEncoding(route)) {
     const upstreamBody = rewrite ? await reencodeLikeClient(body, encoding) : encodedBody;
     if (upstreamBody) {
       plainBody = body;
@@ -214,7 +242,12 @@ export async function prepareDesktopBridgeRequest(req: IncomingMessage, config: 
     }
   }
   const credential = route.provider_id === BRIDGE_OFFICIAL_ROUTE_ID ? null : await resolveCredential(config, route);
-  return { body, route, credential, contentEncodingStripped, plainBody, compaction, payload };
+  return { body, route, credential, contentEncodingStripped, plainBody, compaction, payload, threadId: sessionIdentity.thread_id, move };
+}
+
+/** A compaction the route cannot run itself; the bridge answers it with a provider summary. */
+function answeredByBridge(compaction: BridgeCompactionKind | null | undefined, route: DesktopBridgeRouteContext): boolean {
+  return Boolean(compaction) && BRIDGE_REMOTE_COMPACTION[route.provider_id] === 'bridge_summary';
 }
 
 function connectTimeout(request: ClientRequest, config: PreparedDesktopBridgeConfig): void {
@@ -252,8 +285,12 @@ function writeHttpBridgeError(res: ServerResponse, error: unknown, req?: Incomin
     ...(req?.url === undefined ? {} : { url: req.url }),
   });
   if (res.headersSent) { res.destroy(error instanceof Error ? error : undefined); return; }
-  res.writeHead(code.startsWith('catalog_') || code.startsWith('session_') || code.includes('route_')
-    || OPENROUTER_ONLY_REFUSAL_CODES.has(code) ? 409 : 502, {
+  if (error instanceof ProviderHandoffRefusedError) {
+    res.writeHead(400, { 'content-type': 'application/json', 'cache-control': 'no-store', connection: 'close' });
+    res.end(providerHandoffRefusalBody(error));
+    return;
+  }
+  res.writeHead(isDesktopBridgeRoutingConflict(code) || OPENROUTER_ONLY_REFUSAL_CODES.has(code) ? 409 : 502, {
     'content-type': 'application/json', 'cache-control': 'no-store', connection: 'close',
   });
   res.end(JSON.stringify({ error: { type: 'sks_bridge_error', code, message: code } }));
@@ -318,14 +355,22 @@ function redactedUpstreamClientMessage(statusCode: number, transient: boolean): 
  */
 const UNREADABLE_BODY_HINT = /json|pars(?:e|ing)|decod|encod|compress|utf-?8/i;
 
-async function readRedactedUpstreamError(response: IncomingMessage): Promise<{ upstreamCode: string | null; upstreamType: string | null; unreadableBody: boolean }> {
+async function readRedactedUpstreamError(response: IncomingMessage): Promise<{
+  upstreamCode: string | null;
+  upstreamType: string | null;
+  unreadableBody: boolean;
+  /** The whole body, or null past MAX_UPSTREAM_ERROR_BODY_BYTES. Relayed only where errors pass through. */
+  body: Buffer | null;
+}> {
   let total = 0;
+  let complete = true;
   const chunks: Buffer[] = [];
   for await (const raw of response) {
     const chunk = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
     total += chunk.length;
     if (total > MAX_UPSTREAM_ERROR_BODY_BYTES) {
       response.destroy();
+      complete = false;
       break;
     }
     chunks.push(chunk);
@@ -340,7 +385,15 @@ async function readRedactedUpstreamError(response: IncomingMessage): Promise<{ u
   // still dies here.
   let upstreamCode: string | null = null;
   let upstreamType: string | null = null;
-  const text = Buffer.concat(chunks).toString('utf8');
+  // A compressed error is decoded here, so its identifiers are readable and a
+  // relayed body is plain; an encoding this bridge cannot decode relays nothing.
+  const raw = Buffer.concat(chunks);
+  const encoding = String(response.headers['content-encoding'] || '').trim().toLowerCase();
+  let decoded: Buffer | null = complete ? raw : null;
+  if (decoded && encoding && encoding !== 'identity') {
+    try { decoded = decodeBridgeRequestBody(decoded, encoding, 4 * MAX_UPSTREAM_ERROR_BODY_BYTES); } catch { decoded = null; }
+  }
+  const text = (decoded ?? raw).toString('utf8');
   try {
     const parsed = JSON.parse(text) as { error?: { type?: unknown; code?: unknown }; detail?: unknown };
     upstreamCode = safeUpstreamErrorId(parsed?.error?.code) ?? safeUpstreamErrorId(parsed?.detail);
@@ -348,7 +401,26 @@ async function readRedactedUpstreamError(response: IncomingMessage): Promise<{ u
   } catch {
     // Not JSON, or truncated: nothing recoverable without risking content.
   }
-  return { upstreamCode, upstreamType, unreadableBody: UNREADABLE_BODY_HINT.test(text.slice(0, 4096)) };
+  return {
+    upstreamCode,
+    upstreamType,
+    unreadableBody: UNREADABLE_BODY_HINT.test(text.slice(0, 4096)),
+    body: decoded,
+  };
+}
+
+/**
+ * Credentials a relayed error body must never carry to the client: the key this
+ * bridge injected, and any bearer token or `sk-` key an upstream echoed back.
+ * Everything else — code, type, message, `resets_at` — reaches Codex as sent.
+ */
+function scrubUpstreamErrorBody(body: Buffer, credential: string): Buffer {
+  let text = body.toString('utf8');
+  if (credential) text = text.split(credential).join('[REDACTED]');
+  text = text
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/-]{8,}=*/gi, 'Bearer [REDACTED]')
+    .replace(/\bsk-[A-Za-z0-9_-]{16,}/g, '[REDACTED]');
+  return Buffer.from(text, 'utf8');
 }
 
 function buildRedactedUpstreamErrorBody(
@@ -403,6 +475,7 @@ export function destroyDesktopBridgeUpstreamAgents(): void {
   for (const agent of upstreamAgents.values()) agent.destroy();
   upstreamAgents.clear();
   encodedBodyRefusals.clear();
+  forgetCodexLbTurnStates();
 }
 
 const STALE_CONNECTION_ERROR_CODES = new Set(['ECONNRESET', 'EPIPE', 'ECONNABORTED']);
@@ -458,7 +531,7 @@ export async function forwardHttp(
     // A deferred pin (DNS was down at start) resolves here or fails as
     // `bridge_remote_dns_failed`; a pin past its TTL re-resolves before use.
     await ensureDesktopBridgeRemoteTarget(remote, config.remoteLookup);
-    if (!official && request.compaction && request.payload) {
+    if (!official && request.compaction && answeredByBridge(request.compaction, request.route) && request.payload) {
       await answerCompactionWithProviderSummary(req, res, config, {
         kind: request.compaction,
         payload: request.payload,
@@ -480,6 +553,13 @@ export async function forwardHttp(
       : buildProviderUpstreamHeaders(req.headers, {
         providerId: provider!.provider_id, authTransport: provider!.auth_transport, credential: request.credential!,
       }, target.host);
+    // Codex-LB speaks the official protocol: its errors reach Codex as sent,
+    // and the turn-states it issues come back to it (codex-lb-turn-state.ts).
+    const codexLb = provider?.provider_id === 'codex-lb';
+    const threadId = request.threadId ?? null;
+    // A turn-state belongs to the identity that issued it; a moving thread's is foreign.
+    if (request.move) delete headers['x-codex-turn-state'];
+    else if (codexLb) admitCodexLbTurnState(headers, threadId, request.credential!.fingerprint);
     if (request.body) headers['content-length'] = String(request.body.length);
     else delete headers['content-length'];
     if (request.contentEncodingStripped) delete headers['content-encoding'];
@@ -488,6 +568,7 @@ export async function forwardHttp(
       `${remote.address}:${remote.port}`,
       config.idleTimeoutMs,
     );
+    const idleTimeoutMs = request.compaction ? Math.max(config.idleTimeoutMs, NATIVE_COMPACTION_IDLE_FLOOR_MS) : config.idleTimeoutMs;
 
     // A streamed request body is consumed as it is forwarded, so only a
     // buffered one can be replayed. Every Responses call arrives buffered.
@@ -511,7 +592,7 @@ export async function forwardHttp(
         ...(remote.tlsServername ? { servername: remote.tlsServername } : {}),
       });
       connectTimeout(upstream, config);
-      upstream.setTimeout(config.idleTimeoutMs, () => upstream.destroy(new DesktopBridgeError('bridge_upstream_idle_timeout')));
+      upstream.setTimeout(idleTimeoutMs, () => upstream.destroy(new DesktopBridgeError('bridge_upstream_idle_timeout')));
       req.once('aborted', abort); res.once('close', abort);
       upstream.once('error', (error) => {
         if (!responseStarted && isUnreachableUpstreamError(error)) {
@@ -531,6 +612,7 @@ export async function forwardHttp(
       });
       upstream.once('response', (response) => {
         const statusCode = response.statusCode || 502;
+        if (codexLb) rememberCodexLbTurnState(threadId, request.credential!.fingerprint, response.headers);
         if (plainFallbackActive && statusCode < 400 && !official && !encodedBodyRefusals.has(provider!.provider_id)) {
           // The plain replay of a refused encoded body went through: this
           // upstream cannot read client encodings, so stop sending them.
@@ -574,7 +656,7 @@ export async function forwardHttp(
           // produced it. A user report with a cf-ray id was undiagnosable from
           // the bridge log. Status, model, provider and path only; the body may
           // carry upstream detail and is never logged.
-          void readRedactedUpstreamError(response).then(({ upstreamCode, upstreamType, unreadableBody }) => {
+          void readRedactedUpstreamError(response).then(({ upstreamCode, upstreamType, unreadableBody, body: upstreamBody }) => {
             // A typed API error means the body was read; only an untyped
             // complaint about the body itself (or a 415) blames the encoding.
             if (budget.plainFallback && (statusCode === 415
@@ -604,13 +686,21 @@ export async function forwardHttp(
               )));
               return;
             }
-            const clientStatus = transientMislabel ? 503 : statusCode;
-            const body = buildRedactedUpstreamErrorBody(statusCode, upstreamCode, upstreamType, transientMislabel);
+            // Codex-LB's error is Codex's to act on, exactly as the official
+            // backend's: `context_length_exceeded` compacts, `usage_limit_reached`
+            // waits for its `resets_at`, `previous_response_not_found` resends.
+            // A wrapper code erased all of that, and a forced Retry-After made a
+            // terminal usage limit look retryable.
+            const verbatim = codexLb && upstreamBody !== null;
+            const clientStatus = verbatim ? statusCode : transientMislabel ? 503 : statusCode;
+            const body = verbatim
+              ? scrubUpstreamErrorBody(upstreamBody, request.credential!.value)
+              : buildRedactedUpstreamErrorBody(statusCode, upstreamCode, upstreamType, transientMislabel);
             // Logged after the body parse so the record can carry the upstream's
             // own error code — the one fact a report holding only a status and a
             // cf-ray id cannot supply.
             logHttpRejection({
-              code: transientMislabel
+              code: transientMislabel && !verbatim
                 ? `bridge_upstream_status_${statusCode}_translated_503`
                 : upstreamCode ? `bridge_upstream_status_${statusCode}:${upstreamCode}` : `bridge_upstream_status_${statusCode}`,
               transport: 'http',
@@ -624,8 +714,11 @@ export async function forwardHttp(
             const responseHeaders = rewriteResponseHeaders(response.headers, upstreamBaseUrl, authenticatedLocalBaseUrl);
             responseHeaders['content-length'] = String(body.length);
             delete responseHeaders['transfer-encoding'];
-            if (transientMislabel) responseHeaders['retry-after'] = String(responseHeaders['retry-after'] || '10');
-            if (statusCode === 429 && !responseHeaders['retry-after']) responseHeaders['retry-after'] = '10';
+            delete responseHeaders['content-encoding'];
+            // Codex retries a capacity failure only on advice the gateway drops.
+            if (verbatim && upstreamCode === MODEL_CAPACITY_ERROR_CODE && responseHeaders['retry-after'] === undefined) {
+              responseHeaders['retry-after'] = String(MODEL_CAPACITY_RETRY_AFTER_SECONDS);
+            }
             res.writeHead(clientStatus, responseHeaders);
             res.end(body, () => finish());
           }).catch(finish);
@@ -818,6 +911,11 @@ export async function requestProviderCompactionSummary(
   }
 }
 
+function singleRetryAfter(value: string | string[] | undefined): string | null {
+  const text = String(Array.isArray(value) ? value[0] ?? '' : value ?? '').trim();
+  return /^[A-Za-z0-9 ,:.-]{1,64}$/.test(text) ? text : null;
+}
+
 function upstreamErrorIds(body: Buffer): { upstreamCode: string | null; upstreamType: string | null } {
   try {
     const parsed = JSON.parse(body.toString('utf8')) as { error?: { type?: unknown; code?: unknown }; detail?: unknown };
@@ -870,9 +968,11 @@ async function answerCompactionWithProviderSummary(
       const transient = isTransientUpstreamFailure(call.status, upstreamType, upstreamCode);
       const clientStatus = transient ? 503 : call.status;
       const errorBody = buildRedactedUpstreamErrorBody(call.status, upstreamCode, upstreamType, transient);
+      // The provider's own advice travels; none is invented.
+      const retryAfter = singleRetryAfter(call.headers['retry-after']);
       res.writeHead(clientStatus, {
         'content-type': 'application/json', 'cache-control': 'no-store', 'content-length': String(errorBody.length),
-        ...(transient || call.status === 429 ? { 'retry-after': String(call.headers['retry-after'] || '10') } : {}),
+        ...(retryAfter ? { 'retry-after': retryAfter } : {}),
       });
       res.end(errorBody);
       return;

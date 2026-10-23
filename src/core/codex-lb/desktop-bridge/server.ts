@@ -30,7 +30,8 @@ import type {
   DesktopBridgeStartOptions,
   PreparedDesktopBridgeConfig,
 } from './types.js';
-import { DesktopBridgeError, DesktopBridgeRequestBodyTooLargeError } from './types.js';
+import { DesktopBridgeError, DesktopBridgeRequestBodyTooLargeError, isDesktopBridgeRoutingConflict } from './types.js';
+import { ProviderHandoffRefusedError, providerHandoffRefusalBody } from './provider-handoff.js';
 import { PACKAGE_VERSION } from '../../version.js';
 import {
   DESKTOP_BRIDGE_CLIENT_PATH_PREFIX,
@@ -111,7 +112,9 @@ function rejectionStatus(code: string): number {
   if (code === 'bridge_request_body_too_large') return 413;
   if (code === 'bridge_path_not_allowed') return 404;
   if (code === 'bridge_request_capacity_exhausted') return 503;
-  if (code === 'bridge_session_pin_persist_failed' || code.startsWith('bridge_upstream_')) return 502;
+  // The same status the forwarder answers for the same refusal.
+  if (isDesktopBridgeRoutingConflict(code)) return 409;
+  if (code.startsWith('bridge_upstream_')) return 502;
   if (code.includes('origin') || code.includes('peer') || code.includes('loopback') || code.includes('capability')) return 403;
   return 400;
 }
@@ -144,6 +147,11 @@ function writeBridgeRejection(res: ServerResponse, error: unknown, req?: Incomin
   });
   if (res.headersSent) {
     res.destroy(error instanceof Error ? error : undefined);
+    return;
+  }
+  if (error instanceof ProviderHandoffRefusedError) {
+    res.writeHead(400, { 'content-type': 'application/json', 'cache-control': 'no-store', connection: 'close' });
+    res.end(providerHandoffRefusalBody(error));
     return;
   }
   const code = rejectedCode;

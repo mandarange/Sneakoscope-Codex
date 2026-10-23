@@ -601,7 +601,7 @@ test('failed session-pin persistence leaves bridge memory unchanged and never re
   const bridgePort = await selectAvailableDesktopBridgePort('127.0.0.1');
   const config = bridgeConfig(bridgePort, upstreamPort, 'x-codex-lb-api-key');
   config.persistProviderSessionPins = async () => {
-    throw new DesktopBridgeError('bridge_session_pin_persist_failed');
+    throw Object.assign(new Error('settings write failed'), { code: 'ENOSPC' });
   };
   const prepared = await prepareDesktopBridgeConfig(config);
   let bridge: DesktopBridgeHandle | null = null;

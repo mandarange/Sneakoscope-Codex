@@ -3,10 +3,18 @@ import tls from 'node:tls';
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import WebSocket, { WebSocketServer, type RawData } from 'ws';
-import { BRIDGE_OFFICIAL_ROUTE_ID } from '../bridge-contracts.js';
+import { BRIDGE_OFFICIAL_ROUTE_ID, BRIDGE_REMOTE_COMPACTION } from '../bridge-contracts.js';
 import { buildOfficialPassthroughWebSocketHeaders, buildProviderWebSocketHeaders } from './header-policy.js';
 import { createDesktopBridgeRejectionLogger } from './rejection-log.js';
-import { assertDesktopBridgeRouteContext, ensureDesktopBridgeRemoteTarget, isUnreachableUpstreamError, refreshDesktopBridgeRemoteTarget, resolveAndBindDesktopBridgeRouteContext, resolveCodexSessionIdentity, resolveDesktopBridgeTarget, safeBridgeErrorCode } from './security.js';
+import { assertDesktopBridgeRouteContext, ensureDesktopBridgeRemoteTarget, isUnreachableUpstreamError, refreshDesktopBridgeRemoteTarget, resolveAndBindDesktopBridgeRouteContext, resolveCodexSessionIdentity, resolveDesktopBridgeTarget, safeBridgeErrorCode, threadRouteMove } from './security.js';
+import { admitCodexLbTurnState } from './codex-lb-turn-state.js';
+import {
+  ProviderHandoffRefusedError,
+  assertProviderHandoffAllowed,
+  providerHandoffRefusedEvent,
+  stripProviderBoundItems,
+  type ThreadRouteMove,
+} from './provider-handoff.js';
 import { DEFAULT_DESKTOP_BRIDGE_MAX_REQUEST_BODY_BYTES, DesktopBridgeError, type CodexSessionIdentity, type DesktopBridgeRouteContext, type PreparedDesktopBridgeConfig } from './types.js';
 import {
   buildCompactionSummaryRequest,
@@ -83,6 +91,8 @@ export function forwardResponsesWebSocket(req: IncomingMessage, socket: Duplex, 
     let upstream: WebSocket | null = null;
     let upstreamSocket: net.Socket | null = null;
     let bound: DesktopBridgeRouteContext | null = null;
+    /** The first create moved its thread: the upgrade's turn-state belongs to the route it left. */
+    let boundByMove = false;
     let boundBaseUrl: string | null = null;
     let boundCredentialGeneration: string | null = null;
     let boundCredentialFingerprint: string | null = null;
@@ -159,25 +169,44 @@ export function forwardResponsesWebSocket(req: IncomingMessage, socket: Duplex, 
       // socket once marked as a child thread is never routed as a root turn.
       identity = bound ? withLineage(identity, nextIdentity) : nextIdentity;
       const request = routeRequest(model);
-      // Do not persist a new session pin for a create we cannot forward on this socket.
-      assertBinding(assertDesktopBridgeRouteContext(request, config));
-      const route = await resolveAndBindDesktopBridgeRouteContext(request, config);
+      // Do not persist a new session pin for a create we cannot forward on this
+      // socket, nor for a move whose history the destination cannot read.
+      const planned = assertDesktopBridgeRouteContext(request, config);
+      assertProviderHandoffAllowed(message.create, threadRouteMove(request, planned, config));
+      assertBinding(planned);
+      let move: ThreadRouteMove | null = null;
+      const route = await resolveAndBindDesktopBridgeRouteContext(request, config, (resolved) => {
+        move = threadRouteMove(request, resolved, config);
+        assertProviderHandoffAllowed(message.create, move);
+      });
       if (stopped || client.readyState !== WebSocket.OPEN) return;
       assertBinding(route);
       routedModel = route.public_model;
       if (!bound) {
         bound = route;
+        boundByMove = Boolean(move);
         await connect(route);
       }
       const create = { ...message.create!, model: route.upstream_model };
       // No upstream can read a bridge-made compaction item; it travels as the summary it carries.
-      const expanded = expandBridgeCompactionItems(create);
-      if (route.provider_id !== BRIDGE_OFFICIAL_ROUTE_ID && requestsRemoteCompaction(create)) {
+      let rewritten = expandBridgeCompactionItems(create);
+      // A thread that moved carries account-bound items of the route it left.
+      if (route.session_pin?.handoff_from && stripProviderBoundItems(create, Boolean(move))) rewritten = true;
+      if (BRIDGE_REMOTE_COMPACTION[route.provider_id] === 'bridge_summary' && requestsRemoteCompaction(create)) {
         message.compaction = create;
         return;
       }
-      if (route.upstream_model !== model || expanded) message.data = Buffer.from(JSON.stringify(create));
+      if (route.upstream_model !== model || rewritten) message.data = Buffer.from(JSON.stringify(create));
       message.routed = create;
+    }
+    /** A create refused for a move its history cannot survive: Codex shows why, and the socket stays. */
+    function refuseMove(message: PendingMessage, error: ProviderHandoffRefusedError): void {
+      const model = typeof message.create?.model === 'string' ? message.create.model : '';
+      logRejection({ code: error.code, transport: 'websocket', ...(req.url ? { url: req.url } : {}) });
+      relay(client, Buffer.from(JSON.stringify(providerHandoffRefusedEvent(error, newCompactionResponseId(), model))), false);
+      const index = pending.indexOf(message);
+      if (index >= 0) pending.splice(index, 1);
+      pendingBytes -= message.originalBytes;
     }
     /** Answers a provider-route compaction create with a summary from the thread's own model. */
     async function answerCompaction(create: Record<string, unknown>): Promise<void> {
@@ -222,6 +251,8 @@ export function forwardResponsesWebSocket(req: IncomingMessage, socket: Duplex, 
     }
     async function connect(route: DesktopBridgeRouteContext): Promise<void> {
       const official = route.provider_id === BRIDGE_OFFICIAL_ROUTE_ID;
+      // Only a route the bridge compacts for needs the conversation it relays.
+      const summarizes = BRIDGE_REMOTE_COMPACTION[route.provider_id] === 'bridge_summary';
       const provider = route.provider_id === BRIDGE_OFFICIAL_ROUTE_ID ? null : config.providers[route.provider_id];
       const remote = official ? config.officialRemote : provider?.remote;
       if (!remote) throw new DesktopBridgeError('bridge_websocket_upstream_unavailable');
@@ -236,6 +267,8 @@ export function forwardResponsesWebSocket(req: IncomingMessage, socket: Duplex, 
       const target = resolveDesktopBridgeTarget(req.url, remote);
       const outgoing = official ? buildOfficialPassthroughWebSocketHeaders(req.headers, target.host)
         : buildProviderWebSocketHeaders(req.headers, { providerId: provider!.provider_id, authTransport: provider!.auth_transport, credential: credential! }, target.host);
+      if (boundByMove) delete outgoing['x-codex-turn-state'];
+      else if (provider?.provider_id === 'codex-lb') admitCodexLbTurnState(outgoing, identity.thread_id, credential!.fingerprint);
       // Each leg negotiates its own framing; never reuse the client's key or extensions.
       const headers: Record<string, string> = {};
       for (const [name, value] of Object.entries(outgoing)) {
@@ -282,7 +315,7 @@ export function forwardResponsesWebSocket(req: IncomingMessage, socket: Duplex, 
           frame = advised;
           logRejection({ code: 'bridge_upstream_model_capacity_retry_advised', transport: 'websocket', provider_id: route.provider_id, public_model: routedModel ?? route.public_model, ...(req.url ? { url: req.url } : {}) });
         }
-        chain.received(frame);
+        if (summarizes) chain.received(frame);
         try { relay(client, frame, binary); } catch (error) { fail(error); }
       });
       peer.on('close', (code, reason) => {
@@ -306,22 +339,36 @@ export function forwardResponsesWebSocket(req: IncomingMessage, socket: Duplex, 
       if (processing || stopped) return;
       processing = true;
       try {
-        if (!bound) {
+        while (!bound) {
           const firstCreate = pending.find((message) => message.create);
           if (!firstCreate) return;
-          await resolveCreate(firstCreate);
+          try {
+            await resolveCreate(firstCreate);
+          } catch (error) {
+            if (!(error instanceof ProviderHandoffRefusedError)) throw error;
+            refuseMove(firstCreate, error);
+            continue;
+          }
           // Already validated and rewritten; avoid resolving the alias a second time.
           firstCreate.create = null;
         }
         while (!stopped && client.readyState === WebSocket.OPEN && pending.length) {
           const message = pending[0]!;
-          if (message.create) await resolveCreate(message);
+          if (message.create) {
+            try {
+              await resolveCreate(message);
+            } catch (error) {
+              if (!(error instanceof ProviderHandoffRefusedError)) throw error;
+              refuseMove(message, error);
+              continue;
+            }
+          }
           if (stopped || client.readyState !== WebSocket.OPEN) return;
           if (message.compaction) await answerCompaction(message.compaction);
           else {
             relay(upstream!, message.data, message.binary);
-            // Only a provider socket ever answers a compaction itself.
-            if (message.routed && bound?.provider_id !== BRIDGE_OFFICIAL_ROUTE_ID) chain.sent(message.routed, message.data);
+            // Only a route the bridge compacts for ever answers a compaction itself.
+            if (message.routed && bound && BRIDGE_REMOTE_COMPACTION[bound.provider_id] === 'bridge_summary') chain.sent(message.routed, message.data);
           }
           pending.shift();
           pendingBytes -= message.originalBytes;

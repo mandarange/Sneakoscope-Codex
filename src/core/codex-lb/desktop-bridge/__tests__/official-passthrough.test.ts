@@ -295,7 +295,8 @@ test('an unavailable gateway pin fails without changing account after a route fl
     }];
     bridge = await startDesktopBridge(config, { writeState: false });
     const result = await postJson(bridgePort, '/backend-api/codex/responses', { model: OFFICIAL_MODEL, input: 'hi' }, { 'thread-id': 'thread-legacy-1' });
-    assert.equal(result.status, 400);
+    // A routing refusal is a 409 on every path (server and forwarder agree).
+    assert.equal(result.status, 409);
     assert.match(result.body, /session_pin_route_unavailable/);
     assert.equal(official.seen.length, 0);
     assert.equal(provider.seen.length, 0);
@@ -313,10 +314,10 @@ test('without official passthrough the legacy fail-closed behavior is unchanged'
   try {
     bridge = await startDesktopBridge(bridgeConfig(bridgePort, providerPort, null), { writeState: false });
     const unrouted = await postJson(bridgePort, '/backend-api/codex/responses', { model: OFFICIAL_MODEL, input: 'x' });
-    assert.equal(unrouted.status, 400);
+    assert.equal(unrouted.status, 409);
     assert.match(unrouted.body, /catalog_model_route_missing/);
     const alpha = await postJson(bridgePort, '/backend-api/codex/alpha/search', { query: 'q' });
-    assert.equal(alpha.status, 400);
+    assert.equal(alpha.status, 409);
     assert.equal(provider.seen.length, 0);
   } finally {
     if (bridge) await stopDesktopBridge(bridge);

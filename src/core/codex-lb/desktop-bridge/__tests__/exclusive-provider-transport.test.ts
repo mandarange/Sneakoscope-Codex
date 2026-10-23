@@ -250,11 +250,21 @@ test('HTTP: mode on holds Responses sub-endpoints such as compact to the same ro
   assert.deepEqual(f.official.requests, [{ path: '/backend-api/codex/responses/resp_1/cancel', model: null }]);
 });
 
-test('HTTP: mode off keeps Responses sub-endpoints on the model-less passthrough', { timeout: 15_000 }, async (t) => {
+test('HTTP: mode off routes Responses sub-endpoints by thread pin and body model, never to the official identity', { timeout: 15_000 }, async (t) => {
+  // A compact carries the thread's conversation. Treated as model-less, a
+  // Codex-LB thread's compact left for the official backend under the user's
+  // own ChatGPT login; it now meets the route check the create meets.
   const f = await fixture(t, null);
   assert.deepEqual(await f.post('/backend-api/codex/responses/compact', { model: 'gpt-lb', input: [] }, CHILD_HEADERS), { status: 200, code: null });
-  assert.deepEqual(f.official.requests, [{ path: '/backend-api/codex/responses/compact', model: 'gpt-lb' }]);
-  assert.equal(f.lb.requests.length + f.openrouter.requests.length, 0);
+  assert.deepEqual(f.lb.requests, [{ path: '/backend-api/codex/responses/compact', model: 'gpt-lb' }]);
+  // A sub-endpoint that names no model follows its thread's pin.
+  assert.deepEqual(await f.post('/backend-api/codex/responses/resp_1/cancel', { reason: 'user' }, CHILD_HEADERS), { status: 200, code: null });
+  assert.deepEqual(f.lb.requests.at(-1), { path: '/backend-api/codex/responses/resp_1/cancel', model: null });
+  assert.deepEqual(f.official.requests, []);
+  assert.equal(f.openrouter.requests.length, 0);
+  // A thread with no pin and no model keeps the client's own identity.
+  assert.deepEqual(await f.post('/backend-api/codex/responses/resp_2/cancel', { reason: 'user' }), { status: 200, code: null });
+  assert.deepEqual(f.official.requests, [{ path: '/backend-api/codex/responses/resp_2/cancel', model: null }]);
 });
 
 test('Responses WebSocket: header-named lineage inside client_metadata marks a child', { timeout: 15_000 }, async (t) => {

@@ -302,6 +302,14 @@ export class DesktopBridgeError extends Error {
   }
 }
 
+/**
+ * A refusal that holds until the thread, its model or the routing changes:
+ * answered 409 on every path, so a client never retries it as a fault.
+ */
+export function isDesktopBridgeRoutingConflict(code: string): boolean {
+  return code.startsWith('catalog_') || code.startsWith('session_') || code.includes('route_');
+}
+
 // Responses include image data and accumulated tool output. The old 16 MiB
 // transport cap rejected valid turns before the provider could process them.
 // Keep a finite bound shared by HTTP decoding and WebSocket queues.
