@@ -27,6 +27,10 @@
   reach Codex as sent — `usage_limit_reached` with its `resets_at` and no
   invented Retry-After, `context_length_exceeded`, `previous_response_not_found`
   — minus any credential in the body. Routing refusals answer 409 on every path.
+- Enabling Codex-LB in SKS Center no longer breaks Codex and every later
+  catalog sync by writing `model_provider = "codex-lb"`; Codex stays bound to
+  the bridge, and a selection an earlier toggle wrote is repaired by the next
+  sync.
 - SKS no longer deletes the model you picked in Codex. Guarded config writes
   (catalog sync, provider changes, 1M context) stopped treating SKS's own
   "moved machine-local Codex config" comment as proof that the `model` line

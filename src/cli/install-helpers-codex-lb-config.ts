@@ -14,12 +14,24 @@ export const DESKTOP_BRIDGE_MANAGED_MARKER = '# sks-desktop-bridge-managed';
 export const DESKTOP_BRIDGE_MANAGED_BASE_URL_MARKER = '# sks-desktop-bridge-managed-base-url';
 export const DESKTOP_BRIDGE_MANAGED_MODEL_CATALOG_MARKER = '# sks-desktop-bridge-managed-model-catalog';
 
-/** Point the Codex client at Codex LB, or back at the managed OpenAI/bridge binding. */
-export function bindCodexClientProvider(text: string, provider: 'codex-lb' | 'openai'): string {
-  const selected = topLevelTomlString(text, 'model_provider');
-  if (selected && selected !== 'openai' && selected !== 'codex-lb') return text;
-  if (selected === provider) return text;
-  return upsertTopLevelTomlString(String(text || ''), 'model_provider', provider);
+/**
+ * `sks bridge provider enable codex-lb` used to write `model_provider =
+ * "codex-lb"` under the managed marker. The managed setup defines no such
+ * provider, so Codex could not load it, and every later catalog sync refused
+ * the selection as user-owned. Codex stays on the managed binding (`openai`,
+ * through the bridge), which routes Codex-LB itself; a selection that toggle
+ * wrote is set back in place. A `codex-lb` backed by a real provider table is
+ * someone's own direct setup and is left alone.
+ */
+export function repairManagedCodexLbClientSelection(text: string): string {
+  const source = String(text || '');
+  if (topLevelTomlString(source, 'model_provider') !== 'codex-lb') return source;
+  if (!topLevelHasLine(source, DESKTOP_BRIDGE_MANAGED_MARKER) || hasCodexLbProviderTable(source)) return source;
+  return upsertTopLevelTomlString(source, 'model_provider', 'openai');
+}
+
+function hasCodexLbProviderTable(text: string): boolean {
+  return /^\s*\[model_providers\.(?:"codex-lb"|codex-lb)\]\s*(?:#.*)?$/m.test(text);
 }
 
 /** Write the only current managed Codex routing binding. */
@@ -59,7 +71,8 @@ export function upsertDesktopBridgeManagedConfig(
     throw new Error('historical_user_owned_config_conflict:model_catalog_json');
   }
 
-  const keepCodexLb = selectedProvider === 'codex-lb';
+  // Only a real `codex-lb` provider table makes that selection loadable.
+  const keepCodexLb = selectedProvider === 'codex-lb' && hasCodexLbProviderTable(next);
   next = removeManagedBridgeTopLevelBindings(next);
   next = upsertTopLevelTomlString(next, 'model_provider', keepCodexLb ? 'codex-lb' : 'openai');
   next = addTopLevelMarkerBeforeKey(next, 'model_provider', DESKTOP_BRIDGE_MANAGED_MARKER);

@@ -5,7 +5,11 @@
 SKS has one managed Desktop and CLI routing runtime: the local **Desktop
 Bridge**. Codex-LB and OpenRouter are independent provider profiles registered
 with that bridge; neither is a runtime mode or a global Codex provider
-selection.
+selection. Codex stays bound to the bridge (`model_provider = "openai"` with
+`openai_base_url` pointing at it); enabling or disabling a provider changes
+bridge routing only. A `model_provider = "codex-lb"` that SKS 10.7.0 and
+earlier wrote under the managed marker is set back to `openai` by the next
+catalog sync.
 
 ChatGPT OAuth remains owned by Codex. SKS does not copy, rewrite, or send that
 OAuth authorization to either provider upstream. Codex-LB and OpenRouter

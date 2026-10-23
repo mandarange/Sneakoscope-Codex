@@ -506,6 +506,34 @@ test('ensure refreshes the catalog before the current installer without starting
   assert.equal(oldBootstraps, 0);
 });
 
+test('provider enable leaves Codex bound to the bridge, and a sync repairs what the old toggle wrote', async (t) => {
+  const setup = await fixture(t, true);
+  const runtime = commandOptions(setup);
+  const configPath = path.join(setup.home, '.codex', 'config.toml');
+  const userConfig = 'model = "gpt-6-astra"\n';
+  await fs.writeFile(configPath, userConfig, { mode: 0o600 });
+  const enabled = await executeDesktopBridgeCommandV3({ operation: 'provider.enable', provider_id: 'codex-lb' }, runtime.options);
+  assert.equal(enabled.schema, 'sks.desktop-bridge-command-result.v1');
+  assert.equal(await fs.readFile(configPath, 'utf8'), userConfig, 'enabling a provider never writes model_provider');
+
+  // What the toggle wrote before: a provider the managed setup never defines,
+  // which made every later sync refuse the config as user-owned.
+  await fs.writeFile(configPath, `# sks-desktop-bridge-managed\nmodel_provider = "codex-lb"\n${userConfig}`, { mode: 0o600 });
+  const synced = await executeDesktopBridgeCommandV3({ operation: 'catalog.sync' }, {
+    ...runtime.options,
+    codexLbLookup: async () => [{ address: '93.184.216.34', family: 4 as const }],
+    fetchImpl: async (input) => new Response(JSON.stringify({ data: String(input).includes('openrouter.ai')
+      ? [{ id: 'or-mutation-model' }]
+      : [{ id: 'gpt-6-astra' }, { id: 'lb-mutation-model' }] }), { status: 200 }),
+  });
+  assert.equal(synced.schema, 'sks.desktop-bridge-command-result.v1');
+  if (synced.schema !== 'sks.desktop-bridge-command-result.v1') return;
+  assert.equal(synced.execution.ok, true, JSON.stringify(synced.execution));
+  const after = await fs.readFile(configPath, 'utf8');
+  assert.match(after, /^model_provider = "openai"$/m);
+  assert.match(after, /^model = "gpt-6-astra"$/m, 'and the user model line survives the sync');
+});
+
 test('authentication priority does not report active while an older bridge process is still running', async (t) => {
   const setup = await fixture(t, true);
   const runtime = commandOptions(setup);
