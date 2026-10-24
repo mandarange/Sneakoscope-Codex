@@ -7,6 +7,8 @@ Codex-LB, and SKS stops overriding choices the user made (PR #30). It also
 includes the Mermaid/KaTeX and DOMPurify security refreshes (PR #29 and #32)
 and the compatible Zod 4.6.7 runtime dependency fix for GHSA-mrhx-c7xc-m3w5.
 
+- Context search checks the extractor registry used by align, so a newly
+  published workspace index can answer without a false schema-revision refusal.
 - Codex-LB compaction is native again. The bridge forwards a compaction request
   to Codex-LB unchanged instead of answering it with its own summary, and
   `POST /responses/compact` follows the thread's route in every mode instead of

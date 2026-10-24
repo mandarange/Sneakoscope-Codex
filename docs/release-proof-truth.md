@@ -10,7 +10,9 @@ headers and errors passed through, a Codex-LB toggle that no longer writes
 pointer left alone, stale SKS model pins removed, and a turn-scoped Jev plan.
 It also includes the Mermaid/KaTeX and DOMPurify security refreshes from
 PR #29 and #32 and the compatible Zod 4.6.7 runtime dependency security fix
-(GHSA-mrhx-c7xc-m3w5). Current audit, CI, package receipt and publish dry-run
+(GHSA-mrhx-c7xc-m3w5). Context search now checks align's extractor registry,
+fixing the false schema-revision refusal immediately after a successful align.
+Current audit, CI, package receipt and publish dry-run
 results are recorded under `.sneakoscope/reports/release/10.7.1`.
 No 10.7.1 registry or GitHub publication is claimed before the operator's
 `npm publish` step.

@@ -72,7 +72,7 @@ import {
   CONTEXT_GRAPH_STALE_ERROR,
   type ContextGraphStatus
 } from '../triwiki/context-graph/contracts.js';
-import { contextGraphExtractors } from '../triwiki/context-graph/extractors/index.js';
+import { alignGraphExtractors } from '../triwiki/context-graph/extractors/index.js';
 import { isWorkspaceRelativePosixPath } from '../triwiki/context-graph/paths.js';
 import {
   CONTEXT_GRAPH_TRAVERSAL_CAPS,
@@ -296,7 +296,9 @@ async function preflightStatus(root: string, options: SearchContextOptions): Pro
   // cache-key-stale, source-edited, corrupt-meta and code-only workspaces — the
   // git-derived staleness check that made the snapshot read load-bearing is
   // preserved, not dropped.
-  const status = await contextIndexFreshness(root, { extractors: contextGraphExtractors(), verifySources: false });
+  // Align publishes the workspace index without the generated context pack.
+  // Compare against that publisher's registry, including its evidence revision.
+  const status = await contextIndexFreshness(root, { extractors: alignGraphExtractors(), verifySources: false });
   cacheSet(key, status, STATUS_MEMO_TTL_MS);
   return status;
 }

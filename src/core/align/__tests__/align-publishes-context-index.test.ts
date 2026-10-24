@@ -16,6 +16,8 @@ import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { searchContext } from '../../search/context.js';
+import { SEARCH_SCHEMA_VERSION } from '../../search/types.js';
 import {
   clearContextGraphSnapshotCache,
   clearWorkspaceContextIndex,
@@ -176,6 +178,18 @@ test('align stays fresh after rebuilding shared-memory indexes in a committed wo
     await align(root, 'M-align-shared-index-second');
     const second = await contextIndexFreshness(root, { extractors: alignGraphExtractors() });
     assert.equal(second.status, 'fresh', second.reasons.join('\n'));
+
+    // Exercise the public search preflight with the registry that align actually
+    // published, rather than injecting the freshness verdict into search.
+    const response = await searchContext({
+      schemaVersion: SEARCH_SCHEMA_VERSION,
+      mode: 'context',
+      root,
+      query: 'runService',
+      limits: { maxMatches: 50 }
+    }, { cache: false });
+    assert.equal(response.ok, true, [...response.errors, ...response.warnings].join('\n'));
+    assert.ok(response.matches.length > 0, 'public search could not answer after align');
 
     await write(root, 'src/runner.ts', 'export function runService(value: number) { return value + 2; }\n');
     const changed = await contextIndexFreshness(root, { extractors: alignGraphExtractors() });

@@ -6,6 +6,9 @@
 
 ### Fixed
 
+- Context search accepts the fresh index published by `sks align run`: its
+  freshness check now uses align's extractor registry, avoiding an immediate
+  `schema_revision_changed` refusal while preserving stale-source checks.
 - Refresh the MCP SDK's compatible Zod dependency to 4.6.7, fixing
   GHSA-mrhx-c7xc-m3w5, and include the Mermaid/KaTeX and DOMPurify security
   updates merged after 10.7.0.
