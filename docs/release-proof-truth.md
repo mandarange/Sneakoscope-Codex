@@ -8,6 +8,10 @@ pinned official threads and a stripping handoff between providers, Codex-LB
 headers and errors passed through, a Codex-LB toggle that no longer writes
 `model_provider`, the user's `model` line and the provider's migration
 pointer left alone, stale SKS model pins removed, and a turn-scoped Jev plan.
+It also includes the Mermaid/KaTeX and DOMPurify security refreshes from
+PR #29 and #32 and the compatible Zod 4.6.7 runtime dependency security fix
+(GHSA-mrhx-c7xc-m3w5). Current audit, CI, package receipt and publish dry-run
+results are recorded under `.sneakoscope/reports/release/10.7.1`.
 No 10.7.1 registry or GitHub publication is claimed before the operator's
 `npm publish` step.
 

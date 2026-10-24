@@ -3,7 +3,9 @@
 ## 10.7.1 release candidate
 
 10.7.1 is a hotfix release: the Desktop Bridge becomes a correct client of
-Codex-LB, and SKS stops overriding choices the user made (PR #30).
+Codex-LB, and SKS stops overriding choices the user made (PR #30). It also
+includes the Mermaid/KaTeX and DOMPurify security refreshes (PR #29 and #32)
+and the compatible Zod 4.6.7 runtime dependency fix for GHSA-mrhx-c7xc-m3w5.
 
 - Codex-LB compaction is native again. The bridge forwards a compaction request
   to Codex-LB unchanged instead of answering it with its own summary, and
@@ -29,10 +31,10 @@ Codex-LB, and SKS stops overriding choices the user made (PR #30).
 Release authority requires the canonical suite, full release DAG, package
 receipt, required real checks, dist freshness, upgrade smoke, macOS Menu Bar
 proof, and release stamp from the clean `main` commit. The macOS evidence and
-the stamp come from the operator's clean `main` checkout. A full release check
-passed on the PR #30 merge commit `191e28f0` at version 10.7.0; the version bump
-voids that stamp, so the check runs again on `main` once this release commit is
-merged. Behavior against a live Codex-LB (its request log, one account per
+the stamp come from the operator's clean `main` checkout. Run the full release
+check and normal `npm publish --dry-run` after every source or dependency
+change; earlier stamps do not authorize this candidate. Behavior against a
+live Codex-LB (its request log, one account per
 thread) is not proved. npm publication is operator-owned.
 
 ## 10.7.0 published

@@ -6,6 +6,9 @@
 
 ### Fixed
 
+- Refresh the MCP SDK's compatible Zod dependency to 4.6.7, fixing
+  GHSA-mrhx-c7xc-m3w5, and include the Mermaid/KaTeX and DOMPurify security
+  updates merged after 10.7.0.
 - Compaction on a Codex-LB thread no longer loses the conversation. Codex-LB
   compacts natively on the thread's own account, so its compaction requests
   now travel to it unchanged instead of being replaced by a bridge-written
