@@ -931,6 +931,10 @@ async function reconcileSkillsUnlocked(opts: ReconcileSkillsOptions): Promise<Sk
     );
   }
   const removedResidue = await reconcileRemovedSkillTargets(removedResidueTargets, opts.fix);
+  const quarantinedResiduePaths = new Set(removedResidue.quarantined_user_collisions);
+  report.quarantined_user_collisions.push(...removedResidue.detected
+    .filter((entry) => quarantinedResiduePaths.has(entry.path))
+    .map((entry) => entry.name));
   report.retired_residue = {
     detected_count: removedResidue.detected.length,
     removed_count: removedResidue.removed.length,
@@ -1004,7 +1008,10 @@ async function reconcileSkillsUnlocked(opts: ReconcileSkillsOptions): Promise<Sk
   report.core_skill_integrity = install?.core_skill_integrity || { ok: true, installed_count: 0, restored_count: 0, user_collision_count: 0 };
   report.quarantined_user_collisions.push(...(install?.quarantined_user_collisions || []));
   report.quarantined_manifest_collisions = [...new Set<string>(install?.quarantined_manifest_collisions || [])].sort();
-  report.removed_stale_generated_skills = currentSurfaceSkillPaths(install?.removed_stale_generated_skills || report.removed);
+  report.removed_stale_generated_skills = currentSurfaceSkillPaths([
+    ...(install?.removed_stale_generated_skills || report.removed),
+    ...removedResidue.removed.map((file) => file.replace(/^~\//, ''))
+  ]);
   report.removed_agent_skill_aliases = currentSurfaceSkillPaths(install?.removed_agent_skill_aliases || []);
   report.removed_codex_skill_mirrors = currentSurfaceSkillPaths(install?.removed_codex_skill_mirrors || []);
   report.removed = currentSurfaceSkillPaths(report.removed);
