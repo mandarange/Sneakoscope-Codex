@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { runDoctorCommandAliasCleanup } from '../core/doctor/command-alias-cleanup.js';
 import { PACKAGE_VERSION, packageRoot, readJson, writeReceiptRotated } from '../core/fsx.js';
 import { runSksUpdateNow } from '../core/update-check.js';
@@ -309,10 +310,21 @@ try {
   const rotatedAfterWrite = (await fsp.readdir(dir)).filter((name) => name.startsWith(`${base}.`) && name.endsWith('.json'));
   assertGate(rotatedAfterWrite.length <= 5, 'receipt rotation must include the just-rotated current receipt in keep=5 pruning', { rotatedAfterWrite });
 
+  const convergence = spawnSync(process.execPath, [
+    '--test', path.join(packageRoot(), 'dist/core/update/__tests__/version-independent-convergence.test.js')
+  ], { cwd: packageRoot(), encoding: 'utf8', timeout: 90_000, maxBuffer: 1024 * 1024 });
+  assertGate(convergence.status === 0, 'version-independent convergence contract failed', {
+    exit_code: convergence.status,
+    stdout_tail: convergence.stdout?.slice(-6000),
+    stderr_tail: convergence.stderr?.slice(-2000)
+  });
+
   console.log(JSON.stringify({
     schema: 'sks.current-surface-update-e2e-check.v1',
     ok: true,
     package_version: PACKAGE_VERSION,
+    source_version_policy: 'diagnostic_only',
+    version_independent_convergence: true,
     update_status: result.status,
     verification: result.verification.map((row) => ({ id: row.id, ok: row.ok })),
     migration_stage_count: REQUIRED_MIGRATION_STAGES.length,

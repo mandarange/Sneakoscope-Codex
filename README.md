@@ -133,9 +133,13 @@ sks doctor --json
 
 `sks update` updates the **global** SKS package, verifies the installed command,
 and reconciles SKS-managed skills, hooks, configuration and SKS Center where
-available. It also repairs the known ignored Codex settings and refreshes
-managed guidance. User-authored text and explicit preferences are preserved. If
-a step fails, follow the recovery action in its output.
+available. Cleanup follows the current package's manifest and ownership markers
+regardless of the previous version, including mixed leftovers from interrupted
+installs or a missing old generation manifest. Running it again when already
+current still repairs the managed setup. It also repairs the known ignored
+Codex settings and refreshes managed guidance. User-authored text, credentials
+and explicit preferences are preserved. A required cleanup failure blocks
+completion and is reported with its recovery action.
 
 To check available updates first, run `sks update check`. For a repair without
 requesting a newer package, run `sks doctor --fix` yourself in the terminal.

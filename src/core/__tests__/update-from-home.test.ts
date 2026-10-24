@@ -56,6 +56,14 @@ process.exit(1);
 `);
   await fs.chmod(fakeNpm, 0o755);
   const globalPackageRoot = path.join(home, 'node_modules', 'sneakoscope');
+  // No old generation manifest: interrupted historical installs can leave
+  // marked assets even when the package version already reports latest.
+  const orphan = path.join(home, '.agents', 'skills', 'sks-obsolete-generation');
+  await fs.mkdir(orphan, { recursive: true });
+  await fs.writeFile(path.join(orphan, 'SKILL.md'), '---\nname: sks-obsolete-generation\n---\n<!-- BEGIN SKS MANAGED SKILL v4.8.4 name=sks-obsolete-generation -->\n');
+  await fs.mkdir(path.join(home, '.sneakoscope'), { recursive: true });
+  await fs.writeFile(path.join(home, '.sneakoscope', 'codex-0138-capability.json'), '{}\n');
+  await fs.writeFile(path.join(home, '.sneakoscope', 'customer-state.json'), '{"keep":true}\n');
   const installedEntrypoint = path.join(globalPackageRoot, 'dist', 'bin', 'sks.js');
   await fs.mkdir(path.dirname(installedEntrypoint), { recursive: true });
   await fs.writeFile(path.join(globalPackageRoot, 'package.json'), `${JSON.stringify({
@@ -157,6 +165,13 @@ function assertCompleteHomeUpdate(result: any, home: string, receipt: any) {
   assert.ok(stageIds.includes('desktop-bridge-catalog-repair'), `catalog repair row missing: ${stageIds.join(',')}`);
 }
 
+async function assertLegacyStateConverged(home: string) {
+  await assert.rejects(fs.access(path.join(home, '.agents', 'skills', 'sks-obsolete-generation')), { code: 'ENOENT' });
+  await assert.rejects(fs.access(path.join(home, '.sneakoscope', 'codex-0138-capability.json')), { code: 'ENOENT' });
+  await fs.access(path.join(home, '.agents', 'skills', 'sks-answer', 'SKILL.md'));
+  assert.equal(await fs.readFile(path.join(home, '.sneakoscope', 'customer-state.json'), 'utf8'), '{"keep":true}\n');
+}
+
 test('update from a home (non-project) root runs global_install and every migration stage', async () => {
   const fixture = await updateFromHomeFixture({ seamDoctor: true });
   const previousHome = process.env.HOME;
@@ -203,6 +218,7 @@ test('update from home completes against the real new-version doctor', { timeout
     const result = await runSksUpdateNow(fixture.options);
     const doctorTail = `${result.new_version_doctor?.stdout_tail || ''}\n${result.new_version_doctor?.stderr_tail || ''}`;
     assert.equal(result.new_version_doctor?.ok, true, doctorTail);
+    await assertLegacyStateConverged(fixture.home);
     const receipt = JSON.parse(await fs.readFile(projectUpdateMigrationReceiptPath(fixture.home), 'utf8'));
     assert.equal(receipt.source, 'doctor-migration', 'the real doctor child must own the home receipt');
     assertCompleteHomeUpdate(result, fixture.home, receipt);
@@ -233,6 +249,7 @@ test('already-current update runs the real installed doctor once and verifies se
     assert.equal(result.new_version_doctor?.entrypoint, fixture.env.SKS_FAKE_ENTRYPOINT);
     assert.equal(result.project_receipt?.source, 'doctor-migration');
     assert.equal(result.migration_current, true);
+    await assertLegacyStateConverged(fixture.home);
     assert.equal(result.rollback.available, false);
     assert.ok(result.verification.every((item) => item.ok), JSON.stringify(result.verification));
     const calls = (await fs.readFile(fixture.env.SKS_FAKE_DOCTOR_LOG!, 'utf8')).trim().split('\n').map((row) => JSON.parse(row));

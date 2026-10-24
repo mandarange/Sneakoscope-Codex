@@ -400,6 +400,8 @@ async function reconcileRemovedSkillTargets(
   targets: RemovedSkillCleanupTarget[],
   fix: boolean
 ): Promise<RemovedSksSkillResidueReport> {
+  const manifest = await loadSkillsManifest();
+  const currentNames = new Set<string>(manifest.skills.map((skill: any) => canonicalSkillNameFromValue(skill.canonical_name)));
   const detected: RemovedSksSkillResidueReport['detected'] = [];
   const removed: string[] = [];
   const quarantinedUserCollisions: string[] = [];
@@ -481,18 +483,29 @@ async function reconcileRemovedSkillTargets(
 
     for (const row of rows) {
       const name = canonicalSkillNameFromValue(row.name);
-      if (!REMOVED_SKS_SKILL_NAME_SET.has(name)) continue;
+      const retiredName = REMOVED_SKS_SKILL_NAME_SET.has(name);
+      if (!retiredName && (currentNames.has(name) || !row.isDirectory())) continue;
       const dir = path.join(targetDir, row.name);
       const displayPath = displayRemovedSkillPath(target, dir);
       let managed = false;
       try {
+        if (!retiredName) {
+          // A lost generation manifest must not strand old generated skills.
+          // Only an explicit ownership marker admits an unknown name here;
+          // unmarked user/plugin skills remain outside SKS cleanup authority.
+          const skillPath = path.join(dir, 'SKILL.md');
+          const inspected = await inspectConfinedPath(ownerRoot, skillPath);
+          if (!inspected.exists || inspected.leafSymlink || !inspected.stat?.isFile()) continue;
+          const text = await fsp.readFile(skillPath, 'utf8');
+          if (!MANAGED_SKILL_MARKER_RE.test(text) || FORGE_SKILL_MARKER_RE.test(text)) continue;
+        }
         managed = await isManagedRemovedSkillPath(ownerRoot, dir);
       } catch (error: unknown) {
         errors.push(`${displayPath}:${publicPathError(error, dir)}`);
         remaining.push(displayPath);
         continue;
       }
-      if (!managed && target.managedOnly) continue;
+      if (!managed && target.managedOnly && retiredName) continue;
       detected.push({
         scope: target.scope,
         name,

@@ -3245,8 +3245,8 @@
       "file": "src/scripts/current-surface-update-e2e-check.ts",
       "symbol": "module",
       "token": "fsp.rm",
-      "scope_contract_sha256": "5a9248c2fdac16087a5dce4518109a28704d3a695cc472d4ced5df9adbf6e9d9",
-      "callsite_sha256": "fe7aa33f1dca9420ad250bb27e3b84973a7fdc27a193a9170a632062e26a7c1a",
+      "scope_contract_sha256": "67d511491ac906b18f9abadd431ccd1de8fd62c7551fd164160989842881570e",
+      "callsite_sha256": "74a0fcd4c6bdf161cfd4c89d823831a40c6f9225d0424c62e48208cc9fbd2d0a",
       "occurrence": 1,
       "reason": "Current-surface E2E removes only its mkdtemp-owned upgrade fixture root in finally."
     },
@@ -3254,8 +3254,8 @@
       "file": "src/scripts/current-surface-update-e2e-check.ts",
       "symbol": "module",
       "token": "fsp.writeFile",
-      "scope_contract_sha256": "5a9248c2fdac16087a5dce4518109a28704d3a695cc472d4ced5df9adbf6e9d9",
-      "callsite_sha256": "f4f84e3ef56495f3fdd5ff4f74e68b28fd75cdee986d1dd597f3cbe431a5173f",
+      "scope_contract_sha256": "67d511491ac906b18f9abadd431ccd1de8fd62c7551fd164160989842881570e",
+      "callsite_sha256": "ddae8a174784d972777ee09c3d574288076c704799ace28fc8420cc3dd7c6d45",
       "occurrence": 1,
       "reason": "Current-surface E2E writes only the simulated global sks shim under its mkdtemp-owned fixture HOME."
     },

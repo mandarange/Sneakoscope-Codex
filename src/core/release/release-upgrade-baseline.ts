@@ -9,7 +9,10 @@
 // It lives in src/core so scripts can import it too. Anything that needs the baseline
 // imports from here — do not re-inline the value.
 
-/** The published version the upgrade smoke installs first, before upgrading to the target. */
+/** Historical package fixture for install/rollback smoke, never a supported-version floor.
+ * Update convergence is state-based and release-gated separately by
+ * migration:current-surface-e2e, including missing source-version metadata.
+ */
 export const RELEASE_UPGRADE_BASELINE_VERSION = '7.6.0'
 
 /** Short form used in the upgrade proof filename, e.g. `upgrade-7.6-to-8.0.0.json`. */

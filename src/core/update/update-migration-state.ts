@@ -20,7 +20,6 @@ import {
   runHookTrustRefreshStage,
   runOtherHarnessCleanupStage
 } from './update-migration-state/simple-stages.js';
-import { compareSemVer } from './semver.js';
 import { repairManagedPermissions } from './managed-permission-repair.js';
 import { recordSksProject, runOtherProjectsMigrationStage, SKS_PROJECT_MARKERS } from './sks-project-registry.js';
 
@@ -97,6 +96,7 @@ export interface UpdateMigrationStageRun {
   id: string;
   ok: boolean;
   status: 'ok' | 'skipped' | 'failed';
+  /** Compatibility field in v2 receipts; never a stage-selection condition. */
   min_from_version: string;
   from_version: string | null;
   actions: string[];
@@ -428,34 +428,28 @@ export async function runUpdateRetentionCleanup(root: string, source = 'update-m
 
 type UpdateMigrationStageDefinition = {
   id: string;
-  min_from_version: string;
   run: (root: string, fromVersion: string | null) => Promise<Omit<UpdateMigrationStageRun, 'schema' | 'id' | 'min_from_version' | 'from_version'>>;
 };
 
 const UPDATE_MIGRATION_STAGES: UpdateMigrationStageDefinition[] = [
   {
     id: 'other-harness-cleanup',
-    min_from_version: '0.0.0',
     run: runOtherHarnessCleanupStage
   },
   {
     id: 'retired-local-decision',
-    min_from_version: '0.0.0',
     run: () => runRetiredLocalDecisionStage()
   },
   {
     id: 'skills-reconcile',
-    min_from_version: '0.0.0',
     run: runSkillsReconcileStage
   },
   {
     id: 'current-public-surface-reconcile',
-    min_from_version: '0.0.0',
     run: runCurrentPublicSurfaceReconcileStage
   },
   {
     id: 'naruto-execution-mode',
-    min_from_version: '0.0.0',
     run: async () => {
       const { writeNarutoExecutionMode } = await import('../subagents/naruto-execution-mode.js');
       const initialMode = process.env.SKS_NARUTO_APP_SESSION === '1' ? 'current-session' : 'standalone';
@@ -465,38 +459,31 @@ const UPDATE_MIGRATION_STAGES: UpdateMigrationStageDefinition[] = [
   },
   {
     id: 'session-state-split',
-    min_from_version: '0.0.0',
     run: runSessionStateSplitStage
   },
   {
     id: 'menubar-retarget',
-    min_from_version: '0.0.0',
     run: runMenubarRetargetStage
   },
   {
     id: 'config-fastmode-normalize',
-    min_from_version: '0.0.0',
     run: runConfigFastModeNormalizeStage
   },
   {
     // Preserve a retired SKS Fast preference before dropping its old syntax.
     id: 'config-syntax-repair',
-    min_from_version: '0.0.0',
     run: runConfigSyntaxRepairStage
   },
   {
     id: 'hook-trust-refresh',
-    min_from_version: '0.0.0',
     run: runHookTrustRefreshStage
   },
   {
     id: 'receipt-rotation',
-    min_from_version: '0.0.0',
     run: runReceiptRotationStage
   },
   {
     id: 'desktop-bridge-restage',
-    min_from_version: '0.0.0',
     run: runDesktopBridgeRestageStage
   },
   {
@@ -505,7 +492,6 @@ const UPDATE_MIGRATION_STAGES: UpdateMigrationStageDefinition[] = [
     // refreshes in the background. Same repair Doctor --fix runs; an update
     // must not end with a blocker whose remedy it deliberately owns.
     id: 'desktop-bridge-catalog-repair',
-    min_from_version: '0.0.0',
     run: runDesktopBridgeCatalogRepairStage
   }
 ];
@@ -518,26 +504,16 @@ export async function runUpdateMigrationStages(
   const runs: UpdateMigrationStageRun[] = [];
   for (const stage of UPDATE_MIGRATION_STAGES) {
     if (opts.only && !opts.only.has(stage.id)) continue;
-    if (!legacyStageApplies(fromVersion, stage.min_from_version)) {
-      runs.push({
-        schema: 'sks.update-migration-stage.v2',
-        id: stage.id,
-        ok: true,
-        status: 'skipped',
-        min_from_version: stage.min_from_version,
-        from_version: fromVersion,
-        actions: ['skipped_by_from_version'],
-        blockers: [],
-        warnings: []
-      });
-      continue;
-    }
+    // Converge the installed state to this package's manifest on every run.
+    // Source-version metadata can be absent, stale or from a partial install;
+    // it must never authorize skipping a repair. Downgrade authorization lives
+    // in the update operation, before the target package is installed.
     try {
       const result = await stage.run(root, fromVersion);
       runs.push({
         schema: 'sks.update-migration-stage.v2',
         id: stage.id,
-        min_from_version: stage.min_from_version,
+        min_from_version: '0.0.0',
         from_version: fromVersion,
         ...result
       });
@@ -547,7 +523,7 @@ export async function runUpdateMigrationStages(
         id: stage.id,
         ok: false,
         status: 'failed',
-        min_from_version: stage.min_from_version,
+        min_from_version: '0.0.0',
         from_version: fromVersion,
         actions: [],
         blockers: [err?.message || String(err)],
@@ -597,6 +573,7 @@ async function runSkillsReconcileStage(root: string): Promise<Omit<UpdateMigrati
     0
   );
   const blockers = [
+    ...(convergence.ok ? [] : ['legacy_generation_convergence_failed']),
     ...skillReports.flatMap((report) => report.ok ? [] : [
       `${report.scope}:${'error' in report ? report.error : 'failed'}`
     ]),
@@ -605,6 +582,12 @@ async function runSkillsReconcileStage(root: string): Promise<Omit<UpdateMigrati
     ...(convergence.retired_agent_roles.ok ? [] : ['retired_agent_role_reconcile_failed']),
     ...(runtimeRemaining ? [`retired_runtime_residue_remaining:${runtimeRemaining}`] : []),
     ...(runtimeErrors ? [`retired_runtime_reconcile_failed:${runtimeErrors}`] : []),
+    ...(convergence.runtime_data_gc.remaining_count
+      ? [`legacy_runtime_data_remaining:${convergence.runtime_data_gc.remaining_count}`]
+      : []),
+    ...(convergence.runtime_data_gc.error_count
+      ? [`legacy_runtime_data_reconcile_failed:${convergence.runtime_data_gc.error_count}`]
+      : []),
     ...(convergence.managed_configs.remaining_count
       ? [`retired_config_residue_remaining:${convergence.managed_configs.remaining_count}`]
       : []),
@@ -644,6 +627,7 @@ async function runSkillsReconcileStage(root: string): Promise<Omit<UpdateMigrati
       residue_remaining_count: globalRemaining
         + projectRemaining
         + runtimeRemaining
+        + convergence.runtime_data_gc.remaining_count
         + convergence.managed_configs.remaining_count
     }
   };
@@ -718,16 +702,6 @@ async function runReceiptRotationStage(root: string): Promise<Omit<UpdateMigrati
     warnings: [],
     detail: { removed: removable.length }
   };
-}
-
-function legacyStageApplies(fromVersion: string | null, minFromVersion: string): boolean {
-  if (!fromVersion) return true;
-  if (compareVersionLike(fromVersion, PACKAGE_VERSION) > 0) return false;
-  return compareVersionLike(fromVersion, minFromVersion) >= 0;
-}
-
-function compareVersionLike(a: string | null | undefined, b: string | null | undefined): number {
-  return compareSemVer(a, b) ?? 0;
 }
 
 export async function ensureCurrentMigrationBeforeCommand(input: {

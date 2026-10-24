@@ -12,6 +12,9 @@ It also includes the Mermaid/KaTeX and DOMPurify security refreshes from
 PR #29 and #32 and the compatible Zod 4.6.7 runtime dependency security fix
 (GHSA-mrhx-c7xc-m3w5). Context search now checks align's extractor registry,
 fixing the false schema-revision refusal immediately after a successful align.
+Update convergence no longer selects repairs by recorded source version and
+removes marked orphan skills without requiring an old generation manifest.
+Cache cleanup and incomplete project discovery failures block migration success.
 Current audit, CI, package receipt and publish dry-run
 results are recorded under `.sneakoscope/reports/release/10.7.1`.
 No 10.7.1 registry or GitHub publication is claimed before the operator's
@@ -21,6 +24,12 @@ Fresh proof for the candidate is bound to its clean main commit: canonical
 tests, the full release DAG, pack receipt, required real checks, dist
 freshness, 7.6.0 upgrade smoke, macOS Menu Bar proof, and release stamp; see
 "New 10.7.1 claims" for each boundary.
+
+The 7.6.0 tarball is one immutable historical install/rollback fixture. General
+upgrade support is governed by current managed-state reconciliation; the
+`migration:current-surface-e2e` gate also runs the version-independent convergence
+contract, and installed-doctor tests cover both an old install and a repeated
+latest-version update. No claim is made that every historical tarball was run.
 
 ## 10.7.0 published
 

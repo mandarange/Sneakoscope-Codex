@@ -7,6 +7,11 @@ Codex-LB, and SKS stops overriding choices the user made (PR #30). It also
 includes the Mermaid/KaTeX and DOMPurify security refreshes (PR #29 and #32)
 and the compatible Zod 4.6.7 runtime dependency fix for GHSA-mrhx-c7xc-m3w5.
 
+- Updates converge to the installed target's managed manifest without selecting
+  cleanup stages by the source version. Missing old manifests do not strand
+  marked orphan skills, and any required convergence failure blocks success.
+  The current-surface gate covers mixed-generation residues, missing/damaged
+  version metadata, repeat cleanup, user-content preservation and failure/retry.
 - Context search checks the extractor registry used by align, so a newly
   published workspace index can answer without a false schema-revision refusal.
 - Codex-LB compaction is native again. The bridge forwards a compaction request
@@ -38,6 +43,10 @@ check and normal `npm publish --dry-run` after every source or dependency
 change; earlier stamps do not authorize this candidate. Behavior against a
 live Codex-LB (its request log, one account per
 thread) is not proved. npm publication is operator-owned.
+
+The pinned 7.6.0 package is an additional historical install/rollback smoke
+fixture. It is not a supported upgrade floor or the runtime migration selector;
+`sks update` applies current managed-state reconciliation to every source version.
 
 ## 10.7.0 published
 

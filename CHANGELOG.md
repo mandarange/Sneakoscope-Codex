@@ -6,6 +6,11 @@
 
 ### Fixed
 
+- `sks update` converges legacy managed state regardless of recorded source
+  version, including prereleases, missing metadata and already-current installs.
+  Orphaned SKS-generated skills are removed even when the old generation
+  manifest is missing; user additions are quarantined intact. Cache cleanup
+  and incomplete project discovery failures now block a successful migration.
 - Context search accepts the fresh index published by `sks align run`: its
   freshness check now uses align's extractor registry, avoiding an immediate
   `schema_revision_changed` refusal while preserving stale-source checks.
