@@ -81,10 +81,31 @@ still use the official identity for a model no provider claims.
 ```sh
 sks bridge catalog sync --json
 sks bridge catalog status --json
+sks bridge models refresh --json
 sks bridge route list --json
 sks bridge route set-default codex-lb --json
 sks bridge route explain <model> --json
 ```
+
+The model list refreshes at the end of every `sks update`, `sks doctor`
+(read-only without `--fix`: SKS's own catalog files, never `config.toml`),
+setup, menubar install, `sks codex update` and SKS Center change;
+`sks bridge models refresh` runs one now. A provider that cannot be reached
+keeps its last good models. The bridge answers `GET /models` from the active
+catalog (ETag `sksb-<generation>`) and replaces `X-Models-Etag` on every
+Responses reply, so Codex fetches the new list when it changes. Codex reads
+`/models` from the bridge only with a ChatGPT sign-in; SKS then removes its
+own `model_catalog_json` after a `/models` self-check (one Codex restart to
+switch). Other sign-ins keep `model_catalog_json`, and a refresh that changed
+the list says to restart Codex. A `model_catalog_json` you wrote yourself is
+left alone.
+
+Through the bridge Codex treats every route as OpenAI and asks for `include`
+values only OpenAI serves; the bridge sends Codex-LB and OpenRouter only the
+values each accepts. An operator whose Codex-LB already accepts more can add
+them to its provider profile in `~/.codex/sks/desktop-bridge-settings.json`:
+`"request_compat": { "extra_include": ["output.encrypted_content"] }` (at most
+eight lowercase dotted values; a catalog sync keeps it).
 
 The default provider helps with uniquely resolvable aliases and new-selection
 UI filtering. It is never a silent request fallback. Every thread is pinned at

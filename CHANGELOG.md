@@ -2,6 +2,51 @@
 
 ## [Unreleased]
 
+## [10.7.2] - 2026-10-28
+
+### Fixed
+
+- Codex Desktop through the bridge no longer fails every Codex-LB turn with
+  "Invalid request payload". Through the bridge Codex always sees an "OpenAI"
+  provider, so with output-token replay on it asks for
+  `include: ["output.encrypted_content"]`, which Codex-LB rejects (and
+  OpenRouter too, as `invalid_prompt`). The bridge now sends each provider
+  only the `include` values it accepts: Codex-LB its documented list,
+  extendable per provider with `request_compat.extra_include` in
+  `desktop-bridge-settings.json`; OpenRouter its documented list.
+  `reasoning.encrypted_content` always travels, other fields travel as sent
+  (OpenRouter accepts `stream_options` and `access_programs`), and the
+  official route is unchanged.
+- A thread that moves to another provider also drops `encrypted_function_args`,
+  which only the producing account can read.
+- Upstream rejections are now logged with their status, code, type and
+  `param`, plus the shape of the refused request (field names, `include`,
+  item-type counts — never content), on HTTP and WebSocket; Codex-LB does not
+  log WebSocket validation errors itself.
+
+### Changed
+
+- The model list refreshes on every `sks update`, `sks doctor` (read-only:
+  SKS's own catalog files only, never `config.toml`), `sks doctor --fix`,
+  setup, menubar install, `sks codex update`, SKS Center change and SKS Center
+  Refresh / Run Doctor / Update, not only once the catalog is 12 hours old;
+  `sks bridge models refresh` runs one on demand. Each prints one line
+  (`Model list refreshed: N models (+a −r) generation …`). A refresh within a
+  minute of the last one for the same providers is skipped, and a provider
+  that cannot be reached keeps its last good models.
+- The bridge serves `/models` from the active catalog and advertises it with
+  `X-Models-Etag` (an HTTP header, and inside `codex.response.metadata`
+  WebSocket events, where Codex reads it). With a ChatGPT sign-in Codex follows
+  that list without a restart once it has relaunched after SKS removes the
+  managed `model_catalog_json`; Codex reads `/models` from a custom base URL
+  only for ChatGPT sign-ins (0.153.4 to 0.165), so other sign-ins keep the
+  catalog file, now at a path that stays put while the list is unchanged.
+
+### Removed
+
+- SKS Center's Remote Coding page (the Paseo recommendation) and its Overview
+  shortcut, the root `paseo.json`, and their tests and release docs.
+
 ## [10.7.1] - 2026-10-23
 
 ### Fixed

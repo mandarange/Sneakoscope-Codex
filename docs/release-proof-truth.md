@@ -1,6 +1,31 @@
 # Release Proof Truth
 
-## 10.7.1 candidate
+## 10.7.2 candidate
+
+A patch release for Codex-LB users of Codex Desktop. Through the bridge Codex
+treats the provider as OpenAI and, with output-token replay on, asks every route
+for `include` values only OpenAI serves; Codex-LB refused them on every turn
+("Invalid request payload", param `include`) and OpenRouter as
+`invalid_prompt`. The bridge now filters `include` per route (official route
+untouched), drops `encrypted_function_args` on a provider move, and logs
+upstream refusals with their identifiers and the request shape. The model list
+refreshes on every update, Doctor, setup and SKS Center change; the bridge
+serves `/models` and advertises it with `X-Models-Etag`, and a ChatGPT
+sign-in follows it without restarts. SKS Center's Remote Coding page and the
+root `paseo.json` are removed. No 10.7.2 registry or GitHub publication is
+claimed before the operator's `npm publish` step; see "New 10.7.2 claims".
+
+## 10.7.1 published
+
+This release carried PR #30 (the Desktop Bridge as a Codex-LB client: native
+compaction, pinned threads and a stripping provider handoff, Codex-LB headers
+and errors passed through), the security refreshes from PR #29 and #32, the
+Zod 4.6.7 fix for GHSA-mrhx-c7xc-m3w5, align-compatible context search and
+version-independent update convergence. Published 2026-10-24T06:45:25Z from
+`4889e3fe`; the registry reports 1,357 files. The integrity comparison with
+the pack receipt is not recorded here.
+
+## Historical 10.7.1 candidate notes
 
 This candidate carries PR #30, the hotfix set of the Codex-LB client work:
 native Codex-LB compaction with `/responses/compact` routed by thread pin,
@@ -686,7 +711,23 @@ Exact-commit proof can exist only after the candidate is committed and all
 source-bound gates are regenerated from that clean commit.
 
 All release artifacts bound to 9.2.7 or an earlier commit are historical. They
-must not be renamed, copied, or treated as 10.7.1 evidence.
+must not be renamed, copied, or treated as 10.7.2 evidence.
+
+New 10.7.2 claims:
+
+| Claim | Current support | Boundary |
+| --- | --- | --- |
+| Codex-LB receives only include values in its allowlist, OpenRouter only its documented ones, and the official route the bytes Codex sent | passed-hermetic | `codex-lb-payload-compat` suite: a fake Codex-LB enforcing its include allowlist and frame rules, four Codex payload shapes (Responses Lite, non-Lite, `compaction_trigger`, legacy `instructions`) over zstd HTTP and WebSocket text frames; `provider-request-compat` unit tests |
+| OpenRouter refuses `output.encrypted_content` and accepts Codex's `stream_options` and `access_programs` | verified-on-machine | 2026-10-28 live probe of `openrouter.ai/api/v1/responses` (openai/gpt-4o-mini): 400 `invalid_prompt` with `output.encrypted_content`; 200 with `stream_options: {reasoning_summary_delivery}` and `access_programs`; 200 for the adapted request |
+| A moved thread drops `encrypted_function_args` | passed-hermetic | `provider-handoff` suite |
+| Upstream refusals are logged with status, code, type, `param` and request shape, never content | passed-hermetic | `codex-lb-payload-compat` and `desktop-bridge-rejection-log` tests (a prompt and instructions marker never reach the log) |
+| `request_compat.extra_include` is validated and survives catalog syncs | passed-hermetic | `desktop-service` test |
+| Every update, Doctor and change refreshes the model list; a read-only Doctor never writes `config.toml`; a transient provider failure keeps its last good models; a minute-old refresh is not repeated | passed-hermetic | `model-refresh` suite, `bridge-unreachable-upstream-repair` and doctor reporting tests |
+| The bridge serves `/models` with an ETag and replaces `x-models-etag` on HTTP replies and in `codex.response.metadata` frames | passed-hermetic | `bridge-models-endpoint` suite |
+| Codex follows the bridge list without a restart | not proved live | Codex's handling read in openai/codex at `rust-v0.153.4` and `rust-v0.165.0` (HTTP header; WebSocket metadata event; `/models` fetched only for ChatGPT auth); no live Codex Desktop picker change was observed |
+| SKS Center has no Remote Coding page and the package carries no companion file | passed-hermetic | `removed-paseo-surface` and `sks-menubar-template` tests |
+| A Codex Desktop with output-token replay works against a live Codex-LB | not proved | needs a Codex build with `output_token_replay` and the operator's Codex-LB request log |
+| The 10.7.2 package is ready to publish | not proved | requires the release stamp on the clean main commit and that commit fast-forward pushed to origin main |
 
 New 10.7.1 claims:
 
@@ -701,7 +742,7 @@ New 10.7.1 claims:
 | Stale SKS model pins are removed only from SKS-owned files, with a backup, and direct Codex-LB setups stay | passed-hermetic | `sks-model-pin-hygiene` test; a dry run against the maintainer's `~/.codex` on 2026-10-23 found no stale pin |
 | A Jev plan never outlives its turn | passed-hermetic | `jev-spawn-routing` tests: a stale plan no longer seals the deep tier, and list mode keeps the per-spawn choice |
 | The hotfix holds on a live Codex-LB (one account per thread, native compaction, native-client detection) | not proved | needs an operator-provided key and Codex-LB's request log |
-| The 10.7.1 package is ready to publish | not proved | requires the release stamp on the clean main commit and that commit fast-forward pushed to origin main |
+| The 10.7.1 package is published | verified-on-machine | 2026-10-28, registry `gitHead` 4889e3fe and file count 1357 (`npm view`), published 2026-10-24T06:45:25Z; integrity comparison with the pack receipt not recorded |
 
 New 10.7.0 claims:
 
@@ -856,8 +897,8 @@ New 10.3.10 claims:
 | A stale or cwd-sticky official workflow cannot capture a later prompt | passed-hermetic | unnamed hooks use `loadOwnedRouteState`; idle > 2h is inactive even with leftover open threads; same-session follow-ups still bind while the run is fresh |
 | The 10.3.10 package is published | verified-on-machine | 2026-10-02, registry `gitHead` 0c70457e and file count 1755, sha512 integrity equals the pack receipt |
 | The 10.4.0 package is published | verified-on-machine | 2026-10-02, registry `gitHead` fb7b2385 and file count 1692, sha512 integrity equals the pack receipt |
-| All checked version authorities report 10.7.1 | passed-hermetic | `release:version-truth` after the version bump |
-| The reported 10.7.1 package is ready to publish | not proved | requires a clean exact-commit build, `npm run release:check:full` stamp, pack receipt, provenance, and the release commit fast-forward pushed to origin main (the prepublish reproducibility preflight refuses `head_not_origin_main`) |
+| All checked version authorities report 10.7.2 | passed-hermetic | `release:version-truth` after the version bump |
+| The reported 10.7.2 package is ready to publish | not proved | requires a clean exact-commit build, `npm run release:check:full` stamp, pack receipt, provenance, and the release commit fast-forward pushed to origin main (the prepublish reproducibility preflight refuses `head_not_origin_main`) |
 
 ## 9.1.0 assertion (historical)
 

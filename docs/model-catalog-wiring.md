@@ -22,7 +22,8 @@ flowchart TD
 
   ACTIVE["active generation<br/>.sks-bridge-generations/&lt;gen&gt;/sks-bridge-catalog.json"] --> CFG
   ACTIVE --> ROUTE["route index + route policy<br/>(routing follows the same filtered set)"]
-  CFG["~/.codex/config.toml<br/>model_catalog_json = &lt;gen path&gt;"] --> PICKER["Codex Desktop picker<br/>reasoning selector · Fast tier · model list"]
+  ACTIVE --> MODELS["bridge GET /models<br/>ETag = X-Models-Etag (ChatGPT sign-in)"] --> PICKER
+  CFG["~/.codex/config.toml<br/>model_catalog_json = &lt;gen path&gt; (other sign-ins)"] --> PICKER["Codex Desktop picker<br/>reasoning selector · Fast tier · model list"]
 
   SELFILE["sks-bridge-model-selection.json<br/>schema sks.bridge-model-selection.v1"] --> SEL
   CENTER["SKS Center · Codex Picker Exposure"] -->|"bridge models select --set"| SELFILE
