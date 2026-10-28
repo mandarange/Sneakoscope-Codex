@@ -12,7 +12,7 @@ upstream refusals with their identifiers and the request shape. The model list
 refreshes on every update, Doctor, setup and SKS Center change; the bridge
 serves `/models` and advertises it with `X-Models-Etag`, and a ChatGPT
 sign-in follows it without restarts. SKS Center's Remote Coding page and the
-root `paseo.json` are removed. No 10.7.2 registry or GitHub publication is
+root companion worktree config are removed. No 10.7.2 registry or GitHub publication is
 claimed before the operator's `npm publish` step; see "New 10.7.2 claims".
 
 ## 10.7.1 published
@@ -725,7 +725,7 @@ New 10.7.2 claims:
 | Every update, Doctor and change refreshes the model list; a read-only Doctor never writes `config.toml`; a transient provider failure keeps its last good models; a minute-old refresh is not repeated | passed-hermetic | `model-refresh` suite, `bridge-unreachable-upstream-repair` and doctor reporting tests |
 | The bridge serves `/models` with an ETag and replaces `x-models-etag` on HTTP replies and in `codex.response.metadata` frames | passed-hermetic | `bridge-models-endpoint` suite |
 | Codex follows the bridge list without a restart | not proved live | Codex's handling read in openai/codex at `rust-v0.153.4` and `rust-v0.165.0` (HTTP header; WebSocket metadata event; `/models` fetched only for ChatGPT auth); no live Codex Desktop picker change was observed |
-| SKS Center has no Remote Coding page and the package carries no companion file | passed-hermetic | `removed-paseo-surface` and `sks-menubar-template` tests |
+| SKS Center has no Remote Coding page and the package carries no companion file | passed-hermetic | removed-surface absence test (`test/unit/removed-*-surface.test.mjs`) and `sks-menubar-template` tests |
 | A Codex Desktop with output-token replay works against a live Codex-LB | not proved | needs a Codex build with `output_token_replay` and the operator's Codex-LB request log |
 | The 10.7.2 package is ready to publish | not proved | requires the release stamp on the clean main commit and that commit fast-forward pushed to origin main |
 

@@ -13,7 +13,7 @@
   `--fix`), setup, menubar install, Codex CLI update and SKS Center change;
   the bridge serves `/models` with `X-Models-Etag`, so a ChatGPT sign-in
   follows the list without restarts.
-- SKS Center's Remote Coding page and the root `paseo.json` are removed.
+- SKS Center's Remote Coding page and the root companion worktree config are removed.
 
 Release authority is unchanged: canonical suite, full release DAG, package
 receipt, required real checks, dist freshness, upgrade smoke, macOS Menu Bar
