@@ -399,3 +399,43 @@ test('session pins past the settings byte cap do not hide a saved Codex-LB prefe
   assert.equal(again?.auth_priority_enabled, true);
   assert.equal(again?.provider_session_pins[0]?.thread_id, 'thread-0899');
 });
+
+test('a provider request_compat setting is validated and survives a registry rebuilt by a catalog sync', async (t) => {
+  const setup = await fixture(t);
+  const base = defaultDesktopBridgeServiceSettings({ listen_port: 54_321, client_capability_sha256: CLIENT_CAPABILITY_SHA256 });
+  const withCompat = (requestCompat: unknown) => ({
+    ...base,
+    provider_registry: {
+      ...base.provider_registry,
+      providers: {
+        ...base.provider_registry.providers,
+        'codex-lb': { ...base.provider_registry.providers['codex-lb'], request_compat: requestCompat },
+      },
+    },
+  });
+  await fsp.mkdir(path.dirname(setup.paths.settings_path), { recursive: true });
+  for (const invalid of [
+    { extra_include: ['Output.Encrypted_Content'] },
+    { extra_include: Array.from({ length: 9 }, (_, index) => `value.${'x'.repeat(index + 1)}`) },
+    { extra_include: ['output.encrypted_content'], other: true },
+    ['output.encrypted_content'],
+  ]) {
+    await fsp.writeFile(setup.paths.settings_path, JSON.stringify(withCompat(invalid)), { mode: 0o600 });
+    await assert.rejects(readDesktopBridgeServiceSettings(setup.paths.settings_path), /desktop_bridge_settings_request_compat_invalid/);
+  }
+  await fsp.writeFile(setup.paths.settings_path, JSON.stringify(withCompat({ extra_include: ['output.encrypted_content'] })), { mode: 0o600 });
+  const read = await readDesktopBridgeServiceSettings(setup.paths.settings_path);
+  assert.deepEqual(read?.provider_registry.providers['codex-lb'].request_compat, { extra_include: ['output.encrypted_content'] });
+  assert.equal(read?.provider_registry.providers.openrouter.request_compat, undefined);
+
+  // A sync hands over a snapshot built from the stored provider registry, which has no such field.
+  const rebuilt = { ...base.provider_registry, generation: 'rebuilt-by-sync' };
+  const activated = await resolveDesktopBridgeActivationSettings({
+    home: setup.home, settingsPath: setup.paths.settings_path, clientCapability: CLIENT_CAPABILITY, providerRegistry: rebuilt,
+  });
+  assert.deepEqual(activated.provider_registry.providers['codex-lb'].request_compat, { extra_include: ['output.encrypted_content'] });
+  assert.notEqual(activated.provider_registry.generation, 'rebuilt-by-sync', 'the registry generation covers the setting');
+  await writeDesktopBridgeServiceSettings(setup.paths.settings_path, activated);
+  const again = await readDesktopBridgeServiceSettings(setup.paths.settings_path);
+  assert.deepEqual(again?.provider_registry.providers['codex-lb'].request_compat, { extra_include: ['output.encrypted_content'] });
+});

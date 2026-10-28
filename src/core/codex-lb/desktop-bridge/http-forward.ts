@@ -5,7 +5,7 @@ import zlib from 'node:zlib';
 import { pipeline } from 'node:stream/promises';
 import { BRIDGE_OFFICIAL_ROUTE_ID, BRIDGE_REMOTE_COMPACTION } from '../bridge-contracts.js';
 import { buildOfficialPassthroughHeaders, buildProviderUpstreamHeaders, rewriteResponseHeaders } from './header-policy.js';
-import { createDesktopBridgeRejectionLogger } from './rejection-log.js';
+import { createDesktopBridgeRejectionLogger, desktopBridgeRequestShape, safeUpstreamParam } from './rejection-log.js';
 import { OPENROUTER_ONLY_REFUSAL_CODES } from './exclusive-provider-guard.js';
 import { ensureDesktopBridgeRemoteTarget, isNoRouteUpstreamError, isResponsesFamilyPath, isUnreachableUpstreamError, pinnedPublicModel, refreshDesktopBridgeRemoteTarget, resolveAndBindDesktopBridgeRouteContext, resolveCodexSessionIdentity, resolveDesktopBridgeTarget, safeBridgeErrorCode, singleBridgeHeader, threadRouteMove } from './security.js';
 import { admitCodexLbTurnState, forgetCodexLbTurnStates, rememberCodexLbTurnState } from './codex-lb-turn-state.js';
@@ -17,6 +17,7 @@ import {
   type ThreadRouteMove,
 } from './provider-handoff.js';
 import { desktopBridgeListenOrigin } from './state.js';
+import { adaptRequestForRoute, logRequestAdaptation, providerExtraInclude } from './provider-request-compat.js';
 import {
   buildCompactionSummaryRequest,
   compactEndpointResult,
@@ -223,6 +224,12 @@ export async function prepareDesktopBridgeRequest(req: IncomingMessage, config: 
   if (expandBridgeCompactionItems(payload)) rewrite = true;
   // A thread that moved carries account-bound items of the route it left.
   if (route.session_pin?.handoff_from && stripProviderBoundItems(payload, Boolean(move))) rewrite = true;
+  // Codex believes it talks to OpenAI and asks for what only OpenAI serves.
+  const adapted = adaptRequestForRoute(payload, route, providerExtraInclude(config, route));
+  if (adapted.length) {
+    rewrite = true;
+    logRequestAdaptation(config, route, adapted, 'http');
+  }
   if (payload && rewrite) body = Buffer.from(JSON.stringify(payload));
   const compaction: BridgeCompactionKind | null = bodyKind === 'responses' && requestsRemoteCompaction(payload)
     ? 'trigger'
@@ -358,6 +365,8 @@ const UNREADABLE_BODY_HINT = /json|pars(?:e|ing)|decod|encod|compress|utf-?8/i;
 async function readRedactedUpstreamError(response: IncomingMessage): Promise<{
   upstreamCode: string | null;
   upstreamType: string | null;
+  /** The request field the upstream named (`error.param`), identifier-shaped. */
+  upstreamParam: string | null;
   unreadableBody: boolean;
   /** The whole body, or null past MAX_UPSTREAM_ERROR_BODY_BYTES. Relayed only where errors pass through. */
   body: Buffer | null;
@@ -385,6 +394,7 @@ async function readRedactedUpstreamError(response: IncomingMessage): Promise<{
   // still dies here.
   let upstreamCode: string | null = null;
   let upstreamType: string | null = null;
+  let upstreamParam: string | null = null;
   // A compressed error is decoded here, so its identifiers are readable and a
   // relayed body is plain; an encoding this bridge cannot decode relays nothing.
   const raw = Buffer.concat(chunks);
@@ -395,15 +405,17 @@ async function readRedactedUpstreamError(response: IncomingMessage): Promise<{
   }
   const text = (decoded ?? raw).toString('utf8');
   try {
-    const parsed = JSON.parse(text) as { error?: { type?: unknown; code?: unknown }; detail?: unknown };
+    const parsed = JSON.parse(text) as { error?: { type?: unknown; code?: unknown; param?: unknown }; detail?: unknown };
     upstreamCode = safeUpstreamErrorId(parsed?.error?.code) ?? safeUpstreamErrorId(parsed?.detail);
     upstreamType = safeUpstreamErrorId(parsed?.error?.type);
+    upstreamParam = safeUpstreamParam(parsed?.error?.param);
   } catch {
     // Not JSON, or truncated: nothing recoverable without risking content.
   }
   return {
     upstreamCode,
     upstreamType,
+    upstreamParam,
     unreadableBody: UNREADABLE_BODY_HINT.test(text.slice(0, 4096)),
     body: decoded,
   };
@@ -656,7 +668,7 @@ export async function forwardHttp(
           // produced it. A user report with a cf-ray id was undiagnosable from
           // the bridge log. Status, model, provider and path only; the body may
           // carry upstream detail and is never logged.
-          void readRedactedUpstreamError(response).then(({ upstreamCode, upstreamType, unreadableBody, body: upstreamBody }) => {
+          void readRedactedUpstreamError(response).then(({ upstreamCode, upstreamType, upstreamParam, unreadableBody, body: upstreamBody }) => {
             // A typed API error means the body was read; only an untyped
             // complaint about the body itself (or a 415) blames the encoding.
             if (budget.plainFallback && (statusCode === 415
@@ -698,17 +710,29 @@ export async function forwardHttp(
               : buildRedactedUpstreamErrorBody(statusCode, upstreamCode, upstreamType, transientMislabel);
             // Logged after the body parse so the record can carry the upstream's
             // own error code — the one fact a report holding only a status and a
-            // cf-ray id cannot supply.
+            // cf-ray id cannot supply. A refused request (4xx) also records the
+            // field the upstream named and the shape of what was sent, so a
+            // validation failure can be traced without the request content.
+            const rejected = statusCode >= 400 && statusCode <= 499;
             logHttpRejection({
-              code: transientMislabel && !verbatim
-                ? `bridge_upstream_status_${statusCode}_translated_503`
-                : upstreamCode ? `bridge_upstream_status_${statusCode}:${upstreamCode}` : `bridge_upstream_status_${statusCode}`,
+              code: rejected
+                ? 'bridge_upstream_request_rejected'
+                : transientMislabel && !verbatim
+                  ? `bridge_upstream_status_${statusCode}_translated_503`
+                  : upstreamCode ? `bridge_upstream_status_${statusCode}:${upstreamCode}` : `bridge_upstream_status_${statusCode}`,
               transport: 'http',
               ...(req.method === undefined ? {} : { method: req.method }),
               ...(req.url === undefined ? {} : { url: req.url }),
               status: clientStatus,
               provider_id: provider!.provider_id,
               public_model: request.route.public_model,
+              ...(rejected ? {
+                upstream_status: statusCode,
+                upstream_code: upstreamCode,
+                upstream_type: upstreamType,
+                upstream_param: upstreamParam,
+                request_shape: desktopBridgeRequestShape(request.payload),
+              } : {}),
             });
             responseStarted = true;
             const responseHeaders = rewriteResponseHeaders(response.headers, upstreamBaseUrl, authenticatedLocalBaseUrl);
@@ -941,7 +965,9 @@ async function answerCompactionWithProviderSummary(
   const streaming = input.kind === 'trigger';
   const responseId = newCompactionResponseId();
   const publicModel = input.route.public_model;
-  const body = Buffer.from(JSON.stringify(buildCompactionSummaryRequest(input.payload, input.route.upstream_model)));
+  const summaryRequest = buildCompactionSummaryRequest(input.payload, input.route.upstream_model);
+  adaptRequestForRoute(summaryRequest, input.route, providerExtraInclude(config, input.route));
+  const body = Buffer.from(JSON.stringify(summaryRequest));
   let keepalive: NodeJS.Timeout | null = null;
   const startStream = (): void => {
     if (!streaming || res.headersSent) return;

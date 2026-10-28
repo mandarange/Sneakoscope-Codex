@@ -2,11 +2,13 @@
  * A thread that moves to another route target mid-conversation.
  *
  * Codex sends the whole history when the model changes, and that history holds
- * items only the producing account can read: reasoning `encrypted_content`, a
- * native `compaction` item, response ids. Forwarded to another provider — or to
- * another identity behind the same API — they fail as "could not be verified",
- * `invalid_encrypted_content` or an unknown `previous_response_id`, and no
- * upstream repairs that.
+ * items only the producing account can read: reasoning `encrypted_content`,
+ * output-replay `encrypted_content` on messages and `encrypted_function_args`
+ * on function calls (both sent only to an "OpenAI" provider, which the bridge
+ * always is to Codex), a native `compaction` item, response ids. Forwarded to
+ * another provider — or to another identity behind the same API — they fail as
+ * "could not be verified", `invalid_encrypted_content` or an unknown
+ * `previous_response_id`, and no upstream repairs that.
  *
  * Reasoning is dropped for the rest of a moved thread's life: nothing records
  * which reasoning item came from which account, and a reasoning item is
@@ -89,9 +91,10 @@ export function providerHandoffRefusedEvent(error: ProviderHandoffRefusedError, 
 
 /**
  * Removes what only the thread's previous route can read: every reasoning item,
- * any other `encrypted_content`, and — on the request that makes the move — a
- * `previous_response_id`, which names a response the destination never saw.
- * Compaction items are left to the caller (expanded or refused before this).
+ * any other `encrypted_content`, a function call's `encrypted_function_args`,
+ * and — on the request that makes the move — a `previous_response_id`, which
+ * names a response the destination never saw. Compaction items are left to the
+ * caller (expanded or refused before this).
  */
 export function stripProviderBoundItems(payload: JsonObject | null, moving: boolean): boolean {
   if (!payload) return false;
@@ -103,10 +106,21 @@ export function stripProviderBoundItems(payload: JsonObject | null, moving: bool
         changed = true;
         continue;
       }
-      if (isObject(item) && 'encrypted_content' in item && !isNativeCompactionItem(item)) {
-        const { encrypted_content: _foreign, ...rest } = item;
-        input.push(rest);
-        changed = true;
+      if (isObject(item)) {
+        // One item can carry both: a replayed function call has its output
+        // `encrypted_content` and its `encrypted_function_args`.
+        let next = item;
+        if ('encrypted_content' in next && !isNativeCompactionItem(next)) {
+          const { encrypted_content: _foreign, ...rest } = next;
+          next = rest;
+          changed = true;
+        }
+        if (next.type === 'function_call' && 'encrypted_function_args' in next) {
+          const { encrypted_function_args: _foreign, ...rest } = next;
+          next = rest;
+          changed = true;
+        }
+        input.push(next);
         continue;
       }
       input.push(item);

@@ -5,7 +5,8 @@ import type { Duplex } from 'node:stream';
 import WebSocket, { WebSocketServer, type RawData } from 'ws';
 import { BRIDGE_OFFICIAL_ROUTE_ID, BRIDGE_REMOTE_COMPACTION } from '../bridge-contracts.js';
 import { buildOfficialPassthroughWebSocketHeaders, buildProviderWebSocketHeaders } from './header-policy.js';
-import { createDesktopBridgeRejectionLogger } from './rejection-log.js';
+import { createDesktopBridgeRejectionLogger, desktopBridgeRequestShape, type DesktopBridgeRequestShape } from './rejection-log.js';
+import { adaptRequestForRoute, logRequestAdaptation, providerExtraInclude } from './provider-request-compat.js';
 import { assertDesktopBridgeRouteContext, ensureDesktopBridgeRemoteTarget, isUnreachableUpstreamError, refreshDesktopBridgeRemoteTarget, resolveAndBindDesktopBridgeRouteContext, resolveCodexSessionIdentity, resolveDesktopBridgeTarget, safeBridgeErrorCode, threadRouteMove } from './security.js';
 import { admitCodexLbTurnState } from './codex-lb-turn-state.js';
 import {
@@ -26,6 +27,7 @@ import {
   parseProviderSummary,
   requestsRemoteCompaction,
   ResponsesContinuationChain,
+  safeUpstreamErrorId,
   summaryFailure,
   summaryWithinBounds,
 } from './compaction-adapter.js';
@@ -51,6 +53,33 @@ export function isResponsesWebSocketRequest(req: IncomingMessage): boolean {
 
 function bytes(data: RawData): Buffer {
   return Buffer.isBuffer(data) ? data : Array.isArray(data) ? Buffer.concat(data) : Buffer.from(data);
+}
+
+interface UpstreamFailureEvent {
+  status: number | undefined;
+  code: unknown;
+  type: unknown;
+  param: unknown;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+/**
+ * An upstream `error` or `response.failed` event's identifiers. Codex-LB
+ * answers a create it cannot validate with an `error` event and logs nothing
+ * on its side, so this is the only record such a refusal leaves. Nearly every
+ * frame is a delta, so a byte check precedes any parse.
+ */
+function upstreamFailureEvent(frame: Buffer): UpstreamFailureEvent | null {
+  if (!frame.includes('"response.failed"') && !frame.includes('"type":"error"') && !frame.includes('"type": "error"')) return null;
+  let event: unknown;
+  try { event = JSON.parse(frame.toString('utf8')); } catch { return null; }
+  if (!isRecord(event) || (event.type !== 'error' && event.type !== 'response.failed')) return null;
+  const error = event.type === 'error' ? event.error : isRecord(event.response) ? event.response.error : null;
+  const record = isRecord(error) ? error : {};
+  return { status: typeof event.status === 'number' ? event.status : undefined, code: record.code, type: record.type, param: record.param };
 }
 
 interface PendingMessage {
@@ -98,6 +127,8 @@ export function forwardResponsesWebSocket(req: IncomingMessage, socket: Duplex, 
     let boundCredentialFingerprint: string | null = null;
     /** The public model of the latest create; one socket may carry several. */
     let routedModel: string | null = null;
+    /** The shape of the latest create relayed upstream, for the refusal that answers it. */
+    let routedShape: DesktopBridgeRequestShape | null = null;
     let stopped = false;
     let processing = false;
     let pendingBytes = 0;
@@ -192,11 +223,21 @@ export function forwardResponsesWebSocket(req: IncomingMessage, socket: Duplex, 
       let rewritten = expandBridgeCompactionItems(create);
       // A thread that moved carries account-bound items of the route it left.
       if (route.session_pin?.handoff_from && stripProviderBoundItems(create, Boolean(move))) rewritten = true;
+      // Codex believes it talks to OpenAI and asks for what only OpenAI serves.
+      const adapted = adaptRequestForRoute(create, route, providerExtraInclude(config, route));
+      if (adapted.length) {
+        rewritten = true;
+        logRequestAdaptation(config, route, adapted, 'websocket');
+      }
       if (BRIDGE_REMOTE_COMPACTION[route.provider_id] === 'bridge_summary' && requestsRemoteCompaction(create)) {
         message.compaction = create;
         return;
       }
-      if (route.upstream_model !== model || rewritten) message.data = Buffer.from(JSON.stringify(create));
+      if (route.upstream_model !== model || rewritten) {
+        // A re-serialized create is JSON text, and upstreams refuse binary frames.
+        message.data = Buffer.from(JSON.stringify(create));
+        message.binary = false;
+      }
       message.routed = create;
     }
     /** A create refused for a move its history cannot survive: Codex shows why, and the socket stays. */
@@ -223,7 +264,9 @@ export function forwardResponsesWebSocket(req: IncomingMessage, socket: Duplex, 
         send(compactionFailedEvent(responseId, route.public_model, 'bridge_compaction_history_unavailable'));
         return;
       }
-      const body = Buffer.from(JSON.stringify(buildCompactionSummaryRequest({ ...create, input }, route.upstream_model)));
+      const summaryRequest = buildCompactionSummaryRequest({ ...create, input }, route.upstream_model);
+      adaptRequestForRoute(summaryRequest, route, providerExtraInclude(config, route));
+      const body = Buffer.from(JSON.stringify(summaryRequest));
       let accepted = false;
       try {
         const call = await requestProviderCompactionSummary(config, { provider, credential, clientHeaders: req.headers, requestUrl: req.url || '/' }, body, () => {
@@ -315,6 +358,17 @@ export function forwardResponsesWebSocket(req: IncomingMessage, socket: Duplex, 
           frame = advised;
           logRejection({ code: 'bridge_upstream_model_capacity_retry_advised', transport: 'websocket', provider_id: route.provider_id, public_model: routedModel ?? route.public_model, ...(req.url ? { url: req.url } : {}) });
         }
+        const failure = binary ? null : upstreamFailureEvent(frame);
+        if (failure) {
+          logRejection({
+            code: 'bridge_upstream_request_rejected', transport: 'websocket',
+            ...(failure.status === undefined ? {} : { status: failure.status, upstream_status: failure.status }),
+            provider_id: route.provider_id, public_model: routedModel ?? route.public_model,
+            upstream_code: safeUpstreamErrorId(failure.code), upstream_type: safeUpstreamErrorId(failure.type),
+            upstream_param: typeof failure.param === 'string' ? failure.param : null,
+            request_shape: routedShape, ...(req.url ? { url: req.url } : {}),
+          });
+        }
         if (summarizes) chain.received(frame);
         try { relay(client, frame, binary); } catch (error) { fail(error); }
       });
@@ -367,6 +421,7 @@ export function forwardResponsesWebSocket(req: IncomingMessage, socket: Duplex, 
           if (message.compaction) await answerCompaction(message.compaction);
           else {
             relay(upstream!, message.data, message.binary);
+            if (message.routed) routedShape = desktopBridgeRequestShape(message.routed);
             // Only a route the bridge compacts for ever answers a compaction itself.
             if (message.routed && bound && BRIDGE_REMOTE_COMPACTION[bound.provider_id] === 'bridge_summary') chain.sent(message.routed, message.data);
           }

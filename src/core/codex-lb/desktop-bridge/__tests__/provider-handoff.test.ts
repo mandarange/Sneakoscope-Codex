@@ -149,6 +149,22 @@ test('HTTP: a thread moving Codex-LB → OpenRouter → Codex-LB never carries a
   assert.equal(f.official.requests.length, 0);
 });
 
+test('HTTP: a moved thread loses the output-replay fields only the producing account can read', { timeout: 20_000 }, async (t) => {
+  const f = await fixture(t);
+  // Codex sends these only to an "OpenAI" provider, which the bridge always is to Codex.
+  const call = { type: 'function_call', call_id: 'call_1', name: 'shell', arguments: '{"cmd":"ls"}', encrypted_function_args: 'lb-account-args', encrypted_content: 'lb-account-output' };
+  const reply = { ...assistant('done'), encrypted_content: 'lb-account-message' };
+  const history = [user('fix the parser'), call, { type: 'function_call_output', call_id: 'call_1', output: 'ok' }, reply];
+  assert.equal((await f.post({ model: 'gpt-lb', input: history })).status, 200);
+  assert.deepEqual(f.lb.requests[0]!.body.input, history, 'a thread that never moved is forwarded as sent');
+
+  assert.equal((await f.post({ model: LISTED, input: [...history, user('now on openrouter')] })).status, 200);
+  const moved = f.openrouter.requests[0]!.body.input;
+  assert.deepEqual(moved[1], { type: 'function_call', call_id: 'call_1', name: 'shell', arguments: '{"cmd":"ls"}' }, 'both account-bound fields of one item go');
+  assert.deepEqual(moved[3], assistant('done'));
+  assert.equal(JSON.stringify(moved).includes('lb-account'), false);
+});
+
 test('HTTP: a move that would carry a native compaction is refused readably, and the thread stays put', { timeout: 20_000 }, async (t) => {
   const f = await fixture(t);
   assert.equal((await f.post({ model: 'gpt-lb', input: [user('hi')] })).status, 200);

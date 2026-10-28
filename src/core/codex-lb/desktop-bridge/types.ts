@@ -51,6 +51,11 @@ export interface DesktopBridgeProviderSnapshot {
   credential_generation: string;
   /** Provider-source catalog generation; distinct from routePolicy.catalog_generation. */
   source_catalog_generation: string | null;
+  /**
+   * Operator override of what this provider is sent (provider-request-compat.ts):
+   * `include` values to keep beyond the provider's own list. Absent by default.
+   */
+  request_compat?: { extra_include: readonly string[] };
 }
 
 export interface DesktopBridgeProviderRegistrySnapshot {

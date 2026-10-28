@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createDesktopBridgeRejectionLogger,
+  desktopBridgeRequestShape,
   REJECTION_LOG_BURST
 } from '../../dist/core/codex-lb/desktop-bridge/rejection-log.js';
 
@@ -129,4 +130,50 @@ test('rows without provider fields stay byte-compatible with the old shape', () 
   const row = parsed()[0];
   assert.equal('provider_id' in row, false);
   assert.equal('public_model' in row, false);
+});
+
+test('an upstream refusal records its identifiers and the request shape, never the request content', () => {
+  // Codex-LB answers a create it cannot validate with "Invalid request payload"
+  // and logs nothing on its side; the field it named and what the request held
+  // are the only way to tell which field it refused.
+  const prompt = 'PROMPT-TEXT-never-in-a-log';
+  const request = {
+    model: 'gpt-6-astra', instructions: `system ${prompt}`, stream: true,
+    include: ['reasoning.encrypted_content', 'output.encrypted_content'],
+    input: [
+      { type: 'message', role: 'user', content: [{ type: 'input_text', text: prompt }] },
+      { type: 'function_call', name: 'shell', arguments: `{"cmd":"${prompt}"}` },
+      { type: 'message', role: 'assistant', content: [] },
+      { type: `${prompt} not a type` },
+    ],
+    [`${prompt} key`]: true,
+  };
+  const { log, lines, parsed } = collector();
+  log({
+    code: 'bridge_upstream_request_rejected', transport: 'websocket', status: 400,
+    provider_id: 'codex-lb', public_model: 'gpt-6-astra',
+    upstream_status: 400, upstream_code: 'invalid_request_error', upstream_type: 'invalid_request_error',
+    upstream_param: 'include', request_shape: desktopBridgeRequestShape(request)
+  });
+  const row = parsed()[0];
+  assert.deepEqual([row.upstream_status, row.upstream_code, row.upstream_type, row.upstream_param], [400, 'invalid_request_error', 'invalid_request_error', 'include']);
+  assert.deepEqual(row.request_shape, {
+    keys: ['<other>', 'include', 'input', 'instructions', 'model', 'stream'],
+    include: ['reasoning.encrypted_content', 'output.encrypted_content'],
+    input_types: { message: 2, function_call: 1, '<other>': 1 }
+  });
+  assert.equal(lines.join('').includes(prompt), false, 'no prompt, instructions or tool argument text');
+});
+
+test('an upstream param is kept only when identifier-shaped and bounded', () => {
+  const { log, parsed } = collector();
+  for (const param of ['input[3].content[0].type', 'a'.repeat(80), 'input text with spaces', { nested: true }]) {
+    log({ code: `bridge_upstream_request_rejected_${parsed().length}`, transport: 'http', upstream_param: param, upstream_status: 99 });
+  }
+  const rows = parsed();
+  assert.equal(rows[0].upstream_param, 'input[3].content[0].type');
+  assert.equal(rows[1].upstream_param, 'a'.repeat(64), 'truncated to 64 characters');
+  assert.equal('upstream_param' in rows[2], false);
+  assert.equal('upstream_param' in rows[3], false);
+  assert.equal('upstream_status' in rows[0], false, 'a status outside 100-599 is dropped');
 });

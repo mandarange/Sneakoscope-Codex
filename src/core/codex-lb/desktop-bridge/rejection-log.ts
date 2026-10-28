@@ -13,9 +13,10 @@ import { PACKAGE_VERSION } from '../../version.js';
  * Two properties are non-negotiable here:
  *
  * - **No secrets.** Only the error code, transport, method and pathname are
- *   recorded. Never headers, bodies, query strings, credentials or origins —
- *   a bridge log sits in `~/.codex/sks/logs` and is routinely pasted into bug
- *   reports.
+ *   recorded, plus an upstream's own error identifiers and the refused
+ *   request's shape (field names, `include` values, item-type counts). Never
+ *   headers, bodies, query strings, credentials or origins — a bridge log sits
+ *   in `~/.codex/sks/logs` and is routinely pasted into bug reports.
  * - **Bounded.** A client in a reconnect loop can rejrequest thousands of times
  *   a minute. Each error code gets a small burst allowance and then one periodic
  *   summary line, so a storm costs a bounded number of lines instead of filling
@@ -42,6 +43,81 @@ export interface DesktopBridgeRejectionEvent {
   readonly max_request_body_bytes?: number | undefined;
   readonly request_body_bytes?: number | undefined;
   readonly request_body_stage?: 'encoded' | 'decoded' | undefined;
+  /** An upstream's refusal, as identifiers: its status, `code`, `type` and the
+   *  request field it named (`param`). Its message can echo the request and is
+   *  never recorded. */
+  readonly upstream_status?: number | undefined;
+  readonly upstream_code?: string | null | undefined;
+  readonly upstream_type?: string | null | undefined;
+  readonly upstream_param?: string | null | undefined;
+  /** What the refused request looked like (desktopBridgeRequestShape). */
+  readonly request_shape?: DesktopBridgeRequestShape | null | undefined;
+}
+
+/**
+ * A request's shape without its content: the top-level field names, the
+ * `include` values, and how many input items of each type it carried. Enough
+ * to tell which field an upstream refused; prompts, instructions, tool
+ * arguments and keys never enter it.
+ */
+export interface DesktopBridgeRequestShape {
+  readonly keys: readonly string[];
+  readonly include: readonly string[] | null;
+  readonly input_types: Readonly<Record<string, number>>;
+}
+
+const SHAPE_TOKEN = /^[A-Za-z0-9_.[\]-]{1,64}$/;
+const MAX_SHAPE_KEYS = 64;
+const MAX_SHAPE_INCLUDE = 16;
+const MAX_SHAPE_INPUT_TYPES = 32;
+
+function shapeToken(value: unknown): string {
+  return typeof value === 'string' && SHAPE_TOKEN.test(value) ? value : '<other>';
+}
+
+export function desktopBridgeRequestShape(payload: unknown): DesktopBridgeRequestShape | null {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
+  const request = payload as Record<string, unknown>;
+  const inputTypes: Record<string, number> = {};
+  if (Array.isArray(request.input)) {
+    for (const item of request.input) {
+      const type = item && typeof item === 'object' && !Array.isArray(item) ? shapeToken((item as Record<string, unknown>).type) : '<other>';
+      if (inputTypes[type] === undefined && Object.keys(inputTypes).length >= MAX_SHAPE_INPUT_TYPES) continue;
+      inputTypes[type] = (inputTypes[type] ?? 0) + 1;
+    }
+  } else if (typeof request.input === 'string') inputTypes['<text>'] = 1;
+  return {
+    keys: Object.keys(request).map(shapeToken).sort().slice(0, MAX_SHAPE_KEYS),
+    include: Array.isArray(request.include) ? request.include.slice(0, MAX_SHAPE_INCLUDE).map(shapeToken) : null,
+    input_types: inputTypes,
+  };
+}
+
+/** The shape as logged: rebuilt from its own tokens, so nothing else rides along. */
+function safeRequestShape(shape: DesktopBridgeRequestShape | null | undefined): DesktopBridgeRequestShape | null {
+  if (!shape || !Array.isArray(shape.keys)) return null;
+  const inputTypes: Record<string, number> = {};
+  for (const [type, count] of Object.entries(shape.input_types ?? {}).slice(0, MAX_SHAPE_INPUT_TYPES)) {
+    if (Number.isSafeInteger(count) && count > 0) inputTypes[shapeToken(type)] = count;
+  }
+  return {
+    keys: shape.keys.slice(0, MAX_SHAPE_KEYS).map(shapeToken),
+    include: Array.isArray(shape.include) ? shape.include.slice(0, MAX_SHAPE_INCLUDE).map(shapeToken) : null,
+    input_types: inputTypes,
+  };
+}
+
+/** An upstream error identifier (`code`, `type`): bounded and machine-shaped. */
+function safeUpstreamId(value: unknown): string | null {
+  const text = String(value ?? '').trim();
+  return /^[A-Za-z0-9_.:-]{1,64}$/.test(text) ? text : null;
+}
+
+/** The request field an upstream named: at most 64 characters of `[A-Za-z0-9_.[\]-]`. */
+export function safeUpstreamParam(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const text = value.slice(0, 64);
+  return /^[A-Za-z0-9_.[\]-]+$/.test(text) ? text : null;
 }
 
 /** Catalog-published identifiers: bounded, control-characters stripped, nothing else. */
@@ -136,6 +212,10 @@ export function createDesktopBridgeRejectionLogger(options: {
     const method = safeMethod(event.method);
     const providerId = safeCatalogId(event.provider_id);
     const publicModel = safeCatalogId(event.public_model);
+    const upstreamCode = safeUpstreamId(event.upstream_code);
+    const upstreamType = safeUpstreamId(event.upstream_type);
+    const upstreamParam = safeUpstreamParam(event.upstream_param);
+    const requestShape = safeRequestShape(event.request_shape);
     emit({
       event: 'sks.desktop_bridge.rejected',
       code,
@@ -148,6 +228,11 @@ export function createDesktopBridgeRejectionLogger(options: {
       ...(Number.isSafeInteger(event.max_request_body_bytes) && event.max_request_body_bytes! > 0 ? { max_request_body_bytes: event.max_request_body_bytes } : {}),
       ...(Number.isSafeInteger(event.request_body_bytes) && event.request_body_bytes! >= 0 ? { request_body_bytes: event.request_body_bytes } : {}),
       ...(event.request_body_stage === 'encoded' || event.request_body_stage === 'decoded' ? { request_body_stage: event.request_body_stage } : {}),
+      ...(Number.isInteger(event.upstream_status) && event.upstream_status! >= 100 && event.upstream_status! <= 599 ? { upstream_status: event.upstream_status } : {}),
+      ...(upstreamCode ? { upstream_code: upstreamCode } : {}),
+      ...(upstreamType ? { upstream_type: upstreamType } : {}),
+      ...(upstreamParam ? { upstream_param: upstreamParam } : {}),
+      ...(requestShape ? { request_shape: requestShape } : {}),
     });
   };
 }

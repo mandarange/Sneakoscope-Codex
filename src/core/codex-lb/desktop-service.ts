@@ -16,6 +16,7 @@ import { canonicalizeBridgeModelId, normalizeBridgeUpstreamModelId, sha256Stable
 import { captureCodexAuthSnapshot } from './desktop-auth-invariant.js';
 import { applyOfficialModelPassthrough, bridgeRoutePolicyPath, writeBridgeRoutingPolicy } from './provider-route-policy.js';
 import { desktopBridgeRuntimeVersion, desktopBridgeRuntimeVersionStale } from './desktop-bridge/state.js';
+import { REQUEST_COMPAT_INCLUDE_VALUE, REQUEST_COMPAT_MAX_EXTRA_INCLUDE } from './desktop-bridge/provider-request-compat.js';
 import { PACKAGE_VERSION } from '../version.js';
 import { canonicalChildModelId, readOpenRouterOnlyStateSync } from '../subagents/child-model-allowlist.js';
 import { BRIDGE_OFFICIAL_ROUTE_ID, type BridgeProviderId, type BridgeRoutingPolicy, type ProviderSessionPin } from './bridge-contracts.js';
@@ -188,7 +189,7 @@ export async function resolveDesktopBridgeActivationSettings(options: DesktopBri
   const persisted = await readDesktopBridgeServiceSettings(paths.settings_path); const merged = { ...(persisted || {}), ...(options.settings || {}) };
   const host = merged.listen_host || DEFAULT_DESKTOP_BRIDGE_HOST;
   const port = merged.listen_port ?? await (options.selectAvailablePort || selectAvailableDesktopBridgePort)(host);
-  return defaultDesktopBridgeServiceSettings({ ...merged, ...(options.providerRegistry ? { provider_registry: options.providerRegistry } : {}), ...(options.routePolicy ? { route_policy: options.routePolicy } : {}), ...(options.providerSessionPins ? { provider_session_pins: [...options.providerSessionPins] } : {}), client_capability_sha256: sha256(clientCapability), listen_host: host, listen_port: port });
+  return defaultDesktopBridgeServiceSettings({ ...merged, ...(options.providerRegistry ? { provider_registry: withPersistedRequestCompat(options.providerRegistry, persisted?.provider_registry) } : {}), ...(options.routePolicy ? { route_policy: options.routePolicy } : {}), ...(options.providerSessionPins ? { provider_session_pins: [...options.providerSessionPins] } : {}), client_capability_sha256: sha256(clientCapability), listen_host: host, listen_port: port });
 }
 
 export async function readDesktopBridgeServiceSettings(file: string): Promise<DesktopBridgeServiceSettings | null> {
@@ -343,7 +344,8 @@ function normalizeEndpointForBinding(value: string): string {
 
 export async function resolveDesktopBridgeRuntimeConfig(options: DesktopBridgeServiceOptions = {}): Promise<{ config: DesktopBridgeConfig; settings: DesktopBridgeServiceSettings; loaded_env: CodexLbEnvLoadResult | null; credential_source: DesktopBridgeCredentialSource | null; credential_sources: Partial<Record<BridgeProviderId, DesktopBridgeCredentialSource>>; paths: DesktopBridgeServicePaths }> {
   const home = options.home || options.env?.HOME || process.env.HOME || os.homedir(); const paths = overridePaths(desktopBridgeServicePaths(home), options);
-  let settings = defaultDesktopBridgeServiceSettings({ ...((await readDesktopBridgeServiceSettings(paths.settings_path)) || {}), ...(options.settings || {}), ...(options.providerRegistry ? { provider_registry: options.providerRegistry } : {}), ...(options.routePolicy ? { route_policy: options.routePolicy } : {}), ...(options.providerSessionPins ? { provider_session_pins: [...options.providerSessionPins] } : {}) });
+  const persisted = await readDesktopBridgeServiceSettings(paths.settings_path);
+  let settings = defaultDesktopBridgeServiceSettings({ ...(persisted || {}), ...(options.settings || {}), ...(options.providerRegistry ? { provider_registry: withPersistedRequestCompat(options.providerRegistry, persisted?.provider_registry) } : {}), ...(options.routePolicy ? { route_policy: options.routePolicy } : {}), ...(options.providerSessionPins ? { provider_session_pins: [...options.providerSessionPins] } : {}) });
   const clientCapability = options.clientCapability
     ? validateClientCapability(options.clientCapability)
     : await readDesktopBridgeClientCapability(paths.client_capability_path);
@@ -848,10 +850,49 @@ function normalizeProviderRegistrySnapshot(value: unknown): DesktopBridgeProvide
   const providers = Object.fromEntries((['codex-lb', 'openrouter'] as const).map((providerId) => {
     const provider = registry.providers![providerId];
     const sourceCatalogGeneration = provider.source_catalog_generation ?? provider.catalog_generation ?? null;
-    const { catalog_generation: _legacyCatalogGeneration, ...rest } = provider;
-    return [providerId, { ...rest, source_catalog_generation: sourceCatalogGeneration }];
+    const { catalog_generation: _legacyCatalogGeneration, request_compat: requestCompat, ...rest } = provider;
+    const normalized: DesktopBridgeProviderSnapshot = { ...rest, source_catalog_generation: sourceCatalogGeneration };
+    if (requestCompat !== undefined) normalized.request_compat = validateRequestCompat(requestCompat);
+    return [providerId, normalized];
   })) as DesktopBridgeProviderRegistrySnapshot['providers'];
   return { ...registry, providers };
+}
+
+/**
+ * `request_compat` on a provider profile: `{ "extra_include": [...] }`, at most
+ * eight lowercase dotted `include` values the bridge keeps for that provider
+ * (provider-request-compat.ts). A malformed one is refused like any other bad
+ * setting, never half-applied.
+ */
+function validateRequestCompat(value: unknown): { extra_include: string[] } {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('desktop_bridge_settings_request_compat_invalid');
+  const row = value as Record<string, unknown>;
+  if (Object.keys(row).some((key) => key !== 'extra_include')) throw new Error('desktop_bridge_settings_request_compat_invalid');
+  const values = row.extra_include ?? [];
+  if (!Array.isArray(values) || values.length > REQUEST_COMPAT_MAX_EXTRA_INCLUDE
+    || values.some((entry) => typeof entry !== 'string' || !REQUEST_COMPAT_INCLUDE_VALUE.test(entry))) {
+    throw new Error('desktop_bridge_settings_request_compat_invalid');
+  }
+  return { extra_include: [...new Set(values as string[])] };
+}
+
+/**
+ * The operator sets `request_compat` on a profile in the settings file, while a
+ * catalog sync rebuilds the registry snapshot from the stored provider
+ * registry, which has no such field. The setting stays on the profile it was
+ * written to.
+ */
+function withPersistedRequestCompat(
+  registry: DesktopBridgeProviderRegistrySnapshot,
+  persisted: DesktopBridgeProviderRegistrySnapshot | null | undefined,
+): DesktopBridgeProviderRegistrySnapshot {
+  let providers: DesktopBridgeProviderRegistrySnapshot['providers'] | null = null;
+  for (const id of ['codex-lb', 'openrouter'] as const) {
+    const compat = persisted?.providers?.[id]?.request_compat;
+    if (!compat || registry.providers[id].request_compat) continue;
+    providers = { ...(providers ?? registry.providers), [id]: { ...registry.providers[id], request_compat: compat } };
+  }
+  return providers ? { ...registry, generation: sha256Stable(providers), providers } : registry;
 }
 function overridePaths(base: DesktopBridgeServicePaths, options: DesktopBridgeServiceOptions): DesktopBridgeServicePaths { return { settings_path: options.settingsPath || base.settings_path, state_path: options.statePath || base.state_path, client_capability_path: options.clientCapabilityPath || base.client_capability_path, launch_agent_path: options.launchAgentPath || base.launch_agent_path, stdout_log_path: options.stdoutLogPath || base.stdout_log_path, stderr_log_path: options.stderrLogPath || base.stderr_log_path }; }
 function launchDomain(uid = typeof process.getuid === 'function' ? process.getuid() : 0): string { return `gui/${uid}`; }
