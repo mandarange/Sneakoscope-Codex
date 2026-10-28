@@ -220,3 +220,26 @@ test('a tier-appropriate model that is not older is never old, even when the tie
     assert.equal(modelNotOlderForTier('anthropic/claude-sonnet-4.5', 'deep', { env }), false)
   })
 })
+
+test('with Codex on the bridge /models, tiers follow the bridge active catalog, not a cache Codex has not refreshed yet', async () => {
+  const codexHome = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-model-tiers-bridge-'))
+  try {
+    await fs.writeFile(path.join(codexHome, 'models_cache.json'), JSON.stringify({ fetched_at: 'x', models: REGRESSED_CACHE }))
+    const bundle = path.join(codexHome, 'sks', '.sks-bridge-generations', 'gen-1')
+    await fs.mkdir(bundle, { recursive: true })
+    await fs.writeFile(path.join(bundle, 'sks-bridge-catalog.json'), JSON.stringify({ models: CATALOG }))
+    await fs.writeFile(path.join(codexHome, 'sks', 'sks-bridge-active-generation.json'), JSON.stringify({
+      bundle_directory: '.sks-bridge-generations/gen-1', catalog_filename: 'sks-bridge-catalog.json'
+    }))
+    const bound = `model = "gpt-6.1-sol"\n# sks-desktop-bridge-managed-base-url\nopenai_base_url = "http://127.0.0.1:53451/backend-api/codex"\n`
+    await fs.writeFile(path.join(codexHome, 'config.toml'), bound)
+    const env = { CODEX_HOME: codexHome, HOME: codexHome }
+    assert.equal(resolveLatestModelTiers({ env }).source, 'model_catalog')
+    assert.equal(resolveLatestModelTiers({ env }).models.balanced, 'gpt-6.1-sol')
+    // Not bridge-bound: the cache Codex keeps is the list.
+    await fs.writeFile(path.join(codexHome, 'config.toml'), 'model = "gpt-6.1-sol"\nopenai_base_url = "http://127.0.0.1:53451/backend-api/codex"\n')
+    assert.equal(resolveLatestModelTiers({ env }).source, 'models_cache')
+  } finally {
+    await fs.rm(codexHome, { recursive: true, force: true })
+  }
+})

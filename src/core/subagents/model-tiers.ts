@@ -18,8 +18,9 @@ function modelsCachePath(input: { home?: string; env?: NodeJS.ProcessEnv }): str
  * moves to it without an SKS release.
  *
  * Resolution reads the model list Codex itself uses: the `model_catalog_json`
- * file named in `$CODEX_HOME/config.toml` when there is one (the SKS bridge
- * serves Codex Desktop through it), else Codex's own models cache
+ * file named in `$CODEX_HOME/config.toml` when there is one, the SKS bridge's
+ * active catalog when Codex follows the bridge's `/models` instead (the bridge
+ * serves exactly that catalog), else Codex's own models cache
  * (`$CODEX_HOME/models_cache.json`). The cache alone is not trusted when a
  * catalog is configured: any Codex client rewrites it with the models its own
  * version can see, so an older client leaves a shorter list than Codex Desktop
@@ -111,16 +112,38 @@ function readableRows(file: string): CandidateRow[] {
 
 let catalogPathMemo: { key: string; path: string | null } | null = null
 
-/** The `model_catalog_json` file the user's Codex config names, resolved the way Codex resolves it. */
+// DESKTOP_BRIDGE_MANAGED_BASE_URL_MARKER (install-helpers-codex-lb-config.ts),
+// spelled out so the hook path does not load the config writer.
+const BRIDGE_BASE_URL_MARKER = '# sks-desktop-bridge-managed-base-url'
+
+/**
+ * The bridge's active combined catalog, through its generation pointer: what
+ * the bridge serves as `/models` once Codex reads its list from there.
+ */
+function activeBridgeCatalogPath(codexHome: string): string | null {
+  try {
+    const pointer = JSON.parse(fs.readFileSync(path.join(codexHome, 'sks', 'sks-bridge-active-generation.json'), 'utf8'))
+    const bundle = path.resolve(codexHome, 'sks', String(pointer?.bundle_directory || ''))
+    const file = path.join(bundle, String(pointer?.catalog_filename || ''))
+    return bundle.startsWith(path.join(codexHome, 'sks', '.sks-bridge-generations') + path.sep) && path.dirname(file) === bundle ? file : null
+  } catch {
+    return null
+  }
+}
+
+/** The catalog file behind the list Codex shows, resolved the way Codex resolves `model_catalog_json`. */
 function configuredCatalogPath(input: { home?: string; env?: NodeJS.ProcessEnv }): string | null {
-  const configPath = path.join(codexHomePath(input), 'config.toml')
-  const key = fileKey(configPath)
+  const codexHome = codexHomePath(input)
+  const configPath = path.join(codexHome, 'config.toml')
+  const key = `${fileKey(configPath)}|${fileKey(path.join(codexHome, 'sks', 'sks-bridge-active-generation.json'))}`
   if (catalogPathMemo?.key === key) return catalogPathMemo.path
   let resolved: string | null = null
   try {
     const stat = fs.statSync(configPath)
     if (stat.isFile() && stat.size <= 4 * 1024 * 1024) {
-      const value = readTopLevelTomlString(fs.readFileSync(configPath, 'utf8'), 'model_catalog_json')?.trim()
+      const config = fs.readFileSync(configPath, 'utf8')
+      const value = readTopLevelTomlString(config, 'model_catalog_json')?.trim()
+      if (!value && config.split(/\r?\n/).some((line) => line.trim() === BRIDGE_BASE_URL_MARKER)) resolved = activeBridgeCatalogPath(codexHome)
       if (value) {
         const env = input.env || process.env
         const home = input.home || env.HOME || os.homedir()

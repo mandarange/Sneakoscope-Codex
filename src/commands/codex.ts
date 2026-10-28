@@ -38,13 +38,17 @@ export async function run(_command: any, args: any = []) {
     return;
   }
   if (action === 'update' || action === 'update-now') {
-    const result = await updateCodexCliNow();
+    // A new Codex can be offered a different list: the update ends with a model-list refresh.
+    const updated = await updateCodexCliNow();
+    const modelRefresh = await (await import('../core/codex-lb/model-refresh-after.js')).refreshModelListAfter('codex-update');
+    const result = modelRefresh ? { ...updated, model_refresh: modelRefresh } : updated;
     if (flag(args, '--json')) {
       printJson(result);
       if (!result.ok) process.exitCode = 1;
       return;
     }
     for (const line of codexCliUpdateConsoleLines(result)) console.log(line);
+    if (typeof modelRefresh?.line === 'string') console.log(modelRefresh.line);
     if (!result.ok) process.exitCode = 1;
     return;
   }

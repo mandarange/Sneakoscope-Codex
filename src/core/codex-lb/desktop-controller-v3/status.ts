@@ -1,7 +1,6 @@
 import {
   DESKTOP_BRIDGE_MANAGED_BASE_URL_MARKER,
-  DESKTOP_BRIDGE_MANAGED_MARKER,
-  DESKTOP_BRIDGE_MANAGED_MODEL_CATALOG_MARKER
+  DESKTOP_BRIDGE_MANAGED_MARKER
 } from '../../../cli/install-helpers-codex-lb-config.js';
 import type {
   BridgeProviderId,
@@ -345,10 +344,12 @@ function serviceRuntimeState(service: DesktopBridgeServiceStatus): DesktopBridge
 
 function isManagedConfig(config: string): boolean {
   const top = String(config || '').split(/\n\s*\[/)[0] || '';
+  // The routing binding is SKS's; the model list may not be: Codex reads the
+  // bridge's `/models` (no `model_catalog_json`), SKS's catalog file, or a
+  // user's own pin, which stays as it is.
   return [
     DESKTOP_BRIDGE_MANAGED_MARKER,
-    DESKTOP_BRIDGE_MANAGED_BASE_URL_MARKER,
-    DESKTOP_BRIDGE_MANAGED_MODEL_CATALOG_MARKER
+    DESKTOP_BRIDGE_MANAGED_BASE_URL_MARKER
   ].every((marker) => top.split(/\r?\n/).some((line) => line.trim() === marker))
     && /^\s*model_provider\s*=\s*"openai"\s*(?:#.*)?$/m.test(top);
 }

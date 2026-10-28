@@ -18,6 +18,7 @@ import {
 } from './provider-handoff.js';
 import { desktopBridgeListenOrigin } from './state.js';
 import { adaptRequestForRoute, logRequestAdaptation, providerExtraInclude } from './provider-request-compat.js';
+import { desktopBridgeModelsEtag } from './models-endpoint.js';
 import {
   buildCompactionSummaryRequest,
   compactEndpointResult,
@@ -137,6 +138,16 @@ function modelBodyKind(req: IncomingMessage, pathname: string): 'responses' | 's
   // probe) has no body, and parsing its empty one refused it as invalid JSON.
   if (RESPONSES_PATHS.includes(pathname)) return req.method === 'POST' ? 'responses' : null;
   return req.method === 'POST' && RESPONSES_PATHS.some((prefix) => pathname.startsWith(`${prefix}/`)) ? 'sub-endpoint' : null;
+}
+
+/**
+ * The `X-Models-Etag` a Responses reply carries: the bridge's catalog, in place
+ * of the upstream's own (models-endpoint.ts), or null to leave headers as sent.
+ */
+function advertisedModelsEtag(req: IncomingMessage, config: PreparedDesktopBridgeConfig): string | null {
+  if (!config.modelsCatalog) return null;
+  const pathname = new URL(String(req.url || '/'), 'http://bridge.invalid').pathname;
+  return modelBodyKind(req, pathname) === 'responses' ? desktopBridgeModelsEtag(config.modelsCatalog.generation) : null;
 }
 
 function isCompactEndpoint(req: IncomingMessage, pathname: string): boolean {
@@ -581,6 +592,7 @@ export async function forwardHttp(
       config.idleTimeoutMs,
     );
     const idleTimeoutMs = request.compaction ? Math.max(config.idleTimeoutMs, NATIVE_COMPACTION_IDLE_FLOOR_MS) : config.idleTimeoutMs;
+    const modelsEtag = advertisedModelsEtag(req, config);
 
     // A streamed request body is consumed as it is forwarded, so only a
     // buffered one can be replayed. Every Responses call arrives buffered.
@@ -655,8 +667,11 @@ export async function forwardHttp(
             });
           }
           responseStarted = true;
-          try { res.writeHead(statusCode, rewriteResponseHeaders(response.headers, upstreamBaseUrl, authenticatedLocalBaseUrl)); }
-          catch (error) { response.destroy(error instanceof Error ? error : undefined); finish(error); return; }
+          try {
+            const responseHeaders = rewriteResponseHeaders(response.headers, upstreamBaseUrl, authenticatedLocalBaseUrl);
+            if (modelsEtag) responseHeaders['x-models-etag'] = modelsEtag;
+            res.writeHead(statusCode, responseHeaders);
+          } catch (error) { response.destroy(error instanceof Error ? error : undefined); finish(error); return; }
           void pipeline(response, res).then(() => finish(), finish);
           return;
         }
@@ -743,6 +758,7 @@ export async function forwardHttp(
             if (verbatim && upstreamCode === MODEL_CAPACITY_ERROR_CODE && responseHeaders['retry-after'] === undefined) {
               responseHeaders['retry-after'] = String(MODEL_CAPACITY_RETRY_AFTER_SECONDS);
             }
+            if (modelsEtag) responseHeaders['x-models-etag'] = modelsEtag;
             res.writeHead(clientStatus, responseHeaders);
             res.end(body, () => finish());
           }).catch(finish);
@@ -761,6 +777,7 @@ export async function forwardHttp(
         try {
           const responseHeaders = rewriteResponseHeaders(response.headers, upstreamBaseUrl, authenticatedLocalBaseUrl);
           if (advising) delete responseHeaders['content-length'];
+          if (modelsEtag) responseHeaders['x-models-etag'] = modelsEtag;
           res.writeHead(statusCode, responseHeaders);
         } catch (error) { response.destroy(error instanceof Error ? error : undefined); finish(error); return; }
         void (advising ? pipeline(response, advising, res) : pipeline(response, res)).then(() => finish(), finish);
@@ -971,7 +988,11 @@ async function answerCompactionWithProviderSummary(
   let keepalive: NodeJS.Timeout | null = null;
   const startStream = (): void => {
     if (!streaming || res.headersSent) return;
-    res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store', connection: 'keep-alive' });
+    const modelsEtag = advertisedModelsEtag(req, config);
+    res.writeHead(200, {
+      'content-type': 'text/event-stream', 'cache-control': 'no-store', connection: 'keep-alive',
+      ...(modelsEtag ? { 'x-models-etag': modelsEtag } : {}),
+    });
     res.write(sseEvent(compactionCreatedEvent(responseId, publicModel)));
     keepalive = setInterval(() => { if (!res.writableEnded) res.write(': keepalive\n\n'); }, COMPACTION_KEEPALIVE_MS);
     keepalive.unref();

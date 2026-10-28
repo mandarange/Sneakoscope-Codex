@@ -1,5 +1,5 @@
 import { readText, writeJsonAtomic } from '../../fsx.js';
-import { repairManagedCodexLbClientSelection } from '../../../cli/install-helpers-codex-lb-config.js';
+import { codexReadsBridgeModels, hasUserOwnedModelCatalog, repairManagedCodexLbClientSelection } from '../../../cli/install-helpers-codex-lb-config.js';
 import { safeWriteCodexConfigToml } from '../../codex-runtime/codex-desktop-config-policy.js';
 import { readTopLevelTomlString } from '../../codex-app/codex-model-catalog.js';
 import { codexRestartBlockers, maybeRestartRunningCodexApp } from '../../codex-app/codex-app-restart-policy.js';
@@ -66,7 +66,19 @@ import {
 import { desktopBridgeStatusV3 } from './status.js';
 import { openRouterOnlyExposure, readControllerOpenRouterOnlyState, withoutCodexLbCatalog } from './openrouter-only-catalog.js';
 import type { OpenRouterOnlyState } from '../../subagents/child-model-allowlist.js';
-import type { ControllerPaths, DesktopBridgeControllerV3Options } from './types.js';
+import type { ControllerPaths, DesktopBridgeControllerRequestV3, DesktopBridgeControllerV3Options } from './types.js';
+import {
+  MODEL_REFRESH_RECOVERY_COMMAND,
+  alignCodexModelSource,
+  bridgeServesModels,
+  listedModelSlugs,
+  modelListDiff,
+  modelRefreshLine,
+  readModelRefreshState,
+  refreshedRecently,
+  writeModelRefreshState,
+  type CodexModelSource
+} from './model-refresh.js';
 
 export interface CatalogSyncBehavior {
   restartService?: boolean;
@@ -81,6 +93,8 @@ export interface CatalogSyncBehavior {
    * rolls the activation back, so the catalog and the commit land together.
    */
   onActivated?: () => Promise<unknown>;
+  /** False activates only when config.toml stays byte-identical (a read-only Doctor). Defaults to true. */
+  configWrites?: boolean;
 }
 
 export async function syncCatalog(options: DesktopBridgeControllerV3Options): Promise<DesktopBridgeCommandResult> {
@@ -118,9 +132,10 @@ export async function syncCatalogInternal(
   behavior: CatalogSyncBehavior = {}
 ): Promise<Record<string, unknown>> {
   const paths = controllerPaths(options);
-  const repair = await repairCodexLbClientSelection(paths.configPath);
+  const repair = behavior.configWrites === false ? null : await repairCodexLbClientSelection(paths.configPath);
   if (repair) return blockedSync(inspectHistoricalDesktopBridgeIntent(''), [repair]);
-  const historicalIntent = inspectHistoricalDesktopBridgeIntent(await readText(paths.configPath, ''));
+  const configText = await readText(paths.configPath, '');
+  const historicalIntent = inspectHistoricalDesktopBridgeIntent(configText);
   if (historicalIntent.blockers.length > 0) return blockedSync(historicalIntent, historicalIntent.blockers);
   const rawCredentials = await resolveRawCredentials(options, paths);
   const storedRegistryRead = await loadStoredBridgeProviderRegistry({ home: paths.home });
@@ -150,6 +165,14 @@ export async function syncCatalogInternal(
     ? openRouterOnlyExposure(selection, openRouterOnly, await readText(paths.configPath, ''))
     : selection;
   const build = buildCombinedBridgeCatalog(catalogRegistry(registry), { catalogs, created_at: nowIso(options), selection: exposure });
+  const lost = providersLostToFailedFetch(
+    await readActiveCombinedBridgeCatalog(paths.catalogPath, paths.routeIndexPath),
+    catalogs,
+    catalogRegistry(registry)
+  );
+  if (lost.length > 0) {
+    return { ...blockedSync(historicalIntent, lost.map((providerId) => `${providerCode(providerId)}_catalog_refresh_failed`)), build, active_generation_preserved: true };
+  }
   if (!selectionState.stored) await writeBridgeModelSelection(paths.home, selection).catch(() => undefined);
   // The available list is what SKS Center offers for curation; persisting it on
   // every sync keeps the picker choices in step with what OpenRouter serves.
@@ -237,6 +260,10 @@ export async function syncCatalogInternal(
     receiptDir: paths.receiptDir,
     bridgeBaseUrl: managedBridgeBaseUrl,
     combinedCatalogPath: staging.catalog_path,
+    // Codex already reads the bridge's `/models`, or the user pinned a list of
+    // their own: a sync keeps it that way.
+    bindModelCatalog: !codexReadsBridgeModels(configText) && !hasUserOwnedModelCatalog(configText),
+    configWrite: behavior.configWrites === false ? 'forbid' : 'allow',
     newCatalogGeneration: build.catalog.generation,
     metadataUpdates: [
       {
@@ -438,6 +465,35 @@ function emptyProviderCatalog(
   };
 }
 
+/**
+ * Providers whose list could not be fetched this time (network, server) while
+ * the active catalog still routes their models: activating would drop every
+ * one of them, so the last good catalog stays instead. A rejected or missing
+ * credential is a real change and is not held back.
+ */
+function providersLostToFailedFetch(
+  active: Awaited<ReturnType<typeof readActiveCombinedBridgeCatalog>>,
+  catalogs: Record<BridgeProviderId, ProviderCatalogBuildInput>,
+  registry: BridgeProviderRegistry
+): BridgeProviderId[] {
+  if (!active.ok) return [];
+  return (['codex-lb', 'openrouter'] as const).filter((providerId) => {
+    const blockers = catalogs[providerId].blockers || [];
+    return registry.profiles[providerId].enabled
+      && catalogs[providerId].state === 'failed'
+      && !blockers.some(refusesCredential)
+      && active.catalog.models.some((model) => model.provider_id === providerId);
+  });
+}
+
+/**
+ * The provider refused or lacks the credential (an outage is not that: an
+ * OpenRouter 5xx surfaces as `openrouter_authentication_failed:…_provider_unavailable`).
+ */
+function refusesCredential(blocker: string): boolean {
+  return /unauthorized|credential_missing|key_missing|invalid_key|_http_40[13]\b/.test(blocker);
+}
+
 function validationFailureState(blockers: readonly string[]): 'rejected' | 'unavailable' {
   return blockers.some((blocker) => /(?:401|403|auth|rejected|invalid_key|unauthorized)/i.test(blocker))
     ? 'rejected' : 'unavailable';
@@ -493,12 +549,16 @@ export async function selectExposedModels(
     updated_at: nowIso(options),
     openrouter: { mode: 'selected', public_ids: requested }
   });
-  const sync = await syncCatalogInternal(options);
+  const sync = await syncAsRefresh(options, 'models.select');
   const status = await desktopBridgeStatusV3(options);
   const activation = sync.activation && typeof sync.activation === 'object'
     ? sync.activation as Record<string, unknown>
     : {};
-  const changed = before.selection.openrouter.public_ids.join('\0') !== requested.join('\0');
+  // Codex following the bridge's `/models` picks the new selection up by
+  // itself; only a list it reads from a file needs Codex relaunched.
+  const refresh = sync.model_refresh as ModelRefreshResult;
+  const changed = before.selection.openrouter.public_ids.join('\0') !== requested.join('\0')
+    && (refresh.codex_model_source !== 'bridge_models' || refresh.restart_codex_required);
   const restart = sync.ok === true
     ? await maybeRestartRunningCodexApp({
       env: controllerEnv(options),
@@ -528,4 +588,151 @@ function seedSelectionFromConfiguredModel(
   const configured = readTopLevelTomlString(configText, 'model');
   if (!configured || !configured.includes('/')) return selection;
   return { ...selection, openrouter: { mode: 'selected', public_ids: [configured] } };
+}
+
+export interface ModelRefreshInput {
+  /** Who asked: `update`, `doctor`, `setup`, `cli`, a mutation's operation id … */
+  reason: string;
+  /** Fetch even when the same providers were refreshed under a minute ago. */
+  force?: boolean;
+  /** False for a read-only Doctor: SKS-owned files only, never config.toml. */
+  allowConfigWrites: boolean;
+  behavior?: Omit<CatalogSyncBehavior, 'configWrites'>;
+}
+
+export interface ModelRefreshResult {
+  schema: 'sks.bridge-model-refresh.v1';
+  ok: boolean;
+  skipped: boolean;
+  reason: string;
+  generation: string | null;
+  total: number;
+  added: string[];
+  removed: string[];
+  codex_model_source: CodexModelSource | null;
+  restart_codex_required: boolean;
+  /** The one line every refresh reports, in text and in --json alike. */
+  line: string;
+  refreshed_at: string;
+  warnings: string[];
+  blockers: string[];
+  /** The catalog sync the refresh ran; null when it was skipped. */
+  sync: Record<string, unknown> | null;
+}
+
+/**
+ * The one way the model list is refreshed: a live fetch of every provider's
+ * list, a rebuild and an activation, then Codex pointed at a list it can
+ * follow (model-refresh.ts). It never throws: a failure keeps the previous
+ * list active and says which command retries it.
+ */
+export async function refreshModelCatalog(
+  options: DesktopBridgeControllerV3Options,
+  input: ModelRefreshInput
+): Promise<ModelRefreshResult> {
+  const paths = controllerPaths(options);
+  const refreshedAt = nowIso(options);
+  const base = {
+    schema: 'sks.bridge-model-refresh.v1' as const,
+    reason: input.reason,
+    refreshed_at: refreshedAt,
+    added: [] as string[],
+    removed: [] as string[],
+    restart_codex_required: false
+  };
+  try {
+    const registryGeneration = (await resolveBridgeProviderRegistry({
+      home: paths.home,
+      credentials: await resolveRawCredentials(options, paths)
+    })).generation;
+    const recent = input.force ? null : await readModelRefreshState(paths.home);
+    if (recent && refreshedRecently(recent, registryGeneration, Date.parse(refreshedAt))) {
+      return {
+        ...base, ok: true, skipped: true, generation: recent.generation, total: recent.total, codex_model_source: null,
+        line: `Model list refreshed recently: ${recent.total} models generation ${recent.generation.slice(0, 8)}`,
+        warnings: ['model_refresh_skipped_recent'], blockers: [], sync: null
+      };
+    }
+    const before = await readActiveCombinedBridgeCatalog(paths.catalogPath, paths.routeIndexPath);
+    const sync = await syncCatalogInternal(options, { ...(input.behavior || {}), configWrites: input.allowConfigWrites });
+    if (sync.ok !== true) return refreshFailed(base, stringArray((sync.activation as Record<string, unknown> | undefined)?.blockers), sync);
+    const build = sync.build as CombinedCatalogStagingInput;
+    const activation = sync.activation as Record<string, unknown>;
+    const diff = modelListDiff(listedModelSlugs(before.ok ? before.catalog : null), listedModelSlugs(build.catalog));
+    const source = await alignCodexModelSource({
+      home: paths.home,
+      configPath: paths.configPath,
+      authPath: paths.authPath,
+      catalog: build.catalog,
+      catalogPath: typeof activation.catalog_path === 'string' ? activation.catalog_path : null,
+      allowConfigWrites: input.allowConfigWrites,
+      selfCheck: options.modelsSelfCheckImpl || bridgeServesModels
+    });
+    // Codex reads `model_catalog_json` only at launch, so a changed list in
+    // that file, or a switch to the bridge's list, needs one restart.
+    const restart = source.changed || (source.source === 'model_catalog_json' && diff.added.length + diff.removed.length > 0);
+    const total = listedModelSlugs(build.catalog).length;
+    await writeModelRefreshState(paths.home, {
+      refreshed_at: refreshedAt,
+      provider_registry_generation: registryGeneration,
+      generation: build.catalog.generation,
+      total
+    }).catch(() => undefined);
+    return {
+      ...base, ok: true, skipped: false, generation: build.catalog.generation, total, added: diff.added, removed: diff.removed,
+      codex_model_source: source.source, restart_codex_required: restart,
+      line: modelRefreshLine({ total, added: diff.added.length, removed: diff.removed.length, generation: build.catalog.generation, restartCodex: restart }),
+      warnings: source.warnings, blockers: [], sync
+    };
+  } catch (error: unknown) {
+    return refreshFailed(base, [safeCode(error, 'model_refresh_failed')], null);
+  }
+}
+
+type CombinedCatalogStagingInput = Parameters<typeof stageCombinedBridgeCatalog>[0]['build'];
+
+function refreshFailed(
+  base: Pick<ModelRefreshResult, 'schema' | 'reason' | 'refreshed_at' | 'added' | 'removed' | 'restart_codex_required'>,
+  blockers: readonly string[],
+  sync: Record<string, unknown> | null
+): ModelRefreshResult {
+  return {
+    ...base, ok: false, skipped: false, generation: null, total: 0, codex_model_source: null,
+    line: `Model list refresh failed; the previous list stays active. Run \`${MODEL_REFRESH_RECOVERY_COMMAND}\` to retry.`,
+    warnings: [`model_refresh_failed: run \`${MODEL_REFRESH_RECOVERY_COMMAND}\``],
+    blockers: unique(blockers.length > 0 ? blockers : ['model_refresh_failed']),
+    sync
+  };
+}
+
+/** `sks bridge models refresh`: a forced refresh, reported as one line. */
+export async function refreshModels(
+  request: Extract<DesktopBridgeControllerRequestV3, { operation: 'models.refresh' }>,
+  options: DesktopBridgeControllerV3Options
+): Promise<DesktopBridgeCommandResult> {
+  const refresh = await refreshModelCatalog(options, {
+    reason: request.reason || 'cli',
+    force: request.force !== false,
+    allowConfigWrites: request.allow_config_writes !== false
+  });
+  const { sync, ...model_refresh } = refresh;
+  const status = await desktopBridgeStatusV3(options);
+  return commandResult('models.refresh', refresh.ok, status, { model_refresh, catalog_sync: sync }, refresh.blockers, options);
+}
+
+/**
+ * A mutation's catalog sync, run as a forced model refresh: the sync result
+ * its caller already reads (`ok`, `activation`), with the refresh summary
+ * under `model_refresh`.
+ */
+export async function syncAsRefresh(
+  options: DesktopBridgeControllerV3Options,
+  reason: string,
+  behavior: Omit<CatalogSyncBehavior, 'configWrites'> = {}
+): Promise<Record<string, unknown>> {
+  const { sync, ...model_refresh } = await refreshModelCatalog(options, { reason, force: true, allowConfigWrites: true, behavior });
+  return {
+    ...(sync ?? blockedSync(null, model_refresh.blockers)),
+    model_refresh
+  };
 }

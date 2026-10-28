@@ -170,8 +170,18 @@ export function emptyRouteIndex(): BridgeRouteIndex {
   }).route_index;
 }
 
+/**
+ * What a generation's bundle name says about how its providers were observed.
+ * The check and expiry times are left out: they move on every sync, and a name
+ * that moved with them gave an unchanged catalog a new path each time — a new
+ * `model_catalog_json` for Codex on every refresh. A reused bundle takes the
+ * newer times instead (stageCombinedBridgeCatalog), so freshness still holds.
+ */
 export function catalogObservationGeneration(catalog: CombinedBridgeCatalogArtifact): string {
-  return sha256Stable(catalog.provider_statuses);
+  return sha256Stable(Object.fromEntries(Object.entries(catalog.provider_statuses).map(([providerId, row]) => {
+    const { checked_at: _checkedAt, expires_at: _expiresAt, ...observed } = row;
+    return [providerId, observed];
+  })));
 }
 
 function validProviderStatuses(value: unknown): value is Record<BridgeProviderId, CatalogSyncState> {

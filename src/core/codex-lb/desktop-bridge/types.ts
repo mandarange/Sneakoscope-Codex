@@ -1,5 +1,6 @@
 import type { Server } from 'node:http';
 import type { Socket } from 'node:net';
+import type { DesktopBridgeModelsCatalog } from './models-endpoint.js';
 import type {
   BridgeProviderId,
   BridgeRouteTargetId,
@@ -155,6 +156,13 @@ export interface DesktopBridgeConfig {
    * the official passthrough.
    */
   openRouterOnly?: DesktopBridgeOpenRouterOnlyConfig | null;
+  /**
+   * The active combined catalog, read once at start like the route policy (a
+   * catalog sync restarts the bridge). Set, the bridge answers `/models` from
+   * it and advertises it with `X-Models-Etag` (models-endpoint.ts); absent,
+   * `/models` passes through as before.
+   */
+  modelsCatalog?: DesktopBridgeModelsCatalog | null;
   resolveRequestRoute?: DesktopBridgeRouteResolver;
   persistProviderSessionPins?: DesktopBridgeSessionPinPersister;
   resolveProviderCredential: DesktopBridgeCredentialResolver;

@@ -342,12 +342,16 @@ export async function setupCommand(args: any = []) {
       ...[...(codexHooks?.activation?.blockers || []), ...(codexHooks?.project?.blockers || [])].map((blocker: string) => `codex_hooks:${blocker}`)
     ]
   };
+  // Setup ends with a fresh model list for a managed Desktop Bridge.
+  const modelRefresh = result.ok ? await (await import('../codex-lb/model-refresh-after.js')).refreshModelListAfter('setup') : null;
+  if (modelRefresh) (result as Record<string, unknown>).model_refresh = modelRefresh;
   if (!result.ok) process.exitCode = 1;
   if (flag(args, '--json')) {
     printJson(result);
     return result;
   }
   console.log(`${result.ok ? 'Setup complete' : 'Setup blocked'}: ${root}`);
+  if (typeof modelRefresh?.line === 'string') console.log(modelRefresh.line);
   console.log(`Install scope: ${installScope}`);
   console.log(`Codex CLI: ${cliTools.codex.status}${cliTools.codex.version ? ` ${cliTools.codex.version}` : ''}`);
   console.log(`SKS Codex hooks: ${codexHooks?.active ? 'active for every Codex project' : installScope === 'project' ? 'this project only' : 'not active (run: sks doctor --fix)'}`);

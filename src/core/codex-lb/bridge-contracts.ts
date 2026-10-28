@@ -452,6 +452,7 @@ export type DesktopBridgeCommandOperation =
   | 'catalog.status'
   | 'models.list'
   | 'models.select'
+  | 'models.refresh'
   | 'route.list'
   | 'route.set-default'
   | 'route.official-models'

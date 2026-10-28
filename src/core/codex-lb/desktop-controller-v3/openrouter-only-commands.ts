@@ -26,7 +26,7 @@ import {
 } from '../combined-catalog/model-selection.js';
 import { ensureUserReadOnlyListRole } from '../../subagents/read-only-list-role.js';
 import { canonicalizeBridgeModelId } from '../route-index.js';
-import { syncCatalogInternal } from './catalog.js';
+import { syncAsRefresh } from './catalog.js';
 import { hasOpenRouterRoute, openRouterOnlyStoreLocation } from './openrouter-only-catalog.js';
 import {
   applyOpenRouterOnlyMainModel,
@@ -194,10 +194,10 @@ async function enableOpenRouterOnly(
   // persists nothing at all (the seeded list included). A list with no model
   // the new catalog routes would leave the main thread and every child on a
   // model the bridge refuses, so the commit fails and nothing lands.
-  const sync = await syncCatalogInternal({
+  const sync = await syncAsRefresh({
     ...options,
     settings: { ...(options.settings || {}), auth_priority_enabled: false }
-  }, {
+  }, 'openrouter-only.set', {
     openRouterOnly: { ...before, enabled: true, subagent_models: entries },
     onActivated: async () => {
       await requireRoutableEntry(core.paths, { ...before, enabled: true, subagent_models: entries });
@@ -334,7 +334,7 @@ export async function turnOffOpenRouterOnly(
     return { ok: true, changed: false, catalog_sync: null, main_model: null, blockers: [] };
   }
   const off: OpenRouterOnlyState = { ...before, enabled: false };
-  const sync = (commit: boolean) => syncCatalogInternal(options, {
+  const sync = (commit: boolean) => syncAsRefresh(options, 'openrouter-only.off', {
     ...(behavior.restartService === undefined ? {} : { restartService: behavior.restartService }),
     openRouterOnly: off,
     ...(commit ? { onActivated: () => writeOpenRouterOnlyState({ enabled: false }, location) } : {})
@@ -482,7 +482,7 @@ export async function setSubagentModels(
   // them. The list is committed with that catalog, before the bridge
   // restarts; a failed sync keeps the old list everywhere.
   const exposedBefore = await exposedModelIds(paths);
-  const sync = await syncCatalogInternal(options, {
+  const sync = await syncAsRefresh(options, 'subagent-models.set', {
     openRouterOnly: { ...before, subagent_models: entries },
     onActivated: async () => {
       // An empty list is allowed and reported as unavailable; a list whose

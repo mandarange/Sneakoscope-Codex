@@ -457,6 +457,7 @@ async function runDoctorGlobalOnlyFix(args: any[] = [], root: string, deps: any 
           : bridgeRepair?.ok === false ? 'failed' : 'nothing_to_repair'
     }`);
     console.log(`Desktop Bridge: ${result.desktop_bridge.ok ? 'ready' : 'blocked'} (${result.desktop_bridge.status?.readiness?.state || 'unavailable'})`);
+    if (result.desktop_bridge_repair?.model_refresh?.line) console.log(result.desktop_bridge_repair.model_refresh.line);
     if ((result as any).migration_receipt) {
       console.log(`Migration receipt: ${(result as any).migration_receipt.status} (${(result as any).home})`);
     }
@@ -824,11 +825,10 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean, deps:
   const codexApp = deepDiagnostics
     ? await codexAppIntegrationStatus({ codex }).catch((err: any) => ({ ok: false, error: err.message }))
     : { ok: false, skipped: true, warnings: ['codex_app_optional_diagnostic_skipped'] };
-  // Only the BEFORE picture: a `--fix` run repairs the bridge inside the
-  // transaction further down, and `desktopBridge` is re-read once that closes.
-  const desktopBridgeBeforeFix = await inspectDoctorDesktopBridgeStatus({
-    processEnv: process.env
-  }, { desktopBridgeStatusImpl: deps.desktopBridgeStatusImpl });
+  // Only the BEFORE picture: a `--fix` run repairs the bridge (and refreshes the model list) inside the transaction
+  // below. A read-only Doctor still refreshes the list: SKS's own catalog files only, never config.toml.
+  let desktopBridgeModelRefresh: any = doctorFix ? null : (await (deps.desktopBridgeRepairImpl || repairDoctorDesktopBridgeCatalog)({ fix: false, reason: 'doctor' }).catch(() => null))?.model_refresh ?? null;
+  const desktopBridgeBeforeFix = await inspectDoctorDesktopBridgeStatus({ processEnv: process.env }, { desktopBridgeStatusImpl: deps.desktopBridgeStatusImpl });
   const providerContext = deepDiagnostics
     ? await resolveProviderContext({ root, route: '$Doctor', serviceTier: process.env.SKS_SERVICE_TIER || 'fast' }).catch((err: any) => ({
         schema: 'sks.provider-context.v2',
@@ -1188,7 +1188,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean, deps:
             // repair body lives in core (`repairDoctorDesktopBridgeCatalog`) so
             // the global-only fix and the update migration stage run the SAME
             // restart -> sync -> read-back-verify -> bounded-retry sequence.
-            run: async () => repairDoctorDesktopBridgeCatalog({ fix: doctorFix }) as any
+            run: async () => { const repair = await repairDoctorDesktopBridgeCatalog({ fix: doctorFix }); desktopBridgeModelRefresh = repair.model_refresh ?? null; return repair as any; }
           }
         ].filter((phase) => doctorPhaseIds.includes(phase.id))
       }).catch((err: any) => ({
@@ -1222,11 +1222,9 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean, deps:
   // a repair that never ran, and unchanged no matter how often they re-ran
   // `--fix`. Everything downstream (report, blockers, printed summary) consumes
   // this binding.
-  const desktopBridge = doctorFixTransaction
-    ? await inspectDoctorDesktopBridgeStatus({
-      processEnv: process.env
-    }, { desktopBridgeStatusImpl: deps.desktopBridgeStatusImpl })
-    : desktopBridgeBeforeFix;
+  const desktopBridge = { ...(doctorFixTransaction
+    ? await inspectDoctorDesktopBridgeStatus({ processEnv: process.env }, { desktopBridgeStatusImpl: deps.desktopBridgeStatusImpl })
+    : desktopBridgeBeforeFix), model_refresh: desktopBridgeModelRefresh };
   const startupRoleRepair = (startupConfigRepair as any)?.role_repair;
   const agentRoleConfigRepair = doctorFix && startupRoleRepair
     ? startupRoleRepair

@@ -134,6 +134,8 @@ export interface DesktopBridgeCatalogRepairPhaseResult {
   blockers: string[];
   rollback_evidence: string;
   skipped_reason?: string;
+  /** The model-list refresh this run ended with (its `line` is what gets printed). */
+  model_refresh?: Record<string, unknown> | null;
 }
 
 /**
@@ -145,7 +147,7 @@ export interface DesktopBridgeCatalogRepairPhaseResult {
  * printing `retry_catalog_sync` as a remedy no run of theirs ever executed.
  */
 export async function repairDoctorDesktopBridgeCatalog(
-  input: { fix: boolean },
+  input: { fix: boolean; reason?: string },
   deps: DesktopBridgeCatalogRepairDeps = {}
 ): Promise<DesktopBridgeCatalogRepairPhaseResult> {
   const base = {
@@ -198,10 +200,8 @@ export async function repairDoctorDesktopBridgeCatalog(
       fix: input.fix
     });
     const status: any = await statusImpl({ home: bridgeHome, env: process.env });
-    const blockers = (status?.readiness?.blockers || []).map(String);
-    const stale = blockers.filter((blocker: string) => blocker.endsWith('_catalog_stale'));
     const reverify = { fix: input.fix, bridgeHome, restarted: restarted.restarted };
-    if (!status?.management?.managed || stale.length === 0) {
+    if (!status?.management?.managed) {
       return reverifyTransportIfDegraded({
         ...base,
         ok: restarted.blockers.length === 0,
@@ -210,34 +210,46 @@ export async function repairDoctorDesktopBridgeCatalog(
         blockers: restarted.blockers
       }, reverify, statusImpl, executeImpl);
     }
-    // Sync, then READ THE CATALOG BACK. Trusting the command's own ok flag
-    // reported a repaired catalog that was still stale, and the unification
-    // migration inside it fails intermittently — observed failing once (its
-    // rollback failing too) and then succeeding on the very next attempt, on
-    // two separate machines. One attempt therefore left users with a stale
-    // catalog and a green check; a bounded retry clears it.
+    // Every Doctor and update ends with a fresh model list, not only once the
+    // catalog is twelve hours old. A read-only Doctor refreshes SKS's own
+    // catalog files and never edits config.toml; a refresh that ran under a
+    // minute ago for the same providers is not repeated (`sks update` runs
+    // Doctor inside it). Then READ THE CATALOG BACK: trusting the command's
+    // own ok flag once reported a repaired catalog that was still stale, and
+    // the unification migration inside a sync fails intermittently — observed
+    // failing once and succeeding on the very next attempt — so the retry is
+    // bounded but real. A refresh that fails over a catalog that is not stale
+    // is a warning: the previous list stays active and the line says how to
+    // retry it.
     const attempts: string[] = [];
-    let syncedAndVerified = false;
+    let refresh: Record<string, unknown> | null = null;
+    let stale: string[] = [];
     for (let attempt = 1; attempt <= CATALOG_REPAIR_MAX_ATTEMPTS; attempt += 1) {
-      const sync: any = await executeImpl({ operation: 'catalog.sync' }, { home: bridgeHome, env: process.env });
-      const commandOk = sync?.ok === true && sync?.execution?.ok === true;
+      const command: any = await executeImpl({
+        operation: 'models.refresh',
+        reason: input.reason || (input.fix ? 'doctor-fix' : 'doctor'),
+        force: false,
+        allow_config_writes: input.fix
+      }, { home: bridgeHome, env: process.env });
+      refresh = command?.result?.model_refresh && typeof command.result.model_refresh === 'object' ? command.result.model_refresh : null;
       const after: any = await statusImpl({ home: bridgeHome, env: process.env });
-      const stillStale = ((after?.readiness?.blockers || []) as unknown[])
-        .map(String).filter((blocker) => blocker.endsWith('_catalog_stale'));
-      if (commandOk && stillStale.length === 0) { syncedAndVerified = true; break; }
-      attempts.push(`catalog_sync_attempt_${attempt}:${
-        commandOk ? `still_stale:${stillStale.join(',')}` : (sync?.execution?.blockers || ['failed']).map(String).join(',')
+      stale = ((after?.readiness?.blockers || []) as unknown[]).map(String).filter((blocker) => blocker.endsWith('_catalog_stale'));
+      if (refresh?.ok === true && stale.length === 0) break;
+      attempts.push(`model_refresh_attempt_${attempt}:${
+        refresh?.ok === true ? `still_stale:${stale.join(',')}` : ((refresh?.blockers as unknown[] | undefined) || command?.execution?.blockers || ['failed']).map(String).join(',')
       }`);
     }
+    const refreshed = refresh?.ok === true;
     return reverifyTransportIfDegraded({
       ...base,
-      ok: syncedAndVerified && restarted.blockers.length === 0,
-      repaired: syncedAndVerified || restarted.restarted,
-      warnings: [...restarted.warnings, ...(syncedAndVerified ? attempts : [])],
+      ok: stale.length === 0 && restarted.blockers.length === 0,
+      repaired: (refreshed && refresh?.skipped !== true) || restarted.restarted,
+      warnings: [...restarted.warnings, ...((refresh?.warnings as unknown[] | undefined) || []).map(String), ...(stale.length === 0 ? attempts : [])],
       blockers: [
-        ...(syncedAndVerified ? [] : ['desktop_bridge_catalog_still_stale_after_repair', ...attempts]),
+        ...(stale.length === 0 ? [] : ['desktop_bridge_catalog_still_stale_after_repair', ...attempts]),
         ...restarted.blockers
-      ]
+      ],
+      model_refresh: refresh
     }, reverify, statusImpl, executeImpl);
   } catch (error: any) {
     return { ...base, ok: false, repaired: false, blockers: [String(error?.message || 'desktop_bridge_catalog_sync_failed')] };

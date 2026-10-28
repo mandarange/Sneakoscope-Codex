@@ -1,8 +1,7 @@
 import path from 'node:path';
 import {
   DESKTOP_BRIDGE_MANAGED_BASE_URL_MARKER,
-  DESKTOP_BRIDGE_MANAGED_MARKER,
-  DESKTOP_BRIDGE_MANAGED_MODEL_CATALOG_MARKER
+  DESKTOP_BRIDGE_MANAGED_MARKER
 } from '../../../cli/install-helpers-codex-lb-config.js';
 import { escapeRegExp } from '../../text/regex.js';
 import type { BridgeProviderId } from '../bridge-contracts.js';
@@ -156,11 +155,9 @@ export function prepareHistoricalConfigForDesktopBridgeWriter(
   state: HistoricalProviderConfigState
 ): string {
   const source = String(text || '');
-  if ([
-    DESKTOP_BRIDGE_MANAGED_MARKER,
-    DESKTOP_BRIDGE_MANAGED_BASE_URL_MARKER,
-    DESKTOP_BRIDGE_MANAGED_MODEL_CATALOG_MARKER
-  ].every((marker) => hasTopLevelMarker(source, marker))) return source;
+  // A current managed binding. The model list is not part of it: Codex may
+  // read the bridge's `/models`, SKS's catalog file or a user's own pin.
+  if ([DESKTOP_BRIDGE_MANAGED_MARKER, DESKTOP_BRIDGE_MANAGED_BASE_URL_MARKER].every((marker) => hasTopLevelMarker(source, marker))) return source;
 
   const historicalMarkers = historicalManagedMarkers();
   const hasHistoricalMarker = historicalMarkers.some((marker) => hasTopLevelMarker(source, marker));

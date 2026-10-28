@@ -134,3 +134,35 @@ enum OverviewSummary {
         return value
     }
 }
+
+/// What `sks bridge models refresh --json` reports, as SKS Center shows it.
+/// Success is the payload's own `ok == true` at both levels; a result that only
+/// carries a schema key is not one.
+enum ModelRefreshSummary {
+    struct Outcome: Equatable {
+        let ok: Bool
+        let text: String
+    }
+
+    static func outcome(fromJSONText text: String, at date: Date = Date()) -> Outcome {
+        outcome(fromJSON: jsonObject(text), at: date)
+    }
+
+    static func outcome(fromJSON object: [String: Any]?, at date: Date = Date()) -> Outcome {
+        let refresh = (object?["result"] as? [String: Any])?["model_refresh"] as? [String: Any]
+        guard object?["ok"] as? Bool == true, refresh?["ok"] as? Bool == true else {
+            return Outcome(ok: false, text: refresh?["line"] as? String ?? "Model list refresh failed. Run `sks bridge models refresh` to retry.")
+        }
+        let total = (refresh?["total"] as? NSNumber)?.intValue ?? 0
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        let restart = refresh?["restart_codex_required"] as? Bool == true ? " · restart Codex to see it" : ""
+        return Outcome(ok: true, text: "Model list updated at \(formatter.string(from: date)) (\(total) models)\(restart)")
+    }
+
+    private static func jsonObject(_ text: String) -> [String: Any]? {
+        let start = text.firstIndex(of: "{") ?? text.startIndex
+        guard let data = String(text[start...]).data(using: .utf8) else { return nil }
+        return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+    }
+}

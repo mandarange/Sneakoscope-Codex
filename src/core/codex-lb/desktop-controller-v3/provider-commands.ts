@@ -28,7 +28,23 @@ import {
   timeoutMs
 } from './shared.js';
 import { desktopBridgeStatusV3, loadCore } from './status.js';
+import { refreshModelCatalog } from './catalog.js';
 import type { DesktopBridgeControllerRequestV3, DesktopBridgeControllerV3Options } from './types.js';
+
+/**
+ * A provider change ends with a fresh model list, so SKS Center and Codex
+ * show what the provider now serves. A failed refresh keeps the previous list
+ * and is reported in its own summary, never as the command's failure.
+ */
+async function refreshAfterProviderChange(
+  reason: string,
+  options: DesktopBridgeControllerV3Options
+): Promise<Record<string, unknown> | null> {
+  const core = await loadCore(options);
+  if (!core.activeCatalog.ok || !core.policy) return null;
+  const { sync: _sync, ...summary } = await refreshModelCatalog(options, { reason, force: true, allowConfigWrites: true });
+  return summary;
+}
 
 export async function configureProvider(
   request: Extract<DesktopBridgeControllerRequestV3, { operation: 'provider.configure' }>,
@@ -61,12 +77,15 @@ export async function configureProvider(
   if (core.activeCatalog.ok && core.policy) {
     await persistRuntimeSettings({ ...core, registry }, options, { restartService: false });
   }
+  // A deferred restart waits for validation, which refreshes the list itself.
+  const modelRefresh = restartDeferred ? null : await refreshAfterProviderChange('provider.configure', options);
   const status = await desktopBridgeStatusV3(options);
   const blockers = restartDeferred ? ['desktop_bridge_restart_deferred_until_provider_validation'] : [];
   return commandResult('provider.configure', true, status, {
     configuration: configured,
     restart_deferred: restartDeferred,
     recovery_action: restartDeferred ? `bridge provider validate ${request.provider_id}` : null,
+    model_refresh: modelRefresh,
   }, blockers, options);
 }
 
@@ -119,12 +138,13 @@ export async function validateProvider(
       });
     }
   }
+  const modelRefresh = ok ? await refreshAfterProviderChange('provider.validate', options) : null;
   const status = await desktopBridgeStatusV3(options);
   return commandResult(
     'provider.validate',
     true,
     status,
-    { provider_id: providerId, validated: ok, validation: publicValidationResult(result) },
+    { provider_id: providerId, validated: ok, validation: publicValidationResult(result), model_refresh: modelRefresh },
     ok ? [] : blockers,
     options
   );
@@ -159,8 +179,9 @@ export async function setProviderState(
   }
   // Codex stays bound to the bridge: enabling a provider changes bridge
   // routing only, never Codex's own `model_provider`.
+  const modelRefresh = await refreshAfterProviderChange(operation, options);
   const status = await desktopBridgeStatusV3(options);
-  return commandResult(operation, true, status, { provider_id: providerId, enabled }, [], options);
+  return commandResult(operation, true, status, { provider_id: providerId, enabled, model_refresh: modelRefresh }, [], options);
 }
 
 export async function removeCredential(

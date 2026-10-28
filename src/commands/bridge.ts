@@ -50,6 +50,7 @@ export type BridgeCommandRequest =
   | { operation: 'catalog.status' }
   | { operation: 'models.list' }
   | { operation: 'models.select'; public_ids: string[] }
+  | { operation: 'models.refresh'; reason: string; force: boolean; allow_config_writes: boolean }
   | { operation: 'route.list' }
   | { operation: 'route.set-default'; provider_id: BridgeProviderId }
   | { operation: 'route.official-models'; mode: 'passthrough' | 'gateway' | 'auto' }
@@ -121,6 +122,7 @@ export function usage(command = 'bridge'): string {
     `       sks ${command} catalog sync|status [--json]`,
     `       sks ${command} models list [--json]`,
     `       sks ${command} models select --set <public-id,...> [--json]`,
+    `       sks ${command} models refresh [--json]`,
     `       sks ${command} route list [--json]`,
     `       sks ${command} route set-default <codex-lb|openrouter> [--json]`,
     `       sks ${command} route official-models <passthrough|gateway|auto> [--json]`,
@@ -182,7 +184,7 @@ export async function executeBridgeCommand(
       : await (options.facade || await loadBridgeCommandFacade()).execute(parsed.request);
     const output = parsed.request.operation === 'verify'
       ? verificationOutput(raw, parsed.request.level, parsed.strict)
-      : ordinaryOutput(raw, parsed.label);
+      : ordinaryOutput(raw, parsed.request.operation === 'models.refresh' ? modelRefreshLine(raw) ?? parsed.label : parsed.label);
     const sanitized = sanitizeBridgeValue(output, parsed.secrets) as Record<string, unknown>;
     const decorated = mergeMetadata(sanitized, options.metadata);
     return {
@@ -202,6 +204,12 @@ export async function executeBridgeCommand(
       exit_code: 1
     };
   }
+}
+
+/** The refresh's own one-line report, so text and --json say the same thing. */
+function modelRefreshLine(raw: unknown): string | null {
+  const result = (raw as { result?: { model_refresh?: { line?: unknown } } } | null)?.result;
+  return typeof result?.model_refresh?.line === 'string' ? result.model_refresh.line : null;
 }
 
 export async function loadBridgeCommandFacade(): Promise<BridgeCommandFacade> {
@@ -375,6 +383,15 @@ async function parseInvocation(args: string[], io: BridgeCommandIo): Promise<Par
     if (action === 'list' && target === undefined) {
       allowOnly(parsed, ['--json'], []);
       return { ...base, request: { operation: 'models.list' }, label: 'Selectable bridge models' };
+    }
+    if (action === 'refresh' && target === undefined) {
+      // A fetch of every provider's list now, whatever ran a minute ago.
+      allowOnly(parsed, ['--json'], []);
+      return {
+        ...base,
+        request: { operation: 'models.refresh', reason: 'cli', force: true, allow_config_writes: true },
+        label: 'Model list refresh'
+      };
     }
     if (action === 'select') {
       allowOnly(parsed, ['--json'], ['--set']);

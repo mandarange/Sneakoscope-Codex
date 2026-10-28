@@ -329,7 +329,7 @@ const COMMAND_HELP_LITE = {
   },
   doctor: {
     usage: 'sks doctor [--fix] [--local-only] [--json] [--install-scope global|project]',
-    description: 'Check and repair SKS generated files, while blocking setup if another Codex harness is detected.'
+    description: 'Check and repair SKS generated files, while blocking setup if another Codex harness is detected. Every run refreshes the Desktop Bridge model list; without --fix it writes only SKS\'s own catalog files, never ~/.codex/config.toml.'
   },
   git: {
     usage: 'sks git policy|install|status|doctor|precommit|publish-plan|summary [--json]',

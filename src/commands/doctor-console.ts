@@ -250,6 +250,7 @@ export function renderDoctorConsoleReport(result: any, extras: DoctorConsoleExtr
   for (const warning of pluginPolicy?.doctor_warnings || []) line(`  warning: ${warning}`);
   if (codexCurrentAppDoctor.fixed?.length) line(`  doctor --fix repaired: ${codexCurrentAppDoctor.fixed.join(', ')}`);
   line(`Desktop Bridge: ${desktopBridge.ok ? 'ready' : 'blocked'} (${desktopBridge.status?.readiness?.state || 'unavailable'})`);
+  if (desktopBridge.model_refresh?.line) line(`  ${desktopBridge.model_refresh.line}`);
   for (const providerId of ['codex-lb', 'openrouter']) {
     const provider = desktopBridge.providers?.[providerId];
     if (!provider) continue;

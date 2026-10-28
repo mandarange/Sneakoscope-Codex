@@ -6,6 +6,7 @@ final class OverviewViewController: NSViewController, ControlCenterPage {
     private let status = NativeView.detail("Loading local SKS status…")
     private let notificationInbox = NativeView.detail("Notifications: checking authorization…")
     private let recoveryStatus = NativeView.detail("Progress recovery: no operation state loaded yet.")
+    private let modelListStatus = NativeView.detail("Model list: refreshed by Refresh, Run Doctor and updates.")
     private let healthBadge = NativeView.badge("Checking local status", color: .systemBlue)
     private let statusSpinner = NativeView.spinner(label: "Checking SKS Center status")
     private let snapshotDetails = NativeView.detail("")
@@ -50,7 +51,7 @@ final class OverviewViewController: NSViewController, ControlCenterPage {
         status.setAccessibilityIdentifier("sks-overview-next-action")
         let healthCard = NativeView.card(
             title: "System health", subtitle: "",
-            views: [NativeView.row([healthBadge, statusSpinner]), status, components, buttons]
+            views: [NativeView.row([healthBadge, statusSpinner]), status, modelListStatus, components, buttons]
         )
         recoveryCard = NativeView.card(
             title: "Progress, pause & recovery", subtitle: "Review the current operation before retrying.",
@@ -113,7 +114,15 @@ final class OverviewViewController: NSViewController, ControlCenterPage {
     }
 
     @objc private func refreshStatus() {
-        loadStatus(forceUpdateRefresh: true)
+        loadStatus(forceUpdateRefresh: true) { [weak self] in self?.refreshModelList() }
+    }
+
+    /// Refresh, Run Doctor and a Codex CLI update each end with a fresh model list.
+    private func refreshModelList() {
+        modelListStatus.stringValue = "Refreshing the model list…"
+        processClient.run(["bridge", "models", "refresh", "--json"], timeout: NativeView.longMutationTimeout) { [weak self] result in
+            self?.modelListStatus.stringValue = ModelRefreshSummary.outcome(fromJSONText: result.output).text
+        }
     }
 
     @objc private func updateCodexCLI() {
@@ -145,11 +154,12 @@ final class OverviewViewController: NSViewController, ControlCenterPage {
             self.status.stringValue = ok
                 ? "Codex CLI update completed. Refreshing shared update status…"
                 : "Codex CLI update needs attention. Open Updates or Diagnostics for structured guidance."
+            if ok { self.refreshModelList() }
             self.loadStatus(forceUpdateRefresh: true)
         }
     }
 
-    private func loadStatus(forceUpdateRefresh: Bool) {
+    private func loadStatus(forceUpdateRefresh: Bool, then completion: (() -> Void)? = nil) {
         generation += 1
         let requestGeneration = generation
         refreshButton?.isEnabled = false
@@ -196,6 +206,7 @@ final class OverviewViewController: NSViewController, ControlCenterPage {
             self.refreshButton?.isEnabled = true
             self.statusSpinner.stopAnimation(nil)
             self.renderStatus(update: update, mcp: mcp, partial: false)
+            completion?()
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
             guard let self = self,
@@ -232,6 +243,7 @@ final class OverviewViewController: NSViewController, ControlCenterPage {
             if result.code == 0 {
                 NativeView.setBadge(self.healthBadge, text: "Doctor completed", color: .systemGreen)
                 self.status.stringValue = "Doctor completed. No blocking issue was reported."
+                self.refreshModelList()
             } else {
                 NativeView.setBadge(self.healthBadge, text: "Doctor needs attention", color: .systemOrange)
                 self.status.stringValue = "Doctor found an issue. Open Diagnostics · \(NativeView.redactPreview(result.output))"

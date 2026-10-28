@@ -111,7 +111,8 @@ async function migrateDesktopBridgeConfigUnlocked(
     );
     nextConfig = upsertDesktopBridgeManagedConfig(migrationInputConfig, {
       bridgeBaseUrl: input.bridgeBaseUrl,
-      combinedCatalogPath
+      combinedCatalogPath,
+      bindModelCatalog: input.bindModelCatalog !== false
     });
     validateMetadataUpdates(input.metadataUpdates || [], { home, configPath, authPath });
   } catch (error: unknown) {
@@ -130,6 +131,18 @@ async function migrateDesktopBridgeConfigUnlocked(
     };
   }
 
+  if (input.configWrite === 'forbid' && nextConfig !== currentConfig) {
+    return {
+      ...baseResult,
+      ok: false,
+      status: 'blocked',
+      managed_runtime: null,
+      receipt_path: null,
+      auth_semantic_identity_preserved: true,
+      blockers: ['desktop_bridge_config_write_deferred']
+    };
+  }
+
   const metadataUpdates = normalizedMetadataUpdates(input.metadataUpdates || []);
   const metadataAlreadyCurrent = await Promise.all(metadataUpdates.map(async (update) => {
     const currentSha = await fileSha256OrMissing(update.path);
@@ -138,7 +151,7 @@ async function migrateDesktopBridgeConfigUnlocked(
   const hasUnifiedMarkers = [
     DESKTOP_BRIDGE_MANAGED_MARKER,
     DESKTOP_BRIDGE_MANAGED_BASE_URL_MARKER,
-    DESKTOP_BRIDGE_MANAGED_MODEL_CATALOG_MARKER
+    ...(input.bindModelCatalog === false ? [] : [DESKTOP_BRIDGE_MANAGED_MODEL_CATALOG_MARKER])
   ].every((marker) => hasTopLevelMarker(currentConfig, marker));
   if (nextConfig === currentConfig && hasUnifiedMarkers && metadataAlreadyCurrent.every(Boolean)) {
     const authAfter = await captureCodexAuthSnapshot({ home, authPath });

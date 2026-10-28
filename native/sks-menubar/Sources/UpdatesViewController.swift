@@ -231,6 +231,9 @@ final class UpdatesViewController: NSViewController, ControlCenterPage {
                     self.status.stringValue = "Review ready. Confirm to continue, or cancel to leave the current install unchanged."
                 }
             }
+            if kind == "update", authoritativeState == .succeeded {  // The update refreshed the model list; show what it holds now.
+                self.processClient.run(["bridge", "models", "refresh", "--json"], timeout: NativeView.mutationTimeout) { [weak self] refreshed in self?.status.stringValue = ModelRefreshSummary.outcome(fromJSONText: refreshed.output).text }
+            }
             let updateOutput = kind == "update-status" ? result.output : nil
             let approvalRequired = kind == "update-review" && result.code == 0
             let updateAvailable = updateOutput != nil && NotificationCoordinator.updateIsAvailable(in: result.output)

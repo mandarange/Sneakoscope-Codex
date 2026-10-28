@@ -17,6 +17,8 @@ import { captureCodexAuthSnapshot } from './desktop-auth-invariant.js';
 import { applyOfficialModelPassthrough, bridgeRoutePolicyPath, writeBridgeRoutingPolicy } from './provider-route-policy.js';
 import { desktopBridgeRuntimeVersion, desktopBridgeRuntimeVersionStale } from './desktop-bridge/state.js';
 import { REQUEST_COMPAT_INCLUDE_VALUE, REQUEST_COMPAT_MAX_EXTRA_INCLUDE } from './desktop-bridge/provider-request-compat.js';
+import type { DesktopBridgeModelsCatalog } from './desktop-bridge/models-endpoint.js';
+import { bridgeRouteIndexPath, combinedBridgeCatalogPath, readActiveCombinedBridgeCatalog } from './combined-catalog.js';
 import { PACKAGE_VERSION } from '../version.js';
 import { canonicalChildModelId, readOpenRouterOnlyStateSync } from '../subagents/child-model-allowlist.js';
 import { BRIDGE_OFFICIAL_ROUTE_ID, type BridgeProviderId, type BridgeRoutingPolicy, type ProviderSessionPin } from './bridge-contracts.js';
@@ -623,12 +625,26 @@ async function autoApplyOfficialModelsAtServe(
   process.stdout.write(`${JSON.stringify({ schema: 'sks.desktop-bridge-log.v2', event: 'sks.desktop_bridge.official_models_auto_applied', at: new Date().toISOString(), sks_version: PACKAGE_VERSION, mode, policy_generation: converged.policy_generation, secret_fields_redacted: true })}\n`);
 }
 
+/**
+ * The active combined catalog, read once at start like the route policy: the
+ * bridge serves it as `/models` and advertises it with `X-Models-Etag`. Null
+ * (no catalog yet, or one that does not verify) leaves `/models` passing
+ * through as it did before.
+ */
+async function activeModelsCatalog(home: string): Promise<DesktopBridgeModelsCatalog | null> {
+  const codexHome = path.join(path.resolve(home), '.codex');
+  const active = await readActiveCombinedBridgeCatalog(combinedBridgeCatalogPath(codexHome), bridgeRouteIndexPath(codexHome)).catch(() => null);
+  if (!active?.ok || active.catalog.models.length === 0) return null;
+  return { generation: active.catalog.generation, models: active.catalog.models as unknown as Record<string, unknown>[] };
+}
+
 export async function serveDesktopBridge(options: DesktopBridgeServiceOptions = {}): Promise<{ schema: 'sks.desktop-bridge-serve.v1'; ok: boolean; status: 'stopped' | 'failed'; state: DesktopBridgePublicState | null; blocker?: string }> {
   let handle: DesktopBridgeHandle | null = null;
   try {
     const runtime = await resolveDesktopBridgeRuntimeConfig(options);
     const serveHome = options.home || options.env?.HOME || process.env.HOME || os.homedir();
     await autoApplyOfficialModelsAtServe(runtime, serveHome, options);
+    runtime.config.modelsCatalog = await activeModelsCatalog(serveHome);
     const supervised = desktopBridgeIsSupervised();
     const skewMarkerPath = path.join(path.dirname(runtime.paths.state_path), 'desktop-bridge-skew-restart.json');
     const prepared = await preflightDesktopBridge(runtime.config);

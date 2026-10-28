@@ -41,6 +41,7 @@ export type DesktopBridgeControllerRequestV3 =
   | { operation: 'catalog.status' }
   | { operation: 'models.list' }
   | { operation: 'models.select'; public_ids: readonly string[] }
+  | { operation: 'models.refresh'; reason?: string; force?: boolean; allow_config_writes?: boolean }
   | { operation: 'route.list' }
   | { operation: 'route.set-default'; provider_id: BridgeProviderId }
   | { operation: 'route.official-models'; mode: 'passthrough' | 'gateway' | 'auto' }
@@ -71,6 +72,8 @@ export interface DesktopBridgeControllerV3Options extends DesktopBridgeServiceOp
   deepProbeImpl?: (input: DesktopBridgeDeepProbeRequestV3) => Promise<DesktopBridgeDeepProbeEvidenceV3 | null>;
   /** OpenRouter Only Mode seams: whether Codex Desktop runs, and how it is restarted. */
   codexAppRunningImpl?: typeof import('../../codex-app/menubar/config.js').isCodexAppRunningByBundleId;
+  /** Asks the running bridge whether it serves a catalog as `/models` (model-refresh.ts); null means it does. */
+  modelsSelfCheckImpl?: typeof import('./model-refresh.js').bridgeServesModels;
   codexAppRestartImpl?: typeof import('../../codex-app/codex-app-restart.js').restartCodexApp;
 }
 

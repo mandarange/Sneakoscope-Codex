@@ -13,15 +13,18 @@ export interface DesktopBridgeCatalogRepairStageRun {
 }
 
 /**
- * Clear a stale codex-lb combined catalog as part of the update itself.
+ * Refresh the model list as part of the update itself.
  *
  * `sks update` restarts a stale bridge runtime (desktop-bridge-restage, 9.0.1)
  * but used to leave a stale combined catalog for the user to DISCOVER: the
  * next Doctor run reported `codex_lb_catalog_stale` for an update that had
- * just printed success. This stage runs the same self-guarding repair Doctor
- * `--fix` uses (status read, then sync + read-back verification only when a
- * `*_catalog_stale` blocker is present), so an update finishes with the same
- * catalog state a follow-up `sks doctor --fix` would produce.
+ * just printed success. Since 10.7.2 every update ends with a model-list
+ * refresh — a live fetch of every provider's list, a rebuild and an
+ * activation with read-back verification — whether or not a new version was
+ * installed and however fresh the catalog was, through the same repair Doctor
+ * `--fix` runs, so an update finishes with the list a follow-up
+ * `sks doctor --fix` would produce. The stage id stays
+ * `desktop-bridge-catalog-repair`: migration state from 10.7.1 names it.
  *
  * Guards, in order, and why each one exists:
  * - not under `node --test` (NODE_TEST_CONTEXT) and not SKS_TEST_ISOLATION:
@@ -45,17 +48,19 @@ export async function runDesktopBridgeCatalogRepairStage(): Promise<DesktopBridg
   if (!(await exists(desktopBridgeServicePaths(home).settings_path))) {
     return skip('desktop_bridge_catalog_repair_no_managed_bridge');
   }
-  const repair = await repairDoctorDesktopBridgeCatalog({ fix: true }).catch((error: any) => ({
+  const repair: { ok: boolean; repaired: boolean; warnings: string[]; blockers: string[]; model_refresh?: Record<string, unknown> | null } = await repairDoctorDesktopBridgeCatalog({ fix: true, reason: 'update' }).catch((error: any) => ({
     ok: false,
     repaired: false,
     warnings: [] as string[],
     blockers: [`desktop_bridge_catalog_repair_failed:${error?.message || String(error)}`]
   }));
+  // The refresh's one line rides the stage's actions, so the update reports it.
+  const refreshLine = typeof repair.model_refresh?.line === 'string' ? [repair.model_refresh.line] : [];
   if (repair.ok) {
     return {
       ok: true,
       status: 'ok',
-      actions: [repair.repaired ? 'desktop_bridge_catalog_repaired' : 'desktop_bridge_catalog_clean'],
+      actions: [repair.repaired ? 'desktop_bridge_catalog_repaired' : 'desktop_bridge_catalog_clean', ...refreshLine],
       blockers: [],
       warnings: repair.warnings || []
     };
@@ -63,7 +68,7 @@ export async function runDesktopBridgeCatalogRepairStage(): Promise<DesktopBridg
   return {
     ok: true,
     status: 'ok',
-    actions: [],
+    actions: refreshLine,
     blockers: [],
     warnings: [
       ...(repair.blockers || []).map((blocker: string) => `desktop_bridge_catalog_repair_incomplete:${blocker}`),

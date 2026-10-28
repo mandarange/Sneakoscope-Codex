@@ -4,7 +4,7 @@ import type {
   DesktopBridgeStatusV3,
   DesktopCapabilityReportV3
 } from './bridge-contracts.js';
-import { listSelectableModels, selectExposedModels, syncCatalog } from './desktop-controller-v3/catalog.js';
+import { listSelectableModels, refreshModels, selectExposedModels, syncCatalog } from './desktop-controller-v3/catalog.js';
 import {
   explainRoute,
   ensureDesktopBridge,
@@ -96,6 +96,7 @@ export async function executeDesktopBridgeCommandV3(
       }
       if (request.operation === 'models.list') return listSelectableModels(options);
       if (request.operation === 'models.select') return selectExposedModels(request.public_ids, options);
+      if (request.operation === 'models.refresh') return refreshModels(request, options);
       if (request.operation === 'catalog.sync') return syncCatalog(options);
       if (request.operation === 'catalog.status') {
         const status = await desktopBridgeStatusV3(options);

@@ -33,6 +33,7 @@ import {
 } from './compaction-adapter.js';
 import { requestProviderCompactionSummary } from './http-forward.js';
 import { modelCapacityAdvisedFrame } from './capacity-retry-advice.js';
+import { desktopBridgeModelsEtag, frameWithModelsEtag } from './models-endpoint.js';
 
 const MAX_PENDING_MESSAGES = 256;
 const CLOSE_GRACE_MS = 1_000;
@@ -108,6 +109,7 @@ export function forwardResponsesWebSocket(req: IncomingMessage, socket: Duplex, 
   const upgradeIdentity = resolveCodexSessionIdentity(req.headers);
   const maxBytes = config.maxRequestBodyBytes ?? DEFAULT_DESKTOP_BRIDGE_MAX_REQUEST_BODY_BYTES;
   const server = new WebSocketServer({ noServer: true, clientTracking: false, perMessageDeflate: false, maxPayload: maxBytes });
+  const modelsEtag = config.modelsCatalog ? desktopBridgeModelsEtag(config.modelsCatalog.generation) : null;
   // This server owns no listening handle.
   try {
     server.handleUpgrade(req, socket, head, (client) => {
@@ -358,6 +360,9 @@ export function forwardResponsesWebSocket(req: IncomingMessage, socket: Duplex, 
           frame = advised;
           logRejection({ code: 'bridge_upstream_model_capacity_retry_advised', transport: 'websocket', provider_id: route.provider_id, public_model: routedModel ?? route.public_model, ...(req.url ? { url: req.url } : {}) });
         }
+        // Codex reads the WebSocket `X-Models-Etag` from this event, never the handshake.
+        const advertised = modelsEtag && !binary ? frameWithModelsEtag(frame, modelsEtag) : null;
+        if (advertised) frame = advertised;
         const failure = binary ? null : upstreamFailureEvent(frame);
         if (failure) {
           logRejection({

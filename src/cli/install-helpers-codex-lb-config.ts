@@ -8,6 +8,59 @@ import { escapeRegExp } from '../core/text/regex.js';
 export interface DesktopBridgeManagedConfigInput {
   bridgeBaseUrl: string;
   combinedCatalogPath: string;
+  /**
+   * False when Codex reads the model list from the bridge's `/models` instead
+   * of a file: the managed `model_catalog_json` is removed (a user's own is
+   * left as it is). Defaults to true.
+   */
+  bindModelCatalog?: boolean;
+}
+
+/**
+ * Codex fetches `/models` from a custom `openai_base_url` — and follows the
+ * bridge's `X-Models-Etag` without a restart — only for ChatGPT sign-ins, and
+ * only while no `model_catalog_json` pins a static list (codex-rs
+ * models-manager `should_refresh_models`, 0.153.4 and later). The managed
+ * binding without that key is the bridge-served mode.
+ */
+export function codexReadsBridgeModels(text: string): boolean {
+  const source = String(text || '');
+  return topLevelHasLine(source, DESKTOP_BRIDGE_MANAGED_BASE_URL_MARKER)
+    && Boolean(topLevelTomlString(source, 'openai_base_url'))
+    && !topLevelTomlString(source, 'model_catalog_json');
+}
+
+/** A `model_catalog_json` SKS did not write: the user's own pin, never touched. */
+export function hasUserOwnedModelCatalog(text: string): boolean {
+  const source = String(text || '');
+  return Boolean(topLevelTomlString(source, 'model_catalog_json'))
+    && !topLevelHasLine(source, DESKTOP_BRIDGE_MANAGED_MODEL_CATALOG_MARKER);
+}
+
+/**
+ * Sets (a path) or removes (null) the managed `model_catalog_json` in place,
+ * leaving every other line as it is. Only a managed binding is changed; a
+ * config without the managed base URL, or with a user's own catalog, comes
+ * back unchanged.
+ */
+export function setDesktopBridgeManagedModelCatalog(text: string, combinedCatalogPath: string | null): string {
+  const source = String(text || '');
+  if (!topLevelHasLine(source, DESKTOP_BRIDGE_MANAGED_BASE_URL_MARKER) || hasUserOwnedModelCatalog(source)) return source;
+  if (combinedCatalogPath === null) {
+    if (!topLevelTomlString(source, 'model_catalog_json')) return source;
+    return ensureTrailingNewline(removeTopLevelLine(removeTopLevelTomlKey(source, 'model_catalog_json'), DESKTOP_BRIDGE_MANAGED_MODEL_CATALOG_MARKER));
+  }
+  assertCombinedCatalogPath(combinedCatalogPath);
+  if (topLevelTomlString(source, 'model_catalog_json') === combinedCatalogPath) return source;
+  const next = upsertTopLevelTomlString(source, 'model_catalog_json', combinedCatalogPath);
+  return ensureTrailingNewline(addTopLevelMarkerBeforeKey(next, 'model_catalog_json', DESKTOP_BRIDGE_MANAGED_MODEL_CATALOG_MARKER));
+}
+
+function assertCombinedCatalogPath(combinedCatalogPath: string): void {
+  if (!combinedCatalogPath || !path.isAbsolute(combinedCatalogPath)
+    || path.basename(combinedCatalogPath) !== 'sks-bridge-catalog.json') {
+    throw new Error('desktop_bridge_combined_catalog_path_invalid');
+  }
 }
 
 export const DESKTOP_BRIDGE_MANAGED_MARKER = '# sks-desktop-bridge-managed';
@@ -42,12 +95,8 @@ export function upsertDesktopBridgeManagedConfig(
 ): string {
   const bridgeBaseUrl = normalizeManagedBridgeBaseUrl(input.bridgeBaseUrl);
   const combinedCatalogPath = String(input.combinedCatalogPath || '').trim();
-  if (!combinedCatalogPath || !path.isAbsolute(combinedCatalogPath)) {
-    throw new Error('desktop_bridge_combined_catalog_path_invalid');
-  }
-  if (path.basename(combinedCatalogPath) !== 'sks-bridge-catalog.json') {
-    throw new Error('desktop_bridge_combined_catalog_path_invalid');
-  }
+  assertCombinedCatalogPath(combinedCatalogPath);
+  const bindModelCatalog = input.bindModelCatalog !== false;
 
   const orphanCleanup = removeDesktopBridgeOrphanManagedMarkers(String(text || ''));
   let next = orphanCleanup.text;
@@ -68,19 +117,24 @@ export function upsertDesktopBridgeManagedConfig(
 
   const existingCatalog = topLevelTomlString(next, 'model_catalog_json');
   const catalogOwned = topLevelHasLine(next, DESKTOP_BRIDGE_MANAGED_MODEL_CATALOG_MARKER);
-  if (existingCatalog && !catalogOwned) {
+  // Bound, the managed catalog replaces whatever is there, so a user's own is a
+  // conflict; unbound, a user's own pin is simply left in place.
+  if (existingCatalog && !catalogOwned && bindModelCatalog) {
     throw new Error('historical_user_owned_config_conflict:model_catalog_json');
   }
+  const userCatalog = existingCatalog && !catalogOwned ? existingCatalog : null;
 
   // Only a real `codex-lb` provider table makes that selection loadable.
   const keepCodexLb = selectedProvider === 'codex-lb' && hasCodexLbProviderTable(next);
-  next = removeManagedBridgeTopLevelBindings(next);
+  next = removeManagedBridgeTopLevelBindings(next, { keepModelCatalog: userCatalog !== null });
   next = upsertTopLevelTomlString(next, 'model_provider', keepCodexLb ? 'codex-lb' : 'openai');
   next = addTopLevelMarkerBeforeKey(next, 'model_provider', DESKTOP_BRIDGE_MANAGED_MARKER);
   next = upsertTopLevelTomlString(next, 'openai_base_url', bridgeBaseUrl);
   next = addTopLevelMarkerBeforeKey(next, 'openai_base_url', DESKTOP_BRIDGE_MANAGED_BASE_URL_MARKER);
-  next = upsertTopLevelTomlString(next, 'model_catalog_json', combinedCatalogPath);
-  next = addTopLevelMarkerBeforeKey(next, 'model_catalog_json', DESKTOP_BRIDGE_MANAGED_MODEL_CATALOG_MARKER);
+  if (bindModelCatalog) {
+    next = upsertTopLevelTomlString(next, 'model_catalog_json', combinedCatalogPath);
+    next = addTopLevelMarkerBeforeKey(next, 'model_catalog_json', DESKTOP_BRIDGE_MANAGED_MODEL_CATALOG_MARKER);
+  }
   return ensureTrailingNewline(next);
 }
 
@@ -179,11 +233,11 @@ function removeTopLevelTomlKey(text: string, key: string): string {
     .replace(/\n{3,}/g, '\n\n');
 }
 
-function removeManagedBridgeTopLevelBindings(text: string): string {
+function removeManagedBridgeTopLevelBindings(text: string, options: { keepModelCatalog?: boolean } = {}): string {
   let next = String(text || '');
   next = removeTopLevelTomlKey(next, 'model_provider');
   next = removeTopLevelTomlKey(next, 'openai_base_url');
-  next = removeTopLevelTomlKey(next, 'model_catalog_json');
+  if (!options.keepModelCatalog) next = removeTopLevelTomlKey(next, 'model_catalog_json');
   for (const marker of [
     DESKTOP_BRIDGE_MANAGED_MARKER,
     DESKTOP_BRIDGE_MANAGED_BASE_URL_MARKER,

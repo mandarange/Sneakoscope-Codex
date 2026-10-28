@@ -41,6 +41,7 @@ import {
   DESKTOP_BRIDGE_IMAGEGEN_PATH
 } from './types.js';
 import { handleDesktopBridgeImagegen } from './imagegen-endpoint.js';
+import { answerDesktopBridgeModels, isDesktopBridgeModelsRequest } from './models-endpoint.js';
 import { forwardWebSocket, safeEndUpgradeSocket } from './websocket-forward.js';
 
 function authenticateDesktopBridgeClient(
@@ -311,6 +312,11 @@ export async function startPreparedDesktopBridge(
           return;
         }
         assertAllowedPath(authenticated.pathname, input.allowedPathPrefixes);
+        // The model list Codex shows comes from the catalog this bridge routes.
+        if (input.modelsCatalog && isDesktopBridgeModelsRequest(req, authenticated.pathname)) {
+          answerDesktopBridgeModels(req, res, input.modelsCatalog);
+          return;
+        }
         const prepared = await prepareDesktopBridgeRequest(req, input);
         await forwardHttp(
           req,

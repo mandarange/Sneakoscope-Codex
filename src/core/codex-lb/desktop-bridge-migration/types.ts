@@ -48,6 +48,14 @@ export interface DesktopBridgeMigrationOptions {
   receiptDir?: string;
   bridgeBaseUrl: string;
   combinedCatalogPath?: string;
+  /** False when Codex reads the bridge's `/models` (no managed `model_catalog_json`). Defaults to true. */
+  bindModelCatalog?: boolean;
+  /**
+   * 'forbid' activates only when config.toml would stay byte-identical: a
+   * read-only `sks doctor` refreshes the SKS-owned catalog files and never
+   * edits the user's Codex config. Defaults to 'allow'.
+   */
+  configWrite?: 'allow' | 'forbid';
   newCatalogGeneration?: string | null;
   metadataUpdates?: DesktopBridgeMigrationMetadataUpdate[];
   now?: Date;

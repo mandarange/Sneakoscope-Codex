@@ -455,8 +455,8 @@
       "file": "src/core/codex-lb/combined-catalog/persistence.ts",
       "symbol": "stageCombinedBridgeCatalog",
       "token": "fs.rm",
-      "scope_contract_sha256": "4437ce805158c33786fd23110964eb1f6bff65f36403428255280eb600c39598",
-      "callsite_sha256": "8e8c0f00b28b3f6ee7aac1a1f92f8ed8f4e2dc0842b0974ed7f2ccb2d4da2a01",
+      "scope_contract_sha256": "3da36efea5de38d6cfd5c3a2c3f613a7d3d63b830478eccf3dd4189546cdd250",
+      "callsite_sha256": "b57246d3bdf30dda0ac647d6c1b9096e4f4a60f3ecb992bd9badd1fb4a6a0e25",
       "occurrence": 1,
       "reason": "Combined catalog staging cleanup removes only its randomized temporary generation bundle after success or failure."
     },
@@ -464,8 +464,17 @@
       "file": "src/core/codex-lb/combined-catalog/persistence.ts",
       "symbol": "stageCombinedBridgeCatalog",
       "token": "rename",
-      "scope_contract_sha256": "4437ce805158c33786fd23110964eb1f6bff65f36403428255280eb600c39598",
-      "callsite_sha256": "0a7b1bb6af8f8d16c0209a63f78055f1111098c8ae50c0ed9d2576f21c6c6e0c",
+      "scope_contract_sha256": "3da36efea5de38d6cfd5c3a2c3f613a7d3d63b830478eccf3dd4189546cdd250",
+      "callsite_sha256": "ea96bf96f4fbbd51e7d57899630881b713e402356216aaabc36885744d8b5862",
+      "occurrence": 1,
+      "reason": "A reused generation bundle (same models, routes and observations) takes this sync's check and expiry times by atomically renaming its own verified staged catalog file over the bundle copy inside the private generations directory."
+    },
+    {
+      "file": "src/core/codex-lb/combined-catalog/persistence.ts",
+      "symbol": "stageCombinedBridgeCatalog",
+      "token": "rename",
+      "scope_contract_sha256": "3da36efea5de38d6cfd5c3a2c3f613a7d3d63b830478eccf3dd4189546cdd250",
+      "callsite_sha256": "570a9010f75357dcd8e0e6a3421a6de15eeb1057f131ecacdb67469a61f6b140",
       "occurrence": 1,
       "reason": "Combined catalog staging atomically promotes only a verified randomized generation bundle inside its validated private generations directory."
     },

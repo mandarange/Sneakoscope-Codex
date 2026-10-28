@@ -97,13 +97,13 @@ test('every --fix entry point executes the one shared bridge repair', () => {
   const statusAt = globalOnly.indexOf('inspectDoctorDesktopBridgeStatus(');
   assert.ok(repairAt > 0 && statusAt > repairAt, 'global-only must repair first and report the post-repair status');
   const migrationStage = fs.readFileSync('src/core/update/update-migration-state/desktop-bridge-catalog-repair-stage.ts', 'utf8');
-  assert.match(migrationStage, /repairDoctorDesktopBridgeCatalog\(\{ fix: true \}\)/);
+  assert.match(migrationStage, /repairDoctorDesktopBridgeCatalog\(\{ fix: true, reason: 'update' \}\)/);
 });
 
 test('doctor reports the bridge as it is AFTER the repair transaction', () => {
   const before = DOCTOR_SOURCE.indexOf('const desktopBridgeBeforeFix =');
   const transaction = DOCTOR_SOURCE.indexOf('const doctorFixTransaction =');
-  const after = DOCTOR_SOURCE.indexOf('const desktopBridge = doctorFixTransaction');
+  const after = DOCTOR_SOURCE.indexOf('const desktopBridge = { ...(doctorFixTransaction');
   const bound = DOCTOR_SOURCE.lastIndexOf('desktop_bridge: desktopBridge,');
   assert.ok(before > 0 && transaction > before, 'the pre-fix snapshot must be taken before the transaction');
   assert.ok(after > transaction, 'the reported bridge must be re-read after the repair transaction closes');

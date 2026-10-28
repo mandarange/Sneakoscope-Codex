@@ -197,28 +197,32 @@ test('--fix re-verifies transport after the repair so a serving bridge leaves `d
     restartStaleDesktopBridgeRuntimeImpl: (async () => ({ restarted: false, warnings: [], blockers: [] })) as any,
     desktopBridgeStatusImpl: (async () => { statuses.push(readinessState); return managedStatus(readinessState); }) as any,
     executeDesktopBridgeCommandImpl: (async (request: any) => {
-      operations.push(`${request.operation}:${request.level || ''}`);
+      operations.push(`${request.operation}:${request.level || (request.allow_config_writes === false ? 'read-only' : 'writes')}`);
       if (request.operation === 'verify') readinessState = 'ready';
-      return { ok: true };
+      // A refresh that ran under a minute ago is skipped, and still ok.
+      return request.operation === 'models.refresh'
+        ? { ok: true, result: { model_refresh: { ok: true, skipped: true, line: 'Model list refreshed recently: 9 models generation 3f2a9c1e', warnings: ['model_refresh_skipped_recent'], blockers: [] } } }
+        : { ok: true };
     }) as any
   };
 
   const fixed = await repairDoctorDesktopBridgeCatalog({ fix: true }, deps);
-  assert.deepEqual(operations, ['verify:transport'], 'exactly one transport verify, no catalog sync for a fresh catalog');
+  assert.deepEqual(operations, ['models.refresh:writes', 'verify:transport'], 'every run refreshes the model list, then one transport verify');
   assert.equal(fixed.ok, true);
   assert.equal(fixed.repaired, true, 'degraded -> ready counts as a repair');
-  assert.deepEqual(fixed.warnings, ['desktop_bridge_transport_reverified']);
+  assert.deepEqual(fixed.warnings, ['model_refresh_skipped_recent', 'desktop_bridge_transport_reverified']);
   assert.deepEqual(fixed.blockers, []);
+  assert.equal(fixed.model_refresh?.line, 'Model list refreshed recently: 9 models generation 3f2a9c1e');
 
   // Already ready: nothing to re-verify, no probe fired.
   operations.length = 0; readinessState = 'ready';
   const ready = await repairDoctorDesktopBridgeCatalog({ fix: true }, deps);
-  assert.deepEqual(operations, []);
-  assert.deepEqual(ready.warnings, []);
+  assert.deepEqual(operations, ['models.refresh:writes']);
+  assert.deepEqual(ready.warnings, ['model_refresh_skipped_recent']);
 
-  // Read-only doctor must never fire live probes, degraded or not.
+  // Read-only doctor refreshes without config writes and never fires live probes, degraded or not.
   operations.length = 0; readinessState = 'degraded';
   const readOnly = await repairDoctorDesktopBridgeCatalog({ fix: false }, deps);
-  assert.deepEqual(operations, []);
-  assert.deepEqual(readOnly.warnings, []);
+  assert.deepEqual(operations, ['models.refresh:read-only']);
+  assert.deepEqual(readOnly.warnings, ['model_refresh_skipped_recent']);
 });

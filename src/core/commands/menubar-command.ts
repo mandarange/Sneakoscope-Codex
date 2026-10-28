@@ -33,7 +33,10 @@ export async function menubarCommand(subcommand = 'status', args: string[] = [])
     return result;
   }
   if (action === 'install') {
-    const result = await installSksMenuBar({ root, ...(home ? { home } : {}), apply: true, launch: !flag(args, '--no-launch'), quiet: flag(args, '--json') });
+    const installed = await installSksMenuBar({ root, ...(home ? { home } : {}), apply: true, launch: !flag(args, '--no-launch'), quiet: flag(args, '--json') });
+    // SKS Center shows the list Codex sees, so the install ends with a model-list refresh.
+    const modelRefresh = await (await import('../codex-lb/model-refresh-after.js')).refreshModelListAfter('menubar-install');
+    const result = modelRefresh ? { ...installed, model_refresh: modelRefresh } : installed;
     if (flag(args, '--json')) {
       printJson(result);
       if (!result.ok) process.exitCode = 1;
@@ -44,6 +47,7 @@ export async function menubarCommand(subcommand = 'status', args: string[] = [])
     else cliUi.fail(result.status);
     console.log(`SKS menu bar install: ${result.status}`);
     for (const actionLine of result.actions) console.log(`- ${actionLine}`);
+    if (typeof modelRefresh?.line === 'string') console.log(modelRefresh.line);
     for (const warning of result.warnings) console.log(`warning: ${warning}`);
     for (const blocker of result.blockers) console.log(`blocker: ${blocker}`);
     if (!result.ok) process.exitCode = 1;

@@ -83,6 +83,13 @@ export async function stageCombinedBridgeCatalog(input: {
         || existing.route_index.generation !== input.build.route_index.generation) {
         throw new Error('combined_catalog_generation_bundle_mismatch');
       }
+      // Same models, routes and observations: the bundle keeps its path and
+      // takes this sync's check and expiry times, or it would read as stale
+      // twelve hours after it was first written however often it is refreshed.
+      if (JSON.stringify(existing.catalog.provider_statuses) !== JSON.stringify(input.build.catalog.provider_statuses)) {
+        await fs.rename(tempCatalog, layout.catalogPath);
+        await fsyncDirectory(layout.bundleDirectory);
+      }
     } else {
       await fs.rename(tempBundle, layout.bundleDirectory);
       await fsyncDirectory(layout.generationsRoot);
