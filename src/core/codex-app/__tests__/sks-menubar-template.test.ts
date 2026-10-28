@@ -32,6 +32,10 @@ function source(codexBundleId: string | null = 'com.openai.codex') {
   });
 }
 
+// The removed Remote Coding page and the companion it recommended, spelled in
+// parts so this file never matches the repository-wide absence sweep itself.
+const REMOVED_REMOTE_CODING = new RegExp(['remoteCoding', 'Remote Coding', ['pa', 'seo'].join('')].join('|'), 'i');
+
 test('SKS Menu Bar uses the required split native source and resource inventory', () => {
   const root = resolvePackagedMenuBarSourceRoot();
   assert.deepEqual([...NATIVE_SOURCE_FILES], [
@@ -46,7 +50,6 @@ test('SKS Menu Bar uses the required split native source and resource inventory'
     'ProvidersBridgeCatalog.swift',
     'OpenRouterOnlyState.swift', 'ProvidersOpenRouterOnly.swift',
     'SubagentModelsModels.swift', 'SubagentModelsViewController.swift',
-    'RemoteCodingViewController.swift',
     'DiagnosticsViewController.swift',
     'SettingsViewController.swift', 'LocalDecisionModels.swift', 'LocalDecisionViewController.swift',
     'ImageGenerationModels.swift', 'ImageGenerationViewController.swift',
@@ -69,10 +72,7 @@ test('SKS Menu Bar uses the required split native source and resource inventory'
   assert.doesNotMatch(materialized, /MultiProviderRouterControls|ProvidersConnectTest/);
   assert.match(materialized, /Connect your accounts and choose how Codex routes models/);
   assert.match(materialized, /\["bridge", "route", "explain", model, "--json"\]/);
-  assert.match(materialized, /https:\/\/paseo\.sh\//);
-  assert.match(materialized, /https:\/\/paseo\.sh\/docs/);
-  assert.match(materialized, /Paseo \(recommended\)/);
-  assert.match(materialized, /Paseo is a separate, open-source app/);
+  assert.doesNotMatch(materialized, REMOVED_REMOTE_CODING);
   assert.doesNotMatch(materialized, /Telegram|BotFather|TELEGRAM_BOT_TOKEN/);
   assert.doesNotMatch(materialized, /model\.contains\("\/"\) \? model :/);
 });
@@ -131,14 +131,14 @@ test('runtime materialization injects paths, version, and optional Codex bundle 
   assert.match(withCodex, /case \.degraded:\s*break/);
 });
 
-test('Control Center is a non-modal ten-section AppKit sidebar with native accessibility', () => {
+test('Control Center is a non-modal nine-section AppKit sidebar with native accessibility', () => {
   const swift = source();
   const sidebar = fs.readFileSync(path.join(resolvePackagedMenuBarSourceRoot(), 'Sources', 'SidebarItem.swift'), 'utf8');
   assert.deepEqual([...sidebar.matchAll(/^\s+case \w+ = "([^"]+)"$/gm)].map((match) => match[1]), [
-    'Overview', 'Providers', 'Subagent Models', 'Remote Coding', 'Updates', 'MCP Servers',
+    'Overview', 'Providers', 'Subagent Models', 'Updates', 'MCP Servers',
     'Decisions', 'Image Generation', 'Diagnostics', 'Settings'
   ]);
-  for (const section of ['Overview', 'Updates', 'MCP Servers', 'Providers', 'Subagent Models', 'Remote Coding', 'Decisions', 'Image Generation', 'Diagnostics', 'Settings']) {
+  for (const section of ['Overview', 'Updates', 'MCP Servers', 'Providers', 'Subagent Models', 'Decisions', 'Image Generation', 'Diagnostics', 'Settings']) {
     assert.match(swift, new RegExp(`= "${section.replace(/[&]/g, '\\&')}"`));
   }
   assert.match(swift, /styleMask: \[\.titled, \.closable, \.miniaturizable, \.resizable\]/);
@@ -779,33 +779,16 @@ test('UserNotifications declares all categories/actions, redacts public bodies, 
   assert.doesNotMatch(swift, /display notification|osascript/);
 });
 
-test('Remote Coding page recommends Paseo without owning its runtime boundary', () => {
+test('SKS Center has no Remote Coding page and no remote-companion recommendation', () => {
   const swift = source();
-  const overview = fs.readFileSync(path.join(resolvePackagedMenuBarSourceRoot(), 'Sources', 'OverviewViewController.swift'), 'utf8');
-  const sidebar = fs.readFileSync(path.join(resolvePackagedMenuBarSourceRoot(), 'Sources', 'SidebarItem.swift'), 'utf8');
-  const remote = fs.readFileSync(
-    path.join(resolvePackagedMenuBarSourceRoot(), 'Sources', 'RemoteCodingViewController.swift'),
-    'utf8'
-  );
-  const secureEnvelope = fs.readFileSync(path.join(resolvePackagedMenuBarSourceRoot(), 'Sources', 'SecureProcessEnvelope.swift'), 'utf8');
-  const controlCenter = fs.readFileSync(path.join(resolvePackagedMenuBarSourceRoot(), 'Sources', 'ControlCenterWindowController.swift'), 'utf8');
-
-  assert.match(sidebar, /case remoteCoding = "Remote Coding"/);
-  assert.match(overview, /NativeView\.button\("Remote Coding…"/);
-  assert.match(overview, /openSection\?\("Remote Coding"\)/);
-  assert.match(remote, /final class RemoteCodingViewController: NSViewController/);
-  assert.match(remote, /https:\/\/paseo\.sh\//);
-  assert.match(remote, /https:\/\/paseo\.sh\/docs/);
-  assert.match(remote, /Paseo \(recommended\)/);
-  assert.match(remote, /separate, open-source app/i);
-  assert.match(remote, /Paseo is a separate, open-source app/);
-  assert.match(remote, /setAccessibilityLabel\("Visit Paseo website"\)/);
-  assert.match(remote, /setAccessibilityLabel\("Read Paseo documentation"\)/);
-  assert.match(controlCenter, /\.remoteCoding: RemoteCodingViewController\(\)/);
-  assert.doesNotMatch(remote, /telegram|botfather|NSSecureTextField/i);
+  const root = path.join(resolvePackagedMenuBarSourceRoot(), 'Sources');
+  const secureEnvelope = fs.readFileSync(path.join(root, 'SecureProcessEnvelope.swift'), 'utf8');
+  assert.equal(fs.existsSync(path.join(root, 'RemoteCodingViewController.swift')), false);
+  assert.equal((NATIVE_SOURCE_FILES as readonly string[]).includes('RemoteCodingViewController.swift'), false);
+  assert.doesNotMatch(swift, REMOVED_REMOTE_CODING);
   assert.doesNotMatch(swift, /TelegramRuntimeFactory|telegramService|TELEGRAM_BOT_TOKEN/);
   assert.doesNotMatch(secureEnvelope, /sks\.telegram|\("telegram", "setup"\)/);
-  assert.equal(fs.existsSync(path.join(resolvePackagedMenuBarSourceRoot(), 'Sources', 'RemoteCodingSettingsControls.swift')), false);
+  assert.equal(fs.existsSync(path.join(root, 'RemoteCodingSettingsControls.swift')), false);
 });
 
 test('Control Center Decisions page can enable and disable Jev through the same CLI', () => {

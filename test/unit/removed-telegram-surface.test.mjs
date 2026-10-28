@@ -70,31 +70,6 @@ test('public feature inventory has no Telegram transport', async () => {
   assert.equal(serialized.includes('telegram'), false);
 });
 
-test('Paseo project config keeps its ordered setup and named npm scripts', () => {
-  const paseo = JSON.parse(fs.readFileSync(path.join(root, 'paseo.json'), 'utf8'));
-  assert.deepEqual(paseo, {
-    worktree: {
-      setup: [
-        'npm ci --ignore-scripts',
-        'npm run build:clean'
-      ]
-    },
-    scripts: {
-      build: { command: 'npm run build' },
-      typecheck: { command: 'npm run typecheck' },
-      test: { command: 'npm run test' },
-      'release-check': { command: 'npm run release:check:affected' },
-      'release-confidence': { command: 'npm run release:check:confidence' }
-    }
-  });
-
-  const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-  for (const entry of Object.values(paseo.scripts)) {
-    const script = entry.command.replace(/^npm run /, '');
-    assert.equal(typeof pkg.scripts[script], 'string', `missing package script: ${script}`);
-  }
-});
-
 test('npm pack exposes no Telegram command, runtime, or native source', () => {
   const result = spawnSync('npm', ['pack', '--dry-run', '--ignore-scripts', '--json'], {
     cwd: root,
@@ -111,10 +86,6 @@ test('npm pack exposes no Telegram command, runtime, or native source', () => {
     .filter((packedPath) => /(?:^|\/)telegram/i.test(packedPath));
   assert.deepEqual(telegramPaths, []);
 
-  const remoteCodingPath = 'dist/native/sks-menubar/Sources/RemoteCodingViewController.swift';
-  assert.ok(pack.files.some((file) => file.path === remoteCodingPath));
-  const remoteCodingSource = fs.readFileSync(path.join(root, remoteCodingPath), 'utf8');
-  assert.match(remoteCodingSource, /https:\/\/paseo\.sh\//);
-  assert.match(remoteCodingSource, /https:\/\/paseo\.sh\/docs/);
-  assert.doesNotMatch(remoteCodingSource, /telegram|botfather/i);
+  // The Remote Coding page went with it in 10.7.2: absent from the pack.
+  assert.equal(pack.files.some((file) => /RemoteCoding/.test(file.path)), false);
 });

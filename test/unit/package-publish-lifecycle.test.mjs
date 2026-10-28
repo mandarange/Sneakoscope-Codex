@@ -37,14 +37,10 @@ test('publish lifecycle supports official npm publish with prepack post-build ve
       `built package payload must omit native ${checkoutOnlySurface}`
     );
   }
-  const remoteCodingPage = path.join('dist/native/sks-menubar/Sources', 'RemoteCodingViewController.swift');
-  assert.ok(fs.existsSync(remoteCodingPage), 'published package must include the remote companion recommendation');
-  const remoteCodingSource = fs.readFileSync(remoteCodingPage, 'utf8');
-  assert.match(remoteCodingSource, /https:\/\/paseo\.sh\//);
-  assert.match(remoteCodingSource, /https:\/\/paseo\.sh\/docs/);
-  assert.match(remoteCodingSource, /(?:independent|separate),? open-source (?:project|app)/i);
-  assert.doesNotMatch(remoteCodingSource, /telegram|botfather/i);
-  assert.equal(fs.existsSync(path.join('dist/native/sks-menubar/Sources', 'RemoteCodingSettingsControls.swift')), false);
+  // The Remote Coding page is gone (10.7.2), with its settings controls before it.
+  for (const removed of ['RemoteCodingViewController.swift', 'RemoteCodingSettingsControls.swift']) {
+    assert.equal(fs.existsSync(path.join('dist/native/sks-menubar/Sources', removed)), false, `published package must omit ${removed}`);
+  }
   assert.ok(pkg.files.includes('dist'), 'published package must include the built runtime through dist');
   assert.ok(fs.existsSync('dist/core/config-adopt/index.js'));
   assert.equal(fs.existsSync('dist/core/commands/telegram-command.js'), false);
@@ -158,7 +154,6 @@ test('npm pack excludes native checkout-only QA surfaces while retaining require
   }
   for (const requiredPath of [
     'dist/native/sks-menubar/Sources/AppDelegate.swift',
-    'dist/native/sks-menubar/Sources/RemoteCodingViewController.swift',
     'dist/scripts/release-version-truth-check.js',
     'dist/scripts/check-publish-tag.js',
     'dist/scripts/prepublish-release-check-or-fast.js',
@@ -167,6 +162,7 @@ test('npm pack excludes native checkout-only QA surfaces while retaining require
     assert.ok(packedPaths.includes(requiredPath), `published package must include ${requiredPath}`);
   }
   assert.equal(packedPaths.some((packedPath) => /(?:^|\/)telegram/i.test(packedPath)), false);
+  assert.equal(packedPaths.some((packedPath) => /RemoteCoding/.test(packedPath)), false);
 });
 
 test('actual npm publish lifecycle reports repository blockers without misdiagnosing the release stamp', () => {

@@ -33,7 +33,6 @@ final class ControlCenterWindowController: NSWindowController, NSTableViewDataSo
             .mcpServers: MCPServersViewController(processClient: processClient, operations: operations, notifications: notifications),
             .providers: ProvidersViewController(processClient: processClient, operations: operations),
             .subagentModels: SubagentModelsViewController(processClient: processClient, operations: operations),
-            .remoteCoding: RemoteCodingViewController(),
             .localDecision: LocalDecisionViewController(processClient: processClient, operations: operations),
             .imageGeneration: ImageGenerationViewController(processClient: processClient, operations: operations),
             .diagnostics: DiagnosticsViewController(processClient: processClient, operations: operations),

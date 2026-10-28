@@ -1067,14 +1067,6 @@ and Control Center views share the `sks.update-status.v3` snapshot.
   or upgrade-safety surfaces, not an active integration.
 - `sks telegram` is an ordinary unknown command. Doctor and current feature
   inventories do not project Telegram readiness or credentials.
-- The root `paseo.json` uses the ordered worktree setup commands
-  `npm ci --ignore-scripts` and `npm run build:clean`, then exposes only the
-  existing build, typecheck, test, affected-release, and confidence-release
-  package scripts.
-- README guidance recommends Paseo desktop first, documents the official
-  headless and Codex launch flows, and keeps installation, authentication,
-  pairing, relay operation, and product support with the independent Paseo
-  project.
 - Codex compatibility derives from the package dependency and the resolved
   runtime's generated App Server schema; MCP list pagination is bounded and
   fail-closed, and superseded static Codex schemas and hook fixtures are absent.
@@ -1091,8 +1083,6 @@ commit. Retain the command output, but do not treat it as exact-commit release
 proof:
 
 ```sh
-jq -e . paseo.json
-node -e "const p=require('./package.json'),c=require('./paseo.json'); for (const row of Object.values(c.scripts)) { const name=row.command.replace(/^npm run /,''); if (!p.scripts[name]) throw new Error('missing package script: '+name) }"
 npm run build:clean
 node --test --test-concurrency=1 \
   test/unit/removed-telegram-surface.test.mjs \
@@ -1137,18 +1127,13 @@ Before publication, the version lookup should report that 10.5.3 is not already
 present. The dry run is not publication. The user performs the actual publish,
 push, tag, workflow dispatch, or approval separately.
 
-## Removed-surface and Paseo contract
+## Removed-surface contract
 
 8.3.3 has no live Telegram credential, BotFather, pairing, poller, or cellular
 round-trip evidence requirement. Release verification instead proves that the
-active Telegram surface is absent and that the checked-in `paseo.json`, README,
-package scripts, package metadata, Rust metadata, and runtime version agree with
-the 8.3.3 contract.
-
-Paseo installation, daemon health, authentication, pairing, relay availability,
-and cross-device execution are also not Sneakoscope release evidence. Paseo is
-an independent project; this release checks only the repository configuration
-and documentation that Sneakoscope owns.
+active Telegram surface is absent and that the checked-in README, package
+scripts, package metadata, Rust metadata, and runtime version agree with the
+8.3.3 contract.
 
 ## TriWiki source binding
 

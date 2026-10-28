@@ -35,7 +35,6 @@ export const NATIVE_SOURCE_FILES = [
   'ProvidersOpenRouterOnly.swift',
   'SubagentModelsModels.swift',
   'SubagentModelsViewController.swift',
-  'RemoteCodingViewController.swift',
   'DiagnosticsViewController.swift',
   'SettingsViewController.swift',
   'LocalDecisionModels.swift',

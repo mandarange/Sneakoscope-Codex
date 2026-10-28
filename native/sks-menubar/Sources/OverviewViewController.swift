@@ -37,7 +37,6 @@ final class OverviewViewController: NSViewController, ControlCenterPage {
         updateCodexButton.setAccessibilityHelp("Update the operator Codex CLI to the preferred latest channel.")
         let buttons = NativeView.row([refreshButton, doctorButton, updateCodexButton])
         let shortcuts = NativeView.row([
-            NativeView.button("Remote Coding…", target: self, action: #selector(openRemoteCoding)),
             connectionsShortcut(),
             NativeView.button("Decisions…", target: self, action: #selector(openDecisions)),
             NativeView.button("Updates…", target: self, action: #selector(openUpdates)),
@@ -73,7 +72,6 @@ final class OverviewViewController: NSViewController, ControlCenterPage {
         return button
     }
 
-    @objc private func openRemoteCoding() { openSection?("Remote Coding") }
     @objc private func openProviders() { openSection?("Providers") }
     @objc private func openDecisions() { openSection?("Decisions") }
     @objc private func openUpdates() { openSection?("Updates") }

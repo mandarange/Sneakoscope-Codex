@@ -963,11 +963,6 @@ fixture, or package dry run cannot promote a real-environment row to passed.
 
 ## Standing boundaries (unchanged from 8.3.1)
 
-Paseo is an independent external product. Sneakoscope does not bundle its
-daemon, wrap its CLI, probe its health, own its authentication or relay
-lifecycle, or require a live Paseo session as 9.1.0 release proof. The owned
-contract is limited to the committed `paseo.json` and accurate usage guidance.
-
 The active Telegram command, transport, Doctor projection, native poller and
 settings, feature/package entries, tests, and release requirements must be
 absent. Historical changelog entries and narrowly scoped retired-state
