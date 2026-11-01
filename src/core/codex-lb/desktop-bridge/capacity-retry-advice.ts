@@ -110,26 +110,49 @@ function adviseSseEvents(events: Buffer, onAdvised: () => void): Buffer {
 
 /**
  * Passes an SSE stream through, holding back only an event whose terminating
- * blank line has not arrived yet; Codex cannot act on part of an event anyway.
+ * blank line has not arrived yet. Advice is best-effort: events over 1 MiB
+ * pass through unchanged, even if the upstream never sends their blank line.
+ * The next event can still receive advice. This bounds our private buffer;
+ * normal stream backpressure continues to bound queued downstream writes.
  */
 export function modelCapacityAdvisingSse(onAdvised: () => void): Transform {
+  const maxEventBytes = 1024 * 1024;
   let carry: Buffer = Buffer.alloc(0);
-  return new Transform({
+  let passthrough = false;
+  // Keep delimiter recognition across chunks without decoding partial UTF-8.
+  let endingBytes = 0;
+  const stream = new Transform({
     transform(chunk: Buffer, _encoding, done) {
-      const data = carry.length ? Buffer.concat([carry, chunk]) : chunk;
-      const lf = data.lastIndexOf('\n\n');
-      const crlf = data.lastIndexOf('\r\n\r\n');
-      const end = Math.max(lf === -1 ? -1 : lf + 2, crlf === -1 ? -1 : crlf + 4);
-      if (end === -1) {
-        carry = data;
-        done();
-        return;
+      let advised = false;
+      let start = 0;
+      for (let index = 0; index < chunk.length; index += 1) {
+        endingBytes = ((endingBytes << 8) | chunk[index]!) >>> 0;
+        if ((endingBytes & 0xffff) !== 0x0a0a && endingBytes !== 0x0d0a0d0a) continue;
+        append(chunk.subarray(start, index + 1));
+        if (!passthrough) this.push(adviseSseEvents(carry, () => { advised = true; }));
+        carry = Buffer.alloc(0);
+        passthrough = false;
+        endingBytes = 0;
+        start = index + 1;
       }
-      carry = data.subarray(end);
-      done(null, adviseSseEvents(data.subarray(0, end), onAdvised));
+      if (start < chunk.length) append(chunk.subarray(start));
+      if (advised) onAdvised();
+      done();
     },
     flush(done) {
       done(null, carry.length ? adviseSseEvents(carry, onAdvised) : null);
     },
   });
+  function append(part: Buffer): void {
+    if (passthrough || carry.length + part.length > maxEventBytes) {
+      if (carry.length) stream.push(carry);
+      carry = Buffer.alloc(0);
+      passthrough = true;
+      stream.push(part);
+    } else {
+      // Copy a partial slice so it cannot retain a much larger input chunk.
+      carry = carry.length ? Buffer.concat([carry, part]) : Buffer.from(part);
+    }
+  }
+  return stream;
 }
