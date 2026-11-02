@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import {
   CODEX_CONTEXT_1M_SCHEMA,
   CODEX_CONTEXT_1M_TARGETS,
@@ -174,6 +175,81 @@ test('command round-trips a real config file and skips restart when Codex is not
     await fs.rm(home, { recursive: true, force: true });
   }
 });
+
+test('a missing config remains a valid first-run state and can be enabled', async (t) => {
+  const home = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-context-1m-missing-'));
+  t.after(() => fs.rm(home, { recursive: true, force: true }));
+  const opts = { home, env: { HOME: home }, platform: 'linux' as const };
+  const status = await codexContext1mCommand(['status'], opts);
+  assert.equal(status.ok, true);
+  assert.equal(status.enabled, false);
+  assert.deepEqual(status.blockers, []);
+  assert.equal(status.changed, false);
+  await assert.rejects(fs.stat(status.config_path), { code: 'ENOENT' });
+
+  const enabled = await codexContext1mCommand(['on'], opts);
+  assert.equal(enabled.ok, true);
+  assert.equal(enabled.enabled, true);
+  assert.equal(enabled.changed, true);
+  assert.equal(inspectCodexContext1m(await fs.readFile(enabled.config_path, 'utf8')).enabled, true);
+});
+
+for (const failure of ['permission', 'directory'] as const) {
+  test(`config read failure (${failure}) blocks status and mutations without probing Codex`, async (t) => {
+    if (failure === 'permission' && (process.platform === 'win32' || process.getuid?.() === 0)) {
+      return t.skip('requires POSIX file permissions and an unprivileged user');
+    }
+    const home = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-context-1m-unreadable-'));
+    const codexHome = path.join(home, '.codex');
+    const configPath = path.join(codexHome, 'config.toml');
+    const original = enableCodexContext1m(REALISTIC_CONFIG).next;
+    await fs.mkdir(codexHome);
+    if (failure === 'permission') {
+      await fs.writeFile(configPath, original);
+      await fs.chmod(configPath, 0);
+    } else {
+      await fs.mkdir(configPath);
+      await fs.writeFile(path.join(configPath, 'sentinel'), original);
+    }
+    t.after(async () => {
+      if (failure === 'permission') await fs.chmod(configPath, 0o600);
+      await fs.rm(home, { recursive: true, force: true });
+    });
+    for (const action of ['status', 'on', 'off']) {
+      const result = await codexContext1mCommand([action], {
+        home, env: { HOME: home }, platform: 'darwin',
+        isRunningImpl: async () => assert.fail('must not probe or restart Codex after a read failure')
+      });
+      assert.equal(result.schema, CODEX_CONTEXT_1M_SCHEMA);
+      assert.equal(result.action, action);
+      assert.equal(result.ok, false);
+      assert.equal(result.enabled, null);
+      assert.equal(result.keys, null);
+      assert.equal(result.changed, false);
+      assert.equal(result.write, null);
+      assert.equal(result.restart, null);
+      assert.deepEqual(result.blockers, ['codex_context_config_unreadable']);
+      assert.deepEqual(result.warnings, []);
+    }
+    if (failure === 'permission') await fs.chmod(configPath, 0o600);
+    assert.equal(await fs.readFile(failure === 'permission' ? configPath : path.join(configPath, 'sentinel'), 'utf8'), original);
+    assert.deepEqual(await fs.readdir(codexHome), ['config.toml']);
+
+    if (failure === 'directory') {
+      const cli = path.join(process.cwd(), 'dist/bin/sks.js');
+      const options = { encoding: 'utf8' as const, timeout: 30_000, env: { ...process.env, HOME: home, CODEX_HOME: codexHome } };
+      const json = spawnSync(process.execPath, [cli, 'codex-app', 'context-1m', 'status', '--json'], options);
+      assert.equal(json.status, 1, json.stderr);
+      assert.equal(JSON.parse(json.stdout).enabled, null);
+      assert.equal(JSON.parse(json.stdout).ok, false);
+      const text = spawnSync(process.execPath, [cli, 'codex-app', 'context-1m', 'status'], options);
+      assert.equal(text.status, 1, text.stderr);
+      assert.match(text.stdout, /Codex 1M Context: unavailable/);
+      assert.match(text.stdout, /codex_context_config_unreadable/);
+      assert.doesNotMatch(text.stdout, /Codex 1M Context: disabled|Model: not set|model_context_window: not set/);
+    }
+  });
+}
 
 test('command restarts a running Codex and reports the restart outcome', async () => {
   const home = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-context-1m-restart-'));

@@ -38,12 +38,12 @@ export async function run(_command: any, args: any = []) {
       if (!result.ok) process.exitCode = 1;
       return;
     }
-    console.log(`Codex 1M Context: ${result.enabled ? 'enabled' : 'disabled'}`);
+    console.log(`Codex 1M Context: ${result.enabled === null ? 'unavailable' : result.enabled ? 'enabled' : 'disabled'}`);
     console.log(`Config: ${result.config_path}`);
     const window = result.model_window;
-    console.log(`Model: ${result.model || 'not set'}${window.effective_window ? ` · window ${window.effective_window} (default ${window.default_window ?? 'unknown'}, max ${window.max_window ?? 'uncapped'})` : ' · window unknown'}`);
+    console.log(`Model: ${result.enabled === null ? 'unavailable' : result.model || 'not set'}${window.effective_window ? ` · window ${window.effective_window} (default ${window.default_window ?? 'unknown'}, max ${window.max_window ?? 'uncapped'})` : ' · window unknown'}`);
     if (result.larger_window_models.length) console.log(`Models with a larger window: ${result.larger_window_models.join(', ')}`);
-    for (const [key, target] of Object.entries(result.target)) {
+    for (const [key, target] of result.keys ? Object.entries(result.target) : []) {
       const state = (result.keys as Record<string, { present: boolean; managed: boolean; value: number | null }>)[key];
       const detail = state?.present ? `${state.value ?? 'unparsed'}${state.managed ? ' (SKS-managed)' : ''}` : 'not set';
       console.log(`${key}: ${detail} · target ${target}`);

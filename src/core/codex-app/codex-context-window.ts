@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { exists, readText } from '../fsx.js'
+import { readText } from '../fsx.js'
 import { escapeRegExp } from '../text/regex.js'
 import { safeWriteCodexConfigToml } from '../codex-runtime/codex-desktop-config-policy.js'
 import { codexHomePath, codexUserConfigPath, readTopLevelTomlString } from './codex-model-catalog.js'
@@ -236,16 +236,29 @@ export async function codexContext1mCommand(args: string[] = [], opts: CodexCont
   const action = normalizeCodexContext1mAction(args[0])
   const noRestart = args.includes('--no-restart')
   const configPath = codexUserConfigPath({ env, ...(opts.home ? { home: opts.home } : {}) })
-  const before = String(await readText(configPath, ''))
-  const fileExists = await exists(configPath)
   const blockers: string[] = []
   const warnings: string[] = []
+  let before = ''
+  let fileExists = true
+  let configReadable = true
+  // Only a missing file is an empty first-run config; other read failures
+  // must not be presented as disabled or passed to a configuration mutation.
+  try {
+    before = await readText(configPath)
+  } catch (error: unknown) {
+    if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
+      fileExists = false
+    } else {
+      configReadable = false
+      blockers.push('codex_context_config_unreadable')
+    }
+  }
   let write: Awaited<ReturnType<typeof safeWriteCodexConfigToml>> | null = null
   let changed = false
   let afterText = before
   let mutation: CodexContext1mMutation | null = null
 
-  if (action === 'on' || action === 'off') {
+  if (configReadable && (action === 'on' || action === 'off')) {
     mutation = action === 'on' ? enableCodexContext1m(before) : disableCodexContext1m(before)
     blockers.push(...mutation.blockers)
     warnings.push(...mutation.warnings)
@@ -265,9 +278,11 @@ export async function codexContext1mCommand(args: string[] = [], opts: CodexCont
 
   const inspection = inspectCodexContext1m(afterText)
   warnings.push(...inspection.warnings)
-  const windowRows = await readCodexModelWindows({ env, ...(opts.home ? { home: opts.home } : {}) })
+  const windowRows = configReadable
+    ? await readCodexModelWindows({ env, ...(opts.home ? { home: opts.home } : {}) })
+    : []
   const modelWindow = codexContextModelWindow(windowRows, inspection.model)
-  if (action === 'on' || inspection.enabled) {
+  if (configReadable && (action === 'on' || inspection.enabled)) {
     if (!inspection.model) warnings.push('codex_context_model_line_missing')
     else if (modelWindow.source === 'unknown') warnings.push(`codex_context_model_window_unknown:${inspection.model}`)
     else if (modelWindow.max_window === null) warnings.push(`codex_context_model_window_uncapped:${inspection.model}`)
@@ -292,7 +307,7 @@ export async function codexContext1mCommand(args: string[] = [], opts: CodexCont
     schema: CODEX_CONTEXT_1M_SCHEMA,
     ok: blockers.length === 0,
     action,
-    enabled: inspection.enabled,
+    enabled: configReadable ? inspection.enabled : null,
     config_path: configPath,
     model: inspection.model,
     model_window: modelWindow,
@@ -301,7 +316,7 @@ export async function codexContext1mCommand(args: string[] = [], opts: CodexCont
       .filter((row) => row.listed && row.max_window !== null && row.default_window !== null && row.max_window > row.default_window)
       .map((row) => row.slug),
     target: { ...CODEX_CONTEXT_1M_TARGETS },
-    keys: inspection.keys,
+    keys: configReadable ? inspection.keys : null,
     previous: mutation && action === 'on' ? mutation.previous : null,
     restored: mutation && action === 'off' ? mutation.restored : null,
     changed,

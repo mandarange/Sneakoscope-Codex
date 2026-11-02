@@ -46,6 +46,14 @@ sks doctor --json
 
 Dependency, CI, and piped installs intentionally skip the menu bar build. Set `SKS_POSTINSTALL_MENUBAR=1` only when a scripted install is meant to build it.
 
+## 1M context status is unavailable
+
+Run `sks codex-app context-1m status --json`. A `codex_context_config_unreadable`
+blocker means SKS could not read the reported `config_path`. Restore read access
+and confirm the path is a file, then retry. SKS leaves the configuration untouched
+and does not restart Codex on this failure. JSON reports `ok: false` with
+`enabled` and `keys` set to `null`; a missing file remains a valid disabled state.
+
 ## Bridge or provider checks are unavailable
 
 Inspect the configured route without entering credentials into a shell history:
