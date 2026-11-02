@@ -1,5 +1,11 @@
 # Architecture
 
+The selected next-step integration strategy is documented in the
+[Codex App Server ADR](architecture/codex-native-integration-adr.md), with an
+[implementation roadmap](architecture/codex-native-integration-roadmap.md) and
+[immutable source evidence](architecture/codex-native-integration-evidence.md).
+It is a proposed migration; the current runtime described below is unchanged.
+
 ## Desktop Bridge routing (8.1.3)
 
 The only SKS-managed Desktop/CLI routing runtime is the local **Desktop
