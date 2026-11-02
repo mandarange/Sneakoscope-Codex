@@ -102,15 +102,18 @@ class ModelCallSemaphoreImpl implements ModelCallSemaphore {
     }
     this.queued += 1
     await new Promise<void>((resolve) => this.waiters.push(resolve))
-    this.queued = Math.max(0, this.queued - 1)
-    this.active += 1
-    this.maxObserved = Math.max(this.maxObserved, this.active)
   }
 
   private release(): void {
-    this.active = Math.max(0, this.active - 1)
     const next = this.waiters.shift()
-    if (next) next()
+    if (next) {
+      // Transfer the occupied slot before waking the waiter. Making it free
+      // until acquire resumes lets a new caller take the same slot.
+      this.queued -= 1
+      next()
+    } else {
+      this.active = Math.max(0, this.active - 1)
+    }
   }
 }
 
