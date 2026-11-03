@@ -434,7 +434,9 @@ struct Harness {
         }
         DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 0.15) {
             let pidFile = temp + "/root.pid"
-            for _ in 0..<100 {
+            // Setup only: under a loaded parallel suite zsh can take over a
+            // second to start. The timing claim is terminateAll's bound below.
+            for _ in 0..<500 {
                 if let pidText = try? String(contentsOfFile: pidFile, encoding: .utf8),
                    pid_t(pidText.trimmingCharacters(in: .whitespacesAndNewlines)) != nil {
                     break
