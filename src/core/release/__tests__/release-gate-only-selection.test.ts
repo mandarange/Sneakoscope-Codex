@@ -190,7 +190,9 @@ test('single-gate selection fails immediately for unknown gates and dependency c
 
 async function waitForInProgressSummary(root: string): Promise<any> {
   const reportRoot = path.join(root, '.sneakoscope', 'reports', 'release-gates')
-  const deadline = Date.now() + 5_000
+  // The first snapshot follows the DAG's setup, which took over 5 s under the
+  // parallel release corpus (under 1 s alone). Returns as soon as it is seen.
+  const deadline = Date.now() + 30_000
   while (Date.now() < deadline) {
     const names = await fs.readdir(reportRoot).catch(() => [])
     for (const name of names) {
