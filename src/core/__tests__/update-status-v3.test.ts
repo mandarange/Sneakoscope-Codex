@@ -6,6 +6,7 @@ import path from 'node:path';
 import { runSksUpdateStatus } from '../update-check.js';
 import {
   emptyUpdateStatus,
+  persistKnownUpdateStatus,
   readUpdateStatusCache,
   resetUpdateStatusCoordinatorForTests,
   resolveSksUpdateStatus,
@@ -48,6 +49,111 @@ test('update-status.v3 serves a fresh cache with deterministic TTL and jitter', 
     assert.equal(cached.source, 'cache');
     assert.equal(cached.sks.latest, '6.3.0');
     assert.equal(fetches, 1);
+  } finally {
+    resetUpdateStatusCoordinatorForTests();
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('a failed forced refresh retries on the next read before the previous TTL expires', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-update-status-retry-'));
+  const env = isolatedEnv(root);
+  let at = new Date('2026-07-14T00:00:00.000Z');
+  const options = {
+    env,
+    now: () => at,
+    jitterMs: 0,
+    fallbackSnapshot: () => emptyUpdateStatus('6.2.0', at)
+  };
+  try {
+    resetUpdateStatusCoordinatorForTests();
+    const live = await resolveSksUpdateStatus({
+      ...options,
+      fetchLive: async () => snapshot('6.2.0', '6.3.0', at)
+    });
+    at = new Date(at.getTime() + 1000);
+    const stale = await resolveSksUpdateStatus({
+      ...options,
+      refresh: true,
+      fetchLive: async () => { throw new Error('registry unavailable'); }
+    });
+    assert.equal(stale.source, 'stale');
+    assert.equal(stale.expires_at, live.expires_at);
+    assert.equal(stale.sks.latest, '6.3.0');
+
+    // Simulate another CLI process reading the persisted failure, with no
+    // explicit refresh request and the old successful TTL still unexpired.
+    resetUpdateStatusCoordinatorForTests();
+    const recovered = await resolveSksUpdateStatus({
+      ...options,
+      fetchLive: async () => snapshot('6.2.0', '6.4.0', at)
+    });
+    assert.equal(recovered.source, 'live');
+    assert.equal(recovered.sks.latest, '6.4.0');
+    assert.equal(recovered.public_error, null);
+    assert.ok(!recovered.warnings.includes('update_status_stale'));
+    assert.deepEqual(await readUpdateStatusCache(env), recovered);
+  } finally {
+    resetUpdateStatusCoordinatorForTests();
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('re-enabling update checks refreshes a disabled snapshot even within its old TTL', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-update-status-reenable-'));
+  const env = isolatedEnv(root);
+  const at = new Date('2026-07-14T00:00:00.000Z');
+  const options = {
+    env,
+    now: () => at,
+    jitterMs: 0,
+    fallbackSnapshot: () => emptyUpdateStatus('6.2.0', at)
+  };
+  try {
+    resetUpdateStatusCoordinatorForTests();
+    await resolveSksUpdateStatus({
+      ...options,
+      fetchLive: async () => snapshot('6.2.0', '6.3.0', at)
+    });
+    const disabled = await resolveSksUpdateStatus({
+      ...options,
+      env: { ...env, SKS_DISABLE_UPDATE_CHECK: '1' },
+      fetchLive: async () => { assert.fail('disabled checks must not fetch'); }
+    });
+    assert.equal(disabled.source, 'disabled');
+    const enabled = await resolveSksUpdateStatus({
+      ...options,
+      fetchLive: async () => snapshot('6.2.0', '6.4.0', at)
+    });
+    assert.equal(enabled.source, 'live');
+    assert.equal(enabled.sks.latest, '6.4.0');
+  } finally {
+    resetUpdateStatusCoordinatorForTests();
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('an error persisted with a future expiry is retried on the next status read', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-update-status-persisted-error-'));
+  const env = isolatedEnv(root);
+  const at = new Date('2026-07-14T00:00:00.000Z');
+  try {
+    resetUpdateStatusCoordinatorForTests();
+    const failed = await persistKnownUpdateStatus({
+      env, currentVersion: '6.2.0', error: 'registry unavailable', now: () => at
+    });
+    assert.equal(failed.source, 'error');
+    assert.ok(Date.parse(failed.expires_at) > at.getTime());
+    const recovered = await resolveSksUpdateStatus({
+      env,
+      now: () => at,
+      jitterMs: 0,
+      fallbackSnapshot: () => emptyUpdateStatus('6.2.0', at),
+      fetchLive: async () => snapshot('6.2.0', '6.4.0', at)
+    });
+    assert.equal(recovered.source, 'live');
+    assert.equal(recovered.sks.latest, '6.4.0');
+    assert.equal(recovered.public_error, null);
   } finally {
     resetUpdateStatusCoordinatorForTests();
     await fs.rm(root, { recursive: true, force: true });
