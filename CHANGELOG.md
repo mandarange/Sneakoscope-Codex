@@ -2,6 +2,29 @@
 
 ## [Unreleased]
 
+## [10.7.3] - 2026-11-03
+
+### Fixed
+
+- `sks codex-app context-1m` no longer reports 1M context as "disabled" when
+  `~/.codex/config.toml` exists but cannot be read. It reports the
+  `codex_context_config_unreadable` blocker (`ok: false`, `enabled` and `keys`
+  `null`, text output "unavailable"), and `on`/`off` leave the file alone and
+  do not restart Codex. A missing file is still a valid disabled state.
+- The Desktop Bridge's capacity retry advice no longer buffers an SSE event
+  without bound. An event over 1 MiB, or one whose closing blank line never
+  arrives, passes through unchanged, and the next event can still carry the
+  advice.
+- The model-call limiter (`SKS_REMOTE_API_PARALLEL_BUDGET`) hands a released
+  slot straight to the oldest queued call. A call arriving in between could
+  take the same slot and run one call over the budget.
+
+### Docs
+
+- A proposed Codex App Server integration ADR, its staged roadmap and the
+  source evidence it rests on (`docs/architecture/codex-native-integration-*`).
+  The runtime is unchanged.
+
 ## [10.7.2] - 2026-10-28
 
 ### Fixed

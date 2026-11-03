@@ -1,6 +1,23 @@
 # Release Proof Truth
 
-## 10.7.2 candidate
+## 10.7.3 candidate
+
+A patch release of three fixes merged after 10.7.2 (PR #33, #35, #36).
+`sks codex-app context-1m` reports an unreadable Codex config as unavailable
+instead of disabled and neither writes it nor restarts Codex; the Desktop
+Bridge's capacity retry advice buffers at most one 1 MiB SSE event; and the
+model-call limiter hands a released slot to the queued call, so a newcomer can
+no longer push it over its budget. PR #34 adds a proposed Codex App Server
+integration ADR and roadmap without changing the runtime. No 10.7.3 registry
+or GitHub publication is claimed before the operator's `npm publish` step; see
+"New 10.7.3 claims".
+
+## 10.7.2 published
+
+Published 2026-10-28T13:00:37Z from `7f5b2193`; the registry reports 1,360
+files and its sha512 integrity equals the 10.7.2 pack receipt.
+
+## Historical 10.7.2 candidate notes
 
 A patch release for Codex-LB users of Codex Desktop. Through the bridge Codex
 treats the provider as OpenAI and, with output-token replay on, asks every route
@@ -711,7 +728,16 @@ Exact-commit proof can exist only after the candidate is committed and all
 source-bound gates are regenerated from that clean commit.
 
 All release artifacts bound to 9.2.7 or an earlier commit are historical. They
-must not be renamed, copied, or treated as 10.7.2 evidence.
+must not be renamed, copied, or treated as 10.7.3 evidence.
+
+New 10.7.3 claims:
+
+| Claim | Current support | Boundary |
+| --- | --- | --- |
+| An unreadable Codex config is reported as unavailable, never as disabled, and is never written or followed by a Codex restart | passed-hermetic | `codex-context-window` tests: a directory at the config path and a mode-0 file both block status and mutations without probing Codex; a missing file stays a valid first run that can be enabled |
+| Capacity advice holds at most one 1 MiB SSE event and still advises the next event after an oversized one | passed-hermetic | `capacity-retry-advice` tests: an unterminated oversized event is forwarded before EOF, oversized events pass byte-for-byte with LF and CRLF boundaries, and many small events in one large chunk are each advised |
+| A released model-call slot goes to the queued call, so the budget is never exceeded | passed-hermetic | `model-call-concurrency` tests at budgets 1 and 3 with a caller arriving between release and resume; FIFO order and slot reuse after a rejected call |
+| The 10.7.3 package is ready to publish | not proved | requires the release stamp on the clean main commit and that commit fast-forward pushed to origin main |
 
 New 10.7.2 claims:
 
@@ -727,7 +753,7 @@ New 10.7.2 claims:
 | Codex follows the bridge list without a restart | not proved live | Codex's handling read in openai/codex at `rust-v0.153.4` and `rust-v0.165.0` (HTTP header; WebSocket metadata event; `/models` fetched only for ChatGPT auth); no live Codex Desktop picker change was observed |
 | SKS Center has no Remote Coding page and the package carries no companion file | passed-hermetic | removed-surface absence test (`test/unit/removed-*-surface.test.mjs`) and `sks-menubar-template` tests |
 | A Codex Desktop with output-token replay works against a live Codex-LB | not proved | needs a Codex build with `output_token_replay` and the operator's Codex-LB request log |
-| The 10.7.2 package is ready to publish | not proved | requires the release stamp on the clean main commit and that commit fast-forward pushed to origin main |
+| The 10.7.2 package is published | verified-on-machine | 2026-11-03, registry `gitHead` 7f5b2193 and file count 1360, published 2026-10-28T13:00:37Z; sha512 integrity equals the pack receipt |
 
 New 10.7.1 claims:
 
@@ -897,8 +923,8 @@ New 10.3.10 claims:
 | A stale or cwd-sticky official workflow cannot capture a later prompt | passed-hermetic | unnamed hooks use `loadOwnedRouteState`; idle > 2h is inactive even with leftover open threads; same-session follow-ups still bind while the run is fresh |
 | The 10.3.10 package is published | verified-on-machine | 2026-10-02, registry `gitHead` 0c70457e and file count 1755, sha512 integrity equals the pack receipt |
 | The 10.4.0 package is published | verified-on-machine | 2026-10-02, registry `gitHead` fb7b2385 and file count 1692, sha512 integrity equals the pack receipt |
-| All checked version authorities report 10.7.2 | passed-hermetic | `release:version-truth` after the version bump |
-| The reported 10.7.2 package is ready to publish | not proved | requires a clean exact-commit build, `npm run release:check:full` stamp, pack receipt, provenance, and the release commit fast-forward pushed to origin main (the prepublish reproducibility preflight refuses `head_not_origin_main`) |
+| All checked version authorities report 10.7.3 | passed-hermetic | `release:version-truth` after the version bump |
+| The reported 10.7.3 package is ready to publish | not proved | requires a clean exact-commit build, `npm run release:check:full` stamp, pack receipt, provenance, and the release commit fast-forward pushed to origin main (the prepublish reproducibility preflight refuses `head_not_origin_main`) |
 
 ## 9.1.0 assertion (historical)
 
