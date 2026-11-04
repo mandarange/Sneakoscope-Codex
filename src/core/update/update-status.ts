@@ -330,6 +330,9 @@ function withResponseSource(
 }
 
 function isFresh(snapshot: SksUpdateStatusV3, now: Date): boolean {
+  // Only successful checks establish freshness. A failed forced refresh can
+  // still retain the last successful expiry.
+  if (!['live', 'cache'].includes(snapshot.source) || snapshot.public_error !== null) return false;
   const expires = Date.parse(snapshot.expires_at);
   return Number.isFinite(expires) && expires > now.getTime();
 }
