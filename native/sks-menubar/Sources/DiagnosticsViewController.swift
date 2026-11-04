@@ -78,7 +78,8 @@ final class DiagnosticsViewController: NSViewController, ControlCenterPage {
         guard !busy else { return }
         busy = true
         status.stringValue = "Doctor is running…"
-        processClient.run(["doctor", "--json"], timeout: NativeView.mutationTimeout) { [weak self] result in
+        // Match Overview: the default JSON profile skips deep diagnostics.
+        processClient.run(["doctor", "--full", "--json"], timeout: NativeView.longMutationTimeout) { [weak self] result in
             guard let self = self else { return }
             self.busy = false
             if result.code == 0 {

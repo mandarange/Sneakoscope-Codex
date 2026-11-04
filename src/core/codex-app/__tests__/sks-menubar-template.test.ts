@@ -19,6 +19,7 @@ import {
 } from '../menubar/index.js';
 import { sha256 } from '../../fsx.js';
 import { UPDATE_STAGE_ORDER } from '../../update-check.js';
+import { doctorProfileFromArgs } from '../../../commands/doctor-profile.js';
 
 function source(codexBundleId: string | null = 'com.openai.codex') {
   return swiftMenuSource({
@@ -201,6 +202,19 @@ test('Overview renders every release work-order health field from bounded local 
   assert.match(overview, /\["codex", "update", "--json"\]/);
   assert.ok(overview.includes('stale \\(operation.state.rawValue) record · review operation log'));
   assert.match(swift, /func latestSnapshot\(\) -> OperationSnapshot\?/);
+});
+
+test('Center Run Doctor actions select deep diagnostics with a long deadline', () => {
+  for (const page of ['OverviewViewController.swift', 'DiagnosticsViewController.swift']) {
+    const swift = fs.readFileSync(path.join(resolvePackagedMenuBarSourceRoot(), 'Sources', page), 'utf8');
+    const call = swift.match(/processClient\.run\((\["doctor"[^\]]*\]), timeout: NativeView\.(\w+)\)/);
+    assert.ok(call?.[1], `${page}: Doctor command invocation`);
+    const args = JSON.parse(call[1]) as string[];
+    assert.equal(doctorProfileFromArgs(args.slice(1)), 'full', `${page}: do not skip deep diagnostics`);
+    assert.ok(args.includes('--json'), `${page}: structured diagnostic output`);
+    assert.ok(!args.includes('--fix'), `${page}: checking health must not request repairs`);
+    assert.equal(call[2], 'longMutationTimeout', `${page}: allow full diagnostics to finish`);
+  }
 });
 
 test('Diagnostics induces Codex CLI updates with a guarded action', () => {
