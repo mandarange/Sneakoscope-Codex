@@ -65,6 +65,53 @@ sks bridge route explain gpt-6-astra --json
 
 Use the native connection dialog or `--api-key-stdin` for credentials. An unavailable route is a setup problem; it is not a reason to silently substitute another provider.
 
+## Codex compact reports `responses_compact_input_too_large`
+
+The message “Compact input exceeds the upstream size limit and cannot be
+trimmed without removing required state anchors” comes from Codex-LB's native
+compaction input check. SKS forwards that failure; it does not mean SKS's HTTP
+body limit or the model's context window was reached. Enabling 1M context does
+not increase the gateway's separate compact limit.
+
+In the [reviewed upstream revision](https://github.com/Soju06/codex-lb/blob/72630bbfeee9e3b0d9acfb95e2b1e706b8b0188e/app/core/openai/requests.py#L1048),
+the reference limit is 100,000 estimated tokens: default Python JSON
+serialization length, including ASCII escapes and separator spaces, divided by
+four and rounded up. Korean characters cost six serialized characters and an
+emoji surrogate pair costs twelve. The required selection can include Lite
+`additional_tools`, developer/system instructions, goal/plan calls and their
+paired results, and terminal state. A small UTF-8 request can therefore exceed
+that estimate. The error alone cannot identify which item caused your failure.
+
+After reproducing once, collect `sks --version`, `codex --version`,
+`sks bridge status --json`, and `sks bridge route explain <public-model> --json`.
+Find the bridge log at `stdout_log_path` in the status output. The redacted
+rejection record names `provider_id`, `public_model`,
+`upstream_code`, and `request_shape.compaction_sizes`. That measurement contains
+only fixed type/role groups and counts/sizes, including the largest item in each
+group. `input_json_bytes` describes UTF-8 input JSON;
+`input_ascii_json_chars_estimate` and `input_estimated_tokens` account for ASCII
+escaping instead. Numeric formatting can differ between JavaScript and Python;
+these are diagnostics, not an exact tokenizer or an enforced budget. They
+measure the input sent by SKS, not the gateway's final required selection or an
+unseen WebSocket continuation. No request text, tool arguments, image bytes,
+encrypted state, or credentials are added to these measurements.
+HTTP error responses, native HTTP 200 SSE size failures, and WebSocket error
+events retain their original response and carry the same size evidence.
+
+Check the serving gateway version/image digest with its operator. The reviewed
+GitHub revision does not establish your deployment version. Avoid repeatedly
+retrying the unchanged oversized request or deleting its tool pairs, images,
+instructions, or opaque state to make it pass. For future turns, bound file and
+tool output to the needed lines/results instead of loading complete large files.
+If the required set itself is too large, preserve the original session and make
+a reviewed textual handoff for a new task: requirements, constraints, goal/plan,
+edits, checks, remaining work, and pending tool actions. Verify the project state
+before resuming; a new task does not restore the old task's opaque/pending state.
+An exact in-session fix requires a reproducible request shape and a change at
+the gateway/host boundary that preserves those required items. SKS does not
+silently change provider, remove anchors, raise the upstream cap, or claim that
+diagnostic logging repairs this upstream failure.
+
 ## Tests fail after a source change
 
 Rebuild before running the canonical test command:

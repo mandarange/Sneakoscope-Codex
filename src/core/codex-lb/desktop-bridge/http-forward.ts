@@ -746,7 +746,7 @@ export async function forwardHttp(
                 upstream_code: upstreamCode,
                 upstream_type: upstreamType,
                 upstream_param: upstreamParam,
-                request_shape: desktopBridgeRequestShape(request.payload),
+                request_shape: desktopBridgeRequestShape(request.payload, Boolean(request.compaction)),
               } : {}),
             });
             responseStarted = true;
@@ -773,7 +773,21 @@ export async function forwardHttp(
           ...(req.url === undefined ? {} : { url: req.url }),
           provider_id: provider!.provider_id,
           public_model: request.route.public_model,
-        })) : null;
+        }), codexLb && request.compaction ? event => {
+          const response = event.response;
+          const error = event.type === 'response.failed' && response && typeof response === 'object' && !Array.isArray(response)
+            ? (response as Record<string, unknown>).error : event.type === 'error' ? event.error : null;
+          if (!error || typeof error !== 'object' || Array.isArray(error)) return;
+          const detail = error as Record<string, unknown>;
+          if (detail.code !== 'responses_compact_input_too_large') return;
+          logHttpRejection({
+            code: 'bridge_upstream_request_rejected', transport: 'http', method: req.method, url: req.url,
+            status: statusCode, upstream_status: statusCode, provider_id: provider!.provider_id,
+            public_model: request.route.public_model, upstream_code: safeUpstreamErrorId(detail.code),
+            upstream_type: safeUpstreamErrorId(detail.type), upstream_param: safeUpstreamParam(detail.param),
+            request_shape: desktopBridgeRequestShape(request.payload, true),
+          });
+        } : undefined) : null;
         try {
           const responseHeaders = rewriteResponseHeaders(response.headers, upstreamBaseUrl, authenticatedLocalBaseUrl);
           if (advising) delete responseHeaders['content-length'];

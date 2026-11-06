@@ -1,4 +1,5 @@
 import { PACKAGE_VERSION } from '../../version.js';
+import { compactionInputSizes, safeCompactionInputSizes, type CompactionInputSizes } from './compaction-input-sizes.js';
 
 /**
  * Structured logging for rejected bridge requests.
@@ -64,6 +65,7 @@ export interface DesktopBridgeRequestShape {
   readonly keys: readonly string[];
   readonly include: readonly string[] | null;
   readonly input_types: Readonly<Record<string, number>>;
+  readonly compaction_sizes?: CompactionInputSizes;
 }
 
 const SHAPE_TOKEN = /^[A-Za-z0-9_.[\]-]{1,64}$/;
@@ -75,7 +77,7 @@ function shapeToken(value: unknown): string {
   return typeof value === 'string' && SHAPE_TOKEN.test(value) ? value : '<other>';
 }
 
-export function desktopBridgeRequestShape(payload: unknown): DesktopBridgeRequestShape | null {
+export function desktopBridgeRequestShape(payload: unknown, compaction = false): DesktopBridgeRequestShape | null {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
   const request = payload as Record<string, unknown>;
   const inputTypes: Record<string, number> = {};
@@ -86,10 +88,12 @@ export function desktopBridgeRequestShape(payload: unknown): DesktopBridgeReques
       inputTypes[type] = (inputTypes[type] ?? 0) + 1;
     }
   } else if (typeof request.input === 'string') inputTypes['<text>'] = 1;
+  const compactSizes = compaction ? compactionInputSizes(request) : null;
   return {
     keys: Object.keys(request).map(shapeToken).sort().slice(0, MAX_SHAPE_KEYS),
     include: Array.isArray(request.include) ? request.include.slice(0, MAX_SHAPE_INCLUDE).map(shapeToken) : null,
     input_types: inputTypes,
+    ...(compactSizes ? { compaction_sizes: compactSizes } : {}),
   };
 }
 
@@ -100,10 +104,12 @@ function safeRequestShape(shape: DesktopBridgeRequestShape | null | undefined): 
   for (const [type, count] of Object.entries(shape.input_types ?? {}).slice(0, MAX_SHAPE_INPUT_TYPES)) {
     if (Number.isSafeInteger(count) && count > 0) inputTypes[shapeToken(type)] = count;
   }
+  const compactSizes = safeCompactionInputSizes(shape.compaction_sizes);
   return {
     keys: shape.keys.slice(0, MAX_SHAPE_KEYS).map(shapeToken),
     include: Array.isArray(shape.include) ? shape.include.slice(0, MAX_SHAPE_INCLUDE).map(shapeToken) : null,
     input_types: inputTypes,
+    ...(compactSizes ? { compaction_sizes: compactSizes } : {}),
   };
 }
 
