@@ -84,7 +84,9 @@ that estimate. The error alone cannot identify which item caused your failure.
 
 After reproducing once, collect `sks --version`, `codex --version`,
 `sks bridge status --json`, and `sks bridge route explain <public-model> --json`.
-Find the bridge log at `stdout_log_path` in the status output. The redacted
+On a bridge build containing the compact size diagnostics, find the bridge log
+at `stdout_log_path` in the status output. Older builds lack these size fields.
+The redacted
 rejection record names `provider_id`, `public_model`,
 `upstream_code`, and `request_shape.compaction_sizes`. That measurement contains
 only fixed type/role groups and counts/sizes, including the largest item in each
@@ -95,8 +97,10 @@ these are diagnostics, not an exact tokenizer or an enforced budget. They
 measure the input sent by SKS, not the gateway's final required selection or an
 unseen WebSocket continuation. No request text, tool arguments, image bytes,
 encrypted state, or credentials are added to these measurements.
-HTTP error responses, native HTTP 200 SSE size failures, and WebSocket error
-events retain their original response and carry the same size evidence.
+HTTP error responses, native uncompressed HTTP 200 SSE size failures, and
+WebSocket error events retain their original response and carry the same size
+evidence. SSE observation is best-effort for events up to 1 MiB; compressed or
+larger events pass through unchanged and may have no size record.
 
 Check the serving gateway version/image digest with its operator. The reviewed
 GitHub revision does not establish your deployment version. Avoid repeatedly
