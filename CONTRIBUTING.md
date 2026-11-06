@@ -63,4 +63,8 @@ Use an imperative subject line that names the change, for example `docs: clarify
 
 ## Reporting security issues
 
+For source security reviews, use the [pinned Cloudflare audit guide](docs/security-audit.md).
+Keep ordinary machine-review verdicts separate from audit results and record missing
+execution isolation or independent verification as unresolved work.
+
 Do not open a public issue for a vulnerability. Follow [SECURITY.md](SECURITY.md) so the report can be handled privately.

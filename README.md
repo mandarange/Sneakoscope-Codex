@@ -203,7 +203,7 @@ Type these into the **Codex desktop app or Codex CLI conversation**:
 | `$sks-mad-sks "scope and task"` | Explicitly authorize a bounded high-risk task; combine with another dollar command when appropriate. |
 | `$sks-plan "task"` | Write a plan without editing product code. |
 | `$sks-work` | Run parallel child work through the Naruto execution alias. |
-| `$sks-review` | Review the current changes. |
+| `$sks-review` | Review current changes; security reviews use the [pinned Cloudflare audit skill](docs/security-audit.md). |
 | `$sks-naruto "task"` | Explicitly split independent work across official subagents. |
 | `$sks-help` | Explore available SKS workflows. |
 

@@ -450,6 +450,7 @@
     {
       "canonical_name": "sks-review",
       "trusted_sha256": [
+        "f21e5dfabc3ac9ad9e4d4e1f4333c84a4ff4e287ee8fb786880bd09ba0dcbd8b",
         "dd42627b9b522eb19b05da6167b366278c4cbe2b178b49903e2920006939dd85",
         "d08e9aada80a2fe87edee602e57517ec814b87e0f3dfc40928e8571fc1efafd5",
         "42ba1dbdc6b476d1c4a6e42467fdc86fda58bab3207c054550591ab5f6e94c37"
