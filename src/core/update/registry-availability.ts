@@ -25,12 +25,23 @@ export async function versionDownloadability(input: {
   const base = input.registry.replace(/\/+$/, '');
   const name = input.packageName.replace('/', '%2F');
   try {
-    const doc = await timed(fetchImpl, `${base}/${name}/${encodeURIComponent(input.version)}`, { headers: { accept: 'application/json' } }, timeoutMs);
+    const doc = await timed(timeoutMs, async signal => {
+      const response = await fetchImpl(`${base}/${name}/${encodeURIComponent(input.version)}`, {
+        headers: { accept: 'application/json' }, signal
+      });
+      if (!response.ok) {
+        await response.body?.cancel();
+        return { status: response.status, tarball: null };
+      }
+      // fetch resolves at the headers; keep the deadline active until JSON
+      // consumption finishes so a stalled response body cannot hang status.
+      const tarball = (await response.json() as { dist?: { tarball?: unknown } } | null)?.dist?.tarball;
+      return { status: response.status, tarball };
+    });
     if (doc.status === 404) return 'not_yet_downloadable';
-    if (!doc.ok) return 'unknown';
-    const tarball = (await doc.json().catch(() => null) as any)?.dist?.tarball;
+    const tarball = doc.tarball;
     if (typeof tarball !== 'string' || !/^https?:\/\//.test(tarball)) return 'unknown';
-    const head = await timed(fetchImpl, tarball, { method: 'HEAD' }, timeoutMs);
+    const head = await timed(timeoutMs, signal => fetchImpl(tarball, { method: 'HEAD', signal }));
     if (head.ok) return 'downloadable';
     return head.status === 404 ? 'not_yet_downloadable' : 'unknown';
   } catch {
@@ -72,11 +83,11 @@ function probeEnabled(env: NodeJS.ProcessEnv): boolean {
   return !(env.NODE_TEST_CONTEXT || env.SKS_TEST_ISOLATION === '1');
 }
 
-async function timed(fetchImpl: typeof fetch, url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+async function timed<T>(timeoutMs: number, operation: (signal: AbortSignal) => Promise<T>): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetchImpl(url, { ...init, signal: controller.signal });
+    return await operation(controller.signal);
   } finally {
     clearTimeout(timer);
   }

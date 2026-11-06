@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { offeredUpdateVersion } from '../registry-availability.js';
+import http from 'node:http';
+import { offeredUpdateVersion, versionDownloadability } from '../registry-availability.js';
 
 const registry = 'https://registry.example.test/';
 const env = { SKS_UPDATE_TARBALL_PROBE: '1' };
@@ -37,4 +38,55 @@ test('an unreachable registry or a non-newer version never hides or invents an u
   const neverCalled = (async () => { throw new Error('must not probe'); }) as typeof fetch;
   assert.deepEqual(await offeredUpdateVersion({ ...base, listed: '10.3.6', fetchImpl: neverCalled }), { latest: '10.3.6', pending: null });
   assert.deepEqual(await offeredUpdateVersion({ ...base, listed: '10.4.0', env: { SKS_UPDATE_TARBALL_PROBE: '0' }, fetchImpl: neverCalled }), { latest: '10.4.0', pending: null });
+});
+
+test('a stalled registry document body times out and a later probe can recover', { timeout: 15_000 }, async t => {
+  let stall = true;
+  let headersReceived = false;
+  let headRequests = 0;
+  const server = http.createServer((request, response) => {
+    if (request.method === 'HEAD') {
+      headRequests += 1;
+      response.writeHead(200).end();
+      return;
+    }
+    response.writeHead(200, { 'content-type': 'application/json' });
+    if (stall) {
+      // Send headers and part of the JSON, but never complete the body.
+      response.write('{"dist":');
+    } else {
+      response.end(JSON.stringify({ dist: { tarball: `${localRegistry}/package.tgz` } }));
+    }
+  });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => {
+    server.closeAllConnections();
+    return new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+  });
+  const address = server.address();
+  assert.ok(address && typeof address !== 'string');
+  const localRegistry = `http://127.0.0.1:${address.port}`;
+  const fetchImpl: typeof fetch = async (url, init) => {
+    const response = await fetch(url, init);
+    if (init?.method !== 'HEAD') headersReceived = true;
+    return response;
+  };
+  const options = { registry: localRegistry, packageName: 'sneakoscope', version: '10.4.0', env, fetchImpl, timeoutMs: 1_000 };
+  let watchdog: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const result = await Promise.race([
+      versionDownloadability(options),
+      new Promise<never>((_, reject) => {
+        watchdog = setTimeout(() => reject(new Error('registry body outlived the probe deadline')), 8_000);
+      })
+    ]);
+    assert.equal(headersReceived, true, 'exercise body timeout after response headers arrived');
+    assert.equal(result, 'unknown');
+    assert.equal(headRequests, 0, 'an incomplete document cannot select a tarball');
+  } finally {
+    clearTimeout(watchdog);
+  }
+  stall = false;
+  assert.equal(await versionDownloadability(options), 'downloadable');
+  assert.equal(headRequests, 1);
 });
