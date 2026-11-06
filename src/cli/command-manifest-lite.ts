@@ -208,8 +208,8 @@ const COMMAND_HELP_LITE = {
     description: 'Show the active mission, route, phase, proof, trust, official-subagent evidence, image voxel, DB safety, and next action.'
   },
   review: {
-    usage: 'sks review [--staged|--diff <ref>] [--fix] [--json]',
-    description: 'Review a diff with machine-evidence findings sorted above LLM review notes.'
+    usage: 'sks review [--staged|--diff <ref>] [--fix] [--json] | sks review --security-guide --json',
+    description: 'Review a diff with machine evidence, or locate the verified, pinned Cloudflare security-audit skill without running an audit.'
   },
   quickstart: {
     usage: 'sks quickstart',

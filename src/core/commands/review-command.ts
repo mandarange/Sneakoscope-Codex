@@ -4,6 +4,7 @@ import { printJson } from '../../cli/output.js';
 import { projectRoot, readText, runProcess, writeJsonAtomic, nowIso } from '../fsx.js';
 import { ui } from '../../cli/cli-theme.js';
 import { runCompiledRules } from '../verification/mistake-rule-compiler.js';
+import { securityAuditGuide } from '../security-audit/guide.js';
 
 type Evidence = 'machine';
 type Severity = 'blocker' | 'high' | 'medium' | 'low';
@@ -20,6 +21,11 @@ interface ReviewFinding {
 }
 
 export async function reviewCommand(args: string[] = []) {
+  if (flag(args, '--security-guide')) {
+    const guide = securityAuditGuide();
+    if (!guide.available) process.exitCode = 1;
+    return printJson(guide);
+  }
   const root = path.resolve(String(readOption(args, '--root', '') || await projectRoot()));
   const diff = await collectDiff(root, args);
   if (!diff.files.length) {

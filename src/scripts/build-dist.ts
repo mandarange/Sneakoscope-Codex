@@ -75,6 +75,10 @@ async function copyRuntimeConfigFiles() {
     path.join(srcRoot, 'vendor', 'openai-codex'),
     path.join(distRoot, 'vendor', 'openai-codex')
   );
+  await copyDirIfPresent(
+    path.join(srcRoot, 'vendor', 'cloudflare', 'security-audit'),
+    path.join(distRoot, 'vendor', 'cloudflare', 'security-audit')
+  );
 }
 
 async function copyNativeMenuBarSources() {
