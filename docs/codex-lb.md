@@ -132,6 +132,9 @@ per-provider capability (`BRIDGE_REMOTE_COMPACTION`):
   idle limit below five minutes (a compaction streams nothing for 45–150 s).
   `POST /responses/compact` is routed by the thread's pin, then its body
   model, in every mode — it never leaves for the official identity.
+  A native `responses_compact_input_too_large` refusal keeps its original error
+  and input; the rejection log adds content-free input size measurements.
+  See [compact size diagnosis and recovery](troubleshooting.md#codex-compact-reports-responses_compact_input_too_large).
 - **Bridge summary** — OpenRouter, which has none. The bridge asks the thread's
   own provider and model for a handoff summary (Codex's summarization prompt,
   tool calls disabled) and returns it as the `compaction` item, over HTTP or

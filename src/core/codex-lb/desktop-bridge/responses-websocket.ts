@@ -426,7 +426,7 @@ export function forwardResponsesWebSocket(req: IncomingMessage, socket: Duplex, 
           if (message.compaction) await answerCompaction(message.compaction);
           else {
             relay(upstream!, message.data, message.binary);
-            if (message.routed) routedShape = desktopBridgeRequestShape(message.routed);
+            if (message.routed) routedShape = desktopBridgeRequestShape(message.routed, requestsRemoteCompaction(message.routed));
             // Only a route the bridge compacts for ever answers a compaction itself.
             if (message.routed && bound && BRIDGE_REMOTE_COMPACTION[bound.provider_id] === 'bridge_summary') chain.sent(message.routed, message.data);
           }

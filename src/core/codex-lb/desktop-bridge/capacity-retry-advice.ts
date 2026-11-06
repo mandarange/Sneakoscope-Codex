@@ -82,14 +82,14 @@ export function isAdvisableEventStream(headers: { 'content-type'?: string | unde
 }
 
 /** Rewrites the complete SSE events in `events` that carry an unadvised capacity failure. */
-function adviseSseEvents(events: Buffer, onAdvised: () => void): Buffer {
-  if (!events.includes(MODEL_CAPACITY_ERROR_CODE)) return events;
+function adviseSseEvents(events: Buffer, onAdvised: () => void, onEvent?: (event: JsonObject) => void): Buffer {
+  if (!onEvent && !events.includes(MODEL_CAPACITY_ERROR_CODE)) return events;
   // Event boundaries are ASCII, so splitting the decoded text never cuts a character.
   const parts = events.toString('utf8').split(/(\r?\n\r?\n)/);
   let changed = false;
   for (let index = 0; index < parts.length; index += 2) {
     const block = parts[index]!;
-    if (!block.includes(MODEL_CAPACITY_ERROR_CODE)) continue;
+    if (!onEvent && !block.includes(MODEL_CAPACITY_ERROR_CODE)) continue;
     const lines = block.split(/\r?\n/);
     const data = lines.filter((line) => line.startsWith('data:')).map((line) => line.slice(5).replace(/^ /, '')).join('\n');
     let event: unknown;
@@ -98,7 +98,10 @@ function adviseSseEvents(events: Buffer, onAdvised: () => void): Buffer {
     } catch {
       continue;
     }
-    if (!isObject(event) || !adviseModelCapacityRetry(event)) continue;
+    if (!isObject(event)) continue;
+    // Observers see only complete, bounded events and cannot break forwarding.
+    try { onEvent?.(event); } catch { /* Diagnostics are best-effort. */ }
+    if (!adviseModelCapacityRetry(event)) continue;
     const newline = block.includes('\r\n') ? '\r\n' : '\n';
     parts[index] = [...lines.filter((line) => !line.startsWith('data:')), `data: ${JSON.stringify(event)}`].join(newline);
     changed = true;
@@ -115,7 +118,7 @@ function adviseSseEvents(events: Buffer, onAdvised: () => void): Buffer {
  * The next event can still receive advice. This bounds our private buffer;
  * normal stream backpressure continues to bound queued downstream writes.
  */
-export function modelCapacityAdvisingSse(onAdvised: () => void): Transform {
+export function modelCapacityAdvisingSse(onAdvised: () => void, onEvent?: (event: JsonObject) => void): Transform {
   const maxEventBytes = 1024 * 1024;
   let carry: Buffer = Buffer.alloc(0);
   let passthrough = false;
@@ -129,7 +132,7 @@ export function modelCapacityAdvisingSse(onAdvised: () => void): Transform {
         endingBytes = ((endingBytes << 8) | chunk[index]!) >>> 0;
         if ((endingBytes & 0xffff) !== 0x0a0a && endingBytes !== 0x0d0a0d0a) continue;
         append(chunk.subarray(start, index + 1));
-        if (!passthrough) this.push(adviseSseEvents(carry, () => { advised = true; }));
+        if (!passthrough) this.push(adviseSseEvents(carry, () => { advised = true; }, onEvent));
         carry = Buffer.alloc(0);
         passthrough = false;
         endingBytes = 0;
@@ -140,7 +143,7 @@ export function modelCapacityAdvisingSse(onAdvised: () => void): Transform {
       done();
     },
     flush(done) {
-      done(null, carry.length ? adviseSseEvents(carry, onAdvised) : null);
+      done(null, carry.length ? adviseSseEvents(carry, onAdvised, onEvent) : null);
     },
   });
   function append(part: Buffer): void {
