@@ -65,14 +65,25 @@ test('compact diagnostics log only fixed groups and numbers and stay off ordinar
   injected.compaction_sizes.message = secret;
   injected.compaction_sizes.groups[secret] = { items: 1, message: secret };
   injected.compaction_sizes.groups.reasoning.message = secret;
-  // Existing item-type labels are independently sanitized by the shape logger.
-  injected.input_types = {};
+  // Do not clear the legacy fields: even identifier-shaped labels can be secrets.
+  injected.input_types = { [secret]: 1 };
+  injected.keys.push(secret);
+  injected.include = [secret];
   log({ code: 'bridge_upstream_request_rejected', transport: 'http', request_shape: injected });
   assert.equal(lines.length, 1);
   assert.equal(lines[0]!.includes(secret), false);
   const logged = JSON.parse(lines[0]!).request_shape.compaction_sizes;
   assert.deepEqual(logged, compactionInputSizes(payload));
+  assert.deepEqual(JSON.parse(lines[0]!).request_shape.keys, []);
+  assert.equal(JSON.parse(lines[0]!).request_shape.include, null);
+  assert.deepEqual(JSON.parse(lines[0]!).request_shape.input_types, {});
   injected.compaction_sizes.input_estimated_tokens = -1;
   log({ code: 'bridge_upstream_request_rejected', transport: 'http', request_shape: injected });
   assert.equal(JSON.parse(lines[1]!).request_shape.compaction_sizes, undefined);
+  assert.equal(lines[1]!.includes(secret), false, 'invalid measurements must not re-enable legacy labels');
+  log({ code: 'bridge_upstream_request_rejected', transport: 'http', request_shape: desktopBridgeRequestShape({
+    [secret]: secret, include: [secret], input: secret
+  }, true) });
+  assert.equal(JSON.parse(lines[2]!).request_shape.compaction_sizes, undefined);
+  assert.equal(lines[2]!.includes(secret), false, 'unavailable array measurements must not re-enable legacy labels');
 });

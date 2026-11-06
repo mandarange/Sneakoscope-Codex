@@ -91,15 +91,21 @@ interface AdaptationCount { count: number; loggedAtMs: number }
 /** Per running bridge (one prepared config each), so a restart starts the counts over. */
 const adaptationCounts = new WeakMap<object, Map<string, AdaptationCount>>();
 
+const LOGGED_INCLUDE_VALUES = new Set([
+  'output.encrypted_content',
+  ...Object.values(PROVIDER_INCLUDE_ALLOWLIST).flatMap(values => values ?? []),
+]);
+
 function loggedValue(value: string): string {
-  return /^[A-Za-z0-9_.:-]{1,64}$/.test(value) ? value : '<other>';
+  return LOGGED_INCLUDE_VALUES.has(value) ? value : '<other>';
 }
 
 /**
  * One line per (provider, field, value) when it first happens, then at most one
  * per summary interval carrying the running count: an adaptation repeats on
  * every turn, and the log must say that it happens, not each time it does.
- * Only the provider, the field name and an identifier-shaped value are written.
+ * Only the provider, the field name and a known protocol include value (or
+ * `<other>`) are written. Identifier-shaped arbitrary values can be secrets.
  */
 export function logRequestAdaptation(
   config: PreparedDesktopBridgeConfig,

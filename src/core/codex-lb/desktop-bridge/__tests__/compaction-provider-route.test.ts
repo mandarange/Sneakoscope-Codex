@@ -202,9 +202,21 @@ const COMPACT_SIZE_ERROR = {
   type: 'invalid_request_error', code: 'responses_compact_input_too_large', param: 'input',
   message: 'Compact input exceeds the upstream size limit and cannot be trimmed without removing required state anchors.'
 };
+const PRIVATE_SHAPE_MARKERS = ['private-user-state', 'private-top-level-key', 'private-include-value'] as const;
+const privateShapeFields = { [PRIVATE_SHAPE_MARKERS[1]]: 'private-value', include: [PRIVATE_SHAPE_MARKERS[2]] };
+
+function assertPrivateShapeAbsent(log: Array<Record<string, any>>): void {
+  const serialized = JSON.stringify(log);
+  for (const marker of PRIVATE_SHAPE_MARKERS) assert.equal(serialized.includes(marker), false, `no ${marker} in any bridge log`);
+  const rejection = log.find(line => line.upstream_code === COMPACT_SIZE_ERROR.code)!;
+  assert.deepEqual(rejection.request_shape.keys, []);
+  assert.equal(rejection.request_shape.include, null);
+  assert.deepEqual(rejection.request_shape.input_types, {});
+}
 
 function requiredCompactState() {
   return [
+    { type: PRIVATE_SHAPE_MARKERS[0], content: 'private-input-type-value' },
     { type: 'additional_tools', role: 'developer', tools: [{ type: 'custom', name: 'exec', format: { type: 'grammar', syntax: 'lark', definition: 'start: /./' } }] },
     { type: 'message', role: 'developer', content: '한'.repeat(66_650) },
     { type: 'message', role: 'system', content: 'private-state-sentinel: preserve permissions and pending actions' },
@@ -227,12 +239,12 @@ test('HTTP native compact size refusals keep every anchor and report content-fre
   for (const path of ['/backend-api/codex/responses', '/backend-api/codex/responses/compact']) {
     const input = requiredCompactState();
     if (!path.endsWith('/compact')) input.push({ type: 'compaction_trigger' } as any);
-    const payload = { model: 'gpt-lb', instructions: 'private-state-sentinel', input };
+    const payload = { ...privateShapeFields, model: 'gpt-lb', instructions: 'private-state-sentinel', input };
     const before = JSON.stringify(payload);
     const result = await f.post(path, payload);
     assert.equal(result.status, 400);
     assert.deepEqual(JSON.parse(result.text), { error: COMPACT_SIZE_ERROR });
-    assert.deepEqual(f.lb.requests.at(-1)!.body, { ...payload, model: 'gpt-lb-upstream' });
+    assert.deepEqual(f.lb.requests.at(-1)!.body, { ...payload, model: 'gpt-lb-upstream', include: [] });
     assert.equal(JSON.stringify(payload), before);
     const rejection = log.filter(line => line.code === 'bridge_upstream_request_rejected').at(-1)!;
     assert.equal(rejection.upstream_code, COMPACT_SIZE_ERROR.code);
@@ -241,6 +253,7 @@ test('HTTP native compact size refusals keep every anchor and report content-fre
     assert.equal(JSON.stringify(log).includes('private-state-sentinel'), false);
     assert.equal(JSON.stringify(log).includes('opaque-reasoning-state'), false);
     assert.equal(JSON.stringify(log).includes('required-image-state'), false);
+    assertPrivateShapeAbsent(log);
   }
   assert.equal(f.lb.requests.length, 2, 'size refusals must not replay an unchanged request');
   assert.equal(f.openrouter.requests.length + f.official.requests.length, 0, 'no summary or identity fallback');
@@ -252,32 +265,34 @@ test('WebSocket native compact size refusals preserve state and the original err
   const f = await fixture(t, { lbSocketReply: () => [failed] });
   const ws = await f.socket();
   const answer = once(ws, 'message');
-  const payload = { type: 'response.create', model: 'gpt-lb', input: [...requiredCompactState(), { type: 'compaction_trigger' }] };
+  const payload = { ...privateShapeFields, type: 'response.create', model: 'gpt-lb', input: [...requiredCompactState(), { type: 'compaction_trigger' }] };
   ws.send(JSON.stringify(payload));
   assert.deepEqual(JSON.parse(String((await answer)[0])), failed);
-  assert.deepEqual(f.lb.socketMessages, [{ ...payload, model: 'gpt-lb-upstream' }]);
+  assert.deepEqual(f.lb.socketMessages, [{ ...payload, model: 'gpt-lb-upstream', include: [] }]);
   const rejection = log.find(line => line.upstream_code === COMPACT_SIZE_ERROR.code)!;
   assert.equal(rejection.transport, 'websocket');
   assert.deepEqual(rejection.request_shape.compaction_sizes, compactionInputSizes(payload));
   assert.equal(ws.readyState, WebSocket.OPEN);
   assert.equal(f.lb.requests.length + f.openrouter.requests.length + f.official.requests.length, 0);
   assert.equal(JSON.stringify(log).includes('private-state-sentinel'), false);
+  assertPrivateShapeAbsent(log);
 });
 
 test('HTTP 200 native compact stream failures keep their bytes and record the same size evidence', { timeout: 20_000 }, async t => {
   const log = captureRejections(t);
   const failure = sse({ type: 'response.failed', response: { id: 'resp_failed', error: COMPACT_SIZE_ERROR } });
   const f = await fixture(t, { lbReply: () => ({ status: 200, contentType: 'text/event-stream', body: failure }) });
-  const payload = { model: 'gpt-lb', input: [...requiredCompactState(), { type: 'compaction_trigger' }] };
+  const payload = { ...privateShapeFields, model: 'gpt-lb', input: [...requiredCompactState(), { type: 'compaction_trigger' }] };
   const result = await f.post('/backend-api/codex/responses', payload);
   assert.equal(result.status, 200);
   assert.equal(result.text, failure, 'size failure events must not gain retry advice or a synthetic success');
-  assert.deepEqual(f.lb.requests[0]!.body, { ...payload, model: 'gpt-lb-upstream' });
+  assert.deepEqual(f.lb.requests[0]!.body, { ...payload, model: 'gpt-lb-upstream', include: [] });
   const rejection = log.find(line => line.upstream_code === COMPACT_SIZE_ERROR.code)!;
   assert.equal(rejection.upstream_status, 200);
   assert.deepEqual(rejection.request_shape.compaction_sizes, compactionInputSizes(payload));
   assert.equal(f.lb.requests.length, 1);
   assert.equal(f.openrouter.requests.length + f.official.requests.length, 0);
+  assertPrivateShapeAbsent(log);
 });
 
 test('HTTP: a Codex-LB thread compacts natively, and the item it returns travels back unchanged', { timeout: 20_000 }, async (t) => {

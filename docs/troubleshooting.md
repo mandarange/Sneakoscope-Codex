@@ -97,6 +97,10 @@ these are diagnostics, not an exact tokenizer or an enforced budget. They
 measure the input sent by SKS, not the gateway's final required selection or an
 unseen WebSocket continuation. No request text, tool arguments, image bytes,
 encrypted state, or credentials are added to these measurements.
+Compact records leave the legacy `keys`, `include`, and `input_types` shape
+fields empty, even when size measurements are unavailable. Arbitrary labels
+are never copied into those compact records; unknown include values in
+adaptation logs are represented by the fixed label `<other>`.
 HTTP error responses, native uncompressed HTTP 200 SSE size failures, and
 WebSocket error events retain their original response and carry the same size
 evidence. SSE observation is best-effort for events up to 1 MiB; compressed or

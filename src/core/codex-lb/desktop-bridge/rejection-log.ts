@@ -66,6 +66,16 @@ export interface DesktopBridgeRequestShape {
   readonly include: readonly string[] | null;
   readonly input_types: Readonly<Record<string, number>>;
   readonly compaction_sizes?: CompactionInputSizes;
+  readonly compaction?: true;
+}
+
+/** Compact records contain no caller-controlled key, include or type labels. */
+function compactRequestShape(value: unknown): DesktopBridgeRequestShape {
+  const sizes = safeCompactionInputSizes(value);
+  return {
+    compaction: true, keys: [], include: null, input_types: {},
+    ...(sizes ? { compaction_sizes: sizes } : {}),
+  };
 }
 
 const SHAPE_TOKEN = /^[A-Za-z0-9_.[\]-]{1,64}$/;
@@ -80,6 +90,7 @@ function shapeToken(value: unknown): string {
 export function desktopBridgeRequestShape(payload: unknown, compaction = false): DesktopBridgeRequestShape | null {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
   const request = payload as Record<string, unknown>;
+  if (compaction) return compactRequestShape(compactionInputSizes(request));
   const inputTypes: Record<string, number> = {};
   if (Array.isArray(request.input)) {
     for (const item of request.input) {
@@ -88,28 +99,26 @@ export function desktopBridgeRequestShape(payload: unknown, compaction = false):
       inputTypes[type] = (inputTypes[type] ?? 0) + 1;
     }
   } else if (typeof request.input === 'string') inputTypes['<text>'] = 1;
-  const compactSizes = compaction ? compactionInputSizes(request) : null;
   return {
     keys: Object.keys(request).map(shapeToken).sort().slice(0, MAX_SHAPE_KEYS),
     include: Array.isArray(request.include) ? request.include.slice(0, MAX_SHAPE_INCLUDE).map(shapeToken) : null,
     input_types: inputTypes,
-    ...(compactSizes ? { compaction_sizes: compactSizes } : {}),
   };
 }
 
 /** The shape as logged: rebuilt from its own tokens, so nothing else rides along. */
 function safeRequestShape(shape: DesktopBridgeRequestShape | null | undefined): DesktopBridgeRequestShape | null {
-  if (!shape || !Array.isArray(shape.keys)) return null;
+  if (!shape) return null;
+  if (shape.compaction === true || Object.hasOwn(shape, 'compaction_sizes')) return compactRequestShape(shape.compaction_sizes);
+  if (!Array.isArray(shape.keys)) return null;
   const inputTypes: Record<string, number> = {};
   for (const [type, count] of Object.entries(shape.input_types ?? {}).slice(0, MAX_SHAPE_INPUT_TYPES)) {
     if (Number.isSafeInteger(count) && count > 0) inputTypes[shapeToken(type)] = count;
   }
-  const compactSizes = safeCompactionInputSizes(shape.compaction_sizes);
   return {
     keys: shape.keys.slice(0, MAX_SHAPE_KEYS).map(shapeToken),
     include: Array.isArray(shape.include) ? shape.include.slice(0, MAX_SHAPE_INCLUDE).map(shapeToken) : null,
     input_types: inputTypes,
-    ...(compactSizes ? { compaction_sizes: compactSizes } : {}),
   };
 }
 
