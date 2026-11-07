@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
+import http from 'node:http';
 import path from 'node:path';
 import test from 'node:test';
 import { catalogView, fixture, run, runtime } from './openrouter-only-controller-fixture.js';
 import { desktopBridgeModelsEtag } from '../desktop-bridge/models-endpoint.js';
+import { bridgeRouteIndexPath, combinedBridgeCatalogPath, readActiveCombinedBridgeCatalog } from '../combined-catalog.js';
+import { bridgeServesModels } from '../desktop-controller-v3/model-refresh.js';
 
 // The model list refreshes on every update, Doctor, setup and SKS Center
 // change, not only once the catalog is twelve hours old, and Codex is pointed
@@ -12,6 +15,53 @@ import { desktopBridgeModelsEtag } from '../desktop-bridge/models-endpoint.js';
 const refresh = (overrides: Record<string, unknown> = {}) => ({ operation: 'models.refresh' as const, reason: 'test', force: true, allow_config_writes: true, ...overrides });
 const modelRefresh = (result: Awaited<ReturnType<typeof run>>) => result.result.model_refresh as Record<string, any>;
 const LINE = /^Model list refreshed: \d+ models \(\+\d+ −\d+\) generation [0-9a-f]{8}/;
+
+test('the bridge model self-check bounds a trickling body and a later check can recover', { timeout: 15_000 }, async (t) => {
+  const setup = await fixture(t);
+  const active = await readActiveCombinedBridgeCatalog(combinedBridgeCatalogPath(setup.codexHome), bridgeRouteIndexPath(setup.codexHome));
+  assert.equal(active.ok, true);
+  const catalog = active.catalog;
+  let trickle = true;
+  let chunksSent = 0;
+  let closeTricklingResponse: () => void = () => {};
+  const tricklingResponseClosed = new Promise<void>(resolve => { closeTricklingResponse = resolve; });
+  const server = http.createServer((_request, response) => {
+    response.writeHead(200, { 'content-type': 'application/json', etag: desktopBridgeModelsEtag(catalog.generation) });
+    if (!trickle) {
+      response.end(JSON.stringify({ models: catalog.models }));
+      return;
+    }
+    response.write('{"models":');
+    // Bytes arrive often enough to keep the socket's inactivity timeout alive,
+    // but the response never supplies the complete model list.
+    const interval = setInterval(() => { chunksSent += 1; response.write(' '); }, 20);
+    response.once('close', () => { clearInterval(interval); closeTricklingResponse(); });
+  });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => {
+    server.closeAllConnections();
+    return new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+  });
+  const address = server.address();
+  assert.ok(address && typeof address !== 'string');
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+  let watchdog: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const failure = await Promise.race([
+      bridgeServesModels(baseUrl, catalog, { timeoutMs: 500, attempts: 1 }),
+      new Promise<never>((_, reject) => {
+        watchdog = setTimeout(() => reject(new Error('model body outlived the self-check deadline')), 5_000);
+      })
+    ]);
+    assert.ok(chunksSent > 0, 'exercise an active response, not an idle socket');
+    assert.equal(failure, 'bridge_models_self_check_unreachable');
+    await tricklingResponseClosed;
+  } finally {
+    clearTimeout(watchdog);
+  }
+  trickle = false;
+  assert.equal(await bridgeServesModels(baseUrl, catalog, { timeoutMs: 1_000, attempts: 1 }), null);
+});
 
 test('a refresh fetches every provider although the catalog is fresh, and reports one line', async (t) => {
   const setup = await fixture(t);
