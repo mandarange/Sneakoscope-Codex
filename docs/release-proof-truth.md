@@ -1,6 +1,24 @@
 # Release Proof Truth
 
-## 10.7.3 candidate
+## 10.7.4 candidate
+
+This release contains PR #37, #38 and #39: unhealthy update-cache retry,
+bounded registry response-body reads, content-free diagnostics for native
+compaction size refusals, and the pinned Cloudflare security audit guide.
+Compaction requests and upstream failures remain intact. Guide discovery
+does not execute an audit or authorize any additional action.
+
+Fresh release evidence must come from the clean 10.7.4 `main` commit and is
+retained under `.sneakoscope/reports/release/10.7.4`. No live provider result,
+full security audit or npm publication is claimed; see "New 10.7.4 claims".
+
+## 10.7.3 published
+
+Published 2026-11-03T01:01:14.266Z from `7fa3e074`; the registry reports
+1,360 files. The integrity comparison with the pack receipt is not recorded
+here.
+
+## Historical 10.7.3 candidate notes
 
 A patch release of three fixes merged after 10.7.2 (PR #33, #35, #36).
 `sks codex-app context-1m` reports an unreadable Codex config as unavailable
@@ -728,9 +746,18 @@ Exact-commit proof can exist only after the candidate is committed and all
 source-bound gates are regenerated from that clean commit.
 
 All release artifacts bound to 9.2.7 or an earlier commit are historical. They
-must not be renamed, copied, or treated as 10.7.3 evidence.
+must not be renamed, copied, or treated as 10.7.4 evidence.
 
-New 10.7.3 claims:
+New 10.7.4 claims:
+
+| Claim | Current support | Boundary |
+| --- | --- | --- |
+| Unhealthy update caches are retried and registry body reads have a deadline | source and regression tests | `update-status-v3` and `registry-availability` tests; no registry outage is induced on the host |
+| Native compaction diagnostics use fixed labels and preserve state and upstream errors | source and regression tests | `compaction-input-sizes` and `compaction-provider-route` tests; live Codex-LB behavior is not proved |
+| The security guide is pinned, integrity-checked and bundled | source and regression tests | `security-audit/guide` tests and package inspection; no full security audit is claimed |
+| The 10.7.4 package is ready to publish | requires fresh evidence | full release stamp, pack receipt and normal publish dry-run on the clean commit matching origin main |
+
+New 10.7.3 claims (historical):
 
 | Claim | Current support | Boundary |
 | --- | --- | --- |
@@ -923,8 +950,8 @@ New 10.3.10 claims:
 | A stale or cwd-sticky official workflow cannot capture a later prompt | passed-hermetic | unnamed hooks use `loadOwnedRouteState`; idle > 2h is inactive even with leftover open threads; same-session follow-ups still bind while the run is fresh |
 | The 10.3.10 package is published | verified-on-machine | 2026-10-02, registry `gitHead` 0c70457e and file count 1755, sha512 integrity equals the pack receipt |
 | The 10.4.0 package is published | verified-on-machine | 2026-10-02, registry `gitHead` fb7b2385 and file count 1692, sha512 integrity equals the pack receipt |
-| All checked version authorities report 10.7.3 | passed-hermetic | `release:version-truth` after the version bump |
-| The reported 10.7.3 package is ready to publish | not proved | requires a clean exact-commit build, `npm run release:check:full` stamp, pack receipt, provenance, and the release commit fast-forward pushed to origin main (the prepublish reproducibility preflight refuses `head_not_origin_main`) |
+| All checked version authorities report 10.7.4 | passed-hermetic | `release:version-truth` after the version bump |
+| The reported 10.7.4 package is ready to publish | not proved | requires a clean exact-commit build, `npm run release:check:full` stamp, pack receipt, provenance, and the release commit fast-forward pushed to origin main (the prepublish reproducibility preflight refuses `head_not_origin_main`) |
 
 ## 9.1.0 assertion (historical)
 

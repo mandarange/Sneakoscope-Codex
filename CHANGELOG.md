@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+## [10.7.4] - 2026-11-07
+
+### Added
+
+- `sks review --security-guide --json` exposes a pinned, integrity-checked
+  Cloudflare security audit guide and its companions. The guide is bundled
+  with the package; loading it does not run an audit or grant permissions.
+
+### Fixed
+
+- Update status retries an unhealthy cached result even when the last
+  successful check's expiry is still in the future.
+- Registry availability checks keep their timeout active while reading the
+  response body, so a stalled JSON response cannot hang update status.
+- Native compaction refusals now include content-free input-size diagnostics
+  on supported HTTP and WebSocket paths, including HTTP SSE failures. The
+  bridge preserves the request and upstream error without trimming state;
+  diagnostic labels are fixed and exclude caller-controlled names.
+
 ## [10.7.3] - 2026-11-03
 
 ### Fixed
