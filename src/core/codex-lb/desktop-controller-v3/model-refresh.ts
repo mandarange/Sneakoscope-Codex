@@ -108,7 +108,10 @@ export async function bridgeServesModels(
         resolve('bridge_models_self_check_not_loopback');
         return;
       }
-      const request = http.get(url, { timeout: options.timeoutMs ?? 3_000 }, (response) => {
+      const timeoutMs = options.timeoutMs ?? 3_000;
+      // The socket timeout measures inactivity, so a trickling body can reset
+      // it forever. Bound the entire attempt, including response consumption.
+      const request = http.get(url, { timeout: timeoutMs, signal: AbortSignal.timeout(timeoutMs) }, (response) => {
         const chunks: Buffer[] = [];
         response.on('data', (chunk: Buffer) => chunks.push(chunk));
         response.once('end', () => {
