@@ -195,7 +195,7 @@
     "@openai/codex-sdk": "0.163.0",
     "smol-toml": "^1.9.1",
     "typescript": "^6.0.3",
-    "ws": "^8.22.0"
+    "ws": "^8.23.0"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",
