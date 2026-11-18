@@ -29,6 +29,31 @@ test('smoke check fails with a distinct non-executable signal when the action sc
   assert.equal(repaired.versionDetected, true);
 });
 
+test('smoke check requires an SKS version line on stdout', async (t) => {
+  const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-menubar-smoke-version-'));
+  t.after(() => fs.rm(temp, { recursive: true, force: true }));
+  const script = path.join(temp, 'sks-menubar-action.sh');
+  await fs.writeFile(script, '#!/bin/sh\necho "Node.js v24.22.1"\necho "sneakoscope 10.7.4" >&2\n', { mode: 0o755 });
+
+  const unrelated = await smokeSksMenuBarAction(script);
+  assert.equal(unrelated.ok, false);
+  assert.equal(unrelated.versionDetected, false);
+  assert.equal(unrelated.detectedVersion, null);
+  assert.match(String(unrelated.output), /Node.js v24.22.1/);
+  assert.match(String(unrelated.output), /sneakoscope 10.7.4/);
+});
+
+test('smoke check uses the CLI version when stdout also contains a numeric warning', async (t) => {
+  const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-menubar-smoke-version-noise-'));
+  t.after(() => fs.rm(temp, { recursive: true, force: true }));
+  const script = path.join(temp, 'sks-menubar-action.sh');
+  await fs.writeFile(script, '#!/bin/sh\necho "Node.js v24.22.1"\necho "sneakoscope 10.7.4-rc.1+local"\n', { mode: 0o755 });
+
+  const valid = await smokeSksMenuBarAction(script);
+  assert.equal(valid.ok, true);
+  assert.equal(valid.detectedVersion, '10.7.4-rc.1+local');
+});
+
 test('SKS menu bar action script resolves sks dynamically from the login shell PATH first', async (t) => {
   if (process.platform !== 'darwin') return t.skip('generated Menu Bar action scripts require macOS /bin/zsh');
   const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-menubar-action-'));
