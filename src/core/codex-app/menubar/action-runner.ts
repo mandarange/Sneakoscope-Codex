@@ -59,7 +59,8 @@ export async function smokeSksMenuBarAction(actionScriptPath: string): Promise<{
   const result = await runProcess(actionScriptPath, ['version'], { timeoutMs: 5_000, maxOutputBytes: 16 * 1024 })
     .catch((error: unknown) => ({ code: 1, stdout: '', stderr: error instanceof Error ? error.message : String(error) }));
   const output = `${result.stdout || ''}\n${result.stderr || ''}`.trim();
-  const detectedVersion = output.match(/\b(?:sks|sneakoscope)?\s*v?(\d+\.\d+\.\d+)\b/i)?.[1] || null;
+  // The version command identifies itself on stdout; diagnostics can contain unrelated versions.
+  const detectedVersion = result.stdout.match(/^sneakoscope (\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)\r?$/m)?.[1] || null;
   return {
     ok: result.code === 0 && Boolean(detectedVersion), code: result.code,
     output: output ? output.slice(0, 700) : null,
